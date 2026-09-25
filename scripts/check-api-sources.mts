@@ -3,6 +3,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
+// Paths in the config are relative to the repository root, not the caller's cwd.
+const REPO_ROOT = path.resolve(import.meta.dirname, '..');
+
+function repoFiles(dir: string): string[] {
+  return walkFiles(path.join(REPO_ROOT, dir)).map((file) => normalizePath(path.relative(REPO_ROOT, file)));
+}
+
+function readSource(filePath: string): string | null {
+  const resolved = path.isAbsolute(filePath) ? filePath : path.join(REPO_ROOT, filePath);
+  return fs.existsSync(resolved) ? fs.readFileSync(resolved, 'utf8') : null;
+}
+
 type SourceConfig = {
   writeRules?: {
     ownerPathPrefixes?: string[];
@@ -85,14 +97,14 @@ function crossDomainTablesFor(filePath: string, crossDomainWriters: Record<strin
 
 export function checkApiSources({ config, files }: { config: SourceConfig; files?: string[] }): Violation[] {
   const violations: Violation[] = [];
-  const fileSet = files || walkFiles('apps/api/src');
+  const fileSet = files || repoFiles('apps/api/src');
   const ownerPrefixes = config.writeRules?.ownerPathPrefixes || [];
   const allowedOwners = config.writeRules?.allowedOwners || {};
   const crossDomainWriters = config.writeRules?.crossDomainWriters || {};
 
   for (const filePath of fileSet) {
-    if (!fs.existsSync(filePath)) continue;
-    const source = fs.readFileSync(filePath, 'utf8');
+    const source = readSource(filePath);
+    if (source === null) continue;
     const declaredCrossDomain = crossDomainTablesFor(filePath, crossDomainWriters);
     for (const table of findSqlWrites(source)) {
       const owners = allowedOwners[table];

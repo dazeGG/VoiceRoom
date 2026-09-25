@@ -3,7 +3,8 @@ import net from 'node:net';
 import type { Duplex } from 'node:stream';
 import { URL } from 'node:url';
 import type pg from 'pg';
-import { createDbPool } from '../../lib/db.ts';
+import { createDbPool } from '../../platform/db/pool.ts';
+import { readDatabaseConfig } from '../../lib/config.ts';
 import { createGateCredentialSigner } from './gate-credential-signer.ts';
 import {
   createCredentialBoundaryService,
@@ -102,7 +103,6 @@ function buildUpstreamUpgradeRequest({
 
 function createLiveKitAuthGateService({
   boundary,
-  databaseUrl,
   gatePath = DEFAULT_GATE_PATH,
   logger = createLogger({ name: 'api' }),
   pool,
@@ -112,7 +112,6 @@ function createLiveKitAuthGateService({
   upstreamUrl = process.env.LIVEKIT_INTERNAL_URL || process.env.LIVEKIT_URL || 'ws://127.0.0.1:7880'
 }: {
   boundary?: Pick<CredentialBoundaryService, 'authorizeCredential' | 'assertReady'>;
-  databaseUrl?: string;
   gatePath?: string;
   logger?: GateLogger;
   pool?: pg.Pool | Record<string, unknown> | null;
@@ -123,9 +122,9 @@ function createLiveKitAuthGateService({
 } = {}) {
   const path = normalizeGatePath(gatePath);
   const upstream = cleanUpstreamUrl(upstreamUrl);
-  const activePool = roomStore ? null : pool || createDbPool({ databaseUrl, logger });
+  if (!roomStore && !pool) throw new Error('The LiveKit auth gate needs a room store or a pool');
   // Tests hand in a fake pool, so the option type stays wider than the store's.
-  const store = (roomStore || createRoomStore({ pool: activePool as pg.Pool | null, logger })) as GateRoomStore;
+  const store = (roomStore || createRoomStore({ pool: pool as pg.Pool })) as GateRoomStore;
   const credentialBoundary =
     boundary ||
     createCredentialBoundaryService({
@@ -309,7 +308,7 @@ if (import.meta.main) {
   const logger = createLogger({ name: 'livekit-auth-gate' });
   try {
     const service = createLiveKitAuthGateService({
-      databaseUrl: process.env.DATABASE_URL,
+      pool: createDbPool({ databaseUrl: readDatabaseConfig(process.env).url, logger }),
       gatePath: process.env.LIVEKIT_GATE_PATH || DEFAULT_GATE_PATH,
       logger,
       secret: process.env.LIVEKIT_GATE_SECRET,

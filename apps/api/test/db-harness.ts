@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import type { TestContext } from 'node:test';
 import { Pool } from 'pg';
 import { readDatabaseConfig } from '../src/lib/config.ts';
+import { createDbPool } from '../src/platform/db/pool.ts';
 
 function quoteIdent(value: string) {
   return `"${String(value).replaceAll('"', '""')}"`;
@@ -50,8 +51,12 @@ async function createTestDatabase(_t?: TestContext) {
   const admin = new Pool({ connectionString: url, max: 1 });
   await admin.query(`CREATE DATABASE ${quoteIdent(name)}`);
   const databaseUrl = databaseUrlFor(url, name);
+  // The test's one pool, as a process would have; stores and repositories
+  // borrow it, cleanup ends it.
+  const pool = createDbPool({ databaseUrl, logger: { error() {} } });
 
   async function cleanup() {
+    if (!pool.ended) await pool.end();
     await waitForSessionsToLeave(admin, name);
     await admin.query(
       `SELECT pg_terminate_backend(pid)
@@ -63,7 +68,7 @@ async function createTestDatabase(_t?: TestContext) {
     await admin.end();
   }
 
-  return { cleanup, databaseUrl, databaseName: name };
+  return { cleanup, databaseUrl, databaseName: name, pool };
 }
 
 export { createTestDatabase };

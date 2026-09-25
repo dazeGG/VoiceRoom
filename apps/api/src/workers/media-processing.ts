@@ -1,3 +1,4 @@
+import type pg from 'pg';
 import crypto from 'node:crypto';
 import sharp from 'sharp';
 import { MediaJobFenceError } from '../domains/media/media-job-repository.ts';
@@ -207,15 +208,13 @@ function createMediaProcessingWorker(
   });
 }
 
-async function main(): Promise<void> {
-  if (String(process.env.MEDIA_PROCESSING_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
-  const { createDbPool } = await import('../lib/db.ts');
+async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
+  if (String(env.MEDIA_PROCESSING_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
   const { createAttachmentRepository } = await import('../domains/media/attachment-repository.ts');
   const { createMediaJobRepository } = await import('../domains/media/media-job-repository.ts');
   const { createMediaPressureService } = await import('../domains/media/media-pressure-service.ts');
   const { createMediaStorage } = await import('../domains/media/storage.ts');
-  const pool = createDbPool();
-  const storage = createMediaStorage({ rootDir: process.env.MEDIA_STORAGE_DIR || '/data/media' });
+  const storage = createMediaStorage({ rootDir: env.MEDIA_STORAGE_DIR || '/data/media' });
   await storage.freeSpace();
   const worker = createMediaProcessingWorker({
     attachmentRepository: createAttachmentRepository({ pool }),
@@ -230,18 +229,7 @@ async function main(): Promise<void> {
   };
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
-  try {
-    await worker.run({ signal: controller.signal });
-  } finally {
-    await pool.end();
-  }
-}
-
-if (import.meta.main) {
-  main().catch((error) => {
-    process.stderr.write(`${(error as Error | null)?.stack || error}\n`);
-    process.exitCode = 1;
-  });
+  await worker.run({ signal: controller.signal });
 }
 
 export { DEFAULTS, createMediaProcessingWorker, main, retryDelay, transform };

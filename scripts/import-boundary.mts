@@ -3,6 +3,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
+// Paths in the config are relative to the repository root, not the caller's cwd.
+const REPO_ROOT = path.resolve(import.meta.dirname, '..');
+
+function repoFiles(dir: string): string[] {
+  return walkFiles(path.join(REPO_ROOT, dir)).map((file) => normalizePath(path.relative(REPO_ROOT, file)));
+}
+
+function readSource(filePath: string): string | null {
+  const resolved = path.isAbsolute(filePath) ? filePath : path.join(REPO_ROOT, filePath);
+  return fs.existsSync(resolved) ? fs.readFileSync(resolved, 'utf8') : null;
+}
+
 type ImportRule = { id: string; sources: string[]; forbidden: string[]; message: string };
 type Violation = { ruleId: string; filePath: string; imported: string; message: string };
 
@@ -74,12 +86,12 @@ export function checkImportBoundaries({
   files?: string[];
 }): Violation[] {
   const violations: Violation[] = [];
-  const fileSet = files || walkFiles('.');
+  const fileSet = files || repoFiles('.');
   for (const rule of config.importRules || []) {
     const sources = rule.sources.map(globToRegExp);
     for (const filePath of fileSet.filter((candidate) => sources.some((source) => source.test(candidate)))) {
-      if (!fs.existsSync(filePath)) continue;
-      const source = fs.readFileSync(filePath, 'utf8');
+      const source = readSource(filePath);
+      if (source === null) continue;
       for (const imported of extractImports(source)) {
         if (rule.forbidden.some((forbidden) => imported === forbidden || imported.includes(forbidden))) {
           violations.push({ ruleId: rule.id, filePath, imported, message: rule.message });

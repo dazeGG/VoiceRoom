@@ -11,6 +11,8 @@
 import type { RoomPeerMessage } from '../realtime/legacy-events.ts';
 import { buildServerEnvelope, type ServerEnvelope } from '@voice-room/shared/realtime';
 import crypto from 'node:crypto';
+import type pg from 'pg';
+import { createDbPool } from '../platform/db/pool.ts';
 import { readEnvInt } from '../lib/config.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createRoomStore } from '../lib/room-store.ts';
@@ -24,7 +26,6 @@ import { createAvatarStorage } from '../lib/avatar-storage.ts';
 import { createLinkPreviewFetcher } from '../lib/link-preview-fetcher.ts';
 import { processLinkPreviewImage } from '../lib/link-preview-image.ts';
 import { createLinkPreviewStorage } from '../lib/link-preview-storage.ts';
-import { createRelease250Pool } from '../lib/release-250-pool.ts';
 import { recordMediaAuthorizationInvariantFailure, recordMediaPressure } from '../lib/metrics.ts';
 import { createLinkPreviewRepository } from '../domains/link-previews/link-preview-repository.ts';
 import { createLinkPreviewService } from '../domains/link-previews/link-preview-service.ts';
@@ -32,6 +33,7 @@ import { createAccountDeletionRepository } from '../domains/account/account-dele
 import { createCredentialBoundaryService } from '../domains/admission/credential-boundary-service.ts';
 import { createLiveKitCredentialProvider } from '../domains/admission/livekit-credential-provider.ts';
 import { isGatePrincipal } from '../domains/admission/gate-principal.ts';
+import { createMediaAccessRepository } from '../domains/media/media-access-repository.ts';
 import { createMembershipRepository } from '../domains/membership/membership-repository.ts';
 import { createMembershipService } from '../domains/membership/membership-service.ts';
 import { createMemberDirectoryService } from '../domains/membership/member-directory-service.ts';
@@ -90,6 +92,8 @@ export type ServiceRegistryConfig = {
   MAX_ROOM_BANS: number;
   MAX_PUSH_SUBSCRIPTIONS_PER_USER: number;
   LINK_PREVIEWS_ENABLED: boolean;
+  /** Where uploaded chat media lives; defaults to /data/media. */
+  MEDIA_STORAGE_DIR?: string;
 };
 
 // What the registry needs from the realtime layer, which server.ts owns.
@@ -172,6 +176,8 @@ export type Fake<Store> = {
 
 /** Stores and services a test supplies instead of the database-backed ones. */
 export type StoreOverrides = {
+  /** A pool for the database-backed services the test does not fake. */
+  pool?: pg.Pool | null;
   store?: Fake<ReturnType<typeof createRoomStore>> | null;
   users?: Fake<ReturnType<typeof createUserStore>> | null;
   friends?: Fake<ReturnType<typeof createFriendStore>> | null;
@@ -207,6 +213,9 @@ export function resolveCursorHmacKeys({
     .digest('hex');
 }
 
+const missingPool = () => Promise.reject(new Error('No PostgreSQL pool is installed'));
+const MISSING_POOL = { query: missingPool, connect: missingPool } as unknown as pg.Pool;
+
 export function createServiceRegistry(config: ServiceRegistryConfig, deps: ServiceRegistryDeps) {
   let roomStore: ReturnType<typeof createRoomStore> | null = null;
   let userStore: ReturnType<typeof createUserStore> | null = null;
@@ -222,9 +231,8 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   let historyServices: HistoryServices | null = null;
   let credentialBoundary: ReturnType<typeof createCredentialBoundaryService> | null = null;
   let liveKitCredentialProvider: ReturnType<typeof createLiveKitCredentialProvider> | null = null;
-  let membershipPool: ReturnType<typeof createRelease250Pool> | null = null;
   let membershipServices: MembershipServices | null = null;
-  let release250Pool: ReturnType<typeof createRelease250Pool> | null = null;
+  let pool: pg.Pool | null = null;
   let reactionServices: ReactionServices | null = null;
   let pinServices: PinServices | null = null;
   let notificationServices: NotificationServices | null = null;
@@ -245,7 +253,8 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     LIVEKIT_TOKEN_TTL_SECONDS,
     MAX_ROOM_BANS,
     MAX_PUSH_SUBSCRIPTIONS_PER_USER,
-    LINK_PREVIEWS_ENABLED
+    LINK_PREVIEWS_ENABLED,
+    MEDIA_STORAGE_DIR = '/data/media'
   } = config;
   const { readinessProvider } = deps;
   type D = ServiceRegistryDeps;
@@ -268,6 +277,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   function getRoomStore() {
     if (!roomStore) {
       roomStore = createRoomStore({
+        pool: requirePool(),
         roomIdleTtlMs: ROOM_IDLE_TTL_MS
       });
     }
@@ -276,7 +286,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
 
   function getUserStore() {
     if (!userStore) {
-      userStore = createUserStore({ sessionTtlMs: SESSION_TTL_MS });
+      userStore = createUserStore({ pool: requirePool(), sessionTtlMs: SESSION_TTL_MS });
     }
     return userStore;
   }
@@ -290,7 +300,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
 
   function getFriendStore() {
     if (!friendStore) {
-      friendStore = createFriendStore({});
+      friendStore = createFriendStore({ pool: requirePool() });
     }
     return friendStore;
   }
@@ -316,11 +326,11 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
         cursorCodec,
         dm: createDmHistoryService({
           cursorCodec,
-          repository: createDmHistoryRepository(),
+          repository: createDmHistoryRepository({ pool: requirePool() }),
           projectMessage: async ({ message, peerId, userId }) => {
             const projected = await attachMediaProjection('dm', message);
             if (!projected.replyTo?.messageId) return projected;
-            const replies = createReplyRepository({ client: getRelease250Pool() });
+            const replies = createReplyRepository({ client: getPool() });
             return {
               ...projected,
               replyPreview: await replies.getDirectPreview({
@@ -334,11 +344,11 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
         }),
         room: createRoomHistoryService({
           cursorCodec,
-          repository: createRoomHistoryRepository(),
+          repository: createRoomHistoryRepository({ pool: requirePool() }),
           projectMessage: async ({ message, roomId }) => {
             const projected = await attachMediaProjection('room', message);
             if (!projected.replyTo?.messageId) return projected;
-            const replies = createReplyRepository({ client: getRelease250Pool() });
+            const replies = createReplyRepository({ client: getPool() });
             return {
               ...projected,
               replyPreview: await replies.getRoomPreview({
@@ -352,23 +362,27 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
         read: createMessageReadService({
           authorizeRoomRead: ({ roomId, userId }) => getRoomStore().canUserReadRoomChat(roomId, userId),
           cursorCodec,
-          repository: createMessageReadRepository()
+          repository: createMessageReadRepository({ pool: requirePool() })
         })
       };
     }
     return historyServices;
   }
 
-  function getRelease250Pool() {
-    const databaseUrl = typeof process.env.DATABASE_URL === 'string' ? process.env.DATABASE_URL.trim() : '';
-    if (!databaseUrl) return null;
-    release250Pool = release250Pool || createRelease250Pool({ databaseUrl });
-    return release250Pool;
+  /** The process's one PostgreSQL pool, or null while none is installed (tests on fakes). */
+  function getPool(): pg.Pool | null {
+    return pool;
+  }
+
+  // Apps built on fakes still construct the services they do not fake; those
+  // only fail once they actually reach for the database.
+  function requirePool(): pg.Pool {
+    return pool ?? MISSING_POOL;
   }
 
   function getAccountDeletionRepository() {
     if (accountDeletionRepository) return accountDeletionRepository;
-    const pool = getRelease250Pool();
+    const pool = getPool();
     if (!pool) return null;
     accountDeletionRepository = createAccountDeletionRepository({ pool });
     return accountDeletionRepository;
@@ -376,7 +390,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
 
   function getReactionServices() {
     if (reactionServices) return reactionServices;
-    const pool = getRelease250Pool();
+    const pool = getPool();
     if (!pool) return null;
     const realtime = createReactionRealtimeAdapter({
       broadcastRoom: async (roomId, event) => {
@@ -413,7 +427,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
 
   function getPinServices() {
     if (pinServices) return pinServices;
-    const pool = getRelease250Pool();
+    const pool = getPool();
     if (!pool) return null;
     const service = createPinService({
       repository: createPinRepository({ client: pool }),
@@ -435,7 +449,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
 
   function getMessageDeliveryServices() {
     if (messageDeliveryServices) return messageDeliveryServices;
-    const pool = getRelease250Pool();
+    const pool = getPool();
     if (!pool) return null;
     messageDeliveryServices = {
       idempotency: createMessageIdempotencyRepository(),
@@ -446,7 +460,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
 
   function getNotificationServices() {
     if (notificationServices) return notificationServices;
-    const pool = getRelease250Pool();
+    const pool = getPool();
     if (!pool) return null;
     const inbox = createInboxRepository({ pool });
     const mentions = createMentionRepository({ pool });
@@ -467,7 +481,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
 
   function getModerationServices() {
     if (moderationServices) return moderationServices;
-    const pool = getRelease250Pool();
+    const pool = getPool();
     if (!pool) return null;
     const repository = createModerationRepository({ cursorCodec: getHistoryServices().cursorCodec, pool });
     const service = createModerationService({
@@ -518,7 +532,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
 
   function getActiveBanService() {
     if (activeBanService) return activeBanService;
-    const pool = getRelease250Pool();
+    const pool = getPool();
     if (!pool) return null;
     activeBanService = createActiveBanService({ pool });
     return activeBanService;
@@ -526,9 +540,9 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
 
   function getMediaServices() {
     if (mediaServices) return mediaServices;
-    const pool = getRelease250Pool();
+    const pool = getPool();
     if (!pool) return null;
-    const storage = createMediaStorage({ rootDir: process.env.MEDIA_STORAGE_DIR || '/data/media' });
+    const storage = createMediaStorage({ rootDir: MEDIA_STORAGE_DIR });
     const pressure = createMediaPressureService({
       storagePath: storage.root,
       minFreeBytes: readEnvInt('MEDIA_MIN_FREE_BYTES', 2 * 1024 * 1024 * 1024, 1),
@@ -546,34 +560,19 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       quotaService: quota,
       storage
     });
+    const access = createMediaAccessRepository({ pool });
     const visibility = createMediaVisibilityService({
       attachmentRepository: attachments,
       storage,
       authorizeRoomAttachment: async ({ attachment, viewerId }) => {
         if (!attachment.roomMessageId) return false;
-        const result = await pool.query(
-          `SELECT room.id AS room_id
-           FROM room_messages message
-           JOIN rooms room ON room.id = message.room_id AND room.deleted_at IS NULL
-           JOIN room_memberships membership ON membership.room_id = room.id AND membership.user_id = $2
-           WHERE message.id = $1 AND message.deleted_at IS NULL
-             AND (message.expires_at IS NULL OR message.expires_at > current_timestamp)
-           LIMIT 1`,
-          [attachment.roomMessageId, viewerId]
-        );
-        if (result.rowCount !== 1) return false;
-        return !(await getActiveBanService()!.isBanned({ roomId: result.rows[0].room_id, userId: viewerId }));
+        const roomId = await access.roomOfVisibleRoomMessage({ messageId: attachment.roomMessageId, viewerId });
+        if (!roomId) return false;
+        return !(await getActiveBanService()!.isBanned({ roomId, userId: viewerId }));
       },
       authorizeDirectAttachment: async ({ attachment, viewerId }) => {
         if (!attachment.directMessageId) return false;
-        const result = await pool.query(
-          `SELECT 1 FROM direct_messages
-           WHERE id = $1 AND deleted_at IS NULL
-             AND (sender_id = $2 OR recipient_id = $2)
-           LIMIT 1`,
-          [attachment.directMessageId, viewerId]
-        );
-        return result.rowCount === 1;
+        return access.canSeeDirectMessage({ messageId: attachment.directMessageId, viewerId });
       },
       onAuthorizationInvariantFailure: recordMediaAuthorizationInvariantFailure
     });
@@ -624,9 +623,8 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
 
   function getMembershipServices() {
     if (membershipServices) return membershipServices;
-    const databaseUrl = typeof process.env.DATABASE_URL === 'string' ? process.env.DATABASE_URL.trim() : '';
-    if (!databaseUrl) return null;
-    membershipPool = membershipPool || createRelease250Pool({ databaseUrl });
+    const membershipPool = getPool();
+    if (!membershipPool) return null;
     const repository = createMembershipRepository({ pool: membershipPool });
     const service = createMembershipService({
       pool: membershipPool,
@@ -648,13 +646,14 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
 
   function getNotificationStore() {
     if (!notificationStore) {
-      notificationStore = createNotificationStore({});
+      notificationStore = createNotificationStore({ pool: requirePool() });
     }
     return notificationStore;
   }
 
   function getPushStore() {
-    if (!pushStore) pushStore = createPushStore({ maxSubscriptionsPerUser: MAX_PUSH_SUBSCRIPTIONS_PER_USER });
+    if (!pushStore)
+      pushStore = createPushStore({ pool: requirePool(), maxSubscriptionsPerUser: MAX_PUSH_SUBSCRIPTIONS_PER_USER });
     return pushStore;
   }
 
@@ -676,7 +675,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   function getLinkPreviewService() {
     if (!LINK_PREVIEWS_ENABLED) return null;
     if (linkPreviewService) return linkPreviewService;
-    const pool = getRelease250Pool();
+    const pool = getPool();
     if (!pool) return null;
     linkPreviewService = createLinkPreviewService({
       repository: createLinkPreviewRepository({ pool }),
@@ -696,6 +695,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
    */
   // A fake has only what its test reaches; anything else fails loudly there.
   function applyOverrides(options: StoreOverrides = {}): { roomStoreChanged: boolean } {
+    if (options.pool) pool = options.pool;
     const roomStoreChanged = Boolean(options.store && options.store !== roomStore);
     if (options.store) roomStore = options.store as ReturnType<typeof createRoomStore>;
     if (options.users) userStore = options.users as ReturnType<typeof createUserStore>;
@@ -721,46 +721,35 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     return { roomStoreChanged };
   }
 
-  /** The database-backed stores bootstrap builds before the app. */
-  function install(stores: {
-    roomStore: ReturnType<typeof createRoomStore>;
-    userStore: ReturnType<typeof createUserStore>;
-    friendStore: ReturnType<typeof createFriendStore>;
-    notificationStore: ReturnType<typeof createNotificationStore>;
-    pushStore: ReturnType<typeof createPushStore>;
+  /**
+   * Opens the process's one pool; the stores and repositories built from now on
+   * share it. bootstrap calls this before it builds the app.
+   */
+  function connect({ databaseUrl, logger }: { databaseUrl: string; logger?: Logger }): pg.Pool {
+    pool = createDbPool({ databaseUrl, logger });
+    return pool;
+  }
+
+  /** What bootstrap builds with process configuration the registry does not hold. */
+  function install(services: {
     pushService: ReturnType<typeof createPushService>;
     avatarStorage: ReturnType<typeof createAvatarStorage>;
     linkPreviewStorage: ReturnType<typeof createLinkPreviewStorage> | null;
   }): void {
-    ({
-      roomStore,
-      userStore,
-      friendStore,
-      notificationStore,
-      pushStore,
-      pushService,
-      avatarStorage,
-      linkPreviewStorage
-    } = stores);
+    ({ pushService, avatarStorage, linkPreviewStorage } = services);
     messageService = null;
   }
 
+  /** Ends the installed pool; every store and repository shares it. */
   async function close(logger: Logger): Promise<void> {
-    await Promise.allSettled([
-      roomStore?.close?.(),
-      userStore?.close?.(),
-      friendStore?.close?.(),
-      notificationStore?.close?.(),
-      pushStore?.close?.(),
-      membershipPool?.end?.()
-    ]).then((results) => {
-      for (const result of results) {
-        if (result.status === 'rejected')
-          logger.error({ evt: LOG_EVENTS.STORE_CLOSE_FAILED, err: result.reason }, 'failed to close a store');
-      }
-    });
-    membershipPool = null;
+    const installed = pool;
+    pool = null;
     membershipServices = null;
+    try {
+      await installed?.end();
+    } catch (error) {
+      logger.error({ evt: LOG_EVENTS.STORE_CLOSE_FAILED, err: error }, 'failed to close the database pool');
+    }
   }
 
   return {
@@ -770,7 +759,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     getFriendStore,
     getMessageService,
     getHistoryServices,
-    getRelease250Pool,
+    getPool,
     getAccountDeletionRepository,
     getReactionServices,
     getPinServices,
@@ -792,6 +781,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     /** The friend store while pending room invitations can expire, else null. */
     invitationStore: () => (friendStoreInviteExpiryEnabled ? friendStore : null),
     applyOverrides,
+    connect,
     install,
     close
   };

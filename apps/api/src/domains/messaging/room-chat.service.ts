@@ -15,7 +15,7 @@ import { isReservedPeerId } from '@voice-room/shared/validation';
 import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import type { buildServerEnvelope } from '@voice-room/shared/realtime';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
-import { avatarColorForPeerId } from '../../lib/room-store.ts';
+import { avatarColorForPeerId } from '../rooms/avatar-color.ts';
 import { tokensMatch } from '../../platform/crypto/tokens-match.ts';
 import type { LiveRoom, PresencePeer } from '../rooms/room-views.ts';
 import { cleanChatText, messageFingerprint, normalizeAttachmentIds } from './message-input.ts';

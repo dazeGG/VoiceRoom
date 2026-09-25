@@ -66,6 +66,12 @@ Rules:
 - Route modules receive an explicit `ApiContext` plus their dependencies; no
   new module-level singletons.
 - Configuration is read only by `app/config.ts` (`readApiConfig(env)`).
+- The process has one pg pool, created by the registry (`connect`) or the
+  worker entry, and handed to every repository. Queries are Kysely over the
+  generated `platform/db/schema.ts`. A repository-only transaction is
+  `db.transaction()`; a service that passes one connection between
+  repositories opens it with `transaction(pool, …)` from `platform/db/pool.ts`,
+  and the repositories run on it through `kyselyOn(client)`.
 
 ## 4. Current state versus these rules
 
@@ -74,10 +80,10 @@ copy the old pattern into new code.
 
 | Gap | Where | Rule for new code |
 | --- | --- | --- |
-| Raw `pg` queries with untyped rows; Kysely is wired (`platform/db/kysely.ts`, generated `schema.ts`) but no repository uses it yet | `lib/*-store.ts`, `domains/**/*-repository.ts` | follow the neighbouring repository until the Kysely move lands |
-| Each store and several repositories open their own pool | `lib/db.ts` callers, `app/service-registry.ts` | pass an existing pool; never call `createDbPool` in a module |
+| Raw `pg` queries on the capability heartbeat table | `platform/runtime-readiness-repository.ts` | write new queries with Kysely |
+| Stores kept under `lib/` instead of their domain | `lib/*-store.ts` (`room-store.ts` is a facade over the room repositories) | put new data access in `domains/<d>/<name>.repository.ts` |
 | `server.ts` builds services at import time and keeps mutable module state | `server.ts`, `app/service-registry.ts` | add dependencies through the registry or a route module's deps |
-| Large modules | `lib/room-store.ts`, `realtime/room-runtime.ts`, `server.ts` | add new behaviour in a new domain module, not these files |
+| Large modules | `realtime/room-runtime.ts`, `server.ts` | add new behaviour in a new domain module, not these files |
 
 ## 5. Web layering
 

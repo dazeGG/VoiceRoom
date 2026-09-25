@@ -1,20 +1,9 @@
+import { sql } from 'kysely';
 import type pg from 'pg';
+import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
+import { fromMicros, microsOf } from '../../platform/db/micros.ts';
 import { normalizeLinkPreview, type LinkPreview } from '@voice-room/shared/link-preview';
-import { createDbPool } from '../../lib/db.ts';
-import { createLogger } from '../../lib/logger.ts';
 import { normalizeRoomMessageContent, type RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
-
-const ROOM_MESSAGE_SELECT = `
-  SELECT m.*,
-         floor(extract(epoch FROM m.created_at) * 1000000)::bigint::text AS created_at_micros,
-         COALESCE(NULLIF(u.display_name, ''), u.login, m.name) AS author_name,
-         COALESCE(u.avatar_color_key, rpi.avatar_color_key) AS avatar_color_key,
-         u.avatar_key,
-         u.avatar_accent
-  FROM room_messages m
-  LEFT JOIN room_peer_identities rpi
-    ON rpi.room_id = m.room_id AND rpi.peer_id = m.peer_id
-  LEFT JOIN users u ON u.id = m.author_user_id`;
 
 type Anchor = { createdAtMicros: unknown; id: string };
 type Direction = 'before' | 'after' | 'at-or-after';
@@ -64,8 +53,27 @@ function boundedLimit(value: unknown): number {
   return Math.max(1, Math.min(100, Number.isInteger(value) ? (value as number) : 50));
 }
 
-function anchorTimestamp(parameter: number): string {
-  return `TIMESTAMPTZ 'epoch' + $${parameter}::bigint * INTERVAL '1 microsecond'`;
+const COMPARE = { before: '<', after: '>', 'at-or-after': '>=' } as const;
+
+// Room messages with the author's current profile, or the guest identity's colour.
+function roomMessages(db: Database, roomId: string, now: unknown) {
+  return db
+    .selectFrom('room_messages as m')
+    .leftJoin('room_peer_identities as rpi', (join) =>
+      join.onRef('rpi.room_id', '=', 'm.room_id').onRef('rpi.peer_id', '=', 'm.peer_id')
+    )
+    .leftJoin('users as u', 'u.id', 'm.author_user_id')
+    .selectAll('m')
+    .select([
+      microsOf('m.created_at').as('created_at_micros'),
+      sql<string | null>`COALESCE(NULLIF(u.display_name, ''), u.login, m.name)`.as('author_name'),
+      sql<string | null>`COALESCE(u.avatar_color_key, rpi.avatar_color_key)`.as('avatar_color_key'),
+      'u.avatar_key',
+      'u.avatar_accent'
+    ])
+    .where('m.room_id', '=', roomId)
+    .where('m.deleted_at', 'is', null)
+    .where((eb) => eb.or([eb('m.expires_at', 'is', null), eb('m.expires_at', '>', now as Date)]));
 }
 
 function mapRoomMessage(row: RoomMessageRow): HistoryRoomMessage {
@@ -89,37 +97,33 @@ function mapRoomMessage(row: RoomMessageRow): HistoryRoomMessage {
   };
 }
 
-function createRoomHistoryRepository({
-  databaseUrl,
-  logger = createLogger({ name: 'api' }),
-  pool
-}: {
-  databaseUrl?: string;
-  logger?: unknown;
-  pool?: pg.Pool | null;
-} = {}) {
-  let activePool: pg.Pool | null = pool || null;
-
-  function getPool(): pg.Pool {
-    if (!activePool) activePool = createDbPool({ databaseUrl, logger });
-    return activePool as pg.Pool;
-  }
+function createRoomHistoryRepository({ pool }: { pool: pg.Pool }) {
+  const db = kyselyOn(pool);
+  const toMessages = (rows: unknown[]) => rows.map((row) => mapRoomMessage(row as RoomMessageRow));
 
   async function roomExists(roomId: string): Promise<boolean> {
-    const result = await getPool().query('SELECT 1 FROM rooms WHERE id = $1 AND deleted_at IS NULL LIMIT 1', [roomId]);
-    return result.rowCount === 1;
+    const row = await db
+      .selectFrom('rooms')
+      .select('id')
+      .where('id', '=', roomId)
+      .where('deleted_at', 'is', null)
+      .limit(1)
+      .executeTakeFirst();
+    return Boolean(row);
   }
 
   async function getAnchor({ roomId, messageId }: { roomId: string; messageId: string }): Promise<Anchor | null> {
-    const result = await getPool().query<{ id: string; created_at_micros: string }>(
-      `SELECT id, floor(extract(epoch FROM created_at) * 1000000)::bigint::text AS created_at_micros
-       FROM room_messages WHERE room_id = $1 AND id = $2 LIMIT 1`,
-      [roomId, messageId]
-    );
-    const row = result.rows[0];
+    const row = await db
+      .selectFrom('room_messages')
+      .select(['id', microsOf('created_at').as('created_at_micros')])
+      .where('room_id', '=', roomId)
+      .where('id', '=', messageId)
+      .limit(1)
+      .executeTakeFirst();
     return row ? { id: row.id, createdAtMicros: row.created_at_micros } : null;
   }
 
+  // The page on one side of the anchor, nearest first.
   async function querySide({
     roomId,
     anchor,
@@ -127,32 +131,25 @@ function createRoomHistoryRepository({
     limit,
     now
   }: SideInput & { direction: Direction; limit: number }): Promise<HistoryRoomMessage[]> {
-    const operator = direction === 'before' ? '<' : direction === 'after' ? '>' : '>=';
-    const order = direction === 'before' ? 'DESC' : 'ASC';
-    const result = await getPool().query<RoomMessageRow>(
-      `${ROOM_MESSAGE_SELECT}
-       WHERE m.room_id = $1
-         AND m.deleted_at IS NULL
-         AND (m.expires_at IS NULL OR m.expires_at > $2)
-         AND (m.created_at, m.id) ${operator} (${anchorTimestamp(3)}, $4)
-       ORDER BY m.created_at ${order}, m.id ${order}
-       LIMIT $5`,
-      [roomId, now, anchor.createdAtMicros, anchor.id, limit]
-    );
-    return result.rows.map(mapRoomMessage);
+    const order = direction === 'before' ? 'desc' : 'asc';
+    const rows = await roomMessages(db, roomId, now)
+      .where(
+        sql<boolean>`(m.created_at, m.id) ${sql.raw(COMPARE[direction])} (${fromMicros(anchor.createdAtMicros)}, ${anchor.id})`
+      )
+      .orderBy('m.created_at', order)
+      .orderBy('m.id', order)
+      .limit(limit)
+      .execute();
+    return toMessages(rows);
   }
 
   async function listLatest({ roomId, limit, now }: { roomId: string; limit?: unknown; now: unknown }): Promise<Page> {
-    const result = await getPool().query<RoomMessageRow>(
-      `${ROOM_MESSAGE_SELECT}
-       WHERE m.room_id = $1
-         AND m.deleted_at IS NULL
-         AND (m.expires_at IS NULL OR m.expires_at > $2)
-       ORDER BY m.created_at DESC, m.id DESC
-       LIMIT $3`,
-      [roomId, now, boundedLimit(limit) + 1]
-    );
-    const rows = result.rows.map(mapRoomMessage);
+    const found = await roomMessages(db, roomId, now)
+      .orderBy('m.created_at', 'desc')
+      .orderBy('m.id', 'desc')
+      .limit(boundedLimit(limit) + 1)
+      .execute();
+    const rows = toMessages(found);
     const hasMoreBefore = rows.length > boundedLimit(limit);
     if (hasMoreBefore) rows.pop();
     rows.reverse();
@@ -203,11 +200,7 @@ function createRoomHistoryRepository({
     return { messages: [...before, ...after], hasMoreBefore, hasMoreAfter };
   }
 
-  async function close(): Promise<void> {
-    if (activePool && !pool) await activePool.end();
-  }
-
-  return { close, getAnchor, listAfter, listAround, listBefore, listLatest, roomExists };
+  return { getAnchor, listAfter, listAround, listBefore, listLatest, roomExists };
 }
 
 export { createRoomHistoryRepository, mapRoomMessage };

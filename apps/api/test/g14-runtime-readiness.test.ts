@@ -55,9 +55,9 @@ test(
         await startWorkerHeartbeat({
           env: {
             CAPABILITY_HEARTBEAT_INTERVAL_MS: '60000',
-            CAPABILITY_RUNTIME_ID: `${workerName}-1`,
-            DATABASE_URL: database.databaseUrl
+            CAPABILITY_RUNTIME_ID: `${workerName}-1`
           },
+          pool,
           workerName
         })
       );

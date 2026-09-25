@@ -102,3 +102,20 @@ test('G10-A02 seeded forbidden imports, direct foreign writes and listener worke
   const timerViolations = checkApiSources({ config: rules, files: [badTimer] });
   assert.equal(timerViolations[0]?.ruleId, 'api-listener-worker-timer');
 });
+
+test('G10-A04 the checks scan the repository whatever the working directory', async (t) => {
+  const { checkImportBoundaries, checkApiSources } = await loadScanners();
+  const cwd = process.cwd();
+  process.chdir(os.tmpdir());
+  t.after(() => process.chdir(cwd));
+
+  // Probe rules the real sources are known to break: server.ts imports fastify,
+  // and the room repository writes rooms.
+  const imports = checkImportBoundaries({
+    config: { importRules: [{ id: 'probe', sources: ['apps/api/src/server.ts'], forbidden: ['fastify'], message: '' }] }
+  });
+  assert.equal(imports[0]?.filePath, 'apps/api/src/server.ts');
+
+  const writes = checkApiSources({ config: { writeRules: { allowedOwners: { rooms: [] } } } });
+  assert.ok(writes.some((violation) => violation.filePath === 'apps/api/src/domains/rooms/room.repository.ts'));
+});

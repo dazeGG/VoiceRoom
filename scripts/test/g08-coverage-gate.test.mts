@@ -16,6 +16,9 @@ import {
   type CoverageSummary,
   type CoverageThresholds
 } from '../coverage/check-release-250-coverage.mts';
+import { createTestDatabase } from '../../apps/api/test/db-harness.ts';
+import { runMigrations } from '../../apps/api/src/lib/migrate.ts';
+import { createRoomStore } from '../../apps/api/src/lib/room-store.ts';
 
 const require = createRequire(import.meta.url);
 const { createGateCredentialSigner } = require('../../apps/api/src/domains/admission/gate-credential-signer.ts');
@@ -23,7 +26,7 @@ const {
   createLiveKitAuthGateService,
   extractCredential
 } = require('../../apps/api/src/domains/admission/livekit-auth-gate-service.ts');
-const { createRoomStore } = require('../../apps/api/src/lib/room-store.ts');
+const SILENT_LOGGER = { log() {}, info() {}, warn() {}, error() {} };
 const { createRoomRealtimeRuntime } = require('../../apps/api/src/realtime/room-runtime.ts');
 const SECRET = 'g08-test-livekit-gate-secret-at-least-32-bytes';
 const WEB_ROOM_COVERAGE_SCRIPT = String.raw`
@@ -702,164 +705,166 @@ test('G08 coverage producers execute the changed web line and invariant-protecte
   assert.equal(server.status, 0, server.stderr);
 });
 
-test('G08 changed LiveKit gate persistence decisions are exercised through the public store', async () => {
-  const state = { credentialAllowed: true, epoch: 1, roomExists: true, banCount: 0 };
-  const calls: Array<{ text: string; values: unknown[] }> = [];
-  const query = async (text: string, values: unknown[] = []) => {
-    calls.push({ text, values });
-    if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(text)) return { rows: [], rowCount: 0 };
-    if (/SET epoch = livekit_gate_principal_epochs\.epoch \+ 1/.test(text))
-      return { rows: [{ epoch: ++state.epoch }], rowCount: 1 };
-    if (/INSERT INTO livekit_gate_principal_epochs/.test(text)) return { rows: [{ epoch: state.epoch }], rowCount: 1 };
-    if (/INSERT INTO livekit_gate_credentials/.test(text)) return { rows: [{ id: values[0] }], rowCount: 1 };
-    if (/FROM livekit_gate_credentials c/.test(text) && /LIMIT 1/.test(text))
-      return {
-        rows: state.credentialAllowed ? [{ id: 'credential-1' }] : [],
-        rowCount: state.credentialAllowed ? 1 : 0
-      };
-    if (/SELECT 1 FROM rooms/.test(text))
-      return { rows: state.roomExists ? [{ one: 1 }] : [], rowCount: state.roomExists ? 1 : 0 };
-    if (/SELECT COUNT\(\*\)::int AS count[\s\S]*FROM room_bans/.test(text))
-      return { rows: [{ count: state.banCount }], rowCount: 1 };
-    if (/INSERT INTO room_bans/.test(text))
-      return {
-        rows: [
-          {
-            id: values[0],
-            room_id: values[1],
-            user_id: values[2],
-            ip: values[3],
-            created_at: values[4],
-            metadata: values[5]
-          }
-        ],
-        rowCount: 1
-      };
-    return { rows: [], rowCount: 1 };
-  };
-  const client = { query, release() {} };
-  const pool = {
-    query,
-    async connect() {
-      return client;
-    }
-  };
-  const store = createRoomStore({ pool });
-  const account = { principalType: 'account', principalId: 'user-1' };
-  const guest = { principalType: 'guest', principalId: 'room-1:guest-1' };
+test(
+  'G08 changed LiveKit gate persistence decisions are exercised through the public store',
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (t) => {
+    const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
+    t.after(cleanup);
+    await runMigrations({ databaseUrl, logger: SILENT_LOGGER });
+    await pool.query(
+      `INSERT INTO users (id, login, display_name, password_hash) VALUES ('user-1', 'user-1', 'User', 'x');
+       INSERT INTO rooms (id, is_static) VALUES ('room-1', true);`
+    );
+    const store = createRoomStore({ pool });
+    const account = { principalType: 'account' as const, principalId: 'user-1' };
+    const guest = { principalType: 'guest' as const, principalId: 'room-1:guest-1' };
 
-  assert.deepEqual(store.normalizeGatePrincipal({ accountUserId: 7, roomId: 'room-1' }), {
-    principalType: 'account',
-    principalId: '7'
-  });
-  assert.deepEqual(store.normalizeGatePrincipal({ guestPrincipalId: ' guest-1 ', roomId: 'room-1' }), guest);
-  assert.equal(store.normalizeGatePrincipal({ guestPrincipalId: ' ', roomId: 'room-1' }), null);
-  assert.equal((await store.createLiveKitGateCredential()).status, 'invalid');
-  assert.equal(
-    (
-      await store.createLiveKitGateCredential({
-        credentialHash: 'hash',
-        expiresAt: 2000,
-        peerId: 'peer-1',
-        principal: account,
-        principalEpoch: 0,
-        roomId: 'room-1',
-        now: 1000
-      })
-    ).status,
-    'epoch_mismatch'
-  );
-  const created = await store.createLiveKitGateCredential({
-    credentialHash: 'hash',
-    credentialId: 'credential-1',
-    expiresAt: 2000,
-    peerId: 'peer-1',
-    principal: account,
-    roomId: 'room-1',
-    now: 1000
-  });
-  assert.deepEqual(created, {
-    credential: { id: 'credential-1', principalEpoch: 1, principalId: 'user-1', principalType: 'account' },
-    status: 'created'
-  });
-  assert.equal((await store.getLiveKitGatePrincipalEpoch()).status, 'invalid');
-  assert.deepEqual(await store.getLiveKitGatePrincipalEpoch({ principal: account, roomId: 'room-1', now: 1000 }), {
-    status: 'ready',
-    epoch: 1
-  });
-  assert.equal((await store.verifyLiveKitGateCredential()).status, 'invalid');
-  const verification = {
-    credentialHash: 'hash',
-    peerId: 'peer-1',
-    principalEpoch: 1,
-    principalId: 'user-1',
-    principalType: 'account',
-    roomId: 'room-1',
-    now: 1000
-  };
-  assert.equal((await store.verifyLiveKitGateCredential(verification)).status, 'allowed');
-  state.credentialAllowed = false;
-  assert.equal((await store.verifyLiveKitGateCredential(verification)).status, 'denied');
-  assert.equal((await store.revokeLiveKitGatePrincipal()).status, 'invalid');
-  assert.equal((await store.revokeLiveKitGatePeer({ roomId: 'room-1' })).status, 'invalid');
-  assert.equal(
-    (await store.revokeLiveKitGatePeer({ accountUserId: 'user-1', peerId: 'peer-1', roomId: 'room-1', now: 1000 }))
-      .status,
-    'revoked'
-  );
-  assert.equal(
-    (await store.revokeLiveKitGatePeer({ guestPrincipalId: 'guest-1', peerId: 'peer-2', roomId: 'room-1', now: 1000 }))
-      .status,
-    'revoked'
-  );
-  assert.equal((await store.createRoomBanWithLiveKitGateRevocations()).status, 'invalid');
-  assert.equal(
-    (await store.createRoomBanWithLiveKitGateRevocations({ ip: '127.0.0.1', principals: [], roomId: 'room-1' })).status,
-    'invalid'
-  );
-  assert.equal(
-    (
-      await store.createRoomBanWithLiveKitGateRevocations({
-        ip: '127.0.0.1',
-        principals: [{ principalType: 'root', principalId: 'bad' }],
-        roomId: 'room-1'
-      })
-    ).status,
-    'invalid'
-  );
-  state.roomExists = false;
-  assert.equal(
-    (await store.createRoomBanWithLiveKitGateRevocations({ ip: '127.0.0.1', principals: [guest], roomId: 'room-1' }))
-      .status,
-    'not_found'
-  );
-  state.roomExists = true;
-  state.banCount = 1;
-  assert.equal(
-    (
-      await store.createRoomBanWithLiveKitGateRevocations({
-        ip: '127.0.0.1',
-        maxBans: 1,
-        principals: [guest],
-        roomId: 'room-1'
-      })
-    ).status,
-    'cap_exceeded'
-  );
-  state.banCount = 0;
-  const banned = await store.createRoomBanWithLiveKitGateRevocations({
-    metadata: null,
-    principals: [account, account, guest],
-    roomId: 'room-1',
-    userId: 'user-1',
-    now: 1000
-  });
-  assert.equal(banned.status, 'created');
-  assert.equal(banned.ban.ip, '');
-  assert.equal(banned.revocations.length, 2);
-  assert.equal(await store.assertLiveKitGateReady(), true);
-  assert.ok(calls.some(({ text }) => /UPDATE livekit_gate_credentials/.test(text)));
-});
+    assert.deepEqual(store.normalizeGatePrincipal({ accountUserId: 7, roomId: 'room-1' }), {
+      principalType: 'account',
+      principalId: '7'
+    });
+    assert.deepEqual(store.normalizeGatePrincipal({ guestPrincipalId: ' guest-1 ', roomId: 'room-1' }), guest);
+    assert.equal(store.normalizeGatePrincipal({ guestPrincipalId: ' ', roomId: 'room-1' }), null);
+    assert.equal((await store.createLiveKitGateCredential()).status, 'invalid');
+
+    // A revocation moves the principal to epoch 1; a credential for epoch 0 is refused.
+    assert.deepEqual(await store.revokeLiveKitGatePrincipal({ principal: account, roomId: 'room-1', now: 900 }), {
+      status: 'revoked',
+      epoch: 1
+    });
+    assert.equal(
+      (
+        await store.createLiveKitGateCredential({
+          credentialHash: 'hash',
+          expiresAt: 2000,
+          peerId: 'peer-1',
+          principal: account,
+          principalEpoch: 0,
+          roomId: 'room-1',
+          now: 1000
+        })
+      ).status,
+      'epoch_mismatch'
+    );
+    const created = await store.createLiveKitGateCredential({
+      credentialHash: 'hash',
+      credentialId: 'credential-1',
+      expiresAt: 2000,
+      peerId: 'peer-1',
+      principal: account,
+      roomId: 'room-1',
+      now: 1000
+    });
+    assert.deepEqual(created, {
+      credential: { id: 'credential-1', principalEpoch: 1, principalId: 'user-1', principalType: 'account' },
+      status: 'created'
+    });
+    assert.equal((await store.getLiveKitGatePrincipalEpoch()).status, 'invalid');
+    assert.deepEqual(await store.getLiveKitGatePrincipalEpoch({ principal: account, roomId: 'room-1', now: 1000 }), {
+      status: 'ready',
+      epoch: 1
+    });
+    assert.equal((await store.verifyLiveKitGateCredential()).status, 'invalid');
+    const verification = {
+      credentialHash: 'hash',
+      peerId: 'peer-1',
+      principalEpoch: 1,
+      principalId: 'user-1',
+      principalType: 'account',
+      roomId: 'room-1',
+      now: 1000
+    };
+    assert.equal((await store.verifyLiveKitGateCredential(verification)).status, 'allowed');
+    assert.equal((await store.verifyLiveKitGateCredential({ ...verification, now: 3000 })).status, 'denied', 'expired');
+    assert.equal(
+      (await store.revokeLiveKitGateCredential({ credentialId: 'credential-1', principal: account, roomId: 'room-1' }))
+        .status,
+      'revoked'
+    );
+    assert.equal((await store.verifyLiveKitGateCredential(verification)).status, 'denied');
+    assert.equal(
+      (await store.revokeLiveKitGateCredential({ credentialId: 'nope', principal: account, roomId: 'room-1' })).status,
+      'not_found'
+    );
+    assert.deepEqual(
+      await store.revokeLiveKitGateCredentialsForPeer({ peerId: 'peer-1', principal: account, roomId: 'room-1' }),
+      { status: 'revoked', revoked: 0 }
+    );
+    assert.equal((await store.revokeLiveKitGatePrincipal()).status, 'invalid');
+    assert.equal((await store.revokeLiveKitGatePeer({ roomId: 'room-1' })).status, 'invalid');
+    assert.equal(
+      (await store.revokeLiveKitGatePeer({ accountUserId: 'user-1', peerId: 'peer-1', roomId: 'room-1', now: 1000 }))
+        .status,
+      'revoked'
+    );
+    assert.equal(
+      (
+        await store.revokeLiveKitGatePeer({
+          guestPrincipalId: 'guest-1',
+          peerId: 'peer-2',
+          roomId: 'room-1',
+          now: 1000
+        })
+      ).status,
+      'revoked'
+    );
+    assert.equal((await store.createRoomBanWithLiveKitGateRevocations()).status, 'invalid');
+    assert.equal(
+      (await store.createRoomBanWithLiveKitGateRevocations({ ip: '127.0.0.1', principals: [], roomId: 'room-1' }))
+        .status,
+      'invalid'
+    );
+    assert.equal(
+      (
+        await store.createRoomBanWithLiveKitGateRevocations({
+          ip: '127.0.0.1',
+          principals: [{ principalType: 'root', principalId: 'bad' } as never],
+          roomId: 'room-1'
+        })
+      ).status,
+      'invalid'
+    );
+    assert.equal(
+      (await store.createRoomBanWithLiveKitGateRevocations({ ip: '127.0.0.1', principals: [guest], roomId: 'missing' }))
+        .status,
+      'not_found'
+    );
+    assert.equal(
+      (
+        await store.createRoomBanWithLiveKitGateRevocations({
+          ip: '127.0.0.9',
+          maxBans: 1,
+          principals: [guest],
+          roomId: 'room-1'
+        })
+      ).status,
+      'created'
+    );
+    assert.equal(
+      (
+        await store.createRoomBanWithLiveKitGateRevocations({
+          ip: '127.0.0.1',
+          maxBans: 1,
+          principals: [guest],
+          roomId: 'room-1'
+        })
+      ).status,
+      'cap_exceeded'
+    );
+    const banned = await store.createRoomBanWithLiveKitGateRevocations({
+      metadata: null,
+      principals: [account, account, guest],
+      roomId: 'room-1',
+      userId: 'user-1',
+      now: 1000
+    });
+    assert.equal(banned.status, 'created');
+    assert.equal(banned.ban?.ip, '');
+    assert.equal(banned.revocations.length, 2, 'each principal is revoked once');
+    assert.equal(await store.assertLiveKitGateReady(), true);
+  }
+);
 
 test('G08 realtime join retains and revokes the exact gate principal', async () => {
   const room = { id: 'room123456', peers: new Map(), updatedAt: 0 };
@@ -1121,13 +1126,16 @@ test('G08 admission gate service exported decisions and server paths are exercis
   assert.equal(createLiveKitAuthGateService({ roomStore: store, secret: SECRET }).upstream.hostname, 'public.example');
   delete process.env.LIVEKIT_URL;
   assert.equal(createLiveKitAuthGateService({ roomStore: store, secret: SECRET }).upstream.hostname, '127.0.0.1');
-  assert.ok(createLiveKitAuthGateService({ pool: {}, secret: SECRET, upstreamUrl: 'ws://livekit' }));
   assert.ok(
     createLiveKitAuthGateService({
-      databaseUrl: 'postgresql://localhost/voice',
+      pool: { query: async () => ({ rows: [] }) },
       secret: SECRET,
       upstreamUrl: 'ws://livekit'
     })
+  );
+  assert.throws(
+    () => createLiveKitAuthGateService({ secret: SECRET, upstreamUrl: 'ws://livekit' }),
+    /needs a room store or a pool/
   );
   assert.equal((await gate.authorize(`/rtc?vr_gate_credential=${credential}`)).ok, true);
   decision = 'denied';

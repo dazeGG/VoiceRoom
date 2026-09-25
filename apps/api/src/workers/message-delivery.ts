@@ -1,4 +1,4 @@
-import { createDbPool } from '../lib/db.ts';
+import type pg from 'pg';
 import { readEnvInt, readMessageDeliveryMode } from '../lib/config.ts';
 import { createMessageOutboxRepository } from '../domains/messaging/message-outbox-repository.ts';
 import { boundedBackoff, createLeaseRuntime } from '../platform/lease-runtime.ts';
@@ -156,7 +156,7 @@ function createMessageDeliveryWorker({
   });
 }
 
-async function main(env: NodeJS.ProcessEnv = process.env): Promise<void> {
+async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
   if (!readMessageDeliveryMode(env).claimEnabled) {
     createLogger({ env, name: 'worker.message-delivery' }).info(
       { evt: LOG_EVENTS.WORKER_DISABLED, worker: 'message-delivery', reason: 'claims_disabled' },
@@ -165,7 +165,6 @@ async function main(env: NodeJS.ProcessEnv = process.env): Promise<void> {
     return;
   }
 
-  const pool = createDbPool();
   const outbox = createMessageOutboxRepository({ pool });
   const worker = createMessageDeliveryWorker({
     batchSize: readEnvInt('MESSAGE_DELIVERY_BATCH_SIZE', 100, 1, env),
@@ -180,7 +179,7 @@ async function main(env: NodeJS.ProcessEnv = process.env): Promise<void> {
   let stopPromise: Promise<void> | null = null;
   function stop(): Promise<void> {
     if (!stopPromise) {
-      stopPromise = worker.stop().finally(() => pool.end());
+      stopPromise = worker.stop();
     }
     return stopPromise;
   }
@@ -196,16 +195,6 @@ async function main(env: NodeJS.ProcessEnv = process.env): Promise<void> {
   } finally {
     await stop();
   }
-}
-
-if (import.meta.main) {
-  main().catch((error) => {
-    createLogger({ name: 'worker.message-delivery' }).fatal(
-      { evt: LOG_EVENTS.WORKER_FAILED, worker: 'message-delivery', err: error },
-      'message delivery worker failed'
-    );
-    process.exitCode = 1;
-  });
 }
 
 export { LEASE_IDENTITY, createMessageDeliveryWorker, main };

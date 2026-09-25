@@ -1,20 +1,23 @@
 import pg from 'pg';
-import { readDatabaseConfig } from './config.ts';
-import { recordPgPoolError } from './metrics.ts';
-import { LOG_EVENTS } from './log-events.ts';
-import { createLogger } from './logger.ts';
+import { recordPgPoolError } from '../../lib/metrics.ts';
+import { LOG_EVENTS } from '../../lib/log-events.ts';
+import { createLogger } from '../../lib/logger.ts';
 
 type PoolLogger = { error(...args: unknown[]): void };
 
+/**
+ * A PostgreSQL pool. Each process opens one, at its entrypoint, and hands it to
+ * every store and repository; modules never open their own.
+ */
 function createDbPool({
-  databaseUrl = readDatabaseConfig().url,
+  databaseUrl,
   logger = createLogger({ name: 'api' }),
   max = 10
 }: {
-  databaseUrl?: string;
-  logger?: PoolLogger | unknown;
+  databaseUrl: string;
+  logger?: PoolLogger;
   max?: number;
-} = {}): pg.Pool {
+}): pg.Pool {
   const pool = new pg.Pool({
     connectionString: databaseUrl,
     max
@@ -22,7 +25,7 @@ function createDbPool({
 
   pool.on('error', (error) => {
     recordPgPoolError();
-    (logger as PoolLogger).error({ evt: LOG_EVENTS.DB_POOL_ERROR, err: error }, 'unexpected PostgreSQL pool error');
+    logger.error({ evt: LOG_EVENTS.DB_POOL_ERROR, err: error }, 'unexpected PostgreSQL pool error');
   });
 
   return pool;
@@ -39,7 +42,8 @@ async function transaction<T>(
     await client.query('COMMIT');
     return result;
   } catch (error) {
-    await client.query('ROLLBACK');
+    // A broken connection fails the rollback too; the caller needs the first error.
+    await client.query('ROLLBACK').catch(() => {});
     throw error;
   } finally {
     client.release();

@@ -8,7 +8,9 @@ import {
   type BanMutation,
   type ModerationPage
 } from '@voice-room/shared/moderation';
-import { transaction } from '../../lib/db.ts';
+import { sql } from 'kysely';
+import { kyselyOn } from '../../platform/db/kysely.ts';
+import { transaction } from '../../platform/db/pool.ts';
 import {
   createModerationRepository,
   type ModerationBan,
@@ -93,7 +95,7 @@ function createModerationService({
 
     const result = await transaction(pool, async (client: pg.PoolClient): Promise<BanOutcome> => {
       if (!(await authorizeOwner(roomId, actorUserId, { client }))) return { status: 'forbidden', ban: null };
-      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`voice-room:room-bans:${roomId}`]);
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${`voice-room:room-bans:${roomId}`}))`.execute(kyselyOn(client));
       const replay = await repository.findByIdempotencyKey(roomId, key, { client });
       if (replay) return { status: 'replayed', ban: replay };
 
@@ -164,7 +166,7 @@ function createModerationService({
     if (!roomId || !banId) return { status: 'invalid', ban: null };
     return transaction(pool, async (client: pg.PoolClient): Promise<UnbanOutcome> => {
       if (!(await authorizeOwner(roomId, actorUserId, { client }))) return { status: 'forbidden', ban: null };
-      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`voice-room:room-bans:${roomId}`]);
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${`voice-room:room-bans:${roomId}`}))`.execute(kyselyOn(client));
       const result = await repository.revoke({ roomId, banId, at: now(), client });
       return result.found ? { status: 'unbanned', ban: result.ban } : { status: 'not_found', ban: null };
     });

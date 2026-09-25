@@ -15,15 +15,12 @@ async function createStores(
   t: TestContext,
   notificationOptions: Partial<Parameters<typeof createNotificationStore>[0]> = {}
 ) {
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
-  const users = createUserStore({ databaseUrl, logger: SILENT });
-  const rooms = createRoomStore({ databaseUrl, logger: SILENT });
-  const notifications = createNotificationStore({ databaseUrl, logger: SILENT, ...notificationOptions });
+  const users = createUserStore({ pool, logger: SILENT });
+  const rooms = createRoomStore({ pool });
+  const notifications = createNotificationStore({ pool, ...notificationOptions });
   t.after(async () => {
-    await notifications.close();
-    await rooms.close();
-    await users.close();
     await cleanup();
   });
   return { users, rooms, notifications };

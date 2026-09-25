@@ -1,5 +1,8 @@
 import crypto from 'node:crypto';
+import { sql, type ExpressionBuilder } from 'kysely';
 import type pg from 'pg';
+import { kyselyOn } from '../../platform/db/kysely.ts';
+import type { DB } from '../../platform/db/schema.ts';
 import { buildMessageDeliveryEvent, type MessageDeliveryEvent } from '@voice-room/shared/messaging-send';
 
 const DEFAULT_CLAIM_LIMIT = 100;
@@ -66,6 +69,22 @@ function positiveInteger(value: unknown, fallback: number, max: number = Number.
   return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(parsed, max) : fallback;
 }
 
+const now = sql<Date>`current_timestamp`;
+const after = (ms: number) => sql<Date>`current_timestamp + (${ms} * interval '1 millisecond')`;
+
+// The worker still holds this lease: same owner, same fence, not expired.
+function holdsLease(eb: ExpressionBuilder<DB, 'message_delivery_outbox'>, lease: DeliveryLease) {
+  return eb.exists(
+    eb
+      .selectFrom('message_delivery_leases')
+      .select('identity')
+      .where('identity', '=', lease.identity)
+      .where('owner_id', '=', lease.ownerId)
+      .where('fencing_token', '=', String(lease.fencingToken))
+      .where('expires_at', '>', now)
+  );
+}
+
 function mapOutboxRow(row: OutboxRow): OutboxEvent {
   return Object.freeze({
     eventId: row.event_id,
@@ -82,8 +101,10 @@ function mapOutboxRow(row: OutboxRow): OutboxEvent {
 
 function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } = {}) {
   requireQuery(pool, 'PostgreSQL pool');
-  const db = pool;
+  const db = kyselyOn(pool);
 
+  // Written in the caller's transaction, next to the message it announces; the
+  // same event and revision is queued once.
   async function enqueue(
     client: unknown,
     value: Record<string, unknown>,
@@ -93,30 +114,28 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
     const normalizedRevision = positiveInteger(revision, 1);
     const event = buildMessageDeliveryEvent(value);
     if (!event) throw new TypeError('A valid message delivery event is required');
-    const identity = logicalKey(event, normalizedRevision);
-
-    const result = await client.query<OutboxRow>(
-      `INSERT INTO message_delivery_outbox (
-         event_id, logical_key, event_type, conversation_type, conversation_id,
-         message_id, revision, payload
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
-       ON CONFLICT (logical_key) DO UPDATE SET logical_key = EXCLUDED.logical_key
-       RETURNING *`,
-      [
-        event.eventId,
-        identity,
-        event.type,
-        event.conversation.type,
-        event.conversation.id,
-        event.messageId,
-        normalizedRevision,
-        JSON.stringify(event)
-      ]
-    );
-    // The upsert always returns the row, fresh or already queued.
-    return mapOutboxRow(result.rows[0]!);
+    const row = await kyselyOn(client)
+      .insertInto('message_delivery_outbox')
+      .values({
+        event_id: event.eventId,
+        logical_key: logicalKey(event, normalizedRevision),
+        event_type: event.type,
+        conversation_type: event.conversation.type,
+        conversation_id: event.conversation.id,
+        message_id: event.messageId,
+        revision: normalizedRevision,
+        payload: JSON.stringify(event)
+      })
+      .onConflict((oc) =>
+        oc.column('logical_key').doUpdateSet((eb) => ({ logical_key: eb.ref('excluded.logical_key') }))
+      )
+      .returningAll()
+      .executeTakeFirstOrThrow();
+    return mapOutboxRow(row as OutboxRow);
   }
 
+  // A lease is taken when it is free or expired, or renewed by its owner; each
+  // acquisition moves the fence.
   async function acquireLease({
     identity,
     leaseMs,
@@ -126,75 +145,75 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
     leaseMs?: unknown;
     ownerId: string;
   }): Promise<{ acquired: false } | { acquired: true; fencingToken: number; expiresAt: unknown }> {
-    const result = await db.query<{ fencing_token: number | string; expires_at: unknown }>(
-      `INSERT INTO message_delivery_leases (
-         identity, owner_id, fencing_token, expires_at, heartbeat_at, ready, updated_at
-       ) VALUES ($1, $2, 1, current_timestamp + ($3 * interval '1 millisecond'), current_timestamp, false, current_timestamp)
-       ON CONFLICT (identity) DO UPDATE SET
-         owner_id = EXCLUDED.owner_id,
-         fencing_token = message_delivery_leases.fencing_token + 1,
-         expires_at = EXCLUDED.expires_at,
-         heartbeat_at = current_timestamp,
-         ready = false,
-         updated_at = current_timestamp
-       WHERE message_delivery_leases.expires_at <= current_timestamp
-          OR message_delivery_leases.owner_id = EXCLUDED.owner_id
-       RETURNING fencing_token, expires_at`,
-      [identity, ownerId, positiveInteger(leaseMs, 30_000)]
-    );
-    const row = result.rows[0];
-    if (!result.rowCount || !row) return { acquired: false };
-    return {
-      acquired: true,
-      fencingToken: Number(row.fencing_token),
-      expiresAt: row.expires_at
-    };
+    const row = await db
+      .insertInto('message_delivery_leases')
+      .values({
+        identity,
+        owner_id: ownerId,
+        fencing_token: 1,
+        expires_at: after(positiveInteger(leaseMs, 30_000)),
+        heartbeat_at: now,
+        ready: false,
+        updated_at: now
+      })
+      .onConflict((oc) =>
+        oc
+          .column('identity')
+          .doUpdateSet((eb) => ({
+            owner_id: eb.ref('excluded.owner_id'),
+            fencing_token: sql<string>`message_delivery_leases.fencing_token + 1`,
+            expires_at: eb.ref('excluded.expires_at'),
+            heartbeat_at: now,
+            ready: false,
+            updated_at: now
+          }))
+          .where((eb) =>
+            eb.or([
+              eb('message_delivery_leases.expires_at', '<=', now),
+              eb('message_delivery_leases.owner_id', '=', eb.ref('excluded.owner_id'))
+            ])
+          )
+      )
+      .returning(['fencing_token', 'expires_at'])
+      .executeTakeFirst();
+    if (!row) return { acquired: false };
+    return { acquired: true, fencingToken: Number(row.fencing_token), expiresAt: row.expires_at };
+  }
+
+  function ownLease(lease: DeliveryLease) {
+    return db
+      .updateTable('message_delivery_leases')
+      .where('identity', '=', lease.identity)
+      .where('owner_id', '=', lease.ownerId)
+      .where('fencing_token', '=', String(lease.fencingToken));
   }
 
   async function renewLease({
-    fencingToken,
-    identity,
     leaseMs,
-    ownerId
+    ...lease
   }: DeliveryLease & { leaseMs?: unknown }): Promise<{ renewed: true; expiresAt: unknown } | { renewed: false }> {
-    const result = await db.query<{ expires_at: unknown }>(
-      `UPDATE message_delivery_leases
-       SET expires_at = current_timestamp + ($4 * interval '1 millisecond'),
-           heartbeat_at = current_timestamp, ready = true, updated_at = current_timestamp
-       WHERE identity = $1 AND owner_id = $2 AND fencing_token = $3
-         AND expires_at > current_timestamp
-       RETURNING expires_at`,
-      [identity, ownerId, fencingToken, positiveInteger(leaseMs, 30_000)]
-    );
-    const row = result.rows[0];
-    return result.rowCount && row ? { renewed: true, expiresAt: row.expires_at } : { renewed: false };
+    const row = await ownLease(lease)
+      .set({ expires_at: after(positiveInteger(leaseMs, 30_000)), heartbeat_at: now, ready: true, updated_at: now })
+      .where('expires_at', '>', now)
+      .returning('expires_at')
+      .executeTakeFirst();
+    return row ? { renewed: true, expiresAt: row.expires_at } : { renewed: false };
   }
 
-  async function releaseLease({ fencingToken, identity, ownerId }: DeliveryLease): Promise<void> {
-    await db.query(
-      `UPDATE message_delivery_leases
-       SET expires_at = current_timestamp, ready = false, updated_at = current_timestamp
-       WHERE identity = $1 AND owner_id = $2 AND fencing_token = $3`,
-      [identity, ownerId, fencingToken]
-    );
+  async function releaseLease(lease: DeliveryLease): Promise<void> {
+    await ownLease(lease).set({ expires_at: now, ready: false, updated_at: now }).execute();
   }
 
-  async function recordHeartbeat({
-    fencingToken,
-    identity,
-    ownerId,
-    ready
-  }: DeliveryLease & { ready?: unknown }): Promise<boolean> {
-    const result = await db.query(
-      `UPDATE message_delivery_leases
-       SET heartbeat_at = current_timestamp, ready = $4, updated_at = current_timestamp
-       WHERE identity = $1 AND owner_id = $2 AND fencing_token = $3
-         AND expires_at > current_timestamp`,
-      [identity, ownerId, fencingToken, Boolean(ready)]
-    );
-    return result.rowCount === 1;
+  async function recordHeartbeat({ ready, ...lease }: DeliveryLease & { ready?: unknown }): Promise<boolean> {
+    const result = await ownLease(lease)
+      .set({ heartbeat_at: now, ready: Boolean(ready), updated_at: now })
+      .where('expires_at', '>', now)
+      .executeTakeFirst();
+    return result.numUpdatedRows === 1n;
   }
 
+  // Claims due events, and events whose claim went stale, but only while the
+  // lease is held; the claim records the fence it was made under.
   async function claimBatch({
     fencingToken,
     identity,
@@ -202,56 +221,74 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
     ownerId,
     staleClaimMs = DEFAULT_STALE_CLAIM_MS
   }: DeliveryLease & { limit?: unknown; staleClaimMs?: unknown }): Promise<OutboxEvent[]> {
-    const result = await db.query<OutboxRow>(
-      `WITH active_lease AS (
-         SELECT 1 FROM message_delivery_leases
-         WHERE identity = $1 AND owner_id = $2 AND fencing_token = $3
-           AND expires_at > current_timestamp
-       ), candidates AS (
-         SELECT event_id
-         FROM message_delivery_outbox
-         WHERE (
-           (status = 'pending' AND available_at <= current_timestamp)
-           OR (status = 'processing' AND claimed_at <= current_timestamp - ($5 * interval '1 millisecond'))
-         )
-         ORDER BY available_at, created_at, event_id
-         FOR UPDATE SKIP LOCKED
-         LIMIT $4
-       )
-       UPDATE message_delivery_outbox AS outbox
-       SET status = 'processing', attempts = attempts + 1, claimed_at = current_timestamp,
-           claimed_fencing_token = $3, updated_at = current_timestamp
-       FROM candidates, active_lease
-       WHERE outbox.event_id = candidates.event_id
-       RETURNING outbox.*`,
-      [
-        identity,
-        ownerId,
-        fencingToken,
-        positiveInteger(limit, DEFAULT_CLAIM_LIMIT, 1_000),
-        positiveInteger(staleClaimMs, DEFAULT_STALE_CLAIM_MS)
-      ]
-    );
-    return result.rows.map(mapOutboxRow);
+    const staleBefore = sql<Date>`current_timestamp - (${positiveInteger(staleClaimMs, DEFAULT_STALE_CLAIM_MS)} * interval '1 millisecond')`;
+    const rows = await db
+      .with('active_lease', (qb) =>
+        qb
+          .selectFrom('message_delivery_leases')
+          .select('identity')
+          .where('identity', '=', identity)
+          .where('owner_id', '=', ownerId)
+          .where('fencing_token', '=', String(fencingToken))
+          .where('expires_at', '>', now)
+      )
+      .with('candidates', (qb) =>
+        qb
+          .selectFrom('message_delivery_outbox')
+          .select('event_id')
+          .where((eb) =>
+            eb.or([
+              eb.and([eb('status', '=', 'pending'), eb('available_at', '<=', now)]),
+              eb.and([eb('status', '=', 'processing'), eb('claimed_at', '<=', staleBefore)])
+            ])
+          )
+          .orderBy('available_at')
+          .orderBy('created_at')
+          .orderBy('event_id')
+          .forUpdate()
+          .skipLocked()
+          .limit(positiveInteger(limit, DEFAULT_CLAIM_LIMIT, 1_000))
+      )
+      .updateTable('message_delivery_outbox as outbox')
+      .from(['candidates', 'active_lease'])
+      .set((eb) => ({
+        status: 'processing',
+        attempts: eb('outbox.attempts', '+', 1),
+        claimed_at: now,
+        claimed_fencing_token: String(fencingToken),
+        updated_at: now
+      }))
+      .whereRef('outbox.event_id', '=', 'candidates.event_id')
+      .returningAll('outbox')
+      .execute();
+    return rows.map((row) => mapOutboxRow(row as OutboxRow));
+  }
+
+  function claimedUnderLease(eventId: string, lease: DeliveryLease) {
+    return db
+      .updateTable('message_delivery_outbox')
+      .where('event_id', '=', eventId)
+      .where('status', '=', 'processing')
+      .where('claimed_fencing_token', '=', String(lease.fencingToken))
+      .where((eb) => holdsLease(eb, lease));
   }
 
   async function markDelivered(eventId: string, lease: DeliveryLease): Promise<void> {
-    const result = await db.query(
-      `UPDATE message_delivery_outbox AS outbox
-       SET status = 'delivered', delivered_at = current_timestamp, claimed_at = NULL,
-           claimed_fencing_token = NULL, last_error = NULL, updated_at = current_timestamp
-       WHERE outbox.event_id = $1 AND outbox.status = 'processing'
-         AND outbox.claimed_fencing_token = $4
-         AND EXISTS (
-           SELECT 1 FROM message_delivery_leases
-           WHERE identity = $2 AND owner_id = $3 AND fencing_token = $4
-             AND expires_at > current_timestamp
-         )`,
-      [eventId, lease.identity, lease.ownerId, lease.fencingToken]
-    );
-    if (!result.rowCount) throw new MessageDeliveryFenceError();
+    const result = await claimedUnderLease(eventId, lease)
+      .set({
+        status: 'delivered',
+        delivered_at: now,
+        claimed_at: null,
+        claimed_fencing_token: null,
+        last_error: null,
+        updated_at: now
+      })
+      .executeTakeFirst();
+    if (!result.numUpdatedRows) throw new MessageDeliveryFenceError();
   }
 
+  // A failed delivery goes back to pending after the delay, or dead once it
+  // has used its attempts.
   async function reschedule(
     eventId: string,
     lease: DeliveryLease,
@@ -265,34 +302,22 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
       maxAttempts?: unknown;
     } = {}
   ): Promise<void> {
-    const message = String(
-      (error as { message?: unknown } | null | undefined)?.message || error || 'Message delivery failed'
-    ).slice(0, 2_000);
-    const result = await db.query(
-      `UPDATE message_delivery_outbox AS outbox
-       SET status = CASE WHEN attempts >= $6 THEN 'dead' ELSE 'pending' END,
-           available_at = CASE WHEN attempts >= $6 THEN available_at ELSE current_timestamp + ($5 * interval '1 millisecond') END,
-           dead_at = CASE WHEN attempts >= $6 THEN current_timestamp ELSE NULL END,
-           claimed_at = NULL, claimed_fencing_token = NULL, last_error = $7,
-           updated_at = current_timestamp
-       WHERE outbox.event_id = $1 AND outbox.status = 'processing'
-         AND outbox.claimed_fencing_token = $4
-         AND EXISTS (
-           SELECT 1 FROM message_delivery_leases
-           WHERE identity = $2 AND owner_id = $3 AND fencing_token = $4
-             AND expires_at > current_timestamp
-         )`,
-      [
-        eventId,
-        lease.identity,
-        lease.ownerId,
-        lease.fencingToken,
-        positiveInteger(delayMs, 1_000, 60 * 60 * 1000),
-        positiveInteger(maxAttempts, 12, 100),
-        message
-      ]
-    );
-    if (!result.rowCount) throw new MessageDeliveryFenceError();
+    const reason = (error as { message?: unknown } | null | undefined)?.message || error || 'Message delivery failed';
+    const message = (typeof reason === 'string' ? reason : 'Message delivery failed').slice(0, 2_000);
+    const attemptsLeft = sql<boolean>`attempts < ${positiveInteger(maxAttempts, 12, 100)}`;
+    const result = await claimedUnderLease(eventId, lease)
+      .set({
+        status: sql<string>`CASE WHEN ${attemptsLeft} THEN 'pending' ELSE 'dead' END`,
+        available_at: sql<Date>`CASE WHEN ${attemptsLeft}
+          THEN ${after(positiveInteger(delayMs, 1_000, 60 * 60 * 1000))} ELSE available_at END`,
+        dead_at: sql<Date | null>`CASE WHEN ${attemptsLeft} THEN NULL ELSE current_timestamp END`,
+        claimed_at: null,
+        claimed_fencing_token: null,
+        last_error: message,
+        updated_at: now
+      })
+      .executeTakeFirst();
+    if (!result.numUpdatedRows) throw new MessageDeliveryFenceError();
   }
 
   async function publishPostgres(
@@ -300,15 +325,17 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
     { channel = 'voice_room_message_delivery' }: { channel?: string } = {}
   ): Promise<void> {
     if (!/^[a-z][a-z0-9_]{0,62}$/i.test(channel)) throw new TypeError('Invalid PostgreSQL notification channel');
-    const payload = JSON.stringify({ eventId: event.eventId });
-    await db.query('SELECT pg_notify($1, $2)', [channel, payload]);
+    await sql`SELECT pg_notify(${channel}, ${JSON.stringify({ eventId: event.eventId })})`.execute(db);
   }
 
   async function getEvent(eventId: string): Promise<OutboxEvent | null> {
-    const result = await db.query<OutboxRow>(`SELECT * FROM message_delivery_outbox WHERE event_id = $1 LIMIT 1`, [
-      eventId
-    ]);
-    return result.rows[0] ? mapOutboxRow(result.rows[0]) : null;
+    const row = await db
+      .selectFrom('message_delivery_outbox')
+      .selectAll()
+      .where('event_id', '=', eventId)
+      .limit(1)
+      .executeTakeFirst();
+    return row ? mapOutboxRow(row as OutboxRow) : null;
   }
 
   return Object.freeze({

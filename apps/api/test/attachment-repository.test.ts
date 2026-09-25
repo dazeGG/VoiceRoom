@@ -1,14 +1,25 @@
-import test from 'node:test';
+// The attachment repository over a migrated database: drafts, the upload and
+// processing states, binding to a message, cleanup, storage inventory, quotas
+// and the upload lock.
+
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import type pg from 'pg';
 
 import { createAttachmentRepository, mapAttachment } from '../src/domains/media/attachment-repository.ts';
-import { fakeDb, result } from './fakes/index.ts';
+import { transaction } from '../src/platform/db/pool.ts';
+import { runMigrations } from '../src/lib/migrate.ts';
+import { createTestDatabase } from './db-harness.ts';
+
+const SILENT = { log() {}, info() {}, warn() {}, error() {} };
+const skip = !process.env.TEST_DATABASE_URL;
 
 const ROW = Object.freeze({
   id: 'attachment-1',
   owner_id: 'owner-1',
-  context: 'room',
-  state: 'ready',
+  context: 'room' as const,
+  state: 'ready' as const,
   client_request_id: 'request-1',
   reserved_bytes: '10',
   reservation_expires_at: new Date('2026-07-22T00:00:00Z'),
@@ -35,307 +46,287 @@ const ROW = Object.freeze({
   deleted_at: null
 });
 
-function createPool(handler: (text: string) => unknown = () => result([ROW])) {
-  const pool = fakeDb(handler);
-  return { calls: pool.calls, pool };
+const UPLOAD = { mimeType: 'image/png', bytes: 20, width: 800, height: 600, originalStorageKey: ' original ' };
+const PROCESSED = {
+  processedStorageKey: ' processed ',
+  previewStorageKey: ' preview ',
+  processedBytes: 15,
+  previewBytes: 5
+};
+
+async function setup(t: TestContext) {
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
+  t.after(cleanup);
+  await runMigrations({ databaseUrl, logger: SILENT });
+  const ownerId = crypto.randomUUID();
+  const peerId = crypto.randomUUID();
+  await pool.query(
+    `INSERT INTO users (id, login, display_name, password_hash) VALUES ($1, 'owner', 'Owner', 'x'), ($2, 'peer', 'Peer', 'x');
+     INSERT INTO rooms (id, is_static) VALUES ('room-1', true);
+     INSERT INTO room_messages (id, room_id, text) VALUES ('room-message-1', 'room-1', 'hi');`
+      .replaceAll('$1', `'${ownerId}'`)
+      .replaceAll('$2', `'${peerId}'`)
+  );
+  await pool.query(`INSERT INTO direct_messages (id, sender_id, recipient_id, body) VALUES ('dm-1', $1, $2, 'hi')`, [
+    ownerId,
+    peerId
+  ]);
+  const repository = createAttachmentRepository({ pool });
+  // A draft taken through upload and processing to ready.
+  async function ready(context: 'room' | 'dm' = 'room') {
+    const draft = await repository.createDraft({ ownerId, context });
+    assert.ok(draft);
+    await repository.markUploaded(draft.id, UPLOAD);
+    const done = await repository.markReady(draft.id, PROCESSED);
+    assert.equal(done?.state, 'ready');
+    return done;
+  }
+  return { pool, repository, ownerId, ready };
 }
 
-// The last statement the fake ran.
-function last(calls: Array<{ text: string; values: unknown[] }>) {
-  const call = calls.at(-1);
-  assert.ok(call);
-  return call;
-}
-
-// An attachment the repository must have returned.
-function present<T>(value: T | null | undefined): T {
-  assert.ok(value);
-  return value;
+async function age(pool: pg.Pool, id: string, interval: string) {
+  await pool.query(`UPDATE message_attachments SET updated_at = current_timestamp - $2::interval WHERE id = $1`, [
+    id,
+    interval
+  ]);
 }
 
 test('attachment repository validates its pool and maps database rows', () => {
   assert.throws(() => createAttachmentRepository(), /PostgreSQL pool is required/);
   assert.equal(mapAttachment(null), null);
 
-  const mapped = present(mapAttachment(ROW));
+  const mapped = mapAttachment(ROW);
+  assert.ok(mapped);
   assert.deepEqual(mapped.storageKeys, { original: 'original', processed: 'processed', preview: 'preview' });
   assert.equal(mapped.state, 'ready');
   assert.equal(mapped.internalState, 'ready');
-  assert.equal(mapped.reservedBytes, 10);
-  assert.equal(mapped.originalBytes, 20);
-  assert.equal(mapped.processedBytes, 15);
-  assert.equal(mapped.previewBytes, 5);
+  assert.deepEqual(
+    [mapped.reservedBytes, mapped.originalBytes, mapped.processedBytes, mapped.previewBytes],
+    [10, 20, 15, 5]
+  );
   assert.equal(Object.isFrozen(mapped), true);
   assert.equal(Object.isFrozen(mapped.storageKeys), true);
 
-  const pending = present(
-    mapAttachment({
-      ...ROW,
-      state: 'uploading',
-      metadata: null,
-      reserved_bytes: null,
-      original_bytes: null,
-      processed_bytes: null,
-      preview_bytes: null
-    })
-  );
+  const pending = mapAttachment({
+    ...ROW,
+    state: 'uploading',
+    metadata: null,
+    reserved_bytes: null,
+    original_bytes: null,
+    processed_bytes: null,
+    preview_bytes: null,
+    attachment_order: null
+  });
+  assert.ok(pending);
   assert.equal(pending.state, 'pending');
   assert.deepEqual(pending.metadata, {});
-  assert.equal(pending.reservedBytes, null);
-  assert.equal(pending.originalBytes, null);
-  assert.equal(pending.processedBytes, null);
-  assert.equal(pending.previewBytes, null);
+  assert.deepEqual(
+    [pending.reservedBytes, pending.originalBytes, pending.processedBytes, pending.previewBytes, pending.order],
+    [null, null, null, null, 0]
+  );
 });
 
-test('attachment repository covers draft, lookup, upload, processing, and deletion transitions', async () => {
-  const { calls, pool } = createPool();
-  const repository = createAttachmentRepository({ pool });
-  const client = fakeDb(() => result([ROW]));
+test('a draft moves through upload, processing, failure and deletion', { skip }, async (t) => {
+  const { pool, repository, ownerId } = await setup(t);
+  const expires = new Date(Date.now() + 60_000);
 
   const draft = await repository.createDraft({
-    id: 'attachment-1',
-    ownerId: ' owner-1 ',
+    ownerId: ` ${ownerId} `,
     context: 'room',
     clientRequestId: ' request-1 ',
     reservedBytes: 100,
-    reservationExpiresAt: ROW.reservation_expires_at,
+    reservationExpiresAt: expires,
     metadata: { source: 'test' }
   });
-  assert.equal(draft?.id, 'attachment-1');
-  assert.deepEqual(last(calls).values, [
-    'attachment-1',
-    'owner-1',
-    'room',
-    'request-1',
-    100,
-    ROW.reservation_expires_at,
-    { source: 'test' }
-  ]);
-  await repository.createDraft({ ownerId: 'owner-1', context: 'dm' });
-  assert.equal(typeof last(calls).values[0], 'string');
-  assert.equal(last(calls).values[3], null);
-
-  assert.equal((await repository.findById('attachment-1'))?.id, 'attachment-1');
-  await repository.findById('attachment-1', { forUpdate: true, client });
-  assert.match(client.calls[0]?.text ?? '', /FOR UPDATE/);
-  assert.equal((await repository.listOwnerDrafts('owner-1', 'room', { limit: 0 })).length, 1);
-  assert.equal(last(calls).values[2], 20);
-  await repository.listOwnerDrafts('owner-1', 'room', { limit: 999 });
-  assert.equal(last(calls).values[2], 100);
-  assert.equal((await repository.findByClientRequest('owner-1', 'room', 'request-1'))?.id, 'attachment-1');
-
-  assert.equal(
-    (
-      await repository.markUploaded('attachment-1', {
-        mimeType: 'image/png',
-        bytes: 20,
-        width: 800,
-        height: 600,
-        originalStorageKey: ' original '
-      })
-    )?.id,
-    'attachment-1'
+  assert.ok(draft);
+  assert.deepEqual(
+    [draft.ownerId, draft.state, draft.clientRequestId, draft.reservedBytes, draft.metadata],
+    [ownerId, 'pending', 'request-1', 100, { source: 'test' }]
   );
-  assert.equal((await repository.retryProcessing('attachment-1'))?.id, 'attachment-1');
-  assert.equal(
-    (
-      await repository.markReady('attachment-1', {
-        processedStorageKey: ' processed ',
-        previewStorageKey: ' preview ',
-        processedBytes: 15,
-        previewBytes: 5
-      })
-    )?.id,
-    'attachment-1'
-  );
-  assert.equal((await repository.markFailed('attachment-1', ' processing_failed '))?.id, 'attachment-1');
-  assert.equal((await repository.markUnavailable('attachment-1'))?.id, 'attachment-1');
-  assert.equal(last(calls).values[1], 'media_missing');
-  assert.equal((await repository.markDeleted('attachment-1'))?.id, 'attachment-1');
-  assert.equal((await repository.clearPhysicalData('attachment-1'))?.id, 'attachment-1');
+  const retried = await repository.createDraft({ ownerId, context: 'room', clientRequestId: 'request-1' });
+  assert.equal(retried?.id, draft.id, 'the same client request answers with the same draft');
+  const plain = await repository.createDraft({ ownerId, context: 'dm' });
+  assert.equal(plain?.clientRequestId, null);
 
-  const fallbackDelete = createAttachmentRepository({
-    pool: fakeDb((text) => (/SET state = 'deleted'/.test(text) ? result() : result([ROW])))
+  assert.equal((await repository.findById(draft.id))?.id, draft.id);
+  await transaction(pool, async (client) => {
+    assert.equal((await repository.findById(draft.id, { forUpdate: true, client }))?.id, draft.id);
   });
-  assert.equal((await fallbackDelete.markDeleted('attachment-1'))?.id, 'attachment-1');
+  assert.equal(await repository.findById(crypto.randomUUID()), null);
+  assert.equal((await repository.listOwnerDrafts(ownerId, 'room', { limit: 0 })).length, 1);
+  assert.equal((await repository.listOwnerDrafts(ownerId, 'dm', { limit: 999 })).length, 1);
+  assert.equal((await repository.findByClientRequest(ownerId, 'room', 'request-1'))?.id, draft.id);
 
-  await assert.rejects(
-    () => repository.createDraft({ ownerId: 'owner-1', context: 'other' }),
-    /Invalid attachment context/
+  const uploaded = await repository.markUploaded(draft.id, UPLOAD);
+  assert.deepEqual(
+    [uploaded?.state, uploaded?.originalBytes, uploaded?.storageKeys.original, uploaded?.reservedBytes],
+    ['processing', 20, 'original', null]
   );
+  assert.equal(await repository.markUploaded(draft.id, UPLOAD), null, 'only an uploading draft takes an upload');
+  assert.equal(await repository.retryProcessing(draft.id), null, 'only a failed attachment is retried');
+
+  const failed = await repository.markFailed(draft.id, ' processing_failed ');
+  assert.deepEqual([failed?.state, failed?.failureCode], ['failed', 'processing_failed']);
+  assert.equal((await repository.retryProcessing(draft.id))?.state, 'processing');
+  const done = await repository.markReady(draft.id, PROCESSED);
+  assert.deepEqual([done?.state, done?.storageKeys.processed, done?.previewBytes], ['ready', 'processed', 5]);
+  assert.equal(await repository.markReady(draft.id, PROCESSED), null, 'only a processing attachment turns ready');
+
+  const unavailable = await repository.markUnavailable(draft.id);
+  assert.deepEqual([unavailable?.state, unavailable?.failureCode], ['failed', 'media_missing']);
+  const deleted = await repository.markDeleted(draft.id);
+  assert.equal(deleted?.internalState, 'deleted');
+  assert.equal((await repository.markDeleted(draft.id))?.id, draft.id, 'deleting again answers with the row');
+  assert.equal(await repository.markDeleted(crypto.randomUUID()), null);
+  const cleared = await repository.clearPhysicalData(draft.id);
+  assert.deepEqual(cleared?.storageKeys, { original: null, processed: null, preview: null });
+
+  await assert.rejects(() => repository.createDraft({ ownerId, context: 'other' }), /Invalid attachment context/);
   await assert.rejects(() => repository.createDraft({ ownerId: '', context: 'room' }), /Invalid attachment owner/);
   await assert.rejects(() => repository.createDraft({ ownerId: null, context: 'room' }), /Invalid attachment owner/);
   await assert.rejects(
-    () => repository.createDraft({ ownerId: 'owner-1', context: 'room', clientRequestId: 'x'.repeat(129) }),
+    () => repository.createDraft({ ownerId, context: 'room', clientRequestId: 'x'.repeat(129) }),
     /Invalid client request id/
   );
   await assert.rejects(
-    () => repository.markUploaded('attachment-1', { mimeType: 'text/plain' } as never),
+    () => repository.markUploaded(draft.id, { mimeType: 'text/plain' } as never),
     /Invalid attachment MIME type/
   );
   await assert.rejects(
-    () =>
-      repository.markReady('attachment-1', {
-        processedStorageKey: '',
-        previewStorageKey: 'preview'
-      } as never),
+    () => repository.markReady(draft.id, { processedStorageKey: '', previewStorageKey: 'preview' } as never),
     /Invalid processed storage key/
   );
 });
 
-test('attachment repository binds ordered attachments and lists message data', async () => {
-  let rowCount = 2;
-  const rows = [
-    { ...ROW, id: 'attachment-2', attachment_order: 1 },
-    { ...ROW, attachment_order: 0 }
-  ];
-  const { calls, pool } = createPool(() => result(rows, rowCount));
-  const repository = createAttachmentRepository({ pool });
+test('ready attachments bind to one message in order, all or none', { skip }, async (t) => {
+  const { repository, ownerId, ready } = await setup(t);
+  const first = await ready();
+  const second = await ready();
+  assert.ok(first && second);
 
   const bound = await repository.bindReady({
-    ownerId: 'owner-1',
+    ownerId,
     context: 'room',
-    messageId: 'message-1',
-    attachmentIds: ['attachment-1', 'attachment-2']
+    messageId: 'room-message-1',
+    attachmentIds: [second.id, first.id]
   });
   assert.deepEqual(
-    bound.map((attachment) => attachment.order),
-    [0, 1]
+    bound.map((attachment) => [attachment.id, attachment.order, attachment.roomMessageId]),
+    [
+      [second.id, 0, 'room-message-1'],
+      [first.id, 1, 'room-message-1']
+    ]
   );
-  assert.match(last(calls).text, /room_message_id/);
+  assert.deepEqual(
+    (await repository.listForMessage('room', 'room-message-1')).map((attachment) => attachment.id),
+    [second.id, first.id]
+  );
 
-  await repository.bindReady({
-    ownerId: 'owner-1',
-    context: 'dm',
-    messageId: 'message-2',
-    attachmentIds: ['attachment-1', 'attachment-2']
-  });
-  assert.match(last(calls).text, /direct_message_id/);
-  assert.equal((await repository.listForMessage('room', 'message-1')).length, 2);
-  assert.match(last(calls).text, /room_message_id/);
-  assert.equal((await repository.listForMessage('dm', 'message-2')).length, 2);
-  assert.match(last(calls).text, /direct_message_id/);
+  const direct = await ready('dm');
+  assert.ok(direct);
+  const [inDm] = await repository.bindReady({ ownerId, context: 'dm', messageId: 'dm-1', attachmentIds: [direct.id] });
+  assert.equal(inDm?.directMessageId, 'dm-1');
+  assert.deepEqual(
+    (await repository.listForMessage('dm', 'dm-1')).map((attachment) => attachment.id),
+    [direct.id]
+  );
 
-  const bind = { ownerId: 'owner-1', context: 'room', messageId: 'message-1' };
+  const bind = { ownerId, context: 'room', messageId: 'room-message-1' };
   await assert.rejects(() => repository.bindReady({ ...bind, attachmentIds: [] }), /one and four/);
   await assert.rejects(() => repository.bindReady({ ...bind, attachmentIds: ['a', 'a'] }), /must be unique/);
   await assert.rejects(
     () => repository.bindReady({ ...bind, context: 'other', attachmentIds: ['a'] }),
     /Invalid attachment context/
   );
-  await assert.rejects(() => repository.listForMessage('other', 'message-1'), /Invalid attachment context/);
-  rowCount = 1;
+  await assert.rejects(() => repository.listForMessage('other', 'room-message-1'), /Invalid attachment context/);
+
+  const loose = await ready();
+  const pendingDraft = await repository.createDraft({ ownerId, context: 'room' });
+  assert.ok(loose && pendingDraft);
   await assert.rejects(
-    () =>
-      repository.bindReady({
-        ownerId: 'owner-1',
-        context: 'room',
-        messageId: 'message-1',
-        attachmentIds: ['a', 'b']
-      }),
+    () => repository.bindReady({ ...bind, attachmentIds: [loose.id, pendingDraft.id] }),
     /cannot be bound/
   );
+  assert.equal((await repository.findById(loose.id))?.boundAt, null, 'a failed bind binds nothing');
 });
 
-test('attachment repository covers cleanup, storage inventory, quota, and owner locks', async () => {
-  let mode = 'row';
-  const staleDeleted = { ...ROW, state: 'deleted', updated_at: new Date(Date.now() - 2 * 60 * 60 * 1000) };
-  const { calls, pool } = createPool((text) => {
-    if (/pending_count/.test(text)) {
-      return mode === 'empty'
-        ? { rows: [], rowCount: 0 }
-        : { rows: [{ pending_count: '2', recent_count: '3', used_bytes: '40' }], rowCount: 1 };
-    }
-    if (/original_storage_key, processed_storage_key/.test(text)) {
-      return {
-        rows: [
-          {
-            id: 'attachment-1',
-            original_storage_key: 'original',
-            processed_storage_key: null,
-            preview_storage_key: 'preview'
-          }
-        ],
-        rowCount: 1
-      };
-    }
-    if (/SET state = 'deleted'/.test(text) && mode === 'fallback') return { rows: [], rowCount: 0 };
-    if (/SELECT \* FROM message_attachments WHERE id/.test(text) && mode === 'fallback')
-      return { rows: [staleDeleted], rowCount: 1 };
-    if (/SET state = 'deleted'/.test(text) && mode === 'missing') return { rows: [], rowCount: 0 };
-    if (/SELECT \* FROM message_attachments WHERE id/.test(text) && mode === 'missing')
-      return { rows: [], rowCount: 0 };
-    return { rows: [ROW], rowCount: 1 };
-  });
-  const repository = createAttachmentRepository({ pool });
-
-  assert.equal((await repository.listCleanupCandidates({ limit: 0 })).length, 1);
-  assert.equal(last(calls).values[0], 500);
-  await repository.listCleanupCandidates({ limit: 1 });
-  assert.equal(last(calls).values[0], 1);
-  assert.equal((await repository.listProcessingWithoutActiveJob({ limit: 0 })).length, 1);
-  assert.equal(last(calls).values[0], 500);
-  assert.match(last(calls).text, /NOT EXISTS/);
-  assert.match(last(calls).text, /job\.state IN \('pending', 'processing'\)/);
-  const client = fakeDb(() => result([ROW]));
-  await repository.listProcessingWithoutActiveJob({ limit: 999, client });
-  assert.match(last(client.calls).text, /attachment\.state = 'processing'/);
-  assert.deepEqual(last(client.calls).values, [500]);
-  assert.equal((await repository.markCleanupDeleted('attachment-1'))?.id, 'attachment-1');
-  const cleanupDeleteSql = last(calls).text;
-  assert.equal((cleanupDeleteSql.match(/WHERE id = \$1/g) || []).length, 1);
-  assert.equal((cleanupDeleteSql.match(/state = 'uploading'/g) || []).length, 1);
-  assert.equal((cleanupDeleteSql.match(/state = 'failed'/g) || []).length, 1);
-  assert.equal((cleanupDeleteSql.match(/state = 'ready'/g) || []).length, 1);
-  mode = 'fallback';
-  assert.equal((await repository.markCleanupDeleted('attachment-1'))?.internalState, 'deleted');
-  mode = 'missing';
-  assert.equal(await repository.markCleanupDeleted('attachment-1'), null);
-
-  mode = 'row';
-  assert.deepEqual(await repository.listStorageKeys({ afterId: 'attachment-0', limit: 3_000 }), [
-    {
-      id: 'attachment-1',
-      keys: ['original', 'preview']
-    }
+test('cleanup, processing inventory, storage keys and quota read the live rows', { skip }, async (t) => {
+  const { pool, repository, ownerId, ready } = await setup(t);
+  const stale = await repository.createDraft({ ownerId, context: 'room', reservedBytes: 40 });
+  const withJob = await repository.createDraft({ ownerId, context: 'room' });
+  const orphan = await repository.createDraft({ ownerId, context: 'room' });
+  assert.ok(stale && withJob && orphan);
+  await age(pool, stale.id, '2 hours');
+  await repository.markUploaded(withJob.id, UPLOAD);
+  await repository.markUploaded(orphan.id, UPLOAD);
+  await pool.query(`INSERT INTO media_processing_jobs (id, attachment_id, kind) VALUES ($1, $2, 'process')`, [
+    crypto.randomUUID(),
+    withJob.id
   ]);
-  assert.deepEqual(last(calls).values, ['attachment-0', 2_000]);
-  await repository.listStorageKeys({ limit: 0 });
-  assert.deepEqual(last(calls).values, [null, 500]);
-  assert.deepEqual(await repository.quotaUsage('owner-1'), { pendingCount: 2, recentCount: 3, usedBytes: 40 });
-  mode = 'empty';
-  assert.deepEqual(await repository.quotaUsage('owner-1'), { pendingCount: 0, recentCount: 0, usedBytes: 0 });
 
-  await assert.rejects(() => repository.lockOwner('owner-1', null), /transaction client is required/);
-  const transaction = fakeDb();
-  await repository.lockOwner('owner-1', transaction);
-  assert.deepEqual(transaction.calls[0]?.values, ['media-quota:owner-1']);
+  assert.deepEqual(
+    (await repository.listCleanupCandidates({ limit: 0 })).map((attachment) => attachment.id),
+    [stale.id]
+  );
+  assert.deepEqual(
+    (await repository.listProcessingWithoutActiveJob({ limit: 999 })).map((attachment) => attachment.id),
+    [orphan.id],
+    'an attachment with a live job is not an orphan'
+  );
+
+  assert.equal((await repository.markCleanupDeleted(stale.id))?.internalState, 'deleted');
+  assert.equal(await repository.markCleanupDeleted(orphan.id), null, 'a fresh attachment is no candidate');
+  assert.equal(await repository.markCleanupDeleted(stale.id), null, 'deleted under an hour ago: not yet done');
+  await age(pool, stale.id, '2 hours');
+  assert.equal((await repository.markCleanupDeleted(stale.id))?.id, stale.id, 'deleted long ago counts as done');
+  assert.equal(await repository.markCleanupDeleted(crypto.randomUUID()), null);
+
+  const readyOne = await ready();
+  assert.ok(readyOne);
+  const inventory = await repository.listStorageKeys({ limit: 3_000 });
+  assert.equal(inventory.length, 4);
+  assert.deepEqual(inventory.find((entry) => entry.id === readyOne.id)?.keys, ['original', 'processed', 'preview']);
+  const [firstId] = inventory.map((entry) => entry.id);
+  assert.ok(firstId);
+  assert.deepEqual(
+    (await repository.listStorageKeys({ afterId: firstId, limit: 0 })).map((entry) => entry.id),
+    inventory.slice(1).map((entry) => entry.id)
+  );
+
+  await repository.createDraft({ ownerId, context: 'room', reservedBytes: 7 });
+  assert.deepEqual(await repository.quotaUsage(ownerId), { pendingCount: 1, recentCount: 5, usedBytes: 7 + 20 * 3 });
+  assert.deepEqual(await repository.quotaUsage(crypto.randomUUID()), { pendingCount: 0, recentCount: 0, usedBytes: 0 });
+
+  await assert.rejects(() => repository.lockOwner(ownerId, null), /transaction client is required/);
+  await transaction(pool, (client) => repository.lockOwner(ownerId, client));
 });
 
-test('attachment repository serializes physical upload work with advisory locks', async () => {
-  let unlockFails = false;
-  const client = fakeDb((text) => {
-    if (unlockFails && /unlock/.test(text)) throw new Error('unlock failed');
-    return result();
-  });
-  const { calls } = client;
-  const idle = fakeDb();
-  const repository = createAttachmentRepository({
-    pool: { query: idle.query.bind(idle), connect: async () => client }
+test('the upload lock serializes work on one attachment and always lets go', { skip }, async (t) => {
+  const { pool, repository } = await setup(t);
+  const order: string[] = [];
+  let releaseFirst = () => {};
+  const firstHolds = new Promise<void>((resolve) => {
+    releaseFirst = resolve;
   });
 
-  assert.equal(
-    await repository.withAttachmentLock('attachment-1', async (lockedClient) => {
-      assert.equal(lockedClient, client);
-      return 'done';
-    }),
-    'done'
-  );
-  assert.match(calls[0]?.text ?? '', /pg_advisory_lock/);
-  assert.match(calls[1]?.text ?? '', /pg_advisory_unlock/);
-  assert.equal(client.released, 1);
+  const first = repository.withAttachmentLock('attachment-1', async (client) => {
+    assert.equal(typeof client.query, 'function');
+    order.push('first in');
+    await firstHolds;
+    order.push('first out');
+    return 'first';
+  });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const second = repository.withAttachmentLock('attachment-1', async () => {
+    order.push('second in');
+    return 'second';
+  });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  assert.deepEqual(order, ['first in'], 'the second waits for the first');
+  releaseFirst();
+  assert.deepEqual(await Promise.all([first, second]), ['first', 'second']);
+  assert.deepEqual(order, ['first in', 'first out', 'second in']);
 
-  unlockFails = true;
   await assert.rejects(
     () =>
       repository.withAttachmentLock('attachment-2', async () => {
@@ -343,9 +334,14 @@ test('attachment repository serializes physical upload work with advisory locks'
       }),
     /operation failed/
   );
-  assert.equal(client.released, 2);
+  assert.equal(
+    await repository.withAttachmentLock('attachment-2', async () => 'free again'),
+    'free again',
+    'a failed operation still unlocks'
+  );
+  assert.equal(pool.totalCount - pool.idleCount, 0, 'every connection went back to the pool');
 
-  const noConnect = createAttachmentRepository({ pool: { query: idle.query.bind(idle) } });
+  const noConnect = createAttachmentRepository({ pool: { query: pool.query.bind(pool) } });
   await assert.rejects(
     () => noConnect.withAttachmentLock('attachment-1', async () => {}),
     /cannot acquire attachment locks/

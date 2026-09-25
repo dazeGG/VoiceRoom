@@ -1,10 +1,10 @@
 import crypto from 'node:crypto';
-import type { Selectable } from 'kysely';
+import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
-import type { AccountLoginEvents, Users } from '../platform/db/schema.ts';
+import type { AccountLoginEvents, Json, Users } from '../platform/db/schema.ts';
+import { kyselyOn, type Database } from '../platform/db/kysely.ts';
 import type { SelfUser as SelfProfile } from '@voice-room/shared/contracts/account';
 import type { PublicUser as PublicProfile } from '@voice-room/shared/contracts/users';
-import { createDbPool, transaction } from './db.ts';
 import { hashPassword, verifyPassword } from './password.ts';
 import { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
 import { LOG_EVENTS } from './log-events.ts';
@@ -23,7 +23,6 @@ import {
   normalizeReleaseVersion
 } from '@voice-room/shared/account-security';
 
-type Queryable = Pick<pg.Pool, 'query'> | pg.PoolClient;
 type UserStoreLogger = { warn(...args: unknown[]): void };
 export type StoredUser = NonNullable<ReturnType<typeof mapUser>>;
 export type PublicUser = PublicProfile;
@@ -160,23 +159,15 @@ function mapLoginAlert(row: Selectable<AccountLoginEvents>) {
 }
 
 function createUserStore({
-  databaseUrl,
   logger = createLogger({ name: 'api' }),
   pool,
   sessionTtlMs = DEFAULT_SESSION_TTL_MS
 }: {
-  databaseUrl?: string;
   logger?: UserStoreLogger;
-  pool?: pg.Pool | null;
+  pool: pg.Pool;
   sessionTtlMs?: number;
-} = {}) {
-  let activePool = pool || null;
-  function getPool(): pg.Pool {
-    if (!activePool) {
-      activePool = createDbPool({ databaseUrl, logger });
-    }
-    return activePool;
-  }
+}) {
+  const db = kyselyOn(pool);
 
   async function createUser({
     login,
@@ -199,13 +190,21 @@ function createUserStore({
     try {
       // "What's new" is for people who used an earlier release; a new account
       // starts at the current announcement.
-      const result = await getPool().query(
-        `INSERT INTO users (id, login, display_name, password_hash, avatar_color_key, created_at, updated_at, metadata)
-         VALUES ($1, $2, $3, $4, $5, $6, $6, jsonb_build_object('whatsNewSeen', $7::text))
-         RETURNING *`,
-        [id, login, displayName, passwordHash, assignedAvatarColorKey, toDate(now), WHATS_NEW_VERSION]
-      );
-      return { status: 'created', user: mapUser(result.rows[0])! };
+      const row = await db
+        .insertInto('users')
+        .values({
+          id,
+          login,
+          display_name: displayName,
+          password_hash: passwordHash,
+          avatar_color_key: assignedAvatarColorKey,
+          created_at: toDate(now),
+          updated_at: toDate(now),
+          metadata: sql`jsonb_build_object('whatsNewSeen', ${WHATS_NEW_VERSION}::text)`
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      return { status: 'created', user: mapUser(row)! };
     } catch (error) {
       if (error && (error as { code?: unknown }).code === UNIQUE_VIOLATION) {
         return { status: 'login_taken', user: null };
@@ -215,13 +214,11 @@ function createUserStore({
   }
 
   async function getUserByLogin(login: string) {
-    const result = await getPool().query(`SELECT * FROM users WHERE login = $1`, [login]);
-    return mapUser(result.rows[0]);
+    return mapUser(await db.selectFrom('users').selectAll().where('login', '=', login).executeTakeFirst());
   }
 
   async function getUserById(id: string) {
-    const result = await getPool().query(`SELECT * FROM users WHERE id = $1`, [id]);
-    return mapUser(result.rows[0]);
+    return mapUser(await db.selectFrom('users').selectAll().where('id', '=', id).executeTakeFirst());
   }
 
   // Rename: the display name is the only mutable identity field. An empty value
@@ -236,11 +233,22 @@ function createUserStore({
     displayName?: string;
     now?: number;
   }) {
-    const result = await getPool().query(
-      `UPDATE users SET display_name = $2, updated_at = $3 WHERE id = $1 RETURNING *`,
-      [userId, displayName, toDate(now)]
-    );
-    return mapUser(result.rows[0]);
+    const row = await db
+      .updateTable('users')
+      .set({ display_name: displayName, updated_at: toDate(now) })
+      .where('id', '=', userId)
+      .returningAll()
+      .executeTakeFirst();
+    return mapUser(row);
+  }
+
+  function setAvatar(q: Database, userId: string, avatarKey: string | null, avatarAccent: string | null, now: number) {
+    return q
+      .updateTable('users')
+      .set({ avatar_key: avatarKey || null, avatar_accent: avatarAccent || null, updated_at: toDate(now) })
+      .where('id', '=', userId)
+      .returningAll()
+      .executeTakeFirst();
   }
 
   async function updateAvatar({
@@ -254,14 +262,7 @@ function createUserStore({
     avatarAccent?: string | null;
     now?: number;
   }) {
-    const result = await getPool().query(
-      `UPDATE users
-       SET avatar_key = $2, avatar_accent = $3, updated_at = $4
-       WHERE id = $1
-       RETURNING *`,
-      [userId, avatarKey || null, avatarAccent || null, toDate(now)]
-    );
-    return mapUser(result.rows[0]);
+    return mapUser(await setAvatar(db, userId, avatarKey, avatarAccent, now));
   }
 
   async function swapAvatar({
@@ -275,50 +276,50 @@ function createUserStore({
     avatarAccent?: string | null;
     now?: number;
   }) {
-    return transaction(getPool(), async (client) => {
-      const current = await client.query(`SELECT avatar_key FROM users WHERE id = $1 FOR UPDATE`, [userId]);
-      if (current.rowCount === 0) return { previousAvatarKey: null, user: null };
-      const result = await client.query(
-        `UPDATE users
-         SET avatar_key = $2, avatar_accent = $3, updated_at = $4
-         WHERE id = $1
-         RETURNING *`,
-        [userId, avatarKey || null, avatarAccent || null, toDate(now)]
-      );
-      return {
-        previousAvatarKey: current.rows[0].avatar_key || null,
-        user: mapUser(result.rows[0])
-      };
+    return db.transaction().execute(async (trx) => {
+      const current = await trx
+        .selectFrom('users')
+        .select('avatar_key')
+        .where('id', '=', userId)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!current) return { previousAvatarKey: null, user: null };
+      const row = await setAvatar(trx, userId, avatarKey, avatarAccent, now);
+      return { previousAvatarKey: current.avatar_key || null, user: mapUser(row) };
     });
   }
 
   async function listAvatarKeys(): Promise<string[]> {
     // An account waiting to be deleted keeps its avatar aside for a restore, so
     // avatar reconciliation must not treat that file as unused.
-    const result = await getPool().query(
-      `SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL
-       UNION
-       SELECT metadata->'deletedProfile'->>'avatarKey' AS avatar_key
-       FROM users
-       WHERE metadata->'deletedProfile'->>'avatarKey' IS NOT NULL`
-    );
-    return result.rows.map((row) => row.avatar_key).filter(Boolean);
+    const keptForRestore = sql<string | null>`metadata->'deletedProfile'->>'avatarKey'`;
+    const rows = await db
+      .selectFrom('users')
+      .select('avatar_key')
+      .where('avatar_key', 'is not', null)
+      .union(db.selectFrom('users').select(keptForRestore.as('avatar_key')).where(keptForRestore, 'is not', null))
+      .execute();
+    return rows.map((row) => row.avatar_key).filter((key): key is string => Boolean(key));
   }
 
   // Every way of replacing a password ends the same: the old credential stops
   // working everywhere, so all sessions and push subscriptions go with it.
-  async function replacePasswordInTransaction(
-    client: Queryable,
+  async function replacePassword(
+    trx: Database,
     { userId, newPassword, now }: { userId: string; newPassword: string; now: number }
   ): Promise<void> {
     const passwordHash = await hashPassword(newPassword);
-    await client.query(`UPDATE users SET password_hash = $2, updated_at = $3 WHERE id = $1`, [
-      userId,
-      passwordHash,
-      toDate(now)
-    ]);
-    await client.query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
-    await client.query(`DELETE FROM push_subscriptions WHERE user_id = $1`, [userId]);
+    await trx
+      .updateTable('users')
+      .set({ password_hash: passwordHash, updated_at: toDate(now) })
+      .where('id', '=', userId)
+      .execute();
+    await trx.deleteFrom('sessions').where('user_id', '=', userId).execute();
+    await trx.deleteFrom('push_subscriptions').where('user_id', '=', userId).execute();
+  }
+
+  function lockUser(trx: Database, column: 'id' | 'login', value: string) {
+    return trx.selectFrom('users').selectAll().where(column, '=', value).forUpdate().executeTakeFirst();
   }
 
   // Password change always re-verifies the current password first so a leaked
@@ -335,15 +336,14 @@ function createUserStore({
     newPassword: string;
     now?: number;
   }) {
-    return transaction(getPool(), async (client) => {
-      const userResult = await client.query(`SELECT * FROM users WHERE id = $1 FOR UPDATE`, [userId]);
-      const user = mapUser(userResult.rows[0]);
+    return db.transaction().execute(async (trx) => {
+      const user = mapUser(await lockUser(trx, 'id', userId));
       if (!user) return { status: 'not_found' };
 
       const ok = await verifyPassword(currentPassword, user.passwordHash);
       if (!ok) return { status: 'invalid_password' };
 
-      await replacePasswordInTransaction(client, { userId, newPassword, now });
+      await replacePassword(trx, { userId, newPassword, now });
       return { status: 'updated' };
     });
   }
@@ -360,6 +360,11 @@ function createUserStore({
     return ok ? user : null;
   }
 
+  // The first sign-in from the desktop app is remembered on the account.
+  const desktopAppSeen = (now: number) =>
+    sql<Json>`jsonb_set(metadata, '{desktopAppSeenAt}', to_jsonb(${Math.trunc(Number(now) || Date.now())}::bigint), true)`;
+  const hasMetadataKey = (key: string) => sql<boolean>`metadata ? ${key}`;
+
   async function createSession({
     userId,
     now = Date.now(),
@@ -375,22 +380,28 @@ function createUserStore({
   }) {
     const expiresAt = now + sessionTtlMs;
     const tokenHash = hashSessionToken(token);
-    const result = await getPool().query(
-      `INSERT INTO sessions (id, user_id, created_at, last_seen_at, expires_at, user_agent, location_label)
-       VALUES ($1, $2, $3, $3, $4, $5, $6)
-       RETURNING public_id`,
-      [tokenHash, userId, toDate(now), toDate(expiresAt), cleanUserAgent(userAgent), cleanLocationLabel(locationLabel)]
-    );
+    const row = await db
+      .insertInto('sessions')
+      .values({
+        id: tokenHash,
+        user_id: userId,
+        created_at: toDate(now),
+        last_seen_at: toDate(now),
+        expires_at: toDate(expiresAt),
+        user_agent: cleanUserAgent(userAgent),
+        location_label: cleanLocationLabel(locationLabel)
+      })
+      .returning('public_id')
+      .executeTakeFirstOrThrow();
     if (isDesktopAppUserAgent(userAgent)) {
-      await getPool().query(
-        `UPDATE users
-         SET metadata = jsonb_set(metadata, '{desktopAppSeenAt}', to_jsonb($2::bigint), true)
-         WHERE id = $1
-           AND NOT (metadata ? 'desktopAppSeenAt')`,
-        [userId, Math.trunc(Number(now) || Date.now())]
-      );
+      await db
+        .updateTable('users')
+        .set({ metadata: desktopAppSeen(now) })
+        .where('id', '=', userId)
+        .where((eb) => eb.not(hasMetadataKey('desktopAppSeenAt')))
+        .execute();
     }
-    return { expiresAt, publicId: result.rows[0]?.public_id || null, token, tokenHash };
+    return { expiresAt, publicId: row.public_id, token, tokenHash };
   }
 
   // `userAgent` and `resolveLocation` only feed the hourly touch, so a request
@@ -402,19 +413,22 @@ function createUserStore({
   ) {
     if (typeof token !== 'string' || !token) return null;
     const tokenHash = hashSessionToken(token);
-    const result = await getPool().query(
-      `SELECT u.*, s.expires_at AS session_expires_at, s.last_seen_at AS session_last_seen_at,
-              s.public_id AS session_public_id
-       FROM sessions s
-       JOIN users u ON u.id = s.user_id
-       WHERE s.id = $1 AND s.expires_at > $2`,
-      [tokenHash, toDate(now)]
-    );
-    const row = result.rows[0];
+    const row = await db
+      .selectFrom('sessions as s')
+      .innerJoin('users as u', 'u.id', 's.user_id')
+      .selectAll('u')
+      .select([
+        's.expires_at as session_expires_at',
+        's.last_seen_at as session_last_seen_at',
+        's.public_id as session_public_id'
+      ])
+      .where('s.id', '=', tokenHash)
+      .where('s.expires_at', '>', toDate(now))
+      .executeTakeFirst();
     if (!row) return null;
 
     if (toMillis(row.session_last_seen_at) <= now - SESSION_TOUCH_INTERVAL_MS) {
-      void touchSession({ tokenHash, now, userAgent, resolveLocation }).catch((error) =>
+      void touchSession({ tokenHash, now, userAgent, resolveLocation }).catch((error: unknown) =>
         logger.warn({ evt: LOG_EVENTS.SESSION_TOUCH_FAILED, err: error }, 'failed to touch a session')
       );
     }
@@ -455,48 +469,44 @@ function createUserStore({
         );
       }
     }
-    await getPool().query(
-      `UPDATE sessions
-       SET last_seen_at = $2,
-           expires_at = GREATEST(expires_at, $3),
-           user_agent = CASE WHEN $5 = '' THEN user_agent ELSE $5 END,
-           location_label = CASE WHEN $6 = '' THEN location_label ELSE $6 END
-       WHERE id = $1
-         AND last_seen_at <= $4`,
-      [
-        tokenHash,
-        toDate(now),
-        toDate(now + sessionTtlMs),
-        toDate(now - SESSION_TOUCH_INTERVAL_MS),
-        cleanUserAgent(userAgent),
-        locationLabel
-      ]
-    );
+    const agent = cleanUserAgent(userAgent);
+    await db
+      .updateTable('sessions')
+      .set((eb) => ({
+        last_seen_at: toDate(now),
+        expires_at: sql<Date>`GREATEST(expires_at, ${toDate(now + sessionTtlMs)})`,
+        user_agent: agent ? agent : eb.ref('user_agent'),
+        location_label: locationLabel ? locationLabel : eb.ref('location_label')
+      }))
+      .where('id', '=', tokenHash)
+      .where('last_seen_at', '<=', toDate(now - SESSION_TOUCH_INTERVAL_MS))
+      .execute();
     // A session that predates the marker (or a desktop login made while an
     // older release was live) is stamped on its next hourly touch. The guard
     // keeps the users row from being rewritten on every later touch.
     if (isDesktopAppUserAgent(userAgent)) {
-      await getPool().query(
-        `UPDATE users u
-         SET metadata = jsonb_set(u.metadata, '{desktopAppSeenAt}', to_jsonb($2::bigint), true)
-         FROM sessions s
-         WHERE s.id = $1
-           AND u.id = s.user_id
-           AND NOT (u.metadata ? 'desktopAppSeenAt')`,
-        [tokenHash, Math.trunc(Number(now) || Date.now())]
-      );
+      await db
+        .updateTable('users as u')
+        .from('sessions as s')
+        .set({
+          metadata: sql`jsonb_set(u.metadata, '{desktopAppSeenAt}', to_jsonb(${Math.trunc(Number(now) || Date.now())}::bigint), true)`
+        })
+        .where('s.id', '=', tokenHash)
+        .whereRef('u.id', '=', 's.user_id')
+        .where((eb) => eb.not(sql<boolean>`u.metadata ? 'desktopAppSeenAt'`))
+        .execute();
     }
   }
 
   async function deleteSession(token: unknown): Promise<boolean> {
     if (typeof token !== 'string' || !token) return false;
-    const result = await getPool().query(`DELETE FROM sessions WHERE id = $1`, [hashSessionToken(token)]);
-    return result.rowCount! > 0;
+    const result = await db.deleteFrom('sessions').where('id', '=', hashSessionToken(token)).executeTakeFirst();
+    return result.numDeletedRows > 0n;
   }
 
   async function pruneSessions(now: number = Date.now()) {
-    const result = await getPool().query(`DELETE FROM sessions WHERE expires_at <= $1`, [toDate(now)]);
-    return result.rowCount;
+    const result = await db.deleteFrom('sessions').where('expires_at', '<=', toDate(now)).executeTakeFirst();
+    return Number(result.numDeletedRows);
   }
 
   async function listSessions({
@@ -508,14 +518,15 @@ function createUserStore({
     currentTokenHash?: string;
     now?: number;
   }) {
-    const result = await getPool().query(
-      `SELECT id, public_id, user_agent, location_label, last_seen_at
-       FROM sessions
-       WHERE user_id = $1 AND expires_at > $2
-       ORDER BY last_seen_at DESC, created_at DESC`,
-      [userId, toDate(now)]
-    );
-    return result.rows.map((row) => ({
+    const rows = await db
+      .selectFrom('sessions')
+      .select(['id', 'public_id', 'user_agent', 'location_label', 'last_seen_at'])
+      .where('user_id', '=', userId)
+      .where('expires_at', '>', toDate(now))
+      .orderBy('last_seen_at', 'desc')
+      .orderBy('created_at', 'desc')
+      .execute();
+    return rows.map((row) => ({
       id: row.public_id,
       current: Boolean(currentTokenHash) && row.id === currentTokenHash,
       ...describeUserAgent(row.user_agent),
@@ -528,12 +539,14 @@ function createUserStore({
   // holds open (sockets, voice); the hash itself never reaches a client.
   async function revokeSession({ userId, publicId }: { userId: string; publicId: unknown }) {
     if (typeof publicId !== 'string' || !UUID_PATTERN.test(publicId)) return { status: 'not_found', tokenHash: null };
-    const result = await getPool().query(`DELETE FROM sessions WHERE user_id = $1 AND public_id = $2 RETURNING id`, [
-      userId,
-      publicId.toLowerCase()
-    ]);
-    return result.rowCount === 1
-      ? { status: 'revoked', tokenHash: result.rows[0].id }
+    const rows = await db
+      .deleteFrom('sessions')
+      .where('user_id', '=', userId)
+      .where('public_id', '=', publicId.toLowerCase())
+      .returning('id')
+      .execute();
+    return rows.length === 1 && rows[0]
+      ? { status: 'revoked', tokenHash: rows[0].id }
       : { status: 'not_found', tokenHash: null };
   }
 
@@ -544,11 +557,13 @@ function createUserStore({
     userId: string;
     keepTokenHash: unknown;
   }): Promise<{ tokenHashes: string[] }> {
-    const result = await getPool().query(`DELETE FROM sessions WHERE user_id = $1 AND id <> $2 RETURNING id`, [
-      userId,
-      String(keepTokenHash || '')
-    ]);
-    return { tokenHashes: result.rows.map((row) => row.id) };
+    const rows = await db
+      .deleteFrom('sessions')
+      .where('user_id', '=', userId)
+      .where('id', '<>', typeof keepTokenHash === 'string' ? keepTokenHash : '')
+      .returning('id')
+      .execute();
+    return { tokenHashes: rows.map((row) => row.id) };
   }
 
   // Generating a set proves the password again, like a password change, so a
@@ -562,34 +577,35 @@ function createUserStore({
     currentPassword: string;
     now?: number;
   }) {
-    return transaction(getPool(), async (client) => {
-      const userResult = await client.query(`SELECT * FROM users WHERE id = $1 FOR UPDATE`, [userId]);
-      const user = mapUser(userResult.rows[0]);
+    return db.transaction().execute(async (trx) => {
+      const user = mapUser(await lockUser(trx, 'id', userId));
       if (!user) return { status: 'not_found', codes: [] };
       if (!(await verifyPassword(currentPassword, user.passwordHash))) return { status: 'invalid_password', codes: [] };
 
       const codes = Array.from({ length: RECOVERY_CODE_COUNT }, createRecoveryCode);
-      await client.query(`DELETE FROM account_recovery_codes WHERE user_id = $1`, [userId]);
-      await client.query(
-        `INSERT INTO account_recovery_codes (user_id, code_hash, created_at)
-         SELECT $1, hash, $3 FROM unnest($2::text[]) AS hash`,
-        [userId, codes.map((code) => hashRecoveryCode(userId, code)), toDate(now)]
-      );
+      await trx.deleteFrom('account_recovery_codes').where('user_id', '=', userId).execute();
+      await trx
+        .insertInto('account_recovery_codes')
+        .values(
+          codes.map((code) => ({ user_id: userId, code_hash: hashRecoveryCode(userId, code), created_at: toDate(now) }))
+        )
+        .execute();
       return { status: 'generated', codes, generatedAt: now };
     });
   }
 
   async function getRecoveryCodesStatus(userId: string) {
-    const result = await getPool().query(
-      `SELECT count(*) FILTER (WHERE used_at IS NULL)::int AS remaining, max(created_at) AS generated_at
-       FROM account_recovery_codes
-       WHERE user_id = $1`,
-      [userId]
-    );
-    const row = result.rows[0] || {};
+    const row = await db
+      .selectFrom('account_recovery_codes')
+      .select([
+        sql<number>`count(*) FILTER (WHERE used_at IS NULL)::int`.as('remaining'),
+        (eb) => eb.fn.max('created_at').as('generated_at')
+      ])
+      .where('user_id', '=', userId)
+      .executeTakeFirst();
     return {
-      remaining: Number(row.remaining) || 0,
-      generatedAt: row.generated_at ? toMillis(row.generated_at) : null
+      remaining: Number(row?.remaining) || 0,
+      generatedAt: row?.generated_at ? toMillis(row.generated_at) : null
     };
   }
 
@@ -608,41 +624,43 @@ function createUserStore({
   }) {
     const normalizedCode = normalizeRecoveryCode(code);
     if (!login || !normalizedCode) return { status: 'invalid', user: null, remaining: 0 };
-    return transaction(getPool(), async (client) => {
-      const userResult = await client.query(`SELECT * FROM users WHERE login = $1 FOR UPDATE`, [login]);
-      const user = mapUser(userResult.rows[0]);
+    return db.transaction().execute(async (trx) => {
+      const user = mapUser(await lockUser(trx, 'login', login));
       // An account waiting to be deleted comes back through a restore, not a code.
       if (!user || user.deletionRequestedAt || user.deletedAt) return { status: 'invalid', user: null, remaining: 0 };
 
-      const spent = await client.query(
-        `UPDATE account_recovery_codes
-         SET used_at = $3
-         WHERE user_id = $1 AND code_hash = $2 AND used_at IS NULL
-         RETURNING id`,
-        [user.id, hashRecoveryCode(user.id, normalizedCode), toDate(now)]
-      );
-      if (spent.rowCount !== 1) return { status: 'invalid', user: null, remaining: 0 };
+      const spent = await trx
+        .updateTable('account_recovery_codes')
+        .set({ used_at: toDate(now) })
+        .where('user_id', '=', user.id)
+        .where('code_hash', '=', hashRecoveryCode(user.id, normalizedCode))
+        .where('used_at', 'is', null)
+        .returning('id')
+        .execute();
+      if (spent.length !== 1) return { status: 'invalid', user: null, remaining: 0 };
 
-      await replacePasswordInTransaction(client, { userId: user.id, newPassword, now });
-      const remaining = await client.query(
-        `SELECT count(*)::int AS remaining FROM account_recovery_codes WHERE user_id = $1 AND used_at IS NULL`,
-        [user.id]
-      );
-      return { status: 'recovered', user, remaining: Number(remaining.rows[0]?.remaining) || 0 };
+      await replacePassword(trx, { userId: user.id, newPassword, now });
+      const remaining = await trx
+        .selectFrom('account_recovery_codes')
+        .select(sql<number>`count(*)::int`.as('remaining'))
+        .where('user_id', '=', user.id)
+        .where('used_at', 'is', null)
+        .executeTakeFirst();
+      return { status: 'recovered', user, remaining: Number(remaining?.remaining) || 0 };
     });
   }
 
   // Per-account state of the nudges the lobby shows: the last "what's new"
   // announcement seen and how long the recovery codes reminder stays hidden.
   async function getAccountNotices(userId: string) {
-    const result = await getPool().query(
-      `SELECT metadata->>'whatsNewSeen' AS whats_new_seen,
-              metadata->'recoveryCodesReminderSnoozedUntil' AS reminder_snoozed_until
-       FROM users
-       WHERE id = $1`,
-      [userId]
-    );
-    const row = result.rows[0];
+    const row = await db
+      .selectFrom('users')
+      .select([
+        sql<string | null>`metadata->>'whatsNewSeen'`.as('whats_new_seen'),
+        sql<unknown>`metadata->'recoveryCodesReminderSnoozedUntil'`.as('reminder_snoozed_until')
+      ])
+      .where('id', '=', userId)
+      .executeTakeFirst();
     const snoozedUntil = Number(row?.reminder_snoozed_until);
     return {
       whatsNewSeen: normalizeReleaseVersion(row?.whats_new_seen) || null,
@@ -653,14 +671,15 @@ function createUserStore({
   // Only the current announcement can be recorded, so a stale client cannot
   // pin an account to an older release.
   async function markWhatsNewSeen({ userId, now = Date.now() }: { userId: string; now?: number }) {
-    const result = await getPool().query(
-      `UPDATE users
-       SET metadata = jsonb_set(metadata, '{whatsNewSeen}', to_jsonb($2::text), true),
-           updated_at = $3
-       WHERE id = $1`,
-      [userId, WHATS_NEW_VERSION, toDate(now)]
-    );
-    return result.rowCount === 1
+    const result = await db
+      .updateTable('users')
+      .set({
+        metadata: sql`jsonb_set(metadata, '{whatsNewSeen}', to_jsonb(${WHATS_NEW_VERSION}::text), true)`,
+        updated_at: toDate(now)
+      })
+      .where('id', '=', userId)
+      .executeTakeFirst();
+    return result.numUpdatedRows === 1n
       ? { status: 'seen', whatsNewSeen: WHATS_NEW_VERSION }
       : { status: 'not_found', whatsNewSeen: null };
   }
@@ -668,32 +687,37 @@ function createUserStore({
   // The one-time post-registration app prompt: the first time it is shown or
   // dismissed wins, so repeated calls from several tabs keep that moment.
   async function markAppPromptSeen({ userId, now = Date.now() }: { userId: string; now?: number }) {
-    const result = await getPool().query(
-      `UPDATE users
-       SET metadata = CASE
-             WHEN metadata ? 'appPromptSeenAt' THEN metadata
-             ELSE jsonb_set(metadata, '{appPromptSeenAt}', to_jsonb($2::bigint), true)
-           END
-       WHERE id = $1
-       RETURNING metadata->'appPromptSeenAt' AS seen_at`,
-      [userId, Math.trunc(Number(now) || Date.now())]
-    );
-    const seenAt = Number(result.rows[0]?.seen_at);
-    return result.rowCount === 1
+    const seenAtMs = Math.trunc(Number(now) || Date.now());
+    const rows = await db
+      .updateTable('users')
+      .set({
+        metadata: sql`CASE
+          WHEN metadata ? 'appPromptSeenAt' THEN metadata
+          ELSE jsonb_set(metadata, '{appPromptSeenAt}', to_jsonb(${seenAtMs}::bigint), true)
+        END`
+      })
+      .where('id', '=', userId)
+      .returning(sql<unknown>`metadata->'appPromptSeenAt'`.as('seen_at'))
+      .execute();
+    const seenAt = Number(rows[0]?.seen_at);
+    return rows.length === 1
       ? { status: 'seen', appPromptSeenAt: Number.isSafeInteger(seenAt) ? seenAt : null }
       : { status: 'not_found', appPromptSeenAt: null };
   }
 
   async function snoozeRecoveryCodesReminder({ userId, now = Date.now() }: { userId: string; now?: number }) {
     const snoozedUntil = now + RECOVERY_CODES_REMINDER_SNOOZE_MS;
-    const result = await getPool().query(
-      `UPDATE users
-       SET metadata = jsonb_set(metadata, '{recoveryCodesReminderSnoozedUntil}', to_jsonb($2::bigint), true),
-           updated_at = $3
-       WHERE id = $1`,
-      [userId, snoozedUntil, toDate(now)]
-    );
-    return result.rowCount === 1 ? { status: 'snoozed', snoozedUntil } : { status: 'not_found', snoozedUntil: null };
+    const result = await db
+      .updateTable('users')
+      .set({
+        metadata: sql`jsonb_set(metadata, '{recoveryCodesReminderSnoozedUntil}', to_jsonb(${snoozedUntil}::bigint), true)`,
+        updated_at: toDate(now)
+      })
+      .where('id', '=', userId)
+      .executeTakeFirst();
+    return result.numUpdatedRows === 1n
+      ? { status: 'snoozed', snoozedUntil }
+      : { status: 'not_found', snoozedUntil: null };
   }
 
   // A sign-in needs the account's attention when it comes from a device (browser
@@ -720,52 +744,63 @@ function createUserStore({
     const location = cleanLocationLabel(locationLabel);
     const sameDevice = (entry: { client: unknown; os: unknown; location: unknown }) =>
       entry.client === device.client && entry.os === device.os && entry.location === location;
-    return transaction(getPool(), async (db) => {
-      await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`voice-room:login-events:${userId}`]);
+    return db.transaction().execute(async (trx) => {
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${`voice-room:login-events:${userId}`}))`.execute(trx);
       let alert = false;
       if (kind !== 'register') {
-        const history = await db.query(
-          `SELECT client, os, location_label, alert, resolution, created_at
-           FROM account_login_events
-           WHERE user_id = $1 AND created_at > $2`,
-          [userId, toDate(now - LOGIN_FAMILIARITY_WINDOW_MS)]
-        );
-        const sessions = await db.query(
-          `SELECT s.user_agent, s.location_label
-           FROM sessions s
-           LEFT JOIN account_login_events e ON e.session_public_id = s.public_id
-           WHERE s.user_id = $1
-             AND s.expires_at > $2
-             AND s.public_id IS DISTINCT FROM $3::uuid
-             AND NOT (COALESCE(e.alert, false) AND (e.resolution IS NULL OR e.resolution = 'denied'))`,
-          [userId, toDate(now), sessionPublicId]
-        );
-        const vouchedByHistory = history.rows.some(
+        const history = await trx
+          .selectFrom('account_login_events')
+          .select(['client', 'os', 'location_label', 'alert', 'resolution', 'created_at'])
+          .where('user_id', '=', userId)
+          .where('created_at', '>', toDate(now - LOGIN_FAMILIARITY_WINDOW_MS))
+          .execute();
+        const sessions = await trx
+          .selectFrom('sessions as s')
+          .leftJoin('account_login_events as e', 'e.session_public_id', 's.public_id')
+          .select(['s.user_agent', 's.location_label'])
+          .where('s.user_id', '=', userId)
+          .where('s.expires_at', '>', toDate(now))
+          .where(sql<boolean>`s.public_id IS DISTINCT FROM ${sessionPublicId}::uuid`)
+          .where(sql<boolean>`NOT (COALESCE(e.alert, false) AND (e.resolution IS NULL OR e.resolution = 'denied'))`)
+          .execute();
+        const vouchedByHistory = history.some(
           (row) =>
             (!row.alert || row.resolution === 'confirmed') &&
             sameDevice({ client: row.client, os: row.os, location: row.location_label })
         );
-        const vouchedBySession = sessions.rows.some((row) =>
-          sameDevice({
-            ...describeUserAgent(row.user_agent),
-            location: row.location_label || ''
-          })
+        const vouchedBySession = sessions.some((row) =>
+          sameDevice({ ...describeUserAgent(row.user_agent), location: row.location_label || '' })
         );
         // Only an account that never signed in sets a baseline. Judging by the
         // window alone would let any sign-in after a month away pass quietly.
         const signedInBefore =
-          history.rowCount! > 0 ||
-          (await db.query('SELECT 1 FROM account_login_events WHERE user_id = $1 LIMIT 1', [userId])).rowCount! > 0;
-        const baseline = !signedInBefore && sessions.rowCount === 0;
+          history.length > 0 ||
+          Boolean(
+            await trx
+              .selectFrom('account_login_events')
+              .select('id')
+              .where('user_id', '=', userId)
+              .limit(1)
+              .executeTakeFirst()
+          );
+        const baseline = !signedInBefore && sessions.length === 0;
         alert = !baseline && !vouchedByHistory && !vouchedBySession;
       }
-      const inserted = await db.query(
-        `INSERT INTO account_login_events (user_id, session_public_id, kind, client, os, location_label, alert, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-         RETURNING *`,
-        [userId, sessionPublicId, kind, device.client, device.os, location, alert, toDate(now)]
-      );
-      return { alert: alert ? mapLoginAlert(inserted.rows[0]) : null };
+      const inserted = await trx
+        .insertInto('account_login_events')
+        .values({
+          user_id: userId,
+          session_public_id: sessionPublicId,
+          kind,
+          client: device.client,
+          os: device.os,
+          location_label: location,
+          alert,
+          created_at: toDate(now)
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      return { alert: alert ? mapLoginAlert(inserted) : null };
     });
   }
 
@@ -779,19 +814,18 @@ function createUserStore({
     excludeSessionPublicId?: string | null;
     now?: number;
   }) {
-    const result = await getPool().query(
-      `SELECT *
-       FROM account_login_events
-       WHERE user_id = $1
-         AND alert
-         AND resolved_at IS NULL
-         AND created_at > $2
-         AND session_public_id IS DISTINCT FROM $3::uuid
-       ORDER BY created_at ASC
-       LIMIT 20`,
-      [userId, toDate(now - LOGIN_ALERT_TTL_MS), excludeSessionPublicId]
-    );
-    return result.rows.map(mapLoginAlert);
+    const rows = await db
+      .selectFrom('account_login_events')
+      .selectAll()
+      .where('user_id', '=', userId)
+      .where('alert', '=', true)
+      .where('resolved_at', 'is', null)
+      .where('created_at', '>', toDate(now - LOGIN_ALERT_TTL_MS))
+      .where(sql<boolean>`session_public_id IS DISTINCT FROM ${excludeSessionPublicId}::uuid`)
+      .orderBy('created_at', 'asc')
+      .limit(20)
+      .execute();
+    return rows.map(mapLoginAlert);
   }
 
   // "Это не я" ends the session that sign-in opened in the same transaction and
@@ -809,56 +843,47 @@ function createUserStore({
     currentSessionPublicId?: string | null;
     now?: number;
   }) {
-    if (!UUID_PATTERN.test(String(alertId || '')) || !(['confirmed', 'denied'] as unknown[]).includes(resolution)) {
+    if (typeof alertId !== 'string' || !UUID_PATTERN.test(alertId)) {
       return { status: 'not_found', revokedTokenHash: null };
     }
-    return transaction(getPool(), async (db) => {
-      const resolved = await db.query(
-        `UPDATE account_login_events
-         SET resolved_at = $4, resolution = $3
-         WHERE id = $1
-           AND user_id = $2
-           AND alert
-           AND resolved_at IS NULL
-           AND created_at > $5
-           AND session_public_id IS DISTINCT FROM $6::uuid
-         RETURNING session_public_id`,
-        [
-          String(alertId).toLowerCase(),
-          userId,
-          resolution,
-          toDate(now),
-          toDate(now - LOGIN_ALERT_TTL_MS),
-          currentSessionPublicId
-        ]
-      );
-      if (resolved.rowCount !== 1) return { status: 'not_found', revokedTokenHash: null };
-      const sessionPublicId = resolved.rows[0].session_public_id;
+    if (resolution !== 'confirmed' && resolution !== 'denied') {
+      return { status: 'not_found', revokedTokenHash: null };
+    }
+    return db.transaction().execute(async (trx) => {
+      const resolved = await trx
+        .updateTable('account_login_events')
+        .set({ resolved_at: toDate(now), resolution })
+        .where('id', '=', alertId.toLowerCase())
+        .where('user_id', '=', userId)
+        .where('alert', '=', true)
+        .where('resolved_at', 'is', null)
+        .where('created_at', '>', toDate(now - LOGIN_ALERT_TTL_MS))
+        .where(sql<boolean>`session_public_id IS DISTINCT FROM ${currentSessionPublicId}::uuid`)
+        .returning('session_public_id')
+        .execute();
+      if (resolved.length !== 1) return { status: 'not_found', revokedTokenHash: null };
+      const sessionPublicId = resolved[0]?.session_public_id;
       if (resolution !== 'denied' || !sessionPublicId) return { status: 'resolved', revokedTokenHash: null };
-      const deleted = await db.query(`DELETE FROM sessions WHERE user_id = $1 AND public_id = $2 RETURNING id`, [
-        userId,
-        sessionPublicId
-      ]);
-      return { status: 'resolved', revokedTokenHash: deleted.rows[0]?.id || null };
+      const deleted = await trx
+        .deleteFrom('sessions')
+        .where('user_id', '=', userId)
+        .where('public_id', '=', sessionPublicId)
+        .returning('id')
+        .executeTakeFirst();
+      return { status: 'resolved', revokedTokenHash: deleted?.id || null };
     });
   }
 
   async function pruneLoginEvents(now: number = Date.now()) {
-    const result = await getPool().query(`DELETE FROM account_login_events WHERE created_at <= $1`, [
-      toDate(now - LOGIN_EVENT_RETENTION_MS)
-    ]);
-    return result.rowCount;
-  }
-
-  async function close(): Promise<void> {
-    if (activePool) {
-      await activePool.end();
-    }
+    const result = await db
+      .deleteFrom('account_login_events')
+      .where('created_at', '<=', toDate(now - LOGIN_EVENT_RETENTION_MS))
+      .executeTakeFirst();
+    return Number(result.numDeletedRows);
   }
 
   return {
     changePassword,
-    close,
     createSession,
     createUser,
     deleteSession,

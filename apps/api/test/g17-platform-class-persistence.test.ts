@@ -156,11 +156,10 @@ test(
   'G17-A02 store and PostgreSQL upgrade equal the shared classifier corpus without persisting signals',
   { skip: !process.env.TEST_DATABASE_URL },
   async (t) => {
-    const { cleanup, databaseUrl } = await createTestDatabase(t);
+    const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
     t.after(cleanup);
     await migrate(databaseUrl, PLATFORM_TIMESTAMP);
-    const store = createPushStore({ databaseUrl, logger: SILENT });
-    t.after(() => store.close());
+    const store = createPushStore({ pool });
 
     const corpus = [
       { userAgent: 'Mozilla/5.0 (iPhone; Mobile)' },

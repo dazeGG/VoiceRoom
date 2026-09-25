@@ -120,3 +120,58 @@ test(
     assert.match(indexes, /message_id, emoji, created_at, user_id/);
   }
 );
+
+test(
+  'G68-A03 summaries count each emoji once per user, mark your own, and keep room and DM apart',
+  { skip: !process.env.TEST_DATABASE_URL, timeout: 120000 },
+  async (t) => {
+    const { pool, repository } = await fixture(t);
+    await pool.query(
+      `INSERT INTO direct_messages (id, sender_id, recipient_id, body) VALUES ('dm-1', 'actor', 'peer', 'hi')`
+    );
+    const toggle = (type: string, messageId: string, emoji: string, userId: string, active = true) =>
+      repository.transaction((client) =>
+        repository.setDesiredState({ type, messageId, emoji, userId, active, client })
+      );
+    await toggle('room', 'reaction-message', '😀', 'actor');
+    await toggle('room', 'reaction-message', '😀', 'peer');
+    await toggle('room', 'reaction-message', '🎉', 'peer');
+    await toggle('dm', 'dm-1', '😀', 'peer');
+
+    const summaries = await repository.listSummaries({ type: 'room', messageId: 'reaction-message', userId: 'actor' });
+    assert.deepEqual(
+      summaries.map(({ emoji, count, reactedByMe }) => [emoji, count, reactedByMe]),
+      [
+        ['😀', 2, true],
+        ['🎉', 1, false]
+      ]
+    );
+    const one = await repository.getSummary({
+      type: 'room',
+      messageId: 'reaction-message',
+      emoji: '😀',
+      userId: 'peer'
+    });
+    assert.deepEqual([one.count, one.reactedByMe], [2, true]);
+    assert.deepEqual(await repository.getSummary({ type: 'room', messageId: 'reaction-message', emoji: '👀' }), {
+      emoji: '👀',
+      count: 0,
+      reactedByMe: false,
+      revision: '0'
+    });
+    const direct = await repository.listSummaries({ type: 'dm', messageId: 'dm-1', userId: 'actor' });
+    assert.deepEqual(
+      direct.map(({ emoji, count, reactedByMe }) => [emoji, count, reactedByMe]),
+      [['😀', 1, false]]
+    );
+    assert.equal(await repository.getActive({ type: 'dm', messageId: 'dm-1', emoji: '😀', userId: 'peer' }), true);
+
+    await toggle('room', 'reaction-message', '🎉', 'peer', false);
+    assert.deepEqual(
+      (await repository.listSummaries({ type: 'room', messageId: 'reaction-message' })).map((summary) => summary.emoji),
+      ['😀'],
+      'an emoji nobody uses any more drops out'
+    );
+    await assert.rejects(() => repository.getSummary({ type: 'channel', messageId: 'x', emoji: '😀' }), /room or dm/);
+  }
+);

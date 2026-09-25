@@ -53,9 +53,8 @@ async function waitFor(check: () => Promise<boolean> | boolean, timeoutMs = 3000
 async function setup(t: TestContext) {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const pool = new Pool({ connectionString: databaseUrl });
-  const store = createUserStore({ databaseUrl, logger: SILENT });
+  const store = createUserStore({ pool, logger: SILENT });
   t.after(async () => {
-    await store.close();
     await pool.end();
     await cleanup();
   });

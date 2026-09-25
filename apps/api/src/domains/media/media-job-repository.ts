@@ -1,5 +1,9 @@
 import crypto from 'node:crypto';
+import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
+import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
+import { transaction } from '../../platform/db/pool.ts';
+import type { MediaProcessingJobs } from '../../platform/db/schema.ts';
 import type { Attachment, AttachmentRepository } from './attachment-repository.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
@@ -8,22 +12,9 @@ type Client = QueryClient | null | undefined;
 
 export type MediaJobKind = 'process' | 'cleanup';
 
-type MediaJobRow = {
-  id: string;
-  attachment_id: string;
+type MediaJobRow = Omit<Selectable<MediaProcessingJobs>, 'kind' | 'state'> & {
   kind: MediaJobKind;
   state: 'pending' | 'processing' | 'completed' | 'dead';
-  attempts: number;
-  available_at: unknown;
-  claimed_by: string | null;
-  claimed_at: unknown;
-  lease_expires_at: unknown;
-  fencing_token: string | number;
-  last_error: string | null;
-  created_at: unknown;
-  updated_at: unknown;
-  completed_at: unknown;
-  dead_at: unknown;
 };
 
 export type MediaJob = Readonly<{
@@ -84,11 +75,32 @@ function positiveInteger(value: unknown, fallback: number, maximum: number): num
   return Number.isSafeInteger(number) && number > 0 ? Math.min(number, maximum) : fallback;
 }
 
+// A job whose lease this worker still holds: the one it claimed, at the fence
+// it was given, before the lease ran out.
+function ownedJob(q: Database, jobId: string, workerId: string, fencingToken: number) {
+  return q
+    .updateTable('media_processing_jobs')
+    .where('id', '=', jobId)
+    .where('state', '=', 'processing')
+    .where('claimed_by', '=', workerId)
+    .where('fencing_token', '=', String(fencingToken))
+    .where('lease_expires_at', '>', sql<Date>`current_timestamp`);
+}
+
+const now = sql<Date>`current_timestamp`;
+const after = (ms: number) => sql<Date>`current_timestamp + (${ms} * interval '1 millisecond')`;
+
 function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new TypeError('A PostgreSQL pool is required');
-  const db = pool;
-  const executor = (client: Client): QueryClient => (client && typeof client.query === 'function' ? client : db);
+  const base = pool;
+  const on = (client: Client): Database => kyselyOn(client && typeof client.query === 'function' ? client : base);
+  const job = (row: Selectable<MediaProcessingJobs> | undefined) => mapMediaJob(row as MediaJobRow | undefined);
+  const leased = (row: Selectable<MediaProcessingJobs> | undefined): MediaJob => {
+    if (!row) throw new MediaJobFenceError();
+    return job(row) as MediaJob;
+  };
 
+  // One live (pending or processing) job per attachment and kind.
   async function enqueue(
     attachmentId: string,
     {
@@ -102,29 +114,32 @@ function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
     } = {}
   ): Promise<MediaJob | null> {
     if (!JOB_KINDS.has(kind)) throw new TypeError('Invalid media job kind');
-    const query = executor(client);
-    const existing = await query.query<MediaJobRow>(
-      `SELECT * FROM media_processing_jobs
-       WHERE attachment_id = $1 AND kind = $2 AND state IN ('pending', 'processing')`,
-      [attachmentId, kind]
-    );
-    if (existing.rows[0]) return mapMediaJob(existing.rows[0]);
-    const result = await query.query<MediaJobRow>(
-      `INSERT INTO media_processing_jobs (id, attachment_id, kind, available_at)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (attachment_id, kind) WHERE state IN ('pending', 'processing') DO NOTHING
-       RETURNING *`,
-      [crypto.randomUUID(), attachmentId, kind, availableAt]
-    );
-    if (result.rows[0]) return mapMediaJob(result.rows[0]);
-    const raced = await query.query<MediaJobRow>(
-      `SELECT * FROM media_processing_jobs
-       WHERE attachment_id = $1 AND kind = $2 AND state IN ('pending', 'processing')`,
-      [attachmentId, kind]
-    );
-    return mapMediaJob(raced.rows[0]);
+    const q = on(client);
+    const live = () =>
+      q
+        .selectFrom('media_processing_jobs')
+        .selectAll()
+        .where('attachment_id', '=', attachmentId)
+        .where('kind', '=', kind)
+        .where('state', 'in', ['pending', 'processing'])
+        .executeTakeFirst();
+    const existing = await live();
+    if (existing) return job(existing);
+    const inserted = await q
+      .insertInto('media_processing_jobs')
+      .values({ id: crypto.randomUUID(), attachment_id: attachmentId, kind, available_at: availableAt })
+      .onConflict((oc) =>
+        oc.columns(['attachment_id', 'kind']).where('state', 'in', ['pending', 'processing']).doNothing()
+      )
+      .returningAll()
+      .executeTakeFirst();
+    if (inserted) return job(inserted);
+    // Another enqueue won the race; answer with its job.
+    return job(await live());
   }
 
+  // Claims due jobs, and jobs whose lease ran out, skipping rows another worker
+  // holds; every claim bumps the fencing token.
   async function claimBatch({
     workerId,
     kind = 'process',
@@ -140,61 +155,76 @@ function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
   }): Promise<MediaJob[]> {
     if (!JOB_KINDS.has(kind)) throw new TypeError('Invalid media job kind');
     if (typeof workerId !== 'string' || !workerId.trim()) throw new TypeError('A media worker id is required');
-    const result = await executor(client).query<MediaJobRow>(
-      `WITH candidates AS (
-         SELECT id FROM media_processing_jobs
-         WHERE kind = $1 AND (
-           (state = 'pending' AND available_at <= current_timestamp) OR
-           (state = 'processing' AND lease_expires_at <= current_timestamp)
-         )
-         ORDER BY available_at ASC, created_at ASC, id ASC
-         FOR UPDATE SKIP LOCKED LIMIT $2
-       )
-       UPDATE media_processing_jobs AS job
-       SET state = 'processing', attempts = attempts + 1, claimed_by = $3,
-           claimed_at = current_timestamp,
-           lease_expires_at = current_timestamp + ($4 * interval '1 millisecond'),
-           fencing_token = fencing_token + 1, last_error = NULL,
-           completed_at = NULL, dead_at = NULL, updated_at = current_timestamp
-       FROM candidates WHERE job.id = candidates.id
-       RETURNING job.*`,
-      [kind, positiveInteger(limit, 10, 100), workerId.trim(), positiveInteger(leaseMs, 120_000, 15 * 60 * 1000)]
-    );
-    return result.rows.map(mapMediaJob) as MediaJob[];
+    const claimed = await on(client)
+      .with('candidates', (qb) =>
+        qb
+          .selectFrom('media_processing_jobs')
+          .select('id')
+          .where('kind', '=', kind)
+          .where((eb) =>
+            eb.or([
+              eb.and([eb('state', '=', 'pending'), eb('available_at', '<=', now)]),
+              eb.and([eb('state', '=', 'processing'), eb('lease_expires_at', '<=', now)])
+            ])
+          )
+          .orderBy('available_at', 'asc')
+          .orderBy('created_at', 'asc')
+          .orderBy('id', 'asc')
+          .forUpdate()
+          .skipLocked()
+          .limit(positiveInteger(limit, 10, 100))
+      )
+      .updateTable('media_processing_jobs as job')
+      .from('candidates')
+      .set((eb) => ({
+        state: 'processing',
+        attempts: eb('job.attempts', '+', 1),
+        claimed_by: workerId.trim(),
+        claimed_at: now,
+        lease_expires_at: after(positiveInteger(leaseMs, 120_000, 15 * 60 * 1000)),
+        fencing_token: sql<string>`job.fencing_token + 1`,
+        last_error: null,
+        completed_at: null,
+        dead_at: null,
+        updated_at: now
+      }))
+      .whereRef('job.id', '=', 'candidates.id')
+      .returningAll('job')
+      .execute();
+    return claimed.map((row) => job(row) as MediaJob);
   }
 
   async function renew(
     jobId: string,
     { workerId, fencingToken, leaseMs = 120_000, client }: JobLease & { leaseMs?: unknown }
   ): Promise<MediaJob> {
-    const result = await executor(client).query<MediaJobRow>(
-      `UPDATE media_processing_jobs
-       SET lease_expires_at = current_timestamp + ($4 * interval '1 millisecond'),
-           updated_at = current_timestamp
-       WHERE id = $1 AND state = 'processing' AND claimed_by = $2 AND fencing_token = $3
-         AND lease_expires_at > current_timestamp
-       RETURNING *`,
-      [jobId, workerId, fencingToken, positiveInteger(leaseMs, 120_000, 15 * 60 * 1000)]
+    return leased(
+      await ownedJob(on(client), jobId, workerId, fencingToken)
+        .set({ lease_expires_at: after(positiveInteger(leaseMs, 120_000, 15 * 60 * 1000)), updated_at: now })
+        .returningAll()
+        .executeTakeFirst()
     );
-    if (!result.rows[0]) throw new MediaJobFenceError();
-    return mapMediaJob(result.rows[0]) as MediaJob;
   }
 
   async function complete(jobId: string, { workerId, fencingToken, client }: JobLease): Promise<MediaJob> {
-    const result = await executor(client).query<MediaJobRow>(
-      `UPDATE media_processing_jobs
-       SET state = 'completed', completed_at = current_timestamp, claimed_by = NULL,
-           claimed_at = NULL, lease_expires_at = NULL, last_error = NULL,
-           updated_at = current_timestamp
-       WHERE id = $1 AND state = 'processing' AND claimed_by = $2 AND fencing_token = $3
-         AND lease_expires_at > current_timestamp
-       RETURNING *`,
-      [jobId, workerId, fencingToken]
+    return leased(
+      await ownedJob(on(client), jobId, workerId, fencingToken)
+        .set({
+          state: 'completed',
+          completed_at: now,
+          claimed_by: null,
+          claimed_at: null,
+          lease_expires_at: null,
+          last_error: null,
+          updated_at: now
+        })
+        .returningAll()
+        .executeTakeFirst()
     );
-    if (!result.rows[0]) throw new MediaJobFenceError();
-    return mapMediaJob(result.rows[0]) as MediaJob;
   }
 
+  // A failed attempt goes back to pending after the retry delay, or dead once
+  // it has used its attempts.
   async function fail(
     jobId: string,
     {
@@ -206,63 +236,68 @@ function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
       client
     }: JobLease & { error?: unknown; retryDelayMs?: unknown; maxAttempts?: unknown }
   ): Promise<MediaJob> {
-    const message = String(
-      (error as { message?: unknown } | null | undefined)?.message || error || 'Media job failed'
-    ).slice(0, 2_000);
-    const result = await executor(client).query<MediaJobRow>(
-      `UPDATE media_processing_jobs
-       SET state = CASE WHEN attempts >= $4 THEN 'dead' ELSE 'pending' END,
-           available_at = CASE WHEN attempts >= $4 THEN available_at
-             ELSE current_timestamp + ($5 * interval '1 millisecond') END,
-           dead_at = CASE WHEN attempts >= $4 THEN current_timestamp ELSE NULL END,
-           completed_at = NULL, claimed_by = NULL, claimed_at = NULL, lease_expires_at = NULL,
-           last_error = $6, updated_at = current_timestamp
-       WHERE id = $1 AND state = 'processing' AND claimed_by = $2 AND fencing_token = $3
-         AND lease_expires_at > current_timestamp
-       RETURNING *`,
-      [
-        jobId,
-        workerId,
-        fencingToken,
-        positiveInteger(maxAttempts, 5, 100),
-        positiveInteger(retryDelayMs, 5_000, 15 * 60 * 1000),
-        message
-      ]
+    const reason = (error as { message?: unknown } | null | undefined)?.message || error || 'Media job failed';
+    const message = (typeof reason === 'string' ? reason : 'Media job failed').slice(0, 2_000);
+    const attemptsLeft = sql<boolean>`attempts < ${positiveInteger(maxAttempts, 5, 100)}`;
+    return leased(
+      await ownedJob(on(client), jobId, workerId, fencingToken)
+        .set({
+          state: sql<string>`CASE WHEN ${attemptsLeft} THEN 'pending' ELSE 'dead' END`,
+          available_at: sql<Date>`CASE WHEN ${attemptsLeft}
+            THEN ${after(positiveInteger(retryDelayMs, 5_000, 15 * 60 * 1000))} ELSE available_at END`,
+          dead_at: sql<Date | null>`CASE WHEN ${attemptsLeft} THEN NULL ELSE current_timestamp END`,
+          completed_at: null,
+          claimed_by: null,
+          claimed_at: null,
+          lease_expires_at: null,
+          last_error: message,
+          updated_at: now
+        })
+        .returningAll()
+        .executeTakeFirst()
     );
-    if (!result.rows[0]) throw new MediaJobFenceError();
-    return mapMediaJob(result.rows[0]) as MediaJob;
   }
 
   async function findById(id: string, { client }: { client?: Client } = {}): Promise<MediaJob | null> {
-    const result = await executor(client).query<MediaJobRow>('SELECT * FROM media_processing_jobs WHERE id = $1', [id]);
-    return mapMediaJob(result.rows[0]);
+    return job(
+      await on(client).selectFrom('media_processing_jobs').selectAll().where('id', '=', id).executeTakeFirst()
+    );
   }
 
   async function oldestPendingAgeMs({ client }: { client?: Client } = {}): Promise<number> {
-    const result = await executor(client).query<{ age_ms: string | number | null }>(
-      `SELECT COALESCE(EXTRACT(EPOCH FROM (current_timestamp-MIN(created_at)))*1000,0)::bigint AS age_ms
-       FROM media_processing_jobs WHERE state IN ('pending', 'processing')`
-    );
-    return Number(result.rows[0]?.age_ms || 0);
+    const row = await on(client)
+      .selectFrom('media_processing_jobs')
+      .select(
+        sql<string>`COALESCE(EXTRACT(EPOCH FROM (current_timestamp - MIN(created_at))) * 1000, 0)::bigint`.as('age_ms')
+      )
+      .where('state', 'in', ['pending', 'processing'])
+      .executeTakeFirst();
+    return Number(row?.age_ms || 0);
   }
 
   async function removeTerminalBefore(
     before: Date,
     { limit = 500, client }: { limit?: unknown; client?: Client } = {}
   ): Promise<string[]> {
-    const result = await executor(client).query<{ id: string }>(
-      `WITH candidates AS (
-         SELECT id FROM media_processing_jobs
-         WHERE state IN ('completed', 'dead') AND updated_at < $1
-         ORDER BY updated_at ASC, id ASC LIMIT $2
-       )
-       DELETE FROM media_processing_jobs AS job USING candidates
-       WHERE job.id = candidates.id RETURNING job.id`,
-      [before, positiveInteger(limit, 500, 500)]
-    );
-    return result.rows.map((row) => row.id);
+    const removed = await on(client)
+      .deleteFrom('media_processing_jobs')
+      .where('id', 'in', (eb) =>
+        eb
+          .selectFrom('media_processing_jobs')
+          .select('id')
+          .where('state', 'in', ['completed', 'dead'])
+          .where('updated_at', '<', before)
+          .orderBy('updated_at', 'asc')
+          .orderBy('id', 'asc')
+          .limit(positiveInteger(limit, 500, 500))
+      )
+      .returning('id')
+      .execute();
+    return removed.map((row) => row.id);
   }
 
+  // The attachment turns ready and its job completes in one transaction, and
+  // only while this worker still holds the job's lease.
   async function completeProcessing(
     jobId: string,
     {
@@ -277,30 +312,25 @@ function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
       attachmentResult: Parameters<AttachmentRepository['markReady']>[1];
     }
   ): Promise<Attachment> {
-    if (!db.connect || !attachmentRepository?.markReady)
+    if (!base.connect || !attachmentRepository?.markReady)
       throw new TypeError('Processing completion dependencies are required');
-    const client = await db.connect();
-    try {
-      await client.query('BEGIN');
-      const owned = await client.query<{ attachment_id: string }>(
-        `SELECT attachment_id FROM media_processing_jobs
-         WHERE id = $1 AND state = 'processing' AND claimed_by = $2 AND fencing_token = $3
-           AND lease_expires_at > current_timestamp FOR UPDATE`,
-        [jobId, workerId, fencingToken]
-      );
-      const row = owned.rows[0];
-      if (!row) throw new MediaJobFenceError();
-      const attachment = await attachmentRepository.markReady(row.attachment_id, attachmentResult, client);
+    return transaction(base as Pick<pg.Pool, 'connect'>, async (client) => {
+      const owned = await kyselyOn(client)
+        .selectFrom('media_processing_jobs')
+        .select('attachment_id')
+        .where('id', '=', jobId)
+        .where('state', '=', 'processing')
+        .where('claimed_by', '=', workerId)
+        .where('fencing_token', '=', String(fencingToken))
+        .where('lease_expires_at', '>', now)
+        .forUpdate()
+        .executeTakeFirst();
+      if (!owned) throw new MediaJobFenceError();
+      const attachment = await attachmentRepository.markReady(owned.attachment_id, attachmentResult, client);
       if (!attachment) throw new Error('Attachment is no longer processable');
       await complete(jobId, { workerId, fencingToken, client });
-      await client.query('COMMIT');
       return attachment;
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw error;
-    } finally {
-      client.release();
-    }
+    });
   }
 
   return Object.freeze({

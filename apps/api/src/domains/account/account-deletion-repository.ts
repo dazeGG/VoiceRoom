@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
+import { sql } from 'kysely';
 import type pg from 'pg';
-import { transaction } from '../../lib/db.ts';
+import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { verifyPassword } from '../../lib/password.ts';
 import {
   ACCOUNT_DELETION_GRACE_MS,
@@ -10,8 +11,6 @@ import {
 } from '@voice-room/shared/account-security';
 
 const UNUSABLE_PASSWORD_HASH = '!';
-
-type QueryClient = Pick<pg.PoolClient, 'query'>;
 
 type DeletedProfile = { displayName?: unknown; avatarKey?: string | null; avatarAccent?: string | null };
 
@@ -73,54 +72,93 @@ function hashLogin(login: unknown): string {
 
 // Static rooms the account owns, each with the member who would inherit it:
 // the longest-standing member who is neither leaving nor banned from the room.
-const OWNED_ROOMS_WITH_HEIRS = `
-  SELECT r.id, r.name, r.avatar_key,
-         heir.user_id AS heir_user_id,
-         hu.display_name AS heir_display_name,
-         hu.login AS heir_login
-  FROM rooms r
-  LEFT JOIN LATERAL (
-    SELECT m.user_id
-    FROM room_memberships m
-    JOIN users u ON u.id = m.user_id
-    WHERE m.room_id = r.id
-      AND m.user_id <> $1
-      AND u.deletion_requested_at IS NULL
-      AND u.deleted_at IS NULL
-      AND NOT EXISTS (
-        SELECT 1 FROM room_bans b
-        WHERE b.room_id = r.id
-          AND b.user_id = m.user_id
-          AND b.revoked_at IS NULL
-          AND (b.expires_at IS NULL OR b.expires_at > $2)
-      )
-    ORDER BY m.created_at ASC, m.user_id ASC
-    LIMIT 1
-  ) heir ON true
-  LEFT JOIN users hu ON hu.id = heir.user_id
-  WHERE r.owner_id = $1
-    AND r.is_static = true
-    AND r.deleted_at IS NULL
-  ORDER BY r.created_at ASC, r.id ASC`;
+function ownedRoomsWithHeirs(db: Database, userId: string, now: number) {
+  return db
+    .selectFrom('rooms as r')
+    .leftJoinLateral(
+      (eb) =>
+        eb
+          .selectFrom('room_memberships as m')
+          .innerJoin('users as u', 'u.id', 'm.user_id')
+          .select('m.user_id')
+          .whereRef('m.room_id', '=', 'r.id')
+          .where('m.user_id', '<>', userId)
+          .where('u.deletion_requested_at', 'is', null)
+          .where('u.deleted_at', 'is', null)
+          .where((w) =>
+            w.not(
+              w.exists(
+                w
+                  .selectFrom('room_bans as b')
+                  .select('b.id')
+                  .whereRef('b.room_id', '=', 'r.id')
+                  .whereRef('b.user_id', '=', 'm.user_id')
+                  .where('b.revoked_at', 'is', null)
+                  .where((x) => x.or([x('b.expires_at', 'is', null), x('b.expires_at', '>', toDate(now))]))
+              )
+            )
+          )
+          .orderBy('m.created_at', 'asc')
+          .orderBy('m.user_id', 'asc')
+          .limit(1)
+          .as('heir'),
+      (join) => join.onTrue()
+    )
+    .leftJoin('users as hu', 'hu.id', 'heir.user_id')
+    .select([
+      'r.id',
+      'r.name',
+      'r.avatar_key',
+      'heir.user_id as heir_user_id',
+      'hu.display_name as heir_display_name',
+      'hu.login as heir_login'
+    ])
+    .where('r.owner_id', '=', userId)
+    .where('r.is_static', '=', true)
+    .where('r.deleted_at', 'is', null)
+    .orderBy('r.created_at', 'asc')
+    .orderBy('r.id', 'asc')
+    .execute() as Promise<OwnedRoomRow[]>;
+}
 
 // Everything personal the finished deletion removes. Messages, reactions, pins
 // and mentions stay: other people's conversations keep an anonymous author.
-const PERSONAL_DATA_CLEANUP = Object.freeze([
-  'DELETE FROM room_memberships WHERE user_id = $1',
-  'DELETE FROM room_bookmarks WHERE user_id = $1',
-  'DELETE FROM room_chat_reads WHERE user_id = $1',
-  'DELETE FROM friendships WHERE user_a_id = $1 OR user_b_id = $1',
-  'DELETE FROM friend_requests WHERE requester_id = $1 OR addressee_id = $1',
-  'DELETE FROM user_blocks WHERE blocker_id = $1 OR blocked_id = $1',
-  'DELETE FROM notification_preferences WHERE user_id = $1',
-  'DELETE FROM notification_dm_mutes WHERE user_id = $1 OR peer_user_id = $1',
-  'DELETE FROM notification_room_mutes WHERE user_id = $1',
-  'DELETE FROM user_notifications WHERE recipient_user_id = $1',
-  'DELETE FROM push_subscriptions WHERE user_id = $1',
-  'DELETE FROM sessions WHERE user_id = $1',
-  'DELETE FROM account_recovery_codes WHERE user_id = $1',
-  'DELETE FROM account_login_events WHERE user_id = $1'
-]);
+function removePersonalData(trx: Database, userId: string) {
+  return Promise.all([
+    trx.deleteFrom('room_memberships').where('user_id', '=', userId).execute(),
+    trx.deleteFrom('room_bookmarks').where('user_id', '=', userId).execute(),
+    trx.deleteFrom('room_chat_reads').where('user_id', '=', userId).execute(),
+    trx
+      .deleteFrom('friendships')
+      .where((eb) => eb.or([eb('user_a_id', '=', userId), eb('user_b_id', '=', userId)]))
+      .execute(),
+    trx
+      .deleteFrom('friend_requests')
+      .where((eb) => eb.or([eb('requester_id', '=', userId), eb('addressee_id', '=', userId)]))
+      .execute(),
+    trx
+      .deleteFrom('user_blocks')
+      .where((eb) => eb.or([eb('blocker_id', '=', userId), eb('blocked_id', '=', userId)]))
+      .execute(),
+    trx.deleteFrom('notification_preferences').where('user_id', '=', userId).execute(),
+    trx
+      .deleteFrom('notification_dm_mutes')
+      .where((eb) => eb.or([eb('user_id', '=', userId), eb('peer_user_id', '=', userId)]))
+      .execute(),
+    trx.deleteFrom('notification_room_mutes').where('user_id', '=', userId).execute(),
+    trx.deleteFrom('user_notifications').where('recipient_user_id', '=', userId).execute(),
+    trx.deleteFrom('push_subscriptions').where('user_id', '=', userId).execute(),
+    trx.deleteFrom('sessions').where('user_id', '=', userId).execute(),
+    trx.deleteFrom('account_recovery_codes').where('user_id', '=', userId).execute(),
+    trx.deleteFrom('account_login_events').where('user_id', '=', userId).execute()
+  ]);
+}
+
+function lockUser(trx: Database, column: 'id' | 'login', value: string) {
+  return trx.selectFrom('users').selectAll().where(column, '=', value).forUpdate().executeTakeFirst() as Promise<
+    UserRow | undefined
+  >;
+}
 
 // Owns the account deletion lifecycle, which spans tables owned by several
 // stores: a request hides the account and keeps its profile aside for a restore
@@ -131,7 +169,7 @@ function createAccountDeletionRepository({
   now: clock = Date.now
 }: { pool?: pg.Pool | null; now?: () => number } = {}) {
   if (!pool) throw new TypeError('pool is required');
-  const db = pool;
+  const db = kyselyOn(pool);
 
   async function previewDeletion({
     userId,
@@ -140,10 +178,10 @@ function createAccountDeletionRepository({
     userId: string;
     now?: number;
   }): Promise<AccountDeletionPreview> {
-    const result = await db.query<OwnedRoomRow>(OWNED_ROOMS_WITH_HEIRS, [userId, toDate(now)]);
+    const rooms = await ownedRoomsWithHeirs(db, userId, now);
     return {
       graceDays: Math.round(ACCOUNT_DELETION_GRACE_MS / (24 * 60 * 60 * 1000)),
-      rooms: result.rows.map((row) => ({
+      rooms: rooms.map((row) => ({
         roomId: row.id,
         name: row.name || '',
         heir: row.heir_user_id ? { displayName: row.heir_display_name || '', login: row.heir_login } : null
@@ -160,9 +198,8 @@ function createAccountDeletionRepository({
     currentPassword: unknown;
     now?: number;
   }): Promise<DeletionRequest> {
-    return transaction(db, async (tx: QueryClient): Promise<DeletionRequest> => {
-      const found = await tx.query<UserRow>('SELECT * FROM users WHERE id = $1 FOR UPDATE', [userId]);
-      const user = found.rows[0];
+    return db.transaction().execute(async (trx): Promise<DeletionRequest> => {
+      const user = await lockUser(trx, 'id', userId);
       if (!user || user.deleted_at) return { status: 'not_found' };
       if (user.deletion_requested_at) {
         return {
@@ -177,19 +214,20 @@ function createAccountDeletionRepository({
         avatarKey: user.avatar_key || null,
         avatarAccent: user.avatar_accent || null
       };
-      await tx.query(
-        `UPDATE users
-         SET deletion_requested_at = $2,
-             display_name = $3,
-             avatar_key = NULL,
-             avatar_accent = NULL,
-             metadata = jsonb_set(metadata, '{deletedProfile}', $4::jsonb, true),
-             updated_at = $2
-         WHERE id = $1`,
-        [userId, toDate(now), DELETED_ACCOUNT_NAME, JSON.stringify(deletedProfile)]
-      );
-      await tx.query('DELETE FROM sessions WHERE user_id = $1', [userId]);
-      await tx.query('DELETE FROM push_subscriptions WHERE user_id = $1', [userId]);
+      await trx
+        .updateTable('users')
+        .set({
+          deletion_requested_at: toDate(now),
+          display_name: DELETED_ACCOUNT_NAME,
+          avatar_key: null,
+          avatar_accent: null,
+          metadata: sql`jsonb_set(metadata, '{deletedProfile}', ${JSON.stringify(deletedProfile)}::jsonb, true)`,
+          updated_at: toDate(now)
+        })
+        .where('id', '=', userId)
+        .execute();
+      await trx.deleteFrom('sessions').where('user_id', '=', userId).execute();
+      await trx.deleteFrom('push_subscriptions').where('user_id', '=', userId).execute();
       return { status: 'requested', scheduledFor: now + ACCOUNT_DELETION_GRACE_MS };
     });
   }
@@ -205,9 +243,8 @@ function createAccountDeletionRepository({
     password: unknown;
     now?: number;
   }): Promise<AccountRestore> {
-    return transaction(db, async (tx: QueryClient): Promise<AccountRestore> => {
-      const found = await tx.query<UserRow>('SELECT * FROM users WHERE login = $1 FOR UPDATE', [login]);
-      const user = found.rows[0];
+    return db.transaction().execute(async (trx): Promise<AccountRestore> => {
+      const user = await lockUser(trx, 'login', login);
       const pending = user && !user.deleted_at && user.deletion_requested_at;
       const passwordMatches = await verifyPassword(password, pending ? user.password_hash : UNUSABLE_PASSWORD_HASH);
       if (!pending || !passwordMatches) return { status: 'invalid', userId: null };
@@ -215,23 +252,18 @@ function createAccountDeletionRepository({
         return { status: 'expired', userId: null };
 
       const profile: DeletedProfile = user.metadata?.deletedProfile || {};
-      await tx.query(
-        `UPDATE users
-         SET deletion_requested_at = NULL,
-             display_name = $2,
-             avatar_key = $3,
-             avatar_accent = $4,
-             metadata = metadata - 'deletedProfile',
-             updated_at = $5
-         WHERE id = $1`,
-        [
-          user.id,
-          String(profile.displayName || ''),
-          profile.avatarKey || null,
-          profile.avatarAccent || null,
-          toDate(now)
-        ]
-      );
+      await trx
+        .updateTable('users')
+        .set({
+          deletion_requested_at: null,
+          display_name: typeof profile.displayName === 'string' ? profile.displayName : '',
+          avatar_key: profile.avatarKey || null,
+          avatar_accent: profile.avatarAccent || null,
+          metadata: sql`metadata - 'deletedProfile'`,
+          updated_at: toDate(now)
+        })
+        .where('id', '=', user.id)
+        .execute();
       return { status: 'restored', userId: user.id };
     });
   }
@@ -239,19 +271,20 @@ function createAccountDeletionRepository({
   async function listDueDeletions({ now = clock(), limit = 20 }: { now?: number; limit?: number } = {}): Promise<
     string[]
   > {
-    const result = await db.query<{ id: string }>(
-      `SELECT id
-       FROM users
-       WHERE deleted_at IS NULL
-         AND deletion_requested_at IS NOT NULL
-         AND deletion_requested_at <= $1
-       ORDER BY deletion_requested_at ASC
-       LIMIT $2`,
-      [toDate(now - ACCOUNT_DELETION_GRACE_MS), limit]
-    );
-    return result.rows.map((row) => row.id);
+    const rows = await db
+      .selectFrom('users')
+      .select('id')
+      .where('deleted_at', 'is', null)
+      .where('deletion_requested_at', 'is not', null)
+      .where('deletion_requested_at', '<=', toDate(now - ACCOUNT_DELETION_GRACE_MS))
+      .orderBy('deletion_requested_at', 'asc')
+      .limit(limit)
+      .execute();
+    return rows.map((row) => row.id);
   }
 
+  // Hands each owned room to its heir (or deletes it when nobody can take it),
+  // removes the personal data, reserves the login and anonymizes the row.
   async function finalizeDeletion({
     userId,
     now = clock()
@@ -259,9 +292,8 @@ function createAccountDeletionRepository({
     userId: string;
     now?: number;
   }): Promise<DeletionFinish> {
-    return transaction(db, async (tx: QueryClient): Promise<DeletionFinish> => {
-      const found = await tx.query<UserRow>('SELECT * FROM users WHERE id = $1 FOR UPDATE', [userId]);
-      const user = found.rows[0];
+    return db.transaction().execute(async (trx): Promise<DeletionFinish> => {
+      const user = await lockUser(trx, 'id', userId);
       if (
         !user ||
         user.deleted_at ||
@@ -271,64 +303,67 @@ function createAccountDeletionRepository({
         return { status: 'not_due' };
       }
 
+      const at = toDate(now);
       const transferredRooms: { roomId: string; heirUserId: string }[] = [];
       const deletedRooms: { roomId: string; avatarKey: string | null }[] = [];
-      const owned = await tx.query<OwnedRoomRow>(OWNED_ROOMS_WITH_HEIRS, [userId, toDate(now)]);
-      for (const room of owned.rows) {
+      for (const room of await ownedRoomsWithHeirs(trx, userId, now)) {
         if (room.heir_user_id) {
-          await tx.query('UPDATE rooms SET owner_id = $2, updated_at = $3 WHERE id = $1', [
-            room.id,
-            room.heir_user_id,
-            toDate(now)
-          ]);
-          await tx.query(
-            `UPDATE room_memberships SET role = 'owner', updated_at = $3 WHERE room_id = $1 AND user_id = $2`,
-            [room.id, room.heir_user_id, toDate(now)]
-          );
+          await trx
+            .updateTable('rooms')
+            .set({ owner_id: room.heir_user_id, updated_at: at })
+            .where('id', '=', room.id)
+            .execute();
+          await trx
+            .updateTable('room_memberships')
+            .set({ role: 'owner', updated_at: at })
+            .where('room_id', '=', room.id)
+            .where('user_id', '=', room.heir_user_id)
+            .execute();
           transferredRooms.push({ roomId: room.id, heirUserId: room.heir_user_id });
         } else {
-          await tx.query('UPDATE rooms SET deleted_at = COALESCE(deleted_at, $2), updated_at = $2 WHERE id = $1', [
-            room.id,
-            toDate(now)
-          ]);
+          await trx
+            .updateTable('rooms')
+            .set((eb) => ({ deleted_at: eb.fn.coalesce('deleted_at', eb.val(at)), updated_at: at }))
+            .where('id', '=', room.id)
+            .execute();
           deletedRooms.push({ roomId: room.id, avatarKey: room.avatar_key || null });
         }
       }
 
-      for (const statement of PERSONAL_DATA_CLEANUP) await tx.query(statement, [userId]);
+      await removePersonalData(trx, userId);
 
-      await tx.query(
-        'INSERT INTO reserved_logins (login_hash, reserved_at) VALUES ($1, $2) ON CONFLICT (login_hash) DO NOTHING',
-        [hashLogin(user.login), toDate(now)]
-      );
+      await trx
+        .insertInto('reserved_logins')
+        .values({ login_hash: hashLogin(user.login), reserved_at: at })
+        .onConflict((oc) => oc.column('login_hash').doNothing())
+        .execute();
       const avatarKey = user.metadata?.deletedProfile?.avatarKey || user.avatar_key || null;
-      await tx.query(
-        `UPDATE users
-         SET login = $2,
-             display_name = $3,
-             password_hash = $4,
-             avatar_key = NULL,
-             avatar_accent = NULL,
-             presence_status = 'offline',
-             metadata = '{}'::jsonb,
-             deleted_at = $5,
-             updated_at = $5
-         WHERE id = $1`,
-        [
-          userId,
-          `${DELETED_LOGIN_PREFIX}${user.id.replace(/-/g, '').slice(0, 24)}`,
-          DELETED_ACCOUNT_NAME,
-          UNUSABLE_PASSWORD_HASH,
-          toDate(now)
-        ]
-      );
+      await trx
+        .updateTable('users')
+        .set({
+          login: `${DELETED_LOGIN_PREFIX}${user.id.replace(/-/g, '').slice(0, 24)}`,
+          display_name: DELETED_ACCOUNT_NAME,
+          password_hash: UNUSABLE_PASSWORD_HASH,
+          avatar_key: null,
+          avatar_accent: null,
+          presence_status: 'offline',
+          metadata: '{}',
+          deleted_at: at,
+          updated_at: at
+        })
+        .where('id', '=', userId)
+        .execute();
       return { status: 'deleted', transferredRooms, deletedRooms, avatarKey };
     });
   }
 
   async function isLoginReserved(login: unknown): Promise<boolean> {
-    const result = await db.query('SELECT 1 FROM reserved_logins WHERE login_hash = $1', [hashLogin(login)]);
-    return (result.rowCount ?? 0) > 0;
+    const row = await db
+      .selectFrom('reserved_logins')
+      .select('login_hash')
+      .where('login_hash', '=', hashLogin(login))
+      .executeTakeFirst();
+    return Boolean(row);
   }
 
   return Object.freeze({

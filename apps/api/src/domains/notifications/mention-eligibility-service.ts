@@ -1,4 +1,5 @@
 import type pg from 'pg';
+import { kyselyOn } from '../../platform/db/kysely.ts';
 import { normalizeMentionUserIds } from '@voice-room/shared/mentions';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
@@ -45,25 +46,32 @@ function createMentionEligibilityService({
     const normalized = normalizeMentionUserIds(targetUserIds, { creatorUserId });
     if (!normalized.ok) throw new MentionEligibilityError(normalized.code);
     const db = client?.query ? client : defaultDb;
-    const creator = await db.query(
-      `SELECT 1 FROM room_memberships rm JOIN rooms r ON r.id = rm.room_id
-       WHERE rm.room_id=$1 AND rm.user_id=$2 AND r.deleted_at IS NULL`,
-      [roomId, creatorUserId]
-    );
-    if (!creator.rowCount) throw new MentionEligibilityError('creator_not_eligible');
+    const q = kyselyOn(db);
+    // The writer must be a member of a live room, and not banned from it.
+    const creator = await q
+      .selectFrom('room_memberships as rm')
+      .innerJoin('rooms as r', 'r.id', 'rm.room_id')
+      .select('rm.id')
+      .where('rm.room_id', '=', roomId)
+      .where('rm.user_id', '=', creatorUserId)
+      .where('r.deleted_at', 'is', null)
+      .executeTakeFirst();
+    if (!creator) throw new MentionEligibilityError('creator_not_eligible');
     if ((await activeBanService.filterEligibleUserIds({ roomId, userIds: [creatorUserId], client: db })).length !== 1) {
       throw new MentionEligibilityError('creator_not_eligible');
     }
     if (!normalized.userIds.length) return [];
-    const targets = await db.query<{ user_id: string }>(
-      `SELECT rm.user_id FROM room_memberships rm
-       WHERE rm.room_id=$1 AND rm.user_id = ANY($2::varchar[])`,
-      [roomId, normalized.userIds]
-    );
+    // Every target must be a member too, and not banned.
+    const targets = await q
+      .selectFrom('room_memberships')
+      .select('user_id')
+      .where('room_id', '=', roomId)
+      .where('user_id', 'in', normalized.userIds)
+      .execute();
     const eligible = new Set(
       await activeBanService.filterEligibleUserIds({
         roomId,
-        userIds: targets.rows.map((row) => row.user_id),
+        userIds: targets.map((row) => row.user_id),
         client: db
       })
     );

@@ -16,10 +16,9 @@ async function setup(t: TestContext) {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const pool = new Pool({ connectionString: databaseUrl });
-  const users = createUserStore({ databaseUrl, logger: SILENT });
+  const users = createUserStore({ pool, logger: SILENT });
   const deletion = createAccountDeletionRepository({ pool });
   t.after(async () => {
-    await users.close();
     await pool.end();
     await cleanup();
   });

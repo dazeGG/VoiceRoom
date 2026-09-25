@@ -10,7 +10,7 @@ import type {
   ReplyPreview,
   RoomMessage
 } from '@voice-room/shared/contracts/messages';
-import { avatarColorForPeerId } from '../../lib/room-store.ts';
+import { avatarColorForPeerId } from '../rooms/avatar-color.ts';
 
 export interface RoomChatMessage {
   id: string;

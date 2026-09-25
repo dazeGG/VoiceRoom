@@ -1,14 +1,25 @@
 import crypto from 'node:crypto';
+import { sql, type ExpressionBuilder, type Selectable } from 'kysely';
 import type pg from 'pg';
-import { createDbPool, transaction } from './db.ts';
+import { transaction } from '../platform/db/pool.ts';
+import { kyselyOn, type Database, type Queryable } from '../platform/db/kysely.ts';
 import { cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
 import { normalizeLinkPreview, type LinkPreview } from '@voice-room/shared/link-preview';
-import type { Selectable } from 'kysely';
-import type { DirectMessages } from '../platform/db/schema.ts';
-import { createLogger } from './logger.ts';
+import type { DB, DirectMessages, Users } from '../platform/db/schema.ts';
 
-type Row = Record<string, any>;
-type Queryable = Pick<pg.Pool, 'query'> | pg.PoolClient;
+type Metadata = Record<string, unknown>;
+type UserRow = Pick<
+  Selectable<Users>,
+  | 'avatar_accent'
+  | 'avatar_color_key'
+  | 'avatar_key'
+  | 'created_at'
+  | 'display_name'
+  | 'dnd'
+  | 'id'
+  | 'login'
+  | 'presence_status'
+>;
 export type PublicUser = ReturnType<typeof mapPublicUser> & object;
 
 export type DirectMessageInvite = {
@@ -42,8 +53,7 @@ function toMillis(value: unknown): number | null {
 
 // Public shape for a user row joined from the `users` table (snake_case). Never
 // leaks the password hash; mirrors user-store's publicUser fields.
-function mapPublicUser(row: Row | null | undefined) {
-  if (!row) return null;
+function mapPublicUser(row: UserRow) {
   const presenceStatus = cleanPresenceStatus(row.presence_status) || (row.dnd ? 'dnd' : 'online');
   return {
     avatarAccent: row.avatar_accent || null,
@@ -60,13 +70,13 @@ function mapPublicUser(row: Row | null | undefined) {
 
 // Room invitations ride inside a regular direct message's metadata so they
 // live in the shared thread history without any schema change.
-function mapInvite(metadata: Row | null | undefined): DirectMessageInvite | null {
+function mapInvite(metadata: Metadata | null | undefined): DirectMessageInvite | null {
   if (!metadata || metadata.kind !== 'room-invite') return null;
+  const status = metadata.status;
   return {
-    roomId: String(metadata.roomId || ''),
-    roomName: String(metadata.roomName || ''),
-    status: (['accepted', 'declined', 'expired'].includes(metadata.status) ? metadata.status : 'pending') as
-      'pending' | 'accepted' | 'declined' | 'expired',
+    roomId: typeof metadata.roomId === 'string' ? metadata.roomId : '',
+    roomName: typeof metadata.roomName === 'string' ? metadata.roomName : '',
+    status: status === 'accepted' || status === 'declined' || status === 'expired' ? status : 'pending',
     expiresAt: Number(metadata.expiresAt) || null
   };
 }
@@ -75,7 +85,7 @@ function mapMessage(row: Selectable<DirectMessages>): DirectMessage;
 function mapMessage(row: Selectable<DirectMessages> | null | undefined): DirectMessage | null;
 function mapMessage(row: Selectable<DirectMessages> | null | undefined): DirectMessage | null {
   if (!row) return null;
-  const metadata = row.metadata as Row | null;
+  const metadata = row.metadata as Metadata | null;
   return {
     id: row.id,
     senderId: row.sender_id,
@@ -97,9 +107,9 @@ function orderedPair(a: string, b: string): [string, string] {
   return a < b ? [a, b] : [b, a];
 }
 
-async function lockUserPair(client: Queryable, a: string, b: string): Promise<void> {
+async function lockUserPair(q: Database, a: string, b: string): Promise<void> {
   const [low, high] = orderedPair(a, b);
-  await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`voice-room:user-pair:${low}:${high}`]);
+  await sql`SELECT pg_advisory_xact_lock(hashtext(${`voice-room:user-pair:${low}:${high}`}))`.execute(q);
 }
 
 // Escape LIKE wildcards in user-supplied search terms (we use ESCAPE '\').
@@ -107,80 +117,103 @@ function escapeLike(term: string): string {
   return term.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }
 
-function createFriendStore({
-  databaseUrl,
-  logger = createLogger({ name: 'api' }),
-  pool
-}: { databaseUrl?: string; logger?: unknown; pool?: pg.Pool | null } = {}) {
-  let activePool = pool || null;
-  function getPool(): pg.Pool {
-    if (!activePool) {
-      activePool = createDbPool({ databaseUrl, logger });
-    }
-    return activePool;
-  }
+const now = sql<Date>`current_timestamp`;
+
+// The other side of a friendship row, seen from `userId`.
+function friendOf(userId: string) {
+  return sql<string>`CASE WHEN user_a_id = ${userId} THEN user_b_id ELSE user_a_id END`;
+}
+
+// Messages between two users, either direction.
+function between(a: string, b: string) {
+  return (eb: ExpressionBuilder<DB, 'direct_messages'>) =>
+    eb.or([
+      eb.and([eb('sender_id', '=', a), eb('recipient_id', '=', b)]),
+      eb.and([eb('sender_id', '=', b), eb('recipient_id', '=', a)])
+    ]);
+}
+
+// Invitation state lives in the message's metadata JSON.
+const inviteKind = sql<string>`metadata->>'kind'`;
+const inviteStatus = sql<string>`metadata->>'status'`;
+
+function createFriendStore({ pool }: { pool: pg.Pool }) {
+  const db = kyselyOn(pool);
+  const on = (client?: Queryable): Database => (client ? kyselyOn(client) : db);
 
   // --- Friendship lookups -------------------------------------------------
 
-  async function getFriendIds(userId: string, client: Queryable = getPool()): Promise<string[]> {
-    const result = await client.query(
-      `SELECT CASE WHEN user_a_id = $1 THEN user_b_id ELSE user_a_id END AS friend_id
-       FROM friendships
-       WHERE user_a_id = $1 OR user_b_id = $1`,
-      [userId]
-    );
-    return result.rows.map((row) => row.friend_id);
+  async function getFriendIds(userId: string, client?: Queryable): Promise<string[]> {
+    const rows = await on(client)
+      .selectFrom('friendships')
+      .select(friendOf(userId).as('friend_id'))
+      .where((eb) => eb.or([eb('user_a_id', '=', userId), eb('user_b_id', '=', userId)]))
+      .execute();
+    return rows.map((row) => row.friend_id);
   }
 
-  async function areFriends(a: string, b: string, client: Queryable = getPool()): Promise<boolean> {
+  async function friendsOn(q: Database, a: string, b: string): Promise<boolean> {
     const [low, high] = orderedPair(a, b);
-    const result = await client.query(`SELECT 1 FROM friendships WHERE user_a_id = $1 AND user_b_id = $2`, [low, high]);
-    return result.rowCount! > 0;
+    const row = await q
+      .selectFrom('friendships')
+      .select('id')
+      .where('user_a_id', '=', low)
+      .where('user_b_id', '=', high)
+      .executeTakeFirst();
+    return Boolean(row);
+  }
+
+  function areFriends(a: string, b: string, client?: Queryable): Promise<boolean> {
+    return friendsOn(on(client), a, b);
   }
 
   // Friend list enriched with the last DM and unread count, ready for the
   // sidebar/home. Online status is layered on at the route level from the
   // in-memory presence registry.
   async function listFriends(userId: string) {
-    const pool = getPool();
-    const friendsResult = await pool.query(
-      `SELECT u.*, f.created_at AS friends_since
-       FROM friendships f
-       JOIN users u ON u.id = CASE WHEN f.user_a_id = $1 THEN f.user_b_id ELSE f.user_a_id END
-       WHERE f.user_a_id = $1 OR f.user_b_id = $1
-       ORDER BY lower(coalesce(u.display_name, u.login))`,
-      [userId]
-    );
+    const friends = await db
+      .selectFrom('friendships as f')
+      .innerJoin('users as u', (join) =>
+        join.on(sql<boolean>`u.id = CASE WHEN f.user_a_id = ${userId} THEN f.user_b_id ELSE f.user_a_id END`)
+      )
+      .selectAll('u')
+      .select('f.created_at as friends_since')
+      .where((eb) => eb.or([eb('f.user_a_id', '=', userId), eb('f.user_b_id', '=', userId)]))
+      .orderBy(sql`lower(coalesce(u.display_name, u.login))`)
+      .execute();
 
-    const unreadResult = await pool.query(
-      `SELECT sender_id, COUNT(*)::int AS count
-       FROM direct_messages
-       WHERE recipient_id = $1 AND read_at IS NULL AND deleted_at IS NULL
-       GROUP BY sender_id`,
-      [userId]
-    );
-    const unread = new Map<string, number>(unreadResult.rows.map((row) => [row.sender_id, row.count]));
+    const unread = new Map(Object.entries(await getUnreadCounts(userId)));
 
-    const lastResult = await pool.query(
-      `SELECT DISTINCT ON (peer) peer, id, body, created_at, sender_id
-       FROM (
-         SELECT CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END AS peer,
-                id, body, created_at, sender_id
-         FROM direct_messages
-         WHERE (sender_id = $1 OR recipient_id = $1) AND deleted_at IS NULL
-       ) t
-       ORDER BY peer, created_at DESC, id DESC`,
-      [userId]
-    );
-    const lastMessage = new Map<string, { id: string; body: string; createdAt: number | null; fromMe: boolean }>(
-      lastResult.rows.map((row) => [
+    const last = await db
+      .selectFrom((eb) =>
+        eb
+          .selectFrom('direct_messages')
+          .select([
+            sql<string>`CASE WHEN sender_id = ${userId} THEN recipient_id ELSE sender_id END`.as('peer'),
+            'id',
+            'body',
+            'created_at',
+            'sender_id'
+          ])
+          .where((w) => w.or([w('sender_id', '=', userId), w('recipient_id', '=', userId)]))
+          .where('deleted_at', 'is', null)
+          .as('t')
+      )
+      .distinctOn('peer')
+      .selectAll()
+      .orderBy('peer')
+      .orderBy('created_at', 'desc')
+      .orderBy('id', 'desc')
+      .execute();
+    const lastMessage = new Map(
+      last.map((row) => [
         row.peer,
         { id: row.id, body: row.body, createdAt: toMillis(row.created_at), fromMe: row.sender_id === userId }
       ])
     );
 
-    return friendsResult.rows.map((row) => ({
-      user: mapPublicUser(row)!,
+    return friends.map((row) => ({
+      user: mapPublicUser(row),
       friendsSince: toMillis(row.friends_since),
       unreadCount: unread.get(row.id) || 0,
       lastMessage: lastMessage.get(row.id) || null
@@ -198,23 +231,41 @@ function createFriendStore({
     excludeUserId: string;
     limit?: number;
   }) {
-    const term = String(query || '').trim();
+    const term = typeof query === 'string' ? query.trim() : '';
     if (!term) return [];
     const pattern = `%${escapeLike(term.toLowerCase())}%`;
-    const result = await getPool().query(
-      `SELECT * FROM users
-       WHERE id <> $1
-         AND deletion_requested_at IS NULL
-         AND deleted_at IS NULL
-         AND (lower(login) LIKE $2 ESCAPE '\\' OR lower(display_name) LIKE $2 ESCAPE '\\')
-       ORDER BY lower(login)
-       LIMIT $3`,
-      [excludeUserId, pattern, limit]
-    );
-    return result.rows.map(mapPublicUser) as PublicUser[];
+    const rows = await db
+      .selectFrom('users')
+      .selectAll()
+      .where('id', '<>', excludeUserId)
+      .where('deletion_requested_at', 'is', null)
+      .where('deleted_at', 'is', null)
+      .where((eb) =>
+        eb.or([
+          sql<boolean>`lower(login) LIKE ${pattern} ESCAPE '\\'`,
+          sql<boolean>`lower(display_name) LIKE ${pattern} ESCAPE '\\'`
+        ])
+      )
+      .orderBy(sql`lower(login)`)
+      .limit(limit)
+      .execute();
+    return rows.map(mapPublicUser);
   }
 
   // --- Requests -----------------------------------------------------------
+
+  function setRequestStatus(q: Database, requestId: string, status: 'accepted' | 'declined' | 'cancelled') {
+    return q.updateTable('friend_requests').set({ status, responded_at: now }).where('id', '=', requestId).execute();
+  }
+
+  async function insertFriendship(q: Database, a: string, b: string): Promise<void> {
+    const [low, high] = orderedPair(a, b);
+    await q
+      .insertInto('friendships')
+      .values({ id: crypto.randomUUID(), user_a_id: low, user_b_id: high, created_at: now })
+      .onConflict((oc) => oc.columns(['user_a_id', 'user_b_id']).doNothing())
+      .execute();
+  }
 
   // Send a friend request to a login or explicit user id. Auto-accepts when a
   // reverse pending request already exists, so two people who request each
@@ -230,53 +281,49 @@ function createFriendStore({
     addresseeLogin?: string;
     addresseeUserId?: string;
   }) {
-    return transaction(getPool(), async (client) => {
-      const userResult = addresseeUserId
-        ? await client.query(`SELECT * FROM users WHERE id = $1`, [addresseeUserId])
-        : await client.query(`SELECT * FROM users WHERE login = $1`, [addresseeLogin]);
-      const addressee = userResult.rows[0];
+    return db.transaction().execute(async (trx) => {
+      const addressee = await trx
+        .selectFrom('users')
+        .selectAll()
+        .where(addresseeUserId ? 'id' : 'login', '=', addresseeUserId || addresseeLogin)
+        .executeTakeFirst();
       // Deleted and soon-to-be-deleted accounts cannot be found or befriended.
       if (!addressee || addressee.deletion_requested_at || addressee.deleted_at)
         return { status: 'not_found' as const };
       if (addressee.id === requesterId) return { status: 'self' as const };
 
-      await lockUserPair(client, requesterId, addressee.id);
+      await lockUserPair(trx, requesterId, addressee.id);
 
       // A block in either direction stops the request. The status is the same
       // for both directions so the sender cannot probe whether they were the
       // one blocked.
-      if (await isBlockedBetween(requesterId, addressee.id, client)) {
+      if (await blockedOn(trx, requesterId, addressee.id)) {
         return { status: 'blocked' as const };
       }
 
-      if (await areFriends(requesterId, addressee.id, client)) {
-        return { status: 'already_friends' as const, user: mapPublicUser(addressee)! };
+      if (await friendsOn(trx, requesterId, addressee.id)) {
+        return { status: 'already_friends' as const, user: mapPublicUser(addressee) };
       }
 
+      const pending = (from: string, to: string) =>
+        trx
+          .selectFrom('friend_requests')
+          .select('id')
+          .where('requester_id', '=', from)
+          .where('addressee_id', '=', to)
+          .where('status', '=', 'pending');
+
       // Reverse pending request -> accept it.
-      const reverse = await client.query(
-        `SELECT * FROM friend_requests
-         WHERE requester_id = $1 AND addressee_id = $2 AND status = 'pending'
-         FOR UPDATE`,
-        [addressee.id, requesterId]
-      );
-      if (reverse.rowCount! > 0) {
-        await client.query(
-          `UPDATE friend_requests SET status = 'accepted', responded_at = current_timestamp WHERE id = $1`,
-          [reverse.rows[0].id]
-        );
-        await insertFriendship(client, requesterId, addressee.id);
-        return { status: 'accepted' as const, user: mapPublicUser(addressee)! };
+      const reverse = await pending(addressee.id, requesterId).forUpdate().executeTakeFirst();
+      if (reverse) {
+        await setRequestStatus(trx, reverse.id, 'accepted');
+        await insertFriendship(trx, requesterId, addressee.id);
+        return { status: 'accepted' as const, user: mapPublicUser(addressee) };
       }
 
       // Existing forward pending request -> idempotent.
-      const forward = await client.query(
-        `SELECT * FROM friend_requests
-         WHERE requester_id = $1 AND addressee_id = $2 AND status = 'pending'`,
-        [requesterId, addressee.id]
-      );
-      if (forward.rowCount! > 0) {
-        return { status: 'already_sent' as const, user: mapPublicUser(addressee)! };
+      if (await pending(requesterId, addressee.id).executeTakeFirst()) {
+        return { status: 'already_sent' as const, user: mapPublicUser(addressee) };
       }
 
       // The pre-check above is racy under READ COMMITTED: two concurrent sends
@@ -285,192 +332,185 @@ function createFriendStore({
       // index's predicate makes the loser a no-op so we return an idempotent
       // already_sent instead of bubbling a 23505 up as a 500.
       const id = crypto.randomUUID();
-      const inserted = await client.query(
-        `INSERT INTO friend_requests (id, requester_id, addressee_id, status, created_at)
-         VALUES ($1, $2, $3, 'pending', current_timestamp)
-         ON CONFLICT (requester_id, addressee_id) WHERE status = 'pending' DO NOTHING
-         RETURNING id`,
-        [id, requesterId, addressee.id]
-      );
-      if (inserted.rowCount === 0) {
-        return { status: 'already_sent' as const, user: mapPublicUser(addressee)! };
+      const inserted = await trx
+        .insertInto('friend_requests')
+        .values({ id, requester_id: requesterId, addressee_id: addressee.id, status: 'pending', created_at: now })
+        .onConflict((oc) => oc.columns(['requester_id', 'addressee_id']).where('status', '=', 'pending').doNothing())
+        .returning('id')
+        .executeTakeFirst();
+      if (!inserted) {
+        return { status: 'already_sent' as const, user: mapPublicUser(addressee) };
       }
-      return { status: 'sent' as const, requestId: id, user: mapPublicUser(addressee)! };
+      return { status: 'sent' as const, requestId: id, user: mapPublicUser(addressee) };
     });
-  }
-
-  async function insertFriendship(client: Queryable, a: string, b: string): Promise<void> {
-    const [low, high] = orderedPair(a, b);
-    const id = crypto.randomUUID();
-    await client.query(
-      `INSERT INTO friendships (id, user_a_id, user_b_id, created_at)
-       VALUES ($1, $2, $3, current_timestamp)
-       ON CONFLICT (user_a_id, user_b_id) DO NOTHING`,
-      [id, low, high]
-    );
   }
 
   // Pending incoming + outgoing requests, each joined with the other user and a
   // count of mutual friends (used by the design's "N общих друга" line).
   async function listRequests(userId: string) {
-    const pool = getPool();
-    // Alias the request columns: `u.*` also exposes `id`/`created_at`, and a
-    // duplicate column name makes node-postgres keep the last one — without the
-    // aliases `row.id` would be the requester's user id, not the request id, so
-    // accept/decline would hit the wrong row ("Заявка не найдена").
-    const incoming = await pool.query(
-      `SELECT fr.id AS request_id, fr.created_at AS request_created_at, u.*,
-              (SELECT COUNT(*)::int FROM friendships fa
-               JOIN friendships fb
-                 ON (CASE WHEN fb.user_a_id = u.id THEN fb.user_b_id ELSE fb.user_a_id END)
-                  = (CASE WHEN fa.user_a_id = $1 THEN fa.user_b_id ELSE fa.user_a_id END)
-               WHERE (fa.user_a_id = $1 OR fa.user_b_id = $1)
-                 AND (fb.user_a_id = u.id OR fb.user_b_id = u.id)) AS mutual
-       FROM friend_requests fr
-       JOIN users u ON u.id = fr.requester_id
-       WHERE fr.addressee_id = $1 AND fr.status = 'pending'
-       ORDER BY fr.created_at DESC`,
-      [userId]
-    );
-    const outgoing = await pool.query(
-      `SELECT fr.id AS request_id, fr.created_at AS request_created_at, u.*
-       FROM friend_requests fr
-       JOIN users u ON u.id = fr.addressee_id
-       WHERE fr.requester_id = $1 AND fr.status = 'pending'
-       ORDER BY fr.created_at DESC`,
-      [userId]
-    );
+    const incoming = await db
+      .selectFrom('friend_requests as fr')
+      .innerJoin('users as u', 'u.id', 'fr.requester_id')
+      .selectAll('u')
+      .select([
+        'fr.id as request_id',
+        'fr.created_at as request_created_at',
+        sql<number>`(
+          SELECT COUNT(*)::int FROM friendships fa
+          JOIN friendships fb
+            ON (CASE WHEN fb.user_a_id = u.id THEN fb.user_b_id ELSE fb.user_a_id END)
+             = (CASE WHEN fa.user_a_id = ${userId} THEN fa.user_b_id ELSE fa.user_a_id END)
+          WHERE (fa.user_a_id = ${userId} OR fa.user_b_id = ${userId})
+            AND (fb.user_a_id = u.id OR fb.user_b_id = u.id)
+        )`.as('mutual')
+      ])
+      .where('fr.addressee_id', '=', userId)
+      .where('fr.status', '=', 'pending')
+      .orderBy('fr.created_at', 'desc')
+      .execute();
+    const outgoing = await db
+      .selectFrom('friend_requests as fr')
+      .innerJoin('users as u', 'u.id', 'fr.addressee_id')
+      .selectAll('u')
+      .select(['fr.id as request_id', 'fr.created_at as request_created_at'])
+      .where('fr.requester_id', '=', userId)
+      .where('fr.status', '=', 'pending')
+      .orderBy('fr.created_at', 'desc')
+      .execute();
     return {
-      incoming: incoming.rows.map((row) => ({
+      incoming: incoming.map((row) => ({
         id: row.request_id,
         createdAt: toMillis(row.request_created_at),
         mutualFriends: row.mutual || 0,
-        user: mapPublicUser(row)!
+        user: mapPublicUser(row)
       })),
-      outgoing: outgoing.rows.map((row) => ({
+      outgoing: outgoing.map((row) => ({
         id: row.request_id,
         createdAt: toMillis(row.request_created_at),
-        user: mapPublicUser(row)!
+        user: mapPublicUser(row)
       }))
     };
   }
 
-  // Accept or decline an incoming request the user owns (addressee).
   async function countIncomingRequests(userId: string): Promise<number> {
-    const result = await getPool().query(
-      `SELECT COUNT(*)::int AS count FROM friend_requests
-       WHERE addressee_id = $1 AND status = 'pending'`,
-      [userId]
-    );
-    return result.rows[0]?.count || 0;
+    const row = await db
+      .selectFrom('friend_requests')
+      .select(sql<number>`COUNT(*)::int`.as('count'))
+      .where('addressee_id', '=', userId)
+      .where('status', '=', 'pending')
+      .executeTakeFirst();
+    return row?.count || 0;
   }
 
+  // Accept or decline an incoming request the user owns (addressee).
   async function respondRequest({ userId, requestId, action }: { userId: string; requestId: string; action: string }) {
-    return transaction(getPool(), async (client) => {
-      const candidate = await client.query(
-        `SELECT requester_id FROM friend_requests
-         WHERE id = $1 AND addressee_id = $2 AND status = 'pending'`,
-        [requestId, userId]
-      );
-      if (candidate.rowCount === 0) return { status: 'not_found' as const };
+    return db.transaction().execute(async (trx) => {
+      const pendingRequest = () =>
+        trx
+          .selectFrom('friend_requests')
+          .select('requester_id')
+          .where('id', '=', requestId)
+          .where('addressee_id', '=', userId)
+          .where('status', '=', 'pending');
+      const candidate = await pendingRequest().executeTakeFirst();
+      if (!candidate) return { status: 'not_found' as const };
 
-      await lockUserPair(client, userId, candidate.rows[0].requester_id);
-      const result = await client.query(
-        `SELECT * FROM friend_requests
-         WHERE id = $1 AND addressee_id = $2 AND status = 'pending'
-         FOR UPDATE`,
-        [requestId, userId]
-      );
-      const request = result.rows[0];
+      await lockUserPair(trx, userId, candidate.requester_id);
+      const request = await pendingRequest().forUpdate().executeTakeFirst();
       if (!request) return { status: 'not_found' as const };
 
       if (action === 'accept') {
-        if (await isBlockedBetween(userId, request.requester_id, client)) {
-          await client.query(
-            `UPDATE friend_requests SET status = 'cancelled', responded_at = current_timestamp WHERE id = $1`,
-            [requestId]
-          );
+        if (await blockedOn(trx, userId, request.requester_id)) {
+          await setRequestStatus(trx, requestId, 'cancelled');
           return { status: 'blocked' as const, requesterId: request.requester_id };
         }
-        await client.query(
-          `UPDATE friend_requests SET status = 'accepted', responded_at = current_timestamp WHERE id = $1`,
-          [requestId]
-        );
-        await insertFriendship(client, userId, request.requester_id);
-        const userResult = await client.query(`SELECT * FROM users WHERE id = $1`, [request.requester_id]);
-        return {
-          status: 'accepted' as const,
-          requesterId: request.requester_id,
-          user: mapPublicUser(userResult.rows[0])!
-        };
+        await setRequestStatus(trx, requestId, 'accepted');
+        await insertFriendship(trx, userId, request.requester_id);
+        const requester = await trx
+          .selectFrom('users')
+          .selectAll()
+          .where('id', '=', request.requester_id)
+          .executeTakeFirstOrThrow();
+        return { status: 'accepted' as const, requesterId: request.requester_id, user: mapPublicUser(requester) };
       }
 
-      await client.query(
-        `UPDATE friend_requests SET status = 'declined', responded_at = current_timestamp WHERE id = $1`,
-        [requestId]
-      );
+      await setRequestStatus(trx, requestId, 'declined');
       return { status: 'declined' as const, requesterId: request.requester_id };
     });
   }
 
   // Cancel an outgoing request the user sent (requester).
   async function cancelRequest({ userId, requestId }: { userId: string; requestId: string }) {
-    const result = await getPool().query(
-      `UPDATE friend_requests
-       SET status = 'cancelled', responded_at = current_timestamp
-       WHERE id = $1 AND requester_id = $2 AND status = 'pending'
-       RETURNING addressee_id`,
-      [requestId, userId]
-    );
-    if (result.rowCount === 0) return { status: 'not_found' as const };
-    return { status: 'cancelled' as const, addresseeId: result.rows[0].addressee_id };
+    const row = await db
+      .updateTable('friend_requests')
+      .set({ status: 'cancelled', responded_at: now })
+      .where('id', '=', requestId)
+      .where('requester_id', '=', userId)
+      .where('status', '=', 'pending')
+      .returning('addressee_id')
+      .executeTakeFirst();
+    if (!row) return { status: 'not_found' as const };
+    return { status: 'cancelled' as const, addresseeId: row.addressee_id };
   }
 
   async function removeFriend({ userId, friendId }: { userId: string; friendId: string }) {
     const [low, high] = orderedPair(userId, friendId);
-    const result = await getPool().query(`DELETE FROM friendships WHERE user_a_id = $1 AND user_b_id = $2`, [
-      low,
-      high
-    ]);
-    if (result.rowCount === 0) return { status: 'not_found' as const };
+    const result = await db
+      .deleteFrom('friendships')
+      .where('user_a_id', '=', low)
+      .where('user_b_id', '=', high)
+      .executeTakeFirst();
+    if (result.numDeletedRows === 0n) return { status: 'not_found' as const };
     return { status: 'removed' as const };
   }
 
   // --- Blocks -------------------------------------------------------------
+
+  async function blockedOn(q: Database, a: string, b: string): Promise<boolean> {
+    const row = await q
+      .selectFrom('user_blocks')
+      .select('blocker_id')
+      .where((eb) =>
+        eb.or([
+          eb.and([eb('blocker_id', '=', a), eb('blocked_id', '=', b)]),
+          eb.and([eb('blocker_id', '=', b), eb('blocked_id', '=', a)])
+        ])
+      )
+      .limit(1)
+      .executeTakeFirst();
+    return Boolean(row);
+  }
 
   // A block is directed, but every enforcement point treats an edge in either
   // direction as a stop, so this is the single predicate callers should use.
   async function isBlockedBetween(
     a: string | null | undefined,
     b: string | null | undefined,
-    client: Queryable = getPool()
+    client?: Queryable
   ): Promise<boolean> {
     if (!a || !b || a === b) return false;
-    const result = await client.query(
-      `SELECT 1 FROM user_blocks
-       WHERE (blocker_id = $1 AND blocked_id = $2)
-          OR (blocker_id = $2 AND blocked_id = $1)
-       LIMIT 1`,
-      [a, b]
-    );
-    return result.rowCount! > 0;
+    return blockedOn(on(client), a, b);
   }
 
-  async function listBlockedUserIds(userId: string, client: Queryable = getPool()): Promise<string[]> {
-    const result = await client.query(`SELECT blocked_id FROM user_blocks WHERE blocker_id = $1`, [userId]);
-    return result.rows.map((row) => row.blocked_id);
+  async function listBlockedUserIds(userId: string, client?: Queryable): Promise<string[]> {
+    const rows = await on(client)
+      .selectFrom('user_blocks')
+      .select('blocked_id')
+      .where('blocker_id', '=', userId)
+      .execute();
+    return rows.map((row) => row.blocked_id);
   }
 
-  async function listBlockedUsers(userId: string, client: Queryable = getPool()) {
-    const result = await client.query(
-      `SELECT u.*
-       FROM user_blocks b
-       JOIN users u ON u.id = b.blocked_id
-       WHERE b.blocker_id = $1
-       ORDER BY lower(coalesce(u.display_name, u.login)), u.id`,
-      [userId]
-    );
-    return result.rows.map(mapPublicUser) as PublicUser[];
+  async function listBlockedUsers(userId: string, client?: Queryable) {
+    const rows = await on(client)
+      .selectFrom('user_blocks as b')
+      .innerJoin('users as u', 'u.id', 'b.blocked_id')
+      .selectAll('u')
+      .where('b.blocker_id', '=', userId)
+      .orderBy(sql`lower(coalesce(u.display_name, u.login))`)
+      .orderBy('u.id')
+      .execute();
+    return rows.map(mapPublicUser);
   }
 
   // Blocking is a hard reset of the relationship: the friendship goes away and
@@ -478,96 +518,101 @@ function createFriendStore({
   // starts from a clean slate rather than silently restoring contact.
   async function blockUser({ userId, targetId }: { userId: string; targetId: string }) {
     if (!targetId || userId === targetId) return { status: 'invalid' as const };
-    return transaction(getPool(), async (client) => {
-      await lockUserPair(client, userId, targetId);
-      const exists = await client.query(`SELECT 1 FROM users WHERE id = $1`, [targetId]);
-      if (exists.rowCount === 0) return { status: 'not_found' as const };
+    return db.transaction().execute(async (trx) => {
+      await lockUserPair(trx, userId, targetId);
+      const exists = await trx.selectFrom('users').select('id').where('id', '=', targetId).executeTakeFirst();
+      if (!exists) return { status: 'not_found' as const };
 
-      const inserted = await client.query(
-        `INSERT INTO user_blocks (blocker_id, blocked_id)
-         VALUES ($1, $2)
-         ON CONFLICT (blocker_id, blocked_id) DO NOTHING`,
-        [userId, targetId]
-      );
+      const inserted = await trx
+        .insertInto('user_blocks')
+        .values({ blocker_id: userId, blocked_id: targetId })
+        .onConflict((oc) => oc.columns(['blocker_id', 'blocked_id']).doNothing())
+        .executeTakeFirst();
 
       const [low, high] = orderedPair(userId, targetId);
-      const unfriended = await client.query(`DELETE FROM friendships WHERE user_a_id = $1 AND user_b_id = $2`, [
-        low,
-        high
-      ]);
-      await client.query(
-        `UPDATE friend_requests
-         SET status = 'cancelled', responded_at = current_timestamp
-         WHERE status = 'pending'
-           AND ((requester_id = $1 AND addressee_id = $2)
-             OR (requester_id = $2 AND addressee_id = $1))`,
-        [userId, targetId]
-      );
-      await client.query(
-        `UPDATE direct_messages
-         SET metadata = jsonb_set(metadata, '{status}', '"expired"'::jsonb, true),
-             edited_at = current_timestamp
-         WHERE metadata->>'kind' = 'room-invite'
-           AND metadata->>'status' = 'pending'
-           AND ((sender_id = $1 AND recipient_id = $2)
-             OR (sender_id = $2 AND recipient_id = $1))`,
-        [userId, targetId]
-      );
+      const unfriended = await trx
+        .deleteFrom('friendships')
+        .where('user_a_id', '=', low)
+        .where('user_b_id', '=', high)
+        .executeTakeFirst();
+      await trx
+        .updateTable('friend_requests')
+        .set({ status: 'cancelled', responded_at: now })
+        .where('status', '=', 'pending')
+        .where((eb) =>
+          eb.or([
+            eb.and([eb('requester_id', '=', userId), eb('addressee_id', '=', targetId)]),
+            eb.and([eb('requester_id', '=', targetId), eb('addressee_id', '=', userId)])
+          ])
+        )
+        .execute();
+      await trx
+        .updateTable('direct_messages')
+        .set({
+          metadata: sql`jsonb_set(metadata, '{status}', '"expired"'::jsonb, true)`,
+          edited_at: now
+        })
+        .where(inviteKind, '=', 'room-invite')
+        .where(inviteStatus, '=', 'pending')
+        .where(between(userId, targetId))
+        .execute();
 
       return {
-        status: inserted.rowCount! > 0 ? ('blocked' as const) : ('already_blocked' as const),
-        unfriended: unfriended.rowCount! > 0
+        status:
+          Number(inserted.numInsertedOrUpdatedRows ?? 0) > 0 ? ('blocked' as const) : ('already_blocked' as const),
+        unfriended: unfriended.numDeletedRows > 0n
       };
     });
   }
 
   async function unblockUser({ userId, targetId }: { userId: string; targetId: string }) {
     if (!targetId || userId === targetId) return { status: 'invalid' as const };
-    return transaction(getPool(), async (client) => {
-      await lockUserPair(client, userId, targetId);
-      const result = await client.query(`DELETE FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2`, [
-        userId,
-        targetId
-      ]);
-      return { status: result.rowCount! > 0 ? ('unblocked' as const) : ('not_found' as const) };
+    return db.transaction().execute(async (trx) => {
+      await lockUserPair(trx, userId, targetId);
+      const result = await trx
+        .deleteFrom('user_blocks')
+        .where('blocker_id', '=', userId)
+        .where('blocked_id', '=', targetId)
+        .executeTakeFirst();
+      return { status: result.numDeletedRows > 0n ? ('unblocked' as const) : ('not_found' as const) };
     });
   }
 
   // --- Direct messages ----------------------------------------------------
 
   async function listThread({ userId, peerId, limit = 100 }: { userId: string; peerId: string; limit?: number }) {
-    const result = await getPool().query(
-      `SELECT * FROM direct_messages
-       WHERE ((sender_id = $1 AND recipient_id = $2)
-          OR (sender_id = $2 AND recipient_id = $1))
-         AND deleted_at IS NULL
-       ORDER BY created_at ASC, id ASC
-       LIMIT $3`,
-      [userId, peerId, limit]
-    );
-    return result.rows.map(mapMessage) as DirectMessage[];
+    const rows = await db
+      .selectFrom('direct_messages')
+      .selectAll()
+      .where(between(userId, peerId))
+      .where('deleted_at', 'is', null)
+      .orderBy('created_at', 'asc')
+      .orderBy('id', 'asc')
+      .limit(limit)
+      .execute();
+    return rows.map((row) => mapMessage(row));
   }
 
   async function getMessage(userId: string, peerId: string, messageId: string) {
-    const result = await getPool().query(
-      `SELECT * FROM direct_messages
-       WHERE id = $1
-         AND ((sender_id = $2 AND recipient_id = $3) OR (sender_id = $3 AND recipient_id = $2))
-         AND deleted_at IS NULL
-       LIMIT 1`,
-      [messageId, userId, peerId]
-    );
-    return mapMessage(result.rows[0] || null);
+    const row = await db
+      .selectFrom('direct_messages')
+      .selectAll()
+      .where('id', '=', messageId)
+      .where(between(userId, peerId))
+      .where('deleted_at', 'is', null)
+      .limit(1)
+      .executeTakeFirst();
+    return mapMessage(row);
   }
 
   async function softDeleteMessage(messageId: string): Promise<boolean> {
-    const result = await getPool().query(
-      `UPDATE direct_messages
-       SET deleted_at = now()
-       WHERE id = $1 AND deleted_at IS NULL`,
-      [messageId]
-    );
-    return result.rowCount! > 0;
+    const result = await db
+      .updateTable('direct_messages')
+      .set({ deleted_at: sql<Date>`now()` })
+      .where('id', '=', messageId)
+      .where('deleted_at', 'is', null)
+      .executeTakeFirst();
+    return result.numUpdatedRows > 0n;
   }
 
   async function editMessage({
@@ -581,17 +626,16 @@ function createFriendStore({
     recipientId: string;
     body: string;
   }) {
-    const result = await getPool().query(
-      `UPDATE direct_messages
-       SET body = $4, edited_at = current_timestamp
-       WHERE id = $1
-         AND sender_id = $2
-         AND recipient_id = $3
-         AND deleted_at IS NULL
-       RETURNING *`,
-      [messageId, senderId, recipientId, body]
-    );
-    return mapMessage(result.rows[0] || null);
+    const row = await db
+      .updateTable('direct_messages')
+      .set({ body, edited_at: now })
+      .where('id', '=', messageId)
+      .where('sender_id', '=', senderId)
+      .where('recipient_id', '=', recipientId)
+      .where('deleted_at', 'is', null)
+      .returningAll()
+      .executeTakeFirst();
+    return mapMessage(row);
   }
 
   async function sendMessage({
@@ -606,25 +650,33 @@ function createFriendStore({
     senderId: string;
     recipientId: string;
     body: string;
-    metadata?: Row | null;
+    metadata?: Metadata | null;
     replyToMessageId?: string | null;
     beforeUnitOfWork?:
-      ((client: pg.PoolClient) => Promise<{ replay?: boolean; message?: Row } | null | undefined>) | null;
+      ((client: pg.PoolClient) => Promise<{ replay?: boolean; message?: unknown } | null | undefined>) | null;
     unitOfWork?: ((client: pg.PoolClient, message: DirectMessage) => Promise<unknown>) | null;
   }) {
     const id = crypto.randomUUID();
-    return transaction(getPool(), async (client) => {
+    // A raw pg transaction: the hooks run their own SQL on the same client.
+    return transaction(pool, async (client) => {
       if (typeof beforeUnitOfWork === 'function') {
         const prepared = await beforeUnitOfWork(client);
         if (prepared?.replay) return { ...(prepared.message as DirectMessage), idempotencyReplay: true };
       }
-      const result = await client.query(
-        `INSERT INTO direct_messages (id, sender_id, recipient_id, body, created_at, metadata, reply_to_message_id)
-         VALUES ($1, $2, $3, $4, current_timestamp, $5, $6)
-         RETURNING *`,
-        [id, senderId, recipientId, body, metadata ? JSON.stringify(metadata) : '{}', replyToMessageId]
-      );
-      const message = mapMessage(result.rows[0]);
+      const row = await kyselyOn(client)
+        .insertInto('direct_messages')
+        .values({
+          id,
+          sender_id: senderId,
+          recipient_id: recipientId,
+          body,
+          created_at: now,
+          metadata: metadata ? JSON.stringify(metadata) : '{}',
+          reply_to_message_id: replyToMessageId
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
+      const message = mapMessage(row);
       if (typeof unitOfWork === 'function') await unitOfWork(client, message);
       return message;
     });
@@ -641,71 +693,64 @@ function createFriendStore({
     recipientId: string;
     status: string;
   }) {
-    const result = await getPool().query(
-      `UPDATE direct_messages
-       SET metadata = jsonb_set(metadata, '{status}', to_jsonb($3::text))
-       WHERE id = $1
-         AND recipient_id = $2
-         AND metadata->>'kind' = 'room-invite'
-         AND metadata->>'status' = 'pending'
-         AND deleted_at IS NULL
-       RETURNING *`,
-      [messageId, recipientId, status]
-    );
-    return mapMessage(result.rows[0] || null);
+    const row = await db
+      .updateTable('direct_messages')
+      .set({ metadata: sql`jsonb_set(metadata, '{status}', to_jsonb(${status}::text))` })
+      .where('id', '=', messageId)
+      .where('recipient_id', '=', recipientId)
+      .where(inviteKind, '=', 'room-invite')
+      .where(inviteStatus, '=', 'pending')
+      .where('deleted_at', 'is', null)
+      .returningAll()
+      .executeTakeFirst();
+    return mapMessage(row);
   }
 
   // Expires pending invitations for a room. Omitting senderId expires every
   // sender's invitations, which is what a deleted room needs.
   async function expirePendingInvites({ senderId = null, roomId }: { senderId?: string | null; roomId: string }) {
-    const result = await getPool().query(
-      `UPDATE direct_messages
-       SET metadata = jsonb_set(metadata, '{status}', to_jsonb('expired'::text))
-       WHERE ($1::varchar IS NULL OR sender_id = $1)
-         AND metadata->>'kind' = 'room-invite'
-         AND metadata->>'roomId' = $2
-         AND metadata->>'status' = 'pending'
-         AND deleted_at IS NULL
-       RETURNING *`,
-      [senderId, roomId]
-    );
-    return result.rows.map(mapMessage) as DirectMessage[];
+    let query = db
+      .updateTable('direct_messages')
+      .set({ metadata: sql`jsonb_set(metadata, '{status}', to_jsonb('expired'::text))` })
+      .where(inviteKind, '=', 'room-invite')
+      .where(sql<string>`metadata->>'roomId'`, '=', roomId)
+      .where(inviteStatus, '=', 'pending')
+      .where('deleted_at', 'is', null);
+    if (senderId) query = query.where('sender_id', '=', senderId);
+    const rows = await query.returningAll().execute();
+    return rows.map((row) => mapMessage(row));
   }
 
   // Mark every message from peer -> user as read. Returns the number marked so
   // the caller can decide whether to broadcast a read receipt.
   async function markRead({ userId, peerId }: { userId: string; peerId: string }) {
-    const result = await getPool().query(
-      `UPDATE direct_messages
-       SET read_at = current_timestamp
-       WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL AND deleted_at IS NULL`,
-      [userId, peerId]
-    );
-    return { count: result.rowCount! };
+    const result = await db
+      .updateTable('direct_messages')
+      .set({ read_at: now })
+      .where('recipient_id', '=', userId)
+      .where('sender_id', '=', peerId)
+      .where('read_at', 'is', null)
+      .where('deleted_at', 'is', null)
+      .executeTakeFirst();
+    return { count: Number(result.numUpdatedRows) };
   }
 
   async function getUnreadCounts(userId: string): Promise<Record<string, number>> {
-    const result = await getPool().query(
-      `SELECT sender_id, COUNT(*)::int AS count
-       FROM direct_messages
-       WHERE recipient_id = $1 AND read_at IS NULL AND deleted_at IS NULL
-       GROUP BY sender_id`,
-      [userId]
-    );
-    return Object.fromEntries(result.rows.map((row) => [row.sender_id, row.count]));
-  }
-
-  async function close(): Promise<void> {
-    if (activePool) {
-      await activePool.end();
-    }
+    const rows = await db
+      .selectFrom('direct_messages')
+      .select(['sender_id', sql<number>`COUNT(*)::int`.as('count')])
+      .where('recipient_id', '=', userId)
+      .where('read_at', 'is', null)
+      .where('deleted_at', 'is', null)
+      .groupBy('sender_id')
+      .execute();
+    return Object.fromEntries(rows.map((row) => [row.sender_id, row.count]));
   }
 
   return {
     areFriends,
     blockUser,
     cancelRequest,
-    close,
     isBlockedBetween,
     listBlockedUserIds,
     listBlockedUsers,

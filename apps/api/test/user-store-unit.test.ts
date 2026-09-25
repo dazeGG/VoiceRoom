@@ -1,66 +1,41 @@
-import test from 'node:test';
+// The user store over a migrated database: avatar colours, avatars, and
+// sessions that keep only a hash of their token.
+
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createUserStore, hashSessionToken, publicUser } from '../src/lib/user-store.ts';
 import { AVATAR_COLOR_KEYS } from '@voice-room/shared/validation';
-import { fakePoolWithClient as createFakePool } from './fakes/index.ts';
+import { runMigrations } from '../src/lib/migrate.ts';
+import { createTestDatabase } from './db-harness.ts';
 
-test('createUser stores a validated avatar color key and publicUser returns it', async () => {
-  const pool = createFakePool((text: string, values: unknown[]) => {
-    assert.match(text, /avatar_color_key/);
-    assert.equal(values[4], 'rose');
-    return {
-      rows: [
-        {
-          id: values[0],
-          login: values[1],
-          display_name: values[2],
-          password_hash: values[3],
-          avatar_color_key: values[4],
-          created_at: values[5]
-        }
-      ],
-      rowCount: 1
-    };
-  });
-  const store = createUserStore({ pool });
+const SILENT = { log() {}, info() {}, warn() {}, error() {} };
+const skip = !process.env.TEST_DATABASE_URL;
 
-  const result = await store.createUser({
+async function setup(t: TestContext) {
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
+  t.after(cleanup);
+  await runMigrations({ databaseUrl, logger: SILENT });
+  return { pool, store: createUserStore({ pool, logger: SILENT }) };
+}
+
+test('createUser keeps a valid avatar colour and replaces an invalid one', { skip }, async (t) => {
+  const { store } = await setup(t);
+  const chosen = await store.createUser({
     avatarColorKey: 'rose',
     displayName: 'Ada',
     login: 'ada',
-    now: 1000,
     password: 'password123'
   });
-  assert.ok(result.user);
+  assert.equal(chosen.status, 'created');
+  assert.equal(chosen.user?.avatarColorKey, 'rose');
+  assert.equal(publicUser(chosen.user)?.avatarColorKey, 'rose');
+  assert.equal('passwordHash' in (publicUser(chosen.user) ?? {}), false);
 
-  assert.equal(result.status, 'created');
-  assert.equal(result.user.avatarColorKey, 'rose');
-  assert.equal(publicUser(result.user)?.avatarColorKey, 'rose');
-  assert.equal('passwordHash' in (publicUser(result.user) ?? {}), false);
-});
-
-test('createUser falls back to a curated random avatar color for invalid input', async () => {
-  const pool = createFakePool((text: string, values: unknown[]) => ({
-    rows: [
-      {
-        id: values[0],
-        login: values[1],
-        display_name: values[2],
-        password_hash: values[3],
-        avatar_color_key: values[4],
-        created_at: values[5]
-      }
-    ],
-    rowCount: 1
-  }));
-  const store = createUserStore({ pool });
-
-  const result = await store.createUser({ avatarColorKey: 'neon-unbounded', login: 'grace', password: 'password123' });
-  assert.ok(result.user);
-
-  assert.ok(AVATAR_COLOR_KEYS.includes(result.user.avatarColorKey));
-  assert.ok((AVATAR_COLOR_KEYS as readonly unknown[]).includes(pool.calls[0]?.values[4]));
+  const invalid = await store.createUser({ avatarColorKey: 'neon-unbounded', login: 'grace', password: 'password123' });
+  assert.ok(invalid.user);
+  assert.ok(AVATAR_COLOR_KEYS.includes(invalid.user.avatarColorKey));
+  assert.equal((await store.getUserById(invalid.user.id))?.avatarColorKey, invalid.user.avatarColorKey);
 });
 
 test('publicUser exposes avatar URL and accent without leaking the storage key', () => {
@@ -90,98 +65,43 @@ test('publicUser derives legacy DND flags from the canonical presence status', (
   assert.equal(user.doNotDisturb, true);
 });
 
-test('updateAvatar persists the storage key and server-derived accent', async () => {
-  const pool = createFakePool((text: string, values: unknown[]) => {
-    assert.match(text, /SET avatar_key = \$2, avatar_accent = \$3/);
-    assert.equal(values[0], '123e4567-e89b-12d3-a456-426614174000');
-    assert.equal(values[1], 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp');
-    assert.equal(values[2], '#49303f');
-    return {
-      rows: [
-        {
-          id: values[0],
-          login: 'ada',
-          avatar_key: values[1],
-          avatar_accent: values[2],
-          avatar_color_key: 'rose',
-          created_at: new Date(1000)
-        }
-      ],
-      rowCount: 1
-    };
-  });
-  const user = await createUserStore({ pool }).updateAvatar({
-    userId: '123e4567-e89b-12d3-a456-426614174000',
-    avatarKey: 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp',
-    avatarAccent: '#49303f',
-    now: 2000
-  });
+test('an avatar is stored with its accent, and a swap returns the key it replaced', { skip }, async (t) => {
+  const { store } = await setup(t);
+  const { user } = await store.createUser({ login: 'ada', password: 'password123' });
   assert.ok(user);
-  assert.equal(user.avatarKey, 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp');
-  assert.equal(user.avatarAccent, '#49303f');
+  const oldKey = `av_${user.id}_0123abcd.webp`;
+  const nextKey = `av_${user.id}_deadbeef.webp`;
+
+  const updated = await store.updateAvatar({ userId: user.id, avatarKey: oldKey, avatarAccent: '#49303f', now: 2000 });
+  assert.equal(updated?.avatarKey, oldKey);
+  assert.equal(updated?.avatarAccent, '#49303f');
+
+  const swapped = await store.swapAvatar({ userId: user.id, avatarKey: nextKey, avatarAccent: '#123456', now: 3000 });
+  assert.equal(swapped.previousAvatarKey, oldKey);
+  assert.equal(swapped.user?.avatarKey, nextKey);
+  assert.equal((await store.getUserById(user.id))?.avatarAccent, '#123456');
+  assert.deepEqual(await store.listAvatarKeys(), [nextKey]);
+
+  assert.deepEqual(await store.swapAvatar({ userId: '123e4567-e89b-12d3-a456-426614174000', avatarKey: nextKey }), {
+    previousAvatarKey: null,
+    user: null
+  });
 });
 
-test('swapAvatar locks the user row and returns the exact key it replaced', async () => {
-  const userId = '123e4567-e89b-12d3-a456-426614174000';
-  const oldKey = `av_${userId}_0123abcd.webp`;
-  const nextKey = `av_${userId}_deadbeef.webp`;
-  const pool = createFakePool((text: string, values: unknown[]) => {
-    if (/SELECT avatar_key FROM users/.test(text)) {
-      assert.match(text, /FOR UPDATE/);
-      return { rows: [{ avatar_key: oldKey }], rowCount: 1 };
-    }
-    if (/UPDATE users/.test(text)) {
-      return {
-        rows: [
-          {
-            id: values[0],
-            login: 'ada',
-            avatar_key: values[1],
-            avatar_accent: values[2],
-            avatar_color_key: 'rose',
-            created_at: new Date(1000),
-            updated_at: values[3]
-          }
-        ],
-        rowCount: 1
-      };
-    }
-    throw new Error(`Unexpected query: ${text}`);
-  });
-
-  const result = await createUserStore({ pool }).swapAvatar({
-    userId,
-    avatarKey: nextKey,
-    avatarAccent: '#49303f',
-    now: 2000
-  });
-  assert.ok(result.user);
-
-  assert.equal(result.previousAvatarKey, oldKey);
-  assert.equal(result.user.avatarKey, nextKey);
-  assert.ok(pool.calls.some(({ text }) => text === 'BEGIN'));
-  assert.ok(pool.calls.some(({ text }) => text === 'COMMIT'));
-  assert.ok(pool.calls.some(({ text }) => text === 'release'));
-});
-
-test('sessions store only token hashes in the database', async () => {
+test('sessions store only token hashes in the database', { skip }, async (t) => {
+  const { pool, store } = await setup(t);
+  const { user } = await store.createUser({ login: 'ada', password: 'password123' });
+  assert.ok(user);
   const rawToken = 'session-token-for-cookie-only';
-  const pool = createFakePool((text: string, values: unknown[]) => {
-    if (/INSERT INTO sessions/.test(text)) {
-      assert.equal(values[0], hashSessionToken(rawToken));
-      assert.notEqual(values[0], rawToken);
-      return { rows: [], rowCount: 1 };
-    }
-    if (/DELETE FROM sessions/.test(text)) {
-      assert.equal(values[0], hashSessionToken(rawToken));
-      assert.notEqual(values[0], rawToken);
-      return { rows: [], rowCount: 1 };
-    }
-    throw new Error(`Unexpected query: ${text}`);
-  });
-  const store = createUserStore({ pool });
 
-  const session = await store.createSession({ userId: 'user-1', now: 1000, token: rawToken });
+  const session = await store.createSession({ userId: user.id, token: rawToken });
   assert.equal(session.token, rawToken);
+  const stored = await pool.query<{ id: string }>('SELECT id FROM sessions');
+  assert.deepEqual(
+    stored.rows.map((row) => row.id),
+    [hashSessionToken(rawToken)]
+  );
+  assert.equal((await store.getSessionUser(rawToken))?.user?.id, user.id);
   assert.equal(await store.deleteSession(rawToken), true);
+  assert.equal(await store.getSessionUser(rawToken), null);
 });

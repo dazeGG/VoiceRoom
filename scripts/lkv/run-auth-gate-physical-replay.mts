@@ -6,7 +6,7 @@ import { parseArgs } from 'node:util';
 import type { Pool } from 'pg';
 import { AccessToken, TrackSource } from 'livekit-server-sdk';
 import { createGateCredentialSigner } from '../../apps/api/src/domains/admission/gate-credential-signer.ts';
-import { createDbPool } from '../../apps/api/src/lib/db.ts';
+import { createDbPool } from '../../apps/api/src/platform/db/pool.ts';
 import { runMigrations } from '../../apps/api/src/lib/migrate.ts';
 import { createRoomStore, type GatePrincipal } from '../../apps/api/src/lib/room-store.ts';
 
@@ -130,7 +130,7 @@ async function seedRoom(pool: Pool) {
 }
 
 async function mintCredentials({ pool }: { pool: Pool }) {
-  const store = createRoomStore({ pool, logger: console });
+  const store = createRoomStore({ pool });
   const signer = createGateCredentialSigner({ secret: GATE_SECRET });
   const epoch = await store.getLiveKitGatePrincipalEpoch({ principal: PRINCIPAL, roomId: ROOM_ID });
   if (epoch.status !== 'ready') throw new Error(`unexpected epoch status ${epoch.status}`);

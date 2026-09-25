@@ -41,9 +41,8 @@ async function recoveryTableExists(pool: Pool) {
 test('account security migrations apply, roll back cleanly and backfill existing sessions on reapply', async (t) => {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const pool = new Pool({ connectionString: databaseUrl });
-  const store = createUserStore({ databaseUrl, logger: SILENT });
+  const store = createUserStore({ pool, logger: SILENT });
   t.after(async () => {
-    await store.close();
     await pool.end();
     await cleanup();
   });

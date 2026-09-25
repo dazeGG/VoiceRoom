@@ -14,25 +14,67 @@ import {
   createMentionEligibilityService
 } from '../src/domains/notifications/mention-eligibility-service.ts';
 import { createTestDatabase } from './db-harness.ts';
-import { fake, fakeDb, result } from './fakes/index.ts';
+import { fake, fakeDb } from './fakes/index.ts';
 
-test('G41-A01 active-ban repository applies one expiry and revocation predicate', async () => {
-  const pool = fakeDb((text) => (/COUNT/.test(text) ? result([{ count: 0 }]) : result()));
-  const queries = pool.calls;
-  const now = 1_725_000_000_000;
-  const repository = createActiveBanRepository({ pool, now: () => now });
-  assert.equal(await repository.findActive({ roomId: 'room', userId: 'user' }), null);
-  assert.equal(await repository.countActive('room'), 0);
-  assert.deepEqual(await repository.filterActiveUserIds({ roomId: 'room', userIds: ['user', 'user', 'other'] }), []);
+const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
-  for (const query of queries) {
-    assert.match(query.text, /revoked_at IS NULL/);
-    assert.match(query.text, /expires_at IS NULL OR expires_at >/);
-    assert.ok(query.values.some((value) => value instanceof Date && value.getTime() === now));
+test(
+  'G41-A01 active-ban repository applies one expiry and revocation predicate',
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (t) => {
+    const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
+    t.after(cleanup);
+    await runMigrations({ databaseUrl, logger: SILENT });
+    const now = Date.parse('2026-09-01T12:00:00Z');
+    await pool.query(`
+      INSERT INTO users (id, login, display_name, password_hash)
+      VALUES ('live', 'live', 'L', 'x'), ('expired', 'expired', 'E', 'x'), ('revoked', 'revoked', 'R', 'x'), ('later', 'later', 'T', 'x');
+      INSERT INTO rooms (id, is_static) VALUES ('room', true);
+      INSERT INTO room_bans (id, room_id, user_id, ip, expires_at, revoked_at) VALUES
+        ('b-live', 'room', 'live', '', NULL, NULL),
+        ('b-expired', 'room', 'expired', '', '2026-09-01T11:00:00Z', NULL),
+        ('b-revoked', 'room', 'revoked', '', NULL, '2026-09-01T10:00:00Z'),
+        ('b-later', 'room', 'later', '', '2026-09-01T13:00:00Z', NULL),
+        ('b-guest', 'room', NULL, '203.0.113.7', NULL, NULL)`);
+    const repository = createActiveBanRepository({ pool, now: () => now });
+    const users = ['live', 'expired', 'revoked', 'later', 'live'];
+
+    assert.deepEqual((await repository.filterActiveUserIds({ roomId: 'room', userIds: users })).sort(), [
+      'later',
+      'live'
+    ]);
+    assert.equal(await repository.countActive('room'), 3, 'live, later and the guest');
+    for (const userId of ['expired', 'revoked']) {
+      assert.equal(await repository.findActive({ roomId: 'room', userId }), null, userId);
+    }
+    assert.equal((await repository.findActive({ roomId: 'room', userId: 'later' }))?.id, 'b-later');
+    assert.equal(
+      (await repository.findActive({ roomId: 'room', userId: 'later', at: now + 2 * 3600_000 }))?.id,
+      undefined
+    );
+    assert.equal((await repository.findActive({ roomId: 'room', ip: '203.0.113.7' }))?.id, 'b-guest');
+    assert.equal(
+      (await repository.findActive({ roomId: 'room', userId: 'nobody', ip: '203.0.113.7' }))?.id,
+      'b-guest',
+      'an unbanned account on a banned address is stopped by the address ban'
+    );
+    assert.equal(await repository.findActive({ roomId: 'room' }), null);
+    assert.equal(await repository.countActive(undefined), 0);
+    assert.deepEqual(await repository.filterActiveUserIds({ roomId: 'room', userIds: [] }), []);
+
+    const inserted = await repository.insert({
+      roomId: 'room',
+      userId: 'expired',
+      ip: '198.51.100.1',
+      expiresAt: now + 1000
+    });
+    assert.deepEqual([inserted?.userId, inserted?.ip, inserted?.expiresAt], ['expired', '', now + 1000]);
+    assert.equal(await repository.insert({ roomId: 'room' }), null);
+
+    assert.deepEqual(normalizePrincipal({ userId: 'user', ip: '203.0.113.7' }), { userId: 'user', ip: '' });
+    assert.deepEqual(normalizePrincipal({ ip: '203.0.113.7' }), { userId: null, ip: '203.0.113.7' });
   }
-  assert.deepEqual(normalizePrincipal({ userId: 'user', ip: '203.0.113.7' }), { userId: 'user', ip: '' });
-  assert.deepEqual(normalizePrincipal({ ip: '203.0.113.7' }), { userId: null, ip: '203.0.113.7' });
-});
+);
 
 test('G41-A01 eligibility filtering uses the same repository predicate for all user paths', async () => {
   const calls: Array<{ userIds?: unknown; at?: unknown } | undefined> = [];

@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
+import { sql } from 'kysely';
 import type pg from 'pg';
+import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Client = QueryClient | null | undefined;
@@ -55,11 +57,17 @@ function mapRow(row: OutboxRow | null | undefined): NotificationOutboxEvent | nu
     : null;
 }
 
+const now = sql<Date>`current_timestamp`;
+const after = (ms: number) => sql<Date>`current_timestamp + (${ms} * interval '1 millisecond')`;
+const never = sql<Date>`'-infinity'`;
+
 function createNotificationOutboxRepository({ pool }: { pool?: QueryClient | null } = {}) {
   if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
-  const defaultDb = pool;
-  const db = (client: Client): QueryClient => (client?.query ? client : defaultDb);
+  const base = kyselyOn(pool);
+  const on = (client: Client): Database => (client?.query ? kyselyOn(client) : base);
 
+  // One event per notification revision and channel; a pending one takes the
+  // newest payload.
   async function enqueue({
     notificationId,
     recipientUserId,
@@ -76,13 +84,28 @@ function createNotificationOutboxRepository({ pool }: { pool?: QueryClient | nul
     client?: Client;
   }): Promise<NotificationOutboxEvent | null> {
     const eventId = crypto.createHash('sha256').update(`${notificationId}:${revision}:${channel}`).digest('hex');
-    const r = await db(client).query<OutboxRow>(
-      `INSERT INTO notification_outbox(event_id,notification_id,recipient_user_id,revision,channel,payload) VALUES($1,$2,$3,$4,$5,$6::jsonb) ON CONFLICT(notification_id,revision,channel) DO UPDATE SET payload=EXCLUDED.payload WHERE notification_outbox.status='pending' RETURNING *`,
-      [eventId, notificationId, recipientUserId, revision, channel, JSON.stringify(payload)]
-    );
-    return mapRow(r.rows[0]);
+    const row = await on(client)
+      .insertInto('notification_outbox')
+      .values({
+        event_id: eventId,
+        notification_id: notificationId,
+        recipient_user_id: recipientUserId,
+        revision,
+        channel,
+        payload: JSON.stringify(payload)
+      })
+      .onConflict((oc) =>
+        oc
+          .columns(['notification_id', 'revision', 'channel'])
+          .doUpdateSet((eb) => ({ payload: eb.ref('excluded.payload') }))
+          .where('notification_outbox.status', '=', 'pending')
+      )
+      .returningAll()
+      .executeTakeFirst();
+    return mapRow(row);
   }
 
+  // Taken when free or expired, or re-taken by its owner; each moves the fence.
   async function acquireLease({
     identity,
     ownerId,
@@ -92,36 +115,57 @@ function createNotificationOutboxRepository({ pool }: { pool?: QueryClient | nul
     ownerId: string;
     leaseMs: number;
   }): Promise<{ acquired: true; fencingToken: number; expiresAt: unknown } | { acquired: false }> {
-    const r = await defaultDb.query<{ fencing_token: string | number; expires_at: unknown }>(
-      `INSERT INTO notification_delivery_leases(identity,owner_id,fencing_token,expires_at,updated_at) VALUES($1,$2,1,current_timestamp+($3*interval '1 millisecond'),current_timestamp) ON CONFLICT(identity) DO UPDATE SET owner_id=EXCLUDED.owner_id,fencing_token=notification_delivery_leases.fencing_token+1,expires_at=EXCLUDED.expires_at,updated_at=current_timestamp WHERE notification_delivery_leases.expires_at<=current_timestamp OR notification_delivery_leases.owner_id=$2 RETURNING fencing_token,expires_at`,
-      [identity, ownerId, leaseMs]
-    );
-    const row = r.rows[0];
+    const row = await base
+      .insertInto('notification_delivery_leases')
+      .values({ identity, owner_id: ownerId, fencing_token: 1, expires_at: after(leaseMs), updated_at: now })
+      .onConflict((oc) =>
+        oc
+          .column('identity')
+          .doUpdateSet((eb) => ({
+            owner_id: eb.ref('excluded.owner_id'),
+            fencing_token: sql<string>`notification_delivery_leases.fencing_token + 1`,
+            expires_at: eb.ref('excluded.expires_at'),
+            updated_at: now
+          }))
+          .where((eb) =>
+            eb.or([
+              eb('notification_delivery_leases.expires_at', '<=', now),
+              eb('notification_delivery_leases.owner_id', '=', ownerId)
+            ])
+          )
+      )
+      .returning(['fencing_token', 'expires_at'])
+      .executeTakeFirst();
     return row
       ? { acquired: true, fencingToken: Number(row.fencing_token), expiresAt: row.expires_at }
       : { acquired: false };
   }
 
+  function ownLease({ identity, ownerId, fencingToken }: NotificationLease) {
+    return base
+      .updateTable('notification_delivery_leases')
+      .where('identity', '=', identity)
+      .where('owner_id', '=', ownerId)
+      .where('fencing_token', '=', String(fencingToken));
+  }
+
   async function renewLease({
-    identity,
-    ownerId,
-    fencingToken,
-    leaseMs
+    leaseMs,
+    ...lease
   }: NotificationLease & { leaseMs: number }): Promise<{ renewed: boolean }> {
-    const r = await defaultDb.query(
-      `UPDATE notification_delivery_leases SET expires_at=current_timestamp+($4*interval '1 millisecond'),heartbeat_at=current_timestamp,updated_at=current_timestamp WHERE identity=$1 AND owner_id=$2 AND fencing_token=$3 AND expires_at>current_timestamp`,
-      [identity, ownerId, fencingToken, leaseMs]
-    );
-    return { renewed: r.rowCount === 1 };
+    const result = await ownLease(lease)
+      .set({ expires_at: after(leaseMs), heartbeat_at: now, updated_at: now })
+      .where('expires_at', '>', now)
+      .executeTakeFirst();
+    return { renewed: result.numUpdatedRows === 1n };
   }
 
-  async function releaseLease({ identity, ownerId, fencingToken }: NotificationLease): Promise<void> {
-    await defaultDb.query(
-      `UPDATE notification_delivery_leases SET expires_at='-infinity',ready=false,updated_at=current_timestamp WHERE identity=$1 AND owner_id=$2 AND fencing_token=$3`,
-      [identity, ownerId, fencingToken]
-    );
+  async function releaseLease(lease: NotificationLease): Promise<void> {
+    await ownLease(lease).set({ expires_at: never, ready: false, updated_at: now }).execute();
   }
 
+  // Readiness is reported whether or not the worker holds the lease, but never
+  // by a worker behind the current fence.
   async function recordHeartbeat({
     identity,
     ownerId = null,
@@ -133,10 +177,16 @@ function createNotificationOutboxRepository({ pool }: { pool?: QueryClient | nul
     fencingToken?: number;
     ready?: boolean;
   }): Promise<void> {
-    await defaultDb.query(
-      `INSERT INTO notification_delivery_leases(identity,owner_id,fencing_token,expires_at,heartbeat_at,ready) VALUES($1,$2,$3,'-infinity',current_timestamp,$4) ON CONFLICT(identity) DO UPDATE SET heartbeat_at=current_timestamp,ready=$4,updated_at=current_timestamp WHERE notification_delivery_leases.fencing_token<=$3`,
-      [identity, ownerId, fencingToken, ready]
-    );
+    await base
+      .insertInto('notification_delivery_leases')
+      .values({ identity, owner_id: ownerId, fencing_token: fencingToken, expires_at: never, heartbeat_at: now, ready })
+      .onConflict((oc) =>
+        oc
+          .column('identity')
+          .doUpdateSet({ heartbeat_at: now, ready, updated_at: now })
+          .where('notification_delivery_leases.fencing_token', '<=', String(fencingToken))
+      )
+      .execute();
   }
 
   async function claimBatch({
@@ -149,24 +199,77 @@ function createNotificationOutboxRepository({ pool }: { pool?: QueryClient | nul
     limit?: number;
     staleClaimMs?: number;
   }): Promise<NotificationOutboxEvent[]> {
-    const r = await defaultDb.query<OutboxRow>(
-      `WITH fence AS (SELECT 1 FROM notification_delivery_leases WHERE identity=$1 AND owner_id=$2 AND fencing_token=$3 AND expires_at>current_timestamp), candidates AS (SELECT event_id FROM notification_outbox,fence WHERE (status='pending' AND available_at<=current_timestamp) OR (status='processing' AND claimed_at<current_timestamp-($5*interval '1 millisecond')) ORDER BY available_at,created_at,event_id FOR UPDATE OF notification_outbox SKIP LOCKED LIMIT $4) UPDATE notification_outbox o SET status='processing',claimed_at=current_timestamp,claimed_fencing_token=$3,attempts=o.attempts+1,updated_at=current_timestamp FROM candidates WHERE o.event_id=candidates.event_id RETURNING o.*`,
-      [identity, ownerId, fencingToken, limit, staleClaimMs]
-    );
-    return r.rows.map(mapRow) as NotificationOutboxEvent[];
+    const rows = await base
+      .with('fence', (qb) =>
+        qb
+          .selectFrom('notification_delivery_leases')
+          .select('identity')
+          .where('identity', '=', identity)
+          .where('owner_id', '=', ownerId)
+          .where('fencing_token', '=', String(fencingToken))
+          .where('expires_at', '>', now)
+      )
+      .with('candidates', (qb) =>
+        qb
+          .selectFrom(['notification_outbox', 'fence'])
+          .select('notification_outbox.event_id')
+          .where((eb) =>
+            eb.or([
+              eb.and([eb('status', '=', 'pending'), eb('available_at', '<=', now)]),
+              eb.and([
+                eb('status', '=', 'processing'),
+                eb('claimed_at', '<', sql<Date>`current_timestamp - (${staleClaimMs} * interval '1 millisecond')`)
+              ])
+            ])
+          )
+          .orderBy('available_at')
+          .orderBy('created_at')
+          .orderBy('notification_outbox.event_id')
+          .forUpdate(['notification_outbox'])
+          .skipLocked()
+          .limit(limit)
+      )
+      .updateTable('notification_outbox as o')
+      .from('candidates')
+      .set((eb) => ({
+        status: 'processing',
+        claimed_at: now,
+        claimed_fencing_token: String(fencingToken),
+        attempts: eb('o.attempts', '+', 1),
+        updated_at: now
+      }))
+      .whereRef('o.event_id', '=', 'candidates.event_id')
+      .returningAll('o')
+      .execute();
+    return rows.map((row) => mapRow(row as OutboxRow) as NotificationOutboxEvent);
   }
 
-  async function finish(eventId: string, lease: NotificationLease, status: string, extra = ''): Promise<void> {
-    const r = await defaultDb.query(
-      `UPDATE notification_outbox o SET status=$5, ${extra || "delivered_at=CASE WHEN $5='delivered' THEN current_timestamp ELSE delivered_at END"}, updated_at=current_timestamp FROM notification_delivery_leases l WHERE o.event_id=$1 AND o.claimed_fencing_token=$4 AND l.identity=$2 AND l.owner_id=$3 AND l.fencing_token=$4 AND l.expires_at>current_timestamp`,
-      [eventId, lease.identity, lease.ownerId, lease.fencingToken, status]
-    );
-    if (!r.rowCount) throw new NotificationFenceError();
+  // Only the worker holding the lease the event was claimed under may settle it.
+  function settle(eventId: string, lease: NotificationLease) {
+    return base
+      .updateTable('notification_outbox as o')
+      .from('notification_delivery_leases as l')
+      .where('o.event_id', '=', eventId)
+      .where('o.claimed_fencing_token', '=', String(lease.fencingToken))
+      .where('l.identity', '=', lease.identity)
+      .where('l.owner_id', '=', lease.ownerId)
+      .where('l.fencing_token', '=', String(lease.fencingToken))
+      .where('l.expires_at', '>', now);
   }
 
-  const markDelivered = (id: string, lease: NotificationLease): Promise<void> => finish(id, lease, 'delivered');
-  const markSuppressed = (id: string, lease: NotificationLease): Promise<void> =>
-    finish(id, lease, 'suppressed', 'suppressed_at=current_timestamp');
+  async function markDelivered(eventId: string, lease: NotificationLease): Promise<void> {
+    const result = await settle(eventId, lease)
+      .set({ status: 'delivered', delivered_at: now, updated_at: now })
+      .executeTakeFirst();
+    if (!result.numUpdatedRows) throw new NotificationFenceError();
+  }
+
+  async function markSuppressed(eventId: string, lease: NotificationLease): Promise<void> {
+    const result = await settle(eventId, lease)
+      .set({ status: 'suppressed', suppressed_at: now, updated_at: now })
+      .executeTakeFirst();
+    if (!result.numUpdatedRows) throw new NotificationFenceError();
+  }
 
   async function reschedule(
     eventId: string,
@@ -181,40 +284,59 @@ function createNotificationOutboxRepository({ pool }: { pool?: QueryClient | nul
       maxAttempts?: number;
     } = {}
   ): Promise<void> {
-    const r = await defaultDb.query(
-      `UPDATE notification_outbox o SET status=CASE WHEN attempts >= $5 THEN 'dead' ELSE 'pending' END, dead_at=CASE WHEN attempts >= $5 THEN current_timestamp ELSE dead_at END, available_at=current_timestamp+($6*interval '1 millisecond'),last_error=$7,claimed_at=NULL,claimed_fencing_token=NULL,updated_at=current_timestamp FROM notification_delivery_leases l WHERE o.event_id=$1 AND o.claimed_fencing_token=$4 AND l.identity=$2 AND l.owner_id=$3 AND l.fencing_token=$4 AND l.expires_at>current_timestamp`,
-      [
-        eventId,
-        lease.identity,
-        lease.ownerId,
-        lease.fencingToken,
-        maxAttempts,
-        delayMs,
-        String((error as { message?: unknown } | null | undefined)?.message || error || 'delivery failed').slice(
-          0,
-          2000
-        )
-      ]
-    );
-    if (!r.rowCount) throw new NotificationFenceError();
+    const reason = (error as { message?: unknown } | null | undefined)?.message || error || 'delivery failed';
+    const exhausted = sql<boolean>`o.attempts >= ${maxAttempts}`;
+    const result = await settle(eventId, lease)
+      .set({
+        status: sql<string>`CASE WHEN ${exhausted} THEN 'dead' ELSE 'pending' END`,
+        dead_at: sql<Date | null>`CASE WHEN ${exhausted} THEN current_timestamp ELSE o.dead_at END`,
+        available_at: after(delayMs as number),
+        last_error: (typeof reason === 'string' ? reason : 'delivery failed').slice(0, 2000),
+        claimed_at: null,
+        claimed_fencing_token: null,
+        updated_at: now
+      })
+      .executeTakeFirst();
+    if (!result.numUpdatedRows) throw new NotificationFenceError();
   }
 
+  // The event with the recipient's current state, so a notification read,
+  // retracted or silenced since it was queued is not pushed.
   async function loadCurrent(
     event: { eventId: string },
     { client }: { client?: Client } = {}
   ): Promise<Record<string, unknown> | null> {
-    const r = await db(client).query(
-      `SELECT o.*,n.read_at,n.retracted_at,n.reasons,np.private_notifications,u.dnd,coalesce(nrm.level,'mentions') level FROM notification_outbox o JOIN user_notifications n ON n.id=o.notification_id JOIN users u ON u.id=n.recipient_user_id LEFT JOIN notification_preferences np ON np.user_id=n.recipient_user_id LEFT JOIN notification_room_mutes nrm ON nrm.user_id=n.recipient_user_id AND nrm.room_id=n.room_id WHERE o.event_id=$1`,
-      [event.eventId]
-    );
-    return r.rows[0] || null;
+    const row = await on(client)
+      .selectFrom('notification_outbox as o')
+      .innerJoin('user_notifications as n', 'n.id', 'o.notification_id')
+      .innerJoin('users as u', 'u.id', 'n.recipient_user_id')
+      .leftJoin('notification_preferences as np', 'np.user_id', 'n.recipient_user_id')
+      .leftJoin('notification_room_mutes as nrm', (join) =>
+        join.onRef('nrm.user_id', '=', 'n.recipient_user_id').onRef('nrm.room_id', '=', 'n.room_id')
+      )
+      .selectAll('o')
+      .select([
+        'n.read_at',
+        'n.retracted_at',
+        'n.reasons',
+        'np.private_notifications',
+        'u.dnd',
+        sql<string>`coalesce(nrm.level, 'mentions')`.as('level')
+      ])
+      .where('o.event_id', '=', event.eventId)
+      .executeTakeFirst();
+    return row || null;
   }
 
   async function oldestPendingAgeMs(): Promise<number> {
-    const r = await defaultDb.query<{ age_ms: string | number | null }>(
-      `SELECT COALESCE(EXTRACT(EPOCH FROM (current_timestamp-MIN(created_at)))*1000,0)::bigint AS age_ms FROM notification_outbox WHERE status IN ('pending','processing')`
-    );
-    return Number(r.rows[0]?.age_ms || 0);
+    const row = await base
+      .selectFrom('notification_outbox')
+      .select(
+        sql<string>`COALESCE(EXTRACT(EPOCH FROM (current_timestamp - MIN(created_at))) * 1000, 0)::bigint`.as('age_ms')
+      )
+      .where('status', 'in', ['pending', 'processing'])
+      .executeTakeFirst();
+    return Number(row?.age_ms || 0);
   }
 
   return {

@@ -1,7 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { Pool } from 'pg';
 
 import { createRoomStore } from '../src/lib/room-store.ts';
 import { createUserStore } from '../src/lib/user-store.ts';
@@ -13,11 +12,10 @@ const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 type RoomStore = ReturnType<typeof createRoomStore>;
 
 async function createMigratedStore(t: TestContext, options: { roomIdleTtlMs?: number } = {}) {
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
-  const store = createRoomStore({ databaseUrl, ...options });
+  const store = createRoomStore({ pool, ...options });
   t.after(async () => {
-    await store.close();
     await cleanup();
   });
   return store;
@@ -37,12 +35,10 @@ async function createUser(users: ReturnType<typeof createUserStore>, login: stri
 }
 
 test('PostgreSQL room store persists registry and message shape across store instances', async (t) => {
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
-  const store = createRoomStore({ databaseUrl });
+  const store = createRoomStore({ pool });
   t.after(async () => {
-    await store.close();
-    await reopened.close();
     await cleanup();
   });
 
@@ -62,7 +58,7 @@ test('PostgreSQL room store persists registry and message shape across store ins
   assert.equal(room.isStatic, true);
   assert.equal(message?.roomId, room.id);
 
-  const reopened = createRoomStore({ databaseUrl });
+  const reopened = createRoomStore({ pool });
   const restoredRoom = await reopened.getRoom(room.id);
   const restoredMessages = await reopened.listMessages(room.id, { now: 2000, limit: 10 });
 
@@ -166,14 +162,11 @@ test('PostgreSQL room store can reconcile active temporary rooms after process r
 });
 
 test('PostgreSQL room bans match account or IP and undo stays scoped to its room', async (t) => {
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
-  const store = createRoomStore({ databaseUrl });
-  const users = createUserStore({ databaseUrl, logger: SILENT });
-  t.after(async () => {
-    await Promise.all([store.close(), users.close()]);
-    await cleanup();
-  });
+  const store = createRoomStore({ pool });
+  const users = createUserStore({ pool, logger: SILENT });
+  t.after(cleanup);
 
   const user = await createUser(users, 'room-ban-user');
   await store.createRoom({ creatorIp: 'owner-ip', isStatic: true, roomId: 'ban-room-one', now: 1000 });
@@ -227,13 +220,11 @@ test('PostgreSQL room ban cap is enforced per room and physical room purge casca
 });
 
 test('purging deleted messages and deleted rooms unbinds their attachments for media cleanup', async (t) => {
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
-  const store = createRoomStore({ databaseUrl });
-  const users = createUserStore({ databaseUrl, logger: SILENT });
-  const pool = new Pool({ connectionString: databaseUrl });
+  const store = createRoomStore({ pool });
+  const users = createUserStore({ pool, logger: SILENT });
   t.after(async () => {
-    await Promise.all([store.close(), users.close(), pool.end()]);
     await cleanup();
   });
 

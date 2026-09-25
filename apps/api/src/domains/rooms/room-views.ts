@@ -4,7 +4,7 @@
 
 import type { RoomPeerMessage } from '../../realtime/legacy-events.ts';
 import type { LobbyRoom, PublicPeer } from '@voice-room/shared/contracts/rooms';
-import { avatarColorForPeerId } from '../../lib/room-store.ts';
+import { avatarColorForPeerId } from './avatar-color.ts';
 import { failure, type Failure } from '../../platform/http/http-kit.ts';
 
 /** A peer as the in-memory presence roster holds it. */

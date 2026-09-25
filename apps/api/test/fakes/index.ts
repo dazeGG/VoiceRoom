@@ -233,8 +233,13 @@ export function loginAlert(id: string, overrides: Partial<LoginAlert> = {}): Log
 export type Fakes = { [Key in keyof StoreOverrides]-?: NonNullable<StoreOverrides[Key]> };
 
 type RoomStore = ReturnType<typeof createRoomStore>;
-/** A room as the database room store returns it (the live peers start empty). */
-export type DbRoom = NonNullable<Awaited<ReturnType<RoomStore['getRoom']>>>;
+/**
+ * A room as the database room store returns it, with the live peers a test
+ * seeds; presence merges them into the room's roster when it attaches.
+ */
+export type DbRoom = NonNullable<Awaited<ReturnType<RoomStore['getRoom']>>> & {
+  peers: Map<string, unknown>;
+};
 export function dbRoom(id: string, overrides: Partial<DbRoom> = {}): DbRoom {
   return {
     avatarKey: null,
@@ -244,7 +249,6 @@ export function dbRoom(id: string, overrides: Partial<DbRoom> = {}): DbRoom {
     id,
     isStatic: true,
     lastMessageAt: undefined,
-    messages: [],
     name: 'Room',
     ownerId: null,
     peers: new Map(),

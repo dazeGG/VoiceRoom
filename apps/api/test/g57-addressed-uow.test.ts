@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import test, { type TestContext } from 'node:test';
-import { transaction } from '../src/lib/db.ts';
+import { transaction } from '../src/platform/db/pool.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createNotificationService, type InboxCursorCodec } from '../src/domains/notifications/notification-service.ts';
 import type { MentionEligibilityService } from '../src/domains/notifications/mention-eligibility-service.ts';

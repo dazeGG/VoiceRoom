@@ -8,13 +8,11 @@ import { createTestDatabase } from './db-harness.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
 test('push subscription CRUD upserts endpoints and isolates deletion by user', async (t) => {
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
-  const users = createUserStore({ databaseUrl, logger: SILENT });
-  const pushes = createPushStore({ databaseUrl, logger: SILENT });
+  const users = createUserStore({ pool, logger: SILENT });
+  const pushes = createPushStore({ pool });
   t.after(async () => {
-    await pushes.close();
-    await users.close();
     await cleanup();
   });
 
@@ -69,13 +67,11 @@ test('push subscription CRUD upserts endpoints and isolates deletion by user', a
 });
 
 test('push subscriptions transactionally prune the oldest entries above the per-user cap', async (t) => {
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
-  const users = createUserStore({ databaseUrl, logger: SILENT });
-  const pushes = createPushStore({ databaseUrl, logger: SILENT, maxSubscriptionsPerUser: 2 });
+  const users = createUserStore({ pool, logger: SILENT });
+  const pushes = createPushStore({ pool, maxSubscriptionsPerUser: 2 });
   t.after(async () => {
-    await pushes.close();
-    await users.close();
     await cleanup();
   });
 

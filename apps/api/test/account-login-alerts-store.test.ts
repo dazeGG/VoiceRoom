@@ -19,11 +19,10 @@ const KAZAN = 'Казань, Россия';
 type UserStore = ReturnType<typeof createUserStore>;
 
 async function createMigratedStore(t: TestContext) {
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
-  const store = createUserStore({ databaseUrl, logger: SILENT });
+  const store = createUserStore({ pool, logger: SILENT });
   t.after(async () => {
-    await store.close();
     await cleanup();
   });
   return store;

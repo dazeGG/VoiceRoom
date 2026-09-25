@@ -5,7 +5,8 @@ import {
   type RoomMessageContentV1
 } from '@voice-room/shared/room-message-content';
 
-type Queryable = { query(sql: string, values: unknown[]): Promise<{ rows: Record<string, unknown>[] }> };
+import { sql } from 'kysely';
+import { kyselyOn, type Queryable } from '../../platform/db/kysely.ts';
 
 export type ContentRepository = Readonly<{
   prepareWrite(input: { content?: unknown; text?: unknown }): { content: RoomMessageContentV1; text: string };
@@ -43,14 +44,14 @@ function createContentRepository(): ContentRepository {
     text?: unknown;
   }): Promise<Record<string, unknown> | null> {
     const prepared = prepareWrite({ content, text });
-    const result = await client.query(
-      `UPDATE room_messages
-       SET content = $2::jsonb, text = $3, edited_at = current_timestamp
-       WHERE id = $1 AND deleted_at IS NULL
-       RETURNING *`,
-      [messageId, JSON.stringify(prepared.content), prepared.text]
-    );
-    return result.rows[0] || null;
+    const row = await kyselyOn(client)
+      .updateTable('room_messages')
+      .set({ content: JSON.stringify(prepared.content), text: prepared.text, edited_at: sql<Date>`current_timestamp` })
+      .where('id', '=', messageId)
+      .where('deleted_at', 'is', null)
+      .returningAll()
+      .executeTakeFirst();
+    return row || null;
   }
 
   return Object.freeze({ prepareWrite, update });

@@ -10,13 +10,11 @@ import { createTestDatabase } from './db-harness.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
 async function createStores(t: TestContext) {
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
-  const users = createUserStore({ databaseUrl, logger: SILENT });
-  const friends = createFriendStore({ databaseUrl, logger: SILENT });
+  const users = createUserStore({ pool, logger: SILENT });
+  const friends = createFriendStore({ pool });
   t.after(async () => {
-    await friends.close();
-    await users.close();
     await cleanup();
   });
   return { users, friends };

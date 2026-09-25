@@ -1,5 +1,8 @@
 import crypto from 'node:crypto';
+import { sql, type ExpressionBuilder } from 'kysely';
 import type pg from 'pg';
+import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
+import type { DB } from '../../platform/db/schema.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Client = QueryClient | null | undefined;
@@ -60,14 +63,19 @@ function normalizePrincipal({ userId = null, ip = '' }: { userId?: unknown; ip?:
   };
 }
 
+// A ban counts until it is revoked or runs out.
+function active(at: TimeInput) {
+  return (eb: ExpressionBuilder<DB, 'room_bans'>) =>
+    eb.and([eb('revoked_at', 'is', null), eb.or([eb('expires_at', 'is', null), eb('expires_at', '>', toDate(at))])]);
+}
+
 function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClient | null; now?: () => number } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new TypeError('A PostgreSQL pool is required');
-  const defaultDb = pool;
+  const base = pool;
+  const on = (client: Client): Database => kyselyOn(client && typeof client.query === 'function' ? client : base);
 
-  function executor(client: Client): QueryClient {
-    return client && typeof client.query === 'function' ? client : defaultDb;
-  }
-
+  // The ban that stops this account, or this address for a guest; an account
+  // ban wins over an address ban, the newest over older ones.
   async function findActive({
     roomId,
     userId = null,
@@ -84,23 +92,23 @@ function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClien
     const normalizedUserId = typeof userId === 'string' && userId.trim() ? userId.trim() : null;
     const normalizedIp = typeof ip === 'string' ? ip.trim() : '';
     if (!roomId || (!normalizedUserId && !normalizedIp)) return null;
-    const result = await executor(client).query<BanRow>(
-      `SELECT *
-       FROM room_bans
-       WHERE room_id = $1
-         AND revoked_at IS NULL
-         AND (expires_at IS NULL OR expires_at > $4)
-         AND (
-           ($2::varchar(36) IS NOT NULL AND user_id = $2)
-           OR (user_id IS NULL AND $3::text <> '' AND ip = $3)
-         )
-       ORDER BY CASE WHEN user_id IS NOT NULL THEN 0 ELSE 1 END,
-                created_at DESC,
-                id DESC
-       LIMIT 1`,
-      [roomId, normalizedUserId, normalizedIp, toDate(at)]
-    );
-    return mapActiveBan(result.rows[0]);
+    const row = await on(client)
+      .selectFrom('room_bans')
+      .selectAll()
+      .where('room_id', '=', roomId)
+      .where(active(at))
+      .where((eb) => {
+        const matches = [];
+        if (normalizedUserId) matches.push(eb('user_id', '=', normalizedUserId));
+        if (normalizedIp) matches.push(eb.and([eb('user_id', 'is', null), eb('ip', '=', normalizedIp)]));
+        return eb.or(matches);
+      })
+      .orderBy(sql`CASE WHEN user_id IS NOT NULL THEN 0 ELSE 1 END`)
+      .orderBy('created_at', 'desc')
+      .orderBy('id', 'desc')
+      .limit(1)
+      .executeTakeFirst();
+    return mapActiveBan(row as BanRow | undefined);
   }
 
   async function countActive(
@@ -108,15 +116,13 @@ function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClien
     { at = now(), client }: { at?: TimeInput; client?: Client } = {}
   ): Promise<number> {
     if (!roomId) return 0;
-    const result = await executor(client).query<{ count: number }>(
-      `SELECT COUNT(*)::int AS count
-       FROM room_bans
-       WHERE room_id = $1
-         AND revoked_at IS NULL
-         AND (expires_at IS NULL OR expires_at > $2)`,
-      [roomId, toDate(at)]
-    );
-    return Number(result.rows[0]?.count || 0);
+    const row = await on(client)
+      .selectFrom('room_bans')
+      .select(sql<number>`COUNT(*)::int`.as('count'))
+      .where('room_id', '=', roomId)
+      .where(active(at))
+      .executeTakeFirst();
+    return Number(row?.count || 0);
   }
 
   async function filterActiveUserIds({
@@ -138,16 +144,15 @@ function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClien
       )
     );
     if (!roomId || normalizedUserIds.length === 0) return [];
-    const result = await executor(client).query<{ user_id: string | null }>(
-      `SELECT DISTINCT user_id
-       FROM room_bans
-       WHERE room_id = $1
-         AND user_id = ANY($2::varchar[])
-         AND revoked_at IS NULL
-         AND (expires_at IS NULL OR expires_at > $3)`,
-      [roomId, normalizedUserIds, toDate(at)]
-    );
-    return result.rows.map((row) => row.user_id).filter((userId): userId is string => Boolean(userId));
+    const rows = await on(client)
+      .selectFrom('room_bans')
+      .select('user_id')
+      .distinct()
+      .where('room_id', '=', roomId)
+      .where('user_id', 'in', normalizedUserIds)
+      .where(active(at))
+      .execute();
+    return rows.map((row) => row.user_id).filter((userId): userId is string => Boolean(userId));
   }
 
   async function insert({
@@ -169,21 +174,20 @@ function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClien
   } = {}): Promise<ActiveBanRecord | null> {
     const principal = normalizePrincipal({ userId, ip });
     if (!roomId || (!principal.userId && !principal.ip)) return null;
-    const result = await executor(client).query<BanRow>(
-      `INSERT INTO room_bans (id, room_id, user_id, ip, created_at, expires_at, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING *`,
-      [
-        crypto.randomUUID(),
-        roomId,
-        principal.userId,
-        principal.ip,
-        toDate(at),
-        expiresAt == null ? null : toDate(expiresAt),
-        metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {}
-      ]
-    );
-    return mapActiveBan(result.rows[0]);
+    const row = await on(client)
+      .insertInto('room_bans')
+      .values({
+        id: crypto.randomUUID(),
+        room_id: roomId,
+        user_id: principal.userId,
+        ip: principal.ip,
+        created_at: toDate(at),
+        expires_at: expiresAt == null ? null : toDate(expiresAt),
+        metadata: JSON.stringify(metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {})
+      })
+      .returningAll()
+      .executeTakeFirst();
+    return mapActiveBan(row as BanRow | undefined);
   }
 
   return { countActive, filterActiveUserIds, findActive, insert, mapActiveBan, normalizePrincipal };

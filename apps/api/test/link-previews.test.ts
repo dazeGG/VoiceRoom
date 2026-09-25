@@ -29,11 +29,11 @@ async function setup(t: TestContext, { fetchPage }: { fetchPage?: LinkPreviewFet
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const pool = new Pool({ connectionString: databaseUrl });
-  const rooms = createRoomStore({ databaseUrl, logger: SILENT });
-  const users = createUserStore({ databaseUrl, logger: SILENT });
+  const rooms = createRoomStore({ pool });
+  const users = createUserStore({ pool, logger: SILENT });
   const uploadsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'link-previews-'));
   t.after(async () => {
-    await Promise.all([rooms.close(), users.close(), pool.end()]);
+    await pool.end();
     fs.rmSync(uploadsDir, { recursive: true, force: true });
     await cleanup();
   });

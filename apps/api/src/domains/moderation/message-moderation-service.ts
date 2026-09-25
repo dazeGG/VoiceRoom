@@ -1,5 +1,6 @@
 import type pg from 'pg';
-import { transaction } from '../../lib/db.ts';
+import { kyselyOn } from '../../platform/db/kysely.ts';
+import { transaction } from '../../platform/db/pool.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Loose = Record<string, unknown>;
@@ -113,22 +114,25 @@ function createMessageModerationService({
       if (!(await owners.authorizeOwner(roomId, actorUserId, { client }))) {
         return { status: 'forbidden', deletion: null };
       }
-      const selected = await client.query<{ id: string; room_id: string; deleted_at: unknown }>(
-        `SELECT id, room_id, deleted_at
-         FROM room_messages
-         WHERE room_id = $1 AND id = $2
-         LIMIT 1
-         FOR UPDATE`,
-        [roomId, messageId]
-      );
-      const message = selected.rows[0];
+      const trx = kyselyOn(client);
+      const message = await trx
+        .selectFrom('room_messages')
+        .select(['id', 'room_id', 'deleted_at'])
+        .where('room_id', '=', roomId)
+        .where('id', '=', messageId)
+        .limit(1)
+        .forUpdate()
+        .executeTakeFirst();
       if (!message) return { status: 'not_found', deletion: null };
 
       if (!message.deleted_at) {
-        await client.query(
-          'UPDATE room_messages SET deleted_at = $3 WHERE room_id = $1 AND id = $2 AND deleted_at IS NULL',
-          [roomId, messageId, timestamp]
-        );
+        await trx
+          .updateTable('room_messages')
+          .set({ deleted_at: timestamp })
+          .where('room_id', '=', roomId)
+          .where('id', '=', messageId)
+          .where('deleted_at', 'is', null)
+          .execute();
       }
       const attachments = await revokeAttachments({ roomId, messageId, at: timestamp, client });
       await enqueueCleanup({ roomId, messageId, attachments: attachments || [], at: timestamp, client });

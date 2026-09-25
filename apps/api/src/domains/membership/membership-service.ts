@@ -1,5 +1,7 @@
 import type pg from 'pg';
-import { transaction } from '../../lib/db.ts';
+import { sql } from 'kysely';
+import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
+import { transaction } from '../../platform/db/pool.ts';
 import { createMembershipRepository, type Membership, type MembershipRepository } from './membership-repository.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
@@ -19,6 +21,10 @@ export type RegisteredAdmission<A> =
 export type LeaveOutcome =
   | { membership: null; status: 'invalid' | 'not_active' }
   | { membership: Membership; status: 'owner_required' | 'left' | 'not_active' };
+
+async function lock(db: Database, key: string): Promise<void> {
+  await sql`SELECT pg_advisory_xact_lock(hashtext(${key}))`.execute(db);
+}
 
 function createMembershipService({
   pool,
@@ -54,10 +60,16 @@ function createMembershipService({
   } = {}): Promise<PersistedAdmission> {
     if (!admissionSucceeded || !roomId || !userId) return { membership: null, status: 'not_admitted' };
     return transaction(pool, async (client: pg.PoolClient): Promise<PersistedAdmission> => {
-      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`voice-room:admission:${roomId}`]);
-      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`voice-room:membership:${roomId}:${userId}`]);
-      const room = await client.query('SELECT 1 FROM rooms WHERE id = $1 AND deleted_at IS NULL', [roomId]);
-      if (room.rowCount === 0) return { membership: null, status: 'not_found' };
+      const trx = kyselyOn(client);
+      await lock(trx, `voice-room:admission:${roomId}`);
+      await lock(trx, `voice-room:membership:${roomId}:${userId}`);
+      const room = await trx
+        .selectFrom('rooms')
+        .select('id')
+        .where('id', '=', roomId)
+        .where('deleted_at', 'is', null)
+        .executeTakeFirst();
+      if (!room) return { membership: null, status: 'not_found' };
       if (activeBanService && (await activeBanService.isBanned({ roomId, userId, ip, at: now(), client }))) {
         return { membership: null, status: 'banned' };
       }
@@ -95,7 +107,7 @@ function createMembershipService({
   async function leaveRoom({ roomId, userId }: { roomId?: string; userId?: string } = {}): Promise<LeaveOutcome> {
     if (!roomId || !userId) return { membership: null, status: 'invalid' };
     return transaction(pool, async (client: pg.PoolClient): Promise<LeaveOutcome> => {
-      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`voice-room:membership:${roomId}:${userId}`]);
+      await lock(kyselyOn(client), `voice-room:membership:${roomId}:${userId}`);
       const membership = await repository.getActive(roomId, userId, { client });
       if (!membership) return { membership: null, status: 'not_active' };
       if (membership.role === 'owner') return { membership, status: 'owner_required' };
@@ -115,7 +127,7 @@ function createMembershipService({
   } = {}): Promise<boolean> {
     if (!roomId || !userId || !membershipId) return false;
     return transaction(pool, async (client: pg.PoolClient): Promise<boolean> => {
-      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`voice-room:membership:${roomId}:${userId}`]);
+      await lock(kyselyOn(client), `voice-room:membership:${roomId}:${userId}`);
       const membership = await repository.getActive(roomId, userId, { client });
       if (!membership || membership.id !== membershipId || membership.role === 'owner') return false;
       return Boolean(await repository.deleteActive(roomId, userId, { client }));

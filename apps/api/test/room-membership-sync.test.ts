@@ -1,122 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createRoomStore } from '../src/lib/room-store.ts';
 import fastify from 'fastify';
 import type { Membership } from '../src/domains/membership/membership-repository.ts';
 import { registerMembershipRoutes } from '../src/domains/membership/membership.routes.ts';
 import type { ApiContext } from '../src/app/context.ts';
 import type { LeaveOutcome } from '../src/domains/membership/membership-service.ts';
-import { fake, fakePoolWithClient as createFakePool, result, storedUser, type ScopedCall } from './fakes/index.ts';
-
-const STATIC_ROOM_ROW = {
-  id: 'static-room',
-  creator_ip: '',
-  is_static: true,
-  owner_id: 'owner-user',
-  name: 'Room',
-  created_at: new Date(1000),
-  updated_at: new Date(1000),
-  empty_since: null,
-  deleted_at: null
-};
-
-function roomListHandler({ owner = false, banned = false } = {}) {
-  return (text: string) => {
-    if (/SELECT \* FROM rooms WHERE id = \$1 AND deleted_at IS NULL/.test(text)) {
-      return result([STATIC_ROOM_ROW], 1);
-    }
-    if (/role = 'owner'/.test(text)) return { rows: owner ? [{ exists: 1 }] : [], rowCount: owner ? 1 : 0 };
-    if (/FROM room_bans/.test(text)) {
-      return banned
-        ? {
-            rows: [
-              {
-                id: 'ban',
-                room_id: 'static-room',
-                user_id: 'user-1',
-                ip: '',
-                created_at: new Date(1000),
-                expires_at: null
-              }
-            ],
-            rowCount: 1
-          }
-        : { rows: [], rowCount: 0 };
-    }
-    if (/DELETE FROM room_bookmarks/.test(text)) return result([{ id: 'bookmark' }], 1);
-    return result([], 1);
-  };
-}
-
-const indexOf = (calls: ScopedCall[], pattern: RegExp) => calls.findIndex((call) => pattern.test(call.text));
-
-test('adding a room to the list makes the user a member inside the same transaction', async () => {
-  const pool = createFakePool(roomListHandler());
-  const store = createRoomStore({ pool });
-
-  const result = await store.addRoomBookmarkForUser('user-1', 'static-room', 5000);
-
-  assert.equal(result.status, 'bookmarked');
-  const insert = pool.calls.find((call) => /INSERT INTO room_memberships/.test(call.text));
-  assert.ok(insert, 'membership insert expected');
-  assert.equal(insert.scope, 'client');
-  assert.match(insert.text, /'member'/);
-  assert.match(insert.text, /ON CONFLICT \(room_id, user_id\) DO NOTHING/);
-  assert.deepEqual(insert.values.slice(1), ['static-room', 'user-1', new Date(5000)]);
-  const banLookup = pool.calls[indexOf(pool.calls, /FROM room_bans/)];
-  assert.ok(banLookup);
-  assert.equal(banLookup.scope, 'client');
-  assert.ok(indexOf(pool.calls, /INSERT INTO room_bookmarks/) < indexOf(pool.calls, /FROM room_bans/));
-  assert.ok(indexOf(pool.calls, /FROM room_bans/) < indexOf(pool.calls, /INSERT INTO room_memberships/));
-  assert.ok(indexOf(pool.calls, /INSERT INTO room_memberships/) < indexOf(pool.calls, /^COMMIT$/));
-});
-
-test('a user banned from the room keeps the list entry but does not become a member', async () => {
-  const pool = createFakePool(roomListHandler({ banned: true }));
-  const store = createRoomStore({ pool });
-
-  const result = await store.addRoomBookmarkForUser('user-1', 'static-room', 5000);
-
-  assert.equal(result.status, 'bookmarked');
-  assert.ok(pool.calls.some((call) => /INSERT INTO room_bookmarks/.test(call.text)));
-  assert.equal(indexOf(pool.calls, /INSERT INTO room_memberships/), -1);
-});
-
-test('the owner adding their own room gets no extra member row and no ban lookup', async () => {
-  const pool = createFakePool(roomListHandler({ owner: true }));
-  const store = createRoomStore({ pool });
-
-  const result = await store.addRoomBookmarkForUser('owner-user', 'static-room', 5000);
-
-  assert.equal(result.status, 'bookmarked');
-  assert.equal(indexOf(pool.calls, /FROM room_bans/), -1);
-  assert.equal(indexOf(pool.calls, /INSERT INTO room_memberships/), -1);
-});
-
-test('removing a room from the list also ends the non-owner membership', async () => {
-  const pool = createFakePool(roomListHandler());
-  const store = createRoomStore({ pool });
-
-  const result = await store.removeRoomBookmarkForUser('user-1', 'static-room');
-
-  assert.deepEqual(result, { removed: true, status: 'removed' });
-  const membershipDelete = pool.calls.find((call) => /DELETE FROM room_memberships/.test(call.text));
-  assert.ok(membershipDelete, 'membership delete expected');
-  assert.equal(membershipDelete.scope, 'client');
-  assert.match(membershipDelete.text, /role = 'member'/);
-  assert.deepEqual(membershipDelete.values, ['static-room', 'user-1']);
-});
-
-test('owners cannot remove their room from the list and keep their membership', async () => {
-  const pool = createFakePool(roomListHandler({ owner: true }));
-  const store = createRoomStore({ pool });
-
-  const result = await store.removeRoomBookmarkForUser('owner-user', 'static-room');
-
-  assert.deepEqual(result, { removed: false, status: 'owner' });
-  assert.equal(indexOf(pool.calls, /DELETE FROM/), -1);
-});
+import { fake, storedUser } from './fakes/index.ts';
 
 type LeaveStatus = 'invalid' | 'not_active' | 'owner_required' | 'left';
 

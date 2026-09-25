@@ -1,7 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { Pool } from 'pg';
 
 import { createUserStore } from '../src/lib/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
@@ -19,11 +18,10 @@ const CHROME_WINDOWS =
 const FIREFOX_LINUX = 'Mozilla/5.0 (X11; Linux x86_64; rv:142.0) Gecko/20100101 Firefox/142.0';
 
 async function createMigratedStore(t: TestContext, options: Partial<Parameters<typeof createUserStore>[0]> = {}) {
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
-  const store = createUserStore({ databaseUrl, logger: SILENT, ...options });
+  const store = createUserStore({ pool, logger: SILENT, ...options });
   t.after(async () => {
-    await store.close();
     await cleanup();
   });
   return store;
@@ -229,13 +227,10 @@ test('a recovery code only opens the account it was issued for', async (t) => {
 });
 
 test('new accounts start at the current announcement and the codes reminder snoozes for three days', async (t) => {
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
-  const store = createUserStore({ databaseUrl, logger: SILENT });
-  const pool = new Pool({ connectionString: databaseUrl });
+  const store = createUserStore({ pool, logger: SILENT });
   t.after(async () => {
-    await store.close();
-    await pool.end();
     await cleanup();
   });
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });

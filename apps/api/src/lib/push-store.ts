@@ -1,9 +1,10 @@
 import crypto from 'node:crypto';
+import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
-import { createDbPool, transaction } from './db.ts';
+import { kyselyOn } from '../platform/db/kysely.ts';
+import type { PushSubscriptions } from '../platform/db/schema.ts';
 import { classifyPlatform, PLATFORM_CLASSES } from '@voice-room/shared/platform-class';
 import type { PlatformClass } from '@voice-room/shared/platform-class';
-import { createLogger } from './logger.ts';
 
 type Metadata = Record<string, unknown>;
 export type PushSubscriptionRecord = {
@@ -21,18 +22,21 @@ function createRowId(): string {
   return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
 }
 
-function mapSubscription(row: Record<string, any> | null | undefined): PushSubscriptionRecord | null {
-  if (!row) return null;
+function mapSubscription(row: Selectable<PushSubscriptions>): PushSubscriptionRecord {
   return {
     id: row.id,
     userId: row.user_id,
     endpoint: row.endpoint,
     keys: { p256dh: row.p256dh, auth: row.auth },
-    createdAt: row.created_at?.getTime?.() ?? (Number(row.created_at) || 0),
-    lastSuccessAt: row.last_success_at?.getTime?.() ?? null,
+    createdAt: row.created_at.getTime(),
+    lastSuccessAt: row.last_success_at?.getTime() ?? null,
     platformClass: row.platform_class || PLATFORM_CLASSES.unknown,
-    metadata: row.metadata || {}
+    metadata: (row.metadata as Metadata | null) || {}
   };
+}
+
+function text(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 const PLATFORM_SIGNAL_METADATA_KEYS = new Set([
@@ -77,19 +81,12 @@ function resolvePlatformClass(metadata: Metadata | null | undefined): PlatformCl
   });
 }
 
-function createPushStore({
-  databaseUrl,
-  logger = createLogger({ name: 'api' }),
-  pool,
-  maxSubscriptionsPerUser = 10
-}: { databaseUrl?: string; logger?: unknown; pool?: pg.Pool | null; maxSubscriptionsPerUser?: number } = {}) {
+function createPushStore({ pool, maxSubscriptionsPerUser = 10 }: { pool: pg.Pool; maxSubscriptionsPerUser?: number }) {
+  const db = kyselyOn(pool);
   const subscriptionLimit = Math.max(1, Math.floor(Number(maxSubscriptionsPerUser) || 10));
-  let activePool = pool || null;
-  function getPool(): pg.Pool {
-    if (!activePool) activePool = createDbPool({ databaseUrl, logger });
-    return activePool;
-  }
 
+  // An endpoint moves to another user only when that user proves the same keys;
+  // each user keeps their newest subscriptions up to the limit.
   async function upsert({
     userId,
     subscription,
@@ -99,77 +96,99 @@ function createPushStore({
     subscription?: { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } } | null;
     metadata?: Metadata;
   }): Promise<PushSubscriptionRecord | null> {
-    const endpoint = String(subscription?.endpoint || '').trim();
-    const p256dh = String(subscription?.keys?.p256dh || '').trim();
-    const auth = String(subscription?.keys?.auth || '').trim();
+    const endpoint = text(subscription?.endpoint);
+    const p256dh = text(subscription?.keys?.p256dh);
+    const auth = text(subscription?.keys?.auth);
     if (!userId || !endpoint || !p256dh || !auth) return null;
     const platformClass = resolvePlatformClass(metadata);
     const safeMetadata = sanitizeMetadata(metadata);
-    return transaction(getPool(), async (client) => {
-      await client.query(`SELECT id FROM users WHERE id = $1 FOR UPDATE`, [userId]);
-      const result = await client.query(
-        `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at, metadata, platform_class)
-         VALUES ($1, $2, $3, $4, $5, current_timestamp, $6::jsonb, $7::push_subscription_platform_class)
-         ON CONFLICT (endpoint) DO UPDATE
-         SET user_id = EXCLUDED.user_id,
-             p256dh = EXCLUDED.p256dh,
-             auth = EXCLUDED.auth,
-             created_at = current_timestamp,
-             metadata = EXCLUDED.metadata,
-             platform_class = EXCLUDED.platform_class
-         WHERE push_subscriptions.user_id = EXCLUDED.user_id
-            OR (push_subscriptions.p256dh = EXCLUDED.p256dh
-                AND push_subscriptions.auth = EXCLUDED.auth)
-         RETURNING *`,
-        [createRowId(), userId, endpoint, p256dh, auth, JSON.stringify(safeMetadata), platformClass]
-      );
-      const stored = result.rows[0];
+    return db.transaction().execute(async (trx) => {
+      await trx.selectFrom('users').select('id').where('id', '=', userId).forUpdate().execute();
+      const stored = await trx
+        .insertInto('push_subscriptions')
+        .values({
+          id: createRowId(),
+          user_id: userId,
+          endpoint,
+          p256dh,
+          auth,
+          created_at: sql<Date>`current_timestamp`,
+          metadata: JSON.stringify(safeMetadata),
+          platform_class: platformClass
+        })
+        .onConflict((oc) =>
+          oc
+            .column('endpoint')
+            .doUpdateSet((eb) => ({
+              user_id: eb.ref('excluded.user_id'),
+              p256dh: eb.ref('excluded.p256dh'),
+              auth: eb.ref('excluded.auth'),
+              created_at: sql<Date>`current_timestamp`,
+              metadata: eb.ref('excluded.metadata'),
+              platform_class: eb.ref('excluded.platform_class')
+            }))
+            .where((eb) =>
+              eb.or([
+                eb('push_subscriptions.user_id', '=', eb.ref('excluded.user_id')),
+                eb.and([
+                  eb('push_subscriptions.p256dh', '=', eb.ref('excluded.p256dh')),
+                  eb('push_subscriptions.auth', '=', eb.ref('excluded.auth'))
+                ])
+              ])
+            )
+        )
+        .returningAll()
+        .executeTakeFirst();
       if (!stored) return null;
-      await client.query(
-        `DELETE FROM push_subscriptions
-         WHERE id IN (
-           SELECT id
-           FROM push_subscriptions
-           WHERE user_id = $1
-           ORDER BY CASE WHEN endpoint = $2 THEN 0 ELSE 1 END, created_at DESC, id DESC
-           OFFSET $3
-         )`,
-        [userId, endpoint, subscriptionLimit]
-      );
+      await trx
+        .deleteFrom('push_subscriptions')
+        .where('id', 'in', (eb) =>
+          eb
+            .selectFrom('push_subscriptions')
+            .select('id')
+            .where('user_id', '=', userId)
+            .orderBy(sql`CASE WHEN endpoint = ${endpoint} THEN 0 ELSE 1 END`)
+            .orderBy('created_at', 'desc')
+            .orderBy('id', 'desc')
+            .offset(subscriptionLimit)
+        )
+        .execute();
       return mapSubscription(stored);
     });
   }
 
   async function remove({ userId, endpoint }: { userId: string; endpoint: unknown }): Promise<boolean> {
-    const result = await getPool().query(`DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2`, [
-      userId,
-      String(endpoint || '').trim()
-    ]);
-    return result.rowCount! > 0;
+    const result = await db
+      .deleteFrom('push_subscriptions')
+      .where('user_id', '=', userId)
+      .where('endpoint', '=', text(endpoint))
+      .executeTakeFirst();
+    return result.numDeletedRows > 0n;
   }
 
   async function removeByEndpoint(endpoint: string): Promise<void> {
-    await getPool().query(`DELETE FROM push_subscriptions WHERE endpoint = $1`, [endpoint]);
+    await db.deleteFrom('push_subscriptions').where('endpoint', '=', endpoint).execute();
   }
 
   async function listByUserId(userId: string): Promise<PushSubscriptionRecord[]> {
-    const result = await getPool().query(`SELECT * FROM push_subscriptions WHERE user_id = $1 ORDER BY created_at`, [
-      userId
-    ]);
-    return result.rows.map(mapSubscription) as PushSubscriptionRecord[];
+    const rows = await db
+      .selectFrom('push_subscriptions')
+      .selectAll()
+      .where('user_id', '=', userId)
+      .orderBy('created_at')
+      .execute();
+    return rows.map(mapSubscription);
   }
 
   async function markSuccess(endpoint: string): Promise<void> {
-    await getPool().query(`UPDATE push_subscriptions SET last_success_at = current_timestamp WHERE endpoint = $1`, [
-      endpoint
-    ]);
+    await db
+      .updateTable('push_subscriptions')
+      .set({ last_success_at: sql<Date>`current_timestamp` })
+      .where('endpoint', '=', endpoint)
+      .execute();
   }
 
-  async function close(): Promise<void> {
-    if (activePool) await activePool.end();
-  }
-
-  return { close, listByUserId, markSuccess, remove, removeByEndpoint, upsert };
+  return { listByUserId, markSuccess, remove, removeByEndpoint, upsert };
 }
 
 export type PushStore = ReturnType<typeof createPushStore>;

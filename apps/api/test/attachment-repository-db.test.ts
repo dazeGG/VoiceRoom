@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { Pool } from 'pg';
 
 import { createAttachmentRepository } from '../src/domains/media/attachment-repository.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
@@ -11,14 +10,11 @@ import { createTestDatabase } from './db-harness.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
 test('markCleanupDeleted executes the stale-upload predicate against PostgreSQL', async (t) => {
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
 
-  const users = createUserStore({ databaseUrl, logger: SILENT });
-  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  const users = createUserStore({ pool, logger: SILENT });
   t.after(async () => {
-    await pool.end();
-    await users.close();
     await cleanup();
   });
 
@@ -51,13 +47,10 @@ test('markCleanupDeleted executes the stale-upload predicate against PostgreSQL'
 // Retention: failed and abandoned uploads go after an hour, a ready image
 // nobody attached after a day; a bound one stays.
 test('cleanup lists only stale unbound attachments, each state with its own age', async (t) => {
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
-  const users = createUserStore({ databaseUrl, logger: SILENT });
-  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  const users = createUserStore({ pool, logger: SILENT });
   t.after(async () => {
-    await pool.end();
-    await users.close();
     await cleanup();
   });
   const created = await users.createUser({ login: 'retention-owner', displayName: 'Owner', password: 'password123' });

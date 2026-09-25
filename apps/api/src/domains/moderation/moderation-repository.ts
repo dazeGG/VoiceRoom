@@ -1,5 +1,8 @@
 import crypto from 'node:crypto';
+import { sql } from 'kysely';
 import type pg from 'pg';
+import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
+import { fromMicros, microsOf } from '../../platform/db/micros.ts';
 import type { ActiveBan, ActiveBanProfile } from '@voice-room/shared/moderation';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
@@ -82,9 +85,10 @@ function createModerationRepository({
 }: { cursorCodec?: ModerationCursorCodec; pool?: QueryClient | null } = {}) {
   if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
   if (!cursorCodec?.encode || !cursorCodec?.decode) throw new TypeError('Cursor codec is required');
-  const defaultDb = pool;
+  const base = pool;
   const codec = cursorCodec;
-  const executor = (client: Client): QueryClient => (client?.query ? client : defaultDb);
+  const on = (client: Client): Database => kyselyOn(client?.query ? client : base);
+  const bans = (row: unknown) => mapModerationBan(row as ModerationBanRow | undefined);
 
   function encodeCursor(roomId: string, row: ModerationBanRow | undefined): string | undefined {
     if (!row?.created_at || !row?.id) return undefined;
@@ -115,26 +119,33 @@ function createModerationRepository({
 
   async function isRoomOwner(roomId: string, userId: string, { client }: { client?: Client } = {}): Promise<boolean> {
     if (!roomId || !userId) return false;
-    const result = await executor(client).query(
-      'SELECT 1 FROM rooms WHERE id = $1 AND owner_id = $2 AND deleted_at IS NULL LIMIT 1',
-      [roomId, userId]
-    );
-    return (result.rowCount ?? 0) > 0;
+    const row = await on(client)
+      .selectFrom('rooms')
+      .select('id')
+      .where('id', '=', roomId)
+      .where('owner_id', '=', userId)
+      .where('deleted_at', 'is', null)
+      .limit(1)
+      .executeTakeFirst();
+    return Boolean(row);
+  }
+
+  function activeBans(db: Database, roomId: string, at: TimeInput) {
+    return db
+      .selectFrom('room_bans as rb')
+      .where('rb.room_id', '=', roomId)
+      .where('rb.revoked_at', 'is', null)
+      .where((eb) => eb.or([eb('rb.expires_at', 'is', null), eb('rb.expires_at', '>', asDate(at))]));
   }
 
   async function countActive(
     roomId: string,
     { at = Date.now(), client }: { at?: TimeInput; client?: Client } = {}
   ): Promise<number> {
-    const result = await executor(client).query<{ count: number }>(
-      `SELECT COUNT(*)::int AS count
-       FROM room_bans
-       WHERE room_id = $1
-         AND revoked_at IS NULL
-         AND (expires_at IS NULL OR expires_at > $2)`,
-      [roomId, asDate(at)]
-    );
-    return Number(result.rows[0]?.count || 0);
+    const row = await activeBans(on(client), roomId, at)
+      .select(sql<number>`COUNT(*)::int`.as('count'))
+      .executeTakeFirst();
+    return Number(row?.count || 0);
   }
 
   async function findByIdempotencyKey(
@@ -143,13 +154,18 @@ function createModerationRepository({
     { client }: { client?: Client } = {}
   ): Promise<ModerationBan | null> {
     if (!roomId || !idempotencyKey) return null;
-    const result = await executor(client).query<ModerationBanRow>(
-      'SELECT * FROM room_bans WHERE room_id = $1 AND idempotency_key = $2 LIMIT 1',
-      [roomId, idempotencyKey]
-    );
-    return mapModerationBan(result.rows[0]);
+    const row = await on(client)
+      .selectFrom('room_bans')
+      .selectAll()
+      .where('room_id', '=', roomId)
+      .where('idempotency_key', '=', idempotencyKey)
+      .limit(1)
+      .executeTakeFirst();
+    return bans(row);
   }
 
+  // The live ban on this account, or on this address for a guest, locked for
+  // the caller's transaction.
   async function findActivePrincipal({
     roomId,
     userId = null,
@@ -163,20 +179,17 @@ function createModerationRepository({
     at?: TimeInput;
     client?: Client;
   }): Promise<ModerationBanRow | null> {
-    const result = await executor(client).query<ModerationBanRow>(
-      `SELECT *
-       FROM room_bans
-       WHERE room_id = $1
-         AND revoked_at IS NULL
-         AND (expires_at IS NULL OR expires_at > $4)
-         AND (($2::varchar(36) IS NOT NULL AND user_id = $2)
-           OR ($2::varchar(36) IS NULL AND user_id IS NULL AND ip = $3))
-       ORDER BY created_at DESC, id DESC
-       LIMIT 1
-       FOR UPDATE`,
-      [roomId, userId, guestIp || '', asDate(at)]
-    );
-    return result.rows[0] || null;
+    const row = await activeBans(on(client), roomId, at)
+      .selectAll('rb')
+      .where((eb) =>
+        userId ? eb('rb.user_id', '=', userId) : eb.and([eb('rb.user_id', 'is', null), eb('rb.ip', '=', guestIp || '')])
+      )
+      .orderBy('rb.created_at', 'desc')
+      .orderBy('rb.id', 'desc')
+      .limit(1)
+      .forUpdate()
+      .executeTakeFirst();
+    return (row as ModerationBanRow | undefined) || null;
   }
 
   async function create({
@@ -199,23 +212,24 @@ function createModerationRepository({
     client?: Client;
   }): Promise<ModerationBan | null> {
     const timestamp = asDate(at);
-    const result = await executor(client).query<ModerationBanRow>(
-      `INSERT INTO room_bans
-         (id, room_id, user_id, ip, created_at, expires_at, metadata, reason, idempotency_key, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, '{}'::jsonb, $7, $8, $5)
-       RETURNING *`,
-      [
-        crypto.randomUUID(),
-        roomId,
-        userId,
-        userId ? '' : guestIp,
-        timestamp,
-        expiresAt == null ? null : asDate(expiresAt),
+    const row = await on(client)
+      .insertInto('room_bans')
+      .values({
+        id: crypto.randomUUID(),
+        room_id: roomId,
+        user_id: userId,
+        // A guest ban needs the address; without one the NOT NULL column refuses it.
+        ip: userId ? '' : (guestIp as string),
+        created_at: timestamp,
+        expires_at: expiresAt == null ? null : asDate(expiresAt),
+        metadata: '{}',
         reason,
-        idempotencyKey
-      ]
-    );
-    return mapModerationBan(result.rows[0]);
+        idempotency_key: idempotencyKey,
+        updated_at: timestamp
+      })
+      .returningAll()
+      .executeTakeFirst();
+    return bans(row);
   }
 
   async function updateActive({
@@ -233,17 +247,23 @@ function createModerationRepository({
     at?: TimeInput;
     client?: Client;
   }): Promise<ModerationBan | null> {
-    const timestamp = asDate(at);
-    const result = await executor(client).query<ModerationBanRow>(
-      `UPDATE room_bans
-       SET expires_at = $2, reason = $3, idempotency_key = $4, updated_at = $5
-       WHERE id = $1 AND revoked_at IS NULL
-       RETURNING *`,
-      [id, expiresAt == null ? null : asDate(expiresAt), reason, idempotencyKey, timestamp]
-    );
-    return mapModerationBan(result.rows[0]);
+    const row = await on(client)
+      .updateTable('room_bans')
+      .set({
+        expires_at: expiresAt == null ? null : asDate(expiresAt),
+        reason,
+        idempotency_key: idempotencyKey,
+        updated_at: asDate(at)
+      })
+      .where('id', '=', id)
+      .where('revoked_at', 'is', null)
+      .returningAll()
+      .executeTakeFirst();
+    return bans(row);
   }
 
+  // Live bans with the banned account's profile, newest first, paged by an
+  // opaque cursor bound to the room.
   async function listActive({
     roomId,
     cursor = null,
@@ -263,35 +283,37 @@ function createModerationRepository({
       error.code = 'invalid_cursor';
       throw error;
     }
-    const result = await executor(client).query<ModerationBanRow>(
-      `SELECT rb.*,
-              FLOOR(EXTRACT(EPOCH FROM rb.created_at) * 1000000)::bigint::text AS created_at_micros,
-              u.login,
-              u.display_name,
-              u.avatar_color_key,
-              u.avatar_key,
-              u.avatar_accent
-       FROM room_bans rb
-       LEFT JOIN users u ON u.id = rb.user_id
-       WHERE rb.room_id = $1
-         AND rb.revoked_at IS NULL
-         AND (rb.expires_at IS NULL OR rb.expires_at > $2)
-         AND ($3::bigint IS NULL OR (rb.created_at, rb.id) < (
-           TIMESTAMPTZ 'epoch' + $3::bigint * INTERVAL '1 microsecond', $4::varchar(36)
-         ))
-       ORDER BY rb.created_at DESC, rb.id DESC
-       LIMIT $5`,
-      [roomId, asDate(at), after?.createdAtMicros || null, after?.id || null, limit + 1]
-    );
-    const hasMore = result.rows.length > limit;
-    const rows = hasMore ? result.rows.slice(0, limit) : result.rows;
+    let query = activeBans(on(client), roomId, at)
+      .leftJoin('users as u', 'u.id', 'rb.user_id')
+      .selectAll('rb')
+      .select([
+        microsOf('rb.created_at').as('created_at_micros'),
+        'u.login',
+        'u.display_name',
+        'u.avatar_color_key',
+        'u.avatar_key',
+        'u.avatar_accent'
+      ]);
+    if (after) {
+      query = query.where(
+        sql<boolean>`(rb.created_at, rb.id) < (${fromMicros(after.createdAtMicros)}, ${after.id}::varchar(36))`
+      );
+    }
+    const found = (await query
+      .orderBy('rb.created_at', 'desc')
+      .orderBy('rb.id', 'desc')
+      .limit(limit + 1)
+      .execute()) as ModerationBanRow[];
+    const hasMore = found.length > limit;
+    const rows = hasMore ? found.slice(0, limit) : found;
     return {
-      bans: rows.map(mapModerationBan) as ModerationBan[],
+      bans: rows.map((row) => bans(row) as ModerationBan),
       hasMore,
       nextCursor: hasMore ? encodeCursor(roomId, rows.at(-1)) : undefined
     };
   }
 
+  // Revoking twice keeps the first revocation.
   async function revoke({
     roomId,
     banId,
@@ -303,16 +325,19 @@ function createModerationRepository({
     at?: TimeInput;
     client?: Client;
   }): Promise<{ ban: ModerationBan | null; found: boolean }> {
-    const result = await executor(client).query<ModerationBanRow>(
-      `UPDATE room_bans
-       SET revoked_at = COALESCE(revoked_at, $3),
-           expires_at = CASE WHEN revoked_at IS NULL THEN $3 ELSE expires_at END,
-           updated_at = CASE WHEN revoked_at IS NULL THEN $3 ELSE updated_at END
-       WHERE room_id = $1 AND id = $2
-       RETURNING *`,
-      [roomId, banId, asDate(at)]
-    );
-    return result.rows[0] ? { ban: mapModerationBan(result.rows[0]), found: true } : { ban: null, found: false };
+    const timestamp = asDate(at);
+    const row = await on(client)
+      .updateTable('room_bans')
+      .set({
+        revoked_at: sql<Date>`COALESCE(revoked_at, ${timestamp})`,
+        expires_at: sql<Date | null>`CASE WHEN revoked_at IS NULL THEN ${timestamp} ELSE expires_at END`,
+        updated_at: sql<Date>`CASE WHEN revoked_at IS NULL THEN ${timestamp} ELSE updated_at END`
+      })
+      .where('room_id', '=', roomId)
+      .where('id', '=', banId)
+      .returningAll()
+      .executeTakeFirst();
+    return row ? { ban: bans(row), found: true } : { ban: null, found: false };
   }
 
   return Object.freeze({

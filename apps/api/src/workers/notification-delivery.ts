@@ -1,4 +1,4 @@
-import { createDbPool } from '../lib/db.ts';
+import type pg from 'pg';
 import { readEnvBool, readEnvInt } from '../lib/config.ts';
 import { createPushStore } from '../lib/push-store.ts';
 import { createNotificationOutboxRepository } from '../domains/notifications/notification-outbox-repository.ts';
@@ -180,7 +180,7 @@ function createNotificationDeliveryWorker({
   });
 }
 
-async function main(env: NodeJS.ProcessEnv = process.env): Promise<void> {
+async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
   if (!readEnvBool('NOTIFICATION_DELIVERY_CLAIM_ENABLED', false, env)) {
     createLogger({ env, name: 'worker.notification-delivery' }).info(
       { evt: LOG_EVENTS.WORKER_DISABLED, worker: 'notification-delivery', reason: 'claims_disabled' },
@@ -188,7 +188,6 @@ async function main(env: NodeJS.ProcessEnv = process.env): Promise<void> {
     );
     return;
   }
-  const pool = createDbPool();
   const outbox = createNotificationOutboxRepository({ pool });
   const store = createPushStore({ pool });
   const provider = createNotificationPushProvider({ store, env });
@@ -201,7 +200,7 @@ async function main(env: NodeJS.ProcessEnv = process.env): Promise<void> {
     maxAttempts: readEnvInt('NOTIFICATION_DELIVERY_MAX_ATTEMPTS', 8, 1, env)
   });
   let stopping: Promise<void> | undefined;
-  const stop = (): Promise<void> => stopping || (stopping = worker.stop().finally(() => pool.end()));
+  const stop = (): Promise<void> => stopping || (stopping = worker.stop());
   process.once('SIGINT', () => void stop());
   process.once('SIGTERM', () => void stop());
   try {
@@ -211,12 +210,4 @@ async function main(env: NodeJS.ProcessEnv = process.env): Promise<void> {
   }
 }
 
-if (import.meta.main)
-  main().catch((error: unknown) => {
-    createLogger({ name: 'worker.notification-delivery' }).fatal(
-      { evt: LOG_EVENTS.WORKER_FAILED, worker: 'notification-delivery', err: error },
-      'notification delivery worker failed'
-    );
-    process.exitCode = 1;
-  });
 export { LEASE_IDENTITY, createNotificationDeliveryWorker, main };

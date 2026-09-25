@@ -3,7 +3,7 @@
 - Layers and rules: `../../docs/ARCHITECTURE.md` section 3. Known old patterns still in the code (and what to do instead): section 4.
 - Strict TypeScript on Node 24 type stripping: erasable syntax only, imports with explicit `.ts` extensions, no build step. Applied migrations stay CommonJS `.cjs` (byte-pinned history); new migrations are ES modules.
 - New routes: a `register(app, ctx, deps)` module with TypeBox schemas for params, body and responses, modelled on `src/domains/rooms/rooms.routes.ts`. Never add routes or services to `server.ts`.
-- Data access: repositories take a pool or client from their caller; never create a pool inside a module. Queries are still raw `pg` SQL until the Kysely move (section 4); type the row shape you read.
+- Data access: repositories take the pool (or a client inside the caller's transaction) from their caller; never create a pool inside a module. Write queries with Kysely (`platform/db/kysely.ts`: `kyselyOn(client)`, `db.transaction()`); no new raw `pg` SQL outside migrations and `platform/db`.
 - Configuration is read only in `src/app/config.ts`; do not read `process.env` elsewhere.
 - PostgreSQL is the durable source of truth. Preserve transaction boundaries and test rollback/failure paths.
 - Add or update tests under `test/` for every behaviour change; see the root `CLAUDE.md` testing rules.

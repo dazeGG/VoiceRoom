@@ -1,3 +1,4 @@
+import type pg from 'pg';
 function createMediaReconciliationWorker({
   reconciliationService,
   intervalMs = 15 * 60 * 1000
@@ -28,20 +29,18 @@ function createMediaReconciliationWorker({
   });
 }
 
-async function main(): Promise<void> {
-  if (String(process.env.MEDIA_RECONCILIATION_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
-  const { createDbPool } = await import('../lib/db.ts');
+async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
+  if (String(env.MEDIA_RECONCILIATION_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
   const { createAttachmentRepository } = await import('../domains/media/attachment-repository.ts');
   const { createMediaJobRepository } = await import('../domains/media/media-job-repository.ts');
   const { createMediaReconciliationService } = await import('../domains/media/media-reconciliation-service.ts');
   const { createMediaStorage } = await import('../domains/media/storage.ts');
-  const pool = createDbPool();
   const attachments = createAttachmentRepository({ pool });
   const worker = createMediaReconciliationWorker({
     reconciliationService: createMediaReconciliationService({
       attachmentRepository: attachments,
       jobRepository: createMediaJobRepository({ pool }),
-      storage: createMediaStorage({ rootDir: process.env.MEDIA_STORAGE_DIR || '/data/media' })
+      storage: createMediaStorage({ rootDir: env.MEDIA_STORAGE_DIR || '/data/media' })
     })
   });
   const controller = new AbortController();
@@ -51,18 +50,7 @@ async function main(): Promise<void> {
   };
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
-  try {
-    await worker.run({ signal: controller.signal });
-  } finally {
-    await pool.end();
-  }
-}
-
-if (import.meta.main) {
-  main().catch((error) => {
-    process.stderr.write(`${(error as Error | null)?.stack || error}\n`);
-    process.exitCode = 1;
-  });
+  await worker.run({ signal: controller.signal });
 }
 
 export { createMediaReconciliationWorker, main };

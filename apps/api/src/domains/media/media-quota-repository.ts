@@ -1,4 +1,5 @@
 import type pg from 'pg';
+import { transaction } from '../../platform/db/pool.ts';
 import type { AttachmentRepository } from './attachment-repository.ts';
 
 export type QuotaUsage = Awaited<ReturnType<AttachmentRepository['quotaUsage']>>;
@@ -21,20 +22,11 @@ function createMediaQuotaRepository({
     ownerId: string,
     operation: (input: { client: pg.PoolClient; usage: QuotaUsage }) => Promise<T>
   ): Promise<T> {
-    const client = await db.connect();
-    try {
-      await client.query('BEGIN');
+    return transaction(db, async (client) => {
       await attachments.lockOwner(ownerId, client);
       const usage = await attachments.quotaUsage(ownerId, { client });
-      const result = await operation({ client, usage });
-      await client.query('COMMIT');
-      return result;
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => {});
-      throw error;
-    } finally {
-      client.release();
-    }
+      return operation({ client, usage });
+    });
   }
 
   return Object.freeze({ withOwnerReservation });

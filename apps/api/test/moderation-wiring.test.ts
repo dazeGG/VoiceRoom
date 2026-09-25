@@ -3,7 +3,6 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import pg from 'pg';
 
 import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import { createServiceRegistry, type ServiceRegistryDeps } from '../src/app/service-registry.ts';
@@ -22,8 +21,7 @@ test(
   async (t) => {
     const db = await createTestDatabase(t);
     await runMigrations({ databaseUrl: db.databaseUrl, logger: silent, noLock: true });
-    const pool = new pg.Pool({ connectionString: db.databaseUrl, max: 1 });
-    await pool.query(
+    await db.pool.query(
       `INSERT INTO users(id, login, display_name, password_hash) VALUES ($1, 'owner', 'Owner', 'x');
        INSERT INTO rooms(id, owner_id, is_static) VALUES ('${ROOM}', $1, true);
        INSERT INTO room_messages(id, room_id, text, author_user_id) VALUES ('m-1', '${ROOM}', 'spam', $1);`.replace(
@@ -31,10 +29,7 @@ test(
         `'${OWNER}'`
       )
     );
-    await pool.end();
 
-    const previousUrl = process.env.DATABASE_URL;
-    process.env.DATABASE_URL = db.databaseUrl;
     const detail: Array<[string, ServerEnvelope]> = [];
     const peerMessages: RoomPeerMessage[] = [];
     const registry = createServiceRegistry(
@@ -55,10 +50,9 @@ test(
         roomRuntime: () => ({ broadcastRoomDetail: (roomId, envelope) => detail.push([roomId, envelope]) })
       })
     );
+    registry.applyOverrides({ pool: db.pool });
     t.after(async () => {
       await registry.close(fake());
-      if (previousUrl === undefined) delete process.env.DATABASE_URL;
-      else process.env.DATABASE_URL = previousUrl;
       await db.cleanup();
     });
 

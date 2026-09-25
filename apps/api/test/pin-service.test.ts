@@ -19,8 +19,8 @@ async function createPinFixture(t: TestContext) {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const pool = new Pool({ connectionString: databaseUrl, max: 12 });
-  const users = createUserStore({ databaseUrl, logger: SILENT });
-  const rooms = createRoomStore({ databaseUrl, logger: SILENT });
+  const users = createUserStore({ pool, logger: SILENT });
+  const rooms = createRoomStore({ pool });
   const created = await users.createUser({ login: 'pin-user', displayName: 'Pin User', password: 'password123' });
   const user = created.user;
   assert.ok(user);
@@ -28,8 +28,6 @@ async function createPinFixture(t: TestContext) {
   assert.ok(room);
   t.after(async () => {
     await pool.end();
-    await rooms.close();
-    await users.close();
     await cleanup();
   });
   return { pool, repository: createPinRepository({ client: pool }), room, rooms, user };

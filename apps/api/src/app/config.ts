@@ -114,6 +114,7 @@ export function readApiConfig(env: Env = process.env) {
     RETENTION_KEEP_DELETED_MS: int('RETENTION_KEEP_DELETED_MS', 30 * 24 * 60 * 60 * 1000, 60000),
     // A link preview makes the API open a URL a user posted, so it is opt-in.
     LINK_PREVIEWS_ENABLED: readEnvBool('LINK_PREVIEWS_ENABLED', false, env) as boolean,
+    MEDIA_STORAGE_DIR: String(env.MEDIA_STORAGE_DIR || '/data/media').trim(),
     MESSAGE_DIRECT_EMIT_ENABLED: messageDeliveryMode.directEmitEnabled as boolean,
     MESSAGE_DELIVERY_LISTEN_ENABLED: readEnvBool('MESSAGE_DELIVERY_LISTEN_ENABLED', true, env) as boolean,
     // Desktop downloads come from the latest GitHub release; the metadata is

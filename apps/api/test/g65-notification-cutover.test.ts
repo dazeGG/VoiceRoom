@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type pg from 'pg';
 import { readMessageDeliveryMode } from '../src/lib/config.ts';
 import type { NotificationOutboxRepository } from '../src/domains/notifications/notification-outbox-repository.ts';
 import { createNotificationDeliveryWorker, main } from '../src/workers/notification-delivery.ts';
 import { fake, outboxEvent } from './fakes/index.ts';
 
 test('G65-A02 the notification worker stays off until claims are enabled', async () => {
-  // Without the flag main() returns before it opens a pool.
-  await main({ LOG_LEVEL: 'silent' });
+  // Without the flag main() returns before it touches the pool.
+  await main({ LOG_LEVEL: 'silent' }, fake<pg.Pool>());
 });
 
 test('G65-A02 ten provider failures stop claiming until the worker restarts', async () => {

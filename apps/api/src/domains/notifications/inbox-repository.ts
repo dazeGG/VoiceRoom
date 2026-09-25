@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
+import { sql } from 'kysely';
 import type pg from 'pg';
-import { transaction } from '../../lib/db.ts';
+import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Client = QueryClient | null | undefined;
@@ -41,9 +42,10 @@ export type InboxNotification = {
 
 export type ReadAllResult = { updated: number | null; revision: number | null };
 
-function dbFor(pool: QueryClient, client: Client): QueryClient {
-  return client?.query ? client : pool;
-}
+const createdAtMicros = sql<string>`floor(extract(epoch FROM created_at) * 1000000)::numeric(20,0)`.as(
+  'created_at_micros'
+);
+const now = sql<Date>`current_timestamp`;
 
 // The read point that bounds which notifications a read retires. Callers hand
 // over what they have — a Date from a row, epoch milliseconds from the legacy
@@ -81,23 +83,31 @@ function mapRow(row: NotificationRow | null | undefined): InboxNotification | nu
 
 function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
   if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
-  const db = pool;
+  const db = kyselyOn(pool);
+  const on = (client: Client): Database => (client?.query ? kyselyOn(client) : db);
+  const rows = (found: unknown[]) => found.map((row) => mapRow(row as NotificationRow) as InboxNotification);
 
-  function mutate<T>(client: Client, callback: (db: QueryClient) => Promise<T>): Promise<T> {
-    return client?.query ? callback(client) : transaction(db, callback);
+  // Writes join the caller's transaction, or run in their own.
+  function mutate<T>(client: Client, callback: (db: Database) => Promise<T>): Promise<T> {
+    return client?.query ? callback(kyselyOn(client)) : db.transaction().execute(callback);
   }
 
-  async function allocateRevision(tx: QueryClient, recipientUserId: string): Promise<number> {
-    await tx.query(`SELECT pg_advisory_xact_lock(hashtext('voice-room:notification-revision:' || $1))`, [
-      recipientUserId
-    ]);
-    const result = await tx.query<{ revision: string | number }>(
-      `SELECT coalesce(max(revision),0)+1 AS revision FROM user_notifications WHERE recipient_user_id=$1`,
-      [recipientUserId]
+  // Every change a recipient can see takes the next revision of their inbox,
+  // serialized per recipient so revisions never repeat.
+  async function allocateRevision(tx: Database, recipientUserId: string): Promise<number> {
+    await sql`SELECT pg_advisory_xact_lock(hashtext('voice-room:notification-revision:' || ${recipientUserId}))`.execute(
+      tx
     );
-    return Number(result.rows[0]!.revision);
+    const row = await tx
+      .selectFrom('user_notifications')
+      .select(sql<string>`coalesce(max(revision), 0) + 1`.as('revision'))
+      .where('recipient_user_id', '=', recipientUserId)
+      .executeTakeFirstOrThrow();
+    return Number(row.revision);
   }
 
+  // One notification per recipient and message: new reasons merge in, and the
+  // revision moves only when what the recipient sees changes.
   async function upsert({
     recipientUserId,
     actorUserId,
@@ -117,20 +127,42 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
   }): Promise<InboxNotification | null> {
     return mutate(client, async (tx) => {
       const revision = await allocateRevision(tx, recipientUserId);
-      const result = await tx.query<NotificationRow>(
-        `INSERT INTO user_notifications (id,recipient_user_id,actor_user_id,room_id,source_message_id,reasons,body,revision)
-       VALUES ($1,$2,$3,$4,$5,$6::text[],$7,$8)
-       ON CONFLICT (recipient_user_id, source_message_id) DO UPDATE SET
-         reasons=(SELECT ARRAY(SELECT DISTINCT unnest(user_notifications.reasons || EXCLUDED.reasons) ORDER BY 1)),
-         actor_user_id=EXCLUDED.actor_user_id, body=EXCLUDED.body, retracted_at=NULL,
-         revision=CASE WHEN user_notifications.retracted_at IS NOT NULL OR user_notifications.reasons IS DISTINCT FROM (SELECT ARRAY(SELECT DISTINCT unnest(user_notifications.reasons || EXCLUDED.reasons) ORDER BY 1)) OR user_notifications.body IS DISTINCT FROM EXCLUDED.body THEN EXCLUDED.revision ELSE user_notifications.revision END,
-         updated_at=current_timestamp RETURNING *`,
-        [crypto.randomUUID(), recipientUserId, actorUserId, roomId, sourceMessageId, reasons, body, revision]
-      );
-      return mapRow(result.rows[0]);
+      const mergedReasons = sql<
+        string[]
+      >`(SELECT ARRAY(SELECT DISTINCT unnest(user_notifications.reasons || EXCLUDED.reasons) ORDER BY 1))`;
+      const row = await tx
+        .insertInto('user_notifications')
+        .values({
+          id: crypto.randomUUID(),
+          recipient_user_id: recipientUserId,
+          actor_user_id: actorUserId,
+          room_id: roomId,
+          source_message_id: sourceMessageId,
+          reasons: sql<string[]>`${reasons}::text[]`,
+          body,
+          revision
+        })
+        .onConflict((oc) =>
+          oc.columns(['recipient_user_id', 'source_message_id']).doUpdateSet((eb) => ({
+            reasons: mergedReasons,
+            actor_user_id: eb.ref('excluded.actor_user_id'),
+            body: eb.ref('excluded.body'),
+            retracted_at: null,
+            revision: sql<string>`CASE
+              WHEN user_notifications.retracted_at IS NOT NULL
+                OR user_notifications.reasons IS DISTINCT FROM ${mergedReasons}
+                OR user_notifications.body IS DISTINCT FROM EXCLUDED.body
+              THEN EXCLUDED.revision ELSE user_notifications.revision END`,
+            updated_at: now
+          }))
+        )
+        .returningAll()
+        .executeTakeFirst();
+      return mapRow(row);
     });
   }
 
+  // Newest first, paged by (created_at, id).
   async function list({
     recipientUserId,
     limit = 50,
@@ -142,36 +174,56 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
     before?: Partial<CursorTuple> | null;
     client?: Client;
   }): Promise<InboxNotification[]> {
-    const result = await dbFor(db, client).query<NotificationRow>(
-      `SELECT *, floor(extract(epoch FROM created_at)*1000000)::numeric(20,0) created_at_micros
-       FROM user_notifications WHERE recipient_user_id=$1
-         AND ($2::numeric IS NULL OR (created_at,id)<(to_timestamp($2::numeric/1000000.0),$3::varchar))
-       ORDER BY created_at DESC,id DESC LIMIT $4`,
-      [recipientUserId, before?.createdAtMicros || null, before?.id || '', Math.min(101, limit + 1)]
+    let query = on(client)
+      .selectFrom('user_notifications')
+      .selectAll()
+      .select(createdAtMicros)
+      .where('recipient_user_id', '=', recipientUserId);
+    if (before?.createdAtMicros) {
+      query = query.where(
+        sql<boolean>`(created_at, id) < (to_timestamp(${before.createdAtMicros}::numeric / 1000000.0), ${before.id || ''}::varchar)`
+      );
+    }
+    return rows(
+      await query
+        .orderBy('created_at', 'desc')
+        .orderBy('id', 'desc')
+        .limit(Math.min(101, limit + 1))
+        .execute()
     );
-    return result.rows.map(mapRow) as InboxNotification[];
   }
 
   async function findFirstUnread(
     recipientUserId: string,
     { client }: { client?: Client } = {}
   ): Promise<InboxNotification | null> {
-    const r = await dbFor(db, client).query<NotificationRow>(
-      `SELECT *,floor(extract(epoch FROM created_at)*1000000)::numeric(20,0) created_at_micros FROM user_notifications WHERE recipient_user_id=$1 AND read_at IS NULL AND retracted_at IS NULL ORDER BY created_at ASC,id ASC LIMIT 1`,
-      [recipientUserId]
-    );
-    return mapRow(r.rows[0]);
+    const row = await on(client)
+      .selectFrom('user_notifications')
+      .selectAll()
+      .select(createdAtMicros)
+      .where('recipient_user_id', '=', recipientUserId)
+      .where('read_at', 'is', null)
+      .where('retracted_at', 'is', null)
+      .orderBy('created_at', 'asc')
+      .orderBy('id', 'asc')
+      .limit(1)
+      .executeTakeFirst();
+    return mapRow(row);
   }
 
   async function unreadCount(
     recipientUserId: string,
     { client }: { client?: Client } = {}
   ): Promise<{ count: number; revision: number }> {
-    const r = await dbFor(db, client).query<{ count: number | null; revision: string | number | null }>(
-      `SELECT count(*) FILTER (WHERE read_at IS NULL AND retracted_at IS NULL)::int count,coalesce(max(revision),0)::bigint revision FROM user_notifications WHERE recipient_user_id=$1`,
-      [recipientUserId]
-    );
-    return { count: Number(r.rows[0]?.count || 0), revision: Number(r.rows[0]?.revision || 0) };
+    const row = await on(client)
+      .selectFrom('user_notifications')
+      .select([
+        sql<number>`count(*) FILTER (WHERE read_at IS NULL AND retracted_at IS NULL)::int`.as('count'),
+        sql<string>`coalesce(max(revision), 0)::bigint`.as('revision')
+      ])
+      .where('recipient_user_id', '=', recipientUserId)
+      .executeTakeFirst();
+    return { count: Number(row?.count || 0), revision: Number(row?.revision || 0) };
   }
 
   async function markRead({
@@ -185,11 +237,40 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
   }): Promise<InboxNotification | null> {
     return mutate(client, async (tx) => {
       const revision = await allocateRevision(tx, recipientUserId);
-      const r = await tx.query<NotificationRow>(
-        `UPDATE user_notifications SET read_at=coalesce(read_at,current_timestamp),revision=CASE WHEN read_at IS NULL THEN $3 ELSE revision END,updated_at=CASE WHEN read_at IS NULL THEN current_timestamp ELSE updated_at END WHERE id=$1 AND recipient_user_id=$2 RETURNING *`,
-        [notificationId, recipientUserId, revision]
-      );
-      return mapRow(r.rows[0]);
+      const row = await tx
+        .updateTable('user_notifications')
+        .set({
+          read_at: sql<Date>`coalesce(read_at, current_timestamp)`,
+          revision: sql<string>`CASE WHEN read_at IS NULL THEN ${revision} ELSE revision END`,
+          updated_at: sql<Date>`CASE WHEN read_at IS NULL THEN current_timestamp ELSE updated_at END`
+        })
+        .where('id', '=', notificationId)
+        .where('recipient_user_id', '=', recipientUserId)
+        .returningAll()
+        .executeTakeFirst();
+      return mapRow(row);
+    });
+  }
+
+  // Marks unread notifications read, up to a read point when one is given.
+  async function markUnreadRead(
+    client: Client,
+    recipientUserId: string,
+    bound: Date | null,
+    roomId?: string
+  ): Promise<ReadAllResult> {
+    return mutate(client, async (tx) => {
+      const revision = await allocateRevision(tx, recipientUserId);
+      let query = tx
+        .updateTable('user_notifications')
+        .set({ read_at: now, revision, updated_at: now })
+        .where('recipient_user_id', '=', recipientUserId)
+        .where('read_at', 'is', null);
+      if (roomId !== undefined) query = query.where('room_id', '=', roomId);
+      if (bound) query = query.where('created_at', '<=', bound);
+      const result = await query.executeTakeFirst();
+      const updated = Number(result.numUpdatedRows);
+      return { updated, revision: updated ? revision : null };
     });
   }
 
@@ -204,14 +285,7 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
   }): Promise<ReadAllResult> {
     const bound = readBound(through);
     if (bound === undefined) return { updated: 0, revision: null };
-    return mutate(client, async (tx) => {
-      const revision = await allocateRevision(tx, recipientUserId);
-      const r = await tx.query(
-        `UPDATE user_notifications SET read_at=current_timestamp,revision=$3,updated_at=current_timestamp WHERE recipient_user_id=$1 AND read_at IS NULL AND ($2::timestamptz IS NULL OR created_at <= $2)`,
-        [recipientUserId, bound, revision]
-      );
-      return { updated: r.rowCount, revision: r.rowCount ? revision : null };
-    });
+    return markUnreadRead(client, recipientUserId, bound);
   }
 
   async function retractByMessage(
@@ -219,20 +293,29 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
     { client }: { client?: Client } = {}
   ): Promise<InboxNotification[]> {
     return mutate(client, async (tx) => {
-      const recipients = await tx.query<{ recipient_user_id: string }>(
-        `SELECT DISTINCT recipient_user_id FROM user_notifications WHERE source_message_id=$1 AND retracted_at IS NULL ORDER BY recipient_user_id`,
-        [sourceMessageId]
-      );
-      const rows: NotificationRow[] = [];
-      for (const { recipient_user_id: recipientUserId } of recipients.rows) {
+      const recipients = await tx
+        .selectFrom('user_notifications')
+        .select('recipient_user_id')
+        .distinct()
+        .where('source_message_id', '=', sourceMessageId)
+        .where('retracted_at', 'is', null)
+        .orderBy('recipient_user_id')
+        .execute();
+      const retracted: unknown[] = [];
+      for (const { recipient_user_id: recipientUserId } of recipients) {
         const revision = await allocateRevision(tx, recipientUserId);
-        const r = await tx.query<NotificationRow>(
-          `UPDATE user_notifications SET retracted_at=current_timestamp,body='',revision=$3,updated_at=current_timestamp WHERE source_message_id=$1 AND recipient_user_id=$2 AND retracted_at IS NULL RETURNING *`,
-          [sourceMessageId, recipientUserId, revision]
+        retracted.push(
+          ...(await tx
+            .updateTable('user_notifications')
+            .set({ retracted_at: now, body: '', revision, updated_at: now })
+            .where('source_message_id', '=', sourceMessageId)
+            .where('recipient_user_id', '=', recipientUserId)
+            .where('retracted_at', 'is', null)
+            .returningAll()
+            .execute())
         );
-        rows.push(...r.rows);
       }
-      return rows.map(mapRow) as InboxNotification[];
+      return rows(retracted);
     });
   }
 
@@ -254,14 +337,7 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
   }): Promise<ReadAllResult> {
     const bound = readBound(through);
     if (bound === undefined) return { updated: 0, revision: null };
-    return mutate(client, async (tx) => {
-      const revision = await allocateRevision(tx, recipientUserId);
-      const r = await tx.query(
-        `UPDATE user_notifications SET read_at=current_timestamp,revision=$4,updated_at=current_timestamp WHERE recipient_user_id=$1 AND room_id=$2 AND read_at IS NULL AND ($3::timestamptz IS NULL OR created_at <= $3)`,
-        [recipientUserId, roomId, bound, revision]
-      );
-      return { updated: r.rowCount, revision: r.rowCount ? revision : null };
-    });
+    return markUnreadRead(client, recipientUserId, bound, roomId);
   }
 
   return { findFirstUnread, list, markAllRead, markRead, markReadForRoom, retractByMessage, unreadCount, upsert };

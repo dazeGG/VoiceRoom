@@ -30,7 +30,7 @@ import { createRequestLog } from './platform/http/request-log.ts';
 import { liveKitConnectSources, securityHeaders } from './platform/http/security-headers.ts';
 import { readApiConfig, readinessReadySetFromEnv, resolveRealtimeReconnectLeaseMs } from './app/config.ts';
 
-import { readEnvInt, readEnvBool, readDatabaseConfig, readUploadsDir } from './lib/config.ts';
+import { readEnvBool, readDatabaseConfig, readUploadsDir } from './lib/config.ts';
 import { cleanName, cleanLiveKitUrl, accountPeerIdFor } from '@voice-room/shared/validation';
 import { createProofOfWork } from './lib/pow.ts';
 import { LOG_EVENTS } from './lib/log-events.ts';
@@ -40,11 +40,7 @@ import { reconcileAvatarStorage } from './lib/avatar-reconciliation.ts';
 import { createAvatarStorage } from './lib/avatar-storage.ts';
 import { createLinkPreviewStorage, reconcileLinkPreviewImages } from './lib/link-preview-storage.ts';
 import { createLinkPreviewRepository } from './domains/link-previews/link-preview-repository.ts';
-import { avatarColorForPeerId, createRoomStore } from './lib/room-store.ts';
-import { createUserStore } from './lib/user-store.ts';
-import { createFriendStore } from './lib/friend-store.ts';
-import { createNotificationStore } from './lib/notification-store.ts';
-import { createPushStore } from './lib/push-store.ts';
+import { avatarColorForPeerId } from './domains/rooms/avatar-color.ts';
 import { createPushService } from './lib/push-service.ts';
 import { startApiListener } from './lib/listen.ts';
 import { assertMigrationReady, runMigrations } from './lib/migrate.ts';
@@ -164,6 +160,7 @@ const {
   RETENTION_PURGE_INTERVAL_MS,
   RETENTION_KEEP_DELETED_MS,
   LINK_PREVIEWS_ENABLED,
+  MEDIA_STORAGE_DIR,
   MESSAGE_DIRECT_EMIT_ENABLED,
   MESSAGE_DELIVERY_LISTEN_ENABLED,
   DESKTOP_RELEASE_REPO,
@@ -172,7 +169,7 @@ const {
 } = readApiConfig();
 const readinessProvider = createRuntimeReadinessProvider({
   expectedApiReplicaIds: CAPABILITY_EXPECTED_API_REPLICA_IDS,
-  getClient: () => getRelease250Pool(),
+  getClient: () => getPool(),
   heartbeatIntervalMs: CAPABILITY_HEARTBEAT_INTERVAL_MS,
   heartbeatMaxAgeMs: CAPABILITY_HEARTBEAT_MAX_AGE_MS,
   manifestPath: CAPABILITY_DAG_PATH,
@@ -201,7 +198,8 @@ const services = createServiceRegistry(
     LIVEKIT_TOKEN_TTL_SECONDS,
     MAX_ROOM_BANS,
     MAX_PUSH_SUBSCRIPTIONS_PER_USER,
-    LINK_PREVIEWS_ENABLED
+    LINK_PREVIEWS_ENABLED,
+    MEDIA_STORAGE_DIR
   },
   {
     readinessProvider,
@@ -242,7 +240,7 @@ const {
   getPushService,
   getPushStore,
   getReactionServices,
-  getRelease250Pool,
+  getPool,
   getRoomStore,
   getUserStore
 } = services;
@@ -275,7 +273,7 @@ const {
 const messageProjection = createMessageProjection({
   attachments: () => getMediaServices()?.attachments ?? null,
   replies: () => {
-    const pool = getRelease250Pool();
+    const pool = getPool();
     return pool ? createReplyRepository({ client: pool }) : null;
   }
 });
@@ -298,7 +296,7 @@ const linkPreviewEvents = createLinkPreviewEvents({
 });
 const messageDeliveryRelay = createMessageDeliveryRelay({
   enabled: MESSAGE_DELIVERY_LISTEN_ENABLED,
-  pool: () => getRelease250Pool(),
+  pool: () => getPool(),
   outbox: () => getMessageDeliveryServices()?.outbox ?? null,
   projection: messageProjection,
   broadcastChatMessage: (roomId, message) => roomRuntime?.broadcastChatMessage(roomId, message),
@@ -504,7 +502,7 @@ const roomChat = createRoomChatService({
   limiter: roomChatLimiter,
   findUser: (userId) => getUserStore().getUserById(userId),
   media: getMediaServices,
-  replies: () => createReplyRepository({ client: getRelease250Pool() }),
+  replies: () => createReplyRepository({ client: getPool() }),
   notifications: getNotificationServices,
   delivery: getMessageDeliveryServices,
   projectMedia: attachMediaProjection,
@@ -562,7 +560,7 @@ const directMessages = createDirectMessagesService({
   feature: release250FeatureEnabled,
   limiter: dmLimiter,
   media: getMediaServices,
-  replies: () => createReplyRepository({ client: getRelease250Pool() }),
+  replies: () => createReplyRepository({ client: getPool() }),
   delivery: getMessageDeliveryServices,
   projectMedia: attachMediaProjection,
   projectReply: attachReplyProjection,
@@ -1128,21 +1126,12 @@ async function bootstrap({
     if (env.NODE_ENV === 'production') {
       await assertMigrationReady({ databaseUrl: database.url });
     }
-    const roomStore = createRoomStore({
-      databaseUrl: database.url,
-      logger,
-      roomIdleTtlMs: ROOM_IDLE_TTL_MS
-    });
+    services.connect({ databaseUrl: database.url, logger });
+    const roomStore = getRoomStore();
     await roomStore.markActiveTemporaryRoomsEmpty();
     await roomStore.pruneRooms();
-    const userStore = createUserStore({ databaseUrl: database.url, logger, sessionTtlMs: SESSION_TTL_MS });
-    const friendStore = createFriendStore({ databaseUrl: database.url, logger });
-    const notificationStore = createNotificationStore({ databaseUrl: database.url, logger });
-    const pushStore = createPushStore({
-      databaseUrl: database.url,
-      logger,
-      maxSubscriptionsPerUser: readEnvInt('MAX_PUSH_SUBSCRIPTIONS_PER_USER', 10, 1, env)
-    });
+    const userStore = getUserStore();
+    const pushStore = getPushStore();
     const pushService = createPushService({ store: pushStore, env, logger });
     const avatarStorage = createAvatarStorage({ uploadsDir: readUploadsDir(env) });
     const reconciliation = await reconcileAvatarStorage({
@@ -1158,17 +1147,12 @@ async function bootstrap({
     }
     const linkPreviewStorage = createLinkPreviewStorage({ uploadsDir: readUploadsDir(env) });
     services.install({
-      roomStore,
-      userStore,
-      friendStore,
-      notificationStore,
-      pushStore,
       pushService,
       avatarStorage,
       linkPreviewStorage
     });
     try {
-      const previewPool = getRelease250Pool();
+      const previewPool = getPool();
       if (previewPool) {
         const removedPreviewImages = await reconcileLinkPreviewImages({
           storage: linkPreviewStorage,
@@ -1193,8 +1177,8 @@ async function bootstrap({
     const server = createApiServer({
       store: roomStore,
       users: userStore,
-      friends: friendStore,
-      notifications: notificationStore,
+      friends: getFriendStore(),
+      notifications: getNotificationStore(),
       pushes: pushStore,
       push: pushService,
       avatars: avatarStorage,

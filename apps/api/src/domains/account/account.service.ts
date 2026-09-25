@@ -62,7 +62,7 @@ export interface AccountUserStore {
     currentSessionPublicId: string;
   }): Promise<{ status: string; revokedTokenHash?: string | null }>;
   listSessions(input: { userId: string; currentTokenHash: string }): Promise<AccountSession[]>;
-  revokeSession(input: { userId: string; publicId: string }): Promise<{ status: string; tokenHash?: string }>;
+  revokeSession(input: { userId: string; publicId: string }): Promise<{ status: string; tokenHash?: string | null }>;
   revokeOtherSessions(input: { userId: string; keepTokenHash: string }): Promise<{ tokenHashes: string[] }>;
   generateRecoveryCodes(input: {
     userId: string;

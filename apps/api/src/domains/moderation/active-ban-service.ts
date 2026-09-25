@@ -1,5 +1,7 @@
 import type pg from 'pg';
-import { transaction } from '../../lib/db.ts';
+import { sql } from 'kysely';
+import { kyselyOn } from '../../platform/db/kysely.ts';
+import { transaction } from '../../platform/db/pool.ts';
 import {
   createActiveBanRepository,
   normalizePrincipal,
@@ -74,10 +76,17 @@ function createActiveBanService({
     if (!roomId || (!principal.userId && !principal.ip)) return { ban: null, status: 'invalid' };
     const at = now();
     return transaction(pool, async (client: pg.PoolClient): Promise<BanCreation> => {
-      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`voice-room:admission:${roomId}`]);
-      await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`voice-room:room-bans:${roomId}`]);
-      const room = await client.query('SELECT 1 FROM rooms WHERE id = $1 AND deleted_at IS NULL', [roomId]);
-      if (room.rowCount === 0) return { ban: null, status: 'not_found' };
+      const trx = kyselyOn(client);
+      // Admission and bans in this room wait for each other.
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${`voice-room:admission:${roomId}`}))`.execute(trx);
+      await sql`SELECT pg_advisory_xact_lock(hashtext(${`voice-room:room-bans:${roomId}`}))`.execute(trx);
+      const room = await trx
+        .selectFrom('rooms')
+        .select('id')
+        .where('id', '=', roomId)
+        .where('deleted_at', 'is', null)
+        .executeTakeFirst();
+      if (!room) return { ban: null, status: 'not_found' };
 
       const limit = Number.isInteger(maxActiveBans) && maxActiveBans >= 0 ? maxActiveBans : 100;
       if (limit > 0 && (await repository.countActive(roomId, { at, client })) >= limit) {

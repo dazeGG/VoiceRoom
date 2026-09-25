@@ -1,6 +1,7 @@
+import { sql } from 'kysely';
 import type pg from 'pg';
-import { createDbPool } from '../../lib/db.ts';
-import { createLogger } from '../../lib/logger.ts';
+import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
+import { fromMicros, microsOf } from '../../platform/db/micros.ts';
 
 type Anchor = { createdAtMicros: unknown; id: string };
 type Direction = 'before' | 'after' | 'at-or-after';
@@ -37,8 +38,54 @@ function boundedLimit(value: unknown): number {
   return Math.max(1, Math.min(100, Number.isInteger(value) ? (value as number) : 50));
 }
 
-function anchorTimestamp(parameter: number): string {
-  return `TIMESTAMPTZ 'epoch' + $${parameter}::bigint * INTERVAL '1 microsecond'`;
+const COMPARE = { before: '<', after: '>', 'at-or-after': '>=' } as const;
+
+// Each direction of the thread is read on its own index, then merged: at most
+// `limit` from each side, `limit` in all.
+async function threadPage(
+  db: Database,
+  {
+    userId,
+    peerId,
+    limit,
+    order,
+    anchor
+  }: {
+    userId: string;
+    peerId: string;
+    limit: number;
+    order: 'asc' | 'desc';
+    anchor?: { anchor: Anchor; direction: Direction };
+  }
+) {
+  const side = (from: string, to: string, alias: 'sent' | 'received') => {
+    let query = db
+      .selectFrom('direct_messages as m')
+      .selectAll('m')
+      .where('m.sender_id', '=', from)
+      .where('m.recipient_id', '=', to)
+      .where('m.deleted_at', 'is', null);
+    if (anchor) {
+      query = query.where(
+        sql<boolean>`(m.created_at, m.id) ${sql.raw(COMPARE[anchor.direction])} (${fromMicros(anchor.anchor.createdAtMicros)}, ${anchor.anchor.id})`
+      );
+    }
+    return db
+      .selectFrom(query.orderBy('m.created_at', order).orderBy('m.id', order).limit(limit).as(alias))
+      .selectAll();
+  };
+  return db
+    .selectFrom(
+      side(userId, peerId, 'sent')
+        .unionAll(side(peerId, userId, 'received'))
+        .as('thread')
+    )
+    .selectAll()
+    .select(microsOf('thread.created_at').as('created_at_micros'))
+    .orderBy('thread.created_at', order)
+    .orderBy('thread.id', order)
+    .limit(limit)
+    .execute();
 }
 
 function mapDirectMessage(row: DirectMessageRow): HistoryDirectMessage {
@@ -56,30 +103,21 @@ function mapDirectMessage(row: DirectMessageRow): HistoryDirectMessage {
   };
 }
 
-function createDmHistoryRepository({
-  databaseUrl,
-  logger = createLogger({ name: 'api' }),
-  pool
-}: {
-  databaseUrl?: string;
-  logger?: unknown;
-  pool?: pg.Pool | null;
-} = {}) {
-  let activePool: pg.Pool | null = pool || null;
-
-  function getPool(): pg.Pool {
-    if (!activePool) activePool = createDbPool({ databaseUrl, logger });
-    return activePool as pg.Pool;
-  }
+function createDmHistoryRepository({ pool }: { pool: pg.Pool }) {
+  const db = kyselyOn(pool);
+  const toMessages = (rows: unknown[]) => rows.map((row) => mapDirectMessage(row as DirectMessageRow));
 
   async function canReadThread({ userId, peerId }: { userId: string; peerId: string }): Promise<boolean> {
     if (!userId || !peerId || userId === peerId) return false;
     const [low, high] = userId < peerId ? [userId, peerId] : [peerId, userId];
-    const result = await getPool().query('SELECT 1 FROM friendships WHERE user_a_id = $1 AND user_b_id = $2 LIMIT 1', [
-      low,
-      high
-    ]);
-    return result.rowCount === 1;
+    const row = await db
+      .selectFrom('friendships')
+      .select('id')
+      .where('user_a_id', '=', low)
+      .where('user_b_id', '=', high)
+      .limit(1)
+      .executeTakeFirst();
+    return Boolean(row);
   }
 
   async function querySide({
@@ -95,33 +133,8 @@ function createDmHistoryRepository({
     direction: Direction;
     limit: number;
   }): Promise<HistoryDirectMessage[]> {
-    const operator = direction === 'before' ? '<' : direction === 'after' ? '>' : '>=';
-    const order = direction === 'before' ? 'DESC' : 'ASC';
-    const result = await getPool().query<DirectMessageRow>(
-      `SELECT thread.*,
-              floor(extract(epoch FROM thread.created_at) * 1000000)::bigint::text AS created_at_micros
-       FROM (
-         (SELECT m.*
-          FROM direct_messages m
-          WHERE m.sender_id = $1 AND m.recipient_id = $2
-            AND m.deleted_at IS NULL
-            AND (m.created_at, m.id) ${operator} (${anchorTimestamp(3)}, $4)
-          ORDER BY m.created_at ${order}, m.id ${order}
-          LIMIT $5)
-         UNION ALL
-         (SELECT m.*
-          FROM direct_messages m
-          WHERE m.sender_id = $2 AND m.recipient_id = $1
-            AND m.deleted_at IS NULL
-            AND (m.created_at, m.id) ${operator} (${anchorTimestamp(3)}, $4)
-          ORDER BY m.created_at ${order}, m.id ${order}
-          LIMIT $5)
-       ) thread
-       ORDER BY thread.created_at ${order}, thread.id ${order}
-       LIMIT $5`,
-      [userId, peerId, anchor.createdAtMicros, anchor.id, limit]
-    );
-    return result.rows.map(mapDirectMessage);
+    const order = direction === 'before' ? 'desc' : 'asc';
+    return toMessages(await threadPage(db, { userId, peerId, limit, order, anchor: { anchor, direction } }));
   }
 
   async function listLatest({
@@ -134,27 +147,7 @@ function createDmHistoryRepository({
     limit?: unknown;
   }): Promise<Page> {
     const size = boundedLimit(limit);
-    const result = await getPool().query<DirectMessageRow>(
-      `SELECT thread.*,
-              floor(extract(epoch FROM thread.created_at) * 1000000)::bigint::text AS created_at_micros
-       FROM (
-         (SELECT m.*
-          FROM direct_messages m
-          WHERE m.sender_id = $1 AND m.recipient_id = $2 AND m.deleted_at IS NULL
-          ORDER BY m.created_at DESC, m.id DESC
-          LIMIT $3)
-         UNION ALL
-         (SELECT m.*
-          FROM direct_messages m
-          WHERE m.sender_id = $2 AND m.recipient_id = $1 AND m.deleted_at IS NULL
-          ORDER BY m.created_at DESC, m.id DESC
-          LIMIT $3)
-       ) thread
-       ORDER BY thread.created_at DESC, thread.id DESC
-       LIMIT $3`,
-      [userId, peerId, size + 1]
-    );
-    const rows = result.rows.map(mapDirectMessage);
+    const rows = toMessages(await threadPage(db, { userId, peerId, limit: size + 1, order: 'desc' }));
     const hasMoreBefore = rows.length > size;
     if (hasMoreBefore) rows.pop();
     rows.reverse();
@@ -235,11 +228,7 @@ function createDmHistoryRepository({
     return { messages: [...before, ...after], hasMoreBefore, hasMoreAfter };
   }
 
-  async function close(): Promise<void> {
-    if (activePool && !pool) await activePool.end();
-  }
-
-  return { canReadThread, close, listAfter, listAround, listBefore, listLatest };
+  return { canReadThread, listAfter, listAround, listBefore, listLatest };
 }
 
 export { createDmHistoryRepository, mapDirectMessage };

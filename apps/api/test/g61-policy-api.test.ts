@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
-import { Pool } from 'pg';
 import { normalizeNotificationLevel } from '@voice-room/shared/notifications';
 import { createNotificationService, type RoomLevelStore } from '../src/domains/notifications/notification-service.ts';
 import type { InboxRepository } from '../src/domains/notifications/inbox-repository.ts';
@@ -12,10 +11,10 @@ import { createTestDatabase } from './db-harness.ts';
 import { fake, fakeDb } from './fakes/index.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 async function fixture(t: TestContext) {
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
-  const users = createUserStore({ databaseUrl, logger: SILENT });
-  const rooms = createRoomStore({ databaseUrl, logger: SILENT });
+  const users = createUserStore({ pool, logger: SILENT });
+  const rooms = createRoomStore({ pool });
   const created = await users.createUser({ login: 'g61-user', displayName: 'G61 User', password: 'password123' });
   assert.equal(created.status, 'created');
   assert.ok(created.user);
@@ -25,7 +24,7 @@ async function fixture(t: TestContext) {
     isStatic: true,
     ownerId: created.user.id
   });
-  return { cleanup, databaseUrl, rooms, users, userId: created.user.id, roomId: 'g61-room' };
+  return { cleanup, databaseUrl, pool, rooms, users, userId: created.user.id, roomId: 'g61-room' };
 }
 test('G61-A01 only all mentions none validate', () => {
   assert.equal(normalizeNotificationLevel('all'), 'all');
@@ -35,38 +34,28 @@ test('G61-A01 only all mentions none validate', () => {
 });
 test('G61-A02 PostgreSQL persists explicit levels across restart and keeps missing rows conservative', async (t) => {
   const f = await fixture(t);
-  let store = createNotificationStore({ databaseUrl: f.databaseUrl, logger: SILENT });
+  let store = createNotificationStore({ pool: f.pool });
   t.after(async () => {
-    await store.close();
-    await f.rooms.close();
-    await f.users.close();
     await f.cleanup();
   });
   assert.equal(await store.getRoomLevel(f), 'mentions');
   assert.deepEqual(await store.setRoomLevel({ ...f, level: 'all' }), { ok: true, level: 'all' });
   assert.equal(await store.getRoomLevel(f), 'all');
-  await store.close();
-  store = createNotificationStore({ databaseUrl: f.databaseUrl, logger: SILENT });
+  store = createNotificationStore({ pool: f.pool });
   assert.equal(await store.getRoomLevel(f), 'all');
   for (const level of ['mentions', 'none']) {
     assert.deepEqual(await store.setRoomLevel({ ...f, level }), { ok: true, level });
     assert.equal(await store.getRoomLevel(f), level);
   }
   assert.equal(await store.isRoomMuted(f), true);
-  const pool = new Pool({ connectionString: f.databaseUrl });
-  await pool.query('DELETE FROM notification_room_mutes WHERE user_id = $1 AND room_id = $2', [f.userId, f.roomId]);
+  await f.pool.query('DELETE FROM notification_room_mutes WHERE user_id = $1 AND room_id = $2', [f.userId, f.roomId]);
   assert.equal(await store.getRoomLevel(f), 'mentions');
-  await pool.end();
 });
 test('G61-A03 explicit all replaces legacy mute and concurrent updates retain one valid preference', async (t) => {
   const f = await fixture(t);
-  const store = createNotificationStore({ databaseUrl: f.databaseUrl, logger: SILENT });
-  const pool = new Pool({ connectionString: f.databaseUrl });
+  const store = createNotificationStore({ pool: f.pool });
+  const pool = f.pool;
   t.after(async () => {
-    await pool.end();
-    await store.close();
-    await f.rooms.close();
-    await f.users.close();
     await f.cleanup();
   });
   assert.equal((await store.setRoomMute({ ...f, muted: true })).status, 'muted');

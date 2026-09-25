@@ -1,5 +1,5 @@
 import os from 'node:os';
-import { createDbPool } from '../lib/db.ts';
+import type pg from 'pg';
 import { createRuntimeReadinessRepository } from './runtime-readiness-repository.ts';
 
 const WORKER_CAPABILITIES: Readonly<Record<string, string[]>> = Object.freeze({
@@ -14,14 +14,18 @@ export type WorkerHeartbeat = Readonly<{ close: () => Promise<void> }>;
 
 async function startWorkerHeartbeat({
   env = process.env,
+  pool,
   workerName
-}: { env?: NodeJS.ProcessEnv; workerName?: string } = {}): Promise<WorkerHeartbeat> {
+}: {
+  env?: NodeJS.ProcessEnv;
+  /** The worker's pool; the heartbeat borrows it and leaves ending it to the owner. */
+  pool: pg.Pool;
+  workerName?: string;
+}): Promise<WorkerHeartbeat> {
   const capabilityTokens = WORKER_CAPABILITIES[workerName as string];
-  const databaseUrl = typeof env.DATABASE_URL === 'string' ? env.DATABASE_URL.trim() : '';
-  if (!capabilityTokens || !databaseUrl) return Object.freeze({ close: async () => {} });
+  if (!capabilityTokens) return Object.freeze({ close: async () => {} });
   const id = String(env.CAPABILITY_RUNTIME_ID || `${os.hostname()}:${workerName}`).trim();
   const intervalMs = Math.max(1_000, Number(env.CAPABILITY_HEARTBEAT_INTERVAL_MS) || 5_000);
-  const pool = createDbPool({ databaseUrl });
   const repository = createRuntimeReadinessRepository({ client: pool });
   let timer: ReturnType<typeof setInterval> | null = null;
   const beat = () =>
@@ -41,7 +45,6 @@ async function startWorkerHeartbeat({
       if (timer) clearInterval(timer);
       timer = null;
       await repository.remove('worker', id).catch(() => {});
-      await pool.end();
     }
   });
 }
