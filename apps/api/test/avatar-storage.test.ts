@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -11,9 +10,9 @@ import { createAvatarStorage, validateAvatarKey } from '../src/lib/avatar-storag
 const USER_KEY = 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp';
 const ROOM_KEY = 'room_abcdefghij_0123abcd.webp';
 
-async function readStream(stream) {
-  const chunks = [];
-  stream.on('data', (chunk) => chunks.push(chunk));
+async function readStream(stream: NodeJS.ReadableStream) {
+  const chunks: Buffer[] = [];
+  stream.on('data', (chunk: Buffer) => chunks.push(chunk));
   await once(stream, 'end');
   return Buffer.concat(chunks);
 }
@@ -82,5 +81,5 @@ test('avatar storage requires Buffer contents', async (t) => {
   const uploadsDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'avatar-storage-'));
   t.after(() => fs.promises.rm(uploadsDir, { recursive: true, force: true }));
 
-  await assert.rejects(createAvatarStorage({ uploadsDir }).save(USER_KEY, 'not-a-buffer'), /must be a Buffer/);
+  await assert.rejects(createAvatarStorage({ uploadsDir }).save(USER_KEY, 'not-a-buffer' as never), /must be a Buffer/);
 });

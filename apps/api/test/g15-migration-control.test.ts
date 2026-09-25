@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
@@ -14,7 +13,25 @@ import {
   runMigrations
 } from '../src/lib/migrate.ts';
 
+type FakeClientOptions = {
+  guardTable?: boolean;
+  migrationsTable?: boolean;
+  migrationNames?: string[];
+  guardState?: string;
+  loseLock?: boolean;
+  lockTimeout?: boolean;
+};
+
 class FakeClient {
+  guardTable: boolean;
+  migrationsTable: boolean;
+  migrationNames: string[];
+  guardState: string;
+  loseLock: boolean;
+  lockTimeout: boolean;
+  lockHeld: boolean;
+  queries: Array<{ sql: string; values: unknown[] }>;
+
   constructor({
     guardTable = true,
     migrationsTable = true,
@@ -22,7 +39,7 @@ class FakeClient {
     guardState = 'clean',
     loseLock = false,
     lockTimeout = false
-  } = {}) {
+  }: FakeClientOptions = {}) {
     this.guardTable = guardTable;
     this.migrationsTable = migrationsTable;
     this.migrationNames = migrationNames;
@@ -36,15 +53,13 @@ class FakeClient {
   async connect() {}
   async end() {}
 
-  async query(text, values = []) {
+  async query(text: string, values: unknown[] = []): Promise<{ rows: Record<string, unknown>[] }> {
     const sql = text.replace(/\s+/g, ' ').trim();
     this.queries.push({ sql, values });
     if (sql.startsWith('SET statement_timeout') || sql.startsWith('SET lock_timeout')) return { rows: [] };
     if (sql.includes('pg_advisory_lock')) {
       if (this.lockTimeout) {
-        const error = new Error('canceling statement due to statement timeout');
-        error.code = '57014';
-        throw error;
+        throw Object.assign(new Error('canceling statement due to statement timeout'), { code: '57014' });
       }
       this.lockHeld = true;
       return { rows: [{}] };
@@ -78,7 +93,7 @@ class FakeClient {
     if (sql.startsWith('SELECT state, marker FROM')) return { rows: [{ state: this.guardState, marker: 'fixture' }] };
     if (sql.startsWith('SELECT name FROM pgmigrations')) return { rows: this.migrationNames.map((name) => ({ name })) };
     if (sql.startsWith('INSERT INTO')) {
-      this.guardState = values[1];
+      this.guardState = String(values[1]);
       return { rows: [] };
     }
     return { rows: [] };
@@ -126,7 +141,7 @@ test('G15-A02 lock loss aborts and leaves a dirty rollout fence', async () => {
       clientFactory: () => client,
       migrationRunner: async () => {
         client.loseLock = true;
-        return ['fixture'];
+        return ['fixture'] as never;
       },
       logger: { log() {}, warn() {}, error() {}, info() {} }
     }),
@@ -208,16 +223,17 @@ test(
     skip: !process.env.TEST_DATABASE_URL
   },
   async () => {
-    const databaseUrl = process.env.TEST_DATABASE_URL;
-    const order = [];
-    const migrationRunner = async ({ dbClient }) => {
-      const [{ backend }] = (await dbClient.query('SELECT pg_backend_pid() AS backend')).rows;
+    const databaseUrl = process.env.TEST_DATABASE_URL ?? '';
+    const order: string[] = [];
+    const migrationRunner = async ({ dbClient }: Record<string, unknown>) => {
+      const { rows } = await (dbClient as Client).query<{ backend: number }>('SELECT pg_backend_pid() AS backend');
+      const backend = rows[0]?.backend;
       order.push(`start:${backend}`);
       await new Promise((resolve) => setTimeout(resolve, 75));
       order.push(`end:${backend}`);
       return [];
     };
-    const clientFactory = (connectionString) => new Client({ connectionString });
+    const clientFactory = (connectionString: string) => new Client({ connectionString });
     await Promise.all([
       runMigrations({
         databaseUrl,

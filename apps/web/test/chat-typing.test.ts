@@ -1,23 +1,17 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { test, onTestFinished, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
-
-const webRoot = resolve(import.meta.dirname, '..');
-const require = createRequire(resolve(webRoot, 'package.json'));
+import * as shared from '@voice-room/shared/realtime';
 
 async function loadTyping() {
   vi.resetModules();
   return import('../src/lib/shared/chat/typing.svelte.ts');
 }
 
-const typing = (name) => ({ name, activity: 'typing' });
-const emoji = (name) => ({ name, activity: 'emoji' });
+const typing = (name: string) => ({ name, activity: 'typing' as const });
+const emoji = (name: string) => ({ name, activity: 'emoji' as const });
 
 test('the browser keeps the same typing timings and activities as the shared realtime contract', async () => {
   const typingModule = await loadTyping();
-  const shared = require('@voice-room/shared/realtime');
   assert.equal(typingModule.TYPING_NOTICE_INTERVAL_MS, shared.TYPING_NOTICE_INTERVAL_MS);
   assert.equal(typingModule.TYPING_NOTICE_TTL_MS, shared.TYPING_NOTICE_TTL_MS);
   assert.deepEqual([...typingModule.TYPING_ACTIVITIES], [...shared.TYPING_ACTIVITIES]);
@@ -59,7 +53,7 @@ test('someone with the emoji picker open is shown as choosing an emoji, next to 
 test('a notice goes out at most once per interval, right away after a reset or a switch of activity', async () => {
   const { createTypingNotifier } = await loadTyping();
   let clock = 0;
-  const sent = [];
+  const sent: unknown[] = [];
   const notifier = createTypingNotifier(
     (activity) => {
       sent.push(activity);

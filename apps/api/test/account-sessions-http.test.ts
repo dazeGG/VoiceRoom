@@ -1,6 +1,6 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import { socketPathForDirectory } from './ipc-harness.ts';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -47,7 +47,7 @@ function waitForHealthz(socketPath, timeoutMs = 15000) {
   });
 }
 
-async function startServer(t, extraEnv = {}) {
+async function startServer(t: TestContext, extraEnv = {}) {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };

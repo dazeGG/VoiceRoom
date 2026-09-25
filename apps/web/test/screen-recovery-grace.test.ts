@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
@@ -7,18 +6,18 @@ import { ScreenRecoveryGraceController } from '../src/lib/features/room/client/r
 function clock() {
   let now = 0;
   let nextId = 0;
-  const timers = new Map();
+  const timers = new Map<number, { at: number; callback: () => void }>();
   return {
     now: () => now,
-    setTimeout(callback, delay) {
+    setTimeout: (callback: () => void, delay: number) => {
       const id = ++nextId;
       timers.set(id, { at: now + delay, callback });
       return id;
     },
-    clearTimeout(id) {
-      timers.delete(id);
+    clearTimeout: (id: unknown) => {
+      timers.delete(id as number);
     },
-    advance(ms) {
+    advance(ms: number) {
       now += ms;
       let ready;
       do {
@@ -35,7 +34,7 @@ function clock() {
 
 test('local media churn expires after eight seconds outside global recovery', () => {
   const fake = clock();
-  const expired = [];
+  const expired: unknown[] = [];
   const grace = new ScreenRecoveryGraceController({
     now: fake.now,
     setTimeout: fake.setTimeout,
@@ -43,14 +42,14 @@ test('local media churn expires after eight seconds outside global recovery', ()
   });
   grace.schedule('peer', () => expired.push('peer'));
   fake.advance(7_999);
-  assert.deepEqual(expired, []);
+  assert.equal(expired.length, 0);
   fake.advance(1);
   assert.deepEqual(expired, ['peer']);
 });
 
 test('global recovery holds an elapsed local grace until successful convergence', () => {
   const fake = clock();
-  const expired = [];
+  const expired: unknown[] = [];
   const grace = new ScreenRecoveryGraceController({
     now: fake.now,
     setTimeout: fake.setTimeout,
@@ -59,14 +58,14 @@ test('global recovery holds an elapsed local grace until successful convergence'
   grace.beginGlobal(7);
   grace.schedule('peer', () => expired.push('peer'));
   fake.advance(12_000);
-  assert.deepEqual(expired, []);
+  assert.equal(expired.length, 0);
   grace.endGlobal(false);
   assert.deepEqual(expired, ['peer']);
 });
 
 test('republish cancels grace while terminal outcome and hard cap expire immediately', () => {
   const fake = clock();
-  const expired = [];
+  const expired: unknown[] = [];
   const grace = new ScreenRecoveryGraceController({
     globalHardCapMs: 20_000,
     now: fake.now,
@@ -77,7 +76,7 @@ test('republish cancels grace while terminal outcome and hard cap expire immedia
   grace.schedule('restored', () => expired.push('restored'));
   grace.cancel('restored');
   fake.advance(20_000);
-  assert.deepEqual(expired, []);
+  assert.equal(expired.length, 0);
 
   grace.beginGlobal(2);
   grace.schedule('terminal', () => expired.push('terminal'));
@@ -109,7 +108,7 @@ test('authoritative stop cancels a pending media-only grace', () => {
 
 test('global hard deadline is absolute across recovery epoch churn', () => {
   const fake = clock();
-  const expired = [];
+  const expired: unknown[] = [];
   const grace = new ScreenRecoveryGraceController({
     globalHardCapMs: 20_000,
     now: fake.now,
@@ -121,7 +120,7 @@ test('global hard deadline is absolute across recovery epoch churn', () => {
   fake.advance(15_000);
   grace.beginGlobal(2);
   fake.advance(4_999);
-  assert.deepEqual(expired, []);
+  assert.equal(expired.length, 0);
   fake.advance(1);
   assert.deepEqual(expired, ['peer']);
 });

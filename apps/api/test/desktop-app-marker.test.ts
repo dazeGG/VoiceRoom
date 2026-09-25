@@ -1,5 +1,5 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -22,7 +22,7 @@ const DESKTOP_APP =
 const CHROME =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
 
-function rollbackCountThrough(name) {
+function rollbackCountThrough(name: string) {
   const names = fs
     .readdirSync(MIGRATIONS_DIR)
     .filter((file) => file.endsWith('.cjs'))
@@ -47,7 +47,7 @@ async function waitFor(check, timeoutMs = 3000) {
   }
 }
 
-async function setup(t) {
+async function setup(t: TestContext) {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const pool = new Pool({ connectionString: databaseUrl });
   const store = createUserStore({ databaseUrl, logger: SILENT });
@@ -247,7 +247,7 @@ function request(socketPath, { method = 'GET', pathname, body, cookie, userAgent
   });
 }
 
-async function startServer(t) {
+async function startServer(t: TestContext) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-marker-'));
   const socketPath = socketPathForDirectory(dir);
   const { cleanup, databaseUrl } = await createTestDatabase(t);

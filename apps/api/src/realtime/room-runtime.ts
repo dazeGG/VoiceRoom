@@ -76,7 +76,7 @@ type SessionUser =
   | null
   | undefined;
 type JoinResult = { ok: boolean; code?: string; message?: string; reconnecting?: boolean };
-type RuntimeRoomStore = Pick<
+export type RuntimeRoomStore = Pick<
   RoomStore,
   | 'getRoom'
   | 'listMessages'

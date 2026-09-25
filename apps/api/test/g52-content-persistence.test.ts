@@ -1,14 +1,13 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { projectStoredRoomMessage } from '../src/domains/messaging/content-projector.ts';
 test('G52-A01 known/null/unknown persisted content has exact fallback', () => {
-  assert.equal(projectStoredRoomMessage({ text: 'old', content: null }).text, 'old');
-  assert.equal(projectStoredRoomMessage({ text: 'old', content: { version: 2 } }).text, 'old');
+  assert.equal(projectStoredRoomMessage({ text: 'old', content: null })?.text, 'old');
+  assert.equal(projectStoredRoomMessage({ text: 'old', content: { version: 2 } })?.text, 'old');
   assert.equal(
-    projectStoredRoomMessage({ text: 'old', content: { version: 1, segments: [{ type: 'text', text: 'new' }] } }).text,
+    projectStoredRoomMessage({ text: 'old', content: { version: 1, segments: [{ type: 'text', text: 'new' }] } })?.text,
     'new'
   );
 });

@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -14,7 +13,7 @@ const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const MIGRATIONS_DIR = path.join(import.meta.dirname, '../src/migrations');
 const FIRST_ACCOUNT_SECURITY_MIGRATION = '20260912120000_add_session_device_metadata';
 
-function rollbackCountThrough(name) {
+function rollbackCountThrough(name: string) {
   const names = fs
     .readdirSync(MIGRATIONS_DIR)
     .filter((file) => file.endsWith('.cjs'))
@@ -25,16 +24,18 @@ function rollbackCountThrough(name) {
   return names.length - index;
 }
 
-async function sessionColumns(pool) {
-  const result = await pool.query(
+async function sessionColumns(pool: Pool) {
+  const result = await pool.query<{ column_name: string }>(
     `SELECT column_name FROM information_schema.columns WHERE table_name = 'sessions' ORDER BY column_name`
   );
   return result.rows.map((row) => row.column_name);
 }
 
-async function recoveryTableExists(pool) {
-  const result = await pool.query(`SELECT to_regclass('public.account_recovery_codes') AS name`);
-  return result.rows[0].name !== null;
+async function recoveryTableExists(pool: Pool) {
+  const result = await pool.query<{ name: string | null }>(
+    `SELECT to_regclass('public.account_recovery_codes') AS name`
+  );
+  return result.rows[0]?.name != null;
 }
 
 test('account security migrations apply, roll back cleanly and backfill existing sessions on reapply', async (t) => {
@@ -52,6 +53,7 @@ test('account security migrations apply, roll back cleanly and backfill existing
   assert.ok(await recoveryTableExists(pool));
 
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
+  assert.ok(user);
 
   const rollbackCount = rollbackCountThrough(FIRST_ACCOUNT_SECURITY_MIGRATION);
   for (let index = 0; index < rollbackCount; index += 1) {

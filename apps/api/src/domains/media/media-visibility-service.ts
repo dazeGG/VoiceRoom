@@ -1,11 +1,11 @@
-import type { ReadStream } from 'node:fs';
+import type { Readable } from 'node:stream';
 import type { Attachment, AttachmentRepository } from './attachment-repository.ts';
 import type { MediaStorage } from './storage.ts';
 
 type AttachmentCheck = (input: { attachment: Attachment; viewerId: string }) => unknown;
 type MessageCheck = (input: { attachment: Attachment; message: unknown; viewerId: string }) => unknown;
 
-export type OpenedMedia = Readonly<{ bytes: number; extension: 'webp'; mimeType: 'image/webp'; stream: ReadStream }>;
+export type OpenedMedia = Readonly<{ bytes: number; extension: 'webp'; mimeType: 'image/webp'; stream: Readable }>;
 
 class MediaVisibilityError extends Error {
   declare code: string;

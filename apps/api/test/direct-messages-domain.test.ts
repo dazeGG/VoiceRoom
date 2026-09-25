@@ -1,15 +1,24 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 // Branch-by-branch proofs for direct messages (domains/messaging/direct-*):
 // the service on fake stores and the routes on a bare Fastify app. The dm
 // HTTP and realtime suites cover the database.
 
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import fastify from 'fastify';
+import fastify, { type FastifyInstance } from 'fastify';
 
-import { cleanDmText, createDirectMessagesService } from '../src/domains/messaging/direct-messages.service.ts';
+import {
+  cleanDmText,
+  createDirectMessagesService,
+  type DirectMessage,
+  type DirectMessageStore,
+  type DirectMessagesDeps,
+  type DirectMessagesService,
+  type SendInput
+} from '../src/domains/messaging/direct-messages.service.ts';
 import { registerDirectMessageRoutes } from '../src/domains/messaging/direct-messages.routes.ts';
+import type { ApiContext } from '../src/app/context.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
+import { fake } from './fakes/index.ts';
 
 const ME = { id: 'user-1', login: 'alice', displayName: 'Alice' };
 const PEER = '22222222-2222-4222-8222-222222222222';
@@ -21,20 +30,48 @@ test('DM text keeps lines, collapses runs and caps at 2000 characters', () => {
   assert.equal(cleanDmText(null), '');
 });
 
-function harness(options = {}) {
+type HarnessOptions = {
+  messages?: Record<string, DirectMessage>;
+  readCount?: number;
+  inviteAnswered?: boolean;
+  deleteResult?: unknown;
+  editResult?: null;
+  delivery?: false;
+  replay?: boolean;
+  features?: Partial<Record<'replies' | 'mediaUploads', boolean>>;
+  readError?: Error;
+  friends?: boolean;
+  blocked?: boolean;
+  noPeer?: boolean;
+  deleted?: boolean;
+  roomExists?: boolean;
+  rate?: { allowed: boolean; retryAfterSeconds?: number };
+  media?: null;
+  directEmit?: boolean;
+};
+
+// The stores hand the unit-of-work callbacks a transaction marker, not a client.
+const transactionMarker = (name: string) => ({ transaction: name }) as never;
+
+function harness(options: HarnessOptions = {}) {
   const calls = {
     lockedIn: '',
-    events: [],
-    recipients: [],
-    previews: [],
-    bound: [],
-    outbox: [],
-    completed: [],
-    expired: [],
-    sent: []
+    events: [] as unknown[][],
+    recipients: [] as string[],
+    previews: [] as boolean[],
+    bound: [] as unknown[],
+    outbox: [] as unknown[],
+    completed: [] as string[],
+    expired: [] as unknown[][],
+    sent: [] as Parameters<DirectMessageStore['sendMessage']>[0][]
   };
   const messages = options.messages || {};
-  const direct = {
+  const stored = (messageId: string) => {
+    const message = messages[messageId];
+    assert.ok(message);
+    return message;
+  };
+  const direct: DirectMessageStore = {
     async listThread() {
       return [
         { id: 'm1', senderId: 'user-1', recipientId: PEER },
@@ -47,29 +84,29 @@ function harness(options = {}) {
     async sendMessage(input) {
       calls.sent.push(input);
       if (input.beforeUnitOfWork) {
-        const before = await input.beforeUnitOfWork({ transaction: 'before' });
+        const before = await input.beforeUnitOfWork(transactionMarker('before'));
         if (before?.replay) return { ...before.message, idempotencyReplay: true };
       }
       const inserted = { id: 'dm-new', senderId: input.senderId, recipientId: input.recipientId, body: input.body };
-      if (input.unitOfWork) await input.unitOfWork({ transaction: 'insert' }, inserted);
+      if (input.unitOfWork) await input.unitOfWork(transactionMarker('insert'), inserted);
       return inserted;
     },
-    async getMessage(userId, peerId, messageId) {
+    async getMessage(_userId, _peerId, messageId) {
       return messages[messageId] || null;
     },
     async respondInvite({ messageId, status }) {
-      return options.inviteAnswered
-        ? null
-        : { ...messages[messageId], invite: { ...messages[messageId].invite, status } };
+      if (options.inviteAnswered) return null;
+      const message = stored(messageId);
+      return { ...message, invite: { roomId: '', ...message.invite, status } };
     },
     async softDeleteMessage() {
       return options.deleteResult ?? true;
     },
     async editMessage({ messageId, body }) {
-      return options.editResult === null ? null : { ...messages[messageId], body };
+      return options.editResult === null ? null : { ...stored(messageId), body };
     }
   };
-  const delivery =
+  const delivery: ReturnType<DirectMessagesDeps['delivery']> =
     options.delivery === false
       ? null
       : {
@@ -86,17 +123,21 @@ function harness(options = {}) {
                   }
                 : { kind: 'reserved', ledgerKey: 'ledger-1' };
             },
-            async complete(client, key) {
+            async complete(_client, key) {
               calls.completed.push(key);
             }
           },
           outbox: {
-            async enqueue(client, event) {
+            async enqueue(_client, event) {
               calls.outbox.push(event.type);
             }
           }
         };
-  const features = { replies: true, mediaUploads: true, ...(options.features || {}) };
+  const features: Record<'replies' | 'mediaUploads', boolean> = {
+    replies: true,
+    mediaUploads: true,
+    ...(options.features || {})
+  };
   const service = createDirectMessagesService({
     messages: () => ({ direct }),
     readService: () => ({
@@ -131,8 +172,8 @@ function harness(options = {}) {
             }
           },
     replies: () => ({
-      async lockDirectTarget(input: { client: { transaction: string } }) {
-        calls.lockedIn = input.client.transaction;
+      async lockDirectTarget(input) {
+        calls.lockedIn = (input.client as unknown as { transaction: string }).transaction;
         return { id: 'm1', text: 'target', createdAt: Date.now() };
       }
     }),
@@ -156,8 +197,8 @@ test('the thread needs a friendship and a live account, and marks the thread rea
   const { calls, service } = harness();
   const listed = await service.thread(ME, PEER);
   assert.equal(listed.status, 'listed');
-  assert.equal('passwordHash' in listed.peer, false);
-  assert.equal('hasUsedDesktopApp' in listed.peer, false);
+  assert.equal('passwordHash' in (listed.peer as object), false);
+  assert.equal('hasUsedDesktopApp' in (listed.peer as object), false);
   assert.equal(listed.muted, true);
   assert.deepEqual(
     listed.messages.map((m) => Boolean(m.replyPreview)),
@@ -169,7 +210,7 @@ test('the thread needs a friendship and a live account, and marks the thread rea
   assert.deepEqual(quiet.calls.events, []);
 });
 
-const sendBase = {
+const sendBase: SendInput = {
   text: 'hi https://example.com',
   attachmentIds: undefined,
   replyTo: undefined,
@@ -178,7 +219,7 @@ const sendBase = {
 };
 
 test('send refuses in the legacy order', async () => {
-  const cases = [
+  const cases: Array<[HarnessOptions, Partial<SendInput>, string]> = [
     [{ rate: { allowed: false, retryAfterSeconds: 3 } }, {}, 'rate_limited'],
     [{ friends: false }, {}, 'not_friends'],
     [{ blocked: true }, {}, 'blocked'],
@@ -201,7 +242,9 @@ test('send refuses in the legacy order', async () => {
       JSON.stringify(input)
     );
   }
-  assert.equal((await harness({ rate: { allowed: false } }).service.send(ME, PEER, sendBase)).retryAfterSeconds, 0);
+  const limited = await harness({ rate: { allowed: false } }).service.send(ME, PEER, sendBase);
+  assert.ok('retryAfterSeconds' in limited);
+  assert.equal(limited.retryAfterSeconds, 0);
 });
 
 test('a send binds attachments, locks the reply and records delivery in one unit of work', async () => {
@@ -228,7 +271,7 @@ test('a send binds attachments, locks the reply and records delivery in one unit
 
   const plain = harness({ delivery: false });
   await plain.service.send(ME, PEER, sendBase);
-  assert.equal(plain.calls.sent[0].unitOfWork, null);
+  assert.equal(plain.calls.sent[0]?.unitOfWork, null);
   assert.equal(plain.calls.sent[0].beforeUnitOfWork, null);
 
   const relayed = harness({ directEmit: false });
@@ -239,6 +282,7 @@ test('a send binds attachments, locks the reply and records delivery in one unit
 test('an idempotent replay answers the stored message without delivering again', async () => {
   const { calls, service } = harness({ replay: true });
   const replay = await service.send(ME, PEER, { ...sendBase, idempotencyKey: 'idem-key-1' });
+  assert.ok('message' in replay);
   assert.equal(replay.message.id, 'old');
   assert.deepEqual(replay.message.replyPreview, { projected: true });
   assert.deepEqual([calls.events, calls.previews], [[], []]);
@@ -248,7 +292,7 @@ const invite = { id: 'inv', senderId: PEER, recipientId: 'user-1', invite: { roo
 const mine = { id: 'mine', senderId: 'user-1', recipientId: PEER };
 const theirs = { id: 'theirs', senderId: PEER, recipientId: 'user-1' };
 const myInvite = { id: 'my-inv', senderId: 'user-1', recipientId: PEER, invite: { roomId: 'room-1' } };
-const messages = {
+const messages: Record<string, DirectMessage> = {
   inv: invite,
   mine,
   theirs,
@@ -278,7 +322,9 @@ test('answering a room invitation', async () => {
     'already_answered'
   );
   const { calls, service } = harness({ messages });
-  assert.equal((await service.respondInvite(ME, PEER, 'inv', 'accepted')).message.invite.status, 'accepted');
+  const answered = await service.respondInvite(ME, PEER, 'inv', 'accepted');
+  assert.ok('message' in answered);
+  assert.equal((answered.message.invite as { status?: string } | null | undefined)?.status, 'accepted');
   assert.deepEqual(calls.events, [
     [PEER, 'dm.message.edited'],
     ['user-1', 'dm.message.edited']
@@ -302,7 +348,7 @@ test('marking read by cursor or up to now', async () => {
     }).service.markRead('u', PEER, 'c'),
     { status: 'invalid_cursor', statusCode: 409, code: 'stale', error: 'Stale' }
   );
-  assert.deepEqual(await harness({ readError: {} }).service.markRead('u', PEER, 'c'), {
+  assert.deepEqual(await harness({ readError: new Error() }).service.markRead('u', PEER, 'c'), {
     status: 'invalid_cursor',
     statusCode: 400,
     code: 'invalid_read_cursor',
@@ -344,7 +390,9 @@ test('delete and edit belong to the sender', async () => {
     'not_found'
   );
   const edited = harness({ messages });
-  assert.equal((await edited.service.edit('user-1', PEER, 'mine', 'new')).message.body, 'new');
+  const edit = await edited.service.edit('user-1', PEER, 'mine', 'new');
+  assert.ok('message' in edit);
+  assert.equal(edit.message.body, 'new');
   assert.deepEqual(edited.calls.previews, [true]);
   assert.deepEqual(edited.calls.events, [
     [PEER, 'dm.message.edited'],
@@ -354,43 +402,62 @@ test('delete and edit belong to the sender', async () => {
 
 // --- routes ------------------------------------------------------------------------
 
-function routeApp(t, outcomes = {}, { signedIn = true } = {}) {
+function routeApp(
+  t: TestContext,
+  outcomes: Record<string, unknown> = {},
+  { signedIn = true }: { signedIn?: boolean } = {}
+) {
   const app = fastify();
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
-  const seen = {};
+  const seen: Record<string, unknown[]> = {};
   const record =
-    (name, value) =>
-    async (...args) => {
+    (name: string, value: unknown) =>
+    async (...args: unknown[]) => {
       seen[name] = args;
       return outcomes[name] ?? value;
     };
   registerDirectMessageRoutes(
     app,
     {
-      logger: null,
+      logger: fake<ApiContext['logger']>(),
       clientIp: () => 'ip',
       resolveSession: async () => (signedIn ? { user: ME } : null),
-      hashIp: (ip) => ip
+      hashIp: (ip: string) => ip
     },
-    {
+    fake<DirectMessagesService>({
       thread: record('thread', { status: 'listed', peer: { id: PEER }, messages: [], muted: false }),
       send: record('send', { status: 'sent', message: { id: 'm' } }),
       respondInvite: record('respondInvite', { status: 'answered', message: { id: 'inv' } }),
       markRead: record('markRead', { status: 'read', result: { count: 2 } }),
       remove: record('remove', { status: 'deleted' }),
       edit: record('edit', { status: 'edited', message: { id: 'm', body: 'e' } })
-    }
+    } as Partial<Record<keyof DirectMessagesService, unknown>> as Partial<DirectMessagesService>)
   );
   t.after(() => app.close());
   return { app, seen };
 }
 
-async function call(app, method, url, payload, headers = {}) {
-  const response = await app.inject({ method, url, headers, ...(payload === undefined ? {} : { payload }) });
-  return { status: response.statusCode, body: response.json(), retryAfter: response.headers['retry-after'] };
+type Body = { ok?: boolean; error?: string } & Record<string, unknown>;
+
+async function call(
+  app: FastifyInstance,
+  method: string,
+  url: string,
+  payload?: object,
+  headers: Record<string, string> = {}
+) {
+  const response = await app.inject({
+    method: method as 'GET' | 'POST' | 'PATCH' | 'DELETE',
+    url,
+    headers,
+    ...(payload === undefined ? {} : { payload })
+  });
+  return { status: response.statusCode, body: response.json<Body>(), retryAfter: response.headers['retry-after'] };
 }
 
-const ROUTES = [
+type Route = [string, string, object?];
+
+const ROUTES: Route[] = [
   ['GET', `/api/dm/${PEER}`],
   ['POST', `/api/dm/${PEER}`, { text: 'hi' }],
   ['POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'accept' }],
@@ -417,16 +484,17 @@ test('every DM route needs a session, a valid peer and answers', async (t) => {
     { text: 'hi', replyTo: { messageId: UUID_A } },
     { 'idempotency-key': 'header-key-1' }
   );
-  assert.deepEqual([seen.send[2].replyToMessageId, seen.send[2].idempotencyKey], [UUID_A, 'header-key-1']);
+  const sent = seen.send?.[2] as SendInput;
+  assert.deepEqual([sent.replyToMessageId, sent.idempotencyKey], [UUID_A, 'header-key-1']);
   await call(app, 'POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'decline' });
-  assert.equal(seen.respondInvite[3], 'declined');
+  assert.equal(seen.respondInvite?.[3], 'declined');
   assert.deepEqual((await call(app, 'POST', `/api/dm/${PEER}/read`, { cursor: 'c' })).body, { ok: true, count: 2 });
   assert.deepEqual((await call(app, 'DELETE', `/api/dm/${PEER}/messages/${UUID_A}`)).body, { ok: true, deleted: true });
 });
 
 test('DM refusals keep their texts and codes', async (t) => {
-  const post = ['POST', `/api/dm/${PEER}`, { text: 'x' }];
-  const cases = [
+  const post: Route = ['POST', `/api/dm/${PEER}`, { text: 'x' }];
+  const cases: Array<[string, { status?: string } & Record<string, unknown>, Route, number, string]> = [
     ['thread', { status: 'not_friends' }, ['GET', `/api/dm/${PEER}`], 403, 'Вы не друзья'],
     ['thread', { status: 'user_not_found' }, ['GET', `/api/dm/${PEER}`], 404, 'Пользователь не найден'],
     ['send', { status: 'not_friends' }, post, 403, 'Вы не друзья'],

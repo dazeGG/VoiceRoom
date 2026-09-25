@@ -1,8 +1,7 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import http from 'node:http';
+import http, { type RequestListener } from 'node:http';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -22,7 +21,7 @@ const dockerAvailable =
     encoding: 'utf8'
   }).status === 0;
 
-function runtimePayload(wsUrl) {
+function runtimePayload(wsUrl: string) {
   return JSON.stringify({
     contractVersion: RUNTIME_CONFIG_CONTRACT,
     schemaVersion: 1,
@@ -30,20 +29,21 @@ function runtimePayload(wsUrl) {
   });
 }
 
-async function startEdge(handler) {
+async function startEdge(handler: RequestListener) {
   const server = http.createServer(handler);
-  await new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
     server.listen(0, '127.0.0.1', resolve);
   });
-  const { port } = server.address();
+  const address = server.address();
+  assert.ok(address && typeof address === 'object');
   return {
-    origin: `http://127.0.0.1:${port}`,
-    close: () => new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
+    origin: `http://127.0.0.1:${address.port}`,
+    close: () => new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
   };
 }
 
-async function fetchEdgeConfig(origin, timeoutMs = 100) {
+async function fetchEdgeConfig(origin: string, timeoutMs = 100) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -57,7 +57,7 @@ async function fetchEdgeConfig(origin, timeoutMs = 100) {
   }
 }
 
-async function startCaddyEdge(wsUrl) {
+async function startCaddyEdge(wsUrl: string) {
   const name = `voiceroom-g13-${randomUUID()}`;
   const caddyfile = path.join(repositoryRoot, 'Caddyfile');
   // The image generates this snippet from its own build; any valid policy
@@ -158,7 +158,9 @@ test('G13-A01 one Web image contract serves distinct runtime configuration over 
     response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     response.end(runtimePayload('wss://livekit-b.example.test'));
   });
-  onTestFinished(() => Promise.all([edgeA.close(), edgeB.close()]));
+  onTestFinished(async () => {
+    await Promise.all([edgeA.close(), edgeB.close()]);
+  });
 
   const first = await fetchEdgeConfig(edgeA.origin);
   const second = await fetchEdgeConfig(edgeB.origin);
@@ -176,7 +178,7 @@ test('G13-A01 one Web image contract serves distinct runtime configuration over 
 });
 
 test('G13-A02 404, timeout, malformed, wrong-version and credential payloads fail safely', async () => {
-  const cases = [
+  const cases: RequestListener[] = [
     (_request, response) => {
       response.writeHead(404);
       response.end();

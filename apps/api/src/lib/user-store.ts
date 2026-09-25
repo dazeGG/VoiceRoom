@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
+import type { Selectable } from 'kysely';
 import type pg from 'pg';
+import type { AccountLoginEvents, Users } from '../platform/db/schema.ts';
 import { createDbPool, transaction } from './db.ts';
 import { hashPassword, verifyPassword } from './password.ts';
 import { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
@@ -19,7 +21,6 @@ import {
   normalizeReleaseVersion
 } from '@voice-room/shared/account-security';
 
-type Row = Record<string, any>;
 type Queryable = Pick<pg.Pool, 'query'> | pg.PoolClient;
 type UserStoreLogger = { warn(...args: unknown[]): void };
 export type StoredUser = NonNullable<ReturnType<typeof mapUser>>;
@@ -56,7 +57,7 @@ function randomAvatarColorKey(): string {
   return AVATAR_COLOR_KEYS[crypto.randomInt(AVATAR_COLOR_KEYS.length)] as string;
 }
 
-function mapUser(row: Row | null | undefined) {
+function mapUser(row: Selectable<Users> | null | undefined) {
   if (!row) return null;
   const presenceStatus = cleanPresenceStatus(row.presence_status) || (row.dnd ? 'dnd' : 'online');
   return {
@@ -137,7 +138,7 @@ function cleanLocationLabel(value: unknown): string {
 }
 
 // What a device is shown by; the session it opened stays server-side.
-function mapLoginAlert(row: Row) {
+function mapLoginAlert(row: Selectable<AccountLoginEvents>) {
   return {
     id: row.id,
     kind: row.kind,

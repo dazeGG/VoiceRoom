@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -8,7 +7,7 @@ import test from 'node:test';
 const metricsPath = fileURLToPath(new URL('../src/lib/metrics.ts', import.meta.url));
 const serverPath = fileURLToPath(new URL('../src/lib/worker-metrics-server.ts', import.meta.url));
 
-function startMetricProcess(kind, ageMs) {
+function startMetricProcess(kind: string, ageMs: number): Promise<{ child: ReturnType<typeof spawn>; port: number }> {
   const code = `const m=require(${JSON.stringify(metricsPath)}),s=require(${JSON.stringify(serverPath)});m[process.env.KIND](Number(process.env.AGE));s.startWorkerMetricsServer({host:'127.0.0.1',port:0}).then(x=>{process.stdout.write(String(x.address.port));process.on('SIGTERM',()=>x.close().then(()=>process.exit()));});`;
   const child = spawn(process.execPath, ['-e', code], {
     cwd: path.resolve(import.meta.dirname, '../../..'),
@@ -17,7 +16,7 @@ function startMetricProcess(kind, ageMs) {
   });
   return new Promise((resolve, reject) => {
     child.once('error', reject);
-    child.stdout.once('data', (chunk) => resolve({ child, port: Number(String(chunk).trim()) }));
+    child.stdout.once('data', (chunk: Buffer) => resolve({ child, port: Number(String(chunk).trim()) }));
   });
 }
 

@@ -1,8 +1,11 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import { test } from 'node:test';
-import { createActiveBanRepository, normalizePrincipal } from '../src/domains/moderation/active-ban-repository.ts';
+import {
+  createActiveBanRepository,
+  normalizePrincipal,
+  type ActiveBanRepository
+} from '../src/domains/moderation/active-ban-repository.ts';
 import { createActiveBanService } from '../src/domains/moderation/active-ban-service.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createRoomStore } from '../src/lib/room-store.ts';
@@ -11,16 +14,11 @@ import {
   createMentionEligibilityService
 } from '../src/domains/notifications/mention-eligibility-service.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { fake, fakeDb, result } from './fakes/index.ts';
 
 test('G41-A01 active-ban repository applies one expiry and revocation predicate', async () => {
-  const queries = [];
-  const pool = {
-    async query(text, values) {
-      queries.push({ text, values });
-      if (/COUNT/.test(text)) return { rows: [{ count: 0 }], rowCount: 1 };
-      return { rows: [], rowCount: 0 };
-    }
-  };
+  const pool = fakeDb((text) => (/COUNT/.test(text) ? result([{ count: 0 }]) : result()));
+  const queries = pool.calls;
   const now = 1_725_000_000_000;
   const repository = createActiveBanRepository({ pool, now: () => now });
   assert.equal(await repository.findActive({ roomId: 'room', userId: 'user' }), null);
@@ -37,14 +35,15 @@ test('G41-A01 active-ban repository applies one expiry and revocation predicate'
 });
 
 test('G41-A01 eligibility filtering uses the same repository predicate for all user paths', async () => {
-  const calls = [];
-  const repository = {
+  const calls: Array<{ userIds?: unknown; at?: unknown } | undefined> = [];
+
+  const repository = fake<ActiveBanRepository>({
     async filterActiveUserIds(input) {
       calls.push(input);
       return ['banned'];
     }
-  };
-  const service = createActiveBanService({ pool: {}, repository, now: () => 42 });
+  });
+  const service = createActiveBanService({ pool: fakeDb(), repository, now: () => 42 });
   assert.deepEqual(
     await service.filterEligibleUserIds({
       roomId: 'room',
@@ -53,8 +52,8 @@ test('G41-A01 eligibility filtering uses the same repository predicate for all u
     ['allowed']
   );
   assert.equal(calls.length, 1);
-  assert.deepEqual(calls[0].userIds, ['allowed', 'banned']);
-  assert.equal(calls[0].at, 42);
+  assert.deepEqual(calls[0]?.userIds, ['allowed', 'banned']);
+  assert.equal(calls[0]?.at, 42);
 });
 
 // An expired ban no longer counts on any path that reads bans: the room
@@ -133,7 +132,8 @@ test(
       maxActiveBans: 1
     });
     assert.equal(created.status, 'created');
-    assert.equal((await service.getActiveBan({ roomId: 'g41-room', userId: 'g41-user' }))?.id, created.ban.id);
+    assert.equal((await service.getActiveBan({ roomId: 'g41-room', userId: 'g41-user' }))?.id, created.ban?.id);
+
     assert.equal(await service.getActiveBan({ roomId: 'g41-room', userId: 'g41-user', at: now + 1_000 }), null);
   }
 );

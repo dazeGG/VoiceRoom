@@ -1,35 +1,12 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createRoomStore } from '../src/lib/room-store.ts';
+import fastify from 'fastify';
+import type { Membership } from '../src/domains/membership/membership-repository.ts';
 import { registerMembershipRoutes } from '../src/domains/membership/membership-routes.ts';
-
-function createFakePool(handler) {
-  const calls = [];
-  const client = {
-    query: async (text, values = []) => {
-      calls.push({ scope: 'client', text, values });
-      if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') return { rows: [], rowCount: 0 };
-      return handler(text, values, calls);
-    },
-    release() {
-      calls.push({ scope: 'client', text: 'release', values: [] });
-    }
-  };
-  return {
-    calls,
-    async query(text, values = []) {
-      calls.push({ scope: 'pool', text, values });
-      return handler(text, values, calls);
-    },
-    async connect() {
-      calls.push({ scope: 'pool', text: 'connect', values: [] });
-      return client;
-    },
-    async end() {}
-  };
-}
+import type { LeaveOutcome } from '../src/domains/membership/membership-service.ts';
+import { fakePoolWithClient as createFakePool, result, type ScopedCall } from './fakes/index.ts';
 
 const STATIC_ROOM_ROW = {
   id: 'static-room',
@@ -44,9 +21,9 @@ const STATIC_ROOM_ROW = {
 };
 
 function roomListHandler({ owner = false, banned = false } = {}) {
-  return (text) => {
+  return (text: string) => {
     if (/SELECT \* FROM rooms WHERE id = \$1 AND deleted_at IS NULL/.test(text)) {
-      return { rows: [STATIC_ROOM_ROW], rowCount: 1 };
+      return result([STATIC_ROOM_ROW], 1);
     }
     if (/role = 'owner'/.test(text)) return { rows: owner ? [{ exists: 1 }] : [], rowCount: owner ? 1 : 0 };
     if (/FROM room_bans/.test(text)) {
@@ -66,12 +43,12 @@ function roomListHandler({ owner = false, banned = false } = {}) {
           }
         : { rows: [], rowCount: 0 };
     }
-    if (/DELETE FROM room_bookmarks/.test(text)) return { rows: [{ id: 'bookmark' }], rowCount: 1 };
-    return { rows: [], rowCount: 1 };
+    if (/DELETE FROM room_bookmarks/.test(text)) return result([{ id: 'bookmark' }], 1);
+    return result([], 1);
   };
 }
 
-const indexOf = (calls, pattern) => calls.findIndex((call) => pattern.test(call.text));
+const indexOf = (calls: ScopedCall[], pattern: RegExp) => calls.findIndex((call) => pattern.test(call.text));
 
 test('adding a room to the list makes the user a member inside the same transaction', async () => {
   const pool = createFakePool(roomListHandler());
@@ -87,6 +64,7 @@ test('adding a room to the list makes the user a member inside the same transact
   assert.match(insert.text, /ON CONFLICT \(room_id, user_id\) DO NOTHING/);
   assert.deepEqual(insert.values.slice(1), ['static-room', 'user-1', new Date(5000)]);
   const banLookup = pool.calls[indexOf(pool.calls, /FROM room_bans/)];
+  assert.ok(banLookup);
   assert.equal(banLookup.scope, 'client');
   assert.ok(indexOf(pool.calls, /INSERT INTO room_bookmarks/) < indexOf(pool.calls, /FROM room_bans/));
   assert.ok(indexOf(pool.calls, /FROM room_bans/) < indexOf(pool.calls, /INSERT INTO room_memberships/));
@@ -139,23 +117,33 @@ test('owners cannot remove their room from the list and keep their membership', 
   assert.equal(indexOf(pool.calls, /DELETE FROM/), -1);
 });
 
-function leaveRoute({ membership = { role: 'member' }, leaveStatus = 'left', prepared = true } = {}) {
-  const handlers = {};
-  const onLeftCalls = [];
+type LeaveStatus = 'invalid' | 'not_active' | 'owner_required' | 'left';
+
+function membershipRow(role: 'owner' | 'member'): Membership {
+  return { id: 'm', roomId: 'static-room', userId: 'user-1', role, createdAt: null, updatedAt: null, metadata: {} };
+}
+
+// The DELETE route over real Fastify with a membership service that answers
+// the given membership and leave outcome.
+function leaveRoute({
+  membership = membershipRow('member'),
+  leaveStatus = 'left',
+  prepared = true
+}: { membership?: Membership | null; leaveStatus?: LeaveStatus; prepared?: boolean } = {}) {
+  const app = fastify();
+  const onLeftCalls: unknown[] = [];
   registerMembershipRoutes({
-    app: {
-      get() {},
-      delete(route, handler) {
-        handlers[route] = handler;
-      }
-    },
+    app,
     resolveUser: async () => ({ user: { id: 'user-1' } }),
     membershipService: {
+      async admitRegistered() {
+        throw new Error('not in this test');
+      },
       async getMembership() {
         return membership;
       },
       async leaveRoom() {
-        return { status: leaveStatus };
+        return { status: leaveStatus, membership } as LeaveOutcome;
       }
     },
     prepareLeave: async () => prepared,
@@ -163,20 +151,12 @@ function leaveRoute({ membership = { role: 'member' }, leaveStatus = 'left', pre
       onLeftCalls.push({ roomId, userId: user.id });
     }
   });
-  const handler = handlers['/api/rooms/:roomId/memberships/me'];
   return {
     onLeftCalls,
     async call() {
-      const reply = {};
-      reply.code = (statusCode) => ({
-        send: (payload) => {
-          reply.statusCode = statusCode;
-          reply.payload = payload;
-          return reply;
-        }
-      });
-      await handler({ params: { roomId: 'static-room' } }, reply);
-      return reply;
+      const response = await app.inject({ method: 'DELETE', url: '/api/rooms/static-room/memberships/me' });
+      await app.close();
+      return { statusCode: response.statusCode, payload: response.json<unknown>() };
     }
   };
 }
@@ -192,7 +172,7 @@ test('leaving a room also takes it off the list, including a retry after the mem
 });
 
 test('owners, failed leaves and refused disconnects keep the room on the list', async () => {
-  const owner = leaveRoute({ membership: { role: 'owner' } });
+  const owner = leaveRoute({ membership: membershipRow('owner') });
   assert.equal((await owner.call()).statusCode, 409);
 
   const failed = leaveRoute({ leaveStatus: 'invalid' });

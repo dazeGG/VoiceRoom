@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -6,18 +5,18 @@ import path from 'node:path';
 import { createGeoLocator } from '../src/lib/geoip.ts';
 
 function createLogger() {
-  const entries = [];
+  const entries: unknown[][] = [];
   return {
     entries,
-    warn: (...args) => entries.push(['warn', ...args]),
-    error: (...args) => entries.push(['error', ...args])
+    warn: (...args: unknown[]) => entries.push(['warn', ...args]),
+    error: (...args: unknown[]) => entries.push(['error', ...args])
   };
 }
 
 test('the locator labels city and country, prefers Russian names and never throws', async () => {
-  const lookups = [];
+  const lookups: string[] = [];
   const reader = {
-    get(address) {
+    get(address: string) {
       lookups.push(address);
       if (address === '203.0.113.7') {
         return {

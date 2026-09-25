@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { test, onTestFinished } from 'vitest';
 import assert from 'node:assert/strict';
 
@@ -7,7 +6,7 @@ import * as service from '../src/lib/platform/desktop-autostart.ts';
 // The service has no module state and reads `window` on every call, so one
 // native import covers every bridge shape. Loading it through an in-process
 // Vite server used to abort the whole test file with a V8 fatal on CI.
-function useBridge(bridge) {
+function useBridge(bridge: unknown) {
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
     value: bridge === undefined ? {} : { voiceRoomDesktopAutostart: bridge },
@@ -29,10 +28,10 @@ test('desktop autostart service is unavailable without the shell bridge', async 
 });
 
 test('desktop autostart service normalizes shell results and sends only boolean fields', async () => {
-  const calls = [];
+  const calls: unknown[] = [];
   useBridge({
     getSettings: async () => ({ openAtLogin: 1, startMinimized: true, supported: true }),
-    setSettings: async (patch) => {
+    setSettings: async (patch: unknown) => {
       calls.push(patch);
       return { openAtLogin: true, reason: 'write-failed', startMinimized: 'yes', supported: true };
     }
@@ -44,12 +43,15 @@ test('desktop autostart service normalizes shell results and sends only boolean 
     startMinimized: true,
     supported: true
   });
-  assert.deepEqual(await service.updateDesktopAutostartSettings({ openAtLogin: true, startMinimized: 'yes' }), {
-    openAtLogin: true,
-    reason: 'write-failed',
-    startMinimized: false,
-    supported: true
-  });
+  assert.deepEqual(
+    await service.updateDesktopAutostartSettings({ openAtLogin: true, startMinimized: 'yes' as never }),
+    {
+      openAtLogin: true,
+      reason: 'write-failed',
+      startMinimized: false,
+      supported: true
+    }
+  );
   assert.deepEqual(calls, [{ openAtLogin: true }]);
 });
 

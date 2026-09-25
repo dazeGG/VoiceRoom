@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 // Branch-by-branch proofs for room lifecycle, account lifecycle and the
 // maintenance timers (domains/rooms/room-lifecycle.ts,
 // domains/account/account-lifecycle.ts, platform/maintenance.ts).
@@ -9,16 +8,26 @@ import { EventEmitter } from 'node:events';
 
 import { createRoomLifecycle } from '../src/domains/rooms/room-lifecycle.ts';
 import { createAccountLifecycle } from '../src/domains/account/account-lifecycle.ts';
-import { createRoomPresence } from '../src/realtime/room-presence.ts';
+import type { StoredRoom } from '../src/domains/rooms/room-views.ts';
+import { createRoomPresence, type RosterPeer } from '../src/realtime/room-presence.ts';
+import type { WsConnection } from '../src/realtime/registry.ts';
 import { startMaintenanceTimers } from '../src/platform/maintenance.ts';
+import { fake, recordingLogger } from './fakes/index.ts';
 
-function transport(id) {
-  const sent = [];
+type RecordingLogger = ReturnType<typeof recordingLogger>;
+
+// The given field of every record the logger wrote at a level.
+function logged(logger: RecordingLogger, level: string, field: string) {
+  return logger.records.filter((record) => record.level === level).map((record) => record[field]);
+}
+
+function transport(id: string) {
+  const sent: unknown[] = [];
   return {
     id,
     sent,
-    send(message) {
-      sent.push(message.type);
+    send(message: unknown) {
+      sent.push((message as { type?: string }).type);
       return true;
     }
   };
@@ -35,11 +44,14 @@ function presence() {
       }
     }),
     runtime: () => null,
-    logger: () => ({ error() {} }),
+    logger: () => recordingLogger(),
     occupancyRetry: { baseMs: 1000, maxMs: 1000 },
     roster: { waitMs: 0, pollMs: 1 }
   });
 }
+
+// What a finalizePeer call answered, or the error it failed with.
+type LeaseResult = { finalized?: boolean; ownershipFinalized?: boolean; message?: string };
 
 function roomHarness({
   runtime = true,
@@ -47,17 +59,22 @@ function roomHarness({
   leaseError = false,
   revokeFails = false,
   removeFails = false
+}: {
+  runtime?: boolean;
+  invitations?: boolean;
+  leaseError?: boolean;
+  revokeFails?: boolean;
+  removeFails?: boolean;
 } = {}) {
   const calls = {
-    mirrored: [],
-    invalidated: [],
-    summaries: [],
-    notified: [],
-    revoked: [],
-    removed: [],
-    avatars: [],
-    errors: [],
-    warnings: []
+    mirrored: [] as unknown[],
+    invalidated: [] as string[],
+    summaries: [] as string[],
+    notified: [] as unknown[][],
+    revoked: [] as unknown[],
+    removed: [] as string[],
+    avatars: [] as Array<string | null | undefined>,
+    leaseResults: [] as LeaseResult[]
   };
   const roster = presence();
   const lifecycle = createRoomLifecycle({
@@ -65,17 +82,20 @@ function roomHarness({
     runtime: () =>
       runtime
         ? {
-            mirrorLegacyRoomEvent: (roomId, message) => calls.mirrored.push(message.type),
+            mirrorLegacyRoomEvent: (_roomId, message) => calls.mirrored.push((message as { type?: string }).type),
             invalidateRecipientCache: (roomId) => calls.invalidated.push(roomId),
             scheduleSummaryBroadcast: (roomId) => calls.summaries.push(roomId),
             async cancelRoomReconnectLeases({ finalizePeer }) {
-              const results = [];
-              for (const [peer, ownershipFinalized] of [
+              const results: LeaseResult[] = [];
+              const peers: Array<[RosterPeer | null, boolean]> = [
                 [null, false],
                 [{ id: 'gone' }, true],
-                ...[...(roster.rooms.get('r1')?.peers.values() || [])].map((p) => [p, false])
-              ]) {
-                results.push(await finalizePeer({ peer, ownershipFinalized }).catch((error) => error));
+                ...[...(roster.rooms.get('r1')?.peers.values() || [])].map((p): [RosterPeer, boolean] => [p, false])
+              ];
+              for (const [peer, ownershipFinalized] of peers) {
+                results.push(
+                  await finalizePeer({ peer, ownershipFinalized }).catch((error: unknown) => error as LeaseResult)
+                );
               }
               calls.leaseResults = results;
               if (leaseError) throw new Error('lease');
@@ -105,7 +125,7 @@ function roomHarness({
       calls.avatars.push(key);
     },
     displayName: (user) => user.displayName || 'Nameless',
-    logger: () => ({ error: (fields) => calls.errors.push(fields.evt) })
+    logger: () => recordingLogger()
   });
   return { calls, lifecycle, roster };
 }
@@ -126,8 +146,8 @@ test('the lobby card counts live peers and an update reaches room, watchers and 
 
 test('a profile change updates every seat the account holds', () => {
   const { calls, lifecycle, roster } = roomHarness();
-  const mine = { id: 'p1', accountUserId: 'u1', avatarColorKey: 'red', transport: transport('t1') };
-  const other = { id: 'p2', accountUserId: 'u2', transport: transport('t2') };
+  const mine: RosterPeer = { id: 'p1', accountUserId: 'u1', avatarColorKey: 'red', transport: transport('t1') };
+  const other: RosterPeer = { id: 'p2', accountUserId: 'u2', transport: transport('t2') };
   roster.room('r1').peers.set('p1', mine);
   roster.room('r1').peers.set('p2', other);
   lifecycle.refreshActiveProfile(null);
@@ -170,7 +190,7 @@ test('deleting a room tells everyone, frees every seat and removes the avatar', 
     { roomId: 'r1', accountUserId: null, guestPrincipalId: 'g' }
   ]);
   assert.deepEqual(calls.removed, ['p1', 'p2']);
-  assert.equal(roster.rooms.get('r1').peers.size, 0);
+  assert.equal(roster.rooms.get('r1')?.peers.size, 0);
   assert.deepEqual(calls.leaseResults.slice(0, 2), [{ finalized: false }, { finalized: true }]);
   assert.deepEqual(calls.avatars, ['room.webp']);
   assert.deepEqual(calls.notified, [
@@ -182,23 +202,22 @@ test('deleting a room tells everyone, frees every seat and removes the avatar', 
 test('a room deletion with failing cleanup still finishes and only warns', async () => {
   const failing = roomHarness({ revokeFails: true, removeFails: true, leaseError: true });
   failing.roster.room('r1').peers.set('p1', { id: 'p1', transport: transport('t1') });
-  const warnings = [];
-  await failing.lifecycle.finishRoomDeletion('r1', {
-    request: { log: { warn: (fields) => warnings.push(fields.code), error() {} } }
-  });
-  assert.equal(failing.calls.leaseResults[2].ownershipFinalized, true);
+  const log = recordingLogger();
+  await failing.lifecycle.finishRoomDeletion('r1', { request: { log } });
+  assert.equal(failing.calls.leaseResults[2]?.ownershipFinalized, true);
   assert.equal(failing.calls.leaseResults[2].message, 'revoke');
-  assert.deepEqual(warnings, ['room_delete_peer_cleanup_failed']);
+  assert.deepEqual(logged(log, 'warn', 'code'), ['room_delete_peer_cleanup_failed']);
   assert.deepEqual(failing.calls.avatars, [null]);
 
   const sfuOnly = roomHarness({ removeFails: true });
   sfuOnly.roster.room('r1').peers.set('p1', { id: 'p1', transport: transport('t1') });
   await sfuOnly.lifecycle.finishRoomDeletion('r1');
-  assert.equal(sfuOnly.calls.leaseResults[2].message, 'sfu');
+  assert.equal(sfuOnly.calls.leaseResults[2]?.message, 'sfu');
 
   const broken = roomHarness({ runtime: false });
   await broken.lifecycle.finishRoomDeletion('other');
 
+  const expiryLog = recordingLogger();
   const expiryFails = createRoomLifecycle({
     presence: presence(),
     runtime: () => null,
@@ -212,11 +231,11 @@ test('a room deletion with failing cleanup still finishes and only warns', async
     removeParticipant: async () => {},
     removeAvatar: async () => {},
     displayName: () => '',
-    logger: () => ({ error: (fields) => warnings.push(fields.evt) })
+    logger: () => expiryLog
   });
   await expiryFails.finishRoomDeletion('r9');
   await new Promise((resolve) => setTimeout(resolve, 5));
-  assert.ok(warnings.includes('room.invitation_expiry_failed'));
+  assert.ok(logged(expiryLog, 'error', 'evt').includes('room.invitation_expiry_failed'));
 });
 
 // --- account lifecycle --------------------------------------------------------------
@@ -227,23 +246,33 @@ function accountHarness({
   friendsFail = false,
   principal = true,
   voiceFails = false
+}: {
+  sockets?: boolean;
+  deletions?: boolean;
+  friendsFail?: boolean;
+  principal?: boolean;
+  voiceFails?: boolean;
 } = {}) {
+  const logger = recordingLogger();
   const calls = {
-    notified: [],
-    payloads: [],
-    revoked: [],
-    left: [],
-    removed: [],
-    closed: null,
-    announced: [],
-    finished: [],
-    avatars: [],
-    errors: []
+    notified: [] as unknown[][],
+    payloads: [] as Array<{ user?: object }>,
+    revoked: [] as string[],
+    left: [] as unknown[],
+    removed: [] as string[],
+    closed: null as unknown[] | null,
+    lookup: null as unknown,
+    announced: [] as string[],
+    finished: [] as unknown[][],
+    avatars: [] as Array<string | null | undefined>,
+    get errors() {
+      return logged(logger, 'error', 'evt');
+    }
   };
   const connections = [
-    { activeVoice: { roomId: 'r1', peerId: 'p1' } },
-    { activeVoice: null },
-    { activeVoice: { roomId: 'r1' } }
+    fake<WsConnection>({ activeVoice: { roomId: 'r1', peerId: 'p1' } }),
+    fake<WsConnection>({ activeVoice: null }),
+    fake<WsConnection>({ activeVoice: { roomId: 'r1' } })
   ];
   const lifecycle = createAccountLifecycle({
     friendIds: async () => {
@@ -262,7 +291,7 @@ function accountHarness({
               return connections;
             },
             closeConnections: (targets, code, reason) => {
-              calls.closed = [targets.length, code, reason];
+              calls.closed = [[...targets].length, code, reason];
             }
           }
         : null,
@@ -286,17 +315,20 @@ function accountHarness({
             },
             async finalizeDeletion({ userId }) {
               if (userId === 'broken') throw new Error('db');
-              if (userId === 'kept') return { status: 'restored', transferredRooms: [], deletedRooms: [] };
+              if (userId === 'kept') return { status: 'not_due' };
               return {
                 status: 'deleted',
                 avatarKey: 'a.webp',
-                transferredRooms: [{ roomId: 'heir' }, { roomId: 'vanished' }],
+                transferredRooms: [
+                  { roomId: 'heir', heirUserId: 'h' },
+                  { roomId: 'vanished', heirUserId: 'h' }
+                ],
                 deletedRooms: [{ roomId: 'orphan', avatarKey: 'o.webp' }]
               };
             }
           }
         : null,
-    findRoom: async (roomId) => (roomId === 'heir' ? { id: 'heir' } : null),
+    findRoom: async (roomId) => (roomId === 'heir' ? fake<StoredRoom>({ id: 'heir' }) : null),
     announceRoomUpdate: (roomId) => calls.announced.push(roomId),
     finishRoomDeletion: async (roomId, options) => {
       calls.finished.push([roomId, options.avatarKey]);
@@ -304,7 +336,7 @@ function accountHarness({
     removeAvatar: async (key) => {
       calls.avatars.push(key);
     },
-    logger: () => ({ error: (fields) => calls.errors.push(fields.evt) })
+    logger: () => logger
   });
   return { calls, lifecycle };
 }
@@ -318,15 +350,13 @@ test('a profile change reaches every friend; a failed lookup is only logged', as
     ['f2', 'user-updated']
   ]);
   // Friends get the public profile, never self-only fields.
-  assert.equal('hasUsedDesktopApp' in calls.payloads[0].user, false);
-  assert.equal('passwordHash' in calls.payloads[0].user, false);
-  const errors = [];
-  await accountHarness({ friendsFail: true }).lifecycle.broadcastProfileToFriends(
-    { id: 'u1' },
-    { error: (fields) => errors.push(fields.userId) }
-  );
+  const friendView = calls.payloads[0]?.user ?? {};
+  assert.equal('hasUsedDesktopApp' in friendView, false);
+  assert.equal('passwordHash' in friendView, false);
+  const log = recordingLogger();
+  await accountHarness({ friendsFail: true }).lifecycle.broadcastProfileToFriends({ id: 'u1' }, log);
   await accountHarness({ friendsFail: true }).lifecycle.broadcastProfileToFriends({ id: 'u1' });
-  assert.deepEqual(errors, ['u1']);
+  assert.deepEqual(logged(log, 'error', 'userId'), ['u1']);
 });
 
 test('ending sessions frees their voice seats and closes their sockets', async () => {
@@ -367,7 +397,8 @@ test('finishing due deletions hands rooms over, tears orphans down and survives 
 test('maintenance runs enabled tasks on its interval, logs failures and stops on close', async (t) => {
   t.mock.timers.enable({ apis: ['setInterval'] });
   const server = new EventEmitter();
-  const calls = { pruned: 0, ran: [], observed: [], errors: [] };
+  const logger = recordingLogger();
+  const calls = { pruned: 0, ran: [] as string[], observed: [] as string[] };
   const timer = startMaintenanceTimers(server, {
     keepaliveMs: 10,
     intervalMs: 100,
@@ -379,7 +410,7 @@ test('maintenance runs enabled tasks on its interval, logs failures and stops on
       calls.observed.push(name);
       return run();
     },
-    logger: { error: (fields, message) => calls.errors.push([fields.task, message]) },
+    logger,
     tasks: [
       {
         name: 'a',
@@ -415,10 +446,13 @@ test('maintenance runs enabled tasks on its interval, logs failures and stops on
   assert.ok(calls.pruned >= 2);
   assert.deepEqual(calls.ran, ['a']);
   assert.deepEqual(calls.observed, ['a', 'b']);
-  assert.deepEqual(calls.errors, [
-    ['ws-prune', 'ws prune timer failed'],
-    ['task-b', 'b failed']
-  ]);
+  assert.deepEqual(
+    logger.records.map((record) => [record.task, record.msg]),
+    [
+      ['ws-prune', 'ws prune timer failed'],
+      ['task-b', 'b failed']
+    ]
+  );
   server.emit('close');
   t.mock.timers.tick(1000);
   assert.deepEqual(calls.ran, ['a']);
@@ -436,7 +470,7 @@ test('without a sweep interval only the socket reaper runs', (t) => {
         pruned += 1;
       },
       observe: async () => {},
-      logger: { error() {} },
+      logger: recordingLogger(),
       tasks: []
     }),
     null

@@ -1,15 +1,17 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import { transaction } from '../src/lib/db.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
-import { createNotificationService } from '../src/domains/notifications/notification-service.ts';
+import { createNotificationService, type InboxCursorCodec } from '../src/domains/notifications/notification-service.ts';
+import type { MentionEligibilityService } from '../src/domains/notifications/mention-eligibility-service.ts';
+import type { NotificationOutboxRepository } from '../src/domains/notifications/notification-outbox-repository.ts';
+import { fake } from './fakes/index.ts';
 import { createMentionRepository } from '../src/domains/notifications/mention-repository.ts';
 import { createInboxRepository } from '../src/domains/notifications/inbox-repository.ts';
 import { createNotificationOutboxRepository } from '../src/domains/notifications/notification-outbox-repository.ts';
 import { createTestDatabase } from './db-harness.ts';
-async function fixture(t) {
+async function fixture(t: TestContext) {
   const db = await createTestDatabase(t);
   await runMigrations({
     databaseUrl: db.databaseUrl,
@@ -26,18 +28,18 @@ async function fixture(t) {
   );
   return pool;
 }
-function service(pool, outbox) {
+function service(pool: Pool, outbox: NotificationOutboxRepository) {
   return createNotificationService({
     pool,
     inbox: createInboxRepository({ pool }),
     mentions: createMentionRepository({ pool }),
     outbox,
-    eligibility: {
+    eligibility: fake<MentionEligibilityService>({
       async validate({ targetUserIds }) {
-        return targetUserIds;
+        return targetUserIds as string[];
       }
-    },
-    cursorCodec: {}
+    }),
+    cursorCodec: fake<InboxCursorCodec>()
   });
 }
 test(
@@ -46,12 +48,15 @@ test(
   async (t) => {
     const pool = await fixture(t);
     const actual = createNotificationOutboxRepository({ pool });
-    const notifications = service(pool, {
-      async enqueue(input) {
-        await actual.enqueue(input);
-        throw new Error('injected');
-      }
-    });
+    const notifications = service(
+      pool,
+      fake<NotificationOutboxRepository>({
+        async enqueue(input) {
+          await actual.enqueue(input);
+          throw new Error('injected');
+        }
+      })
+    );
     await assert.rejects(
       transaction(pool, async (client) => {
         await client.query(`INSERT INTO room_messages(id,room_id,text) VALUES ('m1','room','hello')`);

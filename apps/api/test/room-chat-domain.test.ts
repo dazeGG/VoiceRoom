@@ -1,12 +1,14 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 // Branch-by-branch proofs for the room chat (domains/messaging/room-chat.*):
 // the list the room link grants, sending with every refusal in its original
 // order, editing, deleting, marking read, and the HTTP answer each outcome
 // becomes. Everything runs on fakes; the integration suites cover the store.
 
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import fastify from 'fastify';
+import fastify, { type FastifyInstance } from 'fastify';
+
+import type { ApiContext } from '../src/app/context.ts';
+import type { LiveRoom, PresencePeer } from '../src/domains/rooms/room-views.ts';
 
 import {
   cleanChatText,
@@ -15,10 +17,17 @@ import {
   normalizeAttachmentIds,
   requestIdempotencyKey
 } from '../src/domains/messaging/message-input.ts';
-import { publicChatMessage } from '../src/domains/messaging/room-chat-views.ts';
+import { publicChatMessage, type RoomChatMessage } from '../src/domains/messaging/room-chat-views.ts';
 import { registerRoomChatRoutes } from '../src/domains/messaging/room-chat.routes.ts';
-import { createRoomChatService } from '../src/domains/messaging/room-chat.service.ts';
+import {
+  createRoomChatService,
+  type PostInput,
+  type RoomChatDeps,
+  type RoomChatService,
+  type RoomMessages
+} from '../src/domains/messaging/room-chat.service.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
+import { fake, recordingLogger } from './fakes/index.ts';
 
 const UUID_A = '11111111-1111-4111-8111-111111111111';
 const UUID_B = '22222222-2222-4222-8222-222222222222';
@@ -31,15 +40,23 @@ const ACCOUNT = {
   avatarAccent: 'gold'
 };
 
-function room(peers = [], overrides = {}) {
-  return {
+function room(peers: PresencePeer[] = [], overrides: Partial<LiveRoom> = {}) {
+  return fake<LiveRoom>({
     id: 'room-1',
     isStatic: true,
     ownerId: 'owner-1',
     peers: new Map(peers.map((peer) => [peer.id, peer])),
     ...overrides
-  };
+  });
 }
+
+// A field of an outcome union, read without narrowing it to one member first.
+function fieldOf(outcome: object, key: string) {
+  return (outcome as Record<string, unknown>)[key];
+}
+
+// The stores hand the unit-of-work callbacks a transaction marker, not a client.
+const transactionMarker = (name: string) => ({ transaction: name }) as never;
 
 // --- input normalisation ---------------------------------------------------------
 
@@ -100,33 +117,63 @@ test('a public chat message fills avatar and defaults', () => {
   assert.equal(full.avatarUrl, '/x');
   assert.equal(full.avatarColorKey, 'blue');
   assert.deepEqual(full.attachments, [1]);
-  assert.equal(publicChatMessage({ id: 'm', peerId: 'p' }).avatarUrl, null);
+  assert.equal(publicChatMessage({ id: 'm', peerId: 'p' } as RoomChatMessage).avatarUrl, null);
 });
 
 // --- service ---------------------------------------------------------------------
 
-function harness(options = {}) {
+type HarnessOptions = {
+  room?: LiveRoom | null;
+  peers?: PresencePeer[];
+  stored?: RoomChatMessage[];
+  appendResult?: RoomChatMessage | null;
+  messages?: Record<string, RoomChatMessage>;
+  softDeleteResult?: unknown;
+  editResult?: null;
+  lastReadAt?: number | null;
+  features?: Partial<Record<'engagement' | 'replies' | 'mediaUploads', boolean>>;
+  notifications?: null;
+  retireFails?: boolean;
+  noMarkRoomRead?: boolean;
+  delivery?: false;
+  replay?: boolean;
+  readError?: Error;
+  ban?: (userId: string | null | undefined, ip: string) => boolean;
+  rate?: { allowed: boolean; retryAfterSeconds?: number };
+  findUserFails?: boolean;
+  media?: null;
+  directEmit?: boolean;
+};
+
+function harness(options: HarnessOptions = {}) {
+  const logger = recordingLogger();
+  const logged = (level: string) =>
+    logger.records.filter((record) => record.level === level).map((record) => record.evt);
   const calls = {
     lockedIn: '',
-    appended: [],
-    edited: [],
-    deleted: [],
-    detail: [],
-    pins: [],
-    previews: [],
-    emitted: [],
-    summaries: [],
-    retired: [],
-    addressed: [],
-    outbox: [],
-    bound: [],
-    completed: [],
-    warnings: [],
-    errors: []
+    appended: [] as Parameters<RoomMessages['appendMessage']>[1][],
+    edited: [] as string[],
+    deleted: [] as string[],
+    detail: [] as Array<{ type?: string }>,
+    pins: [] as string[],
+    previews: [] as unknown[],
+    emitted: [] as string[],
+    summaries: [] as string[],
+    retired: [] as Array<{ through?: unknown }>,
+    addressed: [] as Array<Record<string, unknown>>,
+    outbox: [] as Array<{ type?: string; message?: RoomChatMessage }>,
+    bound: [] as Array<{ attachmentIds?: unknown }>,
+    completed: [] as unknown[],
+    get warnings() {
+      return logged('warn');
+    },
+    get errors() {
+      return logged('error');
+    }
   };
-  const currentRoom = 'room' in options ? options.room : room(options.peers || []);
+  const currentRoom = 'room' in options ? (options.room ?? null) : room(options.peers || []);
   const stored = options.stored || [];
-  const messages = {
+  const messages: RoomMessages = {
     async listMessages() {
       return stored;
     },
@@ -134,10 +181,10 @@ function harness(options = {}) {
       calls.appended.push(input);
       if (options.appendResult !== undefined) return options.appendResult;
       if (input.beforeUnitOfWork) {
-        const before = await input.beforeUnitOfWork({ transaction: 'before' });
+        const before = await input.beforeUnitOfWork(transactionMarker('before'));
         if (before?.replay) return { ...before.message, idempotencyReplay: true };
       }
-      const inserted = {
+      const inserted: RoomChatMessage = {
         id: input.id,
         roomId,
         peerId: input.peerId,
@@ -147,26 +194,33 @@ function harness(options = {}) {
         authorUserId: input.authorUserId,
         replyTo: input.replyToMessageId ? { messageId: input.replyToMessageId } : undefined
       };
-      if (input.unitOfWork) await input.unitOfWork({ transaction: 'insert' }, inserted);
+      if (input.unitOfWork) await input.unitOfWork(transactionMarker('insert'), inserted);
       return inserted;
     },
-    async getMessage(roomId, messageId) {
+    async getMessage(_roomId, messageId) {
       return (options.messages || {})[messageId] || null;
     },
-    async softDeleteMessage(roomId, messageId) {
+    async softDeleteMessage(_roomId, messageId) {
       calls.deleted.push(messageId);
       return options.softDeleteResult ?? true;
     },
-    async editMessage(roomId, messageId, text) {
+    async editMessage(_roomId, messageId, text) {
       calls.edited.push(text);
-      return options.editResult === null ? null : { ...(options.messages || {})[messageId], text, editedAt: 9 };
+      return options.editResult === null
+        ? null
+        : { ...((options.messages || {})[messageId] as RoomChatMessage), text, editedAt: 9 };
     },
     async markRoomChatRead() {
       return options.lastReadAt === undefined ? 5 : options.lastReadAt;
     }
   };
-  const features = { engagement: true, replies: true, mediaUploads: true, ...(options.features || {}) };
-  const notifications =
+  const features: Record<'engagement' | 'replies' | 'mediaUploads', boolean> = {
+    engagement: true,
+    replies: true,
+    mediaUploads: true,
+    ...(options.features || {})
+  };
+  const notifications: ReturnType<RoomChatDeps['notifications']> =
     options.notifications === null
       ? null
       : {
@@ -188,7 +242,7 @@ function harness(options = {}) {
             ...(options.noMarkRoomRead ? { markRoomRead: undefined } : {})
           }
         };
-  const delivery =
+  const delivery: ReturnType<RoomChatDeps['delivery']> =
     options.delivery === false
       ? null
       : {
@@ -196,7 +250,7 @@ function harness(options = {}) {
             async reserve() {
               return options.replay
                 ? {
-                    kind: 'replay',
+                    kind: 'replay' as const,
                     response: {
                       body: {
                         message: {
@@ -213,12 +267,12 @@ function harness(options = {}) {
                   }
                 : { kind: 'reserved', ledgerKey: 'ledger-1' };
             },
-            async complete(client, key, result) {
+            async complete(_client, key, result) {
               calls.completed.push({ key, status: result.statusCode });
             }
           },
           outbox: {
-            async enqueue(client, event) {
+            async enqueue(_client, event) {
               calls.outbox.push(event);
             }
           }
@@ -232,7 +286,7 @@ function harness(options = {}) {
       }
     }),
     getRoom: async () => currentRoom,
-    findRoomBan: async (roomId, userId, ip) => (options.ban ? options.ban(userId, ip) : false),
+    findRoomBan: async (_roomId, userId, ip) => (options.ban ? options.ban(userId, ip) : false),
     feature: (name) => features[name],
     prepareContent: ({ content, text }) => {
       if (content === 'broken') throw new Error('bad content');
@@ -258,15 +312,15 @@ function harness(options = {}) {
             }
           },
     replies: () => ({
-      async lockRoomTarget(input: { client: { transaction: string } }) {
-        calls.lockedIn = input.client.transaction;
+      async lockRoomTarget(input) {
+        calls.lockedIn = (input.client as unknown as { transaction: string }).transaction;
         return { id: UUID_A, text: 'target', authorUserId: 'user-3', createdAt: Date.now() };
       }
     }),
     notifications: () => notifications,
     delivery: () => delivery,
-    projectMedia: async (context, message) => ({ ...message, attachments: [] }),
-    projectReply: async (context, message) =>
+    projectMedia: async (_context, message) => ({ ...message, attachments: [] }),
+    projectReply: async (_context, message) =>
       message.replyTo ? { ...message, replyPreview: { projected: true } } : message,
     identity: {
       chatPeerId: (user) => `auth-${user?.id}`,
@@ -274,27 +328,24 @@ function harness(options = {}) {
       displayName: (user) => (user ? user.displayName || '' : '')
     },
     directEmit: options.directEmit ?? true,
-    broadcastChatMessage: (roomId, message) => calls.emitted.push(message.id),
-    broadcastRoomDetail: (roomId, event) => calls.detail.push(event),
+    broadcastChatMessage: (_roomId, message) => calls.emitted.push(message.id),
+    broadcastRoomDetail: (_roomId, event) => calls.detail.push(event),
     roomDetailEvent: (type, payload) => ({ type, payload }),
-    scheduleLinkPreview: (roomId, messageId, text, opts) =>
+    scheduleLinkPreview: (_roomId, messageId, _text, opts) =>
       calls.previews.push({ messageId, edited: Boolean(opts?.edited) }),
-    refreshPins: async (roomId, action) => {
+    refreshPins: async (_roomId, action) => {
       calls.pins.push(action);
     },
-    sendRoomSummaryToUser: async (roomId, userId) => {
+    sendRoomSummaryToUser: async (_roomId, userId) => {
       calls.summaries.push(userId);
     },
-    logger: () => ({
-      warn: (fields) => calls.warnings.push(fields.evt),
-      error: (fields) => calls.errors.push(fields.evt)
-    })
+    logger: () => logger
   });
   return { calls, service };
 }
 
-const guest = { id: 'peer0001', sessionToken: TOKEN, name: 'Guest', avatarColorKey: 'red' };
-const postBase = {
+const guest: PresencePeer = { id: 'peer0001', sessionToken: TOKEN, name: 'Guest', avatarColorKey: 'red' };
+const postBase: PostInput = {
   roomId: 'room-1',
   user: null,
   clientIp: '203.0.113.1',
@@ -318,10 +369,9 @@ test('the list refuses missing rooms and banned viewers and projects media and r
     (await harness({ ban: () => true }).service.list('room-1', { user: ACCOUNT, clientIp: 'ip' })).status,
     'room_banned'
   );
-  const listed = await harness({ stored: [{ id: 'a' }, { id: 'b', replyTo: { messageId: UUID_A } }] }).service.list(
-    'room-1',
-    { user: null, clientIp: 'ip' }
-  );
+  const listed = await harness({
+    stored: [{ id: 'a' }, { id: 'b', replyTo: { messageId: UUID_A } }] as RoomChatMessage[]
+  }).service.list('room-1', { user: null, clientIp: 'ip' });
   assert.equal(listed.status, 'listed');
   assert.deepEqual(
     listed.messages.map((m) => [m.id, Boolean(m.replyPreview)]),
@@ -333,7 +383,7 @@ test('the list refuses missing rooms and banned viewers and projects media and r
 });
 
 test('send refuses in the legacy order', async () => {
-  const cases = [
+  const cases: Array<[HarnessOptions, Partial<PostInput>, string]> = [
     [{ features: { engagement: false } }, { content: 'x' }, 'structured_unavailable'],
     [{}, { content: 'broken' }, 'invalid_content'],
     [{}, { content: 'bad-mention' }, 'invalid_mention'],
@@ -365,10 +415,10 @@ test('send refuses in the legacy order', async () => {
     assert.equal(result.status, status, JSON.stringify(input));
   }
   const mention = await harness().service.post({ ...postBase, content: 'bad-mention' });
-  assert.equal(mention.code, 'mention_not_member');
+  assert.equal(fieldOf(mention, 'code'), 'mention_not_member');
   const limited = await harness({ rate: { allowed: false, retryAfterSeconds: 3 } }).service.post(postBase);
-  assert.equal(limited.retryAfterSeconds, 3);
-  assert.equal((await harness({ rate: { allowed: false } }).service.post(postBase)).retryAfterSeconds, 0);
+  assert.equal(fieldOf(limited, 'retryAfterSeconds'), 3);
+  assert.equal(fieldOf(await harness({ rate: { allowed: false } }).service.post(postBase), 'retryAfterSeconds'), 0);
 });
 
 test('a guest peer sends under its live identity and a reserved peer id falls back to the account', async () => {
@@ -376,11 +426,11 @@ test('a guest peer sends under its live identity and a reserved peer id falls ba
   const { calls, service } = harness({ peers: [peer], delivery: false });
   const sent = await service.post({ ...postBase, peerId: guest.id, sessionToken: TOKEN });
   assert.equal(sent.status, 'created');
-  assert.equal(calls.appended[0].peerId, guest.id);
-  assert.equal(calls.appended[0].name, 'Guest');
-  assert.equal(calls.appended[0].avatarColorKey, 'red');
-  assert.equal(calls.appended[0].authorUserId, null);
-  assert.equal(calls.appended[0].unitOfWork, null);
+  assert.equal(calls.appended[0]?.peerId, guest.id);
+  assert.equal(calls.appended[0]?.name, 'Guest');
+  assert.equal(calls.appended[0]?.avatarColorKey, 'red');
+  assert.equal(calls.appended[0]?.authorUserId, null);
+  assert.equal(calls.appended[0]?.unitOfWork, null);
   assert.deepEqual(calls.emitted, [sent.message.id]);
   // The scheduler itself skips texts without a link.
   assert.deepEqual(calls.previews, [{ messageId: sent.message.id, edited: false }]);
@@ -393,7 +443,8 @@ test('a guest peer sends under its live identity and a reserved peer id falls ba
     sessionToken: TOKEN,
     text: 'see https://example.com'
   });
-  assert.equal(reserved.calls.appended[0].peerId, 'auth-user-1');
+  assert.equal(own.status, 'created');
+  assert.equal(reserved.calls.appended[0]?.peerId, 'auth-user-1');
   assert.equal(own.message.avatarUrl, '/api/avatars/alice.webp');
   assert.deepEqual(reserved.calls.previews, [{ messageId: own.message.id, edited: false }]);
 });
@@ -403,25 +454,25 @@ test('a signed-in account in the roster takes its profile colour onto the peer',
   const { calls, service } = harness({ peers: [peer] });
   await service.post({ ...postBase, user: { ...ACCOUNT, avatarKey: null }, peerId: guest.id, sessionToken: TOKEN });
   assert.equal(peer.avatarColorKey, 'teal');
-  assert.equal(calls.appended[0].avatarColorKey, 'teal');
-  assert.equal(calls.outbox[0].message.avatarUrl, '/peer.webp');
+  assert.equal(calls.appended[0]?.avatarColorKey, 'teal');
+  assert.equal(calls.outbox[0]?.message?.avatarUrl, '/peer.webp');
 
   const plain = harness({ peers: [{ ...guest, avatarColorKey: undefined }] });
   await plain.service.post({ ...postBase, peerId: guest.id, sessionToken: TOKEN });
-  assert.ok(plain.calls.appended[0].avatarColorKey);
+  assert.ok(plain.calls.appended[0]?.avatarColorKey);
 });
 
 test('a guest tab of a signed-out account is attributed to the stored account', async () => {
   const peer = { ...guest, accountUserId: 'user-7' };
   const found = harness({ peers: [peer] });
   await found.service.post({ ...postBase, peerId: guest.id, sessionToken: TOKEN });
-  assert.equal(found.calls.appended[0].authorUserId, 'user-7');
-  assert.equal(found.calls.appended[0].name, 'Stored');
+  assert.equal(found.calls.appended[0]?.authorUserId, 'user-7');
+  assert.equal(found.calls.appended[0]?.name, 'Stored');
 
   const failed = harness({ peers: [peer], findUserFails: true });
   await failed.service.post({ ...postBase, peerId: guest.id, sessionToken: TOKEN });
-  assert.equal(failed.calls.appended[0].authorUserId, 'user-7');
-  assert.equal(failed.calls.appended[0].name, 'Guest');
+  assert.equal(failed.calls.appended[0]?.authorUserId, 'user-7');
+  assert.equal(failed.calls.appended[0]?.name, 'Guest');
   assert.equal(failed.calls.warnings.length, 1);
 });
 
@@ -439,13 +490,13 @@ test('an account send binds attachments, locks the reply, addresses mentions and
   });
   assert.equal(sent.status, 'created');
   assert.equal(calls.lockedIn, 'insert', 'the reply target is locked in the transaction that inserts the message');
-  assert.equal(calls.appended[0].text, 'from content');
-  assert.equal(calls.appended[0].replyToMessageId, UUID_B);
-  assert.deepEqual(calls.bound[0].attachmentIds, [UUID_A]);
-  assert.deepEqual(calls.addressed[0].targetUserIds, ['user-2']);
-  assert.equal(calls.addressed[0].replyTargetUserId, 'user-3');
-  assert.equal(calls.outbox[0].type, 'message.created');
-  assert.equal(calls.outbox[0].message.avatarKey, 'alice.webp');
+  assert.equal(calls.appended[0]?.text, 'from content');
+  assert.equal(calls.appended[0]?.replyToMessageId, UUID_B);
+  assert.deepEqual(calls.bound[0]?.attachmentIds, [UUID_A]);
+  assert.deepEqual(calls.addressed[0]?.targetUserIds, ['user-2']);
+  assert.equal(calls.addressed[0]?.replyTargetUserId, 'user-3');
+  assert.equal(calls.outbox[0]?.type, 'message.created');
+  assert.equal(calls.outbox[0]?.message?.avatarKey, 'alice.webp');
   assert.deepEqual(calls.completed, [{ key: 'ledger-1', status: 201 }]);
   assert.ok(sent.message.replyPreview);
 });
@@ -474,7 +525,7 @@ test('mentions are not addressed without engagement or an inbox', async () => {
   assert.deepEqual(guestAuthor.calls.addressed, []);
   const plain = harness({ delivery: false });
   await plain.service.post({ ...postBase, user: ACCOUNT, idempotencyKey: 'idem-key-1' });
-  assert.equal(plain.calls.appended[0].beforeUnitOfWork, null);
+  assert.equal(plain.calls.appended[0]?.beforeUnitOfWork, null);
 });
 
 test('an idempotent replay answers the stored message without broadcasting again', async () => {
@@ -514,7 +565,8 @@ const editBase = { roomId: 'room-1', user: null, clientIp: 'ip', peerId: '', ses
 
 test('edit is for the author only, in the legacy order', async () => {
   const messages = { [guestMessage.id]: guestMessage, [accountMessage.id]: accountMessage };
-  const cases = [
+  type EditInput = Parameters<RoomChatService['edit']>[0];
+  const cases: Array<[HarnessOptions, Partial<EditInput> & Pick<EditInput, 'messageId'>, string]> = [
     [{ room: null }, { messageId: 'm-guest' }, 'room_not_found'],
     [{ ban: () => true }, { messageId: 'm-guest' }, 'room_banned'],
     [{}, { messageId: 'm-guest', text: ' ' }, 'empty'],
@@ -553,7 +605,7 @@ test('an edit is published, refreshes pins and reschedules the link preview', as
   assert.equal(edited.status, 'edited');
   assert.equal(edited.message.text, 'changed');
   assert.equal(edited.message.editedAt, 9);
-  assert.equal(calls.detail[0].type, 'room.chat.edited');
+  assert.equal(calls.detail[0]?.type, 'room.chat.edited');
   assert.deepEqual(calls.pins, ['message-edited']);
   assert.deepEqual(calls.previews, [{ messageId: 'm-guest', edited: true }]);
 });
@@ -600,7 +652,7 @@ test('delete: author, live guest session or the persistent room owner', async ()
     (await owner.service.remove({ ...base, messageId: 'm-account', user: { id: 'owner-1' } })).status,
     'deleted'
   );
-  assert.equal(owner.calls.detail[0].type, 'room.chat.deleted');
+  assert.equal(owner.calls.detail[0]?.type, 'room.chat.deleted');
   assert.deepEqual(owner.calls.pins, ['message-deleted']);
   assert.equal(
     (await harness({ messages }).service.remove({ ...base, messageId: 'm-account', user: ACCOUNT })).status,
@@ -639,7 +691,7 @@ test('marking read advances the cursor or the wall clock and retires notificatio
     status: 'read',
     result: { lastReadAt: 5, unreadCount: 0 }
   });
-  assert.equal(legacy.calls.retired[0].through, 5);
+  assert.equal(legacy.calls.retired[0]?.through, 5);
   assert.equal(
     (await harness({ lastReadAt: null }).service.markRead('room-1', 'user-1', undefined)).status,
     'room_not_found'
@@ -649,7 +701,7 @@ test('marking read advances the cursor or the wall clock and retires notificatio
     readError: Object.assign(new Error('Stale cursor'), { statusCode: 409, code: 'stale_cursor' })
   }).service.markRead('room-1', 'user-1', 'c');
   assert.deepEqual(bad, { status: 'invalid_cursor', statusCode: 409, code: 'stale_cursor', error: 'Stale cursor' });
-  assert.deepEqual(await harness({ readError: {} }).service.markRead('room-1', 'user-1', 'c'), {
+  assert.deepEqual(await harness({ readError: new Error() }).service.markRead('room-1', 'user-1', 'c'), {
     status: 'invalid_cursor',
     statusCode: 400,
     code: 'invalid_read_cursor',
@@ -666,12 +718,22 @@ test('marking read advances the cursor or the wall clock and retires notificatio
 
 // --- routes ------------------------------------------------------------------------
 
-function routeApp(t, outcomes = {}, { user = null } = {}) {
+function routeApp(
+  t: TestContext,
+  outcomes: Record<string, unknown> = {},
+  { user = null }: { user?: typeof ACCOUNT | null } = {}
+) {
   const app = fastify();
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
-  const seen = {};
-  const chat = {
-    async list(roomId, caller) {
+  const seen: {
+    list?: { user?: { id: string } | null };
+    post?: PostInput;
+    edit?: { messageId: string };
+    remove?: unknown;
+    read?: unknown;
+  } = {};
+  const chat = fake<RoomChatService>({
+    async list(roomId: string, caller: { user?: { id: string } | null }) {
       seen.list = caller;
       return (
         outcomes.list || {
@@ -680,7 +742,7 @@ function routeApp(t, outcomes = {}, { user = null } = {}) {
         }
       );
     },
-    async post(input) {
+    async post(input: PostInput) {
       seen.post = input;
       return (
         outcomes.post || {
@@ -689,26 +751,26 @@ function routeApp(t, outcomes = {}, { user = null } = {}) {
         }
       );
     },
-    async edit(input) {
+    async edit(input: { messageId: string }) {
       seen.edit = input;
       return outcomes.edit || { status: 'edited', message: { id: 'm', text: 'e' } };
     },
-    async remove(input) {
+    async remove(input: unknown) {
       seen.remove = input;
       return outcomes.remove || { status: 'deleted' };
     },
-    async markRead(roomId, userId, cursor) {
+    async markRead(roomId: string, userId: string, cursor: unknown) {
       seen.read = { roomId, userId, cursor };
       return outcomes.read || { status: 'read', result: { lastReadAt: 5, unreadCount: 0 } };
     }
-  };
+  } as Partial<Record<keyof RoomChatService, unknown>> as Partial<RoomChatService>);
   registerRoomChatRoutes(
     app,
     {
-      logger: null,
+      logger: fake<ApiContext['logger']>(),
       clientIp: () => '203.0.113.1',
       resolveSession: async () => (user ? { user } : null),
-      hashIp: (ip) => ip
+      hashIp: (ip: string) => ip
     },
     chat
   );
@@ -716,17 +778,37 @@ function routeApp(t, outcomes = {}, { user = null } = {}) {
   return { app, seen };
 }
 
-async function call(app, method, url, payload, headers = {}) {
-  const response = await app.inject({ method, url, headers, ...(payload === undefined ? {} : { payload }) });
-  return { status: response.statusCode, body: response.json(), headers: response.headers };
+type Body = {
+  ok?: boolean;
+  error?: string;
+  roomId?: string;
+  messages?: Array<{ avatarUrl?: string | null }>;
+} & Record<string, unknown>;
+
+type Route = [string, string, object?];
+
+async function call(
+  app: FastifyInstance,
+  method: string,
+  url: string,
+  payload?: object,
+  headers: Record<string, string> = {}
+) {
+  const response = await app.inject({
+    method: method as 'GET' | 'POST' | 'PATCH' | 'DELETE',
+    url,
+    headers,
+    ...(payload === undefined ? {} : { payload })
+  });
+  return { status: response.statusCode, body: response.json<Body>(), headers: response.headers };
 }
 
 test('chat routes pass normalised input and answer each outcome', async (t) => {
   const { app, seen } = routeApp(t, {}, { user: ACCOUNT });
   const listed = await call(app, 'GET', '/api/rooms/room-1/chat');
   assert.equal(listed.body.roomId, 'room-1');
-  assert.equal(listed.body.messages[0].avatarUrl, null);
-  assert.equal(seen.list.user.id, 'user-1');
+  assert.equal(listed.body.messages?.[0]?.avatarUrl, null);
+  assert.equal(seen.list?.user?.id, 'user-1');
 
   const posted = await call(
     app,
@@ -736,17 +818,17 @@ test('chat routes pass normalised input and answer each outcome', async (t) => {
     { 'idempotency-key': 'header-key-1' }
   );
   assert.equal(posted.status, 201);
-  assert.equal(seen.post.name, 'Bob');
+  assert.equal(seen.post?.name, 'Bob');
   assert.equal(seen.post.replyToMessageId, UUID_A);
   assert.equal(seen.post.idempotencyKey, 'header-key-1');
   await call(app, 'POST', '/api/rooms/room-1/chat', { text: 'hi', replyTo: null });
-  assert.equal(seen.post.replyToMessageId, '');
+  assert.equal(seen.post?.replyToMessageId, '');
 
   assert.deepEqual((await call(app, 'PATCH', `/api/rooms/room-1/chat/${UUID_A}`, { text: 'e' })).body, {
     ok: true,
     message: { id: 'm', text: 'e' }
   });
-  assert.equal(seen.edit.messageId, UUID_A);
+  assert.equal(seen.edit?.messageId, UUID_A);
   assert.deepEqual((await call(app, 'DELETE', `/api/rooms/room-1/chat/${UUID_A}`)).body, { ok: true, deleted: true });
   assert.deepEqual((await call(app, 'POST', '/api/rooms/room-1/read', { cursor: 'c' })).body, {
     ok: true,
@@ -757,7 +839,7 @@ test('chat routes pass normalised input and answer each outcome', async (t) => {
 });
 
 test('chat refusals keep their texts, codes and headers', async (t) => {
-  const cases = [
+  const cases: Array<[string, { status: string; code?: string }, number, object | null]> = [
     ['post', { status: 'room_not_found' }, 404, { ok: false, error: 'Room not found', roomId: 'room-1' }],
     [
       'post',
@@ -789,7 +871,7 @@ test('chat refusals keep their texts, codes and headers', async (t) => {
     ['edit', { status: 'not_author' }, 403, { ok: false, error: 'Not allowed to edit this message' }],
     ['remove', { status: 'not_allowed' }, 403, { ok: false, error: 'Not allowed to delete this message' }]
   ];
-  const routes = {
+  const routes: Record<string, Route> = {
     post: ['POST', '/api/rooms/room-1/chat', { text: 'x' }],
     list: ['GET', '/api/rooms/room-1/chat'],
     edit: ['PATCH', '/api/rooms/room-1/chat/m1', { text: 'x' }],
@@ -797,7 +879,9 @@ test('chat refusals keep their texts, codes and headers', async (t) => {
   };
   for (const [action, outcome, status, body] of cases) {
     const { app } = routeApp(t, { [action]: outcome });
-    const response = await call(app, ...routes[action]);
+    const route = routes[action];
+    assert.ok(route);
+    const response = await call(app, ...route);
     assert.equal(response.status, status, `${action} ${outcome.status}`);
     if (body) assert.deepEqual(response.body, body);
   }

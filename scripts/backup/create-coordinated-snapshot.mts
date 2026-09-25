@@ -1,21 +1,20 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes scripts/tsconfig.json.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-function args(argv) {
-  const values = {};
-  for (let index = 0; index < argv.length; index += 2) values[argv[index]?.replace(/^--/, '')] = argv[index + 1];
+function args(argv: string[]) {
+  const values: Record<string, string | undefined> = {};
+  for (let index = 0; index < argv.length; index += 2) values[argv[index]?.replace(/^--/, '') ?? ''] = argv[index + 1];
   return values;
 }
 
-function sha256(file) {
+function sha256(file: string) {
   return `sha256:${crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}`;
 }
 
-function filesBelow(root, current = root) {
-  const result = [];
+function filesBelow(root: string, current = root): string[] {
+  const result: string[] = [];
   for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
     const absolute = path.join(current, entry.name);
     const stat = fs.lstatSync(absolute);
@@ -27,7 +26,7 @@ function filesBelow(root, current = root) {
   return result.sort();
 }
 
-function resolvedProspectivePath(value) {
+function resolvedProspectivePath(value: string) {
   const absolute = path.resolve(value);
   const parsed = path.parse(absolute);
   let current = parsed.root;
@@ -37,7 +36,7 @@ function resolvedProspectivePath(value) {
       if (fs.lstatSync(current).isSymbolicLink())
         throw new Error(`Snapshot output path contains a symlink: ${current}`);
     } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
     }
   }
   let ancestor = absolute;
@@ -45,12 +44,20 @@ function resolvedProspectivePath(value) {
   return path.resolve(fs.realpathSync(ancestor), path.relative(ancestor, absolute));
 }
 
-function containsPath(parent, candidate) {
+function containsPath(parent: string, candidate: string) {
   const relative = path.relative(parent, candidate);
   return relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
-export function createCoordinatedSnapshot({ databaseDump, uploads, catalog, output, namespace }) {
+type SnapshotOptions = {
+  databaseDump?: string;
+  uploads?: string;
+  catalog?: string;
+  output?: string;
+  namespace?: string;
+};
+
+export function createCoordinatedSnapshot({ databaseDump, uploads, catalog, output, namespace }: SnapshotOptions) {
   if (!databaseDump || !uploads || !catalog || !output || !namespace)
     throw new Error('databaseDump, uploads, catalog, output and namespace are required');
   const db = fs.realpathSync(databaseDump);
@@ -120,7 +127,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     });
     process.stdout.write(`${JSON.stringify({ ok: true, namespace: manifest.namespace })}\n`);
   } catch (error) {
-    console.error(error.message);
+    console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
   }
 }

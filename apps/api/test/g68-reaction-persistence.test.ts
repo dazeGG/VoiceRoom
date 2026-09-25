@@ -1,12 +1,11 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createReactionRepository } from '../src/domains/messaging/reaction-repository.ts';
 import { createTestDatabase } from './db-harness.ts';
 
-async function fixture(t) {
+async function fixture(t: TestContext) {
   const db = await createTestDatabase(t);
   await runMigrations({
     databaseUrl: db.databaseUrl,
@@ -32,7 +31,7 @@ test(
   { skip: !process.env.TEST_DATABASE_URL, timeout: 120000 },
   async (t) => {
     const { pool, repository } = await fixture(t);
-    const set = (active, userId = 'actor') =>
+    const set = (active: boolean, userId = 'actor') =>
       repository.transaction((client) =>
         repository.setDesiredState({
           type: 'room',
@@ -96,7 +95,7 @@ test(
     FROM generate_series(1, 10000) gs;
   `);
     const seen = new Set();
-    let after = null;
+    let after: { createdAtMicros: string; id: string } | null = null;
     while (seen.size < 10000) {
       const page = await repository.listReactors({
         type: 'room',
@@ -110,7 +109,7 @@ test(
         assert.equal(seen.has(reactor.userId), false);
         seen.add(reactor.userId);
       }
-      after = page.at(-1).cursorTuple;
+      after = page.at(-1)?.cursorTuple ?? null;
     }
     assert.equal(seen.size, 10000);
     const indexes = (

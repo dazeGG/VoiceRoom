@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import type { ReadStream } from 'node:fs';
+import type { Readable } from 'node:stream';
 import path from 'node:path';
 
 export type MediaVariant = 'original' | 'processed' | 'preview';
@@ -162,7 +162,7 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
   async function openRead(
     attachmentId: unknown,
     variant: unknown
-  ): Promise<Readonly<{ key: string; bytes: number; stream: ReadStream }>> {
+  ): Promise<Readonly<{ key: string; bytes: number; stream: Readable }>> {
     const directory = await existingAttachmentDirectory(attachmentId);
     if (!directory) {
       const error = new Error('Media object does not exist') as Error & { code?: string };
@@ -185,7 +185,7 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
     }
   }
 
-  async function createReadStream(attachmentId: unknown, variant: unknown): Promise<ReadStream> {
+  async function createReadStream(attachmentId: unknown, variant: unknown): Promise<Readable> {
     return (await openRead(attachmentId, variant)).stream;
   }
 

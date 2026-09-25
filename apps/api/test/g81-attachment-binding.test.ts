@@ -1,14 +1,13 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { Pool } from 'pg';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createAttachmentRepository } from '../src/domains/media/attachment-repository.ts';
 import { createTestDatabase } from './db-harness.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
-async function setup(t) {
+async function setup(t: TestContext) {
   const db = await createTestDatabase(t);
   await runMigrations({ databaseUrl: db.databaseUrl, logger: SILENT, noLock: true });
   const pool = new Pool({ connectionString: db.databaseUrl, max: 4 });
@@ -22,7 +21,7 @@ async function setup(t) {
   return { pool, repository: createAttachmentRepository({ pool }) };
 }
 
-async function ready(pool, { owner = 'owner', context = 'room' } = {}) {
+async function ready(pool: Pool, { owner = 'owner', context = 'room' } = {}) {
   const id = crypto.randomUUID();
   await pool.query(
     `INSERT INTO message_attachments(id,owner_id,context,state,mime_type,original_bytes,processed_bytes,preview_bytes,width,height,original_storage_key,processed_storage_key,preview_storage_key,ready_at) VALUES ($1::uuid,$2,$3,'ready','image/jpeg',10,8,4,2,2,$1::text||'/original',$1::text||'/processed',$1::text||'/preview',current_timestamp)`,
@@ -56,7 +55,7 @@ test(
     assert.equal(
       (
         await repository.bindReady({ ownerId: 'owner', context: 'dm', messageId: 'dm-message', attachmentIds: [dmId] })
-      )[0].directMessageId,
+      )[0]?.directMessageId,
       'dm-message'
     );
     assert.equal((await repository.listForMessage('room', 'room-message')).length, 2);

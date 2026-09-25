@@ -1,16 +1,17 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import assert from 'node:assert/strict';
 import { test } from 'vitest';
 
 import {
   RealtimeRecoveryController,
   classifyRecoveryFailure,
-  sanitizeRecoveryCode
+  sanitizeRecoveryCode,
+  type RealtimeRecoveryOptions,
+  type ReplacementOutcome
 } from '../src/lib/features/room/client/recovery/realtime-recovery.ts';
 
 function deferred() {
-  let resolve;
-  const promise = new Promise((done) => {
+  let resolve = (_outcome: ReplacementOutcome) => {};
+  const promise = new Promise<ReplacementOutcome>((done) => {
     resolve = done;
   });
   return { promise, resolve };
@@ -19,18 +20,18 @@ function deferred() {
 function fakeClock() {
   let now = 0;
   let id = 0;
-  const timers = new Map();
+  const timers = new Map<number, { at: number; callback: () => void }>();
   return {
     now: () => now,
-    setTimeout(callback, delay) {
+    setTimeout: (callback: () => void, delay: number) => {
       const timerId = ++id;
       timers.set(timerId, { at: now + delay, callback });
       return timerId;
     },
-    clearTimeout(timerId) {
-      timers.delete(timerId);
+    clearTimeout: (timerId: unknown) => {
+      timers.delete(timerId as number);
     },
-    advance(ms) {
+    advance(ms: number) {
       now += ms;
       let ready;
       do {
@@ -45,17 +46,19 @@ function fakeClock() {
   };
 }
 
-function createController(overrides = {}) {
+function createController(overrides: Partial<RealtimeRecoveryOptions> & { clock?: ReturnType<typeof fakeClock> } = {}) {
   const clock = overrides.clock ?? fakeClock();
-  const snapshots = [];
-  const attempts = [];
-  const transitions = [];
+  const snapshots: unknown[] = [];
+  const attempts: unknown[] = [];
+  const transitions: unknown[] = [];
   const controller = new RealtimeRecoveryController({
     attemptReplacement: async (context) => {
       attempts.push(context);
       return { ok: true };
     },
-    requestAppSnapshot: (context) => snapshots.push(context),
+    requestAppSnapshot: (context) => {
+      snapshots.push(context);
+    },
     onTransition: (event) => transitions.push(event),
     now: clock.now,
     setTimeout: clock.setTimeout,
@@ -260,10 +263,12 @@ test('authoritative snapshot received during cooldown is retained for a later me
 
 test('initial app connection does not replay a queued join, later connection epochs request one snapshot', () => {
   const clock = fakeClock();
-  const snapshots = [];
+  const snapshots: unknown[] = [];
   const controller = new RealtimeRecoveryController({
     attemptReplacement: async () => ({ ok: true }),
-    requestAppSnapshot: (context) => snapshots.push(context),
+    requestAppSnapshot: (context) => {
+      snapshots.push(context);
+    },
     now: clock.now,
     setTimeout: clock.setTimeout,
     clearTimeout: clock.clearTimeout
@@ -273,7 +278,7 @@ test('initial app connection does not replay a queued join, later connection epo
   assert.equal(snapshots.length, 0);
   controller.appWsLost(1);
   controller.appWsRestored(2);
-  assert.deepEqual(snapshots, []);
+  assert.equal(snapshots.length, 0);
   assert.equal(controller.appSnapshotApplied({ appEpoch: 1, active: true, hasLocalPeer: true }), false);
 });
 

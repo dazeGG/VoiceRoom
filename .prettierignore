@@ -13,6 +13,7 @@ apps/api/src/platform/db/schema.ts
 # Build output, caches and local state.
 node_modules/
 coverage/
+!scripts/coverage/
 .svelte-kit/
 apps/web/build/
 apps/web/static/

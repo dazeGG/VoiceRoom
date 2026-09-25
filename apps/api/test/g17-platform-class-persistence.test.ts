@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { performance } from 'node:perf_hooks';
@@ -25,7 +24,7 @@ const SIGNAL_KEYS = [
   'userAgentDataMobile'
 ];
 
-async function migrate(databaseUrl, count, direction = 'up') {
+async function migrate(databaseUrl: string, count: number, direction: 'up' | 'down' = 'up') {
   return runner({
     databaseUrl,
     dir: MIGRATIONS_DIR,
@@ -40,7 +39,7 @@ async function migrate(databaseUrl, count, direction = 'up') {
   });
 }
 
-async function withClient(databaseUrl, callback) {
+async function withClient<T>(databaseUrl: string, callback: (client: Client) => Promise<T>): Promise<T> {
   const client = new Client({ connectionString: databaseUrl });
   await client.connect();
   try {
@@ -66,13 +65,13 @@ test(
         `SELECT enumlabel FROM pg_enum JOIN pg_type ON pg_type.oid = enumtypid WHERE typname = 'push_subscription_platform_class' ORDER BY enumsortorder`
       );
       assert.deepEqual(
-        type.rows.map(({ enumlabel }) => enumlabel),
+        type.rows.map(({ enumlabel }: { enumlabel: string }) => enumlabel),
         ['desktop', 'mobile', 'unknown']
       );
       const columns = await client.query(
         `SELECT column_name FROM information_schema.columns WHERE table_name = 'push_subscriptions'`
       );
-      assert.ok(columns.rows.some(({ column_name }) => column_name === 'platform_class'));
+      assert.ok(columns.rows.some(({ column_name }: { column_name: string }) => column_name === 'platform_class'));
       await client.query(
         `SELECT id, user_id, endpoint, p256dh, auth, created_at, last_success_at, metadata FROM push_subscriptions`
       );
@@ -186,8 +185,8 @@ test(
         },
         metadata: { ...signals, retained: `row-${index}` }
       });
-      assert.equal(stored.platformClass, classifyPlatform(signals));
-      assert.deepEqual(stored.metadata, { retained: `row-${index}` });
+      assert.equal(stored?.platformClass, classifyPlatform(signals));
+      assert.deepEqual(stored?.metadata, { retained: `row-${index}` });
     }
   }
 );
@@ -216,7 +215,7 @@ test(
     await blocker.query('BEGIN');
     await blocker.query('LOCK TABLE push_subscriptions IN ACCESS EXCLUSIVE MODE');
     const startedAt = performance.now();
-    await assert.rejects(migrate(databaseUrl, CORRECTIVE_TIMESTAMP), (error) => error?.code === '55P03');
+    await assert.rejects(migrate(databaseUrl, CORRECTIVE_TIMESTAMP), { code: '55P03' });
     const durationMs = performance.now() - startedAt;
     assert.ok(
       durationMs >= 4500 && durationMs <= 6500,

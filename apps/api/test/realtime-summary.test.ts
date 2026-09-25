@@ -1,8 +1,8 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildRoomRealtimeSummaryFromLobbyRoom } from '../src/realtime/summary.ts';
 import { createRoomRealtimeRuntime } from '../src/realtime/room-runtime.ts';
+import { runtimeDeps } from './fakes/room-runtime.ts';
 
 test('buildRoomRealtimeSummaryFromLobbyRoom mirrors shared summary rules', () => {
   const peers = Array.from({ length: 6 }, (_, index) => ({
@@ -31,49 +31,43 @@ test('buildRoomRealtimeSummaryFromLobbyRoom mirrors shared summary rules', () =>
 });
 
 test('chat messages schedule personalized unread summaries for room recipients', async () => {
-  const sent = [];
+  const sent: Array<{ userId: string; unreadCount: unknown }> = [];
   const room = { id: 'room1', isStatic: true, name: 'Test room', relationship: 'owner' };
-  const store = {
-    async getRoom() {
-      return room;
-    },
-    async getRoomUnreadCount(_roomId, userId) {
-      return userId === 'owner' ? 2 : 5;
-    },
-    async listSummaryRecipientUserIds() {
-      return ['owner', 'bookmark'];
-    }
-  };
-  const wsRegistry = {
-    roomDetailSubscribers() {
-      return [];
-    },
-    sendToUser(userId, envelope) {
-      sent.push({ userId, envelope });
-    }
-  };
-  const runtime = createRoomRealtimeRuntime({
-    presenceRooms: new Map(),
-    wsRegistry,
-    getRoomStore: () => store,
-    publicPeer: (peer) => peer,
-    publicLobbyRoom: (value) => ({
-      isStatic: value.isStatic,
-      name: value.name,
-      relationship: value.relationship,
-      roomId: value.id,
-      unreadCount: value.unreadCount
-    }),
-    publicChatMessage: (message) => message,
-    broadcast() {},
-    avatarColorForPeerId: () => 'blurple'
-  });
+  const runtime = createRoomRealtimeRuntime(
+    runtimeDeps({
+      store: {
+        getRoom: async () => room as never,
+        async getRoomUnreadCount(_roomId, userId) {
+          return userId === 'owner' ? 2 : 5;
+        },
+        async listSummaryRecipientUserIds() {
+          return ['owner', 'bookmark'];
+        }
+      },
+      wsRegistry: {
+        sendToUser(userId, envelope) {
+          const payload = envelope.payload as { room?: { unreadCount?: number } } | undefined;
+          sent.push({ userId, unreadCount: payload?.room?.unreadCount });
+          return 1;
+        }
+      },
+      publicLobbyRoom: (value: typeof room & { unreadCount: number }) => ({
+        isStatic: value.isStatic,
+        name: value.name,
+        relationship: value.relationship,
+        roomId: value.id,
+        unreadCount: value.unreadCount
+      }),
+      avatarColorForPeerId: () => 'blurple'
+    })
+  );
 
   runtime.broadcastChatMessage('room1', { id: 'message1', text: 'hello' });
   await new Promise((resolve) => setTimeout(resolve, 150));
 
   assert.deepEqual(
-    sent.map(({ userId, envelope }) => [userId, envelope.payload.room.unreadCount]),
+    sent.map(({ userId, unreadCount }) => [userId, unreadCount]),
+
     [
       ['owner', 2],
       ['bookmark', 5]

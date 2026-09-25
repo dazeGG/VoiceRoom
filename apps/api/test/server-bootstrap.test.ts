@@ -1,8 +1,8 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { bootstrap, createApiServer } from '../src/server.ts';
+import { recordingLogger } from './fakes/index.ts';
 
 test('importing server exposes an app factory without binding or requiring DATABASE_URL', () => {
   assert.equal(typeof createApiServer, 'function');
@@ -12,16 +12,12 @@ test('importing server exposes an app factory without binding or requiring DATAB
 });
 
 test('bootstrap fails before listen when DATABASE_URL is missing', async () => {
-  let exitCode = null;
-  const logs = [];
+  let exitCode: number | undefined;
+  const logger = recordingLogger();
+  const logs = logger.records;
   const result = await bootstrap({
     env: {},
-    logger: {
-      info() {},
-      warn() {},
-      error() {},
-      fatal: (fields, msg) => logs.push({ ...fields, msg })
-    },
+    logger,
     exit: (code) => {
       exitCode = code;
     }
@@ -29,7 +25,8 @@ test('bootstrap fails before listen when DATABASE_URL is missing', async () => {
 
   assert.equal(result, null);
   assert.equal(exitCode, 1);
-  assert.equal(logs.length, 1);
-  assert.equal(logs[0].evt, 'boot.failed');
-  assert.match(logs[0].err.message, /DATABASE_URL is required/);
+  const fatal = logs.filter((record) => record.level === 'fatal');
+  assert.equal(fatal.length, 1);
+  assert.equal(fatal[0]?.evt, 'boot.failed');
+  assert.match((fatal[0]?.err as Error | undefined)?.message ?? '', /DATABASE_URL is required/);
 });

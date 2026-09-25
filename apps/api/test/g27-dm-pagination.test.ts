@@ -1,23 +1,27 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
-import { canonicalParticipants, createDmHistoryService } from '../src/domains/messaging/dm-history-service.ts';
+import {
+  canonicalParticipants,
+  createDmHistoryService,
+  type DmHistoryRepository
+} from '../src/domains/messaging/dm-history-service.ts';
+import { fake } from './fakes/index.ts';
 
-function message(id, micros) {
+function message(id: string, micros: number) {
   return { id, senderId: 'a', recipientId: 'b', body: id, createdAt: Number(micros), createdAtMicros: String(micros) };
 }
 
 test('G27-A01 DM cursor context is canonical and GET invokes only read repository methods', async () => {
   assert.deepEqual(canonicalParticipants('z', 'a'), ['a', 'z']);
-  const writes = [];
-  const repository = {
+  const writes: unknown[] = [];
+  const repository = fake<DmHistoryRepository>({
     canReadThread: async () => true,
     listLatest: async (input) => {
       writes.push(input);
       return { messages: [message('a', 10), message('b', 10)], hasMoreBefore: false, hasMoreAfter: false };
     }
-  };
+  });
   const service = createDmHistoryService({ repository, cursorCodec: createCursorCodec({ keys: ['d'.repeat(32)] }) });
   const page = await service.getPage({ userId: 'a', peerId: 'b' });
   assert.deepEqual(
@@ -30,6 +34,9 @@ test('G27-A01 DM cursor context is canonical and GET invokes only read repositor
 
 test('G27-A02 unauthorized and cross-thread cursors fail without disclosure', async () => {
   const codec = createCursorCodec({ keys: ['d'.repeat(32)] });
-  const denied = createDmHistoryService({ repository: { canReadThread: async () => false }, cursorCodec: codec });
+  const denied = createDmHistoryService({
+    repository: fake<DmHistoryRepository>({ canReadThread: async () => false }),
+    cursorCodec: codec
+  });
   await assert.rejects(denied.getPage({ userId: 'a', peerId: 'b' }), { code: 'thread_forbidden', statusCode: 403 });
 });

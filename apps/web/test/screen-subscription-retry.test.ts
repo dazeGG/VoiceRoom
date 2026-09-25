@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 
@@ -9,19 +8,19 @@ async function loadRetryController() {
 class FakeTimers {
   now = 0;
   nextId = 1;
-  timers = new Map();
+  timers = new Map<number, { callback: () => void; dueAt: number }>();
 
-  set = (callback, delay) => {
+  set = (callback: () => void, delay: number) => {
     const id = this.nextId++;
     this.timers.set(id, { callback, dueAt: this.now + delay });
     return id;
   };
 
-  clear = (id) => {
+  clear = (id: number) => {
     this.timers.delete(id);
   };
 
-  advance(milliseconds) {
+  advance(milliseconds: number) {
     const target = this.now + milliseconds;
     while (true) {
       const next = [...this.timers.entries()]

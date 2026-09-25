@@ -1,6 +1,6 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import { socketPathForDirectory } from './ipc-harness.ts';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -65,9 +65,9 @@ function request(socketPath, { method = 'GET', pathname, body, cookie } = {}) {
   });
 }
 
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function startServer(t) {
+async function startServer(t: TestContext) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-typing-'));
   const socketPath = socketPathForDirectory(dir);
   const { cleanup, databaseUrl } = await createTestDatabase(t);

@@ -1,8 +1,8 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createAttachmentRepository, mapAttachment } from '../src/domains/media/attachment-repository.ts';
+import { fakeDb, result } from './fakes/index.ts';
 
 const ROW = Object.freeze({
   id: 'attachment-1',
@@ -35,20 +35,29 @@ const ROW = Object.freeze({
   deleted_at: null
 });
 
-function createPool(handler = async () => ({ rows: [ROW], rowCount: 1 })) {
-  const calls = [];
-  const query = async (text, values) => {
-    calls.push({ text, values });
-    return handler(text, values, calls.length);
-  };
-  return { calls, pool: { query } };
+function createPool(handler: (text: string) => unknown = () => result([ROW])) {
+  const pool = fakeDb(handler);
+  return { calls: pool.calls, pool };
+}
+
+// The last statement the fake ran.
+function last(calls: Array<{ text: string; values: unknown[] }>) {
+  const call = calls.at(-1);
+  assert.ok(call);
+  return call;
+}
+
+// An attachment the repository must have returned.
+function present<T>(value: T | null | undefined): T {
+  assert.ok(value);
+  return value;
 }
 
 test('attachment repository validates its pool and maps database rows', () => {
   assert.throws(() => createAttachmentRepository(), /PostgreSQL pool is required/);
   assert.equal(mapAttachment(null), null);
 
-  const mapped = mapAttachment(ROW);
+  const mapped = present(mapAttachment(ROW));
   assert.deepEqual(mapped.storageKeys, { original: 'original', processed: 'processed', preview: 'preview' });
   assert.equal(mapped.state, 'ready');
   assert.equal(mapped.internalState, 'ready');
@@ -59,15 +68,17 @@ test('attachment repository validates its pool and maps database rows', () => {
   assert.equal(Object.isFrozen(mapped), true);
   assert.equal(Object.isFrozen(mapped.storageKeys), true);
 
-  const pending = mapAttachment({
-    ...ROW,
-    state: 'uploading',
-    metadata: null,
-    reserved_bytes: null,
-    original_bytes: null,
-    processed_bytes: null,
-    preview_bytes: null
-  });
+  const pending = present(
+    mapAttachment({
+      ...ROW,
+      state: 'uploading',
+      metadata: null,
+      reserved_bytes: null,
+      original_bytes: null,
+      processed_bytes: null,
+      preview_bytes: null
+    })
+  );
   assert.equal(pending.state, 'pending');
   assert.deepEqual(pending.metadata, {});
   assert.equal(pending.reservedBytes, null);
@@ -79,13 +90,7 @@ test('attachment repository validates its pool and maps database rows', () => {
 test('attachment repository covers draft, lookup, upload, processing, and deletion transitions', async () => {
   const { calls, pool } = createPool();
   const repository = createAttachmentRepository({ pool });
-  const clientCalls = [];
-  const client = {
-    async query(text, values) {
-      clientCalls.push({ text, values });
-      return { rows: [ROW], rowCount: 1 };
-    }
-  };
+  const client = fakeDb(() => result([ROW]));
 
   const draft = await repository.createDraft({
     id: 'attachment-1',
@@ -96,8 +101,8 @@ test('attachment repository covers draft, lookup, upload, processing, and deleti
     reservationExpiresAt: ROW.reservation_expires_at,
     metadata: { source: 'test' }
   });
-  assert.equal(draft.id, 'attachment-1');
-  assert.deepEqual(calls.at(-1).values, [
+  assert.equal(draft?.id, 'attachment-1');
+  assert.deepEqual(last(calls).values, [
     'attachment-1',
     'owner-1',
     'room',
@@ -107,17 +112,17 @@ test('attachment repository covers draft, lookup, upload, processing, and deleti
     { source: 'test' }
   ]);
   await repository.createDraft({ ownerId: 'owner-1', context: 'dm' });
-  assert.equal(typeof calls.at(-1).values[0], 'string');
-  assert.equal(calls.at(-1).values[3], null);
+  assert.equal(typeof last(calls).values[0], 'string');
+  assert.equal(last(calls).values[3], null);
 
-  assert.equal((await repository.findById('attachment-1')).id, 'attachment-1');
+  assert.equal((await repository.findById('attachment-1'))?.id, 'attachment-1');
   await repository.findById('attachment-1', { forUpdate: true, client });
-  assert.match(clientCalls[0].text, /FOR UPDATE/);
+  assert.match(client.calls[0]?.text ?? '', /FOR UPDATE/);
   assert.equal((await repository.listOwnerDrafts('owner-1', 'room', { limit: 0 })).length, 1);
-  assert.equal(calls.at(-1).values[2], 20);
+  assert.equal(last(calls).values[2], 20);
   await repository.listOwnerDrafts('owner-1', 'room', { limit: 999 });
-  assert.equal(calls.at(-1).values[2], 100);
-  assert.equal((await repository.findByClientRequest('owner-1', 'room', 'request-1')).id, 'attachment-1');
+  assert.equal(last(calls).values[2], 100);
+  assert.equal((await repository.findByClientRequest('owner-1', 'room', 'request-1'))?.id, 'attachment-1');
 
   assert.equal(
     (
@@ -128,10 +133,10 @@ test('attachment repository covers draft, lookup, upload, processing, and deleti
         height: 600,
         originalStorageKey: ' original '
       })
-    ).id,
+    )?.id,
     'attachment-1'
   );
-  assert.equal((await repository.retryProcessing('attachment-1')).id, 'attachment-1');
+  assert.equal((await repository.retryProcessing('attachment-1'))?.id, 'attachment-1');
   assert.equal(
     (
       await repository.markReady('attachment-1', {
@@ -140,23 +145,19 @@ test('attachment repository covers draft, lookup, upload, processing, and deleti
         processedBytes: 15,
         previewBytes: 5
       })
-    ).id,
+    )?.id,
     'attachment-1'
   );
-  assert.equal((await repository.markFailed('attachment-1', ' processing_failed ')).id, 'attachment-1');
-  assert.equal((await repository.markUnavailable('attachment-1')).id, 'attachment-1');
-  assert.equal(calls.at(-1).values[1], 'media_missing');
-  assert.equal((await repository.markDeleted('attachment-1')).id, 'attachment-1');
-  assert.equal((await repository.clearPhysicalData('attachment-1')).id, 'attachment-1');
+  assert.equal((await repository.markFailed('attachment-1', ' processing_failed '))?.id, 'attachment-1');
+  assert.equal((await repository.markUnavailable('attachment-1'))?.id, 'attachment-1');
+  assert.equal(last(calls).values[1], 'media_missing');
+  assert.equal((await repository.markDeleted('attachment-1'))?.id, 'attachment-1');
+  assert.equal((await repository.clearPhysicalData('attachment-1'))?.id, 'attachment-1');
 
   const fallbackDelete = createAttachmentRepository({
-    pool: {
-      async query(text) {
-        return /SET state = 'deleted'/.test(text) ? { rows: [], rowCount: 0 } : { rows: [ROW], rowCount: 1 };
-      }
-    }
+    pool: fakeDb((text) => (/SET state = 'deleted'/.test(text) ? result() : result([ROW])))
   });
-  assert.equal((await fallbackDelete.markDeleted('attachment-1')).id, 'attachment-1');
+  assert.equal((await fallbackDelete.markDeleted('attachment-1'))?.id, 'attachment-1');
 
   await assert.rejects(
     () => repository.createDraft({ ownerId: 'owner-1', context: 'other' }),
@@ -169,7 +170,7 @@ test('attachment repository covers draft, lookup, upload, processing, and deleti
     /Invalid client request id/
   );
   await assert.rejects(
-    () => repository.markUploaded('attachment-1', { mimeType: 'text/plain' }),
+    () => repository.markUploaded('attachment-1', { mimeType: 'text/plain' } as never),
     /Invalid attachment MIME type/
   );
   await assert.rejects(
@@ -177,7 +178,7 @@ test('attachment repository covers draft, lookup, upload, processing, and deleti
       repository.markReady('attachment-1', {
         processedStorageKey: '',
         previewStorageKey: 'preview'
-      }),
+      } as never),
     /Invalid processed storage key/
   );
 });
@@ -188,7 +189,7 @@ test('attachment repository binds ordered attachments and lists message data', a
     { ...ROW, id: 'attachment-2', attachment_order: 1 },
     { ...ROW, attachment_order: 0 }
   ];
-  const { calls, pool } = createPool(async () => ({ rows, rowCount }));
+  const { calls, pool } = createPool(() => result(rows, rowCount));
   const repository = createAttachmentRepository({ pool });
 
   const bound = await repository.bindReady({
@@ -201,7 +202,7 @@ test('attachment repository binds ordered attachments and lists message data', a
     bound.map((attachment) => attachment.order),
     [0, 1]
   );
-  assert.match(calls.at(-1).text, /room_message_id/);
+  assert.match(last(calls).text, /room_message_id/);
 
   await repository.bindReady({
     ownerId: 'owner-1',
@@ -209,16 +210,17 @@ test('attachment repository binds ordered attachments and lists message data', a
     messageId: 'message-2',
     attachmentIds: ['attachment-1', 'attachment-2']
   });
-  assert.match(calls.at(-1).text, /direct_message_id/);
+  assert.match(last(calls).text, /direct_message_id/);
   assert.equal((await repository.listForMessage('room', 'message-1')).length, 2);
-  assert.match(calls.at(-1).text, /room_message_id/);
+  assert.match(last(calls).text, /room_message_id/);
   assert.equal((await repository.listForMessage('dm', 'message-2')).length, 2);
-  assert.match(calls.at(-1).text, /direct_message_id/);
+  assert.match(last(calls).text, /direct_message_id/);
 
-  await assert.rejects(() => repository.bindReady({ attachmentIds: [] }), /one and four/);
-  await assert.rejects(() => repository.bindReady({ attachmentIds: ['a', 'a'] }), /must be unique/);
+  const bind = { ownerId: 'owner-1', context: 'room', messageId: 'message-1' };
+  await assert.rejects(() => repository.bindReady({ ...bind, attachmentIds: [] }), /one and four/);
+  await assert.rejects(() => repository.bindReady({ ...bind, attachmentIds: ['a', 'a'] }), /must be unique/);
   await assert.rejects(
-    () => repository.bindReady({ context: 'other', attachmentIds: ['a'] }),
+    () => repository.bindReady({ ...bind, context: 'other', attachmentIds: ['a'] }),
     /Invalid attachment context/
   );
   await assert.rejects(() => repository.listForMessage('other', 'message-1'), /Invalid attachment context/);
@@ -238,7 +240,7 @@ test('attachment repository binds ordered attachments and lists message data', a
 test('attachment repository covers cleanup, storage inventory, quota, and owner locks', async () => {
   let mode = 'row';
   const staleDeleted = { ...ROW, state: 'deleted', updated_at: new Date(Date.now() - 2 * 60 * 60 * 1000) };
-  const { calls, pool } = createPool(async (text) => {
+  const { calls, pool } = createPool((text) => {
     if (/pending_count/.test(text)) {
       return mode === 'empty'
         ? { rows: [], rowCount: 0 }
@@ -268,31 +270,25 @@ test('attachment repository covers cleanup, storage inventory, quota, and owner 
   const repository = createAttachmentRepository({ pool });
 
   assert.equal((await repository.listCleanupCandidates({ limit: 0 })).length, 1);
-  assert.equal(calls.at(-1).values[0], 500);
+  assert.equal(last(calls).values[0], 500);
   await repository.listCleanupCandidates({ limit: 1 });
-  assert.equal(calls.at(-1).values[0], 1);
+  assert.equal(last(calls).values[0], 1);
   assert.equal((await repository.listProcessingWithoutActiveJob({ limit: 0 })).length, 1);
-  assert.equal(calls.at(-1).values[0], 500);
-  assert.match(calls.at(-1).text, /NOT EXISTS/);
-  assert.match(calls.at(-1).text, /job\.state IN \('pending', 'processing'\)/);
-  await repository.listProcessingWithoutActiveJob({
-    limit: 999,
-    client: {
-      async query(text, values) {
-        assert.match(text, /attachment\.state = 'processing'/);
-        assert.deepEqual(values, [500]);
-        return { rows: [ROW], rowCount: 1 };
-      }
-    }
-  });
-  assert.equal((await repository.markCleanupDeleted('attachment-1')).id, 'attachment-1');
-  const cleanupDeleteSql = calls.at(-1).text;
+  assert.equal(last(calls).values[0], 500);
+  assert.match(last(calls).text, /NOT EXISTS/);
+  assert.match(last(calls).text, /job\.state IN \('pending', 'processing'\)/);
+  const client = fakeDb(() => result([ROW]));
+  await repository.listProcessingWithoutActiveJob({ limit: 999, client });
+  assert.match(last(client.calls).text, /attachment\.state = 'processing'/);
+  assert.deepEqual(last(client.calls).values, [500]);
+  assert.equal((await repository.markCleanupDeleted('attachment-1'))?.id, 'attachment-1');
+  const cleanupDeleteSql = last(calls).text;
   assert.equal((cleanupDeleteSql.match(/WHERE id = \$1/g) || []).length, 1);
   assert.equal((cleanupDeleteSql.match(/state = 'uploading'/g) || []).length, 1);
   assert.equal((cleanupDeleteSql.match(/state = 'failed'/g) || []).length, 1);
   assert.equal((cleanupDeleteSql.match(/state = 'ready'/g) || []).length, 1);
   mode = 'fallback';
-  assert.equal((await repository.markCleanupDeleted('attachment-1')).internalState, 'deleted');
+  assert.equal((await repository.markCleanupDeleted('attachment-1'))?.internalState, 'deleted');
   mode = 'missing';
   assert.equal(await repository.markCleanupDeleted('attachment-1'), null);
 
@@ -303,46 +299,29 @@ test('attachment repository covers cleanup, storage inventory, quota, and owner 
       keys: ['original', 'preview']
     }
   ]);
-  assert.deepEqual(calls.at(-1).values, ['attachment-0', 2_000]);
+  assert.deepEqual(last(calls).values, ['attachment-0', 2_000]);
   await repository.listStorageKeys({ limit: 0 });
-  assert.deepEqual(calls.at(-1).values, [null, 500]);
+  assert.deepEqual(last(calls).values, [null, 500]);
   assert.deepEqual(await repository.quotaUsage('owner-1'), { pendingCount: 2, recentCount: 3, usedBytes: 40 });
   mode = 'empty';
   assert.deepEqual(await repository.quotaUsage('owner-1'), { pendingCount: 0, recentCount: 0, usedBytes: 0 });
 
-  await assert.rejects(() => repository.lockOwner('owner-1'), /transaction client is required/);
-  const transactionCalls = [];
-  await repository.lockOwner('owner-1', {
-    async query(text, values) {
-      transactionCalls.push({ text, values });
-    }
-  });
-  assert.deepEqual(transactionCalls[0].values, ['media-quota:owner-1']);
+  await assert.rejects(() => repository.lockOwner('owner-1', null), /transaction client is required/);
+  const transaction = fakeDb();
+  await repository.lockOwner('owner-1', transaction);
+  assert.deepEqual(transaction.calls[0]?.values, ['media-quota:owner-1']);
 });
 
 test('attachment repository serializes physical upload work with advisory locks', async () => {
-  const calls = [];
-  let releaseCalls = 0;
   let unlockFails = false;
-  const client = {
-    async query(text, values) {
-      calls.push({ text, values });
-      if (unlockFails && /unlock/.test(text)) throw new Error('unlock failed');
-      return { rows: [] };
-    },
-    release() {
-      releaseCalls += 1;
-    }
-  };
+  const client = fakeDb((text) => {
+    if (unlockFails && /unlock/.test(text)) throw new Error('unlock failed');
+    return result();
+  });
+  const { calls } = client;
+  const idle = fakeDb();
   const repository = createAttachmentRepository({
-    pool: {
-      async query() {
-        return { rows: [] };
-      },
-      async connect() {
-        return client;
-      }
-    }
+    pool: { query: idle.query.bind(idle), connect: async () => client }
   });
 
   assert.equal(
@@ -352,9 +331,9 @@ test('attachment repository serializes physical upload work with advisory locks'
     }),
     'done'
   );
-  assert.match(calls[0].text, /pg_advisory_lock/);
-  assert.match(calls[1].text, /pg_advisory_unlock/);
-  assert.equal(releaseCalls, 1);
+  assert.match(calls[0]?.text ?? '', /pg_advisory_lock/);
+  assert.match(calls[1]?.text ?? '', /pg_advisory_unlock/);
+  assert.equal(client.released, 1);
 
   unlockFails = true;
   await assert.rejects(
@@ -364,15 +343,9 @@ test('attachment repository serializes physical upload work with advisory locks'
       }),
     /operation failed/
   );
-  assert.equal(releaseCalls, 2);
+  assert.equal(client.released, 2);
 
-  const noConnect = createAttachmentRepository({
-    pool: {
-      async query() {
-        return { rows: [] };
-      }
-    }
-  });
+  const noConnect = createAttachmentRepository({ pool: { query: idle.query.bind(idle) } });
   await assert.rejects(
     () => noConnect.withAttachmentLock('attachment-1', async () => {}),
     /cannot acquire attachment locks/

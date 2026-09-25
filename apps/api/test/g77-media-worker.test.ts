@@ -1,9 +1,12 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
 import test from 'node:test';
-import { MediaJobFenceError } from '../src/domains/media/media-job-repository.ts';
+import { Readable } from 'node:stream';
+import type { AttachmentRepository } from '../src/domains/media/attachment-repository.ts';
+import { MediaJobFenceError, type MediaJobRepository } from '../src/domains/media/media-job-repository.ts';
+import type { MediaStorage } from '../src/domains/media/storage.ts';
 import { DEFAULTS, createMediaProcessingWorker, retryDelay } from '../src/workers/media-processing.ts';
+import { attachment, fake, mediaJob } from './fakes/index.ts';
 
 test('G77-A01 worker defaults, bounded exponential backoff and pressure claim-stop are exact', async () => {
   assert.deepEqual(DEFAULTS, { batchSize: 10, concurrency: 2, leaseMs: 120000, maxAttempts: 5, timeoutMs: 30000 });
@@ -12,14 +15,14 @@ test('G77-A01 worker defaults, bounded exponential backoff and pressure claim-st
   let claims = 0;
   let storageReads = 0;
   const worker = createMediaProcessingWorker({
-    attachmentRepository: {},
-    storage: {},
+    attachmentRepository: fake<AttachmentRepository>(),
+    storage: fake<MediaStorage>(),
     pressureService: {
       async canClaimWork() {
         return false;
       }
     },
-    jobRepository: {
+    jobRepository: fake<MediaJobRepository>({
       async oldestPendingAgeMs() {
         storageReads += 1;
         return 42_000;
@@ -28,7 +31,7 @@ test('G77-A01 worker defaults, bounded exponential backoff and pressure claim-st
         claims += 1;
         return [];
       }
-    },
+    }),
     observeOldestPending(age) {
       assert.equal(age, 42_000);
     }
@@ -43,25 +46,26 @@ test('G77-A02 fencing loss cannot publish ready/failed state and processing owns
   let failed = 0;
   let observedAge = 0;
   const worker = createMediaProcessingWorker({
-    attachmentRepository: {
+    attachmentRepository: fake<AttachmentRepository>({
       async findById() {
-        return { internalState: 'processing' };
+        return attachment({ internalState: 'processing' });
       },
       async markFailed() {
         failed += 1;
+        return null;
       }
-    },
-    storage: {
+    }),
+    storage: fake<MediaStorage>({
       async openRead() {
         throw new MediaJobFenceError();
       }
-    },
-    jobRepository: {
+    }),
+    jobRepository: fake<MediaJobRepository>({
       async oldestPendingAgeMs() {
         return 20_000;
       },
       async claimBatch() {
-        return [{ id: 'j', attachmentId: 'a', attempts: 1, fencingToken: 1, createdAt: new Date(Date.now() - 20_000) }];
+        return [mediaJob({ id: 'j', attachmentId: 'a', createdAt: new Date(Date.now() - 20_000) })];
       },
       async renew() {
         throw new MediaJobFenceError();
@@ -69,9 +73,9 @@ test('G77-A02 fencing loss cannot publish ready/failed state and processing owns
       async fail() {
         throw new MediaJobFenceError();
       }
-    },
+    }),
     observeOldestPending(age) {
-      observedAge = age;
+      observedAge = Number(age);
     }
   });
   assert.equal(await worker.runOnce(), 1);
@@ -88,36 +92,36 @@ test('G77-A03 a claimed upload is turned upright into a WebP image and a preview
   const saved: Record<string, Buffer> = {};
   let completed: Record<string, unknown> | null = null;
   const worker = createMediaProcessingWorker({
-    attachmentRepository: {
+    attachmentRepository: fake<AttachmentRepository>({
       async findById() {
-        return { internalState: 'processing' };
+        return attachment({ internalState: 'processing' });
       }
-    },
-    storage: {
+    }),
+    storage: fake<MediaStorage>({
       async openRead() {
-        return {
-          stream: (async function* () {
-            yield original;
-          })()
-        };
+        return { key: 'att/original', bytes: original.length, stream: Readable.from([original]) };
       },
-      async save(id: string, variant: string, bytes: Buffer) {
-        saved[variant] = bytes;
-        return { key: `${id}/${variant}`, bytes: bytes.length };
+      async save(id, variant, bytes) {
+        const buffer = bytes as Buffer;
+        saved[String(variant)] = buffer;
+        return { key: `${String(id)}/${String(variant)}`, bytes: buffer.length };
       }
-    },
-    jobRepository: {
+    }),
+    jobRepository: fake<MediaJobRepository>({
       async oldestPendingAgeMs() {
         return 0;
       },
       async claimBatch() {
-        return [{ id: 'job', attachmentId: 'att', attempts: 1, fencingToken: 1, createdAt: new Date() }];
+        return [mediaJob({ id: 'job', attachmentId: 'att' })];
       },
-      async renew() {},
-      async completeProcessing(jobId: string, input: { attachmentResult: Record<string, unknown> }) {
+      async renew() {
+        return mediaJob({ id: 'job', attachmentId: 'att' });
+      },
+      async completeProcessing(jobId, input) {
         completed = { jobId, ...input.attachmentResult };
+        return attachment({ id: 'att' });
       }
-    },
+    }),
     observeOldestPending() {}
   });
   assert.equal(await worker.runOnce(), 1);

@@ -1,36 +1,16 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createRoomStore, mapMessage, mapRoom } from '../src/lib/room-store.ts';
+import { createRoomStore, mapMessage, mapRoom, type AppendRoomMessageInput } from '../src/lib/room-store.ts';
+import { fakePoolWithClient } from './fakes/index.ts';
 
-function createFakePool(handler) {
-  const calls = [];
-  const client = {
-    query: async (text, values = []) => {
-      calls.push({ scope: 'client', text, values });
-      if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') return { rows: [], rowCount: 0 };
-      return handler(text, values, calls);
-    },
-    release() {
-      calls.push({ scope: 'client', text: 'release', values: [] });
-    }
-  };
+const createFakePool = fakePoolWithClient;
 
-  return {
-    calls,
-    async query(text, values = []) {
-      calls.push({ scope: 'pool', text, values });
-      return handler(text, values, calls);
-    },
-    async connect() {
-      calls.push({ scope: 'pool', text: 'connect', values: [] });
-      return client;
-    },
-    async end() {
-      calls.push({ scope: 'pool', text: 'end', values: [] });
-    }
-  };
+// The statement the fake ran at an index.
+function nth<Call>(calls: Call[], index: number): Call {
+  const call = calls[index];
+  assert.ok(call);
+  return call;
 }
 
 test('mapRoom maps PostgreSQL row shape to API room shape with ephemeral peers map', () => {
@@ -43,6 +23,7 @@ test('mapRoom maps PostgreSQL row shape to API room shape with ephemeral peers m
     updated_at: new Date(2000),
     empty_since: null
   });
+  assert.ok(room);
 
   assert.equal(room.id, 'abc123');
   assert.equal(room.avatarKey, 'room_abcdefghij_deadbeef.webp');
@@ -73,11 +54,12 @@ test('createRoom inserts durable room row with parameterized SQL', async () => {
   const store = createRoomStore({ pool });
 
   const room = await store.createRoom({ roomId: 'room1', creatorIp: 'ip', isStatic: true, now: 1000 });
+  assert.ok(room);
 
   assert.equal(room.id, 'room1');
-  assert.match(pool.calls[0].text, /INSERT INTO rooms/);
-  assert.deepEqual(pool.calls[0].values.slice(0, 3), ['room1', 'ip', true]);
-  assert.doesNotMatch(pool.calls[0].text, /room_icon_key|room_color_key|emoji/);
+  assert.match(nth(pool.calls, 0).text, /INSERT INTO rooms/);
+  assert.deepEqual(nth(pool.calls, 0).values.slice(0, 3), ['room1', 'ip', true]);
+  assert.doesNotMatch(nth(pool.calls, 0).text, /room_icon_key|room_color_key|emoji/);
 });
 
 test('updateRoomAvatar only updates active static rooms', async () => {
@@ -102,6 +84,7 @@ test('updateRoomAvatar only updates active static rooms', async () => {
     };
   });
   const room = await createRoomStore({ pool }).updateRoomAvatar('abcdefghij', 'room_abcdefghij_deadbeef.webp', 2000);
+  assert.ok(room);
   assert.equal(room.avatarKey, 'room_abcdefghij_deadbeef.webp');
 });
 
@@ -135,15 +118,16 @@ test('swapRoomAvatar locks the room row and returns the exact key it replaced', 
   });
 
   const result = await createRoomStore({ pool }).swapRoomAvatar('abcdefghij', nextKey, 2000);
+  assert.ok(result);
 
   assert.equal(result.previousAvatarKey, oldKey);
-  assert.equal(result.room.avatarKey, nextKey);
+  assert.equal(result.room?.avatarKey, nextKey);
   assert.ok(pool.calls.some(({ text }) => text === 'BEGIN'));
   assert.ok(pool.calls.some(({ text }) => text === 'COMMIT'));
 });
 
 test('appendMessage uses a transaction, verifies room existence, inserts a row that never expires, and trims nothing', async () => {
-  let insertedValues;
+  let insertedValues: unknown[] = [];
   const pool = createFakePool((text, values) => {
     if (/SELECT id FROM rooms/.test(text)) return { rows: [{ id: 'room1' }], rowCount: 1 };
     if (/INSERT INTO room_messages/.test(text)) {
@@ -176,9 +160,10 @@ test('appendMessage uses a transaction, verifies room existence, inserts a row t
       text: 'hello',
       createdAt: 1000,
       expiresAt: 2000
-    },
+    } as AppendRoomMessageInput,
     1000
   );
+  assert.ok(message);
 
   assert.deepEqual(message, {
     id: 'msg1',
@@ -202,7 +187,7 @@ test('appendMessage uses a transaction, verifies room existence, inserts a row t
 });
 
 test('appendMessage does not persist a profile-name snapshot for account messages', async () => {
-  let insertedValues;
+  let insertedValues: unknown[] = [];
   const pool = createFakePool((text, values) => {
     if (/SELECT id FROM rooms/.test(text)) return { rows: [{ id: 'room1' }], rowCount: 1 };
     if (/INSERT INTO room_messages/.test(text)) {
@@ -236,7 +221,7 @@ test('appendMessage does not persist a profile-name snapshot for account message
       createdAt: 1000,
       expiresAt: 2000,
       authorUserId: 'user1'
-    },
+    } as AppendRoomMessageInput,
     1000
   );
 
@@ -268,6 +253,7 @@ test('editMessage updates active room message text and maps its edit timestamp',
   });
 
   const message = await createRoomStore({ pool }).editMessage('room1', 'msg1', 'updated');
+  assert.ok(message);
   assert.equal(message.text, 'updated');
   assert.equal(message.editedAt, 3000);
 });
@@ -307,7 +293,7 @@ test('getRoomUnreadCount counts active messages after the user read cursor and e
 
   const count = await createRoomStore({ pool }).getRoomUnreadCount('room1', 'user1', 5000);
   assert.equal(count, 4);
-  assert.equal(pool.calls[0].values[2].getTime(), 5000);
+  assert.equal((nth(pool.calls, 0).values[2] as Date).getTime(), 5000);
 });
 
 test('markRoomChatRead upserts a monotonic cursor only for visible rooms', async () => {
@@ -350,8 +336,8 @@ test('listVisibleRoomsForUser returns per-user unread metadata', async () => {
   });
 
   const rooms = await createRoomStore({ pool }).listVisibleRoomsForUser('user1');
-  assert.equal(rooms[0].unreadCount, 3);
-  assert.equal(rooms[0].lastMessageAt, 4000);
+  assert.equal(rooms[0]?.unreadCount, 3);
+  assert.equal(rooms[0]?.lastMessageAt, 4000);
 });
 
 test('listMessages only reads active rows and never deletes anything', async () => {
@@ -394,13 +380,13 @@ test('listMessages only reads active rows and never deletes anything', async () 
     })
   ]);
   assert.equal(pool.calls.length, 1);
-  assert.doesNotMatch(pool.calls[0].text, /UPDATE|DELETE/);
-  assert.match(pool.calls[0].text, /LEFT JOIN room_peer_identities/);
-  assert.match(pool.calls[0].text, /LEFT JOIN users/);
-  assert.match(pool.calls[0].text, /COALESCE\(NULLIF\(u\.display_name, ''\), u\.login, recent\.name\) AS name/);
-  assert.equal(messages[0].avatarAccent, '#49303f');
-  assert.match(messages[0].avatarKey, /^av_/);
-  assert.match(pool.calls[0].text, /ORDER BY recent.created_at ASC, recent.id ASC/);
+  assert.doesNotMatch(nth(pool.calls, 0).text, /UPDATE|DELETE/);
+  assert.match(nth(pool.calls, 0).text, /LEFT JOIN room_peer_identities/);
+  assert.match(nth(pool.calls, 0).text, /LEFT JOIN users/);
+  assert.match(nth(pool.calls, 0).text, /COALESCE\(NULLIF\(u\.display_name, ''\), u\.login, recent\.name\) AS name/);
+  assert.equal(messages[0]?.avatarAccent, '#49303f');
+  assert.match(messages[0]?.avatarKey ?? '', /^av_/);
+  assert.match(nth(pool.calls, 0).text, /ORDER BY recent.created_at ASC, recent.id ASC/);
 });
 
 test('createRoomWithQuota enforces room limits inside one advisory-locked transaction', async () => {
@@ -433,6 +419,7 @@ test('createRoomWithQuota enforces room limits inside one advisory-locked transa
     roomId: 'room-quota',
     now: 1000
   });
+  assert.ok(result);
 
   assert.equal(result.status, 'created');
   assert.equal(result.room.id, 'room-quota');
@@ -480,6 +467,7 @@ test('createRoomWithQuota creates owner membership for authenticated static room
     roomId: 'owned-room',
     now: 1000
   });
+  assert.ok(result);
 
   assert.equal(result.status, 'created');
   assert.equal(result.room.ownerId, 'user-1');
@@ -501,6 +489,7 @@ test('createRoomWithQuota requires an owner for static rooms', async () => {
     maxRooms: 10,
     roomId: 'anon-static'
   });
+  assert.ok(result);
 
   assert.deepEqual(result, { room: null, status: 'auth_required' });
 });
@@ -521,6 +510,7 @@ test('createRoomWithQuota enforces static ownership quota per user', async () =>
     maxRooms: 10,
     roomId: 'owned-room-4'
   });
+  assert.ok(result);
 
   assert.deepEqual(result, { room: null, status: 'quota_exceeded' });
 });
@@ -539,6 +529,7 @@ test('createRoomWithQuota returns quota status without inserting when per-IP tem
     maxRooms: 10,
     roomId: 'blocked-room'
   });
+  assert.ok(result);
 
   assert.deepEqual(result, { room: null, status: 'quota_exceeded' });
   assert.equal(
@@ -549,9 +540,10 @@ test('createRoomWithQuota returns quota status without inserting when per-IP tem
 
 test('getOrCreatePeerIdentity creates, reuses, and rejects mismatched tokens by hash', async () => {
   const identities = new Map();
+  const identityKey = (roomId: unknown, peerId: unknown) => `${String(roomId)}:${String(peerId)}`;
   const pool = createFakePool((text, values) => {
     if (/SELECT \* FROM room_peer_identities/.test(text)) {
-      const row = identities.get(`${values[0]}:${values[1]}`);
+      const row = identities.get(identityKey(values[0], values[1]));
       return { rows: row ? [row] : [], rowCount: row ? 1 : 0 };
     }
     if (/INSERT INTO room_peer_identities/.test(text)) {
@@ -566,11 +558,11 @@ test('getOrCreatePeerIdentity creates, reuses, and rejects mismatched tokens by 
         created_at: values[6],
         last_seen_at: values[6]
       };
-      identities.set(`${values[1]}:${values[2]}`, row);
+      identities.set(identityKey(values[1], values[2]), row);
       return { rows: [row], rowCount: 1 };
     }
     if (/UPDATE room_peer_identities/.test(text)) {
-      const row = identities.get(`${values[0]}:${values[1]}`);
+      const row = identities.get(identityKey(values[0], values[1]));
       row.last_seen_at = values[2];
       row.display_name = values[3];
       if (values[4]) row.avatar_color_key = values[4];
@@ -588,9 +580,10 @@ test('getOrCreatePeerIdentity creates, reuses, and rejects mismatched tokens by 
     avatarColorKey: 'green',
     now: 1000
   });
+  assert.ok(created);
   assert.equal(created.status, 'created');
-  assert.equal(created.identity.avatarColorKey, 'green');
-  assert.notEqual(created.identity.sessionTokenHash, 'token-a');
+  assert.equal(created.identity?.avatarColorKey, 'green');
+  assert.notEqual(created.identity?.sessionTokenHash, 'token-a');
 
   const reused = await store.getOrCreatePeerIdentity({
     roomId: 'room1',
@@ -600,9 +593,10 @@ test('getOrCreatePeerIdentity creates, reuses, and rejects mismatched tokens by 
     avatarColorKey: 'rose',
     now: 2000
   });
+  assert.ok(reused);
   assert.equal(reused.status, 'reused');
-  assert.equal(reused.identity.avatarColorKey, 'rose');
-  assert.equal(reused.identity.displayName, 'Ada 2');
+  assert.equal(reused.identity?.avatarColorKey, 'rose');
+  assert.equal(reused.identity?.displayName, 'Ada 2');
 
   const mismatch = await store.getOrCreatePeerIdentity({
     roomId: 'room1',
@@ -610,12 +604,13 @@ test('getOrCreatePeerIdentity creates, reuses, and rejects mismatched tokens by 
     sessionToken: 'token-b',
     now: 3000
   });
+  assert.ok(mismatch);
   assert.equal(mismatch.status, 'token_mismatch');
 });
 
 test('getOrCreatePeerIdentity recovers when concurrent first-touch insert wins the unique key', async () => {
   let insertAttempts = 0;
-  const existingRow = {
+  const existingRow: Record<string, unknown> = {
     id: 'identity-1',
     room_id: 'room-race',
     peer_id: 'peer123456',
@@ -652,8 +647,9 @@ test('getOrCreatePeerIdentity recovers when concurrent first-touch insert wins t
     displayName: 'Retry',
     now: 2000
   });
+  assert.ok(result);
 
   assert.equal(result.status, 'reused');
-  assert.equal(result.identity.avatarColorKey, 'rose');
-  assert.equal(result.identity.displayName, 'Retry');
+  assert.equal(result.identity?.avatarColorKey, 'rose');
+  assert.equal(result.identity?.displayName, 'Retry');
 });

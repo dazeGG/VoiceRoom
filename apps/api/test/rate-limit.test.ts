@@ -1,12 +1,14 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import type { IncomingHttpHeaders } from 'node:http';
+import type { Socket } from 'node:net';
 import { getClientIp, createRateLimiter } from '../src/lib/rate-limit.ts';
+import { fake } from './fakes/index.ts';
 
-function fakeReq({ remoteAddress = '10.0.0.1', forwardedFor } = {}) {
-  const headers = {};
+function fakeReq({ remoteAddress = '10.0.0.1', forwardedFor }: { remoteAddress?: string; forwardedFor?: string } = {}) {
+  const headers: IncomingHttpHeaders = {};
   if (forwardedFor !== undefined) headers['x-forwarded-for'] = forwardedFor;
-  return { headers, socket: { remoteAddress } };
+  return { headers, socket: fake<Socket>({ remoteAddress }) };
 }
 
 test('getClientIp uses socket address when proxy is not trusted', () => {

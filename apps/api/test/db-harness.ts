@@ -1,9 +1,9 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import crypto from 'node:crypto';
+import type { TestContext } from 'node:test';
 import { Pool } from 'pg';
 import { readDatabaseConfig } from '../src/lib/config.ts';
 
-function quoteIdent(value) {
+function quoteIdent(value: string) {
   return `"${String(value).replaceAll('"', '""')}"`;
 }
 
@@ -11,7 +11,7 @@ function databaseName() {
   return `voice_room_test_${crypto.randomBytes(8).toString('hex')}`;
 }
 
-function databaseUrlFor(baseUrl, name) {
+function databaseUrlFor(baseUrl: string, name: string) {
   const parsed = new URL(baseUrl);
   parsed.pathname = `/${name}`;
   parsed.search = '';
@@ -29,7 +29,7 @@ function databaseUrlFor(baseUrl, name) {
 const SESSION_DRAIN_TIMEOUT_MS = 2000;
 const SESSION_DRAIN_POLL_MS = 20;
 
-async function waitForSessionsToLeave(admin, name) {
+async function waitForSessionsToLeave(admin: Pool, name: string) {
   const deadline = Date.now() + SESSION_DRAIN_TIMEOUT_MS;
   for (;;) {
     const { rows } = await admin.query(
@@ -43,7 +43,8 @@ async function waitForSessionsToLeave(admin, name) {
   }
 }
 
-async function createTestDatabase(t) {
+// The test context is accepted for call-site symmetry with t.after cleanups.
+async function createTestDatabase(_t?: TestContext) {
   const { url } = readDatabaseConfig({ DATABASE_URL: process.env.TEST_DATABASE_URL });
   const name = databaseName();
   const admin = new Pool({ connectionString: url, max: 1 });

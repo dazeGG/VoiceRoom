@@ -1,10 +1,12 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import test from 'node:test';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createInboxRepository } from '../src/domains/notifications/inbox-repository.ts';
 import { createTestDatabase } from './db-harness.ts';
+
+const sorted = (...revisions: unknown[]) => revisions.map(Number).sort((a, b) => a - b);
+
 test(
   'G59-A01 100k inbox uses bounded cursor reads with zero writes and isolation',
   { skip: !process.env.TEST_DATABASE_URL, timeout: 120000 },
@@ -99,10 +101,7 @@ test(
         body: 'concurrent'
       })
     ]);
-    assert.deepEqual(
-      [upsertRetract[0].revision, upsert.revision].sort((a, b) => a - b),
-      [2, 3]
-    );
+    assert.deepEqual(sorted(upsertRetract[0]?.revision, upsert?.revision), [2, 3]);
     const later = await repo.upsert({
       recipientUserId: 'r-upsert',
       actorUserId: 'actor',
@@ -111,22 +110,20 @@ test(
       reasons: ['mention'],
       body: 'later'
     });
-    assert.equal(later.revision, 4);
+    assert.equal(later?.revision, 4);
     assert.equal((await repo.unreadCount('r-upsert')).revision, 4);
     const [readRetract, read] = await Promise.all([
       repo.retractByMessage('m-read'),
       repo.markRead({ recipientUserId: 'r-read', notificationId: 'n-read' })
     ]);
-    assert.deepEqual(
-      [readRetract[0].revision, read.revision].sort((a, b) => a - b),
-      [2, 3]
-    );
+    assert.deepEqual(sorted(readRetract[0]?.revision, read?.revision), [2, 3]);
     const [allRetract, readAll] = await Promise.all([
       repo.retractByMessage('m-all'),
       repo.markAllRead({ recipientUserId: 'r-all' })
     ]);
     assert.deepEqual(
-      [allRetract[0].revision, readAll.revision].sort((a, b) => a - b),
+      sorted(allRetract[0]?.revision, readAll.revision),
+
       [3, 4]
     );
     assert.equal((await repo.unreadCount('r-all')).revision, 4);

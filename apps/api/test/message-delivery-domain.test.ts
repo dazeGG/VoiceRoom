@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 // Branch-by-branch proofs for message projection, the durable delivery relay,
 // push and DM notification dispatch, and link preview events.
 
@@ -9,7 +8,14 @@ import { EventEmitter } from 'node:events';
 import { createMessageProjection, publicAttachment } from '../src/domains/messaging/message-projection.ts';
 import { createMessageDeliveryRelay } from '../src/domains/messaging/message-delivery-relay.ts';
 import { createNotificationDispatch } from '../src/domains/notifications/notification-dispatch.ts';
-import { createLinkPreviewEvents } from '../src/domains/link-previews/link-preview-events.ts';
+import {
+  createLinkPreviewEvents,
+  type LinkPreviewEventsDeps
+} from '../src/domains/link-previews/link-preview-events.ts';
+import { fake, recordingLogger } from './fakes/index.ts';
+
+type Sent = { userId: string; payload: Record<string, unknown>; context: Record<string, unknown> };
+const idOf = (message: unknown) => (message as { id?: string }).id;
 
 const ATTACHMENT = {
   id: 'a1',
@@ -25,7 +31,7 @@ const ATTACHMENT = {
 };
 
 function projection({ attachments = true, replies = true } = {}) {
-  const calls = [];
+  const calls: unknown[] = [];
   return {
     calls,
     projection: createMessageProjection({
@@ -71,14 +77,14 @@ test('projection adds attachments and the reply quote', async () => {
     room.attachments.map((a) => a.url),
     ['/api/media/attachments/a1/preview', null]
   );
-  assert.deepEqual(room.replyPreview, { quoted: 'room' });
+  assert.deepEqual((room as { replyPreview?: unknown }).replyPreview, { quoted: 'room' });
   const dm = await p.project('dm', { id: 'm2', replyTo: { messageId: 'm0' } }, { userId: 'u1', peerId: 'u2' });
-  assert.deepEqual(dm.replyPreview, { quoted: 'dm' });
+  assert.deepEqual((dm as { replyPreview?: unknown }).replyPreview, { quoted: 'dm' });
   assert.deepEqual(calls.at(-1), ['dm', { userId: 'u1', peerId: 'u2', messageId: 'm0' }]);
   assert.deepEqual((await p.projectMedia('room', {})).attachments, []);
-  const plain = { id: 'm3' };
+  const plain: { id: string; replyTo?: null } = { id: 'm3' };
   assert.equal(await p.projectReply('room', plain), plain);
-  assert.equal(await p.projectReply('room', null), null);
+  assert.equal(await p.projectReply('room', null as never), null);
 
   const offline = projection({ attachments: false, replies: false }).projection;
   assert.deepEqual((await offline.projectMedia('room', { id: 'm' })).attachments, []);
@@ -88,10 +94,33 @@ test('projection adds attachments and the reply quote', async () => {
 
 // --- relay ------------------------------------------------------------------------
 
-function relayHarness({ enabled = true, pool = true, outbox = true, findUserFails = false, event = null } = {}) {
-  const calls = { chat: [], events: [], dm: [], errors: [], queries: [], released: 0 };
+type RelayOptions = {
+  enabled?: boolean;
+  pool?: boolean;
+  outbox?: boolean;
+  findUserFails?: boolean;
+  event?: unknown;
+};
+
+function relayHarness({
+  enabled = true,
+  pool = true,
+  outbox = true,
+  findUserFails = false,
+  event = null
+}: RelayOptions = {}) {
+  const calls = {
+    chat: [] as unknown[],
+    events: [] as unknown[],
+    dm: [] as unknown[],
+    errors: [] as unknown[],
+    queries: [] as string[],
+    released: 0,
+    failUnlisten: false
+  };
+  const logger = recordingLogger();
   const client = Object.assign(new EventEmitter(), {
-    async query(sql) {
+    async query(sql: string) {
       calls.queries.push(sql);
       if (sql.startsWith('UNLISTEN') && calls.failUnlisten) throw new Error('gone');
     },
@@ -119,7 +148,7 @@ function relayHarness({ enabled = true, pool = true, outbox = true, findUserFail
           }
         : null,
     projection: projection().projection,
-    broadcastChatMessage: (roomId, message) => calls.chat.push([roomId, message.id]),
+    broadcastChatMessage: (roomId, message) => calls.chat.push([roomId, idOf(message)]),
     notifyUser: (userId, event) => calls.events.push([userId, event.type]),
     findUser: async (userId) => {
       if (findUserFails) throw new Error('users');
@@ -128,10 +157,11 @@ function relayHarness({ enabled = true, pool = true, outbox = true, findUserFail
     broadcastDmNotification: async (recipientId, sender) => {
       calls.dm.push([recipientId, sender.id]);
     },
-    publicChatMessage: (message) => ({ id: message.id, public: true }),
-    logger: () => ({ error: (fields) => calls.errors.push(fields.evt) })
+    publicChatMessage: (message) => ({ id: idOf(message), public: true }),
+    logger: () => logger
   });
-  return { calls, client, relay };
+  const errors = () => logger.records.map((record) => record.evt);
+  return { calls, client, errors, relay };
 }
 
 test('relayed room and DM messages reach sockets and raise the DM notification', async () => {
@@ -174,7 +204,7 @@ test('relayed room and DM messages reach sockets and raise the DM notification',
 
 test('the listener LISTENs once, dispatches notified outbox events and cleans up', async () => {
   const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
-  const { calls, client, relay } = relayHarness({
+  const { calls, client, errors, relay } = relayHarness({
     event: { type: 'message.created', conversation: { type: 'room', id: 'r1' }, message: { id: 'm1' } }
   });
   await relay.start();
@@ -191,7 +221,7 @@ test('the listener LISTENs once, dispatches notified outbox events and cleans up
   await settle();
   assert.deepEqual(calls.chat, [['r1', 'm1']]);
   assert.deepEqual(
-    calls.errors.sort(),
+    errors().sort(),
     ['msg.event_dispatch_failed', 'msg.event_dispatch_failed', 'msg.listener_failed'].sort()
   );
   calls.failUnlisten = true;
@@ -212,7 +242,7 @@ test('the listener stays off when disabled or without a pool or outbox', async (
 // --- notification dispatch ------------------------------------------------------------
 
 function dispatchHarness({ enabled = true, preferences = {}, sendFails = false, preferencesFail = false } = {}) {
-  const calls = { sent: [], events: [], warnings: [], errors: [] };
+  const calls = { sent: [] as Sent[], events: [] as unknown[], warnings: [] as unknown[], errors: [] as unknown[] };
   const dispatch = createNotificationDispatch({
     push: () => ({
       config: { enabled },
@@ -230,8 +260,8 @@ function dispatchHarness({ enabled = true, preferences = {}, sendFails = false, 
       return 2;
     },
     logger: () => ({
-      warn: (fields) => calls.warnings.push(fields.evt),
-      error: (fields) => calls.errors.push(fields.evt)
+      warn: (fields: { evt?: string }) => calls.warnings.push(fields.evt),
+      error: (fields: { evt?: string }) => calls.errors.push(fields.evt)
     })
   });
   return { calls, dispatch };
@@ -252,16 +282,16 @@ test('push respects the switch, preferences, private text and expiry', async () 
 
   const privacy = dispatchHarness({ preferences: { privateNotifications: true } });
   await privacy.dispatch.queuePush('u', PAYLOAD);
-  assert.equal(privacy.calls.sent[0].payload.body, 'private');
-  assert.equal('privateBody' in privacy.calls.sent[0].payload, false);
+  assert.equal(privacy.calls.sent[0]?.payload.body, 'private');
+  assert.equal('privateBody' in (privacy.calls.sent[0]?.payload ?? {}), false);
   await privacy.dispatch.queuePush('u', { type: 't', title: 'T', body: 'only public' });
-  assert.equal(privacy.calls.sent[1].payload.body, 'only public');
+  assert.equal(privacy.calls.sent[1]?.payload.body, 'only public');
 
   const expiring = dispatchHarness();
   await expiring.dispatch.queuePush('u', PAYLOAD, { expiresAt: Date.now() - 1000 });
-  assert.deepEqual(expiring.calls.sent, []);
+  assert.equal(expiring.calls.sent.length, 0);
   await expiring.dispatch.queuePush('u', PAYLOAD, { expiresAt: Date.now() + 60_000 });
-  assert.ok(expiring.calls.sent[0].context.ttl > 0);
+  assert.ok(Number(expiring.calls.sent[0]?.context.ttl) > 0);
 
   const failing = dispatchHarness({ sendFails: true });
   await failing.dispatch.queuePush('u', PAYLOAD);
@@ -278,8 +308,8 @@ test('a DM notification skips self, muted senders and failures', async () => {
   assert.equal(await dispatch.broadcastDmNotification('r1', sender, message), 2);
   assert.deepEqual(calls.events, [['r1', 'notification.dm.message']]);
   await new Promise((resolve) => setTimeout(resolve, 5));
-  assert.equal(calls.sent[0].payload.title, 'sam');
-  assert.deepEqual(calls.sent[0].context, { peerUserId: 's1' });
+  assert.equal(calls.sent[0]?.payload.title, 'sam');
+  assert.deepEqual(calls.sent[0]?.context, { peerUserId: 's1' });
   await dispatch.broadcastDmNotification('r1', { id: 's1', displayName: 'Sam' }, message);
   await dispatch.broadcastDmNotification('r1', { id: 's1' }, message);
 
@@ -293,7 +323,7 @@ test('a DM notification skips self, muted senders and failures', async () => {
 // --- link preview events --------------------------------------------------------------
 
 test('link previews are scheduled only when a link may be affected and arrive as edits', async () => {
-  const calls = { scheduled: [], edits: [], events: [] };
+  const calls: { scheduled: unknown[]; edits: unknown[]; events: unknown[] } = { scheduled: [], edits: [], events: [] };
   const events = createLinkPreviewEvents({
     previews: () => ({
       scheduleRoomMessage: (input) => calls.scheduled.push(['room', input.messageId]),
@@ -302,8 +332,8 @@ test('link previews are scheduled only when a link may be affected and arrive as
     roomMessage: async (roomId, messageId) => (messageId === 'gone' ? null : { id: messageId }),
     directMessage: async (senderId, recipientId, messageId) => (messageId === 'gone' ? null : { id: messageId }),
     projection: projection().projection,
-    publicChatMessage: (message) => ({ id: message.id }),
-    broadcastRoomEdit: (roomId, message) => calls.edits.push([roomId, message.id]),
+    publicChatMessage: (message) => ({ id: idOf(message) }),
+    broadcastRoomEdit: (roomId, message) => calls.edits.push([roomId, idOf(message)]),
     notifyUser: (userId, event) => calls.events.push([userId, event.type])
   });
   events.scheduleRoomLinkPreview('r1', 'm1', 'no link here');
@@ -329,7 +359,7 @@ test('link previews are scheduled only when a link may be affected and arrive as
     ['a', 'dm.message.edited']
   ]);
 
-  const disabled = createLinkPreviewEvents({ previews: () => null });
+  const disabled = createLinkPreviewEvents(fake<LinkPreviewEventsDeps>({ previews: () => null }));
   disabled.scheduleRoomLinkPreview('r1', 'm', 'https://example.com');
   disabled.scheduleDirectLinkPreview({ messageId: 'm', senderId: 'a', recipientId: 'b', text: 'https://example.com' });
 });

@@ -1,26 +1,25 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes scripts/tsconfig.json.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-function args(argv) {
-  const values = {};
-  for (let index = 0; index < argv.length; index += 2) values[argv[index]?.replace(/^--/, '')] = argv[index + 1];
+function args(argv: string[]) {
+  const values: Record<string, string | undefined> = {};
+  for (let index = 0; index < argv.length; index += 2) values[argv[index]?.replace(/^--/, '') ?? ''] = argv[index + 1];
   return values;
 }
-function sha256(file) {
+function sha256(file: string) {
   return `sha256:${crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex')}`;
 }
-function inside(root, target) {
+function inside(root: string, target: string) {
   const relative = path.relative(root, target);
   return relative !== '' && !relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative);
 }
-function assertRegular(file, label) {
+function assertRegular(file: string, label: string) {
   const stat = fs.lstatSync(file);
   if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`${label} must be a regular file`);
 }
-function resolveSnapshotFile(root, relative, label) {
+function resolveSnapshotFile(root: string, relative: string | undefined, label: string) {
   if (!relative || path.isAbsolute(relative) || relative.split(/[\\/]/).includes('..'))
     throw new Error(`Unsafe ${label} path in manifest`);
   let current = root;
@@ -34,7 +33,16 @@ function resolveSnapshotFile(root, relative, label) {
   return resolved;
 }
 
-export function restoreCoordinatedSnapshot({ snapshot, target, allowedRoot, namespace }) {
+type RestoreOptions = {
+  snapshot?: string;
+  target?: string;
+  allowedRoot?: string;
+  namespace?: string;
+};
+
+type CatalogLease = { state?: string } | null | undefined;
+
+export function restoreCoordinatedSnapshot({ snapshot, target, allowedRoot, namespace }: RestoreOptions) {
   if (!snapshot || !target || !allowedRoot || !namespace)
     throw new Error('snapshot, target, allowedRoot and namespace are required');
   if (fs.lstatSync(path.resolve(snapshot)).isSymbolicLink()) throw new Error('Snapshot root must not be a symlink');
@@ -84,7 +92,7 @@ export function restoreCoordinatedSnapshot({ snapshot, target, allowedRoot, name
     fs.copyFileSync(database, path.join(staging, 'database.dump'), fs.constants.COPYFILE_EXCL);
     const restoredCatalog = {
       ...catalogValue,
-      leases: catalogValue.leases.map((lease) =>
+      leases: catalogValue.leases.map((lease: CatalogLease) =>
         lease?.state === 'leased' ? { ...lease, state: 'pending', leaseOwner: null, leaseExpiresAt: null } : lease
       )
     };
@@ -104,7 +112,7 @@ export function restoreCoordinatedSnapshot({ snapshot, target, allowedRoot, name
     const report = {
       contract: 'voice-room.coordinated-media-restore/v1',
       namespace,
-      leasesRecovered: catalogValue.leases.filter((lease) => lease?.state === 'leased').length,
+      leasesRecovered: catalogValue.leases.filter((lease: CatalogLease) => lease?.state === 'leased').length,
       restoredAt: new Date().toISOString()
     };
     fs.writeFileSync(path.join(staging, 'restore-report.json'), `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx' });
@@ -129,7 +137,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     });
     process.stdout.write(`${JSON.stringify({ ok: true, ...report })}\n`);
   } catch (error) {
-    console.error(error.message);
+    console.error(error instanceof Error ? error.message : String(error));
     process.exitCode = 1;
   }
 }

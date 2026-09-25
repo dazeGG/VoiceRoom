@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 // The LiveKit auth gate sits on raw sockets, and a socket can go away at any
 // moment: before the gate answers, while authorization is still pending, or
 // between the upstream connecting and the tunnel being written. Each of those
@@ -10,28 +9,35 @@ import { EventEmitter } from 'node:events';
 import net from 'node:net';
 import test from 'node:test';
 
+import type { CredentialBoundaryService } from '../src/domains/admission/credential-boundary-service.ts';
+import type { GateClaims } from '../src/domains/admission/gate-credential-signer.ts';
 import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate-service.ts';
+import { fake } from './fakes/index.ts';
 
 class FakeSocket extends EventEmitter {
+  destroyed = false;
+  writable: boolean;
+  writableEnded = false;
+  writes: string[] = [];
+  throwOnWrite: boolean;
+  end?: (data?: string | Buffer) => void;
+
   constructor({ writable = true, withEnd = true, throwOnWrite = false } = {}) {
     super();
-    this.destroyed = false;
     this.writable = writable;
-    this.writableEnded = false;
-    this.writes = [];
     this.throwOnWrite = throwOnWrite;
     if (withEnd) {
-      this.end = (data) => {
+      this.end = (data?: string | Buffer) => {
         if (this.throwOnWrite) throw new Error('end failed');
-        if (data !== undefined) this.writes.push(String(data));
+        if (data !== undefined) this.writes.push(data.toString());
         this.writableEnded = true;
       };
     }
   }
 
-  write(data) {
+  write(data: string | Buffer) {
     if (this.throwOnWrite) throw new Error('write failed');
-    this.writes.push(data);
+    this.writes.push(data.toString());
     return true;
   }
 
@@ -39,7 +45,7 @@ class FakeSocket extends EventEmitter {
     this.destroyed = true;
   }
 
-  pipe(destination) {
+  pipe<T>(destination: T): T {
     return destination;
   }
 }
@@ -55,15 +61,20 @@ const ACCESS_TOKEN = [
   'signature'
 ].join('.');
 
-function createGate({ errors = [] } = {}) {
-  const boundary = {
-    authorizeCredential: async () => ({ ok: true, claims: CLAIMS }),
-    assertReady: async () => {}
-  };
+type GateError = { evt?: string; msg?: string };
+
+function createGate({ errors = [] as GateError[] } = {}) {
+  const boundary = fake<CredentialBoundaryService>({
+    authorizeCredential: async () => ({ ok: true as const, claims: CLAIMS as GateClaims }),
+    assertReady: async () => true as const
+  });
   const service = createLiveKitAuthGateService({
     boundary,
     roomStore: {},
-    logger: { error: (fields, msg) => errors.push({ ...fields, msg }), warn: () => {} },
+    logger: {
+      error: (fields: GateError, msg?: string) => errors.push({ ...fields, msg }),
+      warn: () => {}
+    },
     upstreamUrl: 'ws://127.0.0.1:7880'
   });
   return service.createServer();
@@ -75,9 +86,10 @@ const upgradeRequest = (url = `/rtc?access_token=${ACCESS_TOKEN}&vr_gate_credent
   headers: {}
 });
 
-function withConnect(factory, run) {
+function withConnect(factory: () => unknown, run: () => unknown) {
   const original = net.connect;
-  net.connect = factory;
+  // The gate opens its upstream with net.connect; the test swaps in a fake socket.
+  net.connect = factory as typeof net.connect;
   return Promise.resolve(run()).finally(() => {
     net.connect = original;
   });
@@ -99,7 +111,7 @@ test('a denied upgrade answers through end() when the socket offers it', () => {
 
   server.emit('upgrade', upgradeRequest('/elsewhere'), client, Buffer.alloc(0));
 
-  assert.match(client.writes[0], /^HTTP\/1\.1 404 Not Found/);
+  assert.match(client.writes[0] ?? '', /^HTTP\/1\.1 404 Not Found/);
   assert.equal(client.writableEnded, true);
 });
 
@@ -109,7 +121,7 @@ test('a denied upgrade without end() writes the answer and then closes', () => {
 
   server.emit('upgrade', upgradeRequest('/elsewhere'), client, Buffer.alloc(0));
 
-  assert.match(String(client.writes[0]), /^HTTP\/1\.1 404 Not Found/);
+  assert.match(client.writes[0] ?? '', /^HTTP\/1\.1 404 Not Found/);
   assert.equal(client.destroyed, true);
 });
 
@@ -161,7 +173,7 @@ test('an upstream that connects after the client left is closed, not written', a
 });
 
 test('an upstream write that throws tears down both sockets and is logged', async () => {
-  const errors = [];
+  const errors: GateError[] = [];
   const server = createGate({ errors });
   const client = new FakeSocket();
   const upstream = new FakeSocket({ throwOnWrite: true });
@@ -178,6 +190,6 @@ test('an upstream write that throws tears down both sockets and is logged', asyn
   assert.equal(client.destroyed, true);
   assert.equal(upstream.destroyed, true);
   assert.equal(errors.length, 1);
-  assert.equal(errors[0].evt, 'livekit.gate_upstream_failed');
-  assert.match(errors[0].msg, /upstream connection failed/);
+  assert.equal(errors[0]?.evt, 'livekit.gate_upstream_failed');
+  assert.match(errors[0]?.msg ?? '', /upstream connection failed/);
 });

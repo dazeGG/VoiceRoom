@@ -1,22 +1,24 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import { Pool } from 'pg';
 import { normalizeNotificationLevel } from '@voice-room/shared/notifications';
-import { createNotificationService } from '../src/domains/notifications/notification-service.ts';
+import { createNotificationService, type RoomLevelStore } from '../src/domains/notifications/notification-service.ts';
+import type { InboxRepository } from '../src/domains/notifications/inbox-repository.ts';
 import { createNotificationStore } from '../src/lib/notification-store.ts';
 import { createRoomStore } from '../src/lib/room-store.ts';
 import { createUserStore } from '../src/lib/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { fake, fakeDb } from './fakes/index.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
-async function fixture(t) {
+async function fixture(t: TestContext) {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const users = createUserStore({ databaseUrl, logger: SILENT });
   const rooms = createRoomStore({ databaseUrl, logger: SILENT });
   const created = await users.createUser({ login: 'g61-user', displayName: 'G61 User', password: 'password123' });
   assert.equal(created.status, 'created');
+  assert.ok(created.user);
   await rooms.createRoomWithQuota({
     roomId: 'g61-room',
     creatorIp: '127.0.0.1',
@@ -91,18 +93,19 @@ test('G61-A03 explicit all replaces legacy mute and concurrent updates retain on
   assert.equal(await store.getRoomLevel(f), 'all');
 });
 test('G61-A04 service preserves the explicit store level on GET and PUT paths', async () => {
-  const calls = [];
-  const notificationStore = {
+  const calls: unknown[][] = [];
+  const notificationStore: RoomLevelStore = {
     async getRoomLevel(value) {
       calls.push(['get', value]);
-      return 'all';
+      return 'all' as const;
     },
     async setRoomLevel(value) {
       calls.push(['set', value]);
       return { ok: true, level: value.level };
     }
   };
-  const service = createNotificationService({ pool: { query() {} }, inbox: {}, notificationStore });
+  const service = createNotificationService({ pool: fakeDb(), inbox: fake<InboxRepository>(), notificationStore });
+
   assert.equal(await service.getRoomLevel({ userId: 'user', roomId: 'room' }), 'all');
   assert.deepEqual(await service.setRoomLevel({ userId: 'user', roomId: 'room', level: 'all' }), {
     ok: true,

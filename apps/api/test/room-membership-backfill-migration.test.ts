@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -27,7 +26,7 @@ function stepsThroughBackfill() {
   return names.length - index;
 }
 
-function step(databaseUrl, direction) {
+function step(databaseUrl: string, direction: 'up' | 'down') {
   return runner({
     databaseUrl,
     dir: MIGRATIONS_DIR,
@@ -39,8 +38,10 @@ function step(databaseUrl, direction) {
   });
 }
 
-async function membershipsOf(pool, roomId) {
-  const result = await pool.query(
+type MembershipRow = { login: string; role: string; created_at: Date; metadata: Record<string, unknown> };
+
+async function membershipsOf(pool: Pool, roomId: string) {
+  const result = await pool.query<MembershipRow>(
     `SELECT u.login, m.role, m.created_at, m.metadata
      FROM room_memberships m JOIN users u ON u.id = m.user_id
      WHERE m.room_id = $1
@@ -64,7 +65,7 @@ test(
 
     await step(db.databaseUrl, 'down');
 
-    const ids = {};
+    const ids: Record<string, string> = {};
     for (const login of ['owner', 'alice', 'bob', 'carol', 'dave', 'erin', 'frank', 'gina']) {
       ids[login] = crypto.randomUUID();
       await pool.query(`INSERT INTO users (id, login, display_name, password_hash) VALUES ($1, $2, $3, 'x')`, [
@@ -87,7 +88,7 @@ test(
       [crypto.randomUUID(), ids.owner, crypto.randomUUID(), ids.erin]
     );
     const bookmarkedAt = '2026-07-03T12:39:00.000Z';
-    const bookmarks = [
+    const bookmarks: Array<[string, string]> = [
       ['static-room', 'owner'],
       ['static-room', 'alice'],
       ['static-room', 'bob'],
@@ -127,10 +128,11 @@ test(
       ]
     );
     const alice = promoted.find((row) => row.login === 'alice');
+    assert.ok(alice);
     assert.equal(alice.created_at.toISOString(), bookmarkedAt);
     assert.deepEqual(alice.metadata, { source: 'bookmark_backfill' });
-    assert.deepEqual(promoted.find((row) => row.login === 'erin').metadata, { joined: 'voice' });
-    assert.deepEqual(promoted.find((row) => row.login === 'owner').metadata, {});
+    assert.deepEqual(promoted.find((row) => row.login === 'erin')?.metadata, { joined: 'voice' });
+    assert.deepEqual(promoted.find((row) => row.login === 'owner')?.metadata, {});
     assert.deepEqual(await membershipsOf(pool, 'deleted-room'), []);
     assert.deepEqual(await membershipsOf(pool, 'temp-room'), []);
 

@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -184,8 +183,8 @@ test(
       `INSERT INTO message_attachments(id,owner_id,context,state,reserved_bytes) VALUES ($1,'rollback-owner','room','uploading',15728640)`,
       [rollbackId]
     );
-    assert.equal((await repository.findById(readyId)).internalState, 'deleted');
-    assert.equal((await repository.findById(rollbackId)).reservedBytes, 15728640);
+    assert.equal((await repository.findById(readyId))?.internalState, 'deleted');
+    assert.equal((await repository.findById(rollbackId))?.reservedBytes, 15728640);
   }
 );
 
@@ -203,7 +202,7 @@ test(
     await pool.query(
       `INSERT INTO users(id,login,display_name,password_hash) VALUES ('media-owner','media-owner','Owner','x')`
     );
-    const insert = (id, state = 'uploading', bytes = 1) =>
+    const insert = (id: string, state = 'uploading', bytes = 1) =>
       pool.query(
         `INSERT INTO message_attachments(id,owner_id,context,state,reserved_bytes) VALUES ($1,'media-owner','room',$2,$3)`,
         [id, state, bytes]

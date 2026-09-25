@@ -1,34 +1,41 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { MAX_PAGE_BYTES, createLinkPreviewFetcher, isPublicAddress } from '../src/lib/link-preview-fetcher.ts';
 
 // A local site the tests reach through a fake DNS answer. The default address
 // policy would refuse 127.0.0.1, so tests that need a real response allow only
 // that one address and any port.
-async function startSite(t, routes) {
+type Route = (request: http.IncomingMessage, response: http.ServerResponse) => void;
+
+async function startSite(t: TestContext, routes: Record<string, Route>) {
   const server = http.createServer((request, response) => {
-    const route = routes[new URL(request.url, 'http://site.test').pathname];
+    const route = routes[new URL(request.url ?? '/', 'http://site.test').pathname];
     if (!route) {
       response.writeHead(404).end();
       return;
     }
     route(request, response);
   });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
   t.after(() => {
     server.closeAllConnections();
     server.close();
   });
-  return `http://site.test:${server.address().port}`;
+  return `http://site.test:${(server.address() as AddressInfo).port}`;
 }
 
-function resolvingTo(table) {
-  return (hostname, _options, callback) => {
+type LookupCallback = (
+  error: NodeJS.ErrnoException | null,
+  addresses: Array<{ address: string; family: number }>
+) => void;
+
+function resolvingTo(table: Record<string, string[]>) {
+  return (hostname: string, _options: Record<string, unknown>, callback: LookupCallback) => {
     const addresses = table[hostname];
     if (!addresses) {
-      callback(Object.assign(new Error('not found'), { code: 'ENOTFOUND' }));
+      callback(Object.assign(new Error('not found'), { code: 'ENOTFOUND' }), []);
       return;
     }
     callback(
@@ -40,7 +47,7 @@ function resolvingTo(table) {
 
 const localOnly = {
   lookup: resolvingTo({ 'site.test': ['127.0.0.1'], 'internal.test': ['10.0.0.8'] }),
-  isAllowedAddress: (address) => address === '127.0.0.1',
+  isAllowedAddress: (address: string) => address === '127.0.0.1',
   isAllowedPort: () => true
 };
 
@@ -74,7 +81,7 @@ test('a page is read through the vetted address, after redirects, and cut at the
   const origin = await startSite(t, {
     '/start': (_request, response) => response.writeHead(302, { Location: '/page' }).end(),
     '/page': (request, response) => {
-      assert.match(request.headers['user-agent'], /VoiceRoomLinkPreview/);
+      assert.match(request.headers['user-agent'] ?? '', /VoiceRoomLinkPreview/);
       response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       response.end(`<head><title>Страница</title></head>${'x'.repeat(MAX_PAGE_BYTES + 4096)}`);
     }
@@ -95,7 +102,7 @@ test('private destinations and unusual links are refused before any connection',
       'public.test': ['93.184.216.34']
     })
   });
-  const refusals = [
+  const refusals: Array<[string, string]> = [
     ['http://127.0.0.1/', 'blocked_address'],
     ['http://[::1]/', 'blocked_address'],
     ['http://169.254.169.254/latest/meta-data', 'blocked_address'],

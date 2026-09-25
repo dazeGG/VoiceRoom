@@ -1,5 +1,4 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createUserStore } from '../src/lib/user-store.ts';
@@ -17,7 +16,9 @@ const SAFARI_IPHONE =
 const MOSCOW = 'Москва, Россия';
 const KAZAN = 'Казань, Россия';
 
-async function createMigratedStore(t) {
+type UserStore = ReturnType<typeof createUserStore>;
+
+async function createMigratedStore(t: TestContext) {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const store = createUserStore({ databaseUrl, logger: SILENT });
@@ -28,7 +29,16 @@ async function createMigratedStore(t) {
   return store;
 }
 
-async function signIn(store, userId, { kind = 'login', userAgent, location = '', now }) {
+async function signIn(
+  store: UserStore,
+  userId: string,
+  {
+    kind = 'login',
+    userAgent,
+    location = '',
+    now
+  }: { kind?: string; userAgent: string; location?: string; now: number }
+) {
   const session = await store.createSession({ userId, now, userAgent, locationLabel: location });
   const { alert } = await store.recordLogin({
     userId,
@@ -44,6 +54,7 @@ async function signIn(store, userId, { kind = 'login', userAgent, location = '',
 test('only a device or city the account has not vouched for raises a question', async (t) => {
   const store = await createMigratedStore(t);
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
+  assert.ok(user);
   const start = 100 * DAY;
 
   const laptop = await signIn(store, user.id, {
@@ -59,7 +70,7 @@ test('only a device or city the account has not vouched for raises a question', 
 
   const stranger = await signIn(store, user.id, { userAgent: FIREFOX_LINUX, location: KAZAN, now: start + 2_000 });
   assert.deepEqual(stranger.alert, {
-    id: stranger.alert.id,
+    id: stranger.alert?.id,
     kind: 'login',
     client: 'Firefox',
     os: 'Linux',
@@ -86,7 +97,7 @@ test('only a device or city the account has not vouched for raises a question', 
         now: start + 5_000
       })
     ).map((alert) => alert.id),
-    [stranger.alert.id, strangerAgain.alert.id, sameBrowserElsewhere.alert.id]
+    [stranger.alert?.id, strangerAgain.alert?.id, sameBrowserElsewhere.alert?.id]
   );
   // A device is never asked about its own sign-in.
   assert.deepEqual(
@@ -97,13 +108,14 @@ test('only a device or city the account has not vouched for raises a question', 
         now: start + 5_000
       })
     ).map((alert) => alert.id),
-    [strangerAgain.alert.id, sameBrowserElsewhere.alert.id]
+    [strangerAgain.alert?.id, sameBrowserElsewhere.alert?.id]
   );
 });
 
 test('"Это я" vouches for the device, "Это не я" ends its session and keeps it unfamiliar', async (t) => {
   const store = await createMigratedStore(t);
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
+  assert.ok(user);
   const start = 100 * DAY;
   const laptop = await signIn(store, user.id, {
     kind: 'register',
@@ -116,7 +128,7 @@ test('"Это я" vouches for the device, "Это не я" ends its session and 
   assert.deepEqual(
     await store.resolveLoginAlert({
       userId: user.id,
-      alertId: phone.alert.id,
+      alertId: phone.alert?.id,
       resolution: 'confirmed',
       currentSessionPublicId: phone.session.publicId,
       now: start + 2_000
@@ -127,7 +139,7 @@ test('"Это я" vouches for the device, "Это не я" ends its session and 
   assert.deepEqual(
     await store.resolveLoginAlert({
       userId: user.id,
-      alertId: phone.alert.id.toUpperCase(),
+      alertId: phone.alert?.id.toUpperCase() ?? '',
       resolution: 'confirmed',
       currentSessionPublicId: laptop.session.publicId,
       now: start + 2_000
@@ -141,7 +153,7 @@ test('"Это я" vouches for the device, "Это не я" ends its session and 
   const stranger = await signIn(store, user.id, { userAgent: FIREFOX_LINUX, location: KAZAN, now: start + 5_000 });
   const denied = await store.resolveLoginAlert({
     userId: user.id,
-    alertId: stranger.alert.id,
+    alertId: stranger.alert?.id,
     resolution: 'denied',
     currentSessionPublicId: laptop.session.publicId,
     now: start + 6_000
@@ -151,7 +163,7 @@ test('"Это я" vouches for the device, "Это не я" ends its session and 
   assert.deepEqual(
     await store.resolveLoginAlert({
       userId: user.id,
-      alertId: stranger.alert.id,
+      alertId: stranger.alert?.id,
       resolution: 'denied',
       now: start + 7_000
     }),
@@ -166,6 +178,7 @@ test('"Это я" vouches for the device, "Это не я" ends its session and 
 test('questions expire, familiarity fades and old sign-ins are pruned', async (t) => {
   const store = await createMigratedStore(t);
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
+  assert.ok(user);
   const start = 100 * DAY;
   const laptop = await signIn(store, user.id, {
     kind: 'register',
@@ -180,7 +193,7 @@ test('questions expire, familiarity fades and old sign-ins are pruned', async (t
   assert.deepEqual(
     await store.resolveLoginAlert({
       userId: user.id,
-      alertId: stranger.alert.id,
+      alertId: stranger.alert?.id,
       resolution: 'confirmed',
       currentSessionPublicId: laptop.session.publicId,
       now: afterTtl
@@ -200,6 +213,7 @@ test('questions expire, familiarity fades and old sign-ins are pruned', async (t
 test('unknown questions and answers are refused', async (t) => {
   const store = await createMigratedStore(t);
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
+  assert.ok(user);
   assert.deepEqual(await store.resolveLoginAlert({ userId: user.id, alertId: 'not-an-id', resolution: 'confirmed' }), {
     status: 'not_found',
     revokedTokenHash: null

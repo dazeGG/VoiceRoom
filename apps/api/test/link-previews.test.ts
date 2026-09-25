@@ -1,5 +1,4 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -11,7 +10,11 @@ import { runMigrations } from '../src/lib/migrate.ts';
 import { createRoomStore } from '../src/lib/room-store.ts';
 import { createUserStore } from '../src/lib/user-store.ts';
 import { createLinkPreviewRepository } from '../src/domains/link-previews/link-preview-repository.ts';
-import { FAILED_TTL_MS, createLinkPreviewService } from '../src/domains/link-previews/link-preview-service.ts';
+import {
+  FAILED_TTL_MS,
+  createLinkPreviewService,
+  type LinkPreviewFetcher
+} from '../src/domains/link-previews/link-preview-service.ts';
 import { createLinkPreviewStorage, reconcileLinkPreviewImages } from '../src/lib/link-preview-storage.ts';
 import { createTestDatabase } from './db-harness.ts';
 
@@ -22,7 +25,7 @@ const OTHER_KEY = `lp_${'cd'.repeat(16)}.webp`;
 const PAGE =
   '<html><head><title>fallback</title><meta property="og:title" content="Пост про котов"><meta property="og:image" content="/cover.png"></head><body></body></html>';
 
-async function setup(t, { fetchPage } = {}) {
+async function setup(t: TestContext, { fetchPage }: { fetchPage?: LinkPreviewFetcher['fetchPage'] } = {}) {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const pool = new Pool({ connectionString: databaseUrl });
@@ -37,7 +40,7 @@ async function setup(t, { fetchPage } = {}) {
 
   const clock = { now: 1_000_000 };
   const fetches = { pages: 0, images: 0 };
-  const published = { room: [], direct: [] };
+  const published: { room: unknown[]; direct: unknown[] } = { room: [], direct: [] };
   const storage = createLinkPreviewStorage({ uploadsDir });
   const repository = createLinkPreviewRepository({ pool });
   const service = createLinkPreviewService({
@@ -67,6 +70,7 @@ async function setup(t, { fetchPage } = {}) {
 
   const { user: ada } = await users.createUser({ login: 'ada', password: 'lovelace-1843' });
   const { user: grace } = await users.createUser({ login: 'grace', password: 'cobol-1959' });
+  assert.ok(ada && grace);
   await rooms.createRoom({ creatorIp: 'ip', isStatic: true, roomId: 'lp-room', now: 1000 });
   return { ada, clock, fetches, grace, pool, published, repository, rooms, service, storage };
 }
@@ -88,8 +92,8 @@ test('a room message gets the preview of its first link, and the cache spares a 
   }
 
   assert.deepEqual(fetches, { pages: 1, images: 1 });
-  assert.deepEqual((await rooms.getMessage('lp-room', 'lp-1')).linkPreview, EXPECTED_PREVIEW);
-  assert.deepEqual((await rooms.getMessage('lp-room', 'lp-2')).linkPreview, EXPECTED_PREVIEW);
+  assert.deepEqual((await rooms.getMessage('lp-room', 'lp-1'))?.linkPreview, EXPECTED_PREVIEW);
+  assert.deepEqual((await rooms.getMessage('lp-room', 'lp-2'))?.linkPreview, EXPECTED_PREVIEW);
   assert.deepEqual(published.room, [
     { roomId: 'lp-room', messageId: 'lp-1' },
     { roomId: 'lp-room', messageId: 'lp-2' }
@@ -106,19 +110,19 @@ test('an edit that drops the link removes the preview, and a stale result never 
   const text = 'https://example.com/post';
   await rooms.appendMessage('lp-room', { id: 'lp-edit', text, authorUserId: ada.id, createdAt: 2000 }, 2000);
   await service.previewRoomMessage({ roomId: 'lp-room', messageId: 'lp-edit', text });
-  assert.ok((await rooms.getMessage('lp-room', 'lp-edit')).linkPreview);
+  assert.ok((await rooms.getMessage('lp-room', 'lp-edit'))?.linkPreview);
 
   await rooms.editMessage('lp-room', 'lp-edit', 'передумал, без ссылки');
   // The preview built for the old text finishes late: the message moved on.
   await service.previewRoomMessage({ roomId: 'lp-room', messageId: 'lp-edit', text });
   assert.ok(
-    (await rooms.getMessage('lp-room', 'lp-edit')).linkPreview,
+    (await rooms.getMessage('lp-room', 'lp-edit'))?.linkPreview,
     'the late result did not touch the edited message'
   );
   assert.equal(published.room.length, 1);
 
   await service.previewRoomMessage({ roomId: 'lp-room', messageId: 'lp-edit', text: 'передумал, без ссылки' });
-  assert.equal((await rooms.getMessage('lp-room', 'lp-edit')).linkPreview, undefined);
+  assert.equal((await rooms.getMessage('lp-room', 'lp-edit'))?.linkPreview, undefined);
   assert.equal(published.room.length, 2);
 });
 
@@ -134,7 +138,7 @@ test('a site that cannot be previewed is remembered for a while', async (t) => {
   await service.previewRoomMessage({ roomId: 'lp-room', messageId: 'lp-fail', text });
 
   assert.equal(fetches.pages, 1);
-  assert.equal((await rooms.getMessage('lp-room', 'lp-fail')).linkPreview, undefined);
+  assert.equal((await rooms.getMessage('lp-room', 'lp-fail'))?.linkPreview, undefined);
   assert.equal(published.room.length, 0);
   const cached = await pool.query('SELECT status, preview, failure_code FROM link_previews');
   assert.deepEqual(cached.rows, [{ status: 'failed', preview: null, failure_code: 'blocked_address' }]);

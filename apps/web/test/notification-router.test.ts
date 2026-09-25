@@ -1,15 +1,31 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { test, vi } from 'vitest';
 import { freshImport } from './helpers/fresh-module.ts';
+import type * as Router from '../src/lib/shared/notifications/router.ts';
 import assert from 'node:assert/strict';
 
 async function loadRouter() {
-  return freshImport('/src/lib/shared/notifications/router.ts');
+  return freshImport<typeof Router>('/src/lib/shared/notifications/router.ts');
 }
 
-function dmEvent(overrides = {}) {
+function reasonOf(result: Router.NotificationRouteResult) {
+  return result.notify ? null : result.reason;
+}
+
+function payloadOf(result: Router.NotificationRouteResult) {
+  assert.equal(result.notify, true);
+  return result.payload;
+}
+
+function built(payload: Router.BrowserNotificationPayload | null) {
+  assert.ok(payload);
+  return payload;
+}
+
+function dmEvent(
+  overrides: { dedupeKey?: string; peerId?: string; peerName?: string; messageId?: string; body?: string } = {}
+) {
   return {
-    type: 'notification.dm.message',
+    type: 'notification.dm.message' as const,
     payload: {
       dedupeKey: overrides.dedupeKey ?? 'dm:msg-1',
       peer: { id: overrides.peerId ?? 'alice-id', displayName: overrides.peerName ?? 'Alice', login: 'alice' },
@@ -18,9 +34,19 @@ function dmEvent(overrides = {}) {
   };
 }
 
-function roomEvent(overrides = {}) {
+function roomEvent(
+  overrides: {
+    dedupeKey?: string;
+    roomId?: string;
+    roomName?: string;
+    senderId?: string;
+    senderName?: string;
+    messageId?: string;
+    body?: string;
+  } = {}
+) {
   return {
-    type: 'notification.room.message',
+    type: 'notification.room.message' as const,
     payload: {
       dedupeKey: overrides.dedupeKey ?? 'room:daily:message:msg-2',
       room: { roomId: overrides.roomId ?? 'daily', name: overrides.roomName ?? 'Daily' },
@@ -30,9 +56,9 @@ function roomEvent(overrides = {}) {
   };
 }
 
-function friendRequestEvent(overrides = {}) {
+function friendRequestEvent(overrides: { dedupeKey?: string; requesterId?: string; requestId?: string } = {}) {
   return {
-    type: 'notification.friend.request',
+    type: 'notification.friend.request' as const,
     payload: {
       dedupeKey: overrides.dedupeKey ?? 'friend-request:req-1',
       requester: { id: overrides.requesterId ?? 'cara-id', displayName: 'Cara', login: 'cara' },
@@ -41,9 +67,9 @@ function friendRequestEvent(overrides = {}) {
   };
 }
 
-function acceptedEvent(overrides = {}) {
+function acceptedEvent(overrides: { dedupeKey?: string; userId?: string; context?: Record<string, unknown> } = {}) {
   return {
-    type: 'notification.friend.accepted',
+    type: 'notification.friend.accepted' as const,
     payload: {
       dedupeKey: overrides.dedupeKey ?? 'friend-accepted:user-1:user-2',
       user: { id: overrides.userId ?? 'dana-id', displayName: 'Dana', login: 'dana' },
@@ -55,33 +81,35 @@ function acceptedEvent(overrides = {}) {
 test('routes notification payloads with visible non-private bodies and title formats', async () => {
   const router = await loadRouter();
 
-  const dm = router.routeNotificationEvent(dmEvent(), { permission: 'granted', notificationsAvailable: true });
-  assert.equal(dm.notify, true);
-  assert.equal(dm.payload.title, 'Alice');
-  assert.equal(dm.payload.body, 'hello from Alice');
-  assert.equal(dm.payload.tag, 'dm:msg-1');
-  assert.deepEqual(dm.payload.data, { kind: 'dm', peerId: 'alice-id', messageId: 'msg-1', route: '/?dm=alice-id' });
+  const dm = payloadOf(
+    router.routeNotificationEvent(dmEvent(), { permission: 'granted', notificationsAvailable: true })
+  );
+  assert.equal(dm.title, 'Alice');
+  assert.equal(dm.body, 'hello from Alice');
+  assert.equal(dm.tag, 'dm:msg-1');
+  assert.deepEqual(dm.data, { kind: 'dm', peerId: 'alice-id', messageId: 'msg-1', route: '/?dm=alice-id' });
 
-  const room = router.routeNotificationEvent(roomEvent(), { permission: 'granted', notificationsAvailable: true });
-  assert.equal(room.notify, true);
-  assert.equal(room.payload.title, 'Bob — Daily');
-  assert.equal(room.payload.body, 'standup starts now');
-  assert.equal(room.payload.data.roomId, 'daily');
-  assert.equal(room.payload.data.route, '/?room=daily&message=msg-2');
-  assert.equal(room.payload.tag, 'room:daily:message:msg-2');
+  const room = payloadOf(
+    router.routeNotificationEvent(roomEvent(), { permission: 'granted', notificationsAvailable: true })
+  );
+  assert.equal(room.title, 'Bob — Daily');
+  assert.equal(room.body, 'standup starts now');
+  assert.equal(room.data?.roomId, 'daily');
+  assert.equal(room.data?.route, '/?room=daily&message=msg-2');
+  assert.equal(room.tag, 'room:daily:message:msg-2');
 
-  const request = router.buildNotificationPayload(friendRequestEvent(), { privateNotifications: false });
+  const request = built(router.buildNotificationPayload(friendRequestEvent(), { privateNotifications: false }));
   assert.equal(request.title, 'Новая заявка в друзья');
   assert.equal(request.body, 'Cara хочет добавить вас в друзья.');
 
-  const accepted = router.buildNotificationPayload(acceptedEvent(), { privateNotifications: false });
+  const accepted = built(router.buildNotificationPayload(acceptedEvent(), { privateNotifications: false }));
   assert.equal(accepted.title, 'Заявка в друзья принята');
   assert.equal(accepted.body, 'Dana теперь у вас в друзьях.');
 
   const fallbackRoom = roomEvent();
-  delete fallbackRoom.payload.room.name;
-  delete fallbackRoom.payload.message.body;
-  const fallback = router.buildNotificationPayload(fallbackRoom, { privateNotifications: false });
+  Reflect.deleteProperty(fallbackRoom.payload.room, 'name');
+  Reflect.deleteProperty(fallbackRoom.payload.message, 'body');
+  const fallback = built(router.buildNotificationPayload(fallbackRoom, { privateNotifications: false }));
   assert.equal(fallback.title, 'Bob — daily');
   assert.equal(fallback.body, 'Новое сообщение');
 });
@@ -90,22 +118,22 @@ test('invalid notification payloads no-op instead of creating incomplete browser
   const router = await loadRouter();
 
   const missingDmPeerId = dmEvent();
-  delete missingDmPeerId.payload.peer.id;
+  Reflect.deleteProperty(missingDmPeerId.payload.peer, 'id');
   assert.equal(router.buildNotificationPayload(missingDmPeerId), null);
   assert.deepEqual(router.routeNotificationEvent(missingDmPeerId), { notify: false, reason: 'invalid-payload' });
 
   const missingRoomId = roomEvent();
-  delete missingRoomId.payload.room.roomId;
+  Reflect.deleteProperty(missingRoomId.payload.room, 'roomId');
   assert.equal(router.buildNotificationPayload(missingRoomId), null);
   assert.deepEqual(router.routeNotificationEvent(missingRoomId), { notify: false, reason: 'invalid-payload' });
 
   const missingFriendRequestId = friendRequestEvent();
-  delete missingFriendRequestId.payload.requestId;
+  Reflect.deleteProperty(missingFriendRequestId.payload, 'requestId');
   assert.equal(router.buildNotificationPayload(missingFriendRequestId), null);
   assert.deepEqual(router.routeNotificationEvent(missingFriendRequestId), { notify: false, reason: 'invalid-payload' });
 
   const missingAcceptedUserId = acceptedEvent();
-  delete missingAcceptedUserId.payload.user.id;
+  Reflect.deleteProperty(missingAcceptedUserId.payload.user, 'id');
   assert.equal(router.buildNotificationPayload(missingAcceptedUserId), null);
   assert.deepEqual(router.routeNotificationEvent(missingAcceptedUserId), { notify: false, reason: 'invalid-payload' });
 });
@@ -113,31 +141,31 @@ test('invalid notification payloads no-op instead of creating incomplete browser
 test('suppresses active exact DM and room targets, mutes, self, denied, and unavailable cases', async () => {
   const router = await loadRouter();
 
-  assert.deepEqual(
-    router.routeNotificationEvent({ type: 'pong', payload: { at: 1 } }).reason,
-    'not-notification-event'
-  );
+  assert.equal(reasonOf(router.routeNotificationEvent({ type: 'pong', payload: { at: 1 } })), 'not-notification-event');
   assert.equal(router.shouldNotify(dmEvent(), { permission: 'granted', notificationsAvailable: true }), true);
   assert.equal(
-    router.routeNotificationEvent(dmEvent(), { notificationsAvailable: false }).reason,
+    reasonOf(router.routeNotificationEvent(dmEvent(), { notificationsAvailable: false })),
     'notifications-unavailable'
   );
   assert.equal(
-    router.routeNotificationEvent(dmEvent(), { permission: 'denied' }).reason,
+    reasonOf(router.routeNotificationEvent(dmEvent(), { permission: 'denied' })),
     'notification-permission-not-granted'
   );
-  assert.equal(router.routeNotificationEvent(dmEvent(), { userId: 'alice-id' }).reason, 'self-event');
-  assert.equal(router.routeNotificationEvent(dmEvent(), { mutedPeerIds: ['alice-id'] }).reason, 'muted-peer');
-  assert.equal(router.routeNotificationEvent(dmEvent(), { doNotDisturb: true }).reason, 'do-not-disturb');
-  assert.equal(router.routeNotificationEvent(roomEvent(), { mutedRoomIds: new Set(['daily']) }).reason, 'muted-room');
+  assert.equal(reasonOf(router.routeNotificationEvent(dmEvent(), { userId: 'alice-id' })), 'self-event');
+  assert.equal(reasonOf(router.routeNotificationEvent(dmEvent(), { mutedPeerIds: ['alice-id'] })), 'muted-peer');
+  assert.equal(reasonOf(router.routeNotificationEvent(dmEvent(), { doNotDisturb: true })), 'do-not-disturb');
   assert.equal(
-    router.routeNotificationEvent(dmEvent(), { activeTarget: { kind: 'dm', peerId: 'alice-id' } }).reason,
+    reasonOf(router.routeNotificationEvent(roomEvent(), { mutedRoomIds: new Set(['daily']) })),
+    'muted-room'
+  );
+  assert.equal(
+    reasonOf(router.routeNotificationEvent(dmEvent(), { activeTarget: { kind: 'dm', peerId: 'alice-id' } })),
     'active-target'
   );
 
-  for (const kind of ['room', 'room-preview', 'room-chat']) {
+  for (const kind of ['room', 'room-preview', 'room-chat'] as const) {
     assert.equal(
-      router.routeNotificationEvent(roomEvent(), { activeTarget: { kind, roomId: 'daily' } }).reason,
+      reasonOf(router.routeNotificationEvent(roomEvent(), { activeTarget: { kind, roomId: 'daily' } })),
       'active-target'
     );
   }
@@ -160,22 +188,23 @@ test('truncates notification bodies conservatively with an ellipsis', async () =
   assert.equal(router.truncateNotificationBody('abcdef', 1), '…');
   assert.equal(router.truncateNotificationBody('abcdef', 0), '');
 
-  const payload = router.buildNotificationPayload(dmEvent({ body: 'one two three four five' }), {
-    privateNotifications: false
-  });
+  const payload = built(
+    router.buildNotificationPayload(dmEvent({ body: 'one two three four five' }), {
+      privateNotifications: false
+    })
+  );
   assert.equal(payload.body, 'one two three four five');
 
-  const privatePayload = router.buildNotificationPayload(dmEvent({ body: 'secret text' }), {
-    privateNotifications: true
-  });
+  const privatePayload = built(
+    router.buildNotificationPayload(dmEvent({ body: 'secret text' }), {
+      privateNotifications: true
+    })
+  );
   assert.equal(privatePayload.body, 'Откройте VoiceRoom, чтобы посмотреть уведомление.');
 });
 
 test('browser helpers dedupe by tag/key and never request permission outside explicit helper', async () => {
-  const originalNotification = globalThis.Notification;
-  const originalBroadcastChannel = globalThis.BroadcastChannel;
-  const originalBridge = globalThis.voiceRoomDesktopNotifications;
-  const calls = [];
+  const calls: Array<{ title: string; options: NotificationOptions | undefined }> = [];
   let requestPermissionCalls = 0;
 
   class FakeNotification {
@@ -184,69 +213,57 @@ test('browser helpers dedupe by tag/key and never request permission outside exp
       requestPermissionCalls += 1;
       return 'granted';
     }
-    constructor(title, options) {
+    constructor(title: string, options?: NotificationOptions) {
       calls.push({ title, options });
-      this.title = title;
-      this.options = options;
     }
   }
 
-  const storage = new Map();
+  const storage = new Map<string, string>();
   vi.stubGlobal('Notification', FakeNotification);
   vi.stubGlobal('BroadcastChannel', undefined);
   vi.stubGlobal('localStorage', {
-    getItem: (key) => (storage.has(key) ? storage.get(key) : null),
-    setItem: (key, value) => storage.set(key, String(value)),
-    removeItem: (key) => storage.delete(key)
+    getItem: (key: string) => (storage.has(key) ? storage.get(key) : null),
+    setItem: (key: string, value: unknown) => storage.set(key, String(value)),
+    removeItem: (key: string) => storage.delete(key)
   });
 
-  try {
-    const router = await loadRouter();
-    router.resetNotificationDedupeForTests();
-    const payload = router.buildNotificationPayload(dmEvent({ dedupeKey: 'dm:dedupe' }), {
+  const router = await loadRouter();
+  router.resetNotificationDedupeForTests();
+  const payload = built(
+    router.buildNotificationPayload(dmEvent({ dedupeKey: 'dm:dedupe' }), {
       privateNotifications: false
-    });
+    })
+  );
 
-    assert.equal(router.getNotificationPermission(), 'granted');
-    assert.equal(router.canUseNotifications(), true);
-    assert.equal(
-      router.routeNotificationEvent(dmEvent({ dedupeKey: 'dm:dedupe' }), { permission: 'granted' }).notify,
-      true
-    );
-    assert.equal(requestPermissionCalls, 0, 'routing does not request permission');
+  assert.equal(router.getNotificationPermission(), 'granted');
+  assert.equal(router.canUseNotifications(), true);
+  assert.equal(
+    router.routeNotificationEvent(dmEvent({ dedupeKey: 'dm:dedupe' }), { permission: 'granted' }).notify,
+    true
+  );
+  assert.equal(requestPermissionCalls, 0, 'routing does not request permission');
 
-    const first = await router.showBrowserNotification(payload);
-    const second = await router.showBrowserNotification(payload);
-    assert.ok(first);
-    assert.equal(second, null);
-    assert.equal(calls.length, 1);
-    assert.equal(calls[0].title, 'Alice');
-    assert.equal(requestPermissionCalls, 0, 'showing does not request permission');
+  const first = await router.showBrowserNotification(payload);
+  const second = await router.showBrowserNotification(payload);
+  assert.ok(first);
+  assert.equal(second, null);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.title, 'Alice');
+  assert.equal(requestPermissionCalls, 0, 'showing does not request permission');
 
-    assert.equal(router.isNotificationDedupeKeyFresh('dm:dedupe'), true);
-    assert.equal(router.consumeNotificationDedupeKey('dm:dedupe'), false);
-    assert.equal(router.consumeNotificationDedupeKey('dm:other', { now: 10, ttlMs: 50 }), true);
-    assert.equal(router.isNotificationDedupeKeyFresh('dm:other', 20), true);
-    assert.equal(router.isNotificationDedupeKeyFresh('dm:other', 61), false);
+  assert.equal(router.isNotificationDedupeKeyFresh('dm:dedupe'), true);
+  assert.equal(router.consumeNotificationDedupeKey('dm:dedupe'), false);
+  assert.equal(router.consumeNotificationDedupeKey('dm:other', { now: 10, ttlMs: 50 }), true);
+  assert.equal(router.isNotificationDedupeKeyFresh('dm:other', 20), true);
+  assert.equal(router.isNotificationDedupeKeyFresh('dm:other', 61), false);
 
-    assert.equal(await router.requestNotificationPermissionFromUserAction(), 'granted');
-    assert.equal(requestPermissionCalls, 1, 'explicit helper requests permission');
-  } finally {
-    if (originalNotification === undefined) delete globalThis.Notification;
-    else globalThis.Notification = originalNotification;
-    if (originalBroadcastChannel === undefined) delete globalThis.BroadcastChannel;
-    else globalThis.BroadcastChannel = originalBroadcastChannel;
-    if (originalBridge === undefined) delete globalThis.voiceRoomDesktopNotifications;
-    else globalThis.voiceRoomDesktopNotifications = originalBridge;
-  }
+  assert.equal(await router.requestNotificationPermissionFromUserAction(), 'granted');
+  assert.equal(requestPermissionCalls, 1, 'explicit helper requests permission');
 });
 
 test('desktop bridge is preferred over page Notification and does not request permission', async () => {
-  const originalNotification = globalThis.Notification;
-  const originalBroadcastChannel = globalThis.BroadcastChannel;
-  const originalBridge = globalThis.voiceRoomDesktopNotifications;
-  const bridgeCalls = [];
-  const notificationCalls = [];
+  const bridgeCalls: Router.DesktopNotificationPayload[] = [];
+  const notificationCalls: Array<{ title: string; options: NotificationOptions | undefined }> = [];
   let requestPermissionCalls = 0;
 
   class DeniedNotification {
@@ -255,7 +272,7 @@ test('desktop bridge is preferred over page Notification and does not request pe
       requestPermissionCalls += 1;
       return 'denied';
     }
-    constructor(title, options) {
+    constructor(title: string, options?: NotificationOptions) {
       notificationCalls.push({ title, options });
     }
   }
@@ -263,88 +280,66 @@ test('desktop bridge is preferred over page Notification and does not request pe
   vi.stubGlobal('Notification', DeniedNotification);
   vi.stubGlobal('BroadcastChannel', undefined);
   vi.stubGlobal('voiceRoomDesktopNotifications', {
-    show(payload) {
+    show(payload: Router.DesktopNotificationPayload) {
       bridgeCalls.push(payload);
       return { ok: true };
     }
   });
 
-  try {
-    const router = await loadRouter();
-    router.resetNotificationDedupeForTests();
-    const payload = router.buildNotificationPayload(dmEvent({ dedupeKey: 'dm:desktop' }), {
+  const router = await loadRouter();
+  router.resetNotificationDedupeForTests();
+  const payload = built(
+    router.buildNotificationPayload(dmEvent({ dedupeKey: 'dm:desktop' }), {
       privateNotifications: false
-    });
+    })
+  );
 
-    assert.equal(router.getNotificationPermission(), 'denied');
-    assert.equal(router.getNotificationDeliveryPermission(), 'granted');
-    assert.equal(router.canUseNotifications(), true);
-    assert.equal(
-      router.routeNotificationEvent(dmEvent({ dedupeKey: 'dm:desktop' }), {
-        permission: router.getNotificationDeliveryPermission()
-      }).notify,
-      true
-    );
+  assert.equal(router.getNotificationPermission(), 'denied');
+  assert.equal(router.getNotificationDeliveryPermission(), 'granted');
+  assert.equal(router.canUseNotifications(), true);
+  assert.equal(
+    router.routeNotificationEvent(dmEvent({ dedupeKey: 'dm:desktop' }), {
+      permission: router.getNotificationDeliveryPermission()
+    }).notify,
+    true
+  );
 
-    const result = await router.showBrowserNotification(payload);
-    assert.equal(result, null);
-    assert.deepEqual(bridgeCalls, [
-      {
-        title: 'Alice',
-        body: 'hello from Alice',
-        tag: 'dm:alice-id',
-        dedupeKey: 'dm:desktop',
-        route: '/?dm=alice-id'
-      }
-    ]);
-    assert.equal(notificationCalls.length, 0);
-    assert.equal(requestPermissionCalls, 0);
-  } finally {
-    if (originalNotification === undefined) delete globalThis.Notification;
-    else globalThis.Notification = originalNotification;
-    if (originalBroadcastChannel === undefined) delete globalThis.BroadcastChannel;
-    else globalThis.BroadcastChannel = originalBroadcastChannel;
-    if (originalBridge === undefined) delete globalThis.voiceRoomDesktopNotifications;
-    else globalThis.voiceRoomDesktopNotifications = originalBridge;
-  }
+  const result = await router.showBrowserNotification(payload);
+  assert.equal(result, null);
+  assert.deepEqual(bridgeCalls, [
+    {
+      title: 'Alice',
+      body: 'hello from Alice',
+      tag: 'dm:alice-id',
+      dedupeKey: 'dm:desktop',
+      route: '/?dm=alice-id'
+    }
+  ]);
+  assert.equal(notificationCalls.length, 0);
+  assert.equal(requestPermissionCalls, 0);
 });
 
 test('desktop bridge can satisfy an explicit notification UI action without browser Notification API', async () => {
-  const originalNotification = globalThis.Notification;
-  const originalBridge = globalThis.voiceRoomDesktopNotifications;
-
   vi.stubGlobal('voiceRoomDesktopNotifications', {
     show() {
       return { ok: true };
     }
   });
 
-  try {
-    const router = await loadRouter();
-    assert.equal(router.getNotificationPermission(), 'unsupported');
-    assert.equal(router.getNotificationDeliveryPermission(), 'granted');
-    assert.equal(router.canUseNotifications(), true);
-    assert.equal(await router.requestNotificationPermissionFromUserAction(), 'granted');
-  } finally {
-    if (originalNotification === undefined) delete globalThis.Notification;
-    else globalThis.Notification = originalNotification;
-    if (originalBridge === undefined) delete globalThis.voiceRoomDesktopNotifications;
-    else globalThis.voiceRoomDesktopNotifications = originalBridge;
-  }
+  const router = await loadRouter();
+  assert.equal(router.getNotificationPermission(), 'unsupported');
+  assert.equal(router.getNotificationDeliveryPermission(), 'granted');
+  assert.equal(router.canUseNotifications(), true);
+  assert.equal(await router.requestNotificationPermissionFromUserAction(), 'granted');
 });
 
 test('desktop bridge unsupported result falls back to browser Notification', async () => {
-  const originalNotification = globalThis.Notification;
-  const originalBroadcastChannel = globalThis.BroadcastChannel;
-  const originalBridge = globalThis.voiceRoomDesktopNotifications;
-  const notificationCalls = [];
+  const notificationCalls: Array<{ title: string; options: NotificationOptions | undefined }> = [];
 
   class FakeNotification {
     static permission = 'granted';
-    constructor(title, options) {
+    constructor(title: string, options?: NotificationOptions) {
       notificationCalls.push({ title, options });
-      this.title = title;
-      this.options = options;
     }
   }
 
@@ -356,101 +351,73 @@ test('desktop bridge unsupported result falls back to browser Notification', asy
     }
   });
 
-  try {
-    const router = await loadRouter();
-    router.resetNotificationDedupeForTests();
-    const payload = router.buildNotificationPayload(roomEvent({ dedupeKey: 'room:desktop-fallback' }), {
+  const router = await loadRouter();
+  router.resetNotificationDedupeForTests();
+  const payload = built(
+    router.buildNotificationPayload(roomEvent({ dedupeKey: 'room:desktop-fallback' }), {
       privateNotifications: false
-    });
-    const result = await router.showBrowserNotification(payload);
+    })
+  );
+  const result = await router.showBrowserNotification(payload);
 
-    assert.ok(result);
-    assert.equal(notificationCalls.length, 1);
-    assert.equal(notificationCalls[0].title, 'Bob — Daily');
-    assert.equal(notificationCalls[0].options.tag, 'room:desktop-fallback');
-  } finally {
-    if (originalNotification === undefined) delete globalThis.Notification;
-    else globalThis.Notification = originalNotification;
-    if (originalBroadcastChannel === undefined) delete globalThis.BroadcastChannel;
-    else globalThis.BroadcastChannel = originalBroadcastChannel;
-    if (originalBridge === undefined) delete globalThis.voiceRoomDesktopNotifications;
-    else globalThis.voiceRoomDesktopNotifications = originalBridge;
-  }
+  assert.ok(result);
+  assert.equal(notificationCalls.length, 1);
+  assert.equal(notificationCalls[0]?.title, 'Bob — Daily');
+  assert.equal(notificationCalls[0]?.options?.tag, 'room:desktop-fallback');
 });
 
 test('showBrowserNotification serializes dedupe through the Web Locks API', async () => {
-  const originalNotification = globalThis.Notification;
-  const originalNavigator = globalThis.navigator;
-  const originalBroadcastChannel = globalThis.BroadcastChannel;
-  const calls = [];
-  let tail = Promise.resolve();
+  const calls: string[] = [];
+  let tail: Promise<void> = Promise.resolve();
 
   class FakeNotification {
     static permission = 'granted';
-    constructor(title) {
+    constructor(title: string) {
       calls.push(title);
     }
   }
 
   vi.stubGlobal('Notification', FakeNotification);
   vi.stubGlobal('BroadcastChannel', undefined);
-  Object.defineProperty(globalThis, 'navigator', {
-    configurable: true,
-    value: {
-      locks: {
-        request(_name, callback) {
-          const result = tail.then(callback);
-          tail = result.catch(() => {});
-          return result;
-        }
+  vi.stubGlobal('navigator', {
+    locks: {
+      request(_name: string, callback: () => unknown) {
+        const result = tail.then(callback);
+        tail = result.then(
+          () => {},
+          () => {}
+        );
+        return result;
       }
     }
   });
 
-  try {
-    const router = await loadRouter();
-    router.resetNotificationDedupeForTests();
-    const payload = { title: 'locked', body: 'body', tag: 'lock-key', dedupeKey: 'lock-key' };
-    const [first, second] = await Promise.all([
-      router.showBrowserNotification(payload),
-      router.showBrowserNotification(payload)
-    ]);
-    assert.ok(first);
-    assert.equal(second, null);
-    assert.equal(calls.length, 1);
-  } finally {
-    if (originalNotification === undefined) delete globalThis.Notification;
-    else globalThis.Notification = originalNotification;
-    if (originalNavigator === undefined) delete globalThis.navigator;
-    else Object.defineProperty(globalThis, 'navigator', { configurable: true, value: originalNavigator });
-    if (originalBroadcastChannel === undefined) delete globalThis.BroadcastChannel;
-    else globalThis.BroadcastChannel = originalBroadcastChannel;
-  }
+  const router = await loadRouter();
+  router.resetNotificationDedupeForTests();
+  const payload = { title: 'locked', body: 'body', tag: 'lock-key', dedupeKey: 'lock-key' };
+  const [first, second] = await Promise.all([
+    router.showBrowserNotification(payload),
+    router.showBrowserNotification(payload)
+  ]);
+  assert.ok(first);
+  assert.equal(second, null);
+  assert.equal(calls.length, 1);
 });
 
 test('showBrowserNotification no-ops when denied or unavailable', async () => {
-  const originalNotification = globalThis.Notification;
-  const originalBridge = globalThis.voiceRoomDesktopNotifications;
   const router = await loadRouter();
   router.resetNotificationDedupeForTests();
 
-  try {
-    assert.equal(router.getNotificationPermission(), 'unsupported');
-    assert.equal(router.canUseNotifications(), false);
-    assert.equal(await router.showBrowserNotification({ title: 'x', body: 'y', tag: 'z', dedupeKey: 'z' }), null);
+  assert.equal(router.getNotificationPermission(), 'unsupported');
+  assert.equal(router.canUseNotifications(), false);
+  assert.equal(await router.showBrowserNotification({ title: 'x', body: 'y', tag: 'z', dedupeKey: 'z' }), null);
 
-    class DeniedNotification {
-      static permission = 'denied';
-      static async requestPermission() {
-        throw new Error('must not be called');
-      }
+  class DeniedNotification {
+    static permission = 'denied';
+    static async requestPermission() {
+      throw new Error('must not be called');
     }
-    vi.stubGlobal('Notification', DeniedNotification);
-    assert.equal(await router.showBrowserNotification({ title: 'x', body: 'y', tag: 'z2', dedupeKey: 'z2' }), null);
-  } finally {
-    if (originalNotification === undefined) delete globalThis.Notification;
-    else globalThis.Notification = originalNotification;
-    if (originalBridge === undefined) delete globalThis.voiceRoomDesktopNotifications;
-    else globalThis.voiceRoomDesktopNotifications = originalBridge;
   }
+  vi.stubGlobal('Notification', DeniedNotification);
+  assert.equal(await router.showBrowserNotification({ title: 'x', body: 'y', tag: 'z2', dedupeKey: 'z2' }), null);
 });

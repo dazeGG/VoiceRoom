@@ -19,7 +19,13 @@ rmSync(V8_DIR, { recursive: true, force: true });
 mkdirSync(V8_DIR, { recursive: true });
 
 run(
-  ['--test', '--test-concurrency=1', 'scripts/test/g08-coverage-gate.test.mts', 'packages/shared/test/*.test.ts', 'apps/api/test/*.test.ts'],
+  [
+    '--test',
+    '--test-concurrency=1',
+    'scripts/test/g08-coverage-gate.test.mts',
+    'packages/shared/test/*.test.ts',
+    'apps/api/test/*.test.ts'
+  ],
   { ...process.env, G08_V8_DIR: V8_DIR, NODE_V8_COVERAGE: V8_DIR }
 );
 run(['scripts/coverage/check-release-250-coverage.mts', '--v8-dir', V8_DIR, '--out', SUMMARY, '--collect-only']);

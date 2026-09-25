@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes scripts/tsconfig.json.
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { spawnSync } from 'node:child_process';
@@ -13,7 +12,9 @@ import { createRequire } from 'node:module';
 
 import {
   checkRelease250Coverage as enforceRelease250Coverage,
-  collectRelease250V8Coverage
+  collectRelease250V8Coverage,
+  type CoverageSummary,
+  type CoverageThresholds
 } from '../coverage/check-release-250-coverage.mts';
 
 const require = createRequire(import.meta.url);
@@ -108,14 +109,14 @@ const SERVER_INTERNAL_COVERAGE_SCRIPT = String.raw`
   })().catch((error) => { console.error(error); process.exitCode = 1; });
 `;
 
-function checkRelease250Coverage(options) {
+function checkRelease250Coverage(options: Parameters<typeof enforceRelease250Coverage>[0]) {
   return enforceRelease250Coverage({
     ...options,
     ...(options.baseThresholds || options.baseThresholdsAbsent !== undefined ? {} : { baseThresholdsAbsent: true })
   });
 }
 
-function thresholdFixture(overrides = {}) {
+function thresholdFixture(overrides: Partial<CoverageThresholds> = {}): CoverageThresholds {
   return {
     schemaVersion: 1,
     release: '2.5.0',
@@ -156,7 +157,7 @@ function thresholdFixture(overrides = {}) {
 }
 
 const thresholds = thresholdFixture();
-const greenSummary = {
+const greenSummary: CoverageSummary = {
   schemaVersion: 1,
   release: '2.5.0',
   meta: { measured: true, engine: 'node-v8-coverage', branchMetric: 'node-v8-branch' },
@@ -247,7 +248,7 @@ test('G08-A03c protected-base policy ratchet rejects every gate weakening', () =
   const base = thresholdFixture({
     strictBranchPaths: ['apps/api/src/platform/cursor-codec.js']
   });
-  const reject = (current, message) =>
+  const reject = (current: CoverageThresholds, message: RegExp) =>
     assert.throws(
       () =>
         enforceRelease250Coverage({
@@ -300,7 +301,7 @@ test('G08-A03d a .js policy entry carries over to its .ts successor only once th
     ...greenSummary,
     files: { ...greenSummary.files, [typed]: { lines: { pct: 100 }, branches: { pct: 100 } } }
   };
-  const check = (fileExists) =>
+  const check = (fileExists: (file: string) => boolean) =>
     enforceRelease250Coverage({
       coverageSummary: summary,
       thresholds: renamed,
@@ -336,7 +337,7 @@ test('G08-A03e a .ts exclusion may only replace the .js/.mjs exclusions of a mod
   const current = thresholdFixture({
     ignoredPathPatterns: [...thresholds.ignoredPathPatterns, 'packages/shared/src/emoji.ts']
   });
-  const check = (thresholdsUnderTest, fileExists) =>
+  const check = (thresholdsUnderTest: CoverageThresholds, fileExists: (file: string) => boolean) =>
     enforceRelease250Coverage({
       coverageSummary: greenSummary,
       thresholds: thresholdsUnderTest,
@@ -449,7 +450,7 @@ test('G08-A06 collector unions complementary raw V8 ranges across shards', (t) =
   const source = "export function decision(value) { return value ? 'yes' : 'no'; }\n";
   fs.writeFileSync(sourcePath, source);
   const scriptUrl = new URL(`file://${sourcePath}`).href;
-  const functions = (left, right) => [
+  const functions = (left: number, right: number) => [
     {
       functionName: 'decision',
       ranges: [
@@ -475,7 +476,7 @@ test('G08-A06 collector unions complementary raw V8 ranges across shards', (t) =
       businessPathPatterns: ['apps/api/src/']
     })
   });
-  assert.deepEqual(summary.files['apps/api/src/decision.js'].branches, { total: 2, covered: 2, skipped: 0, pct: 100 });
+  assert.deepEqual(summary.files['apps/api/src/decision.js']?.branches, { total: 2, covered: 2, skipped: 0, pct: 100 });
   assert.equal(summary.meta.branchMetric, 'node-v8-branch');
   assert.match(summary.meta.semantics, /not Istanbul AST branch coverage/);
 });
@@ -489,7 +490,7 @@ test('G08-A06b collector merges a script reported by its filesystem path', (t) =
   fs.mkdirSync(v8Dir);
   const source = "export function decision(value) { return value ? 'yes' : 'no'; }\n";
   fs.writeFileSync(sourcePath, source);
-  const functions = (left, right) => [
+  const functions = (left: number, right: number) => [
     {
       functionName: 'decision',
       ranges: [
@@ -514,7 +515,7 @@ test('G08-A06b collector merges a script reported by its filesystem path', (t) =
   );
   // The type-stripped script ends in a sourceURL trailer whose length differs by
   // loader; a module-level block one process skipped and another ran is covered.
-  const trailer = (url, blockCount) => [
+  const trailer = (url: string, blockCount: number) => [
     {
       functionName: '',
       ranges: [
@@ -541,7 +542,7 @@ test('G08-A06b collector merges a script reported by its filesystem path', (t) =
       businessPathPatterns: ['apps/api/src/']
     })
   });
-  assert.deepEqual(summary.files['apps/api/src/decision.ts'].branches, { total: 3, covered: 3, skipped: 0, pct: 100 });
+  assert.deepEqual(summary.files['apps/api/src/decision.ts']?.branches, { total: 3, covered: 3, skipped: 0, pct: 100 });
 });
 
 test('G08 web TypeScript producer measures actual auth and media decision files', async (t) => {
@@ -552,7 +553,9 @@ test('G08 web TypeScript producer measures actual auth and media decision files'
   const auth = await import('../../apps/web/src/lib/api/auth.ts');
   const media = await import('../../apps/web/src/lib/features/room/client/media/screen-receiver-demand.ts');
   const user = { id: 'u1' };
-  const response = ({ ok = true, payload = {} } = {}) => ({ ok, json: async () => payload });
+  const response = ({ ok = true, payload = {} }: { ok?: boolean; payload?: unknown } = {}) =>
+    new Response(JSON.stringify(payload), { status: ok ? 200 : 400 });
+  const notJson = () => new Response('not json', { status: 500 });
 
   globalThis.fetch = async () => response({ payload: { user } });
   assert.equal((await auth.register({ login: 'user', password: 'password' })).id, 'u1');
@@ -570,6 +573,7 @@ test('G08 web TypeScript producer measures actual auth and media decision files'
   globalThis.fetch = async () =>
     response({ payload: { user: { id: 'u1', hasUsedDesktopApp: true, appPromptSeen: false } } });
   const flaggedUser = await auth.fetchMe();
+  assert.ok(flaggedUser);
   assert.equal(flaggedUser.hasUsedDesktopApp, true);
   assert.equal(flaggedUser.appPromptSeen, false);
   assert.equal(
@@ -584,12 +588,7 @@ test('G08 web TypeScript producer measures actual auth and media decision files'
   assert.equal(await auth.removeRoomFromList('room'), false);
   globalThis.fetch = async () => response({ ok: false, payload: { error: 'нет доступа' } });
   await assert.rejects(() => auth.removeRoomFromList('room'), /нет доступа/);
-  globalThis.fetch = async () => ({
-    ok: false,
-    json: async () => {
-      throw new Error('not json');
-    }
-  });
+  globalThis.fetch = async () => notJson();
   await assert.rejects(() => auth.removeRoomFromList('room'), /удалить комнату из списка/i);
 
   globalThis.fetch = async () => response({ payload: { user: null } });
@@ -602,12 +601,7 @@ test('G08 web TypeScript producer measures actual auth and media decision files'
   await assert.rejects(() => auth.login({ login: 'user', password: 'bad' }), /denied/);
   await assert.rejects(() => auth.fetchMe(), /проверить сессию/i);
   await assert.rejects(() => auth.fetchOwnedRooms(), /загрузить комнаты/i);
-  globalThis.fetch = async () => ({
-    ok: false,
-    json: async () => {
-      throw new Error('not json');
-    }
-  });
+  globalThis.fetch = async () => notJson();
   await assert.rejects(() => auth.login({ login: 'user', password: 'bad' }), /сервер недоступен/i);
 
   // Account security, added in 2.6.0: every call, plus the fallback each answer
@@ -725,8 +719,8 @@ test('G08 coverage producers execute the changed web line and invariant-protecte
 
 test('G08 changed LiveKit gate persistence decisions are exercised through the public store', async () => {
   const state = { credentialAllowed: true, epoch: 1, roomExists: true, banCount: 0 };
-  const calls = [];
-  const query = async (text, values = []) => {
+  const calls: Array<{ text: string; values: unknown[] }> = [];
+  const query = async (text: string, values: unknown[] = []) => {
     calls.push({ text, values });
     if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(text)) return { rows: [], rowCount: 0 };
     if (/SET epoch = livekit_gate_principal_epochs\.epoch \+ 1/.test(text))
@@ -884,7 +878,7 @@ test('G08 changed LiveKit gate persistence decisions are exercised through the p
 
 test('G08 realtime join retains and revokes the exact gate principal', async () => {
   const room = { id: 'room123456', peers: new Map(), updatedAt: 0 };
-  const revoked = [];
+  const revoked: Array<{ accountUserId?: string; guestPrincipalId?: string }> = [];
   const identityIds = ['identity-1', ''];
   const store = {
     async getOrCreatePeerIdentity() {
@@ -903,12 +897,12 @@ test('G08 realtime join retains and revokes the exact gate principal', async () 
       return [];
     },
     async markRoomActive() {},
-    normalizeGatePrincipal({ accountUserId, guestPrincipalId }) {
+    normalizeGatePrincipal({ accountUserId, guestPrincipalId }: { accountUserId?: string; guestPrincipalId?: string }) {
       if (accountUserId) return { principalType: 'account', principalId: accountUserId };
       if (guestPrincipalId) return { principalType: 'guest', principalId: guestPrincipalId };
       return null;
     },
-    async revokeLiveKitGatePeer(value) {
+    async revokeLiveKitGatePeer(value: { accountUserId?: string; guestPrincipalId?: string }) {
       revoked.push(value);
     }
   };
@@ -926,14 +920,14 @@ test('G08 realtime join retains and revokes the exact gate principal', async () 
     wsRegistry,
     getRoomStore: () => store,
     getRoom: async () => room,
-    publicPeer: (peer) => peer,
-    publicLobbyRoom: (value) => value,
-    publicChatMessage: (value) => value,
+    publicPeer: (peer: unknown) => peer,
+    publicLobbyRoom: (value: unknown) => value,
+    publicChatMessage: (value: unknown) => value,
     broadcast() {},
     closePeer() {},
     avatarColorForPeerId: () => 'blue',
     MAX_ROOM_PEERS: 10,
-    tokensMatch: (left, right) => left === right,
+    tokensMatch: (left: string, right: string) => left === right,
     sessionAvatarColorKey: () => 'blue'
   });
   const makeConnection = () => ({
@@ -973,8 +967,8 @@ test('G08 realtime join retains and revokes the exact gate principal', async () 
   await runtime.leaveVoiceRoom(second);
   await runtime.leaveVoiceRoom(makeConnection(), { roomId: room.id, peerId: 'missing1' });
   assert.equal(revoked.length, 2);
-  assert.equal(revoked[0].guestPrincipalId, 'identity-1');
-  assert.equal(revoked[1].accountUserId, 'user-1');
+  assert.equal(revoked[0]?.guestPrincipalId, 'identity-1');
+  assert.equal(revoked[1]?.accountUserId, 'user-1');
 });
 
 test('G08 admission signer exported decisions are fully exercised', () => {
@@ -1015,7 +1009,7 @@ test('G08 admission signer exported decisions are fully exercised', () => {
   const parts = credential.split('.');
   assert.equal(signer.verify(`${parts[0]}.${parts[1]}.${'x'.repeat(parts[2].length)}`).code, 'bad_signature');
 
-  const signedClaims = (claimsText) => {
+  const signedClaims = (claimsText: string) => {
     const payload = Buffer.from(claimsText).toString('base64url');
     const signature = crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
     return `vrg1.${payload}.${signature}`;
@@ -1060,21 +1054,24 @@ test('G08 admission signer exported decisions are fully exercised', () => {
   assert.equal(createGateCredentialSigner({ secret: SECRET }).verify(defaulted).ok, true);
 });
 
+function portOf(server: net.Server) {
+  const address = server.address();
+  assert.ok(address && typeof address === 'object');
+  return address.port;
+}
+
 class FakeSocket extends EventEmitter {
-  constructor() {
-    super();
-    this.writes = [];
-    this.destroyed = false;
-    this.pipes = [];
-  }
-  write(value) {
+  writes: Array<string | Buffer> = [];
+  destroyed = false;
+  pipes: unknown[] = [];
+  write(value: string | Buffer) {
     this.writes.push(value);
     return true;
   }
   destroy() {
     this.destroyed = true;
   }
-  pipe(target) {
+  pipe<T>(target: T) {
     this.pipes.push(target);
     return target;
   }
@@ -1116,13 +1113,13 @@ test('G08 admission gate service exported decisions and server paths are exercis
       return { status: decision };
     }
   };
-  const errors = [];
+  const errors: unknown[][] = [];
   const gate = createLiveKitAuthGateService({
     roomStore: store,
     secret: SECRET,
     gatePath: 'rtc',
     upstreamUrl: 'ws://livekit.example',
-    logger: { error: (...args) => errors.push(args), warn: () => {} }
+    logger: { error: (...args: unknown[]) => errors.push(args), warn: () => {} }
   });
   assert.equal(gate.path, '/rtc');
   assert.equal(
@@ -1157,7 +1154,7 @@ test('G08 admission gate service exported decisions and server paths are exercis
   const response = () => ({
     status: 0,
     body: '',
-    writeHead(status) {
+    writeHead(status: number) {
       this.status = status;
     },
     end(body = '') {
@@ -1188,17 +1185,13 @@ test('G08 admission gate service exported decisions and server paths are exercis
   await new Promise((resolve) => setImmediate(resolve));
   assert.match(String(deniedSocket.writes[0]), /403 Forbidden/);
 
-  const originalConnect = net.connect;
-  t.after(() => {
-    net.connect = originalConnect;
-  });
   decision = 'allowed';
   // The gate also binds the LiveKit JWT to the credential (peer, room, nbf); the
   // signature is LiveKit's to check, so an unsigned token with the claims does.
-  const encodeJwtPart = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const encodeJwtPart = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
   const accessToken = `${encodeJwtPart({ alg: 'HS256' })}.${encodeJwtPart({ sub: 'peer', nbf: Math.floor(Date.now() / 1000), video: { room: 'voice-room-room' } })}.signature`;
   const upstream = new FakeSocket();
-  net.connect = () => upstream;
+  const connect = t.mock.method(net, 'connect', () => upstream);
   const client = new FakeSocket();
   server.emit(
     'upgrade',
@@ -1212,7 +1205,7 @@ test('G08 admission gate service exported decisions and server paths are exercis
   await new Promise((resolve) => setImmediate(resolve));
   upstream.emit('connect');
   assert.match(String(upstream.writes[0]), /^GET \/rtc\?access_token=[^ ]+ HTTP\/1\.1/);
-  assert.equal(upstream.writes[1].toString(), 'head');
+  assert.equal(String(upstream.writes[1]), 'head');
 
   assert.throws(
     () =>
@@ -1221,7 +1214,7 @@ test('G08 admission gate service exported decisions and server paths are exercis
   );
 
   const upstreamError = new FakeSocket();
-  net.connect = () => upstreamError;
+  connect.mock.mockImplementation(() => upstreamError);
   const errorClient = new FakeSocket();
   server.emit(
     'upgrade',
@@ -1247,31 +1240,31 @@ test('G08 admission gate service exported decisions and server paths are exercis
 
   // The validate probe relays LiveKit's answer; one that names no content
   // type still reaches the browser as plain text.
-  net.connect = originalConnect;
+  connect.mock.restore();
   decision = 'allowed';
   const validateUpstream = http.createServer((request, reply) => {
     reply.writeHead(401);
     reply.end('no');
   });
-  await new Promise((resolve) => validateUpstream.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => validateUpstream.listen(0, '127.0.0.1', () => resolve()));
   t.after(() => validateUpstream.close());
   const validateGate = createLiveKitAuthGateService({
     roomStore: store,
     secret: SECRET,
-    upstreamUrl: `ws://127.0.0.1:${validateUpstream.address().port}`
+    upstreamUrl: `ws://127.0.0.1:${portOf(validateUpstream)}`
   });
   const validateServer = validateGate.createServer();
-  await new Promise((resolve) => validateServer.listen(0, '127.0.0.1', resolve));
+  await new Promise<void>((resolve) => validateServer.listen(0, '127.0.0.1', () => resolve()));
   t.after(() => validateServer.close());
   const probe = await fetch(
-    `http://127.0.0.1:${validateServer.address().port}/rtc/validate?access_token=${accessToken}&vr_gate_credential=${credential}`
+    `http://127.0.0.1:${portOf(validateServer)}/rtc/validate?access_token=${accessToken}&vr_gate_credential=${credential}`
   );
   assert.equal(probe.status, 401);
   assert.equal(probe.headers.get('content-type'), 'text/plain; charset=utf-8');
   assert.equal(probe.headers.get('access-control-allow-origin'), '*');
   assert.equal(await probe.text(), 'no');
 
-  const mainEnv = (extra) => ({
+  const mainEnv = (extra: Record<string, string>) => ({
     ...process.env,
     LIVEKIT_GATE_SECRET: SECRET,
     ...extra,

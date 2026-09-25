@@ -1,16 +1,17 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 // Branch-by-branch proofs for friends, requests, blocks and ringing
 // (domains/social): the service on a fake friend store and the routes on a
 // bare Fastify app. The ws and friends HTTP suites cover the database.
 
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import fastify from 'fastify';
+import fastify, { type FastifyInstance } from 'fastify';
 
-import { createFriendsService } from '../src/domains/social/friends.service.ts';
+import { createFriendsService, type FriendStore, type FriendsService } from '../src/domains/social/friends.service.ts';
 import { registerFriendsRoutes } from '../src/domains/social/friends.routes.ts';
 import { isActiveAccount, notificationActor } from '../src/domains/social/social-views.ts';
+import type { ApiContext } from '../src/app/context.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
+import { fake } from './fakes/index.ts';
 
 const ME = { id: 'user-1', login: 'alice', displayName: 'Alice' };
 const FRIEND_ID = '22222222-2222-4222-8222-222222222222';
@@ -25,6 +26,7 @@ test('social views: the notification actor and active accounts', () => {
     passwordHash: 'secret',
     desktopAppSeenAt: 10
   });
+  assert.ok(actor);
   assert.equal(actor.id, 'u');
   assert.equal('passwordHash' in actor, false);
   assert.equal('hasUsedDesktopApp' in actor, false, 'self-only fields stay private');
@@ -34,9 +36,20 @@ test('social views: the notification actor and active accounts', () => {
   assert.equal(isActiveAccount({ id: 'u', deletedAt: 1 }), false);
 });
 
-function harness(store = {}, options = {}) {
-  const calls = { events: [], pushes: [], dms: [] };
-  const friends = {
+type HarnessOptions = {
+  deletedTarget?: boolean;
+  noRoom?: boolean;
+  roomName?: string;
+  rate?: { allowed: boolean; retryAfterSeconds?: number };
+};
+
+function harness(store: Partial<FriendStore> = {}, options: HarnessOptions = {}) {
+  const calls = {
+    events: [] as unknown[][],
+    pushes: [] as unknown[][],
+    dms: [] as Array<{ body: string; metadata: Record<string, unknown> }>
+  };
+  const friends: FriendStore = {
     async listFriends() {
       return [
         { user: { id: 'f1' }, unreadCount: 2, lastMessage: null },
@@ -151,7 +164,7 @@ test('sending a request notifies the addressee; a crossing request accepts', asy
     ['u2', 'friend-accepted'],
     ['u2', 'notification.friend.accepted']
   ]);
-  assert.equal(crossing.calls.pushes[0][2], 'Заявка принята');
+  assert.equal(crossing.calls.pushes[0]?.[2], 'Заявка принята');
 
   for (const status of ['not_found', 'self', 'blocked']) {
     assert.deepEqual(
@@ -310,39 +323,43 @@ test('a ring notifies, files a room invitation DM for both sides and pushes unti
     ['f1', 'dm-message'],
     ['user-1', 'dm-message']
   ]);
-  assert.equal(calls.dms[0].body, 'Приглашение в комнату «Team»');
+  assert.equal(calls.dms[0]?.body, 'Приглашение в комнату «Team»');
   assert.equal(calls.dms[0].metadata.kind, 'room-invite');
-  assert.deepEqual(calls.pushes[0].slice(0, 3), ['f1', 'ring', 'Alice зовёт вас']);
+  assert.deepEqual(calls.pushes[0]?.slice(0, 3), ['f1', 'ring', 'Alice зовёт вас']);
   assert.deepEqual(calls.pushes[0][3], { expiresAt: 1050 });
 
   const unnamed = harness({}, { roomName: '' });
   await unnamed.service.ring({ id: 'user-1' }, 'room-1', 'f1');
-  assert.equal(unnamed.calls.dms[0].body, 'Приглашение в комнату');
-  assert.equal(unnamed.calls.pushes[0][2], 'Друг зовёт вас');
+  assert.equal(unnamed.calls.dms[0]?.body, 'Приглашение в комнату');
+  assert.equal(unnamed.calls.pushes[0]?.[2], 'Друг зовёт вас');
 });
 
 // --- routes ---------------------------------------------------------------------
 
-function routeApp(t, outcomes = {}, { signedIn = true, limited = false } = {}) {
+function routeApp(
+  t: TestContext,
+  outcomes: Record<string, unknown> = {},
+  { signedIn = true, limited = false }: { signedIn?: boolean; limited?: boolean } = {}
+) {
   const app = fastify();
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
-  const seen = {};
+  const seen: Record<string, unknown[]> = {};
   const record =
-    (name, value) =>
-    async (...args) => {
+    (name: string, value: unknown) =>
+    async (...args: unknown[]) => {
       seen[name] = args;
       return outcomes[name] ?? value;
     };
   registerFriendsRoutes(
     app,
     {
-      logger: null,
+      logger: fake<ApiContext['logger']>(),
       clientIp: () => 'ip',
       resolveSession: async () => (signedIn ? { user: ME } : null),
-      hashIp: (ip) => ip
+      hashIp: (ip: string) => ip
     },
     {
-      friends: {
+      friends: fake<FriendsService>({
         list: record('list', { friends: [], incomingRequestCount: 0 }),
         search: record('search', []),
         requests: record('requests', { incoming: [], outgoing: [] }),
@@ -354,7 +371,7 @@ function routeApp(t, outcomes = {}, { signedIn = true, limited = false } = {}) {
         block: record('block', { status: 'applied', result: 'blocked' }),
         unblock: record('unblock', { status: 'unblocked' }),
         ring: record('ring', { status: 'rung' })
-      },
+      } as Partial<Record<keyof FriendsService, unknown>> as Partial<FriendsService>),
       requestLimiter: { check: () => (limited ? { allowed: false, retryAfterSeconds: 6 } : { allowed: true }) }
     }
   );
@@ -362,12 +379,18 @@ function routeApp(t, outcomes = {}, { signedIn = true, limited = false } = {}) {
   return { app, seen };
 }
 
-async function call(app, method, url, payload) {
-  const response = await app.inject({ method, url, ...(payload === undefined ? {} : { payload }) });
-  return { status: response.statusCode, body: response.json(), retryAfter: response.headers['retry-after'] };
+type Body = { ok?: boolean; error?: string } & Record<string, unknown>;
+
+async function call(app: FastifyInstance, method: string, url: string, payload?: object) {
+  const response = await app.inject({
+    method: method as 'GET' | 'PUT' | 'POST' | 'DELETE',
+    url,
+    ...(payload === undefined ? {} : { payload })
+  });
+  return { status: response.statusCode, body: response.json<Body>(), retryAfter: response.headers['retry-after'] };
 }
 
-const ROUTES = [
+const ROUTES: Array<[string, string, object?]> = [
   ['GET', '/api/friends'],
   ['GET', '/api/friends/search?q=bo'],
   ['GET', '/api/friends/requests'],
@@ -392,8 +415,8 @@ test('every social route needs a session and answers it', async (t) => {
     assert.equal(answered.body.ok, true, url);
   }
   assert.deepEqual(seen.search, ['user-1', 'bo']);
-  assert.deepEqual(seen.sendRequest[1], { userId: '', login: 'bob' });
-  assert.deepEqual(seen.ring.slice(1), ['room-1', FRIEND_ID]);
+  assert.deepEqual(seen.sendRequest?.[1], { userId: '', login: 'bob' });
+  assert.deepEqual(seen.ring?.slice(1), ['room-1', FRIEND_ID]);
   assert.equal((await call(app, 'GET', '/api/friends/search')).status, 200);
   assert.deepEqual(seen.search, ['user-1', '']);
   assert.deepEqual((await call(app, 'POST', `/api/friends/requests/${REQUEST_ID}/decline`, undefined)).body, {
@@ -404,7 +427,7 @@ test('every social route needs a session and answers it', async (t) => {
 });
 
 test('social refusals keep their texts and codes', async (t) => {
-  const cases = [
+  const cases: Array<[string, string, object | undefined, Record<string, unknown>, number, string]> = [
     ['POST', '/api/friends/requests', {}, {}, 400, 'Неверный пользователь'],
     [
       'POST',

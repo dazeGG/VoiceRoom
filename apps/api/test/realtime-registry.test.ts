@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildRoomMembershipPresenceSnapshot, createConnectionRegistry } from '../src/realtime/registry.ts';
@@ -10,7 +9,7 @@ function socket() {
 }
 
 test('manual offline masks open sockets and stale tabs cannot overwrite active account status', async () => {
-  const presenceEvents = [];
+  const presenceEvents: Array<{ friendId: string; userId: string; online: boolean }> = [];
   const registry = createConnectionRegistry({
     maxConnectionsPerUser: 8,
     keepaliveMs: 15_000,

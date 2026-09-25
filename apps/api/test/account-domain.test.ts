@@ -1,16 +1,22 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 // Branch-by-branch proofs for accounts (domains/account): the service on a
 // fake user store, the /api/auth routes on a bare Fastify app, and the
 // session cookie. The HTTP suites (auth, account-*-http) cover the database.
 
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import fastify from 'fastify';
+import fastify, { type FastifyInstance } from 'fastify';
 
-import { createAccountService } from '../src/domains/account/account.service.ts';
+import {
+  createAccountService,
+  type AccountDeletionRepository,
+  type AccountService,
+  type AccountUserStore
+} from '../src/domains/account/account.service.ts';
 import { registerAccountRoutes } from '../src/domains/account/account.routes.ts';
 import { createSessionCookies, parseCookies } from '../src/domains/account/session-cookie.ts';
+import type { ApiContext } from '../src/app/context.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
+import { fake, recordingLogger } from './fakes/index.ts';
 
 const DEVICE = { userAgent: 'UA', locationLabel: 'Berlin' };
 const device = async () => DEVICE;
@@ -32,18 +38,27 @@ test('the session cookie is HttpOnly, Lax, Secure when asked and tolerant when r
 
 // --- service ----------------------------------------------------------------------
 
-function harness(overrides = {}, { deletions = {}, noDeletions = false } = {}) {
+function harness(
+  overrides: Partial<AccountUserStore> = {},
+  {
+    deletions = {},
+    noDeletions = false
+  }: { deletions?: Partial<AccountDeletionRepository>; noDeletions?: boolean } = {}
+) {
+  const logger = recordingLogger();
   const calls = {
-    ended: [],
-    notified: [],
-    pushes: [],
-    refreshed: [],
-    broadcast: [],
-    errors: [],
-    sessions: [],
-    reset: []
+    ended: [] as Array<{ userId?: string | null; tokenHashes?: string[] | null }>,
+    notified: [] as unknown[],
+    pushes: [] as string[],
+    refreshed: [] as string[],
+    broadcast: [] as string[],
+    sessions: [] as unknown[],
+    reset: [] as string[],
+    get errors() {
+      return logger.records.filter((record) => record.level === 'error').map((record) => record.evt);
+    }
   };
-  const users = {
+  const users: AccountUserStore = {
     async createUser(input) {
       return input.login === 'taken'
         ? { status: 'login_taken' }
@@ -122,29 +137,27 @@ function harness(overrides = {}, { deletions = {}, noDeletions = false } = {}) {
     },
     ...overrides
   };
-  const repository = {
+  const requests: Record<string, { status: string; scheduledFor?: number }> = {
+    'right-password': { status: 'requested', scheduledFor: 99 },
+    again: { status: 'already_requested', scheduledFor: 88 },
+    missing: { status: 'not_found' }
+  };
+  const restores: Record<string, { status: string; userId: string | null }> = {
+    ok: { status: 'restored', userId: 'user-1' },
+    old: { status: 'expired', userId: null }
+  };
+  const repository: AccountDeletionRepository = {
     async isLoginReserved(login) {
       return login === 'reserved';
     },
     async previewDeletion() {
-      return { ownedRooms: 1 };
+      return { ownedRooms: 1 } as never;
     },
     async requestDeletion({ currentPassword }) {
-      return (
-        {
-          'right-password': { status: 'requested', scheduledFor: 99 },
-          again: { status: 'already_requested', scheduledFor: 88 },
-          missing: { status: 'not_found' }
-        }[currentPassword] || { status: 'invalid_password' }
-      );
+      return requests[currentPassword] ?? { status: 'invalid_password' };
     },
     async restoreAccount({ login }) {
-      return (
-        { ok: { status: 'restored', userId: 'user-1' }, old: { status: 'expired', userId: null } }[login] || {
-          status: 'invalid',
-          userId: null
-        }
-      );
+      return restores[login] ?? { status: 'invalid', userId: null };
     },
     ...deletions
   };
@@ -171,7 +184,7 @@ function harness(overrides = {}, { deletions = {}, noDeletions = false } = {}) {
     broadcastProfileToFriends: async (user) => {
       calls.broadcast.push(user.id);
     },
-    logger: () => ({ error: (fields) => calls.errors.push(fields.evt) })
+    logger: () => logger
   });
   return { calls, service };
 }
@@ -196,7 +209,7 @@ test('registration validates, keeps deleted logins taken and survives a failed s
   const created = await service.register(base);
   assert.equal(created.status, 'signed_in');
   assert.equal(created.token, 'tok');
-  assert.equal(created.user.login, 'reloaded');
+  assert.equal(created.user?.login, 'reloaded');
   assert.deepEqual(calls.sessions[0], { userId: 'new-1', ...DEVICE });
   assert.equal(calls.errors.length, 1);
   assert.equal((await harness({}, { noDeletions: true }).service.register(base)).status, 'signed_in');
@@ -229,9 +242,9 @@ test('sign-in checks credentials, throttles per login and offers a restore to pe
 test('sign-out ends the session and what it holds open', async () => {
   const { calls, service } = harness();
   await service.logout('');
-  assert.deepEqual(calls.ended, []);
+  assert.equal(calls.ended.length, 0);
   await service.logout('tok');
-  assert.equal(calls.ended[0].tokenHashes.length, 1);
+  assert.equal(calls.ended[0]?.tokenHashes?.length, 1);
 });
 
 test('profile, password, notices and recovery codes', async () => {
@@ -253,7 +266,9 @@ test('profile, password, notices and recovery codes', async () => {
   assert.deepEqual(await service.snoozeRecoveryCodesReminder('user-1'), { status: 'snoozed', snoozedUntil: 9 });
   assert.equal((await service.snoozeRecoveryCodesReminder('gone')).status, 'not_found');
   assert.equal((await service.whatsNew('user-1')).lastSeen, '2.6.0');
-  assert.equal((await service.markWhatsNewSeen('user-1')).whatsNew.lastSeen, '9.9.9');
+  const seen = await service.markWhatsNewSeen('user-1');
+  assert.ok('whatsNew' in seen);
+  assert.equal(seen.whatsNew.lastSeen, '9.9.9');
   assert.equal((await service.markWhatsNewSeen('gone')).status, 'not_found');
   assert.equal((await service.markAppPromptSeen('user-1')).status, 'seen');
   assert.equal((await service.markAppPromptSeen('gone')).status, 'not_found');
@@ -261,6 +276,7 @@ test('profile, password, notices and recovery codes', async () => {
   assert.equal((await service.generateRecoveryCodes('gone', 'x')).status, 'not_found');
   assert.equal((await service.generateRecoveryCodes('user-1', 'wrong')).status, 'invalid_password');
   const generated = await service.generateRecoveryCodes('user-1', 'right-password');
+  assert.ok('codes' in generated);
   assert.equal(generated.recoveryCodes.remaining, 1);
   assert.equal(generated.codes.length, 1);
   const empty = await harness({
@@ -268,6 +284,7 @@ test('profile, password, notices and recovery codes', async () => {
       return { status: 'generated' };
     }
   }).service.generateRecoveryCodes('user-1', 'p');
+  assert.ok('codes' in empty);
   assert.deepEqual(empty.codes, []);
 });
 
@@ -316,6 +333,7 @@ test('recovery replaces the password, ends other sessions and asks the other dev
       return { status: 'recovered', user: { id: 'u' } };
     }
   }).service.recover({ login: 'a', code: 'c', newPassword: 'long-password', device });
+  assert.ok('remaining' in noRemaining);
   assert.equal(noRemaining.remaining, 0);
 });
 
@@ -356,18 +374,28 @@ test('account deletion: preview, request, restore', async () => {
 
 // --- routes -----------------------------------------------------------------------
 
-function routeApp(t, outcomes = {}, { session = null, limited = [], deletionAvailable = true } = {}) {
+type Session = Awaited<ReturnType<ApiContext['resolveSession']>>;
+
+function routeApp(
+  t: TestContext,
+  outcomes: Record<string, unknown> = {},
+  {
+    session = null,
+    limited = [],
+    deletionAvailable = true
+  }: { session?: Session; limited?: string[]; deletionAvailable?: boolean } = {}
+) {
   const app = fastify();
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
-  const seen = {};
+  const seen: Record<string, unknown[]> = {};
   const opened = { status: 'signed_in', token: 'tok', user: { id: 'user-1' } };
   const record =
-    (name, value) =>
-    async (...args) => {
+    (name: string, value: unknown) =>
+    async (...args: unknown[]) => {
       seen[name] = args;
       return outcomes[name] ?? value;
     };
-  const account = {
+  const account = fake<AccountService>({
     register: record('register', opened),
     login: record('login', opened),
     logout: record('logout', undefined),
@@ -393,14 +421,14 @@ function routeApp(t, outcomes = {}, { session = null, limited = [], deletionAvai
     deletionPreview: record('deletionPreview', { status: 'preview', preview: { ownedRooms: 0 } }),
     requestDeletion: record('requestDeletion', { status: 'scheduled', deletionScheduledFor: 5 }),
     deletionAvailable: () => deletionAvailable
-  };
+  } as Partial<Record<keyof AccountService, unknown>> as Partial<AccountService>);
   registerAccountRoutes(
     app,
     {
-      logger: null,
+      logger: fake<ApiContext['logger']>(),
       clientIp: () => '203.0.113.1',
       resolveSession: async () => session,
-      hashIp: (ip) => ip
+      hashIp: (ip: string) => ip
     },
     {
       account,
@@ -422,11 +450,17 @@ function routeApp(t, outcomes = {}, { session = null, limited = [], deletionAvai
 
 const SIGNED_IN = { user: { id: 'user-1' }, session: { publicId: 'pub-1', tokenHash: 'hash-1' } };
 
-async function call(app, method, url, payload) {
-  const response = await app.inject({ method, url, ...(payload === undefined ? {} : { payload }) });
+type Body = { ok?: boolean; error?: string; user?: { id: string } } & Record<string, unknown>;
+
+async function call(app: FastifyInstance, method: string, url: string, payload?: object) {
+  const response = await app.inject({
+    method: method as 'GET' | 'POST' | 'DELETE',
+    url,
+    ...(payload === undefined ? {} : { payload })
+  });
   return {
     status: response.statusCode,
-    body: response.json(),
+    body: response.json<Body>(),
     cookie: response.headers['set-cookie'],
     retryAfter: response.headers['retry-after']
   };
@@ -439,12 +473,13 @@ test('entry routes set the cookie and map every refusal', async (t) => {
     displayName: ' A ',
     password: 'pw'
   });
-  assert.deepEqual([registered.status, registered.cookie, registered.body.user.id], [201, 'vr_session=tok', 'user-1']);
-  assert.equal(seen.register[0].login, 'alice');
-  assert.equal(seen.register[0].passwordConfirm, 'pw');
-  assert.deepEqual(await seen.register[0].device(), DEVICE);
+  assert.deepEqual([registered.status, registered.cookie, registered.body.user?.id], [201, 'vr_session=tok', 'user-1']);
+  const registration = seen.register?.[0] as { login: string; passwordConfirm: string; device: () => Promise<unknown> };
+  assert.equal(registration.login, 'alice');
+  assert.equal(registration.passwordConfirm, 'pw');
+  assert.deepEqual(await registration.device(), DEVICE);
   assert.equal((await call(app, 'POST', '/api/auth/login', { login: 'a', password: 'p' })).cookie, 'vr_session=tok');
-  assert.equal(seen.login[0].password, 'p');
+  assert.equal((seen.login?.[0] as { password: string }).password, 'p');
   const out = await call(app, 'POST', '/api/auth/logout');
   assert.deepEqual([out.body, out.cookie], [{ ok: true }, 'vr_session=']);
   assert.deepEqual(seen.logout, ['raw-token']);
@@ -455,7 +490,7 @@ test('entry routes set the cookie and map every refusal', async (t) => {
     'vr_session=tok'
   );
 
-  const cases = [
+  const cases: Array<[string, { status: string; retryAfterSeconds?: number }, string, number, string]> = [
     ['register', { status: 'invalid_login' }, '/api/auth/register', 400, 'Логин: 3–32 символа, латиница, цифры, . _ -'],
     ['register', { status: 'invalid_password' }, '/api/auth/register', 400, 'Пароль должен быть не короче 8 символов'],
     ['register', { status: 'password_mismatch' }, '/api/auth/register', 400, 'Пароли не совпадают'],
@@ -503,7 +538,7 @@ test('entry routes are rate limited per address and per login', async (t) => {
     ['login:', '/api/auth/login'],
     ['recover:', '/api/auth/recover'],
     ['restore:', '/api/auth/account/restore']
-  ]) {
+  ] as const) {
     const response = await call(routeApp(t, {}, { limited: [prefix] }).app, 'POST', url, { login: 'alice' });
     assert.deepEqual([response.status, response.retryAfter], [429, '11'], url);
   }
@@ -521,10 +556,10 @@ test('me answers null without a session', async (t) => {
     'GET',
     '/api/auth/me'
   );
-  assert.equal(me.body.user.id, 'user-1');
+  assert.equal(me.body.user?.id, 'user-1');
 });
 
-const ACCOUNT_ROUTES = [
+const ACCOUNT_ROUTES: Array<[string, string, object?]> = [
   ['POST', '/api/auth/profile', {}],
   ['POST', '/api/auth/password', {}],
   ['GET', '/api/auth/security'],
@@ -569,7 +604,7 @@ test('every account route needs a session and answers it', async (t) => {
 });
 
 test('account refusals keep their texts', async (t) => {
-  const cases = [
+  const cases: Array<[string, { status: string }, string, string, number, string]> = [
     ['updateProfile', { status: 'not_found' }, 'POST', '/api/auth/profile', 404, 'Аккаунт не найден'],
     [
       'changePassword',
@@ -669,7 +704,7 @@ test('account refusals keep their texts', async (t) => {
     ['password:', '/api/auth/password'],
     ['recovery-codes:', '/api/auth/recovery-codes'],
     ['account-deletion:', '/api/auth/account/deletion']
-  ]) {
+  ] as const) {
     const response = await call(routeApp(t, {}, { session: SIGNED_IN, limited: [prefix] }).app, 'POST', url, {});
     assert.equal(response.status, 429, url);
   }

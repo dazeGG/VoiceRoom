@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 // Branch-by-branch proofs for LiveKit media admission (domains/admission).
 // Every refusal the client can see, every credential that must be revoked on
 // the way out, and the LiveKit admin calls behind kick, ban and server mute.
@@ -6,16 +5,28 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createAdmissionService, revokeIssuedAdmission } from '../src/domains/admission/admission.service.ts';
+import {
+  createAdmissionService,
+  revokeIssuedAdmission,
+  type AdmissionDeps,
+  type AdmissionRequest,
+  type AdmissionResult,
+  type CredentialBoundary,
+  type CredentialProvider,
+  type GatePrincipal,
+  type RefusalReason
+} from '../src/domains/admission/admission.service.ts';
 import {
   createLiveKitAdmin,
+  type LiveKitAdminClient,
   isLiveKitParticipantAlreadyGone,
   resolveServerMutePermission
 } from '../src/domains/admission/livekit-admin.ts';
-import { liveKitHttpUrl, readLiveKitConfig } from '../src/domains/admission/livekit-config.ts';
+import { liveKitHttpUrl, readLiveKitConfig, type LiveKitConfig } from '../src/domains/admission/livekit-config.ts';
 import { tokensMatch } from '../src/platform/crypto/tokens-match.ts';
+import { fake, recordingLogger } from './fakes/index.ts';
 
-const ENABLED = {
+const ENABLED: LiveKitConfig = {
   adminUrl: 'http://livekit:7880',
   apiKey: 'k',
   apiSecret: 's',
@@ -24,20 +35,31 @@ const ENABLED = {
   gateUrl: 'wss://gate',
   url: 'ws://livekit:7880'
 };
-const PRINCIPAL = { principalType: 'guest', principalId: 'room-1:guest-1' };
+const PRINCIPAL: GatePrincipal = { principalType: 'guest', principalId: 'room-1:guest-1' };
 
 function quietLog() {
-  const entries = { warn: [], error: [] };
-  return {
-    entries,
-    log: { warn: (fields) => entries.warn.push(fields), error: (fields) => entries.error.push(fields) }
-  };
+  const log = recordingLogger();
+  const at = (level: string) => log.records.filter((record) => record.level === level);
+  return { entries: { warn: () => at('warn'), error: () => at('error') }, log };
 }
 
-function setup(overrides = {}) {
-  const calls = { issued: [], revokedCredentials: [], revokedPrincipals: [], persisted: [], failures: 0 };
+// The admission issued by a result the test expects to be issued.
+function issued(result: AdmissionResult) {
+  assert.equal(result.status, 'issued');
+  assert.ok('admission' in result);
+  return result.admission;
+}
+
+function setup(overrides: Partial<AdmissionDeps> = {}) {
+  const calls = {
+    issued: [] as Parameters<CredentialProvider['issueAdmission']>[0][],
+    revokedCredentials: [] as Array<string | undefined>,
+    revokedPrincipals: [] as unknown[],
+    persisted: [] as unknown[],
+    failures: 0
+  };
   let muted = false;
-  const deps = {
+  const deps: AdmissionDeps = {
     livekitConfig: () => ENABLED,
     credentialProvider: () => ({
       async issueAdmission(input) {
@@ -92,14 +114,14 @@ function setup(overrides = {}) {
   return {
     calls,
     deps,
-    setMuted: (value) => {
+    setMuted: (value: boolean) => {
       muted = value;
     },
     service: createAdmissionService(deps)
   };
 }
 
-function request(extra = {}) {
+function request(extra: Partial<AdmissionRequest> = {}): AdmissionRequest {
   return {
     roomId: 'room-1',
     peerId: 'peer-1',
@@ -114,16 +136,14 @@ function request(extra = {}) {
 
 test('a roster peer with a matching token is admitted with the microphone', async () => {
   const { service, calls } = setup();
-  const result = await service.admit(request());
-  assert.equal(result.status, 'issued');
-  assert.equal(result.admission.token, 'jwt');
-  assert.equal(calls.issued[0].canPublishMicrophone, true);
+  assert.equal(issued(await service.admit(request())).token, 'jwt');
+  assert.equal(calls.issued[0]?.canPublishMicrophone, true);
   assert.equal(calls.issued[0].livekitRoom, 'voice-room-room-1');
   assert.deepEqual(calls.revokedCredentials, []);
 });
 
 test('refusals before anything is issued', async () => {
-  const cases = [
+  const cases: Array<[Partial<AdmissionDeps>, RefusalReason]> = [
     [{ roomExists: async () => false }, 'room_not_found'],
     [{ findRoomBan: async () => ({ id: 'ban' }) }, 'room_banned'],
     [{ waitForRosterPeer: async () => null }, 'not_in_room'],
@@ -145,7 +165,7 @@ test('refusals before anything is issued', async () => {
 test('identity, principal and moderation state must all be available', async () => {
   const base = setup();
   const store = base.deps.store();
-  const cases = [
+  const cases: Array<[Partial<AdmissionDeps>, RefusalReason]> = [
     [
       {
         store: () => ({
@@ -191,7 +211,7 @@ test('a failed issue is refused and logged', async () => {
     status: 'refused',
     reason: 'livekit_gate_credential_unavailable'
   });
-  assert.equal(entries.warn[0].code, 'livekit_gate_credential_unavailable');
+  assert.equal(entries.warn()[0]?.code, 'livekit_gate_credential_unavailable');
 });
 
 test('a server mute that lands during issue revokes and reissues without the microphone', async () => {
@@ -205,11 +225,10 @@ test('a server mute that lands during issue revokes and reissues without the mic
       return lookups > 1;
     }
   });
-  const result = await service.admit(request());
-  assert.equal(result.status, 'issued');
+  const admission = issued(await service.admit(request()));
   assert.deepEqual(calls.revokedCredentials, ['cred-1']);
-  assert.equal(calls.issued[1].canPublishMicrophone, false);
-  assert.equal(result.admission.gateCredentialId, 'cred-2');
+  assert.equal(calls.issued[1]?.canPublishMicrophone, false);
+  assert.equal(admission.gateCredentialId, 'cred-2');
 });
 
 test('a reissue after a mute race can still fail', async () => {
@@ -278,7 +297,7 @@ test('account admissions persist membership and revoke the credential when that 
   for (const [status, reason] of [
     ['banned', 'room_banned'],
     ['conflict', 'membership_persist_failed']
-  ]) {
+  ] as const) {
     const refused = setup({
       memberships: () => ({ service: { persistSuccessfulAdmission: async () => ({ status }) } })
     });
@@ -303,11 +322,11 @@ test('credential cleanup failures are metered and never hide the primary failure
   const primary = new Error('primary');
   let failures = 0;
   const { entries, log } = quietLog();
-  const refuse = {
+  const refuse = fake<CredentialBoundary>({
     async revokeCredential() {
       return { status: 'not_found' };
     }
-  };
+  });
   await assert.rejects(
     revokeIssuedAdmission({
       boundary: refuse,
@@ -323,7 +342,7 @@ test('credential cleanup failures are metered and never hide the primary failure
     (error) =>
       error instanceof AggregateError &&
       error.errors[0] === primary &&
-      error.errors[1].code === 'credential_revoke_cleanup_refused'
+      (error.errors[1] as { code?: string }).code === 'credential_revoke_cleanup_refused'
   );
   await assert.rejects(
     revokeIssuedAdmission({
@@ -339,7 +358,7 @@ test('credential cleanup failures are metered and never hide the primary failure
     /cleanup was refused/
   );
   assert.equal(failures, 2);
-  assert.equal(entries.error[0].code, 'credential_revoke_cleanup_failed');
+  assert.equal(entries.error()[0]?.code, 'credential_revoke_cleanup_failed');
 });
 
 test('a server mute revokes the principal and survives a failing revocation', async () => {
@@ -349,15 +368,16 @@ test('a server mute revokes the principal and survives a failing revocation', as
   assert.equal(ok.calls.revokedPrincipals.length, 1);
 
   const failing = setup({
-    credentialBoundary: () => ({
-      async revokePrincipal() {
-        throw new Error('db down');
-      }
-    })
+    credentialBoundary: () =>
+      fake<CredentialBoundary>({
+        async revokePrincipal() {
+          throw new Error('db down');
+        }
+      })
   });
   await failing.service.revokeForServerMute({ roomId: 'room-1', peerId: 'peer-1', principal: PRINCIPAL, log });
   assert.equal(failing.calls.failures, 1);
-  assert.equal(entries.error[0].evt, 'livekit.mute_failed');
+  assert.equal(entries.error()[0]?.evt, 'livekit.mute_failed');
 
   const none = setup({ credentialBoundary: () => null });
   await none.service.revokeForServerMute({ roomId: 'room-1', peerId: 'peer-1', principal: PRINCIPAL, log });
@@ -389,34 +409,34 @@ test('LiveKit configuration needs credentials, both URLs and a gate in front of 
 });
 
 test('LiveKit admin removes participants and treats "already gone" as success', async () => {
-  const errors = [];
-  const removed = [];
-  let failWith = null;
-  const client = {
+  const logger = recordingLogger();
+  const removed: string[][] = [];
+  let failWith: Error | null = null;
+  const client = fake<LiveKitAdminClient>({
     async removeParticipant(room, id) {
       if (failWith) throw failWith;
       removed.push([room, id]);
     }
-  };
+  });
   const admin = createLiveKitAdmin({
     config: () => ENABLED,
     roomName: (id) => `vr-${id}`,
-    logger: () => ({ error: (fields) => errors.push(fields) }),
+    logger: () => logger,
     clientFactory: () => client
   });
   await admin.removeParticipant('room-1', 'peer-1');
   assert.deepEqual(removed, [['vr-room-1', 'peer-1']]);
   failWith = Object.assign(new Error('twirp error unknown: participant does not exist'), { status: 404 });
   await admin.removeParticipant('room-1', 'peer-1');
-  assert.equal(errors.length, 0);
+  assert.equal(logger.records.length, 0);
   failWith = new Error('boom');
   await admin.removeParticipant('room-1', 'peer-1');
-  assert.equal(errors[0].evt, 'livekit.participant_remove_failed');
+  assert.equal(logger.records[0]?.evt, 'livekit.participant_remove_failed');
 
   const disabled = createLiveKitAdmin({
     config: () => ({ ...ENABLED, enabled: false }),
     roomName: String,
-    logger: () => ({ error() {} }),
+    logger: () => recordingLogger(),
     clientFactory: () => {
       throw new Error('must not connect');
     }
@@ -426,7 +446,7 @@ test('LiveKit admin removes participants and treats "already gone" as success', 
 });
 
 test('LiveKit admin server mute narrows the grant, mutes the mic and falls back to a disconnect', async () => {
-  const calls = [];
+  const calls: unknown[][] = [];
   const participant = {
     permission: { canSubscribe: true, canPublishSources: [2, 3, 4] },
     tracks: [
@@ -434,29 +454,29 @@ test('LiveKit admin server mute narrows the grant, mutes the mic and falls back 
       { source: 4, muted: false, sid: 'screen-audio' }
     ]
   };
-  let getError = null;
-  let removeError = null;
-  const client = {
+  let getError: Error | null = null;
+  let removeError: Error | null = null;
+  const client = fake<LiveKitAdminClient>({
     async getParticipant() {
       if (getError) throw getError;
       return participant;
     },
-    async updateParticipant(room, id, metadata, permission) {
+    async updateParticipant(_room, _id, _metadata, permission) {
       calls.push(['update', permission.canPublishSources]);
     },
-    async mutePublishedTrack(room, id, sid) {
+    async mutePublishedTrack(_room, _id, sid) {
       calls.push(['mute', sid]);
     },
     async removeParticipant() {
       if (removeError) throw removeError;
       calls.push(['remove']);
     }
-  };
-  const errors = [];
+  });
+  const logger = recordingLogger();
   const admin = createLiveKitAdmin({
     config: () => ENABLED,
     roomName: String,
-    logger: () => ({ error: (fields) => errors.push(fields) }),
+    logger: () => logger,
     clientFactory: () => client
   });
 
@@ -470,7 +490,7 @@ test('LiveKit admin server mute narrows the grant, mutes the mic and falls back 
   assert.deepEqual(await admin.setParticipantMuted('room-1', 'peer-1', false), { status: 'applied' });
   assert.deepEqual(calls, [['update', [2, 3, 4]]], 'unmuting keeps the declared sources and the microphone');
 
-  getError = { status: 404 };
+  getError = Object.assign(new Error('sfu said 404'), { status: 404 });
   assert.deepEqual(await admin.setParticipantMuted('room-1', 'peer-1', true), { status: 'offline' });
   getError = new Error('sfu down');
   calls.length = 0;
@@ -479,7 +499,7 @@ test('LiveKit admin server mute narrows the grant, mutes the mic and falls back 
   await assert.rejects(admin.setParticipantMuted('room-1', 'peer-1', false), /sfu down/);
   removeError = new Error('remove failed');
   await assert.rejects(admin.setParticipantMuted('room-1', 'peer-1', true), (error) => error instanceof AggregateError);
-  assert.equal(errors[0].evt, 'livekit.mute_failed');
+  assert.equal(logger.records[0]?.evt, 'livekit.mute_failed');
 });
 
 test('mute permissions and "already gone" classification', () => {

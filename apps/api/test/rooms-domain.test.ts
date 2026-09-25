@@ -1,28 +1,67 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 // Branch-by-branch proofs for the rooms group (domains/rooms): creating,
 // renaming and deleting rooms, the owner check, the status card and peer
 // preview, /api/state, the account room list, and the owner's kick, server
 // mute and ban with the peer eviction behind them. Routes run on a bare
 // Fastify app with fake dependencies so every HTTP answer is pinned.
 
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import fastify from 'fastify';
+import fastify, { type FastifyInstance } from 'fastify';
 
+import type { ApiContext } from '../src/app/context.ts';
 import { gatePrincipalForPeer, isGatePrincipal } from '../src/domains/admission/gate-principal.ts';
-import { createPeerEviction } from '../src/domains/rooms/peer-eviction.ts';
-import { createPeerModerationService } from '../src/domains/rooms/peer-moderation.service.ts';
+import type { LiveKitConfig } from '../src/domains/admission/livekit-config.ts';
+import {
+  createPeerEviction,
+  type EvictionStore,
+  type FinalizeOptions,
+  type PeerEviction
+} from '../src/domains/rooms/peer-eviction.ts';
+import {
+  createPeerModerationService,
+  type PeerModerationDeps,
+  type PeerModerationService,
+  type PeerModerationStore
+} from '../src/domains/rooms/peer-moderation.service.ts';
 import { registerPeerModerationRoutes } from '../src/domains/rooms/peer-moderation.routes.ts';
-import { publicLobbyRoom, publicPeer, roomAvatarUrl, roomBanned } from '../src/domains/rooms/room-views.ts';
+import {
+  publicLobbyRoom,
+  publicPeer,
+  roomAvatarUrl,
+  roomBanned,
+  type LiveRoom,
+  type PresencePeer,
+  type StoredRoom
+} from '../src/domains/rooms/room-views.ts';
 import { ownerRefusal, registerRoomRoutes } from '../src/domains/rooms/rooms.routes.ts';
-import { createRoomId, createRoomsService } from '../src/domains/rooms/rooms.service.ts';
+import {
+  createRoomId,
+  createRoomsService,
+  type CreateRoomResult,
+  type RoomsService,
+  type RoomsStore
+} from '../src/domains/rooms/rooms.service.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
+import { fake, recordingLogger } from './fakes/index.ts';
 
 const OWNER = 'owner-1';
-const STRICT = { enabled: true, gateSecret: 'x'.repeat(32) };
-const LOOSE = { enabled: false, gateSecret: '' };
 
-function liveRoom(overrides = {}, peers = []) {
+function livekitConfig(overrides: Partial<LiveKitConfig>): LiveKitConfig {
+  return {
+    adminUrl: '',
+    apiKey: '',
+    apiSecret: '',
+    enabled: false,
+    gateSecret: '',
+    gateUrl: '',
+    url: '',
+    ...overrides
+  };
+}
+const STRICT = livekitConfig({ enabled: true, gateSecret: 'x'.repeat(32) });
+const LOOSE = livekitConfig({ enabled: false, gateSecret: '' });
+
+function liveRoom(overrides: Partial<LiveRoom> = {}, peers: PresencePeer[] = []): LiveRoom {
   return {
     id: 'room-1',
     createdAt: 1,
@@ -31,21 +70,25 @@ function liveRoom(overrides = {}, peers = []) {
     name: 'Room',
     ownerId: OWNER,
     peers: new Map(peers.map((peer) => [peer.id, peer])),
+    updatedAt: 1,
     ...overrides
   };
 }
 
-function quietLogger() {
-  const errors = [];
-  return { errors, logger: { error: (fields) => errors.push(fields) } };
-}
+const storedRoom = (room: Partial<StoredRoom> & { id: string }) => fake<StoredRoom>(room);
 
 // --- views and principals ----------------------------------------------------
 
 test('room views keep the shapes the web client mirrors', () => {
   assert.equal(roomAvatarUrl(null), null);
   assert.equal(roomAvatarUrl('room/a b.webp'), '/api/avatars/room%2Fa%20b.webp');
-  const peer = publicPeer({ id: 'peer0001', name: 'A', serverMuted: 1, sessionToken: 'secret', ip: '10.0.0.1' });
+  const peer = publicPeer({
+    id: 'peer0001',
+    name: 'A',
+    serverMuted: 1 as never,
+    sessionToken: 'secret',
+    ip: '10.0.0.1'
+  });
   assert.equal(peer.accountUserId, '');
   assert.equal(peer.serverMuted, true);
   assert.equal(peer.avatarAccent, null);
@@ -84,9 +127,9 @@ test('gate principals are recognised only with a type and a non-empty id', () =>
   assert.equal(isGatePrincipal({ principalType: 'guest', principalId: '  ' }), false);
   assert.equal(isGatePrincipal({ principalType: 'robot', principalId: 'x' }), false);
   assert.equal(isGatePrincipal(null), false);
-  const calls = [];
+  const calls: unknown[] = [];
   const store = {
-    normalizeGatePrincipal: (input) => {
+    normalizeGatePrincipal: (input: unknown) => {
       calls.push(input);
       return null;
     }
@@ -108,16 +151,27 @@ function roomsHarness({
   updated = null,
   deleted = null,
   withRoomIdExists = true
+}: {
+  taken?: string[];
+  created?: CreateRoomResult | null;
+  room?: LiveRoom | null;
+  updated?: StoredRoom | null;
+  deleted?: { avatarKey?: string | null } | null;
+  withRoomIdExists?: boolean;
 } = {}) {
-  const calls = { created: [], announced: [], finished: [] };
+  const calls = {
+    created: [] as unknown[],
+    announced: [] as string[],
+    finished: [] as Array<{ roomId: string; avatarKey?: string | null; request?: unknown }>
+  };
   const ids = ['taken-1', 'fresh-1'];
-  const store = {
+  const store: RoomsStore = {
     async getRoom(roomId) {
-      return taken.includes(roomId) ? { id: roomId } : null;
+      return taken.includes(roomId) ? storedRoom({ id: roomId }) : null;
     },
     async createRoomWithQuota(input) {
       calls.created.push(input);
-      return created || { status: 'created', room: { id: input.roomId } };
+      return created || { status: 'created', room: storedRoom({ id: input.roomId }) };
     },
     async updateRoom() {
       return updated;
@@ -183,21 +237,24 @@ test('the owner check refuses guests, missing rooms, temporary rooms and other u
 });
 
 test('rename announces the update; delete finishes the teardown; both report a lost race', async () => {
-  const renamed = roomsHarness({ updated: { id: 'room-1', name: 'New' } });
+  const renamed = roomsHarness({ updated: storedRoom({ id: 'room-1', name: 'New' }) });
   assert.deepEqual(await renamed.service.rename('room-1', 'New'), { status: 'renamed', room: { card: 'New' } });
   assert.deepEqual(renamed.calls.announced, ['room-1']);
   assert.deepEqual(await roomsHarness().service.rename('room-1', 'New'), { status: 'not_found' });
 
   const removed = roomsHarness({ deleted: { avatarKey: 'a.webp' } });
-  assert.deepEqual(await removed.service.remove('room-1', 'req'), { status: 'deleted' });
+  assert.deepEqual(await removed.service.remove('room-1', 'req' as never), { status: 'deleted' });
   assert.deepEqual(removed.calls.finished, [{ roomId: 'room-1', avatarKey: 'a.webp', request: 'req' }]);
   const noAvatar = roomsHarness({ deleted: {} });
   await noAvatar.service.remove('room-1', null);
-  assert.equal(noAvatar.calls.finished[0].avatarKey, null);
+  assert.equal(noAvatar.calls.finished[0]?.avatarKey, null);
   assert.deepEqual(await roomsHarness().service.remove('room-1', null), { status: 'not_found' });
 });
 
 // --- peer eviction ----------------------------------------------------------------
+
+// What a finalizePeer call answered, or the error it failed with.
+type FinalizeResult = { finalized?: boolean; message?: string; ownershipFinalized?: boolean };
 
 function evictionHarness({
   store = {},
@@ -205,9 +262,15 @@ function evictionHarness({
   ownershipFinalized = false,
   removeFails = false,
   extraPeerIds = []
+}: {
+  store?: EvictionStore;
+  ownedPeer?: PresencePeer;
+  ownershipFinalized?: boolean;
+  removeFails?: boolean;
+  extraPeerIds?: string[];
 } = {}) {
-  const log = [];
-  const results = [];
+  const log: string[] = [];
+  const results: FinalizeResult[] = [];
   const eviction = createPeerEviction({
     store: () => store,
     runtime: () => ({
@@ -217,7 +280,7 @@ function evictionHarness({
           try {
             results.push(await finalizePeer({ peerId, peer: ownedPeer, ownershipFinalized }));
           } catch (error) {
-            results.push(error);
+            results.push(error as FinalizeResult);
           }
         }
       }
@@ -235,9 +298,9 @@ function evictionHarness({
 }
 
 test('eviction revokes, notifies, closes, invalidates and removes in order', async () => {
-  const revoked = [];
-  const invalidated = [];
-  const store = {
+  const revoked: unknown[] = [];
+  const invalidated: unknown[] = [];
+  const store: EvictionStore = {
     async revokeLiveKitGatePeer(input) {
       revoked.push(input);
     },
@@ -248,7 +311,7 @@ test('eviction revokes, notifies, closes, invalidates and removes in order', asy
   const { eviction, log } = evictionHarness({ store });
   await eviction.disconnect(
     { id: 'room-1' },
-    { id: 'p1', accountUserId: 'u1', transport: { id: 't1' } },
+    { id: 'p1', accountUserId: 'u1', transport: { id: 't1', send: () => true } },
     'room.kicked'
   );
   assert.deepEqual(revoked, [{ roomId: 'room-1', peerId: 'p1', accountUserId: 'u1', guestPrincipalId: '' }]);
@@ -286,7 +349,7 @@ test('a ban with pre-revoked credentials skips the revoke; a guest gets no accou
 });
 
 test('eviction keeps going after a failed step and rethrows the first failure as finalized', async () => {
-  const store = {
+  const store: EvictionStore = {
     async revokeLiveKitGatePeer() {
       throw new Error('revoke failed');
     },
@@ -296,7 +359,7 @@ test('eviction keeps going after a failed step and rethrows the first failure as
   };
   const { eviction, log, results } = evictionHarness({ store, removeFails: true });
   await eviction.finalize({ id: 'room-1' }, [{ id: 'p1' }], 'room.kicked');
-  assert.equal(results[0].message, 'revoke failed');
+  assert.equal(results[0]?.message, 'revoke failed');
   assert.equal(results[0].ownershipFinalized, true);
   assert.ok(log.includes('remove:p1'));
 
@@ -309,11 +372,11 @@ test('eviction keeps going after a failed step and rethrows the first failure as
     removeFails: true
   });
   await later.eviction.finalize({ id: 'room-1' }, [{ id: 'p1' }], 'room.kicked');
-  assert.equal(later.results[0].message, 'invalidate failed');
+  assert.equal(later.results[0]?.message, 'invalidate failed');
 
   const sfu = evictionHarness({ removeFails: true });
   await sfu.eviction.finalize({ id: 'room-1' }, [{ id: 'p1' }], 'room.kicked');
-  assert.equal(sfu.results[0].message, 'sfu down');
+  assert.equal(sfu.results[0]?.message, 'sfu down');
 });
 
 test('a peer whose ownership is already final is only notified and invalidated', async () => {
@@ -339,23 +402,40 @@ test('a peer whose ownership is already final is only notified and invalidated',
 function moderationHarness({
   livekit = LOOSE,
   store = {},
-  principal = (roomId, peer) => ({
+  principal = (_roomId, peer) => ({
     principalType: peer.accountUserId ? 'account' : 'guest',
     principalId: peer.accountUserId || peer.id
   }),
   finalize = null
+}: {
+  livekit?: LiveKitConfig;
+  store?: Partial<PeerModerationStore>;
+  principal?: PeerModerationDeps['gatePrincipalForPeer'];
+  finalize?: ((options: FinalizeOptions<unknown>) => Promise<unknown>) | null;
 } = {}) {
-  const calls = { evicted: [], disconnected: [], revoked: [], sfu: [], announced: [], notified: [] };
-  const eviction = {
-    async finalize(room, peers, type, options = {}) {
+  const calls = {
+    evicted: [] as Array<{ peers: string[]; type: string; gateAlreadyRevoked?: boolean }>,
+    disconnected: [] as unknown[],
+    revoked: [] as string[],
+    sfu: [] as unknown[],
+    announced: [] as string[],
+    notified: [] as unknown[],
+    muteRow: undefined as { mutedBy?: string | null } | undefined,
+    unmuteRow: undefined as unknown,
+    ban: undefined as unknown,
+    strictBan: undefined as { principals: unknown[] } | undefined,
+    undo: undefined as unknown
+  };
+  const eviction = fake<PeerEviction>({
+    finalize: (async (_room: unknown, peers: PresencePeer[], type: string, options: FinalizeOptions<unknown> = {}) => {
       calls.evicted.push({ peers: peers.map((peer) => peer.id), type, gateAlreadyRevoked: options.gateAlreadyRevoked });
       if (finalize) return finalize(options);
       return options.beforeFinalize ? options.beforeFinalize() : null;
-    },
-    async disconnect(room, peer, type) {
+    }) as PeerEviction['finalize'],
+    async disconnect(_room, peer, type) {
       calls.disconnected.push({ peerId: peer.id, type });
     }
-  };
+  });
   const service = createPeerModerationService({
     store: () => ({
       async setRoomServerMute(input) {
@@ -393,25 +473,25 @@ function moderationHarness({
     announcePeerUpdated: (room, peer) => calls.announced.push(peer.id),
     notifyPeer: (peer, event) => calls.notified.push(event),
     maxBans: 5,
-    logger: () => quietLogger().logger
+    logger: () => recordingLogger()
   });
   return { calls, service };
 }
 
-const ownerPeer = { id: 'owner-peer', accountUserId: OWNER };
-const accountPeer = { id: 'acct-peer', accountUserId: 'user-1', ip: '10.0.0.1' };
-const secondTab = { id: 'acct-tab2', accountUserId: 'user-1', ip: '10.0.0.9' };
-const guestPeer = { id: 'guest-peer', ip: '10.0.0.1' };
-const sameNatGuest = { id: 'guest-nat', ip: '10.0.0.1' };
-const noIpGuest = { id: 'guest-noip' };
+const ownerPeer: PresencePeer = { id: 'owner-peer', accountUserId: OWNER };
+const accountPeer: PresencePeer = { id: 'acct-peer', accountUserId: 'user-1', ip: '10.0.0.1' };
+const secondTab: PresencePeer = { id: 'acct-tab2', accountUserId: 'user-1', ip: '10.0.0.9' };
+const guestPeer: PresencePeer = { id: 'guest-peer', ip: '10.0.0.1' };
+const sameNatGuest: PresencePeer = { id: 'guest-nat', ip: '10.0.0.1' };
+const noIpGuest: PresencePeer = { id: 'guest-noip' };
 
 test('every peer action refuses an unknown peer and the room owner', async () => {
   const { service } = moderationHarness();
   const room = liveRoom({}, [ownerPeer]);
   for (const action of [
-    (id) => service.kick(room, id),
-    (id) => service.setServerMute(room, id, true),
-    (id) => service.ban(room, id)
+    (id: string) => service.kick(room, id),
+    (id: string) => service.setServerMute(room, id, true),
+    (id: string) => service.ban(room, id)
   ]) {
     assert.equal((await action('')).status, 'peer_not_found');
     assert.equal((await action('nobody')).status, 'peer_not_found');
@@ -427,12 +507,12 @@ test('kick disconnects the target', async () => {
 
 test('server mute persists, revokes old credentials, narrows the SFU and tells everyone', async () => {
   const { calls, service } = moderationHarness();
-  const peer = { ...guestPeer, muted: false };
+  const peer: PresencePeer = { ...guestPeer, muted: false };
   const room = liveRoom({}, [peer]);
   assert.deepEqual(await service.setServerMute(room, peer.id, true), { status: 'applied', muted: true });
   assert.equal(peer.serverMuted, true);
   assert.equal(peer.muted, true);
-  assert.equal(calls.muteRow.mutedBy, OWNER);
+  assert.equal(calls.muteRow?.mutedBy, OWNER);
   assert.deepEqual(calls.revoked, [peer.id]);
   assert.deepEqual(calls.sfu, [[peer.id, true]]);
   assert.deepEqual(calls.announced, [peer.id]);
@@ -481,7 +561,7 @@ test('a guest ban is IP-scoped', async () => {
   const room = liveRoom({}, [guestPeer, sameNatGuest, accountPeer]);
   await service.ban(room, guestPeer.id);
   assert.deepEqual(calls.ban, { roomId: 'room-1', userId: null, ip: '10.0.0.1', maxBans: 5 });
-  assert.deepEqual(calls.evicted[0].peers, [guestPeer.id, sameNatGuest.id, accountPeer.id]);
+  assert.deepEqual(calls.evicted[0]?.peers, [guestPeer.id, sameNatGuest.id, accountPeer.id]);
 });
 
 test('with the strict gate the ban and the revocations commit together', async () => {
@@ -489,11 +569,11 @@ test('with the strict gate the ban and the revocations commit together', async (
   const room = liveRoom({}, [accountPeer, secondTab]);
   assert.deepEqual(await service.ban(room, accountPeer.id), { status: 'banned', banId: 'ban-2', cleanupFailed: false });
   assert.equal(calls.ban, undefined);
-  assert.deepEqual(calls.strictBan.principals, [
+  assert.deepEqual(calls.strictBan?.principals, [
     { principalType: 'account', principalId: 'user-1' },
     { principalType: 'account', principalId: 'user-1' }
   ]);
-  assert.equal(calls.evicted[0].gateAlreadyRevoked, true);
+  assert.equal(calls.evicted[0]?.gateAlreadyRevoked, true);
 });
 
 test('strict ban refusals: a peer without a principal, nobody to revoke, no transactional store', async () => {
@@ -532,23 +612,24 @@ test('ban persistence refusals map to limit, rejected and failed', async () => {
     }
   });
   assert.equal((await noRevocations.service.ban(room(), accountPeer.id)).status, 'ban_rejected');
-  let thrown = null;
+  // Set by the store when it fails; the service marks it.
+  const failure: { error?: Error & { rollbackTerminal?: boolean } } = {};
   const broken = moderationHarness({
     store: {
       async createRoomBan() {
-        thrown = new Error('db down');
-        throw thrown;
+        failure.error = new Error('db down');
+        throw failure.error;
       }
     }
   });
   assert.equal((await broken.service.ban(room(), accountPeer.id)).status, 'ban_failed');
-  assert.equal(thrown.rollbackTerminal, true);
+  assert.equal(failure.error?.rollbackTerminal, true);
 });
 
 test('a durable ban whose peer cleanup failed is still reported as banned', async () => {
   const { service } = moderationHarness({
     finalize: async (options) => {
-      await options.beforeFinalize();
+      await options.beforeFinalize?.();
       throw new Error('cleanup failed');
     }
   });
@@ -573,8 +654,24 @@ test('undo ban reports whether the ban existed', async () => {
 
 // --- routes -------------------------------------------------------------------------
 
+type RouteOptions = {
+  user?: string | null;
+  room?: LiveRoom | null;
+  bans?: boolean | ((userId: string | null | undefined, ip: string) => boolean);
+  peer?: PresencePeer | null;
+  created?: CreateRoomResult | null;
+  renamed?: unknown;
+  removed?: unknown;
+  list?: StoredRoom[];
+  added?: { status: string; room?: StoredRoom | null } | null;
+  removedBookmark?: { status: string; removed?: boolean } | null;
+  rate?: { allowed: boolean; retryAfterSeconds?: number };
+  proof?: { ok: boolean; status?: number; error?: string };
+  moderation?: { kick?: unknown; mute?: unknown; ban?: unknown; undo?: unknown };
+};
+
 function routeApp(
-  t,
+  t: TestContext,
   {
     user = null,
     room = null,
@@ -589,19 +686,23 @@ function routeApp(
     rate = { allowed: true },
     proof = { ok: true },
     moderation = {}
-  } = {}
+  }: RouteOptions = {}
 ) {
   const app = fastify();
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
-  const calls = { created: [], invalidated: [], banLookups: [] };
-  const ctx = {
-    logger: null,
+  const calls = {
+    created: [] as Array<{ ownerId?: string | null }>,
+    invalidated: [] as string[],
+    banLookups: [] as unknown[][]
+  };
+  const ctx: ApiContext = {
+    logger: fake<ApiContext['logger']>(),
     clientIp: () => '203.0.113.1',
     resolveSession: async () => (user ? { user: { id: user } } : null),
-    hashIp: (ip) => ip
+    hashIp: (ip: string) => ip
   };
-  const rooms = {
-    async createRoom(input) {
+  const rooms = fake<RoomsService>({
+    async createRoom(input: Parameters<RoomsService['createRoom']>[0]) {
       calls.created.push(input);
       return (
         created || {
@@ -610,18 +711,18 @@ function routeApp(
         }
       );
     },
-    async checkOwner(userId, roomId) {
+    async checkOwner(userId: string | null | undefined, roomId: string) {
       if (!userId) return { status: 'unauthenticated' };
       if (!room || room.id !== roomId) return { status: 'not_found' };
       return room.ownerId === userId ? { status: 'owner', room } : { status: 'forbidden' };
     },
-    async rename(roomId, name) {
+    async rename(roomId: string, name: string) {
       return renamed || { status: 'renamed', room: { roomId, name } };
     },
     async remove() {
       return removed || { status: 'deleted' };
     }
-  };
+  } as Partial<Record<keyof RoomsService, unknown>> as Partial<RoomsService>);
   registerRoomRoutes(app, ctx, {
     rooms,
     store: () => ({
@@ -629,10 +730,10 @@ function routeApp(
         return list;
       },
       async addRoomBookmarkForUser() {
-        return added;
+        return added as never;
       },
       async removeRoomBookmarkForUser() {
-        return removedBookmark;
+        return removedBookmark as never;
       }
     }),
     getRoom: async (roomId) => (room && room.id === roomId ? room : null),
@@ -642,7 +743,7 @@ function routeApp(
     },
     findAuthorizedPeer: (roomId, peerId, token) =>
       peer && peer.id === peerId && token === 't'.repeat(32) ? peer : null,
-    lobbyRoom: (value) => ({ card: value.id }),
+    lobbyRoom: (value) => ({ card: value.id }) as never,
     invalidateRecipientCache: (roomId) => calls.invalidated.push(roomId),
     createLimiter: { check: () => rate },
     pow: { verify: () => proof },
@@ -651,20 +752,35 @@ function routeApp(
   });
   registerPeerModerationRoutes(app, ctx, {
     rooms,
-    moderation: {
+    moderation: fake<PeerModerationService>({
       kick: async () => moderation.kick || { status: 'kicked' },
-      setServerMute: async (_room, _peerId, muted) => moderation.mute || { status: 'applied', muted },
+      setServerMute: async (_room: unknown, _peerId: unknown, muted: boolean) =>
+        moderation.mute || { status: 'applied', muted },
       ban: async () => moderation.ban || { status: 'banned', banId: 'ban-1', cleanupFailed: false },
       undoBan: async () => moderation.undo || { status: 'deleted' }
-    }
+    } as Partial<Record<keyof PeerModerationService, unknown>> as Partial<PeerModerationService>)
   });
   t.after(() => app.close());
   return { app, calls };
 }
 
-async function call(app, method, url, payload) {
-  const response = await app.inject({ method, url, ...(payload === undefined ? {} : { payload }) });
-  return { status: response.statusCode, body: response.json(), headers: response.headers };
+type Body = {
+  ok?: boolean;
+  error?: string;
+  code?: string;
+  owned?: boolean;
+  name?: string;
+  peer?: { id: string };
+  peers?: Array<{ id: string }>;
+} & Record<string, unknown>;
+
+async function call(app: FastifyInstance, method: string, url: string, payload?: object) {
+  const response = await app.inject({
+    method: method as 'GET' | 'PUT' | 'POST' | 'DELETE',
+    url,
+    ...(payload === undefined ? {} : { payload })
+  });
+  return { status: response.statusCode, body: response.json<Body>(), headers: response.headers };
 }
 
 test('POST /api/rooms: rate limit, proof, login for persistent rooms and store refusals', async (t) => {
@@ -685,7 +801,7 @@ test('POST /api/rooms: rate limit, proof, login for persistent rooms and store r
   assert.equal((await call(guest.app, 'POST', '/api/rooms', { isStatic: 'true' })).status, 401);
   assert.deepEqual(guest.calls.created, []);
 
-  const cases = [
+  const cases: Array<[CreateRoomResult, boolean, number, string]> = [
     [{ status: 'auth_required' }, true, 401, 'Требуется вход для создания постоянной комнаты'],
     [{ status: 'quota_exceeded' }, true, 429, 'Можно владеть максимум 3 постоянными комнатами'],
     [{ status: 'quota_exceeded' }, false, 429, 'Too many temporary rooms waiting from this IP, reuse one or try later'],
@@ -725,7 +841,7 @@ test('POST /api/rooms creates temporary and persistent rooms', async (t) => {
 
 test('room mutations answer the owner check first', async (t) => {
   const room = liveRoom({}, [accountPeer]);
-  const routes = [
+  const routes: Array<[string, string, object | undefined]> = [
     ['PUT', '/api/rooms/room-1', { name: 'x' }],
     ['DELETE', '/api/rooms/room-1', undefined],
     ['POST', '/api/rooms/room-1/kick', { peerId: accountPeer.id }],
@@ -733,11 +849,12 @@ test('room mutations answer the owner check first', async (t) => {
     ['POST', '/api/rooms/room-1/ban', { peerId: accountPeer.id }],
     ['DELETE', '/api/rooms/room-1/bans/ban-1', undefined]
   ];
-  for (const [user, currentRoom, status, error] of [
+  const refusals: Array<[string | null, LiveRoom | null, number, string]> = [
     [null, room, 401, 'Требуется вход'],
     [OWNER, null, 404, 'Комната не найдена'],
     ['someone', room, 403, 'Недостаточно прав']
-  ]) {
+  ];
+  for (const [user, currentRoom, status, error] of refusals) {
     const { app } = routeApp(t, { user, room: currentRoom });
     for (const [method, url, payload] of routes) {
       const response = await call(app, method, url, payload);
@@ -798,8 +915,8 @@ test('GET /api/rooms/:roomId/peers hides the roster from banned viewers', async 
   const room = liveRoom({}, [accountPeer]);
   const open = routeApp(t, { room, user: 'viewer' });
   const peers = await call(open.app, 'GET', '/api/rooms/room-1/peers');
-  assert.equal(peers.body.peers[0].id, accountPeer.id);
-  assert.equal('ip' in peers.body.peers[0], false);
+  assert.equal(peers.body.peers?.[0]?.id, accountPeer.id);
+  assert.equal('ip' in (peers.body.peers?.[0] ?? {}), false);
   assert.deepEqual(open.calls.banLookups, [['viewer', '203.0.113.1']]);
   assert.equal((await call(open.app, 'GET', '/api/rooms/nope-room/peers')).status, 404);
   const banned = routeApp(t, { room, bans: true });
@@ -810,13 +927,13 @@ test('GET /api/rooms/:roomId/peers hides the roster from banned viewers', async 
 });
 
 test('POST /api/state reads the peer and refuses writes, bans and foreign sessions', async (t) => {
-  const peer = { ...accountPeer, id: 'peer0001', sessionToken: 't'.repeat(32) };
+  const peer: PresencePeer = { ...accountPeer, id: 'peer0001', sessionToken: 't'.repeat(32) };
   const request = { roomId: 'room-1', peerId: 'peer0001', sessionToken: 't'.repeat(32) };
   const { app } = routeApp(t, { peer });
   const read = await call(app, 'POST', '/api/state', request);
   assert.equal(read.status, 200);
-  assert.equal(read.body.peer.id, 'peer0001');
-  assert.equal('sessionToken' in read.body.peer, false);
+  assert.equal(read.body.peer?.id, 'peer0001');
+  assert.equal('sessionToken' in (read.body.peer ?? {}), false);
   const write = await call(app, 'POST', '/api/state', { ...request, muted: true });
   assert.deepEqual([write.status, write.body.code], [409, 'state_updates_require_websocket']);
   assert.deepEqual(
@@ -845,17 +962,17 @@ test('the account room list, adding and removing a room', async (t) => {
     ['GET', '/api/auth/rooms'],
     ['POST', '/api/auth/rooms'],
     ['DELETE', '/api/auth/rooms/room-1']
-  ]) {
+  ] as const) {
     assert.equal((await call(anonymous.app, method, url, method === 'POST' ? {} : undefined)).status, 401);
   }
 
-  const listed = routeApp(t, { user: OWNER, list: [{ id: 'room-1' }, { id: 'room-2' }] });
+  const listed = routeApp(t, { user: OWNER, list: [storedRoom({ id: 'room-1' }), storedRoom({ id: 'room-2' })] });
   assert.deepEqual((await call(listed.app, 'GET', '/api/auth/rooms')).body, {
     ok: true,
     rooms: [{ card: 'room-1' }, { card: 'room-2' }]
   });
 
-  const adding = routeApp(t, { user: OWNER, added: { status: 'added', room: { id: 'room-1' } } });
+  const adding = routeApp(t, { user: OWNER, added: { status: 'added', room: storedRoom({ id: 'room-1' }) } });
   assert.deepEqual(await call(adding.app, 'POST', '/api/auth/rooms', {}).then((r) => [r.status, r.body.error]), [
     400,
     'Неверный код комнаты'
@@ -888,7 +1005,7 @@ test('the account room list, adding and removing a room', async (t) => {
 
 test('the owner menu maps every moderation outcome to its HTTP answer', async (t) => {
   const room = liveRoom({}, [accountPeer]);
-  const cases = [
+  const cases: Array<[string, { status: string }, number, string]> = [
     ['kick', { status: 'peer_not_found' }, 404, 'Участник не найден'],
     ['kick', { status: 'owner' }, 400, 'Нельзя исключить владельца комнаты'],
     ['server-mute', { status: 'peer_not_found' }, 404, 'Участник не найден'],
@@ -902,9 +1019,9 @@ test('the owner menu maps every moderation outcome to its HTTP answer', async (t
     ['ban', { status: 'principal_missing' }, 500, 'Не удалось отозвать доступ участника'],
     ['ban', { status: 'revoke_unavailable' }, 500, 'Не удалось отозвать доступ участника']
   ];
-  const keys = { kick: 'kick', 'server-mute': 'mute', ban: 'ban' };
+  const keys: Record<string, string> = { kick: 'kick', 'server-mute': 'mute', ban: 'ban' };
   for (const [action, outcome, status, error] of cases) {
-    const { app } = routeApp(t, { user: OWNER, room, moderation: { [keys[action]]: outcome } });
+    const { app } = routeApp(t, { user: OWNER, room, moderation: { [keys[action] ?? action]: outcome } });
     const response = await call(app, 'POST', `/api/rooms/room-1/${action}`, { peerId: accountPeer.id });
     assert.equal(response.status, status, `${action} ${outcome.status}`);
     assert.equal(response.body.error, error);

@@ -40,6 +40,8 @@ caddy_config/
 
 # Test and coverage output
 coverage/
+# ...but not the coverage gate scripts.
+!scripts/coverage/
 .nyc_output/
 
 # Playwright e2e output

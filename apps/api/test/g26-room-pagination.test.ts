@@ -1,17 +1,17 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
-import { createRoomHistoryService } from '../src/domains/messaging/room-history-service.ts';
+import { createRoomHistoryService, type RoomHistoryRepository } from '../src/domains/messaging/room-history-service.ts';
+import { fake } from './fakes/index.ts';
 
-function message(id, micros) {
+function message(id: string, micros: number) {
   return { id, roomId: 'room-a', createdAt: Number(micros), createdAtMicros: String(micros), text: id };
 }
 
 test('G26-A01 room pages preserve same-microsecond ids and bind cursors to the room', async () => {
   const codec = createCursorCodec({ keys: ['r'.repeat(32)], now: () => 1 });
-  const calls = [];
-  const repository = {
+  const calls: Array<{ limit: number }> = [];
+  const repository = fake<RoomHistoryRepository>({
     roomExists: async () => true,
     async listLatest(input) {
       calls.push(input);
@@ -21,7 +21,7 @@ test('G26-A01 room pages preserve same-microsecond ids and bind cursors to the r
       calls.push(input);
       return { messages: [message('a', 10)], hasMoreBefore: false, hasMoreAfter: true };
     }
-  };
+  });
   const service = createRoomHistoryService({ repository, cursorCodec: codec });
   const latest = await service.getPage({ roomId: 'room-a' });
   assert.deepEqual(
@@ -38,23 +38,23 @@ test('G26-A01 room pages preserve same-microsecond ids and bind cursors to the r
     service.getPage({ roomId: 'room-b', query: { mode: 'before', cursor: latest.pageInfo.after } }),
     { code: 'invalid_cursor', statusCode: 400 }
   );
-  assert.equal(calls[0].limit, 50);
+  assert.equal(calls[0]?.limit, 50);
 });
 
 test('G26-A02 visibility filtering cannot create duplicates', async () => {
   const codec = createCursorCodec({ keys: ['r'.repeat(32)] });
-  const repository = {
+  const repository = fake<RoomHistoryRepository>({
     roomExists: async () => true,
     listLatest: async () => ({
       messages: [message('visible', 1), message('hidden', 2)],
       hasMoreBefore: false,
       hasMoreAfter: false
     })
-  };
+  });
   const service = createRoomHistoryService({
     repository,
     cursorCodec: codec,
-    visibilityPolicy: { canViewRoomMessage: ({ message: item }) => item.id !== 'hidden' }
+    visibilityPolicy: { canViewRoomMessage: ({ message: item }) => (item as { id: string }).id !== 'hidden' }
   });
   assert.deepEqual(
     (await service.getPage({ roomId: 'room-a' })).messages.map(({ id }) => id),

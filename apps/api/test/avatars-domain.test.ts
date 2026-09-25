@@ -1,18 +1,26 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 // Branch-by-branch proofs for avatars and served images (domains/media/avatars.*):
 // the service on fake storage and stores, the routes on a bare Fastify app
 // with the multipart plugin. avatar-routes.test.ts covers the real stack.
 
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import { PassThrough, Readable } from 'node:stream';
-import fastify from 'fastify';
+import fastify, { type FastifyInstance, type FastifyRequest, type InjectOptions } from 'fastify';
 import fastifyMultipart from '@fastify/multipart';
 import sharp from 'sharp';
 
-import { createAvatarsService } from '../src/domains/media/avatars.service.ts';
+import {
+  createAvatarsService,
+  type AvatarStorage,
+  type AvatarsDeps,
+  type AvatarsService
+} from '../src/domains/media/avatars.service.ts';
 import { readAvatarUpload, registerAvatarRoutes } from '../src/domains/media/avatars.routes.ts';
+import type { StoredRoom } from '../src/domains/rooms/room-views.ts';
+import type { RoomsService } from '../src/domains/rooms/rooms.service.ts';
+import type { ApiContext } from '../src/app/context.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
+import { fake, recordingLogger } from './fakes/index.ts';
 
 const PNG = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#3366ff' } })
   .png()
@@ -20,6 +28,9 @@ const PNG = await sharp({ create: { width: 8, height: 8, channels: 3, background
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const ROOM_ID = 'abcdefghij';
 const VALID_KEY = `av_${USER_ID}_0123abcd.webp`;
+
+type SwapAvatar = ReturnType<AvatarsDeps['users']>['swapAvatar'];
+type SwapRoomAvatar = ReturnType<AvatarsDeps['rooms']>['swapRoomAvatar'];
 
 function openedStream() {
   const stream = new PassThrough();
@@ -30,15 +41,35 @@ function openedStream() {
   return stream;
 }
 
-function failingStream(error) {
+function failingStream(error: Error) {
   const stream = new PassThrough();
   queueMicrotask(() => stream.emit('error', error));
   return stream;
 }
 
-function harness({ userResult, roomResult, removeFails = false, readError = null } = {}) {
-  const calls = { saved: [], removed: [], refreshed: [], friends: [], announced: [], errors: [] };
-  const storage = {
+function storedRoom(id: string, avatarKey?: string | null) {
+  return fake<StoredRoom>({ id, avatarKey });
+}
+
+function harness({
+  userResult,
+  roomResult,
+  removeFails = false,
+  readError = null
+}: {
+  userResult?: (input: Parameters<SwapAvatar>[0]) => Awaited<ReturnType<SwapAvatar>>;
+  roomResult?: (key: string | null) => Awaited<ReturnType<SwapRoomAvatar>>;
+  removeFails?: boolean;
+  readError?: Error | 'sync' | null;
+} = {}) {
+  const calls = {
+    saved: [] as string[],
+    removed: [] as string[],
+    refreshed: [] as string[],
+    friends: [] as string[],
+    announced: [] as string[]
+  };
+  const storage: AvatarStorage = {
     async save(key) {
       calls.saved.push(key);
     },
@@ -46,9 +77,9 @@ function harness({ userResult, roomResult, removeFails = false, readError = null
       if (removeFails) throw new Error('disk');
       calls.removed.push(key);
     },
-    createReadStream(key) {
+    createReadStream() {
       if (readError === 'sync') throw new TypeError('bad key');
-      return readError ? failingStream(readError) : openedStream(key);
+      return readError ? failingStream(readError) : openedStream();
     }
   };
   const service = createAvatarsService({
@@ -63,9 +94,7 @@ function harness({ userResult, roomResult, removeFails = false, readError = null
     }),
     rooms: () => ({
       async swapRoomAvatar(roomId, key) {
-        return roomResult
-          ? roomResult(key)
-          : { room: { id: roomId, avatarKey: key }, previousAvatarKey: 'old-room.webp' };
+        return roomResult ? roomResult(key) : { room: storedRoom(roomId, key), previousAvatarKey: 'old-room.webp' };
       }
     }),
     refreshActiveProfile: (user) => calls.refreshed.push(user.id),
@@ -77,8 +106,15 @@ function harness({ userResult, roomResult, removeFails = false, readError = null
       return { roomId };
     }
   });
-  const log = { error: (fields) => calls.errors.push(fields.avatarKey) };
-  return { calls, service, log };
+  return { calls, service, log: recordingLogger() };
+}
+
+// The avatar URL of an account update the test expects to succeed.
+function avatarUrlOf(result: Awaited<ReturnType<AvatarsService['setUserAvatar']>>) {
+  assert.ok('user' in result);
+  const { avatarUrl } = result.user as { avatarUrl?: string };
+  assert.ok(avatarUrl);
+  return avatarUrl;
 }
 
 test('a new account avatar replaces and removes the old file and reaches friends', async () => {
@@ -86,10 +122,10 @@ test('a new account avatar replaces and removes the old file and reaches friends
   const result = await service.setUserAvatar({ id: USER_ID }, PNG, log);
   assert.equal(result.status, 'updated');
   assert.equal(calls.saved.length, 1);
-  assert.match(calls.saved[0], new RegExp(`^av_${USER_ID}_[0-9a-f]{8}\.webp$`));
+  assert.match(calls.saved[0] ?? '', new RegExp(`^av_${USER_ID}_[0-9a-f]{8}\\.webp$`));
   assert.deepEqual(calls.removed, ['old.webp']);
   assert.deepEqual([calls.refreshed, calls.friends], [[USER_ID], [USER_ID]]);
-  assert.ok(result.user.avatarUrl);
+  avatarUrlOf(result);
 });
 
 test('an unchanged upload keeps its file; a vanished account removes the new one', async () => {
@@ -106,19 +142,24 @@ test('an unchanged upload keeps its file; a vanished account removes the new one
   assert.equal((await gone.service.setUserAvatar({ id: USER_ID }, PNG, gone.log)).status, 'not_found');
   assert.deepEqual(gone.calls.removed, gone.calls.saved);
   const goneSame = harness({ userResult: () => ({ user: null }) });
-  const key = (await harness().service.setUserAvatar({ id: USER_ID }, PNG)).user.avatarUrl.split('/api/avatars/')[1];
-  await goneSame.service.setUserAvatar({ id: USER_ID, avatarKey: decodeURIComponent(key) }, PNG, goneSame.log);
+  const key = avatarUrlOf(await harness().service.setUserAvatar({ id: USER_ID }, PNG, undefined)).split(
+    '/api/avatars/'
+  )[1];
+  await goneSame.service.setUserAvatar({ id: USER_ID, avatarKey: decodeURIComponent(key ?? '') }, PNG, goneSame.log);
   assert.deepEqual(goneSame.calls.removed, []);
 });
 
 test('clearing an account avatar, and removal failures are only logged', async () => {
-  const { calls, service, log } = harness({ removeFails: true });
+  const { service, log } = harness({ removeFails: true });
   assert.equal((await service.clearUserAvatar('user-1', log)).status, 'updated');
-  assert.deepEqual(calls.errors, ['old.webp']);
+  assert.deepEqual(
+    log.records.map((record) => record.avatarKey),
+    ['old.webp']
+  );
   await service.removeFile(null, log);
   await service.removeFile('x.webp', undefined);
   assert.equal(
-    (await harness({ userResult: () => ({ user: null }) }).service.clearUserAvatar('user-1')).status,
+    (await harness({ userResult: () => ({ user: null }) }).service.clearUserAvatar('user-1', undefined)).status,
     'not_found'
   );
 });
@@ -135,12 +176,12 @@ test('room avatars swap, announce the room card and clean up', async () => {
   const gone = harness({ roomResult: () => ({ room: null }) });
   assert.equal((await gone.service.setRoomAvatar({ id: ROOM_ID }, PNG, gone.log)).status, 'not_found');
   assert.deepEqual(gone.calls.removed, gone.calls.saved);
-  assert.equal((await gone.service.clearRoomAvatar('room-1')).status, 'not_found');
-  const same = harness({ roomResult: (key) => ({ room: { id: 'room-1' }, previousAvatarKey: key }) });
-  await same.service.setRoomAvatar({ id: ROOM_ID }, PNG);
+  assert.equal((await gone.service.clearRoomAvatar('room-1', undefined)).status, 'not_found');
+  const same = harness({ roomResult: (key) => ({ room: storedRoom('room-1'), previousAvatarKey: key }) });
+  await same.service.setRoomAvatar({ id: ROOM_ID }, PNG, undefined);
   assert.deepEqual(same.calls.removed, []);
   const goneSame = harness({ roomResult: () => ({ room: null }) });
-  await goneSame.service.setRoomAvatar({ id: ROOM_ID, avatarKey: null }, PNG);
+  await goneSame.service.setRoomAvatar({ id: ROOM_ID, avatarKey: null }, PNG, undefined);
   assert.equal(goneSame.calls.removed.length, 1);
 });
 
@@ -158,7 +199,7 @@ test('opening served images: valid keys, missing files and bad keys', async () =
 
 // --- routes --------------------------------------------------------------------------
 
-function multipart(field, content, filename = 'a.png') {
+function multipart(field: string, content: Buffer, filename = 'a.png') {
   const boundary = '----voiceroom';
   const body = Buffer.concat([
     Buffer.from(
@@ -170,46 +211,56 @@ function multipart(field, content, filename = 'a.png') {
   return { payload: body, headers: { 'content-type': `multipart/form-data; boundary=${boundary}` } };
 }
 
+type RouteOptions = {
+  user?: { id: string } | null;
+  room?: { id: string; ownerId: string; isStatic: boolean } | null;
+  limited?: boolean;
+};
+
 function routeApp(
-  t,
-  outcomes = {},
-  { user = { id: 'owner-1' }, room = { id: 'room-1', ownerId: 'owner-1', isStatic: true }, limited = false } = {}
+  t: TestContext,
+  outcomes: Record<string, unknown> = {},
+  {
+    user = { id: 'owner-1' },
+    room = { id: 'room-1', ownerId: 'owner-1', isStatic: true },
+    limited = false
+  }: RouteOptions = {}
 ) {
   const app = fastify();
-  app.register(fastifyMultipart, { limits: { fileSize: 10 * 1024 * 1024, files: 1, parts: 2 } });
+  void app.register(fastifyMultipart, { limits: { fileSize: 10 * 1024 * 1024, files: 1, parts: 2 } });
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
-  const seen = {};
+  const seen: Record<string, unknown[]> = {};
   const record =
-    (name, value) =>
-    async (...args) => {
+    (name: string, value: unknown) =>
+    async (...args: unknown[]) => {
       seen[name] = args;
       return outcomes[name] ?? value;
     };
   registerAvatarRoutes(
     app,
     {
-      logger: null,
+      logger: fake<ApiContext['logger']>(),
       clientIp: () => 'ip',
       resolveSession: async () => (user ? { user } : null),
-      hashIp: (ip) => ip
+      hashIp: (ip: string) => ip
     },
     {
-      avatars: {
+      avatars: fake<AvatarsService>({
         setUserAvatar: record('setUserAvatar', { status: 'updated', user: { id: 'owner-1' } }),
         clearUserAvatar: record('clearUserAvatar', { status: 'updated', user: { id: 'owner-1' } }),
         setRoomAvatar: record('setRoomAvatar', { status: 'updated', room: { roomId: 'room-1' } }),
         clearRoomAvatar: record('clearRoomAvatar', { status: 'updated', room: { roomId: 'room-1' } }),
-        openAvatar: async (key) => (key === 'missing' ? null : Readable.from(['img'])),
-        openLinkPreviewImage: async (key) => (key === 'missing' ? null : Readable.from(['img'])),
+        openAvatar: async (key: string) => (key === 'missing' ? null : Readable.from(['img'])),
+        openLinkPreviewImage: async (key: string) => (key === 'missing' ? null : Readable.from(['img'])),
         removeFile: async () => {}
-      },
-      rooms: {
+      } as Partial<Record<keyof AvatarsService, unknown>> as Partial<AvatarsService>),
+      rooms: fake<RoomsService>({
         async checkOwner(userId, roomId) {
           if (!userId) return { status: 'unauthenticated' };
           if (!room || room.id !== roomId) return { status: 'not_found' };
-          return room.ownerId === userId ? { status: 'owner', room } : { status: 'forbidden' };
+          return room.ownerId === userId ? { status: 'owner', room: room as never } : { status: 'forbidden' };
         }
-      },
+      }),
       uploadLimiter: { check: () => (limited ? { allowed: false, retryAfterSeconds: 8 } : { allowed: true }) }
     }
   );
@@ -217,22 +268,29 @@ function routeApp(
   return { app, seen };
 }
 
-async function call(app, method, url, extra = {}) {
+type Answer = { status: number; body: { error?: string } & Record<string, unknown>; headers: Record<string, unknown> };
+
+async function call(
+  app: FastifyInstance,
+  method: 'GET' | 'POST' | 'DELETE',
+  url: string,
+  extra: Partial<InjectOptions> = {}
+): Promise<Answer> {
   const response = await app.inject({ method, url, ...extra });
-  let body = null;
+  let body: unknown = null;
   try {
     body = response.json();
   } catch {
     body = response.body;
   }
-  return { status: response.statusCode, body, headers: response.headers };
+  return { status: response.statusCode, body: body as Answer['body'], headers: response.headers };
 }
 
 test('uploads read the avatar field and answer the service outcome', async (t) => {
   const { app, seen } = routeApp(t);
   const uploaded = await call(app, 'POST', '/api/auth/avatar', multipart('avatar', PNG));
   assert.deepEqual([uploaded.status, uploaded.body], [200, { ok: true, user: { id: 'owner-1' } }]);
-  assert.deepEqual(seen.setUserAvatar[1], PNG);
+  assert.deepEqual(seen.setUserAvatar?.[1], PNG);
   assert.deepEqual((await call(app, 'POST', '/api/rooms/room-1/avatar', multipart('avatar', PNG))).body, {
     ok: true,
     room: { roomId: 'room-1' }
@@ -257,11 +315,12 @@ test('avatar refusals: session, owner, limit and vanished targets', async (t) =>
     401
   );
   assert.equal((await call(routeApp(t, {}, { user: null }).app, 'DELETE', '/api/auth/avatar')).status, 401);
-  for (const [options, status] of [
+  const refusals: Array<[RouteOptions, number]> = [
     [{ user: null }, 401],
     [{ room: null }, 404],
     [{ user: { id: 'other' } }, 403]
-  ]) {
+  ];
+  for (const [options, status] of refusals) {
     assert.equal(
       (await call(routeApp(t, {}, options).app, 'POST', '/api/rooms/room-1/avatar', multipart('avatar', PNG))).status,
       status
@@ -300,7 +359,7 @@ test('served images are immutable WebP; missing ones are a JSON 404', async (t) 
     const served = await call(app, 'GET', url);
     assert.equal(served.status, 200);
     assert.equal(served.headers['cache-control'], 'public, max-age=31536000, immutable');
-    assert.match(served.headers['content-type'], /^image\/webp/);
+    assert.match(String(served.headers['content-type']), /^image\/webp/);
     assert.equal(served.body, 'img');
   }
   assert.deepEqual((await call(app, 'GET', '/api/avatars/missing')).body, { ok: false, error: 'Avatar not found' });
@@ -310,45 +369,58 @@ test('served images are immutable WebP; missing ones are a JSON 404', async (t) 
   });
 });
 
+// A multipart request whose file() answers as given; only file() is read.
+function upload(file: () => Promise<unknown>) {
+  return fake<FastifyRequest>({ file } as Partial<Record<keyof FastifyRequest, unknown>> as Partial<FastifyRequest>);
+}
+
+const statusOf = (error: unknown) => (error as { statusCode?: number }).statusCode;
+
 test('readAvatarUpload rethrows unexpected multipart failures', async () => {
   await assert.rejects(
-    readAvatarUpload({
-      file: async () => {
+    readAvatarUpload(
+      upload(async () => {
         throw new Error('boom');
-      }
-    }),
+      })
+    ),
     /boom/
   );
   await assert.rejects(
-    readAvatarUpload({
-      file: async () => {
+    readAvatarUpload(
+      upload(async () => {
         throw Object.assign(new Error('big'), { code: 'FST_REQ_FILE_TOO_LARGE' });
-      }
-    }),
-    (error) => error.statusCode === 413
+      })
+    ),
+    (error) => statusOf(error) === 413
   );
-  await assert.rejects(readAvatarUpload({ file: async () => null }), (error) => error.statusCode === 400);
-  const part = (toBuffer, truncated = false) => ({ fieldname: 'avatar', file: { truncated }, toBuffer });
+  await assert.rejects(readAvatarUpload(upload(async () => null)), (error) => statusOf(error) === 400);
+  const part = (toBuffer: () => Promise<Buffer>, truncated = false) => ({
+    fieldname: 'avatar',
+    file: { truncated },
+    toBuffer
+  });
   await assert.rejects(
-    readAvatarUpload({ file: async () => part(async () => Buffer.from('x'), true) }),
-    (error) => error.statusCode === 413
+    readAvatarUpload(upload(async () => part(async () => Buffer.from('x'), true))),
+    (error) => statusOf(error) === 413
   );
   await assert.rejects(
-    readAvatarUpload({
-      file: async () =>
+    readAvatarUpload(
+      upload(async () =>
         part(async () => {
           throw Object.assign(new Error('x'), { statusCode: 413 });
         })
-    }),
-    (error) => error.message === 'Avatar file must be at most 5 MB'
+      )
+    ),
+    (error) => (error as Error).message === 'Avatar file must be at most 5 MB'
   );
   await assert.rejects(
-    readAvatarUpload({
-      file: async () =>
+    readAvatarUpload(
+      upload(async () =>
         part(async () => {
           throw new Error('socket');
         })
-    }),
+      )
+    ),
     /socket/
   );
 });

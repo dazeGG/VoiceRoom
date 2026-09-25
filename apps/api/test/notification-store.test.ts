@@ -1,5 +1,4 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -12,7 +11,10 @@ import { createTestDatabase } from './db-harness.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
-async function createStores(t, notificationOptions = {}) {
+async function createStores(
+  t: TestContext,
+  notificationOptions: Partial<Parameters<typeof createNotificationStore>[0]> = {}
+) {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const users = createUserStore({ databaseUrl, logger: SILENT });
@@ -27,9 +29,10 @@ async function createStores(t, notificationOptions = {}) {
   return { users, rooms, notifications };
 }
 
-async function makeUser(users, login) {
+async function makeUser(users: ReturnType<typeof createUserStore>, login: string) {
   const created = await users.createUser({ login, displayName: login, password: 'password123' });
   assert.equal(created.status, 'created', `created ${login}`);
+  assert.ok(created.user);
   return created.user;
 }
 
@@ -66,7 +69,7 @@ test('notification preferences default private notifications off and update expl
   assert.equal(dndEnabled.status, 'updated');
   assert.equal(dndEnabled.preferences.doNotDisturb, true);
   assert.equal(dndEnabled.preferences.presenceStatus, 'dnd');
-  assert.equal((await users.getUserById(alice.id)).doNotDisturb, true);
+  assert.equal((await users.getUserById(alice.id))?.doNotDisturb, true);
 
   const dndDisabled = await notifications.setDoNotDisturb({ userId: alice.id, doNotDisturb: false });
   assert.equal(dndDisabled.status, 'updated');
@@ -136,7 +139,7 @@ test('notification preferences default private notifications off and update expl
   const dndStatus = await notifications.setPresenceStatus({ userId: alice.id, presenceStatus: 'dnd' });
   assert.equal(dndStatus.preferences.presenceStatus, 'dnd');
   assert.equal(dndStatus.preferences.doNotDisturb, true);
-  assert.equal((await users.getUserById(alice.id)).presenceStatus, 'dnd');
+  assert.equal((await users.getUserById(alice.id))?.presenceStatus, 'dnd');
 });
 
 test('notification store mutes and unmutes any existing non-self user', async (t) => {

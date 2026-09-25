@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -19,7 +18,7 @@ function config() {
   );
 }
 
-function fixtureFile(name, source) {
+function fixtureFile(name: string, source: string) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vr-g10-'));
   const filePath = path.join(dir, name);
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -33,15 +32,17 @@ test('G10-A01 current API composition graph stays inside import, write and timer
   assert.deepEqual(checkApiSources({ config: config() }), []);
 
   const server = await import('../src/server.ts');
-  for (const name of ['bootstrap', 'closeStores', 'createApiApp', 'createApiServer'])
+  for (const name of ['bootstrap', 'closeStores', 'createApiApp', 'createApiServer'] as const)
     assert.equal(typeof server[name], 'function', name);
 });
 
 test('G10-A03 a declared cross-domain writer may touch only its declared tables', async () => {
   const { checkApiSources } = await loadScanners();
   const rules = config();
-  const [writer] = Object.keys(rules.writeRules.crossDomainWriters);
-  const declared = rules.writeRules.crossDomainWriters[writer];
+  const [writer, declared] = Object.entries(rules.writeRules.crossDomainWriters as Record<string, string[]>)[0] ?? [
+    '',
+    []
+  ];
 
   assert.ok(declared.length > 0, 'a cross-domain writer declares the tables it erases');
   const allowed = fixtureFile(
@@ -85,8 +86,8 @@ test('G10-A02 seeded forbidden imports, direct foreign writes and listener worke
     timerRules: rules.timerRules
   };
   const writeViolations = checkApiSources({ config: writeConfig, files: [badWrite] });
-  assert.equal(writeViolations[0].ruleId, 'direct-foreign-table-write');
-  assert.equal(writeViolations[0].table, 'room_messages');
+  assert.equal(writeViolations[0]?.ruleId, 'direct-foreign-table-write');
+  assert.equal(writeViolations[0]?.table, 'room_messages');
 
   // Kysely writes are owned the same way as raw SQL.
   const badKyselyWrite = fixtureFile(
@@ -99,5 +100,5 @@ test('G10-A02 seeded forbidden imports, direct foreign writes and listener worke
 
   const badTimer = fixtureFile('apps/api/src/app.js', 'setInterval(() => {}, 1000);\n');
   const timerViolations = checkApiSources({ config: rules, files: [badTimer] });
-  assert.equal(timerViolations[0].ruleId, 'api-listener-worker-timer');
+  assert.equal(timerViolations[0]?.ruleId, 'api-listener-worker-timer');
 });

@@ -7,7 +7,7 @@ import { socketPathForDirectory } from './ipc-harness.ts';
 //     stops those diffs;
 //   - a connection that neither subscribed nor joined receives no room detail.
 
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -117,7 +117,7 @@ async function register(socketPath, login) {
   return { cookie: cookieFrom(response.setCookie), user: response.body.user };
 }
 
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function voiceCreds(index) {
   return {
@@ -127,7 +127,7 @@ function voiceCreds(index) {
   };
 }
 
-async function withServer(t) {
+async function withServer(t: TestContext) {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const logs = { stdout: '', stderr: '' };

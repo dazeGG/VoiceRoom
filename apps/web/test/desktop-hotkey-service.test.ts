@@ -1,20 +1,19 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { onTestFinished, test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 
 class MemoryStorage {
-  #values = new Map();
+  #values = new Map<string, string>();
 
-  getItem(key) {
+  getItem(key: string) {
     return this.#values.has(key) ? this.#values.get(key) : null;
   }
 
-  setItem(key, value) {
+  setItem(key: string, value: unknown) {
     this.#values.set(key, String(value));
   }
 }
 
-function binding(code) {
+function binding(code: string) {
   return {
     altKey: false,
     code,
@@ -24,7 +23,7 @@ function binding(code) {
   };
 }
 
-function registration(registered, overrides = {}) {
+function registration(registered: string[], overrides: Record<string, unknown> = {}) {
   return {
     active: true,
     backend: 'native',
@@ -35,9 +34,11 @@ function registration(registered, overrides = {}) {
   };
 }
 
-function deferred() {
-  let resolvePromise;
-  let rejectPromise;
+type Deferred = { promise: Promise<unknown>; reject: (error: unknown) => void; resolve: (value: unknown) => void };
+
+function deferred(): Deferred {
+  let resolvePromise = (_value: unknown) => {};
+  let rejectPromise = (_error: unknown) => {};
   const promise = new Promise((resolve, reject) => {
     resolvePromise = resolve;
     rejectPromise = reject;
@@ -46,10 +47,15 @@ function deferred() {
 }
 
 test('desktop hotkey sync buffers early events, prefers the latest status, and discards stale generations', async () => {
-  const calls = [];
-  const actionListeners = new Set();
-  const statusListeners = new Set();
-  const windowTarget = new EventTarget();
+  const calls: Array<{ payload: { configurationId: string }; request: Deferred }> = [];
+  const callAt = (index: number) => {
+    const call = calls[index];
+    assert.ok(call);
+    return call;
+  };
+  const actionListeners = new Set<(event: unknown) => void>();
+  const statusListeners = new Set<(status: unknown) => void>();
+  const windowTarget = new EventTarget() as EventTarget & { voiceRoomDesktopHotkeys?: unknown };
   const storage = new MemoryStorage();
   const originalWarn = console.warn;
   let unbind = () => {};
@@ -57,16 +63,16 @@ test('desktop hotkey sync buffers early events, prefers the latest status, and d
   storage.setItem('voice-room:hotkey:push-to-talk', JSON.stringify(binding('Space')));
 
   windowTarget.voiceRoomDesktopHotkeys = {
-    configure(payload) {
+    configure(payload: { configurationId: string }) {
       const request = deferred();
       calls.push({ payload, request });
       return request.promise;
     },
-    onAction(listener) {
+    onAction(listener: (event: unknown) => void) {
       actionListeners.add(listener);
       return () => actionListeners.delete(listener);
     },
-    onStatus(listener) {
+    onStatus(listener: (status: unknown) => void) {
       statusListeners.add(listener);
       return () => statusListeners.delete(listener);
     },
@@ -84,22 +90,22 @@ test('desktop hotkey sync buffers early events, prefers the latest status, and d
   console.warn = () => {};
 
   const service = await import('../src/lib/features/room/client/services/desktop-hotkey-service.ts');
-  const actions = [];
-  const statuses = [];
+  const actions: unknown[] = [];
+  const statuses: unknown[] = [];
   unbind = service.bindDesktopGlobalHotkeys(
     (action, phase) => actions.push({ action, phase }),
     (status) => statuses.push(status)
   );
   const firstSync = service.syncDesktopGlobalHotkeys(true);
-  const firstConfigurationId = calls[0].payload.configurationId;
+  const firstConfigurationId = callAt(0).payload.configurationId;
   assert.equal(service.isDesktopGlobalHotkeyRegistered('mic-mute'), true);
   for (const listener of actionListeners) {
     listener({ action: 'mic-mute', configurationId: firstConfigurationId, phase: 'pressed' });
     listener({ action: 'push-to-talk', configurationId: firstConfigurationId, phase: 'pressed' });
     listener({ action: 'push-to-talk', configurationId: firstConfigurationId, phase: 'released' });
   }
-  assert.deepEqual(actions, []);
-  calls[0].request.resolve(
+  assert.equal(actions.length, 0);
+  callAt(0).request.resolve(
     registration(['mic-mute', 'output-mute', 'push-to-talk'], {
       configurationId: firstConfigurationId
     })
@@ -109,7 +115,7 @@ test('desktop hotkey sync buffers early events, prefers the latest status, and d
   assert.equal(statuses.length, 1);
 
   const statusSync = service.syncDesktopGlobalHotkeys(true);
-  const statusConfigurationId = calls[1].payload.configurationId;
+  const statusConfigurationId = callAt(1).payload.configurationId;
   const latestStatus = registration(['output-mute'], {
     backend: 'electron-fallback',
     configurationId: statusConfigurationId
@@ -119,7 +125,7 @@ test('desktop hotkey sync buffers early events, prefers the latest status, and d
     listener({ action: 'output-mute', configurationId: statusConfigurationId, phase: 'pressed' });
     listener({ action: 'mic-mute', configurationId: statusConfigurationId, phase: 'pressed' });
   }
-  calls[1].request.resolve(
+  callAt(1).request.resolve(
     registration(['mic-mute'], {
       configurationId: statusConfigurationId
     })
@@ -132,23 +138,23 @@ test('desktop hotkey sync buffers early events, prefers the latest status, and d
   assert.deepEqual(actions.at(-1), { action: 'output-mute', phase: 'pressed' });
 
   const staleSync = service.syncDesktopGlobalHotkeys(true);
-  const staleConfigurationId = calls[2].payload.configurationId;
+  const staleConfigurationId = callAt(2).payload.configurationId;
   for (const listener of actionListeners) {
     listener({ action: 'mic-mute', configurationId: staleConfigurationId, phase: 'pressed' });
   }
   const currentSync = service.syncDesktopGlobalHotkeys(true);
-  const currentConfigurationId = calls[3].payload.configurationId;
+  const currentConfigurationId = callAt(3).payload.configurationId;
   for (const listener of actionListeners) {
     listener({ action: 'mic-mute', configurationId: staleConfigurationId, phase: 'pressed' });
     listener({ action: 'output-mute', configurationId: currentConfigurationId, phase: 'released' });
   }
-  calls[2].request.resolve(
+  callAt(2).request.resolve(
     registration(['mic-mute'], {
       configurationId: staleConfigurationId
     })
   );
   await staleSync;
-  calls[3].request.resolve(
+  callAt(3).request.resolve(
     registration(['output-mute'], {
       configurationId: currentConfigurationId
     })
@@ -158,7 +164,7 @@ test('desktop hotkey sync buffers early events, prefers the latest status, and d
 
   const failedSync = service.syncDesktopGlobalHotkeys(true);
   assert.equal(service.isDesktopGlobalHotkeyRegistered('mic-mute'), true);
-  calls[4].request.reject(new Error('renderer replaced'));
+  callAt(4).request.reject(new Error('renderer replaced'));
   assert.equal(await failedSync, null);
   assert.equal(service.isDesktopGlobalHotkeyRegistered('mic-mute'), false);
   assert.equal(service.isDesktopGlobalHotkeyRegistered('output-mute'), false);
@@ -167,11 +173,11 @@ test('desktop hotkey sync buffers early events, prefers the latest status, and d
   for (const listener of actionListeners) {
     listener({ action: 'mic-mute', phase: 'pressed' });
   }
-  calls[5].request.resolve(
+  callAt(5).request.resolve(
     registration([], {
       active: false,
       backend: 'none',
-      configurationId: calls[5].payload.configurationId
+      configurationId: callAt(5).payload.configurationId
     })
   );
   await inactiveSync;

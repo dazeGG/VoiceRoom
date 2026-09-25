@@ -1,4 +1,4 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
+import type { EmojiTextPart } from '../src/lib/shared/chat/emoji-text.ts';
 import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -12,7 +12,7 @@ async function loadEmojiText() {
   return import('../src/lib/shared/chat/emoji-text.ts');
 }
 
-const emojiParts = (parts) => parts.filter((part) => part.kind === 'emoji').map((part) => part.emoji);
+const emojiParts = (parts: EmojiTextPart[]) => parts.flatMap((part) => (part.kind === 'emoji' ? [part.emoji] : []));
 
 test('text splits into its words and the emoji the artwork draws, and joins back unchanged', async () => {
   const { splitEmoji } = await loadEmojiText();
@@ -34,7 +34,7 @@ test('adjacent emoji stay separate and the longest sequence wins', async () => {
   // An odd regional indicator after a flag is left as text.
   const flags = splitEmoji('🇷🇺🇷');
   assert.deepEqual(emojiParts(flags), ['🇷🇺']);
-  assert.equal(flags.at(-1).kind, 'text');
+  assert.equal(flags.at(-1)?.kind, 'text');
 });
 
 test('a missing presentation selector still reads as the emoji, but a lone text character stays text', async () => {
@@ -67,6 +67,6 @@ test('what the artwork does not draw is left as text, never offered as an image'
   for (const emoji of catalogue.emojis) {
     const parts = splitEmoji(emoji);
     assert.equal(parts.length, 1, `${emoji} is one part`);
-    assert.equal(parts[0].emoji, emoji);
+    assert.equal((parts[0] as { emoji?: string } | undefined)?.emoji, emoji);
   }
 });

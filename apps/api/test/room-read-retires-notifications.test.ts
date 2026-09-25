@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Pool } from 'pg';
@@ -6,6 +5,7 @@ import { createInboxRepository } from '../src/domains/notifications/inbox-reposi
 import { createNotificationService } from '../src/domains/notifications/notification-service.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { fakeDb, result } from './fakes/index.ts';
 
 // Reading a room retires the bell notifications that room produced, up to the
 // read point: kept apart, the bell claimed unread mentions for messages already
@@ -63,19 +63,22 @@ test(
 // A client that records the UPDATE and answers the revision lookup, enough to
 // see what the repository hands PostgreSQL without a database.
 function recordingClient() {
-  const updates = [];
-  return {
-    updates,
-    async query(sql, params) {
-      if (/pg_advisory_xact_lock/.test(sql)) return { rows: [] };
-      if (/AS revision FROM user_notifications/.test(sql)) return { rows: [{ revision: 7 }] };
-      if (/^UPDATE user_notifications/.test(sql)) {
-        updates.push(params);
-        return { rowCount: 2, rows: [] };
-      }
-      throw new Error(`unexpected query: ${sql}`);
+  const updates: unknown[][] = [];
+  const client = fakeDb((sql, params) => {
+    if (/pg_advisory_xact_lock/.test(sql)) return result();
+    if (/AS revision FROM user_notifications/.test(sql)) return result([{ revision: 7 }]);
+    if (/^UPDATE user_notifications/.test(sql)) {
+      updates.push(params);
+      return result([], 2);
     }
-  };
+    throw new Error(`unexpected query: ${sql}`);
+  });
+  return Object.assign(client, { updates });
+}
+
+/** The epoch milliseconds of a Date bound in a recorded UPDATE. */
+function timeAt(client: { updates: unknown[][] }, call: number, param: number) {
+  return (client.updates[call]?.[param] as Date | undefined)?.getTime();
 }
 
 test('a read point in epoch milliseconds reaches PostgreSQL as a time, not a number', async () => {
@@ -92,7 +95,7 @@ test('a read point in epoch milliseconds reaches PostgreSQL as a time, not a num
     client
   });
   assert.deepEqual(result, { updated: 2, revision: 7 });
-  const [recipient, room, bound, revision] = client.updates[0];
+  const [recipient, room, bound, revision] = client.updates[0] ?? [];
   assert.deepEqual([recipient, room, revision], ['user-1', 'room-1', 7]);
   assert.ok(bound instanceof Date);
   assert.equal(bound.getTime(), readAt);
@@ -105,16 +108,16 @@ test('a read point in epoch milliseconds reaches PostgreSQL as a time, not a num
     through: new Date(readAt).toISOString(),
     client
   });
-  assert.equal(client.updates[1][2].getTime(), readAt);
-  assert.equal(client.updates[2][2].getTime(), readAt);
+  assert.equal(timeAt(client, 1, 2), readAt);
+  assert.equal(timeAt(client, 2, 2), readAt);
 
   // No bound still means the whole room.
   await repository.markReadForRoom({ recipientUserId: 'user-1', roomId: 'room-1', through: null, client });
-  assert.equal(client.updates[3][2], null);
+  assert.equal(client.updates[3]?.[2], null);
 
   // All notifications are bounded the same way.
   await repository.markAllRead({ recipientUserId: 'user-1', through: readAt, client });
-  assert.equal(client.updates[4][1].getTime(), readAt);
+  assert.equal(timeAt(client, 4, 1), readAt);
 });
 
 test('a read point that is not a time retires nothing instead of the whole room', async () => {

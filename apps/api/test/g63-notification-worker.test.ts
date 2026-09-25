@@ -1,10 +1,13 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import test from 'node:test';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
-import { createNotificationOutboxRepository } from '../src/domains/notifications/notification-outbox-repository.ts';
+import {
+  createNotificationOutboxRepository,
+  type NotificationOutboxRepository
+} from '../src/domains/notifications/notification-outbox-repository.ts';
+import { fake, outboxEvent } from './fakes/index.ts';
 import { createNotificationPushProvider } from '../src/domains/notifications/push-provider.ts';
 import { createNotificationDeliveryWorker } from '../src/workers/notification-delivery.ts';
 test(
@@ -24,13 +27,14 @@ test(
     });
     const repo = createNotificationOutboxRepository({ pool });
     const one = await repo.acquireLease({ identity: 'notification-delivery.G63', ownerId: 'one', leaseMs: 120000 });
-    assert.equal(one.acquired, true);
+    assert.ok(one.acquired);
     assert.equal(
       (await repo.acquireLease({ identity: 'notification-delivery.G63', ownerId: 'two', leaseMs: 120000 })).acquired,
       false
     );
     await repo.releaseLease({ identity: 'notification-delivery.G63', ownerId: 'one', fencingToken: one.fencingToken });
     const two = await repo.acquireLease({ identity: 'notification-delivery.G63', ownerId: 'two', leaseMs: 120000 });
+    assert.ok(two.acquired);
     assert.ok(two.fencingToken > one.fencingToken);
   }
 );
@@ -56,12 +60,12 @@ test('G63-A02 provider failures throw while terminal/no-subscription outcomes su
   assert.equal((await terminal.deliver({ recipientUserId: 'u', payload: {} })).suppressed, true);
 });
 test('G63-A03 oldest pending age is read from storage on every interval including disabled claims', async () => {
-  let worker;
+  const control: { stop?: () => void } = {};
   let age = 0;
   let reads = 0;
-  const outbox = {
+  const outbox = fake<NotificationOutboxRepository>({
     async acquireLease() {
-      return { acquired: true, fencingToken: 1 };
+      return { acquired: true as const, fencingToken: 1, expiresAt: null };
     },
     async renewLease() {
       return { renewed: true };
@@ -70,15 +74,15 @@ test('G63-A03 oldest pending age is read from storage on every interval includin
     async recordHeartbeat() {},
     async oldestPendingAgeMs() {
       reads += 1;
-      if (reads === 2) setImmediate(() => void worker.stop());
+      if (reads === 2) setImmediate(() => control.stop?.());
       return 16 * 60 * 1000;
     },
     async claimBatch() {
-      return [{ eventId: 'old', createdAt: new Date(Date.now() - 16 * 60 * 1000), attempts: 1 }];
+      return [outboxEvent({ eventId: 'old', createdAt: new Date(Date.now() - 16 * 60 * 1000) })];
     },
     async reschedule() {}
-  };
-  worker = createNotificationDeliveryWorker({
+  });
+  const worker = createNotificationDeliveryWorker({
     outbox,
     provider: {
       async deliver() {
@@ -89,9 +93,10 @@ test('G63-A03 oldest pending age is read from storage on every interval includin
     leaseMs: 1000,
     renewMs: 100,
     observeOldestPending(value) {
-      age = value;
+      age = Number(value);
     }
   });
+  control.stop = () => void worker.stop();
   await worker.start();
   assert.equal(worker.disabledReason, 'oldest_pending_exceeded');
   assert.ok(age >= 15 * 60 * 1000);

@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes scripts/tsconfig.json.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
@@ -7,13 +6,51 @@ const ADR_PATH = 'docs/ADR_UNICODE_REACTIONS.md';
 const EXPECTED_SHA256 = '1d8a944f88d7952f7ef7c5167fef3c67995bcae24543949710231b03a201acda';
 const EXPECTED_AUTHORITY_URL = 'https://www.unicode.org/Public/17.0.0/emoji/emoji-test.txt';
 
-function readDecision(markdown = fs.readFileSync(ADR_PATH, 'utf8')) {
+type Candidate = {
+  name: string;
+  version?: string;
+  license?: string;
+  moduleShape?: string;
+  authority?: boolean;
+  unpackedSize?: number;
+};
+
+type MaintenanceSnapshot = {
+  name: string;
+  latest?: string;
+  versionCount: number;
+  modified: string;
+  selectedVersionPublishedAt: string;
+};
+
+type AuthorityDecision = {
+  schemaVersion: number;
+  goal: string;
+  release: string;
+  status: string;
+  authority: Record<string, unknown>;
+  reactionPolicy: Record<string, unknown>;
+  manifestAuthorization: Record<string, unknown>;
+  candidates: Candidate[];
+  maintenanceSnapshots: MaintenanceSnapshot[];
+};
+
+function readDecision(markdown = fs.readFileSync(ADR_PATH, 'utf8')): AuthorityDecision {
   const match = markdown.match(/```json authority-decision\n([\s\S]*?)\n```/);
-  assert.ok(match, 'ADR must contain a json authority-decision block');
-  return JSON.parse(match[1]);
+  assert.ok(match?.[1], 'ADR must contain a json authority-decision block');
+  return JSON.parse(match[1]) as AuthorityDecision;
 }
 
-function validateAuthorityDecision(decision) {
+function byName<T extends { name: string }>(items: T[]) {
+  const map = new Map(items.map((item) => [item.name, item]));
+  return (name: string) => {
+    const item = map.get(name);
+    assert.ok(item, `missing ${name}`);
+    return item;
+  };
+}
+
+function validateAuthorityDecision(decision: AuthorityDecision) {
   assert.equal(decision.schemaVersion, 1);
   assert.equal(decision.goal, 'G06');
   assert.equal(decision.release, '2.5.0');
@@ -61,31 +98,29 @@ test('G06-A01 records Unicode emoji-test.txt v17.0 as the sole reaction authorit
 
 test('G06-A01 compares required candidates with metadata, license, maintenance, runtime, module, and coverage findings', () => {
   const decision = readDecision();
-  const candidatesByName = new Map(decision.candidates.map((candidate) => [candidate.name, candidate]));
-  const snapshotsByName = new Map(decision.maintenanceSnapshots.map((snapshot) => [snapshot.name, snapshot]));
+  const candidate = byName(decision.candidates);
+  const snapshot = byName(decision.maintenanceSnapshots);
 
   for (const name of ['Unicode emoji-test.txt', 'emojibase-data', 'emoji-regex', 'emoji-regex-xs']) {
-    assert.ok(candidatesByName.has(name), `missing candidate ${name}`);
-    assert.ok(candidatesByName.get(name).version, `missing candidate version for ${name}`);
-    assert.ok(candidatesByName.get(name).license, `missing candidate license for ${name}`);
-    assert.ok(candidatesByName.get(name).moduleShape, `missing module shape for ${name}`);
+    assert.ok(candidate(name).version, `missing candidate version for ${name}`);
+    assert.ok(candidate(name).license, `missing candidate license for ${name}`);
+    assert.ok(candidate(name).moduleShape, `missing module shape for ${name}`);
   }
 
-  assert.equal(candidatesByName.get('Unicode emoji-test.txt').authority, true);
-  assert.equal(candidatesByName.get('emojibase-data').authority, false);
-  assert.equal(candidatesByName.get('emoji-regex').authority, false);
-  assert.equal(candidatesByName.get('emoji-regex-xs').authority, false);
-  assert.equal(candidatesByName.get('emojibase-data').unpackedSize, 50042068);
-  assert.equal(candidatesByName.get('emoji-regex').moduleShape, 'CJS, ESM, types');
-  assert.equal(candidatesByName.get('emoji-regex-xs').version, '2.0.1');
+  assert.equal(candidate('Unicode emoji-test.txt').authority, true);
+  assert.equal(candidate('emojibase-data').authority, false);
+  assert.equal(candidate('emoji-regex').authority, false);
+  assert.equal(candidate('emoji-regex-xs').authority, false);
+  assert.equal(candidate('emojibase-data').unpackedSize, 50042068);
+  assert.equal(candidate('emoji-regex').moduleShape, 'CJS, ESM, types');
+  assert.equal(candidate('emoji-regex-xs').version, '2.0.1');
 
   for (const name of ['emojibase-data', 'emoji-regex', 'emoji-regex-xs']) {
-    assert.ok(snapshotsByName.has(name), `missing maintenance snapshot ${name}`);
-    assert.ok(snapshotsByName.get(name).latest, `missing latest version for ${name}`);
-    assert.ok(snapshotsByName.get(name).versionCount >= 2, `maintenance history is too thin for ${name}`);
-    assert.ok(Date.parse(snapshotsByName.get(name).modified), `missing modified timestamp for ${name}`);
+    assert.ok(snapshot(name).latest, `missing latest version for ${name}`);
+    assert.ok(snapshot(name).versionCount >= 2, `maintenance history is too thin for ${name}`);
+    assert.ok(Date.parse(snapshot(name).modified), `missing modified timestamp for ${name}`);
     assert.ok(
-      Date.parse(snapshotsByName.get(name).selectedVersionPublishedAt),
+      Date.parse(snapshot(name).selectedVersionPublishedAt),
       `missing selected publication timestamp for ${name}`
     );
   }

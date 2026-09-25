@@ -1,7 +1,6 @@
 {
   // Repository scripts run as-is on Node 24 (type stripping): strict,
-  // erasable syntax only, nothing emitted. Files that still carry
-  // `// @ts-nocheck` are not type-checked yet.
+  // erasable syntax only, nothing emitted.
   "compilerOptions": {
     "target": "es2023",
     "module": "nodenext",

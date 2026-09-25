@@ -1,11 +1,10 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import Fastify from 'fastify';
 import { Pool } from 'pg';
 
 import { createPinRepository } from '../src/domains/messaging/pin-repository.ts';
-import { createPinService } from '../src/domains/messaging/pin-service.ts';
+import { createPinService, type PinEvent } from '../src/domains/messaging/pin-service.ts';
 import { registerPinRoutes } from '../src/domains/messaging/pin-routes.ts';
 import { createRoomStore } from '../src/lib/room-store.ts';
 import { createUserStore } from '../src/lib/user-store.ts';
@@ -14,7 +13,7 @@ import { createTestDatabase } from './db-harness.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
-async function createPinFixture(t) {
+async function createPinFixture(t: TestContext) {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const pool = new Pool({ connectionString: databaseUrl, max: 12 });
@@ -22,7 +21,9 @@ async function createPinFixture(t) {
   const rooms = createRoomStore({ databaseUrl, logger: SILENT });
   const created = await users.createUser({ login: 'pin-user', displayName: 'Pin User', password: 'password123' });
   const user = created.user;
+  assert.ok(user);
   const room = await rooms.createRoom({ roomId: 'pin-room', creatorIp: '127.0.0.1', ownerId: user.id, isStatic: true });
+  assert.ok(room);
   t.after(async () => {
     await pool.end();
     await rooms.close();
@@ -32,18 +33,18 @@ async function createPinFixture(t) {
   return { pool, repository: createPinRepository({ client: pool }), room, rooms, user };
 }
 
+/** A stored room message by the fixture's user. */
+async function append(fixture: Awaited<ReturnType<typeof createPinFixture>>, peerId: string, text: string) {
+  const message = await fixture.rooms.appendMessage(fixture.room.id, { authorUserId: fixture.user.id, peerId, text });
+  assert.ok(message);
+  return message;
+}
+
 test('51 concurrent distinct pins preserve the 50-pin room cap', async (t) => {
   const fixture = await createPinFixture(t);
   const service = createPinService({ repository: fixture.repository });
   const messages = await Promise.all(
-    Array.from({ length: 51 }, (_, index) =>
-      fixture.rooms.appendMessage(fixture.room.id, {
-        authorUserId: fixture.user.id,
-        peerId: `peer-${index}`,
-        text: `message-${index}`,
-        expiresAt: Date.now() + 60_000
-      })
-    )
+    Array.from({ length: 51 }, (_, index) => append(fixture, `peer-${index}`, `message-${index}`))
   );
 
   const results = await Promise.allSettled(
@@ -58,38 +59,28 @@ test('51 concurrent distinct pins preserve the 50-pin room cap', async (t) => {
 
   assert.equal(results.filter((result) => result.status === 'fulfilled').length, 50);
   const rejection = results.find((result) => result.status === 'rejected');
-  assert.equal(rejection.reason.code, 'pin_limit_reached');
+  assert.equal((rejection?.reason as { code?: string } | undefined)?.code, 'pin_limit_reached');
   assert.equal((await service.list({ roomId: fixture.room.id })).count, 50);
 });
 
 test('pin refresh publishes edited message text', async (t) => {
   const fixture = await createPinFixture(t);
-  const events = [];
+  const events: PinEvent[] = [];
   const service = createPinService({ repository: fixture.repository, publish: async (event) => events.push(event) });
-  const message = await fixture.rooms.appendMessage(fixture.room.id, {
-    authorUserId: fixture.user.id,
-    peerId: 'peer-edit',
-    text: 'before',
-    expiresAt: Date.now() + 60_000
-  });
+  const message = await append(fixture, 'peer-edit', 'before');
   await service.pin({ roomId: fixture.room.id, messageId: message.id, viewer: fixture.user });
 
   await fixture.pool.query(`UPDATE room_messages SET text = 'after' WHERE id = $1`, [message.id]);
   const refreshed = await service.refresh({ roomId: fixture.room.id, action: 'message-edited', messageId: message.id });
 
-  assert.equal(refreshed.pins[0].text, 'after');
-  assert.equal(events.at(-1).pins[0].text, 'after');
+  assert.equal(refreshed.pins[0]?.text, 'after');
+  assert.equal(events.at(-1)?.pins[0]?.text, 'after');
 });
 
 test('pin refresh removes soft-deleted messages from the snapshot', async (t) => {
   const fixture = await createPinFixture(t);
   const service = createPinService({ repository: fixture.repository });
-  const message = await fixture.rooms.appendMessage(fixture.room.id, {
-    authorUserId: fixture.user.id,
-    peerId: 'peer-delete',
-    text: 'delete me',
-    expiresAt: Date.now() + 60_000
-  });
+  const message = await append(fixture, 'peer-delete', 'delete me');
   await service.pin({ roomId: fixture.room.id, messageId: message.id, viewer: fixture.user });
 
   await fixture.pool.query(`UPDATE room_messages SET deleted_at = now() WHERE id = $1`, [message.id]);
@@ -105,7 +96,7 @@ test('pin refresh removes soft-deleted messages from the snapshot', async (t) =>
 test('bookmark access can read pins but cannot mutate them without membership', async (t) => {
   const app = Fastify({ logger: false });
   t.after(() => app.close());
-  const calls = [];
+  const calls: unknown[] = [];
   registerPinRoutes({
     app,
     pinService: {

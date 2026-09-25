@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPushStore } from '../src/lib/push-store.ts';
@@ -21,6 +20,7 @@ test('push subscription CRUD upserts endpoints and isolates deletion by user', a
 
   const alice = (await users.createUser({ login: 'push-alice', displayName: 'Alice', password: 'password123' })).user;
   const bob = (await users.createUser({ login: 'push-bob', displayName: 'Bob', password: 'password123' })).user;
+  assert.ok(alice && bob);
   const subscription = { endpoint: 'https://push.example/device', keys: { p256dh: 'key-one', auth: 'auth-one' } };
 
   await pushes.upsert({ userId: alice.id, subscription, metadata: { browser: 'test' } });
@@ -39,10 +39,13 @@ test('push subscription CRUD upserts endpoints and isolates deletion by user', a
     subscription: { ...subscription, keys: { p256dh: 'key-two', auth: 'auth-two' } }
   });
   const current = await pushes.listByUserId(alice.id);
+  const [only] = current;
   assert.equal(current.length, 1);
-  assert.equal(current[0].keys.p256dh, 'key-two');
-  const switched = await pushes.upsert({ userId: bob.id, subscription: { ...subscription, keys: current[0].keys } });
-  assert.equal(switched.userId, bob.id);
+  assert.ok(only);
+  assert.equal(only.keys.p256dh, 'key-two');
+  const switched = await pushes.upsert({ userId: bob.id, subscription: { ...subscription, keys: only.keys } });
+  assert.equal(switched?.userId, bob.id);
+
   assert.deepEqual(await pushes.listByUserId(alice.id), []);
   assert.equal(await pushes.remove({ userId: bob.id, endpoint: subscription.endpoint }), true);
   assert.deepEqual(await pushes.listByUserId(bob.id), []);
@@ -78,6 +81,7 @@ test('push subscriptions transactionally prune the oldest entries above the per-
 
   const user = (await users.createUser({ login: 'push-limit', displayName: 'Push Limit', password: 'password123' }))
     .user;
+  assert.ok(user);
   for (const token of ['one', 'two', 'three']) {
     await pushes.upsert({
       userId: user.id,

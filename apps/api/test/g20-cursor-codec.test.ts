@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createCursorCodec, CursorCodecError } from '../src/platform/cursor-codec.ts';
@@ -24,7 +23,7 @@ test('G20-A02 tamper, expiry, purpose and context mismatches have one non-oracle
   let now = 1000;
   const codec = createCursorCodec({ keys: ['s'.repeat(32)], now: () => now, ttlMs: 10 });
   const cursor = codec.encode({ purpose: 'room-history', context: 'room:a', tuple: { createdAtMicros: '1', id: 'm' } });
-  const invalid = [
+  const invalid: Array<[string, { purpose: string; context: string }]> = [
     [cursor.slice(0, -1) + (cursor.endsWith('a') ? 'b' : 'a'), { purpose: 'room-history', context: 'room:a' }],
     [cursor, { purpose: 'dm-history', context: 'room:a' }],
     [cursor, { purpose: 'room-history', context: 'room:b' }]

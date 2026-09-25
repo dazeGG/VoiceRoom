@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { test, onTestFinished, vi } from 'vitest';
 import assert from 'node:assert/strict';
 
@@ -40,11 +39,11 @@ test('the app icon badge counts every unread room and DM except muted ones', asy
 });
 
 test('badge sync sends each change once and clears to zero', async () => {
-  const sent = [];
+  const sent: number[] = [];
   const attention = await loadAttention({
     voiceRoomDesktopAttention: {
       requestAttention: async () => ({ ok: true }),
-      setBadgeCount: async (count) => sent.push(count)
+      setBadgeCount: async (count: number) => sent.push(count)
     }
   });
 
@@ -62,11 +61,11 @@ test('badge sync is a no-op without the desktop bridge and retries after a failu
   assert.doesNotThrow(() => bare.syncDesktopBadgeCount(5));
 
   let fail = true;
-  const sent = [];
+  const sent: number[] = [];
   const attention = await loadAttention({
     voiceRoomDesktopAttention: {
       requestAttention: async () => ({ ok: true }),
-      setBadgeCount: async (count) => {
+      setBadgeCount: async (count: number) => {
         if (fail) throw new Error('untrusted');
         sent.push(count);
       }

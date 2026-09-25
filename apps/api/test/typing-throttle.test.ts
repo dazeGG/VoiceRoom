@@ -1,19 +1,21 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTypingThrottle } from '../src/realtime/typing-throttle.ts';
 
+type FakeTimer = { at: number; callback: () => void };
+
 function createClock() {
   let time = 0;
-  let timers = [];
+  let timers: FakeTimer[] = [];
   return {
     now: () => time,
-    setTimer(callback, delay) {
+    setTimer(callback: () => void, delay: number): FakeTimer & number {
       const timer = { at: time + delay, callback };
       timers.push(timer);
-      return timer;
+      // The throttle keeps a timer as an opaque handle.
+      return timer as FakeTimer & number;
     },
-    advance(ms) {
+    advance(ms: number) {
       time += ms;
       const due = timers.filter((timer) => timer.at <= time).sort((left, right) => left.at - right.at);
       timers = timers.filter((timer) => timer.at > time);
@@ -22,11 +24,17 @@ function createClock() {
   };
 }
 
-function setup(options = {}) {
+function setup(options: Partial<Parameters<typeof createTypingThrottle<string>>[0]> = {}) {
   const clock = createClock();
-  const throttle = createTypingThrottle({ minIntervalMs: 1000, now: clock.now, setTimer: clock.setTimer, ...options });
-  const sent = [];
-  const offer = (key, activity) => throttle.offer(key, activity, (value) => sent.push(`${key}:${value}`));
+  const throttle = createTypingThrottle<string>({
+    minIntervalMs: 1000,
+    now: clock.now,
+    setTimer: clock.setTimer,
+    ...options
+  });
+  const sent: string[] = [];
+  const offer = (key: string, activity: string) =>
+    throttle.offer(key, activity, (value) => sent.push(`${key}:${value}`));
   return { clock, offer, sent, throttle };
 }
 
@@ -105,8 +113,8 @@ test('alternating activities cannot get past one notice a second, and targets do
 });
 
 test('a connection cannot grow the throttle past its target limit', () => {
-  const cleared = [];
-  const { clock, offer, throttle } = setup({ maxTargets: 2, clearTimer: (timer) => cleared.push(timer) });
+  const cleared: unknown[] = [];
+  const { clock, offer, throttle } = setup({ maxTargets: 2, clearTimer: (timer: unknown) => cleared.push(timer) });
 
   offer('a', 'typing');
   // 'a' now waits out its second with a pending switch, so it holds a timer.

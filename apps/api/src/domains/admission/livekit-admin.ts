@@ -11,7 +11,7 @@ interface ParticipantPermissionLike {
   [key: string]: unknown;
 }
 
-interface LiveKitAdminClient {
+export interface LiveKitAdminClient {
   removeParticipant(room: string, identity: string): Promise<unknown>;
   getParticipant(
     room: string,

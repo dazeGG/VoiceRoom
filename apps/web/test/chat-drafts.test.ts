@@ -1,19 +1,18 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { test, onTestFinished, vi } from 'vitest';
 import assert from 'node:assert/strict';
 
 function memoryStorage() {
-  const values = new Map();
+  const values = new Map<string, string>();
   return {
     get length() {
       return values.size;
     },
-    key: (index) => [...values.keys()][index] ?? null,
-    getItem: (key) => (values.has(key) ? values.get(key) : null),
-    setItem: (key, value) => {
+    key: (index: number) => [...values.keys()][index] ?? null,
+    getItem: (key: string) => (values.has(key) ? values.get(key) : null),
+    setItem: (key: string, value: unknown) => {
       values.set(key, String(value));
     },
-    removeItem: (key) => {
+    removeItem: (key: string) => {
       values.delete(key);
     },
     keys: () => [...values.keys()]
@@ -25,14 +24,14 @@ async function loadDrafts() {
   const storage = memoryStorage();
   vi.stubGlobal('localStorage', storage);
   onTestFinished(() => {
-    delete globalThis.localStorage;
+    Reflect.deleteProperty(globalThis, 'localStorage');
   });
   vi.resetModules();
   return { drafts: await import('../src/lib/shared/chat/chat-drafts.ts'), storage };
 }
 
-const dm = (id) => ({ type: 'dm', id });
-const room = (id) => ({ type: 'room', id });
+const dm = (id: string) => ({ type: 'dm' as const, id });
+const room = (id: string) => ({ type: 'room' as const, id });
 
 test('drafts are kept per account and chat, and an empty text removes one', async () => {
   const { drafts, storage } = await loadDrafts();
@@ -40,9 +39,9 @@ test('drafts are kept per account and chat, and an empty text removes one', asyn
   drafts.saveChatDraft('ada', room('lounge'), { text: 'всем привет\nвторая строка' }, 1000);
   drafts.saveChatDraft('linus', dm('grace'), { text: 'другой аккаунт' }, 1000);
 
-  assert.equal(drafts.loadChatDraft('ada', dm('grace'), 2000).text, 'привет');
-  assert.equal(drafts.loadChatDraft('ada', room('lounge'), 2000).text, 'всем привет\nвторая строка');
-  assert.equal(drafts.loadChatDraft('linus', dm('grace'), 2000).text, 'другой аккаунт');
+  assert.equal(drafts.loadChatDraft('ada', dm('grace'), 2000)?.text, 'привет');
+  assert.equal(drafts.loadChatDraft('ada', room('lounge'), 2000)?.text, 'всем привет\nвторая строка');
+  assert.equal(drafts.loadChatDraft('linus', dm('grace'), 2000)?.text, 'другой аккаунт');
   assert.equal(drafts.loadChatDraft('ada', dm('linus'), 2000), null);
   assert.equal(drafts.loadChatDraft('ada', room('grace'), 2000), null, 'a room and a thread never share a draft');
 
@@ -74,7 +73,7 @@ test('a restored draft keeps only the mentions whose @login is still in the text
     1000
   );
 
-  assert.deepEqual(drafts.loadChatDraft('ada', room('lounge'), 1000).mentions, [
+  assert.deepEqual(drafts.loadChatDraft('ada', room('lounge'), 1000)?.mentions, [
     { userId: 'u-grace', login: 'grace', displayName: 'Грейс' }
   ]);
 });
@@ -82,7 +81,7 @@ test('a restored draft keeps only the mentions whose @login is still in the text
 test('old, excess and malformed drafts are dropped', async () => {
   const { drafts } = await loadDrafts();
   const now = drafts.CHAT_DRAFT_MAX_AGE_MS + 100_000;
-  const stored = {
+  const stored: Record<string, unknown> = {
     'dm:stale': { text: 'месяц назад', updatedAt: now - drafts.CHAT_DRAFT_MAX_AGE_MS - 1 },
     'nonsense:x': { text: 'bad key', updatedAt: now },
     'dm:empty': { text: '  ', updatedAt: now },
@@ -116,5 +115,5 @@ test('signing out wipes every draft and ignores late saves until the next sign-i
 
   drafts.resumeChatDrafts();
   drafts.saveChatDraft('ada', dm('grace'), { text: 'снова' }, 3000);
-  assert.equal(drafts.loadChatDraft('ada', dm('grace'), 3000).text, 'снова');
+  assert.equal(drafts.loadChatDraft('ada', dm('grace'), 3000)?.text, 'снова');
 });

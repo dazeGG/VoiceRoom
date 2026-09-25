@@ -1,15 +1,27 @@
 #!/usr/bin/env node
-// @ts-nocheck -- not type-checked yet; remove once the file passes scripts/tsconfig.json.
 
-import { createRequire } from 'node:module';
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { parseArgs } from 'node:util';
+import {
+  createGateCredentialSigner,
+  type GateCredentialSigner,
+  type GatePrincipalType
+} from '../../apps/api/src/domains/admission/gate-credential-signer.ts';
 
-const require = createRequire(import.meta.url);
-const { createGateCredentialSigner } = require('../../apps/api/src/domains/admission/gate-credential-signer.ts');
+type Principal = { principalType: GatePrincipalType; principalId: string };
+type PrincipalKey = Principal & { roomId: string };
+type CredentialRow = {
+  peerId: string;
+  principalEpoch: number;
+  principalId: string;
+  principalType: GatePrincipalType;
+  revoked: boolean;
+  roomId: string;
+};
+type MemoryGateStore = ReturnType<typeof createMemoryGateStore>;
 
-function extractCredential(requestUrl) {
+function extractCredential(requestUrl: string | undefined) {
   const parsed = new URL(requestUrl || '/', 'ws://gate.local');
   const credential = parsed.searchParams.get('vr_gate_credential') || '';
   parsed.searchParams.delete('vr_gate_credential');
@@ -17,23 +29,36 @@ function extractCredential(requestUrl) {
 }
 
 function createMemoryGateStore() {
-  const credentials = new Map();
-  const epochs = new Map();
+  const credentials = new Map<string, CredentialRow>();
+  const epochs = new Map<string, number>();
   let available = true;
-  function key({ roomId, principalType, principalId }) {
+  function key({ roomId, principalType, principalId }: PrincipalKey) {
     return `${roomId}:${principalType}:${principalId}`;
   }
   return {
-    setAvailable(value) {
+    setAvailable(value: boolean) {
       available = Boolean(value);
     },
-    async getLiveKitGatePrincipalEpoch({ principal, roomId }) {
+    async getLiveKitGatePrincipalEpoch({ principal, roomId }: { principal: Principal; roomId: string }) {
       if (!available) throw new Error('database unavailable');
       const principalKey = key({ roomId, ...principal });
-      if (!epochs.has(principalKey)) epochs.set(principalKey, 0);
-      return { status: 'ready', epoch: epochs.get(principalKey) };
+      const epoch = epochs.get(principalKey) ?? 0;
+      epochs.set(principalKey, epoch);
+      return { status: 'ready', epoch };
     },
-    async createLiveKitGateCredential({ credentialHash, peerId, principal, principalEpoch, roomId }) {
+    async createLiveKitGateCredential({
+      credentialHash,
+      peerId,
+      principal,
+      principalEpoch,
+      roomId
+    }: {
+      credentialHash: string;
+      peerId: string;
+      principal: Principal;
+      principalEpoch: number;
+      roomId: string;
+    }) {
       if (!available) throw new Error('database unavailable');
       const currentEpoch = epochs.get(key({ roomId, ...principal }));
       if (principalEpoch !== currentEpoch) return { status: 'epoch_mismatch', credential: null };
@@ -47,7 +72,14 @@ function createMemoryGateStore() {
       });
       return { status: 'created', credential: { id: `cred-${credentials.size}` } };
     },
-    async verifyLiveKitGateCredential({ credentialHash, peerId, principalEpoch, principalId, principalType, roomId }) {
+    async verifyLiveKitGateCredential({
+      credentialHash,
+      peerId,
+      principalEpoch,
+      principalId,
+      principalType,
+      roomId
+    }: PrincipalKey & { credentialHash: string; peerId: string; principalEpoch: number }) {
       if (!available) throw new Error('database unavailable');
       const row = credentials.get(credentialHash);
       const epoch = epochs.get(key({ roomId, principalType, principalId }));
@@ -62,10 +94,11 @@ function createMemoryGateStore() {
         epoch === principalEpoch;
       return { status: allowed ? 'allowed' : 'denied' };
     },
-    async revokeLiveKitGatePrincipal({ principal, roomId }) {
+    async revokeLiveKitGatePrincipal({ principal, roomId }: { principal: Principal; roomId: string }) {
       if (!available) throw new Error('database unavailable');
       const principalKey = key({ roomId, ...principal });
-      epochs.set(principalKey, (epochs.get(principalKey) || 0) + 1);
+      const epoch = (epochs.get(principalKey) || 0) + 1;
+      epochs.set(principalKey, epoch);
       for (const row of credentials.values()) {
         if (
           row.roomId === roomId &&
@@ -75,7 +108,7 @@ function createMemoryGateStore() {
           row.revoked = true;
         }
       }
-      return { status: 'revoked', epoch: epochs.get(principalKey) };
+      return { status: 'revoked', epoch };
     }
   };
 }
@@ -84,7 +117,9 @@ function readTopologyEvidence() {
   const compose = fs.readFileSync('docker-compose.yml', 'utf8');
   const lkv = fs.readFileSync('docker-compose.lkv.yml', 'utf8');
   const caddy = fs.readFileSync('Caddyfile', 'utf8');
-  const config = JSON.parse(fs.readFileSync('config/livekit/external-auth-gate.v1.json', 'utf8'));
+  const config = JSON.parse(fs.readFileSync('config/livekit/external-auth-gate.v1.json', 'utf8')) as {
+    publicSignaling?: { fallbackAllowed?: boolean };
+  };
   const productionGateCommandOk =
     /command:\s*\["node",\s*"apps\/api\/src\/domains\/admission\/livekit-auth-gate-service\.ts"\]/.test(compose);
   const internalLiveKitDefaultOk = /LIVEKIT_URL:\s*\$\{LIVEKIT_URL:-ws:\/\/livekit:7880\}/.test(compose);
@@ -105,7 +140,15 @@ function readTopologyEvidence() {
   };
 }
 
-async function mint({ peerId = 'peer-a', principal, roomId, signer, store }) {
+type ProofDeps = { signer: GateCredentialSigner; store: MemoryGateStore };
+
+async function mint({
+  peerId = 'peer-a',
+  principal,
+  roomId,
+  signer,
+  store
+}: ProofDeps & { peerId?: string; principal: Principal; roomId: string }) {
   const epoch = await store.getLiveKitGatePrincipalEpoch({ principal, roomId });
   const credential = signer.sign({
     expiresAt: Date.now() + 600_000,
@@ -125,7 +168,12 @@ async function mint({ peerId = 'peer-a', principal, roomId, signer, store }) {
   return credential;
 }
 
-async function authorize({ credential, peerId = 'peer-a', signer, store }) {
+async function authorize({
+  credential,
+  peerId = 'peer-a',
+  signer,
+  store
+}: ProofDeps & { credential: string; peerId?: string }) {
   const verified = signer.verify(credential);
   if (!verified.ok) return verified.code;
   const row = await store.verifyLiveKitGateCredential({
@@ -143,9 +191,9 @@ export async function runAuthGateProof() {
   const signer = createGateCredentialSigner({ secret: 'g05-proof-secret-at-least-32-characters' });
   const store = createMemoryGateStore();
   const roomId = 'room-g05';
-  const accountPrincipal = { principalType: 'account', principalId: 'account-1' };
-  const guestPrincipal = { principalType: 'guest', principalId: `${roomId}:guest-uuid-1` };
-  const sameNatGuest = { principalType: 'guest', principalId: `${roomId}:guest-uuid-2` };
+  const accountPrincipal: Principal = { principalType: 'account', principalId: 'account-1' };
+  const guestPrincipal: Principal = { principalType: 'guest', principalId: `${roomId}:guest-uuid-1` };
+  const sameNatGuest: Principal = { principalType: 'guest', principalId: `${roomId}:guest-uuid-2` };
 
   const accountCredential = await mint({ principal: accountPrincipal, roomId, signer, store });
   const accountAllowed = await authorize({ credential: accountCredential, signer, store });
@@ -198,41 +246,42 @@ export async function runAuthGateProof() {
   }
 
   const topology = readTopologyEvidence();
-  const cases = [
-    { id: 'G05-A01-same-token-after-revoke', denied: accountDeniedAfterRevoke === 'denied' },
-    { id: 'G05-A01-same-token-after-leave', denied: accountDeniedAfterRevoke === 'denied' },
-    { id: 'G05-A01-same-token-after-ban', denied: guestDenied === 'denied' },
-    {
-      id: 'G05-A02-public-bypass-7880',
-      denied:
-        topology.productionGateCommandOk &&
-        topology.internalLiveKitDefaultOk &&
-        topology.caddyTargetsGate &&
-        topology.noProductionHostBind7880 &&
-        topology.config.publicSignaling?.fallbackAllowed === false &&
-        topology.lkvRunnable,
-      reason: 'parsed production compose/Caddy/config route public signaling to gate and keep LiveKit 7880 internal'
-    },
-    { id: 'G05-A03-db-outage', denied: dbOutageDenied },
-    {
-      id: 'G05-A03-gate-restart',
-      denied: accountDeniedAfterRevoke === 'denied',
-      reason: 'authorization is row/epoch backed, not process memory backed'
-    },
-    {
-      id: 'G05-A04-mint-vs-revoke-race',
-      denied: staleRaceStore.status === 'epoch_mismatch' && staleRaceDenied === 'denied'
-    },
-    { id: 'G05-A05-refreshed-known-credential', allowed: refreshedAllowed === 'allowed' },
-    { id: 'G05-A05-missing-credential', denied: missing !== 'allowed' },
-    { id: 'G05-A05-wrong-room-or-peer-or-epoch', denied: wrongRoom !== 'allowed' },
-    {
-      id: 'G05-A06-account-vs-guest-nat',
-      denied: guestDenied === 'denied',
-      sharedNatAllowed: sharedNatStillAllowed === 'allowed'
-    },
-    { id: 'G05-A06-query-stripped-before-upstream', denied: !stripped.strippedPath.includes('vr_gate_credential') }
-  ];
+  const cases: Array<{ id: string; denied?: boolean; allowed?: boolean; sharedNatAllowed?: boolean; reason?: string }> =
+    [
+      { id: 'G05-A01-same-token-after-revoke', denied: accountDeniedAfterRevoke === 'denied' },
+      { id: 'G05-A01-same-token-after-leave', denied: accountDeniedAfterRevoke === 'denied' },
+      { id: 'G05-A01-same-token-after-ban', denied: guestDenied === 'denied' },
+      {
+        id: 'G05-A02-public-bypass-7880',
+        denied:
+          topology.productionGateCommandOk &&
+          topology.internalLiveKitDefaultOk &&
+          topology.caddyTargetsGate &&
+          topology.noProductionHostBind7880 &&
+          topology.config.publicSignaling?.fallbackAllowed === false &&
+          topology.lkvRunnable,
+        reason: 'parsed production compose/Caddy/config route public signaling to gate and keep LiveKit 7880 internal'
+      },
+      { id: 'G05-A03-db-outage', denied: dbOutageDenied },
+      {
+        id: 'G05-A03-gate-restart',
+        denied: accountDeniedAfterRevoke === 'denied',
+        reason: 'authorization is row/epoch backed, not process memory backed'
+      },
+      {
+        id: 'G05-A04-mint-vs-revoke-race',
+        denied: staleRaceStore.status === 'epoch_mismatch' && staleRaceDenied === 'denied'
+      },
+      { id: 'G05-A05-refreshed-known-credential', allowed: refreshedAllowed === 'allowed' },
+      { id: 'G05-A05-missing-credential', denied: missing !== 'allowed' },
+      { id: 'G05-A05-wrong-room-or-peer-or-epoch', denied: wrongRoom !== 'allowed' },
+      {
+        id: 'G05-A06-account-vs-guest-nat',
+        denied: guestDenied === 'denied',
+        sharedNatAllowed: sharedNatStillAllowed === 'allowed'
+      },
+      { id: 'G05-A06-query-stripped-before-upstream', denied: !stripped.strippedPath.includes('vr_gate_credential') }
+    ];
 
   return {
     schemaVersion: 1,

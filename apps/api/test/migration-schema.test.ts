@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -16,36 +15,69 @@ import * as presenceStatusMigration from '../src/migrations/20260713120000_add_u
 import * as automaticPresenceMigration from '../src/migrations/20260713220000_add_automatic_presence_source.cjs';
 import * as roomChatReadsMigration from '../src/migrations/20260714120000_create_room_chat_reads.cjs';
 
+type Column = {
+  type?: string;
+  references?: string;
+  onDelete?: string;
+  unique?: boolean;
+  notNull?: boolean;
+  default?: unknown;
+  primaryKey?: boolean;
+};
+// One shape for every recorded call; each call fills the fields its method takes.
+type Call = {
+  type: string;
+  name: string;
+  table: string;
+  text: string;
+  columns: Record<string, Column> & string[];
+  options: { name?: string; unique?: boolean; check?: string; where?: string };
+};
+
+/** A recorded call that must exist. */
+function found(call: Call | undefined): Call {
+  assert.ok(call, 'the migration made this call');
+  return call;
+}
+
+/** Recorded calls by name; a missing name fails the test. */
+function byName(entries: Array<[unknown, Call]>) {
+  const map = new Map(entries);
+  return { get: (name: string) => found(map.get(name)) };
+}
+
 function createRecorder() {
-  const calls = [];
+  const calls: Call[] = [];
+  const record = (call: Partial<Call>) => calls.push(call as Call);
   return {
     calls,
-    func(value) {
+    find: (predicate: (call: Call) => boolean) => found(calls.find(predicate)),
+    func(value: string) {
       return { raw: value };
     },
-    createTable(name, columns) {
-      calls.push({ type: 'createTable', name, columns });
+    createTable(name: string, columns: Call['columns']) {
+      record({ type: 'createTable', name, columns });
     },
-    addColumns(table, columns) {
-      calls.push({ type: 'addColumns', table, columns });
+    addColumns(table: string, columns: Call['columns']) {
+      record({ type: 'addColumns', table, columns });
     },
-    createIndex(table, columns, options = {}) {
-      calls.push({ type: 'createIndex', table, columns, options });
+    createIndex(table: string, columns: Call['columns'], options: Call['options'] = {}) {
+      record({ type: 'createIndex', table, columns, options });
     },
-    addConstraint(table, name, options) {
-      calls.push({ type: 'addConstraint', table, name, options });
+    addConstraint(table: string, name: string, options: Call['options']) {
+      record({ type: 'addConstraint', table, name, options });
     },
-    sql(text) {
-      calls.push({ type: 'sql', text });
+    sql(text: string) {
+      record({ type: 'sql', text });
     },
-    dropTable(name) {
-      calls.push({ type: 'dropTable', name });
+    dropTable(name: string) {
+      record({ type: 'dropTable', name });
     },
-    dropConstraint(table, name) {
-      calls.push({ type: 'dropConstraint', table, name });
+    dropConstraint(table: string, name: string) {
+      record({ type: 'dropConstraint', table, name });
     },
-    dropColumns(table, columns) {
-      calls.push({ type: 'dropColumns', table, columns });
+    dropColumns(table: string, columns: Call['columns']) {
+      record({ type: 'dropColumns', table, columns });
     }
   };
 }
@@ -53,11 +85,11 @@ function createRecorder() {
 test('push subscriptions migration defines durable endpoint ownership and cleanup', () => {
   const pgm = createRecorder();
   pushMigration.up(pgm);
-  const table = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'push_subscriptions');
+  const table = pgm.find((call) => call.type === 'createTable' && call.name === 'push_subscriptions');
   assert.ok(table);
-  assert.equal(table.columns.user_id.references, 'users(id)');
-  assert.equal(table.columns.user_id.onDelete, 'CASCADE');
-  assert.equal(table.columns.endpoint.unique, true);
+  assert.equal(table.columns.user_id?.references, 'users(id)');
+  assert.equal(table.columns.user_id?.onDelete, 'CASCADE');
+  assert.equal(table.columns.endpoint?.unique, true);
   for (const column of ['p256dh', 'auth', 'created_at', 'last_success_at', 'metadata'])
     assert.ok(table.columns[column]);
   assert.ok(
@@ -100,15 +132,15 @@ test('room chat reads migration stores one durable read cursor per room and user
   const pgm = createRecorder();
   roomChatReadsMigration.up(pgm);
 
-  const table = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'room_chat_reads');
+  const table = pgm.find((call) => call.type === 'createTable' && call.name === 'room_chat_reads');
   assert.ok(table);
-  assert.equal(table.columns.room_id.references, 'rooms(id)');
-  assert.equal(table.columns.room_id.onDelete, 'CASCADE');
-  assert.equal(table.columns.user_id.references, 'users(id)');
-  assert.equal(table.columns.user_id.onDelete, 'CASCADE');
-  assert.equal(table.columns.last_read_at.type, 'timestamptz');
+  assert.equal(table.columns.room_id?.references, 'rooms(id)');
+  assert.equal(table.columns.room_id?.onDelete, 'CASCADE');
+  assert.equal(table.columns.user_id?.references, 'users(id)');
+  assert.equal(table.columns.user_id?.onDelete, 'CASCADE');
+  assert.equal(table.columns.last_read_at?.type, 'timestamptz');
 
-  const indexes = new Map(
+  const indexes = byName(
     pgm.calls.filter((call) => call.type === 'createIndex').map((call) => [call.options.name, call])
   );
   assert.deepEqual(indexes.get('room_chat_reads_room_user_unique_idx').columns, ['room_id', 'user_id']);
@@ -127,8 +159,8 @@ test('rooms and room_messages migration captures durable schema contract', () =>
   const pgm = createRecorder();
   migration.up(pgm);
 
-  const rooms = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'rooms');
-  const messages = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'room_messages');
+  const rooms = pgm.find((call) => call.type === 'createTable' && call.name === 'rooms');
+  const messages = pgm.find((call) => call.type === 'createTable' && call.name === 'room_messages');
 
   assert.ok(rooms, 'rooms table is created');
   assert.ok(messages, 'room_messages table is created');
@@ -158,25 +190,25 @@ test('rooms and room_messages migration captures durable schema contract', () =>
     assert.ok(messages.columns[column], `room_messages.${column} exists`);
   }
 
-  assert.equal(rooms.columns.metadata.type, 'jsonb');
-  assert.equal(messages.columns.metadata.type, 'jsonb');
-  assert.equal(messages.columns.room_id.references, 'rooms(id)');
-  assert.equal(messages.columns.room_id.onDelete, 'CASCADE');
+  assert.equal(rooms.columns.metadata?.type, 'jsonb');
+  assert.equal(messages.columns.metadata?.type, 'jsonb');
+  assert.equal(messages.columns.room_id?.references, 'rooms(id)');
+  assert.equal(messages.columns.room_id?.onDelete, 'CASCADE');
 });
 
 test('avatar migration adds reversible user and room avatar columns', () => {
   const pgm = createRecorder();
   avatarMigration.up(pgm);
 
-  const users = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'users');
-  const rooms = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'rooms');
-  const accentConstraint = pgm.calls.find(
+  const users = pgm.find((call) => call.type === 'addColumns' && call.table === 'users');
+  const rooms = pgm.find((call) => call.type === 'addColumns' && call.table === 'rooms');
+  const accentConstraint = pgm.find(
     (call) => call.type === 'addConstraint' && call.name === 'users_avatar_accent_check'
   );
-  assert.equal(users.columns.avatar_key.type, 'text');
-  assert.equal(users.columns.avatar_accent.type, 'varchar(7)');
-  assert.equal(rooms.columns.avatar_key.type, 'text');
-  assert.match(accentConstraint.options.check, /^avatar_accent IS NULL OR avatar_accent/);
+  assert.equal(users.columns.avatar_key?.type, 'text');
+  assert.equal(users.columns.avatar_accent?.type, 'varchar(7)');
+  assert.equal(rooms.columns.avatar_key?.type, 'text');
+  assert.match(String(accentConstraint.options.check), /^avatar_accent IS NULL OR avatar_accent/);
 
   const down = createRecorder();
   avatarMigration.down(down);
@@ -194,18 +226,18 @@ test('room bans migration defines scoped user and IP enforcement with room casca
   const pgm = createRecorder();
   roomBansMigration.up(pgm);
 
-  const bans = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'room_bans');
+  const bans = pgm.find((call) => call.type === 'createTable' && call.name === 'room_bans');
   assert.ok(bans, 'room_bans table is created');
-  assert.equal(bans.columns.room_id.references, 'rooms(id)');
-  assert.equal(bans.columns.room_id.onDelete, 'CASCADE');
-  assert.equal(bans.columns.user_id.references, 'users(id)');
-  assert.equal(bans.columns.user_id.onDelete, 'CASCADE');
-  assert.equal(bans.columns.user_id.notNull, undefined);
-  assert.equal(bans.columns.ip.notNull, true);
-  assert.equal(bans.columns.expires_at.notNull, undefined);
-  assert.equal(bans.columns.metadata.type, 'jsonb');
+  assert.equal(bans.columns.room_id?.references, 'rooms(id)');
+  assert.equal(bans.columns.room_id?.onDelete, 'CASCADE');
+  assert.equal(bans.columns.user_id?.references, 'users(id)');
+  assert.equal(bans.columns.user_id?.onDelete, 'CASCADE');
+  assert.equal(bans.columns.user_id?.notNull, undefined);
+  assert.equal(bans.columns.ip?.notNull, true);
+  assert.equal(bans.columns.expires_at?.notNull, undefined);
+  assert.equal(bans.columns.metadata?.type, 'jsonb');
 
-  const indexes = new Map(
+  const indexes = byName(
     pgm.calls.filter((call) => call.type === 'createIndex').map((call) => [call.options.name, call])
   );
   assert.deepEqual(indexes.get('room_bans_room_user_idx').columns, ['room_id', 'user_id']);
@@ -223,12 +255,12 @@ test('rooms and room_messages migration defines lookup, quota, idle, listing, an
   const pgm = createRecorder();
   migration.up(pgm);
 
-  const indexes = new Map(
+  const indexes = byName(
     pgm.calls.filter((call) => call.type === 'createIndex').map((call) => [call.options.name, call])
   );
 
   assert.deepEqual(indexes.get('rooms_active_id_idx').columns, ['id']);
-  assert.match(indexes.get('rooms_active_id_idx').options.where, /deleted_at IS NULL/);
+  assert.match(String(indexes.get('rooms_active_id_idx').options.where), /deleted_at IS NULL/);
   assert.deepEqual(indexes.get('rooms_quota_idx').columns, ['creator_ip', 'is_static']);
   assert.deepEqual(indexes.get('rooms_idle_prune_idx').columns, ['empty_since']);
   assert.deepEqual(indexes.get('room_messages_room_created_idx').columns, ['room_id', 'created_at', 'id']);
@@ -249,21 +281,21 @@ test('room memberships and bookmarks migration defines authoritative ownership t
   const pgm = createRecorder();
   membershipMigration.up(pgm);
 
-  const memberships = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'room_memberships');
-  const bookmarks = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'room_bookmarks');
+  const memberships = pgm.find((call) => call.type === 'createTable' && call.name === 'room_memberships');
+  const bookmarks = pgm.find((call) => call.type === 'createTable' && call.name === 'room_bookmarks');
   assert.ok(memberships, 'room_memberships table is created');
   assert.ok(bookmarks, 'room_bookmarks table is created');
 
-  assert.equal(memberships.columns.room_id.references, 'rooms(id)');
-  assert.equal(memberships.columns.user_id.references, 'users(id)');
-  assert.equal(memberships.columns.role.default, 'owner'.replace('owner', 'member'));
-  assert.equal(bookmarks.columns.room_id.references, 'rooms(id)');
-  assert.equal(bookmarks.columns.user_id.references, 'users(id)');
+  assert.equal(memberships.columns.room_id?.references, 'rooms(id)');
+  assert.equal(memberships.columns.user_id?.references, 'users(id)');
+  assert.equal(memberships.columns.role?.default, 'owner'.replace('owner', 'member'));
+  assert.equal(bookmarks.columns.room_id?.references, 'rooms(id)');
+  assert.equal(bookmarks.columns.user_id?.references, 'users(id)');
 
   const constraints = pgm.calls.filter((call) => call.type === 'addConstraint');
   assert.ok(constraints.some((call) => call.name === 'room_memberships_role_check'));
 
-  const indexes = new Map(
+  const indexes = byName(
     pgm.calls.filter((call) => call.type === 'createIndex').map((call) => [call.options.name, call])
   );
   assert.deepEqual(indexes.get('room_memberships_room_user_unique_idx').columns, ['room_id', 'user_id']);
@@ -271,7 +303,7 @@ test('room memberships and bookmarks migration defines authoritative ownership t
   assert.deepEqual(indexes.get('room_bookmarks_user_room_unique_idx').columns, ['user_id', 'room_id']);
   assert.equal(indexes.get('room_bookmarks_user_room_unique_idx').options.unique, true);
 
-  const backfill = pgm.calls.find((call) => call.type === 'sql' && /INSERT INTO room_memberships/.test(call.text));
+  const backfill = pgm.find((call) => call.type === 'sql' && /INSERT INTO room_memberships/.test(call.text));
   assert.ok(backfill, 'owner_id compatibility rows are backfilled');
   assert.match(backfill.text, /r\.owner_id IS NOT NULL/);
   assert.match(backfill.text, /r\.is_static = true/);
@@ -291,56 +323,56 @@ test('visual identity migration adds user, room, and anonymous peer visual keys'
   const pgm = createRecorder();
   visualIdentityMigration.up(pgm);
 
-  const users = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'users');
-  const rooms = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'rooms');
-  const peerIdentities = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'room_peer_identities');
+  const users = pgm.find((call) => call.type === 'addColumns' && call.table === 'users');
+  const rooms = pgm.find((call) => call.type === 'addColumns' && call.table === 'rooms');
+  const peerIdentities = pgm.find((call) => call.type === 'createTable' && call.name === 'room_peer_identities');
 
   assert.ok(users, 'users columns are extended');
-  assert.equal(users.columns.avatar_color_key.type, 'varchar(32)');
-  assert.equal(users.columns.avatar_color_key.notNull, true);
-  assert.equal(users.columns.avatar_color_key.default, 'blurple');
+  assert.equal(users.columns.avatar_color_key?.type, 'varchar(32)');
+  assert.equal(users.columns.avatar_color_key?.notNull, true);
+  assert.equal(users.columns.avatar_color_key?.default, 'blurple');
 
   assert.ok(rooms, 'rooms columns are extended');
-  assert.equal(rooms.columns.room_icon_key.type, 'varchar(32)');
-  assert.equal(rooms.columns.room_icon_key.default, 'headphones');
-  assert.equal(rooms.columns.room_color_key.type, 'varchar(32)');
-  assert.equal(rooms.columns.room_color_key.default, 'blue');
+  assert.equal(rooms.columns.room_icon_key?.type, 'varchar(32)');
+  assert.equal(rooms.columns.room_icon_key?.default, 'headphones');
+  assert.equal(rooms.columns.room_color_key?.type, 'varchar(32)');
+  assert.equal(rooms.columns.room_color_key?.default, 'blue');
 
   assert.ok(peerIdentities, 'room_peer_identities table is created');
-  assert.equal(peerIdentities.columns.room_id.references, 'rooms(id)');
-  assert.equal(peerIdentities.columns.room_id.onDelete, 'CASCADE');
-  assert.equal(peerIdentities.columns.session_token_hash.type, 'text');
-  assert.ok(peerIdentities.columns.session_token_hash.notNull, 'session tokens are represented by a required hash');
+  assert.equal(peerIdentities.columns.room_id?.references, 'rooms(id)');
+  assert.equal(peerIdentities.columns.room_id?.onDelete, 'CASCADE');
+  assert.equal(peerIdentities.columns.session_token_hash?.type, 'text');
+  assert.ok(peerIdentities.columns.session_token_hash?.notNull, 'session tokens are represented by a required hash');
   assert.ok(!peerIdentities.columns.session_token, 'raw session tokens are not persisted');
-  assert.equal(peerIdentities.columns.avatar_color_key.type, 'varchar(32)');
-  assert.equal(peerIdentities.columns.metadata.type, 'jsonb');
+  assert.equal(peerIdentities.columns.avatar_color_key?.type, 'varchar(32)');
+  assert.equal(peerIdentities.columns.metadata?.type, 'jsonb');
 });
 
 test('visual identity migration constrains keys and backfills legacy users and rooms', () => {
   const pgm = createRecorder();
   visualIdentityMigration.up(pgm);
 
-  const constraints = new Map(
+  const constraints = byName(
     pgm.calls.filter((call) => call.type === 'addConstraint').map((call) => [call.name, call])
   );
-  assert.match(constraints.get('users_avatar_color_key_check').options.check, /blurple/);
-  assert.match(constraints.get('rooms_room_icon_key_check').options.check, /headphones/);
-  assert.match(constraints.get('rooms_room_color_key_check').options.check, /indigo/);
-  assert.match(constraints.get('room_peer_identities_avatar_color_key_check').options.check, /slate/);
+  assert.match(String(constraints.get('users_avatar_color_key_check').options.check), /blurple/);
+  assert.match(String(constraints.get('rooms_room_icon_key_check').options.check), /headphones/);
+  assert.match(String(constraints.get('rooms_room_color_key_check').options.check), /indigo/);
+  assert.match(String(constraints.get('room_peer_identities_avatar_color_key_check').options.check), /slate/);
 
-  const userBackfill = pgm.calls.find((call) => call.type === 'sql' && /UPDATE users/.test(call.text));
+  const userBackfill = pgm.find((call) => call.type === 'sql' && /UPDATE users/.test(call.text));
   assert.ok(userBackfill, 'existing users are backfilled');
   assert.match(userBackfill.text, /hashtext\(users\.id \|\| ':' \|\| users\.login\)/);
   assert.match(userBackfill.text, /avatar_color_key/);
 
-  const roomBackfill = pgm.calls.find((call) => call.type === 'sql' && /UPDATE rooms/.test(call.text));
+  const roomBackfill = pgm.find((call) => call.type === 'sql' && /UPDATE rooms/.test(call.text));
   assert.ok(roomBackfill, 'legacy room emojis are backfilled');
   assert.match(roomBackfill.text, /WHEN '🎧' THEN 'headphones'/);
   assert.match(roomBackfill.text, /WHEN '☀️' THEN 'sun'/);
   assert.match(roomBackfill.text, /WHEN '🎙️' THEN 'mic'/);
   assert.match(roomBackfill.text, /WHEN '🔥' THEN 'rust'/);
 
-  const indexes = new Map(
+  const indexes = byName(
     pgm.calls.filter((call) => call.type === 'createIndex').map((call) => [call.options.name, call])
   );
   assert.deepEqual(indexes.get('room_peer_identities_room_peer_unique_idx').columns, ['room_id', 'peer_id']);
@@ -352,9 +384,9 @@ test('friends migration captures friend requests, friendships, and direct messag
   const pgm = createRecorder();
   friendsMigration.up(pgm);
 
-  const requests = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'friend_requests');
-  const friendships = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'friendships');
-  const messages = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'direct_messages');
+  const requests = pgm.find((call) => call.type === 'createTable' && call.name === 'friend_requests');
+  const friendships = pgm.find((call) => call.type === 'createTable' && call.name === 'friendships');
+  const messages = pgm.find((call) => call.type === 'createTable' && call.name === 'direct_messages');
 
   assert.ok(requests, 'friend_requests table is created');
   assert.ok(friendships, 'friendships table is created');
@@ -370,18 +402,18 @@ test('friends migration captures friend requests, friendships, and direct messag
     assert.ok(messages.columns[column], `direct_messages.${column} exists`);
   }
 
-  const constraints = new Map(
+  const constraints = byName(
     pgm.calls.filter((call) => call.type === 'addConstraint').map((call) => [call.name, call])
   );
-  assert.match(constraints.get('friend_requests_status_check').options.check, /pending/);
-  assert.match(constraints.get('friendships_ordered_check').options.check, /user_a_id < user_b_id/);
+  assert.match(String(constraints.get('friend_requests_status_check').options.check), /pending/);
+  assert.match(String(constraints.get('friendships_ordered_check').options.check), /user_a_id < user_b_id/);
 
-  const indexes = new Map(
+  const indexes = byName(
     pgm.calls.filter((call) => call.type === 'createIndex').map((call) => [call.options.name, call])
   );
   // Only one pending request per ordered pair.
   assert.equal(indexes.get('friend_requests_pending_unique_idx').options.unique, true);
-  assert.match(indexes.get('friend_requests_pending_unique_idx').options.where, /pending/);
+  assert.match(String(indexes.get('friend_requests_pending_unique_idx').options.where), /pending/);
   assert.equal(indexes.get('friendships_pair_unique_idx').options.unique, true);
 });
 
@@ -399,8 +431,8 @@ test('visual identity migration down removes peer identities before visual colum
   const pgm = createRecorder();
   visualIdentityMigration.down(pgm);
 
-  assert.equal(pgm.calls[0].type, 'dropTable');
-  assert.equal(pgm.calls[0].name, 'room_peer_identities');
+  assert.equal(pgm.calls[0]?.type, 'dropTable');
+  assert.equal(pgm.calls[0]?.name, 'room_peer_identities');
   assert.deepEqual(
     pgm.calls.filter((call) => call.type === 'dropColumns').map((call) => [call.table, call.columns]),
     [
@@ -414,28 +446,28 @@ test('notification preferences migration captures user defaults and mute tables'
   const pgm = createRecorder();
   notificationMigration.up(pgm);
 
-  const preferences = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'notification_preferences');
-  const dmMutes = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'notification_dm_mutes');
-  const roomMutes = pgm.calls.find((call) => call.type === 'createTable' && call.name === 'notification_room_mutes');
+  const preferences = pgm.find((call) => call.type === 'createTable' && call.name === 'notification_preferences');
+  const dmMutes = pgm.find((call) => call.type === 'createTable' && call.name === 'notification_dm_mutes');
+  const roomMutes = pgm.find((call) => call.type === 'createTable' && call.name === 'notification_room_mutes');
 
   assert.ok(preferences, 'notification_preferences table is created');
   assert.ok(dmMutes, 'notification_dm_mutes table is created');
   assert.ok(roomMutes, 'notification_room_mutes table is created');
-  assert.equal(preferences.columns.user_id.references, 'users(id)');
-  assert.equal(preferences.columns.user_id.onDelete, 'CASCADE');
-  assert.equal(preferences.columns.private_notifications.default, false);
-  assert.equal(preferences.columns.private_notifications.notNull, true);
-  assert.equal(dmMutes.columns.peer_user_id.references, 'users(id)');
-  assert.equal(dmMutes.columns.peer_user_id.onDelete, 'CASCADE');
-  assert.equal(roomMutes.columns.room_id.references, 'rooms(id)');
-  assert.equal(roomMutes.columns.room_id.onDelete, 'CASCADE');
+  assert.equal(preferences.columns.user_id?.references, 'users(id)');
+  assert.equal(preferences.columns.user_id?.onDelete, 'CASCADE');
+  assert.equal(preferences.columns.private_notifications?.default, false);
+  assert.equal(preferences.columns.private_notifications?.notNull, true);
+  assert.equal(dmMutes.columns.peer_user_id?.references, 'users(id)');
+  assert.equal(dmMutes.columns.peer_user_id?.onDelete, 'CASCADE');
+  assert.equal(roomMutes.columns.room_id?.references, 'rooms(id)');
+  assert.equal(roomMutes.columns.room_id?.onDelete, 'CASCADE');
 
-  const constraints = new Map(
+  const constraints = byName(
     pgm.calls.filter((call) => call.type === 'addConstraint').map((call) => [call.name, call])
   );
-  assert.match(constraints.get('notification_dm_mutes_no_self_check').options.check, /user_id <> peer_user_id/);
+  assert.match(String(constraints.get('notification_dm_mutes_no_self_check').options.check), /user_id <> peer_user_id/);
 
-  const indexes = new Map(
+  const indexes = byName(
     pgm.calls.filter((call) => call.type === 'createIndex').map((call) => [call.options.name, call])
   );
   assert.equal(indexes.get('notification_dm_mutes_user_peer_unique_idx').options.unique, true);
@@ -458,10 +490,10 @@ test('DND migration adds a non-null disabled-by-default user flag', () => {
   const pgm = createRecorder();
   dndMigration.up(pgm);
 
-  const added = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'users');
+  const added = pgm.find((call) => call.type === 'addColumns' && call.table === 'users');
   assert.ok(added);
-  assert.equal(added.columns.dnd.default, false);
-  assert.equal(added.columns.dnd.notNull, true);
+  assert.equal(added.columns.dnd?.default, false);
+  assert.equal(added.columns.dnd?.notNull, true);
 
   const down = createRecorder();
   dndMigration.down(down);
@@ -479,15 +511,13 @@ test('presence status migration adds a constrained default, backfills DND, and i
   const pgm = createRecorder();
   presenceStatusMigration.up(pgm);
 
-  const added = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'users');
+  const added = pgm.find((call) => call.type === 'addColumns' && call.table === 'users');
   assert.deepEqual(added.columns.presence_status, { type: 'text', notNull: true, default: 'online' });
   assert.ok(
     pgm.calls.some((call) => call.type === 'sql' && /presence_status = 'dnd' WHERE dnd = true/.test(call.text))
   );
-  const constraint = pgm.calls.find(
-    (call) => call.type === 'addConstraint' && call.name === 'users_presence_status_check'
-  );
-  assert.match(constraint.options.check, /'online'.*'away'.*'dnd'.*'offline'/);
+  const constraint = pgm.find((call) => call.type === 'addConstraint' && call.name === 'users_presence_status_check');
+  assert.match(String(constraint.options.check), /'online'.*'away'.*'dnd'.*'offline'/);
 
   const down = createRecorder();
   presenceStatusMigration.down(down);
@@ -501,7 +531,7 @@ test('automatic presence migration records whether away was idle-driven', () => 
   const pgm = createRecorder();
   automaticPresenceMigration.up(pgm);
 
-  const added = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'users');
+  const added = pgm.find((call) => call.type === 'addColumns' && call.table === 'users');
   assert.deepEqual(added.columns.presence_status_automatic, {
     type: 'boolean',
     notNull: true,

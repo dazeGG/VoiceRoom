@@ -474,14 +474,11 @@
     "@typescript-eslint/no-base-to-string": {
       "count": 2
     },
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 13
+      "count": 11
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 29
+      "count": 13
     },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 29
@@ -549,7 +546,7 @@
       "count": 33
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 51
+      "count": 49
     },
     "@typescript-eslint/no-unsafe-call": {
       "count": 6
@@ -609,10 +606,10 @@
       "count": 11
     },
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 16
+      "count": 14
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-call": {
       "count": 1
@@ -673,52 +670,6 @@
       "count": 13
     }
   },
-  "apps/api/test/account-deletion.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 20
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 13
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/api/test/account-domain.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-base-to-string": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 12
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 28
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 3
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 2
-    }
-  },
   "apps/api/test/account-login-alerts-http.test.ts": {
     "@typescript-eslint/ban-ts-comment": {
       "count": 1
@@ -727,70 +678,40 @@
       "count": 11
     },
     "@typescript-eslint/no-unsafe-call": {
-      "count": 4
+      "count": 3
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 20
+      "count": 19
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 2
     }
   },
   "apps/api/test/account-login-alerts-store.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 29
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 23
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
+      "count": 7
     }
   },
   "apps/api/test/account-security-migrations.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
+    "@typescript-eslint/no-unsafe-argument": {
       "count": 1
     },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 5
-    },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 10
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
+      "count": 3
     }
   },
   "apps/api/test/account-security-store.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
+    "@typescript-eslint/no-unsafe-assignment": {
       "count": 1
     },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 23
-    },
     "@typescript-eslint/no-unsafe-call": {
-      "count": 3
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 5
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-return": {
-      "count": 2
+      "count": 1
     }
   },
   "apps/api/test/account-sessions-http.test.ts": {
@@ -804,49 +725,18 @@
       "count": 13
     },
     "@typescript-eslint/no-unsafe-call": {
-      "count": 7
+      "count": 6
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 44
+      "count": 43
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 2
     }
   },
-  "apps/api/test/admission-service.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 6
-    }
-  },
   "apps/api/test/attachment-repository-db.test.ts": {
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 2
-    }
-  },
-  "apps/api/test/attachment-repository.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 18
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 9
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 30
     }
   },
   "apps/api/test/audit-hardening.test.ts": {
@@ -895,74 +785,19 @@
       "count": 2
     }
   },
-  "apps/api/test/avatar-processing.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    }
-  },
   "apps/api/test/avatar-routes.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 7
+      "count": 6
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 6
+      "count": 4
     },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 9
     }
   },
-  "apps/api/test/avatar-storage.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    }
-  },
   "apps/api/test/avatars-domain.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 14
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 25
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 3
-    },
     "no-useless-assignment": {
-      "count": 1
-    },
-    "no-useless-escape": {
       "count": 1
     }
   },
@@ -970,17 +805,14 @@
     "@typescript-eslint/ban-ts-comment": {
       "count": 1
     },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 38
     },
     "@typescript-eslint/no-unsafe-call": {
-      "count": 2
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 18
+      "count": 17
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 3
@@ -1015,36 +847,8 @@
     }
   },
   "apps/api/test/context-menu-server.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 5
-    },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 4
-    }
-  },
-  "apps/api/test/credential-boundary-service.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    }
-  },
-  "apps/api/test/credential-cleanup.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
     }
   },
   "apps/api/test/db-harness.test.ts": {
@@ -1053,88 +857,35 @@
     }
   },
   "apps/api/test/db-harness.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unused-vars": {
       "count": 1
     }
   },
   "apps/api/test/db-room-store.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
+    "@typescript-eslint/no-unsafe-argument": {
       "count": 1
     },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 73
-    },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 26
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 7
+      "count": 3
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 59
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
+      "count": 3
     }
   },
   "apps/api/test/desktop-app-marker.test.ts": {
     "@typescript-eslint/ban-ts-comment": {
       "count": 1
     },
-    "@typescript-eslint/no-unsafe-argument": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 13
+    },
+    "@typescript-eslint/no-unsafe-call": {
       "count": 3
     },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 25
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 5
-    },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 17
+      "count": 15
     },
     "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    }
-  },
-  "apps/api/test/direct-messages-domain.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 18
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 36
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 11
-    },
-    "@typescript-eslint/restrict-template-expressions": {
       "count": 1
     }
   },
@@ -1196,49 +947,14 @@
     }
   },
   "apps/api/test/friend-store.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 32
-    },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 110
-    },
-    "@typescript-eslint/no-unsafe-call": {
       "count": 2
     },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 123
-    },
     "@typescript-eslint/no-unsafe-return": {
-      "count": 3
+      "count": 2
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
-    }
-  },
-  "apps/api/test/friends-domain.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-base-to-string": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 13
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 3
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 2
     }
   },
   "apps/api/test/g04-livekit-replay.test.ts": {
@@ -1256,43 +972,25 @@
     }
   },
   "apps/api/test/g05-livekit-boundary.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 6
-    },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 35
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 3
+      "count": 2
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 46
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
+      "count": 4
     },
     "no-regex-spaces": {
       "count": 4
     }
   },
   "apps/api/test/g10-architecture-boundaries.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 4
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 14
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
+      "count": 13
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 8
+      "count": 4
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 1
@@ -1332,129 +1030,22 @@
       "count": 2
     }
   },
-  "apps/api/test/g15-migration-control.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 13
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 20
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 21
-    }
-  },
   "apps/api/test/g17-platform-class-persistence.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
     "@typescript-eslint/no-base-to-string": {
       "count": 1
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 12
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 18
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 17
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 3
-    }
-  },
-  "apps/api/test/g20-cursor-codec.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    }
-  },
-  "apps/api/test/g26-room-pagination.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    }
-  },
-  "apps/api/test/g27-dm-pagination.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    }
-  },
-  "apps/api/test/g30-read-api.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
+      "count": 7
     }
   },
   "apps/api/test/g35-lease-runtime.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    },
     "@typescript-eslint/prefer-promise-reject-errors": {
       "count": 1
     }
   },
   "apps/api/test/g37-message-outbox-uow.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
-    },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 10
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 9
-    }
-  },
-  "apps/api/test/g38-message-delivery-worker.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
       "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    }
-  },
-  "apps/api/test/g41-active-ban.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 5
     }
   },
   "apps/api/test/g43-membership-schema.test.ts": {
@@ -1471,102 +1062,28 @@
       "count": 1
     }
   },
-  "apps/api/test/g44-membership-admission.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    }
-  },
-  "apps/api/test/g45-members-directory.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    }
-  },
   "apps/api/test/g47-credential-core.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 7
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-call": {
       "count": 2
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 7
+      "count": 2
     }
   },
   "apps/api/test/g48-livekit-cutover.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 18
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 28
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    },
-    "@typescript-eslint/restrict-plus-operands": {
-      "count": 2
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 1
-    },
     "no-empty": {
       "count": 1
     }
   },
-  "apps/api/test/g52-content-persistence.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    }
-  },
-  "apps/api/test/g55-mention-domain.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    }
-  },
   "apps/api/test/g57-addressed-uow.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
+      "count": 3
     }
   },
   "apps/api/test/g59-inbox-api.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-argument": {
       "count": 2
     },
@@ -1578,77 +1095,25 @@
     }
   },
   "apps/api/test/g61-policy-api.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    }
-  },
-  "apps/api/test/g63-notification-worker.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
       "count": 1
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "prefer-const": {
       "count": 1
     }
   },
   "apps/api/test/g68-reaction-persistence.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-argument": {
       "count": 1
     },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 6
+      "count": 5
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 1
-    }
-  },
-  "apps/api/test/g69-reaction-api.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 3
     }
   },
   "apps/api/test/g73-media-schema.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-call": {
       "count": 1
     },
@@ -1659,78 +1124,9 @@
       "count": 1
     }
   },
-  "apps/api/test/g75-media-upload.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 3
-    }
-  },
-  "apps/api/test/g76-media-quota.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    }
-  },
-  "apps/api/test/g77-media-worker.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    }
-  },
-  "apps/api/test/g78-media-cleanup.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    }
-  },
-  "apps/api/test/g79-media-reconcile.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 2
-    }
-  },
   "apps/api/test/g81-attachment-binding.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    }
-  },
-  "apps/api/test/g82-media-auth.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
+      "count": 2
     }
   },
   "apps/api/test/g85-rescue-profile.test.ts": {
@@ -1744,296 +1140,29 @@
       "count": 8
     }
   },
-  "apps/api/test/g86-temporary-ban.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    }
-  },
-  "apps/api/test/g87-moderation-delete.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    }
-  },
-  "apps/api/test/geoip.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    }
-  },
-  "apps/api/test/http-platform.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
   "apps/api/test/lifecycle-domain.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 11
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
     "@typescript-eslint/unbound-method": {
       "count": 1
     }
   },
-  "apps/api/test/link-preview-fetcher.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 23
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 24
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 5
-    }
-  },
-  "apps/api/test/link-preview-route.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    }
-  },
   "apps/api/test/link-previews.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
+      "count": 2
     }
   },
   "apps/api/test/listen.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 5
-    },
     "@typescript-eslint/no-unsafe-call": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 29
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 4
+      "count": 2
     }
   },
   "apps/api/test/livekit-credential-provider.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/api/test/livekit-gate-socket-branches.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/api/test/livekit-token-binding.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 9
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 13
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 4
-    }
-  },
-  "apps/api/test/logging.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 14
-    }
-  },
-  "apps/api/test/media-job-repository.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 13
-    },
     "@typescript-eslint/no-unsafe-return": {
       "count": 1
     }
   },
   "apps/api/test/media-routes.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 1
-    }
-  },
-  "apps/api/test/message-delivery-domain.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 8
-    }
-  },
-  "apps/api/test/migration-schema.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 23
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 42
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 213
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 10
     }
   },
   "apps/api/test/moderation-integration.test.ts": {
@@ -2060,83 +1189,30 @@
     }
   },
   "apps/api/test/notification-settings-domain.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-base-to-string": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 10
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 4
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 14
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 3
-    }
-  },
-  "apps/api/test/notification-store.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 42
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 42
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
+      "count": 5
     }
   },
   "apps/api/test/ops-routes.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 3
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 3
     },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 17
+      "count": 11
     }
   },
   "apps/api/test/pin-service.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 3
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
+      "count": 2
     }
   },
   "apps/api/test/push-service.test.ts": {
@@ -2154,25 +1230,6 @@
     },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 6
-    }
-  },
-  "apps/api/test/push-store.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 9
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 10
-    }
-  },
-  "apps/api/test/rate-limit.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
     }
   },
   "apps/api/test/realtime-event-mapping.test.ts": {
@@ -2200,77 +1257,18 @@
       "count": 1
     }
   },
-  "apps/api/test/realtime-registry.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 5
-    }
-  },
   "apps/api/test/realtime-rooms.test.ts": {
     "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
       "count": 1
     },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 23
     },
     "@typescript-eslint/no-unsafe-call": {
-      "count": 12
+      "count": 11
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 33
-    }
-  },
-  "apps/api/test/realtime-summary.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 3
-    }
-  },
-  "apps/api/test/release-metrics.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    }
-  },
-  "apps/api/test/room-chat-domain.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 12
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
       "count": 32
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 42
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 17
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 1
     }
   },
   "apps/api/test/room-crud.test.ts": {
@@ -2296,43 +1294,6 @@
       "count": 1
     }
   },
-  "apps/api/test/room-membership-backfill-migration.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 19
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 4
-    }
-  },
-  "apps/api/test/room-membership-sync.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 10
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 12
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 16
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 4
-    }
-  },
   "apps/api/test/room-persistence.test.ts": {
     "@typescript-eslint/ban-ts-comment": {
       "count": 1
@@ -2350,81 +1311,20 @@
       "count": 1
     }
   },
-  "apps/api/test/room-presence.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    }
-  },
-  "apps/api/test/room-read-retires-notifications.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    }
-  },
   "apps/api/test/room-store.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 16
+      "count": 15
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 9
+      "count": 2
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 5
     }
   },
   "apps/api/test/rooms-domain.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-base-to-string": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 20
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 40
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 20
-    },
     "@typescript-eslint/restrict-template-expressions": {
-      "count": 6
+      "count": 2
     },
     "@typescript-eslint/unbound-method": {
       "count": 1
@@ -2442,20 +1342,6 @@
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 1
-    }
-  },
-  "apps/api/test/server-bootstrap.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
     }
   },
   "apps/api/test/server-db-boundary.test.ts": {
@@ -2502,94 +1388,16 @@
     }
   },
   "apps/api/test/stream-viewer-attendance.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 7
-    },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 48
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 18
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 47
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 11
-    }
-  },
-  "apps/api/test/typing-throttle.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
       "count": 3
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 7
-    },
+      "count": 34
+    }
+  },
+  "apps/api/test/typing-throttle.test.ts": {
     "@typescript-eslint/unbound-method": {
       "count": 1
-    }
-  },
-  "apps/api/test/user-store-unit.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 17
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 28
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    }
-  },
-  "apps/api/test/user-store.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    }
-  },
-  "apps/api/test/worker-metrics-boundary.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
     }
   },
   "apps/api/test/ws-duplicate-events.test.ts": {
@@ -2613,17 +1421,8 @@
     }
   },
   "apps/api/test/ws-handler-ordering.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 11
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 18
+      "count": 2
     }
   },
   "apps/api/test/ws-harness.ts": {
@@ -3427,136 +2226,6 @@
       "count": 1
     }
   },
-  "apps/web/test/active-voice-resync.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    }
-  },
-  "apps/web/test/audio-gate-worklet.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/web/test/audio-output-transition.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    }
-  },
-  "apps/web/test/chat-drafts.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 3
-    }
-  },
-  "apps/web/test/chat-typing.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    }
-  },
-  "apps/web/test/desktop-autostart.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    }
-  },
-  "apps/web/test/desktop-badge-notifications.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    }
-  },
-  "apps/web/test/desktop-hotkey-service.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 21
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 11
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/web/test/desktop-os-integration.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    }
-  },
-  "apps/web/test/desktop-overlay.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    }
-  },
-  "apps/web/test/dm-thread-resync.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 34
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 34
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 60
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 5
-    }
-  },
   "apps/web/test/emoji-artwork.test.ts": {
     "@typescript-eslint/no-unsafe-argument": {
       "count": 1
@@ -3568,185 +2237,14 @@
       "count": 3
     }
   },
-  "apps/web/test/emoji-text.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    }
-  },
-  "apps/web/test/g13-runtime-config.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 9
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 9
-    }
-  },
-  "apps/web/test/g28-room-pagination.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    }
-  },
-  "apps/web/test/g31-read-reconciliation.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/web/test/network-stats.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 3
-    }
-  },
-  "apps/web/test/notification-router.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 54
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 35
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/web/test/presence-idle.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-this-alias": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 14
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 8
-    }
-  },
   "apps/web/test/realtime-recovery.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
     "@typescript-eslint/no-this-alias": {
       "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 7
-    },
-    "@typescript-eslint/unbound-method": {
-      "count": 2
     }
   },
   "apps/web/test/screen-recovery-grace.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
     "@typescript-eslint/no-this-alias": {
       "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    },
-    "@typescript-eslint/unbound-method": {
-      "count": 10
-    }
-  },
-  "apps/web/test/screen-subscription-retry.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/web/test/screen-track-lifecycle.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 10
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 3
     }
   },
   "packages/shared/src/attachments.ts": {
@@ -3805,23 +2303,11 @@
     }
   },
   "scripts/backup/create-coordinated-snapshot.mts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 14
-    },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 13
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 5
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 10
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
+      "count": 2
     }
   },
   "scripts/check-api-sources.mts": {
@@ -3830,27 +2316,6 @@
     }
   },
   "scripts/coverage/check-release-250-coverage.mts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 40
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 62
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 53
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 206
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 15
-    },
-    "@typescript-eslint/restrict-template-expressions": {
-      "count": 2
-    },
     "preserve-caught-error": {
       "count": 1
     }
@@ -3861,106 +2326,39 @@
     }
   },
   "scripts/lkv/run-auth-gate-physical-replay.mts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 31
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 17
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 20
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 4
-    },
     "no-empty": {
       "count": 1
     }
   },
-  "scripts/lkv/run-auth-gate-proof.mts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
+  "scripts/restore/restore-coordinated-snapshot.mts": {
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 5
+      "count": 8
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 76
+      "count": 5
     },
     "@typescript-eslint/no-unsafe-call": {
-      "count": 11
+      "count": 5
     },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 36
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 3
-    }
-  },
-  "scripts/restore/restore-coordinated-snapshot.mts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 19
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 12
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 9
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 45
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "scripts/test/g06-unicode-candidates.test.mts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 31
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 3
     }
   },
   "scripts/test/g08-coverage-gate.test.mts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 18
+      "count": 7
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 37
+      "count": 21
     },
     "@typescript-eslint/no-unsafe-call": {
-      "count": 100
+      "count": 95
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 141
+      "count": 122
     },
     "@typescript-eslint/no-unsafe-return": {
-      "count": 9
+      "count": 3
     }
   },
   "scripts/test/g89-restore.test.mts": {

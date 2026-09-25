@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readMessageDeliveryMode } from '../src/lib/config.ts';
+import type { NotificationOutboxRepository } from '../src/domains/notifications/notification-outbox-repository.ts';
 import { createNotificationDeliveryWorker, main } from '../src/workers/notification-delivery.ts';
+import { fake, outboxEvent } from './fakes/index.ts';
 
 test('G65-A02 the notification worker stays off until claims are enabled', async () => {
   // Without the flag main() returns before it opens a pool.
@@ -11,15 +13,15 @@ test('G65-A02 the notification worker stays off until claims are enabled', async
 test('G65-A02 ten provider failures stop claiming until the worker restarts', async () => {
   let claims = 0;
   const control: { stop?: () => void } = {};
-  const outbox = {
+  const outbox = fake<NotificationOutboxRepository>({
     async acquireLease() {
-      return { acquired: true, fencingToken: 1 };
+      return { acquired: true as const, fencingToken: 1, expiresAt: null };
     },
     async renewLease() {
       return { renewed: true };
     },
     async releaseLease() {},
-    async recordHeartbeat(input: { ready?: boolean }) {
+    async recordHeartbeat(input) {
       if (input.ready === false) setImmediate(() => control.stop?.());
     },
     async oldestPendingAgeMs() {
@@ -27,7 +29,7 @@ test('G65-A02 ten provider failures stop claiming until the worker restarts', as
     },
     async claimBatch() {
       claims += 1;
-      return [{ eventId: `e${claims}`, createdAt: new Date(), attempts: 1, payload: { body: 'hi' } }];
+      return [outboxEvent({ eventId: `e${claims}`, payload: { body: 'hi' } })];
     },
     async loadCurrent() {
       return { level: 'all', reasons: [] };
@@ -35,7 +37,7 @@ test('G65-A02 ten provider failures stop claiming until the worker restarts', as
     async reschedule() {},
     async markDelivered() {},
     async markSuppressed() {}
-  };
+  });
   const provider = {
     async deliver() {
       throw new Error('push service down');
@@ -48,7 +50,7 @@ test('G65-A02 ten provider failures stop claiming until the worker restarts', as
     leaseMs: 1000,
     renewMs: 100,
     logger: { info() {}, warn() {}, error() {} }
-  } as never);
+  });
   control.stop = () => void worker.stop();
   await worker.start();
   assert.equal(worker.disabledReason, 'provider_failure_threshold');

@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -10,27 +9,29 @@ const SOURCE = readFileSync(`${import.meta.dirname}/../static/audio-gate.worklet
 const SAMPLE_RATE = 48_000;
 const QUANTUM = 128;
 
-function loadProcessor(processorOptions) {
-  let Processor = null;
-  const port = { onmessage: null };
+type Processor = { process(inputs: Float32Array[][], outputs: Float32Array[][]): boolean; threshold: number };
+type ProcessorClass = new (options: { processorOptions: unknown }) => Processor;
+
+function loadProcessor(processorOptions: Record<string, unknown>) {
+  const registered: { Processor?: ProcessorClass } = {};
+  const port: { onmessage: ((event: { data: unknown }) => void) | null } = { onmessage: null };
   const sandbox = {
     AudioWorkletProcessor: class {
-      constructor() {
-        this.port = port;
-      }
+      port = port;
     },
     Math,
     Number,
-    registerProcessor: (_name, ctor) => {
-      Processor = ctor;
+    registerProcessor: (_name: string, ctor: ProcessorClass) => {
+      registered.Processor = ctor;
     },
     sampleRate: SAMPLE_RATE
   };
   vm.runInNewContext(SOURCE, sandbox);
-  const processor = new Processor({ processorOptions });
+  assert.ok(registered.Processor);
+  const processor = new registered.Processor({ processorOptions });
   return {
-    post: (data) => port.onmessage({ data }),
-    run(amplitude, seconds, { tone = false } = {}) {
+    post: (data: unknown) => port.onmessage?.({ data }),
+    run(amplitude: number, seconds: number, { tone = false } = {}) {
       const quanta = Math.round((seconds * SAMPLE_RATE) / QUANTUM);
       let outEnergy = 0;
       let inEnergy = 0;
@@ -46,8 +47,8 @@ function loadProcessor(processorOptions) {
         const output = new Float32Array(QUANTUM);
         processor.process([[input]], [[output]]);
         for (let i = 0; i < QUANTUM; i += 1) {
-          inEnergy += input[i] * input[i];
-          outEnergy += output[i] * output[i];
+          inEnergy += (input[i] ?? 0) ** 2;
+          outEnergy += (output[i] ?? 0) ** 2;
         }
       }
       return outEnergy / Math.max(inEnergy, 1e-12);

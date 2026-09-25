@@ -1,27 +1,20 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createMessageModerationService } from '../src/domains/moderation/message-moderation-service.ts';
+import { fakeDb, result } from './fakes/index.ts';
 
 function harness({ failCleanup = false } = {}) {
-  const events = [];
-  const client = {
-    async query(sql) {
-      events.push(sql);
-      if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') return { rows: [] };
-      if (sql.includes('SELECT id, room_id')) return { rows: [{ id: 'message', room_id: 'room', deleted_at: null }] };
-      return { rows: [] };
-    },
-    release() {
-      events.push('release');
-    }
+  const events: string[] = [];
+  const client = fakeDb((sql) => {
+    events.push(sql);
+    if (sql.includes('SELECT id, room_id')) return result([{ id: 'message', room_id: 'room', deleted_at: null }]);
+    return result();
+  });
+  client.release = () => {
+    events.push('release');
   };
   const service = createMessageModerationService({
-    pool: {
-      async connect() {
-        return client;
-      }
-    },
+    pool: client,
     moderationService: {
       async authorizeOwner() {
         return true;

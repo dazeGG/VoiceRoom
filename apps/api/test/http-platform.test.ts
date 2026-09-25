@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 // Security headers, the request log line and graceful shutdown
 // (platform/http/security-headers.ts, platform/http/request-log.ts,
 // app/graceful-shutdown.ts).
@@ -6,10 +5,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import type { FastifyRequest } from 'fastify';
 
 import { liveKitConnectSources, securityHeaders } from '../src/platform/http/security-headers.ts';
 import { createRequestLog, requestRouteLabel } from '../src/platform/http/request-log.ts';
 import { installGracefulShutdown } from '../src/app/graceful-shutdown.ts';
+import { recordingLogger } from './fakes/index.ts';
 
 test('LiveKit connect sources treat localhost and 127.0.0.1 as one host', () => {
   assert.deepEqual(liveKitConnectSources(''), []);
@@ -22,41 +23,40 @@ test('LiveKit connect sources treat localhost and 127.0.0.1 as one host', () => 
 test('the CSP admits the gate everywhere and the local SFU only outside production', () => {
   const dev = securityHeaders({ connectSources: ['wss://gate.example'], production: false });
   assert.match(
-    dev['Content-Security-Policy'],
+    String(dev['Content-Security-Policy']),
     /connect-src 'self' wss:\/\/gate\.example ws:\/\/localhost:7880 ws:\/\/127\.0\.0\.1:7880 stun: turn: turns:/
   );
-  assert.match(dev['Content-Security-Policy'], /frame-ancestors 'none'/);
+  assert.match(String(dev['Content-Security-Policy']), /frame-ancestors 'none'/);
   assert.equal(dev['X-Content-Type-Options'], 'nosniff');
   const prod = securityHeaders({ connectSources: [], production: true });
-  assert.doesNotMatch(prod['Content-Security-Policy'], /localhost/);
-  assert.match(prod['Permissions-Policy'], /camera=\(\)/);
+  assert.doesNotMatch(String(prod['Content-Security-Policy']), /localhost/);
+  assert.match(String(prod['Permissions-Policy']), /camera=\(\)/);
 });
 
 test('the request line is levelled by status, skips health checks and hashes the address', () => {
-  const lines = [];
-  const log = {
-    info: (fields) => lines.push(['info', fields]),
-    warn: (fields) => lines.push(['warn', fields]),
-    error: (fields) => lines.push(['error', fields])
-  };
+  const log = recordingLogger();
+  const lines = log.records;
   const logRequest = createRequestLog({ clientIp: () => '203.0.113.9', hashIp: (ip) => `hash(${ip})` });
-  const request = (url, extra = {}) => ({
-    method: 'GET',
-    routeOptions: { url },
-    raw: { voiceRoomUserId: 'u1' },
-    log,
-    ...extra
-  });
+  // Just the request fields the log line reads.
+  const request = (url: string, extra = {}) =>
+    ({
+      method: 'GET',
+      routeOptions: { url },
+      raw: { voiceRoomUserId: 'u1' },
+      log,
+      ...extra
+    }) as unknown as FastifyRequest;
   logRequest(request('/api/healthz'), 200, 1);
   logRequest(request('/api/rooms'), 200, 1.234);
   logRequest(request('/api/rooms'), 404, 2);
   logRequest(request('/api/rooms'), 503, 3);
-  logRequest({ method: 'GET', url: '/raw', log }, 200, 1);
+  logRequest({ method: 'GET', url: '/raw', log } as unknown as FastifyRequest, 200, 1);
   assert.deepEqual(
-    lines.map(([level]) => level),
+    lines.map(({ level }) => level),
     ['info', 'warn', 'error', 'info']
   );
-  assert.deepEqual(lines[0][1], {
+  const { level: _level, msg: _msg, ...first } = lines[0] ?? { level: '' };
+  assert.deepEqual(first, {
     evt: 'http.request',
     method: 'GET',
     route: '/api/rooms',
@@ -65,22 +65,27 @@ test('the request line is levelled by status, skips health checks and hashes the
     ipHash: 'hash(203.0.113.9)',
     durationMs: 1.23
   });
-  assert.equal(lines[3][1].userId, undefined);
-  logRequest({ method: 'GET', url: '/nolog' }, 200, 1);
+  assert.equal(lines[3]?.userId, undefined);
+  logRequest({ method: 'GET', url: '/nolog' } as unknown as FastifyRequest, 200, 1);
   assert.equal(requestRouteLabel({}), 'unknown');
   assert.equal(requestRouteLabel({ routerPath: '/legacy' }), '/legacy');
 });
 
 function shutdownHarness({ closeFails = false, hang = false } = {}) {
-  const calls = { exits: [], closedSockets: [], stores: 0, logs: [] };
+  const calls: { exits: unknown[]; closedSockets: unknown[]; stores: number } = {
+    exits: [],
+    closedSockets: [],
+    stores: 0
+  };
   const signals = new EventEmitter();
+  const logger = recordingLogger();
   const server = {
-    close(callback) {
+    close(callback: () => void) {
       if (!hang) callback();
     }
   };
   const sockets = [
-    { socket: { close: (code) => calls.closedSockets.push(code) } },
+    { socket: { close: (code: number) => calls.closedSockets.push(code) } },
     {
       socket: {
         close: () => {
@@ -90,39 +95,40 @@ function shutdownHarness({ closeFails = false, hang = false } = {}) {
     }
   ];
   const shutdown = installGracefulShutdown(server, {
-    logger: { info: (fields) => calls.logs.push(fields.evt), error: (fields) => calls.logs.push(fields.evt) },
+    logger,
     sockets: () => sockets,
     closeStores: async () => {
       calls.stores += 1;
       if (closeFails) throw new Error('db');
     },
-    exit: (code) => calls.exits.push(code),
+    exit: (code: number) => calls.exits.push(code),
     timeoutMs: 20,
-    signals
+    signals: signals as unknown as Pick<NodeJS.Process, 'once'>
   });
-  return { calls, shutdown, signals };
+  const events = () => logger.records.map((record) => record.evt);
+  return { calls, events, shutdown, signals };
 }
 
 test('shutdown closes sockets, the server and the stores once, then exits cleanly', async () => {
-  const { calls, shutdown, signals } = shutdownHarness();
+  const { calls, events, shutdown, signals } = shutdownHarness();
   signals.emit('SIGTERM');
   await new Promise((resolve) => setImmediate(resolve));
   await shutdown('SIGINT');
   assert.deepEqual(calls.closedSockets, [1001]);
   assert.equal(calls.stores, 1);
   assert.deepEqual(calls.exits, [0]);
-  assert.deepEqual(calls.logs, ['boot.shutdown_started']);
+  assert.deepEqual(events(), ['boot.shutdown_started']);
 });
 
 test('a failed or hanging shutdown exits with 1', async () => {
   const failing = shutdownHarness({ closeFails: true });
   await failing.shutdown('SIGTERM');
   assert.deepEqual(failing.calls.exits, [1]);
-  assert.ok(failing.calls.logs.includes('boot.shutdown_failed'));
+  assert.ok(failing.events().includes('boot.shutdown_failed'));
 
   const hanging = shutdownHarness({ hang: true });
   void hanging.shutdown('SIGINT');
   await new Promise((resolve) => setTimeout(resolve, 40));
   assert.deepEqual(hanging.calls.exits, [1]);
-  assert.ok(hanging.calls.logs.includes('boot.shutdown_timeout'));
+  assert.ok(hanging.events().includes('boot.shutdown_timeout'));
 });

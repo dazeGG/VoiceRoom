@@ -1,12 +1,12 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
+import fastify from 'fastify';
 import test from 'node:test';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
-import { createReactionService } from '../src/domains/messaging/reaction-service.ts';
+import { createReactionService, type ReactionRepository } from '../src/domains/messaging/reaction-service.ts';
 import { registerReactionRoutes } from '../src/domains/messaging/reaction-routes.ts';
 import { createReactionRealtimeAdapter } from '../src/domains/messaging/reaction-realtime-adapter.ts';
 
-function repository() {
+function repository(): ReactionRepository {
   let active = false;
   let revision = 0n;
   return {
@@ -36,12 +36,12 @@ function repository() {
       };
     },
     async transaction(callback) {
-      return callback();
+      return callback(null);
     }
   };
 }
 
-function service(overrides = {}) {
+function service(overrides: Partial<Parameters<typeof createReactionService>[0]> = {}) {
   return createReactionService({
     repository: repository(),
     cursorCodec: createCursorCodec({ keys: ['reaction-test-secret-must-be-at-least-32-bytes'] }),
@@ -68,21 +68,21 @@ test('G69-A01 guest room reads are authorized, mutation is 403, and DM/cross-con
       mutation: { messageId: 'm', emoji: '😀', active: true },
       viewer: guest
     }),
-    (error) => error.statusCode === 403 && error.code === 'account_required'
+    { statusCode: 403, code: 'account_required' }
   );
   for (const messageId of ['deleted', 'hidden']) {
     await assert.rejects(
       reactions.getSummaries({ conversation: { type: 'room', id: 'room' }, messageId, viewer: guest }),
-      (error) => error.statusCode === 404
+      { statusCode: 404 }
     );
   }
   await assert.rejects(
     reactions.getSummaries({ conversation: { type: 'room', id: 'other' }, messageId: 'm', viewer: guest }),
-    (error) => error.statusCode === 404
+    { statusCode: 404 }
   );
   await assert.rejects(
     reactions.getSummaries({ conversation: { type: 'dm', id: 'peer' }, messageId: 'm', viewer: { id: 'outsider' } }),
-    (error) => error.statusCode === 404
+    { statusCode: 404 }
   );
 
   const first = await reactions.getReactors({
@@ -106,10 +106,10 @@ test('G69-A01 guest room reads are authorized, mutation is 403, and DM/cross-con
 });
 
 test('G69-A02 desired PUT is idempotent, bounded, revisioned and publishes only changes', async () => {
-  const published = [];
+  const published: unknown[] = [];
   const reactions = service({ publish: async (event) => published.push(event) });
   const viewer = { id: 'account' };
-  const timings = [];
+  const timings: number[] = [];
   for (let index = 0; index < 40; index += 1) {
     const started = performance.now();
     const summary = await reactions.setDesired({
@@ -122,11 +122,11 @@ test('G69-A02 desired PUT is idempotent, bounded, revisioned and publishes only 
     assert.match(summary.revision, /^\d+$/);
   }
   timings.sort((a, b) => a - b);
-  assert.ok(timings[Math.floor(timings.length * 0.95)] <= 250);
+  assert.ok((timings[Math.floor(timings.length * 0.95)] ?? 0) <= 250);
   assert.equal(published.length, 1);
 
-  const roomEvents = [];
-  const accountEvents = [];
+  const roomEvents: unknown[] = [];
+  const accountEvents: Array<[string, unknown]> = [];
   const realtime = createReactionRealtimeAdapter({
     broadcastRoom: async (id, event) => roomEvents.push([id, event]),
     broadcastAccount: (id, event) => accountEvents.push([id, event]),
@@ -146,7 +146,7 @@ test('G69-A02 desired PUT is idempotent, bounded, revisioned and publishes only 
   assert.equal(roomEvents.length, 1);
   assert.deepEqual(accountEvents.map(([id]) => id).sort(), ['account', 'peer']);
 
-  let release;
+  let release: (value: unknown) => void = () => {};
   let settled = false;
   const ordered = createReactionRealtimeAdapter({
     broadcastRoom: () =>
@@ -170,44 +170,14 @@ test('G69-A02 desired PUT is idempotent, bounded, revisioned and publishes only 
   assert.equal(settled, true);
 });
 
-test('G69 routes preserve no-store reads and service authorization status', async () => {
-  const handlers = {};
-  const app = {
-    get(path, handler) {
-      handlers[`GET ${path}`] = handler;
-    },
-    put(path, handler) {
-      handlers[`PUT ${path}`] = handler;
-    }
-  };
-  registerReactionRoutes({ app, reactionService: service(), resolveUser: async (request) => request.viewer });
-  const reply = () => ({
-    status: 0,
-    headers: {},
-    header(name, value) {
-      this.headers[name] = value;
-      return this;
-    },
-    code(value) {
-      this.status = value;
-      return this;
-    },
-    send(value) {
-      this.body = value;
-      return this;
-    }
-  });
-  const request = {
-    params: { type: 'room', conversationId: 'room', messageId: 'm' },
-    query: {},
-    body: { emoji: '😀', active: true },
-    viewer: { id: 'guest', guest: true }
-  };
-  const readReply = reply();
-  await handlers['GET /api/reactions/:type/:conversationId/:messageId'](request, readReply);
-  assert.equal(readReply.status, 200);
-  assert.equal(readReply.headers['Cache-Control'], 'no-store');
-  const writeReply = reply();
-  await handlers['PUT /api/reactions/:type/:conversationId/:messageId'](request, writeReply);
-  assert.equal(writeReply.status, 403);
+test('G69 routes preserve no-store reads and service authorization status', async (t) => {
+  const app = fastify();
+  t.after(() => app.close());
+  registerReactionRoutes({ app, reactionService: service(), resolveUser: async () => ({ id: 'guest', guest: true }) });
+  const url = '/api/reactions/room/room/m';
+  const read = await app.inject({ method: 'GET', url });
+  assert.equal(read.statusCode, 200);
+  assert.equal(read.headers['cache-control'], 'no-store');
+  const write = await app.inject({ method: 'PUT', url, payload: { emoji: '😀', active: true } });
+  assert.equal(write.statusCode, 403);
 });

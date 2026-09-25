@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -13,7 +12,7 @@ const OWNER_ID = '123e4567-e89b-12d3-a456-426614174000';
 const OTHER_ID = '123e4567-e89b-12d3-a456-426614174001';
 const ROOM_ID = 'abcdefghij';
 
-function multipart(buffer, filename = 'avatar.png') {
+function multipart(buffer: Buffer, filename = 'avatar.png') {
   const boundary = '----voice-room-avatar-test';
   return {
     headers: { 'content-type': `multipart/form-data; boundary=${boundary}` },
@@ -27,12 +26,32 @@ function multipart(buffer, filename = 'avatar.png') {
   };
 }
 
-function createHarness(uploadsDir) {
-  const users = new Map([
+type FakeUser = {
+  id: string;
+  login: string;
+  displayName: string;
+  avatarColorKey: string;
+  avatarKey: string | null;
+  avatarAccent?: string | null;
+};
+
+function createHarness(uploadsDir: string) {
+  const users = new Map<string, FakeUser>([
     [OWNER_ID, { id: OWNER_ID, login: 'owner', displayName: 'Owner', avatarColorKey: 'blurple', avatarKey: null }],
     [OTHER_ID, { id: OTHER_ID, login: 'other', displayName: 'Other', avatarColorKey: 'green', avatarKey: null }]
   ]);
-  const room = {
+  const room: {
+    id: string;
+    name: string;
+    ownerId: string;
+    isStatic: boolean;
+    avatarKey: string | null;
+    createdAt: number;
+    updatedAt: number;
+    emptySince: number | null;
+    deletedAt?: number;
+    peers: Map<string, unknown>;
+  } = {
     id: ROOM_ID,
     name: 'Room',
     ownerId: OWNER_ID,
@@ -46,11 +65,19 @@ function createHarness(uploadsDir) {
   let userAvatarWrites = Promise.resolve();
   let roomAvatarWrites = Promise.resolve();
   const userStore = {
-    async getSessionUser(token) {
+    async getSessionUser(token: string) {
       const id = token === 'owner-token' ? OWNER_ID : token === 'other-token' ? OTHER_ID : '';
       return id ? { user: { ...users.get(id) } } : null;
     },
-    swapAvatar({ userId, avatarKey = null, avatarAccent = null }) {
+    swapAvatar({
+      userId,
+      avatarKey = null,
+      avatarAccent = null
+    }: {
+      userId: string;
+      avatarKey?: string | null;
+      avatarAccent?: string | null;
+    }) {
       const operation = userAvatarWrites.then(() => {
         const user = users.get(userId);
         if (!user) return { previousAvatarKey: null, user: null };
@@ -69,10 +96,10 @@ function createHarness(uploadsDir) {
     async listSummaryRecipientUserIds() {
       return [];
     },
-    async getRoom(roomId) {
+    async getRoom(roomId: string) {
       return roomId === ROOM_ID && !room.deletedAt ? { ...room, peers: new Map() } : null;
     },
-    swapRoomAvatar(roomId, avatarKey = null) {
+    swapRoomAvatar(roomId: string, avatarKey: string | null = null) {
       const operation = roomAvatarWrites.then(() => {
         if (roomId !== ROOM_ID || !room.isStatic || room.deletedAt) {
           return { previousAvatarKey: null, room: null };
@@ -88,7 +115,7 @@ function createHarness(uploadsDir) {
       );
       return operation;
     },
-    async deleteRoom(roomId, now = Date.now()) {
+    async deleteRoom(roomId: string, now = Date.now()) {
       if (roomId !== ROOM_ID || room.deletedAt) return null;
       room.deletedAt = now;
       return { ...room, peers: new Map() };
@@ -109,7 +136,7 @@ function createHarness(uploadsDir) {
   return { app, room, storage, users };
 }
 
-function cookie(token) {
+function cookie(token: string) {
   return { cookies: { vr_session: token } };
 }
 
@@ -178,7 +205,7 @@ test('avatar routes authorize, normalize, replace, serve, and delete user and ro
   assert.equal(removed.statusCode, 200);
   assert.equal(removed.json().user.avatarUrl, null);
   assert.equal(removed.json().user.avatarAccent, null);
-  assert.equal(users.get(OWNER_ID).avatarKey, null);
+  assert.equal(users.get(OWNER_ID)?.avatarKey, null);
 
   const notOwner = await app.inject({
     method: 'POST',
@@ -250,7 +277,7 @@ test('concurrent user and room replacements retain only the final referenced ava
     userResponses.map(({ statusCode }) => statusCode),
     [200, 200]
   );
-  assert.deepEqual(await storage.listKeys(), [users.get(OWNER_ID).avatarKey]);
+  assert.deepEqual(await storage.listKeys(), [users.get(OWNER_ID)?.avatarKey]);
 
   const userDelete = await app.inject({ method: 'DELETE', url: '/api/auth/avatar', ...cookie('owner-token') });
   assert.equal(userDelete.statusCode, 200);

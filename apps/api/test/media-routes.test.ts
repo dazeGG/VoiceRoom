@@ -1,44 +1,19 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fastify from 'fastify';
 
 import { registerMediaRoutes } from '../src/domains/media/media-routes.ts';
+import type { MediaService } from '../src/domains/media/media-service.ts';
+import { spy } from './fakes/index.ts';
 
 function createApp() {
-  const calls = [];
+  const calls: string[] = [];
   const app = fastify();
   app.addContentTypeParser('application/octet-stream', (_request, payload, done) => done(null, payload));
   registerMediaRoutes({
     app,
-    mediaService: {
-      async upload(input) {
-        calls.push(['upload', input]);
-        return { id: input.id };
-      },
-      async status(input) {
-        calls.push(['status', input]);
-        return { id: input.id };
-      },
-      async retry(input) {
-        calls.push(['retry', input]);
-        return { id: input.id };
-      },
-      async remove(input) {
-        calls.push(['remove', input]);
-        return { id: input.id };
-      },
-      async createSlot(input) {
-        calls.push(['createSlot', input]);
-        return { id: 'slot' };
-      }
-    },
-    mediaVisibilityService: {
-      async open(input) {
-        calls.push(['open', input]);
-        return { bytes: 0, extension: 'webp', mimeType: 'image/webp', stream: '' };
-      }
-    },
+    mediaService: spy<MediaService>(calls),
+    mediaVisibilityService: spy<{ open: () => Promise<never> }>(calls),
     resolveUser: async () => ({ id: 'user-1' })
   });
   return { app, calls };
@@ -54,7 +29,7 @@ test('media routes reject invalid attachment ids before services see them', asyn
     ['POST', '/api/media/attachments/not-a-uuid/retry'],
     ['DELETE', '/api/media/attachments/not-a-uuid'],
     ['GET', '/api/media/attachments/not-a-uuid/preview']
-  ]) {
+  ] as const) {
     const response = await app.inject({
       method,
       url,

@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 process.env.LIVEKIT_URL = 'ws://livekit:7880';
 process.env.LIVEKIT_GATE_PUBLIC_URL = 'ws://gate.example.test';
@@ -13,6 +12,8 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import type { GatePrincipal } from '../src/domains/admission/credential-boundary-service.ts';
+import type { GateClaims } from '../src/domains/admission/gate-credential-signer.ts';
 
 const { createApiApp } = await import('../src/server.ts');
 const { createGateCredentialSigner } = await import('../src/domains/admission/gate-credential-signer.ts');
@@ -24,17 +25,47 @@ const PEER_ID = 'peer-g05a';
 
 // The gate only reads the JWT payload (LiveKit verifies the signature), so the
 // socket proofs can hand it an unsigned token with the right claims.
-function unsignedLiveKitJwt({ sub, room, nbf = Math.floor(Date.now() / 1000) }) {
-  const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+function unsignedLiveKitJwt({
+  sub,
+  room,
+  nbf = Math.floor(Date.now() / 1000)
+}: {
+  sub: string;
+  room: string;
+  nbf?: number;
+}) {
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
   return `${encode({ alg: 'HS256' })}.${encode({ sub, nbf, video: { room } })}.signature`;
 }
 const SESSION_TOKEN = 'session-g05-token-0000000000000001';
 
+// The refusal code of a check, or undefined when it passed.
+function codeOf(result: { ok: true } | { ok: false; code: string }) {
+  return result.ok ? undefined : result.code;
+}
+
+type PeerRow = { id: string; gateGuestPrincipalId: string; [key: string]: unknown };
+type CredentialRow = {
+  peerId: string;
+  principal: GatePrincipal;
+  principalEpoch: number | undefined;
+  revoked: boolean;
+  roomId: string;
+};
+
+function isPrincipal(value: unknown): value is GatePrincipal {
+  const principal = value as Partial<GatePrincipal> | null;
+  return (
+    (principal?.principalType === 'account' || principal?.principalType === 'guest') &&
+    typeof principal.principalId === 'string' &&
+    principal.principalId.trim().length > 0
+  );
+}
+
 function createGateAwareStore() {
-  const rooms = new Map();
-  const credentials = new Map();
-  const epochs = new Map();
-  const revoked = [];
+  const credentials = new Map<string, CredentialRow>();
+  const epochs = new Map<string, number>();
+  const revoked: Array<{ roomId: string; peerId: string; principal: GatePrincipal }> = [];
   const room = {
     createdAt: Date.now(),
     creatorIp: '127.0.0.1',
@@ -43,9 +74,10 @@ function createGateAwareStore() {
     isStatic: true,
     name: 'G05',
     ownerId: 'owner-1',
-    peers: new Map(),
+    peers: new Map<string, PeerRow>(),
     updatedAt: Date.now()
   };
+  const rooms = new Map<string, typeof room>();
   room.peers.set(PEER_ID, {
     accountUserId: '',
     gateGuestPrincipalId: `guest-id-${PEER_ID}`,
@@ -76,7 +108,15 @@ function createGateAwareStore() {
   });
   rooms.set('room-g05', room);
   let failBanTransaction = false;
-  function principalKey({ roomId, principalType, principalId }) {
+  function principalKey({
+    roomId,
+    principalType,
+    principalId
+  }: {
+    roomId: string;
+    principalType: string;
+    principalId: string;
+  }) {
     return `${roomId}:${principalType}:${principalId}`;
   }
   return {
@@ -90,15 +130,23 @@ function createGateAwareStore() {
     async createRoomWithQuota() {
       throw new Error('not used');
     },
-    async getRoom(roomId) {
+    async getRoom(roomId: string) {
       const room = rooms.get(roomId);
       return room ? { ...room, peers: room.peers } : null;
     },
-    async getOrCreatePeerIdentity({ peerId, sessionToken }) {
+    async getOrCreatePeerIdentity({ peerId, sessionToken }: { peerId: string; sessionToken: string }) {
       if (sessionToken === 'bad-session') return { status: 'token_mismatch', identity: null };
       return { status: 'created', identity: { id: `guest-id-${peerId}`, avatarColorKey: 'blurple', peerId } };
     },
-    normalizeGatePrincipal({ accountUserId, guestPrincipalId, roomId }) {
+    normalizeGatePrincipal({
+      accountUserId,
+      guestPrincipalId,
+      roomId
+    }: {
+      accountUserId?: string | null;
+      guestPrincipalId?: string;
+      roomId?: string;
+    }): GatePrincipal | null {
       if (accountUserId) return { principalType: 'account', principalId: accountUserId };
       const guest = String(guestPrincipalId || '').trim();
       if (!roomId || !guest) return null;
@@ -107,18 +155,38 @@ function createGateAwareStore() {
     async isRoomServerMuted() {
       return false;
     },
-    async getLiveKitGatePrincipalEpoch({ principal, roomId }) {
+    async getLiveKitGatePrincipalEpoch({ principal, roomId }: { principal: GatePrincipal; roomId: string }) {
       const key = principalKey({ roomId, ...principal });
       if (!epochs.has(key)) epochs.set(key, 0);
       return { status: 'ready', epoch: epochs.get(key) };
     },
-    async createLiveKitGateCredential({ credentialHash, peerId, principal, principalEpoch, roomId }) {
+    async createLiveKitGateCredential({
+      credentialHash,
+      peerId,
+      principal,
+      principalEpoch,
+      roomId
+    }: Omit<CredentialRow, 'revoked'> & { credentialHash: string }) {
       const key = principalKey({ roomId, ...principal });
       if ((epochs.get(key) || 0) !== principalEpoch) return { status: 'epoch_mismatch', credential: null };
       credentials.set(credentialHash, { peerId, principal, principalEpoch, revoked: false, roomId });
       return { status: 'created', credential: { id: 'cred-1' } };
     },
-    async verifyLiveKitGateCredential({ credentialHash, peerId, principalEpoch, principalId, principalType, roomId }) {
+    async verifyLiveKitGateCredential({
+      credentialHash,
+      peerId,
+      principalEpoch,
+      principalId,
+      principalType,
+      roomId
+    }: {
+      credentialHash: string;
+      peerId: string;
+      principalEpoch: number;
+      principalId: string;
+      principalType: string;
+      roomId: string;
+    }) {
       const row = credentials.get(credentialHash);
       const key = principalKey({ roomId, principalType, principalId });
       return {
@@ -135,8 +203,19 @@ function createGateAwareStore() {
             : 'denied'
       };
     },
-    async revokeLiveKitGatePeer({ roomId, peerId, accountUserId, guestPrincipalId }) {
+    async revokeLiveKitGatePeer({
+      roomId,
+      peerId = '',
+      accountUserId,
+      guestPrincipalId
+    }: {
+      roomId: string;
+      peerId?: string;
+      accountUserId?: string | null;
+      guestPrincipalId?: string;
+    }) {
       const principal = this.normalizeGatePrincipal({ accountUserId, guestPrincipalId, roomId });
+      assert.ok(principal);
       const key = principalKey({ roomId, ...principal });
       epochs.set(key, (epochs.get(key) || 0) + 1);
       for (const row of credentials.values()) {
@@ -154,19 +233,17 @@ function createGateAwareStore() {
     async createRoomBan() {
       throw new Error('legacy createRoomBan fallback must not be used for LiveKit gate bans');
     },
-    async createRoomBanWithLiveKitGateRevocations({ roomId, ip, principals }) {
+    async createRoomBanWithLiveKitGateRevocations({
+      roomId,
+      ip,
+      principals
+    }: {
+      roomId: string;
+      ip: string;
+      principals: unknown;
+    }) {
       if (failBanTransaction) throw new Error('simulated ban transaction failure');
-      if (
-        !Array.isArray(principals) ||
-        principals.length === 0 ||
-        principals.some((principal) => {
-          return (
-            (principal?.principalType !== 'account' && principal?.principalType !== 'guest') ||
-            typeof principal.principalId !== 'string' ||
-            principal.principalId.trim().length === 0
-          );
-        })
-      ) {
+      if (!Array.isArray(principals) || principals.length === 0 || !principals.every(isPrincipal)) {
         return { status: 'invalid', ban: null, revocations: [] };
       }
       for (const principal of principals) {
@@ -220,7 +297,7 @@ test('G05-A01 API mints LiveKit JWT plus separate exact gate credential', async 
     }
   });
   assert.equal(response.statusCode, 200, response.body);
-  const body = response.json();
+  const body = response.json<{ ok: boolean; room: string; token: string; url: string }>();
   assert.equal(body.ok, true);
   assert.equal(body.room, 'voice-room-room-g05');
   assert.match(body.token, /^[^.]+\.[^.]+\.[^.]+$/);
@@ -279,13 +356,13 @@ test('G05 signer validates finite time claims and expires credentials', () => {
   });
   assert.equal(signer.verify(credential).ok, true);
   now = 2_000;
-  assert.equal(signer.verify(credential).code, 'expired');
+  assert.equal(codeOf(signer.verify(credential)), 'expired');
 });
 
 test('G05-A01 same gate credential is denied after epoch revoke', async () => {
   const store = createGateAwareStore();
   const signer = createGateCredentialSigner({ secret: process.env.LIVEKIT_GATE_SECRET });
-  const principal = { principalType: 'guest', principalId: `room-g05:guest-id-${PEER_ID}` };
+  const principal: GatePrincipal = { principalType: 'guest', principalId: `room-g05:guest-id-${PEER_ID}` };
   const credential = signer.sign({
     expiresAt: Date.now() + 600000,
     peerId: PEER_ID,
@@ -310,8 +387,7 @@ test('G05-A01 same gate credential is denied after epoch revoke', async () => {
   assert.equal((await gate.authorize(`/rtc?vr_gate_credential=${encodeURIComponent(credential)}`)).ok, true);
   await store.revokeLiveKitGatePeer({ roomId: 'room-g05', peerId: PEER_ID, guestPrincipalId: `guest-id-${PEER_ID}` });
   const denied = await gate.authorize(`/rtc?vr_gate_credential=${encodeURIComponent(credential)}`);
-  assert.equal(denied.ok, false);
-  assert.equal(denied.code, 'denied');
+  assert.equal(codeOf(denied), 'denied');
 });
 
 test('G05-A02 topology exposes only the gate as public signaling boundary', () => {
@@ -375,7 +451,14 @@ test('G05-A03..A06 amended strict proof is green and fail-on-blocked exits zero'
     }
   );
   assert.equal(result.status, 0, result.stderr);
-  const proof = JSON.parse(result.stdout);
+  const proof = JSON.parse(result.stdout) as {
+    status: string;
+    selectedMechanism: string;
+    greenF11Allowed: boolean;
+    successorStartAllowed: boolean;
+    cases: Array<{ id: string; denied?: boolean; allowed?: boolean; sharedNatAllowed?: boolean }>;
+    topology: { internalLiveKitDefaultOk: boolean; productionGateCommandOk: boolean };
+  };
   assert.equal(proof.status, 'STRICT_BOUNDARY_PROVEN');
   assert.equal(proof.selectedMechanism, 'external-auth-gate');
   assert.equal(proof.greenF11Allowed, true);
@@ -407,9 +490,7 @@ test('G05 gate strips credential before upstream and fails closed on malformed c
     secret: process.env.LIVEKIT_GATE_SECRET,
     upstreamUrl: 'ws://livekit:7880'
   });
-  const denied = await gate.authorize('/rtc');
-  assert.equal(denied.ok, false);
-  assert.equal(denied.code, 'malformed');
+  assert.equal(codeOf(await gate.authorize('/rtc')), 'malformed');
 });
 
 test('G05 gate rejects wss upstreams because upstream proxying is raw TCP only', () => {
@@ -426,19 +507,14 @@ test('G05 gate rejects wss upstreams because upstream proxying is raw TCP only',
 
 test('G05 gate survives a client cancellation followed by an upstream socket error', async (t) => {
   class FakeSocket extends EventEmitter {
-    constructor() {
-      super();
-      this.destroyed = false;
-      this.writable = true;
-      this.writableEnded = false;
-      this.writes = [];
-    }
+    destroyed = false;
+    writable = true;
+    writableEnded = false;
+    writes: unknown[] = [];
 
-    write(value) {
+    write(value: unknown) {
       if (this.destroyed || this.writableEnded) {
-        const error = new Error('write after end');
-        error.code = 'ERR_STREAM_WRITE_AFTER_END';
-        this.emit('error', error);
+        this.emit('error', Object.assign(new Error('write after end'), { code: 'ERR_STREAM_WRITE_AFTER_END' }));
         return false;
       }
       this.writes.push(value);
@@ -452,21 +528,27 @@ test('G05 gate survives a client cancellation followed by an upstream socket err
       this.emit('close');
     }
 
-    pipe(target) {
+    pipe<T>(target: T): T {
       return target;
     }
   }
 
-  const originalConnect = net.connect;
-  t.after(() => {
-    net.connect = originalConnect;
-  });
   const upstream = new FakeSocket();
-  net.connect = () => upstream;
+  t.mock.method(net, 'connect', () => upstream);
+  const claims: GateClaims = {
+    cid: 'credential',
+    exp: Date.now() + 60_000,
+    iat: Date.now(),
+    peer: PEER_ID,
+    pEpoch: 0,
+    pId: `room-g05:guest-id-${PEER_ID}`,
+    pType: 'guest',
+    room: 'room-g05'
+  };
   const gate = createLiveKitAuthGateService({
     boundary: {
-      assertReady: async () => true,
-      authorizeCredential: async () => ({ ok: true, claims: { iat: Date.now(), peer: PEER_ID, room: 'room-g05' } })
+      assertReady: async () => true as const,
+      authorizeCredential: async () => ({ ok: true as const, claims })
     },
     roomStore: {},
     upstreamUrl: 'ws://livekit:7880'
@@ -485,8 +567,7 @@ test('G05 gate survives a client cancellation followed by an upstream socket err
   await new Promise((resolve) => setImmediate(resolve));
   upstream.emit('connect');
   client.destroy();
-  const error = new Error('peer closed');
-  error.code = 'EPIPE';
+  const error = Object.assign(new Error('peer closed'), { code: 'EPIPE' });
 
   assert.doesNotThrow(() => upstream.emit('error', error));
   assert.equal(client.destroyed, true);
@@ -495,7 +576,7 @@ test('G05 gate survives a client cancellation followed by an upstream socket err
 test('G05 ban reports no success when ban+gate revocation transaction fails', async (t) => {
   const store = createGateAwareStore();
   const signer = createGateCredentialSigner({ secret: process.env.LIVEKIT_GATE_SECRET });
-  const principal = { principalType: 'guest', principalId: `room-g05:guest-id-${PEER_ID}` };
+  const principal: GatePrincipal = { principalType: 'guest', principalId: `room-g05:guest-id-${PEER_ID}` };
   const credential = signer.sign({
     expiresAt: Date.now() + 600000,
     peerId: PEER_ID,
@@ -516,7 +597,7 @@ test('G05 ban reports no success when ban+gate revocation transaction fails', as
   const app = createApiApp({
     store,
     users: {
-      async getSessionUser(token) {
+      async getSessionUser(token: string) {
         return token === 'owner-session' ? { user: { id: 'owner-1', login: 'owner' } } : null;
       }
     }
@@ -548,11 +629,11 @@ test('G05 ban reports no success when ban+gate revocation transaction fails', as
 
 test('G05 ban fails closed when transactional gate revoke helper is unavailable', async (t) => {
   const store = createGateAwareStore();
-  delete store.createRoomBanWithLiveKitGateRevocations;
+  Reflect.deleteProperty(store, 'createRoomBanWithLiveKitGateRevocations');
   const app = createApiApp({
     store,
     users: {
-      async getSessionUser(token) {
+      async getSessionUser(token: string) {
         return token === 'owner-session' ? { user: { id: 'owner-1', login: 'owner' } } : null;
       }
     }
@@ -566,7 +647,7 @@ test('G05 ban fails closed when transactional gate revoke helper is unavailable'
     payload: { peerId: PEER_ID }
   });
   assert.equal(response.statusCode, 500, response.body);
-  assert.equal(response.json().code, 'livekit_gate_revoke_unavailable');
+  assert.equal(response.json<{ code?: string }>().code, 'livekit_gate_revoke_unavailable');
   assert.deepEqual(store.revoked, []);
 });
 
@@ -576,7 +657,7 @@ test('G05 ban fails closed before writing when a targeted guest has no gate prin
   const app = createApiApp({
     store,
     users: {
-      async getSessionUser(token) {
+      async getSessionUser(token: string) {
         return token === 'owner-session' ? { user: { id: 'owner-1', login: 'owner' } } : null;
       }
     }
@@ -590,6 +671,6 @@ test('G05 ban fails closed before writing when a targeted guest has no gate prin
     payload: { peerId: PEER_ID }
   });
   assert.equal(response.statusCode, 500, response.body);
-  assert.equal(response.json().code, 'livekit_gate_principal_missing');
+  assert.equal(response.json<{ code?: string }>().code, 'livekit_gate_principal_missing');
   assert.deepEqual(store.revoked, []);
 });

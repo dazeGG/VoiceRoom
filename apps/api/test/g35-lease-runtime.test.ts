@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { LeaseLostError, boundedBackoff, createLeaseRuntime } from '../src/platform/lease-runtime.ts';
@@ -11,7 +10,7 @@ test('G35-A01 backoff is deterministic and bounded when jitter is disabled', () 
 });
 
 test('G35-A02 renewal loss aborts work before a guarded side effect', async () => {
-  const entered = Promise.withResolvers();
+  const entered = Promise.withResolvers<void>();
   const lost = Promise.withResolvers();
   let acquireCount = 0;
   let sleepCount = 0;
@@ -27,6 +26,7 @@ test('G35-A02 renewal loss aborts work before a guarded side effect', async () =
     sleep: async (_ms, signal) => {
       sleepCount += 1;
       if (sleepCount === 1) return;
+      if (!signal) return;
       if (signal.aborted) throw signal.reason;
       await new Promise((resolve, reject) =>
         signal.addEventListener('abort', () => reject(signal.reason), { once: true })

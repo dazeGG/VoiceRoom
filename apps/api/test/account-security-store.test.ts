@@ -1,5 +1,4 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { Pool } from 'pg';
@@ -19,7 +18,7 @@ const CHROME_WINDOWS =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
 const FIREFOX_LINUX = 'Mozilla/5.0 (X11; Linux x86_64; rv:142.0) Gecko/20100101 Firefox/142.0';
 
-async function createMigratedStore(t, options = {}) {
+async function createMigratedStore(t: TestContext, options: Partial<Parameters<typeof createUserStore>[0]> = {}) {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const store = createUserStore({ databaseUrl, logger: SILENT, ...options });
@@ -30,7 +29,7 @@ async function createMigratedStore(t, options = {}) {
   return store;
 }
 
-async function waitFor(read, timeoutMs = 3000) {
+async function waitFor<T>(read: () => Promise<T>, timeoutMs = 3000): Promise<NonNullable<T>> {
   const started = Date.now();
   for (;;) {
     const value = await read();
@@ -43,6 +42,7 @@ async function waitFor(read, timeoutMs = 3000) {
 test('sessions record their device and list newest first without exposing token hashes', async (t) => {
   const store = await createMigratedStore(t);
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
+  assert.ok(user);
 
   const laptop = await store.createSession({
     userId: user.id,
@@ -65,11 +65,12 @@ test('sessions record their device and list newest first without exposing token 
     location: 'Москва, Россия',
     lastSeenAt: 1_000
   });
-  assert.equal(sessions[0].current, false);
-  assert.equal(sessions[0].location, '');
+  assert.equal(sessions[0]?.current, false);
+  assert.equal(sessions[0]?.location, '');
   assert.equal(JSON.stringify(sessions).includes(laptop.tokenHash), false);
 
   const resolved = await store.getSessionUser(laptop.token, 1_500);
+  assert.ok(resolved);
   assert.equal(resolved.session.publicId, laptop.publicId);
   assert.equal(resolved.session.tokenHash, laptop.tokenHash);
 });
@@ -77,6 +78,7 @@ test('sessions record their device and list newest first without exposing token 
 test('the hourly touch refreshes the device but keeps a known location when a lookup finds nothing', async (t) => {
   const store = await createMigratedStore(t);
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
+  assert.ok(user);
   const session = await store.createSession({
     userId: user.id,
     now: 0,
@@ -108,7 +110,9 @@ test('the hourly touch refreshes the device but keeps a known location when a lo
 test('revoking a session touches only that account and reports the revoked token hashes', async (t) => {
   const store = await createMigratedStore(t);
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
+  assert.ok(user);
   const { user: other } = await store.createUser({ login: 'grace', password: 'cobol-1959' });
+  assert.ok(other);
 
   const first = await store.createSession({ userId: user.id, now: 1_000 });
   const second = await store.createSession({ userId: user.id, now: 1_000 });
@@ -139,6 +143,7 @@ test('revoking a session touches only that account and reports the revoked token
 test('recovery codes are handed out once, work once and replace the password everywhere', async (t) => {
   const store = await createMigratedStore(t);
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
+  assert.ok(user);
   assert.deepEqual(await store.getRecoveryCodesStatus(user.id), { remaining: 0, generatedAt: null });
 
   const refused = await store.generateRecoveryCodes({
@@ -161,6 +166,7 @@ test('recovery codes are handed out once, work once and replace the password eve
 
   const session = await store.createSession({ userId: user.id, now: 1_000 });
   const [first, second] = generated.codes;
+  assert.ok(first);
 
   assert.equal(
     (await store.recoverWithCode({ login: 'ghost', code: first, newPassword: 'new-password-1' })).status,
@@ -184,6 +190,7 @@ test('recovery codes are handed out once, work once and replace the password eve
     newPassword: 'new-password-1',
     now: 2_000
   });
+  assert.ok(recovered.user);
   assert.equal(recovered.status, 'recovered');
   assert.equal(recovered.user.id, user.id);
   assert.equal(recovered.remaining, 9);
@@ -200,7 +207,7 @@ test('recovery codes are handed out once, work once and replace the password eve
     currentPassword: 'new-password-1',
     now: 3_000
   });
-  assert.equal(regenerated.codes.includes(second), false);
+  assert.equal((regenerated.codes as string[]).includes(String(second)), false);
   assert.equal(
     (await store.recoverWithCode({ login: 'ada', code: second, newPassword: 'new-password-2' })).status,
     'invalid'
@@ -211,6 +218,7 @@ test('recovery codes are handed out once, work once and replace the password eve
 test('a recovery code only opens the account it was issued for', async (t) => {
   const store = await createMigratedStore(t);
   const { user: ada } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
+  assert.ok(ada);
   await store.createUser({ login: 'grace', password: 'cobol-1959' });
   const { codes } = await store.generateRecoveryCodes({ userId: ada.id, currentPassword: 'lovelace-1843' });
 
@@ -231,6 +239,7 @@ test('new accounts start at the current announcement and the codes reminder snoo
     await cleanup();
   });
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
+  assert.ok(user);
 
   // Registering after a release must not greet the account with its announcement.
   assert.deepEqual(await store.getAccountNotices(user.id), {

@@ -1,5 +1,4 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 
@@ -10,7 +9,7 @@ import { createTestDatabase } from './db-harness.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
-async function createMigratedStore(t, options = {}) {
+async function createMigratedStore(t: TestContext, options: Partial<Parameters<typeof createUserStore>[0]> = {}) {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const store = createUserStore({ databaseUrl, logger: SILENT, ...options });
@@ -25,6 +24,7 @@ test('createUser persists a hashed account and rejects duplicate logins', async 
   const store = await createMigratedStore(t);
 
   const created = await store.createUser({ login: 'vovosh', displayName: 'Вова', password: 'password123' });
+  assert.ok(created.user);
   assert.equal(created.status, 'created');
   assert.equal(created.user.login, 'vovosh');
   assert.equal(created.user.displayName, 'Вова');
@@ -48,13 +48,16 @@ test('verifyCredentials authenticates only with the correct password', async (t)
 test('updateDisplayName renames the account and tolerates an empty name', async (t) => {
   const store = await createMigratedStore(t);
   const { user } = await store.createUser({ login: 'vovosh', displayName: 'Вова', password: 'password123' });
+  assert.ok(user);
 
   const renamed = await store.updateDisplayName({ userId: user.id, displayName: 'Вовощ' });
+  assert.ok(renamed);
   assert.equal(renamed.displayName, 'Вовощ');
   assert.equal(renamed.id, user.id);
-  assert.equal((await store.getUserById(user.id)).displayName, 'Вовощ');
+  assert.equal((await store.getUserById(user.id))?.displayName, 'Вовощ');
 
   const cleared = await store.updateDisplayName({ userId: user.id, displayName: '' });
+  assert.ok(cleared);
   assert.equal(cleared.displayName, '');
 
   const missing = await store.updateDisplayName({ userId: crypto.randomUUID(), displayName: 'ghost' });
@@ -64,6 +67,7 @@ test('updateDisplayName renames the account and tolerates an empty name', async 
 test('changePassword rotates the credential only after verifying the current one', async (t) => {
   const store = await createMigratedStore(t);
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
+  assert.ok(user);
 
   const wrong = await store.changePassword({
     userId: user.id,
@@ -96,9 +100,13 @@ test('changePassword rotates the credential only after verifying the current one
 test('sessions resolve to their user and expire', async (t) => {
   const store = await createMigratedStore(t, { sessionTtlMs: 1000 });
   const { user } = await store.createUser({ login: 'grace', password: 'cobol-1959' });
+  assert.ok(user);
 
   const session = await store.createSession({ userId: user.id, now: 1000 });
   const resolved = await store.getSessionUser(session.token, 1500);
+  assert.ok(resolved);
+  assert.ok(resolved.user);
+  assert.ok(resolved);
   assert.equal(resolved.user.id, user.id);
   assert.equal(resolved.user.login, 'grace');
   assert.ok(AVATAR_COLOR_KEYS.includes(resolved.user.avatarColorKey));
@@ -110,6 +118,7 @@ test('sessions resolve to their user and expire', async (t) => {
 test('deleteSession and pruneSessions remove session rows', async (t) => {
   const store = await createMigratedStore(t, { sessionTtlMs: 1000 });
   const { user } = await store.createUser({ login: 'linus', password: 'kernel-1991' });
+  assert.ok(user);
 
   const active = await store.createSession({ userId: user.id, now: 2000 });
   assert.equal(await store.deleteSession(active.token), true);
@@ -122,7 +131,9 @@ test('deleteSession and pruneSessions remove session rows', async (t) => {
 test('publicUser never leaks the password hash', async (t) => {
   const store = await createMigratedStore(t);
   const { user } = await store.createUser({ login: 'safe', password: 'no-leak-please' });
+  assert.ok(user);
   const exposed = publicUser(user);
+  assert.ok(exposed);
   assert.equal('passwordHash' in exposed, false);
   assert.deepEqual(Object.keys(exposed).sort(), [
     'avatarAccent',
@@ -143,6 +154,7 @@ test('publicUser never leaks the password hash', async (t) => {
 test('createUser accepts a valid injected avatar color for deterministic callers', async (t) => {
   const store = await createMigratedStore(t);
   const { user } = await store.createUser({ login: 'colorful', avatarColorKey: 'rose', password: 'password123' });
+  assert.ok(user);
   assert.equal(user.avatarColorKey, 'rose');
-  assert.equal(publicUser(user).avatarColorKey, 'rose');
+  assert.equal(publicUser(user)?.avatarColorKey, 'rose');
 });

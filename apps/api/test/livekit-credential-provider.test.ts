@@ -1,11 +1,16 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createLiveKitCredentialProvider } from '../src/domains/admission/livekit-credential-provider.ts';
 
-function jwtPayload(token) {
-  return JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
+type AdmissionInput = NonNullable<Parameters<ReturnType<typeof createLiveKitCredentialProvider>['issueAdmission']>[0]>;
+
+function jwtPayload(token: string): { video: { canPublishSources: string[] } } {
+  return JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8'));
+}
+
+function issued(id: string, value: string) {
+  return { status: 'issued' as const, credential: { id, value, expiresAt: 0, principalEpoch: 0 } };
 }
 
 test('livekit credential provider rejects missing admission input without issuing a gate credential', async () => {
@@ -16,11 +21,12 @@ test('livekit credential provider rejects missing admission input without issuin
     boundary: {
       async issueCredential() {
         calls += 1;
+        return { status: 'unavailable', credential: null };
       }
     },
     gateUrl: 'ws://gate.example/rtc'
   };
-  const admission = {
+  const admission: AdmissionInput = {
     roomId: 'room-1',
     livekitRoom: 'voice-room-room-1',
     peerId: 'peer-1',
@@ -44,7 +50,7 @@ test('livekit credential provider rejects missing admission input without issuin
 
 test('livekit credential provider requires an issuing boundary', () => {
   assert.throws(() => createLiveKitCredentialProvider(), /credential boundary is required/);
-  assert.throws(() => createLiveKitCredentialProvider({ boundary: {} }), /credential boundary is required/);
+  assert.throws(() => createLiveKitCredentialProvider({ boundary: {} as never }), /credential boundary is required/);
 });
 
 test('livekit credential provider preserves boundary refusal without minting a LiveKit token', async () => {
@@ -53,7 +59,7 @@ test('livekit credential provider preserves boundary refusal without minting a L
     apiSecret: 'secret',
     boundary: {
       async issueCredential() {
-        return { status: 'revoked' };
+        return { status: 'revoked', credential: null };
       }
     },
     gateUrl: 'ws://gate.example/rtc'
@@ -81,7 +87,7 @@ test('livekit credential provider binds the signed gate credential to the public
           peerId: 'peer-1',
           principal: { principalId: 'user-1', principalType: 'account' }
         });
-        return { status: 'issued', credential: { id: 'credential-1', value: 'signed-gate-value' } };
+        return issued('credential-1', 'signed-gate-value');
       }
     },
     gateUrl: 'wss://gate.example/rtc?region=eu',
@@ -97,6 +103,7 @@ test('livekit credential provider binds the signed gate credential to the public
   });
 
   assert.equal(result.status, 'issued');
+  assert.ok(result.admission);
   assert.equal(result.admission.gateCredentialId, 'credential-1');
   assert.equal(result.admission.room, 'voice-room-room-1');
   assert.equal(result.admission.ttlSeconds, 120);
@@ -112,7 +119,7 @@ test('livekit credential provider clamps invalid token TTL to a safe minimum', a
     apiSecret: 'secret',
     boundary: {
       async issueCredential() {
-        return { status: 'issued', credential: { id: 'credential-2', value: 'signed-value-2' } };
+        return issued('credential-2', 'signed-value-2');
       }
     },
     gateUrl: 'wss://gate.example/rtc',
@@ -127,6 +134,7 @@ test('livekit credential provider clamps invalid token TTL to a safe minimum', a
   });
 
   assert.equal(result.status, 'issued');
+  assert.ok(result.admission);
   assert.equal(result.admission.ttlSeconds, 6 * 60 * 60);
 });
 
@@ -136,7 +144,7 @@ test('server-muted admission omits microphone publishing while preserving screen
     apiSecret: 'secret',
     boundary: {
       async issueCredential() {
-        return { status: 'issued', credential: { id: 'credential-muted', value: 'signed-muted' } };
+        return issued('credential-muted', 'signed-muted');
       }
     },
     gateUrl: 'wss://gate.example/rtc'
@@ -150,6 +158,7 @@ test('server-muted admission omits microphone publishing while preserving screen
     canPublishMicrophone: false
   });
 
+  assert.ok(result.admission);
   const sources = jwtPayload(result.admission.token).video.canPublishSources;
   assert.equal(sources.includes('microphone'), false, 'microphone TrackSource is absent');
   assert.equal(sources.includes('screen_share'), true, 'screen-share TrackSource remains allowed');

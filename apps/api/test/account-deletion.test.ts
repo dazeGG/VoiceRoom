@@ -1,5 +1,4 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { Pool } from 'pg';
@@ -13,7 +12,7 @@ import { createTestDatabase } from './db-harness.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const DAY = 24 * 60 * 60 * 1000;
 
-async function setup(t) {
+async function setup(t: TestContext) {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const pool = new Pool({ connectionString: databaseUrl });
@@ -27,7 +26,19 @@ async function setup(t) {
   return { pool, users, deletion };
 }
 
-async function createRoom(pool, { id, ownerId, name, createdAt }) {
+async function createUser(
+  users: ReturnType<typeof createUserStore>,
+  input: { login: string; displayName?: string; password: string }
+) {
+  const { user } = await users.createUser(input);
+  assert.ok(user);
+  return user;
+}
+
+async function createRoom(
+  pool: Pool,
+  { id, ownerId, name, createdAt }: { id: string; ownerId: string; name: string; createdAt: number }
+) {
   await pool.query(
     `INSERT INTO rooms (id, creator_ip, is_static, owner_id, name, created_at, updated_at)
      VALUES ($1, '', true, $2, $3, $4, $4)`,
@@ -40,7 +51,10 @@ async function createRoom(pool, { id, ownerId, name, createdAt }) {
   );
 }
 
-async function addMember(pool, { roomId, userId, joinedAt }) {
+async function addMember(
+  pool: Pool,
+  { roomId, userId, joinedAt }: { roomId: string; userId: string; joinedAt: number }
+) {
   await pool.query(
     `INSERT INTO room_memberships (id, room_id, user_id, role, created_at, updated_at)
      VALUES ($1, $2, $3, 'member', $4, $4)`,
@@ -50,7 +64,7 @@ async function addMember(pool, { roomId, userId, joinedAt }) {
 
 test('a deletion request hides the account at once and a restore brings it back unchanged', async (t) => {
   const { pool, users, deletion } = await setup(t);
-  const { user } = await users.createUser({ login: 'ada', displayName: 'Ада', password: 'lovelace-1843' });
+  const user = await createUser(users, { login: 'ada', displayName: 'Ада', password: 'lovelace-1843' });
   await pool.query(`UPDATE users SET avatar_key = 'user-ada-avatar', avatar_accent = '#123456' WHERE id = $1`, [
     user.id
   ]);
@@ -67,6 +81,7 @@ test('a deletion request hides the account at once and a restore brings it back 
   assert.equal(await users.getSessionUser(session.token, now + 1), null, 'every session ends');
 
   const hidden = await users.getUserById(user.id);
+  assert.ok(hidden);
   assert.equal(hidden.displayName, DELETED_ACCOUNT_NAME);
   assert.equal(hidden.avatarKey, null);
   assert.equal(hidden.deletionRequestedAt, now);
@@ -90,6 +105,7 @@ test('a deletion request hides the account at once and a restore brings it back 
   });
 
   const restored = await users.getUserById(user.id);
+  assert.ok(restored);
   assert.equal(restored.displayName, 'Ада');
   assert.equal(restored.avatarKey, 'user-ada-avatar');
   assert.equal(restored.avatarAccent, '#123456');
@@ -108,10 +124,10 @@ test('a deletion request hides the account at once and a restore brings it back 
 
 test('finishing a deletion hands rooms to the longest-standing member, removes personal data and keeps conversations', async (t) => {
   const { pool, users, deletion } = await setup(t);
-  const { user: ada } = await users.createUser({ login: 'ada', displayName: 'Ада', password: 'lovelace-1843' });
-  const { user: grace } = await users.createUser({ login: 'grace', password: 'cobol-1959' });
-  const { user: linus } = await users.createUser({ login: 'linus', password: 'kernel-1991' });
-  const { user: banned } = await users.createUser({ login: 'mallory', password: 'banned-1234' });
+  const ada = await createUser(users, { login: 'ada', displayName: 'Ада', password: 'lovelace-1843' });
+  const grace = await createUser(users, { login: 'grace', password: 'cobol-1959' });
+  const linus = await createUser(users, { login: 'linus', password: 'kernel-1991' });
+  const banned = await createUser(users, { login: 'mallory', password: 'banned-1234' });
   const start = 100 * DAY;
 
   await createRoom(pool, { id: 'shared-room', ownerId: ada.id, name: 'Общая', createdAt: start });
@@ -166,7 +182,9 @@ test('finishing a deletion hands rooms to the longest-standing member, removes p
   });
   assert.deepEqual(await deletion.finalizeDeletion({ userId: ada.id, now: finishAt }), { status: 'not_due' });
 
-  const rooms = await pool.query(`SELECT id, owner_id, deleted_at FROM rooms ORDER BY id`);
+  const rooms = await pool.query<{ id: string; owner_id: string; deleted_at: Date | null }>(
+    `SELECT id, owner_id, deleted_at FROM rooms ORDER BY id`
+  );
   assert.deepEqual(
     rooms.rows.map((row) => [row.id, row.owner_id, Boolean(row.deleted_at)]),
     [
@@ -174,13 +192,13 @@ test('finishing a deletion hands rooms to the longest-standing member, removes p
       ['shared-room', grace.id, false]
     ]
   );
-  const heirRole = await pool.query(
+  const heirRole = await pool.query<{ role: string }>(
     `SELECT role FROM room_memberships WHERE room_id = 'shared-room' AND user_id = $1`,
     [grace.id]
   );
-  assert.equal(heirRole.rows[0].role, 'owner');
+  assert.equal(heirRole.rows[0]?.role, 'owner');
 
-  const count = async (sql) => Number((await pool.query(sql, [ada.id])).rows[0].count);
+  const count = async (sql: string) => Number((await pool.query<{ count: string }>(sql, [ada.id])).rows[0]?.count);
   assert.equal(await count('SELECT count(*) FROM room_memberships WHERE user_id = $1'), 0);
   assert.equal(await count('SELECT count(*) FROM friendships WHERE user_a_id = $1 OR user_b_id = $1'), 0);
   assert.equal(await count('SELECT count(*) FROM account_recovery_codes WHERE user_id = $1'), 0);
@@ -191,8 +209,12 @@ test('finishing a deletion hands rooms to the longest-standing member, removes p
   );
 
   const row = (
-    await pool.query('SELECT login, display_name, password_hash, deleted_at FROM users WHERE id = $1', [ada.id])
+    await pool.query<{ login: string; display_name: string; password_hash: string; deleted_at: Date | null }>(
+      'SELECT login, display_name, password_hash, deleted_at FROM users WHERE id = $1',
+      [ada.id]
+    )
   ).rows[0];
+  assert.ok(row);
   assert.match(row.login, /^deleted-[0-9a-f]{24}$/);
   assert.equal(row.display_name, DELETED_ACCOUNT_NAME);
   assert.equal(row.password_hash, '!');
@@ -203,9 +225,9 @@ test('finishing a deletion hands rooms to the longest-standing member, removes p
   assert.equal(await deletion.isLoginReserved('grace'), false);
 
   // Messages others still read show the anonymous author through the usual join.
-  const message = await pool.query(
+  const message = await pool.query<{ author_name: string }>(
     `SELECT COALESCE(NULLIF(u.display_name, ''), u.login, m.name) AS author_name
      FROM room_messages m LEFT JOIN users u ON u.id = m.author_user_id WHERE m.id = 'ada-message'`
   );
-  assert.equal(message.rows[0].author_name, DELETED_ACCOUNT_NAME);
+  assert.equal(message.rows[0]?.author_name, DELETED_ACCOUNT_NAME);
 });

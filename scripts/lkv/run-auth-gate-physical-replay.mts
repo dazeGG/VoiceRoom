@@ -1,35 +1,61 @@
 #!/usr/bin/env node
-// @ts-nocheck -- not type-checked yet; remove once the file passes scripts/tsconfig.json.
 
 import { spawn } from 'node:child_process';
-import { createRequire } from 'node:module';
 import net from 'node:net';
 import { parseArgs } from 'node:util';
+import type { Pool } from 'pg';
+import { AccessToken, TrackSource } from 'livekit-server-sdk';
+import { createGateCredentialSigner } from '../../apps/api/src/domains/admission/gate-credential-signer.ts';
+import { createDbPool } from '../../apps/api/src/lib/db.ts';
+import { runMigrations } from '../../apps/api/src/lib/migrate.ts';
+import { createRoomStore, type GatePrincipal } from '../../apps/api/src/lib/room-store.ts';
 
-const require = createRequire(import.meta.url);
-const { AccessToken, TrackSource } = require('livekit-server-sdk');
-const { createGateCredentialSigner } = require('../../apps/api/src/domains/admission/gate-credential-signer.ts');
-const { createDbPool } = require('../../apps/api/src/lib/db.ts');
-const { runMigrations } = require('../../apps/api/src/lib/migrate.ts');
-const { createRoomStore } = require('../../apps/api/src/lib/room-store.ts');
+type ReplayCase = { detail: unknown; id: string; passed: boolean };
+type SocketOutcome = {
+  closeCode?: number;
+  closeReason?: string;
+  elapsedMs: number;
+  error?: string;
+  outcome: 'timeout' | 'opened' | 'closed_after_open' | 'rejected';
+};
+type PortProbe = { closed: boolean; error?: string; outcome: 'timeout' | 'connected' | 'rejected' };
+type ReplayEvidence = {
+  cases: ReplayCase[];
+  goal: string;
+  nodeVersion: string;
+  schemaVersion: number;
+  selectedMechanism: string;
+  topology: Record<string, string>;
+  status?: 'PHYSICAL_REPLAY_BLOCKED' | 'PHYSICAL_REPLAY_PROVEN' | 'PHYSICAL_REPLAY_FAILED';
+  blocker?: string;
+  successorStartAllowed?: boolean;
+  greenF11Allowed?: boolean;
+  migrationsApplied?: string[];
+  revocation?: unknown;
+  gateLogs?: Array<{ index: number; lines: string[] }>;
+};
 
 const EXPECTED_NODE_VERSION = 'v24.18.0';
 const ROOM_ID = 'room-g05-physical';
 const LIVEKIT_ROOM = `voice-room-${ROOM_ID}`;
 const PEER_ID = 'peer-g05-physical';
-const PRINCIPAL = { principalType: 'guest', principalId: `${ROOM_ID}:guest-g05-physical` };
+const PRINCIPAL: GatePrincipal = { principalType: 'guest', principalId: `${ROOM_ID}:guest-g05-physical` };
 const GATE_SECRET = process.env.LIVEKIT_GATE_SECRET || 'dev-g05-livekit-gate-secret-32-bytes-minimum';
 const DATABASE_URL = process.env.DATABASE_URL || 'postgres://voice_room:voice_room@postgres:5432/voice_room';
 const LIVEKIT_INTERNAL_URL = process.env.LIVEKIT_INTERNAL_URL || 'ws://livekit:7880';
 const LIVEKIT_API_KEY = process.env.LIVEKIT_API_KEY || 'devkey';
 const LIVEKIT_API_SECRET = process.env.LIVEKIT_API_SECRET || 'devsecret';
 
-function sleep(ms) {
+function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function retry(label, operation, { attempts = 60, delayMs = 1000 } = {}) {
-  let lastError;
+async function retry<T>(
+  label: string,
+  operation: (attempt: number) => Promise<T>,
+  { attempts = 60, delayMs = 1000 } = {}
+) {
+  let lastError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       return await operation(attempt);
@@ -38,17 +64,19 @@ async function retry(label, operation, { attempts = 60, delayMs = 1000 } = {}) {
       await sleep(delayMs);
     }
   }
-  throw new Error(`${label} did not become ready: ${lastError?.message || lastError}`);
+  throw new Error(
+    `${label} did not become ready: ${lastError instanceof Error ? lastError.message : String(lastError)}`
+  );
 }
 
-async function waitForPostgres(pool) {
+async function waitForPostgres(pool: Pool) {
   return retry('postgres', async () => {
     await pool.query('SELECT 1');
     return true;
   });
 }
 
-async function waitForGateReady(port, expectedStatus = 200) {
+async function waitForGateReady(port: number, expectedStatus = 200) {
   return retry(`gate:${port}`, async () => {
     const response = await fetch(`http://127.0.0.1:${port}/readyz`);
     if (response.status !== expectedStatus) {
@@ -58,7 +86,7 @@ async function waitForGateReady(port, expectedStatus = 200) {
   });
 }
 
-function startGate({ databaseUrl, port }) {
+function startGate({ databaseUrl, port }: { databaseUrl: string; port: number }) {
   const child = spawn(process.execPath, ['apps/api/src/domains/admission/livekit-auth-gate-service.ts'], {
     cwd: process.cwd(),
     env: {
@@ -71,9 +99,9 @@ function startGate({ databaseUrl, port }) {
     },
     stdio: ['ignore', 'pipe', 'pipe']
   });
-  const logs = [];
-  child.stdout.on('data', (chunk) => logs.push(String(chunk).trim()));
-  child.stderr.on('data', (chunk) => logs.push(String(chunk).trim()));
+  const logs: string[] = [];
+  child.stdout.on('data', (chunk: Buffer) => logs.push(String(chunk).trim()));
+  child.stderr.on('data', (chunk: Buffer) => logs.push(String(chunk).trim()));
   return {
     child,
     logs,
@@ -90,7 +118,7 @@ function startGate({ databaseUrl, port }) {
   };
 }
 
-async function seedRoom(pool) {
+async function seedRoom(pool: Pool) {
   await pool.query(
     `INSERT INTO rooms (id, creator_ip, is_static, created_at, updated_at, metadata)
      VALUES ($1, '127.0.0.1', true, current_timestamp, current_timestamp, '{}'::jsonb)
@@ -101,7 +129,7 @@ async function seedRoom(pool) {
   );
 }
 
-async function mintCredentials({ pool }) {
+async function mintCredentials({ pool }: { pool: Pool }) {
   const store = createRoomStore({ pool, logger: console });
   const signer = createGateCredentialSigner({ secret: GATE_SECRET });
   const epoch = await store.getLiveKitGatePrincipalEpoch({ principal: PRINCIPAL, roomId: ROOM_ID });
@@ -144,7 +172,7 @@ async function mintCredentials({ pool }) {
     gateCredential,
     livekitJwt,
     store,
-    url(port) {
+    url(port: number) {
       const url = new URL(`ws://127.0.0.1:${port}/rtc`);
       url.searchParams.set('access_token', livekitJwt);
       url.searchParams.set('vr_gate_credential', gateCredential);
@@ -153,8 +181,8 @@ async function mintCredentials({ pool }) {
   };
 }
 
-function openWebSocket(url, { timeoutMs = 8000 } = {}) {
-  return new Promise((resolve) => {
+function openWebSocket(url: string, { timeoutMs = 8000 } = {}) {
+  return new Promise<SocketOutcome>((resolve) => {
     const startedAt = Date.now();
     const ws = new WebSocket(url);
     let opened = false;
@@ -177,7 +205,8 @@ function openWebSocket(url, { timeoutMs = 8000 } = {}) {
       resolve({ elapsedMs: Date.now() - startedAt, outcome: 'opened' });
     });
     ws.addEventListener('error', (event) => {
-      errorMessage = event?.error?.message || event?.message || 'websocket error';
+      const detail = event as Event & { error?: { message?: string }; message?: string };
+      errorMessage = detail.error?.message || detail.message || 'websocket error';
     });
     ws.addEventListener('close', (event) => {
       if (settled) return;
@@ -194,12 +223,12 @@ function openWebSocket(url, { timeoutMs = 8000 } = {}) {
   });
 }
 
-function assertCase(condition, id, detail) {
+function assertCase(condition: unknown, id: string, detail: unknown): ReplayCase {
   return { detail, id, passed: Boolean(condition) };
 }
 
-async function directLocalhostPortClosed(port) {
-  return new Promise((resolve) => {
+async function directLocalhostPortClosed(port: number) {
+  return new Promise<PortProbe>((resolve) => {
     const socket = net.connect({ host: '127.0.0.1', port });
     const timer = setTimeout(() => {
       socket.destroy();
@@ -210,7 +239,7 @@ async function directLocalhostPortClosed(port) {
       socket.destroy();
       resolve({ closed: false, outcome: 'connected' });
     });
-    socket.once('error', (error) => {
+    socket.once('error', (error: NodeJS.ErrnoException) => {
       clearTimeout(timer);
       resolve({ closed: true, error: error.code || error.message, outcome: 'rejected' });
     });
@@ -218,7 +247,7 @@ async function directLocalhostPortClosed(port) {
 }
 
 export async function runPhysicalReplay() {
-  const evidence = {
+  const evidence: ReplayEvidence = {
     cases: [],
     goal: 'G05',
     nodeVersion: process.version,
@@ -240,7 +269,7 @@ export async function runPhysicalReplay() {
   }
 
   const pool = createDbPool({ databaseUrl: DATABASE_URL, logger: console });
-  const gates = [];
+  const gates: Array<ReturnType<typeof startGate>> = [];
   try {
     await waitForPostgres(pool);
     const migrations = await runMigrations({ databaseUrl: DATABASE_URL, logger: console });

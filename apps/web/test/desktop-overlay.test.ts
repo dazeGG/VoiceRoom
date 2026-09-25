@@ -1,8 +1,7 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { test, onTestFinished, vi } from 'vitest';
 import assert from 'node:assert/strict';
 
-async function loadService(bridge) {
+async function loadService(bridge: unknown) {
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
     value: bridge === undefined ? {} : { voiceRoomDesktopOverlay: bridge },
@@ -25,7 +24,7 @@ test('desktop overlay service is unavailable without the shell bridge', async ()
 });
 
 test('desktop overlay service normalizes settings and sends a typed patch', async () => {
-  const calls = [];
+  const calls: unknown[] = [];
   const service = await loadService({
     getSettings: async () => ({
       allowedExecutables: ['mygame.exe', 3, ''],
@@ -35,7 +34,7 @@ test('desktop overlay service normalizes settings and sends a typed patch', asyn
       enabled: 1,
       opacity: 0.5
     }),
-    setSettings: async (patch) => {
+    setSettings: async (patch: unknown) => {
       calls.push(patch);
       return { anchor: 'nope', enabled: false, showNames: false };
     },
@@ -57,7 +56,7 @@ test('desktop overlay service normalizes settings and sends a typed patch', asyn
       enabled: false,
       opacity: 0.2,
       showNames: false
-    }),
+    } as never),
     {
       anchor: 'top-left',
       avatarSize: 'medium',
@@ -73,11 +72,11 @@ test('desktop overlay service normalizes settings and sends a typed patch', asyn
 });
 
 test('desktop overlay snapshot carries mute and stream state once per change', async () => {
-  const snapshots = [];
+  const snapshots: unknown[] = [];
   const service = await loadService({
     getSettings: async () => ({}),
     setSettings: async () => ({}),
-    setSnapshot: async (snapshot) => {
+    setSnapshot: async (snapshot: unknown) => {
       snapshots.push(snapshot);
       return {};
     }

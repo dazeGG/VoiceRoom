@@ -1,8 +1,10 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
-import { createWsHandler } from '../src/realtime/ws-handler.ts';
+import type { IncomingMessage } from 'node:http';
+import { createWsHandler, type WsRoomRuntime } from '../src/realtime/ws-handler.ts';
+import type { ConnectionRegistry, WsConnection } from '../src/realtime/registry.ts';
+import { fake } from './fakes/index.ts';
 
 const ROOM_ID = 'room1';
 const PEER_A = 'peer-alice1';
@@ -11,21 +13,38 @@ const TOKEN_A = 'a'.repeat(32);
 const TOKEN_B = 'b'.repeat(32);
 
 class FakeSocket extends EventEmitter {
+  readyState = 1;
+  send() {}
   close() {}
 }
 
-function createRegistry() {
-  const registry = {
-    connection: null,
+const REQUEST = fake<IncomingMessage>();
+
+// What the handler did to the one connection it opened, and the runtime saw.
+type Observed = {
+  connection: WsConnection | null;
+  lastJoinRequestId?: string;
+  lastLeavePayload?: { sessionToken: string };
+};
+
+// The connection the handler opened.
+function opened(observed: Observed) {
+  assert.ok(observed.connection);
+  return observed.connection;
+}
+
+function createRegistry(observed: Observed) {
+  return fake<ConnectionRegistry>({
     addGuestConnection(socket) {
-      registry.connection = {
+      const connection = fake<WsConnection>({
         activeVoice: null,
         closed: false,
         inboundMessageQueue: Promise.resolve(),
         previewRoomIds: new Set(),
         socket
-      };
-      return registry.connection;
+      });
+      observed.connection = connection;
+      return connection;
     },
     rejectGuestOverLimit() {
       return false;
@@ -34,20 +53,23 @@ function createRegistry() {
       return false;
     },
     removeConnection(connection) {
-      connection.closed = true;
+      if (connection) connection.closed = true;
     },
-    sendReady() {},
-    sendToConnection() {},
+    sendReady() {
+      return true;
+    },
+    sendToConnection() {
+      return true;
+    },
     touch() {}
-  };
-  return registry;
+  });
 }
 
-function clientFrame(type, payload, id) {
+function clientFrame(type: string, payload: Record<string, unknown>, id?: string) {
   return JSON.stringify(id ? { id, type, payload } : { type, payload });
 }
 
-async function waitFor(predicate) {
+async function waitFor(predicate: () => boolean) {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     if (predicate()) return;
     await new Promise((resolve) => setImmediate(resolve));
@@ -55,12 +77,17 @@ async function waitFor(predicate) {
   throw new Error('Timed out waiting for handler state');
 }
 
-function createHandler(resolveSessionUser, events, { failedJoinPeerId = '' } = {}) {
-  const registry = createRegistry();
-  const roomRuntime = {
+function createHandler(
+  resolveSessionUser: () => Promise<null>,
+  events: string[],
+  { failedJoinPeerId = '' }: { failedJoinPeerId?: string } = {}
+) {
+  const observed: Observed = { connection: null };
+  const registry = createRegistry(observed);
+  const roomRuntime = fake<WsRoomRuntime>({
     async joinVoiceRoom(connection, payload, _sessionUser, _clientIp, requestId) {
       if (payload.peerId === failedJoinPeerId) throw new Error('synthetic join failure');
-      registry.lastJoinRequestId = requestId;
+      observed.lastJoinRequestId = requestId;
       events.push(`join:${payload.peerId}`);
       connection.activeVoice = {
         roomId: payload.roomId,
@@ -70,19 +97,19 @@ function createHandler(resolveSessionUser, events, { failedJoinPeerId = '' } = {
       return { ok: true };
     },
     async leaveVoiceRoom(connection, payload) {
-      registry.lastLeavePayload = payload;
+      observed.lastLeavePayload = payload;
       events.push(`leave:${payload.peerId}`);
       if (connection.activeVoice?.roomId === payload.roomId && connection.activeVoice?.peerId === payload.peerId) {
         connection.activeVoice = null;
       }
     },
     async sendAccountSummaries() {},
-    subscribePreview() {},
+    async subscribePreview() {},
     unsubscribePreview() {},
     updatePeerState: async () => ({ ok: true })
-  };
+  });
   return {
-    registry,
+    registry: observed,
     handler: createWsHandler({
       registry,
       roomRuntime,
@@ -94,9 +121,9 @@ function createHandler(resolveSessionUser, events, { failedJoinPeerId = '' } = {
 }
 
 test('JOIN then LEAVE keeps wire order while join authorization is pending', async () => {
-  const events = [];
+  const events: string[] = [];
   let sessionCall = 0;
-  let releaseJoinSession;
+  let releaseJoinSession: ((value: null) => void) | undefined;
   const { handler, registry } = createHandler(async () => {
     sessionCall += 1;
     if (sessionCall === 1) return null;
@@ -105,7 +132,7 @@ test('JOIN then LEAVE keeps wire order while join authorization is pending', asy
     });
   }, events);
   const socket = new FakeSocket();
-  await handler.handleConnection(socket, {});
+  await handler.handleConnection(socket, REQUEST);
 
   socket.emit(
     'message',
@@ -130,18 +157,18 @@ test('JOIN then LEAVE keeps wire order while join authorization is pending', asy
     })
   );
 
-  releaseJoinSession(null);
+  releaseJoinSession?.(null);
   await waitFor(() => events.length === 2);
   assert.deepEqual(events, [`join:${PEER_A}`, `leave:${PEER_A}`]);
-  assert.equal(registry.connection.activeVoice, null);
+  assert.equal(opened(registry).activeVoice, null);
   assert.equal(registry.lastJoinRequestId, 'recovery-request-1');
-  assert.equal(registry.lastLeavePayload.sessionToken, TOKEN_A);
+  assert.equal(registry.lastLeavePayload?.sessionToken, TOKEN_A);
 });
 
 test('two JOIN frames keep receive order when the first authorization is slower', async () => {
-  const events = [];
+  const events: string[] = [];
   let sessionCall = 0;
-  let releaseFirstJoinSession;
+  let releaseFirstJoinSession: ((value: null) => void) | undefined;
   const { handler, registry } = createHandler(async () => {
     sessionCall += 1;
     if (sessionCall === 1) return null;
@@ -153,7 +180,7 @@ test('two JOIN frames keep receive order when the first authorization is slower'
     return null;
   }, events);
   const socket = new FakeSocket();
-  await handler.handleConnection(socket, {});
+  await handler.handleConnection(socket, REQUEST);
 
   socket.emit(
     'message',
@@ -175,16 +202,16 @@ test('two JOIN frames keep receive order when the first authorization is slower'
     })
   );
 
-  releaseFirstJoinSession(null);
+  releaseFirstJoinSession?.(null);
   await waitFor(() => events.length === 2);
   assert.deepEqual(events, [`join:${PEER_A}`, `join:${PEER_B}`]);
-  assert.equal(registry.connection.activeVoice.peerId, PEER_B);
+  assert.equal(opened(registry).activeVoice?.peerId, PEER_B);
 });
 
 test('queued room work is discarded after the connection closes', async () => {
-  const events = [];
+  const events: string[] = [];
   let sessionCall = 0;
-  let releaseJoinSession;
+  let releaseJoinSession: ((value: null) => void) | undefined;
   const { handler, registry } = createHandler(async () => {
     sessionCall += 1;
     if (sessionCall === 1) return null;
@@ -193,7 +220,7 @@ test('queued room work is discarded after the connection closes', async () => {
     });
   }, events);
   const socket = new FakeSocket();
-  await handler.handleConnection(socket, {});
+  await handler.handleConnection(socket, REQUEST);
 
   socket.emit(
     'message',
@@ -215,21 +242,21 @@ test('queued room work is discarded after the connection closes', async () => {
     })
   );
   socket.emit('close');
-  releaseJoinSession(null);
-  await registry.connection.inboundMessageQueue;
+  releaseJoinSession?.(null);
+  await opened(registry).inboundMessageQueue;
 
   assert.deepEqual(events, []);
-  assert.equal(registry.connection.activeVoice, null);
+  assert.equal(opened(registry).activeVoice, null);
 });
 
 test('one rejected handler does not poison the following queue tail', async (t) => {
   t.mock.method(console, 'error', () => {});
-  const events = [];
+  const events: string[] = [];
   const { handler, registry } = createHandler(async () => null, events, {
     failedJoinPeerId: PEER_A
   });
   const socket = new FakeSocket();
-  await handler.handleConnection(socket, {});
+  await handler.handleConnection(socket, REQUEST);
 
   socket.emit(
     'message',
@@ -252,5 +279,5 @@ test('one rejected handler does not poison the following queue tail', async (t) 
 
   await waitFor(() => events.length === 1);
   assert.deepEqual(events, [`join:${PEER_B}`]);
-  assert.equal(registry.connection.activeVoice.peerId, PEER_B);
+  assert.equal(opened(registry).activeVoice?.peerId, PEER_B);
 });

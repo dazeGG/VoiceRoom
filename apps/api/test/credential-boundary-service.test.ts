@@ -1,33 +1,44 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createCredentialBoundaryService } from '../src/domains/admission/credential-boundary-service.ts';
+import {
+  createCredentialBoundaryService,
+  type GatePrincipal,
+  type GateRoomStore
+} from '../src/domains/admission/credential-boundary-service.ts';
+import type {
+  GateClaims,
+  GateCredentialSigner,
+  GateVerification
+} from '../src/domains/admission/gate-credential-signer.ts';
+import { fake } from './fakes/index.ts';
 
-const PRINCIPAL = { principalId: 'room-1:guest-1', principalType: 'guest' };
+const PRINCIPAL: GatePrincipal = { principalId: 'room-1:guest-1', principalType: 'guest' };
+const CLAIMS: GateClaims = {
+  cid: 'credential',
+  exp: 2,
+  iat: 1,
+  peer: 'peer-1',
+  pEpoch: 7,
+  pId: PRINCIPAL.principalId,
+  pType: PRINCIPAL.principalType,
+  room: 'room-1'
+};
 
-function createSigner(
-  verifyResult = {
-    ok: true,
-    claims: {
-      peer: 'peer-1',
-      pEpoch: 7,
-      pId: PRINCIPAL.principalId,
-      pType: PRINCIPAL.principalType,
-      room: 'room-1'
-    }
-  }
-) {
+function createSigner(verifyResult: GateVerification = { ok: true, claims: CLAIMS }): GateCredentialSigner {
   return {
-    hash: (value) => `hash:${value}`,
-    sign: (claims) => `signed:${claims.credentialId}`,
+    hash: (value) => `hash:${String(value)}`,
+    sign: (claims) => `signed:${String(claims?.credentialId)}`,
     verify: () => verifyResult
   };
 }
 
+// A store that implements only what the test drives.
+const store = (implementation: Partial<GateRoomStore>) => fake<GateRoomStore>(implementation);
+
 test('credential boundary issues and authorizes a principal-bound credential', async () => {
-  const calls = {};
-  const roomStore = {
+  const calls: Record<string, unknown> = {};
+  const roomStore = store({
     async assertLiveKitGateReady() {
       calls.ready = true;
     },
@@ -47,7 +58,7 @@ test('credential boundary issues and authorizes a principal-bound credential', a
       calls.verify = input;
       return { status: 'allowed' };
     }
-  };
+  });
   const boundary = createCredentialBoundaryService({
     roomStore,
     signer: createSigner(),
@@ -70,6 +81,7 @@ test('credential boundary issues and authorizes a principal-bound credential', a
   });
 
   assert.equal(issued.status, 'issued');
+  assert.ok(issued.credential);
   assert.equal(issued.credential.expiresAt, 61_000);
   assert.equal(issued.credential.principalEpoch, 7);
   assert.equal(issued.credential.value, `signed:${issued.credential.id}`);
@@ -88,7 +100,7 @@ test('credential boundary issues and authorizes a principal-bound credential', a
 
   assert.deepEqual(await boundary.authorizeCredential(issued.credential.value), {
     ok: true,
-    claims: createSigner().verify().claims
+    claims: CLAIMS
   });
   assert.deepEqual(calls.verify, {
     credentialHash: `hash:${issued.credential.value}`,
@@ -104,17 +116,17 @@ test('credential boundary issues and authorizes a principal-bound credential', a
 });
 
 test('credential boundary fails closed for invalid, unavailable, and denied decisions', async () => {
-  const roomStore = {
+  const roomStore = store({
     async createLiveKitGateCredential() {
       return { status: 'revoked' };
     },
     async getLiveKitGatePrincipalEpoch() {
-      return { status: 'unavailable' };
+      return { status: 'unavailable' } as never;
     },
     async verifyLiveKitGateCredential() {
       return undefined;
     }
-  };
+  });
   const boundary = createCredentialBoundaryService({ roomStore, signer: createSigner(), now: () => 2_000 });
 
   assert.deepEqual(await boundary.issueCredential(), { status: 'invalid', credential: null });
@@ -126,7 +138,7 @@ test('credential boundary fails closed for invalid, unavailable, and denied deci
 
   const invalidBoundary = createCredentialBoundaryService({
     roomStore,
-    signer: createSigner({ ok: false, code: 'expired' })
+    signer: createSigner({ ok: false, code: 'expired', claims: {} })
   });
   assert.deepEqual(await invalidBoundary.authorizeCredential('credential'), { ok: false, code: 'expired' });
   assert.equal(invalidBoundary.resolvePrincipal({ roomId: 'room-1' }), null);
@@ -134,15 +146,15 @@ test('credential boundary fails closed for invalid, unavailable, and denied deci
 });
 
 test('credential boundary preserves store refusal when credential persistence fails', async () => {
-  let storedResult = { status: 'revoked' };
-  const roomStore = {
+  let storedResult: { status: string } | undefined = { status: 'revoked' };
+  const roomStore = store({
     async getLiveKitGatePrincipalEpoch() {
       return { status: 'ready', epoch: 3 };
     },
     async createLiveKitGateCredential() {
       return storedResult;
     }
-  };
+  });
   const boundary = createCredentialBoundaryService({ roomStore, signer: createSigner() });
   const input = { roomId: 'room-1', peerId: 'peer-1', principal: PRINCIPAL };
 
@@ -152,14 +164,14 @@ test('credential boundary preserves store refusal when credential persistence fa
 });
 
 test('credential boundary revokes principals through current and legacy stores', async () => {
-  const directCalls = [];
+  const directCalls: unknown[] = [];
   const direct = createCredentialBoundaryService({
-    roomStore: {
+    roomStore: store({
       async revokeLiveKitGatePrincipal(input) {
         directCalls.push(input);
         return { status: 'revoked', epoch: 8 };
       }
-    },
+    }),
     signer: createSigner(),
     now: () => 3_000
   });
@@ -171,14 +183,14 @@ test('credential boundary revokes principals through current and legacy stores',
   assert.deepEqual(directCalls[0], { principal: PRINCIPAL, roomId: 'room-1', now: 3_000 });
   assert.deepEqual(await direct.revokePrincipal(), { status: 'invalid', epoch: null });
 
-  const legacyCalls = [];
+  const legacyCalls: unknown[] = [];
   const legacy = createCredentialBoundaryService({
-    roomStore: {
+    roomStore: store({
       async revokeLiveKitGatePeer(input) {
         legacyCalls.push(input);
         return { status: 'revoked', epoch: 9 };
       }
-    },
+    }),
     signer: createSigner(),
     now: () => 4_000
   });
@@ -197,14 +209,14 @@ test('credential boundary revokes principals through current and legacy stores',
 });
 
 test('credential boundary revokes only the requested issued credential', async () => {
-  const calls = [];
+  const calls: unknown[] = [];
   const boundary = createCredentialBoundaryService({
-    roomStore: {
+    roomStore: store({
       async revokeLiveKitGateCredential(input) {
         calls.push(input);
         return { status: 'revoked' };
       }
-    },
+    }),
     signer: createSigner(),
     now: () => 4_500
   });
@@ -215,7 +227,7 @@ test('credential boundary revokes only the requested issued credential', async (
   assert.deepEqual(calls, [{ credentialId: 'credential-1', principal: PRINCIPAL, roomId: 'room-1', now: 4_500 }]);
   assert.deepEqual(await boundary.revokeCredential(), { status: 'invalid' });
   assert.deepEqual(
-    await createCredentialBoundaryService({ roomStore: {}, signer: createSigner() }).revokeCredential({
+    await createCredentialBoundaryService({ roomStore: store({}), signer: createSigner() }).revokeCredential({
       credentialId: 'credential-1',
       roomId: 'room-1',
       principal: PRINCIPAL
@@ -225,10 +237,10 @@ test('credential boundary revokes only the requested issued credential', async (
 });
 
 test('credential boundary falls back from peer revocation to normalized principal revocation', async () => {
-  const calls = [];
-  let normalized = PRINCIPAL;
+  const calls: unknown[] = [];
+  let normalized: GatePrincipal | null = PRINCIPAL;
   const boundary = createCredentialBoundaryService({
-    roomStore: {
+    roomStore: store({
       normalizeGatePrincipal() {
         return normalized;
       },
@@ -236,7 +248,7 @@ test('credential boundary falls back from peer revocation to normalized principa
         calls.push(input);
         return { status: 'revoked', epoch: 10 };
       }
-    },
+    }),
     signer: createSigner(),
     now: () => 5_000
   });
@@ -250,7 +262,7 @@ test('credential boundary falls back from peer revocation to normalized principa
   normalized = null;
   assert.deepEqual(await boundary.revokePeer({ roomId: 'room-1' }), { status: 'invalid', epoch: null });
 
-  const unavailable = createCredentialBoundaryService({ roomStore: {}, signer: createSigner() });
+  const unavailable = createCredentialBoundaryService({ roomStore: store({}), signer: createSigner() });
   assert.deepEqual(await unavailable.revokePrincipal({ roomId: 'room-1', principal: PRINCIPAL }), {
     status: 'unavailable',
     epoch: null

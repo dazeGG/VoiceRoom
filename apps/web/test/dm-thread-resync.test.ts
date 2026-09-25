@@ -1,23 +1,37 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { test } from 'vitest';
 import { freshImport } from './helpers/fresh-module.ts';
+import type * as DmThreadResync from '../src/lib/features/home/model/dm-thread-resync.ts';
 import assert from 'node:assert/strict';
 
 async function loadCoordinator() {
-  return freshImport('/src/lib/features/home/model/dm-thread-resync.ts');
+  return freshImport<typeof DmThreadResync>('/src/lib/features/home/model/dm-thread-resync.ts');
 }
 
+type Snapshot = Parameters<Parameters<typeof DmThreadResync.createDmThreadResyncCoordinator>[0]['applySnapshot']>[1];
+// The fixtures carry only the fields the coordinator reads.
+type FakeSnapshot = { peer: ReturnType<typeof peer>; messages: Array<ReturnType<typeof message>> };
+
 function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((resolvePromise, rejectPromise) => {
-    resolve = resolvePromise;
+  let resolve = (_snapshot: FakeSnapshot) => {};
+  let reject = (_error: unknown) => {};
+  const promise = new Promise<Snapshot>((resolvePromise, rejectPromise) => {
+    resolve = (snapshot) => resolvePromise(snapshot as unknown as Snapshot);
     reject = rejectPromise;
   });
   return { promise, resolve, reject };
 }
 
-function message(id, overrides = {}) {
+function message(
+  id: string,
+  overrides: {
+    senderId?: string;
+    recipientId?: string;
+    body?: string;
+    createdAt?: number;
+    editedAt?: number | null;
+    readAt?: number | null;
+  } = {}
+) {
   return {
     id,
     senderId: overrides.senderId ?? 'peer',
@@ -36,7 +50,7 @@ function peer(id = 'peer') {
 test('replays realtime message, edit, delete, and read mutations over a delayed HTTP snapshot', async () => {
   const { createDmThreadResyncCoordinator } = await loadCoordinator();
   const request = deferred();
-  let applied;
+  let applied = undefined as Snapshot | undefined;
   const coordinator = createDmThreadResyncCoordinator({
     fetchSnapshot: () => request.promise,
     isCurrent: () => true,
@@ -60,19 +74,20 @@ test('replays realtime message, edit, delete, and read mutations over a delayed 
     ]
   });
   await resync;
+  assert.ok(applied);
 
   assert.deepEqual(
     applied.messages.map((entry) => entry.id),
     ['edited', 'own-unread', 'new']
   );
-  assert.equal(applied.messages.find((entry) => entry.id === 'edited').body, 'edited now');
-  assert.equal(applied.messages.find((entry) => entry.id === 'own-unread').readAt, 9);
+  assert.equal(applied.messages.find((entry) => entry.id === 'edited')?.body, 'edited now');
+  assert.equal(applied.messages.find((entry) => entry.id === 'own-unread')?.readAt, 9);
 });
 
 test('keeps a newer HTTP message version and independently preserves the newest read marker', async () => {
   const { createDmThreadResyncCoordinator } = await loadCoordinator();
   const request = deferred();
-  let applied;
+  let applied = undefined as Snapshot | undefined;
   const coordinator = createDmThreadResyncCoordinator({
     fetchSnapshot: () => request.promise,
     isCurrent: () => true,
@@ -93,12 +108,15 @@ test('keeps a newer HTTP message version and independently preserves the newest 
     ]
   });
   await resync;
+  assert.ok(applied);
 
   const serverNewer = applied.messages.find((entry) => entry.id === 'server-newer');
+  assert.ok(serverNewer);
   assert.equal(serverNewer.body, 'new HTTP body');
   assert.equal(serverNewer.editedAt, 10);
   assert.equal(serverNewer.readAt, 20);
   const eventNewer = applied.messages.find((entry) => entry.id === 'event-newer');
+  assert.ok(eventNewer);
   assert.equal(eventNewer.body, 'new realtime body');
   assert.equal(eventNewer.editedAt, 6);
   assert.equal(eventNewer.readAt, 20);
@@ -108,7 +126,7 @@ test('coalesces overlapping same-peer resync calls onto one successful request',
   const { createDmThreadResyncCoordinator } = await loadCoordinator();
   const request = deferred();
   let fetchCount = 0;
-  const applied = [];
+  const applied: unknown[] = [];
   const coordinator = createDmThreadResyncCoordinator({
     fetchSnapshot: () => {
       fetchCount += 1;
@@ -138,11 +156,11 @@ test('queues a forced reconnect behind an active fetch and keeps one logical pro
   const reconnectRequest = deferred();
   const requests = [firstRequest, reconnectRequest];
   let fetchCount = 0;
-  const applied = [];
+  const applied: unknown[] = [];
   const coordinator = createDmThreadResyncCoordinator({
     fetchSnapshot: () => {
       fetchCount += 1;
-      return requests.shift().promise;
+      return requests.shift()?.promise ?? Promise.reject(new Error('no request left'));
     },
     isCurrent: () => true,
     applySnapshot: (_peerId, snapshot) => applied.push(snapshot.messages.map((entry) => entry.id)),
@@ -183,11 +201,11 @@ test('queued reconnect recovers when the initial request rejects', async () => {
   const reconnectRequest = deferred();
   const requests = [firstRequest, reconnectRequest];
   let fetchCount = 0;
-  const applied = [];
+  const applied: unknown[] = [];
   const coordinator = createDmThreadResyncCoordinator({
     fetchSnapshot: () => {
       fetchCount += 1;
-      return requests.shift().promise;
+      return requests.shift()?.promise ?? Promise.reject(new Error('no request left'));
     },
     isCurrent: () => true,
     applySnapshot: (_peerId, snapshot) => applied.push(snapshot.messages.map((entry) => entry.id)),
@@ -213,11 +231,11 @@ test('uses a successful initial snapshot as fallback when the queued reconnect f
   const reconnectRequest = deferred();
   const requests = [firstRequest, reconnectRequest];
   let fetchCount = 0;
-  const applied = [];
+  const applied: unknown[] = [];
   const coordinator = createDmThreadResyncCoordinator({
     fetchSnapshot: () => {
       fetchCount += 1;
-      return requests.shift().promise;
+      return requests.shift()?.promise ?? Promise.reject(new Error('no request left'));
     },
     isCurrent: () => true,
     applySnapshot: (_peerId, snapshot) => applied.push(snapshot.messages.map((entry) => entry.id)),
@@ -247,7 +265,7 @@ test('a different-peer request invalidates an older response even if its peer be
   const firstRequest = deferred();
   const secondRequest = deferred();
   let activePeerId = 'first';
-  const applied = [];
+  const applied: unknown[] = [];
   const coordinator = createDmThreadResyncCoordinator({
     fetchSnapshot: (peerId) => (peerId === 'first' ? firstRequest.promise : secondRequest.promise),
     isCurrent: (peerId) => activePeerId === peerId,

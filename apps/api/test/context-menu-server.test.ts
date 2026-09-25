@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 
 import test from 'node:test';
@@ -12,9 +11,14 @@ const { isLiveKitParticipantAlreadyGone, resolveServerMutePermission } =
 const ALICE_ID = '11111111-1111-4111-8111-111111111111';
 const BOB_ID = '22222222-2222-4222-8222-222222222222';
 
+type Bookmark = { removed: boolean; status: string };
+
 function createStore({
-  muteLookup = async () => false,
-  removeBookmark = async () => ({ removed: false, status: 'removed' })
+  muteLookup = async (): Promise<boolean> => false,
+  removeBookmark = async (_userId: string, _roomId: string): Promise<Bookmark> => ({
+    removed: false,
+    status: 'removed'
+  })
 } = {}) {
   const rooms = new Map([
     [
@@ -37,13 +41,13 @@ function createStore({
     async countRooms() {
       return rooms.size;
     },
-    async getRoom(roomId) {
+    async getRoom(roomId: string) {
       return rooms.get(roomId) || null;
     },
-    async getOrCreatePeerIdentity({ peerId }) {
+    async getOrCreatePeerIdentity({ peerId }: { peerId: string }) {
       return { status: 'created', identity: { peerId, avatarColorKey: 'blurple' } };
     },
-    normalizeGatePrincipal({ accountUserId, guestPrincipalId }) {
+    normalizeGatePrincipal({ accountUserId, guestPrincipalId }: { accountUserId?: string; guestPrincipalId?: string }) {
       return accountUserId
         ? { principalId: accountUserId, principalType: 'account' }
         : { principalId: guestPrincipalId, principalType: 'guest' };
@@ -60,10 +64,10 @@ function createStore({
 }
 
 test('room list removal rejects owners and removes only bookmarked rooms', async (t) => {
-  const calls = [];
+  const calls: Array<{ userId: string; roomId: string }> = [];
   const app = createApiApp({
     store: createStore({
-      removeBookmark: async (userId, roomId) => {
+      removeBookmark: async (userId: string, roomId: string) => {
         calls.push({ userId, roomId });
         return userId === ALICE_ID ? { removed: false, status: 'owner' } : { removed: true, status: 'removed' };
       }
@@ -95,7 +99,7 @@ test('room list removal rejects owners and removes only bookmarked rooms', async
 
 function createUsers() {
   return {
-    async getSessionUser(token) {
+    async getSessionUser(token: string) {
       if (token === 'alice-session') return { user: { id: ALICE_ID, login: 'alice', displayName: 'Alice' } };
       if (token === 'bob-session') return { user: { id: BOB_ID, login: 'bob', displayName: 'Bob' } };
       return null;
@@ -183,7 +187,7 @@ test('LiveKit admission fails closed when persisted server-mute lookup fails', a
     }
   });
   // Admission is only for peers already in the room roster.
-  (await store.getRoom('context-room')).peers.set('peer-alice', {
+  (await store.getRoom('context-room'))?.peers.set('peer-alice', {
     id: 'peer-alice',
     name: 'Alice',
     sessionToken: 'goodtoken123456789012345678901234'

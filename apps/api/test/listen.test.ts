@@ -1,14 +1,26 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { AddressInfo } from 'node:net';
 
 import { startApiListener } from '../src/lib/listen.ts';
 
+type ErrorHandler = (error: NodeJS.ErrnoException) => void;
+type TcpAddress = { address: string; port: number };
+
 class FakeServer {
-  constructor({ socketError = null, tcpAddress = { address: '127.0.0.1', port: 4321 } } = {}) {
+  calls: unknown[][];
+  listeners: Map<string, ErrorHandler>;
+  socketError: NodeJS.ErrnoException | null;
+  tcpAddress: TcpAddress;
+  currentAddress: string | TcpAddress | null;
+
+  constructor({
+    socketError = null,
+    tcpAddress = { address: '127.0.0.1', port: 4321 }
+  }: { socketError?: NodeJS.ErrnoException | null; tcpAddress?: TcpAddress } = {}) {
     this.calls = [];
     this.listeners = new Map();
     this.socketError = socketError;
@@ -16,17 +28,17 @@ class FakeServer {
     this.currentAddress = null;
   }
 
-  once(event, handler) {
+  once(event: string, handler: ErrorHandler) {
     this.listeners.set(event, handler);
   }
 
-  removeListener(event, handler) {
+  removeListener(event: string, handler: ErrorHandler) {
     if (this.listeners.get(event) === handler) {
       this.listeners.delete(event);
     }
   }
 
-  listen(...args) {
+  listen(...args: unknown[]) {
     this.calls.push(args);
     if (typeof args[0] === 'string') {
       this.currentAddress = args[0];
@@ -46,13 +58,16 @@ class FakeServer {
   }
 
   address() {
-    return this.currentAddress === null ? this.tcpAddress : this.currentAddress;
+    return (this.currentAddress === null ? this.tcpAddress : this.currentAddress) as AddressInfo | string;
   }
 }
 
+type Message = [level: string, fields: Record<string, unknown>, msg: string | undefined];
+
 function createLogger() {
-  const messages = [];
-  const record = (level) => (fields, msg) => messages.push([level, fields, msg]);
+  const messages: Message[] = [];
+  const record = (level: string) => (fields: Record<string, unknown>, msg?: string) =>
+    messages.push([level, fields, msg]);
   return {
     messages,
     debug: record('debug'),
@@ -69,7 +84,7 @@ test('startApiListener falls back from unix socket to tcp and logs the actual tc
     tcpAddress: { address: '127.0.0.1', port: 4321 }
   });
   const logger = createLogger();
-  let exitCode = null;
+  let exitCode: number | null = null;
 
   startApiListener({
     exit: (code) => {
@@ -84,21 +99,24 @@ test('startApiListener falls back from unix socket to tcp and logs the actual tc
 
   assert.equal(exitCode, null);
   assert.equal(server.calls.length, 2);
-  assert.equal(server.calls[0][0], '/tmp/voice-room.sock');
-  assert.equal(typeof server.calls[0][1], 'function');
-  assert.equal(server.calls[1][0], 3000);
-  assert.equal(server.calls[1][1], '0.0.0.0');
-  assert.equal(typeof server.calls[1][2], 'function');
+  assert.equal(server.calls[0]?.[0], '/tmp/voice-room.sock');
+  assert.equal(typeof server.calls[0]?.[1], 'function');
+  assert.equal(server.calls[1]?.[0], 3000);
+  assert.equal(server.calls[1]?.[1], '0.0.0.0');
+  assert.equal(typeof server.calls[1]?.[2], 'function');
   assert.deepEqual(
     logger.messages.map(([level]) => level),
     ['warn', 'info']
   );
-  const [[, fallback], [, listening]] = logger.messages;
+  const [first, second] = logger.messages;
+  assert.ok(first && second);
+  const [, fallback] = first;
+  const [, listening] = second;
   assert.equal(fallback.evt, 'boot.listen_fallback');
   assert.equal(fallback.socketPath, '/tmp/voice-room.sock');
   assert.equal(fallback.host, '0.0.0.0');
   assert.equal(fallback.port, 3000);
-  assert.equal(fallback.err.code, 'EPERM');
+  assert.equal((fallback.err as { code?: string }).code, 'EPERM');
   assert.equal(listening.evt, 'boot.listening');
   assert.equal(listening.transport, 'tcp');
   assert.equal(listening.host, '127.0.0.1');
@@ -121,15 +139,15 @@ test('startApiListener reports a direct tcp listen with the actual server addres
   });
 
   assert.equal(server.calls.length, 1);
-  assert.equal(server.calls[0][0], 3000);
-  assert.equal(server.calls[0][1], '127.0.0.1');
-  assert.equal(typeof server.calls[0][2], 'function');
+  assert.equal(server.calls[0]?.[0], 3000);
+  assert.equal(server.calls[0]?.[1], '127.0.0.1');
+  assert.equal(typeof server.calls[0]?.[2], 'function');
   assert.deepEqual(
     logger.messages.map(([level]) => level),
     ['info']
   );
   assert.deepEqual(
-    { ...logger.messages[0][1] },
+    { ...logger.messages[0]?.[1] },
     { evt: 'boot.listening', transport: 'tcp', host: '127.0.0.1', port: 3000 }
   );
 });
@@ -143,10 +161,10 @@ test('startApiListener recovers a stale unix socket path once', async () => {
     socketError: Object.assign(new Error('EADDRINUSE'), { code: 'EADDRINUSE' })
   });
   const logger = createLogger();
-  let exitCode = null;
+  let exitCode: number | null = null;
   let firstSocketAttempt = true;
   const originalListen = server.listen.bind(server);
-  server.listen = (...args) => {
+  server.listen = (...args: unknown[]) => {
     if (typeof args[0] === 'string' && firstSocketAttempt) {
       firstSocketAttempt = false;
       originalListen(...args);
@@ -170,14 +188,14 @@ test('startApiListener recovers a stale unix socket path once', async () => {
 
     assert.equal(exitCode, null);
     assert.equal(server.calls.length, 2);
-    assert.equal(server.calls[0][0], socketPath);
-    assert.equal(server.calls[1][0], socketPath);
+    assert.equal(server.calls[0]?.[0], socketPath);
+    assert.equal(server.calls[1]?.[0], socketPath);
     assert.equal(fs.existsSync(socketPath), false);
     assert.deepEqual(
       logger.messages.map(([level]) => level),
       ['info']
     );
-    assert.deepEqual({ ...logger.messages[0][1] }, { evt: 'boot.listening', transport: 'unix', address: socketPath });
+    assert.deepEqual({ ...logger.messages[0]?.[1] }, { evt: 'boot.listening', transport: 'unix', address: socketPath });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

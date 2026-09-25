@@ -1,34 +1,29 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { createMessageOutboxRepository } from '../src/domains/messaging/message-outbox-repository.ts';
+import { fakeDb, result } from './fakes/index.ts';
 
 test('G37-A01 logical event identity deduplicates inside the active transaction', async () => {
-  const calls = [];
-  const pool = { query: async () => ({ rows: [], rowCount: 0 }) };
-  const client = {
-    async query(text, values) {
-      calls.push({ text, values });
-      return {
-        rows: [
-          {
-            event_id: values[0],
-            logical_key: values[1],
-            event_type: values[2],
-            conversation_type: values[3],
-            conversation_id: values[4],
-            message_id: values[5],
-            revision: values[6],
-            payload: JSON.parse(values[7]),
-            attempts: 0,
-            claimed_fencing_token: null
-          }
-        ]
-      };
-    }
-  };
+  const pool = fakeDb();
+  const client = fakeDb((text, values) =>
+    result([
+      {
+        event_id: values[0],
+        logical_key: values[1],
+        event_type: values[2],
+        conversation_type: values[3],
+        conversation_id: values[4],
+        message_id: values[5],
+        revision: values[6],
+        payload: JSON.parse(String(values[7])),
+        attempts: 0,
+        claimed_fencing_token: null
+      }
+    ])
+  );
+  const calls = client.calls;
   const repo = createMessageOutboxRepository({ pool });
   const input = {
     eventId: 'e1',
@@ -40,7 +35,7 @@ test('G37-A01 logical event identity deduplicates inside the active transaction'
   const first = await repo.enqueue(client, input);
   const second = await repo.enqueue(client, { ...input, eventId: 'e2' });
   assert.equal(first.logicalKey, second.logicalKey);
-  assert.match(calls[0].text, /ON CONFLICT \(logical_key\)/);
+  assert.match(calls[0]?.text ?? '', /ON CONFLICT \(logical_key\)/);
 });
 
 test('G37-A02 schema is inert, additive, lock-bounded and retains poison evidence', () => {

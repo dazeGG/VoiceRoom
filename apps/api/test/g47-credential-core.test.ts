@@ -1,17 +1,18 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Pool } from 'pg';
 import { test } from 'node:test';
 import { createCredentialBoundaryService } from '../src/domains/admission/credential-boundary-service.ts';
+import type { GateClaims, GateCredentialSigner } from '../src/domains/admission/gate-credential-signer.ts';
 import { createRoomStore } from '../src/lib/room-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 
-const signer = {
-  hash: (value) => `hash-${value}`.padEnd(64, '0').slice(0, 64),
-  sign: (claims) =>
+// Readable credentials: the JSON of the claims instead of a signed token.
+const signer: GateCredentialSigner = {
+  hash: (value) => `hash-${String(value)}`.padEnd(64, '0').slice(0, 64),
+  sign: (claims = {}) =>
     JSON.stringify({
       peer: claims.peerId,
       pEpoch: claims.principalEpoch,
@@ -21,9 +22,9 @@ const signer = {
     }),
   verify: (value) => {
     try {
-      return { ok: true, claims: JSON.parse(value) };
+      return { ok: true, claims: JSON.parse(String(value)) as GateClaims };
     } catch {
-      return { ok: false, code: 'invalid' };
+      return { ok: false, code: 'malformed' };
     }
   }
 };
@@ -48,6 +49,7 @@ test(
     const principal = boundary.resolvePrincipal({ roomId: 'g47-room', accountUserId: 'account-1' });
     const issued = await boundary.issueCredential({ roomId: 'g47-room', peerId: 'peer-1', principal });
     assert.equal(issued.status, 'issued');
+    assert.ok(issued.credential);
     assert.equal((await boundary.authorizeCredential(issued.credential.value)).ok, true);
     assert.equal((await boundary.revokePrincipal({ roomId: 'g47-room', principal })).status, 'revoked');
     assert.deepEqual(await boundary.authorizeCredential(issued.credential.value), { ok: false, code: 'denied' });

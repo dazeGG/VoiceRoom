@@ -1,5 +1,4 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 
@@ -10,7 +9,7 @@ import { createTestDatabase } from './db-harness.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
-async function createStores(t) {
+async function createStores(t: TestContext) {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const users = createUserStore({ databaseUrl, logger: SILENT });
@@ -23,9 +22,10 @@ async function createStores(t) {
   return { users, friends };
 }
 
-async function makeUser(users, login) {
+async function makeUser(users: ReturnType<typeof createUserStore>, login: string) {
   const created = await users.createUser({ login, displayName: login, password: 'password123' });
   assert.equal(created.status, 'created', `created ${login}`);
+  assert.ok(created.user);
   return created.user;
 }
 
@@ -40,17 +40,18 @@ test('sendRequest creates a pending request and lists it both ways', async (t) =
   const bob = await makeUser(users, 'bob');
 
   const sent = await friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' });
+  assert.ok(sent.requestId);
   assert.equal(sent.status, 'sent');
-  assert.equal(sent.user.id, bob.id);
+  assert.equal(sent.user?.id, bob.id);
 
   const bobReqs = await friends.listRequests(bob.id);
   assert.equal(bobReqs.incoming.length, 1);
-  assert.equal(bobReqs.incoming[0].user.id, alice.id);
+  assert.equal(bobReqs.incoming[0]?.user.id, alice.id);
   assert.equal(bobReqs.outgoing.length, 0);
 
   const aliceReqs = await friends.listRequests(alice.id);
   assert.equal(aliceReqs.outgoing.length, 1);
-  assert.equal(aliceReqs.outgoing[0].user.id, bob.id);
+  assert.equal(aliceReqs.outgoing[0]?.user.id, bob.id);
   assert.equal(await friends.countIncomingRequests(bob.id), 1);
 
   // Not friends yet.
@@ -75,7 +76,9 @@ test('sendRequest can target a user id without requiring public login exposure',
   const bob = await makeUser(users, 'bob');
 
   const sent = await friends.sendRequest({ requesterId: alice.id, addresseeUserId: bob.id });
+  assert.ok(sent.requestId);
   assert.equal(sent.status, 'sent');
+  assert.ok(sent.user);
   assert.equal(sent.user.id, bob.id);
   assert.equal(sent.user.login, 'bob');
 
@@ -126,16 +129,18 @@ test('accept turns a request into a mutual friendship', async (t) => {
   const bob = await makeUser(users, 'bob');
 
   const sent = await friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' });
+  assert.ok(sent.requestId);
   const accepted = await friends.respondRequest({ userId: bob.id, requestId: sent.requestId, action: 'accept' });
   assert.equal(accepted.status, 'accepted');
   assert.equal(accepted.requesterId, alice.id);
 
   assert.equal(await friends.areFriends(alice.id, bob.id), true);
-  const aliceFriends = await friends.listFriends(alice.id);
-  assert.equal(aliceFriends.length, 1);
-  assert.equal(aliceFriends[0].user.id, bob.id);
-  assert.equal(aliceFriends[0].user.doNotDisturb, false);
-  assert.equal(aliceFriends[0].user.presenceStatus, 'online');
+  const [bobAsFriend, ...others] = await friends.listFriends(alice.id);
+  assert.ok(bobAsFriend);
+  assert.equal(others.length, 0);
+  assert.equal(bobAsFriend.user.id, bob.id);
+  assert.equal(bobAsFriend.user.doNotDisturb, false);
+  assert.equal(bobAsFriend.user.presenceStatus, 'online');
 });
 
 test('listRequests surfaces the request id (not the joined user id) so accept works', async (t) => {
@@ -144,15 +149,18 @@ test('listRequests surfaces the request id (not the joined user id) so accept wo
   const bob = await makeUser(users, 'bob');
 
   const sent = await friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' });
+  assert.ok(sent.requestId);
 
   // Regression: `u.*` in the SELECT also exposes `id`, and duplicate column
   // names make node-postgres keep the last one — so `row.id` used to be the
   // requester's user id, breaking accept/decline ("Заявка не найдена").
   const incoming = (await friends.listRequests(bob.id)).incoming[0];
+  assert.ok(incoming);
   assert.equal(incoming.id, sent.requestId);
   assert.notEqual(incoming.id, alice.id);
 
   const outgoing = (await friends.listRequests(alice.id)).outgoing[0];
+  assert.ok(outgoing);
   assert.equal(outgoing.id, sent.requestId);
   assert.notEqual(outgoing.id, bob.id);
 
@@ -168,11 +176,13 @@ test('decline and cancel leave no friendship', async (t) => {
   const bob = await makeUser(users, 'bob');
 
   const sent = await friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' });
+  assert.ok(sent.requestId);
   const declined = await friends.respondRequest({ userId: bob.id, requestId: sent.requestId, action: 'decline' });
   assert.equal(declined.status, 'declined');
   assert.equal(await friends.areFriends(alice.id, bob.id), false);
 
   const resent = await friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' });
+  assert.ok(resent.requestId);
   const cancelled = await friends.cancelRequest({ userId: alice.id, requestId: resent.requestId });
   assert.equal(cancelled.status, 'cancelled');
   assert.equal(cancelled.addresseeId, bob.id);
@@ -186,6 +196,7 @@ test('respond/cancel reject requests the user does not own', async (t) => {
   const eve = await makeUser(users, 'eve');
 
   const sent = await friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' });
+  assert.ok(sent.requestId);
   // Eve can neither accept (not addressee) nor cancel (not requester).
   assert.equal(
     (await friends.respondRequest({ userId: eve.id, requestId: sent.requestId, action: 'accept' })).status,
@@ -200,6 +211,7 @@ test('removeFriend deletes the friendship for both sides', async (t) => {
   const bob = await makeUser(users, 'bob');
 
   const sent = await friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' });
+  assert.ok(sent.requestId);
   await friends.respondRequest({ userId: bob.id, requestId: sent.requestId, action: 'accept' });
 
   const removed = await friends.removeFriend({ userId: bob.id, friendId: alice.id });
@@ -214,6 +226,7 @@ test('direct messages thread, unread counts, and read receipts', async (t) => {
   const bob = await makeUser(users, 'bob');
 
   const sent = await friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' });
+  assert.ok(sent.requestId);
   await friends.respondRequest({ userId: bob.id, requestId: sent.requestId, action: 'accept' });
 
   await friends.sendMessage({ senderId: alice.id, recipientId: bob.id, body: 'привет' });
@@ -229,10 +242,11 @@ test('direct messages thread, unread counts, and read receipts', async (t) => {
 
   // Bob has 2 unread from alice.
   assert.equal((await friends.getUnreadCounts(bob.id))[alice.id], 2);
-  const bobFriends = await friends.listFriends(bob.id);
-  assert.equal(bobFriends[0].unreadCount, 2);
-  assert.equal(bobFriends[0].lastMessage.body, 'норм');
-  assert.equal(bobFriends[0].lastMessage.fromMe, true);
+  const [aliceAsFriend] = await friends.listFriends(bob.id);
+  assert.ok(aliceAsFriend);
+  assert.equal(aliceAsFriend.unreadCount, 2);
+  assert.equal(aliceAsFriend.lastMessage?.body, 'норм');
+  assert.equal(aliceAsFriend.lastMessage?.fromMe, true);
 
   const read = await friends.markRead({ userId: bob.id, peerId: alice.id });
   assert.equal(read.count, 2);
@@ -257,13 +271,14 @@ test('pending room invitations expire together when the sender leaves the room',
       expiresAt: null
     }
   });
-  assert.equal(invite.invite.status, 'pending');
+  assert.equal(invite.invite?.status, 'pending');
   assert.equal(invite.invite.expiresAt, null);
 
-  const expired = await friends.expirePendingInvites({ senderId: alice.id, roomId });
-  assert.equal(expired.length, 1);
-  assert.equal(expired[0].id, invite.id);
-  assert.equal(expired[0].invite.status, 'expired');
+  const [expired, ...others] = await friends.expirePendingInvites({ senderId: alice.id, roomId });
+  assert.equal(others.length, 0);
+  assert.ok(expired);
+  assert.equal(expired.id, invite.id);
+  assert.equal(expired.invite?.status, 'expired');
 
   assert.deepEqual(await friends.expirePendingInvites({ senderId: alice.id, roomId }), []);
 });
@@ -290,12 +305,13 @@ test('direct messages can only be edited atomically by their original sender', a
     recipientId: bob.id,
     body: 'after'
   });
+  assert.ok(edited);
   assert.equal(edited.body, 'after');
   assert.equal(typeof edited.editedAt, 'number');
 
-  const thread = await friends.listThread({ userId: bob.id, peerId: alice.id });
-  assert.equal(thread[0].body, 'after');
-  assert.equal(thread[0].editedAt, edited.editedAt);
+  const [message] = await friends.listThread({ userId: bob.id, peerId: alice.id });
+  assert.equal(message?.body, 'after');
+  assert.equal(message.editedAt, edited.editedAt);
 });
 
 test('searchUsers matches login and display name, excludes self', async (t) => {
@@ -314,6 +330,7 @@ test('concurrent friend acceptance and blocking cannot leave a friendship behind
   const alice = await makeUser(users, 'race-alice');
   const bob = await makeUser(users, 'race-bob');
   const sent = await friends.sendRequest({ requesterId: alice.id, addresseeUserId: bob.id });
+  assert.ok(sent.requestId);
 
   const [accepted, blocked] = await Promise.all([
     friends.respondRequest({ userId: bob.id, requestId: sent.requestId, action: 'accept' }),
@@ -347,7 +364,7 @@ test('blocking expires pending room invitations in both directions', async (t) =
 
   const messages = await friends.listThread({ userId: alice.id, peerId: bob.id });
   assert.deepEqual(
-    messages.map((message) => message.invite.status),
+    messages.map((message) => message.invite?.status),
     ['expired', 'expired']
   );
 });
@@ -358,11 +375,12 @@ test('blocked-user projection is public-only and disappears after unblock', asyn
   const bob = await makeUser(users, 'blocked-list-bob');
   await friends.blockUser({ userId: alice.id, targetId: bob.id });
 
-  const blockedUsers = await friends.listBlockedUsers(alice.id);
-  assert.equal(blockedUsers.length, 1);
-  assert.equal(blockedUsers[0].id, bob.id);
-  assert.equal(Object.hasOwn(blockedUsers[0], 'passwordHash'), false);
-  assert.equal(Object.hasOwn(blockedUsers[0], 'password_hash'), false);
+  const [blocked, ...others] = await friends.listBlockedUsers(alice.id);
+  assert.ok(blocked);
+  assert.equal(others.length, 0);
+  assert.equal(blocked.id, bob.id);
+  assert.equal(Object.hasOwn(blocked, 'passwordHash'), false);
+  assert.equal(Object.hasOwn(blocked, 'password_hash'), false);
 
   assert.equal((await friends.unblockUser({ userId: alice.id, targetId: bob.id })).status, 'unblocked');
   assert.deepEqual(await friends.listBlockedUserIds(alice.id), []);

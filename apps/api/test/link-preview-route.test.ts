@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import { socketPathForDirectory } from './ipc-harness.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,35 +7,26 @@ import { spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { createTestDatabase } from './db-harness.ts';
+import { waitForHealthz } from './fakes/server-process.ts';
 
 const KEY = `lp_${'ef'.repeat(16)}.webp`;
 const ORPHAN_KEY = `lp_${'12'.repeat(16)}.webp`;
 
-function get(socketPath, pathname) {
+function get(
+  socketPath: string,
+  pathname: string
+): Promise<{ status: number | undefined; headers: http.IncomingHttpHeaders; body: Buffer }> {
   return new Promise((resolve, reject) => {
     http
       .get({ path: pathname, socketPath }, (response) => {
-        const chunks = [];
-        response.on('data', (chunk) => chunks.push(chunk));
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
         response.on('end', () =>
           resolve({ status: response.statusCode, headers: response.headers, body: Buffer.concat(chunks) })
         );
       })
       .on('error', reject);
   });
-}
-
-async function waitForHealthz(socketPath) {
-  const started = Date.now();
-  for (;;) {
-    try {
-      if ((await get(socketPath, '/api/healthz')).status === 200) return;
-    } catch {
-      // Not listening yet.
-    }
-    if (Date.now() - started > 15000) throw new Error('Server did not become ready');
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
 }
 
 test('startup sweeps unused preview images, and stored ones are served by key and nothing else is', async (t) => {
@@ -74,7 +64,8 @@ test('startup sweeps unused preview images, and stored ones are served by key an
   const image = await get(socketPath, `/api/link-previews/${KEY}`);
   assert.equal(image.status, 200);
   assert.equal(image.headers['content-type'], 'image/webp');
-  assert.match(image.headers['cache-control'], /immutable/);
+  assert.match(image.headers['cache-control'] ?? '', /immutable/);
+
   assert.equal(image.body.toString(), 'webp-bytes');
 
   for (const pathname of [

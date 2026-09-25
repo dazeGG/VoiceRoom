@@ -1,12 +1,12 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import test from 'node:test';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createAttachmentRepository } from '../src/domains/media/attachment-repository.ts';
-import { createMediaQuotaRepository } from '../src/domains/media/media-quota-repository.ts';
+import { createMediaQuotaRepository, type MediaQuotaRepository } from '../src/domains/media/media-quota-repository.ts';
 import { createMediaQuotaService } from '../src/domains/media/media-quota-service.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { attachment, fakeDb } from './fakes/index.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
 test(
@@ -35,7 +35,9 @@ test(
     );
     assert.equal(results.filter((item) => item.status === 'fulfilled').length, 8);
     assert.equal(
-      results.filter((item) => item.status === 'rejected' && item.reason.code === 'media_pending_limit').length,
+      results.filter(
+        (item) => item.status === 'rejected' && (item.reason as { code?: string }).code === 'media_pending_limit'
+      ).length,
       1
     );
     const first = await quota.reserve({
@@ -44,7 +46,9 @@ test(
       clientRequestId: 'request-0',
       bytes: 1024
     });
-    assert.equal(first.id, results[0].value.id);
+    const [firstResult] = results;
+    assert.ok(firstResult?.status === 'fulfilled');
+    assert.equal(first?.id, firstResult.value?.id);
   }
 );
 
@@ -55,14 +59,14 @@ test('G76-A02 byte and rate boundaries return stable 413 codes and deletion rele
     async findByClientRequest() {
       return null;
     },
-    async createDraft(input) {
+    async createDraft(input: { ownerId: unknown; clientRequestId?: unknown }) {
       created += 1;
-      return input;
+      return attachment({ ownerId: String(input.ownerId), clientRequestId: String(input.clientRequestId) });
     }
   };
-  const quotaRepository = {
+  const quotaRepository: MediaQuotaRepository = {
     async withOwnerReservation(_owner, operation) {
-      return operation({ client: {}, usage });
+      return operation({ client: fakeDb(), usage });
     }
   };
   const quota = createMediaQuotaService({
@@ -73,21 +77,19 @@ test('G76-A02 byte and rate boundaries return stable 413 codes and deletion rele
     maxFilesPerWindow: 20
   });
   await quota.reserve({ ownerId: 'owner', context: 'room', clientRequestId: 'one', bytes: 1 });
-  await assert.rejects(
-    quota.reserve({ ownerId: 'owner', context: 'room', clientRequestId: 'two', bytes: 2 }),
-    (error) => error.statusCode === 413 && error.code === 'media_byte_quota'
-  );
+  await assert.rejects(quota.reserve({ ownerId: 'owner', context: 'room', clientRequestId: 'two', bytes: 2 }), {
+    statusCode: 413,
+    code: 'media_byte_quota'
+  });
   usage.usedBytes = 0;
   usage.pendingCount = 8;
-  await assert.rejects(
-    quota.reserve({ ownerId: 'owner', context: 'room', clientRequestId: 'three', bytes: 1 }),
-    (error) => error.code === 'media_pending_limit'
-  );
+  await assert.rejects(quota.reserve({ ownerId: 'owner', context: 'room', clientRequestId: 'three', bytes: 1 }), {
+    code: 'media_pending_limit'
+  });
   usage.pendingCount = 0;
   usage.recentCount = 20;
-  await assert.rejects(
-    quota.reserve({ ownerId: 'owner', context: 'room', clientRequestId: 'four', bytes: 1 }),
-    (error) => error.code === 'media_rate_limit'
-  );
+  await assert.rejects(quota.reserve({ ownerId: 'owner', context: 'room', clientRequestId: 'four', bytes: 1 }), {
+    code: 'media_rate_limit'
+  });
   assert.equal(created, 1);
 });

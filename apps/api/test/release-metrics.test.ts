@@ -1,8 +1,9 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as metrics from '../src/lib/metrics.ts';
 import { createMediaVisibilityService } from '../src/domains/media/media-visibility-service.ts';
+import type { MediaStorage } from '../src/domains/media/storage.ts';
+import { attachment, fake } from './fakes/index.ts';
 
 test('release queue metrics exclude expected hidden 404s and count only invariant failures', async () => {
   metrics.resetMetricsForTest();
@@ -11,23 +12,16 @@ test('release queue metrics exclude expected hidden 404s and count only invarian
   const service = createMediaVisibilityService({
     attachmentRepository: {
       async findById() {
-        return { id: 'a', ownerId: 'owner', internalState: 'ready', deletedAt: null, boundAt: null };
+        return attachment({ id: 'a' });
       }
     },
-    storage: {},
+    storage: fake<MediaStorage>(),
     onAuthorizationInvariantFailure: metrics.recordMediaAuthorizationInvariantFailure
   });
+  await assert.rejects(service.requireVisible(attachment({ id: 'a' }), 'intruder'));
   await assert.rejects(
-    service.requireVisible(
-      { id: 'a', ownerId: 'owner', internalState: 'ready', deletedAt: null, boundAt: null },
-      'intruder'
-    )
-  );
-  await assert.rejects(
-    service.requireVisible(
-      { id: 'a', ownerId: 'owner', internalState: 'ready', deletedAt: null, boundAt: new Date(), context: 'unknown' },
-      'intruder'
-    )
+    // A bound row with a context the schema forbids: an invariant failure.
+    service.requireVisible(attachment({ id: 'a', boundAt: new Date(), context: 'unknown' as never }), 'intruder')
   );
   metrics.recordCredentialRevokeCleanupFailure();
   const output = metrics.renderPrometheus();

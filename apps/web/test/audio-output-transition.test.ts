@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 import {
@@ -8,9 +7,9 @@ import {
 } from '../src/lib/features/room/client/services/audio-output-transition.ts';
 
 function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((resolvePromise, rejectPromise) => {
+  let resolve = () => {};
+  let reject = (_error: unknown) => {};
+  const promise = new Promise<void>((resolvePromise, rejectPromise) => {
     resolve = resolvePromise;
     reject = rejectPromise;
   });
@@ -19,7 +18,7 @@ function deferred() {
 
 test('audio output remains disconnected until custom sink selection succeeds', async () => {
   const selection = deferred();
-  const events = [];
+  const events: string[] = [];
   const result = transitionAudioOutput({
     disconnect: () => events.push('disconnect'),
     select: () => {
@@ -37,7 +36,7 @@ test('audio output remains disconnected until custom sink selection succeeds', a
 });
 
 test('failed sink selection stays fail-closed', async () => {
-  const events = [];
+  const events: string[] = [];
   const selected = await transitionAudioOutput({
     disconnect: () => events.push('disconnect'),
     select: async () => {
@@ -53,7 +52,7 @@ test('failed sink selection stays fail-closed', async () => {
 
 test('sink transitions are serialized in request order', async () => {
   const first = deferred();
-  const events = [];
+  const events: string[] = [];
   const enqueue = createAudioOutputTransitionQueue();
   const firstResult = enqueue(async () => {
     events.push('first:start');
@@ -75,8 +74,8 @@ test('sink transitions are serialized in request order', async () => {
 });
 
 test('failed initial custom sink never falls back to the default output', async () => {
-  const requested = [];
-  const selected = await initializeAudioOutput(async (sinkId) => {
+  const requested: string[] = [];
+  const selected = await initializeAudioOutput(async (sinkId: string) => {
     requested.push(sinkId);
     return false;
   }, 'custom-speaker');

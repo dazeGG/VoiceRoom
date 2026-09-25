@@ -1,38 +1,12 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createUserStore, hashSessionToken, publicUser } from '../src/lib/user-store.ts';
 import { AVATAR_COLOR_KEYS } from '@voice-room/shared/validation';
-
-function createFakePool(handler) {
-  const calls = [];
-  const client = {
-    async query(text, values = []) {
-      calls.push({ scope: 'client', text, values });
-      if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') return { rows: [], rowCount: 0 };
-      return handler(text, values);
-    },
-    release() {
-      calls.push({ scope: 'client', text: 'release', values: [] });
-    }
-  };
-  return {
-    calls,
-    async query(text, values = []) {
-      calls.push({ scope: 'pool', text, values });
-      return handler(text, values);
-    },
-    async connect() {
-      calls.push({ scope: 'pool', text: 'connect', values: [] });
-      return client;
-    },
-    async end() {}
-  };
-}
+import { fakePoolWithClient as createFakePool } from './fakes/index.ts';
 
 test('createUser stores a validated avatar color key and publicUser returns it', async () => {
-  const pool = createFakePool((text, values) => {
+  const pool = createFakePool((text: string, values: unknown[]) => {
     assert.match(text, /avatar_color_key/);
     assert.equal(values[4], 'rose');
     return {
@@ -58,15 +32,16 @@ test('createUser stores a validated avatar color key and publicUser returns it',
     now: 1000,
     password: 'password123'
   });
+  assert.ok(result.user);
 
   assert.equal(result.status, 'created');
   assert.equal(result.user.avatarColorKey, 'rose');
-  assert.equal(publicUser(result.user).avatarColorKey, 'rose');
-  assert.equal('passwordHash' in publicUser(result.user), false);
+  assert.equal(publicUser(result.user)?.avatarColorKey, 'rose');
+  assert.equal('passwordHash' in (publicUser(result.user) ?? {}), false);
 });
 
 test('createUser falls back to a curated random avatar color for invalid input', async () => {
-  const pool = createFakePool((text, values) => ({
+  const pool = createFakePool((text: string, values: unknown[]) => ({
     rows: [
       {
         id: values[0],
@@ -82,9 +57,10 @@ test('createUser falls back to a curated random avatar color for invalid input',
   const store = createUserStore({ pool });
 
   const result = await store.createUser({ avatarColorKey: 'neon-unbounded', login: 'grace', password: 'password123' });
+  assert.ok(result.user);
 
   assert.ok(AVATAR_COLOR_KEYS.includes(result.user.avatarColorKey));
-  assert.ok(AVATAR_COLOR_KEYS.includes(pool.calls[0].values[4]));
+  assert.ok((AVATAR_COLOR_KEYS as readonly unknown[]).includes(pool.calls[0]?.values[4]));
 });
 
 test('publicUser exposes avatar URL and accent without leaking the storage key', () => {
@@ -98,6 +74,7 @@ test('publicUser exposes avatar URL and accent without leaking the storage key',
     createdAt: 1000,
     presenceStatus: 'away'
   });
+  assert.ok(user);
   assert.equal(user.avatarUrl, '/api/avatars/av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp');
   assert.equal(user.avatarAccent, '#49303f');
   assert.equal(user.presenceStatus, 'away');
@@ -107,13 +84,14 @@ test('publicUser exposes avatar URL and accent without leaking the storage key',
 
 test('publicUser derives legacy DND flags from the canonical presence status', () => {
   const user = publicUser({ id: 'user-1', login: 'ada', presenceStatus: 'dnd' });
+  assert.ok(user);
   assert.equal(user.presenceStatus, 'dnd');
   assert.equal(user.dnd, true);
   assert.equal(user.doNotDisturb, true);
 });
 
 test('updateAvatar persists the storage key and server-derived accent', async () => {
-  const pool = createFakePool((text, values) => {
+  const pool = createFakePool((text: string, values: unknown[]) => {
     assert.match(text, /SET avatar_key = \$2, avatar_accent = \$3/);
     assert.equal(values[0], '123e4567-e89b-12d3-a456-426614174000');
     assert.equal(values[1], 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp');
@@ -138,6 +116,7 @@ test('updateAvatar persists the storage key and server-derived accent', async ()
     avatarAccent: '#49303f',
     now: 2000
   });
+  assert.ok(user);
   assert.equal(user.avatarKey, 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp');
   assert.equal(user.avatarAccent, '#49303f');
 });
@@ -146,7 +125,7 @@ test('swapAvatar locks the user row and returns the exact key it replaced', asyn
   const userId = '123e4567-e89b-12d3-a456-426614174000';
   const oldKey = `av_${userId}_0123abcd.webp`;
   const nextKey = `av_${userId}_deadbeef.webp`;
-  const pool = createFakePool((text, values) => {
+  const pool = createFakePool((text: string, values: unknown[]) => {
     if (/SELECT avatar_key FROM users/.test(text)) {
       assert.match(text, /FOR UPDATE/);
       return { rows: [{ avatar_key: oldKey }], rowCount: 1 };
@@ -176,6 +155,7 @@ test('swapAvatar locks the user row and returns the exact key it replaced', asyn
     avatarAccent: '#49303f',
     now: 2000
   });
+  assert.ok(result.user);
 
   assert.equal(result.previousAvatarKey, oldKey);
   assert.equal(result.user.avatarKey, nextKey);
@@ -186,7 +166,7 @@ test('swapAvatar locks the user row and returns the exact key it replaced', asyn
 
 test('sessions store only token hashes in the database', async () => {
   const rawToken = 'session-token-for-cookie-only';
-  const pool = createFakePool((text, values) => {
+  const pool = createFakePool((text: string, values: unknown[]) => {
     if (/INSERT INTO sessions/.test(text)) {
       assert.equal(values[0], hashSessionToken(rawToken));
       assert.notEqual(values[0], rawToken);
