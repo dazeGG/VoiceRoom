@@ -11,11 +11,23 @@ test('avatar reconciliation removes files that have no live database reference',
 
   const result = await reconcileAvatarStorage({
     storage: {
-      async listKeys() { return [userKey, roomKey, orphanKey]; },
-      async remove(key) { removed.push(key); }
+      async listKeys() {
+        return [userKey, roomKey, orphanKey];
+      },
+      async remove(key) {
+        removed.push(key);
+      }
     },
-    userStore: { async listAvatarKeys() { return [userKey]; } },
-    roomStore: { async listAvatarKeys() { return [roomKey]; } }
+    userStore: {
+      async listAvatarKeys() {
+        return [userKey];
+      }
+    },
+    roomStore: {
+      async listAvatarKeys() {
+        return [roomKey];
+      }
+    }
   });
 
   assert.deepEqual(result, { orphaned: [orphanKey], removed: 1 });

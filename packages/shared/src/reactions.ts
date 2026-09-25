@@ -47,7 +47,8 @@ export function normalizeReactionSummary(value: unknown): ReactionSummary | null
   const emoji: string = cleanReactionEmoji(input.emoji);
   const count = Number(input.count);
   const revision = normalizeReactionRevision(input.revision);
-  if (!emoji || !Number.isSafeInteger(count) || count < 0 || !revision || typeof input.reactedByMe !== 'boolean') return null;
+  if (!emoji || !Number.isSafeInteger(count) || count < 0 || !revision || typeof input.reactedByMe !== 'boolean')
+    return null;
   return { emoji, count, reactedByMe: input.reactedByMe, revision };
 }
 

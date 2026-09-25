@@ -8,7 +8,15 @@ export const toastUi = $state({
 
 let toastTimer = 0;
 
-export function showToastUi(message: string, options: { action?: () => void | Promise<void>; actionLabel?: string; duration?: number; variant?: 'info' | 'error' } = {}): void {
+export function showToastUi(
+  message: string,
+  options: {
+    action?: () => void | Promise<void>;
+    actionLabel?: string;
+    duration?: number;
+    variant?: 'info' | 'error';
+  } = {}
+): void {
   const { action = null, actionLabel = '', duration = 2400, variant = 'info' } = options;
   toastUi.action = action;
   toastUi.actionLabel = actionLabel;

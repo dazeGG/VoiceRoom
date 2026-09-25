@@ -33,16 +33,33 @@ test('title, twitter and description tags fill in, and unsafe image links are ig
     siteName: '',
     imageUrl: null
   });
-  assert.deepEqual(extractLinkPreviewMetadata('', 'https://example.com/'), { title: '', description: '', siteName: '', imageUrl: null });
+  assert.deepEqual(extractLinkPreviewMetadata('', 'https://example.com/'), {
+    title: '',
+    description: '',
+    siteName: '',
+    imageUrl: null
+  });
 });
 
 test('pages in windows-1251 are decoded from the header or the meta tag', () => {
   const privet = Buffer.from([0xcf, 0xf0, 0xe8, 0xe2, 0xe5, 0xf2]);
-  const titled = (prefix: string) => Buffer.concat([Buffer.from(prefix, 'latin1'), Buffer.from('<title>', 'latin1'), privet, Buffer.from('</title>', 'latin1')]);
+  const titled = (prefix: string) =>
+    Buffer.concat([
+      Buffer.from(prefix, 'latin1'),
+      Buffer.from('<title>', 'latin1'),
+      privet,
+      Buffer.from('</title>', 'latin1')
+    ]);
 
   assert.match(decodeHtmlBody(titled(''), 'text/html; charset=windows-1251'), /<title>Привет<\/title>/);
-  assert.match(decodeHtmlBody(titled('<meta http-equiv="Content-Type" content="text/html; charset=windows-1251">'), 'text/html'), /Привет/);
+  assert.match(
+    decodeHtmlBody(titled('<meta http-equiv="Content-Type" content="text/html; charset=windows-1251">'), 'text/html'),
+    /Привет/
+  );
   assert.match(decodeHtmlBody(titled('<meta charset="cp1251">'), 'text/html'), /Привет/);
   assert.equal(decodeHtmlBody(Buffer.from('<title>Привет</title>'), 'text/html'), '<title>Привет</title>');
-  assert.equal(decodeHtmlBody(Buffer.from('<title>ok</title>'), 'text/html; charset=no-such-charset'), '<title>ok</title>');
+  assert.equal(
+    decodeHtmlBody(Buffer.from('<title>ok</title>'), 'text/html; charset=no-such-charset'),
+    '<title>ok</title>'
+  );
 });

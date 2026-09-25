@@ -32,6 +32,9 @@ export function createAudioOutputTransitionQueue(): (transition: () => Promise<b
  * rejected persisted custom sink must remain silent until the user chooses a
  * different output.
  */
-export function initializeAudioOutput(selectOutput: (sinkId: string) => Promise<boolean>, sinkId: string): Promise<boolean> {
+export function initializeAudioOutput(
+  selectOutput: (sinkId: string) => Promise<boolean>,
+  sinkId: string
+): Promise<boolean> {
   return selectOutput(sinkId);
 }

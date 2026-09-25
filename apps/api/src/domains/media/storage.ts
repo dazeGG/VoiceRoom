@@ -113,15 +113,18 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
     }
   }
 
-  async function save(attachmentId: unknown, variant: unknown, source: MediaSource | unknown, { maxBytes = Infinity }: { maxBytes?: number } = {}):
-    Promise<Readonly<{ key: string; bytes: number }>> {
+  async function save(
+    attachmentId: unknown,
+    variant: unknown,
+    source: MediaSource | unknown,
+    { maxBytes = Infinity }: { maxBytes?: number } = {}
+  ): Promise<Readonly<{ key: string; bytes: number }>> {
     const id = validateAttachmentId(attachmentId);
     const normalizedVariant = validateVariant(variant);
     const directory = await ensureAttachmentDirectory(id);
     const destination = path.join(directory, normalizedVariant);
     const temporary = path.join(directory, `.${normalizedVariant}.${crypto.randomUUID()}.tmp`);
-    const flags = fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY |
-      (fs.constants.O_NOFOLLOW || 0);
+    const flags = fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY | (fs.constants.O_NOFOLLOW || 0);
     let handle: fs.promises.FileHandle | null | undefined;
     let bytes = 0;
     try {
@@ -156,7 +159,10 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
     }
   }
 
-  async function openRead(attachmentId: unknown, variant: unknown): Promise<Readonly<{ key: string; bytes: number; stream: ReadStream }>> {
+  async function openRead(
+    attachmentId: unknown,
+    variant: unknown
+  ): Promise<Readonly<{ key: string; bytes: number; stream: ReadStream }>> {
     const directory = await existingAttachmentDirectory(attachmentId);
     if (!directory) {
       const error = new Error('Media object does not exist') as Error & { code?: string };
@@ -227,7 +233,7 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
         throw new Error('Private media namespace contains an invalid attachment directory');
       }
       // assertDirectory above this call rules out a missing directory.
-      const directory = await existingAttachmentDirectory(entry.name) as string;
+      const directory = (await existingAttachmentDirectory(entry.name)) as string;
       const variants = await fs.promises.readdir(directory, { withFileTypes: true });
       for (const variant of variants) {
         if (VARIANTS.has(variant.name) && variant.isFile() && !variant.isSymbolicLink()) {
@@ -250,7 +256,10 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
     });
   }
 
-  async function removeStaleTemporaryFiles(before: Date | number | string, { limit = 500 }: { limit?: number } = {}): Promise<string[]> {
+  async function removeStaleTemporaryFiles(
+    before: Date | number | string,
+    { limit = 500 }: { limit?: number } = {}
+  ): Promise<string[]> {
     await ensureRoot();
     const cutoff = before instanceof Date ? before.getTime() : Number(before);
     if (!Number.isFinite(cutoff)) throw new TypeError('A temporary media cutoff is required');
@@ -259,7 +268,7 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
     for (const entry of entries) {
       if (removed.length >= Math.max(1, Math.min(Number(limit) || 500, 500))) break;
       if (!UUID_PATTERN.test(entry.name) || !entry.isDirectory() || entry.isSymbolicLink()) continue;
-      const directory = await existingAttachmentDirectory(entry.name) as string;
+      const directory = (await existingAttachmentDirectory(entry.name)) as string;
       const variants = await fs.promises.readdir(directory, { withFileTypes: true });
       for (const variant of variants) {
         if (removed.length >= limit) break;

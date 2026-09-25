@@ -31,7 +31,10 @@ function resolvingTo(table) {
       callback(Object.assign(new Error('not found'), { code: 'ENOTFOUND' }));
       return;
     }
-    callback(null, addresses.map((address) => ({ address, family: address.includes(':') ? 6 : 4 })));
+    callback(
+      null,
+      addresses.map((address) => ({ address, family: address.includes(':') ? 6 : 4 }))
+    );
   };
 }
 
@@ -46,8 +49,22 @@ test('only public addresses count as reachable', () => {
     assert.equal(isPublicAddress(address), true, address);
   }
   for (const address of [
-    '127.0.0.1', '10.1.2.3', '172.20.0.1', '192.168.1.1', '169.254.169.254', '100.64.0.1', '0.0.0.0',
-    '224.0.0.1', '::1', '::', 'fc00::1', 'fe80::1', '::ffff:127.0.0.1', '::ffff:10.0.0.1', 'not-an-ip', ''
+    '127.0.0.1',
+    '10.1.2.3',
+    '172.20.0.1',
+    '192.168.1.1',
+    '169.254.169.254',
+    '100.64.0.1',
+    '0.0.0.0',
+    '224.0.0.1',
+    '::1',
+    '::',
+    'fc00::1',
+    'fe80::1',
+    '::ffff:127.0.0.1',
+    '::ffff:10.0.0.1',
+    'not-an-ip',
+    ''
   ]) {
     assert.equal(isPublicAddress(address), false, address);
   }
@@ -72,7 +89,11 @@ test('a page is read through the vetted address, after redirects, and cut at the
 
 test('private destinations and unusual links are refused before any connection', async () => {
   const fetcher = createLinkPreviewFetcher({
-    lookup: resolvingTo({ 'intranet.test': ['10.0.0.5'], 'mixed.test': ['93.184.216.34', '10.0.0.5'], 'public.test': ['93.184.216.34'] })
+    lookup: resolvingTo({
+      'intranet.test': ['10.0.0.5'],
+      'mixed.test': ['93.184.216.34', '10.0.0.5'],
+      'public.test': ['93.184.216.34']
+    })
   });
   const refusals = [
     ['http://127.0.0.1/', 'blocked_address'],
@@ -92,7 +113,8 @@ test('private destinations and unusual links are refused before any connection',
 
 test('a redirect into the private network is refused like a direct link', async (t) => {
   const origin = await startSite(t, {
-    '/to-metadata': (_request, response) => response.writeHead(302, { Location: 'http://169.254.169.254/latest/meta-data' }).end(),
+    '/to-metadata': (_request, response) =>
+      response.writeHead(302, { Location: 'http://169.254.169.254/latest/meta-data' }).end(),
     '/to-intranet': (_request, response) => response.writeHead(301, { Location: 'http://internal.test/admin' }).end()
   });
   const fetcher = createLinkPreviewFetcher(localOnly);

@@ -39,10 +39,30 @@ test('a message without structured content shows its plain text', () => {
 
 test('mention suggestions show face, name and login, mark the active one and pick on click', async () => {
   const onselect = vi.fn();
-  const member = (userId: string, displayName: string, login: string, role = 'member') => ({ userId, displayName, login, role, avatarColorKey: 'blue', avatarUrl: null, avatarAccent: null, joinedAt: null, inVoice: false, presenceStatus: 'online' });
-  render(MentionAutocomplete, { props: { candidates: [member('u1', 'Анна', 'anna', 'owner'), member('u2', 'Анна', 'anna2')] as never, activeIndex: 1, onselect } });
+  const member = (userId: string, displayName: string, login: string, role = 'member') => ({
+    userId,
+    displayName,
+    login,
+    role,
+    avatarColorKey: 'blue',
+    avatarUrl: null,
+    avatarAccent: null,
+    joinedAt: null,
+    inVoice: false,
+    presenceStatus: 'online'
+  });
+  render(MentionAutocomplete, {
+    props: {
+      candidates: [member('u1', 'Анна', 'anna', 'owner'), member('u2', 'Анна', 'anna2')] as never,
+      activeIndex: 1,
+      onselect
+    }
+  });
   const options = screen.getAllByRole('option');
-  expect(options.map((option) => option.textContent?.replace(/\s+/g, ' ').trim())).toEqual(['А Анна @anna · Создатель', 'А Анна @anna2']);
+  expect(options.map((option) => option.textContent?.replace(/\s+/g, ' ').trim())).toEqual([
+    'А Анна @anna · Создатель',
+    'А Анна @anna2'
+  ]);
   expect(options[1]?.getAttribute('aria-selected')).toBe('true');
   await userEvent.click(options[0]);
   expect(onselect).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u1' }));

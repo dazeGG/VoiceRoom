@@ -1,20 +1,30 @@
 import type pg from 'pg';
 import { transaction } from '../../lib/db.ts';
-import { createActiveBanRepository, normalizePrincipal, type ActiveBanRecord, type ActiveBanRepository } from './active-ban-repository.ts';
+import {
+  createActiveBanRepository,
+  normalizePrincipal,
+  type ActiveBanRecord,
+  type ActiveBanRepository
+} from './active-ban-repository.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type TimeInput = Date | number | string;
 
 export type BanCreation =
-  | { ban: null; status: 'invalid' | 'not_found' | 'cap_exceeded' }
-  | { ban: ActiveBanRecord | null; status: 'created' };
+  { ban: null; status: 'invalid' | 'not_found' | 'cap_exceeded' } | { ban: ActiveBanRecord | null; status: 'created' };
 
-function createActiveBanService({ pool, repository = createActiveBanRepository({ pool }), now = Date.now }: {
+function createActiveBanService({
+  pool,
+  repository = createActiveBanRepository({ pool }),
+  now = Date.now
+}: {
   pool?: pg.Pool | null;
   repository?: ActiveBanRepository;
   now?: () => number;
 } = {}) {
-  async function getActiveBan(input: Parameters<ActiveBanRepository['findActive']>[0] = {}): Promise<ActiveBanRecord | null> {
+  async function getActiveBan(
+    input: Parameters<ActiveBanRepository['findActive']>[0] = {}
+  ): Promise<ActiveBanRecord | null> {
     return repository.findActive({ ...input, at: input.at ?? now() });
   }
 
@@ -22,23 +32,37 @@ function createActiveBanService({ pool, repository = createActiveBanRepository({
     return Boolean(await getActiveBan(input));
   }
 
-  async function filterEligibleUserIds({ roomId, userIds = [], at = now(), client }: {
+  async function filterEligibleUserIds({
+    roomId,
+    userIds = [],
+    at = now(),
+    client
+  }: {
     roomId?: string;
     userIds?: unknown;
     at?: TimeInput;
     client?: QueryClient | null;
   } = {}): Promise<string[]> {
-    const normalized = Array.from(new Set(
-      (Array.isArray(userIds) ? userIds : [])
-        .filter((userId): userId is string => typeof userId === 'string' && Boolean(userId.trim()))
-        .map((userId) => userId.trim())
-    ));
+    const normalized = Array.from(
+      new Set(
+        (Array.isArray(userIds) ? userIds : [])
+          .filter((userId): userId is string => typeof userId === 'string' && Boolean(userId.trim()))
+          .map((userId) => userId.trim())
+      )
+    );
     if (!roomId || normalized.length === 0) return [];
     const banned = new Set(await repository.filterActiveUserIds({ roomId, userIds: normalized, at, client }));
     return normalized.filter((userId) => !banned.has(userId));
   }
 
-  async function createBan({ roomId, userId = null, ip = '', expiresAt = null, metadata = {}, maxActiveBans = 100 }: {
+  async function createBan({
+    roomId,
+    userId = null,
+    ip = '',
+    expiresAt = null,
+    metadata = {},
+    maxActiveBans = 100
+  }: {
     roomId?: string;
     userId?: unknown;
     ip?: unknown;
@@ -56,7 +80,7 @@ function createActiveBanService({ pool, repository = createActiveBanRepository({
       if (room.rowCount === 0) return { ban: null, status: 'not_found' };
 
       const limit = Number.isInteger(maxActiveBans) && maxActiveBans >= 0 ? maxActiveBans : 100;
-      if (limit > 0 && await repository.countActive(roomId, { at, client }) >= limit) {
+      if (limit > 0 && (await repository.countActive(roomId, { at, client })) >= limit) {
         return { ban: null, status: 'cap_exceeded' };
       }
       const ban = await repository.insert({ roomId, ...principal, expiresAt, metadata, at, client });

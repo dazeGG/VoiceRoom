@@ -21,7 +21,10 @@ export function normalizeAttachmentIds(value: unknown): string[] | null {
 }
 
 /** The Idempotency-Key header, or the body's idempotencyKey; '' when unusable. */
-export function requestIdempotencyKey(req: { headers?: Record<string, unknown> } | null | undefined, body: { idempotencyKey?: unknown } | null | undefined): string {
+export function requestIdempotencyKey(
+  req: { headers?: Record<string, unknown> } | null | undefined,
+  body: { idempotencyKey?: unknown } | null | undefined
+): string {
   const value = req?.headers?.['idempotency-key'] ?? body?.idempotencyKey;
   const key = typeof value === 'string' ? value.trim() : '';
   return key.length >= 8 && key.length <= 160 ? key : '';

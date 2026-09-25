@@ -40,7 +40,12 @@ h1 {
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   padding: 0 16px;
-  transition: background 160ms var(--ease-out), color 160ms var(--ease-out), border-color 160ms var(--ease-out), box-shadow 160ms var(--ease-out), transform 160ms var(--ease-out);
+  transition:
+    background 160ms var(--ease-out),
+    color 160ms var(--ease-out),
+    border-color 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out),
+    transform 160ms var(--ease-out);
 }
 
 .tool-button {
@@ -76,11 +81,11 @@ h1 {
 }
 
 /* When the summary bar is hidden the grid is the only row. */
-body[data-stage-summary="hidden"] .stage-strip {
+body[data-stage-summary='hidden'] .stage-strip {
   grid-template-rows: minmax(0, 1fr);
 }
 
-body[data-stage-summary="hidden"] .stage-strip-bar {
+body[data-stage-summary='hidden'] .stage-strip-bar {
   display: none;
 }
 
@@ -128,7 +133,10 @@ body[data-stage-summary="hidden"] .stage-strip-bar {
   padding: 0;
   background: var(--warm-900);
   color: var(--muted);
-  transition: background 140ms var(--ease-out), border-color 140ms var(--ease-out), color 140ms var(--ease-out);
+  transition:
+    background 140ms var(--ease-out),
+    border-color 140ms var(--ease-out),
+    color 140ms var(--ease-out);
 }
 
 .strip-toggle-button:hover {
@@ -143,6 +151,6 @@ body[data-stage-summary="hidden"] .stage-strip-bar {
   transition: transform 160ms var(--ease-out);
 }
 
-body[data-strip-collapsed="true"] .strip-toggle-button svg {
+body[data-strip-collapsed='true'] .strip-toggle-button svg {
   transform: rotate(180deg);
 }

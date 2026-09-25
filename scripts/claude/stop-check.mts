@@ -23,7 +23,9 @@ function readInput(): StopInput {
 const input = readInput();
 if (input.stop_hook_active) process.exit(0);
 
-const changed = execFileSync('git', ['status', '--porcelain', '--', 'apps', 'packages', 'scripts'], { encoding: 'utf8' }).trim();
+const changed = execFileSync('git', ['status', '--porcelain', '--', 'apps', 'packages', 'scripts'], {
+  encoding: 'utf8'
+}).trim();
 if (!changed) process.exit(0);
 
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';

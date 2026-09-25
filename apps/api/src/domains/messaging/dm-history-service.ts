@@ -1,4 +1,8 @@
-import { buildHistoryEnvelope, normalizeHistoryRequest, type HistoryEnvelope } from '@voice-room/shared/messaging-history';
+import {
+  buildHistoryEnvelope,
+  normalizeHistoryRequest,
+  type HistoryEnvelope
+} from '@voice-room/shared/messaging-history';
 import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
 
 type Tuple = { createdAtMicros: unknown; id: string };
@@ -59,11 +63,20 @@ function canonicalParticipants(userId: string, peerId: string): [string, string]
   return userId < peerId ? [userId, peerId] : [peerId, userId];
 }
 
-function createDmHistoryService({ repository, cursorCodec, visibilityPolicy, projectMessage }: {
+function createDmHistoryService({
+  repository,
+  cursorCodec,
+  visibilityPolicy,
+  projectMessage
+}: {
   repository?: DmHistoryRepository;
   cursorCodec?: HistoryCursorCodec;
   visibilityPolicy?: VisibilityPolicy;
-  projectMessage?: (input: { message: StoredDirectMessage; userId: string; peerId: string }) => Promise<StoredDirectMessage> | StoredDirectMessage;
+  projectMessage?: (input: {
+    message: StoredDirectMessage;
+    userId: string;
+    peerId: string;
+  }) => Promise<StoredDirectMessage> | StoredDirectMessage;
 } = {}) {
   if (!repository) throw new TypeError('DM history repository is required');
   if (!cursorCodec?.encode || !cursorCodec?.decode) throw new TypeError('cursor codec is required');
@@ -117,7 +130,11 @@ function createDmHistoryService({ repository, cursorCodec, visibilityPolicy, pro
     };
   }
 
-  async function getPage({ userId, peerId, query = {} }: { userId?: unknown; peerId?: unknown; query?: Loose } = {}): Promise<HistoryEnvelope> {
+  async function getPage({
+    userId,
+    peerId,
+    query = {}
+  }: { userId?: unknown; peerId?: unknown; query?: Loose } = {}): Promise<HistoryEnvelope> {
     const viewer = String(userId || '').trim();
     const peer = String(peerId || '').trim();
     if (!viewer) throw new DmHistoryError('authentication_required', 401, 'Authentication required');
@@ -139,20 +156,28 @@ function createDmHistoryService({ repository, cursorCodec, visibilityPolicy, pro
       }
     }
 
-    const method = ({
-      latest: 'listLatest',
-      before: 'listBefore',
-      after: 'listAfter',
-      around: 'listAround'
-    } as const)[mode];
-    const page = await (history[method] as (input: ListInput) => Promise<HistoryPage>)({ userId: viewer, peerId: peer, anchor, limit });
+    const method = (
+      {
+        latest: 'listLatest',
+        before: 'listBefore',
+        after: 'listAfter',
+        around: 'listAround'
+      } as const
+    )[mode];
+    const page = await (history[method] as (input: ListInput) => Promise<HistoryPage>)({
+      userId: viewer,
+      peerId: peer,
+      anchor,
+      limit
+    });
     const visible: StoredDirectMessage[] = [];
     for (const message of page.messages) {
       if (await canView(message, viewer)) visible.push(message);
     }
-    const projected = typeof projectMessage === 'function'
-      ? await Promise.all(visible.map((message) => projectMessage({ message, userId: viewer, peerId: peer })))
-      : visible;
+    const projected =
+      typeof projectMessage === 'function'
+        ? await Promise.all(visible.map((message) => projectMessage({ message, userId: viewer, peerId: peer })))
+        : visible;
     const messages = projected.map((message) => toDto(viewer, peer, message));
 
     return buildHistoryEnvelope({

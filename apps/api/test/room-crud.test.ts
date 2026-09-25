@@ -392,7 +392,6 @@ function teardownSocketServer(t, { server, dir, sessions = [] }) {
   });
 }
 
-
 test('authenticated room presence exposes only minimal account user id on peers', async (t) => {
   const { dir, socketPath, server } = await startSocketServer({ room1: staticRoom() });
   const ownerPresence = await openVoiceSession(socketPath, {
@@ -438,10 +437,7 @@ test('room join refreshes profile identity changed after the websocket opened', 
       return token === OWNER_TOKEN ? { user: { ...owner } } : null;
     }
   };
-  const { dir, socketPath, server } = await startSocketServer(
-    { room1: staticRoom() },
-    { users }
-  );
+  const { dir, socketPath, server } = await startSocketServer({ room1: staticRoom() }, { users });
   const presence = openWs(socketPath, { cookie: `vr_session=${OWNER_TOKEN}` });
   await presence.ready;
   const initialSnapshot = await joinVoiceRoom(presence, {
@@ -450,10 +446,7 @@ test('room join refreshes profile identity changed after the websocket opened', 
     sessionToken: OWNER_PEER_TOKEN,
     name: 'Ignored initial client name'
   });
-  assert.equal(
-    initialSnapshot.payload.peers.find((entry) => entry.id === 'peer0001')?.name,
-    'Original Profile'
-  );
+  assert.equal(initialSnapshot.payload.peers.find((entry) => entry.id === 'peer0001')?.name, 'Original Profile');
 
   const observer = openWs(socketPath);
   await observer.ready;
@@ -518,10 +511,7 @@ test('room join refreshes profile identity changed after the websocket opened', 
     sessionToken: GUEST_PEER_TOKEN,
     name: 'Attempted guest reconnect rename'
   });
-  assert.equal(
-    guestSnapshot.payload.peers.find((entry) => entry.id === 'peer0002')?.name,
-    'Observer'
-  );
+  assert.equal(guestSnapshot.payload.peers.find((entry) => entry.id === 'peer0002')?.name, 'Observer');
 
   teardownSocketServer(t, {
     server,
@@ -616,5 +606,8 @@ test('DELETE does not broadcast lifecycle frames when persistence fails', async 
     cookie: `vr_session=${OWNER_TOKEN}`
   });
   assert.equal(deleteStatus, 404);
-  await assert.rejects(waitForWsType(preview.frames, 'room.deleted', () => true, 150), /room.deleted/);
+  await assert.rejects(
+    waitForWsType(preview.frames, 'room.deleted', () => true, 150),
+    /room.deleted/
+  );
 });

@@ -4,6 +4,8 @@
 import type { AvatarColorKey } from './validation.ts';
 import visualIdentityJson from './visual-identity.json' with { type: 'json' };
 
-const visualIdentity: { AVATAR_COLOR_KEYS: readonly AvatarColorKey[] } = visualIdentityJson as { AVATAR_COLOR_KEYS: readonly AvatarColorKey[] };
+const visualIdentity: { AVATAR_COLOR_KEYS: readonly AvatarColorKey[] } = visualIdentityJson as {
+  AVATAR_COLOR_KEYS: readonly AvatarColorKey[];
+};
 
 export default visualIdentity;

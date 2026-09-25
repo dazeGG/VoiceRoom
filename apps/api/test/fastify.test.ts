@@ -151,9 +151,15 @@ test('API lifecycle starts and stops runtime readiness', async () => {
   const app = createApiApp({
     store: createFakeStore(),
     readinessProviderOverride: {
-      async start() { starts += 1; },
-      async stop() { stops += 1; },
-      getSnapshot() { return { features: {} }; }
+      async start() {
+        starts += 1;
+      },
+      async stop() {
+        stops += 1;
+      },
+      getSnapshot() {
+        return { features: {} };
+      }
     }
   });
 
@@ -184,7 +190,10 @@ test('capability route returns exactly the public boolean capability contract', 
   assert.equal(response.statusCode, 200);
   const features = response.json().features;
   assert.deepEqual(Object.keys(features), PUBLIC_CAPABILITY_KEYS);
-  assert.equal(Object.values(features).every((value) => typeof value === 'boolean'), true);
+  assert.equal(
+    Object.values(features).every((value) => typeof value === 'boolean'),
+    true
+  );
   assert.equal(features.historyCursor, true);
   assert.equal(features.mediaUploads, true);
   assert.equal(features.readCursor, false);
@@ -210,20 +219,31 @@ test('capability route defaults the public boolean contract when readiness throw
 test('production cursor HMAC resolution has no membership fallback secret', () => {
   const { resolveCursorHmacKeys } = require('../src/server.ts').__private;
 
-  assert.throws(() => resolveCursorHmacKeys({
-    context: 'membership',
-    env: { NODE_ENV: 'production', LIVEKIT_GATE_SECRET: 'too-short' }
-  }), /VOICE_ROOM_CURSOR_HMAC_KEYS is required in production/);
+  assert.throws(
+    () =>
+      resolveCursorHmacKeys({
+        context: 'membership',
+        env: { NODE_ENV: 'production', LIVEKIT_GATE_SECRET: 'too-short' }
+      }),
+    /VOICE_ROOM_CURSOR_HMAC_KEYS is required in production/
+  );
 
-  assert.throws(() => resolveCursorHmacKeys({
-    context: 'history',
-    env: { NODE_ENV: 'production', LIVEKIT_GATE_SECRET: 'x'.repeat(64) }
-  }), /VOICE_ROOM_CURSOR_HMAC_KEYS is required in production/);
+  assert.throws(
+    () =>
+      resolveCursorHmacKeys({
+        context: 'history',
+        env: { NODE_ENV: 'production', LIVEKIT_GATE_SECRET: 'x'.repeat(64) }
+      }),
+    /VOICE_ROOM_CURSOR_HMAC_KEYS is required in production/
+  );
 
-  assert.equal(resolveCursorHmacKeys({
-    context: 'membership',
-    env: { NODE_ENV: 'production', VOICE_ROOM_CURSOR_HMAC_KEYS: 'configured-key' }
-  }), 'configured-key');
+  assert.equal(
+    resolveCursorHmacKeys({
+      context: 'membership',
+      env: { NODE_ENV: 'production', VOICE_ROOM_CURSOR_HMAC_KEYS: 'configured-key' }
+    }),
+    'configured-key'
+  );
 });
 
 test('createApiServer keeps the legacy http server contract while exposing app/inject', async () => {
@@ -249,8 +269,14 @@ test('push subscription routes require auth and validate subscription payloads',
       }
     },
     pushes: {
-      async upsert(input) { writes.push(input); return { id: 'subscription-1' }; },
-      async remove(input) { removals.push(input); return true; }
+      async upsert(input) {
+        writes.push(input);
+        return { id: 'subscription-1' };
+      },
+      async remove(input) {
+        removals.push(input);
+        return true;
+      }
     },
     push: { config: { enabled: true, vapidPublicKey: 'public-key' }, async sendToUser() {} }
   });
@@ -259,18 +285,25 @@ test('push subscription routes require auth and validate subscription payloads',
   const config = await app.inject({ method: 'GET', url: '/api/push/config' });
   assert.deepEqual(config.json(), { enabled: true, vapidPublicKey: 'public-key' });
   assert.equal((await app.inject({ method: 'POST', url: '/api/push/subscriptions', payload: {} })).statusCode, 401);
-  assert.equal((await app.inject({
-    method: 'POST',
-    url: '/api/push/subscriptions',
-    headers: { cookie: 'vr_session=push-session' },
-    payload: { subscription: { endpoint: 'javascript:alert(1)', keys: { p256dh: 'key', auth: 'auth' } } }
-  })).statusCode, 400);
+  assert.equal(
+    (
+      await app.inject({
+        method: 'POST',
+        url: '/api/push/subscriptions',
+        headers: { cookie: 'vr_session=push-session' },
+        payload: { subscription: { endpoint: 'javascript:alert(1)', keys: { p256dh: 'key', auth: 'auth' } } }
+      })
+    ).statusCode,
+    400
+  );
 
   const created = await app.inject({
     method: 'POST',
     url: '/api/push/subscriptions',
     headers: { cookie: 'vr_session=push-session', 'user-agent': 'test-browser' },
-    payload: { subscription: { endpoint: 'https://fcm.googleapis.com/fcm/send/device', keys: { p256dh: 'key', auth: 'auth' } } }
+    payload: {
+      subscription: { endpoint: 'https://fcm.googleapis.com/fcm/send/device', keys: { p256dh: 'key', auth: 'auth' } }
+    }
   });
   assert.equal(created.statusCode, 201);
   assert.equal(writes[0].userId, 'user-1');
@@ -325,13 +358,14 @@ test('api metrics expose prometheus counters and runtime gauges', async (t) => {
   assert.equal(metrics.statusCode, 200);
   assert.match(metrics.headers['content-type'], /text\/plain/);
   assert.match(metrics.body, /# TYPE voice_room_api_http_requests_total counter/);
-  assert.ok(metrics.body.includes('voice_room_api_http_requests_total{method="GET",route="/api/healthz",status="200"} 1'));
+  assert.ok(
+    metrics.body.includes('voice_room_api_http_requests_total{method="GET",route="/api/healthz",status="200"} 1')
+  );
   assert.match(metrics.body, /voice_room_api_ws_connections 0/);
   assert.match(metrics.body, /voice_room_api_ws_guest_connections 0/);
   assert.match(metrics.body, /voice_room_api_presence_rooms 0/);
   assert.match(metrics.body, /voice_room_api_pg_pool_errors_total 0/);
 });
-
 
 test('auth session store failures return 5xx instead of anonymous auth state', async (t) => {
   const app = createApiApp({
@@ -433,14 +467,24 @@ test('moderation routes require the owner of a static room', async (t) => {
 
   const nonOwnerApp = createApiApp({
     users,
-    store: { ...baseStore, async getRoom() { return { id: 'room-1', isStatic: true, ownerId: 'other-user', peers: new Map() }; } }
+    store: {
+      ...baseStore,
+      async getRoom() {
+        return { id: 'room-1', isStatic: true, ownerId: 'other-user', peers: new Map() };
+      }
+    }
   });
   t.after(() => nonOwnerApp.close());
   assert.equal((await nonOwnerApp.inject(request('/api/rooms/room-1/kick'))).statusCode, 403);
 
   const temporaryApp = createApiApp({
     users,
-    store: { ...baseStore, async getRoom() { return { id: 'room-2', isStatic: false, ownerId: userId, peers: new Map() }; } }
+    store: {
+      ...baseStore,
+      async getRoom() {
+        return { id: 'room-2', isStatic: false, ownerId: userId, peers: new Map() };
+      }
+    }
   });
   t.after(() => temporaryApp.close());
   assert.equal((await temporaryApp.inject(request('/api/rooms/room-2/ban'))).statusCode, 403);
@@ -487,7 +531,15 @@ test('message edit routes reuse send validation and never grant room owners an a
     },
     async editMessage(input) {
       dmEdit = input;
-      return { id: input.messageId, senderId: input.senderId, recipientId: input.recipientId, body: input.body, createdAt: 100, editedAt: 200, readAt: null };
+      return {
+        id: input.messageId,
+        senderId: input.senderId,
+        recipientId: input.recipientId,
+        body: input.body,
+        createdAt: 100,
+        editedAt: 200,
+        readAt: null
+      };
     }
   };
   const app = createApiApp({
@@ -503,22 +555,22 @@ test('message edit routes reuse send validation and never grant room owners an a
   });
   t.after(() => app.close());
 
-  const request = (url, cookie, payload = { text: ' updated \n\n\n line ' }) => app.inject({
-    method: 'PATCH',
-    url,
-    headers: { cookie: `vr_session=${cookie}`, host: 'voice.local', origin: 'http://voice.local' },
-    payload
-  });
+  const request = (url, cookie, payload = { text: ' updated \n\n\n line ' }) =>
+    app.inject({
+      method: 'PATCH',
+      url,
+      headers: { cookie: `vr_session=${cookie}`, host: 'voice.local', origin: 'http://voice.local' },
+      payload
+    });
 
   const ownerRoomEdit = await request(`/api/rooms/${roomId}/chat/room-message-1`, 'owner-session');
   assert.equal(ownerRoomEdit.statusCode, 403);
   assert.equal(roomEdit, null);
 
-  const authorRoomEdit = await request(
-    `/api/rooms/${roomId}/chat/room-message-1`,
-    'author-session',
-    { peerId: `auth-${authorId}`, text: ' updated \n\n\n line ' }
-  );
+  const authorRoomEdit = await request(`/api/rooms/${roomId}/chat/room-message-1`, 'author-session', {
+    peerId: `auth-${authorId}`,
+    text: ' updated \n\n\n line '
+  });
   assert.equal(authorRoomEdit.statusCode, 200);
   assert.deepEqual(roomEdit, { roomId, messageId: 'room-message-1', text: 'updated\n\nline' });
   assert.equal(authorRoomEdit.json().message.editedAt, 200);
@@ -546,9 +598,6 @@ test('message edit routes reuse send validation and never grant room owners an a
   });
   assert.equal(authorDmEdit.json().message.editedAt, 200);
 });
-
-
-
 
 test('friend request route accepts account user id targets', async (t) => {
   let requestInput = null;
@@ -611,7 +660,13 @@ test('notification preference routes require auth and expose defaults', async (t
     notifications: {
       async getPreferences(userId) {
         assert.equal(userId, '11111111-1111-4111-8111-111111111111');
-        return { doNotDisturb: false, mutedPeerIds: [], mutedRoomIds: [], presenceStatus: 'online', privateNotifications: false };
+        return {
+          doNotDisturb: false,
+          mutedPeerIds: [],
+          mutedRoomIds: [],
+          presenceStatus: 'online',
+          privateNotifications: false
+        };
       }
     }
   });
@@ -684,11 +739,14 @@ test('notification mute and privacy routes call notification store and map statu
   });
   assert.equal(dm.statusCode, 200);
   assert.equal(dm.json().muted, true);
-  assert.deepEqual(calls[0], ['dm', {
-    userId: '11111111-1111-4111-8111-111111111111',
-    peerUserId: '22222222-2222-4222-8222-222222222222',
-    muted: true
-  }]);
+  assert.deepEqual(calls[0], [
+    'dm',
+    {
+      userId: '11111111-1111-4111-8111-111111111111',
+      peerUserId: '22222222-2222-4222-8222-222222222222',
+      muted: true
+    }
+  ]);
 
   const room = await app.inject({
     method: 'PUT',
@@ -701,11 +759,14 @@ test('notification mute and privacy routes call notification store and map statu
     payload: { muted: true }
   });
   assert.equal(room.statusCode, 200);
-  assert.deepEqual(calls[1], ['room', {
-    userId: '11111111-1111-4111-8111-111111111111',
-    roomId: 'saved-room',
-    muted: true
-  }]);
+  assert.deepEqual(calls[1], [
+    'room',
+    {
+      userId: '11111111-1111-4111-8111-111111111111',
+      roomId: 'saved-room',
+      muted: true
+    }
+  ]);
 
   const privacy = await app.inject({
     method: 'PUT',
@@ -719,10 +780,13 @@ test('notification mute and privacy routes call notification store and map statu
   });
   assert.equal(privacy.statusCode, 200);
   assert.equal(privacy.json().preferences.privateNotifications, true);
-  assert.deepEqual(calls[2], ['privacy', {
-    userId: '11111111-1111-4111-8111-111111111111',
-    privateNotifications: true
-  }]);
+  assert.deepEqual(calls[2], [
+    'privacy',
+    {
+      userId: '11111111-1111-4111-8111-111111111111',
+      privateNotifications: true
+    }
+  ]);
 
   const dnd = await app.inject({
     method: 'POST',
@@ -736,10 +800,13 @@ test('notification mute and privacy routes call notification store and map statu
   });
   assert.equal(dnd.statusCode, 200);
   assert.equal(dnd.json().preferences.doNotDisturb, true);
-  assert.deepEqual(calls[3], ['dnd', {
-    userId: '11111111-1111-4111-8111-111111111111',
-    doNotDisturb: true
-  }]);
+  assert.deepEqual(calls[3], [
+    'dnd',
+    {
+      userId: '11111111-1111-4111-8111-111111111111',
+      doNotDisturb: true
+    }
+  ]);
 });
 
 test('presence status route requires auth, validates canonical values, and syncs DND', async (t) => {
@@ -807,11 +874,14 @@ test('presence status route requires auth, validates canonical values, and syncs
     assert.equal(response.json().preferences.presenceStatus, status);
     assert.equal(response.json().preferences.doNotDisturb, status === 'dnd');
   }
-  assert.deepEqual(calls, ['online', 'away', 'dnd', 'offline'].map((presenceStatus) => ({
-    automatic: false,
-    userId: currentUserId,
-    presenceStatus
-  })));
+  assert.deepEqual(
+    calls,
+    ['online', 'away', 'dnd', 'offline'].map((presenceStatus) => ({
+      automatic: false,
+      userId: currentUserId,
+      presenceStatus
+    }))
+  );
 
   const automaticAway = await app.inject({
     method: 'POST',
@@ -848,7 +918,6 @@ test('presence status route requires auth, validates canonical values, and syncs
   assert.equal(calls.length, 5);
 });
 
-
 test('notification mutation routes reject invalid booleans and targets before store calls', async (t) => {
   const calls = [];
   const currentUserId = '11111111-1111-4111-8111-111111111111';
@@ -879,17 +948,16 @@ test('notification mutation routes reject invalid booleans and targets before st
       },
       async setDoNotDisturb(input) {
         calls.push(['dnd', input]);
-        return { status: 'updated', preferences: { doNotDisturb: false, mutedPeerIds: [], presenceStatus: 'online', privateNotifications: false } };
+        return {
+          status: 'updated',
+          preferences: { doNotDisturb: false, mutedPeerIds: [], presenceStatus: 'online', privateNotifications: false }
+        };
       }
     }
   });
   t.after(() => app.close());
 
-  const invalidDmPayloads = [
-    {},
-    { muted: 'true' },
-    { muted: 1 }
-  ];
+  const invalidDmPayloads = [{}, { muted: 'true' }, { muted: 1 }];
   for (const payload of invalidDmPayloads) {
     const response = await app.inject({
       method: 'PUT',
@@ -968,7 +1036,10 @@ test('livekit token uses authenticated user avatar color for room peer identity'
   process.env.LIVEKIT_API_KEY = 'devkey';
   process.env.LIVEKIT_API_SECRET = 'devsecretdevsecretdevsecret';
 
-  const store = withRosterPeer(createFakeStore(), { id: 'peer0001', sessionToken: 'goodtoken123456789012345678901234' });
+  const store = withRosterPeer(createFakeStore(), {
+    id: 'peer0001',
+    sessionToken: 'goodtoken123456789012345678901234'
+  });
   let identityInput = null;
   store.getOrCreatePeerIdentity = async (input) => {
     identityInput = input;
@@ -979,7 +1050,10 @@ test('livekit token uses authenticated user avatar color for room peer identity'
     store,
     liveKitCredentials: {
       async issueAdmission() {
-        return { status: 'issued', admission: { room: 'voice-room-test', token: 'jwt', ttlSeconds: 60, url: 'ws://gate.test/rtc' } };
+        return {
+          status: 'issued',
+          admission: { room: 'voice-room-test', token: 'jwt', ttlSeconds: 60, url: 'ws://gate.test/rtc' }
+        };
       }
     },
     membershipServicesOverride: {
@@ -1041,7 +1115,10 @@ test('livekit token validates persisted anonymous peer identity before issuing v
     store: withRosterPeer(createFakeStore(), { id: 'peer0001', sessionToken: 'badtoken123456789012345678901234' }),
     liveKitCredentials: {
       async issueAdmission() {
-        return { status: 'issued', admission: { room: 'voice-room-test', token: 'jwt', ttlSeconds: 60, url: 'ws://gate.test/rtc' } };
+        return {
+          status: 'issued',
+          admission: { room: 'voice-room-test', token: 'jwt', ttlSeconds: 60, url: 'ws://gate.test/rtc' }
+        };
       }
     }
   });

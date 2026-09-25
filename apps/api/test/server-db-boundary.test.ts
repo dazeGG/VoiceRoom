@@ -24,7 +24,6 @@ function createCapturingLogger(records) {
   };
 }
 
-
 function deferred() {
   let resolve;
   let reject;
@@ -162,7 +161,6 @@ test('server preserves active voice peer spoof protection and rejects anonymous 
   });
 
   try {
-
     const activePost = await request(port, '/api/rooms/room1/chat', {
       method: 'POST',
       body: { peerId: 'peer0001', sessionToken: 'goodtoken12345678901234567890123', name: 'Ada', text: 'from voice' }
@@ -188,10 +186,14 @@ test('server preserves active voice peer spoof protection and rejects anonymous 
   }
 });
 
-
 test('server logs mark-empty failures instead of creating unhandled rejections', async () => {
   const store = createFakeStore();
-  const room = await store.createRoom({ creatorIp: 'test', isStatic: false, roomId: 'room-empty-fail', now: Date.now() });
+  const room = await store.createRoom({
+    creatorIp: 'test',
+    isStatic: false,
+    roomId: 'room-empty-fail',
+    now: Date.now()
+  });
   assert.equal(room.id, 'room-empty-fail');
   store.markRoomEmpty = async () => {
     throw new Error('db offline');
@@ -293,11 +295,7 @@ test('server serializes a late empty write before the active write of a concurre
     }
 
     releaseEmpty.resolve();
-    await waitForWsType(
-      joining.frames,
-      'room.snapshot',
-      (frame) => frame.payload?.roomId === 'room-occupancy-race'
-    );
+    await waitForWsType(joining.frames, 'room.snapshot', (frame) => frame.payload?.roomId === 'room-occupancy-race');
     assert.deepEqual(writes, ['empty:start', 'empty:end', 'active']);
   } finally {
     releaseIdentity.resolve();
@@ -346,7 +344,10 @@ test('pruning retries failed active occupancy before sweeping dynamic rooms', as
     assert.equal(activeAttempts, 2);
     assert.equal((await store.getRoom(roomId))?.emptySince, null);
     assert.ok(await store.getRoom(roomId));
-    assert.equal(errors.some((entry) => entry.evt === 'room.occupancy_persist_failed'), true);
+    assert.equal(
+      errors.some((entry) => entry.evt === 'room.occupancy_persist_failed'),
+      true
+    );
   } finally {
     voice.ws.close();
     await close(server);

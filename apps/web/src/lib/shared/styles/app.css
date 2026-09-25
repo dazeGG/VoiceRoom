@@ -95,8 +95,7 @@ body {
   background:
     radial-gradient(circle at 12% 14%, color-mix(in oklch, var(--panel), transparent 72%), transparent 30%),
     radial-gradient(circle at 84% 10%, color-mix(in oklch, var(--panel-strong), transparent 82%), transparent 28%),
-    linear-gradient(135deg, var(--paper-deep), var(--paper) 48%, var(--paper-deep)),
-    var(--paper);
+    linear-gradient(135deg, var(--paper-deep), var(--paper) 48%, var(--paper-deep)), var(--paper);
   color: var(--ink);
   font-size: 16px;
   line-height: 1.45;
@@ -131,11 +130,11 @@ button:disabled {
   gap: var(--space-lg);
 }
 
-body:not([data-screen="room"]) .app-shell {
+body:not([data-screen='room']) .app-shell {
   padding-inline: 40px;
 }
 
-body:not([data-screen="room"]) .topbar {
+body:not([data-screen='room']) .topbar {
   width: min(100%, 1020px);
   margin-inline: auto;
 }
@@ -178,17 +177,19 @@ body:not([data-screen="room"]) .topbar {
   opacity: 0;
   pointer-events: none;
   transform: translateY(10px);
-  transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out);
+  transition:
+    opacity 180ms var(--ease-out),
+    transform 180ms var(--ease-out);
   overflow-wrap: anywhere;
   white-space: pre-line;
 }
 
-.toast[data-visible="true"] {
+.toast[data-visible='true'] {
   opacity: 1;
   transform: translateY(0);
 }
 
-.toast[data-variant="error"] {
+.toast[data-variant='error'] {
   max-width: min(720px, calc(100vw - 32px));
   border-color: color-mix(in oklch, var(--coral), var(--ink) 20%);
   font-size: 0.86rem;
@@ -217,7 +218,7 @@ body:not([data-screen="room"]) .topbar {
     padding: var(--space-md);
   }
 
-  body:not([data-screen="room"]) .app-shell {
+  body:not([data-screen='room']) .app-shell {
     padding-inline: 20px;
   }
 
@@ -237,8 +238,8 @@ body:not([data-screen="room"]) .topbar {
     font-size: 2.25rem;
   }
 
-  body[data-screen="room"] .toast,
-  body[data-screen="checking"] .toast {
+  body[data-screen='room'] .toast,
+  body[data-screen='checking'] .toast {
     right: var(--space-md);
     bottom: calc(max(var(--space-lg), env(safe-area-inset-bottom)) + 72px);
     left: var(--space-md);

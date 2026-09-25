@@ -17,7 +17,13 @@ type ToneFamily = Readonly<{ base: string; tones: readonly string[] }>;
 
 // U+1F3FB..U+1F3FF. Unicode's "Component" group is rejected by the corpus
 // policy, so these never appear in the corpus on their own.
-export const SKIN_TONES: readonly string[] = Object.freeze(['\u{1F3FB}', '\u{1F3FC}', '\u{1F3FD}', '\u{1F3FE}', '\u{1F3FF}']);
+export const SKIN_TONES: readonly string[] = Object.freeze([
+  '\u{1F3FB}',
+  '\u{1F3FC}',
+  '\u{1F3FD}',
+  '\u{1F3FE}',
+  '\u{1F3FF}'
+]);
 
 const TONE_SET = new Set(SKIN_TONES);
 

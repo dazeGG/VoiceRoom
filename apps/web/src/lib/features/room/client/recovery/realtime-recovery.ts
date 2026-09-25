@@ -1,11 +1,5 @@
 export type RecoveryPhase =
-  | 'idle'
-  | 'waiting-app-snapshot'
-  | 'waiting-livekit'
-  | 'recovering'
-  | 'healthy'
-  | 'failed'
-  | 'cancelled';
+  'idle' | 'waiting-app-snapshot' | 'waiting-livekit' | 'recovering' | 'healthy' | 'failed' | 'cancelled';
 
 export type RecoveryFailure = {
   retryable: boolean;
@@ -15,7 +9,8 @@ export type RecoveryFailure = {
 };
 
 /** What an attempt resolves to: `{ ok: true }`, a classified failure, or whatever it rejected with. */
-export type ReplacementOutcome = { ok?: boolean; retryable?: boolean; status?: number; code?: string } | null | undefined;
+export type ReplacementOutcome =
+  { ok?: boolean; retryable?: boolean; status?: number; code?: string } | null | undefined;
 
 export type RecoveryTransition = Readonly<{
   epoch: number;
@@ -83,7 +78,7 @@ export function sanitizeRecoveryCode(value: unknown): string {
 export function classifyRecoveryFailure(input: unknown): RecoveryFailure {
   const error = input as { code?: unknown; status?: unknown } | null | undefined;
   const rawCode = typeof error?.code === 'string' ? error.code : '';
-  const status = Number.isInteger(error?.status) ? error?.status as number : 0;
+  const status = Number.isInteger(error?.status) ? (error?.status as number) : 0;
   if (TERMINAL_CODES.has(rawCode)) {
     return { retryable: false, result: 'terminal', status, code: rawCode };
   }
@@ -261,7 +256,15 @@ export class RealtimeRecoveryController {
     return true;
   }
 
-  appSnapshotApplied({ appEpoch, active, hasLocalPeer }: { appEpoch: number; active: boolean; hasLocalPeer: boolean }): boolean {
+  appSnapshotApplied({
+    appEpoch,
+    active,
+    hasLocalPeer
+  }: {
+    appEpoch: number;
+    active: boolean;
+    hasLocalPeer: boolean;
+  }): boolean {
     if (!this.active || appEpoch !== this.appEpoch || !active || !hasLocalPeer) {
       this.emit('app_snapshot', 'rejected');
       return false;
@@ -282,7 +285,13 @@ export class RealtimeRecoveryController {
   appSnapshotRequestFailed(error: unknown): void {
     if (!this.active) return;
     const classified = classifyRecoveryFailure(error);
-    this.emit('app_snapshot_failed', classified.retryable ? 'retryable' : 'terminal', this.attempts, classified.status, classified.code);
+    this.emit(
+      'app_snapshot_failed',
+      classified.retryable ? 'retryable' : 'terminal',
+      this.attempts,
+      classified.status,
+      classified.code
+    );
     if (classified.retryable) this.enterCooldown(classified);
     else this.fail('terminal', classified);
   }
@@ -388,7 +397,15 @@ export class RealtimeRecoveryController {
   }
 
   maybeAttempt(): void {
-    if (!this.active || this.phase === 'failed' || !this.snapshotReady || !this.replacementRequired || this.inFlight || this.retryTimer) return;
+    if (
+      !this.active ||
+      this.phase === 'failed' ||
+      !this.snapshotReady ||
+      !this.replacementRequired ||
+      this.inFlight ||
+      this.retryTimer
+    )
+      return;
     if (this.attempts >= this.maxAttempts) {
       this.enterCooldown();
       return;
@@ -414,9 +431,10 @@ export class RealtimeRecoveryController {
       else this.setPhase('waiting-app-snapshot', 'replacement_succeeded');
       return;
     }
-    const classified: ReplacementOutcome = typeof outcome?.retryable === 'boolean' ? outcome : classifyRecoveryFailure(outcome);
+    const classified: ReplacementOutcome =
+      typeof outcome?.retryable === 'boolean' ? outcome : classifyRecoveryFailure(outcome);
     const code = sanitizeRecoveryCode(classified?.code);
-    const status = Number.isInteger(classified?.status) ? classified?.status as number : 0;
+    const status = Number.isInteger(classified?.status) ? (classified?.status as number) : 0;
     this.emit('replacement_attempt', classified?.retryable ? 'retryable' : 'terminal', attempt, status, code);
     const failure = { status, code };
     if (!classified?.retryable) {
@@ -496,17 +514,19 @@ export class RealtimeRecoveryController {
   }
 
   emit(trigger: string, result: string, attempt: number = this.attempts, status = 0, code = 'unknown_error'): void {
-    this.onTransition(Object.freeze({
-      epoch: this.epoch,
-      appEpoch: this.appEpoch,
-      trigger,
-      phase: this.phase,
-      attempt,
-      elapsed: elapsedBucket(Math.max(0, this.now() - this.startedAt)),
-      status,
-      code: sanitizeRecoveryCode(code),
-      result
-    }));
+    this.onTransition(
+      Object.freeze({
+        epoch: this.epoch,
+        appEpoch: this.appEpoch,
+        trigger,
+        phase: this.phase,
+        attempt,
+        elapsed: elapsedBucket(Math.max(0, this.now() - this.startedAt)),
+        status,
+        code: sanitizeRecoveryCode(code),
+        result
+      })
+    );
   }
 
   clearRetryTimer(): void {

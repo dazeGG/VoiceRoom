@@ -17,7 +17,9 @@
   const totalCount = $derived(participantCount + streamCount);
   const focusedParticipant = $derived(getFocusedParticipant());
   const screenFocused = $derived(screenUi.stageVisible);
-  const stripParticipants = $derived(getSortedParticipants().filter((participant) => participant.id !== focusedParticipant?.id));
+  const stripParticipants = $derived(
+    getSortedParticipants().filter((participant) => participant.id !== focusedParticipant?.id)
+  );
   let carousel = $state<HTMLDivElement | null>(null);
   let canScrollLeft = $state(false);
   let canScrollRight = $state(false);
@@ -61,8 +63,8 @@
       aria-label="Предыдущие участники"
       data-visible={canScrollLeft}
       tabindex={canScrollLeft ? 0 : -1}
-      onclick={() => moveCarousel(-1)}
-    ><ChevronLeft size={18} /></button>
+      onclick={() => moveCarousel(-1)}><ChevronLeft size={18} /></button
+    >
     <div class="participant-carousel" bind:this={carousel} onscroll={updateCarouselNav}>
       <div class="participant-focus-strip">
         <StreamTiles />
@@ -75,8 +77,8 @@
       aria-label="Следующие участники"
       data-visible={canScrollRight}
       tabindex={canScrollRight ? 0 : -1}
-      onclick={() => moveCarousel(1)}
-    ><ChevronRight size={18} /></button>
+      onclick={() => moveCarousel(1)}><ChevronRight size={18} /></button
+    >
   </div>
 {/snippet}
 
@@ -86,7 +88,14 @@
       <span class="stage-strip-kicker" id="stageStripKicker">В комнате</span>
       <strong id="stageStripSummary">0 участников</strong>
     </div>
-    <button class="strip-toggle-button" id="stripToggleButton" type="button" aria-label="Свернуть пользователей" aria-pressed="false" hidden><ChevronDown aria-hidden="true" /></button>
+    <button
+      class="strip-toggle-button"
+      id="stripToggleButton"
+      type="button"
+      aria-label="Свернуть пользователей"
+      aria-pressed="false"
+      hidden><ChevronDown aria-hidden="true" /></button
+    >
   </div>
 
   {#if focusedParticipant}
@@ -101,7 +110,13 @@
          below carries everyone else in the same spotlight carousel. -->
     {@render spotlightCarousel(getSortedParticipants())}
   {:else}
-    <div class="tile-grid" id="tileGrid" data-count={Math.min(totalCount, 9)} data-streams={Math.min(streamCount, 9)} aria-live="polite">
+    <div
+      class="tile-grid"
+      id="tileGrid"
+      data-count={Math.min(totalCount, 9)}
+      data-streams={Math.min(streamCount, 9)}
+      aria-live="polite"
+    >
       <StreamTiles />
       <ParticipantList />
     </div>

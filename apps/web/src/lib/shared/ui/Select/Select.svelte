@@ -17,12 +17,13 @@
     onValueChange
   }: SelectProps = $props();
 
-  const selectedLabel = $derived(
-    options.find((option) => option.value === value)?.label
-      ?? options[0]?.label
-      ?? '—'
+  const selectedLabel = $derived(options.find((option) => option.value === value)?.label ?? options[0]?.label ?? '—');
+  const selectedIndex = $derived(
+    Math.max(
+      0,
+      options.findIndex((option) => option.value === value)
+    )
   );
-  const selectedIndex = $derived(Math.max(0, options.findIndex((option) => option.value === value)));
 
   let open = $state(false);
   let activeIndex = $state(0);
@@ -197,7 +198,9 @@
     line-height: 1;
     text-align: left;
     cursor: pointer;
-    transition: border-color 0.15s ease, background 0.15s ease;
+    transition:
+      border-color 0.15s ease,
+      background 0.15s ease;
   }
 
   .select-trigger:hover:not(:disabled),

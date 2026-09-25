@@ -33,9 +33,7 @@ import {
 } from './config';
 
 export function getNoiseMode(mode: unknown): NoiseMode {
-  return typeof mode === 'string' && Object.hasOwn(NOISE_MODES, mode)
-    ? (mode as NoiseMode)
-    : DEFAULT_NOISE_MODE;
+  return typeof mode === 'string' && Object.hasOwn(NOISE_MODES, mode) ? (mode as NoiseMode) : DEFAULT_NOISE_MODE;
 }
 
 export function getStoredNoiseMode(): NoiseMode {
@@ -82,7 +80,6 @@ export function persistMicrophoneMode(mode: MicrophoneMode): MicrophoneMode {
   localStorage.setItem(MICROPHONE_MODE_STORAGE_KEY, value);
   return value;
 }
-
 
 export function persistOutputMuted(muted: boolean): void {
   localStorage.setItem(OUTPUT_MUTED_STORAGE_KEY, String(Boolean(muted)));
@@ -137,9 +134,7 @@ export function getStoredGateThresholdDb(): number {
 
 export function getStoredStreamVolume(): number {
   const storedValue = Number.parseFloat(localStorage.getItem(STREAM_VOLUME_STORAGE_KEY) || '');
-  return Number.isFinite(storedValue)
-    ? clampStreamVolume(storedValue)
-    : DEFAULT_STREAM_VOLUME;
+  return Number.isFinite(storedValue) ? clampStreamVolume(storedValue) : DEFAULT_STREAM_VOLUME;
 }
 
 export function storeStreamVolume(volume: number, maxVolume = MAX_STREAM_VOLUME): number {
@@ -158,9 +153,7 @@ export function normalizeStoredStreamVolume(volume: number, maxVolume = MAX_STRE
 
 export function clampStreamVolume(volume: number, maxVolume = MAX_STREAM_VOLUME): number {
   const upperBound = Math.min(MAX_STREAM_VOLUME, Math.max(0, maxVolume));
-  return Number.isFinite(volume)
-    ? Math.min(upperBound, Math.max(0, volume))
-    : DEFAULT_STREAM_VOLUME;
+  return Number.isFinite(volume) ? Math.min(upperBound, Math.max(0, volume)) : DEFAULT_STREAM_VOLUME;
 }
 
 export function clampGateThresholdDb(value: number): number {
@@ -180,7 +173,8 @@ export function previousGatePercentToDb(value: number): number {
   if (value <= 0) return DEFAULT_GATE_THRESHOLD_DB;
 
   const amount = Math.min(100, Math.max(0, value)) / 100;
-  const amplitude = PREVIOUS_GATE_MIN_AMPLITUDE + amount * amount * (PREVIOUS_GATE_MAX_AMPLITUDE - PREVIOUS_GATE_MIN_AMPLITUDE);
+  const amplitude =
+    PREVIOUS_GATE_MIN_AMPLITUDE + amount * amount * (PREVIOUS_GATE_MAX_AMPLITUDE - PREVIOUS_GATE_MIN_AMPLITUDE);
   return Math.round(amplitudeToDb(amplitude));
 }
 
@@ -244,7 +238,5 @@ export function storeParticipantAudioPreference(
 }
 
 export function clampParticipantVolume(volume: number): number {
-  return Number.isFinite(volume)
-    ? Math.min(MAX_PARTICIPANT_VOLUME, Math.max(0, volume))
-    : DEFAULT_PARTICIPANT_VOLUME;
+  return Number.isFinite(volume) ? Math.min(MAX_PARTICIPANT_VOLUME, Math.max(0, volume)) : DEFAULT_PARTICIPANT_VOLUME;
 }

@@ -5,7 +5,11 @@
   import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
   import { WHATS_NEW_SLIDES, WHATS_NEW_SLIDE_MS, shouldShowWhatsNew } from '../model/whats-new';
 
-  let { paused = false, onOpenSecurity, onOpenChange } = $props<{
+  let {
+    paused = false,
+    onOpenSecurity,
+    onOpenChange
+  } = $props<{
     paused?: boolean;
     onOpenSecurity: () => void;
     /** Lets the lobby hold back other prompts while the story is on screen. */
@@ -179,23 +183,10 @@
         {/if}
       </div>
 
-      <div
-        class="stories-stage"
-        role="presentation"
-        tabindex="-1"
-        bind:this={stageEl}
-        onpointerdown={onPointerDown}
-      >
+      <div class="stories-stage" role="presentation" tabindex="-1" bind:this={stageEl} onpointerdown={onPointerDown}>
         {#key index}
           <div class="stories-slide">
-            <img
-              class="stories-image"
-              src={slide.image}
-              alt={slide.alt}
-              width="1088"
-              height="816"
-              draggable="false"
-            />
+            <img class="stories-image" src={slide.image} alt={slide.alt} width="1088" height="816" draggable="false" />
             <h2 class="stories-title" id="whatsNewSlideTitle">{slide.title}</h2>
             <p class="stories-text" id="whatsNewSlideText">{slide.text}</p>
           </div>

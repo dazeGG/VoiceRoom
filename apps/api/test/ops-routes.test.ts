@@ -8,13 +8,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const { createApiApp } = await import('../src/server.ts');
-const { createDesktopReleaseService, isDesktopReleaseDownloadUrl, normalizeRelease } = await import('../src/domains/ops/desktop-release.service.ts');
+const { createDesktopReleaseService, isDesktopReleaseDownloadUrl, normalizeRelease } =
+  await import('../src/domains/ops/desktop-release.service.ts');
 
 function createStore() {
   return {
-    async countRooms() { return 0; },
-    async getRoom() { return null; },
-    async listSummaryRecipientUserIds() { return []; },
+    async countRooms() {
+      return 0;
+    },
+    async getRoom() {
+      return null;
+    },
+    async listSummaryRecipientUserIds() {
+      return [];
+    },
     async markRoomActive() {},
     async markRoomEmpty() {},
     async pruneRooms() {}
@@ -22,7 +29,14 @@ function createStore() {
 }
 
 function createApp(t) {
-  const app = createApiApp({ store: createStore(), users: { async getSessionUser() { return null; } } });
+  const app = createApiApp({
+    store: createStore(),
+    users: {
+      async getSessionUser() {
+        return null;
+      }
+    }
+  });
   t.after(() => app.close());
   return app;
 }
@@ -41,7 +55,13 @@ test('health keeps its public shape, headers and request id', async (t) => {
   const body = response.json();
   assert.equal(body.ok, true);
   assert.equal(typeof body.livekit, 'boolean');
-  assert.deepEqual(Object.keys(body.capabilityManifest).sort(), ['contractVersion', 'digest', 'manifestRawSha256', 'replicaConsensus', 'schemaVersion']);
+  assert.deepEqual(Object.keys(body.capabilityManifest).sort(), [
+    'contractVersion',
+    'digest',
+    'manifestRawSha256',
+    'replicaConsensus',
+    'schemaVersion'
+  ]);
   assert.equal(body.livekitUrl, undefined, 'the internal LiveKit address is not public');
   assertSecurityHeaders(response);
 });
@@ -87,7 +107,8 @@ test('a malformed JSON body fails with the shared failure shape', async (t) => {
 test('native routes are counted in the request metric exactly once', async (t) => {
   const app = createApp(t);
   const before = await app.inject({ method: 'GET', url: '/api/metrics' });
-  const count = (text) => Number(/voice_room_api_http_requests_total\{[^}]*route="\/api\/pow-challenge"[^}]*\} (\d+)/.exec(text)?.[1] || 0);
+  const count = (text) =>
+    Number(/voice_room_api_http_requests_total\{[^}]*route="\/api\/pow-challenge"[^}]*\} (\d+)/.exec(text)?.[1] || 0);
   const start = count(before.body);
   await app.inject({ method: 'GET', url: '/api/pow-challenge' });
   const after = await app.inject({ method: 'GET', url: '/api/metrics' });
@@ -100,14 +121,30 @@ const githubRelease = {
   tag_name: 'v1.4.0',
   html_url: `https://github.com/${REPO}/releases/tag/v1.4.0`,
   assets: [
-    { name: 'VoiceRoom-1.4.0-mac-arm64.dmg', browser_download_url: `https://github.com/${REPO}/releases/download/v1.4.0/VoiceRoom-1.4.0-mac-arm64.dmg`, size: 10 },
-    { name: 'VoiceRoom-1.4.0-win-x64.exe', browser_download_url: `https://github.com/${REPO}/releases/download/v1.4.0/VoiceRoom-1.4.0-win-x64.exe`, size: 20 },
-    { name: 'VoiceRoom-1.4.0-win-x64-setup.exe', browser_download_url: `https://github.com/${REPO}/releases/download/v1.4.0/VoiceRoom-1.4.0-win-x64-setup.exe`, size: 30 },
-    { name: 'VoiceRoom-1.4.0-mac-x64.dmg', browser_download_url: 'https://evil.example/VoiceRoom-1.4.0-mac-x64.dmg', size: 40 }
+    {
+      name: 'VoiceRoom-1.4.0-mac-arm64.dmg',
+      browser_download_url: `https://github.com/${REPO}/releases/download/v1.4.0/VoiceRoom-1.4.0-mac-arm64.dmg`,
+      size: 10
+    },
+    {
+      name: 'VoiceRoom-1.4.0-win-x64.exe',
+      browser_download_url: `https://github.com/${REPO}/releases/download/v1.4.0/VoiceRoom-1.4.0-win-x64.exe`,
+      size: 20
+    },
+    {
+      name: 'VoiceRoom-1.4.0-win-x64-setup.exe',
+      browser_download_url: `https://github.com/${REPO}/releases/download/v1.4.0/VoiceRoom-1.4.0-win-x64-setup.exe`,
+      size: 30
+    },
+    {
+      name: 'VoiceRoom-1.4.0-mac-x64.dmg',
+      browser_download_url: 'https://evil.example/VoiceRoom-1.4.0-mac-x64.dmg',
+      size: 40
+    }
   ]
 };
 
-test('the release manifest keeps only this repository\'s download URLs and prefers the installer', () => {
+test("the release manifest keeps only this repository's download URLs and prefers the installer", () => {
   const release = normalizeRelease(githubRelease, REPO);
   assert.equal(release.version, '1.4.0');
   assert.equal(release.assets['win-x64'].size, 30);
@@ -149,7 +186,13 @@ test('the release service caches, serves stale data on failure and reports an ou
   assert.equal(stale.cacheControl, 'public, max-age=60');
   assert.equal(warnings.length, 0);
 
-  const empty = createDesktopReleaseService({ repo: REPO, cacheMs: 1_000, timeoutMs: 1_000, logger: { warn: (fields) => warnings.push(fields) }, fetch: async () => new Response('', { status: 503 }) });
+  const empty = createDesktopReleaseService({
+    repo: REPO,
+    cacheMs: 1_000,
+    timeoutMs: 1_000,
+    logger: { warn: (fields) => warnings.push(fields) },
+    fetch: async () => new Response('', { status: 503 })
+  });
   assert.deepEqual(await empty.latest(), { status: 'unavailable' });
   assert.equal(warnings[0].evt, 'desktop.release_fetch_failed');
 });

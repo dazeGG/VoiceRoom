@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 
 import * as service from '../src/lib/platform/desktop-autostart.ts';
 
-
 // The service has no module state and reads `window` on every call, so one
 // native import covers every bridge shape. Loading it through an in-process
 // Vite server used to abort the whole test file with a V8 fatal on CI.
@@ -67,4 +66,3 @@ test('desktop autostart service swallows bridge failures', async () => {
   assert.equal(await service.readDesktopAutostartSettings(), null);
   assert.equal(await service.updateDesktopAutostartSettings({ startMinimized: true }), null);
 });
-

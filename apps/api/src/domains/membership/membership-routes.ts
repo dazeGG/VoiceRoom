@@ -19,7 +19,7 @@ function send(reply: RouteReply, statusCode: number, payload: unknown) {
 }
 
 function viewerOf(session: unknown): Viewer | null | undefined {
-  const resolved = session as { user?: Viewer } & Viewer | null | undefined;
+  const resolved = session as ({ user?: Viewer } & Viewer) | null | undefined;
   return resolved?.user || resolved;
 }
 
@@ -34,15 +34,36 @@ function registerMembershipRoutes<A>({
   membershipEnabled = () => true
 }: {
   app?: FastifyInstance;
-  completeAdmission?: (input: { request: MembershipRequest; roomId: string | undefined; user: Viewer }) => Promise<A | null | undefined> | A | null | undefined;
-  directoryService?: { list(input: { roomId?: string; viewerUserId: string; cursor?: unknown; limit?: unknown; query?: unknown }): Promise<DirectoryListing> };
+  completeAdmission?: (input: {
+    request: MembershipRequest;
+    roomId: string | undefined;
+    user: Viewer;
+  }) => Promise<A | null | undefined> | A | null | undefined;
+  directoryService?: {
+    list(input: {
+      roomId?: string;
+      viewerUserId: string;
+      cursor?: unknown;
+      limit?: unknown;
+      query?: unknown;
+    }): Promise<DirectoryListing>;
+  };
   membershipService?: {
-    admitRegistered(input: { roomId?: string; userId: string; ip: string; completeAdmission: () => unknown }): Promise<RegisteredAdmission<A>>;
+    admitRegistered(input: {
+      roomId?: string;
+      userId: string;
+      ip: string;
+      completeAdmission: () => unknown;
+    }): Promise<RegisteredAdmission<A>>;
     leaveRoom?(input: { roomId?: string; userId: string }): Promise<LeaveOutcome>;
     getMembership(roomId: string | undefined, userId: string): Promise<Membership | null>;
   };
   onLeft?: (input: { request: MembershipRequest; roomId: string | undefined; user: Viewer }) => unknown;
-  prepareLeave?: (input: { request: MembershipRequest; roomId: string | undefined; user: Viewer }) => LeaveGate | Promise<LeaveGate>;
+  prepareLeave?: (input: {
+    request: MembershipRequest;
+    roomId: string | undefined;
+    user: Viewer;
+  }) => LeaveGate | Promise<LeaveGate>;
   resolveUser?: (request: FastifyRequest) => unknown;
   membershipEnabled?: (request: FastifyRequest) => unknown;
 } = {}): void {
@@ -52,7 +73,7 @@ function registerMembershipRoutes<A>({
   const resolve = resolveUser;
 
   app.get<MembershipRoute>('/api/rooms/:roomId/members', async (request, reply) => {
-    if (!await membershipEnabled(request)) return send(reply, 404, { ok: false, error: 'Not found' });
+    if (!(await membershipEnabled(request))) return send(reply, 404, { ok: false, error: 'Not found' });
     const user = viewerOf(await resolve(request));
     if (!user?.id) return send(reply, 401, { ok: false, error: 'Authentication required' });
     try {
@@ -67,7 +88,8 @@ function registerMembershipRoutes<A>({
       if (result.status !== 'ok') return send(reply, 401, { ok: false, error: 'Authentication required' });
       return send(reply, 200, result.envelope);
     } catch (error) {
-      if ((error as { code?: unknown } | null | undefined)?.code === 'invalid_cursor') return send(reply, 400, { ok: false, error: 'Invalid cursor' });
+      if ((error as { code?: unknown } | null | undefined)?.code === 'invalid_cursor')
+        return send(reply, 400, { ok: false, error: 'Invalid cursor' });
       throw error;
     }
   });
@@ -76,7 +98,7 @@ function registerMembershipRoutes<A>({
     const memberships = membershipService;
     const admit = completeAdmission;
     app.post<MembershipRoute>('/api/rooms/:roomId/memberships', async (request, reply) => {
-      if (!await membershipEnabled(request)) return send(reply, 404, { ok: false, error: 'Not found' });
+      if (!(await membershipEnabled(request))) return send(reply, 404, { ok: false, error: 'Not found' });
       const user = viewerOf(await resolve(request));
       if (!user?.id) return send(reply, 401, { ok: false, error: 'Authentication required' });
       const result = await memberships.admitRegistered({
@@ -94,23 +116,35 @@ function registerMembershipRoutes<A>({
 
   if (typeof app.delete === 'function' && membershipService?.leaveRoom) {
     app.delete<MembershipRoute>('/api/rooms/:roomId/memberships/me', async (request, reply) => {
-      if (!await membershipEnabled(request)) return send(reply, 404, { ok: false, error: 'Not found' });
+      if (!(await membershipEnabled(request))) return send(reply, 404, { ok: false, error: 'Not found' });
       const user = viewerOf(await resolve(request));
       if (!user?.id) return send(reply, 401, { ok: false, error: 'Authentication required' });
       const roomId = request.params?.roomId;
       const membership = await membershipService.getMembership(roomId, user.id);
       if (membership?.role === 'owner') {
-        return send(reply, 409, { ok: false, code: 'room_owner_cannot_leave', error: 'Room owner cannot leave their room' });
+        return send(reply, 409, {
+          ok: false,
+          code: 'room_owner_cannot_leave',
+          error: 'Room owner cannot leave their room'
+        });
       }
       if (typeof prepareLeave === 'function') {
         const prepared = await prepareLeave({ request, roomId, user });
         if (prepared === false || (prepared as { ok?: boolean } | null | undefined)?.ok === false) {
-          return send(reply, 503, { ok: false, code: (prepared as { code?: string })?.code || 'leave_unavailable', error: 'Unable to revoke room access' });
+          return send(reply, 503, {
+            ok: false,
+            code: (prepared as { code?: string })?.code || 'leave_unavailable',
+            error: 'Unable to revoke room access'
+          });
         }
       }
       const result = await membershipService.leaveRoom!({ roomId, userId: user.id });
       if (result.status === 'owner_required') {
-        return send(reply, 409, { ok: false, code: 'room_owner_cannot_leave', error: 'Room owner cannot leave their room' });
+        return send(reply, 409, {
+          ok: false,
+          code: 'room_owner_cannot_leave',
+          error: 'Room owner cannot leave their room'
+        });
       }
       if (result.status !== 'left' && result.status !== 'not_active') {
         return send(reply, 409, { ok: false, code: 'room_leave_failed', error: 'Unable to leave room' });

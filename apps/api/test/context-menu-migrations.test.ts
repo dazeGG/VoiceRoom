@@ -14,7 +14,8 @@ const FIRST_CONTEXT_MENU_MIGRATION = '20260809120000_create_room_message_pins.cj
 // Down migrations run from the head, so reaching the context-menu tables also
 // undoes every migration added after them.
 function rollbackCountThrough(fileName: string) {
-  const files = fs.readdirSync(path.resolve(import.meta.dirname, '../src/migrations'))
+  const files = fs
+    .readdirSync(path.resolve(import.meta.dirname, '../src/migrations'))
     .filter((name) => name.endsWith('.cjs'))
     .sort();
   assert.ok(files.includes(fileName), `${fileName} is missing`);
@@ -38,7 +39,10 @@ test('context-menu migrations apply fresh, no-op at head, roll back, and reapply
      ORDER BY table_name`,
     [NEW_TABLES]
   );
-  assert.deepEqual(fresh.rows.map((row) => row.table_name), [...NEW_TABLES].sort());
+  assert.deepEqual(
+    fresh.rows.map((row) => row.table_name),
+    [...NEW_TABLES].sort()
+  );
 
   assert.deepEqual(await runMigrations({ databaseUrl, logger: SILENT }), []);
 

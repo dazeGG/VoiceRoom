@@ -19,13 +19,16 @@ export interface RoomHistoryRoutesOptions {
   historyService?: {
     getPage(input: { roomId: string; query: Record<string, unknown>; access: RoomAccess }): Promise<unknown>;
   };
-  resolveRoomAccess?: (input: { request: HistoryRequest; roomId: string }) => Promise<RoomAccess | boolean | null> | RoomAccess | boolean | null;
+  resolveRoomAccess?: (input: {
+    request: HistoryRequest;
+    roomId: string;
+  }) => Promise<RoomAccess | boolean | null> | RoomAccess | boolean | null;
   path?: string;
 }
 
 function sendRouteError(reply: FastifyReply, error: unknown) {
   const failure = error as RouteError;
-  const statusCode = Number.isInteger(failure?.statusCode) ? failure?.statusCode as number : 500;
+  const statusCode = Number.isInteger(failure?.statusCode) ? (failure?.statusCode as number) : 500;
   const publicMessage = statusCode >= 500 ? 'Internal server error' : failure?.message;
   return reply.code(statusCode).send({
     ok: false,
@@ -34,7 +37,12 @@ function sendRouteError(reply: FastifyReply, error: unknown) {
   });
 }
 
-function registerRoomHistoryRoutes({ app, historyService, resolveRoomAccess, path = ROOM_HISTORY_PATH }: RoomHistoryRoutesOptions = {}): void {
+function registerRoomHistoryRoutes({
+  app,
+  historyService,
+  resolveRoomAccess,
+  path = ROOM_HISTORY_PATH
+}: RoomHistoryRoutesOptions = {}): void {
   if (!app?.get) throw new TypeError('Fastify app is required');
   if (!historyService?.getPage) throw new TypeError('room history service is required');
   const history = historyService;
@@ -42,9 +50,8 @@ function registerRoomHistoryRoutes({ app, historyService, resolveRoomAccess, pat
   app.get<HistoryRoute>(path, async (request, reply) => {
     try {
       const roomId = String(request.params?.roomId || '').trim();
-      const decision = typeof resolveRoomAccess === 'function'
-        ? await resolveRoomAccess({ request, roomId })
-        : { authorized: true };
+      const decision =
+        typeof resolveRoomAccess === 'function' ? await resolveRoomAccess({ request, roomId }) : { authorized: true };
       const access = decision === true ? { authorized: true } : decision;
       if (!access || access.allowed === false || access.authorized === false) {
         const refusal = access || null;

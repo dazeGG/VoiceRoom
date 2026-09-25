@@ -65,7 +65,7 @@ function hasLeadingZeroBits(bytes: Uint8Array, bitCount: number): boolean {
       remainingBits -= 8;
       continue;
     }
-    const mask = 0xff << (8 - remainingBits) & 0xff;
+    const mask = (0xff << (8 - remainingBits)) & 0xff;
     return (byte & mask) === 0;
   }
   return remainingBits <= 0;

@@ -57,7 +57,10 @@ test('avatar storage lists only valid avatar files', async (t) => {
 });
 
 test('Docker build context excludes runtime avatar uploads', async () => {
-  const dockerIgnore = await fs.promises.readFile(path.resolve(import.meta.dirname, '../../..', '.dockerignore'), 'utf8');
+  const dockerIgnore = await fs.promises.readFile(
+    path.resolve(import.meta.dirname, '../../..', '.dockerignore'),
+    'utf8'
+  );
   assert.match(dockerIgnore, /^apps\/api\/uploads\/$/m);
 });
 

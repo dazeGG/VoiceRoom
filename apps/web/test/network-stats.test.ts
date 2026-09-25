@@ -2,11 +2,10 @@
 import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 
-
 async function load(modulePath) {
   vi.stubGlobal('window', { location: { hash: '', pathname: '/', search: '' } });
   vi.stubGlobal('localStorage', { getItem: () => null, setItem() {}, removeItem() {} });
-    vi.resetModules();
+  vi.resetModules();
   return import(/* @vite-ignore */ modulePath);
 }
 
@@ -28,8 +27,14 @@ test('upstream loss and a UDP transport come from the publisher stats', async ()
 test('a relay or TCP candidate is reported as a degraded transport', async () => {
   const { getOutboundNetworkFromStats } = await load('/src/lib/features/room/client/room/stats.ts');
   const pair = { id: 'p1', type: 'candidate-pair', state: 'succeeded', selected: true, localCandidateId: 'l1' };
-  assert.equal(getOutboundNetworkFromStats(report([pair, { id: 'l1', candidateType: 'relay', protocol: 'udp' }])).transport, 'relay');
-  assert.equal(getOutboundNetworkFromStats(report([pair, { id: 'l1', candidateType: 'host', protocol: 'tcp' }])).transport, 'tcp');
+  assert.equal(
+    getOutboundNetworkFromStats(report([pair, { id: 'l1', candidateType: 'relay', protocol: 'udp' }])).transport,
+    'relay'
+  );
+  assert.equal(
+    getOutboundNetworkFromStats(report([pair, { id: 'l1', candidateType: 'host', protocol: 'tcp' }])).transport,
+    'tcp'
+  );
   assert.deepEqual(getOutboundNetworkFromStats(undefined), { lossPct: null, transport: null });
 });
 

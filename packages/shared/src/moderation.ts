@@ -37,7 +37,12 @@ export const MODERATION_CONTRACT_VERSION = 1 as const;
 export const MODERATION_DEFAULT_LIMIT = 50 as const;
 export const MODERATION_MAX_LIMIT = 100 as const;
 export const MODERATION_REASON_MAX_LENGTH = 500 as const;
-export const MODERATION_DURATIONS: readonly ['1h', '1d', '7d', 'permanent'] = Object.freeze(['1h', '1d', '7d', 'permanent'] as const);
+export const MODERATION_DURATIONS: readonly ['1h', '1d', '7d', 'permanent'] = Object.freeze([
+  '1h',
+  '1d',
+  '7d',
+  'permanent'
+] as const);
 export const MODERATION_DURATION_MS: Readonly<Record<ModerationDuration, number | null>> = Object.freeze({
   '1h': 60 * 60 * 1000,
   '1d': 24 * 60 * 60 * 1000,
@@ -62,7 +67,7 @@ export function normalizeModerationLimit(value: unknown, fallback: number = MODE
 }
 
 export function normalizeBanDuration(value: unknown): ModerationDuration | null {
-  return (MODERATION_DURATIONS as readonly unknown[]).includes(value) ? value as ModerationDuration : null;
+  return (MODERATION_DURATIONS as readonly unknown[]).includes(value) ? (value as ModerationDuration) : null;
 }
 
 export function durationToExpiresAt(duration: unknown, now: number = Date.now()): number | null | undefined {
@@ -134,7 +139,12 @@ export function normalizeActiveBan(value: unknown): ActiveBan | null {
   };
 }
 
-export function buildModerationPage({ roomId, bans = [], nextCursor, hasMore = false }: {
+export function buildModerationPage({
+  roomId,
+  bans = [],
+  nextCursor,
+  hasMore = false
+}: {
   roomId?: unknown;
   bans?: unknown[];
   nextCursor?: unknown;

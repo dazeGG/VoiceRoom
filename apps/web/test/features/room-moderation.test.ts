@@ -6,9 +6,16 @@ vi.mock('../../src/lib/api/moderation', () => ({
 }));
 
 const api = await import('../../src/lib/api/moderation');
-const { BAN_DURATIONS, banExpiryLabel, banRoomMember, banSubjectName, liftRoomBan } = await import('../../src/lib/features/home/model/room-moderation.ts');
+const { BAN_DURATIONS, banExpiryLabel, banRoomMember, banSubjectName, liftRoomBan } =
+  await import('../../src/lib/features/home/model/room-moderation.ts');
 
-const ban = (overrides: Record<string, unknown> = {}) => ({ id: 'ban-1', expiresAt: null, subject: { kind: 'account', profile: { displayName: 'Анна', login: 'anna' } }, ...overrides }) as never;
+const ban = (overrides: Record<string, unknown> = {}) =>
+  ({
+    id: 'ban-1',
+    expiresAt: null,
+    subject: { kind: 'account', profile: { displayName: 'Анна', login: 'anna' } },
+    ...overrides
+  }) as never;
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -22,7 +29,11 @@ test('a ban reports who and for how long, with an undo that lifts it', async () 
   const notify = vi.fn();
 
   await banRoomMember('room-a', { userId: 'u-anna', name: 'Анна' }, '1d', notify);
-  expect(api.putBan).toHaveBeenCalledWith('room-a', { userId: 'u-anna', guestIp: null, duration: '1d', reason: '' }, expect.any(String));
+  expect(api.putBan).toHaveBeenCalledWith(
+    'room-a',
+    { userId: 'u-anna', guestIp: null, duration: '1d', reason: '' },
+    expect.any(String)
+  );
   const [message, options] = notify.mock.calls[0] as [string, { undo: { label: string; run: () => void } }];
   expect(message).toBe('Анна заблокирован на 1 день');
   expect(options.undo.label).toBe('Отменить');

@@ -27,7 +27,8 @@ const MIGRATION_GUARD_STATES: { readonly [State in MigrationGuardState]: State }
 const LOCK_TIMEOUT_MS = 5000;
 
 function expectedMigrationCatalog(dir: string = DEFAULT_MIGRATIONS_DIR): string[] {
-  return fs.readdirSync(dir, { withFileTypes: true })
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
     .filter((entry) => entry.isFile() && /\.(?:c?js|ts)$/.test(entry.name))
     .map((entry) => entry.name.replace(/\.(?:c?js|ts)$/, ''))
     .sort();
@@ -50,47 +51,54 @@ async function query(client: QueryClient, text: string, values: unknown[] = []):
 }
 
 async function ensureMigrationGuardSchema(client: QueryClient): Promise<string> {
-  await query(client, `
+  await query(
+    client,
+    `
     CREATE TABLE IF NOT EXISTS ${MIGRATION_GUARD_TABLE} (
       id integer PRIMARY KEY,
       state text NOT NULL,
       marker text,
       updated_at timestamptz NOT NULL DEFAULT NOW()
     )
-  `);
+  `
+  );
 
   const rows = await query(client, `SELECT state FROM ${MIGRATION_GUARD_TABLE} WHERE id = $1`, [MIGRATION_GUARD_ID]);
   if (rows.length === 0) {
-    await query(
-      client,
-      `INSERT INTO ${MIGRATION_GUARD_TABLE} (id, state, marker) VALUES ($1, $2, $3)`,
-      [MIGRATION_GUARD_ID, MIGRATION_GUARD_STATES.clean, null]
-    );
+    await query(client, `INSERT INTO ${MIGRATION_GUARD_TABLE} (id, state, marker) VALUES ($1, $2, $3)`, [
+      MIGRATION_GUARD_ID,
+      MIGRATION_GUARD_STATES.clean,
+      null
+    ]);
     return MIGRATION_GUARD_STATES.clean;
   }
 
   return (rows[0] as { state: string }).state;
 }
 
-async function setMigrationGuardState(client: QueryClient, state: MigrationGuardState, marker: string | null = null): Promise<void> {
-  await query(client, `
+async function setMigrationGuardState(
+  client: QueryClient,
+  state: MigrationGuardState,
+  marker: string | null = null
+): Promise<void> {
+  await query(
+    client,
+    `
     INSERT INTO ${MIGRATION_GUARD_TABLE} (id, state, marker)
     VALUES ($1, $2, $3)
     ON CONFLICT (id) DO UPDATE
     SET state = EXCLUDED.state,
         marker = EXCLUDED.marker,
         updated_at = NOW()
-  `, [MIGRATION_GUARD_ID, state, marker]);
+  `,
+    [MIGRATION_GUARD_ID, state, marker]
+  );
 }
 
 async function assertNoDirtyMigrationState(client: QueryClient): Promise<void> {
   const state = await ensureMigrationGuardSchema(client);
   if (state === MIGRATION_GUARD_STATES.dirty || state === MIGRATION_GUARD_STATES.running) {
-    const rows = await query(
-      client,
-      `SELECT marker FROM ${MIGRATION_GUARD_TABLE} WHERE id = $1`,
-      [MIGRATION_GUARD_ID]
-    );
+    const rows = await query(client, `SELECT marker FROM ${MIGRATION_GUARD_TABLE} WHERE id = $1`, [MIGRATION_GUARD_ID]);
     const marker = rows[0]?.marker;
     throw new Error(`Aborting migrations because migration guard state is ${state}: ${marker || 'unknown reason'}`);
   }
@@ -124,7 +132,9 @@ function advisoryLockParts(lockValue: number | bigint | string): { classId: numb
 
 async function assertMigrationLockHeld(client: QueryClient, lockValue: number | bigint): Promise<void> {
   const { classId, objectId } = advisoryLockParts(lockValue);
-  const rows = await query(client, `
+  const rows = await query(
+    client,
+    `
     SELECT EXISTS (
       SELECT 1
       FROM pg_locks
@@ -135,7 +145,9 @@ async function assertMigrationLockHeld(client: QueryClient, lockValue: number | 
         AND objid = $2
         AND objsubid = 1
     ) AS held
-  `, [classId, objectId]);
+  `,
+    [classId, objectId]
+  );
   if (rows[0]?.held !== true) {
     throw new Error('Migration advisory lock was lost before completion');
   }
@@ -153,26 +165,32 @@ async function assertMigrationReady({
   const client = clientFactory(databaseUrl);
   await client.connect();
   try {
-    const relation = await query(client, `SELECT
+    const relation = await query(
+      client,
+      `SELECT
       to_regclass('public.${MIGRATION_GUARD_TABLE}') AS guard_table,
-      to_regclass('public.${DEFAULT_MIGRATIONS_TABLE}') AS migrations_table`);
+      to_regclass('public.${DEFAULT_MIGRATIONS_TABLE}') AS migrations_table`
+    );
     if (!relation[0]?.guard_table || !relation[0]?.migrations_table) {
       throw new Error('API rollout blocked because the migration guard or catalog is absent');
     }
-    const rows = await query(
-      client,
-      `SELECT state, marker FROM ${MIGRATION_GUARD_TABLE} WHERE id = $1`,
-      [MIGRATION_GUARD_ID]
-    );
+    const rows = await query(client, `SELECT state, marker FROM ${MIGRATION_GUARD_TABLE} WHERE id = $1`, [
+      MIGRATION_GUARD_ID
+    ]);
     const state = rows[0]?.state;
     if (state === MIGRATION_GUARD_STATES.running || state === MIGRATION_GUARD_STATES.dirty) {
       throw new Error(`API rollout blocked by migration guard state ${state}: ${rows[0]?.marker || 'unknown reason'}`);
     }
-    if (state !== MIGRATION_GUARD_STATES.clean) throw new Error(`API rollout blocked by unknown migration guard state ${state || 'missing'}`);
-    const applied = (await query(client, `SELECT name FROM ${DEFAULT_MIGRATIONS_TABLE} ORDER BY name ASC`)).map((row) => row.name);
+    if (state !== MIGRATION_GUARD_STATES.clean)
+      throw new Error(`API rollout blocked by unknown migration guard state ${state || 'missing'}`);
+    const applied = (await query(client, `SELECT name FROM ${DEFAULT_MIGRATIONS_TABLE} ORDER BY name ASC`)).map(
+      (row) => row.name
+    );
     const expected = expectedMigrationCatalog(dir);
     if (applied.length !== expected.length || applied.some((name, index) => name !== expected[index])) {
-      throw new Error(`API rollout blocked because migration catalog/head does not match this build (expected ${expected.at(-1) || 'none'}, got ${applied.at(-1) || 'none'})`);
+      throw new Error(
+        `API rollout blocked because migration catalog/head does not match this build (expected ${expected.at(-1) || 'none'}, got ${applied.at(-1) || 'none'})`
+      );
     }
     return true;
   } finally {
@@ -227,12 +245,19 @@ async function runMigrations({
     if (clearDirty) {
       await ensureMigrationGuardSchema(client);
       await setMigrationGuardState(client, MIGRATION_GUARD_STATES.clean, 'cleared by explicit operator request');
-      logger.warn({ evt: LOG_EVENTS.MIGRATION_DIRTY_CLEARED }, 'cleared dirty migration state by explicit operator request');
+      logger.warn(
+        { evt: LOG_EVENTS.MIGRATION_DIRTY_CLEARED },
+        'cleared dirty migration state by explicit operator request'
+      );
       return [];
     }
     await assertNoDirtyMigrationState(client);
 
-    await setMigrationGuardState(client, MIGRATION_GUARD_STATES.running, `direction=${direction},dir=${path.basename(dir)}`);
+    await setMigrationGuardState(
+      client,
+      MIGRATION_GUARD_STATES.running,
+      `direction=${direction},dir=${path.basename(dir)}`
+    );
     migrationStarted = true;
     await query(client, `SET lock_timeout TO '${LOCK_TIMEOUT_MS}ms'`);
 
@@ -251,7 +276,10 @@ async function runMigrations({
     await assertMigrationLockHeld(client, lockValue);
     await setMigrationGuardState(client, MIGRATION_GUARD_STATES.clean, `last=${path.basename(dir)}:${direction}`);
     if (migrations.length) {
-      logger.info({ evt: LOG_EVENTS.MIGRATION_COMPLETED, direction, applied: migrations.length }, 'PostgreSQL migrations complete');
+      logger.info(
+        { evt: LOG_EVENTS.MIGRATION_COMPLETED, direction, applied: migrations.length },
+        'PostgreSQL migrations complete'
+      );
     } else {
       logger.info({ evt: LOG_EVENTS.MIGRATION_COMPLETED, direction, applied: 0 }, 'PostgreSQL migrations were a no-op');
     }
@@ -259,7 +287,11 @@ async function runMigrations({
     return migrations;
   } catch (error) {
     if (migrationStarted) {
-      await setMigrationGuardState(client, MIGRATION_GUARD_STATES.dirty, `direction=${direction}, error=${(error as Error).message}`).catch(() => {});
+      await setMigrationGuardState(
+        client,
+        MIGRATION_GUARD_STATES.dirty,
+        `direction=${direction}, error=${(error as Error).message}`
+      ).catch(() => {});
     }
     throw error;
   } finally {

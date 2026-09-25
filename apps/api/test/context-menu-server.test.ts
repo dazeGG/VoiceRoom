@@ -6,25 +6,40 @@ import assert from 'node:assert/strict';
 
 import { TrackSource } from 'livekit-server-sdk';
 const { createApiApp } = await import('../src/server.ts');
-const { isLiveKitParticipantAlreadyGone, resolveServerMutePermission } = await import('../src/domains/admission/livekit-admin.ts');
+const { isLiveKitParticipantAlreadyGone, resolveServerMutePermission } =
+  await import('../src/domains/admission/livekit-admin.ts');
 
 const ALICE_ID = '11111111-1111-4111-8111-111111111111';
 const BOB_ID = '22222222-2222-4222-8222-222222222222';
 
-function createStore({ muteLookup = async () => false, removeBookmark = async () => ({ removed: false, status: 'removed' }) } = {}) {
-  const rooms = new Map([['context-room', {
-    id: 'context-room',
-    name: 'Context room',
-    isStatic: true,
-    ownerId: ALICE_ID,
-    peers: new Map(),
-    createdAt: Date.now(),
-    updatedAt: Date.now()
-  }]]);
+function createStore({
+  muteLookup = async () => false,
+  removeBookmark = async () => ({ removed: false, status: 'removed' })
+} = {}) {
+  const rooms = new Map([
+    [
+      'context-room',
+      {
+        id: 'context-room',
+        name: 'Context room',
+        isStatic: true,
+        ownerId: ALICE_ID,
+        peers: new Map(),
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      }
+    ]
+  ]);
   return {
-    async countQuotaRoomsForIp() { return 0; },
-    async countRooms() { return rooms.size; },
-    async getRoom(roomId) { return rooms.get(roomId) || null; },
+    async countQuotaRoomsForIp() {
+      return 0;
+    },
+    async countRooms() {
+      return rooms.size;
+    },
+    async getRoom(roomId) {
+      return rooms.get(roomId) || null;
+    },
     async getOrCreatePeerIdentity({ peerId }) {
       return { status: 'created', identity: { peerId, avatarColorKey: 'blurple' } };
     },
@@ -38,7 +53,9 @@ function createStore({ muteLookup = async () => false, removeBookmark = async ()
     async markRoomActive() {},
     async markRoomEmpty() {},
     async pruneRooms() {},
-    async listSummaryRecipientUserIds() { return []; }
+    async listSummaryRecipientUserIds() {
+      return [];
+    }
   };
 }
 
@@ -48,9 +65,7 @@ test('room list removal rejects owners and removes only bookmarked rooms', async
     store: createStore({
       removeBookmark: async (userId, roomId) => {
         calls.push({ userId, roomId });
-        return userId === ALICE_ID
-          ? { removed: false, status: 'owner' }
-          : { removed: true, status: 'removed' };
+        return userId === ALICE_ID ? { removed: false, status: 'owner' } : { removed: true, status: 'removed' };
       }
     }),
     users: createUsers()
@@ -94,14 +109,24 @@ test('a block in either direction rejects direct-message sends before persistenc
     store: createStore(),
     users: createUsers(),
     friends: {
-      async areFriends() { return true; },
-      async isBlockedBetween() { return true; },
-      async sendMessage() { sends += 1; throw new Error('must not persist'); }
+      async areFriends() {
+        return true;
+      },
+      async isBlockedBetween() {
+        return true;
+      },
+      async sendMessage() {
+        sends += 1;
+        throw new Error('must not persist');
+      }
     }
   });
   t.after(() => app.close());
 
-  for (const [session, peerId] of [['alice-session', BOB_ID], ['bob-session', ALICE_ID]]) {
+  for (const [session, peerId] of [
+    ['alice-session', BOB_ID],
+    ['bob-session', ALICE_ID]
+  ]) {
     const response = await app.inject({
       method: 'POST',
       url: `/api/dm/${peerId}`,
@@ -120,14 +145,24 @@ test('a block in either direction rejects room rings before invite persistence',
     store: createStore(),
     users: createUsers(),
     friends: {
-      async areFriends() { return true; },
-      async isBlockedBetween() { return true; },
-      async sendMessage() { sends += 1; throw new Error('must not persist'); }
+      async areFriends() {
+        return true;
+      },
+      async isBlockedBetween() {
+        return true;
+      },
+      async sendMessage() {
+        sends += 1;
+        throw new Error('must not persist');
+      }
     }
   });
   t.after(() => app.close());
 
-  for (const [session, userId] of [['alice-session', BOB_ID], ['bob-session', ALICE_ID]]) {
+  for (const [session, userId] of [
+    ['alice-session', BOB_ID],
+    ['bob-session', ALICE_ID]
+  ]) {
     const response = await app.inject({
       method: 'POST',
       url: '/api/rooms/context-room/ring',
@@ -142,10 +177,16 @@ test('a block in either direction rejects room rings before invite persistence',
 
 test('LiveKit admission fails closed when persisted server-mute lookup fails', async (t) => {
   let issued = 0;
-  const store = createStore({ muteLookup: async () => { throw new Error('database unavailable'); } });
+  const store = createStore({
+    muteLookup: async () => {
+      throw new Error('database unavailable');
+    }
+  });
   // Admission is only for peers already in the room roster.
   (await store.getRoom('context-room')).peers.set('peer-alice', {
-    id: 'peer-alice', name: 'Alice', sessionToken: 'goodtoken123456789012345678901234'
+    id: 'peer-alice',
+    name: 'Alice',
+    sessionToken: 'goodtoken123456789012345678901234'
   });
   const app = createApiApp({
     store,
@@ -153,7 +194,10 @@ test('LiveKit admission fails closed when persisted server-mute lookup fails', a
     liveKitCredentials: {
       async issueAdmission() {
         issued += 1;
-        return { status: 'issued', admission: { room: 'voice-room-context', token: 'jwt', ttlSeconds: 60, url: 'ws://gate' } };
+        return {
+          status: 'issued',
+          admission: { room: 'voice-room-context', token: 'jwt', ttlSeconds: 60, url: 'ws://gate' }
+        };
       }
     }
   });
@@ -181,11 +225,7 @@ test('microphone server mute preserves unrelated LiveKit permissions and screen 
     canPublishData: false,
     canSubscribe: false,
     hidden: true,
-    canPublishSources: [
-      TrackSource.MICROPHONE,
-      TrackSource.SCREEN_SHARE,
-      TrackSource.SCREEN_SHARE_AUDIO
-    ]
+    canPublishSources: [TrackSource.MICROPHONE, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO]
   };
 
   const muted = resolveServerMutePermission(original, true);

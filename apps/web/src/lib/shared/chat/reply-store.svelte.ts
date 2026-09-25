@@ -118,9 +118,7 @@ export class ReplyStore {
       this.requestFocus();
       return true;
     } catch (error) {
-      this.error = error instanceof Error && error.message
-        ? error.message
-        : 'Не удалось отправить ответ';
+      this.error = error instanceof Error && error.message ? error.message : 'Не удалось отправить ответ';
       return false;
     } finally {
       this.sending = false;

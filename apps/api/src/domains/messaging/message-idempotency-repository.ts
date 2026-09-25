@@ -76,9 +76,7 @@ function boundedString(value: unknown, name: string, max: number): string {
 
 function normalizeIdentity(input: IdempotencyInput = {}): Identity {
   const actorType = input.actorType === 'account' ? 'account' : input.actorType === 'guest' ? 'guest' : '';
-  const conversationType = input.conversation?.type === 'room'
-    ? 'room'
-    : input.conversation?.type === 'dm' ? 'dm' : '';
+  const conversationType = input.conversation?.type === 'room' ? 'room' : input.conversation?.type === 'dm' ? 'dm' : '';
   if (!actorType || !conversationType) throw new TypeError('Unsupported idempotency identity');
 
   return {
@@ -96,13 +94,18 @@ function encodeParts(parts: string[]): string {
 }
 
 function ledgerKey(identity: Identity): string {
-  return crypto.createHash('sha256').update(encodeParts([
-    identity.actorType,
-    identity.actorId,
-    identity.conversationType,
-    identity.conversationId,
-    identity.key
-  ])).digest('hex');
+  return crypto
+    .createHash('sha256')
+    .update(
+      encodeParts([
+        identity.actorType,
+        identity.actorId,
+        identity.conversationType,
+        identity.conversationId,
+        identity.key
+      ])
+    )
+    .digest('hex');
 }
 
 function actorLockKey(identity: Identity): string {
@@ -122,7 +125,8 @@ function createMessageIdempotencyRepository({
   retentionMs = DEFAULT_RETENTION_MS
 }: { actorQuota?: number; retentionMs?: number } = {}) {
   if (!Number.isInteger(actorQuota) || actorQuota < 1) throw new TypeError('actorQuota must be a positive integer');
-  if (!Number.isFinite(retentionMs) || retentionMs < 1_000) throw new TypeError('retentionMs must be at least one second');
+  if (!Number.isFinite(retentionMs) || retentionMs < 1_000)
+    throw new TypeError('retentionMs must be at least one second');
 
   async function reserve(client: unknown, input: IdempotencyInput): Promise<Reservation> {
     requireQuery(client);
@@ -177,11 +181,19 @@ function createMessageIdempotencyRepository({
     return { kind: 'reserved', ledgerKey: key };
   }
 
-  async function complete(client: unknown, key: unknown, { body, messageId = null, statusCode = 200 }: {
-    body?: unknown;
-    messageId?: string | null;
-    statusCode?: number;
-  } = {}): Promise<IdempotentReplay> {
+  async function complete(
+    client: unknown,
+    key: unknown,
+    {
+      body,
+      messageId = null,
+      statusCode = 200
+    }: {
+      body?: unknown;
+      messageId?: string | null;
+      statusCode?: number;
+    } = {}
+  ): Promise<IdempotentReplay> {
     requireQuery(client);
     boundedString(key, 'ledgerKey', 64);
     if (!Number.isInteger(statusCode) || statusCode < 100 || statusCode > 599) {

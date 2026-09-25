@@ -8,18 +8,14 @@ test('reaction emoji groups are an immutable ordered partition of the frozen cor
   const groups = emojiGroups.listReactionEmojiGroups();
   const corpus = listReactionEmojis();
 
-  assert.deepEqual(groups.map((group) => group.key), [
-    'smileys',
-    'people',
-    'nature',
-    'food',
-    'travel',
-    'activities',
-    'objects',
-    'symbols',
-    'flags'
-  ]);
-  assert.deepEqual(groups.flatMap((group) => group.emojis), corpus);
+  assert.deepEqual(
+    groups.map((group) => group.key),
+    ['smileys', 'people', 'nature', 'food', 'travel', 'activities', 'objects', 'symbols', 'flags']
+  );
+  assert.deepEqual(
+    groups.flatMap((group) => group.emojis),
+    corpus
+  );
   assert.equal(new Set(groups.flatMap((group) => group.emojis)).size, corpus.length);
   assert.ok(Object.isFrozen(groups));
   assert.ok(groups.every((group) => Object.isFrozen(group) && Object.isFrozen(group.emojis)));

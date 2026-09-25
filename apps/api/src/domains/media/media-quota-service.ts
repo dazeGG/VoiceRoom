@@ -47,7 +47,13 @@ function createMediaQuotaService({
   const attachments = attachmentRepository;
   const quotas = quotaRepository;
 
-  async function reserve({ ownerId, context, clientRequestId, bytes, metadata }: QuotaReservation): Promise<Attachment | null> {
+  async function reserve({
+    ownerId,
+    context,
+    clientRequestId,
+    bytes,
+    metadata
+  }: QuotaReservation): Promise<Attachment | null> {
     const requestedBytes = Number(bytes);
     if (!Number.isSafeInteger(requestedBytes) || requestedBytes < 1) {
       throw new MediaQuotaError('media_size_invalid', 'A positive upload size is required');
@@ -57,17 +63,23 @@ function createMediaQuotaService({
         ? await attachments.findByClientRequest(ownerId, context, clientRequestId, { client })
         : null;
       if (existing) return existing;
-      if (usage.pendingCount >= maxPending) throw new MediaQuotaError('media_pending_limit', 'Too many pending uploads');
-      if (usage.recentCount >= maxFilesPerWindow) throw new MediaQuotaError('media_rate_limit', 'Upload rate limit exceeded');
-      if (usage.usedBytes + requestedBytes > maxBytes) throw new MediaQuotaError('media_byte_quota', 'Media storage quota exceeded');
-      return attachments.createDraft({
-        ownerId,
-        context,
-        clientRequestId,
-        reservedBytes: requestedBytes,
-        reservationExpiresAt: new Date(Date.now() + reservationTtlMs),
-        metadata
-      }, client);
+      if (usage.pendingCount >= maxPending)
+        throw new MediaQuotaError('media_pending_limit', 'Too many pending uploads');
+      if (usage.recentCount >= maxFilesPerWindow)
+        throw new MediaQuotaError('media_rate_limit', 'Upload rate limit exceeded');
+      if (usage.usedBytes + requestedBytes > maxBytes)
+        throw new MediaQuotaError('media_byte_quota', 'Media storage quota exceeded');
+      return attachments.createDraft(
+        {
+          ownerId,
+          context,
+          clientRequestId,
+          reservedBytes: requestedBytes,
+          reservationExpiresAt: new Date(Date.now() + reservationTtlMs),
+          metadata
+        },
+        client
+      );
     });
   }
 

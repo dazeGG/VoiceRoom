@@ -19,8 +19,24 @@ const CLIENT_LOG_LEVELS = Object.freeze(['debug', 'info', 'warn', 'error'] as co
 
 export type ClientLogLevel = (typeof CLIENT_LOG_LEVELS)[number];
 export type ClientLogContext = Record<string, string | number | boolean | null>;
-export type ClientLogEvent = { level: ClientLogLevel; ns: string; msg: string; at: number; stale: boolean; ctx: ClientLogContext | undefined };
-type RawClientLogEvent = { msg?: unknown; message?: unknown; ns?: unknown; namespace?: unknown; at?: unknown; level?: unknown; ctx?: unknown; context?: unknown };
+export type ClientLogEvent = {
+  level: ClientLogLevel;
+  ns: string;
+  msg: string;
+  at: number;
+  stale: boolean;
+  ctx: ClientLogContext | undefined;
+};
+type RawClientLogEvent = {
+  msg?: unknown;
+  message?: unknown;
+  ns?: unknown;
+  namespace?: unknown;
+  at?: unknown;
+  level?: unknown;
+  ctx?: unknown;
+  context?: unknown;
+};
 const NAMESPACE_PATTERN = /^[A-Za-z0-9:._-]+$/;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
 
@@ -29,7 +45,8 @@ const SESSION_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
 // fragments are dropped, and anything shaped like a JWT or gate credential is
 // masked wherever it appears.
 const URL_QUERY_PATTERN = /(\b[a-z][a-z0-9+.-]*:\/\/[^\s?#"'<>]*)[?#][^\s"'<>]*/gi;
-const SECRET_PATTERN = /\b(?:eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*|vrg1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/g;
+const SECRET_PATTERN =
+  /\b(?:eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*|vrg1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/g;
 
 function redactSecrets(text: string): string {
   return text.replace(URL_QUERY_PATTERN, '$1?…').replace(SECRET_PATTERN, '[redacted]');
@@ -39,7 +56,9 @@ function cleanText(value: unknown, maxChars: number): string {
   if (typeof value !== 'string') return '';
   // Control characters would let a caller forge extra lines in a line-delimited
   // log stream, so they are stripped rather than escaped.
-  return redactSecrets(value.replace(/[\u0000-\u001f\u007f]/g, ' ')).trim().slice(0, maxChars);
+  return redactSecrets(value.replace(/[\u0000-\u001f\u007f]/g, ' '))
+    .trim()
+    .slice(0, maxChars);
 }
 
 function cleanSessionId(value: unknown): string {
@@ -54,7 +73,7 @@ function cleanNamespace(value: unknown): string {
 
 function cleanLevel(value: unknown): ClientLogLevel {
   const text = String(value || '').toLowerCase();
-  return (CLIENT_LOG_LEVELS as readonly string[]).includes(text) ? text as ClientLogLevel : 'info';
+  return (CLIENT_LOG_LEVELS as readonly string[]).includes(text) ? (text as ClientLogLevel) : 'info';
 }
 
 // Only primitives survive. An object or array would let a caller nest an
@@ -108,7 +127,10 @@ function normalizeClientLogEvent(input: unknown, now: number): ClientLogEvent | 
 // Returns the records worth emitting plus how many were discarded, so the
 // intake can report a caller sending malformed batches instead of silently
 // dropping them.
-function normalizeClientLogBatch(body: unknown, { now = Date.now() }: { now?: number } = {}): { sessionId: string; events: ClientLogEvent[]; dropped: number } {
+function normalizeClientLogBatch(
+  body: unknown,
+  { now = Date.now() }: { now?: number } = {}
+): { sessionId: string; events: ClientLogEvent[]; dropped: number } {
   const source = (body && typeof body === 'object' ? body : {}) as { events?: unknown; sessionId?: unknown };
   const rawEvents: unknown[] = Array.isArray(source.events) ? source.events : [];
   const considered = rawEvents.slice(0, CLIENT_LOG_LIMITS.maxEvents);

@@ -52,7 +52,7 @@
   aria-hidden="true"
 >
   {#if src && !imageFailed}
-    <img src={src} alt="" onerror={() => (imageFailed = true)} />
+    <img {src} alt="" onerror={() => (imageFailed = true)} />
   {:else}
     {initial}
   {/if}

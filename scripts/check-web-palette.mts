@@ -21,12 +21,19 @@ const SURFACE_TOKEN_VALUES: Record<string, string> = {
 };
 const SURFACE_TOKENS = Object.keys(SURFACE_TOKEN_VALUES);
 
-const SEMANTIC_TOKEN = /var\(--(?:accent(?:-[\w-]+)?|amber|avatar-[\w-]+|blue|coral|focus-border|green|ink|line|muted|participant-[\w-]+|preview-[\w-]+|profile-cover-accent|room-avatar-bg|slider-fill|stream-live(?:-hover)?|toast-accent|warm-(?:faint|ink(?:-dim)?|muted(?:-dim)?))\b/;
-const SEMANTIC_SELECTOR = /(?:\[aria-pressed|accent|action|active|avatar|away|check|connected|danger|decline|delete|destructive|dnd|dock-bar|error|exit|idle|launch|leave|live|not-found|offline|online|owner|record|remove|room-chat-unread|screen-source-pop-dot|status|stop|submit|success|thumb|toggle|warning)/i;
-const IMAGE_SELECTOR = /(?:404|art|artwork|avatar|brand|crop-stage|illustration|image|logo|preview|screen-video|stream-tile-video|swatch|visual|watermark)/i;
+const SEMANTIC_TOKEN =
+  /var\(--(?:accent(?:-[\w-]+)?|amber|avatar-[\w-]+|blue|coral|focus-border|green|ink|line|muted|participant-[\w-]+|preview-[\w-]+|profile-cover-accent|room-avatar-bg|slider-fill|stream-live(?:-hover)?|toast-accent|warm-(?:faint|ink(?:-dim)?|muted(?:-dim)?))\b/;
+const SEMANTIC_SELECTOR =
+  /(?:\[aria-pressed|accent|action|active|avatar|away|check|connected|danger|decline|delete|destructive|dnd|dock-bar|error|exit|idle|launch|leave|live|not-found|offline|online|owner|record|remove|room-chat-unread|screen-source-pop-dot|status|stop|submit|success|thumb|toggle|warning)/i;
+const IMAGE_SELECTOR =
+  /(?:404|art|artwork|avatar|brand|crop-stage|illustration|image|logo|preview|screen-video|stream-tile-video|swatch|visual|watermark)/i;
 const RAW_COLOR_LITERAL = /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|oklch|oklab|lab|lch)\(|\b(?:black|white)\b/i;
 
-interface Fragment { body: string; offset: number; context: string }
+interface Fragment {
+  body: string;
+  offset: number;
+  context: string;
+}
 
 function sourceFiles(path: string): string[] {
   const files: string[] = [];
@@ -64,7 +71,10 @@ function isAllowedBackground(selector: string, value: string): boolean {
   if (SEMANTIC_TOKEN.test(normalized)) return true;
   if (SEMANTIC_SELECTOR.test(selector) || IMAGE_SELECTOR.test(selector)) return true;
   if (hasSurfaceToken(normalized) && /color-mix\(/i.test(normalized)) return true;
-  return hasSurfaceToken(normalized) && !/(?:#[\da-f]{3,8}\b|\b(?:black|white)\b|\b(?:rgb|hsl|oklch|oklab|lab|lch)\()/i.test(normalized);
+  return (
+    hasSurfaceToken(normalized) &&
+    !/(?:#[\da-f]{3,8}\b|\b(?:black|white)\b|\b(?:rgb|hsl|oklch|oklab|lab|lch)\()/i.test(normalized)
+  );
 }
 
 const problems: string[] = [];
@@ -73,7 +83,8 @@ const appCss = readFileSync(resolve(sourceRoot, 'lib/shared/styles/app.css'), 'u
 for (const token of SURFACE_TOKENS) {
   const value = appCss.match(new RegExp(`${token}\\s*:\\s*([^;]+)`))?.[1]?.trim();
   if (!value) problems.push(`app.css does not declare ${token}`);
-  else if (value !== SURFACE_TOKEN_VALUES[token]) problems.push(`${token}: expected ${SURFACE_TOKEN_VALUES[token]}, found ${value}`);
+  else if (value !== SURFACE_TOKEN_VALUES[token])
+    problems.push(`${token}: expected ${SURFACE_TOKEN_VALUES[token]}, found ${value}`);
 }
 
 for (const absolute of sourceFiles(sourceRoot)) {
@@ -91,7 +102,9 @@ for (const absolute of sourceFiles(sourceRoot)) {
       for (const declaration of block.body.matchAll(/\bbackground(?:-color|-image)?\s*:\s*(?<value>[^;}]+)/g)) {
         const value = (declaration.groups?.value ?? '').trim().replace(/\s+/g, ' ');
         if (isAllowedBackground(block.selector, value)) continue;
-        problems.push(`${path}:${lineAt(source, fragment.offset + block.index + declaration.index)} ${block.selector} -> ${value}`);
+        problems.push(
+          `${path}:${lineAt(source, fragment.offset + block.index + declaration.index)} ${block.selector} -> ${value}`
+        );
       }
     }
   }

@@ -49,7 +49,9 @@ class FakeSocket extends EventEmitter {
 const CLAIMS = { cid: 'cid-1', iat: Date.now(), peer: 'peer-1', room: 'room-1' };
 const ACCESS_TOKEN = [
   Buffer.from('{"alg":"HS256"}').toString('base64url'),
-  Buffer.from(JSON.stringify({ sub: 'peer-1', nbf: Math.floor(Date.now() / 1000), video: { room: 'voice-room-room-1' } })).toString('base64url'),
+  Buffer.from(
+    JSON.stringify({ sub: 'peer-1', nbf: Math.floor(Date.now() / 1000), video: { room: 'voice-room-room-1' } })
+  ).toString('base64url'),
   'signature'
 ].join('.');
 
@@ -68,7 +70,10 @@ function createGate({ errors = [] } = {}) {
 }
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
-const upgradeRequest = (url = `/rtc?access_token=${ACCESS_TOKEN}&vr_gate_credential=credential`) => ({ url, headers: {} });
+const upgradeRequest = (url = `/rtc?access_token=${ACCESS_TOKEN}&vr_gate_credential=credential`) => ({
+  url,
+  headers: {}
+});
 
 function withConnect(factory, run) {
   const original = net.connect;
@@ -121,14 +126,17 @@ test('a client that leaves while authorization is pending never opens an upstrea
   const client = new FakeSocket();
   let connects = 0;
 
-  await withConnect(() => {
-    connects += 1;
-    return new FakeSocket();
-  }, async () => {
-    server.emit('upgrade', upgradeRequest(), client, Buffer.alloc(0));
-    client.writable = false;
-    await flush();
-  });
+  await withConnect(
+    () => {
+      connects += 1;
+      return new FakeSocket();
+    },
+    async () => {
+      server.emit('upgrade', upgradeRequest(), client, Buffer.alloc(0));
+      client.writable = false;
+      await flush();
+    }
+  );
 
   assert.equal(connects, 0);
 });
@@ -138,12 +146,15 @@ test('an upstream that connects after the client left is closed, not written', a
   const client = new FakeSocket();
   const upstream = new FakeSocket();
 
-  await withConnect(() => upstream, async () => {
-    server.emit('upgrade', upgradeRequest(), client, Buffer.alloc(0));
-    await flush();
-    client.destroyed = true;
-    upstream.emit('connect');
-  });
+  await withConnect(
+    () => upstream,
+    async () => {
+      server.emit('upgrade', upgradeRequest(), client, Buffer.alloc(0));
+      await flush();
+      client.destroyed = true;
+      upstream.emit('connect');
+    }
+  );
 
   assert.equal(upstream.destroyed, true);
   assert.deepEqual(upstream.writes, []);
@@ -155,11 +166,14 @@ test('an upstream write that throws tears down both sockets and is logged', asyn
   const client = new FakeSocket();
   const upstream = new FakeSocket({ throwOnWrite: true });
 
-  await withConnect(() => upstream, async () => {
-    server.emit('upgrade', upgradeRequest(), client, Buffer.from('head'));
-    await flush();
-    upstream.emit('connect');
-  });
+  await withConnect(
+    () => upstream,
+    async () => {
+      server.emit('upgrade', upgradeRequest(), client, Buffer.from('head'));
+      await flush();
+      upstream.emit('connect');
+    }
+  );
 
   assert.equal(client.destroyed, true);
   assert.equal(upstream.destroyed, true);

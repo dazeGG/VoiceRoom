@@ -2,8 +2,6 @@
 import { test, onTestFinished, vi } from 'vitest';
 import assert from 'node:assert/strict';
 
-
-
 async function loadService(bridge) {
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
@@ -52,19 +50,22 @@ test('desktop overlay service normalizes settings and sends a typed patch', asyn
     showNames: true,
     allowedExecutables: ['mygame.exe']
   });
-  assert.deepEqual(await service.updateDesktopOverlaySettings({
-    anchor: 'top-left',
-    avatarSize: 'huge',
-    enabled: false,
-    opacity: 0.2,
-    showNames: false
-  }), {
-    anchor: 'top-left',
-    avatarSize: 'medium',
-    enabled: false,
-    showNames: false,
-    allowedExecutables: []
-  });
+  assert.deepEqual(
+    await service.updateDesktopOverlaySettings({
+      anchor: 'top-left',
+      avatarSize: 'huge',
+      enabled: false,
+      opacity: 0.2,
+      showNames: false
+    }),
+    {
+      anchor: 'top-left',
+      avatarSize: 'medium',
+      enabled: false,
+      showNames: false,
+      allowedExecutables: []
+    }
+  );
   assert.deepEqual(calls, [{ anchor: 'top-left', enabled: false, showNames: false }]);
 
   await service.updateDesktopOverlaySettings({ avatarSize: 'small' });

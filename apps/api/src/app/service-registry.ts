@@ -99,7 +99,12 @@ export type ServiceRegistryDeps = {
   broadcast: (room: Room, message: Record<string, unknown>) => void;
   broadcastToUser: (userId: string, message: any) => unknown;
   attachMediaProjection: (context: 'room' | 'dm', message: any) => Promise<any>;
-  disconnectModeratedPeer: (room: Room, peer: any, type: EvictionType, options: { gateAlreadyRevoked?: boolean }) => Promise<unknown>;
+  disconnectModeratedPeer: (
+    room: Room,
+    peer: any,
+    type: EvictionType,
+    options: { gateAlreadyRevoked?: boolean }
+  ) => Promise<unknown>;
   liveKitGatePrincipalForPeer: (roomId: string, peer: any) => unknown;
   getLiveKitConfig: () => LiveKitConfig;
   roomMembershipPresenceSnapshot: (roomId: string) => any;
@@ -114,9 +119,15 @@ type HistoryServices = {
   room: ReturnType<typeof createRoomHistoryService>;
   read: ReturnType<typeof createMessageReadService>;
 };
-type ReactionServices = { realtime: ReturnType<typeof createReactionRealtimeAdapter>; service: ReturnType<typeof createReactionService> };
+type ReactionServices = {
+  realtime: ReturnType<typeof createReactionRealtimeAdapter>;
+  service: ReturnType<typeof createReactionService>;
+};
 type PinServices = { service: ReturnType<typeof createPinService> };
-type MessageDeliveryServices = { idempotency: ReturnType<typeof createMessageIdempotencyRepository>; outbox: ReturnType<typeof createMessageOutboxRepository> };
+type MessageDeliveryServices = {
+  idempotency: ReturnType<typeof createMessageIdempotencyRepository>;
+  outbox: ReturnType<typeof createMessageOutboxRepository>;
+};
 type NotificationServices = {
   eligibility: ReturnType<typeof createMentionEligibilityService>;
   inbox: ReturnType<typeof createInboxRepository>;
@@ -146,23 +157,28 @@ type MembershipServices = {
 // Test doubles and bootstrap's stores come from JavaScript callers.
 type StoreOverrides = Record<string, any>;
 
-export function resolveCursorHmacKeys({ context, env = process.env, fallbackGateSecret = '' }: { context?: string; env?: NodeJS.ProcessEnv; fallbackGateSecret?: string } = {}): string {
-  const configured = env.VOICE_ROOM_CURSOR_HMAC_KEYS
-    || env.CURSOR_HMAC_KEYS
-    || env.CURSOR_HMAC_KEY;
+export function resolveCursorHmacKeys({
+  context,
+  env = process.env,
+  fallbackGateSecret = ''
+}: { context?: string; env?: NodeJS.ProcessEnv; fallbackGateSecret?: string } = {}): string {
+  const configured = env.VOICE_ROOM_CURSOR_HMAC_KEYS || env.CURSOR_HMAC_KEYS || env.CURSOR_HMAC_KEY;
   if (configured) return configured;
 
   if (env.NODE_ENV === 'production') {
     throw new Error('VOICE_ROOM_CURSOR_HMAC_KEYS is required in production');
   }
 
-  const liveKitGateSecret = typeof env.LIVEKIT_GATE_SECRET === 'string'
-    ? env.LIVEKIT_GATE_SECRET.trim()
-    : fallbackGateSecret;
+  const liveKitGateSecret =
+    typeof env.LIVEKIT_GATE_SECRET === 'string' ? env.LIVEKIT_GATE_SECRET.trim() : fallbackGateSecret;
   if (liveKitGateSecret.length >= 32) return `${liveKitGateSecret}:${context}-cursors`;
 
-  const developmentSeed = context === 'membership' ? 'voice-room-development-membership' : 'voice-room-development-cursors';
-  return crypto.createHash('sha256').update(String(env.POW_SECRET || developmentSeed)).digest('hex');
+  const developmentSeed =
+    context === 'membership' ? 'voice-room-development-membership' : 'voice-room-development-cursors';
+  return crypto
+    .createHash('sha256')
+    .update(String(env.POW_SECRET || developmentSeed))
+    .digest('hex');
 }
 
 export function createServiceRegistry(config: ServiceRegistryConfig, deps: ServiceRegistryDeps) {
@@ -175,7 +191,8 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   let pushStore: ReturnType<typeof createPushStore> | null = null;
   let pushService: ReturnType<typeof createPushService> | null = null;
   let avatarStorage: ReturnType<typeof createAvatarStorage> | null = null;
-  let messageService: ReturnType<typeof createMessageService<DirectMessageRepository, RoomMessageRepository>> | null = null;
+  let messageService: ReturnType<typeof createMessageService<DirectMessageRepository, RoomMessageRepository>> | null =
+    null;
   let historyServices: HistoryServices | null = null;
   let credentialBoundary: ReturnType<typeof createCredentialBoundaryService> | null = null;
   let liveKitCredentialProvider: ReturnType<typeof createLiveKitCredentialProvider> | null = null;
@@ -211,11 +228,15 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   const findRoomBan: D['findRoomBan'] = (roomId, userId, ip) => deps.findRoomBan(roomId, userId, ip);
   const broadcast: D['broadcast'] = (room, message) => deps.broadcast(room, message);
   const broadcastToUser: D['broadcastToUser'] = (userId, message) => deps.broadcastToUser(userId, message);
-  const attachMediaProjection: D['attachMediaProjection'] = (context, message) => deps.attachMediaProjection(context, message);
-  const disconnectModeratedPeer: D['disconnectModeratedPeer'] = (room, peer, type, options) => deps.disconnectModeratedPeer(room, peer, type, options);
-  const liveKitGatePrincipalForPeer: D['liveKitGatePrincipalForPeer'] = (roomId, peer) => deps.liveKitGatePrincipalForPeer(roomId, peer);
+  const attachMediaProjection: D['attachMediaProjection'] = (context, message) =>
+    deps.attachMediaProjection(context, message);
+  const disconnectModeratedPeer: D['disconnectModeratedPeer'] = (room, peer, type, options) =>
+    deps.disconnectModeratedPeer(room, peer, type, options);
+  const liveKitGatePrincipalForPeer: D['liveKitGatePrincipalForPeer'] = (roomId, peer) =>
+    deps.liveKitGatePrincipalForPeer(roomId, peer);
   const getLiveKitConfig: D['getLiveKitConfig'] = () => deps.getLiveKitConfig();
-  const roomMembershipPresenceSnapshot: D['roomMembershipPresenceSnapshot'] = (roomId) => deps.roomMembershipPresenceSnapshot(roomId);
+  const roomMembershipPresenceSnapshot: D['roomMembershipPresenceSnapshot'] = (roomId) =>
+    deps.roomMembershipPresenceSnapshot(roomId);
   const broadcastRoomLinkPreview: D['broadcastRoomLinkPreview'] = (input) => deps.broadcastRoomLinkPreview(input);
   const broadcastDirectLinkPreview: D['broadcastDirectLinkPreview'] = (input) => deps.broadcastDirectLinkPreview(input);
 
@@ -260,10 +281,11 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     return messageService;
   }
 
-
   function getHistoryServices() {
     if (!historyServices) {
-      const cursorCodec = createCursorCodec({ keys: resolveCursorHmacKeys({ context: 'history', fallbackGateSecret: LIVEKIT_GATE_SECRET }) });
+      const cursorCodec = createCursorCodec({
+        keys: resolveCursorHmacKeys({ context: 'history', fallbackGateSecret: LIVEKIT_GATE_SECRET })
+      });
       const visibilityPolicy = createMessageVisibilityService();
       historyServices = {
         cursorCodec,
@@ -439,15 +461,14 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
           .map((peer) => liveKitGatePrincipalForPeer(roomId, peer))
           .filter(isGatePrincipal);
       },
-      revokePrincipalInTransaction: ({ client, principal, roomId, now }) => (
-        getRoomStore().revokeLiveKitGatePrincipalInTransaction(client, { principal, roomId, now })
-      ),
+      revokePrincipalInTransaction: ({ client, principal, roomId, now }) =>
+        getRoomStore().revokeLiveKitGatePrincipalInTransaction(client, { principal, roomId, now }),
       afterBanCommitted: async ({ roomId, userId, guestIp }) => {
         const room = await getRoom(roomId);
         if (!room) return;
-        const peers = [...room.peers.values()].filter((peer) => userId
-          ? peer.accountUserId === userId
-          : Boolean(guestIp && !peer.accountUserId && peer.ip === guestIp));
+        const peers = [...room.peers.values()].filter((peer) =>
+          userId ? peer.accountUserId === userId : Boolean(guestIp && !peer.accountUserId && peer.ip === guestIp)
+        );
         for (const peer of peers) {
           await disconnectModeratedPeer(room, peer, 'room.banned', { gateAlreadyRevoked: true });
         }
@@ -514,7 +535,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
           [attachment.roomMessageId, viewerId]
         );
         if (result.rowCount !== 1) return false;
-        return !await getActiveBanService()!.isBanned({ roomId: result.rows[0].room_id, userId: viewerId });
+        return !(await getActiveBanService()!.isBanned({ roomId: result.rows[0].room_id, userId: viewerId }));
       },
       authorizeDirectAttachment: async ({ attachment, viewerId }) => {
         if (!attachment.directMessageId) return false;
@@ -538,13 +559,10 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     if (LIVEKIT_GATE_SECRET.length < 32) return null;
     const store = getRoomStore();
     if (
-      typeof store.getLiveKitGatePrincipalEpoch !== 'function'
-      || typeof store.createLiveKitGateCredential !== 'function'
-      || typeof store.verifyLiveKitGateCredential !== 'function'
-      || (
-        typeof store.revokeLiveKitGatePrincipal !== 'function'
-        && typeof store.revokeLiveKitGatePeer !== 'function'
-      )
+      typeof store.getLiveKitGatePrincipalEpoch !== 'function' ||
+      typeof store.createLiveKitGateCredential !== 'function' ||
+      typeof store.verifyLiveKitGateCredential !== 'function' ||
+      (typeof store.revokeLiveKitGatePrincipal !== 'function' && typeof store.revokeLiveKitGatePeer !== 'function')
     ) {
       return null;
     }
@@ -572,7 +590,9 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   }
 
   function membershipCursorCodec() {
-    return createCursorCodec({ keys: resolveCursorHmacKeys({ context: 'membership', fallbackGateSecret: LIVEKIT_GATE_SECRET }) });
+    return createCursorCodec({
+      keys: resolveCursorHmacKeys({ context: 'membership', fallbackGateSecret: LIVEKIT_GATE_SECRET })
+    });
   }
 
   function getMembershipServices() {
@@ -674,7 +694,16 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
 
   /** The database-backed stores bootstrap builds before the app. */
   function install(stores: StoreOverrides): void {
-    ({ roomStore, userStore, friendStore, notificationStore, pushStore, pushService, avatarStorage, linkPreviewStorage } = stores);
+    ({
+      roomStore,
+      userStore,
+      friendStore,
+      notificationStore,
+      pushStore,
+      pushService,
+      avatarStorage,
+      linkPreviewStorage
+    } = stores);
     messageService = null;
   }
 
@@ -688,7 +717,8 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       membershipPool?.end?.()
     ]).then((results) => {
       for (const result of results) {
-        if (result.status === 'rejected') logger.error({ evt: LOG_EVENTS.STORE_CLOSE_FAILED, err: result.reason }, 'failed to close a store');
+        if (result.status === 'rejected')
+          logger.error({ evt: LOG_EVENTS.STORE_CLOSE_FAILED, err: result.reason }, 'failed to close a store');
       }
     });
     membershipPool = null;
@@ -728,4 +758,3 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     close
   };
 }
-

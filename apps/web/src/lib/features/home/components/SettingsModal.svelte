@@ -9,15 +9,15 @@
   import { deleteUserAvatar, updateDisplayName, uploadUserAvatar } from '$lib/api/auth';
   import { setUser } from '$lib/features/auth/session.svelte';
   import { state as roomClientState } from '$lib/features/room/client/core/state.svelte';
-  import { playPeerCue, playDirectMessageCue, playFriendAcceptedCue, playMicCue, playRoomChatMessageCue, playStreamCue } from '$lib/features/room/client/media/cues';
   import {
-    Avatar,
-    AvatarCropDialog,
-    HotkeyRecorder,
-    Select,
-    Slider,
-    type HotkeyBinding
-  } from '$lib/shared/ui';
+    playPeerCue,
+    playDirectMessageCue,
+    playFriendAcceptedCue,
+    playMicCue,
+    playRoomChatMessageCue,
+    playStreamCue
+  } from '$lib/features/room/client/media/cues';
+  import { Avatar, AvatarCropDialog, HotkeyRecorder, Select, Slider, type HotkeyBinding } from '$lib/shared/ui';
   import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
   import {
     enumerateMicrophones,
@@ -197,8 +197,7 @@
   const browserNotificationsEnabled = $derived(
     pushNotifications.supported
       ? pushNotifications.active
-      : notificationPreferences.notificationsEnabled
-        && notificationPreferences.deliveryPermission === 'granted'
+      : notificationPreferences.notificationsEnabled && notificationPreferences.deliveryPermission === 'granted'
   );
   const macDesktopApp = $derived(desktopApp && desktopPlatform === 'darwin');
   const systemNotificationsEnabled = $derived(
@@ -213,9 +212,7 @@
     { value: '', label: 'Системный' },
     ...speakers.map((speaker) => ({ value: speaker.deviceId, label: speaker.label }))
   ]);
-  const noiseOptions = $derived(
-    NOISE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))
-  );
+  const noiseOptions = $derived(NOISE_OPTIONS.map((option) => ({ value: option.value, label: option.label })));
 
   $effect(() => {
     if (!open) return;
@@ -241,7 +238,9 @@
       if (!cancelled) overlayForeground = next;
     }
     void tick();
-    const timer = window.setInterval(() => { void tick(); }, 1000);
+    const timer = window.setInterval(() => {
+      void tick();
+    }, 1000);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
@@ -352,7 +351,9 @@
       blockedUsers = await fetchBlockedUsers();
       blockedUsersLoaded = true;
     } catch (error) {
-      onToast(error instanceof Error && error.message ? error.message : 'Не удалось загрузить блокировки', { variant: 'error' });
+      onToast(error instanceof Error && error.message ? error.message : 'Не удалось загрузить блокировки', {
+        variant: 'error'
+      });
     } finally {
       blockedUsersLoading = false;
     }
@@ -366,7 +367,9 @@
       blockedUsers = blockedUsers.filter((entry) => entry.id !== userId);
       onToast('Пользователь разблокирован');
     } catch (error) {
-      onToast(error instanceof Error && error.message ? error.message : 'Не удалось разблокировать', { variant: 'error' });
+      onToast(error instanceof Error && error.message ? error.message : 'Не удалось разблокировать', {
+        variant: 'error'
+      });
     } finally {
       blockedUserSaving = '';
     }
@@ -651,13 +654,15 @@
             title: 'Уведомления Voice Room включены'
           });
         }
-      }
-      else if (permission === 'denied') onToast('Разрешите уведомления в настройках браузера');
+      } else if (permission === 'denied') onToast('Разрешите уведомления в настройках браузера');
       else onToast('Системные уведомления недоступны');
     } catch {
-      onToast(pushNotifications.serverEnabled
-        ? 'Не удалось изменить push-уведомления'
-        : 'Push-уведомления не настроены на сервере', { variant: 'error' });
+      onToast(
+        pushNotifications.serverEnabled
+          ? 'Не удалось изменить push-уведомления'
+          : 'Push-уведомления не настроены на сервере',
+        { variant: 'error' }
+      );
     }
   }
 
@@ -751,20 +756,40 @@
       <div class="settings-body">
         <nav class="settings-nav" aria-label="Разделы настроек">
           <div class="settings-nav-main">
-            <button class="settings-nav-item" type="button" data-active={tab === 'profile'} onclick={() => (tab = 'profile')}>
+            <button
+              class="settings-nav-item"
+              type="button"
+              data-active={tab === 'profile'}
+              onclick={() => (tab = 'profile')}
+            >
               <User {...iconMd} aria-hidden="true" />
               Профиль
             </button>
-            <button class="settings-nav-item" type="button" data-active={tab === 'security'} onclick={() => (tab = 'security')}>
+            <button
+              class="settings-nav-item"
+              type="button"
+              data-active={tab === 'security'}
+              onclick={() => (tab = 'security')}
+            >
               <ShieldCheck {...iconMd} aria-hidden="true" />
               Безопасность
             </button>
-            <button class="settings-nav-item" type="button" data-active={tab === 'sound'} onclick={() => (tab = 'sound')}>
+            <button
+              class="settings-nav-item"
+              type="button"
+              data-active={tab === 'sound'}
+              onclick={() => (tab = 'sound')}
+            >
               <Mic {...iconMd} aria-hidden="true" />
               Звук
             </button>
             {#if desktopApp}
-              <button class="settings-nav-item" type="button" data-active={tab === 'hotkeys'} onclick={() => (tab = 'hotkeys')}>
+              <button
+                class="settings-nav-item"
+                type="button"
+                data-active={tab === 'hotkeys'}
+                onclick={() => (tab = 'hotkeys')}
+              >
                 <Keyboard {...iconMd} aria-hidden="true" />
                 Хоткеи
               </button>
@@ -775,12 +800,22 @@
                 Приложение
               </button>
             {/if}
-            <button class="settings-nav-item" type="button" data-active={tab === 'notifications'} onclick={() => (tab = 'notifications')}>
+            <button
+              class="settings-nav-item"
+              type="button"
+              data-active={tab === 'notifications'}
+              onclick={() => (tab = 'notifications')}
+            >
               <Bell {...iconMd} aria-hidden="true" />
               Уведомления
             </button>
           </div>
-          <button class="settings-nav-item settings-nav-item--danger" type="button" disabled={loggingOut} onclick={onLogout}>
+          <button
+            class="settings-nav-item settings-nav-item--danger"
+            type="button"
+            disabled={loggingOut}
+            onclick={onLogout}
+          >
             <LogOut {...iconMd} aria-hidden="true" />
             {loggingOut ? 'Выходим…' : 'Выйти'}
           </button>
@@ -790,7 +825,13 @@
           {#if tab === 'profile'}
             <div class="settings-profile-head">
               <div class="settings-avatar-control">
-                <input bind:this={avatarInput} class="settings-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" onchange={onAvatarFile} />
+                <input
+                  bind:this={avatarInput}
+                  class="settings-avatar-input"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onchange={onAvatarFile}
+                />
                 <button
                   type="button"
                   class="settings-avatar-edit"
@@ -799,7 +840,14 @@
                   aria-label={user?.avatarUrl ? 'Изменить аватар' : 'Загрузить аватар'}
                   title={user?.avatarUrl ? 'Изменить аватар' : 'Загрузить аватар'}
                 >
-                  <Avatar name={label} src={avatarPreviewUrl || (removeAvatarPending ? null : user?.avatarUrl)} colorKey={user?.avatarColorKey} background={user?.avatarAccent || undefined} size={56} class="settings-profile-avatar" />
+                  <Avatar
+                    name={label}
+                    src={avatarPreviewUrl || (removeAvatarPending ? null : user?.avatarUrl)}
+                    colorKey={user?.avatarColorKey}
+                    background={user?.avatarAccent || undefined}
+                    size={56}
+                    class="settings-profile-avatar"
+                  />
                   <span class="settings-avatar-overlay" aria-hidden="true">
                     <Pencil {...iconSm} />
                   </span>
@@ -934,14 +982,18 @@
                           onValueChange={onGateChange}
                         >
                           {#snippet background()}
-                            <span class="settings-gate-fill" data-state={gateOpen ? 'open' : 'closed'} style={`transform:scaleX(${levelScale})`}></span>
+                            <span
+                              class="settings-gate-fill"
+                              data-state={gateOpen ? 'open' : 'closed'}
+                              style={`transform:scaleX(${levelScale})`}
+                            ></span>
                           {/snippet}
                         </Slider>
                         <span class="settings-gate-value">{gateLabel}</span>
                       </div>
                       <div class="settings-gate-hint">
-                        Микрофон открывается, только когда звук громче порога — отсекает фоновый шум и дыхание.
-                        В автоматическом режиме порог сам подстраивается под шум в комнате.
+                        Микрофон открывается, только когда звук громче порога — отсекает фоновый шум и дыхание. В
+                        автоматическом режиме порог сам подстраивается под шум в комнате.
                       </div>
                     </div>
                   </div>
@@ -992,7 +1044,12 @@
                       onValueChange={onNotificationVolumeChange}
                     />
                     <div class="settings-sound-actions">
-                      <button class="settings-sound-preview" type="button" disabled={previewingSoundSet} onclick={previewNotificationSound}>
+                      <button
+                        class="settings-sound-preview"
+                        type="button"
+                        disabled={previewingSoundSet}
+                        onclick={previewNotificationSound}
+                      >
                         {previewingSoundSet ? 'Проверяем…' : 'Проверить набор'}
                       </button>
                     </div>
@@ -1014,7 +1071,9 @@
                     <span class="settings-switch-knob" aria-hidden="true"></span>
                   </button>
                 </div>
-                <div class="settings-gate-hint">Когда вы уже в голосе, Voice Room уточнит, прежде чем переключить звонок.</div>
+                <div class="settings-gate-hint">
+                  Когда вы уже в голосе, Voice Room уточнит, прежде чем переключить звонок.
+                </div>
               </div>
 
               {#if desktopApp}
@@ -1026,16 +1085,18 @@
                         type="button"
                         role="radio"
                         aria-checked={microphoneMode === 'open'}
-                        onclick={() => changeMicrophoneMode('open')}
-                      >Открытый микрофон</button>
+                        onclick={() => changeMicrophoneMode('open')}>Открытый микрофон</button
+                      >
                       <button
                         type="button"
                         role="radio"
                         aria-checked={microphoneMode === 'push-to-talk'}
-                        onclick={() => changeMicrophoneMode('push-to-talk')}
-                      >Push-to-talk</button>
+                        onclick={() => changeMicrophoneMode('push-to-talk')}>Push-to-talk</button
+                      >
                     </div>
-                    <div class="settings-gate-hint">В Push-to-talk микрофон открыт, пока вы удерживаете назначенную клавишу.</div>
+                    <div class="settings-gate-hint">
+                      В Push-to-talk микрофон открыт, пока вы удерживаете назначенную клавишу.
+                    </div>
                   </div>
 
                   <div class="settings-hotkey-row" data-disabled={microphoneMode !== 'push-to-talk'}>
@@ -1059,7 +1120,9 @@
             <div class="settings-hotkeys">
               <div>
                 <span class="settings-section-title">Горячие клавиши</span>
-                <div class="settings-gate-hint">Назначенные сочетания работают глобально в desktop-приложении, пока вы подключены к голосу.</div>
+                <div class="settings-gate-hint">
+                  Назначенные сочетания работают глобально в desktop-приложении, пока вы подключены к голосу.
+                </div>
               </div>
 
               <div class="settings-hotkey-list">
@@ -1105,7 +1168,8 @@
               </div>
               <div class="settings-hotkey-window-note">
                 {#if globalHotkeysAvailable}
-                  В приложении VoiceRoom успешно зарегистрированные сочетания работают поверх других окон, пока вы подключены к голосу. На macOS может потребоваться разрешение «Мониторинг ввода».
+                  В приложении VoiceRoom успешно зарегистрированные сочетания работают поверх других окон, пока вы
+                  подключены к голосу. На macOS может потребоваться разрешение «Мониторинг ввода».
                 {:else}
                   Системные сочетания недоступны в этой сборке приложения.
                 {/if}
@@ -1130,8 +1194,9 @@
                     </button>
                   </div>
                   <div class="settings-gate-hint">
-                    Панель только поверх <strong>игры</strong> в оконном или borderless режиме: Steam, Epic, Riot, Xbox и то, что вы добавите ниже. Браузер, проводник и лаунчеры не считаются игрой.
-                    В exclusive fullscreen Windows отдаёт монитор игре — оверлея там не будет.
+                    Панель только поверх <strong>игры</strong> в оконном или borderless режиме: Steam, Epic, Riot, Xbox и
+                    то, что вы добавите ниже. Браузер, проводник и лаунчеры не считаются игрой. В exclusive fullscreen Windows
+                    отдаёт монитор игре — оверлея там не будет.
                   </div>
                 </div>
 
@@ -1195,7 +1260,9 @@
                   <div class="settings-overlay-window">
                     {#if overlayForeground?.exe}
                       <div class="settings-overlay-window-text">
-                        <span class="settings-overlay-window-name">{overlayForeground.title || overlayForeground.label}</span>
+                        <span class="settings-overlay-window-name"
+                          >{overlayForeground.title || overlayForeground.label}</span
+                        >
                         <span class="settings-overlay-window-exe">{overlayForeground.label}</span>
                       </div>
                       {#if overlayForeground.game}
@@ -1211,7 +1278,9 @@
                         </button>
                       {/if}
                     {:else}
-                      <span class="settings-overlay-window-empty">Переключитесь в игру и вернитесь сюда — здесь появится её окно.</span>
+                      <span class="settings-overlay-window-empty"
+                        >Переключитесь в игру и вернитесь сюда — здесь появится её окно.</span
+                      >
                     {/if}
                   </div>
                   {#if overlayAllowed.length}
@@ -1236,72 +1305,77 @@
               {/if}
 
               {#if autostartAvailable}
-              <div>
-                <div class="settings-gate-head">
-                  <span class="settings-field-label">Автозапуск</span>
-                  <button
-                    class="settings-switch"
-                    type="button"
-                    role="switch"
-                    aria-checked={openAtLogin}
-                    aria-label="Автозапуск"
-                    disabled={autostartSaving || !autostartSupported}
-                    onclick={() => void changeAutostart({ openAtLogin: !openAtLogin })}
-                  >
-                    <span class="settings-switch-knob" aria-hidden="true"></span>
-                  </button>
-                </div>
-                <div class="settings-gate-hint">
-                  {#if autostartSupported}Voice Room откроется при входе в систему.
-                  {:else}Автозапуск недоступен в этой сборке приложения.{/if}
-                </div>
-              </div>
-
-              <div class="settings-notification-dependent" data-disabled={!openAtLogin}>
-                <div class="settings-gate-head">
-                  <span class="settings-field-label">Автозапуск свёрнутым</span>
-                  <button
-                    class="settings-switch"
-                    type="button"
-                    role="switch"
-                    aria-checked={startMinimized}
-                    aria-label="Автозапуск свёрнутым"
-                    disabled={autostartSaving || !autostartSupported || !openAtLogin}
-                    onclick={() => void changeAutostart({ startMinimized: !startMinimized })}
-                  >
-                    <span class="settings-switch-knob" aria-hidden="true"></span>
-                  </button>
-                </div>
-                <div class="settings-gate-hint">
-                  {#if macDesktopApp}При автозапуске окно не откроется — Voice Room будет ждать в Dock.
-                  {:else}При автозапуске окно не откроется — Voice Room будет ждать в трее.{/if}
-                </div>
-              </div>
-
-              {#if !macDesktopApp}
                 <div>
                   <div class="settings-gate-head">
-                    <span class="settings-field-label">Системные уведомления</span>
+                    <span class="settings-field-label">Автозапуск</span>
                     <button
                       class="settings-switch"
                       type="button"
                       role="switch"
-                      aria-checked={systemNotificationsEnabled}
-                      aria-label="Системные уведомления"
-                      onclick={() => void toggleSystemNotifications()}
+                      aria-checked={openAtLogin}
+                      aria-label="Автозапуск"
+                      disabled={autostartSaving || !autostartSupported}
+                      onclick={() => void changeAutostart({ openAtLogin: !openAtLogin })}
                     >
                       <span class="settings-switch-knob" aria-hidden="true"></span>
                     </button>
                   </div>
-                  <div class="settings-gate-hint">Уведомления Windows о сообщениях и заявках в друзья, без системного звука. Звуки Voice Room и счётчик на панели задач от этого не зависят.</div>
+                  <div class="settings-gate-hint">
+                    {#if autostartSupported}Voice Room откроется при входе в систему.
+                    {:else}Автозапуск недоступен в этой сборке приложения.{/if}
+                  </div>
                 </div>
-              {/if}
+
+                <div class="settings-notification-dependent" data-disabled={!openAtLogin}>
+                  <div class="settings-gate-head">
+                    <span class="settings-field-label">Автозапуск свёрнутым</span>
+                    <button
+                      class="settings-switch"
+                      type="button"
+                      role="switch"
+                      aria-checked={startMinimized}
+                      aria-label="Автозапуск свёрнутым"
+                      disabled={autostartSaving || !autostartSupported || !openAtLogin}
+                      onclick={() => void changeAutostart({ startMinimized: !startMinimized })}
+                    >
+                      <span class="settings-switch-knob" aria-hidden="true"></span>
+                    </button>
+                  </div>
+                  <div class="settings-gate-hint">
+                    {#if macDesktopApp}При автозапуске окно не откроется — Voice Room будет ждать в Dock.
+                    {:else}При автозапуске окно не откроется — Voice Room будет ждать в трее.{/if}
+                  </div>
+                </div>
+
+                {#if !macDesktopApp}
+                  <div>
+                    <div class="settings-gate-head">
+                      <span class="settings-field-label">Системные уведомления</span>
+                      <button
+                        class="settings-switch"
+                        type="button"
+                        role="switch"
+                        aria-checked={systemNotificationsEnabled}
+                        aria-label="Системные уведомления"
+                        onclick={() => void toggleSystemNotifications()}
+                      >
+                        <span class="settings-switch-knob" aria-hidden="true"></span>
+                      </button>
+                    </div>
+                    <div class="settings-gate-hint">
+                      Уведомления Windows о сообщениях и заявках в друзья, без системного звука. Звуки Voice Room и
+                      счётчик на панели задач от этого не зависят.
+                    </div>
+                  </div>
+                {/if}
               {/if}
 
               {#if diagnosticsAvailable}
                 <div>
                   <span class="settings-field-label">Диагностика</span>
-                  <div class="settings-gate-hint">Логи и сведения о системе помогут поддержке разобраться с проблемой.</div>
+                  <div class="settings-gate-hint">
+                    Логи и сведения о системе помогут поддержке разобраться с проблемой.
+                  </div>
                   <div class="settings-diagnostics-actions">
                     <button class="settings-unblock-button" type="button" onclick={() => void openLogsFolder()}>
                       Открыть папку логов
@@ -1333,11 +1407,15 @@
                     </button>
                   </div>
                   <div class="settings-gate-hint">
-                    {#if pushNotifications.supported && pushNotifications.active}Включены. События будут доставляться, когда вкладка закрыта.
-                    {:else if pushNotifications.supported && pushNotifications.loaded && !pushNotifications.serverEnabled}Отключены на сервере: настройте VAPID-ключи.
-                    {:else if desktopApp && notificationPreferences.deliveryPermission === 'granted'}Включены для открытого приложения.
+                    {#if pushNotifications.supported && pushNotifications.active}Включены. События будут доставляться,
+                      когда вкладка закрыта.
+                    {:else if pushNotifications.supported && pushNotifications.loaded && !pushNotifications.serverEnabled}Отключены
+                      на сервере: настройте VAPID-ключи.
+                    {:else if desktopApp && notificationPreferences.deliveryPermission === 'granted'}Включены для
+                      открытого приложения.
                     {:else if notificationPreferences.deliveryPermission === 'granted'}Включены для открытой вкладки.
-                    {:else if notificationPreferences.browserPermission === 'denied'}Запрещены браузером — измените разрешение сайта.
+                    {:else if notificationPreferences.browserPermission === 'denied'}Запрещены браузером — измените
+                      разрешение сайта.
                     {:else}Нажмите переключатель, чтобы включить. Запрос выполняется только по вашему действию.{/if}
                   </div>
                 </div>
@@ -1364,91 +1442,109 @@
               <div class="settings-notification-ignore">
                 <div>
                   <span class="settings-section-title">Получать уведомления</span>
-                  <div class="settings-gate-hint">Выберите диалоги и комнаты, от которых хотите получать системные уведомления и звуковые сигналы.</div>
+                  <div class="settings-gate-hint">
+                    Выберите диалоги и комнаты, от которых хотите получать системные уведомления и звуковые сигналы.
+                  </div>
                 </div>
 
                 <div class="settings-notification-targets">
-                <section class="settings-notification-group" aria-labelledby="notificationUsersTitle">
-                  <span class="settings-field-label" id="notificationUsersTitle">Пользователи</span>
-                  {#if notificationUsers.length > 0}
-                    <div class="settings-notification-list">
-                      {#each notificationUsers as peer (peer.id)}
-                        {@const peerMuted = notificationPreferences.mutedPeerIds.includes(peer.id)}
-                        <div class="settings-notification-row">
-                          <Avatar
-                            name={peer.displayName?.trim() || peer.login}
-                            src={peer.avatarUrl}
-                            colorKey={peer.avatarColorKey}
-                            background={peer.avatarAccent || undefined}
-                            size={32}
-                          />
-                          <span class="settings-notification-name">
-                            <span class="settings-notification-title">
-                              <strong><EmojiText text={peer.displayName?.trim() || peer.login} /></strong>
-                              {#if peerMuted}
-                                <span class="settings-notification-muted" role="img" aria-label="Уведомления отключены" title="Уведомления отключены">
-                                  <BellOff {...iconSm} aria-hidden="true" />
-                                </span>
-                              {/if}
+                  <section class="settings-notification-group" aria-labelledby="notificationUsersTitle">
+                    <span class="settings-field-label" id="notificationUsersTitle">Пользователи</span>
+                    {#if notificationUsers.length > 0}
+                      <div class="settings-notification-list">
+                        {#each notificationUsers as peer (peer.id)}
+                          {@const peerMuted = notificationPreferences.mutedPeerIds.includes(peer.id)}
+                          <div class="settings-notification-row">
+                            <Avatar
+                              name={peer.displayName?.trim() || peer.login}
+                              src={peer.avatarUrl}
+                              colorKey={peer.avatarColorKey}
+                              background={peer.avatarAccent || undefined}
+                              size={32}
+                            />
+                            <span class="settings-notification-name">
+                              <span class="settings-notification-title">
+                                <strong><EmojiText text={peer.displayName?.trim() || peer.login} /></strong>
+                                {#if peerMuted}
+                                  <span
+                                    class="settings-notification-muted"
+                                    role="img"
+                                    aria-label="Уведомления отключены"
+                                    title="Уведомления отключены"
+                                  >
+                                    <BellOff {...iconSm} aria-hidden="true" />
+                                  </span>
+                                {/if}
+                              </span>
+                              <small>@{peer.login}</small>
                             </span>
-                            <small>@{peer.login}</small>
-                          </span>
-                          <button
-                            class="settings-switch"
-                            type="button"
-                            role="switch"
-                            aria-checked={!peerMuted}
-                            aria-label={`Получать уведомления от ${peer.displayName?.trim() || peer.login}`}
-                            disabled={Boolean(notificationTargetSaving)}
-                            onclick={() => void togglePeerNotifications(peer.id)}
-                          >
-                            <span class="settings-switch-knob" aria-hidden="true"></span>
-                          </button>
-                        </div>
-                      {/each}
-                    </div>
-                  {:else}
-                    <div class="settings-notification-empty">Диалогов пока нет.</div>
-                  {/if}
-                </section>
+                            <button
+                              class="settings-switch"
+                              type="button"
+                              role="switch"
+                              aria-checked={!peerMuted}
+                              aria-label={`Получать уведомления от ${peer.displayName?.trim() || peer.login}`}
+                              disabled={Boolean(notificationTargetSaving)}
+                              onclick={() => void togglePeerNotifications(peer.id)}
+                            >
+                              <span class="settings-switch-knob" aria-hidden="true"></span>
+                            </button>
+                          </div>
+                        {/each}
+                      </div>
+                    {:else}
+                      <div class="settings-notification-empty">Диалогов пока нет.</div>
+                    {/if}
+                  </section>
 
-                <section class="settings-notification-group" aria-labelledby="notificationRoomsTitle">
-                  <span class="settings-field-label" id="notificationRoomsTitle">Комнаты</span>
-                  {#if notificationRooms.length > 0}
-                    <div class="settings-notification-list">
-                      {#each notificationRooms as room (room.roomId)}
-                        {@const roomMuted = notificationPreferences.mutedRoomIds.includes(room.roomId)}
-                        <div class="settings-notification-row">
-                          <Avatar name={room.name?.trim() || room.roomId} src={room.avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={32} />
-                          <span class="settings-notification-name">
-                            <span class="settings-notification-title">
-                              <strong><EmojiText text={room.name?.trim() || 'Комната'} /></strong>
-                              {#if roomMuted}
-                                <span class="settings-notification-muted" role="img" aria-label="Уведомления отключены" title="Уведомления отключены">
-                                  <BellOff {...iconSm} aria-hidden="true" />
-                                </span>
-                              {/if}
+                  <section class="settings-notification-group" aria-labelledby="notificationRoomsTitle">
+                    <span class="settings-field-label" id="notificationRoomsTitle">Комнаты</span>
+                    {#if notificationRooms.length > 0}
+                      <div class="settings-notification-list">
+                        {#each notificationRooms as room (room.roomId)}
+                          {@const roomMuted = notificationPreferences.mutedRoomIds.includes(room.roomId)}
+                          <div class="settings-notification-row">
+                            <Avatar
+                              name={room.name?.trim() || room.roomId}
+                              src={room.avatarUrl}
+                              shape="squircle"
+                              background="var(--room-avatar-bg)"
+                              size={32}
+                            />
+                            <span class="settings-notification-name">
+                              <span class="settings-notification-title">
+                                <strong><EmojiText text={room.name?.trim() || 'Комната'} /></strong>
+                                {#if roomMuted}
+                                  <span
+                                    class="settings-notification-muted"
+                                    role="img"
+                                    aria-label="Уведомления отключены"
+                                    title="Уведомления отключены"
+                                  >
+                                    <BellOff {...iconSm} aria-hidden="true" />
+                                  </span>
+                                {/if}
+                              </span>
+                              <small>{room.roomId}</small>
                             </span>
-                            <small>{room.roomId}</small>
-                          </span>
-                          <button
-                            class="settings-switch"
-                            type="button"
-                            role="switch"
-                            aria-checked={!roomMuted}
-                            aria-label={`Получать уведомления комнаты ${room.name?.trim() || room.roomId}`}
-                            disabled={Boolean(notificationTargetSaving)}
-                            onclick={() => void toggleRoomNotifications(room.roomId)}
-                          >
-                            <span class="settings-switch-knob" aria-hidden="true"></span>
-                          </button>
-                        </div>
-                      {/each}
-                    </div>
-                  {:else}
-                    <div class="settings-notification-empty">Сохранённых комнат пока нет.</div>
-                  {/if}
-                </section>
+                            <button
+                              class="settings-switch"
+                              type="button"
+                              role="switch"
+                              aria-checked={!roomMuted}
+                              aria-label={`Получать уведомления комнаты ${room.name?.trim() || room.roomId}`}
+                              disabled={Boolean(notificationTargetSaving)}
+                              onclick={() => void toggleRoomNotifications(room.roomId)}
+                            >
+                              <span class="settings-switch-knob" aria-hidden="true"></span>
+                            </button>
+                          </div>
+                        {/each}
+                      </div>
+                    {:else}
+                      <div class="settings-notification-empty">Сохранённых комнат пока нет.</div>
+                    {/if}
+                  </section>
                 </div>
               </div>
 
@@ -1489,7 +1585,6 @@
                   <div class="settings-notification-empty">Заблокированных пользователей нет.</div>
                 {/if}
               </section>
-
             </div>
           {/if}
         </div>

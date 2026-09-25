@@ -15,7 +15,10 @@ export interface GracefulShutdownOptions {
   signals?: Pick<NodeJS.Process, 'once'>;
 }
 
-export function installGracefulShutdown(server: { close(callback: () => void): unknown }, options: GracefulShutdownOptions): (signal: string) => Promise<void> {
+export function installGracefulShutdown(
+  server: { close(callback: () => void): unknown },
+  options: GracefulShutdownOptions
+): (signal: string) => Promise<void> {
   const { logger, exit = process.exit, timeoutMs = 8000, signals = process } = options;
   let shuttingDown = false;
 

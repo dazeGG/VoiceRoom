@@ -9,11 +9,26 @@ test('release queue metrics exclude expected hidden 404s and count only invarian
   metrics.recordNotificationOldestPending(901_000);
   metrics.recordMediaOldestPending(902_000);
   const service = createMediaVisibilityService({
-    attachmentRepository: { async findById() { return { id: 'a', ownerId: 'owner', internalState: 'ready', deletedAt: null, boundAt: null }; } },
-    storage: {}, onAuthorizationInvariantFailure: metrics.recordMediaAuthorizationInvariantFailure
+    attachmentRepository: {
+      async findById() {
+        return { id: 'a', ownerId: 'owner', internalState: 'ready', deletedAt: null, boundAt: null };
+      }
+    },
+    storage: {},
+    onAuthorizationInvariantFailure: metrics.recordMediaAuthorizationInvariantFailure
   });
-  await assert.rejects(service.requireVisible({ id: 'a', ownerId: 'owner', internalState: 'ready', deletedAt: null, boundAt: null }, 'intruder'));
-  await assert.rejects(service.requireVisible({ id: 'a', ownerId: 'owner', internalState: 'ready', deletedAt: null, boundAt: new Date(), context: 'unknown' }, 'intruder'));
+  await assert.rejects(
+    service.requireVisible(
+      { id: 'a', ownerId: 'owner', internalState: 'ready', deletedAt: null, boundAt: null },
+      'intruder'
+    )
+  );
+  await assert.rejects(
+    service.requireVisible(
+      { id: 'a', ownerId: 'owner', internalState: 'ready', deletedAt: null, boundAt: new Date(), context: 'unknown' },
+      'intruder'
+    )
+  );
   metrics.recordCredentialRevokeCleanupFailure();
   const output = metrics.renderPrometheus();
   assert.match(output, /voice_room_notification_oldest_pending_seconds 901/);

@@ -9,11 +9,19 @@ type Queryable = { query(sql: string, values: unknown[]): Promise<{ rows: Record
 
 export type ContentRepository = Readonly<{
   prepareWrite(input: { content?: unknown; text?: unknown }): { content: RoomMessageContentV1; text: string };
-  update(input: { client: Queryable; content?: unknown; messageId: string; text?: unknown }): Promise<Record<string, unknown> | null>;
+  update(input: {
+    client: Queryable;
+    content?: unknown;
+    messageId: string;
+    text?: unknown;
+  }): Promise<Record<string, unknown> | null>;
 }>;
 
 function createContentRepository(): ContentRepository {
-  function prepareWrite({ content, text }: { content?: unknown; text?: unknown }): { content: RoomMessageContentV1; text: string } {
+  function prepareWrite({ content, text }: { content?: unknown; text?: unknown }): {
+    content: RoomMessageContentV1;
+    text: string;
+  } {
     const normalized = content == null ? contentFromLegacyText(text) : normalizeRoomMessageContent(content);
     if (!normalized) {
       const error = new TypeError('Invalid room message content') as TypeError & { code?: string };
@@ -23,7 +31,12 @@ function createContentRepository(): ContentRepository {
     return { content: normalized, text: projectRoomMessageContent(normalized, text) };
   }
 
-  async function update({ client, content, messageId, text }: {
+  async function update({
+    client,
+    content,
+    messageId,
+    text
+  }: {
     client: Queryable;
     content?: unknown;
     messageId: string;

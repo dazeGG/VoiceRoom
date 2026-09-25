@@ -25,11 +25,11 @@
   font-weight: 700;
 }
 
-.name-status[data-state="saved"] {
+.name-status[data-state='saved'] {
   color: oklch(82% 0.018 92);
 }
 
-.name-status[data-state="dirty"] {
+.name-status[data-state='dirty'] {
   color: color-mix(in oklch, var(--amber), var(--ink) 36%);
 }
 
@@ -43,7 +43,10 @@ select {
   background: var(--warm-900);
   color: var(--ink);
   outline: none;
-  transition: background 150ms var(--ease-out), border-color 150ms var(--ease-out), box-shadow 150ms var(--ease-out);
+  transition:
+    background 150ms var(--ease-out),
+    border-color 150ms var(--ease-out),
+    box-shadow 150ms var(--ease-out);
 }
 
 input::placeholder {
@@ -116,11 +119,7 @@ button:focus-visible {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 18px;
   padding: 10px 11px;
-  background: color-mix(
-    in srgb,
-    color-mix(in srgb, var(--warm-800) 60%, var(--warm-900)) 90%,
-    transparent
-  );
+  background: color-mix(in srgb, color-mix(in srgb, var(--warm-800) 60%, var(--warm-900)) 90%, transparent);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
@@ -159,7 +158,9 @@ button:focus-visible {
   background: transparent;
   cursor: pointer;
   pointer-events: auto;
-  transition: background 150ms var(--ease-out), color 150ms var(--ease-out);
+  transition:
+    background 150ms var(--ease-out),
+    color 150ms var(--ease-out);
 }
 
 /* Toggle half of a split (mic / headphones). */
@@ -220,14 +221,14 @@ button:focus-visible {
 }
 
 /* Muted / deafened toggles turn coral, matching VoiceDock. */
-.mic-button[data-state="muted"],
-.output-button[data-state="muted"] {
+.mic-button[data-state='muted'],
+.output-button[data-state='muted'] {
   background: color-mix(in oklch, var(--coral) 16%, transparent);
   color: #e8a094;
 }
 
-.mic-button[data-state="muted"]:hover,
-.output-button[data-state="muted"]:hover {
+.mic-button[data-state='muted']:hover,
+.output-button[data-state='muted']:hover {
   background: color-mix(in oklch, var(--coral) 24%, transparent);
 }
 
@@ -246,13 +247,13 @@ button:focus-visible {
   opacity: 0.5;
 }
 
-.screen-button[data-state="live"] {
+.screen-button[data-state='live'] {
   border-color: color-mix(in oklch, var(--stream-live), var(--line) 18%);
   background: var(--stream-live);
   color: oklch(99% 0.004 92);
 }
 
-.screen-button[data-state="live"]:hover {
+.screen-button[data-state='live']:hover {
   background: var(--stream-live-hover);
   color: oklch(99% 0.004 92);
 }
@@ -260,17 +261,17 @@ button:focus-visible {
 .dock-icon-muted,
 .dock-icon-output-muted,
 .dock-icon-screen-stop,
-.mic-button[data-state="muted"] .dock-icon-mic,
-.output-button[data-state="muted"] .dock-icon-output,
-.screen-button[data-state="live"] .dock-icon-screen {
+.mic-button[data-state='muted'] .dock-icon-mic,
+.output-button[data-state='muted'] .dock-icon-output,
+.screen-button[data-state='live'] .dock-icon-screen {
   display: none;
 }
 
-.mic-button[data-state="muted"] .dock-icon-muted {
+.mic-button[data-state='muted'] .dock-icon-muted {
   display: grid;
 }
 
-.mic-button[data-state="ptt-active"] {
+.mic-button[data-state='ptt-active'] {
   background: color-mix(in oklch, var(--green) 16%, transparent);
   color: #a8e2c5;
 }
@@ -294,11 +295,11 @@ button:focus-visible {
   color: #c4efd9;
 }
 
-.output-button[data-state="muted"] .dock-icon-output-muted {
+.output-button[data-state='muted'] .dock-icon-output-muted {
   display: grid;
 }
 
-.screen-button[data-state="live"] .dock-icon-screen-stop {
+.screen-button[data-state='live'] .dock-icon-screen-stop {
   display: grid;
 }
 
@@ -352,19 +353,19 @@ button:focus-visible {
   height: 16px;
 }
 
-.dock-connection[data-state="connected"] .dock-bar {
+.dock-connection[data-state='connected'] .dock-bar {
   background: var(--green);
 }
 
-.dock-connection[data-state="connecting"] .dock-bar {
+.dock-connection[data-state='connecting'] .dock-bar {
   background: var(--blue);
 }
 
-.dock-connection[data-state="warning"] .dock-bar {
+.dock-connection[data-state='warning'] .dock-bar {
   background: var(--amber);
 }
 
-.dock-connection[data-state="error"] .dock-bar {
+.dock-connection[data-state='error'] .dock-bar {
   background: var(--coral);
 }
 
@@ -389,7 +390,7 @@ button:focus-visible {
 }
 
 .dock-connection-popover::after {
-  content: "";
+  content: '';
   position: absolute;
   top: 100%;
   left: 50%;
@@ -408,19 +409,19 @@ button:focus-visible {
   background: var(--green);
 }
 
-.dock-connection[data-state="connecting"] + .dock-connection-popover .dock-connection-dot {
+.dock-connection[data-state='connecting'] + .dock-connection-popover .dock-connection-dot {
   background: var(--blue);
 }
 
-.dock-connection[data-state="warning"] + .dock-connection-popover .dock-connection-dot {
+.dock-connection[data-state='warning'] + .dock-connection-popover .dock-connection-dot {
   background: var(--amber);
 }
 
-.dock-connection[data-state="error"] + .dock-connection-popover .dock-connection-dot {
+.dock-connection[data-state='error'] + .dock-connection-popover .dock-connection-dot {
   background: var(--coral);
 }
 
-.dock-connection[data-state="idle"] + .dock-connection-popover .dock-connection-dot {
+.dock-connection[data-state='idle'] + .dock-connection-popover .dock-connection-dot {
   background: var(--control-line);
 }
 
@@ -431,17 +432,17 @@ button:focus-visible {
 }
 
 /* Keep the floating dock centred in the lobby main area (not over the sidebar). */
-body[data-lobby-embedded="true"] .room-dock {
+body[data-lobby-embedded='true'] .room-dock {
   left: var(--lobby-sidebar-width, 312px);
 }
 
 /* Keep the floating dock centred in the voice area when the chat rail is open. */
 @media (min-width: 901px) {
-  body[data-chat-open="true"] .room-dock {
+  body[data-chat-open='true'] .room-dock {
     right: var(--room-panel-width);
   }
 
-  body[data-lobby-embedded="true"][data-chat-open="true"] .room-dock {
+  body[data-lobby-embedded='true'][data-chat-open='true'] .room-dock {
     left: var(--lobby-sidebar-width, 312px);
     right: var(--room-panel-width);
   }
@@ -522,7 +523,6 @@ body[data-lobby-embedded="true"] .room-dock {
   font-variant-numeric: tabular-nums;
 }
 
-
 .gate-field-head {
   display: flex;
   align-items: center;
@@ -545,7 +545,9 @@ body[data-lobby-embedded="true"] .room-dock {
   border-radius: 10px;
   background: var(--control);
   cursor: pointer;
-  transition: background 0.16s ease, border-color 0.16s ease;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease;
 }
 
 .gate-switch::after {
@@ -568,7 +570,9 @@ body[data-lobby-embedded="true"] .room-dock {
   height: 16px;
   border-radius: 50%;
   background: var(--muted);
-  transition: left 0.16s ease, background 0.16s ease;
+  transition:
+    left 0.16s ease,
+    background 0.16s ease;
 }
 
 .gate-switch[aria-checked='true'] .gate-switch-knob {
@@ -604,10 +608,12 @@ body[data-lobby-embedded="true"] .room-dock {
   background: linear-gradient(90deg, color-mix(in oklch, var(--green), var(--warm-950) 22%), var(--green));
   transform: scaleX(0);
   transform-origin: left center;
-  transition: transform 80ms linear, background 120ms ease;
+  transition:
+    transform 80ms linear,
+    background 120ms ease;
 }
 
-.mic-level-fill[data-state="closed"] {
+.mic-level-fill[data-state='closed'] {
   background: linear-gradient(90deg, var(--panel-strong), var(--control-hover));
 }
 

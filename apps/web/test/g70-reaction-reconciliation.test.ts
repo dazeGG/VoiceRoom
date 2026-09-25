@@ -8,5 +8,7 @@ test('G70 authoritative empty snapshot removes settled reactions and preserves p
     { emoji: '🔥', count: 1, reactedByMe: true, revision: '3', pending: true, error: '' }
   ];
   assert.deepEqual(replaceReactionSnapshot(current, []), [current[1]]);
-  assert.deepEqual(replaceReactionSnapshot(current, [{ emoji: '👍', count: 0, reactedByMe: false, revision: '4' }]), [current[1]]);
+  assert.deepEqual(replaceReactionSnapshot(current, [{ emoji: '👍', count: 0, reactedByMe: false, revision: '4' }]), [
+    current[1]
+  ]);
 });

@@ -36,7 +36,14 @@ test('smooth mode sends the chosen quality and FPS with audio', async () => {
   screenSourceUi.quality = 'high';
   screenSourceUi.fps = '60';
   confirmScreenSourcePicker();
-  await expect(choice).resolves.toMatchObject({ mode: 'games', profileId: 'high-60', qualityId: 'high', fpsId: '60', streamAudioEnabled: true, source: { id: 'screen:1' } });
+  await expect(choice).resolves.toMatchObject({
+    mode: 'games',
+    profileId: 'high-60',
+    qualityId: 'high',
+    fpsId: '60',
+    streamAudioEnabled: true,
+    source: { id: 'screen:1' }
+  });
 });
 
 test('sharp text mode always sends the source resolution at 5 FPS', async () => {

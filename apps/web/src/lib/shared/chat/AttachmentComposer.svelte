@@ -20,9 +20,7 @@
 
   // The moment you most want a closer look at a pasted screenshot is before you
   // send it, so a pending image opens in the same viewer a sent one does.
-  const viewable = $derived(
-    store.drafts.filter((draft) => Boolean(draft.previewUrl) || draft.state === 'ready')
-  );
+  const viewable = $derived(store.drafts.filter((draft) => Boolean(draft.previewUrl) || draft.state === 'ready'));
   const items = $derived(
     viewable.map((draft) => ({ src: draftSource(draft), alt: draft.file?.name || 'Изображение' }))
   );
@@ -56,7 +54,9 @@
               class="attachment-draft-loading"
               style={`--attachment-progress:${Math.round(draft.progress * 100)}%`}
               role="status"
-              aria-label={draft.state === 'processing' ? 'Обработка изображения' : `Загрузка изображения ${Math.round(draft.progress * 100)}%`}
+              aria-label={draft.state === 'processing'
+                ? 'Обработка изображения'
+                : `Загрузка изображения ${Math.round(draft.progress * 100)}%`}
             >
               <LoaderCircle {...iconSm} aria-hidden="true" />
             </span>
@@ -68,7 +68,7 @@
               type="button"
               aria-label="Повторить загрузку"
               title={draft.error || 'Не удалось обработать изображение'}
-              disabled={disabled}
+              {disabled}
               onclick={() => void store.retry(draft)}
             >
               <RotateCcw {...iconSm} aria-hidden="true" />
@@ -79,7 +79,7 @@
             class="attachment-draft-remove"
             type="button"
             aria-label={`Удалить изображение ${index + 1}`}
-            disabled={disabled}
+            {disabled}
             onclick={() => remove(draft)}
           >
             <X {...iconSm} aria-hidden="true" />

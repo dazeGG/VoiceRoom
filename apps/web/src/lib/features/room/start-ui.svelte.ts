@@ -8,7 +8,10 @@ export const startUi = $state({
   soundButtonVisible: false
 });
 
-export function getNameStatusView(currentName: string, savedName: string): { text: string; state: 'empty' | 'saved' | 'dirty' } {
+export function getNameStatusView(
+  currentName: string,
+  savedName: string
+): { text: string; state: 'empty' | 'saved' | 'dirty' } {
   if (savedName && currentName === savedName) {
     return { text: `Сохранено: ${savedName}`, state: 'saved' };
   }

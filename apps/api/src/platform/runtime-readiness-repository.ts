@@ -26,9 +26,13 @@ export type RuntimeHeartbeat = {
 };
 
 function normalizeTokens(tokens: unknown): string[] {
-  return [...new Set((Array.isArray(tokens) ? tokens : [])
-    .filter((token): token is string => typeof token === 'string' && Boolean(token.trim()))
-    .map((token) => token.trim()))].sort();
+  return [
+    ...new Set(
+      (Array.isArray(tokens) ? tokens : [])
+        .filter((token): token is string => typeof token === 'string' && Boolean(token.trim()))
+        .map((token) => token.trim())
+    )
+  ].sort();
 }
 
 function createRuntimeReadinessRepository({ client }: { client: QueryClient | null | undefined }) {
@@ -106,10 +110,7 @@ function createRuntimeReadinessRepository({ client }: { client: QueryClient | nu
   }
 
   async function remove(kind: RuntimeKind, id: string): Promise<void> {
-    await db.query(
-      'DELETE FROM capability_runtime_heartbeats WHERE runtime_kind = $1 AND runtime_id = $2',
-      [kind, id]
-    );
+    await db.query('DELETE FROM capability_runtime_heartbeats WHERE runtime_kind = $1 AND runtime_id = $2', [kind, id]);
   }
 
   return Object.freeze({ heartbeat, listFresh, remove });

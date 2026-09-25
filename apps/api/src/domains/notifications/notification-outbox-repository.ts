@@ -33,7 +33,10 @@ export type NotificationLease = { identity: string; ownerId: string; fencingToke
 class NotificationFenceError extends Error {
   declare code: string;
 
-  constructor() { super('Notification delivery fence lost'); this.code = 'NOTIFICATION_FENCE_LOST'; }
+  constructor() {
+    super('Notification delivery fence lost');
+    this.code = 'NOTIFICATION_FENCE_LOST';
+  }
 }
 
 function mapRow(row: OutboxRow | null | undefined): NotificationOutboxEvent | null {
@@ -55,9 +58,16 @@ function mapRow(row: OutboxRow | null | undefined): NotificationOutboxEvent | nu
 function createNotificationOutboxRepository({ pool }: { pool?: QueryClient | null } = {}) {
   if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
   const defaultDb = pool;
-  const db = (client: Client): QueryClient => client?.query ? client : defaultDb;
+  const db = (client: Client): QueryClient => (client?.query ? client : defaultDb);
 
-  async function enqueue({ notificationId, recipientUserId, revision, payload, channel = 'web_push', client }: {
+  async function enqueue({
+    notificationId,
+    recipientUserId,
+    revision,
+    payload,
+    channel = 'web_push',
+    client
+  }: {
     notificationId: string;
     recipientUserId: string;
     revision: number;
@@ -73,17 +83,31 @@ function createNotificationOutboxRepository({ pool }: { pool?: QueryClient | nul
     return mapRow(r.rows[0]);
   }
 
-  async function acquireLease({ identity, ownerId, leaseMs }: { identity: string; ownerId: string; leaseMs: number }):
-    Promise<{ acquired: true; fencingToken: number; expiresAt: unknown } | { acquired: false }> {
+  async function acquireLease({
+    identity,
+    ownerId,
+    leaseMs
+  }: {
+    identity: string;
+    ownerId: string;
+    leaseMs: number;
+  }): Promise<{ acquired: true; fencingToken: number; expiresAt: unknown } | { acquired: false }> {
     const r = await defaultDb.query<{ fencing_token: string | number; expires_at: unknown }>(
       `INSERT INTO notification_delivery_leases(identity,owner_id,fencing_token,expires_at,updated_at) VALUES($1,$2,1,current_timestamp+($3*interval '1 millisecond'),current_timestamp) ON CONFLICT(identity) DO UPDATE SET owner_id=EXCLUDED.owner_id,fencing_token=notification_delivery_leases.fencing_token+1,expires_at=EXCLUDED.expires_at,updated_at=current_timestamp WHERE notification_delivery_leases.expires_at<=current_timestamp OR notification_delivery_leases.owner_id=$2 RETURNING fencing_token,expires_at`,
       [identity, ownerId, leaseMs]
     );
     const row = r.rows[0];
-    return row ? { acquired: true, fencingToken: Number(row.fencing_token), expiresAt: row.expires_at } : { acquired: false };
+    return row
+      ? { acquired: true, fencingToken: Number(row.fencing_token), expiresAt: row.expires_at }
+      : { acquired: false };
   }
 
-  async function renewLease({ identity, ownerId, fencingToken, leaseMs }: NotificationLease & { leaseMs: number }): Promise<{ renewed: boolean }> {
+  async function renewLease({
+    identity,
+    ownerId,
+    fencingToken,
+    leaseMs
+  }: NotificationLease & { leaseMs: number }): Promise<{ renewed: boolean }> {
     const r = await defaultDb.query(
       `UPDATE notification_delivery_leases SET expires_at=current_timestamp+($4*interval '1 millisecond'),heartbeat_at=current_timestamp,updated_at=current_timestamp WHERE identity=$1 AND owner_id=$2 AND fencing_token=$3 AND expires_at>current_timestamp`,
       [identity, ownerId, fencingToken, leaseMs]
@@ -98,7 +122,12 @@ function createNotificationOutboxRepository({ pool }: { pool?: QueryClient | nul
     );
   }
 
-  async function recordHeartbeat({ identity, ownerId = null, fencingToken = 0, ready = false }: {
+  async function recordHeartbeat({
+    identity,
+    ownerId = null,
+    fencingToken = 0,
+    ready = false
+  }: {
     identity: string;
     ownerId?: string | null;
     fencingToken?: number;
@@ -110,7 +139,13 @@ function createNotificationOutboxRepository({ pool }: { pool?: QueryClient | nul
     );
   }
 
-  async function claimBatch({ identity, ownerId, fencingToken, limit = 50, staleClaimMs = 120000 }: NotificationLease & {
+  async function claimBatch({
+    identity,
+    ownerId,
+    fencingToken,
+    limit = 50,
+    staleClaimMs = 120000
+  }: NotificationLease & {
     limit?: number;
     staleClaimMs?: number;
   }): Promise<NotificationOutboxEvent[]> {
@@ -130,21 +165,44 @@ function createNotificationOutboxRepository({ pool }: { pool?: QueryClient | nul
   }
 
   const markDelivered = (id: string, lease: NotificationLease): Promise<void> => finish(id, lease, 'delivered');
-  const markSuppressed = (id: string, lease: NotificationLease): Promise<void> => finish(id, lease, 'suppressed', 'suppressed_at=current_timestamp');
+  const markSuppressed = (id: string, lease: NotificationLease): Promise<void> =>
+    finish(id, lease, 'suppressed', 'suppressed_at=current_timestamp');
 
-  async function reschedule(eventId: string, lease: NotificationLease, { delayMs, error, maxAttempts = 8 }: {
-    delayMs?: number;
-    error?: unknown;
-    maxAttempts?: number;
-  } = {}): Promise<void> {
+  async function reschedule(
+    eventId: string,
+    lease: NotificationLease,
+    {
+      delayMs,
+      error,
+      maxAttempts = 8
+    }: {
+      delayMs?: number;
+      error?: unknown;
+      maxAttempts?: number;
+    } = {}
+  ): Promise<void> {
     const r = await defaultDb.query(
       `UPDATE notification_outbox o SET status=CASE WHEN attempts >= $5 THEN 'dead' ELSE 'pending' END, dead_at=CASE WHEN attempts >= $5 THEN current_timestamp ELSE dead_at END, available_at=current_timestamp+($6*interval '1 millisecond'),last_error=$7,claimed_at=NULL,claimed_fencing_token=NULL,updated_at=current_timestamp FROM notification_delivery_leases l WHERE o.event_id=$1 AND o.claimed_fencing_token=$4 AND l.identity=$2 AND l.owner_id=$3 AND l.fencing_token=$4 AND l.expires_at>current_timestamp`,
-      [eventId, lease.identity, lease.ownerId, lease.fencingToken, maxAttempts, delayMs, String((error as { message?: unknown } | null | undefined)?.message || error || 'delivery failed').slice(0, 2000)]
+      [
+        eventId,
+        lease.identity,
+        lease.ownerId,
+        lease.fencingToken,
+        maxAttempts,
+        delayMs,
+        String((error as { message?: unknown } | null | undefined)?.message || error || 'delivery failed').slice(
+          0,
+          2000
+        )
+      ]
     );
     if (!r.rowCount) throw new NotificationFenceError();
   }
 
-  async function loadCurrent(event: { eventId: string }, { client }: { client?: Client } = {}): Promise<Record<string, unknown> | null> {
+  async function loadCurrent(
+    event: { eventId: string },
+    { client }: { client?: Client } = {}
+  ): Promise<Record<string, unknown> | null> {
     const r = await db(client).query(
       `SELECT o.*,n.read_at,n.retracted_at,n.reasons,np.private_notifications,u.dnd,coalesce(nrm.level,'mentions') level FROM notification_outbox o JOIN user_notifications n ON n.id=o.notification_id JOIN users u ON u.id=n.recipient_user_id LEFT JOIN notification_preferences np ON np.user_id=n.recipient_user_id LEFT JOIN notification_room_mutes nrm ON nrm.user_id=n.recipient_user_id AND nrm.room_id=n.room_id WHERE o.event_id=$1`,
       [event.eventId]
@@ -159,7 +217,19 @@ function createNotificationOutboxRepository({ pool }: { pool?: QueryClient | nul
     return Number(r.rows[0]?.age_ms || 0);
   }
 
-  return { acquireLease, claimBatch, enqueue, loadCurrent, markDelivered, markSuppressed, oldestPendingAgeMs, recordHeartbeat, releaseLease, renewLease, reschedule };
+  return {
+    acquireLease,
+    claimBatch,
+    enqueue,
+    loadCurrent,
+    markDelivered,
+    markSuppressed,
+    oldestPendingAgeMs,
+    recordHeartbeat,
+    releaseLease,
+    renewLease,
+    reschedule
+  };
 }
 
 export type NotificationOutboxRepository = ReturnType<typeof createNotificationOutboxRepository>;

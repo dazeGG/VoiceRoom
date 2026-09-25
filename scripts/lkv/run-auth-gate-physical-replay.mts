@@ -256,19 +256,29 @@ export async function runPhysicalReplay() {
     await waitForGateReady(3090, 200);
     const exactUrl = credential.url(3090);
     const firstConnect = await openWebSocket(exactUrl);
-    evidence.cases.push(assertCase(firstConnect.outcome === 'opened', 'G05-A01-initial-gate-upgrade-reaches-livekit', firstConnect));
+    evidence.cases.push(
+      assertCase(firstConnect.outcome === 'opened', 'G05-A01-initial-gate-upgrade-reaches-livekit', firstConnect)
+    );
 
     const revoked = await credential.store.revokeLiveKitGatePrincipal({ principal: PRINCIPAL, roomId: ROOM_ID });
     evidence.revocation = revoked;
     const afterRevoke = await openWebSocket(exactUrl);
-    evidence.cases.push(assertCase(afterRevoke.outcome === 'rejected', 'G05-A01-same-url-jwt-denied-after-postgres-epoch-revoke', afterRevoke));
+    evidence.cases.push(
+      assertCase(
+        afterRevoke.outcome === 'rejected',
+        'G05-A01-same-url-jwt-denied-after-postgres-epoch-revoke',
+        afterRevoke
+      )
+    );
 
     await firstGate.stop();
     const restartedGate = startGate({ databaseUrl: DATABASE_URL, port: 3090 });
     gates.push(restartedGate);
     await waitForGateReady(3090, 200);
     const afterRestart = await openWebSocket(exactUrl);
-    evidence.cases.push(assertCase(afterRestart.outcome === 'rejected', 'G05-A03-gate-restart-still-denies-same-url-jwt', afterRestart));
+    evidence.cases.push(
+      assertCase(afterRestart.outcome === 'rejected', 'G05-A03-gate-restart-still-denies-same-url-jwt', afterRestart)
+    );
 
     const outageGate = startGate({
       databaseUrl: 'postgres://voice_room:voice_room@127.0.0.1:65534/voice_room',
@@ -277,13 +287,17 @@ export async function runPhysicalReplay() {
     gates.push(outageGate);
     await waitForGateReady(3091, 503);
     const outageDenied = await openWebSocket(credential.url(3091));
-    evidence.cases.push(assertCase(outageDenied.outcome === 'rejected', 'G05-A03-db-outage-fails-closed', outageDenied));
+    evidence.cases.push(
+      assertCase(outageDenied.outcome === 'rejected', 'G05-A03-db-outage-fails-closed', outageDenied)
+    );
 
     evidence.gateLogs = gates.map((gate, index) => ({
       index,
       lines: gate.logs.filter(Boolean).slice(-8)
     }));
-    evidence.status = evidence.cases.every((entry) => entry.passed) ? 'PHYSICAL_REPLAY_PROVEN' : 'PHYSICAL_REPLAY_FAILED';
+    evidence.status = evidence.cases.every((entry) => entry.passed)
+      ? 'PHYSICAL_REPLAY_PROVEN'
+      : 'PHYSICAL_REPLAY_FAILED';
     evidence.successorStartAllowed = evidence.status === 'PHYSICAL_REPLAY_PROVEN';
     evidence.greenF11Allowed = evidence.status === 'PHYSICAL_REPLAY_PROVEN';
     return evidence;

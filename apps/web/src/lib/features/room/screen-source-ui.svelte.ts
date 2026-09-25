@@ -9,5 +9,5 @@ export const screenSourceUi = $state({
   quality: 'balanced' as 'balanced' | 'high',
   fps: '30' as '30' | '60',
   audio: true,
-  popOpen: false,
+  popOpen: false
 });

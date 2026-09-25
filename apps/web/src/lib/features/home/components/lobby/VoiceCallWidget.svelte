@@ -26,7 +26,6 @@
   }>();
 
   const openLabel = $derived(`Открыть комнату ${roomName || 'активного голоса'}`);
-
 </script>
 
 <div class="voice-widget" aria-label="Активный голос">
@@ -107,7 +106,9 @@
     background:
       radial-gradient(120% 130% at 0% 0%, color-mix(in oklch, var(--green), transparent 84%), transparent 60%),
       color-mix(in oklch, var(--green), transparent 95%);
-    box-shadow: 0 0 0 1px color-mix(in oklch, var(--green), transparent 94%), 0 14px 34px color-mix(in oklch, var(--green), transparent 86%);
+    box-shadow:
+      0 0 0 1px color-mix(in oklch, var(--green), transparent 94%),
+      0 14px 34px color-mix(in oklch, var(--green), transparent 86%);
     font-family: var(--font-ui);
   }
 
@@ -127,7 +128,9 @@
     border-radius: var(--radius-md);
   }
 
-  .voice-head:hover .voice-room-name { color: var(--accent); }
+  .voice-head:hover .voice-room-name {
+    color: var(--accent);
+  }
 
   .voice-head:focus-visible {
     outline: 2px solid color-mix(in oklch, var(--accent), transparent 20%);
@@ -158,8 +161,12 @@
     font-weight: 600;
   }
 
-  .voice-status--live { color: var(--green); }
-  .voice-status--muted { color: var(--coral); }
+  .voice-status--live {
+    color: var(--green);
+  }
+  .voice-status--muted {
+    color: var(--coral);
+  }
 
   .voice-live-dot {
     width: 6px;
@@ -209,7 +216,9 @@
     color: var(--warm-ink-dim);
   }
 
-  .voice-icon-btn:hover { background: var(--control-hover); }
+  .voice-icon-btn:hover {
+    background: var(--control-hover);
+  }
 
   .voice-icon-btn.is-off {
     border-color: color-mix(in oklch, var(--coral), transparent 50%);
@@ -217,7 +226,9 @@
     color: var(--coral);
   }
 
-  .voice-icon-btn.is-off:hover { background: color-mix(in oklch, var(--coral), transparent 70%); }
+  .voice-icon-btn.is-off:hover {
+    background: color-mix(in oklch, var(--coral), transparent 70%);
+  }
 
   .voice-leave {
     border: none;
@@ -225,5 +236,7 @@
     color: #fff;
   }
 
-  .voice-leave:hover { background: color-mix(in oklch, var(--coral), var(--warm-950) 12%); }
+  .voice-leave:hover {
+    background: color-mix(in oklch, var(--coral), var(--warm-950) 12%);
+  }
 </style>

@@ -8,10 +8,7 @@ export function isPresenceStatus(value: unknown): value is PresenceStatus {
   return typeof value === 'string' && PRESENCE_STATUSES.has(value as PresenceStatus);
 }
 
-export function normalizePresenceStatus(
-  value: unknown,
-  fallback: PresenceStatus = 'online'
-): PresenceStatus {
+export function normalizePresenceStatus(value: unknown, fallback: PresenceStatus = 'online'): PresenceStatus {
   return isPresenceStatus(value) ? value : fallback;
 }
 

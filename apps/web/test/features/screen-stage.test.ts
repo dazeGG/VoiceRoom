@@ -41,7 +41,12 @@ test('the stream volume control reflects mute and volume', () => {
   createParticipant({ id: 'owner', name: 'Анна', screen: true });
   state.viewedScreenPeerId = 'owner';
   state.screenVolume = 0.5;
-  expect(getStreamVolumeView()).toMatchObject({ hidden: false, valuePercent: 50, muted: false, ariaLabel: 'Выключить звук стрима' });
+  expect(getStreamVolumeView()).toMatchObject({
+    hidden: false,
+    valuePercent: 50,
+    muted: false,
+    ariaLabel: 'Выключить звук стрима'
+  });
   state.screenMuted = true;
   expect(getStreamVolumeView()).toMatchObject({ muted: true, ariaLabel: 'Включить звук стрима' });
 });

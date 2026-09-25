@@ -41,7 +41,9 @@ export type InboxNotification = {
 
 export type ReadAllResult = { updated: number | null; revision: number | null };
 
-function dbFor(pool: QueryClient, client: Client): QueryClient { return client?.query ? client : pool; }
+function dbFor(pool: QueryClient, client: Client): QueryClient {
+  return client?.query ? client : pool;
+}
 
 // The read point that bounds which notifications a read retires. Callers hand
 // over what they have — a Date from a row, epoch milliseconds from the legacy
@@ -86,7 +88,9 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
   }
 
   async function allocateRevision(tx: QueryClient, recipientUserId: string): Promise<number> {
-    await tx.query(`SELECT pg_advisory_xact_lock(hashtext('voice-room:notification-revision:' || $1))`, [recipientUserId]);
+    await tx.query(`SELECT pg_advisory_xact_lock(hashtext('voice-room:notification-revision:' || $1))`, [
+      recipientUserId
+    ]);
     const result = await tx.query<{ revision: string | number }>(
       `SELECT coalesce(max(revision),0)+1 AS revision FROM user_notifications WHERE recipient_user_id=$1`,
       [recipientUserId]
@@ -94,7 +98,15 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
     return Number(result.rows[0]!.revision);
   }
 
-  async function upsert({ recipientUserId, actorUserId, roomId, sourceMessageId, reasons, body = '', client }: {
+  async function upsert({
+    recipientUserId,
+    actorUserId,
+    roomId,
+    sourceMessageId,
+    reasons,
+    body = '',
+    client
+  }: {
     recipientUserId: string;
     actorUserId: string;
     roomId: string;
@@ -119,7 +131,12 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
     });
   }
 
-  async function list({ recipientUserId, limit = 50, before = null, client }: {
+  async function list({
+    recipientUserId,
+    limit = 50,
+    before = null,
+    client
+  }: {
     recipientUserId: string;
     limit?: number;
     before?: Partial<CursorTuple> | null;
@@ -135,7 +152,10 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
     return result.rows.map(mapRow) as InboxNotification[];
   }
 
-  async function findFirstUnread(recipientUserId: string, { client }: { client?: Client } = {}): Promise<InboxNotification | null> {
+  async function findFirstUnread(
+    recipientUserId: string,
+    { client }: { client?: Client } = {}
+  ): Promise<InboxNotification | null> {
     const r = await dbFor(db, client).query<NotificationRow>(
       `SELECT *,floor(extract(epoch FROM created_at)*1000000)::numeric(20,0) created_at_micros FROM user_notifications WHERE recipient_user_id=$1 AND read_at IS NULL AND retracted_at IS NULL ORDER BY created_at ASC,id ASC LIMIT 1`,
       [recipientUserId]
@@ -143,7 +163,10 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
     return mapRow(r.rows[0]);
   }
 
-  async function unreadCount(recipientUserId: string, { client }: { client?: Client } = {}): Promise<{ count: number; revision: number }> {
+  async function unreadCount(
+    recipientUserId: string,
+    { client }: { client?: Client } = {}
+  ): Promise<{ count: number; revision: number }> {
     const r = await dbFor(db, client).query<{ count: number | null; revision: string | number | null }>(
       `SELECT count(*) FILTER (WHERE read_at IS NULL AND retracted_at IS NULL)::int count,coalesce(max(revision),0)::bigint revision FROM user_notifications WHERE recipient_user_id=$1`,
       [recipientUserId]
@@ -151,7 +174,11 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
     return { count: Number(r.rows[0]?.count || 0), revision: Number(r.rows[0]?.revision || 0) };
   }
 
-  async function markRead({ recipientUserId, notificationId, client }: {
+  async function markRead({
+    recipientUserId,
+    notificationId,
+    client
+  }: {
     recipientUserId: string;
     notificationId: string;
     client?: Client;
@@ -166,7 +193,11 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
     });
   }
 
-  async function markAllRead({ recipientUserId, through = null, client }: {
+  async function markAllRead({
+    recipientUserId,
+    through = null,
+    client
+  }: {
     recipientUserId: string;
     through?: unknown;
     client?: Client;
@@ -183,7 +214,10 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
     });
   }
 
-  async function retractByMessage(sourceMessageId: string, { client }: { client?: Client } = {}): Promise<InboxNotification[]> {
+  async function retractByMessage(
+    sourceMessageId: string,
+    { client }: { client?: Client } = {}
+  ): Promise<InboxNotification[]> {
     return mutate(client, async (tx) => {
       const recipients = await tx.query<{ recipient_user_id: string }>(
         `SELECT DISTINCT recipient_user_id FROM user_notifications WHERE source_message_id=$1 AND retracted_at IS NULL ORDER BY recipient_user_id`,
@@ -207,7 +241,12 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
   // straight back because nothing had ever been written down.
   // A read point that is not a time retires nothing: treating it as "no bound"
   // would mark the whole room read past what the reader has seen.
-  async function markReadForRoom({ recipientUserId, roomId, through = null, client }: {
+  async function markReadForRoom({
+    recipientUserId,
+    roomId,
+    through = null,
+    client
+  }: {
     recipientUserId: string;
     roomId: string;
     through?: unknown;

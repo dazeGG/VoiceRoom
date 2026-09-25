@@ -15,7 +15,8 @@ const MIGRATIONS_DIR = path.join(import.meta.dirname, '../src/migrations');
 const FIRST_ACCOUNT_SECURITY_MIGRATION = '20260912120000_add_session_device_metadata';
 
 function rollbackCountThrough(name) {
-  const names = fs.readdirSync(MIGRATIONS_DIR)
+  const names = fs
+    .readdirSync(MIGRATIONS_DIR)
     .filter((file) => file.endsWith('.cjs'))
     .map((file) => file.replace(/\.c?js$/, ''))
     .sort();
@@ -72,7 +73,9 @@ test('account security migrations apply, roll back cleanly and backfill existing
 
   const reapplied = await runMigrations({ databaseUrl, logger: SILENT });
   assert.equal(reapplied.length, rollbackCount);
-  const backfilled = await pool.query(`SELECT public_id, user_agent, location_label FROM sessions WHERE user_id = $1`, [user.id]);
+  const backfilled = await pool.query(`SELECT public_id, user_agent, location_label FROM sessions WHERE user_id = $1`, [
+    user.id
+  ]);
   assert.equal(backfilled.rowCount, 1);
   assert.match(backfilled.rows[0].public_id, /^[0-9a-f-]{36}$/);
   assert.equal(backfilled.rows[0].user_agent, '');

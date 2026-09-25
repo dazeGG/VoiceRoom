@@ -51,15 +51,19 @@ async function addMember(pool, { roomId, userId, joinedAt }) {
 test('a deletion request hides the account at once and a restore brings it back unchanged', async (t) => {
   const { pool, users, deletion } = await setup(t);
   const { user } = await users.createUser({ login: 'ada', displayName: 'Ада', password: 'lovelace-1843' });
-  await pool.query(`UPDATE users SET avatar_key = 'user-ada-avatar', avatar_accent = '#123456' WHERE id = $1`, [user.id]);
+  await pool.query(`UPDATE users SET avatar_key = 'user-ada-avatar', avatar_accent = '#123456' WHERE id = $1`, [
+    user.id
+  ]);
   const session = await users.createSession({ userId: user.id, now: 1_000 });
   const now = 10 * DAY;
 
-  assert.deepEqual(await deletion.requestDeletion({ userId: user.id, currentPassword: 'wrong', now }), { status: 'invalid_password' });
-  assert.deepEqual(
-    await deletion.requestDeletion({ userId: user.id, currentPassword: 'lovelace-1843', now }),
-    { status: 'requested', scheduledFor: now + ACCOUNT_DELETION_GRACE_MS }
-  );
+  assert.deepEqual(await deletion.requestDeletion({ userId: user.id, currentPassword: 'wrong', now }), {
+    status: 'invalid_password'
+  });
+  assert.deepEqual(await deletion.requestDeletion({ userId: user.id, currentPassword: 'lovelace-1843', now }), {
+    status: 'requested',
+    scheduledFor: now + ACCOUNT_DELETION_GRACE_MS
+  });
   assert.equal(await users.getSessionUser(session.token, now + 1), null, 'every session ends');
 
   const hidden = await users.getUserById(user.id);
@@ -67,18 +71,33 @@ test('a deletion request hides the account at once and a restore brings it back 
   assert.equal(hidden.avatarKey, null);
   assert.equal(hidden.deletionRequestedAt, now);
   assert.ok((await users.listAvatarKeys()).includes('user-ada-avatar'), 'the avatar file is kept for a restore');
-  assert.equal((await deletion.requestDeletion({ userId: user.id, currentPassword: 'lovelace-1843', now })).status, 'already_requested');
+  assert.equal(
+    (await deletion.requestDeletion({ userId: user.id, currentPassword: 'lovelace-1843', now })).status,
+    'already_requested'
+  );
 
-  assert.deepEqual(await deletion.restoreAccount({ login: 'ada', password: 'wrong', now }), { status: 'invalid', userId: null });
-  assert.deepEqual(await deletion.restoreAccount({ login: 'ghost', password: 'lovelace-1843', now }), { status: 'invalid', userId: null });
-  assert.deepEqual(await deletion.restoreAccount({ login: 'ada', password: 'lovelace-1843', now: now + DAY }), { status: 'restored', userId: user.id });
+  assert.deepEqual(await deletion.restoreAccount({ login: 'ada', password: 'wrong', now }), {
+    status: 'invalid',
+    userId: null
+  });
+  assert.deepEqual(await deletion.restoreAccount({ login: 'ghost', password: 'lovelace-1843', now }), {
+    status: 'invalid',
+    userId: null
+  });
+  assert.deepEqual(await deletion.restoreAccount({ login: 'ada', password: 'lovelace-1843', now: now + DAY }), {
+    status: 'restored',
+    userId: user.id
+  });
 
   const restored = await users.getUserById(user.id);
   assert.equal(restored.displayName, 'Ада');
   assert.equal(restored.avatarKey, 'user-ada-avatar');
   assert.equal(restored.avatarAccent, '#123456');
   assert.equal(restored.deletionRequestedAt, null);
-  assert.deepEqual(await deletion.restoreAccount({ login: 'ada', password: 'lovelace-1843', now }), { status: 'invalid', userId: null });
+  assert.deepEqual(await deletion.restoreAccount({ login: 'ada', password: 'lovelace-1843', now }), {
+    status: 'invalid',
+    userId: null
+  });
 
   await deletion.requestDeletion({ userId: user.id, currentPassword: 'lovelace-1843', now });
   assert.deepEqual(
@@ -106,7 +125,11 @@ test('finishing a deletion hands rooms to the longest-standing member, removes p
   await createRoom(pool, { id: 'lonely-room', ownerId: ada.id, name: 'Пустая', createdAt: start + 10 });
 
   const [low, high] = [ada.id, grace.id].sort();
-  await pool.query('INSERT INTO friendships (id, user_a_id, user_b_id) VALUES ($1, $2, $3)', [crypto.randomUUID(), low, high]);
+  await pool.query('INSERT INTO friendships (id, user_a_id, user_b_id) VALUES ($1, $2, $3)', [
+    crypto.randomUUID(),
+    low,
+    high
+  ]);
   await pool.query(
     `INSERT INTO direct_messages (id, sender_id, recipient_id, body, created_at) VALUES ($1, $2, $3, 'привет', $4)`,
     [crypto.randomUUID(), ada.id, grace.id, new Date(start)]
@@ -144,20 +167,32 @@ test('finishing a deletion hands rooms to the longest-standing member, removes p
   assert.deepEqual(await deletion.finalizeDeletion({ userId: ada.id, now: finishAt }), { status: 'not_due' });
 
   const rooms = await pool.query(`SELECT id, owner_id, deleted_at FROM rooms ORDER BY id`);
-  assert.deepEqual(rooms.rows.map((row) => [row.id, row.owner_id, Boolean(row.deleted_at)]), [
-    ['lonely-room', ada.id, true],
-    ['shared-room', grace.id, false]
-  ]);
-  const heirRole = await pool.query(`SELECT role FROM room_memberships WHERE room_id = 'shared-room' AND user_id = $1`, [grace.id]);
+  assert.deepEqual(
+    rooms.rows.map((row) => [row.id, row.owner_id, Boolean(row.deleted_at)]),
+    [
+      ['lonely-room', ada.id, true],
+      ['shared-room', grace.id, false]
+    ]
+  );
+  const heirRole = await pool.query(
+    `SELECT role FROM room_memberships WHERE room_id = 'shared-room' AND user_id = $1`,
+    [grace.id]
+  );
   assert.equal(heirRole.rows[0].role, 'owner');
 
   const count = async (sql) => Number((await pool.query(sql, [ada.id])).rows[0].count);
   assert.equal(await count('SELECT count(*) FROM room_memberships WHERE user_id = $1'), 0);
   assert.equal(await count('SELECT count(*) FROM friendships WHERE user_a_id = $1 OR user_b_id = $1'), 0);
   assert.equal(await count('SELECT count(*) FROM account_recovery_codes WHERE user_id = $1'), 0);
-  assert.equal(await count('SELECT count(*) FROM direct_messages WHERE sender_id = $1'), 1, 'the other side keeps the conversation');
+  assert.equal(
+    await count('SELECT count(*) FROM direct_messages WHERE sender_id = $1'),
+    1,
+    'the other side keeps the conversation'
+  );
 
-  const row = (await pool.query('SELECT login, display_name, password_hash, deleted_at FROM users WHERE id = $1', [ada.id])).rows[0];
+  const row = (
+    await pool.query('SELECT login, display_name, password_hash, deleted_at FROM users WHERE id = $1', [ada.id])
+  ).rows[0];
   assert.match(row.login, /^deleted-[0-9a-f]{24}$/);
   assert.equal(row.display_name, DELETED_ACCOUNT_NAME);
   assert.equal(row.password_hash, '!');

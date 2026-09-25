@@ -6,8 +6,10 @@ import { installFakeWebSocket, FakeWebSocket } from '../fixtures/fake-websocket.
 import { freshImport } from '../helpers/fresh-module.ts';
 import type * as BoundaryModule from '../../src/lib/platform/desktop-boundary.ts';
 
-const IPHONE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Mobile/15E148 Safari/604.1';
-const WINDOWS = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0 Safari/537.36';
+const IPHONE =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Mobile/15E148 Safari/604.1';
+const WINDOWS =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0 Safari/537.36';
 
 function useDevice(userAgent: string, maxTouchPoints = 0) {
   vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue(userAgent);
@@ -17,7 +19,7 @@ function useDevice(userAgent: string, maxTouchPoints = 0) {
 async function load() {
   installFakeWebSocket();
   const boundary = await freshImport<typeof BoundaryModule>('/src/lib/platform/desktop-boundary.ts');
-  const realtime = (await import('../../src/lib/api/realtime.ts'));
+  const realtime = await import('../../src/lib/api/realtime.ts');
   return { boundary, realtime };
 }
 

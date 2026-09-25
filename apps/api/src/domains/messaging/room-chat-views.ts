@@ -30,9 +30,8 @@ export function publicChatMessage(message: RoomChatMessage) {
     authorUserId: message.authorUserId || null,
     avatarAccent: message.avatarAccent || null,
     avatarColorKey: message.avatarColorKey || (avatarColorForPeerId(message.peerId) as string),
-    avatarUrl: message.avatarUrl || (message.avatarKey
-      ? `/api/avatars/${encodeURIComponent(message.avatarKey)}`
-      : null),
+    avatarUrl:
+      message.avatarUrl || (message.avatarKey ? `/api/avatars/${encodeURIComponent(message.avatarKey)}` : null),
     createdAt: message.createdAt,
     editedAt: message.editedAt || null,
     expiresAt: message.expiresAt,

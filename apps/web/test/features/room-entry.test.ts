@@ -24,7 +24,9 @@ async function load(routes: Record<string, Reply>) {
   return { ...room, ...names, state, guestNameUi, fetchStub, showToast: vi.mocked(showToast) };
 }
 
-const roomExists = { '/api/rooms/abc123': { body: { ok: true, exists: true, name: 'Планёрка', isStatic: true, avatarUrl: null } } };
+const roomExists = {
+  '/api/rooms/abc123': { body: { ok: true, exists: true, name: 'Планёрка', isStatic: true, avatarUrl: null } }
+};
 
 beforeEach(() => {
   localStorage.clear();

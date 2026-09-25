@@ -7,7 +7,6 @@ import { resolve } from 'node:path';
 const webRoot = resolve(import.meta.dirname, '..');
 const read = (path: string) => readFileSync(resolve(webRoot, path), 'utf8');
 
-
 async function loadEmojiText() {
   vi.resetModules();
   return import('../src/lib/shared/chat/emoji-text.ts');
@@ -49,7 +48,10 @@ test('a missing presentation selector still reads as the emoji, but a lone text 
 
   // A stray selector right after an emoji belongs to it.
   const trailing = splitEmoji('a😀️ b');
-  assert.deepEqual(trailing.map((part) => part.text), ['a', '😀️', ' b']);
+  assert.deepEqual(
+    trailing.map((part) => part.text),
+    ['a', '😀️', ' b']
+  );
 });
 
 test('what the artwork does not draw is left as text, never offered as an image', async () => {
@@ -68,4 +70,3 @@ test('what the artwork does not draw is left as text, never offered as an image'
     assert.equal(parts[0].emoji, emoji);
   }
 });
-

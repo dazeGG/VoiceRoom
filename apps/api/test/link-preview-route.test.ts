@@ -18,7 +18,9 @@ function get(socketPath, pathname) {
       .get({ path: pathname, socketPath }, (response) => {
         const chunks = [];
         response.on('data', (chunk) => chunks.push(chunk));
-        response.on('end', () => resolve({ status: response.statusCode, headers: response.headers, body: Buffer.concat(chunks) }));
+        response.on('end', () =>
+          resolve({ status: response.statusCode, headers: response.headers, body: Buffer.concat(chunks) })
+        );
       })
       .on('error', reject);
   });
@@ -48,7 +50,13 @@ test('startup sweeps unused preview images, and stored ones are served by key an
   const { cleanup, databaseUrl } = await createTestDatabase(t);
   const child = spawn(process.execPath, ['src/server.ts'], {
     cwd: path.join(import.meta.dirname, '..'),
-    env: { ...process.env, NODE_ENV: 'test', DATABASE_URL: databaseUrl, SOCKET_PATH: socketPath, UPLOADS_DIR: uploadsDir },
+    env: {
+      ...process.env,
+      NODE_ENV: 'test',
+      DATABASE_URL: databaseUrl,
+      SOCKET_PATH: socketPath,
+      UPLOADS_DIR: uploadsDir
+    },
     stdio: ['ignore', 'ignore', 'ignore']
   });
   t.after(async () => {

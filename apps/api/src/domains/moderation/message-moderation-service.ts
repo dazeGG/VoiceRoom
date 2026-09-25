@@ -17,7 +17,8 @@ export type MessageDeletionOutcome =
 
 function requireOperation<T>(target: Loose | null | undefined, names: string[], label: string): T {
   for (const name of names) {
-    if (typeof target?.[name] === 'function') return (target[name] as (...args: unknown[]) => unknown).bind(target) as T;
+    if (typeof target?.[name] === 'function')
+      return (target[name] as (...args: unknown[]) => unknown).bind(target) as T;
   }
   throw new TypeError(`${label} is required`);
 }
@@ -25,7 +26,11 @@ function requireOperation<T>(target: Loose | null | undefined, names: string[], 
 function attachmentRevoker(input: unknown): Revoker {
   const repository = input as Loose | null | undefined;
   if (repository?.revokeForRoomMessage || repository?.revokeForMessage) {
-    return requireOperation<Revoker>(repository, ['revokeForRoomMessage', 'revokeForMessage'], 'An attachment revocation operation');
+    return requireOperation<Revoker>(
+      repository,
+      ['revokeForRoomMessage', 'revokeForMessage'],
+      'An attachment revocation operation'
+    );
   }
   if (repository?.listForMessage && repository?.markDeleted) {
     const attachments = repository as {
@@ -47,7 +52,11 @@ function attachmentRevoker(input: unknown): Revoker {
 function cleanupEnqueuer(input: unknown): CleanupEnqueuer {
   const repository = input as Loose | null | undefined;
   if (repository?.enqueueCleanupForRoomMessage || repository?.enqueueCleanupForAttachments) {
-    return requireOperation<CleanupEnqueuer>(repository, ['enqueueCleanupForRoomMessage', 'enqueueCleanupForAttachments'], 'A media cleanup enqueue operation');
+    return requireOperation<CleanupEnqueuer>(
+      repository,
+      ['enqueueCleanupForRoomMessage', 'enqueueCleanupForAttachments'],
+      'A media cleanup enqueue operation'
+    );
   }
   if (repository?.enqueue) {
     const jobs = repository as {
@@ -56,7 +65,8 @@ function cleanupEnqueuer(input: unknown): CleanupEnqueuer {
     return async ({ attachments, at, client }) => {
       const queued: unknown[] = [];
       for (const attachment of attachments) {
-        if (attachment?.id) queued.push(await jobs.enqueue(attachment.id, { kind: 'cleanup', availableAt: at, client }));
+        if (attachment?.id)
+          queued.push(await jobs.enqueue(attachment.id, { kind: 'cleanup', availableAt: at, client }));
       }
       return queued;
     };
@@ -73,7 +83,9 @@ function createMessageModerationService({
   now = Date.now
 }: {
   pool?: pg.Pool | null;
-  moderationService?: { authorizeOwner(roomId: string, actorUserId: string, options: { client: QueryClient }): Promise<boolean> };
+  moderationService?: {
+    authorizeOwner(roomId: string, actorUserId: string, options: { client: QueryClient }): Promise<boolean>;
+  };
   attachmentRepository?: unknown;
   mediaJobRepository?: unknown;
   publishMessageDeleted?: (deletion: MessageDeletion) => unknown;
@@ -86,7 +98,11 @@ function createMessageModerationService({
   const revokeAttachments = attachmentRevoker(attachmentRepository);
   const enqueueCleanup = cleanupEnqueuer(mediaJobRepository);
 
-  async function deleteRoomMessage({ roomId, messageId, actorUserId }: {
+  async function deleteRoomMessage({
+    roomId,
+    messageId,
+    actorUserId
+  }: {
     roomId?: string;
     messageId?: string;
     actorUserId?: string;
@@ -94,7 +110,7 @@ function createMessageModerationService({
     if (!roomId || !messageId || !actorUserId) return { status: 'invalid', deletion: null };
     const timestamp = new Date(now());
     const result = await transaction(pool, async (client: pg.PoolClient): Promise<MessageDeletionOutcome> => {
-      if (!await owners.authorizeOwner(roomId, actorUserId, { client })) {
+      if (!(await owners.authorizeOwner(roomId, actorUserId, { client }))) {
         return { status: 'forbidden', deletion: null };
       }
       const selected = await client.query<{ id: string; room_id: string; deleted_at: unknown }>(

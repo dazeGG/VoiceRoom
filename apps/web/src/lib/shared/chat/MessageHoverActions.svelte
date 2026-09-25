@@ -34,8 +34,14 @@
   {/if}
   {#if hasReactions}<span class="chat-msg-actions-divider" role="separator" aria-orientation="vertical"></span>{/if}
   {#if canReply}
-    <button type="button" aria-label="Ответить" title="Ответить" onclick={onReply}><Reply {...iconSm} aria-hidden="true" /></button>
+    <button type="button" aria-label="Ответить" title="Ответить" onclick={onReply}
+      ><Reply {...iconSm} aria-hidden="true" /></button
+    >
   {/if}
-  <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={onCopy}><Copy {...iconSm} aria-hidden="true" /></button>
-  <button type="button" aria-label="Больше действий" title="Больше действий" onclick={onMore}><Ellipsis {...iconSm} aria-hidden="true" /></button>
+  <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={onCopy}
+    ><Copy {...iconSm} aria-hidden="true" /></button
+  >
+  <button type="button" aria-label="Больше действий" title="Больше действий" onclick={onMore}
+    ><Ellipsis {...iconSm} aria-hidden="true" /></button
+  >
 </div>

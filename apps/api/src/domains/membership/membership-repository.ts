@@ -92,9 +92,13 @@ function mapDirectoryMember(row: DirectoryRow | null | undefined): DirectoryMemb
 function createMembershipRepository({ pool }: { pool?: QueryClient | null } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new TypeError('A PostgreSQL pool is required');
   const defaultDb = pool;
-  const executor = (client: Client): QueryClient => client && typeof client.query === 'function' ? client : defaultDb;
+  const executor = (client: Client): QueryClient => (client && typeof client.query === 'function' ? client : defaultDb);
 
-  async function getActive(roomId: string, userId: string, { client }: { client?: Client } = {}): Promise<Membership | null> {
+  async function getActive(
+    roomId: string,
+    userId: string,
+    { client }: { client?: Client } = {}
+  ): Promise<Membership | null> {
     if (!roomId || !userId) return null;
     const result = await executor(client).query<MembershipRow>(
       `SELECT * FROM room_memberships WHERE room_id = $1 AND user_id = $2 LIMIT 1`,
@@ -107,7 +111,11 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null } = {}
     return Boolean(await getActive(roomId, userId, options));
   }
 
-  async function deleteActive(roomId: string, userId: string, { client }: { client?: Client } = {}): Promise<Membership | null> {
+  async function deleteActive(
+    roomId: string,
+    userId: string,
+    { client }: { client?: Client } = {}
+  ): Promise<Membership | null> {
     if (!roomId || !userId) return null;
     const result = await executor(client).query<MembershipRow>(
       `DELETE FROM room_memberships
@@ -118,7 +126,14 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null } = {}
     return mapMembership(result.rows[0]);
   }
 
-  async function upsertActive({ roomId, userId, role = 'member', metadata = {}, at = Date.now(), client }: {
+  async function upsertActive({
+    roomId,
+    userId,
+    role = 'member',
+    metadata = {},
+    at = Date.now(),
+    client
+  }: {
     roomId?: string;
     userId?: string;
     role?: string;
@@ -140,12 +155,25 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null } = {}
            updated_at = EXCLUDED.updated_at,
            metadata = room_memberships.metadata || EXCLUDED.metadata
        RETURNING *`,
-      [crypto.randomUUID(), roomId, userId, normalizedRole, date, metadata && typeof metadata === 'object' ? metadata : {}]
+      [
+        crypto.randomUUID(),
+        roomId,
+        userId,
+        normalizedRole,
+        date,
+        metadata && typeof metadata === 'object' ? metadata : {}
+      ]
     );
     return mapMembership(result.rows[0]);
   }
 
-  async function listDirectoryPage({ roomId, query = '', limit, after = null, client }: {
+  async function listDirectoryPage({
+    roomId,
+    query = '',
+    limit,
+    after = null,
+    client
+  }: {
     roomId?: string;
     query?: unknown;
     limit?: unknown;

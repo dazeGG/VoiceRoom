@@ -10,7 +10,8 @@ import os from 'node:os';
 import { createTestDatabase } from './db-harness.ts';
 import { openWs } from './ws-harness.ts';
 
-const CHROME_WINDOWS = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
+const CHROME_WINDOWS =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
 const FIREFOX_LINUX = 'Mozilla/5.0 (X11; Linux x86_64; rv:142.0) Gecko/20100101 Firefox/142.0';
 const FORMATTED_CODE = /^[0-9A-HJKMNP-TV-Z]{4}(?:-[0-9A-HJKMNP-TV-Z]{4}){3}$/;
 const SESSION_ENDED_CLOSE_CODE = 4401;
@@ -116,7 +117,10 @@ function cookieFrom(setCookie) {
   return String(header || '').split(';')[0];
 }
 
-async function signIn(socketPath, { register = false, login = 'ada', password = 'password123', userAgent = CHROME_WINDOWS } = {}) {
+async function signIn(
+  socketPath,
+  { register = false, login = 'ada', password = 'password123', userAgent = CHROME_WINDOWS } = {}
+) {
   const response = await request(socketPath, {
     method: 'POST',
     pathname: register ? '/api/auth/register' : '/api/auth/login',
@@ -162,26 +166,47 @@ test('signed-in devices are listed without secrets and an ended session loses it
   assert.deepEqual([other.client, other.os], ['Firefox', 'Linux']);
   assert.equal(other.location, '', 'no GeoIP database is configured in tests');
 
-  const ownSession = await request(socketPath, { method: 'DELETE', pathname: `/api/auth/sessions/${current.id}`, cookie: laptop });
+  const ownSession = await request(socketPath, {
+    method: 'DELETE',
+    pathname: `/api/auth/sessions/${current.id}`,
+    cookie: laptop
+  });
   assert.equal(ownSession.status, 400);
 
   const socket = openWs(socketPath, { cookie: desktop });
   await socket.ready;
   const closed = waitForClose(socket.ws);
 
-  const ended = await request(socketPath, { method: 'DELETE', pathname: `/api/auth/sessions/${other.id}`, cookie: laptop });
+  const ended = await request(socketPath, {
+    method: 'DELETE',
+    pathname: `/api/auth/sessions/${other.id}`,
+    cookie: laptop
+  });
   assert.equal(ended.status, 200);
   assert.equal(await closed, SESSION_ENDED_CLOSE_CODE);
   assert.equal(await me(socketPath, desktop), null);
   assert.equal((await me(socketPath, laptop)).login, 'ada');
 
-  const again = await request(socketPath, { method: 'DELETE', pathname: `/api/auth/sessions/${other.id}`, cookie: laptop });
+  const again = await request(socketPath, {
+    method: 'DELETE',
+    pathname: `/api/auth/sessions/${other.id}`,
+    cookie: laptop
+  });
   assert.equal(again.status, 404);
-  const garbage = await request(socketPath, { method: 'DELETE', pathname: '/api/auth/sessions/not-a-session', cookie: laptop });
+  const garbage = await request(socketPath, {
+    method: 'DELETE',
+    pathname: '/api/auth/sessions/not-a-session',
+    cookie: laptop
+  });
   assert.equal(garbage.status, 404);
 
   const phone = await signIn(socketPath, { userAgent: FIREFOX_LINUX });
-  const revoked = await request(socketPath, { method: 'POST', pathname: '/api/auth/sessions/revoke-others', cookie: laptop, body: {} });
+  const revoked = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/auth/sessions/revoke-others',
+    cookie: laptop,
+    body: {}
+  });
   assert.equal(revoked.status, 200);
   assert.equal(revoked.body.revoked, 1);
   assert.equal(await me(socketPath, phone), null);
@@ -222,7 +247,10 @@ test('recovery codes restore access over HTTP and end every earlier session', as
   assert.equal(generated.headers['cache-control'], 'no-store');
   assert.equal(generated.body.codes.length, 10);
   for (const code of generated.body.codes) assert.match(code, FORMATTED_CODE);
-  assert.equal((await request(socketPath, { pathname: '/api/auth/security', cookie })).body.recoveryCodes.remaining, 10);
+  assert.equal(
+    (await request(socketPath, { pathname: '/api/auth/security', cookie })).body.recoveryCodes.remaining,
+    10
+  );
 
   const snoozed = await request(socketPath, {
     method: 'POST',
@@ -296,11 +324,12 @@ test('recovery codes restore access over HTTP and end every earlier session', as
 
 test('recovery attempts are rate limited per address', async (t) => {
   const socketPath = await startServer(t, { AUTH_RATE_LIMIT: '2', AUTH_RATE_WINDOW_MS: '60000' });
-  const attempt = () => request(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/recover',
-    body: { login: 'nobody', code: 'ZZZZ-ZZZZ-ZZZZ-ZZZZ', newPassword: 'brand-new-password' }
-  });
+  const attempt = () =>
+    request(socketPath, {
+      method: 'POST',
+      pathname: '/api/auth/recover',
+      body: { login: 'nobody', code: 'ZZZZ-ZZZZ-ZZZZ-ZZZZ', newPassword: 'brand-new-password' }
+    });
 
   assert.equal((await attempt()).status, 401);
   const limited = await (async () => {

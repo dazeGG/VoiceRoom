@@ -12,7 +12,11 @@ export interface MessageReadRepository {
 
 export type MessageReadService = Readonly<{
   advanceDm(input: { cursor: string; peerId: string; userId: string }): Promise<{ advanced: boolean; cursor: string }>;
-  advanceRoom(input: { cursor: string; roomId: string; userId: string }): Promise<{ advanced: boolean; cursor: string; readThrough: unknown }>;
+  advanceRoom(input: {
+    cursor: string;
+    roomId: string;
+    userId: string;
+  }): Promise<{ advanced: boolean; cursor: string; readThrough: unknown }>;
 }>;
 
 class MessageReadError extends Error {
@@ -27,7 +31,11 @@ class MessageReadError extends Error {
   }
 }
 
-function createMessageReadService({ authorizeRoomRead, cursorCodec, repository }: {
+function createMessageReadService({
+  authorizeRoomRead,
+  cursorCodec,
+  repository
+}: {
   authorizeRoomRead?: (input: { roomId: string; userId: string }) => boolean | Promise<boolean>;
   cursorCodec?: CursorCodec;
   repository?: MessageReadRepository;
@@ -46,7 +54,7 @@ function createMessageReadService({ authorizeRoomRead, cursorCodec, repository }
   }
 
   async function advanceRoom({ cursor, roomId, userId }: { cursor: string; roomId: string; userId: string }) {
-    if (typeof authorizeRoomRead !== 'function' || await authorizeRoomRead({ roomId, userId }) !== true) {
+    if (typeof authorizeRoomRead !== 'function' || (await authorizeRoomRead({ roomId, userId })) !== true) {
       throw new MessageReadError('room_forbidden', 403);
     }
     const tuple = decode(cursor, 'room-read', `room:${roomId}`);

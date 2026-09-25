@@ -30,14 +30,18 @@
   const hasScreenSources = $derived(screenSourceUi.sources.some((s) => s.type === 'screen'));
   const hasWindowSources = $derived(screenSourceUi.sources.some((s) => s.type !== 'screen'));
   const showTabs = $derived(hasScreenSources && hasWindowSources);
-  const filteredSources = $derived(screenSourceUi.sources.filter((s) =>
-    screenSourceUi.tab === 'screens' ? s.type === 'screen' : s.type !== 'screen'
-  ));
+  const filteredSources = $derived(
+    screenSourceUi.sources.filter((s) => (screenSourceUi.tab === 'screens' ? s.type === 'screen' : s.type !== 'screen'))
+  );
   const selectedSource = $derived(screenSourceUi.sources.find((s) => s.id === screenSourceUi.selectedSourceId));
-  const qualityLabel = $derived(screenSourceUi.mode === 'text' ? 'Источник' : screenSourceUi.quality === 'high' ? '1080p' : '720p');
+  const qualityLabel = $derived(
+    screenSourceUi.mode === 'text' ? 'Источник' : screenSourceUi.quality === 'high' ? '1080p' : '720p'
+  );
   const fpsLabel = $derived(screenSourceUi.mode === 'text' ? '5 к/с' : `${screenSourceUi.fps} к/с`);
   const summaryName = $derived(selectedSource?.name ?? 'Не выбрано');
-  const summaryDetail = $derived(`${screenSourceUi.mode === 'text' ? 'Текст' : screenSourceUi.quality === 'high' ? 'HD' : 'SD'} · ${qualityLabel} · ${fpsLabel}${screenSourceUi.audio ? ' · звук' : ''}`);
+  const summaryDetail = $derived(
+    `${screenSourceUi.mode === 'text' ? 'Текст' : screenSourceUi.quality === 'high' ? 'HD' : 'SD'} · ${qualityLabel} · ${fpsLabel}${screenSourceUi.audio ? ' · звук' : ''}`
+  );
 
   $effect(() => {
     syncGuestNameDialogInert(guestNameUi.open, guestNameDialog ?? null);
@@ -48,7 +52,14 @@
   });
 </script>
 
-<div class="toast" id="toast" role="status" aria-live="polite" data-variant={toastUi.variant} data-visible={String(toastUi.visible)}>
+<div
+  class="toast"
+  id="toast"
+  role="status"
+  aria-live="polite"
+  data-variant={toastUi.variant}
+  data-visible={String(toastUi.visible)}
+>
   <span>{toastUi.message}</span>
   {#if toastUi.action && toastUi.actionLabel}
     <button type="button" onclick={() => void invokeToastAction()}>{toastUi.actionLabel}</button>
@@ -107,36 +118,31 @@
     <!-- Header -->
     <div class="screen-source-heading">
       <h2 id="screenSourceTitle">Выберите, что показать</h2>
-      <button
-        class="screen-source-close"
-        type="button"
-        aria-label="Отменить выбор"
-        onclick={cancelScreenSourcePicker}
-      >
+      <button class="screen-source-close" type="button" aria-label="Отменить выбор" onclick={cancelScreenSourcePicker}>
         <X {...iconMd} aria-hidden="true" />
       </button>
     </div>
 
     <!-- Tabs -->
     {#if showTabs}
-    <div class="screen-source-tabs">
-      <button
-        class="screen-source-tab"
-        aria-pressed={screenSourceUi.tab === 'screens'}
-        onclick={() => switchScreenTab('screens')}
-      >
-        <Monitor {...iconSm} aria-hidden="true" />
-        Экраны
-      </button>
-      <button
-        class="screen-source-tab"
-        aria-pressed={screenSourceUi.tab === 'windows'}
-        onclick={() => switchScreenTab('windows')}
-      >
-        <AppWindow {...iconSm} aria-hidden="true" />
-        Окна
-      </button>
-    </div>
+      <div class="screen-source-tabs">
+        <button
+          class="screen-source-tab"
+          aria-pressed={screenSourceUi.tab === 'screens'}
+          onclick={() => switchScreenTab('screens')}
+        >
+          <Monitor {...iconSm} aria-hidden="true" />
+          Экраны
+        </button>
+        <button
+          class="screen-source-tab"
+          aria-pressed={screenSourceUi.tab === 'windows'}
+          onclick={() => switchScreenTab('windows')}
+        >
+          <AppWindow {...iconSm} aria-hidden="true" />
+          Окна
+        </button>
+      </div>
     {/if}
 
     <!-- Source grid -->
@@ -148,7 +154,9 @@
           type="button"
           aria-pressed={selected}
           aria-label={source.name}
-          onclick={() => { screenSourceUi.selectedSourceId = source.id; }}
+          onclick={() => {
+            screenSourceUi.selectedSourceId = source.id;
+          }}
         >
           <span class="screen-source-preview">
             {#if source.thumbnail}
@@ -195,31 +203,39 @@
       <div class="screen-source-footer-actions">
         <!-- SD / HD toggle -->
         {#if screenSourceUi.mode === 'games'}
-        <div class="screen-source-res-toggle" role="group" aria-label="Качество">
-          <button
-            class="screen-source-res-btn"
-            aria-pressed={screenSourceUi.quality === 'balanced'}
-            onclick={() => { screenSourceUi.quality = 'balanced'; }}
-          >SD</button>
-          <button
-            class="screen-source-res-btn"
-            aria-pressed={screenSourceUi.quality === 'high'}
-            onclick={() => { screenSourceUi.quality = 'high'; }}
-          >HD</button>
-        </div>
-        <div class="screen-source-res-toggle" role="group" aria-label="Частота кадров">
-          <button
-            class="screen-source-res-btn"
-            aria-pressed={screenSourceUi.fps === '30'}
-            onclick={() => { screenSourceUi.fps = '30'; }}
-          >30</button>
-          <button
-            class="screen-source-res-btn"
-            aria-pressed={screenSourceUi.fps === '60'}
-            title="60 к/с: плавнее, но вдвое больше нагрузки на кодирование и сеть"
-            onclick={() => { screenSourceUi.fps = '60'; }}
-          >60</button>
-        </div>
+          <div class="screen-source-res-toggle" role="group" aria-label="Качество">
+            <button
+              class="screen-source-res-btn"
+              aria-pressed={screenSourceUi.quality === 'balanced'}
+              onclick={() => {
+                screenSourceUi.quality = 'balanced';
+              }}>SD</button
+            >
+            <button
+              class="screen-source-res-btn"
+              aria-pressed={screenSourceUi.quality === 'high'}
+              onclick={() => {
+                screenSourceUi.quality = 'high';
+              }}>HD</button
+            >
+          </div>
+          <div class="screen-source-res-toggle" role="group" aria-label="Частота кадров">
+            <button
+              class="screen-source-res-btn"
+              aria-pressed={screenSourceUi.fps === '30'}
+              onclick={() => {
+                screenSourceUi.fps = '30';
+              }}>30</button
+            >
+            <button
+              class="screen-source-res-btn"
+              aria-pressed={screenSourceUi.fps === '60'}
+              title="60 к/с: плавнее, но вдвое больше нагрузки на кодирование и сеть"
+              onclick={() => {
+                screenSourceUi.fps = '60';
+              }}>60</button
+            >
+          </div>
         {/if}
 
         <!-- Settings gear + popover -->
@@ -228,61 +244,69 @@
             class="screen-source-gear"
             aria-pressed={screenSourceUi.popOpen}
             title="Настройки стрима"
-            onclick={() => { screenSourceUi.popOpen = !screenSourceUi.popOpen; }}
+            onclick={() => {
+              screenSourceUi.popOpen = !screenSourceUi.popOpen;
+            }}
           >
             <Settings {...iconMd} aria-hidden="true" />
           </button>
 
           {#if screenSourceUi.popOpen}
-          <div class="screen-source-popover" role="dialog" aria-label="Настройки стрима">
-            <div class="screen-source-pop-label">Режим стрима</div>
-            <div class="screen-source-pop-presets">
+            <div class="screen-source-popover" role="dialog" aria-label="Настройки стрима">
+              <div class="screen-source-pop-label">Режим стрима</div>
+              <div class="screen-source-pop-presets">
+                <button
+                  class="screen-source-pop-preset"
+                  aria-pressed={screenSourceUi.mode === 'games'}
+                  onclick={() => {
+                    screenSourceUi.mode = 'games';
+                  }}
+                >
+                  <span class="screen-source-pop-icon">
+                    <Play {...iconSm} aria-hidden="true" />
+                  </span>
+                  <span class="screen-source-pop-info">
+                    <span class="screen-source-pop-title">Плавное видео</span>
+                    <span class="screen-source-pop-desc">30–60 к/с · для игр и видео</span>
+                  </span>
+                  <span class="screen-source-pop-radio" aria-hidden="true">
+                    {#if screenSourceUi.mode === 'games'}<span class="screen-source-pop-dot"></span>{/if}
+                  </span>
+                </button>
+                <button
+                  class="screen-source-pop-preset"
+                  aria-pressed={screenSourceUi.mode === 'text'}
+                  onclick={() => {
+                    screenSourceUi.mode = 'text';
+                  }}
+                >
+                  <span class="screen-source-pop-icon">
+                    <Type {...iconSm} aria-hidden="true" />
+                  </span>
+                  <span class="screen-source-pop-info">
+                    <span class="screen-source-pop-title">Чёткая картинка</span>
+                    <span class="screen-source-pop-desc">5 к/с · для текста и кода</span>
+                  </span>
+                  <span class="screen-source-pop-radio" aria-hidden="true">
+                    {#if screenSourceUi.mode === 'text'}<span class="screen-source-pop-dot"></span>{/if}
+                  </span>
+                </button>
+              </div>
+              <div class="screen-source-pop-sep"></div>
               <button
-                class="screen-source-pop-preset"
-                aria-pressed={screenSourceUi.mode === 'games'}
-                onclick={() => { screenSourceUi.mode = 'games'; }}
+                class="screen-source-pop-audio"
+                role="switch"
+                aria-checked={screenSourceUi.audio}
+                onclick={() => {
+                  screenSourceUi.audio = !screenSourceUi.audio;
+                }}
               >
-                <span class="screen-source-pop-icon">
-                  <Play {...iconSm} aria-hidden="true" />
-                </span>
-                <span class="screen-source-pop-info">
-                  <span class="screen-source-pop-title">Плавное видео</span>
-                  <span class="screen-source-pop-desc">30–60 к/с · для игр и видео</span>
-                </span>
-                <span class="screen-source-pop-radio" aria-hidden="true">
-                  {#if screenSourceUi.mode === 'games'}<span class="screen-source-pop-dot"></span>{/if}
-                </span>
-              </button>
-              <button
-                class="screen-source-pop-preset"
-                aria-pressed={screenSourceUi.mode === 'text'}
-                onclick={() => { screenSourceUi.mode = 'text'; }}
-              >
-                <span class="screen-source-pop-icon">
-                  <Type {...iconSm} aria-hidden="true" />
-                </span>
-                <span class="screen-source-pop-info">
-                  <span class="screen-source-pop-title">Чёткая картинка</span>
-                  <span class="screen-source-pop-desc">5 к/с · для текста и кода</span>
-                </span>
-                <span class="screen-source-pop-radio" aria-hidden="true">
-                  {#if screenSourceUi.mode === 'text'}<span class="screen-source-pop-dot"></span>{/if}
+                <span class="screen-source-pop-audio-label">Звук стрима</span>
+                <span class="screen-source-toggle" aria-hidden="true" data-on={screenSourceUi.audio}>
+                  <span class="screen-source-toggle-knob"></span>
                 </span>
               </button>
             </div>
-            <div class="screen-source-pop-sep"></div>
-            <button
-              class="screen-source-pop-audio"
-              role="switch"
-              aria-checked={screenSourceUi.audio}
-              onclick={() => { screenSourceUi.audio = !screenSourceUi.audio; }}
-            >
-              <span class="screen-source-pop-audio-label">Звук стрима</span>
-              <span class="screen-source-toggle" aria-hidden="true" data-on={screenSourceUi.audio}>
-                <span class="screen-source-toggle-knob"></span>
-              </span>
-            </button>
-          </div>
           {/if}
         </div>
 
@@ -307,4 +331,5 @@
   type="button"
   hidden={!startUi.soundButtonVisible}
   onclick={() => unlockAudio().catch((error) => log.warn('audio unlock failed', errorContext(error)))}
->Разрешить звук</button>
+  >Разрешить звук</button
+>

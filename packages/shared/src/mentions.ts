@@ -12,13 +12,18 @@ function cleanId(value: unknown, max = 128): string {
   return id && id.length <= max ? id : '';
 }
 
-export function normalizeMentionUserIds(value: unknown, { creatorUserId = '' }: { creatorUserId?: string } = {}): MentionNormalization {
+export function normalizeMentionUserIds(
+  value: unknown,
+  { creatorUserId = '' }: { creatorUserId?: string } = {}
+): MentionNormalization {
   if (!Array.isArray(value)) return { ok: false, code: 'invalid_mentions' };
   const creatorId = cleanId(creatorUserId);
   const unique: string[] = [];
   const seen = new Set<string>();
   for (const candidate of value) {
-    const userId = cleanId(typeof candidate === 'string' ? candidate : (candidate as { userId?: unknown } | null)?.userId);
+    const userId = cleanId(
+      typeof candidate === 'string' ? candidate : (candidate as { userId?: unknown } | null)?.userId
+    );
     if (!userId) return { ok: false, code: 'invalid_mention_target' };
     if (userId === creatorId) return { ok: false, code: 'self_mention' };
     if (seen.has(userId)) continue;
@@ -29,7 +34,10 @@ export function normalizeMentionUserIds(value: unknown, { creatorUserId = '' }: 
   return { ok: true, userIds: unique };
 }
 
-export function mentionUserIdsFromContent(content: unknown, options?: { creatorUserId?: string }): MentionNormalization {
+export function mentionUserIdsFromContent(
+  content: unknown,
+  options?: { creatorUserId?: string }
+): MentionNormalization {
   const structured = content as { version?: unknown; segments?: unknown } | null | undefined;
   if (!structured || structured.version !== 1 || !Array.isArray(structured.segments)) {
     return { ok: true, userIds: [] };

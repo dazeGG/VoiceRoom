@@ -14,7 +14,13 @@
 
   type Section = 'general' | 'members' | 'bans';
 
-  let { room, onClose, onSaved, onDeleted, onToast }: {
+  let {
+    room,
+    onClose,
+    onSaved,
+    onDeleted,
+    onToast
+  }: {
     room: OwnedRoom | null;
     onClose: () => void;
     onSaved: () => void;
@@ -51,8 +57,12 @@
       pendingAvatar = null;
       removeAvatarPending = false;
       if (activeRoom) {
-        void getCapabilityFeature('moderationCenter').then((enabled) => { moderationEnabled = enabled; });
-        void getCapabilityFeature('membership').then((enabled) => { membershipEnabled = enabled; });
+        void getCapabilityFeature('moderationCenter').then((enabled) => {
+          moderationEnabled = enabled;
+        });
+        void getCapabilityFeature('membership').then((enabled) => {
+          membershipEnabled = enabled;
+        });
       }
     });
   });
@@ -74,7 +84,9 @@
       onToast('Комната обновлена');
     } catch (cause) {
       error = cause instanceof Error ? cause.message : 'Не удалось обновить комнату';
-    } finally { saving = false; }
+    } finally {
+      saving = false;
+    }
   }
 
   async function remove(): Promise<void> {
@@ -131,7 +143,17 @@
       duration: undo ? BAN_UNDO_DURATION_MS : undefined,
       // The stack keeps a toast open after its action, so undo closes it first:
       // a second click would otherwise try to lift an already lifted ban.
-      actions: undo ? [{ label: undo.label, onClick: (toastId) => { dismissToast(toastId); undo.run(); } }] : undefined
+      actions: undo
+        ? [
+            {
+              label: undo.label,
+              onClick: (toastId) => {
+                dismissToast(toastId);
+                undo.run();
+              }
+            }
+          ]
+        : undefined
     });
   }
 
@@ -147,7 +169,11 @@
 <svelte:window onkeydown={onWindowKeydown} />
 
 {#if room}
-  <div class="settings-overlay" role="presentation" onclick={(event) => event.target === event.currentTarget && onClose()}>
+  <div
+    class="settings-overlay"
+    role="presentation"
+    onclick={(event) => event.target === event.currentTarget && onClose()}
+  >
     <div
       class="settings-modal room-settings-modal"
       role="dialog"
@@ -156,32 +182,69 @@
       tabindex="-1"
       use:dialogFocusTrap={{ enabled: Boolean(room) && !cropOpen }}
     >
-      <div class="settings-head"><span class="settings-title">Настройки комнаты</span><button class="settings-close" type="button" aria-label="Закрыть" onclick={onClose} data-dialog-initial-focus><X {...iconSm} /></button></div>
+      <div class="settings-head">
+        <span class="settings-title">Настройки комнаты</span><button
+          class="settings-close"
+          type="button"
+          aria-label="Закрыть"
+          onclick={onClose}
+          data-dialog-initial-focus><X {...iconSm} /></button
+        >
+      </div>
       <div class="settings-body room-settings-body" data-sectioned={membershipEnabled || moderationEnabled}>
         {#if membershipEnabled || moderationEnabled}
           <nav class="settings-nav" aria-label="Разделы настроек комнаты">
             <div class="settings-nav-main">
-              <button class="settings-nav-item" type="button" data-active={section === 'general'} aria-current={section === 'general' ? 'true' : undefined} onclick={() => (section = 'general')}><SlidersHorizontal {...iconMd} aria-hidden="true" />Основное</button>
+              <button
+                class="settings-nav-item"
+                type="button"
+                data-active={section === 'general'}
+                aria-current={section === 'general' ? 'true' : undefined}
+                onclick={() => (section = 'general')}
+                ><SlidersHorizontal {...iconMd} aria-hidden="true" />Основное</button
+              >
               {#if membershipEnabled}
-                <button class="settings-nav-item" type="button" data-active={section === 'members'} aria-current={section === 'members' ? 'true' : undefined} onclick={() => (section = 'members')}><Users {...iconMd} aria-hidden="true" />Участники</button>
+                <button
+                  class="settings-nav-item"
+                  type="button"
+                  data-active={section === 'members'}
+                  aria-current={section === 'members' ? 'true' : undefined}
+                  onclick={() => (section = 'members')}><Users {...iconMd} aria-hidden="true" />Участники</button
+                >
               {/if}
               {#if moderationEnabled}
-                <button class="settings-nav-item" type="button" data-active={section === 'bans'} aria-current={section === 'bans' ? 'true' : undefined} onclick={() => (section = 'bans')}><Ban {...iconMd} aria-hidden="true" />Блокировки</button>
+                <button
+                  class="settings-nav-item"
+                  type="button"
+                  data-active={section === 'bans'}
+                  aria-current={section === 'bans' ? 'true' : undefined}
+                  onclick={() => (section = 'bans')}><Ban {...iconMd} aria-hidden="true" />Блокировки</button
+                >
               {/if}
             </div>
           </nav>
         {/if}
 
         {#if section === 'members' && membershipEnabled}
-          <div class="settings-content room-settings-content"><RoomMemberList roomId={room.roomId} canModerate={moderationEnabled} onNotify={notifyModeration} /></div>
+          <div class="settings-content room-settings-content">
+            <RoomMemberList roomId={room.roomId} canModerate={moderationEnabled} onNotify={notifyModeration} />
+          </div>
         {:else if section === 'bans' && moderationEnabled}
-          <div class="settings-content room-settings-content"><ModerationCenter roomId={room.roomId} onNotify={notifyModeration} /></div>
+          <div class="settings-content room-settings-content">
+            <ModerationCenter roomId={room.roomId} onNotify={notifyModeration} />
+          </div>
         {:else}
           <form class="settings-content room-settings-content" onsubmit={save}>
             {#if error}<p class="dialog-error" role="alert">{error}</p>{/if}
             <div class="room-profile-head">
               <div class="room-avatar-control">
-                <input bind:this={avatarInput} class="room-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" onchange={onAvatarFile} />
+                <input
+                  bind:this={avatarInput}
+                  class="room-avatar-input"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onchange={onAvatarFile}
+                />
                 <button
                   class="room-avatar-edit"
                   type="button"
@@ -190,7 +253,13 @@
                   aria-label={room.avatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
                   title={room.avatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
                 >
-                  <Avatar name={name || room.roomId} src={avatarPreviewUrl || (removeAvatarPending ? null : room.avatarUrl)} shape="squircle" background="var(--room-avatar-bg)" size={58} />
+                  <Avatar
+                    name={name || room.roomId}
+                    src={avatarPreviewUrl || (removeAvatarPending ? null : room.avatarUrl)}
+                    shape="squircle"
+                    background="var(--room-avatar-bg)"
+                    size={58}
+                  />
                   <span class="room-avatar-overlay" aria-hidden="true"><Pencil {...iconSm} /></span>
                 </button>
                 {#if avatarPreviewUrl || (room.avatarUrl && !removeAvatarPending)}
@@ -200,18 +269,37 @@
                     onclick={removeAvatar}
                     disabled={saving || deleting}
                     aria-label="Удалить аватар комнаты"
-                    title="Удалить аватар комнаты"
-                  ><X {...iconSm} aria-hidden="true" /></button>
+                    title="Удалить аватар комнаты"><X {...iconSm} aria-hidden="true" /></button
+                  >
                 {/if}
               </div>
-              <label class="room-name-field"><span class="settings-field-label">Название</span><input class="settings-input" maxlength="60" bind:value={name} /></label>
+              <label class="room-name-field"
+                ><span class="settings-field-label">Название</span><input
+                  class="settings-input"
+                  maxlength="60"
+                  bind:value={name}
+                /></label
+              >
             </div>
-            <div class="settings-actions"><button class="settings-cancel" type="button" onclick={onClose}>Отмена</button><button class="settings-save" type="submit" disabled={saving || !name.trim()}>{saving ? 'Сохраняем…' : 'Сохранить'}</button></div>
+            <div class="settings-actions">
+              <button class="settings-cancel" type="button" onclick={onClose}>Отмена</button><button
+                class="settings-save"
+                type="submit"
+                disabled={saving || !name.trim()}>{saving ? 'Сохраняем…' : 'Сохранить'}</button
+              >
+            </div>
             <div class="dialog-danger-zone">
               {#if confirmDelete}
                 <p class="dialog-danger-note">Комната будет удалена для всех участников.</p>
-                <div class="dialog-danger-actions"><button class="settings-cancel" type="button" onclick={() => (confirmDelete = false)}>Отмена</button><button class="dialog-danger-confirm" type="button" disabled={deleting} onclick={remove}>Удалить навсегда</button></div>
-              {:else}<button class="dialog-danger-trigger" type="button" onclick={() => (confirmDelete = true)}>Удалить комнату</button>{/if}
+                <div class="dialog-danger-actions">
+                  <button class="settings-cancel" type="button" onclick={() => (confirmDelete = false)}>Отмена</button
+                  ><button class="dialog-danger-confirm" type="button" disabled={deleting} onclick={remove}
+                    >Удалить навсегда</button
+                  >
+                </div>
+              {:else}<button class="dialog-danger-trigger" type="button" onclick={() => (confirmDelete = true)}
+                  >Удалить комнату</button
+                >{/if}
             </div>
           </form>
         {/if}
@@ -235,42 +323,183 @@
 />
 
 <style>
-  .room-settings-modal { width: min(780px, calc(100vw - 28px)); }
+  .room-settings-modal {
+    width: min(780px, calc(100vw - 28px));
+  }
   /* Without sections the dialog is just the general form, sized by its content;
      with sections it keeps one height so switching tabs does not jump. */
-  .room-settings-body { height: auto; min-height: 0; }
-  .room-settings-body[data-sectioned='true'] { height: min(540px, calc(90vh - 74px)); }
-  .room-settings-content { display: flex; flex-direction: column; gap: 24px; padding: 26px; }
-  .room-profile-head { display: flex; align-items: center; gap: 16px; }
-  .room-name-field { display: grid; flex: 1; gap: 7px; }
-
-  @media (max-width: 600px) {
-    .room-settings-body[data-sectioned='true'] { height: auto; overflow-y: auto; }
-    .room-settings-content { padding: 22px 18px; }
+  .room-settings-body {
+    height: auto;
+    min-height: 0;
+  }
+  .room-settings-body[data-sectioned='true'] {
+    height: min(540px, calc(90vh - 74px));
+  }
+  .room-settings-content {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    padding: 26px;
+  }
+  .room-profile-head {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .room-name-field {
+    display: grid;
+    flex: 1;
+    gap: 7px;
   }
 
-  .room-avatar-control { position: relative; flex: none; width: 58px; height: 58px; }
-  .room-avatar-input { display: none; }
-  .room-avatar-edit { position: relative; display: flex; align-items: center; justify-content: center; width: 58px; height: 58px; padding: 0; overflow: hidden; border: 0; border-radius: 31%; background: transparent; color: #fff; cursor: pointer; }
-  .room-avatar-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; border-radius: inherit; background: color-mix(in srgb, var(--warm-950) 58%, transparent); opacity: 0; transition: opacity 0.16s ease; pointer-events: none; }
-  .room-avatar-edit:not(:disabled):hover .room-avatar-overlay,
-  .room-avatar-edit:not(:disabled):focus-visible .room-avatar-overlay { opacity: 1; }
-  .room-avatar-edit:focus-visible { outline: 2px solid var(--coral); outline-offset: 3px; }
-  .room-avatar-remove { position: absolute; z-index: 1; top: -5px; right: -5px; display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; padding: 0; border: 2px solid var(--paper-deep); border-radius: 50%; background: var(--coral); color: #fff; cursor: pointer; box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34); opacity: 0; transition: opacity 0.16s ease, background 0.16s ease; }
-  .room-avatar-control:hover .room-avatar-remove,
-  .room-avatar-control:focus-within .room-avatar-remove { opacity: 1; }
-  .room-avatar-remove:not(:disabled):hover { background: color-mix(in oklch, var(--coral), var(--warm-950) 16%); }
-  .room-avatar-remove:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
-  .room-avatar-edit:disabled,
-  .room-avatar-remove:disabled { cursor: default; opacity: 0.6; }
+  @media (max-width: 600px) {
+    .room-settings-body[data-sectioned='true'] {
+      height: auto;
+      overflow-y: auto;
+    }
+    .room-settings-content {
+      padding: 22px 18px;
+    }
+  }
 
-  .dialog-danger-zone { margin-top: 4px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.08); }
-  .dialog-danger-trigger { padding: 9px 14px; border: 1px solid rgba(239, 68, 68, 0.4); border-radius: 10px; background: transparent; color: #f87171; font-family: var(--font-ui); font-size: 13px; font-weight: 600; cursor: pointer; transition: background-color 0.15s ease, border-color 0.15s ease; }
-  .dialog-danger-trigger:hover { border-color: rgba(239, 68, 68, 0.6); background: color-mix(in oklch, var(--coral) 10%, transparent); }
-  .dialog-danger-note { margin: 0 0 10px; color: rgba(248, 113, 113, 0.92); font-size: 13px; line-height: 1.45; }
-  .dialog-danger-actions { display: flex; justify-content: flex-end; gap: 8px; }
-  .dialog-danger-confirm { display: inline-flex; align-items: center; gap: 6px; padding: 9px 14px; border: 0; border-radius: 10px; background: var(--coral); color: #fff; font-family: var(--font-ui); font-size: 13px; font-weight: 600; cursor: pointer; transition: background-color 0.15s ease; }
-  .dialog-danger-confirm:hover { background: color-mix(in oklch, var(--coral), var(--warm-950) 20%); }
+  .room-avatar-control {
+    position: relative;
+    flex: none;
+    width: 58px;
+    height: 58px;
+  }
+  .room-avatar-input {
+    display: none;
+  }
+  .room-avatar-edit {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 58px;
+    height: 58px;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    border-radius: 31%;
+    background: transparent;
+    color: #fff;
+    cursor: pointer;
+  }
+  .room-avatar-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--warm-950) 58%, transparent);
+    opacity: 0;
+    transition: opacity 0.16s ease;
+    pointer-events: none;
+  }
+  .room-avatar-edit:not(:disabled):hover .room-avatar-overlay,
+  .room-avatar-edit:not(:disabled):focus-visible .room-avatar-overlay {
+    opacity: 1;
+  }
+  .room-avatar-edit:focus-visible {
+    outline: 2px solid var(--coral);
+    outline-offset: 3px;
+  }
+  .room-avatar-remove {
+    position: absolute;
+    z-index: 1;
+    top: -5px;
+    right: -5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: 2px solid var(--paper-deep);
+    border-radius: 50%;
+    background: var(--coral);
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34);
+    opacity: 0;
+    transition:
+      opacity 0.16s ease,
+      background 0.16s ease;
+  }
+  .room-avatar-control:hover .room-avatar-remove,
+  .room-avatar-control:focus-within .room-avatar-remove {
+    opacity: 1;
+  }
+  .room-avatar-remove:not(:disabled):hover {
+    background: color-mix(in oklch, var(--coral), var(--warm-950) 16%);
+  }
+  .room-avatar-remove:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+  }
+  .room-avatar-edit:disabled,
+  .room-avatar-remove:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+
+  .dialog-danger-zone {
+    margin-top: 4px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  .dialog-danger-trigger {
+    padding: 9px 14px;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: 10px;
+    background: transparent;
+    color: #f87171;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease;
+  }
+  .dialog-danger-trigger:hover {
+    border-color: rgba(239, 68, 68, 0.6);
+    background: color-mix(in oklch, var(--coral) 10%, transparent);
+  }
+  .dialog-danger-note {
+    margin: 0 0 10px;
+    color: rgba(248, 113, 113, 0.92);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  .dialog-danger-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+  .dialog-danger-confirm {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 9px 14px;
+    border: 0;
+    border-radius: 10px;
+    background: var(--coral);
+    color: #fff;
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+  }
+  .dialog-danger-confirm:hover {
+    background: color-mix(in oklch, var(--coral), var(--warm-950) 20%);
+  }
   .dialog-danger-confirm:disabled,
-  .dialog-danger-trigger:disabled { cursor: not-allowed; opacity: 0.6; }
+  .dialog-danger-trigger:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
 </style>

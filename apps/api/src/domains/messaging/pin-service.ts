@@ -63,7 +63,11 @@ function requireAccount(viewer: Viewer): { id: string } {
   return viewer as { id: string };
 }
 
-function createPinService({ repository, publish, maxPins = MAX_PINS_PER_ROOM }: {
+function createPinService({
+  repository,
+  publish,
+  maxPins = MAX_PINS_PER_ROOM
+}: {
   repository?: PinRepository;
   publish?: (event: PinEvent) => unknown;
   maxPins?: number;
@@ -73,9 +77,10 @@ function createPinService({ repository, publish, maxPins = MAX_PINS_PER_ROOM }: 
   }
   const pins = repository;
   const publisher = typeof publish === 'function' ? publish : () => false;
-  const transact = typeof pins.transaction === 'function'
-    ? <T>(callback: (client: Client) => Promise<T>) => pins.transaction!(callback)
-    : <T>(callback: (client: Client) => Promise<T>) => callback(null);
+  const transact =
+    typeof pins.transaction === 'function'
+      ? <T>(callback: (client: Client) => Promise<T>) => pins.transaction!(callback)
+      : <T>(callback: (client: Client) => Promise<T>) => callback(null);
 
   async function snapshot(roomId: string, client: Client = null): Promise<PinSnapshot> {
     const listed = await pins.listPins({ roomId, limit: maxPins, client });
@@ -87,7 +92,11 @@ function createPinService({ repository, publish, maxPins = MAX_PINS_PER_ROOM }: 
     return snapshot(roomId);
   }
 
-  async function pin({ roomId: rawRoomId, messageId: rawMessageId, viewer }: { roomId?: unknown; messageId?: unknown; viewer?: Viewer } = {}): Promise<PinSnapshot> {
+  async function pin({
+    roomId: rawRoomId,
+    messageId: rawMessageId,
+    viewer
+  }: { roomId?: unknown; messageId?: unknown; viewer?: Viewer } = {}): Promise<PinSnapshot> {
     const roomId = normalizeRoomId(rawRoomId);
     const messageId = normalizeMessageId(rawMessageId);
     const account = requireAccount(viewer);
@@ -103,11 +112,7 @@ function createPinService({ repository, publish, maxPins = MAX_PINS_PER_ROOM }: 
       if (count >= maxPins) {
         const already = await pins.listPins({ roomId, limit: maxPins, client });
         if (!already.some((entry) => entry.messageId === messageId)) {
-          throw new PinServiceError(
-            `В комнате уже ${maxPins} закреплённых сообщений`,
-            'pin_limit_reached',
-            409
-          );
+          throw new PinServiceError(`В комнате уже ${maxPins} закреплённых сообщений`, 'pin_limit_reached', 409);
         }
       }
 
@@ -120,7 +125,11 @@ function createPinService({ repository, publish, maxPins = MAX_PINS_PER_ROOM }: 
     return mutation.snapshot;
   }
 
-  async function unpin({ roomId: rawRoomId, messageId: rawMessageId, viewer }: { roomId?: unknown; messageId?: unknown; viewer?: Viewer } = {}): Promise<PinSnapshot> {
+  async function unpin({
+    roomId: rawRoomId,
+    messageId: rawMessageId,
+    viewer
+  }: { roomId?: unknown; messageId?: unknown; viewer?: Viewer } = {}): Promise<PinSnapshot> {
     const roomId = normalizeRoomId(rawRoomId);
     const messageId = normalizeMessageId(rawMessageId);
     const account = requireAccount(viewer);
@@ -136,7 +145,11 @@ function createPinService({ repository, publish, maxPins = MAX_PINS_PER_ROOM }: 
     return mutation.snapshot;
   }
 
-  async function refresh({ roomId: rawRoomId, action = 'refreshed', messageId = '' }: { roomId?: unknown; action?: string; messageId?: string } = {}): Promise<PinSnapshot> {
+  async function refresh({
+    roomId: rawRoomId,
+    action = 'refreshed',
+    messageId = ''
+  }: { roomId?: unknown; action?: string; messageId?: string } = {}): Promise<PinSnapshot> {
     const roomId = normalizeRoomId(rawRoomId);
     const current = await snapshot(roomId);
     await publisher({ roomId, action, messageId, actorUserId: null, ...current });

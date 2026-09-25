@@ -14,10 +14,20 @@ import type { LiveRoom, PresencePeer } from './room-views.ts';
 type BanResult = { status: 'created' | 'cap_exceeded' | string; ban?: { id: string } | null; revocations?: unknown[] };
 
 export interface PeerModerationStore {
-  setRoomServerMute(input: { roomId: string; principal: GatePrincipal; mutedBy: string | null | undefined }): Promise<{ status: string }>;
+  setRoomServerMute(input: {
+    roomId: string;
+    principal: GatePrincipal;
+    mutedBy: string | null | undefined;
+  }): Promise<{ status: string }>;
   clearRoomServerMute(input: { roomId: string; principal: GatePrincipal }): Promise<{ status: string }>;
   createRoomBan(input: { roomId: string; userId: string | null; ip: string; maxBans: number }): Promise<BanResult>;
-  createRoomBanWithLiveKitGateRevocations?(input: { roomId: string; userId: string | null; ip: string; maxBans: number; principals: GatePrincipal[] }): Promise<BanResult>;
+  createRoomBanWithLiveKitGateRevocations?(input: {
+    roomId: string;
+    userId: string | null;
+    ip: string;
+    maxBans: number;
+    principals: GatePrincipal[];
+  }): Promise<BanResult>;
   deleteRoomBan(input: { roomId: string; banId: string }): Promise<{ status: string }>;
 }
 
@@ -26,7 +36,12 @@ export interface PeerModerationDeps {
   eviction: PeerEviction;
   gatePrincipalForPeer(roomId: string, peer: PresencePeer): GatePrincipal | null;
   livekitConfig(): LiveKitConfig;
-  revokeForServerMute(input: { roomId: string; peerId: string; principal: GatePrincipal; log: Pick<Logger, 'error'> }): Promise<void>;
+  revokeForServerMute(input: {
+    roomId: string;
+    peerId: string;
+    principal: GatePrincipal;
+    log: Pick<Logger, 'error'>;
+  }): Promise<void>;
   setParticipantMuted(roomId: string, peerId: string, muted: boolean): Promise<ServerMuteResult>;
   /** Tells the room (and its preview watchers) that a peer changed. */
   announcePeerUpdated(room: LiveRoom, peer: PresencePeer): void;
@@ -42,7 +57,9 @@ export type KickResult = { status: 'kicked' } | { status: TargetRefusal };
 export type ServerMuteOutcome = { status: 'applied'; muted: boolean } | { status: TargetRefusal | 'unsupported' };
 export type BanOutcome =
   | { status: 'banned'; banId: string; cleanupFailed: boolean }
-  | { status: TargetRefusal | 'ban_limit' | 'ban_rejected' | 'ban_failed' | 'principal_missing' | 'revoke_unavailable' };
+  | {
+      status: TargetRefusal | 'ban_limit' | 'ban_rejected' | 'ban_failed' | 'principal_missing' | 'revoke_unavailable';
+    };
 
 type BanError = Error & { code?: string; rollbackTerminal?: boolean };
 
@@ -51,7 +68,10 @@ function banError(code: 'room_ban_limit' | 'room_ban_failed'): BanError {
 }
 
 export function createPeerModerationService(deps: PeerModerationDeps) {
-  function findTarget(room: LiveRoom, peerId: string): { status: TargetRefusal } | { status: 'found'; peer: PresencePeer } {
+  function findTarget(
+    room: LiveRoom,
+    peerId: string
+  ): { status: TargetRefusal } | { status: 'found'; peer: PresencePeer } {
     const peer = peerId ? room.peers.get(peerId) : undefined;
     if (!peer) return { status: 'peer_not_found' };
     if (peer.accountUserId && peer.accountUserId === room.ownerId) return { status: 'owner' };
@@ -105,10 +125,10 @@ export function createPeerModerationService(deps: PeerModerationDeps) {
     const { peer } = target;
     const roomId = room.id;
     const bannedUserId = peer.accountUserId || null;
-    const bannedIp = bannedUserId ? '' : (peer.ip || '');
-    const matchingPeers = [...room.peers.values()].filter((candidate) => bannedUserId
-      ? candidate.accountUserId === bannedUserId
-      : Boolean(bannedIp && candidate.ip === bannedIp));
+    const bannedIp = bannedUserId ? '' : peer.ip || '';
+    const matchingPeers = [...room.peers.values()].filter((candidate) =>
+      bannedUserId ? candidate.accountUserId === bannedUserId : Boolean(bannedIp && candidate.ip === bannedIp)
+    );
 
     // With the strict gate, the ban row and the gate revocations commit in one
     // transaction, so no banned peer keeps a credential that still verifies.
@@ -124,8 +144,16 @@ export function createPeerModerationService(deps: PeerModerationDeps) {
         principals.push(principal);
       }
       const createWithRevocations = store.createRoomBanWithLiveKitGateRevocations;
-      if (principals.length === 0 || typeof createWithRevocations !== 'function') return { status: 'revoke_unavailable' };
-      persist = () => createWithRevocations.call(store, { roomId, userId: bannedUserId, ip: bannedIp, maxBans: deps.maxBans, principals });
+      if (principals.length === 0 || typeof createWithRevocations !== 'function')
+        return { status: 'revoke_unavailable' };
+      persist = () =>
+        createWithRevocations.call(store, {
+          roomId,
+          userId: bannedUserId,
+          ip: bannedIp,
+          maxBans: deps.maxBans,
+          principals
+        });
     } else {
       persist = () => store.createRoomBan({ roomId, userId: bannedUserId, ip: bannedIp, maxBans: deps.maxBans });
     }

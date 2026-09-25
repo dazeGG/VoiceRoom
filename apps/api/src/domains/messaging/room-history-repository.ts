@@ -60,7 +60,7 @@ type Page = { messages: HistoryRoomMessage[]; hasMoreBefore: boolean; hasMoreAft
 type SideInput = { roomId: string; anchor: Anchor; limit?: unknown; now: unknown };
 
 function boundedLimit(value: unknown): number {
-  return Math.max(1, Math.min(100, Number.isInteger(value) ? value as number : 50));
+  return Math.max(1, Math.min(100, Number.isInteger(value) ? (value as number) : 50));
 }
 
 function anchorTimestamp(parameter: number): string {
@@ -88,7 +88,11 @@ function mapRoomMessage(row: RoomMessageRow): HistoryRoomMessage {
   };
 }
 
-function createRoomHistoryRepository({ databaseUrl, logger = createLogger({ name: 'api' }), pool }: {
+function createRoomHistoryRepository({
+  databaseUrl,
+  logger = createLogger({ name: 'api' }),
+  pool
+}: {
   databaseUrl?: string;
   logger?: unknown;
   pool?: pg.Pool | null;
@@ -101,10 +105,7 @@ function createRoomHistoryRepository({ databaseUrl, logger = createLogger({ name
   }
 
   async function roomExists(roomId: string): Promise<boolean> {
-    const result = await getPool().query(
-      'SELECT 1 FROM rooms WHERE id = $1 AND deleted_at IS NULL LIMIT 1',
-      [roomId]
-    );
+    const result = await getPool().query('SELECT 1 FROM rooms WHERE id = $1 AND deleted_at IS NULL LIMIT 1', [roomId]);
     return result.rowCount === 1;
   }
 
@@ -115,12 +116,16 @@ function createRoomHistoryRepository({ databaseUrl, logger = createLogger({ name
       [roomId, messageId]
     );
     const row = result.rows[0];
-    return row
-      ? { id: row.id, createdAtMicros: row.created_at_micros }
-      : null;
+    return row ? { id: row.id, createdAtMicros: row.created_at_micros } : null;
   }
 
-  async function querySide({ roomId, anchor, direction, limit, now }: SideInput & { direction: Direction; limit: number }): Promise<HistoryRoomMessage[]> {
+  async function querySide({
+    roomId,
+    anchor,
+    direction,
+    limit,
+    now
+  }: SideInput & { direction: Direction; limit: number }): Promise<HistoryRoomMessage[]> {
     const operator = direction === 'before' ? '<' : direction === 'after' ? '>' : '>=';
     const order = direction === 'before' ? 'DESC' : 'ASC';
     const result = await getPool().query<RoomMessageRow>(

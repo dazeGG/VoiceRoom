@@ -35,7 +35,10 @@ export function getScreenProfile(profileId: string): ScreenProfile {
   };
 }
 
-export function getScreenProfileForMode(mode: ScreenStreamMode, fallbackProfileId: string = DEFAULT_SCREEN_PROFILE_ID): ScreenProfile {
+export function getScreenProfileForMode(
+  mode: ScreenStreamMode,
+  fallbackProfileId: string = DEFAULT_SCREEN_PROFILE_ID
+): ScreenProfile {
   return getScreenProfile(SCREEN_STREAM_MODE_PROFILES[mode] || fallbackProfileId || DEFAULT_SCREEN_PROFILE_ID);
 }
 
@@ -47,7 +50,10 @@ export function getScreenModeForProfile(profileId: string): ScreenStreamMode {
   return profile.fpsId === '5' ? 'text' : 'games';
 }
 
-export function getScreenModeSummary(mode: ScreenStreamMode, fallbackProfileId: string = DEFAULT_SCREEN_PROFILE_ID): string {
+export function getScreenModeSummary(
+  mode: ScreenStreamMode,
+  fallbackProfileId: string = DEFAULT_SCREEN_PROFILE_ID
+): string {
   const profile = getScreenProfileForMode(mode, fallbackProfileId);
   if (mode === 'games') return `Более плавное видео (${profile.label})`;
   return `Более чёткий текст (${profile.label})`;
@@ -97,7 +103,7 @@ export function createScreenProfileId(qualityId: string, fpsId: string): string 
 export function getPreferredScreenVideoCodec(contentHint = 'motion'): 'h264' | 'vp9' | 'vp8' {
   const codecs = RTCRtpSender.getCapabilities?.('video')?.codecs || [];
   const supports = (pattern: RegExp) => codecs.some((codec) => pattern.test(codec.mimeType));
-  const order = contentHint === 'detail' ? ['vp9', 'h264'] as const : ['h264', 'vp9'] as const;
+  const order = contentHint === 'detail' ? (['vp9', 'h264'] as const) : (['h264', 'vp9'] as const);
   for (const codec of order) {
     if (supports(codec === 'vp9' ? /video\/vp9/i : /video\/h264/i)) return codec;
   }
@@ -117,10 +123,13 @@ export async function getScreenPublishVideoOptions(profile: ScreenProfile): Prom
   };
 
   return {
-    backupCodec: videoCodec === SCREEN_VIDEO_BACKUP_CODEC ? false : {
-      codec: SCREEN_VIDEO_BACKUP_CODEC,
-      encoding
-    },
+    backupCodec:
+      videoCodec === SCREEN_VIDEO_BACKUP_CODEC
+        ? false
+        : {
+            codec: SCREEN_VIDEO_BACKUP_CODEC,
+            encoding
+          },
     // Decided at publish, not only on a later profile switch: motion keeps
     // its frame rate under congestion, text keeps its resolution.
     degradationPreference: getScreenDegradationPreference(profile.contentHint),
@@ -132,17 +141,16 @@ export async function getScreenPublishVideoOptions(profile: ScreenProfile): Prom
   } as TrackPublishOptions;
 }
 
-export function getScreenSimulcastLayers(
-  profile: ScreenProfile,
-  VideoPresetClass: typeof VideoPreset
-): VideoPreset[] {
+export function getScreenSimulcastLayers(profile: ScreenProfile, VideoPresetClass: typeof VideoPreset): VideoPreset[] {
   const maxBitrate = getSimulcastLayerBitrate(profile.fpsId);
-  return [new VideoPresetClass({
-    height: SCREEN_SIMULCAST_LAYER.height,
-    maxBitrate,
-    maxFramerate: profile.frameRate,
-    width: SCREEN_SIMULCAST_LAYER.width
-  })];
+  return [
+    new VideoPresetClass({
+      height: SCREEN_SIMULCAST_LAYER.height,
+      maxBitrate,
+      maxFramerate: profile.frameRate,
+      width: SCREEN_SIMULCAST_LAYER.width
+    })
+  ];
 }
 
 function getSimulcastLayerBitrate(fpsId: string): number {
@@ -152,7 +160,10 @@ function getSimulcastLayerBitrate(fpsId: string): number {
   return SCREEN_SIMULCAST_LAYER.bitrateByFps[30];
 }
 
-export function createSourceScreenProfile(baseProfile: ScreenProfile, track: MediaStreamTrack | undefined): ScreenProfile {
+export function createSourceScreenProfile(
+  baseProfile: ScreenProfile,
+  track: MediaStreamTrack | undefined
+): ScreenProfile {
   if (baseProfile.qualityId !== 'source') return baseProfile;
 
   const settings = track?.getSettings?.() || {};

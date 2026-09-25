@@ -16,9 +16,9 @@ function hasDesktopBridge(): boolean {
   if (!browser) return false;
   return Boolean(
     window.voiceRoomRuntime?.isDesktop ||
-      window.voiceRoomDesktopCapture ||
-      window.voiceRoomDesktopAudio ||
-      window.voiceRoomDesktopHotkeys
+    window.voiceRoomDesktopCapture ||
+    window.voiceRoomDesktopAudio ||
+    window.voiceRoomDesktopHotkeys
   );
 }
 

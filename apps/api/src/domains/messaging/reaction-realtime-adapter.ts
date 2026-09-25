@@ -14,16 +14,19 @@ export type ReactionPublishInput = {
 
 export type ReactionRealtimeAdapter = Readonly<{ publish(input?: ReactionPublishInput): Promise<number> }>;
 
-function createReactionRealtimeAdapter({ broadcastRoom, broadcastAccount, resolveDirectRecipients }: {
+function createReactionRealtimeAdapter({
+  broadcastRoom,
+  broadcastAccount,
+  resolveDirectRecipients
+}: {
   broadcastRoom?: Broadcaster;
   broadcastAccount?: Broadcaster;
   resolveDirectRecipients?: (input: ReactionPublishInput) => Iterable<string> | Promise<Iterable<string>>;
 } = {}): ReactionRealtimeAdapter {
   const roomBroadcaster: Broadcaster = typeof broadcastRoom === 'function' ? broadcastRoom : () => false;
   const accountBroadcaster: Broadcaster = typeof broadcastAccount === 'function' ? broadcastAccount : () => false;
-  const recipientResolver = typeof resolveDirectRecipients === 'function'
-    ? resolveDirectRecipients
-    : async (): Promise<Iterable<string>> => [];
+  const recipientResolver =
+    typeof resolveDirectRecipients === 'function' ? resolveDirectRecipients : async (): Promise<Iterable<string>> => [];
 
   async function publish(input: ReactionPublishInput = {}): Promise<number> {
     const { conversation, messageId, summary } = input;

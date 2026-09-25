@@ -10,7 +10,16 @@ import type * as RoomPresenceModule from '../../src/lib/features/home/model/room
 const loadFresh = () => freshImport<typeof RoomPresenceModule>('/src/lib/features/home/model/room-presence.svelte.ts');
 
 function summary(roomId: string, unreadCount: number): RoomRealtimeSummary {
-  return { roomId, name: roomId, isStatic: true, relationship: 'owner', peers: 0, visiblePeers: [], hiddenPeerCount: 0, unreadCount } as unknown as RoomRealtimeSummary;
+  return {
+    roomId,
+    name: roomId,
+    isStatic: true,
+    relationship: 'owner',
+    peers: 0,
+    visiblePeers: [],
+    hiddenPeerCount: 0,
+    unreadCount
+  } as unknown as RoomRealtimeSummary;
 }
 
 test('a room summary sets the unread badge', async () => {

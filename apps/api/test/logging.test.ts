@@ -39,13 +39,16 @@ test('log event codes follow the domain.event naming convention', () => {
 
 test('the logger redacts credentials and personal identifiers at any depth', () => {
   const { logger, records } = captureLogger();
-  logger.info({
-    evt: LOG_EVENTS.HTTP_REQUEST,
-    password: 'hunter2',
-    sessionToken: 'abc',
-    email: 'someone@example.com',
-    nested: { token: 'xyz', email: 'other@example.com', roomId: 'r-1' }
-  }, 'probe');
+  logger.info(
+    {
+      evt: LOG_EVENTS.HTTP_REQUEST,
+      password: 'hunter2',
+      sessionToken: 'abc',
+      email: 'someone@example.com',
+      nested: { token: 'xyz', email: 'other@example.com', roomId: 'r-1' }
+    },
+    'probe'
+  );
 
   const [record] = records;
   assert.equal(records.length, 1);
@@ -126,16 +129,19 @@ test('a bound request id is not repeated at the call site', () => {
 
 test('client log intake keeps well-formed records and reports the rest as dropped', () => {
   const now = Date.now();
-  const batch = normalizeClientLogBatch({
-    sessionId: 'web-abc123',
-    events: [
-      { at: now, level: 'error', ns: 'room:mic', msg: 'getUserMedia failed', ctx: { code: 'NotAllowedError' } },
-      { level: 'warn', ns: 'room:screen-share' },
-      null,
-      'not an object',
-      {}
-    ]
-  }, { now });
+  const batch = normalizeClientLogBatch(
+    {
+      sessionId: 'web-abc123',
+      events: [
+        { at: now, level: 'error', ns: 'room:mic', msg: 'getUserMedia failed', ctx: { code: 'NotAllowedError' } },
+        { level: 'warn', ns: 'room:screen-share' },
+        null,
+        'not an object',
+        {}
+      ]
+    },
+    { now }
+  );
 
   assert.equal(batch.sessionId, 'web-abc123');
   assert.equal(batch.events.length, 2);
@@ -164,12 +170,14 @@ test('client log intake caps the batch, the message and the context', () => {
 
 test('client log intake refuses values that could forge or inflate a record', () => {
   const [event] = normalizeClientLogBatch({
-    events: [{
-      ns: 'room',
-      level: 'fatal',
-      msg: 'line one\nlevel=30 forged',
-      ctx: { nested: { deep: true }, list: [1, 2], ok: 'kept' }
-    }]
+    events: [
+      {
+        ns: 'room',
+        level: 'fatal',
+        msg: 'line one\nlevel=30 forged',
+        ctx: { nested: { deep: true }, list: [1, 2], ok: 'kept' }
+      }
+    ]
   }).events;
 
   // An unknown level must not become a level the alerting treats as louder.
@@ -189,12 +197,15 @@ test('client log intake rejects a namespace or session id with unexpected charac
 
 test('client log intake marks a replayed buffer as stale and pulls back a future clock', () => {
   const now = Date.now();
-  const batch = normalizeClientLogBatch({
-    events: [
-      { ns: 'room', msg: 'old', at: now - CLIENT_LOG_LIMITS.maxAgeMs - 1000 },
-      { ns: 'room', msg: 'ahead', at: now + 60_000 }
-    ]
-  }, { now });
+  const batch = normalizeClientLogBatch(
+    {
+      events: [
+        { ns: 'room', msg: 'old', at: now - CLIENT_LOG_LIMITS.maxAgeMs - 1000 },
+        { ns: 'room', msg: 'ahead', at: now + 60_000 }
+      ]
+    },
+    { now }
+  );
 
   assert.equal(batch.events[0].stale, true);
   assert.equal(batch.events[1].at, now);
@@ -204,15 +215,24 @@ test('client log intake marks a replayed buffer as stale and pulls back a future
 test('client log intake strips URL queries and masks tokens before they reach the log', () => {
   const now = Date.now();
   const jwt = 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJwZWVyLWEifQ.c2lnbmF0dXJl';
-  const batch = normalizeClientLogBatch({
-    events: [{
-      at: now,
-      level: 'error',
-      ns: 'room:livekit',
-      msg: `could not connect to wss://livekit.example/rtc?access_token=${jwt}&vr_gate_credential=vrg1.abc.def`,
-      ctx: { errorMessage: `token ${jwt} rejected`, credential: 'vrg1.payload.signature', page: 'https://app.example/room/abc#frag' }
-    }]
-  }, { now });
+  const batch = normalizeClientLogBatch(
+    {
+      events: [
+        {
+          at: now,
+          level: 'error',
+          ns: 'room:livekit',
+          msg: `could not connect to wss://livekit.example/rtc?access_token=${jwt}&vr_gate_credential=vrg1.abc.def`,
+          ctx: {
+            errorMessage: `token ${jwt} rejected`,
+            credential: 'vrg1.payload.signature',
+            page: 'https://app.example/room/abc#frag'
+          }
+        }
+      ]
+    },
+    { now }
+  );
 
   const [event] = batch.events;
   assert.equal(event.msg, 'could not connect to wss://livekit.example/rtc?…');

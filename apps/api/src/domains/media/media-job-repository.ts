@@ -87,13 +87,20 @@ function positiveInteger(value: unknown, fallback: number, maximum: number): num
 function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new TypeError('A PostgreSQL pool is required');
   const db = pool;
-  const executor = (client: Client): QueryClient => client && typeof client.query === 'function' ? client : db;
+  const executor = (client: Client): QueryClient => (client && typeof client.query === 'function' ? client : db);
 
-  async function enqueue(attachmentId: string, { kind = 'process', availableAt = new Date(), client }: {
-    kind?: string;
-    availableAt?: Date;
-    client?: Client;
-  } = {}): Promise<MediaJob | null> {
+  async function enqueue(
+    attachmentId: string,
+    {
+      kind = 'process',
+      availableAt = new Date(),
+      client
+    }: {
+      kind?: string;
+      availableAt?: Date;
+      client?: Client;
+    } = {}
+  ): Promise<MediaJob | null> {
     if (!JOB_KINDS.has(kind)) throw new TypeError('Invalid media job kind');
     const query = executor(client);
     const existing = await query.query<MediaJobRow>(
@@ -124,7 +131,13 @@ function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
     limit = 10,
     leaseMs = 120_000,
     client
-  }: { workerId: unknown; kind?: string; limit?: unknown; leaseMs?: unknown; client?: Client }): Promise<MediaJob[]> {
+  }: {
+    workerId: unknown;
+    kind?: string;
+    limit?: unknown;
+    leaseMs?: unknown;
+    client?: Client;
+  }): Promise<MediaJob[]> {
     if (!JOB_KINDS.has(kind)) throw new TypeError('Invalid media job kind');
     if (typeof workerId !== 'string' || !workerId.trim()) throw new TypeError('A media worker id is required');
     const result = await executor(client).query<MediaJobRow>(
@@ -145,17 +158,15 @@ function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
            completed_at = NULL, dead_at = NULL, updated_at = current_timestamp
        FROM candidates WHERE job.id = candidates.id
        RETURNING job.*`,
-      [
-        kind,
-        positiveInteger(limit, 10, 100),
-        workerId.trim(),
-        positiveInteger(leaseMs, 120_000, 15 * 60 * 1000)
-      ]
+      [kind, positiveInteger(limit, 10, 100), workerId.trim(), positiveInteger(leaseMs, 120_000, 15 * 60 * 1000)]
     );
     return result.rows.map(mapMediaJob) as MediaJob[];
   }
 
-  async function renew(jobId: string, { workerId, fencingToken, leaseMs = 120_000, client }: JobLease & { leaseMs?: unknown }): Promise<MediaJob> {
+  async function renew(
+    jobId: string,
+    { workerId, fencingToken, leaseMs = 120_000, client }: JobLease & { leaseMs?: unknown }
+  ): Promise<MediaJob> {
     const result = await executor(client).query<MediaJobRow>(
       `UPDATE media_processing_jobs
        SET lease_expires_at = current_timestamp + ($4 * interval '1 millisecond'),
@@ -184,15 +195,20 @@ function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
     return mapMediaJob(result.rows[0]) as MediaJob;
   }
 
-  async function fail(jobId: string, {
-    workerId,
-    fencingToken,
-    error,
-    retryDelayMs = 5_000,
-    maxAttempts = 5,
-    client
-  }: JobLease & { error?: unknown; retryDelayMs?: unknown; maxAttempts?: unknown }): Promise<MediaJob> {
-    const message = String((error as { message?: unknown } | null | undefined)?.message || error || 'Media job failed').slice(0, 2_000);
+  async function fail(
+    jobId: string,
+    {
+      workerId,
+      fencingToken,
+      error,
+      retryDelayMs = 5_000,
+      maxAttempts = 5,
+      client
+    }: JobLease & { error?: unknown; retryDelayMs?: unknown; maxAttempts?: unknown }
+  ): Promise<MediaJob> {
+    const message = String(
+      (error as { message?: unknown } | null | undefined)?.message || error || 'Media job failed'
+    ).slice(0, 2_000);
     const result = await executor(client).query<MediaJobRow>(
       `UPDATE media_processing_jobs
        SET state = CASE WHEN attempts >= $4 THEN 'dead' ELSE 'pending' END,
@@ -230,7 +246,10 @@ function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
     return Number(result.rows[0]?.age_ms || 0);
   }
 
-  async function removeTerminalBefore(before: Date, { limit = 500, client }: { limit?: unknown; client?: Client } = {}): Promise<string[]> {
+  async function removeTerminalBefore(
+    before: Date,
+    { limit = 500, client }: { limit?: unknown; client?: Client } = {}
+  ): Promise<string[]> {
     const result = await executor(client).query<{ id: string }>(
       `WITH candidates AS (
          SELECT id FROM media_processing_jobs
@@ -244,18 +263,22 @@ function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
     return result.rows.map((row) => row.id);
   }
 
-  async function completeProcessing(jobId: string, {
-    workerId,
-    fencingToken,
-    attachmentRepository,
-    attachmentResult
-  }: {
-    workerId: string;
-    fencingToken: number;
-    attachmentRepository?: Pick<AttachmentRepository, 'markReady'> | null;
-    attachmentResult: Parameters<AttachmentRepository['markReady']>[1];
-  }): Promise<Attachment> {
-    if (!db.connect || !attachmentRepository?.markReady) throw new TypeError('Processing completion dependencies are required');
+  async function completeProcessing(
+    jobId: string,
+    {
+      workerId,
+      fencingToken,
+      attachmentRepository,
+      attachmentResult
+    }: {
+      workerId: string;
+      fencingToken: number;
+      attachmentRepository?: Pick<AttachmentRepository, 'markReady'> | null;
+      attachmentResult: Parameters<AttachmentRepository['markReady']>[1];
+    }
+  ): Promise<Attachment> {
+    if (!db.connect || !attachmentRepository?.markReady)
+      throw new TypeError('Processing completion dependencies are required');
     const client = await db.connect();
     try {
       await client.query('BEGIN');
@@ -280,7 +303,17 @@ function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
     }
   }
 
-  return Object.freeze({ claimBatch, complete, completeProcessing, enqueue, fail, findById, oldestPendingAgeMs, removeTerminalBefore, renew });
+  return Object.freeze({
+    claimBatch,
+    complete,
+    completeProcessing,
+    enqueue,
+    fail,
+    findById,
+    oldestPendingAgeMs,
+    removeTerminalBefore,
+    renew
+  });
 }
 
 export type MediaJobRepository = ReturnType<typeof createMediaJobRepository>;

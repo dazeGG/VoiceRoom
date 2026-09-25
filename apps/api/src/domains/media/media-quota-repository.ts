@@ -3,7 +3,10 @@ import type { AttachmentRepository } from './attachment-repository.ts';
 
 export type QuotaUsage = Awaited<ReturnType<AttachmentRepository['quotaUsage']>>;
 
-function createMediaQuotaRepository({ attachmentRepository, pool }: {
+function createMediaQuotaRepository({
+  attachmentRepository,
+  pool
+}: {
   attachmentRepository?: Pick<AttachmentRepository, 'quotaUsage' | 'lockOwner'>;
   pool?: { connect?: () => Promise<pg.PoolClient> } | null;
 } = {}) {
@@ -14,7 +17,10 @@ function createMediaQuotaRepository({ attachmentRepository, pool }: {
   const attachments = attachmentRepository;
   const db = pool as { connect: () => Promise<pg.PoolClient> };
 
-  async function withOwnerReservation<T>(ownerId: string, operation: (input: { client: pg.PoolClient; usage: QuotaUsage }) => Promise<T>): Promise<T> {
+  async function withOwnerReservation<T>(
+    ownerId: string,
+    operation: (input: { client: pg.PoolClient; usage: QuotaUsage }) => Promise<T>
+  ): Promise<T> {
     const client = await db.connect();
     try {
       await client.query('BEGIN');

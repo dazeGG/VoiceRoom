@@ -4,8 +4,20 @@
 
 const HEAD_SCAN_LIMIT = 256 * 1024;
 const NAMED_ENTITIES: Record<string, string> = {
-  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: '\u00a0', laquo: '«', raquo: '»',
-  mdash: '—', ndash: '–', hellip: '…', copy: '©', reg: '®', trade: '™'
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+  nbsp: '\u00a0',
+  laquo: '«',
+  raquo: '»',
+  mdash: '—',
+  ndash: '–',
+  hellip: '…',
+  copy: '©',
+  reg: '®',
+  trade: '™'
 };
 
 export type LinkPreviewMetadata = {
@@ -18,13 +30,12 @@ export type LinkPreviewMetadata = {
 function decodeEntities(text: string): string {
   return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, body: string) => {
     if (body[0] === '#') {
-      const code = body[1] === 'x' || body[1] === 'X'
-        ? Number.parseInt(body.slice(2), 16)
-        : Number.parseInt(body.slice(1), 10);
+      const code =
+        body[1] === 'x' || body[1] === 'X' ? Number.parseInt(body.slice(2), 16) : Number.parseInt(body.slice(1), 10);
       const valid = Number.isInteger(code) && code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff);
       return valid ? String.fromCodePoint(code) : '';
     }
-    return (Object.hasOwn(NAMED_ENTITIES, body.toLowerCase()) ? NAMED_ENTITIES[body.toLowerCase()] as string : entity);
+    return Object.hasOwn(NAMED_ENTITIES, body.toLowerCase()) ? (NAMED_ENTITIES[body.toLowerCase()] as string) : entity;
   });
 }
 
@@ -81,10 +92,10 @@ function extractLinkPreviewMetadata(html: unknown, pageUrl?: string | URL): Link
 // Content-Type header or in a <meta> tag near the top of the page.
 function decodeHtmlBody(buffer: Buffer, contentType: unknown): string {
   const declared = /charset\s*=\s*"?([\w.:-]+)"?/i.exec(String(contentType || ''));
-  let charset = declared ? declared[1] as string : '';
+  let charset = declared ? (declared[1] as string) : '';
   if (!charset) {
     const meta = /<meta[^>]+charset\s*=\s*["']?([\w.:-]+)/i.exec(buffer.subarray(0, 4096).toString('latin1'));
-    charset = meta ? meta[1] as string : 'utf-8';
+    charset = meta ? (meta[1] as string) : 'utf-8';
   }
   try {
     return new TextDecoder(charset.toLowerCase()).decode(buffer);

@@ -50,7 +50,7 @@ function createMediaVisibilityService({
     }
     if (attachment.context === 'room') {
       if (authorizeRoomAttachment) {
-        if (await authorizeRoomAttachment({ attachment, viewerId }) !== true) throw new MediaVisibilityError();
+        if ((await authorizeRoomAttachment({ attachment, viewerId })) !== true) throw new MediaVisibilityError();
         return;
       }
       const message = await resolveRoomMessage?.(attachment.roomMessageId);
@@ -60,7 +60,7 @@ function createMediaVisibilityService({
     }
     if (attachment.context === 'dm') {
       if (authorizeDirectAttachment) {
-        if (await authorizeDirectAttachment({ attachment, viewerId }) !== true) throw new MediaVisibilityError();
+        if ((await authorizeDirectAttachment({ attachment, viewerId })) !== true) throw new MediaVisibilityError();
         return;
       }
       const message = await resolveDirectMessage?.(attachment.directMessageId);
@@ -68,16 +68,28 @@ function createMediaVisibilityService({
       if (!visible) throw new MediaVisibilityError();
       return;
     }
-    onAuthorizationInvariantFailure(); throw new MediaVisibilityError();
+    onAuthorizationInvariantFailure();
+    throw new MediaVisibilityError();
   }
 
-  async function open({ attachmentId, variant, viewerId }: { attachmentId: string; variant: unknown; viewerId: string }): Promise<OpenedMedia> {
+  async function open({
+    attachmentId,
+    variant,
+    viewerId
+  }: {
+    attachmentId: string;
+    variant: unknown;
+    viewerId: string;
+  }): Promise<OpenedMedia> {
     if (variant !== 'preview' && variant !== 'processed') throw new MediaVisibilityError();
     const attachment = await attachments.findById(attachmentId);
     await requireVisible(attachment, viewerId);
     // requireVisible throws for a missing attachment.
     const visible = attachment as Attachment;
-    const opened = await files.openRead(visible.id, variant).catch(() => { onAuthorizationInvariantFailure(); throw new MediaVisibilityError(); });
+    const opened = await files.openRead(visible.id, variant).catch(() => {
+      onAuthorizationInvariantFailure();
+      throw new MediaVisibilityError();
+    });
     return Object.freeze({
       bytes: opened.bytes,
       extension: 'webp',

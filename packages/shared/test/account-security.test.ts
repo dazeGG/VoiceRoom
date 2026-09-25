@@ -6,22 +6,26 @@ import * as accountSecurity from '../src/account-security.ts';
 const USER_AGENTS = Object.freeze([
   {
     name: 'desktop shell',
-    value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) VoiceRoom/1.3.3 Chrome/138.0.0.0 Electron/37.2.0 Safari/537.36',
+    value:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) VoiceRoom/1.3.3 Chrome/138.0.0.0 Electron/37.2.0 Safari/537.36',
     expected: { client: 'VoiceRoom Desktop', os: 'Windows' }
   },
   {
     name: 'Chrome on macOS',
-    value: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
+    value:
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36',
     expected: { client: 'Chrome', os: 'macOS' }
   },
   {
     name: 'Edge on Windows',
-    value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0',
+    value:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36 Edg/139.0.0.0',
     expected: { client: 'Edge', os: 'Windows' }
   },
   {
     name: 'Yandex Browser',
-    value: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 YaBrowser/25.6.0.0 Safari/537.36',
+    value:
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 YaBrowser/25.6.0.0 Safari/537.36',
     expected: { client: 'Яндекс Браузер', os: 'Windows' }
   },
   {
@@ -31,12 +35,14 @@ const USER_AGENTS = Object.freeze([
   },
   {
     name: 'Chrome on Android',
-    value: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36',
+    value:
+      'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36',
     expected: { client: 'Chrome', os: 'Android' }
   },
   {
     name: 'Safari on iPhone',
-    value: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',
+    value:
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',
     expected: { client: 'Safari', os: 'iOS' }
   },
   { name: 'empty', value: '', expected: { client: '', os: '' } },
@@ -62,11 +68,20 @@ test('isDesktopAppUserAgent agrees with the described client', async () => {
 
 test('normalizeSelfUserFlags defaults an older API to banner-on, prompt-off', async () => {
   const cases = [
-    [{ hasUsedDesktopApp: true, appPromptSeen: false }, { hasUsedDesktopApp: true, appPromptSeen: false }],
-    [{ hasUsedDesktopApp: false, appPromptSeen: true }, { hasUsedDesktopApp: false, appPromptSeen: true }],
+    [
+      { hasUsedDesktopApp: true, appPromptSeen: false },
+      { hasUsedDesktopApp: true, appPromptSeen: false }
+    ],
+    [
+      { hasUsedDesktopApp: false, appPromptSeen: true },
+      { hasUsedDesktopApp: false, appPromptSeen: true }
+    ],
     [{}, { hasUsedDesktopApp: false, appPromptSeen: true }],
     [null, { hasUsedDesktopApp: false, appPromptSeen: true }],
-    [{ hasUsedDesktopApp: 'yes', appPromptSeen: 0 }, { hasUsedDesktopApp: false, appPromptSeen: true }]
+    [
+      { hasUsedDesktopApp: 'yes', appPromptSeen: 0 },
+      { hasUsedDesktopApp: false, appPromptSeen: true }
+    ]
   ];
   for (const [input, expected] of cases) {
     assert.deepEqual(accountSecurity.normalizeSelfUserFlags(input), expected);
@@ -99,11 +114,17 @@ test('every alphabet symbol survives normalization', () => {
   assert.equal(accountSecurity.RECOVERY_CODE_ALPHABET.length, 32);
   const code = accountSecurity.RECOVERY_CODE_ALPHABET.slice(0, accountSecurity.RECOVERY_CODE_LENGTH);
   assert.equal(accountSecurity.normalizeRecoveryCode(code), code);
-  assert.equal(accountSecurity.normalizeRecoveryCode(accountSecurity.RECOVERY_CODE_ALPHABET.slice(16)), accountSecurity.RECOVERY_CODE_ALPHABET.slice(16));
+  assert.equal(
+    accountSecurity.normalizeRecoveryCode(accountSecurity.RECOVERY_CODE_ALPHABET.slice(16)),
+    accountSecurity.RECOVERY_CODE_ALPHABET.slice(16)
+  );
 });
 
 test('what is new is compared by release version, not by string order', async () => {
-  assert.equal(accountSecurity.normalizeReleaseVersion(accountSecurity.WHATS_NEW_VERSION), accountSecurity.WHATS_NEW_VERSION);
+  assert.equal(
+    accountSecurity.normalizeReleaseVersion(accountSecurity.WHATS_NEW_VERSION),
+    accountSecurity.WHATS_NEW_VERSION
+  );
 
   for (const [left, right, expected] of [
     ['2.6.0', '2.6.0', 0],
@@ -136,8 +157,16 @@ test('the recovery codes reminder is due only without codes and outside its snoo
     [{ remaining: 0 }, { snoozedUntil: later }, false],
     [{ remaining: 3 }, { snoozedUntil: null }, false],
     [null, { snoozedUntil: null }, false]
-  ] as [Parameters<typeof accountSecurity.isRecoveryCodesReminderDue>[0], Parameters<typeof accountSecurity.isRecoveryCodesReminderDue>[1], boolean][]) {
-    assert.equal(accountSecurity.isRecoveryCodesReminderDue(status, reminder, now), expected, JSON.stringify([status, reminder]));
+  ] as [
+    Parameters<typeof accountSecurity.isRecoveryCodesReminderDue>[0],
+    Parameters<typeof accountSecurity.isRecoveryCodesReminderDue>[1],
+    boolean
+  ][]) {
+    assert.equal(
+      accountSecurity.isRecoveryCodesReminderDue(status, reminder, now),
+      expected,
+      JSON.stringify([status, reminder])
+    );
   }
 });
 

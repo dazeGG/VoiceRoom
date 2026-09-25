@@ -29,16 +29,12 @@
             aria-pressed={summary.reactedByMe}
             aria-label={`${summary.reactedByMe ? 'Убрать' : 'Добавить'} реакцию ${summary.emoji}`}
             onclick={() => void store.toggle(messageId, summary.emoji)}
-          ><Emoji emoji={summary.emoji} size={18} decorative /></button>
+            ><Emoji emoji={summary.emoji} size={18} decorative /></button
+          >
         {:else}
           <span class="reaction-toggle" aria-hidden="true"><Emoji emoji={summary.emoji} size={18} decorative /></span>
         {/if}
-        <Popover
-          placement="top-start"
-          flip
-          role="dialog"
-          ariaLabel={`Пользователи с реакцией ${summary.emoji}`}
-        >
+        <Popover placement="top-start" flip role="dialog" ariaLabel={`Пользователи с реакцией ${summary.emoji}`}>
           {#snippet trigger({ open, toggle, panelId })}
             <button
               class="reaction-count"
@@ -47,8 +43,8 @@
               aria-haspopup="dialog"
               aria-expanded={open}
               aria-controls={panelId}
-              onclick={toggle}
-            >{summary.count}</button>
+              onclick={toggle}>{summary.count}</button
+            >
           {/snippet}
           {#snippet content({ close })}
             <ReactorList {store} {messageId} emoji={summary.emoji} onclose={() => close()} />
@@ -61,13 +57,59 @@
 {/if}
 
 <style>
-  .reaction-summary { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
-  .reaction-chip { display: inline-flex; align-items: center; height: 26px; overflow: visible; border: 1px solid color-mix(in oklch, currentColor, transparent 82%); border-radius: 8px; background: color-mix(in oklch, currentColor, transparent 94%); }
-  .reaction-chip.reacted { border-color: var(--green); background: color-mix(in oklch, var(--green), transparent 88%); }
-  .reaction-chip.pending { opacity: .65; }
-  button { min-width: 0; height: 24px; border: 0; background: transparent; color: inherit; line-height: 1; cursor: pointer; }
-  button:disabled { cursor: default; }
-  .reaction-toggle { display: grid; place-items: center; padding: 1px 3px 1px 7px; font-size: .9rem; }
-  .reaction-count { min-width: 20px; padding: 1px 7px 1px 2px; font-family: var(--font-mono); font-size: 11px; font-variant-numeric: tabular-nums; }
-  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .reaction-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 3px;
+  }
+  .reaction-chip {
+    display: inline-flex;
+    align-items: center;
+    height: 26px;
+    overflow: visible;
+    border: 1px solid color-mix(in oklch, currentColor, transparent 82%);
+    border-radius: 8px;
+    background: color-mix(in oklch, currentColor, transparent 94%);
+  }
+  .reaction-chip.reacted {
+    border-color: var(--green);
+    background: color-mix(in oklch, var(--green), transparent 88%);
+  }
+  .reaction-chip.pending {
+    opacity: 0.65;
+  }
+  button {
+    min-width: 0;
+    height: 24px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    line-height: 1;
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: default;
+  }
+  .reaction-toggle {
+    display: grid;
+    place-items: center;
+    padding: 1px 3px 1px 7px;
+    font-size: 0.9rem;
+  }
+  .reaction-count {
+    min-width: 20px;
+    padding: 1px 7px 1px 2px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
 </style>

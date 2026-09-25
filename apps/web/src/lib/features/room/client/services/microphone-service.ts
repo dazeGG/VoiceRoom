@@ -354,7 +354,7 @@ function createNoiseGateEnvelope(threshold: number, sampleRate: number): NoiseGa
     floorGain: GATE_FLOOR_GAIN,
     gain: threshold > 0 ? GATE_FLOOR_GAIN : 1,
     holdRemaining: 0,
-    holdSamples: Math.round(GATE_HOLD_MS * sampleRate / 1000),
+    holdSamples: Math.round((GATE_HOLD_MS * sampleRate) / 1000),
     open: false,
     releaseCoefficient: getGateSmoothingCoefficient(GATE_RELEASE_MS, sampleRate),
     threshold
@@ -363,9 +363,8 @@ function createNoiseGateEnvelope(threshold: number, sampleRate: number): NoiseGa
 
 function processNoiseGateSample(sample: number, envelope: NoiseGateEnvelope): number {
   const level = Math.abs(sample);
-  const detectorCoefficient = level > envelope.detector
-    ? envelope.detectorAttackCoefficient
-    : envelope.detectorReleaseCoefficient;
+  const detectorCoefficient =
+    level > envelope.detector ? envelope.detectorAttackCoefficient : envelope.detectorReleaseCoefficient;
   envelope.detector += (level - envelope.detector) * detectorCoefficient;
 
   if (envelope.detector >= envelope.threshold) {
@@ -380,9 +379,7 @@ function processNoiseGateSample(sample: number, envelope: NoiseGateEnvelope): nu
   }
 
   const targetGain = envelope.open ? 1 : envelope.floorGain;
-  const gainCoefficient = targetGain > envelope.gain
-    ? envelope.attackCoefficient
-    : envelope.releaseCoefficient;
+  const gainCoefficient = targetGain > envelope.gain ? envelope.attackCoefficient : envelope.releaseCoefficient;
   envelope.gain += (targetGain - envelope.gain) * gainCoefficient;
 
   return sample * envelope.gain;
@@ -440,10 +437,7 @@ export function setLocalMicrophoneCapture(capture: MicrophoneCapture): void {
 }
 
 export function setMicrophoneCaptureEnabled(capture: MicrophoneCapture, enabled: boolean): void {
-  const tracks = new Set([
-    ...(capture.stream?.getAudioTracks() || []),
-    ...(capture.rawStream?.getAudioTracks() || [])
-  ]);
+  const tracks = new Set([...(capture.stream?.getAudioTracks() || []), ...(capture.rawStream?.getAudioTracks() || [])]);
   for (const track of tracks) {
     track.enabled = enabled;
   }
@@ -463,11 +457,9 @@ export function stopMicrophoneCapture(capture: MicrophoneCapture): void {
   for (const context of contexts) context.close().catch(() => {});
 
   const streams = new Set(
-    [
-      capture.stream,
-      capture.rawStream,
-      ...processors.map((processor) => processor.destination?.stream)
-    ].filter((stream): stream is MediaStream => Boolean(stream))
+    [capture.stream, capture.rawStream, ...processors.map((processor) => processor.destination?.stream)].filter(
+      (stream): stream is MediaStream => Boolean(stream)
+    )
   );
   for (const stream of streams) stopStream(stream);
 }

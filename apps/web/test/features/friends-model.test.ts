@@ -23,11 +23,22 @@ vi.mock('../../src/lib/features/room/client/media/cues', () => ({
 const user = (id: string, login = id) => ({ id, login, displayName: login, avatarColorKey: 'blue', avatarUrl: null });
 
 let stop: (() => void) | null = null;
-afterEach(() => { stop?.(); stop = null; });
+afterEach(() => {
+  stop?.();
+  stop = null;
+});
 
 async function startLobby() {
   stubFetch({
-    '/api/friends': { body: { friends: [{ user: user('anna'), online: true }, { user: user('boris'), online: false }], incomingRequestCount: 1 } },
+    '/api/friends': {
+      body: {
+        friends: [
+          { user: user('anna'), online: true },
+          { user: user('boris'), online: false }
+        ],
+        incomingRequestCount: 1
+      }
+    },
     '/api/friends/requests': { body: { incoming: [{ user: user('vera') }], outgoing: [{ user: user('gleb') }] } },
     '/api/notifications/preferences': { body: { preferences: {} } }
   });

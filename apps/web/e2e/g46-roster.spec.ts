@@ -1,7 +1,10 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
-const model = readFileSync(new URL('../src/lib/features/home/model/room-membership.svelte.ts', import.meta.url), 'utf8');
+const model = readFileSync(
+  new URL('../src/lib/features/home/model/room-membership.svelte.ts', import.meta.url),
+  'utf8'
+);
 
 test('G46-A01 roster retains offline members and dedupes voice presence by account', async () => {
   expect(model).toContain('cachedMembers');

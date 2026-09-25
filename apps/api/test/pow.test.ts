@@ -1,12 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import {
-  hasLeadingZeroBits,
-  parsePowChallenge,
-  normalizePowNonce,
-  createProofOfWork
-} from '../src/lib/pow.ts';
+import { hasLeadingZeroBits, parsePowChallenge, normalizePowNonce, createProofOfWork } from '../src/lib/pow.ts';
 
 // Brute-forces a nonce the same way the browser client does.
 // A challenge is null only with difficulty 0, which these cases never use.

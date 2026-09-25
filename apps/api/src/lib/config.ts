@@ -13,7 +13,9 @@ function readEnvBool(name: string, fallback: boolean, env: Env = process.env): b
   return /^(1|true|yes|on)$/i.test(value.trim());
 }
 
-function readMessageDeliveryMode(env: Env = process.env): Readonly<{ claimEnabled: boolean; directEmitEnabled: boolean }> {
+function readMessageDeliveryMode(
+  env: Env = process.env
+): Readonly<{ claimEnabled: boolean; directEmitEnabled: boolean }> {
   const directEmitEnabled = readEnvBool('MESSAGE_DIRECT_EMIT_ENABLED', true, env);
   const claimEnabled = readEnvBool('MESSAGE_DELIVERY_CLAIM_ENABLED', false, env);
   if (directEmitEnabled && claimEnabled) {
@@ -47,10 +49,4 @@ function readUploadsDir(env: Env = process.env): string {
   return path.resolve(configured || path.join(import.meta.dirname, '../../uploads'));
 }
 
-export {
-  readEnvInt,
-  readEnvBool,
-  readMessageDeliveryMode,
-  readDatabaseConfig,
-  readUploadsDir
-};
+export { readEnvInt, readEnvBool, readMessageDeliveryMode, readDatabaseConfig, readUploadsDir };

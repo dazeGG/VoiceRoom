@@ -59,7 +59,9 @@ function sanitizeMetadata(metadata: unknown): Metadata {
 }
 
 function normalizePlatformClass(value: unknown): PlatformClass {
-  return (Object.values(PLATFORM_CLASSES) as unknown[]).includes(value) ? value as PlatformClass : PLATFORM_CLASSES.unknown;
+  return (Object.values(PLATFORM_CLASSES) as unknown[]).includes(value)
+    ? (value as PlatformClass)
+    : PLATFORM_CLASSES.unknown;
 }
 
 function resolvePlatformClass(metadata: Metadata | null | undefined): PlatformClass {
@@ -75,7 +77,12 @@ function resolvePlatformClass(metadata: Metadata | null | undefined): PlatformCl
   });
 }
 
-function createPushStore({ databaseUrl, logger = createLogger({ name: 'api' }), pool, maxSubscriptionsPerUser = 10 }: { databaseUrl?: string; logger?: unknown; pool?: pg.Pool | null; maxSubscriptionsPerUser?: number } = {}) {
+function createPushStore({
+  databaseUrl,
+  logger = createLogger({ name: 'api' }),
+  pool,
+  maxSubscriptionsPerUser = 10
+}: { databaseUrl?: string; logger?: unknown; pool?: pg.Pool | null; maxSubscriptionsPerUser?: number } = {}) {
   const subscriptionLimit = Math.max(1, Math.floor(Number(maxSubscriptionsPerUser) || 10));
   let activePool = pool || null;
   function getPool(): pg.Pool {
@@ -83,7 +90,11 @@ function createPushStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
     return activePool;
   }
 
-  async function upsert({ userId, subscription, metadata = {} }: {
+  async function upsert({
+    userId,
+    subscription,
+    metadata = {}
+  }: {
     userId: string;
     subscription?: { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } } | null;
     metadata?: Metadata;
@@ -130,10 +141,10 @@ function createPushStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
   }
 
   async function remove({ userId, endpoint }: { userId: string; endpoint: unknown }): Promise<boolean> {
-    const result = await getPool().query(
-      `DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2`,
-      [userId, String(endpoint || '').trim()]
-    );
+    const result = await getPool().query(`DELETE FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2`, [
+      userId,
+      String(endpoint || '').trim()
+    ]);
     return result.rowCount! > 0;
   }
 
@@ -142,18 +153,16 @@ function createPushStore({ databaseUrl, logger = createLogger({ name: 'api' }), 
   }
 
   async function listByUserId(userId: string): Promise<PushSubscriptionRecord[]> {
-    const result = await getPool().query(
-      `SELECT * FROM push_subscriptions WHERE user_id = $1 ORDER BY created_at`,
-      [userId]
-    );
+    const result = await getPool().query(`SELECT * FROM push_subscriptions WHERE user_id = $1 ORDER BY created_at`, [
+      userId
+    ]);
     return result.rows.map(mapSubscription) as PushSubscriptionRecord[];
   }
 
   async function markSuccess(endpoint: string): Promise<void> {
-    await getPool().query(
-      `UPDATE push_subscriptions SET last_success_at = current_timestamp WHERE endpoint = $1`,
-      [endpoint]
-    );
+    await getPool().query(`UPDATE push_subscriptions SET last_success_at = current_timestamp WHERE endpoint = $1`, [
+      endpoint
+    ]);
   }
 
   async function close(): Promise<void> {

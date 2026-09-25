@@ -8,14 +8,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 import { createTestDatabase } from './db-harness.ts';
-import {
-  countWsType,
-  joinVoiceRoom,
-  openWs,
-  sendWs,
-  subscribeRoomPreview,
-  waitForWsType
-} from './ws-harness.ts';
+import { countWsType, joinVoiceRoom, openWs, sendWs, subscribeRoomPreview, waitForWsType } from './ws-harness.ts';
 
 function waitForHealthz(socketPath, timeoutMs = 15000) {
   const started = Date.now();
@@ -58,7 +51,11 @@ function request(socketPath, { method = 'GET', pathname, body, cookie } = {}) {
         data += chunk;
       });
       res.on('end', () => {
-        resolve({ status: res.statusCode, body: data ? JSON.parse(data) : null, setCookie: res.headers['set-cookie'] || [] });
+        resolve({
+          status: res.statusCode,
+          body: data ? JSON.parse(data) : null,
+          setCookie: res.headers['set-cookie'] || []
+        });
       });
       res.on('error', reject);
     });
@@ -109,16 +106,31 @@ async function startServer(t) {
       return { cookie, id: response.body.user.id };
     },
     async befriend(requester, addressee, addresseeLogin) {
-      const sent = await request(socketPath, { method: 'POST', pathname: '/api/friends/requests', cookie: requester.cookie, body: { login: addresseeLogin } });
+      const sent = await request(socketPath, {
+        method: 'POST',
+        pathname: '/api/friends/requests',
+        cookie: requester.cookie,
+        body: { login: addresseeLogin }
+      });
       assert.ok(sent.status === 200 || sent.status === 201);
       const list = await request(socketPath, { pathname: '/api/friends/requests', cookie: addressee.cookie });
       const requestId = list.body.incoming[0]?.id;
       assert.ok(requestId);
-      const accepted = await request(socketPath, { method: 'POST', pathname: `/api/friends/requests/${requestId}/accept`, cookie: addressee.cookie, body: {} });
+      const accepted = await request(socketPath, {
+        method: 'POST',
+        pathname: `/api/friends/requests/${requestId}/accept`,
+        cookie: addressee.cookie,
+        body: {}
+      });
       assert.equal(accepted.status, 200);
     },
     async createRoom(owner) {
-      const created = await request(socketPath, { method: 'POST', pathname: '/api/rooms', cookie: owner.cookie, body: { isStatic: true, name: 'Печатают' } });
+      const created = await request(socketPath, {
+        method: 'POST',
+        pathname: '/api/rooms',
+        cookie: owner.cookie,
+        body: { isStatic: true, name: 'Печатают' }
+      });
       assert.equal(created.status, 201);
       return created.body.roomId;
     },
@@ -178,12 +190,21 @@ test('room typing reaches everyone with the chat open, named by the server and n
   const guestWs = await server.connect();
   await subscribeRoomPreview(ownerWs, roomId);
   await subscribeRoomPreview(viewerWs, roomId);
-  await joinVoiceRoom(guestWs, { roomId, peerId: 'guest-typing-peer', sessionToken: 'g'.repeat(32), name: 'Гость Петя' });
+  await joinVoiceRoom(guestWs, {
+    roomId,
+    peerId: 'guest-typing-peer',
+    sessionToken: 'g'.repeat(32),
+    name: 'Гость Петя'
+  });
 
   sendWs(guestWs.ws, 'room.chat.typing', { roomId, name: 'Подделка' });
   for (const session of [ownerWs, viewerWs]) {
     const notice = await waitForWsType(session.frames, 'room.chat.typing');
-    assert.deepEqual(notice.payload, { roomId, typist: { peerId: 'guest-typing-peer', userId: null, name: 'Гость Петя' }, activity: 'typing' });
+    assert.deepEqual(notice.payload, {
+      roomId,
+      typist: { peerId: 'guest-typing-peer', userId: null, name: 'Гость Петя' },
+      activity: 'typing'
+    });
   }
 
   sendWs(ownerWs.ws, 'room.chat.typing', { roomId });
@@ -216,10 +237,14 @@ test('a notice says whether someone types or picks an emoji, and switching is no
   await waitForWsType(erikWs.frames, 'dm.typing', () => countWsType(erikWs.frames, 'dm.typing') === 2);
   await delay(400);
   const direct = erikWs.frames.filter((frame) => frame.type === 'dm.typing').map((frame) => frame.payload);
-  assert.deepEqual(direct, [
-    { userId: dana.id, activity: 'emoji' },
-    { userId: dana.id, activity: 'typing' }
-  ], 'a repeated emoji notice inside a second is dropped, the switch to typing arrives when the second is up');
+  assert.deepEqual(
+    direct,
+    [
+      { userId: dana.id, activity: 'emoji' },
+      { userId: dana.id, activity: 'typing' }
+    ],
+    'a repeated emoji notice inside a second is dropped, the switch to typing arrives when the second is up'
+  );
 
   sendWs(danaWs.ws, 'dm.typing', { userId: erik.id, activity: 'recording' });
   const rejected = await waitForWsType(danaWs.frames, 'error');
@@ -230,6 +255,8 @@ test('a notice says whether someone types or picks an emoji, and switching is no
   sendWs(erikWs.ws, 'room.chat.typing', { roomId, activity: 'emoji' });
   sendWs(erikWs.ws, 'room.chat.typing', { roomId, activity: 'typing' });
   await waitForWsType(danaWs.frames, 'room.chat.typing', () => countWsType(danaWs.frames, 'room.chat.typing') === 2);
-  const inRoom = danaWs.frames.filter((frame) => frame.type === 'room.chat.typing').map((frame) => frame.payload.activity);
+  const inRoom = danaWs.frames
+    .filter((frame) => frame.type === 'room.chat.typing')
+    .map((frame) => frame.payload.activity);
   assert.deepEqual(inRoom, ['emoji', 'typing']);
 });

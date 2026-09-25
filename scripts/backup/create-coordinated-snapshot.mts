@@ -28,13 +28,20 @@ function filesBelow(root, current = root) {
 }
 
 function resolvedProspectivePath(value) {
-  const absolute = path.resolve(value); const parsed = path.parse(absolute); let current = parsed.root;
+  const absolute = path.resolve(value);
+  const parsed = path.parse(absolute);
+  let current = parsed.root;
   for (const component of absolute.slice(parsed.root.length).split(path.sep).filter(Boolean)) {
     current = path.join(current, component);
-    try { if (fs.lstatSync(current).isSymbolicLink()) throw new Error(`Snapshot output path contains a symlink: ${current}`); }
-    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    try {
+      if (fs.lstatSync(current).isSymbolicLink())
+        throw new Error(`Snapshot output path contains a symlink: ${current}`);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
   }
-  let ancestor = absolute; while (!fs.existsSync(ancestor)) ancestor = path.dirname(ancestor);
+  let ancestor = absolute;
+  while (!fs.existsSync(ancestor)) ancestor = path.dirname(ancestor);
   return path.resolve(fs.realpathSync(ancestor), path.relative(ancestor, absolute));
 }
 
@@ -44,15 +51,20 @@ function containsPath(parent, candidate) {
 }
 
 export function createCoordinatedSnapshot({ databaseDump, uploads, catalog, output, namespace }) {
-  if (!databaseDump || !uploads || !catalog || !output || !namespace) throw new Error('databaseDump, uploads, catalog, output and namespace are required');
+  if (!databaseDump || !uploads || !catalog || !output || !namespace)
+    throw new Error('databaseDump, uploads, catalog, output and namespace are required');
   const db = fs.realpathSync(databaseDump);
   const media = fs.realpathSync(uploads);
   const catalogFile = fs.realpathSync(catalog);
-  if (!fs.statSync(db).isFile() || !fs.statSync(media).isDirectory() || !fs.statSync(catalogFile).isFile()) throw new Error('Snapshot sources must include database dump, uploads directory and catalog file');
+  if (!fs.statSync(db).isFile() || !fs.statSync(media).isDirectory() || !fs.statSync(catalogFile).isFile())
+    throw new Error('Snapshot sources must include database dump, uploads directory and catalog file');
   const catalogValue = JSON.parse(fs.readFileSync(catalogFile, 'utf8'));
-  if (!Array.isArray(catalogValue.attachments) || !Array.isArray(catalogValue.leases)) throw new Error('Snapshot catalog must contain attachments and leases');
-  const destination = resolvedProspectivePath(output); const destinationParent = path.dirname(destination);
-  if (containsPath(media, destination) || containsPath(destination, media) || containsPath(media, destinationParent)) throw new Error('Snapshot output and staging must not overlap the uploads source');
+  if (!Array.isArray(catalogValue.attachments) || !Array.isArray(catalogValue.leases))
+    throw new Error('Snapshot catalog must contain attachments and leases');
+  const destination = resolvedProspectivePath(output);
+  const destinationParent = path.dirname(destination);
+  if (containsPath(media, destination) || containsPath(destination, media) || containsPath(media, destinationParent))
+    throw new Error('Snapshot output and staging must not overlap the uploads source');
   if (fs.existsSync(destination)) throw new Error('Snapshot output already exists');
   fs.mkdirSync(destinationParent, { recursive: true });
   const staging = fs.mkdtempSync(path.join(destinationParent, '.snapshot-'));
@@ -68,10 +80,19 @@ export function createCoordinatedSnapshot({ databaseDump, uploads, catalog, outp
       fs.copyFileSync(path.join(media, ...relative.split('/')), target, fs.constants.COPYFILE_EXCL);
     }
     const manifest = {
-      contract: 'voice-room.coordinated-media-snapshot/v1', namespace,
+      contract: 'voice-room.coordinated-media-snapshot/v1',
+      namespace,
       createdAt: new Date().toISOString(),
-      database: { path: 'database.dump', bytes: fs.statSync(path.join(staging, 'database.dump')).size, sha256: sha256(path.join(staging, 'database.dump')) },
-      catalog: { path: 'media-catalog.json', bytes: fs.statSync(path.join(staging, 'media-catalog.json')).size, sha256: sha256(path.join(staging, 'media-catalog.json')) },
+      database: {
+        path: 'database.dump',
+        bytes: fs.statSync(path.join(staging, 'database.dump')).size,
+        sha256: sha256(path.join(staging, 'database.dump'))
+      },
+      catalog: {
+        path: 'media-catalog.json',
+        bytes: fs.statSync(path.join(staging, 'media-catalog.json')).size,
+        sha256: sha256(path.join(staging, 'media-catalog.json'))
+      },
       uploads: uploadsManifest.map((relative) => {
         const file = path.join(mediaOut, ...relative.split('/'));
         return { path: relative, bytes: fs.statSync(file).size, sha256: sha256(file) };
@@ -90,7 +111,16 @@ export function createCoordinatedSnapshot({ databaseDump, uploads, catalog, outp
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     const input = args(process.argv.slice(2));
-    const manifest = createCoordinatedSnapshot({ databaseDump: input.database, uploads: input.uploads, catalog: input.catalog, output: input.output, namespace: input.namespace });
+    const manifest = createCoordinatedSnapshot({
+      databaseDump: input.database,
+      uploads: input.uploads,
+      catalog: input.catalog,
+      output: input.output,
+      namespace: input.namespace
+    });
     process.stdout.write(`${JSON.stringify({ ok: true, namespace: manifest.namespace })}\n`);
-  } catch (error) { console.error(error.message); process.exitCode = 1; }
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
+  }
 }

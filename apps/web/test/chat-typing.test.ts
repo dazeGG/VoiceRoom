@@ -7,7 +7,6 @@ import { resolve } from 'node:path';
 const webRoot = resolve(import.meta.dirname, '..');
 const require = createRequire(resolve(webRoot, 'package.json'));
 
-
 async function loadTyping() {
   vi.resetModules();
   return import('../src/lib/shared/chat/typing.svelte.ts');
@@ -31,7 +30,10 @@ test('the typing line names up to three people and then stops counting', async (
   assert.equal(formatTypingLabel([typing('Аня')]), 'Аня печатает…');
   assert.equal(formatTypingLabel([typing('Аня'), typing('Боря')]), 'Аня и Боря печатают…');
   assert.equal(formatTypingLabel([typing('Аня'), typing('Боря'), typing('Вика')]), 'Аня, Боря и Вика печатают…');
-  assert.equal(formatTypingLabel([typing('Аня'), typing('Боря'), typing('Вика'), typing('Гоша')]), 'Несколько человек печатают…');
+  assert.equal(
+    formatTypingLabel([typing('Аня'), typing('Боря'), typing('Вика'), typing('Гоша')]),
+    'Несколько человек печатают…'
+  );
 });
 
 test('someone with the emoji picker open is shown as choosing an emoji, next to those who type', async () => {
@@ -39,8 +41,14 @@ test('someone with the emoji picker open is shown as choosing an emoji, next to 
   assert.equal(formatTypingLabel([emoji('Аня')]), 'Аня выбирает эмодзи…');
   assert.equal(formatTypingLabel([emoji('Аня'), emoji('Боря')]), 'Аня и Боря выбирают эмодзи…');
   assert.equal(formatTypingLabel([emoji('Аня'), typing('Боря')]), 'Боря печатает, Аня выбирает эмодзи…');
-  assert.equal(formatTypingLabel([typing('Аня'), emoji('Боря'), typing('Вика')]), 'Аня и Вика печатают, Боря выбирает эмодзи…');
-  assert.equal(formatTypingLabel([emoji('Аня'), emoji('Боря'), typing('Вика'), typing('Гоша')]), 'Несколько человек печатают…');
+  assert.equal(
+    formatTypingLabel([typing('Аня'), emoji('Боря'), typing('Вика')]),
+    'Аня и Вика печатают, Боря выбирает эмодзи…'
+  );
+  assert.equal(
+    formatTypingLabel([emoji('Аня'), emoji('Боря'), typing('Вика'), typing('Гоша')]),
+    'Несколько человек печатают…'
+  );
 
   // A notice from an older client has no activity and still means typing.
   assert.equal(typingActivityOf(undefined), 'typing');
@@ -52,7 +60,12 @@ test('a notice goes out at most once per interval, right away after a reset or a
   const { createTypingNotifier } = await loadTyping();
   let clock = 0;
   const sent = [];
-  const notifier = createTypingNotifier((activity) => { sent.push(activity); }, { intervalMs: 2500, now: () => clock });
+  const notifier = createTypingNotifier(
+    (activity) => {
+      sent.push(activity);
+    },
+    { intervalMs: 2500, now: () => clock }
+  );
 
   notifier.notify();
   clock = 1000;
@@ -71,7 +84,11 @@ test('a notice goes out at most once per interval, right away after a reset or a
   notifier.notify('emoji');
   clock = 2800;
   notifier.notify('typing');
-  assert.deepEqual(sent.slice(3), ['emoji', 'typing'], 'opening the picker and typing again are both announced at once');
+  assert.deepEqual(
+    sent.slice(3),
+    ['emoji', 'typing'],
+    'opening the picker and typing again are both announced at once'
+  );
 });
 
 test('a typist stays listed with what they do until their message or the notice expires', async () => {
@@ -102,4 +119,3 @@ test('a typist stays listed with what they do until their message or the notice 
   tracker.note('', 'nobody');
   assert.deepEqual(tracker.people, []);
 });
-

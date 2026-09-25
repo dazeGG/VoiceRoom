@@ -45,14 +45,16 @@ import { createLogger, errorContext, installGlobalErrorCapture, reportClientLogs
 
 const log = createLogger('room');
 
-
 let mounted = false;
 let mountAbortController: AbortController | null = null;
 let activeVoiceLeaveTeardown: (() => void) | null = null;
 let activeVoiceControlsTeardown: (() => void) | null = null;
 let desktopHotkeysTeardown: (() => void) | null = null;
 
-export function mountRoomClient(_root: ParentNode = document, options: { roomId?: string; embeddedRoomId?: string; autoJoin?: boolean } = {}): () => void {
+export function mountRoomClient(
+  _root: ParentNode = document,
+  options: { roomId?: string; embeddedRoomId?: string; autoJoin?: boolean } = {}
+): () => void {
   if (!isRoomClientAllowed()) return () => {};
   if (mounted) return unmountRoomClient;
   mounted = true;
@@ -68,47 +70,51 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
   });
   const desktopRuntime = Boolean(window.voiceRoomRuntime?.isDesktop);
   let lastDesktopHotkeyFailure = '';
-  desktopHotkeysTeardown = desktopRuntime ? bindDesktopGlobalHotkeys(
-    (action, phase, options) => {
-      if (!state.joined) return;
-      if (action === 'push-to-talk') {
-        if (phase === 'pressed') beginPushToTalk();
-        else endPushToTalk({ immediate: options?.immediate });
-        return;
-      }
-      if (phase !== 'pressed') return;
-      if (action === 'mic-mute') toggleMicrophoneMuted();
-      if (action === 'output-mute') toggleOutputMute();
-    },
-    (result: DesktopHotkeyRegistrationResult) => {
-      if (!state.joined || result.failed.length === 0) {
-        lastDesktopHotkeyFailure = '';
-        return;
-      }
+  desktopHotkeysTeardown = desktopRuntime
+    ? bindDesktopGlobalHotkeys(
+        (action, phase, options) => {
+          if (!state.joined) return;
+          if (action === 'push-to-talk') {
+            if (phase === 'pressed') beginPushToTalk();
+            else endPushToTalk({ immediate: options?.immediate });
+            return;
+          }
+          if (phase !== 'pressed') return;
+          if (action === 'mic-mute') toggleMicrophoneMuted();
+          if (action === 'output-mute') toggleOutputMute();
+        },
+        (result: DesktopHotkeyRegistrationResult) => {
+          if (!state.joined || result.failed.length === 0) {
+            lastDesktopHotkeyFailure = '';
+            return;
+          }
 
-      const failureKey = result.failed.map(({ action, reason }) => `${action}:${reason}`).join('|');
-      if (failureKey === lastDesktopHotkeyFailure) return;
-      lastDesktopHotkeyFailure = failureKey;
-      const labels = [...new Set(result.failed.map(({ action }) => action === 'mic-mute'
-        ? 'мьют микрофона'
-        : action === 'output-mute'
-          ? 'мьют звука'
-          : 'push-to-talk'))];
-      const reasons = new Set(result.failed.map(({ reason }) => reason));
-      const explanation = reasons.has('modifier-required')
-        ? 'Для букв и цифр добавьте Ctrl, ⌘, Alt или Shift.'
-        : reasons.has('input-monitoring-required')
-          ? 'Разрешите Voice Room «Мониторинг ввода» в системных настройках macOS и переподключитесь к голосу.'
-        : reasons.has('duplicate-binding')
-          ? 'Назначьте действиям разные сочетания.'
-          : reasons.has('unsupported-key')
-            ? 'Выберите другую клавишу.'
-            : [...reasons].some((reason) => reason.startsWith('helper-') || reason === 'platform-unsupported')
-              ? 'Native-компонент системных клавиш недоступен.'
-            : 'Возможно, сочетание занято другим приложением.';
-      showToast(`Системное сочетание недоступно: ${labels.join(', ')}. ${explanation}`);
-    }
-  ) : null;
+          const failureKey = result.failed.map(({ action, reason }) => `${action}:${reason}`).join('|');
+          if (failureKey === lastDesktopHotkeyFailure) return;
+          lastDesktopHotkeyFailure = failureKey;
+          const labels = [
+            ...new Set(
+              result.failed.map(({ action }) =>
+                action === 'mic-mute' ? 'мьют микрофона' : action === 'output-mute' ? 'мьют звука' : 'push-to-talk'
+              )
+            )
+          ];
+          const reasons = new Set(result.failed.map(({ reason }) => reason));
+          const explanation = reasons.has('modifier-required')
+            ? 'Для букв и цифр добавьте Ctrl, ⌘, Alt или Shift.'
+            : reasons.has('input-monitoring-required')
+              ? 'Разрешите Voice Room «Мониторинг ввода» в системных настройках macOS и переподключитесь к голосу.'
+              : reasons.has('duplicate-binding')
+                ? 'Назначьте действиям разные сочетания.'
+                : reasons.has('unsupported-key')
+                  ? 'Выберите другую клавишу.'
+                  : [...reasons].some((reason) => reason.startsWith('helper-') || reason === 'platform-unsupported')
+                    ? 'Native-компонент системных клавиш недоступен.'
+                    : 'Возможно, сочетание занято другим приложением.';
+          showToast(`Системное сочетание недоступно: ${labels.join(', ')}. ${explanation}`);
+        }
+      )
+    : null;
 
   let activePushToTalkCode = '';
   let localPushToTalkOwned = false;
@@ -159,9 +165,13 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
     window.addEventListener('keydown', onVoiceHotkeyDown, { signal: listenerSignal });
     window.addEventListener('keyup', onVoiceHotkeyUp, { signal: listenerSignal });
     window.addEventListener('blur', releasePushToTalkImmediately, { signal: listenerSignal });
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) releasePushToTalkImmediately();
-    }, { signal: listenerSignal });
+    document.addEventListener(
+      'visibilitychange',
+      () => {
+        if (document.hidden) releasePushToTalkImmediately();
+      },
+      { signal: listenerSignal }
+    );
   }
 
   const mountedRoomId = options.roomId || options.embeddedRoomId || '';
@@ -199,7 +209,9 @@ export function mountRoomClient(_root: ParentNode = document, options: { roomId?
   document.addEventListener('pointerdown', handleAudioUnlockGesture, { passive: true, signal: listenerSignal });
   document.addEventListener('keydown', handleAudioUnlockGesture, { signal: listenerSignal });
   document.addEventListener('fullscreenchange', updateScreenFullscreenState, { signal: listenerSignal });
-  navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshDevices().catch(() => {}), { signal: listenerSignal });
+  navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshDevices().catch(() => {}), {
+    signal: listenerSignal
+  });
   window.addEventListener('beforeunload', leaveRoom, { signal: listenerSignal });
   syncOutputDeviceUiState();
   refreshStageStripControls();

@@ -10,7 +10,17 @@ afterEach(cleanup);
 const KEY = `lp_${'a'.repeat(32)}.webp`;
 
 test('a link preview opens the link in a new tab without sharing this page, and shows the stored copy of its image', () => {
-  render(LinkPreviewCard, { props: { preview: { url: 'https://store.example/game', siteName: 'Store', title: 'Игра', description: 'Описание', image: { key: KEY, width: 320, height: 180 } } as never } });
+  render(LinkPreviewCard, {
+    props: {
+      preview: {
+        url: 'https://store.example/game',
+        siteName: 'Store',
+        title: 'Игра',
+        description: 'Описание',
+        image: { key: KEY, width: 320, height: 180 }
+      } as never
+    }
+  });
   const link = screen.getByRole('link');
   expect(link.getAttribute('href')).toBe('https://store.example/game');
   expect(link.getAttribute('target')).toBe('_blank');
@@ -20,12 +30,34 @@ test('a link preview opens the link in a new tab without sharing this page, and 
 });
 
 test('an image key that is not a stored preview copy is not shown', () => {
-  render(LinkPreviewCard, { props: { preview: { url: 'https://x.example', siteName: 'X', title: '', description: '', image: { key: 'https://evil.example/a.png', width: 1, height: 1 } } as never } });
+  render(LinkPreviewCard, {
+    props: {
+      preview: {
+        url: 'https://x.example',
+        siteName: 'X',
+        title: '',
+        description: '',
+        image: { key: 'https://evil.example/a.png', width: 1, height: 1 }
+      } as never
+    }
+  });
   expect(screen.getByRole('link').querySelector('img')).toBeNull();
 });
 
 function friend(id: string, name: string, online: boolean) {
-  return { user: { id, login: id, displayName: name, avatarUrl: null, avatarAccent: null, avatarColorKey: 'blue', presenceStatus: 'online', doNotDisturb: false }, online };
+  return {
+    user: {
+      id,
+      login: id,
+      displayName: name,
+      avatarUrl: null,
+      avatarAccent: null,
+      avatarColorKey: 'blue',
+      presenceStatus: 'online',
+      doNotDisturb: false
+    },
+    online
+  };
 }
 
 test('the invite list puts online friends first, alphabetically, and disables those already in the room', () => {
@@ -38,7 +70,11 @@ test('the invite list puts online friends first, alphabetically, and disables th
     }
   });
   const items = screen.getAllByRole('menuitem');
-  expect(items.map((item) => item.textContent?.trim().replace(/\s+/g, ' '))).toEqual([expect.stringContaining('Анна'), expect.stringContaining('Вера'), expect.stringContaining('Борис')]);
+  expect(items.map((item) => item.textContent?.trim().replace(/\s+/g, ' '))).toEqual([
+    expect.stringContaining('Анна'),
+    expect.stringContaining('Вера'),
+    expect.stringContaining('Борис')
+  ]);
   expect(items[0]).toHaveProperty('disabled', true);
   expect(items[1]).toHaveProperty('disabled', false);
 });
@@ -47,7 +83,9 @@ test('inviting rings the friend into the room and closes the menu; a failure is 
   const { calls } = stubFetch({ 'POST /api/rooms/room-a/ring': { body: { ok: true } } });
   const close = vi.fn();
   const onToast = vi.fn();
-  render(RoomInviteFriendList, { props: { friends: [friend('u-v', 'Вера', true)] as never, roomId: 'room-a', close, onToast } });
+  render(RoomInviteFriendList, {
+    props: { friends: [friend('u-v', 'Вера', true)] as never, roomId: 'room-a', close, onToast }
+  });
   await userEvent.click(screen.getByRole('menuitem'));
   expect(calls[0]).toMatchObject({ method: 'POST', url: '/api/rooms/room-a/ring', body: { userId: 'u-v' } });
   expect(onToast).toHaveBeenCalledWith('Вера приглашён в комнату');
@@ -55,7 +93,9 @@ test('inviting rings the friend into the room and closes the menu; a failure is 
 
   cleanup();
   stubFetch({ 'POST /api/rooms/room-a/ring': { status: 429, body: { ok: false, error: 'Слишком часто' } } });
-  render(RoomInviteFriendList, { props: { friends: [friend('u-v', 'Вера', true)] as never, roomId: 'room-a', close: vi.fn(), onToast } });
+  render(RoomInviteFriendList, {
+    props: { friends: [friend('u-v', 'Вера', true)] as never, roomId: 'room-a', close: vi.fn(), onToast }
+  });
   await userEvent.click(screen.getByRole('menuitem'));
   expect(onToast).toHaveBeenLastCalledWith('Слишком часто');
 });

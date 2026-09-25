@@ -11,7 +11,9 @@ vi.mock('../src/lib/features/room/client/services/media-playback-service', () =>
     applied.push({ element, options });
     return true;
   },
-  releaseScreenMediaElement: (element: HTMLMediaElement) => { released.push(element); }
+  releaseScreenMediaElement: (element: HTMLMediaElement) => {
+    released.push(element);
+  }
 }));
 vi.mock('../src/lib/features/room/screen-ui.svelte', () => ({
   bumpScreenUiRevision: () => {},
@@ -26,7 +28,9 @@ const { syncScreenAudioFallback } = await import('../src/lib/features/room/clien
 
 class TestMediaStream {
   constructor(readonly tracks: Array<{ kind: string }>) {}
-  getAudioTracks() { return this.tracks.filter((track) => track.kind === 'audio'); }
+  getAudioTracks() {
+    return this.tracks.filter((track) => track.kind === 'audio');
+  }
 }
 
 afterEach(() => {
@@ -41,7 +45,9 @@ test('screen audio keeps a routed fallback sink during a video republish gap', (
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   const endedListeners: Array<() => void> = [];
   const audioTrack = {
-    addEventListener: (_event: string, listener: () => void) => { endedListeners.push(listener); },
+    addEventListener: (_event: string, listener: () => void) => {
+      endedListeners.push(listener);
+    },
     id: 'screen-audio',
     kind: 'audio',
     readyState: 'live'

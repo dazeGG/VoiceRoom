@@ -8,9 +8,11 @@ const dm = readFileSync(new URL('../src/lib/features/home/components/lobby/DmVie
 test('G83-A01 drag/paste/keyboard compose is isolated, resumable and sends only all-ready drafts', async () => {
   expect(store).toContain('voice-room:attachment-drafts:${context}:${contextId}');
   expect(store).toContain("draft.state === 'pending' || draft.state === 'processing'");
-  expect(store).toContain('this.drafts.every((draft) => draft.state === \'ready\')');
-  expect(store).toContain('imageFilesFromClipboard'); expect(store).toContain('imageFilesFromDataTransfer');
-  expect(room).toContain('attachmentIds: media?.readyIds ?? []'); expect(dm).toContain('media?.readyIds ?? []');
+  expect(store).toContain("this.drafts.every((draft) => draft.state === 'ready')");
+  expect(store).toContain('imageFilesFromClipboard');
+  expect(store).toContain('imageFilesFromDataTransfer');
+  expect(room).toContain('attachmentIds: media?.readyIds ?? []');
+  expect(dm).toContain('media?.readyIds ?? []');
   expect(composer).toContain('aria-label="Изображения к сообщению"');
 });
 

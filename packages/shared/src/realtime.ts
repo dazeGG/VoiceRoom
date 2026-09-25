@@ -80,10 +80,12 @@ function isPlainObject(value: unknown): value is Loose {
 
 export function normalizeTypingActivity(value: unknown): TypingActivity | null {
   if (value === undefined || value === null) return 'typing';
-  return (TYPING_ACTIVITIES as readonly unknown[]).includes(value) ? value as TypingActivity : null;
+  return (TYPING_ACTIVITIES as readonly unknown[]).includes(value) ? (value as TypingActivity) : null;
 }
 
-export function parseClientEnvelope(raw: unknown): { ok: true; envelope: ClientEnvelope } | { ok: false; code: string } {
+export function parseClientEnvelope(
+  raw: unknown
+): { ok: true; envelope: ClientEnvelope } | { ok: false; code: string } {
   if (typeof raw !== 'string' || !raw.trim()) {
     return { ok: false, code: 'empty_message' };
   }
@@ -113,7 +115,9 @@ export function parseClientEnvelope(raw: unknown): { ok: true; envelope: ClientE
   };
 }
 
-export function parseServerEnvelope(raw: unknown): { ok: true; envelope: ServerEnvelope } | { ok: false; code: string } {
+export function parseServerEnvelope(
+  raw: unknown
+): { ok: true; envelope: ServerEnvelope } | { ok: false; code: string } {
   return parseClientEnvelope(raw);
 }
 
@@ -133,9 +137,8 @@ export function buildServerErrorEnvelope(code: string, message: string, id?: unk
 }
 
 export function toRoomPeerSummary(peer: Loose, resolveAvatarColorKey?: unknown): RoomPeerSummary {
-  const resolver = typeof resolveAvatarColorKey === 'function'
-    ? resolveAvatarColorKey as (peerId: unknown) => string
-    : () => '';
+  const resolver =
+    typeof resolveAvatarColorKey === 'function' ? (resolveAvatarColorKey as (peerId: unknown) => string) : () => '';
   return {
     id: peer.id as string,
     accountUserId: (peer.accountUserId as string) || undefined,
@@ -147,11 +150,15 @@ export function toRoomPeerSummary(peer: Loose, resolveAvatarColorKey?: unknown):
   };
 }
 
-export function buildRoomRealtimeSummary(room: Loose, peers: unknown, resolveAvatarColorKey?: unknown): RoomRealtimeSummary {
-  const peerList = Array.isArray(peers) ? peers as Loose[] : [];
-  const visiblePeers = peerList.slice(0, MAX_VISIBLE_ROOM_PEERS).map((peer) =>
-    toRoomPeerSummary(peer, resolveAvatarColorKey)
-  );
+export function buildRoomRealtimeSummary(
+  room: Loose,
+  peers: unknown,
+  resolveAvatarColorKey?: unknown
+): RoomRealtimeSummary {
+  const peerList = Array.isArray(peers) ? (peers as Loose[]) : [];
+  const visiblePeers = peerList
+    .slice(0, MAX_VISIBLE_ROOM_PEERS)
+    .map((peer) => toRoomPeerSummary(peer, resolveAvatarColorKey));
   const peerCount = peerList.length;
 
   return {
@@ -168,7 +175,9 @@ export function buildRoomRealtimeSummary(room: Loose, peers: unknown, resolveAva
   };
 }
 
-export function validateClientCommand(envelope: unknown): { ok: true; envelope: ClientEnvelope } | { ok: false; code: string } {
+export function validateClientCommand(
+  envelope: unknown
+): { ok: true; envelope: ClientEnvelope } | { ok: false; code: string } {
   const input = envelope as ClientEnvelope | null | undefined;
   if (!input || typeof input.type !== 'string') {
     return { ok: false, code: 'invalid_envelope' };

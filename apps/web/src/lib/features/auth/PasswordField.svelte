@@ -19,14 +19,7 @@
 </script>
 
 <div class="auth-password">
-  <input
-    class="auth-input"
-    {id}
-    type={revealed ? 'text' : 'password'}
-    {placeholder}
-    {autocomplete}
-    bind:value
-  />
+  <input class="auth-input" {id} type={revealed ? 'text' : 'password'} {placeholder} {autocomplete} bind:value />
   <button
     type="button"
     class="auth-eye"

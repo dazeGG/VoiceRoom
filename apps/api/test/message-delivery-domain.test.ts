@@ -11,18 +11,46 @@ import { createMessageDeliveryRelay } from '../src/domains/messaging/message-del
 import { createNotificationDispatch } from '../src/domains/notifications/notification-dispatch.ts';
 import { createLinkPreviewEvents } from '../src/domains/link-previews/link-preview-events.ts';
 
-const ATTACHMENT = { id: 'a1', context: 'room', order: 0, mimeType: 'image/webp', processedBytes: 10, originalBytes: 20, width: 1, height: 2, state: 'ready', ownerId: 'secret' };
+const ATTACHMENT = {
+  id: 'a1',
+  context: 'room',
+  order: 0,
+  mimeType: 'image/webp',
+  processedBytes: 10,
+  originalBytes: 20,
+  width: 1,
+  height: 2,
+  state: 'ready',
+  ownerId: 'secret'
+};
 
 function projection({ attachments = true, replies = true } = {}) {
   const calls = [];
   return {
     calls,
     projection: createMessageProjection({
-      attachments: () => (attachments ? { async listForMessage(context, id) { calls.push(['list', context, id]); return [ATTACHMENT, { ...ATTACHMENT, id: 'a2', state: 'processing', processedBytes: 0 }]; } } : null),
-      replies: () => (replies ? {
-        async getRoomPreview(input) { calls.push(['room', input]); return { quoted: 'room' }; },
-        async getDirectPreview(input) { calls.push(['dm', input]); return { quoted: 'dm' }; }
-      } : null)
+      attachments: () =>
+        attachments
+          ? {
+              async listForMessage(context, id) {
+                calls.push(['list', context, id]);
+                return [ATTACHMENT, { ...ATTACHMENT, id: 'a2', state: 'processing', processedBytes: 0 }];
+              }
+            }
+          : null,
+      replies: () =>
+        replies
+          ? {
+              async getRoomPreview(input) {
+                calls.push(['room', input]);
+                return { quoted: 'room' };
+              },
+              async getDirectPreview(input) {
+                calls.push(['dm', input]);
+                return { quoted: 'dm' };
+              }
+            }
+          : null
     })
   };
 }
@@ -39,7 +67,10 @@ test('attachments keep only public fields', () => {
 test('projection adds attachments and the reply quote', async () => {
   const { calls, projection: p } = projection();
   const room = await p.project('room', { id: 'm1', replyTo: { messageId: 'm0' } }, { roomId: 'r1' });
-  assert.deepEqual(room.attachments.map((a) => a.url), ['/api/media/attachments/a1/preview', null]);
+  assert.deepEqual(
+    room.attachments.map((a) => a.url),
+    ['/api/media/attachments/a1/preview', null]
+  );
   assert.deepEqual(room.replyPreview, { quoted: 'room' });
   const dm = await p.project('dm', { id: 'm2', replyTo: { messageId: 'm0' } }, { userId: 'u1', peerId: 'u2' });
   assert.deepEqual(dm.replyPreview, { quoted: 'dm' });
@@ -60,18 +91,43 @@ test('projection adds attachments and the reply quote', async () => {
 function relayHarness({ enabled = true, pool = true, outbox = true, findUserFails = false, event = null } = {}) {
   const calls = { chat: [], events: [], dm: [], errors: [], queries: [], released: 0 };
   const client = Object.assign(new EventEmitter(), {
-    async query(sql) { calls.queries.push(sql); if (sql.startsWith('UNLISTEN') && calls.failUnlisten) throw new Error('gone'); },
-    release() { calls.released += 1; }
+    async query(sql) {
+      calls.queries.push(sql);
+      if (sql.startsWith('UNLISTEN') && calls.failUnlisten) throw new Error('gone');
+    },
+    release() {
+      calls.released += 1;
+    }
   });
   const relay = createMessageDeliveryRelay({
     enabled,
-    pool: () => (pool ? { async connect() { return client; } } : null),
-    outbox: () => (outbox ? { async getEvent(id) { if (id === 'broken') throw new Error('db'); return id === 'e1' ? { payload: event } : null; } } : null),
+    pool: () =>
+      pool
+        ? {
+            async connect() {
+              return client;
+            }
+          }
+        : null,
+    outbox: () =>
+      outbox
+        ? {
+            async getEvent(id) {
+              if (id === 'broken') throw new Error('db');
+              return id === 'e1' ? { payload: event } : null;
+            }
+          }
+        : null,
     projection: projection().projection,
     broadcastChatMessage: (roomId, message) => calls.chat.push([roomId, message.id]),
     notifyUser: (userId, event) => calls.events.push([userId, event.type]),
-    findUser: async (userId) => { if (findUserFails) throw new Error('users'); return { id: userId }; },
-    broadcastDmNotification: async (recipientId, sender) => { calls.dm.push([recipientId, sender.id]); },
+    findUser: async (userId) => {
+      if (findUserFails) throw new Error('users');
+      return { id: userId };
+    },
+    broadcastDmNotification: async (recipientId, sender) => {
+      calls.dm.push([recipientId, sender.id]);
+    },
     publicChatMessage: (message) => ({ id: message.id, public: true }),
     logger: () => ({ error: (fields) => calls.errors.push(fields.evt) })
   });
@@ -86,19 +142,41 @@ test('relayed room and DM messages reach sockets and raise the DM notification',
   await relay.dispatch({ type: 'message.created', conversation: { type: 'other' }, message: {} });
   await relay.dispatch({ type: 'message.created', conversation: { type: 'room', id: 'r1' }, message: { id: 'm1' } });
   assert.deepEqual(calls.chat, [['r1', 'm1']]);
-  await relay.dispatch({ type: 'message.created', conversation: { type: 'dm', id: 'u2' }, message: { id: 'm2', senderId: 'u1', recipientId: 'u2' } });
-  await relay.dispatch({ type: 'message.created', conversation: { type: 'dm', id: 'u1' }, message: { id: 'm3', senderId: 'u1', recipientId: 'u2' } });
-  assert.deepEqual(calls.events, [['u1', 'dm-message'], ['u2', 'dm-message'], ['u1', 'dm-message'], ['u2', 'dm-message']]);
-  assert.deepEqual(calls.dm, [['u2', 'u1'], ['u2', 'u1']]);
+  await relay.dispatch({
+    type: 'message.created',
+    conversation: { type: 'dm', id: 'u2' },
+    message: { id: 'm2', senderId: 'u1', recipientId: 'u2' }
+  });
+  await relay.dispatch({
+    type: 'message.created',
+    conversation: { type: 'dm', id: 'u1' },
+    message: { id: 'm3', senderId: 'u1', recipientId: 'u2' }
+  });
+  assert.deepEqual(calls.events, [
+    ['u1', 'dm-message'],
+    ['u2', 'dm-message'],
+    ['u1', 'dm-message'],
+    ['u2', 'dm-message']
+  ]);
+  assert.deepEqual(calls.dm, [
+    ['u2', 'u1'],
+    ['u2', 'u1']
+  ]);
 
   const noSender = relayHarness({ findUserFails: true });
-  await noSender.relay.dispatch({ type: 'message.created', conversation: { type: 'dm', id: 'u2' }, message: { id: 'm', senderId: 'u1', recipientId: 'u2' } });
+  await noSender.relay.dispatch({
+    type: 'message.created',
+    conversation: { type: 'dm', id: 'u2' },
+    message: { id: 'm', senderId: 'u1', recipientId: 'u2' }
+  });
   assert.deepEqual(noSender.calls.dm, []);
 });
 
 test('the listener LISTENs once, dispatches notified outbox events and cleans up', async () => {
   const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
-  const { calls, client, relay } = relayHarness({ event: { type: 'message.created', conversation: { type: 'room', id: 'r1' }, message: { id: 'm1' } } });
+  const { calls, client, relay } = relayHarness({
+    event: { type: 'message.created', conversation: { type: 'room', id: 'r1' }, message: { id: 'm1' } }
+  });
   await relay.start();
   await relay.start();
   assert.deepEqual(calls.queries, ['LISTEN voice_room_message_delivery']);
@@ -112,7 +190,10 @@ test('the listener LISTENs once, dispatches notified outbox events and cleans up
   client.emit('error', new Error('socket'));
   await settle();
   assert.deepEqual(calls.chat, [['r1', 'm1']]);
-  assert.deepEqual(calls.errors.sort(), ['msg.event_dispatch_failed', 'msg.event_dispatch_failed', 'msg.listener_failed'].sort());
+  assert.deepEqual(
+    calls.errors.sort(),
+    ['msg.event_dispatch_failed', 'msg.event_dispatch_failed', 'msg.listener_failed'].sort()
+  );
   calls.failUnlisten = true;
   await relay.stop();
   await relay.stop();
@@ -135,11 +216,23 @@ function dispatchHarness({ enabled = true, preferences = {}, sendFails = false, 
   const dispatch = createNotificationDispatch({
     push: () => ({
       config: { enabled },
-      async sendToUser(userId, payload, context) { if (sendFails) throw new Error('push'); calls.sent.push({ userId, payload, context }); }
+      async sendToUser(userId, payload, context) {
+        if (sendFails) throw new Error('push');
+        calls.sent.push({ userId, payload, context });
+      }
     }),
-    preferences: async () => { if (preferencesFail) throw new Error('prefs'); return { mutedPeerIds: [], mutedRoomIds: [], doNotDisturb: false, ...preferences }; },
-    notifyUser: (userId, event) => { calls.events.push([userId, event.type]); return 2; },
-    logger: () => ({ warn: (fields) => calls.warnings.push(fields.evt), error: (fields) => calls.errors.push(fields.evt) })
+    preferences: async () => {
+      if (preferencesFail) throw new Error('prefs');
+      return { mutedPeerIds: [], mutedRoomIds: [], doNotDisturb: false, ...preferences };
+    },
+    notifyUser: (userId, event) => {
+      calls.events.push([userId, event.type]);
+      return 2;
+    },
+    logger: () => ({
+      warn: (fields) => calls.warnings.push(fields.evt),
+      error: (fields) => calls.errors.push(fields.evt)
+    })
   });
   return { calls, dispatch };
 }
@@ -219,14 +312,22 @@ test('link previews are scheduled only when a link may be affected and arrive as
   events.scheduleDirectLinkPreview({ messageId: 'd1', senderId: 'a', recipientId: 'b', text: 'plain' });
   events.scheduleDirectLinkPreview({ messageId: 'd2', senderId: 'a', recipientId: 'b', text: 'https://example.com' });
   events.scheduleDirectLinkPreview({ messageId: 'd3', senderId: 'a', recipientId: 'b', text: '', edited: true });
-  assert.deepEqual(calls.scheduled, [['room', 'm2'], ['room', 'm3'], ['dm', 'd2'], ['dm', 'd3']]);
+  assert.deepEqual(calls.scheduled, [
+    ['room', 'm2'],
+    ['room', 'm3'],
+    ['dm', 'd2'],
+    ['dm', 'd3']
+  ]);
 
   await events.broadcastRoomLinkPreview({ roomId: 'r1', messageId: 'gone' });
   await events.broadcastRoomLinkPreview({ roomId: 'r1', messageId: 'm2' });
   await events.broadcastDirectLinkPreview({ messageId: 'gone', senderId: 'a', recipientId: 'b' });
   await events.broadcastDirectLinkPreview({ messageId: 'd2', senderId: 'a', recipientId: 'b' });
   assert.deepEqual(calls.edits, [['r1', 'm2']]);
-  assert.deepEqual(calls.events, [['b', 'dm.message.edited'], ['a', 'dm.message.edited']]);
+  assert.deepEqual(calls.events, [
+    ['b', 'dm.message.edited'],
+    ['a', 'dm.message.edited']
+  ]);
 
   const disabled = createLinkPreviewEvents({ previews: () => null });
   disabled.scheduleRoomLinkPreview('r1', 'm', 'https://example.com');

@@ -46,11 +46,17 @@ function parseBase64urlJson(value: unknown): Record<string, unknown> {
 }
 
 function hashGateCredential(credential: unknown): string {
-  return crypto.createHash('sha256').update(String(credential || '')).digest('hex');
+  return crypto
+    .createHash('sha256')
+    .update(String(credential || ''))
+    .digest('hex');
 }
 
 function signPayload(payload: string, secret: string): string {
-  return crypto.createHmac('sha256', String(secret || '')).update(payload).digest('base64url');
+  return crypto
+    .createHmac('sha256', String(secret || ''))
+    .update(payload)
+    .digest('base64url');
 }
 
 function normalizeGateSecret(secret: unknown): string {
@@ -61,13 +67,17 @@ function normalizeGateSecret(secret: unknown): string {
   return value;
 }
 
-function createGateCredentialSigner({ secret, now = Date.now, maxFutureSkewMs = 30_000 }: {
+function createGateCredentialSigner({
+  secret,
+  now = Date.now,
+  maxFutureSkewMs = 30_000
+}: {
   secret?: unknown;
   now?: unknown;
   maxFutureSkewMs?: unknown;
 } = {}): GateCredentialSigner {
   const signingSecret = normalizeGateSecret(secret);
-  const nowMs: () => number = typeof now === 'function' ? now as () => number : () => Date.now();
+  const nowMs: () => number = typeof now === 'function' ? (now as () => number) : () => Date.now();
 
   function sign({
     credentialId = crypto.randomUUID(),
@@ -93,11 +103,11 @@ function createGateCredentialSigner({ secret, now = Date.now, maxFutureSkewMs = 
       throw new Error('Invalid gate credential payload');
     }
     if (
-      !Number.isSafeInteger(body.pEpoch)
-      || body.pEpoch < 0
-      || !Number.isFinite(body.iat)
-      || !Number.isFinite(body.exp)
-      || body.exp <= body.iat
+      !Number.isSafeInteger(body.pEpoch) ||
+      body.pEpoch < 0 ||
+      !Number.isFinite(body.iat) ||
+      !Number.isFinite(body.exp) ||
+      body.exp <= body.iat
     ) {
       throw new Error('Invalid gate credential epoch or time claims');
     }
@@ -112,8 +122,8 @@ function createGateCredentialSigner({ secret, now = Date.now, maxFutureSkewMs = 
     const [, payload, signature] = parts as [string, string, string];
     const expected = signPayload(payload, signingSecret);
     if (
-      signature.length !== expected.length
-      || !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
+      signature.length !== expected.length ||
+      !crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected))
     ) {
       return { ok: false, code: 'bad_signature' };
     }
@@ -124,21 +134,20 @@ function createGateCredentialSigner({ secret, now = Date.now, maxFutureSkewMs = 
       return { ok: false, code: 'malformed_payload' };
     }
     if (
-      typeof claims.cid !== 'string'
-      || !claims.cid
-      || typeof claims.room !== 'string'
-      || !claims.room
-      || typeof claims.peer !== 'string'
-      || !claims.peer
-      || typeof claims.pId !== 'string'
-      || !claims.pId
-      || !['account', 'guest'].includes(claims.pType as string)
-      ||
-      !Number.isFinite(claims.iat)
-      || !Number.isFinite(claims.exp)
-      || !Number.isSafeInteger(Number(claims.pEpoch))
-      || Number(claims.pEpoch) < 0
-      || (claims.exp as number) <= (claims.iat as number)
+      typeof claims.cid !== 'string' ||
+      !claims.cid ||
+      typeof claims.room !== 'string' ||
+      !claims.room ||
+      typeof claims.peer !== 'string' ||
+      !claims.peer ||
+      typeof claims.pId !== 'string' ||
+      !claims.pId ||
+      !['account', 'guest'].includes(claims.pType as string) ||
+      !Number.isFinite(claims.iat) ||
+      !Number.isFinite(claims.exp) ||
+      !Number.isSafeInteger(Number(claims.pEpoch)) ||
+      Number(claims.pEpoch) < 0 ||
+      (claims.exp as number) <= (claims.iat as number)
     ) {
       return { ok: false, code: 'invalid_claims', claims };
     }

@@ -9,7 +9,12 @@ import {
   type ModerationPage
 } from '@voice-room/shared/moderation';
 import { transaction } from '../../lib/db.ts';
-import { createModerationRepository, type ModerationBan, type ModerationCursorCodec, type ModerationRepository } from './moderation-repository.ts';
+import {
+  createModerationRepository,
+  type ModerationBan,
+  type ModerationCursorCodec,
+  type ModerationRepository
+} from './moderation-repository.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 
@@ -20,8 +25,7 @@ export type BanOutcome =
   | { status: 'replayed' | 'updated' | 'created'; ban: ModerationBan | null };
 
 export type UnbanOutcome =
-  | { status: 'invalid' | 'forbidden' | 'not_found'; ban: null }
-  | { status: 'unbanned'; ban: ModerationBan | null };
+  { status: 'invalid' | 'forbidden' | 'not_found'; ban: null } | { status: 'unbanned'; ban: ModerationBan | null };
 
 type PutBanInput = { roomId: string; actorUserId: string; input?: unknown; idempotencyKey?: unknown };
 
@@ -41,16 +45,34 @@ function createModerationService({
   now?: () => number;
   maxActiveBans?: number;
   resolvePrincipals?: (input: { roomId: string } & BanMutation) => Promise<CredentialPrincipal[]>;
-  revokePrincipalInTransaction?: (input: { client: QueryClient; principal: CredentialPrincipal; roomId: string; now: number }) => Promise<{ status?: string } | null | undefined>;
-  afterBanCommitted?: (input: { roomId: string; principals: CredentialPrincipal[]; result: BanOutcome } & BanMutation) => unknown;
+  revokePrincipalInTransaction?: (input: {
+    client: QueryClient;
+    principal: CredentialPrincipal;
+    roomId: string;
+    now: number;
+  }) => Promise<{ status?: string } | null | undefined>;
+  afterBanCommitted?: (
+    input: { roomId: string; principals: CredentialPrincipal[]; result: BanOutcome } & BanMutation
+  ) => unknown;
 } = {}) {
-  async function authorizeOwner(roomId: string, actorUserId: string, options?: { client?: QueryClient | null }): Promise<boolean> {
+  async function authorizeOwner(
+    roomId: string,
+    actorUserId: string,
+    options?: { client?: QueryClient | null }
+  ): Promise<boolean> {
     return repository.isRoomOwner(roomId, actorUserId, options);
   }
 
-  async function listActive({ roomId, actorUserId, query = {} }: { roomId: string; actorUserId: string; query?: Record<string, unknown> }):
-    Promise<{ status: 'forbidden'; envelope: null } | { status: 'ok'; envelope: ModerationPage }> {
-    if (!await authorizeOwner(roomId, actorUserId)) return { status: 'forbidden', envelope: null };
+  async function listActive({
+    roomId,
+    actorUserId,
+    query = {}
+  }: {
+    roomId: string;
+    actorUserId: string;
+    query?: Record<string, unknown>;
+  }): Promise<{ status: 'forbidden'; envelope: null } | { status: 'ok'; envelope: ModerationPage }> {
+    if (!(await authorizeOwner(roomId, actorUserId))) return { status: 'forbidden', envelope: null };
     const page = normalizeModerationPageRequest(query);
     const result = await repository.listActive({ roomId, ...page, at: now() });
     return {
@@ -65,14 +87,12 @@ function createModerationService({
     if (!mutation || !key || mutation.userId === actorUserId) return { status: 'invalid', ban: null };
     // Reject non-owners before resolving account or network principals. The
     // transaction repeats this check to close ownership-change races.
-    if (!await authorizeOwner(roomId, actorUserId)) return { status: 'forbidden', ban: null };
-    const principals = typeof resolvePrincipals === 'function'
-      ? await resolvePrincipals({ roomId, ...mutation })
-      : [];
+    if (!(await authorizeOwner(roomId, actorUserId))) return { status: 'forbidden', ban: null };
+    const principals = typeof resolvePrincipals === 'function' ? await resolvePrincipals({ roomId, ...mutation }) : [];
     if (mutation.userId && principals.length === 0) return { status: 'revocation_unavailable', ban: null };
 
     const result = await transaction(pool, async (client: pg.PoolClient): Promise<BanOutcome> => {
-      if (!await authorizeOwner(roomId, actorUserId, { client })) return { status: 'forbidden', ban: null };
+      if (!(await authorizeOwner(roomId, actorUserId, { client }))) return { status: 'forbidden', ban: null };
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`voice-room:room-bans:${roomId}`]);
       const replay = await repository.findByIdempotencyKey(roomId, key, { client });
       if (replay) return { status: 'replayed', ban: replay };
@@ -94,7 +114,7 @@ function createModerationService({
         return { status: 'updated', ban };
       }
 
-      if (await repository.countActive(roomId, { at, client }) >= maxActiveBans) {
+      if ((await repository.countActive(roomId, { at, client })) >= maxActiveBans) {
         return { status: 'cap_exceeded', ban: null };
       }
       const ban = await repository.create({
@@ -114,7 +134,12 @@ function createModerationService({
     return result;
   }
 
-  async function revokeAll(client: QueryClient, roomId: string, principals: CredentialPrincipal[], at: number): Promise<void> {
+  async function revokeAll(
+    client: QueryClient,
+    roomId: string,
+    principals: CredentialPrincipal[],
+    at: number
+  ): Promise<void> {
     if (principals.length === 0) return;
     if (typeof revokePrincipalInTransaction !== 'function') throw new Error('Credential revocation is unavailable');
     const seen = new Set<string>();
@@ -127,10 +152,18 @@ function createModerationService({
     }
   }
 
-  async function unban({ roomId, actorUserId, banId }: { roomId?: string; actorUserId: string; banId?: string }): Promise<UnbanOutcome> {
+  async function unban({
+    roomId,
+    actorUserId,
+    banId
+  }: {
+    roomId?: string;
+    actorUserId: string;
+    banId?: string;
+  }): Promise<UnbanOutcome> {
     if (!roomId || !banId) return { status: 'invalid', ban: null };
     return transaction(pool, async (client: pg.PoolClient): Promise<UnbanOutcome> => {
-      if (!await authorizeOwner(roomId, actorUserId, { client })) return { status: 'forbidden', ban: null };
+      if (!(await authorizeOwner(roomId, actorUserId, { client }))) return { status: 'forbidden', ban: null };
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`voice-room:room-bans:${roomId}`]);
       const result = await repository.revoke({ roomId, banId, at: now(), client });
       return result.found ? { status: 'unbanned', ban: result.ban } : { status: 'not_found', ban: null };

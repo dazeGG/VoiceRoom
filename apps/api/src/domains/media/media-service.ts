@@ -8,7 +8,11 @@ import type { MediaStorage } from './storage.ts';
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const MAX_INPUT_PIXELS = 40 * 1024 * 1024;
-const FORMAT_MIME: Readonly<Record<string, string>> = Object.freeze({ jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' });
+const FORMAT_MIME: Readonly<Record<string, string>> = Object.freeze({
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp'
+});
 const PNG_END = Buffer.from('0000000049454e44ae426082', 'hex');
 
 type Client = Pick<pg.PoolClient, 'query'> | null | undefined;
@@ -71,12 +75,28 @@ async function readBounded(stream: AsyncIterable<unknown>, maxBytes: number): Pr
 }
 
 function detectExactContainer(buffer: Buffer): '' | 'jpeg' | 'png' | 'webp' {
-  if (buffer.length >= 4 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff
-    && buffer.at(-2) === 0xff && buffer.at(-1) === 0xd9) return 'jpeg';
-  if (buffer.length >= 20 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
-    && buffer.subarray(-PNG_END.length).equals(PNG_END)) return 'png';
-  if (buffer.length >= 12 && buffer.toString('ascii', 0, 4) === 'RIFF'
-    && buffer.toString('ascii', 8, 12) === 'WEBP' && buffer.readUInt32LE(4) + 8 === buffer.length) return 'webp';
+  if (
+    buffer.length >= 4 &&
+    buffer[0] === 0xff &&
+    buffer[1] === 0xd8 &&
+    buffer[2] === 0xff &&
+    buffer.at(-2) === 0xff &&
+    buffer.at(-1) === 0xd9
+  )
+    return 'jpeg';
+  if (
+    buffer.length >= 20 &&
+    buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) &&
+    buffer.subarray(-PNG_END.length).equals(PNG_END)
+  )
+    return 'png';
+  if (
+    buffer.length >= 12 &&
+    buffer.toString('ascii', 0, 4) === 'RIFF' &&
+    buffer.toString('ascii', 8, 12) === 'WEBP' &&
+    buffer.readUInt32LE(4) + 8 === buffer.length
+  )
+    return 'webp';
   return '';
 }
 
@@ -89,8 +109,11 @@ function createMediaService({
   maxUploadBytes = MAX_UPLOAD_BYTES,
   maxInputPixels = MAX_INPUT_PIXELS
 }: {
-  attachmentRepository?: Pick<AttachmentRepository, 'findById' | 'markUploaded' | 'markFailed' | 'markDeleted' | 'retryProcessing'>
-    & Partial<Pick<AttachmentRepository, 'withAttachmentLock' | 'clearPhysicalData'>>;
+  attachmentRepository?: Pick<
+    AttachmentRepository,
+    'findById' | 'markUploaded' | 'markFailed' | 'markDeleted' | 'retryProcessing'
+  > &
+    Partial<Pick<AttachmentRepository, 'withAttachmentLock' | 'clearPhysicalData'>>;
   jobRepository?: Partial<Pick<MediaJobRepository, 'enqueue'>> | null;
   pressureService?: Partial<Pick<MediaPressureService, 'assertAcceptingUploads'>> | null;
   quotaService?: MediaQuotaService;
@@ -111,7 +134,13 @@ function createMediaService({
     return attachment;
   }
 
-  async function createSlot({ ownerId, context, clientRequestId, bytes, metadata = {} }: {
+  async function createSlot({
+    ownerId,
+    context,
+    clientRequestId,
+    bytes,
+    metadata = {}
+  }: {
     ownerId: string;
     context?: unknown;
     clientRequestId?: unknown;
@@ -119,16 +148,26 @@ function createMediaService({
     metadata?: unknown;
   }): Promise<PublicAttachment | null> {
     await pressureService?.assertAcceptingUploads?.();
-    if (context !== 'room' && context !== 'dm') throw new MediaServiceError('media_context_invalid', 'Invalid attachment context', 400);
+    if (context !== 'room' && context !== 'dm')
+      throw new MediaServiceError('media_context_invalid', 'Invalid attachment context', 400);
     if (typeof clientRequestId !== 'string' || !clientRequestId.trim()) {
       throw new MediaServiceError('media_request_id_required', 'Client request id is required', 400);
     }
     if (Number(bytes) > maxUploadBytes) throw new MediaServiceError('media_too_large', 'Image exceeds 10 MiB', 413);
-    const attachment = await quotas.reserve({ ownerId, context, clientRequestId: clientRequestId.trim(), bytes, metadata });
+    const attachment = await quotas.reserve({
+      ownerId,
+      context,
+      clientRequestId: clientRequestId.trim(),
+      bytes,
+      metadata
+    });
     return publicAttachment(attachment);
   }
 
-  async function inspectOriginal(attachmentId: string, claimedMimeType: string | undefined): Promise<{ height: number; mimeType: string; width: number }> {
+  async function inspectOriginal(
+    attachmentId: string,
+    claimedMimeType: string | undefined
+  ): Promise<{ height: number; mimeType: string; width: number }> {
     const opened = await files.openRead(attachmentId, 'original');
     const buffer = await readBounded(opened.stream, maxUploadBytes);
     const container = detectExactContainer(buffer);
@@ -146,7 +185,8 @@ function createMediaService({
       throw new MediaServiceError('media_invalid_image', 'Invalid or unsafe image', 400, { cause });
     }
     const mimeType = FORMAT_MIME[metadata.format as string];
-    if (!mimeType || metadata.format !== container) throw new MediaServiceError('media_type_unsupported', 'Only JPEG, PNG, and WebP images are supported', 415);
+    if (!mimeType || metadata.format !== container)
+      throw new MediaServiceError('media_type_unsupported', 'Only JPEG, PNG, and WebP images are supported', 415);
     if (claimedMimeType && claimedMimeType !== 'application/octet-stream' && claimedMimeType !== mimeType) {
       throw new MediaServiceError('media_type_mismatch', 'Image content does not match its MIME type', 415);
     }
@@ -158,7 +198,12 @@ function createMediaService({
     return { height, mimeType, width };
   }
 
-  async function upload({ id, ownerId, stream, mimeType }: {
+  async function upload({
+    id,
+    ownerId,
+    stream,
+    mimeType
+  }: {
     id: string;
     ownerId: string;
     stream?: UploadStream | null;
@@ -167,8 +212,7 @@ function createMediaService({
     await pressureService?.assertAcceptingUploads?.();
     if (!stream) throw new MediaServiceError('media_body_required', 'Image body is required', 400);
     const body = stream;
-    const locked: AttachmentLock = attachments.withAttachmentLock
-      || (async (_id, operation) => operation(undefined));
+    const locked: AttachmentLock = attachments.withAttachmentLock || (async (_id, operation) => operation(undefined));
     return locked(id, async (client: Client) => {
       const attachment = await owned(id, ownerId, client);
       if (attachment.internalState === 'processing' || attachment.state === 'ready') {
@@ -185,13 +229,17 @@ function createMediaService({
           throw new MediaServiceError('media_size_mismatch', 'Image exceeds its reserved size', 413);
         }
         const image = await inspectOriginal(id, mimeType);
-        const updated = await attachments.markUploaded(id, {
-          mimeType: image.mimeType,
-          bytes: saved.bytes,
-          width: image.width,
-          height: image.height,
-          originalStorageKey: saved.key
-        }, client);
+        const updated = await attachments.markUploaded(
+          id,
+          {
+            mimeType: image.mimeType,
+            bytes: saved.bytes,
+            width: image.width,
+            height: image.height,
+            originalStorageKey: saved.key
+          },
+          client
+        );
         if (!updated) throw new MediaServiceError('media_state_conflict', 'Attachment upload was superseded', 409);
         await jobRepository?.enqueue?.(id, { client });
         return publicAttachment(updated);

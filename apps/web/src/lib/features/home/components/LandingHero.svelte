@@ -29,7 +29,9 @@
 <section class="landing-hero" aria-labelledby="landingTitle">
   <p class="landing-kicker">Комната по ссылке за секунду</p>
   <h1 class="landing-title" id="landingTitle">Голосовая комната без лишних дверей</h1>
-  <p class="landing-lead">Нажмите — и вы уже в комнате. Код и ссылка появятся сразу. Аккаунт нужен, только чтобы сохранять комнаты.</p>
+  <p class="landing-lead">
+    Нажмите — и вы уже в комнате. Код и ссылка появятся сразу. Аккаунт нужен, только чтобы сохранять комнаты.
+  </p>
 
   <div class="landing-cta-row">
     <button class="landing-primary-button" type="button" disabled={creatingTemp} onclick={onCreateTemp}>

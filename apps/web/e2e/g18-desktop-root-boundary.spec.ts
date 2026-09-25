@@ -56,7 +56,10 @@ test('G18-A01 blocks every desktop-only entry route before child effects mount',
   }
 });
 
-test('G18-A02 registered mobile service worker suppresses a delivered push notification', async ({ browser, baseURL }) => {
+test('G18-A02 registered mobile service worker suppresses a delivered push notification', async ({
+  browser,
+  baseURL
+}) => {
   const origin = baseURL ?? 'http://127.0.0.1:5180';
   const context = await mobileContext(browser);
   await context.grantPermissions(['notifications'], { origin });

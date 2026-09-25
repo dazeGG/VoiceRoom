@@ -35,16 +35,26 @@ async function createPinFixture(t) {
 test('51 concurrent distinct pins preserve the 50-pin room cap', async (t) => {
   const fixture = await createPinFixture(t);
   const service = createPinService({ repository: fixture.repository });
-  const messages = await Promise.all(Array.from({ length: 51 }, (_, index) => fixture.rooms.appendMessage(
-    fixture.room.id,
-    { authorUserId: fixture.user.id, peerId: `peer-${index}`, text: `message-${index}`, expiresAt: Date.now() + 60_000 }
-  )));
+  const messages = await Promise.all(
+    Array.from({ length: 51 }, (_, index) =>
+      fixture.rooms.appendMessage(fixture.room.id, {
+        authorUserId: fixture.user.id,
+        peerId: `peer-${index}`,
+        text: `message-${index}`,
+        expiresAt: Date.now() + 60_000
+      })
+    )
+  );
 
-  const results = await Promise.allSettled(messages.map((message) => service.pin({
-    roomId: fixture.room.id,
-    messageId: message.id,
-    viewer: fixture.user
-  })));
+  const results = await Promise.allSettled(
+    messages.map((message) =>
+      service.pin({
+        roomId: fixture.room.id,
+        messageId: message.id,
+        viewer: fixture.user
+      })
+    )
+  );
 
   assert.equal(results.filter((result) => result.status === 'fulfilled').length, 50);
   const rejection = results.find((result) => result.status === 'rejected');
@@ -83,7 +93,11 @@ test('pin refresh removes soft-deleted messages from the snapshot', async (t) =>
   await service.pin({ roomId: fixture.room.id, messageId: message.id, viewer: fixture.user });
 
   await fixture.pool.query(`UPDATE room_messages SET deleted_at = now() WHERE id = $1`, [message.id]);
-  const refreshed = await service.refresh({ roomId: fixture.room.id, action: 'message-deleted', messageId: message.id });
+  const refreshed = await service.refresh({
+    roomId: fixture.room.id,
+    action: 'message-deleted',
+    messageId: message.id
+  });
 
   assert.deepEqual(refreshed, { pins: [], count: 0 });
 });
@@ -95,9 +109,18 @@ test('bookmark access can read pins but cannot mutate them without membership', 
   registerPinRoutes({
     app,
     pinService: {
-      async list() { calls.push('list'); return { pins: [], count: 0 }; },
-      async pin() { calls.push('pin'); return { pins: [], count: 0 }; },
-      async unpin() { calls.push('unpin'); return { pins: [], count: 0 }; }
+      async list() {
+        calls.push('list');
+        return { pins: [], count: 0 };
+      },
+      async pin() {
+        calls.push('pin');
+        return { pins: [], count: 0 };
+      },
+      async unpin() {
+        calls.push('unpin');
+        return { pins: [], count: 0 };
+      }
     },
     async resolveRoomAccess({ action }) {
       return action === 'read'

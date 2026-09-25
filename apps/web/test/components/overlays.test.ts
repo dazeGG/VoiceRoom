@@ -74,7 +74,17 @@ test('pressing outside or resizing the window closes a context menu', async () =
 });
 
 test('a context menu opened near the window edge stays inside the window', async () => {
-  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ width: 200, height: 150, top: 0, left: 0, right: 200, bottom: 150, x: 0, y: 0, toJSON() {} });
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+    width: 200,
+    height: 150,
+    top: 0,
+    left: 0,
+    right: 200,
+    bottom: 150,
+    x: 0,
+    y: 0,
+    toJSON() {}
+  });
   render(ContextMenuHarness, { props: { onClose: vi.fn(), x: window.innerWidth - 10, y: window.innerHeight - 10 } });
   const menu = await screen.findByRole('menu', { name: 'Действия с комнатой' });
   await waitFor(() => expect(menu.style.left).toBe(`${window.innerWidth - 200 - 8}px`));

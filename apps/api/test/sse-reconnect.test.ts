@@ -8,12 +8,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 import { createTestDatabase } from './db-harness.ts';
-import {
-  openWs,
-  joinVoiceRoom,
-  sendWs,
-  waitForWsType
-} from './ws-harness.ts';
+import { openWs, joinVoiceRoom, sendWs, waitForWsType } from './ws-harness.ts';
 
 const PEER_A = 'peer-alice1';
 const PEER_B = 'peer-bobbb1';
@@ -194,9 +189,9 @@ test('WS reconnect preserves presence and avoids spurious join/leave events', as
     await joinVoiceRoom(peerA2, { roomId, peerId: PEER_A, sessionToken: TOKEN_A, name: 'Evil' });
     await wait(150);
 
-    const reconnectEvents = peerB.frames.slice(beforeReconnect).filter((frame) =>
-      frame.type === 'room.peer.joined' || frame.type === 'room.peer.left'
-    );
+    const reconnectEvents = peerB.frames
+      .slice(beforeReconnect)
+      .filter((frame) => frame.type === 'room.peer.joined' || frame.type === 'room.peer.left');
     assert.equal(reconnectEvents.length, 0);
 
     const peerA3 = openWs(socketPath);

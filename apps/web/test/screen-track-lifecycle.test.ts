@@ -2,7 +2,6 @@
 import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 
-
 async function loadParticipantScreenLifecycle() {
   vi.resetModules();
   const testState = { stageRefreshes: 0 };
@@ -11,14 +10,22 @@ async function loadParticipantScreenLifecycle() {
     playMediaElement: () => {},
     releaseRemoteAudioElement: () => {}
   }));
-  vi.doMock('../src/lib/features/room/client/media/cues', () => ({ clearPeerJoinCue: () => {}, playStreamCue: () => {}, playStreamViewerCue: () => {} }));
+  vi.doMock('../src/lib/features/room/client/media/cues', () => ({
+    clearPeerJoinCue: () => {},
+    playStreamCue: () => {},
+    playStreamViewerCue: () => {}
+  }));
   vi.doMock('../src/lib/features/room/client/media/meters', () => ({ attachMeter: () => {} }));
-  vi.doMock('../src/lib/features/room/client/services/livekit-service', () => ({ syncLiveKitScreenSubscriptions: () => {} }));
+  vi.doMock('../src/lib/features/room/client/services/livekit-service', () => ({
+    syncLiveKitScreenSubscriptions: () => {}
+  }));
   vi.doMock('../src/lib/features/room/client/ui/screen-view', () => ({
     disconnectScreen: () => {},
     hideScreenStage: () => {},
     refreshAllScreenActions: () => {},
-    refreshScreenStage: () => { testState.stageRefreshes += 1; },
+    refreshScreenStage: () => {
+      testState.stageRefreshes += 1;
+    },
     refreshScreenTiles: () => {}
   }));
   const lifecycle = await import('../src/lib/features/room/client/room/participants.ts');

@@ -25,7 +25,10 @@ test('every level is kept for reports, and only the last hundred records are', a
   const logger = log.createLogger('room');
   logger.debug('joining');
   logger.info('joined', { peers: 2 });
-  expect(log.readLogBuffer().map((record) => [record.level, record.ns, record.msg])).toEqual([['debug', 'room', 'joining'], ['info', 'room', 'joined']]);
+  expect(log.readLogBuffer().map((record) => [record.level, record.ns, record.msg])).toEqual([
+    ['debug', 'room', 'joining'],
+    ['info', 'room', 'joined']
+  ]);
 
   for (let index = 0; index < 150; index += 1) logger.warn(`w${index}`);
   expect(log.readLogBuffer()).toHaveLength(100);
@@ -36,7 +39,11 @@ test('every level is kept for reports, and only the last hundred records are', a
 
 test('secrets and URL queries are redacted from errors before they are kept', async () => {
   const log = await load();
-  const context = log.errorContext(new Error('connect failed wss://lk.example/rtc?access_token=abc&gate=vrg1.aaa.bbb token eyJhbGciOiJI.eyJzdWIiOiJ4In0.sig'));
+  const context = log.errorContext(
+    new Error(
+      'connect failed wss://lk.example/rtc?access_token=abc&gate=vrg1.aaa.bbb token eyJhbGciOiJI.eyJzdWIiOiJ4In0.sig'
+    )
+  );
   expect(context.errorName).toBe('Error');
   expect(context.errorMessage).toBe('connect failed wss://lk.example/rtc?… token [redacted]');
 });
@@ -68,7 +75,12 @@ test('reports are throttled and stop for good once the intake is switched off', 
 });
 
 test('a report that cannot be delivered never throws and keeps the buffer', async () => {
-  vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('offline'); }));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => {
+      throw new TypeError('offline');
+    })
+  );
   const log = await load();
   log.createLogger('room').error('a');
   await expect(log.reportClientLogs('x')).resolves.toBe(true);
@@ -78,7 +90,9 @@ test('a report that cannot be delivered never throws and keeps the buffer', asyn
 test('uncaught errors and rejected promises are captured', async () => {
   const log = await load();
   log.installGlobalErrorCapture();
-  window.dispatchEvent(new ErrorEvent('error', { message: 'boom', filename: 'https://voiceroom.ru/app.js?v=secret', lineno: 7 }));
+  window.dispatchEvent(
+    new ErrorEvent('error', { message: 'boom', filename: 'https://voiceroom.ru/app.js?v=secret', lineno: 7 })
+  );
   const rejection = new Event('unhandledrejection') as Event & { reason: unknown };
   rejection.reason = new Error('nope');
   window.dispatchEvent(rejection);
@@ -88,11 +102,21 @@ test('uncaught errors and rejected promises are captured', async () => {
 });
 
 test('a failed API response is logged with the request id the server gave it', async () => {
-  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ error: 'Нет доступа' }), { status: 403, headers: { 'x-request-id': 'req-42' } })));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ error: 'Нет доступа' }), { status: 403, headers: { 'x-request-id': 'req-42' } })
+    )
+  );
   const log = await load();
   log.clearLogBuffer();
   const http = await import('../../src/lib/api/http.ts');
   await expect(http.getJsonAuth('/api/friends')).rejects.toThrow('Нет доступа');
   const records = (await import('../../src/lib/shared/log.ts')).readLogBuffer();
-  expect(records.at(-1)).toMatchObject({ level: 'warn', msg: 'api request failed', ctx: { url: '/api/friends', status: 403, requestId: 'req-42' } });
+  expect(records.at(-1)).toMatchObject({
+    level: 'warn',
+    msg: 'api request failed',
+    ctx: { url: '/api/friends', status: 403, requestId: 'req-42' }
+  });
 });

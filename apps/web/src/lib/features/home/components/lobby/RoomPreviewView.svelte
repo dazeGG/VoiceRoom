@@ -178,7 +178,13 @@
                 style:--participant-avatar-shadow={avatar.shadow}
               >
                 <div class="voice-ring" aria-hidden="true">
-                  <span class="avatar">{avatar.initials}{#if avatar.src}<img src={avatar.src} alt="" onerror={(event) => event.currentTarget.remove()} />{/if}</span>
+                  <span class="avatar"
+                    >{avatar.initials}{#if avatar.src}<img
+                        src={avatar.src}
+                        alt=""
+                        onerror={(event) => event.currentTarget.remove()}
+                      />{/if}</span
+                  >
                 </div>
                 <div class="participant-copy">
                   <h2>
@@ -223,14 +229,34 @@
       <aside class="lobby-room-members" aria-label="Список участников комнаты">
         <header class="chat-rail-head">
           <div class="room-panel-tabs" role="tablist" aria-label="Раздел панели комнаты">
-            <button type="button" role="tab" aria-label="Чат" aria-selected="false" data-active="false" title="Чат" onclick={() => selectPanel('chat')}>
+            <button
+              type="button"
+              role="tab"
+              aria-label="Чат"
+              aria-selected="false"
+              data-active="false"
+              title="Чат"
+              onclick={() => selectPanel('chat')}
+            >
               <MessageSquare {...iconSm} aria-hidden="true" />
             </button>
-            <button type="button" role="tab" aria-label="Участники" aria-selected="true" data-active="true" title="Участники">
+            <button
+              type="button"
+              role="tab"
+              aria-label="Участники"
+              aria-selected="true"
+              data-active="true"
+              title="Участники"
+            >
               <Users {...iconSm} aria-hidden="true" />
             </button>
           </div>
-          <button class="chat-rail-collapse" type="button" aria-label="Свернуть панель" onclick={() => (activePanel = null)}>
+          <button
+            class="chat-rail-collapse"
+            type="button"
+            aria-label="Свернуть панель"
+            onclick={() => (activePanel = null)}
+          >
             <ChevronRight {...iconSm} aria-hidden="true" />
           </button>
         </header>

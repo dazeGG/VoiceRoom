@@ -2,12 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import path from 'node:path';
 import fs from 'node:fs';
-import {
-  readEnvInt,
-  readEnvBool,
-  readDatabaseConfig,
-  readUploadsDir
-} from '../src/lib/config.ts';
+import { readEnvInt, readEnvBool, readDatabaseConfig, readUploadsDir } from '../src/lib/config.ts';
 import { readApiConfig } from '../src/app/config.ts';
 
 test('readEnvInt parses a valid integer', () => {
@@ -51,7 +46,6 @@ test('readUploadsDir defaults to an ignored API-local directory', () => {
   assert.equal(readUploadsDir({}), path.resolve(import.meta.dirname, '../uploads'));
 });
 
-
 test('readDatabaseConfig requires DATABASE_URL', () => {
   assert.throws(() => readDatabaseConfig({}), /DATABASE_URL is required/);
 });
@@ -61,7 +55,10 @@ test('readDatabaseConfig rejects malformed DATABASE_URL', () => {
 });
 
 test('readDatabaseConfig rejects non-PostgreSQL protocols', () => {
-  assert.throws(() => readDatabaseConfig({ DATABASE_URL: 'mysql://user:pass@localhost/db' }), /postgres:\/\/ or postgresql:\/\//);
+  assert.throws(
+    () => readDatabaseConfig({ DATABASE_URL: 'mysql://user:pass@localhost/db' }),
+    /postgres:\/\/ or postgresql:\/\//
+  );
 });
 
 test('readDatabaseConfig accepts postgres URLs', () => {
@@ -85,8 +82,10 @@ test('compose passes every feature flag the API leaves disabled by default', () 
   const passed = new Set(Array.from(apiBlock.matchAll(/^ {6}([A-Z0-9_]+):/gm), (m) => m[1]));
   // A default-off flag: false with no env, true once its variable is set.
   const base = readApiConfig({ NODE_ENV: 'production' }) as Record<string, unknown>;
-  const defaultOff = Object.keys(base).filter((name) =>
-    base[name] === false && (readApiConfig({ NODE_ENV: 'production', [name]: 'true' }) as Record<string, unknown>)[name] === true
+  const defaultOff = Object.keys(base).filter(
+    (name) =>
+      base[name] === false &&
+      (readApiConfig({ NODE_ENV: 'production', [name]: 'true' }) as Record<string, unknown>)[name] === true
   );
 
   assert.ok(defaultOff.length > 0, 'expected the API to declare default-off flags');

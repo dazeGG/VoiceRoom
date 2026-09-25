@@ -11,23 +11,45 @@ import { createRoomPresence } from '../src/realtime/room-presence.ts';
 
 function transport(id, { fails = false } = {}) {
   const sent = [];
-  return { id, sent, send(message) { if (fails) return false; sent.push(message.type); return true; } };
+  return {
+    id,
+    sent,
+    send(message) {
+      if (fails) return false;
+      sent.push(message.type);
+      return true;
+    }
+  };
 }
 
-function harness({ store = {}, runtime = true, retry = { baseMs: 1, maxMs: 4 }, roster = { waitMs: 30, pollMs: 5 } } = {}) {
+function harness({
+  store = {},
+  runtime = true,
+  retry = { baseMs: 1, maxMs: 4 },
+  roster = { waitMs: 30, pollMs: 5 }
+} = {}) {
   const calls = { active: [], empty: [], summaries: [], mirrored: [], errors: [] };
   const presence = createRoomPresence({
     store: () => ({
-      async markRoomActive(roomId) { calls.active.push(roomId); },
-      async markRoomEmpty(roomId) { calls.empty.push(roomId); },
+      async markRoomActive(roomId) {
+        calls.active.push(roomId);
+      },
+      async markRoomEmpty(roomId) {
+        calls.empty.push(roomId);
+      },
       async pruneRooms() {},
-      async getRoom(roomId) { return roomId === 'kept' ? { id: roomId } : null; },
+      async getRoom(roomId) {
+        return roomId === 'kept' ? { id: roomId } : null;
+      },
       ...store
     }),
-    runtime: () => (runtime ? {
-      scheduleSummaryBroadcast: (roomId) => calls.summaries.push(roomId),
-      mirrorLegacyRoomEvent: (roomId, message) => calls.mirrored.push(message.type)
-    } : null),
+    runtime: () =>
+      runtime
+        ? {
+            scheduleSummaryBroadcast: (roomId) => calls.summaries.push(roomId),
+            mirrorLegacyRoomEvent: (roomId, message) => calls.mirrored.push(message.type)
+          }
+        : null,
     logger: () => ({ error: (fields) => calls.errors.push(fields.evt) }),
     occupancyRetry: retry,
     roster
@@ -43,7 +65,13 @@ test('stored rooms share the live roster', () => {
   const first = presence.attach({ id: 'r1', peers: new Map([['p1', { id: 'p1' }]]) });
   assert.equal(first.peers, presence.room('r1').peers);
   assert.ok(first.peers.has('p1'));
-  const second = presence.attach({ id: 'r1', peers: new Map([['p1', { id: 'other' }], ['p2', { id: 'p2' }]]) });
+  const second = presence.attach({
+    id: 'r1',
+    peers: new Map([
+      ['p1', { id: 'other' }],
+      ['p2', { id: 'p2' }]
+    ])
+  });
   assert.equal(second.peers.get('p1').id, 'p1');
   assert.ok(second.peers.has('p2'));
   assert.equal(presence.attach({ id: 'r1', peers: presence.room('r1').peers }).peers.size, 2);
@@ -108,7 +136,10 @@ test('occupancy writes are serialized and a failure retries with backoff', async
   const { calls, presence } = harness({
     store: {
       async markRoomActive(roomId) {
-        if (failures > 0) { failures -= 1; throw new Error('db down'); }
+        if (failures > 0) {
+          failures -= 1;
+          throw new Error('db down');
+        }
         calls.active.push(roomId);
       }
     }
@@ -127,7 +158,11 @@ test('occupancy writes are serialized and a failure retries with backoff', async
 
 test('a retry that fails again is logged and the next one is not stacked', async () => {
   const { calls, presence } = harness({
-    store: { async markRoomEmpty() { throw new Error('db down'); } },
+    store: {
+      async markRoomEmpty() {
+        throw new Error('db down');
+      }
+    },
     retry: { baseMs: 1, maxMs: 2 }
   });
   const failing = presence.queueOccupancy('r1');
@@ -140,7 +175,14 @@ test('a retry that fails again is logged and the next one is not stacked', async
 });
 
 test('closing the last seat logs a failed occupancy write', async () => {
-  const { calls, presence } = harness({ store: { async markRoomEmpty() { throw new Error('db down'); } }, retry: { baseMs: 1000, maxMs: 1000 } });
+  const { calls, presence } = harness({
+    store: {
+      async markRoomEmpty() {
+        throw new Error('db down');
+      }
+    },
+    retry: { baseMs: 1000, maxMs: 1000 }
+  });
   presence.room('r1').peers.set('p', { id: 'p', transport: transport('tp') });
   presence.closePeer('r1', 'p', 'tp');
   await settle();
@@ -159,8 +201,12 @@ test('the idle sweep reconciles live rooms first and forgets rooms the store dro
   const order = [];
   const { presence } = harness({
     store: {
-      async markRoomActive(roomId) { order.push(`active:${roomId}`); },
-      async pruneRooms() { order.push('prune'); }
+      async markRoomActive(roomId) {
+        order.push(`active:${roomId}`);
+      },
+      async pruneRooms() {
+        order.push('prune');
+      }
     }
   });
   presence.room('kept').peers.set('p', { id: 'p' });

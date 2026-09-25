@@ -17,16 +17,24 @@ export interface AttachmentDraft {
 type Envelope = { ok: boolean; attachment: AttachmentDraft; code?: string; error?: string };
 
 export class AttachmentApiError extends Error {
-  constructor(public code: string, message: string, public status: number) {
+  constructor(
+    public code: string,
+    message: string,
+    public status: number
+  ) {
     super(message);
     this.name = 'AttachmentApiError';
   }
 }
 
 async function envelope(response: Response): Promise<Envelope> {
-  const payload = await response.json().catch(() => null) as Envelope | null;
+  const payload = (await response.json().catch(() => null)) as Envelope | null;
   if (!response.ok || !payload?.ok) {
-    throw new AttachmentApiError(payload?.code || 'media_error', payload?.error || 'Не удалось загрузить изображение', response.status);
+    throw new AttachmentApiError(
+      payload?.code || 'media_error',
+      payload?.error || 'Не удалось загрузить изображение',
+      response.status
+    );
   }
   return payload;
 }
@@ -63,9 +71,19 @@ export function uploadAttachmentContent(
     request.onerror = () => reject(new AttachmentApiError('media_network_error', 'Сервер недоступен', 0));
     request.onload = () => {
       let payload: Envelope | null = null;
-      try { payload = JSON.parse(request.responseText) as Envelope; } catch { /* handled below */ }
+      try {
+        payload = JSON.parse(request.responseText) as Envelope;
+      } catch {
+        /* handled below */
+      }
       if (request.status < 200 || request.status >= 300 || !payload?.ok) {
-        reject(new AttachmentApiError(payload?.code || 'media_error', payload?.error || 'Не удалось загрузить изображение', request.status));
+        reject(
+          new AttachmentApiError(
+            payload?.code || 'media_error',
+            payload?.error || 'Не удалось загрузить изображение',
+            request.status
+          )
+        );
         return;
       }
       onProgress(1);
@@ -77,21 +95,26 @@ export function uploadAttachmentContent(
 
 export async function getAttachmentStatus(id: string): Promise<AttachmentDraft> {
   const response = await fetch(`/api/media/attachments/${encodeURIComponent(id)}`, {
-    credentials: 'same-origin', headers: { Accept: 'application/json' }
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' }
   });
   return (await envelope(response)).attachment;
 }
 
 export async function retryAttachment(id: string): Promise<AttachmentDraft> {
   const response = await fetch(`/api/media/attachments/${encodeURIComponent(id)}/retry`, {
-    method: 'POST', credentials: 'same-origin', headers: { Accept: 'application/json' }
+    method: 'POST',
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' }
   });
   return (await envelope(response)).attachment;
 }
 
 export async function deleteAttachment(id: string): Promise<void> {
   const response = await fetch(`/api/media/attachments/${encodeURIComponent(id)}`, {
-    method: 'DELETE', credentials: 'same-origin', headers: { Accept: 'application/json' }
+    method: 'DELETE',
+    credentials: 'same-origin',
+    headers: { Accept: 'application/json' }
   });
   await envelope(response);
 }

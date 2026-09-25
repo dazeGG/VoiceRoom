@@ -33,7 +33,8 @@
         if (!cancelled) preview = result;
       })
       .catch((cause) => {
-        if (!cancelled) error = cause instanceof Error && cause.message ? cause.message : 'Не удалось подготовить удаление';
+        if (!cancelled)
+          error = cause instanceof Error && cause.message ? cause.message : 'Не удалось подготовить удаление';
       });
     return () => {
       cancelled = true;
@@ -70,8 +71,8 @@
   <Dialog {open} title="Удалить аккаунт" {onClose} width={500} initialFocus="#deleteAccountPassword">
     <form class="delete-account" onsubmit={confirmDeletion}>
       <p class="delete-account-text">
-        Аккаунт сразу скроется, а все сеансы завершатся. До {formatDate(Date.now() + graceDays * DAY_MS)} его можно
-        восстановить, просто войдя с паролем. После этого удаление окончательное:
+        Аккаунт сразу скроется, а все сеансы завершатся. До {formatDate(Date.now() + graceDays * DAY_MS)} его можно восстановить,
+        просто войдя с паролем. После этого удаление окончательное:
       </p>
       <ul class="delete-account-list">
         <li>друзья, заявки, блокировки, настройки и коды восстановления удалятся;</li>
@@ -90,7 +91,7 @@
                   text={room.heir
                     ? `перейдёт к ${room.heir.displayName || room.heir.login} — самому давнему участнику`
                     : 'удалится: других участников нет'}
-                  />
+                />
               </small>
             </div>
           {/each}

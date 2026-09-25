@@ -166,9 +166,7 @@
   }
 
   const peer = $derived(friendsState.threadPeer);
-  const friendEntry = $derived(
-    friendsState.friends.find((entry) => entry.user.id === friendsState.selectedFriendId)
-  );
+  const friendEntry = $derived(friendsState.friends.find((entry) => entry.user.id === friendsState.selectedFriendId));
   const online = $derived(friendEntry?.online ?? false);
   const presence = $derived(effectivePresenceStatus(online, peer?.presenceStatus, peer?.doNotDisturb));
   const presenceLabel = $derived(
@@ -275,14 +273,20 @@
   });
 
   onMount(() => {
-    void getCapabilityFeature('reactions').then((enabled) => { reactionsEnabled = enabled; });
+    void getCapabilityFeature('reactions').then((enabled) => {
+      reactionsEnabled = enabled;
+    });
     if (selfId) {
       void loadFrequentReactions('chat', selfId).then((emoji) => {
         if (emoji.length > 0) quickReactions = emoji;
       });
     }
-    void getCapabilityFeature('replies').then((enabled) => { repliesEnabled = enabled; });
-    void getCapabilityFeature('mediaUploads').then((enabled) => { mediaUploadsEnabled = enabled; });
+    void getCapabilityFeature('replies').then((enabled) => {
+      repliesEnabled = enabled;
+    });
+    void getCapabilityFeature('mediaUploads').then((enabled) => {
+      mediaUploadsEnabled = enabled;
+    });
     return getAppRealtime().subscribe((event) => {
       if (event.type !== 'reaction.updated' || event.payload.conversation.type !== 'dm') return;
       if (event.payload.conversation.id !== friendsState.selectedFriendId) return;
@@ -357,10 +361,7 @@
     if (token !== settleToken) return;
     if (scrollEl) {
       // A slow or dead image must not hold the thread hostage.
-      await Promise.race([
-        pendingArtwork(scrollEl),
-        new Promise((resolve) => setTimeout(resolve, SETTLE_TIMEOUT_MS))
-      ]);
+      await Promise.race([pendingArtwork(scrollEl), new Promise((resolve) => setTimeout(resolve, SETTLE_TIMEOUT_MS))]);
     }
     if (token !== settleToken) return;
     await tick();
@@ -515,8 +516,6 @@
     inputEl?.focus();
   }
 
-
-
   async function togglePeerMute(): Promise<void> {
     if (!peer || muteSaving) return;
     muteSaving = true;
@@ -537,7 +536,9 @@
       reactions.markDeleted(mid);
       pushToast('Сообщение удалено');
     } catch (cause) {
-      pushToast(cause instanceof Error && cause.message ? cause.message : 'Не удалось удалить сообщение', { variant: 'error' });
+      pushToast(cause instanceof Error && cause.message ? cause.message : 'Не удалось удалить сообщение', {
+        variant: 'error'
+      });
     }
   }
 
@@ -673,7 +674,9 @@
           <div class="lobby-dm-head-name"><EmojiText text={friendName(peer)} /></div>
           <div class="lobby-dm-head-status" data-presence={presence}>{presenceLabel}</div>
         </div>
-        <span style="flex:none;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:#9a9484;">
+        <span
+          style="flex:none;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:#9a9484;"
+        >
           <User {...iconMd} aria-hidden="true" />
         </span>
       </button>
@@ -693,7 +696,12 @@
             <div class="lobby-dm-empty">{friendsState.threadHistoryError}</div>
           {/if}
           {#if friendsState.threadHistoryEnabled && (friendsState.threadLoadingOlder || friendsState.threadHasMoreBefore)}
-            <button type="button" class="lobby-dm-empty" disabled={friendsState.threadLoadingOlder} onclick={() => void loadOlderThread(scrollEl)}>
+            <button
+              type="button"
+              class="lobby-dm-empty"
+              disabled={friendsState.threadLoadingOlder}
+              onclick={() => void loadOlderThread(scrollEl)}
+            >
               {friendsState.threadLoadingOlder ? 'Загружаем…' : 'Показать предыдущие'}
             </button>
           {/if}
@@ -703,22 +711,64 @@
             {/if}
             <div class="chat-msg dm-chat-group" data-self={group.fromMe}>
               {#if group.fromMe}
-                <button class="chat-avatar-button chat-msg-trigger" type="button" aria-haspopup="dialog" aria-label="Ваш профиль" onclick={openSelfProfile}>
-                  <Avatar class="chat-msg-avatar" name={self.displayName?.trim() || self.login} src={self.avatarUrl} colorKey={self.avatarColorKey} background={self.avatarAccent || undefined} size={34} />
+                <button
+                  class="chat-avatar-button chat-msg-trigger"
+                  type="button"
+                  aria-haspopup="dialog"
+                  aria-label="Ваш профиль"
+                  onclick={openSelfProfile}
+                >
+                  <Avatar
+                    class="chat-msg-avatar"
+                    name={self.displayName?.trim() || self.login}
+                    src={self.avatarUrl}
+                    colorKey={self.avatarColorKey}
+                    background={self.avatarAccent || undefined}
+                    size={34}
+                  />
                 </button>
               {:else}
-                <button class="chat-avatar-button chat-msg-trigger" type="button" aria-haspopup="dialog" aria-label={`Профиль ${friendName(peer!)}`} onclick={openMessageAuthorProfile}>
-                  <Avatar class="chat-msg-avatar" name={friendName(peer!)} src={peer?.avatarUrl} colorKey={peer?.avatarColorKey} background={peer?.avatarAccent || undefined} size={34} />
+                <button
+                  class="chat-avatar-button chat-msg-trigger"
+                  type="button"
+                  aria-haspopup="dialog"
+                  aria-label={`Профиль ${friendName(peer!)}`}
+                  onclick={openMessageAuthorProfile}
+                >
+                  <Avatar
+                    class="chat-msg-avatar"
+                    name={friendName(peer!)}
+                    src={peer?.avatarUrl}
+                    colorKey={peer?.avatarColorKey}
+                    background={peer?.avatarAccent || undefined}
+                    size={34}
+                  />
                 </button>
               {/if}
               <div class="chat-msg-main">
                 <div class="chat-msg-meta">
                   {#if group.fromMe}
-                    <button class="chat-msg-author chat-msg-trigger" type="button" style={`color:${self.avatarAccent || 'var(--accent)'}`} aria-haspopup="dialog" aria-label="Ваш профиль" onclick={openSelfProfile}><EmojiText text={self.displayName?.trim() || self.login} /></button>
+                    <button
+                      class="chat-msg-author chat-msg-trigger"
+                      type="button"
+                      style={`color:${self.avatarAccent || 'var(--accent)'}`}
+                      aria-haspopup="dialog"
+                      aria-label="Ваш профиль"
+                      onclick={openSelfProfile}><EmojiText text={self.displayName?.trim() || self.login} /></button
+                    >
                   {:else}
-                    <button class="chat-msg-author chat-msg-trigger" type="button" style={`color:${peer?.avatarAccent || 'var(--accent)'}`} aria-haspopup="dialog" aria-label={`Профиль ${friendName(peer!)}`} onclick={openMessageAuthorProfile}><EmojiText text={friendName(peer!)} /></button>
+                    <button
+                      class="chat-msg-author chat-msg-trigger"
+                      type="button"
+                      style={`color:${peer?.avatarAccent || 'var(--accent)'}`}
+                      aria-haspopup="dialog"
+                      aria-label={`Профиль ${friendName(peer!)}`}
+                      onclick={openMessageAuthorProfile}><EmojiText text={friendName(peer!)} /></button
+                    >
                   {/if}
-                  <time class="chat-msg-time" datetime={new Date(group.bubbles[0].createdAt).toISOString()}>{formatTime(group.bubbles[0].createdAt)}</time>
+                  <time class="chat-msg-time" datetime={new Date(group.bubbles[0].createdAt).toISOString()}
+                    >{formatTime(group.bubbles[0].createdAt)}</time
+                  >
                 </div>
                 {#each group.bubbles as bubble (bubble.id)}
                   <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -738,8 +788,18 @@
                         </div>
                         {#if inviteActionable(bubble, group.fromMe)}
                           <div class="lobby-room-invitation-actions">
-                            <button type="button" class="lobby-room-invitation-dismiss" disabled={inviteResponding === bubble.id} onclick={() => void onInviteRespond(bubble, 'decline')}>Не сейчас</button>
-                            <button type="button" class="lobby-room-invitation-join" disabled={inviteResponding === bubble.id} onclick={() => void onInviteRespond(bubble, 'accept')}>Войти</button>
+                            <button
+                              type="button"
+                              class="lobby-room-invitation-dismiss"
+                              disabled={inviteResponding === bubble.id}
+                              onclick={() => void onInviteRespond(bubble, 'decline')}>Не сейчас</button
+                            >
+                            <button
+                              type="button"
+                              class="lobby-room-invitation-join"
+                              disabled={inviteResponding === bubble.id}
+                              onclick={() => void onInviteRespond(bubble, 'accept')}>Войти</button
+                            >
                           </div>
                         {/if}
                       </article>
@@ -756,14 +816,24 @@
                         />
                         <div class="dm-msg-edit-actions">
                           <button type="button" onclick={cancelEditing} disabled={editSaving}>Отмена</button>
-                          <button type="button" onclick={saveEdit} disabled={editSaving || !editDraft.trim()}>Сохранить</button>
+                          <button type="button" onclick={saveEdit} disabled={editSaving || !editDraft.trim()}
+                            >Сохранить</button
+                          >
                         </div>
                       </div>
                     {:else}
                       <div class="dm-chat-content">
-                        {#if bubble.replyPreview}<ReplyPreview preview={bubble.replyPreview} interactive onjump={jumpToMessage} />{/if}
+                        {#if bubble.replyPreview}<ReplyPreview
+                            preview={bubble.replyPreview}
+                            interactive
+                            onjump={jumpToMessage}
+                          />{/if}
                         {#if bubble.attachments?.length}<AttachmentMosaic attachments={bubble.attachments} />{/if}
-                        {#if bubble.body.trim()}<span class="chat-msg-content dm-msg-content"><ChatText text={bubble.body} />{#if bubble.editedAt}<span class="dm-msg-edited">(изменено)</span>{/if}</span>{/if}
+                        {#if bubble.body.trim()}<span class="chat-msg-content dm-msg-content"
+                            ><ChatText text={bubble.body} />{#if bubble.editedAt}<span class="dm-msg-edited"
+                                >(изменено)</span
+                              >{/if}</span
+                          >{/if}
                         {#if bubble.linkPreview}<LinkPreviewCard preview={bubble.linkPreview} />{/if}
                         {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={bubble.id} />{/if}
                       </div>
@@ -772,7 +842,10 @@
                         messageId={bubble.id}
                         userId={selfId}
                         canReply={repliesEnabled}
-                        onReply={() => { replyTarget = bubble; inputEl?.focus(); }}
+                        onReply={() => {
+                          replyTarget = bubble;
+                          inputEl?.focus();
+                        }}
                         onCopy={() => void copyMessageText(bubble)}
                         onMore={(event) => openMessageMenu(bubble, group.fromMe, event)}
                       />
@@ -791,7 +864,12 @@
         {#if replyTarget}
           {@const target = replyTarget}
           <ReplyTargetBar
-            target={{ messageId: target.id, deleted: false, author: { id: target.senderId, name: target.senderId === selfId ? 'Вы' : friendName(peer!) }, text: target.body }}
+            target={{
+              messageId: target.id,
+              deleted: false,
+              author: { id: target.senderId, name: target.senderId === selfId ? 'Вы' : friendName(peer!) },
+              text: target.body
+            }}
             onjump={jumpToMessage}
             oncancel={() => (replyTarget = null)}
           />
@@ -880,9 +958,12 @@
     open={Boolean(menuMessage)}
     x={menuX}
     y={menuY}
-    quickReactions={quickReactions}
+    {quickReactions}
     activeReactions={new Set(
-      reactions.forMessage(target.id).filter((summary) => summary.reactedByMe).map((summary) => summary.emoji)
+      reactions
+        .forMessage(target.id)
+        .filter((summary) => summary.reactedByMe)
+        .map((summary) => summary.emoji)
     )}
     canReact={reactionsEnabled && Boolean(selfId)}
     canReply={repliesEnabled}
@@ -891,7 +972,10 @@
     onClose={closeMessageMenu}
     onReact={(emoji) => void reactions.toggle(target.id, emoji)}
     onOpenReactionPicker={() => openReactionPickerFor(target.id)}
-    onReply={() => { replyTarget = target; inputEl?.focus(); }}
+    onReply={() => {
+      replyTarget = target;
+      inputEl?.focus();
+    }}
     onCopy={() => void copyMessageText(target)}
     onEdit={() => startEditing(target)}
     onDelete={() => void onDelete(target.id)}

@@ -114,7 +114,9 @@
       }
       return false;
     }
-    const expected = splitEmoji(text).filter((part) => part.kind === 'emoji').map((part) => part.text);
+    const expected = splitEmoji(text)
+      .filter((part) => part.kind === 'emoji')
+      .map((part) => part.text);
     return expected.length === shown.length && expected.every((emoji, index) => emoji === shown[index]);
   }
 
@@ -155,7 +157,10 @@
     if (!root || !selection || selection.rangeCount === 0) return null;
     const range = selection.getRangeAt(0);
     if (!root.contains(range.startContainer) || !root.contains(range.endContainer)) return null;
-    return { start: offsetOf(range.startContainer, range.startOffset), end: offsetOf(range.endContainer, range.endOffset) };
+    return {
+      start: offsetOf(range.startContainer, range.startOffset),
+      end: offsetOf(range.endContainer, range.endOffset)
+    };
   }
 
   export function focus(): void {
@@ -202,7 +207,10 @@
     let selection = selectionInside();
     if (text.length > maxlength) {
       text = text.slice(0, maxlength);
-      selection = selection && { start: Math.min(selection.start, text.length), end: Math.min(selection.end, text.length) };
+      selection = selection && {
+        start: Math.min(selection.start, text.length),
+        end: Math.min(selection.end, text.length)
+      };
     }
     if (!showsText(text) || text !== serialize(root)) {
       render(text);
@@ -225,7 +233,11 @@
       insertText('\n');
       return;
     }
-    if ((event.inputType === 'insertText' || event.inputType === 'insertReplacementText') && event.data && !event.isComposing) {
+    if (
+      (event.inputType === 'insertText' || event.inputType === 'insertReplacementText') &&
+      event.data &&
+      !event.isComposing
+    ) {
       const selection = selectionInside() ?? { start: value.length, end: value.length };
       if (value.length - (selection.end - selection.start) + event.data.length > maxlength) event.preventDefault();
     }

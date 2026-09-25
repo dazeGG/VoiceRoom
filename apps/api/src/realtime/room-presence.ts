@@ -30,7 +30,10 @@ export interface OccupancyStore {
 export interface RoomPresenceDeps {
   store(): OccupancyStore;
   /** The realtime runtime once createApiApp built it; preview watchers and summaries go through it. */
-  runtime(): { scheduleSummaryBroadcast(roomId: string): void; mirrorLegacyRoomEvent(roomId: string, message: unknown): void } | null;
+  runtime(): {
+    scheduleSummaryBroadcast(roomId: string): void;
+    mirrorLegacyRoomEvent(roomId: string, message: unknown): void;
+  } | null;
   logger(): Pick<Logger, 'error'>;
   occupancyRetry: { baseMs: number; maxMs: number };
   roster: { waitMs: number; pollMs: number };
@@ -51,7 +54,9 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
   }
 
   /** Joins a stored room with its live roster (the roster object is shared, not copied). */
-  function attach<T extends { id: string; peers?: unknown }>(dbRoom: T | null): (T & { peers: Map<string, RosterPeer> }) | null {
+  function attach<T extends { id: string; peers?: unknown }>(
+    dbRoom: T | null
+  ): (T & { peers: Map<string, RosterPeer> }) | null {
     if (!dbRoom) return null;
     const presence = room(dbRoom.id);
     if (dbRoom.peers instanceof Map && dbRoom.peers !== presence.peers) {
@@ -79,7 +84,12 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
       if (occupancyRetries.get(roomId) !== retry) return;
       retry.timer = null;
       void queueOccupancy(roomId).catch((error) => {
-        deps.logger().error({ evt: LOG_EVENTS.ROOM_OCCUPANCY_RETRY_FAILED, err: error }, 'failed to retry room occupancy persistence');
+        deps
+          .logger()
+          .error(
+            { evt: LOG_EVENTS.ROOM_OCCUPANCY_RETRY_FAILED, err: error },
+            'failed to retry room occupancy persistence'
+          );
       });
     }, delay);
     retry.timer?.unref?.();
@@ -162,7 +172,12 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
       // The call ended: reset the in-memory call clock (never persisted).
       target.voiceActiveSince = null;
       void queueOccupancy(roomId).catch((error) => {
-        deps.logger().error({ evt: LOG_EVENTS.ROOM_OCCUPANCY_PERSIST_FAILED, roomId, err: error }, 'failed to persist room occupancy');
+        deps
+          .logger()
+          .error(
+            { evt: LOG_EVENTS.ROOM_OCCUPANCY_PERSIST_FAILED, roomId, err: error },
+            'failed to persist room occupancy'
+          );
       });
     } else {
       target.updatedAt = Date.now();
@@ -171,7 +186,11 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
 
   // The client sends its realtime join just before asking for a media token,
   // so admission waits a moment for the join to land.
-  async function waitForRosterPeer(roomId: string, peerId: string, timeoutMs = deps.roster.waitMs): Promise<RosterPeer | null> {
+  async function waitForRosterPeer(
+    roomId: string,
+    peerId: string,
+    timeoutMs = deps.roster.waitMs
+  ): Promise<RosterPeer | null> {
     const deadline = Date.now() + timeoutMs;
     for (;;) {
       const peer = rooms.get(roomId)?.peers?.get(peerId);
@@ -184,7 +203,9 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
   // idle-room sweep. If the database is unavailable the sweep fails closed,
   // so an old empty_since marker cannot delete a live room.
   async function prune(now = Date.now()): Promise<void> {
-    const activeRoomIds = [...rooms.entries()].filter(([, current]) => current.peers.size > 0).map(([roomId]) => roomId);
+    const activeRoomIds = [...rooms.entries()]
+      .filter(([, current]) => current.peers.size > 0)
+      .map(([roomId]) => roomId);
     await Promise.all(activeRoomIds.map((roomId) => queueOccupancy(roomId)));
     await deps.store().pruneRooms(now);
     for (const roomId of [...rooms.keys()]) {

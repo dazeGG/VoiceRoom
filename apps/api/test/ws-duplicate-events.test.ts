@@ -13,13 +13,7 @@ import http from 'node:http';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
-import {
-  openWs,
-  sendWs,
-  joinVoiceRoom,
-  waitForWsType,
-  countWsType
-} from './ws-harness.ts';
+import { openWs, sendWs, joinVoiceRoom, waitForWsType, countWsType } from './ws-harness.ts';
 import { createTestDatabase } from './db-harness.ts';
 
 const PEER_A = 'peer-dup-a1';
@@ -140,9 +134,7 @@ test('room.peer.update fans out exactly one room.peer.updated per other peer', a
     await joinVoiceRoom(bob, { roomId, peerId: PEER_B, sessionToken: TOKEN_B, name: 'Bob' });
 
     // Ensure Bob has seen Alice as a peer before we mutate her state.
-    await waitForWsType(bob.frames, 'room.peer.joined', (frame) => frame.payload?.peer?.id === PEER_A).catch(
-      () => {}
-    );
+    await waitForWsType(bob.frames, 'room.peer.joined', (frame) => frame.payload?.peer?.id === PEER_A).catch(() => {});
 
     const bobSince = bob.frames.length;
 
@@ -155,11 +147,7 @@ test('room.peer.update fans out exactly one room.peer.updated per other peer', a
     });
 
     // Wait for the first updated event, then let any duplicates settle.
-    await waitForWsType(
-      bob.frames,
-      'room.peer.updated',
-      (frame) => frame.payload?.peer?.id === PEER_A
-    );
+    await waitForWsType(bob.frames, 'room.peer.updated', (frame) => frame.payload?.peer?.id === PEER_A);
     await delay(200);
 
     const updatesForAlice = bob.frames

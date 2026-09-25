@@ -1,6 +1,10 @@
 type KeyLister = { listAvatarKeys(): Promise<string[]> };
 
-async function reconcileAvatarStorage({ storage, userStore, roomStore }: {
+async function reconcileAvatarStorage({
+  storage,
+  userStore,
+  roomStore
+}: {
   storage: { listKeys(): Promise<string[]>; remove(key: string): Promise<unknown> };
   userStore: KeyLister;
   roomStore: KeyLister;

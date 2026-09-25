@@ -9,8 +9,16 @@ export type MediaCleanupResult = Readonly<{
   temporaryFilesRemoved: number;
 }>;
 
-function createMediaMaintenanceService({ attachmentRepository, jobRepository, storage, batchSize = 500 }: {
-  attachmentRepository?: Pick<AttachmentRepository, 'listCleanupCandidates' | 'markCleanupDeleted' | 'clearPhysicalData'>;
+function createMediaMaintenanceService({
+  attachmentRepository,
+  jobRepository,
+  storage,
+  batchSize = 500
+}: {
+  attachmentRepository?: Pick<
+    AttachmentRepository,
+    'listCleanupCandidates' | 'markCleanupDeleted' | 'clearPhysicalData'
+  >;
   jobRepository?: Partial<Pick<MediaJobRepository, 'removeTerminalBefore'>> | null;
   storage?: Pick<MediaStorage, 'removeAttachment'> & Partial<Pick<MediaStorage, 'removeStaleTemporaryFiles'>>;
   batchSize?: number;
@@ -21,7 +29,9 @@ function createMediaMaintenanceService({ attachmentRepository, jobRepository, st
 
   async function cleanupOnce(): Promise<MediaCleanupResult> {
     const temporaryFilesRemoved = files.removeStaleTemporaryFiles
-      ? await files.removeStaleTemporaryFiles(new Date(Date.now() - 60 * 60 * 1000), { limit: Math.min(500, batchSize) })
+      ? await files.removeStaleTemporaryFiles(new Date(Date.now() - 60 * 60 * 1000), {
+          limit: Math.min(500, batchSize)
+        })
       : [];
     const candidates = await attachments.listCleanupCandidates({ limit: Math.min(500, batchSize) });
     let removed = 0;
@@ -36,7 +46,9 @@ function createMediaMaintenanceService({ attachmentRepository, jobRepository, st
       if (removed % 25 === 0) await new Promise((resolve) => setImmediate(resolve));
     }
     const jobsRemoved = jobRepository?.removeTerminalBefore
-      ? await jobRepository.removeTerminalBefore(new Date(Date.now() - 60 * 60 * 1000), { limit: Math.min(500, batchSize) })
+      ? await jobRepository.removeTerminalBefore(new Date(Date.now() - 60 * 60 * 1000), {
+          limit: Math.min(500, batchSize)
+        })
       : [];
     return Object.freeze({
       inspected: candidates.length,

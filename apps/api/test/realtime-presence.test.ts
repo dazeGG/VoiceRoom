@@ -180,9 +180,7 @@ test('realtime ready reports online friends and fans out presence', async (t) =>
     const check = () => {
       const presence = bobStream.frames.find(
         (frame) =>
-          frame.type === 'friend.presence' &&
-          frame.payload?.userId === aliceId &&
-          frame.payload?.online === true
+          frame.type === 'friend.presence' && frame.payload?.userId === aliceId && frame.payload?.online === true
       );
       if (presence) {
         clearTimeout(timer);
@@ -250,15 +248,16 @@ test('manual presence status updates own tabs, friend profiles, and effective on
     assert.equal(response.body.preferences.presenceStatus, status);
     assert.equal(response.body.preferences.doNotDisturb, doNotDisturb);
 
-    const ownUpdate = (stream, sinceIndex) => waitForWsType(
-      stream.frames,
-      'notification.settings.updated',
-      (frame) =>
-        frame.payload?.preferences?.presenceStatus === status &&
-        frame.payload?.preferences?.doNotDisturb === doNotDisturb,
-      5000,
-      sinceIndex
-    );
+    const ownUpdate = (stream, sinceIndex) =>
+      waitForWsType(
+        stream.frames,
+        'notification.settings.updated',
+        (frame) =>
+          frame.payload?.preferences?.presenceStatus === status &&
+          frame.payload?.preferences?.doNotDisturb === doNotDisturb,
+        5000,
+        sinceIndex
+      );
     const [firstUpdate, secondUpdate] = await Promise.all([
       ownUpdate(aliceFirstTab, firstTabBefore),
       ownUpdate(aliceSecondTab, secondTabBefore)

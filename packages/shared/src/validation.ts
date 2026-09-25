@@ -45,12 +45,7 @@ export const SCREEN_PROFILE_IDS: ReadonlySet<string> = new Set([
   'source-60'
 ]);
 
-export const PRESENCE_STATUSES: readonly PresenceStatus[] = Object.freeze([
-  'online',
-  'away',
-  'dnd',
-  'offline'
-]);
+export const PRESENCE_STATUSES: readonly PresenceStatus[] = Object.freeze(['online', 'away', 'dnd', 'offline']);
 const PRESENCE_STATUS_SET = new Set<unknown>(PRESENCE_STATUSES);
 
 export function normalizeRoomId(value: unknown): string {
@@ -127,11 +122,11 @@ export const AVATAR_COLOR_KEYS: readonly AvatarColorKey[] = visualIdentity.AVATA
 const AVATAR_COLOR_KEY_SET = new Set<unknown>(AVATAR_COLOR_KEYS);
 
 export function cleanAvatarColorKey(value: unknown): AvatarColorKey | '' {
-  return typeof value === 'string' && AVATAR_COLOR_KEY_SET.has(value) ? value as AvatarColorKey : '';
+  return typeof value === 'string' && AVATAR_COLOR_KEY_SET.has(value) ? (value as AvatarColorKey) : '';
 }
 
 export function cleanPresenceStatus(value: unknown): PresenceStatus | '' {
-  return typeof value === 'string' && PRESENCE_STATUS_SET.has(value) ? value as PresenceStatus : '';
+  return typeof value === 'string' && PRESENCE_STATUS_SET.has(value) ? (value as PresenceStatus) : '';
 }
 
 export function cleanStreamId(value: unknown): string {

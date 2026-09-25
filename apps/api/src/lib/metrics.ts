@@ -5,7 +5,11 @@ export type MediaPressureSnapshot = { freeBytes?: unknown; healthy?: unknown; re
 const httpRequests = new Map<string, HttpRequestStat>();
 const maintenanceTasks = new Map<string, MaintenanceStat>();
 let pgPoolErrors = 0;
-let mediaPressure: { freeBytes: number; healthy: boolean; reason: string } = { freeBytes: 0, healthy: false, reason: 'unchecked' };
+let mediaPressure: { freeBytes: number; healthy: boolean; reason: string } = {
+  freeBytes: 0,
+  healthy: false,
+  reason: 'unchecked'
+};
 let notificationOldestPendingSeconds = 0;
 let mediaOldestPendingSeconds = 0;
 let mediaAuthorizationInvariantFailures = 0;
@@ -29,7 +33,12 @@ function httpKey({ method, route, statusCode }: { method: string; route: string;
   return `${method} ${route} ${statusCode}`;
 }
 
-function recordHttpRequest({ method = 'GET', route = 'unknown', statusCode = 0, durationMs = 0 }: { method?: string; route?: string; statusCode?: number | string; durationMs?: number } = {}): void {
+function recordHttpRequest({
+  method = 'GET',
+  route = 'unknown',
+  statusCode = 0,
+  durationMs = 0
+}: { method?: string; route?: string; statusCode?: number | string; durationMs?: number } = {}): void {
   const status = String(statusCode || 0);
   const key = httpKey({ method, route, statusCode: status });
   const current = httpRequests.get(key) || {
@@ -71,10 +80,18 @@ function recordMediaPressure(snapshot: MediaPressureSnapshot = {}): void {
   };
 }
 
-function recordNotificationOldestPending(ageMs: unknown): void { notificationOldestPendingSeconds = Math.max(0, Number(ageMs) || 0) / 1000; }
-function recordMediaOldestPending(ageMs: unknown): void { mediaOldestPendingSeconds = Math.max(0, Number(ageMs) || 0) / 1000; }
-function recordMediaAuthorizationInvariantFailure(): void { mediaAuthorizationInvariantFailures += 1; }
-function recordCredentialRevokeCleanupFailure(): void { credentialRevokeCleanupFailures += 1; }
+function recordNotificationOldestPending(ageMs: unknown): void {
+  notificationOldestPendingSeconds = Math.max(0, Number(ageMs) || 0) / 1000;
+}
+function recordMediaOldestPending(ageMs: unknown): void {
+  mediaOldestPendingSeconds = Math.max(0, Number(ageMs) || 0) / 1000;
+}
+function recordMediaAuthorizationInvariantFailure(): void {
+  mediaAuthorizationInvariantFailures += 1;
+}
+function recordCredentialRevokeCleanupFailure(): void {
+  credentialRevokeCleanupFailures += 1;
+}
 
 async function observeMaintenance<T>(task: string, callback: () => T | Promise<T>): Promise<T> {
   const startedAt = process.hrtime.bigint();
@@ -105,11 +122,17 @@ function renderPrometheus({
   ];
 
   for (const item of httpRequests.values()) {
-    lines.push(metricLine('voice_room_api_http_requests_total', {
-      method: item.method,
-      route: item.route,
-      status: item.status
-    }, item.count));
+    lines.push(
+      metricLine(
+        'voice_room_api_http_requests_total',
+        {
+          method: item.method,
+          route: item.route,
+          status: item.status
+        },
+        item.count
+      )
+    );
   }
 
   lines.push(
@@ -117,11 +140,17 @@ function renderPrometheus({
     '# TYPE voice_room_api_http_request_duration_seconds_sum counter'
   );
   for (const item of httpRequests.values()) {
-    lines.push(metricLine('voice_room_api_http_request_duration_seconds_sum', {
-      method: item.method,
-      route: item.route,
-      status: item.status
-    }, item.durationSecondsSum));
+    lines.push(
+      metricLine(
+        'voice_room_api_http_request_duration_seconds_sum',
+        {
+          method: item.method,
+          route: item.route,
+          status: item.status
+        },
+        item.durationSecondsSum
+      )
+    );
   }
 
   lines.push(
@@ -145,7 +174,11 @@ function renderPrometheus({
     `voice_room_api_media_free_bytes ${mediaPressure.freeBytes}`,
     '# HELP voice_room_api_media_pressure_healthy Whether media uploads and claims are pressure-safe.',
     '# TYPE voice_room_api_media_pressure_healthy gauge',
-    metricLine('voice_room_api_media_pressure_healthy', { reason: mediaPressure.reason }, Number(mediaPressure.healthy)),
+    metricLine(
+      'voice_room_api_media_pressure_healthy',
+      { reason: mediaPressure.reason },
+      Number(mediaPressure.healthy)
+    ),
     '# HELP voice_room_notification_oldest_pending_seconds Age of the oldest claimed notification job.',
     '# TYPE voice_room_notification_oldest_pending_seconds gauge',
     `voice_room_notification_oldest_pending_seconds ${notificationOldestPendingSeconds}`,
@@ -163,7 +196,9 @@ function renderPrometheus({
   );
 
   for (const item of maintenanceTasks.values()) {
-    lines.push(metricLine('voice_room_api_maintenance_duration_seconds_sum', { task: item.task }, item.durationSecondsSum));
+    lines.push(
+      metricLine('voice_room_api_maintenance_duration_seconds_sum', { task: item.task }, item.durationSecondsSum)
+    );
   }
 
   lines.push(
@@ -179,7 +214,9 @@ function renderPrometheus({
     '# TYPE voice_room_api_maintenance_last_duration_seconds gauge'
   );
   for (const item of maintenanceTasks.values()) {
-    lines.push(metricLine('voice_room_api_maintenance_last_duration_seconds', { task: item.task }, item.lastDurationSeconds));
+    lines.push(
+      metricLine('voice_room_api_maintenance_last_duration_seconds', { task: item.task }, item.lastDurationSeconds)
+    );
   }
 
   for (const [key, value] of Object.entries(capabilityReadiness)) {

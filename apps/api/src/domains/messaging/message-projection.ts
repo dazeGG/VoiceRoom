@@ -41,7 +41,10 @@ export function publicAttachment(attachment: StoredAttachment) {
 }
 
 export function createMessageProjection(deps: MessageProjectionDeps) {
-  async function projectMedia<T extends { id?: string }>(context: Context, message: T): Promise<T & { attachments: ReturnType<typeof publicAttachment>[] }> {
+  async function projectMedia<T extends { id?: string }>(
+    context: Context,
+    message: T
+  ): Promise<T & { attachments: ReturnType<typeof publicAttachment>[] }> {
     const attachments = deps.attachments();
     if (!attachments || !message?.id) return { ...message, attachments: [] };
     const stored = await attachments.listForMessage(context, message.id);
@@ -57,14 +60,19 @@ export function createMessageProjection(deps: MessageProjectionDeps) {
     if (!messageId) return message;
     const replies = deps.replies();
     if (!replies) return message;
-    const replyPreview = context === 'room'
-      ? await replies.getRoomPreview({ roomId, messageId })
-      : await replies.getDirectPreview({ userId, peerId, messageId });
+    const replyPreview =
+      context === 'room'
+        ? await replies.getRoomPreview({ roomId, messageId })
+        : await replies.getDirectPreview({ userId, peerId, messageId });
     return { ...message, replyPreview };
   }
 
   /** Attachments first, then the reply quote: the shape every copy of a message has. */
-  async function project<T extends { id?: string; replyTo?: { messageId?: string } | null }>(context: Context, message: T, options: { roomId?: string; userId?: string; peerId?: string } = {}) {
+  async function project<T extends { id?: string; replyTo?: { messageId?: string } | null }>(
+    context: Context,
+    message: T,
+    options: { roomId?: string; userId?: string; peerId?: string } = {}
+  ) {
     return projectReply(context, await projectMedia(context, message), options);
   }
 

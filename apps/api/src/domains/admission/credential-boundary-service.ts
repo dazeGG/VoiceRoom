@@ -10,8 +10,16 @@ export type Revocation = { status: string; epoch?: number | null; revoked?: numb
 // The subset of the room store the boundary works through. Everything but the
 // three issuing/verifying calls is optional: older stores lack the revocations.
 export interface GateRoomStore {
-  normalizeGatePrincipal?(input: { roomId?: string; accountUserId?: string | null; guestPrincipalId?: string }): GatePrincipal | null;
-  getLiveKitGatePrincipalEpoch(input: { principal: GatePrincipal; roomId: string; now: number }): Promise<{ status: 'ready'; epoch: number } | { status: 'invalid'; epoch: null } | null | undefined>;
+  normalizeGatePrincipal?(input: {
+    roomId?: string;
+    accountUserId?: string | null;
+    guestPrincipalId?: string;
+  }): GatePrincipal | null;
+  getLiveKitGatePrincipalEpoch(input: {
+    principal: GatePrincipal;
+    roomId: string;
+    now: number;
+  }): Promise<{ status: 'ready'; epoch: number } | { status: 'invalid'; epoch: null } | null | undefined>;
   createLiveKitGateCredential(input: {
     credentialHash: string;
     credentialId: string;
@@ -33,15 +41,23 @@ export interface GateRoomStore {
     roomId: string;
   }): Promise<StoreStatus>;
   revokeLiveKitGatePrincipal?(input: { principal: GatePrincipal; roomId: string; now: number }): Promise<Revocation>;
-  revokeLiveKitGatePeer?(input: { roomId?: string; accountUserId?: string | null; guestPrincipalId?: string; now: number }): Promise<Revocation>;
-  revokeLiveKitGateCredential?(input: { credentialId: string; principal: GatePrincipal; roomId: string; now: number }): Promise<Revocation>;
+  revokeLiveKitGatePeer?(input: {
+    roomId?: string;
+    accountUserId?: string | null;
+    guestPrincipalId?: string;
+    now: number;
+  }): Promise<Revocation>;
+  revokeLiveKitGateCredential?(input: {
+    credentialId: string;
+    principal: GatePrincipal;
+    roomId: string;
+    now: number;
+  }): Promise<Revocation>;
   assertLiveKitGateReady(): Promise<unknown>;
 }
 
 export type IssuedCredential = { expiresAt: number; id: string; principalEpoch: number | undefined; value: string };
-export type CredentialIssue =
-  | { status: 'issued'; credential: IssuedCredential }
-  | { status: string; credential: null };
+export type CredentialIssue = { status: 'issued'; credential: IssuedCredential } | { status: string; credential: null };
 export type CredentialAuthorization = { ok: true; claims: GateClaims } | { ok: false; code: string };
 
 function createCredentialBoundaryService({
@@ -59,10 +75,14 @@ function createCredentialBoundaryService({
 } = {}) {
   if (!roomStore) throw new TypeError('roomStore is required');
   const store = roomStore;
-  const clock: () => number = typeof now === 'function' ? now as () => number : Date.now;
+  const clock: () => number = typeof now === 'function' ? (now as () => number) : Date.now;
   const ttlMs = Math.max(60_000, Number(credentialTtlMs) || DEFAULT_CREDENTIAL_TTL_MS);
 
-  function resolvePrincipal({ roomId, accountUserId = null, guestPrincipalId = '' }: {
+  function resolvePrincipal({
+    roomId,
+    accountUserId = null,
+    guestPrincipalId = ''
+  }: {
     roomId?: string;
     accountUserId?: string | null;
     guestPrincipalId?: string;
@@ -71,7 +91,12 @@ function createCredentialBoundaryService({
     return store.normalizeGatePrincipal({ roomId, accountUserId, guestPrincipalId });
   }
 
-  async function issueCredential({ roomId, peerId, principal, metadata = {} }: {
+  async function issueCredential({
+    roomId,
+    peerId,
+    principal,
+    metadata = {}
+  }: {
     roomId?: string;
     peerId?: string;
     principal?: GatePrincipal | null;
@@ -130,12 +155,13 @@ function createCredentialBoundaryService({
       principalType: claims.pType,
       roomId: claims.room
     });
-    return decision?.status === 'allowed'
-      ? { ok: true, claims }
-      : { ok: false, code: decision?.status || 'denied' };
+    return decision?.status === 'allowed' ? { ok: true, claims } : { ok: false, code: decision?.status || 'denied' };
   }
 
-  async function revokePrincipal({ roomId, principal }: { roomId?: string; principal?: GatePrincipal | null } = {}): Promise<Revocation> {
+  async function revokePrincipal({
+    roomId,
+    principal
+  }: { roomId?: string; principal?: GatePrincipal | null } = {}): Promise<Revocation> {
     if (!roomId || !principal) return { status: 'invalid', epoch: null };
     if (typeof store.revokeLiveKitGatePrincipal === 'function') {
       return store.revokeLiveKitGatePrincipal({ principal, roomId, now: clock() });
@@ -145,16 +171,21 @@ function createCredentialBoundaryService({
       return store.revokeLiveKitGatePeer({
         roomId,
         accountUserId: principal.principalType === 'account' ? principal.principalId : null,
-        guestPrincipalId: principal.principalType === 'guest' && principal.principalId.startsWith(guestPrefix)
-          ? principal.principalId.slice(guestPrefix.length)
-          : principal.principalId,
+        guestPrincipalId:
+          principal.principalType === 'guest' && principal.principalId.startsWith(guestPrefix)
+            ? principal.principalId.slice(guestPrefix.length)
+            : principal.principalId,
         now: clock()
       });
     }
     return { status: 'unavailable', epoch: null };
   }
 
-  async function revokeCredential({ credentialId, roomId, principal }: {
+  async function revokeCredential({
+    credentialId,
+    roomId,
+    principal
+  }: {
     credentialId?: string;
     roomId?: string;
     principal?: GatePrincipal | null;
@@ -164,7 +195,11 @@ function createCredentialBoundaryService({
     return store.revokeLiveKitGateCredential({ credentialId, principal, roomId, now: clock() });
   }
 
-  async function revokePeer({ roomId, accountUserId = null, guestPrincipalId = '' }: {
+  async function revokePeer({
+    roomId,
+    accountUserId = null,
+    guestPrincipalId = ''
+  }: {
     roomId?: string;
     accountUserId?: string | null;
     guestPrincipalId?: string;

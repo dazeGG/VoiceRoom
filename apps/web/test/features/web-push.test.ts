@@ -47,7 +47,11 @@ test('turning push on subscribes this browser with the server key and saves the 
 
   await expect(push.setPushNotificationsEnabled(true)).resolves.toBe(true);
   expect(pushManager.subscribe).toHaveBeenCalledWith(expect.objectContaining({ userVisibleOnly: true }));
-  expect(calls.at(-1)).toMatchObject({ method: 'POST', url: '/api/push/subscriptions', body: { subscription: { endpoint: 'https://push.example/sub-1' } } });
+  expect(calls.at(-1)).toMatchObject({
+    method: 'POST',
+    url: '/api/push/subscriptions',
+    body: { subscription: { endpoint: 'https://push.example/sub-1' } }
+  });
   expect(push.pushNotifications.active).toBe(true);
 });
 
@@ -68,11 +72,15 @@ test('turning push off removes the subscription on the server and in the browser
   });
   const push = await load();
   await expect(push.setPushNotificationsEnabled(false)).resolves.toBe(false);
-  expect(calls.at(-1)).toMatchObject({ method: 'DELETE', url: '/api/push/subscriptions', body: { endpoint: 'https://push.example/sub-1' } });
+  expect(calls.at(-1)).toMatchObject({
+    method: 'DELETE',
+    url: '/api/push/subscriptions',
+    body: { endpoint: 'https://push.example/sub-1' }
+  });
   expect(subscription.unsubscribe).toHaveBeenCalled();
 });
 
-test('signing out detaches this browser\'s subscription', async () => {
+test("signing out detaches this browser's subscription", async () => {
   const { subscription } = fakePushManager(true);
   const { calls } = stubFetch({ 'DELETE /api/push/subscriptions': { body: { ok: true } } });
   const push = await load();

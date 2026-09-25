@@ -10,8 +10,15 @@ export interface LinkPreviewEventsDeps {
     scheduleRoomMessage(input: { roomId: string; messageId: string; text: string }): unknown;
     scheduleDirectMessage(input: { messageId: string; senderId: string; recipientId: string; text: string }): unknown;
   } | null;
-  roomMessage(roomId: string, messageId: string): Promise<{ id?: string; replyTo?: { messageId?: string } | null } | null>;
-  directMessage(senderId: string, recipientId: string, messageId: string): Promise<{ id?: string; replyTo?: { messageId?: string } | null } | null>;
+  roomMessage(
+    roomId: string,
+    messageId: string
+  ): Promise<{ id?: string; replyTo?: { messageId?: string } | null } | null>;
+  directMessage(
+    senderId: string,
+    recipientId: string,
+    messageId: string
+  ): Promise<{ id?: string; replyTo?: { messageId?: string } | null } | null>;
   projection: MessageProjection;
   publicChatMessage(message: unknown): unknown;
   /** Sends a room-detail envelope to voice peers and preview watchers. */
@@ -27,7 +34,15 @@ export function createLinkPreviewEvents(deps: LinkPreviewEventsDeps) {
     deps.broadcastRoomEdit(roomId, deps.publicChatMessage(projected));
   }
 
-  async function broadcastDirectLinkPreview({ messageId, senderId, recipientId }: { messageId: string; senderId: string; recipientId: string }): Promise<void> {
+  async function broadcastDirectLinkPreview({
+    messageId,
+    senderId,
+    recipientId
+  }: {
+    messageId: string;
+    senderId: string;
+    recipientId: string;
+  }): Promise<void> {
     const message = await deps.directMessage(senderId, recipientId, messageId);
     if (!message) return;
     const projected = await deps.projection.project('dm', message, { userId: senderId, peerId: recipientId });
@@ -38,12 +53,29 @@ export function createLinkPreviewEvents(deps: LinkPreviewEventsDeps) {
 
   // A new message without a link needs no work; an edit always does, because
   // it may have removed the link.
-  function scheduleRoomLinkPreview(roomId: string, messageId: string, text: string, { edited = false }: { edited?: boolean } = {}): void {
+  function scheduleRoomLinkPreview(
+    roomId: string,
+    messageId: string,
+    text: string,
+    { edited = false }: { edited?: boolean } = {}
+  ): void {
     if (!edited && !firstPreviewableUrl(text)) return;
     deps.previews()?.scheduleRoomMessage({ roomId, messageId, text });
   }
 
-  function scheduleDirectLinkPreview({ messageId, senderId, recipientId, text, edited = false }: { messageId: string; senderId: string; recipientId: string; text: string; edited?: boolean }): void {
+  function scheduleDirectLinkPreview({
+    messageId,
+    senderId,
+    recipientId,
+    text,
+    edited = false
+  }: {
+    messageId: string;
+    senderId: string;
+    recipientId: string;
+    text: string;
+    edited?: boolean;
+  }): void {
     if (!edited && !firstPreviewableUrl(text)) return;
     deps.previews()?.scheduleDirectMessage({ messageId, senderId, recipientId, text });
   }

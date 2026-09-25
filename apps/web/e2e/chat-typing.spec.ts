@@ -1,7 +1,11 @@
 import { expect, test } from '@playwright/test';
 import { createPermanentRoom, enterRoom, registerViaUi, uniqueLogin } from './helpers';
 
-test('a friend sees typing and emoji browsing under the message field, until the message arrives', async ({ browser, page, baseURL }) => {
+test('a friend sees typing and emoji browsing under the message field, until the message arrives', async ({
+  browser,
+  page,
+  baseURL
+}) => {
   const readerLogin = uniqueLogin('typingreader');
   const writerLogin = uniqueLogin('typingwriter');
   await registerViaUi(page, readerLogin);
@@ -14,7 +18,9 @@ test('a friend sees typing and emoji browsing under the message field, until the
     const incoming = await page.context().request.get('/api/friends/requests');
     const requestId = ((await incoming.json()) as { incoming?: Array<{ id: string }> }).incoming?.[0]?.id;
     expect(requestId).toBeTruthy();
-    expect((await page.context().request.post(`/api/friends/requests/${requestId}/accept`, { data: {} })).ok()).toBe(true);
+    expect((await page.context().request.post(`/api/friends/requests/${requestId}/accept`, { data: {} })).ok()).toBe(
+      true
+    );
 
     await page.goto('/');
     await page.locator('.lv-row', { hasText: writerLogin }).first().click();
@@ -51,7 +57,11 @@ test('a friend sees typing and emoji browsing under the message field, until the
   }
 });
 
-test('the room chat shows who is typing from the call to someone reading it in the lobby', async ({ browser, page, baseURL }) => {
+test('the room chat shows who is typing from the call to someone reading it in the lobby', async ({
+  browser,
+  page,
+  baseURL
+}) => {
   const ownerLogin = uniqueLogin('typingowner');
   const guestLogin = uniqueLogin('typingcaller');
   await registerViaUi(page, ownerLogin);

@@ -11,10 +11,13 @@ const chat = fs.readFileSync('src/lib/features/room/components/RoomChatPanel.sve
 
 test('G88-A01 owner center exposes complete, accessible moderation controls', async ({ page }) => {
   expect(component).toContain('fetchActiveBans(roomId');
-  expect(model).toContain('1 час'); expect(model).toContain('1 день');
-  expect(model).toContain('7 дней'); expect(model).toContain('Навсегда');
+  expect(model).toContain('1 час');
+  expect(model).toContain('1 день');
+  expect(model).toContain('7 дней');
+  expect(model).toContain('Навсегда');
   expect(component).toContain('role="alert"');
-  expect(model).toContain('Отменить'); expect(component).toContain('Активных блокировок нет');
+  expect(model).toContain('Отменить');
+  expect(component).toContain('Активных блокировок нет');
   expect(members).toContain('<PopoverSubmenu label="Заблокировать"');
   expect(members).toContain('banRoomMember(roomId');
   expect(api).toContain('limit = MODERATION_DEFAULT_LIMIT');

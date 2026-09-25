@@ -3,18 +3,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import sharp from 'sharp';
 
-import {
-  AVATAR_SIZE,
-  createAvatarKey,
-  detectAvatarFormat,
-  processAvatar
-} from '../src/lib/avatar-processing.ts';
+import { AVATAR_SIZE, createAvatarKey, detectAvatarFormat, processAvatar } from '../src/lib/avatar-processing.ts';
 
 test('avatar processing accepts JPEG, PNG, and WebP magic bytes and normalizes to 256px WebP', async () => {
   for (const format of ['jpeg', 'png', 'webp']) {
-    const input = await sharp({
-      create: { width: 40, height: 20, channels: 3, background: { r: 230, g: 40, b: 90 } }
-    })[format]().toBuffer();
+    const image = sharp({ create: { width: 40, height: 20, channels: 3, background: { r: 230, g: 40, b: 90 } } });
+    const input = await image[format]().toBuffer();
     assert.equal(detectAvatarFormat(input), format);
 
     const processed = await processAvatar(input);

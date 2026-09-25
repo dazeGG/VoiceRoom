@@ -184,7 +184,8 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   const hasAuthoritativeScreenUpdate = peerInfo.screenAuthoritative === true && hasScreenUpdate;
   if (Object.hasOwn(peerInfo, 'accountUserId')) participant.accountUserId = peerInfo.accountUserId || '';
   if (Object.hasOwn(peerInfo, 'avatarAccent')) participant.avatarAccent = peerInfo.avatarAccent || '';
-  if (Object.hasOwn(peerInfo, 'avatarColorKey')) participant.avatarColorKey = peerInfo.avatarColorKey || participant.avatarColorKey;
+  if (Object.hasOwn(peerInfo, 'avatarColorKey'))
+    participant.avatarColorKey = peerInfo.avatarColorKey || participant.avatarColorKey;
   if (Object.hasOwn(peerInfo, 'avatarUrl')) participant.avatarUrl = peerInfo.avatarUrl || '';
   if (Object.hasOwn(peerInfo, 'name')) participant.name = peerInfo.name || participant.name;
   if (Object.hasOwn(peerInfo, 'deafened')) participant.deafened = Boolean(peerInfo.deafened);
@@ -193,10 +194,14 @@ export function updateParticipant(peerInfo: PeerInfo): void {
     participant.screen = Boolean(peerInfo.screen);
   }
   if (hasAuthoritativeScreenUpdate) participant.screenAuthoritative = Boolean(peerInfo.screen);
-  if (Object.hasOwn(peerInfo, 'screenAudio') && (hasAuthoritativeScreenUpdate || participant.screenAuthoritative !== false)) {
+  if (
+    Object.hasOwn(peerInfo, 'screenAudio') &&
+    (hasAuthoritativeScreenUpdate || participant.screenAuthoritative !== false)
+  ) {
     participant.screenAudio = Boolean(peerInfo.screenAudio);
   }
-  if (Object.hasOwn(peerInfo, 'screenProfileId')) participant.screenProfileId = getScreenProfile(peerInfo.screenProfileId ?? '').id;
+  if (Object.hasOwn(peerInfo, 'screenProfileId'))
+    participant.screenProfileId = getScreenProfile(peerInfo.screenProfileId ?? '').id;
   if (Object.hasOwn(peerInfo, 'screenStreamId')) participant.screenStreamId = peerInfo.screenStreamId || '';
   if (Object.hasOwn(peerInfo, 'serverMuted')) participant.serverMuted = Boolean(peerInfo.serverMuted);
   const hadViewedScreenOwnerId = participant.viewedScreenPeerId;
@@ -213,9 +218,9 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   }
   if (!participant.screen) {
     const attendedEndedScreen =
-      state.viewedScreenPeerId === participant.id
-      || state.screenSubscribedPeerIds.has(participant.id)
-      || state.self?.viewedScreenPeerId === participant.id;
+      state.viewedScreenPeerId === participant.id ||
+      state.screenSubscribedPeerIds.has(participant.id) ||
+      state.self?.viewedScreenPeerId === participant.id;
     state.screenCollapsedPeerIds.delete(participant.id);
     state.screenSubscribedPeerIds.delete(participant.id);
     if (attendedEndedScreen) disconnectScreenSoon(participant.id);
@@ -272,9 +277,9 @@ export function removePeer(peerId: string): void {
   closeParticipantContextMenu(peerId);
 
   const attendedRemovedScreen =
-    state.viewedScreenPeerId === peerId
-    || state.screenSubscribedPeerIds.has(peerId)
-    || state.self?.viewedScreenPeerId === peerId;
+    state.viewedScreenPeerId === peerId ||
+    state.screenSubscribedPeerIds.has(peerId) ||
+    state.self?.viewedScreenPeerId === peerId;
 
   applyStreamViewerCue(peer, peer.viewedScreenPeerId, '');
   clearPeerJoinCue(peerId);
@@ -290,7 +295,6 @@ export function removePeer(peerId: string): void {
   if (state.peers.size === 0) setParticipantSpeaking(state.self, false);
   refreshScreenTilesSoon();
   refreshParticipantState();
-
 }
 
 export function detachLiveKitParticipant(peer: Participant, voiceIssue = ''): void {
@@ -331,7 +335,9 @@ function isRemoteScreenTrack(peer: Participant, track: MediaStreamTrack, stream:
   if (peer.screenStreamId && stream.id === peer.screenStreamId) return true;
   if (track.kind !== 'audio' || !peer.screen || !peer.screenAudio) return false;
 
-  const alreadyHasMicAudio = Boolean(peer.stream?.getAudioTracks().some((audioTrack) => audioTrack.readyState !== 'ended'));
+  const alreadyHasMicAudio = Boolean(
+    peer.stream?.getAudioTracks().some((audioTrack) => audioTrack.readyState !== 'ended')
+  );
   const subscribed = state.viewedScreenPeerId === peer.id || state.screenSubscribedPeerIds.has(peer.id);
   const alreadyWatchingScreen = subscribed || Boolean(peer.screenStream);
   return alreadyHasMicAudio && alreadyWatchingScreen;
@@ -355,11 +361,7 @@ export function attachRemoteScreenStream(peer: Participant, stream: MediaStream)
   for (const track of screenStream.getAudioTracks()) {
     if (watchedRemoteScreenTracks.has(track)) continue;
     watchedRemoteScreenTracks.add(track);
-    track.addEventListener(
-      'ended',
-      () => detachRemoteScreenAudioTrack(peer, track.id),
-      { once: true }
-    );
+    track.addEventListener('ended', () => detachRemoteScreenAudioTrack(peer, track.id), { once: true });
   }
 
   const subscribed = state.viewedScreenPeerId === peer.id || state.screenSubscribedPeerIds.has(peer.id);
@@ -602,8 +604,5 @@ export function getParticipantById(peerId: string): Participant | null {
 
 export function getAllParticipants(): Participant[] {
   void participantsUi.revision;
-  return [
-    ...(state.self ? [state.self] : []),
-    ...state.peers.values()
-  ];
+  return [...(state.self ? [state.self] : []), ...state.peers.values()];
 }

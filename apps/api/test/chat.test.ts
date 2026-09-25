@@ -8,17 +8,11 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 import { createTestDatabase } from './db-harness.ts';
-import {
-  openWs,
-  joinVoiceRoom,
-  subscribeRoomPreview,
-  waitForWsType
-} from './ws-harness.ts';
+import { openWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType } from './ws-harness.ts';
 
 const ROOM_ID = 'chat-room1';
 const PEER_ID = 'peer-chat1';
 const TOKEN = 'c'.repeat(32);
-
 
 function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-sock-'));
@@ -138,7 +132,9 @@ async function patchJson(socketPath, pathname, body, { cookie } = {}) {
 
   const text = await new Promise((resolve, reject) => {
     let data = '';
-    response.on('data', (chunk) => { data += chunk; });
+    response.on('data', (chunk) => {
+      data += chunk;
+    });
     response.on('end', () => resolve(data));
     response.on('error', reject);
   });
@@ -228,11 +224,11 @@ test('chat API persists, streams, and respects room auth', async (t) => {
     );
     assert.equal(rejectedEdit.status, 403);
 
-    const edited = await patchJson(
-      socketPath,
-      `/api/rooms/${created.body.roomId}/chat/${posted.body.message.id}`,
-      { peerId: PEER_ID, sessionToken: TOKEN, text: '  Изменено\n\n\nс сохранением строк  ' }
-    );
+    const edited = await patchJson(socketPath, `/api/rooms/${created.body.roomId}/chat/${posted.body.message.id}`, {
+      peerId: PEER_ID,
+      sessionToken: TOKEN,
+      text: '  Изменено\n\n\nс сохранением строк  '
+    });
     assert.equal(edited.status, 200);
     assert.equal(edited.body.message.text, 'Изменено\n\nс сохранением строк');
     assert.equal(typeof edited.body.message.editedAt, 'number');
@@ -270,7 +266,6 @@ test('chat API persists, streams, and respects room auth', async (t) => {
     throw error;
   }
 });
-
 
 test('chat API rejects anonymous room-link posting without active presence', async (t) => {
   const { dir, socketPath } = getSocketPath();
@@ -348,24 +343,31 @@ test('account chat uses the current profile and refreshes active room peers afte
       sessionToken: TOKEN,
       name: 'Ignored client name'
     });
-    assert.equal(
-      joined.payload.peers.find((peer) => peer.id === 'preview-voice-user')?.name,
-      'Preview User'
-    );
+    assert.equal(joined.payload.peers.find((peer) => peer.id === 'preview-voice-user')?.name, 'Preview User');
 
-    const first = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
-      name: 'Spoofed Name',
-      text: 'Первое сообщение из превью'
-    }, { cookie: sessionCookie });
+    const first = await postJson(
+      socketPath,
+      `/api/rooms/${created.body.roomId}/chat`,
+      {
+        name: 'Spoofed Name',
+        text: 'Первое сообщение из превью'
+      },
+      { cookie: sessionCookie }
+    );
     assert.equal(first.status, 201);
     assert.equal(first.body.message.peerId, accountPeerId);
     assert.equal(first.body.message.name, 'Preview User');
     assert.equal(first.body.message.avatarColorKey, registered.body.user.avatarColorKey);
 
-    const second = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
-      name: 'Another Spoof',
-      text: 'Второе сообщение из превью'
-    }, { cookie: sessionCookie });
+    const second = await postJson(
+      socketPath,
+      `/api/rooms/${created.body.roomId}/chat`,
+      {
+        name: 'Another Spoof',
+        text: 'Второе сообщение из превью'
+      },
+      { cookie: sessionCookie }
+    );
     assert.equal(second.status, 201);
     assert.equal(second.body.message.peerId, accountPeerId);
     assert.equal(second.body.message.name, 'Preview User');
@@ -393,9 +395,14 @@ test('account chat uses the current profile and refreshes active room peers afte
     assert.equal(activePeerBroadcast.payload.message.name, 'Preview User');
 
     const beforeRename = voice.frames.length;
-    const renamed = await postJson(socketPath, '/api/auth/profile', {
-      displayName: 'Current Profile'
-    }, { cookie: sessionCookie });
+    const renamed = await postJson(
+      socketPath,
+      '/api/auth/profile',
+      {
+        displayName: 'Current Profile'
+      },
+      { cookie: sessionCookie }
+    );
     assert.equal(renamed.status, 200);
 
     const peerUpdated = await waitForWsType(
@@ -409,11 +416,10 @@ test('account chat uses the current profile and refreshes active room peers afte
 
     const history = await getJson(socketPath, `/api/rooms/${created.body.roomId}/chat`);
     assert.equal(history.status, 200);
-    assert.deepEqual(history.body.messages.map((message) => message.name), [
-      'Current Profile',
-      'Current Profile',
-      'Current Profile'
-    ]);
+    assert.deepEqual(
+      history.body.messages.map((message) => message.name),
+      ['Current Profile', 'Current Profile', 'Current Profile']
+    );
 
     voice.ws.close();
   } catch (error) {
@@ -423,7 +429,6 @@ test('account chat uses the current profile and refreshes active room peers afte
     throw error;
   }
 });
-
 
 test('chat API returns not found when posting to a missing room', async (t) => {
   const { dir, socketPath } = getSocketPath();
@@ -505,7 +510,6 @@ test('chat API still protects active voice peer identities', async (t) => {
   }
 });
 
-
 test('chat API rate limits room-link posts per room and IP', async (t) => {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
@@ -534,16 +538,26 @@ test('chat API rate limits room-link posts per room and IP', async (t) => {
     const created = await postJson(socketPath, '/api/rooms', { isStatic: false });
     assert.equal(created.status, 201);
 
-    const first = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
-      name: 'Link Guest',
-      text: 'first'
-    }, { cookie: sessionCookie });
+    const first = await postJson(
+      socketPath,
+      `/api/rooms/${created.body.roomId}/chat`,
+      {
+        name: 'Link Guest',
+        text: 'first'
+      },
+      { cookie: sessionCookie }
+    );
     assert.equal(first.status, 201);
 
-    const second = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
-      name: 'Link Guest',
-      text: 'second'
-    }, { cookie: sessionCookie });
+    const second = await postJson(
+      socketPath,
+      `/api/rooms/${created.body.roomId}/chat`,
+      {
+        name: 'Link Guest',
+        text: 'second'
+      },
+      { cookie: sessionCookie }
+    );
     assert.equal(second.status, 429);
     assert.equal(second.body.error, 'Too many chat messages');
     assert.equal(typeof second.body.retryAfterSeconds, 'number');
@@ -554,7 +568,6 @@ test('chat API rate limits room-link posts per room and IP', async (t) => {
     throw error;
   }
 });
-
 
 test('manual static-room chat scenario survives API restart without voice join', async (t) => {
   const { dir, socketPath } = getSocketPath();
@@ -586,10 +599,15 @@ test('manual static-room chat scenario survives API restart without voice join',
     assert.equal(statusBeforeRestart.body.exists, true);
     assert.equal(statusBeforeRestart.body.isStatic, true);
 
-    const posted = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
-      name: 'Manual Guest',
-      text: 'Сообщение до перезапуска API'
-    }, { cookie: sessionCookie });
+    const posted = await postJson(
+      socketPath,
+      `/api/rooms/${created.body.roomId}/chat`,
+      {
+        name: 'Manual Guest',
+        text: 'Сообщение до перезапуска API'
+      },
+      { cookie: sessionCookie }
+    );
     assert.equal(posted.status, 201);
     assert.equal(posted.body.message.peerId, `auth-${registered.body.user.id}`);
 

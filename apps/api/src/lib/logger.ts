@@ -77,7 +77,11 @@ function createFastifyLoggerOptions(env: Env = process.env): false | LoggerOptio
 // and per pool. One instance per name is enough.
 const sharedLoggers = new Map<string, Logger>();
 
-function createLogger({ env = process.env, name = 'api', destination }: { env?: Env; name?: string; destination?: DestinationStream } = {}): Logger {
+function createLogger({
+  env = process.env,
+  name = 'api',
+  destination
+}: { env?: Env; name?: string; destination?: DestinationStream } = {}): Logger {
   const options = loggerOptions(env, name);
   if (isLoggingDisabled(env)) options.level = 'silent';
   // A caller that supplies its own destination wants its own instance.

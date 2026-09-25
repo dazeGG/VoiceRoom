@@ -109,7 +109,11 @@ export function handleGuestNameDialogClick(event: MouseEvent, input: HTMLInputEl
   }
 }
 
-export function handleGuestNameDialogKeydown(event: KeyboardEvent, dialog: HTMLElement, input: HTMLInputElement | null): void {
+export function handleGuestNameDialogKeydown(
+  event: KeyboardEvent,
+  dialog: HTMLElement,
+  input: HTMLInputElement | null
+): void {
   if (event.key === 'Escape') {
     event.preventDefault();
     input?.focus();
@@ -118,9 +122,9 @@ export function handleGuestNameDialogKeydown(event: KeyboardEvent, dialog: HTMLE
 
   if (event.key !== 'Tab') return;
 
-  const focusableElements = Array.from(
-    dialog.querySelectorAll<HTMLElement>('input, button')
-  ).filter((element) => !element.hasAttribute('disabled'));
+  const focusableElements = Array.from(dialog.querySelectorAll<HTMLElement>('input, button')).filter(
+    (element) => !element.hasAttribute('disabled')
+  );
   const first = focusableElements[0];
   const last = focusableElements.at(-1);
   if (!first || !last) return;

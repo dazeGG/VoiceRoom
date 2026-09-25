@@ -11,12 +11,7 @@
     Volume2,
     VolumeX
   } from '@lucide/svelte';
-  import {
-    banRoomPeer,
-    kickRoomPeer,
-    setRoomPeerServerMute,
-    undoRoomBan
-  } from '$lib/api/rooms';
+  import { banRoomPeer, kickRoomPeer, setRoomPeerServerMute, undoRoomBan } from '$lib/api/rooms';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { session } from '$lib/features/auth/session.svelte';
   import {
@@ -28,13 +23,7 @@
     setMode
   } from '$lib/features/home/model/friends.svelte';
   import { openProfileCardFor } from '$lib/features/home/profile-card-ui.svelte';
-  import {
-    ContextMenu,
-    PopoverDivider,
-    PopoverMenuItem,
-    PopoverMenuLabel,
-    Slider
-  } from '$lib/shared/ui';
+  import { ContextMenu, PopoverDivider, PopoverMenuItem, PopoverMenuLabel, Slider } from '$lib/shared/ui';
   import {
     getParticipantAudioPreference,
     getParticipantAudioPreferenceKey,
@@ -44,10 +33,7 @@
   import { getParticipantById } from '../client/room/participants';
   import { showToast } from '../client/ui/toast';
   import { participantProfilePerson } from '../profile-card-adapter';
-  import {
-    closeParticipantContextMenu,
-    participantContextMenu
-  } from '../participant-context-ui.svelte';
+  import { closeParticipantContextMenu, participantContextMenu } from '../participant-context-ui.svelte';
   import { roomSettingsUi } from '../room-settings.svelte';
   import { state as roomState } from '../client/core/state.svelte';
 
@@ -96,7 +82,9 @@
     closeParticipantContextMenu(peer.id, false);
     void action()
       .catch((error) => showToast(errorToastMessage(error, fallback), { variant: 'error' }))
-      .finally(() => { moderating = false; });
+      .finally(() => {
+        moderating = false;
+      });
   }
 
   function showProfile(event: MouseEvent): void {
@@ -311,10 +299,22 @@
             </PopoverMenuItem>
           {/if}
 
-          <PopoverMenuItem role="button" label="Исключить из комнаты" variant="danger" disabled={moderating} onclick={kickParticipant}>
+          <PopoverMenuItem
+            role="button"
+            label="Исключить из комнаты"
+            variant="danger"
+            disabled={moderating}
+            onclick={kickParticipant}
+          >
             {#snippet icon()}<LogOut {...iconMd} aria-hidden="true" />{/snippet}
           </PopoverMenuItem>
-          <PopoverMenuItem role="button" label="Заблокировать в комнате" variant="danger" disabled={moderating} onclick={banParticipant}>
+          <PopoverMenuItem
+            role="button"
+            label="Заблокировать в комнате"
+            variant="danger"
+            disabled={moderating}
+            onclick={banParticipant}
+          >
             {#snippet icon()}<Ban {...iconMd} aria-hidden="true" />{/snippet}
           </PopoverMenuItem>
         {/if}

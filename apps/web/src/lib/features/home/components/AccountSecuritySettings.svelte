@@ -18,7 +18,13 @@
   import RecoveryCodesDialog from './RecoveryCodesDialog.svelte';
   import DeleteAccountDialog from './DeleteAccountDialog.svelte';
 
-  let { login, highlightRecoveryCodes = false, highlightPassword = false, onToast, onDialogOpenChange = () => {} } = $props<{
+  let {
+    login,
+    highlightRecoveryCodes = false,
+    highlightPassword = false,
+    onToast,
+    onDialogOpenChange = () => {}
+  } = $props<{
     login: string;
     // Set when the lobby reminder brought the user here.
     highlightRecoveryCodes?: boolean;
@@ -152,11 +158,24 @@
       <div class="settings-password-fields">
         <div>
           <span class="settings-field-label">Текущий пароль</span>
-          <input class="settings-input" type="password" bind:this={currentPasswordInput} bind:value={currentPassword} placeholder="••••••••" autocomplete="current-password" />
+          <input
+            class="settings-input"
+            type="password"
+            bind:this={currentPasswordInput}
+            bind:value={currentPassword}
+            placeholder="••••••••"
+            autocomplete="current-password"
+          />
         </div>
         <div>
           <span class="settings-field-label">Новый пароль</span>
-          <input class="settings-input" type="password" bind:value={newPassword} placeholder="Минимум {PASSWORD_MIN_LENGTH} символов" autocomplete="new-password" />
+          <input
+            class="settings-input"
+            type="password"
+            bind:value={newPassword}
+            placeholder="Минимум {PASSWORD_MIN_LENGTH} символов"
+            autocomplete="new-password"
+          />
         </div>
       </div>
       <div class="account-security-password-foot">
@@ -179,7 +198,10 @@
     {#if loading && !recoveryCodes}
       <div class="settings-notification-empty" role="status">Загружаем…</div>
     {:else if recoveryCodes}
-      <div class="settings-notification-row account-security-row" data-warning={recoveryCodes.remaining === 0 || lowOnCodes}>
+      <div
+        class="settings-notification-row account-security-row"
+        data-warning={recoveryCodes.remaining === 0 || lowOnCodes}
+      >
         <span class="account-security-icon" aria-hidden="true"><KeyRound {...iconMd} /></span>
         <span class="settings-notification-name">
           <strong>{recoveryCodes.remaining > 0 ? 'Коды созданы' : 'Коды не созданы'}</strong>
@@ -205,10 +227,17 @@
     <div class="account-security-head">
       <div>
         <span class="settings-section-title" id="accountSessionsTitle">Устройства</span>
-        <div class="settings-gate-hint">Где открыт ваш аккаунт. Незнакомый сеанс завершите — пароль после этого лучше сменить.</div>
+        <div class="settings-gate-hint">
+          Где открыт ваш аккаунт. Незнакомый сеанс завершите — пароль после этого лучше сменить.
+        </div>
       </div>
       {#if hasOtherSessions}
-        <button class="settings-unblock-button" type="button" disabled={endingOthers || Boolean(endingSessionId)} onclick={() => void endOtherSessions()}>
+        <button
+          class="settings-unblock-button"
+          type="button"
+          disabled={endingOthers || Boolean(endingSessionId)}
+          onclick={() => void endOtherSessions()}
+        >
           {endingOthers ? 'Завершаем…' : 'Выйти на других устройствах'}
         </button>
       {/if}
@@ -229,7 +258,9 @@
             <span class="settings-notification-name">
               <strong>{sessionDeviceLabel(session)}</strong>
               <small>
-                {session.current ? 'Это устройство' : formatLastSeen(session.lastSeenAt)}{session.location ? ` · ${session.location}` : ''}
+                {session.current ? 'Это устройство' : formatLastSeen(session.lastSeenAt)}{session.location
+                  ? ` · ${session.location}`
+                  : ''}
               </small>
             </span>
             {#if !session.current}
@@ -250,7 +281,8 @@
     {/if}
     {#if sessions.some((session) => session.location)}
       <div class="settings-gate-hint">
-        Город определяется по IP-адресу с помощью <a href="https://db-ip.com" target="_blank" rel="noreferrer">DB-IP</a>; сам адрес не сохраняется.
+        Город определяется по IP-адресу с помощью <a href="https://db-ip.com" target="_blank" rel="noreferrer">DB-IP</a
+        >; сам адрес не сохраняется.
       </div>
     {/if}
   </section>

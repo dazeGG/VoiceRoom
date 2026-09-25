@@ -102,10 +102,15 @@
             <button type="button" onclick={() => open(item)}>
               <span class="notification-inbox-dot" aria-hidden="true"></span>
               <span class="notification-inbox-text">
-                <strong><EmojiText text={item.retractedAt ? 'Сообщение недоступно' : item.body || 'Новое уведомление'} /></strong>
+                <strong
+                  ><EmojiText
+                    text={item.retractedAt ? 'Сообщение недоступно' : item.body || 'Новое уведомление'}
+                  /></strong
+                >
                 <small>
                   <span class="notification-inbox-reason">{reasonLabel(item.reasons)}</span>
-                  {#if timeAgo(item.createdAt)}<span class="notification-inbox-time">{timeAgo(item.createdAt)}</span>{/if}
+                  {#if timeAgo(item.createdAt)}<span class="notification-inbox-time">{timeAgo(item.createdAt)}</span
+                    >{/if}
                 </small>
               </span>
             </button>
@@ -117,8 +122,8 @@
           class="notification-inbox-more"
           type="button"
           disabled={inbox.loading}
-          onclick={() => void inbox.load(true)}
-        >{inbox.loading ? 'Загружаем…' : 'Показать ещё'}</button>
+          onclick={() => void inbox.load(true)}>{inbox.loading ? 'Загружаем…' : 'Показать ещё'}</button
+        >
       {/if}
     {/if}
   </div>
@@ -187,7 +192,9 @@
     font-size: 12.5px;
     white-space: nowrap;
     cursor: pointer;
-    transition: background 0.14s ease, color 0.14s ease;
+    transition:
+      background 0.14s ease,
+      color 0.14s ease;
   }
 
   .notification-inbox-dismiss {
@@ -201,7 +208,9 @@
     background: transparent;
     color: var(--muted);
     cursor: pointer;
-    transition: background 0.14s ease, color 0.14s ease;
+    transition:
+      background 0.14s ease,
+      color 0.14s ease;
   }
 
   .notification-inbox-read-all:hover,
@@ -264,7 +273,9 @@
     background: transparent;
   }
 
-  li.unread .notification-inbox-dot { background: var(--coral); }
+  li.unread .notification-inbox-dot {
+    background: var(--coral);
+  }
 
   .notification-inbox-text {
     display: grid;
@@ -284,7 +295,9 @@
     line-clamp: 2;
   }
 
-  li.unread strong { color: var(--ink); }
+  li.unread strong {
+    color: var(--ink);
+  }
 
   small {
     display: flex;
@@ -301,7 +314,9 @@
     font-size: 11px;
   }
 
-  .notification-inbox-time { font-family: var(--font-mono); }
+  .notification-inbox-time {
+    font-family: var(--font-mono);
+  }
 
   .notification-inbox-state {
     display: grid;
@@ -312,9 +327,14 @@
     text-align: center;
   }
 
-  .notification-inbox-empty { color: var(--warm-faint, var(--muted)); }
+  .notification-inbox-empty {
+    color: var(--warm-faint, var(--muted));
+  }
 
-  .notification-inbox-state p { margin: 0; font-size: 13px; }
+  .notification-inbox-state p {
+    margin: 0;
+    font-size: 13px;
+  }
 
   .notification-inbox-retry,
   .notification-inbox-more {
@@ -339,7 +359,16 @@
     background: color-mix(in oklch, var(--paper), var(--ink) 7%);
   }
 
-  .notification-inbox-more:disabled { cursor: default; opacity: 0.6; }
+  .notification-inbox-more:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
 
-  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+  }
 </style>

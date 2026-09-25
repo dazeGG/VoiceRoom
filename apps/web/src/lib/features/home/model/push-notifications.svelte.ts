@@ -138,10 +138,12 @@ export async function setPushNotificationsEnabled(enabled: boolean): Promise<boo
     }
     const permission = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
     if (permission !== 'granted') throw new Error('Notification permission was not granted');
-    let subscription = existing || await registration.pushManager.subscribe({
-      applicationServerKey: decodeVapidKey(config.vapidPublicKey),
-      userVisibleOnly: true
-    });
+    let subscription =
+      existing ||
+      (await registration.pushManager.subscribe({
+        applicationServerKey: decodeVapidKey(config.vapidPublicKey),
+        userVisibleOnly: true
+      }));
     try {
       await savePushSubscription(subscription.toJSON());
     } catch (error) {

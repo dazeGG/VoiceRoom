@@ -118,55 +118,74 @@ export function registerOpsRoutes(root: FastifyInstance, ctx: ApiContext, deps: 
     };
   });
 
-  app.get('/api/desktop/latest', { schema: { response: { 200: DesktopRelease, 502: Failure } } }, async (_request, reply) => {
-    const result = await deps.desktopRelease.latest();
-    if (result.status !== 'ok') return reply.code(502).send(failure('Не удалось получить данные о релизе'));
-    return reply.header('Cache-Control', result.cacheControl).send({ ok: true as const, ...result.release });
-  });
+  app.get(
+    '/api/desktop/latest',
+    { schema: { response: { 200: DesktopRelease, 502: Failure } } },
+    async (_request, reply) => {
+      const result = await deps.desktopRelease.latest();
+      if (result.status !== 'ok') return reply.code(502).send(failure('Не удалось получить данные о релизе'));
+      return reply.header('Cache-Control', result.cacheControl).send({ ok: true as const, ...result.release });
+    }
+  );
 
   // Browser log intake. The room client buffers what it saw locally and posts
   // the buffer when a call fails, which is the only way a microphone, screen
   // share or reconnect failure on someone else's machine becomes visible here.
   // Records are re-emitted into the same stream as server records rather than
   // stored, so they age out with the rest of the logs and need no schema.
-  app.post('/api/client-logs', { schema: { response: { 202: ClientLogsAccepted, 404: Failure, 429: Failure } } }, async (request, reply) => {
-    if (!deps.clientLogs.enabled) return reply.code(404).send(failure('Not found'));
+  app.post(
+    '/api/client-logs',
+    { schema: { response: { 202: ClientLogsAccepted, 404: Failure, 429: Failure } } },
+    async (request, reply) => {
+      if (!deps.clientLogs.enabled) return reply.code(404).send(failure('Not found'));
 
-    const clientIp = ctx.clientIp(request.raw);
-    const rate = deps.clientLogs.limiter.check(`client-logs:${clientIp}`);
-    if (!rate.allowed) {
-      return reply
-        .code(429)
-        .header('Retry-After', String(rate.retryAfterSeconds))
-        .send(failure('Слишком много попыток, попробуйте позже'));
+      const clientIp = ctx.clientIp(request.raw);
+      const rate = deps.clientLogs.limiter.check(`client-logs:${clientIp}`);
+      if (!rate.allowed) {
+        return reply
+          .code(429)
+          .header('Retry-After', String(rate.retryAfterSeconds))
+          .send(failure('Слишком много попыток, попробуйте позже'));
+      }
+
+      const session = await ctx.resolveSession(request.raw);
+      const batch = normalizeClientLogBatch(request.body ?? {});
+      if (batch.dropped > 0) {
+        request.log.warn(
+          { evt: LOG_EVENTS.CLIENT_REPORT_REJECTED, dropped: batch.dropped, accepted: batch.events.length },
+          'client log records were rejected'
+        );
+      }
+
+      // The shared fields are bound once so each record carries the identity of
+      // the reporter without the client being able to claim one.
+      const reporter = {
+        source: 'web',
+        clientSessionId: batch.sessionId || undefined,
+        userId: session?.user?.id || undefined,
+        ipHash: ctx.hashIp(clientIp)
+      };
+      for (const event of batch.events) {
+        const level = event.level as 'debug' | 'info' | 'warn' | 'error';
+        request.log[level](
+          {
+            evt: LOG_EVENTS.CLIENT_REPORT,
+            ...reporter,
+            ns: event.ns,
+            at: event.at,
+            stale: event.stale || undefined,
+            ctx: event.ctx
+          },
+          event.msg
+        );
+      }
+
+      return reply.code(202).send({
+        ok: true as const,
+        accepted: batch.events.length,
+        dropped: batch.dropped,
+        limits: { ...CLIENT_LOG_LIMITS }
+      });
     }
-
-    const session = await ctx.resolveSession(request.raw);
-    const batch = normalizeClientLogBatch(request.body ?? {});
-    if (batch.dropped > 0) {
-      request.log.warn({ evt: LOG_EVENTS.CLIENT_REPORT_REJECTED, dropped: batch.dropped, accepted: batch.events.length }, 'client log records were rejected');
-    }
-
-    // The shared fields are bound once so each record carries the identity of
-    // the reporter without the client being able to claim one.
-    const reporter = {
-      source: 'web',
-      clientSessionId: batch.sessionId || undefined,
-      userId: session?.user?.id || undefined,
-      ipHash: ctx.hashIp(clientIp)
-    };
-    for (const event of batch.events) {
-      const level = event.level as 'debug' | 'info' | 'warn' | 'error';
-      request.log[level]({
-        evt: LOG_EVENTS.CLIENT_REPORT,
-        ...reporter,
-        ns: event.ns,
-        at: event.at,
-        stale: event.stale || undefined,
-        ctx: event.ctx
-      }, event.msg);
-    }
-
-    return reply.code(202).send({ ok: true as const, accepted: batch.events.length, dropped: batch.dropped, limits: { ...CLIENT_LOG_LIMITS } });
-  });
+  );
 }

@@ -53,13 +53,12 @@ function encodeParts(parts: string[]): string {
 }
 
 function logicalKey(event: MessageDeliveryEvent, revision: number): string {
-  return crypto.createHash('sha256').update(encodeParts([
-    event.type,
-    event.conversation.type,
-    event.conversation.id,
-    event.messageId,
-    String(revision)
-  ])).digest('hex');
+  return crypto
+    .createHash('sha256')
+    .update(
+      encodeParts([event.type, event.conversation.type, event.conversation.id, event.messageId, String(revision)])
+    )
+    .digest('hex');
 }
 
 function positiveInteger(value: unknown, fallback: number, max: number = Number.MAX_SAFE_INTEGER): number {
@@ -85,7 +84,11 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
   requireQuery(pool, 'PostgreSQL pool');
   const db = pool;
 
-  async function enqueue(client: unknown, value: Record<string, unknown>, { revision = 1 }: { revision?: unknown } = {}): Promise<OutboxEvent> {
+  async function enqueue(
+    client: unknown,
+    value: Record<string, unknown>,
+    { revision = 1 }: { revision?: unknown } = {}
+  ): Promise<OutboxEvent> {
     requireQuery(client, 'Active PostgreSQL transaction client');
     const normalizedRevision = positiveInteger(revision, 1);
     const event = buildMessageDeliveryEvent(value);
@@ -114,8 +117,15 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
     return mapOutboxRow(result.rows[0]!);
   }
 
-  async function acquireLease({ identity, leaseMs, ownerId }: { identity: string; leaseMs?: unknown; ownerId: string }):
-    Promise<{ acquired: false } | { acquired: true; fencingToken: number; expiresAt: unknown }> {
+  async function acquireLease({
+    identity,
+    leaseMs,
+    ownerId
+  }: {
+    identity: string;
+    leaseMs?: unknown;
+    ownerId: string;
+  }): Promise<{ acquired: false } | { acquired: true; fencingToken: number; expiresAt: unknown }> {
     const result = await db.query<{ fencing_token: number | string; expires_at: unknown }>(
       `INSERT INTO message_delivery_leases (
          identity, owner_id, fencing_token, expires_at, heartbeat_at, ready, updated_at
@@ -141,8 +151,12 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
     };
   }
 
-  async function renewLease({ fencingToken, identity, leaseMs, ownerId }: DeliveryLease & { leaseMs?: unknown }):
-    Promise<{ renewed: true; expiresAt: unknown } | { renewed: false }> {
+  async function renewLease({
+    fencingToken,
+    identity,
+    leaseMs,
+    ownerId
+  }: DeliveryLease & { leaseMs?: unknown }): Promise<{ renewed: true; expiresAt: unknown } | { renewed: false }> {
     const result = await db.query<{ expires_at: unknown }>(
       `UPDATE message_delivery_leases
        SET expires_at = current_timestamp + ($4 * interval '1 millisecond'),
@@ -165,7 +179,12 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
     );
   }
 
-  async function recordHeartbeat({ fencingToken, identity, ownerId, ready }: DeliveryLease & { ready?: unknown }): Promise<boolean> {
+  async function recordHeartbeat({
+    fencingToken,
+    identity,
+    ownerId,
+    ready
+  }: DeliveryLease & { ready?: unknown }): Promise<boolean> {
     const result = await db.query(
       `UPDATE message_delivery_leases
        SET heartbeat_at = current_timestamp, ready = $4, updated_at = current_timestamp
@@ -233,12 +252,22 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
     if (!result.rowCount) throw new MessageDeliveryFenceError();
   }
 
-  async function reschedule(eventId: string, lease: DeliveryLease, { delayMs, error, maxAttempts = 12 }: {
-    delayMs?: unknown;
-    error?: unknown;
-    maxAttempts?: unknown;
-  } = {}): Promise<void> {
-    const message = String((error as { message?: unknown } | null | undefined)?.message || error || 'Message delivery failed').slice(0, 2_000);
+  async function reschedule(
+    eventId: string,
+    lease: DeliveryLease,
+    {
+      delayMs,
+      error,
+      maxAttempts = 12
+    }: {
+      delayMs?: unknown;
+      error?: unknown;
+      maxAttempts?: unknown;
+    } = {}
+  ): Promise<void> {
+    const message = String(
+      (error as { message?: unknown } | null | undefined)?.message || error || 'Message delivery failed'
+    ).slice(0, 2_000);
     const result = await db.query(
       `UPDATE message_delivery_outbox AS outbox
        SET status = CASE WHEN attempts >= $6 THEN 'dead' ELSE 'pending' END,
@@ -266,17 +295,19 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
     if (!result.rowCount) throw new MessageDeliveryFenceError();
   }
 
-  async function publishPostgres(event: { eventId: string }, { channel = 'voice_room_message_delivery' }: { channel?: string } = {}): Promise<void> {
+  async function publishPostgres(
+    event: { eventId: string },
+    { channel = 'voice_room_message_delivery' }: { channel?: string } = {}
+  ): Promise<void> {
     if (!/^[a-z][a-z0-9_]{0,62}$/i.test(channel)) throw new TypeError('Invalid PostgreSQL notification channel');
     const payload = JSON.stringify({ eventId: event.eventId });
     await db.query('SELECT pg_notify($1, $2)', [channel, payload]);
   }
 
   async function getEvent(eventId: string): Promise<OutboxEvent | null> {
-    const result = await db.query<OutboxRow>(
-      `SELECT * FROM message_delivery_outbox WHERE event_id = $1 LIMIT 1`,
-      [eventId]
-    );
+    const result = await db.query<OutboxRow>(`SELECT * FROM message_delivery_outbox WHERE event_id = $1 LIMIT 1`, [
+      eventId
+    ]);
     return result.rows[0] ? mapOutboxRow(result.rows[0]) : null;
   }
 

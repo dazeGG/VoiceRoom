@@ -34,13 +34,23 @@ test('chat messages schedule personalized unread summaries for room recipients',
   const sent = [];
   const room = { id: 'room1', isStatic: true, name: 'Test room', relationship: 'owner' };
   const store = {
-    async getRoom() { return room; },
-    async getRoomUnreadCount(_roomId, userId) { return userId === 'owner' ? 2 : 5; },
-    async listSummaryRecipientUserIds() { return ['owner', 'bookmark']; }
+    async getRoom() {
+      return room;
+    },
+    async getRoomUnreadCount(_roomId, userId) {
+      return userId === 'owner' ? 2 : 5;
+    },
+    async listSummaryRecipientUserIds() {
+      return ['owner', 'bookmark'];
+    }
   };
   const wsRegistry = {
-    roomDetailSubscribers() { return []; },
-    sendToUser(userId, envelope) { sent.push({ userId, envelope }); }
+    roomDetailSubscribers() {
+      return [];
+    },
+    sendToUser(userId, envelope) {
+      sent.push({ userId, envelope });
+    }
   };
   const runtime = createRoomRealtimeRuntime({
     presenceRooms: new Map(),
@@ -64,6 +74,9 @@ test('chat messages schedule personalized unread summaries for room recipients',
 
   assert.deepEqual(
     sent.map(({ userId, envelope }) => [userId, envelope.payload.room.unreadCount]),
-    [['owner', 2], ['bookmark', 5]]
+    [
+      ['owner', 2],
+      ['bookmark', 5]
+    ]
   );
 });

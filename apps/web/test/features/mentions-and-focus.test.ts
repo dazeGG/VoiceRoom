@@ -10,7 +10,19 @@ import {
   toggleParticipantFocus
 } from '../../src/lib/features/room/participants-ui.svelte.ts';
 
-const member = (userId: string, login: string) => ({ userId, login, displayName: login, avatarColorKey: 'blue', avatarUrl: null, avatarAccent: null, role: 'member', joinedAt: null, inVoice: false, presenceStatus: 'online' }) as const;
+const member = (userId: string, login: string) =>
+  ({
+    userId,
+    login,
+    displayName: login,
+    avatarColorKey: 'blue',
+    avatarUrl: null,
+    avatarAccent: null,
+    role: 'member',
+    joinedAt: null,
+    inVoice: false,
+    presenceStatus: 'online'
+  }) as const;
 
 test('typing @ after a space opens a mention query; e-mail-like text does not', () => {
   const mentions = createMentionComposer();

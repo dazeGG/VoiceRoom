@@ -16,7 +16,9 @@ export interface LiveKitConfig {
 }
 
 export function liveKitHttpUrl(url: string): string {
-  return String(url || '').replace(/^wss:/, 'https:').replace(/^ws:/, 'http:');
+  return String(url || '')
+    .replace(/^wss:/, 'https:')
+    .replace(/^ws:/, 'http:');
 }
 
 export function readLiveKitConfig(

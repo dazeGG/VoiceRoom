@@ -32,13 +32,20 @@ export interface MessageDeliveryRelayDeps {
   notifyUser(userId: string, event: Record<string, unknown>): void;
   findUser(userId: string): Promise<{ id: string; [key: string]: unknown } | null>;
   /** The recipient's DM notification and push. */
-  broadcastDmNotification(recipientId: string, sender: { id: string; [key: string]: unknown }, message: { id: string; body?: string; createdAt?: unknown }): Promise<unknown>;
+  broadcastDmNotification(
+    recipientId: string,
+    sender: { id: string; [key: string]: unknown },
+    message: { id: string; body?: string; createdAt?: unknown }
+  ): Promise<unknown>;
   publicChatMessage(message: unknown): unknown;
   logger(): Pick<Logger, 'error'>;
 }
 
 export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
-  let listener: { client: ListenClient; onNotification: (notification: { channel: string; payload?: string }) => void } | null = null;
+  let listener: {
+    client: ListenClient;
+    onNotification: (notification: { channel: string; payload?: string }) => void;
+  } | null = null;
 
   async function dispatchMessageDeliveryEvent(event: DeliveryEvent | null | undefined): Promise<void> {
     if (!event || event.type !== 'message.created' || !event.message) return;
@@ -49,7 +56,13 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
       return;
     }
     if (event.conversation?.type === 'dm') {
-      const message = event.message as { senderId: string; recipientId: string; id: string; body?: string; createdAt?: unknown };
+      const message = event.message as {
+        senderId: string;
+        recipientId: string;
+        id: string;
+        body?: string;
+        createdAt?: unknown;
+      };
       const peerId = message.senderId === event.conversation.id ? message.recipientId : event.conversation.id;
       const projected = await deps.projection.project('dm', message, { userId: message.senderId, peerId });
       deps.notifyUser(message.senderId, { type: 'dm-message', message: projected });
@@ -74,10 +87,19 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
         const row = parsed.eventId ? await outbox.getEvent(parsed.eventId) : null;
         // The outbox stores the event its writer enqueued; dispatch checks its fields.
         if (row?.payload) await dispatchMessageDeliveryEvent(row.payload as DeliveryEvent);
-      })().catch((error) => deps.logger().error({ evt: LOG_EVENTS.MESSAGE_EVENT_DISPATCH_FAILED, err: error }, 'failed to dispatch a durable message event'));
+      })().catch((error) =>
+        deps
+          .logger()
+          .error(
+            { evt: LOG_EVENTS.MESSAGE_EVENT_DISPATCH_FAILED, err: error },
+            'failed to dispatch a durable message event'
+          )
+      );
     };
     client.on('notification', onNotification);
-    client.on('error', (error) => deps.logger().error({ evt: LOG_EVENTS.MESSAGE_LISTENER_FAILED, err: error }, 'message delivery listener failed'));
+    client.on('error', (error) =>
+      deps.logger().error({ evt: LOG_EVENTS.MESSAGE_LISTENER_FAILED, err: error }, 'message delivery listener failed')
+    );
     await client.query(`LISTEN ${CHANNEL}`);
     listener = { client, onNotification };
   }
@@ -91,7 +113,11 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
     current.client.release();
   }
 
-  return { dispatch: dispatchMessageDeliveryEvent, start: startMessageDeliveryListener, stop: stopMessageDeliveryListener };
+  return {
+    dispatch: dispatchMessageDeliveryEvent,
+    start: startMessageDeliveryListener,
+    stop: stopMessageDeliveryListener
+  };
 }
 
 export type MessageDeliveryRelay = ReturnType<typeof createMessageDeliveryRelay>;

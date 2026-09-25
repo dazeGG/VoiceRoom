@@ -6,7 +6,12 @@
 import type { PushPayload } from '../notifications/notification-dispatch.ts';
 import type { AccountDeletionPreview } from '@voice-room/shared/account-security';
 import type { Logger } from 'pino';
-import { ACCOUNT_DELETION_GRACE_MS, WHATS_NEW_VERSION, formatRecoveryCode, isDeletedAccountLogin } from '@voice-room/shared/account-security';
+import {
+  ACCOUNT_DELETION_GRACE_MS,
+  WHATS_NEW_VERSION,
+  formatRecoveryCode,
+  isDeletedAccountLogin
+} from '@voice-room/shared/account-security';
 import { isValidPassword } from '@voice-room/shared/validation';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { hashSessionToken, selfUser } from '../../lib/user-store.ts';
@@ -34,7 +39,11 @@ type Status<T extends string> = T extends string ? { status: T } : never;
 type NotFound = Status<'not_found'>;
 
 export interface AccountUserStore {
-  createUser(input: { login: string; displayName: string; password: string }): Promise<{ status: string; user?: AccountUser | null }>;
+  createUser(input: {
+    login: string;
+    displayName: string;
+    password: string;
+  }): Promise<{ status: string; user?: AccountUser | null }>;
   createSession(input: { userId: string } & Device): Promise<{ token: string; publicId: string }>;
   getUserById(userId: string): Promise<AccountUser | null>;
   verifyCredentials(login: string, password: string): Promise<AccountUser | null>;
@@ -47,19 +56,40 @@ export interface AccountUserStore {
   markWhatsNewSeen(input: { userId: string }): Promise<{ status: string; whatsNewSeen?: unknown }>;
   markAppPromptSeen(input: { userId: string }): Promise<{ status: string }>;
   listPendingLoginAlerts(input: { userId: string; excludeSessionPublicId: string }): Promise<unknown[]>;
-  resolveLoginAlert(input: { userId: string; alertId: string; resolution: 'confirmed' | 'denied'; currentSessionPublicId: string }): Promise<{ status: string; revokedTokenHash?: string | null }>;
+  resolveLoginAlert(input: {
+    userId: string;
+    alertId: string;
+    resolution: 'confirmed' | 'denied';
+    currentSessionPublicId: string;
+  }): Promise<{ status: string; revokedTokenHash?: string | null }>;
   listSessions(input: { userId: string; currentTokenHash: string }): Promise<unknown[]>;
   revokeSession(input: { userId: string; publicId: string }): Promise<{ status: string; tokenHash?: string }>;
   revokeOtherSessions(input: { userId: string; keepTokenHash: string }): Promise<{ tokenHashes: string[] }>;
-  generateRecoveryCodes(input: { userId: string; currentPassword: string }): Promise<{ status: string; codes?: string[]; generatedAt?: unknown }>;
-  recoverWithCode(input: { login: string; code: unknown; newPassword: string }): Promise<{ status: string; user?: AccountUser | null; remaining?: number }>;
-  recordLogin(input: { userId: string; sessionPublicId: string; kind: LoginKind; userAgent: string; locationLabel: unknown }): Promise<{ alert?: LoginAlert | null }>;
+  generateRecoveryCodes(input: {
+    userId: string;
+    currentPassword: string;
+  }): Promise<{ status: string; codes?: string[]; generatedAt?: unknown }>;
+  recoverWithCode(input: {
+    login: string;
+    code: unknown;
+    newPassword: string;
+  }): Promise<{ status: string; user?: AccountUser | null; remaining?: number }>;
+  recordLogin(input: {
+    userId: string;
+    sessionPublicId: string;
+    kind: LoginKind;
+    userAgent: string;
+    locationLabel: unknown;
+  }): Promise<{ alert?: LoginAlert | null }>;
 }
 
 export interface AccountDeletionRepository {
   isLoginReserved(login: string): Promise<boolean>;
   previewDeletion(input: { userId: string }): Promise<AccountDeletionPreview>;
-  requestDeletion(input: { userId: string; currentPassword: string }): Promise<{ status: string; scheduledFor?: number }>;
+  requestDeletion(input: {
+    userId: string;
+    currentPassword: string;
+  }): Promise<{ status: string; scheduledFor?: number }>;
   restoreAccount(input: { login: string; password: string }): Promise<{ status: string; userId: string | null }>;
 }
 
@@ -101,44 +131,81 @@ export function createAccountService(deps: AccountDeps) {
   // Records a sign-in and, when it comes from an unfamiliar device or city,
   // asks the account's other devices right away and by push. A failure here
   // must not fail the sign-in itself.
-  async function recordAndAnnounceLogin(userId: string, session: { publicId: string }, device: Device, kind: LoginKind): Promise<void> {
+  async function recordAndAnnounceLogin(
+    userId: string,
+    session: { publicId: string },
+    device: Device,
+    kind: LoginKind
+  ): Promise<void> {
     try {
-      const { alert } = await deps.users().recordLogin({ userId, sessionPublicId: session.publicId, kind, userAgent: device.userAgent, locationLabel: device.locationLabel });
+      const { alert } = await deps.users().recordLogin({
+        userId,
+        sessionPublicId: session.publicId,
+        kind,
+        userAgent: device.userAgent,
+        locationLabel: device.locationLabel
+      });
       if (!alert) return;
       deps.notifyUser(userId, { type: 'account.login.new', alert });
-      void deps.queuePush(userId, {
-        type: 'account.login',
-        title: kind === 'recovery' ? 'Вход по коду восстановления' : 'Новый вход в аккаунт',
-        body: `${describeLoginDevice(alert)}. Если это были не вы, откройте Voice Room.`,
-        tag: `login-alert:${alert.id}`,
-        dedupeKey: `login-alert:${alert.id}`,
-        url: '/'
-      }, { ignorePreferences: true });
+      void deps.queuePush(
+        userId,
+        {
+          type: 'account.login',
+          title: kind === 'recovery' ? 'Вход по коду восстановления' : 'Новый вход в аккаунт',
+          body: `${describeLoginDevice(alert)}. Если это были не вы, откройте Voice Room.`,
+          tag: `login-alert:${alert.id}`,
+          dedupeKey: `login-alert:${alert.id}`,
+          url: '/'
+        },
+        { ignorePreferences: true }
+      );
     } catch (error) {
-      deps.logger().error({ evt: LOG_EVENTS.AUTH_SIGN_IN_RECORD_FAILED, userId, kind, err: error }, 'failed to record a sign-in');
+      deps
+        .logger()
+        .error({ evt: LOG_EVENTS.AUTH_SIGN_IN_RECORD_FAILED, userId, kind, err: error }, 'failed to record a sign-in');
     }
   }
 
-  async function openSession(user: AccountUser, device: () => Promise<Device>, kind: LoginKind): Promise<OpenedSession> {
+  async function openSession(
+    user: AccountUser,
+    device: () => Promise<Device>,
+    kind: LoginKind
+  ): Promise<OpenedSession> {
     const where = await device();
     const session = await deps.users().createSession({ userId: user.id, ...where });
     await recordAndAnnounceLogin(user.id, session, where, kind);
     return { status: 'signed_in', token: session.token, user: await reloadSelf(user) };
   }
 
-  async function register(input: { login: string; displayName: string; password: string; passwordConfirm: string; device: () => Promise<Device> }): Promise<OpenedSession | Status<'invalid_login' | 'invalid_password' | 'password_mismatch' | 'login_taken'>> {
+  async function register(input: {
+    login: string;
+    displayName: string;
+    password: string;
+    passwordConfirm: string;
+    device: () => Promise<Device>;
+  }): Promise<OpenedSession | Status<'invalid_login' | 'invalid_password' | 'password_mismatch' | 'login_taken'>> {
     if (!input.login) return { status: 'invalid_login' };
     if (!isValidPassword(input.password)) return { status: 'invalid_password' };
     if (input.password !== input.passwordConfirm) return { status: 'password_mismatch' };
     // A deleted account's login stays taken, so nobody can pose as that person.
-    if (isDeletedAccountLogin(input.login) || await deps.deletions()?.isLoginReserved(input.login)) return { status: 'login_taken' };
-    const created = await deps.users().createUser({ login: input.login, displayName: input.displayName, password: input.password });
+    if (isDeletedAccountLogin(input.login) || (await deps.deletions()?.isLoginReserved(input.login)))
+      return { status: 'login_taken' };
+    const created = await deps
+      .users()
+      .createUser({ login: input.login, displayName: input.displayName, password: input.password });
     if (created.status === 'login_taken') return { status: 'login_taken' };
     return openSession(created.user as AccountUser, input.device, 'register');
   }
 
-  async function login(input: { login: string; password: string; device: () => Promise<Device> }): Promise<
-    OpenedSession | Status<'invalid_credentials'> | { status: 'throttled'; retryAfterSeconds: number } | { status: 'deletion_pending'; deletionScheduledFor: number }
+  async function login(input: {
+    login: string;
+    password: string;
+    device: () => Promise<Device>;
+  }): Promise<
+    | OpenedSession
+    | Status<'invalid_credentials'>
+    | { status: 'throttled'; retryAfterSeconds: number }
+    | { status: 'deletion_pending'; deletionScheduledFor: number }
   > {
     if (!input.login || !input.password) return { status: 'invalid_credentials' };
     // The per-IP limit does nothing against credential stuffing from many
@@ -150,7 +217,8 @@ export function createAccountService(deps: AccountDeps) {
     if (!user) return { status: 'invalid_credentials' };
     deps.loginFailures.reset(input.login);
     // The right password on an account waiting to be deleted offers a restore.
-    if (user.deletionRequestedAt) return { status: 'deletion_pending', deletionScheduledFor: user.deletionRequestedAt + ACCOUNT_DELETION_GRACE_MS };
+    if (user.deletionRequestedAt)
+      return { status: 'deletion_pending', deletionScheduledFor: user.deletionRequestedAt + ACCOUNT_DELETION_GRACE_MS };
     return openSession(user, input.device, 'login');
   }
 
@@ -160,7 +228,11 @@ export function createAccountService(deps: AccountDeps) {
     await deps.endSessionConnections({ tokenHashes: [hashSessionToken(token) as string] });
   }
 
-  async function updateProfile(userId: string, displayName: string, log?: Pick<Logger, 'error'>): Promise<{ status: 'updated'; user: SelfUser } | NotFound> {
+  async function updateProfile(
+    userId: string,
+    displayName: string,
+    log?: Pick<Logger, 'error'>
+  ): Promise<{ status: 'updated'; user: SelfUser } | NotFound> {
     const user = await deps.users().updateDisplayName({ userId, displayName });
     if (!user) return { status: 'not_found' };
     deps.refreshActiveProfile(user);
@@ -170,7 +242,11 @@ export function createAccountService(deps: AccountDeps) {
 
   // Every session of the account ends, this one included: the new password
   // is the new proof of who is signed in.
-  async function changePassword(userId: string, currentPassword: string, newPassword: string): Promise<Status<'changed' | 'invalid_password' | 'invalid_new_password'> | NotFound> {
+  async function changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string
+  ): Promise<Status<'changed' | 'invalid_password' | 'invalid_new_password'> | NotFound> {
     if (!isValidPassword(newPassword)) return { status: 'invalid_new_password' };
     const result = await deps.users().changePassword({ userId, currentPassword, newPassword });
     if (result.status === 'not_found') return { status: 'not_found' };
@@ -180,13 +256,20 @@ export function createAccountService(deps: AccountDeps) {
   }
 
   async function security(userId: string) {
-    const [recoveryCodes, notices] = await Promise.all([deps.users().getRecoveryCodesStatus(userId), deps.users().getAccountNotices(userId)]);
+    const [recoveryCodes, notices] = await Promise.all([
+      deps.users().getRecoveryCodesStatus(userId),
+      deps.users().getAccountNotices(userId)
+    ]);
     return { recoveryCodes, recoveryCodesReminder: { snoozedUntil: notices.recoveryCodesReminderSnoozedUntil } };
   }
 
-  async function snoozeRecoveryCodesReminder(userId: string): Promise<{ status: 'snoozed'; snoozedUntil: unknown } | NotFound> {
+  async function snoozeRecoveryCodesReminder(
+    userId: string
+  ): Promise<{ status: 'snoozed'; snoozedUntil: unknown } | NotFound> {
     const result = await deps.users().snoozeRecoveryCodesReminder({ userId });
-    return result.status === 'snoozed' ? { status: 'snoozed', snoozedUntil: result.snoozedUntil } : { status: 'not_found' };
+    return result.status === 'snoozed'
+      ? { status: 'snoozed', snoozedUntil: result.snoozedUntil }
+      : { status: 'not_found' };
   }
 
   async function whatsNew(userId: string) {
@@ -194,7 +277,9 @@ export function createAccountService(deps: AccountDeps) {
     return { current: WHATS_NEW_VERSION as string, lastSeen: notices.whatsNewSeen };
   }
 
-  async function markWhatsNewSeen(userId: string): Promise<{ status: 'seen'; whatsNew: { current: string; lastSeen: unknown } } | NotFound> {
+  async function markWhatsNewSeen(
+    userId: string
+  ): Promise<{ status: 'seen'; whatsNew: { current: string; lastSeen: unknown } } | NotFound> {
     const result = await deps.users().markWhatsNewSeen({ userId });
     if (result.status !== 'seen') return { status: 'not_found' };
     return { status: 'seen', whatsNew: { current: WHATS_NEW_VERSION as string, lastSeen: result.whatsNewSeen } };
@@ -211,22 +296,38 @@ export function createAccountService(deps: AccountDeps) {
 
   // Denying a sign-in ends that session; either answer closes the same
   // question on every other device of the account.
-  async function resolveLoginAlert(userId: string, currentSessionPublicId: string, alertId: string, resolution: 'confirmed' | 'denied'): Promise<
-    { status: 'resolved'; resolution: 'confirmed' } | { status: 'resolved'; resolution: 'denied'; sessionEnded: boolean; recoveryCodes: unknown } | NotFound
+  async function resolveLoginAlert(
+    userId: string,
+    currentSessionPublicId: string,
+    alertId: string,
+    resolution: 'confirmed' | 'denied'
+  ): Promise<
+    | { status: 'resolved'; resolution: 'confirmed' }
+    | { status: 'resolved'; resolution: 'denied'; sessionEnded: boolean; recoveryCodes: unknown }
+    | NotFound
   > {
     const result = await deps.users().resolveLoginAlert({ userId, alertId, resolution, currentSessionPublicId });
     if (result.status !== 'resolved') return { status: 'not_found' };
     if (result.revokedTokenHash) await deps.endSessionConnections({ userId, tokenHashes: [result.revokedTokenHash] });
     deps.notifyUser(userId, { type: 'account.login.resolved', alertId: String(alertId).toLowerCase(), resolution });
     if (resolution === 'confirmed') return { status: 'resolved', resolution };
-    return { status: 'resolved', resolution, sessionEnded: Boolean(result.revokedTokenHash), recoveryCodes: await deps.users().getRecoveryCodesStatus(userId) };
+    return {
+      status: 'resolved',
+      resolution,
+      sessionEnded: Boolean(result.revokedTokenHash),
+      recoveryCodes: await deps.users().getRecoveryCodesStatus(userId)
+    };
   }
 
   async function listSessions(userId: string, currentTokenHash: string): Promise<unknown[]> {
     return deps.users().listSessions({ userId, currentTokenHash });
   }
 
-  async function revokeSession(userId: string, currentSessionPublicId: string, sessionId: unknown): Promise<Status<'revoked' | 'current_session'> | NotFound> {
+  async function revokeSession(
+    userId: string,
+    currentSessionPublicId: string,
+    sessionId: unknown
+  ): Promise<Status<'revoked' | 'current_session'> | NotFound> {
     const publicId = typeof sessionId === 'string' ? sessionId.toLowerCase() : '';
     if (publicId && publicId === String(currentSessionPublicId).toLowerCase()) return { status: 'current_session' };
     const result = await deps.users().revokeSession({ userId, publicId });
@@ -241,8 +342,13 @@ export function createAccountService(deps: AccountDeps) {
     return result.tokenHashes.length;
   }
 
-  async function generateRecoveryCodes(userId: string, currentPassword: string): Promise<
-    { status: 'generated'; codes: string[]; recoveryCodes: { remaining: number; generatedAt: unknown } } | Status<'invalid_password'> | NotFound
+  async function generateRecoveryCodes(
+    userId: string,
+    currentPassword: string
+  ): Promise<
+    | { status: 'generated'; codes: string[]; recoveryCodes: { remaining: number; generatedAt: unknown } }
+    | Status<'invalid_password'>
+    | NotFound
   > {
     const result = await deps.users().generateRecoveryCodes({ userId, currentPassword });
     if (result.status === 'not_found') return { status: 'not_found' };
@@ -256,11 +362,16 @@ export function createAccountService(deps: AccountDeps) {
   }
 
   // A recovery code replaces the password and ends every other session.
-  async function recover(input: { login: string; code: unknown; newPassword: string; device: () => Promise<Device> }): Promise<
-    (OpenedSession & { remaining: number }) | Status<'invalid_new_password' | 'invalid_code'>
-  > {
+  async function recover(input: {
+    login: string;
+    code: unknown;
+    newPassword: string;
+    device: () => Promise<Device>;
+  }): Promise<(OpenedSession & { remaining: number }) | Status<'invalid_new_password' | 'invalid_code'>> {
     if (!isValidPassword(input.newPassword)) return { status: 'invalid_new_password' };
-    const result = await deps.users().recoverWithCode({ login: input.login, code: input.code, newPassword: input.newPassword });
+    const result = await deps
+      .users()
+      .recoverWithCode({ login: input.login, code: input.code, newPassword: input.newPassword });
     if (result.status !== 'recovered') return { status: 'invalid_code' };
     const user = result.user as AccountUser;
     await deps.endSessionConnections({ userId: user.id });
@@ -268,7 +379,9 @@ export function createAccountService(deps: AccountDeps) {
     return { ...opened, remaining: result.remaining ?? 0 };
   }
 
-  async function deletionPreview(userId: string): Promise<{ status: 'preview'; preview: AccountDeletionPreview } | Status<'unavailable'>> {
+  async function deletionPreview(
+    userId: string
+  ): Promise<{ status: 'preview'; preview: AccountDeletionPreview } | Status<'unavailable'>> {
     const repository = deps.deletions();
     if (!repository) return { status: 'unavailable' };
     return { status: 'preview', preview: await repository.previewDeletion({ userId }) };
@@ -276,29 +389,41 @@ export function createAccountService(deps: AccountDeps) {
 
   // The account is hidden at once and deleted after the grace period; every
   // session ends and friends see the anonymous name from now on.
-  async function requestDeletion(userId: string, currentPassword: string, log?: Pick<Logger, 'error'>): Promise<
-    { status: 'scheduled'; deletionScheduledFor: number } | { status: 'already_requested'; deletionScheduledFor: number } | Status<'invalid_password' | 'unavailable'> | NotFound
+  async function requestDeletion(
+    userId: string,
+    currentPassword: string,
+    log?: Pick<Logger, 'error'>
+  ): Promise<
+    | { status: 'scheduled'; deletionScheduledFor: number }
+    | { status: 'already_requested'; deletionScheduledFor: number }
+    | Status<'invalid_password' | 'unavailable'>
+    | NotFound
   > {
     const repository = deps.deletions();
     if (!repository) return { status: 'unavailable' };
     const result = await repository.requestDeletion({ userId, currentPassword });
     if (result.status === 'invalid_password') return { status: 'invalid_password' };
     if (result.status === 'not_found') return { status: 'not_found' };
-    if (result.status === 'already_requested') return { status: 'already_requested', deletionScheduledFor: result.scheduledFor as number };
+    if (result.status === 'already_requested')
+      return { status: 'already_requested', deletionScheduledFor: result.scheduledFor as number };
     await deps.endSessionConnections({ userId });
     const hidden = await deps.users().getUserById(userId);
     if (hidden) await deps.broadcastProfileToFriends(hidden, log);
     return { status: 'scheduled', deletionScheduledFor: result.scheduledFor as number };
   }
 
-  async function restore(input: { login: string; password: string; device: () => Promise<Device> }, log?: Pick<Logger, 'error'>): Promise<OpenedSession | Status<'expired' | 'invalid_credentials'>> {
+  async function restore(
+    input: { login: string; password: string; device: () => Promise<Device> },
+    log?: Pick<Logger, 'error'>
+  ): Promise<OpenedSession | Status<'expired' | 'invalid_credentials'>> {
     const repository = deps.deletions() as AccountDeletionRepository;
-    const result = input.login && input.password
-      ? await repository.restoreAccount({ login: input.login, password: input.password })
-      : { status: 'invalid', userId: null };
+    const result =
+      input.login && input.password
+        ? await repository.restoreAccount({ login: input.login, password: input.password })
+        : { status: 'invalid', userId: null };
     if (result.status === 'expired') return { status: 'expired' };
     if (result.status !== 'restored') return { status: 'invalid_credentials' };
-    const user = await deps.users().getUserById(result.userId as string) as AccountUser;
+    const user = (await deps.users().getUserById(result.userId as string)) as AccountUser;
     const opened = await openSession(user, input.device, 'login');
     await deps.broadcastProfileToFriends(user, log);
     return opened;

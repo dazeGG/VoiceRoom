@@ -13,7 +13,11 @@
   import RoomMemberList from '$lib/features/home/components/lobby/RoomMemberList.svelte';
   import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '$lib/features/home/model/room-moderation';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
-  import { fetchRoomNotificationLevel, setRoomNotificationLevel, type RoomNotificationLevel } from '$lib/api/notifications';
+  import {
+    fetchRoomNotificationLevel,
+    setRoomNotificationLevel,
+    type RoomNotificationLevel
+  } from '$lib/api/notifications';
 
   type Section = 'general' | 'members' | 'bans';
 
@@ -43,11 +47,16 @@
   let wasOpen = false;
   $effect(() => {
     if (roomSettingsUi.open && !wasOpen) {
-      void getCapabilityFeature('moderationCenter').then((enabled) => { moderationEnabled = enabled; });
-      void getCapabilityFeature('membership').then((enabled) => { membershipEnabled = enabled; });
+      void getCapabilityFeature('moderationCenter').then((enabled) => {
+        moderationEnabled = enabled;
+      });
+      void getCapabilityFeature('membership').then((enabled) => {
+        membershipEnabled = enabled;
+      });
       void getCapabilityFeature('engagement').then(async (enabled) => {
         engagementEnabled = enabled;
-        if (enabled) notificationLevel = await fetchRoomNotificationLevel(roomClientState.roomId).catch(() => 'mentions');
+        if (enabled)
+          notificationLevel = await fetchRoomNotificationLevel(roomClientState.roomId).catch(() => 'mentions');
       });
       section = 'general';
       name = roomClientState.roomName;
@@ -198,18 +207,36 @@
         {#if membershipEnabled || moderationEnabled}
           <nav class="settings-nav" aria-label="Разделы настроек комнаты">
             <div class="settings-nav-main">
-              <button class="settings-nav-item" type="button" data-active={section === 'general'} aria-current={section === 'general' ? 'true' : undefined} onclick={() => (section = 'general')}>
+              <button
+                class="settings-nav-item"
+                type="button"
+                data-active={section === 'general'}
+                aria-current={section === 'general' ? 'true' : undefined}
+                onclick={() => (section = 'general')}
+              >
                 <SlidersHorizontal {...iconMd} aria-hidden="true" />
                 Основное
               </button>
               {#if membershipEnabled}
-                <button class="settings-nav-item" type="button" data-active={section === 'members'} aria-current={section === 'members' ? 'true' : undefined} onclick={() => (section = 'members')}>
+                <button
+                  class="settings-nav-item"
+                  type="button"
+                  data-active={section === 'members'}
+                  aria-current={section === 'members' ? 'true' : undefined}
+                  onclick={() => (section = 'members')}
+                >
                   <Users {...iconMd} aria-hidden="true" />
                   Участники
                 </button>
               {/if}
               {#if moderationEnabled}
-                <button class="settings-nav-item" type="button" data-active={section === 'bans'} aria-current={section === 'bans' ? 'true' : undefined} onclick={() => (section = 'bans')}>
+                <button
+                  class="settings-nav-item"
+                  type="button"
+                  data-active={section === 'bans'}
+                  aria-current={section === 'bans' ? 'true' : undefined}
+                  onclick={() => (section = 'bans')}
+                >
                   <Ban {...iconMd} aria-hidden="true" />
                   Блокировки
                 </button>
@@ -220,7 +247,11 @@
 
         {#if section === 'members' && membershipEnabled}
           <div class="settings-content room-settings-content">
-            <RoomMemberList roomId={roomClientState.roomId} canModerate={moderationEnabled} onNotify={notifyModeration} />
+            <RoomMemberList
+              roomId={roomClientState.roomId}
+              canModerate={moderationEnabled}
+              onNotify={notifyModeration}
+            />
           </div>
         {:else if section === 'bans' && moderationEnabled}
           <div class="settings-content room-settings-content">
@@ -233,47 +264,64 @@
             {/if}
 
             <div class="room-profile-head">
-            <div class="room-avatar-field">
-              <div class="room-avatar-control">
-                <input bind:this={avatarInput} class="room-avatar-input" type="file" accept="image/jpeg,image/png,image/webp" onchange={onAvatarFile} />
-                <button
-                  class="room-avatar-edit"
-                  type="button"
-                  onclick={() => avatarInput?.click()}
-                  disabled={avatarSaving}
-                  aria-label={roomClientState.roomAvatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
-                  title={roomClientState.roomAvatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
-                >
-                  <Avatar name={name || roomClientState.roomId} src={avatarPreviewUrl || (removeAvatarPending ? null : roomClientState.roomAvatarUrl)} shape="squircle" background="var(--room-avatar-bg)" size={58} />
-                  <span class="room-avatar-overlay" aria-hidden="true">
-                    <Pencil {...iconSm} />
-                  </span>
-                </button>
-                {#if avatarPreviewUrl || (roomClientState.roomAvatarUrl && !removeAvatarPending)}
+              <div class="room-avatar-field">
+                <div class="room-avatar-control">
+                  <input
+                    bind:this={avatarInput}
+                    class="room-avatar-input"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onchange={onAvatarFile}
+                  />
                   <button
-                    class="room-avatar-remove"
+                    class="room-avatar-edit"
                     type="button"
-                    onclick={removeAvatar}
+                    onclick={() => avatarInput?.click()}
                     disabled={avatarSaving}
-                    aria-label="Удалить аватар комнаты"
-                    title="Удалить аватар комнаты"
+                    aria-label={roomClientState.roomAvatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
+                    title={roomClientState.roomAvatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
                   >
-                    <X {...iconSm} aria-hidden="true" />
+                    <Avatar
+                      name={name || roomClientState.roomId}
+                      src={avatarPreviewUrl || (removeAvatarPending ? null : roomClientState.roomAvatarUrl)}
+                      shape="squircle"
+                      background="var(--room-avatar-bg)"
+                      size={58}
+                    />
+                    <span class="room-avatar-overlay" aria-hidden="true">
+                      <Pencil {...iconSm} />
+                    </span>
                   </button>
-                {/if}
+                  {#if avatarPreviewUrl || (roomClientState.roomAvatarUrl && !removeAvatarPending)}
+                    <button
+                      class="room-avatar-remove"
+                      type="button"
+                      onclick={removeAvatar}
+                      disabled={avatarSaving}
+                      aria-label="Удалить аватар комнаты"
+                      title="Удалить аватар комнаты"
+                    >
+                      <X {...iconSm} aria-hidden="true" />
+                    </button>
+                  {/if}
+                </div>
               </div>
-            </div>
-            <div class="room-name-field">
-              <span class="settings-field-label">Название</span>
-              <input class="settings-input" maxlength="60" placeholder="Название комнаты" bind:value={name} />
-            </div>
+              <div class="room-name-field">
+                <span class="settings-field-label">Название</span>
+                <input class="settings-input" maxlength="60" placeholder="Название комнаты" bind:value={name} />
+              </div>
             </div>
 
             {#if engagementEnabled}
               <label class="room-settings-notifications">
                 <span class="settings-field-label">Уведомления комнаты</span>
                 <span class="settings-select-wrap">
-                  <select class="settings-select" value={notificationLevel} onchange={saveNotificationLevel} disabled={notificationSaving}>
+                  <select
+                    class="settings-select"
+                    value={notificationLevel}
+                    onchange={saveNotificationLevel}
+                    disabled={notificationSaving}
+                  >
                     <option value="all">Все сообщения</option>
                     <option value="mentions">Упоминания и ответы</option>
                     <option value="none">Выключены</option>
@@ -295,9 +343,16 @@
 
             <div class="dialog-danger-zone">
               {#if confirmingDelete}
-                <p class="dialog-danger-note">Комната будет удалена для всех участников. Это действие нельзя отменить.</p>
+                <p class="dialog-danger-note">
+                  Комната будет удалена для всех участников. Это действие нельзя отменить.
+                </p>
                 <div class="dialog-danger-actions">
-                  <button class="settings-cancel" type="button" onclick={() => (confirmingDelete = false)} disabled={deleting}>Отмена</button>
+                  <button
+                    class="settings-cancel"
+                    type="button"
+                    onclick={() => (confirmingDelete = false)}
+                    disabled={deleting}>Отмена</button
+                  >
                   <button class="dialog-danger-confirm" type="button" onclick={confirmDelete} disabled={deleting}>
                     {#if deleting}
                       <span class="home-spinner" aria-hidden="true"></span>
@@ -335,21 +390,51 @@
 />
 
 <style>
-  .room-settings-modal { width: 780px; }
+  .room-settings-modal {
+    width: 780px;
+  }
   /* Without sections the dialog is just the general form, sized by its content;
      with sections it keeps one height so switching tabs does not jump. */
-  .room-settings-body { height: auto; min-height: 0; }
-  .room-settings-body[data-sectioned='true'] { height: min(560px, calc(90vh - 74px)); }
-  .room-settings-content { display: flex; flex-direction: column; gap: 28px; padding: 28px 30px 30px; }
-  .room-settings-notifications { display: grid; }
-  .room-settings-notifications .settings-field-label { margin-bottom: 9px; }
-  .room-profile-head { display: flex; align-items: center; gap: 16px; }
-  .room-name-field { flex: 1; min-width: 0; }
-  .room-avatar-field { flex: none; }
+  .room-settings-body {
+    height: auto;
+    min-height: 0;
+  }
+  .room-settings-body[data-sectioned='true'] {
+    height: min(560px, calc(90vh - 74px));
+  }
+  .room-settings-content {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    padding: 28px 30px 30px;
+  }
+  .room-settings-notifications {
+    display: grid;
+  }
+  .room-settings-notifications .settings-field-label {
+    margin-bottom: 9px;
+  }
+  .room-profile-head {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .room-name-field {
+    flex: 1;
+    min-width: 0;
+  }
+  .room-avatar-field {
+    flex: none;
+  }
 
   @media (max-width: 600px) {
-    .room-settings-body[data-sectioned='true'] { height: auto; overflow-y: auto; }
-    .room-settings-content { padding: 22px 18px; }
+    .room-settings-body[data-sectioned='true'] {
+      height: auto;
+      overflow-y: auto;
+    }
+    .room-settings-content {
+      padding: 22px 18px;
+    }
   }
 
   .room-avatar-control {
@@ -419,11 +504,15 @@
     cursor: pointer;
     box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34);
     opacity: 0;
-    transition: opacity 0.16s ease, background 0.16s ease;
+    transition:
+      opacity 0.16s ease,
+      background 0.16s ease;
   }
 
   .room-avatar-control:hover .room-avatar-remove,
-  .room-avatar-control:focus-within .room-avatar-remove { opacity: 1; }
+  .room-avatar-control:focus-within .room-avatar-remove {
+    opacity: 1;
+  }
 
   .room-avatar-remove:not(:disabled):hover {
     background: color-mix(in oklch, var(--coral), var(--warm-950) 16%);
@@ -455,7 +544,9 @@
     font-size: 13px;
     font-weight: 600;
     padding: 9px 14px;
-    transition: background-color 0.15s ease, border-color 0.15s ease;
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease;
   }
 
   .dialog-danger-trigger:hover {

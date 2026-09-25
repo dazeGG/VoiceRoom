@@ -5,12 +5,7 @@ import { clearScreenAttendance, setScreenAttendance } from '../model/screen-atte
 
 import { bumpScreenUiRevision, screenUi } from '../../screen-ui.svelte';
 import { clearParticipantFocus } from '../../participants-ui.svelte';
-import {
-  detachRemoteScreen,
-  getAllParticipants,
-  getParticipantById,
-  hasRemoteScreenVideo
-} from '../room/participants';
+import { detachRemoteScreen, getAllParticipants, getParticipantById, hasRemoteScreenVideo } from '../room/participants';
 import type { Participant } from '../core/types';
 import { playMediaElement, releaseScreenMediaElement } from '../services/media-playback-service';
 import {
@@ -34,9 +29,9 @@ export function handleScreenStageClick(event: MouseEvent): void {
   if (!state.viewedScreenPeerId || !screenUi.stageVisible) return;
   const target = event.target as Element;
   if (
-    target.closest('.screen-view-controls')
-    || target.closest('.screen-meta')
-    || target.closest('.screen-placeholder')
+    target.closest('.screen-view-controls') ||
+    target.closest('.screen-meta') ||
+    target.closest('.screen-placeholder')
   ) {
     return;
   }
@@ -63,7 +58,6 @@ export async function enterScreenView(peerId: string): Promise<void> {
   const peer = getParticipantById(peerId);
   if (peer?.isLocal && state.localScreenStream) {
     peer.screen = true;
-
   }
   if (!peer?.screen) {
     showToast('Демонстрация уже завершена');
@@ -177,9 +171,7 @@ export function isScreenSubscribed(peerId: string): boolean {
 
 export function refreshScreenAction(_participant: Participant | null): void {}
 
-export function refreshAllScreenActions(): void {
-
-}
+export function refreshAllScreenActions(): void {}
 
 function isParticipantStreaming(participant: Participant | null): boolean {
   if (!participant) return false;

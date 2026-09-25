@@ -53,7 +53,12 @@ function createMediaPressureService({
         });
         onSnapshot(snapshot);
       } catch {
-        snapshot = Object.freeze({ checkedAt: Date.now(), freeBytes: 0, healthy: false, reason: 'storage_unavailable' });
+        snapshot = Object.freeze({
+          checkedAt: Date.now(),
+          freeBytes: 0,
+          healthy: false,
+          reason: 'storage_unavailable'
+        });
         onSnapshot(snapshot);
       } finally {
         checking = null;
@@ -66,7 +71,10 @@ function createMediaPressureService({
   async function assertAcceptingUploads(): Promise<PressureSnapshot> {
     const state = await measure();
     if (!state.healthy) {
-      const error = new Error('Media uploads are temporarily unavailable') as Error & { code?: string; statusCode?: number };
+      const error = new Error('Media uploads are temporarily unavailable') as Error & {
+        code?: string;
+        statusCode?: number;
+      };
       error.code = 'MEDIA_PRESSURE';
       error.statusCode = 503;
       throw error;

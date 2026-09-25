@@ -175,7 +175,7 @@ export function normalizeLoginAlert(input: unknown): LoginAlert | null {
   if (!input || typeof input !== 'object') return null;
   const value = input as Loose;
   const id = typeof value.id === 'string' && UUID_PATTERN.test(value.id) ? value.id.toLowerCase() : '';
-  const kind = (LOGIN_ALERT_KINDS as readonly unknown[]).includes(value.kind) ? value.kind as LoginAlertKind : '';
+  const kind = (LOGIN_ALERT_KINDS as readonly unknown[]).includes(value.kind) ? (value.kind as LoginAlertKind) : '';
   const createdAt = Number(value.createdAt);
   if (!id || !kind || !Number.isSafeInteger(createdAt) || createdAt < 0) return null;
   return {
@@ -190,7 +190,8 @@ export function normalizeLoginAlert(input: unknown): LoginAlert | null {
 
 export function describeUserAgent(value: unknown): UserAgentDescription {
   const userAgent = typeof value === 'string' ? value.slice(0, 512) : '';
-  const match = (rules: readonly (readonly [RegExp, string])[]): string => rules.find(([pattern]) => pattern.test(userAgent))?.[1] || '';
+  const match = (rules: readonly (readonly [RegExp, string])[]): string =>
+    rules.find(([pattern]) => pattern.test(userAgent))?.[1] || '';
   return { client: match(CLIENT_RULES), os: match(OS_RULES) };
 }
 
@@ -220,9 +221,10 @@ function boundedText(value: unknown, max: number): string {
 export function normalizeAccountSession(input: unknown): AccountSession | null {
   if (!input || typeof input !== 'object') return null;
   const value = input as Loose;
-  const id = typeof value.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.id)
-    ? value.id.toLowerCase()
-    : '';
+  const id =
+    typeof value.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.id)
+      ? value.id.toLowerCase()
+      : '';
   const lastSeenAt = Number(value.lastSeenAt);
   if (!id || !Number.isSafeInteger(lastSeenAt) || lastSeenAt < 0) return null;
   return {

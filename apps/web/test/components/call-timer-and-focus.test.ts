@@ -34,7 +34,8 @@ test('a dialog focus trap focuses the marked element, keeps Tab inside and retur
   opener.focus();
 
   const dialog = document.createElement('div');
-  dialog.innerHTML = '<button>Первая</button><input data-dialog-initial-focus aria-label="Имя" /><button>Последняя</button>';
+  dialog.innerHTML =
+    '<button>Первая</button><input data-dialog-initial-focus aria-label="Имя" /><button>Последняя</button>';
   document.body.append(dialog);
   const trap = dialogFocusTrap(dialog);
   await Promise.resolve();

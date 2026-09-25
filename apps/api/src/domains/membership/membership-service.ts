@@ -20,7 +20,12 @@ export type LeaveOutcome =
   | { membership: null; status: 'invalid' | 'not_active' }
   | { membership: Membership; status: 'owner_required' | 'left' | 'not_active' };
 
-function createMembershipService({ pool, repository = createMembershipRepository({ pool }), activeBanService, now = Date.now }: {
+function createMembershipService({
+  pool,
+  repository = createMembershipRepository({ pool }),
+  activeBanService,
+  now = Date.now
+}: {
   pool?: pg.Pool | null;
   repository?: MembershipRepository;
   activeBanService?: BanCheck | null;
@@ -34,7 +39,13 @@ function createMembershipService({ pool, repository = createMembershipRepository
     return repository.isActive(roomId, userId);
   }
 
-  async function persistSuccessfulAdmission({ roomId, userId, ip = '', metadata = {}, admissionSucceeded = true }: {
+  async function persistSuccessfulAdmission({
+    roomId,
+    userId,
+    ip = '',
+    metadata = {},
+    admissionSucceeded = true
+  }: {
     roomId?: string;
     userId?: string;
     ip?: string;
@@ -47,7 +58,7 @@ function createMembershipService({ pool, repository = createMembershipRepository
       await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`voice-room:membership:${roomId}:${userId}`]);
       const room = await client.query('SELECT 1 FROM rooms WHERE id = $1 AND deleted_at IS NULL', [roomId]);
       if (room.rowCount === 0) return { membership: null, status: 'not_found' };
-      if (activeBanService && await activeBanService.isBanned({ roomId, userId, ip, at: now(), client })) {
+      if (activeBanService && (await activeBanService.isBanned({ roomId, userId, ip, at: now(), client }))) {
         return { membership: null, status: 'banned' };
       }
       const existing = await repository.getActive(roomId, userId, { client });
@@ -56,7 +67,13 @@ function createMembershipService({ pool, repository = createMembershipRepository
     });
   }
 
-  async function admitRegistered<A>({ roomId, userId, ip = '', metadata = {}, completeAdmission }: {
+  async function admitRegistered<A>({
+    roomId,
+    userId,
+    ip = '',
+    metadata = {},
+    completeAdmission
+  }: {
     roomId?: string;
     userId?: string;
     ip?: string;
@@ -66,7 +83,7 @@ function createMembershipService({ pool, repository = createMembershipRepository
     if (!roomId || !userId || typeof completeAdmission !== 'function') {
       return { admission: null, membership: null, status: 'invalid' };
     }
-    if (activeBanService && await activeBanService.isBanned({ roomId, userId, ip, at: now() })) {
+    if (activeBanService && (await activeBanService.isBanned({ roomId, userId, ip, at: now() }))) {
       return { admission: null, membership: null, status: 'banned' };
     }
     const admission = await completeAdmission();
@@ -83,13 +100,15 @@ function createMembershipService({ pool, repository = createMembershipRepository
       if (!membership) return { membership: null, status: 'not_active' };
       if (membership.role === 'owner') return { membership, status: 'owner_required' };
       const deleted = await repository.deleteActive(roomId, userId, { client });
-      return deleted
-        ? { membership: deleted, status: 'left' }
-        : { membership: membership, status: 'not_active' };
+      return deleted ? { membership: deleted, status: 'left' } : { membership: membership, status: 'not_active' };
     });
   }
 
-  async function rollbackSuccessfulAdmission({ roomId, userId, membershipId }: {
+  async function rollbackSuccessfulAdmission({
+    roomId,
+    userId,
+    membershipId
+  }: {
     roomId?: string;
     userId?: string;
     membershipId?: string;

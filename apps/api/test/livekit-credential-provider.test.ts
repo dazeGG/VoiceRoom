@@ -13,7 +13,11 @@ test('livekit credential provider rejects missing admission input without issuin
   const config = {
     apiKey: 'key',
     apiSecret: 'secret',
-    boundary: { async issueCredential() { calls += 1; } },
+    boundary: {
+      async issueCredential() {
+        calls += 1;
+      }
+    },
     gateUrl: 'ws://gate.example/rtc'
   };
   const admission = {
@@ -24,16 +28,16 @@ test('livekit credential provider rejects missing admission input without issuin
   };
 
   for (const key of ['apiKey', 'apiSecret', 'gateUrl']) {
-    assert.deepEqual(
-      await createLiveKitCredentialProvider({ ...config, [key]: '' }).issueAdmission(admission),
-      { status: 'unavailable', admission: null }
-    );
+    assert.deepEqual(await createLiveKitCredentialProvider({ ...config, [key]: '' }).issueAdmission(admission), {
+      status: 'unavailable',
+      admission: null
+    });
   }
   for (const key of ['roomId', 'livekitRoom', 'peerId', 'principal']) {
-    assert.deepEqual(
-      await createLiveKitCredentialProvider(config).issueAdmission({ ...admission, [key]: null }),
-      { status: 'unavailable', admission: null }
-    );
+    assert.deepEqual(await createLiveKitCredentialProvider(config).issueAdmission({ ...admission, [key]: null }), {
+      status: 'unavailable',
+      admission: null
+    });
   }
   assert.equal(calls, 0);
 });
@@ -47,16 +51,23 @@ test('livekit credential provider preserves boundary refusal without minting a L
   const provider = createLiveKitCredentialProvider({
     apiKey: 'key',
     apiSecret: 'secret',
-    boundary: { async issueCredential() { return { status: 'revoked' }; } },
+    boundary: {
+      async issueCredential() {
+        return { status: 'revoked' };
+      }
+    },
     gateUrl: 'ws://gate.example/rtc'
   });
 
-  assert.deepEqual(await provider.issueAdmission({
-    roomId: 'room-1',
-    livekitRoom: 'voice-room-room-1',
-    peerId: 'peer-1',
-    principal: { principalId: 'guest-1', principalType: 'guest' }
-  }), { status: 'revoked', admission: null });
+  assert.deepEqual(
+    await provider.issueAdmission({
+      roomId: 'room-1',
+      livekitRoom: 'voice-room-room-1',
+      peerId: 'peer-1',
+      principal: { principalId: 'guest-1', principalType: 'guest' }
+    }),
+    { status: 'revoked', admission: null }
+  );
 });
 
 test('livekit credential provider binds the signed gate credential to the public URL', async () => {

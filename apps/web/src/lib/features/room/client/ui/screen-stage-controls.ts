@@ -39,9 +39,10 @@ function releaseScreenAudioFallback(): void {
 }
 
 export function syncScreenAudioFallback(peer: Participant | null, hasVideoStream: boolean): void {
-  const audioTrack = !hasVideoStream && peer && !peer.isLocal
-    ? peer.screenStream?.getAudioTracks().find((track) => track.readyState !== 'ended') || null
-    : null;
+  const audioTrack =
+    !hasVideoStream && peer && !peer.isLocal
+      ? peer.screenStream?.getAudioTracks().find((track) => track.readyState !== 'ended') || null
+      : null;
   if (!audioTrack) {
     releaseScreenAudioFallback();
     return;
@@ -56,9 +57,13 @@ export function syncScreenAudioFallback(peer: Participant | null, hasVideoStream
     document.body.append(audio);
     screenAudioFallback = audio;
     screenAudioFallbackTrackId = audioTrack.id;
-    audioTrack.addEventListener('ended', () => {
-      if (screenAudioFallbackTrackId === audioTrack.id) releaseScreenAudioFallback();
-    }, { once: true });
+    audioTrack.addEventListener(
+      'ended',
+      () => {
+        if (screenAudioFallbackTrackId === audioTrack.id) releaseScreenAudioFallback();
+      },
+      { once: true }
+    );
   }
 
   syncScreenVideoAudio();
@@ -221,21 +226,33 @@ export function bindScreenStageIdleUi(signal?: AbortSignal): void {
     activateScreenStageUi();
   };
 
-  stage.addEventListener('pointerenter', () => {
-    screenStagePointerInside = true;
-    activateScreenStageUi();
-  }, { signal });
-  stage.addEventListener('pointerleave', () => {
-    screenStagePointerInside = false;
-    deactivateScreenStageUi();
-  }, { signal });
+  stage.addEventListener(
+    'pointerenter',
+    () => {
+      screenStagePointerInside = true;
+      activateScreenStageUi();
+    },
+    { signal }
+  );
+  stage.addEventListener(
+    'pointerleave',
+    () => {
+      screenStagePointerInside = false;
+      deactivateScreenStageUi();
+    },
+    { signal }
+  );
   stage.addEventListener('pointermove', wakeScreenStageUi, { signal });
   stage.addEventListener('mousedown', wakeScreenStageUi, { signal });
   stage.addEventListener('wheel', wakeScreenStageUi, { passive: true, signal });
-  stage.addEventListener('touchstart', () => {
-    screenStagePointerInside = true;
-    activateScreenStageUi();
-  }, { passive: true, signal });
+  stage.addEventListener(
+    'touchstart',
+    () => {
+      screenStagePointerInside = true;
+      activateScreenStageUi();
+    },
+    { passive: true, signal }
+  );
   document.addEventListener(
     'touchstart',
     (event) => {

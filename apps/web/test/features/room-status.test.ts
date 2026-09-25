@@ -12,8 +12,19 @@ beforeEach(() => {
 });
 
 test('an uploaded avatar and a valid accent win over the palette; a bad accent falls back', () => {
-  const uploaded = getAvatarPresentation({ name: 'Анна Смирнова', avatarColorKey: 'blue', isLocal: false, avatarUrl: '/a.webp', avatarAccent: '#123abc' });
-  expect(uploaded).toMatchObject({ src: '/a.webp', background: '#123abc', foreground: '#ffffff', label: 'Анна Смирнова' });
+  const uploaded = getAvatarPresentation({
+    name: 'Анна Смирнова',
+    avatarColorKey: 'blue',
+    isLocal: false,
+    avatarUrl: '/a.webp',
+    avatarAccent: '#123abc'
+  });
+  expect(uploaded).toMatchObject({
+    src: '/a.webp',
+    background: '#123abc',
+    foreground: '#ffffff',
+    label: 'Анна Смирнова'
+  });
 
   const fallback = getAvatarPresentation({ name: 'Анна', avatarColorKey: 'blue', isLocal: false, avatarAccent: 'red' });
   expect(fallback.src).toBeNull();

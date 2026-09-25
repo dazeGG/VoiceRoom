@@ -19,18 +19,23 @@ vi.mock('../../src/lib/api/rooms', () => ({
   undoRoomBan: vi.fn(async () => {})
 }));
 vi.mock('../../src/lib/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
-vi.mock('../../src/lib/features/room/client/services/media-playback-service', () => ({ applyRemoteParticipantAudioPreferences: vi.fn() }));
+vi.mock('../../src/lib/features/room/client/services/media-playback-service', () => ({
+  applyRemoteParticipantAudioPreferences: vi.fn()
+}));
 
-const ParticipantContextMenu = (await import('../../src/lib/features/room/components/ParticipantContextMenu.svelte')).default;
+const ParticipantContextMenu = (await import('../../src/lib/features/room/components/ParticipantContextMenu.svelte'))
+  .default;
 const friends = await import('../../src/lib/features/home/model/friends.svelte');
 const roomsApi = await import('../../src/lib/api/rooms');
 const { showToast } = await import('../../src/lib/features/room/client/ui/toast');
-const { applyRemoteParticipantAudioPreferences } = await import('../../src/lib/features/room/client/services/media-playback-service');
+const { applyRemoteParticipantAudioPreferences } =
+  await import('../../src/lib/features/room/client/services/media-playback-service');
 const { setUser, clearSession } = await import('../../src/lib/features/auth/session.svelte.ts');
 const { state } = await import('../../src/lib/features/room/client/core/state.svelte.ts');
 const { createInitialRoomState } = await import('../../src/lib/features/room/client/model/room-state.ts');
 const { createParticipant } = await import('../../src/lib/features/room/client/room/participants.ts');
-const { openParticipantContextMenu, participantContextMenu, closeParticipantContextMenu } = await import('../../src/lib/features/room/participant-context-ui.svelte.ts');
+const { openParticipantContextMenu, participantContextMenu, closeParticipantContextMenu } =
+  await import('../../src/lib/features/room/participant-context-ui.svelte.ts');
 const { roomSettingsUi } = await import('../../src/lib/features/room/room-settings.svelte.ts');
 const { getParticipantAudioPreference } = await import('../../src/lib/features/room/client/core/settings.ts');
 
@@ -75,7 +80,12 @@ test('a guest only offers local sound settings', () => {
 });
 
 test('an account shows actions for the relationship: add, accept, sent, remove', async () => {
-  const cases: Array<[string, string]> = [['none', 'Добавить в друзья'], ['incoming', 'Принять заявку'], ['outgoing', 'Заявка отправлена'], ['friend', 'Удалить из друзей']];
+  const cases: Array<[string, string]> = [
+    ['none', 'Добавить в друзья'],
+    ['incoming', 'Принять заявку'],
+    ['outgoing', 'Заявка отправлена'],
+    ['friend', 'Удалить из друзей']
+  ];
   for (const [relationship, label] of cases) {
     relationships.set('anna-user', relationship);
     const menu = openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' });
@@ -98,7 +108,9 @@ test('a failed action shows the server message, or a fallback per action', async
   vi.mocked(friends.openDm).mockRejectedValueOnce(new Error(''));
   const menu = openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' });
   await userEvent.click(within(menu).getByRole('button', { name: 'Написать' }));
-  await waitFor(() => expect(showToast).toHaveBeenCalledWith('Не удалось открыть личные сообщения', { variant: 'error' }));
+  await waitFor(() =>
+    expect(showToast).toHaveBeenCalledWith('Не удалось открыть личные сообщения', { variant: 'error' })
+  );
   expect(friends.setMode).toHaveBeenCalledWith('friends');
 });
 
@@ -128,7 +140,9 @@ test('only the owner can moderate, after the audio controls', async () => {
 
   roomSettingsUi.isOwner = true;
   menu = openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' });
-  const labels = within(menu).getAllByRole('button').map((button) => button.textContent?.trim() ?? '');
+  const labels = within(menu)
+    .getAllByRole('button')
+    .map((button) => button.textContent?.trim() ?? '');
   const muteIndex = labels.findIndex((label) => label.includes('Заглушить'));
   const kickIndex = labels.findIndex((label) => label.includes('Исключить'));
   const banIndex = labels.findIndex((label) => label.includes('Заблокировать'));
@@ -136,7 +150,11 @@ test('only the owner can moderate, after the audio controls', async () => {
   expect(kickIndex).toBeGreaterThan(muteIndex);
   expect(banIndex).toBeGreaterThan(kickIndex);
 
-  await userEvent.click(within(menu).getAllByRole('button').find((button) => button.textContent?.includes('Исключить'))!);
+  await userEvent.click(
+    within(menu)
+      .getAllByRole('button')
+      .find((button) => button.textContent?.includes('Исключить'))!
+  );
   expect(roomsApi.kickRoomPeer).toHaveBeenCalledWith('room-a', 'anna');
   await waitFor(() => expect(showToast).toHaveBeenCalledWith('Анна исключён из комнаты'));
 });

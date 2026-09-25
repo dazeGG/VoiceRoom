@@ -29,5 +29,7 @@
     white-space: nowrap;
   }
 
-  .chat-typing:empty { visibility: hidden; }
+  .chat-typing:empty {
+    visibility: hidden;
+  }
 </style>

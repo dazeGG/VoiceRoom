@@ -63,7 +63,9 @@
     background: transparent;
     color: var(--warm-muted);
     cursor: pointer;
-    transition: background 120ms ease, color 120ms ease;
+    transition:
+      background 120ms ease,
+      color 120ms ease;
   }
 
   .reply-target-cancel:hover,

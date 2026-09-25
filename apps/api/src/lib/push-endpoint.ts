@@ -1,15 +1,11 @@
 import crypto from 'node:crypto';
 
-const EXACT_PUSH_HOSTS = new Set([
-  'fcm.googleapis.com',
-  'updates.push.services.mozilla.com',
-  'web.push.apple.com'
-]);
+const EXACT_PUSH_HOSTS = new Set(['fcm.googleapis.com', 'updates.push.services.mozilla.com', 'web.push.apple.com']);
 
 function isAllowedPushHost(hostname: string): boolean {
-  return EXACT_PUSH_HOSTS.has(hostname)
-    || hostname === 'notify.windows.com'
-    || hostname.endsWith('.notify.windows.com');
+  return (
+    EXACT_PUSH_HOSTS.has(hostname) || hostname === 'notify.windows.com' || hostname.endsWith('.notify.windows.com')
+  );
 }
 
 function cleanPushEndpoint(value: unknown): string | null {
@@ -19,13 +15,16 @@ function cleanPushEndpoint(value: unknown): string | null {
   try {
     const url = new URL(endpoint);
     const hostname = url.hostname.toLowerCase();
-    if (url.protocol !== 'https:'
-      || url.username
-      || url.password
-      || url.port
-      || url.hash
-      || hostname.endsWith('.')
-      || !isAllowedPushHost(hostname)) return null;
+    if (
+      url.protocol !== 'https:' ||
+      url.username ||
+      url.password ||
+      url.port ||
+      url.hash ||
+      hostname.endsWith('.') ||
+      !isAllowedPushHost(hostname)
+    )
+      return null;
     return url.href;
   } catch {
     return null;

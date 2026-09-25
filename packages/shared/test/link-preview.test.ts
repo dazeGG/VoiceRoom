@@ -10,7 +10,9 @@ test('the first http(s) link without credentials is the one previewed', () => {
   assert.equal(preview.firstPreviewableUrl('смотри https://example.com/a?b=1#part.'), 'https://example.com/a?b=1');
   assert.match(preview.firstPreviewableUrl('это www.Example.com/путь!')!, /^https:\/\/www\.example\.com\//);
   assert.equal(
-    preview.firstPreviewableUrl('ftp://files.example javascript:alert(1) https://user:pw@example.com http://ok.example'),
+    preview.firstPreviewableUrl(
+      'ftp://files.example javascript:alert(1) https://user:pw@example.com http://ok.example'
+    ),
     'http://ok.example/'
   );
   assert.equal(preview.firstPreviewableUrl('без ссылок'), null);
@@ -42,7 +44,12 @@ test('previews without text, with a foreign scheme or with a forged image key ar
   assert.equal(preview.normalizeLinkPreview({ url: 'javascript:alert(1)', title: 'x' }), null);
   assert.equal(preview.normalizeLinkPreview({ url: 'https://a:b@example.com', title: 'x' }), null);
   assert.equal(preview.normalizeLinkPreview(['https://example.com']), null);
-  for (const image of [{ key: '../etc/passwd', width: 1, height: 1 }, { key: KEY, width: 0, height: 10 }, { key: KEY, width: 5000, height: 10 }, { key: KEY, width: 1.5, height: 10 }]) {
+  for (const image of [
+    { key: '../etc/passwd', width: 1, height: 1 },
+    { key: KEY, width: 0, height: 10 },
+    { key: KEY, width: 5000, height: 10 },
+    { key: KEY, width: 1.5, height: 10 }
+  ]) {
     assert.equal(preview.normalizeLinkPreview({ url: 'https://example.com', title: 'x', image })!.image, null);
   }
   assert.equal(preview.linkPreviewImageUrl('lp_../../x.webp'), null);
@@ -52,7 +59,13 @@ test('the browser module behaves exactly like the server module', async () => {
   const esm = await import(pathToFileURL(path.join(import.meta.dirname, '../src/link-preview.ts')).href);
   const texts = ['https://example.com/a#b', 'www.example.com', 'нет', 'ftp://x https://y.example/z.'];
   for (const text of texts) assert.equal(esm.firstPreviewableUrl(text), preview.firstPreviewableUrl(text));
-  const input = { url: 'https://example.com', title: 't\u200f', description: 'd', siteName: 's', image: { key: KEY, width: 2, height: 3 } };
+  const input = {
+    url: 'https://example.com',
+    title: 't\u200f',
+    description: 'd',
+    siteName: 's',
+    image: { key: KEY, width: 2, height: 3 }
+  };
   assert.deepEqual(esm.normalizeLinkPreview(input), preview.normalizeLinkPreview(input));
   assert.equal(esm.MAX_LINK_PREVIEW_TITLE, preview.MAX_LINK_PREVIEW_TITLE);
 });

@@ -1,8 +1,8 @@
-body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
+body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   max-height: 42px;
 }
 
-.tile-grid[data-count="0"] {
+.tile-grid[data-count='0'] {
   display: block;
   height: auto;
   min-height: clamp(180px, calc(100dvh - 360px), 360px);
@@ -12,64 +12,64 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
    capped in width and centred. Layouts follow the "Плитки звонка" spec:
    incomplete bottom rows (3, 5, 7) get their trailing tile nudged one
    half-track so the short row sits centred under the row above. */
-.tile-grid[data-count="1"] {
+.tile-grid[data-count='1'] {
   --tile-columns: 1;
   --grid-aspect: 1.7778;
 }
 
-.tile-grid[data-count="2"] {
+.tile-grid[data-count='2'] {
   --tile-columns: 2;
   --grid-aspect: 3.5556;
 }
 
-.tile-grid[data-count="3"] {
+.tile-grid[data-count='3'] {
   --tile-columns: 2;
   --grid-aspect: 1.7778;
 }
 
-.tile-grid[data-count="3"] :is(.stream-tile, .participant):nth-child(3) {
+.tile-grid[data-count='3'] :is(.stream-tile, .participant):nth-child(3) {
   grid-column: 2 / span 2;
 }
 
-.tile-grid[data-count="4"] {
+.tile-grid[data-count='4'] {
   --tile-columns: 2;
   --grid-aspect: 1.7778;
 }
 
-.tile-grid[data-count="5"] {
+.tile-grid[data-count='5'] {
   --tile-columns: 3;
   --grid-aspect: 2.6667;
 }
 
-.tile-grid[data-count="5"] :is(.stream-tile, .participant):nth-child(4) {
+.tile-grid[data-count='5'] :is(.stream-tile, .participant):nth-child(4) {
   grid-column: 2 / span 2;
 }
 
-.tile-grid[data-count="6"] {
+.tile-grid[data-count='6'] {
   --tile-columns: 3;
   --grid-aspect: 2.6667;
 }
 
-.tile-grid[data-count="7"] {
+.tile-grid[data-count='7'] {
   --tile-columns: 4;
   --grid-aspect: 3.5556;
 }
 
-.tile-grid[data-count="7"] :is(.stream-tile, .participant):nth-child(5) {
+.tile-grid[data-count='7'] :is(.stream-tile, .participant):nth-child(5) {
   grid-column: 2 / span 2;
 }
 
-.tile-grid[data-count="8"] {
+.tile-grid[data-count='8'] {
   --tile-columns: 4;
   --grid-aspect: 3.5556;
 }
 
-.tile-grid[data-count="9"] {
+.tile-grid[data-count='9'] {
   --tile-columns: 3;
   --grid-aspect: 1.7778;
 }
 
-.tile-grid[data-count]:not([data-count="0"]) {
+.tile-grid[data-count]:not([data-count='0']) {
   width: min(100%, calc(100cqh * var(--grid-aspect)));
   height: auto;
   aspect-ratio: var(--grid-aspect);
@@ -96,49 +96,128 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   overflow: hidden;
   background: color-mix(in oklch, var(--participant-pastel), var(--paper-deep) 30%);
   box-shadow: none;
-  transition: background 180ms ease, opacity 180ms ease;
+  transition:
+    background 180ms ease,
+    opacity 180ms ease;
 }
 
-.participant:not([data-local="true"]) { cursor: pointer; }
-.participant[data-local="true"] { cursor: pointer; }
+.participant:not([data-local='true']) {
+  cursor: pointer;
+}
+.participant[data-local='true'] {
+  cursor: pointer;
+}
 
 /* Spotlight («В центре внимания»): one 16:9 tile on the stage — a participant
    tile or the screen stage — with everyone else in a paged carousel below.
    Clicking the spotlighted tile again releases it, so there is no close X. */
-.participant-focus-layout { display: grid; width: 100%; height: 100%; min-height: 0; grid-template-rows: minmax(0, 1fr) auto; place-items: center; gap: var(--space-md); }
-.participant-focus-stage { position: relative; display: grid; width: min(100%, 980px); height: 100%; min-height: 0; place-items: center; }
+.participant-focus-layout {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+  place-items: center;
+  gap: var(--space-md);
+}
+.participant-focus-stage {
+  position: relative;
+  display: grid;
+  width: min(100%, 980px);
+  height: 100%;
+  min-height: 0;
+  place-items: center;
+}
 /* Fit the 16:9 spotlight tile into the stage: cap the width by both the stage
    itself and the strip height (100cqh = .stage-strip) minus the carousel row,
    so the tile keeps its aspect ratio instead of being squashed. */
-.participant-focus-stage > .participant { width: min(100%, calc((100cqh - 136px) * 1.7778)); }
-.participant-carousel-shell { display: grid; width: min(100%, 790px); grid-template-columns: 34px minmax(0, 1fr) 34px; align-items: center; gap: 8px; }
-.participant-carousel { min-width: 0; overflow-x: auto; scrollbar-width: none; }
-.participant-carousel::-webkit-scrollbar { display: none; }
-.participant-focus-strip { display: flex; width: max-content; height: 112px; align-items: center; gap: 10px; margin-inline: auto; }
-.participant-focus-strip :is(.participant, .stream-tile) { width: 142px; height: 80px; flex: 0 0 142px; align-self: center; }
+.participant-focus-stage > .participant {
+  width: min(100%, calc((100cqh - 136px) * 1.7778));
+}
+.participant-carousel-shell {
+  display: grid;
+  width: min(100%, 790px);
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 8px;
+}
+.participant-carousel {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.participant-carousel::-webkit-scrollbar {
+  display: none;
+}
+.participant-focus-strip {
+  display: flex;
+  width: max-content;
+  height: 112px;
+  align-items: center;
+  gap: 10px;
+  margin-inline: auto;
+}
+.participant-focus-strip :is(.participant, .stream-tile) {
+  width: 142px;
+  height: 80px;
+  flex: 0 0 142px;
+  align-self: center;
+}
 /* Carousel tiles stay minimal: no watch/status chrome, just the tile itself. */
 .participant-focus-strip .stream-tile-actions,
 .participant-focus-strip .participant p,
-.participant-focus-strip .participant-screen-action { display: none; }
-.participant-focus-strip .participant { padding: var(--space-xs); }
-.participant-focus-strip .participant-copy { right: var(--space-xs); bottom: var(--space-xs); left: var(--space-xs); }
-.participant-focus-strip .participant h2 { max-width: calc(100% - 2px); padding: 3px 6px; font-size: 0.72rem; }
-.participant-focus-strip .stream-tile-copy { padding: var(--space-xs); }
-.participant-focus-strip .stream-tile-copy strong { font-size: 0.72rem; }
-.participant-focus-strip .stream-tile-icon svg { width: 24px; height: 24px; }
-.participant-carousel-nav { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid var(--line); border-radius: 50%; background: var(--panel); color: var(--warm-muted); cursor: pointer; }
+.participant-focus-strip .participant-screen-action {
+  display: none;
+}
+.participant-focus-strip .participant {
+  padding: var(--space-xs);
+}
+.participant-focus-strip .participant-copy {
+  right: var(--space-xs);
+  bottom: var(--space-xs);
+  left: var(--space-xs);
+}
+.participant-focus-strip .participant h2 {
+  max-width: calc(100% - 2px);
+  padding: 3px 6px;
+  font-size: 0.72rem;
+}
+.participant-focus-strip .stream-tile-copy {
+  padding: var(--space-xs);
+}
+.participant-focus-strip .stream-tile-copy strong {
+  font-size: 0.72rem;
+}
+.participant-focus-strip .stream-tile-icon svg {
+  width: 24px;
+  height: 24px;
+}
+.participant-carousel-nav {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--panel);
+  color: var(--warm-muted);
+  cursor: pointer;
+}
 /* Arrows appear only when there is another page on that side. */
-.participant-carousel-nav[data-visible="false"] { visibility: hidden; pointer-events: none; }
+.participant-carousel-nav[data-visible='false'] {
+  visibility: hidden;
+  pointer-events: none;
+}
 
-.participant[data-muted="true"] {
+.participant[data-muted='true'] {
   opacity: 1;
 }
 
-.participant[data-screen="true"] {
+.participant[data-screen='true'] {
   border-color: color-mix(in oklch, var(--line), var(--blue) 16%);
 }
 
-.participant[data-speaking="true"] {
+.participant[data-speaking='true'] {
   border-color: var(--green);
   box-shadow: inset 0 0 0 1px var(--green);
 }
@@ -152,7 +231,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   background: transparent;
 }
 
-.participant[data-speaking="true"] .voice-ring {
+.participant[data-speaking='true'] .voice-ring {
   box-shadow: none;
 }
 
@@ -182,7 +261,7 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   object-fit: cover;
 }
 
-.participant[data-speaking="true"] .avatar {
+.participant[data-speaking='true'] .avatar {
   box-shadow: none;
 }
 
@@ -223,15 +302,15 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   }
 }
 
-.participant[data-screen="true"]:not([data-local="true"]) {
+.participant[data-screen='true']:not([data-local='true']) {
   cursor: pointer;
 }
 
-.participant[data-screen="true"][data-local="true"] {
+.participant[data-screen='true'][data-local='true'] {
   cursor: pointer;
 }
 
-.participant[data-screen="true"] .participant-screen-action {
+.participant[data-screen='true'] .participant-screen-action {
   display: none;
 }
 
@@ -286,11 +365,11 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   height: 16px;
 }
 
-.participant[data-muted="true"] .participant-muted-icon {
+.participant[data-muted='true'] .participant-muted-icon {
   display: grid;
 }
 
-.participant[data-deafened="true"] .participant-deafened-icon {
+.participant[data-deafened='true'] .participant-deafened-icon {
   display: grid;
 }
 
@@ -324,7 +403,10 @@ body[data-screen-view="true"][data-strip-collapsed="true"] .stage-strip {
   font-weight: 800;
   line-height: 1;
   white-space: nowrap;
-  transition: background 160ms var(--ease-out), border-color 160ms var(--ease-out), transform 160ms var(--ease-out);
+  transition:
+    background 160ms var(--ease-out),
+    border-color 160ms var(--ease-out),
+    transform 160ms var(--ease-out);
 }
 
 .participant-screen-action:hover {

@@ -2,7 +2,8 @@ import { expect, test } from 'vitest';
 import { resolvePopoverPlacement } from '../src/lib/shared/ui/Popover/popover-placement.ts';
 
 const VIEWPORT = 800;
-const rect = (top: number, height: number) => ({ top, bottom: top + height, height, left: 0, right: 100, width: 100, x: 0, y: top, toJSON() {} }) as DOMRect;
+const rect = (top: number, height: number) =>
+  ({ top, bottom: top + height, height, left: 0, right: 100, width: 100, x: 0, y: top, toJSON() {} }) as DOMRect;
 
 test('a panel that fits below stays below', () => {
   expect(resolvePopoverPlacement(rect(100, 40), rect(150, 200), 'bottom-start', VIEWPORT)).toBe('bottom-start');

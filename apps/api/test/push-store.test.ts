@@ -13,7 +13,11 @@ test('push subscription CRUD upserts endpoints and isolates deletion by user', a
   await runMigrations({ databaseUrl, logger: SILENT });
   const users = createUserStore({ databaseUrl, logger: SILENT });
   const pushes = createPushStore({ databaseUrl, logger: SILENT });
-  t.after(async () => { await pushes.close(); await users.close(); await cleanup(); });
+  t.after(async () => {
+    await pushes.close();
+    await users.close();
+    await cleanup();
+  });
 
   const alice = (await users.createUser({ login: 'push-alice', displayName: 'Alice', password: 'password123' })).user;
   const bob = (await users.createUser({ login: 'push-bob', displayName: 'Bob', password: 'password123' })).user;
@@ -48,11 +52,16 @@ test('push subscription CRUD upserts endpoints and isolates deletion by user', a
     subscription: { endpoint: 'https://push.example/alice-password', keys: { p256dh: 'alice-key', auth: 'alice-auth' } }
   });
   assert.equal((await pushes.listByUserId(alice.id)).length, 1);
-  assert.equal((await users.changePassword({
-    userId: alice.id,
-    currentPassword: 'password123',
-    newPassword: 'password456'
-  })).status, 'updated');
+  assert.equal(
+    (
+      await users.changePassword({
+        userId: alice.id,
+        currentPassword: 'password123',
+        newPassword: 'password456'
+      })
+    ).status,
+    'updated'
+  );
   assert.deepEqual(await pushes.listByUserId(alice.id), []);
 });
 
@@ -61,9 +70,14 @@ test('push subscriptions transactionally prune the oldest entries above the per-
   await runMigrations({ databaseUrl, logger: SILENT });
   const users = createUserStore({ databaseUrl, logger: SILENT });
   const pushes = createPushStore({ databaseUrl, logger: SILENT, maxSubscriptionsPerUser: 2 });
-  t.after(async () => { await pushes.close(); await users.close(); await cleanup(); });
+  t.after(async () => {
+    await pushes.close();
+    await users.close();
+    await cleanup();
+  });
 
-  const user = (await users.createUser({ login: 'push-limit', displayName: 'Push Limit', password: 'password123' })).user;
+  const user = (await users.createUser({ login: 'push-limit', displayName: 'Push Limit', password: 'password123' }))
+    .user;
   for (const token of ['one', 'two', 'three']) {
     await pushes.upsert({
       userId: user.id,
@@ -79,12 +93,16 @@ test('push subscriptions transactionally prune the oldest entries above the per-
     ['https://fcm.googleapis.com/fcm/send/two', 'https://fcm.googleapis.com/fcm/send/three']
   );
 
-  await Promise.all(['four', 'five', 'six', 'seven'].map((token) => pushes.upsert({
-    userId: user.id,
-    subscription: {
-      endpoint: `https://fcm.googleapis.com/fcm/send/${token}`,
-      keys: { p256dh: `key-${token}`, auth: `auth-${token}` }
-    }
-  })));
+  await Promise.all(
+    ['four', 'five', 'six', 'seven'].map((token) =>
+      pushes.upsert({
+        userId: user.id,
+        subscription: {
+          endpoint: `https://fcm.googleapis.com/fcm/send/${token}`,
+          keys: { p256dh: `key-${token}`, auth: `auth-${token}` }
+        }
+      })
+    )
+  );
   assert.equal((await pushes.listByUserId(user.id)).length, 2);
 });

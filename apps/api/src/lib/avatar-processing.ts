@@ -56,17 +56,12 @@ async function processAvatar(buffer: unknown): Promise<ProcessedAvatar> {
 
 function createAvatarKey(kind: string, id: unknown, hash: string): string {
   const normalizedId = String(id || '');
-  const validId = kind === 'user'
-    ? /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalizedId)
-    : kind === 'room' && /^[abcdefghijkmnpqrstuvwxyz23456789]{10}$/.test(normalizedId);
+  const validId =
+    kind === 'user'
+      ? /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalizedId)
+      : kind === 'room' && /^[abcdefghijkmnpqrstuvwxyz23456789]{10}$/.test(normalizedId);
   if (!validId || !/^[a-f0-9]{8}$/.test(hash)) throw new Error('Invalid avatar key input');
   return `${kind === 'room' ? 'room' : 'av'}_${normalizedId}_${hash}.webp`;
 }
 
-export {
-  AVATAR_SIZE,
-  MAX_AVATAR_BYTES,
-  createAvatarKey,
-  detectAvatarFormat,
-  processAvatar
-};
+export { AVATAR_SIZE, MAX_AVATAR_BYTES, createAvatarKey, detectAvatarFormat, processAvatar };

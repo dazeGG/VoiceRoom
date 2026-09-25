@@ -70,7 +70,9 @@
         />
       </label>
 
-      <button class="secondary-button" id="joinByCodeButton" type="button" onclick={joinRoomByCode}>Войти по коду</button>
+      <button class="secondary-button" id="joinByCodeButton" type="button" onclick={joinRoomByCode}
+        >Войти по коду</button
+      >
     </div>
   </section>
 </main>

@@ -15,7 +15,9 @@ function clock() {
       timers.set(id, { at: now + delay, callback });
       return id;
     },
-    clearTimeout(id) { timers.delete(id); },
+    clearTimeout(id) {
+      timers.delete(id);
+    },
     advance(ms) {
       now += ms;
       let ready;
@@ -34,7 +36,11 @@ function clock() {
 test('local media churn expires after eight seconds outside global recovery', () => {
   const fake = clock();
   const expired = [];
-  const grace = new ScreenRecoveryGraceController({ now: fake.now, setTimeout: fake.setTimeout, clearTimeout: fake.clearTimeout });
+  const grace = new ScreenRecoveryGraceController({
+    now: fake.now,
+    setTimeout: fake.setTimeout,
+    clearTimeout: fake.clearTimeout
+  });
   grace.schedule('peer', () => expired.push('peer'));
   fake.advance(7_999);
   assert.deepEqual(expired, []);
@@ -45,7 +51,11 @@ test('local media churn expires after eight seconds outside global recovery', ()
 test('global recovery holds an elapsed local grace until successful convergence', () => {
   const fake = clock();
   const expired = [];
-  const grace = new ScreenRecoveryGraceController({ now: fake.now, setTimeout: fake.setTimeout, clearTimeout: fake.clearTimeout });
+  const grace = new ScreenRecoveryGraceController({
+    now: fake.now,
+    setTimeout: fake.setTimeout,
+    clearTimeout: fake.clearTimeout
+  });
   grace.beginGlobal(7);
   grace.schedule('peer', () => expired.push('peer'));
   fake.advance(12_000);
@@ -84,8 +94,14 @@ test('republish cancels grace while terminal outcome and hard cap expire immedia
 test('authoritative stop cancels a pending media-only grace', () => {
   const fake = clock();
   let expired = false;
-  const grace = new ScreenRecoveryGraceController({ now: fake.now, setTimeout: fake.setTimeout, clearTimeout: fake.clearTimeout });
-  grace.schedule('peer', () => { expired = true; });
+  const grace = new ScreenRecoveryGraceController({
+    now: fake.now,
+    setTimeout: fake.setTimeout,
+    clearTimeout: fake.clearTimeout
+  });
+  grace.schedule('peer', () => {
+    expired = true;
+  });
   grace.authoritativeStop('peer');
   fake.advance(8_000);
   assert.equal(expired, false);
@@ -123,4 +139,3 @@ test('screen grace timers invoke injected schedulers without rebinding their rec
   grace.beginGlobal(1);
   assert.equal(receiver, undefined);
 });
-

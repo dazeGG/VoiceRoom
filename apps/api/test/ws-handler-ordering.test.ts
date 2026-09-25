@@ -27,9 +27,15 @@ function createRegistry() {
       };
       return registry.connection;
     },
-    rejectGuestOverLimit() { return false; },
-    rejectOverLimit() { return false; },
-    removeConnection(connection) { connection.closed = true; },
+    rejectGuestOverLimit() {
+      return false;
+    },
+    rejectOverLimit() {
+      return false;
+    },
+    removeConnection(connection) {
+      connection.closed = true;
+    },
     sendReady() {},
     sendToConnection() {},
     touch() {}
@@ -66,10 +72,7 @@ function createHandler(resolveSessionUser, events, { failedJoinPeerId = '' } = {
     async leaveVoiceRoom(connection, payload) {
       registry.lastLeavePayload = payload;
       events.push(`leave:${payload.peerId}`);
-      if (
-        connection.activeVoice?.roomId === payload.roomId
-        && connection.activeVoice?.peerId === payload.peerId
-      ) {
+      if (connection.activeVoice?.roomId === payload.roomId && connection.activeVoice?.peerId === payload.peerId) {
         connection.activeVoice = null;
       }
     },
@@ -97,23 +100,35 @@ test('JOIN then LEAVE keeps wire order while join authorization is pending', asy
   const { handler, registry } = createHandler(async () => {
     sessionCall += 1;
     if (sessionCall === 1) return null;
-    return new Promise((resolve) => { releaseJoinSession = resolve; });
+    return new Promise((resolve) => {
+      releaseJoinSession = resolve;
+    });
   }, events);
   const socket = new FakeSocket();
   await handler.handleConnection(socket, {});
 
-  socket.emit('message', clientFrame('room.join', {
-    roomId: ROOM_ID,
-    peerId: PEER_A,
-    sessionToken: TOKEN_A,
-    name: 'Alice'
-  }, 'recovery-request-1'));
+  socket.emit(
+    'message',
+    clientFrame(
+      'room.join',
+      {
+        roomId: ROOM_ID,
+        peerId: PEER_A,
+        sessionToken: TOKEN_A,
+        name: 'Alice'
+      },
+      'recovery-request-1'
+    )
+  );
   await waitFor(() => Boolean(releaseJoinSession));
-  socket.emit('message', clientFrame('room.leave', {
-    roomId: ROOM_ID,
-    peerId: PEER_A,
-    sessionToken: TOKEN_A
-  }));
+  socket.emit(
+    'message',
+    clientFrame('room.leave', {
+      roomId: ROOM_ID,
+      peerId: PEER_A,
+      sessionToken: TOKEN_A
+    })
+  );
 
   releaseJoinSession(null);
   await waitFor(() => events.length === 2);
@@ -131,26 +146,34 @@ test('two JOIN frames keep receive order when the first authorization is slower'
     sessionCall += 1;
     if (sessionCall === 1) return null;
     if (sessionCall === 2) {
-      return new Promise((resolve) => { releaseFirstJoinSession = resolve; });
+      return new Promise((resolve) => {
+        releaseFirstJoinSession = resolve;
+      });
     }
     return null;
   }, events);
   const socket = new FakeSocket();
   await handler.handleConnection(socket, {});
 
-  socket.emit('message', clientFrame('room.join', {
-    roomId: ROOM_ID,
-    peerId: PEER_A,
-    sessionToken: TOKEN_A,
-    name: 'Alice'
-  }));
+  socket.emit(
+    'message',
+    clientFrame('room.join', {
+      roomId: ROOM_ID,
+      peerId: PEER_A,
+      sessionToken: TOKEN_A,
+      name: 'Alice'
+    })
+  );
   await waitFor(() => Boolean(releaseFirstJoinSession));
-  socket.emit('message', clientFrame('room.join', {
-    roomId: ROOM_ID,
-    peerId: PEER_B,
-    sessionToken: TOKEN_B,
-    name: 'Bob'
-  }));
+  socket.emit(
+    'message',
+    clientFrame('room.join', {
+      roomId: ROOM_ID,
+      peerId: PEER_B,
+      sessionToken: TOKEN_B,
+      name: 'Bob'
+    })
+  );
 
   releaseFirstJoinSession(null);
   await waitFor(() => events.length === 2);
@@ -165,24 +188,32 @@ test('queued room work is discarded after the connection closes', async () => {
   const { handler, registry } = createHandler(async () => {
     sessionCall += 1;
     if (sessionCall === 1) return null;
-    return new Promise((resolve) => { releaseJoinSession = resolve; });
+    return new Promise((resolve) => {
+      releaseJoinSession = resolve;
+    });
   }, events);
   const socket = new FakeSocket();
   await handler.handleConnection(socket, {});
 
-  socket.emit('message', clientFrame('room.join', {
-    roomId: ROOM_ID,
-    peerId: PEER_A,
-    sessionToken: TOKEN_A,
-    name: 'Alice'
-  }));
+  socket.emit(
+    'message',
+    clientFrame('room.join', {
+      roomId: ROOM_ID,
+      peerId: PEER_A,
+      sessionToken: TOKEN_A,
+      name: 'Alice'
+    })
+  );
   await waitFor(() => Boolean(releaseJoinSession));
-  socket.emit('message', clientFrame('room.join', {
-    roomId: ROOM_ID,
-    peerId: PEER_B,
-    sessionToken: TOKEN_B,
-    name: 'Bob'
-  }));
+  socket.emit(
+    'message',
+    clientFrame('room.join', {
+      roomId: ROOM_ID,
+      peerId: PEER_B,
+      sessionToken: TOKEN_B,
+      name: 'Bob'
+    })
+  );
   socket.emit('close');
   releaseJoinSession(null);
   await registry.connection.inboundMessageQueue;
@@ -200,18 +231,24 @@ test('one rejected handler does not poison the following queue tail', async (t) 
   const socket = new FakeSocket();
   await handler.handleConnection(socket, {});
 
-  socket.emit('message', clientFrame('room.join', {
-    roomId: ROOM_ID,
-    peerId: PEER_A,
-    sessionToken: TOKEN_A,
-    name: 'Alice'
-  }));
-  socket.emit('message', clientFrame('room.join', {
-    roomId: ROOM_ID,
-    peerId: PEER_B,
-    sessionToken: TOKEN_B,
-    name: 'Bob'
-  }));
+  socket.emit(
+    'message',
+    clientFrame('room.join', {
+      roomId: ROOM_ID,
+      peerId: PEER_A,
+      sessionToken: TOKEN_A,
+      name: 'Alice'
+    })
+  );
+  socket.emit(
+    'message',
+    clientFrame('room.join', {
+      roomId: ROOM_ID,
+      peerId: PEER_B,
+      sessionToken: TOKEN_B,
+      name: 'Bob'
+    })
+  );
 
   await waitFor(() => events.length === 1);
   assert.deepEqual(events, [`join:${PEER_B}`]);

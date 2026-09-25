@@ -16,7 +16,8 @@ import { spawnSync } from 'node:child_process';
 
 const { createApiApp } = await import('../src/server.ts');
 const { createGateCredentialSigner } = await import('../src/domains/admission/gate-credential-signer.ts');
-const { createLiveKitAuthGateService, extractCredential } = await import('../src/domains/admission/livekit-auth-gate-service.ts');
+const { createLiveKitAuthGateService, extractCredential } =
+  await import('../src/domains/admission/livekit-auth-gate-service.ts');
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');
 const PEER_ID = 'peer-g05a';
@@ -51,7 +52,13 @@ function createGateAwareStore() {
     id: PEER_ID,
     ip: '203.0.113.10',
     sessionToken: SESSION_TOKEN,
-    transport: { close() {}, id: 'transport-g05', send() { return true; } }
+    transport: {
+      close() {},
+      id: 'transport-g05',
+      send() {
+        return true;
+      }
+    }
   });
   room.peers.set('peer-same-nat', {
     accountUserId: 'account-same-nat',
@@ -59,7 +66,13 @@ function createGateAwareStore() {
     id: 'peer-same-nat',
     ip: '203.0.113.10',
     sessionToken: 'session-same-nat',
-    transport: { close() {}, id: 'transport-same-nat', send() { return true; } }
+    transport: {
+      close() {},
+      id: 'transport-same-nat',
+      send() {
+        return true;
+      }
+    }
   });
   rooms.set('room-g05', room);
   let failBanTransaction = false;
@@ -109,16 +122,17 @@ function createGateAwareStore() {
       const row = credentials.get(credentialHash);
       const key = principalKey({ roomId, principalType, principalId });
       return {
-        status: row
-          && !row.revoked
-          && row.roomId === roomId
-          && row.peerId === peerId
-          && row.principal.principalType === principalType
-          && row.principal.principalId === principalId
-          && row.principalEpoch === principalEpoch
-          && epochs.get(key) === principalEpoch
-          ? 'allowed'
-          : 'denied'
+        status:
+          row &&
+          !row.revoked &&
+          row.roomId === roomId &&
+          row.peerId === peerId &&
+          row.principal.principalType === principalType &&
+          row.principal.principalId === principalId &&
+          row.principalEpoch === principalEpoch &&
+          epochs.get(key) === principalEpoch
+            ? 'allowed'
+            : 'denied'
       };
     },
     async revokeLiveKitGatePeer({ roomId, peerId, accountUserId, guestPrincipalId }) {
@@ -126,7 +140,11 @@ function createGateAwareStore() {
       const key = principalKey({ roomId, ...principal });
       epochs.set(key, (epochs.get(key) || 0) + 1);
       for (const row of credentials.values()) {
-        if (row.roomId === roomId && row.principal.principalType === principal.principalType && row.principal.principalId === principal.principalId) {
+        if (
+          row.roomId === roomId &&
+          row.principal.principalType === principal.principalType &&
+          row.principal.principalId === principal.principalId
+        ) {
           row.revoked = true;
         }
       }
@@ -138,18 +156,28 @@ function createGateAwareStore() {
     },
     async createRoomBanWithLiveKitGateRevocations({ roomId, ip, principals }) {
       if (failBanTransaction) throw new Error('simulated ban transaction failure');
-      if (!Array.isArray(principals) || principals.length === 0 || principals.some((principal) => {
-        return (principal?.principalType !== 'account' && principal?.principalType !== 'guest')
-          || typeof principal.principalId !== 'string'
-          || principal.principalId.trim().length === 0;
-      })) {
+      if (
+        !Array.isArray(principals) ||
+        principals.length === 0 ||
+        principals.some((principal) => {
+          return (
+            (principal?.principalType !== 'account' && principal?.principalType !== 'guest') ||
+            typeof principal.principalId !== 'string' ||
+            principal.principalId.trim().length === 0
+          );
+        })
+      ) {
         return { status: 'invalid', ban: null, revocations: [] };
       }
       for (const principal of principals) {
         const key = principalKey({ roomId, ...principal });
         epochs.set(key, (epochs.get(key) || 0) + 1);
         for (const row of credentials.values()) {
-          if (row.roomId === roomId && row.principal.principalType === principal.principalType && row.principal.principalId === principal.principalId) {
+          if (
+            row.roomId === roomId &&
+            row.principal.principalType === principal.principalType &&
+            row.principal.principalId === principal.principalId
+          ) {
             row.revoked = true;
           }
         }
@@ -207,14 +235,19 @@ test('G05-A01 API mints LiveKit JWT plus separate exact gate credential', async 
   assert.equal(verified.claims.peer, PEER_ID);
   assert.equal(verified.claims.pType, 'guest');
   assert.equal(verified.claims.pId, `room-g05:guest-id-${PEER_ID}`);
-  assert.equal((await store.verifyLiveKitGateCredential({
-    credentialHash: signer.hash(gateCredential),
-    peerId: verified.claims.peer,
-    principalEpoch: verified.claims.pEpoch,
-    principalId: verified.claims.pId,
-    principalType: verified.claims.pType,
-    roomId: verified.claims.room
-  })).status, 'allowed');
+  assert.equal(
+    (
+      await store.verifyLiveKitGateCredential({
+        credentialHash: signer.hash(gateCredential),
+        peerId: verified.claims.peer,
+        principalEpoch: verified.claims.pEpoch,
+        principalId: verified.claims.pId,
+        principalType: verified.claims.pType,
+        roomId: verified.claims.room
+      })
+    ).status,
+    'allowed'
+  );
 });
 
 test('G05 signer validates finite time claims and expires credentials', () => {
@@ -223,14 +256,18 @@ test('G05 signer validates finite time claims and expires credentials', () => {
     secret: process.env.LIVEKIT_GATE_SECRET,
     now: () => now
   });
-  assert.throws(() => signer.sign({
-    expiresAt: Number.POSITIVE_INFINITY,
-    peerId: PEER_ID,
-    principalEpoch: 0,
-    principalId: `room-g05:guest-id-${PEER_ID}`,
-    principalType: 'guest',
-    roomId: 'room-g05'
-  }), /Invalid gate credential/);
+  assert.throws(
+    () =>
+      signer.sign({
+        expiresAt: Number.POSITIVE_INFINITY,
+        peerId: PEER_ID,
+        principalEpoch: 0,
+        principalId: `room-g05:guest-id-${PEER_ID}`,
+        principalType: 'guest',
+        roomId: 'room-g05'
+      }),
+    /Invalid gate credential/
+  );
   const credential = signer.sign({
     expiresAt: 2_000,
     issuedAt: 1_000,
@@ -292,7 +329,10 @@ test('G05-A02 topology exposes only the gate as public signaling boundary', () =
   assert.match(apiService, /LIVEKIT_INTERNAL_URL:\s*ws:\/\/livekit:7880/);
   assert.doesNotMatch(apiService, /LIVEKIT_INTERNAL_URL:\s*\$\{LIVEKIT_URL\b/);
   assert.doesNotMatch(apiService, /LIVEKIT_INTERNAL_URL:\s*\$\{LIVEKIT_GATE_PUBLIC_URL\b/);
-  assert.match(compose, /LIVEKIT_GATE_PUBLIC_URL:\s*\$\{LIVEKIT_GATE_PUBLIC_URL:-wss:\/\/\$\{LIVEKIT_DOMAIN:-livekit\.\$\{DOMAIN\}\}\}/);
+  assert.match(
+    compose,
+    /LIVEKIT_GATE_PUBLIC_URL:\s*\$\{LIVEKIT_GATE_PUBLIC_URL:-wss:\/\/\$\{LIVEKIT_DOMAIN:-livekit\.\$\{DOMAIN\}\}\}/
+  );
   assert.match(compose, /LIVEKIT_GATE_SECRET/);
   assert.doesNotMatch(compose, /"7880:7880"/);
   assert.match(caddy, /reverse_proxy livekit-gate:3080/);
@@ -318,10 +358,7 @@ test('development topology routes public signaling through the auth gate', () =>
   assert.doesNotMatch(livekitService, /\$\{LIVEKIT_HTTP_PORT:-7880\}:7880/);
   assert.match(gateService, /livekit-auth-gate-service\.ts/);
   assert.match(gateService, /\$\{LIVEKIT_HTTP_PORT:-7880\}:3080/);
-  assert.equal(
-    packageJson.scripts['dev:livekit'],
-    'docker compose -f docker-compose.dev.yml up --build livekit-gate'
-  );
+  assert.equal(packageJson.scripts['dev:livekit'], 'docker compose -f docker-compose.dev.yml up --build livekit-gate');
   assert.equal(
     packageJson.scripts['dev:restart'],
     'docker compose -f docker-compose.dev.yml restart livekit-gate api web'
@@ -329,17 +366,26 @@ test('development topology routes public signaling through the auth gate', () =>
 });
 
 test('G05-A03..A06 amended strict proof is green and fail-on-blocked exits zero', async () => {
-  const result = spawnSync(process.execPath, [path.join(ROOT, 'scripts/lkv/run-auth-gate-proof.mts'), '--json', '--fail-on-blocked'], {
-    cwd: ROOT,
-    encoding: 'utf8'
-  });
+  const result = spawnSync(
+    process.execPath,
+    [path.join(ROOT, 'scripts/lkv/run-auth-gate-proof.mts'), '--json', '--fail-on-blocked'],
+    {
+      cwd: ROOT,
+      encoding: 'utf8'
+    }
+  );
   assert.equal(result.status, 0, result.stderr);
   const proof = JSON.parse(result.stdout);
   assert.equal(proof.status, 'STRICT_BOUNDARY_PROVEN');
   assert.equal(proof.selectedMechanism, 'external-auth-gate');
   assert.equal(proof.greenF11Allowed, true);
   assert.equal(proof.successorStartAllowed, true);
-  for (const id of ['G05-A01-same-token-after-revoke', 'G05-A03-db-outage', 'G05-A05-missing-credential', 'G05-A06-account-vs-guest-nat']) {
+  for (const id of [
+    'G05-A01-same-token-after-revoke',
+    'G05-A03-db-outage',
+    'G05-A05-missing-credential',
+    'G05-A06-account-vs-guest-nat'
+  ]) {
     const entry = proof.cases.find((item) => item.id === id);
     assert.ok(entry, `missing ${id}`);
     assert.notEqual(entry.denied, false, id);
@@ -367,11 +413,15 @@ test('G05 gate strips credential before upstream and fails closed on malformed c
 });
 
 test('G05 gate rejects wss upstreams because upstream proxying is raw TCP only', () => {
-  assert.throws(() => createLiveKitAuthGateService({
-    roomStore: createGateAwareStore(),
-    secret: process.env.LIVEKIT_GATE_SECRET,
-    upstreamUrl: 'wss://livekit.example.test/rtc'
-  }), /must be ws:\/\/ because the auth gate uses a raw TCP upstream/);
+  assert.throws(
+    () =>
+      createLiveKitAuthGateService({
+        roomStore: createGateAwareStore(),
+        secret: process.env.LIVEKIT_GATE_SECRET,
+        upstreamUrl: 'wss://livekit.example.test/rtc'
+      }),
+    /must be ws:\/\/ because the auth gate uses a raw TCP upstream/
+  );
 });
 
 test('G05 gate survives a client cancellation followed by an upstream socket error', async (t) => {
@@ -426,7 +476,12 @@ test('G05 gate survives a client cancellation followed by an upstream socket err
   const client = new FakeSocket();
   const accessToken = unsignedLiveKitJwt({ sub: PEER_ID, room: 'voice-room-room-g05' });
 
-  server.emit('upgrade', { url: `/rtc?access_token=${accessToken}&vr_gate_credential=test`, headers: {} }, client, Buffer.alloc(0));
+  server.emit(
+    'upgrade',
+    { url: `/rtc?access_token=${accessToken}&vr_gate_credential=test`, headers: {} },
+    client,
+    Buffer.alloc(0)
+  );
   await new Promise((resolve) => setImmediate(resolve));
   upstream.emit('connect');
   client.destroy();
@@ -475,14 +530,19 @@ test('G05 ban reports no success when ban+gate revocation transaction fails', as
     payload: { peerId: PEER_ID }
   });
   assert.equal(response.statusCode, 500, response.body);
-  assert.equal((await store.verifyLiveKitGateCredential({
-    credentialHash: signer.hash(credential),
-    peerId: PEER_ID,
-    principalEpoch: 0,
-    principalId: principal.principalId,
-    principalType: principal.principalType,
-    roomId: 'room-g05'
-  })).status, 'allowed');
+  assert.equal(
+    (
+      await store.verifyLiveKitGateCredential({
+        credentialHash: signer.hash(credential),
+        peerId: PEER_ID,
+        principalEpoch: 0,
+        principalId: principal.principalId,
+        principalType: principal.principalType,
+        roomId: 'room-g05'
+      })
+    ).status,
+    'allowed'
+  );
   assert.deepEqual(store.revoked, []);
 });
 

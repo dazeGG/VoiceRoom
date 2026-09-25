@@ -4,7 +4,11 @@
 export const NOTIFICATION_CONTRACT_VERSION = 1 as const;
 export const NOTIFICATION_DEFAULT_LIMIT = 50 as const;
 export const NOTIFICATION_MAX_LIMIT = 100 as const;
-export const NOTIFICATION_LEVELS: readonly ['all', 'mentions', 'none'] = Object.freeze(['all', 'mentions', 'none'] as const);
+export const NOTIFICATION_LEVELS: readonly ['all', 'mentions', 'none'] = Object.freeze([
+  'all',
+  'mentions',
+  'none'
+] as const);
 export const NOTIFICATION_REASONS: readonly ['mention', 'reply'] = Object.freeze(['mention', 'reply'] as const);
 
 export type NotificationLevel = 'all' | 'mentions' | 'none';
@@ -52,8 +56,11 @@ function cleanString(value: unknown, max = 256): string {
   return text && text.length <= max ? text : '';
 }
 
-export function normalizeNotificationLevel(value: unknown, fallback: NotificationLevel = 'mentions'): NotificationLevel {
-  return NOTIFICATION_LEVEL_SET.has(value) ? value as NotificationLevel : fallback;
+export function normalizeNotificationLevel(
+  value: unknown,
+  fallback: NotificationLevel = 'mentions'
+): NotificationLevel {
+  return NOTIFICATION_LEVEL_SET.has(value) ? (value as NotificationLevel) : fallback;
 }
 
 export function normalizeNotificationLimit(value: unknown, fallback: number = NOTIFICATION_DEFAULT_LIMIT): number {
@@ -88,7 +95,14 @@ export function normalizeNotificationItem(input: unknown): NotificationItem | nu
   };
 }
 
-export function buildNotificationEnvelope({ notifications = [], nextCursor, hasMore = false, unreadCount = 0, revision = 0, firstUnread = null }: {
+export function buildNotificationEnvelope({
+  notifications = [],
+  nextCursor,
+  hasMore = false,
+  unreadCount = 0,
+  revision = 0,
+  firstUnread = null
+}: {
   notifications?: unknown;
   nextCursor?: unknown;
   hasMore?: unknown;
@@ -108,22 +122,25 @@ export function buildNotificationEnvelope({ notifications = [], nextCursor, hasM
   };
 }
 
-export function normalizeNotificationEnvelope(input: unknown):
-  | { ok: true; envelope: NotificationEnvelope }
-  | { ok: false; code: string } {
+export function normalizeNotificationEnvelope(
+  input: unknown
+): { ok: true; envelope: NotificationEnvelope } | { ok: false; code: string } {
   const value = input as Loose | null;
   if (!value || typeof value !== 'object' || value.contractVersion !== NOTIFICATION_CONTRACT_VERSION) {
     return { ok: false, code: 'invalid_notification_envelope' };
   }
   const pageInfo = value.pageInfo as Loose | null | undefined;
-  return { ok: true, envelope: buildNotificationEnvelope({
-    notifications: value.notifications,
-    nextCursor: pageInfo?.nextCursor,
-    hasMore: pageInfo?.hasMore,
-    unreadCount: value.unreadCount,
-    revision: value.revision,
-    firstUnread: value.firstUnread
-  }) };
+  return {
+    ok: true,
+    envelope: buildNotificationEnvelope({
+      notifications: value.notifications,
+      nextCursor: pageInfo?.nextCursor,
+      hasMore: pageInfo?.hasMore,
+      unreadCount: value.unreadCount,
+      revision: value.revision,
+      firstUnread: value.firstUnread
+    })
+  };
 }
 
 /**
@@ -131,13 +148,18 @@ export function normalizeNotificationEnvelope(input: unknown):
  * on the source message. Deliberately not /r/:roomId — that route means "put me
  * back inside this room" and joins voice on load, which a mention must never do.
  */
-export function notificationRoute(item: Partial<Pick<NotificationItem, 'roomId' | 'sourceMessageId'>> | null | undefined): string {
+export function notificationRoute(
+  item: Partial<Pick<NotificationItem, 'roomId' | 'sourceMessageId'>> | null | undefined
+): string {
   const roomId = encodeURIComponent(String(item?.roomId || ''));
   const messageId = encodeURIComponent(String(item?.sourceMessageId || ''));
   return `/?room=${roomId}&message=${messageId}`;
 }
 
-export function buildProviderPayload(item: unknown, { privateNotifications = false }: { privateNotifications?: boolean } = {}): ProviderPayload | null {
+export function buildProviderPayload(
+  item: unknown,
+  { privateNotifications = false }: { privateNotifications?: boolean } = {}
+): ProviderPayload | null {
   const notification = normalizeNotificationItem(item);
   if (!notification) return null;
   return {
@@ -146,7 +168,9 @@ export function buildProviderPayload(item: unknown, { privateNotifications = fal
     revision: notification.revision,
     dedupeKey: `${notification.id}:${notification.revision}`,
     title: 'VoiceRoom',
-    body: privateNotifications ? 'Откройте VoiceRoom, чтобы посмотреть уведомление.' : (notification.body || 'У вас новое уведомление'),
+    body: privateNotifications
+      ? 'Откройте VoiceRoom, чтобы посмотреть уведомление.'
+      : notification.body || 'У вас новое уведомление',
     route: notificationRoute(notification)
   };
 }

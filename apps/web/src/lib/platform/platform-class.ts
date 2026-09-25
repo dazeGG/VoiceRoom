@@ -27,9 +27,10 @@ function browserNavigator(): Navigator | null {
 export function collectPlatformSignals(): PlatformSignals {
   const runtime = runtimeWindow()?.voiceRoomRuntime;
   const nav = browserNavigator();
-  const userAgentData = 'userAgentData' in (nav || {})
-    ? (nav as Navigator & { userAgentData?: { mobile?: boolean } }).userAgentData
-    : undefined;
+  const userAgentData =
+    'userAgentData' in (nav || {})
+      ? (nav as Navigator & { userAgentData?: { mobile?: boolean } }).userAgentData
+      : undefined;
 
   return {
     desktopBridge: runtime?.isDesktop === true,

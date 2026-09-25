@@ -1,11 +1,7 @@
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { state } from '../core/state.svelte';
 import { postState } from '../room/presence';
-import {
-  supportsAudioOutputSelection,
-  syncPlaybackMuteState,
-  unlockAudio
-} from '../services/media-playback-service';
+import { supportsAudioOutputSelection, syncPlaybackMuteState, unlockAudio } from '../services/media-playback-service';
 import { playMicCue, playOutputCue } from '../media/cues';
 import {
   getLocalMicrophoneCapture,
@@ -61,9 +57,9 @@ export function getCallControlsView(): CallControlsView {
       ? state.pushToTalkActive
         ? 'Push-to-talk: микрофон открыт'
         : 'Push-to-talk: микрофон закрыт'
-    : state.muted
-      ? 'Включить микрофон'
-      : 'Выключить микрофон';
+      : state.muted
+        ? 'Включить микрофон'
+        : 'Выключить микрофон';
 
   return {
     label,
@@ -74,8 +70,12 @@ export function getCallControlsView(): CallControlsView {
       : !state.joined
         ? 'idle'
         : state.microphoneMode === 'push-to-talk'
-          ? state.pushToTalkActive ? 'ptt-active' : 'ptt'
-          : state.muted ? 'muted' : 'live'
+          ? state.pushToTalkActive
+            ? 'ptt-active'
+            : 'ptt'
+          : state.muted
+            ? 'muted'
+            : 'live'
   };
 }
 
@@ -103,10 +103,7 @@ export function syncOutputDeviceUiState(): void {
 }
 
 export function setMicrophoneMuted(muted: boolean, options: { playCue?: boolean; post?: boolean } = {}): void {
-  const {
-    playCue = true,
-    post = true
-  } = options;
+  const { playCue = true, post = true } = options;
   if (!state.localStream) return;
   const nextMuted = Boolean(muted);
   if (state.muted === nextMuted) return;
@@ -120,7 +117,9 @@ export function setMicrophoneMuted(muted: boolean, options: { playCue?: boolean;
 
   state.muted = nextMuted;
   setMicrophoneCaptureEnabled(getLocalMicrophoneCapture(), !state.muted);
-  syncLocalMicrophonePublicationMuted().catch((error) => log.warn('liveKit microphone mute failed', errorContext(error)));
+  syncLocalMicrophonePublicationMuted().catch((error) =>
+    log.warn('liveKit microphone mute failed', errorContext(error))
+  );
 
   if (playCue) playMicCue(state.muted);
   updateParticipant({
@@ -139,7 +138,9 @@ export function setMicrophoneMuted(muted: boolean, options: { playCue?: boolean;
  * `setMicrophoneMuted` has nothing to do but the room must stop showing a mute.
  */
 function syncShownMicrophoneMute(): void {
-  syncLocalMicrophonePublicationMuted().catch((error) => log.warn('liveKit microphone mute failed', errorContext(error)));
+  syncLocalMicrophonePublicationMuted().catch((error) =>
+    log.warn('liveKit microphone mute failed', errorContext(error))
+  );
   updateParticipant({
     deafened: state.outputMuted,
     id: state.peerId,
@@ -184,12 +185,7 @@ export function setMicrophoneMode(mode: MicrophoneMode): MicrophoneMode {
 }
 
 export function beginPushToTalk(): boolean {
-  if (
-    state.microphoneMode !== 'push-to-talk'
-    || !state.joined
-    || !state.localStream
-    || state.outputMuted
-  ) return false;
+  if (state.microphoneMode !== 'push-to-talk' || !state.joined || !state.localStream || state.outputMuted) return false;
 
   window.clearTimeout(pushToTalkReleaseTimer);
   pushToTalkReleaseTimer = 0;
@@ -261,17 +257,16 @@ export function toggleOutputMute(options: { unmuteMicrophone?: boolean } = {}): 
   if (state.localStream) {
     if (state.outputMuted) {
       setMicrophoneMuted(true, { playCue: false, post: false });
-    } else if (
-      state.microphoneMode === 'open'
-      && (options.unmuteMicrophone || !state.micMutedBeforeOutputMute)
-    ) {
+    } else if (state.microphoneMode === 'open' && (options.unmuteMicrophone || !state.micMutedBeforeOutputMute)) {
       setMicrophoneMuted(false, { playCue: false, post: false });
     }
   }
 
   // Deafen changes whether an idle push-to-talk microphone shows as muted even
   // when `state.muted` stays put, so the SFU publication is resynced either way.
-  syncLocalMicrophonePublicationMuted().catch((error) => log.warn('liveKit microphone mute failed', errorContext(error)));
+  syncLocalMicrophonePublicationMuted().catch((error) =>
+    log.warn('liveKit microphone mute failed', errorContext(error))
+  );
 
   // Rings are cleared on the same tick as the mute so none survives the switch.
   if (state.outputMuted) clearAllSpeaking();

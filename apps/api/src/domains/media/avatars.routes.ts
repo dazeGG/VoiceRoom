@@ -12,7 +12,11 @@ import { ownerRefusal } from '../rooms/rooms.routes.ts';
 import type { RoomsService } from '../rooms/rooms.service.ts';
 import type { AvatarsService, AvatarUser } from './avatars.service.ts';
 
-const Answer = Type.Object({ ok: Type.Literal(true), user: Type.Optional(Type.Unknown()), room: Type.Optional(Type.Unknown()) });
+const Answer = Type.Object({
+  ok: Type.Literal(true),
+  user: Type.Optional(Type.Unknown()),
+  room: Type.Optional(Type.Unknown())
+});
 const Refusal = Type.Object({ ok: Type.Literal(false), error: Type.String() });
 const Responses = { 200: Answer, '4xx': Refusal };
 const RoomParams = Type.Object({ roomId: Type.String() });
@@ -56,7 +60,11 @@ export interface AvatarRoutesDeps {
   uploadLimiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
 }
 
-export function registerAvatarRoutes(root: FastifyInstance, ctx: ApiContext, { avatars, rooms, uploadLimiter }: AvatarRoutesDeps): void {
+export function registerAvatarRoutes(
+  root: FastifyInstance,
+  ctx: ApiContext,
+  { avatars, rooms, uploadLimiter }: AvatarRoutesDeps
+): void {
   const app = root.withTypeProvider<TypeBoxTypeProvider>();
 
   async function signedIn(request: FastifyRequest, reply: FastifyReply): Promise<AvatarUser | null> {
@@ -70,7 +78,10 @@ export function registerAvatarRoutes(root: FastifyInstance, ctx: ApiContext, { a
   function withinUploadLimit(reply: FastifyReply, ownerId: string): boolean {
     const rate = uploadLimiter.check(`avatar:${ownerId}`);
     if (!rate.allowed) {
-      reply.code(429).header('Retry-After', String(rate.retryAfterSeconds)).send(failure('Слишком много загрузок, попробуйте позже'));
+      reply
+        .code(429)
+        .header('Retry-After', String(rate.retryAfterSeconds))
+        .send(failure('Слишком много загрузок, попробуйте позже'));
     }
     return rate.allowed;
   }
@@ -100,21 +111,29 @@ export function registerAvatarRoutes(root: FastifyInstance, ctx: ApiContext, { a
     return { ok: true as const, user: result.user };
   });
 
-  app.post('/api/rooms/:roomId/avatar', { schema: { params: RoomParams, response: Responses } }, async (request, reply) => {
-    const room = await ownedRoom(request.params.roomId, request, reply);
-    if (!room || !withinUploadLimit(reply, room.ownerId as string)) return reply;
-    const result = await avatars.setRoomAvatar(room, await readAvatarUpload(request), request.log);
-    if (result.status === 'not_found') return reply.code(404).send(failure('Комната не найдена'));
-    return { ok: true as const, room: result.room };
-  });
+  app.post(
+    '/api/rooms/:roomId/avatar',
+    { schema: { params: RoomParams, response: Responses } },
+    async (request, reply) => {
+      const room = await ownedRoom(request.params.roomId, request, reply);
+      if (!room || !withinUploadLimit(reply, room.ownerId as string)) return reply;
+      const result = await avatars.setRoomAvatar(room, await readAvatarUpload(request), request.log);
+      if (result.status === 'not_found') return reply.code(404).send(failure('Комната не найдена'));
+      return { ok: true as const, room: result.room };
+    }
+  );
 
-  app.delete('/api/rooms/:roomId/avatar', { schema: { params: RoomParams, response: Responses } }, async (request, reply) => {
-    const room = await ownedRoom(request.params.roomId, request, reply);
-    if (!room) return reply;
-    const result = await avatars.clearRoomAvatar(room.id, request.log);
-    if (result.status === 'not_found') return reply.code(404).send(failure('Комната не найдена'));
-    return { ok: true as const, room: result.room };
-  });
+  app.delete(
+    '/api/rooms/:roomId/avatar',
+    { schema: { params: RoomParams, response: Responses } },
+    async (request, reply) => {
+      const room = await ownedRoom(request.params.roomId, request, reply);
+      if (!room) return reply;
+      const result = await avatars.clearRoomAvatar(room.id, request.log);
+      if (result.status === 'not_found') return reply.code(404).send(failure('Комната не найдена'));
+      return { ok: true as const, room: result.room };
+    }
+  );
 
   // Content-addressed files never change, so browsers may keep them forever.
   async function sendImage(reply: FastifyReply, open: Promise<unknown>, missing: string) {
@@ -123,11 +142,13 @@ export function registerAvatarRoutes(root: FastifyInstance, ctx: ApiContext, { a
     return reply.header('Cache-Control', 'public, max-age=31536000, immutable').type('image/webp').send(stream);
   }
 
-  app.get('/api/avatars/:key', { schema: { params: Type.Object({ key: Type.String() }) } }, async (request, reply) => (
+  app.get('/api/avatars/:key', { schema: { params: Type.Object({ key: Type.String() }) } }, async (request, reply) =>
     sendImage(reply, avatars.openAvatar(request.params.key), 'Avatar not found')
-  ));
+  );
 
-  app.get('/api/link-previews/:key', { schema: { params: Type.Object({ key: Type.String() }) } }, async (request, reply) => (
-    sendImage(reply, avatars.openLinkPreviewImage(request.params.key), 'Image not found')
-  ));
+  app.get(
+    '/api/link-previews/:key',
+    { schema: { params: Type.Object({ key: Type.String() }) } },
+    async (request, reply) => sendImage(reply, avatars.openLinkPreviewImage(request.params.key), 'Image not found')
+  );
 }

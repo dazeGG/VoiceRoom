@@ -60,15 +60,18 @@ export type DirectReplyTarget = {
   replyTo: { messageId: string } | undefined;
 };
 
-type RoomReplyMessage = {
-  id?: string;
-  peerId?: string;
-  authorUserId?: string | null;
-  name?: string;
-  text?: string;
-  createdAt?: string | number | Date | null;
-  expiresAt?: string | number | Date | null;
-} | null | undefined;
+type RoomReplyMessage =
+  | {
+      id?: string;
+      peerId?: string;
+      authorUserId?: string | null;
+      name?: string;
+      text?: string;
+      createdAt?: string | number | Date | null;
+      expiresAt?: string | number | Date | null;
+    }
+  | null
+  | undefined;
 
 function requireQuery(client: QueryClient | null | undefined): QueryClient {
   if (!client || typeof client.query !== 'function') {
@@ -117,7 +120,11 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     return requireQuery(override || defaultClient);
   }
 
-  async function lockRoomTarget({ roomId, messageId, client: override }: { roomId?: string; messageId?: string } & Override = {}): Promise<RoomReplyTarget | null> {
+  async function lockRoomTarget({
+    roomId,
+    messageId,
+    client: override
+  }: { roomId?: string; messageId?: string } & Override = {}): Promise<RoomReplyTarget | null> {
     const result = await queryClient(override).query<RoomTargetRow>(
       `SELECT m.*,
               COALESCE(NULLIF(u.display_name, ''), u.login, m.name) AS author_name
@@ -130,7 +137,12 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     return mapRoomTarget(result.rows[0] || null);
   }
 
-  async function lockDirectTarget({ userId, peerId, messageId, client: override }: { userId?: string; peerId?: string; messageId?: string } & Override = {}): Promise<DirectReplyTarget | null> {
+  async function lockDirectTarget({
+    userId,
+    peerId,
+    messageId,
+    client: override
+  }: { userId?: string; peerId?: string; messageId?: string } & Override = {}): Promise<DirectReplyTarget | null> {
     const result = await queryClient(override).query<DirectTargetRow>(
       `SELECT m.*, COALESCE(NULLIF(u.display_name, ''), u.login) AS author_name
        FROM direct_messages m
@@ -144,7 +156,12 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     return mapDirectTarget(result.rows[0] || null);
   }
 
-  async function getRoomPreview({ roomId, messageId, client: override, now }: { roomId?: string; messageId?: string; now?: number } & Override = {}): Promise<ReplyPreview | null> {
+  async function getRoomPreview({
+    roomId,
+    messageId,
+    client: override,
+    now
+  }: { roomId?: string; messageId?: string; now?: number } & Override = {}): Promise<ReplyPreview | null> {
     const result = await queryClient(override).query<RoomTargetRow>(
       `SELECT m.*,
               COALESCE(NULLIF(u.display_name, ''), u.login, m.name) AS author_name
@@ -157,12 +174,28 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     return target ? projectReplyPreview(target, { now }) : projectReplyTombstone(messageId);
   }
 
-  async function getDirectPreview({ userId, peerId, messageId, client: override, now }: { userId?: string; peerId?: string; messageId?: string; now?: number } & Override = {}): Promise<ReplyPreview | null> {
+  async function getDirectPreview({
+    userId,
+    peerId,
+    messageId,
+    client: override,
+    now
+  }: {
+    userId?: string;
+    peerId?: string;
+    messageId?: string;
+    now?: number;
+  } & Override = {}): Promise<ReplyPreview | null> {
     const target = await locklessDirectTarget({ userId, peerId, messageId, client: override });
     return target ? projectReplyPreview(target, { now }) : projectReplyTombstone(messageId);
   }
 
-  async function insertRoomReply({ roomId, targetMessageId, message, client: override }: {
+  async function insertRoomReply({
+    roomId,
+    targetMessageId,
+    message,
+    client: override
+  }: {
     roomId?: string;
     targetMessageId?: string;
     message?: RoomReplyMessage;
@@ -179,7 +212,7 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
         id,
         roomId,
         message?.peerId || '',
-        message?.authorUserId ? '' : (message?.name || ''),
+        message?.authorUserId ? '' : message?.name || '',
         message?.text || '',
         message?.createdAt ? new Date(message.createdAt) : null,
         message?.expiresAt ? new Date(message.expiresAt) : null,
@@ -190,7 +223,14 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     return mapRoomTarget(result.rows[0] || null);
   }
 
-  async function insertDirectReply({ senderId, recipientId, targetMessageId, body, id, client: override }: {
+  async function insertDirectReply({
+    senderId,
+    recipientId,
+    targetMessageId,
+    body,
+    id,
+    client: override
+  }: {
     senderId?: string;
     recipientId?: string;
     targetMessageId?: string;
@@ -209,7 +249,12 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     return mapDirectTarget(result.rows[0] || null);
   }
 
-  async function locklessDirectTarget({ userId, peerId, messageId, client: override }: { userId?: string; peerId?: string; messageId?: string } & Override = {}): Promise<DirectReplyTarget | null> {
+  async function locklessDirectTarget({
+    userId,
+    peerId,
+    messageId,
+    client: override
+  }: { userId?: string; peerId?: string; messageId?: string } & Override = {}): Promise<DirectReplyTarget | null> {
     const result = await queryClient(override).query<DirectTargetRow>(
       `SELECT m.*, COALESCE(NULLIF(u.display_name, ''), u.login) AS author_name
        FROM direct_messages m

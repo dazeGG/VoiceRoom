@@ -11,10 +11,7 @@ export function getHotkeyStorageKey(action: HotkeyAction): string {
   return `${HOTKEY_STORAGE_PREFIX}${action}`;
 }
 
-export function getDefaultHotkeyBinding(
-  action: HotkeyAction,
-  applePlatform = isApplePlatform()
-): HotkeyBinding | null {
+export function getDefaultHotkeyBinding(action: HotkeyAction, applePlatform = isApplePlatform()): HotkeyBinding | null {
   if (action !== 'mic-mute') return null;
   return {
     altKey: false,
@@ -73,8 +70,10 @@ export function eventMatchesHotkey(action: HotkeyAction, event: KeyboardEvent): 
 export function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
   return Boolean(
-    target.isContentEditable
-    || target.closest('input, textarea, select, [contenteditable="true"], [role="textbox"], [data-hotkey-recorder-recording="true"]')
+    target.isContentEditable ||
+    target.closest(
+      'input, textarea, select, [contenteditable="true"], [role="textbox"], [data-hotkey-recorder-recording="true"]'
+    )
   );
 }
 

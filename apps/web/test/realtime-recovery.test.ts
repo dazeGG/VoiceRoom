@@ -10,7 +10,9 @@ import {
 
 function deferred() {
   let resolve;
-  const promise = new Promise((done) => { resolve = done; });
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
   return { promise, resolve };
 }
 
@@ -187,7 +189,8 @@ test('recovery timers invoke injected schedulers without rebinding their receive
 });
 
 test('a later transport regression invalidates an in-place reconcile completion', async () => {
-  const { LiveKitReconcileGeneration } = await import('../src/lib/features/room/client/recovery/livekit-reconcile-generation.ts');
+  const { LiveKitReconcileGeneration } =
+    await import('../src/lib/features/room/client/recovery/livekit-reconcile-generation.ts');
   const generation = new LiveKitReconcileGeneration();
   const reconnected = generation.capture();
   generation.invalidate();
@@ -276,15 +279,20 @@ test('initial app connection does not replay a queued join, later connection epo
 
 test('API failure classification is stable and fails unknown HTTP errors closed', () => {
   assert.deepEqual(classifyRecoveryFailure({ status: 503, code: 'livekit_gate_unavailable' }), {
-    retryable: true, result: 'retryable', status: 503, code: 'livekit_gate_unavailable'
+    retryable: true,
+    result: 'retryable',
+    status: 503,
+    code: 'livekit_gate_unavailable'
   });
   assert.equal(classifyRecoveryFailure({ status: 503, code: 'invalid_session' }).retryable, false);
   // A LiveKit token asked for before the realtime re-join lands is retried.
   assert.deepEqual(classifyRecoveryFailure({ status: 409, code: 'not_in_room' }), {
-    retryable: true, result: 'retryable', status: 409, code: 'not_in_room'
+    retryable: true,
+    result: 'retryable',
+    status: 409,
+    code: 'not_in_room'
   });
   assert.equal(classifyRecoveryFailure({ status: 418, code: 'surprise' }).retryable, false);
   assert.equal(classifyRecoveryFailure(new TypeError('fetch failed')).retryable, true);
   assert.equal(sanitizeRecoveryCode('token=secret'), 'unknown_error');
 });
-

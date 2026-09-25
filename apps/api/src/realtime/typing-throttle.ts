@@ -7,7 +7,12 @@
 // cannot get past the budget.
 type Timer = { unref?: () => unknown } | number;
 type Forward<Activity> = (activity: Activity) => void;
-type Entry<Activity> = { at: number; activity: Activity | null; pending: { activity: Activity; forward: Forward<Activity> } | null; timer: Timer | null };
+type Entry<Activity> = {
+  at: number;
+  activity: Activity | null;
+  pending: { activity: Activity; forward: Forward<Activity> } | null;
+  timer: Timer | null;
+};
 
 const TYPING_FORWARD_MIN_MS = 1000;
 // A client names the targets it types to, so one connection must not be able
@@ -58,14 +63,17 @@ function createTypingThrottle<Activity = string>({
     if (!entry.timer && activity === entry.activity) return false;
     entry.pending = { activity, forward };
     if (!entry.timer) {
-      entry.timer = setTimer(() => {
-        const latest = entry.pending as NonNullable<Entry<Activity>['pending']>;
-        entry.timer = null;
-        entry.pending = null;
-        // Back where the last notice left them: the other side already shows
-        // it, and a late copy could land after the message it belongs to.
-        if (latest.activity !== entry.activity) send(entry, latest.activity, latest.forward);
-      }, Math.max(0, wait));
+      entry.timer = setTimer(
+        () => {
+          const latest = entry.pending as NonNullable<Entry<Activity>['pending']>;
+          entry.timer = null;
+          entry.pending = null;
+          // Back where the last notice left them: the other side already shows
+          // it, and a late copy could land after the message it belongs to.
+          if (latest.activity !== entry.activity) send(entry, latest.activity, latest.forward);
+        },
+        Math.max(0, wait)
+      );
       (entry.timer as { unref?: () => unknown }).unref?.();
     }
     return false;

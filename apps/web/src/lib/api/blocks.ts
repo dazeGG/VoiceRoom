@@ -13,9 +13,7 @@ function blockUrl(userId: string): string {
 
 export async function fetchBlockedUserIds(): Promise<string[]> {
   const payload = await getJsonAuth<{ ok: true; blocked?: unknown }>('/api/blocks');
-  return Array.isArray(payload.blocked)
-    ? payload.blocked.filter((id): id is string => typeof id === 'string')
-    : [];
+  return Array.isArray(payload.blocked) ? payload.blocked.filter((id): id is string => typeof id === 'string') : [];
 }
 
 function blockedPublicUser(value: unknown): PublicUser | null {
@@ -31,9 +29,10 @@ function blockedPublicUser(value: unknown): PublicUser | null {
     doNotDisturb: user.doNotDisturb === true,
     id: user.id,
     login: user.login,
-    presenceStatus: user.presenceStatus === 'away' || user.presenceStatus === 'dnd' || user.presenceStatus === 'offline'
-      ? user.presenceStatus
-      : 'online'
+    presenceStatus:
+      user.presenceStatus === 'away' || user.presenceStatus === 'dnd' || user.presenceStatus === 'offline'
+        ? user.presenceStatus
+        : 'online'
   };
 }
 

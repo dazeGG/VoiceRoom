@@ -56,7 +56,7 @@ function normalizePrincipal({ userId = null, ip = '' }: { userId?: unknown; ip?:
   const accountId = typeof userId === 'string' && userId.trim() ? userId.trim() : null;
   return {
     userId: accountId,
-    ip: accountId ? '' : (typeof ip === 'string' ? ip.trim() : '')
+    ip: accountId ? '' : typeof ip === 'string' ? ip.trim() : ''
   };
 }
 
@@ -68,7 +68,13 @@ function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClien
     return client && typeof client.query === 'function' ? client : defaultDb;
   }
 
-  async function findActive({ roomId, userId = null, ip = '', at = now(), client }: {
+  async function findActive({
+    roomId,
+    userId = null,
+    ip = '',
+    at = now(),
+    client
+  }: {
     roomId?: string;
     userId?: unknown;
     ip?: unknown;
@@ -97,7 +103,10 @@ function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClien
     return mapActiveBan(result.rows[0]);
   }
 
-  async function countActive(roomId: string | undefined, { at = now(), client }: { at?: TimeInput; client?: Client } = {}): Promise<number> {
+  async function countActive(
+    roomId: string | undefined,
+    { at = now(), client }: { at?: TimeInput; client?: Client } = {}
+  ): Promise<number> {
     if (!roomId) return 0;
     const result = await executor(client).query<{ count: number }>(
       `SELECT COUNT(*)::int AS count
@@ -110,17 +119,24 @@ function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClien
     return Number(result.rows[0]?.count || 0);
   }
 
-  async function filterActiveUserIds({ roomId, userIds = [], at = now(), client }: {
+  async function filterActiveUserIds({
+    roomId,
+    userIds = [],
+    at = now(),
+    client
+  }: {
     roomId?: string;
     userIds?: unknown;
     at?: TimeInput;
     client?: Client;
   } = {}): Promise<string[]> {
-    const normalizedUserIds = Array.from(new Set(
-      (Array.isArray(userIds) ? userIds : [])
-        .filter((userId): userId is string => typeof userId === 'string' && Boolean(userId.trim()))
-        .map((userId) => userId.trim())
-    ));
+    const normalizedUserIds = Array.from(
+      new Set(
+        (Array.isArray(userIds) ? userIds : [])
+          .filter((userId): userId is string => typeof userId === 'string' && Boolean(userId.trim()))
+          .map((userId) => userId.trim())
+      )
+    );
     if (!roomId || normalizedUserIds.length === 0) return [];
     const result = await executor(client).query<{ user_id: string | null }>(
       `SELECT DISTINCT user_id
@@ -134,7 +150,15 @@ function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClien
     return result.rows.map((row) => row.user_id).filter((userId): userId is string => Boolean(userId));
   }
 
-  async function insert({ roomId, userId = null, ip = '', expiresAt = null, metadata = {}, at = now(), client }: {
+  async function insert({
+    roomId,
+    userId = null,
+    ip = '',
+    expiresAt = null,
+    metadata = {},
+    at = now(),
+    client
+  }: {
     roomId?: string;
     userId?: unknown;
     ip?: unknown;

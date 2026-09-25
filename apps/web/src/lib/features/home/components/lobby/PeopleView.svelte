@@ -86,7 +86,12 @@
     if (count === 0) return 'нет общих друзей';
     const mod10 = count % 10;
     const mod100 = count % 100;
-    const word = mod10 === 1 && mod100 !== 11 ? 'общий друг' : mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20) ? 'общих друга' : 'общих друзей';
+    const word =
+      mod10 === 1 && mod100 !== 11
+        ? 'общий друг'
+        : mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)
+          ? 'общих друга'
+          : 'общих друзей';
     return `${count} ${word}`;
   }
 </script>
@@ -132,17 +137,35 @@
       {:else}
         {#each incoming as request (request.id)}
           <div class="lr-req-card">
-            <Avatar name={friendName(request.user)} src={request.user.avatarUrl} colorKey={request.user.avatarColorKey} background={request.user.avatarAccent || undefined} size={44} />
+            <Avatar
+              name={friendName(request.user)}
+              src={request.user.avatarUrl}
+              colorKey={request.user.avatarColorKey}
+              background={request.user.avatarAccent || undefined}
+              size={44}
+            />
             <div class="people-request-copy">
               <div class="lr-req-name people-truncate"><EmojiText text={friendName(request.user)} /></div>
               <div class="lr-req-handle people-truncate">@{request.user.login}</div>
               <div class="lr-req-meta people-truncate">{mutualLabel(request.mutualFriends)}</div>
             </div>
             <div class="lr-req-actions">
-              <button class="lr-req-btn accept" type="button" title="Принять" disabled={busy[request.id]} onclick={() => run(request.id, () => acceptRequest(request.id), 'Заявка принята')}>
+              <button
+                class="lr-req-btn accept"
+                type="button"
+                title="Принять"
+                disabled={busy[request.id]}
+                onclick={() => run(request.id, () => acceptRequest(request.id), 'Заявка принята')}
+              >
                 <Check {...iconMd} aria-hidden="true" />
               </button>
-              <button class="lr-req-btn decline" type="button" title="Отклонить" disabled={busy[request.id]} onclick={() => run(request.id, () => declineRequest(request.id), 'Заявка отклонена')}>
+              <button
+                class="lr-req-btn decline"
+                type="button"
+                title="Отклонить"
+                disabled={busy[request.id]}
+                onclick={() => run(request.id, () => declineRequest(request.id), 'Заявка отклонена')}
+              >
                 <X {...iconSm} aria-hidden="true" />
               </button>
             </div>
@@ -158,13 +181,23 @@
       {:else}
         {#each outgoing as request (request.id)}
           <div class="lr-req-card">
-            <Avatar name={friendName(request.user)} src={request.user.avatarUrl} colorKey={request.user.avatarColorKey} background={request.user.avatarAccent || undefined} size={44} />
+            <Avatar
+              name={friendName(request.user)}
+              src={request.user.avatarUrl}
+              colorKey={request.user.avatarColorKey}
+              background={request.user.avatarAccent || undefined}
+              size={44}
+            />
             <div class="people-request-copy">
               <div class="lr-req-name people-truncate"><EmojiText text={friendName(request.user)} /></div>
               <div class="lr-req-handle people-truncate">@{request.user.login}</div>
               <div class="lr-req-pending"><span class="lr-req-pending-dot"></span>заявка отправлена · ждём ответа</div>
             </div>
-            <Button variant="ghost" disabled={busy[request.id]} onclick={() => run(request.id, () => cancelRequest(request.id), 'Заявка отменена')}>Отменить</Button>
+            <Button
+              variant="ghost"
+              disabled={busy[request.id]}
+              onclick={() => run(request.id, () => cancelRequest(request.id), 'Заявка отменена')}>Отменить</Button
+            >
           </div>
         {/each}
       {/if}

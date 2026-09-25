@@ -38,4 +38,3 @@ test('pong clears the pending timeout and starts a fresh heartbeat epoch', () =>
   watchdog.reset();
   assert.equal(watchdog.isTimedOut(), false);
 });
-

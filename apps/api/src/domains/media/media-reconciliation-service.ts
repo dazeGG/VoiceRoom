@@ -11,9 +11,14 @@ export type ReconciliationResult = Readonly<{
   severity: 'p0' | 'ok';
 }>;
 
-function createMediaReconciliationService({ attachmentRepository, jobRepository, storage, assertLeaseOwned = async () => true }: {
-  attachmentRepository?: Pick<AttachmentRepository, 'listStorageKeys' | 'findById' | 'markUnavailable'>
-    & Partial<Pick<AttachmentRepository, 'listProcessingWithoutActiveJob'>>;
+function createMediaReconciliationService({
+  attachmentRepository,
+  jobRepository,
+  storage,
+  assertLeaseOwned = async () => true
+}: {
+  attachmentRepository?: Pick<AttachmentRepository, 'listStorageKeys' | 'findById' | 'markUnavailable'> &
+    Partial<Pick<AttachmentRepository, 'listProcessingWithoutActiveJob'>>;
   jobRepository?: Partial<Pick<MediaJobRepository, 'enqueue'>> | null;
   storage?: Pick<MediaStorage, 'listKeys' | 'parseStorageKey' | 'remove'>;
   assertLeaseOwned?: () => Promise<unknown>;

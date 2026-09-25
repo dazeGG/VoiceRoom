@@ -20,9 +20,15 @@
   // populates roomClientState.room* on join/rename, and these update without imperative DOM writes.
   const heading = $derived(roomClientState.roomName || roomClientState.roomId);
   const roomAccountIds = $derived(
-    new Set(getSortedParticipants().map((participant) => participant.accountUserId).filter(Boolean))
+    new Set(
+      getSortedParticipants()
+        .map((participant) => participant.accountUserId)
+        .filter(Boolean)
+    )
   );
-  const roomUnreadCount = $derived(Math.max(roomUi.unreadChat, roomPresence.unreadCountByRoomId[roomClientState.roomId] ?? 0));
+  const roomUnreadCount = $derived(
+    Math.max(roomUi.unreadChat, roomPresence.unreadCountByRoomId[roomClientState.roomId] ?? 0)
+  );
 
   function openRoomPanel(tab: RoomPanelTab): void {
     if (roomUi.chatOpen && roomUi.activePanel === tab) {
@@ -38,7 +44,6 @@
   function notifyRoomsChanged(): void {
     window.dispatchEvent(new CustomEvent('voice-room:rooms-changed', { detail: { roomId: roomClientState.roomId } }));
   }
-
 </script>
 
 <Topbar label="Новая голосовая комната" reload>
@@ -113,5 +118,10 @@
 </Topbar>
 
 <style>
-  .room-heading-actions { display: flex; flex: none; align-items: center; gap: 12px; }
+  .room-heading-actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+  }
 </style>

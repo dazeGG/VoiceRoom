@@ -97,7 +97,9 @@ export type DesktopNotificationPayload = {
 export type DesktopNotificationBridgeResult = { ok?: boolean; reason?: string } | null | undefined | void;
 
 export type DesktopNotificationBridge = {
-  show: (payload: DesktopNotificationPayload) => DesktopNotificationBridgeResult | Promise<DesktopNotificationBridgeResult>;
+  show: (
+    payload: DesktopNotificationPayload
+  ) => DesktopNotificationBridgeResult | Promise<DesktopNotificationBridgeResult>;
 };
 
 export type NotificationRouteOptions = {
@@ -114,8 +116,7 @@ export type NotificationRouteOptions = {
 };
 
 export type NotificationRouteResult =
-  | { notify: true; payload: BrowserNotificationPayload }
-  | { notify: false; reason: string };
+  { notify: true; payload: BrowserNotificationPayload } | { notify: false; reason: string };
 
 const DEFAULT_BODY = 'Новое сообщение';
 const PRIVATE_BODY = 'Откройте VoiceRoom, чтобы посмотреть уведомление.';
@@ -128,18 +129,25 @@ const memoryDedupe = new Map<string, number>();
 let dedupeChannel: BroadcastChannel | null | undefined;
 
 function getDesktopNotificationBridge(): DesktopNotificationBridge | null {
-  const candidate = (globalThis as typeof globalThis & { voiceRoomDesktopNotifications?: unknown }).voiceRoomDesktopNotifications;
+  const candidate = (globalThis as typeof globalThis & { voiceRoomDesktopNotifications?: unknown })
+    .voiceRoomDesktopNotifications;
   if (!candidate || typeof candidate !== 'object') return null;
   const bridge = candidate as Partial<DesktopNotificationBridge>;
   return typeof bridge.show === 'function' ? (bridge as DesktopNotificationBridge) : null;
 }
 
-function hasId(collection: readonly string[] | Set<string> | null | undefined, value: string | null | undefined): boolean {
+function hasId(
+  collection: readonly string[] | Set<string> | null | undefined,
+  value: string | null | undefined
+): boolean {
   if (!collection || !value) return false;
   return collection instanceof Set ? collection.has(value) : collection.includes(value);
 }
 
-function actorLabel(actor: Pick<NotificationActor, 'displayName' | 'login' | 'id'> | null | undefined, fallback: string): string {
+function actorLabel(
+  actor: Pick<NotificationActor, 'displayName' | 'login' | 'id'> | null | undefined,
+  fallback: string
+): string {
   const name = actor?.displayName?.trim() || actor?.login?.trim() || actor?.id?.trim();
   return name || fallback;
 }
@@ -148,7 +156,9 @@ function roomLabel(room: Pick<NotificationRoomContext, 'name' | 'roomId'> | null
   return room?.name?.trim() || room?.roomId?.trim() || 'Комната';
 }
 
-function isNotificationRealtimeEvent(event: RealtimeEvent | NotificationRealtimeEvent): event is NotificationRealtimeEvent {
+function isNotificationRealtimeEvent(
+  event: RealtimeEvent | NotificationRealtimeEvent
+): event is NotificationRealtimeEvent {
   return (
     event.type === 'notification.dm.message' ||
     event.type === 'notification.room.message' ||
@@ -157,7 +167,10 @@ function isNotificationRealtimeEvent(event: RealtimeEvent | NotificationRealtime
   );
 }
 
-function activeTargetSuppresses(event: NotificationRealtimeEvent, activeTarget: NotificationActiveTarget | null | undefined): boolean {
+function activeTargetSuppresses(
+  event: NotificationRealtimeEvent,
+  activeTarget: NotificationActiveTarget | null | undefined
+): boolean {
   if (!activeTarget) return false;
   if (event.type === 'notification.dm.message') {
     return activeTarget.kind === 'dm' && activeTarget.peerId === event.payload?.peer?.id;
@@ -229,7 +242,9 @@ function getDedupeChannel(): BroadcastChannel | null {
 }
 
 export function truncateNotificationBody(body: string | null | undefined, maxLength = MAX_BODY_LENGTH): string {
-  const normalized = String(body ?? '').replace(/\s+/g, ' ').trim();
+  const normalized = String(body ?? '')
+    .replace(/\s+/g, ' ')
+    .trim();
   if (maxLength <= 0) return '';
   if (normalized.length <= maxLength) return normalized;
   if (maxLength === 1) return '…';
@@ -385,10 +400,12 @@ export function buildNotificationPayload(
   };
 }
 
-export function shouldNotify(event: RealtimeEvent | NotificationRealtimeEvent, options: NotificationRouteOptions = {}): boolean {
+export function shouldNotify(
+  event: RealtimeEvent | NotificationRealtimeEvent,
+  options: NotificationRouteOptions = {}
+): boolean {
   return routeNotificationEvent(event, options).notify;
 }
-
 
 export function routeNotificationEvent(
   event: RealtimeEvent | NotificationRealtimeEvent,
@@ -397,7 +414,8 @@ export function routeNotificationEvent(
   if (!isNotificationRealtimeEvent(event)) return { notify: false, reason: 'not-notification-event' };
   if (options.doNotDisturb) return { notify: false, reason: 'do-not-disturb' };
   if (options.notificationsAvailable === false) return { notify: false, reason: 'notifications-unavailable' };
-  if (options.permission && options.permission !== 'granted') return { notify: false, reason: 'notification-permission-not-granted' };
+  if (options.permission && options.permission !== 'granted')
+    return { notify: false, reason: 'notification-permission-not-granted' };
 
   const senderId = eventSenderId(event);
   if (options.userId && senderId === options.userId) return { notify: false, reason: 'self-event' };
@@ -455,7 +473,9 @@ function shouldFallbackToBrowserNotification(result: DesktopNotificationBridgeRe
   return Boolean(result && typeof result === 'object' && result.ok === false);
 }
 
-function deliverBrowserNotification(payload: BrowserNotificationPayload): Notification | Promise<Notification | null> | null {
+function deliverBrowserNotification(
+  payload: BrowserNotificationPayload
+): Notification | Promise<Notification | null> | null {
   const bridge = getDesktopNotificationBridge();
   if (!bridge && (!canUseNotifications() || getNotificationPermission() !== 'granted')) return null;
   if (!consumeNotificationDedupeKey(payload.dedupeKey || payload.tag)) return null;
@@ -474,12 +494,15 @@ function deliverBrowserNotification(payload: BrowserNotificationPayload): Notifi
   }
 }
 
-export function showBrowserNotification(payload: BrowserNotificationPayload): Notification | Promise<Notification | null> | null {
+export function showBrowserNotification(
+  payload: BrowserNotificationPayload
+): Notification | Promise<Notification | null> | null {
   const locks = globalThis.navigator?.locks;
   if (!locks) return deliverBrowserNotification(payload);
   const key = payload.dedupeKey || payload.tag;
-  return (locks.request(
-    `voice-room-notification:${key}`,
-    () => Promise.resolve(deliverBrowserNotification(payload))
-  ) as unknown as Promise<Notification | null>).catch(() => null);
+  return (
+    locks.request(`voice-room-notification:${key}`, () =>
+      Promise.resolve(deliverBrowserNotification(payload))
+    ) as unknown as Promise<Notification | null>
+  ).catch(() => null);
 }

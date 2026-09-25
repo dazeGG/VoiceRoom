@@ -11,7 +11,7 @@ vi.mock('../../src/lib/features/room/client/ui/toast', () => ({ showToast: vi.fn
 
 async function load() {
   vi.resetModules();
-  const lifecycle = (await import('../../src/lib/features/room/client/room/lifecycle.ts'));
+  const lifecycle = await import('../../src/lib/features/room/client/room/lifecycle.ts');
   const { state } = await import('../../src/lib/features/room/client/core/state.svelte.ts');
   const { roomSettingsUi } = await import('../../src/lib/features/room/room-settings.svelte.ts');
   const { showToast } = await import('../../src/lib/features/room/client/ui/toast');

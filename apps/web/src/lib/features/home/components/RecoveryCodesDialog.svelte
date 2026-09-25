@@ -6,7 +6,14 @@
   import { recoveryCodesFileText } from '../model/account-security';
   import type { ToastOptions } from '../model/toasts.svelte';
 
-  let { open, login, replacing = false, onClose, onGenerated, onToast } = $props<{
+  let {
+    open,
+    login,
+    replacing = false,
+    onClose,
+    onGenerated,
+    onToast
+  } = $props<{
     open: boolean;
     login: string;
     replacing?: boolean;
@@ -67,7 +74,9 @@
   }
 
   function downloadCodes(): void {
-    const url = URL.createObjectURL(new Blob([recoveryCodesFileText(codes, login)], { type: 'text/plain;charset=utf-8' }));
+    const url = URL.createObjectURL(
+      new Blob([recoveryCodesFileText(codes, login)], { type: 'text/plain;charset=utf-8' })
+    );
     const link = document.createElement('a');
     link.href = url;
     link.download = `voiceroom-recovery-codes-${login}.txt`;
@@ -80,70 +89,71 @@
 
 <!-- Opened from the settings modal, whose overlay sits at z-index 60. -->
 <div class="recovery-dialog-layer">
-<Dialog
-  {open}
-  title={codes.length > 0 ? 'Сохраните коды восстановления' : 'Коды восстановления'}
-  onClose={close}
-  width={480}
-  initialFocus={codes.length > 0 ? '[data-recovery-codes]' : '#recoveryPasswordInput'}
->
-  {#if codes.length === 0}
-    <form class="recovery-form" onsubmit={generate}>
+  <Dialog
+    {open}
+    title={codes.length > 0 ? 'Сохраните коды восстановления' : 'Коды восстановления'}
+    onClose={close}
+    width={480}
+    initialFocus={codes.length > 0 ? '[data-recovery-codes]' : '#recoveryPasswordInput'}
+  >
+    {#if codes.length === 0}
+      <form class="recovery-form" onsubmit={generate}>
+        <p class="recovery-text">
+          Если вы забудете пароль, войти можно будет по логину и одному из десяти кодов. Каждый код срабатывает один
+          раз.
+        </p>
+        {#if replacing}
+          <p class="recovery-warning">Новые коды заменят старые — старые сразу перестанут работать.</p>
+        {/if}
+        <div>
+          <label class="settings-field-label" for="recoveryPasswordInput">Текущий пароль</label>
+          <input
+            id="recoveryPasswordInput"
+            class="settings-input"
+            type="password"
+            autocomplete="current-password"
+            placeholder="••••••••"
+            bind:value={password}
+          />
+        </div>
+        {#if error}
+          <p class="recovery-error" role="alert">{error}</p>
+        {/if}
+        <div class="lr-dialog-actions">
+          <Button variant="ghost" type="button" onclick={close}>Отмена</Button>
+          <Button variant="primary" type="submit" disabled={generating}>
+            {generating ? 'Создаём…' : 'Создать коды'}
+          </Button>
+        </div>
+      </form>
+    {:else}
       <p class="recovery-text">
-        Если вы забудете пароль, войти можно будет по логину и одному из десяти кодов. Каждый код срабатывает один раз.
+        Коды показываются только сейчас. Сохраните их там, где не потеряете: в менеджере паролей или на бумаге.
       </p>
-      {#if replacing}
-        <p class="recovery-warning">Новые коды заменят старые — старые сразу перестанут работать.</p>
-      {/if}
-      <div>
-        <label class="settings-field-label" for="recoveryPasswordInput">Текущий пароль</label>
-        <input
-          id="recoveryPasswordInput"
-          class="settings-input"
-          type="password"
-          autocomplete="current-password"
-          placeholder="••••••••"
-          bind:value={password}
-        />
-      </div>
-      {#if error}
-        <p class="recovery-error" role="alert">{error}</p>
-      {/if}
-      <div class="lr-dialog-actions">
-        <Button variant="ghost" type="button" onclick={close}>Отмена</Button>
-        <Button variant="primary" type="submit" disabled={generating}>
-          {generating ? 'Создаём…' : 'Создать коды'}
+      <ol class="recovery-codes" tabindex="-1" data-recovery-codes>
+        {#each codes as code (code)}
+          <li><code>{code}</code></li>
+        {/each}
+      </ol>
+      <div class="recovery-tools">
+        <Button variant="ghost" type="button" onclick={copyCodes}>
+          {#snippet icon()}<Copy {...iconSm} aria-hidden="true" />{/snippet}
+          Скопировать
+        </Button>
+        <Button variant="ghost" type="button" onclick={downloadCodes}>
+          {#snippet icon()}<Download {...iconSm} aria-hidden="true" />{/snippet}
+          Скачать .txt
         </Button>
       </div>
-    </form>
-  {:else}
-    <p class="recovery-text">
-      Коды показываются только сейчас. Сохраните их там, где не потеряете: в менеджере паролей или на бумаге.
-    </p>
-    <ol class="recovery-codes" tabindex="-1" data-recovery-codes>
-      {#each codes as code (code)}
-        <li><code>{code}</code></li>
-      {/each}
-    </ol>
-    <div class="recovery-tools">
-      <Button variant="ghost" type="button" onclick={copyCodes}>
-        {#snippet icon()}<Copy {...iconSm} aria-hidden="true" />{/snippet}
-        Скопировать
-      </Button>
-      <Button variant="ghost" type="button" onclick={downloadCodes}>
-        {#snippet icon()}<Download {...iconSm} aria-hidden="true" />{/snippet}
-        Скачать .txt
-      </Button>
-    </div>
-    <label class="recovery-confirm">
-      <input type="checkbox" bind:checked={saved} />
-      <span>Я сохранил коды</span>
-    </label>
-    <div class="lr-dialog-actions">
-      <Button variant="primary" type="button" disabled={!saved} onclick={close}>Готово</Button>
-    </div>
-  {/if}
-</Dialog>
+      <label class="recovery-confirm">
+        <input type="checkbox" bind:checked={saved} />
+        <span>Я сохранил коды</span>
+      </label>
+      <div class="lr-dialog-actions">
+        <Button variant="primary" type="button" disabled={!saved} onclick={close}>Готово</Button>
+      </div>
+    {/if}
+  </Dialog>
 </div>
 
 <style>

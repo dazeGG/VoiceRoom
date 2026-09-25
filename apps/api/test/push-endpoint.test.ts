@@ -8,7 +8,8 @@ test('push endpoints accept only known browser push services', () => {
     'https://updates.push.services.mozilla.com/wpush/v2/device-token',
     'https://web.push.apple.com/QWxhZGRpbjpvcGVuIHNlc2FtZQ',
     'https://db3.notify.windows.com/w/?token=device-token'
-  ]) assert.equal(cleanPushEndpoint(endpoint), endpoint);
+  ])
+    assert.equal(cleanPushEndpoint(endpoint), endpoint);
 });
 
 test('push endpoints reject SSRF and URL parser bypasses', () => {
@@ -23,7 +24,8 @@ test('push endpoints reject SSRF and URL parser bypasses', () => {
     'https://fcm.googleapis.com:444/push',
     'https://fcm.googleapis.com./push',
     'https://fcm.googleapis.com/push#fragment'
-  ]) assert.equal(cleanPushEndpoint(endpoint), null, endpoint);
+  ])
+    assert.equal(cleanPushEndpoint(endpoint), null, endpoint);
 });
 
 test('push endpoint log descriptors never contain capability URLs', () => {

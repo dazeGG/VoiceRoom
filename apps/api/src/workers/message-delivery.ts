@@ -7,8 +7,16 @@ import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
 
 type MessageOutbox = ReturnType<typeof createMessageOutboxRepository>;
-type Deliver = (payload: unknown, context: { eventId: string; fencingToken: number; signal: AbortSignal }) => Promise<unknown>;
-type WorkerLogger = { info?(...args: unknown[]): void; warn(...args: unknown[]): void; error(...args: unknown[]): void; fatal?(...args: unknown[]): void };
+type Deliver = (
+  payload: unknown,
+  context: { eventId: string; fencingToken: number; signal: AbortSignal }
+) => Promise<unknown>;
+type WorkerLogger = {
+  info?(...args: unknown[]): void;
+  warn(...args: unknown[]): void;
+  error(...args: unknown[]): void;
+  fatal?(...args: unknown[]): void;
+};
 
 const LEASE_IDENTITY = 'message-delivery.G38';
 
@@ -52,7 +60,8 @@ function createMessageDeliveryWorker({
 } = {}) {
   if (!outbox) throw new TypeError('Message delivery outbox repository is required');
   const store = outbox;
-  const dispatch: Deliver = deliver || ((event) => store.publishPostgres(event as Parameters<MessageOutbox['publishPostgres']>[0]));
+  const dispatch: Deliver =
+    deliver || ((event) => store.publishPostgres(event as Parameters<MessageOutbox['publishPostgres']>[0]));
   if (typeof dispatch !== 'function') throw new TypeError('Message delivery adapter must be a function');
 
   let runtime: LeaseRuntime;
@@ -104,13 +113,16 @@ function createMessageDeliveryWorker({
             error,
             maxAttempts
           });
-          logger.warn({
-            evt: LOG_EVENTS.MESSAGE_DELIVERY_FAILED,
-            eventId: event.eventId,
-            attempt: event.attempts,
-            maxAttempts,
-            err: error
-          }, 'message delivery attempt failed');
+          logger.warn(
+            {
+              evt: LOG_EVENTS.MESSAGE_DELIVERY_FAILED,
+              eventId: event.eventId,
+              attempt: event.attempts,
+              maxAttempts,
+              err: error
+            },
+            'message delivery attempt failed'
+          );
         }
       }
     }
@@ -126,7 +138,10 @@ function createMessageDeliveryWorker({
     run: processLease,
     onHeartbeat(heartbeat) {
       void store.recordHeartbeat(heartbeat).catch((error: unknown) => {
-        logger.warn({ evt: LOG_EVENTS.WORKER_HEARTBEAT_FAILED, worker: 'message-delivery', err: error }, 'unable to record the message delivery heartbeat');
+        logger.warn(
+          { evt: LOG_EVENTS.WORKER_HEARTBEAT_FAILED, worker: 'message-delivery', err: error },
+          'unable to record the message delivery heartbeat'
+        );
       });
     }
   });
@@ -143,8 +158,10 @@ function createMessageDeliveryWorker({
 
 async function main(env: NodeJS.ProcessEnv = process.env): Promise<void> {
   if (!readMessageDeliveryMode(env).claimEnabled) {
-    createLogger({ env, name: 'worker.message-delivery' })
-      .info({ evt: LOG_EVENTS.WORKER_DISABLED, worker: 'message-delivery', reason: 'claims_disabled' }, 'message delivery claims are disabled');
+    createLogger({ env, name: 'worker.message-delivery' }).info(
+      { evt: LOG_EVENTS.WORKER_DISABLED, worker: 'message-delivery', reason: 'claims_disabled' },
+      'message delivery claims are disabled'
+    );
     return;
   }
 
@@ -167,8 +184,12 @@ async function main(env: NodeJS.ProcessEnv = process.env): Promise<void> {
     }
     return stopPromise;
   }
-  process.once('SIGINT', () => { void stop(); });
-  process.once('SIGTERM', () => { void stop(); });
+  process.once('SIGINT', () => {
+    void stop();
+  });
+  process.once('SIGTERM', () => {
+    void stop();
+  });
 
   try {
     await worker.start();
@@ -179,8 +200,10 @@ async function main(env: NodeJS.ProcessEnv = process.env): Promise<void> {
 
 if (import.meta.main) {
   main().catch((error) => {
-    createLogger({ name: 'worker.message-delivery' })
-      .fatal({ evt: LOG_EVENTS.WORKER_FAILED, worker: 'message-delivery', err: error }, 'message delivery worker failed');
+    createLogger({ name: 'worker.message-delivery' }).fatal(
+      { evt: LOG_EVENTS.WORKER_FAILED, worker: 'message-delivery', err: error },
+      'message delivery worker failed'
+    );
     process.exitCode = 1;
   });
 }

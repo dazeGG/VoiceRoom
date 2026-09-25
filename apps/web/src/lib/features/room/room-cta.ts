@@ -34,9 +34,11 @@ export interface AppPromptInput {
 
 /** The one-time post-registration app prompt waits for a quiet lobby. */
 export function shouldOpenAppPrompt(input: AppPromptInput): boolean {
-  return input.appAvailable
-    && !input.hasUsedDesktopApp
-    && !input.appPromptSeen
-    && !input.otherDialogOpen
-    && !input.voiceActive;
+  return (
+    input.appAvailable &&
+    !input.hasUsedDesktopApp &&
+    !input.appPromptSeen &&
+    !input.otherDialogOpen &&
+    !input.voiceActive
+  );
 }

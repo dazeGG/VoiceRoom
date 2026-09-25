@@ -1,7 +1,11 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { clearViewedScreenPeerReferences, createRoomRealtimeRuntime, resolveViewedScreenPeerId } from '../src/realtime/room-runtime.ts';
+import {
+  clearViewedScreenPeerReferences,
+  createRoomRealtimeRuntime,
+  resolveViewedScreenPeerId
+} from '../src/realtime/room-runtime.ts';
 
 const ROOM_ID = 'room1';
 const OWNER_ID = 'peer-owner1';
@@ -37,10 +41,18 @@ function createCapturingLogger(records) {
 
 function createRuntime(room, broadcasts, overrides = {}) {
   const store = {
-    async getRoom() { return null; },
-    async isRoomServerMuted() { return false; },
-    async listMessages() { return []; },
-    async listSummaryRecipientUserIds() { return []; },
+    async getRoom() {
+      return null;
+    },
+    async isRoomServerMuted() {
+      return false;
+    },
+    async listMessages() {
+      return [];
+    },
+    async listSummaryRecipientUserIds() {
+      return [];
+    },
     normalizeGatePrincipal({ accountUserId, guestPrincipalId }) {
       return accountUserId
         ? { principalId: accountUserId, principalType: 'account' }
@@ -50,7 +62,9 @@ function createRuntime(room, broadcasts, overrides = {}) {
   };
   const wsRegistry = {
     registerConnectionForRoom() {},
-    roomDetailSubscribers() { return []; },
+    roomDetailSubscribers() {
+      return [];
+    },
     sendToConnection() {},
     sendToUser() {},
     unregisterConnectionForRoom() {},
@@ -172,7 +186,9 @@ test('reconnect restores persisted server mute for the account principal', async
   const lookups = [];
   const runtime = createRuntime(room, [], {
     store: {
-      async getRoom() { return room; },
+      async getRoom() {
+        return room;
+      },
       async getOrCreatePeerIdentity({ peerId }) {
         return { status: 'ok', identity: { id: `identity-${peerId}`, avatarColorKey: 'blue' } };
       },
@@ -198,7 +214,9 @@ test('reconnect returns a terminal error when persisted server-mute authority is
   const room = { id: ROOM_ID, peers: new Map() };
   const runtime = createRuntime(room, [], {
     store: {
-      async getRoom() { return room; },
+      async getRoom() {
+        return room;
+      },
       async getOrCreatePeerIdentity({ peerId }) {
         return { status: 'ok', identity: { id: `identity-${peerId}`, avatarColorKey: 'blue' } };
       },
@@ -208,12 +226,16 @@ test('reconnect returns a terminal error when persisted server-mute authority is
     }
   });
 
-  const result = await runtime.joinVoiceRoom(createVoiceConnection(), {
+  const result = await runtime.joinVoiceRoom(
+    createVoiceConnection(),
+    {
       roomId: ROOM_ID,
       peerId: OWNER_ID,
       sessionToken: OWNER_TOKEN,
       name: 'Owner'
-    }, { id: 'account-owner', displayName: 'Owner' });
+    },
+    { id: 'account-owner', displayName: 'Owner' }
+  );
   assert.deepEqual(result, {
     ok: false,
     code: 'server_mute_unavailable',
@@ -225,7 +247,13 @@ test('reconnect returns a terminal error when persisted server-mute authority is
 test('attendance only accepts an active remote screen owner', () => {
   const owner = createPeer(OWNER_ID, { screen: true });
   const viewer = createPeer(VIEWER_ID);
-  const room = { id: ROOM_ID, peers: new Map([[owner.id, owner], [viewer.id, viewer]]) };
+  const room = {
+    id: ROOM_ID,
+    peers: new Map([
+      [owner.id, owner],
+      [viewer.id, viewer]
+    ])
+  };
 
   assert.equal(resolveViewedScreenPeerId(room, viewer.id, owner.id), owner.id);
   assert.equal(resolveViewedScreenPeerId(room, viewer.id, viewer.id), '');
@@ -259,7 +287,10 @@ test('owner removal clears every viewer that still references the stream', () =>
   room.peers.delete(owner.id);
   const cleared = clearViewedScreenPeerReferences(room, owner.id);
 
-  assert.deepEqual(cleared.map((peer) => peer.id), [viewer.id, otherViewer.id]);
+  assert.deepEqual(
+    cleared.map((peer) => peer.id),
+    [viewer.id, otherViewer.id]
+  );
   assert.equal(viewer.viewedScreenPeerId, '');
   assert.equal(otherViewer.viewedScreenPeerId, '');
   assert.equal(unrelated.viewedScreenPeerId, 'peer-other1');
@@ -268,7 +299,13 @@ test('owner removal clears every viewer that still references the stream', () =>
 test('screen stop publishes viewer leave and rejects a stale re-entry', async () => {
   const owner = createPeer(OWNER_ID, { screen: true });
   const viewer = createPeer(VIEWER_ID, { viewedScreenPeerId: OWNER_ID });
-  const room = { id: ROOM_ID, peers: new Map([[owner.id, owner], [viewer.id, viewer]]) };
+  const room = {
+    id: ROOM_ID,
+    peers: new Map([
+      [owner.id, owner],
+      [viewer.id, viewer]
+    ])
+  };
   const broadcasts = [];
   const runtime = createRuntime(room, broadcasts);
 
@@ -311,7 +348,13 @@ test('screen stop publishes viewer leave and rejects a stale re-entry', async ()
 test('superseded transport cannot stop the replacement peer stream', async () => {
   const owner = createPeer(OWNER_ID, { screen: true, transport: { id: 'new-transport' } });
   const viewer = createPeer(VIEWER_ID, { viewedScreenPeerId: OWNER_ID });
-  const room = { id: ROOM_ID, peers: new Map([[owner.id, owner], [viewer.id, viewer]]) };
+  const room = {
+    id: ROOM_ID,
+    peers: new Map([
+      [owner.id, owner],
+      [viewer.id, viewer]
+    ])
+  };
   const broadcasts = [];
   const runtime = createRuntime(room, broadcasts);
 
@@ -336,7 +379,9 @@ test('newer concurrent join wins even when its identity lookup finishes first', 
   const identityLookups = [];
   const runtime = createRuntime(room, [], {
     store: {
-      async getRoom() { return { id: ROOM_ID, name: 'Room' }; },
+      async getRoom() {
+        return { id: ROOM_ID, name: 'Room' };
+      },
       async getOrCreatePeerIdentity(request) {
         return new Promise((resolve) => identityLookups.push({ request, resolve }));
       }
@@ -369,7 +414,9 @@ test('older join cannot replace a newer join after a delayed room lookup', async
   const runtime = createRuntime(room, [], {
     getRoom: async () => new Promise((resolve) => roomLookups.push(resolve)),
     store: {
-      async getRoom() { return { id: ROOM_ID, name: 'Room' }; },
+      async getRoom() {
+        return { id: ROOM_ID, name: 'Room' };
+      },
       async getOrCreatePeerIdentity() {
         return { status: 'ok', identity: { avatarColorKey: 'blue' } };
       }
@@ -400,7 +447,9 @@ test('initial join is announced even when a reconnect replaces it during occupan
   const runtime = createRuntime(room, broadcasts, {
     queueRoomOccupancyTransition: async () => new Promise((resolve) => occupancyTransitions.push(resolve)),
     store: {
-      async getRoom() { return { id: ROOM_ID, name: 'Room' }; },
+      async getRoom() {
+        return { id: ROOM_ID, name: 'Room' };
+      },
       async getOrCreatePeerIdentity() {
         return { status: 'ok', identity: { avatarColorKey: 'blue' } };
       }
@@ -422,7 +471,10 @@ test('initial join is announced even when a reconnect replaces it during occupan
 
   assert.equal(secondResult.ok, true);
   assert.equal(firstResult.code, 'superseded_join');
-  assert.deepEqual(broadcasts.map((message) => message.type), ['peer-joined']);
+  assert.deepEqual(
+    broadcasts.map((message) => message.type),
+    ['peer-joined']
+  );
 });
 
 test('committed join still returns a correlated snapshot when occupancy persistence fails', async () => {
@@ -440,7 +492,9 @@ test('committed join still returns a correlated snapshot when occupancy persiste
       }
     },
     store: {
-      async getRoom() { return { id: ROOM_ID, name: 'Room' }; },
+      async getRoom() {
+        return { id: ROOM_ID, name: 'Room' };
+      },
       async getOrCreatePeerIdentity() {
         return { status: 'ok', identity: { avatarColorKey: 'blue' } };
       }
@@ -460,7 +514,10 @@ test('committed join still returns a correlated snapshot when occupancy persiste
     assert.equal(room.peers.has(OWNER_ID), true);
     assert.equal(sent.at(-1)?.type, 'room.snapshot');
     assert.equal(sent.at(-1)?.id, 'recovery-request-1');
-    assert.equal(errors.some((entry) => entry.evt === 'room.occupancy_persist_failed'), true);
+    assert.equal(
+      errors.some((entry) => entry.evt === 'room.occupancy_persist_failed'),
+      true
+    );
   } finally {
     errors.length = 0;
   }
@@ -472,7 +529,9 @@ test('explicit leave cancels a join before it can attach a peer', async () => {
   const runtime = createRuntime(room, [], {
     store: {
       async getOrCreatePeerIdentity() {
-        return new Promise((resolve) => { releaseIdentity = resolve; });
+        return new Promise((resolve) => {
+          releaseIdentity = resolve;
+        });
       }
     }
   });
@@ -496,7 +555,9 @@ test('connection cleanup cancels a join before it can create a ghost peer', asyn
   const runtime = createRuntime(room, [], {
     store: {
       async getOrCreatePeerIdentity() {
-        return new Promise((resolve) => { releaseIdentity = resolve; });
+        return new Promise((resolve) => {
+          releaseIdentity = resolve;
+        });
       }
     }
   });
@@ -521,7 +582,10 @@ test('newer room join wins across different peer keys on one connection', async 
   const secondToken = 's'.repeat(32);
   const firstRoom = { id: ROOM_ID, peers: new Map() };
   const secondRoom = { id: secondRoomId, peers: new Map() };
-  const rooms = new Map([[ROOM_ID, firstRoom], [secondRoomId, secondRoom]]);
+  const rooms = new Map([
+    [ROOM_ID, firstRoom],
+    [secondRoomId, secondRoom]
+  ]);
   let releaseFirstIdentity;
   const runtime = createRuntime(firstRoom, [], {
     presenceRooms: rooms,
@@ -532,7 +596,9 @@ test('newer room join wins across different peer keys on one connection', async 
       },
       async getOrCreatePeerIdentity({ roomId }) {
         if (roomId === ROOM_ID) {
-          return new Promise((resolve) => { releaseFirstIdentity = resolve; });
+          return new Promise((resolve) => {
+            releaseFirstIdentity = resolve;
+          });
         }
         return { status: 'ok', identity: { avatarColorKey: 'blue' } };
       }
@@ -540,17 +606,25 @@ test('newer room join wins across different peer keys on one connection', async 
   });
   const connection = { activeVoice: null, closed: false, previewRoomIds: new Set() };
 
-  const firstJoin = runtime.joinVoiceRoom(connection, {
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN
-  }, null);
+  const firstJoin = runtime.joinVoiceRoom(
+    connection,
+    {
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN
+    },
+    null
+  );
   while (!releaseFirstIdentity) await Promise.resolve();
-  const secondResult = await runtime.joinVoiceRoom(connection, {
-    roomId: secondRoomId,
-    peerId: secondPeerId,
-    sessionToken: secondToken
-  }, null);
+  const secondResult = await runtime.joinVoiceRoom(
+    connection,
+    {
+      roomId: secondRoomId,
+      peerId: secondPeerId,
+      sessionToken: secondToken
+    },
+    null
+  );
   releaseFirstIdentity({ status: 'ok', identity: { avatarColorKey: 'blue' } });
   const firstResult = await firstJoin;
 
@@ -571,7 +645,9 @@ test('same connection cannot leave an orphan when it changes peer id in one room
       if (peer?.transport?.id === transportId) room.peers.delete(peerId);
     },
     store: {
-      async getRoom() { return { id: ROOM_ID, name: 'Room' }; },
+      async getRoom() {
+        return { id: ROOM_ID, name: 'Room' };
+      },
       async getOrCreatePeerIdentity() {
         return { status: 'ok', identity: { avatarColorKey: 'blue' } };
       }
@@ -579,16 +655,24 @@ test('same connection cannot leave an orphan when it changes peer id in one room
   });
   const connection = { activeVoice: null, closed: false, previewRoomIds: new Set() };
 
-  const firstResult = await runtime.joinVoiceRoom(connection, {
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN
-  }, null);
-  const secondResult = await runtime.joinVoiceRoom(connection, {
-    roomId: ROOM_ID,
-    peerId: secondPeerId,
-    sessionToken: secondToken
-  }, null);
+  const firstResult = await runtime.joinVoiceRoom(
+    connection,
+    {
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN
+    },
+    null
+  );
+  const secondResult = await runtime.joinVoiceRoom(
+    connection,
+    {
+      roomId: ROOM_ID,
+      peerId: secondPeerId,
+      sessionToken: secondToken
+    },
+    null
+  );
 
   assert.equal(firstResult.ok, true);
   assert.equal(secondResult.ok, true);
@@ -601,11 +685,20 @@ test('closed connection cannot subscribe after a delayed ban lookup', async () =
   const subscribers = new Set();
   let releaseBanLookup;
   const runtime = createRuntime(room, [], {
-    findRoomBan: async () => new Promise((resolve) => { releaseBanLookup = resolve; }),
+    findRoomBan: async () =>
+      new Promise((resolve) => {
+        releaseBanLookup = resolve;
+      }),
     wsRegistry: {
-      registerConnectionForRoom(connection) { subscribers.add(connection); },
-      unregisterConnectionForRoom(connection) { subscribers.delete(connection); },
-      unregisterConnectionFromAllRooms(connection) { subscribers.delete(connection); }
+      registerConnectionForRoom(connection) {
+        subscribers.add(connection);
+      },
+      unregisterConnectionForRoom(connection) {
+        subscribers.delete(connection);
+      },
+      unregisterConnectionFromAllRooms(connection) {
+        subscribers.delete(connection);
+      }
     }
   });
   const connection = { activeVoice: null, closed: false, previewRoomIds: new Set() };
@@ -629,14 +722,24 @@ test('closed connection rolls back preview subscription during snapshot build', 
   const runtime = createRuntime(room, [], {
     store: {
       async getRoom() {
-        return new Promise((resolve) => { releaseRoomLookup = resolve; });
+        return new Promise((resolve) => {
+          releaseRoomLookup = resolve;
+        });
       }
     },
     wsRegistry: {
-      registerConnectionForRoom(connection) { subscribers.add(connection); },
-      sendToConnection(_connection, envelope) { sentEnvelopes.push(envelope); },
-      unregisterConnectionForRoom(connection) { subscribers.delete(connection); },
-      unregisterConnectionFromAllRooms(connection) { subscribers.delete(connection); }
+      registerConnectionForRoom(connection) {
+        subscribers.add(connection);
+      },
+      sendToConnection(_connection, envelope) {
+        sentEnvelopes.push(envelope);
+      },
+      unregisterConnectionForRoom(connection) {
+        subscribers.delete(connection);
+      },
+      unregisterConnectionFromAllRooms(connection) {
+        subscribers.delete(connection);
+      }
     }
   });
   const connection = { activeVoice: null, closed: false, previewRoomIds: new Set() };
@@ -676,12 +779,16 @@ test('unexpected disconnect preserves presence and a same-session replacement cl
   assert.deepEqual(closed, []);
 
   const replacement = createVoiceConnection();
-  const result = await runtime.joinVoiceRoom(replacement, {
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    name: 'Owner'
-  }, null);
+  const result = await runtime.joinVoiceRoom(
+    replacement,
+    {
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      name: 'Owner'
+    },
+    null
+  );
 
   assert.deepEqual(result, { ok: true, reconnecting: true });
   assert.equal(room.peers.size, 1);
@@ -721,12 +828,14 @@ test('lease expiry finalizes the exact disconnected transport once', async () =>
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(room.peers.has(OWNER_ID), false);
   assert.equal(revoked.length, 1);
-  assert.deepEqual(closed, [{
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    transportId: 'transport-expiring',
-    reason: 'lost'
-  }]);
+  assert.deepEqual(closed, [
+    {
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      transportId: 'transport-expiring',
+      reason: 'lost'
+    }
+  ]);
   assert.deepEqual(removeCalls, [[ROOM_ID, OWNER_ID]]);
 
   capturedExpiry();
@@ -752,20 +861,29 @@ test('retryable failure after replacement claim restores only the original remai
       return room;
     }
   });
-  runtime.cleanupConnection(createVoiceConnection({
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    transportId: owner.transport.id
-  }));
+  runtime.cleanupConnection(
+    createVoiceConnection({
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      transportId: owner.transport.id
+    })
+  );
 
   scheduler.advance(600);
-  await assert.rejects(runtime.joinVoiceRoom(createVoiceConnection(), {
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    name: 'Owner'
-  }, null), /storage unavailable/);
+  await assert.rejects(
+    runtime.joinVoiceRoom(
+      createVoiceConnection(),
+      {
+        roomId: ROOM_ID,
+        peerId: OWNER_ID,
+        sessionToken: OWNER_TOKEN,
+        name: 'Owner'
+      },
+      null
+    ),
+    /storage unavailable/
+  );
   assert.equal(scheduler.size(), 1);
 
   rejectLookup = false;
@@ -812,12 +930,14 @@ test('leave replayed on a fresh socket finalizes only the matching disconnected 
   const owner = createPeer(OWNER_ID, { transport: { id: 'transport-replayed-leave', close() {} } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({ room, scheduler, revoked, closed });
-  runtime.cleanupConnection(createVoiceConnection({
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    transportId: owner.transport.id
-  }));
+  runtime.cleanupConnection(
+    createVoiceConnection({
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      transportId: owner.transport.id
+    })
+  );
 
   await runtime.leaveVoiceRoom(createVoiceConnection(), {
     roomId: ROOM_ID,
@@ -836,7 +956,9 @@ test('terminal ownership invalidates an in-flight claimed replacement without re
   const revoked = [];
   const closed = [];
   let resolveIdentity;
-  const identity = new Promise((resolve) => { resolveIdentity = resolve; });
+  const identity = new Promise((resolve) => {
+    resolveIdentity = resolve;
+  });
   const owner = createPeer(OWNER_ID, { transport: { id: 'transport-claimed', close() {} } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({
@@ -848,20 +970,26 @@ test('terminal ownership invalidates an in-flight claimed replacement without re
       getOrCreatePeerIdentity: () => identity
     }
   });
-  runtime.cleanupConnection(createVoiceConnection({
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    transportId: owner.transport.id
-  }));
+  runtime.cleanupConnection(
+    createVoiceConnection({
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      transportId: owner.transport.id
+    })
+  );
   const [capturedExpiry] = scheduler.callbacks();
 
-  const replacement = runtime.joinVoiceRoom(createVoiceConnection(), {
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    name: 'Owner'
-  }, null);
+  const replacement = runtime.joinVoiceRoom(
+    createVoiceConnection(),
+    {
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      name: 'Owner'
+    },
+    null
+  );
   await new Promise((resolve) => setImmediate(resolve));
   await runtime.finalizeReconnectLease({ roomId: ROOM_ID, peerId: OWNER_ID, reason: 'banned' });
   resolveIdentity({ status: 'ok', identity: { id: 'identity-owner', avatarColorKey: 'blue' } });
@@ -881,7 +1009,9 @@ test('replacement waits when expiry wins CAS before credential finalization', as
   const revoked = [];
   const closed = [];
   let resolveRevoke;
-  const revokeGate = new Promise((resolve) => { resolveRevoke = resolve; });
+  const revokeGate = new Promise((resolve) => {
+    resolveRevoke = resolve;
+  });
   const owner = createPeer(OWNER_ID, { transport: { id: 'transport-finalizing', close() {} } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   let roomLookups = 0;
@@ -902,20 +1032,26 @@ test('replacement waits when expiry wins CAS before credential finalization', as
       }
     }
   });
-  runtime.cleanupConnection(createVoiceConnection({
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    transportId: owner.transport.id
-  }));
+  runtime.cleanupConnection(
+    createVoiceConnection({
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      transportId: owner.transport.id
+    })
+  );
 
   scheduler.advance(1000);
-  const replacement = runtime.joinVoiceRoom(createVoiceConnection(), {
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    name: 'Owner'
-  }, null);
+  const replacement = runtime.joinVoiceRoom(
+    createVoiceConnection(),
+    {
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      name: 'Owner'
+    },
+    null
+  );
   await Promise.resolve();
   assert.equal(revoked.length, 1);
   assert.equal(roomLookups, 0);
@@ -956,12 +1092,14 @@ test('membership removal terminal-claims leases before one principal revoke and 
       }
     }
   });
-  runtime.cleanupConnection(createVoiceConnection({
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    transportId: owner.transport.id
-  }));
+  runtime.cleanupConnection(
+    createVoiceConnection({
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      transportId: owner.transport.id
+    })
+  );
   const [capturedExpiry] = scheduler.callbacks();
 
   const result = await runtime.disconnectAccountFromRoom({
@@ -979,12 +1117,16 @@ test('membership removal terminal-claims leases before one principal revoke and 
   assert.equal(removeCalls.length, 1);
 
   capturedExpiry();
-  const lateJoin = await runtime.joinVoiceRoom(createVoiceConnection(), {
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    name: 'Owner'
-  }, { id: 'account-owner' });
+  const lateJoin = await runtime.joinVoiceRoom(
+    createVoiceConnection(),
+    {
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      name: 'Owner'
+    },
+    { id: 'account-owner' }
+  );
   assert.equal(lateJoin.code, 'superseded_join');
   assert.equal(closed.length, 1);
   assert.equal(principalRevokes.length, 1);
@@ -1004,12 +1146,16 @@ test('stale superseded connection leave cannot evict the authoritative replaceme
     transportId: owner.transport.id
   });
   const replacement = createVoiceConnection();
-  const joined = await runtime.joinVoiceRoom(replacement, {
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    name: 'Owner'
-  }, null);
+  const joined = await runtime.joinVoiceRoom(
+    replacement,
+    {
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      name: 'Owner'
+    },
+    null
+  );
   assert.equal(joined.ok, true);
   const replacementTransportId = room.peers.get(OWNER_ID).transport.id;
 
@@ -1025,7 +1171,9 @@ test('only one replacement may claim a pending reconnect lease', async () => {
   const revoked = [];
   const closed = [];
   let resolveIdentity;
-  const identity = new Promise((resolve) => { resolveIdentity = resolve; });
+  const identity = new Promise((resolve) => {
+    resolveIdentity = resolve;
+  });
   const owner = createPeer(OWNER_ID, { transport: { id: 'transport-single-claim', close() {} } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({
@@ -1035,25 +1183,35 @@ test('only one replacement may claim a pending reconnect lease', async () => {
     closed,
     store: { getOrCreatePeerIdentity: () => identity }
   });
-  runtime.cleanupConnection(createVoiceConnection({
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    transportId: owner.transport.id
-  }));
+  runtime.cleanupConnection(
+    createVoiceConnection({
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      transportId: owner.transport.id
+    })
+  );
 
-  const first = runtime.joinVoiceRoom(createVoiceConnection(), {
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    name: 'Owner'
-  }, null);
-  const second = await runtime.joinVoiceRoom(createVoiceConnection(), {
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    name: 'Owner'
-  }, null);
+  const first = runtime.joinVoiceRoom(
+    createVoiceConnection(),
+    {
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      name: 'Owner'
+    },
+    null
+  );
+  const second = await runtime.joinVoiceRoom(
+    createVoiceConnection(),
+    {
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      name: 'Owner'
+    },
+    null
+  );
   assert.equal(second.code, 'superseded_join');
 
   resolveIdentity({ status: 'ok', identity: { id: 'identity-owner', avatarColorKey: 'blue' } });
@@ -1087,33 +1245,43 @@ test('failed expiry finalizer blocks admission until credential revoke retry suc
       }
     }
   });
-  runtime.cleanupConnection(createVoiceConnection({
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    transportId: owner.transport.id
-  }));
+  runtime.cleanupConnection(
+    createVoiceConnection({
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      transportId: owner.transport.id
+    })
+  );
   scheduler.advance(1000);
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(room.peers.has(OWNER_ID), true);
   assert.equal(closed.length, 0);
 
-  const blocked = await runtime.joinVoiceRoom(createVoiceConnection(), {
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    name: 'Owner'
-  }, null);
+  const blocked = await runtime.joinVoiceRoom(
+    createVoiceConnection(),
+    {
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      name: 'Owner'
+    },
+    null
+  );
   assert.equal(blocked.code, 'reconnect_finalize_failed');
   assert.equal(room.peers.has(OWNER_ID), true);
   assert.equal(closed.length, 0);
 
-  const result = await runtime.joinVoiceRoom(createVoiceConnection(), {
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    name: 'Owner'
-  }, null);
+  const result = await runtime.joinVoiceRoom(
+    createVoiceConnection(),
+    {
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      name: 'Owner'
+    },
+    null
+  );
   assert.equal(result.ok, true);
   assert.equal(result.reconnecting, false);
   assert.equal(attempts, 3);
@@ -1127,7 +1295,9 @@ test('terminal prerequisite keeps ownership when the claimed transport disconnec
   const closed = [];
   let releaseTerminal;
   let identityCalls = 0;
-  const terminalPrerequisite = new Promise((resolve) => { releaseTerminal = resolve; });
+  const terminalPrerequisite = new Promise((resolve) => {
+    releaseTerminal = resolve;
+  });
   const owner = createPeer(OWNER_ID, { transport: { id: 'transport-terminal-prerequisite', close() {} } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({
@@ -1159,12 +1329,16 @@ test('terminal prerequisite keeps ownership when the claimed transport disconnec
     }
   });
   runtime.cleanupConnection(connection);
-  const replacement = runtime.joinVoiceRoom(createVoiceConnection(), {
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    name: 'Owner'
-  }, null);
+  const replacement = runtime.joinVoiceRoom(
+    createVoiceConnection(),
+    {
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      name: 'Owner'
+    },
+    null
+  );
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(identityCalls, 0);
 
@@ -1193,12 +1367,14 @@ test('terminal scope retries a failed expiry finalizer and runs its queued callb
       }
     }
   });
-  runtime.cleanupConnection(createVoiceConnection({
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    transportId: owner.transport.id
-  }));
+  runtime.cleanupConnection(
+    createVoiceConnection({
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      transportId: owner.transport.id
+    })
+  );
   scheduler.advance(1000);
   await new Promise((resolve) => setImmediate(resolve));
 
@@ -1232,12 +1408,16 @@ test('explicit leave only terminates the old generation and allows immediate sam
 
   await runtime.leaveVoiceRoom(connection, connection.activeVoice);
   assert.equal(room.peers.has(OWNER_ID), false);
-  const result = await runtime.joinVoiceRoom(createVoiceConnection(), {
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    name: 'Owner'
-  }, null);
+  const result = await runtime.joinVoiceRoom(
+    createVoiceConnection(),
+    {
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      name: 'Owner'
+    },
+    null
+  );
   assert.equal(result.ok, true);
   assert.equal(result.reconnecting, false);
   assert.equal(room.peers.size, 1);
@@ -1253,12 +1433,16 @@ test('kick terminal ownership rejects same-session resurrection', async () => {
     const runtime = createLeaseRuntime({ room, scheduler, revoked, closed });
 
     await runtime.finalizeReconnectLease({ roomId: ROOM_ID, peerId: OWNER_ID, reason });
-    const result = await runtime.joinVoiceRoom(createVoiceConnection(), {
-      roomId: ROOM_ID,
-      peerId: OWNER_ID,
-      sessionToken: OWNER_TOKEN,
-      name: 'Owner'
-    }, null);
+    const result = await runtime.joinVoiceRoom(
+      createVoiceConnection(),
+      {
+        roomId: ROOM_ID,
+        peerId: OWNER_ID,
+        sessionToken: OWNER_TOKEN,
+        name: 'Owner'
+      },
+      null
+    );
 
     assert.equal(result.code, 'superseded_join', reason);
     assert.equal(room.peers.has(OWNER_ID), false, reason);
@@ -1288,12 +1472,14 @@ test('membership finalizer failure does not close the peer or report successful 
       }
     }
   });
-  runtime.cleanupConnection(createVoiceConnection({
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    transportId: owner.transport.id
-  }));
+  runtime.cleanupConnection(
+    createVoiceConnection({
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      transportId: owner.transport.id
+    })
+  );
 
   const result = await runtime.disconnectAccountFromRoom({
     roomId: ROOM_ID,
@@ -1312,20 +1498,30 @@ test('room terminal API claims every lease before custom delete finalizers run o
   const closed = [];
   const owner = createPeer(OWNER_ID, { transport: { id: 'transport-delete-owner', close() {} } });
   const viewer = createPeer(VIEWER_ID, { transport: { id: 'transport-delete-viewer', close() {} } });
-  const room = { id: ROOM_ID, peers: new Map([[owner.id, owner], [viewer.id, viewer]]) };
+  const room = {
+    id: ROOM_ID,
+    peers: new Map([
+      [owner.id, owner],
+      [viewer.id, viewer]
+    ])
+  };
   const runtime = createLeaseRuntime({ room, scheduler, revoked, closed });
-  runtime.cleanupConnection(createVoiceConnection({
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    transportId: owner.transport.id
-  }));
-  runtime.cleanupConnection(createVoiceConnection({
-    roomId: ROOM_ID,
-    peerId: VIEWER_ID,
-    sessionToken: VIEWER_TOKEN,
-    transportId: viewer.transport.id
-  }));
+  runtime.cleanupConnection(
+    createVoiceConnection({
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      transportId: owner.transport.id
+    })
+  );
+  runtime.cleanupConnection(
+    createVoiceConnection({
+      roomId: ROOM_ID,
+      peerId: VIEWER_ID,
+      sessionToken: VIEWER_TOKEN,
+      transportId: viewer.transport.id
+    })
+  );
   const capturedExpiries = scheduler.callbacks();
   const finalized = [];
 
@@ -1355,7 +1551,9 @@ test('claimed replacements are superseded by delete, kick, and membership termin
     const revoked = [];
     const closed = [];
     let resolveIdentity;
-    const identity = new Promise((resolve) => { resolveIdentity = resolve; });
+    const identity = new Promise((resolve) => {
+      resolveIdentity = resolve;
+    });
     const owner = createPeer(OWNER_ID, {
       accountUserId: 'account-owner',
       transport: { id: `transport-claimed-${scope}`, close() {} }
@@ -1368,18 +1566,24 @@ test('claimed replacements are superseded by delete, kick, and membership termin
       closed,
       store: { getOrCreatePeerIdentity: () => identity }
     });
-    runtime.cleanupConnection(createVoiceConnection({
-      roomId: ROOM_ID,
-      peerId: OWNER_ID,
-      sessionToken: OWNER_TOKEN,
-      transportId: owner.transport.id
-    }));
-    const replacement = runtime.joinVoiceRoom(createVoiceConnection(), {
-      roomId: ROOM_ID,
-      peerId: OWNER_ID,
-      sessionToken: OWNER_TOKEN,
-      name: 'Owner'
-    }, { id: 'account-owner' });
+    runtime.cleanupConnection(
+      createVoiceConnection({
+        roomId: ROOM_ID,
+        peerId: OWNER_ID,
+        sessionToken: OWNER_TOKEN,
+        transportId: owner.transport.id
+      })
+    );
+    const replacement = runtime.joinVoiceRoom(
+      createVoiceConnection(),
+      {
+        roomId: ROOM_ID,
+        peerId: OWNER_ID,
+        sessionToken: OWNER_TOKEN,
+        name: 'Owner'
+      },
+      { id: 'account-owner' }
+    );
     await new Promise((resolve) => setImmediate(resolve));
 
     if (scope === 'delete') {
@@ -1406,7 +1610,9 @@ test('terminal scope finalizes the current authoritative transport instead of an
   const revoked = [];
   const closed = [];
   let resolveIdentity;
-  const identity = new Promise((resolve) => { resolveIdentity = resolve; });
+  const identity = new Promise((resolve) => {
+    resolveIdentity = resolve;
+  });
   const owner = createPeer(OWNER_ID, { transport: { id: 'transport-obsolete', close() {} } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({
@@ -1416,23 +1622,32 @@ test('terminal scope finalizes the current authoritative transport instead of an
     closed,
     store: { getOrCreatePeerIdentity: () => identity }
   });
-  runtime.cleanupConnection(createVoiceConnection({
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    transportId: owner.transport.id
-  }));
-  const obsoleteJoin = runtime.joinVoiceRoom(createVoiceConnection(), {
-    roomId: ROOM_ID,
-    peerId: OWNER_ID,
-    sessionToken: OWNER_TOKEN,
-    name: 'Owner'
-  }, null);
+  runtime.cleanupConnection(
+    createVoiceConnection({
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      transportId: owner.transport.id
+    })
+  );
+  const obsoleteJoin = runtime.joinVoiceRoom(
+    createVoiceConnection(),
+    {
+      roomId: ROOM_ID,
+      peerId: OWNER_ID,
+      sessionToken: OWNER_TOKEN,
+      name: 'Owner'
+    },
+    null
+  );
   await new Promise((resolve) => setImmediate(resolve));
 
-  room.peers.set(OWNER_ID, createPeer(OWNER_ID, {
-    transport: { id: 'transport-authoritative', close() {} }
-  }));
+  room.peers.set(
+    OWNER_ID,
+    createPeer(OWNER_ID, {
+      transport: { id: 'transport-authoritative', close() {} }
+    })
+  );
   await runtime.cancelRoomReconnectLeases({ roomId: ROOM_ID, reason: 'deleted' });
   resolveIdentity({ status: 'ok', identity: { id: 'identity-owner', avatarColorKey: 'blue' } });
 
@@ -1445,15 +1660,25 @@ test('terminal scope finalizes the current authoritative transport instead of an
 test('snapshot reads presence after awaited message history', async () => {
   const owner = createPeer(OWNER_ID, { screen: true });
   const viewer = createPeer(VIEWER_ID, { viewedScreenPeerId: OWNER_ID });
-  const room = { id: ROOM_ID, peers: new Map([[owner.id, owner], [viewer.id, viewer]]) };
+  const room = {
+    id: ROOM_ID,
+    peers: new Map([
+      [owner.id, owner],
+      [viewer.id, viewer]
+    ])
+  };
   let releaseMessages;
   const messagesPending = new Promise((resolve) => {
     releaseMessages = resolve;
   });
   const runtime = createRuntime(room, [], {
     store: {
-      async getRoom() { return { id: ROOM_ID, name: 'Room' }; },
-      async listMessages() { return messagesPending; }
+      async getRoom() {
+        return { id: ROOM_ID, name: 'Room' };
+      },
+      async listMessages() {
+        return messagesPending;
+      }
     }
   });
 

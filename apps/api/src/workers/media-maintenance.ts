@@ -1,4 +1,7 @@
-function createMediaMaintenanceWorker({ maintenanceService, intervalMs = 60_000 }: { maintenanceService?: { cleanupOnce(): Promise<unknown> }; intervalMs?: number } = {}) {
+function createMediaMaintenanceWorker({
+  maintenanceService,
+  intervalMs = 60_000
+}: { maintenanceService?: { cleanupOnce(): Promise<unknown> }; intervalMs?: number } = {}) {
   if (!maintenanceService?.cleanupOnce) throw new TypeError('Media maintenance service is required');
   const service = maintenanceService;
   let stopping = false;
@@ -7,12 +10,22 @@ function createMediaMaintenanceWorker({ maintenanceService, intervalMs = 60_000 
       await service.cleanupOnce();
       await new Promise<void>((resolve) => {
         const timer = setTimeout(done, intervalMs);
-        function done() { clearTimeout(timer); signal?.removeEventListener('abort', done); resolve(); }
+        function done() {
+          clearTimeout(timer);
+          signal?.removeEventListener('abort', done);
+          resolve();
+        }
         signal?.addEventListener('abort', done, { once: true });
       });
     }
   }
-  return Object.freeze({ run, runOnce: service.cleanupOnce, stop: () => { stopping = true; } });
+  return Object.freeze({
+    run,
+    runOnce: service.cleanupOnce,
+    stop: () => {
+      stopping = true;
+    }
+  });
 }
 
 async function main(): Promise<void> {
@@ -32,11 +45,17 @@ async function main(): Promise<void> {
     })
   });
   const controller = new AbortController();
-  const shutdown = () => { worker.stop(); controller.abort(); };
+  const shutdown = () => {
+    worker.stop();
+    controller.abort();
+  };
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
-  try { await worker.run({ signal: controller.signal }); }
-  finally { await pool.end(); }
+  try {
+    await worker.run({ signal: controller.signal });
+  } finally {
+    await pool.end();
+  }
 }
 
 if (import.meta.main) {

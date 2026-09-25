@@ -29,8 +29,19 @@ export interface AvatarUser {
 export interface AvatarsDeps {
   storage(): AvatarStorage;
   linkPreviewStorage(): FileStorage;
-  users(): { swapAvatar(input: { userId: string; avatarKey?: string; avatarAccent?: string | null }): Promise<{ user?: AvatarUser | null; previousAvatarKey?: string | null }> };
-  rooms(): { swapRoomAvatar(roomId: string, avatarKey: string | null): Promise<{ room?: StoredRoom | null; previousAvatarKey?: string | null }> };
+  users(): {
+    swapAvatar(input: {
+      userId: string;
+      avatarKey?: string;
+      avatarAccent?: string | null;
+    }): Promise<{ user?: AvatarUser | null; previousAvatarKey?: string | null }>;
+  };
+  rooms(): {
+    swapRoomAvatar(
+      roomId: string,
+      avatarKey: string | null
+    ): Promise<{ room?: StoredRoom | null; previousAvatarKey?: string | null }>;
+  };
   /** Refreshes the user's live room peers after a profile change. */
   refreshActiveProfile(user: AvatarUser): void;
   broadcastProfileToFriends(user: AvatarUser, log: Log): Promise<void>;
@@ -81,7 +92,11 @@ export function createAvatarsService(deps: AvatarsDeps) {
     return { status: 'updated' as const, user: selfUser(user) };
   }
 
-  async function setUserAvatar(user: AvatarUser, upload: Buffer, log: Log): Promise<Updated<{ user: unknown }> | NotFound> {
+  async function setUserAvatar(
+    user: AvatarUser,
+    upload: Buffer,
+    log: Log
+  ): Promise<Updated<{ user: unknown }> | NotFound> {
     const { avatarKey, accent } = await store('user', user.id, upload);
     const result = await deps.users().swapAvatar({ userId: user.id, avatarKey, avatarAccent: accent });
     if (!result.user) {
@@ -100,7 +115,11 @@ export function createAvatarsService(deps: AvatarsDeps) {
     return profileChanged(result.user, log);
   }
 
-  async function setRoomAvatar(room: { id: string; avatarKey?: string | null }, upload: Buffer, log: Log): Promise<Updated<{ room: unknown }> | NotFound> {
+  async function setRoomAvatar(
+    room: { id: string; avatarKey?: string | null },
+    upload: Buffer,
+    log: Log
+  ): Promise<Updated<{ room: unknown }> | NotFound> {
     const { avatarKey } = await store('room', room.id, upload);
     const result = await deps.rooms().swapRoomAvatar(room.id, avatarKey);
     if (!result.room) {

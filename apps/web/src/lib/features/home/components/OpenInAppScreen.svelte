@@ -29,9 +29,7 @@
 <div class="open-in-app" role="dialog" aria-modal="true" aria-labelledby="openInAppTitle">
   <div class="open-in-app-card">
     <h1 id="openInAppTitle">Открываем в приложении</h1>
-    <p>
-      Если Voice Room установлен, комната откроется в нём. Разрешите браузеру открыть приложение, если он спросит.
-    </p>
+    <p>Если Voice Room установлен, комната откроется в нём. Разрешите браузеру открыть приложение, если он спросит.</p>
     <p>Приложения ещё нет? Скачайте его: в нём оверлей поверх игр, горячие клавиши и Push-to-talk.</p>
     <div class="open-in-app-actions">
       <Button variant="primary" type="button" disabled={downloading} onclick={download}>Скачать приложение</Button>

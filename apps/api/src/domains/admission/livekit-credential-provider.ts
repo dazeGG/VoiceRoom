@@ -11,9 +11,7 @@ export type LiveKitAdmission = {
   url: string;
 };
 
-export type AdmissionIssue =
-  | { status: 'issued'; admission: LiveKitAdmission }
-  | { status: string; admission: null };
+export type AdmissionIssue = { status: 'issued'; admission: LiveKitAdmission } | { status: string; admission: null };
 
 function createLiveKitCredentialProvider({
   apiKey,
@@ -24,11 +22,14 @@ function createLiveKitCredentialProvider({
 }: {
   apiKey?: string;
   apiSecret?: string;
-  boundary?: { issueCredential(input: { roomId: string; peerId: string; principal: GatePrincipal }): Promise<CredentialIssue> };
+  boundary?: {
+    issueCredential(input: { roomId: string; peerId: string; principal: GatePrincipal }): Promise<CredentialIssue>;
+  };
   gateUrl?: string;
   tokenTtlSeconds?: unknown;
 } = {}) {
-  if (!boundary || typeof boundary.issueCredential !== 'function') throw new TypeError('credential boundary is required');
+  if (!boundary || typeof boundary.issueCredential !== 'function')
+    throw new TypeError('credential boundary is required');
   const credentials = boundary;
   const ttlSeconds = Math.max(60, Number(tokenTtlSeconds) || 6 * 60 * 60);
 

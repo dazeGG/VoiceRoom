@@ -14,7 +14,9 @@ async function loadScanners() {
 }
 
 function config() {
-  return JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '../../../config/import-boundaries.v1.json'), 'utf8'));
+  return JSON.parse(
+    fs.readFileSync(path.join(import.meta.dirname, '../../../config/import-boundaries.v1.json'), 'utf8')
+  );
 }
 
 function fixtureFile(name, source) {
@@ -31,7 +33,8 @@ test('G10-A01 current API composition graph stays inside import, write and timer
   assert.deepEqual(checkApiSources({ config: config() }), []);
 
   const server = await import('../src/server.ts');
-  for (const name of ['bootstrap', 'closeStores', 'createApiApp', 'createApiServer']) assert.equal(typeof server[name], 'function', name);
+  for (const name of ['bootstrap', 'closeStores', 'createApiApp', 'createApiServer'])
+    assert.equal(typeof server[name], 'function', name);
 });
 
 test('G10-A03 a declared cross-domain writer may touch only its declared tables', async () => {
@@ -41,13 +44,19 @@ test('G10-A03 a declared cross-domain writer may touch only its declared tables'
   const declared = rules.writeRules.crossDomainWriters[writer];
 
   assert.ok(declared.length > 0, 'a cross-domain writer declares the tables it erases');
-  const allowed = fixtureFile(writer, `async function run(db) { await db.query('DELETE FROM ${declared[0]} WHERE user_id = $1'); }
-`);
+  const allowed = fixtureFile(
+    writer,
+    `async function run(db) { await db.query('DELETE FROM ${declared[0]} WHERE user_id = $1'); }
+`
+  );
   assert.deepEqual(checkApiSources({ config: rules, files: [allowed] }), []);
 
   const undeclared = Object.keys(rules.writeRules.allowedOwners).find((table) => !declared.includes(table));
-  const forbidden = fixtureFile(writer, `async function run(db) { await db.query('DELETE FROM ${undeclared} WHERE id = $1'); }
-`);
+  const forbidden = fixtureFile(
+    writer,
+    `async function run(db) { await db.query('DELETE FROM ${undeclared} WHERE id = $1'); }
+`
+  );
   const violations = checkApiSources({ config: rules, files: [forbidden] });
   assert.equal(violations[0]?.ruleId, 'direct-foreign-table-write');
   assert.equal(violations[0]?.table, undeclared);
@@ -57,13 +66,19 @@ test('G10-A02 seeded forbidden imports, direct foreign writes and listener worke
   const { checkImportBoundaries, checkApiSources } = await loadScanners();
   const rules = config();
 
-  const badImport = fixtureFile('apps/api/src/server.ts', "const db = require('./lib/db');\nconst v = require('packages/shared/src/validation.js');\n");
+  const badImport = fixtureFile(
+    'apps/api/src/server.ts',
+    "const db = require('./lib/db');\nconst v = require('packages/shared/src/validation.js');\n"
+  );
   assert.match(
     checkImportBoundaries({ config: rules, files: [badImport] })[0]?.ruleId || '',
     /no-shared-src-deep-imports|api-routes-do-not-import-db/
   );
 
-  const badWrite = fixtureFile('apps/api/src/lib/push-service.js', "async function run(db) { await db.query('UPDATE room_messages SET text = $1'); }\n");
+  const badWrite = fixtureFile(
+    'apps/api/src/lib/push-service.js',
+    "async function run(db) { await db.query('UPDATE room_messages SET text = $1'); }\n"
+  );
   const writeConfig = {
     ...rules,
     writeRules: rules.writeRules,
@@ -74,12 +89,15 @@ test('G10-A02 seeded forbidden imports, direct foreign writes and listener worke
   assert.equal(writeViolations[0].table, 'room_messages');
 
   // Kysely writes are owned the same way as raw SQL.
-  const badKyselyWrite = fixtureFile('apps/api/src/lib/push-service.ts', "export async function run(db) { await db.updateTable('room_messages').set({ text: '' }).execute(); }\n");
+  const badKyselyWrite = fixtureFile(
+    'apps/api/src/lib/push-service.ts',
+    "export async function run(db) { await db.updateTable('room_messages').set({ text: '' }).execute(); }\n"
+  );
   const kyselyViolations = checkApiSources({ config: writeConfig, files: [badKyselyWrite] });
   assert.equal(kyselyViolations[0]?.ruleId, 'direct-foreign-table-write');
   assert.equal(kyselyViolations[0]?.table, 'room_messages');
 
-  const badTimer = fixtureFile('apps/api/src/app.js', "setInterval(() => {}, 1000);\n");
+  const badTimer = fixtureFile('apps/api/src/app.js', 'setInterval(() => {}, 1000);\n');
   const timerViolations = checkApiSources({ config: rules, files: [badTimer] });
   assert.equal(timerViolations[0].ruleId, 'api-listener-worker-timer');
 });

@@ -33,7 +33,11 @@ export function createMentionComposer() {
     activeIndex = Math.min(activeIndex, Math.max(0, candidates.length - 1));
   }
 
-  function choose(text: string, caret: number, member = candidates[activeIndex]): { text: string; caret: number } | null {
+  function choose(
+    text: string,
+    caret: number,
+    member = candidates[activeIndex]
+  ): { text: string; caret: number } | null {
     if (!member || anchorStart < 0 || selected.length >= MAX_MENTIONS_PER_MESSAGE) return null;
     const replacement = `${mentionToken(member)} `;
     const next = text.slice(0, anchorStart) + replacement + text.slice(caret);
@@ -44,7 +48,9 @@ export function createMentionComposer() {
     return { text: next, caret: nextCaret };
   }
 
-  function remove(userId: string): void { selected = selected.filter((item) => item.userId !== userId); }
+  function remove(userId: string): void {
+    selected = selected.filter((item) => item.userId !== userId);
+  }
   function toContent(text: string): RoomMessageContentV1 {
     const pending = selected.map((member) => ({ member, token: mentionToken(member) }));
     const segments: RoomMessageSegmentV1[] = [];
@@ -54,9 +60,15 @@ export function createMentionComposer() {
       let next = -1;
       for (let index = 0; index < pending.length; index += 1) {
         const found = text.indexOf(pending[index].token, offset);
-        if (found >= 0 && (nextIndex < 0 || found < nextIndex)) { nextIndex = found; next = index; }
+        if (found >= 0 && (nextIndex < 0 || found < nextIndex)) {
+          nextIndex = found;
+          next = index;
+        }
       }
-      if (next < 0) { segments.push({ type: 'text', text: text.slice(offset) }); break; }
+      if (next < 0) {
+        segments.push({ type: 'text', text: text.slice(offset) });
+        break;
+      }
       if (nextIndex > offset) segments.push({ type: 'text', text: text.slice(offset, nextIndex) });
       const match = pending.splice(next, 1)[0];
       segments.push({ type: 'mention', userId: match.member.userId, label: match.token });
@@ -65,9 +77,20 @@ export function createMentionComposer() {
     if (segments.length === 0) segments.push({ type: 'text', text });
     return { version: 1, segments };
   }
-  function move(delta: number): void { if (candidates.length) activeIndex = (activeIndex + delta + candidates.length) % candidates.length; }
-  function close(): void { query = ''; anchorStart = -1; activeIndex = 0; candidates = []; }
-  function reset(): void { close(); selected = []; composing = false; }
+  function move(delta: number): void {
+    if (candidates.length) activeIndex = (activeIndex + delta + candidates.length) % candidates.length;
+  }
+  function close(): void {
+    query = '';
+    anchorStart = -1;
+    activeIndex = 0;
+    candidates = [];
+  }
+  function reset(): void {
+    close();
+    selected = [];
+    composing = false;
+  }
   // Brings back the mentions of a restored draft so they still notify on send.
   function restore(value: readonly SelectedMention[]): void {
     close();
@@ -75,8 +98,32 @@ export function createMentionComposer() {
   }
 
   return {
-    get activeIndex() { return activeIndex; }, get candidates() { return candidates; }, get isOpen() { return anchorStart >= 0 && candidates.length > 0; },
-    get query() { return query; }, get selected() { return selected; },
-    choose, close, move, remove, reset, restore, setCandidates, setComposing(value: boolean) { composing = value; }, toContent, update
+    get activeIndex() {
+      return activeIndex;
+    },
+    get candidates() {
+      return candidates;
+    },
+    get isOpen() {
+      return anchorStart >= 0 && candidates.length > 0;
+    },
+    get query() {
+      return query;
+    },
+    get selected() {
+      return selected;
+    },
+    choose,
+    close,
+    move,
+    remove,
+    reset,
+    restore,
+    setCandidates,
+    setComposing(value: boolean) {
+      composing = value;
+    },
+    toContent,
+    update
   };
 }

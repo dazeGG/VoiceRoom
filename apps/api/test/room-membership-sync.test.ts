@@ -51,7 +51,19 @@ function roomListHandler({ owner = false, banned = false } = {}) {
     if (/role = 'owner'/.test(text)) return { rows: owner ? [{ exists: 1 }] : [], rowCount: owner ? 1 : 0 };
     if (/FROM room_bans/.test(text)) {
       return banned
-        ? { rows: [{ id: 'ban', room_id: 'static-room', user_id: 'user-1', ip: '', created_at: new Date(1000), expires_at: null }], rowCount: 1 }
+        ? {
+            rows: [
+              {
+                id: 'ban',
+                room_id: 'static-room',
+                user_id: 'user-1',
+                ip: '',
+                created_at: new Date(1000),
+                expires_at: null
+              }
+            ],
+            rowCount: 1
+          }
         : { rows: [], rowCount: 0 };
     }
     if (/DELETE FROM room_bookmarks/.test(text)) return { rows: [{ id: 'bookmark' }], rowCount: 1 };
@@ -133,22 +145,36 @@ function leaveRoute({ membership = { role: 'member' }, leaveStatus = 'left', pre
   registerMembershipRoutes({
     app: {
       get() {},
-      delete(route, handler) { handlers[route] = handler; }
+      delete(route, handler) {
+        handlers[route] = handler;
+      }
     },
     resolveUser: async () => ({ user: { id: 'user-1' } }),
     membershipService: {
-      async getMembership() { return membership; },
-      async leaveRoom() { return { status: leaveStatus }; }
+      async getMembership() {
+        return membership;
+      },
+      async leaveRoom() {
+        return { status: leaveStatus };
+      }
     },
     prepareLeave: async () => prepared,
-    onLeft: async ({ roomId, user }) => { onLeftCalls.push({ roomId, userId: user.id }); }
+    onLeft: async ({ roomId, user }) => {
+      onLeftCalls.push({ roomId, userId: user.id });
+    }
   });
   const handler = handlers['/api/rooms/:roomId/memberships/me'];
   return {
     onLeftCalls,
     async call() {
       const reply = {};
-      reply.code = (statusCode) => ({ send: (payload) => { reply.statusCode = statusCode; reply.payload = payload; return reply; } });
+      reply.code = (statusCode) => ({
+        send: (payload) => {
+          reply.statusCode = statusCode;
+          reply.payload = payload;
+          return reply;
+        }
+      });
       await handler({ params: { roomId: 'static-room' } }, reply);
       return reply;
     }
@@ -177,4 +203,3 @@ test('owners, failed leaves and refused disconnects keep the room on the list', 
 
   assert.deepEqual([...owner.onLeftCalls, ...failed.onLeftCalls, ...refused.onLeftCalls], []);
 });
-

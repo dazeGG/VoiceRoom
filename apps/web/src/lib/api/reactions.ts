@@ -33,7 +33,10 @@ export async function setReactionDesired(
   emoji: string,
   active: boolean
 ): Promise<ReactionSummary> {
-  const payload = await putJson<{ ok: true; summary: unknown }>(reactionUrl(conversation, messageId), { emoji, active });
+  const payload = await putJson<{ ok: true; summary: unknown }>(reactionUrl(conversation, messageId), {
+    emoji,
+    active
+  });
   const summary = normalizeReactionSummary(payload.summary);
   if (!summary) throw new Error('Сервер вернул неверную реакцию');
   return summary;

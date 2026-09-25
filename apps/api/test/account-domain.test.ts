@@ -33,57 +33,144 @@ test('the session cookie is HttpOnly, Lax, Secure when asked and tolerant when r
 // --- service ----------------------------------------------------------------------
 
 function harness(overrides = {}, { deletions = {}, noDeletions = false } = {}) {
-  const calls = { ended: [], notified: [], pushes: [], refreshed: [], broadcast: [], errors: [], sessions: [], reset: [] };
+  const calls = {
+    ended: [],
+    notified: [],
+    pushes: [],
+    refreshed: [],
+    broadcast: [],
+    errors: [],
+    sessions: [],
+    reset: []
+  };
   const users = {
-    async createUser(input) { return input.login === 'taken' ? { status: 'login_taken' } : { status: 'created', user: { id: 'new-1', login: input.login } }; },
-    async createSession(input) { calls.sessions.push(input); return { token: 'tok', publicId: 'pub-1' }; },
-    async getUserById(userId) { return { id: userId, login: 'reloaded', displayName: 'Reloaded' }; },
-    async verifyCredentials(login, password) { return password === 'right-password' ? { ...USER, deletionRequestedAt: login === 'leaving' ? 1000 : null } : null; },
+    async createUser(input) {
+      return input.login === 'taken'
+        ? { status: 'login_taken' }
+        : { status: 'created', user: { id: 'new-1', login: input.login } };
+    },
+    async createSession(input) {
+      calls.sessions.push(input);
+      return { token: 'tok', publicId: 'pub-1' };
+    },
+    async getUserById(userId) {
+      return { id: userId, login: 'reloaded', displayName: 'Reloaded' };
+    },
+    async verifyCredentials(login, password) {
+      return password === 'right-password' ? { ...USER, deletionRequestedAt: login === 'leaving' ? 1000 : null } : null;
+    },
     async deleteSession() {},
-    async updateDisplayName({ userId, displayName }) { return userId === 'gone' ? null : { id: userId, displayName }; },
-    async changePassword({ userId, currentPassword }) { return { status: userId === 'gone' ? 'not_found' : currentPassword === 'right-password' ? 'changed' : 'invalid_password' }; },
-    async getRecoveryCodesStatus() { return { remaining: 3 }; },
-    async getAccountNotices() { return { recoveryCodesReminderSnoozedUntil: 5, whatsNewSeen: '2.6.0' }; },
-    async snoozeRecoveryCodesReminder({ userId }) { return userId === 'gone' ? { status: 'not_found' } : { status: 'snoozed', snoozedUntil: 9 }; },
-    async markWhatsNewSeen({ userId }) { return userId === 'gone' ? { status: 'not_found' } : { status: 'seen', whatsNewSeen: '9.9.9' }; },
-    async markAppPromptSeen({ userId }) { return { status: userId === 'gone' ? 'not_found' : 'seen' }; },
-    async listPendingLoginAlerts() { return [{ id: 'a1' }]; },
-    async resolveLoginAlert({ alertId, resolution }) { return alertId === 'missing' ? { status: 'not_found' } : { status: 'resolved', revokedTokenHash: resolution === 'denied' ? 'hash-x' : null }; },
-    async listSessions() { return [{ publicId: 'pub-1' }]; },
-    async revokeSession({ publicId }) { return publicId === 'other' ? { status: 'revoked', tokenHash: 'hash-o' } : { status: 'not_found' }; },
-    async revokeOtherSessions() { return { tokenHashes: ['h1', 'h2'] }; },
+    async updateDisplayName({ userId, displayName }) {
+      return userId === 'gone' ? null : { id: userId, displayName };
+    },
+    async changePassword({ userId, currentPassword }) {
+      return {
+        status: userId === 'gone' ? 'not_found' : currentPassword === 'right-password' ? 'changed' : 'invalid_password'
+      };
+    },
+    async getRecoveryCodesStatus() {
+      return { remaining: 3 };
+    },
+    async getAccountNotices() {
+      return { recoveryCodesReminderSnoozedUntil: 5, whatsNewSeen: '2.6.0' };
+    },
+    async snoozeRecoveryCodesReminder({ userId }) {
+      return userId === 'gone' ? { status: 'not_found' } : { status: 'snoozed', snoozedUntil: 9 };
+    },
+    async markWhatsNewSeen({ userId }) {
+      return userId === 'gone' ? { status: 'not_found' } : { status: 'seen', whatsNewSeen: '9.9.9' };
+    },
+    async markAppPromptSeen({ userId }) {
+      return { status: userId === 'gone' ? 'not_found' : 'seen' };
+    },
+    async listPendingLoginAlerts() {
+      return [{ id: 'a1' }];
+    },
+    async resolveLoginAlert({ alertId, resolution }) {
+      return alertId === 'missing'
+        ? { status: 'not_found' }
+        : { status: 'resolved', revokedTokenHash: resolution === 'denied' ? 'hash-x' : null };
+    },
+    async listSessions() {
+      return [{ publicId: 'pub-1' }];
+    },
+    async revokeSession({ publicId }) {
+      return publicId === 'other' ? { status: 'revoked', tokenHash: 'hash-o' } : { status: 'not_found' };
+    },
+    async revokeOtherSessions() {
+      return { tokenHashes: ['h1', 'h2'] };
+    },
     async generateRecoveryCodes({ userId, currentPassword }) {
       if (userId === 'gone') return { status: 'not_found' };
-      return currentPassword === 'right-password' ? { status: 'generated', codes: ['aaaabbbbcccc'], generatedAt: 7 } : { status: 'invalid_password' };
+      return currentPassword === 'right-password'
+        ? { status: 'generated', codes: ['aaaabbbbcccc'], generatedAt: 7 }
+        : { status: 'invalid_password' };
     },
-    async recoverWithCode({ code }) { return code === 'good' ? { status: 'recovered', user: { id: 'user-1' }, remaining: 4 } : { status: 'invalid' }; },
+    async recoverWithCode({ code }) {
+      return code === 'good' ? { status: 'recovered', user: { id: 'user-1' }, remaining: 4 } : { status: 'invalid' };
+    },
     async recordLogin({ kind }) {
       if (kind === 'register') throw new Error('audit down');
-      return { alert: kind === 'recovery' ? { id: 'alert-1', client: 'Firefox', os: 'Linux', location: 'Berlin' } : kind === 'login' ? { id: 'alert-2' } : null };
+      return {
+        alert:
+          kind === 'recovery'
+            ? { id: 'alert-1', client: 'Firefox', os: 'Linux', location: 'Berlin' }
+            : kind === 'login'
+              ? { id: 'alert-2' }
+              : null
+      };
     },
     ...overrides
   };
   const repository = {
-    async isLoginReserved(login) { return login === 'reserved'; },
-    async previewDeletion() { return { ownedRooms: 1 }; },
-    async requestDeletion({ currentPassword }) {
-      return { 'right-password': { status: 'requested', scheduledFor: 99 }, again: { status: 'already_requested', scheduledFor: 88 }, missing: { status: 'not_found' } }[currentPassword] || { status: 'invalid_password' };
+    async isLoginReserved(login) {
+      return login === 'reserved';
     },
-    async restoreAccount({ login }) { return { ok: { status: 'restored', userId: 'user-1' }, old: { status: 'expired', userId: null } }[login] || { status: 'invalid', userId: null }; },
+    async previewDeletion() {
+      return { ownedRooms: 1 };
+    },
+    async requestDeletion({ currentPassword }) {
+      return (
+        {
+          'right-password': { status: 'requested', scheduledFor: 99 },
+          again: { status: 'already_requested', scheduledFor: 88 },
+          missing: { status: 'not_found' }
+        }[currentPassword] || { status: 'invalid_password' }
+      );
+    },
+    async restoreAccount({ login }) {
+      return (
+        { ok: { status: 'restored', userId: 'user-1' }, old: { status: 'expired', userId: null } }[login] || {
+          status: 'invalid',
+          userId: null
+        }
+      );
+    },
     ...deletions
   };
   const service = createAccountService({
     users: () => users,
     deletions: () => (noDeletions ? null : repository),
     loginFailures: {
-      reserve: (key) => (key === 'locked' ? { allowed: false, retryAfterSeconds: 30 } : key === 'locked-nowait' ? { allowed: false } : { allowed: true }),
+      reserve: (key) =>
+        key === 'locked'
+          ? { allowed: false, retryAfterSeconds: 30 }
+          : key === 'locked-nowait'
+            ? { allowed: false }
+            : { allowed: true },
       reset: (key) => calls.reset.push(key)
     },
-    endSessionConnections: async (input) => { calls.ended.push(input); },
+    endSessionConnections: async (input) => {
+      calls.ended.push(input);
+    },
     notifyUser: (userId, event) => calls.notified.push(event.type),
-    queuePush: async (userId, payload) => { calls.pushes.push(payload.title); },
+    queuePush: async (userId, payload) => {
+      calls.pushes.push(payload.title);
+    },
     refreshActiveProfile: (user) => calls.refreshed.push(user.id),
-    broadcastProfileToFriends: async (user) => { calls.broadcast.push(user.id); },
+    broadcastProfileToFriends: async (user) => {
+      calls.broadcast.push(user.id);
+    },
     logger: () => ({ error: (fields) => calls.errors.push(fields.evt) })
   });
   return { calls, service };
@@ -91,9 +178,18 @@ function harness(overrides = {}, { deletions = {}, noDeletions = false } = {}) {
 
 test('registration validates, keeps deleted logins taken and survives a failed sign-in record', async () => {
   const { calls, service } = harness();
-  const base = { login: 'bob', displayName: 'Bob', password: 'long-password', passwordConfirm: 'long-password', device };
+  const base = {
+    login: 'bob',
+    displayName: 'Bob',
+    password: 'long-password',
+    passwordConfirm: 'long-password',
+    device
+  };
   assert.equal((await service.register({ ...base, login: '' })).status, 'invalid_login');
-  assert.equal((await service.register({ ...base, password: 'short', passwordConfirm: 'short' })).status, 'invalid_password');
+  assert.equal(
+    (await service.register({ ...base, password: 'short', passwordConfirm: 'short' })).status,
+    'invalid_password'
+  );
   assert.equal((await service.register({ ...base, passwordConfirm: 'other-password' })).status, 'password_mismatch');
   assert.equal((await service.register({ ...base, login: 'reserved' })).status, 'login_taken');
   assert.equal((await service.register({ ...base, login: 'taken' })).status, 'login_taken');
@@ -110,8 +206,14 @@ test('sign-in checks credentials, throttles per login and offers a restore to pe
   const { calls, service } = harness();
   assert.equal((await service.login({ login: '', password: 'x', device })).status, 'invalid_credentials');
   assert.equal((await service.login({ login: 'alice', password: '', device })).status, 'invalid_credentials');
-  assert.deepEqual(await service.login({ login: 'locked', password: 'x', device }), { status: 'throttled', retryAfterSeconds: 30 });
-  assert.deepEqual(await service.login({ login: 'locked-nowait', password: 'x', device }), { status: 'throttled', retryAfterSeconds: 0 });
+  assert.deepEqual(await service.login({ login: 'locked', password: 'x', device }), {
+    status: 'throttled',
+    retryAfterSeconds: 30
+  });
+  assert.deepEqual(await service.login({ login: 'locked-nowait', password: 'x', device }), {
+    status: 'throttled',
+    retryAfterSeconds: 0
+  });
   assert.equal((await service.login({ login: 'alice', password: 'wrong', device })).status, 'invalid_credentials');
   assert.deepEqual(calls.reset, []);
   const pending = await service.login({ login: 'leaving', password: 'right-password', device });
@@ -144,7 +246,10 @@ test('profile, password, notices and recovery codes', async () => {
   assert.equal((await service.changePassword('user-1', 'right-password', 'long-password')).status, 'changed');
   assert.deepEqual(calls.ended.at(-1), { userId: 'user-1' });
 
-  assert.deepEqual(await service.security('user-1'), { recoveryCodes: { remaining: 3 }, recoveryCodesReminder: { snoozedUntil: 5 } });
+  assert.deepEqual(await service.security('user-1'), {
+    recoveryCodes: { remaining: 3 },
+    recoveryCodesReminder: { snoozedUntil: 5 }
+  });
   assert.deepEqual(await service.snoozeRecoveryCodesReminder('user-1'), { status: 'snoozed', snoozedUntil: 9 });
   assert.equal((await service.snoozeRecoveryCodesReminder('gone')).status, 'not_found');
   assert.equal((await service.whatsNew('user-1')).lastSeen, '2.6.0');
@@ -158,7 +263,11 @@ test('profile, password, notices and recovery codes', async () => {
   const generated = await service.generateRecoveryCodes('user-1', 'right-password');
   assert.equal(generated.recoveryCodes.remaining, 1);
   assert.equal(generated.codes.length, 1);
-  const empty = await harness({ async generateRecoveryCodes() { return { status: 'generated' }; } }).service.generateRecoveryCodes('user-1', 'p');
+  const empty = await harness({
+    async generateRecoveryCodes() {
+      return { status: 'generated' };
+    }
+  }).service.generateRecoveryCodes('user-1', 'p');
   assert.deepEqual(empty.codes, []);
 });
 
@@ -173,22 +282,40 @@ test('sessions and sign-in alerts', async () => {
   assert.equal(await service.revokeOtherSessions('user-1', 'keep'), 2);
 
   assert.equal((await service.resolveLoginAlert('user-1', 'pub-1', 'missing', 'confirmed')).status, 'not_found');
-  assert.deepEqual(await service.resolveLoginAlert('user-1', 'pub-1', 'A1', 'confirmed'), { status: 'resolved', resolution: 'confirmed' });
-  assert.deepEqual(await service.resolveLoginAlert('user-1', 'pub-1', 'A1', 'denied'), { status: 'resolved', resolution: 'denied', sessionEnded: true, recoveryCodes: { remaining: 3 } });
+  assert.deepEqual(await service.resolveLoginAlert('user-1', 'pub-1', 'A1', 'confirmed'), {
+    status: 'resolved',
+    resolution: 'confirmed'
+  });
+  assert.deepEqual(await service.resolveLoginAlert('user-1', 'pub-1', 'A1', 'denied'), {
+    status: 'resolved',
+    resolution: 'denied',
+    sessionEnded: true,
+    recoveryCodes: { remaining: 3 }
+  });
   assert.deepEqual(calls.ended.at(-1), { userId: 'user-1', tokenHashes: ['hash-x'] });
   assert.deepEqual(calls.notified, ['account.login.resolved', 'account.login.resolved']);
 });
 
 test('recovery replaces the password, ends other sessions and asks the other devices', async () => {
   const { calls, service } = harness();
-  assert.equal((await service.recover({ login: 'alice', code: 'good', newPassword: 'short', device })).status, 'invalid_new_password');
-  assert.equal((await service.recover({ login: 'alice', code: 'bad', newPassword: 'long-password', device })).status, 'invalid_code');
+  assert.equal(
+    (await service.recover({ login: 'alice', code: 'good', newPassword: 'short', device })).status,
+    'invalid_new_password'
+  );
+  assert.equal(
+    (await service.recover({ login: 'alice', code: 'bad', newPassword: 'long-password', device })).status,
+    'invalid_code'
+  );
   const recovered = await service.recover({ login: 'alice', code: 'good', newPassword: 'long-password', device });
   assert.equal(recovered.status, 'signed_in');
   assert.equal(recovered.remaining, 4);
   assert.deepEqual(calls.ended, [{ userId: 'user-1' }]);
   assert.deepEqual(calls.pushes, ['Вход по коду восстановления']);
-  const noRemaining = await harness({ async recoverWithCode() { return { status: 'recovered', user: { id: 'u' } }; } }).service.recover({ login: 'a', code: 'c', newPassword: 'long-password', device });
+  const noRemaining = await harness({
+    async recoverWithCode() {
+      return { status: 'recovered', user: { id: 'u' } };
+    }
+  }).service.recover({ login: 'a', code: 'c', newPassword: 'long-password', device });
   assert.equal(noRemaining.remaining, 0);
 });
 
@@ -203,11 +330,21 @@ test('account deletion: preview, request, restore', async () => {
   assert.deepEqual(await service.deletionPreview('user-1'), { status: 'preview', preview: { ownedRooms: 1 } });
   assert.equal((await service.requestDeletion('user-1', 'wrong')).status, 'invalid_password');
   assert.equal((await service.requestDeletion('user-1', 'missing')).status, 'not_found');
-  assert.deepEqual(await service.requestDeletion('user-1', 'again'), { status: 'already_requested', deletionScheduledFor: 88 });
-  assert.deepEqual(await service.requestDeletion('user-1', 'right-password'), { status: 'scheduled', deletionScheduledFor: 99 });
+  assert.deepEqual(await service.requestDeletion('user-1', 'again'), {
+    status: 'already_requested',
+    deletionScheduledFor: 88
+  });
+  assert.deepEqual(await service.requestDeletion('user-1', 'right-password'), {
+    status: 'scheduled',
+    deletionScheduledFor: 99
+  });
   assert.deepEqual(calls.ended, [{ userId: 'user-1' }]);
   assert.deepEqual(calls.broadcast, ['user-1']);
-  const vanished = harness({ async getUserById() { return null; } });
+  const vanished = harness({
+    async getUserById() {
+      return null;
+    }
+  });
   await vanished.service.requestDeletion('user-1', 'right-password');
   assert.deepEqual(vanished.calls.broadcast, []);
 
@@ -224,7 +361,12 @@ function routeApp(t, outcomes = {}, { session = null, limited = [], deletionAvai
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
   const seen = {};
   const opened = { status: 'signed_in', token: 'tok', user: { id: 'user-1' } };
-  const record = (name, value) => async (...args) => { seen[name] = args; return outcomes[name] ?? value; };
+  const record =
+    (name, value) =>
+    async (...args) => {
+      seen[name] = args;
+      return outcomes[name] ?? value;
+    };
   const account = {
     register: record('register', opened),
     login: record('login', opened),
@@ -234,7 +376,11 @@ function routeApp(t, outcomes = {}, { session = null, limited = [], deletionAvai
     updateProfile: record('updateProfile', { status: 'updated', user: { id: 'user-1' } }),
     changePassword: record('changePassword', { status: 'changed' }),
     security: record('security', { recoveryCodes: {}, recoveryCodesReminder: { snoozedUntil: null } }),
-    generateRecoveryCodes: record('generateRecoveryCodes', { status: 'generated', codes: ['c'], recoveryCodes: { remaining: 1, generatedAt: 1 } }),
+    generateRecoveryCodes: record('generateRecoveryCodes', {
+      status: 'generated',
+      codes: ['c'],
+      recoveryCodes: { remaining: 1, generatedAt: 1 }
+    }),
     snoozeRecoveryCodesReminder: record('snoozeRecoveryCodesReminder', { status: 'snoozed', snoozedUntil: 3 }),
     listSessions: record('listSessions', []),
     revokeOtherSessions: record('revokeOtherSessions', 2),
@@ -248,19 +394,28 @@ function routeApp(t, outcomes = {}, { session = null, limited = [], deletionAvai
     requestDeletion: record('requestDeletion', { status: 'scheduled', deletionScheduledFor: 5 }),
     deletionAvailable: () => deletionAvailable
   };
-  registerAccountRoutes(app, {
-    logger: null,
-    clientIp: () => '203.0.113.1',
-    resolveSession: async () => session,
-    hashIp: (ip) => ip
-  }, {
-    account,
-    limiter: { check: (key) => (limited.some((prefix) => key.startsWith(prefix)) ? { allowed: false, retryAfterSeconds: 11 } : { allowed: true }) },
-    sessionCookie: (token) => `vr_session=${token}`,
-    clearedSessionCookie: () => 'vr_session=',
-    sessionToken: () => 'raw-token',
-    device: async () => DEVICE
-  });
+  registerAccountRoutes(
+    app,
+    {
+      logger: null,
+      clientIp: () => '203.0.113.1',
+      resolveSession: async () => session,
+      hashIp: (ip) => ip
+    },
+    {
+      account,
+      limiter: {
+        check: (key) =>
+          limited.some((prefix) => key.startsWith(prefix))
+            ? { allowed: false, retryAfterSeconds: 11 }
+            : { allowed: true }
+      },
+      sessionCookie: (token) => `vr_session=${token}`,
+      clearedSessionCookie: () => 'vr_session=',
+      sessionToken: () => 'raw-token',
+      device: async () => DEVICE
+    }
+  );
   t.after(() => app.close());
   return { app, seen };
 }
@@ -269,12 +424,21 @@ const SIGNED_IN = { user: { id: 'user-1' }, session: { publicId: 'pub-1', tokenH
 
 async function call(app, method, url, payload) {
   const response = await app.inject({ method, url, ...(payload === undefined ? {} : { payload }) });
-  return { status: response.statusCode, body: response.json(), cookie: response.headers['set-cookie'], retryAfter: response.headers['retry-after'] };
+  return {
+    status: response.statusCode,
+    body: response.json(),
+    cookie: response.headers['set-cookie'],
+    retryAfter: response.headers['retry-after']
+  };
 }
 
 test('entry routes set the cookie and map every refusal', async (t) => {
   const { app, seen } = routeApp(t);
-  const registered = await call(app, 'POST', '/api/auth/register', { login: ' Alice ', displayName: ' A ', password: 'pw' });
+  const registered = await call(app, 'POST', '/api/auth/register', {
+    login: ' Alice ',
+    displayName: ' A ',
+    password: 'pw'
+  });
   assert.deepEqual([registered.status, registered.cookie, registered.body.user.id], [201, 'vr_session=tok', 'user-1']);
   assert.equal(seen.register[0].login, 'alice');
   assert.equal(seen.register[0].passwordConfirm, 'pw');
@@ -286,7 +450,10 @@ test('entry routes set the cookie and map every refusal', async (t) => {
   assert.deepEqual(seen.logout, ['raw-token']);
   const recovered = await call(app, 'POST', '/api/auth/recover', { login: 'alice', code: 'c', newPassword: 'n' });
   assert.deepEqual(recovered.body.recoveryCodes, { remaining: 2 });
-  assert.equal((await call(app, 'POST', '/api/auth/account/restore', { login: 'a', password: 'p' })).cookie, 'vr_session=tok');
+  assert.equal(
+    (await call(app, 'POST', '/api/auth/account/restore', { login: 'a', password: 'p' })).cookie,
+    'vr_session=tok'
+  );
 
   const cases = [
     ['register', { status: 'invalid_login' }, '/api/auth/register', 400, 'Логин: 3–32 символа, латиница, цифры, . _ -'],
@@ -294,8 +461,20 @@ test('entry routes set the cookie and map every refusal', async (t) => {
     ['register', { status: 'password_mismatch' }, '/api/auth/register', 400, 'Пароли не совпадают'],
     ['register', { status: 'login_taken' }, '/api/auth/register', 409, 'Этот логин уже занят'],
     ['login', { status: 'invalid_credentials' }, '/api/auth/login', 401, 'Неверный логин или пароль'],
-    ['login', { status: 'throttled', retryAfterSeconds: 4 }, '/api/auth/login', 429, 'Слишком много попыток, попробуйте позже'],
-    ['recover', { status: 'invalid_new_password' }, '/api/auth/recover', 400, 'Пароль должен быть не короче 8 символов'],
+    [
+      'login',
+      { status: 'throttled', retryAfterSeconds: 4 },
+      '/api/auth/login',
+      429,
+      'Слишком много попыток, попробуйте позже'
+    ],
+    [
+      'recover',
+      { status: 'invalid_new_password' },
+      '/api/auth/recover',
+      400,
+      'Пароль должен быть не короче 8 символов'
+    ],
     ['recover', { status: 'invalid_code' }, '/api/auth/recover', 401, 'Неверный логин или код восстановления'],
     ['restore', { status: 'expired' }, '/api/auth/account/restore', 410, 'Аккаунт уже удалён'],
     ['restore', { status: 'invalid_credentials' }, '/api/auth/account/restore', 401, 'Неверный логин или пароль']
@@ -304,12 +483,27 @@ test('entry routes set the cookie and map every refusal', async (t) => {
     const response = await call(routeApp(t, { [name]: outcome }).app, 'POST', url, {});
     assert.deepEqual([response.status, response.body.error], [status, error], `${name} ${outcome.status}`);
   }
-  const pending = await call(routeApp(t, { login: { status: 'deletion_pending', deletionScheduledFor: 77 } }).app, 'POST', '/api/auth/login', {});
-  assert.deepEqual(pending.body, { ok: false, error: 'Аккаунт ожидает удаления', code: 'account_deletion_pending', deletionScheduledFor: 77 });
+  const pending = await call(
+    routeApp(t, { login: { status: 'deletion_pending', deletionScheduledFor: 77 } }).app,
+    'POST',
+    '/api/auth/login',
+    {}
+  );
+  assert.deepEqual(pending.body, {
+    ok: false,
+    error: 'Аккаунт ожидает удаления',
+    code: 'account_deletion_pending',
+    deletionScheduledFor: 77
+  });
 });
 
 test('entry routes are rate limited per address and per login', async (t) => {
-  for (const [prefix, url] of [['register:', '/api/auth/register'], ['login:', '/api/auth/login'], ['recover:', '/api/auth/recover'], ['restore:', '/api/auth/account/restore']]) {
+  for (const [prefix, url] of [
+    ['register:', '/api/auth/register'],
+    ['login:', '/api/auth/login'],
+    ['recover:', '/api/auth/recover'],
+    ['restore:', '/api/auth/account/restore']
+  ]) {
     const response = await call(routeApp(t, {}, { limited: [prefix] }).app, 'POST', url, { login: 'alice' });
     assert.deepEqual([response.status, response.retryAfter], [429, '11'], url);
   }
@@ -322,7 +516,11 @@ test('entry routes are rate limited per address and per login', async (t) => {
 
 test('me answers null without a session', async (t) => {
   assert.deepEqual((await call(routeApp(t).app, 'GET', '/api/auth/me')).body, { ok: true, user: null });
-  const me = await call(routeApp(t, {}, { session: { ...SIGNED_IN, user: { id: 'user-1', login: 'alice' } } }).app, 'GET', '/api/auth/me');
+  const me = await call(
+    routeApp(t, {}, { session: { ...SIGNED_IN, user: { id: 'user-1', login: 'alice' } } }).app,
+    'GET',
+    '/api/auth/me'
+  );
   assert.equal(me.body.user.id, 'user-1');
 });
 
@@ -364,37 +562,114 @@ test('every account route needs a session and answers it', async (t) => {
   const deletion = await call(signedIn.app, 'POST', '/api/auth/account/deletion', { currentPassword: 'p' });
   assert.deepEqual([deletion.body, deletion.cookie], [{ ok: true, deletionScheduledFor: 5 }, 'vr_session=']);
   assert.deepEqual((await call(signedIn.app, 'GET', '/api/auth/account/deletion')).body, { ok: true, ownedRooms: 0 });
-  assert.deepEqual((await call(signedIn.app, 'POST', '/api/auth/login-alerts/a1/confirm')).body, { ok: true, resolution: 'confirmed' });
+  assert.deepEqual((await call(signedIn.app, 'POST', '/api/auth/login-alerts/a1/confirm')).body, {
+    ok: true,
+    resolution: 'confirmed'
+  });
 });
 
 test('account refusals keep their texts', async (t) => {
   const cases = [
     ['updateProfile', { status: 'not_found' }, 'POST', '/api/auth/profile', 404, 'Аккаунт не найден'],
-    ['changePassword', { status: 'invalid_new_password' }, 'POST', '/api/auth/password', 400, 'Пароль должен быть не короче 8 символов'],
+    [
+      'changePassword',
+      { status: 'invalid_new_password' },
+      'POST',
+      '/api/auth/password',
+      400,
+      'Пароль должен быть не короче 8 символов'
+    ],
     ['changePassword', { status: 'not_found' }, 'POST', '/api/auth/password', 404, 'Аккаунт не найден'],
     ['changePassword', { status: 'invalid_password' }, 'POST', '/api/auth/password', 400, 'Неверный текущий пароль'],
     ['generateRecoveryCodes', { status: 'not_found' }, 'POST', '/api/auth/recovery-codes', 404, 'Аккаунт не найден'],
-    ['generateRecoveryCodes', { status: 'invalid_password' }, 'POST', '/api/auth/recovery-codes', 400, 'Неверный пароль'],
-    ['snoozeRecoveryCodesReminder', { status: 'not_found' }, 'POST', '/api/auth/recovery-codes/reminder/snooze', 404, 'Аккаунт не найден'],
-    ['revokeSession', { status: 'current_session' }, 'DELETE', '/api/auth/sessions/pub-1', 400, 'Чтобы завершить этот сеанс, выйдите из аккаунта'],
+    [
+      'generateRecoveryCodes',
+      { status: 'invalid_password' },
+      'POST',
+      '/api/auth/recovery-codes',
+      400,
+      'Неверный пароль'
+    ],
+    [
+      'snoozeRecoveryCodesReminder',
+      { status: 'not_found' },
+      'POST',
+      '/api/auth/recovery-codes/reminder/snooze',
+      404,
+      'Аккаунт не найден'
+    ],
+    [
+      'revokeSession',
+      { status: 'current_session' },
+      'DELETE',
+      '/api/auth/sessions/pub-1',
+      400,
+      'Чтобы завершить этот сеанс, выйдите из аккаунта'
+    ],
     ['revokeSession', { status: 'not_found' }, 'DELETE', '/api/auth/sessions/x', 404, 'Сеанс не найден'],
     ['markWhatsNewSeen', { status: 'not_found' }, 'POST', '/api/auth/whats-new/seen', 404, 'Аккаунт не найден'],
     ['markAppPromptSeen', { status: 'not_found' }, 'POST', '/api/auth/app-prompt/seen', 404, 'Аккаунт не найден'],
-    ['resolveLoginAlert', { status: 'not_found' }, 'POST', '/api/auth/login-alerts/x/deny', 404, 'Вход не найден или на него уже ответили'],
-    ['deletionPreview', { status: 'unavailable' }, 'GET', '/api/auth/account/deletion', 503, 'Удаление аккаунта сейчас недоступно'],
-    ['requestDeletion', { status: 'unavailable' }, 'POST', '/api/auth/account/deletion', 503, 'Удаление аккаунта сейчас недоступно'],
+    [
+      'resolveLoginAlert',
+      { status: 'not_found' },
+      'POST',
+      '/api/auth/login-alerts/x/deny',
+      404,
+      'Вход не найден или на него уже ответили'
+    ],
+    [
+      'deletionPreview',
+      { status: 'unavailable' },
+      'GET',
+      '/api/auth/account/deletion',
+      503,
+      'Удаление аккаунта сейчас недоступно'
+    ],
+    [
+      'requestDeletion',
+      { status: 'unavailable' },
+      'POST',
+      '/api/auth/account/deletion',
+      503,
+      'Удаление аккаунта сейчас недоступно'
+    ],
     ['requestDeletion', { status: 'invalid_password' }, 'POST', '/api/auth/account/deletion', 400, 'Неверный пароль'],
     ['requestDeletion', { status: 'not_found' }, 'POST', '/api/auth/account/deletion', 404, 'Аккаунт не найден']
   ];
   for (const [name, outcome, method, url, status, error] of cases) {
-    const response = await call(routeApp(t, { [name]: outcome }, { session: SIGNED_IN }).app, method, url, method === 'POST' ? {} : undefined);
+    const response = await call(
+      routeApp(t, { [name]: outcome }, { session: SIGNED_IN }).app,
+      method,
+      url,
+      method === 'POST' ? {} : undefined
+    );
     assert.deepEqual([response.status, response.body.error], [status, error], `${name} ${outcome.status}`);
   }
-  const again = await call(routeApp(t, { requestDeletion: { status: 'already_requested', deletionScheduledFor: 8 } }, { session: SIGNED_IN }).app, 'POST', '/api/auth/account/deletion', {});
-  assert.deepEqual(again.body, { ok: false, error: 'Аккаунт уже ожидает удаления', code: 'account_deletion_pending', deletionScheduledFor: 8 });
-  const off = await call(routeApp(t, {}, { session: SIGNED_IN, deletionAvailable: false }).app, 'POST', '/api/auth/account/deletion', {});
+  const again = await call(
+    routeApp(t, { requestDeletion: { status: 'already_requested', deletionScheduledFor: 8 } }, { session: SIGNED_IN })
+      .app,
+    'POST',
+    '/api/auth/account/deletion',
+    {}
+  );
+  assert.deepEqual(again.body, {
+    ok: false,
+    error: 'Аккаунт уже ожидает удаления',
+    code: 'account_deletion_pending',
+    deletionScheduledFor: 8
+  });
+  const off = await call(
+    routeApp(t, {}, { session: SIGNED_IN, deletionAvailable: false }).app,
+    'POST',
+    '/api/auth/account/deletion',
+    {}
+  );
   assert.equal(off.status, 503);
-  for (const [prefix, url] of [['password:', '/api/auth/password'], ['recovery-codes:', '/api/auth/recovery-codes'], ['account-deletion:', '/api/auth/account/deletion']]) {
+  for (const [prefix, url] of [
+    ['password:', '/api/auth/password'],
+    ['recovery-codes:', '/api/auth/recovery-codes'],
+    ['account-deletion:', '/api/auth/account/deletion']
+  ]) {
     const response = await call(routeApp(t, {}, { session: SIGNED_IN, limited: [prefix] }).app, 'POST', url, {});
     assert.equal(response.status, 429, url);
   }

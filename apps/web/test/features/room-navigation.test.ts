@@ -8,8 +8,10 @@ import { freshImport } from '../helpers/fresh-module.ts';
 import type * as NavigationModule from '../../src/lib/features/home/model/room-navigation.svelte.ts';
 
 async function load() {
-  const navigation = await freshImport<typeof NavigationModule>('/src/lib/features/home/model/room-navigation.svelte.ts');
-  const voice = (await import('../../src/lib/features/room/voice-session.svelte.ts'));
+  const navigation = await freshImport<typeof NavigationModule>(
+    '/src/lib/features/home/model/room-navigation.svelte.ts'
+  );
+  const voice = await import('../../src/lib/features/room/voice-session.svelte.ts');
   voice.clearConnectedVoiceRoom();
   return { ...navigation, ...voice };
 }
@@ -62,7 +64,11 @@ test('opening the active call from anywhere views and mounts the call room witho
   nav.setConnectedVoiceRoom('call-room');
   nav.selectRoomPreview('other-room');
   expect(nav.openActiveVoiceRoom()).toBe('call-room');
-  expect(nav.roomNavigation).toEqual({ viewedRoomId: 'call-room', embeddedRoomId: 'call-room', joinIntentRoomId: null });
+  expect(nav.roomNavigation).toEqual({
+    viewedRoomId: 'call-room',
+    embeddedRoomId: 'call-room',
+    joinIntentRoomId: null
+  });
 });
 
 test('leaving a call closes its room client only when that room is the one on screen', async () => {

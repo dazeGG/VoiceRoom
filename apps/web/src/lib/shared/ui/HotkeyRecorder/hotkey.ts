@@ -24,12 +24,12 @@ export function hotkeyBindingFromEvent(event: KeyboardEvent): HotkeyBinding | nu
 
 export function hotkeyMatchesEvent(binding: HotkeyBinding | null, event: KeyboardEvent): boolean {
   return Boolean(
-    binding
-    && binding.code === event.code
-    && binding.altKey === event.altKey
-    && binding.ctrlKey === event.ctrlKey
-    && binding.metaKey === event.metaKey
-    && binding.shiftKey === event.shiftKey
+    binding &&
+    binding.code === event.code &&
+    binding.altKey === event.altKey &&
+    binding.ctrlKey === event.ctrlKey &&
+    binding.metaKey === event.metaKey &&
+    binding.shiftKey === event.shiftKey
   );
 }
 

@@ -6,7 +6,9 @@ const RELEASE_DOWNLOAD_PREFIX = `${new URL(RELEASES_URL).pathname.replace(/\/rel
 export function isDesktopReleaseAssetUrl(value: string): boolean {
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && url.hostname === 'github.com' && url.pathname.startsWith(RELEASE_DOWNLOAD_PREFIX);
+    return (
+      url.protocol === 'https:' && url.hostname === 'github.com' && url.pathname.startsWith(RELEASE_DOWNLOAD_PREFIX)
+    );
   } catch {
     return false;
   }

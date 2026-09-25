@@ -48,7 +48,10 @@ async function updateInboundAudioStats(): Promise<void> {
       const stats = await track?.getRTCStatsReport?.().catch(() => undefined);
       stats?.forEach((report: any) => {
         if (report.type !== 'inbound-rtp' || report.kind !== 'audio') return;
-        const totals = { lost: Math.max(0, Number(report.packetsLost) || 0), received: Number(report.packetsReceived) || 0 };
+        const totals = {
+          lost: Math.max(0, Number(report.packetsLost) || 0),
+          received: Number(report.packetsReceived) || 0
+        };
         const before = previousInbound.get(report.id) || { lost: 0, received: 0 };
         current.set(report.id, totals);
         lost += Math.max(0, totals.lost - before.lost);
@@ -92,19 +95,19 @@ function getRoundTripTimeFromStats(stats: RTCStatsReport | undefined): number | 
   let remoteInboundRttMs: number | null = null;
   stats.forEach((report) => {
     if (
-      report.type === 'candidate-pair'
-      && report.state === 'succeeded'
-      && (report.nominated || report.selected)
-      && typeof report.currentRoundTripTime === 'number'
+      report.type === 'candidate-pair' &&
+      report.state === 'succeeded' &&
+      (report.nominated || report.selected) &&
+      typeof report.currentRoundTripTime === 'number'
     ) {
       candidatePairRttMs = report.currentRoundTripTime * 1000;
       return;
     }
 
     if (
-      remoteInboundRttMs === null
-      && report.type === 'remote-inbound-rtp'
-      && typeof report.roundTripTime === 'number'
+      remoteInboundRttMs === null &&
+      report.type === 'remote-inbound-rtp' &&
+      typeof report.roundTripTime === 'number'
     ) {
       remoteInboundRttMs = report.roundTripTime * 1000;
     }
@@ -131,11 +134,7 @@ export function getOutboundNetworkFromStats(stats: RTCStatsReport | undefined): 
     if (report.type === 'remote-inbound-rtp' && typeof report.fractionLost === 'number' && lossPct === null) {
       lossPct = roundPct(Math.max(0, report.fractionLost) * 100);
     }
-    if (
-      report.type === 'candidate-pair'
-      && report.state === 'succeeded'
-      && (report.nominated || report.selected)
-    ) {
+    if (report.type === 'candidate-pair' && report.state === 'succeeded' && (report.nominated || report.selected)) {
       const local = reports.get(report.localCandidateId);
       if (local?.candidateType === 'relay') transport = 'relay';
       else if (local) transport = String(local.protocol).toLowerCase() === 'tcp' ? 'tcp' : 'udp';

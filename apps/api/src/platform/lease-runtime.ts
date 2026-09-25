@@ -19,7 +19,10 @@ export type FenceGuard = Readonly<{
 
 type LeaseRequest = { identity: string; leaseMs: number; ownerId: string; signal: AbortSignal };
 type LeaseReference = { fencingToken: number; identity: string; ownerId: string };
-type AcquireResult = { acquired?: boolean; fencingToken?: unknown; fencing_token?: unknown; expiresAt?: unknown; expires_at?: unknown } | null | undefined;
+type AcquireResult =
+  | { acquired?: boolean; fencingToken?: unknown; fencing_token?: unknown; expiresAt?: unknown; expires_at?: unknown }
+  | null
+  | undefined;
 type Heartbeat = { identity: string; ownerId: string; fencingToken: number; ready: boolean };
 type Sleep = (ms: number, signal?: AbortSignal) => Promise<void>;
 type RuntimeLogger = { warn(...args: unknown[]): void; error(...args: unknown[]): void };
@@ -59,17 +62,20 @@ function delay(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-function boundedBackoff(attempt: unknown, {
-  baseMs = DEFAULT_IDLE_MS,
-  maxMs = DEFAULT_MAX_BACKOFF_MS,
-  jitter = 0
-}: { baseMs?: number; maxMs?: number; jitter?: unknown } = {}): number {
+function boundedBackoff(
+  attempt: unknown,
+  {
+    baseMs = DEFAULT_IDLE_MS,
+    maxMs = DEFAULT_MAX_BACKOFF_MS,
+    jitter = 0
+  }: { baseMs?: number; maxMs?: number; jitter?: unknown } = {}
+): number {
   const exponent = Math.max(0, Math.min(20, Number(attempt) || 0));
-  const bounded = Math.min(Math.max(1, maxMs), Math.max(1, baseMs) * (2 ** exponent));
+  const bounded = Math.min(Math.max(1, maxMs), Math.max(1, baseMs) * 2 ** exponent);
   const normalizedJitter = Math.max(0, Math.min(1, Number(jitter) || 0));
   if (!normalizedJitter) return bounded;
   const spread = bounded * normalizedJitter;
-  return Math.max(1, Math.round(bounded - spread + (Math.random() * spread * 2)));
+  return Math.max(1, Math.round(bounded - spread + Math.random() * spread * 2));
 }
 
 function createFenceGuard({ lease, signal }: { lease: Lease; signal: AbortSignal }): FenceGuard {
@@ -130,7 +136,9 @@ function createLeaseRuntime({
   onHeartbeat?: (heartbeat: Heartbeat) => void;
   ownerId?: string;
   release?: (lease: LeaseReference) => Promise<unknown>;
-  renew?: (request: LeaseReference & { leaseMs: number; signal: AbortSignal }) => Promise<{ renewed?: boolean } | null | undefined> | { renewed?: boolean } | null | undefined;
+  renew?: (
+    request: LeaseReference & { leaseMs: number; signal: AbortSignal }
+  ) => Promise<{ renewed?: boolean } | null | undefined> | { renewed?: boolean } | null | undefined;
   renewMs?: number;
   run?: (guard: FenceGuard) => Promise<unknown> | unknown;
   sleep?: Sleep;
@@ -192,7 +200,12 @@ function createLeaseRuntime({
         fencingToken: lease.fencingToken,
         identity: leaseIdentity,
         ownerId
-      }).catch((error: unknown) => logger.warn({ evt: LOG_EVENTS.WORKER_HEARTBEAT_FAILED, identity: leaseIdentity, stage: 'release', err: error }, 'unable to release a fenced lease'));
+      }).catch((error: unknown) =>
+        logger.warn(
+          { evt: LOG_EVENTS.WORKER_HEARTBEAT_FAILED, identity: leaseIdentity, stage: 'release', err: error },
+          'unable to release a fenced lease'
+        )
+      );
     }
   }
 
@@ -200,14 +213,21 @@ function createLeaseRuntime({
     let failures = 0;
     while (!runtimeController.signal.aborted) {
       try {
-        const lease = normalizeLease(await acquireLease({
-          identity: leaseIdentity,
-          leaseMs,
-          ownerId,
-          signal: runtimeController.signal
-        }), leaseIdentity, ownerId);
+        const lease = normalizeLease(
+          await acquireLease({
+            identity: leaseIdentity,
+            leaseMs,
+            ownerId,
+            signal: runtimeController.signal
+          }),
+          leaseIdentity,
+          ownerId
+        );
         if (!lease) {
-          await sleep(boundedBackoff(failures, { baseMs: idleMs, maxMs: maxBackoffMs, jitter }), runtimeController.signal);
+          await sleep(
+            boundedBackoff(failures, { baseMs: idleMs, maxMs: maxBackoffMs, jitter }),
+            runtimeController.signal
+          );
           failures = Math.min(failures + 1, 20);
           continue;
         }
@@ -215,10 +235,16 @@ function createLeaseRuntime({
         await holdLease(lease);
       } catch (error) {
         if (runtimeController.signal.aborted) break;
-        if (!(error instanceof LeaseLostError)) logger.error({ evt: LOG_EVENTS.WORKER_FAILED, identity: leaseIdentity, stage: 'iteration', err: error }, 'fenced lease iteration failed');
+        if (!(error instanceof LeaseLostError))
+          logger.error(
+            { evt: LOG_EVENTS.WORKER_FAILED, identity: leaseIdentity, stage: 'iteration', err: error },
+            'fenced lease iteration failed'
+          );
         failures = Math.min(failures + 1, 20);
-        await sleep(boundedBackoff(failures, { baseMs: idleMs, maxMs: maxBackoffMs, jitter }), runtimeController.signal)
-          .catch(() => {});
+        await sleep(
+          boundedBackoff(failures, { baseMs: idleMs, maxMs: maxBackoffMs, jitter }),
+          runtimeController.signal
+        ).catch(() => {});
       }
     }
   }
@@ -230,7 +256,10 @@ function createLeaseRuntime({
       return active?.lease || null;
     },
     start(): Promise<void> {
-      if (!loopPromise) loopPromise = loop().finally(() => { loopPromise = null; });
+      if (!loopPromise)
+        loopPromise = loop().finally(() => {
+          loopPromise = null;
+        });
       return loopPromise;
     },
     async stop(): Promise<void> {

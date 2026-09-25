@@ -3,7 +3,12 @@ import { session, setUser } from '$lib/features/auth/session.svelte';
 import { roomNameFor } from '$lib/features/auth/account';
 import { roomSettingsUi } from '../../room-settings.svelte';
 import { startUi } from '../../start-ui.svelte';
-import { clearConnectedVoiceRoom, setConnectedVoiceRoom, setVoiceControlsState, setVoiceSessionTiming } from '../../voice-session.svelte';
+import {
+  clearConnectedVoiceRoom,
+  setConnectedVoiceRoom,
+  setVoiceControlsState,
+  setVoiceSessionTiming
+} from '../../voice-session.svelte';
 import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
 import { ApiRequestError, checkRoomExists, postJson } from '../net/api';
@@ -14,12 +19,14 @@ import { extractRoomId, rotateStoredPeerSession } from '../core/session';
 import { isRoomEmbedded } from '../core/embed';
 import { openLeaveScreen } from '../../leave-screen.svelte';
 import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
-import { getDisplayName, persistName, requestGuestNameForRoom, requireSavedName, updateNameStatuses } from '../ui/names';
 import {
-  resetConnectionStatus,
-  setServerConnectionStatus,
-  setVoiceConnectionStatus
-} from '../ui/status';
+  getDisplayName,
+  persistName,
+  requestGuestNameForRoom,
+  requireSavedName,
+  updateNameStatuses
+} from '../ui/names';
+import { resetConnectionStatus, setServerConnectionStatus, setVoiceConnectionStatus } from '../ui/status';
 import { refreshCallControls, resetPushToTalkState } from '../ui/controls';
 import { refreshScreenControls, stopLocalScreenStream } from '../services/screen-share-service';
 import { closeScreenView, refreshScreenStage } from '../ui/screen-view';
@@ -39,10 +46,21 @@ import {
   syncLiveKitParticipantById,
   syncLiveKitParticipants
 } from '../services/livekit-service';
-import { getLocalMicrophoneCapture, openLocalMicrophone, setLocalMicrophoneCapture, stopMicrophoneCapture } from '../services/microphone-service';
+import {
+  getLocalMicrophoneCapture,
+  openLocalMicrophone,
+  setLocalMicrophoneCapture,
+  stopMicrophoneCapture
+} from '../services/microphone-service';
 import { attachMeter, startMeters, stopMeters } from '../media/meters';
 import { startPeerLatencyStats, startSpeakingStats, stopPeerLatencyStats, stopSpeakingStats } from './stats';
-import { clearAllPeerJoinCues, clearPeerJoinCue, clearStreamViewerCues, playPeerCue, playPeerJoinCue } from '../media/cues';
+import {
+  clearAllPeerJoinCues,
+  clearPeerJoinCue,
+  clearStreamViewerCues,
+  playPeerCue,
+  playPeerJoinCue
+} from '../media/cues';
 import { cancelScreenSourcePicker } from '../ui/screen-source-picker';
 import { syncDesktopGlobalHotkeys } from '../services/desktop-hotkey-service';
 import { closeParticipantContextMenu } from '../../participant-context-ui.svelte';
@@ -165,7 +183,11 @@ function showRoomModerationScreen(reason: 'banned' | 'kicked'): void {
 
 function getMissingRoomLabel(): string {
   try {
-    return decodeURIComponent(window.location.pathname).replace(/^\/r\/?/, '').replace(/\/$/, '') || 'room';
+    return (
+      decodeURIComponent(window.location.pathname)
+        .replace(/^\/r\/?/, '')
+        .replace(/\/$/, '') || 'room'
+    );
   } catch {
     return 'room';
   }
@@ -470,7 +492,11 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
       return;
     }
     showToast(event.payload.message || 'Ошибка realtime-соединения');
-    if (event.payload.code === 'invalid_session' || event.payload.code === 'join_failed' || event.payload.code === 'room_full') {
+    if (
+      event.payload.code === 'invalid_session' ||
+      event.payload.code === 'join_failed' ||
+      event.payload.code === 'room_full'
+    ) {
       leaveRoom();
       setVoiceConnectionStatus('error');
     }
@@ -481,7 +507,6 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
     showRoomNotFound();
     return;
   }
-
 
   if (event.type === 'room.kicked' || event.type === 'room.banned') {
     if (event.payload.roomId === state.roomId && (!event.payload.peerId || event.payload.peerId === state.peerId)) {
@@ -536,7 +561,15 @@ export function leaveRoom(): void {
   joinAttemptGeneration += 1;
   cancelRoomRecovery();
   void syncDesktopGlobalHotkeys(false);
-  if (!state.joined && !state.localStream && !state.localScreenStream && !state.connecting && !voiceJoinSent && !state.voiceRealtimeTeardown) return;
+  if (
+    !state.joined &&
+    !state.localStream &&
+    !state.localScreenStream &&
+    !state.connecting &&
+    !voiceJoinSent &&
+    !state.voiceRealtimeTeardown
+  )
+    return;
 
   const disconnectedRoomId = state.roomId;
   state.connecting = false;

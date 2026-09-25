@@ -75,8 +75,8 @@
       data-active={tab === 'permanent'}
       type="button"
       tabindex={tab === 'permanent' ? 0 : -1}
-      onclick={() => selectTab('permanent')}
-    >Постоянная</button>
+      onclick={() => selectTab('permanent')}>Постоянная</button
+    >
     <button
       bind:this={tempTab}
       id="createRoomTempTab"
@@ -87,8 +87,8 @@
       data-active={tab === 'temp'}
       type="button"
       tabindex={tab === 'temp' ? 0 : -1}
-      onclick={() => selectTab('temp')}
-    >Временная</button>
+      onclick={() => selectTab('temp')}>Временная</button
+    >
   </div>
 
   <form class="lr-dialog-form" onsubmit={submit}>

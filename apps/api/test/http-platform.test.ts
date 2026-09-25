@@ -21,7 +21,10 @@ test('LiveKit connect sources treat localhost and 127.0.0.1 as one host', () => 
 
 test('the CSP admits the gate everywhere and the local SFU only outside production', () => {
   const dev = securityHeaders({ connectSources: ['wss://gate.example'], production: false });
-  assert.match(dev['Content-Security-Policy'], /connect-src 'self' wss:\/\/gate\.example ws:\/\/localhost:7880 ws:\/\/127\.0\.0\.1:7880 stun: turn: turns:/);
+  assert.match(
+    dev['Content-Security-Policy'],
+    /connect-src 'self' wss:\/\/gate\.example ws:\/\/localhost:7880 ws:\/\/127\.0\.0\.1:7880 stun: turn: turns:/
+  );
   assert.match(dev['Content-Security-Policy'], /frame-ancestors 'none'/);
   assert.equal(dev['X-Content-Type-Options'], 'nosniff');
   const prod = securityHeaders({ connectSources: [], production: true });
@@ -31,16 +34,37 @@ test('the CSP admits the gate everywhere and the local SFU only outside producti
 
 test('the request line is levelled by status, skips health checks and hashes the address', () => {
   const lines = [];
-  const log = { info: (fields) => lines.push(['info', fields]), warn: (fields) => lines.push(['warn', fields]), error: (fields) => lines.push(['error', fields]) };
+  const log = {
+    info: (fields) => lines.push(['info', fields]),
+    warn: (fields) => lines.push(['warn', fields]),
+    error: (fields) => lines.push(['error', fields])
+  };
   const logRequest = createRequestLog({ clientIp: () => '203.0.113.9', hashIp: (ip) => `hash(${ip})` });
-  const request = (url, extra = {}) => ({ method: 'GET', routeOptions: { url }, raw: { voiceRoomUserId: 'u1' }, log, ...extra });
+  const request = (url, extra = {}) => ({
+    method: 'GET',
+    routeOptions: { url },
+    raw: { voiceRoomUserId: 'u1' },
+    log,
+    ...extra
+  });
   logRequest(request('/api/healthz'), 200, 1);
   logRequest(request('/api/rooms'), 200, 1.234);
   logRequest(request('/api/rooms'), 404, 2);
   logRequest(request('/api/rooms'), 503, 3);
   logRequest({ method: 'GET', url: '/raw', log }, 200, 1);
-  assert.deepEqual(lines.map(([level]) => level), ['info', 'warn', 'error', 'info']);
-  assert.deepEqual(lines[0][1], { evt: 'http.request', method: 'GET', route: '/api/rooms', statusCode: 200, userId: 'u1', ipHash: 'hash(203.0.113.9)', durationMs: 1.23 });
+  assert.deepEqual(
+    lines.map(([level]) => level),
+    ['info', 'warn', 'error', 'info']
+  );
+  assert.deepEqual(lines[0][1], {
+    evt: 'http.request',
+    method: 'GET',
+    route: '/api/rooms',
+    statusCode: 200,
+    userId: 'u1',
+    ipHash: 'hash(203.0.113.9)',
+    durationMs: 1.23
+  });
   assert.equal(lines[3][1].userId, undefined);
   logRequest({ method: 'GET', url: '/nolog' }, 200, 1);
   assert.equal(requestRouteLabel({}), 'unknown');
@@ -50,15 +74,28 @@ test('the request line is levelled by status, skips health checks and hashes the
 function shutdownHarness({ closeFails = false, hang = false } = {}) {
   const calls = { exits: [], closedSockets: [], stores: 0, logs: [] };
   const signals = new EventEmitter();
-  const server = { close(callback) { if (!hang) callback(); } };
+  const server = {
+    close(callback) {
+      if (!hang) callback();
+    }
+  };
   const sockets = [
     { socket: { close: (code) => calls.closedSockets.push(code) } },
-    { socket: { close: () => { throw new Error('gone'); } } }
+    {
+      socket: {
+        close: () => {
+          throw new Error('gone');
+        }
+      }
+    }
   ];
   const shutdown = installGracefulShutdown(server, {
     logger: { info: (fields) => calls.logs.push(fields.evt), error: (fields) => calls.logs.push(fields.evt) },
     sockets: () => sockets,
-    closeStores: async () => { calls.stores += 1; if (closeFails) throw new Error('db'); },
+    closeStores: async () => {
+      calls.stores += 1;
+      if (closeFails) throw new Error('db');
+    },
     exit: (code) => calls.exits.push(code),
     timeoutMs: 20,
     signals

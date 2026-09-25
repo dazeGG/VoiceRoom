@@ -53,7 +53,9 @@ for (const tree of TREES) {
   if (verbose) for (const entry of reads) process.stdout.write(`${entry}\n`);
   if (reads.length > allowed) {
     failed = true;
-    process.stderr.write(`${tree}: ${reads.length} source reads, baseline ${allowed}. Test behaviour instead of source text:\n${reads.join('\n')}\n`);
+    process.stderr.write(
+      `${tree}: ${reads.length} source reads, baseline ${allowed}. Test behaviour instead of source text:\n${reads.join('\n')}\n`
+    );
   } else if (update) {
     baseline[tree] = reads.length;
   }

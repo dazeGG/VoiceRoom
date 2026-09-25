@@ -61,9 +61,10 @@ function createNotificationStore({
   pool
 }: { automaticPresenceLeaseMs?: number; databaseUrl?: string; logger?: unknown; pool?: pg.Pool | null } = {}) {
   let activePool = pool || null;
-  const activeLeaseMs = Number.isFinite(automaticPresenceLeaseMs) && automaticPresenceLeaseMs > 0
-    ? Math.floor(automaticPresenceLeaseMs)
-    : DEFAULT_AUTOMATIC_PRESENCE_LEASE_MS;
+  const activeLeaseMs =
+    Number.isFinite(automaticPresenceLeaseMs) && automaticPresenceLeaseMs > 0
+      ? Math.floor(automaticPresenceLeaseMs)
+      : DEFAULT_AUTOMATIC_PRESENCE_LEASE_MS;
   function getPool(): pg.Pool {
     if (!activePool) {
       activePool = createDbPool({ databaseUrl, logger });
@@ -71,7 +72,10 @@ function createNotificationStore({
     return activePool;
   }
 
-  async function getPreferences(userId: string | null | undefined, client: Queryable = getPool()): Promise<NotificationPreferences> {
+  async function getPreferences(
+    userId: string | null | undefined,
+    client: Queryable = getPool()
+  ): Promise<NotificationPreferences> {
     if (!userId) return mapPreferences();
     const preferences = await client.query(
       `SELECT u.dnd, u.presence_status, u.presence_status_automatic, np.private_notifications
@@ -100,7 +104,8 @@ function createNotificationStore({
       presenceStatusAutomatic: preferences.rows[0]?.presence_status_automatic,
       privateNotifications: preferences.rows[0]?.private_notifications || false,
       mutedPeerIds: dmMutes.rows.map((row) => row.peer_user_id),
-      mutedRoomIds: roomMutes.rows.map((row) => row.room_id)
+      mutedRoomIds: roomMutes.rows
+        .map((row) => row.room_id)
         .filter((roomId) => roomMutes.rows.find((row) => row.room_id === roomId)?.level === 'none'),
       roomLevels: Object.fromEntries(roomMutes.rows.map((row) => [row.room_id, row.level || 'none']))
     });
@@ -111,7 +116,13 @@ function createNotificationStore({
     return result.rowCount! > 0;
   }
 
-  async function setPrivateNotifications({ userId, privateNotifications }: { userId: string; privateNotifications: unknown }): Promise<PreferencesResult<'not_found' | 'updated'>> {
+  async function setPrivateNotifications({
+    userId,
+    privateNotifications
+  }: {
+    userId: string;
+    privateNotifications: unknown;
+  }): Promise<PreferencesResult<'not_found' | 'updated'>> {
     if (!userId) return { status: 'not_found', preferences: mapPreferences() };
     return transaction(getPool(), async (client) => {
       if (!(await userExists(userId, client))) {
@@ -129,7 +140,13 @@ function createNotificationStore({
     });
   }
 
-  async function setDoNotDisturb({ userId, doNotDisturb }: { userId: string; doNotDisturb: unknown }): Promise<PreferencesResult<'not_found' | 'updated'>> {
+  async function setDoNotDisturb({
+    userId,
+    doNotDisturb
+  }: {
+    userId: string;
+    doNotDisturb: unknown;
+  }): Promise<PreferencesResult<'not_found' | 'updated'>> {
     if (!userId) return { status: 'not_found', preferences: mapPreferences() };
     return transaction(getPool(), async (client) => {
       const updated = await client.query(
@@ -150,7 +167,15 @@ function createNotificationStore({
     });
   }
 
-  async function setPresenceStatus({ userId, presenceStatus, automatic = false }: { userId: string; presenceStatus: unknown; automatic?: unknown }): Promise<PreferencesResult<'not_found' | 'invalid' | 'unchanged' | 'updated'>> {
+  async function setPresenceStatus({
+    userId,
+    presenceStatus,
+    automatic = false
+  }: {
+    userId: string;
+    presenceStatus: unknown;
+    automatic?: unknown;
+  }): Promise<PreferencesResult<'not_found' | 'invalid' | 'unchanged' | 'updated'>> {
     const normalizedPresenceStatus = cleanPresenceStatus(presenceStatus);
     if (!userId) return { status: 'not_found', preferences: mapPreferences() };
     if (!normalizedPresenceStatus) return { status: 'invalid', preferences: mapPreferences() };
@@ -177,13 +202,10 @@ function createNotificationStore({
       let nextAutomatic = false;
 
       if (automatic) {
-        const shouldEnterAway = normalizedPresenceStatus === 'away'
-          && currentStatus === 'online'
-          && !hasActiveLease;
+        const shouldEnterAway = normalizedPresenceStatus === 'away' && currentStatus === 'online' && !hasActiveLease;
         const shouldRenewOnline = normalizedPresenceStatus === 'online' && currentStatus === 'online';
-        const shouldResumeOnline = normalizedPresenceStatus === 'online'
-          && currentStatus === 'away'
-          && currentAutomatic;
+        const shouldResumeOnline =
+          normalizedPresenceStatus === 'online' && currentStatus === 'away' && currentAutomatic;
         if (shouldRenewOnline) {
           await client.query(
             `UPDATE users
@@ -229,7 +251,15 @@ function createNotificationStore({
     });
   }
 
-  async function setDmMute({ userId, peerUserId, muted }: { userId: string; peerUserId: string; muted: unknown }): Promise<PreferencesResult<'not_found' | 'self' | 'muted' | 'unmuted'>> {
+  async function setDmMute({
+    userId,
+    peerUserId,
+    muted
+  }: {
+    userId: string;
+    peerUserId: string;
+    muted: unknown;
+  }): Promise<PreferencesResult<'not_found' | 'self' | 'muted' | 'unmuted'>> {
     if (!userId || !peerUserId) return { status: 'not_found', preferences: mapPreferences() };
     if (userId === peerUserId) return { status: 'self', preferences: mapPreferences() };
 
@@ -271,7 +301,15 @@ function createNotificationStore({
     return result.rowCount! > 0;
   }
 
-  async function setRoomMute({ userId, roomId, muted }: { userId: string; roomId: string; muted: unknown }): Promise<PreferencesResult<'not_found' | 'temporary_room' | 'not_saved_room' | 'muted' | 'unmuted'>> {
+  async function setRoomMute({
+    userId,
+    roomId,
+    muted
+  }: {
+    userId: string;
+    roomId: string;
+    muted: unknown;
+  }): Promise<PreferencesResult<'not_found' | 'temporary_room' | 'not_saved_room' | 'muted' | 'unmuted'>> {
     if (!userId || !roomId) return { status: 'not_found', preferences: mapPreferences() };
 
     return transaction(getPool(), async (client) => {
@@ -317,16 +355,21 @@ function createNotificationStore({
     });
   }
 
-  async function setRoomLevel({ userId, roomId, level }: { userId: string; roomId: string; level: unknown }): Promise<{ ok: false; code: 'invalid_level' | 'not_found' } | { ok: true; level: RoomNotificationLevel }> {
+  async function setRoomLevel({
+    userId,
+    roomId,
+    level
+  }: {
+    userId: string;
+    roomId: string;
+    level: unknown;
+  }): Promise<{ ok: false; code: 'invalid_level' | 'not_found' } | { ok: true; level: RoomNotificationLevel }> {
     if (!userId || !roomId || !(['all', 'mentions', 'none'] as unknown[]).includes(level)) {
       return { ok: false, code: 'invalid_level' };
     }
     return transaction(getPool(), async (client) => {
       if (!(await userExists(userId, client))) return { ok: false, code: 'not_found' };
-      const room = await client.query(
-        'SELECT 1 FROM rooms WHERE id = $1 AND deleted_at IS NULL LIMIT 1',
-        [roomId]
-      );
+      const room = await client.query('SELECT 1 FROM rooms WHERE id = $1 AND deleted_at IS NULL LIMIT 1', [roomId]);
       if (room.rowCount === 0) return { ok: false, code: 'not_found' };
       await client.query(
         `INSERT INTO notification_room_mutes (id, user_id, room_id, level, created_at, updated_at)

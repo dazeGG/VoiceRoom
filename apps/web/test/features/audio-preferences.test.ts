@@ -26,7 +26,9 @@ test('volume and local mute are stored separately and survive a reload', () => {
 
   storeParticipantAudioPreference(key, { muted: false });
   expect(getParticipantAudioPreference(key)).toEqual({ muted: false, volume: 1.5 });
-  expect(JSON.parse(localStorage.getItem('voice-room:participant-audio-preferences') ?? '{}')).toEqual({ [key]: { muted: false, volume: 1.5 } });
+  expect(JSON.parse(localStorage.getItem('voice-room:participant-audio-preferences') ?? '{}')).toEqual({
+    [key]: { muted: false, volume: 1.5 }
+  });
 });
 
 test('volume is kept between 0 and 200%, and broken storage falls back to defaults', () => {
@@ -45,7 +47,8 @@ test('the interface sound volume is a stored percentage', () => {
 });
 
 test('the master volume is stored as a whole percent between 0 and 200', async () => {
-  const { getStoredMasterVolume, persistMasterVolume } = await import('../../src/lib/features/room/client/core/settings.ts');
+  const { getStoredMasterVolume, persistMasterVolume } =
+    await import('../../src/lib/features/room/client/core/settings.ts');
   expect(getStoredMasterVolume()).toBe(100);
   expect(persistMasterVolume(250)).toBe(200);
   expect(persistMasterVolume(-1)).toBe(0);

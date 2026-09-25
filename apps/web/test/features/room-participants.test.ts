@@ -4,7 +4,11 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
 import { createInitialRoomState } from '../../src/lib/features/room/client/model/room-state.ts';
-import { clearAllSpeaking, createParticipant, syncPeers } from '../../src/lib/features/room/client/room/participants.ts';
+import {
+  clearAllSpeaking,
+  createParticipant,
+  syncPeers
+} from '../../src/lib/features/room/client/room/participants.ts';
 import { startMeters, stopMeters } from '../../src/lib/features/room/client/media/meters.ts';
 import type { Participant } from '../../src/lib/features/room/client/core/types.ts';
 
@@ -25,7 +29,9 @@ function analyser(amplitude: number) {
   return {
     frequencyBinCount: 64,
     getByteTimeDomainData(data: Uint8Array) {
-      data.forEach((_, index) => { data[index] = 128 + (index % 2 === 0 ? amplitude : -amplitude); });
+      data.forEach((_, index) => {
+        data[index] = 128 + (index % 2 === 0 ? amplitude : -amplitude);
+      });
     }
   } as unknown as AnalyserNode;
 }

@@ -43,13 +43,18 @@ export interface RoomStatus {
 async function roomAvatarRequest(roomId: string, method: 'POST' | 'DELETE', file?: Blob): Promise<RoomSummary> {
   const body = file ? new FormData() : undefined;
   if (body && file) body.append('avatar', file, 'avatar.webp');
-  const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/avatar`, { method, body, credentials: 'same-origin' });
+  const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/avatar`, {
+    method,
+    body,
+    credentials: 'same-origin'
+  });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.error || 'Не удалось обновить аватар комнаты');
   return payload.room;
 }
 
-export const uploadRoomAvatar = (roomId: string, file: Blob): Promise<RoomSummary> => roomAvatarRequest(roomId, 'POST', file);
+export const uploadRoomAvatar = (roomId: string, file: Blob): Promise<RoomSummary> =>
+  roomAvatarRequest(roomId, 'POST', file);
 export const deleteRoomAvatar = (roomId: string): Promise<RoomSummary> => roomAvatarRequest(roomId, 'DELETE');
 
 export interface ChatMessage {
@@ -166,11 +171,7 @@ export async function kickRoomPeer(roomId: string, peerId: string): Promise<void
   await postJsonAuth(`/api/rooms/${encodeURIComponent(roomId)}/kick`, { peerId });
 }
 
-export async function setRoomPeerServerMute(
-  roomId: string,
-  peerId: string,
-  muted: boolean
-): Promise<void> {
+export async function setRoomPeerServerMute(roomId: string, peerId: string, muted: boolean): Promise<void> {
   await postJsonAuth(`/api/rooms/${encodeURIComponent(roomId)}/server-mute`, { peerId, muted });
 }
 
@@ -213,7 +214,10 @@ export async function fetchRoomChat(roomId: string): Promise<ChatMessage[]> {
   return Array.isArray(payload?.messages) ? (payload.messages as ChatMessage[]) : [];
 }
 
-export async function fetchRoomChatPage(roomId: string, request: HistoryPageRequest = {}): Promise<RoomChatHistoryPage> {
+export async function fetchRoomChatPage(
+  roomId: string,
+  request: HistoryPageRequest = {}
+): Promise<RoomChatHistoryPage> {
   const params = new URLSearchParams({
     mode: request.mode ?? 'latest',
     limit: String(request.limit ?? 50)
@@ -229,18 +233,18 @@ export async function fetchRoomChatPage(roomId: string, request: HistoryPageRequ
   const page = payload as Omit<RoomChatHistoryPage, 'messages'> & { messages?: HistoryMessageDto[] };
   return {
     ...page,
-    messages: Array.isArray(page.messages) ? page.messages.map((message) => roomMessageFromHistory(roomId, message)) : []
+    messages: Array.isArray(page.messages)
+      ? page.messages.map((message) => roomMessageFromHistory(roomId, message))
+      : []
   };
 }
 
 function roomMessageFromHistory(roomId: string, message: HistoryMessageDto): ChatMessage {
   const author = message.author ?? {};
-  const content = typeof message.content === 'object' && message.content !== null
-    ? message.content as Record<string, unknown>
-    : {};
-  const createdAt = typeof message.createdAt === 'number'
-    ? message.createdAt
-    : Date.parse(String(message.createdAt ?? ''));
+  const content =
+    typeof message.content === 'object' && message.content !== null ? (message.content as Record<string, unknown>) : {};
+  const createdAt =
+    typeof message.createdAt === 'number' ? message.createdAt : Date.parse(String(message.createdAt ?? ''));
   return {
     id: message.id,
     roomId,
@@ -251,7 +255,7 @@ function roomMessageFromHistory(roomId: string, message: HistoryMessageDto): Cha
     avatarUrl: typeof author.avatarUrl === 'string' ? author.avatarUrl : null,
     avatarAccent: typeof author.avatarAccent === 'string' ? author.avatarAccent : null,
     text: projectRoomMessageContent(content, typeof content.text === 'string' ? content.text : ''),
-    content: content.version === 1 ? content as unknown as RoomMessageContentV1 : undefined,
+    content: content.version === 1 ? (content as unknown as RoomMessageContentV1) : undefined,
     createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
     editedAt: message.editedAt == null ? null : Number(message.editedAt),
     expiresAt: message.expiresAt == null ? Number.MAX_SAFE_INTEGER : Number(message.expiresAt),
@@ -265,13 +269,25 @@ function roomMessageFromHistory(roomId: string, message: HistoryMessageDto): Cha
 }
 
 export async function markRoomChatRead(roomId: string, cursor?: string): Promise<string | undefined> {
-  const payload = await postJsonAuth<{ cursor?: string; readCursor?: string }>(`/api/rooms/${encodeURIComponent(roomId)}/read`, cursor ? { cursor } : {});
+  const payload = await postJsonAuth<{ cursor?: string; readCursor?: string }>(
+    `/api/rooms/${encodeURIComponent(roomId)}/read`,
+    cursor ? { cursor } : {}
+  );
   return payload?.readCursor ?? payload?.cursor;
 }
 
 export async function postRoomChat(
   roomId: string,
-  body: { name: string; peerId?: string; sessionToken?: string; text: string; content?: RoomMessageContentV1; attachmentIds?: string[]; replyTo?: { messageId: string }; idempotencyKey?: string }
+  body: {
+    name: string;
+    peerId?: string;
+    sessionToken?: string;
+    text: string;
+    content?: RoomMessageContentV1;
+    attachmentIds?: string[];
+    replyTo?: { messageId: string };
+    idempotencyKey?: string;
+  }
 ): Promise<ChatMessage> {
   const payload = await postJson<{ message: ChatMessage }>(`/api/rooms/${encodeURIComponent(roomId)}/chat`, body);
   return payload.message;

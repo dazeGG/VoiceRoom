@@ -55,7 +55,12 @@ function cleanText(value: unknown, max: number): string {
   if (typeof value !== 'string') return '';
   const text = value.replace(HIDDEN_CHARACTERS, ' ').replace(/\s+/g, ' ').trim();
   const characters = Array.from(text);
-  return characters.length > max ? `${characters.slice(0, max - 1).join('').trimEnd()}…` : text;
+  return characters.length > max
+    ? `${characters
+        .slice(0, max - 1)
+        .join('')
+        .trimEnd()}…`
+    : text;
 }
 
 function normalizeImage(value: unknown): LinkPreviewImage | null {
@@ -77,8 +82,8 @@ export function normalizeLinkPreview(value: unknown): LinkPreview | null {
   const title = cleanText(input.title, MAX_LINK_PREVIEW_TITLE);
   const description = cleanText(input.description, MAX_LINK_PREVIEW_DESCRIPTION);
   if (!title && !description) return null;
-  const siteName = cleanText(input.siteName, MAX_LINK_PREVIEW_SITE_NAME)
-    || new URL(url).hostname.replace(/^www\./i, '');
+  const siteName =
+    cleanText(input.siteName, MAX_LINK_PREVIEW_SITE_NAME) || new URL(url).hostname.replace(/^www\./i, '');
   return { url, title, description, siteName, image: normalizeImage(input.image) };
 }
 

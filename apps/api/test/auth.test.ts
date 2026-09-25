@@ -264,9 +264,10 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   assert.equal(bookmarkedAgain.body.room.roomId, room.body.roomId);
 
   const secondRooms = await request(socketPath, { pathname: '/api/auth/rooms', cookie: secondCookie });
-  assert.deepEqual(secondRooms.body.rooms.map((entry) => [entry.roomId, entry.relationship]), [
-    [room.body.roomId, 'bookmarked']
-  ]);
+  assert.deepEqual(
+    secondRooms.body.rooms.map((entry) => [entry.roomId, entry.relationship]),
+    [[room.body.roomId, 'bookmarked']]
+  );
 
   // Room unread state is a durable server cursor: reading three messages must
   // make the next message start a fresh count at one, not resume at four.

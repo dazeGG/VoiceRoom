@@ -9,7 +9,8 @@ import { buildHeaderPolicy, readMetaPolicy, renderCaddySnippet } from '../script
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const readRepo = (path: string) => readFileSync(join(repoRoot, path), 'utf8');
 const readWeb = (path: string) => readFileSync(join(repoRoot, 'apps', 'web', path), 'utf8');
-const META = "default-src 'self'; connect-src 'self' http: https: ws: wss: stun:; img-src 'self' data: blob:; object-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'sha256-abc123='; base-uri 'none'; form-action 'none'";
+const META =
+  "default-src 'self'; connect-src 'self' http: https: ws: wss: stun:; img-src 'self' data: blob:; object-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'sha256-abc123='; base-uri 'none'; form-action 'none'";
 
 test('the header keeps the build hash and every meta directive', () => {
   const policy = buildHeaderPolicy(META);
@@ -22,7 +23,10 @@ test('the header keeps the build hash and every meta directive', () => {
 
 test('the header narrows connect-src to the deployment LiveKit origin and forbids framing', () => {
   const policy = buildHeaderPolicy(META);
-  assert.match(policy, /connect-src 'self' wss:\/\/\{\$LIVEKIT_DOMAIN\} https:\/\/\{\$LIVEKIT_DOMAIN\} stun: turn: turns:/);
+  assert.match(
+    policy,
+    /connect-src 'self' wss:\/\/\{\$LIVEKIT_DOMAIN\} https:\/\/\{\$LIVEKIT_DOMAIN\} stun: turn: turns:/
+  );
   assert.doesNotMatch(policy, /connect-src[^;]*\bhttp:/);
   assert.match(policy, /frame-ancestors 'none'/);
 });
@@ -66,7 +70,10 @@ test('page CSP supports runtime LiveKit origins while production Caddy narrows t
   // test/caddy-csp.test.ts), which narrows connect-src to LIVEKIT_DOMAIN.
   assert.match(caddy, /import \/etc\/caddy\/csp\.caddy/);
   assert.match(dockerfile, /FROM caddy:2\.11\.4-alpine AS web/);
-  assert.match(compose, /\n {2}caddy:\n[\s\S]*?image: \$\{VOICEROOM_WEB_IMAGE:\?set immutable VOICEROOM_WEB_IMAGE digest\}/);
+  assert.match(
+    compose,
+    /\n {2}caddy:\n[\s\S]*?image: \$\{VOICEROOM_WEB_IMAGE:\?set immutable VOICEROOM_WEB_IMAGE digest\}/
+  );
   assert.ok(config.includes("'style-src': ['self', 'unsafe-inline']"));
   assert.match(config, /style attributes/);
 });

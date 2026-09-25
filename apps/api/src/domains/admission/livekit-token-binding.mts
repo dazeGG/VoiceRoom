@@ -24,21 +24,20 @@ export interface GateClaims {
 export type BindingResult =
   | { ok: true }
   | {
-    ok: false;
-    code:
-      | 'missing_claims'
-      | 'missing_token'
-      | 'ambiguous_token'
-      | 'malformed_authorization'
-      | 'malformed_token'
-      | 'identity_mismatch'
-      | 'room_mismatch'
-      | 'stale_token';
-  };
+      ok: false;
+      code:
+        | 'missing_claims'
+        | 'missing_token'
+        | 'ambiguous_token'
+        | 'malformed_authorization'
+        | 'malformed_token'
+        | 'identity_mismatch'
+        | 'room_mismatch'
+        | 'stale_token';
+    };
 
 export type TokenExtraction =
-  | { ok: true; token: string }
-  | { ok: false; code: 'missing_token' | 'ambiguous_token' | 'malformed_authorization' };
+  { ok: true; token: string } | { ok: false; code: 'missing_token' | 'ambiguous_token' | 'malformed_authorization' };
 
 interface LiveKitJwtPayload {
   sub?: unknown;
@@ -60,7 +59,7 @@ export function decodeJwtPayload(token: string): LiveKitJwtPayload | null {
   if (parts.length !== 3 || !parts[1]) return null;
   try {
     const payload: unknown = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-    return payload && typeof payload === 'object' && !Array.isArray(payload) ? payload as LiveKitJwtPayload : null;
+    return payload && typeof payload === 'object' && !Array.isArray(payload) ? (payload as LiveKitJwtPayload) : null;
   } catch {
     return null;
   }

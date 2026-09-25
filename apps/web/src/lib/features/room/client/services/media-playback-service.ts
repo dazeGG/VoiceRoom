@@ -74,9 +74,7 @@ export function applyScreenMediaElementVolume(
   mediaElement: HTMLMediaElement,
   options: { boostAllowed: boolean; muted: boolean; volume: number }
 ): boolean {
-  const volume = Number.isFinite(options.volume)
-    ? Math.min(MAX_STREAM_VOLUME, Math.max(0, options.volume))
-    : 1;
+  const volume = Number.isFinite(options.volume) ? Math.min(MAX_STREAM_VOLUME, Math.max(0, options.volume)) : 1;
   if (!options.boostAllowed) {
     releaseMediaStreamElement(mediaElement);
     mediaElement.volume = 1;
@@ -139,9 +137,11 @@ export function handleAudioUnlockGesture(): void {
 }
 
 function shouldAttemptAudioUnlock(): boolean {
-  return state.audioUnlockPending
-    || state.voiceConnection === 'playback-blocked'
-    || state.audioContext?.state === 'suspended';
+  return (
+    state.audioUnlockPending ||
+    state.voiceConnection === 'playback-blocked' ||
+    state.audioContext?.state === 'suspended'
+  );
 }
 
 export async function unlockAudio(): Promise<void> {

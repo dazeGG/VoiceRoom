@@ -4,7 +4,11 @@ import { renderPrometheus } from './metrics.ts';
 
 export type WorkerMetricsServer = Readonly<{ address: AddressInfo | string | null; close: () => Promise<void> }>;
 
-function startWorkerMetricsServer({ host = '0.0.0.0', port = 9464, render = renderPrometheus }: {
+function startWorkerMetricsServer({
+  host = '0.0.0.0',
+  port = 9464,
+  render = renderPrometheus
+}: {
   host?: string;
   port?: number;
   render?: () => string;
@@ -14,15 +18,22 @@ function startWorkerMetricsServer({ host = '0.0.0.0', port = 9464, render = rend
       response.writeHead(404).end();
       return;
     }
-    response.writeHead(200, { 'content-type': 'text/plain; version=0.0.4; charset=utf-8', 'cache-control': 'no-store' });
+    response.writeHead(200, {
+      'content-type': 'text/plain; version=0.0.4; charset=utf-8',
+      'cache-control': 'no-store'
+    });
     response.end(render());
   });
   return new Promise((resolve, reject) => {
     server.once('error', reject);
-    server.listen(port, host, () => resolve(Object.freeze({
-      address: server.address(),
-      close: () => new Promise<void>((done, fail) => server.close((error) => error ? fail(error) : done()))
-    })));
+    server.listen(port, host, () =>
+      resolve(
+        Object.freeze({
+          address: server.address(),
+          close: () => new Promise<void>((done, fail) => server.close((error) => (error ? fail(error) : done())))
+        })
+      )
+    );
   });
 }
 

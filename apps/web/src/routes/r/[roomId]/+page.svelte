@@ -33,14 +33,14 @@
   // Guests auto-join as soon as RoomPage mounts, so the offer is decided before
   // it renders. Signed-in users get the same offer from LobbyPage.
   const guestOpenInApp = $derived(
-    boundaryReady
-      && session.loaded
-      && !session.user
-      && !authLoadError
-      && Boolean(routeRoomId)
-      && !guestContinuedInBrowser
-      && !inAppNavigation
-      && shouldOfferOpenInApp(readOpenInAppSignals())
+    boundaryReady &&
+      session.loaded &&
+      !session.user &&
+      !authLoadError &&
+      Boolean(routeRoomId) &&
+      !guestContinuedInBrowser &&
+      !inAppNavigation &&
+      shouldOfferOpenInApp(readOpenInAppSignals())
   );
 
   $effect(() => {
@@ -98,7 +98,7 @@
 
 <svelte:head>
   <title>Voice Room</title>
-  <meta name="theme-color" content="#10110f">
+  <meta name="theme-color" content="#10110f" />
 </svelte:head>
 
 {#if !boundaryReady}
@@ -137,7 +137,10 @@
       <div class="auth-session-error-card">
         <p class="auth-loader-kicker">Сессия не проверена</p>
         <h1>Не удалось проверить аккаунт</h1>
-        <p>Проверьте подключение к серверу и повторите попытку. Мы не будем открывать комнату как гостевую, пока проверка не пройдет.</p>
+        <p>
+          Проверьте подключение к серверу и повторите попытку. Мы не будем открывать комнату как гостевую, пока проверка
+          не пройдет.
+        </p>
         <button class="home-primary-button" type="button" onclick={retrySessionLoad}>Повторить</button>
       </div>
     </main>

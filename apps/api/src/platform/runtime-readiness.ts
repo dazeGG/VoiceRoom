@@ -1,6 +1,12 @@
 import type pg from 'pg';
 import { PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/capabilities';
-import { createReadinessReport, resolveManifestPath, type ReadinessOptions, type ReadinessReport, type ReplicaInput } from './readiness.ts';
+import {
+  createReadinessReport,
+  resolveManifestPath,
+  type ReadinessOptions,
+  type ReadinessReport,
+  type ReplicaInput
+} from './readiness.ts';
 import { createRuntimeReadinessRepository, type RuntimeReadinessRepository } from './runtime-readiness-repository.ts';
 
 function asSet(value: unknown): Set<string> {
@@ -104,7 +110,9 @@ function createRuntimeReadinessProvider({
   async function start(): Promise<ReadinessReport> {
     await refresh();
     if (!timer) {
-      timer = setInterval(() => { void refresh(); }, heartbeatIntervalMs);
+      timer = setInterval(() => {
+        void refresh();
+      }, heartbeatIntervalMs);
       timer.unref?.();
     }
     return snapshot;

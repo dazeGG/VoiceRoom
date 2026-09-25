@@ -62,19 +62,29 @@ export default tseslint.config(
   {
     rules: {
       // node:test's and Vitest's test()/describe() return promises the runner awaits itself.
-      '@typescript-eslint/no-floating-promises': ['error', {
-        allowForKnownSafeCalls: [
-          { from: 'package', package: 'node:test', name: ['test', 'it', 'describe', 'suite', 'before', 'after', 'beforeEach', 'afterEach'] },
-          { from: 'package', package: 'vitest', name: ['test', 'it', 'describe', 'suite'] }
-        ]
-      }],
+      '@typescript-eslint/no-floating-promises': [
+        'error',
+        {
+          allowForKnownSafeCalls: [
+            {
+              from: 'package',
+              package: 'node:test',
+              name: ['test', 'it', 'describe', 'suite', 'before', 'after', 'beforeEach', 'afterEach']
+            },
+            { from: 'package', package: 'vitest', name: ['test', 'it', 'describe', 'suite'] }
+          ]
+        }
+      ],
       // Stylistic: async functions without await are common in fakes and handlers.
       '@typescript-eslint/require-await': 'off',
       '@typescript-eslint/no-misused-promises': ['error', { checksVoidReturn: { attributes: false } }],
       '@typescript-eslint/switch-exhaustiveness-check': ['error', { considerDefaultExhaustiveForUnions: true }],
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/consistent-type-imports': ['error', { fixStyle: 'inline-type-imports' }],
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' }
+      ],
       'svelte/no-at-html-tags': 'error'
     }
   },
@@ -89,10 +99,13 @@ export default tseslint.config(
     // A request's logger already binds reqId; repeating it writes the field twice.
     files: ['apps/api/src/**/*.ts'],
     rules: {
-      'no-restricted-syntax': ['error', {
-        selector: "Property[key.name='reqId'][value.type=/MemberExpression|ChainExpression/]",
-        message: 'request.log already carries reqId; do not add it again.'
-      }]
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "Property[key.name='reqId'][value.type=/MemberExpression|ChainExpression/]",
+          message: 'request.log already carries reqId; do not add it again.'
+        }
+      ]
     }
   }
 );

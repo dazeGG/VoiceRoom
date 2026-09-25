@@ -17,8 +17,7 @@ export interface DesktopRelease {
 }
 
 export type DesktopReleaseResult =
-  | { status: 'ok'; release: DesktopRelease; cacheControl: string }
-  | { status: 'unavailable' };
+  { status: 'ok'; release: DesktopRelease; cacheControl: string } | { status: 'unavailable' };
 
 interface GitHubAsset {
   name?: unknown;
@@ -45,9 +44,11 @@ export interface DesktopReleaseServiceOptions {
 export function isDesktopReleaseDownloadUrl(value: unknown, repo: string): value is string {
   try {
     const url = new URL(String(value || ''));
-    return url.protocol === 'https:'
-      && url.hostname === 'github.com'
-      && url.pathname.startsWith(`/${repo}/releases/download/`);
+    return (
+      url.protocol === 'https:' &&
+      url.hostname === 'github.com' &&
+      url.pathname.startsWith(`/${repo}/releases/download/`)
+    );
   } catch {
     return false;
   }
@@ -64,7 +65,7 @@ function pickReleaseAsset(assets: GitHubAsset[], patterns: RegExp[], repo: strin
 }
 
 export function normalizeRelease(release: GitHubRelease, repo: string): DesktopRelease {
-  const assets = Array.isArray(release.assets) ? release.assets as GitHubAsset[] : [];
+  const assets = Array.isArray(release.assets) ? (release.assets as GitHubAsset[]) : [];
   return {
     version: String(release.tag_name || '').replace(/^v/, ''),
     htmlUrl: typeof release.html_url === 'string' ? release.html_url : '',
@@ -93,9 +94,12 @@ export function createDesktopReleaseService(options: DesktopReleaseServiceOption
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), options.timeoutMs);
     try {
-      const response = await fetchImpl(`https://api.github.com/repos/${options.repo}/releases/latest`, { headers, signal: controller.signal });
+      const response = await fetchImpl(`https://api.github.com/repos/${options.repo}/releases/latest`, {
+        headers,
+        signal: controller.signal
+      });
       if (!response.ok) throw new Error(`GitHub responded ${response.status}`);
-      return normalizeRelease(await response.json() as GitHubRelease, options.repo);
+      return normalizeRelease((await response.json()) as GitHubRelease, options.repo);
     } finally {
       clearTimeout(timeout);
     }
@@ -116,7 +120,10 @@ export function createDesktopReleaseService(options: DesktopReleaseServiceOption
     } catch (error) {
       // Serve stale metadata if we have any; the binaries are still valid.
       if (cache.release) return { status: 'ok', release: cache.release, cacheControl: 'public, max-age=60' };
-      options.logger.warn({ evt: LOG_EVENTS.DESKTOP_RELEASE_FETCH_FAILED, err: error }, 'failed to fetch the desktop release manifest');
+      options.logger.warn(
+        { evt: LOG_EVENTS.DESKTOP_RELEASE_FETCH_FAILED, err: error },
+        'failed to fetch the desktop release manifest'
+      );
       return { status: 'unavailable' };
     }
   }

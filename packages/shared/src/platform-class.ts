@@ -52,7 +52,7 @@ export function classifyPlatform(input: PlatformSignals = {}): PlatformClass {
 
 export function platformPolicy(platformClass: unknown): PlatformPolicy {
   const normalized: PlatformClass = (Object.values(PLATFORM_CLASSES) as unknown[]).includes(platformClass)
-    ? platformClass as PlatformClass
+    ? (platformClass as PlatformClass)
     : PLATFORM_CLASSES.unknown;
   return {
     contractVersion: PLATFORM_CLASS_CONTRACT,

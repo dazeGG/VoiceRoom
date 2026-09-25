@@ -17,8 +17,14 @@ export type RealtimeAccountEvent =
   | { type: 'friend.accepted'; payload: { userId: string } }
   | { type: 'friend.removed'; payload: { userId: string } }
   | { type: 'friend.updated'; payload: { user: PublicUser } }
-  | { type: 'ring.incoming'; payload: { fromUser: PublicUser; room: { id: string; name: string; emoji: string }; expiresAt: number } }
-  | { type: 'notification.settings.updated'; payload: { preferences: import('./notifications').NotificationPreferences } }
+  | {
+      type: 'ring.incoming';
+      payload: { fromUser: PublicUser; room: { id: string; name: string; emoji: string }; expiresAt: number };
+    }
+  | {
+      type: 'notification.settings.updated';
+      payload: { preferences: import('./notifications').NotificationPreferences };
+    }
   | { type: 'dm.message'; payload: { message: DirectMessage } }
   | { type: 'dm.message.edited'; payload: { message: DirectMessage } }
   | { type: 'dm.read'; payload: { userId: string } }
@@ -54,7 +60,10 @@ export type RealtimeRoomEvent =
   | { type: 'room.chat.message'; payload: { roomId: string; message: ChatMessage } }
   | { type: 'room.chat.edited'; payload: { roomId: string; message: ChatMessage } }
   | { type: 'room.chat.deleted'; payload: { roomId: string; messageId: string } }
-  | { type: 'room.chat.typing'; payload: { roomId: string; typist: { peerId: string; userId: string | null; name: string }; activity?: string } }
+  | {
+      type: 'room.chat.typing';
+      payload: { roomId: string; typist: { peerId: string; userId: string | null; name: string }; activity?: string };
+    }
   | { type: 'room.updated'; payload: { room: RoomSummary } }
   | { type: 'room.deleted'; payload: { roomId: string } }
   | { type: 'room.not_found'; payload: { roomId: string } }
@@ -85,7 +94,7 @@ export type PinsRealtimeEvent = {
 };
 
 export type RealtimeEvent = (
-  RealtimeAccountEvent
+  | RealtimeAccountEvent
   | RealtimeRoomEvent
   | RealtimeErrorEvent
   | NotificationRealtimeEvent
@@ -234,7 +243,8 @@ class AppRealtimeConnection {
   }
 
   private openSocket(): void {
-    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING)) return;
+    if (this.socket && (this.socket.readyState === WebSocket.OPEN || this.socket.readyState === WebSocket.CONNECTING))
+      return;
     const generation = ++this.openGeneration;
     const socket = new WebSocket(wsUrl());
     this.socket = socket;

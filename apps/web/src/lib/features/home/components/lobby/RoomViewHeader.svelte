@@ -6,7 +6,14 @@
   import { friendsState } from '../../model/friends.svelte';
   import { RoomMenu } from '$lib/shared/components/room-menu';
 
-  let { room, presentUserIds = new Set<string>(), onBack, onOpenSettings, onRoomsChanged, onToast } = $props<{
+  let {
+    room,
+    presentUserIds = new Set<string>(),
+    onBack,
+    onOpenSettings,
+    onRoomsChanged,
+    onToast
+  } = $props<{
     room: OwnedRoom;
     presentUserIds?: Set<string>;
     onBack: () => void;

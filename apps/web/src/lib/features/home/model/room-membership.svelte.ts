@@ -57,10 +57,13 @@ function readCache(roomId: string): RoomMembershipEntry | null {
 function persist(roomId: string, entry: RoomMembershipEntry): void {
   if (!browser) return;
   try {
-    localStorage.setItem(cacheKey(roomId), JSON.stringify({
-      members: entry.cachedMembers,
-      presenceRevision: entry.presenceRevision
-    }));
+    localStorage.setItem(
+      cacheKey(roomId),
+      JSON.stringify({
+        members: entry.cachedMembers,
+        presenceRevision: entry.presenceRevision
+      })
+    );
   } catch {
     // Storage is an offline optimization; privacy mode/quota must not break roster loading.
   }
@@ -124,10 +127,14 @@ export function applyRoomVoicePeers(roomId: string, peers: RoomPeer[], presenceR
   const voiceUserIds = new Set(
     peers.map((peer) => peer.accountUserId).filter((userId): userId is string => Boolean(userId))
   );
-  const updateVoice = (members: MembershipMember[]) => mergeMembers([], members.map((member) => ({
-    ...member,
-    inVoice: voiceUserIds.has(member.userId)
-  })));
+  const updateVoice = (members: MembershipMember[]) =>
+    mergeMembers(
+      [],
+      members.map((member) => ({
+        ...member,
+        inVoice: voiceUserIds.has(member.userId)
+      }))
+    );
   entry.members = updateVoice(entry.members);
   entry.cachedMembers = updateVoice(entry.cachedMembers);
   entry.presenceRevision = presenceRevision;

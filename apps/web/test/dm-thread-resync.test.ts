@@ -3,7 +3,6 @@ import { test } from 'vitest';
 import { freshImport } from './helpers/fresh-module.ts';
 import assert from 'node:assert/strict';
 
-
 async function loadCoordinator() {
   return freshImport('/src/lib/features/home/model/dm-thread-resync.ts');
 }
@@ -62,7 +61,10 @@ test('replays realtime message, edit, delete, and read mutations over a delayed 
   });
   await resync;
 
-  assert.deepEqual(applied.messages.map((entry) => entry.id), ['edited', 'own-unread', 'new']);
+  assert.deepEqual(
+    applied.messages.map((entry) => entry.id),
+    ['edited', 'own-unread', 'new']
+  );
   assert.equal(applied.messages.find((entry) => entry.id === 'edited').body, 'edited now');
   assert.equal(applied.messages.find((entry) => entry.id === 'own-unread').readAt, 9);
 });
@@ -81,14 +83,8 @@ test('keeps a newer HTTP message version and independently preserves the newest 
   });
 
   const resync = coordinator.resync('peer');
-  coordinator.recordUpsert(
-    'peer',
-    message('server-newer', { body: 'stale buffered body', editedAt: 5, readAt: 7 })
-  );
-  coordinator.recordUpsert(
-    'peer',
-    message('event-newer', { body: 'new realtime body', editedAt: 6, readAt: 10 })
-  );
+  coordinator.recordUpsert('peer', message('server-newer', { body: 'stale buffered body', editedAt: 5, readAt: 7 }));
+  coordinator.recordUpsert('peer', message('event-newer', { body: 'new realtime body', editedAt: 6, readAt: 10 }));
   request.resolve({
     peer: peer(),
     messages: [
@@ -314,4 +310,3 @@ test('invalidate prevents a delayed request from applying', async () => {
 
   assert.equal(applied, false);
 });
-

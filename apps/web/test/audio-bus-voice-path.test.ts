@@ -24,8 +24,12 @@ class FakeNode {
     this.gain = {
       value: 1,
       scheduled: [],
-      cancelScheduledValues() { this.scheduled = []; },
-      setValueAtTime(value: number, at: number) { this.scheduled.push([value, at]); }
+      cancelScheduledValues() {
+        this.scheduled = [];
+      },
+      setValueAtTime(value: number, at: number) {
+        this.scheduled.push([value, at]);
+      }
     };
     this.connected = [];
   }
@@ -70,13 +74,14 @@ async function loadBus(storage = {}) {
   vi.stubGlobal('window', { location: { hash: '', pathname: '/', search: '' }, setTimeout: (fn: () => void) => fn() });
   vi.stubGlobal('MediaStream', FakeMediaStream);
   vi.stubGlobal('AudioContext', FakeAudioContext);
-    vi.resetModules();
+  vi.resetModules();
   const bus = await import('../src/lib/features/room/client/services/audio-bus.ts');
   const { state } = await import('../src/lib/features/room/client/core/state.svelte.ts');
   return { bus, state };
 }
 
-const voiceElement = () => ({ muted: false, srcObject: new FakeMediaStream(), volume: 1 }) as unknown as HTMLMediaElement;
+const voiceElement = () =>
+  ({ muted: false, srcObject: new FakeMediaStream(), volume: 1 }) as unknown as HTMLMediaElement;
 
 test('a voice at or below 100% plays on its own element, outside the Web Audio mix', async () => {
   const { bus, state } = await loadBus();
@@ -125,7 +130,10 @@ test('muting the output lets the confirmation cue finish before the master bus g
   const graph = bus.getAudioBusGraph() as unknown as Record<'master', FakeNode>;
   state.outputMuted = true;
   bus.syncAudioBusSettings({ muteDelayMs: 220 });
-  assert.deepEqual(graph.master.gain.scheduled, [[1, 0], [0, 0.22]]);
+  assert.deepEqual(graph.master.gain.scheduled, [
+    [1, 0],
+    [0, 0.22]
+  ]);
 
   state.outputMuted = false;
   bus.syncAudioBusSettings({ muteDelayMs: 220 });

@@ -2,8 +2,6 @@
 import { test, onTestFinished, vi } from 'vitest';
 import assert from 'node:assert/strict';
 
-
-
 async function loadAttention(windowValue = {}) {
   vi.stubGlobal('window', windowValue);
   const originalWarn = console.warn;
@@ -20,22 +18,25 @@ const flush = () => new Promise((resolveFlush) => setImmediate(resolveFlush));
 test('the app icon badge counts every unread room and DM except muted ones', async () => {
   const attention = await loadAttention();
 
-  assert.equal(attention.countUnreadForBadge({
-    friends: [
-      { unreadCount: 2, user: { id: 'alice' } },
-      { unreadCount: 5, user: { id: 'muted-bob' } },
-      { unreadCount: 0, user: { id: 'carol' } }
-    ],
-    mutes: { mutedPeerIds: ['muted-bob'], mutedRoomIds: ['quiet-room'] },
-    roomUnreadById: { 'live-room': 4, 'stale-room': 0 },
-    rooms: [
-      { roomId: 'live-room', unreadCount: 1 },
-      { roomId: 'stale-room', unreadCount: 9 },
-      { roomId: 'list-room', unreadCount: 3 },
-      { roomId: 'quiet-room', unreadCount: 7 },
-      { roomId: 'broken-room', unreadCount: Number.NaN }
-    ]
-  }), 2 + 4 + 0 + 3);
+  assert.equal(
+    attention.countUnreadForBadge({
+      friends: [
+        { unreadCount: 2, user: { id: 'alice' } },
+        { unreadCount: 5, user: { id: 'muted-bob' } },
+        { unreadCount: 0, user: { id: 'carol' } }
+      ],
+      mutes: { mutedPeerIds: ['muted-bob'], mutedRoomIds: ['quiet-room'] },
+      roomUnreadById: { 'live-room': 4, 'stale-room': 0 },
+      rooms: [
+        { roomId: 'live-room', unreadCount: 1 },
+        { roomId: 'stale-room', unreadCount: 9 },
+        { roomId: 'list-room', unreadCount: 3 },
+        { roomId: 'quiet-room', unreadCount: 7 },
+        { roomId: 'broken-room', unreadCount: Number.NaN }
+      ]
+    }),
+    2 + 4 + 0 + 3
+  );
 });
 
 test('badge sync sends each change once and clears to zero', async () => {
@@ -78,4 +79,3 @@ test('badge sync is a no-op without the desktop bridge and retries after a failu
   await flush();
   assert.deepEqual(sent, [2]);
 });
-

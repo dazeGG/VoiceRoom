@@ -6,7 +6,8 @@ import ComposerHarness from './harness/ComposerHarness.svelte';
 afterEach(cleanup);
 
 type Harness = { insert(text: string, caret?: number): boolean; setValue(next: string): void };
-const renderHarness = (props: { initial?: string; maxlength?: number }) => render(ComposerHarness, { props }).component as unknown as Harness;
+const renderHarness = (props: { initial?: string; maxlength?: number }) =>
+  render(ComposerHarness, { props }).component as unknown as Harness;
 
 const field = () => screen.getByRole('textbox', { name: 'Сообщение' });
 const value = () => screen.getByTestId('value').textContent;
@@ -44,7 +45,12 @@ test('clearing the value from outside (after sending) empties the field', () => 
 
 test('pasting rich content inserts plain text only', async () => {
   render(ComposerHarness, { props: { initial: '' } });
-  const data = { getData: (type: string) => (type === 'text/plain' ? 'жирный <b>' : '<b>жирный</b>'), types: ['text/plain', 'text/html'], files: [], items: [] };
+  const data = {
+    getData: (type: string) => (type === 'text/plain' ? 'жирный <b>' : '<b>жирный</b>'),
+    types: ['text/plain', 'text/html'],
+    files: [],
+    items: []
+  };
   await fireEvent.paste(field(), { clipboardData: data });
   flushSync();
   expect(value()).toBe('жирный <b>');

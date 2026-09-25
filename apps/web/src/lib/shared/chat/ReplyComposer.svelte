@@ -88,8 +88,7 @@
       disabled={disabled || store.sending || !target || target.deleted}
       rows="1"
       oninput={updateDraft}
-      onkeydown={onKeydown}
-    ></textarea>
+      onkeydown={onKeydown}></textarea>
     <button
       type="button"
       aria-label="Отправить ответ"

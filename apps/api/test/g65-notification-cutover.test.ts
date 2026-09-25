@@ -12,19 +12,43 @@ test('G65-A02 ten provider failures stop claiming until the worker restarts', as
   let claims = 0;
   const control: { stop?: () => void } = {};
   const outbox = {
-    async acquireLease() { return { acquired: true, fencingToken: 1 }; },
-    async renewLease() { return { renewed: true }; },
+    async acquireLease() {
+      return { acquired: true, fencingToken: 1 };
+    },
+    async renewLease() {
+      return { renewed: true };
+    },
     async releaseLease() {},
-    async recordHeartbeat(input: { ready?: boolean }) { if (input.ready === false) setImmediate(() => control.stop?.()); },
-    async oldestPendingAgeMs() { return 0; },
-    async claimBatch() { claims += 1; return [{ eventId: `e${claims}`, createdAt: new Date(), attempts: 1, payload: { body: 'hi' } }]; },
-    async loadCurrent() { return { level: 'all', reasons: [] }; },
+    async recordHeartbeat(input: { ready?: boolean }) {
+      if (input.ready === false) setImmediate(() => control.stop?.());
+    },
+    async oldestPendingAgeMs() {
+      return 0;
+    },
+    async claimBatch() {
+      claims += 1;
+      return [{ eventId: `e${claims}`, createdAt: new Date(), attempts: 1, payload: { body: 'hi' } }];
+    },
+    async loadCurrent() {
+      return { level: 'all', reasons: [] };
+    },
     async reschedule() {},
     async markDelivered() {},
     async markSuppressed() {}
   };
-  const provider = { async deliver() { throw new Error('push service down'); } };
-  const worker = createNotificationDeliveryWorker({ outbox, provider, idleMs: 1, leaseMs: 1000, renewMs: 100, logger: { info() {}, warn() {}, error() {} } } as never);
+  const provider = {
+    async deliver() {
+      throw new Error('push service down');
+    }
+  };
+  const worker = createNotificationDeliveryWorker({
+    outbox,
+    provider,
+    idleMs: 1,
+    leaseMs: 1000,
+    renewMs: 100,
+    logger: { info() {}, warn() {}, error() {} }
+  } as never);
   control.stop = () => void worker.stop();
   await worker.start();
   assert.equal(worker.disabledReason, 'provider_failure_threshold');
@@ -32,5 +56,8 @@ test('G65-A02 ten provider failures stop claiming until the worker restarts', as
 });
 
 test('G65-A02 message direct emit and delivery claims cannot run together', () => {
-  assert.throws(() => readMessageDeliveryMode({ MESSAGE_DIRECT_EMIT_ENABLED: 'true', MESSAGE_DELIVERY_CLAIM_ENABLED: 'true' }), /cannot both be enabled/);
+  assert.throws(
+    () => readMessageDeliveryMode({ MESSAGE_DIRECT_EMIT_ENABLED: 'true', MESSAGE_DELIVERY_CLAIM_ENABLED: 'true' }),
+    /cannot both be enabled/
+  );
 });

@@ -17,12 +17,18 @@ test('typing notices name a room or a user and carry nothing the server trusts',
   assert.ok(TYPING_NOTICE_TTL_MS > TYPING_NOTICE_INTERVAL_MS, 'a repeated notice arrives before the last one expires');
 
   assert.equal(validateClientCommand({ type: 'room.chat.typing', payload: { roomId: 'abcdefghij' } }).ok, true);
-  assert.deepEqual(validateClientCommand({ type: 'room.chat.typing', payload: {} }), { ok: false, code: 'invalid_room_id' });
+  assert.deepEqual(validateClientCommand({ type: 'room.chat.typing', payload: {} }), {
+    ok: false,
+    code: 'invalid_room_id'
+  });
 
   const userId = '123e4567-e89b-12d3-a456-426614174000';
   assert.equal(validateClientCommand({ type: 'dm.typing', payload: { userId } }).ok, true);
   for (const bad of [undefined, '', 'bob', 42, `${userId}x`]) {
-    assert.deepEqual(validateClientCommand({ type: 'dm.typing', payload: { userId: bad } }), { ok: false, code: 'invalid_user_id' });
+    assert.deepEqual(validateClientCommand({ type: 'dm.typing', payload: { userId: bad } }), {
+      ok: false,
+      code: 'invalid_user_id'
+    });
   }
 });
 
@@ -34,16 +40,19 @@ test('a typing notice says whether the person types or picks an emoji, and means
   for (const bad of ['', 'Emoji', 'recording', 1, {}]) assert.equal(normalizeTypingActivity(bad), null);
 
   const userId = '123e4567-e89b-12d3-a456-426614174000';
-  assert.equal(validateClientCommand({ type: 'room.chat.typing', payload: { roomId: 'abcdefghij', activity: 'emoji' } }).ok, true);
+  assert.equal(
+    validateClientCommand({ type: 'room.chat.typing', payload: { roomId: 'abcdefghij', activity: 'emoji' } }).ok,
+    true
+  );
   assert.equal(validateClientCommand({ type: 'dm.typing', payload: { userId, activity: 'typing' } }).ok, true);
   assert.deepEqual(
     validateClientCommand({ type: 'room.chat.typing', payload: { roomId: 'abcdefghij', activity: 'recording' } }),
     { ok: false, code: 'invalid_typing_activity' }
   );
-  assert.deepEqual(
-    validateClientCommand({ type: 'dm.typing', payload: { userId, activity: 42 } }),
-    { ok: false, code: 'invalid_typing_activity' }
-  );
+  assert.deepEqual(validateClientCommand({ type: 'dm.typing', payload: { userId, activity: 42 } }), {
+    ok: false,
+    code: 'invalid_typing_activity'
+  });
 });
 
 test('parseClientEnvelope accepts valid envelopes', () => {

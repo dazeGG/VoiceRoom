@@ -15,7 +15,14 @@ import {
 } from '../src/lib/migrate.ts';
 
 class FakeClient {
-  constructor({ guardTable = true, migrationsTable = true, migrationNames = expectedMigrationCatalog(), guardState = 'clean', loseLock = false, lockTimeout = false } = {}) {
+  constructor({
+    guardTable = true,
+    migrationsTable = true,
+    migrationNames = expectedMigrationCatalog(),
+    guardState = 'clean',
+    loseLock = false,
+    lockTimeout = false
+  } = {}) {
     this.guardTable = guardTable;
     this.migrationsTable = migrationsTable;
     this.migrationNames = migrationNames;
@@ -53,8 +60,19 @@ class FakeClient {
       this.lockHeld = false;
       return { rows: [{ pg_advisory_unlock: held }] };
     }
-    if (sql.includes('to_regclass')) return { rows: [{ guard_table: this.guardTable ? 'voiceroom_migration_guard' : null, migrations_table: this.migrationsTable ? 'pgmigrations' : null }] };
-    if (sql.startsWith('CREATE TABLE')) { this.guardTable = true; return { rows: [] }; }
+    if (sql.includes('to_regclass'))
+      return {
+        rows: [
+          {
+            guard_table: this.guardTable ? 'voiceroom_migration_guard' : null,
+            migrations_table: this.migrationsTable ? 'pgmigrations' : null
+          }
+        ]
+      };
+    if (sql.startsWith('CREATE TABLE')) {
+      this.guardTable = true;
+      return { rows: [] };
+    }
     if (sql.startsWith('SELECT state FROM')) return { rows: [{ state: this.guardState }] };
     if (sql.startsWith('SELECT marker FROM')) return { rows: [{ marker: 'fixture' }] };
     if (sql.startsWith('SELECT state, marker FROM')) return { rows: [{ state: this.guardState, marker: 'fixture' }] };
@@ -123,7 +141,9 @@ test('G15-A02 interrupted migration leaves a dirty rollout fence', async () => {
     runMigrations({
       databaseUrl: 'postgres://fixture',
       clientFactory: () => client,
-      migrationRunner: async () => { throw new Error('interrupted fixture'); },
+      migrationRunner: async () => {
+        throw new Error('interrupted fixture');
+      },
       logger: { log() {}, warn() {}, error() {}, info() {} }
     }),
     /interrupted fixture/
@@ -139,11 +159,31 @@ test('G15-A02 rollout requires a clean guard and the exact migration catalog/hea
     );
   }
 
-  await assert.rejects(assertMigrationReady({ databaseUrl: 'postgres://fixture', clientFactory: () => new FakeClient({ guardTable: false }) }), /guard or catalog is absent/);
-  await assert.rejects(assertMigrationReady({ databaseUrl: 'postgres://fixture', clientFactory: () => new FakeClient({ migrationsTable: false }) }), /guard or catalog is absent/);
+  await assert.rejects(
+    assertMigrationReady({
+      databaseUrl: 'postgres://fixture',
+      clientFactory: () => new FakeClient({ guardTable: false })
+    }),
+    /guard or catalog is absent/
+  );
+  await assert.rejects(
+    assertMigrationReady({
+      databaseUrl: 'postgres://fixture',
+      clientFactory: () => new FakeClient({ migrationsTable: false })
+    }),
+    /guard or catalog is absent/
+  );
   const stale = expectedMigrationCatalog().slice(0, -1);
-  await assert.rejects(assertMigrationReady({ databaseUrl: 'postgres://fixture', clientFactory: () => new FakeClient({ migrationNames: stale }) }), /catalog\/head does not match/);
-  await assert.doesNotReject(assertMigrationReady({ databaseUrl: 'postgres://fixture', clientFactory: () => new FakeClient() }));
+  await assert.rejects(
+    assertMigrationReady({
+      databaseUrl: 'postgres://fixture',
+      clientFactory: () => new FakeClient({ migrationNames: stale })
+    }),
+    /catalog\/head does not match/
+  );
+  await assert.doesNotReject(
+    assertMigrationReady({ databaseUrl: 'postgres://fixture', clientFactory: () => new FakeClient() })
+  );
 });
 
 test('G15-A02 production rejects unfenced and down migration commands before database access', () => {
@@ -154,34 +194,56 @@ test('G15-A02 production rejects unfenced and down migration commands before dat
       encoding: 'utf8'
     });
     assert.notEqual(result.status, 0);
-    assert.match(`${result.stdout}\n${result.stderr}`, /Production (migrations require the fenced advisory lock|down migrations are disabled)/);
+    assert.match(
+      `${result.stdout}\n${result.stderr}`,
+      /Production (migrations require the fenced advisory lock|down migrations are disabled)/
+    );
     assert.doesNotMatch(`${result.stdout}\n${result.stderr}`, /ECONNREFUSED/);
   }
 });
 
-test('G15-A01 concurrent PostgreSQL runners serialize behind one advisory fence', {
-  skip: !process.env.TEST_DATABASE_URL
-}, async () => {
-  const databaseUrl = process.env.TEST_DATABASE_URL;
-  const order = [];
-  const migrationRunner = async ({ dbClient }) => {
-    const [{ backend }] = (await dbClient.query('SELECT pg_backend_pid() AS backend')).rows;
-    order.push(`start:${backend}`);
-    await new Promise((resolve) => setTimeout(resolve, 75));
-    order.push(`end:${backend}`);
-    return [];
-  };
-  const clientFactory = (connectionString) => new Client({ connectionString });
-  await Promise.all([
-    runMigrations({ databaseUrl, clientFactory, migrationRunner, logger: { log() {}, info() {}, warn() {}, error() {} } }),
-    runMigrations({ databaseUrl, clientFactory, migrationRunner, logger: { log() {}, info() {}, warn() {}, error() {} } })
-  ]);
-  assert.match(order.join(','), /^start:\d+,end:\d+,start:\d+,end:\d+$/);
-});
+test(
+  'G15-A01 concurrent PostgreSQL runners serialize behind one advisory fence',
+  {
+    skip: !process.env.TEST_DATABASE_URL
+  },
+  async () => {
+    const databaseUrl = process.env.TEST_DATABASE_URL;
+    const order = [];
+    const migrationRunner = async ({ dbClient }) => {
+      const [{ backend }] = (await dbClient.query('SELECT pg_backend_pid() AS backend')).rows;
+      order.push(`start:${backend}`);
+      await new Promise((resolve) => setTimeout(resolve, 75));
+      order.push(`end:${backend}`);
+      return [];
+    };
+    const clientFactory = (connectionString) => new Client({ connectionString });
+    await Promise.all([
+      runMigrations({
+        databaseUrl,
+        clientFactory,
+        migrationRunner,
+        logger: { log() {}, info() {}, warn() {}, error() {} }
+      }),
+      runMigrations({
+        databaseUrl,
+        clientFactory,
+        migrationRunner,
+        logger: { log() {}, info() {}, warn() {}, error() {} }
+      })
+    ]);
+    assert.match(order.join(','), /^start:\d+,end:\d+,start:\d+,end:\d+$/);
+  }
+);
 
-test('G15-A03 an existing PostgreSQL database is unready until the exact guarded catalog reaches this build head', { skip:!process.env.TEST_DATABASE_URL }, async (t) => {
-  const db=await createTestDatabase(t); t.after(()=>db.cleanup());
-  await assert.rejects(assertMigrationReady({databaseUrl:db.databaseUrl}),/guard or catalog is absent/);
-  await runMigrations({databaseUrl:db.databaseUrl,logger:{log(){},info(){},warn(){},error(){}}});
-  await assert.doesNotReject(assertMigrationReady({databaseUrl:db.databaseUrl}));
-});
+test(
+  'G15-A03 an existing PostgreSQL database is unready until the exact guarded catalog reaches this build head',
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (t) => {
+    const db = await createTestDatabase(t);
+    t.after(() => db.cleanup());
+    await assert.rejects(assertMigrationReady({ databaseUrl: db.databaseUrl }), /guard or catalog is absent/);
+    await runMigrations({ databaseUrl: db.databaseUrl, logger: { log() {}, info() {}, warn() {}, error() {} } });
+    await assert.doesNotReject(assertMigrationReady({ databaseUrl: db.databaseUrl }));
+  }
+);

@@ -30,10 +30,7 @@ export function closeProfileCard(restoreFocus = true): void {
  * Anchors the card under the clicked element rather than at the pointer, so a
  * click anywhere on an avatar produces the same placement.
  */
-export function openProfileCardFor(
-  person: ProfileCardPerson,
-  anchor: EventTarget | ProfileCardAnchor | null
-): void {
+export function openProfileCardFor(person: ProfileCardPerson, anchor: EventTarget | ProfileCardAnchor | null): void {
   const element = anchor instanceof HTMLElement ? anchor : null;
   const explicit = !element && anchor && 'rect' in anchor ? anchor : null;
   const rect = explicit?.rect ?? element?.getBoundingClientRect() ?? null;

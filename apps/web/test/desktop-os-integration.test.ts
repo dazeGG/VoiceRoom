@@ -3,7 +3,6 @@ import { onTestFinished, test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { freshImport, muteWarnings, stubWindow } from './helpers/fresh-module.ts';
 
-
 // Every load gets fresh module instances, so module-level state (sync
 // de-duplication, the in-app navigation mark) never leaks between tests.
 async function loadModule(modulePath: string, windowValue: Record<string, unknown> = {}) {
@@ -21,16 +20,32 @@ test('desktop links normalize shell payloads and ignore anything unexpected', as
     voiceRoomDesktopLinks: {
       onOpen: (next) => {
         handler = next;
-        return () => { unsubscribed = true; };
+        return () => {
+          unsubscribed = true;
+        };
       }
     }
   });
 
-  assert.deepEqual(service.normalizeDesktopLink({ kind: 'room', roomId: 'abc123', route: '/r/abc123' }), { kind: 'room', roomId: 'abc123' });
-  assert.deepEqual(service.normalizeDesktopLink({ kind: 'mention', roomId: 'abc123', messageId: 'm1' }), { kind: 'mention', roomId: 'abc123', messageId: 'm1' });
+  assert.deepEqual(service.normalizeDesktopLink({ kind: 'room', roomId: 'abc123', route: '/r/abc123' }), {
+    kind: 'room',
+    roomId: 'abc123'
+  });
+  assert.deepEqual(service.normalizeDesktopLink({ kind: 'mention', roomId: 'abc123', messageId: 'm1' }), {
+    kind: 'mention',
+    roomId: 'abc123',
+    messageId: 'm1'
+  });
   assert.deepEqual(service.normalizeDesktopLink({ kind: 'dm', dmId: 'u-7' }), { kind: 'dm', dmId: 'u-7' });
   assert.deepEqual(service.normalizeDesktopLink({ kind: 'app' }), { kind: 'app' });
-  for (const junk of [null, 'room', { kind: 'room', roomId: 'x' }, { kind: 'mention', roomId: 'abc123' }, { kind: 'dm', dmId: '../x' }, { kind: 'settings' }]) {
+  for (const junk of [
+    null,
+    'room',
+    { kind: 'room', roomId: 'x' },
+    { kind: 'mention', roomId: 'abc123' },
+    { kind: 'dm', dmId: '../x' },
+    { kind: 'settings' }
+  ]) {
     assert.equal(service.normalizeDesktopLink(junk), null);
   }
 
@@ -123,15 +138,22 @@ test('desktop diagnostics copy, open logs and share the web context', async () =
   service.syncDesktopDiagnosticsContext({ roomId: 'abc123', userId: 'u1' });
   service.syncDesktopDiagnosticsContext({ roomId: '', userId: 'u1' });
   await flush();
-  assert.deepEqual(contexts, [{ roomId: 'abc123', userId: 'u1' }, { roomId: '', userId: 'u1' }]);
+  assert.deepEqual(contexts, [
+    { roomId: 'abc123', userId: 'u1' },
+    { roomId: '', userId: 'u1' }
+  ]);
 });
 
 test('desktop diagnostics fail closed on bridge errors and without the bridge', async () => {
   const service = await loadModule('/src/lib/platform/desktop-diagnostics.ts', {
     voiceRoomDesktopDiagnostics: {
-      copyInfo: async () => { throw new Error('untrusted'); },
+      copyInfo: async () => {
+        throw new Error('untrusted');
+      },
       getInfo: async () => ({ text: 'app: 1.3.0' }),
-      openLogsFolder: async () => { throw new Error('untrusted'); },
+      openLogsFolder: async () => {
+        throw new Error('untrusted');
+      },
       setContext: async () => {}
     }
   });
@@ -146,8 +168,10 @@ test('desktop diagnostics fail closed on bridge errors and without the bridge', 
 
 test('open in app targets desktop browsers only with the right scheme', async () => {
   const service = await loadModule('/src/lib/platform/open-in-app.ts', {});
-  const windowsChrome = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0 Safari/537.36';
-  const macSafari = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Safari/605.1.15';
+  const windowsChrome =
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0 Safari/537.36';
+  const macSafari =
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Safari/605.1.15';
   const linux = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0 Safari/537.36';
 
   assert.equal(service.resolveAppLinkScheme('voiceroom.ru'), 'voiceroom');
@@ -159,16 +183,32 @@ test('open in app targets desktop browsers only with the right scheme', async ()
 
   assert.equal(service.shouldOfferOpenInApp({ desktopBridge: false, userAgent: windowsChrome }), true);
   assert.equal(service.shouldOfferOpenInApp({ desktopBridge: false, userAgent: macSafari, maxTouchPoints: 0 }), true);
-  assert.equal(service.shouldOfferOpenInApp({ desktopBridge: true, userAgent: windowsChrome }), false, 'inside the app');
-  assert.equal(service.shouldOfferOpenInApp({ desktopBridge: false, userAgent: macSafari, maxTouchPoints: 5 }), false, 'iPad desktop mode');
+  assert.equal(
+    service.shouldOfferOpenInApp({ desktopBridge: true, userAgent: windowsChrome }),
+    false,
+    'inside the app'
+  );
+  assert.equal(
+    service.shouldOfferOpenInApp({ desktopBridge: false, userAgent: macSafari, maxTouchPoints: 5 }),
+    false,
+    'iPad desktop mode'
+  );
   assert.equal(service.shouldOfferOpenInApp({ desktopBridge: false, userAgent: windowsChrome, mobile: true }), false);
-  assert.equal(service.shouldOfferOpenInApp({ automated: true, desktopBridge: false, userAgent: windowsChrome }), false, 'Playwright and other webdriver sessions');
+  assert.equal(
+    service.shouldOfferOpenInApp({ automated: true, desktopBridge: false, userAgent: windowsChrome }),
+    false,
+    'Playwright and other webdriver sessions'
+  );
   assert.equal(service.shouldOfferOpenInApp({ desktopBridge: false, userAgent: linux }), false);
 });
 
 test('open in app navigates Chromium and uses a hidden frame in Firefox', async () => {
   const service = await loadModule('/src/lib/platform/open-in-app.ts', {});
-  const chromium = { document: {}, location: { href: 'https://voiceroom.ru/r/abc123' }, navigator: { userAgent: 'Chrome/146' } };
+  const chromium = {
+    document: {},
+    location: { href: 'https://voiceroom.ru/r/abc123' },
+    navigator: { userAgent: 'Chrome/146' }
+  };
   service.launchAppLink('voiceroom://r/abc123', chromium);
   assert.equal(chromium.location.href, 'voiceroom://r/abc123');
 
@@ -209,10 +249,22 @@ test('room switch confirmation asks only when leaving another live call', async 
   onTestFinished(() => localStorage.clear());
   const model = await loadModule('/src/lib/features/home/model/room-switch-confirmation.ts', {});
 
-  assert.equal(model.shouldConfirmRoomSwitch({ confirmEnabled: true, connectedRoomId: 'room-a', targetRoomId: 'room-b' }), true);
-  assert.equal(model.shouldConfirmRoomSwitch({ confirmEnabled: true, connectedRoomId: 'room-a', targetRoomId: 'room-a' }), false);
-  assert.equal(model.shouldConfirmRoomSwitch({ confirmEnabled: true, connectedRoomId: null, targetRoomId: 'room-b' }), false);
-  assert.equal(model.shouldConfirmRoomSwitch({ confirmEnabled: false, connectedRoomId: 'room-a', targetRoomId: 'room-b' }), false);
+  assert.equal(
+    model.shouldConfirmRoomSwitch({ confirmEnabled: true, connectedRoomId: 'room-a', targetRoomId: 'room-b' }),
+    true
+  );
+  assert.equal(
+    model.shouldConfirmRoomSwitch({ confirmEnabled: true, connectedRoomId: 'room-a', targetRoomId: 'room-a' }),
+    false
+  );
+  assert.equal(
+    model.shouldConfirmRoomSwitch({ confirmEnabled: true, connectedRoomId: null, targetRoomId: 'room-b' }),
+    false
+  );
+  assert.equal(
+    model.shouldConfirmRoomSwitch({ confirmEnabled: false, connectedRoomId: 'room-a', targetRoomId: 'room-b' }),
+    false
+  );
 
   assert.equal(model.readRoomSwitchConfirmEnabled(), true);
   assert.equal(model.applyRoomSwitchDecision({ proceed: false, dontAskAgain: true }), false);
@@ -274,4 +326,3 @@ test('desktop build download uses the release asset and falls back to the releas
   ]);
   assert.equal(clicked.length, 1);
 });
-

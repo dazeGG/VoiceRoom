@@ -16,10 +16,29 @@ type ReactorTuple = { createdAtMicros: string; id: string };
 type ReactorRow = { userId: string; displayName: string; avatarUrl: string | null; cursorTuple: ReactorTuple };
 
 export interface ReactionRepository {
-  setDesiredState(input: { type: string; messageId: string; emoji: string; userId: string; active: boolean; client: Client }): Promise<{ changed: boolean; revision: string }>;
-  getSummary(input: { type: string; messageId: string; emoji: string; userId: string; client: Client }): Promise<unknown>;
+  setDesiredState(input: {
+    type: string;
+    messageId: string;
+    emoji: string;
+    userId: string;
+    active: boolean;
+    client: Client;
+  }): Promise<{ changed: boolean; revision: string }>;
+  getSummary(input: {
+    type: string;
+    messageId: string;
+    emoji: string;
+    userId: string;
+    client: Client;
+  }): Promise<unknown>;
   listSummaries(input: { type: string; messageId: string; userId: string | null }): Promise<unknown[]>;
-  listReactors(input: { type: string; messageId: string; emoji: string; limit: number; after: ReactorTuple | null }): Promise<ReactorRow[]>;
+  listReactors(input: {
+    type: string;
+    messageId: string;
+    emoji: string;
+    limit: number;
+    after: ReactorTuple | null;
+  }): Promise<ReactorRow[]>;
   transaction?<T>(callback: (client: Client) => Promise<T>): Promise<T>;
 }
 
@@ -28,10 +47,21 @@ export interface ReactionCursorCodec {
   decode(cursor: string, options: { purpose: string; context: string }): ReactorTuple;
 }
 
-type VisibilityCheck = (input: { conversation: Conversation; messageId: string; viewer: Viewer; operation: 'read' | 'write' }) => unknown;
-type WritesEnabled = boolean | ((context: { conversation: Conversation; mutation: ReactionMutation; viewer: Viewer }) => unknown);
+type VisibilityCheck = (input: {
+  conversation: Conversation;
+  messageId: string;
+  viewer: Viewer;
+  operation: 'read' | 'write';
+}) => unknown;
+type WritesEnabled =
+  boolean | ((context: { conversation: Conversation; mutation: ReactionMutation; viewer: Viewer }) => unknown);
 
-export type ReactionEvent = { conversation: Conversation; messageId: string; actorUserId: string; summary: ReactionSummary };
+export type ReactionEvent = {
+  conversation: Conversation;
+  messageId: string;
+  actorUserId: string;
+  summary: ReactionSummary;
+};
 
 class ReactionServiceError extends Error {
   declare code: string;
@@ -79,7 +109,12 @@ function createReactionService({
   const visibility: VisibilityCheck = typeof requireVisible === 'function' ? requireVisible : async () => false;
   const publisher = typeof publish === 'function' ? publish : () => false;
 
-  async function assertVisible({ conversation, messageId, viewer, operation }: {
+  async function assertVisible({
+    conversation,
+    messageId,
+    viewer,
+    operation
+  }: {
     conversation: Conversation;
     messageId: string;
     viewer: Viewer;
@@ -91,13 +126,19 @@ function createReactionService({
     }
   }
 
-  async function canWrite(context: { conversation: Conversation; mutation: ReactionMutation; viewer: Viewer }): Promise<boolean> {
-    return typeof writesEnabled === 'function'
-      ? (await writesEnabled(context)) === true
-      : writesEnabled === true;
+  async function canWrite(context: {
+    conversation: Conversation;
+    mutation: ReactionMutation;
+    viewer: Viewer;
+  }): Promise<boolean> {
+    return typeof writesEnabled === 'function' ? (await writesEnabled(context)) === true : writesEnabled === true;
   }
 
-  async function getSummaries({ conversation: rawConversation, messageId, viewer }: {
+  async function getSummaries({
+    conversation: rawConversation,
+    messageId,
+    viewer
+  }: {
     conversation?: unknown;
     messageId?: unknown;
     viewer?: Viewer;
@@ -114,7 +155,11 @@ function createReactionService({
     return summaries.map(normalizeReactionSummary).filter((summary): summary is ReactionSummary => Boolean(summary));
   }
 
-  async function setDesired({ conversation: rawConversation, mutation: rawMutation, viewer }: {
+  async function setDesired({
+    conversation: rawConversation,
+    mutation: rawMutation,
+    viewer
+  }: {
     conversation?: unknown;
     mutation?: unknown;
     viewer?: Viewer;
@@ -149,9 +194,7 @@ function createReactionService({
       });
       return { changed: result.changed, summary: normalizeReactionSummary(summary) };
     };
-    const result = reactions.transaction
-      ? await reactions.transaction(execute)
-      : await execute();
+    const result = reactions.transaction ? await reactions.transaction(execute) : await execute();
     if (!result.summary) throw new Error('Repository returned an invalid reaction summary');
 
     if (result.changed) {
@@ -165,7 +208,13 @@ function createReactionService({
     return result.summary;
   }
 
-  async function getReactors({ conversation: rawConversation, messageId, emoji, query, viewer }: {
+  async function getReactors({
+    conversation: rawConversation,
+    messageId,
+    emoji,
+    query,
+    viewer
+  }: {
     conversation?: unknown;
     messageId?: unknown;
     emoji?: unknown;
@@ -196,13 +245,14 @@ function createReactionService({
     const last = pageRows.at(-1);
     const page = {
       reactors: pageRows.map(({ cursorTuple: _cursorTuple, ...reactor }) => reactor),
-      nextCursor: hasMore && last
-        ? codec.encode({
-            purpose: 'reaction-reactors',
-            context: cursorContext,
-            tuple: last.cursorTuple
-          })
-        : null
+      nextCursor:
+        hasMore && last
+          ? codec.encode({
+              purpose: 'reaction-reactors',
+              context: cursorContext,
+              tuple: last.cursorTuple
+            })
+          : null
     };
     const normalizedPage = normalizeReactorPage(page);
     if (!normalizedPage) throw new Error('Repository returned an invalid reactor page');

@@ -5,7 +5,11 @@ import { URL } from 'node:url';
 import type pg from 'pg';
 import { createDbPool } from '../../lib/db.ts';
 import { createGateCredentialSigner } from './gate-credential-signer.ts';
-import { createCredentialBoundaryService, type CredentialBoundaryService, type GateRoomStore } from './credential-boundary-service.ts';
+import {
+  createCredentialBoundaryService,
+  type CredentialBoundaryService,
+  type GateRoomStore
+} from './credential-boundary-service.ts';
 import { createRoomStore } from '../../lib/room-store.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { createLogger } from '../../lib/logger.ts';
@@ -17,8 +21,7 @@ const VALIDATE_TIMEOUT_MS = 5_000;
 type GateLogger = { warn(...args: unknown[]): void; error(...args: unknown[]): void };
 type GateSocket = Duplex & { writable?: boolean; writableEnded?: boolean };
 type GateDecision =
-  | { ok: true; claims: unknown; strippedPath: string }
-  | { ok: false; code: string; strippedPath: string };
+  { ok: true; claims: unknown; strippedPath: string } | { ok: false; code: string; strippedPath: string };
 
 function normalizeGatePath(value: unknown): string {
   const path = String(value || DEFAULT_GATE_PATH).trim();
@@ -27,7 +30,8 @@ function normalizeGatePath(value: unknown): string {
 
 function cleanUpstreamUrl(value: unknown): URL {
   const parsed = new URL(String(value || 'ws://127.0.0.1:7880'));
-  if (parsed.protocol !== 'ws:') throw new Error('LIVEKIT_INTERNAL_URL must be ws:// because the auth gate uses a raw TCP upstream');
+  if (parsed.protocol !== 'ws:')
+    throw new Error('LIVEKIT_INTERNAL_URL must be ws:// because the auth gate uses a raw TCP upstream');
   return parsed;
 }
 
@@ -39,10 +43,7 @@ function extractCredential(requestUrl?: string): { credential: string; strippedP
 }
 
 function isSocketWritable(socket: GateSocket | null | undefined): boolean {
-  return Boolean(socket)
-    && !socket!.destroyed
-    && socket!.writable !== false
-    && !socket!.writableEnded;
+  return Boolean(socket) && !socket!.destroyed && socket!.writable !== false && !socket!.writableEnded;
 }
 
 function destroySocket(socket: Duplex | null | undefined): void {
@@ -74,7 +75,11 @@ function isValidatePath(requestUrl: string | undefined, gatePath: string): boole
   return pathname === `${gatePath}/validate` || pathname === `${gatePath}/v1/validate`;
 }
 
-function buildUpstreamUpgradeRequest({ request, strippedPath, upstream }: {
+function buildUpstreamUpgradeRequest({
+  request,
+  strippedPath,
+  upstream
+}: {
   request: http.IncomingMessage;
   strippedPath: string;
   upstream: URL;
@@ -118,13 +123,15 @@ function createLiveKitAuthGateService({
 } = {}) {
   const path = normalizeGatePath(gatePath);
   const upstream = cleanUpstreamUrl(upstreamUrl);
-  const activePool = roomStore ? null : (pool || createDbPool({ databaseUrl, logger }));
+  const activePool = roomStore ? null : pool || createDbPool({ databaseUrl, logger });
   // Tests hand in a fake pool, so the option type stays wider than the store's.
   const store = (roomStore || createRoomStore({ pool: activePool as pg.Pool | null, logger })) as GateRoomStore;
-  const credentialBoundary = boundary || createCredentialBoundaryService({
-    roomStore: store,
-    signer: createGateCredentialSigner({ secret })
-  });
+  const credentialBoundary =
+    boundary ||
+    createCredentialBoundaryService({
+      roomStore: store,
+      signer: createGateCredentialSigner({ secret })
+    });
 
   // With `headers` the LiveKit JWT that rides along must belong to the same
   // admission as the gate credential (see livekit-token-binding.js). The
@@ -144,7 +151,8 @@ function createLiveKitAuthGateService({
   function createServer(): http.Server {
     const server = http.createServer((req, res) => {
       if (req.url === '/readyz') {
-        credentialBoundary.assertReady()
+        credentialBoundary
+          .assertReady()
           .then(() => {
             res.writeHead(200, { 'content-type': 'application/json' });
             res.end(JSON.stringify({ ok: true }));
@@ -195,20 +203,28 @@ function createLiveKitAuthGateService({
               return;
             }
             try {
-              upstreamSocket.write(buildUpstreamUpgradeRequest({ request, strippedPath: decision.strippedPath, upstream }));
+              upstreamSocket.write(
+                buildUpstreamUpgradeRequest({ request, strippedPath: decision.strippedPath, upstream })
+              );
               if (head?.length) upstreamSocket.write(head);
               tunnelEstablished = true;
               socket.pipe(upstreamSocket);
               upstreamSocket.pipe(socket);
             } catch (error) {
-              logger.error({ evt: LOG_EVENTS.LIVEKIT_GATE_UPSTREAM_FAILED, err: error }, 'LiveKit gate upstream connection failed');
+              logger.error(
+                { evt: LOG_EVENTS.LIVEKIT_GATE_UPSTREAM_FAILED, err: error },
+                'LiveKit gate upstream connection failed'
+              );
               destroySocket(socket);
               closeUpstream();
             }
           });
           upstreamSocket.once('error', (error) => {
             if (!tunnelEstablished) {
-              logger.error({ evt: LOG_EVENTS.LIVEKIT_GATE_UPSTREAM_FAILED, err: error }, 'LiveKit gate upstream connection failed');
+              logger.error(
+                { evt: LOG_EVENTS.LIVEKIT_GATE_UPSTREAM_FAILED, err: error },
+                'LiveKit gate upstream connection failed'
+              );
               deny(socket, 503, 'Service Unavailable');
             } else {
               destroySocket(socket);
@@ -218,7 +234,10 @@ function createLiveKitAuthGateService({
           upstreamSocket.once('close', () => destroySocket(socket));
         })
         .catch((error: unknown) => {
-          logger.error({ evt: LOG_EVENTS.LIVEKIT_GATE_AUTHORIZATION_FAILED, err: error }, 'LiveKit gate authorization failed');
+          logger.error(
+            { evt: LOG_EVENTS.LIVEKIT_GATE_AUTHORIZATION_FAILED, err: error },
+            'LiveKit gate authorization failed'
+          );
           deny(socket, 503, 'Service Unavailable');
         });
     });
@@ -242,19 +261,22 @@ function createLiveKitAuthGateService({
         }
         const headers: http.OutgoingHttpHeaders = { ...req.headers, host: upstream.host };
         delete headers['x-vr-gate-credential'];
-        const upstreamRequest = http.request({
-          headers,
-          host: upstream.hostname,
-          method: 'GET',
-          path: decision.strippedPath,
-          port: Number(upstream.port || 80),
-          timeout: VALIDATE_TIMEOUT_MS
-        }, (upstreamResponse) => {
-          res.writeHead(upstreamResponse.statusCode || 502, {
-            'content-type': upstreamResponse.headers['content-type'] || 'text/plain; charset=utf-8'
-          });
-          upstreamResponse.pipe(res);
-        });
+        const upstreamRequest = http.request(
+          {
+            headers,
+            host: upstream.hostname,
+            method: 'GET',
+            path: decision.strippedPath,
+            port: Number(upstream.port || 80),
+            timeout: VALIDATE_TIMEOUT_MS
+          },
+          (upstreamResponse) => {
+            res.writeHead(upstreamResponse.statusCode || 502, {
+              'content-type': upstreamResponse.headers['content-type'] || 'text/plain; charset=utf-8'
+            });
+            upstreamResponse.pipe(res);
+          }
+        );
         upstreamRequest.on('timeout', () => upstreamRequest.destroy(new Error('validate timed out')));
         upstreamRequest.on('error', (error) => {
           logger.error({ evt: LOG_EVENTS.LIVEKIT_GATE_UPSTREAM_FAILED, err: error }, 'LiveKit gate validate failed');
@@ -264,7 +286,10 @@ function createLiveKitAuthGateService({
         upstreamRequest.end();
       })
       .catch((error: unknown) => {
-        logger.error({ evt: LOG_EVENTS.LIVEKIT_GATE_AUTHORIZATION_FAILED, err: error }, 'LiveKit gate authorization failed');
+        logger.error(
+          { evt: LOG_EVENTS.LIVEKIT_GATE_AUTHORIZATION_FAILED, err: error },
+          'LiveKit gate authorization failed'
+        );
         res.writeHead(503);
         res.end();
       });
@@ -293,10 +318,16 @@ if (import.meta.main) {
     const port = Number(process.env.LIVEKIT_GATE_PORT || 3080);
     const host = process.env.LIVEKIT_GATE_HOST || '0.0.0.0';
     service.createServer().listen(port, host, () => {
-      logger.info({ evt: LOG_EVENTS.LISTENING, service: 'livekit-auth-gate', host, port, path: service.path }, 'LiveKit auth gate listening');
+      logger.info(
+        { evt: LOG_EVENTS.LISTENING, service: 'livekit-auth-gate', host, port, path: service.path },
+        'LiveKit auth gate listening'
+      );
     });
   } catch (error) {
-    logger.fatal({ evt: LOG_EVENTS.BOOTSTRAP_FAILED, service: 'livekit-auth-gate', err: error }, 'LiveKit auth gate failed to start');
+    logger.fatal(
+      { evt: LOG_EVENTS.BOOTSTRAP_FAILED, service: 'livekit-auth-gate', err: error },
+      'LiveKit auth gate failed to start'
+    );
     // The logger is silent unless LOG_LEVEL is set, and a process that refuses
     // to start must still tell the operator why.
     process.stderr.write(`LiveKit auth gate failed to start: ${(error as Error | null)?.stack || error}

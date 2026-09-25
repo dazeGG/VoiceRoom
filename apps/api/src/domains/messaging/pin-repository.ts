@@ -59,7 +59,7 @@ function mapPin(row: PinRow): StoredPin {
 }
 
 function createPinRepository({ client }: { client?: PinPool | null } = {}) {
-  const defaultClient: PinPool | null = client ? requireQuery(client) as PinPool : null;
+  const defaultClient: PinPool | null = client ? (requireQuery(client) as PinPool) : null;
   const queryClient = (override?: QueryClient | null): QueryClient => requireQuery(override || defaultClient);
 
   async function transaction<T>(callback: (client: QueryClient) => Promise<T>): Promise<T> {
@@ -80,15 +80,16 @@ function createPinRepository({ client }: { client?: PinPool | null } = {}) {
   }
 
   async function lockRoom({ roomId, client: override }: { roomId?: string } & Override = {}): Promise<void> {
-    await queryClient(override).query(
-      `SELECT pg_advisory_xact_lock(hashtext($1))`,
-      [`voice-room:room-pins:${roomId}`]
-    );
+    await queryClient(override).query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [`voice-room:room-pins:${roomId}`]);
   }
 
   // Pinned messages, newest pin first. Deleted messages are dropped here rather
   // than in the service so the count and the list can never disagree.
-  async function listPins({ roomId, limit = 50, client: override }: { roomId?: string; limit?: number } & Override = {}): Promise<StoredPin[]> {
+  async function listPins({
+    roomId,
+    limit = 50,
+    client: override
+  }: { roomId?: string; limit?: number } & Override = {}): Promise<StoredPin[]> {
     const result = await queryClient(override).query<PinRow>(
       `SELECT p.message_id,
               p.pinned_by,
@@ -124,7 +125,11 @@ function createPinRepository({ client }: { client?: PinPool | null } = {}) {
 
   // Resolves the message only when it actually belongs to the room and is still
   // visible, so a caller cannot pin someone else's message into their own room.
-  async function findVisibleMessage({ roomId, messageId, client: override }: { roomId?: string; messageId?: string } & Override = {}): Promise<boolean> {
+  async function findVisibleMessage({
+    roomId,
+    messageId,
+    client: override
+  }: { roomId?: string; messageId?: string } & Override = {}): Promise<boolean> {
     const result = await queryClient(override).query(
       `SELECT id FROM room_messages
        WHERE id = $1 AND room_id = $2 AND deleted_at IS NULL`,
@@ -133,7 +138,12 @@ function createPinRepository({ client }: { client?: PinPool | null } = {}) {
     return (result.rowCount ?? 0) > 0;
   }
 
-  async function pin({ roomId, messageId, userId, client: override }: { roomId?: string; messageId?: string; userId?: string } & Override = {}): Promise<{ changed: boolean }> {
+  async function pin({
+    roomId,
+    messageId,
+    userId,
+    client: override
+  }: { roomId?: string; messageId?: string; userId?: string } & Override = {}): Promise<{ changed: boolean }> {
     const result = await queryClient(override).query(
       `INSERT INTO room_message_pins (room_id, message_id, pinned_by)
        VALUES ($1, $2, $3)
@@ -143,7 +153,11 @@ function createPinRepository({ client }: { client?: PinPool | null } = {}) {
     return { changed: (result.rowCount ?? 0) > 0 };
   }
 
-  async function unpin({ roomId, messageId, client: override }: { roomId?: string; messageId?: string } & Override = {}): Promise<{ changed: boolean }> {
+  async function unpin({
+    roomId,
+    messageId,
+    client: override
+  }: { roomId?: string; messageId?: string } & Override = {}): Promise<{ changed: boolean }> {
     const result = await queryClient(override).query(
       `DELETE FROM room_message_pins WHERE room_id = $1 AND message_id = $2`,
       [roomId, messageId]

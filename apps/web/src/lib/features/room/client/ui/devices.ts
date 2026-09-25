@@ -53,7 +53,9 @@ export interface GateControlView {
 }
 
 export function getGateControlView(): GateControlView {
-  const levelDb = Number.isFinite(roomDeviceUi.micLevelDb) ? clampGateThresholdDb(roomDeviceUi.micLevelDb) : GATE_THRESHOLD_MIN_DB;
+  const levelDb = Number.isFinite(roomDeviceUi.micLevelDb)
+    ? clampGateThresholdDb(roomDeviceUi.micLevelDb)
+    : GATE_THRESHOLD_MIN_DB;
   const position = getDbMeterPosition(levelDb);
   // In automatic mode the live threshold is inside the worklet; the meter
   // does not pretend to know it.
@@ -266,8 +268,9 @@ export function updateGateThresholdFromSlider(value: string | number): void {
 }
 
 function updateActiveGateThreshold(threshold: number): boolean {
-  const gateProcessors = getMicrophoneProcessors(state.micProcessor)
-    .filter((processor) => processor.type === 'gate' && typeof processor.setThreshold === 'function');
+  const gateProcessors = getMicrophoneProcessors(state.micProcessor).filter(
+    (processor) => processor.type === 'gate' && typeof processor.setThreshold === 'function'
+  );
   if (gateProcessors.length === 0) return false;
 
   for (const processor of gateProcessors) {

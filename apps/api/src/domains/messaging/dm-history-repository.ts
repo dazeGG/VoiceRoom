@@ -34,7 +34,7 @@ export type HistoryDirectMessage = {
 type Page = { messages: HistoryDirectMessage[]; hasMoreBefore: boolean; hasMoreAfter: boolean };
 
 function boundedLimit(value: unknown): number {
-  return Math.max(1, Math.min(100, Number.isInteger(value) ? value as number : 50));
+  return Math.max(1, Math.min(100, Number.isInteger(value) ? (value as number) : 50));
 }
 
 function anchorTimestamp(parameter: number): string {
@@ -56,7 +56,11 @@ function mapDirectMessage(row: DirectMessageRow): HistoryDirectMessage {
   };
 }
 
-function createDmHistoryRepository({ databaseUrl, logger = createLogger({ name: 'api' }), pool }: {
+function createDmHistoryRepository({
+  databaseUrl,
+  logger = createLogger({ name: 'api' }),
+  pool
+}: {
   databaseUrl?: string;
   logger?: unknown;
   pool?: pg.Pool | null;
@@ -71,14 +75,20 @@ function createDmHistoryRepository({ databaseUrl, logger = createLogger({ name: 
   async function canReadThread({ userId, peerId }: { userId: string; peerId: string }): Promise<boolean> {
     if (!userId || !peerId || userId === peerId) return false;
     const [low, high] = userId < peerId ? [userId, peerId] : [peerId, userId];
-    const result = await getPool().query(
-      'SELECT 1 FROM friendships WHERE user_a_id = $1 AND user_b_id = $2 LIMIT 1',
-      [low, high]
-    );
+    const result = await getPool().query('SELECT 1 FROM friendships WHERE user_a_id = $1 AND user_b_id = $2 LIMIT 1', [
+      low,
+      high
+    ]);
     return result.rowCount === 1;
   }
 
-  async function querySide({ userId, peerId, anchor, direction, limit }: {
+  async function querySide({
+    userId,
+    peerId,
+    anchor,
+    direction,
+    limit
+  }: {
     userId: string;
     peerId: string;
     anchor: Anchor;
@@ -114,7 +124,15 @@ function createDmHistoryRepository({ databaseUrl, logger = createLogger({ name: 
     return result.rows.map(mapDirectMessage);
   }
 
-  async function listLatest({ userId, peerId, limit }: { userId: string; peerId: string; limit?: unknown }): Promise<Page> {
+  async function listLatest({
+    userId,
+    peerId,
+    limit
+  }: {
+    userId: string;
+    peerId: string;
+    limit?: unknown;
+  }): Promise<Page> {
     const size = boundedLimit(limit);
     const result = await getPool().query<DirectMessageRow>(
       `SELECT thread.*,
@@ -143,7 +161,17 @@ function createDmHistoryRepository({ databaseUrl, logger = createLogger({ name: 
     return { messages: rows, hasMoreBefore, hasMoreAfter: false };
   }
 
-  async function listBefore({ userId, peerId, anchor, limit }: { userId: string; peerId: string; anchor: Anchor; limit?: unknown }): Promise<Page> {
+  async function listBefore({
+    userId,
+    peerId,
+    anchor,
+    limit
+  }: {
+    userId: string;
+    peerId: string;
+    anchor: Anchor;
+    limit?: unknown;
+  }): Promise<Page> {
     const size = boundedLimit(limit);
     const rows = await querySide({ userId, peerId, anchor, direction: 'before', limit: size + 1 });
     const hasMoreBefore = rows.length > size;
@@ -152,7 +180,17 @@ function createDmHistoryRepository({ databaseUrl, logger = createLogger({ name: 
     return { messages: rows, hasMoreBefore, hasMoreAfter: true };
   }
 
-  async function listAfter({ userId, peerId, anchor, limit }: { userId: string; peerId: string; anchor: Anchor; limit?: unknown }): Promise<Page> {
+  async function listAfter({
+    userId,
+    peerId,
+    anchor,
+    limit
+  }: {
+    userId: string;
+    peerId: string;
+    anchor: Anchor;
+    limit?: unknown;
+  }): Promise<Page> {
     const size = boundedLimit(limit);
     const rows = await querySide({ userId, peerId, anchor, direction: 'after', limit: size + 1 });
     const hasMoreAfter = rows.length > size;
@@ -160,7 +198,17 @@ function createDmHistoryRepository({ databaseUrl, logger = createLogger({ name: 
     return { messages: rows, hasMoreBefore: true, hasMoreAfter };
   }
 
-  async function listAround({ userId, peerId, anchor, limit }: { userId: string; peerId: string; anchor: Anchor; limit?: unknown }): Promise<Page> {
+  async function listAround({
+    userId,
+    peerId,
+    anchor,
+    limit
+  }: {
+    userId: string;
+    peerId: string;
+    anchor: Anchor;
+    limit?: unknown;
+  }): Promise<Page> {
     const size = boundedLimit(limit);
     const beforeSize = Math.floor(size / 2);
     const afterSize = size - beforeSize;

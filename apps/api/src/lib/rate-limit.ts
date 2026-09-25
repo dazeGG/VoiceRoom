@@ -56,7 +56,15 @@ function createRateLimiter({ limit, windowMs }: { limit: number; windowMs: numbe
 // attacker spread across many addresses still hits a ceiling on one account,
 // while the owner's successful sign-in clears the count. A limit or window of
 // <= 0 disables it.
-function createFailureLimiter({ limit, windowMs, maxEntries = 100_000 }: { limit: number; windowMs: number; maxEntries?: number }) {
+function createFailureLimiter({
+  limit,
+  windowMs,
+  maxEntries = 100_000
+}: {
+  limit: number;
+  windowMs: number;
+  maxEntries?: number;
+}) {
   const entries = new Map<string, Entry>();
   let lastSweepAt = 0;
 

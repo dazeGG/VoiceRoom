@@ -76,7 +76,10 @@
   font-size: 12.5px;
   font-weight: 650;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .room-panel-tab-unread {
@@ -97,7 +100,9 @@
 .room-panel-tabs button[data-active='true'] {
   background: color-mix(in oklch, var(--warm-700), transparent 18%);
   color: #f0eadc;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.06), 0 3px 10px rgba(0, 0, 0, 0.18);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.06),
+    0 3px 10px rgba(0, 0, 0, 0.18);
 }
 
 .room-panel-tabs button:focus-visible {
@@ -116,7 +121,9 @@
   background: var(--control);
   color: #9a9484;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .chat-rail-collapse:hover {
@@ -359,31 +366,102 @@ button.chat-msg-author {
   justify-items: start;
 }
 
-.chat-msg-body > * { max-width: 100%; }
+.chat-msg-body > * {
+  max-width: 100%;
+}
 
-.chat-msg-content { min-width: 0; flex: 1; }
+.chat-msg-content {
+  min-width: 0;
+  flex: 1;
+}
 /* Floating pill above the message, matching the context-menu surface: same
    blur, border and shadow, so hover actions and the right-click menu read as
    one system. */
-.chat-msg-actions { position: absolute; bottom: calc(100% - 6px); right: -12px; z-index: 2; display: flex; align-items: center; gap: 4px; overflow: visible; padding: 5px; border: 1px solid rgba(255,255,255,.1); border-radius: 16px; background: color-mix(in srgb, var(--warm-800) 94%, transparent); backdrop-filter: blur(20px); box-shadow: 0 16px 40px rgba(0,0,0,.55); opacity: 0; transform: translateY(2px); pointer-events: none; transition: opacity 120ms ease, transform 120ms ease; }
+.chat-msg-actions {
+  position: absolute;
+  bottom: calc(100% - 6px);
+  right: -12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: visible;
+  padding: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--warm-800) 94%, transparent);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
 /* A hovered message must rise above the sticky day divider so its toolbar,
    lifted above the message body, is not covered by the pinned date bubble. */
-.chat-msg:has(.chat-msg-text:hover), .chat-msg:has(.chat-msg-text:focus-within) { z-index: 6; }
-.chat-msg-text:hover .chat-msg-actions, .chat-msg-text:focus-within .chat-msg-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.chat-msg:has(.chat-msg-text:hover),
+.chat-msg:has(.chat-msg-text:focus-within) {
+  z-index: 6;
+}
+.chat-msg-text:hover .chat-msg-actions,
+.chat-msg-text:focus-within .chat-msg-actions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
 /* The toolbar of a group's first message floats over the author line, so the
    author line has to hold it open too — otherwise it vanishes the moment the
    pointer crosses that band on its way to the toolbar, or after an overlay
    closes under the pointer there. */
-.chat-msg-meta:hover + .chat-msg-text .chat-msg-actions { opacity: 1; transform: translateY(0); pointer-events: auto; }
+.chat-msg-meta:hover + .chat-msg-text .chat-msg-actions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
 /* An open message menu or reaction picker takes the pointer and the focus out of
    the row, so :hover alone would hide the toolbar the overlay was opened from —
    and with it the target the user is about to click. */
 .chat-msg-text.is-context .chat-msg-actions,
-.chat-msg-actions[data-overlay-open='true'] { opacity: 1; transform: translateY(0); pointer-events: auto; }
-.chat-msg-actions > button { display: grid; width: 36px; height: 36px; place-items: center; border: 0; border-radius: 12px; padding: 0; background: transparent; color: var(--warm-muted); cursor: pointer; transition: background 120ms ease, color 120ms ease; }
-.chat-msg-actions-divider { width: 1px; height: 24px; flex: none; margin: 0 2px; background: var(--line); }
-.chat-msg-actions button:hover, .chat-msg-actions button:focus-visible { background: color-mix(in oklch, var(--accent), transparent 86%); color: var(--warm-ink); outline: none; }
-.chat-msg-actions .chat-msg-action-danger:hover, .chat-msg-actions .chat-msg-action-danger:focus-visible { background: color-mix(in oklch, var(--coral), transparent 86%); color: var(--coral); }
+.chat-msg-actions[data-overlay-open='true'] {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.chat-msg-actions > button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 12px;
+  padding: 0;
+  background: transparent;
+  color: var(--warm-muted);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+.chat-msg-actions-divider {
+  width: 1px;
+  height: 24px;
+  flex: none;
+  margin: 0 2px;
+  background: var(--line);
+}
+.chat-msg-actions button:hover,
+.chat-msg-actions button:focus-visible {
+  background: color-mix(in oklch, var(--accent), transparent 86%);
+  color: var(--warm-ink);
+  outline: none;
+}
+.chat-msg-actions .chat-msg-action-danger:hover,
+.chat-msg-actions .chat-msg-action-danger:focus-visible {
+  background: color-mix(in oklch, var(--coral), transparent 86%);
+  color: var(--coral);
+}
 
 .chat-msg-text + .chat-msg-text {
   margin-top: 3px;
@@ -396,7 +474,6 @@ button.chat-msg-author {
   font-size: 9.5px;
   white-space: nowrap;
 }
-
 
 .chat-msg-edit {
   display: grid;
@@ -463,7 +540,9 @@ button.chat-msg-author {
   color: #c66;
   opacity: 1;
 }
-.chat-msg[data-self="true"] .chat-msg-delete { opacity: 0.7; }
+.chat-msg[data-self='true'] .chat-msg-delete {
+  opacity: 0.7;
+}
 
 .chat-rail-note,
 .chat-rail-error {

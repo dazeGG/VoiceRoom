@@ -18,10 +18,13 @@ const { createInitialRoomState } = await import('../../src/lib/features/room/cli
 const hotkeys = await import('../../src/lib/features/room/client/core/hotkeys.ts');
 const { isMicrophoneShownMuted } = await import('../../src/lib/features/room/client/core/microphone-mute.ts');
 const { beginPushToTalk, endPushToTalk } = await import('../../src/lib/features/room/client/ui/controls.ts');
-const { getStoredMicrophoneVolume, persistMicrophoneVolume } = await import('../../src/lib/features/room/client/core/settings.ts');
-const { formatHotkeyBinding, hotkeyBindingFromEvent, hotkeyMatchesEvent } = await import('../../src/lib/shared/ui/HotkeyRecorder/hotkey.ts');
+const { getStoredMicrophoneVolume, persistMicrophoneVolume } =
+  await import('../../src/lib/features/room/client/core/settings.ts');
+const { formatHotkeyBinding, hotkeyBindingFromEvent, hotkeyMatchesEvent } =
+  await import('../../src/lib/shared/ui/HotkeyRecorder/hotkey.ts');
 
-const key = (overrides: Partial<KeyboardEvent> = {}) => ({ altKey: false, code: 'KeyM', ctrlKey: true, metaKey: false, shiftKey: true, ...overrides }) as KeyboardEvent;
+const key = (overrides: Partial<KeyboardEvent> = {}) =>
+  ({ altKey: false, code: 'KeyM', ctrlKey: true, metaKey: false, shiftKey: true, ...overrides }) as KeyboardEvent;
 
 beforeEach(() => {
   localStorage.clear();
@@ -42,7 +45,12 @@ test('a binding is the physical key with the exact set of modifiers', () => {
 });
 
 test('microphone mute defaults to Ctrl+Shift+M, or Cmd+Shift+M on Apple; other actions start unassigned', () => {
-  expect(hotkeys.getDefaultHotkeyBinding('mic-mute', false)).toMatchObject({ code: 'KeyM', ctrlKey: true, metaKey: false, shiftKey: true });
+  expect(hotkeys.getDefaultHotkeyBinding('mic-mute', false)).toMatchObject({
+    code: 'KeyM',
+    ctrlKey: true,
+    metaKey: false,
+    shiftKey: true
+  });
   expect(hotkeys.getDefaultHotkeyBinding('mic-mute', true)).toMatchObject({ ctrlKey: false, metaKey: true });
   expect(hotkeys.getDefaultHotkeyBinding('push-to-talk')).toBeNull();
 });
@@ -50,7 +58,13 @@ test('microphone mute defaults to Ctrl+Shift+M, or Cmd+Shift+M on Apple; other a
 test('a changed binding is stored and announced; clearing it disables the action; junk falls back to the default', () => {
   const changed = vi.fn();
   window.addEventListener(hotkeys.HOTKEY_BINDINGS_CHANGED_EVENT, changed);
-  hotkeys.writeHotkeyBinding('push-to-talk', { altKey: false, code: 'Space', ctrlKey: false, metaKey: false, shiftKey: false });
+  hotkeys.writeHotkeyBinding('push-to-talk', {
+    altKey: false,
+    code: 'Space',
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false
+  });
   expect(hotkeys.readHotkeyBinding('push-to-talk')?.code).toBe('Space');
   expect(changed).toHaveBeenCalledTimes(1);
 
@@ -71,7 +85,9 @@ test('hotkeys never fire while typing in a field', () => {
   expect(hotkeys.isTypingTarget(input)).toBe(true);
   expect(hotkeys.isTypingTarget(div)).toBe(false);
   expect(hotkeys.isTypingTarget(editable)).toBe(true);
-  input.remove(); div.remove(); editable.remove();
+  input.remove();
+  div.remove();
+  editable.remove();
 });
 
 test('an idle push-to-talk microphone is not shown as muted, but deafen is', () => {
@@ -87,7 +103,12 @@ test('an idle push-to-talk microphone is not shown as muted, but deafen is', () 
 
 test('holding push-to-talk opens the microphone without a cue, and releasing closes it after a short hold', () => {
   vi.useFakeTimers();
-  Object.assign(state, { microphoneMode: 'push-to-talk', joined: true, localStream: { getAudioTracks: () => [] }, muted: true });
+  Object.assign(state, {
+    microphoneMode: 'push-to-talk',
+    joined: true,
+    localStream: { getAudioTracks: () => [] },
+    muted: true
+  });
   expect(beginPushToTalk()).toBe(true);
   expect(state.pushToTalkActive).toBe(true);
   expect(state.muted).toBe(false);

@@ -89,7 +89,10 @@ test('startApiListener falls back from unix socket to tcp and logs the actual tc
   assert.equal(server.calls[1][0], 3000);
   assert.equal(server.calls[1][1], '0.0.0.0');
   assert.equal(typeof server.calls[1][2], 'function');
-  assert.deepEqual(logger.messages.map(([level]) => level), ['warn', 'info']);
+  assert.deepEqual(
+    logger.messages.map(([level]) => level),
+    ['warn', 'info']
+  );
   const [[, fallback], [, listening]] = logger.messages;
   assert.equal(fallback.evt, 'boot.listen_fallback');
   assert.equal(fallback.socketPath, '/tmp/voice-room.sock');
@@ -121,13 +124,15 @@ test('startApiListener reports a direct tcp listen with the actual server addres
   assert.equal(server.calls[0][0], 3000);
   assert.equal(server.calls[0][1], '127.0.0.1');
   assert.equal(typeof server.calls[0][2], 'function');
-  assert.deepEqual(logger.messages.map(([level]) => level), ['info']);
+  assert.deepEqual(
+    logger.messages.map(([level]) => level),
+    ['info']
+  );
   assert.deepEqual(
     { ...logger.messages[0][1] },
     { evt: 'boot.listening', transport: 'tcp', host: '127.0.0.1', port: 3000 }
   );
 });
-
 
 test('startApiListener recovers a stale unix socket path once', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-listen-'));
@@ -168,11 +173,11 @@ test('startApiListener recovers a stale unix socket path once', async () => {
     assert.equal(server.calls[0][0], socketPath);
     assert.equal(server.calls[1][0], socketPath);
     assert.equal(fs.existsSync(socketPath), false);
-    assert.deepEqual(logger.messages.map(([level]) => level), ['info']);
     assert.deepEqual(
-      { ...logger.messages[0][1] },
-      { evt: 'boot.listening', transport: 'unix', address: socketPath }
+      logger.messages.map(([level]) => level),
+      ['info']
     );
+    assert.deepEqual({ ...logger.messages[0][1] }, { evt: 'boot.listening', transport: 'unix', address: socketPath });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

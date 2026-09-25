@@ -10,12 +10,7 @@ import { spawn } from 'node:child_process';
 import path from 'node:path';
 import os from 'node:os';
 import { createTestDatabase } from './db-harness.ts';
-import {
-  joinVoiceRoom,
-  openWs as openHarnessWs,
-  subscribeRoomPreview,
-  waitForWsType
-} from './ws-harness.ts';
+import { joinVoiceRoom, openWs as openHarnessWs, subscribeRoomPreview, waitForWsType } from './ws-harness.ts';
 
 function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-ws-'));
@@ -254,11 +249,7 @@ test('ws pushes room summaries to authenticated users right after ready', async 
   // for the next room event: a room.summary push follows `ready`.
   const owner = openHarnessWs(socketPath, { cookie: ownerCookie });
   await owner.ready;
-  const summary = await waitForWsType(
-    owner.frames,
-    'room.summary',
-    (frame) => frame.payload?.room?.roomId === roomId
-  );
+  const summary = await waitForWsType(owner.frames, 'room.summary', (frame) => frame.payload?.room?.roomId === roomId);
   assert.equal(summary.payload.room.visiblePeers.length, 1);
   assert.equal(summary.payload.room.visiblePeers[0].name, 'Гость');
 
@@ -348,7 +339,10 @@ test('ws sends additive account notification envelopes without regressing legacy
   assert.equal(legacyRequest.payload.direction, 'incoming');
   const notificationRequest = await waitForWsType(bob.frames, 'notification.friend.request');
   assert.equal(notificationRequest.payload.requester.login, 'alice-notify');
-  assert.equal(notificationRequest.payload.requestId, notificationRequest.payload.dedupeKey.replace('friend-request:', ''));
+  assert.equal(
+    notificationRequest.payload.requestId,
+    notificationRequest.payload.dedupeKey.replace('friend-request:', '')
+  );
 
   await acceptFirstRequest(socketPath, bobCookie);
   const legacyAccepted = await waitForWsType(alice.frames, 'friend.accepted');
@@ -370,7 +364,11 @@ test('ws sends additive account notification envelopes without regressing legacy
   });
   assert.equal(sent.status, 201);
 
-  const legacyDm = await waitForWsType(bob.frames, 'dm.message', (frame) => frame.payload?.message?.body === 'hello bob');
+  const legacyDm = await waitForWsType(
+    bob.frames,
+    'dm.message',
+    (frame) => frame.payload?.message?.body === 'hello bob'
+  );
   assert.equal(legacyDm.payload.message.id, sent.body.message.id);
   const notificationDm = await waitForWsType(
     bob.frames,
@@ -379,9 +377,18 @@ test('ws sends additive account notification envelopes without regressing legacy
   );
   assert.equal(notificationDm.payload.dedupeKey, `dm:${sent.body.message.id}`);
   assert.equal(notificationDm.payload.peer.login, 'alice-notify');
-  await waitForWsType(alice.frames, 'dm.message', (frame) => frame.payload?.message?.id === sent.body.message.id, 5000, aliceBeforeDm);
+  await waitForWsType(
+    alice.frames,
+    'dm.message',
+    (frame) => frame.payload?.message?.id === sent.body.message.id,
+    5000,
+    aliceBeforeDm
+  );
   await delay(150);
-  assert.equal(alice.frames.slice(aliceBeforeDm).some((frame) => frame.type === 'notification.dm.message'), false);
+  assert.equal(
+    alice.frames.slice(aliceBeforeDm).some((frame) => frame.type === 'notification.dm.message'),
+    false
+  );
 
   const muted = await request(socketPath, {
     method: 'PUT',
@@ -412,7 +419,10 @@ test('ws sends additive account notification envelopes without regressing legacy
     bobBeforeMutedDm
   );
   await delay(150);
-  assert.equal(bob.frames.slice(bobBeforeMutedDm).some((frame) => frame.type === 'notification.dm.message'), false);
+  assert.equal(
+    bob.frames.slice(bobBeforeMutedDm).some((frame) => frame.type === 'notification.dm.message'),
+    false
+  );
 
   alice.ws.close();
   bob.ws.close();
@@ -570,16 +580,21 @@ test('ring works from the lobby for an active friend and delivers one invitation
   );
 
   const bobBeforeLeave = bob.frames.length;
-  alice.ws.send(JSON.stringify({
-    type: 'room.leave',
-    payload: { roomId, peerId: 'alice-ring-peer', sessionToken: 'r'.repeat(32) }
-  }));
+  alice.ws.send(
+    JSON.stringify({
+      type: 'room.leave',
+      payload: { roomId, peerId: 'alice-ring-peer', sessionToken: 'r'.repeat(32) }
+    })
+  );
   await delay(250);
   const peersAfterLeave = await request(socketPath, {
     pathname: `/api/rooms/${encodeURIComponent(roomId)}/peers`,
     cookie: bobCookie
   });
-  assert.equal(peersAfterLeave.body.peers.some((peer) => peer.accountUserId === inviteMessage.senderId), false);
+  assert.equal(
+    peersAfterLeave.body.peers.some((peer) => peer.accountUserId === inviteMessage.senderId),
+    false
+  );
   const threadAfterLeave = await request(socketPath, {
     pathname: `/api/dm/${encodeURIComponent(inviteMessage.senderId)}`,
     cookie: bobCookie
@@ -589,10 +604,11 @@ test('ring works from the lobby for an active friend and delivers one invitation
     'pending'
   );
   assert.equal(
-    bob.frames.slice(bobBeforeLeave).some((frame) =>
-      frame.type === 'dm.message.edited'
-      && frame.payload?.message?.id === secondInvite.payload.message.id
-    ),
+    bob.frames
+      .slice(bobBeforeLeave)
+      .some(
+        (frame) => frame.type === 'dm.message.edited' && frame.payload?.message?.id === secondInvite.payload.message.id
+      ),
     false
   );
 
@@ -653,7 +669,13 @@ test('ws sends saved-room message notifications with sender exclusion', async (t
     sessionToken: 'o'.repeat(32),
     name: 'Owner Notify'
   });
-  await waitForWsType(owner.frames, 'room.snapshot', (frame) => frame.payload?.roomId === roomId, 5000, beforeOwnerJoin);
+  await waitForWsType(
+    owner.frames,
+    'room.snapshot',
+    (frame) => frame.payload?.roomId === roomId,
+    5000,
+    beforeOwnerJoin
+  );
   const ownerVoiceBefore = owner.frames.length;
   const ownerVoicePost = await request(socketPath, {
     method: 'POST',
@@ -673,7 +695,10 @@ test('ws sends saved-room message notifications with sender exclusion', async (t
     ownerVoiceBefore
   );
   await delay(150);
-  assert.equal(owner.frames.slice(ownerVoiceBefore).some((frame) => frame.type === 'notification.room.message'), false);
+  assert.equal(
+    owner.frames.slice(ownerVoiceBefore).some((frame) => frame.type === 'notification.room.message'),
+    false
+  );
 
   const ownerBefore = owner.frames.length;
   const posterBefore = poster.frames.length;
@@ -685,7 +710,13 @@ test('ws sends saved-room message notifications with sender exclusion', async (t
   });
   assert.equal(posted.status, 201);
 
-  await waitForWsType(owner.frames, 'room.chat.message', (frame) => frame.payload?.message?.id === posted.body.message.id, 5000, ownerBefore);
+  await waitForWsType(
+    owner.frames,
+    'room.chat.message',
+    (frame) => frame.payload?.message?.id === posted.body.message.id,
+    5000,
+    ownerBefore
+  );
   const notification = await waitForWsType(
     owner.frames,
     'notification.room.message',
@@ -697,7 +728,10 @@ test('ws sends saved-room message notifications with sender exclusion', async (t
   assert.equal(notification.payload.room.name, 'Daily Room');
   assert.equal(notification.payload.sender.login, 'room-poster-notify');
   await delay(150);
-  assert.equal(poster.frames.slice(posterBefore).some((frame) => frame.type === 'notification.room.message'), false);
+  assert.equal(
+    poster.frames.slice(posterBefore).some((frame) => frame.type === 'notification.room.message'),
+    false
+  );
 
   owner.ws.close();
   poster.ws.close();
@@ -729,10 +763,14 @@ test('ws pushes friend.updated to friends after avatar upload and delete', async
 
   const png = await sharp({
     create: { width: 64, height: 64, channels: 3, background: { r: 200, g: 60, b: 40 } }
-  }).png().toBuffer();
+  })
+    .png()
+    .toBuffer();
   const boundary = '----voice-room-ws-avatar';
   const payload = Buffer.concat([
-    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="avatar"; filename="avatar.png"\r\nContent-Type: image/png\r\n\r\n`),
+    Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="avatar"; filename="avatar.png"\r\nContent-Type: image/png\r\n\r\n`
+    ),
     png,
     Buffer.from(`\r\n--${boundary}--\r\n`)
   ]);

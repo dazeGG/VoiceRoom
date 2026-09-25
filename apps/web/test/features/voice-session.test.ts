@@ -1,7 +1,9 @@
 import { afterEach, expect, test, vi } from 'vitest';
 
 vi.mock('../../src/lib/features/room/client/media/cues', () => ({ playPeerCue: vi.fn() }));
-vi.mock('../../src/lib/features/home/model/room-membership.svelte', () => ({ leaveActiveRoomMembership: vi.fn(async () => true) }));
+vi.mock('../../src/lib/features/home/model/room-membership.svelte', () => ({
+  leaveActiveRoomMembership: vi.fn(async () => true)
+}));
 
 const cues = await import('../../src/lib/features/room/client/media/cues');
 const voice = await import('../../src/lib/features/room/voice-session.svelte.ts');

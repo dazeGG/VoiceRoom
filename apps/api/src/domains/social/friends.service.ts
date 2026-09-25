@@ -19,9 +19,19 @@ export interface FriendStore {
   countIncomingRequests(userId: string): Promise<number>;
   searchUsers(input: { query: string; excludeUserId: string }): Promise<{ id: string; [key: string]: unknown }[]>;
   getFriendIds(userId: string): Promise<string[]>;
-  listRequests(userId: string): Promise<{ incoming: { user: { id: string } }[]; outgoing: { user: { id: string } }[]; [key: string]: unknown }>;
-  sendRequest(input: { requesterId: string; addresseeLogin: string; addresseeUserId: string }): Promise<{ status: string; user?: { id: string; [key: string]: unknown }; requestId?: string }>;
-  respondRequest(input: { userId: string; requestId: string; action: 'accept' | 'decline' }): Promise<{ status: string; requesterId?: string; user?: unknown }>;
+  listRequests(
+    userId: string
+  ): Promise<{ incoming: { user: { id: string } }[]; outgoing: { user: { id: string } }[]; [key: string]: unknown }>;
+  sendRequest(input: {
+    requesterId: string;
+    addresseeLogin: string;
+    addresseeUserId: string;
+  }): Promise<{ status: string; user?: { id: string; [key: string]: unknown }; requestId?: string }>;
+  respondRequest(input: {
+    userId: string;
+    requestId: string;
+    action: 'accept' | 'decline';
+  }): Promise<{ status: string; requesterId?: string; user?: unknown }>;
   cancelRequest(input: { userId: string; requestId: string }): Promise<{ status: string; addresseeId?: string }>;
   removeFriend(input: { userId: string; friendId: string }): Promise<{ status: string }>;
   listBlockedUserIds(userId: string): Promise<string[]>;
@@ -36,7 +46,12 @@ export interface FriendsDeps {
   friends(): FriendStore;
   findUser(userId: string): Promise<SocialUser | null>;
   findRoom(roomId: string): Promise<{ id: string; name?: string; emoji?: string } | null>;
-  sendDirectMessage(input: { senderId: string; recipientId: string; body: string; metadata: Record<string, unknown> }): Promise<unknown>;
+  sendDirectMessage(input: {
+    senderId: string;
+    recipientId: string;
+    body: string;
+    metadata: Record<string, unknown>;
+  }): Promise<unknown>;
   isOnline(userId: string): boolean;
   notifyUser(userId: string, event: Record<string, unknown>): void;
   queuePush(userId: string, payload: PushPayload, context?: Record<string, unknown>): Promise<unknown>;
@@ -48,7 +63,12 @@ export interface FriendsDeps {
 export function createFriendsService(deps: FriendsDeps) {
   const now = deps.now || Date.now;
 
-  function friendPush(userId: string, type: 'friend.accepted' | 'friend.request', actor: SocialUser, dedupeKey: string): void {
+  function friendPush(
+    userId: string,
+    type: 'friend.accepted' | 'friend.request',
+    actor: SocialUser,
+    dedupeKey: string
+  ): void {
     void deps.queuePush(userId, {
       type,
       title: type === 'friend.accepted' ? 'Заявка принята' : 'Новая заявка в друзья',
@@ -63,12 +83,20 @@ export function createFriendsService(deps: FriendsDeps) {
   function announceAccepted(requesterId: string, accepter: SocialUser, context: Record<string, unknown>): void {
     const dedupeKey = `friend-accepted:${requesterId}:${accepter.id}`;
     deps.notifyUser(requesterId, { type: 'friend-accepted', userId: accepter.id });
-    deps.notifyUser(requesterId, { type: 'notification.friend.accepted', dedupeKey, user: notificationActor(accepter), context });
+    deps.notifyUser(requesterId, {
+      type: 'notification.friend.accepted',
+      dedupeKey,
+      user: notificationActor(accepter),
+      context
+    });
     friendPush(requesterId, 'friend.accepted', accepter, dedupeKey);
   }
 
   async function list(userId: string) {
-    const [friends, incomingRequestCount] = await Promise.all([deps.friends().listFriends(userId), deps.friends().countIncomingRequests(userId)]);
+    const [friends, incomingRequestCount] = await Promise.all([
+      deps.friends().listFriends(userId),
+      deps.friends().countIncomingRequests(userId)
+    ]);
     return {
       friends: friends.map((entry) => ({
         user: entry.user,
@@ -90,8 +118,13 @@ export function createFriendsService(deps: FriendsDeps) {
     const friendSet = new Set(friendIds);
     const outgoing = new Set(requests.outgoing.map((row) => row.user.id));
     const incoming = new Set(requests.incoming.map((row) => row.user.id));
-    const relationship = (id: string) => (friendSet.has(id) ? 'friend' : outgoing.has(id) ? 'outgoing' : incoming.has(id) ? 'incoming' : 'none');
-    return results.map((candidate) => ({ user: candidate, online: deps.isOnline(candidate.id), relationship: relationship(candidate.id) }));
+    const relationship = (id: string) =>
+      friendSet.has(id) ? 'friend' : outgoing.has(id) ? 'outgoing' : incoming.has(id) ? 'incoming' : 'none';
+    return results.map((candidate) => ({
+      user: candidate,
+      online: deps.isOnline(candidate.id),
+      relationship: relationship(candidate.id)
+    }));
   }
 
   async function requests(userId: string) {
@@ -99,10 +132,16 @@ export function createFriendsService(deps: FriendsDeps) {
   }
 
   // A request to someone who already asked you is an acceptance.
-  async function sendRequest(requester: SocialUser, target: { userId: string; login: string }): Promise<
-    { status: 'sent' | 'accepted' | 'already_friends' | 'already_sent'; user: unknown } | Status<'not_found' | 'self' | 'blocked'>
+  async function sendRequest(
+    requester: SocialUser,
+    target: { userId: string; login: string }
+  ): Promise<
+    | { status: 'sent' | 'accepted' | 'already_friends' | 'already_sent'; user: unknown }
+    | Status<'not_found' | 'self' | 'blocked'>
   > {
-    const result = await deps.friends().sendRequest({ requesterId: requester.id, addresseeLogin: target.login, addresseeUserId: target.userId });
+    const result = await deps
+      .friends()
+      .sendRequest({ requesterId: requester.id, addresseeLogin: target.login, addresseeUserId: target.userId });
     switch (result.status) {
       case 'not_found':
       case 'self':
@@ -128,9 +167,11 @@ export function createFriendsService(deps: FriendsDeps) {
     return { status: 'sent', user: result.user };
   }
 
-  async function respond(user: SocialUser, requestId: string, action: 'accept' | 'decline'): Promise<
-    { status: 'accepted'; user: unknown } | Status<'declined' | 'not_found' | 'blocked'>
-  > {
+  async function respond(
+    user: SocialUser,
+    requestId: string,
+    action: 'accept' | 'decline'
+  ): Promise<{ status: 'accepted'; user: unknown } | Status<'declined' | 'not_found' | 'blocked'>> {
     const result = await deps.friends().respondRequest({ userId: user.id, requestId, action });
     if (result.status === 'not_found') return { status: 'not_found' };
     if (result.status === 'accepted') {
@@ -156,13 +197,19 @@ export function createFriendsService(deps: FriendsDeps) {
   }
 
   async function blocked(userId: string) {
-    const [ids, users] = await Promise.all([deps.friends().listBlockedUserIds(userId), deps.friends().listBlockedUsers(userId)]);
+    const [ids, users] = await Promise.all([
+      deps.friends().listBlockedUserIds(userId),
+      deps.friends().listBlockedUsers(userId)
+    ]);
     return { blocked: ids, users };
   }
 
   // The blocked side is told the friendship ended, never that a block was
   // applied: their UI simply shows the person is no longer a friend.
-  async function block(userId: string, targetId: string): Promise<{ status: 'applied'; result: string } | Status<'not_found' | 'invalid'>> {
+  async function block(
+    userId: string,
+    targetId: string
+  ): Promise<{ status: 'applied'; result: string } | Status<'not_found' | 'invalid'>> {
     const result = await deps.friends().blockUser({ userId, targetId });
     if (result.status === 'not_found') return { status: 'not_found' };
     if (result.status === 'invalid') return { status: 'invalid' };
@@ -178,8 +225,13 @@ export function createFriendsService(deps: FriendsDeps) {
   // Presence is deliberately not required: a friend can be invited from the
   // lobby before joining the room yourself. The per-pair limit bounds how
   // often anyone can ring the same person.
-  async function ring(caller: SocialUser, roomId: string, targetUserId: string): Promise<
-    Status<'rung' | 'not_friends' | 'blocked' | 'account_deleted' | 'room_not_found'> | { status: 'rate_limited'; retryAfterSeconds: number }
+  async function ring(
+    caller: SocialUser,
+    roomId: string,
+    targetUserId: string
+  ): Promise<
+    | Status<'rung' | 'not_friends' | 'blocked' | 'account_deleted' | 'room_not_found'>
+    | { status: 'rate_limited'; retryAfterSeconds: number }
   > {
     if (!(await deps.friends().areFriends(caller.id, targetUserId))) return { status: 'not_friends' };
     if (await deps.friends().isBlockedBetween(caller.id, targetUserId)) return { status: 'blocked' };
@@ -207,16 +259,20 @@ export function createFriendsService(deps: FriendsDeps) {
     });
     deps.notifyUser(targetUserId, { type: 'dm-message', message: invite });
     deps.notifyUser(caller.id, { type: 'dm-message', message: invite });
-    void deps.queuePush(targetUserId, {
-      type: 'ring',
-      title: `${caller.displayName || caller.login || 'Друг'} зовёт вас`,
-      body: room.name ? `Комната «${room.name}»` : 'Присоединиться к комнате',
-      privateBody: 'Вас зовут в голосовую комнату.',
-      tag: `ring:${caller.id}:${roomId}`,
-      dedupeKey: `ring:${caller.id}:${roomId}:${expiresAt}`,
-      url: `/r/${encodeURIComponent(roomId)}`,
-      expiresAt
-    }, { expiresAt });
+    void deps.queuePush(
+      targetUserId,
+      {
+        type: 'ring',
+        title: `${caller.displayName || caller.login || 'Друг'} зовёт вас`,
+        body: room.name ? `Комната «${room.name}»` : 'Присоединиться к комнате',
+        privateBody: 'Вас зовут в голосовую комнату.',
+        tag: `ring:${caller.id}:${roomId}`,
+        dedupeKey: `ring:${caller.id}:${roomId}:${expiresAt}`,
+        url: `/r/${encodeURIComponent(roomId)}`,
+        expiresAt
+      },
+      { expiresAt }
+    );
     return { status: 'rung' };
   }
 

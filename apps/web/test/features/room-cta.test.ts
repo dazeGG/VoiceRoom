@@ -22,7 +22,13 @@ test('nothing is offered before joining the call or after closing the offer', ()
 });
 
 test('the app prompt opens once, in a quiet lobby, never over a call or another dialog', () => {
-  const quiet = { appAvailable: true, hasUsedDesktopApp: false, appPromptSeen: false, otherDialogOpen: false, voiceActive: false };
+  const quiet = {
+    appAvailable: true,
+    hasUsedDesktopApp: false,
+    appPromptSeen: false,
+    otherDialogOpen: false,
+    voiceActive: false
+  };
   expect(shouldOpenAppPrompt(quiet)).toBe(true);
   expect(shouldOpenAppPrompt({ ...quiet, appPromptSeen: true })).toBe(false);
   expect(shouldOpenAppPrompt({ ...quiet, otherDialogOpen: true })).toBe(false);

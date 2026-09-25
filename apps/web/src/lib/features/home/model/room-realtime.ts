@@ -90,22 +90,27 @@ function sendActiveResyncAttempt(): void {
   pending.currentRequestId = `${pending.requestId}-attempt-${pending.attempts}`;
   pending.requestIds.add(pending.currentRequestId);
   getAppRealtime().send('room.join', activeVoiceJoin, pending.currentRequestId);
-  pending.timer = setTimeout(() => {
-    if (activeResync !== pending) return;
-    if (pending.attempts < 3) {
-      sendActiveResyncAttempt();
-      return;
-    }
-    clearActiveResync();
-    activeResyncFailureHandler?.({ code: 'transport_error', requestId: pending.currentRequestId });
-  }, 1_000 * 2 ** (pending.attempts - 1));
+  pending.timer = setTimeout(
+    () => {
+      if (activeResync !== pending) return;
+      if (pending.attempts < 3) {
+        sendActiveResyncAttempt();
+        return;
+      }
+      clearActiveResync();
+      activeResyncFailureHandler?.({ code: 'transport_error', requestId: pending.currentRequestId });
+    },
+    1_000 * 2 ** (pending.attempts - 1)
+  );
 }
 
 function isRetryableActiveResyncError(code: string): boolean {
   return retryableActiveResyncErrors.has(code);
 }
 
-export function setActiveVoiceResyncFailureHandler(handler: ((failure: { code: string; requestId: string }) => void) | null): void {
+export function setActiveVoiceResyncFailureHandler(
+  handler: ((failure: { code: string; requestId: string }) => void) | null
+): void {
   activeResyncFailureHandler = handler;
 }
 
@@ -113,11 +118,11 @@ export function acknowledgeActiveVoiceResync(event: RealtimeEvent): boolean {
   const pending = activeResync;
   if (!pending) return false;
   if (
-    event.type === 'room.snapshot'
-    && pending.requestIds.has(event.id || '')
-    && event.id === pending.currentRequestId
-    && event.payload.mode === 'active'
-    && event.payload.roomId === activeVoiceJoin?.roomId
+    event.type === 'room.snapshot' &&
+    pending.requestIds.has(event.id || '') &&
+    event.id === pending.currentRequestId &&
+    event.payload.mode === 'active' &&
+    event.payload.roomId === activeVoiceJoin?.roomId
   ) {
     clearActiveResync();
     return true;
@@ -191,9 +196,7 @@ export function initLobbyRoomRealtime(
       const updated = event.payload.room;
       onRoomsUpdate((rooms) =>
         rooms.map((room) =>
-          room.roomId === updated.roomId
-            ? { ...room, ...updated, relationship: room.relationship }
-            : room
+          room.roomId === updated.roomId ? { ...room, ...updated, relationship: room.relationship } : room
         )
       );
     }
@@ -255,22 +258,14 @@ export function subscribeRoomVoice(roomId: string, handler: RoomDetailHandler): 
   };
 }
 
-export function joinVoiceRoom(payload: {
-  roomId: string;
-  peerId: string;
-  sessionToken: string;
-  name: string;
-}): void {
+export function joinVoiceRoom(payload: { roomId: string; peerId: string; sessionToken: string; name: string }): void {
   ensureReconnectRestore();
   activeVoiceJoin = payload;
   getAppRealtime().send('room.join', payload);
 }
 
 export function leaveVoiceRoom(payload: { roomId: string; peerId: string; sessionToken: string }): void {
-  if (
-    activeVoiceJoin?.roomId === payload.roomId &&
-    activeVoiceJoin.peerId === payload.peerId
-  ) {
+  if (activeVoiceJoin?.roomId === payload.roomId && activeVoiceJoin.peerId === payload.peerId) {
     activeVoiceJoin = null;
     lastActiveResyncKey = '';
     clearActiveResync();

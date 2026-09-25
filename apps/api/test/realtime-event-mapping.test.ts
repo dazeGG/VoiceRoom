@@ -102,9 +102,18 @@ test('room chat delete is not treated as a legacy peer event', () => {
 });
 
 test('reaction updates map onto preview room subscriptions without losing the authoritative revision', () => {
-  const summary={emoji:'👍',count:2,reactedByMe:false,revision:'7'};
-  const event=legacyPeerMessageToWs({type:'reaction.updated',payload:{conversation:{type:'room',id:'room-1'},roomId:'room-1',messageId:'msg-1',summary}},'room-1');
-  assert.equal(event.type,'reaction.updated'); assert.equal(event.payload.roomId,'room-1'); assert.equal(event.payload.messageId,'msg-1'); assert.deepEqual(event.payload.summary,summary);
+  const summary = { emoji: '👍', count: 2, reactedByMe: false, revision: '7' };
+  const event = legacyPeerMessageToWs(
+    {
+      type: 'reaction.updated',
+      payload: { conversation: { type: 'room', id: 'room-1' }, roomId: 'room-1', messageId: 'msg-1', summary }
+    },
+    'room-1'
+  );
+  assert.equal(event.type, 'reaction.updated');
+  assert.equal(event.payload.roomId, 'room-1');
+  assert.equal(event.payload.messageId, 'msg-1');
+  assert.deepEqual(event.payload.summary, summary);
 });
 
 test('moderation terminal events map on both account and active room transports', () => {

@@ -11,7 +11,13 @@
 <!-- A compact card that sits under the message rather than taking it over: the
      picture as a thumbnail on the left, and on the right the site, a one-line
      title and at most two lines of description. -->
-<a class="link-preview" class:link-preview--with-image={Boolean(imageUrl)} href={preview.url} target="_blank" rel="noopener noreferrer nofollow">
+<a
+  class="link-preview"
+  class:link-preview--with-image={Boolean(imageUrl)}
+  href={preview.url}
+  target="_blank"
+  rel="noopener noreferrer nofollow"
+>
   {#if imageUrl && preview.image}
     <span class="link-preview__thumb">
       <img
@@ -28,7 +34,8 @@
   <span class="link-preview__text">
     <span class="link-preview__site"><EmojiText text={preview.siteName} /></span>
     {#if preview.title}<strong class="link-preview__title"><EmojiText text={preview.title} /></strong>{/if}
-    {#if preview.description}<span class="link-preview__description"><EmojiText text={preview.description} /></span>{/if}
+    {#if preview.description}<span class="link-preview__description"><EmojiText text={preview.description} /></span
+      >{/if}
   </span>
 </a>
 

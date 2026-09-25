@@ -85,10 +85,16 @@ test('ambiguous token sources are refused instead of guessing', () => {
   const good = tokenFor();
   const other = tokenFor({ room: 'voice-room-room-b' });
   assert.equal(extractAccessToken(`/rtc?access_token=${good}&access_token=${other}`).code, 'ambiguous_token');
-  assert.equal(extractAccessToken(`/rtc?access_token=${good}`, { authorization: `Bearer ${other}` }).code, 'ambiguous_token');
+  assert.equal(
+    extractAccessToken(`/rtc?access_token=${good}`, { authorization: `Bearer ${other}` }).code,
+    'ambiguous_token'
+  );
   assert.equal(extractAccessToken('/rtc', { authorization: 'Basic abc' }).code, 'malformed_authorization');
   assert.equal(extractAccessToken('/rtc', { authorization: ['Bearer a', 'Bearer b'] }).code, 'malformed_authorization');
-  assert.deepEqual(extractAccessToken(`/rtc?access_token=${good}`, { authorization: `Bearer ${good}` }), { ok: true, token: good });
+  assert.deepEqual(extractAccessToken(`/rtc?access_token=${good}`, { authorization: `Bearer ${good}` }), {
+    ok: true,
+    token: good
+  });
 });
 
 test('room names follow the configured prefix with the same sanitising as before', () => {
@@ -146,12 +152,20 @@ test('the gate answers 403 and never dials LiveKit for a foreign JWT', async (t)
   const server = gate.createServer();
   const client = new FakeSocket();
   const token = tokenFor({ room: 'voice-room-room-b' });
-  server.emit('upgrade', { url: `/rtc?access_token=${token}&vr_gate_credential=x`, headers: {} }, client, Buffer.alloc(0));
+  server.emit(
+    'upgrade',
+    { url: `/rtc?access_token=${token}&vr_gate_credential=x`, headers: {} },
+    client,
+    Buffer.alloc(0)
+  );
   await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(dialed, false);
   assert.match(client.writes.join(''), /^HTTP\/1\.1 403 Forbidden/);
-  assert.deepEqual(warnings.map((entry) => [entry.evt, entry.code]), [['livekit.gate_denied', 'room_mismatch']]);
+  assert.deepEqual(
+    warnings.map((entry) => [entry.evt, entry.code]),
+    [['livekit.gate_denied', 'room_mismatch']]
+  );
 });
 
 test('credential-only authorize calls keep checking just the credential', async () => {
@@ -191,7 +205,9 @@ test('the validate probe is admitted like the upgrade and proxied without the ga
   assert.equal(ok.headers.get('access-control-allow-origin'), '*', 'the web origin must be able to read the answer');
   assert.deepEqual(seen, [`/rtc/v1/validate?access_token=${tokenFor()}`]);
 
-  const foreign = await fetch(`${base}/rtc/validate?access_token=${tokenFor({ room: 'voice-room-room-b' })}&vr_gate_credential=x`);
+  const foreign = await fetch(
+    `${base}/rtc/validate?access_token=${tokenFor({ room: 'voice-room-room-b' })}&vr_gate_credential=x`
+  );
   assert.equal(foreign.status, 403);
   assert.equal(foreign.headers.get('access-control-allow-origin'), '*');
   assert.equal(seen.length, 1, 'a refused probe never reaches LiveKit');

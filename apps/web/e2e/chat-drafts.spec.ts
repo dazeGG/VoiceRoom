@@ -1,7 +1,11 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
 import { createPermanentRoom, registerViaUi, uniqueLogin } from './helpers';
 
-async function registerFriend(browser: Browser, baseURL: string | undefined, prefix: string): Promise<{ login: string; context: BrowserContext }> {
+async function registerFriend(
+  browser: Browser,
+  baseURL: string | undefined,
+  prefix: string
+): Promise<{ login: string; context: BrowserContext }> {
   const login = uniqueLogin(prefix);
   const context = await browser.newContext({ baseURL });
   await registerViaUi(await context.newPage(), login);
@@ -10,7 +14,8 @@ async function registerFriend(browser: Browser, baseURL: string | undefined, pre
 
 async function acceptIncomingRequests(page: Page): Promise<void> {
   const incoming = await page.context().request.get('/api/friends/requests');
-  const ids = ((await incoming.json()) as { incoming?: Array<{ id: string }> }).incoming?.map((request) => request.id) ?? [];
+  const ids =
+    ((await incoming.json()) as { incoming?: Array<{ id: string }> }).incoming?.map((request) => request.id) ?? [];
   expect(ids.length).toBeGreaterThan(0);
   for (const id of ids) {
     const accepted = await page.context().request.post(`/api/friends/requests/${id}/accept`, { data: {} });
@@ -18,7 +23,11 @@ async function acceptIncomingRequests(page: Page): Promise<void> {
   }
 }
 
-test('unsent direct message text stays with its own thread across switches and page loads', async ({ browser, page, baseURL }) => {
+test('unsent direct message text stays with its own thread across switches and page loads', async ({
+  browser,
+  page,
+  baseURL
+}) => {
   const selfLogin = uniqueLogin('draftself');
   await registerViaUi(page, selfLogin);
   const grace = await registerFriend(browser, baseURL, 'draftgrace');

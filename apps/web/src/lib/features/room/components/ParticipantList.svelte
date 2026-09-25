@@ -3,7 +3,8 @@
   import { getSortedParticipants } from '../participants-ui.svelte';
   import type { Participant } from '../client/core/types';
 
-  let { participants: supplied, variant = 'grid' }: { participants?: Participant[]; variant?: 'grid' | 'strip' } = $props();
+  let { participants: supplied, variant = 'grid' }: { participants?: Participant[]; variant?: 'grid' | 'strip' } =
+    $props();
   const participants = $derived(supplied ?? getSortedParticipants());
 </script>
 

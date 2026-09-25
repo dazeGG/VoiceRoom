@@ -22,11 +22,16 @@ export function hasLeadingZeroBits(bytes: Uint8Array, bits: number): boolean {
 }
 
 export function cleanDisplayName(value: unknown): string {
-  return String(value || '').trim().replace(/\s+/g, ' ').slice(0, 40);
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .slice(0, 40);
 }
 
 export function getInitials(name: string): string {
-  const words = String(name || 'Гость').trim().split(/\s+/);
+  const words = String(name || 'Гость')
+    .trim()
+    .split(/\s+/);
   return words
     .slice(0, 2)
     .map((word) => word[0])

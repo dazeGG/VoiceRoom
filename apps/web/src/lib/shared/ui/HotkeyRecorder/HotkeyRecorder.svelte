@@ -2,11 +2,7 @@
   import { RotateCcw } from '@lucide/svelte';
   import { onDestroy } from 'svelte';
   import { iconSm } from '$lib/shared/ui/icons';
-  import {
-    formatHotkeyBinding,
-    hotkeyBindingFromEvent,
-    isHotkeyModifierCode
-  } from './hotkey';
+  import { formatHotkeyBinding, hotkeyBindingFromEvent, isHotkeyModifierCode } from './hotkey';
   import type { HotkeyRecorderProps } from './types';
 
   let {
@@ -111,7 +107,9 @@
     background: var(--control);
     color: var(--warm-ink, #f1ecdf);
     cursor: pointer;
-    transition: border-color 150ms ease, background 150ms ease;
+    transition:
+      border-color 150ms ease,
+      background 150ms ease;
   }
 
   .hotkey-recorder-field {

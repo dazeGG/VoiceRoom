@@ -17,9 +17,10 @@ import { buildHeaderPolicy, renderCaddySnippet } from '../scripts/emit-caddy-csp
 
 const repositoryRoot = `${import.meta.dirname}/../../../`;
 const caddyImage = 'caddy:2.11.4-alpine';
-const dockerAvailable = spawnSync('docker', ['version', '--format', '{{.Server.Version}}'], {
-  encoding: 'utf8'
-}).status === 0;
+const dockerAvailable =
+  spawnSync('docker', ['version', '--format', '{{.Server.Version}}'], {
+    encoding: 'utf8'
+  }).status === 0;
 
 function runtimePayload(wsUrl) {
   return JSON.stringify({
@@ -38,7 +39,7 @@ async function startEdge(handler) {
   const { port } = server.address();
   return {
     origin: `http://127.0.0.1:${port}`,
-    close: () => new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+    close: () => new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())))
   };
 }
 
@@ -62,17 +63,33 @@ async function startCaddyEdge(wsUrl) {
   // The image generates this snippet from its own build; any valid policy
   // lets the Caddyfile load here.
   const cspSnippet = path.join(mkdtempSync(path.join(os.tmpdir(), 'voiceroom-csp-')), 'csp.caddy');
-  writeFileSync(cspSnippet, renderCaddySnippet(buildHeaderPolicy("default-src 'self'; script-src 'self' 'sha256-test='")));
-  const run = spawnSync('docker', [
-    'run', '-d', '--name', name,
-    '-e', 'DOMAIN=:80',
-    '-e', 'LIVEKIT_DOMAIN=:81',
-    '-e', `LIVEKIT_GATE_PUBLIC_URL=${wsUrl}`,
-    '-p', '127.0.0.1::80',
-    '-v', `${caddyfile}:/etc/caddy/Caddyfile:ro`,
-    '-v', `${cspSnippet}:/etc/caddy/csp.caddy:ro`,
-    caddyImage
-  ], { encoding: 'utf8' });
+  writeFileSync(
+    cspSnippet,
+    renderCaddySnippet(buildHeaderPolicy("default-src 'self'; script-src 'self' 'sha256-test='"))
+  );
+  const run = spawnSync(
+    'docker',
+    [
+      'run',
+      '-d',
+      '--name',
+      name,
+      '-e',
+      'DOMAIN=:80',
+      '-e',
+      'LIVEKIT_DOMAIN=:81',
+      '-e',
+      `LIVEKIT_GATE_PUBLIC_URL=${wsUrl}`,
+      '-p',
+      '127.0.0.1::80',
+      '-v',
+      `${caddyfile}:/etc/caddy/Caddyfile:ro`,
+      '-v',
+      `${cspSnippet}:/etc/caddy/csp.caddy:ro`,
+      caddyImage
+    ],
+    { encoding: 'utf8' }
+  );
   if (run.status !== 0) throw new Error(run.stderr || 'failed to start Caddy edge');
 
   const mapping = spawnSync('docker', ['port', name, '80/tcp'], { encoding: 'utf8' });
@@ -103,26 +120,34 @@ async function startCaddyEdge(wsUrl) {
   return {
     name,
     origin,
-    imageId: spawnSync('docker', ['image', 'inspect', caddyImage, '--format', '{{.Id}}'], { encoding: 'utf8' }).stdout.trim(),
-    close: () => { spawnSync('docker', ['rm', '-f', name], { encoding: 'utf8' }); }
+    imageId: spawnSync('docker', ['image', 'inspect', caddyImage, '--format', '{{.Id}}'], {
+      encoding: 'utf8'
+    }).stdout.trim(),
+    close: () => {
+      spawnSync('docker', ['rm', '-f', name], { encoding: 'utf8' });
+    }
   };
 }
 
-test('G13-A01 the pinned Caddy image serves two runtime configs without rebuilding', {
-  skip: !dockerAvailable
-}, async () => {
-  const edgeA = await startCaddyEdge('wss://caddy-a.example.test');
-  onTestFinished(edgeA.close);
-  const edgeB = await startCaddyEdge('wss://caddy-b.example.test');
-  onTestFinished(edgeB.close);
+test(
+  'G13-A01 the pinned Caddy image serves two runtime configs without rebuilding',
+  {
+    skip: !dockerAvailable
+  },
+  async () => {
+    const edgeA = await startCaddyEdge('wss://caddy-a.example.test');
+    onTestFinished(edgeA.close);
+    const edgeB = await startCaddyEdge('wss://caddy-b.example.test');
+    onTestFinished(edgeB.close);
 
-  const first = await fetchEdgeConfig(edgeA.origin, 1_000);
-  const second = await fetchEdgeConfig(edgeB.origin, 1_000);
-  assert.equal(first.livekit.wsUrl, 'wss://caddy-a.example.test/');
-  assert.equal(second.livekit.wsUrl, 'wss://caddy-b.example.test/');
-  assert.match(edgeA.imageId, /^sha256:/);
-  assert.equal(edgeA.imageId, edgeB.imageId);
-});
+    const first = await fetchEdgeConfig(edgeA.origin, 1_000);
+    const second = await fetchEdgeConfig(edgeB.origin, 1_000);
+    assert.equal(first.livekit.wsUrl, 'wss://caddy-a.example.test/');
+    assert.equal(second.livekit.wsUrl, 'wss://caddy-b.example.test/');
+    assert.match(edgeA.imageId, /^sha256:/);
+    assert.equal(edgeA.imageId, edgeB.imageId);
+  }
+);
 
 test('G13-A01 one Web image contract serves distinct runtime configuration over real HTTP edges', async () => {
   const edgeA = await startEdge((_request, response) => {
@@ -152,11 +177,26 @@ test('G13-A01 one Web image contract serves distinct runtime configuration over 
 
 test('G13-A02 404, timeout, malformed, wrong-version and credential payloads fail safely', async () => {
   const cases = [
-    (_request, response) => { response.writeHead(404); response.end(); },
+    (_request, response) => {
+      response.writeHead(404);
+      response.end();
+    },
     (_request, _response) => {},
-    (_request, response) => { response.end('{bad json'); },
-    (_request, response) => { response.end(JSON.stringify({ contractVersion: RUNTIME_CONFIG_CONTRACT, schemaVersion: 2, livekit: { wsUrl: 'wss://wrong.example.test' } })); },
-    (_request, response) => { response.end(runtimePayload('wss://user:secret@livekit.example.test')); }
+    (_request, response) => {
+      response.end('{bad json');
+    },
+    (_request, response) => {
+      response.end(
+        JSON.stringify({
+          contractVersion: RUNTIME_CONFIG_CONTRACT,
+          schemaVersion: 2,
+          livekit: { wsUrl: 'wss://wrong.example.test' }
+        })
+      );
+    },
+    (_request, response) => {
+      response.end(runtimePayload('wss://user:secret@livekit.example.test'));
+    }
   ];
 
   for (const handler of cases) {

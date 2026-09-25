@@ -8,7 +8,12 @@ const REPLY_CONFLICT_BODY = Object.freeze({
 
 type RoomReplyRoute = { Params: { roomId: string; messageId: string }; Body: { text?: unknown } | null };
 type DirectReplyRoute = { Params: { peerUserId: string; messageId: string }; Body: { text?: unknown } | null };
-type ReplyInput = { request: FastifyRequest; targetMessageId: string; text: string; idempotencyKey: string | string[] | undefined };
+type ReplyInput = {
+  request: FastifyRequest;
+  targetMessageId: string;
+  text: string;
+  idempotencyKey: string | string[] | undefined;
+};
 
 export interface ReplyMessageService {
   replyToRoom(input: ReplyInput & { roomId: string }): Promise<unknown>;
@@ -28,16 +33,21 @@ function cleanText(value: unknown, maxLength = 4000): string {
 
 function isUnavailableError(error: unknown): boolean {
   const code = (error as { code?: unknown } | null | undefined)?.code;
-  return error instanceof ReplyTargetUnavailableError
-    || code === 'reply_target_unavailable'
-    || code === 'message_not_visible';
+  return (
+    error instanceof ReplyTargetUnavailableError ||
+    code === 'reply_target_unavailable' ||
+    code === 'message_not_visible'
+  );
 }
 
 function replyConflict(reply: FastifyReply): FastifyReply {
   return reply.code(409).send(REPLY_CONFLICT_BODY);
 }
 
-function createMessageReplyHandlers({ messageService, maxTextLength = 4000 }: {
+function createMessageReplyHandlers({
+  messageService,
+  maxTextLength = 4000
+}: {
   messageService?: ReplyMessageService;
   maxTextLength?: number;
 } = {}): MessageReplyHandlers {
@@ -89,10 +99,13 @@ function createMessageReplyHandlers({ messageService, maxTextLength = 4000 }: {
   return Object.freeze({ directReply, roomReply });
 }
 
-function registerMessageReplyRoutes(fastify: FastifyInstance, options: {
-  messageService?: ReplyMessageService;
-  maxTextLength?: number;
-} = {}): MessageReplyHandlers {
+function registerMessageReplyRoutes(
+  fastify: FastifyInstance,
+  options: {
+    messageService?: ReplyMessageService;
+    maxTextLength?: number;
+  } = {}
+): MessageReplyHandlers {
   if (!fastify || typeof fastify.post !== 'function') {
     throw new TypeError('A Fastify instance is required');
   }

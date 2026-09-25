@@ -13,7 +13,11 @@ export type MessageService<Direct, Room> = Readonly<{
   withUnitOfWork<T>(operation: (unit: MessagingUnitOfWork<Direct, Room>) => T | Promise<T>): Promise<T>;
 }>;
 
-function createMessageService<Direct, Room>({ directMessages, roomMessages, visibility }: {
+function createMessageService<Direct, Room>({
+  directMessages,
+  roomMessages,
+  visibility
+}: {
   directMessages?: Direct;
   roomMessages?: Room;
   visibility?: MessageVisibilityService;

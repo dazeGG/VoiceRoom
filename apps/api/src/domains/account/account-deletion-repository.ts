@@ -2,7 +2,12 @@ import crypto from 'node:crypto';
 import type pg from 'pg';
 import { transaction } from '../../lib/db.ts';
 import { verifyPassword } from '../../lib/password.ts';
-import { ACCOUNT_DELETION_GRACE_MS, DELETED_ACCOUNT_NAME, DELETED_LOGIN_PREFIX, type AccountDeletionPreview } from '@voice-room/shared/account-security';
+import {
+  ACCOUNT_DELETION_GRACE_MS,
+  DELETED_ACCOUNT_NAME,
+  DELETED_LOGIN_PREFIX,
+  type AccountDeletionPreview
+} from '@voice-room/shared/account-security';
 
 const UNUSABLE_PASSWORD_HASH = '!';
 
@@ -32,12 +37,9 @@ type OwnedRoomRow = {
 };
 
 export type DeletionRequest =
-  | { status: 'not_found' | 'invalid_password' }
-  | { status: 'already_requested' | 'requested'; scheduledFor: number };
+  { status: 'not_found' | 'invalid_password' } | { status: 'already_requested' | 'requested'; scheduledFor: number };
 
-export type AccountRestore =
-  | { status: 'invalid' | 'expired'; userId: null }
-  | { status: 'restored'; userId: string };
+export type AccountRestore = { status: 'invalid' | 'expired'; userId: null } | { status: 'restored'; userId: string };
 
 export type DeletionFinish =
   | { status: 'not_due' }
@@ -59,7 +61,14 @@ function toMillis(value: unknown): number | null {
 }
 
 function hashLogin(login: unknown): string {
-  return crypto.createHash('sha256').update(String(login || '').trim().toLowerCase()).digest('hex');
+  return crypto
+    .createHash('sha256')
+    .update(
+      String(login || '')
+        .trim()
+        .toLowerCase()
+    )
+    .digest('hex');
 }
 
 // Static rooms the account owns, each with the member who would inherit it:
@@ -117,11 +126,20 @@ const PERSONAL_DATA_CLEANUP = Object.freeze([
 // stores: a request hides the account and keeps its profile aside for a restore
 // during the grace period; the finish hands its rooms over, removes its personal
 // data and anonymizes the row others' messages still point at.
-function createAccountDeletionRepository({ pool, now: clock = Date.now }: { pool?: pg.Pool | null; now?: () => number } = {}) {
+function createAccountDeletionRepository({
+  pool,
+  now: clock = Date.now
+}: { pool?: pg.Pool | null; now?: () => number } = {}) {
   if (!pool) throw new TypeError('pool is required');
   const db = pool;
 
-  async function previewDeletion({ userId, now = clock() }: { userId: string; now?: number }): Promise<AccountDeletionPreview> {
+  async function previewDeletion({
+    userId,
+    now = clock()
+  }: {
+    userId: string;
+    now?: number;
+  }): Promise<AccountDeletionPreview> {
     const result = await db.query<OwnedRoomRow>(OWNED_ROOMS_WITH_HEIRS, [userId, toDate(now)]);
     return {
       graceDays: Math.round(ACCOUNT_DELETION_GRACE_MS / (24 * 60 * 60 * 1000)),
@@ -133,7 +151,11 @@ function createAccountDeletionRepository({ pool, now: clock = Date.now }: { pool
     };
   }
 
-  async function requestDeletion({ userId, currentPassword, now = clock() }: {
+  async function requestDeletion({
+    userId,
+    currentPassword,
+    now = clock()
+  }: {
     userId: string;
     currentPassword: unknown;
     now?: number;
@@ -143,9 +165,12 @@ function createAccountDeletionRepository({ pool, now: clock = Date.now }: { pool
       const user = found.rows[0];
       if (!user || user.deleted_at) return { status: 'not_found' };
       if (user.deletion_requested_at) {
-        return { status: 'already_requested', scheduledFor: (toMillis(user.deletion_requested_at) as number) + ACCOUNT_DELETION_GRACE_MS };
+        return {
+          status: 'already_requested',
+          scheduledFor: (toMillis(user.deletion_requested_at) as number) + ACCOUNT_DELETION_GRACE_MS
+        };
       }
-      if (!await verifyPassword(currentPassword, user.password_hash)) return { status: 'invalid_password' };
+      if (!(await verifyPassword(currentPassword, user.password_hash))) return { status: 'invalid_password' };
 
       const deletedProfile = {
         displayName: user.display_name || '',
@@ -171,7 +196,11 @@ function createAccountDeletionRepository({ pool, now: clock = Date.now }: { pool
 
   // Same answer for an unknown login and a wrong password; a password is
   // checked either way so neither is observably faster.
-  async function restoreAccount({ login, password, now = clock() }: {
+  async function restoreAccount({
+    login,
+    password,
+    now = clock()
+  }: {
     login: string;
     password: unknown;
     now?: number;
@@ -182,7 +211,8 @@ function createAccountDeletionRepository({ pool, now: clock = Date.now }: { pool
       const pending = user && !user.deleted_at && user.deletion_requested_at;
       const passwordMatches = await verifyPassword(password, pending ? user.password_hash : UNUSABLE_PASSWORD_HASH);
       if (!pending || !passwordMatches) return { status: 'invalid', userId: null };
-      if ((toMillis(user.deletion_requested_at) as number) + ACCOUNT_DELETION_GRACE_MS <= now) return { status: 'expired', userId: null };
+      if ((toMillis(user.deletion_requested_at) as number) + ACCOUNT_DELETION_GRACE_MS <= now)
+        return { status: 'expired', userId: null };
 
       const profile: DeletedProfile = user.metadata?.deletedProfile || {};
       await tx.query(
@@ -194,13 +224,21 @@ function createAccountDeletionRepository({ pool, now: clock = Date.now }: { pool
              metadata = metadata - 'deletedProfile',
              updated_at = $5
          WHERE id = $1`,
-        [user.id, String(profile.displayName || ''), profile.avatarKey || null, profile.avatarAccent || null, toDate(now)]
+        [
+          user.id,
+          String(profile.displayName || ''),
+          profile.avatarKey || null,
+          profile.avatarAccent || null,
+          toDate(now)
+        ]
       );
       return { status: 'restored', userId: user.id };
     });
   }
 
-  async function listDueDeletions({ now = clock(), limit = 20 }: { now?: number; limit?: number } = {}): Promise<string[]> {
+  async function listDueDeletions({ now = clock(), limit = 20 }: { now?: number; limit?: number } = {}): Promise<
+    string[]
+  > {
     const result = await db.query<{ id: string }>(
       `SELECT id
        FROM users
@@ -214,15 +252,21 @@ function createAccountDeletionRepository({ pool, now: clock = Date.now }: { pool
     return result.rows.map((row) => row.id);
   }
 
-  async function finalizeDeletion({ userId, now = clock() }: { userId: string; now?: number }): Promise<DeletionFinish> {
+  async function finalizeDeletion({
+    userId,
+    now = clock()
+  }: {
+    userId: string;
+    now?: number;
+  }): Promise<DeletionFinish> {
     return transaction(db, async (tx: QueryClient): Promise<DeletionFinish> => {
       const found = await tx.query<UserRow>('SELECT * FROM users WHERE id = $1 FOR UPDATE', [userId]);
       const user = found.rows[0];
       if (
-        !user
-        || user.deleted_at
-        || !user.deletion_requested_at
-        || (toMillis(user.deletion_requested_at) as number) + ACCOUNT_DELETION_GRACE_MS > now
+        !user ||
+        user.deleted_at ||
+        !user.deletion_requested_at ||
+        (toMillis(user.deletion_requested_at) as number) + ACCOUNT_DELETION_GRACE_MS > now
       ) {
         return { status: 'not_due' };
       }
@@ -232,17 +276,21 @@ function createAccountDeletionRepository({ pool, now: clock = Date.now }: { pool
       const owned = await tx.query<OwnedRoomRow>(OWNED_ROOMS_WITH_HEIRS, [userId, toDate(now)]);
       for (const room of owned.rows) {
         if (room.heir_user_id) {
-          await tx.query('UPDATE rooms SET owner_id = $2, updated_at = $3 WHERE id = $1', [room.id, room.heir_user_id, toDate(now)]);
+          await tx.query('UPDATE rooms SET owner_id = $2, updated_at = $3 WHERE id = $1', [
+            room.id,
+            room.heir_user_id,
+            toDate(now)
+          ]);
           await tx.query(
             `UPDATE room_memberships SET role = 'owner', updated_at = $3 WHERE room_id = $1 AND user_id = $2`,
             [room.id, room.heir_user_id, toDate(now)]
           );
           transferredRooms.push({ roomId: room.id, heirUserId: room.heir_user_id });
         } else {
-          await tx.query(
-            'UPDATE rooms SET deleted_at = COALESCE(deleted_at, $2), updated_at = $2 WHERE id = $1',
-            [room.id, toDate(now)]
-          );
+          await tx.query('UPDATE rooms SET deleted_at = COALESCE(deleted_at, $2), updated_at = $2 WHERE id = $1', [
+            room.id,
+            toDate(now)
+          ]);
           deletedRooms.push({ roomId: room.id, avatarKey: room.avatar_key || null });
         }
       }

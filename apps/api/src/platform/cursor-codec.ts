@@ -74,15 +74,9 @@ function normalizeTuple(input: unknown): CursorTuple {
 }
 
 function normalizeKeys(keys: unknown): CursorKey[] {
-  const rawKeys: unknown[] = Array.isArray(keys)
-    ? keys
-    : typeof keys === 'string'
-      ? keys.split(',')
-      : [];
+  const rawKeys: unknown[] = Array.isArray(keys) ? keys : typeof keys === 'string' ? keys.split(',') : [];
 
-  const normalized = rawKeys
-    .map((value) => (typeof value === 'string' ? value.trim() : ''))
-    .filter(Boolean);
+  const normalized = rawKeys.map((value) => (typeof value === 'string' ? value.trim() : '')).filter(Boolean);
 
   if (normalized.length === 0) throw new Error('At least one cursor HMAC key is required');
 
@@ -101,7 +95,13 @@ function readCursorKeysFromEnv(env: NodeJS.ProcessEnv = process.env): string {
   return env.VOICE_ROOM_CURSOR_HMAC_KEYS || env.CURSOR_HMAC_KEYS || env.CURSOR_HMAC_KEY || '';
 }
 
-function makePayload({ purpose, context, tuple, ttlMs, nowMs }: {
+function makePayload({
+  purpose,
+  context,
+  tuple,
+  ttlMs,
+  nowMs
+}: {
   purpose: string;
   context: string;
   tuple: CursorTuple;
@@ -120,14 +120,19 @@ function makePayload({ purpose, context, tuple, ttlMs, nowMs }: {
   };
 }
 
-function createCursorCodec(options: { keys?: unknown; env?: NodeJS.ProcessEnv; ttlMs?: unknown; now?: unknown } = {}): CursorCodec {
+function createCursorCodec(
+  options: { keys?: unknown; env?: NodeJS.ProcessEnv; ttlMs?: unknown; now?: unknown } = {}
+): CursorCodec {
   const keys = normalizeKeys(options.keys ?? readCursorKeysFromEnv(options.env));
-  const ttlMs = Number.isFinite(options.ttlMs) && (options.ttlMs as number) > 0
-    ? Math.trunc(options.ttlMs as number)
-    : DEFAULT_TTL_MS;
-  const now: () => number = typeof options.now === 'function' ? options.now as () => number : Date.now;
+  const ttlMs =
+    Number.isFinite(options.ttlMs) && (options.ttlMs as number) > 0
+      ? Math.trunc(options.ttlMs as number)
+      : DEFAULT_TTL_MS;
+  const now: () => number = typeof options.now === 'function' ? (options.now as () => number) : Date.now;
 
-  function encode(input: { purpose?: unknown; context?: unknown; tuple?: unknown; [key: string]: unknown } = {}): string {
+  function encode(
+    input: { purpose?: unknown; context?: unknown; tuple?: unknown; [key: string]: unknown } = {}
+  ): string {
     const purpose = normalizeString(input.purpose, 'purpose', MAX_PURPOSE_BYTES);
     const context = normalizeString(input.context, 'context', MAX_CONTEXT_BYTES);
     const tuple = normalizeTuple(input.tuple ?? input);

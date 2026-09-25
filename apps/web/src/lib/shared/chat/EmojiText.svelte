@@ -11,4 +11,8 @@
   const parts = $derived(splitEmoji(text));
 </script>
 
-{#each parts as part, index (index)}{#if part.kind === 'emoji'}<Emoji emoji={part.emoji} {size} inline />{:else}{part.text}{/if}{/each}
+{#each parts as part, index (index)}{#if part.kind === 'emoji'}<Emoji
+      emoji={part.emoji}
+      {size}
+      inline
+    />{:else}{part.text}{/if}{/each}

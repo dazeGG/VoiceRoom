@@ -26,7 +26,9 @@ test('last activity is only as precise as the hourly server refresh', () => {
 });
 
 test('the recovery codes summary says how many are left and warns when none are', () => {
-  expect(recoveryCodesSummary({ remaining: 0, generatedAt: null })).toBe('Кодов пока нет. Без них забытый пароль не восстановить.');
+  expect(recoveryCodesSummary({ remaining: 0, generatedAt: null })).toBe(
+    'Кодов пока нет. Без них забытый пароль не восстановить.'
+  );
   expect(recoveryCodesSummary({ remaining: 0, generatedAt: NOW })).toMatch(/^Все коды использованы/);
   expect(recoveryCodesSummary({ remaining: 7, generatedAt: null })).toBe('Осталось 7 из 10');
 });
@@ -40,8 +42,15 @@ test('the downloaded codes file names the account and lists every code', () => {
 test('the reminder to create codes shows only without codes and not while snoozed', () => {
   const noCodes = { recoveryCodes: { remaining: 0 }, recoveryCodesReminder: null } as never;
   expect(shouldShowRecoveryCodesReminder(noCodes, NOW)).toBe(true);
-  expect(shouldShowRecoveryCodesReminder({ recoveryCodes: { remaining: 3 }, recoveryCodesReminder: null } as never, NOW)).toBe(false);
-  expect(shouldShowRecoveryCodesReminder({ recoveryCodes: { remaining: 0 }, recoveryCodesReminder: { snoozedUntil: NOW + HOUR } } as never, NOW)).toBe(false);
+  expect(
+    shouldShowRecoveryCodesReminder({ recoveryCodes: { remaining: 3 }, recoveryCodesReminder: null } as never, NOW)
+  ).toBe(false);
+  expect(
+    shouldShowRecoveryCodesReminder(
+      { recoveryCodes: { remaining: 0 }, recoveryCodesReminder: { snoozedUntil: NOW + HOUR } } as never,
+      NOW
+    )
+  ).toBe(false);
 });
 
 test('sign-in alerts say how the account was entered, when and where, oldest first without repeats', () => {

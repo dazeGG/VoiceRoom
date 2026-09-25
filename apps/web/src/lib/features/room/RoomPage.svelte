@@ -17,7 +17,11 @@
   import { applyDesktopBoundaryToDocument, setRoomRouteActive } from '$lib/platform/desktop-boundary';
   import { setRoomEmbedded } from './client/core/embed';
 
-  let { embeddedRoomId = '', roomId = '', autoJoin = false } = $props<{
+  let {
+    embeddedRoomId = '',
+    roomId = '',
+    autoJoin = false
+  } = $props<{
     embeddedRoomId?: string;
     roomId?: string;
     autoJoin?: boolean;

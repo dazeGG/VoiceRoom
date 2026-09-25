@@ -16,8 +16,17 @@ type JoinResult = { ok: boolean; code?: string; message?: string };
 export interface WsRoomRuntime {
   subscribePreview(connection: WsConnection, roomId: string): Promise<unknown>;
   unsubscribePreview(connection: WsConnection, roomId: string): unknown;
-  joinVoiceRoom(connection: WsConnection, payload: Record<string, any>, user: SessionUser | null, clientIp: string, requestId?: string): Promise<JoinResult>;
-  leaveVoiceRoom(connection: WsConnection, target: { roomId: string; peerId: string; sessionToken: string }): Promise<unknown>;
+  joinVoiceRoom(
+    connection: WsConnection,
+    payload: Record<string, any>,
+    user: SessionUser | null,
+    clientIp: string,
+    requestId?: string
+  ): Promise<JoinResult>;
+  leaveVoiceRoom(
+    connection: WsConnection,
+    target: { roomId: string; peerId: string; sessionToken: string }
+  ): Promise<unknown>;
   updatePeerState(connection: WsConnection, payload: Record<string, any>): Promise<{ ok: boolean; code?: string }>;
   broadcastRoomTyping(connection: WsConnection, roomId: string, activity: TypingActivity): unknown;
   sendAccountSummaries(connection: WsConnection, userId: string): Promise<unknown>;
@@ -50,13 +59,16 @@ function createWsHandler({
   // that caused it. Without both, a report of "the call keeps dropping" leaves
   // nothing to search: the socket is gone and the stack alone names no user.
   function reportMessageError(error: unknown, connection: WsConnection | null = null, type = ''): void {
-    logger.error({
-      evt: LOG_EVENTS.WS_MESSAGE_FAILED,
-      connId: connection?.id,
-      userId: connection?.userId || undefined,
-      type: type || undefined,
-      err: error
-    }, 'ws message handler failed');
+    logger.error(
+      {
+        evt: LOG_EVENTS.WS_MESSAGE_FAILED,
+        connId: connection?.id,
+        userId: connection?.userId || undefined,
+        type: type || undefined,
+        err: error
+      },
+      'ws message handler failed'
+    );
   }
 
   // Direct typing notices reach only a friend when neither side blocked the
@@ -115,7 +127,11 @@ function createWsHandler({
       .catch((error) => reportMessageError(error, connection));
   }
 
-  async function handleMessage(connection: WsConnection, envelope: InboundEnvelope, req: IncomingMessage): Promise<void> {
+  async function handleMessage(
+    connection: WsConnection,
+    envelope: InboundEnvelope,
+    req: IncomingMessage
+  ): Promise<void> {
     if (envelope.type === 'hello') {
       registry.touch(connection);
       return;
@@ -123,10 +139,7 @@ function createWsHandler({
 
     if (envelope.type === 'ping') {
       registry.touch(connection);
-      registry.sendToConnection(
-        connection,
-        buildServerEnvelope('pong', { at: envelope.payload.at }, envelope.id)
-      );
+      registry.sendToConnection(connection, buildServerEnvelope('pong', { at: envelope.payload.at }, envelope.id));
       return;
     }
 
@@ -164,27 +177,40 @@ function createWsHandler({
       );
       const joinRoomId = normalizeRoomId(envelope.payload.roomId);
       if (result.ok) {
-        logger.info({
-          evt: LOG_EVENTS.ROOM_JOINED,
-          connId: connection.id,
-          userId: connection.userId || undefined,
-          roomId: joinRoomId,
-          guest: connection.guest
-        }, 'room joined');
+        logger.info(
+          {
+            evt: LOG_EVENTS.ROOM_JOINED,
+            connId: connection.id,
+            userId: connection.userId || undefined,
+            roomId: joinRoomId,
+            guest: connection.guest
+          },
+          'room joined'
+        );
       } else {
-        logger.warn({
-          evt: LOG_EVENTS.ROOM_JOIN_REJECTED,
-          connId: connection.id,
-          userId: connection.userId || undefined,
-          roomId: joinRoomId,
-          code: result.code || 'join_failed'
-        }, 'room join rejected');
+        logger.warn(
+          {
+            evt: LOG_EVENTS.ROOM_JOIN_REJECTED,
+            connId: connection.id,
+            userId: connection.userId || undefined,
+            roomId: joinRoomId,
+            code: result.code || 'join_failed'
+          },
+          'room join rejected'
+        );
       }
 
       if (!result.ok && result.code === 'room_banned') {
-        registry.sendToConnection(connection, buildServerEnvelope('room.banned', {
-          roomId: envelope.payload.roomId
-        }, envelope.id));
+        registry.sendToConnection(
+          connection,
+          buildServerEnvelope(
+            'room.banned',
+            {
+              roomId: envelope.payload.roomId
+            },
+            envelope.id
+          )
+        );
       } else if (!result.ok && result.message) {
         registry.sendToConnection(
           connection,
@@ -195,12 +221,15 @@ function createWsHandler({
     }
 
     if (envelope.type === 'room.leave') {
-      logger.info({
-        evt: LOG_EVENTS.ROOM_LEFT,
-        connId: connection.id,
-        userId: connection.userId || undefined,
-        roomId: normalizeRoomId(envelope.payload.roomId)
-      }, 'room left');
+      logger.info(
+        {
+          evt: LOG_EVENTS.ROOM_LEFT,
+          connId: connection.id,
+          userId: connection.userId || undefined,
+          roomId: normalizeRoomId(envelope.payload.roomId)
+        },
+        'room left'
+      );
       await roomRuntime.leaveVoiceRoom(connection, {
         roomId: normalizeRoomId(envelope.payload.roomId),
         peerId: normalizePeerId(envelope.payload.peerId),
@@ -230,17 +259,24 @@ function createWsHandler({
     }
 
     if (envelope.type === 'dm.typing') {
-      await forwardDirectTyping(connection, envelope.payload.userId, normalizeTypingActivity(envelope.payload.activity) || 'typing');
+      await forwardDirectTyping(
+        connection,
+        envelope.payload.userId,
+        normalizeTypingActivity(envelope.payload.activity) || 'typing'
+      );
       return;
     }
 
-    logger.warn({
-      evt: LOG_EVENTS.WS_MESSAGE_REJECTED,
-      connId: connection.id,
-      userId: connection.userId || undefined,
-      type: envelope.type,
-      code: 'not_implemented'
-    }, 'unsupported ws message type');
+    logger.warn(
+      {
+        evt: LOG_EVENTS.WS_MESSAGE_REJECTED,
+        connId: connection.id,
+        userId: connection.userId || undefined,
+        type: envelope.type,
+        code: 'not_implemented'
+      },
+      'unsupported ws message type'
+    );
     registry.sendToConnection(
       connection,
       buildServerErrorEnvelope('not_implemented', `Unsupported message type: ${envelope.type}`, envelope.id)
@@ -255,52 +291,70 @@ function createWsHandler({
     // count the doomed connection toward the limit (off-by-one) and flap the
     // user's presence for friends when it was their first connection.
     if (sessionUser && registry.rejectOverLimit(sessionUser.id)) {
-      logger.warn({
-        evt: LOG_EVENTS.WS_REJECTED_OVER_LIMIT,
-        userId: sessionUser.id,
-        scope: 'user',
-        code: 4429
-      }, 'ws connection rejected over the per-user limit');
+      logger.warn(
+        {
+          evt: LOG_EVENTS.WS_REJECTED_OVER_LIMIT,
+          userId: sessionUser.id,
+          scope: 'user',
+          code: 4429
+        },
+        'ws connection rejected over the per-user limit'
+      );
       socket.close(4429, 'Too many connections');
       return;
     }
 
     const guestIp = sessionUser ? '' : getClientIp(req);
     if (!sessionUser && registry.rejectGuestOverLimit(guestIp)) {
-      logger.warn({
-        evt: LOG_EVENTS.WS_REJECTED_OVER_LIMIT,
-        ipHash: hashIp(guestIp),
-        scope: 'guest',
-        code: 4429
-      }, 'ws connection rejected over the per-ip guest limit');
+      logger.warn(
+        {
+          evt: LOG_EVENTS.WS_REJECTED_OVER_LIMIT,
+          ipHash: hashIp(guestIp),
+          scope: 'guest',
+          code: 4429
+        },
+        'ws connection rejected over the per-ip guest limit'
+      );
       socket.close(4429, 'Too many connections');
       return;
     }
 
     const clientIp = getClientIp(req);
     const connection = sessionUser
-      ? registry.addConnection(sessionUser.id, socket, clientIp, sessionUser.presenceStatus, session?.session?.tokenHash)
+      ? registry.addConnection(
+          sessionUser.id,
+          socket,
+          clientIp,
+          sessionUser.presenceStatus,
+          session?.session?.tokenHash
+        )
       : registry.addGuestConnection(socket, guestIp);
 
-    logger.info({
-      evt: LOG_EVENTS.WS_CONNECTED,
-      connId: connection.id,
-      userId: connection.userId || undefined,
-      guest: connection.guest,
-      ipHash: hashIp(clientIp)
-    }, 'ws connected');
+    logger.info(
+      {
+        evt: LOG_EVENTS.WS_CONNECTED,
+        connId: connection.id,
+        userId: connection.userId || undefined,
+        guest: connection.guest,
+        ipHash: hashIp(clientIp)
+      },
+      'ws connected'
+    );
 
     if (sessionUser) {
       let friendIds: string[] = [];
       try {
         friendIds = await getFriendIds(sessionUser.id);
       } catch (error) {
-        logger.error({
-          evt: LOG_EVENTS.WS_FRIENDS_LOAD_FAILED,
-          connId: connection.id,
-          userId: sessionUser.id,
-          err: error
-        }, 'failed to load friends for the ws ready frame');
+        logger.error(
+          {
+            evt: LOG_EVENTS.WS_FRIENDS_LOAD_FAILED,
+            connId: connection.id,
+            userId: sessionUser.id,
+            err: error
+          },
+          'failed to load friends for the ws ready frame'
+        );
       }
       registry.sendReady(connection, {
         userId: sessionUser.id,
@@ -315,10 +369,7 @@ function createWsHandler({
       if (connection.closed) return;
       const parsed = parseInboundMessage(String(raw));
       if (!parsed.ok) {
-        registry.sendToConnection(
-          connection,
-          buildServerErrorEnvelope(parsed.code, 'Invalid WebSocket message')
-        );
+        registry.sendToConnection(connection, buildServerErrorEnvelope(parsed.code, 'Invalid WebSocket message'));
         return;
       }
       if (parsed.envelope.type === 'hello' || parsed.envelope.type === 'ping') {
@@ -341,18 +392,25 @@ function createWsHandler({
     // once: counting ws.closed must equal the number of sockets that ended,
     // not the number of ways each one ended.
     let closeReported = false;
-    function reportClosed({ code = 0, reason = '', error = null }: { code?: unknown; reason?: unknown; error?: unknown } = {}): void {
+    function reportClosed({
+      code = 0,
+      reason = '',
+      error = null
+    }: { code?: unknown; reason?: unknown; error?: unknown } = {}): void {
       if (closeReported) return;
       closeReported = true;
-      logger[error ? 'warn' : 'info']({
-        evt: LOG_EVENTS.WS_CLOSED,
-        connId: connection.id,
-        userId: connection.userId || undefined,
-        code: Number(code) || 0,
-        reason: String(reason || '').slice(0, 120) || undefined,
-        durationMs: now() - connection.openedAt,
-        err: error || undefined
-      }, error ? 'ws closed after a socket error' : 'ws closed');
+      logger[error ? 'warn' : 'info'](
+        {
+          evt: LOG_EVENTS.WS_CLOSED,
+          connId: connection.id,
+          userId: connection.userId || undefined,
+          code: Number(code) || 0,
+          reason: String(reason || '').slice(0, 120) || undefined,
+          durationMs: now() - connection.openedAt,
+          err: error || undefined
+        },
+        error ? 'ws closed after a socket error' : 'ws closed'
+      );
     }
 
     socket.on('close', (code: number, reason: unknown) => {

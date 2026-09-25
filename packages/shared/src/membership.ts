@@ -71,9 +71,9 @@ export function normalizeMembershipMember(value: unknown): MembershipMember | nu
   if (!isObject(value)) return null;
   const userId = cleanString(value.userId ?? value.id, 36);
   if (!userId) return null;
-  const role = MEMBERSHIP_ROLE_SET.has(value.role) ? value.role as MembershipRole : 'member';
+  const role = MEMBERSHIP_ROLE_SET.has(value.role) ? (value.role as MembershipRole) : 'member';
   const presenceStatus = MEMBER_PRESENCE_STATUSES.includes(value.presenceStatus)
-    ? value.presenceStatus as MemberPresenceStatus
+    ? (value.presenceStatus as MemberPresenceStatus)
     : 'offline';
   return {
     userId,
@@ -89,7 +89,13 @@ export function normalizeMembershipMember(value: unknown): MembershipMember | nu
   };
 }
 
-export function buildMembershipEnvelope({ roomId, members = [], nextCursor, hasMore = false, presenceRevision = 0 }: {
+export function buildMembershipEnvelope({
+  roomId,
+  members = [],
+  nextCursor,
+  hasMore = false,
+  presenceRevision = 0
+}: {
   roomId?: unknown;
   members?: unknown[];
   nextCursor?: unknown;
@@ -110,9 +116,9 @@ export function buildMembershipEnvelope({ roomId, members = [], nextCursor, hasM
   };
 }
 
-export function normalizeMembershipEnvelope(value: unknown):
-  | { ok: true; envelope: MembershipEnvelope }
-  | { ok: false; code: string } {
+export function normalizeMembershipEnvelope(
+  value: unknown
+): { ok: true; envelope: MembershipEnvelope } | { ok: false; code: string } {
   if (!isObject(value) || value.contractVersion !== MEMBERSHIP_CONTRACT_VERSION) {
     return { ok: false, code: 'invalid_membership_envelope' };
   }

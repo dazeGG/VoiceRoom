@@ -19,7 +19,8 @@ const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const MIGRATIONS_DIR = path.join(import.meta.dirname, '../src/migrations');
 const KEY = `lp_${'ab'.repeat(16)}.webp`;
 const OTHER_KEY = `lp_${'cd'.repeat(16)}.webp`;
-const PAGE = '<html><head><title>fallback</title><meta property="og:title" content="Пост про котов"><meta property="og:image" content="/cover.png"></head><body></body></html>';
+const PAGE =
+  '<html><head><title>fallback</title><meta property="og:title" content="Пост про котов"><meta property="og:image" content="/cover.png"></head><body></body></html>';
 
 async function setup(t, { fetchPage } = {}) {
   const { cleanup, databaseUrl } = await createTestDatabase(t);
@@ -54,8 +55,12 @@ async function setup(t, { fetchPage } = {}) {
       }
     },
     processImage: async () => ({ key: KEY, buffer: Buffer.from('webp'), width: 640, height: 360 }),
-    onRoomPreview: async (event) => { published.room.push(event); },
-    onDirectPreview: async (event) => { published.direct.push(event); },
+    onRoomPreview: async (event) => {
+      published.room.push(event);
+    },
+    onDirectPreview: async (event) => {
+      published.direct.push(event);
+    },
     logger: SILENT,
     now: () => clock.now
   });
@@ -85,7 +90,10 @@ test('a room message gets the preview of its first link, and the cache spares a 
   assert.deepEqual(fetches, { pages: 1, images: 1 });
   assert.deepEqual((await rooms.getMessage('lp-room', 'lp-1')).linkPreview, EXPECTED_PREVIEW);
   assert.deepEqual((await rooms.getMessage('lp-room', 'lp-2')).linkPreview, EXPECTED_PREVIEW);
-  assert.deepEqual(published.room, [{ roomId: 'lp-room', messageId: 'lp-1' }, { roomId: 'lp-room', messageId: 'lp-2' }]);
+  assert.deepEqual(published.room, [
+    { roomId: 'lp-room', messageId: 'lp-1' },
+    { roomId: 'lp-room', messageId: 'lp-2' }
+  ]);
   assert.deepEqual(await storage.listKeys(), [KEY]);
 
   // Building it again changes nothing, so nobody is told again.
@@ -103,7 +111,10 @@ test('an edit that drops the link removes the preview, and a stale result never 
   await rooms.editMessage('lp-room', 'lp-edit', 'передумал, без ссылки');
   // The preview built for the old text finishes late: the message moved on.
   await service.previewRoomMessage({ roomId: 'lp-room', messageId: 'lp-edit', text });
-  assert.ok((await rooms.getMessage('lp-room', 'lp-edit')).linkPreview, 'the late result did not touch the edited message');
+  assert.ok(
+    (await rooms.getMessage('lp-room', 'lp-edit')).linkPreview,
+    'the late result did not touch the edited message'
+  );
   assert.equal(published.room.length, 1);
 
   await service.previewRoomMessage({ roomId: 'lp-room', messageId: 'lp-edit', text: 'передумал, без ссылки' });
@@ -113,7 +124,9 @@ test('an edit that drops the link removes the preview, and a stale result never 
 
 test('a site that cannot be previewed is remembered for a while', async (t) => {
   const { ada, clock, fetches, pool, published, rooms, service } = await setup(t, {
-    fetchPage: async () => { throw Object.assign(new Error('private'), { code: 'blocked_address' }); }
+    fetchPage: async () => {
+      throw Object.assign(new Error('private'), { code: 'blocked_address' });
+    }
   });
   const text = 'http://intranet.example/';
   await rooms.appendMessage('lp-room', { id: 'lp-fail', text, authorUserId: ada.id, createdAt: 2000 }, 2000);
@@ -141,7 +154,7 @@ test('direct messages get previews too, and only images nobody uses are swept', 
   );
 
   await service.previewDirectMessage({ messageId, senderId: grace.id, recipientId: ada.id, text });
-  assert.equal(published.direct.length, 0, 'only the sender\'s own message is previewed');
+  assert.equal(published.direct.length, 0, "only the sender's own message is previewed");
   await service.previewDirectMessage({ messageId, senderId: ada.id, recipientId: grace.id, text });
   const stored = await pool.query('SELECT metadata FROM direct_messages WHERE id = $1', [messageId]);
   assert.deepEqual(stored.rows[0].metadata.linkPreview, EXPECTED_PREVIEW);
@@ -166,12 +179,16 @@ test('the link preview migration applies and rolls back cleanly', async (t) => {
     await pool.end();
     await cleanup();
   });
-  const tableExists = async () => (await pool.query(`SELECT to_regclass('public.link_previews') AS name`)).rows[0].name !== null;
+  const tableExists = async () =>
+    (await pool.query(`SELECT to_regclass('public.link_previews') AS name`)).rows[0].name !== null;
 
   await runMigrations({ databaseUrl, logger: SILENT });
   assert.equal(await tableExists(), true);
 
-  const names = fs.readdirSync(MIGRATIONS_DIR).filter((file) => file.endsWith('.cjs')).sort();
+  const names = fs
+    .readdirSync(MIGRATIONS_DIR)
+    .filter((file) => file.endsWith('.cjs'))
+    .sort();
   const index = names.indexOf('20260913120000_create_link_previews.cjs');
   assert.notEqual(index, -1);
   for (let step = 0; step < names.length - index; step += 1) {

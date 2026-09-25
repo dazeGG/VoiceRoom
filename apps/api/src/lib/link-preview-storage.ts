@@ -71,7 +71,10 @@ function createLinkPreviewStorage({ uploadsDir = readUploadsDir() }: { uploadsDi
 }
 
 // Removes stored images that neither a cached preview nor any message uses.
-async function reconcileLinkPreviewImages({ storage, repository }: {
+async function reconcileLinkPreviewImages({
+  storage,
+  repository
+}: {
   storage: Pick<LinkPreviewStorage, 'listKeys' | 'remove'>;
   repository: { listReferencedImageKeys(): Promise<string[]> };
 }): Promise<number> {

@@ -8,7 +8,10 @@ import type { Participant } from '../src/lib/features/room/client/core/types.ts'
 test('chat links keep hosts, paths and query strings, drop trailing punctuation, and never link scripts', () => {
   const url = 'https://spb.hh.ru/vacancy/134530018?nhtmFrom=chat';
   expect(parseChatLinks(url)).toEqual([{ kind: 'link', text: url, href: url }]);
-  expect(parseChatLinks(`${url}.`)).toEqual([{ kind: 'link', text: url, href: url }, { kind: 'text', text: '.' }]);
+  expect(parseChatLinks(`${url}.`)).toEqual([
+    { kind: 'link', text: url, href: url },
+    { kind: 'text', text: '.' }
+  ]);
   expect(parseChatLinks('javascript:alert(1)')).toEqual([{ kind: 'text', text: 'javascript:alert(1)' }]);
 });
 
@@ -25,12 +28,14 @@ test('being offline wins over any status; unknown statuses fall back by do-not-d
 
 test('frequent reactions are per user, ranked by count then recency, three at most', () => {
   expect(frequentReactionKey('chat', 'user-42')).toBe('chat:user-42');
-  expect(rankFrequentReactions([
-    { emoji: '👍', count: 2, lastUsedAt: 10 },
-    { emoji: '😂', count: 4, lastUsedAt: 5 },
-    { emoji: '🔥', count: 4, lastUsedAt: 12 },
-    { emoji: '❤️', count: 1, lastUsedAt: 20 }
-  ]).map((entry) => entry.emoji)).toEqual(['🔥', '😂', '👍']);
+  expect(
+    rankFrequentReactions([
+      { emoji: '👍', count: 2, lastUsedAt: 10 },
+      { emoji: '😂', count: 4, lastUsedAt: 5 },
+      { emoji: '🔥', count: 4, lastUsedAt: 12 },
+      { emoji: '❤️', count: 1, lastUsedAt: 20 }
+    ]).map((entry) => entry.emoji)
+  ).toEqual(['🔥', '😂', '👍']);
 });
 
 test('watching a stream is one stream at a time and reports only real changes', () => {

@@ -33,12 +33,7 @@
 
 {#if count > 0}
   <div class="pinned-bar" class:is-expanded={expanded}>
-    <button
-      class="pinned-bar-toggle"
-      type="button"
-      aria-expanded={expanded}
-      onclick={() => (expanded = !expanded)}
-    >
+    <button class="pinned-bar-toggle" type="button" aria-expanded={expanded} onclick={() => (expanded = !expanded)}>
       <span class="pinned-bar-icon" aria-hidden="true"><Pin {...iconSm} /></span>
       <span class="pinned-bar-title">Закреплённые</span>
       <span class="pinned-bar-count">{count}</span>

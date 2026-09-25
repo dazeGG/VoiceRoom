@@ -19,7 +19,15 @@ export function parseCookies(req: { headers?: { cookie?: unknown } } | null | un
   return cookies;
 }
 
-export function createSessionCookies({ name, secure, maxAgeSeconds }: { name: string; secure: boolean; maxAgeSeconds: number }) {
+export function createSessionCookies({
+  name,
+  secure,
+  maxAgeSeconds
+}: {
+  name: string;
+  secure: boolean;
+  maxAgeSeconds: number;
+}) {
   const attributes = (maxAge: number) => {
     const parts = ['Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${Math.max(0, Math.floor(maxAge))}`];
     if (secure) parts.push('Secure');

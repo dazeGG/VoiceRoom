@@ -51,14 +51,15 @@ function createMemoryGateStore() {
       if (!available) throw new Error('database unavailable');
       const row = credentials.get(credentialHash);
       const epoch = epochs.get(key({ roomId, principalType, principalId }));
-      const allowed = row
-        && !row.revoked
-        && row.roomId === roomId
-        && row.peerId === peerId
-        && row.principalType === principalType
-        && row.principalId === principalId
-        && row.principalEpoch === principalEpoch
-        && epoch === principalEpoch;
+      const allowed =
+        row &&
+        !row.revoked &&
+        row.roomId === roomId &&
+        row.peerId === peerId &&
+        row.principalType === principalType &&
+        row.principalId === principalId &&
+        row.principalEpoch === principalEpoch &&
+        epoch === principalEpoch;
       return { status: allowed ? 'allowed' : 'denied' };
     },
     async revokeLiveKitGatePrincipal({ principal, roomId }) {
@@ -66,7 +67,11 @@ function createMemoryGateStore() {
       const principalKey = key({ roomId, ...principal });
       epochs.set(principalKey, (epochs.get(principalKey) || 0) + 1);
       for (const row of credentials.values()) {
-        if (row.roomId === roomId && row.principalType === principal.principalType && row.principalId === principal.principalId) {
+        if (
+          row.roomId === roomId &&
+          row.principalType === principal.principalType &&
+          row.principalId === principal.principalId
+        ) {
           row.revoked = true;
         }
       }
@@ -80,11 +85,16 @@ function readTopologyEvidence() {
   const lkv = fs.readFileSync('docker-compose.lkv.yml', 'utf8');
   const caddy = fs.readFileSync('Caddyfile', 'utf8');
   const config = JSON.parse(fs.readFileSync('config/livekit/external-auth-gate.v1.json', 'utf8'));
-  const productionGateCommandOk = /command:\s*\["node",\s*"apps\/api\/src\/domains\/admission\/livekit-auth-gate-service\.ts"\]/.test(compose);
+  const productionGateCommandOk =
+    /command:\s*\["node",\s*"apps\/api\/src\/domains\/admission\/livekit-auth-gate-service\.ts"\]/.test(compose);
   const internalLiveKitDefaultOk = /LIVEKIT_URL:\s*\$\{LIVEKIT_URL:-ws:\/\/livekit:7880\}/.test(compose);
-  const caddyTargetsGate = /reverse_proxy\s+livekit-gate:3080/.test(caddy) && !/reverse_proxy\s+livekit:7880/.test(caddy);
+  const caddyTargetsGate =
+    /reverse_proxy\s+livekit-gate:3080/.test(caddy) && !/reverse_proxy\s+livekit:7880/.test(caddy);
   const noProductionHostBind7880 = !/"7880:7880"/.test(compose);
-  const lkvRunnable = /postgres:/.test(lkv) && /target:\s*api/.test(lkv) && /apps\/api\/src\/domains\/admission\/livekit-auth-gate-service\.ts/.test(lkv);
+  const lkvRunnable =
+    /postgres:/.test(lkv) &&
+    /target:\s*api/.test(lkv) &&
+    /apps\/api\/src\/domains\/admission\/livekit-auth-gate-service\.ts/.test(lkv);
   return {
     caddyTargetsGate,
     config,
@@ -176,7 +186,9 @@ export async function runAuthGateProof() {
     roomId: 'room-other'
   });
   const wrongRoom = await authorize({ credential: wrongRoomCredential, signer, store });
-  const stripped = extractCredential(`/rtc?access_token=lk&vr_gate_credential=${encodeURIComponent(refreshed)}&room=voice-room-room-g05`);
+  const stripped = extractCredential(
+    `/rtc?access_token=lk&vr_gate_credential=${encodeURIComponent(refreshed)}&room=voice-room-room-g05`
+  );
   store.setAvailable(false);
   let dbOutageDenied = false;
   try {
@@ -192,33 +204,47 @@ export async function runAuthGateProof() {
     { id: 'G05-A01-same-token-after-ban', denied: guestDenied === 'denied' },
     {
       id: 'G05-A02-public-bypass-7880',
-      denied: topology.productionGateCommandOk
-        && topology.internalLiveKitDefaultOk
-        && topology.caddyTargetsGate
-        && topology.noProductionHostBind7880
-        && topology.config.publicSignaling?.fallbackAllowed === false
-        && topology.lkvRunnable,
+      denied:
+        topology.productionGateCommandOk &&
+        topology.internalLiveKitDefaultOk &&
+        topology.caddyTargetsGate &&
+        topology.noProductionHostBind7880 &&
+        topology.config.publicSignaling?.fallbackAllowed === false &&
+        topology.lkvRunnable,
       reason: 'parsed production compose/Caddy/config route public signaling to gate and keep LiveKit 7880 internal'
     },
     { id: 'G05-A03-db-outage', denied: dbOutageDenied },
-    { id: 'G05-A03-gate-restart', denied: accountDeniedAfterRevoke === 'denied', reason: 'authorization is row/epoch backed, not process memory backed' },
-    { id: 'G05-A04-mint-vs-revoke-race', denied: staleRaceStore.status === 'epoch_mismatch' && staleRaceDenied === 'denied' },
+    {
+      id: 'G05-A03-gate-restart',
+      denied: accountDeniedAfterRevoke === 'denied',
+      reason: 'authorization is row/epoch backed, not process memory backed'
+    },
+    {
+      id: 'G05-A04-mint-vs-revoke-race',
+      denied: staleRaceStore.status === 'epoch_mismatch' && staleRaceDenied === 'denied'
+    },
     { id: 'G05-A05-refreshed-known-credential', allowed: refreshedAllowed === 'allowed' },
     { id: 'G05-A05-missing-credential', denied: missing !== 'allowed' },
     { id: 'G05-A05-wrong-room-or-peer-or-epoch', denied: wrongRoom !== 'allowed' },
-    { id: 'G05-A06-account-vs-guest-nat', denied: guestDenied === 'denied', sharedNatAllowed: sharedNatStillAllowed === 'allowed' },
+    {
+      id: 'G05-A06-account-vs-guest-nat',
+      denied: guestDenied === 'denied',
+      sharedNatAllowed: sharedNatStillAllowed === 'allowed'
+    },
     { id: 'G05-A06-query-stripped-before-upstream', denied: !stripped.strippedPath.includes('vr_gate_credential') }
   ];
 
   return {
     schemaVersion: 1,
     goal: 'G05',
-    status: cases.every((entry) => entry.denied !== false && entry.allowed !== false && entry.sharedNatAllowed !== false)
-      && accountAllowed === 'allowed'
-      ? 'STRICT_BOUNDARY_PROVEN'
-      : 'STRICT_BOUNDARY_FAILED',
+    status:
+      cases.every((entry) => entry.denied !== false && entry.allowed !== false && entry.sharedNatAllowed !== false) &&
+      accountAllowed === 'allowed'
+        ? 'STRICT_BOUNDARY_PROVEN'
+        : 'STRICT_BOUNDARY_FAILED',
     selectedMechanism: 'external-auth-gate',
-    establishedSessionSemantics: 'existing WebSocket/LiveKit sessions are removed best-effort; strict guarantee applies to every new LiveKit signaling upgrade/reconnect',
+    establishedSessionSemantics:
+      'existing WebSocket/LiveKit sessions are removed best-effort; strict guarantee applies to every new LiveKit signaling upgrade/reconnect',
     topology,
     successorStartAllowed: true,
     greenF11Allowed: true,
@@ -227,7 +253,9 @@ export async function runAuthGateProof() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { values } = parseArgs({ options: { json: { type: 'boolean', default: false }, 'fail-on-blocked': { type: 'boolean', default: false } } });
+  const { values } = parseArgs({
+    options: { json: { type: 'boolean', default: false }, 'fail-on-blocked': { type: 'boolean', default: false } }
+  });
   const report = await runAuthGateProof();
   process.stdout.write(values.json ? `${JSON.stringify(report, null, 2)}\n` : `${JSON.stringify(report)}\n`);
   if (values['fail-on-blocked'] && report.status !== 'STRICT_BOUNDARY_PROVEN') process.exitCode = 2;

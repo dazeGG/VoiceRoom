@@ -3,7 +3,14 @@ import type { RoomStore } from '../../lib/room-store.ts';
 type StoreMethod = (...args: unknown[]) => unknown;
 type Store = Record<string, unknown>;
 
-const METHODS = ['appendMessage', 'editMessage', 'getMessage', 'listMessages', 'markRoomChatRead', 'softDeleteMessage'] as const;
+const METHODS = [
+  'appendMessage',
+  'editMessage',
+  'getMessage',
+  'listMessages',
+  'markRoomChatRead',
+  'softDeleteMessage'
+] as const;
 
 export type RoomMessageRepository = Readonly<Pick<RoomStore, (typeof METHODS)[number]>>;
 
@@ -16,7 +23,10 @@ function requireMethod(store: Store | null | undefined, name: string): StoreMeth
 
 function createRoomMessageRepository({ store }: { store?: Store | RoomStore | null } = {}): RoomMessageRepository {
   if (!store) throw new TypeError('Room message repository requires a store');
-  const delegate = (name: string): any => (...args: unknown[]) => requireMethod(store as Store, name)(...args);
+  const delegate =
+    (name: string): any =>
+    (...args: unknown[]) =>
+      requireMethod(store as Store, name)(...args);
 
   return Object.freeze({
     appendMessage: delegate('appendMessage'),

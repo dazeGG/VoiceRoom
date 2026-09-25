@@ -1,10 +1,16 @@
 import { expect, test } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 
-const membershipModel = readFileSync(new URL('../src/lib/features/home/model/room-membership.svelte.ts', import.meta.url), 'utf8');
+const membershipModel = readFileSync(
+  new URL('../src/lib/features/home/model/room-membership.svelte.ts', import.meta.url),
+  'utf8'
+);
 const voiceSession = readFileSync(new URL('../src/lib/features/room/voice-session.svelte.ts', import.meta.url), 'utf8');
 const routes = readFileSync(new URL('../../api/src/domains/membership/membership-routes.ts', import.meta.url), 'utf8');
-const service = readFileSync(new URL('../../api/src/domains/membership/membership-service.ts', import.meta.url), 'utf8');
+const service = readFileSync(
+  new URL('../../api/src/domains/membership/membership-service.ts', import.meta.url),
+  'utf8'
+);
 
 test('G49-A01 leave-call preserves membership while leave-room uses the durable DELETE endpoint', async () => {
   const leaveCall = voiceSession.slice(

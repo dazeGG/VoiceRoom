@@ -6,12 +6,17 @@ import { Pool } from 'pg';
 
 import { createUserStore } from '../src/lib/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
-import { RECOVERY_CODES_REMINDER_SNOOZE_MS, WHATS_NEW_VERSION, normalizeRecoveryCode } from '@voice-room/shared/account-security';
+import {
+  RECOVERY_CODES_REMINDER_SNOOZE_MS,
+  WHATS_NEW_VERSION,
+  normalizeRecoveryCode
+} from '@voice-room/shared/account-security';
 import { createTestDatabase } from './db-harness.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const HOUR = 60 * 60 * 1000;
-const CHROME_WINDOWS = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
+const CHROME_WINDOWS =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
 const FIREFOX_LINUX = 'Mozilla/5.0 (X11; Linux x86_64; rv:142.0) Gecko/20100101 Firefox/142.0';
 
 async function createMigratedStore(t, options = {}) {
@@ -48,7 +53,10 @@ test('sessions record their device and list newest first without exposing token 
   const desktop = await store.createSession({ userId: user.id, now: 2_000, userAgent: FIREFOX_LINUX });
 
   const sessions = await store.listSessions({ userId: user.id, currentTokenHash: laptop.tokenHash, now: 3_000 });
-  assert.deepEqual(sessions.map((session) => session.id), [desktop.publicId, laptop.publicId]);
+  assert.deepEqual(
+    sessions.map((session) => session.id),
+    [desktop.publicId, laptop.publicId]
+  );
   assert.deepEqual(sessions[1], {
     id: laptop.publicId,
     current: true,
@@ -106,18 +114,18 @@ test('revoking a session touches only that account and reports the revoked token
   const second = await store.createSession({ userId: user.id, now: 1_000 });
   const foreign = await store.createSession({ userId: other.id, now: 1_000 });
 
-  assert.deepEqual(
-    await store.revokeSession({ userId: other.id, publicId: first.publicId }),
-    { status: 'not_found', tokenHash: null }
-  );
-  assert.deepEqual(
-    await store.revokeSession({ userId: user.id, publicId: 'not-a-session-id' }),
-    { status: 'not_found', tokenHash: null }
-  );
-  assert.deepEqual(
-    await store.revokeSession({ userId: user.id, publicId: first.publicId.toUpperCase() }),
-    { status: 'revoked', tokenHash: first.tokenHash }
-  );
+  assert.deepEqual(await store.revokeSession({ userId: other.id, publicId: first.publicId }), {
+    status: 'not_found',
+    tokenHash: null
+  });
+  assert.deepEqual(await store.revokeSession({ userId: user.id, publicId: 'not-a-session-id' }), {
+    status: 'not_found',
+    tokenHash: null
+  });
+  assert.deepEqual(await store.revokeSession({ userId: user.id, publicId: first.publicId.toUpperCase() }), {
+    status: 'revoked',
+    tokenHash: first.tokenHash
+  });
   assert.equal(await store.getSessionUser(first.token, 5_000), null);
   assert.ok(await store.getSessionUser(second.token, 5_000));
 
@@ -133,10 +141,18 @@ test('recovery codes are handed out once, work once and replace the password eve
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
   assert.deepEqual(await store.getRecoveryCodesStatus(user.id), { remaining: 0, generatedAt: null });
 
-  const refused = await store.generateRecoveryCodes({ userId: user.id, currentPassword: 'not-the-password', now: 1_000 });
+  const refused = await store.generateRecoveryCodes({
+    userId: user.id,
+    currentPassword: 'not-the-password',
+    now: 1_000
+  });
   assert.deepEqual(refused, { status: 'invalid_password', codes: [] });
 
-  const generated = await store.generateRecoveryCodes({ userId: user.id, currentPassword: 'lovelace-1843', now: 1_000 });
+  const generated = await store.generateRecoveryCodes({
+    userId: user.id,
+    currentPassword: 'lovelace-1843',
+    now: 1_000
+  });
   assert.equal(generated.status, 'generated');
   assert.equal(generated.codes.length, 10);
   assert.equal(new Set(generated.codes).size, 10);
@@ -146,14 +162,28 @@ test('recovery codes are handed out once, work once and replace the password eve
   const session = await store.createSession({ userId: user.id, now: 1_000 });
   const [first, second] = generated.codes;
 
-  assert.equal((await store.recoverWithCode({ login: 'ghost', code: first, newPassword: 'new-password-1' })).status, 'invalid');
-  assert.equal((await store.recoverWithCode({ login: 'ada', code: 'not a code', newPassword: 'new-password-1' })).status, 'invalid');
-  assert.equal((await store.recoverWithCode({ login: 'ada', code: 'ZZZZ-ZZZZ-ZZZZ-ZZZZ', newPassword: 'new-password-1' })).status, 'invalid');
+  assert.equal(
+    (await store.recoverWithCode({ login: 'ghost', code: first, newPassword: 'new-password-1' })).status,
+    'invalid'
+  );
+  assert.equal(
+    (await store.recoverWithCode({ login: 'ada', code: 'not a code', newPassword: 'new-password-1' })).status,
+    'invalid'
+  );
+  assert.equal(
+    (await store.recoverWithCode({ login: 'ada', code: 'ZZZZ-ZZZZ-ZZZZ-ZZZZ', newPassword: 'new-password-1' })).status,
+    'invalid'
+  );
   assert.ok(await store.verifyCredentials('ada', 'lovelace-1843'), 'failed attempts must not touch the password');
 
   // Codes survive being typed in lower case and split into groups.
   const typed = first.toLowerCase().replace(/(.{4})/g, '$1 ');
-  const recovered = await store.recoverWithCode({ login: 'ada', code: typed, newPassword: 'new-password-1', now: 2_000 });
+  const recovered = await store.recoverWithCode({
+    login: 'ada',
+    code: typed,
+    newPassword: 'new-password-1',
+    now: 2_000
+  });
   assert.equal(recovered.status, 'recovered');
   assert.equal(recovered.user.id, user.id);
   assert.equal(recovered.remaining, 9);
@@ -165,9 +195,16 @@ test('recovery codes are handed out once, work once and replace the password eve
   assert.equal(reused.status, 'invalid');
 
   // A new set replaces the old one entirely.
-  const regenerated = await store.generateRecoveryCodes({ userId: user.id, currentPassword: 'new-password-1', now: 3_000 });
+  const regenerated = await store.generateRecoveryCodes({
+    userId: user.id,
+    currentPassword: 'new-password-1',
+    now: 3_000
+  });
   assert.equal(regenerated.codes.includes(second), false);
-  assert.equal((await store.recoverWithCode({ login: 'ada', code: second, newPassword: 'new-password-2' })).status, 'invalid');
+  assert.equal(
+    (await store.recoverWithCode({ login: 'ada', code: second, newPassword: 'new-password-2' })).status,
+    'invalid'
+  );
   assert.deepEqual(await store.getRecoveryCodesStatus(user.id), { remaining: 10, generatedAt: 3_000 });
 });
 
@@ -203,13 +240,19 @@ test('new accounts start at the current announcement and the codes reminder snoo
 
   // An account from before announcements existed has nothing recorded.
   await pool.query(`UPDATE users SET metadata = '{}'::jsonb WHERE id = $1`, [user.id]);
-  assert.deepEqual(await store.getAccountNotices(user.id), { whatsNewSeen: null, recoveryCodesReminderSnoozedUntil: null });
+  assert.deepEqual(await store.getAccountNotices(user.id), {
+    whatsNewSeen: null,
+    recoveryCodesReminderSnoozedUntil: null
+  });
 
-  assert.deepEqual(await store.markWhatsNewSeen({ userId: user.id }), { status: 'seen', whatsNewSeen: WHATS_NEW_VERSION });
-  assert.deepEqual(
-    await store.snoozeRecoveryCodesReminder({ userId: user.id, now: 1_000 }),
-    { status: 'snoozed', snoozedUntil: 1_000 + RECOVERY_CODES_REMINDER_SNOOZE_MS }
-  );
+  assert.deepEqual(await store.markWhatsNewSeen({ userId: user.id }), {
+    status: 'seen',
+    whatsNewSeen: WHATS_NEW_VERSION
+  });
+  assert.deepEqual(await store.snoozeRecoveryCodesReminder({ userId: user.id, now: 1_000 }), {
+    status: 'snoozed',
+    snoozedUntil: 1_000 + RECOVERY_CODES_REMINDER_SNOOZE_MS
+  });
   assert.deepEqual(await store.getAccountNotices(user.id), {
     whatsNewSeen: WHATS_NEW_VERSION,
     recoveryCodesReminderSnoozedUntil: 1_000 + 3 * 24 * HOUR
@@ -217,5 +260,8 @@ test('new accounts start at the current announcement and the codes reminder snoo
 
   const ghost = crypto.randomUUID();
   assert.deepEqual(await store.markWhatsNewSeen({ userId: ghost }), { status: 'not_found', whatsNewSeen: null });
-  assert.deepEqual(await store.snoozeRecoveryCodesReminder({ userId: ghost }), { status: 'not_found', snoozedUntil: null });
+  assert.deepEqual(await store.snoozeRecoveryCodesReminder({ userId: ghost }), {
+    status: 'not_found',
+    snoozedUntil: null
+  });
 });

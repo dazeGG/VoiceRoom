@@ -4,7 +4,13 @@ import net from 'node:net';
 import { parseArgs } from 'node:util';
 
 type PartitionMode = 'open' | 'partitioned';
-type ProxyOptions = { listenPort?: number | string; listenHost?: string; targetHost?: string; targetPort?: number | string; mode?: PartitionMode };
+type ProxyOptions = {
+  listenPort?: number | string;
+  listenHost?: string;
+  targetHost?: string;
+  targetPort?: number | string;
+  mode?: PartitionMode;
+};
 
 export function createPartitionProxy(options: ProxyOptions = {}) {
   const listenPort = Number(options.listenPort ?? 17880);

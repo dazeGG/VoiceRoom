@@ -148,7 +148,7 @@ function normalizePublicNode(node: unknown, index: number): CapabilityPublicNode
           operators: toStringArray(node.rollback.operators, [])
         }
       : null,
-    order: Number.isFinite(node.order) ? node.order as number : index
+    order: Number.isFinite(node.order) ? (node.order as number) : index
   };
 }
 
@@ -182,9 +182,7 @@ export function normalizeManifest(candidate: unknown): CapabilityManifest | null
   if (contract !== CAPABILITY_CONTRACT) return null;
   if (candidate.schemaVersion !== CAPABILITY_SCHEMA_VERSION) return null;
 
-  const publicKeys = Array.isArray(candidate.publicKeys)
-    ? candidate.publicKeys.map(normalizePublicNode)
-    : [];
+  const publicKeys = Array.isArray(candidate.publicKeys) ? candidate.publicKeys.map(normalizePublicNode) : [];
   const internalPrerequisites = Array.isArray(candidate.internalPrerequisites)
     ? candidate.internalPrerequisites.map(normalizeInternalNode)
     : [];
@@ -269,8 +267,12 @@ export function normalizeManifest(candidate: unknown): CapabilityManifest | null
   return {
     contractVersion: CAPABILITY_CONTRACT,
     schemaVersion: CAPABILITY_SCHEMA_VERSION,
-    publicKeys: [...byKey.values()].sort((a, b) => PUBLIC_CAPABILITY_KEYS.indexOf(a.key) - PUBLIC_CAPABILITY_KEYS.indexOf(b.key)),
-    internalPrerequisites: [...byKeyInternal.values()].sort((a, b) => INTERNAL_NODE_KEYS.indexOf(a.key) - INTERNAL_NODE_KEYS.indexOf(b.key)),
+    publicKeys: [...byKey.values()].sort(
+      (a, b) => PUBLIC_CAPABILITY_KEYS.indexOf(a.key) - PUBLIC_CAPABILITY_KEYS.indexOf(b.key)
+    ),
+    internalPrerequisites: [...byKeyInternal.values()].sort(
+      (a, b) => INTERNAL_NODE_KEYS.indexOf(a.key) - INTERNAL_NODE_KEYS.indexOf(b.key)
+    ),
     operatorFlags: [...byOperator.values()].sort((a, b) => OPERATOR_KEYS.indexOf(a.key) - OPERATOR_KEYS.indexOf(b.key)),
     replicaConsensus: isObject(candidate.replicaConsensus)
       ? {

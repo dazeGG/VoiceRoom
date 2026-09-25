@@ -1,11 +1,12 @@
-import {
-  NOTIFICATION_VOLUME_BOOST,
-  PEER_JOIN_CUE_DEDUPE_MS,
-  STREAM_VIEWER_CUE_DEDUPE_MS
-} from '../core/config';
+import { NOTIFICATION_VOLUME_BOOST, PEER_JOIN_CUE_DEDUPE_MS, STREAM_VIEWER_CUE_DEDUPE_MS } from '../core/config';
 import { isDoNotDisturbPlaybackSuppressed } from '$lib/shared/audio/playback-policy.svelte';
 import { state } from '../core/state.svelte';
-import { getSharedAudioContext, isAppPlaybackMuted, isLocalAppAudioSuppressed, queueAudioUnlock } from '../services/media-playback-service';
+import {
+  getSharedAudioContext,
+  isAppPlaybackMuted,
+  isLocalAppAudioSuppressed,
+  queueAudioUnlock
+} from '../services/media-playback-service';
 import { getAudioBusInput } from '../services/audio-bus';
 
 import { createLogger, errorContext } from '$lib/shared/log';
@@ -68,12 +69,14 @@ function playCueSequence(notes: CueNote[], label: string): void {
   }
 }
 
-
 export function playDirectMessageCue(): void {
-  playCueSequence([
-    { frequency: 660, peak: 0.030, duration: 0.105 },
-    { frequency: 880, peak: 0.026, start: 0.075, duration: 0.12 }
-  ], 'DM');
+  playCueSequence(
+    [
+      { frequency: 660, peak: 0.03, duration: 0.105 },
+      { frequency: 880, peak: 0.026, start: 0.075, duration: 0.12 }
+    ],
+    'DM'
+  );
 }
 
 const ROOM_CHAT_CUE_DEDUPE_MS = 10_000;
@@ -91,35 +94,47 @@ export function playRoomChatMessageCue(messageId?: string): void {
     if (roomChatCueTimes.has(messageId)) return;
     roomChatCueTimes.set(messageId, now);
   }
-  playCueSequence([
-    { frequency: 587, peak: 0.026, duration: 0.095 },
-    { frequency: 784, peak: 0.024, start: 0.065, duration: 0.11 }
-  ], 'Room chat');
+  playCueSequence(
+    [
+      { frequency: 587, peak: 0.026, duration: 0.095 },
+      { frequency: 784, peak: 0.024, start: 0.065, duration: 0.11 }
+    ],
+    'Room chat'
+  );
 }
 
 export function playFriendRequestCue(): void {
-  playCueSequence([
-    { frequency: 523, peak: 0.028, duration: 0.11 },
-    { frequency: 659, peak: 0.030, start: 0.085, duration: 0.11 },
-    { frequency: 784, peak: 0.024, start: 0.17, duration: 0.13 }
-  ], 'Friend request');
+  playCueSequence(
+    [
+      { frequency: 523, peak: 0.028, duration: 0.11 },
+      { frequency: 659, peak: 0.03, start: 0.085, duration: 0.11 },
+      { frequency: 784, peak: 0.024, start: 0.17, duration: 0.13 }
+    ],
+    'Friend request'
+  );
 }
 
 export function playFriendAcceptedCue(): void {
-  playCueSequence([
-    { frequency: 587, peak: 0.028, duration: 0.10 },
-    { frequency: 740, peak: 0.030, start: 0.08, duration: 0.11 },
-    { frequency: 988, peak: 0.022, start: 0.17, duration: 0.16 }
-  ], 'Friend accepted');
+  playCueSequence(
+    [
+      { frequency: 587, peak: 0.028, duration: 0.1 },
+      { frequency: 740, peak: 0.03, start: 0.08, duration: 0.11 },
+      { frequency: 988, peak: 0.022, start: 0.17, duration: 0.16 }
+    ],
+    'Friend accepted'
+  );
 }
 
 export function playRingCue(): void {
-  playCueSequence([
-    { frequency: 659, peak: 0.032, duration: 0.14 },
-    { frequency: 880, peak: 0.034, start: 0.13, duration: 0.16 },
-    { frequency: 659, peak: 0.03, start: 0.34, duration: 0.14 },
-    { frequency: 988, peak: 0.032, start: 0.47, duration: 0.2 }
-  ], 'Ring');
+  playCueSequence(
+    [
+      { frequency: 659, peak: 0.032, duration: 0.14 },
+      { frequency: 880, peak: 0.034, start: 0.13, duration: 0.16 },
+      { frequency: 659, peak: 0.03, start: 0.34, duration: 0.14 },
+      { frequency: 988, peak: 0.032, start: 0.47, duration: 0.2 }
+    ],
+    'Ring'
+  );
 }
 
 export function playPeerJoinCue(peerId: string | undefined): void {

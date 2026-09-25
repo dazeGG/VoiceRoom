@@ -23,9 +23,14 @@ function requireMethod(store: Store | null | undefined, name: string): StoreMeth
   return (store[name] as StoreMethod).bind(store);
 }
 
-function createDirectMessageRepository({ store }: { store?: Store | FriendStore | null } = {}): DirectMessageRepository {
+function createDirectMessageRepository({
+  store
+}: { store?: Store | FriendStore | null } = {}): DirectMessageRepository {
   if (!store) throw new TypeError('Direct message repository requires a store');
-  const delegate = (name: string): any => (...args: unknown[]) => requireMethod(store as Store, name)(...args);
+  const delegate =
+    (name: string): any =>
+    (...args: unknown[]) =>
+      requireMethod(store as Store, name)(...args);
 
   return Object.freeze({
     editMessage: delegate('editMessage'),

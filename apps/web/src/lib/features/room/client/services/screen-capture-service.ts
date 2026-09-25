@@ -5,7 +5,13 @@ import { createScreenProfileId, getScreenProfile } from '../media/profiles';
 import { createAbortError, disconnectAudioNode, isCaptureCancelled } from '../core/utils';
 import { showScreenSourcePicker } from '../ui/screen-source-picker';
 import { setLocalAppAudioSuppressed } from './media-playback-service';
-import type { DesktopAudioCapture, DesktopPickerSelection, ScreenProfile, ScreenSourceSelection, ScreenStreamMode } from '../core/types';
+import type {
+  DesktopAudioCapture,
+  DesktopPickerSelection,
+  ScreenProfile,
+  ScreenSourceSelection,
+  ScreenStreamMode
+} from '../core/types';
 
 import { createLogger, errorContext } from '$lib/shared/log';
 
@@ -66,17 +72,21 @@ async function openBrowserScreenShare(profile: ScreenProfile): Promise<MediaStre
 
   let stream: MediaStream;
   try {
-    stream = await navigator.mediaDevices.getDisplayMedia(createBrowserDisplayMediaConstraints(profile, {
-      audio: wantsScreenShareAudio(),
-      suppressLocalAudioPlayback: false
-    }));
+    stream = await navigator.mediaDevices.getDisplayMedia(
+      createBrowserDisplayMediaConstraints(profile, {
+        audio: wantsScreenShareAudio(),
+        suppressLocalAudioPlayback: false
+      })
+    );
   } catch (error) {
     if ((error as Error)?.name !== 'TypeError') throw error;
-    stream = await navigator.mediaDevices.getDisplayMedia(createBrowserDisplayMediaConstraints(profile, {
-      audio: wantsScreenShareAudio(),
-      includeAudioHints: false,
-      suppressLocalAudioPlayback: false
-    }));
+    stream = await navigator.mediaDevices.getDisplayMedia(
+      createBrowserDisplayMediaConstraints(profile, {
+        audio: wantsScreenShareAudio(),
+        includeAudioHints: false,
+        suppressLocalAudioPlayback: false
+      })
+    );
   }
 
   await applyScreenCaptureProfile(stream, profile);
@@ -87,11 +97,7 @@ function createBrowserDisplayMediaConstraints(
   profile: ScreenProfile,
   options: { audio?: boolean; includeAudioHints?: boolean; suppressLocalAudioPlayback?: boolean } = {}
 ): DisplayMediaStreamOptions {
-  const {
-    audio = true,
-    includeAudioHints = true,
-    suppressLocalAudioPlayback = false
-  } = options;
+  const { audio = true, includeAudioHints = true, suppressLocalAudioPlayback = false } = options;
   const video = createScreenVideoConstraints(profile);
 
   if (!audio) {
@@ -226,10 +232,9 @@ async function openDesktopCapturePicker(profile: ScreenProfile): Promise<Desktop
 function getDesktopPickerProfile(selection: DesktopPickerSelection, fallbackProfile: ScreenProfile): ScreenProfile {
   if (selection?.profileId) return getScreenProfile(selection.profileId);
   if (selection?.qualityId || selection?.fpsId) {
-    return getScreenProfile(createScreenProfileId(
-      selection.qualityId || fallbackProfile.qualityId,
-      selection.fpsId || fallbackProfile.fpsId
-    ));
+    return getScreenProfile(
+      createScreenProfileId(selection.qualityId || fallbackProfile.qualityId, selection.fpsId || fallbackProfile.fpsId)
+    );
   }
   return fallbackProfile;
 }
@@ -284,10 +289,10 @@ async function openStagedDesktopDisplayMedia(profile: ScreenProfile): Promise<Me
 function hasNativeDesktopSafeAudio(): boolean {
   const bridge = window.voiceRoomDesktopAudio;
   return Boolean(
-    typeof bridge?.startSafeSystem === 'function'
-      && typeof bridge?.stop === 'function'
-      && typeof bridge?.onData === 'function'
-      && typeof bridge?.onEvent === 'function'
+    typeof bridge?.startSafeSystem === 'function' &&
+    typeof bridge?.stop === 'function' &&
+    typeof bridge?.onData === 'function' &&
+    typeof bridge?.onEvent === 'function'
   );
 }
 
@@ -323,7 +328,7 @@ async function startDesktopSafeScreenAudioCapture(): Promise<DesktopAudioCapture
       mode: 'safe-system'
     });
     sessionId = audioSession.sessionId;
-    const format = formatEvent || await formatPromise;
+    const format = formatEvent || (await formatPromise);
     window.clearTimeout(formatTimer);
     return await createDesktopSafeAudioTrack({
       format,
@@ -402,9 +407,7 @@ function createDesktopAudioContext(sampleRate: number): AudioContext {
 function getDesktopPcmSamples(chunk: Uint8Array | ArrayBuffer | null | undefined): Float32Array<ArrayBuffer> {
   if (!chunk) return new Float32Array();
 
-  const bytes = chunk instanceof Uint8Array
-    ? chunk
-    : new Uint8Array(chunk);
+  const bytes = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
   const byteLength = bytes.byteLength - (bytes.byteLength % Float32Array.BYTES_PER_ELEMENT);
   if (byteLength <= 0) return new Float32Array();
 
@@ -442,7 +445,12 @@ async function openDesktopStream(
   options: { audio?: boolean; audioMode?: string } = {}
 ): Promise<MediaStream> {
   const withAudio = options.audio !== false;
-  const attempts = createDesktopCaptureAttempts(sourceId, withAudio, profile, options.audioMode || (withAudio ? 'loopback' : 'none'));
+  const attempts = createDesktopCaptureAttempts(
+    sourceId,
+    withAudio,
+    profile,
+    options.audioMode || (withAudio ? 'loopback' : 'none')
+  );
   const errors: CaptureAttemptDetail[] = [];
 
   for (const attempt of attempts) {
@@ -543,14 +551,18 @@ async function openDesktopDisplayMediaStream(
     throw new Error('Desktop-оболочка не дала доступ к выбору источника экрана.');
   }
 
-  await window.voiceRoomDesktopCapture.selectSource(sourceId, {
-    allowEchoFallback: false,
-    enabled: withAudio,
-    mode: audioMode
-  }, {
-    fpsId: profile.fpsId,
-    qualityId: profile.qualityId
-  });
+  await window.voiceRoomDesktopCapture.selectSource(
+    sourceId,
+    {
+      allowEchoFallback: false,
+      enabled: withAudio,
+      mode: audioMode
+    },
+    {
+      fpsId: profile.fpsId,
+      qualityId: profile.qualityId
+    }
+  );
   return navigator.mediaDevices.getDisplayMedia({
     audio: withAudio,
     video: true
@@ -575,10 +587,12 @@ function createDesktopMediaConstraints(
         chromeMediaSource: 'desktop',
         chromeMediaSourceId: sourceId,
         maxFrameRate: profile.frameRate,
-        ...(SCREEN_QUALITY_OPTIONS[profile.qualityId]?.source ? {} : {
-          maxHeight: profile.height,
-          maxWidth: profile.width
-        })
+        ...(SCREEN_QUALITY_OPTIONS[profile.qualityId]?.source
+          ? {}
+          : {
+              maxHeight: profile.height,
+              maxWidth: profile.width
+            })
       }
     }
   } as unknown as MediaStreamConstraints;

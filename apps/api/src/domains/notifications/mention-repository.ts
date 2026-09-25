@@ -26,21 +26,36 @@ export type Mention = {
   retractedAt: unknown;
 };
 
-function executor(pool: QueryClient, client: Client): QueryClient { return client?.query ? client : pool; }
+function executor(pool: QueryClient, client: Client): QueryClient {
+  return client?.query ? client : pool;
+}
 
 function mapMention(row: MentionRow | null | undefined): Mention | null {
-  return row ? {
-    id: row.id, roomId: row.room_id, messageId: row.message_id,
-    creatorUserId: row.creator_user_id, targetUserId: row.target_user_id,
-    revision: Number(row.revision), createdAt: row.created_at, retractedAt: row.retracted_at
-  } : null;
+  return row
+    ? {
+        id: row.id,
+        roomId: row.room_id,
+        messageId: row.message_id,
+        creatorUserId: row.creator_user_id,
+        targetUserId: row.target_user_id,
+        revision: Number(row.revision),
+        createdAt: row.created_at,
+        retractedAt: row.retracted_at
+      }
+    : null;
 }
 
 function createMentionRepository({ pool }: { pool?: QueryClient | null } = {}) {
   if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
   const defaultDb = pool;
 
-  async function replaceForMessage({ roomId, messageId, creatorUserId, targetUserIds = [], client }: {
+  async function replaceForMessage({
+    roomId,
+    messageId,
+    creatorUserId,
+    targetUserIds = [],
+    client
+  }: {
     roomId: string;
     messageId: string;
     creatorUserId: string;
@@ -81,7 +96,8 @@ function createMentionRepository({ pool }: { pool?: QueryClient | null } = {}) {
   async function retractForMessage(messageId: string, { client }: { client?: Client } = {}): Promise<Mention[]> {
     const result = await executor(defaultDb, client).query<MentionRow>(
       `UPDATE room_message_mentions SET retracted_at = current_timestamp, revision = revision + 1
-       WHERE message_id = $1 AND retracted_at IS NULL RETURNING *`, [messageId]
+       WHERE message_id = $1 AND retracted_at IS NULL RETURNING *`,
+      [messageId]
     );
     return result.rows.map(mapMention) as Mention[];
   }

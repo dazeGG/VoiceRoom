@@ -89,11 +89,4 @@ function countWsType(frames, type, sinceIndex = 0) {
   return frames.slice(sinceIndex).filter((frame) => frame.type === type).length;
 }
 
-export {
-  openWs,
-  sendWs,
-  waitForWsType,
-  joinVoiceRoom,
-  subscribeRoomPreview,
-  countWsType
-};
+export { openWs, sendWs, waitForWsType, joinVoiceRoom, subscribeRoomPreview, countWsType };

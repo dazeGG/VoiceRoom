@@ -65,9 +65,7 @@ export async function fetchFriends(): Promise<{ friends: Friend[]; incomingReque
 }
 
 export async function searchUsers(query: string): Promise<SearchResult[]> {
-  const payload = await getJsonAuth<{ results?: SearchResult[] }>(
-    `/api/friends/search?q=${encodeURIComponent(query)}`
-  );
+  const payload = await getJsonAuth<{ results?: SearchResult[] }>(`/api/friends/search?q=${encodeURIComponent(query)}`);
   return Array.isArray(payload.results) ? payload.results : [];
 }
 
@@ -88,7 +86,9 @@ export async function sendFriendRequest(login: string): Promise<{ status: SendRe
   return payload;
 }
 
-export async function sendFriendRequestByUserId(userId: string): Promise<{ status: SendRequestStatus; user: PublicUser }> {
+export async function sendFriendRequestByUserId(
+  userId: string
+): Promise<{ status: SendRequestStatus; user: PublicUser }> {
   const payload = await postJsonAuth<{ status: SendRequestStatus; user: PublicUser }>('/api/friends/requests', {
     userId
   });

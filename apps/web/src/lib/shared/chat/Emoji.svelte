@@ -33,13 +33,17 @@
 </script>
 
 {#if failed}
-  <span class="emoji emoji-text" class:emoji-inline={inline} style:--emoji-size={box} aria-hidden={decorative || undefined}
-    >{emoji}</span
+  <span
+    class="emoji emoji-text"
+    class:emoji-inline={inline}
+    style:--emoji-size={box}
+    aria-hidden={decorative || undefined}>{emoji}</span
   >
 {:else}
   <img
     class="emoji"
-    class:emoji-inline={inline} style:--emoji-size={box}
+    class:emoji-inline={inline}
+    style:--emoji-size={box}
     src={url}
     alt={decorative ? '' : emoji}
     data-emoji={emoji}

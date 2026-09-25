@@ -19,11 +19,25 @@ import {
   type Relationship
 } from '$lib/api/friends';
 import { blockUser as apiBlockUser, unblockUser as apiUnblockUser } from '$lib/api/blocks';
-import { deleteDirectMessage, editDirectMessage, fetchThread, fetchThreadPage, markThreadRead, respondRoomInvite, sendDirectMessage, type DirectMessage } from '$lib/api/dm';
+import {
+  deleteDirectMessage,
+  editDirectMessage,
+  fetchThread,
+  fetchThreadPage,
+  markThreadRead,
+  respondRoomInvite,
+  sendDirectMessage,
+  type DirectMessage
+} from '$lib/api/dm';
 import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
 import { createTypingTracker, typingActivityOf } from '$lib/shared/chat/typing.svelte';
 import type { PresenceStatus } from '$lib/shared/presence';
-import { playDirectMessageCue, playFriendAcceptedCue, playFriendRequestCue, playRingCue } from '$lib/features/room/client/media/cues';
+import {
+  playDirectMessageCue,
+  playFriendAcceptedCue,
+  playFriendRequestCue,
+  playRingCue
+} from '$lib/features/room/client/media/cues';
 import {
   canUseNotifications,
   getNotificationDeliveryPermission,
@@ -332,7 +346,10 @@ async function resyncOpenThread(options: { force?: boolean } = {}): Promise<void
     const page = await fetchThreadPage(peerId, { mode: 'latest' });
     if (friendsState.selectedFriendId !== peerId) return;
     const firstCreatedAt = page.messages[0]?.createdAt;
-    dmHistory.reconcileLatest(page.messages, (message) => firstCreatedAt == null || message.createdAt >= firstCreatedAt);
+    dmHistory.reconcileLatest(
+      page.messages,
+      (message) => firstCreatedAt == null || message.createdAt >= firstCreatedAt
+    );
     noteLatestThreadRendered();
     return;
   }
@@ -347,7 +364,7 @@ export function loadOlderThread(scrollElement: HTMLElement | null): Promise<void
 
 function noteLatestThreadRendered(cursor?: string): void {
   const candidate = cursor || [...friendsState.thread].reverse().find((message) => message.readCursor)?.readCursor;
-  friendsState.threadReadCandidate = friendsState.threadReadCursorEnabled ? candidate ?? null : '__legacy__';
+  friendsState.threadReadCandidate = friendsState.threadReadCursorEnabled ? (candidate ?? null) : '__legacy__';
   friendsState.threadReadRevision += 1;
 }
 
@@ -388,7 +405,12 @@ export async function respondRoomInvitation(message: DirectMessage, action: 'acc
 
 // --- DM -----------------------------------------------------------------
 
-export async function sendMessage(text: string, attachmentIds: string[] = [], replyTo?: { messageId: string }, idempotencyKey?: string): Promise<void> {
+export async function sendMessage(
+  text: string,
+  attachmentIds: string[] = [],
+  replyTo?: { messageId: string },
+  idempotencyKey?: string
+): Promise<void> {
   const peerId = friendsState.selectedFriendId;
   const body = text.trim();
   if (!peerId || (!body && attachmentIds.length === 0)) return;
@@ -423,7 +445,8 @@ function appendToThread(incoming: DirectMessage): void {
   // A link preview can arrive as an edit before the message itself is
   // delivered; the later, preview-less copy must not wipe it.
   const known = friendsState.thread.find((existing) => existing.id === incoming.id);
-  const message = known?.linkPreview && !incoming.linkPreview ? { ...incoming, linkPreview: known.linkPreview } : incoming;
+  const message =
+    known?.linkPreview && !incoming.linkPreview ? { ...incoming, linkPreview: known.linkPreview } : incoming;
   if (friendsState.threadHistoryEnabled) dmHistory.upsert(message);
   else {
     if (friendsState.thread.some((existing) => existing.id === message.id)) return;
@@ -445,9 +468,7 @@ function bumpLastMessage(peerId: string, message: DirectMessage): void {
 function applyEditedMessage(message: DirectMessage): void {
   if (friendsState.threadHistoryEnabled) dmHistory.upsert(message);
   else {
-    friendsState.thread = friendsState.thread.map((existing) =>
-      existing.id === message.id ? message : existing
-    );
+    friendsState.thread = friendsState.thread.map((existing) => (existing.id === message.id ? message : existing));
   }
   const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
   const friend = findFriend(peerId);
@@ -661,7 +682,8 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
         }
       } else if (message.senderId !== selfId) {
         // Invites already announced themselves with the ring cue.
-        if (!message.invite && areNotificationPreferencesLoadedFor(selfId) && !isPeerNotificationsMuted(peerId)) playDirectMessageCue();
+        if (!message.invite && areNotificationPreferencesLoadedFor(selfId) && !isPeerNotificationsMuted(peerId))
+          playDirectMessageCue();
         const friend = findFriend(peerId);
         if (friend) friend.unreadCount += 1;
       }

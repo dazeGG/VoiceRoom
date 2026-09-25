@@ -69,10 +69,7 @@ test('all sampled RGB boundaries produce valid CSS without throwing', () => {
 });
 
 test('out-of-range and invalid channel values are normalized safely', () => {
-  assert.deepEqual(
-    deriveAvatarAccent({ r: -100, g: 300, b: Number.NaN }),
-    deriveAvatarAccent({ r: 0, g: 255, b: 0 })
-  );
+  assert.deepEqual(deriveAvatarAccent({ r: -100, g: 300, b: Number.NaN }), deriveAvatarAccent({ r: 0, g: 255, b: 0 }));
   assertValidPresentation(deriveAvatarAccent(null));
 });
 
@@ -130,7 +127,10 @@ test('the package export resolves to the same deterministic accent rules', async
       }
     }
   }
-  assert.deepEqual(module.deriveAvatarAccent({ r: -100, g: 300, b: Number.NaN }), deriveAvatarAccent({ r: -100, g: 300, b: Number.NaN }));
+  assert.deepEqual(
+    module.deriveAvatarAccent({ r: -100, g: 300, b: Number.NaN }),
+    deriveAvatarAccent({ r: -100, g: 300, b: Number.NaN })
+  );
 
   const pixels = makeBitmap(64, (insideCircle) => (insideCircle ? [30, 200, 90, 255] : [255, 0, 0, 255]));
   assert.deepEqual(module.dominantAvatarColor(pixels, 64, 64), dominantAvatarColor(pixels, 64, 64));

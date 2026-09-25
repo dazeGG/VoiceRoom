@@ -2,16 +2,20 @@
 import { test, onTestFinished, vi } from 'vitest';
 import assert from 'node:assert/strict';
 
-
-
 function memoryStorage() {
   const values = new Map();
   return {
-    get length() { return values.size; },
+    get length() {
+      return values.size;
+    },
     key: (index) => [...values.keys()][index] ?? null,
     getItem: (key) => (values.has(key) ? values.get(key) : null),
-    setItem: (key, value) => { values.set(key, String(value)); },
-    removeItem: (key) => { values.delete(key); },
+    setItem: (key, value) => {
+      values.set(key, String(value));
+    },
+    removeItem: (key) => {
+      values.delete(key);
+    },
     keys: () => [...values.keys()]
   };
 }
@@ -20,7 +24,9 @@ function memoryStorage() {
 async function loadDrafts() {
   const storage = memoryStorage();
   vi.stubGlobal('localStorage', storage);
-  onTestFinished(() => { delete globalThis.localStorage; });
+  onTestFinished(() => {
+    delete globalThis.localStorage;
+  });
   vi.resetModules();
   return { drafts: await import('../src/lib/shared/chat/chat-drafts.ts'), storage };
 }
@@ -45,19 +51,28 @@ test('drafts are kept per account and chat, and an empty text removes one', asyn
   assert.ok(drafts.loadChatDraft('ada', room('lounge'), 3000));
 
   drafts.saveChatDraft('ada', room('lounge'), { text: '' }, 3000);
-  assert.deepEqual(storage.keys(), [drafts.chatDraftStorageKey('linus')], 'an account without drafts leaves no key behind');
+  assert.deepEqual(
+    storage.keys(),
+    [drafts.chatDraftStorageKey('linus')],
+    'an account without drafts leaves no key behind'
+  );
 });
 
 test('a restored draft keeps only the mentions whose @login is still in the text', async () => {
   const { drafts } = await loadDrafts();
-  drafts.saveChatDraft('ada', room('lounge'), {
-    text: '@grace посмотри',
-    mentions: [
-      { userId: 'u-grace', login: 'grace', displayName: 'Грейс' },
-      { userId: 'u-linus', login: 'linus', displayName: 'Линус' },
-      { userId: 'u-grace', login: 'grace', displayName: 'Грейс' }
-    ]
-  }, 1000);
+  drafts.saveChatDraft(
+    'ada',
+    room('lounge'),
+    {
+      text: '@grace посмотри',
+      mentions: [
+        { userId: 'u-grace', login: 'grace', displayName: 'Грейс' },
+        { userId: 'u-linus', login: 'linus', displayName: 'Линус' },
+        { userId: 'u-grace', login: 'grace', displayName: 'Грейс' }
+      ]
+    },
+    1000
+  );
 
   assert.deepEqual(drafts.loadChatDraft('ada', room('lounge'), 1000).mentions, [
     { userId: 'u-grace', login: 'grace', displayName: 'Грейс' }
@@ -103,4 +118,3 @@ test('signing out wipes every draft and ignores late saves until the next sign-i
   drafts.saveChatDraft('ada', dm('grace'), { text: 'снова' }, 3000);
   assert.equal(drafts.loadChatDraft('ada', dm('grace'), 3000).text, 'снова');
 });
-

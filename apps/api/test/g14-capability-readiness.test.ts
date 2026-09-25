@@ -46,9 +46,18 @@ test('G14-A01 canonical manifest has exact 9/10/15 nodes and fail-closed default
   assert.equal(manifest.publicKeys.length, 9);
   assert.equal(manifest.internalPrerequisites.length, 10);
   assert.equal(manifest.operatorFlags.length, 15);
-  assert.deepEqual(manifest.publicKeys.map(({ key }) => key), PUBLIC_CAPABILITY_KEYS);
-  assert.deepEqual(manifest.internalPrerequisites.map(({ key }) => key), INTERNAL_NODE_KEYS);
-  assert.deepEqual(manifest.operatorFlags.map(({ key }) => key), OPERATOR_KEYS);
+  assert.deepEqual(
+    manifest.publicKeys.map(({ key }) => key),
+    PUBLIC_CAPABILITY_KEYS
+  );
+  assert.deepEqual(
+    manifest.internalPrerequisites.map(({ key }) => key),
+    INTERNAL_NODE_KEYS
+  );
+  assert.deepEqual(
+    manifest.operatorFlags.map(({ key }) => key),
+    OPERATOR_KEYS
+  );
 
   const disabled = createReadinessReport(manifestPath);
   assert.deepEqual(disabled.features, Object.fromEntries(PUBLIC_CAPABILITY_KEYS.map((key) => [key, false])));
@@ -93,9 +102,15 @@ test('G14-A02 missing prerequisite and replica heartbeat/digest mismatch make ev
 
 test('G14-A02 rejects missing schema, unknown nodes, missing edges and cycles', () => {
   const invalidPaths = [
-    tempManifest((value) => { delete value.schemaVersion; }),
-    tempManifest((value) => { value.publicKeys[0].key = 'unknown'; }),
-    tempManifest((value) => { value.publicKeys[0].dependsOn = ['missing']; }),
+    tempManifest((value) => {
+      delete value.schemaVersion;
+    }),
+    tempManifest((value) => {
+      value.publicKeys[0].key = 'unknown';
+    }),
+    tempManifest((value) => {
+      value.publicKeys[0].dependsOn = ['missing'];
+    }),
     tempManifest((value) => {
       value.publicKeys[0].dependsOn = ['readCursor'];
       value.publicKeys[1].dependsOn = ['historyCursor'];

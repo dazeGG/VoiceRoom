@@ -74,7 +74,9 @@
     font-weight: 600;
     text-align: left;
     cursor: pointer;
-    transition: background 0.14s ease, color 0.14s ease;
+    transition:
+      background 0.14s ease,
+      color 0.14s ease;
   }
 
   /* Hover and keyboard focus land on the same treatment so arrow-key users see

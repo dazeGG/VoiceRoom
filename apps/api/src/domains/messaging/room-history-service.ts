@@ -1,4 +1,8 @@
-import { buildHistoryEnvelope, normalizeHistoryRequest, type HistoryEnvelope } from '@voice-room/shared/messaging-history';
+import {
+  buildHistoryEnvelope,
+  normalizeHistoryRequest,
+  type HistoryEnvelope
+} from '@voice-room/shared/messaging-history';
 
 type Tuple = { createdAtMicros: unknown; id: string };
 type Loose = Record<string, unknown>;
@@ -62,11 +66,21 @@ class RoomHistoryError extends Error {
   }
 }
 
-function createRoomHistoryService({ repository, cursorCodec, visibilityPolicy, projectMessage, now = () => new Date() }: {
+function createRoomHistoryService({
+  repository,
+  cursorCodec,
+  visibilityPolicy,
+  projectMessage,
+  now = () => new Date()
+}: {
   repository?: RoomHistoryRepository;
   cursorCodec?: HistoryCursorCodec;
   visibilityPolicy?: VisibilityPolicy;
-  projectMessage?: (input: { message: StoredRoomMessage; roomId: string; access: Access }) => Promise<StoredRoomMessage> | StoredRoomMessage;
+  projectMessage?: (input: {
+    message: StoredRoomMessage;
+    roomId: string;
+    access: Access;
+  }) => Promise<StoredRoomMessage> | StoredRoomMessage;
   now?: () => Date;
 } = {}) {
   if (!repository) throw new TypeError('room history repository is required');
@@ -133,7 +147,11 @@ function createRoomHistoryService({ repository, cursorCodec, visibilityPolicy, p
     };
   }
 
-  async function getPage({ roomId, query = {}, access = { authorized: true } }: { roomId?: unknown; query?: Loose; access?: Access } = {}): Promise<HistoryEnvelope> {
+  async function getPage({
+    roomId,
+    query = {},
+    access = { authorized: true }
+  }: { roomId?: unknown; query?: Loose; access?: Access } = {}): Promise<HistoryEnvelope> {
     const normalizedRoomId = String(roomId || '').trim();
     if (!normalizedRoomId) throw new RoomHistoryError('room_not_found', 404, 'Room not found');
 
@@ -159,12 +177,14 @@ function createRoomHistoryService({ repository, cursorCodec, visibilityPolicy, p
       }
     }
 
-    const method = ({
-      latest: 'listLatest',
-      before: 'listBefore',
-      after: 'listAfter',
-      around: 'listAround'
-    } as const)[mode];
+    const method = (
+      {
+        latest: 'listLatest',
+        before: 'listBefore',
+        after: 'listAfter',
+        around: 'listAround'
+      } as const
+    )[mode];
     const page = await (history[method] as (input: ListInput) => Promise<HistoryPage>)({
       roomId: normalizedRoomId,
       anchor,
@@ -175,9 +195,10 @@ function createRoomHistoryService({ repository, cursorCodec, visibilityPolicy, p
     for (const message of page.messages) {
       if (await canView(message, access)) visible.push(message);
     }
-    const projected = typeof projectMessage === 'function'
-      ? await Promise.all(visible.map((message) => projectMessage({ message, roomId: normalizedRoomId, access })))
-      : visible;
+    const projected =
+      typeof projectMessage === 'function'
+        ? await Promise.all(visible.map((message) => projectMessage({ message, roomId: normalizedRoomId, access })))
+        : visible;
     const messages = projected.map((message) => toDto(normalizedRoomId, message));
 
     return buildHistoryEnvelope({

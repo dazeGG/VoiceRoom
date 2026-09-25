@@ -132,17 +132,20 @@ function mapAttachment(row: AttachmentRow | null | undefined): Attachment | null
 function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new TypeError('A PostgreSQL pool is required');
   const db = pool;
-  const executor = (client: Client): QueryClient => client && typeof client.query === 'function' ? client : db;
+  const executor = (client: Client): QueryClient => (client && typeof client.query === 'function' ? client : db);
 
-  async function createDraft({
-    id = crypto.randomUUID(),
-    ownerId,
-    context,
-    clientRequestId = null,
-    reservedBytes = null,
-    reservationExpiresAt = null,
-    metadata = {}
-  }: AttachmentDraft, client?: Client): Promise<Attachment | null> {
+  async function createDraft(
+    {
+      id = crypto.randomUUID(),
+      ownerId,
+      context,
+      clientRequestId = null,
+      reservedBytes = null,
+      reservationExpiresAt = null,
+      metadata = {}
+    }: AttachmentDraft,
+    client?: Client
+  ): Promise<Attachment | null> {
     const normalizedContext = requiredText(context, 'attachment context', 8);
     if (!CONTEXTS.has(normalizedContext)) throw new TypeError('Invalid attachment context');
     const result = await executor(client).query<AttachmentRow>(
@@ -166,7 +169,10 @@ function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } =
     return mapAttachment(result.rows[0]);
   }
 
-  async function findById(id: string, { forUpdate = false, client }: { forUpdate?: boolean; client?: Client } = {}): Promise<Attachment | null> {
+  async function findById(
+    id: string,
+    { forUpdate = false, client }: { forUpdate?: boolean; client?: Client } = {}
+  ): Promise<Attachment | null> {
     const result = await executor(client).query<AttachmentRow>(
       `SELECT * FROM message_attachments WHERE id = $1${forUpdate ? ' FOR UPDATE' : ''}`,
       [id]
@@ -174,7 +180,11 @@ function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } =
     return mapAttachment(result.rows[0]);
   }
 
-  async function listOwnerDrafts(ownerId: string, context: string, { limit = 20, client }: { limit?: unknown; client?: Client } = {}): Promise<Attachment[]> {
+  async function listOwnerDrafts(
+    ownerId: string,
+    context: string,
+    { limit = 20, client }: { limit?: unknown; client?: Client } = {}
+  ): Promise<Attachment[]> {
     const result = await executor(client).query<AttachmentRow>(
       `SELECT * FROM message_attachments
        WHERE owner_id = $1 AND context = $2 AND bound_at IS NULL AND deleted_at IS NULL
@@ -184,7 +194,12 @@ function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } =
     return result.rows.map(mapAttachment) as Attachment[];
   }
 
-  async function findByClientRequest(ownerId: string, context: string, clientRequestId: string, { client }: { client?: Client } = {}): Promise<Attachment | null> {
+  async function findByClientRequest(
+    ownerId: string,
+    context: string,
+    clientRequestId: string,
+    { client }: { client?: Client } = {}
+  ): Promise<Attachment | null> {
     const result = await executor(client).query<AttachmentRow>(
       `SELECT * FROM message_attachments
        WHERE owner_id = $1 AND context = $2 AND client_request_id = $3`,
@@ -193,13 +208,17 @@ function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } =
     return mapAttachment(result.rows[0]);
   }
 
-  async function markUploaded(id: string, {
-    mimeType,
-    bytes,
-    width,
-    height,
-    originalStorageKey
-  }: { mimeType: string; bytes: number; width: number; height: number; originalStorageKey: string }, client?: Client): Promise<Attachment | null> {
+  async function markUploaded(
+    id: string,
+    {
+      mimeType,
+      bytes,
+      width,
+      height,
+      originalStorageKey
+    }: { mimeType: string; bytes: number; width: number; height: number; originalStorageKey: string },
+    client?: Client
+  ): Promise<Attachment | null> {
     if (!MIME_TYPES.has(mimeType)) throw new TypeError('Invalid attachment MIME type');
     const result = await executor(client).query<AttachmentRow>(
       `UPDATE message_attachments
@@ -225,12 +244,16 @@ function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } =
     return mapAttachment(result.rows[0]);
   }
 
-  async function markReady(id: string, {
-    processedStorageKey,
-    previewStorageKey,
-    processedBytes,
-    previewBytes
-  }: { processedStorageKey: string; previewStorageKey: string; processedBytes: number; previewBytes: number }, client?: Client): Promise<Attachment | null> {
+  async function markReady(
+    id: string,
+    {
+      processedStorageKey,
+      previewStorageKey,
+      processedBytes,
+      previewBytes
+    }: { processedStorageKey: string; previewStorageKey: string; processedBytes: number; previewBytes: number },
+    client?: Client
+  ): Promise<Attachment | null> {
     const result = await executor(client).query<AttachmentRow>(
       `UPDATE message_attachments
        SET state = 'ready', processed_storage_key = $2, preview_storage_key = $3,
@@ -274,12 +297,20 @@ function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } =
     return findById(id, { client });
   }
 
-  async function bindReady({ ownerId, context, messageId, attachmentIds }: {
-    ownerId: string;
-    context: string;
-    messageId: string;
-    attachmentIds: unknown;
-  }, client?: Client): Promise<Attachment[]> {
+  async function bindReady(
+    {
+      ownerId,
+      context,
+      messageId,
+      attachmentIds
+    }: {
+      ownerId: string;
+      context: string;
+      messageId: string;
+      attachmentIds: unknown;
+    },
+    client?: Client
+  ): Promise<Attachment[]> {
     if (!Array.isArray(attachmentIds) || attachmentIds.length < 1 || attachmentIds.length > 4) {
       throw new TypeError('Between one and four attachment ids are required');
     }
@@ -316,7 +347,11 @@ function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } =
     return (result.rows.map(mapAttachment) as Attachment[]).sort((left, right) => left.order - right.order);
   }
 
-  async function listForMessage(context: string, messageId: string, { client }: { client?: Client } = {}): Promise<Attachment[]> {
+  async function listForMessage(
+    context: string,
+    messageId: string,
+    { client }: { client?: Client } = {}
+  ): Promise<Attachment[]> {
     const column = context === 'room' ? 'room_message_id' : context === 'dm' ? 'direct_message_id' : null;
     if (!column) throw new TypeError('Invalid attachment context');
     const result = await executor(client).query<AttachmentRow>(
@@ -326,7 +361,9 @@ function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } =
     return result.rows.map(mapAttachment) as Attachment[];
   }
 
-  async function listCleanupCandidates({ limit = 500, client }: { limit?: unknown; client?: Client } = {}): Promise<Attachment[]> {
+  async function listCleanupCandidates({ limit = 500, client }: { limit?: unknown; client?: Client } = {}): Promise<
+    Attachment[]
+  > {
     const result = await executor(client).query<AttachmentRow>(
       `SELECT * FROM message_attachments
        WHERE
@@ -354,9 +391,14 @@ ${CLEANUP_CANDIDATE_PREDICATE}
       : null;
   }
 
-  async function listStorageKeys({ afterId = null, limit = 500, client }: { afterId?: string | null; limit?: unknown; client?: Client } = {}):
-    Promise<{ id: string; keys: string[] }[]> {
-    const result = await executor(client).query<Pick<AttachmentRow, 'id' | 'original_storage_key' | 'processed_storage_key' | 'preview_storage_key'>>(
+  async function listStorageKeys({
+    afterId = null,
+    limit = 500,
+    client
+  }: { afterId?: string | null; limit?: unknown; client?: Client } = {}): Promise<{ id: string; keys: string[] }[]> {
+    const result = await executor(client).query<
+      Pick<AttachmentRow, 'id' | 'original_storage_key' | 'processed_storage_key' | 'preview_storage_key'>
+    >(
       `SELECT id, original_storage_key, processed_storage_key, preview_storage_key
        FROM message_attachments WHERE ($1::uuid IS NULL OR id > $1::uuid)
        ORDER BY id ASC LIMIT $2`,
@@ -364,11 +406,16 @@ ${CLEANUP_CANDIDATE_PREDICATE}
     );
     return result.rows.map((row) => ({
       id: row.id,
-      keys: [row.original_storage_key, row.processed_storage_key, row.preview_storage_key].filter((key): key is string => Boolean(key))
+      keys: [row.original_storage_key, row.processed_storage_key, row.preview_storage_key].filter(
+        (key): key is string => Boolean(key)
+      )
     }));
   }
 
-  async function listProcessingWithoutActiveJob({ limit = 500, client }: { limit?: unknown; client?: Client } = {}): Promise<Attachment[]> {
+  async function listProcessingWithoutActiveJob({
+    limit = 500,
+    client
+  }: { limit?: unknown; client?: Client } = {}): Promise<Attachment[]> {
     const result = await executor(client).query<AttachmentRow>(
       `SELECT attachment.* FROM message_attachments attachment
        WHERE attachment.state = 'processing'
@@ -383,7 +430,11 @@ ${CLEANUP_CANDIDATE_PREDICATE}
     return result.rows.map(mapAttachment) as Attachment[];
   }
 
-  async function markUnavailable(id: string, failureCode: string = 'media_missing', client?: Client): Promise<Attachment | null> {
+  async function markUnavailable(
+    id: string,
+    failureCode: string = 'media_missing',
+    client?: Client
+  ): Promise<Attachment | null> {
     return markFailed(id, failureCode, client);
   }
 
@@ -399,9 +450,15 @@ ${CLEANUP_CANDIDATE_PREDICATE}
     return mapAttachment(result.rows[0]);
   }
 
-  async function quotaUsage(ownerId: string, { since = new Date(Date.now() - 10 * 60 * 1000), client }: { since?: Date; client?: Client } = {}):
-    Promise<Readonly<{ pendingCount: number; recentCount: number; usedBytes: number }>> {
-    const result = await executor(client).query<{ pending_count?: number; recent_count?: number; used_bytes?: string | number }>(
+  async function quotaUsage(
+    ownerId: string,
+    { since = new Date(Date.now() - 10 * 60 * 1000), client }: { since?: Date; client?: Client } = {}
+  ): Promise<Readonly<{ pendingCount: number; recentCount: number; usedBytes: number }>> {
+    const result = await executor(client).query<{
+      pending_count?: number;
+      recent_count?: number;
+      used_bytes?: string | number;
+    }>(
       `SELECT
          count(*) FILTER (WHERE state = 'uploading')::integer AS pending_count,
          count(*) FILTER (WHERE created_at >= $2)::integer AS recent_count,

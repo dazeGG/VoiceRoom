@@ -33,7 +33,10 @@ export interface AccountLifecycleDeps {
 export function createAccountLifecycle(deps: AccountLifecycleDeps) {
   // The friend list, DM threads and pending requests cache the public profile
   // outside a live room. Best effort: a failed lookup must not fail the change.
-  async function broadcastProfileToFriends(user: { id: string; [key: string]: unknown } | null | undefined, log?: Pick<Logger, 'error'>): Promise<void> {
+  async function broadcastProfileToFriends(
+    user: { id: string; [key: string]: unknown } | null | undefined,
+    log?: Pick<Logger, 'error'>
+  ): Promise<void> {
     if (!user?.id) return;
     try {
       const message = { type: 'user-updated', user: publicUser(user) };
@@ -48,7 +51,13 @@ export function createAccountLifecycle(deps: AccountLifecycleDeps) {
   // the account's other devices stay connected, even in the same room.
   // Without token hashes every socket of the account closes (the password was
   // replaced); without an account id the hashes alone pick them (sign-out).
-  async function endSessionConnections({ userId = null, tokenHashes = null }: { userId?: string | null; tokenHashes?: string[] | null }): Promise<void> {
+  async function endSessionConnections({
+    userId = null,
+    tokenHashes = null
+  }: {
+    userId?: string | null;
+    tokenHashes?: string[] | null;
+  }): Promise<void> {
     const sockets = deps.sockets();
     if (!sockets || (!userId && !Array.isArray(tokenHashes))) return;
     const targets = sockets.findAccountConnections(userId, tokenHashes);
@@ -57,11 +66,17 @@ export function createAccountLifecycle(deps: AccountLifecycleDeps) {
       if (!activeVoice?.roomId || !activeVoice.peerId) continue;
       try {
         const principal = deps.seatPrincipal(activeVoice.roomId, activeVoice.peerId);
-        if (principal) await deps.revokeSeatCredentials({ roomId: activeVoice.roomId, peerId: activeVoice.peerId, principal });
+        if (principal)
+          await deps.revokeSeatCredentials({ roomId: activeVoice.roomId, peerId: activeVoice.peerId, principal });
         await deps.leaveVoice(connection, activeVoice);
         await deps.removeParticipant(activeVoice.roomId, activeVoice.peerId);
       } catch (error) {
-        deps.logger().error({ evt: LOG_EVENTS.ACCOUNT_SESSION_VOICE_END_FAILED, userId, err: error }, 'failed to end voice for an ended account session');
+        deps
+          .logger()
+          .error(
+            { evt: LOG_EVENTS.ACCOUNT_SESSION_VOICE_END_FAILED, userId, err: error },
+            'failed to end voice for an ended account session'
+          );
       }
     }
     sockets.closeConnections(targets, deps.sessionRevokedCloseCode, 'Session ended');
@@ -87,7 +102,9 @@ export function createAccountLifecycle(deps: AccountLifecycleDeps) {
           await deps.finishRoomDeletion(roomId, { avatarKey });
         }
       } catch (error) {
-        deps.logger().error({ evt: LOG_EVENTS.ACCOUNT_DELETION_FAILED, err: error }, 'failed to finish an account deletion');
+        deps
+          .logger()
+          .error({ evt: LOG_EVENTS.ACCOUNT_DELETION_FAILED, err: error }, 'failed to finish an account deletion');
       }
     }
     return finished;

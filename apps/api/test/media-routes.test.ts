@@ -12,14 +12,32 @@ function createApp() {
   registerMediaRoutes({
     app,
     mediaService: {
-      async upload(input) { calls.push(['upload', input]); return { id: input.id }; },
-      async status(input) { calls.push(['status', input]); return { id: input.id }; },
-      async retry(input) { calls.push(['retry', input]); return { id: input.id }; },
-      async remove(input) { calls.push(['remove', input]); return { id: input.id }; },
-      async createSlot(input) { calls.push(['createSlot', input]); return { id: 'slot' }; }
+      async upload(input) {
+        calls.push(['upload', input]);
+        return { id: input.id };
+      },
+      async status(input) {
+        calls.push(['status', input]);
+        return { id: input.id };
+      },
+      async retry(input) {
+        calls.push(['retry', input]);
+        return { id: input.id };
+      },
+      async remove(input) {
+        calls.push(['remove', input]);
+        return { id: input.id };
+      },
+      async createSlot(input) {
+        calls.push(['createSlot', input]);
+        return { id: 'slot' };
+      }
     },
     mediaVisibilityService: {
-      async open(input) { calls.push(['open', input]); return { bytes: 0, extension: 'webp', mimeType: 'image/webp', stream: '' }; }
+      async open(input) {
+        calls.push(['open', input]);
+        return { bytes: 0, extension: 'webp', mimeType: 'image/webp', stream: '' };
+      }
     },
     resolveUser: async () => ({ id: 'user-1' })
   });

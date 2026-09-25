@@ -86,9 +86,7 @@ function normalizePayload(value: unknown): RuntimeConfigV1 | null {
     livekit: {
       wsUrl: normalizeLiveKitServerUrl(livekit?.wsUrl),
       connectFallbacks: Array.isArray(livekit?.connectFallbacks)
-        ? livekit.connectFallbacks
-            .map((item: unknown) => normalizeLiveKitServerUrl(item))
-            .filter(Boolean)
+        ? livekit.connectFallbacks.map((item: unknown) => normalizeLiveKitServerUrl(item)).filter(Boolean)
         : []
     }
   };
@@ -110,23 +108,23 @@ function parseRuntimeConfig(raw: unknown): RuntimeConfigV1 | null {
     return null;
   }
 
-  if (
-    parsed?.contractVersion !== RUNTIME_CONFIG_CONTRACT ||
-    parsed?.schemaVersion !== RUNTIME_SCHEMA_VERSION
-  ) return null;
+  if (parsed?.contractVersion !== RUNTIME_CONFIG_CONTRACT || parsed?.schemaVersion !== RUNTIME_SCHEMA_VERSION)
+    return null;
   return normalizePayload(parsed) || null;
 }
 
 function getRuntimeConfig(raw: unknown): RuntimeConfigV1 {
   const parsed = parseRuntimeConfig(raw);
-  return parsed || {
-    ...DEFAULT_RUNTIME_CONFIG,
-    livekit: {
-      ...DEFAULT_RUNTIME_CONFIG.livekit,
-      wsUrl: normalizeLiveKitServerUrl(DEFAULT_RUNTIME_CONFIG.livekit.wsUrl),
-      connectFallbacks: DEFAULT_RUNTIME_CONFIG.livekit.connectFallbacks
+  return (
+    parsed || {
+      ...DEFAULT_RUNTIME_CONFIG,
+      livekit: {
+        ...DEFAULT_RUNTIME_CONFIG.livekit,
+        wsUrl: normalizeLiveKitServerUrl(DEFAULT_RUNTIME_CONFIG.livekit.wsUrl),
+        connectFallbacks: DEFAULT_RUNTIME_CONFIG.livekit.connectFallbacks
+      }
     }
-  };
+  );
 }
 
 export {

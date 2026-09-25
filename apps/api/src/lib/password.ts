@@ -29,14 +29,7 @@ async function hashPassword(password: unknown): Promise<string> {
     r: BLOCK_SIZE,
     p: PARALLELIZATION
   });
-  return [
-    ALGORITHM,
-    COST,
-    BLOCK_SIZE,
-    PARALLELIZATION,
-    salt.toString('base64'),
-    derived.toString('base64')
-  ].join('$');
+  return [ALGORITHM, COST, BLOCK_SIZE, PARALLELIZATION, salt.toString('base64'), derived.toString('base64')].join('$');
 }
 
 async function verifyPassword(password: unknown, stored: unknown): Promise<boolean> {

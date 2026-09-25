@@ -17,7 +17,11 @@
     alt?: string;
   }
 
-  let { items, index = 0, onclose }: {
+  let {
+    items,
+    index = 0,
+    onclose
+  }: {
     items: LightboxItem[];
     index?: number;
     onclose: () => void;
@@ -90,18 +94,36 @@
   }
 
   function keydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') { event.preventDefault(); onclose(); }
-    else if (event.key === 'ArrowLeft' && items.length > 1) { event.preventDefault(); move(-1); }
-    else if (event.key === 'ArrowRight' && items.length > 1) { event.preventDefault(); move(1); }
-    else if (event.key === '+' || event.key === '=') { event.preventDefault(); zoomTo(scale + STEP); }
-    else if (event.key === '-') { event.preventDefault(); zoomTo(scale - STEP); }
-    else if (event.key === '0') { event.preventDefault(); reset(); }
-    else if (event.key === 'Tab') {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onclose();
+    } else if (event.key === 'ArrowLeft' && items.length > 1) {
+      event.preventDefault();
+      move(-1);
+    } else if (event.key === 'ArrowRight' && items.length > 1) {
+      event.preventDefault();
+      move(1);
+    } else if (event.key === '+' || event.key === '=') {
+      event.preventDefault();
+      zoomTo(scale + STEP);
+    } else if (event.key === '-') {
+      event.preventDefault();
+      zoomTo(scale - STEP);
+    } else if (event.key === '0') {
+      event.preventDefault();
+      reset();
+    } else if (event.key === 'Tab') {
       const controls = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled),a[href]'));
       if (!controls.length) return;
-      const first = controls[0]; const last = controls.at(-1)!;
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      const first = controls[0];
+      const last = controls.at(-1)!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
   }
 
@@ -116,7 +138,9 @@
 <div
   class="attachment-lightbox-backdrop"
   role="presentation"
-  onclick={(event) => { if (event.target === event.currentTarget) onclose(); }}
+  onclick={(event) => {
+    if (event.target === event.currentTarget) onclose();
+  }}
 >
   <div
     bind:this={dialog}
@@ -174,8 +198,11 @@
     </div>
 
     {#if items.length > 1}
-      <button class="attachment-previous" type="button" onclick={() => move(-1)} aria-label="Предыдущее изображение">‹</button>
-      <button class="attachment-next" type="button" onclick={() => move(1)} aria-label="Следующее изображение">›</button>
+      <button class="attachment-previous" type="button" onclick={() => move(-1)} aria-label="Предыдущее изображение"
+        >‹</button
+      >
+      <button class="attachment-next" type="button" onclick={() => move(1)} aria-label="Следующее изображение">›</button
+      >
     {/if}
   </div>
 </div>

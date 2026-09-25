@@ -69,15 +69,34 @@
   }
 
   @keyframes mascot-blink {
-    0%, 91%, 100% { transform: scaleY(1); }
-    94%, 96% { transform: scaleY(0.12); }
+    0%,
+    91%,
+    100% {
+      transform: scaleY(1);
+    }
+    94%,
+    96% {
+      transform: scaleY(0.12);
+    }
   }
 
   @keyframes mascot-look {
-    0%, 22% { transform: translateX(0); }
-    32%, 52% { transform: translateX(7px); }
-    62%, 84% { transform: translateX(-7px); }
-    94%, 100% { transform: translateX(0); }
+    0%,
+    22% {
+      transform: translateX(0);
+    }
+    32%,
+    52% {
+      transform: translateX(7px);
+    }
+    62%,
+    84% {
+      transform: translateX(-7px);
+    }
+    94%,
+    100% {
+      transform: translateX(0);
+    }
   }
 
   .mascot-icon--scare {
@@ -104,45 +123,107 @@
 
   /* Hovering replays the scare: swap to identically-defined "-replay" keyframes,
      since re-triggering the same forwards animation name is a no-op in CSS. */
-  .mascot-icon--scare:hover .mascot-scare { animation-name: mascot-scare-replay; }
-  .mascot-icon--scare:hover .mascot-eyes-fade { animation-name: mascot-eyes-out-replay; }
-  .mascot-icon--scare:hover .mascot-x-fade { animation-name: mascot-x-in-replay; }
+  .mascot-icon--scare:hover .mascot-scare {
+    animation-name: mascot-scare-replay;
+  }
+  .mascot-icon--scare:hover .mascot-eyes-fade {
+    animation-name: mascot-eyes-out-replay;
+  }
+  .mascot-icon--scare:hover .mascot-x-fade {
+    animation-name: mascot-x-in-replay;
+  }
 
   @keyframes mascot-scare {
-    0% { transform: none; }
-    8% { transform: translateY(-5px); }
-    14% { transform: translate(-2.5px, 0); }
-    20% { transform: translate(2.5px, 0); }
-    26% { transform: translate(-1.5px, 0); }
-    32%, 55% { transform: none; }
-    70%, 100% { transform: translateY(2px) rotate(-2deg); }
+    0% {
+      transform: none;
+    }
+    8% {
+      transform: translateY(-5px);
+    }
+    14% {
+      transform: translate(-2.5px, 0);
+    }
+    20% {
+      transform: translate(2.5px, 0);
+    }
+    26% {
+      transform: translate(-1.5px, 0);
+    }
+    32%,
+    55% {
+      transform: none;
+    }
+    70%,
+    100% {
+      transform: translateY(2px) rotate(-2deg);
+    }
   }
   @keyframes mascot-scare-replay {
-    0% { transform: none; }
-    8% { transform: translateY(-5px); }
-    14% { transform: translate(-2.5px, 0); }
-    20% { transform: translate(2.5px, 0); }
-    26% { transform: translate(-1.5px, 0); }
-    32%, 55% { transform: none; }
-    70%, 100% { transform: translateY(2px) rotate(-2deg); }
+    0% {
+      transform: none;
+    }
+    8% {
+      transform: translateY(-5px);
+    }
+    14% {
+      transform: translate(-2.5px, 0);
+    }
+    20% {
+      transform: translate(2.5px, 0);
+    }
+    26% {
+      transform: translate(-1.5px, 0);
+    }
+    32%,
+    55% {
+      transform: none;
+    }
+    70%,
+    100% {
+      transform: translateY(2px) rotate(-2deg);
+    }
   }
 
   @keyframes mascot-eyes-out {
-    0%, 45% { opacity: 1; }
-    52%, 100% { opacity: 0; }
+    0%,
+    45% {
+      opacity: 1;
+    }
+    52%,
+    100% {
+      opacity: 0;
+    }
   }
   @keyframes mascot-eyes-out-replay {
-    0%, 45% { opacity: 1; }
-    52%, 100% { opacity: 0; }
+    0%,
+    45% {
+      opacity: 1;
+    }
+    52%,
+    100% {
+      opacity: 0;
+    }
   }
 
   @keyframes mascot-x-in {
-    0%, 52% { opacity: 0; }
-    60%, 100% { opacity: 1; }
+    0%,
+    52% {
+      opacity: 0;
+    }
+    60%,
+    100% {
+      opacity: 1;
+    }
   }
   @keyframes mascot-x-in-replay {
-    0%, 52% { opacity: 0; }
-    60%, 100% { opacity: 1; }
+    0%,
+    52% {
+      opacity: 0;
+    }
+    60%,
+    100% {
+      opacity: 1;
+    }
   }
 
   @media (prefers-reduced-motion: reduce) {

@@ -34,15 +34,15 @@ function messageId(message: unknown): string {
 
 function isInvitation(message: Loose | null | undefined): boolean {
   const metadata = message?.metadata as Loose | null | undefined;
-  return message?.invite != null
-    || metadata?.kind === 'room-invite'
-    || message?.kind === 'room-invite';
+  return message?.invite != null || metadata?.kind === 'room-invite' || message?.kind === 'room-invite';
 }
 
 function isReplyTargetKindAllowed(input: unknown): boolean {
   const message = input as Loose | null | undefined;
   if (!message || !messageId(message)) return false;
-  return !isInvitation(message) && !isSystemCard(message?.content ?? message?.kind ?? message?.type ?? message?.metadata);
+  return (
+    !isInvitation(message) && !isSystemCard(message?.content ?? message?.kind ?? message?.type ?? message?.metadata)
+  );
 }
 
 function isUnavailable(input: unknown, now: number = Date.now()): boolean {
@@ -55,7 +55,13 @@ function isUnavailable(input: unknown, now: number = Date.now()): boolean {
 
 function projectAuthor(message: Loose): ReplyAuthor | undefined {
   const named = message.author as Loose | null | undefined;
-  const id = message.authorUserId || message.author_user_id || message.senderId || message.sender_id || message.peerId || message.peer_id;
+  const id =
+    message.authorUserId ||
+    message.author_user_id ||
+    message.senderId ||
+    message.sender_id ||
+    message.peerId ||
+    message.peer_id;
   const name = message.name || message.displayName || named?.name || named?.displayName;
   const author: ReplyAuthor = {};
   if (id) author.id = String(id);
@@ -86,7 +92,10 @@ function projectReplyPreview(message: unknown, { now = Date.now() }: { now?: num
   if (!isReplyTargetKindAllowed(message)) return null;
 
   // Intentionally omit replyTo/replyPreview: previews are exactly one level.
-  const preview: { messageId: string; deleted: boolean; author?: ReplyAuthor; text?: string } = { messageId: id, deleted: false };
+  const preview: { messageId: string; deleted: boolean; author?: ReplyAuthor; text?: string } = {
+    messageId: id,
+    deleted: false
+  };
   const author = projectAuthor(message as Loose);
   const text = projectText(message as Loose);
   if (author) preview.author = author;
@@ -94,7 +103,12 @@ function projectReplyPreview(message: unknown, { now = Date.now() }: { now?: num
   return Object.freeze(preview);
 }
 
-async function requireReplyTarget({ message, visibility, visibilityContext, now = Date.now() }: {
+async function requireReplyTarget({
+  message,
+  visibility,
+  visibilityContext,
+  now = Date.now()
+}: {
   message?: unknown;
   visibility?: boolean | ((context: Loose) => unknown);
   visibilityContext?: Loose;
@@ -104,9 +118,8 @@ async function requireReplyTarget({ message, visibility, visibilityContext, now 
     throw new ReplyTargetUnavailableError();
   }
 
-  const visible = typeof visibility === 'function'
-    ? await visibility({ ...visibilityContext, message })
-    : visibility === true;
+  const visible =
+    typeof visibility === 'function' ? await visibility({ ...visibilityContext, message }) : visibility === true;
   if (visible !== true) throw new ReplyTargetUnavailableError();
 
   const preview = projectReplyPreview(message, { now });

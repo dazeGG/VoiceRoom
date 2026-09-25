@@ -128,13 +128,16 @@
   // call joining or live, so it never covers the call or its audio-unlock prompt.
   $effect(() => {
     if (appPromptDone || appPromptOpen || !user) return;
-    if (!shouldOpenAppPrompt({
-      appAvailable: appPromptAvailable,
-      hasUsedDesktopApp: user.hasUsedDesktopApp,
-      appPromptSeen: user.appPromptSeen,
-      otherDialogOpen: loginAlertOpen || whatsNewOpen,
-      voiceActive: Boolean(connectedVoiceRoomId || roomNavigation.joinIntentRoomId)
-    })) return;
+    if (
+      !shouldOpenAppPrompt({
+        appAvailable: appPromptAvailable,
+        hasUsedDesktopApp: user.hasUsedDesktopApp,
+        appPromptSeen: user.appPromptSeen,
+        otherDialogOpen: loginAlertOpen || whatsNewOpen,
+        voiceActive: Boolean(connectedVoiceRoomId || roomNavigation.joinIntentRoomId)
+      })
+    )
+      return;
     appPromptOpen = true;
   });
 
@@ -159,9 +162,8 @@
   const connectedRoomVisible = $derived(connectedRoomIsViewed(friendsState.mode));
   const embeddedRoomVisible = $derived(embeddedRoomIsVisible(friendsState.mode));
 
-
   function setRoomPeerCount(roomId: string, peers: number): void {
-    rooms = rooms.map((room) => room.roomId === roomId ? { ...room, peers: Math.max(0, peers) } : room);
+    rooms = rooms.map((room) => (room.roomId === roomId ? { ...room, peers: Math.max(0, peers) } : room));
   }
 
   function decrementRoomPeerCount(roomId: string | null): void {
@@ -187,8 +189,13 @@
     replaceState(target, {});
   }
 
-  function closeEmbeddedRoom({ replaceUrl = true, closedRoomId = embeddedRoomId }: { replaceUrl?: boolean; closedRoomId?: string | null } = {}): void {
-    const shouldReplaceUrl = Boolean(replaceUrl && closedRoomId && extractRoomId(window.location.pathname) === closedRoomId);
+  function closeEmbeddedRoom({
+    replaceUrl = true,
+    closedRoomId = embeddedRoomId
+  }: { replaceUrl?: boolean; closedRoomId?: string | null } = {}): void {
+    const shouldReplaceUrl = Boolean(
+      replaceUrl && closedRoomId && extractRoomId(window.location.pathname) === closedRoomId
+    );
     clearEmbeddedRoomState();
     restoreLobbyDocumentState();
     if (shouldReplaceUrl) {
@@ -198,12 +205,14 @@
 
   // The server closes the realtime socket with a dedicated code when this
   // device's session was ended elsewhere (another device, password recovery).
-  onMount(() => getAppRealtime().onSessionEnded(() => {
-    // Our own sign-out or password change already handles the UI.
-    if (consumeExpectedSessionEnd() || !authSession.user) return;
-    clearSession();
-    onToast('Сеанс на этом устройстве завершён. Войдите снова');
-  }));
+  onMount(() =>
+    getAppRealtime().onSessionEnded(() => {
+      // Our own sign-out or password change already handles the UI.
+      if (consumeExpectedSessionEnd() || !authSession.user) return;
+      clearSession();
+      onToast('Сеанс на этом устройстве завершён. Войдите снова');
+    })
+  );
 
   onMount(() => {
     void refreshRooms();
@@ -245,7 +254,8 @@
       : () => {};
 
     function onEmbeddedLeave(event: Event): void {
-      const closedRoomId = event instanceof CustomEvent && typeof event.detail?.roomId === 'string' ? event.detail.roomId : null;
+      const closedRoomId =
+        event instanceof CustomEvent && typeof event.detail?.roomId === 'string' ? event.detail.roomId : null;
       const closedViewedRoom = Boolean(closedRoomId && selectedRoomId === closedRoomId);
       decrementRoomPeerCount(closedRoomId);
       closeEmbeddedRoom({ closedRoomId });
@@ -301,7 +311,8 @@
     }
 
     function onEnterRoomRequest(event: Event): void {
-      const roomId = event instanceof CustomEvent && typeof event.detail?.roomId === 'string' ? event.detail.roomId : '';
+      const roomId =
+        event instanceof CustomEvent && typeof event.detail?.roomId === 'string' ? event.detail.roomId : '';
       if (roomId) requestEnterRoom(roomId);
     }
 
@@ -367,18 +378,20 @@
       syncDesktopOverlaySnapshot([]);
       return;
     }
-    syncDesktopOverlaySnapshot(getSortedParticipants().map((participant) => ({
-      avatarAccent: participant.avatarAccent || '',
-      avatarColorKey: participant.avatarColorKey || '',
-      avatarUrl: participant.avatarUrl || '',
-      id: participant.id,
-      micMuted: participant.muted,
-      name: participant.name || '',
-      outputMuted: participant.deafened,
-      self: participant.isLocal,
-      speaking: participant.speaking,
-      streaming: participant.screen
-    })));
+    syncDesktopOverlaySnapshot(
+      getSortedParticipants().map((participant) => ({
+        avatarAccent: participant.avatarAccent || '',
+        avatarColorKey: participant.avatarColorKey || '',
+        avatarUrl: participant.avatarUrl || '',
+        id: participant.id,
+        micMuted: participant.muted,
+        name: participant.name || '',
+        outputMuted: participant.deafened,
+        self: participant.isLocal,
+        speaking: participant.speaking,
+        streaming: participant.screen
+      }))
+    );
   });
 
   $effect(() => {
@@ -388,12 +401,14 @@
   $effect(() => {
     // Muted chats stay out of the icon count; the mention cue above is not
     // affected by room mutes.
-    syncDesktopBadgeCount(countUnreadForBadge({
-      friends: friendsState.friends,
-      mutes: notificationPreferences,
-      roomUnreadById: roomPresence.unreadCountByRoomId,
-      rooms
-    }));
+    syncDesktopBadgeCount(
+      countUnreadForBadge({
+        friends: friendsState.friends,
+        mutes: notificationPreferences,
+        roomUnreadById: roomPresence.unreadCountByRoomId,
+        rooms
+      })
+    );
   });
 
   $effect(() => {
@@ -597,7 +612,6 @@
   }
 </script>
 
-
 {#if user}
   <div class="lobby-shell lv dens-cozy">
     <Sidebar
@@ -628,33 +642,88 @@
       {#if embeddedRoomId}
         <div class="lobby-embedded-room" hidden={!embeddedRoomVisible}>
           {#key embeddedRoomId}
-            <RoomPage embeddedRoomId={embeddedRoomId} autoJoin={autoJoinRoomId === embeddedRoomId} />
+            <RoomPage {embeddedRoomId} autoJoin={autoJoinRoomId === embeddedRoomId} />
           {/key}
         </div>
       {/if}
 
       {#if friendsState.mode === 'rooms' && selectedRoom && connectedVoiceRoomId && selectedRoom.roomId !== connectedVoiceRoomId}
-        <RoomBrowseView {user} room={selectedRoom} onEnter={() => requestEnterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} onRoomsChanged={() => { closeViewedRoom(); void refreshRooms(); }} {onToast} />
+        <RoomBrowseView
+          {user}
+          room={selectedRoom}
+          onEnter={() => requestEnterRoom(selectedRoom.roomId)}
+          onBack={closeViewedRoom}
+          onOpenSettings={selectedRoom.relationship === 'owner'
+            ? () => (previewSettingsRoomId = selectedRoom.roomId)
+            : undefined}
+          onRoomsChanged={() => {
+            closeViewedRoom();
+            void refreshRooms();
+          }}
+          {onToast}
+        />
       {:else if friendsState.mode === 'rooms' && selectedRoom && (!embeddedRoomId || !embeddedRoomVisible)}
         {@const anchor = previewAnchor?.roomId === selectedRoom.roomId ? previewAnchor : null}
         <!-- Keyed on the anchor so a second mention in a room already on screen
              still reopens its chat on the new message. -->
         {#key anchor?.messageId ?? ''}
-        <RoomPreviewView {user} room={selectedRoom} initialPanel={anchor ? 'chat' : null} aroundMessageId={anchor?.messageId} onEnter={() => requestEnterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} onRoomsChanged={() => { closeViewedRoom(); void refreshRooms(); }} {onToast} />
+          <RoomPreviewView
+            {user}
+            room={selectedRoom}
+            initialPanel={anchor ? 'chat' : null}
+            aroundMessageId={anchor?.messageId}
+            onEnter={() => requestEnterRoom(selectedRoom.roomId)}
+            onBack={closeViewedRoom}
+            onOpenSettings={selectedRoom.relationship === 'owner'
+              ? () => (previewSettingsRoomId = selectedRoom.roomId)
+              : undefined}
+            onRoomsChanged={() => {
+              closeViewedRoom();
+              void refreshRooms();
+            }}
+            {onToast}
+          />
         {/key}
       {:else if friendsState.mode === 'rooms' && !embeddedRoomVisible}
-        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onRoomsChanged={refreshRooms} onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)} {recoveryCodesReminder} onOpenRecoveryCodes={() => openSecuritySettings('recovery-codes')} onSnoozeRecoveryCodes={snoozeRecoveryCodes} {onToast} />
+        <VoiceHome
+          {rooms}
+          onOpenRoom={previewRoom}
+          onCreateRoom={() => (createDialogOpen = true)}
+          onJoinCode={handleJoin}
+          onRoomsChanged={refreshRooms}
+          onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)}
+          {recoveryCodesReminder}
+          onOpenRecoveryCodes={() => openSecuritySettings('recovery-codes')}
+          onSnoozeRecoveryCodes={snoozeRecoveryCodes}
+          {onToast}
+        />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'dm'}
         <DmView selfId={user.id} self={user} />
       {:else if friendsState.mode === 'friends' && friendsState.view === 'people'}
         <PeopleView {user} {onToast} onHome={goHome} />
       {:else if friendsState.mode === 'friends'}
-        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onRoomsChanged={refreshRooms} onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)} {recoveryCodesReminder} onOpenRecoveryCodes={() => openSecuritySettings('recovery-codes')} onSnoozeRecoveryCodes={snoozeRecoveryCodes} {onToast} />
+        <VoiceHome
+          {rooms}
+          onOpenRoom={previewRoom}
+          onCreateRoom={() => (createDialogOpen = true)}
+          onJoinCode={handleJoin}
+          onRoomsChanged={refreshRooms}
+          onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)}
+          {recoveryCodesReminder}
+          onOpenRecoveryCodes={() => openSecuritySettings('recovery-codes')}
+          onSnoozeRecoveryCodes={snoozeRecoveryCodes}
+          {onToast}
+        />
       {/if}
     </main>
   </div>
 
-  <CreateRoomDialog open={createDialogOpen} {creating} onClose={() => (createDialogOpen = false)} onCreate={handleCreate} />
+  <CreateRoomDialog
+    open={createDialogOpen}
+    {creating}
+    onClose={() => (createDialogOpen = false)}
+    onCreate={handleCreate}
+  />
   <SettingsModal
     open={settingsOpen}
     bind:tab={settingsTab}
@@ -678,7 +747,17 @@
     onOpenChange={(open) => (whatsNewOpen = open)}
   />
   <AppBenefitsModal open={appPromptOpen} onClose={closeAppPrompt} />
-  <LobbyRoomSettingsDialog room={previewSettingsRoom} onClose={() => (previewSettingsRoomId = '')} onSaved={refreshRooms} onDeleted={() => { previewSettingsRoomId = ''; closeViewedRoom(); void refreshRooms(); }} {onToast} />
+  <LobbyRoomSettingsDialog
+    room={previewSettingsRoom}
+    onClose={() => (previewSettingsRoomId = '')}
+    onSaved={refreshRooms}
+    onDeleted={() => {
+      previewSettingsRoomId = '';
+      closeViewedRoom();
+      void refreshRooms();
+    }}
+    {onToast}
+  />
   <RoomSwitchDialog
     open={Boolean(pendingRoomSwitchId)}
     fromName={roomLabel(connectedVoiceRoomId || '')}
@@ -704,9 +783,31 @@
 
 <style>
   /* The panel clips; the list inside it is what scrolls. */
-  .notification-inbox-panel { position: fixed; z-index: 71; left: 326px; bottom: 16px; display: flex; width: min(420px, calc(100vw - 358px)); max-height: min(620px, calc(100vh - 32px)); overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); box-shadow: var(--shadow); }
-  .notification-inbox-panel :global(.notification-inbox) { flex: 1 1 auto; min-width: 0; }
+  .notification-inbox-panel {
+    position: fixed;
+    z-index: 71;
+    left: 326px;
+    bottom: 16px;
+    display: flex;
+    width: min(420px, calc(100vw - 358px));
+    max-height: min(620px, calc(100vh - 32px));
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--paper);
+    box-shadow: var(--shadow);
+  }
+  .notification-inbox-panel :global(.notification-inbox) {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
   @media (max-width: 900px) {
-    .notification-inbox-panel { left: 12px; right: 12px; bottom: 76px; width: auto; max-height: min(560px, calc(100vh - 96px)); }
+    .notification-inbox-panel {
+      left: 12px;
+      right: 12px;
+      bottom: 76px;
+      width: auto;
+      max-height: min(560px, calc(100vh - 96px));
+    }
   }
 </style>

@@ -21,9 +21,7 @@ interface ScreenSubscriptionRetryScheduler {
   setTimer?: (callback: () => void, delay: number) => number;
 }
 
-export function createScreenSubscriptionRetryController(
-  scheduler: ScreenSubscriptionRetryScheduler = {}
-) {
+export function createScreenSubscriptionRetryController(scheduler: ScreenSubscriptionRetryScheduler = {}) {
   const delays = scheduler.delays || SCREEN_SUBSCRIPTION_RETRY_DELAYS_MS;
   const responseMs = scheduler.responseMs ?? SCREEN_SUBSCRIPTION_RETRY_RESPONSE_MS;
   const setTimer = scheduler.setTimer || ((callback, delay) => window.setTimeout(callback, delay));

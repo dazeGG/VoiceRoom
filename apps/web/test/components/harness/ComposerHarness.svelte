@@ -3,7 +3,9 @@
 
   let { initial = '', maxlength = Number.POSITIVE_INFINITY }: { initial?: string; maxlength?: number } = $props();
   let value = $state(initial);
-  let composer = $state<{ setSelection(start: number, end?: number): void; insertText(text: string): boolean } | null>(null);
+  let composer = $state<{ setSelection(start: number, end?: number): void; insertText(text: string): boolean } | null>(
+    null
+  );
 
   export function insert(text: string, caret?: number): boolean {
     if (caret !== undefined) composer?.setSelection(caret);

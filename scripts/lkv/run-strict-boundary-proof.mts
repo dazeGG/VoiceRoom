@@ -44,7 +44,9 @@ const ATTEMPTS = Object.freeze([
   }
 ]);
 
-export async function runStrictBoundaryProof(options: { mechanism?: string; replay?: ReturnType<typeof runReplayScenario> } = {}) {
+export async function runStrictBoundaryProof(
+  options: { mechanism?: string; replay?: ReturnType<typeof runReplayScenario> } = {}
+) {
   if (options.mechanism === 'external-auth-gate' || process.env.G05_SELECTED_MECHANISM === 'external-auth-gate') {
     return runAuthGateProof();
   }

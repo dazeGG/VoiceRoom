@@ -1,9 +1,5 @@
 import type { HotkeyBinding } from '$lib/shared/ui/HotkeyRecorder/types';
-import {
-  HOTKEY_BINDINGS_CHANGED_EVENT,
-  readHotkeyBinding,
-  type HotkeyAction
-} from '../core/hotkeys';
+import { HOTKEY_BINDINGS_CHANGED_EVENT, readHotkeyBinding, type HotkeyAction } from '../core/hotkeys';
 
 import { createLogger, errorContext } from '$lib/shared/log';
 
@@ -33,11 +29,7 @@ type DesktopActionHandler = (
   options?: { immediate?: boolean }
 ) => void;
 
-const GLOBAL_ACTIONS: readonly DesktopGlobalHotkeyAction[] = [
-  'mic-mute',
-  'output-mute',
-  'push-to-talk'
-];
+const GLOBAL_ACTIONS: readonly DesktopGlobalHotkeyAction[] = ['mic-mute', 'output-mute', 'push-to-talk'];
 
 let voiceActive = false;
 let syncGeneration = 0;
@@ -72,9 +64,7 @@ function getBindings(): Partial<Record<DesktopGlobalHotkeyAction, HotkeyBinding 
 }
 
 function applyRegistrationResult(result: DesktopHotkeyRegistrationResult): void {
-  registeredActions = new Set(
-    Array.isArray(result.registered) ? result.registered.filter(isGlobalAction) : []
-  );
+  registeredActions = new Set(Array.isArray(result.registered) ? result.registered.filter(isGlobalAction) : []);
   registrationStatusHandler?.(result);
 }
 
@@ -93,10 +83,7 @@ function configurationMatches(configurationId: number | undefined): boolean {
   return configurationId === undefined || configurationId === activeConfigurationId;
 }
 
-function finishPendingSync(
-  generation: number,
-  effectiveResult: DesktopHotkeyRegistrationResult | null
-): void {
+function finishPendingSync(generation: number, effectiveResult: DesktopHotkeyRegistrationResult | null): void {
   if (pendingSyncGeneration !== generation) return;
 
   pendingSyncGeneration = 0;
@@ -117,10 +104,8 @@ function finishPendingSync(
   for (const payload of actions) {
     if (payload.action === 'push-to-talk') finalPushToTalk = payload;
   }
-  if (
-    finalPushToTalk?.phase === 'pressed'
-    && finalRegistrations.has('push-to-talk')
-  ) deliverDesktopAction('push-to-talk', 'pressed');
+  if (finalPushToTalk?.phase === 'pressed' && finalRegistrations.has('push-to-talk'))
+    deliverDesktopAction('push-to-talk', 'pressed');
 }
 
 export function desktopGlobalHotkeysAvailable(): boolean {
@@ -144,9 +129,7 @@ export async function syncDesktopGlobalHotkeys(active = voiceActive): Promise<De
 
   registeredActions.clear();
   pendingSyncGeneration = generation;
-  pendingRegistrationActions = new Set(
-    GLOBAL_ACTIONS.filter((action) => Boolean(bindings[action]))
-  );
+  pendingRegistrationActions = new Set(GLOBAL_ACTIONS.filter((action) => Boolean(bindings[action])));
   pendingActionEvents = [];
   pendingRegistrationStatus = null;
 
@@ -197,32 +180,25 @@ export function bindDesktopGlobalHotkeys(
   desktopActionHandler = onAction;
   registrationStatusHandler = onRegistrationStatus ?? null;
 
-  const removeActionListener = bridge?.onAction?.((payload) => {
-    if (
-      !voiceActive
-      || !isGlobalAction(payload?.action)
-      || !configurationMatches(payload.configurationId)
-    ) return;
-    const phase = payload?.phase === 'released' ? 'released' : 'pressed';
-    if (pendingSyncGeneration !== 0) {
-      pendingActionEvents.push({ action: payload.action, phase });
-      return;
-    }
-    if (registeredActions.has(payload.action)) deliverDesktopAction(payload.action, phase);
-  }) ?? (() => {});
-  const removeStatusListener = bridge?.onStatus?.((result) => {
-    if (
-      !voiceActive
-      || !result
-      || result.active !== true
-      || !configurationMatches(result.configurationId)
-    ) return;
-    if (pendingSyncGeneration !== 0) {
-      pendingRegistrationStatus = result;
-      return;
-    }
-    applyRegistrationResult(result);
-  }) ?? (() => {});
+  const removeActionListener =
+    bridge?.onAction?.((payload) => {
+      if (!voiceActive || !isGlobalAction(payload?.action) || !configurationMatches(payload.configurationId)) return;
+      const phase = payload?.phase === 'released' ? 'released' : 'pressed';
+      if (pendingSyncGeneration !== 0) {
+        pendingActionEvents.push({ action: payload.action, phase });
+        return;
+      }
+      if (registeredActions.has(payload.action)) deliverDesktopAction(payload.action, phase);
+    }) ?? (() => {});
+  const removeStatusListener =
+    bridge?.onStatus?.((result) => {
+      if (!voiceActive || !result || result.active !== true || !configurationMatches(result.configurationId)) return;
+      if (pendingSyncGeneration !== 0) {
+        pendingRegistrationStatus = result;
+        return;
+      }
+      applyRegistrationResult(result);
+    }) ?? (() => {});
 
   const onBindingsChanged = (): void => {
     if (voiceActive) void syncDesktopGlobalHotkeys(true);

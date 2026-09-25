@@ -12,7 +12,10 @@ const WORKER_CAPABILITIES: Readonly<Record<string, string[]>> = Object.freeze({
 
 export type WorkerHeartbeat = Readonly<{ close: () => Promise<void> }>;
 
-async function startWorkerHeartbeat({ env = process.env, workerName }: { env?: NodeJS.ProcessEnv; workerName?: string } = {}): Promise<WorkerHeartbeat> {
+async function startWorkerHeartbeat({
+  env = process.env,
+  workerName
+}: { env?: NodeJS.ProcessEnv; workerName?: string } = {}): Promise<WorkerHeartbeat> {
   const capabilityTokens = WORKER_CAPABILITIES[workerName as string];
   const databaseUrl = typeof env.DATABASE_URL === 'string' ? env.DATABASE_URL.trim() : '';
   if (!capabilityTokens || !databaseUrl) return Object.freeze({ close: async () => {} });
@@ -21,14 +24,17 @@ async function startWorkerHeartbeat({ env = process.env, workerName }: { env?: N
   const pool = createDbPool({ databaseUrl });
   const repository = createRuntimeReadinessRepository({ client: pool });
   let timer: ReturnType<typeof setInterval> | null = null;
-  const beat = () => repository.heartbeat({
-    kind: 'worker',
-    id,
-    capabilityTokens,
-    ready: true
-  });
+  const beat = () =>
+    repository.heartbeat({
+      kind: 'worker',
+      id,
+      capabilityTokens,
+      ready: true
+    });
   await beat();
-  timer = setInterval(() => { void beat().catch(() => {}); }, intervalMs);
+  timer = setInterval(() => {
+    void beat().catch(() => {});
+  }, intervalMs);
   timer.unref?.();
   return Object.freeze({
     close: async () => {

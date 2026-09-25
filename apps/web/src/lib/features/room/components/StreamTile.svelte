@@ -57,7 +57,6 @@
       playMediaElement(videoEl);
     }
   });
-
 </script>
 
 {#if isCollapsed}

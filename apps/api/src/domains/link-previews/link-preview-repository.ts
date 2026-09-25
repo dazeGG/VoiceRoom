@@ -17,7 +17,14 @@ function createLinkPreviewRepository({ pool }: { pool: QueryClient }) {
     return row ? { status: row.status, preview: row.preview, failureCode: row.failure_code } : null;
   }
 
-  async function saveCached({ urlHash, url, preview, failureCode = null, now, ttlMs }: {
+  async function saveCached({
+    urlHash,
+    url,
+    preview,
+    failureCode = null,
+    now,
+    ttlMs
+  }: {
     urlHash: string;
     url: string;
     preview: LinkPreview | null;
@@ -51,7 +58,12 @@ function createLinkPreviewRepository({ pool }: { pool: QueryClient }) {
     ELSE jsonb_set(metadata, '{linkPreview}', $4::jsonb)
   END`;
 
-  async function setRoomMessagePreview({ roomId, messageId, text, preview }: {
+  async function setRoomMessagePreview({
+    roomId,
+    messageId,
+    text,
+    preview
+  }: {
     roomId: string;
     messageId: string;
     text: string;
@@ -66,7 +78,12 @@ function createLinkPreviewRepository({ pool }: { pool: QueryClient }) {
     return (result.rowCount ?? 0) > 0;
   }
 
-  async function setDirectMessagePreview({ messageId, senderId, text, preview }: {
+  async function setDirectMessagePreview({
+    messageId,
+    senderId,
+    text,
+    preview
+  }: {
     messageId: string;
     senderId: string;
     text: string;

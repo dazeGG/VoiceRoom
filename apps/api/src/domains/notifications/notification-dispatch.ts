@@ -31,7 +31,10 @@ export interface PushContext {
 }
 
 export interface NotificationDispatchDeps {
-  push(): { config: { enabled: boolean }; sendToUser(userId: string, payload: Record<string, unknown>, context: Record<string, unknown>): Promise<unknown> };
+  push(): {
+    config: { enabled: boolean };
+    sendToUser(userId: string, payload: Record<string, unknown>, context: Record<string, unknown>): Promise<unknown>;
+  };
   preferences(userId: string): Promise<Preferences>;
   notifyUser(userId: string, event: Record<string, unknown>): number;
   logger(): Pick<Logger, 'warn' | 'error'>;
@@ -52,12 +55,18 @@ export function createNotificationDispatch(deps: NotificationDispatchDeps) {
       const deliveryContext = ttl === undefined ? context : { ...context, ttl };
       await deps.push().sendToUser(userId, { ...publicPayload, body }, deliveryContext);
     } catch (error) {
-      deps.logger().warn({ evt: LOG_EVENTS.PUSH_SEND_FAILED, userId, err: error }, 'failed to send a push notification');
+      deps
+        .logger()
+        .warn({ evt: LOG_EVENTS.PUSH_SEND_FAILED, userId, err: error }, 'failed to send a push notification');
     }
   }
 
   // Returns how many of the recipient's sockets got the live notice.
-  async function broadcastDmNotification(recipientUserId: string, sender: SocialUser | null | undefined, message: { id: string; body?: string; createdAt?: unknown }): Promise<number> {
+  async function broadcastDmNotification(
+    recipientUserId: string,
+    sender: SocialUser | null | undefined,
+    message: { id: string; body?: string; createdAt?: unknown }
+  ): Promise<number> {
     if (!recipientUserId || !sender || recipientUserId === sender.id) return 0;
     try {
       const preferences = await deps.preferences(recipientUserId);
@@ -69,18 +78,27 @@ export function createNotificationDispatch(deps: NotificationDispatchDeps) {
         message: { id: message.id, body: message.body, createdAt: message.createdAt }
       };
       const broadcastCount = deps.notifyUser(recipientUserId, notification);
-      void queuePush(recipientUserId, {
-        type: 'dm.message',
-        title: sender.displayName || sender.login || 'Новое сообщение',
-        body: message.body,
-        privateBody: 'Откройте VoiceRoom, чтобы прочитать сообщение.',
-        tag: `dm:${sender.id}`,
-        dedupeKey: notification.dedupeKey,
-        url: `/?dm=${encodeURIComponent(sender.id)}`
-      }, { peerUserId: sender.id });
+      void queuePush(
+        recipientUserId,
+        {
+          type: 'dm.message',
+          title: sender.displayName || sender.login || 'Новое сообщение',
+          body: message.body,
+          privateBody: 'Откройте VoiceRoom, чтобы прочитать сообщение.',
+          tag: `dm:${sender.id}`,
+          dedupeKey: notification.dedupeKey,
+          url: `/?dm=${encodeURIComponent(sender.id)}`
+        },
+        { peerUserId: sender.id }
+      );
       return broadcastCount;
     } catch (error) {
-      deps.logger().error({ evt: LOG_EVENTS.NOTIFICATION_BROADCAST_FAILED, err: error }, 'failed to broadcast a direct message notification');
+      deps
+        .logger()
+        .error(
+          { evt: LOG_EVENTS.NOTIFICATION_BROADCAST_FAILED, err: error },
+          'failed to broadcast a direct message notification'
+        );
       return 0;
     }
   }

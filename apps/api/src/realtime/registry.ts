@@ -7,7 +7,11 @@ import { toWsAccountEvent } from './account-events.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
 
-export type RealtimeSocket = { readyState: number; send(data: string): void; close(code?: number, reason?: string): void };
+export type RealtimeSocket = {
+  readyState: number;
+  send(data: string): void;
+  close(code?: number, reason?: string): void;
+};
 export type ActiveVoice = { roomId: string; [key: string]: any };
 export type WsConnection = {
   id: string;
@@ -33,14 +37,19 @@ type PresenceRegistry = {
   userPresenceStatuses: Map<string, string>;
   getPresenceRevision?: () => number;
 };
-type PresenceRoom = { updatedAt?: unknown; peers?: { values?: () => Iterable<{ accountUserId?: string | null }> } } | null | undefined;
+type PresenceRoom =
+  { updatedAt?: unknown; peers?: { values?: () => Iterable<{ accountUserId?: string | null }> } } | null | undefined;
 type RegistryLogger = { error(...args: unknown[]): void };
 
 function createConnectionId(prefix: string): string {
   return `${prefix}:${Date.now()}:${crypto.randomBytes(4).toString('hex')}`;
 }
 
-function buildRoomMembershipPresenceSnapshot(roomId: string, room: PresenceRoom, registry: PresenceRegistry | null | undefined) {
+function buildRoomMembershipPresenceSnapshot(
+  roomId: string,
+  room: PresenceRoom,
+  registry: PresenceRegistry | null | undefined
+) {
   const byUserId = new Map<string, PresenceEntry[]>();
   for (const [userId, userConnections] of registry?.userConnections || []) {
     const entries: PresenceEntry[] = [];
@@ -103,7 +112,13 @@ function createConnectionRegistry({
     return connectionCount(userId) > 0 && userPresenceStatuses.get(userId) !== 'offline';
   }
 
-  function createConnectionRecord(userId: string | null, socket: RealtimeSocket, clientIp = '', presenceStatus: unknown = 'online', authSessionHash: unknown = ''): WsConnection {
+  function createConnectionRecord(
+    userId: string | null,
+    socket: RealtimeSocket,
+    clientIp = '',
+    presenceStatus: unknown = 'online',
+    authSessionHash: unknown = ''
+  ): WsConnection {
     return {
       id: createConnectionId(userId || 'guest'),
       userId: userId || null,
@@ -123,7 +138,13 @@ function createConnectionRegistry({
     };
   }
 
-  function addConnection(userId: string, socket: RealtimeSocket, clientIp = '', presenceStatus: unknown = 'online', authSessionHash: unknown = ''): WsConnection {
+  function addConnection(
+    userId: string,
+    socket: RealtimeSocket,
+    clientIp = '',
+    presenceStatus: unknown = 'online',
+    authSessionHash: unknown = ''
+  ): WsConnection {
     let set = userConnections.get(userId);
     const wasOffline = !isUserOnline(userId);
     if (!set) {
@@ -165,7 +186,10 @@ function createConnectionRegistry({
     try {
       friendIds = await getFriendIds(userId);
     } catch (error) {
-      logger.error({ evt: LOG_EVENTS.WS_PRESENCE_FRIENDS_LOAD_FAILED, userId, online, err: error }, 'failed to load friends for a presence change');
+      logger.error(
+        { evt: LOG_EVENTS.WS_PRESENCE_FRIENDS_LOAD_FAILED, userId, online, err: error },
+        'failed to load friends for a presence change'
+      );
       return;
     }
     for (const friendId of friendIds) {
@@ -269,7 +293,10 @@ function createConnectionRegistry({
     return maxGuestConnectionsPerIp > 0 && guestConnectionCount(guestIp) >= maxGuestConnectionsPerIp;
   }
 
-  function registerConnectionForRoom(connection: WsConnection | null | undefined, roomId: string | null | undefined): void {
+  function registerConnectionForRoom(
+    connection: WsConnection | null | undefined,
+    roomId: string | null | undefined
+  ): void {
     if (!connection || !roomId) return;
     let set = roomDetailConnections.get(roomId);
     if (!set) {
@@ -304,11 +331,16 @@ function createConnectionRegistry({
   // Sockets authenticated by account sessions that were just ended. Without a
   // hash list this selects every socket of the account (password replaced);
   // without an account id the hashes are matched across all signed-in sockets.
-  function findAccountConnections(userId: string | null | undefined, tokenHashes: unknown[] | null = null): WsConnection[] {
+  function findAccountConnections(
+    userId: string | null | undefined,
+    tokenHashes: unknown[] | null = null
+  ): WsConnection[] {
     const wanted = Array.isArray(tokenHashes) ? new Set(tokenHashes.filter(Boolean)) : null;
     const candidates = userId ? userConnections.get(userId) : wanted ? connections.values() : null;
     if (!candidates) return [];
-    return [...candidates].filter((connection) => !connection.guest && (!wanted || wanted.has(connection.authSessionHash)));
+    return [...candidates].filter(
+      (connection) => !connection.guest && (!wanted || wanted.has(connection.authSessionHash))
+    );
   }
 
   function closeConnections(targets: Iterable<WsConnection>, code = 4401, reason = 'Session revoked'): void {

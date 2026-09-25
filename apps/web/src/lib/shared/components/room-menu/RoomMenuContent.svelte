@@ -6,10 +6,7 @@
   import { Avatar, Ellipsis, PopoverDivider, PopoverMenuItem, PopoverMenuLabel, PopoverSubmenu } from '$lib/shared/ui';
   import { iconMd } from '$lib/shared/ui/icons';
   import { copyText } from '$lib/shared/utils/clipboard';
-  import {
-    isRoomNotificationsMuted,
-    updateRoomNotificationsMuted
-  } from '$lib/shared/notifications/preferences.svelte';
+  import { isRoomNotificationsMuted, updateRoomNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
   import RoomInviteFriendList from './RoomInviteFriendList.svelte';
 
   let {
@@ -170,7 +167,12 @@
       {#snippet icon()}<Settings {...iconMd} aria-hidden="true" />{/snippet}
     </PopoverMenuItem>
   {:else if !isOwner}
-    <PopoverMenuItem label="Удалить из списка" variant="danger" disabled={removeSaving} onclick={() => void removeBookmark()}>
+    <PopoverMenuItem
+      label="Удалить из списка"
+      variant="danger"
+      disabled={removeSaving}
+      onclick={() => void removeBookmark()}
+    >
       {#snippet icon()}<Trash2 {...iconMd} aria-hidden="true" />{/snippet}
     </PopoverMenuItem>
   {/if}
@@ -185,8 +187,19 @@
     gap: 2px;
   }
 
-  .room-menu-head { display: flex; align-items: center; gap: 12px; padding: 10px 10px 12px; }
-  .room-menu-info { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
+  .room-menu-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 10px 12px;
+  }
+  .room-menu-info {
+    display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-direction: column;
+    gap: 3px;
+  }
 
   :global(.room-menu-name) {
     color: var(--warm-ink, #ece7d9);

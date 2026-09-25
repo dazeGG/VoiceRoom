@@ -9,17 +9,27 @@ export interface GatePrincipalPeer {
 }
 
 export interface GatePrincipalStore {
-  normalizeGatePrincipal(input: { accountUserId: string | null; guestPrincipalId: string; roomId: string }): GatePrincipal | null;
+  normalizeGatePrincipal(input: {
+    accountUserId: string | null;
+    guestPrincipalId: string;
+    roomId: string;
+  }): GatePrincipal | null;
 }
 
 export function isGatePrincipal(value: unknown): value is GatePrincipal {
   const principal = value as Partial<GatePrincipal> | null | undefined;
-  return (principal?.principalType === 'account' || principal?.principalType === 'guest')
-    && typeof principal.principalId === 'string'
-    && principal.principalId.trim().length > 0;
+  return (
+    (principal?.principalType === 'account' || principal?.principalType === 'guest') &&
+    typeof principal.principalId === 'string' &&
+    principal.principalId.trim().length > 0
+  );
 }
 
-export function gatePrincipalForPeer(store: GatePrincipalStore, roomId: string, peer: GatePrincipalPeer): GatePrincipal | null {
+export function gatePrincipalForPeer(
+  store: GatePrincipalStore,
+  roomId: string,
+  peer: GatePrincipalPeer
+): GatePrincipal | null {
   return store.normalizeGatePrincipal({
     accountUserId: peer.accountUserId || null,
     guestPrincipalId: peer.gateGuestPrincipalId || '',

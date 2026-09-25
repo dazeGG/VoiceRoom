@@ -34,7 +34,10 @@ export function formatTypingLabel(people: readonly TypingPerson[]): string {
   if (visible.length === 0) return '';
   if (visible.length > 3) return 'Несколько человек печатают…';
   const clauses = TYPING_ACTIVITIES.map((activity) =>
-    describe(visible.filter((person) => person.activity === activity).map((person) => person.name), activity)
+    describe(
+      visible.filter((person) => person.activity === activity).map((person) => person.name),
+      activity
+    )
   ).filter(Boolean);
   return `${clauses.join(', ')}…`;
 }
@@ -71,9 +74,10 @@ interface TypingEntry extends TypingPerson {
 
 // Who is typing, keyed by person. An entry goes away when that person's
 // message arrives or TTL after their last notice.
-export function createTypingTracker(
-  { ttlMs = TYPING_NOTICE_TTL_MS, now = Date.now }: { ttlMs?: number; now?: () => number } = {}
-) {
+export function createTypingTracker({
+  ttlMs = TYPING_NOTICE_TTL_MS,
+  now = Date.now
+}: { ttlMs?: number; now?: () => number } = {}) {
   let entries = $state<TypingEntry[]>([]);
   let timer: ReturnType<typeof setTimeout> | null = null;
 

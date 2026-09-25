@@ -145,7 +145,10 @@ test('notification store mutes and unmutes any existing non-self user', async (t
   const bob = await makeUser(users, 'bob');
 
   assert.equal((await notifications.setDmMute({ userId: alice.id, peerUserId: alice.id, muted: true })).status, 'self');
-  assert.equal((await notifications.setDmMute({ userId: alice.id, peerUserId: crypto.randomUUID(), muted: true })).status, 'not_found');
+  assert.equal(
+    (await notifications.setDmMute({ userId: alice.id, peerUserId: crypto.randomUUID(), muted: true })).status,
+    'not_found'
+  );
 
   const muted = await notifications.setDmMute({ userId: alice.id, peerUserId: bob.id, muted: true });
   assert.equal(muted.status, 'muted');
@@ -166,9 +169,18 @@ test('notification store persists mutes for saved rooms only', async (t) => {
   await rooms.createRoomWithQuota({ roomId: 'other-room', creatorIp: '127.0.0.1', isStatic: true, ownerId: bob.id });
   await rooms.createRoom({ roomId: 'temp-room', creatorIp: '127.0.0.1', isStatic: false });
 
-  assert.equal((await notifications.setRoomMute({ userId: alice.id, roomId: 'missing-room', muted: true })).status, 'not_found');
-  assert.equal((await notifications.setRoomMute({ userId: alice.id, roomId: 'temp-room', muted: true })).status, 'temporary_room');
-  assert.equal((await notifications.setRoomMute({ userId: alice.id, roomId: 'other-room', muted: true })).status, 'not_saved_room');
+  assert.equal(
+    (await notifications.setRoomMute({ userId: alice.id, roomId: 'missing-room', muted: true })).status,
+    'not_found'
+  );
+  assert.equal(
+    (await notifications.setRoomMute({ userId: alice.id, roomId: 'temp-room', muted: true })).status,
+    'temporary_room'
+  );
+  assert.equal(
+    (await notifications.setRoomMute({ userId: alice.id, roomId: 'other-room', muted: true })).status,
+    'not_saved_room'
+  );
 
   const muted = await notifications.setRoomMute({ userId: alice.id, roomId: 'saved-room', muted: true });
   assert.equal(muted.status, 'muted');

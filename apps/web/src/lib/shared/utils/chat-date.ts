@@ -1,6 +1,16 @@
 const MONTHS = [
-  'января', 'февраля', 'марта', 'апреля', 'мая', 'июня',
-  'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'
+  'января',
+  'февраля',
+  'марта',
+  'апреля',
+  'мая',
+  'июня',
+  'июля',
+  'августа',
+  'сентября',
+  'октября',
+  'ноября',
+  'декабря'
 ];
 
 function startOfDay(ms: number): number {
@@ -23,9 +33,7 @@ export function formatChatDayLabel(ms: number, nowMs = Date.now()): string {
   const date = new Date(ms);
   const now = new Date(nowMs);
   const isCalendarAnniversary =
-    date.getFullYear() !== now.getFullYear() &&
-    date.getMonth() === now.getMonth() &&
-    date.getDate() === now.getDate();
+    date.getFullYear() !== now.getFullYear() && date.getMonth() === now.getMonth() && date.getDate() === now.getDate();
 
   return `${date.getDate()} ${MONTHS[date.getMonth()]}${isCalendarAnniversary ? ` ${date.getFullYear()}` : ''}`;
 }

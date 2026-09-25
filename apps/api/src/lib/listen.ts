@@ -41,7 +41,10 @@ function startApiListener({
     const actual = typeof address === 'object' && address ? address : null;
     const listenHost = actual?.address || host;
     const listenPort = actual?.port || port;
-    logger.info({ evt: LOG_EVENTS.LISTENING, transport: 'tcp', host: listenHost, port: listenPort }, 'Voice Room API is listening');
+    logger.info(
+      { evt: LOG_EVENTS.LISTENING, transport: 'tcp', host: listenHost, port: listenPort },
+      'Voice Room API is listening'
+    );
   }
 
   function failToStart(error: unknown): void {
@@ -107,13 +110,16 @@ function startApiListener({
       }
 
       if (error && (error.code === 'EPERM' || error.code === 'EACCES' || error.code === 'ENOTSUP')) {
-        logger.warn({
-          evt: LOG_EVENTS.LISTEN_FALLBACK,
-          socketPath,
-          host,
-          port,
-          err: error
-        }, 'unable to bind the unix socket; falling back to a TCP listen');
+        logger.warn(
+          {
+            evt: LOG_EVENTS.LISTEN_FALLBACK,
+            socketPath,
+            host,
+            port,
+            err: error
+          },
+          'unable to bind the unix socket; falling back to a TCP listen'
+        );
         listenOnTcp();
         return;
       }

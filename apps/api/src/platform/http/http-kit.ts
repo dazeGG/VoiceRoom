@@ -54,7 +54,12 @@ export function registerHttpKit(app: FastifyInstance, options: HttpKitOptions): 
 
   app.addHook('onResponse', async (request: FastifyRequest, reply: FastifyReply) => {
     const durationMs = reply.elapsedTime;
-    options.recordRequest({ method: request.method, route: routeLabel(request), statusCode: reply.statusCode, durationMs });
+    options.recordRequest({
+      method: request.method,
+      route: routeLabel(request),
+      statusCode: reply.statusCode,
+      durationMs
+    });
     options.logRequest(request, reply.statusCode, durationMs);
   });
 

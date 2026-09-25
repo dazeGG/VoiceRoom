@@ -140,7 +140,6 @@ test('publicUser never leaks the password hash', async (t) => {
   assert.ok(AVATAR_COLOR_KEYS.includes(exposed.avatarColorKey));
 });
 
-
 test('createUser accepts a valid injected avatar color for deterministic callers', async (t) => {
   const store = await createMigratedStore(t);
   const { user } = await store.createUser({ login: 'colorful', avatarColorKey: 'rose', password: 'password123' });

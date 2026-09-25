@@ -7,7 +7,9 @@ import { authUser } from '../fixtures/users.ts';
 import { freshImport } from '../helpers/fresh-module.ts';
 import type * as SignOutModule from '../../src/lib/features/home/model/sign-out.ts';
 
-vi.mock('../../src/lib/features/home/model/push-notifications.svelte', () => ({ detachPushSubscription: vi.fn(async () => {}) }));
+vi.mock('../../src/lib/features/home/model/push-notifications.svelte', () => ({
+  detachPushSubscription: vi.fn(async () => {})
+}));
 
 beforeEach(() => localStorage.clear());
 
@@ -23,10 +25,9 @@ test('a room list without rooms is an empty list', async () => {
   await expect(fetchOwnedRooms()).resolves.toEqual([]);
 });
 
-
 async function signedIn() {
   const signOutModule = await freshImport<typeof SignOutModule>('/src/lib/features/home/model/sign-out.ts');
-  const session = (await import('../../src/lib/features/auth/session.svelte.ts'));
+  const session = await import('../../src/lib/features/auth/session.svelte.ts');
   session.setUser(authUser());
   return { ...signOutModule, ...session };
 }

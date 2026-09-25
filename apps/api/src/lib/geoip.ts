@@ -14,13 +14,15 @@ type GeoLogger = { warn(...args: unknown[]): void; error(...args: unknown[]): vo
 export type GeoLocator = Readonly<{ enabled: boolean; locate(ip: unknown): Promise<string>; warm(): Promise<boolean> }>;
 
 function normalizeAddress(value: unknown): string {
-  const address = String(value || '').trim().replace(/^::ffff:(?=\d+\.\d+\.\d+\.\d+$)/i, '');
+  const address = String(value || '')
+    .trim()
+    .replace(/^::ffff:(?=\d+\.\d+\.\d+\.\d+$)/i, '');
   return net.isIP(address) ? address : '';
 }
 
 function namesOf(place: unknown): Names {
   const names = place && typeof place === 'object' ? (place as { names?: unknown }).names : null;
-  return names && typeof names === 'object' ? names as Names : {};
+  return names && typeof names === 'object' ? (names as Names) : {};
 }
 
 // DB-IP Lite names cities in English only and sometimes appends the district
@@ -47,7 +49,11 @@ function formatLocation(input: unknown): string {
 // MaxMind-format database (DB-IP City Lite in production). The address is only
 // read here: it is never stored or sent anywhere. Without a database every
 // lookup answers '' and the list simply shows no location.
-function createGeoLocator({ databasePath = '', logger = createLogger({ name: 'api' }), openReader }: {
+function createGeoLocator({
+  databasePath = '',
+  logger = createLogger({ name: 'api' }),
+  openReader
+}: {
   databasePath?: string;
   logger?: GeoLogger;
   openReader?: (path: string) => Promise<GeoReader>;
@@ -58,13 +64,20 @@ function createGeoLocator({ databasePath = '', logger = createLogger({ name: 'ap
     if (!databasePath) return Promise.resolve(null);
     readerPromise ||= (async (): Promise<GeoReader | null> => {
       if (!fs.existsSync(databasePath)) {
-        logger.warn({ evt: LOG_EVENTS.GEOIP_UNAVAILABLE, databasePath, reason: 'missing' }, 'GeoIP database not found; device locations are disabled');
+        logger.warn(
+          { evt: LOG_EVENTS.GEOIP_UNAVAILABLE, databasePath, reason: 'missing' },
+          'GeoIP database not found; device locations are disabled'
+        );
         return null;
       }
-      const open = openReader || ((path: string) => import('maxmind').then((maxmind) => maxmind.open(path) as Promise<GeoReader>));
+      const open =
+        openReader || ((path: string) => import('maxmind').then((maxmind) => maxmind.open(path) as Promise<GeoReader>));
       return open(databasePath);
     })().catch((error: unknown) => {
-      logger.error({ evt: LOG_EVENTS.GEOIP_UNAVAILABLE, databasePath, reason: 'open_failed', err: error }, 'failed to open the GeoIP database');
+      logger.error(
+        { evt: LOG_EVENTS.GEOIP_UNAVAILABLE, databasePath, reason: 'open_failed', err: error },
+        'failed to open the GeoIP database'
+      );
       return null;
     });
     return readerPromise;

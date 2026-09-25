@@ -77,12 +77,11 @@ function createModerationStore() {
       return { ban, status: 'deleted' };
     },
     async findActiveRoomBan({ roomId, userId, ip }) {
-      return [...bans.values()].find((ban) =>
-        ban.roomId === roomId && (
-          (userId && ban.userId === userId) ||
-          (!ban.userId && ip && ban.ip === ip)
-        )
-      ) || null;
+      return (
+        [...bans.values()].find(
+          (ban) => ban.roomId === roomId && ((userId && ban.userId === userId) || (!ban.userId && ip && ban.ip === ip))
+        ) || null
+      );
     },
     async getOrCreatePeerIdentity({ roomId, peerId, sessionToken }) {
       const key = `${roomId}:${peerId}`;
@@ -149,31 +148,42 @@ function createUsers() {
 }
 
 function createFriends() {
-  return { async getFriendIds() { return []; } };
+  return {
+    async getFriendIds() {
+      return [];
+    }
+  };
 }
 
 async function requestJson(socketPath, method, pathname, { body, cookie = '', ip = '' } = {}) {
   const payload = body === undefined ? null : JSON.stringify(body);
   return new Promise((resolve, reject) => {
-    const req = http.request({
-      socketPath,
-      method,
-      path: pathname,
-      headers: {
-        Accept: 'application/json',
-        ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}),
-        ...(cookie ? { Cookie: cookie } : {}),
-        ...(ip ? { 'X-Forwarded-For': ip } : {})
+    const req = http.request(
+      {
+        socketPath,
+        method,
+        path: pathname,
+        headers: {
+          Accept: 'application/json',
+          ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}),
+          ...(cookie ? { Cookie: cookie } : {}),
+          ...(ip ? { 'X-Forwarded-For': ip } : {})
+        }
+      },
+      (res) => {
+        let responseBody = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          responseBody += chunk;
+        });
+        res.on('end', () =>
+          resolve({
+            status: res.statusCode,
+            body: responseBody ? JSON.parse(responseBody) : null
+          })
+        );
       }
-    }, (res) => {
-      let responseBody = '';
-      res.setEncoding('utf8');
-      res.on('data', (chunk) => { responseBody += chunk; });
-      res.on('end', () => resolve({
-        status: res.statusCode,
-        body: responseBody ? JSON.parse(responseBody) : null
-      }));
-    });
+    );
     req.on('error', reject);
     if (payload) req.end(payload);
     else req.end();
@@ -190,7 +200,10 @@ async function startServer() {
     friends: createFriends(),
     liveKitCredentials: {
       async issueAdmission() {
-        return { status: 'issued', admission: { room: ROOM_ID, token: 'jwt', ttlSeconds: 60, url: 'ws://gate.test/rtc' } };
+        return {
+          status: 'issued',
+          admission: { room: ROOM_ID, token: 'jwt', ttlSeconds: 60, url: 'ws://gate.test/rtc' }
+        };
       }
     },
     membershipServicesOverride: {
@@ -202,7 +215,7 @@ async function startServer() {
     }
   });
   await new Promise((resolve, reject) => {
-    server.listen({ path: socketPath }, (error) => error ? reject(error) : resolve());
+    server.listen({ path: socketPath }, (error) => (error ? reject(error) : resolve()));
   });
   return { dir, server, socketPath, store };
 }
@@ -220,11 +233,14 @@ async function stopServer({ dir, server }, sessions) {
 
 test('kick and ban lifecycle enforces join, token, chat, preview, and undo', async (t) => {
   const nativeFetch = global.fetch;
-  global.fetch = async () => new Response('{}', {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' }
+  global.fetch = async () =>
+    new Response('{}', {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  t.after(() => {
+    global.fetch = nativeFetch;
   });
-  t.after(() => { global.fetch = nativeFetch; });
   const fixture = await startServer();
   const sessions = [];
   t.after(() => stopServer(fixture, sessions));
@@ -294,7 +310,10 @@ test('kick and ban lifecycle enforces join, token, chat, preview, and undo', asy
   assert.equal(storedAccountBan.userId, TARGET_ID);
   assert.equal(storedAccountBan.ip, '');
   await waitForWsType(target.frames, 'room.banned', (frame) => frame.payload.roomId === ROOM_ID, 5000, banStart);
-  assert.equal(owner.frames.slice(ownerFramesBeforeBan).some((frame) => frame.type === 'room.banned'), false);
+  assert.equal(
+    owner.frames.slice(ownerFramesBeforeBan).some((frame) => frame.type === 'room.banned'),
+    false
+  );
 
   const ownerState = await requestJson(fixture.socketPath, 'POST', '/api/state', {
     body: { roomId: ROOM_ID, peerId: OWNER_PEER_ID, sessionToken: OWNER_PEER_TOKEN },
@@ -329,7 +348,10 @@ test('kick and ban lifecycle enforces join, token, chat, preview, and undo', asy
     sessionToken: 's'.repeat(32),
     name: 'Same IP guest'
   });
-  assert.equal(sameIpGuest.frames.some((frame) => frame.type === 'room.banned'), false);
+  assert.equal(
+    sameIpGuest.frames.some((frame) => frame.type === 'room.banned'),
+    false
+  );
 
   const token = await requestJson(fixture.socketPath, 'POST', '/api/livekit-token', {
     body: { roomId: ROOM_ID, peerId: 'target-after-ban', sessionToken: 'b'.repeat(32), name: 'Target' },
@@ -353,7 +375,10 @@ test('kick and ban lifecycle enforces join, token, chat, preview, and undo', asy
   await preview.ready;
   sendWs(preview.ws, 'room.preview.subscribe', { roomId: ROOM_ID });
   await waitForWsType(preview.frames, 'room.banned', (frame) => frame.payload.roomId === ROOM_ID);
-  assert.equal(preview.frames.some((frame) => frame.type === 'room.snapshot'), false);
+  assert.equal(
+    preview.frames.some((frame) => frame.type === 'room.snapshot'),
+    false
+  );
 
   const undo = await requestJson(fixture.socketPath, 'DELETE', `/api/rooms/${ROOM_ID}/bans/${ban.body.banId}`, {
     cookie: OWNER_COOKIE,
@@ -364,7 +389,13 @@ test('kick and ban lifecycle enforces join, token, chat, preview, and undo', asy
 
   const previewAfterUndoStart = preview.frames.length;
   sendWs(preview.ws, 'room.preview.subscribe', { roomId: ROOM_ID });
-  await waitForWsType(preview.frames, 'room.snapshot', (frame) => frame.payload.roomId === ROOM_ID, 5000, previewAfterUndoStart);
+  await waitForWsType(
+    preview.frames,
+    'room.snapshot',
+    (frame) => frame.payload.roomId === ROOM_ID,
+    5000,
+    previewAfterUndoStart
+  );
 
   // Media admission is only for peers in the room roster, so rejoin first.
   await joinVoiceRoom(target, {

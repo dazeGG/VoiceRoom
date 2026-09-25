@@ -4,9 +4,16 @@
 export type AttachmentContext = 'room' | 'dm';
 export type AttachmentState = 'pending' | 'processing' | 'ready' | 'failed' | 'deleted' | 'unavailable';
 export type MessageAttachment = {
-  id: string; context: AttachmentContext; ownerId: string; order: number;
-  mimeType: 'image/jpeg' | 'image/png' | 'image/webp'; bytes: number;
-  width: number; height: number; state: AttachmentState; url: string | null;
+  id: string;
+  context: AttachmentContext;
+  ownerId: string;
+  order: number;
+  mimeType: 'image/jpeg' | 'image/png' | 'image/webp';
+  bytes: number;
+  width: number;
+  height: number;
+  state: AttachmentState;
+  url: string | null;
 };
 
 export const MAX_ATTACHMENTS = 4;
@@ -25,8 +32,8 @@ export function normalizeAttachment(value: unknown): MessageAttachment | null {
   const id = text(input.id);
   const context = input.context === 'room' || input.context === 'dm' ? input.context : '';
   const ownerId = text(input.ownerId);
-  const mimeType = MIME_TYPES.has(input.mimeType) ? input.mimeType as MessageAttachment['mimeType'] : '';
-  const state = STATES.has(input.state) ? input.state as AttachmentState : 'unavailable';
+  const mimeType = MIME_TYPES.has(input.mimeType) ? (input.mimeType as MessageAttachment['mimeType']) : '';
+  const state = STATES.has(input.state) ? (input.state as AttachmentState) : 'unavailable';
   const order = Number(input.order);
   const bytes = Number(input.bytes);
   const width = Number(input.width);

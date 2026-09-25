@@ -55,15 +55,17 @@ export function createSendShadowStore<T extends { id?: string }>() {
 
   function confirm(draftKey: string, value: T): void {
     const canonicalId = value.id || null;
-    items = items.map((item) => item.draftKey === draftKey
-      ? { ...item, canonicalId, value, state: 'confirmed', updatedAt: Date.now() }
-      : item
+    items = items.map((item) =>
+      item.draftKey === draftKey ? { ...item, canonicalId, value, state: 'confirmed', updatedAt: Date.now() } : item
     );
     if (canonicalId) {
       let kept = false;
       items = items.filter((item) => {
         if (item.canonicalId !== canonicalId) return true;
-        if (!kept) { kept = true; return true; }
+        if (!kept) {
+          kept = true;
+          return true;
+        }
         return false;
       });
     }
@@ -71,28 +73,30 @@ export function createSendShadowStore<T extends { id?: string }>() {
 
   function reconcileRealtime(value: T, draftKey?: string): void {
     const canonicalId = value.id || null;
-    const match = items.find((item) =>
-      (draftKey && item.draftKey === draftKey) || (canonicalId && item.canonicalId === canonicalId)
+    const match = items.find(
+      (item) => (draftKey && item.draftKey === draftKey) || (canonicalId && item.canonicalId === canonicalId)
     );
     if (match) {
       confirm(match.draftKey, value);
       return;
     }
     if (canonicalId && items.some((item) => item.value.id === canonicalId)) return;
-    items = [...items, {
-      draftKey: draftKey || `remote:${canonicalId || randomKey()}`,
-      fingerprint: fingerprint(value),
-      canonicalId,
-      value,
-      state: 'confirmed',
-      updatedAt: Date.now()
-    }];
+    items = [
+      ...items,
+      {
+        draftKey: draftKey || `remote:${canonicalId || randomKey()}`,
+        fingerprint: fingerprint(value),
+        canonicalId,
+        value,
+        state: 'confirmed',
+        updatedAt: Date.now()
+      }
+    ];
   }
 
   function fail(draftKey: string): void {
-    items = items.map((item) => item.draftKey === draftKey
-      ? { ...item, state: 'failed', updatedAt: Date.now() }
-      : item
+    items = items.map((item) =>
+      item.draftKey === draftKey ? { ...item, state: 'failed', updatedAt: Date.now() } : item
     );
   }
 
@@ -101,7 +105,9 @@ export function createSendShadowStore<T extends { id?: string }>() {
   }
 
   return {
-    get items() { return items; },
+    get items() {
+      return items;
+    },
     begin,
     confirm,
     fail,

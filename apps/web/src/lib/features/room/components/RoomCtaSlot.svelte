@@ -27,13 +27,15 @@
     mobile = !getDesktopBoundaryPolicy().desktopAllowed;
   });
 
-  const cta = $derived(resolveRoomCta({
-    joined: roomClientState.joined,
-    guest: !embedded && !session.user,
-    appAvailable,
-    hasUsedDesktopApp: session.user?.hasUsedDesktopApp ?? false,
-    dismissed
-  }));
+  const cta = $derived(
+    resolveRoomCta({
+      joined: roomClientState.joined,
+      guest: !embedded && !session.user,
+      appAvailable,
+      hasUsedDesktopApp: session.user?.hasUsedDesktopApp ?? false,
+      dismissed
+    })
+  );
 
   // One promise per offer: a headline worth reading, and the reason under it.
   const copy = $derived.by(() => {
@@ -63,32 +65,37 @@
 </script>
 
 {#if cta || (mobile && roomClientState.joined)}
-<div class="room-cta-stack">
-{#if cta}
-  <aside class="room-cta" data-kind={cta} aria-label={copy.label}>
-    <span class="room-cta-icon" aria-hidden="true">
-      {#if cta === 'account'}<UserPlus {...iconMd} />{:else}<MonitorDown {...iconMd} />{/if}
-    </span>
-    <div class="room-cta-copy">
-      <strong class="room-cta-title">{copy.title}</strong>
-      <span class="room-cta-text">{copy.text}</span>
-    </div>
-    <Button
-      class="compact room-cta-action"
-      variant="primary"
-      type="button"
-      onclick={() => (cta === 'account' ? (authMode = 'register') : (benefitsOpen = true))}
-    >{copy.action}</Button>
-    <button class="room-cta-close" type="button" aria-label="Скрыть до следующего захода" onclick={() => (dismissed = true)}>
-      <X {...iconSm} aria-hidden="true" />
-    </button>
-  </aside>
-{/if}
-{#if mobile && roomClientState.joined}
-  <!-- A mobile browser suspends the microphone when it leaves the foreground. -->
-  <p class="room-mobile-hint" role="note">Звонок идёт, пока браузер открыт и экран включён</p>
-{/if}
-</div>
+  <div class="room-cta-stack">
+    {#if cta}
+      <aside class="room-cta" data-kind={cta} aria-label={copy.label}>
+        <span class="room-cta-icon" aria-hidden="true">
+          {#if cta === 'account'}<UserPlus {...iconMd} />{:else}<MonitorDown {...iconMd} />{/if}
+        </span>
+        <div class="room-cta-copy">
+          <strong class="room-cta-title">{copy.title}</strong>
+          <span class="room-cta-text">{copy.text}</span>
+        </div>
+        <Button
+          class="compact room-cta-action"
+          variant="primary"
+          type="button"
+          onclick={() => (cta === 'account' ? (authMode = 'register') : (benefitsOpen = true))}>{copy.action}</Button
+        >
+        <button
+          class="room-cta-close"
+          type="button"
+          aria-label="Скрыть до следующего захода"
+          onclick={() => (dismissed = true)}
+        >
+          <X {...iconSm} aria-hidden="true" />
+        </button>
+      </aside>
+    {/if}
+    {#if mobile && roomClientState.joined}
+      <!-- A mobile browser suspends the microphone when it leaves the foreground. -->
+      <p class="room-mobile-hint" role="note">Звонок идёт, пока браузер открыт и экран включён</p>
+    {/if}
+  </div>
 {/if}
 
 {#if authMode}
@@ -124,12 +131,12 @@
     pointer-events: auto;
   }
 
-  :global(body[data-lobby-embedded="true"]) .room-cta-stack {
+  :global(body[data-lobby-embedded='true']) .room-cta-stack {
     left: var(--lobby-sidebar-width, 312px);
   }
 
   @media (min-width: 901px) {
-    :global(body[data-chat-open="true"]) .room-cta-stack {
+    :global(body[data-chat-open='true']) .room-cta-stack {
       right: var(--room-panel-width);
     }
   }
@@ -155,11 +162,7 @@
     padding: 10px 11px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 18px;
-    background: color-mix(
-      in srgb,
-      color-mix(in srgb, var(--warm-800) 60%, var(--warm-900)) 90%,
-      transparent
-    );
+    background: color-mix(in srgb, color-mix(in srgb, var(--warm-800) 60%, var(--warm-900)) 90%, transparent);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
@@ -210,7 +213,9 @@
     background: transparent;
     color: #8c8676;
     cursor: pointer;
-    transition: background 150ms var(--ease-out), color 150ms var(--ease-out);
+    transition:
+      background 150ms var(--ease-out),
+      color 150ms var(--ease-out);
   }
 
   .room-cta-close:hover {

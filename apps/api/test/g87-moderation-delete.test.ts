@@ -12,14 +12,37 @@ function harness({ failCleanup = false } = {}) {
       if (sql.includes('SELECT id, room_id')) return { rows: [{ id: 'message', room_id: 'room', deleted_at: null }] };
       return { rows: [] };
     },
-    release() { events.push('release'); }
+    release() {
+      events.push('release');
+    }
   };
   const service = createMessageModerationService({
-    pool: { async connect() { return client; } },
-    moderationService: { async authorizeOwner() { return true; } },
-    attachmentRepository: { async revokeForRoomMessage() { events.push('attachments-revoked'); return [{ id: 'attachment' }]; } },
-    mediaJobRepository: { async enqueueCleanupForRoomMessage() { events.push('cleanup-enqueued'); if (failCleanup) throw new Error('queue unavailable'); } },
-    async publishMessageDeleted() { events.push('published'); }, now: () => 1234
+    pool: {
+      async connect() {
+        return client;
+      }
+    },
+    moderationService: {
+      async authorizeOwner() {
+        return true;
+      }
+    },
+    attachmentRepository: {
+      async revokeForRoomMessage() {
+        events.push('attachments-revoked');
+        return [{ id: 'attachment' }];
+      }
+    },
+    mediaJobRepository: {
+      async enqueueCleanupForRoomMessage() {
+        events.push('cleanup-enqueued');
+        if (failCleanup) throw new Error('queue unavailable');
+      }
+    },
+    async publishMessageDeleted() {
+      events.push('published');
+    },
+    now: () => 1234
   });
   return { events, service };
 }
@@ -35,7 +58,10 @@ test('G87-A01 tombstone, attachment denial and cleanup intent commit before publ
 
 test('G87-A02 cleanup failure rolls back and emits no deletion event', async () => {
   const { events, service } = harness({ failCleanup: true });
-  await assert.rejects(service.deleteRoomMessage({ roomId: 'room', messageId: 'message', actorUserId: 'owner' }), /queue unavailable/);
+  await assert.rejects(
+    service.deleteRoomMessage({ roomId: 'room', messageId: 'message', actorUserId: 'owner' }),
+    /queue unavailable/
+  );
   assert.ok(events.includes('ROLLBACK'));
   assert.equal(events.includes('COMMIT'), false);
   assert.equal(events.includes('published'), false);

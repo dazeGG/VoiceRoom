@@ -235,7 +235,11 @@ export async function snoozeRecoveryCodesReminder(): Promise<RecoveryCodesRemind
 }
 
 export async function fetchWhatsNew(): Promise<WhatsNewState> {
-  const payload = await authRead<{ whatsNew?: Partial<WhatsNewState> }>('/auth/whats-new', 'GET', 'Не удалось загрузить новости');
+  const payload = await authRead<{ whatsNew?: Partial<WhatsNewState> }>(
+    '/auth/whats-new',
+    'GET',
+    'Не удалось загрузить новости'
+  );
   return {
     current: normalizeReleaseVersion(payload.whatsNew?.current),
     lastSeen: normalizeReleaseVersion(payload.whatsNew?.lastSeen) || null
@@ -251,7 +255,11 @@ export async function markAppPromptSeen(): Promise<void> {
 }
 
 export async function fetchLoginAlerts(): Promise<LoginAlert[]> {
-  const payload = await authRead<{ alerts?: unknown[] }>('/auth/login-alerts', 'GET', 'Не удалось проверить входы в аккаунт');
+  const payload = await authRead<{ alerts?: unknown[] }>(
+    '/auth/login-alerts',
+    'GET',
+    'Не удалось проверить входы в аккаунт'
+  );
   return (Array.isArray(payload.alerts) ? payload.alerts : [])
     .map(normalizeLoginAlert)
     .filter((alert): alert is LoginAlert => alert !== null);
@@ -283,7 +291,9 @@ export async function confirmLoginAlert(alertId: string): Promise<void> {
   await authPost(`/auth/login-alerts/${encodeURIComponent(alertId)}/confirm`, {});
 }
 
-export async function denyLoginAlert(alertId: string): Promise<{ sessionEnded: boolean; recoveryCodes: RecoveryCodesStatus }> {
+export async function denyLoginAlert(
+  alertId: string
+): Promise<{ sessionEnded: boolean; recoveryCodes: RecoveryCodesStatus }> {
   const payload = await authPost<{ sessionEnded?: boolean; recoveryCodes?: RecoveryCodesStatus }>(
     `/auth/login-alerts/${encodeURIComponent(alertId)}/deny`,
     {}
@@ -310,17 +320,21 @@ export async function revokeOtherAccountSessions(): Promise<number> {
 export async function generateRecoveryCodes(
   currentPassword: string
 ): Promise<{ codes: string[]; recoveryCodes: RecoveryCodesStatus }> {
-  const payload = await authPost<{ codes?: unknown[]; recoveryCodes?: RecoveryCodesStatus }>(
-    '/auth/recovery-codes',
-    { currentPassword }
-  );
+  const payload = await authPost<{ codes?: unknown[]; recoveryCodes?: RecoveryCodesStatus }>('/auth/recovery-codes', {
+    currentPassword
+  });
   return {
-    codes: (Array.isArray(payload.codes) ? payload.codes : []).filter((code): code is string => typeof code === 'string'),
+    codes: (Array.isArray(payload.codes) ? payload.codes : []).filter(
+      (code): code is string => typeof code === 'string'
+    ),
     recoveryCodes: readRecoveryCodesStatus(payload.recoveryCodes)
   };
 }
 
 export async function recoverAccount(input: RecoverInput): Promise<{ user: AuthUser; remaining: number }> {
-  const payload = await authPost<{ user: AuthUser; recoveryCodes?: Partial<RecoveryCodesStatus> }>('/auth/recover', input);
+  const payload = await authPost<{ user: AuthUser; recoveryCodes?: Partial<RecoveryCodesStatus> }>(
+    '/auth/recover',
+    input
+  );
   return { user: readAuthUser(payload.user), remaining: readRecoveryCodesStatus(payload.recoveryCodes).remaining };
 }

@@ -8,7 +8,9 @@ afterEach(cleanup);
 
 function renderMenu(props: Record<string, unknown> = {}) {
   const handlers = { close: vi.fn(), onToast: vi.fn(), onOpenSettings: vi.fn(), onRoomsChanged: vi.fn() };
-  render(RoomMenuContent, { props: { roomId: 'abc123', name: 'Планёрка', showNotificationControls: false, ...handlers, ...props } });
+  render(RoomMenuContent, {
+    props: { roomId: 'abc123', name: 'Планёрка', showNotificationControls: false, ...handlers, ...props }
+  });
   return handlers;
 }
 
@@ -52,7 +54,15 @@ test('copying the code or link reports success, and a missing clipboard is repor
 
 test('a copy that finishes after the menu moved to another room says nothing', async () => {
   let finish: () => void = () => {};
-  vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: () => new Promise<void>((resolve) => { finish = resolve; }) } });
+  vi.stubGlobal('navigator', {
+    ...navigator,
+    clipboard: {
+      writeText: () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        })
+    }
+  });
   const menu = renderMenu({ canClose: () => false });
   await userEvent.click(screen.getByRole('menuitem', { name: 'Скопировать код' }));
   finish();

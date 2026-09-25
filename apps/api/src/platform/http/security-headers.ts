@@ -22,7 +22,13 @@ export function liveKitConnectSources(url: string): string[] {
   return [...sources];
 }
 
-export function securityHeaders({ connectSources, production }: { connectSources: string[]; production: boolean }): Record<string, string> {
+export function securityHeaders({
+  connectSources,
+  production
+}: {
+  connectSources: string[];
+  production: boolean;
+}): Record<string, string> {
   const connectSrc = [
     "'self'",
     ...connectSources,

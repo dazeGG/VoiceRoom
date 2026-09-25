@@ -14,8 +14,7 @@ export function createRoomId(): string {
 }
 
 export type CreateRoomResult =
-  | { status: 'created'; room: StoredRoom }
-  | { status: 'auth_required' | 'quota_exceeded' | 'capacity_exceeded' };
+  { status: 'created'; room: StoredRoom } | { status: 'auth_required' | 'quota_exceeded' | 'capacity_exceeded' };
 
 export interface RoomsStore {
   roomIdExists?(roomId: string): Promise<boolean>;
@@ -53,8 +52,7 @@ export interface RoomsServiceDeps {
 }
 
 export type OwnerCheck =
-  | { status: 'owner'; room: LiveRoom }
-  | { status: 'unauthenticated' | 'not_found' | 'forbidden' };
+  { status: 'owner'; room: LiveRoom } | { status: 'unauthenticated' | 'not_found' | 'forbidden' };
 
 export function createRoomsService(deps: RoomsServiceDeps) {
   const newRoomId = deps.newRoomId || createRoomId;
@@ -64,7 +62,12 @@ export function createRoomsService(deps: RoomsServiceDeps) {
     return store.roomIdExists ? store.roomIdExists(roomId) : Boolean(await store.getRoom(roomId));
   }
 
-  async function createRoom(input: { creatorIp: string; isStatic: boolean; ownerId: string | null; name: string }): Promise<CreateRoomResult> {
+  async function createRoom(input: {
+    creatorIp: string;
+    isStatic: boolean;
+    ownerId: string | null;
+    name: string;
+  }): Promise<CreateRoomResult> {
     let roomId = newRoomId();
     while (await isTaken(roomId)) roomId = newRoomId();
     return deps.store().createRoomWithQuota({
@@ -86,7 +89,10 @@ export function createRoomsService(deps: RoomsServiceDeps) {
   }
 
   // Legacy visual fields are ignored; only the name is mutable.
-  async function rename(roomId: string, name: string): Promise<{ status: 'renamed'; room: unknown } | { status: 'not_found' }> {
+  async function rename(
+    roomId: string,
+    name: string
+  ): Promise<{ status: 'renamed'; room: unknown } | { status: 'not_found' }> {
     const updated = await deps.store().updateRoom(roomId, { name });
     // Lost a race with a concurrent delete (UPDATE matched 0 rows).
     if (!updated) return { status: 'not_found' };

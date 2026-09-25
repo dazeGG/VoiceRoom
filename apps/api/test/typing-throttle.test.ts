@@ -79,7 +79,11 @@ test('the held notice carries what the person does by then, and is skipped when 
   clock.advance(100);
   offer('room', 'typing');
   clock.advance(1000);
-  assert.deepEqual(sent, ['room:typing', 'room:emoji', 'room:typing'], 'a round trip inside the second is not replayed late');
+  assert.deepEqual(
+    sent,
+    ['room:typing', 'room:emoji', 'room:typing'],
+    'a round trip inside the second is not replayed late'
+  );
 });
 
 test('alternating activities cannot get past one notice a second, and targets do not share a budget', () => {
@@ -90,8 +94,14 @@ test('alternating activities cannot get past one notice a second, and targets do
     clock.advance(40);
   }
   clock.advance(200);
-  assert.deepEqual(sent.filter((entry) => entry.startsWith('room:')), ['room:typing', 'room:emoji']);
-  assert.deepEqual(sent.filter((entry) => entry.startsWith('friend:')), ['friend:typing']);
+  assert.deepEqual(
+    sent.filter((entry) => entry.startsWith('room:')),
+    ['room:typing', 'room:emoji']
+  );
+  assert.deepEqual(
+    sent.filter((entry) => entry.startsWith('friend:')),
+    ['friend:typing']
+  );
 });
 
 test('a connection cannot grow the throttle past its target limit', () => {

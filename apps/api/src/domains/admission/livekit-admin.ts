@@ -13,8 +13,18 @@ interface ParticipantPermissionLike {
 
 interface LiveKitAdminClient {
   removeParticipant(room: string, identity: string): Promise<unknown>;
-  getParticipant(room: string, identity: string): Promise<{ permission?: ParticipantPermissionLike; tracks?: { source?: number; muted?: boolean; sid: string }[] } | undefined>;
-  updateParticipant(room: string, identity: string, metadata: undefined, permission: ParticipantPermissionLike): Promise<unknown>;
+  getParticipant(
+    room: string,
+    identity: string
+  ): Promise<
+    { permission?: ParticipantPermissionLike; tracks?: { source?: number; muted?: boolean; sid: string }[] } | undefined
+  >;
+  updateParticipant(
+    room: string,
+    identity: string,
+    metadata: undefined,
+    permission: ParticipantPermissionLike
+  ): Promise<unknown>;
   mutePublishedTrack(room: string, identity: string, trackSid: string, muted: boolean): Promise<unknown>;
 }
 
@@ -36,11 +46,15 @@ export function isLiveKitParticipantAlreadyGone(error: unknown): boolean {
 // Server mute is enforced at the SFU, not just in the client: microphone is
 // removed from the participant's allowed sources while screen sharing and data
 // remain intact, and the live microphone track is muted immediately.
-export function resolveServerMutePermission<T extends ParticipantPermissionLike>(currentPermission: T = {} as T, muted: boolean): T & { canPublishSources: number[] } {
+export function resolveServerMutePermission<T extends ParticipantPermissionLike>(
+  currentPermission: T = {} as T,
+  muted: boolean
+): T & { canPublishSources: number[] } {
   const declaredSources = Array.isArray(currentPermission.canPublishSources) ? currentPermission.canPublishSources : [];
-  const currentSources = declaredSources.length > 0
-    ? declaredSources
-    : [TrackSource.MICROPHONE, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO];
+  const currentSources =
+    declaredSources.length > 0
+      ? declaredSources
+      : [TrackSource.MICROPHONE, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO];
   const canPublishSources = muted
     ? currentSources.filter((source) => source !== TrackSource.MICROPHONE)
     : [...new Set([...currentSources, TrackSource.MICROPHONE])];
@@ -51,7 +65,8 @@ export function createLiveKitAdmin({
   config,
   roomName,
   logger,
-  clientFactory = (livekit) => new RoomServiceClient(livekit.adminUrl, livekit.apiKey, livekit.apiSecret) as unknown as LiveKitAdminClient
+  clientFactory = (livekit) =>
+    new RoomServiceClient(livekit.adminUrl, livekit.apiKey, livekit.apiSecret) as unknown as LiveKitAdminClient
 }: {
   config: () => LiveKitConfig;
   roomName: (roomId: string) => string;
@@ -65,7 +80,10 @@ export function createLiveKitAdmin({
       await clientFactory(livekit).removeParticipant(roomName(roomId), peerId);
     } catch (error) {
       if (!isLiveKitParticipantAlreadyGone(error)) {
-        logger().error({ evt: LOG_EVENTS.LIVEKIT_PARTICIPANT_REMOVE_FAILED, roomId, peerId, err: error }, 'failed to remove a moderated LiveKit participant');
+        logger().error(
+          { evt: LOG_EVENTS.LIVEKIT_PARTICIPANT_REMOVE_FAILED, roomId, peerId, err: error },
+          'failed to remove a moderated LiveKit participant'
+        );
       }
     }
   }
@@ -81,21 +99,33 @@ export function createLiveKitAdmin({
       const participant = await service.getParticipant(room, peerId);
       // Preserve every unrelated grant. A microphone moderation action must not
       // widen subscriptions/data grants or revoke screen-share publication.
-      await service.updateParticipant(room, peerId, undefined, resolveServerMutePermission(participant?.permission || {}, muted));
+      await service.updateParticipant(
+        room,
+        peerId,
+        undefined,
+        resolveServerMutePermission(participant?.permission || {}, muted)
+      );
       if (muted) {
         // Microphone only — a moderator mute must not silence screen-share audio.
-        const microphoneTracks = (participant?.tracks || []).filter((track) => track.source === TrackSource.MICROPHONE && !track.muted);
+        const microphoneTracks = (participant?.tracks || []).filter(
+          (track) => track.source === TrackSource.MICROPHONE && !track.muted
+        );
         for (const track of microphoneTracks) await service.mutePublishedTrack(room, peerId, track.sid, true);
       }
     } catch (error) {
       if (isLiveKitParticipantAlreadyGone(error)) return { status: 'offline' };
-      logger().error({ evt: LOG_EVENTS.LIVEKIT_MUTE_FAILED, roomId, peerId, err: error }, 'failed to apply a LiveKit server mute');
+      logger().error(
+        { evt: LOG_EVENTS.LIVEKIT_MUTE_FAILED, roomId, peerId, err: error },
+        'failed to apply a LiveKit server mute'
+      );
       if (!muted) throw error;
       try {
         await service.removeParticipant(room, peerId);
         return { status: 'disconnected' };
       } catch (disconnectError) {
-        throw new AggregateError([error, disconnectError], 'LiveKit server mute and disconnect both failed', { cause: error });
+        throw new AggregateError([error, disconnectError], 'LiveKit server mute and disconnect both failed', {
+          cause: error
+        });
       }
     }
     return { status: 'applied' };

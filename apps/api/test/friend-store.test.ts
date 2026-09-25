@@ -69,7 +69,6 @@ test('sendRequest is idempotent and rejects self/missing targets', async (t) => 
   assert.equal((await friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' })).status, 'already_sent');
 });
 
-
 test('sendRequest can target a user id without requiring public login exposure', async (t) => {
   const { users, friends } = await createStores(t);
   const alice = await makeUser(users, 'alice');
@@ -81,7 +80,10 @@ test('sendRequest can target a user id without requiring public login exposure',
   assert.equal(sent.user.login, 'bob');
 
   assert.equal((await friends.sendRequest({ requesterId: alice.id, addresseeUserId: alice.id })).status, 'self');
-  assert.equal((await friends.sendRequest({ requesterId: alice.id, addresseeUserId: crypto.randomUUID() })).status, 'not_found');
+  assert.equal(
+    (await friends.sendRequest({ requesterId: alice.id, addresseeUserId: crypto.randomUUID() })).status,
+    'not_found'
+  );
 });
 
 test('concurrent duplicate sendRequest does not throw and stays idempotent', async (t) => {
@@ -185,7 +187,10 @@ test('respond/cancel reject requests the user does not own', async (t) => {
 
   const sent = await friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' });
   // Eve can neither accept (not addressee) nor cancel (not requester).
-  assert.equal((await friends.respondRequest({ userId: eve.id, requestId: sent.requestId, action: 'accept' })).status, 'not_found');
+  assert.equal(
+    (await friends.respondRequest({ userId: eve.id, requestId: sent.requestId, action: 'accept' })).status,
+    'not_found'
+  );
   assert.equal((await friends.cancelRequest({ userId: eve.id, requestId: sent.requestId })).status, 'not_found');
 });
 
@@ -217,7 +222,10 @@ test('direct messages thread, unread counts, and read receipts', async (t) => {
 
   const thread = await friends.listThread({ userId: bob.id, peerId: alice.id });
   assert.equal(thread.length, 3);
-  assert.deepEqual(thread.map((m) => m.body), ['привет', 'как дела?', 'норм']);
+  assert.deepEqual(
+    thread.map((m) => m.body),
+    ['привет', 'как дела?', 'норм']
+  );
 
   // Bob has 2 unread from alice.
   assert.equal((await friends.getUnreadCounts(bob.id))[alice.id], 2);
@@ -338,7 +346,10 @@ test('blocking expires pending room invitations in both directions', async (t) =
   await friends.blockUser({ userId: alice.id, targetId: bob.id });
 
   const messages = await friends.listThread({ userId: alice.id, peerId: bob.id });
-  assert.deepEqual(messages.map((message) => message.invite.status), ['expired', 'expired']);
+  assert.deepEqual(
+    messages.map((message) => message.invite.status),
+    ['expired', 'expired']
+  );
 });
 
 test('blocked-user projection is public-only and disappears after unblock', async (t) => {

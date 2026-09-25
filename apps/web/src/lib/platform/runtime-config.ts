@@ -14,10 +14,7 @@ type RuntimeConfigOptions = {
   origin?: string;
 };
 
-const SENSITIVE_KEY_PATTERNS: RegExp[] = [
-  /(api[-_]?key)/i,
-  /(secret|token|credential|password)/i
-];
+const SENSITIVE_KEY_PATTERNS: RegExp[] = [/(api[-_]?key)/i, /(secret|token|credential|password)/i];
 
 function hasSuspiciousSecrets(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
@@ -34,7 +31,11 @@ function hasSuspiciousSecrets(value: unknown): boolean {
 function resolveConfigOrigin(override?: string): string {
   if (typeof override === 'string' && override.trim()) return override.trim();
   if (typeof window !== 'undefined' && window.location?.origin) return window.location.origin;
-  if (typeof process !== 'undefined' && typeof process.env.RUNTIME_CONFIG_ORIGIN === 'string' && process.env.RUNTIME_CONFIG_ORIGIN.trim()) {
+  if (
+    typeof process !== 'undefined' &&
+    typeof process.env.RUNTIME_CONFIG_ORIGIN === 'string' &&
+    process.env.RUNTIME_CONFIG_ORIGIN.trim()
+  ) {
     return process.env.RUNTIME_CONFIG_ORIGIN.trim();
   }
   return 'about:blank';

@@ -2,7 +2,6 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 
-
 async function loadRetryController() {
   return import('../src/lib/features/room/client/media/screen-subscription-retry.ts');
 }
@@ -61,7 +60,9 @@ function target(overrides = {}) {
       isCurrent: () => state.current,
       isDemanded: () => state.demanded,
       key: 'screen-track',
-      retry: () => { state.retries += 1; }
+      retry: () => {
+        state.retries += 1;
+      }
     }
   };
 }

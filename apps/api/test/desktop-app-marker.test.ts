@@ -10,23 +10,21 @@ import { spawn } from 'node:child_process';
 import { Pool } from 'pg';
 
 import { runMigrations } from '../src/lib/migrate.ts';
-import {
-  createUserStore,
-  hashSessionToken,
-  publicUser,
-  selfUser
-} from '../src/lib/user-store.ts';
+import { createUserStore, hashSessionToken, publicUser, selfUser } from '../src/lib/user-store.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { socketPathForDirectory } from './ipc-harness.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const MIGRATION = '20260916150000_backfill_desktop_app_marker';
 const MIGRATIONS_DIR = path.join(import.meta.dirname, '../src/migrations');
-const DESKTOP_APP = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) VoiceRoom/1.3.3 Chrome/138.0.0.0 Electron/37.2.0 Safari/537.36';
-const CHROME = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
+const DESKTOP_APP =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) VoiceRoom/1.3.3 Chrome/138.0.0.0 Electron/37.2.0 Safari/537.36';
+const CHROME =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
 
 function rollbackCountThrough(name) {
-  const names = fs.readdirSync(MIGRATIONS_DIR)
+  const names = fs
+    .readdirSync(MIGRATIONS_DIR)
     .filter((file) => file.endsWith('.cjs'))
     .map((file) => file.replace(/\.c?js$/, ''))
     .sort();
@@ -78,15 +76,18 @@ test('backfill marks desktop app users from sessions and login events, and only 
   const browserOnly = await make('browser-only', '2026-09-04T10:00:00Z');
   const lateSignup = await make('late-signup', '2026-09-20T10:00:00Z');
 
-  const insertSession = (userId, userAgent, createdAt) => pool.query(
-    `INSERT INTO sessions (id, user_id, created_at, last_seen_at, expires_at, user_agent)
+  const insertSession = (userId, userAgent, createdAt) =>
+    pool.query(
+      `INSERT INTO sessions (id, user_id, created_at, last_seen_at, expires_at, user_agent)
      VALUES ($1, $2, $3, $3, now() + interval '1 day', $4)`,
-    [crypto.randomBytes(16).toString('hex'), userId, createdAt, userAgent]
-  );
-  const insertEvent = (userId, client, createdAt) => pool.query(
-    `INSERT INTO account_login_events (user_id, kind, client, created_at) VALUES ($1, 'login', $2, $3)`,
-    [userId, client, createdAt]
-  );
+      [crypto.randomBytes(16).toString('hex'), userId, createdAt, userAgent]
+    );
+  const insertEvent = (userId, client, createdAt) =>
+    pool.query(`INSERT INTO account_login_events (user_id, kind, client, created_at) VALUES ($1, 'login', $2, $3)`, [
+      userId,
+      client,
+      createdAt
+    ]);
   await insertSession(sessionOnly, DESKTOP_APP, '2026-09-05T08:00:00Z');
   await insertSession(sessionOnly, CHROME, '2026-09-04T08:00:00Z');
   await insertEvent(eventOnly, 'VoiceRoom Desktop', '2026-09-06T08:00:00Z');
@@ -130,7 +131,11 @@ test('a desktop session stamps the account once, and the marker outlives every s
   assert.equal(selfUser(user).hasUsedDesktopApp, false);
 
   await store.createSession({ userId: user.id, userAgent: CHROME, now: 1_000 });
-  assert.equal((await metadataOf(pool, user.id)).metadata.desktopAppSeenAt, undefined, 'a browser session does not stamp');
+  assert.equal(
+    (await metadataOf(pool, user.id)).metadata.desktopAppSeenAt,
+    undefined,
+    'a browser session does not stamp'
+  );
 
   const first = await store.createSession({ userId: user.id, userAgent: DESKTOP_APP, now: 2_000 });
   const stamped = await metadataOf(pool, user.id);
@@ -153,16 +158,23 @@ test('the hourly touch stamps a session that predates the marker, without rewrit
   const { pool, store } = await setup(t);
   const { user } = await store.createUser({ login: 'linus', password: 'password123' });
   const session = await store.createSession({ userId: user.id, userAgent: CHROME });
-  await pool.query(`UPDATE sessions SET last_seen_at = now() - interval '2 hours' WHERE id = $1`, [hashSessionToken(session.token)]);
+  await pool.query(`UPDATE sessions SET last_seen_at = now() - interval '2 hours' WHERE id = $1`, [
+    hashSessionToken(session.token)
+  ]);
 
   await store.getSessionUser(session.token, Date.now(), { userAgent: DESKTOP_APP });
   await waitFor(async () => Boolean((await metadataOf(pool, user.id)).metadata.desktopAppSeenAt));
   const stamped = await metadataOf(pool, user.id);
 
-  await pool.query(`UPDATE sessions SET last_seen_at = now() - interval '2 hours' WHERE id = $1`, [hashSessionToken(session.token)]);
+  await pool.query(`UPDATE sessions SET last_seen_at = now() - interval '2 hours' WHERE id = $1`, [
+    hashSessionToken(session.token)
+  ]);
   await store.getSessionUser(session.token, Date.now() + 5_000, { userAgent: DESKTOP_APP });
   await waitFor(async () => {
-    const result = await pool.query(`SELECT last_seen_at > now() - interval '1 hour' AS touched FROM sessions WHERE id = $1`, [hashSessionToken(session.token)]);
+    const result = await pool.query(
+      `SELECT last_seen_at > now() - interval '1 hour' AS touched FROM sessions WHERE id = $1`,
+      [hashSessionToken(session.token)]
+    );
     return result.rows[0].touched;
   });
   assert.deepEqual(await metadataOf(pool, user.id), stamped);
@@ -173,9 +185,18 @@ test('the app prompt is recorded once per account', async (t) => {
   const { user } = await store.createUser({ login: 'barbara', password: 'password123' });
   assert.equal(selfUser(user).appPromptSeen, false);
 
-  assert.deepEqual(await store.markAppPromptSeen({ userId: user.id, now: 5_000 }), { status: 'seen', appPromptSeenAt: 5_000 });
-  assert.deepEqual(await store.markAppPromptSeen({ userId: user.id, now: 9_000 }), { status: 'seen', appPromptSeenAt: 5_000 });
-  assert.deepEqual(await store.markAppPromptSeen({ userId: crypto.randomUUID() }), { status: 'not_found', appPromptSeenAt: null });
+  assert.deepEqual(await store.markAppPromptSeen({ userId: user.id, now: 5_000 }), {
+    status: 'seen',
+    appPromptSeenAt: 5_000
+  });
+  assert.deepEqual(await store.markAppPromptSeen({ userId: user.id, now: 9_000 }), {
+    status: 'seen',
+    appPromptSeenAt: 5_000
+  });
+  assert.deepEqual(await store.markAppPromptSeen({ userId: crypto.randomUUID() }), {
+    status: 'not_found',
+    appPromptSeenAt: null
+  });
   assert.equal(selfUser(await store.getUserById(user.id)).appPromptSeen, true);
 });
 
@@ -194,7 +215,6 @@ test('self-only flags never enter the public user shape other people receive', (
   assert.equal('hasUsedDesktopApp' in shared, false);
   assert.equal('appPromptSeen' in shared, false);
   assert.deepEqual(selfUser(user), { ...shared, hasUsedDesktopApp: true, appPromptSeen: true });
-
 });
 
 function request(socketPath, { method = 'GET', pathname, body, cookie, userAgent } = {}) {
@@ -209,12 +229,16 @@ function request(socketPath, { method = 'GET', pathname, body, cookie, userAgent
   return new Promise((resolve, reject) => {
     const req = http.request({ method, path: pathname, socketPath, headers }, (res) => {
       let data = '';
-      res.on('data', (chunk) => { data += chunk; });
-      res.on('end', () => resolve({
-        status: res.statusCode,
-        body: data ? JSON.parse(data) : null,
-        cookie: String((res.headers['set-cookie'] || [])[0] || '').split(';')[0]
-      }));
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      res.on('end', () =>
+        resolve({
+          status: res.statusCode,
+          body: data ? JSON.parse(data) : null,
+          cookie: String((res.headers['set-cookie'] || [])[0] || '').split(';')[0]
+        })
+      );
       res.on('error', reject);
     });
     req.on('error', reject);
@@ -264,7 +288,12 @@ test('self responses carry the flags and the app prompt endpoint records them', 
   const socketPath = await startServer(t);
   const credentials = { login: 'hedy', password: 'password123', passwordConfirm: 'password123' };
 
-  const registered = await request(socketPath, { method: 'POST', pathname: '/api/auth/register', body: credentials, userAgent: CHROME });
+  const registered = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/auth/register',
+    body: credentials,
+    userAgent: CHROME
+  });
   assert.equal(registered.status, 201);
   assert.equal(registered.body.user.hasUsedDesktopApp, false);
   assert.equal(registered.body.user.appPromptSeen, false);
@@ -276,13 +305,26 @@ test('self responses carry the flags and the app prompt endpoint records them', 
     userAgent: DESKTOP_APP
   });
   assert.equal(fromApp.status, 200);
-  assert.equal(fromApp.body.user.hasUsedDesktopApp, true, 'the login response is built after the session stamps the marker');
+  assert.equal(
+    fromApp.body.user.hasUsedDesktopApp,
+    true,
+    'the login response is built after the session stamps the marker'
+  );
 
-  const unauthenticated = await request(socketPath, { method: 'POST', pathname: '/api/auth/app-prompt/seen', body: {} });
+  const unauthenticated = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/auth/app-prompt/seen',
+    body: {}
+  });
   assert.equal(unauthenticated.status, 401);
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const seen = await request(socketPath, { method: 'POST', pathname: '/api/auth/app-prompt/seen', body: {}, cookie: registered.cookie });
+    const seen = await request(socketPath, {
+      method: 'POST',
+      pathname: '/api/auth/app-prompt/seen',
+      body: {},
+      cookie: registered.cookie
+    });
     assert.equal(seen.status, 200);
     assert.deepEqual(seen.body, { ok: true, appPromptSeen: true });
   }

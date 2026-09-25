@@ -40,24 +40,29 @@ export function createReadReconciliation(options: ReadReconciliationOptions) {
     if (disposed || (!options.legacy && !cursor)) return Promise.resolve();
     pending = cursor ?? '';
     if (!active) {
-      active = drain().finally(() => { active = null; });
+      active = drain().finally(() => {
+        active = null;
+      });
     }
     return active;
   }
 
-  channel?.addEventListener('message', (event: MessageEvent<{ cursor?: unknown; sequence?: unknown; source?: unknown }>) => {
-    const cursor = typeof event.data?.cursor === 'string' ? event.data.cursor : '';
-    const remoteSource = typeof event.data?.source === 'string' ? event.data.source : '';
-    const remoteSequence = Number(event.data?.sequence);
-    if (!cursor || cursor === committed || seen.has(cursor)) return;
-    // Cursor payloads are opaque. Order the transport envelope per sender and
-    // let the server's monotonic read cursor reject cross-sender stale values.
-    if (remoteSource && Number.isSafeInteger(remoteSequence) && remoteSequence > 0) {
-      if (remoteSequence <= (sourceSequences.get(remoteSource) || 0)) return;
-      sourceSequences.set(remoteSource, remoteSequence);
+  channel?.addEventListener(
+    'message',
+    (event: MessageEvent<{ cursor?: unknown; sequence?: unknown; source?: unknown }>) => {
+      const cursor = typeof event.data?.cursor === 'string' ? event.data.cursor : '';
+      const remoteSource = typeof event.data?.source === 'string' ? event.data.source : '';
+      const remoteSequence = Number(event.data?.sequence);
+      if (!cursor || cursor === committed || seen.has(cursor)) return;
+      // Cursor payloads are opaque. Order the transport envelope per sender and
+      // let the server's monotonic read cursor reject cross-sender stale values.
+      if (remoteSource && Number.isSafeInteger(remoteSequence) && remoteSequence > 0) {
+        if (remoteSequence <= (sourceSequences.get(remoteSource) || 0)) return;
+        sourceSequences.set(remoteSource, remoteSequence);
+      }
+      void advanceAfterRender(cursor);
     }
-    void advanceAfterRender(cursor);
-  });
+  );
 
   function dispose(): void {
     disposed = true;

@@ -54,8 +54,17 @@ export interface RoomMessages {
 
 interface Delivery {
   idempotency: {
-    reserve(client: DbClient, input: Record<string, unknown>): Promise<{ kind: 'replay'; response: { body?: { message?: RoomChatMessage } } } | { kind: string; ledgerKey: string }>;
-    complete(client: DbClient, key: string, result: { body: unknown; messageId: string; statusCode: number }): Promise<unknown>;
+    reserve(
+      client: DbClient,
+      input: Record<string, unknown>
+    ): Promise<
+      { kind: 'replay'; response: { body?: { message?: RoomChatMessage } } } | { kind: string; ledgerKey: string }
+    >;
+    complete(
+      client: DbClient,
+      key: string,
+      result: { body: unknown; messageId: string; statusCode: number }
+    ): Promise<unknown>;
   };
   outbox: { enqueue(client: DbClient, event: Record<string, unknown>): Promise<unknown> };
 }
@@ -64,17 +73,37 @@ type Projection = (context: 'room', message: RoomChatMessage, options?: { roomId
 
 export interface RoomChatDeps {
   messages(): { room: RoomMessages };
-  readService(): { advanceRoom(input: { cursor: string; roomId: string; userId: string }): Promise<{ readThrough?: unknown; [key: string]: unknown }> };
+  readService(): {
+    advanceRoom(input: {
+      cursor: string;
+      roomId: string;
+      userId: string;
+    }): Promise<{ readThrough?: unknown; [key: string]: unknown }>;
+  };
   getRoom(roomId: string): Promise<LiveRoom | null>;
   findRoomBan(roomId: string, userId: string | null | undefined, ip: string): Promise<unknown>;
   feature(name: 'engagement' | 'replies' | 'mediaUploads'): boolean;
   prepareContent(input: { content: unknown; text: string }): { content: unknown; text: string };
-  mentionUserIds(content: unknown, options: { creatorUserId: string }): { ok: true; userIds: string[] } | { ok: false; code: string };
+  mentionUserIds(
+    content: unknown,
+    options: { creatorUserId: string }
+  ): { ok: true; userIds: string[] } | { ok: false; code: string };
   limiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
   findUser(userId: string): Promise<ChatAuthor | null>;
   media(): { attachments: { bindReady(input: Record<string, unknown>, client: DbClient): Promise<unknown> } } | null;
-  replies(): { lockRoomTarget(input: { roomId: string; messageId: string; client: DbClient }): Promise<{ authorUserId?: string | null } | null> };
-  notifications(): { service: { createAddressedForMessage(input: Record<string, unknown>): Promise<unknown>; markRoomRead?(input: { userId: string; roomId: string; through: unknown }): Promise<unknown> } } | null;
+  replies(): {
+    lockRoomTarget(input: {
+      roomId: string;
+      messageId: string;
+      client: DbClient;
+    }): Promise<{ authorUserId?: string | null } | null>;
+  };
+  notifications(): {
+    service: {
+      createAddressedForMessage(input: Record<string, unknown>): Promise<unknown>;
+      markRoomRead?(input: { userId: string; roomId: string; through: unknown }): Promise<unknown>;
+    };
+  } | null;
   delivery(): Delivery | null;
   projectMedia: Projection;
   projectReply: Projection;
@@ -114,7 +143,15 @@ export type ChatRefusal =
 export type PostOutcome =
   | { status: 'created'; message: RoomChatMessage }
   | ChatRefusal
-  | { status: 'structured_unavailable' | 'invalid_content' | 'invalid_attachments' | 'reply_unavailable' | 'presence_required' | 'media_unavailable' }
+  | {
+      status:
+        | 'structured_unavailable'
+        | 'invalid_content'
+        | 'invalid_attachments'
+        | 'reply_unavailable'
+        | 'presence_required'
+        | 'media_unavailable';
+    }
   | { status: 'invalid_mention'; code: string };
 
 export interface PostInput extends Caller, PeerClaim {
@@ -141,12 +178,17 @@ export function createRoomChatService(deps: RoomChatDeps) {
   // The room link is the capability for guests, so this list stays readable to
   // anyone who can join, but not to someone the room has banned. Account
   // members use the paginated history route.
-  async function list(roomId: string, caller: Caller): Promise<{ status: 'listed'; messages: RoomChatMessage[] } | ChatRefusal> {
+  async function list(
+    roomId: string,
+    caller: Caller
+  ): Promise<{ status: 'listed'; messages: RoomChatMessage[] } | ChatRefusal> {
     const room = await deps.getRoom(roomId);
     if (!room) return { status: 'room_not_found' };
     if (await deps.findRoomBan(roomId, caller.user?.id, caller.clientIp)) return { status: 'room_banned' };
     const stored = await deps.messages().room.listMessages(roomId, { limit: 100 });
-    const messages = await Promise.all(stored.map(async (message) => deps.projectReply('room', await deps.projectMedia('room', message), { roomId })));
+    const messages = await Promise.all(
+      stored.map(async (message) => deps.projectReply('room', await deps.projectMedia('room', message), { roomId }))
+    );
     return { status: 'listed', messages };
   }
 
@@ -175,7 +217,8 @@ export function createRoomChatService(deps: RoomChatDeps) {
     if (!room) return { status: 'room_not_found' };
     if (await deps.findRoomBan(roomId, sessionUser?.id, clientIp)) return { status: 'room_banned' };
     if (attachmentIds === null) return { status: 'invalid_attachments' };
-    if (input.replyTo != null && (!replyToMessageId || !deps.feature('replies'))) return { status: 'reply_unavailable' };
+    if (input.replyTo != null && (!replyToMessageId || !deps.feature('replies')))
+      return { status: 'reply_unavailable' };
     if (!text && attachmentIds.length === 0) return { status: 'empty' };
     const limited = rateLimited(clientIp, roomId);
     if (limited) return limited;
@@ -185,14 +228,17 @@ export function createRoomChatService(deps: RoomChatDeps) {
     // reserved `auth-` id, falls back to the caller's own account peer id, so
     // a message is never filed under an identity the caller does not hold.
     const requestedPeerId = input.peerId;
-    const activePeer = requestedPeerId && !isReservedPeerId(requestedPeerId) ? room.peers.get(requestedPeerId) ?? null : null;
+    const activePeer =
+      requestedPeerId && !isReservedPeerId(requestedPeerId) ? (room.peers.get(requestedPeerId) ?? null) : null;
     let peerId = activePeer ? requestedPeerId : deps.identity.chatPeerId(sessionUser);
     let avatarColorKey: string = deps.identity.avatarColorKey(sessionUser) || (avatarColorForPeerId(peerId) as string);
     if (activePeer) {
       if (!isLivePeer(activePeer, input.sessionToken)) return { status: 'invalid_session' };
-      if (await deps.findRoomBan(roomId, activePeer.accountUserId, activePeer.ip || clientIp)) return { status: 'room_banned' };
+      if (await deps.findRoomBan(roomId, activePeer.accountUserId, activePeer.ip || clientIp))
+        return { status: 'room_banned' };
       peerId = activePeer.id;
-      if (deps.identity.avatarColorKey(sessionUser)) activePeer.avatarColorKey = deps.identity.avatarColorKey(sessionUser);
+      if (deps.identity.avatarColorKey(sessionUser))
+        activePeer.avatarColorKey = deps.identity.avatarColorKey(sessionUser);
       avatarColorKey = activePeer.avatarColorKey || (avatarColorForPeerId(peerId) as string);
     } else if (!sessionUser) {
       return { status: 'presence_required' };
@@ -203,7 +249,12 @@ export function createRoomChatService(deps: RoomChatDeps) {
       try {
         authorUser = await deps.findUser(activePeer.accountUserId);
       } catch (error) {
-        deps.logger().warn({ evt: LOG_EVENTS.MESSAGE_AUTHOR_PROFILE_FAILED, roomId, err: error }, 'failed to resolve a room chat author profile');
+        deps
+          .logger()
+          .warn(
+            { evt: LOG_EVENTS.MESSAGE_AUTHOR_PROFILE_FAILED, roomId, err: error },
+            'failed to resolve a room chat author profile'
+          );
       }
     }
 
@@ -214,7 +265,8 @@ export function createRoomChatService(deps: RoomChatDeps) {
       ? `/api/avatars/${encodeURIComponent(authorUser.avatarKey)}`
       : activePeer?.avatarUrl || null;
     const media = attachmentIds.length > 0 ? deps.media() : null;
-    if (attachmentIds.length > 0 && (!authorUserId || !media || !deps.feature('mediaUploads'))) return { status: 'media_unavailable' };
+    if (attachmentIds.length > 0 && (!authorUserId || !media || !deps.feature('mediaUploads')))
+      return { status: 'media_unavailable' };
     const replies = replyToMessageId ? deps.replies() : null;
     const notifications = deps.notifications();
     const delivery = deps.delivery();
@@ -232,57 +284,82 @@ export function createRoomChatService(deps: RoomChatDeps) {
       content,
       authorUserId,
       replyToMessageId: replyToMessageId || null,
-      beforeUnitOfWork: idempotencyKey && delivery
-        ? async (client) => {
-            const reservation = await delivery.idempotency.reserve(client, {
-              actorType: authorUserId ? 'account' : 'guest',
-              actorId: authorUserId || peerId,
-              conversation: { type: 'room', id: roomId },
-              key: idempotencyKey,
-              fingerprint: messageFingerprint({ text, content, attachmentIds, replyToMessageId })
-            });
-            if (reservation.kind === 'replay') {
-              return { replay: true as const, message: (reservation as { response: { body?: { message?: RoomChatMessage } } }).response.body?.message as RoomChatMessage };
-            }
-            idempotencyLedgerKey = (reservation as { ledgerKey: string }).ledgerKey;
-            return null;
-          }
-        : null,
-      unitOfWork: attachmentIds.length > 0 || replyToMessageId || mentionUserIds.length > 0 || delivery
-        ? async (client, inserted) => {
-            if (replies) {
-              const target = await replies.lockRoomTarget({ roomId, messageId: replyToMessageId, client });
-              replyPreview = await requireReplyTarget({ message: target, visibility: true });
-              replyTargetUserId = target?.authorUserId || null;
-            }
-            if (media) {
-              await media.attachments.bindReady({ ownerId: authorUserId, context: 'room', messageId: inserted.id, attachmentIds }, client);
-            }
-            if (authorUserId && notifications && deps.feature('engagement') && (mentionUserIds.length > 0 || replyTargetUserId)) {
-              await notifications.service.createAddressedForMessage({
-                roomId,
-                messageId: inserted.id,
-                creatorUserId: authorUserId,
-                targetUserIds: mentionUserIds,
-                replyTargetUserId,
-                body: text,
-                client
-              });
-            }
-            if (delivery) {
-              await delivery.outbox.enqueue(client, {
-                eventId: crypto.randomUUID(),
-                type: 'message.created',
+      beforeUnitOfWork:
+        idempotencyKey && delivery
+          ? async (client) => {
+              const reservation = await delivery.idempotency.reserve(client, {
+                actorType: authorUserId ? 'account' : 'guest',
+                actorId: authorUserId || peerId,
                 conversation: { type: 'room', id: roomId },
-                messageId: inserted.id,
-                message: { ...inserted, name, avatarAccent, avatarColorKey, avatarKey: authorUser?.avatarKey || null, avatarUrl }
+                key: idempotencyKey,
+                fingerprint: messageFingerprint({ text, content, attachmentIds, replyToMessageId })
               });
-              if (idempotencyLedgerKey) {
-                await delivery.idempotency.complete(client, idempotencyLedgerKey, { body: { message: inserted }, messageId: inserted.id, statusCode: 201 });
+              if (reservation.kind === 'replay') {
+                return {
+                  replay: true as const,
+                  message: (reservation as { response: { body?: { message?: RoomChatMessage } } }).response.body
+                    ?.message as RoomChatMessage
+                };
+              }
+              idempotencyLedgerKey = (reservation as { ledgerKey: string }).ledgerKey;
+              return null;
+            }
+          : null,
+      unitOfWork:
+        attachmentIds.length > 0 || replyToMessageId || mentionUserIds.length > 0 || delivery
+          ? async (client, inserted) => {
+              if (replies) {
+                const target = await replies.lockRoomTarget({ roomId, messageId: replyToMessageId, client });
+                replyPreview = await requireReplyTarget({ message: target, visibility: true });
+                replyTargetUserId = target?.authorUserId || null;
+              }
+              if (media) {
+                await media.attachments.bindReady(
+                  { ownerId: authorUserId, context: 'room', messageId: inserted.id, attachmentIds },
+                  client
+                );
+              }
+              if (
+                authorUserId &&
+                notifications &&
+                deps.feature('engagement') &&
+                (mentionUserIds.length > 0 || replyTargetUserId)
+              ) {
+                await notifications.service.createAddressedForMessage({
+                  roomId,
+                  messageId: inserted.id,
+                  creatorUserId: authorUserId,
+                  targetUserIds: mentionUserIds,
+                  replyTargetUserId,
+                  body: text,
+                  client
+                });
+              }
+              if (delivery) {
+                await delivery.outbox.enqueue(client, {
+                  eventId: crypto.randomUUID(),
+                  type: 'message.created',
+                  conversation: { type: 'room', id: roomId },
+                  messageId: inserted.id,
+                  message: {
+                    ...inserted,
+                    name,
+                    avatarAccent,
+                    avatarColorKey,
+                    avatarKey: authorUser?.avatarKey || null,
+                    avatarUrl
+                  }
+                });
+                if (idempotencyLedgerKey) {
+                  await delivery.idempotency.complete(client, idempotencyLedgerKey, {
+                    body: { message: inserted },
+                    messageId: inserted.id,
+                    statusCode: 201
+                  });
+                }
               }
             }
-          }
-        : null
+          : null
     });
     if (!message) return { status: 'empty' };
 
@@ -301,7 +378,11 @@ export function createRoomChatService(deps: RoomChatDeps) {
   // Editing belongs to the author alone, even in a persistent room. Account
   // authorship is decided by the account: peer ids are client-chosen, and
   // matching them is how a guest could act on a signed-in author's messages.
-  async function edit(input: Caller & PeerClaim & { roomId: string; messageId: string; text: unknown }): Promise<{ status: 'edited'; message: ReturnType<typeof publicChatMessage> } | ChatRefusal | { status: 'not_author' }> {
+  async function edit(
+    input: Caller & PeerClaim & { roomId: string; messageId: string; text: unknown }
+  ): Promise<
+    { status: 'edited'; message: ReturnType<typeof publicChatMessage> } | ChatRefusal | { status: 'not_author' }
+  > {
     const { roomId, messageId, clientIp, user } = input;
     const room = await deps.getRoom(roomId);
     if (!room) return { status: 'room_not_found' };
@@ -319,7 +400,8 @@ export function createRoomChatService(deps: RoomChatDeps) {
       if (!isPeerAuthor) return { status: 'not_author' };
       const activePeer = room.peers.get(input.peerId);
       if (!isLivePeer(activePeer, input.sessionToken)) return { status: 'invalid_session' };
-      if (await deps.findRoomBan(roomId, activePeer.accountUserId, activePeer.ip || clientIp)) return { status: 'room_banned' };
+      if (await deps.findRoomBan(roomId, activePeer.accountUserId, activePeer.ip || clientIp))
+        return { status: 'room_banned' };
     }
     const limited = rateLimited(clientIp, roomId);
     if (limited) return limited;
@@ -336,7 +418,9 @@ export function createRoomChatService(deps: RoomChatDeps) {
   // A guest message belongs to the live peer session that wrote it, an
   // account message to that account, and the owner of a persistent room may
   // delete anything in it.
-  async function remove(input: Caller & PeerClaim & { roomId: string; messageId: string }): Promise<{ status: 'deleted' } | ChatRefusal | { status: 'not_allowed' }> {
+  async function remove(
+    input: Caller & PeerClaim & { roomId: string; messageId: string }
+  ): Promise<{ status: 'deleted' } | ChatRefusal | { status: 'not_allowed' }> {
     const { roomId, messageId, user } = input;
     const room = await deps.getRoom(roomId);
     if (!room) return { status: 'room_not_found' };
@@ -373,7 +457,9 @@ export function createRoomChatService(deps: RoomChatDeps) {
       if (typeof service?.markRoomRead !== 'function') return;
       await service.markRoomRead({ userId, roomId, through: through ?? null });
     } catch (error) {
-      deps.logger().error({ evt: LOG_EVENTS.NOTIFICATION_RETIRE_FAILED, err: error }, 'failed to retire room notifications');
+      deps
+        .logger()
+        .error({ evt: LOG_EVENTS.NOTIFICATION_RETIRE_FAILED, err: error }, 'failed to retire room notifications');
     }
   }
 
@@ -394,7 +480,12 @@ export function createRoomChatService(deps: RoomChatDeps) {
       } catch (error) {
         const failure = error as { statusCode?: number; code?: string; message?: string };
         const code = failure.code || 'invalid_read_cursor';
-        return { status: 'invalid_cursor', statusCode: failure.statusCode || 400, code, error: failure.message || code };
+        return {
+          status: 'invalid_cursor',
+          statusCode: failure.statusCode || 400,
+          code,
+          error: failure.message || code
+        };
       }
     }
 

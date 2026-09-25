@@ -25,26 +25,11 @@ import { createRequestLog } from './platform/http/request-log.ts';
 import { liveKitConnectSources, securityHeaders } from './platform/http/security-headers.ts';
 import { readApiConfig, readinessReadySetFromEnv, resolveRealtimeReconnectLeaseMs } from './app/config.ts';
 
-import {
-  readEnvInt,
-  readEnvBool,
-  readDatabaseConfig,
-  readUploadsDir
-} from './lib/config.ts';
-import {
-  cleanName,
-  cleanLiveKitUrl,
-  accountPeerIdFor
-} from '@voice-room/shared/validation';
+import { readEnvInt, readEnvBool, readDatabaseConfig, readUploadsDir } from './lib/config.ts';
+import { cleanName, cleanLiveKitUrl, accountPeerIdFor } from '@voice-room/shared/validation';
 import { createProofOfWork } from './lib/pow.ts';
 import { LOG_EVENTS } from './lib/log-events.ts';
-import {
-  createFastifyLoggerOptions,
-  createLogger,
-  hashIp,
-  newRequestId,
-  normalizeRequestId
-} from './lib/logger.ts';
+import { createFastifyLoggerOptions, createLogger, hashIp, newRequestId, normalizeRequestId } from './lib/logger.ts';
 import { getClientIp, createFailureLimiter, createRateLimiter } from './lib/rate-limit.ts';
 import { reconcileAvatarStorage } from './lib/avatar-reconciliation.ts';
 import { createAvatarStorage } from './lib/avatar-storage.ts';
@@ -202,32 +187,35 @@ const readinessProvider = createRuntimeReadinessProvider({
   })
 });
 
-const services = createServiceRegistry({
-  ROOM_IDLE_TTL_MS,
-  SESSION_TTL_MS,
-  GEOIP_DB_PATH,
-  LIVEKIT_GATE_SECRET,
-  LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS,
-  LIVEKIT_TOKEN_TTL_SECONDS,
-  MAX_ROOM_BANS,
-  MAX_PUSH_SUBSCRIPTIONS_PER_USER,
-  LINK_PREVIEWS_ENABLED
-}, {
-  readinessProvider,
-  release250FeatureEnabled: (name) => release250FeatureEnabled(name),
-  roomRuntime: () => roomRuntime,
-  getRoom: (roomId) => getRoom(roomId),
-  findRoomBan: (roomId, userId, ip) => findRoomBan(roomId, userId, ip),
-  broadcast: (room, message) => broadcast(room, message),
-  broadcastToUser: (userId, message) => broadcastToUser(userId, message),
-  attachMediaProjection: (context, message) => attachMediaProjection(context, message),
-  disconnectModeratedPeer: (room, peer, type, options) => disconnectModeratedPeer(room, peer, type, options),
-  liveKitGatePrincipalForPeer: (roomId, peer) => liveKitGatePrincipalForPeer(roomId, peer),
-  getLiveKitConfig: () => getLiveKitConfig(),
-  roomMembershipPresenceSnapshot: (roomId) => roomMembershipPresenceSnapshot(roomId),
-  broadcastRoomLinkPreview: (input) => broadcastRoomLinkPreview(input),
-  broadcastDirectLinkPreview: (input) => broadcastDirectLinkPreview(input)
-});
+const services = createServiceRegistry(
+  {
+    ROOM_IDLE_TTL_MS,
+    SESSION_TTL_MS,
+    GEOIP_DB_PATH,
+    LIVEKIT_GATE_SECRET,
+    LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS,
+    LIVEKIT_TOKEN_TTL_SECONDS,
+    MAX_ROOM_BANS,
+    MAX_PUSH_SUBSCRIPTIONS_PER_USER,
+    LINK_PREVIEWS_ENABLED
+  },
+  {
+    readinessProvider,
+    release250FeatureEnabled: (name) => release250FeatureEnabled(name),
+    roomRuntime: () => roomRuntime,
+    getRoom: (roomId) => getRoom(roomId),
+    findRoomBan: (roomId, userId, ip) => findRoomBan(roomId, userId, ip),
+    broadcast: (room, message) => broadcast(room, message),
+    broadcastToUser: (userId, message) => broadcastToUser(userId, message),
+    attachMediaProjection: (context, message) => attachMediaProjection(context, message),
+    disconnectModeratedPeer: (room, peer, type, options) => disconnectModeratedPeer(room, peer, type, options),
+    liveKitGatePrincipalForPeer: (roomId, peer) => liveKitGatePrincipalForPeer(roomId, peer),
+    getLiveKitConfig: () => getLiveKitConfig(),
+    roomMembershipPresenceSnapshot: (roomId) => roomMembershipPresenceSnapshot(roomId),
+    broadcastRoomLinkPreview: (input) => broadcastRoomLinkPreview(input),
+    broadcastDirectLinkPreview: (input) => broadcastDirectLinkPreview(input)
+  }
+);
 const {
   getAccountDeletionRepository,
   getActiveBanService,
@@ -296,10 +284,12 @@ const notificationDispatch = createNotificationDispatch({
 const linkPreviewEvents = createLinkPreviewEvents({
   previews: () => getLinkPreviewService(),
   roomMessage: (roomId, messageId) => getMessageService().room.getMessage(roomId, messageId),
-  directMessage: (senderId, recipientId, messageId) => getMessageService().direct.getMessage(senderId, recipientId, messageId),
+  directMessage: (senderId, recipientId, messageId) =>
+    getMessageService().direct.getMessage(senderId, recipientId, messageId),
   projection: messageProjection,
   publicChatMessage,
-  broadcastRoomEdit: (roomId, message) => roomRuntime?.broadcastRoomDetail?.(roomId, buildServerEnvelope('room.chat.edited', { roomId, message })),
+  broadcastRoomEdit: (roomId, message) =>
+    roomRuntime?.broadcastRoomDetail?.(roomId, buildServerEnvelope('room.chat.edited', { roomId, message })),
   notifyUser: (userId, event) => broadcastToUser(userId, event)
 });
 const messageDeliveryRelay = createMessageDeliveryRelay({
@@ -310,13 +300,15 @@ const messageDeliveryRelay = createMessageDeliveryRelay({
   broadcastChatMessage: (roomId, message) => roomRuntime?.broadcastChatMessage(roomId, message),
   notifyUser: (userId, event) => broadcastToUser(userId, event),
   findUser: (userId) => getUserStore().getUserById(userId),
-  broadcastDmNotification: (recipientId, sender, message) => notificationDispatch.broadcastDmNotification(recipientId, sender, message),
+  broadcastDmNotification: (recipientId, sender, message) =>
+    notificationDispatch.broadcastDmNotification(recipientId, sender, message),
   publicChatMessage,
   logger: () => getProcessLogger()
 });
 const { projectMedia: attachMediaProjection, projectReply: attachReplyProjection } = messageProjection;
 const { queuePush, broadcastDmNotification } = notificationDispatch;
-const { broadcastRoomLinkPreview, broadcastDirectLinkPreview, scheduleRoomLinkPreview, scheduleDirectLinkPreview } = linkPreviewEvents;
+const { broadcastRoomLinkPreview, broadcastDirectLinkPreview, scheduleRoomLinkPreview, scheduleDirectLinkPreview } =
+  linkPreviewEvents;
 const { start: startMessageDeliveryListener, stop: stopMessageDeliveryListener } = messageDeliveryRelay;
 const roomLifecycle = createRoomLifecycle({
   presence: roomPresence,
@@ -355,12 +347,11 @@ const {
   expireRoomInvitations,
   finishRoomDeletion
 } = roomLifecycle;
-const {
-  endSessionConnections: endAccountSessionConnections,
-  finalizeDueDeletions: finalizeDueAccountDeletions
-} = accountLifecycle;
+const { endSessionConnections: endAccountSessionConnections, finalizeDueDeletions: finalizeDueAccountDeletions } =
+  accountLifecycle;
 // Callers pass the request (or `{ log }`) whose logger records a failed broadcast.
-const broadcastUserProfileToFriends = (user: any, request?: { log?: any } | null) => accountLifecycle.broadcastProfileToFriends(user, request?.log);
+const broadcastUserProfileToFriends = (user: any, request?: { log?: any } | null) =>
+  accountLifecycle.broadcastProfileToFriends(user, request?.log);
 
 // Work that runs outside a request (timers, listeners, background dispatch)
 // still has to be searchable next to the requests it was triggered by, so it
@@ -394,7 +385,10 @@ async function refreshPinsAfterMessageMutation(roomId: string, action: string, m
   } catch (error) {
     // The message mutation is already committed. Preserve its success while
     // retaining evidence; clients will reconcile the derived pin list on load.
-    getProcessLogger().error({ evt: LOG_EVENTS.MESSAGE_PIN_REFRESH_FAILED, roomId, messageId, err: error }, 'failed to refresh room pins after a message mutation');
+    getProcessLogger().error(
+      { evt: LOG_EVENTS.MESSAGE_PIN_REFRESH_FAILED, roomId, messageId, err: error },
+      'failed to refresh room pins after a message mutation'
+    );
   }
 }
 
@@ -518,7 +512,9 @@ const roomChat = createRoomChatService({
   roomDetailEvent: buildServerEnvelope,
   scheduleLinkPreview: scheduleRoomLinkPreview,
   refreshPins: refreshPinsAfterMessageMutation,
-  sendRoomSummaryToUser: async (roomId, userId) => { await roomRuntime?.sendRoomSummaryToUser(roomId, userId); },
+  sendRoomSummaryToUser: async (roomId, userId) => {
+    await roomRuntime?.sendRoomSummaryToUser(roomId, userId);
+  },
   logger: () => getProcessLogger()
 });
 const sessionCookies = createSessionCookies({
@@ -679,9 +675,24 @@ function startPruneTimer(server: ApiServer, logger: Logger = getProcessLogger())
     logger,
     tasks: [
       { name: 'room_prune', label: 'room-prune', failureMessage: 'room prune timer failed', run: () => pruneRooms() },
-      { name: 'session_prune', label: 'session-prune', failureMessage: 'session prune timer failed', run: () => getUserStore().pruneSessions() },
-      { name: 'login_event_prune', label: 'sign-in-history-prune', failureMessage: 'sign-in history prune timer failed', run: () => getUserStore().pruneLoginEvents() },
-      { name: 'account_deletion_finalize', label: 'account-deletion', failureMessage: 'account deletion timer failed', run: () => finalizeDueAccountDeletions() },
+      {
+        name: 'session_prune',
+        label: 'session-prune',
+        failureMessage: 'session prune timer failed',
+        run: () => getUserStore().pruneSessions()
+      },
+      {
+        name: 'login_event_prune',
+        label: 'sign-in-history-prune',
+        failureMessage: 'sign-in history prune timer failed',
+        run: () => getUserStore().pruneLoginEvents()
+      },
+      {
+        name: 'account_deletion_finalize',
+        label: 'account-deletion',
+        failureMessage: 'account deletion timer failed',
+        run: () => finalizeDueAccountDeletions()
+      },
       {
         name: 'link_preview_prune',
         label: 'link-preview-prune',
@@ -714,7 +725,6 @@ async function findRoomBan(roomId: string, userId?: string | null, ip?: string |
   if (typeof getRoomStore().findActiveRoomBan !== 'function') return null;
   return getRoomStore().findActiveRoomBan({ roomId, userId: userId || null, ip: ip || '' });
 }
-
 
 function getActiveGuestWsCount() {
   if (!wsRegistry?.connections) return 0;
@@ -849,8 +859,12 @@ function createApiApp({
   });
   app.register(fastifyWebsocket, { options: { maxPayload: WS_MAX_PAYLOAD_BYTES } });
   const activeReadinessProvider = readinessProviderOverride || readinessProvider;
-  app.addHook('onReady', async () => { await activeReadinessProvider.start?.(); });
-  app.addHook('onClose', async () => { await activeReadinessProvider.stop?.(); });
+  app.addHook('onReady', async () => {
+    await activeReadinessProvider.start?.();
+  });
+  app.addHook('onClose', async () => {
+    await activeReadinessProvider.stop?.();
+  });
   app.addHook('onReady', startMessageDeliveryListener);
   app.addHook('onClose', stopMessageDeliveryListener);
 
@@ -901,10 +915,8 @@ function createApiApp({
     getFriendIds: (userId) => getFriendStore().getFriendIds(userId),
     isUserOnline,
     // The same relationship rule as sending a direct message.
-    canTypeToUser: async (userId, peerId) => (
-      await getFriendStore().areFriends(userId, peerId)
-      && !(await getFriendStore().isBlockedBetween(userId, peerId))
-    ),
+    canTypeToUser: async (userId, peerId) =>
+      (await getFriendStore().areFriends(userId, peerId)) && !(await getFriendStore().isBlockedBetween(userId, peerId)),
     getClientIp: (req) => getClientIp(req, TRUST_PROXY),
     logger: appLogger
   });
@@ -935,7 +947,11 @@ function createApiApp({
   registerFriendsRoutes(app, apiContext, { friends: friendsService, requestLimiter: friendRequestLimiter });
   registerDirectMessageRoutes(app, apiContext, directMessages);
   registerNotificationSettingsRoutes(app, apiContext, notificationSettings);
-  registerAvatarRoutes(app, apiContext, { avatars: avatarsService, rooms: roomsService, uploadLimiter: avatarUploadLimiter });
+  registerAvatarRoutes(app, apiContext, {
+    avatars: avatarsService,
+    rooms: roomsService,
+    uploadLimiter: avatarUploadLimiter
+  });
   registerAccountRoutes(app, apiContext, {
     account: accountService,
     limiter: authLimiter,
@@ -1006,8 +1022,8 @@ function createApiApp({
     historyService: getHistoryServices().room,
     resolveRoomAccess: async ({ request, roomId }) => {
       const session = await resolveSessionUser(request);
-      const authorized = Boolean(session?.user?.id)
-        && await getRoomStore().canUserReadRoomChat(roomId, session!.user!.id);
+      const authorized =
+        Boolean(session?.user?.id) && (await getRoomStore().canUserReadRoomChat(roomId, session!.user!.id));
       return { authorized, statusCode: session ? 403 : 401 };
     }
   });
@@ -1034,8 +1050,9 @@ function createApiApp({
       resolveRoomAccess: async ({ request, roomId, action }) => {
         const session = await resolveSessionUser(request);
         const viewer = session?.user || null;
-        const authorized = Boolean(viewer?.id)
-          && await getRoomStore()[action === 'write' ? 'canUserReactInRoom' : 'canUserReadRoomChat'](roomId, viewer!.id);
+        const authorized =
+          Boolean(viewer?.id) &&
+          (await getRoomStore()[action === 'write' ? 'canUserReactInRoom' : 'canUserReadRoomChat'](roomId, viewer!.id));
         return { authorized, statusCode: session ? 403 : 401, viewer };
       }
     });
@@ -1073,8 +1090,6 @@ function createApiApp({
       readsEnabled: () => release250FeatureEnabled('mediaRead')
     });
   }
-
-
 
   // Register after plugins finish loading so @fastify/websocket can wrap the handler.
   app.after(() => {
@@ -1117,7 +1132,11 @@ async function closeStores(logger: Pick<Logger, 'error'> = getProcessLogger()): 
   await services.close(logger);
 }
 
-async function bootstrap({ env = process.env, logger = createLogger({ env, name: 'api' }), exit = process.exit }: {
+async function bootstrap({
+  env = process.env,
+  logger = createLogger({ env, name: 'api' }),
+  exit = process.exit
+}: {
   env?: NodeJS.ProcessEnv;
   logger?: Logger;
   exit?: (code?: number) => void;
@@ -1153,10 +1172,22 @@ async function bootstrap({ env = process.env, logger = createLogger({ env, name:
       roomStore
     });
     if (reconciliation.removed > 0) {
-      logger.info({ evt: LOG_EVENTS.MAINTENANCE_TASK_COMPLETED, task: 'avatar-reconciliation', removed: reconciliation.removed }, 'removed orphaned avatar files');
+      logger.info(
+        { evt: LOG_EVENTS.MAINTENANCE_TASK_COMPLETED, task: 'avatar-reconciliation', removed: reconciliation.removed },
+        'removed orphaned avatar files'
+      );
     }
     const linkPreviewStorage = createLinkPreviewStorage({ uploadsDir: readUploadsDir(env) });
-    services.install({ roomStore, userStore, friendStore, notificationStore, pushStore, pushService, avatarStorage, linkPreviewStorage });
+    services.install({
+      roomStore,
+      userStore,
+      friendStore,
+      notificationStore,
+      pushStore,
+      pushService,
+      avatarStorage,
+      linkPreviewStorage
+    });
     try {
       const previewPool = getRelease250Pool();
       if (previewPool) {
@@ -1164,10 +1195,21 @@ async function bootstrap({ env = process.env, logger = createLogger({ env, name:
           storage: linkPreviewStorage,
           repository: createLinkPreviewRepository({ pool: previewPool })
         });
-        if (removedPreviewImages > 0) logger.info({ evt: LOG_EVENTS.MAINTENANCE_TASK_COMPLETED, task: 'link-preview-reconciliation', removed: removedPreviewImages }, 'removed unused link preview images');
+        if (removedPreviewImages > 0)
+          logger.info(
+            {
+              evt: LOG_EVENTS.MAINTENANCE_TASK_COMPLETED,
+              task: 'link-preview-reconciliation',
+              removed: removedPreviewImages
+            },
+            'removed unused link preview images'
+          );
       }
     } catch (error) {
-      logger.warn({ evt: LOG_EVENTS.LINK_PREVIEW_RECONCILE_FAILED, err: error }, 'link preview image reconciliation failed');
+      logger.warn(
+        { evt: LOG_EVENTS.LINK_PREVIEW_RECONCILE_FAILED, err: error },
+        'link preview image reconciliation failed'
+      );
     }
     const server = createApiServer({
       store: roomStore,
@@ -1211,8 +1253,8 @@ if (import.meta.main) {
 }
 
 export const __private = {
-    pruneRooms,
-    resolveCursorHmacKeys,
-    resolveRealtimeReconnectLeaseMs
-  };
+  pruneRooms,
+  resolveCursorHmacKeys,
+  resolveRealtimeReconnectLeaseMs
+};
 export { bootstrap, closeStores, createApiApp, createApiServer };

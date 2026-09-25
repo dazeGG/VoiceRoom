@@ -63,7 +63,9 @@ interface HistoryMessageDto {
 }
 
 // Opening a thread also clears its unread badge server-side.
-export async function fetchThread(userId: string): Promise<{ peer: PublicUser; messages: DirectMessage[]; muted: boolean }> {
+export async function fetchThread(
+  userId: string
+): Promise<{ peer: PublicUser; messages: DirectMessage[]; muted: boolean }> {
   const payload = await getJsonAuth<{ peer: PublicUser; messages?: DirectMessage[]; muted?: boolean }>(
     `/api/dm/${encodeURIComponent(userId)}`
   );
@@ -76,7 +78,12 @@ export async function fetchThread(userId: string): Promise<{ peer: PublicUser; m
 
 export async function fetchThreadPage(
   userId: string,
-  request: { mode?: 'latest' | 'before' | 'after' | 'around'; cursor?: string; limit?: number; signal?: AbortSignal } = {}
+  request: {
+    mode?: 'latest' | 'before' | 'after' | 'around';
+    cursor?: string;
+    limit?: number;
+    signal?: AbortSignal;
+  } = {}
 ): Promise<DirectMessageHistoryPage> {
   const params = new URLSearchParams({
     mode: request.mode ?? 'latest',
@@ -93,38 +100,41 @@ export async function fetchThreadPage(
   const page = payload as Omit<DirectMessageHistoryPage, 'messages'> & { messages?: HistoryMessageDto[] };
   return {
     ...page,
-    messages: Array.isArray(page.messages) ? page.messages.map((message) => directMessageFromHistory(userId, message)) : []
+    messages: Array.isArray(page.messages)
+      ? page.messages.map((message) => directMessageFromHistory(userId, message))
+      : []
   };
 }
 
 function directMessageFromHistory(peerId: string, message: HistoryMessageDto): DirectMessage {
   const author = message.author ?? {};
-  const content = typeof message.content === 'object' && message.content !== null
-    ? message.content as Record<string, unknown>
-    : {};
+  const content =
+    typeof message.content === 'object' && message.content !== null ? (message.content as Record<string, unknown>) : {};
   const senderId = typeof author.userId === 'string' ? author.userId : peerId;
-  const createdAt = typeof message.createdAt === 'number'
-    ? message.createdAt
-    : Date.parse(String(message.createdAt ?? ''));
-  const metadata = typeof message.metadata === 'object' && message.metadata !== null
-    ? message.metadata as Record<string, unknown>
-    : {};
-  const invite = metadata.kind === 'room-invite'
-    ? {
-        roomId: typeof metadata.roomId === 'string' ? metadata.roomId : '',
-        roomName: typeof metadata.roomName === 'string' ? metadata.roomName : '',
-        status: ['accepted', 'declined', 'expired'].includes(String(metadata.status))
-          ? metadata.status as DirectMessageInvite['status']
-          : 'pending' as const,
-        expiresAt: Number.isFinite(Number(metadata.expiresAt)) && metadata.expiresAt != null
-          ? Number(metadata.expiresAt)
-          : null
-      }
-    : null;
+  const createdAt =
+    typeof message.createdAt === 'number' ? message.createdAt : Date.parse(String(message.createdAt ?? ''));
+  const metadata =
+    typeof message.metadata === 'object' && message.metadata !== null
+      ? (message.metadata as Record<string, unknown>)
+      : {};
+  const invite =
+    metadata.kind === 'room-invite'
+      ? {
+          roomId: typeof metadata.roomId === 'string' ? metadata.roomId : '',
+          roomName: typeof metadata.roomName === 'string' ? metadata.roomName : '',
+          status: ['accepted', 'declined', 'expired'].includes(String(metadata.status))
+            ? (metadata.status as DirectMessageInvite['status'])
+            : ('pending' as const),
+          expiresAt:
+            Number.isFinite(Number(metadata.expiresAt)) && metadata.expiresAt != null
+              ? Number(metadata.expiresAt)
+              : null
+        }
+      : null;
   return {
     id: message.id,
     senderId,
-    recipientId: typeof message.recipientId === 'string' ? message.recipientId : (senderId === peerId ? '' : peerId),
+    recipientId: typeof message.recipientId === 'string' ? message.recipientId : senderId === peerId ? '' : peerId,
     body: typeof content.text === 'string' ? content.text : '',
     createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
     editedAt: message.editedAt == null ? null : Number(message.editedAt),
@@ -139,7 +149,13 @@ function directMessageFromHistory(peerId: string, message: HistoryMessageDto): D
   };
 }
 
-export async function sendDirectMessage(userId: string, text: string, attachmentIds: string[] = [], replyTo?: { messageId: string }, idempotencyKey?: string): Promise<DirectMessage> {
+export async function sendDirectMessage(
+  userId: string,
+  text: string,
+  attachmentIds: string[] = [],
+  replyTo?: { messageId: string },
+  idempotencyKey?: string
+): Promise<DirectMessage> {
   const payload = await postJsonAuth<{ message: DirectMessage }>(`/api/dm/${encodeURIComponent(userId)}`, {
     text,
     attachmentIds,
@@ -150,12 +166,20 @@ export async function sendDirectMessage(userId: string, text: string, attachment
 }
 
 export async function markThreadRead(userId: string, cursor?: string): Promise<number> {
-  const payload = await postJsonAuth<{ count?: number }>(`/api/dm/${encodeURIComponent(userId)}/read`, cursor ? { cursor } : {});
+  const payload = await postJsonAuth<{ count?: number }>(
+    `/api/dm/${encodeURIComponent(userId)}/read`,
+    cursor ? { cursor } : {}
+  );
   return payload.count ?? 0;
 }
 
-export async function deleteDirectMessage(userId: string, messageId: string): Promise<{ ok: boolean; deleted?: boolean }> {
-  const payload = await del<{ ok: boolean; deleted?: boolean }>(`/api/dm/${encodeURIComponent(userId)}/messages/${encodeURIComponent(messageId)}`);
+export async function deleteDirectMessage(
+  userId: string,
+  messageId: string
+): Promise<{ ok: boolean; deleted?: boolean }> {
+  const payload = await del<{ ok: boolean; deleted?: boolean }>(
+    `/api/dm/${encodeURIComponent(userId)}/messages/${encodeURIComponent(messageId)}`
+  );
   return payload;
 }
 

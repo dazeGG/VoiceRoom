@@ -35,7 +35,11 @@ export interface CredentialProvider {
 }
 
 export interface CredentialBoundary {
-  revokeCredential(input: { credentialId: string | undefined; roomId: string; principal: GatePrincipal }): Promise<{ status?: string } | undefined>;
+  revokeCredential(input: {
+    credentialId: string | undefined;
+    roomId: string;
+    principal: GatePrincipal;
+  }): Promise<{ status?: string } | undefined>;
   revokePrincipal(input: { roomId: string; principal: GatePrincipal }): Promise<unknown>;
 }
 
@@ -47,13 +51,22 @@ export interface AdmissionStore {
     displayName: string;
     avatarColorKey: string;
   }): Promise<{ status: string; identity?: { id?: string } | null } | null>;
-  normalizeGatePrincipal(input: { accountUserId: string | null; guestPrincipalId: string; roomId: string }): GatePrincipal | null;
+  normalizeGatePrincipal(input: {
+    accountUserId: string | null;
+    guestPrincipalId: string;
+    roomId: string;
+  }): GatePrincipal | null;
   isRoomServerMuted?(input: { roomId: string; principal: GatePrincipal }): Promise<boolean>;
 }
 
 export interface MembershipServices {
   service: {
-    persistSuccessfulAdmission(input: { roomId: string; userId: string; ip: string; admissionSucceeded: boolean }): Promise<{ status: string }>;
+    persistSuccessfulAdmission(input: {
+      roomId: string;
+      userId: string;
+      ip: string;
+      admissionSucceeded: boolean;
+    }): Promise<{ status: string }>;
   };
 }
 
@@ -100,8 +113,20 @@ export interface AdmissionRequest {
 // Every refusal to admit a peer to the SFU is recorded with the code the
 // client is about to see. A call that "does not connect" is otherwise
 // indistinguishable in the logs from one that was never attempted.
-function logDenied(log: Pick<Logger, 'warn'>, fields: { roomId: string; peerId: string; code: string; err?: unknown }): void {
-  log.warn({ evt: LOG_EVENTS.LIVEKIT_ADMISSION_DENIED, roomId: fields.roomId, peerId: fields.peerId, code: fields.code, err: fields.err || undefined }, 'LiveKit admission denied');
+function logDenied(
+  log: Pick<Logger, 'warn'>,
+  fields: { roomId: string; peerId: string; code: string; err?: unknown }
+): void {
+  log.warn(
+    {
+      evt: LOG_EVENTS.LIVEKIT_ADMISSION_DENIED,
+      roomId: fields.roomId,
+      peerId: fields.peerId,
+      code: fields.code,
+      err: fields.err || undefined
+    },
+    'LiveKit admission denied'
+  );
 }
 
 /**
@@ -129,12 +154,26 @@ export async function revokeIssuedAdmission({
   try {
     const revoked = await boundary?.revokeCredential({ credentialId, roomId, principal });
     if (revoked?.status !== 'revoked') {
-      throw Object.assign(new Error('Issued admission credential cleanup was refused'), { code: 'credential_revoke_cleanup_refused' });
+      throw Object.assign(new Error('Issued admission credential cleanup was refused'), {
+        code: 'credential_revoke_cleanup_refused'
+      });
     }
   } catch (cleanupError) {
     recordFailure();
-    log?.error({ evt: LOG_EVENTS.LIVEKIT_ADMISSION_REVOKED, credentialId, roomId, code: 'credential_revoke_cleanup_failed', err: cleanupError }, 'issued admission credential cleanup failed');
-    if (cause) throw new AggregateError([cause, cleanupError], 'Admission persistence and credential cleanup both failed', { cause });
+    log?.error(
+      {
+        evt: LOG_EVENTS.LIVEKIT_ADMISSION_REVOKED,
+        credentialId,
+        roomId,
+        code: 'credential_revoke_cleanup_failed',
+        err: cleanupError
+      },
+      'issued admission credential cleanup failed'
+    );
+    if (cause)
+      throw new AggregateError([cause, cleanupError], 'Admission persistence and credential cleanup both failed', {
+        cause
+      });
     throw cleanupError;
   }
 }
@@ -170,9 +209,19 @@ export function createAdmissionService(deps: AdmissionDeps) {
 
     const store = deps.store();
     // Null only if the identity row vanished mid-transaction.
-    const identity = (await store.getOrCreatePeerIdentity({ roomId, peerId, sessionToken, displayName: name, avatarColorKey: user?.avatarColorKey || '' }))!;
+    const identity = (await store.getOrCreatePeerIdentity({
+      roomId,
+      peerId,
+      sessionToken,
+      displayName: name,
+      avatarColorKey: user?.avatarColorKey || ''
+    }))!;
     if (identity.status === 'token_mismatch') return refuse('invalid_session');
-    const principal = store.normalizeGatePrincipal({ accountUserId: user?.id || null, guestPrincipalId: identity.identity?.id || '', roomId });
+    const principal = store.normalizeGatePrincipal({
+      accountUserId: user?.id || null,
+      guestPrincipalId: identity.identity?.id || '',
+      roomId
+    });
     if (!principal) {
       logDenied(log, { roomId, peerId, code: 'livekit_gate_principal_unavailable' });
       return refuse('livekit_gate_principal_unavailable');
@@ -198,16 +247,25 @@ export function createAdmissionService(deps: AdmissionDeps) {
       return refuse('livekit_gate_unavailable');
     }
 
-    const issue = () => provider.issueAdmission({ canPublishMicrophone: !serverMuted, livekitRoom: deps.roomName(roomId), name, peerId, principal, roomId });
-    const revoke = (credentialId: string | undefined, cause?: unknown) => revokeIssuedAdmission({
-      boundary: deps.credentialBoundary(),
-      cause,
-      credentialId,
-      principal,
-      recordFailure: deps.recordRevokeFailure,
-      log,
-      roomId
-    });
+    const issue = () =>
+      provider.issueAdmission({
+        canPublishMicrophone: !serverMuted,
+        livekitRoom: deps.roomName(roomId),
+        name,
+        peerId,
+        principal,
+        roomId
+      });
+    const revoke = (credentialId: string | undefined, cause?: unknown) =>
+      revokeIssuedAdmission({
+        boundary: deps.credentialBoundary(),
+        cause,
+        credentialId,
+        principal,
+        recordFailure: deps.recordRevokeFailure,
+        log,
+        roomId
+      });
 
     let issued = await issue();
     if (issued.status !== 'issued' || !issued.admission) {
@@ -241,7 +299,12 @@ export function createAdmissionService(deps: AdmissionDeps) {
     if (user?.id && memberships) {
       let persisted: { status: string };
       try {
-        persisted = await memberships.service.persistSuccessfulAdmission({ roomId, userId: user.id, ip: clientIp, admissionSucceeded: true });
+        persisted = await memberships.service.persistSuccessfulAdmission({
+          roomId,
+          userId: user.id,
+          ip: clientIp,
+          admissionSucceeded: true
+        });
       } catch (error) {
         await revoke(admission.gateCredentialId, error);
         throw error;
@@ -258,7 +321,17 @@ export function createAdmissionService(deps: AdmissionDeps) {
   // Every gate credential issued before a server mute was paired with a JWT
   // that still grants the microphone. Revoke them so a reconnect has to fetch a
   // fresh admission, which the durable mute row keeps microphone-free.
-  async function revokeForServerMute({ roomId, peerId, principal, log }: { roomId: string; peerId: string; principal: GatePrincipal; log: Pick<Logger, 'error'> }): Promise<void> {
+  async function revokeForServerMute({
+    roomId,
+    peerId,
+    principal,
+    log
+  }: {
+    roomId: string;
+    peerId: string;
+    principal: GatePrincipal;
+    log: Pick<Logger, 'error'>;
+  }): Promise<void> {
     const boundary = deps.credentialBoundary();
     if (!boundary) return;
     try {
@@ -267,7 +340,10 @@ export function createAdmissionService(deps: AdmissionDeps) {
       // The live SFU permission is still narrowed; only a later reconnect with
       // the old admission would regain the microphone.
       deps.recordRevokeFailure();
-      log.error({ evt: LOG_EVENTS.LIVEKIT_MUTE_FAILED, roomId, peerId, err: error }, 'failed to revoke gate credentials for a server mute');
+      log.error(
+        { evt: LOG_EVENTS.LIVEKIT_MUTE_FAILED, roomId, peerId, err: error },
+        'failed to revoke gate credentials for a server mute'
+      );
     }
   }
 

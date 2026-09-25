@@ -1,23 +1,8 @@
 <script lang="ts">
-  import {
-    ChevronDown,
-    HeadphoneOff,
-    Headphones,
-    Mic,
-    MicOff,
-    ScreenShare,
-    ScreenShareOff,
-    X
-  } from '@lucide/svelte';
+  import { ChevronDown, HeadphoneOff, Headphones, Mic, MicOff, ScreenShare, ScreenShareOff, X } from '@lucide/svelte';
   import { Popover, Select, Slider } from '$lib/shared/ui';
-  import {
-    NOISE_MODE_SELECT_OPTIONS,
-    roomDeviceUi
-  } from '$lib/features/room/room-device-ui.svelte';
-  import {
-    GATE_THRESHOLD_MAX_DB,
-    GATE_THRESHOLD_MIN_DB
-  } from '../client/core/config';
+  import { NOISE_MODE_SELECT_OPTIONS, roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
+  import { GATE_THRESHOLD_MAX_DB, GATE_THRESHOLD_MIN_DB } from '../client/core/config';
   import {
     closeDevicePopover,
     closeOutputPopover,
@@ -70,8 +55,6 @@
     toggle();
     if (!wasOpen) void refreshDevices();
   }
-
-
 </script>
 
 <div class="room-dock" aria-label="Управление голосом">
@@ -101,7 +84,8 @@
               <span class="dock-icon dock-icon-mic" aria-hidden="true"><Mic /></span>
               <span class="dock-icon dock-icon-muted" aria-hidden="true"><MicOff /></span>
               {#if roomClientState.microphoneMode === 'push-to-talk'}
-                <span class="dock-ptt-badge" data-active={roomClientState.pushToTalkActive} aria-hidden="true">PTT</span>
+                <span class="dock-ptt-badge" data-active={roomClientState.pushToTalkActive} aria-hidden="true">PTT</span
+                >
               {/if}
               <span class="sr-only" id="muteText">{callControls.label}</span>
             </button>
@@ -290,7 +274,12 @@
     <span class="dock-divider" aria-hidden="true"></span>
 
     <div class="dock-connection-wrap">
-      <div class="dock-connection" data-state={connection.stateName} role="status" aria-label={connection.label || 'Связь'}>
+      <div
+        class="dock-connection"
+        data-state={connection.stateName}
+        role="status"
+        aria-label={connection.label || 'Связь'}
+      >
         <span class="dock-bar" aria-hidden="true"></span>
         <span class="dock-bar" aria-hidden="true"></span>
         <span class="dock-bar" aria-hidden="true"></span>
@@ -301,7 +290,14 @@
       </span>
     </div>
 
-    <button class="dock-button leave-button" id="leaveButton" type="button" aria-label="Покинуть звонок" hidden={screenUi.hideLeaveButton} onclick={handleLeaveButtonClick}>
+    <button
+      class="dock-button leave-button"
+      id="leaveButton"
+      type="button"
+      aria-label="Покинуть звонок"
+      hidden={screenUi.hideLeaveButton}
+      onclick={handleLeaveButtonClick}
+    >
       <X aria-hidden="true" />
     </button>
     <button
@@ -310,7 +306,10 @@
       type="button"
       aria-label="Выйти со стрима"
       hidden={!screenUi.showScreenExit}
-      onclick={() => leaveScreenView({ keepPreview: false }).catch((error) => log.error('screen view action failed', errorContext(error)))}
+      onclick={() =>
+        leaveScreenView({ keepPreview: false }).catch((error) =>
+          log.error('screen view action failed', errorContext(error))
+        )}
     >
       <ScreenShareOff aria-hidden="true" />
     </button>

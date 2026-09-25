@@ -82,5 +82,5 @@ export function closeScreenSourceOnEscape(event: KeyboardEvent): void {
 }
 
 function getTabSources(sources: DesktopCaptureSource[], tab: 'screens' | 'windows'): DesktopCaptureSource[] {
-  return sources.filter((s) => tab === 'screens' ? s.type === 'screen' : s.type !== 'screen');
+  return sources.filter((s) => (tab === 'screens' ? s.type === 'screen' : s.type !== 'screen'));
 }

@@ -2,7 +2,10 @@ import type { ReactionSummary } from '@voice-room/shared/reactions';
 
 export type ReactionSnapshotView = ReactionSummary & { pending: boolean; error: string };
 
-export function replaceReactionSnapshot(current: ReactionSnapshotView[], summaries: ReactionSummary[]): ReactionSnapshotView[] {
+export function replaceReactionSnapshot(
+  current: ReactionSnapshotView[],
+  summaries: ReactionSummary[]
+): ReactionSnapshotView[] {
   const previous = new Map(current.map((item) => [item.emoji, item]));
   const next = summaries.flatMap((summary) => {
     const prior = previous.get(summary.emoji);

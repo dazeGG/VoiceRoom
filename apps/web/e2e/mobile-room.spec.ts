@@ -4,7 +4,8 @@ import { PASSWORD, createPermanentRoom, registerViaUi, uniqueLogin } from './hel
 // A covered control fails fast with a named locator instead of hanging the test.
 test.use({ actionTimeout: 15_000 });
 
-const PIXEL_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36';
+const PIXEL_UA =
+  'Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Mobile Safari/537.36';
 
 async function phone(browser: Browser, baseURL: string | undefined): Promise<BrowserContext> {
   const context = await browser.newContext({
@@ -35,11 +36,17 @@ async function expectJoinedPhoneRoom(page: Page): Promise<void> {
     const width = document.documentElement.clientWidth;
     const offenders = [...document.querySelectorAll('body *')]
       .filter((element) => element.getBoundingClientRect().right > width + 0.5)
-      .map((element) => `${element.tagName.toLowerCase()}.${String(element.className).split(' ').filter(Boolean).slice(0, 2).join('.')}`)
+      .map(
+        (element) =>
+          `${element.tagName.toLowerCase()}.${String(element.className).split(' ').filter(Boolean).slice(0, 2).join('.')}`
+      )
       .slice(0, 8);
     return { extra: document.documentElement.scrollWidth - width, offenders };
   });
-  expect(overflow.extra, `no horizontal scroll; wider than the screen: ${overflow.offenders.join(', ')}`).toBeLessThanOrEqual(0);
+  expect(
+    overflow.extra,
+    `no horizontal scroll; wider than the screen: ${overflow.offenders.join(', ')}`
+  ).toBeLessThanOrEqual(0);
   for (const selector of ['.mic-button', '.output-button', '.leave-button']) {
     const box = await page.locator(selector).first().boundingBox();
     expect(box, selector).not.toBeNull();
@@ -48,7 +55,11 @@ async function expectJoinedPhoneRoom(page: Page): Promise<void> {
   }
 }
 
-test('a guest on a phone joins a room, chats, and stays on the room page after leaving', async ({ browser, page, baseURL }) => {
+test('a guest on a phone joins a room, chats, and stays on the room page after leaving', async ({
+  browser,
+  page,
+  baseURL
+}) => {
   // Two accounts, a room, a phone join, chat and leave: longer than the default.
   test.setTimeout(120_000);
   await registerViaUi(page, uniqueLogin('mobilehost'));
@@ -92,7 +103,11 @@ test('a guest on a phone joins a room, chats, and stays on the room page after l
   }
 });
 
-test('a signed-in phone gets the standalone room with its account, never the lobby', async ({ browser, page, baseURL }) => {
+test('a signed-in phone gets the standalone room with its account, never the lobby', async ({
+  browser,
+  page,
+  baseURL
+}) => {
   await registerViaUi(page, uniqueLogin('mobilehost'));
   const roomId = await createPermanentRoom(page, `Mobile ${uniqueLogin('room')}`);
 

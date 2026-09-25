@@ -14,7 +14,6 @@
   let releaseError = $state(false);
   let downloadingId = $state('');
 
-
   async function ensureRelease(): Promise<DesktopRelease | null> {
     if (release) return release;
     if (releaseLoading) return null;

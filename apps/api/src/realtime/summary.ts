@@ -1,7 +1,11 @@
 import { buildRoomRealtimeSummary } from '@voice-room/shared/realtime';
 import type { RoomRealtimeSummary } from '@voice-room/shared/realtime';
 
-function buildRoomRealtimeSummaryFromLobbyRoom(room: Parameters<typeof buildRoomRealtimeSummary>[0], peers: unknown, resolveAvatarColorKey?: unknown): RoomRealtimeSummary {
+function buildRoomRealtimeSummaryFromLobbyRoom(
+  room: Parameters<typeof buildRoomRealtimeSummary>[0],
+  peers: unknown,
+  resolveAvatarColorKey?: unknown
+): RoomRealtimeSummary {
   const peerList = Array.isArray(peers) ? peers : [];
   return buildRoomRealtimeSummary(room, peerList, resolveAvatarColorKey);
 }

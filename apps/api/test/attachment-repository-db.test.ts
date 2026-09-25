@@ -43,10 +43,7 @@ test('markCleanupDeleted executes the stale-upload predicate against PostgreSQL'
   assert.equal(deleted?.internalState, 'deleted');
   assert.ok(deleted?.deletedAt);
 
-  const persisted = await pool.query(
-    'SELECT state, deleted_at FROM message_attachments WHERE id = $1',
-    [attachmentId]
-  );
+  const persisted = await pool.query('SELECT state, deleted_at FROM message_attachments WHERE id = $1', [attachmentId]);
   assert.equal(persisted.rows[0].state, 'deleted');
   assert.ok(persisted.rows[0].deleted_at);
 });
@@ -65,7 +62,9 @@ test('cleanup lists only stale unbound attachments, each state with its own age'
   });
   const created = await users.createUser({ login: 'retention-owner', displayName: 'Owner', password: 'password123' });
   const ownerId = String(created.user?.id);
-  await pool.query(`INSERT INTO rooms (id, creator_ip) VALUES ('room', ''); INSERT INTO room_messages (id, room_id, text) VALUES ('bound-message', 'room', 'x')`);
+  await pool.query(
+    `INSERT INTO rooms (id, creator_ip) VALUES ('room', ''); INSERT INTO room_messages (id, room_id, text) VALUES ('bound-message', 'room', 'x')`
+  );
 
   const rows: Array<[string, string, string, boolean]> = [
     ['uploading-old', 'uploading', '2 hours', false],
@@ -86,11 +85,26 @@ test('cleanup lists only stale unbound attachments, each state with its own age'
          processed_bytes, preview_bytes, ready_at)
        VALUES ($1, $2, 'room', $3, current_timestamp - $4::interval, $5, $6, $7,
          $8, $9::int, $9::int, $9::int, $10, $10, $10, $9::int, $9::int, $11)`,
-      [id, ownerId, state, age, bound ? new Date() : null, bound ? 'bound-message' : null, bound ? 0 : null,
-        ready ? 'image/webp' : null, ready ? 10 : null, ready ? `key-${name}` : null, ready ? new Date() : null]
+      [
+        id,
+        ownerId,
+        state,
+        age,
+        bound ? new Date() : null,
+        bound ? 'bound-message' : null,
+        bound ? 0 : null,
+        ready ? 'image/webp' : null,
+        ready ? 10 : null,
+        ready ? `key-${name}` : null,
+        ready ? new Date() : null
+      ]
     );
   }
 
   const candidates = await createAttachmentRepository({ pool }).listCleanupCandidates();
-  assert.deepEqual(candidates.map((attachment) => ids.get(attachment.id)).sort(), ['failed-old', 'ready-old', 'uploading-old']);
+  assert.deepEqual(candidates.map((attachment) => ids.get(attachment.id)).sort(), [
+    'failed-old',
+    'ready-old',
+    'uploading-old'
+  ]);
 });

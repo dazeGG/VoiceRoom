@@ -30,7 +30,7 @@
   );
   const friendsSince = $derived(
     person?.userId
-      ? friendsState.friends.find((entry) => entry.user.id === person.userId)?.friendsSince ?? null
+      ? (friendsState.friends.find((entry) => entry.user.id === person.userId)?.friendsSince ?? null)
       : null
   );
 

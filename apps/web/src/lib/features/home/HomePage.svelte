@@ -60,7 +60,9 @@
 
   const selectedBuild = $derived(DESKTOP_BUILDS.find((build) => build.id === selectedBuildId) ?? DESKTOP_BUILDS[0]);
   const selectedAsset = $derived(release?.assets[selectedBuildId] ?? null);
-  const appMeta = $derived(formatDesktopReleaseMeta(selectedBuild, selectedAsset, release, releaseLoading, releaseError));
+  const appMeta = $derived(
+    formatDesktopReleaseMeta(selectedBuild, selectedAsset, release, releaseLoading, releaseError)
+  );
   const downloadLabel = $derived(desktopDownloadLabel(appDownloadState));
 
   $effect(() => {
@@ -80,7 +82,6 @@
       window.clearTimeout(downloadResetTimer);
     };
   });
-
 
   function retrySessionLoad(): void {
     if (!session.loaded) return;
@@ -226,7 +227,10 @@
       <div class="auth-session-error-card">
         <p class="auth-loader-kicker">Сессия не проверена</p>
         <h1>Не удалось проверить аккаунт</h1>
-        <p>Проверьте подключение к серверу и повторите попытку. Мы не будем показывать лобби или сбрасывать сессию, пока проверка не пройдет.</p>
+        <p>
+          Проверьте подключение к серверу и повторите попытку. Мы не будем показывать лобби или сбрасывать сессию, пока
+          проверка не пройдет.
+        </p>
         <button class="home-primary-button" type="button" onclick={retrySessionLoad}>Повторить</button>
       </div>
     </main>

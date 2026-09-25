@@ -70,7 +70,9 @@ test('publishing caps bitrate and frame rate, adds a VP8 backup and one 540p sim
     backupCodec: { codec: 'vp8' },
     simulcast: true
   });
-  expect(options.screenShareSimulcastLayers?.map((layer) => [layer.width, layer.height, layer.encoding.maxBitrate])).toEqual([[960, 540, 1_500_000]]);
+  expect(
+    options.screenShareSimulcastLayers?.map((layer) => [layer.width, layer.height, layer.encoding.maxBitrate])
+  ).toEqual([[960, 540, 1_500_000]]);
 });
 
 test('a source-quality profile scales its bitrate with the captured pixels, within a cap', () => {

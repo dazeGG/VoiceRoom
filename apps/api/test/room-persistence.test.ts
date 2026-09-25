@@ -10,7 +10,6 @@ import { openWs, joinVoiceRoom } from './ws-harness.ts';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 
-
 function getSocketPath() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-sock-'));
   return {
@@ -117,7 +116,6 @@ async function postJson(port, pathname, body, { cookie } = {}) {
   };
 }
 
-
 async function getJson(port, pathname) {
   const response = await new Promise((resolve, reject) => {
     http
@@ -217,7 +215,6 @@ test('room registry survives restart and preserves the static flag', async (t) =
   }
 });
 
-
 test('temporary empty rooms count toward per-IP room quota', async (t) => {
   const { dir, socketPath } = getSocketPath();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
@@ -244,7 +241,6 @@ test('temporary empty rooms count toward per-IP room quota', async (t) => {
     throw error;
   }
 });
-
 
 test('active temporary rooms stay counted toward per-IP room creation quota', async (t) => {
   const { dir, socketPath } = getSocketPath();

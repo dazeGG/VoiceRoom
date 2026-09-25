@@ -6,7 +6,15 @@ import { stubFetch } from '../fixtures/fetch.ts';
 afterEach(cleanup);
 
 function member(userId: string, displayName: string, presenceStatus: string) {
-  return { userId, displayName, login: displayName.toLowerCase(), avatarColorKey: 'blue', role: 'member', presenceStatus, inVoice: false };
+  return {
+    userId,
+    displayName,
+    login: displayName.toLowerCase(),
+    avatarColorKey: 'blue',
+    role: 'member',
+    presenceStatus,
+    inVoice: false
+  };
 }
 
 test('the participants tab lists the roster from the server, split into online and offline', async () => {

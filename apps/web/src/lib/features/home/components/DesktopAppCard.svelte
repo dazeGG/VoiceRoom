@@ -53,12 +53,7 @@
     <div class="home-app-body">
       <div>
         <div class="home-app-fieldlabel">Платформа</div>
-        <Select
-          bind:value={selectedBuildId}
-          options={BUILD_OPTIONS}
-          label="Платформа"
-          variant="home"
-        />
+        <Select bind:value={selectedBuildId} options={BUILD_OPTIONS} label="Платформа" variant="home" />
       </div>
 
       {#if releaseError}
@@ -67,7 +62,12 @@
           Открыть страницу загрузок
         </a>
       {:else}
-        <button class="home-dl" type="button" disabled={releaseLoading || appDownloadState === 'loading'} onclick={onDownload}>
+        <button
+          class="home-dl"
+          type="button"
+          disabled={releaseLoading || appDownloadState === 'loading'}
+          onclick={onDownload}
+        >
           {#if appDownloadState === 'loading' || releaseLoading}
             <span class="home-spinner" aria-hidden="true"></span>
           {:else if appDownloadState === 'done'}
@@ -97,7 +97,10 @@
           </div>
         </div>
       {:else}
-        <p class="home-app-note">Приложение не подписано. Если SmartScreen покажет «Приложение не проверено» — нажмите «Подробнее» → «Выполнить в любом случае».</p>
+        <p class="home-app-note">
+          Приложение не подписано. Если SmartScreen покажет «Приложение не проверено» — нажмите «Подробнее» → «Выполнить
+          в любом случае».
+        </p>
       {/if}
     </div>
   {/if}

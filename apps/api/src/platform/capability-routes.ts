@@ -5,12 +5,15 @@ const HEALTH_CAPABILITIES_LIMITS = {
   contractVersion: 1
 };
 
-type ReadinessLike = {
-  features?: Record<string, unknown>;
-  manifest?: { contractVersion?: string; digest?: string; schemaVersion?: number };
-  replica?: { ready?: boolean; [key: string]: unknown } | null;
-  ready?: boolean;
-} | null | undefined;
+type ReadinessLike =
+  | {
+      features?: Record<string, unknown>;
+      manifest?: { contractVersion?: string; digest?: string; schemaVersion?: number };
+      replica?: { ready?: boolean; [key: string]: unknown } | null;
+      ready?: boolean;
+    }
+  | null
+  | undefined;
 
 type ReadinessSource = { getSnapshot?: () => ReadinessLike } & Record<string, unknown>;
 
@@ -27,26 +30,27 @@ function formatCapabilityPayload(readiness: ReadinessLike) {
   };
 }
 
-function registerCapabilityRoutes({ app, readinessProvider }: { app?: FastifyInstance; readinessProvider?: ReadinessSource | null }): void {
+function registerCapabilityRoutes({
+  app,
+  readinessProvider
+}: {
+  app?: FastifyInstance;
+  readinessProvider?: ReadinessSource | null;
+}): void {
   if (!app || typeof app.get !== 'function' || !readinessProvider) return;
   const provider = readinessProvider;
 
   app.get('/api/capabilities', (_request, reply) => {
     const readiness = (() => {
       try {
-        return provider.getSnapshot
-          ? provider.getSnapshot()
-          : provider as ReadinessLike;
+        return provider.getSnapshot ? provider.getSnapshot() : (provider as ReadinessLike);
       } catch {
         return null;
       }
     })();
 
     const payload = formatCapabilityPayload(readiness);
-    reply
-      .header('Cache-Control', 'no-store')
-      .code(200)
-      .send(payload);
+    reply.header('Cache-Control', 'no-store').code(200).send(payload);
   });
 }
 

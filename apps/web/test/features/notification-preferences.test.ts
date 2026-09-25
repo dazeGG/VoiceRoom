@@ -7,19 +7,30 @@ import { freshImport } from '../helpers/fresh-module.ts';
 import type * as PreferencesModule from '../../src/lib/shared/notifications/preferences.svelte.ts';
 
 function prefs(overrides: Record<string, unknown> = {}) {
-  return { mutedPeerIds: [], mutedRoomIds: [], presenceStatus: 'online', privateNotifications: false, doNotDisturb: false, ...overrides };
+  return {
+    mutedPeerIds: [],
+    mutedRoomIds: [],
+    presenceStatus: 'online',
+    privateNotifications: false,
+    doNotDisturb: false,
+    ...overrides
+  };
 }
 
 async function load() {
-  const preferences = await freshImport<typeof PreferencesModule>('/src/lib/shared/notifications/preferences.svelte.ts');
-  const playback = (await import('../../src/lib/shared/audio/playback-policy.svelte.ts'));
+  const preferences = await freshImport<typeof PreferencesModule>(
+    '/src/lib/shared/notifications/preferences.svelte.ts'
+  );
+  const playback = await import('../../src/lib/shared/audio/playback-policy.svelte.ts');
   return { ...preferences, ...playback };
 }
 
 beforeEach(() => localStorage.clear());
 
 test('preferences load from the server once per account', async () => {
-  const { calls } = stubFetch({ '/api/notifications/preferences': { body: { preferences: prefs({ mutedRoomIds: ['room-a'] }) } } });
+  const { calls } = stubFetch({
+    '/api/notifications/preferences': { body: { preferences: prefs({ mutedRoomIds: ['room-a'] }) } }
+  });
   const n = await load();
   await n.loadNotificationPreferences('user-1');
   await n.loadNotificationPreferences('user-1');
@@ -32,8 +43,12 @@ test('preferences load from the server once per account', async () => {
 test('muting a room or a person goes to the server and shows its answer', async () => {
   const { calls } = stubFetch({
     '/api/notifications/preferences': { body: { preferences: prefs() } },
-    'PUT /api/notifications/room/room-a/mute': { body: { ok: true, muted: true, preferences: prefs({ mutedRoomIds: ['room-a'] }) } },
-    'PUT /api/notifications/dm/peer-1/mute': { body: { ok: true, muted: true, preferences: prefs({ mutedRoomIds: ['room-a'], mutedPeerIds: ['peer-1'] }) } }
+    'PUT /api/notifications/room/room-a/mute': {
+      body: { ok: true, muted: true, preferences: prefs({ mutedRoomIds: ['room-a'] }) }
+    },
+    'PUT /api/notifications/dm/peer-1/mute': {
+      body: { ok: true, muted: true, preferences: prefs({ mutedRoomIds: ['room-a'], mutedPeerIds: ['peer-1'] }) }
+    }
   });
   const n = await load();
   await n.loadNotificationPreferences('user-1');
@@ -63,7 +78,9 @@ test('do-not-disturb silences cues and shows as the dnd status', async () => {
 test('a mutation answer arriving after the account changed is ignored', async () => {
   stubFetch({
     '/api/notifications/preferences': { body: { preferences: prefs() } },
-    'PUT /api/notifications/room/room-a/mute': { body: { ok: true, muted: true, preferences: prefs({ mutedRoomIds: ['room-a'] }) } }
+    'PUT /api/notifications/room/room-a/mute': {
+      body: { ok: true, muted: true, preferences: prefs({ mutedRoomIds: ['room-a'] }) }
+    }
   });
   const n = await load();
   await n.loadNotificationPreferences('user-1');

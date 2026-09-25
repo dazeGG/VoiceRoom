@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { inheritLiveKitGateCredential, normalizeLiveKitServerUrl, resolveLiveKitConnectUrls } from '../src/runtime-config.ts';
+import {
+  inheritLiveKitGateCredential,
+  normalizeLiveKitServerUrl,
+  resolveLiveKitConnectUrls
+} from '../src/runtime-config.ts';
 
 test('removes a legacy rtc path before LiveKit appends its signaling path', () => {
   assert.equal(
@@ -15,10 +19,7 @@ test('copies the one-time LiveKit gate credential to a configured endpoint', () 
     'wss://livekit.dev.voiceroom.ru/?vr_gate_credential=signed-value'
   );
 
-  assert.equal(
-    result,
-    'wss://livekit.dev.voiceroom.ru/?vr_gate_credential=signed-value'
-  );
+  assert.equal(result, 'wss://livekit.dev.voiceroom.ru/?vr_gate_credential=signed-value');
 });
 
 test('preserves configured query parameters while replacing a stale credential', () => {
@@ -27,10 +28,7 @@ test('preserves configured query parameters while replacing a stale credential',
     'wss://livekit.example/rtc?vr_gate_credential=fresh'
   );
 
-  assert.equal(
-    result,
-    'wss://fallback.example/?region=eu&vr_gate_credential=fresh'
-  );
+  assert.equal(result, 'wss://fallback.example/?region=eu&vr_gate_credential=fresh');
 });
 
 test('leaves configured endpoints unchanged when the API issued no gate credential', () => {
@@ -42,16 +40,22 @@ test('leaves configured endpoints unchanged when the API issued no gate credenti
 
 test('never places an uncredentialed runtime endpoint before the API admission URL', () => {
   // Only the LiveKit section matters here.
-  const urls = resolveLiveKitConnectUrls({
-    livekit: {
-      wsUrl: 'wss://livekit.dev.voiceroom.ru/rtc',
-      connectFallbacks: ['wss://livekit-fallback.dev.voiceroom.ru/rtc']
-    }
-  } as Parameters<typeof resolveLiveKitConnectUrls>[0], 'wss://livekit.dev.voiceroom.ru/rtc?vr_gate_credential=signed-value');
+  const urls = resolveLiveKitConnectUrls(
+    {
+      livekit: {
+        wsUrl: 'wss://livekit.dev.voiceroom.ru/rtc',
+        connectFallbacks: ['wss://livekit-fallback.dev.voiceroom.ru/rtc']
+      }
+    } as Parameters<typeof resolveLiveKitConnectUrls>[0],
+    'wss://livekit.dev.voiceroom.ru/rtc?vr_gate_credential=signed-value'
+  );
 
   assert.deepEqual(urls, [
     'wss://livekit.dev.voiceroom.ru/?vr_gate_credential=signed-value',
     'wss://livekit-fallback.dev.voiceroom.ru/?vr_gate_credential=signed-value'
   ]);
-  assert.equal(urls.some((url) => !new URL(url).searchParams.has('vr_gate_credential')), false);
+  assert.equal(
+    urls.some((url) => !new URL(url).searchParams.has('vr_gate_credential')),
+    false
+  );
 });

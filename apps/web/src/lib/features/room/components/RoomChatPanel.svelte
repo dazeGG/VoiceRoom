@@ -5,7 +5,15 @@
   import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
   import { iconSm } from '$lib/shared/ui/icons';
   import { onMount, tick, untrack } from 'svelte';
-  import { deleteRoomChatMessage, editRoomChatMessage, fetchRoomChat, fetchRoomChatPage, markRoomChatRead, postRoomChat, type ChatMessage } from '$lib/api/rooms';
+  import {
+    deleteRoomChatMessage,
+    editRoomChatMessage,
+    fetchRoomChat,
+    fetchRoomChatPage,
+    markRoomChatRead,
+    postRoomChat,
+    type ChatMessage
+  } from '$lib/api/rooms';
   import { beginRoomChatReadSession, setRoomUnreadCount } from '$lib/features/home/model/room-presence.svelte';
   import { session } from '$lib/features/auth/session.svelte';
   import { subscribeRoomPreview } from '$lib/features/home/model/room-realtime';
@@ -29,13 +37,7 @@
   import MessageHoverActions from '$lib/shared/chat/MessageHoverActions.svelte';
   import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions } from '$lib/shared/chat/frequent-reactions';
   import PinnedMessagesBar from './PinnedMessagesBar.svelte';
-  import {
-    applyRoomPinsEvent,
-    isMessagePinned,
-    loadRoomPins,
-    resetRoomPins,
-    togglePin
-  } from '../pins.svelte';
+  import { applyRoomPinsEvent, isMessagePinned, loadRoomPins, resetRoomPins, togglePin } from '../pins.svelte';
   import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
   import {
     dataTransferHasImages,
@@ -58,7 +60,12 @@
   import { contentFromLegacyText } from '@voice-room/shared/room-message-content';
   import { createMentionComposer } from '$lib/shared/chat/mention-composer.svelte';
   import { loadChatDraft, saveChatDraft } from '$lib/shared/chat/chat-drafts';
-  import { createTypingNotifier, createTypingTracker, formatTypingLabel, typingActivityOf } from '$lib/shared/chat/typing.svelte';
+  import {
+    createTypingNotifier,
+    createTypingTracker,
+    formatTypingLabel,
+    typingActivityOf
+  } from '$lib/shared/chat/typing.svelte';
   import { getAppRealtime } from '$lib/api/realtime';
   import MentionAutocomplete from '$lib/shared/chat/MentionAutocomplete.svelte';
   import { getRoomMembership, loadRoomMembership } from '$lib/features/home/model/room-membership.svelte';
@@ -290,7 +297,9 @@
     if (!query && !draft.slice(0, caret).endsWith('@')) return;
     await loadRoomMembership(roomId, { query });
     if (mentionComposer.query !== query) return;
-    mentionComposer.setCandidates(getRoomMembership(roomId).members.filter((member) => member.userId !== session.user?.id));
+    mentionComposer.setCandidates(
+      getRoomMembership(roomId).members.filter((member) => member.userId !== session.user?.id)
+    );
   }
 
   function chooseMention(member: MembershipMember): void {
@@ -422,10 +431,7 @@
 
   function isOwnMessage(message: ChatMessage): boolean {
     const accountUserId = session.user?.id;
-    return Boolean(
-      (accountUserId && message.authorUserId === accountUserId)
-      || (peerId && message.peerId === peerId)
-    );
+    return Boolean((accountUserId && message.authorUserId === accountUserId) || (peerId && message.peerId === peerId));
   }
 
   // Showing the chat marks it read and parks the view on the newest message.
@@ -493,9 +499,15 @@
     void getCapabilityFeature('mediaUploads').then((enabled) => {
       media = enabled ? getAttachmentComposeStore('room', roomId) : null;
     });
-    void getCapabilityFeature('reactions').then((enabled) => { reactionsEnabled = enabled; });
-    void getCapabilityFeature('replies').then((enabled) => { repliesEnabled = enabled; });
-    void getCapabilityFeature('engagement').then((enabled) => { engagementEnabled = enabled; });
+    void getCapabilityFeature('reactions').then((enabled) => {
+      reactionsEnabled = enabled;
+    });
+    void getCapabilityFeature('replies').then((enabled) => {
+      repliesEnabled = enabled;
+    });
+    void getCapabilityFeature('engagement').then((enabled) => {
+      engagementEnabled = enabled;
+    });
 
     const controller = new AbortController();
     void initializeHistory(controller.signal);
@@ -547,7 +559,7 @@
         const edited = event.payload.message;
         if (edited?.id) {
           if (historyEnabled) history.upsert(edited);
-          else messages = messages.map((message) => message.id === edited.id ? edited : message);
+          else messages = messages.map((message) => (message.id === edited.id ? edited : message));
         }
         return;
       }
@@ -557,23 +569,24 @@
         const peer = event.payload.peer;
         if (!peer?.id) return;
         const authored = (message: ChatMessage) =>
-          message.peerId === peer.id
-          || Boolean(peer.accountUserId && message.authorUserId === peer.accountUserId);
+          message.peerId === peer.id || Boolean(peer.accountUserId && message.authorUserId === peer.accountUserId);
         const stale = (message: ChatMessage) =>
-          message.name !== peer.name
-          || message.avatarUrl !== peer.avatarUrl
-          || message.avatarAccent !== peer.avatarAccent
-          || (Boolean(peer.avatarColorKey) && message.avatarColorKey !== peer.avatarColorKey);
+          message.name !== peer.name ||
+          message.avatarUrl !== peer.avatarUrl ||
+          message.avatarAccent !== peer.avatarAccent ||
+          (Boolean(peer.avatarColorKey) && message.avatarColorKey !== peer.avatarColorKey);
         if (!messages.some((message) => authored(message) && stale(message))) return;
-        messages = messages.map((message) => authored(message)
-          ? {
-              ...message,
-              name: peer.name || message.name,
-              avatarAccent: peer.avatarAccent,
-              avatarColorKey: peer.avatarColorKey || message.avatarColorKey,
-              avatarUrl: peer.avatarUrl
-            }
-          : message);
+        messages = messages.map((message) =>
+          authored(message)
+            ? {
+                ...message,
+                name: peer.name || message.name,
+                avatarAccent: peer.avatarAccent,
+                avatarColorKey: peer.avatarColorKey || message.avatarColorKey,
+                avatarUrl: peer.avatarUrl
+              }
+            : message
+        );
         return;
       }
       if (event.type === 'room.chat.typing') {
@@ -666,10 +679,7 @@
     try {
       await togglePin(roomId, messageId);
     } catch (err) {
-      toast(
-        err instanceof Error && err.message ? err.message : 'Не удалось закрепить сообщение',
-        { variant: 'error' }
-      );
+      toast(err instanceof Error && err.message ? err.message : 'Не удалось закрепить сообщение', { variant: 'error' });
     }
   }
 
@@ -688,10 +698,9 @@
     const incoming = recent.filter((item) => item?.id && !known.has(item.id));
     error = '';
     for (const item of incoming) messageIds.add(item.id);
-    messages = [
-      ...messages.map((item) => recentById.get(item.id) ?? item),
-      ...incoming
-    ].sort((a, b) => a.createdAt - b.createdAt);
+    messages = [...messages.map((item) => recentById.get(item.id) ?? item), ...incoming].sort(
+      (a, b) => a.createdAt - b.createdAt
+    );
     if (chatVisible) {
       onRead?.();
       void settleAtBottom();
@@ -817,7 +826,9 @@
         ...peerCredentials(),
         text,
         content: engagementEnabled
-          ? (mentionComposer.selected.length ? mentionComposer.toContent(text) : contentFromLegacyText(text) ?? undefined)
+          ? mentionComposer.selected.length
+            ? mentionComposer.toContent(text)
+            : (contentFromLegacyText(text) ?? undefined)
           : undefined,
         attachmentIds: media?.readyIds ?? [],
         replyTo: replyTarget ? { messageId: replyTarget.id } : undefined
@@ -933,7 +944,7 @@
     try {
       const edited = await editRoomChatMessage(roomId, messageId, { ...peerCredentials(), text });
       if (historyEnabled) history.upsert(edited);
-      else messages = messages.map((message) => message.id === edited.id ? edited : message);
+      else messages = messages.map((message) => (message.id === edited.id ? edited : message));
       cancelEditing();
     } catch (err) {
       error = err instanceof Error ? err.message : 'Не удалось изменить сообщение';
@@ -954,9 +965,7 @@
     event.preventDefault();
     event.stopPropagation();
     const anchor = event.currentTarget;
-    const person = participant
-      ? participantProfilePerson(participant)
-      : roomMessageProfilePerson(group.messages[0]);
+    const person = participant ? participantProfilePerson(participant) : roomMessageProfilePerson(group.messages[0]);
     queueMicrotask(() => openProfileCardFor(person, anchor));
   }
 
@@ -967,12 +976,9 @@
     event.preventDefault();
     event.stopPropagation();
     const anchor = event.currentTarget;
-    const person = mentionProfilePerson(
-      userId,
-      label,
-      getRoomMembership(roomId).members,
-      [...roomState.peers.values()]
-    );
+    const person = mentionProfilePerson(userId, label, getRoomMembership(roomId).members, [
+      ...roomState.peers.values()
+    ]);
     queueMicrotask(() => openProfileCardFor(person, anchor));
   }
 
@@ -980,9 +986,7 @@
   function mentionsMe(message: ChatMessage): boolean {
     const selfUserId = session.user?.id;
     if (!selfUserId || message.content?.version !== 1) return false;
-    return message.content.segments.some(
-      (segment) => segment.type === 'mention' && segment.userId === selfUserId
-    );
+    return message.content.segments.some((segment) => segment.type === 'mention' && segment.userId === selfUserId);
   }
 
   function openUserMenu(group: ChatGroup, event: MouseEvent): void {
@@ -1058,158 +1062,219 @@
   </header>
 
   {#if activeTab === 'chat'}
-  <PinnedMessagesBar
-    onJump={jumpToMessage}
-    onUnpin={(messageId) => void togglePinned(messageId)}
-    canUnpin={Boolean(session.user?.id)}
-  />
-  <div class="chat-rail-body" id={chatPanelId} role="tabpanel" aria-labelledby={chatTabId} bind:this={chatBody} onscroll={onHistoryScroll}>
-    {#if loading}
-      <p class="chat-rail-note">Загружаем сообщения…</p>
-    {:else if days.length}
-      {#if historyEnabled && (loadingOlder || hasMoreBefore)}
-        <button class="chat-rail-note" type="button" disabled={loadingOlder} onclick={() => void history.loadOlder(chatBody)}>
-          {loadingOlder ? 'Загружаем…' : 'Показать предыдущие'}
-        </button>
-      {/if}
-      {#each days as day (day.key)}
-        <section class="chat-day-section" aria-label={day.label}>
-          <div class="chat-day-divider" role="separator" aria-label={day.label}>
-            <span>{day.label}</span>
-          </div>
-          {#each day.groups as group (group.key)}
-          <div class="chat-msg" data-self={group.self}>
-          {#if canOpenProfile(group)}
-            {@const label = group.self ? 'Ваш профиль' : `Профиль ${group.name}`}
-            <button
-              class="chat-avatar-button chat-msg-trigger"
-              type="button"
-              aria-haspopup="dialog"
-              aria-label={label}
-              title={label}
-              onclick={(event) => openUserProfile(group, event)}
-              oncontextmenu={(event) => openUserMenu(group, event)}
-            >
-              <Avatar class="chat-msg-avatar" name={group.name} src={group.avatarUrl} background={group.avatarBackground} size={34} />
-            </button>
-          {:else}
-            <Avatar class="chat-msg-avatar" name={group.name} src={group.avatarUrl} background={group.avatarBackground} size={34} />
-          {/if}
-          <div class="chat-msg-main">
-            <div class="chat-msg-meta">
-              {#if canOpenProfile(group)}
-                <button
-                  class="chat-msg-author chat-msg-trigger"
-                  type="button"
-                  style={`color:${group.avatarBackground}`}
-                  aria-haspopup="dialog"
-                  aria-label={group.self ? 'Ваш профиль' : `Профиль ${group.name}`}
-                  onclick={(event) => openUserProfile(group, event)}
-                  oncontextmenu={(event) => openUserMenu(group, event)}
-                ><EmojiText text={group.name} /></button>
-              {:else}
-                <span class="chat-msg-author" style={`color:${group.avatarBackground}`}><EmojiText text={group.name} /></span>
-              {/if}
-              <time class="chat-msg-time" datetime={new Date(group.messages[0].createdAt).toISOString()}>{group.time}</time>
+    <PinnedMessagesBar
+      onJump={jumpToMessage}
+      onUnpin={(messageId) => void togglePinned(messageId)}
+      canUnpin={Boolean(session.user?.id)}
+    />
+    <div
+      class="chat-rail-body"
+      id={chatPanelId}
+      role="tabpanel"
+      aria-labelledby={chatTabId}
+      bind:this={chatBody}
+      onscroll={onHistoryScroll}
+    >
+      {#if loading}
+        <p class="chat-rail-note">Загружаем сообщения…</p>
+      {:else if days.length}
+        {#if historyEnabled && (loadingOlder || hasMoreBefore)}
+          <button
+            class="chat-rail-note"
+            type="button"
+            disabled={loadingOlder}
+            onclick={() => void history.loadOlder(chatBody)}
+          >
+            {loadingOlder ? 'Загружаем…' : 'Показать предыдущие'}
+          </button>
+        {/if}
+        {#each days as day (day.key)}
+          <section class="chat-day-section" aria-label={day.label}>
+            <div class="chat-day-divider" role="separator" aria-label={day.label}>
+              <span>{day.label}</span>
             </div>
-            {#each group.messages as message (message.id)}
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <div
-                class="chat-msg-text"
-                class:is-context={menuMessage?.id === message.id}
-                class:mentions-me={mentionsMe(message)}
-                data-message-id={message.id}
-                data-group-first={message.id === group.messages[0].id}
-                oncontextmenu={(event) => openMessageMenu(message, event)}
-              >
-                {#if editingMessageId === message.id}
-                  <div class="chat-msg-edit">
-                    <EmojiComposer
-                      class="chat-msg-edit-input"
-                      bind:this={editEl}
-                      bind:value={editDraft}
-                      maxlength={500}
-                      ariaLabel="Текст сообщения"
-                      onkeydown={onEditKeydown}
-                      disabled={editSaving}
+            {#each day.groups as group (group.key)}
+              <div class="chat-msg" data-self={group.self}>
+                {#if canOpenProfile(group)}
+                  {@const label = group.self ? 'Ваш профиль' : `Профиль ${group.name}`}
+                  <button
+                    class="chat-avatar-button chat-msg-trigger"
+                    type="button"
+                    aria-haspopup="dialog"
+                    aria-label={label}
+                    title={label}
+                    onclick={(event) => openUserProfile(group, event)}
+                    oncontextmenu={(event) => openUserMenu(group, event)}
+                  >
+                    <Avatar
+                      class="chat-msg-avatar"
+                      name={group.name}
+                      src={group.avatarUrl}
+                      background={group.avatarBackground}
+                      size={34}
                     />
-                    <div class="chat-msg-edit-actions">
-                      <button type="button" onclick={cancelEditing} disabled={editSaving}>Отмена</button>
-                      <button type="button" onclick={saveEdit} disabled={editSaving || !editDraft.trim()}>Сохранить</button>
-                    </div>
-                  </div>
+                  </button>
                 {:else}
-                  <div class="chat-msg-body">
-                    {#if message.replyPreview}<ReplyPreview preview={message.replyPreview} interactive onjump={jumpToMessage} />{/if}
-                    <span class="chat-msg-content">{#if message.content}<StructuredMessageContent content={message.content} fallback={message.text} onmention={openMentionProfile} />{:else}<ChatText text={message.text} />{/if}{#if message.editedAt}<span class="chat-msg-edited">(изменено)</span>{/if}</span>
-                    {#if message.linkPreview}<LinkPreviewCard preview={message.linkPreview} />{/if}
-                    {#if message.attachments?.length}<AttachmentMosaic attachments={message.attachments} />{/if}
-                    {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={message.id} canMutate={Boolean(session.user?.id)} />{/if}
-                  </div>
-                  <MessageHoverActions
-                    reactionStore={reactionsEnabled && session.user?.id ? reactions : undefined}
-                    messageId={message.id}
-                    userId={session.user?.id}
-                    canReply={repliesEnabled}
-                    onReply={() => { replyTarget = message; composeEl?.focus(); }}
-                    onCopy={() => void copyMessageText(message)}
-                    onMore={(event) => openMessageMenu(message, event)}
+                  <Avatar
+                    class="chat-msg-avatar"
+                    name={group.name}
+                    src={group.avatarUrl}
+                    background={group.avatarBackground}
+                    size={34}
                   />
                 {/if}
+                <div class="chat-msg-main">
+                  <div class="chat-msg-meta">
+                    {#if canOpenProfile(group)}
+                      <button
+                        class="chat-msg-author chat-msg-trigger"
+                        type="button"
+                        style={`color:${group.avatarBackground}`}
+                        aria-haspopup="dialog"
+                        aria-label={group.self ? 'Ваш профиль' : `Профиль ${group.name}`}
+                        onclick={(event) => openUserProfile(group, event)}
+                        oncontextmenu={(event) => openUserMenu(group, event)}><EmojiText text={group.name} /></button
+                      >
+                    {:else}
+                      <span class="chat-msg-author" style={`color:${group.avatarBackground}`}
+                        ><EmojiText text={group.name} /></span
+                      >
+                    {/if}
+                    <time class="chat-msg-time" datetime={new Date(group.messages[0].createdAt).toISOString()}
+                      >{group.time}</time
+                    >
+                  </div>
+                  {#each group.messages as message (message.id)}
+                    <!-- svelte-ignore a11y_no_static_element_interactions -->
+                    <div
+                      class="chat-msg-text"
+                      class:is-context={menuMessage?.id === message.id}
+                      class:mentions-me={mentionsMe(message)}
+                      data-message-id={message.id}
+                      data-group-first={message.id === group.messages[0].id}
+                      oncontextmenu={(event) => openMessageMenu(message, event)}
+                    >
+                      {#if editingMessageId === message.id}
+                        <div class="chat-msg-edit">
+                          <EmojiComposer
+                            class="chat-msg-edit-input"
+                            bind:this={editEl}
+                            bind:value={editDraft}
+                            maxlength={500}
+                            ariaLabel="Текст сообщения"
+                            onkeydown={onEditKeydown}
+                            disabled={editSaving}
+                          />
+                          <div class="chat-msg-edit-actions">
+                            <button type="button" onclick={cancelEditing} disabled={editSaving}>Отмена</button>
+                            <button type="button" onclick={saveEdit} disabled={editSaving || !editDraft.trim()}
+                              >Сохранить</button
+                            >
+                          </div>
+                        </div>
+                      {:else}
+                        <div class="chat-msg-body">
+                          {#if message.replyPreview}<ReplyPreview
+                              preview={message.replyPreview}
+                              interactive
+                              onjump={jumpToMessage}
+                            />{/if}
+                          <span class="chat-msg-content"
+                            >{#if message.content}<StructuredMessageContent
+                                content={message.content}
+                                fallback={message.text}
+                                onmention={openMentionProfile}
+                              />{:else}<ChatText text={message.text} />{/if}{#if message.editedAt}<span
+                                class="chat-msg-edited">(изменено)</span
+                              >{/if}</span
+                          >
+                          {#if message.linkPreview}<LinkPreviewCard preview={message.linkPreview} />{/if}
+                          {#if message.attachments?.length}<AttachmentMosaic attachments={message.attachments} />{/if}
+                          {#if reactionsEnabled}<ReactionSummary
+                              store={reactions}
+                              messageId={message.id}
+                              canMutate={Boolean(session.user?.id)}
+                            />{/if}
+                        </div>
+                        <MessageHoverActions
+                          reactionStore={reactionsEnabled && session.user?.id ? reactions : undefined}
+                          messageId={message.id}
+                          userId={session.user?.id}
+                          canReply={repliesEnabled}
+                          onReply={() => {
+                            replyTarget = message;
+                            composeEl?.focus();
+                          }}
+                          onCopy={() => void copyMessageText(message)}
+                          onMore={(event) => openMessageMenu(message, event)}
+                        />
+                      {/if}
+                    </div>
+                  {/each}
+                </div>
               </div>
             {/each}
-          </div>
-          </div>
-          {/each}
-        </section>
-      {/each}
-    {:else}
-      <p class="chat-rail-note">Пока пусто. Напишите первое сообщение.</p>
+          </section>
+        {/each}
+      {:else}
+        <p class="chat-rail-note">Пока пусто. Напишите первое сообщение.</p>
+      {/if}
+    </div>
+
+    {#if error}
+      <p class="chat-rail-error">{error}</p>
     {/if}
-  </div>
 
-  {#if error}
-    <p class="chat-rail-error">{error}</p>
-  {/if}
-
-  <form class="chat-rail-compose" onsubmit={sendMessage} onpaste={onComposePaste}>
-    <div class="chat-compose-row attachment-compose-field">
-      {#if replyTarget}
-        {@const target = replyTarget}
-        <ReplyTargetBar
-          target={{ messageId: target.id, deleted: false, author: { id: target.authorUserId || target.peerId, name: target.name }, text: target.text }}
-          onjump={jumpToMessage}
-          oncancel={() => (replyTarget = null)}
+    <form class="chat-rail-compose" onsubmit={sendMessage} onpaste={onComposePaste}>
+      <div class="chat-compose-row attachment-compose-field">
+        {#if replyTarget}
+          {@const target = replyTarget}
+          <ReplyTargetBar
+            target={{
+              messageId: target.id,
+              deleted: false,
+              author: { id: target.authorUserId || target.peerId, name: target.name },
+              text: target.text
+            }}
+            onjump={jumpToMessage}
+            oncancel={() => (replyTarget = null)}
+          />
+        {/if}
+        {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
+        <div class="attachment-compose-controls">
+          {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}
+          <EmojiComposer
+            class="chat-rail-input chat-rail-textarea"
+            bind:this={composeEl}
+            bind:value={draft}
+            maxlength={500}
+            placeholder="Написать в комнату…"
+            onkeydown={onComposeKeydown}
+            oninput={onComposeInput}
+            oncompositionstart={() => mentionComposer.setComposing(true)}
+            oncompositionend={() => {
+              mentionComposer.setComposing(false);
+              void updateMentionCandidates();
+            }}
+            disabled={sending}
+          />
+          <ComposerEmojiPicker
+            userId={session.user?.id ?? ''}
+            disabled={sending}
+            onpick={insertEmoji}
+            onbrowse={() => typingNotifier.notify('emoji')}
+          />
+        </div>
+      </div>
+      {#if mentionComposer.isOpen}
+        <MentionAutocomplete
+          candidates={mentionComposer.candidates}
+          activeIndex={mentionComposer.activeIndex}
+          onselect={chooseMention}
         />
       {/if}
-      {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
-      <div class="attachment-compose-controls">
-        {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}
-        <EmojiComposer
-          class="chat-rail-input chat-rail-textarea"
-          bind:this={composeEl}
-          bind:value={draft}
-          maxlength={500}
-          placeholder="Написать в комнату…"
-          onkeydown={onComposeKeydown}
-          oninput={onComposeInput}
-          oncompositionstart={() => mentionComposer.setComposing(true)}
-          oncompositionend={() => { mentionComposer.setComposing(false); void updateMentionCandidates(); }}
-          disabled={sending}
-        />
-        <ComposerEmojiPicker
-          userId={session.user?.id ?? ''}
-          disabled={sending}
-          onpick={insertEmoji}
-          onbrowse={() => typingNotifier.notify('emoji')}
-        />
-      </div>
-    </div>
-    {#if mentionComposer.isOpen}
-      <MentionAutocomplete candidates={mentionComposer.candidates} activeIndex={mentionComposer.activeIndex} onselect={chooseMention} />
-    {/if}
-    <TypingIndicator label={typingLabel} />
-  </form>
+      <TypingIndicator label={typingLabel} />
+    </form>
   {:else if participants}
     <div class="room-panel-members" id={participantsPanelId} role="tabpanel" aria-labelledby={participantsTabId}>
       {@render participants()}
@@ -1223,9 +1288,12 @@
     open={Boolean(menuMessage)}
     x={menuX}
     y={menuY}
-    quickReactions={quickReactions}
+    {quickReactions}
     activeReactions={new Set(
-      reactions.forMessage(target.id).filter((summary) => summary.reactedByMe).map((summary) => summary.emoji)
+      reactions
+        .forMessage(target.id)
+        .filter((summary) => summary.reactedByMe)
+        .map((summary) => summary.emoji)
     )}
     canReact={reactionsEnabled && Boolean(session.user?.id)}
     canReply={repliesEnabled}
@@ -1236,7 +1304,10 @@
     onClose={closeMessageMenu}
     onReact={(emoji) => reactFromMenu(target.id, emoji)}
     onOpenReactionPicker={() => openReactionPickerFor(target.id)}
-    onReply={() => { replyTarget = target; composeEl?.focus(); }}
+    onReply={() => {
+      replyTarget = target;
+      composeEl?.focus();
+    }}
     onCopy={() => void copyMessageText(target)}
     onTogglePin={() => void togglePinned(target.id)}
     onEdit={() => startEditing(target)}

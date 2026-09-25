@@ -42,7 +42,8 @@ function sanitizePayload(payload: unknown): CapabilityState {
     return { ...INITIAL_STATE, features: { ...INITIAL_FEATURES }, stale: true };
   }
 
-  const rawFeatures = typeof value.features === 'object' && value.features !== null ? (value.features as Record<string, unknown>) : {};
+  const rawFeatures =
+    typeof value.features === 'object' && value.features !== null ? (value.features as Record<string, unknown>) : {};
   const features: Record<string, boolean> = { ...INITIAL_FEATURES };
   for (const [key, featureValue] of Object.entries(rawFeatures)) {
     if (PUBLIC_FEATURE_KEYS.has(key)) {

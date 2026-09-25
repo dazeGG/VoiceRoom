@@ -6,8 +6,11 @@ export const IDEMPOTENCY_KEY_MIN_LENGTH = 8 as const;
 export const IDEMPOTENCY_KEY_MAX_LENGTH = 160 as const;
 export const IDEMPOTENCY_FINGERPRINT_MAX_LENGTH = 256 as const;
 export const REPLY_PREVIEW_TEXT_MAX_LENGTH = 280 as const;
-export const DELIVERY_EVENT_TYPES: readonly ['message.created', 'message.updated', 'message.deleted'] =
-  Object.freeze(['message.created', 'message.updated', 'message.deleted'] as const);
+export const DELIVERY_EVENT_TYPES: readonly ['message.created', 'message.updated', 'message.deleted'] = Object.freeze([
+  'message.created',
+  'message.updated',
+  'message.deleted'
+] as const);
 
 export type ConversationRef = { type: 'room' | 'dm'; id: string };
 export type ReplyPointer = Readonly<{ messageId: string }>;
@@ -61,10 +64,12 @@ export function normalizeConversation(value: unknown): ConversationRef | null {
 }
 
 export function isSystemCard(value: unknown): boolean {
-  return value === 'system'
-    || value === 'system-card'
-    || value === 'invite'
-    || (isObject(value) && (value.type === 'system' || value.type === 'system-card' || value.system === true));
+  return (
+    value === 'system' ||
+    value === 'system-card' ||
+    value === 'invite' ||
+    (isObject(value) && (value.type === 'system' || value.type === 'system-card' || value.system === true))
+  );
 }
 
 export function normalizeReplyPointer(value: unknown): ReplyPointer | null {
@@ -101,7 +106,9 @@ export function normalizeIdempotency(value: unknown): IdempotencyDescriptor | nu
   return { key, fingerprint, actorType, actorId, conversation };
 }
 
-export function normalizeSendEnvelope(value: unknown):
+export function normalizeSendEnvelope(
+  value: unknown
+):
   | { ok: true; legacy: false; envelope: SendEnvelope }
   | { ok: true; legacy: true; envelope: null }
   | { ok: false; code: string } {
@@ -119,9 +126,8 @@ export function normalizeSendEnvelope(value: unknown):
   const idempotency = normalizeIdempotency(value.idempotency);
   if (!idempotency) return { ok: false, code: 'invalid_idempotency' };
 
-  const replyTo = value.replyTo === undefined || value.replyTo === null
-    ? undefined
-    : normalizeReplyPointer(value.replyTo);
+  const replyTo =
+    value.replyTo === undefined || value.replyTo === null ? undefined : normalizeReplyPointer(value.replyTo);
   if (value.replyTo && !replyTo) return { ok: false, code: 'invalid_reply_target' };
 
   return {
@@ -142,7 +148,9 @@ export function buildMessageDeliveryEvent(value: Loose = {}): MessageDeliveryEve
   const eventId = cleanString(value.eventId ?? value.id, 160);
   const messageId = cleanString(value.messageId, 160);
   const conversation = normalizeConversation(value.conversation);
-  const type = (DELIVERY_EVENT_TYPES as readonly unknown[]).includes(value.type) ? value.type as MessageDeliveryEvent['type'] : '';
+  const type = (DELIVERY_EVENT_TYPES as readonly unknown[]).includes(value.type)
+    ? (value.type as MessageDeliveryEvent['type'])
+    : '';
   if (!eventId || !messageId || !conversation || !type) return null;
 
   return {

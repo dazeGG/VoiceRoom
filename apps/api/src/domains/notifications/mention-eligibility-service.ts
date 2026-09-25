@@ -13,11 +13,16 @@ class MentionEligibilityError extends Error {
 
   constructor(code = 'mention_not_eligible') {
     super('One or more mention targets are not eligible');
-    this.name = 'MentionEligibilityError'; this.code = code; this.statusCode = 422;
+    this.name = 'MentionEligibilityError';
+    this.code = code;
+    this.statusCode = 422;
   }
 }
 
-function createMentionEligibilityService({ activeBanService, pool }: {
+function createMentionEligibilityService({
+  activeBanService,
+  pool
+}: {
   activeBanService?: ActiveBanFilter;
   pool?: QueryClient | null;
 } = {}) {
@@ -26,7 +31,12 @@ function createMentionEligibilityService({ activeBanService, pool }: {
   const defaultDb = pool;
 
   // An arrow function keeps the activeBanService narrowing from the check above.
-  const validate = async ({ roomId, creatorUserId, targetUserIds, client }: {
+  const validate = async ({
+    roomId,
+    creatorUserId,
+    targetUserIds,
+    client
+  }: {
     roomId: string;
     creatorUserId: string;
     targetUserIds: unknown;
@@ -50,11 +60,13 @@ function createMentionEligibilityService({ activeBanService, pool }: {
        WHERE rm.room_id=$1 AND rm.user_id = ANY($2::varchar[])`,
       [roomId, normalized.userIds]
     );
-    const eligible = new Set(await activeBanService.filterEligibleUserIds({
-      roomId,
-      userIds: targets.rows.map((row) => row.user_id),
-      client: db
-    }));
+    const eligible = new Set(
+      await activeBanService.filterEligibleUserIds({
+        roomId,
+        userIds: targets.rows.map((row) => row.user_id),
+        client: db
+      })
+    );
     if (eligible.size !== normalized.userIds.length) throw new MentionEligibilityError();
     return normalized.userIds;
   };

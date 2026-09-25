@@ -46,7 +46,11 @@ function timingSafeMatch(expected: string, actual: string): boolean {
 
 // Stateful proof-of-work guard for room creation: signs challenges with an HMAC
 // keyed by the client IP and tracks spent challenges to prevent replay.
-function createProofOfWork({ secret = crypto.randomBytes(32), difficulty, ttlMs }: {
+function createProofOfWork({
+  secret = crypto.randomBytes(32),
+  difficulty,
+  ttlMs
+}: {
   secret?: crypto.BinaryLike;
   difficulty: number;
   ttlMs: number;

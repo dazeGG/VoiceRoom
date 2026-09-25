@@ -35,7 +35,11 @@ function parsePage(value: unknown, roomId: string): ModerationPage {
 
 async function responseJson<T>(response: Response): Promise<T> {
   let payload: ({ error?: string } & T) | null = null;
-  try { payload = await response.json(); } catch { /* generic error below */ }
+  try {
+    payload = await response.json();
+  } catch {
+    /* generic error below */
+  }
   if (!response.ok) throw new Error(payload?.error || 'Сервер недоступен');
   return payload as T;
 }
@@ -71,9 +75,7 @@ export async function putBan(roomId: string, input: BanMutation, idempotencyKey:
 }
 
 export async function unban(roomId: string, banId: string): Promise<ActiveBan> {
-  const payload = await del<{ ban?: unknown }>(
-    `${roomModerationUrl(roomId)}/bans/${encodeURIComponent(banId)}`
-  );
+  const payload = await del<{ ban?: unknown }>(`${roomModerationUrl(roomId)}/bans/${encodeURIComponent(banId)}`);
   const ban = normalizeActiveBan(payload.ban);
   if (!ban) throw new Error('Сервер вернул некорректный ответ');
   return ban;

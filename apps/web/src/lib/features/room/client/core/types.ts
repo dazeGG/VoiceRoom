@@ -222,11 +222,7 @@ export interface RoomScreenState {
 }
 
 export interface AppState
-  extends RoomSessionState,
-    RoomConnectionState,
-    RoomParticipantState,
-    RoomAudioState,
-    RoomScreenState {}
+  extends RoomSessionState, RoomConnectionState, RoomParticipantState, RoomAudioState, RoomScreenState {}
 
 // Mirrors the server's publicLobbyRoom() shape (apps/api/src/domains/rooms/room-views.ts) — the body carried
 // by both the PUT /api/rooms/:roomId response and the room-updated broadcast.
@@ -262,10 +258,7 @@ interface DesktopAudioFormatEvent {
 declare global {
   interface Window {
     voiceRoomDesktopCapture?: {
-      applyProfile?: (options: {
-        fpsId?: string;
-        qualityId?: string;
-      }) => Promise<{
+      applyProfile?: (options: { fpsId?: string; qualityId?: string }) => Promise<{
         fpsId?: string;
         maxHeight?: number;
         maxWidth?: number;
@@ -303,12 +296,8 @@ declare global {
     voiceRoomDesktopAudio?: {
       startSafeSystem: (options: { mode: string }) => Promise<{ sessionId: string }>;
       stop: (sessionId: string) => Promise<void>;
-      onData: (
-        callback: (payload: { sessionId: string; chunk: Uint8Array | ArrayBuffer }) => void
-      ) => () => void;
-      onEvent: (
-        callback: (payload: { sessionId: string; event: DesktopAudioFormatEvent }) => void
-      ) => () => void;
+      onData: (callback: (payload: { sessionId: string; chunk: Uint8Array | ArrayBuffer }) => void) => () => void;
+      onEvent: (callback: (payload: { sessionId: string; event: DesktopAudioFormatEvent }) => void) => () => void;
     };
     voiceRoomDesktopHotkeys?: {
       configure: (payload: {

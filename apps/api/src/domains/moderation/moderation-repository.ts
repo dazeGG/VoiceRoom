@@ -28,7 +28,10 @@ export type ModerationBanRow = {
   avatar_accent?: string | null;
 };
 
-export type ModerationBan = Omit<ActiveBan, 'createdAt' | 'updatedAt'> & { createdAt: number | null; updatedAt: number | null };
+export type ModerationBan = Omit<ActiveBan, 'createdAt' | 'updatedAt'> & {
+  createdAt: number | null;
+  updatedAt: number | null;
+};
 
 function asDate(value: unknown): Date {
   if (value instanceof Date) return value;
@@ -73,12 +76,15 @@ function mapModerationBan(row: ModerationBanRow | null | undefined): ModerationB
   };
 }
 
-function createModerationRepository({ cursorCodec, pool }: { cursorCodec?: ModerationCursorCodec; pool?: QueryClient | null } = {}) {
+function createModerationRepository({
+  cursorCodec,
+  pool
+}: { cursorCodec?: ModerationCursorCodec; pool?: QueryClient | null } = {}) {
   if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
   if (!cursorCodec?.encode || !cursorCodec?.decode) throw new TypeError('Cursor codec is required');
   const defaultDb = pool;
   const codec = cursorCodec;
-  const executor = (client: Client): QueryClient => client?.query ? client : defaultDb;
+  const executor = (client: Client): QueryClient => (client?.query ? client : defaultDb);
 
   function encodeCursor(roomId: string, row: ModerationBanRow | undefined): string | undefined {
     if (!row?.created_at || !row?.id) return undefined;
@@ -116,7 +122,10 @@ function createModerationRepository({ cursorCodec, pool }: { cursorCodec?: Moder
     return (result.rowCount ?? 0) > 0;
   }
 
-  async function countActive(roomId: string, { at = Date.now(), client }: { at?: TimeInput; client?: Client } = {}): Promise<number> {
+  async function countActive(
+    roomId: string,
+    { at = Date.now(), client }: { at?: TimeInput; client?: Client } = {}
+  ): Promise<number> {
     const result = await executor(client).query<{ count: number }>(
       `SELECT COUNT(*)::int AS count
        FROM room_bans
@@ -128,7 +137,11 @@ function createModerationRepository({ cursorCodec, pool }: { cursorCodec?: Moder
     return Number(result.rows[0]?.count || 0);
   }
 
-  async function findByIdempotencyKey(roomId: string, idempotencyKey: string, { client }: { client?: Client } = {}): Promise<ModerationBan | null> {
+  async function findByIdempotencyKey(
+    roomId: string,
+    idempotencyKey: string,
+    { client }: { client?: Client } = {}
+  ): Promise<ModerationBan | null> {
     if (!roomId || !idempotencyKey) return null;
     const result = await executor(client).query<ModerationBanRow>(
       'SELECT * FROM room_bans WHERE room_id = $1 AND idempotency_key = $2 LIMIT 1',
@@ -137,7 +150,13 @@ function createModerationRepository({ cursorCodec, pool }: { cursorCodec?: Moder
     return mapModerationBan(result.rows[0]);
   }
 
-  async function findActivePrincipal({ roomId, userId = null, guestIp = null, at = Date.now(), client }: {
+  async function findActivePrincipal({
+    roomId,
+    userId = null,
+    guestIp = null,
+    at = Date.now(),
+    client
+  }: {
     roomId: string;
     userId?: string | null;
     guestIp?: string | null;
@@ -160,7 +179,16 @@ function createModerationRepository({ cursorCodec, pool }: { cursorCodec?: Moder
     return result.rows[0] || null;
   }
 
-  async function create({ roomId, userId = null, guestIp = null, expiresAt, reason = '', idempotencyKey, at = Date.now(), client }: {
+  async function create({
+    roomId,
+    userId = null,
+    guestIp = null,
+    expiresAt,
+    reason = '',
+    idempotencyKey,
+    at = Date.now(),
+    client
+  }: {
     roomId: string;
     userId?: string | null;
     guestIp?: string | null;
@@ -176,13 +204,28 @@ function createModerationRepository({ cursorCodec, pool }: { cursorCodec?: Moder
          (id, room_id, user_id, ip, created_at, expires_at, metadata, reason, idempotency_key, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, '{}'::jsonb, $7, $8, $5)
        RETURNING *`,
-      [crypto.randomUUID(), roomId, userId, userId ? '' : guestIp, timestamp,
-        expiresAt == null ? null : asDate(expiresAt), reason, idempotencyKey]
+      [
+        crypto.randomUUID(),
+        roomId,
+        userId,
+        userId ? '' : guestIp,
+        timestamp,
+        expiresAt == null ? null : asDate(expiresAt),
+        reason,
+        idempotencyKey
+      ]
     );
     return mapModerationBan(result.rows[0]);
   }
 
-  async function updateActive({ id, expiresAt, reason = '', idempotencyKey, at = Date.now(), client }: {
+  async function updateActive({
+    id,
+    expiresAt,
+    reason = '',
+    idempotencyKey,
+    at = Date.now(),
+    client
+  }: {
     id: string;
     expiresAt?: TimeInput | null;
     reason?: string;
@@ -201,7 +244,13 @@ function createModerationRepository({ cursorCodec, pool }: { cursorCodec?: Moder
     return mapModerationBan(result.rows[0]);
   }
 
-  async function listActive({ roomId, cursor = null, limit = 50, at = Date.now(), client }: {
+  async function listActive({
+    roomId,
+    cursor = null,
+    limit = 50,
+    at = Date.now(),
+    client
+  }: {
     roomId: string;
     cursor?: string | null;
     limit?: number;
@@ -243,7 +292,12 @@ function createModerationRepository({ cursorCodec, pool }: { cursorCodec?: Moder
     };
   }
 
-  async function revoke({ roomId, banId, at = Date.now(), client }: {
+  async function revoke({
+    roomId,
+    banId,
+    at = Date.now(),
+    client
+  }: {
     roomId: string;
     banId: string;
     at?: TimeInput;

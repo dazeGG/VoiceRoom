@@ -167,11 +167,7 @@ test('message edit rate limits run after ownership and before storage or realtim
   const allowedRoomEdit = await patch(app, roomUrl, 'author-session', 'room allowed');
   assert.equal(allowedRoomEdit.statusCode, 200);
   assert.equal(roomEditCount, 1);
-  await waitForFrame(
-    realtime.frames,
-    'room.chat.edited',
-    (frame) => frame.payload?.message?.text === 'room allowed'
-  );
+  await waitForFrame(realtime.frames, 'room.chat.edited', (frame) => frame.payload?.message?.text === 'room allowed');
 
   const blockedRoomEdit = await patch(app, roomUrl, 'author-session', 'room blocked');
   assert.equal(blockedRoomEdit.statusCode, 429);
@@ -192,11 +188,7 @@ test('message edit rate limits run after ownership and before storage or realtim
   const allowedDmEdit = await patch(app, dmUrl, 'author-session', 'dm allowed');
   assert.equal(allowedDmEdit.statusCode, 200);
   assert.equal(dmEditCount, 1);
-  await waitForFrame(
-    realtime.frames,
-    'dm.message.edited',
-    (frame) => frame.payload?.message?.body === 'dm allowed'
-  );
+  await waitForFrame(realtime.frames, 'dm.message.edited', (frame) => frame.payload?.message?.body === 'dm allowed');
 
   const blockedDmEdit = await patch(app, dmUrl, 'author-session', 'dm blocked');
   assert.equal(blockedDmEdit.statusCode, 429);

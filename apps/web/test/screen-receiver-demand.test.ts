@@ -1,7 +1,6 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
 
-
 async function loadDemandPolicy() {
   return import('../src/lib/features/room/client/media/screen-receiver-demand.ts');
 }

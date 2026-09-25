@@ -1,13 +1,16 @@
 type Loose = Record<string, unknown>;
 
-export type VisibilityContext = {
-  authorized?: unknown;
-  room?: { deletedAt?: unknown; deleted_at?: unknown } | null;
-  message?: Loose | null;
-  viewerId?: string;
-  userId?: string;
-  [key: string]: unknown;
-} | null | undefined;
+export type VisibilityContext =
+  | {
+      authorized?: unknown;
+      room?: { deletedAt?: unknown; deleted_at?: unknown } | null;
+      message?: Loose | null;
+      viewerId?: string;
+      userId?: string;
+      [key: string]: unknown;
+    }
+  | null
+  | undefined;
 
 export interface VisibilityPolicy {
   canView(context: VisibilityContext): boolean | Promise<boolean>;
@@ -31,13 +34,15 @@ class MessageVisibilityError extends Error {
 }
 
 function participantIds(message: Loose | null | undefined): Set<unknown> {
-  return new Set([
-    message?.senderId || message?.sender_id,
-    message?.recipientId || message?.recipient_id
-  ].filter(Boolean));
+  return new Set(
+    [message?.senderId || message?.sender_id, message?.recipientId || message?.recipient_id].filter(Boolean)
+  );
 }
 
-function createMessageVisibilityService({ roomAdapter, directAdapter }: {
+function createMessageVisibilityService({
+  roomAdapter,
+  directAdapter
+}: {
   roomAdapter?: VisibilityPolicy;
   directAdapter?: VisibilityPolicy;
 } = {}): MessageVisibilityService {

@@ -58,10 +58,16 @@ test('push subscriptions migration defines durable endpoint ownership and cleanu
   assert.equal(table.columns.user_id.references, 'users(id)');
   assert.equal(table.columns.user_id.onDelete, 'CASCADE');
   assert.equal(table.columns.endpoint.unique, true);
-  for (const column of ['p256dh', 'auth', 'created_at', 'last_success_at', 'metadata']) assert.ok(table.columns[column]);
-  assert.ok(pgm.calls.some((call) => call.type === 'createIndex'
-    && call.options.name === 'push_subscriptions_user_created_idx'
-    && call.columns.join(',') === 'user_id,created_at,id'));
+  for (const column of ['p256dh', 'auth', 'created_at', 'last_success_at', 'metadata'])
+    assert.ok(table.columns[column]);
+  assert.ok(
+    pgm.calls.some(
+      (call) =>
+        call.type === 'createIndex' &&
+        call.options.name === 'push_subscriptions_user_created_idx' &&
+        call.columns.join(',') === 'user_id,created_at,id'
+    )
+  );
 
   const down = createRecorder();
   pushMigration.down(down);
@@ -111,7 +117,10 @@ test('room chat reads migration stores one durable read cursor per room and user
 
   const down = createRecorder();
   roomChatReadsMigration.down(down);
-  assert.deepEqual(down.calls.filter((call) => call.type === 'dropTable').map((call) => call.name), ['room_chat_reads']);
+  assert.deepEqual(
+    down.calls.filter((call) => call.type === 'dropTable').map((call) => call.name),
+    ['room_chat_reads']
+  );
 });
 
 test('rooms and room_messages migration captures durable schema contract', () => {
@@ -123,10 +132,29 @@ test('rooms and room_messages migration captures durable schema contract', () =>
 
   assert.ok(rooms, 'rooms table is created');
   assert.ok(messages, 'room_messages table is created');
-  for (const column of ['id', 'creator_ip', 'is_static', 'created_at', 'updated_at', 'empty_since', 'deleted_at', 'metadata']) {
+  for (const column of [
+    'id',
+    'creator_ip',
+    'is_static',
+    'created_at',
+    'updated_at',
+    'empty_since',
+    'deleted_at',
+    'metadata'
+  ]) {
     assert.ok(rooms.columns[column], `rooms.${column} exists`);
   }
-  for (const column of ['id', 'room_id', 'peer_id', 'name', 'text', 'created_at', 'expires_at', 'deleted_at', 'metadata']) {
+  for (const column of [
+    'id',
+    'room_id',
+    'peer_id',
+    'name',
+    'text',
+    'created_at',
+    'expires_at',
+    'deleted_at',
+    'metadata'
+  ]) {
     assert.ok(messages.columns[column], `room_messages.${column} exists`);
   }
 
@@ -154,7 +182,10 @@ test('avatar migration adds reversible user and room avatar columns', () => {
   avatarMigration.down(down);
   assert.deepEqual(
     down.calls.filter((call) => call.type === 'dropColumns').map((call) => [call.table, call.columns]),
-    [['rooms', ['avatar_key']], ['users', ['avatar_key', 'avatar_accent']]]
+    [
+      ['rooms', ['avatar_key']],
+      ['users', ['avatar_key', 'avatar_accent']]
+    ]
   );
   assert.ok(down.calls.some((call) => call.type === 'dropConstraint' && call.name === 'users_avatar_accent_check'));
 });
@@ -182,7 +213,10 @@ test('room bans migration defines scoped user and IP enforcement with room casca
 
   const down = createRecorder();
   roomBansMigration.down(down);
-  assert.deepEqual(down.calls.filter((call) => call.type === 'dropTable').map((call) => call.name), ['room_bans']);
+  assert.deepEqual(
+    down.calls.filter((call) => call.type === 'dropTable').map((call) => call.name),
+    ['room_bans']
+  );
 });
 
 test('rooms and room_messages migration defines lookup, quota, idle, listing, and expiry indexes', () => {
@@ -190,9 +224,7 @@ test('rooms and room_messages migration defines lookup, quota, idle, listing, an
   migration.up(pgm);
 
   const indexes = new Map(
-    pgm.calls
-      .filter((call) => call.type === 'createIndex')
-      .map((call) => [call.options.name, call])
+    pgm.calls.filter((call) => call.type === 'createIndex').map((call) => [call.options.name, call])
   );
 
   assert.deepEqual(indexes.get('rooms_active_id_idx').columns, ['id']);
@@ -213,7 +245,6 @@ test('rooms migration down drops child table before parent table', () => {
   );
 });
 
-
 test('room memberships and bookmarks migration defines authoritative ownership tables', () => {
   const pgm = createRecorder();
   membershipMigration.up(pgm);
@@ -233,9 +264,7 @@ test('room memberships and bookmarks migration defines authoritative ownership t
   assert.ok(constraints.some((call) => call.name === 'room_memberships_role_check'));
 
   const indexes = new Map(
-    pgm.calls
-      .filter((call) => call.type === 'createIndex')
-      .map((call) => [call.options.name, call])
+    pgm.calls.filter((call) => call.type === 'createIndex').map((call) => [call.options.name, call])
   );
   assert.deepEqual(indexes.get('room_memberships_room_user_unique_idx').columns, ['room_id', 'user_id']);
   assert.equal(indexes.get('room_memberships_room_user_unique_idx').options.unique, true);
@@ -292,9 +321,7 @@ test('visual identity migration constrains keys and backfills legacy users and r
   visualIdentityMigration.up(pgm);
 
   const constraints = new Map(
-    pgm.calls
-      .filter((call) => call.type === 'addConstraint')
-      .map((call) => [call.name, call])
+    pgm.calls.filter((call) => call.type === 'addConstraint').map((call) => [call.name, call])
   );
   assert.match(constraints.get('users_avatar_color_key_check').options.check, /blurple/);
   assert.match(constraints.get('rooms_room_icon_key_check').options.check, /headphones/);
@@ -314,9 +341,7 @@ test('visual identity migration constrains keys and backfills legacy users and r
   assert.match(roomBackfill.text, /WHEN '🔥' THEN 'rust'/);
 
   const indexes = new Map(
-    pgm.calls
-      .filter((call) => call.type === 'createIndex')
-      .map((call) => [call.options.name, call])
+    pgm.calls.filter((call) => call.type === 'createIndex').map((call) => [call.options.name, call])
   );
   assert.deepEqual(indexes.get('room_peer_identities_room_peer_unique_idx').columns, ['room_id', 'peer_id']);
   assert.equal(indexes.get('room_peer_identities_room_peer_unique_idx').options.unique, true);
@@ -440,11 +465,14 @@ test('DND migration adds a non-null disabled-by-default user flag', () => {
 
   const down = createRecorder();
   dndMigration.down(down);
-  assert.deepEqual(down.calls.find((call) => call.type === 'dropColumns'), {
-    type: 'dropColumns',
-    table: 'users',
-    columns: ['dnd']
-  });
+  assert.deepEqual(
+    down.calls.find((call) => call.type === 'dropColumns'),
+    {
+      type: 'dropColumns',
+      table: 'users',
+      columns: ['dnd']
+    }
+  );
 });
 
 test('presence status migration adds a constrained default, backfills DND, and is reversible', () => {
@@ -453,8 +481,12 @@ test('presence status migration adds a constrained default, backfills DND, and i
 
   const added = pgm.calls.find((call) => call.type === 'addColumns' && call.table === 'users');
   assert.deepEqual(added.columns.presence_status, { type: 'text', notNull: true, default: 'online' });
-  assert.ok(pgm.calls.some((call) => call.type === 'sql' && /presence_status = 'dnd' WHERE dnd = true/.test(call.text)));
-  const constraint = pgm.calls.find((call) => call.type === 'addConstraint' && call.name === 'users_presence_status_check');
+  assert.ok(
+    pgm.calls.some((call) => call.type === 'sql' && /presence_status = 'dnd' WHERE dnd = true/.test(call.text))
+  );
+  const constraint = pgm.calls.find(
+    (call) => call.type === 'addConstraint' && call.name === 'users_presence_status_check'
+  );
   assert.match(constraint.options.check, /'online'.*'away'.*'dnd'.*'offline'/);
 
   const down = createRecorder();
@@ -481,9 +513,11 @@ test('automatic presence migration records whether away was idle-driven', () => 
 
   const down = createRecorder();
   automaticPresenceMigration.down(down);
-  assert.deepEqual(down.calls, [{
-    type: 'dropColumns',
-    table: 'users',
-    columns: ['presence_status_automatic', 'presence_active_until']
-  }]);
+  assert.deepEqual(down.calls, [
+    {
+      type: 'dropColumns',
+      table: 'users',
+      columns: ['presence_status_automatic', 'presence_active_until']
+    }
+  ]);
 });

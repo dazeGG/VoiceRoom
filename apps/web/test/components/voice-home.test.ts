@@ -6,7 +6,16 @@ import VoiceHome from '../../src/lib/features/home/components/lobby/VoiceHome.sv
 afterEach(cleanup);
 
 function room(roomId: string, name: string, peers = 0) {
-  return { roomId, name, peers, avatarUrl: null, createdAt: 1, emptySince: null, isStatic: true, relationship: 'owner' as const };
+  return {
+    roomId,
+    name,
+    peers,
+    avatarUrl: null,
+    createdAt: 1,
+    emptySince: null,
+    isStatic: true,
+    relationship: 'owner' as const
+  };
 }
 
 function renderHome(rooms: ReturnType<typeof room>[] = []) {
@@ -41,7 +50,10 @@ test('an empty or blank code is not submitted', async () => {
 test('rooms are listed busiest first and open on click', async () => {
   const props = renderHome([room('quiet', 'Тихая', 0), room('busy', 'Шумная', 3)]);
   const cards = screen.getAllByRole('button', { name: /Тихая|Шумная/ });
-  expect(cards.map((card) => card.textContent)).toEqual([expect.stringContaining('Шумная'), expect.stringContaining('Тихая')]);
+  expect(cards.map((card) => card.textContent)).toEqual([
+    expect.stringContaining('Шумная'),
+    expect.stringContaining('Тихая')
+  ]);
   await userEvent.click(cards[1]);
   expect(props.onOpenRoom).toHaveBeenCalledWith('quiet');
 });

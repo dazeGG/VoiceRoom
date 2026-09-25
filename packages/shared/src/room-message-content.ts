@@ -15,7 +15,11 @@ const MAX_TEXT_LENGTH = 8_000;
 const MAX_LABEL_LENGTH = 256;
 const HTML_TAG = /<\s*\/?\s*[a-z][^>]*>/i;
 
-function cleanString(value: unknown, maxLength: number, { allowEmpty = false }: { allowEmpty?: boolean } = {}): string | null {
+function cleanString(
+  value: unknown,
+  maxLength: number,
+  { allowEmpty = false }: { allowEmpty?: boolean } = {}
+): string | null {
   if (typeof value !== 'string') return null;
   const normalized = value.replace(/\r\n?/g, '\n').normalize('NFC');
   if ((!allowEmpty && !normalized) || normalized.length > maxLength || HTML_TAG.test(normalized)) return null;
@@ -74,10 +78,12 @@ export function normalizeRoomMessageContent(input: unknown): RoomMessageContentV
 }
 
 function projectKnownContent(content: RoomMessageContentV1): string {
-  return content.segments.map((segment) => {
-    if (segment.type === 'text') return segment.text;
-    return segment.label;
-  }).join('');
+  return content.segments
+    .map((segment) => {
+      if (segment.type === 'text') return segment.text;
+      return segment.label;
+    })
+    .join('');
 }
 
 export function projectRoomMessageContent(value: unknown, legacyText: unknown = ''): string {

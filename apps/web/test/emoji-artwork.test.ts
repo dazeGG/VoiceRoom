@@ -43,7 +43,10 @@ test('the offered catalogue is exactly what the artwork can draw', async () => {
   const catalogue = JSON.parse(read('src/lib/shared/chat/emoji-coverage.json'));
   const offered = new Set(catalogue.emojis);
 
-  assert.deepEqual(catalogue.emojis, copies.map((copy) => copy.emoji));
+  assert.deepEqual(
+    catalogue.emojis,
+    copies.map((copy) => copy.emoji)
+  );
   assert.equal(offered.size, copies.length);
   assert.equal(copies.length + missing.length, corpus.length);
   assert.ok(copies.some((copy) => copy.name === assetName(RU_FLAG)));
@@ -57,7 +60,7 @@ test('the offered catalogue is exactly what the artwork can draw', async () => {
   assert.ok(uncovered.length <= 1, `too many flags missing: ${uncovered.join(' ')}`);
 });
 
-test('the artwork ships the upstream licence, not the repackager\'s', () => {
+test("the artwork ships the upstream licence, not the repackager's", () => {
   const script = read('scripts/build-emoji-assets.ts');
   const licence = read('scripts/emoji-artwork-LICENSE.txt');
 

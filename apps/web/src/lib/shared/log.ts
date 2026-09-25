@@ -95,7 +95,8 @@ export function errorContext(error: unknown, extra: LogContext = {}): LogContext
 // gate credential in its query. The intake strips these too; doing it here
 // keeps them out of the in-page buffer and anything that copies it.
 const URL_QUERY_PATTERN = /(\b[a-z][a-z0-9+.-]*:\/\/[^\s?#"'<>]*)[?#][^\s"'<>]*/gi;
-const SECRET_PATTERN = /\b(?:eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*|vrg1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/g;
+const SECRET_PATTERN =
+  /\b(?:eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*|vrg1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/g;
 
 export function redactForLog(text: string): string {
   return text.replace(URL_QUERY_PATTERN, '$1?…').replace(SECRET_PATTERN, '[redacted]');

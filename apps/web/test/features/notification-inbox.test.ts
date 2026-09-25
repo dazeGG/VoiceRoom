@@ -4,15 +4,36 @@
 import { expect, test, vi } from 'vitest';
 import { createNotificationInbox, notificationRoute } from '../../src/lib/shared/notifications/inbox.svelte.ts';
 
-const item = (id: string, readAt: number | null = null) => ({ id, roomId: 'room-a', sourceMessageId: `m-${id}`, actorUserId: 'u-anna', reasons: ['mention'], revision: 1, createdAt: 1, updatedAt: 1, readAt, retractedAt: null, body: 'текст' });
-const envelope = (notifications: unknown[], extra: Record<string, unknown> = {}) => ({ contractVersion: 1, notifications, pageInfo: { hasMore: false }, unreadCount: notifications.length, revision: 1, firstUnread: null, ...extra });
+const item = (id: string, readAt: number | null = null) => ({
+  id,
+  roomId: 'room-a',
+  sourceMessageId: `m-${id}`,
+  actorUserId: 'u-anna',
+  reasons: ['mention'],
+  revision: 1,
+  createdAt: 1,
+  updatedAt: 1,
+  readAt,
+  retractedAt: null,
+  body: 'текст'
+});
+const envelope = (notifications: unknown[], extra: Record<string, unknown> = {}) => ({
+  contractVersion: 1,
+  notifications,
+  pageInfo: { hasMore: false },
+  unreadCount: notifications.length,
+  revision: 1,
+  firstUnread: null,
+  ...extra
+});
 
 test('a notification links to the room preview at the message, never to the joining /r/ route', () => {
   expect(notificationRoute({ roomId: 'room a', sourceMessageId: 'm/1' })).toBe('/?room=room%20a&message=m%2F1');
 });
 
 test('the inbox loads pages without duplicates and reports a broken answer', async () => {
-  const list = vi.fn()
+  const list = vi
+    .fn()
     .mockResolvedValueOnce(envelope([item('1'), item('2')], { pageInfo: { hasMore: true, nextCursor: 'c2' } }))
     .mockResolvedValueOnce(envelope([item('2'), item('3')]))
     .mockResolvedValueOnce({ nonsense: true });

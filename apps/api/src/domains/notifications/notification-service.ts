@@ -23,12 +23,22 @@ export interface InboxCursorCodec {
 export interface RoomLevelStore {
   getRoomLevel?(input: { userId: string; roomId: string }): Promise<NotificationLevel> | NotificationLevel;
   setRoomLevel?(input: { userId: string; roomId: string; level: NotificationLevel }): unknown;
-  getPreferences?(userId: string): Promise<{ roomLevels?: Record<string, NotificationLevel>; mutedRoomIds?: string[] } | null | undefined>;
+  getPreferences?(
+    userId: string
+  ): Promise<{ roomLevels?: Record<string, NotificationLevel>; mutedRoomIds?: string[] } | null | undefined>;
 }
 
 type Unread = { count: number; revision: number };
 
-function createNotificationService({ pool, inbox, mentions, eligibility, outbox, cursorCodec, notificationStore }: {
+function createNotificationService({
+  pool,
+  inbox,
+  mentions,
+  eligibility,
+  outbox,
+  cursorCodec,
+  notificationStore
+}: {
   pool?: pg.Pool | null;
   inbox?: InboxRepository;
   mentions?: MentionRepository;
@@ -43,7 +53,15 @@ function createNotificationService({ pool, inbox, mentions, eligibility, outbox,
   const encode = (item: InboxNotification): string | undefined =>
     cursorCodec?.encode({ purpose: 'notification-inbox', context: item.recipientUserId, tuple: item.cursorTuple });
 
-  async function list({ userId, cursor, limit }: { userId: string; cursor?: string; limit?: unknown }): Promise<NotificationEnvelope> {
+  async function list({
+    userId,
+    cursor,
+    limit
+  }: {
+    userId: string;
+    cursor?: string;
+    limit?: unknown;
+  }): Promise<NotificationEnvelope> {
     const pageSize = normalizeNotificationLimit(limit);
     const before = cursor ? cursorCodec!.decode(cursor, { purpose: 'notification-inbox', context: userId }) : null;
     const [rows, unread, firstUnread] = await Promise.all([
@@ -64,7 +82,9 @@ function createNotificationService({ pool, inbox, mentions, eligibility, outbox,
     });
   }
 
-  async function count(userId: string): Promise<Unread> { return items.unreadCount(userId); }
+  async function count(userId: string): Promise<Unread> {
+    return items.unreadCount(userId);
+  }
 
   async function markRead({ userId, notificationId }: { userId: string; notificationId: string }) {
     const item = await items.markRead({ recipientUserId: userId, notificationId });
@@ -74,7 +94,10 @@ function createNotificationService({ pool, inbox, mentions, eligibility, outbox,
   }
 
   async function markAllRead({ userId, through }: { userId: string; through?: unknown }) {
-    const result: number | { updated: number | null; revision: number | null } = await items.markAllRead({ recipientUserId: userId, through });
+    const result: number | { updated: number | null; revision: number | null } = await items.markAllRead({
+      recipientUserId: userId,
+      through
+    });
     const unread = await items.unreadCount(userId);
     return {
       ok: true as const,
@@ -84,7 +107,15 @@ function createNotificationService({ pool, inbox, mentions, eligibility, outbox,
     };
   }
 
-  async function markRoomRead({ userId, roomId, through = null }: { userId?: string; roomId?: string; through?: unknown }) {
+  async function markRoomRead({
+    userId,
+    roomId,
+    through = null
+  }: {
+    userId?: string;
+    roomId?: string;
+    through?: unknown;
+  }) {
     if (!userId || !roomId) return { ok: false as const, code: 'invalid_request' };
     const result = await items.markReadForRoom({ recipientUserId: userId, roomId, through });
     const unread = await items.unreadCount(userId);
@@ -101,7 +132,15 @@ function createNotificationService({ pool, inbox, mentions, eligibility, outbox,
     return { ok: true as const, unreadCount: unread.count, revision: unread.revision };
   }
 
-  async function createAddressedForMessage({ roomId, messageId, creatorUserId, targetUserIds = [], replyTargetUserId = null, body = '', client }: {
+  async function createAddressedForMessage({
+    roomId,
+    messageId,
+    creatorUserId,
+    targetUserIds = [],
+    replyTargetUserId = null,
+    body = '',
+    client
+  }: {
     roomId: string;
     messageId: string;
     creatorUserId: string;
@@ -123,9 +162,23 @@ function createNotificationService({ pool, inbox, mentions, eligibility, outbox,
       const created: InboxNotification[] = [];
       for (const [recipientUserId, reasons] of recipientReasons) {
         // upsert always returns the row it wrote.
-        const item = (await items.upsert({ recipientUserId, actorUserId: creatorUserId, roomId, sourceMessageId: messageId, reasons: [...reasons], body, client: tx }))!;
+        const item = (await items.upsert({
+          recipientUserId,
+          actorUserId: creatorUserId,
+          roomId,
+          sourceMessageId: messageId,
+          reasons: [...reasons],
+          body,
+          client: tx
+        }))!;
         const payload = buildProviderPayload(item);
-        await outbox!.enqueue({ notificationId: item.id, recipientUserId, revision: item.revision, payload, client: tx });
+        await outbox!.enqueue({
+          notificationId: item.id,
+          recipientUserId,
+          revision: item.revision,
+          payload,
+          client: tx
+        });
         created.push(item);
       }
       return created;
@@ -147,7 +200,17 @@ function createNotificationService({ pool, inbox, mentions, eligibility, outbox,
     return { ok: false, code: 'not_supported' };
   }
 
-  return { count, createAddressedForMessage, getRoomLevel, list, markAllRead, markRead, markRoomRead, resync, setRoomLevel };
+  return {
+    count,
+    createAddressedForMessage,
+    getRoomLevel,
+    list,
+    markAllRead,
+    markRead,
+    markRoomRead,
+    resync,
+    setRoomLevel
+  };
 }
 
 export type NotificationService = ReturnType<typeof createNotificationService>;

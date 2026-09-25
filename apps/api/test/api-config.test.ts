@@ -4,7 +4,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { DEFAULT_REALTIME_RECONNECT_LEASE_MS, readApiConfig, readinessReadySetFromEnv, resolveRealtimeReconnectLeaseMs } from '../src/app/config.ts';
+import {
+  DEFAULT_REALTIME_RECONNECT_LEASE_MS,
+  readApiConfig,
+  readinessReadySetFromEnv,
+  resolveRealtimeReconnectLeaseMs
+} from '../src/app/config.ts';
 
 test('defaults are safe: opt-in features off, local bind, dev cookies', () => {
   const config = readApiConfig({});
@@ -56,6 +61,12 @@ test('ready sets and the reconnect lease', () => {
   assert.deepEqual([...readinessReadySetFromEnv('X', { X: ' a, b ,a ' })], ['a', 'b']);
   assert.equal(resolveRealtimeReconnectLeaseMs({}), DEFAULT_REALTIME_RECONNECT_LEASE_MS);
   assert.equal(resolveRealtimeReconnectLeaseMs({ REALTIME_RECONNECT_LEASE_MS: '5000' }), 5000);
-  assert.equal(resolveRealtimeReconnectLeaseMs({ REALTIME_RECONNECT_LEASE_MS: '500' }), DEFAULT_REALTIME_RECONNECT_LEASE_MS);
-  assert.equal(resolveRealtimeReconnectLeaseMs({ REALTIME_RECONNECT_LEASE_MS: '1.5' }), DEFAULT_REALTIME_RECONNECT_LEASE_MS);
+  assert.equal(
+    resolveRealtimeReconnectLeaseMs({ REALTIME_RECONNECT_LEASE_MS: '500' }),
+    DEFAULT_REALTIME_RECONNECT_LEASE_MS
+  );
+  assert.equal(
+    resolveRealtimeReconnectLeaseMs({ REALTIME_RECONNECT_LEASE_MS: '1.5' }),
+    DEFAULT_REALTIME_RECONNECT_LEASE_MS
+  );
 });

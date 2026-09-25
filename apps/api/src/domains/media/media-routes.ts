@@ -23,7 +23,7 @@ function cleanAttachmentId(value: unknown): string {
 
 function sendError(reply: FastifyReply, error: unknown) {
   const failure = error as RouteError;
-  const status = Number.isInteger(failure?.statusCode) ? failure?.statusCode as number : 500;
+  const status = Number.isInteger(failure?.statusCode) ? (failure?.statusCode as number) : 500;
   return reply.code(status).send({
     ok: false,
     code: status >= 500 ? 'media_error' : failure?.code || 'media_error',
@@ -41,17 +41,20 @@ function registerMediaRoutes({
 }: {
   app?: FastifyInstance;
   mediaService?: MediaService;
-  mediaVisibilityService?: { open?: (input: { attachmentId: string; variant: unknown; viewerId: string }) => Promise<OpenedMedia> } | null;
+  mediaVisibilityService?: {
+    open?: (input: { attachmentId: string; variant: unknown; viewerId: string }) => Promise<OpenedMedia>;
+  } | null;
   readsEnabled?: Gate;
   resolveUser?: (request: FastifyRequest) => unknown;
   uploadsEnabled?: Gate;
 } = {}): void {
-  if (!app || !mediaService || typeof resolveUser !== 'function') throw new TypeError('Media route dependencies are required');
+  if (!app || !mediaService || typeof resolveUser !== 'function')
+    throw new TypeError('Media route dependencies are required');
   const media = mediaService;
   const resolve = resolveUser;
 
   async function user(request: FastifyRequest, reply: FastifyReply): Promise<Viewer | null> {
-    const session = await resolve(request) as { user?: Viewer } & Partial<Viewer> | null | undefined;
+    const session = (await resolve(request)) as ({ user?: Viewer } & Partial<Viewer>) | null | undefined;
     const resolved = session?.user || session;
     if (!resolved?.id) {
       reply.code(401).send({ ok: false, code: 'authentication_required', error: 'Authentication required' });
@@ -70,18 +73,29 @@ function registerMediaRoutes({
   }
 
   app.post<MediaRoute>('/api/media/attachments', async (request, reply) => {
-    const current = await user(request, reply); if (!current) return;
-    if (!await uploadsEnabled(request)) return reply.code(503).send({ ok: false, code: 'media_uploads_disabled', error: 'Media uploads are unavailable' });
+    const current = await user(request, reply);
+    if (!current) return;
+    if (!(await uploadsEnabled(request)))
+      return reply
+        .code(503)
+        .send({ ok: false, code: 'media_uploads_disabled', error: 'Media uploads are unavailable' });
     try {
       const attachment = await media.createSlot({ ownerId: current.id, ...request.body });
       return reply.header('Cache-Control', 'no-store').code(201).send({ ok: true, attachment });
-    } catch (error) { return sendError(reply, error); }
+    } catch (error) {
+      return sendError(reply, error);
+    }
   });
 
   app.put<MediaRoute>('/api/media/attachments/:id/content', async (request, reply) => {
-    const current = await user(request, reply); if (!current) return;
-    const id = attachmentId(request, reply); if (!id) return;
-    if (!await uploadsEnabled(request)) return reply.code(503).send({ ok: false, code: 'media_uploads_disabled', error: 'Media uploads are unavailable' });
+    const current = await user(request, reply);
+    if (!current) return;
+    const id = attachmentId(request, reply);
+    if (!id) return;
+    if (!(await uploadsEnabled(request)))
+      return reply
+        .code(503)
+        .send({ ok: false, code: 'media_uploads_disabled', error: 'Media uploads are unavailable' });
     try {
       const multipart = request as MediaRequest;
       let stream: AsyncIterable<unknown> | undefined = request.raw;
@@ -93,48 +107,79 @@ function registerMediaRoutes({
       }
       const attachment = await media.upload({ id, ownerId: current.id, stream, mimeType });
       return reply.header('Cache-Control', 'no-store').send({ ok: true, attachment });
-    } catch (error) { return sendError(reply, error); }
+    } catch (error) {
+      return sendError(reply, error);
+    }
   });
 
   app.get<MediaRoute>('/api/media/attachments/:id', async (request, reply) => {
-    const current = await user(request, reply); if (!current) return;
-    const id = attachmentId(request, reply); if (!id) return;
+    const current = await user(request, reply);
+    if (!current) return;
+    const id = attachmentId(request, reply);
+    if (!id) return;
     try {
       const attachment = await media.status({ id, ownerId: current.id });
       return reply.header('Cache-Control', 'no-store').send({ ok: true, attachment });
-    } catch (error) { return sendError(reply, error); }
+    } catch (error) {
+      return sendError(reply, error);
+    }
   });
 
   app.post<MediaRoute>('/api/media/attachments/:id/retry', async (request, reply) => {
-    const current = await user(request, reply); if (!current) return;
-    const id = attachmentId(request, reply); if (!id) return;
-    if (!await uploadsEnabled(request)) return reply.code(503).send({ ok: false, code: 'media_uploads_disabled', error: 'Media uploads are unavailable' });
-    try { return reply.send({ ok: true, attachment: await media.retry({ id, ownerId: current.id }) }); }
-    catch (error) { return sendError(reply, error); }
+    const current = await user(request, reply);
+    if (!current) return;
+    const id = attachmentId(request, reply);
+    if (!id) return;
+    if (!(await uploadsEnabled(request)))
+      return reply
+        .code(503)
+        .send({ ok: false, code: 'media_uploads_disabled', error: 'Media uploads are unavailable' });
+    try {
+      return reply.send({ ok: true, attachment: await media.retry({ id, ownerId: current.id }) });
+    } catch (error) {
+      return sendError(reply, error);
+    }
   });
 
   app.delete<MediaRoute>('/api/media/attachments/:id', async (request, reply) => {
-    const current = await user(request, reply); if (!current) return;
-    const id = attachmentId(request, reply); if (!id) return;
-    try { return reply.send({ ok: true, attachment: await media.remove({ id, ownerId: current.id }) }); }
-    catch (error) { return sendError(reply, error); }
+    const current = await user(request, reply);
+    if (!current) return;
+    const id = attachmentId(request, reply);
+    if (!id) return;
+    try {
+      return reply.send({ ok: true, attachment: await media.remove({ id, ownerId: current.id }) });
+    } catch (error) {
+      return sendError(reply, error);
+    }
   });
 
   if (mediaVisibilityService?.open) {
     const visibility = mediaVisibilityService as { open: NonNullable<typeof mediaVisibilityService.open> };
     app.get<MediaRoute>('/api/media/attachments/:id/:variant', async (request, reply) => {
-      const current = await user(request, reply); if (!current) return;
-      const id = attachmentId(request, reply); if (!id) return;
-      if (!await readsEnabled(request)) return reply.code(404).send({ ok: false, code: 'media_not_found', error: 'Attachment not found' });
+      const current = await user(request, reply);
+      if (!current) return;
+      const id = attachmentId(request, reply);
+      if (!id) return;
+      if (!(await readsEnabled(request)))
+        return reply.code(404).send({ ok: false, code: 'media_not_found', error: 'Attachment not found' });
       try {
-        const opened = await visibility.open({ attachmentId: id, variant: request.params.variant, viewerId: current.id });
+        const opened = await visibility.open({
+          attachmentId: id,
+          variant: request.params.variant,
+          viewerId: current.id
+        });
         return reply
           .header('Cache-Control', 'private, no-store')
-          .header('Content-Disposition', `${request.query?.download === '1' ? 'attachment' : 'inline'}; filename="image.${opened.extension}"`)
+          .header(
+            'Content-Disposition',
+            `${request.query?.download === '1' ? 'attachment' : 'inline'}; filename="image.${opened.extension}"`
+          )
           .header('Content-Length', String(opened.bytes))
           .type(opened.mimeType)
           .send(opened.stream);
-      } catch (error) { return sendError(reply, error); }
+      } catch (error) {
+        return sendError(reply, error);
+      }
     });
   }
 }

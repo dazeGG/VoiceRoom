@@ -53,7 +53,11 @@ function request(socketPath, { method = 'GET', pathname, body, cookie } = {}) {
         data += chunk;
       });
       res.on('end', () => {
-        resolve({ status: res.statusCode, body: data ? JSON.parse(data) : null, setCookie: res.headers['set-cookie'] || [] });
+        resolve({
+          status: res.statusCode,
+          body: data ? JSON.parse(data) : null,
+          setCookie: res.headers['set-cookie'] || []
+        });
       });
       res.on('error', reject);
     });
@@ -110,7 +114,12 @@ test('an account can be deleted, restored within the grace period and never re-r
   assert.deepEqual(preview.body.rooms, []);
   assert.equal(preview.body.graceDays, 7);
 
-  const wrongPassword = await request(socketPath, { method: 'POST', pathname: '/api/auth/account/deletion', cookie, body: { currentPassword: 'nope' } });
+  const wrongPassword = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/auth/account/deletion',
+    cookie,
+    body: { currentPassword: 'nope' }
+  });
   assert.equal(wrongPassword.status, 400);
 
   const requested = await request(socketPath, {
@@ -130,12 +139,28 @@ test('an account can be deleted, restored within the grace period and never re-r
   assert.equal(pendingLogin.body.deletionScheduledFor, requested.body.deletionScheduledFor);
   assert.equal(pendingLogin.setCookie.length, 0);
 
-  assert.equal((await request(socketPath, { method: 'POST', pathname: '/api/auth/account/restore', body: { ...credentials, password: 'nope' } })).status, 401);
-  const restored = await request(socketPath, { method: 'POST', pathname: '/api/auth/account/restore', body: credentials });
+  assert.equal(
+    (
+      await request(socketPath, {
+        method: 'POST',
+        pathname: '/api/auth/account/restore',
+        body: { ...credentials, password: 'nope' }
+      })
+    ).status,
+    401
+  );
+  const restored = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/auth/account/restore',
+    body: credentials
+  });
   assert.equal(restored.status, 200);
   assert.equal(restored.body.user.login, 'ada');
   const restoredCookie = cookieFrom(restored.setCookie);
-  assert.equal((await request(socketPath, { pathname: '/api/auth/me', cookie: restoredCookie })).body.user.login, 'ada');
+  assert.equal(
+    (await request(socketPath, { pathname: '/api/auth/me', cookie: restoredCookie })).body.user.login,
+    'ada'
+  );
 
   // Delete again and let the grace period run out.
   const again = await request(socketPath, {
@@ -148,10 +173,19 @@ test('an account can be deleted, restored within the grace period and never re-r
   const deletion = createAccountDeletionRepository({ pool });
   const [userId] = await deletion.listDueDeletions({ now: again.body.deletionScheduledFor + 1 });
   assert.ok(userId);
-  assert.equal((await deletion.finalizeDeletion({ userId, now: again.body.deletionScheduledFor + 1 })).status, 'deleted');
+  assert.equal(
+    (await deletion.finalizeDeletion({ userId, now: again.body.deletionScheduledFor + 1 })).status,
+    'deleted'
+  );
 
-  assert.equal((await request(socketPath, { method: 'POST', pathname: '/api/auth/login', body: credentials })).status, 401);
-  assert.equal((await request(socketPath, { method: 'POST', pathname: '/api/auth/account/restore', body: credentials })).status, 401);
+  assert.equal(
+    (await request(socketPath, { method: 'POST', pathname: '/api/auth/login', body: credentials })).status,
+    401
+  );
+  assert.equal(
+    (await request(socketPath, { method: 'POST', pathname: '/api/auth/account/restore', body: credentials })).status,
+    401
+  );
   for (const login of ['ada', 'deleted-anything']) {
     const reuse = await request(socketPath, {
       method: 'POST',

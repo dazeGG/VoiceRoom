@@ -9,7 +9,12 @@ import type { LiveRoom, PresencePeer } from './room-views.ts';
 export type EvictionType = 'room.kicked' | 'room.banned';
 
 export interface EvictionStore {
-  revokeLiveKitGatePeer?(input: { roomId: string; peerId: string; accountUserId: string | null; guestPrincipalId: string }): Promise<unknown>;
+  revokeLiveKitGatePeer?(input: {
+    roomId: string;
+    peerId: string;
+    accountUserId: string | null;
+    guestPrincipalId: string;
+  }): Promise<unknown>;
   invalidatePeerIdentity?(input: { roomId: string; peerId: string }): Promise<unknown>;
 }
 
@@ -18,7 +23,11 @@ export interface ReconnectRuntime {
     roomId: string;
     peerIds: string[];
     reason: string;
-    finalizePeer(input: { peerId: string; peer?: PresencePeer | null; ownershipFinalized: boolean }): Promise<{ finalized: boolean }>;
+    finalizePeer(input: {
+      peerId: string;
+      peer?: PresencePeer | null;
+      ownershipFinalized: boolean;
+    }): Promise<{ finalized: boolean }>;
   }): Promise<unknown>;
 }
 
@@ -47,7 +56,12 @@ export interface FinalizeOptions<T> {
 type OwnershipError = Error & { ownershipFinalized?: boolean };
 
 export function createPeerEviction(deps: PeerEvictionDeps) {
-  async function evictPeer(room: Pick<LiveRoom, 'id'>, peer: PresencePeer, type: EvictionType, { gateAlreadyRevoked, ownershipFinalized }: { gateAlreadyRevoked: boolean; ownershipFinalized: boolean }) {
+  async function evictPeer(
+    room: Pick<LiveRoom, 'id'>,
+    peer: PresencePeer,
+    type: EvictionType,
+    { gateAlreadyRevoked, ownershipFinalized }: { gateAlreadyRevoked: boolean; ownershipFinalized: boolean }
+  ) {
     const store = deps.store();
     let failure: unknown = null;
     if (!ownershipFinalized && !gateAlreadyRevoked && typeof store.revokeLiveKitGatePeer === 'function') {
@@ -118,7 +132,12 @@ export function createPeerEviction(deps: PeerEvictionDeps) {
     return prerequisiteResult;
   }
 
-  async function disconnect(room: Pick<LiveRoom, 'id'>, peer: PresencePeer, type: EvictionType, { gateAlreadyRevoked = false } = {}): Promise<void> {
+  async function disconnect(
+    room: Pick<LiveRoom, 'id'>,
+    peer: PresencePeer,
+    type: EvictionType,
+    { gateAlreadyRevoked = false } = {}
+  ): Promise<void> {
     await finalize(room, [peer], type, { gateAlreadyRevoked });
   }
 

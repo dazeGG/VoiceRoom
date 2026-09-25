@@ -17,15 +17,25 @@ export interface ReactionRoutesOptions {
   app?: FastifyInstance;
   reactionService?: {
     getSummaries(input: { conversation: Conversation; messageId: string; viewer: Viewer }): Promise<unknown>;
-    setDesired(input: { conversation: Conversation; mutation: { messageId: string; emoji: unknown; active: unknown }; viewer: Viewer }): Promise<unknown>;
-    getReactors(input: { conversation: Conversation; messageId: string; emoji: unknown; query: Record<string, unknown>; viewer: Viewer }): Promise<Record<string, unknown>>;
+    setDesired(input: {
+      conversation: Conversation;
+      mutation: { messageId: string; emoji: unknown; active: unknown };
+      viewer: Viewer;
+    }): Promise<unknown>;
+    getReactors(input: {
+      conversation: Conversation;
+      messageId: string;
+      emoji: unknown;
+      query: Record<string, unknown>;
+      viewer: Viewer;
+    }): Promise<Record<string, unknown>>;
   };
   resolveUser?: (request: ReactionRequest) => unknown;
 }
 
 // A resolver may hand back the session ({ user }) or the user itself.
 function sessionUser(value: unknown): Viewer {
-  const resolved = value as { user?: Viewer } & Record<string, unknown> | null | undefined;
+  const resolved = value as ({ user?: Viewer } & Record<string, unknown>) | null | undefined;
   return resolved?.user || resolved || null;
 }
 
@@ -41,7 +51,7 @@ function routeInput(request: ReactionRequest): { conversation: Conversation; mes
 
 function sendError(request: FastifyRequest, reply: FastifyReply, error: unknown) {
   const failure = error as RouteError;
-  const statusCode = Number.isInteger(failure?.statusCode) ? failure?.statusCode as number : 500;
+  const statusCode = Number.isInteger(failure?.statusCode) ? (failure?.statusCode as number) : 500;
   if (statusCode >= 500) request.log?.error?.({ err: error }, 'Reaction request failed');
   return reply.code(statusCode).send({
     ok: false,
@@ -99,7 +109,10 @@ function registerReactionRoutes({ app, reactionService, resolveUser }: ReactionR
         query: request.query || {},
         viewer: await viewer(request)
       });
-      return reply.header('Cache-Control', 'no-store').code(200).send({ ok: true, ...page });
+      return reply
+        .header('Cache-Control', 'no-store')
+        .code(200)
+        .send({ ok: true, ...page });
     } catch (error) {
       return sendError(request, reply, error);
     }

@@ -12,7 +12,13 @@ export type PushDelivery =
   | { delivered: false; suppressed: true; reason: 'provider_disabled' }
   | { delivered: boolean; suppressed: boolean; sent: number; removed: number };
 
-function createNotificationPushProvider({ pushService, store, env, client, logger }: {
+function createNotificationPushProvider({
+  pushService,
+  store,
+  env,
+  client,
+  logger
+}: {
   pushService?: NotificationPushService;
   store?: PushSubscriptionStore;
   env?: NodeJS.ProcessEnv;

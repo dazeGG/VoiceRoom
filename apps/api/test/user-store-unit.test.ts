@@ -36,14 +36,16 @@ test('createUser stores a validated avatar color key and publicUser returns it',
     assert.match(text, /avatar_color_key/);
     assert.equal(values[4], 'rose');
     return {
-      rows: [{
-        id: values[0],
-        login: values[1],
-        display_name: values[2],
-        password_hash: values[3],
-        avatar_color_key: values[4],
-        created_at: values[5]
-      }],
+      rows: [
+        {
+          id: values[0],
+          login: values[1],
+          display_name: values[2],
+          password_hash: values[3],
+          avatar_color_key: values[4],
+          created_at: values[5]
+        }
+      ],
       rowCount: 1
     };
   });
@@ -65,14 +67,16 @@ test('createUser stores a validated avatar color key and publicUser returns it',
 
 test('createUser falls back to a curated random avatar color for invalid input', async () => {
   const pool = createFakePool((text, values) => ({
-    rows: [{
-      id: values[0],
-      login: values[1],
-      display_name: values[2],
-      password_hash: values[3],
-      avatar_color_key: values[4],
-      created_at: values[5]
-    }],
+    rows: [
+      {
+        id: values[0],
+        login: values[1],
+        display_name: values[2],
+        password_hash: values[3],
+        avatar_color_key: values[4],
+        created_at: values[5]
+      }
+    ],
     rowCount: 1
   }));
   const store = createUserStore({ pool });
@@ -115,10 +119,16 @@ test('updateAvatar persists the storage key and server-derived accent', async ()
     assert.equal(values[1], 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp');
     assert.equal(values[2], '#49303f');
     return {
-      rows: [{
-        id: values[0], login: 'ada', avatar_key: values[1], avatar_accent: values[2],
-        avatar_color_key: 'rose', created_at: new Date(1000)
-      }],
+      rows: [
+        {
+          id: values[0],
+          login: 'ada',
+          avatar_key: values[1],
+          avatar_accent: values[2],
+          avatar_color_key: 'rose',
+          created_at: new Date(1000)
+        }
+      ],
       rowCount: 1
     };
   });
@@ -143,10 +153,17 @@ test('swapAvatar locks the user row and returns the exact key it replaced', asyn
     }
     if (/UPDATE users/.test(text)) {
       return {
-        rows: [{
-          id: values[0], login: 'ada', avatar_key: values[1], avatar_accent: values[2],
-          avatar_color_key: 'rose', created_at: new Date(1000), updated_at: values[3]
-        }],
+        rows: [
+          {
+            id: values[0],
+            login: 'ada',
+            avatar_key: values[1],
+            avatar_accent: values[2],
+            avatar_color_key: 'rose',
+            created_at: new Date(1000),
+            updated_at: values[3]
+          }
+        ],
         rowCount: 1
       };
     }

@@ -22,11 +22,28 @@ test('DM text keeps lines, collapses runs and caps at 2000 characters', () => {
 });
 
 function harness(options = {}) {
-  const calls = { lockedIn: '', events: [], recipients: [], previews: [], bound: [], outbox: [], completed: [], expired: [], sent: [] };
+  const calls = {
+    lockedIn: '',
+    events: [],
+    recipients: [],
+    previews: [],
+    bound: [],
+    outbox: [],
+    completed: [],
+    expired: [],
+    sent: []
+  };
   const messages = options.messages || {};
   const direct = {
-    async listThread() { return [{ id: 'm1', senderId: 'user-1', recipientId: PEER }, { id: 'm2', senderId: PEER, recipientId: 'user-1', replyTo: { messageId: 'm1' } }]; },
-    async markRead() { return { count: options.readCount ?? 1 }; },
+    async listThread() {
+      return [
+        { id: 'm1', senderId: 'user-1', recipientId: PEER },
+        { id: 'm2', senderId: PEER, recipientId: 'user-1', replyTo: { messageId: 'm1' } }
+      ];
+    },
+    async markRead() {
+      return { count: options.readCount ?? 1 };
+    },
     async sendMessage(input) {
       calls.sent.push(input);
       if (input.beforeUnitOfWork) {
@@ -37,18 +54,48 @@ function harness(options = {}) {
       if (input.unitOfWork) await input.unitOfWork({ transaction: 'insert' }, inserted);
       return inserted;
     },
-    async getMessage(userId, peerId, messageId) { return messages[messageId] || null; },
-    async respondInvite({ messageId, status }) { return options.inviteAnswered ? null : { ...messages[messageId], invite: { ...messages[messageId].invite, status } }; },
-    async softDeleteMessage() { return options.deleteResult ?? true; },
-    async editMessage({ messageId, body }) { return options.editResult === null ? null : { ...messages[messageId], body }; }
-  };
-  const delivery = options.delivery === false ? null : {
-    idempotency: {
-      async reserve() { return options.replay ? { kind: 'replay', response: { body: { message: { id: 'old', senderId: 'user-1', recipientId: PEER, replyTo: { messageId: 'm1' } } } } } : { kind: 'reserved', ledgerKey: 'ledger-1' }; },
-      async complete(client, key) { calls.completed.push(key); }
+    async getMessage(userId, peerId, messageId) {
+      return messages[messageId] || null;
     },
-    outbox: { async enqueue(client, event) { calls.outbox.push(event.type); } }
+    async respondInvite({ messageId, status }) {
+      return options.inviteAnswered
+        ? null
+        : { ...messages[messageId], invite: { ...messages[messageId].invite, status } };
+    },
+    async softDeleteMessage() {
+      return options.deleteResult ?? true;
+    },
+    async editMessage({ messageId, body }) {
+      return options.editResult === null ? null : { ...messages[messageId], body };
+    }
   };
+  const delivery =
+    options.delivery === false
+      ? null
+      : {
+          idempotency: {
+            async reserve() {
+              return options.replay
+                ? {
+                    kind: 'replay',
+                    response: {
+                      body: {
+                        message: { id: 'old', senderId: 'user-1', recipientId: PEER, replyTo: { messageId: 'm1' } }
+                      }
+                    }
+                  }
+                : { kind: 'reserved', ledgerKey: 'ledger-1' };
+            },
+            async complete(client, key) {
+              calls.completed.push(key);
+            }
+          },
+          outbox: {
+            async enqueue(client, event) {
+              calls.outbox.push(event.type);
+            }
+          }
+        };
   const features = { replies: true, mediaUploads: true, ...(options.features || {}) };
   const service = createDirectMessagesService({
     messages: () => ({ direct }),
@@ -58,21 +105,46 @@ function harness(options = {}) {
         return { cursor: input.cursor, readThrough: 3 };
       }
     }),
-    friends: () => ({ areFriends: async () => options.friends ?? true, isBlockedBetween: async () => options.blocked ?? false }),
-    findUser: async (userId) => (options.noPeer ? null : { id: userId, login: 'bob', deletedAt: options.deleted ? 1 : null, passwordHash: 'x', desktopAppSeenAt: 10 }),
+    friends: () => ({
+      areFriends: async () => options.friends ?? true,
+      isBlockedBetween: async () => options.blocked ?? false
+    }),
+    findUser: async (userId) =>
+      options.noPeer
+        ? null
+        : { id: userId, login: 'bob', deletedAt: options.deleted ? 1 : null, passwordHash: 'x', desktopAppSeenAt: 10 },
     isDmMuted: async () => true,
     roomExists: async () => options.roomExists ?? true,
-    expireRoomInvitations: async (senderId, roomId) => { calls.expired.push([senderId, roomId]); },
+    expireRoomInvitations: async (senderId, roomId) => {
+      calls.expired.push([senderId, roomId]);
+    },
     feature: (name) => features[name],
     limiter: { check: () => options.rate || { allowed: true } },
-    media: () => (options.media === null ? null : { attachments: { async bindReady(input) { calls.bound.push(input.attachmentIds); } } }),
-    replies: () => ({ async lockDirectTarget(input: { client: { transaction: string } }) { calls.lockedIn = input.client.transaction; return { id: 'm1', text: 'target', createdAt: Date.now() }; } }),
+    media: () =>
+      options.media === null
+        ? null
+        : {
+            attachments: {
+              async bindReady(input) {
+                calls.bound.push(input.attachmentIds);
+              }
+            }
+          },
+    replies: () => ({
+      async lockDirectTarget(input: { client: { transaction: string } }) {
+        calls.lockedIn = input.client.transaction;
+        return { id: 'm1', text: 'target', createdAt: Date.now() };
+      }
+    }),
     delivery: () => delivery,
     projectMedia: async (context, message) => ({ ...message, attachments: [] }),
-    projectReply: async (context, message) => (message.replyTo ? { ...message, replyPreview: { projected: true } } : message),
+    projectReply: async (context, message) =>
+      message.replyTo ? { ...message, replyPreview: { projected: true } } : message,
     directEmit: options.directEmit ?? true,
     notifyUser: (userId, event) => calls.events.push([userId, event.type]),
-    notifyRecipient: async (recipientId) => { calls.recipients.push(recipientId); },
+    notifyRecipient: async (recipientId) => {
+      calls.recipients.push(recipientId);
+    },
     scheduleLinkPreview: (input) => calls.previews.push(Boolean(input.edited))
   });
   return { calls, service };
@@ -87,14 +159,23 @@ test('the thread needs a friendship and a live account, and marks the thread rea
   assert.equal('passwordHash' in listed.peer, false);
   assert.equal('hasUsedDesktopApp' in listed.peer, false);
   assert.equal(listed.muted, true);
-  assert.deepEqual(listed.messages.map((m) => Boolean(m.replyPreview)), [false, true]);
+  assert.deepEqual(
+    listed.messages.map((m) => Boolean(m.replyPreview)),
+    [false, true]
+  );
   assert.deepEqual(calls.events, [[PEER, 'dm-read']]);
   const quiet = harness({ readCount: 0 });
   await quiet.service.thread(ME, PEER);
   assert.deepEqual(quiet.calls.events, []);
 });
 
-const sendBase = { text: 'hi https://example.com', attachmentIds: undefined, replyTo: undefined, replyToMessageId: '', idempotencyKey: '' };
+const sendBase = {
+  text: 'hi https://example.com',
+  attachmentIds: undefined,
+  replyTo: undefined,
+  replyToMessageId: '',
+  idempotencyKey: ''
+};
 
 test('send refuses in the legacy order', async () => {
   const cases = [
@@ -104,27 +185,44 @@ test('send refuses in the legacy order', async () => {
     [{ deleted: true }, {}, 'account_deleted'],
     [{}, { attachmentIds: 'x' }, 'invalid_attachments'],
     [{}, { replyTo: {} }, 'reply_unavailable'],
-    [{ features: { replies: false } }, { replyTo: { messageId: UUID_A }, replyToMessageId: UUID_A }, 'reply_unavailable'],
+    [
+      { features: { replies: false } },
+      { replyTo: { messageId: UUID_A }, replyToMessageId: UUID_A },
+      'reply_unavailable'
+    ],
     [{}, { text: '  ' }, 'empty'],
     [{ media: null }, { attachmentIds: [UUID_A] }, 'media_unavailable'],
     [{ features: { mediaUploads: false } }, { attachmentIds: [UUID_A] }, 'media_unavailable']
   ];
   for (const [options, input, status] of cases) {
-    assert.equal((await harness(options).service.send(ME, PEER, { ...sendBase, ...input })).status, status, JSON.stringify(input));
+    assert.equal(
+      (await harness(options).service.send(ME, PEER, { ...sendBase, ...input })).status,
+      status,
+      JSON.stringify(input)
+    );
   }
   assert.equal((await harness({ rate: { allowed: false } }).service.send(ME, PEER, sendBase)).retryAfterSeconds, 0);
 });
 
 test('a send binds attachments, locks the reply and records delivery in one unit of work', async () => {
   const { calls, service } = harness();
-  const sent = await service.send(ME, PEER, { ...sendBase, attachmentIds: [UUID_A], replyTo: { messageId: UUID_A }, replyToMessageId: UUID_A, idempotencyKey: 'idem-key-1' });
+  const sent = await service.send(ME, PEER, {
+    ...sendBase,
+    attachmentIds: [UUID_A],
+    replyTo: { messageId: UUID_A },
+    replyToMessageId: UUID_A,
+    idempotencyKey: 'idem-key-1'
+  });
   assert.equal(sent.status, 'sent');
   assert.equal(calls.lockedIn, 'insert', 'the reply target is locked in the transaction that inserts the message');
   assert.ok(sent.message.replyPreview);
   assert.deepEqual(calls.bound, [[UUID_A]]);
   assert.deepEqual(calls.outbox, ['message.created']);
   assert.deepEqual(calls.completed, ['ledger-1']);
-  assert.deepEqual(calls.events, [[PEER, 'dm-message'], ['user-1', 'dm-message']]);
+  assert.deepEqual(calls.events, [
+    [PEER, 'dm-message'],
+    ['user-1', 'dm-message']
+  ]);
   assert.deepEqual(calls.recipients, [PEER]);
   assert.deepEqual(calls.previews, [false]);
 
@@ -150,52 +248,108 @@ const invite = { id: 'inv', senderId: PEER, recipientId: 'user-1', invite: { roo
 const mine = { id: 'mine', senderId: 'user-1', recipientId: PEER };
 const theirs = { id: 'theirs', senderId: PEER, recipientId: 'user-1' };
 const myInvite = { id: 'my-inv', senderId: 'user-1', recipientId: PEER, invite: { roomId: 'room-1' } };
-const messages = { inv: invite, mine, theirs, 'my-inv': myInvite, plain: { id: 'plain', senderId: PEER, recipientId: 'user-1' } };
+const messages = {
+  inv: invite,
+  mine,
+  theirs,
+  'my-inv': myInvite,
+  plain: { id: 'plain', senderId: PEER, recipientId: 'user-1' }
+};
 
 test('answering a room invitation', async () => {
-  assert.equal((await harness({ messages }).service.respondInvite(ME, PEER, 'missing', 'accepted')).status, 'not_found');
+  assert.equal(
+    (await harness({ messages }).service.respondInvite(ME, PEER, 'missing', 'accepted')).status,
+    'not_found'
+  );
   assert.equal((await harness({ messages }).service.respondInvite(ME, PEER, 'plain', 'accepted')).status, 'not_found');
-  assert.equal((await harness({ messages }).service.respondInvite(ME, PEER, 'my-inv', 'accepted')).status, 'not_invited');
+  assert.equal(
+    (await harness({ messages }).service.respondInvite(ME, PEER, 'my-inv', 'accepted')).status,
+    'not_invited'
+  );
   const gone = harness({ messages, roomExists: false });
   assert.equal((await gone.service.respondInvite(ME, PEER, 'inv', 'accepted')).status, 'room_gone');
   assert.deepEqual(gone.calls.expired, [[PEER, 'room-1']]);
-  assert.equal((await harness({ messages, roomExists: false }).service.respondInvite(ME, PEER, 'inv', 'declined')).status, 'answered');
-  assert.equal((await harness({ messages, inviteAnswered: true }).service.respondInvite(ME, PEER, 'inv', 'accepted')).status, 'already_answered');
+  assert.equal(
+    (await harness({ messages, roomExists: false }).service.respondInvite(ME, PEER, 'inv', 'declined')).status,
+    'answered'
+  );
+  assert.equal(
+    (await harness({ messages, inviteAnswered: true }).service.respondInvite(ME, PEER, 'inv', 'accepted')).status,
+    'already_answered'
+  );
   const { calls, service } = harness({ messages });
   assert.equal((await service.respondInvite(ME, PEER, 'inv', 'accepted')).message.invite.status, 'accepted');
-  assert.deepEqual(calls.events, [[PEER, 'dm.message.edited'], ['user-1', 'dm.message.edited']]);
+  assert.deepEqual(calls.events, [
+    [PEER, 'dm.message.edited'],
+    ['user-1', 'dm.message.edited']
+  ]);
 });
 
 test('marking read by cursor or up to now', async () => {
   const cursor = harness();
-  assert.deepEqual(await cursor.service.markRead('user-1', PEER, 'c1'), { status: 'read', result: { cursor: 'c1', readThrough: 3 } });
+  assert.deepEqual(await cursor.service.markRead('user-1', PEER, 'c1'), {
+    status: 'read',
+    result: { cursor: 'c1', readThrough: 3 }
+  });
   assert.deepEqual(cursor.calls.events, [[PEER, 'dm-read']]);
   assert.deepEqual(await harness().service.markRead('user-1', PEER, ''), { status: 'read', result: { count: 1 } });
   const nothing = harness({ readCount: 0 });
   await nothing.service.markRead('user-1', PEER, undefined);
   assert.deepEqual(nothing.calls.events, []);
-  assert.deepEqual(await harness({ readError: Object.assign(new Error('Stale'), { statusCode: 409, code: 'stale' }) }).service.markRead('u', PEER, 'c'), { status: 'invalid_cursor', statusCode: 409, code: 'stale', error: 'Stale' });
-  assert.deepEqual(await harness({ readError: {} }).service.markRead('u', PEER, 'c'), { status: 'invalid_cursor', statusCode: 400, code: 'invalid_read_cursor', error: 'invalid_read_cursor' });
+  assert.deepEqual(
+    await harness({
+      readError: Object.assign(new Error('Stale'), { statusCode: 409, code: 'stale' })
+    }).service.markRead('u', PEER, 'c'),
+    { status: 'invalid_cursor', statusCode: 409, code: 'stale', error: 'Stale' }
+  );
+  assert.deepEqual(await harness({ readError: {} }).service.markRead('u', PEER, 'c'), {
+    status: 'invalid_cursor',
+    statusCode: 400,
+    code: 'invalid_read_cursor',
+    error: 'invalid_read_cursor'
+  });
 });
 
 test('delete and edit belong to the sender', async () => {
   assert.equal((await harness({ messages }).service.remove('user-1', PEER, 'missing')).status, 'not_found');
   assert.equal((await harness({ messages }).service.remove('user-1', PEER, 'theirs')).status, 'not_sender');
-  assert.equal((await harness({ messages, deleteResult: false }).service.remove('user-1', PEER, 'mine')).status, 'not_found');
+  assert.equal(
+    (await harness({ messages, deleteResult: false }).service.remove('user-1', PEER, 'mine')).status,
+    'not_found'
+  );
   const removed = harness({ messages });
   assert.equal((await removed.service.remove('user-1', PEER, 'mine')).status, 'deleted');
-  assert.deepEqual(removed.calls.events, [[PEER, 'dm.message.deleted'], ['user-1', 'dm.message.deleted']]);
+  assert.deepEqual(removed.calls.events, [
+    [PEER, 'dm.message.deleted'],
+    ['user-1', 'dm.message.deleted']
+  ]);
 
   assert.equal((await harness({ messages }).service.edit('user-1', PEER, 'mine', ' ')).status, 'empty');
   assert.equal((await harness({ messages }).service.edit('user-1', PEER, 'missing', 'x')).status, 'not_found');
   assert.equal((await harness({ messages }).service.edit('user-1', PEER, 'theirs', 'x')).status, 'not_sender');
   assert.equal((await harness({ messages }).service.edit('user-1', PEER, 'my-inv', 'x')).status, 'invitation');
-  assert.equal((await harness({ messages, rate: { allowed: false, retryAfterSeconds: 2 } }).service.edit('user-1', PEER, 'mine', 'x')).status, 'rate_limited');
-  assert.equal((await harness({ messages, editResult: null }).service.edit('user-1', PEER, 'mine', 'x')).status, 'not_found');
+  assert.equal(
+    (
+      await harness({ messages, rate: { allowed: false, retryAfterSeconds: 2 } }).service.edit(
+        'user-1',
+        PEER,
+        'mine',
+        'x'
+      )
+    ).status,
+    'rate_limited'
+  );
+  assert.equal(
+    (await harness({ messages, editResult: null }).service.edit('user-1', PEER, 'mine', 'x')).status,
+    'not_found'
+  );
   const edited = harness({ messages });
   assert.equal((await edited.service.edit('user-1', PEER, 'mine', 'new')).message.body, 'new');
   assert.deepEqual(edited.calls.previews, [true]);
-  assert.deepEqual(edited.calls.events, [[PEER, 'dm.message.edited'], ['user-1', 'dm.message.edited']]);
+  assert.deepEqual(edited.calls.events, [
+    [PEER, 'dm.message.edited'],
+    ['user-1', 'dm.message.edited']
+  ]);
 });
 
 // --- routes ------------------------------------------------------------------------
@@ -204,20 +358,29 @@ function routeApp(t, outcomes = {}, { signedIn = true } = {}) {
   const app = fastify();
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
   const seen = {};
-  const record = (name, value) => async (...args) => { seen[name] = args; return outcomes[name] ?? value; };
-  registerDirectMessageRoutes(app, {
-    logger: null,
-    clientIp: () => 'ip',
-    resolveSession: async () => (signedIn ? { user: ME } : null),
-    hashIp: (ip) => ip
-  }, {
-    thread: record('thread', { status: 'listed', peer: { id: PEER }, messages: [], muted: false }),
-    send: record('send', { status: 'sent', message: { id: 'm' } }),
-    respondInvite: record('respondInvite', { status: 'answered', message: { id: 'inv' } }),
-    markRead: record('markRead', { status: 'read', result: { count: 2 } }),
-    remove: record('remove', { status: 'deleted' }),
-    edit: record('edit', { status: 'edited', message: { id: 'm', body: 'e' } })
-  });
+  const record =
+    (name, value) =>
+    async (...args) => {
+      seen[name] = args;
+      return outcomes[name] ?? value;
+    };
+  registerDirectMessageRoutes(
+    app,
+    {
+      logger: null,
+      clientIp: () => 'ip',
+      resolveSession: async () => (signedIn ? { user: ME } : null),
+      hashIp: (ip) => ip
+    },
+    {
+      thread: record('thread', { status: 'listed', peer: { id: PEER }, messages: [], muted: false }),
+      send: record('send', { status: 'sent', message: { id: 'm' } }),
+      respondInvite: record('respondInvite', { status: 'answered', message: { id: 'inv' } }),
+      markRead: record('markRead', { status: 'read', result: { count: 2 } }),
+      remove: record('remove', { status: 'deleted' }),
+      edit: record('edit', { status: 'edited', message: { id: 'm', body: 'e' } })
+    }
+  );
   t.after(() => app.close());
   return { app, seen };
 }
@@ -247,7 +410,13 @@ test('every DM route needs a session, a valid peer and answers', async (t) => {
   }
   assert.equal((await call(app, 'GET', '/api/dm/user-1')).status, 404);
   assert.equal((await call(app, 'POST', '/api/dm/user-1', {})).status, 404);
-  await call(app, 'POST', `/api/dm/${PEER}`, { text: 'hi', replyTo: { messageId: UUID_A } }, { 'idempotency-key': 'header-key-1' });
+  await call(
+    app,
+    'POST',
+    `/api/dm/${PEER}`,
+    { text: 'hi', replyTo: { messageId: UUID_A } },
+    { 'idempotency-key': 'header-key-1' }
+  );
   assert.deepEqual([seen.send[2].replyToMessageId, seen.send[2].idempotencyKey], [UUID_A, 'header-key-1']);
   await call(app, 'POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'decline' });
   assert.equal(seen.respondInvite[3], 'declined');
@@ -268,19 +437,79 @@ test('DM refusals keep their texts and codes', async (t) => {
     ['send', { status: 'empty' }, post, 400, 'Пустое сообщение'],
     ['send', { status: 'media_unavailable' }, post, 503, 'Media uploads are unavailable'],
     ['send', { status: 'rate_limited', retryAfterSeconds: 5 }, post, 429, 'Слишком много сообщений, попробуйте позже'],
-    ['respondInvite', {}, ['POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'maybe' }], 400, 'Неверное действие'],
-    ['respondInvite', { status: 'not_found' }, ['POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'accept' }], 404, 'Приглашение не найдено'],
-    ['respondInvite', { status: 'not_invited' }, ['POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'accept' }], 403, 'Отвечать может только приглашённый'],
-    ['respondInvite', { status: 'room_gone' }, ['POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'accept' }], 410, 'Комната больше не существует'],
-    ['respondInvite', { status: 'already_answered' }, ['POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'accept' }], 409, 'Приглашение уже обработано'],
-    ['markRead', { status: 'invalid_cursor', statusCode: 409, code: 'stale', error: 'Stale' }, ['POST', `/api/dm/${PEER}/read`, { cursor: 'c' }], 409, 'Stale'],
+    [
+      'respondInvite',
+      {},
+      ['POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'maybe' }],
+      400,
+      'Неверное действие'
+    ],
+    [
+      'respondInvite',
+      { status: 'not_found' },
+      ['POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'accept' }],
+      404,
+      'Приглашение не найдено'
+    ],
+    [
+      'respondInvite',
+      { status: 'not_invited' },
+      ['POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'accept' }],
+      403,
+      'Отвечать может только приглашённый'
+    ],
+    [
+      'respondInvite',
+      { status: 'room_gone' },
+      ['POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'accept' }],
+      410,
+      'Комната больше не существует'
+    ],
+    [
+      'respondInvite',
+      { status: 'already_answered' },
+      ['POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'accept' }],
+      409,
+      'Приглашение уже обработано'
+    ],
+    [
+      'markRead',
+      { status: 'invalid_cursor', statusCode: 409, code: 'stale', error: 'Stale' },
+      ['POST', `/api/dm/${PEER}/read`, { cursor: 'c' }],
+      409,
+      'Stale'
+    ],
     ['edit', { status: 'empty' }, ['PATCH', `/api/dm/${PEER}/messages/${UUID_A}`, {}], 400, 'Пустое сообщение'],
     ['edit', { status: 'not_found' }, ['PATCH', `/api/dm/${PEER}/messages/${UUID_A}`, {}], 404, 'Сообщение не найдено'],
-    ['edit', { status: 'not_sender' }, ['PATCH', `/api/dm/${PEER}/messages/${UUID_A}`, {}], 403, 'Можно редактировать только свои сообщения'],
-    ['edit', { status: 'invitation' }, ['PATCH', `/api/dm/${PEER}/messages/${UUID_A}`, {}], 403, 'Приглашение нельзя редактировать'],
-    ['edit', { status: 'rate_limited', retryAfterSeconds: 5 }, ['PATCH', `/api/dm/${PEER}/messages/${UUID_A}`, {}], 429, 'Слишком много сообщений, попробуйте позже'],
+    [
+      'edit',
+      { status: 'not_sender' },
+      ['PATCH', `/api/dm/${PEER}/messages/${UUID_A}`, {}],
+      403,
+      'Можно редактировать только свои сообщения'
+    ],
+    [
+      'edit',
+      { status: 'invitation' },
+      ['PATCH', `/api/dm/${PEER}/messages/${UUID_A}`, {}],
+      403,
+      'Приглашение нельзя редактировать'
+    ],
+    [
+      'edit',
+      { status: 'rate_limited', retryAfterSeconds: 5 },
+      ['PATCH', `/api/dm/${PEER}/messages/${UUID_A}`, {}],
+      429,
+      'Слишком много сообщений, попробуйте позже'
+    ],
     ['remove', { status: 'not_found' }, ['DELETE', `/api/dm/${PEER}/messages/${UUID_A}`], 404, 'Сообщение не найдено'],
-    ['remove', { status: 'not_sender' }, ['DELETE', `/api/dm/${PEER}/messages/${UUID_A}`], 403, 'Можно удалять только свои сообщения']
+    [
+      'remove',
+      { status: 'not_sender' },
+      ['DELETE', `/api/dm/${PEER}/messages/${UUID_A}`],
+      403,
+      'Можно удалять только свои сообщения'
+    ]
   ];
   for (const [name, outcome, [method, url, payload], status, error] of cases) {
     const response = await call(routeApp(t, { [name]: outcome }).app, method, url, payload);

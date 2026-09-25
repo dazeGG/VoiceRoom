@@ -48,7 +48,10 @@ export function getConnectionStatusView(): ConnectionStatusView {
     };
   }
 
-  if (state.voiceConnection === 'lost' || (state.voiceConnection === 'connected' && state.localConnectionQuality === 'lost')) {
+  if (
+    state.voiceConnection === 'lost' ||
+    (state.voiceConnection === 'connected' && state.localConnectionQuality === 'lost')
+  ) {
     return {
       label: 'Голос потерян',
       stateName: 'error',

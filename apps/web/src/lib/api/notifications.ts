@@ -27,17 +27,24 @@ export async function fetchNotificationPreferences(): Promise<NotificationPrefer
 }
 
 export async function setDmNotificationsMuted(userId: string, muted: boolean): Promise<NotificationMuteResponse> {
-  const payload = await putJson<NotificationMuteResponse>(`/api/notifications/dm/${encodeURIComponent(userId)}/mute`, { muted });
+  const payload = await putJson<NotificationMuteResponse>(`/api/notifications/dm/${encodeURIComponent(userId)}/mute`, {
+    muted
+  });
   return { ...payload, preferences: normalizePreferences(payload.preferences) };
 }
 
 export async function setRoomNotificationsMuted(roomId: string, muted: boolean): Promise<NotificationMuteResponse> {
-  const payload = await putJson<NotificationMuteResponse>(`/api/notifications/room/${encodeURIComponent(roomId)}/mute`, { muted });
+  const payload = await putJson<NotificationMuteResponse>(
+    `/api/notifications/room/${encodeURIComponent(roomId)}/mute`,
+    { muted }
+  );
   return { ...payload, preferences: normalizePreferences(payload.preferences) };
 }
 
 export async function setPrivateNotifications(privateNotifications: boolean): Promise<NotificationPreferencesResponse> {
-  const payload = await putJson<NotificationPreferencesResponse>('/api/notifications/privacy', { privateNotifications });
+  const payload = await putJson<NotificationPreferencesResponse>('/api/notifications/privacy', {
+    privateNotifications
+  });
   return { ...payload, preferences: normalizePreferences(payload.preferences) };
 }
 
@@ -80,15 +87,16 @@ export async function setRoomNotificationLevel(roomId: string, level: RoomNotifi
   await putJson(`/api/notifications/room/${encodeURIComponent(roomId)}/level`, { level });
 }
 
-function normalizePreferences(preferences: Partial<NotificationPreferences> | null | undefined): NotificationPreferences {
+function normalizePreferences(
+  preferences: Partial<NotificationPreferences> | null | undefined
+): NotificationPreferences {
   const doNotDisturb = Boolean(preferences?.doNotDisturb);
   return {
     doNotDisturb,
     mutedPeerIds: Array.isArray(preferences?.mutedPeerIds) ? preferences.mutedPeerIds : [],
     mutedRoomIds: Array.isArray(preferences?.mutedRoomIds) ? preferences.mutedRoomIds : [],
     presenceStatus: normalizePresenceStatus(preferences?.presenceStatus, doNotDisturb ? 'dnd' : 'online'),
-    presenceStatusAutomatic:
-      preferences?.presenceStatus === 'away' && Boolean(preferences?.presenceStatusAutomatic),
+    presenceStatusAutomatic: preferences?.presenceStatus === 'away' && Boolean(preferences?.presenceStatusAutomatic),
     privateNotifications: Boolean(preferences?.privateNotifications)
   };
 }

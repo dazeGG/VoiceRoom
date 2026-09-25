@@ -24,12 +24,7 @@ test('media capabilities become ready when every declared prerequisite is ready'
     apiReady: ['G26', 'G27', 'G75', 'G76', 'G81', 'G82'],
     webReady: ['G28', 'G29', 'G83', 'G84'],
     visibilityReady: ['G23'],
-    workerReady: [
-      'media-processing.G77',
-      'media-maintenance.G78',
-      'media-reconciliation.G79',
-      'media-pressure.G80'
-    ],
+    workerReady: ['media-processing.G77', 'media-maintenance.G78', 'media-reconciliation.G79', 'media-pressure.G80'],
     internalReady: ['internal.attachmentBinding']
   });
 

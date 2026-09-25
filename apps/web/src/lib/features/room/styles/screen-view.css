@@ -3,17 +3,17 @@
    focused participant (see .participant-focus-strip in participants.css). */
 /* Explicit height: .stage-strip is a size query container (contain: size), so
    it cannot derive a height from its own content inside the stage's auto row. */
-body[data-screen-view="true"] .stage-strip {
+body[data-screen-view='true'] .stage-strip {
   min-height: 0;
   height: 128px;
   align-content: center;
   overflow: hidden;
 }
 
-body[data-screen-view="true"] .participant-carousel-shell {
+body[data-screen-view='true'] .participant-carousel-shell {
   justify-self: center;
 }
 
-body[data-strip-collapsed="true"] .participant {
+body[data-strip-collapsed='true'] .participant {
   display: none;
 }

@@ -10,10 +10,14 @@ function repository() {
   let active = false;
   let revision = 0n;
   return {
-    async listSummaries() { return active ? [{ emoji: '😀', count: 1, reactedByMe: false, revision: String(revision) }] : []; },
+    async listSummaries() {
+      return active ? [{ emoji: '😀', count: 1, reactedByMe: false, revision: String(revision) }] : [];
+    },
     async listReactors({ limit }) {
       return Array.from({ length: Math.min(limit, 101) }, (_, index) => ({
-        userId: `u-${index}`, displayName: `User ${index}`, avatarUrl: null,
+        userId: `u-${index}`,
+        displayName: `User ${index}`,
+        avatarUrl: null,
         cursorTuple: { createdAtMicros: String(index), id: `u-${index}` }
       }));
     },
@@ -23,8 +27,17 @@ function repository() {
       revision += 1n;
       return { changed: true, revision: String(revision) };
     },
-    async getSummary({ userId }) { return { emoji: '😀', count: active ? 1 : 0, reactedByMe: active && userId === 'account', revision: String(revision) }; },
-    async transaction(callback) { return callback(); }
+    async getSummary({ userId }) {
+      return {
+        emoji: '😀',
+        count: active ? 1 : 0,
+        reactedByMe: active && userId === 'account',
+        revision: String(revision)
+      };
+    },
+    async transaction(callback) {
+      return callback();
+    }
   };
 }
 
@@ -45,20 +58,51 @@ function service(overrides = {}) {
 test('G69-A01 guest room reads are authorized, mutation is 403, and DM/cross-context data fails closed', async () => {
   const reactions = service();
   const guest = { id: 'guest-principal', guest: true };
-  assert.deepEqual(await reactions.getSummaries({ conversation: { type: 'room', id: 'room' }, messageId: 'm', viewer: guest }), []);
-  await assert.rejects(reactions.setDesired({
-    conversation: { type: 'room', id: 'room' }, mutation: { messageId: 'm', emoji: '😀', active: true }, viewer: guest
-  }), (error) => error.statusCode === 403 && error.code === 'account_required');
+  assert.deepEqual(
+    await reactions.getSummaries({ conversation: { type: 'room', id: 'room' }, messageId: 'm', viewer: guest }),
+    []
+  );
+  await assert.rejects(
+    reactions.setDesired({
+      conversation: { type: 'room', id: 'room' },
+      mutation: { messageId: 'm', emoji: '😀', active: true },
+      viewer: guest
+    }),
+    (error) => error.statusCode === 403 && error.code === 'account_required'
+  );
   for (const messageId of ['deleted', 'hidden']) {
-    await assert.rejects(reactions.getSummaries({ conversation: { type: 'room', id: 'room' }, messageId, viewer: guest }), (error) => error.statusCode === 404);
+    await assert.rejects(
+      reactions.getSummaries({ conversation: { type: 'room', id: 'room' }, messageId, viewer: guest }),
+      (error) => error.statusCode === 404
+    );
   }
-  await assert.rejects(reactions.getSummaries({ conversation: { type: 'room', id: 'other' }, messageId: 'm', viewer: guest }), (error) => error.statusCode === 404);
-  await assert.rejects(reactions.getSummaries({ conversation: { type: 'dm', id: 'peer' }, messageId: 'm', viewer: { id: 'outsider' } }), (error) => error.statusCode === 404);
+  await assert.rejects(
+    reactions.getSummaries({ conversation: { type: 'room', id: 'other' }, messageId: 'm', viewer: guest }),
+    (error) => error.statusCode === 404
+  );
+  await assert.rejects(
+    reactions.getSummaries({ conversation: { type: 'dm', id: 'peer' }, messageId: 'm', viewer: { id: 'outsider' } }),
+    (error) => error.statusCode === 404
+  );
 
-  const first = await reactions.getReactors({ conversation: { type: 'room', id: 'room' }, messageId: 'm', emoji: '😀', query: {}, viewer: guest });
+  const first = await reactions.getReactors({
+    conversation: { type: 'room', id: 'room' },
+    messageId: 'm',
+    emoji: '😀',
+    query: {},
+    viewer: guest
+  });
   assert.equal(first.reactors.length, 50);
   assert.ok(first.nextCursor);
-  await assert.rejects(reactions.getReactors({ conversation: { type: 'room', id: 'other' }, messageId: 'm', emoji: '😀', query: { cursor: first.nextCursor }, viewer: guest }));
+  await assert.rejects(
+    reactions.getReactors({
+      conversation: { type: 'room', id: 'other' },
+      messageId: 'm',
+      emoji: '😀',
+      query: { cursor: first.nextCursor },
+      viewer: guest
+    })
+  );
 });
 
 test('G69-A02 desired PUT is idempotent, bounded, revisioned and publishes only changes', async () => {
@@ -69,7 +113,9 @@ test('G69-A02 desired PUT is idempotent, bounded, revisioned and publishes only 
   for (let index = 0; index < 40; index += 1) {
     const started = performance.now();
     const summary = await reactions.setDesired({
-      conversation: { type: 'room', id: 'room' }, mutation: { messageId: 'm', emoji: '😀', active: true }, viewer
+      conversation: { type: 'room', id: 'room' },
+      mutation: { messageId: 'm', emoji: '😀', active: true },
+      viewer
     });
     timings.push(performance.now() - started);
     assert.equal(summary.count, 1);
@@ -86,23 +132,77 @@ test('G69-A02 desired PUT is idempotent, bounded, revisioned and publishes only 
     broadcastAccount: (id, event) => accountEvents.push([id, event]),
     resolveDirectRecipients: async () => ['account', 'peer', 'account']
   });
-  await realtime.publish({ conversation: { type: 'room', id: 'room' }, messageId: 'm', summary: { emoji: '😀', count: 1, reactedByMe: true, revision: '1' } });
-  await realtime.publish({ conversation: { type: 'dm', id: 'peer' }, actorUserId: 'account', messageId: 'm', summary: { emoji: '😀', count: 1, reactedByMe: true, revision: '1' } });
+  await realtime.publish({
+    conversation: { type: 'room', id: 'room' },
+    messageId: 'm',
+    summary: { emoji: '😀', count: 1, reactedByMe: true, revision: '1' }
+  });
+  await realtime.publish({
+    conversation: { type: 'dm', id: 'peer' },
+    actorUserId: 'account',
+    messageId: 'm',
+    summary: { emoji: '😀', count: 1, reactedByMe: true, revision: '1' }
+  });
   assert.equal(roomEvents.length, 1);
   assert.deepEqual(accountEvents.map(([id]) => id).sort(), ['account', 'peer']);
 
-  let release; let settled=false;
-  const ordered=createReactionRealtimeAdapter({broadcastRoom:()=>new Promise((resolve)=>{release=resolve;})});
-  const pending=ordered.publish({conversation:{type:'room',id:'room'},messageId:'m',summary:{emoji:'😀',count:1,reactedByMe:true,revision:'2'}}).then(()=>{settled=true;});
-  await new Promise((resolve)=>setImmediate(resolve)); assert.equal(settled,false); release(true); await pending; assert.equal(settled,true);
+  let release;
+  let settled = false;
+  const ordered = createReactionRealtimeAdapter({
+    broadcastRoom: () =>
+      new Promise((resolve) => {
+        release = resolve;
+      })
+  });
+  const pending = ordered
+    .publish({
+      conversation: { type: 'room', id: 'room' },
+      messageId: 'm',
+      summary: { emoji: '😀', count: 1, reactedByMe: true, revision: '2' }
+    })
+    .then(() => {
+      settled = true;
+    });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(settled, false);
+  release(true);
+  await pending;
+  assert.equal(settled, true);
 });
 
 test('G69 routes preserve no-store reads and service authorization status', async () => {
   const handlers = {};
-  const app = { get(path, handler) { handlers[`GET ${path}`] = handler; }, put(path, handler) { handlers[`PUT ${path}`] = handler; } };
+  const app = {
+    get(path, handler) {
+      handlers[`GET ${path}`] = handler;
+    },
+    put(path, handler) {
+      handlers[`PUT ${path}`] = handler;
+    }
+  };
   registerReactionRoutes({ app, reactionService: service(), resolveUser: async (request) => request.viewer });
-  const reply = () => ({ status: 0, headers: {}, header(name, value) { this.headers[name] = value; return this; }, code(value) { this.status = value; return this; }, send(value) { this.body = value; return this; } });
-  const request = { params: { type: 'room', conversationId: 'room', messageId: 'm' }, query: {}, body: { emoji: '😀', active: true }, viewer: { id: 'guest', guest: true } };
+  const reply = () => ({
+    status: 0,
+    headers: {},
+    header(name, value) {
+      this.headers[name] = value;
+      return this;
+    },
+    code(value) {
+      this.status = value;
+      return this;
+    },
+    send(value) {
+      this.body = value;
+      return this;
+    }
+  });
+  const request = {
+    params: { type: 'room', conversationId: 'room', messageId: 'm' },
+    query: {},
+    body: { emoji: '😀', active: true },
+    viewer: { id: 'guest', guest: true }
+  };
   const readReply = reply();
   await handlers['GET /api/reactions/:type/:conversationId/:messageId'](request, readReply);
   assert.equal(readReply.status, 200);

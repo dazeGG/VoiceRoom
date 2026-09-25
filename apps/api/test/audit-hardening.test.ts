@@ -64,7 +64,9 @@ function createStore() {
       return stored;
     },
     async getMessage(roomId, messageId) {
-      return messages.find((message) => message.roomId === roomId && message.id === messageId && !message.deleted) || null;
+      return (
+        messages.find((message) => message.roomId === roomId && message.id === messageId && !message.deleted) || null
+      );
     },
     async editMessage(roomId, messageId, text) {
       const message = await this.getMessage(roomId, messageId);
@@ -86,7 +88,11 @@ function createStore() {
       return 1;
     },
     async findActiveRoomBan({ roomId, userId, ip }) {
-      return bans.find((ban) => ban.roomId === roomId && ((userId && ban.userId === userId) || (!ban.userId && ip && ban.ip === ip))) || null;
+      return (
+        bans.find(
+          (ban) => ban.roomId === roomId && ((userId && ban.userId === userId) || (!ban.userId && ip && ban.ip === ip))
+        ) || null
+      );
     },
     async getOrCreatePeerIdentity({ roomId, peerId, sessionToken }) {
       const key = `${roomId}:${peerId}`;
@@ -166,32 +172,37 @@ function createUsers() {
 function request(socketPath, method, pathname, { body, cookie = '', ip = '', headers = {} } = {}) {
   const payload = body === undefined ? null : JSON.stringify(body);
   return new Promise((resolve, reject) => {
-    const req = http.request({
-      socketPath,
-      method,
-      path: pathname,
-      headers: {
-        Accept: 'application/json',
-        Host: 'localhost',
-        ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}),
-        ...(cookie ? { Cookie: cookie } : {}),
-        ...(ip ? { 'X-Forwarded-For': ip } : {}),
-        ...headers
-      }
-    }, (res) => {
-      let responseBody = '';
-      res.setEncoding('utf8');
-      res.on('data', (chunk) => { responseBody += chunk; });
-      res.on('end', () => {
-        let parsed = null;
-        try {
-          parsed = responseBody ? JSON.parse(responseBody) : null;
-        } catch {
-          parsed = responseBody;
+    const req = http.request(
+      {
+        socketPath,
+        method,
+        path: pathname,
+        headers: {
+          Accept: 'application/json',
+          Host: 'localhost',
+          ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(payload) } : {}),
+          ...(cookie ? { Cookie: cookie } : {}),
+          ...(ip ? { 'X-Forwarded-For': ip } : {}),
+          ...headers
         }
-        resolve({ status: res.statusCode, body: parsed });
-      });
-    });
+      },
+      (res) => {
+        let responseBody = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => {
+          responseBody += chunk;
+        });
+        res.on('end', () => {
+          let parsed = null;
+          try {
+            parsed = responseBody ? JSON.parse(responseBody) : null;
+          } catch {
+            parsed = responseBody;
+          }
+          resolve({ status: res.statusCode, body: parsed });
+        });
+      }
+    );
     req.on('error', reject);
     if (payload) req.end(payload);
     else req.end();
@@ -206,15 +217,32 @@ async function startServer(t) {
   const server = createApiServer({
     store,
     users: createUsers(),
-    friends: { async getFriendIds() { return []; } },
+    friends: {
+      async getFriendIds() {
+        return [];
+      }
+    },
     liveKitCredentials: {
       async issueAdmission(input) {
         issued.push(input);
-        return { status: 'issued', admission: { gateCredentialId: crypto.randomUUID(), room: ROOM_ID, token: 'jwt', ttlSeconds: 60, url: 'ws://gate.test/rtc' } };
+        return {
+          status: 'issued',
+          admission: {
+            gateCredentialId: crypto.randomUUID(),
+            room: ROOM_ID,
+            token: 'jwt',
+            ttlSeconds: 60,
+            url: 'ws://gate.test/rtc'
+          }
+        };
       }
     },
     membershipServicesOverride: {
-      service: { async persistSuccessfulAdmission() { return { created: false, status: 'active' }; } }
+      service: {
+        async persistSuccessfulAdmission() {
+          return { created: false, status: 'active' };
+        }
+      }
     }
   });
   await new Promise((resolve, reject) => {
@@ -238,7 +266,9 @@ async function startServer(t) {
 function mockLiveKitAdmin(t) {
   const nativeFetch = global.fetch;
   global.fetch = async () => new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
-  t.after(() => { global.fetch = nativeFetch; });
+  t.after(() => {
+    global.fetch = nativeFetch;
+  });
 }
 
 test('a guest cannot claim an account peer id or rewrite an account-authored message', async (t) => {
@@ -261,13 +291,23 @@ test('a guest cannot claim an account peer id or rewrite an account-authored mes
   const attacker = fixture.open('', GUEST_IP);
   await attacker.ready;
   const claimStart = attacker.frames.length;
-  sendWs(attacker.ws, 'room.join', { roomId: ROOM_ID, peerId: accountPeerId, sessionToken: 'a'.repeat(32), name: 'Attacker' });
+  sendWs(attacker.ws, 'room.join', {
+    roomId: ROOM_ID,
+    peerId: accountPeerId,
+    sessionToken: 'a'.repeat(32),
+    name: 'Attacker'
+  });
   const refused = await waitForWsType(attacker.frames, 'error', () => true, 5000, claimStart);
   assert.equal(refused.error.code, 'invalid_join');
 
   // Joined under a peer id of their own, the attacker still cannot act on the
   // account's message by naming the account peer id or their own.
-  await joinVoiceRoom(attacker, { roomId: ROOM_ID, peerId: 'attacker-peer', sessionToken: 'a'.repeat(32), name: 'Attacker' });
+  await joinVoiceRoom(attacker, {
+    roomId: ROOM_ID,
+    peerId: 'attacker-peer',
+    sessionToken: 'a'.repeat(32),
+    name: 'Attacker'
+  });
   for (const peerId of [accountPeerId, 'attacker-peer']) {
     const edit = await request(fixture.socketPath, 'PATCH', `/api/rooms/${ROOM_ID}/chat/${messageId}`, {
       body: { peerId, sessionToken: 'a'.repeat(32), text: 'forged' },
@@ -321,10 +361,11 @@ test('a banned visitor can no longer read the room chat or roster', async (t) =>
 
 test('LiveKit admission is only issued to a peer the room roster knows', async (t) => {
   const fixture = await startServer(t);
-  const token = (peerId, sessionToken = 'g'.repeat(32)) => request(fixture.socketPath, 'POST', '/api/livekit-token', {
-    body: { roomId: ROOM_ID, peerId, sessionToken, name: 'Guest' },
-    ip: GUEST_IP
-  });
+  const token = (peerId, sessionToken = 'g'.repeat(32)) =>
+    request(fixture.socketPath, 'POST', '/api/livekit-token', {
+      body: { roomId: ROOM_ID, peerId, sessionToken, name: 'Guest' },
+      ip: GUEST_IP
+    });
 
   const ghost = await token('ghost-listener');
   assert.equal(ghost.status, 409);
@@ -345,7 +386,12 @@ test('a join that is still in flight when the token request lands is waited for'
   const fixture = await startServer(t);
   const guest = fixture.open('', GUEST_IP);
   await guest.ready;
-  sendWs(guest.ws, 'room.join', { roomId: ROOM_ID, peerId: 'racing-peer', sessionToken: 'r'.repeat(32), name: 'Racer' });
+  sendWs(guest.ws, 'room.join', {
+    roomId: ROOM_ID,
+    peerId: 'racing-peer',
+    sessionToken: 'r'.repeat(32),
+    name: 'Racer'
+  });
   const admitted = await request(fixture.socketPath, 'POST', '/api/livekit-token', {
     body: { roomId: ROOM_ID, peerId: 'racing-peer', sessionToken: 'r'.repeat(32), name: 'Racer' },
     ip: GUEST_IP
@@ -358,19 +404,28 @@ test('cookie writes and WebSocket handshakes from another origin are refused on 
   const evil = { Origin: 'https://livekit.localhost' };
 
   const legacy = await request(fixture.socketPath, 'POST', `/api/rooms/${ROOM_ID}/kick`, {
-    body: { peerId: 'anyone' }, cookie: OWNER_COOKIE, ip: OWNER_IP, headers: evil
+    body: { peerId: 'anyone' },
+    cookie: OWNER_COOKIE,
+    ip: OWNER_IP,
+    headers: evil
   });
   assert.equal(legacy.status, 403);
   assert.equal(legacy.body.error, 'Cross-origin request rejected');
   // Domain routes and even unknown paths go through the same hook.
   const domain = await request(fixture.socketPath, 'POST', `/api/rooms/${ROOM_ID}/bans`, {
-    body: { peerId: 'anyone' }, cookie: OWNER_COOKIE, ip: OWNER_IP, headers: evil
+    body: { peerId: 'anyone' },
+    cookie: OWNER_COOKIE,
+    ip: OWNER_IP,
+    headers: evil
   });
   assert.equal(domain.status, 403);
   assert.equal(domain.body.error, 'Cross-origin request rejected');
 
   const sameOrigin = await request(fixture.socketPath, 'POST', `/api/rooms/${ROOM_ID}/kick`, {
-    body: { peerId: 'anyone' }, cookie: OWNER_COOKIE, ip: OWNER_IP, headers: { Origin: 'http://localhost' }
+    body: { peerId: 'anyone' },
+    cookie: OWNER_COOKIE,
+    ip: OWNER_IP,
+    headers: { Origin: 'http://localhost' }
   });
   assert.equal(sameOrigin.status, 404);
   // Without a cookie there is nothing to ride on, and reads are never blocked.
@@ -385,10 +440,11 @@ test('cookie writes and WebSocket handshakes from another origin are refused on 
 
 test('failed logins are capped per account no matter how many addresses try', async (t) => {
   const fixture = await startServer(t);
-  const attempt = (i) => request(fixture.socketPath, 'POST', '/api/auth/login', {
-    body: { login: 'victim', password: `guess-${i}` },
-    ip: `203.0.113.${i + 1}`
-  });
+  const attempt = (i) =>
+    request(fixture.socketPath, 'POST', '/api/auth/login', {
+      body: { login: 'victim', password: `guess-${i}` },
+      ip: `203.0.113.${i + 1}`
+    });
   for (let i = 0; i < 3; i += 1) assert.equal((await attempt(i)).status, 401);
   const blocked = await attempt(3);
   assert.equal(blocked.status, 429);
@@ -414,7 +470,9 @@ test('a server mute revokes the admissions issued before it', async (t) => {
     ip: OWNER_IP
   });
   assert.equal(mute.status, 200, JSON.stringify(mute.body));
-  assert.deepEqual(fixture.store.revokedPrincipals, [{ roomId: ROOM_ID, principalId: VICTIM_ID, principalType: 'account' }]);
+  assert.deepEqual(fixture.store.revokedPrincipals, [
+    { roomId: ROOM_ID, principalId: VICTIM_ID, principalType: 'account' }
+  ]);
 
   const unmute = await request(fixture.socketPath, 'POST', `/api/rooms/${ROOM_ID}/server-mute`, {
     body: { peerId: 'victim-peer', muted: false },

@@ -5,11 +5,7 @@
   import type { AuthUser } from '$lib/api/auth';
   import { Avatar, Badge, Popover, PopoverMenuLabel } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
-  import {
-    effectivePresenceStatus,
-    normalizePresenceStatus,
-    type PresenceStatus
-  } from '$lib/shared/presence';
+  import { effectivePresenceStatus, normalizePresenceStatus, type PresenceStatus } from '$lib/shared/presence';
   import { friendName } from '../../model/lobby-format';
   import { friendsState, openDm } from '../../model/friends.svelte';
   import { notificationPreferences, updatePresenceStatus } from '$lib/shared/notifications/preferences.svelte';
@@ -57,9 +53,7 @@
   }>();
 
   const sortedFriends = $derived(
-    [...friendsState.friends].sort(
-      (a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0)
-    )
+    [...friendsState.friends].sort((a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0))
   );
 
   const selfName = $derived(user.displayName?.trim() || user.login);
@@ -70,18 +64,18 @@
       notificationPreferences.doNotDisturb ? 'dnd' : 'online'
     )
   );
-  const statusOptions = $derived<ReadonlyArray<{
-    value: PresenceStatus;
-    label: string;
-    note?: string;
-  }>>([
+  const statusOptions = $derived<
+    ReadonlyArray<{
+      value: PresenceStatus;
+      label: string;
+      note?: string;
+    }>
+  >([
     { value: 'online', label: 'В сети' },
     {
       value: 'away',
       label: 'Отошёл',
-      note: friendsState.automaticPresenceIdleAvailable
-        ? 'Автоматически после 5 минут бездействия'
-        : undefined
+      note: friendsState.automaticPresenceIdleAvailable ? 'Автоматически после 5 минут бездействия' : undefined
     },
     {
       value: 'dnd',
@@ -97,7 +91,10 @@
   let statusTypeahead = '';
   let statusTypeaheadTimer: ReturnType<typeof setTimeout> | null = null;
   const selectedStatusIndex = $derived(
-    Math.max(0, statusOptions.findIndex((option) => option.value === selfPresence))
+    Math.max(
+      0,
+      statusOptions.findIndex((option) => option.value === selfPresence)
+    )
   );
 
   async function focusStatusOption(index = selectedStatusIndex): Promise<void> {
@@ -164,9 +161,7 @@
 
     const start = (activeStatusIndex + 1) % statusOptions.length;
     const ordered = [...statusOptions.slice(start), ...statusOptions.slice(0, start)];
-    const matched = ordered.find((option) =>
-      option.label.toLocaleLowerCase().startsWith(statusTypeahead)
-    );
+    const matched = ordered.find((option) => option.label.toLocaleLowerCase().startsWith(statusTypeahead));
     if (!matched) return;
     void focusStatusOption(statusOptions.findIndex((option) => option.value === matched.value));
   }
@@ -239,7 +234,11 @@
       <p class="lr-empty" style="padding:2px 7px 8px;">Пока нет друзей. Откройте «Заявки», чтобы добавить по логину.</p>
     {:else}
       {#each sortedFriends as entry (entry.user.id)}
-        {@const friendPresence = effectivePresenceStatus(entry.online, entry.user.presenceStatus, entry.user.doNotDisturb)}
+        {@const friendPresence = effectivePresenceStatus(
+          entry.online,
+          entry.user.presenceStatus,
+          entry.user.doNotDisturb
+        )}
         {@const friendNotificationsMuted = notificationPreferences.mutedPeerIds.includes(entry.user.id)}
         <button
           class="lv-row"
@@ -260,9 +259,16 @@
           />
           <div style="min-width:0;flex:1;">
             <div class="lv-notification-title">
-              <div class="lv-row-name" style={`font-weight:${entry.unreadCount > 0 ? 750 : 650}`}><EmojiText text={friendName(entry.user)} /></div>
+              <div class="lv-row-name" style={`font-weight:${entry.unreadCount > 0 ? 750 : 650}`}>
+                <EmojiText text={friendName(entry.user)} />
+              </div>
               {#if friendNotificationsMuted}
-                <span class="lv-notification-muted" role="img" aria-label="Уведомления отключены" title="Уведомления отключены">
+                <span
+                  class="lv-notification-muted"
+                  role="img"
+                  aria-label="Уведомления отключены"
+                  title="Уведомления отключены"
+                >
                   <BellOff {...iconSm} aria-hidden="true" />
                 </span>
               {/if}
@@ -290,7 +296,13 @@
   {/if}
 
   <div class="lv-profile">
-    <Popover bind:open={statusPopoverOpen} placement="top-start" role="listbox" ariaLabel="Статус пользователя" panelClass="lv-status-popover">
+    <Popover
+      bind:open={statusPopoverOpen}
+      placement="top-start"
+      role="listbox"
+      ariaLabel="Статус пользователя"
+      panelClass="lv-status-popover"
+    >
       {#snippet trigger({ open, panelId })}
         <button
           type="button"
@@ -401,7 +413,9 @@
     margin-left: auto;
   }
 
-  .lv-notification-button { position: relative; }
+  .lv-notification-button {
+    position: relative;
+  }
   .lv-notification-count {
     position: absolute;
     top: -5px;
@@ -444,7 +458,9 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
-    transition: background 140ms ease, color 140ms ease;
+    transition:
+      background 140ms ease,
+      color 140ms ease;
   }
 
   /* Same accent wash the shared menu items use, so the status list reads as one
@@ -468,9 +484,15 @@
     background: var(--warm-faint);
   }
 
-  .lv-status-dot[data-status='online'] { background: var(--green); }
-  .lv-status-dot[data-status='away'] { background: var(--amber); }
-  .lv-status-dot[data-status='dnd'] { background: var(--coral); }
+  .lv-status-dot[data-status='online'] {
+    background: var(--green);
+  }
+  .lv-status-dot[data-status='away'] {
+    background: var(--amber);
+  }
+  .lv-status-dot[data-status='dnd'] {
+    background: var(--coral);
+  }
 
   .lv-status-copy {
     display: grid;

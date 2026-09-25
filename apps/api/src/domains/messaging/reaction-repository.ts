@@ -14,8 +14,18 @@ const CONTEXT_TABLES = Object.freeze({
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type ReactionPool = QueryClient & { connect?: () => Promise<pg.PoolClient> };
 type Override = { client?: QueryClient | null };
-type SummaryRow = { emoji: string; revision: string | number | null; reaction_count: number | null; reacted_by_me: boolean | null };
-type ReactorRow = { user_id: string; display_name: string; avatar_key: string | null; created_at_micros: string | number };
+type SummaryRow = {
+  emoji: string;
+  revision: string | number | null;
+  reaction_count: number | null;
+  reacted_by_me: boolean | null;
+};
+type ReactorRow = {
+  user_id: string;
+  display_name: string;
+  avatar_key: string | null;
+  created_at_micros: string | number;
+};
 
 export type StoredReactionSummary = { emoji: string; count: number; reactedByMe: boolean; revision: string };
 export type StoredReactor = {
@@ -62,7 +72,7 @@ function mapReactor(row: ReactorRow): StoredReactor {
 }
 
 function createReactionRepository({ client }: { client?: ReactionPool | null } = {}) {
-  const defaultClient: ReactionPool | null = client ? requireQuery(client) as ReactionPool : null;
+  const defaultClient: ReactionPool | null = client ? (requireQuery(client) as ReactionPool) : null;
   const queryClient = (override?: QueryClient | null): QueryClient => requireQuery(override || defaultClient);
 
   async function transaction<T>(callback: (client: QueryClient) => Promise<T>): Promise<T> {
@@ -101,7 +111,13 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
     return String(result.rows[0]?.revision || 0);
   }
 
-  async function getActive({ type, messageId, emoji, userId, client: override }: Target & Override = {}): Promise<boolean> {
+  async function getActive({
+    type,
+    messageId,
+    emoji,
+    userId,
+    client: override
+  }: Target & Override = {}): Promise<boolean> {
     const { reactions } = contextTables(type);
     const result = await queryClient(override).query<{ active: boolean }>(
       `SELECT EXISTS (
@@ -113,7 +129,14 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
     return result.rows[0]?.active === true;
   }
 
-  async function setDesiredState({ type, messageId, emoji, userId, active, client: override }: Target & { active?: boolean } & Override = {}): Promise<{ changed: boolean; revision: string }> {
+  async function setDesiredState({
+    type,
+    messageId,
+    emoji,
+    userId,
+    active,
+    client: override
+  }: Target & { active?: boolean } & Override = {}): Promise<{ changed: boolean; revision: string }> {
     const db = queryClient(override);
     const { reactions, revisions } = contextTables(type);
     const currentRevision = await ensureRevision({ type, messageId, emoji, client: db });
@@ -150,7 +173,13 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
     return { changed: true, revision };
   }
 
-  async function getSummary({ type, messageId, emoji, userId, client: override }: Target & Override = {}): Promise<StoredReactionSummary> {
+  async function getSummary({
+    type,
+    messageId,
+    emoji,
+    userId,
+    client: override
+  }: Target & Override = {}): Promise<StoredReactionSummary> {
     const { reactions, revisions } = contextTables(type);
     const result = await queryClient(override).query<SummaryRow>(
       `SELECT v.emoji, v.revision,
@@ -167,7 +196,9 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
     return row ? mapSummary(row, userId) : { emoji: emoji as string, count: 0, reactedByMe: false, revision: '0' };
   }
 
-  async function listSummaries({ type, messageId, userId, client: override }: Target & Override = {}): Promise<StoredReactionSummary[]> {
+  async function listSummaries({ type, messageId, userId, client: override }: Target & Override = {}): Promise<
+    StoredReactionSummary[]
+  > {
     const { reactions, revisions } = contextTables(type);
     const result = await queryClient(override).query<SummaryRow>(
       `SELECT v.emoji, v.revision,
@@ -184,7 +215,14 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
     return result.rows.map((row) => mapSummary(row, userId));
   }
 
-  async function listReactors({ type, messageId, emoji, limit, after, client: override }: Target & {
+  async function listReactors({
+    type,
+    messageId,
+    emoji,
+    limit,
+    after,
+    client: override
+  }: Target & {
     limit?: number;
     after?: { createdAtMicros: string; id: string } | null;
   } & Override = {}): Promise<StoredReactor[]> {

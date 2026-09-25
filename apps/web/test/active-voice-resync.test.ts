@@ -2,7 +2,6 @@
 import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 
-
 async function loadRoomRealtime() {
   vi.resetModules();
   const sent = [];
@@ -10,11 +9,21 @@ async function loadRoomRealtime() {
     epoch: 7,
     connected: true,
     ensureConnected() {},
-    getConnectionEpoch() { return this.epoch; },
-    isConnected() { return this.connected; },
-    onRestore() { return () => {}; },
-    send(type, payload, id) { sent.push({ type, payload, id }); },
-    subscribe() { return () => {}; }
+    getConnectionEpoch() {
+      return this.epoch;
+    },
+    isConnected() {
+      return this.connected;
+    },
+    onRestore() {
+      return () => {};
+    },
+    send(type, payload, id) {
+      sent.push({ type, payload, id });
+    },
+    subscribe() {
+      return () => {};
+    }
   };
   vi.doMock('../src/lib/api/realtime', () => ({ getAppRealtime: () => connection }));
   vi.doMock('../src/lib/features/home/model/room-presence.svelte', () => ({ applyRoomSummary: () => {} }));

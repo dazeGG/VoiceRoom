@@ -23,7 +23,6 @@
     void store.loadReactors(messageId, emoji);
     queueMicrotask(() => heading?.focus());
   });
-
 </script>
 
 <section class="reactor-list" aria-labelledby="reactor-list-title">
@@ -43,7 +42,9 @@
           {#if reactor.avatarUrl}
             <img src={reactor.avatarUrl} alt="" width="28" height="28" />
           {:else}
-            <span class="avatar" aria-hidden="true">{(reactor.displayName.match(/[\p{L}\p{N}]/u)?.[0] ?? '?').toUpperCase()}</span>
+            <span class="avatar" aria-hidden="true"
+              >{(reactor.displayName.match(/[\p{L}\p{N}]/u)?.[0] ?? '?').toUpperCase()}</span
+            >
           {/if}
           <span><EmojiText text={reactor.displayName} /></span>
         </li>
@@ -63,14 +64,67 @@
 </section>
 
 <style>
-  .reactor-list { width: min(300px, 80vw); max-height: 360px; overflow: auto; padding: 4px; }
-  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  h3 { margin: 0; font-size: .95rem; outline: none; }
-  header button { min-width: 40px; min-height: 40px; border: 0; background: transparent; color: inherit; font-size: 1.4rem; }
-  ul { display: grid; gap: 4px; margin: 8px 0; padding: 0; list-style: none; }
-  li { display: flex; align-items: center; gap: 8px; min-height: 40px; }
-  img, .avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; }
-  .avatar { display: grid; place-items: center; background: color-mix(in oklch, var(--paper), var(--ink) 14%); }
-  p { margin: 8px 2px; font-size: .85rem; opacity: .8; }
-  .load-more { width: 100%; min-height: 40px; border: 0; border-radius: 9px; color: inherit; background: color-mix(in oklch, var(--paper), var(--ink) 10%); }
+  .reactor-list {
+    width: min(300px, 80vw);
+    max-height: 360px;
+    overflow: auto;
+    padding: 4px;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  h3 {
+    margin: 0;
+    font-size: 0.95rem;
+    outline: none;
+  }
+  header button {
+    min-width: 40px;
+    min-height: 40px;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font-size: 1.4rem;
+  }
+  ul {
+    display: grid;
+    gap: 4px;
+    margin: 8px 0;
+    padding: 0;
+    list-style: none;
+  }
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 40px;
+  }
+  img,
+  .avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  .avatar {
+    display: grid;
+    place-items: center;
+    background: color-mix(in oklch, var(--paper), var(--ink) 14%);
+  }
+  p {
+    margin: 8px 2px;
+    font-size: 0.85rem;
+    opacity: 0.8;
+  }
+  .load-more {
+    width: 100%;
+    min-height: 40px;
+    border: 0;
+    border-radius: 9px;
+    color: inherit;
+    background: color-mix(in oklch, var(--paper), var(--ink) 10%);
+  }
 </style>

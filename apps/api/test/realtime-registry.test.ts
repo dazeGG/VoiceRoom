@@ -23,26 +23,38 @@ test('manual offline masks open sockets and stale tabs cannot overwrite active a
   const first = registry.addConnection('user-1', socket(), '127.0.0.1', 'online');
   await settle();
   assert.equal(registry.isUserOnline('user-1'), true);
-  assert.deepEqual(presenceEvents.map((event) => event.online), [true]);
+  assert.deepEqual(
+    presenceEvents.map((event) => event.online),
+    [true]
+  );
 
   registry.setUserPresenceStatus('user-1', 'offline');
   await settle();
   assert.equal(registry.isUserOnline('user-1'), false);
-  assert.deepEqual(presenceEvents.map((event) => event.online), [true, false]);
+  assert.deepEqual(
+    presenceEvents.map((event) => event.online),
+    [true, false]
+  );
 
   const staleSecondTab = registry.addConnection('user-1', socket(), '127.0.0.2', 'online');
   await settle();
   assert.equal(registry.userPresenceStatuses.get('user-1'), 'offline');
   assert.equal(first.presenceStatus, 'offline');
   assert.equal(staleSecondTab.presenceStatus, 'offline');
-  assert.deepEqual(presenceEvents.map((event) => event.online), [true, false]);
+  assert.deepEqual(
+    presenceEvents.map((event) => event.online),
+    [true, false]
+  );
 
   registry.setUserPresenceStatus('user-1', 'away');
   await settle();
   registry.setUserPresenceStatus('user-1', 'dnd');
   await settle();
   assert.equal(registry.isUserOnline('user-1'), true);
-  assert.deepEqual(presenceEvents.map((event) => event.online), [true, false, true]);
+  assert.deepEqual(
+    presenceEvents.map((event) => event.online),
+    [true, false, true]
+  );
 
   registry.setUserPresenceStatus('user-1', 'offline');
   await settle();
@@ -50,7 +62,10 @@ test('manual offline masks open sockets and stale tabs cannot overwrite active a
   registry.removeConnection(staleSecondTab);
   await settle();
   assert.equal(registry.userPresenceStatuses.has('user-1'), false);
-  assert.deepEqual(presenceEvents.map((event) => event.online), [true, false, true, false]);
+  assert.deepEqual(
+    presenceEvents.map((event) => event.online),
+    [true, false, true, false]
+  );
 });
 
 test('presence revision advances when account availability changes', () => {
@@ -84,16 +99,14 @@ test('membership presence includes signed-in users before they join voice', () =
   });
   registry.addConnection('owner-1', socket(), '127.0.0.1', 'online');
 
-  const snapshot = buildRoomMembershipPresenceSnapshot(
-    'room-1',
-    { updatedAt: 10, peers: new Map() },
-    registry
-  );
+  const snapshot = buildRoomMembershipPresenceSnapshot('room-1', { updatedAt: 10, peers: new Map() }, registry);
 
-  assert.deepEqual(snapshot.byUserId.get('owner-1'), [{
-    inVoice: false,
-    roomId: null,
-    presenceStatus: 'online'
-  }]);
+  assert.deepEqual(snapshot.byUserId.get('owner-1'), [
+    {
+      inVoice: false,
+      roomId: null,
+      presenceStatus: 'online'
+    }
+  ]);
   assert.equal(snapshot.revision, registry.getPresenceRevision());
 });

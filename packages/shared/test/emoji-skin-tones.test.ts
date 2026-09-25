@@ -15,7 +15,10 @@ test('collapsing folds every tone variant into a base that stays in the corpus',
   const visible = new Set(collapsed);
 
   // Order is preserved, so the category ranges in `emoji-groups` still line up.
-  assert.deepEqual(collapsed, corpus.filter((emoji) => visible.has(emoji)));
+  assert.deepEqual(
+    collapsed,
+    corpus.filter((emoji) => visible.has(emoji))
+  );
   assert.ok(collapsed.length < corpus.length);
   assert.equal(new Set(collapsed).size, collapsed.length);
   assert.ok(Object.isFrozen(collapsed));

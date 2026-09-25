@@ -27,7 +27,10 @@ export interface MaintenanceOptions {
 }
 
 /** Starts the timers and stops them when the server closes; returns the sweep timer, if any. */
-export function startMaintenanceTimers(server: { once(event: 'close', listener: () => void): unknown }, options: MaintenanceOptions): ReturnType<typeof setInterval> | null {
+export function startMaintenanceTimers(
+  server: { once(event: 'close', listener: () => void): unknown },
+  options: MaintenanceOptions
+): ReturnType<typeof setInterval> | null {
   const { logger } = options;
   // Half-open sockets never emit 'close'; without this dead peers linger in
   // rosters and friends stay "online" forever.
@@ -45,9 +48,11 @@ export function startMaintenanceTimers(server: { once(event: 'close', listener: 
   const timer = setInterval(() => {
     for (const task of options.tasks) {
       if (task.enabled && !task.enabled()) continue;
-      void options.observe(task.name, () => task.run()).catch((error) => {
-        logger.error({ evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: task.label, err: error }, task.failureMessage);
-      });
+      void options
+        .observe(task.name, () => task.run())
+        .catch((error) => {
+          logger.error({ evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: task.label, err: error }, task.failureMessage);
+        });
     }
   }, options.intervalMs);
   timer.unref?.();

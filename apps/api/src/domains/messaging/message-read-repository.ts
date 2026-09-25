@@ -11,7 +11,11 @@ export type MessageReadRepository = Readonly<{
   advanceRoom(input: { roomId: string; userId: string; tuple: ReadTuple }): Promise<ReadAdvance>;
 }>;
 
-function createMessageReadRepository({ databaseUrl, logger = createLogger({ name: 'api' }), pool }: {
+function createMessageReadRepository({
+  databaseUrl,
+  logger = createLogger({ name: 'api' }),
+  pool
+}: {
   databaseUrl?: string;
   logger?: unknown;
   pool?: pg.Pool | null;
@@ -26,7 +30,15 @@ function createMessageReadRepository({ databaseUrl, logger = createLogger({ name
   // never got read_at and its unread badge came back on every reload. The
   // SELECT above each write has already matched created_at to these exact
   // micros, so reusing them names the same instant.
-  async function advanceRoom({ roomId, userId, tuple }: { roomId: string; userId: string; tuple: ReadTuple }): Promise<ReadAdvance> {
+  async function advanceRoom({
+    roomId,
+    userId,
+    tuple
+  }: {
+    roomId: string;
+    userId: string;
+    tuple: ReadTuple;
+  }): Promise<ReadAdvance> {
     return transaction(getPool(), async (client: pg.PoolClient) => {
       const message = await client.query<{ created_at: unknown; id: string }>(
         `SELECT created_at, id FROM room_messages
@@ -65,7 +77,15 @@ function createMessageReadRepository({ databaseUrl, logger = createLogger({ name
     });
   }
 
-  async function advanceDm({ peerId, userId, tuple }: { peerId: string; userId: string; tuple: ReadTuple }): Promise<ReadAdvance> {
+  async function advanceDm({
+    peerId,
+    userId,
+    tuple
+  }: {
+    peerId: string;
+    userId: string;
+    tuple: ReadTuple;
+  }): Promise<ReadAdvance> {
     return transaction(getPool(), async (client: pg.PoolClient) => {
       const message = await client.query<{ created_at: unknown; id: string }>(
         `SELECT created_at, id FROM direct_messages

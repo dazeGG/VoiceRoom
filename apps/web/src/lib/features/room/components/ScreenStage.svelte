@@ -56,10 +56,18 @@
   tabindex="-1"
   aria-label="Закрыть просмотр экрана"
   onclick={handleScreenStageClick}
-  onkeydown={(event) => { if (event.key === 'Enter' || event.key === ' ') handleScreenStageClick(event as unknown as MouseEvent); }}
-  onpointerenter={() => { screenUi.uiActive = true; }}
-  onpointerleave={() => { screenUi.uiActive = false; }}
-  onpointermove={() => { if (screenUi.stageVisible) screenUi.uiActive = true; }}
+  onkeydown={(event) => {
+    if (event.key === 'Enter' || event.key === ' ') handleScreenStageClick(event as unknown as MouseEvent);
+  }}
+  onpointerenter={() => {
+    screenUi.uiActive = true;
+  }}
+  onpointerleave={() => {
+    screenUi.uiActive = false;
+  }}
+  onpointermove={() => {
+    if (screenUi.stageVisible) screenUi.uiActive = true;
+  }}
 >
   <video class="screen-video" id="screenVideo" bind:this={videoEl} autoplay playsinline></video>
   <div class="screen-placeholder" id="screenPlaceholder" hidden={!screenUi.showPlaceholder}>Подключение к экрану</div>
@@ -87,7 +95,13 @@
         {#if meta.viewerAvatars.length === 0}
           Смотрят: 0
         {:else}
-          <AvatarStack items={meta.viewerAvatars} maxAvatars={null} size={22} ariaLabel="Смотрят стрим" class="screen-meta-avatar-stack" />
+          <AvatarStack
+            items={meta.viewerAvatars}
+            maxAvatars={null}
+            size={22}
+            ariaLabel="Смотрят стрим"
+            class="screen-meta-avatar-stack"
+          />
         {/if}
       </span>
     </div>

@@ -5,11 +5,20 @@ import { createMembershipService } from '../src/domains/membership/membership-se
 
 test('G44-A01 registered membership follows successful admission and guests/failures create no row', async () => {
   const calls = [];
-  const pool = { async query() {}, async connect() { return { query: async () => ({}), release() {} }; } };
+  const pool = {
+    async query() {},
+    async connect() {
+      return { query: async () => ({}), release() {} };
+    }
+  };
   const service = createMembershipService({
     pool,
     repository: {},
-    activeBanService: { async isBanned() { return false; } }
+    activeBanService: {
+      async isBanned() {
+        return false;
+      }
+    }
   });
   service.persistSuccessfulAdmission = undefined;
   const invalid = await service.admitRegistered({ roomId: 'room', completeAdmission: async () => ({ token: 'x' }) });
@@ -18,4 +27,3 @@ test('G44-A01 registered membership follows successful admission and guests/fail
   assert.equal(failed.status, 'admission_failed');
   assert.deepEqual(calls, []);
 });
-

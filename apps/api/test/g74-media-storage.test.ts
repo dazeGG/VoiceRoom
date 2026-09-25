@@ -25,12 +25,17 @@ test('G74-A02 traversal, encoded paths, symlinks, foreign objects and interrupte
   const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'voice-room-media-'));
   t.after(() => fs.promises.rm(root, { recursive: true, force: true }));
   const storage = createMediaStorage({ rootDir: root });
-  for (const value of ['../x', '%2e%2e/x', `${ID}/../original`, 'avatars/user.webp']) assert.throws(() => parseStorageKey(value));
+  for (const value of ['../x', '%2e%2e/x', `${ID}/../original`, 'avatars/user.webp'])
+    assert.throws(() => parseStorageKey(value));
   assert.throws(() => createStorageKey(ID, 'other'));
-  await assert.rejects(storage.save(ID, 'original', Buffer.alloc(2), { maxBytes: 1 }), (error: { code?: string; statusCode?: number; message?: string }) => error.code === 'MEDIA_TOO_LARGE');
+  await assert.rejects(
+    storage.save(ID, 'original', Buffer.alloc(2), { maxBytes: 1 }),
+    (error: { code?: string; statusCode?: number; message?: string }) => error.code === 'MEDIA_TOO_LARGE'
+  );
   const attachmentDir = path.join(root, ID);
   assert.deepEqual(await fs.promises.readdir(attachmentDir), []);
-  const target = path.join(root, 'target'); await fs.promises.mkdir(target);
+  const target = path.join(root, 'target');
+  await fs.promises.mkdir(target);
   const symlinkId = '223e4567-e89b-42d3-a456-426614174000';
   try {
     await fs.promises.symlink(target, path.join(root, symlinkId), 'junction');

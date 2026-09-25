@@ -31,9 +31,7 @@ export function connectedRoomIsViewed(mode: RoomShellMode): boolean {
 
 export function embeddedRoomIsVisible(mode: RoomShellMode): boolean {
   return Boolean(
-    roomNavigation.embeddedRoomId &&
-      mode === 'rooms' &&
-      (!getActiveVoiceRoomId() || connectedRoomIsViewed(mode))
+    roomNavigation.embeddedRoomId && mode === 'rooms' && (!getActiveVoiceRoomId() || connectedRoomIsViewed(mode))
   );
 }
 
@@ -80,7 +78,11 @@ export function clearEmbeddedRoom(): void {
 }
 
 export function clearDisconnectedHiddenEmbed(): void {
-  if (!getActiveVoiceRoomId() && roomNavigation.embeddedRoomId && roomNavigation.viewedRoomId !== roomNavigation.embeddedRoomId) {
+  if (
+    !getActiveVoiceRoomId() &&
+    roomNavigation.embeddedRoomId &&
+    roomNavigation.viewedRoomId !== roomNavigation.embeddedRoomId
+  ) {
     roomNavigation.embeddedRoomId = null;
   }
 }

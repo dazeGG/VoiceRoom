@@ -31,7 +31,10 @@
     onAuthenticated?: (user: AuthUser) => Promise<void> | void;
   } = $props();
 
-  const COPY: Record<AuthMode, { title: string; subtitle: string; submit: string; submitting: string; failure: string }> = {
+  const COPY: Record<
+    AuthMode,
+    { title: string; subtitle: string; submit: string; submitting: string; failure: string }
+  > = {
     login: {
       title: 'Вход',
       subtitle: 'Продолжите с сохранёнными комнатами и именем.',
@@ -101,7 +104,8 @@
   function validate(): string {
     if (isRegister && !normalizeLogin(loginValue)) return `Логин: ${LOGIN_HINT}`;
     if (isRecover && !normalizeLogin(loginValue)) return 'Введите логин аккаунта';
-    if (isRecover && !normalizeRecoveryCode(recoveryCode)) return 'Код восстановления — 16 символов, например ABCD-EFGH-JKMN-PQRS';
+    if (isRecover && !normalizeRecoveryCode(recoveryCode))
+      return 'Код восстановления — 16 символов, например ABCD-EFGH-JKMN-PQRS';
     if (!isLogin && !isValidPassword(password)) return `Пароль должен быть не короче ${PASSWORD_MIN_LENGTH} символов`;
     if (!isLogin && password !== passwordConfirm) return 'Пароли не совпадают';
     return '';

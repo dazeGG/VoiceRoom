@@ -3,13 +3,7 @@
 // store only ever replaces its snapshot — there is no incremental merge to get
 // wrong.
 
-import {
-  fetchRoomPins,
-  pinRoomMessage,
-  pinSnapshot,
-  unpinRoomMessage,
-  type PinnedMessage
-} from '$lib/api/pins';
+import { fetchRoomPins, pinRoomMessage, pinSnapshot, unpinRoomMessage, type PinnedMessage } from '$lib/api/pins';
 
 export const roomPins = $state({
   roomId: '',

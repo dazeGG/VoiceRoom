@@ -33,10 +33,17 @@ export interface RoomLifecycleDeps {
   presence: RoomPresence;
   runtime(): RoomRuntime | null;
   /** The friend store while pending room invitations can expire, else null. */
-  invitations(): { expirePendingInvites(input: { senderId: string | null; roomId: string }): Promise<{ senderId: string; recipientId: string }[]> } | null;
+  invitations(): {
+    expirePendingInvites(input: {
+      senderId: string | null;
+      roomId: string;
+    }): Promise<{ senderId: string; recipientId: string }[]>;
+  } | null;
   notifyUser(userId: string, event: Record<string, unknown>): void;
   /** Null without a gate secret; teardown then fails that peer's revocation. */
-  credentials(): { revokePeer(input: { roomId: string; accountUserId: string | null; guestPrincipalId: string }): Promise<unknown> } | null;
+  credentials(): {
+    revokePeer(input: { roomId: string; accountUserId: string | null; guestPrincipalId: string }): Promise<unknown>;
+  } | null;
   removeParticipant(roomId: string, peerId: string): Promise<void>;
   removeAvatar(key: string | null | undefined, log: Pick<Logger, 'error'> | undefined): Promise<void>;
   displayName(user: ProfileUser): string;
@@ -100,7 +107,13 @@ export function createRoomLifecycle(deps: RoomLifecycleDeps) {
   // Everything after the durable soft-delete: tell whoever watches, expire
   // its invitations, drop every peer and remove the avatar. Shared by the
   // owner's delete and by rooms nobody inherits from a deleted account.
-  async function finishRoomDeletion(roomId: string, { avatarKey = null, request = null }: { avatarKey?: string | null; request?: { log?: Pick<Logger, 'warn' | 'error'> } | null } = {}): Promise<void> {
+  async function finishRoomDeletion(
+    roomId: string,
+    {
+      avatarKey = null,
+      request = null
+    }: { avatarKey?: string | null; request?: { log?: Pick<Logger, 'warn' | 'error'> } | null } = {}
+  ): Promise<void> {
     // Broadcast before presence teardown so the writes do not race socket close.
     const live = presence.rooms.get(roomId);
     if (live) presence.broadcast(live, { type: 'room-deleted', roomId });
@@ -109,7 +122,9 @@ export function createRoomLifecycle(deps: RoomLifecycleDeps) {
     // Invitations outlive the inviter's session, so the deleted room is the
     // only thing left that can invalidate them.
     void expireRoomInvitations(null, roomId).catch((error) => {
-      deps.logger().error({ evt: LOG_EVENTS.ROOM_INVITATION_EXPIRY_FAILED, err: error }, 'failed to expire room invitations');
+      deps
+        .logger()
+        .error({ evt: LOG_EVENTS.ROOM_INVITATION_EXPIRY_FAILED, err: error }, 'failed to expire room invitations');
     });
 
     // Terminal-claim every active or leased peer before credential or
@@ -123,7 +138,11 @@ export function createRoomLifecycle(deps: RoomLifecycleDeps) {
           const principalPeer = peer as GatePrincipalPeer & RosterPeer;
           let failure: unknown = null;
           try {
-            await deps.credentials()!.revokePeer({ roomId, accountUserId: principalPeer.accountUserId || null, guestPrincipalId: principalPeer.gateGuestPrincipalId || '' });
+            await deps.credentials()!.revokePeer({
+              roomId,
+              accountUserId: principalPeer.accountUserId || null,
+              guestPrincipalId: principalPeer.gateGuestPrincipalId || ''
+            });
           } catch (error) {
             failure = error;
           }

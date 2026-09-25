@@ -29,18 +29,28 @@ export class AttachmentComposeStore {
 
   private readonly storageKey: string;
 
-  constructor(readonly context: AttachmentContext, readonly contextId: string) {
+  constructor(
+    readonly context: AttachmentContext,
+    readonly contextId: string
+  ) {
     this.storageKey = `voice-room:attachment-drafts:${context}:${contextId}`;
     if (typeof localStorage !== 'undefined') {
       try {
         const ids = JSON.parse(localStorage.getItem(this.storageKey) || '[]');
-        if (Array.isArray(ids) && ids.length) void this.resume(ids.filter((id): id is string => typeof id === 'string'));
-      } catch { localStorage.removeItem(this.storageKey); }
+        if (Array.isArray(ids) && ids.length)
+          void this.resume(ids.filter((id): id is string => typeof id === 'string'));
+      } catch {
+        localStorage.removeItem(this.storageKey);
+      }
     }
   }
 
-  get readyIds(): string[] { return this.drafts.filter((draft) => draft.state === 'ready').map((draft) => draft.id); }
-  get canSend(): boolean { return this.drafts.length > 0 && this.drafts.every((draft) => draft.state === 'ready'); }
+  get readyIds(): string[] {
+    return this.drafts.filter((draft) => draft.state === 'ready').map((draft) => draft.id);
+  }
+  get canSend(): boolean {
+    return this.drafts.length > 0 && this.drafts.every((draft) => draft.state === 'ready');
+  }
 
   async addFiles(files: Iterable<File>): Promise<void> {
     this.lastError = null;
@@ -71,9 +81,13 @@ export class AttachmentComposeStore {
       });
       draft = this.drafts[this.drafts.length - 1];
       this.persist();
-      Object.assign(draft, await uploadAttachmentContent(slot.id, file, (progress) => {
-        if (draft) draft.progress = progress;
-      }), { progress: 1 });
+      Object.assign(
+        draft,
+        await uploadAttachmentContent(slot.id, file, (progress) => {
+          if (draft) draft.progress = progress;
+        }),
+        { progress: 1 }
+      );
       await this.waitUntilTerminal(draft);
     } catch (error) {
       if (draft && draft.state !== 'ready') {
@@ -82,8 +96,7 @@ export class AttachmentComposeStore {
         disposePreview(draft);
         this.drafts = this.drafts.filter((item) => item.id !== draft?.id);
         this.persist();
-      }
-      else throw error;
+      } else throw error;
     } finally {
       this.busy = false;
     }
@@ -98,7 +111,8 @@ export class AttachmentComposeStore {
 
   async resume(ids: string[]): Promise<void> {
     const statuses = await Promise.all(ids.slice(0, 4).map(getAttachmentStatus));
-    this.drafts = statuses.filter((draft) => draft.context === this.context && draft.state !== 'deleted')
+    this.drafts = statuses
+      .filter((draft) => draft.context === this.context && draft.state !== 'deleted')
       .map((draft) => ({
         ...draft,
         file: null,
@@ -107,7 +121,11 @@ export class AttachmentComposeStore {
         error: null
       }));
     this.persist();
-    await Promise.all(this.drafts.filter((draft) => draft.state === 'pending' || draft.state === 'processing').map((draft) => this.waitUntilTerminal(draft)));
+    await Promise.all(
+      this.drafts
+        .filter((draft) => draft.state === 'pending' || draft.state === 'processing')
+        .map((draft) => this.waitUntilTerminal(draft))
+    );
   }
 
   move(from: number, to: number): void {

@@ -38,9 +38,7 @@ export function isOfferedEmoji(emoji: string): boolean {
 }
 
 /** Every emoji the picker may browse, in corpus order, tones already folded. */
-export const BROWSABLE_EMOJIS: readonly string[] = Object.freeze(
-  listCollapsedReactionEmojis().filter(isOfferedEmoji)
-);
+export const BROWSABLE_EMOJIS: readonly string[] = Object.freeze(listCollapsedReactionEmojis().filter(isOfferedEmoji));
 
 const BROWSABLE_SET = new Set(BROWSABLE_EMOJIS);
 

@@ -6,7 +6,11 @@ import { createLogger } from './logger.ts';
 
 type PoolLogger = { error(...args: unknown[]): void };
 
-function createDbPool({ databaseUrl = readDatabaseConfig().url, logger = createLogger({ name: 'api' }), max = 10 }: {
+function createDbPool({
+  databaseUrl = readDatabaseConfig().url,
+  logger = createLogger({ name: 'api' }),
+  max = 10
+}: {
   databaseUrl?: string;
   logger?: PoolLogger | unknown;
   max?: number;
@@ -24,7 +28,10 @@ function createDbPool({ databaseUrl = readDatabaseConfig().url, logger = createL
   return pool;
 }
 
-async function transaction<T>(pool: Pick<pg.Pool, 'connect'> | null | undefined, callback: (client: pg.PoolClient) => Promise<T>): Promise<T> {
+async function transaction<T>(
+  pool: Pick<pg.Pool, 'connect'> | null | undefined,
+  callback: (client: pg.PoolClient) => Promise<T>
+): Promise<T> {
   const client = await pool!.connect();
   try {
     await client.query('BEGIN');

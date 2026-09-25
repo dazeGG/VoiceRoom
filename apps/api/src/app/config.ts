@@ -13,7 +13,12 @@ export const DEFAULT_REALTIME_RECONNECT_LEASE_MS = 30000;
 export function readinessReadySetFromEnv(name: string, env: Env = process.env): Set<string> {
   const raw = (env[name] || '').trim();
   if (!raw) return new Set();
-  return new Set(raw.split(',').map((item) => item.trim()).filter(Boolean));
+  return new Set(
+    raw
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean)
+  );
 }
 
 export function resolveRealtimeReconnectLeaseMs(env: Env = process.env): number {

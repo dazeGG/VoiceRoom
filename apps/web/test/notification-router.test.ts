@@ -3,7 +3,6 @@ import { test, vi } from 'vitest';
 import { freshImport } from './helpers/fresh-module.ts';
 import assert from 'node:assert/strict';
 
-
 async function loadRouter() {
   return freshImport('/src/lib/shared/notifications/router.ts');
 }
@@ -87,7 +86,6 @@ test('routes notification payloads with visible non-private bodies and title for
   assert.equal(fallback.body, 'Новое сообщение');
 });
 
-
 test('invalid notification payloads no-op instead of creating incomplete browser payloads', async () => {
   const router = await loadRouter();
 
@@ -115,15 +113,27 @@ test('invalid notification payloads no-op instead of creating incomplete browser
 test('suppresses active exact DM and room targets, mutes, self, denied, and unavailable cases', async () => {
   const router = await loadRouter();
 
-  assert.deepEqual(router.routeNotificationEvent({ type: 'pong', payload: { at: 1 } }).reason, 'not-notification-event');
+  assert.deepEqual(
+    router.routeNotificationEvent({ type: 'pong', payload: { at: 1 } }).reason,
+    'not-notification-event'
+  );
   assert.equal(router.shouldNotify(dmEvent(), { permission: 'granted', notificationsAvailable: true }), true);
-  assert.equal(router.routeNotificationEvent(dmEvent(), { notificationsAvailable: false }).reason, 'notifications-unavailable');
-  assert.equal(router.routeNotificationEvent(dmEvent(), { permission: 'denied' }).reason, 'notification-permission-not-granted');
+  assert.equal(
+    router.routeNotificationEvent(dmEvent(), { notificationsAvailable: false }).reason,
+    'notifications-unavailable'
+  );
+  assert.equal(
+    router.routeNotificationEvent(dmEvent(), { permission: 'denied' }).reason,
+    'notification-permission-not-granted'
+  );
   assert.equal(router.routeNotificationEvent(dmEvent(), { userId: 'alice-id' }).reason, 'self-event');
   assert.equal(router.routeNotificationEvent(dmEvent(), { mutedPeerIds: ['alice-id'] }).reason, 'muted-peer');
   assert.equal(router.routeNotificationEvent(dmEvent(), { doNotDisturb: true }).reason, 'do-not-disturb');
   assert.equal(router.routeNotificationEvent(roomEvent(), { mutedRoomIds: new Set(['daily']) }).reason, 'muted-room');
-  assert.equal(router.routeNotificationEvent(dmEvent(), { activeTarget: { kind: 'dm', peerId: 'alice-id' } }).reason, 'active-target');
+  assert.equal(
+    router.routeNotificationEvent(dmEvent(), { activeTarget: { kind: 'dm', peerId: 'alice-id' } }).reason,
+    'active-target'
+  );
 
   for (const kind of ['room', 'room-preview', 'room-chat']) {
     assert.equal(
@@ -132,8 +142,14 @@ test('suppresses active exact DM and room targets, mutes, self, denied, and unav
     );
   }
 
-  assert.equal(router.routeNotificationEvent(dmEvent(), { activeTarget: { kind: 'dm', peerId: 'other' } }).notify, true);
-  assert.equal(router.routeNotificationEvent(roomEvent(), { activeTarget: { kind: 'room-preview', roomId: 'other' } }).notify, true);
+  assert.equal(
+    router.routeNotificationEvent(dmEvent(), { activeTarget: { kind: 'dm', peerId: 'other' } }).notify,
+    true
+  );
+  assert.equal(
+    router.routeNotificationEvent(roomEvent(), { activeTarget: { kind: 'room-preview', roomId: 'other' } }).notify,
+    true
+  );
 });
 
 test('truncates notification bodies conservatively with an ellipsis', async () => {
@@ -144,10 +160,14 @@ test('truncates notification bodies conservatively with an ellipsis', async () =
   assert.equal(router.truncateNotificationBody('abcdef', 1), '…');
   assert.equal(router.truncateNotificationBody('abcdef', 0), '');
 
-  const payload = router.buildNotificationPayload(dmEvent({ body: 'one two three four five' }), { privateNotifications: false });
+  const payload = router.buildNotificationPayload(dmEvent({ body: 'one two three four five' }), {
+    privateNotifications: false
+  });
   assert.equal(payload.body, 'one two three four five');
 
-  const privatePayload = router.buildNotificationPayload(dmEvent({ body: 'secret text' }), { privateNotifications: true });
+  const privatePayload = router.buildNotificationPayload(dmEvent({ body: 'secret text' }), {
+    privateNotifications: true
+  });
   assert.equal(privatePayload.body, 'Откройте VoiceRoom, чтобы посмотреть уведомление.');
 });
 
@@ -183,11 +203,16 @@ test('browser helpers dedupe by tag/key and never request permission outside exp
   try {
     const router = await loadRouter();
     router.resetNotificationDedupeForTests();
-    const payload = router.buildNotificationPayload(dmEvent({ dedupeKey: 'dm:dedupe' }), { privateNotifications: false });
+    const payload = router.buildNotificationPayload(dmEvent({ dedupeKey: 'dm:dedupe' }), {
+      privateNotifications: false
+    });
 
     assert.equal(router.getNotificationPermission(), 'granted');
     assert.equal(router.canUseNotifications(), true);
-    assert.equal(router.routeNotificationEvent(dmEvent({ dedupeKey: 'dm:dedupe' }), { permission: 'granted' }).notify, true);
+    assert.equal(
+      router.routeNotificationEvent(dmEvent({ dedupeKey: 'dm:dedupe' }), { permission: 'granted' }).notify,
+      true
+    );
     assert.equal(requestPermissionCalls, 0, 'routing does not request permission');
 
     const first = await router.showBrowserNotification(payload);
@@ -247,13 +272,17 @@ test('desktop bridge is preferred over page Notification and does not request pe
   try {
     const router = await loadRouter();
     router.resetNotificationDedupeForTests();
-    const payload = router.buildNotificationPayload(dmEvent({ dedupeKey: 'dm:desktop' }), { privateNotifications: false });
+    const payload = router.buildNotificationPayload(dmEvent({ dedupeKey: 'dm:desktop' }), {
+      privateNotifications: false
+    });
 
     assert.equal(router.getNotificationPermission(), 'denied');
     assert.equal(router.getNotificationDeliveryPermission(), 'granted');
     assert.equal(router.canUseNotifications(), true);
     assert.equal(
-      router.routeNotificationEvent(dmEvent({ dedupeKey: 'dm:desktop' }), { permission: router.getNotificationDeliveryPermission() }).notify,
+      router.routeNotificationEvent(dmEvent({ dedupeKey: 'dm:desktop' }), {
+        permission: router.getNotificationDeliveryPermission()
+      }).notify,
       true
     );
 
@@ -330,7 +359,9 @@ test('desktop bridge unsupported result falls back to browser Notification', asy
   try {
     const router = await loadRouter();
     router.resetNotificationDedupeForTests();
-    const payload = router.buildNotificationPayload(roomEvent({ dedupeKey: 'room:desktop-fallback' }), { privateNotifications: false });
+    const payload = router.buildNotificationPayload(roomEvent({ dedupeKey: 'room:desktop-fallback' }), {
+      privateNotifications: false
+    });
     const result = await router.showBrowserNotification(payload);
 
     assert.ok(result);

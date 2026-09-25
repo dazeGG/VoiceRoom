@@ -104,7 +104,10 @@
         <UserPlus {...iconMd} aria-hidden="true" />
       </span>
       <div style="flex:1;min-width:0;">
-        <div class="lr-callout-title">{requestCount} {requestCount === 1 ? 'новая заявка' : 'новые заявки'} в друзья</div>
+        <div class="lr-callout-title">
+          {requestCount}
+          {requestCount === 1 ? 'новая заявка' : 'новые заявки'} в друзья
+        </div>
         <div class="lr-callout-sub">Откройте, чтобы принять или отклонить</div>
       </div>
       <span style="flex:none;color:var(--warm-faint);">
@@ -139,7 +142,9 @@
     </div>
   {/if}
 
-  <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;margin:24px 0 18px;">
+  <div
+    style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;margin:24px 0 18px;"
+  >
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
       <form class="lv-join" onsubmit={submitJoinCode}>
         <input
@@ -149,11 +154,7 @@
           aria-describedby="roomAutoSaveHint"
           bind:value={joinCode}
         />
-        <span
-          class="lv-join-hint"
-          title="Постоянные комнаты сохраняются автоматически"
-          aria-hidden="true"
-        >i</span>
+        <span class="lv-join-hint" title="Постоянные комнаты сохраняются автоматически" aria-hidden="true">i</span>
         <span class="lv-sr-only" id="roomAutoSaveHint">Постоянные комнаты сохраняются автоматически</span>
         <button class="lv-join-btn" type="submit">Войти</button>
       </form>
@@ -186,12 +187,23 @@
           class:has-unread={unreadCount > 0}
         >
           <div class="lv-card-head">
-            <Avatar name={roomDisplayName(room)} src={room.avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={42} />
+            <Avatar
+              name={roomDisplayName(room)}
+              src={room.avatarUrl}
+              shape="squircle"
+              background="var(--room-avatar-bg)"
+              size={42}
+            />
             <div style="min-width:0;flex:1;">
               <div class="lv-notification-title">
                 <Ellipsis text={roomDisplayName(room)} class="lv-row-name" tag="div" />
                 {#if roomNotificationsMuted}
-                  <span class="lv-notification-muted" role="img" aria-label="Уведомления отключены" title="Уведомления отключены">
+                  <span
+                    class="lv-notification-muted"
+                    role="img"
+                    aria-label="Уведомления отключены"
+                    title="Уведомления отключены"
+                  >
                     <BellOff {...iconSm} aria-hidden="true" />
                   </span>
                 {/if}
@@ -205,7 +217,14 @@
           {/if}
           <div class="lv-card-foot">
             {#if room.peers > 0}
-              <span style="display:flex;align-items:center;gap:8px;"><span class="lr-livedot"></span><AvatarStack items={roomAvatars(room.roomId)} maxAvatars={5} size={24} ariaLabel="В комнате" /></span>
+              <span style="display:flex;align-items:center;gap:8px;"
+                ><span class="lr-livedot"></span><AvatarStack
+                  items={roomAvatars(room.roomId)}
+                  maxAvatars={5}
+                  size={24}
+                  ariaLabel="В комнате"
+                /></span
+              >
             {:else}
               <span class="lv-row-sub">тихо сейчас</span>
             {/if}
@@ -236,7 +255,9 @@
           presentUserIds={roomPresentUserIds(contextRoom.roomId)}
           {close}
           canClose={(roomId) => contextRoomId === roomId}
-          onOpenSettings={contextRoom.relationship === 'owner' ? () => onOpenRoomSettings?.(contextRoom.roomId) : undefined}
+          onOpenSettings={contextRoom.relationship === 'owner'
+            ? () => onOpenRoomSettings?.(contextRoom.roomId)
+            : undefined}
           {onRoomsChanged}
           {onToast}
         />
