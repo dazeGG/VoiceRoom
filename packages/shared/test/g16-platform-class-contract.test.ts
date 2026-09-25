@@ -1,6 +1,4 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
 import test from 'node:test';
 
 import * as platform from '../src/platform-class.ts';
@@ -43,14 +41,12 @@ test('G16-A02 policy is fail-open only for unknown and never returns raw signals
 });
 
 test('G16-A02 declaration and runtime contracts expose the same normalized DTO', () => {
-  const declaration = fs.readFileSync(path.join(import.meta.dirname, '../src/platform-class.ts'), 'utf8');
-  assert.match(declaration, /type PlatformClass = 'desktop' \| 'mobile' \| 'unknown'/);
-  assert.match(declaration, /contractVersion: 'voice-room\.platform-class\/v1'/);
-  assert.match(declaration, /platformClass: PlatformClass/);
-  assert.match(declaration, /desktopAllowed: boolean/);
-  assert.match(declaration, /roomClientAllowed: boolean/);
-  assert.doesNotMatch(
-    declaration.match(/export interface PlatformPolicy \{[\s\S]*?\}/)?.[0] || '',
-    /userAgent|\bplatform\??:|maxTouchPoints|desktopBridge/
-  );
+  // The DTO is checked by the compiler: exactly these fields, no raw signals.
+  const policy: platform.PlatformPolicy = platform.platformPolicy('mobile');
+  const exact: Record<keyof platform.PlatformPolicy, true> = { contractVersion: true, platformClass: true, desktopAllowed: true, roomClientAllowed: true };
+  assert.deepEqual(Object.keys(policy).sort(), Object.keys(exact).sort());
+  const version: 'voice-room.platform-class/v1' = policy.contractVersion;
+  const classes: platform.PlatformClass[] = ['desktop', 'mobile', 'unknown'];
+  assert.equal(version, platform.PLATFORM_CLASS_CONTRACT);
+  assert.deepEqual(Object.keys(platform.PLATFORM_CLASSES).sort(), [...classes].sort());
 });

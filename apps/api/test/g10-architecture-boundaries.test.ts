@@ -30,11 +30,8 @@ test('G10-A01 current API composition graph stays inside import, write and timer
   assert.deepEqual(checkImportBoundaries({ config: config() }), []);
   assert.deepEqual(checkApiSources({ config: config() }), []);
 
-  const serverSource = fs.readFileSync(path.join(import.meta.dirname, '../src/server.ts'), 'utf8');
-  assert.match(serverSource, /function createApiServer\(/);
-  assert.match(serverSource, /function createApiApp\(/);
-  assert.match(serverSource, /function bootstrap\(/);
-  assert.match(serverSource, /export \{ bootstrap, closeStores, createApiApp, createApiServer \};/);
+  const server = await import('../src/server.ts');
+  for (const name of ['bootstrap', 'closeStores', 'createApiApp', 'createApiServer']) assert.equal(typeof server[name], 'function', name);
 });
 
 test('G10-A03 a declared cross-domain writer may touch only its declared tables', async () => {

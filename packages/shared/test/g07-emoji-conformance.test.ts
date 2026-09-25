@@ -14,7 +14,6 @@ import {
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const PACKAGE_JSON = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-const SOURCE = fs.readFileSync(path.join(ROOT, 'src/emoji.ts'), 'utf8');
 const EXPECTED_CORPUS_SHA256 = '4a53e0c0dc317e6830f4055191e9fe287ab2db8978b2f78bdbaa43a60483d791';
 const EXPECTED_UNICODE_SHA256 = '1d8a944f88d7952f7ef7c5167fef3c67995bcae24543949710231b03a201acda';
 
@@ -109,9 +108,4 @@ test('the package export, the source file and the declared types agree', async (
   }
 
   assert.equal(PACKAGE_JSON.exports['./emoji'], './src/emoji.ts');
-  assert.match(SOURCE, /export const EMOJI_REACTION_AUTHORITY: EmojiReactionAuthority = /);
-  assert.match(SOURCE, /export function isReactionEmoji\(value: unknown\): value is string \{/);
-  assert.match(SOURCE, /export function cleanReactionEmoji\(value: unknown\): string \{/);
-  assert.match(SOURCE, /export function assertReactionEmoji\(value: unknown\): string \{/);
-  assert.match(SOURCE, /export function listReactionEmojis\(\): string\[\] \{/);
 });

@@ -8,6 +8,7 @@ import {
   readDatabaseConfig,
   readUploadsDir
 } from '../src/lib/config.ts';
+import { readApiConfig } from '../src/app/config.ts';
 
 test('readEnvInt parses a valid integer', () => {
   assert.equal(readEnvInt('PORT', 3000, 1, { PORT: '8080' }), 8080);
@@ -78,17 +79,14 @@ test('readDatabaseConfig accepts postgres URLs', () => {
 // log intake on, whatever the host .env said.
 test('compose passes every feature flag the API leaves disabled by default', () => {
   const root = path.join(import.meta.dirname, '../../..');
-  // Flags are read in app/config.ts; server.ts reads the start-up ones itself.
-  const server = ['apps/api/src/server.ts', 'apps/api/src/app/config.ts']
-    .map((file) => fs.readFileSync(path.join(root, file), 'utf8'))
-    .join('\n');
   const compose = fs.readFileSync(path.join(root, 'docker-compose.yml'), 'utf8');
 
   const apiBlock = compose.slice(compose.indexOf('\n  api:'), compose.indexOf('\n  message-delivery:'));
   const passed = new Set(Array.from(apiBlock.matchAll(/^ {6}([A-Z0-9_]+):/gm), (m) => m[1]));
-  const defaultOff = Array.from(
-    server.matchAll(/readEnvBool\(\s*'([A-Z0-9_]+)',\s*false/g),
-    (m) => m[1]
+  // A default-off flag: false with no env, true once its variable is set.
+  const base = readApiConfig({ NODE_ENV: 'production' }) as Record<string, unknown>;
+  const defaultOff = Object.keys(base).filter((name) =>
+    base[name] === false && (readApiConfig({ NODE_ENV: 'production', [name]: 'true' }) as Record<string, unknown>)[name] === true
   );
 
   assert.ok(defaultOff.length > 0, 'expected the API to declare default-off flags');

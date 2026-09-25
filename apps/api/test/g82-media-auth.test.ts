@@ -1,7 +1,4 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
 import assert from 'node:assert/strict';
 import fastify from 'fastify';
 import test from 'node:test';
@@ -48,8 +45,4 @@ test('G82-A02 guessed and denied reads are indistinguishable 404 with private sa
   assert.equal(ok.headers['content-type'], 'image/webp'); assert.match(ok.headers['content-disposition'], /^inline; filename="image\.webp"$/);
   assert.equal(denied.statusCode, 404); assert.deepEqual(denied.json(), { ok: false, code: 'media_not_found', error: 'Attachment not found' });
   assert.ok(performance.now() - started < 500);
-  const projection = require('node:fs').readFileSync(fileURLToPath(new URL('../src/domains/messaging/message-projection.ts', import.meta.url)), 'utf8');
-  const shape = projection.match(/function publicAttachment[\s\S]*?\n\}/)?.[0];
-  assert.ok(shape, 'publicAttachment is where the check looks');
-  assert.doesNotMatch(shape, /ownerId/);
 });

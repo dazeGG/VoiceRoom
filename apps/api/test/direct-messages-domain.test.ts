@@ -22,20 +22,19 @@ test('DM text keeps lines, collapses runs and caps at 2000 characters', () => {
 });
 
 function harness(options = {}) {
-  const calls = { events: [], recipients: [], previews: [], bound: [], outbox: [], completed: [], expired: [], sent: [] };
+  const calls = { lockedIn: '', events: [], recipients: [], previews: [], bound: [], outbox: [], completed: [], expired: [], sent: [] };
   const messages = options.messages || {};
   const direct = {
     async listThread() { return [{ id: 'm1', senderId: 'user-1', recipientId: PEER }, { id: 'm2', senderId: PEER, recipientId: 'user-1', replyTo: { messageId: 'm1' } }]; },
     async markRead() { return { count: options.readCount ?? 1 }; },
     async sendMessage(input) {
       calls.sent.push(input);
-      const client = {};
       if (input.beforeUnitOfWork) {
-        const before = await input.beforeUnitOfWork(client);
+        const before = await input.beforeUnitOfWork({ transaction: 'before' });
         if (before?.replay) return { ...before.message, idempotencyReplay: true };
       }
       const inserted = { id: 'dm-new', senderId: input.senderId, recipientId: input.recipientId, body: input.body };
-      if (input.unitOfWork) await input.unitOfWork(client, inserted);
+      if (input.unitOfWork) await input.unitOfWork({ transaction: 'insert' }, inserted);
       return inserted;
     },
     async getMessage(userId, peerId, messageId) { return messages[messageId] || null; },
@@ -60,14 +59,14 @@ function harness(options = {}) {
       }
     }),
     friends: () => ({ areFriends: async () => options.friends ?? true, isBlockedBetween: async () => options.blocked ?? false }),
-    findUser: async (userId) => (options.noPeer ? null : { id: userId, login: 'bob', deletedAt: options.deleted ? 1 : null, passwordHash: 'x' }),
+    findUser: async (userId) => (options.noPeer ? null : { id: userId, login: 'bob', deletedAt: options.deleted ? 1 : null, passwordHash: 'x', desktopAppSeenAt: 10 }),
     isDmMuted: async () => true,
     roomExists: async () => options.roomExists ?? true,
     expireRoomInvitations: async (senderId, roomId) => { calls.expired.push([senderId, roomId]); },
     feature: (name) => features[name],
     limiter: { check: () => options.rate || { allowed: true } },
     media: () => (options.media === null ? null : { attachments: { async bindReady(input) { calls.bound.push(input.attachmentIds); } } }),
-    replies: () => ({ async lockDirectTarget() { return { id: 'm1', text: 'target', createdAt: Date.now() }; } }),
+    replies: () => ({ async lockDirectTarget(input: { client: { transaction: string } }) { calls.lockedIn = input.client.transaction; return { id: 'm1', text: 'target', createdAt: Date.now() }; } }),
     delivery: () => delivery,
     projectMedia: async (context, message) => ({ ...message, attachments: [] }),
     projectReply: async (context, message) => (message.replyTo ? { ...message, replyPreview: { projected: true } } : message),
@@ -86,6 +85,7 @@ test('the thread needs a friendship and a live account, and marks the thread rea
   const listed = await service.thread(ME, PEER);
   assert.equal(listed.status, 'listed');
   assert.equal('passwordHash' in listed.peer, false);
+  assert.equal('hasUsedDesktopApp' in listed.peer, false);
   assert.equal(listed.muted, true);
   assert.deepEqual(listed.messages.map((m) => Boolean(m.replyPreview)), [false, true]);
   assert.deepEqual(calls.events, [[PEER, 'dm-read']]);
@@ -119,6 +119,7 @@ test('a send binds attachments, locks the reply and records delivery in one unit
   const { calls, service } = harness();
   const sent = await service.send(ME, PEER, { ...sendBase, attachmentIds: [UUID_A], replyTo: { messageId: UUID_A }, replyToMessageId: UUID_A, idempotencyKey: 'idem-key-1' });
   assert.equal(sent.status, 'sent');
+  assert.equal(calls.lockedIn, 'insert', 'the reply target is locked in the transaction that inserts the message');
   assert.ok(sent.message.replyPreview);
   assert.deepEqual(calls.bound, [[UUID_A]]);
   assert.deepEqual(calls.outbox, ['message.created']);

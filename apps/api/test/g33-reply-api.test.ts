@@ -1,6 +1,4 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
 import { test } from 'node:test';
 import { requireReplyTarget } from '../src/domains/messaging/reply-projector.ts';
 
@@ -14,13 +12,3 @@ test('G33-A01 unavailable and invisible reply targets share one non-disclosing 4
   }
 });
 
-test('G33-A02 room, guest and DM sends lock reply targets inside the message UoW', () => {
-  const roomChat = fs.readFileSync(path.resolve(import.meta.dirname, '../src/domains/messaging/room-chat.service.ts'), 'utf8');
-  const directMessages = fs.readFileSync(path.resolve(import.meta.dirname, '../src/domains/messaging/direct-messages.service.ts'), 'utf8');
-  assert.match(roomChat, /unitOfWork:[\s\S]*lockRoomTarget/);
-  assert.match(directMessages, /unitOfWork:[\s\S]*lockDirectTarget/);
-  for (const source of [roomChat, directMessages]) {
-    assert.match(source, /replyToMessageId:[\s\S]*beforeUnitOfWork:[\s\S]*unitOfWork/);
-    assert.doesNotMatch(source, /replyPreview\.replyPreview/);
-  }
-});

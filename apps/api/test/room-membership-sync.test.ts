@@ -1,8 +1,6 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
 
 import { createRoomStore } from '../src/lib/room-store.ts';
 import { registerMembershipRoutes } from '../src/domains/membership/membership-routes.ts';
@@ -180,9 +178,3 @@ test('owners, failed leaves and refused disconnects keep the room on the list', 
   assert.deepEqual([...owner.onLeftCalls, ...failed.onLeftCalls, ...refused.onLeftCalls], []);
 });
 
-test('the API wires leaving a room to the room store that owns the list', () => {
-  const source = fs.readFileSync(path.resolve(import.meta.dirname, '../src/server.ts'), 'utf8');
-  const start = source.indexOf('registerMembershipRoutes({');
-  const wiring = source.slice(start, source.indexOf('\n    });', start));
-  assert.match(wiring, /onLeft: async \(\{ roomId, user \}\) => \{\s*await getRoomStore\(\)\.removeRoomBookmarkForUser\(user\.id, roomId\);/);
-});

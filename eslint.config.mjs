@@ -84,5 +84,15 @@ export default tseslint.config(
     files: ['apps/web/src/**/*.{ts,svelte}'],
     ignores: ['apps/web/src/lib/shared/log.ts'],
     rules: { 'no-console': 'error' }
+  },
+  {
+    // A request's logger already binds reqId; repeating it writes the field twice.
+    files: ['apps/api/src/**/*.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', {
+        selector: "Property[key.name='reqId'][value.type=/MemberExpression|ChainExpression/]",
+        message: 'request.log already carries reqId; do not add it again.'
+      }]
+    }
   }
 );

@@ -1,12 +1,10 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
 import { createReactionService } from '../src/domains/messaging/reaction-service.ts';
 import { registerReactionRoutes } from '../src/domains/messaging/reaction-routes.ts';
 import { createReactionRealtimeAdapter } from '../src/domains/messaging/reaction-realtime-adapter.ts';
-import fs from 'node:fs';
 
 function repository() {
   let active = false;
@@ -112,7 +110,4 @@ test('G69 routes preserve no-store reads and service authorization status', asyn
   const writeReply = reply();
   await handlers['PUT /api/reactions/:type/:conversationId/:messageId'](request, writeReply);
   assert.equal(writeReply.status, 403);
-  const registry = fs.readFileSync(fileURLToPath(new URL('../src/app/service-registry.ts', import.meta.url)), 'utf8');
-  assert.match(registry, /operation === 'read' && !viewer\?\.id/);
-  assert.match(registry, /canUserReadRoomChat/);
 });

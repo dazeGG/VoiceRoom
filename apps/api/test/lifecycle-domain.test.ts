@@ -147,7 +147,7 @@ test('a room deletion with failing cleanup still finishes and only warns', async
 // --- account lifecycle --------------------------------------------------------------
 
 function accountHarness({ sockets = true, deletions = true, friendsFail = false, principal = true, voiceFails = false } = {}) {
-  const calls = { notified: [], revoked: [], left: [], removed: [], closed: null, announced: [], finished: [], avatars: [], errors: [] };
+  const calls = { notified: [], payloads: [], revoked: [], left: [], removed: [], closed: null, announced: [], finished: [], avatars: [], errors: [] };
   const connections = [
     { activeVoice: { roomId: 'r1', peerId: 'p1' } },
     { activeVoice: null },
@@ -155,7 +155,7 @@ function accountHarness({ sockets = true, deletions = true, friendsFail = false,
   ];
   const lifecycle = createAccountLifecycle({
     friendIds: async () => { if (friendsFail) throw new Error('friends'); return ['f1', 'f2']; },
-    notifyUser: (userId, event) => calls.notified.push([userId, event.type]),
+    notifyUser: (userId, event) => { calls.notified.push([userId, event.type]); calls.payloads.push(event); },
     sockets: () => (sockets ? {
       findAccountConnections: (userId, hashes) => { calls.lookup = [userId, hashes]; return connections; },
       closeConnections: (targets, code, reason) => { calls.closed = [targets.length, code, reason]; }
@@ -185,8 +185,11 @@ function accountHarness({ sockets = true, deletions = true, friendsFail = false,
 test('a profile change reaches every friend; a failed lookup is only logged', async () => {
   const { calls, lifecycle } = accountHarness();
   await lifecycle.broadcastProfileToFriends(null);
-  await lifecycle.broadcastProfileToFriends({ id: 'u1', login: 'ann' });
+  await lifecycle.broadcastProfileToFriends({ id: 'u1', login: 'ann', desktopAppSeenAt: 10, passwordHash: 'x' });
   assert.deepEqual(calls.notified, [['f1', 'user-updated'], ['f2', 'user-updated']]);
+  // Friends get the public profile, never self-only fields.
+  assert.equal('hasUsedDesktopApp' in calls.payloads[0].user, false);
+  assert.equal('passwordHash' in calls.payloads[0].user, false);
   const errors = [];
   await accountHarness({ friendsFail: true }).lifecycle.broadcastProfileToFriends({ id: 'u1' }, { error: (fields) => errors.push(fields.userId) });
   await accountHarness({ friendsFail: true }).lifecycle.broadcastProfileToFriends({ id: 'u1' });

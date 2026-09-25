@@ -18,9 +18,10 @@ const REQUEST_ID = '33333333-3333-4333-8333-333333333333';
 
 test('social views: the notification actor and active accounts', () => {
   assert.equal(notificationActor(null), null);
-  const actor = notificationActor({ id: 'u', login: 'bob', displayName: 'Bob', passwordHash: 'secret' });
+  const actor = notificationActor({ id: 'u', login: 'bob', displayName: 'Bob', passwordHash: 'secret', desktopAppSeenAt: 10 });
   assert.equal(actor.id, 'u');
   assert.equal('passwordHash' in actor, false);
+  assert.equal('hasUsedDesktopApp' in actor, false, 'self-only fields stay private');
   assert.equal(isActiveAccount(null), false);
   assert.equal(isActiveAccount({ id: 'u' }), true);
   assert.equal(isActiveAccount({ id: 'u', deletionRequestedAt: 1 }), false);

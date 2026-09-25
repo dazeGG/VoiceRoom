@@ -1,6 +1,3 @@
-import { fileURLToPath } from 'node:url';
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { DEFAULT_MIN_FREE_BYTES, DEFAULT_RECOVERY_BYTES, createMediaPressureService } from '../src/domains/media/media-pressure-service.ts';
@@ -30,6 +27,4 @@ test('G80-A02 replica disagreement disables uploads despite healthy local statfs
   assert.equal(disagreed.healthy, false); assert.equal(disagreed.reason, 'replica_disagreement');
   consensus = true;
   assert.equal((await pressure.measure({ force: true })).healthy, true);
-  const registry = require('node:fs').readFileSync(fileURLToPath(new URL('../src/app/service-registry.ts', import.meta.url)), 'utf8');
-  assert.match(registry, /replicaConsensus: \(\) => readinessProvider\.getSnapshot\(\)\?\.replicaConsensus === true/);
 });

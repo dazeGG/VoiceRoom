@@ -934,6 +934,8 @@ test('membership removal terminal-claims leases before one principal revoke and 
   const revoked = [];
   const closed = [];
   const principalRevokes = [];
+  const removeCalls = [];
+  let removedBeforeRevoke = -1;
   const owner = createPeer(OWNER_ID, {
     accountUserId: 'account-owner',
     transport: { id: 'transport-membership', close() {} }
@@ -944,10 +946,12 @@ test('membership removal terminal-claims leases before one principal revoke and 
     scheduler,
     revoked,
     closed,
+    removeCalls,
     credentialBoundary: {
       resolvePrincipal: () => ({ principalType: 'account', principalId: 'account-owner' }),
       async revokePrincipal(value) {
         principalRevokes.push(value);
+        removedBeforeRevoke = removeCalls.length;
         return { status: 'revoked' };
       }
     }
@@ -969,6 +973,10 @@ test('membership removal terminal-claims leases before one principal revoke and 
   assert.equal(principalRevokes.length, 1);
   assert.equal(closed.length, 1);
   assert.equal(room.peers.has(OWNER_ID), false);
+  // The credential dies before the LiveKit participant is removed, so the
+  // client cannot reconnect in between.
+  assert.equal(removedBeforeRevoke, 0);
+  assert.equal(removeCalls.length, 1);
 
   capturedExpiry();
   const lateJoin = await runtime.joinVoiceRoom(createVoiceConnection(), {
@@ -1261,6 +1269,7 @@ test('membership finalizer failure does not close the peer or report successful 
   const scheduler = createManualScheduler();
   const revoked = [];
   const closed = [];
+  const removeCalls = [];
   const owner = createPeer(OWNER_ID, {
     accountUserId: 'account-owner',
     transport: { id: 'transport-membership-failed', close() {} }
@@ -1271,6 +1280,7 @@ test('membership finalizer failure does not close the peer or report successful 
     scheduler,
     revoked,
     closed,
+    removeCalls,
     credentialBoundary: {
       resolvePrincipal: () => ({ principalType: 'account', principalId: 'account-owner' }),
       async revokePrincipal() {
@@ -1293,6 +1303,7 @@ test('membership finalizer failure does not close the peer or report successful 
   assert.deepEqual(result, { ok: false, code: 'unavailable', disconnected: 0 });
   assert.equal(room.peers.has(OWNER_ID), true);
   assert.deepEqual(closed, []);
+  assert.deepEqual(removeCalls, []);
 });
 
 test('room terminal API claims every lease before custom delete finalizers run once', async () => {

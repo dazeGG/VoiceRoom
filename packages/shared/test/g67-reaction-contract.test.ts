@@ -1,5 +1,3 @@
-import fs from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as reactionContract from '../src/reactions.ts';
@@ -37,8 +35,10 @@ test('G67-A02 reactor envelopes enforce default50/max100, opaque cursors and typ
   }));
   assert.deepEqual(reactionContract.normalizeReactorPage({ reactors, nextCursor: 'next' }), { reactors, nextCursor: 'next' });
   assert.equal(reactionContract.normalizeReactorPage({ reactors: [...reactors, reactors[0]], nextCursor: null }), null);
-  const declarations = fs.readFileSync(fileURLToPath(new URL('../src/reactions.ts', import.meta.url)), 'utf8');
-  assert.match(declarations, /active: boolean/);
-  assert.match(declarations, /revision: string/);
-  assert.match(declarations, /ReactorPage/);
+  const mutation: reactionContract.ReactionMutation = { messageId: 'm', emoji: '😀', active: true };
+  const summary: reactionContract.ReactionSummary = { emoji: '😀', count: 1, reactedByMe: true, revision: '9007199254740993' };
+  const page: reactionContract.ReactorPage = { reactors: [], nextCursor: null };
+  assert.deepEqual(reactionContract.normalizeReactionMutation(mutation), mutation);
+  assert.deepEqual(reactionContract.normalizeReactionSummary(summary), summary);
+  assert.deepEqual(reactionContract.normalizeReactorPage(page), page);
 });

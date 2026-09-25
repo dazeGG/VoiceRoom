@@ -2,8 +2,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Writable } from 'node:stream';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 
 import { LOG_EVENTS, LOG_EVENT_CODES } from '../src/lib/log-events.ts';
 import {
@@ -124,17 +122,6 @@ test('a bound request id is not repeated at the call site', () => {
   assert.equal(records[0].reqId, 'abc');
   const line = JSON.stringify(records[0]);
   assert.equal(line.match(/"reqId"/g).length, 1);
-});
-
-test('no handler adds reqId to a record the request logger already binds', () => {
-  const source = readFileSync(join(import.meta.dirname, '../src/server.ts'), 'utf8');
-  const offenders = source
-    .split(String.fromCharCode(10))
-    .map((line, index) => [index + 1, line])
-    .filter(([, line]) => /^\s*reqId:\s*(req\?\.id|request\.id)\s*,?\s*$/.test(line))
-    .map(([number]) => number);
-
-  assert.deepEqual(offenders, [], `server.ts repeats a bound reqId on lines: ${offenders.join(', ')}`);
 });
 
 test('client log intake keeps well-formed records and reports the rest as dropped', () => {

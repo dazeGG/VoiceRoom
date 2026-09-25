@@ -1,12 +1,12 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
 import { Pool } from 'pg';
 import { test } from 'node:test';
 import { createActiveBanRepository, normalizePrincipal } from '../src/domains/moderation/active-ban-repository.ts';
 import { createActiveBanService } from '../src/domains/moderation/active-ban-service.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
+import { createRoomStore } from '../src/lib/room-store.ts';
+import { MentionEligibilityError, createMentionEligibilityService } from '../src/domains/notifications/mention-eligibility-service.ts';
 import { createTestDatabase } from './db-harness.ts';
 
 test('G41-A01 active-ban repository applies one expiry and revocation predicate', async () => {
@@ -51,21 +51,26 @@ test('G41-A01 eligibility filtering uses the same repository predicate for all u
   assert.equal(calls[0].at, 42);
 });
 
-test('G41-A02 named HTTP, media, membership, mention and room-store paths call the active-ban service', () => {
-  const root = path.resolve(import.meta.dirname, '..');
-  const server = fs.readFileSync(path.join(root, 'src/server.ts'), 'utf8');
-  const registry = fs.readFileSync(path.join(root, 'src/app/service-registry.ts'), 'utf8');
-  const roomStore = fs.readFileSync(path.join(root, 'src/lib/room-store.ts'), 'utf8');
-  const mentions = fs.readFileSync(path.join(root, 'src/domains/notifications/mention-eligibility-service.ts'), 'utf8');
+// An expired ban no longer counts on any path that reads bans: the room
+// store's lookup and mention eligibility share the active-ban service.
+test('G41-A02 room store and mention eligibility ignore an expired ban and honour a live one', { skip: !process.env.TEST_DATABASE_URL }, async (t) => {
+  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  await runMigrations({ databaseUrl, logger: { log() {}, info() {}, warn() {}, error() {} }, noLock: true });
+  const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+  t.after(async () => { await pool.end(); await cleanup(); });
+  await pool.query(`INSERT INTO users (id, login, display_name, password_hash) VALUES ('owner', 'g41owner', 'Owner', 'x'), ('target', 'g41target', 'Target', 'x')`);
+  await pool.query(`INSERT INTO rooms (id, creator_ip) VALUES ('g41-paths', '')`);
+  await pool.query(`INSERT INTO room_memberships (id, room_id, user_id, role) VALUES ('m1', 'g41-paths', 'owner', 'owner'), ('m2', 'g41-paths', 'target', 'member')`);
+  await pool.query(`INSERT INTO room_bans (id, room_id, user_id, ip, created_at, expires_at, metadata) VALUES ('old', 'g41-paths', 'target', '', now() - interval '2 hours', now() - interval '1 hour', '{}'::jsonb)`);
 
-  assert.match(server, /function findRoomBan[\s\S]*getActiveBanService\(\)/);
-  assert.match(registry, /authorizeRoomAttachment[\s\S]*getActiveBanService\(\)!?\.isBanned/);
-  assert.match(registry, /createMembershipService\([\s\S]*findRoomBan/);
-  assert.doesNotMatch(registry, /authorizeRoomAttachment[\s\S]*?FROM room_bans/);
-  assert.match(mentions, /activeBanService\.filterEligibleUserIds/g);
-  assert.doesNotMatch(mentions, /FROM room_bans/);
-  assert.match(roomStore, /findActiveRoomBan[\s\S]*getActiveBanService\(\)\.getActiveBan/);
-  assert.doesNotMatch(roomStore, /SELECT COUNT\(\*\)::int AS count FROM room_bans/);
+  const store = createRoomStore({ pool });
+  const mentions = createMentionEligibilityService({ pool, activeBanService: createActiveBanService({ pool }) });
+  assert.equal(await store.findActiveRoomBan({ roomId: 'g41-paths', userId: 'target' }), null);
+  assert.deepEqual(await mentions.validate({ roomId: 'g41-paths', creatorUserId: 'owner', targetUserIds: ['target'] }), ['target']);
+
+  await pool.query(`INSERT INTO room_bans (id, room_id, user_id, ip, created_at, expires_at, metadata) VALUES ('live', 'g41-paths', 'target', '', now(), now() + interval '1 hour', '{}'::jsonb)`);
+  assert.equal((await store.findActiveRoomBan({ roomId: 'g41-paths', userId: 'target' }))?.id, 'live');
+  await assert.rejects(mentions.validate({ roomId: 'g41-paths', creatorUserId: 'owner', targetUserIds: ['target'] }), MentionEligibilityError);
 });
 
 test('G41-A02 exact expiry unblocks and one hundred expired rows consume zero active cap in PostgreSQL', { skip: !process.env.TEST_DATABASE_URL }, async (t) => {

@@ -94,7 +94,8 @@ lib/platform/            desktop bridge, capability state
 - Tests exercise behaviour: call the module, render the component, send the
   request. They do not read source files and match their text; the only
   allowed file reads are deployment configuration (Caddyfile, compose files,
-  Dockerfile, CSP) and migrations.
+  Dockerfile, CSP) and migrations. `scripts/check-test-source-reads.mts` in
+  `npm run check` fails a test that reads a code file under `src/`.
 - API tests run against a real PostgreSQL (`test/db-harness.ts`) where the
   behaviour touches SQL.
 - Critical user flows have Playwright coverage under `apps/web/e2e`.

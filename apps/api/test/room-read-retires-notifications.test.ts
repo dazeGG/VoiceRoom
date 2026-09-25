@@ -1,54 +1,42 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
 import test from 'node:test';
+import { Pool } from 'pg';
+import { createInboxRepository } from '../src/domains/notifications/inbox-repository.ts';
+import { createNotificationService } from '../src/domains/notifications/notification-service.ts';
+import { runMigrations } from '../src/lib/migrate.ts';
+import { createTestDatabase } from './db-harness.ts';
 
-const read = (relative: string) => fs.readFileSync(path.resolve(import.meta.dirname, relative), 'utf8');
+// Reading a room retires the bell notifications that room produced, up to the
+// read point: kept apart, the bell claimed unread mentions for messages already
+// read. (The room chat service calling this on both read paths is covered in
+// room-chat-domain.test.ts.)
+test('retirement is scoped to the reader and the room and bounded by the read point', { skip: !process.env.TEST_DATABASE_URL }, async (t) => {
+  const db = await createTestDatabase(t);
+  await runMigrations({ databaseUrl: db.databaseUrl, logger: { log() {}, info() {}, warn() {}, error() {} }, noLock: true });
+  const pool = new Pool({ connectionString: db.databaseUrl, max: 2 });
+  t.after(async () => { await pool.end(); await db.cleanup(); });
+  await pool.query(`
+    INSERT INTO users(id, login, display_name, password_hash) VALUES ('a', 'ra', 'A', 'x'), ('me', 'rme', 'Me', 'x'), ('other', 'rother', 'O', 'x');
+    INSERT INTO rooms(id, creator_ip) VALUES ('room', ''), ('elsewhere', '');
+    INSERT INTO room_messages(id, room_id, text) VALUES ('m1', 'room', 'x'), ('m2', 'room', 'x'), ('m3', 'elsewhere', 'x'), ('m4', 'room', 'x');
+    INSERT INTO user_notifications(id, recipient_user_id, actor_user_id, room_id, source_message_id, reasons, revision, created_at) VALUES
+      ('old', 'me', 'a', 'room', 'm1', ARRAY['mention'], 1, '2026-08-01T10:00:00Z'),
+      ('new', 'me', 'a', 'room', 'm2', ARRAY['mention'], 2, '2026-08-01T12:00:00Z'),
+      ('other-room', 'me', 'a', 'elsewhere', 'm3', ARRAY['mention'], 3, '2026-08-01T10:00:00Z'),
+      ('other-user', 'other', 'a', 'room', 'm4', ARRAY['mention'], 4, '2026-08-01T10:00:00Z')`);
+  const inbox = createInboxRepository({ pool });
+  const service = createNotificationService({ pool, inbox });
+  const unread = async () => (await pool.query<{ id: string }>(`SELECT id FROM user_notifications WHERE read_at IS NULL ORDER BY id`)).rows.map((row) => row.id);
 
-test('reading a room retires the notifications that room produced', () => {
-  const server = read('../src/domains/messaging/room-chat.service.ts');
+  assert.deepEqual(await service.markRoomRead({ userId: '', roomId: 'room' }), { ok: false, code: 'invalid_request' });
+  const bounded = await service.markRoomRead({ userId: 'me', roomId: 'room', through: Date.parse('2026-08-01T11:00:00Z') });
+  assert.equal(bounded.updated, 1);
+  assert.deepEqual(await unread(), ['new', 'other-room', 'other-user']);
 
-  // A read and its notification are two records of the same event. Kept apart,
-  // the bell went on claiming unread mentions for messages already read, and
-  // said so again after every reload because nothing was ever written down.
-  assert.match(server, /async function retireRoomNotifications\(roomId: string, userId: string, through: unknown\)/);
-  assert.match(server, /service\.markRoomRead\(\{ userId, roomId, through: through \?\? null \}\)/);
-
-  // Both read paths retire: the cursor one and the legacy wall-clock one.
-  assert.match(server, /await retireRoomNotifications\(roomId, userId, result\.readThrough\)/);
-  assert.match(server, /await retireRoomNotifications\(roomId, userId, lastReadAt\)/);
-
-  // Best effort: a read that already succeeded must not fail over this.
-  const start = server.indexOf('async function retireRoomNotifications');
-  const body = server.slice(start, server.indexOf('\n}', start));
-  assert.match(body, /try \{/);
-  assert.match(body, /catch \(error\)/);
-});
-
-test('the read service reports how far the read reached', () => {
-  const service = read('../src/domains/messaging/message-read-service.ts');
-
-  // The caller needs the read point to bound which notifications it retires.
-  assert.match(service, /readThrough: state\.last_read_message_created_at \?\? null/);
-});
-
-test('retirement is scoped to one room and bounded by the read point', () => {
-  const repository = read('../src/domains/notifications/inbox-repository.ts');
-  const service = read('../src/domains/notifications/notification-service.ts');
-
-  assert.match(repository, /async function markReadForRoom\(/);
-  // Scoped to the recipient and the room, and never past what was read: a null
-  // bound means the whole room, which is what a legacy read reports.
-  assert.match(repository, /recipient_user_id=\$1 AND room_id=\$2 AND read_at IS NULL/);
-  assert.match(repository, /\(\$3::timestamptz IS NULL OR created_at <= \$3\)/);
-  assert.match(repository, /markReadForRoom,/);
-
-  assert.match(service, /async function markRoomRead\(\{ userId, roomId, through = null \}/);
-  assert.match(service, /if \(!userId \|\| !roomId\) return \{ ok: false as const, code: 'invalid_request' \}/);
-  assert.match(service, /markRoomRead,/);
+  // A legacy read reports no bound: the whole room.
+  await service.markRoomRead({ userId: 'me', roomId: 'room', through: null });
+  assert.deepEqual(await unread(), ['other-room', 'other-user']);
 });
 
 // A client that records the UPDATE and answers the revision lookup, enough to
@@ -70,7 +58,6 @@ function recordingClient() {
 }
 
 test('a read point in epoch milliseconds reaches PostgreSQL as a time, not a number', async () => {
-  const { createInboxRepository } = require('../src/domains/notifications/inbox-repository.ts');
   const client = recordingClient();
   const repository = createInboxRepository({ pool: client });
   const readAt = 1789427934720;
@@ -100,7 +87,6 @@ test('a read point in epoch milliseconds reaches PostgreSQL as a time, not a num
 });
 
 test('a read point that is not a time retires nothing instead of the whole room', async () => {
-  const { createInboxRepository } = require('../src/domains/notifications/inbox-repository.ts');
   const client = recordingClient();
   const repository = createInboxRepository({ pool: client });
 

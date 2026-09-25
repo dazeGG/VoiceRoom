@@ -66,7 +66,7 @@ test('a public chat message fills avatar and defaults', () => {
 // --- service ---------------------------------------------------------------------
 
 function harness(options = {}) {
-  const calls = { appended: [], edited: [], deleted: [], detail: [], pins: [], previews: [], emitted: [], summaries: [], retired: [], addressed: [], outbox: [], bound: [], completed: [], warnings: [], errors: [] };
+  const calls = { lockedIn: '', appended: [], edited: [], deleted: [], detail: [], pins: [], previews: [], emitted: [], summaries: [], retired: [], addressed: [], outbox: [], bound: [], completed: [], warnings: [], errors: [] };
   const currentRoom = 'room' in options ? options.room : room(options.peers || []);
   const stored = options.stored || [];
   const messages = {
@@ -74,13 +74,12 @@ function harness(options = {}) {
     async appendMessage(roomId, input) {
       calls.appended.push(input);
       if (options.appendResult !== undefined) return options.appendResult;
-      const client = {};
       if (input.beforeUnitOfWork) {
-        const before = await input.beforeUnitOfWork(client);
+        const before = await input.beforeUnitOfWork({ transaction: 'before' });
         if (before?.replay) return { ...before.message, idempotencyReplay: true };
       }
       const inserted = { id: input.id, roomId, peerId: input.peerId, name: input.name, text: input.text, createdAt: input.createdAt, authorUserId: input.authorUserId, replyTo: input.replyToMessageId ? { messageId: input.replyToMessageId } : undefined };
-      if (input.unitOfWork) await input.unitOfWork(client, inserted);
+      if (input.unitOfWork) await input.unitOfWork({ transaction: 'insert' }, inserted);
       return inserted;
     },
     async getMessage(roomId, messageId) { return (options.messages || {})[messageId] || null; },
@@ -128,7 +127,7 @@ function harness(options = {}) {
       return { id: userId, displayName: 'Stored', avatarKey: null };
     },
     media: () => (options.media === null ? null : { attachments: { async bindReady(input) { calls.bound.push(input); } } }),
-    replies: () => ({ async lockRoomTarget() { return { id: UUID_A, text: 'target', authorUserId: 'user-3', createdAt: Date.now() }; } }),
+    replies: () => ({ async lockRoomTarget(input: { client: { transaction: string } }) { calls.lockedIn = input.client.transaction; return { id: UUID_A, text: 'target', authorUserId: 'user-3', createdAt: Date.now() }; } }),
     notifications: () => notifications,
     delivery: () => delivery,
     projectMedia: async (context, message) => ({ ...message, attachments: [] }),
@@ -253,6 +252,7 @@ test('an account send binds attachments, locks the reply, addresses mentions and
     idempotencyKey: 'idem-key-1'
   });
   assert.equal(sent.status, 'created');
+  assert.equal(calls.lockedIn, 'insert', 'the reply target is locked in the transaction that inserts the message');
   assert.equal(calls.appended[0].text, 'from content');
   assert.equal(calls.appended[0].replyToMessageId, UUID_B);
   assert.deepEqual(calls.bound[0].attachmentIds, [UUID_A]);

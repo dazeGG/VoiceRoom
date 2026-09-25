@@ -1110,9 +1110,6 @@
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 2
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
     }
   },
   "apps/api/test/direct-messages-domain.test.ts": {
@@ -1704,18 +1701,6 @@
   "apps/api/test/g78-media-cleanup.test.ts": {
     "@typescript-eslint/ban-ts-comment": {
       "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
     }
   },
   "apps/api/test/g79-media-reconcile.test.ts": {
@@ -1732,20 +1717,6 @@
       "count": 2
     }
   },
-  "apps/api/test/g80-media-pressure.test.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    }
-  },
   "apps/api/test/g81-attachment-binding.test.ts": {
     "@typescript-eslint/ban-ts-comment": {
       "count": 1
@@ -1760,18 +1731,6 @@
   "apps/api/test/g82-media-auth.test.ts": {
     "@typescript-eslint/ban-ts-comment": {
       "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
     }
   },
   "apps/api/test/g85-rescue-profile.test.ts": {
@@ -2413,13 +2372,13 @@
       "count": 3
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 6
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-call": {
-      "count": 12
+      "count": 3
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 11
+      "count": 4
     }
   },
   "apps/api/test/room-store.test.ts": {

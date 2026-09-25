@@ -31,14 +31,6 @@ test('G40-A01 API and worker compose services receive the same cutover vector', 
   }
 });
 
-test('G40-A01 relayed DM delivery raises the recipient notification like direct emit', () => {
-  const source = fs.readFileSync(path.resolve(import.meta.dirname, '../src/domains/messaging/message-delivery-relay.ts'), 'utf8');
-  const start = source.indexOf('async function dispatchMessageDeliveryEvent');
-  const relay = source.slice(start, source.indexOf('async function startMessageDeliveryListener', start));
-  assert.ok(start >= 0);
-  assert.match(relay, /conversation\?\.type === 'dm'[\s\S]*findUser\(message\.senderId\)[\s\S]*broadcastDmNotification\(message\.recipientId, sender, projected\)/);
-});
-
 test('G40-A02 missing worker readiness keeps worker-dependent capability false', () => {
   const report = createReadinessReport(undefined, {
     desired: { engagement: true },
