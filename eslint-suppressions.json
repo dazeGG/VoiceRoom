@@ -1481,11 +1481,6 @@
       "count": 1
     }
   },
-  "apps/web/scripts/build-emoji-assets.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    }
-  },
   "apps/web/scripts/emit-caddy-csp.ts": {
     "@typescript-eslint/no-unsafe-argument": {
       "count": 1
@@ -2224,17 +2219,6 @@
   "apps/web/src/routes/r/[roomId]/+page.svelte": {
     "@typescript-eslint/no-unsafe-argument": {
       "count": 1
-    }
-  },
-  "apps/web/test/emoji-artwork.test.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
     }
   },
   "apps/web/test/realtime-recovery.test.ts": {

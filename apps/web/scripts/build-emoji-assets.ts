@@ -28,12 +28,12 @@ import { listReactionEmojis } from '@voice-room/shared/emoji';
 
 const require = createRequire(import.meta.url);
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
-const outputDir = join(webRoot, 'static', 'emoji');
-const catalogueFile = join(webRoot, 'src', 'lib', 'shared', 'chat', 'emoji-coverage.json');
+const defaultOutputDir = join(webRoot, 'static', 'emoji');
+const defaultCatalogueFile = join(webRoot, 'src', 'lib', 'shared', 'chat', 'emoji-coverage.json');
 const ARTWORK_PACKAGE = '@discordapp/twemoji';
 const packageRoot = join(dirname(require.resolve(`${ARTWORK_PACKAGE}/package.json`)), 'dist', 'svg');
 const graphicsLicenceFile = join(dirname(fileURLToPath(import.meta.url)), 'emoji-artwork-LICENSE.txt');
-const { version } = require(`${ARTWORK_PACKAGE}/package.json`);
+const { version } = require(`${ARTWORK_PACKAGE}/package.json`) as { version: string };
 
 /** Our canonical asset name: every code point of the sequence, upper-case hex. */
 export function assetName(sequence: string) {
@@ -78,7 +78,11 @@ export async function planEmojiAssets() {
   return { copies, missing, corpus };
 }
 
-async function main() {
+/**
+ * Copies the artwork the corpus needs, with its licence and credit, and writes
+ * the catalogue. Returns the plan it carried out.
+ */
+export async function buildEmojiAssets({ outputDir = defaultOutputDir, catalogueFile = defaultCatalogueFile } = {}) {
   const { copies, missing, corpus } = await planEmojiAssets();
 
   if (!copies.length) {
@@ -120,7 +124,11 @@ async function main() {
   const serialised = `${JSON.stringify(catalogue, null, 2)}\n`;
   const previous = await readFile(catalogueFile, 'utf8').catch(() => '');
   if (previous !== serialised) await writeFile(catalogueFile, serialised, 'utf8');
+  return { copies, missing, corpus, version };
+}
 
+async function main() {
+  const { copies, missing, corpus } = await buildEmojiAssets();
   console.log(
     `emoji assets: ${copies.length} of ${corpus.length} corpus entries from ${ARTWORK_PACKAGE}@${version}` +
       ` -> static/emoji (${missing.length} not covered and not offered)`

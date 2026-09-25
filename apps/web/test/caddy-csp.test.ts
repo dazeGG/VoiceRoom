@@ -1,4 +1,4 @@
-import { test } from 'vitest';
+import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -8,7 +8,15 @@ import { buildHeaderPolicy, readMetaPolicy, renderCaddySnippet } from '../script
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const readRepo = (path: string) => readFileSync(join(repoRoot, path), 'utf8');
-const readWeb = (path: string) => readFileSync(join(repoRoot, 'apps', 'web', path), 'utf8');
+
+async function pageCsp(env: Record<string, string> = {}) {
+  for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+  vi.resetModules();
+  const { default: config } = await import('../svelte.config.js');
+  const directives = config.kit?.csp?.directives;
+  assert.ok(directives);
+  return directives;
+}
 const META =
   "default-src 'self'; connect-src 'self' http: https: ws: wss: stun:; img-src 'self' data: blob:; object-src 'none'; script-src 'self' 'wasm-unsafe-eval' 'sha256-abc123='; base-uri 'none'; form-action 'none'";
 
@@ -52,20 +60,17 @@ test('Caddy imports the generated policy and the image builds it', () => {
   assert.match(dockerfile, /COPY --from=web-build \/app\/csp\.caddy \/etc\/caddy\/csp\.caddy/);
 });
 
-test('page CSP supports runtime LiveKit origins while production Caddy narrows them', () => {
-  const config = readWeb('svelte.config.js');
+test('page CSP supports runtime LiveKit origins while production Caddy narrows them', async () => {
+  const directives = await pageCsp();
   const caddy = readRepo('Caddyfile');
   const compose = readRepo('docker-compose.yml');
   const dockerfile = readRepo('Dockerfile');
-  const cspBlock = config.slice(config.indexOf("'connect-src'"), config.indexOf("'default-src'"));
 
-  assert.match(config, /function liveKitConnectSources/);
-  assert.ok(cspBlock.includes('...liveKitConnectSources()'));
-  for (const scheme of ["'http:'", "'https:'", "'ws:'", "'wss:'"]) {
-    assert.ok(cspBlock.includes(scheme), `missing runtime connect scheme ${scheme}`);
+  const connect = directives['connect-src'] ?? [];
+  for (const source of ['self', 'http:', 'https:', 'ws:', 'wss:', 'ws://localhost:*', 'ws://127.0.0.1:*']) {
+    assert.ok(connect.includes(source as never), `missing runtime connect source ${source}`);
   }
-  assert.ok(cspBlock.includes("'ws://localhost:*'"));
-  assert.ok(cspBlock.includes("'ws://127.0.0.1:*'"));
+  assert.deepEqual(directives['style-src'], ['self', 'unsafe-inline']);
   // Caddy imports the full policy generated from this build (see
   // test/caddy-csp.test.ts), which narrows connect-src to LIVEKIT_DOMAIN.
   assert.match(caddy, /import \/etc\/caddy\/csp\.caddy/);
@@ -74,6 +79,18 @@ test('page CSP supports runtime LiveKit origins while production Caddy narrows t
     compose,
     /\n {2}caddy:\n[\s\S]*?image: \$\{VOICEROOM_WEB_IMAGE:\?set immutable VOICEROOM_WEB_IMAGE digest\}/
   );
-  assert.ok(config.includes("'style-src': ['self', 'unsafe-inline']"));
-  assert.match(config, /style attributes/);
+});
+
+test('a build that knows its LiveKit origin adds it to the page connect-src', async () => {
+  const directives = await pageCsp({
+    LIVEKIT_URL: 'wss://lk.example.com/rtc',
+    LIVEKIT_PUBLIC_URL: 'not a url',
+    LIVEKIT_DOMAIN: 'media.example.com',
+    DOMAIN: 'example.org'
+  });
+  const connect = directives['connect-src'] ?? [];
+  for (const origin of ['wss://lk.example.com', 'wss://media.example.com', 'wss://livekit.example.org']) {
+    assert.ok(connect.includes(origin as never), `missing ${origin}`);
+  }
+  assert.ok(!connect.includes('not a url' as never));
 });

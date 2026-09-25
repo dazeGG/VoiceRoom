@@ -61,17 +61,4 @@ test('every export is one TypeScript source, with no JavaScript copy beside it',
     files.filter((name) => !name.endsWith('.ts')),
     ['visual-identity.json']
   );
-
-  const untypedImports = files
-    .filter((name) => name.endsWith('.ts'))
-    .flatMap((name) => {
-      const source = fs.readFileSync(path.join(sourceDirectory, name), 'utf8');
-      return (
-        source
-          .match(/(?:from\s+|import\s*\()['"]\.\/[^'"]+['"]/g)
-          ?.filter((match) => !/\.(ts|json)['"]$/.test(match))
-          .map((match) => `${name}: ${match}`) ?? []
-      );
-    });
-  assert.deepEqual(untypedImports, []);
 });

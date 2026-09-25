@@ -1,15 +1,18 @@
-import { test } from 'vitest';
+import { onTestFinished, test } from 'vitest';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { listReactionEmojis } from '@voice-room/shared/emoji';
-import { assetName, planEmojiAssets } from '../scripts/build-emoji-assets.ts';
+import { assetName, buildEmojiAssets, planEmojiAssets } from '../scripts/build-emoji-assets.ts';
 import { emojiAssetName, emojiAssetUrl } from '../src/lib/shared/chat/emoji-asset.ts';
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relative: string) => readFileSync(join(webRoot, relative), 'utf8');
+type Catalogue = { source: string; emojis: string[] };
+const readJson = <T>(file: string) => JSON.parse(readFileSync(file, 'utf8')) as T;
 
 const RU_FLAG = '\u{1F1F7}\u{1F1FA}';
 const WAVE_DARK = '\u{1F44B}\u{1F3FF}';
@@ -40,7 +43,7 @@ test('the offered catalogue is exactly what the artwork can draw', async () => {
   // drawable and what cannot be drawn is never offered.
   const { copies, missing } = await planEmojiAssets();
   const corpus = listReactionEmojis();
-  const catalogue = JSON.parse(read('src/lib/shared/chat/emoji-coverage.json'));
+  const catalogue = readJson<Catalogue>(join(webRoot, 'src/lib/shared/chat/emoji-coverage.json'));
   const offered = new Set(catalogue.emojis);
 
   assert.deepEqual(
@@ -60,22 +63,37 @@ test('the offered catalogue is exactly what the artwork can draw', async () => {
   assert.ok(uncovered.length <= 1, `too many flags missing: ${uncovered.join(' ')}`);
 });
 
-test("the artwork ships the upstream licence, not the repackager's", () => {
-  const script = read('scripts/build-emoji-assets.ts');
-  const licence = read('scripts/emoji-artwork-LICENSE.txt');
+test("the artwork ships the upstream licence, not the repackager's", async () => {
+  const outputDir = mkdtempSync(join(tmpdir(), 'emoji-assets-'));
+  onTestFinished(() => rmSync(outputDir, { recursive: true, force: true }));
+  const catalogueFile = join(outputDir, 'emoji-coverage.json');
+
+  const { copies, version } = await buildEmojiAssets({ outputDir, catalogueFile });
 
   // The npm package carrying the files ships only the MIT notice for Twemoji's
   // code. That does not cover the artwork, which is CC BY 4.0, so the upstream
   // text travels with the files from this repo and the credit names Twemoji
   // and Discord's fork the files come from.
-  assert.match(licence, /Attribution 4\.0 International/);
-  assert.match(script, /graphicsLicenceFile/);
-  assert.match(script, /LICENSE\.txt/);
-  assert.match(script, /ATTRIBUTION\.txt/);
-  assert.match(script, /CC BY 4\.0/);
-  assert.match(script, /jdecked\/twemoji/);
-  assert.match(script, /github\.com\/discord\/twemoji/);
-  assert.match(script, /const ARTWORK_PACKAGE = '@discordapp\/twemoji';/);
-  assert.equal(JSON.parse(read('package.json')).devDependencies['@discordapp/twemoji'], '16.0.1');
-  assert.match(read('src/lib/shared/chat/emoji-coverage.json'), /"source": "@discordapp\/twemoji@16\.0\.1"/);
+  assert.equal(version, '16.0.1');
+  assert.equal(
+    readJson<{ devDependencies: Record<string, string> }>(join(webRoot, 'package.json')).devDependencies[
+      '@discordapp/twemoji'
+    ],
+    version
+  );
+  assert.equal(readFileSync(join(outputDir, 'LICENSE.txt'), 'utf8'), read('scripts/emoji-artwork-LICENSE.txt'));
+  assert.match(read('scripts/emoji-artwork-LICENSE.txt'), /Attribution 4\.0 International/);
+  const attribution = readFileSync(join(outputDir, 'ATTRIBUTION.txt'), 'utf8');
+  assert.match(attribution, /CC BY 4\.0/);
+  assert.match(attribution, /github\.com\/jdecked\/twemoji/);
+  assert.match(attribution, /github\.com\/discord\/twemoji/);
+  assert.match(attribution, /@discordapp\/twemoji 16\.0\.1/);
+  const [first] = copies;
+  assert.ok(first);
+  assert.ok(existsSync(join(outputDir, `${first.name}.svg`)));
+
+  const catalogue = readJson<Catalogue>(catalogueFile);
+  assert.equal(catalogue.source, '@discordapp/twemoji@16.0.1');
+  // The committed catalogue is what a build writes.
+  assert.equal(readFileSync(catalogueFile, 'utf8'), read('src/lib/shared/chat/emoji-coverage.json'));
 });

@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // Ratchet for tests that read source code instead of exercising it
-// (CLAUDE.md "Tests"). Counts, per test tree, string literals that point at a
-// code file under src/ on a line that reads a file. Migrations, JSON
-// data and deployment config are allowed. The count may only go down: a tree
+// (CLAUDE.md "Tests"). Counts, per test tree, lines that read a file and name
+// a code file (any literal ending in a code extension) or a src directory
+// (a literal that is `src` or contains a `src/` segment, as path.join
+// arguments do). Migrations, the generated DB schema, JSON data and
+// deployment config are allowed. The count may only go down: a tree
 // above its baseline fails; `--update` lowers the baseline after a cleanup.
 
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
@@ -12,7 +14,14 @@ const repoRoot = resolve(import.meta.dirname, '..');
 const BASELINE_PATH = resolve(repoRoot, 'config/test-source-reads.json');
 const TREES = ['apps/api/test', 'apps/web/test', 'packages/shared/test', 'scripts/test'];
 
-const CODE_PATH = /(['"`])([^'"`\n]*\bsrc\/[^'"`\n]*\.(?:ts|mts|svelte|js|mjs))\1/g;
+const CODE_PATH = /(['"`])([^'"`\n]*\.(?:ts|mts|cts|svelte|js|mjs|cjs)|src|[^'"`\n]*\bsrc\/[^'"`\n]*)\1/g;
+const CODE_EXTENSION = /\.(?:ts|mts|cts|svelte|js|mjs|cjs)$/;
+const ALLOWED = [
+  /\/migrations\//,
+  /platform\/db\/schema\.ts$/,
+  // Audio worklets are plain scripts the browser loads by URL; tests run them in a sandbox.
+  /\/static\/[^/]+\.worklet\.js$/
+];
 // Only literals on a line that reads a file count; loading a module is fine.
 const READ_CALL = /\b(?:readFileSync|readFile|read[A-Z]\w*|read)\s*\(/;
 
@@ -33,7 +42,8 @@ function sourceReads(tree: string): string[] {
     lines.forEach((line, index) => {
       for (const match of line.matchAll(CODE_PATH)) {
         const target = match[2] ?? '';
-        if (target.includes('/migrations/')) continue;
+        if (/\.\w+$/.test(target) && !CODE_EXTENSION.test(target)) continue;
+        if (ALLOWED.some((pattern) => pattern.test(target))) continue;
         if (!READ_CALL.test(line) || line.includes('import(')) continue;
         found.push(`${relative(repoRoot, file).split('\\').join('/')}:${index + 1} ${target}`);
       }
