@@ -1,3 +1,4 @@
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import crypto from 'node:crypto';
 
 const CURSOR_CODEC_VERSION = 1;
@@ -16,7 +17,7 @@ export type CursorCodec = {
 };
 
 class CursorCodecError extends Error {
-  declare code: string;
+  declare code: ErrorCode;
   declare statusCode: number;
 
   constructor(message = 'Invalid cursor') {

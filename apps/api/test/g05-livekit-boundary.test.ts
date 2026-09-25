@@ -14,6 +14,7 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import type { GatePrincipal } from '../src/domains/admission/credential-boundary-service.ts';
 import type { GateClaims } from '../src/domains/admission/gate-credential-signer.ts';
+import type { Fakes } from './fakes/index.ts';
 
 const { createApiApp } = await import('../src/server.ts');
 const { createGateCredentialSigner } = await import('../src/domains/admission/gate-credential-signer.ts');
@@ -61,6 +62,12 @@ function isPrincipal(value: unknown): value is GatePrincipal {
     principal.principalId.trim().length > 0
   );
 }
+
+type GateAwareStore = Fakes['store'] & {
+  revoked: Array<{ roomId: string; peerId: string; principal: GatePrincipal }>;
+  failNextBanTransaction(): void;
+  clearPeerGateGuestPrincipalId(peerId?: string): void;
+};
 
 function createGateAwareStore() {
   const credentials = new Map<string, CredentialRow>();
@@ -119,6 +126,16 @@ function createGateAwareStore() {
   }) {
     return `${roomId}:${principalType}:${principalId}`;
   }
+  function normalizePrincipal({
+    accountUserId,
+    guestPrincipalId,
+    roomId
+  }: { accountUserId?: string | null; guestPrincipalId?: string; roomId?: string } = {}): GatePrincipal | null {
+    if (accountUserId) return { principalType: 'account', principalId: accountUserId };
+    const guest = (guestPrincipalId || '').trim();
+    if (!roomId || !guest) return null;
+    return { principalType: 'guest', principalId: `${roomId}:${guest}` };
+  }
   return {
     revoked,
     async countRooms() {
@@ -130,63 +147,45 @@ function createGateAwareStore() {
     async createRoomWithQuota() {
       throw new Error('not used');
     },
-    async getRoom(roomId: string) {
+    async getRoom(roomId) {
       const room = rooms.get(roomId);
       return room ? { ...room, peers: room.peers } : null;
     },
-    async getOrCreatePeerIdentity({ peerId, sessionToken }: { peerId: string; sessionToken: string }) {
+    async getOrCreatePeerIdentity({ peerId, sessionToken }) {
       if (sessionToken === 'bad-session') return { status: 'token_mismatch', identity: null };
       return { status: 'created', identity: { id: `guest-id-${peerId}`, avatarColorKey: 'blurple', peerId } };
     },
-    normalizeGatePrincipal({
-      accountUserId,
-      guestPrincipalId,
-      roomId
-    }: {
-      accountUserId?: string | null;
-      guestPrincipalId?: string;
-      roomId?: string;
-    }): GatePrincipal | null {
-      if (accountUserId) return { principalType: 'account', principalId: accountUserId };
-      const guest = String(guestPrincipalId || '').trim();
-      if (!roomId || !guest) return null;
-      return { principalType: 'guest', principalId: `${roomId}:${guest}` };
-    },
+    normalizeGatePrincipal: normalizePrincipal,
     async isRoomServerMuted() {
       return false;
     },
-    async getLiveKitGatePrincipalEpoch({ principal, roomId }: { principal: GatePrincipal; roomId: string }) {
+    async getLiveKitGatePrincipalEpoch({ principal, roomId = '' } = {}) {
+      assert.ok(principal);
       const key = principalKey({ roomId, ...principal });
       if (!epochs.has(key)) epochs.set(key, 0);
       return { status: 'ready', epoch: epochs.get(key) };
     },
     async createLiveKitGateCredential({
-      credentialHash,
-      peerId,
+      credentialHash = '',
+      peerId = '',
       principal,
       principalEpoch,
-      roomId
-    }: Omit<CredentialRow, 'revoked'> & { credentialHash: string }) {
+      roomId = ''
+    } = {}) {
+      assert.ok(principal);
       const key = principalKey({ roomId, ...principal });
       if ((epochs.get(key) || 0) !== principalEpoch) return { status: 'epoch_mismatch', credential: null };
       credentials.set(credentialHash, { peerId, principal, principalEpoch, revoked: false, roomId });
       return { status: 'created', credential: { id: 'cred-1' } };
     },
     async verifyLiveKitGateCredential({
-      credentialHash,
+      credentialHash = '',
       peerId,
       principalEpoch,
-      principalId,
-      principalType,
-      roomId
-    }: {
-      credentialHash: string;
-      peerId: string;
-      principalEpoch: number;
-      principalId: string;
-      principalType: string;
-      roomId: string;
-    }) {
+      principalId = '',
+      principalType = '',
+      roomId = ''
+    } = {}) {
       const row = credentials.get(credentialHash);
       const key = principalKey({ roomId, principalType, principalId });
       return {
@@ -203,18 +202,8 @@ function createGateAwareStore() {
             : 'denied'
       };
     },
-    async revokeLiveKitGatePeer({
-      roomId,
-      peerId = '',
-      accountUserId,
-      guestPrincipalId
-    }: {
-      roomId: string;
-      peerId?: string;
-      accountUserId?: string | null;
-      guestPrincipalId?: string;
-    }) {
-      const principal = this.normalizeGatePrincipal({ accountUserId, guestPrincipalId, roomId });
+    async revokeLiveKitGatePeer({ roomId = '', peerId = '', accountUserId, guestPrincipalId } = {}) {
+      const principal = normalizePrincipal({ accountUserId, guestPrincipalId, roomId });
       assert.ok(principal);
       const key = principalKey({ roomId, ...principal });
       epochs.set(key, (epochs.get(key) || 0) + 1);
@@ -233,15 +222,7 @@ function createGateAwareStore() {
     async createRoomBan() {
       throw new Error('legacy createRoomBan fallback must not be used for LiveKit gate bans');
     },
-    async createRoomBanWithLiveKitGateRevocations({
-      roomId,
-      ip,
-      principals
-    }: {
-      roomId: string;
-      ip: string;
-      principals: unknown;
-    }) {
+    async createRoomBanWithLiveKitGateRevocations({ roomId = '', ip, principals } = {}) {
       if (failBanTransaction) throw new Error('simulated ban transaction failure');
       if (!Array.isArray(principals) || principals.length === 0 || !principals.every(isPrincipal)) {
         return { status: 'invalid', ban: null, revocations: [] };
@@ -272,13 +253,19 @@ function createGateAwareStore() {
     async listSummaryRecipientUserIds() {
       return [];
     },
-    async markRoomActive() {},
-    async markRoomEmpty() {},
-    async pruneRooms() {},
+    async markRoomActive() {
+      return null;
+    },
+    async markRoomEmpty() {
+      return null;
+    },
+    async pruneRooms() {
+      return false;
+    },
     async assertLiveKitGateReady() {
       return true;
     }
-  };
+  } satisfies GateAwareStore;
 }
 
 test('G05-A01 API mints LiveKit JWT plus separate exact gate credential', async (t) => {

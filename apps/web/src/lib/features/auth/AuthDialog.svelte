@@ -7,7 +7,8 @@
   import { goto } from '$app/navigation';
   import { X } from '@lucide/svelte';
   import { normalizeRecoveryCode } from '@voice-room/shared/account-security';
-  import { AuthRequestError, login, recoverAccount, register, restoreAccount, type AuthUser } from '$lib/api/auth';
+  import { login, recoverAccount, register, restoreAccount, type AuthUser } from '$lib/api/auth';
+  import { ApiError } from '$lib/api/client';
   import { iconMd } from '$lib/shared/ui/icons';
   import { LOGIN_HINT, PASSWORD_MIN_LENGTH, isValidPassword, normalizeLogin } from './account';
   import { session, setUser } from './session.svelte';
@@ -152,7 +153,7 @@
         leaving = await finish(user);
       }
     } catch (cause) {
-      if (isLogin && cause instanceof AuthRequestError && cause.code === 'account_deletion_pending') {
+      if (isLogin && cause instanceof ApiError && cause.code === 'account_deletion_pending') {
         pendingDeletionAt = Number(cause.details.deletionScheduledFor) || null;
         return;
       }

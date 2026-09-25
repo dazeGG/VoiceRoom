@@ -7,6 +7,9 @@ import sharp from 'sharp';
 
 import { createApiApp } from '../src/server.ts';
 import { createAvatarStorage } from '../src/lib/avatar-storage.ts';
+import type { StoreOverrides } from '../src/app/service-registry.ts';
+import { dbRoom, storedUser, userSession } from './fakes/index.ts';
+import type { StoredUser } from '../src/lib/user-store.ts';
 
 const OWNER_ID = '123e4567-e89b-12d3-a456-426614174000';
 const OTHER_ID = '123e4567-e89b-12d3-a456-426614174001';
@@ -26,12 +29,7 @@ function multipart(buffer: Buffer, filename = 'avatar.png') {
   };
 }
 
-type FakeUser = {
-  id: string;
-  login: string;
-  displayName: string;
-  avatarColorKey: string;
-  avatarKey: string | null;
+type FakeUser = Pick<StoredUser, 'id' | 'login' | 'displayName' | 'avatarColorKey' | 'avatarKey'> & {
   avatarAccent?: string | null;
 };
 
@@ -64,10 +62,11 @@ function createHarness(uploadsDir: string) {
   };
   let userAvatarWrites = Promise.resolve();
   let roomAvatarWrites = Promise.resolve();
-  const userStore = {
-    async getSessionUser(token: string) {
+  const userStore: StoreOverrides['users'] = {
+    async getSessionUser(token) {
       const id = token === 'owner-token' ? OWNER_ID : token === 'other-token' ? OTHER_ID : '';
-      return id ? { user: { ...users.get(id) } } : null;
+      const user = users.get(id);
+      return user ? userSession(user) : null;
     },
     swapAvatar({
       userId,
@@ -83,7 +82,7 @@ function createHarness(uploadsDir: string) {
         if (!user) return { previousAvatarKey: null, user: null };
         const previousAvatarKey = user.avatarKey;
         Object.assign(user, { avatarKey, avatarAccent });
-        return { previousAvatarKey, user: { ...user } };
+        return { previousAvatarKey, user: storedUser(user) };
       });
       userAvatarWrites = operation.then(
         () => undefined,
@@ -92,12 +91,13 @@ function createHarness(uploadsDir: string) {
       return operation;
     }
   };
-  const roomStore = {
+  const current = () => dbRoom(ROOM_ID, room);
+  const roomStore: StoreOverrides['store'] = {
     async listSummaryRecipientUserIds() {
       return [];
     },
-    async getRoom(roomId: string) {
-      return roomId === ROOM_ID && !room.deletedAt ? { ...room, peers: new Map() } : null;
+    async getRoom(roomId) {
+      return roomId === ROOM_ID && !room.deletedAt ? current() : null;
     },
     swapRoomAvatar(roomId: string, avatarKey: string | null = null) {
       const operation = roomAvatarWrites.then(() => {
@@ -107,7 +107,7 @@ function createHarness(uploadsDir: string) {
         const previousAvatarKey = room.avatarKey;
         room.avatarKey = avatarKey;
         room.updatedAt = Date.now();
-        return { previousAvatarKey, room: { ...room, peers: new Map() } };
+        return { previousAvatarKey, room: current() };
       });
       roomAvatarWrites = operation.then(
         () => undefined,
@@ -118,7 +118,7 @@ function createHarness(uploadsDir: string) {
     async deleteRoom(roomId: string, now = Date.now()) {
       if (roomId !== ROOM_ID || room.deletedAt) return null;
       room.deletedAt = now;
-      return { ...room, peers: new Map() };
+      return current();
     }
   };
   const storage = createAvatarStorage({ uploadsDir });

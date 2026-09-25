@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { lobbyRoom } from './fakes/index.ts';
 import assert from 'node:assert/strict';
 import { buildRoomRealtimeSummaryFromLobbyRoom } from '../src/realtime/summary.ts';
 import { createRoomRealtimeRuntime } from '../src/realtime/room-runtime.ts';
@@ -46,18 +47,20 @@ test('chat messages schedule personalized unread summaries for room recipients',
       },
       wsRegistry: {
         sendToUser(userId, envelope) {
-          const payload = envelope.payload as { room?: { unreadCount?: number } } | undefined;
-          sent.push({ userId, unreadCount: payload?.room?.unreadCount });
+          sent.push({
+            userId,
+            unreadCount: envelope.type === 'room.summary' ? envelope.payload.room.unreadCount : undefined
+          });
           return 1;
         }
       },
-      publicLobbyRoom: (value: typeof room & { unreadCount: number }) => ({
-        isStatic: value.isStatic,
-        name: value.name,
-        relationship: value.relationship,
-        roomId: value.id,
-        unreadCount: value.unreadCount
-      }),
+      publicLobbyRoom: (value: typeof room & { unreadCount: number }) =>
+        lobbyRoom(value.id, {
+          isStatic: value.isStatic,
+          name: value.name,
+          relationship: value.relationship,
+          unreadCount: value.unreadCount
+        }),
       avatarColorForPeerId: () => 'blurple'
     })
   );

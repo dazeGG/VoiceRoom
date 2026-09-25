@@ -61,3 +61,31 @@ test('G26-A02 visibility filtering cannot create duplicates', async () => {
     ['visible']
   );
 });
+
+test('a room page keeps link previews and sends times as epoch milliseconds', async () => {
+  const codec = createCursorCodec({ keys: ['r'.repeat(32)] });
+  const preview = { url: 'https://example.com/', title: 'Example', description: '', siteName: '', image: null };
+  const repository = fake<RoomHistoryRepository>({
+    roomExists: async () => true,
+    listLatest: async () => ({
+      messages: [
+        {
+          ...message('a', 1),
+          createdAt: '2026-01-01T00:00:00.000Z',
+          editedAt: new Date('2026-01-01T00:01:00.000Z'),
+          expiresAt: new Date('2026-01-02T00:00:00.000Z'),
+          linkPreview: preview
+        }
+      ],
+      hasMoreBefore: false,
+      hasMoreAfter: false
+    })
+  });
+  const service = createRoomHistoryService({ repository, cursorCodec: codec });
+  const [first] = (await service.getPage({ roomId: 'room-a' })).messages;
+  assert.ok(first);
+  assert.deepEqual(first.linkPreview, preview);
+  assert.equal(first.createdAt, Date.parse('2026-01-01T00:00:00.000Z'));
+  assert.equal(first.editedAt, Date.parse('2026-01-01T00:01:00.000Z'));
+  assert.equal(first.expiresAt, Date.parse('2026-01-02T00:00:00.000Z'));
+});

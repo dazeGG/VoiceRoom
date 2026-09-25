@@ -1,62 +1,28 @@
-import { state } from '../core/state.svelte';
+import type { LiveKitAdmission } from '@voice-room/shared/contracts/admission';
+import { api } from '$lib/api/client';
+import { fetchRoomStatus } from '$lib/api/rooms';
 import { resolveLiveKitUrls } from '$lib/platform/runtime-config';
+import { state } from '../core/state.svelte';
 
-export class ApiRequestError extends Error {
-  code: string;
+/** LiveKit credentials with every URL the client may try, best first. */
+export type LiveKitCredentials = LiveKitAdmission & { urls: string[] };
+
+export async function requestLiveKitToken(input: {
+  name: string;
+  peerId: string;
   roomId: string;
-  status: number;
-
-  constructor(message: string, code = '', roomId = '', status = 0) {
-    super(message);
-    this.name = 'ApiRequestError';
-    this.code = code;
-    this.roomId = roomId;
-    this.status = status;
-  }
+  sessionToken: string;
+}): Promise<LiveKitCredentials> {
+  const admission = await api.post<LiveKitAdmission>('/api/livekit-token', input);
+  return { ...admission, urls: await resolveLiveKitUrls(admission.url) };
 }
 
-export async function fetchJson(url: string): Promise<any> {
-  const response = await fetch(url, { headers: { Accept: 'application/json' } });
-  if (!response.ok) throw new Error('Сервер недоступен');
-  return response.json();
-}
-
-export async function postJson(url: string, body: unknown): Promise<any> {
-  const response = await fetch(url, {
-    body: JSON.stringify(body),
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json'
-    },
-    method: 'POST'
-  });
-  let payload: any = null;
-  try {
-    payload = await response.json();
-  } catch {
-    // Non-JSON errors are handled by the generic message below.
-  }
-  if (!response.ok) {
-    throw new ApiRequestError(payload?.error || 'Сервер недоступен', payload?.code, payload?.roomId, response.status);
-  }
-  if (url === '/api/livekit-token' && typeof payload?.url === 'string') {
-    return { ...payload, urls: await resolveLiveKitUrls(payload.url) };
-  }
-  return payload;
-}
-
+/** Whether the room exists; on the way, remembers its name and avatar for the top bar. */
 export async function checkRoomExists(roomId: string): Promise<boolean> {
-  const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}`, {
-    headers: { Accept: 'application/json' }
-  });
-  if (response.status === 404) return false;
-  if (!response.ok) throw new Error('Не удалось проверить комнату');
-
-  const status = await response.json();
-  // Capture the room's display name so the in-room top bar can show it
-  // instead of the bare code.
-  state.roomName = typeof status?.name === 'string' ? status.name : '';
-  state.roomAvatarUrl = typeof status?.avatarUrl === 'string' ? status.avatarUrl : '';
-  state.roomIsStatic = status?.isStatic === true;
-  return Boolean(status?.exists);
+  const status = await fetchRoomStatus(roomId);
+  if (!status) return false;
+  state.roomName = status.name;
+  state.roomAvatarUrl = status.avatarUrl ?? '';
+  state.roomIsStatic = status.isStatic;
+  return true;
 }

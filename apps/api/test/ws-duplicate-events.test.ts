@@ -1,5 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import { socketPathForDirectory } from './ipc-harness.ts';
 // Regression: a single room.peer.update must fan out exactly one
 // room.peer.updated to each other active peer. Today broadcast() delivers
 // once per peer transport AND once via mirrorLegacyRoomEvent to every
@@ -9,109 +7,22 @@ import { socketPathForDirectory } from './ipc-harness.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import http from 'node:http';
-import { spawn } from 'node:child_process';
-import path from 'node:path';
-import os from 'node:os';
-import { openWs, sendWs, joinVoiceRoom, waitForWsType, countWsType } from './ws-harness.ts';
+import { openWs, sendWs, joinVoiceRoom, waitForWsType } from './ws-harness.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { request, socketDir, startServer, waitForHealthz, type ServerLogs } from './fakes/server-process.ts';
 
 const PEER_A = 'peer-dup-a1';
 const PEER_B = 'peer-dup-b1';
 const TOKEN_A = 'a'.repeat(32);
 const TOKEN_B = 'b'.repeat(32);
 
-function getSocketPath() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-dup-'));
-  return { dir, socketPath: socketPathForDirectory(dir) };
-}
-
-function waitForHealthz(socketPath, timeoutMs = 15000) {
-  const started = Date.now();
-  return new Promise((resolve, reject) => {
-    const attempt = () => {
-      http
-        .get({ path: '/api/healthz', socketPath }, (res) => {
-          res.resume();
-          if (res.statusCode === 200) {
-            resolve();
-            return;
-          }
-          retry();
-        })
-        .on('error', retry);
-    };
-    const retry = () => {
-      if (Date.now() - started > timeoutMs) {
-        reject(new Error('Server did not become ready'));
-        return;
-      }
-      setTimeout(attempt, 50);
-    };
-    attempt();
-  });
-}
-
-function startServer(socketPath, databaseUrl, logs) {
-  const child = spawn(process.execPath, ['src/server.ts'], {
-    cwd: path.join(import.meta.dirname, '..'),
-    env: {
-      ...process.env,
-      NODE_ENV: 'test',
-      MAX_EMPTY_ROOMS_PER_IP: '0',
-      ROOM_CREATE_POW_DIFFICULTY: '0',
-      ROOM_CREATE_RATE_LIMIT: '0',
-      AUTH_RATE_LIMIT: '0',
-      DATABASE_URL: databaseUrl,
-      SOCKET_PATH: socketPath
-    },
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
-  child.stdout.on('data', (chunk) => {
-    logs.stdout += chunk.toString();
-  });
-  child.stderr.on('data', (chunk) => {
-    logs.stderr += chunk.toString();
-  });
-  return child;
-}
-
-function postJson(socketPath, pathname, body) {
-  const payload = JSON.stringify(body);
-  return new Promise((resolve, reject) => {
-    const req = http.request(
-      {
-        method: 'POST',
-        path: pathname,
-        socketPath,
-        headers: {
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(payload)
-        }
-      },
-      (res) => {
-        let data = '';
-        res.on('data', (chunk) => {
-          data += chunk;
-        });
-        res.on('end', () => resolve({ status: res.statusCode, body: data ? JSON.parse(data) : null }));
-        res.on('error', reject);
-      }
-    );
-    req.on('error', reject);
-    req.write(payload);
-    req.end();
-  });
-}
-
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 test('room.peer.update fans out exactly one room.peer.updated per other peer', async (t) => {
-  const { dir, socketPath } = getSocketPath();
+  const { dir, socketPath } = socketDir('voice-room-dup-');
   const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const logs = { stdout: '', stderr: '' };
-  const child = startServer(socketPath, databaseUrl, logs);
+  const logs: ServerLogs = { stdout: '', stderr: '' };
+  const child = startServer(socketPath, databaseUrl, logs, { AUTH_RATE_LIMIT: '0' });
   t.after(() => {
     child.kill('SIGTERM');
     fs.rmSync(dir, { recursive: true, force: true });
@@ -121,9 +32,9 @@ test('room.peer.update fans out exactly one room.peer.updated per other peer', a
   try {
     await waitForHealthz(socketPath);
 
-    const created = await postJson(socketPath, '/api/rooms', {});
+    const created = await request<{ roomId: string }>(socketPath, { method: 'POST', pathname: '/api/rooms', body: {} });
     assert.equal(created.status, 201);
-    const roomId = created.body.roomId;
+    const { roomId } = created.body;
 
     const alice = openWs(socketPath);
     await alice.ready;
@@ -134,7 +45,7 @@ test('room.peer.update fans out exactly one room.peer.updated per other peer', a
     await joinVoiceRoom(bob, { roomId, peerId: PEER_B, sessionToken: TOKEN_B, name: 'Bob' });
 
     // Ensure Bob has seen Alice as a peer before we mutate her state.
-    await waitForWsType(bob.frames, 'room.peer.joined', (frame) => frame.payload?.peer?.id === PEER_A).catch(() => {});
+    await waitForWsType(bob.frames, 'room.peer.joined', (frame) => frame.payload.peer.id === PEER_A).catch(() => {});
 
     const bobSince = bob.frames.length;
 
@@ -147,12 +58,12 @@ test('room.peer.update fans out exactly one room.peer.updated per other peer', a
     });
 
     // Wait for the first updated event, then let any duplicates settle.
-    await waitForWsType(bob.frames, 'room.peer.updated', (frame) => frame.payload?.peer?.id === PEER_A);
+    await waitForWsType(bob.frames, 'room.peer.updated', (frame) => frame.payload.peer.id === PEER_A);
     await delay(200);
 
     const updatesForAlice = bob.frames
       .slice(bobSince)
-      .filter((frame) => frame.type === 'room.peer.updated' && frame.payload?.peer?.id === PEER_A).length;
+      .filter((frame) => frame.type === 'room.peer.updated' && frame.payload.peer.id === PEER_A).length;
 
     assert.equal(
       updatesForAlice,

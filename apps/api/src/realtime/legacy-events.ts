@@ -1,11 +1,27 @@
-import { buildServerEnvelope } from './envelope.ts';
+// What the room layer sends a voice peer, in the older in-process spelling,
+// and its WebSocket event. Every RoomPeerMessage has an event: a transport
+// that could not map a message would report a failed send and the peer
+// would be dropped as lost.
+
+import type { ServerEvents } from '@voice-room/shared/contracts/realtime';
 import type { ServerEnvelope } from '@voice-room/shared/realtime';
+import { buildServerEnvelope } from './envelope.ts';
 
-type LegacyPeerMessage = { type?: unknown; [key: string]: any };
+type Tagged<Type extends string, Fields> = { type: Type } & Fields;
 
-function legacyPeerMessageToWs(message: LegacyPeerMessage | null | undefined, roomId: string): ServerEnvelope | null {
-  if (!message || typeof message.type !== 'string') return null;
+export type RoomPeerMessage =
+  | Tagged<'ping', ServerEvents['pong']>
+  | Tagged<'peer-joined' | 'peer-updated', Pick<ServerEvents['room.peer.joined'], 'peer'>>
+  | Tagged<'peer-left', { peerId: string; reason?: string }>
+  | Tagged<'room-updated', ServerEvents['room.updated']>
+  | Tagged<'room-deleted', ServerEvents['room.deleted']>
+  | Tagged<'room-not-found', { roomId?: string }>
+  | Tagged<'room-full', Pick<ServerEvents['room.full'], 'maxRoomPeers'>>
+  | Tagged<'room.kicked' | 'room.banned', { roomId?: string; peerId?: string }>
+  | Tagged<'chat-message', Pick<ServerEvents['room.chat.message'], 'message'>>
+  | Tagged<'reaction.updated', { payload: ServerEvents['reaction.updated'] }>;
 
+function legacyPeerMessageToWs(message: RoomPeerMessage, roomId: string): ServerEnvelope {
   switch (message.type) {
     case 'ping':
       return buildServerEnvelope('pong', { at: message.at });
@@ -31,17 +47,12 @@ function legacyPeerMessageToWs(message: LegacyPeerMessage | null | undefined, ro
     case 'room.banned':
       return buildServerEnvelope(message.type, { roomId: message.roomId || roomId, peerId: message.peerId });
     case 'chat-message':
-      return buildServerEnvelope('room.chat.message', {
-        roomId,
-        message: message.message
-      });
+      return buildServerEnvelope('room.chat.message', { roomId, message: message.message });
     case 'reaction.updated':
       return buildServerEnvelope('reaction.updated', {
         ...message.payload,
-        roomId: message.payload?.roomId || roomId
+        roomId: message.payload.roomId || roomId
       });
-    default:
-      return null;
   }
 }
 

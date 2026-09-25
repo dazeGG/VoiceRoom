@@ -1,9 +1,11 @@
 // Operational routes: health, metrics, the room-creation proof-of-work
 // challenge, the desktop release manifest and browser log intake. Response
-// shapes are declared as TypeBox schemas.
+// shapes are the contracts in @voice-room/shared/contracts/ops.
 
-import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
+import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
+import { Failure } from '@voice-room/shared/contracts/http';
+import { ClientLogsAccepted, DesktopRelease, Health, PowChallenge } from '@voice-room/shared/contracts/ops';
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
@@ -31,47 +33,6 @@ export interface OpsRouteDeps {
   clientLogs: { enabled: boolean; limiter: RateLimiter };
   desktopRelease: DesktopReleaseService;
 }
-
-const Failure = Type.Object({ ok: Type.Literal(false), error: Type.String(), code: Type.Optional(Type.String()) });
-
-const Health = Type.Object({
-  livekit: Type.Boolean(),
-  ok: Type.Literal(true),
-  capabilityManifest: Type.Object({
-    contractVersion: Type.Union([Type.String(), Type.Null()]),
-    schemaVersion: Type.Union([Type.Number(), Type.Null()]),
-    digest: Type.Union([Type.String(), Type.Null()]),
-    replicaConsensus: Type.String(),
-    manifestRawSha256: Type.Union([Type.String(), Type.Null()])
-  })
-});
-
-const PowChallenge = Type.Union([
-  Type.Object({ ok: Type.Literal(true), required: Type.Literal(false) }),
-  Type.Object({
-    ok: Type.Literal(true),
-    algorithm: Type.Literal('sha256'),
-    challenge: Type.String(),
-    difficulty: Type.Number(),
-    expiresAt: Type.Number(),
-    required: Type.Literal(true)
-  })
-]);
-
-const Asset = Type.Union([Type.Object({ url: Type.String(), size: Type.Number() }), Type.Null()]);
-const DesktopRelease = Type.Object({
-  ok: Type.Literal(true),
-  version: Type.String(),
-  htmlUrl: Type.String(),
-  assets: Type.Object({ 'mac-arm64': Asset, 'mac-x64': Asset, 'win-x64': Asset })
-});
-
-const ClientLogsAccepted = Type.Object({
-  ok: Type.Literal(true),
-  accepted: Type.Number(),
-  dropped: Type.Number(),
-  limits: Type.Record(Type.String(), Type.Number())
-});
 
 export function registerOpsRoutes(root: FastifyInstance, ctx: ApiContext, deps: OpsRouteDeps): void {
   const app = root.withTypeProvider<TypeBoxTypeProvider>();
@@ -123,7 +84,10 @@ export function registerOpsRoutes(root: FastifyInstance, ctx: ApiContext, deps: 
     { schema: { response: { 200: DesktopRelease, 502: Failure } } },
     async (_request, reply) => {
       const result = await deps.desktopRelease.latest();
-      if (result.status !== 'ok') return reply.code(502).send(failure('Не удалось получить данные о релизе'));
+      if (result.status !== 'ok')
+        return reply
+          .code(502)
+          .send(failure('Не удалось получить данные о релизе', { code: 'desktop_release_unavailable' }));
       return reply.header('Cache-Control', result.cacheControl).send({ ok: true as const, ...result.release });
     }
   );
@@ -137,7 +101,7 @@ export function registerOpsRoutes(root: FastifyInstance, ctx: ApiContext, deps: 
     '/api/client-logs',
     { schema: { response: { 202: ClientLogsAccepted, 404: Failure, 429: Failure } } },
     async (request, reply) => {
-      if (!deps.clientLogs.enabled) return reply.code(404).send(failure('Not found'));
+      if (!deps.clientLogs.enabled) return reply.code(404).send(failure('Not found', { code: 'not_found' }));
 
       const clientIp = ctx.clientIp(request.raw);
       const rate = deps.clientLogs.limiter.check(`client-logs:${clientIp}`);
@@ -145,7 +109,7 @@ export function registerOpsRoutes(root: FastifyInstance, ctx: ApiContext, deps: 
         return reply
           .code(429)
           .header('Retry-After', String(rate.retryAfterSeconds))
-          .send(failure('Слишком много попыток, попробуйте позже'));
+          .send(failure('Слишком много попыток, попробуйте позже', { code: 'rate_limited' }));
       }
 
       const session = await ctx.resolveSession(request.raw);

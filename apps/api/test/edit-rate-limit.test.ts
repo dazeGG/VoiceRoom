@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 process.env.ROOM_CHAT_RATE_LIMIT = '1';
 process.env.ROOM_CHAT_RATE_WINDOW_MS = '60000';
 process.env.DM_RATE_LIMIT = '1';
@@ -8,51 +7,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const { createApiApp } = await import('../src/server.ts');
+import type { Failure } from '@voice-room/shared/contracts/http';
+import type { FastifyInstance } from 'fastify';
+import { dbRoom, storedDirectMessage, userSession, type Fakes } from './fakes/index.ts';
+import { injectWs, sendWs, waitForWsType } from './ws-harness.ts';
 
 const AUTHOR_ID = '11111111-1111-4111-8111-111111111111';
 const OWNER_ID = '22222222-2222-4222-8222-222222222222';
 const PEER_ID = '33333333-3333-4333-8333-333333333333';
 const ROOM_ID = 'edit-rate-room';
 
-function waitForFrame(frames, type, predicate = () => true, timeoutMs = 1000) {
-  const startedAt = Date.now();
-  return new Promise((resolve, reject) => {
-    const check = () => {
-      const frame = frames.find((candidate) => candidate.type === type && predicate(candidate));
-      if (frame) {
-        resolve(frame);
-        return;
-      }
-      if (Date.now() - startedAt >= timeoutMs) {
-        reject(new Error(`Timed out waiting for WebSocket frame: ${type}`));
-        return;
-      }
-      setTimeout(check, 5);
-    };
-    check();
-  });
-}
-
-async function openWs(app, cookie) {
-  const frames = [];
-  const ws = await app.injectWS(
-    '/api/ws',
-    { headers: { cookie }, socket: { remoteAddress: '127.0.0.1' } },
-    {
-      onInit(socket) {
-        socket.on('message', (raw) => frames.push(JSON.parse(String(raw))));
-      }
-    }
-  );
-  await waitForFrame(frames, 'ready');
-  return { frames, ws };
-}
-
 function flushRealtime() {
   return new Promise((resolve) => setImmediate(() => setImmediate(resolve)));
 }
 
-function patch(app, url, sessionToken, text) {
+function patch(app: FastifyInstance, url: string, sessionToken: string, text: string) {
   return app.inject({
     method: 'PATCH',
     url,
@@ -68,7 +37,18 @@ function patch(app, url, sessionToken, text) {
 test('message edit rate limits run after ownership and before storage or realtime fan-out', async (t) => {
   let roomEditCount = 0;
   let dmEditCount = 0;
-  let roomMessage = {
+  let roomMessage: {
+    authorUserId: string;
+    avatarColorKey: string;
+    createdAt: number;
+    editedAt: number | null;
+    expiresAt: number;
+    id: string;
+    name: string;
+    peerId: string;
+    roomId: string;
+    text: string;
+  } = {
     authorUserId: AUTHOR_ID,
     avatarColorKey: 'blurple',
     createdAt: 100,
@@ -80,18 +60,15 @@ test('message edit rate limits run after ownership and before storage or realtim
     roomId: ROOM_ID,
     text: 'room before'
   };
-  let dmMessage = {
-    id: 'dm-message-1',
+  let dmMessage = storedDirectMessage('dm-message-1', {
     senderId: AUTHOR_ID,
     recipientId: PEER_ID,
     body: 'dm before',
-    createdAt: 100,
-    editedAt: null,
-    readAt: null
-  };
+    createdAt: 100
+  });
 
   const roomStore = {
-    async editMessage(roomId, messageId, text) {
+    async editMessage(roomId: string, messageId: string, text: string) {
       roomEditCount += 1;
       roomMessage = { ...roomMessage, roomId, id: messageId, text, editedAt: 200 };
       return roomMessage;
@@ -99,31 +76,33 @@ test('message edit rate limits run after ownership and before storage or realtim
     async findActiveRoomBan() {
       return null;
     },
-    async getMessage(roomId, messageId) {
+    async getMessage(roomId: string, messageId: string) {
       return roomId === ROOM_ID && messageId === roomMessage.id ? roomMessage : null;
     },
-    async getRoom(roomId) {
+    async getRoom(roomId: string) {
       if (roomId !== ROOM_ID) return null;
-      return {
-        createdAt: 100,
-        emptySince: null,
-        id: ROOM_ID,
-        isStatic: true,
-        name: 'Rate limit room',
-        ownerId: OWNER_ID,
-        peers: new Map()
-      };
+      return dbRoom(ROOM_ID, { createdAt: 100, name: 'Rate limit room', ownerId: OWNER_ID });
     },
-    async listMessages(roomId) {
+    async listMessages(roomId: string) {
       return roomId === ROOM_ID ? [roomMessage] : [];
     },
     async listVisibleRoomsForUser() {
       return [];
     }
-  };
+  } satisfies Fakes['store'];
 
   const friendStore = {
-    async editMessage({ messageId, senderId, recipientId, body }) {
+    async editMessage({
+      messageId,
+      senderId,
+      recipientId,
+      body
+    }: {
+      messageId: string;
+      senderId: string;
+      recipientId: string;
+      body: string;
+    }) {
       dmEditCount += 1;
       dmMessage = { ...dmMessage, id: messageId, senderId, recipientId, body, editedAt: 300 };
       return dmMessage;
@@ -131,33 +110,33 @@ test('message edit rate limits run after ownership and before storage or realtim
     async getFriendIds() {
       return [];
     },
-    async getMessage(_userId, _peerId, messageId) {
+    async getMessage(_userId: string, _peerId: string, messageId: string) {
       if (messageId === 'foreign-message-1') {
         return { ...dmMessage, id: messageId, senderId: PEER_ID, recipientId: AUTHOR_ID };
       }
       return messageId === dmMessage.id ? dmMessage : null;
     }
-  };
+  } satisfies Fakes['friends'];
 
-  const userStore = {
+  const userStore: Fakes['users'] = {
     async getSessionUser(token) {
-      if (token === 'author-session') return { user: { id: AUTHOR_ID } };
-      if (token === 'owner-session') return { user: { id: OWNER_ID } };
+      if (token === 'author-session') return userSession({ id: AUTHOR_ID });
+      if (token === 'owner-session') return userSession({ id: OWNER_ID });
       return null;
     }
   };
 
   const app = createApiApp({ store: roomStore, friends: friendStore, users: userStore });
-  let realtime;
+  let realtime: Awaited<ReturnType<typeof injectWs>> | undefined;
   t.after(async () => {
     realtime?.ws.terminate();
     await app.close();
   });
   await app.ready();
 
-  realtime = await openWs(app, 'vr_session=author-session');
-  realtime.ws.send(JSON.stringify({ type: 'room.preview.subscribe', payload: { roomId: ROOM_ID } }));
-  await waitForFrame(realtime.frames, 'room.snapshot', (frame) => frame.payload?.roomId === ROOM_ID);
+  realtime = await injectWs(app, { cookie: 'vr_session=author-session' });
+  sendWs(realtime.ws, 'room.preview.subscribe', { roomId: ROOM_ID });
+  await waitForWsType(realtime.frames, 'room.snapshot', (frame) => frame.payload.roomId === ROOM_ID, 1000);
 
   const roomUrl = `/api/rooms/${ROOM_ID}/chat/${roomMessage.id}`;
   const forbiddenRoomEdit = await patch(app, roomUrl, 'owner-session', 'room forbidden');
@@ -167,13 +146,19 @@ test('message edit rate limits run after ownership and before storage or realtim
   const allowedRoomEdit = await patch(app, roomUrl, 'author-session', 'room allowed');
   assert.equal(allowedRoomEdit.statusCode, 200);
   assert.equal(roomEditCount, 1);
-  await waitForFrame(realtime.frames, 'room.chat.edited', (frame) => frame.payload?.message?.text === 'room allowed');
+  await waitForWsType(
+    realtime.frames,
+    'room.chat.edited',
+    (frame) => frame.payload.message.text === 'room allowed',
+    1000
+  );
 
   const blockedRoomEdit = await patch(app, roomUrl, 'author-session', 'room blocked');
   assert.equal(blockedRoomEdit.statusCode, 429);
-  assert.equal(blockedRoomEdit.json().error, 'Too many chat messages');
-  assert.ok(blockedRoomEdit.json().retryAfterSeconds > 0);
-  assert.equal(blockedRoomEdit.headers['retry-after'], String(blockedRoomEdit.json().retryAfterSeconds));
+  const blockedRoomEditBody = blockedRoomEdit.json<Failure>();
+  assert.equal(blockedRoomEditBody.error, 'Too many chat messages');
+  assert.ok((blockedRoomEditBody.retryAfterSeconds ?? 0) > 0);
+  assert.equal(blockedRoomEdit.headers['retry-after'], String(blockedRoomEditBody.retryAfterSeconds));
   assert.equal(roomEditCount, 1);
   assert.equal(roomMessage.text, 'room allowed');
   await flushRealtime();
@@ -188,13 +173,19 @@ test('message edit rate limits run after ownership and before storage or realtim
   const allowedDmEdit = await patch(app, dmUrl, 'author-session', 'dm allowed');
   assert.equal(allowedDmEdit.statusCode, 200);
   assert.equal(dmEditCount, 1);
-  await waitForFrame(realtime.frames, 'dm.message.edited', (frame) => frame.payload?.message?.body === 'dm allowed');
+  await waitForWsType(
+    realtime.frames,
+    'dm.message.edited',
+    (frame) => frame.payload.message.body === 'dm allowed',
+    1000
+  );
 
   const blockedDmEdit = await patch(app, dmUrl, 'author-session', 'dm blocked');
   assert.equal(blockedDmEdit.statusCode, 429);
-  assert.equal(blockedDmEdit.json().error, 'Слишком много сообщений, попробуйте позже');
-  assert.ok(blockedDmEdit.json().retryAfterSeconds > 0);
-  assert.equal(blockedDmEdit.headers['retry-after'], String(blockedDmEdit.json().retryAfterSeconds));
+  const blockedDmEditBody = blockedDmEdit.json<Failure>();
+  assert.equal(blockedDmEditBody.error, 'Слишком много сообщений, попробуйте позже');
+  assert.ok((blockedDmEditBody.retryAfterSeconds ?? 0) > 0);
+  assert.equal(blockedDmEdit.headers['retry-after'], String(blockedDmEditBody.retryAfterSeconds));
   assert.equal(dmEditCount, 1);
   assert.equal(dmMessage.body, 'dm allowed');
   await flushRealtime();

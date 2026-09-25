@@ -1,3 +1,6 @@
+import type { AccountMessage } from './account-events.ts';
+import type { RoomMessage } from '@voice-room/shared/contracts/messages';
+import type { LobbyRoom, PublicPeer } from '@voice-room/shared/contracts/rooms';
 import { SUMMARY_COALESCE_MS } from '@voice-room/shared/realtime';
 import {
   normalizeRoomId,
@@ -13,9 +16,10 @@ import { buildRoomRealtimeSummaryFromLobbyRoom, createSummaryCoalescer } from '.
 import { createWsTransport } from './peer-transport.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
-import { legacyPeerMessageToWs } from './legacy-events.ts';
+import { legacyPeerMessageToWs, type RoomPeerMessage } from './legacy-events.ts';
 import { createTypingThrottle } from './typing-throttle.ts';
 import type { TypingActivity, ServerEnvelope } from '@voice-room/shared/realtime';
+import type { RoomSnapshot } from '@voice-room/shared/contracts/realtime';
 import type { RoomStore } from '../lib/room-store.ts';
 import type { UserStore } from '../lib/user-store.ts';
 import type { ConnectionRegistry, WsConnection } from './registry.ts';
@@ -114,11 +118,11 @@ export type RoomRuntimeDeps = {
   wsRegistry: ConnectionRegistry;
   getRoomStore: () => RuntimeRoomStore;
   getRoom: (roomId: string) => Promise<PresenceRoom | null>;
-  publicPeer: (peer: any) => any;
-  publicLobbyRoom: (room: any) => any;
-  publicChatMessage: (message: any) => any;
+  publicPeer: (peer: any) => PublicPeer;
+  publicLobbyRoom: (room: any) => LobbyRoom;
+  publicChatMessage: (message: any) => RoomMessage;
   getUserStore?: (() => Pick<UserStore, 'getUserById'>) | null;
-  broadcast: (room: any, message: Record<string, unknown>, exceptPeerId?: string) => void;
+  broadcast: (room: any, message: RoomPeerMessage, exceptPeerId?: string) => void;
   closePeer: (roomId: string, peerId: string, transportId: string | undefined, reason: string) => void;
   avatarColorForPeerId: (peerId: unknown) => string;
   MAX_ROOM_PEERS: number;
@@ -736,9 +740,8 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     }
   }
 
-  function mirrorLegacyRoomEvent(roomId: string, message: Record<string, unknown>): void {
+  function mirrorLegacyRoomEvent(roomId: string, message: RoomPeerMessage): void {
     const envelope = legacyPeerMessageToWs(message, roomId);
-    if (!envelope) return;
     broadcastRoomDetail(roomId, envelope, { previewOnly: true });
   }
 
@@ -868,7 +871,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
       }
     }
 
-    const notification = {
+    const notification: AccountMessage = {
       type: 'notification.room.message',
       dedupeKey: `room:${roomId}:message:${message.id}`,
       room: roomNotificationContext(room),
@@ -893,7 +896,10 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     }
   }
 
-  async function buildRoomSnapshot(roomId: string, mode = 'preview') {
+  async function buildRoomSnapshot(
+    roomId: string,
+    mode: RoomSnapshot['mode'] = 'preview'
+  ): Promise<RoomSnapshot | null> {
     const dbRoom = await getRoomStore().getRoom(roomId);
     if (!dbRoom) return null;
     const recentMessages = (await getRoomStore().listMessages(roomId, { limit: 100 })).map(publicChatMessage);
@@ -947,8 +953,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
 
   function attachVoiceTransport(connection: WsConnection, roomId: string, peerId: string, sessionToken: string) {
     const transport = createWsTransport((message) => {
-      const envelope = legacyPeerMessageToWs(message as Record<string, any>, roomId);
-      if (!envelope) return false;
+      const envelope = legacyPeerMessageToWs(message, roomId);
       return wsRegistry.sendToConnection(connection, envelope);
     });
     connection.activeVoice = { roomId, peerId, sessionToken, transportId: transport.id };

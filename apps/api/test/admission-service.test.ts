@@ -239,7 +239,10 @@ test('a reissue after a mute race can still fail', async () => {
       async issueAdmission() {
         issues += 1;
         return issues === 1
-          ? { status: 'issued', admission: { gateCredentialId: 'cred-1' } }
+          ? {
+              status: 'issued',
+              admission: { gateCredentialId: 'cred-1', room: 'lk', token: 'jwt', ttlSeconds: 60, url: 'wss://gate' }
+            }
           : { status: 'unavailable', admission: null };
       }
     })

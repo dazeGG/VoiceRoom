@@ -1,3 +1,4 @@
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import type { Attachment, AttachmentRepository } from './attachment-repository.ts';
 import type { MediaQuotaRepository } from './media-quota-repository.ts';
 
@@ -15,10 +16,10 @@ export type QuotaReservation = {
 };
 
 class MediaQuotaError extends Error {
-  declare code: string;
+  declare code: ErrorCode;
   declare statusCode: number;
 
-  constructor(code: string, message: string) {
+  constructor(code: ErrorCode, message: string) {
     super(message);
     this.name = 'MediaQuotaError';
     this.code = code;

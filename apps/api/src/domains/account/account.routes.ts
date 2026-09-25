@@ -3,37 +3,49 @@
 // profile, password, recovery codes, devices, sign-in alerts, notices and
 // deletion. Texts are the ones the web client shows.
 
-import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
+import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import {
+  AccountFailure,
+  AlertIdParams,
+  AppPromptSeen,
+  CredentialsBody,
+  CurrentPasswordBody,
+  DeletionPreview,
+  DeletionScheduled,
+  LoginAlertResolved,
+  LoginAlerts,
+  Me,
+  PasswordBody,
+  ProfileBody,
+  RecoverBody,
+  Recovered,
+  RecoveryCodesGenerated,
+  RegisterBody,
+  ReminderSnoozed,
+  Security,
+  SessionIdParams,
+  Sessions,
+  SessionsRevoked,
+  SignedIn,
+  WhatsNewAnswer
+} from '@voice-room/shared/contracts/account';
+import { Done } from '@voice-room/shared/contracts/http';
 import { cleanDisplayName, normalizeLogin } from '@voice-room/shared/validation';
 import type { ApiContext, ResolvedSession, SessionRecord, SessionUser } from '../../app/context.ts';
 import { selfUser } from '../../lib/user-store.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import type { AccountService, Device, OpenedSession } from './account.service.ts';
 
-// Account payloads (self user, sessions, alerts, previews) are shaped by the
-// stores; the schemas frame the envelope and keep every field.
-const Scheduled = Type.Optional(Type.Number());
-const Answer = Type.Object(
-  { ok: Type.Literal(true), deletionScheduledFor: Scheduled },
-  { additionalProperties: Type.Unknown() }
-);
-const Refusal = Type.Object({
-  ok: Type.Literal(false),
-  error: Type.String(),
-  code: Type.Optional(Type.String()),
-  deletionScheduledFor: Scheduled
-});
-const Responses = { 200: Answer, 201: Answer, '4xx': Refusal, 503: Refusal };
-const Field = Type.Optional(Type.Unknown());
+const answers = <Success>(success: Success) => ({ 200: success, '4xx': AccountFailure, 503: AccountFailure });
 
-const SIGN_IN_REQUIRED = failure('Требуется вход');
-const TOO_MANY_ATTEMPTS = failure('Слишком много попыток, попробуйте позже');
-const ACCOUNT_NOT_FOUND = failure('Аккаунт не найден');
-const SHORT_PASSWORD = failure('Пароль должен быть не короче 8 символов');
-const WRONG_CREDENTIALS = failure('Неверный логин или пароль');
-const WRONG_PASSWORD = failure('Неверный пароль');
-const DELETION_UNAVAILABLE = failure('Удаление аккаунта сейчас недоступно');
+const SIGN_IN_REQUIRED = failure('Требуется вход', { code: 'authentication_required' });
+const TOO_MANY_ATTEMPTS = failure('Слишком много попыток, попробуйте позже', { code: 'rate_limited' });
+const ACCOUNT_NOT_FOUND = failure('Аккаунт не найден', { code: 'account_not_found' });
+const SHORT_PASSWORD = failure('Пароль должен быть не короче 8 символов', { code: 'password_too_short' });
+const WRONG_CREDENTIALS = failure('Неверный логин или пароль', { code: 'invalid_credentials' });
+const WRONG_PASSWORD = failure('Неверный пароль', { code: 'wrong_password' });
+const DELETION_UNAVAILABLE = failure('Удаление аккаунта сейчас недоступно', { code: 'account_deletion_unavailable' });
 
 export interface AccountRoutesDeps {
   account: AccountService;
@@ -49,7 +61,7 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-type SignedIn = { user: SessionUser; session: SessionRecord };
+type Account = { user: SessionUser; session: SessionRecord };
 
 export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, deps: AccountRoutesDeps): void {
   const app = root.withTypeProvider<TypeBoxTypeProvider>();
@@ -66,7 +78,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     return rate.allowed;
   }
 
-  async function signedIn(request: FastifyRequest, reply: FastifyReply): Promise<SignedIn | null> {
+  async function signedIn(request: FastifyRequest, reply: FastifyReply): Promise<Account | null> {
     const resolved: ResolvedSession | null = await ctx.resolveSession(request.raw);
     if (resolved?.user && resolved.session) return { user: resolved.user, session: resolved.session };
     reply.code(401).send(SIGN_IN_REQUIRED);
@@ -94,8 +106,8 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     {
       preValidation: optionalJsonBody,
       schema: {
-        body: Type.Object({ login: Field, displayName: Field, password: Field, passwordConfirm: Field }),
-        response: Responses
+        body: RegisterBody,
+        response: { ...answers(SignedIn), 201: SignedIn }
       }
     },
     async (request, reply) => {
@@ -106,18 +118,20 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
         login: normalizeLogin(body.login),
         displayName: cleanDisplayName(body.displayName),
         password,
-        passwordConfirm: typeof body.passwordConfirm === 'string' ? body.passwordConfirm : password,
+        passwordConfirm: body.passwordConfirm ?? password,
         device: device(request)
       });
       switch (result.status) {
         case 'invalid_login':
-          return reply.code(400).send(failure('Логин: 3–32 символа, латиница, цифры, . _ -'));
+          return reply
+            .code(400)
+            .send(failure('Логин: 3–32 символа, латиница, цифры, . _ -', { code: 'invalid_login' }));
         case 'invalid_password':
           return reply.code(400).send(SHORT_PASSWORD);
         case 'password_mismatch':
-          return reply.code(400).send(failure('Пароли не совпадают'));
+          return reply.code(400).send(failure('Пароли не совпадают', { code: 'passwords_mismatch' }));
         case 'login_taken':
-          return reply.code(409).send(failure('Этот логин уже занят'));
+          return reply.code(409).send(failure('Этот логин уже занят', { code: 'login_taken' }));
         case 'signed_in':
           return openSession(reply, 201, result);
       }
@@ -128,7 +142,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     '/api/auth/login',
     {
       preValidation: optionalJsonBody,
-      schema: { body: Type.Object({ login: Field, password: Field }), response: Responses }
+      schema: { body: CredentialsBody, response: answers(SignedIn) }
     },
     async (request, reply) => {
       if (!withinLimit(reply, `login:${ctx.clientIp(request.raw)}`)) return reply;
@@ -153,12 +167,12 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     }
   );
 
-  app.post('/api/auth/logout', { schema: { response: Responses } }, async (request, reply) => {
+  app.post('/api/auth/logout', { schema: { response: answers(Done) } }, async (request, reply) => {
     await account.logout(deps.sessionToken(request.raw));
     return reply.header('Set-Cookie', deps.clearedSessionCookie()).send({ ok: true as const });
   });
 
-  app.get('/api/auth/me', { schema: { response: Responses } }, async (request) => {
+  app.get('/api/auth/me', { schema: { response: answers(Me) } }, async (request) => {
     const resolved = await ctx.resolveSession(request.raw);
     return { ok: true as const, user: resolved ? selfUser(resolved.user) : null };
   });
@@ -167,7 +181,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     '/api/auth/recover',
     {
       preValidation: optionalJsonBody,
-      schema: { body: Type.Object({ login: Field, code: Field, newPassword: Field }), response: Responses }
+      schema: { body: RecoverBody, response: answers(Recovered) }
     },
     async (request, reply) => {
       const ipRate = deps.limiter.check(`recover:${ctx.clientIp(request.raw)}`);
@@ -183,7 +197,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
       });
       if (result.status === 'invalid_new_password') return reply.code(400).send(SHORT_PASSWORD);
       if (result.status === 'invalid_code')
-        return reply.code(401).send(failure('Неверный логин или код восстановления'));
+        return reply.code(401).send(failure('Неверный логин или код восстановления', { code: 'invalid_recovery' }));
       return openSession(reply, 200, result, { recoveryCodes: { remaining: result.remaining } });
     }
   );
@@ -192,7 +206,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     '/api/auth/account/restore',
     {
       preValidation: optionalJsonBody,
-      schema: { body: Type.Object({ login: Field, password: Field }), response: Responses }
+      schema: { body: CredentialsBody, response: answers(SignedIn) }
     },
     async (request, reply) => {
       if (!account.deletionAvailable()) return reply.code(503).send(DELETION_UNAVAILABLE);
@@ -201,7 +215,8 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
         { login: normalizeLogin(request.body.login), password: text(request.body.password), device: device(request) },
         request.log
       );
-      if (result.status === 'expired') return reply.code(410).send(failure('Аккаунт уже удалён'));
+      if (result.status === 'expired')
+        return reply.code(410).send(failure('Аккаунт уже удалён', { code: 'account_already_deleted' }));
       if (result.status === 'invalid_credentials') return reply.code(401).send(WRONG_CREDENTIALS);
       return openSession(reply, 200, result);
     }
@@ -213,7 +228,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     '/api/auth/profile',
     {
       preValidation: optionalJsonBody,
-      schema: { body: Type.Object({ displayName: Field }), response: Responses }
+      schema: { body: ProfileBody, response: answers(SignedIn) }
     },
     async (request, reply) => {
       const me = await signedIn(request, reply);
@@ -228,7 +243,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     '/api/auth/password',
     {
       preValidation: optionalJsonBody,
-      schema: { body: Type.Object({ currentPassword: Field, newPassword: Field }), response: Responses }
+      schema: { body: PasswordBody, response: answers(Done) }
     },
     async (request, reply) => {
       const me = await signedIn(request, reply);
@@ -247,14 +262,14 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
         case 'not_found':
           return reply.code(404).send(ACCOUNT_NOT_FOUND);
         case 'invalid_password':
-          return reply.code(400).send(failure('Неверный текущий пароль'));
+          return reply.code(400).send(failure('Неверный текущий пароль', { code: 'wrong_current_password' }));
         case 'changed':
           return reply.header('Set-Cookie', deps.clearedSessionCookie()).send({ ok: true as const });
       }
     }
   );
 
-  app.get('/api/auth/security', { schema: { response: Responses } }, async (request, reply) => {
+  app.get('/api/auth/security', { schema: { response: answers(Security) } }, async (request, reply) => {
     const me = await signedIn(request, reply);
     if (!me) return reply;
     return { ok: true as const, ...(await account.security(me.user.id)) };
@@ -264,7 +279,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     '/api/auth/recovery-codes',
     {
       preValidation: optionalJsonBody,
-      schema: { body: Type.Object({ currentPassword: Field }), response: Responses }
+      schema: { body: CurrentPasswordBody, response: answers(RecoveryCodesGenerated) }
     },
     async (request, reply) => {
       const me = await signedIn(request, reply);
@@ -278,49 +293,60 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     }
   );
 
-  app.post('/api/auth/recovery-codes/reminder/snooze', { schema: { response: Responses } }, async (request, reply) => {
-    const me = await signedIn(request, reply);
-    if (!me) return reply;
-    const result = await account.snoozeRecoveryCodesReminder(me.user.id);
-    if (result.status === 'not_found') return reply.code(404).send(ACCOUNT_NOT_FOUND);
-    return { ok: true as const, recoveryCodesReminder: { snoozedUntil: result.snoozedUntil } };
-  });
+  app.post(
+    '/api/auth/recovery-codes/reminder/snooze',
+    { schema: { response: answers(ReminderSnoozed) } },
+    async (request, reply) => {
+      const me = await signedIn(request, reply);
+      if (!me) return reply;
+      const result = await account.snoozeRecoveryCodesReminder(me.user.id);
+      if (result.status === 'not_found') return reply.code(404).send(ACCOUNT_NOT_FOUND);
+      return { ok: true as const, recoveryCodesReminder: { snoozedUntil: result.snoozedUntil } };
+    }
+  );
 
-  app.get('/api/auth/sessions', { schema: { response: Responses } }, async (request, reply) => {
+  app.get('/api/auth/sessions', { schema: { response: answers(Sessions) } }, async (request, reply) => {
     const me = await signedIn(request, reply);
     if (!me) return reply;
     return { ok: true as const, sessions: await account.listSessions(me.user.id, me.session.tokenHash) };
   });
 
-  app.post('/api/auth/sessions/revoke-others', { schema: { response: Responses } }, async (request, reply) => {
-    const me = await signedIn(request, reply);
-    if (!me) return reply;
-    return { ok: true as const, revoked: await account.revokeOtherSessions(me.user.id, me.session.tokenHash) };
-  });
+  app.post(
+    '/api/auth/sessions/revoke-others',
+    { schema: { response: answers(SessionsRevoked) } },
+    async (request, reply) => {
+      const me = await signedIn(request, reply);
+      if (!me) return reply;
+      return { ok: true as const, revoked: await account.revokeOtherSessions(me.user.id, me.session.tokenHash) };
+    }
+  );
 
   app.delete(
     '/api/auth/sessions/:sessionId',
     {
-      schema: { params: Type.Object({ sessionId: Type.String() }), response: Responses }
+      schema: { params: SessionIdParams, response: answers(Done) }
     },
     async (request, reply) => {
       const me = await signedIn(request, reply);
       if (!me) return reply;
       const result = await account.revokeSession(me.user.id, me.session.publicId, request.params.sessionId);
       if (result.status === 'current_session')
-        return reply.code(400).send(failure('Чтобы завершить этот сеанс, выйдите из аккаунта'));
-      if (result.status === 'not_found') return reply.code(404).send(failure('Сеанс не найден'));
+        return reply
+          .code(400)
+          .send(failure('Чтобы завершить этот сеанс, выйдите из аккаунта', { code: 'current_session' }));
+      if (result.status === 'not_found')
+        return reply.code(404).send(failure('Сеанс не найден', { code: 'session_not_found' }));
       return { ok: true as const };
     }
   );
 
-  app.get('/api/auth/whats-new', { schema: { response: Responses } }, async (request, reply) => {
+  app.get('/api/auth/whats-new', { schema: { response: answers(WhatsNewAnswer) } }, async (request, reply) => {
     const me = await signedIn(request, reply);
     if (!me) return reply;
     return { ok: true as const, whatsNew: await account.whatsNew(me.user.id) };
   });
 
-  app.post('/api/auth/whats-new/seen', { schema: { response: Responses } }, async (request, reply) => {
+  app.post('/api/auth/whats-new/seen', { schema: { response: answers(WhatsNewAnswer) } }, async (request, reply) => {
     const me = await signedIn(request, reply);
     if (!me) return reply;
     const result = await account.markWhatsNewSeen(me.user.id);
@@ -328,15 +354,15 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     return { ok: true as const, whatsNew: result.whatsNew };
   });
 
-  app.post('/api/auth/app-prompt/seen', { schema: { response: Responses } }, async (request, reply) => {
+  app.post('/api/auth/app-prompt/seen', { schema: { response: answers(AppPromptSeen) } }, async (request, reply) => {
     const me = await signedIn(request, reply);
     if (!me) return reply;
     const result = await account.markAppPromptSeen(me.user.id);
     if (result.status === 'not_found') return reply.code(404).send(ACCOUNT_NOT_FOUND);
-    return { ok: true as const, appPromptSeen: true };
+    return { ok: true as const, appPromptSeen: true as const };
   });
 
-  app.get('/api/auth/login-alerts', { schema: { response: Responses } }, async (request, reply) => {
+  app.get('/api/auth/login-alerts', { schema: { response: answers(LoginAlerts) } }, async (request, reply) => {
     const me = await signedIn(request, reply);
     if (!me) return reply;
     return { ok: true as const, alerts: await account.loginAlerts(me.user.id, me.session.publicId) };
@@ -346,12 +372,12 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     app.post(
       `/api/auth/login-alerts/:alertId/${resolution}`,
       {
-        schema: { params: Type.Object({ alertId: Type.String() }), response: Responses }
+        schema: { params: AlertIdParams, response: answers(LoginAlertResolved) }
       },
       async (request, reply) => {
         const me = await signedIn(request, reply);
         if (!me) return reply;
-        const params = request.params as { alertId: string };
+        const { params } = request;
         const result = await account.resolveLoginAlert(
           me.user.id,
           me.session.publicId,
@@ -359,14 +385,16 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
           resolution === 'confirm' ? 'confirmed' : 'denied'
         );
         if (result.status === 'not_found')
-          return reply.code(404).send(failure('Вход не найден или на него уже ответили'));
+          return reply
+            .code(404)
+            .send(failure('Вход не найден или на него уже ответили', { code: 'login_alert_not_found' }));
         const { status: _status, ...answer } = result;
         return { ok: true as const, ...answer };
       }
     );
   }
 
-  app.get('/api/auth/account/deletion', { schema: { response: Responses } }, async (request, reply) => {
+  app.get('/api/auth/account/deletion', { schema: { response: answers(DeletionPreview) } }, async (request, reply) => {
     const me = await signedIn(request, reply);
     if (!me) return reply;
     const result = await account.deletionPreview(me.user.id);
@@ -378,7 +406,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
     '/api/auth/account/deletion',
     {
       preValidation: optionalJsonBody,
-      schema: { body: Type.Object({ currentPassword: Field }), response: Responses }
+      schema: { body: CurrentPasswordBody, response: answers(DeletionScheduled) }
     },
     async (request, reply) => {
       const me = await signedIn(request, reply);

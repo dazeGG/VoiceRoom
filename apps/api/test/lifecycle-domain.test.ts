@@ -2,6 +2,7 @@
 // maintenance timers (domains/rooms/room-lifecycle.ts,
 // domains/account/account-lifecycle.ts, platform/maintenance.ts).
 
+import type { AccountMessage } from '../src/realtime/account-events.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
@@ -12,7 +13,7 @@ import type { StoredRoom } from '../src/domains/rooms/room-views.ts';
 import { createRoomPresence, type RosterPeer } from '../src/realtime/room-presence.ts';
 import type { WsConnection } from '../src/realtime/registry.ts';
 import { startMaintenanceTimers } from '../src/platform/maintenance.ts';
-import { fake, recordingLogger } from './fakes/index.ts';
+import { fake, recordingLogger, storedUser, storedDirectMessage } from './fakes/index.ts';
 
 type RecordingLogger = ReturnType<typeof recordingLogger>;
 
@@ -106,7 +107,7 @@ function roomHarness({
       invitations
         ? {
             async expirePendingInvites({ roomId }) {
-              return roomId === 'r1' ? [{ senderId: 's', recipientId: 'r' }] : [];
+              return roomId === 'r1' ? [storedDirectMessage('m-1', { senderId: 's', recipientId: 'r' })] : [];
             }
           }
         : null,
@@ -256,7 +257,7 @@ function accountHarness({
   const logger = recordingLogger();
   const calls = {
     notified: [] as unknown[][],
-    payloads: [] as Array<{ user?: object }>,
+    payloads: [] as AccountMessage[],
     revoked: [] as string[],
     left: [] as unknown[],
     removed: [] as string[],
@@ -344,18 +345,21 @@ function accountHarness({
 test('a profile change reaches every friend; a failed lookup is only logged', async () => {
   const { calls, lifecycle } = accountHarness();
   await lifecycle.broadcastProfileToFriends(null);
-  await lifecycle.broadcastProfileToFriends({ id: 'u1', login: 'ann', desktopAppSeenAt: 10, passwordHash: 'x' });
+  await lifecycle.broadcastProfileToFriends(
+    storedUser({ id: 'u1', login: 'ann', desktopAppSeenAt: 10, passwordHash: 'x' })
+  );
   assert.deepEqual(calls.notified, [
     ['f1', 'user-updated'],
     ['f2', 'user-updated']
   ]);
   // Friends get the public profile, never self-only fields.
-  const friendView = calls.payloads[0]?.user ?? {};
+  const first = calls.payloads[0];
+  const friendView = first?.type === 'user-updated' ? first.user : {};
   assert.equal('hasUsedDesktopApp' in friendView, false);
   assert.equal('passwordHash' in friendView, false);
   const log = recordingLogger();
-  await accountHarness({ friendsFail: true }).lifecycle.broadcastProfileToFriends({ id: 'u1' }, log);
-  await accountHarness({ friendsFail: true }).lifecycle.broadcastProfileToFriends({ id: 'u1' });
+  await accountHarness({ friendsFail: true }).lifecycle.broadcastProfileToFriends(storedUser({ id: 'u1' }), log);
+  await accountHarness({ friendsFail: true }).lifecycle.broadcastProfileToFriends(storedUser({ id: 'u1' }));
   assert.deepEqual(logged(log, 'error', 'userId'), ['u1']);
 });
 

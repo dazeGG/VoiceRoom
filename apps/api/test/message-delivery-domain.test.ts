@@ -12,7 +12,7 @@ import {
   createLinkPreviewEvents,
   type LinkPreviewEventsDeps
 } from '../src/domains/link-previews/link-preview-events.ts';
-import { fake, recordingLogger } from './fakes/index.ts';
+import { fake, recordingLogger, storedUser, roomMessage, storedDirectMessage } from './fakes/index.ts';
 
 type Sent = { userId: string; payload: Record<string, unknown>; context: Record<string, unknown> };
 const idOf = (message: unknown) => (message as { id?: string }).id;
@@ -49,11 +49,11 @@ function projection({ attachments = true, replies = true } = {}) {
           ? {
               async getRoomPreview(input) {
                 calls.push(['room', input]);
-                return { quoted: 'room' };
+                return { messageId: 'room-quote', deleted: false };
               },
               async getDirectPreview(input) {
                 calls.push(['dm', input]);
-                return { quoted: 'dm' };
+                return { messageId: 'dm-quote', deleted: false };
               }
             }
           : null
@@ -77,9 +77,9 @@ test('projection adds attachments and the reply quote', async () => {
     room.attachments.map((a) => a.url),
     ['/api/media/attachments/a1/preview', null]
   );
-  assert.deepEqual((room as { replyPreview?: unknown }).replyPreview, { quoted: 'room' });
+  assert.deepEqual((room as { replyPreview?: unknown }).replyPreview, { messageId: 'room-quote', deleted: false });
   const dm = await p.project('dm', { id: 'm2', replyTo: { messageId: 'm0' } }, { userId: 'u1', peerId: 'u2' });
-  assert.deepEqual((dm as { replyPreview?: unknown }).replyPreview, { quoted: 'dm' });
+  assert.deepEqual((dm as { replyPreview?: unknown }).replyPreview, { messageId: 'dm-quote', deleted: false });
   assert.deepEqual(calls.at(-1), ['dm', { userId: 'u1', peerId: 'u2', messageId: 'm0' }]);
   assert.deepEqual((await p.projectMedia('room', {})).attachments, []);
   const plain: { id: string; replyTo?: null } = { id: 'm3' };
@@ -152,7 +152,7 @@ function relayHarness({
     notifyUser: (userId, event) => calls.events.push([userId, event.type]),
     findUser: async (userId) => {
       if (findUserFails) throw new Error('users');
-      return { id: userId };
+      return storedUser({ id: userId });
     },
     broadcastDmNotification: async (recipientId, sender) => {
       calls.dm.push([recipientId, sender.id]);
@@ -299,7 +299,7 @@ test('push respects the switch, preferences, private text and expiry', async () 
 });
 
 test('a DM notification skips self, muted senders and failures', async () => {
-  const sender = { id: 's1', login: 'sam' };
+  const sender = storedUser({ id: 's1', login: 'sam' });
   const message = { id: 'm1', body: 'hi', createdAt: 1 };
   const { calls, dispatch } = dispatchHarness();
   assert.equal(await dispatch.broadcastDmNotification('', sender, message), 0);
@@ -310,8 +310,8 @@ test('a DM notification skips self, muted senders and failures', async () => {
   await new Promise((resolve) => setTimeout(resolve, 5));
   assert.equal(calls.sent[0]?.payload.title, 'sam');
   assert.deepEqual(calls.sent[0]?.context, { peerUserId: 's1' });
-  await dispatch.broadcastDmNotification('r1', { id: 's1', displayName: 'Sam' }, message);
-  await dispatch.broadcastDmNotification('r1', { id: 's1' }, message);
+  await dispatch.broadcastDmNotification('r1', storedUser({ id: 's1', displayName: 'Sam' }), message);
+  await dispatch.broadcastDmNotification('r1', storedUser({ id: 's1' }), message);
 
   const muted = dispatchHarness({ preferences: { mutedPeerIds: ['s1'] } });
   assert.equal(await muted.dispatch.broadcastDmNotification('r1', sender, message), 0);
@@ -330,9 +330,10 @@ test('link previews are scheduled only when a link may be affected and arrive as
       scheduleDirectMessage: (input) => calls.scheduled.push(['dm', input.messageId])
     }),
     roomMessage: async (roomId, messageId) => (messageId === 'gone' ? null : { id: messageId }),
-    directMessage: async (senderId, recipientId, messageId) => (messageId === 'gone' ? null : { id: messageId }),
+    directMessage: async (senderId, recipientId, messageId) =>
+      messageId === 'gone' ? null : storedDirectMessage(messageId, { senderId, recipientId }),
     projection: projection().projection,
-    publicChatMessage: (message) => ({ id: idOf(message) }),
+    publicChatMessage: (message) => roomMessage(idOf(message) ?? ''),
     broadcastRoomEdit: (roomId, message) => calls.edits.push([roomId, idOf(message)]),
     notifyUser: (userId, event) => calls.events.push([userId, event.type])
   });

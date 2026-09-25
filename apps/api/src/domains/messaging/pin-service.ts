@@ -1,16 +1,17 @@
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import type pg from 'pg';
+import type { PinnedMessage } from '@voice-room/shared/contracts/messages';
 // Any room participant may pin, so the only guard against a room turning into
 // an unbounded pin list is this cap. Discord uses 50; matching it keeps the
 // pinned bar scrollable rather than endless.
 const MAX_PINS_PER_ROOM = 50;
 
 type Client = Pick<pg.PoolClient, 'query'> | null | undefined;
-type Pin = { messageId: string; [key: string]: unknown };
-type PinSnapshot = { pins: Pin[]; count: number };
+type PinSnapshot = { pins: PinnedMessage[]; count: number };
 type Viewer = { id?: string; guest?: boolean; isGuest?: boolean } | null | undefined;
 
 export interface PinRepository {
-  listPins(input: { roomId: string; limit: number; client: Client }): Promise<Pin[]>;
+  listPins(input: { roomId: string; limit: number; client: Client }): Promise<PinnedMessage[]>;
   pin(input: { roomId: string; messageId: string; userId: string; client: Client }): Promise<{ changed: boolean }>;
   unpin(input: { roomId: string; messageId: string; client: Client }): Promise<{ changed: boolean }>;
   countPins(input: { roomId: string; client: Client }): Promise<number>;
@@ -29,10 +30,10 @@ export type PinService = Readonly<{
 }>;
 
 class PinServiceError extends Error {
-  declare code: string;
+  declare code: ErrorCode;
   declare statusCode: number;
 
-  constructor(message: string, code: string, statusCode: number) {
+  constructor(message: string, code: ErrorCode, statusCode: number) {
     super(message);
     this.name = 'PinServiceError';
     this.code = code;

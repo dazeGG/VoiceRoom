@@ -6,11 +6,10 @@
 
 import type { IncomingMessage } from 'node:http';
 import type { FastifyBaseLogger } from 'fastify';
+import type { StoredUser } from '../lib/user-store.ts';
 
-export interface SessionUser {
-  id: string;
-  [key: string]: unknown;
-}
+/** The signed-in account behind a session, as the user store reads it. */
+export type SessionUser = StoredUser;
 
 /** The signed-in session itself, as the user store returns it. */
 export interface SessionRecord {

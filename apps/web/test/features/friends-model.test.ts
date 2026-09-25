@@ -2,6 +2,7 @@
 
 import { afterEach, expect, test, vi } from 'vitest';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { notificationPreferences } from '../fixtures/users.ts';
 
 type Handler = (event: { type: string; payload: Record<string, unknown> }) => void;
 let emit: Handler = () => {};
@@ -40,7 +41,7 @@ async function startLobby() {
       }
     },
     '/api/friends/requests': { body: { incoming: [{ user: user('vera') }], outgoing: [{ user: user('gleb') }] } },
-    '/api/notifications/preferences': { body: { preferences: {} } }
+    '/api/notifications/preferences': { body: { preferences: notificationPreferences() } }
   });
   vi.resetModules();
   const friends = await import('../../src/lib/features/home/model/friends.svelte.ts');

@@ -3,6 +3,7 @@ import type { SvelteMap } from 'svelte/reactivity';
 import type { HotkeyBinding } from '$lib/shared/ui/HotkeyRecorder/types';
 import type { MicrophoneMode, NoiseMode } from './config';
 import type { Participant, PeerInfo } from '../model/participants';
+import type { LobbyRoom } from '@voice-room/shared/contracts/rooms';
 export type { Participant, ParticipantViewRefs, PeerInfo } from '../model/participants';
 
 export type ScreenStreamMode = 'games' | 'text';
@@ -224,18 +225,8 @@ export interface RoomScreenState {
 export interface AppState
   extends RoomSessionState, RoomConnectionState, RoomParticipantState, RoomAudioState, RoomScreenState {}
 
-// Mirrors the server's publicLobbyRoom() shape (apps/api/src/domains/rooms/room-views.ts) — the body carried
-// by both the PUT /api/rooms/:roomId response and the room-updated broadcast.
-export interface RoomLifecycleSummary {
-  avatarUrl: string | null;
-  createdAt: number;
-  emptySince: number | null;
-  isStatic: boolean;
-  name: string;
-  peers: number;
-  relationship: string;
-  roomId: string;
-}
+/** The lobby card the rename answer and the room.updated broadcast carry. */
+export type RoomLifecycleSummary = LobbyRoom;
 
 export type ServerMessage =
   | { type: 'hello'; peer: PeerInfo; peers: PeerInfo[]; roomId: string }

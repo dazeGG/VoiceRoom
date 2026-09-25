@@ -2,9 +2,10 @@
 // profile, sessions that end taking their sockets and voice seats with them,
 // and deletions finished once their grace period is over.
 
+import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
-import { publicUser } from '../../lib/user-store.ts';
+import { publicUser, type StoredUser } from '../../lib/user-store.ts';
 import type { GatePrincipal } from '../admission/admission.service.ts';
 import type { ConnectionRegistry, WsConnection } from '../../realtime/registry.ts';
 import type { AccountDeletionRepository } from './account-deletion-repository.ts';
@@ -14,7 +15,7 @@ type ActiveVoice = NonNullable<WsConnection['activeVoice']>;
 
 export interface AccountLifecycleDeps {
   friendIds(userId: string): Promise<string[]>;
-  notifyUser(userId: string, event: Record<string, unknown>): void;
+  notifyUser(userId: string, event: AccountMessage): void;
   sockets(): Pick<ConnectionRegistry, 'findAccountConnections' | 'closeConnections'> | null;
   /** The gate principal of the voice seat a connection holds, if it still has one. */
   seatPrincipal(roomId: string, peerId: string): GatePrincipal | null;
@@ -34,12 +35,12 @@ export function createAccountLifecycle(deps: AccountLifecycleDeps) {
   // The friend list, DM threads and pending requests cache the public profile
   // outside a live room. Best effort: a failed lookup must not fail the change.
   async function broadcastProfileToFriends(
-    user: { id: string; [key: string]: unknown } | null | undefined,
+    user: StoredUser | null | undefined,
     log?: Pick<Logger, 'error'>
   ): Promise<void> {
     if (!user?.id) return;
     try {
-      const message = { type: 'user-updated', user: publicUser(user) };
+      const message: AccountMessage = { type: 'user-updated', user: publicUser(user) };
       for (const friendId of await deps.friendIds(user.id)) deps.notifyUser(friendId, message);
     } catch (error) {
       log?.error({ err: error, userId: user.id }, 'failed to broadcast profile update to friends');

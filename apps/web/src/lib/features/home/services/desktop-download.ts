@@ -1,5 +1,5 @@
 import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
-import { RELEASES_URL, detectDesktopBuildId } from '../model/desktop-builds';
+import { RELEASES_URL, detectDesktopBuildId, type DesktopBuildId } from '../model/desktop-builds';
 
 const RELEASE_DOWNLOAD_PREFIX = `${new URL(RELEASES_URL).pathname.replace(/\/releases\/latest$/, '')}/releases/download/`;
 
@@ -27,7 +27,7 @@ export function triggerDesktopDownload(url: string): void {
  * Downloads one desktop build from the latest release, or opens the releases
  * page when the API could not return the release or has no asset for it.
  */
-export function startDesktopBuildDownload(release: DesktopRelease | null, buildId: string): void {
+export function startDesktopBuildDownload(release: DesktopRelease | null, buildId: DesktopBuildId): void {
   const asset = release?.assets[buildId] ?? null;
   // An installer the user will run: follow only GitHub's release-download path
   // of the desktop repository, whatever the API answered.

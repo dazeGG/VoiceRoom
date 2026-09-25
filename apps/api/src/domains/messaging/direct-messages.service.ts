@@ -3,7 +3,12 @@
 // room invitation, editing, deleting and marking read. Checks run in the
 // order the legacy handlers ran them.
 
+import type { AccountMessage } from '../../realtime/account-events.ts';
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';
+import { errorCode } from '../../platform/http/http-kit.ts';
 import type pg from 'pg';
+import type { DirectMessage as DirectMessageView, ReplyPreview } from '@voice-room/shared/contracts/messages';
+import type { PublicUser } from '@voice-room/shared/contracts/users';
 import crypto from 'node:crypto';
 import { publicUser } from '../../lib/user-store.ts';
 import { isActiveAccount, type SocialUser } from '../social/social-views.ts';
@@ -14,17 +19,8 @@ type DbClient = Pick<pg.PoolClient, 'query'> | null | undefined;
 type Status<T extends string> = T extends string ? { status: T } : never;
 type RateLimited = { status: 'rate_limited'; retryAfterSeconds: number };
 
-export interface DirectMessage {
-  id: string;
-  senderId: string;
-  recipientId: string;
-  body?: string;
-  createdAt?: unknown;
-  invite?: { roomId: string } | null;
-  replyTo?: { messageId: string } | null;
-  idempotencyReplay?: boolean;
-  [key: string]: unknown;
-}
+/** A direct message as the store reads it: the contract shape plus what stays server-side. */
+export type DirectMessage = DirectMessageView & { idempotencyReplay?: boolean; deletedAt?: number | null };
 
 export interface DirectMessageStore {
   listThread(input: { userId: string; peerId: string }): Promise<DirectMessage[]>;
@@ -96,7 +92,7 @@ export interface DirectMessagesDeps {
   projectMedia: Projection;
   projectReply: Projection;
   directEmit: boolean;
-  notifyUser(userId: string, event: Record<string, unknown>): void;
+  notifyUser(userId: string, event: AccountMessage): void;
   /** The recipient's notification and push, unless they muted the sender. */
   notifyRecipient(recipientId: string, sender: SocialUser, message: DirectMessage): Promise<unknown>;
   scheduleLinkPreview(input: {
@@ -137,7 +133,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     user: SocialUser,
     peerId: string
   ): Promise<
-    | { status: 'listed'; peer: unknown; messages: DirectMessage[]; muted: boolean }
+    | { status: 'listed'; peer: PublicUser; messages: DirectMessage[]; muted: boolean }
     | Status<'not_friends' | 'user_not_found'>
   > {
     if (!(await deps.friends().areFriends(user.id, peerId))) return { status: 'not_friends' };
@@ -190,7 +186,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     const replies = replyToMessageId ? deps.replies() : null;
     const delivery = deps.delivery();
     let idempotencyLedgerKey = '';
-    let replyPreview: unknown;
+    let replyPreview: ReplyPreview | null = null;
 
     const stored = await deps.messages().direct.sendMessage({
       senderId: sender.id,
@@ -290,7 +286,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     }
     const message = await deps.messages().direct.respondInvite({ messageId, recipientId: user.id, status: action });
     if (!message) return { status: 'already_answered' };
-    const event = { type: 'dm.message.edited', message };
+    const event: AccountMessage = { type: 'dm.message.edited', message };
     deps.notifyUser(peerId, event);
     deps.notifyUser(user.id, event);
     return { status: 'answered', message };
@@ -304,16 +300,16 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     cursor: unknown
   ): Promise<
     | { status: 'read'; result: Record<string, unknown> }
-    | { status: 'invalid_cursor'; statusCode: number; code: string; error: string }
+    | { status: 'invalid_cursor'; statusCode: number; code: ErrorCode; error: string }
   > {
     if (typeof cursor === 'string' && cursor) {
       try {
         const result = await deps.readService().advanceDm({ cursor, peerId, userId });
-        deps.notifyUser(peerId, { type: 'dm-read', userId, cursor });
+        deps.notifyUser(peerId, { type: 'dm-read', userId });
         return { status: 'read', result };
       } catch (error) {
-        const failure = error as { statusCode?: number; code?: string; message?: string };
-        const code = failure.code || 'invalid_read_cursor';
+        const failure = error as { statusCode?: number; message?: string };
+        const code = errorCode(failure, 'invalid_read_cursor');
         return {
           status: 'invalid_cursor',
           statusCode: failure.statusCode || 400,
@@ -366,7 +362,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
       .direct.editMessage({ messageId, senderId: userId, recipientId: peerId, body: text });
     if (!message) return { status: 'not_found' };
     deps.scheduleLinkPreview({ messageId, senderId: userId, recipientId: peerId, text, edited: true });
-    const event = { type: 'dm.message.edited', message };
+    const event: AccountMessage = { type: 'dm.message.edited', message };
     deps.notifyUser(peerId, event);
     deps.notifyUser(userId, event);
     return { status: 'edited', message };

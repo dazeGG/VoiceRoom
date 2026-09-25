@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { TrackSource } from 'livekit-server-sdk';
+import { dbRoom, userSession, type DbRoom, type Fakes } from './fakes/index.ts';
 const { createApiApp } = await import('../src/server.ts');
 const { isLiveKitParticipantAlreadyGone, resolveServerMutePermission } =
   await import('../src/domains/admission/livekit-admin.ts');
@@ -15,25 +16,15 @@ type Bookmark = { removed: boolean; status: string };
 
 function createStore({
   muteLookup = async (): Promise<boolean> => false,
-  removeBookmark = async (_userId: string, _roomId: string): Promise<Bookmark> => ({
+  removeBookmark = async (
+    _userId: string | null | undefined,
+    _roomId: string | null | undefined
+  ): Promise<Bookmark> => ({
     removed: false,
     status: 'removed'
   })
-} = {}) {
-  const rooms = new Map([
-    [
-      'context-room',
-      {
-        id: 'context-room',
-        name: 'Context room',
-        isStatic: true,
-        ownerId: ALICE_ID,
-        peers: new Map(),
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      }
-    ]
-  ]);
+} = {}): Fakes['store'] {
+  const rooms = new Map([['context-room', dbRoom('context-room', { name: 'Context room', ownerId: ALICE_ID })]]);
   return {
     async countQuotaRoomsForIp() {
       return 0;
@@ -47,16 +38,22 @@ function createStore({
     async getOrCreatePeerIdentity({ peerId }: { peerId: string }) {
       return { status: 'created', identity: { peerId, avatarColorKey: 'blurple' } };
     },
-    normalizeGatePrincipal({ accountUserId, guestPrincipalId }: { accountUserId?: string; guestPrincipalId?: string }) {
+    normalizeGatePrincipal({ accountUserId, guestPrincipalId } = {}) {
       return accountUserId
         ? { principalId: accountUserId, principalType: 'account' }
         : { principalId: guestPrincipalId, principalType: 'guest' };
     },
     isRoomServerMuted: muteLookup,
     removeRoomBookmarkForUser: removeBookmark,
-    async markRoomActive() {},
-    async markRoomEmpty() {},
-    async pruneRooms() {},
+    async markRoomActive() {
+      return null;
+    },
+    async markRoomEmpty() {
+      return null;
+    },
+    async pruneRooms() {
+      return false;
+    },
     async listSummaryRecipientUserIds() {
       return [];
     }
@@ -64,10 +61,10 @@ function createStore({
 }
 
 test('room list removal rejects owners and removes only bookmarked rooms', async (t) => {
-  const calls: Array<{ userId: string; roomId: string }> = [];
+  const calls: Array<{ userId: string | null | undefined; roomId: string | null | undefined }> = [];
   const app = createApiApp({
     store: createStore({
-      removeBookmark: async (userId: string, roomId: string) => {
+      removeBookmark: async (userId, roomId) => {
         calls.push({ userId, roomId });
         return userId === ALICE_ID ? { removed: false, status: 'owner' } : { removed: true, status: 'removed' };
       }
@@ -97,11 +94,11 @@ test('room list removal rejects owners and removes only bookmarked rooms', async
   ]);
 });
 
-function createUsers() {
+function createUsers(): Fakes['users'] {
   return {
-    async getSessionUser(token: string) {
-      if (token === 'alice-session') return { user: { id: ALICE_ID, login: 'alice', displayName: 'Alice' } };
-      if (token === 'bob-session') return { user: { id: BOB_ID, login: 'bob', displayName: 'Bob' } };
+    async getSessionUser(token) {
+      if (token === 'alice-session') return userSession({ id: ALICE_ID, login: 'alice', displayName: 'Alice' });
+      if (token === 'bob-session') return userSession({ id: BOB_ID, login: 'bob', displayName: 'Bob' });
       return null;
     }
   };
@@ -187,7 +184,8 @@ test('LiveKit admission fails closed when persisted server-mute lookup fails', a
     }
   });
   // Admission is only for peers already in the room roster.
-  (await store.getRoom('context-room'))?.peers.set('peer-alice', {
+  const room = (await store.getRoom?.('context-room')) as DbRoom | null;
+  room?.peers.set('peer-alice', {
     id: 'peer-alice',
     name: 'Alice',
     sessionToken: 'goodtoken123456789012345678901234'
@@ -200,7 +198,13 @@ test('LiveKit admission fails closed when persisted server-mute lookup fails', a
         issued += 1;
         return {
           status: 'issued',
-          admission: { room: 'voice-room-context', token: 'jwt', ttlSeconds: 60, url: 'ws://gate' }
+          admission: {
+            gateCredentialId: 'cred-1',
+            room: 'voice-room-context',
+            token: 'jwt',
+            ttlSeconds: 60,
+            url: 'ws://gate'
+          }
         };
       }
     }

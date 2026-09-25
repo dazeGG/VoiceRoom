@@ -1,3 +1,4 @@
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import type { Readable } from 'node:stream';
 import type { Attachment, AttachmentRepository } from './attachment-repository.ts';
 import type { MediaStorage } from './storage.ts';
@@ -8,7 +9,7 @@ type MessageCheck = (input: { attachment: Attachment; message: unknown; viewerId
 export type OpenedMedia = Readonly<{ bytes: number; extension: 'webp'; mimeType: 'image/webp'; stream: Readable }>;
 
 class MediaVisibilityError extends Error {
-  declare code: string;
+  declare code: ErrorCode;
   declare statusCode: number;
 
   constructor() {

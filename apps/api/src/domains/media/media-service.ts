@@ -1,5 +1,8 @@
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import type pg from 'pg';
 import sharp from 'sharp';
+import type { AttachmentDraft } from '@voice-room/shared/contracts/media';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 import type { Attachment, AttachmentRepository } from './attachment-repository.ts';
 import type { MediaJobRepository } from './media-job-repository.ts';
 import type { MediaPressureService } from './media-pressure-service.ts';
@@ -20,25 +23,14 @@ type ImageMetadata = Awaited<ReturnType<ReturnType<typeof sharp>['metadata']>>;
 type AttachmentLock = <T>(id: string, operation: (client: Client) => Promise<T>) => Promise<T>;
 type UploadStream = AsyncIterable<unknown> & { resume?: () => unknown };
 
-export type PublicAttachment = Readonly<{
-  id: string;
-  context: Attachment['context'];
-  state: Attachment['state'];
-  mimeType: string | null;
-  bytes: number | null;
-  width: number | null;
-  height: number | null;
-  failureCode: string | null;
-  createdAt: unknown;
-  updatedAt: unknown;
-}>;
+export type PublicAttachment = Readonly<AttachmentDraft>;
 
 class MediaServiceError extends Error {
-  declare code: string;
+  declare code: ErrorCode;
   declare statusCode: number;
 
   // The options carry the underlying failure as `cause` (sharp's decode error).
-  constructor(code: string, message: string, statusCode: number, options?: ErrorOptions) {
+  constructor(code: ErrorCode, message: string, statusCode: number, options?: ErrorOptions) {
     super(message, options);
     this.name = 'MediaServiceError';
     this.code = code;
@@ -57,8 +49,8 @@ function publicAttachment(attachment: Attachment | null | undefined): PublicAtta
     width: attachment.width,
     height: attachment.height,
     failureCode: attachment.failureCode,
-    createdAt: attachment.createdAt,
-    updatedAt: attachment.updatedAt
+    createdAt: epochMillis(attachment.createdAt),
+    updatedAt: epochMillis(attachment.updatedAt)
   });
 }
 

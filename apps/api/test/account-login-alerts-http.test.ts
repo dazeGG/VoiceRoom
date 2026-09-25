@@ -1,108 +1,20 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import { socketPathForDirectory } from './ipc-harness.ts';
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import http from 'node:http';
-import { spawn } from 'node:child_process';
-import path from 'node:path';
-import os from 'node:os';
-import { createTestDatabase } from './db-harness.ts';
-import { openWs, waitForWsType } from './ws-harness.ts';
+import type { LoginAlerts, Me } from '@voice-room/shared/contracts/account';
+import { cookieFrom, request, startApiServer } from './fakes/server-process.ts';
+import { openWs, waitForClose, waitForWsType } from './ws-harness.ts';
+
+async function startServer(t: TestContext) {
+  const { socketPath } = await startApiServer(t, { prefix: 'voice-room-login-alerts-', env: { AUTH_RATE_LIMIT: '0' } });
+  return socketPath;
+}
 
 const CHROME_WINDOWS =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
 const FIREFOX_LINUX = 'Mozilla/5.0 (X11; Linux x86_64; rv:142.0) Gecko/20100101 Firefox/142.0';
 const SESSION_ENDED_CLOSE_CODE = 4401;
 
-function waitForHealthz(socketPath, timeoutMs = 15000) {
-  const started = Date.now();
-  return new Promise((resolve, reject) => {
-    const attempt = () => {
-      http
-        .get({ path: '/api/healthz', socketPath }, (res) => {
-          res.resume();
-          if (res.statusCode === 200) {
-            resolve();
-            return;
-          }
-          retry();
-        })
-        .on('error', retry);
-    };
-    const retry = () => {
-      if (Date.now() - started > timeoutMs) {
-        reject(new Error('Server did not become ready'));
-        return;
-      }
-      setTimeout(attempt, 50);
-    };
-    attempt();
-  });
-}
-
-async function startServer(t: TestContext) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-login-alerts-'));
-  const socketPath = socketPathForDirectory(dir);
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const child = spawn(process.execPath, ['src/server.ts'], {
-    cwd: path.join(import.meta.dirname, '..'),
-    env: {
-      ...process.env,
-      NODE_ENV: 'test',
-      MAX_EMPTY_ROOMS_PER_IP: '0',
-      ROOM_CREATE_POW_DIFFICULTY: '0',
-      ROOM_CREATE_RATE_LIMIT: '0',
-      AUTH_RATE_LIMIT: '0',
-      DATABASE_URL: databaseUrl,
-      SOCKET_PATH: socketPath
-    },
-    stdio: ['ignore', 'ignore', 'ignore']
-  });
-  t.after(() => {
-    child.kill('SIGTERM');
-    fs.rmSync(dir, { recursive: true, force: true });
-    return cleanup();
-  });
-  await waitForHealthz(socketPath);
-  return socketPath;
-}
-
-function request(socketPath, { method = 'GET', pathname, body, cookie, headers = {} } = {}) {
-  const payload = body === undefined ? null : JSON.stringify(body);
-  const nextHeaders = { Accept: 'application/json', ...headers };
-  if (payload) {
-    nextHeaders['Content-Type'] = 'application/json';
-    nextHeaders['Content-Length'] = Buffer.byteLength(payload);
-  }
-  if (cookie) nextHeaders.Cookie = cookie;
-  return new Promise((resolve, reject) => {
-    const req = http.request({ method, path: pathname, socketPath, headers: nextHeaders }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      res.on('end', () => {
-        resolve({
-          status: res.statusCode,
-          body: data ? JSON.parse(data) : null,
-          setCookie: res.headers['set-cookie'] || []
-        });
-      });
-      res.on('error', reject);
-    });
-    req.on('error', reject);
-    if (payload) req.write(payload);
-    req.end();
-  });
-}
-
-function cookieFrom(setCookie) {
-  const header = Array.isArray(setCookie) ? setCookie[0] : setCookie;
-  return String(header || '').split(';')[0];
-}
-
-async function signIn(socketPath, userAgent, { register = false } = {}) {
+async function signIn(socketPath: string, userAgent: string, { register = false } = {}) {
   const response = await request(socketPath, {
     method: 'POST',
     pathname: register ? '/api/auth/register' : '/api/auth/login',
@@ -115,18 +27,8 @@ async function signIn(socketPath, userAgent, { register = false } = {}) {
   return cookieFrom(response.setCookie);
 }
 
-function waitForClose(ws, timeoutMs = 5000) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Socket was not closed')), timeoutMs);
-    ws.on('close', (code) => {
-      clearTimeout(timer);
-      resolve(code);
-    });
-  });
-}
-
-async function me(socketPath, cookie) {
-  return (await request(socketPath, { pathname: '/api/auth/me', cookie })).body.user;
+async function me(socketPath: string, cookie: string) {
+  return (await request<Me>(socketPath, { pathname: '/api/auth/me', cookie })).body.user;
 }
 
 test('a sign-in from a new device asks the open devices live, and "Это не я" ends it everywhere', async (t) => {
@@ -144,13 +46,13 @@ test('a sign-in from a new device asks the open devices live, and "Это не �
   assert.equal(announced.payload.alert.kind, 'login');
   assert.equal('sessionPublicId' in announced.payload.alert, false);
 
-  const pending = await request(socketPath, { pathname: '/api/auth/login-alerts', cookie: laptop });
+  const pending = await request<LoginAlerts>(socketPath, { pathname: '/api/auth/login-alerts', cookie: laptop });
   assert.equal(pending.status, 200);
   assert.deepEqual(
     pending.body.alerts.map((alert) => alert.id),
     [announced.payload.alert.id]
   );
-  const ownView = await request(socketPath, { pathname: '/api/auth/login-alerts', cookie: stranger });
+  const ownView = await request<LoginAlerts>(socketPath, { pathname: '/api/auth/login-alerts', cookie: stranger });
   assert.deepEqual(ownView.body.alerts, [], 'the new device is not asked about itself');
 
   const strangerSocket = openWs(socketPath, { cookie: stranger });
@@ -177,7 +79,7 @@ test('a sign-in from a new device asks the open devices live, and "Это не �
   assert.deepEqual(denied.body.recoveryCodes, { remaining: 0, generatedAt: null });
   assert.equal(await strangerClosed, SESSION_ENDED_CLOSE_CODE);
   assert.equal(await me(socketPath, stranger), null);
-  assert.equal((await me(socketPath, laptop)).login, 'ada');
+  assert.equal((await me(socketPath, laptop))?.login, 'ada');
 
   const resolved = await waitForWsType(laptopSocket.frames, 'account.login.resolved');
   assert.deepEqual(resolved.payload, { alertId, resolution: 'denied' });
@@ -192,7 +94,8 @@ test('a sign-in from a new device asks the open devices live, and "Это не �
 
   // A denied device asks again; confirming it makes the next sign-in quiet.
   const strangerBack = await signIn(socketPath, FIREFOX_LINUX);
-  const [secondAlert] = (await request(socketPath, { pathname: '/api/auth/login-alerts', cookie: laptop })).body.alerts;
+  const [secondAlert] = (await request<LoginAlerts>(socketPath, { pathname: '/api/auth/login-alerts', cookie: laptop }))
+    .body.alerts;
   assert.ok(secondAlert);
   const confirmed = await request(socketPath, {
     method: 'POST',
@@ -201,9 +104,12 @@ test('a sign-in from a new device asks the open devices live, and "Это не �
     body: {}
   });
   assert.equal(confirmed.status, 200);
-  assert.equal((await me(socketPath, strangerBack)).login, 'ada');
+  assert.equal((await me(socketPath, strangerBack))?.login, 'ada');
 
   await signIn(socketPath, FIREFOX_LINUX);
-  assert.deepEqual((await request(socketPath, { pathname: '/api/auth/login-alerts', cookie: laptop })).body.alerts, []);
+  assert.deepEqual(
+    (await request<LoginAlerts>(socketPath, { pathname: '/api/auth/login-alerts', cookie: laptop })).body.alerts,
+    []
+  );
   laptopSocket.ws.close();
 });

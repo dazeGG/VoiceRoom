@@ -1,68 +1,19 @@
+import type {
+  NotificationActor,
+  NotificationMessageBrief,
+  NotificationRoomContext,
+  ServerEvent
+} from '@voice-room/shared/contracts/realtime';
 import type { RealtimeEvent } from '../../api/realtime';
 
-export type NotificationEventType =
-  | 'notification.dm.message'
-  | 'notification.room.message'
-  | 'notification.friend.request'
-  | 'notification.friend.accepted';
+export type { NotificationActor, NotificationMessageBrief, NotificationRoomContext };
 
-export type NotificationActor = {
-  id: string;
-  displayName?: string;
-  login?: string;
-  avatarColorKey?: string;
-  avatarAccent?: string | null;
-  avatarUrl?: string | null;
-};
-
-export type NotificationMessageBrief = {
-  id: string;
-  body: string;
-  createdAt: number;
-};
-
-export type NotificationRoomContext = {
-  roomId: string;
-  name?: string;
-  avatarUrl?: string | null;
-};
-
-export type NotificationDmMessageEvent = {
-  type: 'notification.dm.message';
-  payload: {
-    dedupeKey: string;
-    peer: NotificationActor;
-    message: NotificationMessageBrief;
-  };
-};
-
-export type NotificationRoomMessageEvent = {
-  type: 'notification.room.message';
-  payload: {
-    dedupeKey: string;
-    room: NotificationRoomContext;
-    sender: NotificationActor;
-    message: NotificationMessageBrief;
-  };
-};
-
-export type NotificationFriendRequestEvent = {
-  type: 'notification.friend.request';
-  payload: {
-    dedupeKey: string;
-    requester: NotificationActor;
-    requestId: string;
-  };
-};
-
-export type NotificationFriendAcceptedEvent = {
-  type: 'notification.friend.accepted';
-  payload: {
-    dedupeKey: string;
-    user: NotificationActor;
-    context?: Record<string, unknown>;
-  };
-};
+type EventOf<Type extends ServerEvent['type']> = Extract<ServerEvent, { type: Type }>;
+export type NotificationDmMessageEvent = EventOf<'notification.dm.message'>;
+export type NotificationRoomMessageEvent = EventOf<'notification.room.message'>;
+export type NotificationFriendRequestEvent = EventOf<'notification.friend.request'>;
+export type NotificationFriendAcceptedEvent = EventOf<'notification.friend.accepted'>;
+export type NotificationEventType = NotificationRealtimeEvent['type'];
 
 export type NotificationRealtimeEvent =
   | NotificationDmMessageEvent

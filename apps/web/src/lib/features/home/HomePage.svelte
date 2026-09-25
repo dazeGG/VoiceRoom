@@ -27,7 +27,8 @@
     QUARANTINE_CMD,
     desktopDownloadLabel,
     detectDesktopBuildId,
-    formatDesktopReleaseMeta
+    formatDesktopReleaseMeta,
+    type DesktopBuildId
   } from './model/desktop-builds';
 
   let { initialAuthMode = null }: { initialAuthMode?: AuthMode | null } = $props();
@@ -38,7 +39,7 @@
   let loggingOut = $state(false);
   let authLoadError = $state(false);
 
-  let selectedBuildId = $state('mac-arm64');
+  let selectedBuildId = $state<DesktopBuildId>('mac-arm64');
   let appOpen = $state(false);
   let appDownloadState = $state<'idle' | 'loading' | 'done'>('idle');
   let cmdCopied = $state(false);

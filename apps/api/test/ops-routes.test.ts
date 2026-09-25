@@ -6,12 +6,13 @@
 import test, { type TestContext } from 'node:test';
 import type { LightMyRequestResponse } from 'fastify';
 import assert from 'node:assert/strict';
+import type { StoreOverrides } from '../src/app/service-registry.ts';
 
 const { createApiApp } = await import('../src/server.ts');
 const { createDesktopReleaseService, isDesktopReleaseDownloadUrl, normalizeRelease } =
   await import('../src/domains/ops/desktop-release.service.ts');
 
-function createStore() {
+function createStore(): StoreOverrides['store'] {
   return {
     async countRooms() {
       return 0;
@@ -22,9 +23,15 @@ function createStore() {
     async listSummaryRecipientUserIds() {
       return [];
     },
-    async markRoomActive() {},
-    async markRoomEmpty() {},
-    async pruneRooms() {}
+    async markRoomActive() {
+      return null;
+    },
+    async markRoomEmpty() {
+      return null;
+    },
+    async pruneRooms() {
+      return false;
+    }
   };
 }
 
@@ -86,7 +93,7 @@ test('disabled client log intake answers the legacy 404 shape', async (t) => {
   const app = createApp(t);
   const response = await app.inject({ method: 'POST', url: '/api/client-logs', payload: { events: [] } });
   assert.equal(response.statusCode, 404);
-  assert.deepEqual(response.json(), { ok: false, error: 'Not found' });
+  assert.deepEqual(response.json(), { ok: false, error: 'Not found', code: 'not_found' });
   assertSecurityHeaders(response);
 });
 

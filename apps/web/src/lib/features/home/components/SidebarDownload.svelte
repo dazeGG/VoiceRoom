@@ -5,7 +5,7 @@
   import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
   import { Popover, PopoverMenuItem } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
-  import { DESKTOP_BUILDS } from '../model/desktop-builds';
+  import { DESKTOP_BUILDS, type DesktopBuildId } from '../model/desktop-builds';
   import { startDesktopBuildDownload } from '../services/desktop-download';
 
   let open = $state(false);
@@ -30,7 +30,7 @@
     }
   }
 
-  async function download(buildId: string, close: () => void): Promise<void> {
+  async function download(buildId: DesktopBuildId, close: () => void): Promise<void> {
     if (downloadingId) return;
     downloadingId = buildId;
     try {

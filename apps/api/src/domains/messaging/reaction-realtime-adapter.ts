@@ -1,14 +1,14 @@
+import type { ServerEvent } from '@voice-room/shared/contracts/realtime';
+import type { ReactionSummary } from '@voice-room/shared/reactions';
+
 type Conversation = { type?: string; id?: string };
-type ReactionEvent = {
-  type: 'reaction.updated';
-  payload: { conversation: Conversation; roomId: string | undefined; messageId: string; summary: unknown };
-};
+type ReactionEvent = Extract<ServerEvent, { type: 'reaction.updated' }>;
 type Broadcaster = (id: string, event: ReactionEvent) => unknown;
 
 export type ReactionPublishInput = {
   conversation?: Conversation | null;
   messageId?: string;
-  summary?: unknown;
+  summary?: ReactionSummary | null;
   [key: string]: unknown;
 };
 
@@ -30,21 +30,21 @@ function createReactionRealtimeAdapter({
 
   async function publish(input: ReactionPublishInput = {}): Promise<number> {
     const { conversation, messageId, summary } = input;
-    if (!conversation?.type || !conversation.id || !messageId || !summary) return 0;
+    const type = conversation?.type;
+    if ((type !== 'room' && type !== 'dm') || !conversation?.id || !messageId || !summary) return 0;
     const event: ReactionEvent = {
       type: 'reaction.updated',
       payload: {
-        conversation,
-        roomId: conversation.type === 'room' ? conversation.id : undefined,
+        conversation: { type, id: conversation.id },
+        ...(type === 'room' ? { roomId: conversation.id } : {}),
         messageId,
         summary
       }
     };
 
-    if (conversation.type === 'room') {
+    if (type === 'room') {
       return (await roomBroadcaster(conversation.id, event)) === false ? 0 : 1;
     }
-    if (conversation.type !== 'dm') return 0;
 
     const recipients = new Set(await recipientResolver(input));
     let published = 0;

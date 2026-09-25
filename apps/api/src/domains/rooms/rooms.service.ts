@@ -3,7 +3,7 @@
 
 import crypto from 'node:crypto';
 import type { Logger } from 'pino';
-import type { LiveRoom, StoredRoom } from './room-views.ts';
+import type { LiveRoom, LobbyRoom, StoredRoom } from './room-views.ts';
 
 type RequestLog = { log?: Pick<Logger, 'warn' | 'error'> } | null;
 
@@ -45,7 +45,7 @@ export interface RoomsServiceDeps {
   getRoom(roomId: string): Promise<LiveRoom | null>;
   limits: RoomLimits;
   /** Broadcasts room.updated and returns the lobby card it sent. */
-  announceRoomUpdate(roomId: string, room: StoredRoom): unknown;
+  announceRoomUpdate(roomId: string, room: StoredRoom): LobbyRoom;
   /** Everything after the durable soft-delete: events, invitations, peers, avatar. */
   finishRoomDeletion(roomId: string, options: { avatarKey: string | null; request: RequestLog }): Promise<void>;
   newRoomId?: () => string;
@@ -92,7 +92,7 @@ export function createRoomsService(deps: RoomsServiceDeps) {
   async function rename(
     roomId: string,
     name: string
-  ): Promise<{ status: 'renamed'; room: unknown } | { status: 'not_found' }> {
+  ): Promise<{ status: 'renamed'; room: LobbyRoom } | { status: 'not_found' }> {
     const updated = await deps.store().updateRoom(roomId, { name });
     // Lost a race with a concurrent delete (UPDATE matched 0 rows).
     if (!updated) return { status: 'not_found' };

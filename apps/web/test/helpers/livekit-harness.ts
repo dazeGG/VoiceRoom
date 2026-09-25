@@ -25,7 +25,8 @@ export interface LiveKitHarness {
   detachedScreens: string[];
   retries: { scheduled: Array<{ peerId: string }>; cleared: number; clearedAll: number };
   audio: { ensured: Array<{ peerId: string }> };
-  ApiRequestError: new (message: string, code?: string, status?: number) => Error & { code: string; status: number };
+  /** A refusal from the API as the real client raises it. */
+  refusal(message: string, code: string, status?: number): Error;
   /** Every LiveKit Room the service created, in order. */
   rooms: Array<{
     connectedUrl: string;
@@ -41,8 +42,8 @@ const P = '../../src/lib/features/room/client';
 export async function loadLiveKitHarness(
   options: {
     autoResolveClient?: boolean;
-    /** Answers POST requests made through the room API client. */
-    postJson?: (url: string, body: unknown) => Promise<unknown>;
+    /** Answers the LiveKit token request. */
+    requestToken?: () => Promise<{ token: string; url?: string; urls?: string[] }>;
     /** LiveKit URLs whose connect() fails. */
     failingUrls?: string[];
     /** Whether a recovery epoch is still current. */
@@ -126,18 +127,9 @@ export async function loadLiveKitHarness(
   vi.doMock(`${P}/core/state.svelte`, () => ({ state }));
   vi.doMock(`${P}/ui/status`, () => ({ setVoiceConnectionStatus: () => {} }));
   vi.doMock(`${P}/ui/toast`, () => ({ showToast: () => {} }));
-  class ApiRequestError extends Error {
-    constructor(
-      message: string,
-      readonly code = '',
-      readonly status = 0
-    ) {
-      super(message);
-    }
-  }
+  const { ApiError } = await import('../../src/lib/api/client.ts');
   vi.doMock(`${P}/net/api`, () => ({
-    ApiRequestError,
-    postJson: options.postJson ?? (async () => ({}))
+    requestLiveKitToken: options.requestToken ?? (async () => ({}))
   }));
   vi.doMock(`${P}/services/media-playback-service`, () => ({
     queueAudioUnlock: () => {},
@@ -258,7 +250,7 @@ export async function loadLiveKitHarness(
     detachedScreens,
     retries,
     audio,
-    ApiRequestError,
+    refusal: (message, code, status = 0) => new ApiError(message, status, { code }),
     rooms
   };
 }

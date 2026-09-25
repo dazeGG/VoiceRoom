@@ -8,11 +8,11 @@ const detailHandlers = new Map<string, Set<RoomDetailHandler>>();
 
 function roomDetailEventTargetsRoom(event: RealtimeEvent, roomId: string): boolean {
   if (event.type === 'room.snapshot') return event.payload.roomId === roomId;
-  if ('payload' in event && event.payload && typeof event.payload === 'object') {
-    const payload = event.payload as { roomId?: string; room?: { roomId?: string } };
-    return payload.roomId === roomId || payload.room?.roomId === roomId;
-  }
-  return false;
+  const payload: unknown = 'payload' in event ? event.payload : null;
+  if (!payload || typeof payload !== 'object') return false;
+  if ('roomId' in payload && payload.roomId === roomId) return true;
+  const room = 'room' in payload ? payload.room : null;
+  return !!room && typeof room === 'object' && 'roomId' in room && room.roomId === roomId;
 }
 
 function dispatchRoomDetail(roomId: string, event: RealtimeEvent): void {

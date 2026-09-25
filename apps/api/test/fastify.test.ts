@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 const { createApiApp, createApiServer } = await import('../src/server.ts');
 const { withRosterPeer } = await import('./roster-harness.ts');
 import { PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/capabilities';
+import { notificationPreferences } from './fakes/index.ts';
 const { resetMetricsForTest } = await import('../src/lib/metrics.ts');
 
 function createFakeStore() {
@@ -538,7 +539,8 @@ test('message edit routes reuse send validation and never grant room owners an a
         body: input.body,
         createdAt: 100,
         editedAt: 200,
-        readAt: null
+        readAt: null,
+        invite: null
       };
     }
   };
@@ -616,11 +618,15 @@ test('friend request route accepts account user id targets', async (t) => {
           status: 'sent',
           requestId: 'request-1',
           user: {
+            avatarAccent: null,
             avatarColorKey: 'rose',
+            avatarUrl: null,
             createdAt: Date.now(),
             displayName: 'Bob',
+            doNotDisturb: false,
             id: input.addresseeUserId,
-            login: 'bob'
+            login: 'bob',
+            presenceStatus: 'online'
           }
         };
       }
@@ -660,13 +666,7 @@ test('notification preference routes require auth and expose defaults', async (t
     notifications: {
       async getPreferences(userId) {
         assert.equal(userId, '11111111-1111-4111-8111-111111111111');
-        return {
-          doNotDisturb: false,
-          mutedPeerIds: [],
-          mutedRoomIds: [],
-          presenceStatus: 'online',
-          privateNotifications: false
-        };
+        return notificationPreferences();
       }
     }
   });
@@ -681,24 +681,18 @@ test('notification preference routes require auth and expose defaults', async (t
     headers: { cookie: 'vr_session=session-token' }
   });
   assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json().preferences, {
-    doNotDisturb: false,
-    mutedPeerIds: [],
-    mutedRoomIds: [],
-    presenceStatus: 'online',
-    privateNotifications: false
-  });
+  assert.deepEqual(response.json().preferences, notificationPreferences());
 });
 
 test('notification mute and privacy routes call notification store and map statuses', async (t) => {
   const calls = [];
-  const preferences = {
+  const preferences = notificationPreferences({
     doNotDisturb: true,
     mutedPeerIds: ['22222222-2222-4222-8222-222222222222'],
     mutedRoomIds: ['saved-room'],
     presenceStatus: 'dnd',
     privateNotifications: true
-  };
+  });
   const app = createApiApp({
     store: createFakeStore(),
     users: {
@@ -838,13 +832,11 @@ test('presence status route requires auth, validates canonical values, and syncs
         calls.push(input);
         return {
           status: 'updated',
-          preferences: {
+          preferences: notificationPreferences({
             doNotDisturb: input.presenceStatus === 'dnd',
-            mutedPeerIds: [],
             presenceStatus: input.presenceStatus,
-            presenceStatusAutomatic: Boolean(input.automatic && input.presenceStatus === 'away'),
-            privateNotifications: false
-          }
+            presenceStatusAutomatic: Boolean(input.automatic && input.presenceStatus === 'away')
+          })
         };
       }
     }
@@ -913,7 +905,7 @@ test('presence status route requires auth, validates canonical values, and syncs
       payload
     });
     assert.equal(response.statusCode, 400);
-    assert.deepEqual(response.json(), { ok: false, error });
+    assert.deepEqual(response.json(), { ok: false, error, code: 'invalid_request' });
   }
   assert.equal(calls.length, 5);
 });
@@ -936,21 +928,21 @@ test('notification mutation routes reject invalid booleans and targets before st
     notifications: {
       async setDmMute(input) {
         calls.push(['dm', input]);
-        return { status: 'muted', preferences: { mutedPeerIds: [], privateNotifications: false } };
+        return { status: 'muted', preferences: notificationPreferences() };
       },
       async setRoomMute(input) {
         calls.push(['room', input]);
-        return { status: 'muted', preferences: { mutedPeerIds: [], mutedRoomIds: [], privateNotifications: false } };
+        return { status: 'muted', preferences: notificationPreferences() };
       },
       async setPrivateNotifications(input) {
         calls.push(['privacy', input]);
-        return { status: 'updated', preferences: { mutedPeerIds: [], privateNotifications: false } };
+        return { status: 'updated', preferences: notificationPreferences() };
       },
       async setDoNotDisturb(input) {
         calls.push(['dnd', input]);
         return {
           status: 'updated',
-          preferences: { doNotDisturb: false, mutedPeerIds: [], presenceStatus: 'online', privateNotifications: false }
+          preferences: notificationPreferences()
         };
       }
     }
@@ -966,7 +958,7 @@ test('notification mutation routes reject invalid booleans and targets before st
       payload
     });
     assert.equal(response.statusCode, 400);
-    assert.deepEqual(response.json(), { ok: false, error: 'muted must be a boolean' });
+    assert.deepEqual(response.json(), { ok: false, error: 'muted must be a boolean', code: 'invalid_request' });
   }
 
   const dmSelf = await app.inject({
@@ -994,7 +986,7 @@ test('notification mutation routes reject invalid booleans and targets before st
     payload: { muted: 'true' }
   });
   assert.equal(invalidRoomPayload.statusCode, 400);
-  assert.deepEqual(invalidRoomPayload.json(), { ok: false, error: 'muted must be a boolean' });
+  assert.deepEqual(invalidRoomPayload.json(), { ok: false, error: 'muted must be a boolean', code: 'invalid_request' });
 
   const invalidRoom = await app.inject({
     method: 'PUT',
@@ -1012,7 +1004,11 @@ test('notification mutation routes reject invalid booleans and targets before st
     payload: {}
   });
   assert.equal(invalidPrivacy.statusCode, 400);
-  assert.deepEqual(invalidPrivacy.json(), { ok: false, error: 'privateNotifications must be a boolean' });
+  assert.deepEqual(invalidPrivacy.json(), {
+    ok: false,
+    error: 'privateNotifications must be a boolean',
+    code: 'invalid_request'
+  });
 
   const invalidDnd = await app.inject({
     method: 'POST',
@@ -1021,7 +1017,7 @@ test('notification mutation routes reject invalid booleans and targets before st
     payload: { dnd: 'true' }
   });
   assert.equal(invalidDnd.statusCode, 400);
-  assert.deepEqual(invalidDnd.json(), { ok: false, error: 'dnd must be a boolean' });
+  assert.deepEqual(invalidDnd.json(), { ok: false, error: 'dnd must be a boolean', code: 'invalid_request' });
 
   assert.deepEqual(calls, []);
 });
@@ -1052,7 +1048,13 @@ test('livekit token uses authenticated user avatar color for room peer identity'
       async issueAdmission() {
         return {
           status: 'issued',
-          admission: { room: 'voice-room-test', token: 'jwt', ttlSeconds: 60, url: 'ws://gate.test/rtc' }
+          admission: {
+            gateCredentialId: 'cred-1',
+            room: 'voice-room-test',
+            token: 'jwt',
+            ttlSeconds: 60,
+            url: 'ws://gate.test/rtc'
+          }
         };
       }
     },
@@ -1117,7 +1119,13 @@ test('livekit token validates persisted anonymous peer identity before issuing v
       async issueAdmission() {
         return {
           status: 'issued',
-          admission: { room: 'voice-room-test', token: 'jwt', ttlSeconds: 60, url: 'ws://gate.test/rtc' }
+          admission: {
+            gateCredentialId: 'cred-1',
+            room: 'voice-room-test',
+            token: 'jwt',
+            ttlSeconds: 60,
+            url: 'ws://gate.test/rtc'
+          }
         };
       }
     }

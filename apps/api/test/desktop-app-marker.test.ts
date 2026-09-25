@@ -1,18 +1,16 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
-import http from 'node:http';
-import os from 'node:os';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import { Pool } from 'pg';
+import type { Me, SignedIn } from '@voice-room/shared/contracts/account';
 
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createUserStore, hashSessionToken, publicUser, selfUser } from '../src/lib/user-store.ts';
 import { createTestDatabase } from './db-harness.ts';
-import { socketPathForDirectory } from './ipc-harness.ts';
+import { storedUser } from './fakes/index.ts';
+import { cookieFrom, request, startApiServer } from './fakes/server-process.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const MIGRATION = '20260916150000_backfill_desktop_app_marker';
@@ -33,12 +31,17 @@ function rollbackCountThrough(name: string) {
   return names.length - index;
 }
 
-async function metadataOf(pool, userId) {
-  const result = await pool.query(`SELECT metadata, updated_at FROM users WHERE id = $1`, [userId]);
-  return { metadata: result.rows[0].metadata, updatedAt: result.rows[0].updated_at.getTime() };
+async function metadataOf(pool: Pool, userId: string) {
+  const result = await pool.query<{ metadata: Record<string, unknown>; updated_at: Date }>(
+    `SELECT metadata, updated_at FROM users WHERE id = $1`,
+    [userId]
+  );
+  const [row] = result.rows;
+  assert.ok(row);
+  return { metadata: row.metadata, updatedAt: row.updated_at.getTime() };
 }
 
-async function waitFor(check, timeoutMs = 3000) {
+async function waitFor(check: () => Promise<boolean> | boolean, timeoutMs = 3000) {
   const started = Date.now();
   for (;;) {
     if (await check()) return;
@@ -65,8 +68,9 @@ test('backfill marks desktop app users from sessions and login events, and only 
   const rollbackCount = rollbackCountThrough(MIGRATION);
   assert.equal(rollbackCount, 1, 'this test rolls back exactly the marker migration');
 
-  const make = async (login, createdAt) => {
+  const make = async (login: string, createdAt: string) => {
     const { user } = await store.createUser({ login, password: 'password123' });
+    assert.ok(user);
     await pool.query(`UPDATE users SET created_at = $2, metadata = '{}'::jsonb WHERE id = $1`, [user.id, createdAt]);
     return user.id;
   };
@@ -76,13 +80,13 @@ test('backfill marks desktop app users from sessions and login events, and only 
   const browserOnly = await make('browser-only', '2026-09-04T10:00:00Z');
   const lateSignup = await make('late-signup', '2026-09-20T10:00:00Z');
 
-  const insertSession = (userId, userAgent, createdAt) =>
+  const insertSession = (userId: string, userAgent: string, createdAt: string) =>
     pool.query(
       `INSERT INTO sessions (id, user_id, created_at, last_seen_at, expires_at, user_agent)
      VALUES ($1, $2, $3, $3, now() + interval '1 day', $4)`,
       [crypto.randomBytes(16).toString('hex'), userId, createdAt, userAgent]
     );
-  const insertEvent = (userId, client, createdAt) =>
+  const insertEvent = (userId: string, client: string, createdAt: string) =>
     pool.query(`INSERT INTO account_login_events (user_id, kind, client, created_at) VALUES ($1, 'login', $2, $3)`, [
       userId,
       client,
@@ -102,7 +106,7 @@ test('backfill marks desktop app users from sessions and login events, and only 
   assert.equal(up.length, 1);
 
   const cutoff = Date.parse('2026-09-16T15:00:00Z');
-  const expectations = [
+  const expectations: Array<[string, number | undefined, number | undefined]> = [
     [sessionOnly, Date.parse('2026-09-05T08:00:00Z'), cutoff],
     [eventOnly, Date.parse('2026-09-06T08:00:00Z'), cutoff],
     [both, Date.parse('2026-09-07T08:00:00Z'), cutoff],
@@ -128,6 +132,7 @@ test('backfill marks desktop app users from sessions and login events, and only 
 test('a desktop session stamps the account once, and the marker outlives every session', async (t) => {
   const { pool, store } = await setup(t);
   const { user } = await store.createUser({ login: 'grace', password: 'password123' });
+  assert.ok(user);
   assert.equal(selfUser(user).hasUsedDesktopApp, false);
 
   await store.createSession({ userId: user.id, userAgent: CHROME, now: 1_000 });
@@ -150,6 +155,7 @@ test('a desktop session stamps the account once, and the marker outlives every s
   await store.pruneSessions();
   await store.changePassword({ userId: user.id, currentPassword: 'password123', newPassword: 'password456' });
   const survivor = await store.getUserById(user.id);
+  assert.ok(survivor);
   assert.equal(survivor.desktopAppSeenAt, 2_000);
   assert.equal(selfUser(survivor).hasUsedDesktopApp, true);
 });
@@ -157,6 +163,7 @@ test('a desktop session stamps the account once, and the marker outlives every s
 test('the hourly touch stamps a session that predates the marker, without rewriting the row later', async (t) => {
   const { pool, store } = await setup(t);
   const { user } = await store.createUser({ login: 'linus', password: 'password123' });
+  assert.ok(user);
   const session = await store.createSession({ userId: user.id, userAgent: CHROME });
   await pool.query(`UPDATE sessions SET last_seen_at = now() - interval '2 hours' WHERE id = $1`, [
     hashSessionToken(session.token)
@@ -183,6 +190,7 @@ test('the hourly touch stamps a session that predates the marker, without rewrit
 test('the app prompt is recorded once per account', async (t) => {
   const { store } = await setup(t);
   const { user } = await store.createUser({ login: 'barbara', password: 'password123' });
+  assert.ok(user);
   assert.equal(selfUser(user).appPromptSeen, false);
 
   assert.deepEqual(await store.markAppPromptSeen({ userId: user.id, now: 5_000 }), {
@@ -197,11 +205,13 @@ test('the app prompt is recorded once per account', async (t) => {
     status: 'not_found',
     appPromptSeenAt: null
   });
-  assert.equal(selfUser(await store.getUserById(user.id)).appPromptSeen, true);
+  const prompted = await store.getUserById(user.id);
+  assert.ok(prompted);
+  assert.equal(selfUser(prompted).appPromptSeen, true);
 });
 
 test('self-only flags never enter the public user shape other people receive', () => {
-  const user = {
+  const user = storedUser({
     id: 'u1',
     login: 'ada',
     displayName: 'Ada',
@@ -210,99 +220,33 @@ test('self-only flags never enter the public user shape other people receive', (
     presenceStatus: 'online',
     desktopAppSeenAt: 10,
     appPromptSeenAt: 20
-  };
+  });
   const shared = publicUser(user);
   assert.equal('hasUsedDesktopApp' in shared, false);
   assert.equal('appPromptSeen' in shared, false);
   assert.deepEqual(selfUser(user), { ...shared, hasUsedDesktopApp: true, appPromptSeen: true });
 });
 
-function request(socketPath, { method = 'GET', pathname, body, cookie, userAgent } = {}) {
-  const payload = body === undefined ? null : JSON.stringify(body);
-  const headers = { Accept: 'application/json' };
-  if (payload) {
-    headers['Content-Type'] = 'application/json';
-    headers['Content-Length'] = Buffer.byteLength(payload);
-  }
-  if (cookie) headers.Cookie = cookie;
-  if (userAgent) headers['User-Agent'] = userAgent;
-  return new Promise((resolve, reject) => {
-    const req = http.request({ method, path: pathname, socketPath, headers }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      res.on('end', () =>
-        resolve({
-          status: res.statusCode,
-          body: data ? JSON.parse(data) : null,
-          cookie: String((res.headers['set-cookie'] || [])[0] || '').split(';')[0]
-        })
-      );
-      res.on('error', reject);
-    });
-    req.on('error', reject);
-    if (payload) req.write(payload);
-    req.end();
-  });
-}
-
-async function startServer(t: TestContext) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-marker-'));
-  const socketPath = socketPathForDirectory(dir);
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const child = spawn(process.execPath, ['src/server.ts'], {
-    cwd: path.join(import.meta.dirname, '..'),
-    env: {
-      ...process.env,
-      NODE_ENV: 'test',
-      MAX_EMPTY_ROOMS_PER_IP: '0',
-      ROOM_CREATE_POW_DIFFICULTY: '0',
-      ROOM_CREATE_RATE_LIMIT: '0',
-      AUTH_RATE_LIMIT: '0',
-      DATABASE_URL: databaseUrl,
-      SOCKET_PATH: socketPath
-    },
-    stdio: ['ignore', 'ignore', 'ignore']
-  });
-  t.after(() => {
-    child.kill('SIGTERM');
-    fs.rmSync(dir, { recursive: true, force: true });
-    return cleanup();
-  });
-  const started = Date.now();
-  for (;;) {
-    try {
-      const health = await request(socketPath, { pathname: '/api/healthz' });
-      if (health.status === 200) break;
-    } catch {
-      // Not listening yet.
-    }
-    if (Date.now() - started > 15_000) throw new Error('Server did not become ready');
-    await new Promise((resolve) => setTimeout(resolve, 50));
-  }
-  return socketPath;
-}
-
 test('self responses carry the flags and the app prompt endpoint records them', async (t) => {
-  const socketPath = await startServer(t);
+  const { socketPath } = await startApiServer(t, { prefix: 'voice-room-marker-', env: { AUTH_RATE_LIMIT: '0' } });
   const credentials = { login: 'hedy', password: 'password123', passwordConfirm: 'password123' };
 
-  const registered = await request(socketPath, {
+  const registered = await request<SignedIn>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/register',
     body: credentials,
-    userAgent: CHROME
+    headers: { 'User-Agent': CHROME }
   });
+  const cookie = cookieFrom(registered.setCookie);
   assert.equal(registered.status, 201);
   assert.equal(registered.body.user.hasUsedDesktopApp, false);
   assert.equal(registered.body.user.appPromptSeen, false);
 
-  const fromApp = await request(socketPath, {
+  const fromApp = await request<SignedIn>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/login',
     body: { login: credentials.login, password: credentials.password },
-    userAgent: DESKTOP_APP
+    headers: { 'User-Agent': DESKTOP_APP }
   });
   assert.equal(fromApp.status, 200);
   assert.equal(
@@ -323,14 +267,14 @@ test('self responses carry the flags and the app prompt endpoint records them', 
       method: 'POST',
       pathname: '/api/auth/app-prompt/seen',
       body: {},
-      cookie: registered.cookie
+      cookie
     });
     assert.equal(seen.status, 200);
     assert.deepEqual(seen.body, { ok: true, appPromptSeen: true });
   }
 
-  const me = await request(socketPath, { pathname: '/api/auth/me', cookie: registered.cookie });
+  const me = await request<Me>(socketPath, { pathname: '/api/auth/me', cookie });
   assert.equal(me.status, 200);
-  assert.equal(me.body.user.hasUsedDesktopApp, true);
+  assert.equal(me.body.user?.hasUsedDesktopApp, true);
   assert.equal(me.body.user.appPromptSeen, true);
 });

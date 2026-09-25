@@ -1,20 +1,26 @@
 // The room owner's participant menu: kick, server mute, ban and undoing a ban.
 
-import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
+import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
+import { Done, RoomIdParams } from '@voice-room/shared/contracts/http';
+import {
+  BanParams,
+  PeerBanned,
+  PeerTargetBody,
+  RoomFailure,
+  ServerMuteBody,
+  ServerMuted
+} from '@voice-room/shared/contracts/rooms';
 import type { FastifyInstance } from 'fastify';
 import { normalizePeerId, normalizeRoomId } from '@voice-room/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import type { PeerModerationService } from './peer-moderation.service.ts';
-import { FailureBody, ownerRefusal } from './rooms.routes.ts';
+import { ownerRefusal } from './rooms.routes.ts';
 import type { RoomsService } from './rooms.service.ts';
 
-const RoomParams = Type.Object({ roomId: Type.String() });
-const TargetBody = Type.Object({ peerId: Type.Optional(Type.Unknown()) });
-const Ok = Type.Object({ ok: Type.Literal(true) });
-const PEER_NOT_FOUND = failure('Участник не найден');
-const MUTE_UNSUPPORTED = failure('Участник не поддерживает модерацию микрофона');
-const BAN_NOT_SAVED = failure('Не удалось сохранить блокировку');
+const PEER_NOT_FOUND = failure('Участник не найден', { code: 'peer_not_found' });
+const MUTE_UNSUPPORTED = failure('Участник не поддерживает модерацию микрофона', { code: 'server_mute_unsupported' });
+const BAN_NOT_SAVED = failure('Не удалось сохранить блокировку', { code: 'block_failed' });
 const GATE_REVOKE_FAILED = 'Не удалось отозвать доступ участника';
 
 export function registerPeerModerationRoutes(
@@ -41,14 +47,15 @@ export function registerPeerModerationRoutes(
     '/api/rooms/:roomId/kick',
     {
       preValidation: optionalJsonBody,
-      schema: { params: RoomParams, body: TargetBody, response: { 200: Ok, '4xx': FailureBody } }
+      schema: { params: RoomIdParams, body: PeerTargetBody, response: { 200: Done, '4xx': RoomFailure } }
     },
     async (request, reply) => {
       const room = await ownedRoom(request, reply);
       if (!room) return reply;
       const result = await moderation.kick(room, normalizePeerId(request.body.peerId));
       if (result.status === 'peer_not_found') return reply.code(404).send(PEER_NOT_FOUND);
-      if (result.status === 'owner') return reply.code(400).send(failure('Нельзя исключить владельца комнаты'));
+      if (result.status === 'owner')
+        return reply.code(400).send(failure('Нельзя исключить владельца комнаты', { code: 'cannot_kick_owner' }));
       return { ok: true as const };
     }
   );
@@ -60,9 +67,9 @@ export function registerPeerModerationRoutes(
     {
       preValidation: optionalJsonBody,
       schema: {
-        params: RoomParams,
-        body: Type.Object({ peerId: Type.Optional(Type.Unknown()), muted: Type.Optional(Type.Unknown()) }),
-        response: { 200: Type.Object({ ok: Type.Literal(true), muted: Type.Boolean() }), '4xx': FailureBody }
+        params: RoomIdParams,
+        body: ServerMuteBody,
+        response: { 200: ServerMuted, '4xx': RoomFailure }
       }
     },
     async (request, reply) => {
@@ -75,7 +82,9 @@ export function registerPeerModerationRoutes(
       );
       if (result.status === 'peer_not_found') return reply.code(404).send(PEER_NOT_FOUND);
       if (result.status === 'owner')
-        return reply.code(400).send(failure('Нельзя выключить микрофон владельцу комнаты'));
+        return reply
+          .code(400)
+          .send(failure('Нельзя выключить микрофон владельцу комнаты', { code: 'cannot_mute_owner' }));
       if (result.status !== 'applied') return reply.code(400).send(MUTE_UNSUPPORTED);
       return { ok: true as const, muted: result.muted };
     }
@@ -86,13 +95,9 @@ export function registerPeerModerationRoutes(
     {
       preValidation: optionalJsonBody,
       schema: {
-        params: RoomParams,
-        body: TargetBody,
-        response: {
-          201: Type.Object({ ok: Type.Literal(true), banId: Type.String() }),
-          '4xx': FailureBody,
-          500: FailureBody
-        }
+        params: RoomIdParams,
+        body: PeerTargetBody,
+        response: { 201: PeerBanned, '4xx': RoomFailure, 500: RoomFailure }
       }
     },
     async (request, reply) => {
@@ -103,7 +108,7 @@ export function registerPeerModerationRoutes(
         case 'peer_not_found':
           return reply.code(404).send(PEER_NOT_FOUND);
         case 'owner':
-          return reply.code(400).send(failure('Нельзя заблокировать владельца комнаты'));
+          return reply.code(400).send(failure('Нельзя заблокировать владельца комнаты', { code: 'cannot_ban_owner' }));
         case 'ban_limit':
           return reply.code(409).send(failure('Достигнут лимит блокировок комнаты', { code: 'room_ban_limit' }));
         case 'ban_rejected':
@@ -126,15 +131,16 @@ export function registerPeerModerationRoutes(
     '/api/rooms/:roomId/bans/:banId',
     {
       schema: {
-        params: Type.Object({ roomId: Type.String(), banId: Type.String() }),
-        response: { 200: Ok, '4xx': FailureBody }
+        params: BanParams,
+        response: { 200: Done, '4xx': RoomFailure }
       }
     },
     async (request, reply) => {
       const room = await ownedRoom(request, reply);
       if (!room) return reply;
       const result = await moderation.undoBan(room.id, request.params.banId);
-      if (result.status === 'not_found') return reply.code(404).send(failure('Блокировка не найдена'));
+      if (result.status === 'not_found')
+        return reply.code(404).send(failure('Блокировка не найдена', { code: 'ban_not_found' }));
       return { ok: true as const };
     }
   );

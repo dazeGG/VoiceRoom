@@ -1,67 +1,65 @@
-// Account auth client. All requests are same-origin, so the HttpOnly session
-// cookie set by the API rides along automatically (including on /api/rooms,
-// which is how a logged-in user's persistent rooms get an owner).
+// Account auth client. Every request goes through the shared client, so the
+// HttpOnly session cookie set by the API rides along (including on /api/rooms,
+// which is how a signed-in user's persistent rooms get an owner). Shapes come
+// from @voice-room/shared/contracts/account.
 
-import type { PresenceStatus } from '$lib/shared/presence';
 import {
   normalizeAccountSession,
   normalizeLoginAlert,
   normalizeReleaseVersion,
-  normalizeSelfUserFlags,
   type AccountDeletionPreview,
-  type AccountDeletionRoom,
   type AccountSession,
   type LoginAlert,
   type RecoveryCodesReminder,
   type RecoveryCodesStatus,
-  type SelfUserFlags,
   type WhatsNewState
 } from '@voice-room/shared/account-security';
+import type {
+  AppPromptSeen,
+  DeletionPreview,
+  DeletionScheduled,
+  LoginAlertResolved,
+  LoginAlerts,
+  Me,
+  Recovered,
+  RecoveryCodesGenerated,
+  ReminderSnoozed,
+  Security,
+  SelfUser,
+  Sessions,
+  SessionsRevoked,
+  SignedIn,
+  WhatsNewAnswer
+} from '@voice-room/shared/contracts/account';
+import type { Done } from '@voice-room/shared/contracts/http';
+import type { LobbyRoom, RoomCard, RoomList, RoomUnbookmarked } from '@voice-room/shared/contracts/rooms';
+// Explicit extensions: the release coverage gate (scripts/test/g08-*) loads
+// this module in plain Node, without Vite's resolver.
+import { api } from './client.ts';
 
-export interface AuthUser extends SelfUserFlags {
-  avatarAccent: string | null;
-  avatarColorKey: string;
-  avatarUrl: string | null;
-  createdAt: number;
-  displayName: string;
-  dnd: boolean;
-  doNotDisturb: boolean;
-  id: string;
-  login: string;
-  presenceStatus: PresenceStatus;
-}
-
-// Every response that returns the signed-in account goes through here, so the
-// self-only flags always exist even when an older API leaves them out.
-function readAuthUser<T extends AuthUser | null | undefined>(user: T): T {
-  return (user ? { ...user, ...normalizeSelfUserFlags(user) } : user) as T;
-}
+export type AuthUser = SelfUser;
 
 export type RoomRelationship = 'owner' | 'bookmarked';
 
-export interface OwnedRoom {
-  avatarUrl: string | null;
-  createdAt: number;
-  emptySince: number | null;
-  isStatic: boolean;
-  name: string;
-  peers: number;
-  relationship: RoomRelationship;
-  roomId: string;
-  unreadCount?: number;
+/** A room on the account's list: the lobby card. */
+export type OwnedRoom = LobbyRoom;
+
+async function avatarRequest(method: 'POST' | 'DELETE', file?: Blob): Promise<AuthUser> {
+  let body: FormData | undefined;
+  if (file) {
+    body = new FormData();
+    body.append('avatar', file, 'avatar.webp');
+  }
+  const fallback = 'Не удалось обновить аватар';
+  const answer =
+    method === 'POST'
+      ? await api.post<SignedIn>('/api/auth/avatar', body, { fallback })
+      : await api.delete<SignedIn>('/api/auth/avatar', undefined, { fallback });
+  return answer.user;
 }
 
-async function avatarRequest(path: string, method: 'POST' | 'DELETE', file?: Blob): Promise<AuthUser> {
-  const body = file ? new FormData() : undefined;
-  if (body && file) body.append('avatar', file, 'avatar.webp');
-  const response = await fetch(`/api${path}`, { method, body, credentials: 'same-origin' });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || 'Не удалось обновить аватар');
-  return readAuthUser(payload.user as AuthUser);
-}
-
-export const uploadUserAvatar = (file: Blob): Promise<AuthUser> => avatarRequest('/auth/avatar', 'POST', file);
-export const deleteUserAvatar = (): Promise<AuthUser> => avatarRequest('/auth/avatar', 'DELETE');
+export const uploadUserAvatar = (file: Blob): Promise<AuthUser> => avatarRequest('POST', file);
+export const deleteUserAvatar = (): Promise<AuthUser> => avatarRequest('DELETE');
 
 export interface Credentials {
   login: string;
@@ -73,107 +71,47 @@ export interface RegisterInput extends Credentials {
   passwordConfirm?: string;
 }
 
-async function authPost<T>(path: string, body: unknown): Promise<T> {
-  const response = await fetch(`/api${path}`, {
-    body: JSON.stringify(body),
-    credentials: 'same-origin',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-    method: 'POST'
-  });
-
-  let payload: ({ error?: string; code?: string } & Record<string, unknown>) | null = null;
-  try {
-    payload = await response.json();
-  } catch {
-    // Non-JSON error bodies fall through to the generic message.
-  }
-
-  if (!response.ok) {
-    throw new AuthRequestError(payload?.error || 'Сервер недоступен', payload?.code || '', payload || {});
-  }
-  return payload as T;
-}
-
-// Carries the machine-readable code and extra fields some auth answers need,
-// such as when a sign-in hits an account that is waiting to be deleted.
-export class AuthRequestError extends Error {
-  code: string;
-  details: Record<string, unknown>;
-
-  constructor(message: string, code: string, details: Record<string, unknown>) {
-    super(message);
-    this.name = 'AuthRequestError';
-    this.code = code;
-    this.details = details;
-  }
-}
-
 export async function register(input: RegisterInput): Promise<AuthUser> {
-  const payload = await authPost<{ user: AuthUser }>('/auth/register', input);
-  return readAuthUser(payload.user);
+  return (await api.post<SignedIn>('/api/auth/register', input)).user;
 }
 
 export async function login(input: Credentials): Promise<AuthUser> {
-  const payload = await authPost<{ user: AuthUser }>('/auth/login', input);
-  return readAuthUser(payload.user);
+  return (await api.post<SignedIn>('/api/auth/login', input)).user;
 }
 
 export async function logout(): Promise<void> {
-  await authPost('/auth/logout', {});
+  await api.post<Done>('/api/auth/logout');
 }
 
 export async function updateDisplayName(displayName: string): Promise<AuthUser> {
-  const payload = await authPost<{ user: AuthUser }>('/auth/profile', { displayName });
-  return readAuthUser(payload.user);
+  return (await api.post<SignedIn>('/api/auth/profile', { displayName })).user;
 }
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
-  await authPost('/auth/password', { currentPassword, newPassword });
+  await api.post<Done>('/api/auth/password', { currentPassword, newPassword });
 }
 
 export async function fetchMe(): Promise<AuthUser | null> {
-  const response = await fetch('/api/auth/me', {
-    credentials: 'same-origin',
-    headers: { Accept: 'application/json' }
-  });
-  if (!response.ok) {
-    throw new Error('Не удалось проверить сессию');
-  }
-  const payload = (await response.json()) as { user: AuthUser | null };
-  return readAuthUser(payload.user ?? null);
+  return (await api.get<Me>('/api/auth/me', { fallback: 'Не удалось проверить сессию' })).user;
 }
 
 export async function addRoomByCode(code: string): Promise<OwnedRoom> {
-  const payload = await authPost<{ room: OwnedRoom }>('/auth/rooms', { code });
-  return payload.room;
+  return (await api.post<RoomCard>('/api/auth/rooms', { code })).room;
 }
 
 export async function removeRoomFromList(roomId: string): Promise<boolean> {
-  const response = await fetch(`/api/auth/rooms/${encodeURIComponent(roomId)}`, {
-    method: 'DELETE',
-    credentials: 'same-origin',
-    headers: { Accept: 'application/json' }
+  const answer = await api.delete<RoomUnbookmarked>(`/api/auth/rooms/${encodeURIComponent(roomId)}`, undefined, {
+    fallback: 'Не удалось удалить комнату из списка'
   });
-  const payload = (await response.json().catch(() => ({}))) as { error?: string; removed?: boolean };
-  if (!response.ok) throw new Error(payload.error || 'Не удалось удалить комнату из списка');
-  return Boolean(payload.removed);
+  return answer.removed;
 }
 
 export async function fetchOwnedRooms(): Promise<OwnedRoom[]> {
-  const response = await fetch('/api/auth/rooms', {
-    credentials: 'same-origin',
-    headers: { Accept: 'application/json' }
-  });
-  if (!response.ok) {
-    throw new Error('Не удалось загрузить комнаты');
-  }
-  const payload = (await response.json()) as { rooms?: OwnedRoom[] };
-  return Array.isArray(payload.rooms) ? payload.rooms : [];
+  return (await api.get<RoomList>('/api/auth/rooms', { fallback: 'Не удалось загрузить комнаты' })).rooms;
 }
 
 export type {
   AccountDeletionPreview,
-  AccountDeletionRoom,
   AccountSession,
   LoginAlert,
   RecoveryCodesReminder,
@@ -192,149 +130,101 @@ export interface RecoverInput {
   newPassword: string;
 }
 
-async function authRead<T>(path: string, method: 'GET' | 'DELETE', fallbackError: string): Promise<T> {
-  const response = await fetch(`/api${path}`, {
-    method,
-    credentials: 'same-origin',
-    headers: { Accept: 'application/json' }
-  });
-  const payload = (await response.json().catch(() => ({}))) as T & { error?: string };
-  if (!response.ok) throw new Error(payload.error || fallbackError);
-  return payload;
-}
-
-function readRecoveryCodesStatus(value: Partial<RecoveryCodesStatus> | undefined): RecoveryCodesStatus {
-  return {
-    remaining: Math.max(0, Number(value?.remaining) || 0),
-    generatedAt: typeof value?.generatedAt === 'number' ? value.generatedAt : null
-  };
-}
-
-function readRecoveryCodesReminder(value: Partial<RecoveryCodesReminder> | undefined): RecoveryCodesReminder {
-  const snoozedUntil = Number(value?.snoozedUntil);
-  return { snoozedUntil: Number.isFinite(snoozedUntil) && snoozedUntil > 0 ? snoozedUntil : null };
-}
-
 export async function fetchAccountSecurity(): Promise<AccountSecurity> {
-  const payload = await authRead<{
-    recoveryCodes?: RecoveryCodesStatus;
-    recoveryCodesReminder?: Partial<RecoveryCodesReminder>;
-  }>('/auth/security', 'GET', 'Не удалось загрузить настройки безопасности');
-  return {
-    recoveryCodes: readRecoveryCodesStatus(payload.recoveryCodes),
-    recoveryCodesReminder: readRecoveryCodesReminder(payload.recoveryCodesReminder)
-  };
+  const { recoveryCodes, recoveryCodesReminder } = await api.get<Security>('/api/auth/security', {
+    fallback: 'Не удалось загрузить настройки безопасности'
+  });
+  return { recoveryCodes, recoveryCodesReminder };
 }
 
 export async function snoozeRecoveryCodesReminder(): Promise<RecoveryCodesReminder> {
-  const payload = await authPost<{ recoveryCodesReminder?: Partial<RecoveryCodesReminder> }>(
-    '/auth/recovery-codes/reminder/snooze',
-    {}
-  );
-  return readRecoveryCodesReminder(payload.recoveryCodesReminder);
+  return (await api.post<ReminderSnoozed>('/api/auth/recovery-codes/reminder/snooze')).recoveryCodesReminder;
+}
+
+// Only a well-formed release number is shown or compared.
+function readWhatsNew({ whatsNew }: WhatsNewAnswer): WhatsNewState {
+  return {
+    current: normalizeReleaseVersion(whatsNew.current),
+    lastSeen: normalizeReleaseVersion(whatsNew.lastSeen) || null
+  };
 }
 
 export async function fetchWhatsNew(): Promise<WhatsNewState> {
-  const payload = await authRead<{ whatsNew?: Partial<WhatsNewState> }>(
-    '/auth/whats-new',
-    'GET',
-    'Не удалось загрузить новости'
+  return readWhatsNew(
+    await api.get<WhatsNewAnswer>('/api/auth/whats-new', { fallback: 'Не удалось загрузить новости' })
   );
-  return {
-    current: normalizeReleaseVersion(payload.whatsNew?.current),
-    lastSeen: normalizeReleaseVersion(payload.whatsNew?.lastSeen) || null
-  };
 }
 
 export async function markWhatsNewSeen(): Promise<void> {
-  await authPost('/auth/whats-new/seen', {});
+  await api.post<WhatsNewAnswer>('/api/auth/whats-new/seen');
 }
 
 export async function markAppPromptSeen(): Promise<void> {
-  await authPost('/auth/app-prompt/seen', {});
+  await api.post<AppPromptSeen>('/api/auth/app-prompt/seen');
 }
 
+// Alerts and sessions go through the shared normalizers: an entry without a
+// valid id or time is dropped rather than shown half-empty.
 export async function fetchLoginAlerts(): Promise<LoginAlert[]> {
-  const payload = await authRead<{ alerts?: unknown[] }>(
-    '/auth/login-alerts',
-    'GET',
-    'Не удалось проверить входы в аккаунт'
-  );
-  return (Array.isArray(payload.alerts) ? payload.alerts : [])
-    .map(normalizeLoginAlert)
-    .filter((alert): alert is LoginAlert => alert !== null);
+  const { alerts } = await api.get<LoginAlerts>('/api/auth/login-alerts', {
+    fallback: 'Не удалось проверить входы в аккаунт'
+  });
+  return alerts.map(normalizeLoginAlert).filter((alert): alert is LoginAlert => alert !== null);
 }
 
 export async function fetchAccountDeletionPreview(): Promise<AccountDeletionPreview> {
-  const payload = await authRead<{ graceDays?: number; rooms?: AccountDeletionRoom[] }>(
-    '/auth/account/deletion',
-    'GET',
-    'Не удалось подготовить удаление аккаунта'
-  );
-  return {
-    graceDays: Math.max(1, Number(payload.graceDays) || 7),
-    rooms: Array.isArray(payload.rooms) ? payload.rooms : []
-  };
+  const { graceDays, rooms } = await api.get<DeletionPreview>('/api/auth/account/deletion', {
+    fallback: 'Не удалось подготовить удаление аккаунта'
+  });
+  return { graceDays, rooms };
 }
 
 export async function requestAccountDeletion(currentPassword: string): Promise<{ deletionScheduledFor: number }> {
-  const payload = await authPost<{ deletionScheduledFor?: number }>('/auth/account/deletion', { currentPassword });
-  return { deletionScheduledFor: Number(payload.deletionScheduledFor) || Date.now() };
+  const { deletionScheduledFor } = await api.post<DeletionScheduled>('/api/auth/account/deletion', { currentPassword });
+  return { deletionScheduledFor };
 }
 
 export async function restoreAccount(input: Credentials): Promise<AuthUser> {
-  const payload = await authPost<{ user: AuthUser }>('/auth/account/restore', input);
-  return readAuthUser(payload.user);
+  return (await api.post<SignedIn>('/api/auth/account/restore', input)).user;
 }
 
 export async function confirmLoginAlert(alertId: string): Promise<void> {
-  await authPost(`/auth/login-alerts/${encodeURIComponent(alertId)}/confirm`, {});
+  await api.post<LoginAlertResolved>(`/api/auth/login-alerts/${encodeURIComponent(alertId)}/confirm`);
 }
 
 export async function denyLoginAlert(
   alertId: string
 ): Promise<{ sessionEnded: boolean; recoveryCodes: RecoveryCodesStatus }> {
-  const payload = await authPost<{ sessionEnded?: boolean; recoveryCodes?: RecoveryCodesStatus }>(
-    `/auth/login-alerts/${encodeURIComponent(alertId)}/deny`,
-    {}
-  );
-  return { sessionEnded: payload.sessionEnded === true, recoveryCodes: readRecoveryCodesStatus(payload.recoveryCodes) };
+  const answer = await api.post<LoginAlertResolved>(`/api/auth/login-alerts/${encodeURIComponent(alertId)}/deny`);
+  if (answer.resolution !== 'denied') throw new Error('Не удалось ответить на вход');
+  return { sessionEnded: answer.sessionEnded, recoveryCodes: answer.recoveryCodes };
 }
 
 export async function fetchAccountSessions(): Promise<AccountSession[]> {
-  const payload = await authRead<{ sessions?: unknown[] }>('/auth/sessions', 'GET', 'Не удалось загрузить устройства');
-  return (Array.isArray(payload.sessions) ? payload.sessions : [])
-    .map(normalizeAccountSession)
-    .filter((session): session is AccountSession => session !== null);
+  const { sessions } = await api.get<Sessions>('/api/auth/sessions', { fallback: 'Не удалось загрузить устройства' });
+  return sessions.map(normalizeAccountSession).filter((session): session is AccountSession => session !== null);
 }
 
 export async function revokeAccountSession(sessionId: string): Promise<void> {
-  await authRead(`/auth/sessions/${encodeURIComponent(sessionId)}`, 'DELETE', 'Не удалось завершить сеанс');
+  await api.delete<Done>(`/api/auth/sessions/${encodeURIComponent(sessionId)}`, undefined, {
+    fallback: 'Не удалось завершить сеанс'
+  });
 }
 
 export async function revokeOtherAccountSessions(): Promise<number> {
-  const payload = await authPost<{ revoked?: number }>('/auth/sessions/revoke-others', {});
-  return Math.max(0, Number(payload.revoked) || 0);
+  return (await api.post<SessionsRevoked>('/api/auth/sessions/revoke-others')).revoked;
 }
 
 export async function generateRecoveryCodes(
   currentPassword: string
 ): Promise<{ codes: string[]; recoveryCodes: RecoveryCodesStatus }> {
-  const payload = await authPost<{ codes?: unknown[]; recoveryCodes?: RecoveryCodesStatus }>('/auth/recovery-codes', {
+  const { codes, recoveryCodes } = await api.post<RecoveryCodesGenerated>('/api/auth/recovery-codes', {
     currentPassword
   });
-  return {
-    codes: (Array.isArray(payload.codes) ? payload.codes : []).filter(
-      (code): code is string => typeof code === 'string'
-    ),
-    recoveryCodes: readRecoveryCodesStatus(payload.recoveryCodes)
-  };
+  return { codes, recoveryCodes };
 }
 
 export async function recoverAccount(input: RecoverInput): Promise<{ user: AuthUser; remaining: number }> {
-  const payload = await authPost<{ user: AuthUser; recoveryCodes?: Partial<RecoveryCodesStatus> }>(
-    '/auth/recover',
-    input
-  );
-  return { user: readAuthUser(payload.user), remaining: readRecoveryCodesStatus(payload.recoveryCodes).remaining };
+  const { user, recoveryCodes } = await api.post<Recovered>('/api/auth/recover', input);
+  return { user, remaining: recoveryCodes.remaining };
 }

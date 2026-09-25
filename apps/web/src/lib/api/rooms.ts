@@ -1,10 +1,30 @@
-import { del, fetchJson, patchJson, postJson, postJsonAuth, putJson } from './http';
+import type { Done } from '@voice-room/shared/contracts/http';
+import type {
+  Attachment,
+  LinkPreview,
+  MessageDeleted,
+  RoomChat,
+  RoomHistoryMessage,
+  RoomHistoryPage,
+  RoomMessage,
+  RoomMessageAnswer,
+  RoomRead
+} from '@voice-room/shared/contracts/messages';
+import type {
+  LobbyRoom,
+  PeerBanned,
+  PublicPeer,
+  RoomCard,
+  RoomCreated,
+  RoomPeers,
+  RoomStatus as RoomStatusAnswer,
+  ServerMuted
+} from '@voice-room/shared/contracts/rooms';
+import { api, orNull } from './client';
 import { createRoomProof } from './pow';
-import type { MessageAttachment } from '@voice-room/shared/attachments';
 import type { ReplyTarget } from '$lib/shared/chat/reply-store.svelte';
 import type { RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
 import { projectRoomMessageContent } from '@voice-room/shared/room-message-content';
-import { normalizeLinkPreview, type LinkPreview } from '@voice-room/shared/link-preview';
 
 export interface CreateRoomOptions {
   isStatic?: boolean;
@@ -15,48 +35,38 @@ export interface UpdateRoomOptions {
   name: string;
 }
 
-// Mirrors the server's publicLobbyRoom() shape (apps/api/src/domains/rooms/room-views.ts)
-// — the same body the PUT response and the room.updated WebSocket broadcast carry.
-export interface RoomSummary {
-  avatarUrl: string | null;
-  createdAt: number;
-  emptySince: number | null;
-  isStatic: boolean;
-  name: string;
-  peers: number;
-  relationship: string;
-  roomId: string;
-}
+/** The lobby card: the rename answer, the room list and the room.updated event. */
+export type RoomSummary = LobbyRoom;
 
-export interface RoomStatus {
-  avatarUrl: string | null;
-  createdAt: number;
-  name: string;
-  emptySince: number | null;
-  exists: boolean;
-  isStatic: boolean;
-  maxRoomPeers: number;
-  peers: number;
-  roomId: string;
-}
+/** The public status card of a room that exists. */
+export type RoomStatus = Omit<RoomStatusAnswer, 'ok'>;
+
+/** A read-only view of a current room occupant. */
+export type RoomPeer = PublicPeer;
 
 async function roomAvatarRequest(roomId: string, method: 'POST' | 'DELETE', file?: Blob): Promise<RoomSummary> {
-  const body = file ? new FormData() : undefined;
-  if (body && file) body.append('avatar', file, 'avatar.webp');
-  const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/avatar`, {
-    method,
-    body,
-    credentials: 'same-origin'
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || 'Не удалось обновить аватар комнаты');
-  return payload.room;
+  let body: FormData | undefined;
+  if (file) {
+    body = new FormData();
+    body.append('avatar', file, 'avatar.webp');
+  }
+  const url = `/api/rooms/${encodeURIComponent(roomId)}/avatar`;
+  const fallback = 'Не удалось обновить аватар комнаты';
+  const answer =
+    method === 'POST'
+      ? await api.post<RoomCard>(url, body, { fallback })
+      : await api.delete<RoomCard>(url, undefined, { fallback });
+  return answer.room;
 }
 
 export const uploadRoomAvatar = (roomId: string, file: Blob): Promise<RoomSummary> =>
   roomAvatarRequest(roomId, 'POST', file);
 export const deleteRoomAvatar = (roomId: string): Promise<RoomSummary> => roomAvatarRequest(roomId, 'DELETE');
 
+/**
+ * A room message as the chat UI holds it: the contract's RoomMessage with the
+ * expiry always set and the history cursors when the message came from a page.
+ */
 export interface ChatMessage {
   authorUserId: string | null;
   avatarAccent: string | null;
@@ -73,10 +83,23 @@ export interface ChatMessage {
   content?: RoomMessageContentV1;
   cursor?: string;
   readCursor?: string;
-  attachments?: MessageAttachment[];
+  attachments?: Attachment[];
   linkPreview?: LinkPreview;
   replyTo?: { messageId: string };
   replyPreview?: ReplyTarget;
+}
+
+/** A message that never expires shows no countdown. */
+const NEVER = Number.MAX_SAFE_INTEGER;
+
+export function chatMessageFromRoomMessage(message: RoomMessage): ChatMessage {
+  return {
+    ...message,
+    expiresAt: message.expiresAt ?? NEVER,
+    content: message.content ?? undefined,
+    replyTo: message.replyTo ?? undefined,
+    replyPreview: message.replyPreview ?? undefined
+  };
 }
 
 export interface RoomChatHistoryPage {
@@ -92,21 +115,6 @@ export interface RoomChatHistoryPage {
   };
 }
 
-interface HistoryMessageDto {
-  id: string;
-  createdAt: unknown;
-  author?: Record<string, unknown>;
-  content?: unknown;
-  cursor?: string;
-  readCursor?: string;
-  attachments?: MessageAttachment[];
-  replyTo?: { messageId: string };
-  replyPreview?: ReplyTarget;
-  linkPreview?: unknown;
-  editedAt?: unknown;
-  expiresAt?: unknown;
-}
-
 export interface HistoryPageRequest {
   mode?: 'latest' | 'before' | 'after' | 'around';
   cursor?: string;
@@ -115,16 +123,9 @@ export interface HistoryPageRequest {
   messageId?: string;
 }
 
-interface CreateRoomResponse {
-  createdAt: number;
-  isStatic: boolean;
-  name: string;
-  roomId: string;
-}
-
 export async function createRoom(options: CreateRoomOptions = {}): Promise<string> {
   const proof = await createRoomProof();
-  const room = await postJson<CreateRoomResponse>('/api/rooms', {
+  const room = await api.post<RoomCreated>('/api/rooms', {
     isStatic: Boolean(options.isStatic),
     name: options.name ?? '',
     proof
@@ -133,85 +134,61 @@ export async function createRoom(options: CreateRoomOptions = {}): Promise<strin
 }
 
 export async function updateRoom(roomId: string, options: UpdateRoomOptions): Promise<RoomSummary> {
-  const payload = await putJson<{ room: RoomSummary }>(`/api/rooms/${encodeURIComponent(roomId)}`, {
+  const payload = await api.put<RoomCard>(`/api/rooms/${encodeURIComponent(roomId)}`, {
     name: options.name
   });
   return payload.room;
 }
 
 export async function deleteRoom(roomId: string): Promise<void> {
-  await del(`/api/rooms/${encodeURIComponent(roomId)}`);
+  await api.delete<Done>(`/api/rooms/${encodeURIComponent(roomId)}`);
 }
 
 export async function ringRoomFriend(roomId: string, userId: string): Promise<void> {
-  await postJsonAuth(`/api/rooms/${encodeURIComponent(roomId)}/ring`, { userId });
-}
-
-// A read-only view of a current room occupant (mirrors the server's publicPeer).
-export interface RoomPeer {
-  accountUserId?: string;
-  avatarAccent: string | null;
-  avatarColorKey: string;
-  avatarUrl: string | null;
-  id: string;
-  deafened?: boolean;
-  joinedAt?: number;
-  muted: boolean;
-  name: string;
-  screen?: boolean;
-  screenAudio?: boolean;
-  screenProfileId?: string;
-  screenStreamId?: string;
-  /** Muted by the room owner. The participant cannot lift this themselves. */
-  serverMuted?: boolean;
-  viewedScreenPeerId?: string;
+  await api.post<Done>(`/api/rooms/${encodeURIComponent(roomId)}/ring`, { userId });
 }
 
 export async function kickRoomPeer(roomId: string, peerId: string): Promise<void> {
-  await postJsonAuth(`/api/rooms/${encodeURIComponent(roomId)}/kick`, { peerId });
+  await api.post<Done>(`/api/rooms/${encodeURIComponent(roomId)}/kick`, { peerId });
 }
 
 export async function setRoomPeerServerMute(roomId: string, peerId: string, muted: boolean): Promise<void> {
-  await postJsonAuth(`/api/rooms/${encodeURIComponent(roomId)}/server-mute`, { peerId, muted });
+  await api.post<ServerMuted>(`/api/rooms/${encodeURIComponent(roomId)}/server-mute`, { peerId, muted });
 }
 
 export async function banRoomPeer(roomId: string, peerId: string): Promise<string> {
-  const payload = await postJsonAuth<{ banId: string }>(`/api/rooms/${encodeURIComponent(roomId)}/ban`, { peerId });
+  const payload = await api.post<PeerBanned>(`/api/rooms/${encodeURIComponent(roomId)}/ban`, { peerId });
   return payload.banId;
 }
 
 export async function undoRoomBan(roomId: string, banId: string): Promise<void> {
-  await del(`/api/rooms/${encodeURIComponent(roomId)}/bans/${encodeURIComponent(banId)}`);
+  await api.delete<Done>(`/api/rooms/${encodeURIComponent(roomId)}/bans/${encodeURIComponent(banId)}`);
 }
 
 // Snapshot of who is in a room right now, without joining it — powers the lobby
 // room preview.
 export async function fetchRoomPeers(roomId: string): Promise<RoomPeer[]> {
-  const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/peers`, {
-    headers: { Accept: 'application/json' }
-  });
-  if (response.status === 404) return [];
-  if (!response.ok) throw new Error('Не удалось загрузить участников');
-  const payload = (await response.json()) as { peers?: RoomPeer[] };
-  return Array.isArray(payload.peers) ? payload.peers : [];
+  const answer = await orNull(
+    api.get<RoomPeers>(`/api/rooms/${encodeURIComponent(roomId)}/peers`, {
+      fallback: 'Не удалось загрузить участников'
+    })
+  );
+  return answer?.peers ?? [];
 }
 
 export async function fetchRoomStatus(roomId: string): Promise<RoomStatus | null> {
-  const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}`, {
-    headers: { Accept: 'application/json' }
-  });
-  if (response.status === 404) return null;
-  if (!response.ok) throw new Error('Не удалось проверить комнату');
-
-  const payload = await response.json();
-  return payload as RoomStatus;
+  const answer = await orNull(
+    api.get<RoomStatusAnswer>(`/api/rooms/${encodeURIComponent(roomId)}`, { fallback: 'Не удалось проверить комнату' })
+  );
+  if (!answer) return null;
+  const { ok: _ok, ...status } = answer;
+  return status;
 }
 
 export async function fetchRoomChat(roomId: string): Promise<ChatMessage[]> {
-  const payload = (await fetchJson(`/api/rooms/${encodeURIComponent(roomId)}/chat`)) as {
-    messages?: ChatMessage[];
-  };
-  return Array.isArray(payload?.messages) ? (payload.messages as ChatMessage[]) : [];
+  return (await api.get<RoomChat>(`/api/rooms/${encodeURIComponent(roomId)}/chat`)).messages.map(
+    chatMessageFromRoomMessage
+  );
 }
 
 export async function fetchRoomChatPage(
@@ -224,56 +201,41 @@ export async function fetchRoomChatPage(
   });
   if (request.cursor) params.set('cursor', request.cursor);
   if (request.messageId) params.set('messageId', request.messageId);
-  const response = await fetch(`/api/rooms/${encodeURIComponent(roomId)}/chat/history?${params}`, {
-    headers: { Accept: 'application/json' },
-    signal: request.signal
+  const page = await api.get<RoomHistoryPage>(`/api/rooms/${encodeURIComponent(roomId)}/chat/history?${params}`, {
+    signal: request.signal,
+    fallback: 'Не удалось загрузить историю комнаты'
   });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.error || 'Не удалось загрузить историю комнаты');
-  const page = payload as Omit<RoomChatHistoryPage, 'messages'> & { messages?: HistoryMessageDto[] };
-  return {
-    ...page,
-    messages: Array.isArray(page.messages)
-      ? page.messages.map((message) => roomMessageFromHistory(roomId, message))
-      : []
-  };
+  return { ...page, messages: page.messages.map((message) => roomMessageFromHistory(roomId, message)) };
 }
 
-function roomMessageFromHistory(roomId: string, message: HistoryMessageDto): ChatMessage {
-  const author = message.author ?? {};
-  const content =
-    typeof message.content === 'object' && message.content !== null ? (message.content as Record<string, unknown>) : {};
-  const createdAt =
-    typeof message.createdAt === 'number' ? message.createdAt : Date.parse(String(message.createdAt ?? ''));
+function roomMessageFromHistory(roomId: string, message: RoomHistoryMessage): ChatMessage {
+  const { author, content } = message;
+  const structured = 'version' in content ? content : undefined;
   return {
     id: message.id,
     roomId,
-    authorUserId: typeof author.userId === 'string' ? author.userId : null,
-    peerId: typeof author.peerId === 'string' ? author.peerId : '',
-    name: typeof author.name === 'string' ? author.name : 'Гость',
-    avatarColorKey: typeof author.avatarColorKey === 'string' ? author.avatarColorKey : '',
-    avatarUrl: typeof author.avatarUrl === 'string' ? author.avatarUrl : null,
-    avatarAccent: typeof author.avatarAccent === 'string' ? author.avatarAccent : null,
-    text: projectRoomMessageContent(content, typeof content.text === 'string' ? content.text : ''),
-    content: content.version === 1 ? (content as unknown as RoomMessageContentV1) : undefined,
-    createdAt: Number.isFinite(createdAt) ? createdAt : Date.now(),
-    editedAt: message.editedAt == null ? null : Number(message.editedAt),
-    expiresAt: message.expiresAt == null ? Number.MAX_SAFE_INTEGER : Number(message.expiresAt),
+    authorUserId: author.userId,
+    peerId: author.peerId,
+    name: author.name || 'Гость',
+    avatarColorKey: author.avatarColorKey ?? '',
+    avatarUrl: author.avatarUrl,
+    avatarAccent: author.avatarAccent,
+    text: projectRoomMessageContent(content, 'text' in content ? content.text : ''),
+    content: structured,
+    createdAt: message.createdAt ?? Date.now(),
+    editedAt: message.editedAt ?? null,
+    expiresAt: message.expiresAt ?? NEVER,
     cursor: message.cursor,
     readCursor: message.readCursor,
     attachments: message.attachments,
-    linkPreview: normalizeLinkPreview(message.linkPreview) ?? undefined,
-    replyTo: message.replyTo,
-    replyPreview: message.replyPreview
+    linkPreview: message.linkPreview,
+    replyTo: message.replyTo ?? undefined,
+    replyPreview: message.replyPreview ?? undefined
   };
 }
 
 export async function markRoomChatRead(roomId: string, cursor?: string): Promise<string | undefined> {
-  const payload = await postJsonAuth<{ cursor?: string; readCursor?: string }>(
-    `/api/rooms/${encodeURIComponent(roomId)}/read`,
-    cursor ? { cursor } : {}
-  );
-  return payload?.readCursor ?? payload?.cursor;
+  return (await api.post<RoomRead>(`/api/rooms/${encodeURIComponent(roomId)}/read`, cursor ? { cursor } : {})).cursor;
 }
 
 export async function postRoomChat(
@@ -289,20 +251,19 @@ export async function postRoomChat(
     idempotencyKey?: string;
   }
 ): Promise<ChatMessage> {
-  const payload = await postJson<{ message: ChatMessage }>(`/api/rooms/${encodeURIComponent(roomId)}/chat`, body);
-  return payload.message;
+  const payload = await api.post<RoomMessageAnswer>(`/api/rooms/${encodeURIComponent(roomId)}/chat`, body);
+  return chatMessageFromRoomMessage(payload.message);
 }
 
 export async function deleteRoomChatMessage(
   roomId: string,
   messageId: string,
   body?: { peerId?: string; sessionToken?: string }
-): Promise<{ ok: boolean; deleted?: boolean }> {
-  const payload = await del<{ ok: boolean; deleted?: boolean }>(
+): Promise<MessageDeleted> {
+  return api.delete<MessageDeleted>(
     `/api/rooms/${encodeURIComponent(roomId)}/chat/${encodeURIComponent(messageId)}`,
     body ?? {}
   );
-  return payload;
 }
 
 export async function editRoomChatMessage(
@@ -310,9 +271,9 @@ export async function editRoomChatMessage(
   messageId: string,
   body: { text: string; peerId?: string; sessionToken?: string }
 ): Promise<ChatMessage> {
-  const payload = await patchJson<{ message: ChatMessage }>(
+  const payload = await api.patch<RoomMessageAnswer>(
     `/api/rooms/${encodeURIComponent(roomId)}/chat/${encodeURIComponent(messageId)}`,
     body
   );
-  return payload.message;
+  return chatMessageFromRoomMessage(payload.message);
 }

@@ -40,3 +40,27 @@ test('G27-A02 unauthorized and cross-thread cursors fail without disclosure', as
   });
   await assert.rejects(denied.getPage({ userId: 'a', peerId: 'b' }), { code: 'thread_forbidden', statusCode: 403 });
 });
+
+test('a DM page sends its times as epoch milliseconds', async () => {
+  const repository = fake<DmHistoryRepository>({
+    canReadThread: async () => true,
+    listLatest: async () => ({
+      messages: [
+        {
+          ...message('a', 1),
+          createdAt: '2026-01-01T00:00:00.000Z',
+          editedAt: new Date('2026-01-01T00:01:00.000Z'),
+          readAt: new Date('2026-01-01T00:02:00.000Z')
+        }
+      ],
+      hasMoreBefore: false,
+      hasMoreAfter: false
+    })
+  });
+  const service = createDmHistoryService({ repository, cursorCodec: createCursorCodec({ keys: ['d'.repeat(32)] }) });
+  const [first] = (await service.getPage({ userId: 'a', peerId: 'b' })).messages;
+  assert.ok(first);
+  assert.equal(first.createdAt, Date.parse('2026-01-01T00:00:00.000Z'));
+  assert.equal(first.editedAt, Date.parse('2026-01-01T00:01:00.000Z'));
+  assert.equal(first.readAt, Date.parse('2026-01-01T00:02:00.000Z'));
+});

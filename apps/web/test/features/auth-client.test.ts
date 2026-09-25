@@ -19,8 +19,8 @@ test('a failing room list is an error, not an empty list', async () => {
   await expect(fetchOwnedRooms()).rejects.toThrow('Не удалось загрузить комнаты');
 });
 
-test('a room list without rooms is an empty list', async () => {
-  stubFetch({ '/api/auth/rooms': { body: {} } });
+test('an empty room list is an empty list', async () => {
+  stubFetch({ '/api/auth/rooms': { body: { ok: true, rooms: [] } } });
   const { fetchOwnedRooms } = await import('../../src/lib/api/auth.ts');
   await expect(fetchOwnedRooms()).resolves.toEqual([]);
 });

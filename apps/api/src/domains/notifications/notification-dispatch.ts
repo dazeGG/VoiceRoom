@@ -1,6 +1,7 @@
 // Delivering a notification outside the app: web push with the account's
 // preferences applied, and the live + push notice for a new direct message.
 
+import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { resolvePushTtl, shouldDeliverPush } from '../../lib/push-service.ts';
@@ -36,7 +37,7 @@ export interface NotificationDispatchDeps {
     sendToUser(userId: string, payload: Record<string, unknown>, context: Record<string, unknown>): Promise<unknown>;
   };
   preferences(userId: string): Promise<Preferences>;
-  notifyUser(userId: string, event: Record<string, unknown>): number;
+  notifyUser(userId: string, event: AccountMessage): number;
   logger(): Pick<Logger, 'warn' | 'error'>;
 }
 
@@ -65,17 +66,18 @@ export function createNotificationDispatch(deps: NotificationDispatchDeps) {
   async function broadcastDmNotification(
     recipientUserId: string,
     sender: SocialUser | null | undefined,
-    message: { id: string; body?: string; createdAt?: unknown }
+    message: { id: string; body: string; createdAt: number | null }
   ): Promise<number> {
     if (!recipientUserId || !sender || recipientUserId === sender.id) return 0;
     try {
       const preferences = await deps.preferences(recipientUserId);
       if (preferences.mutedPeerIds.includes(sender.id)) return 0;
-      const notification = {
+      const dedupeKey = `dm:${message.id}`;
+      const notification: AccountMessage = {
         type: 'notification.dm.message',
-        dedupeKey: `dm:${message.id}`,
+        dedupeKey,
         peer: notificationActor(sender),
-        message: { id: message.id, body: message.body, createdAt: message.createdAt }
+        message: { id: message.id, body: message.body, createdAt: message.createdAt ?? Date.now() }
       };
       const broadcastCount = deps.notifyUser(recipientUserId, notification);
       void queuePush(
@@ -86,7 +88,7 @@ export function createNotificationDispatch(deps: NotificationDispatchDeps) {
           body: message.body,
           privateBody: 'Откройте VoiceRoom, чтобы прочитать сообщение.',
           tag: `dm:${sender.id}`,
-          dedupeKey: notification.dedupeKey,
+          dedupeKey,
           url: `/?dm=${encodeURIComponent(sender.id)}`
         },
         { peerUserId: sender.id }

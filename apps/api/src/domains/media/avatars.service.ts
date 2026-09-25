@@ -6,7 +6,9 @@ import type { Readable } from 'node:stream';
 import type { Logger } from 'pino';
 import { createAvatarKey, processAvatar } from '../../lib/avatar-processing.ts';
 import { validateAvatarKey } from '../../lib/avatar-storage.ts';
-import { selfUser } from '../../lib/user-store.ts';
+import { selfUser, type StoredUser } from '../../lib/user-store.ts';
+import type { SelfUser } from '@voice-room/shared/contracts/account';
+import type { LobbyRoom } from '@voice-room/shared/contracts/rooms';
 import type { StoredRoom } from '../rooms/room-views.ts';
 
 type Log = Pick<Logger, 'error'> | undefined;
@@ -20,11 +22,7 @@ export interface AvatarStorage extends FileStorage {
   remove(key: string): Promise<unknown>;
 }
 
-export interface AvatarUser {
-  id: string;
-  avatarKey?: string | null;
-  [key: string]: unknown;
-}
+export type AvatarUser = StoredUser;
 
 export interface AvatarsDeps {
   storage(): AvatarStorage;
@@ -46,7 +44,7 @@ export interface AvatarsDeps {
   refreshActiveProfile(user: AvatarUser): void;
   broadcastProfileToFriends(user: AvatarUser, log: Log): Promise<void>;
   /** Broadcasts room.updated and returns the lobby card it sent. */
-  announceRoomUpdate(roomId: string, room: StoredRoom): unknown;
+  announceRoomUpdate(roomId: string, room: StoredRoom): LobbyRoom;
 }
 
 type Updated<T> = { status: 'updated' } & T;
@@ -96,7 +94,7 @@ export function createAvatarsService(deps: AvatarsDeps) {
     user: AvatarUser,
     upload: Buffer,
     log: Log
-  ): Promise<Updated<{ user: unknown }> | NotFound> {
+  ): Promise<Updated<{ user: SelfUser }> | NotFound> {
     const { avatarKey, accent } = await store('user', user.id, upload);
     const result = await deps.users().swapAvatar({ userId: user.id, avatarKey, avatarAccent: accent });
     if (!result.user) {
@@ -108,7 +106,7 @@ export function createAvatarsService(deps: AvatarsDeps) {
     return profileChanged(result.user, log);
   }
 
-  async function clearUserAvatar(userId: string, log: Log): Promise<Updated<{ user: unknown }> | NotFound> {
+  async function clearUserAvatar(userId: string, log: Log): Promise<Updated<{ user: SelfUser }> | NotFound> {
     const result = await deps.users().swapAvatar({ userId });
     if (!result.user) return { status: 'not_found' };
     await removeFile(result.previousAvatarKey, log);
@@ -119,7 +117,7 @@ export function createAvatarsService(deps: AvatarsDeps) {
     room: { id: string; avatarKey?: string | null },
     upload: Buffer,
     log: Log
-  ): Promise<Updated<{ room: unknown }> | NotFound> {
+  ): Promise<Updated<{ room: LobbyRoom }> | NotFound> {
     const { avatarKey } = await store('room', room.id, upload);
     const result = await deps.rooms().swapRoomAvatar(room.id, avatarKey);
     if (!result.room) {
@@ -130,7 +128,7 @@ export function createAvatarsService(deps: AvatarsDeps) {
     return { status: 'updated', room: deps.announceRoomUpdate(room.id, result.room) };
   }
 
-  async function clearRoomAvatar(roomId: string, log: Log): Promise<Updated<{ room: unknown }> | NotFound> {
+  async function clearRoomAvatar(roomId: string, log: Log): Promise<Updated<{ room: LobbyRoom }> | NotFound> {
     const result = await deps.rooms().swapRoomAvatar(roomId, null);
     if (!result.room) return { status: 'not_found' };
     await removeFile(result.previousAvatarKey, log);

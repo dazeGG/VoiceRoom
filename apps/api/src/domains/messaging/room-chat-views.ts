@@ -1,6 +1,15 @@
-// A room chat message as clients see it: the HTTP answers, the realtime
-// events and the legacy list all send this shape (apps/web ChatMessage).
+// A room chat message as clients see it (RoomMessage in
+// @voice-room/shared/contracts/messages): the HTTP answers, the realtime
+// events and the legacy list all send this shape.
 
+import type {
+  Attachment,
+  LinkPreview,
+  MessageContent,
+  ReplyPointer,
+  ReplyPreview,
+  RoomMessage
+} from '@voice-room/shared/contracts/messages';
 import { avatarColorForPeerId } from '../../lib/room-store.ts';
 
 export interface RoomChatMessage {
@@ -17,15 +26,15 @@ export interface RoomChatMessage {
   avatarColorKey?: string | null;
   avatarKey?: string | null;
   avatarUrl?: string | null;
-  content?: unknown;
-  attachments?: unknown[];
-  linkPreview?: unknown;
-  replyTo?: { messageId: string } | null;
-  replyPreview?: unknown;
+  content?: MessageContent | null;
+  attachments?: Attachment[];
+  linkPreview?: LinkPreview | null;
+  replyTo?: ReplyPointer | null;
+  replyPreview?: ReplyPreview | null;
   idempotencyReplay?: boolean;
 }
 
-export function publicChatMessage(message: RoomChatMessage) {
+export function publicChatMessage(message: RoomChatMessage): RoomMessage {
   return {
     authorUserId: message.authorUserId || null,
     avatarAccent: message.avatarAccent || null,

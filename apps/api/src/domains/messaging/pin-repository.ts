@@ -1,4 +1,5 @@
 import type pg from 'pg';
+import { normalizeRoomMessageContent, type RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type PinPool = QueryClient & { connect?: () => Promise<pg.PoolClient> };
@@ -23,7 +24,7 @@ export type StoredPin = {
   pinnedAt: number | null;
   author: { peerId: string; userId: string | null; name: string };
   text: string;
-  content: unknown;
+  content: RoomMessageContentV1 | null;
   createdAt: number | null;
 };
 
@@ -53,7 +54,7 @@ function mapPin(row: PinRow): StoredPin {
       name: row.name || ''
     },
     text: row.text || '',
-    content: row.content || null,
+    content: normalizeRoomMessageContent(row.content),
     createdAt: toMillis(row.created_at)
   };
 }

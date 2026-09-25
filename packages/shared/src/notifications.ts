@@ -20,10 +20,11 @@ export interface NotificationItem {
   actorUserId: string;
   reasons: NotificationReason[];
   revision: number;
-  createdAt: unknown;
-  updatedAt: unknown;
-  readAt: unknown;
-  retractedAt: unknown;
+  /** Epoch milliseconds, like every time the API sends. */
+  createdAt: number | null;
+  updatedAt: number | null;
+  readAt: number | null;
+  retractedAt: number | null;
   body: string;
   cursor?: string;
 }
@@ -56,6 +57,16 @@ function cleanString(value: unknown, max = 256): string {
   return text && text.length <= max ? text : '';
 }
 
+// Rows carry what the database driver returns (a Date or an ISO string);
+// an envelope read back on the web already carries numbers.
+function epochMillis(value: unknown): number | null {
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.getTime();
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value !== 'string' || !value) return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export function normalizeNotificationLevel(
   value: unknown,
   fallback: NotificationLevel = 'mentions'
@@ -86,10 +97,10 @@ export function normalizeNotificationItem(input: unknown): NotificationItem | nu
     actorUserId,
     reasons,
     revision: Math.max(1, Number.isSafeInteger(Number(value.revision)) ? Number(value.revision) : 1),
-    createdAt: value.createdAt ?? null,
-    updatedAt: value.updatedAt ?? null,
-    readAt: value.readAt ?? null,
-    retractedAt: value.retractedAt ?? null,
+    createdAt: epochMillis(value.createdAt),
+    updatedAt: epochMillis(value.updatedAt),
+    readAt: epochMillis(value.readAt),
+    retractedAt: epochMillis(value.retractedAt),
     body: value.retractedAt ? '' : cleanString(value.body, 512),
     cursor: cleanString(value.cursor, 4096) || undefined
   };

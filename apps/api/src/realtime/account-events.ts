@@ -1,16 +1,37 @@
-import { buildServerEnvelope } from './envelope.ts';
+// What domain services tell an account's sockets, in the older in-process
+// spelling, and its WebSocket event. Services send AccountMessage; only this
+// module knows the wire names.
+
+import type { ServerEvents } from '@voice-room/shared/contracts/realtime';
 import type { ServerEnvelope } from '@voice-room/shared/realtime';
+import { buildServerEnvelope } from './envelope.ts';
 
-type AccountEvent = { type?: unknown; [key: string]: any };
+type Tagged<Type extends string, Fields> = { type: Type } & Fields;
 
-function toWsAccountEvent(message: AccountEvent | null | undefined): ServerEnvelope | null {
-  if (!message || typeof message.type !== 'string') return null;
+export type AccountMessage =
+  | Tagged<'presence', ServerEvents['friend.presence']>
+  | Tagged<'friend-request', Record<never, never>>
+  | Tagged<'friend-accepted' | 'friend-removed', { userId: string }>
+  | Tagged<'ring.incoming', ServerEvents['ring.incoming']>
+  | Tagged<'user-updated', ServerEvents['friend.updated']>
+  | Tagged<'notification-settings-updated', ServerEvents['notification.settings.updated']>
+  | Tagged<'dm-message' | 'dm.message.edited' | 'dm-message-edited', ServerEvents['dm.message']>
+  | Tagged<'dm-read', ServerEvents['dm.read']>
+  | Tagged<'dm.message.deleted' | 'dm-message-deleted', ServerEvents['dm.message.deleted']>
+  | Tagged<'notification.dm.message', ServerEvents['notification.dm.message']>
+  | Tagged<'notification.room.message', ServerEvents['notification.room.message']>
+  | Tagged<'notification.friend.request', ServerEvents['notification.friend.request']>
+  | Tagged<'notification.friend.accepted', ServerEvents['notification.friend.accepted']>
+  | Tagged<'room.kicked' | 'room.banned', ServerEvents['room.kicked']>
+  | Tagged<'account.login.new', ServerEvents['account.login.new']>
+  | Tagged<'account.login.resolved', ServerEvents['account.login.resolved']>;
 
+function toWsAccountEvent(message: AccountMessage): ServerEnvelope {
   switch (message.type) {
     case 'presence':
       return buildServerEnvelope('friend.presence', {
         userId: message.userId,
-        online: Boolean(message.online)
+        online: message.online
       });
     case 'friend-request':
       return buildServerEnvelope('friend.request', { direction: 'incoming' });
@@ -80,8 +101,6 @@ function toWsAccountEvent(message: AccountEvent | null | undefined): ServerEnvel
         alertId: message.alertId,
         resolution: message.resolution
       });
-    default:
-      return null;
   }
 }
 

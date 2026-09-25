@@ -308,6 +308,7 @@ test('desktop build download uses the release asset and falls back to the releas
   });
   const { RELEASES_URL } = await import('../src/lib/features/home/model/desktop-builds.ts');
   const release = {
+    ok: true as const,
     version: '1.2.3',
     htmlUrl: 'https://example.test/release',
     assets: {

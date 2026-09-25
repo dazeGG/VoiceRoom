@@ -3,9 +3,12 @@
 // fans the message out to this replica's sockets. Claiming and retrying are
 // the worker's job (workers/message-delivery.ts), so nothing here runs on a timer.
 
+import type { DirectMessage as StoredDirectMessage } from '../../lib/friend-store.ts';
+import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import type { MessageProjection } from './message-projection.ts';
+import type { StoredUser } from '../../lib/user-store.ts';
 
 const CHANNEL = 'voice_room_message_delivery';
 
@@ -29,13 +32,13 @@ export interface MessageDeliveryRelayDeps {
   outbox(): { getEvent(eventId: string): Promise<{ payload?: unknown } | null> } | null;
   projection: MessageProjection;
   broadcastChatMessage(roomId: string, message: unknown): void;
-  notifyUser(userId: string, event: Record<string, unknown>): void;
-  findUser(userId: string): Promise<{ id: string; [key: string]: unknown } | null>;
+  notifyUser(userId: string, event: AccountMessage): void;
+  findUser(userId: string): Promise<StoredUser | null>;
   /** The recipient's DM notification and push. */
   broadcastDmNotification(
     recipientId: string,
-    sender: { id: string; [key: string]: unknown },
-    message: { id: string; body?: string; createdAt?: unknown }
+    sender: StoredUser,
+    message: { id: string; body: string; createdAt: number | null }
   ): Promise<unknown>;
   publicChatMessage(message: unknown): unknown;
   logger(): Pick<Logger, 'error'>;
@@ -56,13 +59,8 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
       return;
     }
     if (event.conversation?.type === 'dm') {
-      const message = event.message as {
-        senderId: string;
-        recipientId: string;
-        id: string;
-        body?: string;
-        createdAt?: unknown;
-      };
+      // The outbox carries the stored message as the store wrote it.
+      const message = event.message as unknown as StoredDirectMessage;
       const peerId = message.senderId === event.conversation.id ? message.recipientId : event.conversation.id;
       const projected = await deps.projection.project('dm', message, { userId: message.senderId, peerId });
       deps.notifyUser(message.senderId, { type: 'dm-message', message: projected });

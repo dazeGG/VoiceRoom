@@ -3,8 +3,11 @@ import type { DesktopAsset, DesktopRelease } from '$lib/api/desktop';
 export const QUARANTINE_CMD = 'sudo xattr -rd com.apple.quarantine /Applications/Voice\\ Room.app';
 export const RELEASES_URL = 'https://github.com/dazeGG/VoiceRoomDesktop/releases/latest';
 
+/** A platform the desktop app is built for; each has one asset in a release. */
+export type DesktopBuildId = keyof DesktopRelease['assets'];
+
 export interface DesktopBuild {
-  id: string;
+  id: DesktopBuildId;
   label: string;
   ext: string;
   req: string;
@@ -17,7 +20,7 @@ export const DESKTOP_BUILDS: DesktopBuild[] = [
   { id: 'win-x64', label: 'Windows · 64-bit', ext: '.exe', req: 'Windows 10/11', mac: false }
 ];
 
-export function detectDesktopBuildId(): string {
+export function detectDesktopBuildId(): DesktopBuildId {
   try {
     const ua = `${navigator.userAgent || ''} ${navigator.platform || ''}`;
     if (/Win/i.test(ua)) return 'win-x64';

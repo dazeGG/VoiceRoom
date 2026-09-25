@@ -1,9 +1,7 @@
+import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
 import { PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/capabilities';
-
-const HEALTH_CAPABILITIES_LIMITS = {
-  contractVersion: 1
-};
+import { Capabilities } from '@voice-room/shared/contracts/ops';
 
 type ReadinessLike =
   | {
@@ -21,36 +19,22 @@ function publicFeatureFlags(features: Record<string, unknown> | null | undefined
   return Object.fromEntries(PUBLIC_CAPABILITY_KEYS.map((key) => [key, features?.[key] === true]));
 }
 
-function formatCapabilityPayload(readiness: ReadinessLike) {
-  const snapshot = readiness || {};
-  return {
-    contractVersion: HEALTH_CAPABILITIES_LIMITS.contractVersion,
-    apiVersion: '2.5.0',
-    features: publicFeatureFlags(snapshot?.features)
-  };
-}
-
-function registerCapabilityRoutes({
-  app,
-  readinessProvider
-}: {
-  app?: FastifyInstance;
-  readinessProvider?: ReadinessSource | null;
-}): void {
-  if (!app || typeof app.get !== 'function' || !readinessProvider) return;
-  const provider = readinessProvider;
-
-  app.get('/api/capabilities', (_request, reply) => {
-    const readiness = (() => {
-      try {
-        return provider.getSnapshot ? provider.getSnapshot() : (provider as ReadinessLike);
-      } catch {
-        return null;
-      }
-    })();
-
-    const payload = formatCapabilityPayload(readiness);
-    reply.header('Cache-Control', 'no-store').code(200).send(payload);
+/** The public feature flags: every known key, true only when the replica reports it on. */
+function registerCapabilityRoutes(root: FastifyInstance, readiness: ReadinessSource): void {
+  const app = root.withTypeProvider<TypeBoxTypeProvider>();
+  app.get('/api/capabilities', { schema: { response: { 200: Capabilities } } }, async (_request, reply) => {
+    let snapshot: ReadinessLike = null;
+    try {
+      snapshot = readiness.getSnapshot ? readiness.getSnapshot() : (readiness as ReadinessLike);
+    } catch {
+      // An unreadable snapshot reports every feature off.
+    }
+    reply.header('Cache-Control', 'no-store');
+    return {
+      contractVersion: 1 as const,
+      apiVersion: '2.5.0',
+      features: publicFeatureFlags(snapshot?.features)
+    };
   });
 }
 

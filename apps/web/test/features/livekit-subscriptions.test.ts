@@ -158,9 +158,9 @@ test('a token request that races the realtime join is retried while the join is 
   let current = true;
   const lk = await loadLiveKitHarness({
     autoResolveClient: true,
-    postJson: async () => {
+    requestToken: async () => {
       attempts += 1;
-      if (attempts < 3) throw new lk.ApiRequestError('not in room', 'not_in_room');
+      if (attempts < 3) throw lk.refusal('not in room', 'not_in_room');
       // Stop right after the credentials arrive, before any LiveKit connection.
       current = false;
       return { token: 't', url: 'wss://lk' };
@@ -179,9 +179,9 @@ test('a token request is not retried once the join was abandoned, nor for other 
   let attempts = 0;
   const lk = await loadLiveKitHarness({
     autoResolveClient: true,
-    postJson: async () => {
+    requestToken: async () => {
       attempts += 1;
-      throw new lk.ApiRequestError('not in room', 'not_in_room');
+      throw lk.refusal('not in room', 'not_in_room');
     }
   });
   const abandoned = lk.service.connectLiveKitRoom('Анна', () => false);
@@ -191,7 +191,7 @@ test('a token request is not retried once the join was abandoned, nor for other 
   expect(attempts).toBe(1);
 
   const other = await loadLiveKitHarness({
-    postJson: async () => {
+    requestToken: async () => {
       throw new Error('room full');
     }
   });

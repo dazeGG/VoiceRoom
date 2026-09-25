@@ -1,33 +1,40 @@
-import {
-  buildHistoryEnvelope,
-  normalizeHistoryRequest,
-  type HistoryEnvelope
-} from '@voice-room/shared/messaging-history';
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';
+import type {
+  Attachment,
+  LinkPreview,
+  MessageContent,
+  ReplyPointer,
+  ReplyPreview,
+  RoomHistoryMessage,
+  RoomHistoryPage
+} from '@voice-room/shared/contracts/messages';
+import { normalizeHistoryRequest } from '@voice-room/shared/messaging-history';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 
 type Tuple = { createdAtMicros: unknown; id: string };
 type Loose = Record<string, unknown>;
 type Access = { authorized?: boolean; [key: string]: unknown } | null | undefined;
 
+/** A room message as the history repository reads it; times come as the driver returns them. */
 export type StoredRoomMessage = {
   id: string;
-  roomId?: string;
-  createdAt?: unknown;
-  createdAtMicros?: unknown;
-  authorUserId?: unknown;
-  peerId?: unknown;
-  name?: unknown;
-  avatarColorKey?: unknown;
+  roomId: string;
+  createdAt: unknown;
+  createdAtMicros: unknown;
+  authorUserId?: string | null;
+  peerId?: string;
+  name?: string;
+  avatarColorKey?: string | null;
   avatarKey?: string | null;
-  avatarAccent?: unknown;
-  content?: unknown;
-  text?: unknown;
+  avatarAccent?: string | null;
+  content?: MessageContent | null;
+  text?: string;
   editedAt?: unknown;
   expiresAt?: unknown;
-  attachments?: unknown;
-  linkPreview?: unknown;
-  replyTo?: unknown;
-  replyPreview?: unknown;
-  [key: string]: unknown;
+  attachments?: Attachment[];
+  linkPreview?: LinkPreview | null;
+  replyTo?: ReplyPointer | null;
+  replyPreview?: ReplyPreview | null;
 };
 
 type HistoryPage = { messages: StoredRoomMessage[]; hasMoreBefore: boolean; hasMoreAfter: boolean };
@@ -55,10 +62,10 @@ type VisibilityPolicy = {
 };
 
 class RoomHistoryError extends Error {
-  declare code: string;
+  declare code: ErrorCode;
   declare statusCode: number;
 
-  constructor(code: string, statusCode: number, message: string) {
+  constructor(code: ErrorCode, statusCode: number, message: string) {
     super(message);
     this.name = 'RoomHistoryError';
     this.code = code;
@@ -121,25 +128,25 @@ function createRoomHistoryService({
     return true;
   }
 
-  function toDto(roomId: string, message: StoredRoomMessage) {
+  function toDto(roomId: string, message: StoredRoomMessage): RoomHistoryMessage {
     const tuple = { createdAtMicros: message.createdAtMicros, id: message.id };
     return {
       id: message.id,
       kind: 'room',
-      createdAt: message.createdAt,
+      createdAt: epochMillis(message.createdAt),
       author: {
-        userId: message.authorUserId,
-        peerId: message.peerId,
-        name: message.name,
-        avatarColorKey: message.avatarColorKey,
+        userId: message.authorUserId ?? null,
+        peerId: message.peerId ?? '',
+        name: message.name ?? '',
+        avatarColorKey: message.avatarColorKey ?? null,
         avatarUrl: message.avatarKey ? `/api/avatars/${encodeURIComponent(message.avatarKey)}` : null,
-        avatarAccent: message.avatarAccent
+        avatarAccent: message.avatarAccent ?? null
       },
-      content: message.content || { type: 'text', text: message.text },
-      editedAt: message.editedAt,
-      expiresAt: message.expiresAt,
+      content: message.content || { type: 'text', text: message.text ?? '' },
+      editedAt: epochMillis(message.editedAt),
+      expiresAt: epochMillis(message.expiresAt),
       attachments: message.attachments,
-      linkPreview: message.linkPreview,
+      linkPreview: message.linkPreview ?? undefined,
       replyTo: message.replyTo,
       replyPreview: message.replyPreview,
       cursor: encodeTuple(roomId, tuple),
@@ -151,7 +158,7 @@ function createRoomHistoryService({
     roomId,
     query = {},
     access = { authorized: true }
-  }: { roomId?: unknown; query?: Loose; access?: Access } = {}): Promise<HistoryEnvelope> {
+  }: { roomId?: unknown; query?: Loose; access?: Access } = {}): Promise<RoomHistoryPage> {
     const normalizedRoomId = String(roomId || '').trim();
     if (!normalizedRoomId) throw new RoomHistoryError('room_not_found', 404, 'Room not found');
 
@@ -201,7 +208,8 @@ function createRoomHistoryService({
         : visible;
     const messages = projected.map((message) => toDto(normalizedRoomId, message));
 
-    return buildHistoryEnvelope({
+    return {
+      contractVersion: 1,
       mode,
       messages,
       pageInfo: {
@@ -211,7 +219,7 @@ function createRoomHistoryService({
         hasMoreBefore: page.hasMoreBefore,
         hasMoreAfter: page.hasMoreAfter
       }
-    });
+    };
   }
 
   return { getPage };

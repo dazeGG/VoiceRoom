@@ -20,10 +20,10 @@ export type MessageReadService = Readonly<{
 }>;
 
 class MessageReadError extends Error {
-  declare code: string;
+  declare code: ErrorCode;
   declare statusCode: number;
 
-  constructor(code = 'invalid_read_cursor', statusCode = 400) {
+  constructor(code: ErrorCode = 'invalid_read_cursor', statusCode = 400) {
     super('Invalid read cursor');
     this.name = 'MessageReadError';
     this.code = code;
@@ -81,3 +81,4 @@ function createMessageReadService({
 }
 
 export { MessageReadError, createMessageReadService };
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';

@@ -4,6 +4,8 @@
 // failure is rethrown marked `ownershipFinalized` so the reconnect lease does
 // not hand the seat back.
 
+import type { RoomPeerMessage } from '../../realtime/legacy-events.ts';
+import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { LiveRoom, PresencePeer } from './room-views.ts';
 
 export type EvictionType = 'room.kicked' | 'room.banned';
@@ -35,8 +37,8 @@ export interface PeerEvictionDeps {
   store(): EvictionStore;
   /** Null until createApiApp builds the realtime runtime. */
   runtime(): ReconnectRuntime | null;
-  notifyPeer(peer: PresencePeer, event: Record<string, unknown>): void;
-  notifyUser(userId: string, event: Record<string, unknown>): void;
+  notifyPeer(peer: PresencePeer, event: RoomPeerMessage): void;
+  notifyUser(userId: string, event: AccountMessage): void;
   /** Drops the voice seat any socket of this peer still holds in the room. */
   detachVoiceConnections(roomId: string, peerId: string): void;
   closePeer(roomId: string, peerId: string, transportId: string | undefined, reason: string): void;
@@ -76,7 +78,7 @@ export function createPeerEviction(deps: PeerEvictionDeps) {
         failure = error;
       }
     }
-    const event = { type, roomId: room.id, peerId: peer.id };
+    const event = { type, roomId: room.id, peerId: peer.id } as const;
     deps.notifyPeer(peer, event);
     if (peer.accountUserId) deps.notifyUser(peer.accountUserId, event);
     deps.detachVoiceConnections(room.id, peer.id);

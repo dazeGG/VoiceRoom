@@ -1,18 +1,18 @@
 <script lang="ts">
-  import type { MessageAttachment } from '@voice-room/shared/attachments';
+  import type { Attachment } from '@voice-room/shared/contracts/messages';
   import { attachmentVariantUrl } from '../../api/attachments';
   import AttachmentLightbox from './AttachmentLightbox.svelte';
   import './attachment.css';
 
-  let { attachments = [] }: { attachments?: MessageAttachment[] } = $props();
+  let { attachments = [] }: { attachments?: Attachment[] } = $props();
   let selected = $state(-1);
   const ready = $derived(attachments.filter((attachment) => attachment.state === 'ready'));
   const items = $derived(
     ready.map((attachment) => ({
       src: attachmentVariantUrl(attachment.id, 'processed'),
       downloadHref: attachmentVariantUrl(attachment.id, 'processed', true),
-      width: attachment.width,
-      height: attachment.height
+      width: attachment.width ?? undefined,
+      height: attachment.height ?? undefined
     }))
   );
 </script>

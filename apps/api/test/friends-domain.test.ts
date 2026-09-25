@@ -11,29 +11,25 @@ import { registerFriendsRoutes } from '../src/domains/social/friends.routes.ts';
 import { isActiveAccount, notificationActor } from '../src/domains/social/social-views.ts';
 import type { ApiContext } from '../src/app/context.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
-import { fake } from './fakes/index.ts';
+import { fake, publicUser, storedUser, storedDirectMessage } from './fakes/index.ts';
 
-const ME = { id: 'user-1', login: 'alice', displayName: 'Alice' };
+const ME = storedUser({ id: 'user-1', login: 'alice', displayName: 'Alice' });
 const FRIEND_ID = '22222222-2222-4222-8222-222222222222';
 const REQUEST_ID = '33333333-3333-4333-8333-333333333333';
 
 test('social views: the notification actor and active accounts', () => {
   assert.equal(notificationActor(null), null);
-  const actor = notificationActor({
-    id: 'u',
-    login: 'bob',
-    displayName: 'Bob',
-    passwordHash: 'secret',
-    desktopAppSeenAt: 10
-  });
+  const actor = notificationActor(
+    storedUser({ id: 'u', login: 'bob', displayName: 'Bob', passwordHash: 'secret', desktopAppSeenAt: 10 })
+  );
   assert.ok(actor);
   assert.equal(actor.id, 'u');
   assert.equal('passwordHash' in actor, false);
   assert.equal('hasUsedDesktopApp' in actor, false, 'self-only fields stay private');
   assert.equal(isActiveAccount(null), false);
-  assert.equal(isActiveAccount({ id: 'u' }), true);
-  assert.equal(isActiveAccount({ id: 'u', deletionRequestedAt: 1 }), false);
-  assert.equal(isActiveAccount({ id: 'u', deletedAt: 1 }), false);
+  assert.equal(isActiveAccount(storedUser({ id: 'u' })), true);
+  assert.equal(isActiveAccount(storedUser({ id: 'u', deletionRequestedAt: 1 })), false);
+  assert.equal(isActiveAccount(storedUser({ id: 'u', deletedAt: 1 })), false);
 });
 
 type HarnessOptions = {
@@ -52,29 +48,37 @@ function harness(store: Partial<FriendStore> = {}, options: HarnessOptions = {})
   const friends: FriendStore = {
     async listFriends() {
       return [
-        { user: { id: 'f1' }, unreadCount: 2, lastMessage: null },
-        { user: { id: 'f2' }, friendsSince: 5 }
+        { user: publicUser('f1'), friendsSince: null, unreadCount: 2, lastMessage: null },
+        {
+          user: publicUser('f2'),
+          friendsSince: 5,
+          unreadCount: 0,
+          lastMessage: { id: 'm', body: 'hi', createdAt: 4, fromMe: false }
+        }
       ];
     },
     async countIncomingRequests() {
       return 3;
     },
     async searchUsers() {
-      return [{ id: 'f1' }, { id: 'out' }, { id: 'in' }, { id: 'none' }];
+      return ['f1', 'out', 'in', 'none'].map((id) => publicUser(id));
     },
     async getFriendIds() {
       return ['f1'];
     },
     async listRequests() {
-      return { incoming: [{ user: { id: 'in' } }], outgoing: [{ user: { id: 'out' } }] };
+      return {
+        incoming: [{ id: 'r-in', createdAt: 1, mutualFriends: 0, user: publicUser('in') }],
+        outgoing: [{ id: 'r-out', createdAt: 1, user: publicUser('out') }]
+      };
     },
     async sendRequest() {
-      return { status: 'pending', user: { id: 'u2' }, requestId: 'r1' };
+      return { status: 'sent', user: publicUser('u2'), requestId: 'r1' };
     },
     async respondRequest({ action }) {
       return action === 'accept'
-        ? { status: 'accepted', requesterId: 'u2', user: { id: 'u2' } }
-        : { status: 'declined' };
+        ? { status: 'accepted', requesterId: 'u2', user: publicUser('u2') }
+        : { status: 'declined', requesterId: 'u2' };
     },
     async cancelRequest() {
       return { status: 'cancelled', addresseeId: 'u2' };
@@ -86,7 +90,7 @@ function harness(store: Partial<FriendStore> = {}, options: HarnessOptions = {})
       return ['b1'];
     },
     async listBlockedUsers() {
-      return [{ id: 'b1' }];
+      return [publicUser('b1')];
     },
     async blockUser() {
       return { status: 'blocked', unfriended: true };
@@ -104,11 +108,11 @@ function harness(store: Partial<FriendStore> = {}, options: HarnessOptions = {})
   };
   const service = createFriendsService({
     friends: () => friends,
-    findUser: async (userId) => (options.deletedTarget ? { id: userId, deletedAt: 1 } : { id: userId }),
+    findUser: async (userId) => storedUser({ id: userId, deletedAt: options.deletedTarget ? 1 : null }),
     findRoom: async (roomId) => (options.noRoom ? null : { id: roomId, name: options.roomName ?? 'Team' }),
     sendDirectMessage: async (input) => {
       calls.dms.push(input);
-      return { id: 'dm-1' };
+      return storedDirectMessage('dm-1');
     },
     isOnline: (userId) => userId === 'f1',
     notifyUser: (userId, event) => calls.events.push([userId, event.type]),
@@ -126,8 +130,14 @@ test('lists, search relationships and requests', async () => {
   const { service } = harness();
   assert.deepEqual(await service.list('user-1'), {
     friends: [
-      { user: { id: 'f1' }, friendsSince: null, online: true, unreadCount: 2, lastMessage: null },
-      { user: { id: 'f2' }, friendsSince: 5, online: false, unreadCount: undefined, lastMessage: undefined }
+      { user: publicUser('f1'), friendsSince: null, online: true, unreadCount: 2, lastMessage: null },
+      {
+        user: publicUser('f2'),
+        friendsSince: 5,
+        online: false,
+        unreadCount: 0,
+        lastMessage: { id: 'm', body: 'hi', createdAt: 4, fromMe: false }
+      }
     ],
     incomingRequestCount: 3
   });
@@ -136,14 +146,14 @@ test('lists, search relationships and requests', async () => {
     ['friend', 'outgoing', 'incoming', 'none']
   );
   assert.equal((await service.requests('user-1')).incoming.length, 1);
-  assert.deepEqual(await service.blocked('user-1'), { blocked: ['b1'], users: [{ id: 'b1' }] });
+  assert.deepEqual(await service.blocked('user-1'), { blocked: ['b1'], users: [publicUser('b1')] });
 });
 
 test('sending a request notifies the addressee; a crossing request accepts', async () => {
   const sent = harness();
   assert.deepEqual(await sent.service.sendRequest(ME, { userId: '', login: 'bob' }), {
     status: 'sent',
-    user: { id: 'u2' }
+    user: publicUser('u2')
   });
   assert.deepEqual(sent.calls.events, [
     ['u2', 'friend-request'],
@@ -156,7 +166,7 @@ test('sending a request notifies the addressee; a crossing request accepts', asy
 
   const crossing = harness({
     async sendRequest() {
-      return { status: 'accepted', user: { id: 'u2' } };
+      return { status: 'accepted', user: publicUser('u2') };
     }
   });
   assert.equal((await crossing.service.sendRequest(ME, { userId: 'x', login: '' })).status, 'accepted');
@@ -166,7 +176,7 @@ test('sending a request notifies the addressee; a crossing request accepts', asy
   ]);
   assert.equal(crossing.calls.pushes[0]?.[2], 'Заявка принята');
 
-  for (const status of ['not_found', 'self', 'blocked']) {
+  for (const status of ['not_found', 'self', 'blocked'] as const) {
     assert.deepEqual(
       await harness({
         async sendRequest() {
@@ -176,13 +186,16 @@ test('sending a request notifies the addressee; a crossing request accepts', asy
       { status }
     );
   }
-  for (const status of ['already_friends', 'already_sent']) {
+  for (const status of ['already_friends', 'already_sent'] as const) {
     const quiet = harness({
       async sendRequest() {
-        return { status, user: { id: 'u2' } };
+        return { status, user: publicUser('u2') };
       }
     });
-    assert.deepEqual(await quiet.service.sendRequest(ME, { userId: 'x', login: '' }), { status, user: { id: 'u2' } });
+    assert.deepEqual(await quiet.service.sendRequest(ME, { userId: 'x', login: '' }), {
+      status,
+      user: publicUser('u2')
+    });
     assert.deepEqual(quiet.calls.events, []);
   }
 });
@@ -206,7 +219,7 @@ test('responding, cancelling, removing, blocking and unblocking', async () => {
     (
       await harness({
         async respondRequest() {
-          return { status: 'blocked' };
+          return { status: 'blocked', requesterId: 'u2' };
         }
       }).service.respond(ME, 'r', 'accept')
     ).status,
@@ -329,7 +342,7 @@ test('a ring notifies, files a room invitation DM for both sides and pushes unti
   assert.deepEqual(calls.pushes[0][3], { expiresAt: 1050 });
 
   const unnamed = harness({}, { roomName: '' });
-  await unnamed.service.ring({ id: 'user-1' }, 'room-1', 'f1');
+  await unnamed.service.ring(storedUser({ login: '' }), 'room-1', 'f1');
   assert.equal(unnamed.calls.dms[0]?.body, 'Приглашение в комнату');
   assert.equal(unnamed.calls.pushes[0]?.[2], 'Друг зовёт вас');
 });
@@ -363,8 +376,8 @@ function routeApp(
         list: record('list', { friends: [], incomingRequestCount: 0 }),
         search: record('search', []),
         requests: record('requests', { incoming: [], outgoing: [] }),
-        sendRequest: record('sendRequest', { status: 'sent', user: { id: 'u2' } }),
-        respond: record('respond', { status: 'accepted', user: { id: 'u2' } }),
+        sendRequest: record('sendRequest', { status: 'sent', user: publicUser('u2') }),
+        respond: record('respond', { status: 'accepted', user: publicUser('u2') }),
         cancel: record('cancel', { status: 'cancelled' }),
         remove: record('remove', { status: 'removed' }),
         blocked: record('blocked', { blocked: [], users: [] }),
@@ -422,7 +435,7 @@ test('every social route needs a session and answers it', async (t) => {
   assert.deepEqual((await call(app, 'POST', `/api/friends/requests/${REQUEST_ID}/decline`, undefined)).body, {
     ok: true,
     status: 'accepted',
-    user: { id: 'u2' }
+    user: publicUser('u2')
   });
 });
 
@@ -545,12 +558,12 @@ test('social refusals keep their texts and codes', async (t) => {
   const selfBlock = await call(routeApp(t).app, 'PUT', '/api/blocks/user-1');
   assert.equal(selfBlock.status, 400);
   const quiet = await call(
-    routeApp(t, { sendRequest: { status: 'already_sent', user: { id: 'u2' } } }).app,
+    routeApp(t, { sendRequest: { status: 'already_sent', user: publicUser('u2') } }).app,
     'POST',
     '/api/friends/requests',
     { userId: FRIEND_ID }
   );
-  assert.deepEqual([quiet.status, quiet.body], [200, { ok: true, status: 'already_sent', user: { id: 'u2' } }]);
+  assert.deepEqual([quiet.status, quiet.body], [200, { ok: true, status: 'already_sent', user: publicUser('u2') }]);
   const declined = await call(
     routeApp(t, { respond: { status: 'declined' } }).app,
     'POST',
@@ -565,7 +578,7 @@ test('social refusals keep their texts and codes', async (t) => {
   );
   assert.deepEqual(
     [cooldown.status, cooldown.retryAfter, cooldown.body],
-    [429, '4', { ok: false, error: 'Invite cooldown', retryAfterSeconds: 4 }]
+    [429, '4', { ok: false, error: 'Invite cooldown', code: 'invite_cooldown', retryAfterSeconds: 4 }]
   );
   const tooMany = await call(routeApp(t, {}, { limited: true }).app, 'POST', '/api/friends/requests', {
     userId: FRIEND_ID

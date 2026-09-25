@@ -3,6 +3,7 @@
 // order, editing, deleting, marking read, and the HTTP answer each outcome
 // becomes. Everything runs on fakes; the integration suites cover the store.
 
+import { buildServerEnvelope } from '@voice-room/shared/realtime';
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fastify, { type FastifyInstance } from 'fastify';
@@ -27,15 +28,29 @@ import {
   type RoomMessages
 } from '../src/domains/messaging/room-chat.service.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
-import { fake, recordingLogger } from './fakes/index.ts';
+import { fake, recordingLogger, storedUser } from './fakes/index.ts';
 
 const UUID_A = '11111111-1111-4111-8111-111111111111';
 const UUID_B = '22222222-2222-4222-8222-222222222222';
 const TOKEN = 't'.repeat(32);
+const PICTURE = {
+  id: 'a1',
+  context: 'room',
+  order: 0,
+  mimeType: 'image/webp',
+  bytes: 10,
+  width: 2,
+  height: 2,
+  state: 'ready',
+  url: '/api/media/attachments/a1/preview'
+};
+const PREVIEW = { url: 'https://example.com', title: 'Example', description: '', siteName: '', image: null };
+const QUOTE = { messageId: 'quoted', deleted: false, text: 'hi' };
+
 const ACCOUNT = {
   id: 'user-1',
   displayName: 'Alice',
-  avatarColorKey: 'teal',
+  avatarColorKey: 'teal' as const,
   avatarKey: 'alice.webp',
   avatarAccent: 'gold'
 };
@@ -111,12 +126,12 @@ test('a public chat message fills avatar and defaults', () => {
     createdAt: 1,
     avatarUrl: '/x',
     avatarColorKey: 'blue',
-    attachments: [1],
-    linkPreview: { url: 'u' }
+    attachments: [PICTURE],
+    linkPreview: PREVIEW
   });
   assert.equal(full.avatarUrl, '/x');
   assert.equal(full.avatarColorKey, 'blue');
-  assert.deepEqual(full.attachments, [1]);
+  assert.deepEqual(full.attachments, [PICTURE]);
   assert.equal(publicChatMessage({ id: 'm', peerId: 'p' } as RoomChatMessage).avatarUrl, null);
 });
 
@@ -294,7 +309,7 @@ function harness(options: HarnessOptions = {}) {
     },
     mentionUserIds: (content) =>
       content === 'bad-mention'
-        ? { ok: false, code: 'mention_not_member' }
+        ? { ok: false, code: 'invalid_mention_target' }
         : { ok: true, userIds: content === 'mention' ? ['user-2'] : [] },
     limiter: { check: () => options.rate || { allowed: true } },
     findUser: async (userId) => {
@@ -320,8 +335,7 @@ function harness(options: HarnessOptions = {}) {
     notifications: () => notifications,
     delivery: () => delivery,
     projectMedia: async (_context, message) => ({ ...message, attachments: [] }),
-    projectReply: async (_context, message) =>
-      message.replyTo ? { ...message, replyPreview: { projected: true } } : message,
+    projectReply: async (_context, message) => (message.replyTo ? { ...message, replyPreview: QUOTE } : message),
     identity: {
       chatPeerId: (user) => `auth-${user?.id}`,
       avatarColorKey: (user) => user?.avatarColorKey || '',
@@ -330,7 +344,7 @@ function harness(options: HarnessOptions = {}) {
     directEmit: options.directEmit ?? true,
     broadcastChatMessage: (_roomId, message) => calls.emitted.push(message.id),
     broadcastRoomDetail: (_roomId, event) => calls.detail.push(event),
-    roomDetailEvent: (type, payload) => ({ type, payload }),
+    roomDetailEvent: buildServerEnvelope,
     scheduleLinkPreview: (_roomId, messageId, _text, opts) =>
       calls.previews.push({ messageId, edited: Boolean(opts?.edited) }),
     refreshPins: async (_roomId, action) => {
@@ -415,7 +429,7 @@ test('send refuses in the legacy order', async () => {
     assert.equal(result.status, status, JSON.stringify(input));
   }
   const mention = await harness().service.post({ ...postBase, content: 'bad-mention' });
-  assert.equal(fieldOf(mention, 'code'), 'mention_not_member');
+  assert.equal(fieldOf(mention, 'code'), 'invalid_mention_target');
   const limited = await harness({ rate: { allowed: false, retryAfterSeconds: 3 } }).service.post(postBase);
   assert.equal(fieldOf(limited, 'retryAfterSeconds'), 3);
   assert.equal(fieldOf(await harness({ rate: { allowed: false } }).service.post(postBase), 'retryAfterSeconds'), 0);
@@ -533,7 +547,7 @@ test('an idempotent replay answers the stored message without broadcasting again
   const replay = await service.post({ ...postBase, user: ACCOUNT, idempotencyKey: 'idem-key-1' });
   assert.equal(replay.status, 'created');
   assert.equal(replay.message.id, 'old');
-  assert.deepEqual(replay.message.replyPreview, { projected: true });
+  assert.deepEqual(replay.message.replyPreview, QUOTE);
   assert.deepEqual(calls.emitted, []);
   assert.deepEqual(calls.previews, []);
 
@@ -698,9 +712,9 @@ test('marking read advances the cursor or the wall clock and retires notificatio
   );
 
   const bad = await harness({
-    readError: Object.assign(new Error('Stale cursor'), { statusCode: 409, code: 'stale_cursor' })
+    readError: Object.assign(new Error('Stale cursor'), { statusCode: 409, code: 'invalid_cursor' })
   }).service.markRead('room-1', 'user-1', 'c');
-  assert.deepEqual(bad, { status: 'invalid_cursor', statusCode: 409, code: 'stale_cursor', error: 'Stale cursor' });
+  assert.deepEqual(bad, { status: 'invalid_cursor', statusCode: 409, code: 'invalid_cursor', error: 'Stale cursor' });
   assert.deepEqual(await harness({ readError: new Error() }).service.markRead('room-1', 'user-1', 'c'), {
     status: 'invalid_cursor',
     statusCode: 400,
@@ -753,7 +767,12 @@ function routeApp(
     },
     async edit(input: { messageId: string }) {
       seen.edit = input;
-      return outcomes.edit || { status: 'edited', message: { id: 'm', text: 'e' } };
+      return (
+        outcomes.edit || {
+          status: 'edited',
+          message: publicChatMessage({ id: 'm', roomId: 'room-1', peerId: 'p', name: 'A', text: 'e', createdAt: 1 })
+        }
+      );
     },
     async remove(input: unknown) {
       seen.remove = input;
@@ -769,7 +788,7 @@ function routeApp(
     {
       logger: fake<ApiContext['logger']>(),
       clientIp: () => '203.0.113.1',
-      resolveSession: async () => (user ? { user } : null),
+      resolveSession: async () => (user ? { user: storedUser(user) } : null),
       hashIp: (ip: string) => ip
     },
     chat
@@ -826,7 +845,10 @@ test('chat routes pass normalised input and answer each outcome', async (t) => {
 
   assert.deepEqual((await call(app, 'PATCH', `/api/rooms/room-1/chat/${UUID_A}`, { text: 'e' })).body, {
     ok: true,
-    message: { id: 'm', text: 'e' }
+    // As sent over the wire: the fields left undefined are not in the JSON.
+    message: JSON.parse(
+      JSON.stringify(publicChatMessage({ id: 'm', roomId: 'room-1', peerId: 'p', name: 'A', text: 'e', createdAt: 1 }))
+    ) as unknown
   });
   assert.equal(seen.edit?.messageId, UUID_A);
   assert.deepEqual((await call(app, 'DELETE', `/api/rooms/room-1/chat/${UUID_A}`)).body, { ok: true, deleted: true });
@@ -840,21 +862,31 @@ test('chat routes pass normalised input and answer each outcome', async (t) => {
 
 test('chat refusals keep their texts, codes and headers', async (t) => {
   const cases: Array<[string, { status: string; code?: string }, number, object | null]> = [
-    ['post', { status: 'room_not_found' }, 404, { ok: false, error: 'Room not found', roomId: 'room-1' }],
+    [
+      'post',
+      { status: 'room_not_found' },
+      404,
+      { ok: false, error: 'Room not found', code: 'room_not_found', roomId: 'room-1' }
+    ],
     [
       'post',
       { status: 'room_banned' },
       403,
       { ok: false, error: 'Вы заблокированы в этой комнате', code: 'room_banned', roomId: 'room-1' }
     ],
-    ['post', { status: 'invalid_session' }, 403, { ok: false, error: 'Invalid peer session' }],
-    ['post', { status: 'empty' }, 400, { ok: false, error: 'Invalid chat message' }],
-    ['post', { status: 'structured_unavailable' }, 409, { ok: false, error: 'Structured messages are unavailable' }],
+    ['post', { status: 'invalid_session' }, 403, { ok: false, error: 'Invalid peer session', code: 'invalid_session' }],
+    ['post', { status: 'empty' }, 400, { ok: false, error: 'Invalid chat message', code: 'invalid_message' }],
     [
       'post',
-      { status: 'invalid_mention', code: 'mention_x' },
+      { status: 'structured_unavailable' },
+      409,
+      { ok: false, error: 'Structured messages are unavailable', code: 'structured_messages_unavailable' }
+    ],
+    [
+      'post',
+      { status: 'invalid_mention', code: 'self_mention' },
       422,
-      { ok: false, error: 'Invalid mention target', code: 'mention_x' }
+      { ok: false, error: 'Invalid mention target', code: 'self_mention' }
     ],
     [
       'post',
@@ -862,14 +894,49 @@ test('chat refusals keep their texts, codes and headers', async (t) => {
       400,
       { ok: false, error: 'Invalid message content', code: 'invalid_message_content' }
     ],
-    ['post', { status: 'invalid_attachments' }, 400, { ok: false, error: 'Invalid attachments' }],
-    ['post', { status: 'reply_unavailable' }, 409, { ok: false, error: 'Reply target is unavailable' }],
-    ['post', { status: 'presence_required' }, 403, { ok: false, error: 'Active room presence or login required' }],
-    ['post', { status: 'media_unavailable' }, 503, { ok: false, error: 'Media uploads are unavailable' }],
+    [
+      'post',
+      { status: 'invalid_attachments' },
+      400,
+      { ok: false, error: 'Invalid attachments', code: 'invalid_attachments' }
+    ],
+    [
+      'post',
+      { status: 'reply_unavailable' },
+      409,
+      { ok: false, error: 'Reply target is unavailable', code: 'reply_unavailable' }
+    ],
+    [
+      'post',
+      { status: 'presence_required' },
+      403,
+      { ok: false, error: 'Active room presence or login required', code: 'presence_or_login_required' }
+    ],
+    [
+      'post',
+      { status: 'media_unavailable' },
+      503,
+      { ok: false, error: 'Media uploads are unavailable', code: 'media_uploads_disabled' }
+    ],
     ['list', { status: 'room_banned' }, 403, null],
-    ['edit', { status: 'message_not_found' }, 404, { ok: false, error: 'Message not found' }],
-    ['edit', { status: 'not_author' }, 403, { ok: false, error: 'Not allowed to edit this message' }],
-    ['remove', { status: 'not_allowed' }, 403, { ok: false, error: 'Not allowed to delete this message' }]
+    [
+      'edit',
+      { status: 'message_not_found' },
+      404,
+      { ok: false, error: 'Message not found', code: 'message_not_found' }
+    ],
+    [
+      'edit',
+      { status: 'not_author' },
+      403,
+      { ok: false, error: 'Not allowed to edit this message', code: 'message_edit_forbidden' }
+    ],
+    [
+      'remove',
+      { status: 'not_allowed' },
+      403,
+      { ok: false, error: 'Not allowed to delete this message', code: 'message_delete_forbidden' }
+    ]
   ];
   const routes: Record<string, Route> = {
     post: ['POST', '/api/rooms/room-1/chat', { text: 'x' }],
@@ -890,7 +957,12 @@ test('chat refusals keep their texts, codes and headers', async (t) => {
   const limited = await call(app, 'POST', '/api/rooms/room-1/chat', { text: 'x' });
   assert.equal(limited.status, 429);
   assert.equal(limited.headers['retry-after'], '4');
-  assert.deepEqual(limited.body, { ok: false, error: 'Too many chat messages', retryAfterSeconds: 4 });
+  assert.deepEqual(limited.body, {
+    ok: false,
+    error: 'Too many chat messages',
+    code: 'message_rate_limited',
+    retryAfterSeconds: 4
+  });
 });
 
 test('marking read needs a session, a room and a usable cursor', async (t) => {
@@ -904,11 +976,11 @@ test('marking read needs a session, a room and a usable cursor', async (t) => {
   assert.equal((await call(gone.app, 'POST', '/api/rooms/room-1/read', {})).status, 404);
   const stale = routeApp(
     t,
-    { read: { status: 'invalid_cursor', statusCode: 409, code: 'stale_cursor', error: 'Stale cursor' } },
+    { read: { status: 'invalid_cursor', statusCode: 409, code: 'invalid_cursor', error: 'Stale cursor' } },
     { user: ACCOUNT }
   );
   assert.deepEqual(
     await call(stale.app, 'POST', '/api/rooms/room-1/read', { cursor: 'c' }).then((r) => [r.status, r.body]),
-    [409, { ok: false, error: 'Stale cursor', code: 'stale_cursor' }]
+    [409, { ok: false, error: 'Stale cursor', code: 'invalid_cursor' }]
   );
 });

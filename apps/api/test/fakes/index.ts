@@ -3,6 +3,17 @@
 // take their parameter types from the real interface and a signature that
 // drifts from production fails to compile.
 
+import type { NotificationPreferences } from '@voice-room/shared/contracts/notifications';
+import type { LoginAlert } from '@voice-room/shared/contracts/account';
+import type { RoomMessage } from '@voice-room/shared/contracts/messages';
+import type { DirectMessage as StoredDirectMessage } from '../../src/lib/friend-store.ts';
+import type { LobbyRoom } from '@voice-room/shared/contracts/rooms';
+import type { PublicUser } from '@voice-room/shared/contracts/users';
+import type { DirectMessage } from '../../src/domains/messaging/direct-messages.service.ts';
+import type { StoredRoom } from '../../src/domains/rooms/room-views.ts';
+import type { StoredUser } from '../../src/lib/user-store.ts';
+import type { createRoomStore } from '../../src/lib/room-store.ts';
+import type { StoreOverrides } from '../../src/app/service-registry.ts';
 import type pg from 'pg';
 import type { Logger } from 'pino';
 import type { Attachment } from '../../src/domains/media/attachment-repository.ts';
@@ -149,6 +160,162 @@ export function mediaJob(overrides: Partial<MediaJob> = {}): MediaJob {
     updatedAt: new Date(),
     completedAt: null,
     deadAt: null,
+    ...overrides
+  };
+}
+
+/** An account row as the user store maps it; the login defaults to the id. */
+export function storedUser(overrides: Partial<StoredUser> = {}): StoredUser {
+  const id = overrides.id ?? 'user-1';
+  return {
+    avatarAccent: null,
+    avatarColorKey: 'blurple',
+    avatarKey: null,
+    createdAt: 1,
+    displayName: '',
+    doNotDisturb: false,
+    id,
+    login: id,
+    passwordHash: 'hash',
+    presenceStatus: 'online',
+    deletionRequestedAt: null,
+    deletedAt: null,
+    desktopAppSeenAt: null,
+    appPromptSeenAt: null,
+    ...overrides
+  };
+}
+
+/** A direct message as the friend store reads it: plain text, no invite, unread. */
+export function directMessage(
+  overrides: Partial<DirectMessage> & Pick<DirectMessage, 'id' | 'senderId' | 'recipientId'>
+): DirectMessage {
+  return { body: '', createdAt: 1, editedAt: null, readAt: null, invite: null, ...overrides };
+}
+
+/** What the user store answers for a signed-in session cookie. */
+export function userSession(overrides: Partial<StoredUser> = {}) {
+  return {
+    session: {
+      expiresAt: Date.now() + 60_000,
+      publicId: 'session-1',
+      token: 'session-token',
+      tokenHash: 'session-hash'
+    },
+    user: storedUser(overrides)
+  };
+}
+
+/** A direct message as the friend store returns it. */
+export function storedDirectMessage(id: string, overrides: Partial<StoredDirectMessage> = {}): StoredDirectMessage {
+  return {
+    id,
+    senderId: 'sender-1',
+    recipientId: 'recipient-1',
+    body: '',
+    createdAt: 1,
+    editedAt: null,
+    readAt: null,
+    invite: null,
+    linkPreview: undefined,
+    replyTo: undefined,
+    deletedAt: null,
+    ...overrides
+  };
+}
+
+/** A login alert as the user store returns it. */
+export function loginAlert(id: string, overrides: Partial<LoginAlert> = {}): LoginAlert {
+  return { id, kind: 'login', client: '', os: '', location: '', createdAt: 1, ...overrides };
+}
+
+/** Each store a test can hand createApiApp, as a fake with any subset of its methods. */
+export type Fakes = { [Key in keyof StoreOverrides]-?: NonNullable<StoreOverrides[Key]> };
+
+type RoomStore = ReturnType<typeof createRoomStore>;
+/** A room as the database room store returns it (the live peers start empty). */
+export type DbRoom = NonNullable<Awaited<ReturnType<RoomStore['getRoom']>>>;
+export function dbRoom(id: string, overrides: Partial<DbRoom> = {}): DbRoom {
+  return {
+    avatarKey: null,
+    createdAt: 1,
+    creatorIp: '',
+    emptySince: null,
+    id,
+    isStatic: true,
+    lastMessageAt: undefined,
+    messages: [],
+    name: 'Room',
+    ownerId: null,
+    peers: new Map(),
+    unreadCount: undefined,
+    updatedAt: 1,
+    ...overrides
+  };
+}
+
+/** A room row as the room store returns it. */
+export function storedRoom(overrides: Partial<StoredRoom> & { id: string }): StoredRoom {
+  return { createdAt: 1, emptySince: null, isStatic: true, name: 'Room', ...overrides };
+}
+
+/** A public profile as the stores build it. */
+export function publicUser(id: string, overrides: Partial<PublicUser> = {}): PublicUser {
+  return {
+    avatarAccent: null,
+    avatarColorKey: 'blurple',
+    avatarUrl: null,
+    createdAt: 1,
+    displayName: id,
+    doNotDisturb: false,
+    id,
+    login: id,
+    presenceStatus: 'online',
+    ...overrides
+  };
+}
+
+/** A room chat message as the API sends it. */
+export function roomMessage(id: string, overrides: Partial<RoomMessage> = {}): RoomMessage {
+  return {
+    id,
+    roomId: 'room-1',
+    peerId: 'peer-1',
+    name: 'Аня',
+    text: 'hello',
+    authorUserId: null,
+    avatarAccent: null,
+    avatarColorKey: 'blue',
+    avatarUrl: null,
+    createdAt: 1,
+    editedAt: null,
+    attachments: [],
+    ...overrides
+  };
+}
+
+export function lobbyRoom(roomId: string, overrides: Partial<LobbyRoom> = {}): LobbyRoom {
+  return {
+    roomId,
+    name: roomId,
+    avatarUrl: null,
+    isStatic: true,
+    relationship: 'owner',
+    createdAt: 1,
+    peers: 0,
+    ...overrides
+  };
+}
+
+export function notificationPreferences(overrides: Partial<NotificationPreferences> = {}): NotificationPreferences {
+  return {
+    doNotDisturb: false,
+    mutedPeerIds: [],
+    mutedRoomIds: [],
+    roomLevels: {},
+    presenceStatus: 'online',
+    presenceStatusAutomatic: false,
+    privateNotifications: false,
     ...overrides
   };
 }

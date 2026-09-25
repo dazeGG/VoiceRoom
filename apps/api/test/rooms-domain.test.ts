@@ -4,6 +4,7 @@
 // mute and ban with the peer eviction behind them. Routes run on a bare
 // Fastify app with fake dependencies so every HTTP answer is pinned.
 
+import type { PowVerdict } from '../src/lib/pow.ts';
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fastify, { type FastifyInstance } from 'fastify';
@@ -42,7 +43,7 @@ import {
   type RoomsStore
 } from '../src/domains/rooms/rooms.service.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
-import { fake, recordingLogger } from './fakes/index.ts';
+import { fake, recordingLogger, storedUser, storedRoom } from './fakes/index.ts';
 
 const OWNER = 'owner-1';
 
@@ -74,8 +75,6 @@ function liveRoom(overrides: Partial<LiveRoom> = {}, peers: PresencePeer[] = [])
     ...overrides
   };
 }
-
-const storedRoom = (room: Partial<StoredRoom> & { id: string }) => fake<StoredRoom>(room);
 
 // --- views and principals ----------------------------------------------------
 
@@ -187,7 +186,7 @@ function roomsHarness({
     limits: { maxRooms: 10, maxOwnedStaticRoomsPerUser: 3, maxTempRoomsPerIp: 2 },
     announceRoomUpdate: (roomId, value) => {
       calls.announced.push(roomId);
-      return { card: value.name };
+      return publicLobbyRoom(value, 0);
     },
     finishRoomDeletion: async (roomId, options) => {
       calls.finished.push({ roomId, ...options });
@@ -232,13 +231,14 @@ test('the owner check refuses guests, missing rooms, temporary rooms and other u
   assert.equal(owned.room.id, 'room-1');
   assert.deepEqual(ownerRefusal({ status: 'unauthenticated' }), {
     status: 401,
-    body: { ok: false, error: 'Требуется вход' }
+    body: { ok: false, error: 'Требуется вход', code: 'authentication_required' }
   });
 });
 
 test('rename announces the update; delete finishes the teardown; both report a lost race', async () => {
   const renamed = roomsHarness({ updated: storedRoom({ id: 'room-1', name: 'New' }) });
-  assert.deepEqual(await renamed.service.rename('room-1', 'New'), { status: 'renamed', room: { card: 'New' } });
+  const renamedRoom = await renamed.service.rename('room-1', 'New');
+  assert.equal(renamedRoom.status === 'renamed' && renamedRoom.room.name, 'New');
   assert.deepEqual(renamed.calls.announced, ['room-1']);
   assert.deepEqual(await roomsHarness().service.rename('room-1', 'New'), { status: 'not_found' });
 
@@ -516,7 +516,7 @@ test('server mute persists, revokes old credentials, narrows the SFU and tells e
   assert.deepEqual(calls.revoked, [peer.id]);
   assert.deepEqual(calls.sfu, [[peer.id, true]]);
   assert.deepEqual(calls.announced, [peer.id]);
-  assert.deepEqual(calls.notified, [{ type: 'room.server-mute', roomId: 'room-1', peerId: peer.id, muted: true }]);
+  assert.deepEqual(calls.notified, []);
 
   // Lifting it leaves the participant's own mute alone and revokes nothing.
   assert.deepEqual(await service.setServerMute(room, peer.id, false), { status: 'applied', muted: false });
@@ -666,7 +666,7 @@ type RouteOptions = {
   added?: { status: string; room?: StoredRoom | null } | null;
   removedBookmark?: { status: string; removed?: boolean } | null;
   rate?: { allowed: boolean; retryAfterSeconds?: number };
-  proof?: { ok: boolean; status?: number; error?: string };
+  proof?: PowVerdict;
   moderation?: { kick?: unknown; mute?: unknown; ban?: unknown; undo?: unknown };
 };
 
@@ -698,7 +698,7 @@ function routeApp(
   const ctx: ApiContext = {
     logger: fake<ApiContext['logger']>(),
     clientIp: () => '203.0.113.1',
-    resolveSession: async () => (user ? { user: { id: user } } : null),
+    resolveSession: async () => (user ? { user: storedUser({ id: user }) } : null),
     hashIp: (ip: string) => ip
   };
   const rooms = fake<RoomsService>({
@@ -717,7 +717,7 @@ function routeApp(
       return room.ownerId === userId ? { status: 'owner', room } : { status: 'forbidden' };
     },
     async rename(roomId: string, name: string) {
-      return renamed || { status: 'renamed', room: { roomId, name } };
+      return renamed || { status: 'renamed', room: publicLobbyRoom(storedRoom({ id: roomId, name }), 0) };
     },
     async remove() {
       return removed || { status: 'deleted' };
@@ -743,7 +743,7 @@ function routeApp(
     },
     findAuthorizedPeer: (roomId, peerId, token) =>
       peer && peer.id === peerId && token === 't'.repeat(32) ? peer : null,
-    lobbyRoom: (value) => ({ card: value.id }) as never,
+    lobbyRoom: (value) => publicLobbyRoom(value, 0),
     invalidateRecipientCache: (roomId) => calls.invalidated.push(roomId),
     createLimiter: { check: () => rate },
     pow: { verify: () => proof },
@@ -789,13 +789,13 @@ test('POST /api/rooms: rate limit, proof, login for persistent rooms and store r
   assert.equal(tooMany.status, 429);
   assert.equal(tooMany.headers['retry-after'], '7');
 
-  const badProof = routeApp(t, { proof: { ok: false, status: 403, error: 'Invalid room creation proof' } });
+  const badProof = routeApp(t, {
+    proof: { ok: false, status: 403, error: 'Invalid room creation proof', code: 'pow_invalid' }
+  });
   assert.deepEqual(await call(badProof.app, 'POST', '/api/rooms', {}).then((r) => [r.status, r.body]), [
     403,
-    { ok: false, error: 'Invalid room creation proof' }
+    { ok: false, error: 'Invalid room creation proof', code: 'pow_invalid' }
   ]);
-  const vagueProof = routeApp(t, { proof: { ok: false } });
-  assert.equal((await call(vagueProof.app, 'POST', '/api/rooms', {})).status, 400);
 
   const guest = routeApp(t);
   assert.equal((await call(guest.app, 'POST', '/api/rooms', { isStatic: 'true' })).status, 401);
@@ -849,17 +849,17 @@ test('room mutations answer the owner check first', async (t) => {
     ['POST', '/api/rooms/room-1/ban', { peerId: accountPeer.id }],
     ['DELETE', '/api/rooms/room-1/bans/ban-1', undefined]
   ];
-  const refusals: Array<[string | null, LiveRoom | null, number, string]> = [
-    [null, room, 401, 'Требуется вход'],
-    [OWNER, null, 404, 'Комната не найдена'],
-    ['someone', room, 403, 'Недостаточно прав']
+  const refusals: Array<[string | null, LiveRoom | null, number, string, string]> = [
+    [null, room, 401, 'Требуется вход', 'authentication_required'],
+    [OWNER, null, 404, 'Комната не найдена', 'room_not_found'],
+    ['someone', room, 403, 'Недостаточно прав', 'forbidden']
   ];
-  for (const [user, currentRoom, status, error] of refusals) {
+  for (const [user, currentRoom, status, error, code] of refusals) {
     const { app } = routeApp(t, { user, room: currentRoom });
     for (const [method, url, payload] of routes) {
       const response = await call(app, method, url, payload);
       assert.equal(response.status, status, `${method} ${url}`);
-      assert.deepEqual(response.body, { ok: false, error });
+      assert.deepEqual(response.body, { ok: false, error, code });
     }
   }
 });
@@ -869,11 +869,11 @@ test('PUT and DELETE /api/rooms/:roomId', async (t) => {
   const ok = routeApp(t, { user: OWNER, room });
   assert.deepEqual((await call(ok.app, 'PUT', '/api/rooms/room-1', { name: ' New ' })).body, {
     ok: true,
-    room: { roomId: 'room-1', name: 'New' }
+    room: publicLobbyRoom(storedRoom({ id: 'room-1', name: 'New' }), 0)
   });
   assert.deepEqual((await call(ok.app, 'PUT', '/api/rooms/room-1')).body, {
     ok: true,
-    room: { roomId: 'room-1', name: 'Room' }
+    room: publicLobbyRoom(storedRoom({ id: 'room-1', name: 'Room' }), 0)
   });
   assert.deepEqual(
     await call(ok.app, 'PUT', '/api/rooms/room-1', { name: '   ' }).then((r) => [r.status, r.body.error]),
@@ -902,11 +902,12 @@ test('GET /api/rooms/:roomId is the public status card', async (t) => {
   });
   assert.deepEqual(await call(app, 'GET', '/api/rooms/other-room').then((r) => [r.status, r.body]), [
     404,
-    { ok: false, error: 'Room not found', exists: false, roomId: 'other-room' }
+    { ok: false, error: 'Room not found', code: 'room_not_found', exists: false, roomId: 'other-room' }
   ]);
   assert.deepEqual((await call(app, 'GET', '/api/rooms/%20')).body, {
     ok: false,
     error: 'Room not found',
+    code: 'room_not_found',
     exists: false
   });
 });
@@ -969,7 +970,7 @@ test('the account room list, adding and removing a room', async (t) => {
   const listed = routeApp(t, { user: OWNER, list: [storedRoom({ id: 'room-1' }), storedRoom({ id: 'room-2' })] });
   assert.deepEqual((await call(listed.app, 'GET', '/api/auth/rooms')).body, {
     ok: true,
-    rooms: [{ card: 'room-1' }, { card: 'room-2' }]
+    rooms: [publicLobbyRoom(storedRoom({ id: 'room-1' }), 0), publicLobbyRoom(storedRoom({ id: 'room-2' }), 0)]
   });
 
   const adding = routeApp(t, { user: OWNER, added: { status: 'added', room: storedRoom({ id: 'room-1' }) } });
@@ -980,7 +981,7 @@ test('the account room list, adding and removing a room', async (t) => {
   for (const key of ['roomId', 'code', 'roomCode']) {
     assert.deepEqual((await call(adding.app, 'POST', '/api/auth/rooms', { [key]: 'room-1' })).body, {
       ok: true,
-      room: { card: 'room-1' }
+      room: publicLobbyRoom(storedRoom({ id: 'room-1' }), 0)
     });
   }
   assert.deepEqual(adding.calls.invalidated, ['room-1', 'room-1', 'room-1']);

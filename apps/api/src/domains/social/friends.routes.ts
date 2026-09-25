@@ -1,8 +1,21 @@
 // Friends, requests, blocks and ringing a friend into a room over HTTP.
 // Texts and codes are the ones the web client shows.
 
-import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
+import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import { Done, Failure, IdParams, RoomIdParams, UserIdParams } from '@voice-room/shared/contracts/http';
+import {
+  BlockApplied,
+  BlockList,
+  FriendList,
+  FriendRequestAnswered,
+  FriendRequests,
+  FriendRequestSent,
+  FriendSearch,
+  FriendSearchQuery,
+  RingBody,
+  SendFriendRequestBody
+} from '@voice-room/shared/contracts/social';
 import { normalizeLogin, normalizeRoomId } from '@voice-room/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
@@ -10,22 +23,10 @@ import { cleanUuid } from '../messaging/message-input.ts';
 import type { FriendsService } from './friends.service.ts';
 import type { SocialUser } from './social-views.ts';
 
-const Answer = Type.Object(
-  { ok: Type.Literal(true), status: Type.Optional(Type.String()), user: Type.Optional(Type.Unknown()) },
-  { additionalProperties: Type.Unknown() }
-);
-const Refusal = Type.Object({
-  ok: Type.Literal(false),
-  error: Type.String(),
-  code: Type.Optional(Type.String()),
-  retryAfterSeconds: Type.Optional(Type.Number())
-});
-const Responses = { 200: Answer, 201: Answer, '4xx': Refusal };
-const IdParams = Type.Object({ id: Type.String() });
-const UserParams = Type.Object({ userId: Type.String() });
-const REQUEST_NOT_FOUND = failure('Заявка не найдена');
-const USER_NOT_FOUND = failure('Пользователь не найден');
-const CANNOT_BLOCK = failure('Нельзя заблокировать этого пользователя');
+const answers = <Success>(success: Success) => ({ 200: success, '4xx': Failure });
+const REQUEST_NOT_FOUND = failure('Заявка не найдена', { code: 'friend_request_not_found' });
+const USER_NOT_FOUND = failure('Пользователь не найден', { code: 'user_not_found' });
+const CANNOT_BLOCK = failure('Нельзя заблокировать этого пользователя', { code: 'cannot_block_user' });
 
 export interface FriendsRoutesDeps {
   friends: FriendsService;
@@ -42,11 +43,11 @@ export function registerFriendsRoutes(
   async function signedIn(request: FastifyRequest, reply: FastifyReply): Promise<SocialUser | null> {
     const user = (await ctx.resolveSession(request.raw))?.user;
     if (user) return user as SocialUser;
-    reply.code(401).send(failure('Требуется вход'));
+    reply.code(401).send(failure('Требуется вход', { code: 'authentication_required' }));
     return null;
   }
 
-  app.get('/api/friends', { schema: { response: Responses } }, async (request, reply) => {
+  app.get('/api/friends', { schema: { response: answers(FriendList) } }, async (request, reply) => {
     const user = await signedIn(request, reply);
     if (!user) return reply;
     return { ok: true as const, ...(await friends.list(user.id)) };
@@ -55,7 +56,7 @@ export function registerFriendsRoutes(
   app.get(
     '/api/friends/search',
     {
-      schema: { querystring: Type.Object({ q: Type.Optional(Type.String()) }), response: Responses }
+      schema: { querystring: FriendSearchQuery, response: answers(FriendSearch) }
     },
     async (request, reply) => {
       const user = await signedIn(request, reply);
@@ -64,7 +65,7 @@ export function registerFriendsRoutes(
     }
   );
 
-  app.get('/api/friends/requests', { schema: { response: Responses } }, async (request, reply) => {
+  app.get('/api/friends/requests', { schema: { response: answers(FriendRequests) } }, async (request, reply) => {
     const user = await signedIn(request, reply);
     if (!user) return reply;
     return { ok: true as const, ...(await friends.requests(user.id)) };
@@ -75,13 +76,8 @@ export function registerFriendsRoutes(
     {
       preValidation: optionalJsonBody,
       schema: {
-        body: Type.Object({
-          userId: Type.Optional(Type.Unknown()),
-          addresseeUserId: Type.Optional(Type.Unknown()),
-          login: Type.Optional(Type.Unknown()),
-          handle: Type.Optional(Type.Unknown())
-        }),
-        response: Responses
+        body: SendFriendRequestBody,
+        response: { 200: FriendRequestSent, 201: FriendRequestSent, '4xx': Failure }
       }
     },
     async (request, reply) => {
@@ -92,21 +88,24 @@ export function registerFriendsRoutes(
         return reply
           .code(429)
           .header('Retry-After', String(rate.retryAfterSeconds))
-          .send({ ...failure('Слишком много заявок, попробуйте позже'), retryAfterSeconds: rate.retryAfterSeconds });
+          .send({
+            ...failure('Слишком много заявок, попробуйте позже', { code: 'friend_request_rate_limited' }),
+            retryAfterSeconds: rate.retryAfterSeconds
+          });
       }
       const { body } = request;
       const userId = cleanUuid(body.userId || body.addresseeUserId || '');
       const login: string = normalizeLogin(body.login || body.handle || '');
-      if (!userId && !login) return reply.code(400).send(failure('Неверный пользователь'));
+      if (!userId && !login) return reply.code(400).send(failure('Неверный пользователь', { code: 'invalid_user' }));
 
       const result = await friends.sendRequest(user, { userId, login });
       switch (result.status) {
         case 'not_found':
           return reply.code(404).send(USER_NOT_FOUND);
         case 'self':
-          return reply.code(400).send(failure('Нельзя добавить себя'));
+          return reply.code(400).send(failure('Нельзя добавить себя', { code: 'cannot_befriend_self' }));
         case 'blocked':
-          return reply.code(403).send(failure('Заявку отправить нельзя'));
+          return reply.code(403).send(failure('Заявку отправить нельзя', { code: 'friend_request_refused' }));
         case 'sent':
           return reply.code(201).send({ ok: true as const, status: 'sent', user: result.user });
         default:
@@ -118,25 +117,25 @@ export function registerFriendsRoutes(
   for (const action of ['accept', 'decline'] as const) {
     app.post(
       `/api/friends/requests/:id/${action}`,
-      { schema: { params: IdParams, response: Responses } },
+      { schema: { params: IdParams, response: answers(FriendRequestAnswered) } },
       async (request, reply) => {
         const user = await signedIn(request, reply);
         if (!user) return reply;
-        const id = cleanUuid((request.params as { id: string }).id);
+        const id = cleanUuid(request.params.id);
         if (!id) return reply.code(404).send(REQUEST_NOT_FOUND);
         const result = await friends.respond(user, id, action);
         if (result.status === 'not_found') return reply.code(404).send(REQUEST_NOT_FOUND);
         if (result.status === 'blocked')
           return reply.code(409).send(failure('Заявка больше недоступна', { code: 'relationship_blocked' }));
-        if (result.status === 'accepted') return { ok: true as const, status: 'accepted', user: result.user };
-        return { ok: true as const, status: 'declined' };
+        if (result.status === 'accepted') return { ok: true as const, status: 'accepted' as const, user: result.user };
+        return { ok: true as const, status: 'declined' as const };
       }
     );
   }
 
   app.delete(
     '/api/friends/requests/:id',
-    { schema: { params: IdParams, response: Responses } },
+    { schema: { params: IdParams, response: answers(Done) } },
     async (request, reply) => {
       const user = await signedIn(request, reply);
       if (!user) return reply;
@@ -148,42 +147,50 @@ export function registerFriendsRoutes(
   );
 
   // Registered before /api/friends/:userId so the literal segment wins the match.
-  app.get('/api/blocks', { schema: { response: Responses } }, async (request, reply) => {
+  app.get('/api/blocks', { schema: { response: answers(BlockList) } }, async (request, reply) => {
     const user = await signedIn(request, reply);
     if (!user) return reply;
     return { ok: true as const, ...(await friends.blocked(user.id)) };
   });
 
-  app.put('/api/blocks/:userId', { schema: { params: UserParams, response: Responses } }, async (request, reply) => {
-    const user = await signedIn(request, reply);
-    if (!user) return reply;
-    const id = cleanUuid(request.params.userId);
-    if (!id || id === user.id) return reply.code(400).send(CANNOT_BLOCK);
-    const result = await friends.block(user.id, id);
-    if (result.status === 'not_found') return reply.code(404).send(USER_NOT_FOUND);
-    if (result.status === 'invalid') return reply.code(400).send(CANNOT_BLOCK);
-    return { ok: true as const, status: result.result };
-  });
+  app.put(
+    '/api/blocks/:userId',
+    { schema: { params: UserIdParams, response: answers(BlockApplied) } },
+    async (request, reply) => {
+      const user = await signedIn(request, reply);
+      if (!user) return reply;
+      const id = cleanUuid(request.params.userId);
+      if (!id || id === user.id) return reply.code(400).send(CANNOT_BLOCK);
+      const result = await friends.block(user.id, id);
+      if (result.status === 'not_found') return reply.code(404).send(USER_NOT_FOUND);
+      if (result.status === 'invalid') return reply.code(400).send(CANNOT_BLOCK);
+      return { ok: true as const, status: result.result };
+    }
+  );
 
-  app.delete('/api/blocks/:userId', { schema: { params: UserParams, response: Responses } }, async (request, reply) => {
-    const user = await signedIn(request, reply);
-    if (!user) return reply;
-    const id = cleanUuid(request.params.userId);
-    if (!id) return reply.code(404).send(USER_NOT_FOUND);
-    if ((await friends.unblock(user.id, id)).status === 'not_found')
-      return reply.code(404).send(failure('Пользователь не заблокирован'));
-    return { ok: true as const };
-  });
+  app.delete(
+    '/api/blocks/:userId',
+    { schema: { params: UserIdParams, response: answers(Done) } },
+    async (request, reply) => {
+      const user = await signedIn(request, reply);
+      if (!user) return reply;
+      const id = cleanUuid(request.params.userId);
+      if (!id) return reply.code(404).send(USER_NOT_FOUND);
+      if ((await friends.unblock(user.id, id)).status === 'not_found')
+        return reply.code(404).send(failure('Пользователь не заблокирован', { code: 'user_not_blocked' }));
+      return { ok: true as const };
+    }
+  );
 
   app.delete(
     '/api/friends/:userId',
-    { schema: { params: UserParams, response: Responses } },
+    { schema: { params: UserIdParams, response: answers(Done) } },
     async (request, reply) => {
       const user = await signedIn(request, reply);
       if (!user) return reply;
       const id = cleanUuid(request.params.userId);
       if (!id || (await friends.remove(user.id, id)).status === 'not_found')
-        return reply.code(404).send(failure('Друг не найден'));
+        return reply.code(404).send(failure('Друг не найден', { code: 'friend_not_found' }));
       return { ok: true as const };
     }
   );
@@ -193,9 +200,9 @@ export function registerFriendsRoutes(
     {
       preValidation: optionalJsonBody,
       schema: {
-        params: Type.Object({ roomId: Type.String() }),
-        body: Type.Object({ userId: Type.Optional(Type.Unknown()) }),
-        response: Responses
+        params: RoomIdParams,
+        body: RingBody,
+        response: answers(Done)
       }
     },
     async (request, reply) => {
@@ -204,11 +211,11 @@ export function registerFriendsRoutes(
       const roomId: string = normalizeRoomId(request.params.roomId);
       const targetUserId = cleanUuid(request.body.userId);
       if (!roomId || !targetUserId || targetUserId === user.id)
-        return reply.code(400).send(failure('Invalid ring target'));
+        return reply.code(400).send(failure('Invalid ring target', { code: 'invalid_ring_target' }));
       const result = await friends.ring(user, roomId, targetUserId);
       switch (result.status) {
         case 'not_friends':
-          return reply.code(403).send(failure('You are not friends'));
+          return reply.code(403).send(failure('You are not friends', { code: 'not_friends' }));
         case 'blocked':
           return reply.code(403).send(failure('Invite is unavailable', { code: 'relationship_blocked' }));
         case 'account_deleted':
@@ -217,9 +224,12 @@ export function registerFriendsRoutes(
           return reply
             .code(429)
             .header('Retry-After', String(result.retryAfterSeconds))
-            .send({ ...failure('Invite cooldown'), retryAfterSeconds: result.retryAfterSeconds });
+            .send({
+              ...failure('Invite cooldown', { code: 'invite_cooldown' }),
+              retryAfterSeconds: result.retryAfterSeconds
+            });
         case 'room_not_found':
-          return reply.code(404).send(failure('Room not found'));
+          return reply.code(404).send(failure('Room not found', { code: 'room_not_found' }));
         case 'rung':
           return { ok: true as const };
       }

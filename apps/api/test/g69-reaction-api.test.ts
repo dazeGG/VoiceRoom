@@ -3,7 +3,10 @@ import fastify from 'fastify';
 import test from 'node:test';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
 import { createReactionService, type ReactionRepository } from '../src/domains/messaging/reaction-service.ts';
-import { registerReactionRoutes } from '../src/domains/messaging/reaction-routes.ts';
+import { registerReactionRoutes } from '../src/domains/messaging/reactions.routes.ts';
+import type { ApiContext } from '../src/app/context.ts';
+import { fake } from './fakes/index.ts';
+import { registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { createReactionRealtimeAdapter } from '../src/domains/messaging/reaction-realtime-adapter.ts';
 
 function repository(): ReactionRepository {
@@ -173,7 +176,12 @@ test('G69-A02 desired PUT is idempotent, bounded, revisioned and publishes only 
 test('G69 routes preserve no-store reads and service authorization status', async (t) => {
   const app = fastify();
   t.after(() => app.close());
-  registerReactionRoutes({ app, reactionService: service(), resolveUser: async () => ({ id: 'guest', guest: true }) });
+  // Every route answers no-store through the HTTP kit, as in the server.
+  registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
+  // A guest has no session: a visible room's reactions read fine, writing needs an account.
+  registerReactionRoutes(app, fake<ApiContext>({ resolveSession: async () => null }), {
+    reactions: service({ requireVisible: async ({ conversation }) => conversation.id === 'room' })
+  });
   const url = '/api/reactions/room/room/m';
   const read = await app.inject({ method: 'GET', url });
   assert.equal(read.statusCode, 200);

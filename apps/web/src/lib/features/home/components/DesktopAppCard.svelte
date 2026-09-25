@@ -2,7 +2,13 @@
   import { Check, ChevronDown, Copy, Download, ExternalLink, Monitor } from '@lucide/svelte';
   import { Select } from '$lib/shared/ui';
   import { iconMd, iconSm, iconXs } from '$lib/shared/ui/icons';
-  import { DESKTOP_BUILDS, QUARANTINE_CMD, RELEASES_URL, type DesktopBuild } from '../model/desktop-builds';
+  import {
+    DESKTOP_BUILDS,
+    QUARANTINE_CMD,
+    RELEASES_URL,
+    type DesktopBuild,
+    type DesktopBuildId
+  } from '../model/desktop-builds';
 
   const BUILD_OPTIONS = DESKTOP_BUILDS.map((build) => ({ value: build.id, label: build.label }));
 
@@ -21,7 +27,7 @@
     onCopyCommand
   } = $props<{
     appOpen: boolean;
-    selectedBuildId: string;
+    selectedBuildId: DesktopBuildId;
     selectedBuild: DesktopBuild;
     releaseError: boolean;
     releaseLoading: boolean;

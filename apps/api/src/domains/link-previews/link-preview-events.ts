@@ -2,6 +2,9 @@
 // whether one is needed; when it is ready it reaches readers as an edit of the
 // message, re-read in full so it carries its attachments and reply quote.
 
+import type { DirectMessage as StoredDirectMessage } from '../../lib/friend-store.ts';
+import type { AccountMessage } from '../../realtime/account-events.ts';
+import type { RoomMessage } from '@voice-room/shared/contracts/messages';
 import { firstPreviewableUrl } from '@voice-room/shared/link-preview';
 import type { MessageProjection } from '../messaging/message-projection.ts';
 
@@ -14,16 +17,12 @@ export interface LinkPreviewEventsDeps {
     roomId: string,
     messageId: string
   ): Promise<{ id?: string; replyTo?: { messageId?: string } | null } | null>;
-  directMessage(
-    senderId: string,
-    recipientId: string,
-    messageId: string
-  ): Promise<{ id?: string; replyTo?: { messageId?: string } | null } | null>;
+  directMessage(senderId: string, recipientId: string, messageId: string): Promise<StoredDirectMessage | null>;
   projection: MessageProjection;
-  publicChatMessage(message: unknown): unknown;
+  publicChatMessage(message: unknown): RoomMessage;
   /** Sends a room-detail envelope to voice peers and preview watchers. */
-  broadcastRoomEdit(roomId: string, message: unknown): void;
-  notifyUser(userId: string, event: Record<string, unknown>): void;
+  broadcastRoomEdit(roomId: string, message: RoomMessage): void;
+  notifyUser(userId: string, event: AccountMessage): void;
 }
 
 export function createLinkPreviewEvents(deps: LinkPreviewEventsDeps) {
@@ -46,7 +45,7 @@ export function createLinkPreviewEvents(deps: LinkPreviewEventsDeps) {
     const message = await deps.directMessage(senderId, recipientId, messageId);
     if (!message) return;
     const projected = await deps.projection.project('dm', message, { userId: senderId, peerId: recipientId });
-    const event = { type: 'dm.message.edited', message: projected };
+    const event: AccountMessage = { type: 'dm.message.edited', message: projected };
     deps.notifyUser(recipientId, event);
     deps.notifyUser(senderId, event);
   }

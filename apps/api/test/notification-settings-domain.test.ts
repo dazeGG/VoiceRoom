@@ -12,9 +12,9 @@ import {
   type NotificationPreferenceStore,
   type NotificationSettingsService
 } from '../src/domains/notifications/notification-settings.service.ts';
-import { fake } from './fakes/index.ts';
+import { fake, notificationPreferences, storedUser } from './fakes/index.ts';
 import { registerNotificationSettingsRoutes } from '../src/domains/notifications/notification-settings.routes.ts';
-import { registerHttpKit } from '../src/platform/http/http-kit.ts';
+import { AJV_OPTIONS, registerHttpKit } from '../src/platform/http/http-kit.ts';
 import type { ApiContext } from '../src/app/context.ts';
 
 const ME = { id: 'user-1', login: 'alice' };
@@ -37,6 +37,8 @@ type HarnessOptions = {
   result?: MutationResult | null;
 };
 
+const AWAY = notificationPreferences({ presenceStatus: 'away' });
+
 function harness({ enabled = true, rate = { allowed: true }, upserted = true, result = null }: HarnessOptions = {}) {
   const calls = {
     presence: [] as unknown[],
@@ -45,19 +47,22 @@ function harness({ enabled = true, rate = { allowed: true }, upserted = true, re
     removed: [] as unknown[],
     upserts: [] as Array<{ metadata: { userAgent: string } }>
   };
-  const updated = result || { status: 'updated', preferences: { presenceStatus: 'away', doNotDisturb: false } };
+  const updated = result || { status: 'updated', preferences: AWAY };
   const store: NotificationPreferenceStore = {
     async getPreferences() {
-      return { mutedPeerIds: [] };
+      return notificationPreferences();
     },
     async setDmMute(input) {
-      return { status: 'updated', preferences: { dm: input } };
+      return { status: 'muted', preferences: notificationPreferences({ mutedPeerIds: [input.peerUserId] }) };
     },
     async setRoomMute(input) {
-      return { status: 'updated', preferences: { room: input } };
+      return {
+        status: 'unmuted',
+        preferences: notificationPreferences({ mutedRoomIds: input.muted ? [input.roomId] : [] })
+      };
     },
     async setPrivateNotifications(input) {
-      return { status: 'updated', preferences: { privacy: input } };
+      return { status: 'updated', preferences: notificationPreferences(input) };
     },
     async setDoNotDisturb() {
       return updated;
@@ -77,7 +82,7 @@ function harness({ enabled = true, rate = { allowed: true }, upserted = true, re
         calls.removed.push(input);
       }
     }),
-    pushConfig: () => ({ enabled, publicKey: 'vapid' }),
+    pushConfig: () => ({ enabled, vapidPublicKey: 'vapid' }),
     pushLimiter: { check: () => rate },
     setPresence: (userId, status) => calls.presence.push(status),
     notifyUser: (userId, event) => calls.events.push(event),
@@ -91,40 +96,35 @@ function harness({ enabled = true, rate = { allowed: true }, upserted = true, re
 test('presence changes normalise the status and reach devices and friends', async () => {
   const { calls, service } = harness();
   const result = await service.setPresenceStatus(ME, 'away', true);
-  assert.deepEqual(result?.preferences, { presenceStatus: 'away', doNotDisturb: false });
+  assert.deepEqual(result.preferences, AWAY);
   assert.deepEqual([calls.presence, calls.friends], [['away'], ['away']]);
   assert.equal(calls.events[0]?.type, 'notification-settings-updated');
 
-  const dnd = harness({ result: { status: 'updated', preferences: { doNotDisturb: true } } });
-  assert.deepEqual((await dnd.service.setDoNotDisturb(ME, true))?.preferences, {
-    doNotDisturb: true,
-    presenceStatus: 'dnd'
+  // A stored do-not-disturb flag without its status still reads as 'dnd'.
+  const dnd = harness({
+    result: {
+      status: 'updated',
+      preferences: notificationPreferences({ doNotDisturb: true, presenceStatus: '' as 'online' })
+    }
   });
-  const online = harness({ result: { status: 'updated', preferences: {} } });
-  assert.equal((await online.service.setDoNotDisturb(ME, false))?.preferences?.presenceStatus, 'online');
-  const missing = harness({ result: { status: 'not_found' } });
-  assert.deepEqual(await missing.service.setPresenceStatus(ME, 'online', false), { status: 'not_found' });
+  assert.deepEqual(
+    (await dnd.service.setDoNotDisturb(ME, true)).preferences,
+    notificationPreferences({ doNotDisturb: true, presenceStatus: 'dnd' })
+  );
+  const online = harness({ result: { status: 'updated', preferences: notificationPreferences() } });
+  assert.equal((await online.service.setDoNotDisturb(ME, false)).preferences.presenceStatus, 'online');
+  const missing = harness({ result: { status: 'not_found', preferences: notificationPreferences() } });
+  assert.equal((await missing.service.setPresenceStatus(ME, 'online', false)).status, 'not_found');
   assert.deepEqual(missing.calls.events, []);
 });
 
 test('mutes and privacy pass straight to the preference store', async () => {
   const { service } = harness();
-  assert.deepEqual((await service.setDmMute('user-1', PEER, true))?.preferences?.dm, {
-    userId: 'user-1',
-    peerUserId: PEER,
-    muted: true
-  });
-  assert.deepEqual((await service.setRoomMute('user-1', 'room-1', false))?.preferences?.room, {
-    userId: 'user-1',
-    roomId: 'room-1',
-    muted: false
-  });
-  assert.deepEqual((await service.setPrivateNotifications('user-1', true))?.preferences?.privacy, {
-    userId: 'user-1',
-    privateNotifications: true
-  });
-  assert.deepEqual(await service.preferences('user-1'), { mutedPeerIds: [] });
-  assert.equal(service.pushConfig().publicKey, 'vapid');
+  assert.deepEqual((await service.setDmMute('user-1', PEER, true)).preferences.mutedPeerIds, [PEER]);
+  assert.deepEqual((await service.setRoomMute('user-1', 'room-1', true)).preferences.mutedRoomIds, ['room-1']);
+  assert.equal((await service.setPrivateNotifications('user-1', true)).preferences.privateNotifications, true);
+  assert.deepEqual(await service.preferences('user-1'), notificationPreferences());
+  assert.equal(service.pushConfig().vapidPublicKey, 'vapid');
 });
 
 test('push subscribe and unsubscribe', async () => {
@@ -149,15 +149,17 @@ test('push subscribe and unsubscribe', async () => {
 
 // --- routes -------------------------------------------------------------------------
 
+const PRIVATE = notificationPreferences({ privateNotifications: true });
+
 function routeApp(
   t: TestContext,
   outcomes: Record<string, unknown> = {},
   { signedIn = true, user = ME }: { signedIn?: boolean; user?: { id: string; login?: string } } = {}
 ) {
-  const app = fastify();
+  const app = fastify({ ajv: AJV_OPTIONS });
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
   const seen: Record<string, unknown[]> = {};
-  const updated = { status: 'updated', preferences: { a: 1 } };
+  const updated = { status: 'updated', preferences: PRIVATE };
   const record =
     (name: string, value: unknown) =>
     async (...args: unknown[]) => {
@@ -169,17 +171,17 @@ function routeApp(
     {
       logger: fake<ApiContext['logger']>(),
       clientIp: () => 'ip',
-      resolveSession: async () => (signedIn ? { user } : null),
+      resolveSession: async () => (signedIn ? { user: storedUser(user) } : null),
       hashIp: (ip: string) => ip
     },
     fake<NotificationSettingsService>({
-      preferences: record('preferences', { mutedPeerIds: [] }),
+      preferences: record('preferences', notificationPreferences()),
       setDmMute: record('setDmMute', updated),
       setRoomMute: record('setRoomMute', updated),
       setPrivateNotifications: record('setPrivateNotifications', updated),
       setDoNotDisturb: record('setDoNotDisturb', updated),
       setPresenceStatus: record('setPresenceStatus', updated),
-      pushConfig: () => ({ enabled: true, publicKey: 'vapid' }),
+      pushConfig: () => ({ enabled: true, vapidPublicKey: 'vapid' }),
       subscribe: record('subscribe', { status: 'subscribed' }),
       unsubscribe: record('unsubscribe', { status: 'removed' })
     } as Partial<Record<keyof NotificationSettingsService, unknown>> as Partial<NotificationSettingsService>)
@@ -219,14 +221,14 @@ test('every settings route needs a session and answers it', async (t) => {
   assert.deepEqual((await call(app, 'PUT', `/api/notifications/dm/${PEER}/mute`, { muted: true })).body, {
     ok: true,
     muted: true,
-    preferences: { a: 1 }
+    preferences: PRIVATE
   });
   assert.deepEqual((await call(app, 'PUT', '/api/notifications/privacy', { privateNotifications: false })).body, {
     ok: true,
-    preferences: { a: 1 }
+    preferences: PRIVATE
   });
   assert.deepEqual(seen.setPresenceStatus?.slice(1, 3), ['away', true]);
-  assert.deepEqual((await call(app, 'GET', '/api/push/config')).body, { enabled: true, publicKey: 'vapid' });
+  assert.deepEqual((await call(app, 'GET', '/api/push/config')).body, { enabled: true, vapidPublicKey: 'vapid' });
 });
 
 test('settings refusals keep their texts', async (t) => {

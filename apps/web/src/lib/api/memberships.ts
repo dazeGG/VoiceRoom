@@ -1,7 +1,7 @@
+import { api } from './client';
+import type { MemberPage, MembershipLeft } from '@voice-room/shared/contracts/membership';
 import type { MembershipEnvelope } from '@voice-room/shared/membership';
 import { normalizeMembershipEnvelope } from '@voice-room/shared/membership';
-import { getJsonAuth } from './http';
-import { del } from './http';
 
 export type {
   MemberPresenceStatus,
@@ -23,7 +23,7 @@ export async function fetchRoomMemberships(
   const params = new URLSearchParams({ limit: String(Math.min(100, Math.max(1, limit))) });
   if (cursor) params.set('cursor', cursor);
   if (query?.trim()) params.set('q', query.trim());
-  const payload = await getJsonAuth<unknown>(`/api/rooms/${encodeURIComponent(roomId)}/members?${params.toString()}`);
+  const payload = await api.get<MemberPage>(`/api/rooms/${encodeURIComponent(roomId)}/members?${params.toString()}`);
   const normalized = normalizeMembershipEnvelope(payload);
   if (!normalized.ok || normalized.envelope.roomId !== roomId) {
     throw new Error('Сервер вернул некорректный список участников');
@@ -32,5 +32,6 @@ export async function fetchRoomMemberships(
 }
 
 export async function leaveRoomMembership(roomId: string): Promise<{ left: boolean }> {
-  return del<{ left: boolean }>(`/api/rooms/${encodeURIComponent(roomId)}/memberships/me`);
+  const { left } = await api.delete<MembershipLeft>(`/api/rooms/${encodeURIComponent(roomId)}/memberships/me`);
+  return { left };
 }

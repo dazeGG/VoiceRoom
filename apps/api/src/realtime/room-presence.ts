@@ -2,6 +2,7 @@
 // room events to them, taking a peer out, and keeping the durable
 // active/empty marker of each room in step with the roster.
 
+import type { RoomPeerMessage } from './legacy-events.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { publicPeer, type PresencePeer } from '../domains/rooms/room-views.ts';
@@ -10,7 +11,7 @@ import { clearViewedScreenPeerReferences } from './room-runtime.ts';
 export interface RosterPeer extends PresencePeer {
   closed?: boolean;
   replaced?: boolean;
-  transport?: { id?: string; send(message: unknown): boolean } | null;
+  transport?: { id?: string; send(message: RoomPeerMessage): boolean } | null;
 }
 
 export interface PresenceRoom {
@@ -32,7 +33,7 @@ export interface RoomPresenceDeps {
   /** The realtime runtime once createApiApp built it; preview watchers and summaries go through it. */
   runtime(): {
     scheduleSummaryBroadcast(roomId: string): void;
-    mirrorLegacyRoomEvent(roomId: string, message: unknown): void;
+    mirrorLegacyRoomEvent(roomId: string, message: RoomPeerMessage): void;
   } | null;
   logger(): Pick<Logger, 'error'>;
   occupancyRetry: { baseMs: number; maxMs: number };
@@ -126,7 +127,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
     return transition;
   }
 
-  function sendEvent(peer: RosterPeer | null | undefined, message: unknown): boolean {
+  function sendEvent(peer: RosterPeer | null | undefined, message: RoomPeerMessage): boolean {
     const sent = peer?.transport?.send(message) ?? false;
     if (!sent && peer) peer.closed = true;
     return sent;
@@ -135,7 +136,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
   // Delivers a legacy room event to active peers over their own transports.
   // Preview-only subscribers are reached through mirrorLegacyRoomEvent at
   // each call site, so nothing is delivered twice.
-  function broadcast(target: PresenceRoom, message: unknown, exceptPeerId = ''): void {
+  function broadcast(target: PresenceRoom, message: RoomPeerMessage, exceptPeerId = ''): void {
     const failedPeers: RosterPeer[] = [];
     for (const peer of target.peers.values()) {
       if (peer.id !== exceptPeerId && !sendEvent(peer, message)) failedPeers.push(peer);
@@ -146,7 +147,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
 
   function publishClearedScreenViewers(target: PresenceRoom, ownerPeerId: string): void {
     for (const viewer of clearViewedScreenPeerReferences(target, ownerPeerId) as RosterPeer[]) {
-      const message = { type: 'peer-updated', peer: publicPeer(viewer) };
+      const message: RoomPeerMessage = { type: 'peer-updated', peer: publicPeer(viewer) };
       broadcast(target, message);
       deps.runtime()?.mirrorLegacyRoomEvent(target.id, message);
     }

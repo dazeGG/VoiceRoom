@@ -18,11 +18,11 @@ test('subscribers share one socket that opens with hello and flushes what was se
   const realtime = await load();
   const first = realtime.connectRealtime(() => {});
   const second = realtime.connectRealtime(() => {});
-  first.send('room.join', { roomId: 'room-a' });
+  first.send('room.preview.subscribe', { roomId: 'room-a' });
   expect(FakeWebSocket.instances).toHaveLength(1);
 
   FakeWebSocket.latest().open();
-  expect(FakeWebSocket.latest().sent.map((frame) => frame.type)).toEqual(['hello', 'room.join']);
+  expect(FakeWebSocket.latest().sent.map((frame) => frame.type)).toEqual(['hello', 'room.preview.subscribe']);
   first.close();
   second.close();
 });

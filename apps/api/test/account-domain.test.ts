@@ -16,11 +16,13 @@ import { registerAccountRoutes } from '../src/domains/account/account.routes.ts'
 import { createSessionCookies, parseCookies } from '../src/domains/account/session-cookie.ts';
 import type { ApiContext } from '../src/app/context.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
-import { fake, recordingLogger } from './fakes/index.ts';
+import { fake, recordingLogger, storedUser, publicUser, loginAlert } from './fakes/index.ts';
 
 const DEVICE = { userAgent: 'UA', locationLabel: 'Berlin' };
 const device = async () => DEVICE;
-const USER = { id: 'user-1', login: 'alice', displayName: 'Alice' };
+const USER = storedUser({ id: 'user-1', login: 'alice', displayName: 'Alice' });
+const ALERT = { id: 'a1', kind: 'login' as const, client: '', os: '', location: '', createdAt: 1 };
+const SESSION = { id: 'pub-1', current: true, client: '', os: '', location: '', lastSeenAt: 1 };
 
 // --- session cookie -------------------------------------------------------------
 
@@ -62,21 +64,21 @@ function harness(
     async createUser(input) {
       return input.login === 'taken'
         ? { status: 'login_taken' }
-        : { status: 'created', user: { id: 'new-1', login: input.login } };
+        : { status: 'created', user: storedUser({ id: 'new-1', login: input.login }) };
     },
     async createSession(input) {
       calls.sessions.push(input);
       return { token: 'tok', publicId: 'pub-1' };
     },
     async getUserById(userId) {
-      return { id: userId, login: 'reloaded', displayName: 'Reloaded' };
+      return storedUser({ id: userId, login: 'reloaded', displayName: 'Reloaded' });
     },
     async verifyCredentials(login, password) {
       return password === 'right-password' ? { ...USER, deletionRequestedAt: login === 'leaving' ? 1000 : null } : null;
     },
     async deleteSession() {},
     async updateDisplayName({ userId, displayName }) {
-      return userId === 'gone' ? null : { id: userId, displayName };
+      return userId === 'gone' ? null : storedUser({ id: userId, displayName });
     },
     async changePassword({ userId, currentPassword }) {
       return {
@@ -84,22 +86,24 @@ function harness(
       };
     },
     async getRecoveryCodesStatus() {
-      return { remaining: 3 };
+      return { remaining: 3, generatedAt: null };
     },
     async getAccountNotices() {
       return { recoveryCodesReminderSnoozedUntil: 5, whatsNewSeen: '2.6.0' };
     },
     async snoozeRecoveryCodesReminder({ userId }) {
-      return userId === 'gone' ? { status: 'not_found' } : { status: 'snoozed', snoozedUntil: 9 };
+      return userId === 'gone' ? { status: 'not_found', snoozedUntil: null } : { status: 'snoozed', snoozedUntil: 9 };
     },
     async markWhatsNewSeen({ userId }) {
-      return userId === 'gone' ? { status: 'not_found' } : { status: 'seen', whatsNewSeen: '9.9.9' };
+      return userId === 'gone'
+        ? { status: 'not_found', whatsNewSeen: null }
+        : { status: 'seen', whatsNewSeen: '9.9.9' };
     },
     async markAppPromptSeen({ userId }) {
       return { status: userId === 'gone' ? 'not_found' : 'seen' };
     },
     async listPendingLoginAlerts() {
-      return [{ id: 'a1' }];
+      return [ALERT];
     },
     async resolveLoginAlert({ alertId, resolution }) {
       return alertId === 'missing'
@@ -107,7 +111,7 @@ function harness(
         : { status: 'resolved', revokedTokenHash: resolution === 'denied' ? 'hash-x' : null };
     },
     async listSessions() {
-      return [{ publicId: 'pub-1' }];
+      return [SESSION];
     },
     async revokeSession({ publicId }) {
       return publicId === 'other' ? { status: 'revoked', tokenHash: 'hash-o' } : { status: 'not_found' };
@@ -116,22 +120,22 @@ function harness(
       return { tokenHashes: ['h1', 'h2'] };
     },
     async generateRecoveryCodes({ userId, currentPassword }) {
-      if (userId === 'gone') return { status: 'not_found' };
+      if (userId === 'gone') return { status: 'not_found', codes: [] };
       return currentPassword === 'right-password'
         ? { status: 'generated', codes: ['aaaabbbbcccc'], generatedAt: 7 }
-        : { status: 'invalid_password' };
+        : { status: 'invalid_password', codes: [] };
     },
     async recoverWithCode({ code }) {
-      return code === 'good' ? { status: 'recovered', user: { id: 'user-1' }, remaining: 4 } : { status: 'invalid' };
+      return code === 'good' ? { status: 'recovered', user: storedUser(), remaining: 4 } : { status: 'invalid' };
     },
     async recordLogin({ kind }) {
       if (kind === 'register') throw new Error('audit down');
       return {
         alert:
           kind === 'recovery'
-            ? { id: 'alert-1', client: 'Firefox', os: 'Linux', location: 'Berlin' }
+            ? loginAlert('alert-1', { kind: 'recovery', client: 'Firefox', os: 'Linux', location: 'Berlin' })
             : kind === 'login'
-              ? { id: 'alert-2' }
+              ? loginAlert('alert-2')
               : null
       };
     },
@@ -151,7 +155,7 @@ function harness(
       return login === 'reserved';
     },
     async previewDeletion() {
-      return { ownedRooms: 1 } as never;
+      return { graceDays: 7, rooms: [] };
     },
     async requestDeletion({ currentPassword }) {
       return requests[currentPassword] ?? { status: 'invalid_password' };
@@ -260,7 +264,7 @@ test('profile, password, notices and recovery codes', async () => {
   assert.deepEqual(calls.ended.at(-1), { userId: 'user-1' });
 
   assert.deepEqual(await service.security('user-1'), {
-    recoveryCodes: { remaining: 3 },
+    recoveryCodes: { remaining: 3, generatedAt: null },
     recoveryCodesReminder: { snoozedUntil: 5 }
   });
   assert.deepEqual(await service.snoozeRecoveryCodesReminder('user-1'), { status: 'snoozed', snoozedUntil: 9 });
@@ -281,7 +285,7 @@ test('profile, password, notices and recovery codes', async () => {
   assert.equal(generated.codes.length, 1);
   const empty = await harness({
     async generateRecoveryCodes() {
-      return { status: 'generated' };
+      return { status: 'generated', codes: [] };
     }
   }).service.generateRecoveryCodes('user-1', 'p');
   assert.ok('codes' in empty);
@@ -290,8 +294,8 @@ test('profile, password, notices and recovery codes', async () => {
 
 test('sessions and sign-in alerts', async () => {
   const { calls, service } = harness();
-  assert.deepEqual(await service.listSessions('user-1', 'hash'), [{ publicId: 'pub-1' }]);
-  assert.deepEqual(await service.loginAlerts('user-1', 'pub-1'), [{ id: 'a1' }]);
+  assert.deepEqual(await service.listSessions('user-1', 'hash'), [SESSION]);
+  assert.deepEqual(await service.loginAlerts('user-1', 'pub-1'), [ALERT]);
   assert.equal((await service.revokeSession('user-1', 'PUB-1', 'pub-1')).status, 'current_session');
   assert.equal((await service.revokeSession('user-1', 'pub-1', 42)).status, 'not_found');
   assert.equal((await service.revokeSession('user-1', 'pub-1', 'other')).status, 'revoked');
@@ -307,7 +311,7 @@ test('sessions and sign-in alerts', async () => {
     status: 'resolved',
     resolution: 'denied',
     sessionEnded: true,
-    recoveryCodes: { remaining: 3 }
+    recoveryCodes: { remaining: 3, generatedAt: null }
   });
   assert.deepEqual(calls.ended.at(-1), { userId: 'user-1', tokenHashes: ['hash-x'] });
   assert.deepEqual(calls.notified, ['account.login.resolved', 'account.login.resolved']);
@@ -330,7 +334,7 @@ test('recovery replaces the password, ends other sessions and asks the other dev
   assert.deepEqual(calls.pushes, ['Вход по коду восстановления']);
   const noRemaining = await harness({
     async recoverWithCode() {
-      return { status: 'recovered', user: { id: 'u' } };
+      return { status: 'recovered', user: storedUser({ id: 'u' }) };
     }
   }).service.recover({ login: 'a', code: 'c', newPassword: 'long-password', device });
   assert.ok('remaining' in noRemaining);
@@ -345,7 +349,10 @@ test('account deletion: preview, request, restore', async () => {
 
   const { calls, service } = harness();
   assert.equal(service.deletionAvailable(), true);
-  assert.deepEqual(await service.deletionPreview('user-1'), { status: 'preview', preview: { ownedRooms: 1 } });
+  assert.deepEqual(await service.deletionPreview('user-1'), {
+    status: 'preview',
+    preview: { graceDays: 7, rooms: [] }
+  });
   assert.equal((await service.requestDeletion('user-1', 'wrong')).status, 'invalid_password');
   assert.equal((await service.requestDeletion('user-1', 'missing')).status, 'not_found');
   assert.deepEqual(await service.requestDeletion('user-1', 'again'), {
@@ -388,7 +395,8 @@ function routeApp(
   const app = fastify();
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
   const seen: Record<string, unknown[]> = {};
-  const opened = { status: 'signed_in', token: 'tok', user: { id: 'user-1' } };
+  const me = { ...publicUser('user-1'), hasUsedDesktopApp: false, appPromptSeen: true };
+  const opened = { status: 'signed_in', token: 'tok', user: me };
   const record =
     (name: string, value: unknown) =>
     async (...args: unknown[]) => {
@@ -401,9 +409,12 @@ function routeApp(
     logout: record('logout', undefined),
     recover: record('recover', { ...opened, remaining: 2 }),
     restore: record('restore', opened),
-    updateProfile: record('updateProfile', { status: 'updated', user: { id: 'user-1' } }),
+    updateProfile: record('updateProfile', { status: 'updated', user: me }),
     changePassword: record('changePassword', { status: 'changed' }),
-    security: record('security', { recoveryCodes: {}, recoveryCodesReminder: { snoozedUntil: null } }),
+    security: record('security', {
+      recoveryCodes: { remaining: 0, generatedAt: null },
+      recoveryCodesReminder: { snoozedUntil: null }
+    }),
     generateRecoveryCodes: record('generateRecoveryCodes', {
       status: 'generated',
       codes: ['c'],
@@ -418,7 +429,7 @@ function routeApp(
     markAppPromptSeen: record('markAppPromptSeen', { status: 'seen' }),
     loginAlerts: record('loginAlerts', []),
     resolveLoginAlert: record('resolveLoginAlert', { status: 'resolved', resolution: 'confirmed' }),
-    deletionPreview: record('deletionPreview', { status: 'preview', preview: { ownedRooms: 0 } }),
+    deletionPreview: record('deletionPreview', { status: 'preview', preview: { graceDays: 7, rooms: [] } }),
     requestDeletion: record('requestDeletion', { status: 'scheduled', deletionScheduledFor: 5 }),
     deletionAvailable: () => deletionAvailable
   } as Partial<Record<keyof AccountService, unknown>> as Partial<AccountService>);
@@ -448,7 +459,7 @@ function routeApp(
   return { app, seen };
 }
 
-const SIGNED_IN = { user: { id: 'user-1' }, session: { publicId: 'pub-1', tokenHash: 'hash-1' } };
+const SIGNED_IN = { user: storedUser(), session: { publicId: 'pub-1', tokenHash: 'hash-1' } };
 
 type Body = { ok?: boolean; error?: string; user?: { id: string } } & Record<string, unknown>;
 
@@ -552,7 +563,7 @@ test('entry routes are rate limited per address and per login', async (t) => {
 test('me answers null without a session', async (t) => {
   assert.deepEqual((await call(routeApp(t).app, 'GET', '/api/auth/me')).body, { ok: true, user: null });
   const me = await call(
-    routeApp(t, {}, { session: { ...SIGNED_IN, user: { id: 'user-1', login: 'alice' } } }).app,
+    routeApp(t, {}, { session: { ...SIGNED_IN, user: storedUser({ id: 'user-1', login: 'alice' }) } }).app,
     'GET',
     '/api/auth/me'
   );
@@ -583,7 +594,11 @@ test('every account route needs a session and answers it', async (t) => {
   const signedIn = routeApp(t, {}, { session: SIGNED_IN });
   for (const [method, url, payload] of ACCOUNT_ROUTES) {
     const refused = await call(anonymous, method, url, payload);
-    assert.deepEqual([refused.status, refused.body], [401, { ok: false, error: 'Требуется вход' }], url);
+    assert.deepEqual(
+      [refused.status, refused.body],
+      [401, { ok: false, error: 'Требуется вход', code: 'authentication_required' }],
+      url
+    );
     const answered = await call(signedIn.app, method, url, payload);
     assert.equal(answered.status, 200, url);
     assert.equal(answered.body.ok, true, url);
@@ -596,7 +611,11 @@ test('every account route needs a session and answers it', async (t) => {
   assert.deepEqual(signedIn.seen.changePassword, ['user-1', 'a', 'b']);
   const deletion = await call(signedIn.app, 'POST', '/api/auth/account/deletion', { currentPassword: 'p' });
   assert.deepEqual([deletion.body, deletion.cookie], [{ ok: true, deletionScheduledFor: 5 }, 'vr_session=']);
-  assert.deepEqual((await call(signedIn.app, 'GET', '/api/auth/account/deletion')).body, { ok: true, ownedRooms: 0 });
+  assert.deepEqual((await call(signedIn.app, 'GET', '/api/auth/account/deletion')).body, {
+    ok: true,
+    graceDays: 7,
+    rooms: []
+  });
   assert.deepEqual((await call(signedIn.app, 'POST', '/api/auth/login-alerts/a1/confirm')).body, {
     ok: true,
     resolution: 'confirmed'

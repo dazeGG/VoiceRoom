@@ -1,49 +1,27 @@
 // The realtime (WebSocket) envelope: what a client may send, what the server
 // answers, typing notices, and the room summary the lobby shows.
 
+import type {
+  ClientCommand,
+  ClientCommandType,
+  RoomPeerSummary,
+  RoomRealtimeSummary,
+  RoomTypist,
+  ServerErrorFrame,
+  ServerEvent,
+  ServerEvents,
+  ServerEventType,
+  ServerFrame,
+  TypingActivity
+} from './contracts/realtime.ts';
 import { cleanName, normalizePeerId, normalizeRoomId, normalizeSessionToken } from './validation.ts';
 
 export const MAX_VISIBLE_ROOM_PEERS = 5 as const;
 export const SUMMARY_COALESCE_MS = 75 as const;
 
-export type TypingActivity = 'typing' | 'emoji';
-export type RoomTypist = { peerId: string; userId: string | null; name: string };
-
-export type ClientEnvelope = {
-  id?: string;
-  type: string;
-  payload?: Record<string, unknown>;
-};
-
-export type ServerEnvelope = {
-  id?: string;
-  type: string;
-  payload?: Record<string, unknown>;
-  error?: { code: string; message: string };
-};
-
-export type RoomPeerSummary = {
-  id: string;
-  accountUserId?: string;
-  avatarAccent?: string | null;
-  avatarColorKey: string;
-  avatarUrl?: string | null;
-  muted: boolean;
-  name: string;
-};
-
-export type RoomRealtimeSummary = {
-  roomId: string;
-  avatarUrl?: string | null;
-  name: string;
-  isStatic: boolean;
-  relationship: string;
-  peers: number;
-  visiblePeers: RoomPeerSummary[];
-  hiddenPeerCount: number;
-  lastMessageAt?: number | null;
-  unreadCount?: number;
-};
+export type { RoomPeerSummary, RoomRealtimeSummary, RoomTypist, TypingActivity };
+/** Any frame the server sends. */
+export type ServerEnvelope = ServerFrame;
 
 type Loose = Record<string, unknown>;
 
@@ -52,7 +30,7 @@ type Loose = Record<string, unknown>;
 // room.chat.send / dm.send / dm.read are intentionally absent until they are
 // ported. Adding a type without a handler makes the client believe a channel
 // exists that the server silently drops.
-export const KNOWN_CLIENT_TYPES: ReadonlySet<string> = new Set([
+export const KNOWN_CLIENT_TYPES: ReadonlySet<string> = new Set<ClientCommandType>([
   'hello',
   'ping',
   'room.preview.subscribe',
@@ -83,9 +61,10 @@ export function normalizeTypingActivity(value: unknown): TypingActivity | null {
   return (TYPING_ACTIVITIES as readonly unknown[]).includes(value) ? (value as TypingActivity) : null;
 }
 
-export function parseClientEnvelope(
-  raw: unknown
-): { ok: true; envelope: ClientEnvelope } | { ok: false; code: string } {
+/** A frame as it arrived: a type and an object payload, not yet checked against its command. */
+type RawEnvelope = { id?: string; type: string; payload: Loose };
+
+export function parseClientEnvelope(raw: unknown): { ok: true; envelope: RawEnvelope } | { ok: false; code: string } {
   if (typeof raw !== 'string' || !raw.trim()) {
     return { ok: false, code: 'empty_message' };
   }
@@ -115,20 +94,19 @@ export function parseClientEnvelope(
   };
 }
 
-export function parseServerEnvelope(
-  raw: unknown
-): { ok: true; envelope: ServerEnvelope } | { ok: false; code: string } {
-  return parseClientEnvelope(raw);
-}
-
-export function buildServerEnvelope(type: string, payload: Loose = {}, id?: unknown): ServerEnvelope {
-  const envelope: ServerEnvelope = { type, payload };
+/** The one way the API builds an event: the payload must be the one its type carries. */
+export function buildServerEnvelope<Type extends ServerEventType>(
+  type: Type,
+  payload: ServerEvents[Type],
+  id?: unknown
+): Extract<ServerEvent, { type: Type }> {
+  const envelope = { type, payload } as Extract<ServerEvent, { type: Type }>;
   if (typeof id === 'string' && id) envelope.id = id;
   return envelope;
 }
 
-export function buildServerErrorEnvelope(code: string, message: string, id?: unknown): ServerEnvelope {
-  const envelope: ServerEnvelope = {
+export function buildServerErrorEnvelope(code: string, message: string, id?: unknown): ServerErrorFrame {
+  const envelope: ServerErrorFrame = {
     type: 'error',
     error: { code, message }
   };
@@ -175,10 +153,15 @@ export function buildRoomRealtimeSummary(
   };
 }
 
+/**
+ * Checks a parsed frame against its command. This is the one place a client
+ * frame becomes a typed ClientCommand, so every field a handler reads without
+ * its own check is checked here.
+ */
 export function validateClientCommand(
   envelope: unknown
-): { ok: true; envelope: ClientEnvelope } | { ok: false; code: string } {
-  const input = envelope as ClientEnvelope | null | undefined;
+): { ok: true; envelope: ClientCommand } | { ok: false; code: string } {
+  const input = envelope as { id?: unknown; type?: unknown; payload?: unknown } | null | undefined;
   if (!input || typeof input.type !== 'string') {
     return { ok: false, code: 'invalid_envelope' };
   }
@@ -221,5 +204,6 @@ export function validateClientCommand(
     return { ok: false, code: 'invalid_typing_activity' };
   }
 
-  return { ok: true, envelope: { ...input, payload } };
+  const id = typeof input.id === 'string' ? input.id : undefined;
+  return { ok: true, envelope: { ...(id ? { id } : {}), type: input.type, payload } as ClientCommand };
 }

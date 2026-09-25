@@ -1,21 +1,13 @@
 import crypto from 'node:crypto';
 import type pg from 'pg';
 import { cleanPresenceStatus } from '@voice-room/shared/validation';
-import type { PresenceStatus } from '@voice-room/shared/validation';
+import type { NotificationLevel, NotificationPreferences } from '@voice-room/shared/contracts/notifications';
 import { createDbPool, transaction } from './db.ts';
 import { createLogger } from './logger.ts';
 
 type Queryable = Pick<pg.Pool, 'query'> | pg.PoolClient;
-export type RoomNotificationLevel = 'all' | 'mentions' | 'none';
-export type NotificationPreferences = {
-  doNotDisturb: boolean;
-  mutedPeerIds: string[];
-  mutedRoomIds: string[];
-  roomLevels: Record<string, RoomNotificationLevel>;
-  presenceStatus: PresenceStatus;
-  presenceStatusAutomatic: boolean;
-  privateNotifications: boolean;
-};
+export type RoomNotificationLevel = NotificationLevel;
+export type { NotificationPreferences };
 type PreferencesInput = {
   doNotDisturb?: boolean;
   presenceStatus?: unknown;

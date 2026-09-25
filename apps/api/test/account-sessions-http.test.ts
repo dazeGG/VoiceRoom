@@ -1,14 +1,17 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import { socketPathForDirectory } from './ipc-harness.ts';
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import http from 'node:http';
-import { spawn } from 'node:child_process';
-import path from 'node:path';
-import os from 'node:os';
-import { createTestDatabase } from './db-harness.ts';
-import { openWs } from './ws-harness.ts';
+import type {
+  Me,
+  Recovered,
+  RecoveryCodesGenerated,
+  ReminderSnoozed,
+  Security,
+  Sessions,
+  SessionsRevoked,
+  WhatsNewAnswer
+} from '@voice-room/shared/contracts/account';
+import { cookieFrom, request, startApiServer } from './fakes/server-process.ts';
+import { openWs, waitForClose } from './ws-harness.ts';
 
 const CHROME_WINDOWS =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
@@ -16,109 +19,16 @@ const FIREFOX_LINUX = 'Mozilla/5.0 (X11; Linux x86_64; rv:142.0) Gecko/20100101 
 const FORMATTED_CODE = /^[0-9A-HJKMNP-TV-Z]{4}(?:-[0-9A-HJKMNP-TV-Z]{4}){3}$/;
 const SESSION_ENDED_CLOSE_CODE = 4401;
 
-function getSocketPath() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-account-'));
-  return { dir, socketPath: socketPathForDirectory(dir) };
-}
-
-function waitForHealthz(socketPath, timeoutMs = 15000) {
-  const started = Date.now();
-  return new Promise((resolve, reject) => {
-    const attempt = () => {
-      http
-        .get({ path: '/api/healthz', socketPath }, (res) => {
-          res.resume();
-          if (res.statusCode === 200) {
-            resolve();
-            return;
-          }
-          retry();
-        })
-        .on('error', retry);
-    };
-    const retry = () => {
-      if (Date.now() - started > timeoutMs) {
-        reject(new Error('Server did not become ready'));
-        return;
-      }
-      setTimeout(attempt, 50);
-    };
-    attempt();
+async function startServer(t: TestContext, env: Record<string, string> = {}) {
+  const { socketPath } = await startApiServer(t, {
+    prefix: 'voice-room-account-',
+    env: { AUTH_RATE_LIMIT: '0', ...env }
   });
-}
-
-async function startServer(t: TestContext, extraEnv = {}) {
-  const { dir, socketPath } = getSocketPath();
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const logs = { stdout: '', stderr: '' };
-  const child = spawn(process.execPath, ['src/server.ts'], {
-    cwd: path.join(import.meta.dirname, '..'),
-    env: {
-      ...process.env,
-      NODE_ENV: 'test',
-      MAX_EMPTY_ROOMS_PER_IP: '0',
-      ROOM_CREATE_POW_DIFFICULTY: '0',
-      ROOM_CREATE_RATE_LIMIT: '0',
-      AUTH_RATE_LIMIT: '0',
-      DATABASE_URL: databaseUrl,
-      SOCKET_PATH: socketPath,
-      ...extraEnv
-    },
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
-  child.stdout.on('data', (chunk) => {
-    logs.stdout += chunk.toString();
-  });
-  child.stderr.on('data', (chunk) => {
-    logs.stderr += chunk.toString();
-  });
-  t.after(() => {
-    child.kill('SIGTERM');
-    fs.rmSync(dir, { recursive: true, force: true });
-    return cleanup();
-  });
-  await waitForHealthz(socketPath);
   return socketPath;
 }
 
-function request(socketPath, { method = 'GET', pathname, body, cookie, headers = {} } = {}) {
-  const payload = body === undefined ? null : JSON.stringify(body);
-  const nextHeaders = { Accept: 'application/json', ...headers };
-  if (payload) {
-    nextHeaders['Content-Type'] = 'application/json';
-    nextHeaders['Content-Length'] = Buffer.byteLength(payload);
-  }
-  if (cookie) nextHeaders.Cookie = cookie;
-
-  return new Promise((resolve, reject) => {
-    const req = http.request({ method, path: pathname, socketPath, headers: nextHeaders }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      res.on('end', () => {
-        resolve({
-          status: res.statusCode,
-          headers: res.headers,
-          body: data ? JSON.parse(data) : null,
-          setCookie: res.headers['set-cookie'] || []
-        });
-      });
-      res.on('error', reject);
-    });
-    req.on('error', reject);
-    if (payload) req.write(payload);
-    req.end();
-  });
-}
-
-function cookieFrom(setCookie) {
-  const header = Array.isArray(setCookie) ? setCookie[0] : setCookie;
-  return String(header || '').split(';')[0];
-}
-
 async function signIn(
-  socketPath,
+  socketPath: string,
   { register = false, login = 'ada', password = 'password123', userAgent = CHROME_WINDOWS } = {}
 ) {
   const response = await request(socketPath, {
@@ -131,18 +41,8 @@ async function signIn(
   return cookieFrom(response.setCookie);
 }
 
-function waitForClose(ws, timeoutMs = 5000) {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Socket was not closed')), timeoutMs);
-    ws.on('close', (code) => {
-      clearTimeout(timer);
-      resolve(code);
-    });
-  });
-}
-
-async function me(socketPath, cookie) {
-  const response = await request(socketPath, { pathname: '/api/auth/me', cookie });
+async function me(socketPath: string, cookie: string) {
+  const response = await request<Me>(socketPath, { pathname: '/api/auth/me', cookie });
   assert.equal(response.status, 200);
   return response.body.user;
 }
@@ -154,7 +54,7 @@ test('signed-in devices are listed without secrets and an ended session loses it
 
   assert.equal((await request(socketPath, { pathname: '/api/auth/sessions' })).status, 401);
 
-  const listed = await request(socketPath, { pathname: '/api/auth/sessions', cookie: laptop });
+  const listed = await request<Sessions>(socketPath, { pathname: '/api/auth/sessions', cookie: laptop });
   assert.equal(listed.status, 200);
   assert.equal(listed.body.sessions.length, 2);
   for (const session of listed.body.sessions) {
@@ -162,6 +62,7 @@ test('signed-in devices are listed without secrets and an ended session loses it
   }
   const current = listed.body.sessions.find((session) => session.current);
   const other = listed.body.sessions.find((session) => !session.current);
+  assert.ok(current && other);
   assert.deepEqual([current.client, current.os], ['Chrome', 'Windows']);
   assert.deepEqual([other.client, other.os], ['Firefox', 'Linux']);
   assert.equal(other.location, '', 'no GeoIP database is configured in tests');
@@ -185,7 +86,7 @@ test('signed-in devices are listed without secrets and an ended session loses it
   assert.equal(ended.status, 200);
   assert.equal(await closed, SESSION_ENDED_CLOSE_CODE);
   assert.equal(await me(socketPath, desktop), null);
-  assert.equal((await me(socketPath, laptop)).login, 'ada');
+  assert.equal((await me(socketPath, laptop))?.login, 'ada');
 
   const again = await request(socketPath, {
     method: 'DELETE',
@@ -201,7 +102,7 @@ test('signed-in devices are listed without secrets and an ended session loses it
   assert.equal(garbage.status, 404);
 
   const phone = await signIn(socketPath, { userAgent: FIREFOX_LINUX });
-  const revoked = await request(socketPath, {
+  const revoked = await request<SessionsRevoked>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/sessions/revoke-others',
     cookie: laptop,
@@ -210,20 +111,20 @@ test('signed-in devices are listed without secrets and an ended session loses it
   assert.equal(revoked.status, 200);
   assert.equal(revoked.body.revoked, 1);
   assert.equal(await me(socketPath, phone), null);
-  assert.equal((await me(socketPath, laptop)).login, 'ada');
+  assert.equal((await me(socketPath, laptop))?.login, 'ada');
 });
 
 test('recovery codes restore access over HTTP and end every earlier session', async (t) => {
   const socketPath = await startServer(t);
   const cookie = await signIn(socketPath, { register: true });
 
-  const initial = await request(socketPath, { pathname: '/api/auth/security', cookie });
+  const initial = await request<Security>(socketPath, { pathname: '/api/auth/security', cookie });
   assert.equal(initial.status, 200);
   assert.deepEqual(initial.body.recoveryCodes, { remaining: 0, generatedAt: null });
   assert.deepEqual(initial.body.recoveryCodesReminder, { snoozedUntil: null });
 
   // A freshly registered account starts at the current announcement.
-  const whatsNew = await request(socketPath, { pathname: '/api/auth/whats-new', cookie });
+  const whatsNew = await request<WhatsNewAnswer>(socketPath, { pathname: '/api/auth/whats-new', cookie });
   assert.equal(whatsNew.status, 200);
   assert.match(whatsNew.body.whatsNew.current, /^\d+\.\d+\.\d+$/);
   assert.equal(whatsNew.body.whatsNew.lastSeen, whatsNew.body.whatsNew.current);
@@ -237,7 +138,7 @@ test('recovery codes restore access over HTTP and end every earlier session', as
   });
   assert.equal(wrongPassword.status, 400);
 
-  const generated = await request(socketPath, {
+  const generated = await request<RecoveryCodesGenerated>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/recovery-codes',
     cookie,
@@ -248,24 +149,29 @@ test('recovery codes restore access over HTTP and end every earlier session', as
   assert.equal(generated.body.codes.length, 10);
   for (const code of generated.body.codes) assert.match(code, FORMATTED_CODE);
   assert.equal(
-    (await request(socketPath, { pathname: '/api/auth/security', cookie })).body.recoveryCodes.remaining,
+    (await request<Security>(socketPath, { pathname: '/api/auth/security', cookie })).body.recoveryCodes.remaining,
     10
   );
 
-  const snoozed = await request(socketPath, {
+  const snoozed = await request<ReminderSnoozed>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/recovery-codes/reminder/snooze',
     cookie,
     body: {}
   });
   assert.equal(snoozed.status, 200);
-  assert.ok(snoozed.body.recoveryCodesReminder.snoozedUntil > Date.now() + 2 * 24 * 60 * 60 * 1000);
+  assert.ok((snoozed.body.recoveryCodesReminder.snoozedUntil ?? 0) > Date.now() + 2 * 24 * 60 * 60 * 1000);
   assert.deepEqual(
-    (await request(socketPath, { pathname: '/api/auth/security', cookie })).body.recoveryCodesReminder,
+    (await request<Security>(socketPath, { pathname: '/api/auth/security', cookie })).body.recoveryCodesReminder,
     snoozed.body.recoveryCodesReminder
   );
 
-  const seen = await request(socketPath, { method: 'POST', pathname: '/api/auth/whats-new/seen', cookie, body: {} });
+  const seen = await request<WhatsNewAnswer>(socketPath, {
+    method: 'POST',
+    pathname: '/api/auth/whats-new/seen',
+    cookie,
+    body: {}
+  });
   assert.equal(seen.status, 200);
   assert.equal(seen.body.whatsNew.lastSeen, seen.body.whatsNew.current);
 
@@ -282,6 +188,7 @@ test('recovery codes restore access over HTTP and end every earlier session', as
   assert.equal(wrongCode.setCookie.length, 0);
 
   const [code] = generated.body.codes;
+  assert.ok(code);
   const shortPassword = await request(socketPath, {
     method: 'POST',
     pathname: '/api/auth/recover',
@@ -289,7 +196,7 @@ test('recovery codes restore access over HTTP and end every earlier session', as
   });
   assert.equal(shortPassword.status, 400, 'a rejected password must not spend the code');
 
-  const recovered = await request(socketPath, {
+  const recovered = await request<Recovered>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/recover',
     headers: { 'User-Agent': FIREFOX_LINUX },
@@ -304,7 +211,7 @@ test('recovery codes restore access over HTTP and end every earlier session', as
 
   assert.equal(await closed, SESSION_ENDED_CLOSE_CODE);
   assert.equal(await me(socketPath, cookie), null);
-  assert.equal((await me(socketPath, recoveredCookie)).login, 'ada');
+  assert.equal((await me(socketPath, recoveredCookie))?.login, 'ada');
 
   const reused = await request(socketPath, {
     method: 'POST',

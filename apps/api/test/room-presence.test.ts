@@ -3,6 +3,7 @@
 // own transport, the serialized occupancy writes with retry, the roster wait
 // and the idle-room sweep.
 
+import type { RoomPeerMessage } from '../src/realtime/legacy-events.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -19,9 +20,9 @@ function transport(id: string, { fails = false } = {}) {
   return {
     id,
     sent,
-    send(message: unknown) {
+    send(message: RoomPeerMessage) {
       if (fails) return false;
-      sent.push((message as { type?: string }).type);
+      sent.push(message.type);
       return true;
     }
   };
@@ -109,14 +110,15 @@ test('broadcast skips the sender, closes peers whose transport failed and refres
   const dead = seat('b', transport('tb', { fails: true }));
   const sender = seat('c', senderTransport);
   for (const peer of [ok, dead, sender]) room.peers.set(peer.id, peer);
-  presence.broadcast(room, { type: 'hello' }, 'c');
-  assert.deepEqual(okTransport.sent, ['hello', 'peer-left']);
+  presence.broadcast(room, { type: 'room-deleted', roomId: 'r1' }, 'c');
+  assert.deepEqual(okTransport.sent, ['room-deleted', 'peer-left']);
   assert.deepEqual(senderTransport.sent, ['peer-left']);
   assert.equal(dead.closed, true);
   assert.equal(room.peers.has('b'), false);
   assert.ok(calls.summaries.includes('r1'));
-  assert.equal(presence.sendEvent(null, {}), false);
-  assert.equal(presence.sendEvent({ id: 'x' }, {}), false);
+  const ping = { type: 'ping', at: 1 } as const;
+  assert.equal(presence.sendEvent(null, ping), false);
+  assert.equal(presence.sendEvent({ id: 'x' }, ping), false);
 });
 
 test('a seat closes only from its own transport; the last one out marks the room empty', async () => {

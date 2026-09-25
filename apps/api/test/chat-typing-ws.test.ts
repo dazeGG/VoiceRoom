@@ -1,91 +1,39 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import { socketPathForDirectory } from './ipc-harness.ts';
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import http from 'node:http';
-import { spawn } from 'node:child_process';
-import path from 'node:path';
-import os from 'node:os';
+import type { SignedIn } from '@voice-room/shared/contracts/account';
+import type { FriendRequests } from '@voice-room/shared/contracts/social';
+import type { RoomCreated } from '@voice-room/shared/contracts/rooms';
 import { createTestDatabase } from './db-harness.ts';
-import { countWsType, joinVoiceRoom, openWs, sendWs, subscribeRoomPreview, waitForWsType } from './ws-harness.ts';
-
-function waitForHealthz(socketPath, timeoutMs = 15000) {
-  const started = Date.now();
-  return new Promise((resolve, reject) => {
-    const attempt = () => {
-      http
-        .get({ path: '/api/healthz', socketPath }, (res) => {
-          res.resume();
-          if (res.statusCode === 200) {
-            resolve();
-            return;
-          }
-          retry();
-        })
-        .on('error', retry);
-    };
-    const retry = () => {
-      if (Date.now() - started > timeoutMs) {
-        reject(new Error('Server did not become ready'));
-        return;
-      }
-      setTimeout(attempt, 50);
-    };
-    attempt();
-  });
-}
-
-function request(socketPath, { method = 'GET', pathname, body, cookie } = {}) {
-  const payload = body === undefined ? null : JSON.stringify(body);
-  const headers = { Accept: 'application/json' };
-  if (payload) {
-    headers['Content-Type'] = 'application/json';
-    headers['Content-Length'] = Buffer.byteLength(payload);
-  }
-  if (cookie) headers.Cookie = cookie;
-  return new Promise((resolve, reject) => {
-    const req = http.request({ method, path: pathname, socketPath, headers }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      res.on('end', () => {
-        resolve({
-          status: res.statusCode,
-          body: data ? JSON.parse(data) : null,
-          setCookie: res.headers['set-cookie'] || []
-        });
-      });
-      res.on('error', reject);
-    });
-    req.on('error', reject);
-    if (payload) req.write(payload);
-    req.end();
-  });
-}
+import {
+  cookieFrom,
+  request,
+  socketDir,
+  startServer as spawnServer,
+  waitForHealthz,
+  type ServerLogs
+} from './fakes/server-process.ts';
+import {
+  countWsType,
+  joinVoiceRoom,
+  openWs,
+  sendRawWs,
+  sendWs,
+  subscribeRoomPreview,
+  waitForWsType,
+  type WsSession
+} from './ws-harness.ts';
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+type Account = { cookie: string; id: string };
+
 async function startServer(t: TestContext) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-typing-'));
-  const socketPath = socketPathForDirectory(dir);
+  const { dir, socketPath } = socketDir('voice-room-typing-');
   const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const child = spawn(process.execPath, ['src/server.ts'], {
-    cwd: path.join(import.meta.dirname, '..'),
-    env: {
-      ...process.env,
-      NODE_ENV: 'test',
-      MAX_EMPTY_ROOMS_PER_IP: '0',
-      ROOM_CREATE_POW_DIFFICULTY: '0',
-      ROOM_CREATE_RATE_LIMIT: '0',
-      AUTH_RATE_LIMIT: '0',
-      DATABASE_URL: databaseUrl,
-      SOCKET_PATH: socketPath
-    },
-    stdio: ['ignore', 'ignore', 'ignore']
-  });
-  const sockets = [];
+  const logs: ServerLogs = { stdout: '', stderr: '' };
+  const child = spawnServer(socketPath, databaseUrl, logs, { AUTH_RATE_LIMIT: '0' });
+  const sockets: WsSession[] = [];
   t.after(async () => {
     for (const session of sockets) session.ws.close();
     child.kill('SIGTERM');
@@ -95,17 +43,16 @@ async function startServer(t: TestContext) {
   await waitForHealthz(socketPath);
 
   return {
-    async register(login) {
-      const response = await request(socketPath, {
+    async register(login: string) {
+      const response = await request<SignedIn>(socketPath, {
         method: 'POST',
         pathname: '/api/auth/register',
         body: { login, displayName: login, password: 'password123', passwordConfirm: 'password123' }
       });
       assert.equal(response.status, 201);
-      const cookie = String(response.setCookie[0] || '').split(';')[0];
-      return { cookie, id: response.body.user.id };
+      return { cookie: cookieFrom(response.setCookie), id: response.body.user.id };
     },
-    async befriend(requester, addressee, addresseeLogin) {
+    async befriend(requester: Account, addressee: Account, addresseeLogin: string) {
       const sent = await request(socketPath, {
         method: 'POST',
         pathname: '/api/friends/requests',
@@ -113,7 +60,10 @@ async function startServer(t: TestContext) {
         body: { login: addresseeLogin }
       });
       assert.ok(sent.status === 200 || sent.status === 201);
-      const list = await request(socketPath, { pathname: '/api/friends/requests', cookie: addressee.cookie });
+      const list = await request<FriendRequests>(socketPath, {
+        pathname: '/api/friends/requests',
+        cookie: addressee.cookie
+      });
       const requestId = list.body.incoming[0]?.id;
       assert.ok(requestId);
       const accepted = await request(socketPath, {
@@ -124,8 +74,8 @@ async function startServer(t: TestContext) {
       });
       assert.equal(accepted.status, 200);
     },
-    async createRoom(owner) {
-      const created = await request(socketPath, {
+    async createRoom(owner: Account) {
+      const created = await request<RoomCreated>(socketPath, {
         method: 'POST',
         pathname: '/api/rooms',
         cookie: owner.cookie,
@@ -134,7 +84,7 @@ async function startServer(t: TestContext) {
       assert.equal(created.status, 201);
       return created.body.roomId;
     },
-    async connect(cookie) {
+    async connect(cookie?: string) {
       const session = openWs(socketPath, cookie ? { cookie } : {});
       sockets.push(session);
       await session.ready;
@@ -197,7 +147,8 @@ test('room typing reaches everyone with the chat open, named by the server and n
     name: 'Гость Петя'
   });
 
-  sendWs(guestWs.ws, 'room.chat.typing', { roomId, name: 'Подделка' });
+  // A claimed name is ignored: the typist is the peer the server knows.
+  sendRawWs(guestWs.ws, { type: 'room.chat.typing', payload: { roomId, name: 'Подделка' } });
   for (const session of [ownerWs, viewerWs]) {
     const notice = await waitForWsType(session.frames, 'room.chat.typing');
     assert.deepEqual(notice.payload, {
@@ -246,7 +197,7 @@ test('a notice says whether someone types or picks an emoji, and switching is no
     'a repeated emoji notice inside a second is dropped, the switch to typing arrives when the second is up'
   );
 
-  sendWs(danaWs.ws, 'dm.typing', { userId: erik.id, activity: 'recording' });
+  sendRawWs(danaWs.ws, { type: 'dm.typing', payload: { userId: erik.id, activity: 'recording' } });
   const rejected = await waitForWsType(danaWs.frames, 'error');
   assert.equal(rejected.error.code, 'invalid_typing_activity');
 

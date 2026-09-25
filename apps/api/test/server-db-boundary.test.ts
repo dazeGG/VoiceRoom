@@ -1,10 +1,15 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 process.env.ROOM_CHAT_RATE_LIMIT = '0';
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import http from 'node:http';
+import type http from 'node:http';
+import type { AddressInfo } from 'node:net';
+import type { FastifyBaseLogger } from 'fastify';
+import type { RoomChat, RoomMessageAnswer } from '@voice-room/shared/contracts/messages';
+import type { RoomCreated, RoomStatus } from '@voice-room/shared/contracts/rooms';
+import { dbRoom, fake, type DbRoom, type Fakes } from './fakes/index.ts';
+import type { ApiBody } from './fakes/server-process.ts';
 
 const { __private, createApiServer } = await import('../src/server.ts');
 const { openWs, joinVoiceRoom, sendWs, waitForWsType } = await import('./ws-harness.ts');
@@ -12,22 +17,30 @@ const { openWs, joinVoiceRoom, sendWs, waitForWsType } = await import('./ws-harn
 // A logger that records the structured fields, so a test can assert the API
 // observed a failure instead of swallowing it: Fastify's own logger is silent
 // under the test environment.
-function createCapturingLogger(records) {
-  const record = (level) => (fields, msg) => records.push({ level, ...fields, msg });
-  return {
+type LogRecord = Record<string, unknown> & { level: string; msg?: string };
+
+function createCapturingLogger(records: LogRecord[]): FastifyBaseLogger {
+  const record = (level: string) => (fields: object, msg?: string) => {
+    records.push({ level, ...fields, msg });
+  };
+  const logger: FastifyBaseLogger = fake<FastifyBaseLogger>({
+    level: 'trace',
     debug: record('debug'),
     error: record('error'),
     fatal: record('fatal'),
     info: record('info'),
     trace: record('trace'),
-    warn: record('warn')
-  };
+    warn: record('warn'),
+    silent: () => {},
+    child: () => logger
+  });
+  return logger;
 }
 
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((nextResolve, nextReject) => {
+function deferred<Value = void>() {
+  let resolve!: (value: Value) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<Value>((nextResolve, nextReject) => {
     resolve = nextResolve;
     reject = nextReject;
   });
@@ -35,8 +48,26 @@ function deferred() {
 }
 
 function createFakeStore() {
-  const rooms = new Map();
-  const messages = new Map();
+  const rooms = new Map<string, DbRoom>();
+  const messages = new Map<string, Array<Record<string, unknown>>>();
+  const createRoom = async ({
+    creatorIp = '',
+    isStatic = false,
+    roomId = '',
+    name = '',
+    now = Date.now()
+  }: { creatorIp?: unknown; isStatic?: boolean; roomId?: string; name?: unknown; now?: number } = {}) => {
+    const room = dbRoom(roomId, {
+      createdAt: now,
+      creatorIp: String(creatorIp),
+      emptySince: now,
+      isStatic,
+      name: String(name),
+      updatedAt: now
+    });
+    rooms.set(roomId, room);
+    return { ...room, peers: new Map() };
+  };
   return {
     rooms,
     async appendMessage(roomId, message) {
@@ -53,39 +84,28 @@ function createFakeStore() {
     async countRooms() {
       return rooms.size;
     },
-    async createRoom({ creatorIp, isStatic, roomId, name = '', now = Date.now() }) {
-      const room = {
-        createdAt: now,
-        creatorIp,
-        emptySince: now,
-        id: roomId,
-        isStatic,
-        name,
-        messages: [],
-        peers: new Map(),
-        updatedAt: now
-      };
-      rooms.set(roomId, room);
-      return { ...room, peers: new Map() };
-    },
+    createRoom,
     async createRoomWithQuota(options) {
-      const room = await this.createRoom(options);
+      const room = await createRoom(options);
       return { room, status: 'created' };
     },
     async getRoom(roomId) {
       const room = rooms.get(roomId);
       return room ? { ...room, peers: new Map() } : null;
     },
-    async getOrCreatePeerIdentity({ peerId, sessionToken }) {
-      if (sessionToken && sessionToken.startsWith('bad')) {
+    async getOrCreatePeerIdentity({ peerId, sessionToken } = { roomId: '', peerId: '', sessionToken: '' }) {
+      if (typeof sessionToken === 'string' && sessionToken.startsWith('bad')) {
         return { identity: null, status: 'token_mismatch' };
       }
       return { identity: { avatarColorKey: 'blurple', peerId }, status: 'created' };
     },
-    normalizeGatePrincipal({ accountUserId, guestPrincipalId }) {
+    normalizeGatePrincipal({
+      accountUserId,
+      guestPrincipalId
+    }: { accountUserId?: string | null; guestPrincipalId?: string } = {}) {
       return accountUserId
-        ? { principalId: accountUserId, principalType: 'account' }
-        : { principalId: guestPrincipalId || 'test-guest', principalType: 'guest' };
+        ? { principalId: accountUserId, principalType: 'account' as const }
+        : { principalId: guestPrincipalId || 'test-guest', principalType: 'guest' as const };
     },
     async isRoomServerMuted() {
       return false;
@@ -96,29 +116,39 @@ function createFakeStore() {
     async listSummaryRecipientUserIds() {
       return [];
     },
-    async markRoomActive() {},
-    async markRoomEmpty() {},
-    async pruneRooms() {}
-  };
+    async markRoomActive(_roomOrId?: unknown): Promise<unknown> {
+      return null;
+    },
+    async markRoomEmpty(_roomOrId?: unknown): Promise<unknown> {
+      return null;
+    },
+    async pruneRooms(): Promise<unknown> {
+      return false;
+    }
+  } satisfies Fakes['store'] & { rooms: Map<string, DbRoom> };
 }
 
-function listen(server) {
-  return new Promise((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve(server.address().port));
+function listen(server: http.Server) {
+  return new Promise<number>((resolve) => {
+    server.listen(0, '127.0.0.1', () => resolve((server.address() as AddressInfo).port));
   });
 }
 
-function close(server) {
-  return new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+function close(server: http.Server) {
+  return new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
 }
 
-async function request(port, path, { method = 'GET', body } = {}) {
+async function request<Body = ApiBody>(
+  port: number,
+  path: string,
+  { method = 'GET', body }: { method?: string; body?: unknown } = {}
+) {
   const response = await fetch(`http://127.0.0.1:${port}${path}`, {
     method,
     headers: body ? { 'content-type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined
   });
-  return { response, json: await response.json() };
+  return { response, json: (await response.json()) as Body & ApiBody };
 }
 
 test('server create/chat handlers use async store and reject anonymous link-only chat', async () => {
@@ -126,7 +156,7 @@ test('server create/chat handlers use async store and reject anonymous link-only
   const server = createApiServer({ store });
   const port = await listen(server);
   try {
-    const created = await request(port, '/api/rooms', { method: 'POST', body: { isStatic: false } });
+    const created = await request<RoomCreated>(port, '/api/rooms', { method: 'POST', body: { isStatic: false } });
     assert.equal(created.response.status, 201);
     assert.equal(created.json.isStatic, false);
 
@@ -137,7 +167,7 @@ test('server create/chat handlers use async store and reject anonymous link-only
     assert.equal(posted.response.status, 403);
     assert.equal(posted.json.error, 'Active room presence or login required');
 
-    const listed = await request(port, `/api/rooms/${created.json.roomId}/chat`);
+    const listed = await request<RoomChat>(port, `/api/rooms/${created.json.roomId}/chat`);
     assert.equal(listed.response.status, 200);
     assert.equal(listed.json.messages.length, 0);
   } finally {
@@ -161,7 +191,7 @@ test('server preserves active voice peer spoof protection and rejects anonymous 
   });
 
   try {
-    const activePost = await request(port, '/api/rooms/room1/chat', {
+    const activePost = await request<RoomMessageAnswer>(port, '/api/rooms/room1/chat', {
       method: 'POST',
       body: { peerId: 'peer0001', sessionToken: 'goodtoken12345678901234567890123', name: 'Ada', text: 'from voice' }
     });
@@ -199,7 +229,7 @@ test('server logs mark-empty failures instead of creating unhandled rejections',
     throw new Error('db offline');
   };
 
-  const errors = [];
+  const errors: LogRecord[] = [];
   const server = createApiServer({ store, logger: createCapturingLogger(errors) });
   const port = await listen(server);
   const voice = openWs(port);
@@ -238,14 +268,14 @@ test('server serializes a late empty write before the active write of a concurre
   const releaseEmpty = deferred();
   const originalGetOrCreatePeerIdentity = store.getOrCreatePeerIdentity.bind(store);
   store.getOrCreatePeerIdentity = async (input) => {
-    if (input.peerId === 'joining-peer') {
+    if (input?.peerId === 'joining-peer') {
       identityStarted.resolve();
       await releaseIdentity.promise;
     }
     return originalGetOrCreatePeerIdentity(input);
   };
 
-  const writes = [];
+  const writes: string[] = [];
   store.markRoomActive = async () => {
     writes.push('active');
   };
@@ -288,7 +318,7 @@ test('server serializes a late empty write before the active write of a concurre
 
     const deadline = Date.now() + 5000;
     while (true) {
-      const status = await request(port, '/api/rooms/room-occupancy-race');
+      const status = await request<RoomStatus>(port, '/api/rooms/room-occupancy-race');
       if (status.json.peers === 1) break;
       if (Date.now() >= deadline) throw new Error('joining peer was not installed while empty write was pending');
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -311,10 +341,10 @@ test('pruning retries failed active occupancy before sweeping dynamic rooms', as
   const roomId = 'room-active-retry';
   await store.createRoom({ creatorIp: 'test', isStatic: false, roomId, now: 1000 });
   let activeAttempts = 0;
-  store.markRoomActive = async (activeRoomId) => {
+  store.markRoomActive = async (activeRoomId?: unknown) => {
     activeAttempts += 1;
     if (activeAttempts === 1) throw new Error('temporary occupancy failure');
-    const room = store.rooms.get(activeRoomId);
+    const room = store.rooms.get(String(activeRoomId));
     if (room) room.emptySince = null;
   };
   store.pruneRooms = async () => {
@@ -322,7 +352,7 @@ test('pruning retries failed active occupancy before sweeping dynamic rooms', as
     if (room?.emptySince != null) store.rooms.delete(roomId);
   };
 
-  const errors = [];
+  const errors: LogRecord[] = [];
   const server = createApiServer({ store, logger: createCapturingLogger(errors) });
   const port = await listen(server);
   const voice = openWs(port);

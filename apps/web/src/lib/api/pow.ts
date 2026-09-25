@@ -1,13 +1,7 @@
-import { fetchJson } from './http';
+import type { PowChallenge } from '@voice-room/shared/contracts/ops';
+import { api } from './client';
 
 const ROOM_PROOF_BATCH_SIZE = 250;
-
-interface PowChallenge {
-  challenge?: string;
-  difficulty?: number;
-  expiresAt?: number;
-  required: boolean;
-}
 
 export interface RoomProof {
   challenge: string;
@@ -15,7 +9,7 @@ export interface RoomProof {
 }
 
 export async function createRoomProof(): Promise<RoomProof | null> {
-  const challenge = await fetchJson<PowChallenge>('/api/pow-challenge');
+  const challenge = await api.get<PowChallenge>('/api/pow-challenge');
   if (!challenge.required) return null;
 
   if (!window.crypto?.subtle || typeof TextEncoder !== 'function') {
@@ -23,12 +17,8 @@ export async function createRoomProof(): Promise<RoomProof | null> {
   }
 
   return {
-    challenge: normalizeChallenge(challenge.challenge),
-    nonce: await solveProofOfWork(
-      normalizeChallenge(challenge.challenge),
-      Number(challenge.difficulty),
-      Number(challenge.expiresAt)
-    )
+    challenge: challenge.challenge,
+    nonce: await solveProofOfWork(challenge.challenge, challenge.difficulty, challenge.expiresAt)
   };
 }
 
@@ -49,11 +39,6 @@ async function solveProofOfWork(challenge: string, difficulty: number, expiresAt
   }
 
   throw new Error('Проверка создания комнаты истекла');
-}
-
-function normalizeChallenge(challenge: unknown): string {
-  if (typeof challenge !== 'string' || !challenge) throw new Error('Не удалось создать комнату');
-  return challenge;
 }
 
 function hasLeadingZeroBits(bytes: Uint8Array, bitCount: number): boolean {

@@ -3,8 +3,7 @@
   import { Bell, BellOff, Keyboard, LogOut, Mic, Monitor, Pencil, ShieldCheck, User, X } from '@lucide/svelte';
   import { onDestroy, untrack } from 'svelte';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
-  import type { PublicUser } from '$lib/api/friends';
-  import { fetchBlockedUsers, unblockUser } from '$lib/api/blocks';
+  import { fetchBlockedUsers, unblockUser, type PublicUser } from '$lib/api/friends';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { deleteUserAvatar, updateDisplayName, uploadUserAvatar } from '$lib/api/auth';
   import { setUser } from '$lib/features/auth/session.svelte';

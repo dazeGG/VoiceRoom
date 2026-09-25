@@ -1,5 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import { socketPathForDirectory } from './ipc-harness.ts';
 // Integration coverage for the WS room surface that the plan calls out:
 //   - room.summary fan-out to visible/saved-room users with bounded visiblePeers
 //     and an explicit hiddenPeerCount;
@@ -10,105 +8,21 @@ import { socketPathForDirectory } from './ipc-harness.ts';
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import http from 'node:http';
-import { spawn } from 'node:child_process';
-import path from 'node:path';
-import os from 'node:os';
 import { openWs, sendWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType, countWsType } from './ws-harness.ts';
+import type { SignedIn } from '@voice-room/shared/contracts/account';
+import type { RoomCreated } from '@voice-room/shared/contracts/rooms';
 import { createTestDatabase } from './db-harness.ts';
+import {
+  cookieFrom,
+  request,
+  socketDir,
+  startServer,
+  waitForHealthz,
+  type ServerLogs
+} from './fakes/server-process.ts';
 
-function getSocketPath() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-rt-'));
-  return { dir, socketPath: socketPathForDirectory(dir) };
-}
-
-function waitForHealthz(socketPath, timeoutMs = 15000) {
-  const started = Date.now();
-  return new Promise((resolve, reject) => {
-    const attempt = () => {
-      http
-        .get({ path: '/api/healthz', socketPath }, (res) => {
-          res.resume();
-          if (res.statusCode === 200) {
-            resolve();
-            return;
-          }
-          retry();
-        })
-        .on('error', retry);
-    };
-    const retry = () => {
-      if (Date.now() - started > timeoutMs) {
-        reject(new Error('Server did not become ready'));
-        return;
-      }
-      setTimeout(attempt, 50);
-    };
-    attempt();
-  });
-}
-
-function startServer(socketPath, databaseUrl, logs) {
-  const child = spawn(process.execPath, ['src/server.ts'], {
-    cwd: path.join(import.meta.dirname, '..'),
-    env: {
-      ...process.env,
-      NODE_ENV: 'test',
-      MAX_EMPTY_ROOMS_PER_IP: '0',
-      ROOM_CREATE_POW_DIFFICULTY: '0',
-      ROOM_CREATE_RATE_LIMIT: '0',
-      AUTH_RATE_LIMIT: '0',
-      DATABASE_URL: databaseUrl,
-      SOCKET_PATH: socketPath
-    },
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
-  child.stdout.on('data', (chunk) => {
-    logs.stdout += chunk.toString();
-  });
-  child.stderr.on('data', (chunk) => {
-    logs.stderr += chunk.toString();
-  });
-  return child;
-}
-
-function requestJson(socketPath, { method = 'GET', pathname, body, cookie } = {}) {
-  const payload = body === undefined ? null : JSON.stringify(body);
-  const headers = { Accept: 'application/json' };
-  if (payload) {
-    headers['Content-Type'] = 'application/json';
-    headers['Content-Length'] = Buffer.byteLength(payload);
-  }
-  if (cookie) headers.Cookie = cookie;
-
-  return new Promise((resolve, reject) => {
-    const req = http.request({ method, path: pathname, socketPath, headers }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      res.on('end', () => {
-        resolve({
-          status: res.statusCode,
-          body: data ? JSON.parse(data) : null,
-          setCookie: res.headers['set-cookie'] || []
-        });
-      });
-      res.on('error', reject);
-    });
-    req.on('error', reject);
-    if (payload) req.write(payload);
-    req.end();
-  });
-}
-
-function cookieFrom(setCookie) {
-  const header = Array.isArray(setCookie) ? setCookie[0] : setCookie;
-  return String(header || '').split(';')[0];
-}
-
-async function register(socketPath, login) {
-  const response = await requestJson(socketPath, {
+async function register(socketPath: string, login: string) {
+  const response = await request<SignedIn>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/register',
     body: { login, displayName: login, password: 'password123', passwordConfirm: 'password123' }
@@ -119,7 +33,7 @@ async function register(socketPath, login) {
 
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-function voiceCreds(index) {
+function voiceCreds(index: number) {
   return {
     peerId: `peer-voice-${index}`,
     sessionToken: `vtoken${index}`.padEnd(32, '0'),
@@ -128,9 +42,9 @@ function voiceCreds(index) {
 }
 
 async function withServer(t: TestContext) {
-  const { dir, socketPath } = getSocketPath();
+  const { dir, socketPath } = socketDir('voice-room-rt-');
   const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const logs = { stdout: '', stderr: '' };
+  const logs: ServerLogs = { stdout: '', stderr: '' };
   const child = startServer(socketPath, databaseUrl, logs);
   t.after(() => {
     child.kill('SIGTERM');
@@ -145,7 +59,7 @@ test('room owner receives bounded room.summary as peers join and leave', async (
   const { socketPath, logs } = await withServer(t);
   try {
     const owner = await register(socketPath, 'summary-owner');
-    const created = await requestJson(socketPath, {
+    const created = await request<RoomCreated>(socketPath, {
       method: 'POST',
       pathname: '/api/rooms',
       body: { isStatic: true },
@@ -171,7 +85,7 @@ test('room owner receives bounded room.summary as peers join and leave', async (
     const full = await waitForWsType(
       ownerWs.frames,
       'room.summary',
-      (frame) => frame.payload?.room?.roomId === roomId && frame.payload.room.peers === 6
+      (frame) => frame.payload.room.roomId === roomId && frame.payload.room.peers === 6
     );
     const summary = full.payload.room;
     assert.equal(summary.peers, 6);
@@ -182,22 +96,24 @@ test('room owner receives bounded room.summary as peers join and leave', async (
     // One peer explicitly leaves; a transport-only close now keeps presence
     // during the bounded reconnect lease.
     const sinceLeave = ownerWs.frames.length;
-    sendWs(peers[0].peer.ws, 'room.leave', {
+    const [leaving] = peers;
+    assert.ok(leaving);
+    sendWs(leaving.peer.ws, 'room.leave', {
       roomId,
-      peerId: peers[0].creds.peerId,
-      sessionToken: peers[0].creds.sessionToken
+      peerId: leaving.creds.peerId,
+      sessionToken: leaving.creds.sessionToken
     });
 
     const afterLeave = await waitForWsType(
       ownerWs.frames,
       'room.summary',
-      (frame) => frame.payload?.room?.roomId === roomId && frame.payload.room.peers === 5,
+      (frame) => frame.payload.room.roomId === roomId && frame.payload.room.peers === 5,
       5000,
       sinceLeave
     );
     assert.equal(afterLeave.payload.room.visiblePeers.length, 5);
     assert.equal(afterLeave.payload.room.hiddenPeerCount, 0);
-    peers[0].peer.ws.close();
+    leaving.peer.ws.close();
 
     ownerWs.ws.close();
     for (const { peer } of peers) peer.ws.close();
@@ -210,7 +126,7 @@ test('room owner receives bounded room.summary as peers join and leave', async (
 test('preview subscribe streams peer diffs and unsubscribe stops them', async (t) => {
   const { socketPath, logs } = await withServer(t);
   try {
-    const created = await requestJson(socketPath, { method: 'POST', pathname: '/api/rooms', body: {} });
+    const created = await request<RoomCreated>(socketPath, { method: 'POST', pathname: '/api/rooms', body: {} });
     assert.equal(created.status, 201);
     const roomId = created.body.roomId;
 
@@ -230,7 +146,7 @@ test('preview subscribe streams peer diffs and unsubscribe stops them', async (t
     await waitForWsType(
       viewer.frames,
       'room.peer.joined',
-      (frame) => frame.payload?.roomId === roomId && frame.payload.peer?.id === first.peerId
+      (frame) => frame.payload.roomId === roomId && frame.payload.peer?.id === first.peerId
     );
 
     // Stop previewing; further joins must not reach this connection.
@@ -259,7 +175,7 @@ test('preview subscribe streams peer diffs and unsubscribe stops them', async (t
 test('idle connection receives no room detail without subscribe or join', async (t) => {
   const { socketPath, logs } = await withServer(t);
   try {
-    const created = await requestJson(socketPath, { method: 'POST', pathname: '/api/rooms', body: {} });
+    const created = await request<RoomCreated>(socketPath, { method: 'POST', pathname: '/api/rooms', body: {} });
     assert.equal(created.status, 201);
     const roomId = created.body.roomId;
 

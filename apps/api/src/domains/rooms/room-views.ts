@@ -1,7 +1,9 @@
-// What clients see of a room and of the peers in it. The web client mirrors
-// these shapes (apps/web/src/lib/api/rooms.ts), and the realtime runtime sends
-// the same objects over the socket, so a field changes here or nowhere.
+// What clients see of a room and of the peers in it: the shapes of
+// @voice-room/shared/contracts/rooms, which the HTTP routes register and the
+// realtime runtime sends over the socket.
 
+import type { RoomPeerMessage } from '../../realtime/legacy-events.ts';
+import type { LobbyRoom, PublicPeer } from '@voice-room/shared/contracts/rooms';
 import { avatarColorForPeerId } from '../../lib/room-store.ts';
 import { failure, type Failure } from '../../platform/http/http-kit.ts';
 
@@ -24,7 +26,7 @@ export interface PresencePeer {
   screenStreamId?: string;
   serverMuted?: boolean;
   sessionToken?: string;
-  transport?: { id?: string; send(message: unknown): boolean } | null;
+  transport?: { id?: string; send(message: RoomPeerMessage): boolean } | null;
   viewedScreenPeerId?: string;
 }
 
@@ -53,7 +55,7 @@ export function roomAvatarUrl(avatarKey: string | null | undefined): string | nu
   return avatarKey ? `/api/avatars/${encodeURIComponent(avatarKey)}` : null;
 }
 
-export function publicPeer(peer: PresencePeer) {
+export function publicPeer(peer: PresencePeer): PublicPeer {
   return {
     accountUserId: peer.accountUserId || '',
     avatarAccent: peer.avatarAccent || null,
@@ -73,20 +75,7 @@ export function publicPeer(peer: PresencePeer) {
   };
 }
 
-export type PublicPeer = ReturnType<typeof publicPeer>;
-
-export interface LobbyRoom {
-  avatarUrl: string | null;
-  createdAt: number;
-  emptySince: number | null | undefined;
-  isStatic: boolean;
-  lastMessageAt?: number | null;
-  name: string;
-  peers: number;
-  relationship: string;
-  roomId: string;
-  unreadCount?: number;
-}
+export type { LobbyRoom, PublicPeer };
 
 /** The lobby card: the PUT response, the room list and the room.updated event. */
 export function publicLobbyRoom(room: StoredRoom, peerCount: number): LobbyRoom {

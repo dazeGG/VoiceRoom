@@ -60,7 +60,7 @@ test('parseClientEnvelope accepts valid envelopes', () => {
   assert.equal(result.ok, true);
   if (!result.ok) return;
   assert.equal(result.envelope.type, 'ping');
-  assert.equal(result.envelope.payload!.at, 1);
+  assert.equal(result.envelope.payload.at, 1);
 });
 
 test('parseClientEnvelope rejects malformed input', () => {
@@ -121,5 +121,5 @@ test('buildServerEnvelope preserves optional id', () => {
   const frame = buildServerEnvelope('ready', { userId: 'u1' }, 'req-1');
   assert.equal(frame.type, 'ready');
   assert.equal(frame.id, 'req-1');
-  assert.equal(frame.payload!.userId, 'u1');
+  assert.equal(frame.payload.userId, 'u1');
 });

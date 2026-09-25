@@ -1,27 +1,28 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
+// In-process account and room messages become the public WebSocket events.
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import type { ServerEvents, ServerEventType } from '@voice-room/shared/contracts/realtime';
+import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import { toWsAccountEvent } from '../src/realtime/account-events.ts';
 import { legacyPeerMessageToWs } from '../src/realtime/legacy-events.ts';
+import { notificationPreferences, storedDirectMessage } from './fakes/index.ts';
+
+/** The payload of an event, after checking it is the event expected. */
+function payloadOf<Type extends ServerEventType>(envelope: ServerEnvelope, type: Type): ServerEvents[Type] {
+  assert.equal(envelope.type, type);
+  return (envelope as { payload: unknown }).payload as ServerEvents[Type];
+}
 
 test('account realtime maps DM delete events to the public websocket contract', () => {
-  const event = toWsAccountEvent({
-    type: 'dm.message.deleted',
-    messageId: 'msg-1',
-    peerUserId: 'user-2'
-  });
-
-  assert.equal(event.type, 'dm.message.deleted');
-  assert.equal(event.payload.messageId, 'msg-1');
-  assert.equal(event.payload.peerUserId, 'user-2');
+  const event = toWsAccountEvent({ type: 'dm.message.deleted', messageId: 'msg-1', peerUserId: 'user-2' });
+  assert.deepEqual(payloadOf(event, 'dm.message.deleted'), { messageId: 'msg-1', peerUserId: 'user-2' });
 });
 
 test('account realtime maps DM edit events with the updated message', () => {
-  const message = { id: 'msg-1', senderId: 'user-1', recipientId: 'user-2', body: 'updated', editedAt: 123 };
+  const message = storedDirectMessage('msg-1', { senderId: 'user-1', recipientId: 'user-2', body: 'updated' });
   const event = toWsAccountEvent({ type: 'dm.message.edited', message });
-
-  assert.equal(event.type, 'dm.message.edited');
-  assert.deepEqual(event.payload.message, message);
+  assert.deepEqual(payloadOf(event, 'dm.message.edited').message, message);
 });
 
 test('account realtime maps ring invitations with their expiry', () => {
@@ -31,11 +32,8 @@ test('account realtime maps ring invitations with their expiry', () => {
     room: { id: 'room-1', name: 'Daily', emoji: '' },
     expiresAt: 12345
   });
-
-  assert.equal(event.type, 'ring.incoming');
-  assert.equal(event.payload.fromUser.login, 'alice');
-  assert.equal(event.payload.room.id, 'room-1');
-  assert.equal(event.payload.expiresAt, 12345);
+  const payload = payloadOf(event, 'ring.incoming');
+  assert.deepEqual([payload.fromUser.login, payload.room.id, payload.expiresAt], ['alice', 'room-1', 12345]);
 });
 
 test('account realtime maps additive notification envelopes', () => {
@@ -45,21 +43,18 @@ test('account realtime maps additive notification envelopes', () => {
     peer: { id: 'user-1', displayName: 'Alice', login: 'alice', avatarColorKey: 'mint' },
     message: { id: 'msg-1', body: 'hello', createdAt: 123 }
   });
-  assert.equal(dm.type, 'notification.dm.message');
-  assert.equal(dm.payload.dedupeKey, 'dm:msg-1');
-  assert.equal(dm.payload.peer.login, 'alice');
-  assert.equal(dm.payload.message.body, 'hello');
+  const dmPayload = payloadOf(dm, 'notification.dm.message');
+  assert.deepEqual([dmPayload.dedupeKey, dmPayload.peer.login, dmPayload.message.body], ['dm:msg-1', 'alice', 'hello']);
 
   const room = toWsAccountEvent({
     type: 'notification.room.message',
     dedupeKey: 'room:room-1:message:msg-2',
-    room: { roomId: 'room-1', name: 'Daily', emoji: '☕', avatarColorKey: 'sky' },
+    room: { roomId: 'room-1', name: 'Daily' },
     sender: { id: 'user-2', displayName: 'Bob', login: 'bob', avatarColorKey: 'rose' },
     message: { id: 'msg-2', body: 'standup', createdAt: 456 }
   });
-  assert.equal(room.type, 'notification.room.message');
-  assert.equal(room.payload.room.name, 'Daily');
-  assert.equal(room.payload.sender.login, 'bob');
+  const roomPayload = payloadOf(room, 'notification.room.message');
+  assert.deepEqual([roomPayload.room.name, roomPayload.sender.login], ['Daily', 'bob']);
 
   const request = toWsAccountEvent({
     type: 'notification.friend.request',
@@ -67,8 +62,7 @@ test('account realtime maps additive notification envelopes', () => {
     requester: { id: 'user-3', displayName: 'Cara', login: 'cara', avatarColorKey: 'lime' },
     requestId: 'req-1'
   });
-  assert.equal(request.type, 'notification.friend.request');
-  assert.equal(request.payload.requestId, 'req-1');
+  assert.equal(payloadOf(request, 'notification.friend.request').requestId, 'req-1');
 
   const accepted = toWsAccountEvent({
     type: 'notification.friend.accepted',
@@ -76,29 +70,13 @@ test('account realtime maps additive notification envelopes', () => {
     user: { id: 'user-4', displayName: 'Dana', login: 'dana', avatarColorKey: 'gold' },
     context: { relationship: 'friend' }
   });
-  assert.equal(accepted.type, 'notification.friend.accepted');
-  assert.equal(accepted.payload.dedupeKey, 'friend-accepted:user-3:user-4');
-  assert.equal(accepted.payload.context.relationship, 'friend');
+  assert.deepEqual(payloadOf(accepted, 'notification.friend.accepted').context, { relationship: 'friend' });
 });
 
 test('account realtime maps notification settings updates for same-account tabs', () => {
-  const preferences = {
-    doNotDisturb: true,
-    mutedPeerIds: ['user-2'],
-    presenceStatus: 'dnd',
-    privateNotifications: false
-  };
+  const preferences = notificationPreferences({ doNotDisturb: true, mutedPeerIds: ['user-2'], presenceStatus: 'dnd' });
   const event = toWsAccountEvent({ type: 'notification-settings-updated', preferences });
-
-  assert.equal(event.type, 'notification.settings.updated');
-  assert.deepEqual(event.payload.preferences, preferences);
-});
-
-test('room chat delete is not treated as a legacy peer event', () => {
-  assert.equal(
-    legacyPeerMessageToWs({ type: 'room.chat.deleted', payload: { roomId: 'room-1', messageId: 'msg-1' } }, 'room-1'),
-    null
-  );
+  assert.deepEqual(payloadOf(event, 'notification.settings.updated').preferences, preferences);
 });
 
 test('reaction updates map onto preview room subscriptions without losing the authoritative revision', () => {
@@ -110,22 +88,20 @@ test('reaction updates map onto preview room subscriptions without losing the au
     },
     'room-1'
   );
-  assert.equal(event.type, 'reaction.updated');
-  assert.equal(event.payload.roomId, 'room-1');
-  assert.equal(event.payload.messageId, 'msg-1');
-  assert.deepEqual(event.payload.summary, summary);
+  assert.deepEqual(payloadOf(event, 'reaction.updated'), {
+    conversation: { type: 'room', id: 'room-1' },
+    roomId: 'room-1',
+    messageId: 'msg-1',
+    summary
+  });
 });
 
 test('moderation terminal events map on both account and active room transports', () => {
-  for (const type of ['room.kicked', 'room.banned']) {
+  for (const type of ['room.kicked', 'room.banned'] as const) {
     const account = toWsAccountEvent({ type, roomId: 'room-1', peerId: 'peer-1' });
-    assert.equal(account.type, type);
-    assert.equal(account.payload.roomId, 'room-1');
-    assert.equal(account.payload.peerId, 'peer-1');
+    assert.deepEqual(payloadOf(account, type), { roomId: 'room-1', peerId: 'peer-1' });
 
     const active = legacyPeerMessageToWs({ type, roomId: 'room-1', peerId: 'peer-1' }, 'room-1');
-    assert.equal(active.type, type);
-    assert.equal(active.payload.roomId, 'room-1');
-    assert.equal(active.payload.peerId, 'peer-1');
+    assert.deepEqual(payloadOf(active, type), { roomId: 'room-1', peerId: 'peer-1' });
   }
 });

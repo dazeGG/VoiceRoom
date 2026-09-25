@@ -4,9 +4,10 @@ import assert from 'node:assert/strict';
 import { createRoomStore } from '../src/lib/room-store.ts';
 import fastify from 'fastify';
 import type { Membership } from '../src/domains/membership/membership-repository.ts';
-import { registerMembershipRoutes } from '../src/domains/membership/membership-routes.ts';
+import { registerMembershipRoutes } from '../src/domains/membership/membership.routes.ts';
+import type { ApiContext } from '../src/app/context.ts';
 import type { LeaveOutcome } from '../src/domains/membership/membership-service.ts';
-import { fakePoolWithClient as createFakePool, result, type ScopedCall } from './fakes/index.ts';
+import { fake, fakePoolWithClient as createFakePool, result, storedUser, type ScopedCall } from './fakes/index.ts';
 
 const STATIC_ROOM_ROW = {
   id: 'static-room',
@@ -132,13 +133,10 @@ function leaveRoute({
 }: { membership?: Membership | null; leaveStatus?: LeaveStatus; prepared?: boolean } = {}) {
   const app = fastify();
   const onLeftCalls: unknown[] = [];
-  registerMembershipRoutes({
-    app,
-    resolveUser: async () => ({ user: { id: 'user-1' } }),
-    membershipService: {
-      async admitRegistered() {
-        throw new Error('not in this test');
-      },
+  const ctx = fake<ApiContext>({ resolveSession: async () => ({ user: storedUser() }) });
+  registerMembershipRoutes(app, ctx, {
+    directory: fake(),
+    memberships: {
       async getMembership() {
         return membership;
       },
@@ -146,9 +144,10 @@ function leaveRoute({
         return { status: leaveStatus, membership } as LeaveOutcome;
       }
     },
+    enabled: () => true,
     prepareLeave: async () => prepared,
-    onLeft: async ({ roomId, user }) => {
-      onLeftCalls.push({ roomId, userId: user.id });
+    onLeft: async ({ roomId, userId }) => {
+      onLeftCalls.push({ roomId, userId });
     }
   });
   return {
@@ -182,4 +181,71 @@ test('owners, failed leaves and refused disconnects keep the room on the list', 
   assert.equal((await refused.call()).statusCode, 503);
 
   assert.deepEqual([...owner.onLeftCalls, ...failed.onLeftCalls, ...refused.onLeftCalls], []);
+});
+
+test('the member directory answers its page, and refuses outsiders, bad cursors and a disabled feature', async (t) => {
+  const page = {
+    contractVersion: 1 as const,
+    roomId: 'static-room',
+    members: [
+      {
+        userId: 'user-1',
+        displayName: 'Anna',
+        login: 'anna',
+        avatarColorKey: 'blurple',
+        avatarUrl: null,
+        avatarAccent: null,
+        role: 'member' as const,
+        joinedAt: 5,
+        inVoice: false,
+        presenceStatus: 'online' as const
+      }
+    ],
+    pageInfo: { hasMore: false },
+    presenceRevision: 3
+  };
+  const seen: unknown[] = [];
+  function directoryApp({
+    answer = 'ok',
+    enabled = true,
+    signedIn = true
+  }: { answer?: 'ok' | 'forbidden' | 'unauthorized' | 'bad-cursor'; enabled?: boolean; signedIn?: boolean } = {}) {
+    const app = fastify();
+    t.after(() => app.close());
+    registerMembershipRoutes(
+      app,
+      fake<ApiContext>({ resolveSession: async () => (signedIn ? { user: storedUser() } : null) }),
+      {
+        directory: {
+          async list(input) {
+            seen.push(input);
+            if (answer === 'bad-cursor') throw Object.assign(new Error('bad cursor'), { code: 'invalid_cursor' });
+            return answer === 'ok' ? { status: 'ok', envelope: page } : { status: answer };
+          }
+        },
+        memberships: fake(),
+        enabled: () => enabled,
+        prepareLeave: async () => true,
+        onLeft: async () => {}
+      }
+    );
+    return (url = '/api/rooms/static-room/members?limit=20&q=an&cursor=c1') => app.inject({ method: 'GET', url });
+  }
+
+  const listed = await directoryApp()();
+  assert.equal(listed.statusCode, 200);
+  assert.deepEqual(listed.json(), page);
+  assert.deepEqual(seen[0], { roomId: 'static-room', viewerUserId: 'user-1', cursor: 'c1', limit: '20', query: 'an' });
+  await directoryApp()('/api/rooms/static-room/members?query=old');
+  assert.equal((seen[1] as { query?: string }).query, 'old');
+
+  assert.equal((await directoryApp({ answer: 'forbidden' })()).statusCode, 403);
+  assert.equal((await directoryApp({ answer: 'unauthorized' })()).statusCode, 401);
+  assert.deepEqual((await directoryApp({ answer: 'bad-cursor' })()).json(), {
+    ok: false,
+    error: 'Invalid cursor',
+    code: 'invalid_cursor'
+  });
+  assert.equal((await directoryApp({ signedIn: false })()).statusCode, 401);
+  assert.equal((await directoryApp({ enabled: false })()).statusCode, 404);
 });

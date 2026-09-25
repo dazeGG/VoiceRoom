@@ -34,6 +34,7 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "@types/pg": "^8.23.1",
+    "@types/ws": "^8.18.1",
     "kysely-codegen": "^0.20.0",
     "typescript": "^5.9.3"
   }

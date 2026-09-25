@@ -3,19 +3,11 @@
 
 import { beforeEach, expect, test } from 'vitest';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { notificationPreferences } from '../fixtures/users.ts';
 import { freshImport } from '../helpers/fresh-module.ts';
 import type * as PreferencesModule from '../../src/lib/shared/notifications/preferences.svelte.ts';
 
-function prefs(overrides: Record<string, unknown> = {}) {
-  return {
-    mutedPeerIds: [],
-    mutedRoomIds: [],
-    presenceStatus: 'online',
-    privateNotifications: false,
-    doNotDisturb: false,
-    ...overrides
-  };
-}
+const prefs = notificationPreferences;
 
 async function load() {
   const preferences = await freshImport<typeof PreferencesModule>(
@@ -94,9 +86,9 @@ test('settings pushed over realtime replace the local copy only for the signed-i
   stubFetch({ '/api/notifications/preferences': { body: { preferences: prefs() } } });
   const n = await load();
   await n.loadNotificationPreferences('user-1');
-  n.applyRealtimeNotificationPreferences('someone-else', prefs({ mutedRoomIds: ['x'] }) as never);
+  n.applyRealtimeNotificationPreferences('someone-else', prefs({ mutedRoomIds: ['x'] }));
   expect(n.isRoomNotificationsMuted('x')).toBe(false);
-  n.applyRealtimeNotificationPreferences('user-1', prefs({ mutedRoomIds: ['x'] }) as never);
+  n.applyRealtimeNotificationPreferences('user-1', prefs({ mutedRoomIds: ['x'] }));
   expect(n.isRoomNotificationsMuted('x')).toBe(true);
 });
 

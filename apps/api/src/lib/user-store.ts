@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 import type { Selectable } from 'kysely';
 import type pg from 'pg';
 import type { AccountLoginEvents, Users } from '../platform/db/schema.ts';
+import type { SelfUser as SelfProfile } from '@voice-room/shared/contracts/account';
+import type { PublicUser as PublicProfile } from '@voice-room/shared/contracts/users';
 import { createDbPool, transaction } from './db.ts';
 import { hashPassword, verifyPassword } from './password.ts';
 import { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
@@ -24,7 +26,7 @@ import {
 type Queryable = Pick<pg.Pool, 'query'> | pg.PoolClient;
 type UserStoreLogger = { warn(...args: unknown[]): void };
 export type StoredUser = NonNullable<ReturnType<typeof mapUser>>;
-export type PublicUser = NonNullable<ReturnType<typeof publicUser>>;
+export type PublicUser = PublicProfile;
 
 const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const SESSION_TOUCH_INTERVAL_MS = 60 * 60 * 1000;
@@ -78,13 +80,18 @@ function mapUser(row: Selectable<Users> | null | undefined) {
   };
 }
 
+/** Enough of an account to show it: the id and login, and whatever else is known. */
+export type ProfileSource = Pick<StoredUser, 'id' | 'login'> & Partial<StoredUser>;
+
 // What we ever send back to a client: never the password hash.
-function publicUser(user: Partial<StoredUser> | null | undefined) {
+function publicUser(user: ProfileSource): PublicProfile;
+function publicUser(user: ProfileSource | null | undefined): PublicProfile | null;
+function publicUser(user: ProfileSource | null | undefined): PublicProfile | null {
   if (!user) return null;
   const presenceStatus = cleanPresenceStatus(user.presenceStatus) || (user.doNotDisturb ? 'dnd' : 'online');
   return {
     avatarAccent: user.avatarAccent || null,
-    createdAt: user.createdAt,
+    createdAt: user.createdAt ?? null,
     avatarColorKey: user.avatarColorKey || 'blurple',
     avatarUrl: user.avatarKey ? `/api/avatars/${encodeURIComponent(user.avatarKey)}` : null,
     displayName: user.displayName || '',
@@ -98,7 +105,9 @@ function publicUser(user: Partial<StoredUser> | null | undefined) {
 
 // The signed-in account's own view: the public shape plus facts that must never
 // reach other users (DM peers, profile broadcasts, message authors).
-function selfUser(user: Partial<StoredUser> | null | undefined) {
+function selfUser(user: ProfileSource): SelfProfile;
+function selfUser(user: ProfileSource | null | undefined): SelfProfile | null;
+function selfUser(user: ProfileSource | null | undefined): SelfProfile | null {
   const base = publicUser(user);
   if (!base || !user) return null;
   return {
@@ -137,11 +146,12 @@ function cleanLocationLabel(value: unknown): string {
   return typeof value === 'string' ? value.trim().slice(0, LOCATION_LABEL_MAX_LENGTH) : '';
 }
 
-// What a device is shown by; the session it opened stays server-side.
+// What a device is shown by; the session it opened stays server-side. Only
+// sign-ins and recoveries raise alerts; a registration never does.
 function mapLoginAlert(row: Selectable<AccountLoginEvents>) {
   return {
     id: row.id,
-    kind: row.kind,
+    kind: row.kind === 'recovery' ? ('recovery' as const) : ('login' as const),
     client: row.client || '',
     os: row.os || '',
     location: row.location_label || '',

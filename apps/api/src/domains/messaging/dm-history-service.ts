@@ -1,28 +1,51 @@
-import {
-  buildHistoryEnvelope,
-  normalizeHistoryRequest,
-  type HistoryEnvelope
-} from '@voice-room/shared/messaging-history';
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';
+import type {
+  Attachment,
+  DirectHistoryMessage,
+  DirectHistoryPage,
+  ReplyPointer,
+  ReplyPreview
+} from '@voice-room/shared/contracts/messages';
+import { normalizeHistoryRequest } from '@voice-room/shared/messaging-history';
 import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 
 type Tuple = { createdAtMicros: unknown; id: string };
 type Loose = Record<string, unknown>;
 
+/** A direct message as the history repository reads it; times come as the driver returns them. */
 export type StoredDirectMessage = {
   id: string;
   senderId: string;
   recipientId: string;
   body?: string;
-  createdAt?: unknown;
-  createdAtMicros?: unknown;
+  createdAt: unknown;
+  createdAtMicros: unknown;
   editedAt?: unknown;
   readAt?: unknown;
-  metadata?: { linkPreview?: unknown; [key: string]: unknown } | null;
-  attachments?: unknown;
-  replyTo?: unknown;
-  replyPreview?: unknown;
-  [key: string]: unknown;
+  metadata?: Loose | null;
+  attachments?: Attachment[];
+  replyTo?: ReplyPointer | null;
+  replyPreview?: ReplyPreview | null;
 };
+
+function text(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+// Only what a client may read from the metadata: the room invitation and the
+// link preview. Everything else in it stays server-side.
+function publicMetadata(metadata: Loose | null | undefined): DirectHistoryMessage['metadata'] {
+  if (!metadata) return null;
+  return {
+    kind: text(metadata.kind),
+    roomId: text(metadata.roomId),
+    roomName: text(metadata.roomName),
+    status: text(metadata.status),
+    expiresAt: metadata.expiresAt === undefined ? undefined : epochMillis(metadata.expiresAt),
+    linkPreview: normalizeLinkPreview(metadata.linkPreview) || undefined
+  };
+}
 
 type HistoryPage = { messages: StoredDirectMessage[]; hasMoreBefore: boolean; hasMoreAfter: boolean };
 type ListInput = { userId: string; peerId: string; anchor: Tuple | undefined; limit: number };
@@ -48,10 +71,10 @@ type VisibilityPolicy = {
 };
 
 class DmHistoryError extends Error {
-  declare code: string;
+  declare code: ErrorCode;
   declare statusCode: number;
 
-  constructor(code: string, statusCode: number, message: string) {
+  constructor(code: ErrorCode, statusCode: number, message: string) {
     super(message);
     this.name = 'DmHistoryError';
     this.code = code;
@@ -109,18 +132,18 @@ function createDmHistoryService({
     return true;
   }
 
-  function toDto(userId: string, peerId: string, message: StoredDirectMessage) {
+  function toDto(userId: string, peerId: string, message: StoredDirectMessage): DirectHistoryMessage {
     const tuple = { createdAtMicros: message.createdAtMicros, id: message.id };
     return {
       id: message.id,
       kind: 'dm',
-      createdAt: message.createdAt,
+      createdAt: epochMillis(message.createdAt),
       author: { userId: message.senderId },
       recipientId: message.recipientId,
-      content: { type: 'text', text: message.body },
-      editedAt: message.editedAt,
-      readAt: message.readAt,
-      metadata: message.metadata,
+      content: { type: 'text', text: message.body ?? '' },
+      editedAt: epochMillis(message.editedAt),
+      readAt: epochMillis(message.readAt),
+      metadata: publicMetadata(message.metadata),
       attachments: message.attachments,
       linkPreview: normalizeLinkPreview(message.metadata?.linkPreview) || undefined,
       replyTo: message.replyTo,
@@ -134,7 +157,7 @@ function createDmHistoryService({
     userId,
     peerId,
     query = {}
-  }: { userId?: unknown; peerId?: unknown; query?: Loose } = {}): Promise<HistoryEnvelope> {
+  }: { userId?: unknown; peerId?: unknown; query?: Loose } = {}): Promise<DirectHistoryPage> {
     const viewer = String(userId || '').trim();
     const peer = String(peerId || '').trim();
     if (!viewer) throw new DmHistoryError('authentication_required', 401, 'Authentication required');
@@ -180,7 +203,8 @@ function createDmHistoryService({
         : visible;
     const messages = projected.map((message) => toDto(viewer, peer, message));
 
-    return buildHistoryEnvelope({
+    return {
+      contractVersion: 1,
       mode,
       messages,
       pageInfo: {
@@ -190,7 +214,7 @@ function createDmHistoryService({
         hasMoreBefore: page.hasMoreBefore,
         hasMoreAfter: page.hasMoreAfter
       }
-    });
+    };
   }
 
   return { getPage };

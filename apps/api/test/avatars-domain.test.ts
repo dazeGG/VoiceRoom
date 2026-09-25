@@ -16,11 +16,14 @@ import {
   type AvatarsService
 } from '../src/domains/media/avatars.service.ts';
 import { readAvatarUpload, registerAvatarRoutes } from '../src/domains/media/avatars.routes.ts';
-import type { StoredRoom } from '../src/domains/rooms/room-views.ts';
 import type { RoomsService } from '../src/domains/rooms/rooms.service.ts';
 import type { ApiContext } from '../src/app/context.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
-import { fake, recordingLogger } from './fakes/index.ts';
+import { fake, lobbyRoom, recordingLogger, storedUser, storedRoom } from './fakes/index.ts';
+import { selfUser } from '../src/lib/user-store.ts';
+
+const OWNER = selfUser(storedUser({ id: 'owner-1' }));
+const ROOM_CARD = lobbyRoom('room-1');
 
 const PNG = await sharp({ create: { width: 8, height: 8, channels: 3, background: '#3366ff' } })
   .png()
@@ -47,8 +50,8 @@ function failingStream(error: Error) {
   return stream;
 }
 
-function storedRoom(id: string, avatarKey?: string | null) {
-  return fake<StoredRoom>({ id, avatarKey });
+function room(id: string, avatarKey?: string | null) {
+  return storedRoom({ id, avatarKey: avatarKey ?? null });
 }
 
 function harness({
@@ -89,12 +92,15 @@ function harness({
       async swapAvatar(input) {
         return userResult
           ? userResult(input)
-          : { user: { id: input.userId, avatarKey: input.avatarKey ?? null }, previousAvatarKey: 'old.webp' };
+          : {
+              user: storedUser({ id: input.userId, avatarKey: input.avatarKey ?? null }),
+              previousAvatarKey: 'old.webp'
+            };
       }
     }),
     rooms: () => ({
       async swapRoomAvatar(roomId, key) {
-        return roomResult ? roomResult(key) : { room: storedRoom(roomId, key), previousAvatarKey: 'old-room.webp' };
+        return roomResult ? roomResult(key) : { room: room(roomId, key), previousAvatarKey: 'old-room.webp' };
       }
     }),
     refreshActiveProfile: (user) => calls.refreshed.push(user.id),
@@ -103,7 +109,7 @@ function harness({
     },
     announceRoomUpdate: (roomId) => {
       calls.announced.push(roomId);
-      return { roomId };
+      return lobbyRoom(roomId);
     }
   });
   return { calls, service, log: recordingLogger() };
@@ -119,7 +125,7 @@ function avatarUrlOf(result: Awaited<ReturnType<AvatarsService['setUserAvatar']>
 
 test('a new account avatar replaces and removes the old file and reaches friends', async () => {
   const { calls, service, log } = harness();
-  const result = await service.setUserAvatar({ id: USER_ID }, PNG, log);
+  const result = await service.setUserAvatar(storedUser({ id: USER_ID }), PNG, log);
   assert.equal(result.status, 'updated');
   assert.equal(calls.saved.length, 1);
   assert.match(calls.saved[0] ?? '', new RegExp(`^av_${USER_ID}_[0-9a-f]{8}\\.webp$`));
@@ -131,21 +137,25 @@ test('a new account avatar replaces and removes the old file and reaches friends
 test('an unchanged upload keeps its file; a vanished account removes the new one', async () => {
   const same = harness({
     userResult: (input) => ({
-      user: { id: input.userId, avatarKey: input.avatarKey },
+      user: storedUser({ id: input.userId, avatarKey: input.avatarKey ?? null }),
       previousAvatarKey: input.avatarKey
     })
   });
-  await same.service.setUserAvatar({ id: USER_ID }, PNG, same.log);
+  await same.service.setUserAvatar(storedUser({ id: USER_ID }), PNG, same.log);
   assert.deepEqual(same.calls.removed, []);
 
   const gone = harness({ userResult: () => ({ user: null }) });
-  assert.equal((await gone.service.setUserAvatar({ id: USER_ID }, PNG, gone.log)).status, 'not_found');
+  assert.equal((await gone.service.setUserAvatar(storedUser({ id: USER_ID }), PNG, gone.log)).status, 'not_found');
   assert.deepEqual(gone.calls.removed, gone.calls.saved);
   const goneSame = harness({ userResult: () => ({ user: null }) });
-  const key = avatarUrlOf(await harness().service.setUserAvatar({ id: USER_ID }, PNG, undefined)).split(
+  const key = avatarUrlOf(await harness().service.setUserAvatar(storedUser({ id: USER_ID }), PNG, undefined)).split(
     '/api/avatars/'
   )[1];
-  await goneSame.service.setUserAvatar({ id: USER_ID, avatarKey: decodeURIComponent(key ?? '') }, PNG, goneSame.log);
+  await goneSame.service.setUserAvatar(
+    storedUser({ id: USER_ID, avatarKey: decodeURIComponent(key ?? '') }),
+    PNG,
+    goneSame.log
+  );
   assert.deepEqual(goneSame.calls.removed, []);
 });
 
@@ -168,16 +178,16 @@ test('room avatars swap, announce the room card and clean up', async () => {
   const { calls, service, log } = harness();
   assert.deepEqual(await service.setRoomAvatar({ id: ROOM_ID }, PNG, log), {
     status: 'updated',
-    room: { roomId: ROOM_ID }
+    room: lobbyRoom(ROOM_ID)
   });
   assert.deepEqual(calls.removed, ['old-room.webp']);
-  assert.deepEqual(await service.clearRoomAvatar('room-1', log), { status: 'updated', room: { roomId: 'room-1' } });
+  assert.deepEqual(await service.clearRoomAvatar('room-1', log), { status: 'updated', room: lobbyRoom('room-1') });
 
   const gone = harness({ roomResult: () => ({ room: null }) });
   assert.equal((await gone.service.setRoomAvatar({ id: ROOM_ID }, PNG, gone.log)).status, 'not_found');
   assert.deepEqual(gone.calls.removed, gone.calls.saved);
   assert.equal((await gone.service.clearRoomAvatar('room-1', undefined)).status, 'not_found');
-  const same = harness({ roomResult: (key) => ({ room: storedRoom('room-1'), previousAvatarKey: key }) });
+  const same = harness({ roomResult: (key) => ({ room: room('room-1'), previousAvatarKey: key }) });
   await same.service.setRoomAvatar({ id: ROOM_ID }, PNG, undefined);
   assert.deepEqual(same.calls.removed, []);
   const goneSame = harness({ roomResult: () => ({ room: null }) });
@@ -241,15 +251,15 @@ function routeApp(
     {
       logger: fake<ApiContext['logger']>(),
       clientIp: () => 'ip',
-      resolveSession: async () => (user ? { user } : null),
+      resolveSession: async () => (user ? { user: storedUser(user) } : null),
       hashIp: (ip: string) => ip
     },
     {
       avatars: fake<AvatarsService>({
-        setUserAvatar: record('setUserAvatar', { status: 'updated', user: { id: 'owner-1' } }),
-        clearUserAvatar: record('clearUserAvatar', { status: 'updated', user: { id: 'owner-1' } }),
-        setRoomAvatar: record('setRoomAvatar', { status: 'updated', room: { roomId: 'room-1' } }),
-        clearRoomAvatar: record('clearRoomAvatar', { status: 'updated', room: { roomId: 'room-1' } }),
+        setUserAvatar: record('setUserAvatar', { status: 'updated', user: OWNER }),
+        clearUserAvatar: record('clearUserAvatar', { status: 'updated', user: OWNER }),
+        setRoomAvatar: record('setRoomAvatar', { status: 'updated', room: ROOM_CARD }),
+        clearRoomAvatar: record('clearRoomAvatar', { status: 'updated', room: ROOM_CARD }),
         openAvatar: async (key: string) => (key === 'missing' ? null : Readable.from(['img'])),
         openLinkPreviewImage: async (key: string) => (key === 'missing' ? null : Readable.from(['img'])),
         removeFile: async () => {}
@@ -289,16 +299,16 @@ async function call(
 test('uploads read the avatar field and answer the service outcome', async (t) => {
   const { app, seen } = routeApp(t);
   const uploaded = await call(app, 'POST', '/api/auth/avatar', multipart('avatar', PNG));
-  assert.deepEqual([uploaded.status, uploaded.body], [200, { ok: true, user: { id: 'owner-1' } }]);
+  assert.deepEqual([uploaded.status, uploaded.body], [200, { ok: true, user: OWNER }]);
   assert.deepEqual(seen.setUserAvatar?.[1], PNG);
   assert.deepEqual((await call(app, 'POST', '/api/rooms/room-1/avatar', multipart('avatar', PNG))).body, {
     ok: true,
-    room: { roomId: 'room-1' }
+    room: ROOM_CARD
   });
-  assert.deepEqual((await call(app, 'DELETE', '/api/auth/avatar')).body, { ok: true, user: { id: 'owner-1' } });
+  assert.deepEqual((await call(app, 'DELETE', '/api/auth/avatar')).body, { ok: true, user: OWNER });
   assert.deepEqual((await call(app, 'DELETE', '/api/rooms/room-1/avatar')).body, {
     ok: true,
-    room: { roomId: 'room-1' }
+    room: ROOM_CARD
   });
 
   const wrongField = await call(app, 'POST', '/api/auth/avatar', multipart('picture', PNG));
@@ -362,10 +372,15 @@ test('served images are immutable WebP; missing ones are a JSON 404', async (t) 
     assert.match(String(served.headers['content-type']), /^image\/webp/);
     assert.equal(served.body, 'img');
   }
-  assert.deepEqual((await call(app, 'GET', '/api/avatars/missing')).body, { ok: false, error: 'Avatar not found' });
+  assert.deepEqual((await call(app, 'GET', '/api/avatars/missing')).body, {
+    ok: false,
+    error: 'Avatar not found',
+    code: 'image_not_found'
+  });
   assert.deepEqual((await call(app, 'GET', '/api/link-previews/missing')).body, {
     ok: false,
-    error: 'Image not found'
+    error: 'Image not found',
+    code: 'image_not_found'
   });
 });
 

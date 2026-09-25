@@ -1,166 +1,33 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import { socketPathForDirectory } from './ipc-harness.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import http from 'node:http';
-import { spawn } from 'node:child_process';
-import path from 'node:path';
-import os from 'node:os';
-import { createTestDatabase } from './db-harness.ts';
 
-function getSocketPath() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-realtime-'));
-  return { dir, socketPath: socketPathForDirectory(dir) };
-}
+import type { Preferences } from '@voice-room/shared/contracts/notifications';
+import type { FriendList } from '@voice-room/shared/contracts/social';
+import type { PresenceStatus } from '@voice-room/shared/contracts/users';
+import {
+  acceptFirstFriendRequest,
+  registerAccount,
+  request,
+  sendFriendRequest,
+  startApiServer
+} from './fakes/server-process.ts';
+import { openWs, waitForWsType, type WsSession } from './ws-harness.ts';
 
-function waitForHealthz(socketPath, timeoutMs = 15000) {
-  const started = Date.now();
-  return new Promise((resolve, reject) => {
-    const attempt = () => {
-      http
-        .get({ path: '/api/healthz', socketPath }, (res) => {
-          res.resume();
-          if (res.statusCode === 200) {
-            resolve();
-            return;
-          }
-          retry();
-        })
-        .on('error', retry);
-    };
-    const retry = () => {
-      if (Date.now() - started > timeoutMs) {
-        reject(new Error('Server did not become ready'));
-        return;
-      }
-      setTimeout(attempt, 50);
-    };
-    attempt();
-  });
-}
-
-function startServer(socketPath, databaseUrl, logs) {
-  const child = spawn(process.execPath, ['src/server.ts'], {
-    cwd: path.join(import.meta.dirname, '..'),
-    env: {
-      ...process.env,
-      NODE_ENV: 'test',
-      MAX_EMPTY_ROOMS_PER_IP: '0',
-      ROOM_CREATE_POW_DIFFICULTY: '0',
-      ROOM_CREATE_RATE_LIMIT: '0',
-      AUTH_RATE_LIMIT: '0',
-      DATABASE_URL: databaseUrl,
-      SOCKET_PATH: socketPath
-    },
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
-  child.stdout.on('data', (chunk) => {
-    logs.stdout += chunk.toString();
-  });
-  child.stderr.on('data', (chunk) => {
-    logs.stderr += chunk.toString();
-  });
-  return child;
-}
-
-function request(socketPath, { method = 'GET', pathname, body, cookie } = {}) {
-  const payload = body === undefined ? null : JSON.stringify(body);
-  const headers = { Accept: 'application/json' };
-  if (payload) {
-    headers['Content-Type'] = 'application/json';
-    headers['Content-Length'] = Buffer.byteLength(payload);
-  }
-  if (cookie) headers.Cookie = cookie;
-
-  return new Promise((resolve, reject) => {
-    const req = http.request({ method, path: pathname, socketPath, headers }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      res.on('end', () => {
-        resolve({
-          status: res.statusCode,
-          body: data ? JSON.parse(data) : null,
-          setCookie: res.headers['set-cookie'] || []
-        });
-      });
-      res.on('error', reject);
-    });
-    req.on('error', reject);
-    if (payload) req.write(payload);
-    req.end();
-  });
-}
-
-function cookieFrom(setCookie) {
-  const header = Array.isArray(setCookie) ? setCookie[0] : setCookie;
-  return String(header || '').split(';')[0];
-}
-
-import { openWs, waitForWsType } from './ws-harness.ts';
-
-function openRealtimeStream(socketPath, cookie) {
+function openRealtimeStream(socketPath: string, cookie: string) {
   return openWs(socketPath, { cookie });
 }
 
-async function register(socketPath, login) {
-  const response = await request(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/register',
-    body: { login, displayName: login, password: 'password123', passwordConfirm: 'password123' }
-  });
-  assert.equal(response.status, 201);
-  return cookieFrom(response.setCookie);
-}
-
-async function befriend(socketPath, requesterCookie, addresseeLogin) {
-  const response = await request(socketPath, {
-    method: 'POST',
-    pathname: '/api/friends/requests',
-    cookie: requesterCookie,
-    body: { login: addresseeLogin }
-  });
-  assert.ok(response.status === 200 || response.status === 201);
-  return response.body;
-}
-
-async function acceptFirstRequest(socketPath, cookie) {
-  const list = await request(socketPath, { pathname: '/api/friends/requests', cookie });
-  assert.equal(list.status, 200);
-  const requestId = list.body.incoming[0]?.id;
-  assert.ok(requestId);
-  const accepted = await request(socketPath, {
-    method: 'POST',
-    pathname: `/api/friends/requests/${encodeURIComponent(requestId)}/accept`,
-    cookie,
-    body: {}
-  });
-  assert.equal(accepted.status, 200);
-}
-
 test('realtime ready reports online friends and fans out presence', async (t) => {
-  const { dir, socketPath } = getSocketPath();
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const logs = { stdout: '', stderr: '' };
-  const child = startServer(socketPath, databaseUrl, logs);
-  t.after(() => {
-    child.kill('SIGTERM');
-    fs.rmSync(dir, { recursive: true, force: true });
-    return cleanup();
-  });
+  const { socketPath } = await startApiServer(t, { prefix: 'voice-room-realtime-', env: { AUTH_RATE_LIMIT: '0' } });
 
-  await waitForHealthz(socketPath);
+  const aliceCookie = await registerAccount(socketPath, 'alice');
+  const bobCookie = await registerAccount(socketPath, 'bob');
 
-  const aliceCookie = await register(socketPath, 'alice');
-  const bobCookie = await register(socketPath, 'bob');
+  await sendFriendRequest(socketPath, aliceCookie, 'bob');
+  await acceptFirstFriendRequest(socketPath, bobCookie);
 
-  await befriend(socketPath, aliceCookie, 'bob');
-  await acceptFirstRequest(socketPath, bobCookie);
-
-  const bobFriends = await request(socketPath, { pathname: '/api/friends', cookie: bobCookie });
-  const aliceFriends = await request(socketPath, { pathname: '/api/friends', cookie: aliceCookie });
+  const bobFriends = await request<FriendList>(socketPath, { pathname: '/api/friends', cookie: bobCookie });
+  const aliceFriends = await request<FriendList>(socketPath, { pathname: '/api/friends', cookie: aliceCookie });
   const aliceId = bobFriends.body.friends.find((entry) => entry.user.login === 'alice')?.user.id;
   const bobId = aliceFriends.body.friends.find((entry) => entry.user.login === 'bob')?.user.id;
   assert.ok(aliceId);
@@ -175,25 +42,14 @@ test('realtime ready reports online friends and fans out presence', async (t) =>
   const aliceReady = await aliceStream.ready;
   assert.deepEqual(aliceReady.payload.onlineFriendIds, [bobId]);
 
-  const bobPresence = await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Bob did not receive presence update')), 5000);
-    const check = () => {
-      const presence = bobStream.frames.find(
-        (frame) =>
-          frame.type === 'friend.presence' && frame.payload?.userId === aliceId && frame.payload?.online === true
-      );
-      if (presence) {
-        clearTimeout(timer);
-        resolve(presence);
-        return;
-      }
-      setTimeout(check, 20);
-    };
-    check();
-  });
+  const bobPresence = await waitForWsType(
+    bobStream.frames,
+    'friend.presence',
+    (frame) => frame.payload.userId === aliceId && frame.payload.online
+  );
   assert.equal(bobPresence.payload.online, true);
 
-  const friendsForBob = await request(socketPath, { pathname: '/api/friends', cookie: bobCookie });
+  const friendsForBob = await request<FriendList>(socketPath, { pathname: '/api/friends', cookie: bobCookie });
   assert.equal(friendsForBob.status, 200);
   const aliceEntry = friendsForBob.body.friends.find((entry) => entry.user.login === 'alice');
   assert.ok(aliceEntry);
@@ -201,24 +57,14 @@ test('realtime ready reports online friends and fans out presence', async (t) =>
 });
 
 test('manual presence status updates own tabs, friend profiles, and effective online state', async (t) => {
-  const { dir, socketPath } = getSocketPath();
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const logs = { stdout: '', stderr: '' };
-  const child = startServer(socketPath, databaseUrl, logs);
-  t.after(() => {
-    child.kill('SIGTERM');
-    fs.rmSync(dir, { recursive: true, force: true });
-    return cleanup();
-  });
+  const { socketPath } = await startApiServer(t, { prefix: 'voice-room-realtime-', env: { AUTH_RATE_LIMIT: '0' } });
 
-  await waitForHealthz(socketPath);
+  const aliceCookie = await registerAccount(socketPath, 'alice-status');
+  const bobCookie = await registerAccount(socketPath, 'bob-status');
+  await sendFriendRequest(socketPath, aliceCookie, 'bob-status');
+  await acceptFirstFriendRequest(socketPath, bobCookie);
 
-  const aliceCookie = await register(socketPath, 'alice-status');
-  const bobCookie = await register(socketPath, 'bob-status');
-  await befriend(socketPath, aliceCookie, 'bob-status');
-  await acceptFirstRequest(socketPath, bobCookie);
-
-  const bobFriends = await request(socketPath, { pathname: '/api/friends', cookie: bobCookie });
+  const bobFriends = await request<FriendList>(socketPath, { pathname: '/api/friends', cookie: bobCookie });
   const aliceId = bobFriends.body.friends.find((entry) => entry.user.login === 'alice-status')?.user.id;
   assert.ok(aliceId);
 
@@ -229,16 +75,26 @@ test('manual presence status updates own tabs, friend profiles, and effective on
   await waitForWsType(
     bobStream.frames,
     'friend.presence',
-    (frame) => frame.payload?.userId === aliceId && frame.payload?.online === true
+    (frame) => frame.payload.userId === aliceId && frame.payload.online === true
   );
   const aliceSecondTab = openRealtimeStream(socketPath, aliceCookie);
   await aliceSecondTab.ready;
 
-  async function setPresenceAndVerify({ status, doNotDisturb, online, presenceChanged }) {
+  async function setPresenceAndVerify({
+    status,
+    doNotDisturb,
+    online,
+    presenceChanged
+  }: {
+    status: PresenceStatus;
+    doNotDisturb: boolean;
+    online: boolean;
+    presenceChanged: boolean;
+  }) {
     const firstTabBefore = aliceFirstTab.frames.length;
     const secondTabBefore = aliceSecondTab.frames.length;
     const bobBefore = bobStream.frames.length;
-    const response = await request(socketPath, {
+    const response = await request<Preferences>(socketPath, {
       method: 'POST',
       pathname: '/api/presence/status',
       cookie: aliceCookie,
@@ -248,13 +104,13 @@ test('manual presence status updates own tabs, friend profiles, and effective on
     assert.equal(response.body.preferences.presenceStatus, status);
     assert.equal(response.body.preferences.doNotDisturb, doNotDisturb);
 
-    const ownUpdate = (stream, sinceIndex) =>
+    const ownUpdate = (stream: WsSession, sinceIndex: number) =>
       waitForWsType(
         stream.frames,
         'notification.settings.updated',
         (frame) =>
-          frame.payload?.preferences?.presenceStatus === status &&
-          frame.payload?.preferences?.doNotDisturb === doNotDisturb,
+          frame.payload.preferences.presenceStatus === status &&
+          frame.payload.preferences.doNotDisturb === doNotDisturb,
         5000,
         sinceIndex
       );
@@ -269,7 +125,7 @@ test('manual presence status updates own tabs, friend profiles, and effective on
       await waitForWsType(
         bobStream.frames,
         'friend.presence',
-        (frame) => frame.payload?.userId === aliceId && frame.payload?.online === online,
+        (frame) => frame.payload.userId === aliceId && frame.payload.online === online,
         5000,
         bobBefore
       );
@@ -277,13 +133,13 @@ test('manual presence status updates own tabs, friend profiles, and effective on
     const profile = await waitForWsType(
       bobStream.frames,
       'friend.updated',
-      (frame) => frame.payload?.user?.id === aliceId && frame.payload?.user?.presenceStatus === status,
+      (frame) => frame.payload.user.id === aliceId && frame.payload.user.presenceStatus === status,
       5000,
       bobBefore
     );
     assert.equal(profile.payload.user.doNotDisturb, doNotDisturb);
 
-    const friends = await request(socketPath, { pathname: '/api/friends', cookie: bobCookie });
+    const friends = await request<FriendList>(socketPath, { pathname: '/api/friends', cookie: bobCookie });
     assert.equal(friends.status, 200);
     const alice = friends.body.friends.find((entry) => entry.user.id === aliceId);
     assert.equal(alice?.online, online);

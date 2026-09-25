@@ -40,7 +40,7 @@ test('browser-facing shared modules expose named ESM exports', async () => {
 
   for (const [subpath, names] of Object.entries(expectedExports)) {
     const target = (packageJson.exports as Record<string, string>)[`./${subpath}`];
-    assert.match(target!, /^\.\/src\/[a-z-]+\.ts$/);
+    assert.match(target!, /^\.\/src\/(?:contracts\/)?[a-z-]+\.ts$/);
     const esm = await import(`@voice-room/shared/${subpath}`);
     for (const name of names) assert.ok(name in esm, `${subpath} must export ${name}`);
   }
@@ -49,11 +49,11 @@ test('browser-facing shared modules expose named ESM exports', async () => {
 test('every export is one TypeScript source, with no JavaScript copy beside it', () => {
   const sourceDirectory = path.join(import.meta.dirname, '../src');
   const files = fs
-    .readdirSync(sourceDirectory, { withFileTypes: true })
+    .readdirSync(sourceDirectory, { recursive: true, withFileTypes: true })
     .filter((entry) => entry.isFile())
-    .map((entry) => entry.name);
+    .map((entry) => path.relative(sourceDirectory, path.join(entry.parentPath, entry.name)).split(path.sep).join('/'));
   const exported = Object.values(packageJson.exports)
-    .map((target) => path.basename(target))
+    .map((target) => target.replace(/^\.\/src\//, ''))
     .sort();
 
   assert.deepEqual(files.filter((name) => name.endsWith('.ts')).sort(), exported);

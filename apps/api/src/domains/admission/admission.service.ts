@@ -14,11 +14,11 @@ export type GatePrincipal = {
 };
 
 export interface Admission {
-  gateCredentialId?: string;
-  room?: string;
-  token?: string;
-  ttlSeconds?: number;
-  url?: string;
+  gateCredentialId: string;
+  room: string;
+  token: string;
+  ttlSeconds: number;
+  url: string;
 }
 
 type IssueResult = { status: 'issued'; admission: Admission } | { status: string; admission: null };

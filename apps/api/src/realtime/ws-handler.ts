@@ -2,6 +2,7 @@ import { normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voice-
 import { normalizeTypingActivity } from '@voice-room/shared/realtime';
 import type { IncomingMessage } from 'node:http';
 import type { TypingActivity } from '@voice-room/shared/realtime';
+import type { ClientCommand } from '@voice-room/shared/contracts/realtime';
 import { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } from './envelope.ts';
 import { createTypingThrottle } from './typing-throttle.ts';
 import type { ConnectionRegistry, RealtimeSocket, WsConnection } from './registry.ts';
@@ -9,7 +10,7 @@ import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger, hashIp } from '../lib/logger.ts';
 
 // Validated commands always carry a payload object.
-type InboundEnvelope = { id?: string; type: string; payload: Record<string, any> };
+type InboundEnvelope = ClientCommand;
 type SessionUser = { id: string; presenceStatus?: unknown; [key: string]: unknown };
 type ResolvedSession = { user?: SessionUser | null; session?: { tokenHash?: string } | null } | null | undefined;
 type JoinResult = { ok: boolean; code?: string; message?: string };
@@ -96,14 +97,20 @@ function createWsHandler({
   }
 
   function forwardDirectTyping(connection: WsConnection, peerId: string, activity: TypingActivity = 'typing'): void {
-    if (!connection.userId || peerId === connection.userId) return;
+    const { userId } = connection;
+    if (!userId || peerId === userId) return;
+    const sender = connection as WsConnection & { userId: string };
     connection.dmTypingThrottle ??= createTypingThrottle<TypingActivity>({ now });
     connection.dmTypingThrottle.offer(peerId, activity, (value: TypingActivity) => {
-      sendDirectTyping(connection, peerId, value).catch((error) => reportMessageError(error, connection, 'dm.typing'));
+      sendDirectTyping(sender, peerId, value).catch((error) => reportMessageError(error, connection, 'dm.typing'));
     });
   }
 
-  async function sendDirectTyping(connection: WsConnection, peerId: string, activity: TypingActivity): Promise<void> {
+  async function sendDirectTyping(
+    connection: WsConnection & { userId: string },
+    peerId: string,
+    activity: TypingActivity
+  ): Promise<void> {
     const cache: Map<string, { allowed: boolean; checkedAt: number }> = (connection.dmTypingPermission ??= new Map());
     const entry = cache.get(peerId) || { allowed: false, checkedAt: -Infinity };
     cache.delete(peerId);
@@ -111,7 +118,7 @@ function createWsHandler({
     while (cache.size > DM_TYPING_THREAD_LIMIT) cache.delete(cache.keys().next().value as string);
     if (now() - entry.checkedAt >= DM_TYPING_PERMISSION_TTL_MS) {
       if (!spendTypingLookup(connection)) return;
-      entry.allowed = Boolean(await canTypeToUser(connection.userId as string, peerId));
+      entry.allowed = Boolean(await canTypeToUser(connection.userId, peerId));
       entry.checkedAt = now();
     }
     if (!entry.allowed || connection.closed) return;
@@ -132,155 +139,142 @@ function createWsHandler({
     envelope: InboundEnvelope,
     req: IncomingMessage
   ): Promise<void> {
-    if (envelope.type === 'hello') {
-      registry.touch(connection);
-      return;
-    }
+    switch (envelope.type) {
+      case 'hello': {
+        registry.touch(connection);
+        return;
+      }
 
-    if (envelope.type === 'ping') {
-      registry.touch(connection);
-      registry.sendToConnection(connection, buildServerEnvelope('pong', { at: envelope.payload.at }, envelope.id));
-      return;
-    }
+      case 'ping': {
+        registry.touch(connection);
+        registry.sendToConnection(connection, buildServerEnvelope('pong', { at: envelope.payload.at }, envelope.id));
+        return;
+      }
 
-    if (envelope.type === 'room.preview.subscribe') {
-      const roomId = normalizeRoomId(envelope.payload.roomId);
-      if (!roomId) {
-        registry.sendToConnection(
+      case 'room.preview.subscribe': {
+        const roomId = normalizeRoomId(envelope.payload.roomId);
+        if (!roomId) {
+          registry.sendToConnection(
+            connection,
+            buildServerErrorEnvelope('invalid_room_id', 'Invalid room id', envelope.id)
+          );
+          return;
+        }
+        await roomRuntime.subscribePreview(connection, roomId);
+        return;
+      }
+
+      case 'room.preview.unsubscribe': {
+        const roomId = normalizeRoomId(envelope.payload.roomId);
+        if (roomId) roomRuntime.unsubscribePreview(connection, roomId);
+        return;
+      }
+
+      case 'room.join': {
+        // A WebSocket can stay open while the account profile changes. Resolve the
+        // session again at join time so a newly uploaded/deleted avatar is not
+        // overwritten by the user snapshot captured when the socket first opened.
+        const currentSession = await resolveSessionUser(req);
+        if (connection.closed) return;
+        const result = await roomRuntime.joinVoiceRoom(
           connection,
-          buildServerErrorEnvelope('invalid_room_id', 'Invalid room id', envelope.id)
+          envelope.payload,
+          currentSession?.user || null,
+          getClientIp(req),
+          envelope.id
+        );
+        const joinRoomId = normalizeRoomId(envelope.payload.roomId);
+        if (result.ok) {
+          logger.info(
+            {
+              evt: LOG_EVENTS.ROOM_JOINED,
+              connId: connection.id,
+              userId: connection.userId || undefined,
+              roomId: joinRoomId,
+              guest: connection.guest
+            },
+            'room joined'
+          );
+        } else {
+          logger.warn(
+            {
+              evt: LOG_EVENTS.ROOM_JOIN_REJECTED,
+              connId: connection.id,
+              userId: connection.userId || undefined,
+              roomId: joinRoomId,
+              code: result.code || 'join_failed'
+            },
+            'room join rejected'
+          );
+        }
+
+        if (!result.ok && result.code === 'room_banned') {
+          registry.sendToConnection(
+            connection,
+            buildServerEnvelope(
+              'room.banned',
+              {
+                roomId: envelope.payload.roomId
+              },
+              envelope.id
+            )
+          );
+        } else if (!result.ok && result.message) {
+          registry.sendToConnection(
+            connection,
+            buildServerErrorEnvelope(result.code || 'join_failed', result.message, envelope.id)
+          );
+        }
+        return;
+      }
+
+      case 'room.leave': {
+        logger.info(
+          {
+            evt: LOG_EVENTS.ROOM_LEFT,
+            connId: connection.id,
+            userId: connection.userId || undefined,
+            roomId: normalizeRoomId(envelope.payload.roomId)
+          },
+          'room left'
+        );
+        await roomRuntime.leaveVoiceRoom(connection, {
+          roomId: normalizeRoomId(envelope.payload.roomId),
+          peerId: normalizePeerId(envelope.payload.peerId),
+          sessionToken: normalizeSessionToken(envelope.payload.sessionToken)
+        });
+        return;
+      }
+
+      case 'room.peer.update': {
+        const result = await roomRuntime.updatePeerState(connection, envelope.payload);
+        if (!result.ok) {
+          registry.sendToConnection(
+            connection,
+            buildServerErrorEnvelope(result.code || 'update_failed', 'Peer update rejected', envelope.id)
+          );
+        }
+        return;
+      }
+
+      case 'room.chat.typing': {
+        await roomRuntime.broadcastRoomTyping(
+          connection,
+          normalizeRoomId(envelope.payload.roomId),
+          normalizeTypingActivity(envelope.payload.activity) || 'typing'
         );
         return;
       }
-      await roomRuntime.subscribePreview(connection, roomId);
-      return;
-    }
 
-    if (envelope.type === 'room.preview.unsubscribe') {
-      const roomId = normalizeRoomId(envelope.payload.roomId);
-      if (roomId) roomRuntime.unsubscribePreview(connection, roomId);
-      return;
-    }
-
-    if (envelope.type === 'room.join') {
-      // A WebSocket can stay open while the account profile changes. Resolve the
-      // session again at join time so a newly uploaded/deleted avatar is not
-      // overwritten by the user snapshot captured when the socket first opened.
-      const currentSession = await resolveSessionUser(req);
-      if (connection.closed) return;
-      const result = await roomRuntime.joinVoiceRoom(
-        connection,
-        envelope.payload,
-        currentSession?.user || null,
-        getClientIp(req),
-        envelope.id
-      );
-      const joinRoomId = normalizeRoomId(envelope.payload.roomId);
-      if (result.ok) {
-        logger.info(
-          {
-            evt: LOG_EVENTS.ROOM_JOINED,
-            connId: connection.id,
-            userId: connection.userId || undefined,
-            roomId: joinRoomId,
-            guest: connection.guest
-          },
-          'room joined'
-        );
-      } else {
-        logger.warn(
-          {
-            evt: LOG_EVENTS.ROOM_JOIN_REJECTED,
-            connId: connection.id,
-            userId: connection.userId || undefined,
-            roomId: joinRoomId,
-            code: result.code || 'join_failed'
-          },
-          'room join rejected'
-        );
-      }
-
-      if (!result.ok && result.code === 'room_banned') {
-        registry.sendToConnection(
+      case 'dm.typing': {
+        await forwardDirectTyping(
           connection,
-          buildServerEnvelope(
-            'room.banned',
-            {
-              roomId: envelope.payload.roomId
-            },
-            envelope.id
-          )
+          envelope.payload.userId,
+          normalizeTypingActivity(envelope.payload.activity) || 'typing'
         );
-      } else if (!result.ok && result.message) {
-        registry.sendToConnection(
-          connection,
-          buildServerErrorEnvelope(result.code || 'join_failed', result.message, envelope.id)
-        );
+        return;
       }
-      return;
     }
-
-    if (envelope.type === 'room.leave') {
-      logger.info(
-        {
-          evt: LOG_EVENTS.ROOM_LEFT,
-          connId: connection.id,
-          userId: connection.userId || undefined,
-          roomId: normalizeRoomId(envelope.payload.roomId)
-        },
-        'room left'
-      );
-      await roomRuntime.leaveVoiceRoom(connection, {
-        roomId: normalizeRoomId(envelope.payload.roomId),
-        peerId: normalizePeerId(envelope.payload.peerId),
-        sessionToken: normalizeSessionToken(envelope.payload.sessionToken)
-      });
-      return;
-    }
-
-    if (envelope.type === 'room.peer.update') {
-      const result = await roomRuntime.updatePeerState(connection, envelope.payload);
-      if (!result.ok) {
-        registry.sendToConnection(
-          connection,
-          buildServerErrorEnvelope(result.code || 'update_failed', 'Peer update rejected', envelope.id)
-        );
-      }
-      return;
-    }
-
-    if (envelope.type === 'room.chat.typing') {
-      await roomRuntime.broadcastRoomTyping(
-        connection,
-        normalizeRoomId(envelope.payload.roomId),
-        normalizeTypingActivity(envelope.payload.activity) || 'typing'
-      );
-      return;
-    }
-
-    if (envelope.type === 'dm.typing') {
-      await forwardDirectTyping(
-        connection,
-        envelope.payload.userId,
-        normalizeTypingActivity(envelope.payload.activity) || 'typing'
-      );
-      return;
-    }
-
-    logger.warn(
-      {
-        evt: LOG_EVENTS.WS_MESSAGE_REJECTED,
-        connId: connection.id,
-        userId: connection.userId || undefined,
-        type: envelope.type,
-        code: 'not_implemented'
-      },
-      'unsupported ws message type'
-    );
-    registry.sendToConnection(
-      connection,
-      buildServerErrorEnvelope('not_implemented', `Unsupported message type: ${envelope.type}`, envelope.id)
-    );
   }
 
   async function handleConnection(socket: WsSocket, req: IncomingMessage): Promise<void> {
@@ -374,14 +368,14 @@ function createWsHandler({
       }
       if (parsed.envelope.type === 'hello' || parsed.envelope.type === 'ping') {
         // Heartbeats do not mutate room intent and must not wait behind storage.
-        void handleMessage(connection, parsed.envelope as InboundEnvelope, req).catch(reportMessageError);
+        void handleMessage(connection, parsed.envelope, req).catch(reportMessageError);
         return;
       }
 
       // Preserve wire order across stateful handlers that await authorization
       // or storage. Without this queue, JOIN→LEAVE and JOIN1→JOIN2 can execute
       // in reverse before the room runtime registers their intent.
-      const envelope = parsed.envelope as InboundEnvelope;
+      const envelope = parsed.envelope;
       enqueueMessage(connection, () => handleMessage(connection, envelope, req));
     });
 

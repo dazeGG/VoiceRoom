@@ -5,7 +5,9 @@ import { Pool } from 'pg';
 
 import { createPinRepository } from '../src/domains/messaging/pin-repository.ts';
 import { createPinService, type PinEvent } from '../src/domains/messaging/pin-service.ts';
-import { registerPinRoutes } from '../src/domains/messaging/pin-routes.ts';
+import { registerPinRoutes } from '../src/domains/messaging/pins.routes.ts';
+import type { ApiContext } from '../src/app/context.ts';
+import { fake, storedUser } from './fakes/index.ts';
 import { createRoomStore } from '../src/lib/room-store.ts';
 import { createUserStore } from '../src/lib/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
@@ -97,28 +99,29 @@ test('bookmark access can read pins but cannot mutate them without membership', 
   const app = Fastify({ logger: false });
   t.after(() => app.close());
   const calls: unknown[] = [];
-  registerPinRoutes({
+  registerPinRoutes(
     app,
-    pinService: {
-      async list() {
-        calls.push('list');
-        return { pins: [], count: 0 };
+    fake<ApiContext>({ resolveSession: async () => ({ user: storedUser({ id: 'bookmark-user' }) }) }),
+    {
+      pins: {
+        async list() {
+          calls.push('list');
+          return { pins: [], count: 0 };
+        },
+        async pin() {
+          calls.push('pin');
+          return { pins: [], count: 0 };
+        },
+        async unpin() {
+          calls.push('unpin');
+          return { pins: [], count: 0 };
+        }
       },
-      async pin() {
-        calls.push('pin');
-        return { pins: [], count: 0 };
-      },
-      async unpin() {
-        calls.push('unpin');
-        return { pins: [], count: 0 };
-      }
-    },
-    async resolveRoomAccess({ action }) {
-      return action === 'read'
-        ? { authorized: true, viewer: { id: 'bookmark-user' } }
-        : { authorized: false, statusCode: 403, code: 'room_membership_required' };
+      // A bookmark may read the pins but not change them.
+      canRead: async () => true,
+      canWrite: async () => false
     }
-  });
+  );
 
   const read = await app.inject({ method: 'GET', url: '/api/rooms/bookmarked/pins' });
   const write = await app.inject({ method: 'PUT', url: '/api/rooms/bookmarked/pins/message-1' });

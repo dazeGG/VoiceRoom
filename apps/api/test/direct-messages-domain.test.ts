@@ -18,9 +18,9 @@ import {
 import { registerDirectMessageRoutes } from '../src/domains/messaging/direct-messages.routes.ts';
 import type { ApiContext } from '../src/app/context.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
-import { fake } from './fakes/index.ts';
+import { fake, storedUser, directMessage, publicUser } from './fakes/index.ts';
 
-const ME = { id: 'user-1', login: 'alice', displayName: 'Alice' };
+const ME = storedUser({ id: 'user-1', login: 'alice', displayName: 'Alice' });
 const PEER = '22222222-2222-4222-8222-222222222222';
 const UUID_A = '11111111-1111-4111-8111-111111111111';
 
@@ -74,8 +74,8 @@ function harness(options: HarnessOptions = {}) {
   const direct: DirectMessageStore = {
     async listThread() {
       return [
-        { id: 'm1', senderId: 'user-1', recipientId: PEER },
-        { id: 'm2', senderId: PEER, recipientId: 'user-1', replyTo: { messageId: 'm1' } }
+        directMessage({ id: 'm1', senderId: 'user-1', recipientId: PEER }),
+        directMessage({ id: 'm2', senderId: PEER, recipientId: 'user-1', replyTo: { messageId: 'm1' } })
       ];
     },
     async markRead() {
@@ -87,7 +87,12 @@ function harness(options: HarnessOptions = {}) {
         const before = await input.beforeUnitOfWork(transactionMarker('before'));
         if (before?.replay) return { ...before.message, idempotencyReplay: true };
       }
-      const inserted = { id: 'dm-new', senderId: input.senderId, recipientId: input.recipientId, body: input.body };
+      const inserted = directMessage({
+        id: 'dm-new',
+        senderId: input.senderId,
+        recipientId: input.recipientId,
+        body: input.body
+      });
       if (input.unitOfWork) await input.unitOfWork(transactionMarker('insert'), inserted);
       return inserted;
     },
@@ -97,7 +102,10 @@ function harness(options: HarnessOptions = {}) {
     async respondInvite({ messageId, status }) {
       if (options.inviteAnswered) return null;
       const message = stored(messageId);
-      return { ...message, invite: { roomId: '', ...message.invite, status } };
+      return {
+        ...message,
+        invite: { roomId: '', roomName: '', expiresAt: null, ...message.invite, status }
+      };
     },
     async softDeleteMessage() {
       return options.deleteResult ?? true;
@@ -153,7 +161,13 @@ function harness(options: HarnessOptions = {}) {
     findUser: async (userId) =>
       options.noPeer
         ? null
-        : { id: userId, login: 'bob', deletedAt: options.deleted ? 1 : null, passwordHash: 'x', desktopAppSeenAt: 10 },
+        : storedUser({
+            id: userId,
+            login: 'bob',
+            deletedAt: options.deleted ? 1 : null,
+            passwordHash: 'x',
+            desktopAppSeenAt: 10
+          }),
     isDmMuted: async () => true,
     roomExists: async () => options.roomExists ?? true,
     expireRoomInvitations: async (senderId, roomId) => {
@@ -179,8 +193,7 @@ function harness(options: HarnessOptions = {}) {
     }),
     delivery: () => delivery,
     projectMedia: async (context, message) => ({ ...message, attachments: [] }),
-    projectReply: async (context, message) =>
-      message.replyTo ? { ...message, replyPreview: { projected: true } } : message,
+    projectReply: async (context, message) => (message.replyTo ? { ...message, replyPreview: QUOTE } : message),
     directEmit: options.directEmit ?? true,
     notifyUser: (userId, event) => calls.events.push([userId, event.type]),
     notifyRecipient: async (recipientId) => {
@@ -284,20 +297,31 @@ test('an idempotent replay answers the stored message without delivering again',
   const replay = await service.send(ME, PEER, { ...sendBase, idempotencyKey: 'idem-key-1' });
   assert.ok('message' in replay);
   assert.equal(replay.message.id, 'old');
-  assert.deepEqual(replay.message.replyPreview, { projected: true });
+  assert.deepEqual(replay.message.replyPreview, QUOTE);
   assert.deepEqual([calls.events, calls.previews], [[], []]);
 });
 
-const invite = { id: 'inv', senderId: PEER, recipientId: 'user-1', invite: { roomId: 'room-1' } };
-const mine = { id: 'mine', senderId: 'user-1', recipientId: PEER };
-const theirs = { id: 'theirs', senderId: PEER, recipientId: 'user-1' };
-const myInvite = { id: 'my-inv', senderId: 'user-1', recipientId: PEER, invite: { roomId: 'room-1' } };
+const invite = directMessage({
+  id: 'inv',
+  senderId: PEER,
+  recipientId: 'user-1',
+  invite: { roomId: 'room-1', roomName: 'Room', status: 'pending', expiresAt: null }
+});
+const QUOTE = { messageId: 'm1', deleted: false, text: 'hi' };
+const mine = directMessage({ id: 'mine', senderId: 'user-1', recipientId: PEER });
+const theirs = directMessage({ id: 'theirs', senderId: PEER, recipientId: 'user-1' });
+const myInvite = directMessage({
+  id: 'my-inv',
+  senderId: 'user-1',
+  recipientId: PEER,
+  invite: { roomId: 'room-1', roomName: 'Room', status: 'pending', expiresAt: null }
+});
 const messages: Record<string, DirectMessage> = {
   inv: invite,
   mine,
   theirs,
   'my-inv': myInvite,
-  plain: { id: 'plain', senderId: PEER, recipientId: 'user-1' }
+  plain: directMessage({ id: 'plain', senderId: PEER, recipientId: 'user-1' })
 };
 
 test('answering a room invitation', async () => {
@@ -344,9 +368,9 @@ test('marking read by cursor or up to now', async () => {
   assert.deepEqual(nothing.calls.events, []);
   assert.deepEqual(
     await harness({
-      readError: Object.assign(new Error('Stale'), { statusCode: 409, code: 'stale' })
+      readError: Object.assign(new Error('Stale'), { statusCode: 409, code: 'invalid_cursor' })
     }).service.markRead('u', PEER, 'c'),
-    { status: 'invalid_cursor', statusCode: 409, code: 'stale', error: 'Stale' }
+    { status: 'invalid_cursor', statusCode: 409, code: 'invalid_cursor', error: 'Stale' }
   );
   assert.deepEqual(await harness({ readError: new Error() }).service.markRead('u', PEER, 'c'), {
     status: 'invalid_cursor',
@@ -425,12 +449,18 @@ function routeApp(
       hashIp: (ip: string) => ip
     },
     fake<DirectMessagesService>({
-      thread: record('thread', { status: 'listed', peer: { id: PEER }, messages: [], muted: false }),
-      send: record('send', { status: 'sent', message: { id: 'm' } }),
-      respondInvite: record('respondInvite', { status: 'answered', message: { id: 'inv' } }),
+      thread: record('thread', { status: 'listed', peer: publicUser(PEER), messages: [], muted: false }),
+      send: record('send', {
+        status: 'sent',
+        message: directMessage({ id: 'm', senderId: 'user-1', recipientId: PEER })
+      }),
+      respondInvite: record('respondInvite', { status: 'answered', message: invite }),
       markRead: record('markRead', { status: 'read', result: { count: 2 } }),
       remove: record('remove', { status: 'deleted' }),
-      edit: record('edit', { status: 'edited', message: { id: 'm', body: 'e' } })
+      edit: record('edit', {
+        status: 'edited',
+        message: directMessage({ id: 'm', senderId: 'user-1', recipientId: PEER, body: 'e' })
+      })
     } as Partial<Record<keyof DirectMessagesService, unknown>> as Partial<DirectMessagesService>)
   );
   t.after(() => app.close());
@@ -542,7 +572,7 @@ test('DM refusals keep their texts and codes', async (t) => {
     ],
     [
       'markRead',
-      { status: 'invalid_cursor', statusCode: 409, code: 'stale', error: 'Stale' },
+      { status: 'invalid_cursor', statusCode: 409, code: 'invalid_cursor', error: 'Stale' },
       ['POST', `/api/dm/${PEER}/read`, { cursor: 'c' }],
       409,
       'Stale'

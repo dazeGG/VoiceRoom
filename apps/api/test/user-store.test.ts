@@ -148,7 +148,7 @@ test('publicUser never leaks the password hash', async (t) => {
     'presenceStatus'
   ]);
   assert.equal(exposed.presenceStatus, 'online');
-  assert.ok(AVATAR_COLOR_KEYS.includes(exposed.avatarColorKey));
+  assert.ok((AVATAR_COLOR_KEYS as readonly string[]).includes(exposed.avatarColorKey));
 });
 
 test('createUser accepts a valid injected avatar color for deterministic callers', async (t) => {

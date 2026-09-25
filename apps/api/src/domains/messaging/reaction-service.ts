@@ -1,3 +1,4 @@
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import type pg from 'pg';
 import {
   normalizeReactionMutation,
@@ -64,10 +65,10 @@ export type ReactionEvent = {
 };
 
 class ReactionServiceError extends Error {
-  declare code: string;
+  declare code: ErrorCode;
   declare statusCode: number;
 
-  constructor(message: string, code: string, statusCode: number) {
+  constructor(message: string, code: ErrorCode, statusCode: number) {
     super(message);
     this.name = 'ReactionServiceError';
     this.code = code;
@@ -261,5 +262,7 @@ function createReactionService({
 
   return Object.freeze({ getReactors, getSummaries, setDesired });
 }
+
+export type ReactionService = ReturnType<typeof createReactionService>;
 
 export { ReactionServiceError, createReactionService, normalizeConversation };

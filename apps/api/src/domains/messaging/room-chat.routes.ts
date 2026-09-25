@@ -1,7 +1,20 @@
 // The room chat over HTTP: list, send, edit, delete and mark read. Answers,
 // texts and codes are the ones the web client already handles.
 
-import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
+import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
+import { RoomIdParams } from '@voice-room/shared/contracts/http';
+import {
+  DeleteRoomMessageBody,
+  EditRoomMessageBody,
+  MessageDeleted,
+  MessageFailure,
+  MessageParams,
+  PostRoomMessageBody,
+  ReadBody,
+  RoomChat,
+  RoomMessageAnswer,
+  RoomRead
+} from '@voice-room/shared/contracts/messages';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import { cleanName, normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voice-room/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
@@ -11,59 +24,52 @@ import { cleanUuid, requestIdempotencyKey } from './message-input.ts';
 import { publicChatMessage } from './room-chat-views.ts';
 import type { Caller, ChatRefusal, PostOutcome, RoomChatService } from './room-chat.service.ts';
 
-const ChatFailure = Type.Object({
-  ok: Type.Literal(false),
-  error: Type.String(),
-  code: Type.Optional(Type.String()),
-  roomId: Type.Optional(Type.String()),
-  retryAfterSeconds: Type.Optional(Type.Number())
-});
-const Payload = Type.Unknown();
-const Failures = { '4xx': ChatFailure, 503: ChatFailure };
-const RoomParams = Type.Object({ roomId: Type.String() });
-const MessageParams = Type.Object({ roomId: Type.String(), messageId: Type.String() });
-const PeerClaimBody = {
-  peerId: Type.Optional(Type.Unknown()),
-  sessionToken: Type.Optional(Type.Unknown())
-};
+const Failures = { '4xx': MessageFailure, 503: MessageFailure };
 
 type Refusal = ChatRefusal | Exclude<PostOutcome, { status: 'created' }> | { status: 'not_author' | 'not_allowed' };
 
 function sendRefusal(reply: FastifyReply, roomId: string, refusal: Refusal) {
   switch (refusal.status) {
     case 'room_not_found':
-      return reply.code(404).send({ ...failure('Room not found'), roomId });
+      return reply.code(404).send({ ...failure('Room not found', { code: 'room_not_found' }), roomId });
     case 'room_banned':
       return reply.code(403).send(roomBanned(roomId));
     case 'message_not_found':
-      return reply.code(404).send(failure('Message not found'));
+      return reply.code(404).send(failure('Message not found', { code: 'message_not_found' }));
     case 'invalid_session':
-      return reply.code(403).send(failure('Invalid peer session'));
+      return reply.code(403).send(failure('Invalid peer session', { code: 'invalid_session' }));
     case 'empty':
-      return reply.code(400).send(failure('Invalid chat message'));
+      return reply.code(400).send(failure('Invalid chat message', { code: 'invalid_message' }));
     case 'rate_limited':
       return reply
         .code(429)
         .header('Retry-After', String(refusal.retryAfterSeconds))
-        .send({ ...failure('Too many chat messages'), retryAfterSeconds: refusal.retryAfterSeconds });
+        .send({
+          ...failure('Too many chat messages', { code: 'message_rate_limited' }),
+          retryAfterSeconds: refusal.retryAfterSeconds
+        });
     case 'not_author':
-      return reply.code(403).send(failure('Not allowed to edit this message'));
+      return reply.code(403).send(failure('Not allowed to edit this message', { code: 'message_edit_forbidden' }));
     case 'not_allowed':
-      return reply.code(403).send(failure('Not allowed to delete this message'));
+      return reply.code(403).send(failure('Not allowed to delete this message', { code: 'message_delete_forbidden' }));
     case 'structured_unavailable':
-      return reply.code(409).send(failure('Structured messages are unavailable'));
+      return reply
+        .code(409)
+        .send(failure('Structured messages are unavailable', { code: 'structured_messages_unavailable' }));
     case 'invalid_mention':
       return reply.code(422).send(failure('Invalid mention target', { code: refusal.code }));
     case 'invalid_content':
       return reply.code(400).send(failure('Invalid message content', { code: 'invalid_message_content' }));
     case 'invalid_attachments':
-      return reply.code(400).send(failure('Invalid attachments'));
+      return reply.code(400).send(failure('Invalid attachments', { code: 'invalid_attachments' }));
     case 'reply_unavailable':
-      return reply.code(409).send(failure('Reply target is unavailable'));
+      return reply.code(409).send(failure('Reply target is unavailable', { code: 'reply_unavailable' }));
     case 'presence_required':
-      return reply.code(403).send(failure('Active room presence or login required'));
+      return reply
+        .code(403)
+        .send(failure('Active room presence or login required', { code: 'presence_or_login_required' }));
     case 'media_unavailable':
-      return reply.code(503).send(failure('Media uploads are unavailable'));
+      return reply.code(503).send(failure('Media uploads are unavailable', { code: 'media_uploads_disabled' }));
   }
 }
 
@@ -79,11 +85,8 @@ export function registerRoomChatRoutes(root: FastifyInstance, ctx: ApiContext, c
     '/api/rooms/:roomId/chat',
     {
       schema: {
-        params: RoomParams,
-        response: {
-          200: Type.Object({ ok: Type.Literal(true), messages: Type.Array(Payload), roomId: Type.String() }),
-          ...Failures
-        }
+        params: RoomIdParams,
+        response: { 200: RoomChat, ...Failures }
       }
     },
     async (request, reply) => {
@@ -99,23 +102,15 @@ export function registerRoomChatRoutes(root: FastifyInstance, ctx: ApiContext, c
     {
       preValidation: optionalJsonBody,
       schema: {
-        params: RoomParams,
-        body: Type.Object({
-          ...PeerClaimBody,
-          name: Type.Optional(Type.Unknown()),
-          text: Type.Optional(Type.Unknown()),
-          content: Type.Optional(Type.Unknown()),
-          attachmentIds: Type.Optional(Type.Unknown()),
-          replyTo: Type.Optional(Type.Unknown()),
-          idempotencyKey: Type.Optional(Type.Unknown())
-        }),
-        response: { 201: Type.Object({ ok: Type.Literal(true), message: Payload }), ...Failures }
+        params: RoomIdParams,
+        body: PostRoomMessageBody,
+        response: { 201: RoomMessageAnswer, ...Failures }
       }
     },
     async (request, reply) => {
       const roomId: string = normalizeRoomId(request.params.roomId);
       const { body } = request;
-      const replyTo = body.replyTo as { messageId?: unknown } | null | undefined;
+      const { replyTo } = body;
       const result = await chat.post({
         ...(await caller(request.raw)),
         roomId,
@@ -140,8 +135,8 @@ export function registerRoomChatRoutes(root: FastifyInstance, ctx: ApiContext, c
       preValidation: optionalJsonBody,
       schema: {
         params: MessageParams,
-        body: Type.Object({ ...PeerClaimBody, text: Type.Optional(Type.Unknown()) }),
-        response: { 200: Type.Object({ ok: Type.Literal(true), message: Payload }), ...Failures }
+        body: EditRoomMessageBody,
+        response: { 200: RoomMessageAnswer, ...Failures }
       }
     },
     async (request, reply) => {
@@ -165,8 +160,8 @@ export function registerRoomChatRoutes(root: FastifyInstance, ctx: ApiContext, c
       preValidation: optionalJsonBody,
       schema: {
         params: MessageParams,
-        body: Type.Object(PeerClaimBody),
-        response: { 200: Type.Object({ ok: Type.Literal(true), deleted: Type.Literal(true) }), ...Failures }
+        body: DeleteRoomMessageBody,
+        response: { 200: MessageDeleted, ...Failures }
       }
     },
     async (request, reply) => {
@@ -188,20 +183,20 @@ export function registerRoomChatRoutes(root: FastifyInstance, ctx: ApiContext, c
     {
       preValidation: optionalJsonBody,
       schema: {
-        params: RoomParams,
-        body: Type.Object({ cursor: Type.Optional(Type.Unknown()) }),
-        // The cursor read answers with the read service's own fields.
-        response: { 200: Type.Object({ ok: Type.Literal(true) }, { additionalProperties: true }), ...Failures }
+        params: RoomIdParams,
+        body: ReadBody,
+        response: { 200: RoomRead, ...Failures }
       }
     },
     async (request, reply) => {
       const userId = (await ctx.resolveSession(request.raw))?.user?.id;
-      if (!userId) return reply.code(401).send(failure('Требуется вход'));
+      if (!userId) return reply.code(401).send(failure('Требуется вход', { code: 'authentication_required' }));
       const roomId: string = normalizeRoomId(request.params.roomId);
-      if (!roomId) return reply.code(404).send(failure('Комната не найдена'));
+      if (!roomId) return reply.code(404).send(failure('Комната не найдена', { code: 'room_not_found' }));
 
       const result = await chat.markRead(roomId, userId, request.body.cursor);
-      if (result.status === 'room_not_found') return reply.code(404).send(failure('Комната не найдена'));
+      if (result.status === 'room_not_found')
+        return reply.code(404).send(failure('Комната не найдена', { code: 'room_not_found' }));
       if (result.status === 'invalid_cursor')
         return reply.code(result.statusCode).send(failure(result.error, { code: result.code }));
       return { ok: true as const, ...result.result };

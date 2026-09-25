@@ -2,13 +2,36 @@ import crypto from 'node:crypto';
 import type pg from 'pg';
 import { createDbPool, transaction } from './db.ts';
 import { cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
-import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
+import { normalizeLinkPreview, type LinkPreview } from '@voice-room/shared/link-preview';
+import type { Selectable } from 'kysely';
+import type { DirectMessages } from '../platform/db/schema.ts';
 import { createLogger } from './logger.ts';
 
 type Row = Record<string, any>;
 type Queryable = Pick<pg.Pool, 'query'> | pg.PoolClient;
 export type PublicUser = ReturnType<typeof mapPublicUser> & object;
-export type DirectMessage = ReturnType<typeof mapMessage> & object;
+
+export type DirectMessageInvite = {
+  roomId: string;
+  roomName: string;
+  status: 'pending' | 'accepted' | 'declined' | 'expired';
+  expiresAt: number | null;
+};
+
+/** A direct message as stored; deletedAt stays internal, callers filter on it. */
+export interface DirectMessage {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  body: string;
+  createdAt: number | null;
+  editedAt: number | null;
+  readAt: number | null;
+  invite: DirectMessageInvite | null;
+  linkPreview: LinkPreview | undefined;
+  replyTo: { messageId: string } | undefined;
+  deletedAt: number | null;
+}
 
 function toMillis(value: unknown): number | null {
   if (value == null) return null;
@@ -37,7 +60,7 @@ function mapPublicUser(row: Row | null | undefined) {
 
 // Room invitations ride inside a regular direct message's metadata so they
 // live in the shared thread history without any schema change.
-function mapInvite(metadata: Row | null | undefined) {
+function mapInvite(metadata: Row | null | undefined): DirectMessageInvite | null {
   if (!metadata || metadata.kind !== 'room-invite') return null;
   return {
     roomId: String(metadata.roomId || ''),
@@ -48,8 +71,11 @@ function mapInvite(metadata: Row | null | undefined) {
   };
 }
 
-function mapMessage(row: Row | null | undefined) {
+function mapMessage(row: Selectable<DirectMessages>): DirectMessage;
+function mapMessage(row: Selectable<DirectMessages> | null | undefined): DirectMessage | null;
+function mapMessage(row: Selectable<DirectMessages> | null | undefined): DirectMessage | null {
   if (!row) return null;
+  const metadata = row.metadata as Row | null;
   return {
     id: row.id,
     senderId: row.sender_id,
@@ -58,8 +84,8 @@ function mapMessage(row: Row | null | undefined) {
     createdAt: toMillis(row.created_at),
     editedAt: toMillis(row.edited_at),
     readAt: toMillis(row.read_at),
-    invite: mapInvite(row.metadata),
-    linkPreview: normalizeLinkPreview(row.metadata?.linkPreview) || undefined,
+    invite: mapInvite(metadata),
+    linkPreview: normalizeLinkPreview(metadata?.linkPreview) || undefined,
     replyTo: row.reply_to_message_id ? { messageId: row.reply_to_message_id } : undefined,
     // deletedAt kept internal; callers filter before map
     deletedAt: row.deleted_at ? toMillis(row.deleted_at) : null
@@ -210,8 +236,9 @@ function createFriendStore({
         : await client.query(`SELECT * FROM users WHERE login = $1`, [addresseeLogin]);
       const addressee = userResult.rows[0];
       // Deleted and soon-to-be-deleted accounts cannot be found or befriended.
-      if (!addressee || addressee.deletion_requested_at || addressee.deleted_at) return { status: 'not_found' };
-      if (addressee.id === requesterId) return { status: 'self' };
+      if (!addressee || addressee.deletion_requested_at || addressee.deleted_at)
+        return { status: 'not_found' as const };
+      if (addressee.id === requesterId) return { status: 'self' as const };
 
       await lockUserPair(client, requesterId, addressee.id);
 
@@ -219,11 +246,11 @@ function createFriendStore({
       // for both directions so the sender cannot probe whether they were the
       // one blocked.
       if (await isBlockedBetween(requesterId, addressee.id, client)) {
-        return { status: 'blocked' };
+        return { status: 'blocked' as const };
       }
 
       if (await areFriends(requesterId, addressee.id, client)) {
-        return { status: 'already_friends', user: mapPublicUser(addressee)! };
+        return { status: 'already_friends' as const, user: mapPublicUser(addressee)! };
       }
 
       // Reverse pending request -> accept it.
@@ -239,7 +266,7 @@ function createFriendStore({
           [reverse.rows[0].id]
         );
         await insertFriendship(client, requesterId, addressee.id);
-        return { status: 'accepted', user: mapPublicUser(addressee)! };
+        return { status: 'accepted' as const, user: mapPublicUser(addressee)! };
       }
 
       // Existing forward pending request -> idempotent.
@@ -249,7 +276,7 @@ function createFriendStore({
         [requesterId, addressee.id]
       );
       if (forward.rowCount! > 0) {
-        return { status: 'already_sent', user: mapPublicUser(addressee)! };
+        return { status: 'already_sent' as const, user: mapPublicUser(addressee)! };
       }
 
       // The pre-check above is racy under READ COMMITTED: two concurrent sends
@@ -266,9 +293,9 @@ function createFriendStore({
         [id, requesterId, addressee.id]
       );
       if (inserted.rowCount === 0) {
-        return { status: 'already_sent', user: mapPublicUser(addressee)! };
+        return { status: 'already_sent' as const, user: mapPublicUser(addressee)! };
       }
-      return { status: 'sent', requestId: id, user: mapPublicUser(addressee)! };
+      return { status: 'sent' as const, requestId: id, user: mapPublicUser(addressee)! };
     });
   }
 
@@ -345,7 +372,7 @@ function createFriendStore({
          WHERE id = $1 AND addressee_id = $2 AND status = 'pending'`,
         [requestId, userId]
       );
-      if (candidate.rowCount === 0) return { status: 'not_found' };
+      if (candidate.rowCount === 0) return { status: 'not_found' as const };
 
       await lockUserPair(client, userId, candidate.rows[0].requester_id);
       const result = await client.query(
@@ -355,7 +382,7 @@ function createFriendStore({
         [requestId, userId]
       );
       const request = result.rows[0];
-      if (!request) return { status: 'not_found' };
+      if (!request) return { status: 'not_found' as const };
 
       if (action === 'accept') {
         if (await isBlockedBetween(userId, request.requester_id, client)) {
@@ -363,7 +390,7 @@ function createFriendStore({
             `UPDATE friend_requests SET status = 'cancelled', responded_at = current_timestamp WHERE id = $1`,
             [requestId]
           );
-          return { status: 'blocked', requesterId: request.requester_id };
+          return { status: 'blocked' as const, requesterId: request.requester_id };
         }
         await client.query(
           `UPDATE friend_requests SET status = 'accepted', responded_at = current_timestamp WHERE id = $1`,
@@ -371,14 +398,18 @@ function createFriendStore({
         );
         await insertFriendship(client, userId, request.requester_id);
         const userResult = await client.query(`SELECT * FROM users WHERE id = $1`, [request.requester_id]);
-        return { status: 'accepted', requesterId: request.requester_id, user: mapPublicUser(userResult.rows[0]) };
+        return {
+          status: 'accepted' as const,
+          requesterId: request.requester_id,
+          user: mapPublicUser(userResult.rows[0])!
+        };
       }
 
       await client.query(
         `UPDATE friend_requests SET status = 'declined', responded_at = current_timestamp WHERE id = $1`,
         [requestId]
       );
-      return { status: 'declined', requesterId: request.requester_id };
+      return { status: 'declined' as const, requesterId: request.requester_id };
     });
   }
 
@@ -391,8 +422,8 @@ function createFriendStore({
        RETURNING addressee_id`,
       [requestId, userId]
     );
-    if (result.rowCount === 0) return { status: 'not_found' };
-    return { status: 'cancelled', addresseeId: result.rows[0].addressee_id };
+    if (result.rowCount === 0) return { status: 'not_found' as const };
+    return { status: 'cancelled' as const, addresseeId: result.rows[0].addressee_id };
   }
 
   async function removeFriend({ userId, friendId }: { userId: string; friendId: string }) {
@@ -401,8 +432,8 @@ function createFriendStore({
       low,
       high
     ]);
-    if (result.rowCount === 0) return { status: 'not_found' };
-    return { status: 'removed' };
+    if (result.rowCount === 0) return { status: 'not_found' as const };
+    return { status: 'removed' as const };
   }
 
   // --- Blocks -------------------------------------------------------------
@@ -446,11 +477,11 @@ function createFriendStore({
   // any pending request in either direction is cancelled, so unblocking later
   // starts from a clean slate rather than silently restoring contact.
   async function blockUser({ userId, targetId }: { userId: string; targetId: string }) {
-    if (!targetId || userId === targetId) return { status: 'invalid' };
+    if (!targetId || userId === targetId) return { status: 'invalid' as const };
     return transaction(getPool(), async (client) => {
       await lockUserPair(client, userId, targetId);
       const exists = await client.query(`SELECT 1 FROM users WHERE id = $1`, [targetId]);
-      if (exists.rowCount === 0) return { status: 'not_found' };
+      if (exists.rowCount === 0) return { status: 'not_found' as const };
 
       const inserted = await client.query(
         `INSERT INTO user_blocks (blocker_id, blocked_id)
@@ -484,21 +515,21 @@ function createFriendStore({
       );
 
       return {
-        status: inserted.rowCount! > 0 ? 'blocked' : 'already_blocked',
+        status: inserted.rowCount! > 0 ? ('blocked' as const) : ('already_blocked' as const),
         unfriended: unfriended.rowCount! > 0
       };
     });
   }
 
   async function unblockUser({ userId, targetId }: { userId: string; targetId: string }) {
-    if (!targetId || userId === targetId) return { status: 'invalid' };
+    if (!targetId || userId === targetId) return { status: 'invalid' as const };
     return transaction(getPool(), async (client) => {
       await lockUserPair(client, userId, targetId);
       const result = await client.query(`DELETE FROM user_blocks WHERE blocker_id = $1 AND blocked_id = $2`, [
         userId,
         targetId
       ]);
-      return { status: result.rowCount! > 0 ? 'unblocked' : 'not_found' };
+      return { status: result.rowCount! > 0 ? ('unblocked' as const) : ('not_found' as const) };
     });
   }
 
@@ -593,7 +624,7 @@ function createFriendStore({
          RETURNING *`,
         [id, senderId, recipientId, body, metadata ? JSON.stringify(metadata) : '{}', replyToMessageId]
       );
-      const message = mapMessage(result.rows[0])!;
+      const message = mapMessage(result.rows[0]);
       if (typeof unitOfWork === 'function') await unitOfWork(client, message);
       return message;
     });

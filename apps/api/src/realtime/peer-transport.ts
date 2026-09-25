@@ -1,12 +1,13 @@
+import type { RoomPeerMessage } from './legacy-events.ts';
 import crypto from 'node:crypto';
 
-export type WsTransport = { id: string; kind: 'ws'; send: (payload: unknown) => unknown; close(): void };
+export type WsTransport = { id: string; kind: 'ws'; send: (message: RoomPeerMessage) => boolean; close(): void };
 
 function createTransportId(): string {
   return crypto.randomBytes(16).toString('hex');
 }
 
-function createWsTransport(send: (payload: unknown) => unknown): WsTransport {
+function createWsTransport(send: (message: RoomPeerMessage) => boolean): WsTransport {
   const id = createTransportId();
   return {
     id,

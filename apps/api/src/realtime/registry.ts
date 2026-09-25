@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { cleanPresenceStatus } from '@voice-room/shared/validation';
 import type { PresenceStatus } from '@voice-room/shared/validation';
 import type { ServerEnvelope } from '@voice-room/shared/realtime';
+import type { ServerEvents } from '@voice-room/shared/contracts/realtime';
 import { buildServerEnvelope, sendWsEnvelope } from './envelope.ts';
 import { toWsAccountEvent } from './account-events.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
@@ -276,7 +277,7 @@ function createConnectionRegistry({
     return sendToUser(userId, wsEvent);
   }
 
-  function sendReady(connection: WsConnection, payload: Parameters<typeof buildServerEnvelope>[1]): boolean {
+  function sendReady(connection: WsConnection, payload: ServerEvents['ready']): boolean {
     return sendToConnection(connection, buildServerEnvelope('ready', payload));
   }
 

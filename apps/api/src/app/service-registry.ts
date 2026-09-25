@@ -8,6 +8,8 @@
 // here reaches back into server.ts.
 //
 
+import type { RoomPeerMessage } from '../realtime/legacy-events.ts';
+import { buildServerEnvelope, type ServerEnvelope } from '@voice-room/shared/realtime';
 import crypto from 'node:crypto';
 import { readEnvInt } from '../lib/config.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
@@ -96,7 +98,7 @@ export type ServiceRegistryDeps = {
   release250FeatureEnabled: (name: string) => boolean;
   getRoom: (roomId: string) => Promise<Room | null>;
   findRoomBan: (roomId: string, userId: string | null | undefined, ip: string | null | undefined) => Promise<unknown>;
-  broadcast: (room: Room, message: Record<string, unknown>) => void;
+  broadcast: (room: Room, message: RoomPeerMessage) => void;
   broadcastToUser: (userId: string, message: any) => unknown;
   attachMediaProjection: (context: 'room' | 'dm', message: any) => Promise<any>;
   disconnectModeratedPeer: (
@@ -110,7 +112,7 @@ export type ServiceRegistryDeps = {
   roomMembershipPresenceSnapshot: (roomId: string) => any;
   broadcastRoomLinkPreview: (input: any) => Promise<unknown>;
   broadcastDirectLinkPreview: (input: any) => Promise<unknown>;
-  roomRuntime: () => { broadcastRoomDetail(roomId: string, envelope: any): void } | null | undefined;
+  roomRuntime: () => { broadcastRoomDetail(roomId: string, envelope: ServerEnvelope): void } | null | undefined;
 };
 
 type HistoryServices = {
@@ -155,7 +157,31 @@ type MembershipServices = {
   service: ReturnType<typeof createMembershipService>;
 };
 // Test doubles and bootstrap's stores come from JavaScript callers.
-type StoreOverrides = Record<string, any>;
+/**
+ * A stand-in a test supplies for a store: any subset of its methods, each
+ * called with the real arguments. What a method answers is the test's to
+ * choose, so a case can return just the fields it exercises.
+ */
+export type Fake<Store> = {
+  // Declared as a method so a fake may narrow a parameter the real store
+  // accepts loosely (method parameters are checked bivariantly).
+  [Key in keyof Store]?: Store[Key] extends (...args: infer Args) => unknown
+    ? { method(...args: Args): unknown }['method']
+    : unknown;
+};
+
+/** Stores and services a test supplies instead of the database-backed ones. */
+export type StoreOverrides = {
+  store?: Fake<ReturnType<typeof createRoomStore>> | null;
+  users?: Fake<ReturnType<typeof createUserStore>> | null;
+  friends?: Fake<ReturnType<typeof createFriendStore>> | null;
+  notifications?: Fake<ReturnType<typeof createNotificationStore>> | null;
+  pushes?: Fake<ReturnType<typeof createPushStore>> | null;
+  push?: Fake<ReturnType<typeof createPushService>> | null;
+  avatars?: Fake<ReturnType<typeof createAvatarStorage>> | null;
+  liveKitCredentials?: Fake<ReturnType<typeof createLiveKitCredentialProvider>> | null;
+  membershipServicesOverride?: { service?: Fake<MembershipServices['service']> } | null;
+};
 
 export function resolveCursorHmacKeys({
   context,
@@ -226,7 +252,6 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   const release250FeatureEnabled: D['release250FeatureEnabled'] = (name) => deps.release250FeatureEnabled(name);
   const getRoom: D['getRoom'] = (roomId) => deps.getRoom(roomId);
   const findRoomBan: D['findRoomBan'] = (roomId, userId, ip) => deps.findRoomBan(roomId, userId, ip);
-  const broadcast: D['broadcast'] = (room, message) => deps.broadcast(room, message);
   const broadcastToUser: D['broadcastToUser'] = (userId, message) => deps.broadcastToUser(userId, message);
   const attachMediaProjection: D['attachMediaProjection'] = (context, message) =>
     deps.attachMediaProjection(context, message);
@@ -479,10 +504,12 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       moderationService: service,
       attachmentRepository: createAttachmentRepository({ pool }),
       mediaJobRepository: createMediaJobRepository({ pool }),
-      publishMessageDeleted: async ({ roomId, messageId, deletedAt }) => {
-        const room = await getRoom(roomId);
-        if (!room) return;
-        broadcast(room, { type: 'chat-message-deleted', messageId, deletedAt });
+      // Voice peers and preview watchers both follow the room detail stream, and
+      // it is the one that removes a message from the chat.
+      publishMessageDeleted: async ({ roomId, messageId }) => {
+        deps
+          .roomRuntime()
+          ?.broadcastRoomDetail(roomId, buildServerEnvelope('room.chat.deleted', { roomId, messageId }));
       }
     });
     moderationServices = { messageService, repository, service };
@@ -667,17 +694,19 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
    * derived services are rebuilt on next use. Returns whether the room store
    * changed (the in-memory roster then belongs to the old one).
    */
+  // A fake has only what its test reaches; anything else fails loudly there.
   function applyOverrides(options: StoreOverrides = {}): { roomStoreChanged: boolean } {
     const roomStoreChanged = Boolean(options.store && options.store !== roomStore);
-    if (options.store) roomStore = options.store;
-    if (options.users) userStore = options.users;
+    if (options.store) roomStore = options.store as ReturnType<typeof createRoomStore>;
+    if (options.users) userStore = options.users as ReturnType<typeof createUserStore>;
     friendStoreInviteExpiryEnabled = Boolean(options.friends?.expirePendingInvites);
-    if (options.friends) friendStore = options.friends;
+    if (options.friends) friendStore = options.friends as ReturnType<typeof createFriendStore>;
     messageService = null;
     historyServices = null;
     credentialBoundary = null;
-    liveKitCredentialProvider = options.liveKitCredentials ?? null;
-    membershipServices = options.membershipServicesOverride ?? null;
+    liveKitCredentialProvider =
+      (options.liveKitCredentials as ReturnType<typeof createLiveKitCredentialProvider> | null | undefined) ?? null;
+    membershipServices = (options.membershipServicesOverride as MembershipServices | null | undefined) ?? null;
     reactionServices = null;
     pinServices = null;
     notificationServices = null;
@@ -685,15 +714,24 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     mediaServices = null;
     activeBanService = null;
     messageDeliveryServices = null;
-    if (options.notifications) notificationStore = options.notifications;
-    pushStore = options.pushes || null;
-    pushService = options.push || null;
-    if (options.avatars) avatarStorage = options.avatars;
+    if (options.notifications) notificationStore = options.notifications as ReturnType<typeof createNotificationStore>;
+    pushStore = (options.pushes as ReturnType<typeof createPushStore> | null | undefined) || null;
+    pushService = (options.push as ReturnType<typeof createPushService> | null | undefined) || null;
+    if (options.avatars) avatarStorage = options.avatars as ReturnType<typeof createAvatarStorage>;
     return { roomStoreChanged };
   }
 
   /** The database-backed stores bootstrap builds before the app. */
-  function install(stores: StoreOverrides): void {
+  function install(stores: {
+    roomStore: ReturnType<typeof createRoomStore>;
+    userStore: ReturnType<typeof createUserStore>;
+    friendStore: ReturnType<typeof createFriendStore>;
+    notificationStore: ReturnType<typeof createNotificationStore>;
+    pushStore: ReturnType<typeof createPushStore>;
+    pushService: ReturnType<typeof createPushService>;
+    avatarStorage: ReturnType<typeof createAvatarStorage>;
+    linkPreviewStorage: ReturnType<typeof createLinkPreviewStorage> | null;
+  }): void {
     ({
       roomStore,
       userStore,

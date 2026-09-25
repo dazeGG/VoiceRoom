@@ -12,6 +12,7 @@
     fetchRoomChatPage,
     markRoomChatRead,
     postRoomChat,
+    chatMessageFromRoomMessage,
     type ChatMessage
   } from '$lib/api/rooms';
   import { beginRoomChatReadSession, setRoomUnreadCount } from '$lib/features/home/model/room-presence.svelte';
@@ -532,7 +533,7 @@
       }
       if (event.type === 'room.snapshot') {
         if (Array.isArray(event.payload.recentMessages)) {
-          mergeMessages(event.payload.recentMessages);
+          mergeMessages(event.payload.recentMessages.map(chatMessageFromRoomMessage));
           loading = false;
         }
         return;
@@ -556,7 +557,7 @@
         return;
       }
       if (event.type === 'room.chat.edited') {
-        const edited = event.payload.message;
+        const edited = chatMessageFromRoomMessage(event.payload.message);
         if (edited?.id) {
           if (historyEnabled) history.upsert(edited);
           else messages = messages.map((message) => (message.id === edited.id ? edited : message));
@@ -596,7 +597,7 @@
         return;
       }
       if (event.type !== 'room.chat.message') return;
-      const message = event.payload.message;
+      const message = chatMessageFromRoomMessage(event.payload.message);
       if (message) roomTyping.clear(typingKey(message));
       if (!message?.id || messageIds.has(message.id) || messages.some((item) => item.id === message.id)) return;
       messageIds.add(message.id);

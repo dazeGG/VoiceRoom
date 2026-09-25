@@ -5,11 +5,15 @@
 // how it is spelled over HTTP. Checks run in the order the legacy handler ran
 // them, so a request that fails two checks still gets the same answer.
 
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';
+import type { MentionNormalization, MentionRefusal } from '@voice-room/shared/mentions';
+import { errorCode } from '../../platform/http/http-kit.ts';
 import type pg from 'pg';
 import crypto from 'node:crypto';
 import type { Logger } from 'pino';
 import { isReservedPeerId } from '@voice-room/shared/validation';
 import type { ServerEnvelope } from '@voice-room/shared/realtime';
+import type { buildServerEnvelope } from '@voice-room/shared/realtime';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { avatarColorForPeerId } from '../../lib/room-store.ts';
 import { tokensMatch } from '../../platform/crypto/tokens-match.ts';
@@ -17,6 +21,7 @@ import type { LiveRoom, PresencePeer } from '../rooms/room-views.ts';
 import { cleanChatText, messageFingerprint, normalizeAttachmentIds } from './message-input.ts';
 import { requireReplyTarget } from './reply-projector.ts';
 import { publicChatMessage, type RoomChatMessage } from './room-chat-views.ts';
+import type { ReplyPreview } from '@voice-room/shared/contracts/messages';
 
 type DbClient = Pick<pg.PoolClient, 'query'> | null | undefined;
 
@@ -84,10 +89,7 @@ export interface RoomChatDeps {
   findRoomBan(roomId: string, userId: string | null | undefined, ip: string): Promise<unknown>;
   feature(name: 'engagement' | 'replies' | 'mediaUploads'): boolean;
   prepareContent(input: { content: unknown; text: string }): { content: unknown; text: string };
-  mentionUserIds(
-    content: unknown,
-    options: { creatorUserId: string }
-  ): { ok: true; userIds: string[] } | { ok: false; code: string };
+  mentionUserIds(content: unknown, options: { creatorUserId: string }): MentionNormalization;
   limiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
   findUser(userId: string): Promise<ChatAuthor | null>;
   media(): { attachments: { bindReady(input: Record<string, unknown>, client: DbClient): Promise<unknown> } } | null;
@@ -115,7 +117,7 @@ export interface RoomChatDeps {
   directEmit: boolean;
   broadcastChatMessage(roomId: string, message: RoomChatMessage): void;
   broadcastRoomDetail(roomId: string, event: ServerEnvelope): void;
-  roomDetailEvent(type: 'room.chat.deleted' | 'room.chat.edited', payload: Record<string, unknown>): ServerEnvelope;
+  roomDetailEvent: typeof buildServerEnvelope;
   scheduleLinkPreview(roomId: string, messageId: string, text: string, options?: { edited?: boolean }): void;
   refreshPins(roomId: string, action: 'message-deleted' | 'message-edited', messageId: string): Promise<void>;
   sendRoomSummaryToUser(roomId: string, userId: string): Promise<void>;
@@ -152,7 +154,7 @@ export type PostOutcome =
         | 'presence_required'
         | 'media_unavailable';
     }
-  | { status: 'invalid_mention'; code: string };
+  | { status: 'invalid_mention'; code: MentionRefusal };
 
 export interface PostInput extends Caller, PeerClaim {
   roomId: string;
@@ -271,7 +273,7 @@ export function createRoomChatService(deps: RoomChatDeps) {
     const notifications = deps.notifications();
     const delivery = deps.delivery();
     let idempotencyLedgerKey = '';
-    let replyPreview: unknown;
+    let replyPreview: ReplyPreview | null = null;
     let replyTargetUserId: string | null = null;
 
     const message = await deps.messages().room.appendMessage(roomId, {
@@ -466,7 +468,7 @@ export function createRoomChatService(deps: RoomChatDeps) {
   type ReadOutcome =
     | { status: 'read'; result: Record<string, unknown> }
     | { status: 'room_not_found' }
-    | { status: 'invalid_cursor'; statusCode: number; code: string; error: string };
+    | { status: 'invalid_cursor'; statusCode: number; code: ErrorCode; error: string };
 
   // A cursor advances the durable read point; without one the legacy
   // wall-clock read marks everything up to now.
@@ -478,8 +480,8 @@ export function createRoomChatService(deps: RoomChatDeps) {
         await deps.sendRoomSummaryToUser(roomId, userId);
         return { status: 'read', result };
       } catch (error) {
-        const failure = error as { statusCode?: number; code?: string; message?: string };
-        const code = failure.code || 'invalid_read_cursor';
+        const failure = error as { statusCode?: number; message?: string };
+        const code = errorCode(failure, 'invalid_read_cursor');
         return {
           status: 'invalid_cursor',
           statusCode: failure.statusCode || 400,

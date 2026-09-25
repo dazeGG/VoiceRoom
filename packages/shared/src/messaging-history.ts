@@ -93,7 +93,7 @@ export function normalizeLimit(value: unknown, fallback: number = HISTORY_DEFAUL
 
 export function normalizeHistoryRequest(
   value: Loose = {}
-): { ok: true; request: HistoryRequest } | { ok: false; code: string } {
+): { ok: true; request: HistoryRequest } | { ok: false; code: 'invalid_cursor' } {
   const mode = HISTORY_MODE_SET.has(value.mode) ? (value.mode as HistoryMode) : 'latest';
   const limit = normalizeLimit(value.limit);
   const cursor = isOpaqueCursor(value.cursor) ? value.cursor : '';

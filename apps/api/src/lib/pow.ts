@@ -1,7 +1,9 @@
 import crypto from 'node:crypto';
 
 export type PowChallenge = { challengeId: string; difficulty: number; issuedAt: number; signature: string };
-export type PowVerdict = { ok: true } | { ok: false; status: 403; error: string };
+export type PowVerdict =
+  | { ok: true }
+  | { ok: false; status: 403; error: string; code: 'pow_required' | 'pow_invalid' | 'pow_expired' | 'pow_reused' };
 
 function hasLeadingZeroBits(buffer: Uint8Array, bits: number): boolean {
   const fullBytes = Math.floor(bits / 8);
@@ -83,27 +85,27 @@ function createProofOfWork({
     const nonce = normalizePowNonce(submitted?.nonce);
     const parsed = parsePowChallenge(challenge);
     if (!parsed || !nonce) {
-      return { ok: false, status: 403, error: 'Room creation proof is required' };
+      return { ok: false, status: 403, error: 'Room creation proof is required', code: 'pow_required' };
     }
 
     const { challengeId, difficulty: proofDifficulty, issuedAt, signature } = parsed;
     const payload = `${challengeId}.${issuedAt}.${proofDifficulty}`;
     const expectedSignature = sign(payload, clientIp);
     if (proofDifficulty !== difficulty || !timingSafeMatch(expectedSignature, signature)) {
-      return { ok: false, status: 403, error: 'Invalid room creation proof' };
+      return { ok: false, status: 403, error: 'Invalid room creation proof', code: 'pow_invalid' };
     }
 
     if (now < issuedAt || now - issuedAt > ttlMs) {
-      return { ok: false, status: 403, error: 'Room creation proof expired' };
+      return { ok: false, status: 403, error: 'Room creation proof expired', code: 'pow_expired' };
     }
 
     if (usedChallenges.has(challengeId)) {
-      return { ok: false, status: 403, error: 'Room creation proof was already used' };
+      return { ok: false, status: 403, error: 'Room creation proof was already used', code: 'pow_reused' };
     }
 
     const digest = crypto.createHash('sha256').update(`${challenge}:${nonce}`).digest();
     if (!hasLeadingZeroBits(digest, proofDifficulty)) {
-      return { ok: false, status: 403, error: 'Invalid room creation proof' };
+      return { ok: false, status: 403, error: 'Invalid room creation proof', code: 'pow_invalid' };
     }
 
     usedChallenges.set(challengeId, now + ttlMs);

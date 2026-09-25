@@ -3,6 +3,7 @@ import { transaction } from '../../lib/db.ts';
 import {
   buildNotificationEnvelope,
   buildProviderPayload,
+  normalizeNotificationItem,
   normalizeNotificationLevel,
   normalizeNotificationLimit,
   type NotificationEnvelope,
@@ -22,7 +23,11 @@ export interface InboxCursorCodec {
 
 export interface RoomLevelStore {
   getRoomLevel?(input: { userId: string; roomId: string }): Promise<NotificationLevel> | NotificationLevel;
-  setRoomLevel?(input: { userId: string; roomId: string; level: NotificationLevel }): unknown;
+  setRoomLevel?(input: {
+    userId: string;
+    roomId: string;
+    level: NotificationLevel;
+  }): Promise<{ ok: false; code: 'invalid_level' | 'not_found' } | { ok: true; level: NotificationLevel }>;
   getPreferences?(
     userId: string
   ): Promise<{ roomLevels?: Record<string, NotificationLevel>; mutedRoomIds?: string[] } | null | undefined>;
@@ -87,10 +92,10 @@ function createNotificationService({
   }
 
   async function markRead({ userId, notificationId }: { userId: string; notificationId: string }) {
-    const item = await items.markRead({ recipientUserId: userId, notificationId });
-    if (!item) return { ok: false as const, code: 'not_found' };
+    const notification = normalizeNotificationItem(await items.markRead({ recipientUserId: userId, notificationId }));
+    if (!notification) return { ok: false as const, code: 'not_found' as const };
     const unread = await items.unreadCount(userId);
-    return { ok: true as const, notification: item, unreadCount: unread.count, revision: unread.revision };
+    return { ok: true as const, notification, unreadCount: unread.count, revision: unread.revision };
   }
 
   async function markAllRead({ userId, through }: { userId: string; through?: unknown }) {
@@ -195,9 +200,9 @@ function createNotificationService({
 
   async function setRoomLevel({ userId, roomId, level }: { userId: string; roomId: string; level: unknown }) {
     const normalized = normalizeNotificationLevel(level, '' as NotificationLevel);
-    if (!normalized) return { ok: false, code: 'invalid_level' };
+    if (!normalized) return { ok: false as const, code: 'invalid_level' as const };
     if (notificationStore?.setRoomLevel) return notificationStore.setRoomLevel({ userId, roomId, level: normalized });
-    return { ok: false, code: 'not_supported' };
+    return { ok: false as const, code: 'not_supported' as const };
   }
 
   return {

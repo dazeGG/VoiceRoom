@@ -1,18 +1,9 @@
-import { fetchJson } from './http';
+import type { DesktopAsset, DesktopRelease } from '@voice-room/shared/contracts/ops';
+import { api } from './client';
 
-export interface DesktopAsset {
-  url: string;
-  size: number;
-}
-
-export interface DesktopRelease {
-  version: string;
-  htmlUrl: string;
-  /** Keyed by platform id: 'mac-arm64' | 'mac-x64' | 'win-x64'. */
-  assets: Record<string, DesktopAsset | null>;
-}
+export type { DesktopAsset, DesktopRelease };
 
 /** Latest desktop release metadata, proxied + cached by the API from GitHub. */
 export function fetchDesktopRelease(): Promise<DesktopRelease> {
-  return fetchJson<DesktopRelease>('/api/desktop/latest');
+  return api.get<DesktopRelease>('/api/desktop/latest');
 }

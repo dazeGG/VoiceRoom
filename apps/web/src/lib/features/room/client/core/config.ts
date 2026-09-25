@@ -98,7 +98,6 @@ export const SCREEN_AUDIO_BITRATE = 192_000;
 export const SCREEN_STATS_INTERVAL_MS = 1500;
 export const SCREEN_VIDEO_BACKUP_CODEC: string = 'vp8';
 export const PEER_SESSION_STORAGE_PREFIX = 'voice-room:peer-session:';
-export const ROOM_PROOF_BATCH_SIZE = 64;
 
 export interface ScreenQualityOption {
   bitrateByFps: Record<string, number>;

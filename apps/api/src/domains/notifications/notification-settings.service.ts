@@ -2,17 +2,19 @@
 // private notification text, do-not-disturb and presence status (one
 // preference record), and the browser push subscriptions.
 
+import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
 import { cleanPresenceStatus } from '@voice-room/shared/validation';
+import type { NotificationPreferences, PushConfig } from '@voice-room/shared/contracts/notifications';
 import { cleanPushEndpoint } from '../../lib/push-endpoint.ts';
 
 export interface MutationResult {
   status: string;
-  preferences?: Record<string, unknown>;
+  preferences: NotificationPreferences;
 }
 
 export interface NotificationPreferenceStore {
-  getPreferences(userId: string): Promise<unknown>;
+  getPreferences(userId: string): Promise<NotificationPreferences>;
   setDmMute(input: { userId: string; peerUserId: string; muted: boolean }): Promise<MutationResult>;
   setRoomMute(input: { userId: string; roomId: string; muted: boolean }): Promise<MutationResult>;
   setPrivateNotifications(input: { userId: string; privateNotifications: boolean }): Promise<MutationResult>;
@@ -35,11 +37,11 @@ export interface NotificationSettingsDeps {
     }): Promise<unknown>;
     remove(input: { userId: string; endpoint: string }): Promise<unknown>;
   };
-  pushConfig(): { enabled: boolean; [key: string]: unknown };
+  pushConfig(): PushConfig;
   pushLimiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
   /** Tells the account's sockets which presence to report to friends. */
   setPresence(userId: string, presenceStatus: string): void;
-  notifyUser(userId: string, event: Record<string, unknown>): void;
+  notifyUser(userId: string, event: AccountMessage): void;
   broadcastProfileToFriends(
     user: Record<string, unknown> & { id: string },
     log: Pick<Logger, 'error'> | undefined
@@ -73,8 +75,8 @@ export function createNotificationSettingsService(deps: NotificationSettingsDeps
     log?: Pick<Logger, 'error'>
   ): Promise<MutationResult> {
     if (result.status !== 'updated') return result;
-    const presenceStatus: string =
-      cleanPresenceStatus(result.preferences?.presenceStatus) || (result.preferences?.doNotDisturb ? 'dnd' : 'online');
+    const presenceStatus =
+      cleanPresenceStatus(result.preferences.presenceStatus) || (result.preferences.doNotDisturb ? 'dnd' : 'online');
     const preferences = { ...result.preferences, doNotDisturb: presenceStatus === 'dnd', presenceStatus };
     deps.setPresence(user.id, presenceStatus);
     deps.notifyUser(user.id, { type: 'notification-settings-updated', preferences });

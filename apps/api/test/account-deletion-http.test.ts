@@ -1,106 +1,27 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import { socketPathForDirectory } from './ipc-harness.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import http from 'node:http';
-import { spawn } from 'node:child_process';
-import path from 'node:path';
-import os from 'node:os';
 import { Pool } from 'pg';
 import { createAccountDeletionRepository } from '../src/domains/account/account-deletion-repository.ts';
 import { ACCOUNT_DELETION_GRACE_MS } from '@voice-room/shared/account-security';
-import { createTestDatabase } from './db-harness.ts';
-
-function waitForHealthz(socketPath, timeoutMs = 15000) {
-  const started = Date.now();
-  return new Promise((resolve, reject) => {
-    const attempt = () => {
-      http
-        .get({ path: '/api/healthz', socketPath }, (res) => {
-          res.resume();
-          if (res.statusCode === 200) {
-            resolve();
-            return;
-          }
-          retry();
-        })
-        .on('error', retry);
-    };
-    const retry = () => {
-      if (Date.now() - started > timeoutMs) {
-        reject(new Error('Server did not become ready'));
-        return;
-      }
-      setTimeout(attempt, 50);
-    };
-    attempt();
-  });
-}
-
-function request(socketPath, { method = 'GET', pathname, body, cookie } = {}) {
-  const payload = body === undefined ? null : JSON.stringify(body);
-  const headers = { Accept: 'application/json' };
-  if (payload) {
-    headers['Content-Type'] = 'application/json';
-    headers['Content-Length'] = Buffer.byteLength(payload);
-  }
-  if (cookie) headers.Cookie = cookie;
-  return new Promise((resolve, reject) => {
-    const req = http.request({ method, path: pathname, socketPath, headers }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      res.on('end', () => {
-        resolve({
-          status: res.statusCode,
-          body: data ? JSON.parse(data) : null,
-          setCookie: res.headers['set-cookie'] || []
-        });
-      });
-      res.on('error', reject);
-    });
-    req.on('error', reject);
-    if (payload) req.write(payload);
-    req.end();
-  });
-}
-
-function cookieFrom(setCookie) {
-  const header = Array.isArray(setCookie) ? setCookie[0] : setCookie;
-  return String(header || '').split(';')[0];
-}
+import type {
+  AccountFailure,
+  DeletionPreview,
+  DeletionScheduled,
+  Me,
+  SignedIn
+} from '@voice-room/shared/contracts/account';
+import { cookieFrom, request, startApiServer } from './fakes/server-process.ts';
 
 test('an account can be deleted, restored within the grace period and never re-registered afterwards', async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-account-deletion-'));
-  const socketPath = socketPathForDirectory(dir);
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const child = spawn(process.execPath, ['src/server.ts'], {
-    cwd: path.join(import.meta.dirname, '..'),
-    env: {
-      ...process.env,
-      NODE_ENV: 'test',
-      MAX_EMPTY_ROOMS_PER_IP: '0',
-      ROOM_CREATE_POW_DIFFICULTY: '0',
-      ROOM_CREATE_RATE_LIMIT: '0',
-      AUTH_RATE_LIMIT: '0',
-      DATABASE_URL: databaseUrl,
-      SOCKET_PATH: socketPath
-    },
-    stdio: ['ignore', 'ignore', 'ignore']
+  const { socketPath, databaseUrl, beforeCleanup } = await startApiServer(t, {
+    prefix: 'voice-room-account-deletion-',
+    env: { AUTH_RATE_LIMIT: '0' }
   });
   const pool = new Pool({ connectionString: databaseUrl });
-  t.after(async () => {
-    child.kill('SIGTERM');
-    await pool.end();
-    fs.rmSync(dir, { recursive: true, force: true });
-    await cleanup();
-  });
-  await waitForHealthz(socketPath);
+  beforeCleanup(() => pool.end());
 
   const credentials = { login: 'ada', password: 'lovelace-1843' };
-  const registered = await request(socketPath, {
+  const registered = await request<SignedIn>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/register',
     body: { ...credentials, passwordConfirm: credentials.password }
@@ -109,7 +30,7 @@ test('an account can be deleted, restored within the grace period and never re-r
   const cookie = cookieFrom(registered.setCookie);
 
   assert.equal((await request(socketPath, { pathname: '/api/auth/account/deletion' })).status, 401);
-  const preview = await request(socketPath, { pathname: '/api/auth/account/deletion', cookie });
+  const preview = await request<DeletionPreview>(socketPath, { pathname: '/api/auth/account/deletion', cookie });
   assert.equal(preview.status, 200);
   assert.deepEqual(preview.body.rooms, []);
   assert.equal(preview.body.graceDays, 7);
@@ -122,7 +43,7 @@ test('an account can be deleted, restored within the grace period and never re-r
   });
   assert.equal(wrongPassword.status, 400);
 
-  const requested = await request(socketPath, {
+  const requested = await request<DeletionScheduled>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/account/deletion',
     cookie,
@@ -131,9 +52,13 @@ test('an account can be deleted, restored within the grace period and never re-r
   assert.equal(requested.status, 200);
   assert.ok(requested.body.deletionScheduledFor > Date.now() + ACCOUNT_DELETION_GRACE_MS - 60_000);
   assert.match(String(requested.setCookie[0] || ''), /Max-Age=0/);
-  assert.equal((await request(socketPath, { pathname: '/api/auth/me', cookie })).body.user, null);
+  assert.equal((await request<Me>(socketPath, { pathname: '/api/auth/me', cookie })).body.user, null);
 
-  const pendingLogin = await request(socketPath, { method: 'POST', pathname: '/api/auth/login', body: credentials });
+  const pendingLogin = await request<AccountFailure>(socketPath, {
+    method: 'POST',
+    pathname: '/api/auth/login',
+    body: credentials
+  });
   assert.equal(pendingLogin.status, 409);
   assert.equal(pendingLogin.body.code, 'account_deletion_pending');
   assert.equal(pendingLogin.body.deletionScheduledFor, requested.body.deletionScheduledFor);
@@ -149,7 +74,7 @@ test('an account can be deleted, restored within the grace period and never re-r
     ).status,
     401
   );
-  const restored = await request(socketPath, {
+  const restored = await request<SignedIn>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/account/restore',
     body: credentials
@@ -158,12 +83,12 @@ test('an account can be deleted, restored within the grace period and never re-r
   assert.equal(restored.body.user.login, 'ada');
   const restoredCookie = cookieFrom(restored.setCookie);
   assert.equal(
-    (await request(socketPath, { pathname: '/api/auth/me', cookie: restoredCookie })).body.user.login,
+    (await request<Me>(socketPath, { pathname: '/api/auth/me', cookie: restoredCookie })).body.user?.login,
     'ada'
   );
 
   // Delete again and let the grace period run out.
-  const again = await request(socketPath, {
+  const again = await request<DeletionScheduled>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/account/deletion',
     cookie: restoredCookie,

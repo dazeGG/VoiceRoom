@@ -19,7 +19,7 @@ function summary(roomId: string, unreadCount: number): RoomRealtimeSummary {
     visiblePeers: [],
     hiddenPeerCount: 0,
     unreadCount
-  } as unknown as RoomRealtimeSummary;
+  };
 }
 
 test('a room summary sets the unread badge', async () => {

@@ -24,7 +24,7 @@ export type MessageVisibilityService = Readonly<{
 }>;
 
 class MessageVisibilityError extends Error {
-  declare code: string;
+  declare code: ErrorCode;
 
   constructor() {
     super('Message is not visible');
@@ -88,3 +88,4 @@ function createMessageVisibilityService({
 }
 
 export { MessageVisibilityError, createMessageVisibilityService };
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';

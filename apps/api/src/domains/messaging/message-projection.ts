@@ -1,6 +1,8 @@
 // What a stored message carries when it leaves the API: its attachments
 // (public fields only) and, for a reply, the quoted message preview.
 
+import type { Attachment, ReplyPreview } from '@voice-room/shared/contracts/messages';
+
 type Context = 'room' | 'dm';
 
 export interface StoredAttachment {
@@ -19,22 +21,22 @@ export interface StoredAttachment {
 export interface MessageProjectionDeps {
   attachments(): { listForMessage(context: Context, messageId: string): Promise<StoredAttachment[]> } | null;
   replies(): {
-    getRoomPreview(input: { roomId?: string; messageId: string }): Promise<unknown>;
-    getDirectPreview(input: { userId?: string; peerId?: string; messageId: string }): Promise<unknown>;
+    getRoomPreview(input: { roomId?: string; messageId: string }): Promise<ReplyPreview | null>;
+    getDirectPreview(input: { userId?: string; peerId?: string; messageId: string }): Promise<ReplyPreview | null>;
   } | null;
 }
 
 // Never the owner or storage keys: an attachment is visible to everyone who
 // can read the message.
-export function publicAttachment(attachment: StoredAttachment) {
+export function publicAttachment(attachment: StoredAttachment): Attachment {
   return {
     id: attachment.id,
     context: attachment.context,
     order: attachment.order,
     mimeType: attachment.mimeType,
-    bytes: attachment.processedBytes || attachment.originalBytes,
-    width: attachment.width,
-    height: attachment.height,
+    bytes: attachment.processedBytes || attachment.originalBytes || null,
+    width: attachment.width ?? null,
+    height: attachment.height ?? null,
     state: attachment.state,
     url: attachment.state === 'ready' ? `/api/media/attachments/${encodeURIComponent(attachment.id)}/preview` : null
   };
@@ -44,7 +46,7 @@ export function createMessageProjection(deps: MessageProjectionDeps) {
   async function projectMedia<T extends { id?: string }>(
     context: Context,
     message: T
-  ): Promise<T & { attachments: ReturnType<typeof publicAttachment>[] }> {
+  ): Promise<T & { attachments: Attachment[] }> {
     const attachments = deps.attachments();
     if (!attachments || !message?.id) return { ...message, attachments: [] };
     const stored = await attachments.listForMessage(context, message.id);
@@ -55,7 +57,7 @@ export function createMessageProjection(deps: MessageProjectionDeps) {
     context: Context,
     message: T,
     { roomId, userId, peerId }: { roomId?: string; userId?: string; peerId?: string } = {}
-  ): Promise<T | (T & { replyPreview: unknown })> {
+  ): Promise<T | (T & { replyPreview: ReplyPreview | null })> {
     const messageId = message?.replyTo?.messageId;
     if (!messageId) return message;
     const replies = deps.replies();

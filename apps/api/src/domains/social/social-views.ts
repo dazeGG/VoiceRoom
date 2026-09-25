@@ -1,19 +1,15 @@
 // How people appear to each other outside a room: the actor on a
 // notification, and whether an account can still be written to or invited.
 
-import { publicUser } from '../../lib/user-store.ts';
+import type { NotificationActor } from '@voice-room/shared/contracts/realtime';
+import { publicUser, type StoredUser } from '../../lib/user-store.ts';
 
-export interface SocialUser {
-  id: string;
-  login?: string;
-  displayName?: string;
-  deletionRequestedAt?: number | null;
-  deletedAt?: number | null;
-  [key: string]: unknown;
-}
+export type SocialUser = StoredUser;
 
-export function notificationActor(user: SocialUser | null | undefined) {
-  const actor = publicUser(user) as Record<string, unknown> | null;
+export function notificationActor(user: SocialUser): NotificationActor;
+export function notificationActor(user: SocialUser | null | undefined): NotificationActor | null;
+export function notificationActor(user: SocialUser | null | undefined): NotificationActor | null {
+  const actor = publicUser(user);
   if (!actor) return null;
   return {
     id: actor.id,

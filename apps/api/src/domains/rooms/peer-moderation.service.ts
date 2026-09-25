@@ -3,6 +3,7 @@
 // that the room exists and the actor owns it; this returns what happened and
 // leaves the HTTP answer to the route.
 
+import type { RoomPeerMessage } from '../../realtime/legacy-events.ts';
 import type { Logger } from 'pino';
 import type { GatePrincipal } from '../admission/admission.service.ts';
 import { isGatePrincipal } from '../admission/gate-principal.ts';
@@ -45,7 +46,7 @@ export interface PeerModerationDeps {
   setParticipantMuted(roomId: string, peerId: string, muted: boolean): Promise<ServerMuteResult>;
   /** Tells the room (and its preview watchers) that a peer changed. */
   announcePeerUpdated(room: LiveRoom, peer: PresencePeer): void;
-  notifyPeer(peer: PresencePeer, event: Record<string, unknown>): void;
+  notifyPeer(peer: PresencePeer, event: RoomPeerMessage): void;
   maxBans: number;
   logger(): Pick<Logger, 'error'>;
 }
@@ -110,8 +111,8 @@ export function createPeerModerationService(deps: PeerModerationDeps) {
     if (muted) await deps.revokeForServerMute({ roomId: room.id, peerId: peer.id, principal, log: deps.logger() });
     await deps.setParticipantMuted(room.id, peer.id, muted);
 
+    // The peer learns it from the same peer-updated everyone gets.
     deps.announcePeerUpdated(room, peer);
-    deps.notifyPeer(peer, { type: 'room.server-mute', roomId: room.id, peerId: peer.id, muted });
     return { status: 'applied', muted };
   }
 

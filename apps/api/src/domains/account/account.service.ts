@@ -3,8 +3,16 @@
 // deletion. Returns what happened; the routes own cookies, rate limits and
 // how each outcome is spelled over HTTP.
 
+import type { LoginAlert } from '@voice-room/shared/contracts/account';
+import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { PushPayload } from '../notifications/notification-dispatch.ts';
 import type { AccountDeletionPreview } from '@voice-room/shared/account-security';
+import type {
+  AccountSession,
+  LoginAlert as LoginAlertView,
+  RecoveryCodesStatus,
+  SelfUser
+} from '@voice-room/shared/contracts/account';
 import type { Logger } from 'pino';
 import {
   ACCOUNT_DELETION_GRACE_MS,
@@ -14,24 +22,13 @@ import {
 } from '@voice-room/shared/account-security';
 import { isValidPassword } from '@voice-room/shared/validation';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
-import { hashSessionToken, selfUser } from '../../lib/user-store.ts';
+import { hashSessionToken, selfUser, type StoredUser } from '../../lib/user-store.ts';
 
-export interface AccountUser {
-  id: string;
-  deletionRequestedAt?: number | null;
-  [key: string]: unknown;
-}
+export type AccountUser = StoredUser;
 
 export interface Device {
   userAgent: string;
   locationLabel: unknown;
-}
-
-interface LoginAlert {
-  id: string;
-  client?: string;
-  os?: string;
-  location?: string;
 }
 
 // Distributes over a union so each status narrows on its own.
@@ -50,25 +47,27 @@ export interface AccountUserStore {
   deleteSession(token: string): Promise<unknown>;
   updateDisplayName(input: { userId: string; displayName: string }): Promise<AccountUser | null>;
   changePassword(input: { userId: string; currentPassword: string; newPassword: string }): Promise<{ status: string }>;
-  getRecoveryCodesStatus(userId: string): Promise<unknown>;
-  getAccountNotices(userId: string): Promise<{ recoveryCodesReminderSnoozedUntil?: unknown; whatsNewSeen?: unknown }>;
-  snoozeRecoveryCodesReminder(input: { userId: string }): Promise<{ status: string; snoozedUntil?: unknown }>;
-  markWhatsNewSeen(input: { userId: string }): Promise<{ status: string; whatsNewSeen?: unknown }>;
+  getRecoveryCodesStatus(userId: string): Promise<RecoveryCodesStatus>;
+  getAccountNotices(
+    userId: string
+  ): Promise<{ recoveryCodesReminderSnoozedUntil: number | null; whatsNewSeen: string | null }>;
+  snoozeRecoveryCodesReminder(input: { userId: string }): Promise<{ status: string; snoozedUntil: number | null }>;
+  markWhatsNewSeen(input: { userId: string }): Promise<{ status: string; whatsNewSeen: string | null }>;
   markAppPromptSeen(input: { userId: string }): Promise<{ status: string }>;
-  listPendingLoginAlerts(input: { userId: string; excludeSessionPublicId: string }): Promise<unknown[]>;
+  listPendingLoginAlerts(input: { userId: string; excludeSessionPublicId: string }): Promise<LoginAlertView[]>;
   resolveLoginAlert(input: {
     userId: string;
     alertId: string;
     resolution: 'confirmed' | 'denied';
     currentSessionPublicId: string;
   }): Promise<{ status: string; revokedTokenHash?: string | null }>;
-  listSessions(input: { userId: string; currentTokenHash: string }): Promise<unknown[]>;
+  listSessions(input: { userId: string; currentTokenHash: string }): Promise<AccountSession[]>;
   revokeSession(input: { userId: string; publicId: string }): Promise<{ status: string; tokenHash?: string }>;
   revokeOtherSessions(input: { userId: string; keepTokenHash: string }): Promise<{ tokenHashes: string[] }>;
   generateRecoveryCodes(input: {
     userId: string;
     currentPassword: string;
-  }): Promise<{ status: string; codes?: string[]; generatedAt?: unknown }>;
+  }): Promise<{ status: string; codes: string[]; generatedAt?: number }>;
   recoverWithCode(input: {
     login: string;
     code: unknown;
@@ -104,7 +103,7 @@ export interface AccountDeps {
   };
   /** Ends what the given sessions still hold open: sockets and voice seats. */
   endSessionConnections(input: { userId?: string | null; tokenHashes?: string[] | null }): Promise<void>;
-  notifyUser(userId: string, event: Record<string, unknown>): void;
+  notifyUser(userId: string, event: AccountMessage): void;
   queuePush(userId: string, payload: PushPayload, options: { ignorePreferences: boolean }): Promise<unknown>;
   /** Refreshes the user's live room peers after a profile change. */
   refreshActiveProfile(user: AccountUser): void;
@@ -112,7 +111,7 @@ export interface AccountDeps {
   logger(): Pick<Logger, 'error'>;
 }
 
-export type SelfUser = ReturnType<typeof selfUser>;
+export type { SelfUser };
 export type OpenedSession = { status: 'signed_in'; token: string; user: SelfUser };
 
 function describeLoginDevice(alert: LoginAlert): string {
@@ -265,7 +264,7 @@ export function createAccountService(deps: AccountDeps) {
 
   async function snoozeRecoveryCodesReminder(
     userId: string
-  ): Promise<{ status: 'snoozed'; snoozedUntil: unknown } | NotFound> {
+  ): Promise<{ status: 'snoozed'; snoozedUntil: number | null } | NotFound> {
     const result = await deps.users().snoozeRecoveryCodesReminder({ userId });
     return result.status === 'snoozed'
       ? { status: 'snoozed', snoozedUntil: result.snoozedUntil }
@@ -279,7 +278,7 @@ export function createAccountService(deps: AccountDeps) {
 
   async function markWhatsNewSeen(
     userId: string
-  ): Promise<{ status: 'seen'; whatsNew: { current: string; lastSeen: unknown } } | NotFound> {
+  ): Promise<{ status: 'seen'; whatsNew: { current: string; lastSeen: string | null } } | NotFound> {
     const result = await deps.users().markWhatsNewSeen({ userId });
     if (result.status !== 'seen') return { status: 'not_found' };
     return { status: 'seen', whatsNew: { current: WHATS_NEW_VERSION as string, lastSeen: result.whatsNewSeen } };
@@ -290,7 +289,7 @@ export function createAccountService(deps: AccountDeps) {
     return result.status === 'seen' ? { status: 'seen' } : { status: 'not_found' };
   }
 
-  async function loginAlerts(userId: string, currentSessionPublicId: string): Promise<unknown[]> {
+  async function loginAlerts(userId: string, currentSessionPublicId: string): Promise<LoginAlertView[]> {
     return deps.users().listPendingLoginAlerts({ userId, excludeSessionPublicId: currentSessionPublicId });
   }
 
@@ -303,7 +302,7 @@ export function createAccountService(deps: AccountDeps) {
     resolution: 'confirmed' | 'denied'
   ): Promise<
     | { status: 'resolved'; resolution: 'confirmed' }
-    | { status: 'resolved'; resolution: 'denied'; sessionEnded: boolean; recoveryCodes: unknown }
+    | { status: 'resolved'; resolution: 'denied'; sessionEnded: boolean; recoveryCodes: RecoveryCodesStatus }
     | NotFound
   > {
     const result = await deps.users().resolveLoginAlert({ userId, alertId, resolution, currentSessionPublicId });
@@ -319,7 +318,7 @@ export function createAccountService(deps: AccountDeps) {
     };
   }
 
-  async function listSessions(userId: string, currentTokenHash: string): Promise<unknown[]> {
+  async function listSessions(userId: string, currentTokenHash: string): Promise<AccountSession[]> {
     return deps.users().listSessions({ userId, currentTokenHash });
   }
 
@@ -346,18 +345,16 @@ export function createAccountService(deps: AccountDeps) {
     userId: string,
     currentPassword: string
   ): Promise<
-    | { status: 'generated'; codes: string[]; recoveryCodes: { remaining: number; generatedAt: unknown } }
-    | Status<'invalid_password'>
-    | NotFound
+    { status: 'generated'; codes: string[]; recoveryCodes: RecoveryCodesStatus } | Status<'invalid_password'> | NotFound
   > {
     const result = await deps.users().generateRecoveryCodes({ userId, currentPassword });
     if (result.status === 'not_found') return { status: 'not_found' };
     if (result.status === 'invalid_password') return { status: 'invalid_password' };
-    const codes = result.codes ?? [];
+    const { codes } = result;
     return {
       status: 'generated',
-      codes: codes.map((code) => formatRecoveryCode(code) as string),
-      recoveryCodes: { remaining: codes.length, generatedAt: result.generatedAt }
+      codes: codes.map((code) => formatRecoveryCode(code)),
+      recoveryCodes: { remaining: codes.length, generatedAt: result.generatedAt ?? null }
     };
   }
 

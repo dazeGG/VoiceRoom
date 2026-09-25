@@ -1,116 +1,99 @@
-// Friends, friend requests, and people search. All requests are same-origin and
-// carry the HttpOnly session cookie (see http.ts credentialed helpers).
+// Friends, friend requests, and people search. Shapes come from the shared
+// social contract the API answers with.
 
-import { del, getJsonAuth, postJsonAuth } from './http';
-import type { PresenceStatus } from '$lib/shared/presence';
+import type {
+  BlockApplied,
+  BlockList,
+  Done,
+  FriendList,
+  FriendRequestAnswered,
+  FriendRequests,
+  FriendRequestSent,
+  FriendSearch,
+  IncomingRequest,
+  OutgoingRequest,
+  SearchResult,
+  SendRequestStatus
+} from '@voice-room/shared/contracts/social';
+import type { PublicUser } from '@voice-room/shared/contracts/users';
+import { api } from './client';
 
-// Mirrors the server's publicUser() shape (user-store.ts).
-export interface PublicUser {
-  avatarAccent: string | null;
-  avatarColorKey: string;
-  avatarUrl: string | null;
-  createdAt: number;
-  displayName: string;
-  doNotDisturb: boolean;
-  id: string;
-  login: string;
-  presenceStatus: PresenceStatus;
-}
+export type {
+  Friend,
+  FriendLastMessage,
+  IncomingRequest,
+  OutgoingRequest,
+  Relationship,
+  SearchResult,
+  SendRequestStatus
+} from '@voice-room/shared/contracts/social';
+export type { PublicUser } from '@voice-room/shared/contracts/users';
 
-export interface FriendLastMessage {
-  id: string;
-  body: string;
-  createdAt: number;
-  fromMe: boolean;
-}
-
-export interface Friend {
-  user: PublicUser;
-  /** Epoch millis the friendship was established, null for pre-migration rows. */
-  friendsSince: number | null;
-  online: boolean;
-  unreadCount: number;
-  lastMessage: FriendLastMessage | null;
-}
-
-export type Relationship = 'friend' | 'outgoing' | 'incoming' | 'none';
-
-export interface SearchResult {
-  user: PublicUser;
-  online: boolean;
-  relationship: Relationship;
-}
-
-export interface IncomingRequest {
-  id: string;
-  createdAt: number;
-  mutualFriends: number;
-  user: PublicUser;
-}
-
-export interface OutgoingRequest {
-  id: string;
-  createdAt: number;
-  user: PublicUser;
-}
-
-export type SendRequestStatus = 'sent' | 'accepted' | 'already_sent' | 'already_friends';
-
-export async function fetchFriends(): Promise<{ friends: Friend[]; incomingRequestCount: number }> {
-  const payload = await getJsonAuth<{ friends?: Friend[]; incomingRequestCount?: number }>('/api/friends');
-  return {
-    friends: Array.isArray(payload.friends) ? payload.friends : [],
-    incomingRequestCount: payload.incomingRequestCount ?? 0
-  };
+export async function fetchFriends(): Promise<Pick<FriendList, 'friends' | 'incomingRequestCount'>> {
+  const { friends, incomingRequestCount } = await api.get<FriendList>('/api/friends');
+  return { friends, incomingRequestCount };
 }
 
 export async function searchUsers(query: string): Promise<SearchResult[]> {
-  const payload = await getJsonAuth<{ results?: SearchResult[] }>(`/api/friends/search?q=${encodeURIComponent(query)}`);
-  return Array.isArray(payload.results) ? payload.results : [];
+  return (await api.get<FriendSearch>(`/api/friends/search?q=${encodeURIComponent(query)}`)).results;
 }
 
 export async function fetchRequests(): Promise<{ incoming: IncomingRequest[]; outgoing: OutgoingRequest[] }> {
-  const payload = await getJsonAuth<{ incoming?: IncomingRequest[]; outgoing?: OutgoingRequest[] }>(
-    '/api/friends/requests'
-  );
-  return {
-    incoming: Array.isArray(payload.incoming) ? payload.incoming : [],
-    outgoing: Array.isArray(payload.outgoing) ? payload.outgoing : []
-  };
+  const { incoming, outgoing } = await api.get<FriendRequests>('/api/friends/requests');
+  return { incoming, outgoing };
 }
 
-export async function sendFriendRequest(login: string): Promise<{ status: SendRequestStatus; user: PublicUser }> {
-  const payload = await postJsonAuth<{ status: SendRequestStatus; user: PublicUser }>('/api/friends/requests', {
-    login
-  });
-  return payload;
+async function sendRequest(body: { login: string } | { userId: string }) {
+  const { status, user } = await api.post<FriendRequestSent>('/api/friends/requests', body);
+  return { status, user };
 }
 
-export async function sendFriendRequestByUserId(
-  userId: string
-): Promise<{ status: SendRequestStatus; user: PublicUser }> {
-  const payload = await postJsonAuth<{ status: SendRequestStatus; user: PublicUser }>('/api/friends/requests', {
-    userId
-  });
-  return payload;
+export function sendFriendRequest(login: string): Promise<{ status: SendRequestStatus; user: PublicUser }> {
+  return sendRequest({ login });
+}
+
+export function sendFriendRequestByUserId(userId: string): Promise<{ status: SendRequestStatus; user: PublicUser }> {
+  return sendRequest({ userId });
 }
 
 export async function acceptFriendRequest(requestId: string): Promise<PublicUser> {
-  const payload = await postJsonAuth<{ user: PublicUser }>(
-    `/api/friends/requests/${encodeURIComponent(requestId)}/accept`,
-    {}
-  );
-  return payload.user;
+  const answer = await api.post<FriendRequestAnswered>(`/api/friends/requests/${encodeURIComponent(requestId)}/accept`);
+  if (answer.status !== 'accepted') throw new Error('Заявка больше недоступна');
+  return answer.user;
 }
 
 export async function declineFriendRequest(requestId: string): Promise<void> {
-  await postJsonAuth(`/api/friends/requests/${encodeURIComponent(requestId)}/decline`, {});
+  await api.post<FriendRequestAnswered>(`/api/friends/requests/${encodeURIComponent(requestId)}/decline`);
 }
 
 export async function cancelFriendRequest(requestId: string): Promise<void> {
-  await del(`/api/friends/requests/${encodeURIComponent(requestId)}`);
+  await api.delete<Done>(`/api/friends/requests/${encodeURIComponent(requestId)}`);
 }
 
 export async function removeFriend(userId: string): Promise<void> {
-  await del(`/api/friends/${encodeURIComponent(userId)}`);
+  await api.delete<Done>(`/api/friends/${encodeURIComponent(userId)}`);
+}
+
+// Blocking ends the friendship, cancels pending friend requests in both
+// directions, and — because DM and room invites both require an active
+// friendship — stops those too. It does not prevent sharing a room.
+
+function blockUrl(userId: string): string {
+  return `/api/blocks/${encodeURIComponent(userId)}`;
+}
+
+export async function fetchBlockedUserIds(): Promise<string[]> {
+  return (await api.get<BlockList>('/api/blocks')).blocked;
+}
+
+export async function fetchBlockedUsers(): Promise<PublicUser[]> {
+  return (await api.get<BlockList>('/api/blocks')).users;
+}
+
+export async function blockUser(userId: string): Promise<BlockApplied['status']> {
+  return (await api.put<BlockApplied>(blockUrl(userId))).status;
+}
+
+export async function unblockUser(userId: string): Promise<void> {
+  await api.delete<Done>(blockUrl(userId));
 }

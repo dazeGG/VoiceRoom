@@ -13,7 +13,8 @@ import { startUi } from '$lib/features/room/start-ui.svelte';
 import { state } from '../core/state.svelte';
 import { setVoiceConnectionStatus } from '../ui/status';
 import { showToast } from '../ui/toast';
-import { ApiRequestError, postJson } from '../net/api';
+import { ApiError } from '$lib/api/client';
+import { requestLiveKitToken, type LiveKitCredentials } from '../net/api';
 import { queueAudioUnlock, syncRemoteAudioPlayback } from './media-playback-service';
 import { clearPeerJoinCue } from '../media/cues';
 import { getScreenProfile, getScreenPublishVideoOptions } from '../media/profiles';
@@ -89,10 +90,10 @@ const NOT_IN_ROOM_RETRY_DELAYS_MS = [500, 1_000, 2_000];
  * few seconds for it; a slower or reconnecting realtime socket gets a few more
  * tries here before the join is treated as failed.
  */
-async function requestLiveKitCredentials(name: string, isCurrent: () => boolean): Promise<any> {
+async function requestLiveKitCredentials(name: string, isCurrent: () => boolean): Promise<LiveKitCredentials> {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      return await postJson('/api/livekit-token', {
+      return await requestLiveKitToken({
         name,
         peerId: state.peerId,
         roomId: state.roomId,
@@ -100,7 +101,7 @@ async function requestLiveKitCredentials(name: string, isCurrent: () => boolean)
       });
     } catch (error) {
       const delay = NOT_IN_ROOM_RETRY_DELAYS_MS[attempt];
-      if (!(error instanceof ApiRequestError) || error.code !== 'not_in_room' || delay === undefined) throw error;
+      if (!(error instanceof ApiError) || error.code !== 'not_in_room' || delay === undefined) throw error;
       await new Promise((resolve) => setTimeout(resolve, delay));
       // A rejected or abandoned join (room full, left the room) ends the wait.
       if (!isCurrent()) throw error;
@@ -234,23 +235,19 @@ export async function attemptFreshLiveKitReplacement({
       await disposeCandidatePublications(candidate, screenPublications);
       await disconnectLiveKitRoomInstance(candidate);
     }
-    const status = error instanceof ApiRequestError ? error.status : 0;
+    const status = error instanceof ApiError ? error.status : 0;
     const code =
-      error instanceof ApiRequestError
-        ? error.code
-        : error instanceof LiveKitTransportError
-          ? error.code
-          : 'transport_error';
+      error instanceof ApiError ? error.code : error instanceof LiveKitTransportError ? error.code : 'transport_error';
     logLiveKitTransition('warn', { event: 'fresh_replacement', result: 'failed', status, code: safeLiveKitCode(code) });
     return {
-      retryable: !(error instanceof ApiRequestError) || isRetryableLiveKitApiFailure(error),
+      retryable: !(error instanceof ApiError) || isRetryableLiveKitApiFailure(error),
       status,
       code
     };
   }
 }
 
-function isRetryableLiveKitApiFailure(error: ApiRequestError): boolean {
+function isRetryableLiveKitApiFailure(error: ApiError): boolean {
   if (
     [
       'authentication_required',

@@ -1,180 +1,50 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import { socketPathForDirectory } from './ipc-harness.ts';
 import test from 'node:test';
+import type { SignedIn } from '@voice-room/shared/contracts/account';
+import type { RoomChat, RoomMessageAnswer } from '@voice-room/shared/contracts/messages';
+import type { RoomCreated, RoomStatus } from '@voice-room/shared/contracts/rooms';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import http from 'node:http';
-import { spawn } from 'node:child_process';
-import path from 'node:path';
-import os from 'node:os';
 import { createTestDatabase } from './db-harness.ts';
+import {
+  cookieFrom,
+  request,
+  socketDir,
+  startServer,
+  waitForHealthz,
+  type ApiBody,
+  type ServerLogs
+} from './fakes/server-process.ts';
 import { openWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType } from './ws-harness.ts';
+
+type CookieOption = { cookie?: string };
+
+/** POST with the session cookie of `cookie`; the answer carries the first Set-Cookie as `name=value`. */
+async function postJson<Body = ApiBody>(
+  socketPath: string,
+  pathname: string,
+  body: unknown,
+  { cookie }: CookieOption = {}
+) {
+  const response = await request<Body>(socketPath, { method: 'POST', pathname, body, cookie });
+  return { ...response, setCookie: cookieFrom(response.setCookie) };
+}
+
+function patchJson<Body = ApiBody>(socketPath: string, pathname: string, body: unknown, { cookie }: CookieOption = {}) {
+  return request<Body>(socketPath, { method: 'PATCH', pathname, body, cookie });
+}
+
+function getJson<Body = ApiBody>(socketPath: string, pathname: string) {
+  return request<Body>(socketPath, { pathname });
+}
 
 const ROOM_ID = 'chat-room1';
 const PEER_ID = 'peer-chat1';
 const TOKEN = 'c'.repeat(32);
 
-function getSocketPath() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-sock-'));
-  return {
-    dir,
-    socketPath: socketPathForDirectory(dir)
-  };
-}
-
-function waitForHealthz(socketPath, timeoutMs = 15000) {
-  const started = Date.now();
-  return new Promise((resolve, reject) => {
-    const attempt = () => {
-      http
-        .get({ path: '/api/healthz', socketPath }, (res) => {
-          res.resume();
-          if (res.statusCode === 200) {
-            resolve();
-            return;
-          }
-          retry();
-        })
-        .on('error', retry);
-    };
-    const retry = () => {
-      if (Date.now() - started > timeoutMs) {
-        reject(new Error('Server did not become ready'));
-        return;
-      }
-      setTimeout(attempt, 50);
-    };
-    attempt();
-  });
-}
-
-function startServer(socketPath, databaseUrl, logs, envOverrides = {}) {
-  const child = spawn(process.execPath, ['src/server.ts'], {
-    cwd: path.join(import.meta.dirname, '..'),
-    env: {
-      ...process.env,
-      NODE_ENV: 'test',
-      MAX_EMPTY_ROOMS_PER_IP: '0',
-      ROOM_CREATE_POW_DIFFICULTY: '0',
-      ROOM_CREATE_RATE_LIMIT: '0',
-      DATABASE_URL: databaseUrl,
-      SOCKET_PATH: socketPath,
-      ...envOverrides
-    },
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
-
-  child.stdout.on('data', (chunk) => {
-    logs.stdout += chunk.toString();
-  });
-  child.stderr.on('data', (chunk) => {
-    logs.stderr += chunk.toString();
-  });
-
-  return child;
-}
-
-async function postJson(socketPath, pathname, body, { cookie } = {}) {
-  const payload = JSON.stringify(body);
-  const response = await new Promise((resolve, reject) => {
-    const req = http.request(
-      {
-        path: pathname,
-        method: 'POST',
-        socketPath,
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(payload),
-          ...(cookie ? { Cookie: cookie } : {})
-        }
-      },
-      resolve
-    );
-    req.on('error', reject);
-    req.end(payload);
-  });
-
-  const text = await new Promise((resolve, reject) => {
-    let data = '';
-    response.on('data', (chunk) => {
-      data += chunk;
-    });
-    response.on('end', () => resolve(data));
-    response.on('error', reject);
-  });
-
-  return {
-    status: response.statusCode,
-    body: text ? JSON.parse(text) : null,
-    setCookie: response.headers['set-cookie']?.[0]?.split(';')[0] || ''
-  };
-}
-
-async function patchJson(socketPath, pathname, body, { cookie } = {}) {
-  const payload = JSON.stringify(body);
-  const response = await new Promise((resolve, reject) => {
-    const req = http.request(
-      {
-        path: pathname,
-        method: 'PATCH',
-        socketPath,
-        headers: {
-          'Content-Type': 'application/json',
-          'Content-Length': Buffer.byteLength(payload),
-          ...(cookie ? { Cookie: cookie } : {})
-        }
-      },
-      resolve
-    );
-    req.on('error', reject);
-    req.end(payload);
-  });
-
-  const text = await new Promise((resolve, reject) => {
-    let data = '';
-    response.on('data', (chunk) => {
-      data += chunk;
-    });
-    response.on('end', () => resolve(data));
-    response.on('error', reject);
-  });
-  return { status: response.statusCode, body: text ? JSON.parse(text) : null };
-}
-
-async function getJson(socketPath, pathname) {
-  const response = await new Promise((resolve, reject) => {
-    http
-      .get(
-        {
-          path: pathname,
-          socketPath,
-          headers: { Accept: 'application/json' }
-        },
-        resolve
-      )
-      .on('error', reject);
-  });
-
-  const text = await new Promise((resolve, reject) => {
-    let data = '';
-    response.on('data', (chunk) => {
-      data += chunk;
-    });
-    response.on('end', () => resolve(data));
-    response.on('error', reject);
-  });
-
-  return {
-    status: response.statusCode,
-    body: text ? JSON.parse(text) : null,
-    setCookie: response.headers['set-cookie']?.[0]?.split(';')[0] || ''
-  };
-}
-
 test('chat API persists, streams, and respects room auth', async (t) => {
-  const { dir, socketPath } = getSocketPath();
+  const { dir, socketPath } = socketDir();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const logs = { stdout: '', stderr: '' };
+  const logs: ServerLogs = { stdout: '', stderr: '' };
   const child = startServer(socketPath, databaseUrl, logs);
   t.after(() => {
     child.kill('SIGTERM');
@@ -185,7 +55,7 @@ test('chat API persists, streams, and respects room auth', async (t) => {
   try {
     await waitForHealthz(socketPath);
 
-    const created = await postJson(socketPath, '/api/rooms', {});
+    const created = await postJson<RoomCreated>(socketPath, '/api/rooms', {});
     assert.equal(created.status, 201);
 
     const voice = openWs(socketPath);
@@ -197,11 +67,11 @@ test('chat API persists, streams, and respects room auth', async (t) => {
       name: 'Alice'
     });
 
-    const empty = await getJson(socketPath, `/api/rooms/${created.body.roomId}/chat`);
+    const empty = await getJson<RoomChat>(socketPath, `/api/rooms/${created.body.roomId}/chat`);
     assert.equal(empty.status, 200);
     assert.deepEqual(empty.body.messages, []);
 
-    const posted = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
+    const posted = await postJson<RoomMessageAnswer>(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
       name: 'Alice',
       peerId: PEER_ID,
       sessionToken: TOKEN,
@@ -213,22 +83,26 @@ test('chat API persists, streams, and respects room auth', async (t) => {
     const streamed = await waitForWsType(
       voice.frames,
       'room.chat.message',
-      (frame) => frame.payload?.message?.text === 'Привет, чат!'
+      (frame) => frame.payload.message.text === 'Привет, чат!'
     );
     assert.equal(streamed.payload.message.text, 'Привет, чат!');
 
-    const rejectedEdit = await patchJson(
+    const rejectedEdit = await patchJson<RoomMessageAnswer>(
       socketPath,
       `/api/rooms/${created.body.roomId}/chat/${posted.body.message.id}`,
       { peerId: PEER_ID, sessionToken: 'x'.repeat(32), text: 'spoofed edit' }
     );
     assert.equal(rejectedEdit.status, 403);
 
-    const edited = await patchJson(socketPath, `/api/rooms/${created.body.roomId}/chat/${posted.body.message.id}`, {
-      peerId: PEER_ID,
-      sessionToken: TOKEN,
-      text: '  Изменено\n\n\nс сохранением строк  '
-    });
+    const edited = await patchJson<RoomMessageAnswer>(
+      socketPath,
+      `/api/rooms/${created.body.roomId}/chat/${posted.body.message.id}`,
+      {
+        peerId: PEER_ID,
+        sessionToken: TOKEN,
+        text: '  Изменено\n\n\nс сохранением строк  '
+      }
+    );
     assert.equal(edited.status, 200);
     assert.equal(edited.body.message.text, 'Изменено\n\nс сохранением строк');
     assert.equal(typeof edited.body.message.editedAt, 'number');
@@ -236,19 +110,19 @@ test('chat API persists, streams, and respects room auth', async (t) => {
     const streamedEdit = await waitForWsType(
       voice.frames,
       'room.chat.edited',
-      (frame) => frame.payload?.message?.id === posted.body.message.id
+      (frame) => frame.payload.message.id === posted.body.message.id
     );
     assert.equal(streamedEdit.payload.message.text, 'Изменено\n\nс сохранением строк');
     assert.equal(streamedEdit.payload.message.editedAt, edited.body.message.editedAt);
 
-    const after = await getJson(socketPath, `/api/rooms/${created.body.roomId}/chat`);
+    const after = await getJson<RoomChat>(socketPath, `/api/rooms/${created.body.roomId}/chat`);
     assert.equal(after.status, 200);
     assert.equal(after.body.messages.length, 1);
-    assert.equal(after.body.messages[0].text, 'Изменено\n\nс сохранением строк');
-    assert.equal(after.body.messages[0].editedAt, edited.body.message.editedAt);
+    assert.equal(after.body.messages[0]?.text, 'Изменено\n\nс сохранением строк');
+    assert.equal(after.body.messages[0]?.editedAt, edited.body.message.editedAt);
 
     // 2.4.0: multiline preserved (newlines, limited blank lines, line count cap)
-    const multi = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
+    const multi = await postJson<RoomMessageAnswer>(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
       name: 'Alice',
       peerId: PEER_ID,
       sessionToken: TOKEN,
@@ -268,9 +142,9 @@ test('chat API persists, streams, and respects room auth', async (t) => {
 });
 
 test('chat API rejects anonymous room-link posting without active presence', async (t) => {
-  const { dir, socketPath } = getSocketPath();
+  const { dir, socketPath } = socketDir();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const logs = { stdout: '', stderr: '' };
+  const logs: ServerLogs = { stdout: '', stderr: '' };
   const child = startServer(socketPath, databaseUrl, logs);
   t.after(() => {
     child.kill('SIGTERM');
@@ -281,21 +155,21 @@ test('chat API rejects anonymous room-link posting without active presence', asy
   try {
     await waitForHealthz(socketPath);
 
-    const created = await postJson(socketPath, '/api/rooms', { isStatic: false });
+    const created = await postJson<RoomCreated>(socketPath, '/api/rooms', { isStatic: false });
     assert.equal(created.status, 201);
 
     const preview = openWs(socketPath);
     await preview.ready;
     await subscribeRoomPreview(preview, created.body.roomId);
 
-    const posted = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
+    const posted = await postJson<RoomMessageAnswer>(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
       name: 'Link Guest',
       text: 'Пишу без входа в голос'
     });
     assert.equal(posted.status, 403);
     assert.equal(posted.body.error, 'Active room presence or login required');
 
-    const after = await getJson(socketPath, `/api/rooms/${created.body.roomId}/chat`);
+    const after = await getJson<RoomChat>(socketPath, `/api/rooms/${created.body.roomId}/chat`);
     assert.equal(after.status, 200);
     assert.equal(after.body.messages.length, 0);
 
@@ -309,9 +183,9 @@ test('chat API rejects anonymous room-link posting without active presence', asy
 });
 
 test('account chat uses the current profile and refreshes active room peers after rename', async (t) => {
-  const { dir, socketPath } = getSocketPath();
+  const { dir, socketPath } = socketDir();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const logs = { stdout: '', stderr: '' };
+  const logs: ServerLogs = { stdout: '', stderr: '' };
   const child = startServer(socketPath, databaseUrl, logs);
   t.after(() => {
     child.kill('SIGTERM');
@@ -322,7 +196,7 @@ test('account chat uses the current profile and refreshes active room peers afte
   try {
     await waitForHealthz(socketPath);
 
-    const registered = await postJson(socketPath, '/api/auth/register', {
+    const registered = await postJson<SignedIn>(socketPath, '/api/auth/register', {
       login: 'preview-chat-user',
       displayName: 'Preview User',
       password: 'password123',
@@ -332,7 +206,7 @@ test('account chat uses the current profile and refreshes active room peers afte
     const sessionCookie = registered.setCookie;
     const accountPeerId = `auth-${registered.body.user.id}`;
 
-    const created = await postJson(socketPath, '/api/rooms', { isStatic: false });
+    const created = await postJson<RoomCreated>(socketPath, '/api/rooms', { isStatic: false });
     assert.equal(created.status, 201);
 
     const voice = openWs(socketPath, { cookie: sessionCookie });
@@ -345,7 +219,7 @@ test('account chat uses the current profile and refreshes active room peers afte
     });
     assert.equal(joined.payload.peers.find((peer) => peer.id === 'preview-voice-user')?.name, 'Preview User');
 
-    const first = await postJson(
+    const first = await postJson<RoomMessageAnswer>(
       socketPath,
       `/api/rooms/${created.body.roomId}/chat`,
       {
@@ -359,7 +233,7 @@ test('account chat uses the current profile and refreshes active room peers afte
     assert.equal(first.body.message.name, 'Preview User');
     assert.equal(first.body.message.avatarColorKey, registered.body.user.avatarColorKey);
 
-    const second = await postJson(
+    const second = await postJson<RoomMessageAnswer>(
       socketPath,
       `/api/rooms/${created.body.roomId}/chat`,
       {
@@ -376,7 +250,7 @@ test('account chat uses the current profile and refreshes active room peers afte
     // An account-backed active peer remains authoritative even if its HTTP
     // session cookie is absent; the request body cannot spoof the live name.
     const beforeActivePeerPost = voice.frames.length;
-    const activePeerPost = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
+    const activePeerPost = await postJson<RoomMessageAnswer>(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
       name: 'Spoofed Active Name',
       peerId: 'preview-voice-user',
       sessionToken: TOKEN,
@@ -388,7 +262,7 @@ test('account chat uses the current profile and refreshes active room peers afte
     const activePeerBroadcast = await waitForWsType(
       voice.frames,
       'room.chat.message',
-      (frame) => frame.payload?.message?.id === activePeerPost.body.message.id,
+      (frame) => frame.payload.message.id === activePeerPost.body.message.id,
       5000,
       beforeActivePeerPost
     );
@@ -408,13 +282,13 @@ test('account chat uses the current profile and refreshes active room peers afte
     const peerUpdated = await waitForWsType(
       voice.frames,
       'room.peer.updated',
-      (frame) => frame.payload?.peer?.id === 'preview-voice-user',
+      (frame) => frame.payload.peer.id === 'preview-voice-user',
       5000,
       beforeRename
     );
     assert.equal(peerUpdated.payload.peer.name, 'Current Profile');
 
-    const history = await getJson(socketPath, `/api/rooms/${created.body.roomId}/chat`);
+    const history = await getJson<RoomChat>(socketPath, `/api/rooms/${created.body.roomId}/chat`);
     assert.equal(history.status, 200);
     assert.deepEqual(
       history.body.messages.map((message) => message.name),
@@ -431,9 +305,9 @@ test('account chat uses the current profile and refreshes active room peers afte
 });
 
 test('chat API returns not found when posting to a missing room', async (t) => {
-  const { dir, socketPath } = getSocketPath();
+  const { dir, socketPath } = socketDir();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const logs = { stdout: '', stderr: '' };
+  const logs: ServerLogs = { stdout: '', stderr: '' };
   const child = startServer(socketPath, databaseUrl, logs);
   t.after(() => {
     child.kill('SIGTERM');
@@ -459,9 +333,9 @@ test('chat API returns not found when posting to a missing room', async (t) => {
 });
 
 test('chat API still protects active voice peer identities', async (t) => {
-  const { dir, socketPath } = getSocketPath();
+  const { dir, socketPath } = socketDir();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const logs = { stdout: '', stderr: '' };
+  const logs: ServerLogs = { stdout: '', stderr: '' };
   const child = startServer(socketPath, databaseUrl, logs);
   t.after(() => {
     child.kill('SIGTERM');
@@ -472,7 +346,7 @@ test('chat API still protects active voice peer identities', async (t) => {
   try {
     await waitForHealthz(socketPath);
 
-    const created = await postJson(socketPath, '/api/rooms', {});
+    const created = await postJson<RoomCreated>(socketPath, '/api/rooms', {});
     assert.equal(created.status, 201);
 
     const voice = openWs(socketPath);
@@ -484,7 +358,7 @@ test('chat API still protects active voice peer identities', async (t) => {
       name: 'Alice'
     });
 
-    const spoofed = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
+    const spoofed = await postJson<RoomMessageAnswer>(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
       name: 'Mallory',
       peerId: PEER_ID,
       text: 'spoof'
@@ -492,7 +366,7 @@ test('chat API still protects active voice peer identities', async (t) => {
     assert.equal(spoofed.status, 403);
     assert.equal(spoofed.body.error, 'Invalid peer session');
 
-    const valid = await postJson(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
+    const valid = await postJson<RoomMessageAnswer>(socketPath, `/api/rooms/${created.body.roomId}/chat`, {
       name: 'Alice',
       peerId: PEER_ID,
       sessionToken: TOKEN,
@@ -511,9 +385,9 @@ test('chat API still protects active voice peer identities', async (t) => {
 });
 
 test('chat API rate limits room-link posts per room and IP', async (t) => {
-  const { dir, socketPath } = getSocketPath();
+  const { dir, socketPath } = socketDir();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const logs = { stdout: '', stderr: '' };
+  const logs: ServerLogs = { stdout: '', stderr: '' };
   const child = startServer(socketPath, databaseUrl, logs, {
     ROOM_CHAT_RATE_LIMIT: '1',
     ROOM_CHAT_RATE_WINDOW_MS: '60000'
@@ -527,7 +401,7 @@ test('chat API rate limits room-link posts per room and IP', async (t) => {
   try {
     await waitForHealthz(socketPath);
 
-    const registered = await postJson(socketPath, '/api/auth/register', {
+    const registered = await postJson<SignedIn>(socketPath, '/api/auth/register', {
       login: 'rate-chat-user',
       password: 'password123',
       passwordConfirm: 'password123'
@@ -535,10 +409,10 @@ test('chat API rate limits room-link posts per room and IP', async (t) => {
     assert.equal(registered.status, 201);
     const sessionCookie = registered.setCookie;
 
-    const created = await postJson(socketPath, '/api/rooms', { isStatic: false });
+    const created = await postJson<RoomCreated>(socketPath, '/api/rooms', { isStatic: false });
     assert.equal(created.status, 201);
 
-    const first = await postJson(
+    const first = await postJson<RoomMessageAnswer>(
       socketPath,
       `/api/rooms/${created.body.roomId}/chat`,
       {
@@ -549,7 +423,7 @@ test('chat API rate limits room-link posts per room and IP', async (t) => {
     );
     assert.equal(first.status, 201);
 
-    const second = await postJson(
+    const second = await postJson<RoomMessageAnswer>(
       socketPath,
       `/api/rooms/${created.body.roomId}/chat`,
       {
@@ -570,9 +444,9 @@ test('chat API rate limits room-link posts per room and IP', async (t) => {
 });
 
 test('manual static-room chat scenario survives API restart without voice join', async (t) => {
-  const { dir, socketPath } = getSocketPath();
+  const { dir, socketPath } = socketDir();
   const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const logs = { stdout: '', stderr: '' };
+  const logs: ServerLogs = { stdout: '', stderr: '' };
   let child = startServer(socketPath, databaseUrl, logs);
   t.after(() => {
     child.kill('SIGTERM');
@@ -583,23 +457,28 @@ test('manual static-room chat scenario survives API restart without voice join',
   try {
     await waitForHealthz(socketPath);
 
-    const registered = await postJson(socketPath, '/api/auth/register', {
+    const registered = await postJson<SignedIn>(socketPath, '/api/auth/register', {
       login: 'manual-owner',
       password: 'password123'
     });
     assert.equal(registered.status, 201);
     const sessionCookie = registered.setCookie;
 
-    const created = await postJson(socketPath, '/api/rooms', { isStatic: true }, { cookie: sessionCookie });
+    const created = await postJson<RoomCreated>(
+      socketPath,
+      '/api/rooms',
+      { isStatic: true },
+      { cookie: sessionCookie }
+    );
     assert.equal(created.status, 201);
     assert.equal(created.body.isStatic, true);
 
-    const statusBeforeRestart = await getJson(socketPath, `/api/rooms/${created.body.roomId}`);
+    const statusBeforeRestart = await getJson<RoomStatus>(socketPath, `/api/rooms/${created.body.roomId}`);
     assert.equal(statusBeforeRestart.status, 200);
     assert.equal(statusBeforeRestart.body.exists, true);
     assert.equal(statusBeforeRestart.body.isStatic, true);
 
-    const posted = await postJson(
+    const posted = await postJson<RoomMessageAnswer>(
       socketPath,
       `/api/rooms/${created.body.roomId}/chat`,
       {
@@ -614,20 +493,20 @@ test('manual static-room chat scenario survives API restart without voice join',
     child.kill('SIGTERM');
     await new Promise((resolve) => child.once('exit', resolve));
 
-    const restartLogs = { stdout: '', stderr: '' };
+    const restartLogs: ServerLogs = { stdout: '', stderr: '' };
     child = startServer(socketPath, databaseUrl, restartLogs);
     await waitForHealthz(socketPath);
 
-    const statusAfterRestart = await getJson(socketPath, `/api/rooms/${created.body.roomId}`);
+    const statusAfterRestart = await getJson<RoomStatus>(socketPath, `/api/rooms/${created.body.roomId}`);
     assert.equal(statusAfterRestart.status, 200);
     assert.equal(statusAfterRestart.body.exists, true);
     assert.equal(statusAfterRestart.body.isStatic, true);
 
-    const chatAfterRestart = await getJson(socketPath, `/api/rooms/${created.body.roomId}/chat`);
+    const chatAfterRestart = await getJson<RoomChat>(socketPath, `/api/rooms/${created.body.roomId}/chat`);
     assert.equal(chatAfterRestart.status, 200);
     assert.equal(chatAfterRestart.body.messages.length, 1);
-    assert.equal(chatAfterRestart.body.messages[0].id, posted.body.message.id);
-    assert.equal(chatAfterRestart.body.messages[0].text, 'Сообщение до перезапуска API');
+    assert.equal(chatAfterRestart.body.messages[0]?.id, posted.body.message.id);
+    assert.equal(chatAfterRestart.body.messages[0]?.text, 'Сообщение до перезапуска API');
   } catch (error) {
     if (logs.stderr.trim()) {
       console.error('Server stderr:\n', logs.stderr.trimEnd());

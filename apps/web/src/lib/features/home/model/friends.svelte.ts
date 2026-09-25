@@ -16,11 +16,13 @@ import {
   type OutgoingRequest,
   type PublicUser,
   type SendRequestStatus,
-  type Relationship
+  type Relationship,
+  blockUser as apiBlockUser,
+  unblockUser as apiUnblockUser
 } from '$lib/api/friends';
-import { blockUser as apiBlockUser, unblockUser as apiUnblockUser } from '$lib/api/blocks';
 import {
   deleteDirectMessage,
+  directMessageFromView,
   editDirectMessage,
   fetchThread,
   fetchThreadPage,
@@ -667,7 +669,7 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
       break;
     }
     case 'dm.message': {
-      const { message } = event.payload;
+      const message = directMessageFromView(event.payload.message);
       const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
       // The message itself ends that friend's "typing" state.
       if (message.senderId !== selfId) dmTyping.clear(message.senderId);
@@ -718,7 +720,7 @@ function handleRealtimeEvent(event: RealtimeEvent): void {
       break;
     }
     case 'dm.message.edited': {
-      const { message } = event.payload;
+      const message = directMessageFromView(event.payload.message);
       const peerId = message.senderId === selfId ? message.recipientId : message.senderId;
       threadResync.recordUpsert(peerId, message);
       applyEditedMessage(message);

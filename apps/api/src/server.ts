@@ -1,3 +1,4 @@
+import type { RoomPeerMessage } from './realtime/legacy-events.ts';
 import crypto from 'node:crypto';
 import type http from 'node:http';
 import fastify, { LogController } from 'fastify';
@@ -19,7 +20,11 @@ import { createNotificationDispatch } from './domains/notifications/notification
 import { createAccountLifecycle } from './domains/account/account-lifecycle.ts';
 import { createRoomLifecycle } from './domains/rooms/room-lifecycle.ts';
 import { startMaintenanceTimers } from './platform/maintenance.ts';
-import { createServiceRegistry, resolveCursorHmacKeys as resolveCursorHmacKeysFor } from './app/service-registry.ts';
+import {
+  createServiceRegistry,
+  resolveCursorHmacKeys as resolveCursorHmacKeysFor,
+  type StoreOverrides
+} from './app/service-registry.ts';
 import { installGracefulShutdown } from './app/graceful-shutdown.ts';
 import { createRequestLog } from './platform/http/request-log.ts';
 import { liveKitConnectSources, securityHeaders } from './platform/http/security-headers.ts';
@@ -49,7 +54,7 @@ import {
   recordHttpRequest,
   renderPrometheus
 } from './lib/metrics.ts';
-import { registerHttpKit } from './platform/http/http-kit.ts';
+import { AJV_OPTIONS, failure, registerHttpKit } from './platform/http/http-kit.ts';
 import { registerOpsRoutes } from './domains/ops/ops.routes.ts';
 import { registerAdmissionRoutes } from './domains/admission/admission.routes.ts';
 import { gatePrincipalForPeer } from './domains/admission/gate-principal.ts';
@@ -80,17 +85,16 @@ import { tokensMatch } from './platform/crypto/tokens-match.ts';
 import { createDesktopReleaseService } from './domains/ops/desktop-release.service.ts';
 import { getLiveKitRoomName as liveKitRoomName } from './domains/admission/livekit-token-binding.mts';
 import { isCrossOriginCookieWrite, isCrossOriginWebSocket } from './platform/http/origin-guard.mts';
-import { registerMembershipRoutes } from './domains/membership/membership-routes.ts';
-import { registerDmHistoryRoutes } from './domains/messaging/dm-history-routes.ts';
-import { registerRoomHistoryRoutes } from './domains/messaging/room-history-routes.ts';
+import { registerMembershipRoutes } from './domains/membership/membership.routes.ts';
+import { registerHistoryRoutes } from './domains/messaging/history.routes.ts';
 import { createContentRepository } from './domains/messaging/content-repository.ts';
 import { createReplyRepository } from './domains/messaging/reply-repository.ts';
-import { registerReactionRoutes } from './domains/messaging/reaction-routes.ts';
-import { registerPinRoutes } from './domains/messaging/pin-routes.ts';
-import { registerNotificationRoutes } from './domains/notifications/notification-routes.ts';
-import { registerModerationRoutes } from './domains/moderation/moderation-routes.ts';
+import { registerReactionRoutes } from './domains/messaging/reactions.routes.ts';
+import { registerPinRoutes } from './domains/messaging/pins.routes.ts';
+import { registerNotificationRoutes } from './domains/notifications/notifications.routes.ts';
+import { registerModerationRoutes } from './domains/moderation/moderation.routes.ts';
 import { MAX_UPLOAD_BYTES } from './domains/media/media-service.ts';
-import { registerMediaRoutes } from './domains/media/media-routes.ts';
+import { registerMediaRoutes } from './domains/media/media.routes.ts';
 import { createRuntimeReadinessProvider } from './platform/runtime-readiness.ts';
 import { registerCapabilityRoutes } from './platform/capability-routes.ts';
 import { mentionUserIdsFromContent } from '@voice-room/shared/mentions';
@@ -481,7 +485,7 @@ const peerModeration = createPeerModerationService({
   revokeForServerMute: (input) => admissionService!.revokeForServerMute(input),
   setParticipantMuted: (roomId, peerId, muted) => setLiveKitParticipantMuted(roomId, peerId, muted),
   announcePeerUpdated: (room, peer) => {
-    const event = { type: 'peer-updated', peer: publicPeer(peer) };
+    const event: RoomPeerMessage = { type: 'peer-updated', peer: publicPeer(peer) };
     broadcast(room, event);
     roomRuntime?.mirrorLegacyRoomEvent(room.id, event);
   },
@@ -754,15 +758,15 @@ function createApiApp({
   // somewhere to observe it: Fastify's own logger is silent by default.
   logger = null
 }: {
-  store?: unknown;
-  users?: unknown;
-  friends?: unknown;
-  notifications?: unknown;
-  pushes?: unknown;
-  push?: unknown;
-  avatars?: unknown;
-  liveKitCredentials?: unknown;
-  membershipServicesOverride?: unknown;
+  store?: StoreOverrides['store'];
+  users?: StoreOverrides['users'];
+  friends?: StoreOverrides['friends'];
+  notifications?: StoreOverrides['notifications'];
+  pushes?: StoreOverrides['pushes'];
+  push?: StoreOverrides['push'];
+  avatars?: StoreOverrides['avatars'];
+  liveKitCredentials?: StoreOverrides['liveKitCredentials'];
+  membershipServicesOverride?: StoreOverrides['membershipServicesOverride'];
   readinessProviderOverride?: typeof readinessProvider | null;
   realtimeReconnectLeaseMs?: number;
   realtimeNow?: () => number;
@@ -793,7 +797,8 @@ function createApiApp({
     // is replaced rather than trusted into the log stream.
     genReqId: (request) => normalizeRequestId(request.headers['x-request-id']) || newRequestId(),
     logger: createFastifyLoggerOptions(),
-    trustProxy: TRUST_PROXY
+    trustProxy: TRUST_PROXY,
+    ajv: AJV_OPTIONS
   });
   const appLogger = logger || app.log;
   setProcessLogger(appLogger);
@@ -813,12 +818,15 @@ function createApiApp({
     if (isCrossOriginWebSocket(request.raw)) {
       // The refused handshake socket is not an HTTP connection the server
       // tracks, so it has to be closed explicitly once the 403 is written.
-      reply.code(403).header('Connection', 'close').send({ ok: false, error: 'Cross-origin request rejected' });
+      reply
+        .code(403)
+        .header('Connection', 'close')
+        .send(failure('Cross-origin request rejected', { code: 'cross_origin_rejected' }));
       reply.raw.once('finish', () => request.raw.socket?.destroySoon?.());
       return;
     }
     if (isCrossOriginCookieWrite(request.raw, Boolean(getSessionToken(request.raw)))) {
-      reply.code(403).send({ ok: false, error: 'Cross-origin request rejected' });
+      reply.code(403).send(failure('Cross-origin request rejected', { code: 'cross_origin_rejected' }));
       return;
     }
     done();
@@ -922,7 +930,10 @@ function createApiApp({
   });
 
   app.setNotFoundHandler((request, reply) => {
-    reply.headers(baseHeaders()).code(404).send({ ok: false, error: 'Not found' });
+    reply
+      .headers(baseHeaders())
+      .code(404)
+      .send(failure('Not found', { code: 'not_found' }));
   });
 
   registerAdmissionRoutes(app, apiContext, admissionService);
@@ -990,102 +1001,70 @@ function createApiApp({
     desktopRelease: desktopReleaseService
   });
 
-  registerCapabilityRoutes({
-    app,
-    readinessProvider: activeReadinessProvider
-  });
+  registerCapabilityRoutes(app, activeReadinessProvider);
 
   const memberships = getMembershipServices();
   if (memberships) {
-    registerMembershipRoutes({
-      app,
-      directoryService: memberships.directory,
-      membershipService: memberships.service,
-      resolveUser: resolveSessionUser,
-      membershipEnabled: () => {
+    registerMembershipRoutes(app, apiContext, {
+      directory: memberships.directory,
+      memberships: memberships.service,
+      enabled: () => {
         try {
           return activeReadinessProvider.getSnapshot()?.features?.membership === true;
         } catch {
           return false;
         }
       },
-      prepareLeave: ({ roomId, user }) => roomRuntime!.disconnectAccountFromRoom({ roomId, userId: user.id }),
-      onLeft: async ({ roomId, user }) => {
-        await getRoomStore().removeRoomBookmarkForUser(user.id, roomId);
+      prepareLeave: ({ roomId, userId }) => roomRuntime!.disconnectAccountFromRoom({ roomId, userId }),
+      onLeft: async ({ roomId, userId }) => {
+        await getRoomStore().removeRoomBookmarkForUser(userId, roomId);
         roomRuntime?.invalidateRecipientCache(roomId);
       }
     });
   }
 
-  registerRoomHistoryRoutes({
-    app,
-    historyService: getHistoryServices().room,
-    resolveRoomAccess: async ({ request, roomId }) => {
-      const session = await resolveSessionUser(request);
-      const authorized =
-        Boolean(session?.user?.id) && (await getRoomStore().canUserReadRoomChat(roomId, session!.user!.id));
-      return { authorized, statusCode: session ? 403 : 401 };
-    }
-  });
-  registerDmHistoryRoutes({
-    app,
-    historyService: getHistoryServices().dm,
-    resolveUser: resolveSessionUser
+  registerHistoryRoutes(app, apiContext, {
+    rooms: getHistoryServices().room,
+    directs: getHistoryServices().dm,
+    canReadRoom: (roomId, userId) => getRoomStore().canUserReadRoomChat(roomId, userId)
   });
 
   const reactions = getReactionServices();
   if (reactions) {
-    registerReactionRoutes({
-      app,
-      reactionService: reactions.service,
-      resolveUser: resolveSessionUser
-    });
+    registerReactionRoutes(app, apiContext, { reactions: reactions.service });
   }
 
   const pins = getPinServices();
   if (pins) {
-    registerPinRoutes({
-      app,
-      pinService: pins.service,
-      resolveRoomAccess: async ({ request, roomId, action }) => {
-        const session = await resolveSessionUser(request);
-        const viewer = session?.user || null;
-        const authorized =
-          Boolean(viewer?.id) &&
-          (await getRoomStore()[action === 'write' ? 'canUserReactInRoom' : 'canUserReadRoomChat'](roomId, viewer!.id));
-        return { authorized, statusCode: session ? 403 : 401, viewer };
-      }
+    registerPinRoutes(app, apiContext, {
+      pins: pins.service,
+      canRead: (roomId, userId) => getRoomStore().canUserReadRoomChat(roomId, userId),
+      canWrite: (roomId, userId) => getRoomStore().canUserReactInRoom(roomId, userId)
     });
   }
 
   const notificationDomain = getNotificationServices();
   if (notificationDomain) {
-    registerNotificationRoutes({
-      app,
-      service: notificationDomain.service,
-      resolveUser: async (request) => (await resolveSessionUser(request))?.user || null,
+    registerNotificationRoutes(app, apiContext, {
+      notifications: notificationDomain.service,
       enabled: () => release250FeatureEnabled('engagement')
     });
   }
 
   const moderation = getModerationServices();
   if (moderation) {
-    registerModerationRoutes({
-      app,
-      moderationService: moderation.service,
-      messageModerationService: moderation.messageService,
-      resolveUser: async (request) => (await resolveSessionUser(request))?.user || null,
+    registerModerationRoutes(app, apiContext, {
+      moderation: moderation.service,
+      messages: moderation.messageService,
       enabled: () => release250FeatureEnabled('moderationCenter')
     });
   }
 
   const media = getMediaServices();
   if (media) {
-    registerMediaRoutes({
-      app,
-      mediaService: media.service,
-      mediaVisibilityService: media.visibility,
-      resolveUser: resolveSessionUser,
+    registerMediaRoutes(app, apiContext, {
+      media: media.service,
+      visibility: media.visibility,
       uploadsEnabled: () => release250FeatureEnabled('mediaUploads'),
       readsEnabled: () => release250FeatureEnabled('mediaRead')
     });

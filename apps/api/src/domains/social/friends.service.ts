@@ -2,42 +2,65 @@
 // change that another person should see reaches them as an account event and,
 // where it matters, a push.
 
+import type { DirectMessage as StoredDirectMessage } from '../../lib/friend-store.ts';
+import type { AccountMessage } from '../../realtime/account-events.ts';
+import type {
+  FriendLastMessage,
+  IncomingRequest,
+  OutgoingRequest,
+  Relationship,
+  SendRequestStatus
+} from '@voice-room/shared/contracts/social';
+import type { PublicUser } from '@voice-room/shared/contracts/users';
 import type { PushPayload } from '../notifications/notification-dispatch.ts';
 import { notificationActor, isActiveAccount, type SocialUser } from './social-views.ts';
 
 type Status<T extends string> = T extends string ? { status: T } : never;
 
 interface FriendEntry {
-  user: { id: string; [key: string]: unknown };
-  friendsSince?: unknown;
-  unreadCount?: number;
-  lastMessage?: unknown;
+  user: PublicUser;
+  friendsSince: number | null;
+  unreadCount: number;
+  lastMessage: FriendLastMessage | null;
 }
 
 export interface FriendStore {
   listFriends(userId: string): Promise<FriendEntry[]>;
   countIncomingRequests(userId: string): Promise<number>;
-  searchUsers(input: { query: string; excludeUserId: string }): Promise<{ id: string; [key: string]: unknown }[]>;
+  searchUsers(input: { query: string; excludeUserId: string }): Promise<PublicUser[]>;
   getFriendIds(userId: string): Promise<string[]>;
-  listRequests(
-    userId: string
-  ): Promise<{ incoming: { user: { id: string } }[]; outgoing: { user: { id: string } }[]; [key: string]: unknown }>;
+  listRequests(userId: string): Promise<{ incoming: IncomingRequest[]; outgoing: OutgoingRequest[] }>;
   sendRequest(input: {
     requesterId: string;
     addresseeLogin: string;
     addresseeUserId: string;
-  }): Promise<{ status: string; user?: { id: string; [key: string]: unknown }; requestId?: string }>;
+  }): Promise<
+    | Status<'not_found' | 'self' | 'blocked'>
+    | { status: 'accepted'; user: PublicUser }
+    | { status: 'already_friends' | 'already_sent'; user: PublicUser }
+    | { status: 'sent'; user: PublicUser; requestId: string }
+  >;
   respondRequest(input: {
     userId: string;
     requestId: string;
     action: 'accept' | 'decline';
-  }): Promise<{ status: string; requesterId?: string; user?: unknown }>;
-  cancelRequest(input: { userId: string; requestId: string }): Promise<{ status: string; addresseeId?: string }>;
-  removeFriend(input: { userId: string; friendId: string }): Promise<{ status: string }>;
+  }): Promise<
+    | Status<'not_found'>
+    | { status: 'blocked' | 'declined'; requesterId: string }
+    | { status: 'accepted'; requesterId: string; user: PublicUser }
+  >;
+  cancelRequest(input: {
+    userId: string;
+    requestId: string;
+  }): Promise<Status<'not_found'> | { status: 'cancelled'; addresseeId: string }>;
+  removeFriend(input: { userId: string; friendId: string }): Promise<Status<'removed' | 'not_found'>>;
   listBlockedUserIds(userId: string): Promise<string[]>;
-  listBlockedUsers(userId: string): Promise<unknown[]>;
-  blockUser(input: { userId: string; targetId: string }): Promise<{ status: string; unfriended?: boolean }>;
-  unblockUser(input: { userId: string; targetId: string }): Promise<{ status: string }>;
+  listBlockedUsers(userId: string): Promise<PublicUser[]>;
+  blockUser(input: {
+    userId: string;
+    targetId: string;
+  }): Promise<Status<'not_found' | 'invalid'> | { status: 'blocked' | 'already_blocked'; unfriended: boolean }>;
+  unblockUser(input: { userId: string; targetId: string }): Promise<Status<'unblocked' | 'not_found' | 'invalid'>>;
   areFriends(a: string, b: string): Promise<boolean>;
   isBlockedBetween(a: string, b: string): Promise<boolean>;
 }
@@ -51,9 +74,9 @@ export interface FriendsDeps {
     recipientId: string;
     body: string;
     metadata: Record<string, unknown>;
-  }): Promise<unknown>;
+  }): Promise<StoredDirectMessage>;
   isOnline(userId: string): boolean;
-  notifyUser(userId: string, event: Record<string, unknown>): void;
+  notifyUser(userId: string, event: AccountMessage): void;
   queuePush(userId: string, payload: PushPayload, context?: Record<string, unknown>): Promise<unknown>;
   ringLimiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
   ringTtlMs: number;
@@ -118,7 +141,7 @@ export function createFriendsService(deps: FriendsDeps) {
     const friendSet = new Set(friendIds);
     const outgoing = new Set(requests.outgoing.map((row) => row.user.id));
     const incoming = new Set(requests.incoming.map((row) => row.user.id));
-    const relationship = (id: string) =>
+    const relationship = (id: string): Relationship =>
       friendSet.has(id) ? 'friend' : outgoing.has(id) ? 'outgoing' : incoming.has(id) ? 'incoming' : 'none';
     return results.map((candidate) => ({
       user: candidate,
@@ -135,10 +158,7 @@ export function createFriendsService(deps: FriendsDeps) {
   async function sendRequest(
     requester: SocialUser,
     target: { userId: string; login: string }
-  ): Promise<
-    | { status: 'sent' | 'accepted' | 'already_friends' | 'already_sent'; user: unknown }
-    | Status<'not_found' | 'self' | 'blocked'>
-  > {
+  ): Promise<{ status: SendRequestStatus; user: PublicUser } | Status<'not_found' | 'self' | 'blocked'>> {
     const result = await deps
       .friends()
       .sendRequest({ requesterId: requester.id, addresseeLogin: target.login, addresseeUserId: target.userId });
@@ -150,12 +170,13 @@ export function createFriendsService(deps: FriendsDeps) {
       case 'already_friends':
       case 'already_sent':
         return { status: result.status, user: result.user };
+      case 'accepted':
+        announceAccepted(result.user.id, requester, { userId: requester.id, relationship: 'friend' });
+        return { status: 'accepted', user: result.user };
+      case 'sent':
+        break;
     }
-    const addressee = result.user as { id: string };
-    if (result.status === 'accepted') {
-      announceAccepted(addressee.id, requester, { userId: requester.id, relationship: 'friend' });
-      return { status: 'accepted', user: result.user };
-    }
+    const addressee = result.user;
     deps.notifyUser(addressee.id, { type: 'friend-request' });
     deps.notifyUser(addressee.id, {
       type: 'notification.friend.request',
@@ -171,11 +192,11 @@ export function createFriendsService(deps: FriendsDeps) {
     user: SocialUser,
     requestId: string,
     action: 'accept' | 'decline'
-  ): Promise<{ status: 'accepted'; user: unknown } | Status<'declined' | 'not_found' | 'blocked'>> {
+  ): Promise<{ status: 'accepted'; user: PublicUser } | Status<'declined' | 'not_found' | 'blocked'>> {
     const result = await deps.friends().respondRequest({ userId: user.id, requestId, action });
     if (result.status === 'not_found') return { status: 'not_found' };
     if (result.status === 'accepted') {
-      announceAccepted(result.requesterId as string, user, { userId: user.id, relationship: 'friend', requestId });
+      announceAccepted(result.requesterId, user, { userId: user.id, relationship: 'friend', requestId });
       return { status: 'accepted', user: result.user };
     }
     if (result.status === 'blocked') return { status: 'blocked' };
@@ -185,7 +206,7 @@ export function createFriendsService(deps: FriendsDeps) {
   async function cancel(userId: string, requestId: string): Promise<Status<'cancelled' | 'not_found'>> {
     const result = await deps.friends().cancelRequest({ userId, requestId });
     if (result.status === 'not_found') return { status: 'not_found' };
-    deps.notifyUser(result.addresseeId as string, { type: 'friend-request' });
+    deps.notifyUser(result.addresseeId, { type: 'friend-request' });
     return { status: 'cancelled' };
   }
 
@@ -209,7 +230,7 @@ export function createFriendsService(deps: FriendsDeps) {
   async function block(
     userId: string,
     targetId: string
-  ): Promise<{ status: 'applied'; result: string } | Status<'not_found' | 'invalid'>> {
+  ): Promise<{ status: 'applied'; result: 'blocked' | 'already_blocked' } | Status<'not_found' | 'invalid'>> {
     const result = await deps.friends().blockUser({ userId, targetId });
     if (result.status === 'not_found') return { status: 'not_found' };
     if (result.status === 'invalid') return { status: 'invalid' };

@@ -11,9 +11,10 @@ import {
 } from '../../voice-session.svelte';
 import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
-import { ApiRequestError, checkRoomExists, postJson } from '../net/api';
+import { ApiError } from '$lib/api/client';
+import { createRoom } from '$lib/api/rooms';
+import { checkRoomExists } from '../net/api';
 import { postState } from './presence';
-import { createRoomProof } from '../net/pow';
 import { errorMessage, wait } from '../core/utils';
 import { extractRoomId, rotateStoredPeerSession } from '../core/session';
 import { isRoomEmbedded } from '../core/embed';
@@ -198,9 +199,7 @@ export async function createRoomFromStart(): Promise<void> {
 
   startUi.createRoomLoading = true;
   try {
-    const proof = await createRoomProof();
-    const room = await postJson('/api/rooms', { proof });
-    openRoom(room.roomId);
+    openRoom(await createRoom());
   } catch (error) {
     log.error('room action failed', errorContext(error));
     showToast(errorMessage(error) || 'Не удалось создать комнату');
@@ -401,7 +400,7 @@ async function performJoinRoom(generation: number): Promise<void> {
       return;
     }
     log.error('room action failed', errorContext(error));
-    const banned = error instanceof ApiRequestError && error.code === 'room_banned';
+    const banned = error instanceof ApiError && error.code === 'room_banned';
     if (!banned) showToast(formatJoinError(error));
     setVoiceConnectionStatus(isVoiceRouteError(error) ? 'no-route' : 'error');
     if (voiceJoinSent && state.roomId && state.peerId && state.sessionToken) {

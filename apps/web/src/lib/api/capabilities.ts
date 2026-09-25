@@ -1,5 +1,5 @@
-import { fetchJson } from './http';
-
+import type { Capabilities } from '@voice-room/shared/contracts/ops';
+import { api } from './client';
 export type CapabilityKey =
   | 'historyCursor'
   | 'readCursor'
@@ -13,17 +13,13 @@ export type CapabilityKey =
 
 export type CapabilityFeatures = Record<CapabilityKey, boolean>;
 
-export interface CapabilityResponse {
-  contractVersion: 1;
-  apiVersion: string;
-  features: Partial<CapabilityFeatures>;
-}
+export type CapabilityResponse = Capabilities;
 
 let cache: Promise<CapabilityResponse> | null = null;
 
 export async function loadCapabilities(): Promise<CapabilityResponse> {
   if (!cache) {
-    cache = fetchJson<CapabilityResponse>('/api/capabilities');
+    cache = api.get<CapabilityResponse>('/api/capabilities');
   }
   return cache;
 }

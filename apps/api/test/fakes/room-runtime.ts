@@ -2,6 +2,8 @@
 // overrides what it drives. Store and registry are partial fakes typed as the
 // real interfaces.
 
+import { publicLobbyRoom, publicPeer, type StoredRoom } from '../../src/domains/rooms/room-views.ts';
+import { publicChatMessage } from '../../src/domains/messaging/room-chat-views.ts';
 import type { ConnectionRegistry } from '../../src/realtime/registry.ts';
 import type { RoomRuntimeDeps, RuntimeRoomStore } from '../../src/realtime/room-runtime.ts';
 import { fake } from './index.ts';
@@ -43,9 +45,9 @@ export function runtimeDeps({ store = {}, wsRegistry = {}, ...overrides }: Runti
     }),
     getRoomStore: () => roomStore,
     getRoom: async () => null,
-    publicPeer: (peer: unknown) => peer,
-    publicLobbyRoom: (room: unknown) => room,
-    publicChatMessage: (message: unknown) => message,
+    publicPeer,
+    publicLobbyRoom: (room: StoredRoom) => publicLobbyRoom(room, 0),
+    publicChatMessage,
     broadcast() {},
     closePeer() {},
     avatarColorForPeerId: () => 'blue',

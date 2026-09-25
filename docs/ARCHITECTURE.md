@@ -52,7 +52,17 @@ Rules:
   both the HTTP route and the WebSocket path call.
 - Cross-cutting request checks (origin/CSRF, request ids, security headers)
   are global Fastify hooks, not per-route calls.
-- Route input and output are TypeBox schemas registered with Fastify.
+- Route input and output are TypeBox schemas registered with Fastify. The
+  schemas live in `packages/shared/src/contracts/<domain>.ts`; the web client
+  types its calls from the same module, so a payload changes in one place.
+- Every failure is `{ ok: false, error, code }` with `code` from
+  `contracts/errors.ts` (`ERROR_CODES`). The web shows the text for the code
+  (`lib/api/error-texts.ts`, a `Record<ErrorCode, string>`), so adding a code
+  without its text fails `npm run check`.
+- WebSocket frames are typed by `contracts/realtime.ts`: `ClientCommands` and
+  `ServerEvents` map each `type` to its payload. The server builds frames with
+  `buildServerEnvelope`, the handler dispatches commands with an exhaustive
+  `switch`, and the web receives `ServerEvent`.
 - Route modules receive an explicit `ApiContext` plus their dependencies; no
   new module-level singletons.
 - Configuration is read only by `app/config.ts` (`readApiConfig(env)`).
@@ -67,8 +77,6 @@ copy the old pattern into new code.
 | Raw `pg` queries with untyped rows; Kysely is wired (`platform/db/kysely.ts`, generated `schema.ts`) but no repository uses it yet | `lib/*-store.ts`, `domains/**/*-repository.ts` | follow the neighbouring repository until the Kysely move lands |
 | Each store and several repositories open their own pool | `lib/db.ts` callers, `app/service-registry.ts` | pass an existing pool; never call `createDbPool` in a module |
 | `server.ts` builds services at import time and keeps mutable module state | `server.ts`, `app/service-registry.ts` | add dependencies through the registry or a route module's deps |
-| Nine route modules have no schemas and take `{ app, ... }` | `membership-routes`, `media-routes`, `message-routes`, `pin-routes`, `reaction-routes`, `moderation-routes`, `notification-routes`, `room-history-routes`, `dm-history-routes` | new routes follow `rooms.routes.ts`: `register(app, ctx, deps)` with TypeBox |
-| HTTP response shapes are duplicated by hand in `apps/web/src/lib/api/*`; WebSocket events are `{ type: string; payload: Record<string, unknown> }` | web `lib/api`, `packages/shared/src/realtime.ts` | keep both sides in the same change until shared contracts land |
 | Large modules | `lib/room-store.ts`, `realtime/room-runtime.ts`, `server.ts` | add new behaviour in a new domain module, not these files |
 
 ## 5. Web layering

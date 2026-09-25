@@ -1,9 +1,9 @@
-import type { RoomPeer } from '$lib/api/rooms';
+import type { RoomPeerSummary } from '@voice-room/shared/contracts/realtime';
 import type { RoomRealtimeSummary } from '$lib/api/realtime';
 import { untrack } from 'svelte';
 
 export const roomPresence = $state<{
-  peersByRoomId: Record<string, RoomPeer[]>;
+  peersByRoomId: Record<string, RoomPeerSummary[]>;
   hiddenPeerCountByRoomId: Record<string, number>;
   unreadCountByRoomId: Record<string, number>;
 }>({
@@ -58,7 +58,7 @@ export function beginRoomChatReadSession(roomId: string): () => void {
   };
 }
 
-export function setRoomPresence(roomId: string, peers: RoomPeer[], hiddenPeerCount = 0): void {
+export function setRoomPresence(roomId: string, peers: RoomPeerSummary[], hiddenPeerCount = 0): void {
   roomPresence.peersByRoomId = { ...roomPresence.peersByRoomId, [roomId]: peers };
   roomPresence.hiddenPeerCountByRoomId = {
     ...roomPresence.hiddenPeerCountByRoomId,

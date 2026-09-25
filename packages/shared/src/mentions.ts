@@ -4,7 +4,8 @@ export const MENTIONS_CONTRACT_VERSION = 1 as const;
 export const MAX_MENTIONS_PER_MESSAGE = 5 as const;
 export const MAX_MENTION_CANDIDATES = 8 as const;
 
-export type MentionNormalization = { ok: true; userIds: string[] } | { ok: false; code: string };
+export type MentionRefusal = 'invalid_mentions' | 'invalid_mention_target' | 'self_mention' | 'too_many_mentions';
+export type MentionNormalization = { ok: true; userIds: string[] } | { ok: false; code: MentionRefusal };
 
 function cleanId(value: unknown, max = 128): string {
   if (typeof value !== 'string') return '';

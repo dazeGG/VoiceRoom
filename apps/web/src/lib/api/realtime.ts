@@ -1,120 +1,29 @@
 // App-level WebSocket at /api/ws: account events, room summaries, preview/detail, voice.
 
-import type { DirectMessage } from './dm';
-import type { PublicUser } from './friends';
-import type { ChatMessage, RoomPeer, RoomSummary } from './rooms';
-import type { NotificationRealtimeEvent } from '../shared/notifications';
-import type { ReactionSummary } from '@voice-room/shared/reactions';
-import type { LoginAlert } from '@voice-room/shared/account-security';
+import type {
+  ClientCommands,
+  ClientCommandType,
+  RoomRealtimeSummary,
+  RoomSnapshot,
+  ServerEvent,
+  ServerFrame
+} from '@voice-room/shared/contracts/realtime';
 import { isRealtimeBlocked } from '$lib/platform/desktop-boundary';
 import { RealtimeHeartbeatWatchdog } from './realtime-heartbeat';
 
-export type RealtimeAccountEvent =
-  | { type: 'ready'; payload: { userId?: string; guest?: boolean; onlineFriendIds?: string[] } }
-  | { type: 'pong'; payload: { at: number } }
-  | { type: 'friend.presence'; payload: { userId: string; online: boolean } }
-  | { type: 'friend.request'; payload: { direction: 'incoming' | 'outgoing' } }
-  | { type: 'friend.accepted'; payload: { userId: string } }
-  | { type: 'friend.removed'; payload: { userId: string } }
-  | { type: 'friend.updated'; payload: { user: PublicUser } }
-  | {
-      type: 'ring.incoming';
-      payload: { fromUser: PublicUser; room: { id: string; name: string; emoji: string }; expiresAt: number };
-    }
-  | {
-      type: 'notification.settings.updated';
-      payload: { preferences: import('./notifications').NotificationPreferences };
-    }
-  | { type: 'dm.message'; payload: { message: DirectMessage } }
-  | { type: 'dm.message.edited'; payload: { message: DirectMessage } }
-  | { type: 'dm.read'; payload: { userId: string } }
-  | { type: 'dm.message.deleted'; payload: { messageId: string; peerUserId?: string } }
-  | { type: 'dm.typing'; payload: { userId: string; activity?: string } }
-  | { type: 'account.login.new'; payload: { alert: LoginAlert } }
-  | { type: 'account.login.resolved'; payload: { alertId: string; resolution: 'confirmed' | 'denied' } };
-
-export type RoomRealtimeSummary = RoomSummary & {
-  visiblePeers: RoomPeer[];
-  hiddenPeerCount: number;
-  lastMessageAt?: number | null;
-  unreadCount?: number;
-};
-
-export type RoomSnapshot = {
-  roomId: string;
-  room: RoomSummary;
-  peers: RoomPeer[];
-  recentMessages?: ChatMessage[];
-  // Server-side in-memory call clock: when the current voice session started
-  // (first live peer), or null while the room is empty. Never persisted.
-  voiceActiveSince?: number | null;
-  mode: 'preview' | 'active';
-};
-
-export type RealtimeRoomEvent =
-  | { type: 'room.summary'; payload: { room: RoomRealtimeSummary } }
-  | { type: 'room.snapshot'; payload: RoomSnapshot }
-  | { type: 'room.peer.joined'; payload: { roomId: string; peer: RoomPeer } }
-  | { type: 'room.peer.left'; payload: { roomId: string; peerId: string; reason: string } }
-  | { type: 'room.peer.updated'; payload: { roomId: string; peer: RoomPeer } }
-  | { type: 'room.chat.message'; payload: { roomId: string; message: ChatMessage } }
-  | { type: 'room.chat.edited'; payload: { roomId: string; message: ChatMessage } }
-  | { type: 'room.chat.deleted'; payload: { roomId: string; messageId: string } }
-  | {
-      type: 'room.chat.typing';
-      payload: { roomId: string; typist: { peerId: string; userId: string | null; name: string }; activity?: string };
-    }
-  | { type: 'room.updated'; payload: { room: RoomSummary } }
-  | { type: 'room.deleted'; payload: { roomId: string } }
-  | { type: 'room.not_found'; payload: { roomId: string } }
-  | { type: 'room.full'; payload: { roomId: string; maxRoomPeers: number } }
-  | { type: 'room.kicked'; payload: { roomId: string; peerId?: string } }
-  | { type: 'room.banned'; payload: { roomId: string; peerId?: string } };
-
+/** A refusal from the server, as handlers see it. */
 export type RealtimeErrorEvent = { type: 'error'; payload: { code: string; message: string; id?: string } };
-export type ReactionRealtimeEvent = {
-  type: 'reaction.updated';
-  payload: {
-    conversation: { type: 'room' | 'dm'; id: string };
-    roomId?: string;
-    messageId: string;
-    summary: ReactionSummary;
-  };
-};
 
-export type PinsRealtimeEvent = {
-  type: 'room.pins';
-  payload: {
-    roomId: string;
-    action: 'pinned' | 'unpinned';
-    messageId: string;
-    pins: unknown;
-    count: number;
-  };
-};
+/** Every event handlers receive: the server's events plus refusals. */
+export type RealtimeEvent = ServerEvent | RealtimeErrorEvent;
+export type { RoomRealtimeSummary, RoomSnapshot };
 
-export type RealtimeEvent = (
-  | RealtimeAccountEvent
-  | RealtimeRoomEvent
-  | RealtimeErrorEvent
-  | NotificationRealtimeEvent
-  | ReactionRealtimeEvent
-  | PinsRealtimeEvent
-) & { id?: string };
-
-/** @deprecated Use RealtimeEvent */
-export type { RealtimeEvent as RealtimeEventUnion };
-
-type ServerEnvelope = {
-  id?: string;
-  type: string;
-  payload?: Record<string, unknown>;
-  error?: { code: string; message: string };
-};
+/** Sends one command; the payload must be the one its type carries. */
+type Send = <Type extends ClientCommandType>(type: Type, payload: ClientCommands[Type], id?: string) => void;
 
 export interface RealtimeHandle {
   close: () => void;
-  send: (type: string, payload?: Record<string, unknown>, id?: string) => void;
+  send: Send;
 }
 
 const RECONNECT_BASE_MS = 500;
@@ -132,23 +41,22 @@ function wsUrl(): string {
   return `${protocol}//${window.location.host}/api/ws`;
 }
 
-function parseRealtimeEvent(envelope: ServerEnvelope): RealtimeEvent | null {
+/**
+ * The one place a server frame is trusted to match the realtime contract. A
+ * frame without a type is dropped; an error frame becomes an `error` event.
+ */
+function parseRealtimeEvent(frame: unknown): RealtimeEvent | null {
+  const envelope = frame as Partial<ServerFrame> | null;
   if (!envelope || typeof envelope.type !== 'string') return null;
   if (envelope.type === 'error') {
+    const error = (envelope as { error?: { code?: string; message?: string } }).error;
     return {
       type: 'error',
-      payload: {
-        code: envelope.error?.code || 'unknown_error',
-        message: envelope.error?.message || 'WebSocket error',
-        id: envelope.id
-      }
+      payload: { code: error?.code || 'unknown_error', message: error?.message || 'WebSocket error', id: envelope.id }
     };
   }
-  return {
-    type: envelope.type,
-    payload: envelope.payload ?? {},
-    ...(envelope.id ? { id: envelope.id } : {})
-  } as RealtimeEvent;
+  const event = envelope as ServerEvent;
+  return { ...event, payload: event.payload ?? {} } as ServerEvent;
 }
 
 class AppRealtimeConnection {
@@ -179,7 +87,7 @@ class AppRealtimeConnection {
     };
   }
 
-  send(type: string, payload: Record<string, unknown> = {}, id?: string): void {
+  send: Send = (type, payload, id) => {
     if (isRealtimeBlocked()) return;
     const frame = JSON.stringify({ ...(id ? { id } : {}), type, payload });
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
@@ -188,7 +96,7 @@ class AppRealtimeConnection {
       return;
     }
     this.socket.send(frame);
-  }
+  };
 
   private clearTimers(): void {
     if (this.heartbeatTimer) {
@@ -266,13 +174,13 @@ class AppRealtimeConnection {
     };
     socket.onmessage = (event) => {
       if (this.socket !== socket || generation !== this.openGeneration) return;
-      let envelope: ServerEnvelope | null = null;
+      let frame: unknown;
       try {
-        envelope = JSON.parse(String(event.data)) as ServerEnvelope;
+        frame = JSON.parse(String(event.data));
       } catch {
         return;
       }
-      const parsed = parseRealtimeEvent(envelope);
+      const parsed = parseRealtimeEvent(frame);
       if (parsed?.type === 'pong') this.heartbeatWatchdog.recordPong();
       if (parsed) this.emit(parsed);
     };
@@ -366,6 +274,6 @@ export function connectRealtime(onEvent: (event: RealtimeEvent) => void): Realti
   const unsubscribe = conn.subscribe(onEvent);
   return {
     close: unsubscribe,
-    send: (type, payload = {}) => conn.send(type, payload)
+    send: (type, payload) => conn.send(type, payload)
   };
 }

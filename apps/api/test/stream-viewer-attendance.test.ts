@@ -1,4 +1,6 @@
 import test from 'node:test';
+import { publicLobbyRoom, publicPeer, type StoredRoom } from '../src/domains/rooms/room-views.ts';
+import { publicChatMessage } from '../src/domains/messaging/room-chat-views.ts';
 import assert from 'node:assert/strict';
 import {
   clearViewedScreenPeerReferences,
@@ -100,14 +102,9 @@ function createRuntime(room: TestRoom, broadcasts: unknown[], overrides: Runtime
     logger: overrides.logger as RoomRuntimeDeps['logger'],
     getRoomStore: () => store,
     getRoom: overrides.getRoom || (async () => room),
-    publicPeer: (peer: TestPeer) => ({
-      id: peer.id,
-      name: peer.name as unknown,
-      screen: peer.screen as unknown,
-      viewedScreenPeerId: peer.viewedScreenPeerId as unknown
-    }),
-    publicLobbyRoom: (value: unknown) => value,
-    publicChatMessage: (value: unknown) => value,
+    publicPeer,
+    publicLobbyRoom: (value: StoredRoom) => publicLobbyRoom(value, 0),
+    publicChatMessage,
     broadcast: (_room, message) => broadcasts.push(structuredClone(message)),
     closePeer: overrides.closePeer || (() => {}),
     avatarColorForPeerId: () => 'blue',
@@ -1728,6 +1725,6 @@ test('snapshot reads presence after awaited message history', async () => {
   const snapshot = await snapshotPending;
   assert.ok(snapshot);
 
-  assert.equal(snapshot.peers.find((peer) => peer.id === OWNER_ID).screen, false);
-  assert.equal(snapshot.peers.find((peer) => peer.id === VIEWER_ID).viewedScreenPeerId, '');
+  assert.equal(snapshot.peers.find((peer) => peer.id === OWNER_ID)?.screen, false);
+  assert.equal(snapshot.peers.find((peer) => peer.id === VIEWER_ID)?.viewedScreenPeerId, '');
 });

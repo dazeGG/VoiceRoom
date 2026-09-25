@@ -2,6 +2,9 @@
 // and room.updated event, peers picking up a new profile, invitations that
 // die with the room, and tearing a deleted room down.
 
+import type { RoomPeerMessage } from '../../realtime/legacy-events.ts';
+import type { DirectMessage as StoredDirectMessage } from '../../lib/friend-store.ts';
+import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import type { RoomPresence, RosterPeer } from '../../realtime/room-presence.ts';
@@ -9,7 +12,7 @@ import type { GatePrincipalPeer } from '../admission/gate-principal.ts';
 import { publicLobbyRoom, publicPeer, roomAvatarUrl, type StoredRoom } from './room-views.ts';
 
 interface RoomRuntime {
-  mirrorLegacyRoomEvent(roomId: string, message: unknown): void;
+  mirrorLegacyRoomEvent(roomId: string, message: RoomPeerMessage): void;
   invalidateRecipientCache(roomId: string): void;
   scheduleSummaryBroadcast(roomId: string): void;
   cancelRoomReconnectLeases(input: {
@@ -34,12 +37,9 @@ export interface RoomLifecycleDeps {
   runtime(): RoomRuntime | null;
   /** The friend store while pending room invitations can expire, else null. */
   invitations(): {
-    expirePendingInvites(input: {
-      senderId: string | null;
-      roomId: string;
-    }): Promise<{ senderId: string; recipientId: string }[]>;
+    expirePendingInvites(input: { senderId: string | null; roomId: string }): Promise<StoredDirectMessage[]>;
   } | null;
-  notifyUser(userId: string, event: Record<string, unknown>): void;
+  notifyUser(userId: string, event: AccountMessage): void;
   /** Null without a gate secret; teardown then fails that peer's revocation. */
   credentials(): {
     revokePeer(input: { roomId: string; accountUserId: string | null; guestPrincipalId: string }): Promise<unknown>;
@@ -81,7 +81,7 @@ export function createRoomLifecycle(deps: RoomLifecycleDeps) {
         peer.avatarAccent = user.avatarAccent || null;
         peer.avatarColorKey = user.avatarColorKey || peer.avatarColorKey;
         peer.avatarUrl = avatarUrl;
-        const message = { type: 'peer-updated', peer: publicPeer(peer) };
+        const message: RoomPeerMessage = { type: 'peer-updated', peer: publicPeer(peer) };
         presence.broadcast(room, message);
         deps.runtime()?.mirrorLegacyRoomEvent(roomId, message);
         deps.runtime()?.scheduleSummaryBroadcast(roomId);
@@ -97,7 +97,7 @@ export function createRoomLifecycle(deps: RoomLifecycleDeps) {
     if (typeof store?.expirePendingInvites !== 'function') return [];
     const messages = await store.expirePendingInvites({ senderId: senderId || null, roomId });
     for (const message of messages) {
-      const event = { type: 'dm.message.edited', message };
+      const event: AccountMessage = { type: 'dm.message.edited', message };
       deps.notifyUser(message.senderId, event);
       deps.notifyUser(message.recipientId, event);
     }

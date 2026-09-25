@@ -31,7 +31,7 @@ async function inCall(options: Parameters<typeof loadLiveKitHarness>[0] = {}) {
 }
 
 test('a replacement connects, publishes the kept microphone and only then takes over from the old room', async () => {
-  const { lk, oldRoom } = await inCall({ postJson: async () => ({ token: 't', url: 'wss://lk.example' }) });
+  const { lk, oldRoom } = await inCall({ requestToken: async () => ({ token: 't', url: 'wss://lk.example' }) });
   const outcome = await lk.service.attemptFreshLiveKitReplacement({ epoch: 1, attempt: 1 });
 
   expect(outcome).toEqual({ ok: true });
@@ -43,7 +43,7 @@ test('a replacement connects, publishes the kept microphone and only then takes 
 
 test('when the first LiveKit address fails, the next one is tried', async () => {
   const { lk } = await inCall({
-    postJson: async () => ({ token: 't', urls: ['wss://a.example', 'wss://b.example'] }),
+    requestToken: async () => ({ token: 't', urls: ['wss://a.example', 'wss://b.example'] }),
     failingUrls: ['wss://a.example']
   });
   await expect(lk.service.attemptFreshLiveKitReplacement({ epoch: 1, attempt: 1 })).resolves.toEqual({ ok: true });
@@ -55,7 +55,7 @@ test('when the first LiveKit address fails, the next one is tried', async () => 
 
 test('a failure everywhere keeps the old room and is worth retrying', async () => {
   const { lk, oldRoom } = await inCall({
-    postJson: async () => ({ token: 't', url: 'wss://a.example' }),
+    requestToken: async () => ({ token: 't', url: 'wss://a.example' }),
     failingUrls: ['wss://a.example']
   });
   await expect(lk.service.attemptFreshLiveKitReplacement({ epoch: 1, attempt: 1 })).resolves.toMatchObject({
@@ -68,20 +68,20 @@ test('a failure everywhere keeps the old room and is worth retrying', async () =
 test('a ban or a full room stops recovery; a server error does not', async () => {
   let error: Error = new Error('');
   const { lk } = await inCall({
-    postJson: async () => {
+    requestToken: async () => {
       throw error;
     }
   });
-  error = new lk.ApiRequestError('banned', 'room_banned', 403);
+  error = lk.refusal('banned', 'room_banned', 403);
   await expect(lk.service.attemptFreshLiveKitReplacement({ epoch: 1, attempt: 1 })).resolves.toMatchObject({
     retryable: false,
     code: 'room_banned'
   });
-  error = new lk.ApiRequestError('full', 'room_full', 409);
+  error = lk.refusal('full', 'room_full', 409);
   await expect(lk.service.attemptFreshLiveKitReplacement({ epoch: 1, attempt: 2 })).resolves.toMatchObject({
     retryable: false
   });
-  error = new lk.ApiRequestError('down', 'internal', 503);
+  error = lk.refusal('down', 'internal', 503);
   await expect(lk.service.attemptFreshLiveKitReplacement({ epoch: 1, attempt: 3 })).resolves.toMatchObject({
     retryable: true,
     status: 503
@@ -91,7 +91,7 @@ test('a ban or a full room stops recovery; a server error does not', async () =>
 test('a replacement abandoned mid-way (the recovery epoch moved on) never replaces the room', async () => {
   let current = true;
   const { lk, oldRoom } = await inCall({
-    postJson: async () => {
+    requestToken: async () => {
       current = false;
       return { token: 't', url: 'wss://lk.example' };
     },
@@ -113,7 +113,7 @@ test('recovery logs name candidates by index only, never by URL or raw error', a
     logged.push(args);
   });
   const { lk } = await inCall({
-    postJson: async () => ({ token: 't', urls: ['wss://secret-a.example', 'wss://secret-b.example'] }),
+    requestToken: async () => ({ token: 't', urls: ['wss://secret-a.example', 'wss://secret-b.example'] }),
     failingUrls: ['wss://secret-a.example']
   });
   await lk.service.attemptFreshLiveKitReplacement({ epoch: 1, attempt: 1 });
@@ -126,12 +126,12 @@ test('recovery logs name candidates by index only, never by URL or raw error', a
 });
 
 test('?forceRelay=1 sends all media through the TURN relay; otherwise ICE picks freely', async () => {
-  const { lk } = await inCall({ postJson: async () => ({ token: 't', url: 'wss://lk.example' }) });
+  const { lk } = await inCall({ requestToken: async () => ({ token: 't', url: 'wss://lk.example' }) });
   await lk.service.attemptFreshLiveKitReplacement({ epoch: 1, attempt: 1 });
   expect(lk.rooms[0]?.connectOptions).toEqual({ autoSubscribe: false });
 
   window.history.replaceState({}, '', '/r/room-a?forceRelay=1');
-  const relayed = await inCall({ postJson: async () => ({ token: 't', url: 'wss://lk.example' }) });
+  const relayed = await inCall({ requestToken: async () => ({ token: 't', url: 'wss://lk.example' }) });
   await relayed.lk.service.attemptFreshLiveKitReplacement({ epoch: 1, attempt: 1 });
   expect(relayed.lk.rooms[0]?.connectOptions).toEqual({
     autoSubscribe: false,

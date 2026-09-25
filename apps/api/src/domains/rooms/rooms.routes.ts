@@ -2,8 +2,23 @@
 // preview, the account's room list, and the read-only legacy /api/state.
 // Error texts are the ones the web client already shows.
 
-import { Type, type TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
+import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
+import { Done, RoomIdParams } from '@voice-room/shared/contracts/http';
+import {
+  BookmarkRoomBody,
+  CreateRoomBody,
+  PeerState,
+  PeerStateBody,
+  RenameRoomBody,
+  RoomCard,
+  RoomCreated,
+  RoomFailure,
+  RoomList,
+  RoomPeers,
+  RoomStatus,
+  RoomUnbookmarked
+} from '@voice-room/shared/contracts/rooms';
 import { cleanRoomName, normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voice-room/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody, type Failure } from '../../platform/http/http-kit.ts';
@@ -17,24 +32,14 @@ import {
   type StoredRoom
 } from './room-views.ts';
 import type { OwnerCheck, RoomsService } from './rooms.service.ts';
+import type { PowVerdict } from '../../lib/pow.ts';
 
-export const FailureBody = Type.Object({
-  ok: Type.Literal(false),
-  error: Type.String(),
-  code: Type.Optional(Type.String()),
-  roomId: Type.Optional(Type.String()),
-  exists: Type.Optional(Type.Boolean())
-});
-
-// Room and peer payloads are built by room-views.ts and typed there; the
-// schema only frames the envelope so no field is dropped on serialisation.
-const Payload = Type.Unknown();
-const RoomParams = Type.Object({ roomId: Type.String() });
+const answers = <Success>(success: Success) => ({ 200: success, '4xx': RoomFailure });
 
 const OWNER_REFUSALS: Record<Exclude<OwnerCheck['status'], 'owner'>, { status: 401 | 403 | 404; body: Failure }> = {
-  unauthenticated: { status: 401, body: failure('Требуется вход') },
-  not_found: { status: 404, body: failure('Комната не найдена') },
-  forbidden: { status: 403, body: failure('Недостаточно прав') }
+  unauthenticated: { status: 401, body: failure('Требуется вход', { code: 'authentication_required' }) },
+  not_found: { status: 404, body: failure('Комната не найдена', { code: 'room_not_found' }) },
+  forbidden: { status: 403, body: failure('Недостаточно прав', { code: 'forbidden' }) }
 };
 
 /** The HTTP answer for a failed owner check (every room mutation starts with one). */
@@ -42,8 +47,10 @@ export function ownerRefusal(check: Exclude<OwnerCheck, { status: 'owner' }>) {
   return OWNER_REFUSALS[check.status];
 }
 
-const ROOM_NOT_FOUND = failure('Комната не найдена');
-const STATIC_ROOM_NEEDS_LOGIN = failure('Требуется вход для создания постоянной комнаты');
+const ROOM_NOT_FOUND = failure('Комната не найдена', { code: 'room_not_found' });
+const STATIC_ROOM_NEEDS_LOGIN = failure('Требуется вход для создания постоянной комнаты', {
+  code: 'static_room_requires_login'
+});
 
 interface RateLimiter {
   check(key: string): { allowed: boolean; retryAfterSeconds?: number };
@@ -65,7 +72,7 @@ export interface RoomRoutesDeps {
   lobbyRoom(room: StoredRoom): LobbyRoom;
   invalidateRecipientCache(roomId: string): void;
   createLimiter: RateLimiter;
-  pow: { verify(ip: string, proof: unknown): { ok: boolean; status?: number; error?: string } };
+  pow: { verify(ip: string, proof: unknown): PowVerdict };
   maxRooms: number;
   maxRoomPeers: number;
 }
@@ -98,26 +105,8 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
     {
       preValidation: optionalJsonBody,
       schema: {
-        body: Type.Object({
-          isStatic: Type.Optional(Type.Unknown()),
-          name: Type.Optional(Type.Unknown()),
-          proof: Type.Optional(Type.Unknown())
-        }),
-        response: {
-          201: Type.Object({
-            ok: Type.Literal(true),
-            avatarUrl: Type.Null(),
-            createdAt: Type.Number(),
-            maxRooms: Type.Number(),
-            maxRoomPeers: Type.Number(),
-            isStatic: Type.Boolean(),
-            name: Type.String(),
-            owned: Type.Boolean(),
-            roomId: Type.String()
-          }),
-          '4xx': FailureBody,
-          503: FailureBody
-        }
+        body: CreateRoomBody,
+        response: { 201: RoomCreated, '4xx': RoomFailure, 503: RoomFailure }
       }
     },
     async (request, reply) => {
@@ -127,10 +116,10 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
         return reply
           .code(429)
           .header('Retry-After', String(rate.retryAfterSeconds))
-          .send(failure('Too many rooms created, try again later'));
+          .send(failure('Too many rooms created, try again later', { code: 'room_create_rate_limited' }));
       }
       const proof = deps.pow.verify(clientIp, request.body.proof);
-      if (!proof.ok) return reply.code(proof.status || 400).send(failure(proof.error || 'Invalid proof'));
+      if (!proof.ok) return reply.code(proof.status).send(failure(proof.error, { code: proof.code }));
 
       const isStatic = parseBoolean(request.body.isStatic);
       // Persistent rooms belong to the account that creates them so they can be
@@ -146,17 +135,16 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
       });
       if (created.status === 'auth_required') return reply.code(401).send(STATIC_ROOM_NEEDS_LOGIN);
       if (created.status === 'quota_exceeded') {
-        return reply
-          .code(429)
-          .send(
-            failure(
-              isStatic
-                ? 'Можно владеть максимум 3 постоянными комнатами'
-                : 'Too many temporary rooms waiting from this IP, reuse one or try later'
-            )
-          );
+        return reply.code(429).send(
+          isStatic
+            ? failure('Можно владеть максимум 3 постоянными комнатами', { code: 'static_room_quota' })
+            : failure('Too many temporary rooms waiting from this IP, reuse one or try later', {
+                code: 'temporary_room_quota'
+              })
+        );
       }
-      if (created.status !== 'created') return reply.code(503).send(failure('Room capacity is temporarily full'));
+      if (created.status !== 'created')
+        return reply.code(503).send(failure('Room capacity is temporarily full', { code: 'room_full' }));
 
       const { room } = created;
       return reply.code(201).send({
@@ -178,9 +166,9 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
     {
       preValidation: optionalJsonBody,
       schema: {
-        params: RoomParams,
-        body: Type.Object({ name: Type.Optional(Type.Unknown()) }),
-        response: { 200: Type.Object({ ok: Type.Literal(true), room: Payload }), '4xx': FailureBody }
+        params: RoomIdParams,
+        body: RenameRoomBody,
+        response: answers(RoomCard)
       }
     },
     async (request, reply) => {
@@ -191,7 +179,7 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
         return reply.code(refusal.status).send(refusal.body);
       }
       const name: string = request.body.name !== undefined ? cleanRoomName(request.body.name) : check.room.name;
-      if (!name) return reply.code(400).send(failure('Дайте комнате название'));
+      if (!name) return reply.code(400).send(failure('Дайте комнате название', { code: 'room_name_required' }));
       const renamed = await deps.rooms.rename(roomId, name);
       if (renamed.status === 'not_found') return reply.code(404).send(ROOM_NOT_FOUND);
       return { ok: true as const, room: renamed.room };
@@ -201,7 +189,7 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
   app.delete(
     '/api/rooms/:roomId',
     {
-      schema: { params: RoomParams, response: { 200: Type.Object({ ok: Type.Literal(true) }), '4xx': FailureBody } }
+      schema: { params: RoomIdParams, response: answers(Done) }
     },
     async (request, reply) => {
       const roomId: string = normalizeRoomId(request.params.roomId);
@@ -220,27 +208,13 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
     '/api/rooms/:roomId',
     {
       schema: {
-        params: RoomParams,
-        response: {
-          200: Type.Object({
-            ok: Type.Literal(true),
-            avatarUrl: Type.Union([Type.String(), Type.Null()]),
-            createdAt: Type.Number(),
-            exists: Type.Literal(true),
-            emptySince: Type.Optional(Type.Union([Type.Number(), Type.Null()])),
-            isStatic: Type.Boolean(),
-            maxRoomPeers: Type.Number(),
-            name: Type.String(),
-            peers: Type.Number(),
-            roomId: Type.String()
-          }),
-          404: FailureBody
-        }
+        params: RoomIdParams,
+        response: { 200: RoomStatus, 404: RoomFailure }
       }
     },
     async (request, reply) => {
       const roomId: string = normalizeRoomId(request.params.roomId);
-      const notFound = { ...failure('Room not found'), exists: false };
+      const notFound = { ...failure('Room not found', { code: 'room_not_found' }), exists: false };
       if (!roomId) return reply.code(404).send(notFound);
       const room = await deps.getRoom(roomId);
       if (!room) return reply.code(404).send({ ...notFound, roomId });
@@ -265,17 +239,14 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
     '/api/rooms/:roomId/peers',
     {
       schema: {
-        params: RoomParams,
-        response: {
-          200: Type.Object({ ok: Type.Literal(true), roomId: Type.String(), peers: Type.Array(Payload) }),
-          '4xx': FailureBody
-        }
+        params: RoomIdParams,
+        response: answers(RoomPeers)
       }
     },
     async (request, reply) => {
       const roomId: string = normalizeRoomId(request.params.roomId);
       const room = await deps.getRoom(roomId);
-      if (!room) return reply.code(404).send({ ...failure('Room not found'), roomId });
+      if (!room) return reply.code(404).send({ ...failure('Room not found', { code: 'room_not_found' }), roomId });
       if (await deps.findRoomBan(roomId, await sessionUserId(request.raw), ctx.clientIp(request.raw))) {
         return reply.code(403).send(roomBanned(roomId));
       }
@@ -288,12 +259,8 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
     {
       preValidation: optionalJsonBody,
       schema: {
-        body: Type.Object({
-          roomId: Type.Optional(Type.Unknown()),
-          peerId: Type.Optional(Type.Unknown()),
-          sessionToken: Type.Optional(Type.Unknown())
-        }),
-        response: { 200: Type.Object({ ok: Type.Literal(true), peer: Payload }), '4xx': FailureBody }
+        body: PeerStateBody,
+        response: answers(PeerState)
       }
     },
     async (request, reply) => {
@@ -309,7 +276,7 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
         return reply.code(403).send(roomBanned(roomId));
       }
       const peer = deps.findAuthorizedPeer(roomId, peerId, sessionToken);
-      if (!peer) return reply.code(403).send(failure('Invalid peer session'));
+      if (!peer) return reply.code(403).send(failure('Invalid peer session', { code: 'invalid_session' }));
       if (await deps.findRoomBan(roomId, peer.accountUserId, peer.ip || ''))
         return reply.code(403).send(roomBanned(roomId));
 
@@ -328,12 +295,12 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
     '/api/auth/rooms',
     {
       schema: {
-        response: { 200: Type.Object({ ok: Type.Literal(true), rooms: Type.Array(Payload) }), '4xx': FailureBody }
+        response: answers(RoomList)
       }
     },
     async (request, reply) => {
       const userId = await sessionUserId(request.raw);
-      if (!userId) return reply.code(401).send(failure('Требуется вход'));
+      if (!userId) return reply.code(401).send(failure('Требуется вход', { code: 'authentication_required' }));
       const rooms = await deps.store().listVisibleRoomsForUser(userId);
       return { ok: true as const, rooms: rooms.map(deps.lobbyRoom) };
     }
@@ -344,25 +311,23 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
     {
       preValidation: optionalJsonBody,
       schema: {
-        body: Type.Object({
-          roomId: Type.Optional(Type.Unknown()),
-          code: Type.Optional(Type.Unknown()),
-          roomCode: Type.Optional(Type.Unknown())
-        }),
-        response: { 200: Type.Object({ ok: Type.Literal(true), room: Payload }), '4xx': FailureBody }
+        body: BookmarkRoomBody,
+        response: answers(RoomCard)
       }
     },
     async (request, reply) => {
       const userId = await sessionUserId(request.raw);
-      if (!userId) return reply.code(401).send(failure('Требуется вход'));
+      if (!userId) return reply.code(401).send(failure('Требуется вход', { code: 'authentication_required' }));
       const { body } = request;
       const roomId: string = normalizeRoomId(body.roomId || body.code || body.roomCode);
-      if (!roomId) return reply.code(400).send(failure('Неверный код комнаты'));
+      if (!roomId) return reply.code(400).send(failure('Неверный код комнаты', { code: 'invalid_room' }));
 
       const added = await deps.store().addRoomBookmarkForUser(userId, roomId);
       if (added.status === 'not_found') return reply.code(404).send(ROOM_NOT_FOUND);
       if (added.status === 'temporary_room')
-        return reply.code(400).send(failure('В список можно добавить только постоянную комнату'));
+        return reply
+          .code(400)
+          .send(failure('В список можно добавить только постоянную комнату', { code: 'room_not_static' }));
       deps.invalidateRecipientCache(roomId);
       return { ok: true as const, room: deps.lobbyRoom(added.room as StoredRoom) };
     }
@@ -372,13 +337,13 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
     '/api/auth/rooms/:roomId',
     {
       schema: {
-        params: RoomParams,
-        response: { 200: Type.Object({ ok: Type.Literal(true), removed: Payload }), '4xx': FailureBody }
+        params: RoomIdParams,
+        response: answers(RoomUnbookmarked)
       }
     },
     async (request, reply) => {
       const userId = await sessionUserId(request.raw);
-      if (!userId) return reply.code(401).send(failure('Требуется вход'));
+      if (!userId) return reply.code(401).send(failure('Требуется вход', { code: 'authentication_required' }));
       const roomId: string = normalizeRoomId(request.params.roomId);
       if (!roomId) return reply.code(404).send(ROOM_NOT_FOUND);
 
@@ -387,7 +352,7 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
         return reply.code(403).send(failure('Владелец управляет комнатой через настройки', { code: 'room_owner' }));
       }
       deps.invalidateRecipientCache(roomId);
-      return { ok: true as const, removed: result.removed };
+      return { ok: true as const, removed: Boolean(result.removed) };
     }
   );
 }

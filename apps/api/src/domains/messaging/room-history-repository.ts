@@ -2,6 +2,7 @@ import type pg from 'pg';
 import { normalizeLinkPreview, type LinkPreview } from '@voice-room/shared/link-preview';
 import { createDbPool } from '../../lib/db.ts';
 import { createLogger } from '../../lib/logger.ts';
+import { normalizeRoomMessageContent, type RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
 
 const ROOM_MESSAGE_SELECT = `
   SELECT m.*,
@@ -44,7 +45,7 @@ export type HistoryRoomMessage = {
   authorUserId: string | null;
   name: string;
   text: string;
-  content: unknown;
+  content: RoomMessageContentV1 | undefined;
   createdAt: string;
   createdAtMicros: string;
   editedAt: unknown;
@@ -75,7 +76,7 @@ function mapRoomMessage(row: RoomMessageRow): HistoryRoomMessage {
     authorUserId: row.author_user_id || null,
     name: row.author_name || '',
     text: row.text || '',
-    content: row.content || undefined,
+    content: normalizeRoomMessageContent(row.content) ?? undefined,
     createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
     createdAtMicros: row.created_at_micros,
     editedAt: row.edited_at || null,

@@ -1,120 +1,19 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
-import { socketPathForDirectory } from './ipc-harness.ts';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import http from 'node:http';
-import { spawn } from 'node:child_process';
-import path from 'node:path';
-import os from 'node:os';
-import { createTestDatabase } from './db-harness.ts';
+import type { Me, SignedIn } from '@voice-room/shared/contracts/account';
+import type { Preferences } from '@voice-room/shared/contracts/notifications';
+import type { RoomCard, RoomCreated, RoomList, RoomUnbookmarked } from '@voice-room/shared/contracts/rooms';
+import { cookieFrom, request, startApiServer } from './fakes/server-process.ts';
 
-function getSocketPath() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-auth-'));
-  return { dir, socketPath: socketPathForDirectory(dir) };
-}
-
-function waitForHealthz(socketPath, timeoutMs = 15000) {
-  const started = Date.now();
-  return new Promise((resolve, reject) => {
-    const attempt = () => {
-      http
-        .get({ path: '/api/healthz', socketPath }, (res) => {
-          res.resume();
-          if (res.statusCode === 200) {
-            resolve();
-            return;
-          }
-          retry();
-        })
-        .on('error', retry);
-    };
-    const retry = () => {
-      if (Date.now() - started > timeoutMs) {
-        reject(new Error('Server did not become ready'));
-        return;
-      }
-      setTimeout(attempt, 50);
-    };
-    attempt();
-  });
-}
-
-function startServer(socketPath, databaseUrl, logs) {
-  const child = spawn(process.execPath, ['src/server.ts'], {
-    cwd: path.join(import.meta.dirname, '..'),
-    env: {
-      ...process.env,
-      NODE_ENV: 'test',
-      MAX_EMPTY_ROOMS_PER_IP: '0',
-      ROOM_CREATE_POW_DIFFICULTY: '0',
-      ROOM_CREATE_RATE_LIMIT: '0',
-      AUTH_RATE_LIMIT: '0',
-      DATABASE_URL: databaseUrl,
-      SOCKET_PATH: socketPath
-    },
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
-  child.stdout.on('data', (chunk) => {
-    logs.stdout += chunk.toString();
-  });
-  child.stderr.on('data', (chunk) => {
-    logs.stderr += chunk.toString();
-  });
-  return child;
-}
-
-function request(socketPath, { method = 'GET', pathname, body, cookie } = {}) {
-  const payload = body === undefined ? null : JSON.stringify(body);
-  const headers = { Accept: 'application/json' };
-  if (payload) {
-    headers['Content-Type'] = 'application/json';
-    headers['Content-Length'] = Buffer.byteLength(payload);
-  }
-  if (cookie) headers.Cookie = cookie;
-
-  return new Promise((resolve, reject) => {
-    const req = http.request({ method, path: pathname, socketPath, headers }, (res) => {
-      let data = '';
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-      res.on('end', () => {
-        resolve({
-          status: res.statusCode,
-          body: data ? JSON.parse(data) : null,
-          setCookie: res.headers['set-cookie'] || []
-        });
-      });
-      res.on('error', reject);
-    });
-    req.on('error', reject);
-    if (payload) req.write(payload);
-    req.end();
-  });
-}
-
-// Reduce a Set-Cookie header into a `name=value` Cookie string for the next call.
-function cookieFrom(setCookie) {
-  const header = Array.isArray(setCookie) ? setCookie[0] : setCookie;
-  return String(header || '').split(';')[0];
+function startServer(t: TestContext) {
+  return startApiServer(t, { prefix: 'voice-room-auth-', env: { AUTH_RATE_LIMIT: '0' } });
 }
 
 test('auth flow: register, session, owned rooms, logout', async (t) => {
-  const { dir, socketPath } = getSocketPath();
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const logs = { stdout: '', stderr: '' };
-  const child = startServer(socketPath, databaseUrl, logs);
-  t.after(() => {
-    child.kill('SIGTERM');
-    fs.rmSync(dir, { recursive: true, force: true });
-    return cleanup();
-  });
-
-  await waitForHealthz(socketPath);
+  const { socketPath } = await startServer(t);
 
   // Register sets a session cookie and returns the public user.
-  const registered = await request(socketPath, {
+  const registered = await request<SignedIn>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/register',
     body: { login: 'Vovosh', displayName: 'Вова', password: 'password123', passwordConfirm: 'password123' }
@@ -127,15 +26,15 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   assert.match(cookie, /^vr_session=/);
 
   // /auth/me reflects the session.
-  const me = await request(socketPath, { pathname: '/api/auth/me', cookie });
+  const me = await request<Me>(socketPath, { pathname: '/api/auth/me', cookie });
   assert.equal(me.status, 200);
-  assert.equal(me.body.user.login, 'vovosh');
-  assert.ok(me.body.user.avatarColorKey);
-  assert.equal(me.body.user.dnd, false);
-  assert.equal(me.body.user.doNotDisturb, false);
-  assert.equal(me.body.user.presenceStatus, 'online');
+  assert.equal(me.body.user?.login, 'vovosh');
+  assert.ok(me.body.user?.avatarColorKey);
+  assert.equal(me.body.user?.dnd, false);
+  assert.equal(me.body.user?.doNotDisturb, false);
+  assert.equal(me.body.user?.presenceStatus, 'online');
 
-  const dnd = await request(socketPath, {
+  const dnd = await request<Preferences>(socketPath, {
     method: 'POST',
     pathname: '/api/notifications/settings',
     body: { dnd: true },
@@ -144,22 +43,22 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   assert.equal(dnd.status, 200);
   assert.equal(dnd.body.preferences.doNotDisturb, true);
   assert.equal(dnd.body.preferences.presenceStatus, 'dnd');
-  const meWithDnd = await request(socketPath, { pathname: '/api/auth/me', cookie });
-  assert.equal(meWithDnd.body.user.dnd, true);
-  assert.equal(meWithDnd.body.user.doNotDisturb, true);
-  assert.equal(meWithDnd.body.user.presenceStatus, 'dnd');
+  const meWithDnd = await request<Me>(socketPath, { pathname: '/api/auth/me', cookie });
+  assert.equal(meWithDnd.body.user?.dnd, true);
+  assert.equal(meWithDnd.body.user?.doNotDisturb, true);
+  assert.equal(meWithDnd.body.user?.presenceStatus, 'dnd');
 
   // Without the cookie there is no session.
-  const anon = await request(socketPath, { pathname: '/api/auth/me' });
+  const anon = await request<Me>(socketPath, { pathname: '/api/auth/me' });
   assert.equal(anon.status, 200);
   assert.equal(anon.body.user, null);
 
-  const malformedCookie = await request(socketPath, { pathname: '/api/auth/me', cookie: 'vr_session=%' });
+  const malformedCookie = await request<Me>(socketPath, { pathname: '/api/auth/me', cookie: 'vr_session=%' });
   assert.equal(malformedCookie.status, 200);
   assert.equal(malformedCookie.body.user, null);
 
   // Static rooms cannot be created anonymously in v2.
-  const anonStatic = await request(socketPath, {
+  const anonStatic = await request<RoomCreated>(socketPath, {
     method: 'POST',
     pathname: '/api/rooms',
     body: { isStatic: true, name: 'анон' }
@@ -168,7 +67,7 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
 
   // A static room created while authenticated is owned and listed back,
   // carrying the normalized name chosen at creation.
-  const room = await request(socketPath, {
+  const room = await request<RoomCreated>(socketPath, {
     method: 'POST',
     pathname: '/api/rooms',
     body: { isStatic: true, name: '  квартирник  ' },
@@ -179,7 +78,7 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   assert.equal(room.body.name, 'квартирник');
 
   // Legacy visual fields from older clients are ignored while the name is kept.
-  const fancyRoom = await request(socketPath, {
+  const fancyRoom = await request<RoomCreated>(socketPath, {
     method: 'POST',
     pathname: '/api/rooms',
     body: { isStatic: true, name: 'дейли', emoji: '🦄' },
@@ -187,7 +86,7 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   });
   assert.equal(fancyRoom.body.name, 'дейли');
 
-  const thirdRoom = await request(socketPath, {
+  const thirdRoom = await request<RoomCreated>(socketPath, {
     method: 'POST',
     pathname: '/api/rooms',
     body: { isStatic: true, name: 'планёрка' },
@@ -196,7 +95,7 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   assert.equal(thirdRoom.status, 201);
   assert.equal(thirdRoom.body.owned, true);
 
-  const fourthRoom = await request(socketPath, {
+  const fourthRoom = await request<RoomCreated>(socketPath, {
     method: 'POST',
     pathname: '/api/rooms',
     body: { isStatic: true, name: 'лимит' },
@@ -205,7 +104,7 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   assert.equal(fourthRoom.status, 429);
 
   // A temporary room (no isStatic) stays ownerless even when authenticated.
-  const tempRoom = await request(socketPath, {
+  const tempRoom = await request<RoomCreated>(socketPath, {
     method: 'POST',
     pathname: '/api/rooms',
     body: { isStatic: false },
@@ -213,7 +112,7 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   });
   assert.equal(tempRoom.body.owned, false);
 
-  const rooms = await request(socketPath, { pathname: '/api/auth/rooms', cookie });
+  const rooms = await request<RoomList>(socketPath, { pathname: '/api/auth/rooms', cookie });
   assert.equal(rooms.status, 200);
   // Both owned static rooms are listed; the temporary one is not.
   assert.deepEqual(
@@ -221,12 +120,12 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
     new Set([room.body.roomId, fancyRoom.body.roomId, thirdRoom.body.roomId])
   );
   const listed = rooms.body.rooms.find((entry) => entry.roomId === room.body.roomId);
-  assert.equal(listed.name, 'квартирник');
-  assert.equal(listed.relationship, 'owner');
+  assert.equal(listed?.name, 'квартирник');
+  assert.equal(listed?.relationship, 'owner');
 
   // Adding an already owned room by code is idempotent and the lobby keeps the
   // stronger owner relationship instead of duplicating the row.
-  const ownBookmark = await request(socketPath, {
+  const ownBookmark = await request<RoomCard>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/rooms',
     body: { roomId: room.body.roomId },
@@ -234,11 +133,11 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   });
   assert.equal(ownBookmark.status, 200);
   assert.equal(ownBookmark.body.room.relationship, 'owner');
-  const afterOwnBookmark = await request(socketPath, { pathname: '/api/auth/rooms', cookie });
+  const afterOwnBookmark = await request<RoomList>(socketPath, { pathname: '/api/auth/rooms', cookie });
   assert.equal(afterOwnBookmark.body.rooms.filter((entry) => entry.roomId === room.body.roomId).length, 1);
-  assert.equal(afterOwnBookmark.body.rooms.find((entry) => entry.roomId === room.body.roomId).relationship, 'owner');
+  assert.equal(afterOwnBookmark.body.rooms.find((entry) => entry.roomId === room.body.roomId)?.relationship, 'owner');
 
-  const secondUser = await request(socketPath, {
+  const secondUser = await request<SignedIn>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/register',
     body: { login: 'listener', password: 'password123' }
@@ -246,7 +145,7 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   assert.equal(secondUser.status, 201);
   const secondCookie = cookieFrom(secondUser.setCookie);
 
-  const bookmarked = await request(socketPath, {
+  const bookmarked = await request<RoomCard>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/rooms',
     body: { code: room.body.roomId },
@@ -254,7 +153,7 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   });
   assert.equal(bookmarked.status, 200);
   assert.equal(bookmarked.body.room.relationship, 'bookmarked');
-  const bookmarkedAgain = await request(socketPath, {
+  const bookmarkedAgain = await request<RoomCard>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/rooms',
     body: { code: room.body.roomId },
@@ -263,7 +162,7 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   assert.equal(bookmarkedAgain.status, 200);
   assert.equal(bookmarkedAgain.body.room.roomId, room.body.roomId);
 
-  const secondRooms = await request(socketPath, { pathname: '/api/auth/rooms', cookie: secondCookie });
+  const secondRooms = await request<RoomList>(socketPath, { pathname: '/api/auth/rooms', cookie: secondCookie });
   assert.deepEqual(
     secondRooms.body.rooms.map((entry) => [entry.roomId, entry.relationship]),
     [[room.body.roomId, 'bookmarked']]
@@ -280,8 +179,8 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
     });
     assert.equal(sent.status, 201);
   }
-  const unreadBeforeRead = await request(socketPath, { pathname: '/api/auth/rooms', cookie: secondCookie });
-  assert.equal(unreadBeforeRead.body.rooms[0].unreadCount, 3);
+  const unreadBeforeRead = await request<RoomList>(socketPath, { pathname: '/api/auth/rooms', cookie: secondCookie });
+  assert.equal(unreadBeforeRead.body.rooms[0]?.unreadCount, 3);
 
   const markedRead = await request(socketPath, {
     method: 'POST',
@@ -289,8 +188,8 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
     cookie: secondCookie
   });
   assert.equal(markedRead.status, 200, JSON.stringify(markedRead.body));
-  const unreadAfterRead = await request(socketPath, { pathname: '/api/auth/rooms', cookie: secondCookie });
-  assert.equal(unreadAfterRead.body.rooms[0].unreadCount, 0);
+  const unreadAfterRead = await request<RoomList>(socketPath, { pathname: '/api/auth/rooms', cookie: secondCookie });
+  assert.equal(unreadAfterRead.body.rooms[0]?.unreadCount, 0);
 
   const nextMessage = await request(socketPath, {
     method: 'POST',
@@ -299,10 +198,13 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
     cookie
   });
   assert.equal(nextMessage.status, 201);
-  const unreadAfterNextMessage = await request(socketPath, { pathname: '/api/auth/rooms', cookie: secondCookie });
-  assert.equal(unreadAfterNextMessage.body.rooms[0].unreadCount, 1);
+  const unreadAfterNextMessage = await request<RoomList>(socketPath, {
+    pathname: '/api/auth/rooms',
+    cookie: secondCookie
+  });
+  assert.equal(unreadAfterNextMessage.body.rooms[0]?.unreadCount, 1);
 
-  const tempBookmark = await request(socketPath, {
+  const tempBookmark = await request<RoomCard>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/rooms',
     body: { roomId: tempRoom.body.roomId },
@@ -310,7 +212,7 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   });
   assert.equal(tempBookmark.status, 400);
 
-  const ownerRemoval = await request(socketPath, {
+  const ownerRemoval = await request<RoomUnbookmarked>(socketPath, {
     method: 'DELETE',
     pathname: `/api/auth/rooms/${room.body.roomId}`,
     cookie
@@ -318,77 +220,70 @@ test('auth flow: register, session, owned rooms, logout', async (t) => {
   assert.equal(ownerRemoval.status, 403);
   assert.equal(ownerRemoval.body.code, 'room_owner');
 
-  const bookmarkRemoval = await request(socketPath, {
+  const bookmarkRemoval = await request<RoomUnbookmarked>(socketPath, {
     method: 'DELETE',
     pathname: `/api/auth/rooms/${room.body.roomId}`,
     cookie: secondCookie
   });
   assert.equal(bookmarkRemoval.status, 200);
   assert.equal(bookmarkRemoval.body.removed, true);
-  const afterBookmarkRemoval = await request(socketPath, { pathname: '/api/auth/rooms', cookie: secondCookie });
+  const afterBookmarkRemoval = await request<RoomList>(socketPath, {
+    pathname: '/api/auth/rooms',
+    cookie: secondCookie
+  });
   assert.deepEqual(afterBookmarkRemoval.body.rooms, []);
 
   // Listing rooms requires a session.
-  const roomsAnon = await request(socketPath, { pathname: '/api/auth/rooms' });
+  const roomsAnon = await request<RoomList>(socketPath, { pathname: '/api/auth/rooms' });
   assert.equal(roomsAnon.status, 401);
 
   // Logout clears the cookie and invalidates the session.
   const loggedOut = await request(socketPath, { method: 'POST', pathname: '/api/auth/logout', cookie });
   assert.equal(loggedOut.status, 200);
   assert.match(cookieFrom(loggedOut.setCookie), /^vr_session=/);
-  const afterLogout = await request(socketPath, { pathname: '/api/auth/me', cookie });
+  const afterLogout = await request<Me>(socketPath, { pathname: '/api/auth/me', cookie });
   assert.equal(afterLogout.body.user, null);
 });
 
 test('auth flow: validation, duplicate login, and wrong password', async (t) => {
-  const { dir, socketPath } = getSocketPath();
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const logs = { stdout: '', stderr: '' };
-  const child = startServer(socketPath, databaseUrl, logs);
-  t.after(() => {
-    child.kill('SIGTERM');
-    fs.rmSync(dir, { recursive: true, force: true });
-    return cleanup();
-  });
+  const { socketPath } = await startServer(t);
 
-  await waitForHealthz(socketPath);
-
-  const shortPassword = await request(socketPath, {
+  const shortPassword = await request<SignedIn>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/register',
     body: { login: 'ada', password: 'short' }
   });
   assert.equal(shortPassword.status, 400);
 
-  const mismatch = await request(socketPath, {
+  const mismatch = await request<SignedIn>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/register',
     body: { login: 'ada', password: 'password123', passwordConfirm: 'password124' }
   });
   assert.equal(mismatch.status, 400);
 
-  const created = await request(socketPath, {
+  const created = await request<SignedIn>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/register',
     body: { login: 'ada', password: 'password123' }
   });
   assert.equal(created.status, 201);
 
-  const duplicate = await request(socketPath, {
+  const duplicate = await request<SignedIn>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/register',
     body: { login: 'ada', password: 'password123' }
   });
   assert.equal(duplicate.status, 409);
 
-  const wrongPassword = await request(socketPath, {
+  const wrongPassword = await request<SignedIn>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/login',
     body: { login: 'ada', password: 'nope-nope-nope' }
   });
   assert.equal(wrongPassword.status, 401);
 
-  const ok = await request(socketPath, {
+  const ok = await request<SignedIn>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/login',
     body: { login: 'ada', password: 'password123' }
@@ -398,19 +293,9 @@ test('auth flow: validation, duplicate login, and wrong password', async (t) => 
 });
 
 test('account settings: rename and change password', async (t) => {
-  const { dir, socketPath } = getSocketPath();
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
-  const logs = { stdout: '', stderr: '' };
-  const child = startServer(socketPath, databaseUrl, logs);
-  t.after(() => {
-    child.kill('SIGTERM');
-    fs.rmSync(dir, { recursive: true, force: true });
-    return cleanup();
-  });
+  const { socketPath } = await startServer(t);
 
-  await waitForHealthz(socketPath);
-
-  const registered = await request(socketPath, {
+  const registered = await request<SignedIn>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/register',
     body: { login: 'vovosh', displayName: 'Вова', password: 'password123' }
@@ -427,7 +312,7 @@ test('account settings: rename and change password', async (t) => {
   assert.equal(anonRename.status, 401);
 
   // Renaming returns the updated public user and is reflected by /auth/me.
-  const renamed = await request(socketPath, {
+  const renamed = await request<SignedIn>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/profile',
     body: { displayName: '  Вовощ  ' },
@@ -436,8 +321,8 @@ test('account settings: rename and change password', async (t) => {
   assert.equal(renamed.status, 200);
   assert.equal(renamed.body.user.displayName, 'Вовощ');
   assert.equal('passwordHash' in renamed.body.user, false);
-  const me = await request(socketPath, { pathname: '/api/auth/me', cookie });
-  assert.equal(me.body.user.displayName, 'Вовощ');
+  const me = await request<Me>(socketPath, { pathname: '/api/auth/me', cookie });
+  assert.equal(me.body.user?.displayName, 'Вовощ');
 
   // A too-short new password is rejected before touching the stored hash.
   const tooShort = await request(socketPath, {
@@ -468,19 +353,19 @@ test('account settings: rename and change password', async (t) => {
   assert.match(String(changed.setCookie[0] || ''), /Max-Age=0/);
 
   // Password rotation revokes existing sessions, including the current cookie.
-  const staleMe = await request(socketPath, { pathname: '/api/auth/me', cookie });
+  const staleMe = await request<Me>(socketPath, { pathname: '/api/auth/me', cookie });
   assert.equal(staleMe.status, 200);
   assert.equal(staleMe.body.user, null);
 
   // The old password no longer logs in; the new one does.
-  const oldLogin = await request(socketPath, {
+  const oldLogin = await request<SignedIn>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/login',
     body: { login: 'vovosh', password: 'password123' }
   });
   assert.equal(oldLogin.status, 401);
 
-  const newLogin = await request(socketPath, {
+  const newLogin = await request<SignedIn>(socketPath, {
     method: 'POST',
     pathname: '/api/auth/login',
     body: { login: 'vovosh', password: 'brand-new-password' }
