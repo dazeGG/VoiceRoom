@@ -283,8 +283,8 @@ export class RealtimeRecoveryController {
     if (!this.active) return;
     const classified = classifyRecoveryFailure(error);
     this.emit('app_snapshot_failed', classified.retryable ? 'retryable' : 'terminal', this.attempts, classified.status, classified.code);
-    if (classified.retryable) this.enterCooldown();
-    else this.fail('terminal');
+    if (classified.retryable) this.enterCooldown(classified);
+    else this.fail('terminal', classified);
   }
 
   livekitReconnecting(): void {
@@ -418,12 +418,13 @@ export class RealtimeRecoveryController {
     const code = sanitizeRecoveryCode(classified?.code);
     const status = Number.isInteger(classified?.status) ? classified?.status as number : 0;
     this.emit('replacement_attempt', classified?.retryable ? 'retryable' : 'terminal', attempt, status, code);
+    const failure = { status, code };
     if (!classified?.retryable) {
-      this.fail('terminal');
+      this.fail('terminal', failure);
       return;
     }
     if (this.attempts >= this.maxAttempts) {
-      this.enterCooldown();
+      this.enterCooldown(failure);
       return;
     }
     const baseDelay = this.retryDelaysMs[Math.min(this.attempts - 1, this.retryDelaysMs.length - 1)] ?? 0;
@@ -434,14 +435,17 @@ export class RealtimeRecoveryController {
     }, delay);
   }
 
-  fail(result: 'terminal' | 'exhausted'): void {
+  // The failed transition carries the reason, so a failure report says why
+  // recovery gave up instead of "unknown_error".
+  fail(result: 'terminal' | 'exhausted', failure: { status?: number; code?: string } = {}): void {
     this.clearRetryTimer();
     this.failedAppEpoch = this.appEpoch;
-    this.setPhase('failed', 'recovery_failed', result);
+    this.phase = 'failed';
+    this.emit('recovery_failed', result, this.attempts, failure.status ?? 0, failure.code ?? 'unknown_error');
   }
 
-  enterCooldown(): void {
-    this.fail('exhausted');
+  enterCooldown(failure: { status?: number; code?: string } = {}): void {
+    this.fail('exhausted', failure);
     this.cooldownComplete = false;
     this.meaningfulRearm = false;
     this.rearmNeedsSnapshotRequest = false;

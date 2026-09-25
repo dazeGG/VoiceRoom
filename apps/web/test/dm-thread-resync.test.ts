@@ -2,7 +2,6 @@
 import { test } from 'vitest';
 import { freshImport } from './helpers/fresh-module.ts';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 
 
 async function loadCoordinator() {
@@ -316,20 +315,3 @@ test('invalidate prevents a delayed request from applying', async () => {
   assert.equal(applied, false);
 });
 
-test('lobby forwards DM realtime mutations to the active resync buffer', () => {
-  const friends = readFileSync(`${import.meta.dirname}/../src/lib/features/home/model/friends.svelte.ts`, 'utf8');
-
-  const openDmStart = friends.indexOf('export async function openDm');
-  const openDmEnd = friends.indexOf('\nasync function resyncOpenThread', openDmStart);
-  const openDm = friends.slice(openDmStart, openDmEnd);
-  assert.match(openDm, /await threadResync\.resync\(userId\)/);
-  assert.doesNotMatch(openDm, /fetchThread\(/);
-  assert.match(openDm, /finally \{[\s\S]*friendsState\.selectedFriendId === userId[\s\S]*threadLoading = false/);
-
-  assert.match(friends, /case 'ready': \{[\s\S]*?resyncOpenThread\(\{ force: true \}\)/);
-
-  assert.match(friends, /case 'dm\.message': \{[\s\S]*?threadResync\.recordUpsert\(peerId, message\)/);
-  assert.match(friends, /case 'dm\.read': \{[\s\S]*?threadResync\.recordRead\(event\.payload\.userId, now\)/);
-  assert.match(friends, /case 'dm\.message\.deleted': \{[\s\S]*?threadResync\.recordDelete\(peerId, mid\)/);
-  assert.match(friends, /case 'dm\.message\.edited': \{[\s\S]*?threadResync\.recordUpsert\(peerId, message\)/);
-});

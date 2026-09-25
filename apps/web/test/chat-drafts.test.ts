@@ -1,11 +1,7 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { test, onTestFinished, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
-const webRoot = resolve(import.meta.dirname, '..');
-const read = (path: string) => readFileSync(resolve(webRoot, path), 'utf8');
 
 
 function memoryStorage() {
@@ -108,18 +104,3 @@ test('signing out wipes every draft and ignores late saves until the next sign-i
   assert.equal(drafts.loadChatDraft('ada', dm('grace'), 3000).text, 'снова');
 });
 
-test('both chat composers restore and store drafts, and the session clears them', () => {
-  const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
-  assert.match(dmView, /loadChatDraft\(selfId, \{ type: 'dm', id: peerId \}\)/);
-  assert.match(dmView, /saveChatDraft\(selfId, \{ type: 'dm', id: draftPeerId \}, \{ text: draft \}\)/);
-  assert.match(dmView, /addEventListener\('pagehide', persistDraft\)/);
-
-  const roomChat = read('src/lib/features/room/components/RoomChatPanel.svelte');
-  assert.match(roomChat, /loadChatDraft\(userId, \{ type: 'room', id: roomId \}\)/);
-  assert.match(roomChat, /mentionComposer\.restore\(saved\.mentions\)/);
-  assert.match(roomChat, /mentions: mentionComposer\.selected/);
-
-  const sessionModel = read('src/lib/features/auth/session.svelte.ts');
-  assert.match(sessionModel, /clearChatDrafts\(\)/);
-  assert.match(sessionModel, /resumeChatDrafts\(\)/);
-});

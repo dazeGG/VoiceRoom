@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 
@@ -11,12 +10,26 @@ class FakeMediaStream {
   }
 }
 
+type FakeGain = {
+  value: number;
+  scheduled: Array<[number, number]>;
+  cancelScheduledValues(): void;
+  setValueAtTime(value: number, at: number): void;
+};
+
 class FakeNode {
+  gain: FakeGain;
+  connected: FakeNode[];
   constructor() {
-    this.gain = { value: 1, cancelScheduledValues() {}, setValueAtTime() {} };
+    this.gain = {
+      value: 1,
+      scheduled: [],
+      cancelScheduledValues() { this.scheduled = []; },
+      setValueAtTime(value: number, at: number) { this.scheduled.push([value, at]); }
+    };
     this.connected = [];
   }
-  connect(node) {
+  connect(node: FakeNode) {
     this.connected.push(node);
   }
   disconnect() {
@@ -25,6 +38,9 @@ class FakeNode {
 }
 
 class FakeAudioContext {
+  currentTime: number;
+  destination: FakeNode;
+  sources: number;
   constructor() {
     this.currentTime = 0;
     this.destination = new FakeNode();
@@ -35,7 +51,7 @@ class FakeAudioContext {
   }
   createDynamicsCompressor() {
     const node = new FakeNode();
-    for (const key of ['threshold', 'knee', 'ratio', 'attack', 'release']) node[key] = { value: 0 };
+    for (const key of ['threshold', 'knee', 'ratio', 'attack', 'release']) Object.assign(node, { [key]: { value: 0 } });
     return node;
   }
   createMediaStreamSource() {
@@ -51,7 +67,7 @@ async function loadBus(storage = {}) {
     setItem: (key: string, value: unknown) => store.set(key, String(value)),
     removeItem: (key: string) => store.delete(key)
   });
-  vi.stubGlobal('window', { location: { hash: '', pathname: '/', search: '' }, setTimeout: (fn) => fn() });
+  vi.stubGlobal('window', { location: { hash: '', pathname: '/', search: '' }, setTimeout: (fn: () => void) => fn() });
   vi.stubGlobal('MediaStream', FakeMediaStream);
   vi.stubGlobal('AudioContext', FakeAudioContext);
     vi.resetModules();
@@ -60,7 +76,7 @@ async function loadBus(storage = {}) {
   return { bus, state };
 }
 
-const voiceElement = () => ({ muted: false, srcObject: new FakeMediaStream(), volume: 1 });
+const voiceElement = () => ({ muted: false, srcObject: new FakeMediaStream(), volume: 1 }) as unknown as HTMLMediaElement;
 
 test('a voice at or below 100% plays on its own element, outside the Web Audio mix', async () => {
   const { bus, state } = await loadBus();
@@ -76,7 +92,7 @@ test('a boost above 100% moves the voice into the mix and silences the element',
   const element = voiceElement();
   assert.equal(bus.playVoiceElement(element, { muted: false, volume: 1.5 }), 'mixed');
   assert.equal(element.muted, true, 'the element must not be a second audible path');
-  assert.equal(state.audioContext.sources, 1);
+  assert.equal((state.audioContext as unknown as FakeAudioContext).sources, 1);
 
   // Back under 100% it returns to direct playback.
   assert.equal(bus.playVoiceElement(element, { muted: false, volume: 0.9 }), 'direct');
@@ -102,4 +118,25 @@ test('master volume and output mute re-decide every voice', async () => {
   element.muted = false;
   bus.syncAudioBusSettings();
   assert.equal(element.muted, false, 'a released element is no longer managed');
+});
+
+test('muting the output lets the confirmation cue finish before the master bus goes silent', async () => {
+  const { bus, state } = await loadBus();
+  const graph = bus.getAudioBusGraph() as unknown as Record<'master', FakeNode>;
+  state.outputMuted = true;
+  bus.syncAudioBusSettings({ muteDelayMs: 220 });
+  assert.deepEqual(graph.master.gain.scheduled, [[1, 0], [0, 0.22]]);
+
+  state.outputMuted = false;
+  bus.syncAudioBusSettings({ muteDelayMs: 220 });
+  assert.deepEqual(graph.master.gain.scheduled, [[1, 0]], 'unmuting is immediate');
+});
+
+test('interface sounds go through their own bus input at the stored notification volume', async () => {
+  const { bus } = await loadBus({ 'voice-room:notification-volume': '50' });
+  const graph = bus.getAudioBusGraph() as unknown as Record<'sfx' | 'master', FakeNode>;
+  bus.syncAudioBusSettings();
+  assert.equal(bus.getAudioBusInput('sfx'), graph.sfx);
+  assert.equal(graph.sfx.gain.value, 0.5);
+  assert.ok(graph.sfx.connected.includes(graph.master), 'sounds are mixed under the master volume');
 });

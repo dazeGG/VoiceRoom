@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { listReactionEmojis } from '@voice-room/shared/emoji';
 import { assetName, planEmojiAssets } from '../scripts/build-emoji-assets.ts';
+import { emojiAssetName, emojiAssetUrl } from '../src/lib/shared/chat/emoji-asset.ts';
 
 const webRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (relative: string) => readFileSync(join(webRoot, relative), 'utf8');
@@ -26,11 +27,10 @@ test('an asset name spells out every code point of the sequence', () => {
 });
 
 test('the runtime and the generator agree on how a file is named', () => {
-  const runtime = read('src/lib/shared/chat/emoji-asset.ts');
-
-  assert.match(runtime, /toString\(16\)\.toUpperCase\(\)\.padStart\(4, '0'\)/);
-  assert.match(runtime, /join\('-'\)/);
-  assert.match(runtime, /`\/emoji\/\$\{emojiAssetName\(emoji\)\}\.svg`/);
+  for (const emoji of [RU_FLAG, WAVE_DARK, FAMILY, KEYCAP_ONE, '😀']) {
+    assert.equal(emojiAssetName(emoji), assetName(emoji));
+    assert.equal(emojiAssetUrl(emoji), `/emoji/${assetName(emoji)}.svg`);
+  }
 });
 
 test('the offered catalogue is exactly what the artwork can draw', async () => {
@@ -55,25 +55,6 @@ test('the offered catalogue is exactly what the artwork can draw', async () => {
   const uncovered = flags.filter((emoji) => !offered.has(emoji));
   assert.ok(flags.length > 250);
   assert.ok(uncovered.length <= 1, `too many flags missing: ${uncovered.join(' ')}`);
-});
-
-test('reaction surfaces draw the artwork instead of leaving it to the platform font', () => {
-  const emoji = read('src/lib/shared/chat/Emoji.svelte');
-  const picker = read('src/lib/shared/chat/ReactionPicker.svelte');
-  const summary = read('src/lib/shared/chat/ReactionSummary.svelte');
-  const menu = read('src/lib/shared/chat/MessageContextMenu.svelte');
-
-  // The character stays the alt text, so copying a reaction still yields an
-  // emoji, and the font remains the fallback when a file fails to load.
-  assert.match(emoji, /alt=\{decorative \? '' : emoji\}/);
-  assert.match(emoji, /onerror=\{\(\) => \(failed = true\)\}/);
-  assert.match(emoji, /\{#if failed\}/);
-  assert.match(emoji, /loading="lazy"/);
-
-  for (const source of [picker, summary, menu]) {
-    assert.match(source, /import Emoji from '\.\/Emoji\.svelte'/);
-    assert.match(source, /<Emoji/);
-  }
 });
 
 test('the artwork ships the upstream licence, not the repackager\'s', () => {

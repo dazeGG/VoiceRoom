@@ -1,10 +1,7 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { test, onTestFinished, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
-const webRoot = resolve(import.meta.dirname, '..');
 
 
 async function loadAttention(windowValue = {}) {
@@ -82,25 +79,3 @@ test('badge sync is a no-op without the desktop bridge and retries after a failu
   assert.deepEqual(sent, [2]);
 });
 
-test('lobby mirrors unread counts to the app icon and clears it on unmount', () => {
-  const lobby = readFileSync(resolve(webRoot, 'src/lib/features/home/LobbyPage.svelte'), 'utf8');
-
-  assert.match(lobby, /syncDesktopBadgeCount\(countUnreadForBadge\(\{[\s\S]*?friends: friendsState\.friends[\s\S]*?mutes: notificationPreferences[\s\S]*?roomUnreadById: roomPresence\.unreadCountByRoomId[\s\S]*?rooms\s*\}\)\)/);
-  assert.match(lobby, /syncDesktopCallState\(\{ active: false[^)]*\}\);\s*syncDesktopBadgeCount\(0\);/);
-});
-
-test('an open chat suppresses notifications only while the window is in front', () => {
-  const friends = readFileSync(resolve(webRoot, 'src/lib/features/home/model/friends.svelte.ts'), 'utf8');
-
-  assert.match(friends, /function getActiveNotificationTarget\(\): NotificationActiveTarget \| null \{\s*[\s\S]*?document\.visibilityState !== 'visible' \|\| !document\.hasFocus\(\)[\s\S]*?return null;[\s\S]*?kind: 'dm'/);
-});
-
-test('system notifications stay silent and have a switch in the desktop app tab', () => {
-  const router = readFileSync(resolve(webRoot, 'src/lib/shared/notifications/router.ts'), 'utf8');
-  const modal = readFileSync(resolve(webRoot, 'src/lib/features/home/components/SettingsModal.svelte'), 'utf8');
-
-  assert.match(router, /new globalThis\.Notification\(payload\.title, \{[\s\S]*?silent: true/);
-  assert.match(modal, /\{:else if tab === 'app' && desktopApp && \(autostartAvailable \|\| overlayAvailable\)\}[\s\S]*?\{#if !macDesktopApp\}[\s\S]*?aria-checked=\{systemNotificationsEnabled\}[\s\S]*?aria-label="Системные уведомления"[\s\S]*?toggleSystemNotifications\(\)/);
-  assert.match(modal, /async function toggleSystemNotifications\(\)[\s\S]*?setNotificationsEnabled\(false\)[\s\S]*?requestNotificationsFromUiAction\(\)/);
-  assert.match(modal, /<div hidden=\{desktopApp && autostartAvailable\}>\s*<div class="settings-gate-head">\s*<span class="settings-field-label">\{notificationToggleLabel\}/);
-});

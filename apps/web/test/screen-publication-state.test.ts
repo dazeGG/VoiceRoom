@@ -1,24 +1,9 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
 
-const root = resolve(import.meta.dirname, '..');
-const require = createRequire(import.meta.url);
-const ts = require('typescript');
 
 async function loadPublicationState() {
-  const path = 'src/lib/features/room/client/media/screen-publication-state.ts';
-  const output = ts.transpileModule(readFileSync(resolve(root, path), 'utf8'), {
-    compilerOptions: {
-      module: ts.ModuleKind.ES2022,
-      target: ts.ScriptTarget.ES2022,
-      verbatimModuleSyntax: true
-    },
-    fileName: path
-  }).outputText;
-  return import(`data:text/javascript;base64,${Buffer.from(output).toString('base64')}`);
+  return import('../src/lib/features/room/client/media/screen-publication-state.ts');
 }
 
 test('screen activity survives video republish while screen audio remains published', async () => {

@@ -25,11 +25,22 @@ export interface LiveKitHarness {
   detachedScreens: string[];
   retries: { scheduled: Array<{ peerId: string }>; cleared: number; clearedAll: number };
   audio: { ensured: Array<{ peerId: string }> };
+  ApiRequestError: new (message: string, code?: string, status?: number) => Error & { code: string; status: number };
+  /** Every LiveKit Room the service created, in order. */
+  rooms: Array<{ connectedUrl: string; connectOptions: Record<string, unknown>; disconnected: boolean; published: Array<{ track: unknown; options: Record<string, unknown> }>; unpublished: unknown[] }>;
 }
 
 const P = '../../src/lib/features/room/client';
 
-export async function loadLiveKitHarness(options: { autoResolveClient?: boolean } = {}): Promise<LiveKitHarness> {
+export async function loadLiveKitHarness(options: {
+  autoResolveClient?: boolean;
+  /** Answers POST requests made through the room API client. */
+  postJson?: (url: string, body: unknown) => Promise<unknown>;
+  /** LiveKit URLs whose connect() fails. */
+  failingUrls?: string[];
+  /** Whether a recovery epoch is still current. */
+  recoveryEpochCurrent?: () => boolean;
+} = {}): Promise<LiveKitHarness> {
   vi.resetModules();
 
   const state: LiveKitHarness['state'] = {
@@ -46,9 +57,44 @@ export async function loadLiveKitHarness(options: { autoResolveClient?: boolean 
   const detachedScreens: string[] = [];
   const retries: LiveKitHarness['retries'] = { scheduled: [], cleared: 0, clearedAll: 0 };
   const audio: LiveKitHarness['audio'] = { ensured: [] };
+  const rooms: FakeRoom[] = [];
+  const failingUrls = new Set<string>(options.failingUrls ?? []);
+  class FakeRoom {
+    readonly listeners = new Map<string, Array<(...args: unknown[]) => void>>();
+    readonly remoteParticipants = new Map<string, unknown>();
+    connectedUrl = '';
+    connectOptions: Record<string, unknown> = {};
+    disconnected = false;
+    readonly published: Array<{ track: unknown; options: Record<string, unknown> }> = [];
+    readonly unpublished: unknown[] = [];
+    readonly localParticipant = {
+      trackPublications: new Map<string, unknown>(),
+      publishTrack: async (track: unknown, publishOptions: Record<string, unknown>) => {
+        this.published.push({ track, options: publishOptions });
+        return { track, trackSid: `sid-${this.published.length}`, source: publishOptions.source, mute: async () => {}, unmute: async () => {} };
+      },
+      unpublishTrack: async (track: unknown) => { this.unpublished.push(track); }
+    };
+    constructor() { rooms.push(this); }
+    async connect(url: string, _token: string, connectOptions: Record<string, unknown> = {}) {
+      if (failingUrls.has(url)) throw new Error(`cannot reach ${url}`);
+      this.connectedUrl = url;
+      this.connectOptions = connectOptions;
+    }
+    on(event: string, handler: (...args: unknown[]) => void) {
+      this.listeners.set(event, [...(this.listeners.get(event) ?? []), handler]);
+      return this;
+    }
+    removeAllListeners() { this.listeners.clear(); }
+    async disconnect() { this.disconnected = true; }
+  }
+  const RoomEvent = new Proxy({}, { get: (_target, name) => String(name) });
   const livekitClient = {
+    Room: FakeRoom,
+    RoomEvent,
     SubscriptionError: { SE_CODEC_UNSUPPORTED: 1 },
-    VideoQuality: { HIGH: 2, LOW: 0 }
+    VideoQuality: { HIGH: 2, LOW: 0 },
+    VideoPreset: class { constructor(readonly encoding: unknown) {} }
   };
 
   vi.doMock(`${P}/core/config`, () => ({ MICROPHONE_AUDIO_BITRATE: 64_000, SCREEN_AUDIO_BITRATE: 192_000 }));
@@ -56,9 +102,14 @@ export async function loadLiveKitHarness(options: { autoResolveClient?: boolean 
   vi.doMock(`${P}/core/state.svelte`, () => ({ state }));
   vi.doMock(`${P}/ui/status`, () => ({ setVoiceConnectionStatus: () => {} }));
   vi.doMock(`${P}/ui/toast`, () => ({ showToast: () => {} }));
+  class ApiRequestError extends Error {
+    constructor(message: string, readonly code = '', readonly status = 0) {
+      super(message);
+    }
+  }
   vi.doMock(`${P}/net/api`, () => ({
-    ApiRequestError: class ApiRequestError extends Error {},
-    postJson: async () => ({})
+    ApiRequestError,
+    postJson: options.postJson ?? (async () => ({}))
   }));
   vi.doMock(`${P}/services/media-playback-service`, () => ({ queueAudioUnlock: () => {}, syncRemoteAudioPlayback: () => {} }));
   vi.doMock(`${P}/media/cues`, () => ({ clearPeerJoinCue: () => {} }));
@@ -115,7 +166,7 @@ export async function loadLiveKitHarness(options: { autoResolveClient?: boolean 
   }));
   vi.doMock(`${P}/ui/screen-view`, () => ({ refreshScreenAction: () => {}, refreshScreenStage: () => {}, refreshScreenTiles: () => {} }));
   vi.doMock(`${P}/recovery/room-recovery`, () => ({
-    isCurrentRoomRecoveryEpoch: () => true,
+    isCurrentRoomRecoveryEpoch: () => options.recoveryEpochCurrent?.() ?? true,
     notifyLiveKitDisconnected: () => {},
     notifyLiveKitReconciled: () => {},
     notifyLiveKitReconnecting: () => {},
@@ -141,7 +192,7 @@ export async function loadLiveKitHarness(options: { autoResolveClient?: boolean 
   }));
 
   const service = await import('../../src/lib/features/room/client/services/livekit-service.ts');
-  return { service, state, livekitClientResolvers, screenAttachments, detachedScreens, retries, audio };
+  return { service, state, livekitClientResolvers, screenAttachments, detachedScreens, retries, audio, ApiRequestError, rooms };
 }
 
 /** A fake remote publication that records subscription and quality requests. */

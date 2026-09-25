@@ -53,6 +53,9 @@ import {
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
 import { ScreenRecoveryGraceController } from '../recovery/screen-recovery-grace';
 import { LiveKitReconcileGeneration } from '../recovery/livekit-reconcile-generation';
+import { createLogger } from '$lib/shared/log';
+
+const log = createLogger('room:livekit');
 
 const screenSubscriptionRetryController = createScreenSubscriptionRetryController();
 const screenRecoveryGrace = new ScreenRecoveryGraceController();
@@ -322,7 +325,7 @@ function getLiveKitConnectUrls(url: string): string[] {
 
 function logLiveKitTransition(level: 'info' | 'warn', event: Record<string, string | number>): void {
   if (!['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)) return;
-  console[level]('livekit_recovery_transition', event);
+  log[level]('livekit_recovery_transition', event);
 }
 
 class LiveKitTransportError extends Error {

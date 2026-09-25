@@ -1,10 +1,6 @@
 import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
-const webRoot = resolve(import.meta.dirname, '..');
-const read = (path: string) => readFileSync(resolve(webRoot, path), 'utf8');
 
 async function loadInsert() {
   vi.resetModules();
@@ -31,36 +27,3 @@ test('an emoji that would overflow the field is not inserted', async () => {
   assert.deepEqual(insertIntoDraft('a'.repeat(498), '👍', { start: 498, end: 498 }, 500)?.caret, 500);
 });
 
-test('both composers carry an emoji button on the right that inserts and announces browsing', () => {
-  const roomChat = read('src/lib/features/room/components/RoomChatPanel.svelte');
-  const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
-
-  for (const [source, field] of [[roomChat, 'composeEl'], [dmView, 'inputEl']]) {
-    // After the field, inside the same control row as the attachment button.
-    assert.match(source, /class="attachment-compose-controls">[\s\S]*<EmojiComposer[\s\S]*?\/>\s*<ComposerEmojiPicker/);
-    assert.match(source, /onpick=\{insertEmoji\}/);
-    assert.match(source, /onbrowse=\{\(\) => typingNotifier\.notify\('emoji'\)\}/);
-    // The field puts the emoji at its remembered caret and reports the input.
-    assert.match(source, new RegExp(`function insertEmoji\\(emoji: string\\): void \\{\\s*${field}\\?\\.insertText\\(emoji\\);\\s*\\}`));
-  }
-});
-
-test('reactions and the composer browse emoji through one panel', () => {
-  const panel = read('src/lib/shared/chat/EmojiPickerPanel.svelte');
-  const reactions = read('src/lib/shared/chat/ReactionPicker.svelte');
-  const composer = read('src/lib/shared/chat/ComposerEmojiPicker.svelte');
-
-  assert.match(reactions, /<EmojiPickerPanel \{frequentEmoji\} onpick=/);
-  assert.match(composer, /<EmojiPickerPanel[\s\S]*searchLabel="Поиск эмодзи"[\s\S]*onpick=/);
-  assert.doesNotMatch(panel, /store\.|toggle\(/, 'the panel knows nothing about reactions');
-
-  assert.match(composer, /placement="top-end"/);
-  assert.match(composer, /aria-label="Добавить эмодзи"/);
-  assert.match(composer, /<Smile /);
-  // Browsing is repeated faster than the notifier's throttle, so the state
-  // never lapses while the panel is open, and it stops with the panel.
-  assert.match(composer, /setInterval\(browse, TYPING_NOTICE_INTERVAL_MS \/ 2\)/);
-  assert.match(composer, /return \(\) => clearInterval\(timer\)/);
-  assert.match(composer, /close\(false\);\s*onpick\(emoji\);/);
-  assert.match(read('src/lib/features/room/styles/chat-rail.css'), /\.chat-rail-compose \.composer-emoji-root \{\s*margin-top: 5px;/);
-});

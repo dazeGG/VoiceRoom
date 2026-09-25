@@ -1,11 +1,8 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { onTestFinished, test, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { freshImport, muteWarnings, stubWindow } from './helpers/fresh-module.ts';
 
-const webRoot = resolve(import.meta.dirname, '..');
 
 // Every load gets fresh module instances, so module-level state (sync
 // de-duplication, the in-app navigation mark) never leaks between tests.
@@ -231,54 +228,6 @@ test('room switch confirmation asks only when leaving another live call', async 
   assert.equal(localStorage.getItem(model.ROOM_SWITCH_CONFIRM_STORAGE_KEY), null);
 });
 
-test('lobby routes every voice entry, desktop links and call controls through the new flows', () => {
-  const lobby = readFileSync(resolve(webRoot, 'src/lib/features/home/LobbyPage.svelte'), 'utf8');
-
-  assert.equal((lobby.match(/onEnter=\{\(\) => requestEnterRoom\(selectedRoom\.roomId\)\}/g) || []).length, 2);
-  assert.doesNotMatch(lobby, /onEnter=\{\(\) => enterRoom\(/);
-  assert.match(lobby, /function handleJoin[\s\S]*?requestEnterRoom\(roomId\);/);
-  assert.match(lobby, /createDialogOpen = false;\s*requestEnterRoom\(roomId\);/);
-  assert.match(lobby, /if \(initialRoomId && shouldOfferOpenInApp\(readOpenInAppSignals\(\)\) && !consumeInAppRoomNavigation\(\)\) \{[\s\S]*?openRoomInApp\(\);[\s\S]*?\} else if \(initialRoomId\) \{\s*selectRoomForVoiceEntry\(initialRoomId\);/);
-  assert.match(lobby, /window\.addEventListener\(ENTER_ROOM_EVENT, onEnterRoomRequest\)/);
-  assert.match(lobby, /function onEnterRoomRequest[\s\S]*?if \(roomId\) requestEnterRoom\(roomId\);/);
-
-  const friends = readFileSync(resolve(webRoot, 'src/lib/features/home/model/friends.svelte.ts'), 'utf8');
-  assert.doesNotMatch(friends, /window\.location\.assign\(`\/r\//, 'accepting an invite no longer reloads past the confirmation');
-  assert.match(friends, /new CustomEvent\(ENTER_ROOM_EVENT, \{ detail: \{ roomId \} \}\)/);
-  assert.match(lobby, /bindDesktopLinks\(openDesktopLink\)/);
-  assert.match(lobby, /'toggle-mic': toggleActiveVoiceMic,\s*'toggle-output': toggleActiveVoiceDeafen,\s*disconnect: \(\) => void leaveConnectedVoiceRoom\(\)/);
-  assert.match(lobby, /syncDesktopCallState\(\{\s*active: Boolean\(connectedVoiceRoomId\),\s*micMuted: voiceSession\.muted,\s*outputMuted: voiceSession\.deafened/);
-  assert.match(lobby, /<RoomSwitchDialog[\s\S]*?onConfirm=\{\(dontAskAgain\) => resolveRoomSwitch\(true, dontAskAgain\)\}/);
-  assert.match(lobby, /<OpenInAppScreen onRetry=\{openRoomInApp\} onContinue=\{continueRoomInBrowser\} \/>/);
-});
-
-test('guests get the open-in-app offer before auto-joining, and in-app reloads are marked', () => {
-  const route = readFileSync(resolve(webRoot, 'src/routes/r/[roomId]/+page.svelte'), 'utf8');
-  assert.match(route, /onMount\(\(\) => \{[\s\S]*?inAppNavigation = consumeInAppRoomNavigation\(\);[\s\S]*?boundaryReady = true;/);
-  assert.match(route, /const guestOpenInApp = \$derived\([\s\S]*?!session\.user[\s\S]*?!inAppNavigation[\s\S]*?shouldOfferOpenInApp\(readOpenInAppSignals\(\)\)/);
-  assert.match(route, /\{:else if guestOpenInApp\}\s*<OpenInAppScreen[\s\S]*?\{:else\}\s*\{#key routeRoomId\}\s*<RoomPage roomId=\{routeRoomId\} autoJoin \/>/);
-
-  for (const file of ['src/lib/features/home/HomePage.svelte', 'src/lib/features/room/client/room/room.ts']) {
-    const source = readFileSync(resolve(webRoot, file), 'utf8');
-    assert.match(source, /function openRoom\(roomId: string\): void \{\s*markInAppRoomNavigation\(\);\s*window\.location\.href = `\/r\//, file);
-  }
-});
-
-test('open-in-app screen offers the desktop download next to retry and continue', () => {
-  const screen = readFileSync(resolve(webRoot, 'src/lib/features/home/components/OpenInAppScreen.svelte'), 'utf8');
-  assert.match(screen, /let \{ onRetry, onContinue \} = \$props/, 'both call sites keep their props');
-  assert.match(screen, /onMount\(\(\) => \{\s*startDownload = createDesktopDownload\(\);/);
-  assert.match(screen, /await startDownload\(\);/);
-  assert.match(
-    screen,
-    /<div class="open-in-app-actions">\s*<Button variant="primary"[^>]*onclick=\{download\}>Скачать приложение<\/Button>\s*<Button variant="ghost" type="button" onclick=\{onRetry\}>Открыть снова<\/Button>\s*<Button variant="ghost" type="button" onclick=\{onContinue\}>Продолжить в браузере<\/Button>/
-  );
-
-  const sidebar = readFileSync(resolve(webRoot, 'src/lib/features/home/components/SidebarDownload.svelte'), 'utf8');
-  assert.match(sidebar, /startDesktopBuildDownload\(release \?\? \(await ensureRelease\(\)\), buildId\)/);
-  assert.doesNotMatch(sidebar, /RELEASES_URL/, 'the release-page fallback lives in the shared helper');
-});
-
 test('desktop build download uses the release asset and falls back to the releases page', async () => {
   const opened = [];
   const clicked = [];
@@ -326,9 +275,3 @@ test('desktop build download uses the release asset and falls back to the releas
   assert.equal(clicked.length, 1);
 });
 
-test('settings expose the room switch question and desktop diagnostics', () => {
-  const modal = readFileSync(resolve(webRoot, 'src/lib/features/home/components/SettingsModal.svelte'), 'utf8');
-
-  assert.match(modal, /aria-label="Спрашивать перед переходом в другую комнату"[\s\S]*?onclick=\{toggleRoomSwitchConfirm\}/);
-  assert.match(modal, /\{#if diagnosticsAvailable\}[\s\S]*?openLogsFolder\(\)[\s\S]*?Открыть папку логов[\s\S]*?copyDiagnostics\(\)[\s\S]*?Скопировать информацию о системе/);
-});

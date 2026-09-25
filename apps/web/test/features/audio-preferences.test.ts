@@ -43,3 +43,12 @@ test('the interface sound volume is a stored percentage', () => {
   localStorage.setItem('voice-room:notification-volume', '50');
   expect(getNotificationVolumeMultiplier()).toBe(0.5);
 });
+
+test('the master volume is stored as a whole percent between 0 and 200', async () => {
+  const { getStoredMasterVolume, persistMasterVolume } = await import('../../src/lib/features/room/client/core/settings.ts');
+  expect(getStoredMasterVolume()).toBe(100);
+  expect(persistMasterVolume(250)).toBe(200);
+  expect(persistMasterVolume(-1)).toBe(0);
+  expect(persistMasterVolume(72.4)).toBe(72);
+  expect(getStoredMasterVolume()).toBe(72);
+});

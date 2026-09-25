@@ -1,67 +1,34 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
-import { test } from 'vitest';
+import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
 
-const root = resolve(import.meta.dirname, '..');
-const require = createRequire(import.meta.url);
-const ts = require('typescript');
-
-function moduleUrl(source) {
-  return `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;
-}
 
 async function loadParticipantScreenLifecycle() {
-  const stubUrl = moduleUrl(`
-    export const state = {
-      viewedScreenPeerId: '',
-      sharedScreenPeerId: '',
-      screenRequesting: false,
-      screenSubscribedPeerIds: new Set()
-    };
-    export const testState = { stageRefreshes: 0 };
-    export const participantsUi = { revision: 0 };
-    export const reactiveParticipant = (participant) => participant;
-    export const bumpParticipantsRevision = () => {};
-    export const closeParticipantContextMenu = () => {};
-    export const getScreenProfile = () => ({ id: 'balanced-30' });
-    export const applyRemoteParticipantAudioPreferences = () => {};
-    export const playMediaElement = () => {};
-    export const releaseRemoteAudioElement = () => {};
-    export const STREAM_CUE_DEDUPE_MS = 1000;
-    export const clearPeerJoinCue = () => {};
-    export const playStreamCue = () => {};
-    export const playStreamViewerCue = () => {};
-    export const attachMeter = () => {};
-    export const syncLiveKitScreenSubscriptions = () => {};
-    export const disconnectScreen = () => {};
-    export const hideScreenStage = () => {};
-    export const refreshAllScreenActions = () => {};
-    export const refreshScreenStage = () => { testState.stageRefreshes += 1; };
-    export const refreshScreenTiles = () => {};
-  `);
-  const path = 'src/lib/features/room/client/room/participants.ts';
-  const source = readFileSync(resolve(root, path), 'utf8')
-    .replace(/from '[^']+'/g, `from '${stubUrl}'`)
-    .replace(/import\('[^']+'\)/g, `import('${stubUrl}')`);
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.ES2022,
-      target: ts.ScriptTarget.ES2022,
-      verbatimModuleSyntax: true
-    },
-    fileName: path
-  }).outputText;
-  return {
-    lifecycle: await import(moduleUrl(output)),
-    state: (await import(stubUrl)).state,
-    testState: (await import(stubUrl)).testState
-  };
+  vi.resetModules();
+  const testState = { stageRefreshes: 0 };
+  vi.doMock('../src/lib/features/room/client/services/media-playback-service', () => ({
+    applyRemoteParticipantAudioPreferences: () => {},
+    playMediaElement: () => {},
+    releaseRemoteAudioElement: () => {}
+  }));
+  vi.doMock('../src/lib/features/room/client/media/cues', () => ({ clearPeerJoinCue: () => {}, playStreamCue: () => {}, playStreamViewerCue: () => {} }));
+  vi.doMock('../src/lib/features/room/client/media/meters', () => ({ attachMeter: () => {} }));
+  vi.doMock('../src/lib/features/room/client/services/livekit-service', () => ({ syncLiveKitScreenSubscriptions: () => {} }));
+  vi.doMock('../src/lib/features/room/client/ui/screen-view', () => ({
+    disconnectScreen: () => {},
+    hideScreenStage: () => {},
+    refreshAllScreenActions: () => {},
+    refreshScreenStage: () => { testState.stageRefreshes += 1; },
+    refreshScreenTiles: () => {}
+  }));
+  const lifecycle = await import('../src/lib/features/room/client/room/participants.ts');
+  const { state } = await import('../src/lib/features/room/client/core/state.svelte.ts');
+  state.viewedScreenPeerId = '';
+  state.screenRequesting = false;
+  return { lifecycle, state, testState };
 }
 
-function track(id, kind) {
+function track(id: string, kind: string) {
   return {
     id,
     kind,

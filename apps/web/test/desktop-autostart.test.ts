@@ -1,12 +1,9 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { test, onTestFinished } from 'vitest';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 
 import * as service from '../src/lib/platform/desktop-autostart.ts';
 
-const webRoot = resolve(import.meta.dirname, '..');
 
 // The service has no module state and reads `window` on every call, so one
 // native import covers every bridge shape. Loading it through an in-process
@@ -71,12 +68,3 @@ test('desktop autostart service swallows bridge failures', async () => {
   assert.equal(await service.updateDesktopAutostartSettings({ startMinimized: true }), null);
 });
 
-test('settings modal exposes desktop-only autostart switches', () => {
-  const modal = readFileSync(resolve(webRoot, 'src/lib/features/home/components/SettingsModal.svelte'), 'utf8');
-
-  assert.match(modal, /\{#if desktopApp && \(autostartAvailable \|\| overlayAvailable\)\}[\s\S]*data-active=\{tab === 'app'\}[\s\S]*Приложение[\s\S]*\{\/if\}/);
-  assert.match(
-    modal,
-    /\{:else if tab === 'app' && desktopApp && \(autostartAvailable \|\| overlayAvailable\)\}[\s\S]*aria-label="Автозапуск"[\s\S]*changeAutostart\(\{ openAtLogin: !openAtLogin \}\)[\s\S]*aria-label="Автозапуск свёрнутым"[\s\S]*disabled=\{autostartSaving \|\| !autostartSupported \|\| !openAtLogin\}[\s\S]*changeAutostart\(\{ startMinimized: !startMinimized \}\)/
-  );
-});

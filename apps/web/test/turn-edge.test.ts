@@ -46,8 +46,3 @@ test('LiveKit runs embedded TURN behind external TLS with published UDP and rela
   assert.match(compose, /TURN_ENABLED: \$\{TURN_ENABLED:-false\}\n\s+TURN_DOMAIN: \$\{TURN_DOMAIN:-\}/);
 });
 
-test('?forceRelay=1 forces relay-only ICE for verifying a TURN deployment', () => {
-  const livekit = read('apps/web/src/lib/features/room/client/services/livekit-service.ts');
-  assert.match(livekit, /get\('forceRelay'\) === '1'/);
-  assert.match(livekit, /isForcedRelayDiagnostic\(\) \? \{ rtcConfig: \{ iceTransportPolicy: 'relay'/);
-});

@@ -69,8 +69,3 @@ test('what the artwork does not draw is left as text, never offered as an image'
   }
 });
 
-test('the renderer draws text parts as text and emoji parts as artwork on one line', () => {
-  const component = read('src/lib/shared/chat/EmojiText.svelte');
-  assert.match(component, /\{#each parts as part, index \(index\)\}\{#if part\.kind === 'emoji'\}<Emoji emoji=\{part\.emoji\} \{size\} inline \/>\{:else\}\{part\.text\}\{\/if\}\{\/each\}/);
-  assert.doesNotMatch(component, /\{@html|innerHTML/);
-});

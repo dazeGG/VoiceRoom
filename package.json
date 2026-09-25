@@ -23,7 +23,7 @@
     "dev:host:web": "npm --workspace @voice-room/web run dev",
     "dev:host:livekit": "docker run --rm -e LIVEKIT_KEYS=\"devkey: devsecret\" -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server:v1.13.2 --dev --bind 0.0.0.0",
     "build": "npm --workspace @voice-room/web run build",
-    "check": "npm --workspace @voice-room/shared run check && npm --workspace @voice-room/api run check && npm --workspace @voice-room/web run check && tsc -p scripts/tsconfig.json && npm run lint",
+    "check": "npm --workspace @voice-room/shared run check && npm --workspace @voice-room/api run check && npm --workspace @voice-room/web run check && tsc -p scripts/tsconfig.json && node scripts/check-web-palette.mts && node scripts/check-test-source-reads.mts && npm run lint",
     "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
     "lint:baseline": "eslint . --suppress-all",
     "test": "npm --workspace @voice-room/shared run test && npm --workspace @voice-room/api run test && npm --workspace @voice-room/web run test",

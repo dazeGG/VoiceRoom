@@ -1,47 +1,24 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
 
-const root = resolve(import.meta.dirname, '..');
-const require = createRequire(import.meta.url);
-const ts = require('typescript');
-
-function moduleUrl(source) {
-  return `data:text/javascript;base64,${Buffer.from(source).toString('base64')}`;
-}
 
 async function loadRoomRealtime() {
-  const stubUrl = moduleUrl(`
-    export const sent = [];
-    export const connection = {
-      epoch: 7,
-      connected: true,
-      ensureConnected() {},
-      getConnectionEpoch() { return this.epoch; },
-      isConnected() { return this.connected; },
-      onRestore() { return () => {}; },
-      send(type, payload, id) { sent.push({ type, payload, id }); },
-      subscribe() { return () => {}; }
-    };
-    export const getAppRealtime = () => connection;
-    export const applyRoomSummary = () => {};
-  `);
-  const path = 'src/lib/features/home/model/room-realtime.ts';
-  const source = readFileSync(resolve(root, path), 'utf8')
-    .replace(/from '[^']+'/g, `from '${stubUrl}'`);
-  const output = ts.transpileModule(source, {
-    compilerOptions: {
-      module: ts.ModuleKind.ES2022,
-      target: ts.ScriptTarget.ES2022,
-      verbatimModuleSyntax: true
-    },
-    fileName: path
-  }).outputText;
-  const stub = await import(stubUrl);
-  return { realtime: await import(moduleUrl(output)), sent: stub.sent };
+  vi.resetModules();
+  const sent = [];
+  const connection = {
+    epoch: 7,
+    connected: true,
+    ensureConnected() {},
+    getConnectionEpoch() { return this.epoch; },
+    isConnected() { return this.connected; },
+    onRestore() { return () => {}; },
+    send(type, payload, id) { sent.push({ type, payload, id }); },
+    subscribe() { return () => {}; }
+  };
+  vi.doMock('../src/lib/api/realtime', () => ({ getAppRealtime: () => connection }));
+  vi.doMock('../src/lib/features/home/model/room-presence.svelte', () => ({ applyRoomSummary: () => {} }));
+  return { realtime: await import('../src/lib/features/home/model/room-realtime.ts'), sent };
 }
 
 test('a delayed retryable error cannot cancel a newer successful voice resync attempt', async () => {

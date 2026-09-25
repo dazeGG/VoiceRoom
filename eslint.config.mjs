@@ -77,5 +77,12 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' }],
       'svelte/no-at-html-tags': 'error'
     }
+  },
+  {
+    // Browser code logs through $lib/shared/log so records reach the failure
+    // report buffer; only the logger itself touches the console.
+    files: ['apps/web/src/**/*.{ts,svelte}'],
+    ignores: ['apps/web/src/lib/shared/log.ts'],
+    rules: { 'no-console': 'error' }
   }
 );

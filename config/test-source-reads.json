@@ -1,0 +1,6 @@
+{
+  "apps/api/test": 38,
+  "apps/web/test": 0,
+  "packages/shared/test": 3,
+  "scripts/test": 0
+}

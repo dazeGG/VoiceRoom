@@ -60,3 +60,13 @@ test('a room card opens its menu on right click and from the keyboard, and Escap
   await userEvent.keyboard('{Shift>}{F10}{/Shift}');
   expect(await screen.findByRole('menu', { name: 'Меню комнаты Планёрка' })).toBeTruthy();
 });
+
+test('a room with muted notifications shows a bell-off mark next to its name', async () => {
+  const { notificationPreferences } = await import('../../src/lib/shared/notifications/preferences.svelte.ts');
+  notificationPreferences.mutedRoomIds = ['abc123'];
+  renderHome([room('abc123', 'Планёрка'), room('other', 'Другая')]);
+  const muted = screen.getAllByRole('img', { name: 'Уведомления отключены' });
+  expect(muted).toHaveLength(1);
+  expect(screen.getByRole('button', { name: /Планёрка/ }).contains(muted[0])).toBe(true);
+  notificationPreferences.mutedRoomIds = [];
+});

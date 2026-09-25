@@ -1,7 +1,6 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 
 test('G31-A01 multiple render advances coalesce to the newest pending cursor', async () => {
   const { createReadReconciliation } = await import('../src/lib/shared/chat/read-reconciliation.svelte.ts');
@@ -52,8 +51,3 @@ test('G31-A03 two tabs accept repeated newer cursors and suppress identical or o
   }
 });
 
-test('G31 realtime reconciliation failures stay non-blocking but observable', () => {
-  const source = readFileSync(`${import.meta.dirname}/../src/lib/features/room/components/RoomChatPanel.svelte`, 'utf8');
-  assert.match(source, /catch \(cause\) \{\s*log\.error\('failed to reconcile realtime room read cursor', errorContext\(cause\)\);/);
-  assert.doesNotMatch(source, /markRealtimeRenderedRead[\s\S]*?catch \{\}/);
-});

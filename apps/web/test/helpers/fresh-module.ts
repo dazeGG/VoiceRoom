@@ -28,7 +28,11 @@ export function stubWindow(props: Record<string, unknown>): void {
   }
 }
 
-/** Imports a root-relative module (`/src/...`) as a new instance. */
+/**
+ * Imports a root-relative module (`/src/...`) as a new instance. This also
+ * reloads Svelte's runtime, so a test that checks reactivity between the
+ * module's `$state` and its own `$effect` must import the module statically.
+ */
 export async function freshImport<T = Record<string, unknown>>(modulePath: string): Promise<T> {
   vi.resetModules();
   return (await import(/* @vite-ignore */ modulePath)) as T;

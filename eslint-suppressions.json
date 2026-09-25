@@ -3473,30 +3473,13 @@
       "count": 1
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 13
+      "count": 7
     },
     "@typescript-eslint/no-unsafe-call": {
-      "count": 10
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 17
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/web/test/audio-bus-voice-path.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
+      "count": 3
     }
   },
   "apps/web/test/audio-gate-worklet.test.ts": {
@@ -3676,11 +3659,6 @@
       "count": 1
     }
   },
-  "apps/web/test/microphone-input-hotkeys.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    }
-  },
   "apps/web/test/network-stats.test.ts": {
     "@typescript-eslint/ban-ts-comment": {
       "count": 1
@@ -3718,26 +3696,6 @@
       "count": 1
     }
   },
-  "apps/web/test/palette-surface-contract.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 14
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 16
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 16
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 27
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    }
-  },
   "apps/web/test/presence-idle.test.ts": {
     "@typescript-eslint/ban-ts-comment": {
       "count": 1
@@ -3753,20 +3711,6 @@
     },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 8
-    }
-  },
-  "apps/web/test/realtime-connection-race.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 9
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 9
     }
   },
   "apps/web/test/realtime-recovery.test.ts": {
@@ -3787,51 +3731,6 @@
     },
     "@typescript-eslint/unbound-method": {
       "count": 2
-    }
-  },
-  "apps/web/test/screen-audio-fallback.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 9
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 11
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 21
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/web/test/screen-publication-state.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/web/test/screen-receiver-demand.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
     }
   },
   "apps/web/test/screen-recovery-grace.test.ts": {
@@ -3862,16 +3761,16 @@
       "count": 1
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 21
+      "count": 7
     },
     "@typescript-eslint/no-unsafe-call": {
-      "count": 24
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 27
+      "count": 6
     },
     "@typescript-eslint/no-unsafe-return": {
-      "count": 2
+      "count": 1
     }
   },
   "apps/web/test/screen-track-lifecycle.test.ts": {
@@ -3879,13 +3778,13 @@
       "count": 1
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 19
+      "count": 3
     },
     "@typescript-eslint/no-unsafe-call": {
-      "count": 16
+      "count": 4
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 36
+      "count": 10
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 3

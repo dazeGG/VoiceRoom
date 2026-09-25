@@ -27,7 +27,7 @@ export default defineConfig({
     proxy: API_PROXY
   },
   test: {
-    include: ['test/**/*.test.ts'],
+    include: ['test/**/*.test.ts', 'test/**/*.test.svelte.ts'],
     // Browser semantics for every unit test: runes compile for the client and
     // component tests get a DOM. Node APIs stay available.
     environment: 'jsdom',

@@ -1,6 +1,5 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import { test } from 'vitest';
 
 import {
@@ -197,25 +196,6 @@ test('a later transport regression invalidates an in-place reconcile completion'
   assert.equal(generation.isCurrent(laterReconnect), true);
 });
 
-test('web recovery wiring pins replacement identity and correlates bounded resync retries', () => {
-  const realtime = fs.readFileSync(`${import.meta.dirname}/../src/lib/api/realtime.ts`, 'utf8');
-  const roomRealtime = fs.readFileSync(`${import.meta.dirname}/../src/lib/features/home/model/room-realtime.ts`, 'utf8');
-  const livekit = fs.readFileSync(`${import.meta.dirname}/../src/lib/features/room/client/services/livekit-service.ts`, 'utf8');
-
-  assert.match(realtime, /this\.reconnectTimer !== null[\s\S]{0,160}clearTimeout\(this\.reconnectTimer\)/);
-  assert.match(realtime, /generation !== this\.openGeneration/);
-  assert.match(roomRealtime, /voice-resync-\$\{appEpoch\}/);
-  assert.match(roomRealtime, /pending\.attempts < 3/);
-  assert.match(roomRealtime, /code: 'transport_error'/);
-  assert.match(roomRealtime, /pending\.currentRequestId = `\$\{pending\.requestId\}-attempt-\$\{pending\.attempts\}`/);
-  assert.match(roomRealtime, /event\.id === pending\.currentRequestId/);
-  assert.match(roomRealtime, /event\.payload\.id !== pending\.currentRequestId/);
-  assert.match(livekit, /state\.sessionToken === sessionToken/);
-  assert.match(livekit, /state\.localScreenStream === screenStream/);
-  assert.match(livekit, /screenTrackIds/);
-  assert.match(livekit, /oldRoom\) reconcileGenerationFor\(oldRoom\)\.invalidate\(\)/);
-});
-
 test('stale replacement completion cannot revive a cancelled or newer recovery epoch', async () => {
   const attempt = deferred();
   const { controller } = createController({ attemptReplacement: () => attempt.promise });
@@ -308,16 +288,3 @@ test('API failure classification is stable and fails unknown HTTP errors closed'
   assert.equal(sanitizeRecoveryCode('token=secret'), 'unknown_error');
 });
 
-test('room recovery wiring uses app epochs and applied active snapshot authority', () => {
-  const realtime = fs.readFileSync(`${import.meta.dirname}/../src/lib/api/realtime.ts`, 'utf8');
-  const roomRealtime = fs.readFileSync(`${import.meta.dirname}/../src/lib/features/home/model/room-realtime.ts`, 'utf8');
-  const room = fs.readFileSync(`${import.meta.dirname}/../src/lib/features/room/client/room/room.ts`, 'utf8');
-
-  assert.match(realtime, /this\.connectionEpoch \+= 1/);
-  assert.match(realtime, /restore\(this\.connectionEpoch\)/);
-  assert.match(roomRealtime, /connectionEpoch <= lastRestoreEpoch/);
-  assert.match(roomRealtime, /requestActiveVoiceResync\(recoveryEpoch: number, appEpoch: number\)/);
-  assert.match(room, /notifyRoomSnapshotApplied\([\s\S]*active: snapshot\.mode === 'active'[\s\S]*hasLocalPeer: Boolean\(localPeer\)/);
-  assert.match(room, /connectLiveKitRoom\([\s\S]*notifyLiveKitReconciled\(\)/);
-  assert.doesNotMatch(room, /event\.type === 'pong'[\s\S]{0,200}notifyRoomSnapshotApplied/);
-});

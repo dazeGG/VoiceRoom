@@ -1,7 +1,7 @@
 // What this tab subscribes to in LiveKit: remote voices while the output is
 // on, and screen shares only while someone here watches them.
 
-import { expect, test } from 'vitest';
+import { expect, test, vi } from 'vitest';
 import { fakeParticipant, fakePublication, flushMicrotasks, loadLiveKitHarness } from '../helpers/livekit-harness.ts';
 
 function liveAudioTrack() {
@@ -132,4 +132,47 @@ test('late screen subscription cannot override authoritative screen stop', async
   expect(lk.detachedScreens).toEqual([existing.id]);
   expect(screen.calls.subscribed.at(-1)).toBe(false);
   expect(existing).toMatchObject({ screen: false, screenAudio: false, screenStream: null });
+});
+
+test('a token request that races the realtime join is retried while the join is still current', async () => {
+  vi.useFakeTimers();
+  let attempts = 0;
+  let current = true;
+  const lk = await loadLiveKitHarness({
+    autoResolveClient: true,
+    postJson: async () => {
+      attempts += 1;
+      if (attempts < 3) throw new lk.ApiRequestError('not in room', 'not_in_room');
+      // Stop right after the credentials arrive, before any LiveKit connection.
+      current = false;
+      return { token: 't', url: 'wss://lk' };
+    }
+  });
+  const connecting = lk.service.connectLiveKitRoom('Анна', () => current);
+  await vi.advanceTimersByTimeAsync(500);
+  await vi.advanceTimersByTimeAsync(1_000);
+  await expect(connecting).resolves.toBe(false);
+  expect(attempts).toBe(3);
+  vi.useRealTimers();
+});
+
+test('a token request is not retried once the join was abandoned, nor for other errors', async () => {
+  vi.useFakeTimers();
+  let attempts = 0;
+  const lk = await loadLiveKitHarness({
+    autoResolveClient: true,
+    postJson: async () => {
+      attempts += 1;
+      throw new lk.ApiRequestError('not in room', 'not_in_room');
+    }
+  });
+  const abandoned = lk.service.connectLiveKitRoom('Анна', () => false);
+  const assertion = expect(abandoned).rejects.toThrow('not in room');
+  await vi.advanceTimersByTimeAsync(500);
+  await assertion;
+  expect(attempts).toBe(1);
+
+  const other = await loadLiveKitHarness({ postJson: async () => { throw new Error('room full'); } });
+  await expect(other.service.connectLiveKitRoom('Анна', () => true)).rejects.toThrow('room full');
+  vi.useRealTimers();
 });

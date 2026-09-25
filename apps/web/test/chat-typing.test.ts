@@ -1,12 +1,10 @@
 // @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.test.json.
 import { test, onTestFinished, vi } from 'vitest';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 
 const webRoot = resolve(import.meta.dirname, '..');
-const read = (path: string) => readFileSync(resolve(webRoot, path), 'utf8');
 const require = createRequire(resolve(webRoot, 'package.json'));
 
 
@@ -105,31 +103,3 @@ test('a typist stays listed with what they do until their message or the notice 
   assert.deepEqual(tracker.people, []);
 });
 
-test('direct threads and room chats send, show and clear typing notices under the message field', () => {
-  const dmView = read('src/lib/features/home/components/lobby/DmView.svelte');
-  assert.match(dmView, /send\('dm\.typing', \{ userId: draftPeerId, activity \}\)/);
-  assert.match(dmView, /oninput=\{onComposeInput\}/);
-  assert.match(dmView, /class="lobby-dm-head-status" data-presence=\{presence\}>\{presenceLabel\}</, 'the header shows presence only');
-  assert.match(dmView, /class="lobby-dm-compose"[\s\S]*<TypingIndicator label=\{typingLabel\} \/>/);
-
-  const friends = read('src/lib/features/home/model/friends.svelte.ts');
-  assert.match(friends, /case 'dm\.typing'/);
-  assert.match(friends, /dmTyping\.note\(event\.payload\.userId, '', typingActivityOf\(event\.payload\.activity\)\)/);
-  assert.match(friends, /dmTyping\.clear\(message\.senderId\)/);
-
-  const roomChat = read('src/lib/features/room/components/RoomChatPanel.svelte');
-  assert.match(roomChat, /send\('room\.chat\.typing', \{ roomId, activity \}\)/);
-  assert.match(roomChat, /event\.type === 'room\.chat\.typing'/);
-  assert.match(roomChat, /typingActivityOf\(event\.payload\.activity\)/);
-  assert.match(roomChat, /roomTyping\.clear\(typingKey\(message\)\)/);
-  assert.match(roomChat, /<form class="chat-rail-compose"[\s\S]*<TypingIndicator label=\{typingLabel\} \/>[\s\S]*<\/form>/);
-  assert.doesNotMatch(roomChat, /chat-rail-typing/);
-
-  const indicator = read('src/lib/shared/chat/TypingIndicator.svelte');
-  assert.match(indicator, /class="chat-typing" aria-live="polite"/);
-  assert.match(indicator, /position: absolute;/);
-  assert.match(indicator, /color: var\(--warm-muted/);
-  for (const [source, selector] of [[read('src/lib/features/room/styles/chat-rail.css'), 'chat-rail-compose'], [read('src/lib/features/home/styles/friends.css'), 'lobby-dm-compose']]) {
-    assert.match(source, new RegExp(`\\.${selector} \\{[^}]*--chat-typing-inset:`));
-  }
-});
