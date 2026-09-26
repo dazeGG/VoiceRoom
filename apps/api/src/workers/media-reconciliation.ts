@@ -31,9 +31,9 @@ function createMediaReconciliationWorker({
 
 async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
   if (String(env.MEDIA_RECONCILIATION_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
-  const { createAttachmentRepository } = await import('../domains/media/attachment-repository.ts');
-  const { createMediaJobRepository } = await import('../domains/media/media-job-repository.ts');
-  const { createMediaReconciliationService } = await import('../domains/media/media-reconciliation-service.ts');
+  const { createAttachmentRepository } = await import('../domains/media/attachment.repository.ts');
+  const { createMediaJobRepository } = await import('../domains/media/media-job.repository.ts');
+  const { createMediaReconciliationService } = await import('../domains/media/media-reconciliation.service.ts');
   const { createMediaStorage } = await import('../domains/media/storage.ts');
   const attachments = createAttachmentRepository({ pool });
   const worker = createMediaReconciliationWorker({

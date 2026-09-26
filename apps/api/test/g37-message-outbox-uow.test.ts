@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { createMessageOutboxRepository } from '../src/domains/messaging/message-outbox-repository.ts';
+import { createMessageOutboxRepository } from '../src/domains/messaging/message-outbox.repository.ts';
 import { transaction } from '../src/platform/db/pool.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';

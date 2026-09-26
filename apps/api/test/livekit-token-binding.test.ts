@@ -15,7 +15,7 @@ import {
   normalizeLiveKitRoomPrefix,
   verifyAccessTokenBinding
 } from '../src/domains/admission/livekit-token-binding.mts';
-import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate-service.ts';
+import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate.service.ts';
 import type { GateClaims } from '../src/domains/admission/gate-credential-signer.ts';
 import { recordingLogger } from './fakes/index.ts';
 

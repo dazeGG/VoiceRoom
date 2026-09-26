@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import type pg from 'pg';
 
-import { createAttachmentRepository, mapAttachment } from '../src/domains/media/attachment-repository.ts';
+import { createAttachmentRepository, mapAttachment } from '../src/domains/media/attachment.repository.ts';
 import { transaction } from '../src/platform/db/pool.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';

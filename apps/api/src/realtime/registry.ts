@@ -1,7 +1,8 @@
 import crypto from 'node:crypto';
 import { cleanPresenceStatus } from '@voice-room/shared/validation';
 import type { PresenceStatus } from '@voice-room/shared/validation';
-import type { ServerEnvelope } from '@voice-room/shared/realtime';
+import type { ServerEnvelope, TypingActivity } from '@voice-room/shared/realtime';
+import type { createTypingThrottle } from './typing-throttle.ts';
 import type { ServerEvents } from '@voice-room/shared/contracts/realtime';
 import { buildServerEnvelope, sendWsEnvelope } from './envelope.ts';
 import { toWsAccountEvent } from './account-events.ts';
@@ -13,7 +14,8 @@ export type RealtimeSocket = {
   send(data: string): void;
   close(code?: number, reason?: string): void;
 };
-export type ActiveVoice = { roomId: string; [key: string]: any };
+/** The voice seat a socket holds. */
+export type ActiveVoice = { roomId: string; peerId: string; sessionToken: string; transportId: string };
 export type WsConnection = {
   id: string;
   userId: string | null;
@@ -25,13 +27,22 @@ export type WsConnection = {
   presenceStatus: PresenceStatus;
   previewRoomIds: Set<string>;
   activeVoice: ActiveVoice | null;
-  pendingVoiceJoin: any;
+  /** The voice join this socket asked for last; a newer one supersedes it. */
+  pendingVoiceJoin: { roomId: string; peerId: string } | null;
   inboundMessageQueue: Promise<unknown>;
   lastHeartbeatAt: number;
   openedAt: number;
   closed: boolean;
-  [key: string]: any;
+  /** Who this socket types as in a room chat, cached for a minute. */
+  typingProfile?: { at: number; typist: RoomTypist };
+  roomTypingThrottle?: TypingThrottle;
+  dmTypingThrottle?: TypingThrottle;
+  /** DM typing may check friendships only so often per window. */
+  dmTypingLookups?: { windowAt: number; spent: number };
+  dmTypingPermission?: Map<string, { allowed: boolean; checkedAt: number }>;
 };
+type RoomTypist = { peerId: string; userId: string | null; name: string };
+type TypingThrottle = ReturnType<typeof createTypingThrottle<TypingActivity>>;
 type PresenceEntry = { inVoice: boolean; roomId: string | null; presenceStatus: string };
 type PresenceRegistry = {
   userConnections?: Map<string, Set<WsConnection>>;

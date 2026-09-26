@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
-import { createInboxRepository } from '../src/domains/notifications/inbox-repository.ts';
-import { createNotificationService } from '../src/domains/notifications/notification-service.ts';
+import { createInboxRepository } from '../src/domains/notifications/inbox.repository.ts';
+import { createNotificationService } from '../src/domains/notifications/notification.service.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 

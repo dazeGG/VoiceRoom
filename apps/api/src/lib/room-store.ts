@@ -4,7 +4,7 @@
 
 import type pg from 'pg';
 import { kyselyOn, type Queryable } from '../platform/db/kysely.ts';
-import { createActiveBanService, type ActiveBanService } from '../domains/moderation/active-ban-service.ts';
+import { createActiveBanService, type ActiveBanService } from '../domains/moderation/active-ban.service.ts';
 import { createRoomRepository } from '../domains/rooms/room.repository.ts';
 import { createRoomAccessRepository } from '../domains/rooms/room-access.repository.ts';
 import { createPeerIdentityRepository } from '../domains/rooms/peer-identity.repository.ts';

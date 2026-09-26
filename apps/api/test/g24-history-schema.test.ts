@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { Pool } from 'pg';
-import { createDmHistoryRepository } from '../src/domains/messaging/dm-history-repository.ts';
-import { createRoomHistoryRepository } from '../src/domains/messaging/room-history-repository.ts';
+import { createDmHistoryRepository } from '../src/domains/messaging/dm-history.repository.ts';
+import { createRoomHistoryRepository } from '../src/domains/messaging/room-history.repository.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 

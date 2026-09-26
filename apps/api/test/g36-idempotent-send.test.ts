@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import {
   createMessageIdempotencyRepository,
   IdempotencyConflictError
-} from '../src/domains/messaging/message-idempotency-repository.ts';
+} from '../src/domains/messaging/message-idempotency.repository.ts';
 
 function identity(fingerprint = 'fp') {
   return { actorType: 'account', actorId: 'u', conversation: { type: 'room', id: 'r' }, key: '12345678', fingerprint };

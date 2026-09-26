@@ -1,4 +1,5 @@
 import test from 'node:test';
+import type { StoredRoom } from '../src/domains/rooms/room-views.ts';
 import { lobbyRoom } from './fakes/index.ts';
 import assert from 'node:assert/strict';
 import { buildRoomRealtimeSummaryFromLobbyRoom } from '../src/realtime/summary.ts';
@@ -33,7 +34,7 @@ test('buildRoomRealtimeSummaryFromLobbyRoom mirrors shared summary rules', () =>
 
 test('chat messages schedule personalized unread summaries for room recipients', async () => {
   const sent: Array<{ userId: string; unreadCount: unknown }> = [];
-  const room = { id: 'room1', isStatic: true, name: 'Test room', relationship: 'owner' };
+  const room: StoredRoom = { id: 'room1', createdAt: 0, isStatic: true, name: 'Test room', relationship: 'owner' };
   const runtime = createRoomRealtimeRuntime(
     runtimeDeps({
       store: {
@@ -54,7 +55,7 @@ test('chat messages schedule personalized unread summaries for room recipients',
           return 1;
         }
       },
-      publicLobbyRoom: (value: typeof room & { unreadCount: number }) =>
+      publicLobbyRoom: (value: StoredRoom) =>
         lobbyRoom(value.id, {
           isStatic: value.isStatic,
           name: value.name,
@@ -65,7 +66,14 @@ test('chat messages schedule personalized unread summaries for room recipients',
     })
   );
 
-  runtime.broadcastChatMessage('room1', { id: 'message1', text: 'hello' });
+  runtime.broadcastChatMessage('room1', {
+    id: 'message1',
+    roomId: 'room1',
+    peerId: 'peer-1',
+    name: 'Ada',
+    text: 'hello',
+    createdAt: 1
+  });
   await new Promise((resolve) => setTimeout(resolve, 150));
 
   assert.deepEqual(

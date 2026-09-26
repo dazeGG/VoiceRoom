@@ -271,9 +271,9 @@ function accountHarness({
     }
   };
   const connections = [
-    fake<WsConnection>({ activeVoice: { roomId: 'r1', peerId: 'p1' } }),
+    fake<WsConnection>({ activeVoice: { roomId: 'r1', peerId: 'p1', sessionToken: 's1', transportId: 't1' } }),
     fake<WsConnection>({ activeVoice: null }),
-    fake<WsConnection>({ activeVoice: { roomId: 'r1' } })
+    fake<WsConnection>({ activeVoice: { roomId: 'r1', peerId: '', sessionToken: '', transportId: '' } })
   ];
   const lifecycle = createAccountLifecycle({
     friendIds: async () => {

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
-import { createMessageReadService } from '../src/domains/messaging/message-read-service.ts';
-import type { MessageReadRepository } from '../src/domains/messaging/message-read-repository.ts';
+import { createMessageReadService } from '../src/domains/messaging/message-read.service.ts';
+import type { MessageReadRepository } from '../src/domains/messaging/message-read.repository.ts';
 import { fake } from './fakes/index.ts';
 
 test('G30-A01 room read uses an exact purpose-bound tuple and reports monotonic no-op', async () => {

@@ -6,9 +6,10 @@ import { Failure, RoomIdParams } from '@voice-room/shared/contracts/http';
 import { MemberPage, MembersQuery, MembershipLeft } from '@voice-room/shared/contracts/membership';
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
-import type { DirectoryListing } from './member-directory-service.ts';
-import type { Membership } from './membership-repository.ts';
-import type { LeaveOutcome } from './membership-service.ts';
+import type { DirectoryListing } from './member-directory.service.ts';
+import type { Membership } from './membership.repository.ts';
+import type { LeaveOutcome } from './membership.service.ts';
+import { mayLeaveRoom } from './membership.policy.ts';
 
 const NOT_FOUND = failure('Not found', { code: 'not_found' });
 const SIGN_IN_REQUIRED = failure('Authentication required', { code: 'authentication_required' });
@@ -87,7 +88,7 @@ export function registerMembershipRoutes(root: FastifyInstance, ctx: ApiContext,
       if (!userId) return reply;
       const { roomId } = request.params;
       const membership = await deps.memberships.getMembership(roomId, userId);
-      if (membership?.role === 'owner') return reply.code(409).send(OWNER_CANNOT_LEAVE);
+      if (!mayLeaveRoom(membership)) return reply.code(409).send(OWNER_CANNOT_LEAVE);
       const prepared = await deps.prepareLeave({ roomId, userId });
       if (prepared === false || (typeof prepared === 'object' && !prepared.ok)) {
         const reason = (typeof prepared === 'object' && prepared.code) || 'leave_unavailable';

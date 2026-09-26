@@ -5,7 +5,7 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createMembershipRepository } from '../src/domains/membership/membership-repository.ts';
+import { createMembershipRepository } from '../src/domains/membership/membership.repository.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 

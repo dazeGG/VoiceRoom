@@ -2,6 +2,7 @@
 // at start-up. Names match the variables; the comments say why a default is
 // what it is.
 
+import crypto from 'node:crypto';
 import { cleanLiveKitUrl } from '@voice-room/shared/validation';
 import { readEnvBool, readEnvInt, readMessageDeliveryMode } from '../lib/config.ts';
 
@@ -115,6 +116,7 @@ export function readApiConfig(env: Env = process.env) {
     // A link preview makes the API open a URL a user posted, so it is opt-in.
     LINK_PREVIEWS_ENABLED: readEnvBool('LINK_PREVIEWS_ENABLED', false, env) as boolean,
     MEDIA_STORAGE_DIR: String(env.MEDIA_STORAGE_DIR || '/data/media').trim(),
+    MEDIA_MIN_FREE_BYTES: int('MEDIA_MIN_FREE_BYTES', 2 * 1024 * 1024 * 1024, 1),
     MESSAGE_DIRECT_EMIT_ENABLED: messageDeliveryMode.directEmitEnabled as boolean,
     MESSAGE_DELIVERY_LISTEN_ENABLED: readEnvBool('MESSAGE_DELIVERY_LISTEN_ENABLED', true, env) as boolean,
     // Desktop downloads come from the latest GitHub release; the metadata is
@@ -126,3 +128,29 @@ export function readApiConfig(env: Env = process.env) {
 }
 
 export type ApiConfig = ReturnType<typeof readApiConfig>;
+
+// The keys that sign history and membership cursors: configured in
+// production, derived from the gate secret or a development seed elsewhere.
+export function resolveCursorHmacKeys({
+  context,
+  env = process.env,
+  fallbackGateSecret = ''
+}: { context?: string; env?: NodeJS.ProcessEnv; fallbackGateSecret?: string } = {}): string {
+  const configured = env.VOICE_ROOM_CURSOR_HMAC_KEYS || env.CURSOR_HMAC_KEYS || env.CURSOR_HMAC_KEY;
+  if (configured) return configured;
+
+  if (env.NODE_ENV === 'production') {
+    throw new Error('VOICE_ROOM_CURSOR_HMAC_KEYS is required in production');
+  }
+
+  const liveKitGateSecret =
+    typeof env.LIVEKIT_GATE_SECRET === 'string' ? env.LIVEKIT_GATE_SECRET.trim() : fallbackGateSecret;
+  if (liveKitGateSecret.length >= 32) return `${liveKitGateSecret}:${context}-cursors`;
+
+  const developmentSeed =
+    context === 'membership' ? 'voice-room-development-membership' : 'voice-room-development-cursors';
+  return crypto
+    .createHash('sha256')
+    .update(String(env.POW_SECRET || developmentSeed))
+    .digest('hex');
+}

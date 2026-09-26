@@ -1,7 +1,7 @@
 import { URL } from 'node:url';
 import { AccessToken, TrackSource } from 'livekit-server-sdk';
 import { normalizeLiveKitServerUrl } from '@voice-room/shared/runtime-config';
-import type { CredentialIssue, GatePrincipal, IssuedCredential } from './credential-boundary-service.ts';
+import type { CredentialIssue, GatePrincipal, IssuedCredential } from './credential-boundary.service.ts';
 
 export type LiveKitAdmission = {
   gateCredentialId: string;

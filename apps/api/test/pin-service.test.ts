@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import Fastify from 'fastify';
 import { Pool } from 'pg';
 
-import { createPinRepository } from '../src/domains/messaging/pin-repository.ts';
-import { createPinService, type PinEvent } from '../src/domains/messaging/pin-service.ts';
+import { createPinRepository } from '../src/domains/messaging/pin.repository.ts';
+import { createPinService, type PinEvent } from '../src/domains/messaging/pin.service.ts';
 import { registerPinRoutes } from '../src/domains/messaging/pins.routes.ts';
 import type { ApiContext } from '../src/app/context.ts';
 import { fake, storedUser } from './fakes/index.ts';

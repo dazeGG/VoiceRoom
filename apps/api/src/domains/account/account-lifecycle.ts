@@ -8,7 +8,7 @@ import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { publicUser, type StoredUser } from '../../lib/user-store.ts';
 import type { GatePrincipal } from '../admission/admission.service.ts';
 import type { ConnectionRegistry, WsConnection } from '../../realtime/registry.ts';
-import type { AccountDeletionRepository } from './account-deletion-repository.ts';
+import type { AccountDeletionRepository } from './account-deletion.repository.ts';
 import type { StoredRoom } from '../rooms/room-views.ts';
 
 type ActiveVoice = NonNullable<WsConnection['activeVoice']>;

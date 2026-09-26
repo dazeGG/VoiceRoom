@@ -17,7 +17,7 @@ import { registerNotificationSettingsRoutes } from '../src/domains/notifications
 import { AJV_OPTIONS, registerHttpKit } from '../src/platform/http/http-kit.ts';
 import type { ApiContext } from '../src/app/context.ts';
 
-const ME = { id: 'user-1', login: 'alice' };
+const ME = storedUser({ id: 'user-1', login: 'alice' });
 const PEER = '22222222-2222-4222-8222-222222222222';
 const SUBSCRIPTION = { endpoint: 'https://fcm.googleapis.com/fcm/send/abc', keys: { p256dh: 'p', auth: 'a' } };
 

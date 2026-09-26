@@ -11,8 +11,8 @@ import {
   MediaJobFenceError,
   createMediaJobRepository,
   mapMediaJob
-} from '../src/domains/media/media-job-repository.ts';
-import { createAttachmentRepository, type AttachmentRepository } from '../src/domains/media/attachment-repository.ts';
+} from '../src/domains/media/media-job.repository.ts';
+import { createAttachmentRepository, type AttachmentRepository } from '../src/domains/media/attachment.repository.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { fake } from './fakes/index.ts';

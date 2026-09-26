@@ -2,7 +2,8 @@
 
 - Layers and rules: `../../docs/ARCHITECTURE.md` section 3. Known old patterns still in the code (and what to do instead): section 4.
 - Strict TypeScript on Node 24 type stripping: erasable syntax only, imports with explicit `.ts` extensions, no build step. Applied migrations stay CommonJS `.cjs` (byte-pinned history); new migrations are ES modules.
-- New routes: a `register(app, ctx, deps)` module with TypeBox schemas for params, body and responses, modelled on `src/domains/rooms/rooms.routes.ts`. Never add routes or services to `server.ts`.
+- New routes: a `register(app, ctx, deps)` module with TypeBox schemas for params, body and responses, modelled on `src/domains/rooms/rooms.routes.ts`. Wire them in `src/app/api-routes.ts`; a domain's services are wired in `domains/<d>/<d>.module.ts` or `src/app/domain-services.ts`. `server.ts` is only the process entry.
+- File names say their layer after a dot: `<name>.routes|service|repository|policy|module.ts` (G10-A05 checks it).
 - Data access: repositories take the pool (or a client inside the caller's transaction) from their caller; never create a pool inside a module. Write queries with Kysely (`platform/db/kysely.ts`: `kyselyOn(client)`, `db.transaction()`); no new raw `pg` SQL outside migrations and `platform/db`.
 - Configuration is read only in `src/app/config.ts`; do not read `process.env` elsewhere.
 - PostgreSQL is the durable source of truth. Preserve transaction boundaries and test rollback/failure paths.

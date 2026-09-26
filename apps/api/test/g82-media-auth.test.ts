@@ -4,9 +4,10 @@ import test from 'node:test';
 import { registerMediaRoutes } from '../src/domains/media/media.routes.ts';
 import type { ApiContext } from '../src/app/context.ts';
 import { Readable } from 'node:stream';
-import type { Attachment, AttachmentRepository } from '../src/domains/media/attachment-repository.ts';
-import type { MediaService } from '../src/domains/media/media-service.ts';
-import { createMediaVisibilityService } from '../src/domains/media/media-visibility-service.ts';
+import type { Attachment, AttachmentRepository } from '../src/domains/media/attachment.repository.ts';
+import type { MediaService } from '../src/domains/media/media.service.ts';
+import { registerHttpKit } from '../src/platform/http/http-kit.ts';
+import { createMediaVisibilityService } from '../src/domains/media/media-visibility.service.ts';
 import type { MediaStorage } from '../src/domains/media/storage.ts';
 import { attachment as attachmentRow, fake, spy, storedUser } from './fakes/index.ts';
 const ID = '123e4567-e89b-42d3-a456-426614174000';
@@ -66,6 +67,7 @@ test('G82-A01 draft owner, room guest/member and DM participants are authorized;
 test('G82-A02 guessed and denied reads are indistinguishable 404 with private safe response headers', async (t) => {
   const app = fastify();
   t.after(() => app.close());
+  registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
   const visible = new Set([ID]);
   registerMediaRoutes(app, fake<ApiContext>({ resolveSession: async () => ({ user: storedUser({ id: 'member' }) }) }), {
     media: spy<MediaService>([]),

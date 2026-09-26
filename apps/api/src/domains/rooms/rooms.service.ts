@@ -4,6 +4,7 @@
 import crypto from 'node:crypto';
 import type { Logger } from 'pino';
 import type { LiveRoom, LobbyRoom, StoredRoom } from './room-views.ts';
+import { isRoomOwner } from './room.policy.ts';
 
 type RequestLog = { log?: Pick<Logger, 'warn' | 'error'> } | null;
 
@@ -84,7 +85,7 @@ export function createRoomsService(deps: RoomsServiceDeps) {
     if (!userId) return { status: 'unauthenticated' };
     const room = await deps.getRoom(roomId);
     if (!room) return { status: 'not_found' };
-    if (!room.isStatic || room.ownerId !== userId) return { status: 'forbidden' };
+    if (!isRoomOwner(room, userId)) return { status: 'forbidden' };
     return { status: 'owner', room };
   }
 

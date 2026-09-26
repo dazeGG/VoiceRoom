@@ -5,7 +5,7 @@ import {
   createCredentialBoundaryService,
   type GatePrincipal,
   type GateRoomStore
-} from '../src/domains/admission/credential-boundary-service.ts';
+} from '../src/domains/admission/credential-boundary.service.ts';
 import type {
   GateClaims,
   GateCredentialSigner,

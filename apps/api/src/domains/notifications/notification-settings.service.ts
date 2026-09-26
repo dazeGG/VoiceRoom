@@ -1,3 +1,4 @@
+import type { StoredUser } from '../../lib/user-store.ts';
 // A signed-in account's notification settings: per-conversation mutes,
 // private notification text, do-not-disturb and presence status (one
 // preference record), and the browser push subscriptions.
@@ -42,10 +43,7 @@ export interface NotificationSettingsDeps {
   /** Tells the account's sockets which presence to report to friends. */
   setPresence(userId: string, presenceStatus: string): void;
   notifyUser(userId: string, event: AccountMessage): void;
-  broadcastProfileToFriends(
-    user: Record<string, unknown> & { id: string },
-    log: Pick<Logger, 'error'> | undefined
-  ): Promise<void>;
+  broadcastProfileToFriends(user: StoredUser, log: Pick<Logger, 'error'> | undefined): Promise<void>;
 }
 
 type RateLimited = { status: 'rate_limited'; retryAfterSeconds: number };
@@ -70,7 +68,7 @@ export function createNotificationSettingsService(deps: NotificationSettingsDeps
   // either changes, the account's devices get the new preferences and its
   // friends the new status.
   async function publishPresence(
-    user: Record<string, unknown> & { id: string },
+    user: StoredUser,
     result: MutationResult,
     log?: Pick<Logger, 'error'>
   ): Promise<MutationResult> {
@@ -93,20 +91,11 @@ export function createNotificationSettingsService(deps: NotificationSettingsDeps
     setPrivateNotifications: (userId: string, privateNotifications: boolean) =>
       deps.preferences().setPrivateNotifications({ userId, privateNotifications }),
 
-    async setDoNotDisturb(
-      user: Record<string, unknown> & { id: string },
-      doNotDisturb: boolean,
-      log?: Pick<Logger, 'error'>
-    ) {
+    async setDoNotDisturb(user: StoredUser, doNotDisturb: boolean, log?: Pick<Logger, 'error'>) {
       return publishPresence(user, await deps.preferences().setDoNotDisturb({ userId: user.id, doNotDisturb }), log);
     },
 
-    async setPresenceStatus(
-      user: Record<string, unknown> & { id: string },
-      presenceStatus: string,
-      automatic: boolean,
-      log?: Pick<Logger, 'error'>
-    ) {
+    async setPresenceStatus(user: StoredUser, presenceStatus: string, automatic: boolean, log?: Pick<Logger, 'error'>) {
       return publishPresence(
         user,
         await deps.preferences().setPresenceStatus({ automatic, userId: user.id, presenceStatus }),

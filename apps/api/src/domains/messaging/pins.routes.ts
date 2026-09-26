@@ -7,8 +7,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { Failure, RoomIdParams } from '@voice-room/shared/contracts/http';
 import { MessageParams, PinList } from '@voice-room/shared/contracts/messages';
 import type { ApiContext, SessionUser } from '../../app/context.ts';
-import { failure, sendServiceError } from '../../platform/http/http-kit.ts';
-import type { PinService } from './pin-service.ts';
+import { failure } from '../../platform/http/http-kit.ts';
+import type { PinService } from './pin.service.ts';
 
 export interface PinRoutesDeps {
   pins: Pick<PinService, 'list' | 'pin' | 'unpin'>;
@@ -20,6 +20,8 @@ const answers = { 200: PinList, '4xx': Failure, '5xx': Failure };
 
 export function registerPinRoutes(root: FastifyInstance, ctx: ApiContext, deps: PinRoutesDeps): void {
   const app = root.withTypeProvider<TypeBoxTypeProvider>();
+  // A failure the services do not classify answers with the domain's own code.
+  const config = { errorFallback: 'pin_error' as const };
 
   async function member(
     request: FastifyRequest,
@@ -38,15 +40,11 @@ export function registerPinRoutes(root: FastifyInstance, ctx: ApiContext, deps: 
 
   app.get(
     '/api/rooms/:roomId/pins',
-    { schema: { params: RoomIdParams, response: answers } },
+    { config, schema: { params: RoomIdParams, response: answers } },
     async (request, reply) => {
       const roomId = request.params.roomId.trim();
-      try {
-        if (!(await member(request, reply, roomId, 'read'))) return reply;
-        return { ok: true as const, ...(await deps.pins.list({ roomId })) };
-      } catch (error) {
-        return sendServiceError(reply, error, { fallback: 'pin_error', log: request.log, what: 'Pin request' });
-      }
+      if (!(await member(request, reply, roomId, 'read'))) return reply;
+      return { ok: true as const, ...(await deps.pins.list({ roomId })) };
     }
   );
 
@@ -57,19 +55,16 @@ export function registerPinRoutes(root: FastifyInstance, ctx: ApiContext, deps: 
     app.route({
       method,
       url: '/api/rooms/:roomId/pins/:messageId',
+      config,
       schema: { params: MessageParams, response: answers },
       handler: async (request, reply) => {
         const roomId = request.params.roomId.trim();
-        try {
-          const viewer = await member(request, reply, roomId, 'write');
-          if (!viewer) return reply;
-          return {
-            ok: true as const,
-            ...(await deps.pins[change]({ roomId, messageId: request.params.messageId, viewer }))
-          };
-        } catch (error) {
-          return sendServiceError(reply, error, { fallback: 'pin_error', log: request.log, what: 'Pin request' });
-        }
+        const viewer = await member(request, reply, roomId, 'write');
+        if (!viewer) return reply;
+        return {
+          ok: true as const,
+          ...(await deps.pins[change]({ roomId, messageId: request.params.messageId, viewer }))
+        };
       }
     });
   }

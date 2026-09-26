@@ -11,7 +11,8 @@ import type { RoomCreated, RoomStatus } from '@voice-room/shared/contracts/rooms
 import { dbRoom, fake, type DbRoom, type Fakes } from './fakes/index.ts';
 import type { ApiBody } from './fakes/server-process.ts';
 
-const { __private, createApiServer } = await import('../src/server.ts');
+const { createApiServer } = await import('../src/server.ts');
+const { createApiRuntime } = await import('../src/app/api-runtime.ts');
 const { openWs, joinVoiceRoom, sendWs, waitForWsType } = await import('./ws-harness.ts');
 
 // A logger that records the structured fields, so a test can assert the API
@@ -353,7 +354,8 @@ test('pruning retries failed active occupancy before sweeping dynamic rooms', as
   };
 
   const errors: LogRecord[] = [];
-  const server = createApiServer({ store, logger: createCapturingLogger(errors) });
+  const runtime = createApiRuntime();
+  const server = runtime.createServer({ store, logger: createCapturingLogger(errors) });
   const port = await listen(server);
   const voice = openWs(port);
   await voice.ready;
@@ -369,7 +371,7 @@ test('pruning retries failed active occupancy before sweeping dynamic rooms', as
     assert.equal(activeAttempts, 1);
     assert.ok(await store.getRoom(roomId));
 
-    await __private.pruneRooms(5000);
+    await runtime.pruneRooms(5000);
 
     assert.equal(activeAttempts, 2);
     assert.equal((await store.getRoom(roomId))?.emptySince, null);

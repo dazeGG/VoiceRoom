@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
-import { createRoomHistoryService, type RoomHistoryRepository } from '../src/domains/messaging/room-history-service.ts';
+import { createRoomHistoryService, type RoomHistoryRepository } from '../src/domains/messaging/room-history.service.ts';
 import { fake } from './fakes/index.ts';
 
 function message(id: string, micros: number) {

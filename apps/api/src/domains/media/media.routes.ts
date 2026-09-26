@@ -13,9 +13,9 @@ import {
   CreateAttachmentBody
 } from '@voice-room/shared/contracts/media';
 import type { ApiContext } from '../../app/context.ts';
-import { failure, optionalJsonBody, sendServiceError } from '../../platform/http/http-kit.ts';
-import type { MediaService, PublicAttachment } from './media-service.ts';
-import type { OpenedMedia } from './media-visibility-service.ts';
+import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
+import type { MediaService, PublicAttachment } from './media.service.ts';
+import type { OpenedMedia } from './media-visibility.service.ts';
 
 const ATTACHMENT_ID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
@@ -43,6 +43,8 @@ async function noStore(_request: FastifyRequest, reply: FastifyReply): Promise<v
 
 export function registerMediaRoutes(root: FastifyInstance, ctx: ApiContext, deps: MediaRoutesDeps): void {
   const app = root.withTypeProvider<TypeBoxTypeProvider>();
+  // A failure the services do not classify answers with the domain's own code.
+  const config = { errorFallback: 'media_error' as const };
   const { media } = deps;
 
   async function signedIn(request: FastifyRequest, reply: FastifyReply): Promise<string | null> {
@@ -60,23 +62,19 @@ export function registerMediaRoutes(root: FastifyInstance, ctx: ApiContext, deps
 
   /** Runs one owner operation on an attachment and answers it. */
   async function answer(
-    request: FastifyRequest,
     reply: FastifyReply,
     operation: () => Promise<PublicAttachment | null>,
     status: 200 | 201 = 200
   ) {
-    try {
-      const attachment = await operation();
-      if (!attachment) return reply.code(404).send(failure('Attachment not found', { code: 'media_not_found' }));
-      return reply.code(status).send({ ok: true as const, attachment });
-    } catch (error) {
-      return sendServiceError(reply, error, { fallback: 'media_error', log: request.log, what: 'Media request' });
-    }
+    const attachment = await operation();
+    if (!attachment) return reply.code(404).send(failure('Attachment not found', { code: 'media_not_found' }));
+    return reply.code(status).send({ ok: true as const, attachment });
   }
 
   app.post(
     '/api/media/attachments',
     {
+      config,
       onRequest: noStore,
       preValidation: optionalJsonBody,
       schema: { body: CreateAttachmentBody, response: { ...answers, 201: AttachmentAnswer } }
@@ -86,20 +84,20 @@ export function registerMediaRoutes(root: FastifyInstance, ctx: ApiContext, deps
       if (!ownerId) return reply;
       if (!deps.uploadsEnabled()) return reply.code(503).send(UPLOADS_DISABLED);
       const { context, clientRequestId, bytes } = request.body;
-      return answer(request, reply, () => media.createSlot({ ownerId, context, clientRequestId, bytes }), 201);
+      return answer(reply, () => media.createSlot({ ownerId, context, clientRequestId, bytes }), 201);
     }
   );
 
   app.put(
     '/api/media/attachments/:id/content',
-    { onRequest: noStore, schema: { params: IdParams, response: answers } },
+    { config, onRequest: noStore, schema: { params: IdParams, response: answers } },
     async (request, reply) => {
       const ownerId = await signedIn(request, reply);
       if (!ownerId) return reply;
       const id = attachmentId(request.params.id, reply);
       if (!id) return reply;
       if (!deps.uploadsEnabled()) return reply.code(503).send(UPLOADS_DISABLED);
-      return answer(request, reply, async () => {
+      return answer(reply, async () => {
         let stream: AsyncIterable<unknown> | undefined = request.raw;
         let mimeType = String(request.headers['content-type'] || '').split(';')[0] ?? '';
         if (mimeType.startsWith('multipart/')) {
@@ -114,38 +112,38 @@ export function registerMediaRoutes(root: FastifyInstance, ctx: ApiContext, deps
 
   app.get(
     '/api/media/attachments/:id',
-    { onRequest: noStore, schema: { params: IdParams, response: answers } },
+    { config, onRequest: noStore, schema: { params: IdParams, response: answers } },
     async (request, reply) => {
       const ownerId = await signedIn(request, reply);
       if (!ownerId) return reply;
       const id = attachmentId(request.params.id, reply);
       if (!id) return reply;
-      return answer(request, reply, () => media.status({ id, ownerId }));
+      return answer(reply, () => media.status({ id, ownerId }));
     }
   );
 
   app.post(
     '/api/media/attachments/:id/retry',
-    { schema: { params: IdParams, response: answers } },
+    { config, schema: { params: IdParams, response: answers } },
     async (request, reply) => {
       const ownerId = await signedIn(request, reply);
       if (!ownerId) return reply;
       const id = attachmentId(request.params.id, reply);
       if (!id) return reply;
       if (!deps.uploadsEnabled()) return reply.code(503).send(UPLOADS_DISABLED);
-      return answer(request, reply, () => media.retry({ id, ownerId }));
+      return answer(reply, () => media.retry({ id, ownerId }));
     }
   );
 
   app.delete(
     '/api/media/attachments/:id',
-    { schema: { params: IdParams, response: answers } },
+    { config, schema: { params: IdParams, response: answers } },
     async (request, reply) => {
       const ownerId = await signedIn(request, reply);
       if (!ownerId) return reply;
       const id = attachmentId(request.params.id, reply);
       if (!id) return reply;
-      return answer(request, reply, () => media.remove({ id, ownerId }));
+      return answer(reply, () => media.remove({ id, ownerId }));
     }
   );
 
@@ -155,6 +153,7 @@ export function registerMediaRoutes(root: FastifyInstance, ctx: ApiContext, deps
   app.get(
     '/api/media/attachments/:id/:variant',
     {
+      config,
       schema: {
         params: AttachmentVariantParams,
         querystring: AttachmentVariantQuery
@@ -167,18 +166,14 @@ export function registerMediaRoutes(root: FastifyInstance, ctx: ApiContext, deps
       if (!id) return reply;
       if (!deps.readsEnabled())
         return reply.code(404).send(failure('Attachment not found', { code: 'media_not_found' }));
-      try {
-        const opened = await visibility.open({ attachmentId: id, variant: request.params.variant, viewerId });
-        const disposition = request.query.download === '1' ? 'attachment' : 'inline';
-        return reply
-          .header('Cache-Control', 'private, no-store')
-          .header('Content-Disposition', `${disposition}; filename="image.${opened.extension}"`)
-          .header('Content-Length', String(opened.bytes))
-          .type(opened.mimeType)
-          .send(opened.stream);
-      } catch (error) {
-        return sendServiceError(reply, error, { fallback: 'media_error', log: request.log, what: 'Media request' });
-      }
+      const opened = await visibility.open({ attachmentId: id, variant: request.params.variant, viewerId });
+      const disposition = request.query.download === '1' ? 'attachment' : 'inline';
+      return reply
+        .header('Cache-Control', 'private, no-store')
+        .header('Content-Disposition', `${disposition}; filename="image.${opened.extension}"`)
+        .header('Content-Length', String(opened.bytes))
+        .type(opened.mimeType)
+        .send(opened.stream);
     }
   );
 }

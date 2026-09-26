@@ -5,14 +5,14 @@ import {
   createActiveBanRepository,
   normalizePrincipal,
   type ActiveBanRepository
-} from '../src/domains/moderation/active-ban-repository.ts';
-import { createActiveBanService } from '../src/domains/moderation/active-ban-service.ts';
+} from '../src/domains/moderation/active-ban.repository.ts';
+import { createActiveBanService } from '../src/domains/moderation/active-ban.service.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createRoomStore } from '../src/lib/room-store.ts';
 import {
   MentionEligibilityError,
   createMentionEligibilityService
-} from '../src/domains/notifications/mention-eligibility-service.ts';
+} from '../src/domains/notifications/mention-eligibility.service.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { fake, fakeDb } from './fakes/index.ts';
 

@@ -87,7 +87,7 @@ async function waitForGateReady(port: number, expectedStatus = 200) {
 }
 
 function startGate({ databaseUrl, port }: { databaseUrl: string; port: number }) {
-  const child = spawn(process.execPath, ['apps/api/src/domains/admission/livekit-auth-gate-service.ts'], {
+  const child = spawn(process.execPath, ['apps/api/src/domains/admission/livekit-auth-gate.service.ts'], {
     cwd: process.cwd(),
     env: {
       ...process.env,
@@ -255,7 +255,7 @@ export async function runPhysicalReplay() {
     selectedMechanism: 'external-auth-gate',
     topology: {
       databaseUrl: DATABASE_URL.replace(/:\/\/([^:]+):([^@]+)@/, '://$1:<redacted>@'),
-      gateEntrypoint: 'apps/api/src/domains/admission/livekit-auth-gate-service.ts',
+      gateEntrypoint: 'apps/api/src/domains/admission/livekit-auth-gate.service.ts',
       livekitImage: 'livekit/livekit-server:v1.13.2',
       livekitInternalUrl: LIVEKIT_INTERNAL_URL
     }

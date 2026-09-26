@@ -25,7 +25,7 @@ const { createGateCredentialSigner } = require('../../apps/api/src/domains/admis
 const {
   createLiveKitAuthGateService,
   extractCredential
-} = require('../../apps/api/src/domains/admission/livekit-auth-gate-service.ts');
+} = require('../../apps/api/src/domains/admission/livekit-auth-gate.service.ts');
 const SILENT_LOGGER = { log() {}, info() {}, warn() {}, error() {} };
 const { createRoomRealtimeRuntime } = require('../../apps/api/src/realtime/room-runtime.ts');
 const SECRET = 'g08-test-livekit-gate-secret-at-least-32-bytes';
@@ -81,7 +81,7 @@ const ADMISSION_INTERNAL_COVERAGE_SCRIPT = String.raw`
   }
   executeFunction("apps/api/src/domains/admission/gate-credential-signer.ts", "signPayload", "const crypto = require('node:crypto');", "signPayload('', '');");
   executeFunction("apps/api/src/domains/admission/gate-credential-signer.ts", "parseBase64urlJson", "", "try { parseBase64urlJson(''); } catch {}");
-  executeFunction("apps/api/src/domains/admission/livekit-auth-gate-service.ts", "buildUpstreamUpgradeRequest", "const DEFAULT_GATE_PATH = '/api/livekit-gate';", "buildUpstreamUpgradeRequest({ request: { headers: {} }, strippedPath: '', upstream: new URL('ws://livekit.example') });");
+  executeFunction("apps/api/src/domains/admission/livekit-auth-gate.service.ts", "buildUpstreamUpgradeRequest", "const DEFAULT_GATE_PATH = '/api/livekit-gate';", "buildUpstreamUpgradeRequest({ request: { headers: {} }, strippedPath: '', upstream: new URL('ws://livekit.example') });");
 `;
 const SERVER_INTERNAL_COVERAGE_SCRIPT = String.raw`
   (async () => {
@@ -290,8 +290,8 @@ test('G08-A03c protected-base policy ratchet rejects every gate weakening', () =
 });
 
 test('G08-A03d a .js policy entry carries over to its .ts successor only once the .js file is gone', () => {
-  const legacy = 'apps/api/src/domains/media/attachment-repository.js';
-  const typed = 'apps/api/src/domains/media/attachment-repository.ts';
+  const legacy = 'apps/api/src/domains/media/attachment.repository.js';
+  const typed = 'apps/api/src/domains/media/attachment.repository.ts';
   const base = thresholdFixture({
     strictBranchPaths: [legacy],
     businessPathPatterns: [...thresholds.businessPathPatterns, legacy]
@@ -315,7 +315,7 @@ test('G08-A03d a .js policy entry carries over to its .ts successor only once th
   assert.equal(check(() => false).ratchetMode, 'protected-base-ratchet');
   assert.throws(
     () => check(() => true),
-    /may not remove or narrow protected-base policy entry: apps\/api\/src\/domains\/media\/attachment-repository\.js/i
+    /may not remove or narrow protected-base policy entry: apps\/api\/src\/domains\/media\/attachment\.repository\.js/i
   );
   assert.throws(
     () =>
@@ -1265,7 +1265,7 @@ test('G08 admission gate service exported decisions and server paths are exercis
   });
   const invalidSecretMain = spawnSync(
     process.execPath,
-    [require.resolve('../../apps/api/src/domains/admission/livekit-auth-gate-service.ts')],
+    [require.resolve('../../apps/api/src/domains/admission/livekit-auth-gate.service.ts')],
     {
       encoding: 'utf8',
       env: mainEnv({ LIVEKIT_GATE_SECRET: 'short' })
@@ -1275,7 +1275,7 @@ test('G08 admission gate service exported decisions and server paths are exercis
   assert.match(invalidSecretMain.stderr, /failed to start/i);
   const defaultHostMain = spawnSync(
     process.execPath,
-    [require.resolve('../../apps/api/src/domains/admission/livekit-auth-gate-service.ts')],
+    [require.resolve('../../apps/api/src/domains/admission/livekit-auth-gate.service.ts')],
     {
       encoding: 'utf8',
       env: mainEnv({ LIVEKIT_GATE_PORT: '-1', LIVEKIT_GATE_HOST: '' })
@@ -1284,7 +1284,7 @@ test('G08 admission gate service exported decisions and server paths are exercis
   assert.equal(defaultHostMain.status, 1);
   const defaultPortMain = spawnSync(
     process.execPath,
-    [require.resolve('../../apps/api/src/domains/admission/livekit-auth-gate-service.ts')],
+    [require.resolve('../../apps/api/src/domains/admission/livekit-auth-gate.service.ts')],
     {
       encoding: 'utf8',
       env: mainEnv({ LIVEKIT_GATE_PORT: '', LIVEKIT_GATE_HOST: '256.256.256.256' })

@@ -20,7 +20,9 @@ const VIEWER_TOKEN = 'v'.repeat(32);
 
 // The runtime's in-memory room and peer records.
 type TestRoom = NonNullable<Parameters<typeof resolveViewedScreenPeerId>[0]>;
-type TestPeer = TestRoom['peers'] extends Map<string, infer Peer> ? Peer : never;
+type RosterPeer = TestRoom['peers'] extends Map<string, infer Peer> ? Peer : never;
+// Every peer a test builds has a live transport.
+type TestPeer = RosterPeer & { transport: NonNullable<RosterPeer['transport']> & { id: string } };
 type LogRecord = { level: string; msg?: string } & Record<string, unknown>;
 type Broadcast = { type?: string; peer: { id: string; screen?: unknown; viewedScreenPeerId?: unknown } };
 // Settles a promise the test holds open.
@@ -33,7 +35,7 @@ function createPeer(id: string, overrides: Record<string, unknown> = {}): TestPe
     name: id,
     screen: false,
     sessionToken: id === OWNER_ID ? OWNER_TOKEN : VIEWER_TOKEN,
-    transport: { id: `transport-${id}` },
+    transport: { id: `transport-${id}`, send: () => true },
     viewedScreenPeerId: '',
     ...overrides
   };
@@ -97,7 +99,7 @@ function createRuntime(room: TestRoom, broadcasts: unknown[], overrides: Runtime
     ...overrides.wsRegistry
   });
   return createRoomRealtimeRuntime({
-    presenceRooms: overrides.presenceRooms || new Map([[room.id as string, room]]),
+    presenceRooms: overrides.presenceRooms || new Map([[room.id, room]]),
     wsRegistry,
     logger: overrides.logger as RoomRuntimeDeps['logger'],
     getRoomStore: () => store,
@@ -342,7 +344,9 @@ test('screen stop publishes viewer leave and rejects a stale re-entry', async ()
   const runtime = createRuntime(room, broadcasts);
 
   const stopped = await runtime.updatePeerState(
-    fake<WsConnection>({ activeVoice: { roomId: ROOM_ID, peerId: OWNER_ID, transportId: owner.transport.id } }),
+    fake<WsConnection>({
+      activeVoice: { roomId: ROOM_ID, peerId: OWNER_ID, sessionToken: OWNER_TOKEN, transportId: owner.transport.id }
+    }),
     {
       roomId: ROOM_ID,
       peerId: OWNER_ID,
@@ -363,7 +367,9 @@ test('screen stop publishes viewer leave and rejects a stale re-entry', async ()
 
   broadcasts.length = 0;
   const staleEntry = await runtime.updatePeerState(
-    fake<WsConnection>({ activeVoice: { roomId: ROOM_ID, peerId: VIEWER_ID, transportId: viewer.transport.id } }),
+    fake<WsConnection>({
+      activeVoice: { roomId: ROOM_ID, peerId: VIEWER_ID, sessionToken: VIEWER_TOKEN, transportId: viewer.transport.id }
+    }),
     {
       roomId: ROOM_ID,
       peerId: VIEWER_ID,
@@ -391,7 +397,9 @@ test('superseded transport cannot stop the replacement peer stream', async () =>
   const runtime = createRuntime(room, broadcasts);
 
   const result = await runtime.updatePeerState(
-    fake<WsConnection>({ activeVoice: { roomId: ROOM_ID, peerId: OWNER_ID, transportId: 'old-transport' } }),
+    fake<WsConnection>({
+      activeVoice: { roomId: ROOM_ID, peerId: OWNER_ID, sessionToken: OWNER_TOKEN, transportId: 'old-transport' }
+    }),
     {
       roomId: ROOM_ID,
       peerId: OWNER_ID,
@@ -439,7 +447,7 @@ test('newer concurrent join wins even when its identity lookup finishes first', 
 
   assert.equal(secondResult.ok, true);
   assert.equal(firstResult.code, 'superseded_join');
-  assert.equal(room.peers.get(OWNER_ID)?.transport.id, secondConnection.activeVoice?.transportId);
+  assert.equal(room.peers.get(OWNER_ID)?.transport?.id, secondConnection.activeVoice?.transportId);
 });
 
 test('older join cannot replace a newer join after a delayed room lookup', async () => {
@@ -471,7 +479,7 @@ test('older join cannot replace a newer join after a delayed room lookup', async
 
   assert.equal(secondResult.ok, true);
   assert.equal(firstResult.code, 'superseded_join');
-  assert.equal(room.peers.get(OWNER_ID)?.transport.id, secondConnection.activeVoice?.transportId);
+  assert.equal(room.peers.get(OWNER_ID)?.transport?.id, secondConnection.activeVoice?.transportId);
 });
 
 test('initial join is announced even when a reconnect replaces it during occupancy persistence', async () => {
@@ -512,7 +520,7 @@ test('initial join is announced even when a reconnect replaces it during occupan
 });
 
 test('committed join still returns a correlated snapshot when occupancy persistence fails', async () => {
-  const room: TestRoom = { id: ROOM_ID, name: 'Room', peers: new Map() };
+  const room: TestRoom = { id: ROOM_ID, peers: new Map() };
   const sent: Array<{ type?: string; id?: string }> = [];
   const errors: LogRecord[] = [];
   const runtime = createRuntime(room, [], {
@@ -830,7 +838,7 @@ test('unexpected disconnect preserves presence and a same-session replacement cl
   assert.equal(room.peers.size, 1);
   assert.equal(room.peers.get(OWNER_ID)?.muted, true);
   assert.equal(room.peers.get(OWNER_ID)?.screen, true);
-  assert.notEqual(room.peers.get(OWNER_ID)?.transport.id, oldTransport.id);
+  assert.notEqual(room.peers.get(OWNER_ID)?.transport?.id, oldTransport.id);
   assert.equal(scheduler.size(), 0);
 
   scheduler.advance(1000);
@@ -1193,10 +1201,10 @@ test('stale superseded connection leave cannot evict the authoritative replaceme
     null
   );
   assert.equal(joined.ok, true);
-  const replacementTransportId = room.peers.get(OWNER_ID)?.transport.id;
+  const replacementTransportId = room.peers.get(OWNER_ID)?.transport?.id;
 
   await runtime.leaveVoiceRoom(staleConnection, staleConnection.activeVoice);
-  assert.equal(room.peers.get(OWNER_ID)?.transport.id, replacementTransportId);
+  assert.equal(room.peers.get(OWNER_ID)?.transport?.id, replacementTransportId);
   assert.equal(replacement.activeVoice?.transportId, replacementTransportId);
   assert.deepEqual(revoked, []);
   assert.deepEqual(closed, []);
@@ -1567,7 +1575,7 @@ test('room terminal API claims every lease before custom delete finalizers run o
       assert.ok(peer);
       finalized.push(peer.id);
       const current = room.peers.get(peer.id);
-      if (current?.transport?.id === peer.transport.id) room.peers.delete(peer.id);
+      if (current?.transport?.id === peer.transport?.id) room.peers.delete(peer.id);
     }
   });
 

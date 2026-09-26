@@ -16,9 +16,9 @@ import type { createRoomStore } from '../../src/lib/room-store.ts';
 import type { StoreOverrides } from '../../src/app/service-registry.ts';
 import type pg from 'pg';
 import type { Logger } from 'pino';
-import type { Attachment } from '../../src/domains/media/attachment-repository.ts';
-import type { MediaJob } from '../../src/domains/media/media-job-repository.ts';
-import type { NotificationOutboxEvent } from '../../src/domains/notifications/notification-outbox-repository.ts';
+import type { Attachment } from '../../src/domains/media/attachment.repository.ts';
+import type { MediaJob } from '../../src/domains/media/media-job.repository.ts';
+import type { NotificationOutboxEvent } from '../../src/domains/notifications/notification-outbox.repository.ts';
 
 export function fake<T>(implementation: Partial<T> = {}): T {
   return implementation as T;

@@ -9,12 +9,12 @@ import { Pool } from 'pg';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createRoomStore } from '../src/lib/room-store.ts';
 import { createUserStore } from '../src/lib/user-store.ts';
-import { createLinkPreviewRepository } from '../src/domains/link-previews/link-preview-repository.ts';
+import { createLinkPreviewRepository } from '../src/domains/link-previews/link-preview.repository.ts';
 import {
   FAILED_TTL_MS,
   createLinkPreviewService,
   type LinkPreviewFetcher
-} from '../src/domains/link-previews/link-preview-service.ts';
+} from '../src/domains/link-previews/link-preview.service.ts';
 import { createLinkPreviewStorage, reconcileLinkPreviewImages } from '../src/lib/link-preview-storage.ts';
 import { createTestDatabase } from './db-harness.ts';
 

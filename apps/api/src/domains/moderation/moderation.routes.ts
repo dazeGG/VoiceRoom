@@ -17,8 +17,8 @@ import {
 import { BanParams } from '@voice-room/shared/contracts/rooms';
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
-import type { MessageModerationService } from './message-moderation-service.ts';
-import type { ModerationService } from './moderation-service.ts';
+import type { MessageModerationService } from './message-moderation.service.ts';
+import type { ModerationService } from './moderation.service.ts';
 
 const NOT_FOUND = failure('Not found', { code: 'not_found' });
 const SIGN_IN_REQUIRED = failure('Authentication required', { code: 'authentication_required' });

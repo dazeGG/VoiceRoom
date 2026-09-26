@@ -3,9 +3,19 @@
 // A route that hijacks its reply skips Fastify's onSend/onResponse hooks and
 // with them all of this, so no route does.
 
-import type { FastifyBaseLogger, FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { isErrorCode, type ErrorCode } from '@voice-room/shared/contracts/errors';
 import type { Failure as FailureBody } from '@voice-room/shared/contracts/http';
+
+declare module 'fastify' {
+  interface FastifyContextConfig {
+    /**
+     * The code a failure of this route answers with when the error carries no
+     * catalogued one (a domain's own, like `reaction_error`).
+     */
+    errorFallback?: ErrorCode;
+  }
+}
 
 export interface RequestSample {
   method: string;
@@ -37,25 +47,6 @@ export function failure(error: string, { code }: { code: ErrorCode }): Failure {
 export function errorCode(error: unknown, fallback: ErrorCode): ErrorCode {
   const code = (error as { code?: unknown } | null)?.code;
   return isErrorCode(code) ? code : fallback;
-}
-
-/**
- * Answers a domain service's error: it carries its HTTP status and code, and
- * anything else is a server failure whose message stays private and is logged.
- */
-export function sendServiceError(
-  reply: FastifyReply,
-  error: unknown,
-  { fallback, log, what }: { fallback: ErrorCode; log: FastifyBaseLogger; what: string }
-) {
-  const known = error as { statusCode?: unknown; message?: string } | null;
-  const status = typeof known?.statusCode === 'number' && Number.isInteger(known.statusCode) ? known.statusCode : 500;
-  if (status >= 500) {
-    log.error({ err: error }, `${what} failed`);
-    return reply.code(status).send(failure('Internal server error', { code: fallback }));
-  }
-  const code = errorCode(error, fallback);
-  return reply.code(status).send(failure(known?.message || code, { code }));
 }
 
 function fallbackCode(status: number): ErrorCode {
@@ -117,13 +108,20 @@ export function registerHttpKit(app: FastifyInstance, options: HttpKitOptions): 
     options.logRequest(request, reply.statusCode, durationMs);
   });
 
+  // One answer for every thrown error: a domain service's error carries its
+  // HTTP status and code; anything else is a server failure whose message
+  // stays private and is logged.
   app.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
     if (error.validation) {
       return reply.code(400).send(failure(validationMessage(error.validation), { code: 'invalid_request' }));
     }
     const status = typeof error.statusCode === 'number' && error.statusCode >= 400 ? error.statusCode : 500;
-    if (status >= 500) options.logHandlerFailure(request, routeLabel(request), error);
-    const message = status >= 500 ? 'Internal server error' : error.message;
-    return reply.code(status).send(failure(message, { code: errorCode(error, fallbackCode(status)) }));
+    const routeFallback = request.routeOptions?.config?.errorFallback;
+    if (status >= 500) {
+      options.logHandlerFailure(request, routeLabel(request), error);
+      return reply.code(status).send(failure('Internal server error', { code: routeFallback ?? 'internal_error' }));
+    }
+    const code = errorCode(error, routeFallback ?? fallbackCode(status));
+    return reply.code(status).send(failure(error.message || code, { code }));
   });
 }

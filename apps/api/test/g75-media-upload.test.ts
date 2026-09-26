@@ -5,11 +5,11 @@ import path from 'node:path';
 import { Readable } from 'node:stream';
 import sharp from 'sharp';
 import test from 'node:test';
-import { createMediaService, detectExactContainer, MAX_UPLOAD_BYTES } from '../src/domains/media/media-service.ts';
+import { createMediaService, detectExactContainer, MAX_UPLOAD_BYTES } from '../src/domains/media/media.service.ts';
 import { createMediaStorage } from '../src/domains/media/storage.ts';
-import type { Attachment, AttachmentRepository } from '../src/domains/media/attachment-repository.ts';
-import type { MediaJobRepository } from '../src/domains/media/media-job-repository.ts';
-import type { MediaQuotaService } from '../src/domains/media/media-quota-service.ts';
+import type { Attachment, AttachmentRepository } from '../src/domains/media/attachment.repository.ts';
+import type { MediaJobRepository } from '../src/domains/media/media-job.repository.ts';
+import type { MediaQuotaService } from '../src/domains/media/media-quota.service.ts';
 import { attachment, fake, fakeDb } from './fakes/index.ts';
 const ID = '123e4567-e89b-42d3-a456-426614174000';
 

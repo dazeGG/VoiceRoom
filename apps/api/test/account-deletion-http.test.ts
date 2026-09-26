@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
-import { createAccountDeletionRepository } from '../src/domains/account/account-deletion-repository.ts';
+import { createAccountDeletionRepository } from '../src/domains/account/account-deletion.repository.ts';
 import { ACCOUNT_DELETION_GRACE_MS } from '@voice-room/shared/account-security';
 import type {
   AccountFailure,

@@ -22,6 +22,7 @@ import { cleanChatText, messageFingerprint, normalizeAttachmentIds } from './mes
 import { requireReplyTarget } from './reply-projector.ts';
 import { publicChatMessage, type RoomChatMessage } from './room-chat-views.ts';
 import type { ReplyPreview } from '@voice-room/shared/contracts/messages';
+import { mayModerateRoomMessage, roomMessageAuthorship } from './room-message.policy.ts';
 
 type DbClient = Pick<pg.PoolClient, 'query'> | null | undefined;
 
@@ -394,12 +395,11 @@ export function createRoomChatService(deps: RoomChatDeps) {
 
     const current = await deps.messages().room.getMessage(roomId, messageId);
     if (!current) return { status: 'message_not_found' };
-    const isAccountAuthor = Boolean(user && current.authorUserId && user.id === current.authorUserId);
-    const isPeerAuthor = Boolean(!current.authorUserId && input.peerId && input.peerId === current.peerId);
-    if (!isAccountAuthor) {
+    const authorship = roomMessageAuthorship(current, { userId: user?.id, peerId: input.peerId });
+    if (authorship !== 'account') {
       // Deliberately no owner/moderator override: editing always belongs to
       // the original author, even in a persistent room.
-      if (!isPeerAuthor) return { status: 'not_author' };
+      if (authorship !== 'peer') return { status: 'not_author' };
       const activePeer = room.peers.get(input.peerId);
       if (!isLivePeer(activePeer, input.sessionToken)) return { status: 'invalid_session' };
       if (await deps.findRoomBan(roomId, activePeer.accountUserId, activePeer.ip || clientIp))
@@ -429,12 +429,10 @@ export function createRoomChatService(deps: RoomChatDeps) {
     const current = await deps.messages().room.getMessage(roomId, messageId);
     if (!current) return { status: 'message_not_found' };
 
-    const isPeerAuthor = !current.authorUserId && Boolean(input.peerId) && input.peerId === current.peerId;
-    const isAccountAuthor = Boolean(user && current.authorUserId && user.id === current.authorUserId);
-    const isRoomOwner = Boolean(user && room.isStatic && room.ownerId === user.id);
-    if (isPeerAuthor) {
+    const authorship = roomMessageAuthorship(current, { userId: user?.id, peerId: input.peerId });
+    if (authorship === 'peer') {
       if (!isLivePeer(room.peers.get(input.peerId), input.sessionToken)) return { status: 'invalid_session' };
-    } else if (!isAccountAuthor && !isRoomOwner) {
+    } else if (authorship !== 'account' && !mayModerateRoomMessage(room, user?.id)) {
       return { status: 'not_allowed' };
     }
 

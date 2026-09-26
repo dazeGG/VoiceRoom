@@ -157,7 +157,6 @@ function relayHarness({
     broadcastDmNotification: async (recipientId, sender) => {
       calls.dm.push([recipientId, sender.id]);
     },
-    publicChatMessage: (message) => ({ id: idOf(message), public: true }),
     logger: () => logger
   });
   const errors = () => logger.records.map((record) => record.evt);

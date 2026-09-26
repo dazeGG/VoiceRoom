@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import fastify from 'fastify';
-import type { Membership } from '../src/domains/membership/membership-repository.ts';
+import type { Membership } from '../src/domains/membership/membership.repository.ts';
 import { registerMembershipRoutes } from '../src/domains/membership/membership.routes.ts';
 import type { ApiContext } from '../src/app/context.ts';
-import type { LeaveOutcome } from '../src/domains/membership/membership-service.ts';
+import type { LeaveOutcome } from '../src/domains/membership/membership.service.ts';
 import { fake, storedUser } from './fakes/index.ts';
 
 type LeaveStatus = 'invalid' | 'not_active' | 'owner_required' | 'left';

@@ -15,36 +15,8 @@
       "count": 1
     }
   },
-  "apps/api/src/app/service-registry.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 9
-    },
-    "@typescript-eslint/no-redundant-type-constituents": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 10
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 11
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 5
-    }
-  },
-  "apps/api/src/domains/account/account-deletion-repository.ts": {
+  "apps/api/src/domains/account/account-deletion.repository.ts": {
     "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    }
-  },
-  "apps/api/src/domains/account/account-lifecycle.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
       "count": 1
     }
   },
@@ -83,7 +55,7 @@
       "count": 1
     }
   },
-  "apps/api/src/domains/admission/livekit-auth-gate-service.ts": {
+  "apps/api/src/domains/admission/livekit-auth-gate.service.ts": {
     "@typescript-eslint/no-base-to-string": {
       "count": 2
     },
@@ -102,7 +74,7 @@
       "count": 1
     }
   },
-  "apps/api/src/domains/link-previews/link-preview-service.ts": {
+  "apps/api/src/domains/link-previews/link-preview.service.ts": {
     "@typescript-eslint/no-base-to-string": {
       "count": 1
     }
@@ -112,7 +84,7 @@
       "count": 1
     }
   },
-  "apps/api/src/domains/media/media-pressure-service.ts": {
+  "apps/api/src/domains/media/media-pressure.service.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }
@@ -122,20 +94,14 @@
       "count": 1
     }
   },
-  "apps/api/src/domains/membership/member-directory-service.ts": {
+  "apps/api/src/domains/membership/member-directory.service.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }
   },
-  "apps/api/src/domains/messaging/direct-message-repository.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
+  "apps/api/src/domains/messaging/direct-message.repository.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 8
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
@@ -151,7 +117,7 @@
       "count": 1
     }
   },
-  "apps/api/src/domains/messaging/dm-history-service.ts": {
+  "apps/api/src/domains/messaging/dm-history.service.ts": {
     "@typescript-eslint/await-thenable": {
       "count": 1
     },
@@ -169,17 +135,17 @@
       "count": 2
     }
   },
-  "apps/api/src/domains/messaging/pin-repository.ts": {
+  "apps/api/src/domains/messaging/pin.repository.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }
   },
-  "apps/api/src/domains/messaging/reaction-repository.ts": {
+  "apps/api/src/domains/messaging/reaction.repository.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }
   },
-  "apps/api/src/domains/messaging/reaction-service.ts": {
+  "apps/api/src/domains/messaging/reaction.service.ts": {
     "@typescript-eslint/no-base-to-string": {
       "count": 1
     }
@@ -204,7 +170,7 @@
       "count": 2
     }
   },
-  "apps/api/src/domains/messaging/room-history-service.ts": {
+  "apps/api/src/domains/messaging/room-history.service.ts": {
     "@typescript-eslint/await-thenable": {
       "count": 1
     },
@@ -212,15 +178,9 @@
       "count": 1
     }
   },
-  "apps/api/src/domains/messaging/room-message-repository.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
+  "apps/api/src/domains/messaging/room-message.repository.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 6
     },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
@@ -374,9 +334,6 @@
     "@typescript-eslint/no-base-to-string": {
       "count": 1
     },
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     },
@@ -385,42 +342,10 @@
     }
   },
   "apps/api/src/realtime/room-runtime.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 16
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 16
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 29
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 43
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 49
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 2
-    },
     "@typescript-eslint/no-unused-vars": {
       "count": 1
     },
-    "no-extra-boolean-cast": {
-      "count": 1
-    },
     "no-useless-assignment": {
-      "count": 3
-    },
-    "prefer-const": {
-      "count": 1
-    }
-  },
-  "apps/api/src/realtime/typing-throttle.ts": {
-    "@typescript-eslint/no-explicit-any": {
       "count": 1
     }
   },
@@ -431,44 +356,14 @@
     "@typescript-eslint/no-base-to-string": {
       "count": 1
     },
-    "@typescript-eslint/no-explicit-any": {
-      "count": 3
-    },
     "@typescript-eslint/no-misused-promises": {
       "count": 1
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
       "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
     }
   },
   "apps/api/src/server.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 11
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 13
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
-    },
     "@typescript-eslint/unbound-method": {
       "count": 1
     }
@@ -493,7 +388,7 @@
   },
   "apps/api/src/workers/notification-delivery.ts": {
     "@typescript-eslint/no-explicit-any": {
-      "count": 3
+      "count": 2
     },
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
@@ -594,7 +489,7 @@
       "count": 4
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 40
+      "count": 39
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 1
@@ -867,21 +762,13 @@
     }
   },
   "apps/api/test/stream-viewer-attendance.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 30
+      "count": 1
     }
   },
   "apps/api/test/typing-throttle.test.ts": {
     "@typescript-eslint/unbound-method": {
       "count": 1
-    }
-  },
-  "apps/api/test/ws-handler-ordering.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
     }
   },
   "apps/web/e2e/g70-reactions.spec.ts": {

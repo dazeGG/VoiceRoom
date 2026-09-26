@@ -90,9 +90,10 @@ function createHandler(
       observed.lastJoinRequestId = requestId;
       events.push(`join:${payload.peerId}`);
       connection.activeVoice = {
-        roomId: payload.roomId,
-        peerId: payload.peerId,
-        transportId: `transport:${payload.peerId}`
+        roomId: String(payload.roomId),
+        peerId: String(payload.peerId),
+        sessionToken: String(payload.sessionToken),
+        transportId: `transport:${String(payload.peerId)}`
       };
       return { ok: true };
     },

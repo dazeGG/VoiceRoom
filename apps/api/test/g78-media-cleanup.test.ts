@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createMediaMaintenanceService } from '../src/domains/media/media-maintenance-service.ts';
+import { createMediaMaintenanceService } from '../src/domains/media/media-maintenance.service.ts';
 import { createMediaMaintenanceWorker } from '../src/workers/media-maintenance.ts';
 import { attachment } from './fakes/index.ts';
 

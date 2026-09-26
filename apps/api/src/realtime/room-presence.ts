@@ -8,16 +8,23 @@ import { LOG_EVENTS } from '../lib/log-events.ts';
 import { publicPeer, type PresencePeer } from '../domains/rooms/room-views.ts';
 import { clearViewedScreenPeerReferences } from './room-runtime.ts';
 
+/** How the server reaches a peer's socket; closing it is the socket owner's business. */
+export interface PeerTransport {
+  id?: string;
+  send(message: RoomPeerMessage): boolean;
+  close?(): void;
+}
+
 export interface RosterPeer extends PresencePeer {
   closed?: boolean;
   replaced?: boolean;
-  transport?: { id?: string; send(message: RoomPeerMessage): boolean } | null;
+  transport?: PeerTransport | null;
 }
 
 export interface PresenceRoom {
   id: string;
   peers: Map<string, RosterPeer>;
-  updatedAt: number;
+  updatedAt?: number;
   voiceActiveSince?: number | null;
 }
 
@@ -146,7 +153,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
   }
 
   function publishClearedScreenViewers(target: PresenceRoom, ownerPeerId: string): void {
-    for (const viewer of clearViewedScreenPeerReferences(target, ownerPeerId) as RosterPeer[]) {
+    for (const viewer of clearViewedScreenPeerReferences(target, ownerPeerId)) {
       const message: RoomPeerMessage = { type: 'peer-updated', peer: publicPeer(viewer) };
       broadcast(target, message);
       deps.runtime()?.mirrorLegacyRoomEvent(target.id, message);

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 async function loadScanners() {
@@ -32,7 +33,7 @@ test('G10-A01 current API composition graph stays inside import, write and timer
   assert.deepEqual(checkApiSources({ config: config() }), []);
 
   const server = await import('../src/server.ts');
-  for (const name of ['bootstrap', 'closeStores', 'createApiApp', 'createApiServer'] as const)
+  for (const name of ['bootstrap', 'createApiApp', 'createApiServer'] as const)
     assert.equal(typeof server[name], 'function', name);
 });
 
@@ -109,13 +110,24 @@ test('G10-A04 the checks scan the repository whatever the working directory', as
   process.chdir(os.tmpdir());
   t.after(() => process.chdir(cwd));
 
-  // Probe rules the real sources are known to break: server.ts imports fastify,
-  // and the room repository writes rooms.
+  // Probe rules the real sources are known to break: the runtime imports
+  // fastify, and the room repository writes rooms.
+  const runtime = 'apps/api/src/app/api-runtime.ts';
   const imports = checkImportBoundaries({
-    config: { importRules: [{ id: 'probe', sources: ['apps/api/src/server.ts'], forbidden: ['fastify'], message: '' }] }
+    config: { importRules: [{ id: 'probe', sources: [runtime], forbidden: ['fastify'], message: '' }] }
   });
-  assert.equal(imports[0]?.filePath, 'apps/api/src/server.ts');
+  assert.equal(imports[0]?.filePath, runtime);
 
   const writes = checkApiSources({ config: { writeRules: { allowedOwners: { rooms: [] } } } });
   assert.ok(writes.some((violation) => violation.filePath === 'apps/api/src/domains/rooms/room.repository.ts'));
+});
+
+// docs/ARCHITECTURE.md section 3: a domain file says which layer it is after
+// a dot, so `rooms.service.ts`, never `rooms-service.ts`.
+test('G10-A05 domain files name their layer with a dot', () => {
+  const domains = fileURLToPath(new URL('../src/domains/', import.meta.url));
+  const misnamed = fs
+    .readdirSync(domains, { recursive: true, encoding: 'utf8' })
+    .filter((file) => /-(routes|service|repository|policy|module)\.ts$/.test(file));
+  assert.deepEqual(misnamed, []);
 });

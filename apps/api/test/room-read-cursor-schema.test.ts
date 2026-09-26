@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Pool } from 'pg';
-import { createMessageReadRepository } from '../src/domains/messaging/message-read-repository.ts';
+import { createMessageReadRepository } from '../src/domains/messaging/message-read.repository.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 

@@ -9,6 +9,7 @@ import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import type { MessageProjection } from './message-projection.ts';
 import type { StoredUser } from '../../lib/user-store.ts';
+import type { RoomChatMessage } from './room-chat-views.ts';
 
 const CHANNEL = 'voice_room_message_delivery';
 
@@ -31,7 +32,7 @@ export interface MessageDeliveryRelayDeps {
   pool(): { connect(): Promise<ListenClient> } | null;
   outbox(): { getEvent(eventId: string): Promise<{ payload?: unknown } | null> } | null;
   projection: MessageProjection;
-  broadcastChatMessage(roomId: string, message: unknown): void;
+  broadcastChatMessage(roomId: string, message: RoomChatMessage): void;
   notifyUser(userId: string, event: AccountMessage): void;
   findUser(userId: string): Promise<StoredUser | null>;
   /** The recipient's DM notification and push. */
@@ -40,7 +41,6 @@ export interface MessageDeliveryRelayDeps {
     sender: StoredUser,
     message: { id: string; body: string; createdAt: number | null }
   ): Promise<unknown>;
-  publicChatMessage(message: unknown): unknown;
   logger(): Pick<Logger, 'error'>;
 }
 
@@ -54,8 +54,9 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
     if (!event || event.type !== 'message.created' || !event.message) return;
     if (event.conversation?.type === 'room') {
       const roomId = event.conversation.id as string;
-      const projected = await deps.projection.project('room', event.message as { id?: string }, { roomId });
-      deps.broadcastChatMessage(roomId, deps.publicChatMessage(projected));
+      // The outbox carries the stored message; the runtime makes it public.
+      const message = event.message as unknown as RoomChatMessage;
+      deps.broadcastChatMessage(roomId, await deps.projection.project('room', message, { roomId }));
       return;
     }
     if (event.conversation?.type === 'dm') {

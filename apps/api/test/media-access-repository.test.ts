@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createMediaAccessRepository } from '../src/domains/media/media-access-repository.ts';
+import { createMediaAccessRepository } from '../src/domains/media/media-access.repository.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 

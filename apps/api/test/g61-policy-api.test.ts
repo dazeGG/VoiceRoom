@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
 import { normalizeNotificationLevel } from '@voice-room/shared/notifications';
-import { createNotificationService, type RoomLevelStore } from '../src/domains/notifications/notification-service.ts';
-import type { InboxRepository } from '../src/domains/notifications/inbox-repository.ts';
+import { createNotificationService, type RoomLevelStore } from '../src/domains/notifications/notification.service.ts';
+import type { InboxRepository } from '../src/domains/notifications/inbox.repository.ts';
 import { createNotificationStore } from '../src/lib/notification-store.ts';
 import { createRoomStore } from '../src/lib/room-store.ts';
 import { createUserStore } from '../src/lib/user-store.ts';

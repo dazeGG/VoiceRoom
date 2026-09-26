@@ -14,6 +14,7 @@ import { publicUser } from '../../lib/user-store.ts';
 import { isActiveAccount, type SocialUser } from '../social/social-views.ts';
 import { messageFingerprint, normalizeAttachmentIds } from './message-input.ts';
 import { requireReplyTarget } from './reply-projector.ts';
+import { isDirectSender } from './direct-message.policy.ts';
 
 type DbClient = Pick<pg.PoolClient, 'query'> | null | undefined;
 type Status<T extends string> = T extends string ? { status: T } : never;
@@ -332,7 +333,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
   ): Promise<Status<'deleted' | 'not_found' | 'not_sender'>> {
     const current = await deps.messages().direct.getMessage(userId, peerId, messageId);
     if (!current) return { status: 'not_found' };
-    if (current.senderId !== userId) return { status: 'not_sender' };
+    if (!isDirectSender(current, userId)) return { status: 'not_sender' };
     if (!(await deps.messages().direct.softDeleteMessage(messageId))) return { status: 'not_found' };
     deps.notifyUser(peerId, { type: 'dm.message.deleted', messageId, peerUserId: userId });
     deps.notifyUser(userId, { type: 'dm.message.deleted', messageId, peerUserId: peerId });
@@ -353,7 +354,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     if (!text) return { status: 'empty' };
     const current = await deps.messages().direct.getMessage(userId, peerId, messageId);
     if (!current) return { status: 'not_found' };
-    if (current.senderId !== userId) return { status: 'not_sender' };
+    if (!isDirectSender(current, userId)) return { status: 'not_sender' };
     if (current.invite) return { status: 'invitation' };
     const limited = rateLimited(userId);
     if (limited) return limited;

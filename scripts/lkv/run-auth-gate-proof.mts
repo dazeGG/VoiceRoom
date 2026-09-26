@@ -121,7 +121,7 @@ function readTopologyEvidence() {
     publicSignaling?: { fallbackAllowed?: boolean };
   };
   const productionGateCommandOk =
-    /command:\s*\["node",\s*"apps\/api\/src\/domains\/admission\/livekit-auth-gate-service\.ts"\]/.test(compose);
+    /command:\s*\["node",\s*"apps\/api\/src\/domains\/admission\/livekit-auth-gate\.service\.ts"\]/.test(compose);
   const internalLiveKitDefaultOk = /LIVEKIT_URL:\s*\$\{LIVEKIT_URL:-ws:\/\/livekit:7880\}/.test(compose);
   const caddyTargetsGate =
     /reverse_proxy\s+livekit-gate:3080/.test(caddy) && !/reverse_proxy\s+livekit:7880/.test(caddy);
@@ -129,7 +129,7 @@ function readTopologyEvidence() {
   const lkvRunnable =
     /postgres:/.test(lkv) &&
     /target:\s*api/.test(lkv) &&
-    /apps\/api\/src\/domains\/admission\/livekit-auth-gate-service\.ts/.test(lkv);
+    /apps\/api\/src\/domains\/admission\/livekit-auth-gate\.service\.ts/.test(lkv);
   return {
     caddyTargetsGate,
     config,

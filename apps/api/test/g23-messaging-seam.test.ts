@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
-import { createMessageService } from '../src/domains/messaging/message-service.ts';
-import { createMessageVisibilityService } from '../src/domains/messaging/message-visibility-service.ts';
+import { createMessageService } from '../src/domains/messaging/message.service.ts';
+import { createMessageVisibilityService } from '../src/domains/messaging/message-visibility.service.ts';
 
 test('G23-A01 message UoW exposes unchanged repositories and exactly one visibility policy', async () => {
   const room = {};
@@ -24,8 +24,8 @@ test('G23-A02 repository contains one canonical visibility service implementatio
   const candidates = [];
   for (const dir of ['domains/messaging', 'domains/notifications', 'domains/media']) {
     for (const name of fs.readdirSync(path.join(root, dir)))
-      if (/message-visibility-service\.(?:js|ts)$/.test(name)) candidates.push(path.join(dir, name));
+      if (/message-visibility\.service\.(?:js|ts)$/.test(name)) candidates.push(path.join(dir, name));
   }
   assert.equal(candidates.length, 1);
-  assert.match(candidates[0]!, /domains[\\/]messaging[\\/]message-visibility-service\.ts$/);
+  assert.match(candidates[0]!, /domains[\\/]messaging[\\/]message-visibility\.service\.ts$/);
 });

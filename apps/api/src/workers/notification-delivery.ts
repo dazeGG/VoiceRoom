@@ -1,11 +1,11 @@
 import type pg from 'pg';
 import { readEnvBool, readEnvInt } from '../lib/config.ts';
 import { createPushStore } from '../lib/push-store.ts';
-import { createNotificationOutboxRepository } from '../domains/notifications/notification-outbox-repository.ts';
+import { createNotificationOutboxRepository } from '../domains/notifications/notification-outbox.repository.ts';
 import { createNotificationPushProvider } from '../domains/notifications/push-provider.ts';
 import { boundedBackoff, createLeaseRuntime } from '../platform/lease-runtime.ts';
 import type { FenceGuard } from '../platform/lease-runtime.ts';
-import type { NotificationOutboxRepository } from '../domains/notifications/notification-outbox-repository.ts';
+import type { NotificationOutboxRepository } from '../domains/notifications/notification-outbox.repository.ts';
 import { recordNotificationOldestPending } from '../lib/metrics.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
@@ -16,7 +16,9 @@ type WorkerLogger = {
   error(...args: unknown[]): void;
   fatal?(...args: unknown[]): void;
 };
-type Provider = { deliver(job: any): Promise<{ suppressed?: boolean } | null | undefined> };
+type Provider = {
+  deliver(job: { recipientUserId: string; payload: unknown }): Promise<{ suppressed?: boolean } | null | undefined>;
+};
 
 const LEASE_IDENTITY = 'notification-delivery.G63';
 

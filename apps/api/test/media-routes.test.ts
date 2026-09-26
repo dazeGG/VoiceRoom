@@ -10,7 +10,7 @@ import type { Failure } from '@voice-room/shared/contracts/http';
 import type { AttachmentAnswer, AttachmentDraft } from '@voice-room/shared/contracts/media';
 import type { ApiContext } from '../src/app/context.ts';
 import { registerMediaRoutes } from '../src/domains/media/media.routes.ts';
-import type { MediaService } from '../src/domains/media/media-service.ts';
+import type { MediaService } from '../src/domains/media/media.service.ts';
 import { AJV_OPTIONS, registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { fake, spy, storedUser } from './fakes/index.ts';
 

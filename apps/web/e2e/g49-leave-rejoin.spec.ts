@@ -8,7 +8,7 @@ const membershipModel = readFileSync(
 const voiceSession = readFileSync(new URL('../src/lib/features/room/voice-session.svelte.ts', import.meta.url), 'utf8');
 const routes = readFileSync(new URL('../../api/src/domains/membership/membership-routes.ts', import.meta.url), 'utf8');
 const service = readFileSync(
-  new URL('../../api/src/domains/membership/membership-service.ts', import.meta.url),
+  new URL('../../api/src/domains/membership/membership.service.ts', import.meta.url),
   'utf8'
 );
 

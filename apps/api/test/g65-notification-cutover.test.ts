@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type pg from 'pg';
 import { readMessageDeliveryMode } from '../src/lib/config.ts';
-import type { NotificationOutboxRepository } from '../src/domains/notifications/notification-outbox-repository.ts';
+import type { NotificationOutboxRepository } from '../src/domains/notifications/notification-outbox.repository.ts';
 import { createNotificationDeliveryWorker, main } from '../src/workers/notification-delivery.ts';
 import { fake, outboxEvent } from './fakes/index.ts';
 

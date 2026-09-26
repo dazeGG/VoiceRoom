@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import test, { type TestContext } from 'node:test';
 import { runMigrations } from '../src/lib/migrate.ts';
-import { createReactionRepository } from '../src/domains/messaging/reaction-repository.ts';
+import { createReactionRepository } from '../src/domains/messaging/reaction.repository.ts';
 import { createTestDatabase } from './db-harness.ts';
 
 async function fixture(t: TestContext) {

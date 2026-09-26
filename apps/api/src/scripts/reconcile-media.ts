@@ -1,8 +1,8 @@
 import { readDatabaseConfig } from '../lib/config.ts';
 import { createDbPool } from '../platform/db/pool.ts';
-import { createAttachmentRepository } from '../domains/media/attachment-repository.ts';
-import { createMediaReconciliationService } from '../domains/media/media-reconciliation-service.ts';
-import { createMediaJobRepository } from '../domains/media/media-job-repository.ts';
+import { createAttachmentRepository } from '../domains/media/attachment.repository.ts';
+import { createMediaReconciliationService } from '../domains/media/media-reconciliation.service.ts';
+import { createMediaJobRepository } from '../domains/media/media-job.repository.ts';
 import { createMediaStorage } from '../domains/media/storage.ts';
 
 async function main() {

@@ -4,7 +4,7 @@ import type {
   DeliveryLease,
   OutboxEvent,
   createMessageOutboxRepository
-} from '../src/domains/messaging/message-outbox-repository.ts';
+} from '../src/domains/messaging/message-outbox.repository.ts';
 import { LEASE_IDENTITY, createMessageDeliveryWorker } from '../src/workers/message-delivery.ts';
 import { fake } from './fakes/index.ts';
 

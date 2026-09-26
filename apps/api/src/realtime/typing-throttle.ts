@@ -5,7 +5,7 @@
 // person is doing by then, so the other side never keeps showing "выбирает
 // эмодзи" after they went back to typing, and alternating activities still
 // cannot get past the budget.
-type Timer = { unref?: () => unknown } | number;
+type Timer = ReturnType<typeof setTimeout> | number;
 type Forward<Activity> = (activity: Activity) => void;
 type Entry<Activity> = {
   at: number;
@@ -24,13 +24,13 @@ function createTypingThrottle<Activity = string>({
   minIntervalMs = TYPING_FORWARD_MIN_MS,
   now = Date.now,
   setTimer = setTimeout,
-  clearTimer = clearTimeout,
+  clearTimer = (timer: Timer) => clearTimeout(timer),
   maxTargets = TYPING_TARGET_LIMIT
 }: {
   minIntervalMs?: number;
   now?: () => number;
   setTimer?: (callback: () => void, ms: number) => Timer;
-  clearTimer?: (timer: any) => void;
+  clearTimer?: (timer: Timer) => void;
   maxTargets?: number;
 } = {}) {
   const targets = new Map<string, Entry<Activity>>();

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { normalizeMentionUserIds } from '@voice-room/shared/mentions';
-import { createMentionEligibilityService } from '../src/domains/notifications/mention-eligibility-service.ts';
+import { createMentionEligibilityService } from '../src/domains/notifications/mention-eligibility.service.ts';
 import { fakeDb, result } from './fakes/index.ts';
 test('G55-A01 mentions are unique, bounded and never self/everyone', () => {
   assert.deepEqual(normalizeMentionUserIds(['a', 'a', 'b'], { creatorUserId: 'c' }), { ok: true, userIds: ['a', 'b'] });

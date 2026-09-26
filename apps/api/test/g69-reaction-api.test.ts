@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fastify from 'fastify';
 import test from 'node:test';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
-import { createReactionService, type ReactionRepository } from '../src/domains/messaging/reaction-service.ts';
+import { createReactionService, type ReactionRepository } from '../src/domains/messaging/reaction.service.ts';
 import { registerReactionRoutes } from '../src/domains/messaging/reactions.routes.ts';
 import type { ApiContext } from '../src/app/context.ts';
 import { fake } from './fakes/index.ts';

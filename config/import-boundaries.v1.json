@@ -10,9 +10,9 @@
     },
     {
       "id": "api-routes-do-not-import-db",
-      "sources": ["apps/api/src/server.ts", "apps/api/src/app.js"],
+      "sources": ["apps/api/src/server.ts", "apps/api/src/app/api-runtime.ts"],
       "forbidden": ["./lib/db", "./platform/db/", "apps/api/src/platform/db/"],
-      "message": "server.ts reaches the database through the service registry, never the pool or query builder."
+      "message": "The composition reaches the database through the service registry, never the pool or query builder."
     }
   ],
   "writeRules": {
@@ -22,7 +22,7 @@
         "apps/api/src/domains/rooms/room.repository.ts"
       ],
       "room_memberships": [
-        "apps/api/src/domains/membership/membership-repository.ts",
+        "apps/api/src/domains/membership/membership.repository.ts",
         "apps/api/src/domains/rooms/room-access.repository.ts",
         "apps/api/src/domains/rooms/room.repository.ts"
       ],
@@ -32,45 +32,57 @@
         "apps/api/src/domains/rooms/room.repository.ts"
       ],
       "room_messages": [
-        "apps/api/src/domains/messaging/content-repository.ts",
-        "apps/api/src/domains/messaging/reply-repository.ts",
-        "apps/api/src/domains/moderation/message-moderation-service.ts",
-        "apps/api/src/domains/link-previews/link-preview-repository.ts",
+        "apps/api/src/domains/messaging/content.repository.ts",
+        "apps/api/src/domains/messaging/reply.repository.ts",
+        "apps/api/src/domains/moderation/message-moderation.service.ts",
+        "apps/api/src/domains/link-previews/link-preview.repository.ts",
         "apps/api/src/domains/messaging/room-chat.repository.ts",
         "apps/api/src/domains/rooms/room.repository.ts"
       ],
       "room_bans": [
-        "apps/api/src/domains/moderation/active-ban-repository.ts",
-        "apps/api/src/domains/moderation/moderation-repository.ts",
+        "apps/api/src/domains/moderation/active-ban.repository.ts",
+        "apps/api/src/domains/moderation/moderation.repository.ts",
         "apps/api/src/domains/moderation/room-ban.repository.ts"
       ],
       "room_chat_reads": [
-        "apps/api/src/domains/messaging/message-read-repository.ts",
+        "apps/api/src/domains/messaging/message-read.repository.ts",
         "apps/api/src/domains/rooms/room-access.repository.ts"
       ],
-      "room_message_pins": ["apps/api/src/domains/messaging/pin-repository.ts"],
+      "room_message_pins": ["apps/api/src/domains/messaging/pin.repository.ts"],
       "room_server_mutes": ["apps/api/src/domains/moderation/room-ban.repository.ts"],
-      "user_blocks": ["apps/api/src/lib/friend-store.ts"],
+      "user_blocks": ["apps/api/src/domains/social/user-block.repository.ts"],
       "users": [
-        "apps/api/src/lib/user-store.ts",
+        "apps/api/src/domains/account/user.repository.ts",
+        "apps/api/src/domains/account/session.repository.ts",
         "apps/api/src/lib/notification-store.ts"
       ],
-      "sessions": ["apps/api/src/lib/user-store.ts"],
-      "friend_requests": ["apps/api/src/lib/friend-store.ts"],
-      "friendships": ["apps/api/src/lib/friend-store.ts"],
+      "sessions": [
+        "apps/api/src/domains/account/session.repository.ts",
+        "apps/api/src/domains/account/user.repository.ts",
+        "apps/api/src/domains/account/login-event.repository.ts"
+      ],
+      "friend_requests": [
+        "apps/api/src/domains/social/friend-request.repository.ts",
+        "apps/api/src/domains/social/user-block.repository.ts"
+      ],
+      "friendships": [
+        "apps/api/src/domains/social/friendship.repository.ts",
+        "apps/api/src/domains/social/user-block.repository.ts"
+      ],
       "direct_messages": [
-        "apps/api/src/lib/friend-store.ts",
-        "apps/api/src/domains/messaging/message-read-repository.ts",
-        "apps/api/src/domains/messaging/reply-repository.ts",
-        "apps/api/src/domains/link-previews/link-preview-repository.ts"
+        "apps/api/src/domains/messaging/dm-thread.repository.ts",
+        "apps/api/src/domains/social/user-block.repository.ts",
+        "apps/api/src/domains/messaging/message-read.repository.ts",
+        "apps/api/src/domains/messaging/reply.repository.ts",
+        "apps/api/src/domains/link-previews/link-preview.repository.ts"
       ],
       "notification_preferences": ["apps/api/src/lib/notification-store.ts"],
       "notification_dm_mutes": ["apps/api/src/lib/notification-store.ts"],
       "notification_room_mutes": ["apps/api/src/lib/notification-store.ts"],
-      "push_subscriptions": ["apps/api/src/lib/push-store.ts", "apps/api/src/lib/user-store.ts"]
+      "push_subscriptions": ["apps/api/src/lib/push-store.ts", "apps/api/src/domains/account/user.repository.ts"]
     },
     "crossDomainWriters": {
-      "apps/api/src/domains/account/account-deletion-repository.ts": [
+      "apps/api/src/domains/account/account-deletion.repository.ts": [
         "users",
         "sessions",
         "push_subscriptions",

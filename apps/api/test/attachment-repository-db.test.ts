@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 
-import { createAttachmentRepository } from '../src/domains/media/attachment-repository.ts';
+import { createAttachmentRepository } from '../src/domains/media/attachment.repository.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createUserStore } from '../src/lib/user-store.ts';
 import { createTestDatabase } from './db-harness.ts';

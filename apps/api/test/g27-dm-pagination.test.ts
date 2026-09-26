@@ -5,7 +5,7 @@ import {
   canonicalParticipants,
   createDmHistoryService,
   type DmHistoryRepository
-} from '../src/domains/messaging/dm-history-service.ts';
+} from '../src/domains/messaging/dm-history.service.ts';
 import { fake } from './fakes/index.ts';
 
 function message(id: string, micros: number) {

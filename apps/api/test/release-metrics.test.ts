@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as metrics from '../src/lib/metrics.ts';
-import { createMediaVisibilityService } from '../src/domains/media/media-visibility-service.ts';
+import { createMediaVisibilityService } from '../src/domains/media/media-visibility.service.ts';
 import type { MediaStorage } from '../src/domains/media/storage.ts';
 import { attachment, fake } from './fakes/index.ts';
 

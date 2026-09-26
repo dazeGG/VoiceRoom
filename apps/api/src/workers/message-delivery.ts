@@ -1,6 +1,6 @@
 import type pg from 'pg';
 import { readEnvInt, readMessageDeliveryMode } from '../lib/config.ts';
-import { createMessageOutboxRepository } from '../domains/messaging/message-outbox-repository.ts';
+import { createMessageOutboxRepository } from '../domains/messaging/message-outbox.repository.ts';
 import { boundedBackoff, createLeaseRuntime } from '../platform/lease-runtime.ts';
 import type { FenceGuard, LeaseRuntime } from '../platform/lease-runtime.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';

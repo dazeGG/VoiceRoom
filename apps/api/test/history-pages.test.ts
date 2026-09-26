@@ -5,8 +5,8 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createRoomHistoryRepository } from '../src/domains/messaging/room-history-repository.ts';
-import { createDmHistoryRepository } from '../src/domains/messaging/dm-history-repository.ts';
+import { createRoomHistoryRepository } from '../src/domains/messaging/room-history.repository.ts';
+import { createDmHistoryRepository } from '../src/domains/messaging/dm-history.repository.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 

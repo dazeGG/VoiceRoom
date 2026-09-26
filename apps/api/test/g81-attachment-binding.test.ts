@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import { Pool } from 'pg';
 import test, { type TestContext } from 'node:test';
 import { runMigrations } from '../src/lib/migrate.ts';
-import { createAttachmentRepository } from '../src/domains/media/attachment-repository.ts';
+import { createAttachmentRepository } from '../src/domains/media/attachment.repository.ts';
 import { createTestDatabase } from './db-harness.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 

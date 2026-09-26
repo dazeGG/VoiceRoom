@@ -4,7 +4,7 @@ import {
   createMemberDirectoryService,
   presenceForUser,
   type DirectoryCursorCodec
-} from '../src/domains/membership/member-directory-service.ts';
+} from '../src/domains/membership/member-directory.service.ts';
 import { fake } from './fakes/index.ts';
 
 test('G45-A01 directory is membership-gated, cursor-bound to room/query and dedupes presence connections', async () => {

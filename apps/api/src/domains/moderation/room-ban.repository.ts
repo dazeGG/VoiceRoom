@@ -12,7 +12,7 @@ import type { GatePrincipal } from '../admission/admission.service.ts';
 import { revokePrincipalInTransaction, type PrincipalRevocation } from '../admission/gate-credential.repository.ts';
 import { isGatePrincipal } from '../admission/gate-principal.ts';
 import { createRowId, normalizePositiveInt, toDate, toMillis } from '../rooms/room.repository.ts';
-import type { ActiveBanService } from './active-ban-service.ts';
+import type { ActiveBanService } from './active-ban.service.ts';
 
 type BanLookups = Pick<ActiveBanService, 'getActiveBan' | 'repository'>;
 

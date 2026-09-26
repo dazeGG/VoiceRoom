@@ -7,8 +7,8 @@ import assert from 'node:assert/strict';
 import fastify from 'fastify';
 
 import type { ApiContext } from '../src/app/context.ts';
-import type { MessageModerationService } from '../src/domains/moderation/message-moderation-service.ts';
-import type { ModerationService } from '../src/domains/moderation/moderation-service.ts';
+import type { MessageModerationService } from '../src/domains/moderation/message-moderation.service.ts';
+import type { ModerationService } from '../src/domains/moderation/moderation.service.ts';
 import { registerModerationRoutes } from '../src/domains/moderation/moderation.routes.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { fake, storedUser } from './fakes/index.ts';

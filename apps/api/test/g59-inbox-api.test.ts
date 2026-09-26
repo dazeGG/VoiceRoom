@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import test from 'node:test';
 import { runMigrations } from '../src/lib/migrate.ts';
-import { createInboxRepository } from '../src/domains/notifications/inbox-repository.ts';
+import { createInboxRepository } from '../src/domains/notifications/inbox.repository.ts';
 import { createTestDatabase } from './db-harness.ts';
 
 const sorted = (...revisions: unknown[]) => revisions.map(Number).sort((a, b) => a - b);

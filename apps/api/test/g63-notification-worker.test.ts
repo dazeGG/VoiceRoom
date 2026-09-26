@@ -6,7 +6,7 @@ import { createTestDatabase } from './db-harness.ts';
 import {
   createNotificationOutboxRepository,
   type NotificationOutboxRepository
-} from '../src/domains/notifications/notification-outbox-repository.ts';
+} from '../src/domains/notifications/notification-outbox.repository.ts';
 import { fake, outboxEvent } from './fakes/index.ts';
 import { createNotificationPushProvider } from '../src/domains/notifications/push-provider.ts';
 import { createNotificationDeliveryWorker } from '../src/workers/notification-delivery.ts';

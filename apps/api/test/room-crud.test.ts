@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import http from 'node:http';
 
 const { createApiApp, createApiServer } = await import('../src/server.ts');
-const { resolveRealtimeReconnectLeaseMs } = (await import('../src/server.ts')).__private;
+const { resolveRealtimeReconnectLeaseMs } = await import('../src/app/config.ts');
 const { openWs, sendWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType } = await import('./ws-harness.ts');
 import type { ClientCommands } from '@voice-room/shared/contracts/realtime';
 import type { StoredUser } from '../src/lib/user-store.ts';

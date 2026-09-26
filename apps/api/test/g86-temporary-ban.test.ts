@@ -5,8 +5,8 @@ import {
   type ModerationBanRow,
   type ModerationCursorCodec,
   type ModerationRepository
-} from '../src/domains/moderation/moderation-repository.ts';
-import { createModerationService } from '../src/domains/moderation/moderation-service.ts';
+} from '../src/domains/moderation/moderation.repository.ts';
+import { createModerationService } from '../src/domains/moderation/moderation.service.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { fake, fakeDb } from './fakes/index.ts';

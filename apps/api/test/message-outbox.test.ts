@@ -9,7 +9,7 @@ import type pg from 'pg';
 import {
   MessageDeliveryFenceError,
   createMessageOutboxRepository
-} from '../src/domains/messaging/message-outbox-repository.ts';
+} from '../src/domains/messaging/message-outbox.repository.ts';
 import { transaction } from '../src/platform/db/pool.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';

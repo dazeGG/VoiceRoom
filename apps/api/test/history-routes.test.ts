@@ -10,9 +10,9 @@ import {
   createDmHistoryService,
   DmHistoryError,
   type DmHistoryRepository
-} from '../src/domains/messaging/dm-history-service.ts';
+} from '../src/domains/messaging/dm-history.service.ts';
 import { registerHistoryRoutes, type HistoryRoutesDeps } from '../src/domains/messaging/history.routes.ts';
-import { createRoomHistoryService, type RoomHistoryRepository } from '../src/domains/messaging/room-history-service.ts';
+import { createRoomHistoryService, type RoomHistoryRepository } from '../src/domains/messaging/room-history.service.ts';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { fake, storedUser } from './fakes/index.ts';

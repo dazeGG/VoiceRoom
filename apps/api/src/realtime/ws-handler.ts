@@ -1,3 +1,5 @@
+import type { JoinPayload } from './voice-join.ts';
+import type { PeerUpdatePayload } from './room-runtime.ts';
 import { normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voice-room/shared/validation';
 import { normalizeTypingActivity } from '@voice-room/shared/realtime';
 import type { IncomingMessage } from 'node:http';
@@ -19,7 +21,7 @@ export interface WsRoomRuntime {
   unsubscribePreview(connection: WsConnection, roomId: string): unknown;
   joinVoiceRoom(
     connection: WsConnection,
-    payload: Record<string, any>,
+    payload: JoinPayload,
     user: SessionUser | null,
     clientIp: string,
     requestId?: string
@@ -28,12 +30,16 @@ export interface WsRoomRuntime {
     connection: WsConnection,
     target: { roomId: string; peerId: string; sessionToken: string }
   ): Promise<unknown>;
-  updatePeerState(connection: WsConnection, payload: Record<string, any>): Promise<{ ok: boolean; code?: string }>;
+  updatePeerState(connection: WsConnection, payload: PeerUpdatePayload): Promise<{ ok: boolean; code?: string }>;
   broadcastRoomTyping(connection: WsConnection, roomId: string, activity: TypingActivity): unknown;
   sendAccountSummaries(connection: WsConnection, userId: string): Promise<unknown>;
 }
 type WsLogger = { info(...args: unknown[]): void; warn(...args: unknown[]): void; error(...args: unknown[]): void };
-type WsSocket = RealtimeSocket & { on(event: string, listener: (...args: any[]) => void): unknown };
+type WsSocket = RealtimeSocket & {
+  on(event: 'message', listener: (raw: unknown) => void): unknown;
+  on(event: 'close', listener: (code: number, reason: unknown) => void): unknown;
+  on(event: 'error', listener: (error: Error) => void): unknown;
+};
 
 function createWsHandler({
   registry,

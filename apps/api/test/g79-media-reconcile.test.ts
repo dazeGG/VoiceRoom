@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { AttachmentRepository } from '../src/domains/media/attachment-repository.ts';
-import type { MediaJobRepository } from '../src/domains/media/media-job-repository.ts';
-import { createMediaReconciliationService } from '../src/domains/media/media-reconciliation-service.ts';
+import type { AttachmentRepository } from '../src/domains/media/attachment.repository.ts';
+import type { MediaJobRepository } from '../src/domains/media/media-job.repository.ts';
+import { createMediaReconciliationService } from '../src/domains/media/media-reconciliation.service.ts';
 import type { MediaStorage, MediaVariant } from '../src/domains/media/storage.ts';
 import { attachment, fake, mediaJob } from './fakes/index.ts';
 

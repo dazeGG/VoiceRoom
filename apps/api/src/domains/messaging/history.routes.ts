@@ -6,7 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { Failure, RoomIdParams } from '@voice-room/shared/contracts/http';
 import { DirectHistoryPage, HistoryQuery, PeerParams, RoomHistoryPage } from '@voice-room/shared/contracts/messages';
 import type { ApiContext } from '../../app/context.ts';
-import { failure, sendServiceError } from '../../platform/http/http-kit.ts';
+import { failure } from '../../platform/http/http-kit.ts';
 
 type Query = Record<string, string | undefined>;
 
@@ -23,45 +23,31 @@ const answers = <Page>(page: Page) => ({ 200: page, '4xx': Failure, '5xx': Failu
 
 export function registerHistoryRoutes(root: FastifyInstance, ctx: ApiContext, deps: HistoryRoutesDeps): void {
   const app = root.withTypeProvider<TypeBoxTypeProvider>();
+  // A failure the services do not classify answers with the domain's own code.
+  const config = { errorFallback: 'history_error' as const };
 
   app.get(
     '/api/rooms/:roomId/chat/history',
-    { schema: { params: RoomIdParams, querystring: HistoryQuery, response: answers(RoomHistoryPage) } },
+    { config, schema: { params: RoomIdParams, querystring: HistoryQuery, response: answers(RoomHistoryPage) } },
     async (request, reply) => {
       const roomId = request.params.roomId.trim();
       const userId = (await ctx.resolveSession(request.raw))?.user?.id;
       if (!userId || !(await deps.canReadRoom(roomId, userId))) {
         return reply.code(userId ? 403 : 401).send(failure('Room is not available', { code: 'room_forbidden' }));
       }
-      try {
-        return await deps.rooms.getPage({ roomId, query: request.query, access: { authorized: true } });
-      } catch (error) {
-        return sendServiceError(reply, error, {
-          fallback: 'history_error',
-          log: request.log,
-          what: 'room history request'
-        });
-      }
+      return await deps.rooms.getPage({ roomId, query: request.query, access: { authorized: true } });
     }
   );
 
   app.get(
     '/api/dm/:userId/history',
-    { schema: { params: PeerParams, querystring: HistoryQuery, response: answers(DirectHistoryPage) } },
+    { config, schema: { params: PeerParams, querystring: HistoryQuery, response: answers(DirectHistoryPage) } },
     async (request, reply) => {
       const userId = (await ctx.resolveSession(request.raw))?.user?.id;
       if (!userId) {
         return reply.code(401).send(failure('Authentication required', { code: 'authentication_required' }));
       }
-      try {
-        return await deps.directs.getPage({ userId, peerId: request.params.userId.trim(), query: request.query });
-      } catch (error) {
-        return sendServiceError(reply, error, {
-          fallback: 'history_error',
-          log: request.log,
-          what: 'DM history request'
-        });
-      }
+      return await deps.directs.getPage({ userId, peerId: request.params.userId.trim(), query: request.query });
     }
   );
 }

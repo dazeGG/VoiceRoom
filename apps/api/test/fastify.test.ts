@@ -218,7 +218,7 @@ test('capability route defaults the public boolean contract when readiness throw
 });
 
 test('production cursor HMAC resolution has no membership fallback secret', () => {
-  const { resolveCursorHmacKeys } = require('../src/server.ts').__private;
+  const { resolveCursorHmacKeys } = require('../src/app/config.ts');
 
   assert.throws(
     () =>

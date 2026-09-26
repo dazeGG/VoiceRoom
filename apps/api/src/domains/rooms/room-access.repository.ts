@@ -5,7 +5,7 @@ import { sql } from 'kysely';
 import type pg from 'pg';
 import { transaction } from '../../platform/db/pool.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
-import type { ActiveBanService } from '../moderation/active-ban-service.ts';
+import type { ActiveBanService } from '../moderation/active-ban.service.ts';
 import {
   createRowId,
   mapRoom,

@@ -1,9 +1,9 @@
 import type pg from 'pg';
 import crypto from 'node:crypto';
 import sharp from 'sharp';
-import { MediaJobFenceError } from '../domains/media/media-job-repository.ts';
-import type { MediaJob, MediaJobRepository } from '../domains/media/media-job-repository.ts';
-import type { AttachmentRepository } from '../domains/media/attachment-repository.ts';
+import { MediaJobFenceError } from '../domains/media/media-job.repository.ts';
+import type { MediaJob, MediaJobRepository } from '../domains/media/media-job.repository.ts';
+import type { AttachmentRepository } from '../domains/media/attachment.repository.ts';
 import type { MediaStorage } from '../domains/media/storage.ts';
 import { recordMediaOldestPending } from '../lib/metrics.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
@@ -210,9 +210,9 @@ function createMediaProcessingWorker(
 
 async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
   if (String(env.MEDIA_PROCESSING_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
-  const { createAttachmentRepository } = await import('../domains/media/attachment-repository.ts');
-  const { createMediaJobRepository } = await import('../domains/media/media-job-repository.ts');
-  const { createMediaPressureService } = await import('../domains/media/media-pressure-service.ts');
+  const { createAttachmentRepository } = await import('../domains/media/attachment.repository.ts');
+  const { createMediaJobRepository } = await import('../domains/media/media-job.repository.ts');
+  const { createMediaPressureService } = await import('../domains/media/media-pressure.service.ts');
   const { createMediaStorage } = await import('../domains/media/storage.ts');
   const storage = createMediaStorage({ rootDir: env.MEDIA_STORAGE_DIR || '/data/media' });
   await storage.freeSpace();

@@ -31,9 +31,9 @@ function createMediaMaintenanceWorker({
 
 async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
   if (String(env.MEDIA_MAINTENANCE_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
-  const { createAttachmentRepository } = await import('../domains/media/attachment-repository.ts');
-  const { createMediaJobRepository } = await import('../domains/media/media-job-repository.ts');
-  const { createMediaMaintenanceService } = await import('../domains/media/media-maintenance-service.ts');
+  const { createAttachmentRepository } = await import('../domains/media/attachment.repository.ts');
+  const { createMediaJobRepository } = await import('../domains/media/media-job.repository.ts');
+  const { createMediaMaintenanceService } = await import('../domains/media/media-maintenance.service.ts');
   const { createMediaStorage } = await import('../domains/media/storage.ts');
   const storage = createMediaStorage({ rootDir: env.MEDIA_STORAGE_DIR || '/data/media' });
   const worker = createMediaMaintenanceWorker({

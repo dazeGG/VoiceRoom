@@ -4,7 +4,7 @@ import {
   DEFAULT_MIN_FREE_BYTES,
   DEFAULT_RECOVERY_BYTES,
   createMediaPressureService
-} from '../src/domains/media/media-pressure-service.ts';
+} from '../src/domains/media/media-pressure.service.ts';
 import { recordMediaPressure, renderPrometheus, resetMetricsForTest } from '../src/lib/metrics.ts';
 
 test('G80-A01 2GiB boundary, claim stop and recovery hysteresis fail closed', async () => {

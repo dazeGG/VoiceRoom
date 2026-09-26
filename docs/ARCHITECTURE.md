@@ -42,7 +42,7 @@ domain      domains/<d>/<name>.policy.ts      pure rules (authorship, moderation
 data        domains/<d>/<name>.repository.ts  SQL; the only writers of their tables
 platform    platform/**                       http kit, origin guard, db, readiness
 realtime    realtime/**                       WebSocket transport and in-memory presence
-composition server.ts, app/**                 config, wiring, bootstrap
+composition server.ts, app/**                 entry (server.ts), config, per-app runtime, wiring
 ```
 
 Rules:
@@ -55,6 +55,10 @@ Rules:
 - Route input and output are TypeBox schemas registered with Fastify. The
   schemas live in `packages/shared/src/contracts/<domain>.ts`; the web client
   types its calls from the same module, so a payload changes in one place.
+- A route lets a service error through: the one error handler
+  (`platform/http/http-kit.ts`) answers with the error's status and code, or
+  a 500 with the route's `config.errorFallback` code. Routes do not catch to
+  format a failure.
 - Every failure is `{ ok: false, error, code }` with `code` from
   `contracts/errors.ts` (`ERROR_CODES`). The web shows the text for the code
   (`lib/api/error-texts.ts`, a `Record<ErrorCode, string>`), so adding a code
@@ -66,6 +70,14 @@ Rules:
 - Route modules receive an explicit `ApiContext` plus their dependencies; no
   new module-level singletons.
 - Configuration is read only by `app/config.ts` (`readApiConfig(env)`).
+- An app is composed by `createApiRuntime({ env })` (`app/api-runtime.ts`):
+  the service registry (stores and `domains/<d>/<d>.module.ts` wiring), the
+  realtime hub, the domain services and the routes (`app/api-routes.ts`).
+  Nothing lives in module scope, so every app a test builds has its own
+  state. `server.ts` is only the process entry.
+- A rule about who may act on a resource is a pure function in
+  `domains/<d>/<name>.policy.ts`; services and realtime paths call it rather
+  than repeat the comparison.
 - The process has one pg pool, created by the registry (`connect`) or the
   worker entry, and handed to every repository. Queries are Kysely over the
   generated `platform/db/schema.ts`. A repository-only transaction is
@@ -81,9 +93,8 @@ copy the old pattern into new code.
 | Gap | Where | Rule for new code |
 | --- | --- | --- |
 | Raw `pg` queries on the capability heartbeat table | `platform/runtime-readiness-repository.ts` | write new queries with Kysely |
-| Stores kept under `lib/` instead of their domain | `lib/*-store.ts` (`room-store.ts` is a facade over the room repositories) | put new data access in `domains/<d>/<name>.repository.ts` |
-| `server.ts` builds services at import time and keeps mutable module state | `server.ts`, `app/service-registry.ts` | add dependencies through the registry or a route module's deps |
-| Large modules | `realtime/room-runtime.ts`, `server.ts` | add new behaviour in a new domain module, not these files |
+| Store facades under `lib/` | `lib/room-store.ts`, `lib/user-store.ts`, `lib/friend-store.ts` (facades over domain repositories), `lib/notification-store.ts`, `lib/push-store.ts` | depend on the domain repository, not the facade |
+| Capability readiness machinery (release-2.5 flags) | `platform/readiness.ts`, `platform/runtime-readiness*.ts`, `/api/capabilities` | gate new features without it |
 
 ## 5. Web layering
 

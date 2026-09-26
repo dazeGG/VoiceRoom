@@ -18,7 +18,7 @@ import {
 } from '@voice-room/shared/contracts/notifications';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
-import type { NotificationService } from './notification-service.ts';
+import type { NotificationService } from './notification.service.ts';
 
 export interface NotificationRoutesDeps {
   notifications: NotificationService;

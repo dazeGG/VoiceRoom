@@ -1,5 +1,7 @@
-// The moderation services as server.ts wires them, over a migrated database:
-// what reaches the room's viewers when an owner removes a message.
+// The moderation module as the registry wires it, over a migrated database:
+// what reaches the room's viewers when an owner removes a message. The
+// registry has no path to the voice peers' own transports, so the deletion
+// goes out on the room detail stream only.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -7,7 +9,6 @@ import assert from 'node:assert/strict';
 import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import { createServiceRegistry, type ServiceRegistryDeps } from '../src/app/service-registry.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
-import type { RoomPeerMessage } from '../src/realtime/legacy-events.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { fake } from './fakes/index.ts';
 
@@ -31,7 +32,6 @@ test(
     );
 
     const detail: Array<[string, ServerEnvelope]> = [];
-    const peerMessages: RoomPeerMessage[] = [];
     const registry = createServiceRegistry(
       {
         ROOM_IDLE_TTL_MS: 60_000,
@@ -46,7 +46,6 @@ test(
       },
       fake<ServiceRegistryDeps>({
         getRoom: async () => null,
-        broadcast: (_room, message) => peerMessages.push(message),
         roomRuntime: () => ({ broadcastRoomDetail: (roomId, envelope) => detail.push([roomId, envelope]) })
       })
     );
@@ -66,8 +65,5 @@ test(
 
     assert.equal(outcome.status, 'deleted');
     assert.deepEqual(detail, [[ROOM, { type: 'room.chat.deleted', payload: { roomId: ROOM, messageId: 'm-1' } }]]);
-    // Nothing goes to the voice peers' own transports: a message they cannot
-    // map would count as a failed send and drop them from the room.
-    assert.deepEqual(peerMessages, []);
   }
 );

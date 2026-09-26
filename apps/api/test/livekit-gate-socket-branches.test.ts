@@ -9,9 +9,9 @@ import { EventEmitter } from 'node:events';
 import net from 'node:net';
 import test from 'node:test';
 
-import type { CredentialBoundaryService } from '../src/domains/admission/credential-boundary-service.ts';
+import type { CredentialBoundaryService } from '../src/domains/admission/credential-boundary.service.ts';
 import type { GateClaims } from '../src/domains/admission/gate-credential-signer.ts';
-import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate-service.ts';
+import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate.service.ts';
 import { fake } from './fakes/index.ts';
 
 class FakeSocket extends EventEmitter {
