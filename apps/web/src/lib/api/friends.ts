@@ -9,10 +9,8 @@ import type {
   FriendRequestAnswered,
   FriendRequests,
   FriendRequestSent,
-  FriendSearch,
   IncomingRequest,
   OutgoingRequest,
-  SearchResult,
   SendRequestStatus
 } from '@voice-room/shared/contracts/social';
 import type { PublicUser } from '@voice-room/shared/contracts/users';
@@ -32,10 +30,6 @@ export type { PublicUser } from '@voice-room/shared/contracts/users';
 export async function fetchFriends(): Promise<Pick<FriendList, 'friends' | 'incomingRequestCount'>> {
   const { friends, incomingRequestCount } = await api.get<FriendList>('/api/friends');
   return { friends, incomingRequestCount };
-}
-
-export async function searchUsers(query: string): Promise<SearchResult[]> {
-  return (await api.get<FriendSearch>(`/api/friends/search?q=${encodeURIComponent(query)}`)).results;
 }
 
 export async function fetchRequests(): Promise<{ incoming: IncomingRequest[]; outgoing: OutgoingRequest[] }> {
@@ -80,10 +74,6 @@ export async function removeFriend(userId: string): Promise<void> {
 
 function blockUrl(userId: string): string {
   return `/api/blocks/${encodeURIComponent(userId)}`;
-}
-
-export async function fetchBlockedUserIds(): Promise<string[]> {
-  return (await api.get<BlockList>('/api/blocks')).blocked;
 }
 
 export async function fetchBlockedUsers(): Promise<PublicUser[]> {

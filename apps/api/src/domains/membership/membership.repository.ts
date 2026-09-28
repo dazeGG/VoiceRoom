@@ -231,4 +231,4 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null } = {}
 
 export type MembershipRepository = ReturnType<typeof createMembershipRepository>;
 
-export { createMembershipRepository, mapDirectoryMember, mapMembership };
+export { createMembershipRepository };

@@ -29,7 +29,7 @@ export function showToastUi(
   }, duration);
 }
 
-export function dismissToastUi(): void {
+function dismissToastUi(): void {
   window.clearTimeout(toastTimer);
   toastUi.visible = false;
   toastUi.action = null;

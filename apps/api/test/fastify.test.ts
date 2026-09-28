@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
@@ -9,11 +8,45 @@ import assert from 'node:assert/strict';
 const { createApiApp, createApiServer } = await import('../src/server.ts');
 const { withRosterPeer } = await import('./roster-harness.ts');
 import { PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/capabilities';
-import { notificationPreferences } from './fakes/index.ts';
+import { fake, notificationPreferences } from './fakes/index.ts';
+import type { StoreOverrides } from '../src/app/service-registry.ts';
+import type { ReadinessReport } from '../src/platform/readiness.ts';
+import type { NotificationPreferences } from '@voice-room/shared/contracts/notifications';
+import type { createPushStore } from '../src/lib/push-store.ts';
+
+type RoomStoreFake = NonNullable<StoreOverrides['store']>;
+type PushStore = ReturnType<typeof createPushStore>;
 const { resetMetricsForTest } = await import('../src/lib/metrics.ts');
 
-function createFakeStore() {
-  const rooms = new Map();
+function createFakeStore(): RoomStoreFake {
+  const rooms = new Map<string, Record<string, unknown>>();
+  async function createRoom({
+    creatorIp,
+    isStatic,
+    roomId,
+    name = '',
+    now = Date.now()
+  }: {
+    creatorIp?: unknown;
+    isStatic?: boolean;
+    roomId?: string;
+    name?: unknown;
+    now?: number;
+  }) {
+    const room = {
+      createdAt: now,
+      creatorIp,
+      emptySince: now,
+      id: roomId,
+      isStatic,
+      name,
+      messages: [],
+      peers: new Map(),
+      updatedAt: now
+    };
+    rooms.set(roomId ?? '', room);
+    return { ...room, peers: new Map() };
+  }
   return {
     async countQuotaRoomsForIp() {
       return 0;
@@ -21,23 +54,9 @@ function createFakeStore() {
     async countRooms() {
       return rooms.size;
     },
-    async createRoom({ creatorIp, isStatic, roomId, name = '', now = Date.now() }) {
-      const room = {
-        createdAt: now,
-        creatorIp,
-        emptySince: now,
-        id: roomId,
-        isStatic,
-        name,
-        messages: [],
-        peers: new Map(),
-        updatedAt: now
-      };
-      rooms.set(roomId, room);
-      return { ...room, peers: new Map() };
-    },
+    createRoom,
     async createRoomWithQuota(options) {
-      const room = await this.createRoom(options);
+      const room = await createRoom(options);
       return { room, status: 'created' };
     },
     async getRoom(roomId) {
@@ -45,12 +64,13 @@ function createFakeStore() {
       return room ? { ...room, peers: new Map() } : null;
     },
     async getOrCreatePeerIdentity({ peerId, sessionToken }) {
-      if (sessionToken && sessionToken.startsWith('bad')) {
+      if (typeof sessionToken === 'string' && sessionToken.startsWith('bad')) {
         return { identity: null, status: 'token_mismatch' };
       }
       return { identity: { avatarColorKey: 'blurple', peerId }, status: 'created' };
     },
-    normalizeGatePrincipal({ accountUserId, guestPrincipalId }) {
+    normalizeGatePrincipal(input) {
+      const { accountUserId, guestPrincipalId } = input ?? {};
       return accountUserId
         ? { principalId: accountUserId, principalType: 'account' }
         : { principalId: guestPrincipalId, principalType: 'guest' };
@@ -101,7 +121,7 @@ test('every response carries the request id the server logged it under', async (
   t.after(() => app.close());
 
   const generated = await app.inject({ method: 'GET', url: '/api/healthz' });
-  assert.match(generated.headers['x-request-id'] || '', /^[A-Za-z0-9._-]{1,64}$/);
+  assert.match(String(generated.headers['x-request-id'] ?? ''), /^[A-Za-z0-9._-]{1,64}$/);
 
   const supplied = await app.inject({
     method: 'GET',
@@ -118,12 +138,12 @@ test('every response carries the request id the server logged it under', async (
     headers: { 'x-request-id': forged }
   });
   assert.notEqual(hostile.headers['x-request-id'], forged);
-  assert.match(hostile.headers['x-request-id'] || '', /^[A-Za-z0-9._-]{1,64}$/);
+  assert.match(String(hostile.headers['x-request-id'] ?? ''), /^[A-Za-z0-9._-]{1,64}$/);
 
   // A 4xx is exactly the response a user is most likely to report.
   const missing = await app.inject({ method: 'GET', url: '/api/does-not-exist' });
   assert.equal(missing.statusCode, 404);
-  assert.match(missing.headers['x-request-id'] || '', /^[A-Za-z0-9._-]{1,64}$/);
+  assert.match(String(missing.headers['x-request-id'] ?? ''), /^[A-Za-z0-9._-]{1,64}$/);
 });
 
 test('healthz fails readiness when capability snapshot is unavailable', async (t) => {
@@ -154,12 +174,13 @@ test('API lifecycle starts and stops runtime readiness', async () => {
     readinessProviderOverride: {
       async start() {
         starts += 1;
+        return fake<ReadinessReport>({ features: {} });
       },
       async stop() {
         stops += 1;
       },
       getSnapshot() {
-        return { features: {} };
+        return fake<ReadinessReport>({ features: {} });
       }
     }
   });
@@ -175,13 +196,13 @@ test('capability route returns exactly the public boolean capability contract', 
     store: createFakeStore(),
     readinessProviderOverride: {
       getSnapshot() {
-        return {
+        return fake<ReadinessReport>({
           features: {
             historyCursor: true,
             mediaUploads: true,
             unknownFutureFlag: true
           }
-        };
+        });
       }
     }
   });
@@ -258,8 +279,8 @@ test('createApiServer keeps the legacy http server contract while exposing app/i
 });
 
 test('push subscription routes require auth and validate subscription payloads', async (t) => {
-  const writes = [];
-  const removals = [];
+  const writes: Parameters<PushStore['upsert']>[0][] = [];
+  const removals: Parameters<PushStore['remove']>[0][] = [];
   const app = createApiApp({
     store: createFakeStore(),
     users: {
@@ -307,8 +328,8 @@ test('push subscription routes require auth and validate subscription payloads',
     }
   });
   assert.equal(created.statusCode, 201);
-  assert.equal(writes[0].userId, 'user-1');
-  assert.equal(writes[0].metadata.userAgent, 'test-browser');
+  assert.equal(writes[0]?.userId, 'user-1');
+  assert.equal(writes[0]?.metadata?.userAgent, 'test-browser');
 
   const removed = await app.inject({
     method: 'DELETE',
@@ -329,9 +350,8 @@ test('push subscription routes require auth and validate subscription payloads',
     assert.equal(rejected.statusCode, 400);
   }
 
-  let limited;
-  for (let index = 0; index < 21; index += 1) {
-    limited = await app.inject({
+  const subscribe = (index: number) =>
+    app.inject({
       method: 'POST',
       url: '/api/push/subscriptions',
       headers: { cookie: 'vr_session=push-rate-session' },
@@ -342,7 +362,8 @@ test('push subscription routes require auth and validate subscription payloads',
         }
       }
     });
-  }
+  for (let index = 0; index < 20; index += 1) await subscribe(index);
+  const limited = await subscribe(20);
   assert.equal(limited.statusCode, 429);
   assert.equal(limited.headers['retry-after'], '60');
 });
@@ -357,7 +378,7 @@ test('api metrics expose prometheus counters and runtime gauges', async (t) => {
 
   const metrics = await app.inject({ method: 'GET', url: '/api/metrics' });
   assert.equal(metrics.statusCode, 200);
-  assert.match(metrics.headers['content-type'], /text\/plain/);
+  assert.match(String(metrics.headers['content-type']), /text\/plain/);
   assert.match(metrics.body, /# TYPE voice_room_api_http_requests_total counter/);
   assert.ok(
     metrics.body.includes('voice_room_api_http_requests_total{method="GET",route="/api/healthz",status="200"} 1')
@@ -459,8 +480,8 @@ test('moderation routes require the owner of a static room', async (t) => {
     }
   };
   const baseStore = createFakeStore();
-  const request = (url) => ({
-    method: 'POST',
+  const request = (url: string) => ({
+    method: 'POST' as const,
     url,
     headers: { cookie: 'vr_session=session-token', host: 'voice.local', origin: 'http://voice.local' },
     payload: { peerId: 'peer-12345678' }
@@ -498,35 +519,36 @@ test('message edit routes reuse send validation and never grant room owners an a
   const roomId = 'room-edit1';
   let roomEdit = null;
   let dmEdit = null;
-  let bannedUserId = null;
-  const store = {
+  let bannedUserId: string | null = null;
+  const roomMessage = {
+    authorUserId: authorId,
+    avatarColorKey: 'blurple',
+    createdAt: 100,
+    editedAt: null,
+    expiresAt: 10_000,
+    id: 'room-message-1',
+    name: 'Author',
+    peerId: `auth-${authorId}`,
+    roomId,
+    text: 'before'
+  };
+  const store: RoomStoreFake = {
     ...createFakeStore(),
-    async findActiveRoomBan({ userId }) {
-      return userId === bannedUserId ? { id: 'ban-1' } : null;
+    async findActiveRoomBan(input) {
+      return input?.userId === bannedUserId ? { id: 'ban-1' } : null;
     },
     async getRoom() {
       return { id: roomId, isStatic: true, ownerId, peers: new Map() };
     },
     async getMessage() {
-      return {
-        authorUserId: authorId,
-        avatarColorKey: 'blurple',
-        createdAt: 100,
-        editedAt: null,
-        expiresAt: 10_000,
-        id: 'room-message-1',
-        name: 'Author',
-        peerId: `auth-${authorId}`,
-        roomId,
-        text: 'before'
-      };
+      return roomMessage;
     },
     async editMessage(nextRoomId, messageId, text) {
       roomEdit = { roomId: nextRoomId, messageId, text };
-      return { ...(await this.getMessage()), text, editedAt: 200 };
+      return { ...roomMessage, text, editedAt: 200 };
     }
   };
-  const friends = {
+  const friends: NonNullable<StoreOverrides['friends']> = {
     async getMessage() {
       return { id: 'dm-message-1', senderId: authorId, recipientId: peerId, body: 'before' };
     },
@@ -557,7 +579,7 @@ test('message edit routes reuse send validation and never grant room owners an a
   });
   t.after(() => app.close());
 
-  const request = (url, cookie, payload = { text: ' updated \n\n\n line ' }) =>
+  const request = (url: string, cookie: string, payload: Record<string, unknown> = { text: ' updated \n\n\n line ' }) =>
     app.inject({
       method: 'PATCH',
       url,
@@ -685,7 +707,7 @@ test('notification preference routes require auth and expose defaults', async (t
 });
 
 test('notification mute and privacy routes call notification store and map statuses', async (t) => {
-  const calls = [];
+  const calls: unknown[] = [];
   const preferences = notificationPreferences({
     doNotDisturb: true,
     mutedPeerIds: ['22222222-2222-4222-8222-222222222222'],
@@ -804,7 +826,7 @@ test('notification mute and privacy routes call notification store and map statu
 });
 
 test('presence status route requires auth, validates canonical values, and syncs DND', async (t) => {
-  const calls = [];
+  const calls: unknown[] = [];
   const currentUserId = '11111111-1111-4111-8111-111111111111';
   const app = createApiApp({
     store: createFakeStore(),
@@ -834,7 +856,7 @@ test('presence status route requires auth, validates canonical values, and syncs
           status: 'updated',
           preferences: notificationPreferences({
             doNotDisturb: input.presenceStatus === 'dnd',
-            presenceStatus: input.presenceStatus,
+            presenceStatus: input.presenceStatus as NotificationPreferences['presenceStatus'],
             presenceStatusAutomatic: Boolean(input.automatic && input.presenceStatus === 'away')
           })
         };
@@ -911,7 +933,7 @@ test('presence status route requires auth, validates canonical values, and syncs
 });
 
 test('notification mutation routes reject invalid booleans and targets before store calls', async (t) => {
-  const calls = [];
+  const calls: unknown[] = [];
   const currentUserId = '11111111-1111-4111-8111-111111111111';
   const headers = {
     cookie: 'vr_session=session-token',
@@ -1036,9 +1058,11 @@ test('livekit token uses authenticated user avatar color for room peer identity'
     id: 'peer0001',
     sessionToken: 'goodtoken123456789012345678901234'
   });
-  let identityInput = null;
+  const seen: { identity: Parameters<NonNullable<RoomStoreFake['getOrCreatePeerIdentity']>>[0] | null } = {
+    identity: null
+  };
   store.getOrCreatePeerIdentity = async (input) => {
-    identityInput = input;
+    seen.identity = input;
     return { identity: { avatarColorKey: input.avatarColorKey, peerId: input.peerId }, status: 'created' };
   };
 
@@ -1098,7 +1122,7 @@ test('livekit token uses authenticated user avatar color for room peer identity'
   });
 
   assert.equal(response.statusCode, 200);
-  assert.equal(identityInput.avatarColorKey, 'green');
+  assert.equal(seen.identity?.avatarColorKey, 'green');
 });
 
 test('livekit token validates persisted anonymous peer identity before issuing voice access', async (t) => {

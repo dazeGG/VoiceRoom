@@ -90,7 +90,7 @@ export function applyRemoteScreenCue(participant: Participant, hadScreen: boolea
   playStreamCue(nextScreen ? 'start' : 'stop');
 }
 
-export function clearRemoteScreenCue(peerId: string | undefined): void {
+function clearRemoteScreenCue(peerId: string | undefined): void {
   if (!peerId) return;
   streamCueTimes.delete(`${peerId}:start`);
   streamCueTimes.delete(`${peerId}:stop`);
@@ -104,11 +104,7 @@ function getAttendedStreamOwnerIds(): Set<string> {
   return ownerIds;
 }
 
-export function applyStreamViewerCue(
-  participant: Participant,
-  hadViewedOwnerId: string,
-  nextViewedOwnerId: string
-): void {
+function applyStreamViewerCue(participant: Participant, hadViewedOwnerId: string, nextViewedOwnerId: string): void {
   if (participant.isLocal || hadViewedOwnerId === nextViewedOwnerId) return;
 
   const attendedOwnerIds = getAttendedStreamOwnerIds();

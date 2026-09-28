@@ -122,15 +122,4 @@ function newRequestId(): string {
   return crypto.randomUUID();
 }
 
-export {
-  createFastifyLoggerOptions,
-  createLogger,
-  getLogLevel,
-  hashIp,
-  isLoggingDisabled,
-  loggerOptions,
-  newRequestId,
-  normalizeRequestId,
-  REDACTED_PATHS,
-  REQUEST_ID_PATTERN
-};
+export { createFastifyLoggerOptions, createLogger, getLogLevel, hashIp, newRequestId, normalizeRequestId };

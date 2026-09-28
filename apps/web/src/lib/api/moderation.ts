@@ -1,4 +1,4 @@
-import type { BanLifted, BanPage, BanSaved, MessageRemoved } from '@voice-room/shared/contracts/moderation';
+import type { BanLifted, BanPage, BanSaved } from '@voice-room/shared/contracts/moderation';
 import { api } from './client';
 import {
   MODERATION_DEFAULT_LIMIT,
@@ -57,8 +57,4 @@ export async function unban(roomId: string, banId: string): Promise<ActiveBan> {
   const ban = normalizeActiveBan(payload.ban);
   if (!ban) throw new Error('Сервер вернул некорректный ответ');
   return ban;
-}
-
-export async function deleteModeratedMessage(roomId: string, messageId: string): Promise<void> {
-  await api.delete<MessageRemoved>(`${roomModerationUrl(roomId)}/messages/${encodeURIComponent(messageId)}`);
 }

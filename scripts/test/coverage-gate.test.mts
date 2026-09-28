@@ -11,8 +11,8 @@ import test from 'node:test';
 import { createRequire } from 'node:module';
 
 import {
-  checkRelease250Coverage as enforceRelease250Coverage,
-  collectRelease250V8Coverage,
+  checkCoverage as enforceCoverage,
+  collectV8Coverage,
   type CoverageSummary,
   type CoverageThresholds
 } from '../coverage/check-release-250-coverage.mts';
@@ -112,8 +112,8 @@ const SERVER_INTERNAL_COVERAGE_SCRIPT = String.raw`
   })().catch((error) => { console.error(error); process.exitCode = 1; });
 `;
 
-function checkRelease250Coverage(options: Parameters<typeof enforceRelease250Coverage>[0]) {
-  return enforceRelease250Coverage({
+function checkCoverage(options: Parameters<typeof enforceCoverage>[0]) {
+  return enforceCoverage({
     ...options,
     ...(options.baseThresholds || options.baseThresholdsAbsent !== undefined ? {} : { baseThresholdsAbsent: true })
   });
@@ -172,7 +172,7 @@ const greenSummary: CoverageSummary = {
 };
 
 test('G08-A01 accepts measured coverage and explicit initial adoption', () => {
-  const result = checkRelease250Coverage({
+  const result = checkCoverage({
     coverageSummary: greenSummary,
     thresholds,
     changedFiles: ['apps/api/src/domains/admission/gate-credential-signer.js'],
@@ -190,7 +190,7 @@ test('G08-A02 protected-base ratchet rejects a lowered PR baseline', () => {
   });
   assert.throws(
     () =>
-      checkRelease250Coverage({
+      checkCoverage({
         coverageSummary: greenSummary,
         thresholds,
         baseThresholds
@@ -199,7 +199,7 @@ test('G08-A02 protected-base ratchet rejects a lowered PR baseline', () => {
   );
   assert.throws(
     () =>
-      checkRelease250Coverage({
+      checkCoverage({
         coverageSummary: greenSummary,
         thresholds: thresholdFixture({ baseline: { ...thresholds.baseline, total: { lines: 81, branches: 70 } } }),
         baseThresholds
@@ -207,7 +207,7 @@ test('G08-A02 protected-base ratchet rejects a lowered PR baseline', () => {
     /node-v8-branch baseline decreased from protected base/i
   );
 
-  const ratcheted = checkRelease250Coverage({
+  const ratcheted = checkCoverage({
     coverageSummary: greenSummary,
     thresholds: thresholdFixture({ baseline: { ...thresholds.baseline, total: { lines: 81, branches: 71 } } }),
     baseThresholds
@@ -221,7 +221,7 @@ test('G08-A03 initial adoption fails closed without explicit metadata', () => {
   });
   assert.throws(
     () =>
-      checkRelease250Coverage({
+      checkCoverage({
         coverageSummary: greenSummary,
         thresholds: invalid,
         baseThresholdsAbsent: true
@@ -232,12 +232,12 @@ test('G08-A03 initial adoption fails closed without explicit metadata', () => {
 
 test('G08-A03b enforcement rejects missing or ambiguous trust modes', () => {
   assert.throws(
-    () => enforceRelease250Coverage({ coverageSummary: greenSummary, thresholds }),
+    () => enforceCoverage({ coverageSummary: greenSummary, thresholds }),
     /requires exactly one trust mode/i
   );
   assert.throws(
     () =>
-      enforceRelease250Coverage({
+      enforceCoverage({
         coverageSummary: greenSummary,
         thresholds,
         baseThresholds: thresholds,
@@ -254,7 +254,7 @@ test('G08-A03c protected-base policy ratchet rejects every gate weakening', () =
   const reject = (current: CoverageThresholds, message: RegExp) =>
     assert.throws(
       () =>
-        enforceRelease250Coverage({
+        enforceCoverage({
           coverageSummary: greenSummary,
           thresholds: current,
           baseThresholds: base
@@ -305,7 +305,7 @@ test('G08-A03d a .js policy entry carries over to its .ts successor only once th
     files: { ...greenSummary.files, [typed]: { lines: { pct: 100 }, branches: { pct: 100 } } }
   };
   const check = (fileExists: (file: string) => boolean) =>
-    enforceRelease250Coverage({
+    enforceCoverage({
       coverageSummary: summary,
       thresholds: renamed,
       baseThresholds: base,
@@ -319,7 +319,7 @@ test('G08-A03d a .js policy entry carries over to its .ts successor only once th
   );
   assert.throws(
     () =>
-      enforceRelease250Coverage({
+      enforceCoverage({
         coverageSummary: summary,
         thresholds: thresholdFixture({ strictBranchPaths: [], businessPathPatterns: renamed.businessPathPatterns }),
         baseThresholds: base,
@@ -341,7 +341,7 @@ test('G08-A03e a .ts exclusion may only replace the .js/.mjs exclusions of a mod
     ignoredPathPatterns: [...thresholds.ignoredPathPatterns, 'packages/shared/src/emoji.ts']
   });
   const check = (thresholdsUnderTest: CoverageThresholds, fileExists: (file: string) => boolean) =>
-    enforceRelease250Coverage({
+    enforceCoverage({
       coverageSummary: greenSummary,
       thresholds: thresholdsUnderTest,
       baseThresholds: base,
@@ -369,7 +369,7 @@ test('G08-A03e a .ts exclusion may only replace the .js/.mjs exclusions of a mod
 test('G08-A04 rejects unmeasured/regressed coverage and changed business gaps', () => {
   assert.throws(
     () =>
-      checkRelease250Coverage({
+      checkCoverage({
         coverageSummary: { ...greenSummary, meta: { ...greenSummary.meta, measured: false } },
         thresholds
       }),
@@ -377,7 +377,7 @@ test('G08-A04 rejects unmeasured/regressed coverage and changed business gaps', 
   );
   assert.throws(
     () =>
-      checkRelease250Coverage({
+      checkCoverage({
         coverageSummary: { ...greenSummary, total: { lines: { pct: 79 }, branches: { pct: 72 } } },
         thresholds
       }),
@@ -385,7 +385,7 @@ test('G08-A04 rejects unmeasured/regressed coverage and changed business gaps', 
   );
   assert.throws(
     () =>
-      checkRelease250Coverage({
+      checkCoverage({
         coverageSummary: greenSummary,
         thresholds,
         changedFiles: ['apps/api/src/lib/missing-coverage.js']
@@ -394,7 +394,7 @@ test('G08-A04 rejects unmeasured/regressed coverage and changed business gaps', 
   );
   assert.throws(
     () =>
-      checkRelease250Coverage({
+      checkCoverage({
         coverageSummary: greenSummary,
         thresholds,
         coveragePath: 'coverage/other-summary.json'
@@ -407,7 +407,7 @@ test('G08-A05 changed auth and web media strict files fail closed when missing o
   const media = 'apps/web/src/lib/features/room/client/media/screen-receiver-demand.ts';
   assert.throws(
     () =>
-      checkRelease250Coverage({
+      checkCoverage({
         coverageSummary: greenSummary,
         thresholds,
         changedFiles: [media]
@@ -416,7 +416,7 @@ test('G08-A05 changed auth and web media strict files fail closed when missing o
   );
   assert.throws(
     () =>
-      checkRelease250Coverage({
+      checkCoverage({
         coverageSummary: {
           ...greenSummary,
           files: { ...greenSummary.files, [media]: { lines: { pct: 100 }, branches: { pct: 94.99 } } }
@@ -428,7 +428,7 @@ test('G08-A05 changed auth and web media strict files fail closed when missing o
   );
   assert.throws(
     () =>
-      checkRelease250Coverage({
+      checkCoverage({
         coverageSummary: {
           ...greenSummary,
           files: {
@@ -471,7 +471,7 @@ test('G08-A06 collector unions complementary raw V8 ranges across shards', (t) =
     path.join(v8Dir, 'two.json'),
     JSON.stringify({ result: [{ url: scriptUrl, functions: functions(0, 1) }] })
   );
-  const summary = collectRelease250V8Coverage({
+  const summary = collectV8Coverage({
     v8Dir,
     root,
     thresholds: thresholdFixture({
@@ -537,7 +537,7 @@ test('G08-A06b collector merges a script reported by its filesystem path', (t) =
       result: [{ url: new URL(`file://${sourcePath}`).href, functions: trailer(`file://${sourcePath}`, 1) }]
     })
   );
-  const summary = collectRelease250V8Coverage({
+  const summary = collectV8Coverage({
     v8Dir,
     root,
     thresholds: thresholdFixture({
@@ -684,7 +684,9 @@ test('G08 web TypeScript producer measures actual auth and media decision files'
 });
 
 test('G08 coverage producers execute the changed web line and invariant-protected admission fallbacks', () => {
-  const coverageEnv = process.env.G08_V8_DIR ? { NODE_V8_COVERAGE: path.resolve(process.env.G08_V8_DIR) } : {};
+  const coverageEnv = process.env.COVERAGE_V8_DIR
+    ? { NODE_V8_COVERAGE: path.resolve(process.env.COVERAGE_V8_DIR) }
+    : {};
   const web = spawnSync(process.execPath, ['--input-type=module', '--eval', WEB_ROOM_COVERAGE_SCRIPT], {
     cwd: path.resolve('.'),
     encoding: 'utf8',
@@ -1261,7 +1263,7 @@ test('G08 admission gate service exported decisions and server paths are exercis
     ...process.env,
     LIVEKIT_GATE_SECRET: SECRET,
     ...extra,
-    ...(process.env.G08_V8_DIR ? { NODE_V8_COVERAGE: path.resolve(process.env.G08_V8_DIR) } : {})
+    ...(process.env.COVERAGE_V8_DIR ? { NODE_V8_COVERAGE: path.resolve(process.env.COVERAGE_V8_DIR) } : {})
   });
   const invalidSecretMain = spawnSync(
     process.execPath,

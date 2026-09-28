@@ -231,4 +231,4 @@ function createDmHistoryRepository({ pool }: { pool: pg.Pool }) {
   return { canReadThread, listAfter, listAround, listBefore, listLatest };
 }
 
-export { createDmHistoryRepository, mapDirectMessage };
+export { createDmHistoryRepository };

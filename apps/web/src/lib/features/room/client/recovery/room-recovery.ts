@@ -119,15 +119,3 @@ export function notifyLiveKitDisconnected(): void {
 export function isCurrentRoomRecoveryEpoch(epoch: number): boolean {
   return controller?.isCurrent(epoch) ?? false;
 }
-
-export function getRoomRecoverySnapshot(): Readonly<{
-  epoch: number;
-  phase: string;
-  appEpoch: number;
-  snapshotReady: boolean;
-  livekitReady: boolean;
-  attempts: number;
-  inFlight: boolean;
-}> | null {
-  return controller?.getSnapshot() ?? null;
-}

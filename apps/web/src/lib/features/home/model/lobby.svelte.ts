@@ -80,7 +80,7 @@ const PENDING_NOTIFICATION_TTL_MS = 60_000;
 const RESOLVED_ROOM_INVITATIONS_KEY = 'voice-room:resolved-invitations';
 
 /** The DM thread the lobby has open. */
-export class DmThread {
+class DmThread {
   peer = $state<PublicUser | null>(null);
   messages = $state<DirectMessage[]>([]);
   loading = $state(false);

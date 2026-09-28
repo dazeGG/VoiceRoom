@@ -70,7 +70,7 @@ function roomIdFrom(roomOrId: string | { id?: string } | null | undefined): stri
 const countAll = sql<number>`COUNT(*)::int`.as('count');
 
 /** Serializes room creation across replicas: quotas count rooms other creators may be adding. */
-export async function lockRoomCreation(db: Database): Promise<void> {
+async function lockRoomCreation(db: Database): Promise<void> {
   await sql`SELECT pg_advisory_xact_lock(hashtext(${'voice-room:create-room'}))`.execute(db);
 }
 

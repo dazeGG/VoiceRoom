@@ -42,7 +42,7 @@ export async function handleScreenButtonClick(): Promise<void> {
   await startScreenShare(getSelectedScreenProfileId());
 }
 
-export function getSelectedScreenProfileId(): string {
+function getSelectedScreenProfileId(): string {
   return getScreenProfileForMode(state.localScreenMode || DEFAULT_SCREEN_STREAM_MODE, state.localScreenProfileId).id;
 }
 
@@ -53,7 +53,7 @@ function applyLocalScreenProfileState(profile: ScreenProfile, mode: ScreenStream
   state.localScreenFpsId = profile.fpsId;
 }
 
-export async function startScreenShare(profileId: string = getSelectedScreenProfileId()): Promise<void> {
+async function startScreenShare(profileId: string = getSelectedScreenProfileId()): Promise<void> {
   if (!state.joined || state.connecting) {
     showToast('Сначала подключитесь к комнате');
     return;
@@ -123,7 +123,7 @@ export async function startScreenShare(profileId: string = getSelectedScreenProf
   }
 }
 
-export async function stopScreenShare(options: { notify?: boolean; quiet?: boolean } = {}): Promise<void> {
+async function stopScreenShare(options: { notify?: boolean; quiet?: boolean } = {}): Promise<void> {
   if (!state.localScreenStream || state.screenStopping) return;
 
   state.screenStopping = true;
@@ -163,7 +163,7 @@ export async function stopScreenShare(options: { notify?: boolean; quiet?: boole
 /** @deprecated Screen dock button is reactive in RoomDock.svelte. */
 export function refreshScreenControls(): void {}
 
-export function hasScreenAudio(): boolean {
+function hasScreenAudio(): boolean {
   return Boolean(state.localScreenStream?.getAudioTracks().some((track) => track.readyState !== 'ended'));
 }
 

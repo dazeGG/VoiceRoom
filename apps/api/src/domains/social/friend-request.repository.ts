@@ -10,7 +10,7 @@ import { friendsOn, insertFriendship } from './friendship.repository.ts';
 import { blockedOn } from './user-block.repository.ts';
 
 // --- Requests -----------------------------------------------------------
-export function setRequestStatus(q: Database, requestId: string, status: 'accepted' | 'declined' | 'cancelled') {
+function setRequestStatus(q: Database, requestId: string, status: 'accepted' | 'declined' | 'cancelled') {
   return q.updateTable('friend_requests').set({ status, responded_at: now }).where('id', '=', requestId).execute();
 }
 

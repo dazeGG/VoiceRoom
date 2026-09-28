@@ -45,7 +45,7 @@ function linkPreviewOf(metadata: unknown) {
   return normalizeLinkPreview(preview);
 }
 
-export function mapMessage(row: MessageRow) {
+function mapMessage(row: MessageRow) {
   const linkPreview = linkPreviewOf(row.metadata);
   return {
     avatarAccent: row.avatar_accent || null,

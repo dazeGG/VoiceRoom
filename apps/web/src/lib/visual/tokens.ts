@@ -10,7 +10,7 @@ export interface AvatarColorToken {
   shadow: string;
 }
 
-export const AVATAR_COLORS: Record<AvatarColorKey, AvatarColorToken> = {
+const AVATAR_COLORS: Record<AvatarColorKey, AvatarColorToken> = {
   blurple: {
     key: 'blurple',
     background: 'oklch(58% 0.26 278)',

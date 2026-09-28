@@ -22,15 +22,6 @@ export function getInitials(name: string): string {
     .toUpperCase();
 }
 
-export function hashStringToHue(value: string): number {
-  let hash = 0;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = Math.imul(31, hash) + value.charCodeAt(index);
-  }
-
-  return ((hash % 360) + 360) % 360;
-}
-
 export function isSafariBrowser(): boolean {
   const userAgent = navigator.userAgent || '';
   return /Safari/i.test(userAgent) && !/Chrome|Chromium|CriOS|Edg|OPR|Firefox|FxiOS/i.test(userAgent);
@@ -46,7 +37,7 @@ export function isCaptureCancelled(error: unknown): boolean {
   return errorName(error) === 'NotAllowedError' || errorName(error) === 'AbortError';
 }
 
-export function errorName(error: unknown): string {
+function errorName(error: unknown): string {
   return error instanceof Error ? error.name : '';
 }
 

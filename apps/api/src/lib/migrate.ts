@@ -306,13 +306,10 @@ async function runMigrations({
 }
 
 export {
-  DEFAULT_MIGRATIONS_DIR,
   expectedMigrationCatalog,
-  assertMigrationLockHeld,
   assertMigrationReady,
   advisoryLockParts,
   runMigrations,
-  MIGRATION_GUARD_TABLE,
   MIGRATION_GUARD_STATES,
   LOCK_TIMEOUT_MS
 };

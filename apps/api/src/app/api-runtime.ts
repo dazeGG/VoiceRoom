@@ -45,7 +45,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
 
   const services = createServiceRegistry(config, {
     readinessProvider,
-    release250FeatureEnabled: (name) => release250FeatureEnabled(name),
+    capabilityEnabled: (name) => capabilityEnabled(name),
     roomRuntime: () => hub.runtime(),
     getRoom: (roomId) => hub.getRoom(roomId),
     findRoomBan: (roomId, userId, ip) => hub.findRoomBan(roomId, userId, ip),
@@ -88,7 +88,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     processLogger = logger || null;
   }
 
-  function release250FeatureEnabled(name: string): boolean {
+  function capabilityEnabled(name: string): boolean {
     try {
       return readinessProvider.getSnapshot()?.features?.[name] === true;
     } catch {
@@ -105,7 +105,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     hub,
     liveKit,
     limits,
-    featureEnabled: release250FeatureEnabled,
+    featureEnabled: capabilityEnabled,
     logger: () => getProcessLogger(),
     admission: () => admissionService
   });
@@ -282,7 +282,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
       roomRuntime,
       wsHandler,
       readiness: activeReadinessProvider,
-      featureEnabled: release250FeatureEnabled,
+      featureEnabled: capabilityEnabled,
       livekitEnabled: () => liveKit.config().enabled,
       renderMetrics
     });

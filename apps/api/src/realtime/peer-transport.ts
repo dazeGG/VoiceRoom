@@ -19,4 +19,4 @@ function createWsTransport(send: (message: RoomPeerMessage) => boolean): WsTrans
   };
 }
 
-export { createWsTransport, createTransportId };
+export { createWsTransport };

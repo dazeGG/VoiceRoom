@@ -429,7 +429,7 @@ function formatJoinError(error: unknown): string {
   return message || 'Не удалось подключиться';
 }
 
-export function isVoiceRouteError(error: unknown): boolean {
+function isVoiceRouteError(error: unknown): boolean {
   const message = errorMessage(error);
   return /ice|no route|signal connection|failed to fetch|timeout|websocket/i.test(message);
 }
@@ -668,30 +668,4 @@ export async function rejoinRoomSignedIn(roomId: string): Promise<void> {
     log.error('guest register rejoin failed', errorContext(error));
   }
   window.location.assign(`/r/${encodeURIComponent(roomId)}`);
-}
-
-export async function copyRoomCode(): Promise<void> {
-  if (await copyText(state.roomId)) {
-    showToast('Код комнаты скопирован');
-  } else {
-    showToast(`Не удалось скопировать. Код: ${state.roomId}`);
-  }
-}
-
-export async function copyRoomLink(): Promise<void> {
-  const roomUrl = new URL(`/r/${encodeURIComponent(state.roomId)}`, window.location.origin);
-  if (await copyText(roomUrl.href)) {
-    showToast('Ссылка на комнату скопирована');
-  } else {
-    showToast(`Не удалось скопировать. Ссылка: ${roomUrl.href}`);
-  }
-}
-
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
 }

@@ -46,4 +46,4 @@ function describePushEndpoint(value: unknown): { pushHost: string; pushEndpointH
   };
 }
 
-export { cleanPushEndpoint, describePushEndpoint, isAllowedPushHost };
+export { cleanPushEndpoint, describePushEndpoint };

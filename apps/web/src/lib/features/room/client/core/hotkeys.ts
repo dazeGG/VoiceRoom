@@ -3,7 +3,7 @@ import type { HotkeyBinding } from '$lib/shared/ui/HotkeyRecorder/types';
 
 export type HotkeyAction = 'mic-mute' | 'output-mute' | 'push-to-talk';
 
-export const HOTKEY_STORAGE_PREFIX = 'voice-room:hotkey:';
+const HOTKEY_STORAGE_PREFIX = 'voice-room:hotkey:';
 export const HOTKEY_BINDINGS_CHANGED_EVENT = 'voice-room:hotkey-bindings-changed';
 const DISABLED_HOTKEY_VALUE = 'null';
 
@@ -47,7 +47,7 @@ export function writeHotkeyBinding(action: HotkeyAction, binding: HotkeyBinding 
   }
 }
 
-export function parseHotkeyBinding(serialized: string): HotkeyBinding | null {
+function parseHotkeyBinding(serialized: string): HotkeyBinding | null {
   try {
     const value = JSON.parse(serialized) as Partial<HotkeyBinding> | null;
     if (!value || typeof value !== 'object' || typeof value.code !== 'string' || !value.code) return null;

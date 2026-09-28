@@ -16,7 +16,6 @@ import type {
   PublicPeer,
   RoomCard,
   RoomCreated,
-  RoomPeers,
   RoomStatus as RoomStatusAnswer,
   ServerMuted
 } from '@voice-room/shared/contracts/rooms';
@@ -163,17 +162,6 @@ export async function banRoomPeer(roomId: string, peerId: string): Promise<strin
 
 export async function undoRoomBan(roomId: string, banId: string): Promise<void> {
   await api.delete<Done>(`/api/rooms/${encodeURIComponent(roomId)}/bans/${encodeURIComponent(banId)}`);
-}
-
-// Snapshot of who is in a room right now, without joining it — powers the lobby
-// room preview.
-export async function fetchRoomPeers(roomId: string): Promise<RoomPeer[]> {
-  const answer = await orNull(
-    api.get<RoomPeers>(`/api/rooms/${encodeURIComponent(roomId)}/peers`, {
-      fallback: 'Не удалось загрузить участников'
-    })
-  );
-  return answer?.peers ?? [];
 }
 
 export async function fetchRoomStatus(roomId: string): Promise<RoomStatus | null> {

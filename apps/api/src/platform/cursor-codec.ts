@@ -171,4 +171,4 @@ function createCursorCodec(
   return { encode, decode };
 }
 
-export { CURSOR_CODEC_VERSION, CursorCodecError, createCursorCodec };
+export { CursorCodecError, createCursorCodec };

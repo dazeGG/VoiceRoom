@@ -378,4 +378,4 @@ function createAccountDeletionRepository({
 
 export type AccountDeletionRepository = ReturnType<typeof createAccountDeletionRepository>;
 
-export { createAccountDeletionRepository, hashLogin };
+export { createAccountDeletionRepository };

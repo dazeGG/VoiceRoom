@@ -33,7 +33,7 @@ export interface EmojiCategory {
 const OFFERED = new Set<string>(coverage.emojis);
 
 /** Whether this app draws, and therefore offers, this exact sequence. */
-export function isOfferedEmoji(emoji: string): boolean {
+function isOfferedEmoji(emoji: string): boolean {
   return OFFERED.has(emoji);
 }
 

@@ -160,4 +160,4 @@ function createPinService({
   return Object.freeze({ list, pin, refresh, unpin });
 }
 
-export { MAX_PINS_PER_ROOM, PinServiceError, createPinService };
+export { createPinService };

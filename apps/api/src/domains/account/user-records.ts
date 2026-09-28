@@ -15,8 +15,8 @@ export type PublicUser = PublicProfile;
 
 export const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 export const SESSION_TOUCH_INTERVAL_MS = 60 * 60 * 1000;
-export const USER_AGENT_MAX_LENGTH = 512;
-export const LOCATION_LABEL_MAX_LENGTH = 120;
+const USER_AGENT_MAX_LENGTH = 512;
+const LOCATION_LABEL_MAX_LENGTH = 120;
 export const UNIQUE_VIOLATION = '23505';
 export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Longer than the familiarity window, so a device keeps vouching for itself
@@ -35,7 +35,7 @@ export function toMillis(value: unknown): number {
 }
 
 // Per-account markers kept in `users.metadata` as epoch milliseconds.
-export function metadataMillis(metadata: unknown, key: string): number | null {
+function metadataMillis(metadata: unknown, key: string): number | null {
   const value = Number(metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>)[key] : NaN);
   return Number.isSafeInteger(value) && value > 0 ? value : null;
 }

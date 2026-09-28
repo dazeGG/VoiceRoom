@@ -408,6 +408,30 @@
       "count": 3
     }
   },
+  "apps/api/test/addressed-uow.test.ts": {
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 3
+    }
+  },
+  "apps/api/test/architecture-boundaries.test.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 13
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 4
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    }
+  },
+  "apps/api/test/attachment-binding.test.ts": {
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    }
+  },
   "apps/api/test/attachment-repository-db.test.ts": {
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 2
@@ -447,6 +471,17 @@
       "count": 4
     }
   },
+  "apps/api/test/credential-core.test.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 2
+    }
+  },
   "apps/api/test/db-harness.test.ts": {
     "@typescript-eslint/unbound-method": {
       "count": 1
@@ -476,23 +511,17 @@
     }
   },
   "apps/api/test/fastify.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 4
+      "count": 3
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 25
-    },
-    "@typescript-eslint/no-unsafe-call": {
       "count": 4
     },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 39
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 3
     },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 30
     }
   },
   "apps/api/test/friend-store.test.ts": {
@@ -500,182 +529,20 @@
       "count": 1
     }
   },
-  "apps/api/test/g04-livekit-replay.test.ts": {
+  "apps/api/test/inbox-api.test.ts": {
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
+      "count": 2
     },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    }
-  },
-  "apps/api/test/g05-livekit-boundary.test.ts": {
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 2
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    },
-    "no-regex-spaces": {
-      "count": 4
-    }
-  },
-  "apps/api/test/g10-architecture-boundaries.test.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 13
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/api/test/g14-capability-readiness.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/api/test/g14-runtime-readiness.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
       "count": 2
     }
   },
-  "apps/api/test/g17-platform-class-persistence.test.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 7
-    }
-  },
-  "apps/api/test/g35-lease-runtime.test.ts": {
+  "apps/api/test/lease-runtime.test.ts": {
     "@typescript-eslint/prefer-promise-reject-errors": {
       "count": 1
-    }
-  },
-  "apps/api/test/g43-membership-schema.test.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/api/test/g47-credential-core.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    }
-  },
-  "apps/api/test/g48-livekit-cutover.test.ts": {
-    "no-empty": {
-      "count": 1
-    }
-  },
-  "apps/api/test/g57-addressed-uow.test.ts": {
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 3
-    }
-  },
-  "apps/api/test/g59-inbox-api.test.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    }
-  },
-  "apps/api/test/g61-policy-api.test.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    }
-  },
-  "apps/api/test/g68-reaction-persistence.test.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/api/test/g73-media-schema.test.ts": {
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 13
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/api/test/g81-attachment-binding.test.ts": {
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    }
-  },
-  "apps/api/test/g85-rescue-profile.test.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 8
     }
   },
   "apps/api/test/lifecycle-domain.test.ts": {
@@ -693,7 +560,62 @@
       "count": 2
     }
   },
+  "apps/api/test/livekit-boundary.test.ts": {
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 2
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 4
+    },
+    "no-regex-spaces": {
+      "count": 4
+    }
+  },
   "apps/api/test/livekit-credential-provider.test.ts": {
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    }
+  },
+  "apps/api/test/livekit-cutover.test.ts": {
+    "no-empty": {
+      "count": 1
+    }
+  },
+  "apps/api/test/livekit-replay.test.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 3
+    }
+  },
+  "apps/api/test/media-schema.test.ts": {
+    "@typescript-eslint/no-unsafe-call": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 13
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    }
+  },
+  "apps/api/test/membership-schema.test.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 4
+    },
     "@typescript-eslint/no-unsafe-return": {
       "count": 1
     }
@@ -717,21 +639,42 @@
       "count": 11
     }
   },
-  "apps/api/test/push-service.test.ts": {
-    "@typescript-eslint/ban-ts-comment": {
+  "apps/api/test/platform-class-persistence.test.ts": {
+    "@typescript-eslint/no-base-to-string": {
       "count": 1
     },
+    "@typescript-eslint/no-unsafe-assignment": {
+      "count": 7
+    }
+  },
+  "apps/api/test/policy-api.test.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 1
+    }
+  },
+  "apps/api/test/reaction-persistence.test.ts": {
+    "@typescript-eslint/no-unsafe-argument": {
+      "count": 1
+    },
+    "@typescript-eslint/no-unsafe-member-access": {
+      "count": 5
+    },
+    "@typescript-eslint/no-unsafe-return": {
+      "count": 1
+    }
+  },
+  "apps/api/test/rescue-profile.test.ts": {
     "@typescript-eslint/no-unsafe-argument": {
       "count": 2
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 3
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 6
+      "count": 8
     }
   },
   "apps/api/test/room-crud.test.ts": {
@@ -747,20 +690,6 @@
       "count": 1
     }
   },
-  "apps/api/test/roster-harness.ts": {
-    "@typescript-eslint/no-explicit-any": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
   "apps/api/test/stream-viewer-attendance.test.ts": {
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 1
@@ -771,7 +700,7 @@
       "count": 1
     }
   },
-  "apps/web/e2e/g70-reactions.spec.ts": {
+  "apps/web/e2e/reactions.spec.ts": {
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 14
     },
@@ -1166,14 +1095,6 @@
       "count": 1
     }
   },
-  "apps/web/src/lib/shared/chat/ReplyComposer.svelte": {
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
   "apps/web/src/lib/shared/chat/StructuredMessageContent.svelte": {
     "svelte/no-navigation-without-resolve": {
       "count": 1
@@ -1356,7 +1277,7 @@
       "count": 1
     }
   },
-  "packages/shared/test/g07-emoji-conformance.test.ts": {
+  "packages/shared/test/emoji-conformance.test.ts": {
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 2
     },
@@ -1425,7 +1346,7 @@
       "count": 36
     }
   },
-  "scripts/test/g08-coverage-gate.test.mts": {
+  "scripts/test/coverage-gate.test.mts": {
     "@typescript-eslint/no-unsafe-argument": {
       "count": 7
     },
@@ -1442,7 +1363,7 @@
       "count": 3
     }
   },
-  "scripts/test/g89-restore.test.mts": {
+  "scripts/test/restore.test.mts": {
     "@typescript-eslint/consistent-type-imports": {
       "count": 1
     },

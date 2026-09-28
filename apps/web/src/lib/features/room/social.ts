@@ -21,7 +21,7 @@ export interface RoomSocial {
 
 const unavailable = (): Promise<never> => Promise.reject(new Error('Нужен аккаунт'));
 
-export const NO_ROOM_SOCIAL: RoomSocial = {
+const NO_ROOM_SOCIAL: RoomSocial = {
   friends: () => [],
   relationship: () => 'none',
   knownLogin: () => '',

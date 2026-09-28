@@ -114,4 +114,4 @@ function createMemberDirectoryService({
 
 export type MemberDirectoryService = ReturnType<typeof createMemberDirectoryService>;
 
-export { CURSOR_PURPOSE, createMemberDirectoryService, presenceForUser };
+export { createMemberDirectoryService, presenceForUser };

@@ -242,10 +242,4 @@ function createMessageIdempotencyRepository({
   return Object.freeze({ complete, pruneExpired, reserve });
 }
 
-export {
-  DEFAULT_ACTOR_QUOTA,
-  DEFAULT_RETENTION_MS,
-  IdempotencyConflictError,
-  IdempotencyQuotaError,
-  createMessageIdempotencyRepository
-};
+export { IdempotencyConflictError, createMessageIdempotencyRepository };

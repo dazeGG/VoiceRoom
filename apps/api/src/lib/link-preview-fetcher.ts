@@ -254,4 +254,4 @@ function createLinkPreviewFetcher({
 
 export type LinkPreviewFetcher = ReturnType<typeof createLinkPreviewFetcher>;
 
-export { MAX_IMAGE_BYTES, MAX_PAGE_BYTES, createLinkPreviewFetcher, isPublicAddress };
+export { MAX_PAGE_BYTES, createLinkPreviewFetcher, isPublicAddress };

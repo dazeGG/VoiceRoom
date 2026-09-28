@@ -352,4 +352,4 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
   });
 }
 
-export { DEFAULT_CLAIM_LIMIT, DEFAULT_STALE_CLAIM_MS, MessageDeliveryFenceError, createMessageOutboxRepository };
+export { MessageDeliveryFenceError, createMessageOutboxRepository };

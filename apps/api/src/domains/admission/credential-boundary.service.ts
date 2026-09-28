@@ -230,4 +230,4 @@ function createCredentialBoundaryService({
 
 export type CredentialBoundaryService = ReturnType<typeof createCredentialBoundaryService>;
 
-export { DEFAULT_CREDENTIAL_TTL_MS, createCredentialBoundaryService };
+export { createCredentialBoundaryService };

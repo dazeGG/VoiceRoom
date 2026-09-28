@@ -31,7 +31,7 @@ export interface HttpKitOptions {
   logHandlerFailure: (request: FastifyRequest, route: string, error: unknown) => void;
 }
 
-export function routeLabel(request: FastifyRequest): string {
+function routeLabel(request: FastifyRequest): string {
   return request.routeOptions?.url || request.url || 'unknown';
 }
 

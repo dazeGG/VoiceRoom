@@ -150,4 +150,4 @@ function createLinkPreviewService({
 
 export type LinkPreviewService = ReturnType<typeof createLinkPreviewService>;
 
-export { FAILED_TTL_MS, READY_TTL_MS, createLinkPreviewService };
+export { FAILED_TTL_MS, createLinkPreviewService };

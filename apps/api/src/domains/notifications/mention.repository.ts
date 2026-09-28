@@ -125,4 +125,4 @@ function createMentionRepository({ pool }: { pool?: QueryClient | null } = {}) {
 
 export type MentionRepository = ReturnType<typeof createMentionRepository>;
 
-export { createMentionRepository, mapMention };
+export { createMentionRepository };

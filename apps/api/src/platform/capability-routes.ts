@@ -50,4 +50,4 @@ function createCapabilitySnapshot(readiness: ReadinessLike) {
   };
 }
 
-export { createCapabilitySnapshot, publicFeatureFlags, registerCapabilityRoutes };
+export { createCapabilitySnapshot, registerCapabilityRoutes };

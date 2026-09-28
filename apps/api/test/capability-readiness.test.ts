@@ -1,4 +1,3 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -8,7 +7,9 @@ import {
   INTERNAL_NODE_KEYS,
   OPERATOR_KEYS,
   PUBLIC_CAPABILITY_KEYS,
-  normalizeManifest
+  normalizeManifest,
+  type CapabilityManifest,
+  type CapabilityRequires
 } from '@voice-room/shared/capabilities';
 import { createCapabilitySnapshot } from '../src/platform/capability-routes.ts';
 import { createReadinessReport, sha256Hex } from '../src/platform/readiness.ts';
@@ -19,19 +20,37 @@ const manifestPath = path.isAbsolute(requestedManifestPath)
   ? requestedManifestPath
   : path.resolve(repositoryRoot, requestedManifestPath);
 
-function fullOptions(manifest) {
-  const categories = ['binary', 'schema', 'index', 'config', 'api', 'web', 'visibility', 'worker', 'internal'];
-  const options = {
-    desired: Object.fromEntries(PUBLIC_CAPABILITY_KEYS.map((key) => [key, true]))
-  };
-  for (const category of categories) {
-    options[`${category}Ready`] = [...new Set(manifest.publicKeys.flatMap((node) => node.requires[category]))];
-  }
-  return options;
+const CATEGORIES = [
+  'binary',
+  'schema',
+  'index',
+  'config',
+  'api',
+  'web',
+  'visibility',
+  'worker',
+  'internal'
+] as const satisfies readonly (keyof CapabilityRequires)[];
+type ReadyLists = Record<`${(typeof CATEGORIES)[number]}Ready`, string[]>;
+
+// Every prerequisite the manifest names, marked ready, and every key desired.
+function fullOptions(manifest: CapabilityManifest | null): ReadyLists & { desired: Record<string, boolean> } {
+  if (!manifest) throw new Error('the capability manifest did not parse');
+  const ready = Object.fromEntries(
+    CATEGORIES.map((category) => [
+      `${category}Ready`,
+      [...new Set(manifest.publicKeys.flatMap((node) => node.requires[category]))]
+    ])
+  ) as ReadyLists;
+  return { desired: Object.fromEntries(PUBLIC_CAPABILITY_KEYS.map((key) => [key, true])), ...ready };
 }
 
-function tempManifest(mutator) {
-  const candidate = JSON.parse(readFileSync(manifestPath, 'utf8'));
+// The manifest file as the tests edit it before writing a broken copy.
+type ManifestNode = { key: string; dependsOn: string[] };
+type ManifestJson = { schemaVersion?: number; publicKeys: [ManifestNode, ManifestNode, ...ManifestNode[]] };
+
+function tempManifest(mutator: (manifest: ManifestJson) => void): string {
+  const candidate = JSON.parse(readFileSync(manifestPath, 'utf8')) as ManifestJson;
   mutator(candidate);
   const dir = mkdtempSync(path.join(tmpdir(), 'voiceroom-g14-'));
   const target = path.join(dir, 'manifest.json');

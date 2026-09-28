@@ -169,7 +169,7 @@ export function amplitudeToDb(amplitude: number): number {
   return Math.max(GATE_THRESHOLD_MIN_DB, Math.min(GATE_THRESHOLD_MAX_DB, 20 * Math.log10(amplitude)));
 }
 
-export function previousGatePercentToDb(value: number): number {
+function previousGatePercentToDb(value: number): number {
   if (value <= 0) return DEFAULT_GATE_THRESHOLD_DB;
 
   const amount = Math.min(100, Math.max(0, value)) / 100;
@@ -237,6 +237,6 @@ export function storeParticipantAudioPreference(
   return next;
 }
 
-export function clampParticipantVolume(volume: number): number {
+function clampParticipantVolume(volume: number): number {
   return Number.isFinite(volume) ? Math.min(MAX_PARTICIPANT_VOLUME, Math.max(0, volume)) : DEFAULT_PARTICIPANT_VOLUME;
 }

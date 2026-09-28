@@ -203,4 +203,4 @@ function createRoomHistoryRepository({ pool }: { pool: pg.Pool }) {
   return { getAnchor, listAfter, listAround, listBefore, listLatest, roomExists };
 }
 
-export { createRoomHistoryRepository, mapRoomMessage };
+export { createRoomHistoryRepository };

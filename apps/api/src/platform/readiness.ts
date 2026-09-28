@@ -501,17 +501,4 @@ function createReadinessReport(manifestPath?: unknown, options: ReadinessOptions
   };
 }
 
-function createReadinessProvider(
-  options: { manifestPath?: unknown; getReadinessOptions?: () => ReadinessOptions } = {}
-) {
-  const manifestPath = resolveManifestPath(options.manifestPath);
-  const optionsProvider = typeof options.getReadinessOptions === 'function' ? options.getReadinessOptions : () => ({});
-  const getSnapshot = () => {
-    const currentOptions = optionsProvider();
-    return createReadinessReport(manifestPath, currentOptions);
-  };
-
-  return { manifestPath, getSnapshot };
-}
-
-export { resolveManifestPath, readManifestText, createReadinessReport, createReadinessProvider, sha256Hex };
+export { resolveManifestPath, createReadinessReport, sha256Hex };

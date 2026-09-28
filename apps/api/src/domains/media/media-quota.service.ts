@@ -4,7 +4,6 @@ import type { MediaQuotaRepository } from './media-quota.repository.ts';
 
 const DEFAULT_MAX_PENDING = 8;
 const DEFAULT_MAX_FILES_PER_WINDOW = 20;
-const DEFAULT_WINDOW_MS = 10 * 60 * 1000;
 const DEFAULT_MAX_BYTES = 1024 * 1024 * 1024;
 
 export type QuotaReservation = {
@@ -89,11 +88,4 @@ function createMediaQuotaService({
 
 export type MediaQuotaService = ReturnType<typeof createMediaQuotaService>;
 
-export {
-  DEFAULT_MAX_BYTES,
-  DEFAULT_MAX_FILES_PER_WINDOW,
-  DEFAULT_MAX_PENDING,
-  DEFAULT_WINDOW_MS,
-  MediaQuotaError,
-  createMediaQuotaService
-};
+export { createMediaQuotaService };

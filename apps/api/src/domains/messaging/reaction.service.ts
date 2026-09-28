@@ -265,4 +265,4 @@ function createReactionService({
 
 export type ReactionService = ReturnType<typeof createReactionService>;
 
-export { ReactionServiceError, createReactionService, normalizeConversation };
+export { createReactionService };

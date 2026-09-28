@@ -1,14 +1,14 @@
 import type { PlacementAxis, PopoverPlacement } from './types';
 
-export const POPOVER_PANEL_GAP_PX = 10;
-export const POPOVER_VIEWPORT_MARGIN_PX = 8;
+const POPOVER_PANEL_GAP_PX = 10;
+const POPOVER_VIEWPORT_MARGIN_PX = 8;
 
 export function parsePlacement(placement: PopoverPlacement): PlacementAxis {
   const [vertical, horizontal] = placement.split('-') as ['top' | 'bottom', 'start' | 'end'];
   return { vertical, horizontal };
 }
 
-export function flipPlacementVertical(placement: PopoverPlacement, vertical: 'top' | 'bottom'): PopoverPlacement {
+function flipPlacementVertical(placement: PopoverPlacement, vertical: 'top' | 'bottom'): PopoverPlacement {
   const { horizontal } = parsePlacement(placement);
   return `${vertical}-${horizontal}`;
 }

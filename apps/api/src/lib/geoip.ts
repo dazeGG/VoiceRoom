@@ -102,4 +102,4 @@ function createGeoLocator({
   });
 }
 
-export { createGeoLocator, formatLocation, normalizeAddress };
+export { createGeoLocator };

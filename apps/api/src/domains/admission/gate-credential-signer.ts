@@ -165,4 +165,4 @@ function createGateCredentialSigner({
   };
 }
 
-export { CREDENTIAL_PREFIX, createGateCredentialSigner, hashGateCredential };
+export { createGateCredentialSigner };

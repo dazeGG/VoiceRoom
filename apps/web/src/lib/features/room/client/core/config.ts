@@ -148,7 +148,6 @@ export const SCREEN_QUALITY_OPTIONS: Record<string, ScreenQualityOption> = {
   }
 };
 
-export const SCREEN_QUALITY_ORDER = ['balanced', 'high'];
 export const SCREEN_SOURCE_BASE_BITRATE = 1_800_000;
 export const SCREEN_SOURCE_BASE_PIXELS = 1920 * 1080;
 export const SCREEN_SOURCE_MAX_BITRATE = 12_000_000;

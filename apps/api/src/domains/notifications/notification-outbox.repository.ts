@@ -356,4 +356,4 @@ function createNotificationOutboxRepository({ pool }: { pool?: QueryClient | nul
 
 export type NotificationOutboxRepository = ReturnType<typeof createNotificationOutboxRepository>;
 
-export { NotificationFenceError, createNotificationOutboxRepository };
+export { createNotificationOutboxRepository };

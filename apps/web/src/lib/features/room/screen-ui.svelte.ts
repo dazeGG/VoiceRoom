@@ -96,7 +96,7 @@ function getScreenViewers(ownerPeerId: string): Participant[] {
   return getAllParticipants().filter((participant) => participant.viewedScreenPeerId === ownerPeerId);
 }
 
-export function getViewerAvatarItem(viewer: Participant): AvatarStackItem {
+function getViewerAvatarItem(viewer: Participant): AvatarStackItem {
   const avatar = getAvatarPresentation(viewer);
   return {
     background: avatar.background,

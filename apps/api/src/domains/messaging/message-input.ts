@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 
 const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-export const MAX_MESSAGE_ATTACHMENTS = 4;
+const MAX_MESSAGE_ATTACHMENTS = 4;
 
 export function cleanUuid(value: unknown): string {
   const id = String(value || '').trim();

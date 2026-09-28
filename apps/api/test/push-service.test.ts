@@ -1,7 +1,21 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPushService, readPushConfig, resolvePushTtl, shouldDeliverPush } from '../src/lib/push-service.ts';
+import {
+  createPushService,
+  readPushConfig,
+  resolvePushTtl,
+  shouldDeliverPush,
+  type PushSubscriptionStore,
+  type WebPushClient
+} from '../src/lib/push-service.ts';
+import { fake } from './fakes/index.ts';
+
+// What a logger received, one entry per call.
+type LogCall = unknown[];
+
+function pushError(message: string, statusCode: number): Error {
+  return Object.assign(new Error(message), { statusCode });
+}
 
 const ENABLED_ENV = {
   VAPID_PUBLIC_KEY: 'public-key',
@@ -40,9 +54,9 @@ test('push policy centralizes DND, user, and room mute filtering', () => {
 });
 
 test('push service delivers to all subscriptions and records successes', async () => {
-  const marked = [];
-  const deliveries = [];
-  const store = {
+  const marked: string[] = [];
+  const deliveries: { subscription: unknown; payload: { type: string }; options: unknown }[] = [];
+  const store: PushSubscriptionStore = {
     async listByUserId() {
       return [
         { endpoint: 'https://fcm.googleapis.com/fcm/send/one', keys: { p256dh: 'a', auth: 'b' } },
@@ -54,10 +68,10 @@ test('push service delivers to all subscriptions and records successes', async (
     },
     async removeByEndpoint() {}
   };
-  const client = {
+  const client: WebPushClient = {
     setVapidDetails() {},
     async sendNotification(subscription, payload, options) {
-      deliveries.push({ subscription, payload: JSON.parse(payload), options });
+      deliveries.push({ subscription, payload: JSON.parse(payload) as { type: string }, options });
     }
   };
   const service = createPushService({ store, env: ENABLED_ENV, client });
@@ -68,14 +82,14 @@ test('push service delivers to all subscriptions and records successes', async (
     'https://fcm.googleapis.com/fcm/send/one',
     'https://fcm.googleapis.com/fcm/send/two'
   ]);
-  assert.equal(deliveries[0].payload.type, 'ring');
-  assert.deepEqual(deliveries[0].options, { TTL: 30 });
+  assert.equal(deliveries[0]?.payload.type, 'ring');
+  assert.deepEqual(deliveries[0]?.options, { TTL: 30 });
 });
 
 test('push service derives ring TTL from expiry and skips expired invitations', async () => {
-  const deliveries = [];
+  const deliveries: unknown[] = [];
   let listCalls = 0;
-  const store = {
+  const store: PushSubscriptionStore = {
     async listByUserId() {
       listCalls += 1;
       return [{ endpoint: 'https://fcm.googleapis.com/fcm/send/ring', keys: { p256dh: 'a', auth: 'b' } }];
@@ -83,7 +97,7 @@ test('push service derives ring TTL from expiry and skips expired invitations', 
     async markSuccess() {},
     async removeByEndpoint() {}
   };
-  const client = {
+  const client: WebPushClient = {
     setVapidDetails() {},
     async sendNotification(_subscription, _payload, options) {
       deliveries.push(options);
@@ -109,8 +123,8 @@ test('push service derives ring TTL from expiry and skips expired invitations', 
 });
 
 test('push service removes expired endpoints on 404/410 and tolerates other failures', async () => {
-  const removed = [];
-  const store = {
+  const removed: string[] = [];
+  const store: PushSubscriptionStore = {
     async listByUserId() {
       return [410, 404, 500].map((status) => ({
         endpoint: `https://fcm.googleapis.com/fcm/send/${status}`,
@@ -122,12 +136,10 @@ test('push service removes expired endpoints on 404/410 and tolerates other fail
       removed.push(endpoint);
     }
   };
-  const client = {
+  const client: WebPushClient = {
     setVapidDetails() {},
     async sendNotification(subscription) {
-      const error = new Error('failed');
-      error.statusCode = Number(subscription.endpoint.split('/').at(-1));
-      throw error;
+      throw pushError('failed', Number(subscription.endpoint.split('/').at(-1)));
     }
   };
   const service = createPushService({ store, env: ENABLED_ENV, client, logger: { warn() {} } });
@@ -142,24 +154,24 @@ test('push service removes expired endpoints on 404/410 and tolerates other fail
 
 test('push service drops invalid stored endpoints without sending or leaking capability URLs', async () => {
   const endpoint = 'https://internal.example/secret-capability-token';
-  const removed = [];
-  const logs = [];
-  const store = {
+  const removed: string[] = [];
+  const logs: LogCall[] = [];
+  const store = fake<PushSubscriptionStore>({
     async listByUserId() {
       return [{ endpoint, keys: { p256dh: 'a', auth: 'b' } }];
     },
     async removeByEndpoint(value) {
       removed.push(value);
     }
-  };
-  const client = {
+  });
+  const client: WebPushClient = {
     setVapidDetails() {},
     async sendNotification() {
       assert.fail('invalid endpoint must not be contacted');
     }
   };
   const logger = {
-    warn(...items) {
+    warn(...items: unknown[]) {
       logs.push(items);
     }
   };
@@ -172,42 +184,41 @@ test('push service drops invalid stored endpoints without sending or leaking cap
 
 test('push delivery failures log only a safe host and endpoint hash', async () => {
   const endpoint = 'https://fcm.googleapis.com/fcm/send/secret-capability-token';
-  const logs = [];
-  const store = {
+  const logs: LogCall[] = [];
+  const store: PushSubscriptionStore = {
     async listByUserId() {
       return [{ endpoint, keys: { p256dh: 'a', auth: 'b' } }];
     },
     async markSuccess() {},
     async removeByEndpoint() {}
   };
-  const client = {
+  const client: WebPushClient = {
     setVapidDetails() {},
     async sendNotification() {
-      const error = new Error(`failed to deliver ${endpoint}`);
-      error.statusCode = 500;
-      throw error;
+      throw pushError(`failed to deliver ${endpoint}`, 500);
     }
   };
   const logger = {
-    warn(...items) {
+    warn(...items: unknown[]) {
       logs.push(items);
     }
   };
   const service = createPushService({ store, env: ENABLED_ENV, client, logger });
 
   await service.sendToUser('user-1', { type: 'ring' });
-  assert.equal(logs[0][0].pushHost, 'fcm.googleapis.com');
-  assert.match(logs[0][0].pushEndpointHash, /^[a-f0-9]{16}$/);
+  const fields = logs[0]?.[0] as { pushHost: string; pushEndpointHash: string };
+  assert.equal(fields.pushHost, 'fcm.googleapis.com');
+  assert.match(fields.pushEndpointHash, /^[a-f0-9]{16}$/);
   assert.doesNotMatch(JSON.stringify(logs), /secret-capability-token/);
 });
 
 test('push service degrades cleanly when subscription storage is unavailable', async () => {
-  const store = {
+  const store = fake<PushSubscriptionStore>({
     async listByUserId() {
       throw new Error('database unavailable');
     }
-  };
-  const client = {
+  });
+  const client: WebPushClient = {
     setVapidDetails() {},
     async sendNotification() {
       assert.fail('must not send');

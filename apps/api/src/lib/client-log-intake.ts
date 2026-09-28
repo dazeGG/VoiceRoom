@@ -147,4 +147,4 @@ function normalizeClientLogBatch(
   };
 }
 
-export { CLIENT_LOG_LEVELS, CLIENT_LOG_LIMITS, normalizeClientLogBatch, normalizeClientLogEvent };
+export { CLIENT_LOG_LIMITS, normalizeClientLogBatch };

@@ -32,7 +32,7 @@ function normalizeTarget(target: ReplyTarget | null | undefined): ReplyTarget | 
   };
 }
 
-export class ReplyStore {
+class ReplyStore {
   conversation = $state<ReplyConversation | null>(null);
   target = $state<ReplyTarget | null>(null);
   sending = $state(false);
@@ -139,5 +139,3 @@ export class ReplyStore {
 export function createReplyStore(): ReplyStore {
   return new ReplyStore();
 }
-
-export const replyStore = createReplyStore();

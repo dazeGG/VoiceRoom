@@ -127,11 +127,4 @@ async function requireReplyTarget({
   return preview;
 }
 
-export {
-  REPLY_TOMBSTONE_TEXT,
-  ReplyTargetUnavailableError,
-  isReplyTargetKindAllowed,
-  projectReplyPreview,
-  projectReplyTombstone,
-  requireReplyTarget
-};
+export { projectReplyPreview, projectReplyTombstone, requireReplyTarget };

@@ -547,7 +547,7 @@ function lineNumberAtOffset(lines: SourceLine[], offset: number) {
   return Math.min(lines.length, low + 1);
 }
 
-export function collectRelease250V8Coverage({
+export function collectV8Coverage({
   v8Dir,
   thresholds,
   root = process.cwd(),
@@ -624,7 +624,7 @@ export function collectRelease250V8Coverage({
   };
 }
 
-export function checkRelease250Coverage({
+export function checkCoverage({
   coverageSummary,
   thresholds,
   changedFiles = [],
@@ -708,7 +708,7 @@ if (import.meta.main) {
     let coverageSummary: CoverageSummary;
     let coveragePath = args.coverage;
     if (args.v8Dir) {
-      coverageSummary = collectRelease250V8Coverage({ v8Dir: args.v8Dir, thresholds, root: args.root });
+      coverageSummary = collectV8Coverage({ v8Dir: args.v8Dir, thresholds, root: args.root });
       writeJson(args.out, coverageSummary);
       coveragePath = args.out;
       if (args.collectOnly) {
@@ -718,7 +718,7 @@ if (import.meta.main) {
     } else {
       coverageSummary = readJson<CoverageSummary>(args.coverage, 'coverage summary');
     }
-    const result = checkRelease250Coverage({
+    const result = checkCoverage({
       coverageSummary,
       thresholds,
       changedFiles: readChangedFiles(args.changedFiles),

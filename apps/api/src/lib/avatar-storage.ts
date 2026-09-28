@@ -62,4 +62,4 @@ function createAvatarStorage({ uploadsDir = readUploadsDir() }: { uploadsDir?: s
   return { save, remove, createReadStream, listKeys };
 }
 
-export { AVATAR_KEY_PATTERN, validateAvatarKey, createAvatarStorage };
+export { validateAvatarKey, createAvatarStorage };

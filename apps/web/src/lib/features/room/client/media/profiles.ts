@@ -68,7 +68,7 @@ export function getScreenProfileLabels(profileId: string): { qualityLabel: strin
   };
 }
 
-export function parseScreenProfileId(profileId: string): { qualityId: string; fpsId: string } {
+function parseScreenProfileId(profileId: string): { qualityId: string; fpsId: string } {
   const normalized = String(profileId || '').trim();
   if (Object.hasOwn(SCREEN_QUALITY_OPTIONS, normalized)) {
     return { qualityId: normalizeScreenQualityId(normalized), fpsId: DEFAULT_SCREEN_FPS_ID };
@@ -141,7 +141,7 @@ export async function getScreenPublishVideoOptions(profile: ScreenProfile): Prom
   } as TrackPublishOptions;
 }
 
-export function getScreenSimulcastLayers(profile: ScreenProfile, VideoPresetClass: typeof VideoPreset): VideoPreset[] {
+function getScreenSimulcastLayers(profile: ScreenProfile, VideoPresetClass: typeof VideoPreset): VideoPreset[] {
   const maxBitrate = getSimulcastLayerBitrate(profile.fpsId);
   return [
     new VideoPresetClass({
@@ -186,7 +186,7 @@ export function createSourceScreenProfile(
   };
 }
 
-export function formatBitrate(bitrate: number): string {
+function formatBitrate(bitrate: number): string {
   if (bitrate >= 1_000_000) {
     return `${(bitrate / 1_000_000).toFixed(bitrate >= 10_000_000 ? 0 : 1)} Mbps`;
   }

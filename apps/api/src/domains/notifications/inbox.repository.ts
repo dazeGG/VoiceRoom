@@ -345,4 +345,4 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
 
 export type InboxRepository = ReturnType<typeof createInboxRepository>;
 
-export { createInboxRepository, mapRow as mapNotificationRow };
+export { createInboxRepository };

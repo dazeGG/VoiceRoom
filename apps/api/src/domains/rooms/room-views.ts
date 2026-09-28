@@ -94,7 +94,7 @@ export function publicLobbyRoom(room: StoredRoom, peerCount: number): LobbyRoom 
   return result;
 }
 
-export const ROOM_BANNED_ERROR = 'Вы заблокированы в этой комнате';
+const ROOM_BANNED_ERROR = 'Вы заблокированы в этой комнате';
 
 export function roomBanned(roomId: string): Failure & { roomId: string } {
   return { ...failure(ROOM_BANNED_ERROR, { code: 'room_banned' }), roomId };

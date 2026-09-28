@@ -102,7 +102,7 @@ export function syncOutputDeviceUiState(): void {
   roomDeviceUi.outputDisabled = !supportsAudioOutputSelection();
 }
 
-export function setMicrophoneMuted(muted: boolean, options: { playCue?: boolean; post?: boolean } = {}): void {
+function setMicrophoneMuted(muted: boolean, options: { playCue?: boolean; post?: boolean } = {}): void {
   const { playCue = true, post = true } = options;
   if (!state.localStream) return;
   const nextMuted = Boolean(muted);
@@ -283,11 +283,6 @@ export function toggleOutputMute(options: { unmuteMicrophone?: boolean } = {}): 
   syncVoiceSessionControls();
   postState().catch(() => {});
   if (!state.outputMuted) unlockAudio().catch(() => {});
-}
-
-/** @deprecated Reactive views replace imperative DOM refresh. */
-export function refreshOutputControls(): void {
-  syncOutputDeviceUiState();
 }
 
 /** @deprecated Reactive views replace imperative DOM refresh. */

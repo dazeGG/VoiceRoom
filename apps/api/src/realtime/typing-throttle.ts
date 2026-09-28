@@ -82,4 +82,4 @@ function createTypingThrottle<Activity = string>({
   return { offer, size: () => targets.size };
 }
 
-export { TYPING_FORWARD_MIN_MS, TYPING_TARGET_LIMIT, createTypingThrottle };
+export { createTypingThrottle };

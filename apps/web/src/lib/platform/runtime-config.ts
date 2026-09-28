@@ -88,7 +88,7 @@ async function fetchRuntimeConfig(originOverride?: string): Promise<RuntimeConfi
   }
 }
 
-export function loadRuntimeConfig(options: RuntimeConfigOptions = {}): Promise<RuntimeConfigV1> {
+function loadRuntimeConfig(options: RuntimeConfigOptions = {}): Promise<RuntimeConfigV1> {
   const key = cacheKey(options.origin);
   const existing = configCache.get(key);
   if (existing) return existing;

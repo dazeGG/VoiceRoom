@@ -4,7 +4,7 @@ export type { PresenceStatus };
 
 const PRESENCE_STATUSES = new Set<PresenceStatus>(['online', 'away', 'dnd', 'offline']);
 
-export function isPresenceStatus(value: unknown): value is PresenceStatus {
+function isPresenceStatus(value: unknown): value is PresenceStatus {
   return typeof value === 'string' && PRESENCE_STATUSES.has(value as PresenceStatus);
 }
 

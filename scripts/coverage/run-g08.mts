@@ -7,7 +7,7 @@
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, rmSync } from 'node:fs';
 
-const V8_DIR = 'coverage/.release-250-v8';
+const V8_DIR = 'coverage/.gate-v8';
 const SUMMARY = 'coverage/release-250-summary.json';
 
 function run(args: string[], env: NodeJS.ProcessEnv = process.env): void {
@@ -22,11 +22,11 @@ run(
   [
     '--test',
     '--test-concurrency=1',
-    'scripts/test/g08-coverage-gate.test.mts',
+    'scripts/test/coverage-gate.test.mts',
     'packages/shared/test/*.test.ts',
     'apps/api/test/*.test.ts'
   ],
-  { ...process.env, G08_V8_DIR: V8_DIR, NODE_V8_COVERAGE: V8_DIR }
+  { ...process.env, COVERAGE_V8_DIR: V8_DIR, NODE_V8_COVERAGE: V8_DIR }
 );
 run(['scripts/coverage/check-release-250-coverage.mts', '--v8-dir', V8_DIR, '--out', SUMMARY, '--collect-only']);
 run(['scripts/coverage/check-release-250-coverage.mts', '--coverage', SUMMARY, '--base-thresholds-absent']);

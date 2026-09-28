@@ -86,12 +86,12 @@ function projectKnownContent(content: RoomMessageContentV1): string {
     .join('');
 }
 
-export function projectRoomMessageContent(value: unknown, legacyText: unknown = ''): string {
+export function projectRoomMessageContent(value: unknown, plainText: unknown = ''): string {
   const normalized = normalizeRoomMessageContent(value);
-  return normalized ? projectKnownContent(normalized) : String(legacyText || '');
+  return normalized ? projectKnownContent(normalized) : String(plainText || '');
 }
 
-export function contentFromLegacyText(value: unknown): RoomMessageContentV1 | null {
+export function contentFromPlainText(value: unknown): RoomMessageContentV1 | null {
   const text = cleanString(value, MAX_TEXT_LENGTH);
   return text ? { version: CONTENT_VERSION, segments: [{ type: 'text', text }] } : null;
 }

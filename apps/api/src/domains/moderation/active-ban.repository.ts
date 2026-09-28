@@ -195,4 +195,4 @@ function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClien
 
 export type ActiveBanRepository = ReturnType<typeof createActiveBanRepository>;
 
-export { createActiveBanRepository, mapActiveBan, normalizePrincipal };
+export { createActiveBanRepository, normalizePrincipal };

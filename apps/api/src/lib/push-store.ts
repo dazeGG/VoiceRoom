@@ -193,4 +193,4 @@ function createPushStore({ pool, maxSubscriptionsPerUser = 10 }: { pool: pg.Pool
 
 export type PushStore = ReturnType<typeof createPushStore>;
 
-export { createPushStore, mapSubscription, resolvePlatformClass, sanitizeMetadata };
+export { createPushStore };

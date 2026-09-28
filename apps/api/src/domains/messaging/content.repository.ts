@@ -1,5 +1,5 @@
 import {
-  contentFromLegacyText,
+  contentFromPlainText,
   normalizeRoomMessageContent,
   projectRoomMessageContent,
   type RoomMessageContentV1
@@ -23,7 +23,7 @@ function createContentRepository(): ContentRepository {
     content: RoomMessageContentV1;
     text: string;
   } {
-    const normalized = content == null ? contentFromLegacyText(text) : normalizeRoomMessageContent(content);
+    const normalized = content == null ? contentFromPlainText(text) : normalizeRoomMessageContent(content);
     if (!normalized) {
       const error = new TypeError('Invalid room message content') as TypeError & { code?: string };
       error.code = 'INVALID_MESSAGE_CONTENT';

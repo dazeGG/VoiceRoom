@@ -80,5 +80,5 @@ function createMessageReadService({
   return Object.freeze({ advanceDm, advanceRoom });
 }
 
-export { MessageReadError, createMessageReadService };
+export { createMessageReadService };
 import type { ErrorCode } from '@voice-room/shared/contracts/errors';

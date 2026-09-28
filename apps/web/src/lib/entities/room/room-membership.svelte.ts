@@ -1,6 +1,5 @@
 import { browser } from '$app/environment';
 import { fetchRoomMemberships, leaveRoomMembership, type MembershipMember } from '$lib/api/memberships';
-import type { RoomPeer } from '$lib/api/rooms';
 
 interface RoomMembershipEntry {
   cachedMembers: MembershipMember[];
@@ -121,29 +120,7 @@ export async function loadRoomMembership(
   }
 }
 
-export function applyRoomVoicePeers(roomId: string, peers: RoomPeer[], presenceRevision: number): void {
-  const entry = getRoomMembership(roomId);
-  if (presenceRevision <= entry.presenceRevision) return;
-  if (entry.presenceRevision > 0 && presenceRevision > entry.presenceRevision + 1) {
-    void loadRoomMembership(roomId, { query: entry.query });
-    return;
-  }
-  const voiceUserIds = peers.map((peer) => peer.accountUserId).filter((userId): userId is string => Boolean(userId));
-  const updateVoice = (members: MembershipMember[]) =>
-    mergeMembers(
-      [],
-      members.map((member) => ({
-        ...member,
-        inVoice: voiceUserIds.includes(member.userId)
-      }))
-    );
-  entry.members = updateVoice(entry.members);
-  entry.cachedMembers = updateVoice(entry.cachedMembers);
-  entry.presenceRevision = presenceRevision;
-  persist(roomId, entry);
-}
-
-export function clearRoomMembership(roomId: string): void {
+function clearRoomMembership(roomId: string): void {
   const { [roomId]: _removed, ...remaining } = roomMembershipState.byRoomId;
   roomMembershipState.byRoomId = remaining;
   if (browser) localStorage.removeItem(cacheKey(roomId));

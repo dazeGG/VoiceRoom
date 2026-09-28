@@ -225,4 +225,4 @@ function createRoomHistoryService({
   return { getPage };
 }
 
-export { RoomHistoryError, createRoomHistoryService };
+export { createRoomHistoryService };

@@ -38,7 +38,7 @@ function copyTextFor(range: Range): { text: string; html: string } | null {
   }
 }
 
-export function handleEmojiCopy(event: ClipboardEvent): void {
+function handleEmojiCopy(event: ClipboardEvent): void {
   if (event.defaultPrevented || !event.clipboardData) return;
   const selection = document.getSelection();
   if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return;

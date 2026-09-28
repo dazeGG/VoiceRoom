@@ -418,4 +418,4 @@ function createNotificationStore({
 
 export type NotificationStore = ReturnType<typeof createNotificationStore>;
 
-export { createNotificationStore, mapPreferences };
+export { createNotificationStore };

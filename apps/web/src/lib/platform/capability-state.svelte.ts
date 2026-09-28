@@ -1,5 +1,5 @@
 import { PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/capabilities';
-import { isCapabilityReady, loadCapabilities, resetCapabilities, type CapabilityKey } from '../api/capabilities';
+import { isCapabilityReady, loadCapabilities, type CapabilityKey } from '../api/capabilities';
 
 export type CapabilityEdge = 'unknown' | 'ready' | 'not-ready' | 'stale';
 
@@ -30,12 +30,6 @@ const INITIAL_STATE: CapabilityState = {
 let state: CapabilityState = { ...INITIAL_STATE, features: { ...INITIAL_FEATURES } };
 let inFlight: Promise<CapabilityState> | null = null;
 
-export function resetCapabilityState(): void {
-  state = { ...INITIAL_STATE, features: { ...INITIAL_FEATURES } };
-  inFlight = null;
-  resetCapabilities();
-}
-
 function sanitizePayload(payload: unknown): CapabilityState {
   const value = typeof payload === 'object' && payload !== null ? (payload as Record<string, unknown>) : null;
   if (!value) {
@@ -65,7 +59,7 @@ function sanitizePayload(payload: unknown): CapabilityState {
   };
 }
 
-export async function loadCapabilityState(): Promise<CapabilityState> {
+async function loadCapabilityState(): Promise<CapabilityState> {
   if (inFlight) return inFlight;
 
   inFlight = (async () => {
@@ -82,10 +76,6 @@ export async function loadCapabilityState(): Promise<CapabilityState> {
   const next = await inFlight;
   inFlight = null;
   return next;
-}
-
-export function getCapabilityState(): CapabilityState {
-  return { ...state, features: { ...state.features } };
 }
 
 export async function getCapabilityFeature(key: string, fallback = false): Promise<boolean> {

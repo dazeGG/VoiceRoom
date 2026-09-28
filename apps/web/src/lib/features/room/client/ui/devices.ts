@@ -92,7 +92,7 @@ export function clearGateSwitchTimer(): void {
   gateSwitchTimer = 0;
 }
 
-export function setGateThresholdDb(value: string | number): void {
+function setGateThresholdDb(value: string | number): void {
   const threshold = Number.parseInt(String(value), 10);
   state.gateThresholdDb = Number.isFinite(threshold) ? clampGateThresholdDb(threshold) : DEFAULT_GATE_THRESHOLD_DB;
   localStorage.setItem(GATE_THRESHOLD_DB_STORAGE_KEY, String(state.gateThresholdDb));

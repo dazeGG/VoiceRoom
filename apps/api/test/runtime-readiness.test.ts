@@ -1,10 +1,14 @@
-// @ts-nocheck -- not type-checked yet; remove once the file passes tsconfig.json.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { Pool } from 'pg';
 import test from 'node:test';
-import { normalizeManifest, PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/capabilities';
+import {
+  normalizeManifest,
+  PUBLIC_CAPABILITY_KEYS,
+  type CapabilityManifest,
+  type CapabilityRequires
+} from '@voice-room/shared/capabilities';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createReadinessReport } from '../src/platform/readiness.ts';
 import { createRuntimeReadinessProvider } from '../src/platform/runtime-readiness.ts';
@@ -15,13 +19,31 @@ import { createTestDatabase } from './db-harness.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const manifestPath = path.resolve(import.meta.dirname, '../../../config/capability-dag.v1.json');
 
-function fullOptions() {
-  const manifest = normalizeManifest(JSON.parse(readFileSync(manifestPath, 'utf8')));
-  const options = { desired: Object.fromEntries(PUBLIC_CAPABILITY_KEYS.map((key) => [key, true])) };
-  for (const category of ['binary', 'schema', 'index', 'config', 'api', 'web', 'visibility', 'worker', 'internal']) {
-    options[`${category}Ready`] = [...new Set(manifest.publicKeys.flatMap((node) => node.requires[category]))];
-  }
-  return options;
+const CATEGORIES = [
+  'binary',
+  'schema',
+  'index',
+  'config',
+  'api',
+  'web',
+  'visibility',
+  'worker',
+  'internal'
+] as const satisfies readonly (keyof CapabilityRequires)[];
+type ReadyLists = Record<`${(typeof CATEGORIES)[number]}Ready`, string[]>;
+
+// Every prerequisite the manifest names, marked ready, and every key desired.
+function fullOptions(
+  manifest: CapabilityManifest | null = normalizeManifest(JSON.parse(readFileSync(manifestPath, 'utf8')))
+): ReadyLists & { desired: Record<string, boolean> } {
+  if (!manifest) throw new Error('the capability manifest did not parse');
+  const ready = Object.fromEntries(
+    CATEGORIES.map((category) => [
+      `${category}Ready`,
+      [...new Set(manifest.publicKeys.flatMap((node) => node.requires[category]))]
+    ])
+  ) as ReadyLists;
+  return { desired: Object.fromEntries(PUBLIC_CAPABILITY_KEYS.map((key) => [key, true])), ...ready };
 }
 
 test('G14-A02 production replica consensus never fabricates a missing heartbeat', () => {
@@ -49,7 +71,7 @@ test(
       await database.cleanup();
     });
     const repository = createRuntimeReadinessRepository({ client: pool });
-    const workerHeartbeats = [];
+    const workerHeartbeats: Awaited<ReturnType<typeof startWorkerHeartbeat>>[] = [];
     for (const workerName of Object.keys(WORKER_CAPABILITIES)) {
       workerHeartbeats.push(
         await startWorkerHeartbeat({

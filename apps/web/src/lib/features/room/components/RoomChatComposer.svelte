@@ -3,7 +3,7 @@
   // reply target. Sending itself belongs to the panel, which owns the messages.
   import { onDestroy, onMount, tick } from 'svelte';
   import type { MembershipMember } from '@voice-room/shared/membership';
-  import { contentFromLegacyText } from '@voice-room/shared/room-message-content';
+  import { contentFromPlainText } from '@voice-room/shared/room-message-content';
   import type { ChatMessage } from '$lib/api/rooms';
   import { getAppRealtime } from '$lib/api/realtime';
   import { getRoomMembership, loadRoomMembership } from '$lib/entities/room/room-membership.svelte';
@@ -115,7 +115,7 @@
         content: engagementEnabled
           ? mentions.selected.length
             ? mentions.toContent(text)
-            : (contentFromLegacyText(text) ?? undefined)
+            : (contentFromPlainText(text) ?? undefined)
           : undefined,
         attachmentIds: media?.readyIds ?? [],
         replyTo: replyTarget ? { messageId: replyTarget.id } : undefined

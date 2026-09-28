@@ -356,4 +356,4 @@ function createModerationRepository({
 
 export type ModerationRepository = ReturnType<typeof createModerationRepository>;
 
-export { createModerationRepository, mapModerationBan };
+export { createModerationRepository };

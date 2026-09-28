@@ -301,12 +301,4 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
 
 export type MediaStorage = ReturnType<typeof createMediaStorage>;
 
-export {
-  STORAGE_KEY_PATTERN,
-  UUID_PATTERN,
-  createMediaStorage,
-  createStorageKey,
-  parseStorageKey,
-  validateAttachmentId,
-  validateVariant
-};
+export { createMediaStorage, createStorageKey, parseStorageKey };

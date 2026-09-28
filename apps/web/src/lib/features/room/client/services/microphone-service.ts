@@ -79,7 +79,7 @@ export function setNoiseMode(mode: unknown): void {
   localStorage.setItem(NOISE_MODE_STORAGE_KEY, state.noiseMode);
 }
 
-export async function openMicrophone(mode: NoiseMode = state.noiseMode): Promise<MediaStream> {
+async function openMicrophone(mode: NoiseMode = state.noiseMode): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getUserMedia) {
     throw new Error('Браузер не дал доступ к микрофону. Нужен HTTPS или localhost.');
   }
@@ -410,7 +410,7 @@ function loadRnnoiseModule(): Promise<any> {
   return rnnoiseModulePromise;
 }
 
-export function createProcessingAudioContext(): AudioContext {
+function createProcessingAudioContext(): AudioContext {
   try {
     // 48 kHz is Opus's native rate, so nothing resamples between this chain
     // and the encoder; 'interactive' asks for the smallest render buffer.

@@ -34,7 +34,7 @@ test('browser-facing shared modules expose named ESM exports', async () => {
     notifications: ['normalizeNotificationEnvelope'],
     'platform-class': ['classifyPlatformPolicy'],
     reactions: ['normalizeReactionSummary', 'normalizeReactorPage'],
-    'room-message-content': ['contentFromLegacyText', 'projectRoomMessageContent'],
+    'room-message-content': ['contentFromPlainText', 'projectRoomMessageContent'],
     'runtime-config': ['DEFAULT_RUNTIME_CONFIG', 'parseRuntimeConfig', 'resolveLiveKitConnectUrls']
   };
 

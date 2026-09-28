@@ -30,7 +30,7 @@ export interface ScreenShareCapture {
   stream: MediaStream;
 }
 
-export function wantsScreenShareAudio(): boolean {
+function wantsScreenShareAudio(): boolean {
   return true;
 }
 
@@ -61,7 +61,7 @@ function hasLegacyDesktopCapture(): boolean {
   return Boolean(window.voiceRoomDesktopCapture?.getSources);
 }
 
-export function isDesktopApp(): boolean {
+function isDesktopApp(): boolean {
   return Boolean(window.voiceRoomRuntime?.isDesktop);
 }
 
@@ -607,7 +607,7 @@ async function selectDesktopCaptureSource(): Promise<ScreenSourceSelection> {
   return showScreenSourcePicker(sources);
 }
 
-export async function applyScreenCaptureProfile(stream: MediaStream, profile: ScreenProfile): Promise<void> {
+async function applyScreenCaptureProfile(stream: MediaStream, profile: ScreenProfile): Promise<void> {
   const [videoTrack] = stream.getVideoTracks();
   if (!videoTrack) return;
 

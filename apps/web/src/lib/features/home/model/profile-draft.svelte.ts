@@ -6,7 +6,7 @@ import { deleteUserAvatar, updateDisplayName, uploadUserAvatar, type AuthUser } 
 import { setUser } from '$lib/features/auth/session.svelte';
 import { state as roomClientState } from '$lib/features/room/client/core/state.svelte';
 
-export const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 
 export class ProfileDraft {
   name = $state('');

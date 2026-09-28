@@ -17,7 +17,7 @@ export function saveStartName(event: Event): void {
   saveNameFromValue(startUi.nameInput);
 }
 
-export function saveNameFromValue(rawValue: string): string {
+function saveNameFromValue(rawValue: string): string {
   const name = cleanDisplayName(rawValue);
   if (!name) {
     showToast('Введите имя');
@@ -84,7 +84,7 @@ export function resetGuestNameDialog(): void {
   reject?.();
 }
 
-export function setGuestNameDialogOpen(open: boolean): void {
+function setGuestNameDialogOpen(open: boolean): void {
   guestNameUi.open = open;
 }
 

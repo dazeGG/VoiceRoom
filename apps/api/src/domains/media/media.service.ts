@@ -277,12 +277,4 @@ function createMediaService({
 
 export type MediaService = ReturnType<typeof createMediaService>;
 
-export {
-  FORMAT_MIME,
-  MAX_INPUT_PIXELS,
-  MAX_UPLOAD_BYTES,
-  MediaServiceError,
-  createMediaService,
-  detectExactContainer,
-  publicAttachment
-};
+export { MAX_UPLOAD_BYTES, createMediaService, detectExactContainer };

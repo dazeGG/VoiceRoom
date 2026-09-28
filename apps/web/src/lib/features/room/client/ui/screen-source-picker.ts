@@ -51,7 +51,7 @@ export function switchScreenTab(tab: 'screens' | 'windows'): void {
   screenSourceUi.popOpen = false;
 }
 
-export function resolveScreenSourcePicker(selection: ScreenSourceSelection): void {
+function resolveScreenSourcePicker(selection: ScreenSourceSelection): void {
   const request = closeScreenSourcePicker();
   request?.resolve(selection);
 }

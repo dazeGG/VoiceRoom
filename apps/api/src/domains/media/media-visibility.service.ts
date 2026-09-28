@@ -103,4 +103,4 @@ function createMediaVisibilityService({
   return Object.freeze({ open, requireVisible });
 }
 
-export { MediaVisibilityError, createMediaVisibilityService };
+export { createMediaVisibilityService };

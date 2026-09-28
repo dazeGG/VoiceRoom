@@ -87,5 +87,5 @@ function createMessageVisibilityService({
   });
 }
 
-export { MessageVisibilityError, createMessageVisibilityService };
+export { createMessageVisibilityService };
 import type { ErrorCode } from '@voice-room/shared/contracts/errors';

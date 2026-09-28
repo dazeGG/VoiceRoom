@@ -85,4 +85,4 @@ async function reconcileLinkPreviewImages({
   return unused.length;
 }
 
-export { createLinkPreviewStorage, reconcileLinkPreviewImages, validateLinkPreviewImageKey };
+export { createLinkPreviewStorage, reconcileLinkPreviewImages };
