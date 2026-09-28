@@ -92,7 +92,6 @@ copy the old pattern into new code.
 
 | Gap | Where | Rule for new code |
 | --- | --- | --- |
-| Raw `pg` queries on the capability heartbeat table | `platform/runtime-readiness-repository.ts` | write new queries with Kysely |
 | Store facades under `lib/` | `lib/room-store.ts`, `lib/user-store.ts`, `lib/friend-store.ts` (facades over domain repositories), `lib/notification-store.ts`, `lib/push-store.ts` | depend on the domain repository, not the facade |
 | Capability readiness machinery (release-2.5 flags) | `platform/readiness.ts`, `platform/runtime-readiness*.ts`, `/api/capabilities` | gate new features without it |
 
