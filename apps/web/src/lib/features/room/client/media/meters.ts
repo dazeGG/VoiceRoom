@@ -9,7 +9,6 @@ import { state } from '../core/state.svelte';
 import { amplitudeToDb } from '../core/settings';
 import { getSharedAudioContext } from '../services/media-playback-service';
 import { isGateDisabled } from '../services/microphone-service';
-import { bumpParticipantsRevision } from '../../participants-ui.svelte';
 import type { Participant } from '../core/types';
 
 import { createLogger, errorContext } from '$lib/shared/log';
@@ -100,5 +99,4 @@ function applySpeaking(participant: Participant, over: boolean): void {
   const speaking = over || now < participant.speakingHoldUntil;
   if (participant.speaking === speaking) return;
   participant.speaking = speaking;
-  bumpParticipantsRevision();
 }

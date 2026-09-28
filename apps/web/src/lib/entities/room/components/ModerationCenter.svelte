@@ -6,7 +6,7 @@
   import { fetchActiveBans } from '$lib/api/moderation';
   import { Avatar } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import { banExpiryLabel, banSubjectName, liftRoomBan, type ModerationNotice } from '../../model/room-moderation';
+  import { banExpiryLabel, banSubjectName, liftRoomBan, type ModerationNotice } from '../room-moderation';
 
   // Active bans of one room, shown as the «Блокировки» section of the room
   // settings. Bans are placed from a member's menu; this list only lifts them.

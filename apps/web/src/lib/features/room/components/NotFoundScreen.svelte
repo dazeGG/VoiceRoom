@@ -31,3 +31,32 @@
     </div>
   </div>
 </main>
+
+<style>
+  :global(.not-found-mascot) {
+    display: inline-flex;
+    margin-bottom: 22px;
+  }
+  :global(.not-found-code) {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    background: var(--control);
+    font-family: var(--font-mono);
+    font-size: 14.5px;
+    letter-spacing: 0.04em;
+    color: var(--warm-300);
+    vertical-align: middle;
+    overflow-wrap: anywhere;
+  }
+  :global(.not-found-code-dot) {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--coral);
+  }
+</style>

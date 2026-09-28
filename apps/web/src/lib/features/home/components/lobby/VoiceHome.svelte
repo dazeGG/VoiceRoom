@@ -3,12 +3,14 @@
   import { Avatar, AvatarStack, Badge, Button, ContextMenu, Ellipsis, MascotIcon } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import type { OwnedRoom } from '$lib/api/auth';
-  import { roomPresence } from '../../model/room-presence.svelte';
+  import { roomPresence } from '../../../../entities/room/room-presence.svelte';
   import { roomPeerAvatarItems } from '../../model/room-avatars';
   import { roomDisplayName } from '../../model/rooms';
-  import { friendsState, showPeople } from '../../model/friends.svelte';
+  import { useLobby } from '$lib/features/home/model/lobby-context';
   import { notificationPreferences } from '$lib/shared/notifications/preferences.svelte';
   import { RoomMenuContent } from '$lib/shared/components/room-menu';
+
+  const lobby = useLobby();
 
   let {
     rooms,
@@ -40,7 +42,7 @@
   let contextY = $state(0);
   let contextTrigger = $state<HTMLElement | null>(null);
 
-  const requestCount = $derived(friendsState.incomingRequestCount);
+  const requestCount = $derived(lobby.incomingRequestCount);
   const sortedRooms = $derived([...rooms].sort((a: OwnedRoom, b: OwnedRoom) => b.peers - a.peers));
   const contextRoom = $derived(rooms.find((room: OwnedRoom) => room.roomId === contextRoomId));
 
@@ -99,7 +101,7 @@
   <h1 class="lr-title">Комнаты</h1>
 
   {#if requestCount > 0}
-    <button class="lr-callout" type="button" onclick={showPeople}>
+    <button class="lr-callout" type="button" onclick={lobby.showPeople}>
       <span class="lr-callout-icon">
         <UserPlus {...iconMd} aria-hidden="true" />
       </span>
@@ -251,7 +253,7 @@
           name={roomDisplayName(contextRoom)}
           avatarUrl={contextRoom.avatarUrl}
           relationship={contextRoom.relationship}
-          friends={friendsState.friends}
+          friends={lobby.friends}
           presentUserIds={roomPresentUserIds(contextRoom.roomId)}
           {close}
           canClose={(roomId) => contextRoomId === roomId}
@@ -265,3 +267,153 @@
     {/snippet}
   </ContextMenu>
 {/if}
+
+<style>
+  :global(.lv-row-sub) {
+    font-size: var(--lv-sub);
+    color: var(--warm-faint);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :global(.lv-card-unread) {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+  }
+  :global(.lv-card-foot) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  :global(.lv-join-hint) {
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin-right: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 999px;
+    color: var(--warm-muted);
+    cursor: help;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-style: italic;
+    line-height: 1;
+  }
+  :global(.lv-sr-only) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  :global(.lr-empty-state) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+  }
+  :global(.lr-livedot) {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 0 3px color-mix(in oklch, var(--green), transparent 78%);
+    flex: none;
+  }
+  :global(.lr-callout) {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    margin-top: 22px;
+    padding: 14px 16px;
+    border: 1px solid color-mix(in oklch, var(--accent), transparent 60%);
+    border-radius: var(--radius-lg);
+    background: color-mix(in oklch, var(--accent), transparent 92%);
+    cursor: pointer;
+    text-align: left;
+    font: inherit;
+    color: inherit;
+  }
+  :where(.lr-callout):hover {
+    background: color-mix(in oklch, var(--accent), transparent 86%);
+  }
+  :global(.lr-callout-icon) {
+    flex: none;
+    width: 38px;
+    height: 38px;
+    border-radius: var(--radius-md);
+    background: color-mix(in oklch, var(--accent), transparent 78%);
+    color: var(--accent-ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  :global(.lr-callout-title) {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--warm-ink);
+  }
+  :global(.lr-callout-sub) {
+    font-size: 12px;
+    color: var(--warm-muted);
+    margin-top: 1px;
+  }
+  :where(.lr-callout) + .lr-callout {
+    margin-top: 10px;
+  }
+  :global(.lr-callout--split) {
+    gap: 0;
+    padding: 0;
+    cursor: default;
+  }
+  :where(.lr-callout--split):hover {
+    background: color-mix(in oklch, var(--accent), transparent 92%);
+  }
+  :where(.lr-callout--split):has(.lr-callout-main:hover) {
+    background: color-mix(in oklch, var(--accent), transparent 86%);
+  }
+  :global(.lr-callout-main) {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+    padding: 14px 8px 14px 16px;
+    border: none;
+    border-radius: inherit;
+    background: none;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  :global(.lr-callout-dismiss) {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    margin-right: 12px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--warm-faint);
+    cursor: pointer;
+  }
+  :where(.lr-callout-dismiss):hover {
+    background: var(--control);
+    color: var(--warm-ink);
+  }
+</style>

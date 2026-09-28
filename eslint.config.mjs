@@ -96,6 +96,42 @@ export default tseslint.config(
     rules: { 'no-console': 'error' }
   },
   {
+    // docs/ARCHITECTURE.md section 5: the lobby shows rooms, never the other way
+    // round. What both need lives in $lib/entities; what a room needs from the
+    // lobby comes through a context (features/room/social.ts).
+    files: ['apps/web/src/lib/features/room/**/*.{ts,svelte}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['$lib/features/home', '$lib/features/home/**', '**/features/home/**'],
+              message: 'A room does not import the lobby: use $lib/entities or the room social context.'
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    // Layers below the features never reach up into one.
+    files: ['apps/web/src/lib/{entities,shared,platform,api}/**/*.{ts,svelte}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['$lib/features/home/**', '$lib/features/room/**', '**/features/home/**', '**/features/room/**'],
+              message: 'entities, shared, platform and api sit below the features and do not import them.'
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
     // A request's logger already binds reqId; repeating it writes the field twice.
     files: ['apps/api/src/**/*.ts'],
     rules: {

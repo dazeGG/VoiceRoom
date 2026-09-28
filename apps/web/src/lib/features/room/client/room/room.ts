@@ -1,3 +1,4 @@
+import { SvelteSet } from 'svelte/reactivity';
 import { addRoomByCode, fetchMe, fetchOwnedRooms } from '$lib/api/auth';
 import { session, setUser } from '$lib/features/auth/session.svelte';
 import { roomNameFor } from '$lib/features/auth/account';
@@ -33,7 +34,6 @@ import { refreshScreenControls, stopLocalScreenStream } from '../services/screen
 import { closeScreenView, refreshScreenStage } from '../ui/screen-view';
 import {
   createParticipant,
-  refreshParticipantState,
   removeAudioElements,
   removePeer,
   syncPeers,
@@ -79,7 +79,7 @@ import {
   joinVoiceRoom,
   leaveVoiceRoom as sendVoiceLeave,
   subscribeRoomVoice
-} from '$lib/features/home/model/room-realtime';
+} from '$lib/entities/room/room-realtime';
 import { applyRoomDeleted, applyRoomUpdated } from './lifecycle';
 import { markInAppRoomNavigation } from '$lib/platform/open-in-app';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
@@ -153,7 +153,6 @@ function showRoomScreen(): void {
   refreshCallControls();
   refreshScreenControls();
   refreshScreenStage();
-  refreshParticipantState();
 }
 
 export function showRoomEntryFailure(): void {
@@ -414,7 +413,6 @@ async function performJoinRoom(generation: number): Promise<void> {
     await disconnectLiveKitRoom();
     state.self = null;
     stopLocalStream();
-    refreshParticipantState();
     if (banned) showRoomModerationScreen('banned');
   } finally {
     if (isCurrent()) state.connecting = false;
@@ -448,7 +446,7 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
     const peers = Array.isArray(snapshot.peers) ? snapshot.peers : [];
     const localPeer = peers.find((peer) => peer.id === state.peerId);
     const remotePeers = peers.filter((peer) => peer.id !== state.peerId);
-    state.serverPeerIds = new Set(remotePeers.map((peer) => peer.id).filter(Boolean));
+    state.serverPeerIds = new SvelteSet(remotePeers.map((peer) => peer.id).filter(Boolean));
     state.serverPeerSyncReady = true;
     // Prefer the server clock for the call widget timers: my joinedAt from the
     // authoritative peer record, the shared call start from the room snapshot.
@@ -475,7 +473,6 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
       createParticipant({ ...peer, screenAuthoritative: true });
     }
     syncLiveKitParticipants(state.livekitRoom);
-    refreshParticipantState();
     notifyRoomSnapshotApplied({
       appEpoch: getAppRealtime().getConnectionEpoch(),
       active: snapshot.mode === 'active',
@@ -519,7 +516,6 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
     createParticipant({ ...event.payload.peer, screenAuthoritative: true });
     syncLiveKitParticipantById(event.payload.peer?.id);
     playPeerJoinCue(event.payload.peer?.id);
-    refreshParticipantState();
     return;
   }
 
@@ -529,7 +525,6 @@ async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
     removePeer(event.payload.peerId);
     clearPeerJoinCue(event.payload.peerId);
     if (hadPeer) playPeerCue('leave');
-    refreshParticipantState();
     return;
   }
 
@@ -618,7 +613,6 @@ export function leaveRoom(): void {
   closeDevicePopover();
   closeOutputPopover();
   resetConnectionStatus();
-  refreshParticipantState();
   clearConnectedVoiceRoom(disconnectedRoomId);
 }
 

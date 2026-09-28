@@ -34,3 +34,22 @@
     {/if}
   </button>
 </div>
+
+<style>
+  :global(.auth-eye) {
+    flex: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    color: var(--warm-faint);
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+  :where(.auth-eye):hover {
+    color: #b7b0a0;
+  }
+</style>

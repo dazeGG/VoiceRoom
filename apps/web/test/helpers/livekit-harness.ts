@@ -198,7 +198,6 @@ export async function loadLiveKitHarness(
     detachRemoteScreenAudioTrack: () => {},
     detachRemoteScreenVideoTrack: () => {},
     detachRemoteScreenVideoTracks: () => {},
-    refreshParticipantState: () => {},
     removePeer: () => {},
     setParticipantSpeaking: () => {},
     updateParticipant: () => {},

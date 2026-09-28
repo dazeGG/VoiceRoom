@@ -3,13 +3,14 @@
   import { Ban, Ellipsis, User } from '@lucide/svelte';
   import Avatar from '$lib/shared/ui/Avatar/Avatar.svelte';
   import { Popover, PopoverDivider, PopoverMenuItem, PopoverSubmenu } from '$lib/shared/ui';
+  import type { PopoverContentState, PopoverTriggerState } from '$lib/shared/ui/Popover';
   import { iconMd } from '$lib/shared/ui/icons';
   import { session } from '$lib/features/auth/session.svelte';
-  import { getRoomMembership, loadRoomMembership, roomMembershipState } from '../../model/room-membership.svelte';
-  import { BAN_DURATIONS, banRoomMember, type ModerationNotice } from '../../model/room-moderation';
+  import { getRoomMembership, loadRoomMembership, roomMembershipState } from '../room-membership.svelte';
+  import { BAN_DURATIONS, banRoomMember, type ModerationNotice } from '../room-moderation';
   import type { MembershipMember } from '$lib/api/memberships';
   import type { ModerationDuration } from '$lib/api/moderation';
-  import { openProfileCardFor } from '../../profile-card-ui.svelte';
+  import { openProfileCardFor } from '../../profile-card/profile-card-ui.svelte';
   import type { ProfileCardPerson } from '$lib/shared/components/profile-card';
 
   let {
@@ -113,7 +114,7 @@
         ariaLabel={`Действия с ${nameFor(member)}`}
         rootClass="room-member-list__menu-root"
       >
-        {#snippet trigger({ open, toggle, panelId })}
+        {#snippet trigger({ open, toggle, panelId }: PopoverTriggerState)}
           <button
             class="room-member-list__menu-trigger"
             type="button"
@@ -133,7 +134,7 @@
           </button>
         {/snippet}
 
-        {#snippet content({ close })}
+        {#snippet content({ close }: PopoverContentState)}
           <div class="room-member-list__menu">
             <PopoverMenuItem label="Профиль" onclick={() => showProfileFromMenu(member, close)}>
               {#snippet icon()}<User {...iconMd} aria-hidden="true" />{/snippet}
@@ -141,7 +142,7 @@
             <PopoverDivider />
             <PopoverSubmenu label="Заблокировать" ariaLabel={`Срок блокировки ${nameFor(member)}`}>
               {#snippet icon()}<Ban {...iconMd} aria-hidden="true" />{/snippet}
-              {#snippet content({ close: closeSubmenu })}
+              {#snippet content({ close: closeSubmenu }: { close: () => void })}
                 {#each BAN_DURATIONS as option (option.value)}
                   <PopoverMenuItem
                     label={option.label}

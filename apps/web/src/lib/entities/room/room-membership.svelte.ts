@@ -79,9 +79,13 @@ export function getRoomMembership(roomId: string): RoomMembershipEntry {
 }
 
 function mergeMembers(current: MembershipMember[], incoming: MembershipMember[]): MembershipMember[] {
-  const byUserId = new Map(current.map((member) => [member.userId, member]));
-  for (const member of incoming) byUserId.set(member.userId, { ...byUserId.get(member.userId), ...member });
-  return [...byUserId.values()].sort(
+  const merged = [...current];
+  for (const member of incoming) {
+    const index = merged.findIndex((known) => known.userId === member.userId);
+    if (index === -1) merged.push(member);
+    else merged[index] = { ...merged[index], ...member };
+  }
+  return merged.sort(
     (left, right) => Number(right.presenceStatus !== 'offline') - Number(left.presenceStatus !== 'offline')
   );
 }
@@ -124,15 +128,13 @@ export function applyRoomVoicePeers(roomId: string, peers: RoomPeer[], presenceR
     void loadRoomMembership(roomId, { query: entry.query });
     return;
   }
-  const voiceUserIds = new Set(
-    peers.map((peer) => peer.accountUserId).filter((userId): userId is string => Boolean(userId))
-  );
+  const voiceUserIds = peers.map((peer) => peer.accountUserId).filter((userId): userId is string => Boolean(userId));
   const updateVoice = (members: MembershipMember[]) =>
     mergeMembers(
       [],
       members.map((member) => ({
         ...member,
-        inVoice: voiceUserIds.has(member.userId)
+        inVoice: voiceUserIds.includes(member.userId)
       }))
     );
   entry.members = updateVoice(entry.members);

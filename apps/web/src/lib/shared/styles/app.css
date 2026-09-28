@@ -64,6 +64,19 @@
   --warm-muted: #a39c8a;
   --warm-muted-dim: #948d7c;
   --warm-faint: #7d7666;
+  /* The rest of the warm-neutral scale, lightest to darkest, and the soft
+     status tints used on dark surfaces. */
+  --warm-100: #ece7d9;
+  --warm-150: #e7e2d4;
+  --warm-300: #cfc9ba;
+  --warm-500: #9a9484;
+  --warm-550: #8e897b;
+  --warm-560: #8c8676;
+  --warm-650: #6f6a5c;
+  --warm-850: #10110f;
+  --green-soft: #7ec99a;
+  --coral-soft: #e8b3a8;
+  --danger-soft: #f87171;
 }
 
 @media (prefers-reduced-motion: reduce) {

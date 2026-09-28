@@ -7,9 +7,10 @@ import { createInitialRoomState } from '../model/room-state';
  * transparent to plain reads/writes — while Svelte components can now read fields
  * reactively. This replaces the bridge that the migration plan originally proposed.
  *
- * Note: `$state` deep-proxies plain objects/arrays, but NOT Map/Set. `peers` uses
- * `SvelteMap` so participant mutations propagate to Svelte. `screen*PeerIds` (Set)
- * still rely on `screenUi.revision` until migrated to SvelteSet.
+ * Note: `$state` deep-proxies plain objects/arrays, but NOT Map/Set. `peers` is a
+ * `SvelteMap` and the peer id sets are `SvelteSet`s, so their changes reach
+ * Svelte on their own. A MediaStream is not reactive: tracks added to or
+ * removed from a screen stream in place are announced with `screenUi.revision`.
  */
 export const state = $state(createInitialRoomState());
 

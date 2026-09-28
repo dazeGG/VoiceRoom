@@ -4,7 +4,7 @@
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
-vi.mock('../../src/lib/features/home/model/room-realtime', () => ({
+vi.mock('../../src/lib/entities/room/room-realtime', () => ({
   requestActiveVoiceResync: vi.fn(() => true),
   setActiveVoiceResyncFailureHandler: vi.fn()
 }));

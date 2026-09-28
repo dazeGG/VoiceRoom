@@ -56,9 +56,8 @@
   } = $props();
 
   let search = $state('');
-  let activeSectionKey = $state('frequent');
   let activeIndex = $state(0);
-  let skinTone = $state(NEUTRAL_TONE);
+  let skinTone = $state(loadSkinTone(SKIN_TONES.length));
   let toneMenuOpen = $state(false);
   let toneStripFor = $state('');
   let toneStripLeft = $state(0);
@@ -160,10 +159,6 @@
   const toneStripOptions = $derived(toneStripFor ? skinToneChoices(toneStripFor) : []);
 
   $effect(() => {
-    skinTone = loadSkinTone(SKIN_TONES.length);
-  });
-
-  $effect(() => {
     void tick().then(() => {
       searchInput?.focus();
       if (scroller) viewportHeight = scroller.clientHeight || viewportHeight;
@@ -176,14 +171,14 @@
 
   // Which category the reader is actually looking at, so the anchors stay honest
   // while they scroll instead of only when they click.
-  $effect(() => {
+  const activeSectionKey = $derived.by(() => {
     const position = scrollTop + 1;
     let current = layout.rows[0]?.sectionKey ?? 'frequent';
     for (const row of layout.rows) {
       if (row.kind !== 'header' || row.top > position) continue;
       current = row.sectionKey;
     }
-    activeSectionKey = current;
+    return current;
   });
 
   function onScroll(event: Event): void {
@@ -194,7 +189,6 @@
 
   function goToSection(key: string): void {
     search = '';
-    activeSectionKey = key;
     activeIndex = 0;
     void tick().then(() => {
       const top = layout.sectionTop.get(key);

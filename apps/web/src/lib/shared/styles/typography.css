@@ -118,27 +118,11 @@
   font-weight: 400;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: var(--eyebrow-ink, #6f6a5c);
+  color: var(--eyebrow-ink, var(--warm-650));
 }
 
 /* Heavy display heading. Pages set their own font-size / max-width. The top
    margin is the lockup spacing under .eyebrow — reset it where the heading
    stands alone. */
-.hero-title {
-  margin: 18px 0 0;
-  font-family: var(--font-display);
-  font-weight: 700;
-  line-height: 1.03;
-  letter-spacing: 0;
-  text-wrap: balance;
-}
 
 /* Intro paragraph under .hero-title. */
-.hero-lead {
-  margin: 22px 0 0;
-  max-width: 460px;
-  font-size: 17px;
-  font-weight: 400;
-  line-height: 1.55;
-  color: var(--hero-lead-ink, #b3ac9b);
-}

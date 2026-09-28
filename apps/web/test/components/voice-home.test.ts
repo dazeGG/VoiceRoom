@@ -2,6 +2,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/sv
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 import VoiceHome from '../../src/lib/features/home/components/lobby/VoiceHome.svelte';
+import { LobbyStore } from '../../src/lib/features/home/model/lobby.svelte.ts';
+import { lobbyContext } from '../../src/lib/features/home/model/lobby-context.ts';
 
 afterEach(cleanup);
 
@@ -25,7 +27,7 @@ function renderHome(rooms: ReturnType<typeof room>[] = []) {
     onCreateRoom: vi.fn(),
     onJoinCode: vi.fn()
   };
-  render(VoiceHome, { props });
+  render(VoiceHome, { props, context: lobbyContext(new LobbyStore()) });
   return props;
 }
 

@@ -1,5 +1,5 @@
 import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
-import { RELEASES_URL, detectDesktopBuildId, type DesktopBuildId } from '../model/desktop-builds';
+import { RELEASES_URL, detectDesktopBuildId, type DesktopBuildId } from './desktop-builds';
 
 const RELEASE_DOWNLOAD_PREFIX = `${new URL(RELEASES_URL).pathname.replace(/\/releases\/latest$/, '')}/releases/download/`;
 

@@ -2,16 +2,20 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { authUser } from '../fixtures/users.ts';
+import type { Relationship } from '../../src/lib/api/friends.ts';
+import type { RoomSocial } from '../../src/lib/features/room/social.ts';
 
-const relationships = new Map<string, string>();
-vi.mock('../../src/lib/features/home/model/friends.svelte', () => ({
-  acceptRequestByUserId: vi.fn(async () => {}),
-  addFriendByUserId: vi.fn(async () => ({ status: 'sent' })),
-  getFriendRelationship: (userId: string) => relationships.get(userId) ?? 'none',
-  openDm: vi.fn(async () => {}),
+const relationships = new Map<string, Relationship>();
+const social = {
+  friends: () => [],
+  relationship: (userId: string) => relationships.get(userId) ?? 'none',
+  knownLogin: () => '',
+  addFriend: vi.fn(async (userId: string) => ({ status: 'sent' as const, user: authUser({ id: userId }) })),
+  acceptRequest: vi.fn(async () => {}),
   removeFriend: vi.fn(async () => {}),
-  setMode: vi.fn()
-}));
+  openDm: vi.fn(async () => {}),
+  showFriends: vi.fn()
+} satisfies RoomSocial;
 vi.mock('../../src/lib/api/rooms', () => ({
   banRoomPeer: vi.fn(async () => 'ban-1'),
   kickRoomPeer: vi.fn(async () => {}),
@@ -25,7 +29,7 @@ vi.mock('../../src/lib/features/room/client/services/media-playback-service', ()
 
 const ParticipantContextMenu = (await import('../../src/lib/features/room/components/ParticipantContextMenu.svelte'))
   .default;
-const friends = await import('../../src/lib/features/home/model/friends.svelte');
+const { roomSocialContext } = await import('../../src/lib/features/room/social.ts');
 const roomsApi = await import('../../src/lib/api/rooms');
 const { showToast } = await import('../../src/lib/features/room/client/ui/toast');
 const { applyRemoteParticipantAudioPreferences } =
@@ -61,7 +65,7 @@ function openFor(peer: Record<string, unknown>, variant: 'tile' | 'list' = 'tile
   createParticipant({ id: 'me', name: 'Я' });
   createParticipant(peer as never);
   openParticipantContextMenu(String(peer.id), 20, 20, variant);
-  render(ParticipantContextMenu);
+  render(ParticipantContextMenu, { context: roomSocialContext(social) });
   return screen.getByRole('dialog', { name: `Действия для ${String(peer.name)}` });
 }
 
@@ -80,7 +84,7 @@ test('a guest only offers local sound settings', () => {
 });
 
 test('an account shows actions for the relationship: add, accept, sent, remove', async () => {
-  const cases: Array<[string, string]> = [
+  const cases: Array<[Relationship, string]> = [
     ['none', 'Добавить в друзья'],
     ['incoming', 'Принять заявку'],
     ['outgoing', 'Заявка отправлена'],
@@ -100,18 +104,18 @@ test('adding a friend closes the menu first and reports the result', async () =>
   const menu = openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' });
   await userEvent.click(within(menu).getByRole('button', { name: 'Добавить в друзья' }));
   expect(participantContextMenu.open).toBe(false);
-  expect(friends.addFriendByUserId).toHaveBeenCalledWith('anna-user');
+  expect(social.addFriend).toHaveBeenCalledWith('anna-user');
   await waitFor(() => expect(showToast).toHaveBeenCalledWith('Заявка в друзья отправлена'));
 });
 
 test('a failed action shows the server message, or a fallback per action', async () => {
-  vi.mocked(friends.openDm).mockRejectedValueOnce(new Error(''));
+  vi.mocked(social.openDm).mockRejectedValueOnce(new Error(''));
   const menu = openFor({ id: 'anna', name: 'Анна', accountUserId: 'anna-user' });
   await userEvent.click(within(menu).getByRole('button', { name: 'Написать' }));
   await waitFor(() =>
     expect(showToast).toHaveBeenCalledWith('Не удалось открыть личные сообщения', { variant: 'error' })
   );
-  expect(friends.setMode).toHaveBeenCalledWith('friends');
+  expect(social.showFriends).toHaveBeenCalled();
 });
 
 test('volume changes and local mute are saved for this person and applied at once', async () => {

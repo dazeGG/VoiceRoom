@@ -25,8 +25,8 @@ async function loadRoomRealtime() {
     }
   };
   vi.doMock('../src/lib/api/realtime', () => ({ getAppRealtime: () => connection }));
-  vi.doMock('../src/lib/features/home/model/room-presence.svelte', () => ({ applyRoomSummary: () => {} }));
-  return { realtime: await import('../src/lib/features/home/model/room-realtime.ts'), sent };
+  vi.doMock('../src/lib/entities/room/room-presence.svelte', () => ({ applyRoomSummary: () => {} }));
+  return { realtime: await import('../src/lib/entities/room/room-realtime.ts'), sent };
 }
 
 test('a delayed retryable error cannot cancel a newer successful voice resync attempt', async () => {

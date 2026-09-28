@@ -2,7 +2,7 @@ import { onTestFinished, test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { freshImport, muteWarnings, stubWindow } from './helpers/fresh-module.ts';
 import type * as RoomSwitchConfirmation from '../src/lib/features/home/model/room-switch-confirmation.ts';
-import type * as DesktopDownload from '../src/lib/features/home/services/desktop-download.ts';
+import type * as DesktopDownload from '../src/lib/platform/desktop-download.ts';
 import type * as DesktopCall from '../src/lib/platform/desktop-call.ts';
 import type * as DesktopDiagnostics from '../src/lib/platform/desktop-diagnostics.ts';
 import type * as DesktopLinks from '../src/lib/platform/desktop-links.ts';
@@ -303,10 +303,10 @@ test('desktop build download uses the release asset and falls back to the releas
     click.mockRestore();
     append.mockRestore();
   });
-  const downloads = await loadModule<typeof DesktopDownload>('/src/lib/features/home/services/desktop-download.ts', {
+  const downloads = await loadModule<typeof DesktopDownload>('/src/lib/platform/desktop-download.ts', {
     open: (...args: unknown[]) => opened.push(args)
   });
-  const { RELEASES_URL } = await import('../src/lib/features/home/model/desktop-builds.ts');
+  const { RELEASES_URL } = await import('../src/lib/platform/desktop-builds.ts');
   const release = {
     ok: true as const,
     version: '1.2.3',

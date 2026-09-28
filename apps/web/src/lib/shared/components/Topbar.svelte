@@ -16,3 +16,12 @@
   </a>
   {#if children}{@render children()}{/if}
 </header>
+
+<style>
+  :global(.brand-mark) {
+    width: 32px;
+    height: 32px;
+    display: block;
+    flex: 0 0 auto;
+  }
+</style>

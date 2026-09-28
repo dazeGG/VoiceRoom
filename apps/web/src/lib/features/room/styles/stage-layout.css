@@ -97,31 +97,6 @@ body[data-stage-summary='hidden'] .stage-strip-bar {
   gap: var(--space-sm);
 }
 
-.stage-strip-title {
-  display: grid;
-  min-width: 0;
-  gap: 2px;
-}
-
-.stage-strip-kicker {
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.stage-strip-title strong {
-  overflow: hidden;
-  color: oklch(94% 0.012 92);
-  font-size: 0.92rem;
-  font-weight: 800;
-  line-height: 1.1;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .strip-toggle-button {
   display: grid;
   width: 34px;

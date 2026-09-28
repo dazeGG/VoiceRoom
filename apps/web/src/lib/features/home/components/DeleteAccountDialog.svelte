@@ -151,7 +151,7 @@
   }
 
   .delete-account-error {
-    color: #e8b3a8;
+    color: var(--coral-soft);
   }
 
   .delete-account-list {

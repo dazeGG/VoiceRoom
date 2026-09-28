@@ -202,7 +202,7 @@
   }
 
   :global(.room-menu-name) {
-    color: var(--warm-ink, #ece7d9);
+    color: var(--warm-ink, var(--warm-100));
     font-family: var(--font-ui);
     font-size: 15px;
     font-weight: 700;
@@ -210,7 +210,7 @@
   }
 
   :global(.room-menu-code) {
-    color: var(--warm-muted, #9a9484);
+    color: var(--warm-muted, var(--warm-500));
     font-family: var(--font-mono);
     font-size: 12px;
     letter-spacing: 0.02em;

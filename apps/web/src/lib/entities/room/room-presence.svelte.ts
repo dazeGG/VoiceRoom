@@ -12,10 +12,11 @@ export const roomPresence = $state<{
   unreadCountByRoomId: {}
 });
 
-const roomChatReadSessions = new Map<string, number>();
+// Open chat views per room; a room being read keeps its unread count at zero.
+const roomChatReadSessions: Record<string, number> = {};
 
 function roomChatIsBeingRead(roomId: string): boolean {
-  return (roomChatReadSessions.get(roomId) ?? 0) > 0;
+  return (roomChatReadSessions[roomId] ?? 0) > 0;
 }
 
 export function applyRoomSummary(summary: RoomRealtimeSummary): void {
@@ -45,16 +46,14 @@ export function setRoomUnreadCount(roomId: string, unreadCount: number): void {
 
 export function beginRoomChatReadSession(roomId: string): () => void {
   if (!roomId) return () => {};
-  roomChatReadSessions.set(roomId, (roomChatReadSessions.get(roomId) ?? 0) + 1);
+  roomChatReadSessions[roomId] = (roomChatReadSessions[roomId] ?? 0) + 1;
   setRoomUnreadCount(roomId, 0);
 
   let active = true;
   return () => {
     if (!active) return;
     active = false;
-    const next = (roomChatReadSessions.get(roomId) ?? 1) - 1;
-    if (next > 0) roomChatReadSessions.set(roomId, next);
-    else roomChatReadSessions.delete(roomId);
+    roomChatReadSessions[roomId] = Math.max(0, (roomChatReadSessions[roomId] ?? 1) - 1);
   };
 }
 

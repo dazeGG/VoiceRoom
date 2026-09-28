@@ -94,3 +94,132 @@
 {#if viewing >= 0 && items.length}
   <AttachmentLightbox {items} index={viewing} onclose={() => (viewing = -1)} />
 {/if}
+
+<style>
+  :global(.attachment-composer) {
+    min-width: 0;
+    padding: 12px 12px 0;
+  }
+  :global(.attachment-compose-error) {
+    margin: 6px 12px 0;
+    color: var(--coral);
+    font-size: 12px;
+  }
+  :global(.attachment-draft-open) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    cursor: zoom-in;
+  }
+  :where(.attachment-draft-open) img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+  }
+  :where(.attachment-draft-open):focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  :global(.attachment-draft-list) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  :global(.attachment-draft) {
+    position: relative;
+    width: 72px;
+    height: 72px;
+    flex: none;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    background: var(--warm-900);
+  }
+  :global(.attachment-draft > img) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    border-radius: inherit;
+    object-fit: cover;
+  }
+  :global(.attachment-draft-placeholder) {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    place-items: center;
+    overflow: hidden;
+    border-radius: inherit;
+    color: var(--warm-muted);
+  }
+  :global(.attachment-draft-loading) {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: white;
+    overflow: hidden;
+    border-radius: inherit;
+    background: color-mix(in srgb, var(--warm-950) 56%, transparent);
+    backdrop-filter: brightness(0.68);
+  }
+  :global(.attachment-draft-loading svg) {
+    box-sizing: content-box;
+    padding: 8px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--warm-950) 82%, transparent);
+    animation: attachment-spin 0.9s linear infinite;
+  }
+  :global(.attachment-draft-remove),
+  :global(.attachment-draft-retry) {
+    position: absolute;
+    z-index: 2;
+    display: grid;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    color: white;
+    background: color-mix(in srgb, var(--warm-950) 90%, transparent);
+    cursor: pointer;
+    transition:
+      opacity 0.14s ease,
+      transform 0.14s ease,
+      background 0.14s ease;
+  }
+  :global(.attachment-draft-remove) {
+    top: -6px;
+    right: -6px;
+    width: 22px;
+    height: 22px;
+    border: 2px solid var(--paper-deep);
+    color: white;
+    background: var(--coral);
+    box-shadow: 0 2px 7px color-mix(in srgb, var(--warm-950) 66%, transparent);
+    opacity: 0;
+  }
+  :where(.attachment-draft):hover .attachment-draft-remove,
+  :where(.attachment-draft):focus-within .attachment-draft-remove {
+    opacity: 1;
+  }
+  :where(.attachment-draft-remove):not(:disabled):hover {
+    background: color-mix(in oklch, var(--coral), var(--warm-950) 16%);
+  }
+  :where(.attachment-draft-remove):focus-visible {
+    outline: 2px solid white;
+    outline-offset: 2px;
+  }
+  :global(.attachment-draft-retry) {
+    right: 5px;
+    bottom: 5px;
+  }
+</style>

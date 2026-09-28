@@ -1,4 +1,4 @@
-import { SvelteMap } from 'svelte/reactivity';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import {
   DEFAULT_SCREEN_FPS_ID,
   DEFAULT_SCREEN_PROFILE_ID,
@@ -76,15 +76,15 @@ export function createInitialRoomState(): AppState {
     screenMuted: false,
     screenRequesting: false,
     screenStarting: false,
-    screenCollapsedPeerIds: new Set(),
-    screenSubscribedPeerIds: new Set(),
+    screenCollapsedPeerIds: new SvelteSet(),
+    screenSubscribedPeerIds: new SvelteSet(),
     screenSourceRequest: null,
     screenStopping: false,
     screenVolume: getStoredStreamVolume(),
     stripCollapsed: false,
     self: null,
     serverConnection: 'idle',
-    serverPeerIds: new Set(),
+    serverPeerIds: new SvelteSet(),
     serverPeerSyncReady: false,
     sessionToken: peerSession.sessionToken,
     sharedScreenPeerId: '',

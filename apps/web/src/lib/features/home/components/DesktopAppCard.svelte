@@ -8,7 +8,7 @@
     RELEASES_URL,
     type DesktopBuild,
     type DesktopBuildId
-  } from '../model/desktop-builds';
+  } from '../../../platform/desktop-builds';
 
   const BUILD_OPTIONS = DESKTOP_BUILDS.map((build) => ({ value: build.id, label: build.label }));
 
@@ -111,3 +111,134 @@
     </div>
   {/if}
 </section>
+
+<style>
+  :global(.home-app-head) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    width: 100%;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  :global(.home-app-head-main) {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  :global(.home-app-title) {
+    display: block;
+    color: var(--warm-300);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  :global(.home-app-sub) {
+    display: block;
+    margin-top: 2px;
+    color: var(--warm-faint);
+    font-size: 12.5px;
+  }
+  :global(.home-app-body) {
+    margin-top: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  :global(.home-app-fieldlabel) {
+    margin-bottom: 8px;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--warm-650);
+    text-transform: uppercase;
+  }
+  :global(.home-dl) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 14px;
+    background: var(--control);
+    color: var(--warm-100);
+    font-family: var(--font-ui);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  :where(.home-dl):disabled {
+    cursor: default;
+    opacity: 0.7;
+  }
+  :where(.home-dl):hover {
+    background: var(--control-hover);
+  }
+  :global(.home-app-meta) {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
+    color: var(--warm-650);
+  }
+  :global(.home-app-note) {
+    margin: 2px 0 0;
+    color: var(--warm-560);
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  :global(.home-cmd-label) {
+    margin: 0 0 8px;
+    color: var(--warm-560);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  :global(.home-cmd) {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 11px;
+    padding: 10px 11px;
+    background: var(--warm-900);
+  }
+  :where(.home-cmd) code {
+    flex: 1;
+    min-width: 0;
+    align-self: center;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: 1.5;
+    color: var(--warm-300);
+    word-break: break-all;
+  }
+  :global(.home-cmd-copy) {
+    flex: none;
+    align-self: center;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 6px 10px;
+    background: var(--control);
+    color: var(--warm-300);
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  :where(.home-cmd-copy):hover {
+    background: var(--control-hover);
+  }
+</style>

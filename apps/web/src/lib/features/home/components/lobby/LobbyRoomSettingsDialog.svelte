@@ -6,9 +6,9 @@
   import { Avatar, AvatarCropDialog } from '$lib/shared/ui';
   import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import ModerationCenter from './ModerationCenter.svelte';
-  import RoomMemberList from './RoomMemberList.svelte';
-  import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '../../model/room-moderation';
+  import ModerationCenter from '../../../../entities/room/components/ModerationCenter.svelte';
+  import RoomMemberList from '../../../../entities/room/components/RoomMemberList.svelte';
+  import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '../../../../entities/room/room-moderation';
   import { dismissToast, type ToastOptions } from '../../model/toasts.svelte';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
 
@@ -455,7 +455,7 @@
     border: 1px solid rgba(239, 68, 68, 0.4);
     border-radius: 10px;
     background: transparent;
-    color: #f87171;
+    color: var(--danger-soft);
     font-family: var(--font-ui);
     font-size: 13px;
     font-weight: 600;

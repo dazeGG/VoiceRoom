@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from 'vitest';
 
 vi.mock('../../src/lib/features/room/client/media/cues', () => ({ playPeerCue: vi.fn() }));
-vi.mock('../../src/lib/features/home/model/room-membership.svelte', () => ({
+vi.mock('../../src/lib/entities/room/room-membership.svelte', () => ({
   leaveActiveRoomMembership: vi.fn(async () => true)
 }));
 

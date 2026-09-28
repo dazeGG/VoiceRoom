@@ -3,15 +3,15 @@
 // is looked up from people we already know and left blank otherwise.
 
 import type { ProfileCardPerson } from '$lib/shared/components/profile-card';
-import { friendsState, getKnownLogin } from '$lib/features/home/model/friends.svelte';
+import type { RoomSocial } from './social';
 import type { PresenceStatus } from '$lib/shared/presence';
 import type { Participant } from './client/model/participants';
 import type { ChatMessage } from '$lib/api/rooms';
 import type { MembershipMember } from '@voice-room/shared/membership';
 
-function presenceFor(accountUserId: string): PresenceStatus {
+function presenceFor(social: RoomSocial, accountUserId: string): PresenceStatus {
   if (!accountUserId) return 'online';
-  const friend = friendsState.friends.find((entry) => entry.user.id === accountUserId);
+  const friend = social.friends().find((entry) => entry.user.id === accountUserId);
   // Not a friend: they are visibly in the room, so treat them as online rather
   // than claiming an offline status we cannot actually observe.
   if (!friend) return 'online';
@@ -20,29 +20,29 @@ function presenceFor(accountUserId: string): PresenceStatus {
   return (friend.user.presenceStatus as PresenceStatus) || 'online';
 }
 
-export function participantProfilePerson(participant: Participant): ProfileCardPerson {
+export function participantProfilePerson(social: RoomSocial, participant: Participant): ProfileCardPerson {
   const userId = participant.accountUserId || null;
   return {
     userId,
     name: participant.name,
-    login: userId ? getKnownLogin(userId) : '',
+    login: userId ? social.knownLogin(userId) : '',
     avatarUrl: participant.avatarUrl || null,
     avatarColorKey: participant.avatarColorKey || '',
     avatarAccent: participant.avatarAccent || null,
-    presence: userId ? presenceFor(userId) : 'online'
+    presence: userId ? presenceFor(social, userId) : 'online'
   };
 }
 
-export function roomMessageProfilePerson(message: ChatMessage): ProfileCardPerson {
+export function roomMessageProfilePerson(social: RoomSocial, message: ChatMessage): ProfileCardPerson {
   const userId = message.authorUserId || null;
   return {
     userId,
     name: message.name,
-    login: userId ? getKnownLogin(userId) : '',
+    login: userId ? social.knownLogin(userId) : '',
     avatarUrl: message.avatarUrl || null,
     avatarColorKey: message.avatarColorKey || '',
     avatarAccent: message.avatarAccent || null,
-    presence: userId ? presenceFor(userId) : 'online'
+    presence: userId ? presenceFor(social, userId) : 'online'
   };
 }
 
@@ -53,6 +53,7 @@ export function roomMessageProfilePerson(message: ChatMessage): ProfileCardPerso
  * they are a stranger who has since left.
  */
 export function mentionProfilePerson(
+  social: RoomSocial,
   userId: string,
   label: string,
   members: readonly MembershipMember[],
@@ -67,20 +68,20 @@ export function mentionProfilePerson(
       avatarUrl: member.avatarUrl,
       avatarColorKey: member.avatarColorKey || '',
       avatarAccent: member.avatarAccent,
-      presence: presenceFor(userId)
+      presence: presenceFor(social, userId)
     };
   }
 
   const participant = participants.find((entry) => entry.accountUserId === userId);
-  if (participant) return participantProfilePerson(participant);
+  if (participant) return participantProfilePerson(social, participant);
 
   return {
     userId,
     name: label.replace(/^@/, ''),
-    login: getKnownLogin(userId),
+    login: social.knownLogin(userId),
     avatarUrl: null,
     avatarColorKey: '',
     avatarAccent: null,
-    presence: presenceFor(userId)
+    presence: presenceFor(social, userId)
   };
 }

@@ -45,3 +45,13 @@
     ><Ellipsis {...iconSm} aria-hidden="true" /></button
   >
 </div>
+
+<style>
+  :global(.chat-msg-actions-divider) {
+    width: 1px;
+    height: 24px;
+    flex: none;
+    margin: 0 2px;
+    background: var(--line);
+  }
+</style>

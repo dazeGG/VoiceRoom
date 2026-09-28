@@ -9,11 +9,11 @@
   import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
   import '$lib/features/room/styles/room.css';
   import RoomPreviewChat from './RoomPreviewChat.svelte';
-  import RoomMemberList from './RoomMemberList.svelte';
+  import RoomMemberList from '../../../../entities/room/components/RoomMemberList.svelte';
   import RoomViewHeader from './RoomViewHeader.svelte';
   import LobbyStreamTile from './LobbyStreamTile.svelte';
-  import { subscribeRoomPreview } from '../../model/room-realtime';
-  import { roomPresence } from '../../model/room-presence.svelte';
+  import { subscribeRoomPreview } from '../../../../entities/room/room-realtime';
+  import { roomPresence } from '../../../../entities/room/room-presence.svelte';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
 
   let { room, user, onEnter, onBack, onOpenSettings, onRoomsChanged, onToast } = $props<{
@@ -251,3 +251,40 @@
     {/if}
   </div>
 </div>
+
+<style>
+  :global(.lobby-stage-error) {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    margin: 0;
+    border: 1px solid rgba(232, 160, 148, 0.24);
+    border-radius: 999px;
+    background: color-mix(in oklch, var(--coral) 18%, var(--warm-950));
+    color: var(--coral);
+    padding: 8px 13px;
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+  :global(.lobby-browse-room) {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: transparent;
+  }
+  :global(.lobby-browse-topbar) {
+    flex: none;
+    min-height: 68px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 28px;
+    border-bottom: none;
+    background: transparent;
+  }
+</style>

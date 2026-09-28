@@ -1,5 +1,6 @@
 import { getAppRealtime, type RealtimeEvent, type RoomSnapshot } from '$lib/api/realtime';
 import { applyRoomSummary } from './room-presence.svelte';
+import type { OwnedRoom } from '$lib/api/auth';
 
 type RoomDetailHandler = (event: RealtimeEvent) => void;
 
@@ -161,7 +162,7 @@ function ensureReconnectRestore(): void {
 }
 
 export function initLobbyRoomRealtime(
-  onRoomsUpdate: (updater: (rooms: import('$lib/api/auth').OwnedRoom[]) => import('$lib/api/auth').OwnedRoom[]) => void,
+  onRoomsUpdate: (updater: (rooms: OwnedRoom[]) => OwnedRoom[]) => void,
   onReconnect?: () => void
 ): () => void {
   const conn = getAppRealtime();

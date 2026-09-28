@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Ban, ChevronDown, Pencil, SlidersHorizontal, Users, X } from '@lucide/svelte';
-  import '$lib/features/home/styles/settings.css';
+  import '$lib/shared/styles/settings.css';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { Avatar, AvatarCropDialog } from '$lib/shared/ui';
   import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
@@ -9,9 +9,9 @@
   import { applyRoomUpdated } from '../client/room/lifecycle';
   import { showToast } from '../client/ui/toast';
   import { roomSettingsUi, closeRoomSettings } from '../room-settings.svelte';
-  import ModerationCenter from '$lib/features/home/components/lobby/ModerationCenter.svelte';
-  import RoomMemberList from '$lib/features/home/components/lobby/RoomMemberList.svelte';
-  import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '$lib/features/home/model/room-moderation';
+  import ModerationCenter from '$lib/entities/room/components/ModerationCenter.svelte';
+  import RoomMemberList from '$lib/entities/room/components/RoomMemberList.svelte';
+  import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '$lib/entities/room/room-moderation';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
   import {
     fetchRoomNotificationLevel,
@@ -539,7 +539,7 @@
     background: transparent;
     border: 1px solid rgba(239, 68, 68, 0.4);
     border-radius: 10px;
-    color: #f87171;
+    color: var(--danger-soft);
     cursor: pointer;
     font-size: 13px;
     font-weight: 600;
@@ -590,5 +590,37 @@
   .dialog-danger-trigger:disabled {
     cursor: not-allowed;
     opacity: 0.6;
+  }
+  :global(.settings-select-wrap) {
+    position: relative;
+  }
+  :global(.settings-select) {
+    width: 100%;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    padding: 13px 40px 13px 15px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    background: var(--warm-900);
+    color: var(--warm-ink);
+    font-family: var(--font-ui);
+    font-size: 14.5px;
+    font-weight: 500;
+    outline: none;
+    cursor: pointer;
+  }
+  :where(.settings-select) option {
+    background: var(--warm-800);
+    color: var(--warm-ink);
+  }
+  :global(.settings-select-chevron) {
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: inline-flex;
+    pointer-events: none;
+    color: var(--warm-muted);
   }
 </style>

@@ -143,6 +143,8 @@ export function handleGuestNameDialogKeydown(
 
 export function persistName(name: string): void {
   state.savedName = name;
+  // A name saved elsewhere (the guest name dialog) fills an empty start form.
+  if (!startUi.nameInput) startUi.nameInput = name;
   localStorage.setItem('voice-room:name', name);
   updateNameStatuses(name);
 }

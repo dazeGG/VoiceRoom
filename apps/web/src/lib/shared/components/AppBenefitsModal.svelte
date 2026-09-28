@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Button, Dialog } from '$lib/shared/ui';
-  import { createDesktopDownload } from '../services/desktop-download';
+  import { createDesktopDownload } from '../../platform/desktop-download';
 
   let { open, onClose } = $props<{
     open: boolean;

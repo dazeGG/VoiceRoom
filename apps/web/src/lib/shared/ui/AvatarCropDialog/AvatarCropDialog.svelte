@@ -424,7 +424,7 @@
   }
   .crop-error {
     margin: 0 24px 12px;
-    color: #f87171;
+    color: var(--danger-soft);
     font-size: 13px;
   }
   .crop-actions {

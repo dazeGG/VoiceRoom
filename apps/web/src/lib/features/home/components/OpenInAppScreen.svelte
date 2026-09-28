@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { Button } from '$lib/shared/ui';
-  import { createDesktopDownload } from '../services/desktop-download';
+  import { createDesktopDownload } from '../../../platform/desktop-download';
 
   let { onRetry, onContinue } = $props<{
     onRetry: () => void;

@@ -1,6 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/svelte';
 import { afterEach, expect, test } from 'vitest';
-import RoomMemberList from '../../src/lib/features/home/components/lobby/RoomMemberList.svelte';
+import RoomMemberList from '../../src/lib/entities/room/components/RoomMemberList.svelte';
 import { stubFetch } from '../fixtures/fetch.ts';
 
 afterEach(cleanup);

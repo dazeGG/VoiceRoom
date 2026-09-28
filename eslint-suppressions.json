@@ -801,9 +801,6 @@
     "@typescript-eslint/no-redundant-type-constituents": {
       "count": 2
     },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-assignment": {
       "count": 2
     },
@@ -822,13 +819,13 @@
       "count": 4
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 7
+      "count": 6
     },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 4
     },
     "@typescript-eslint/no-unsafe-return": {
-      "count": 4
+      "count": 3
     },
     "svelte/no-navigation-without-resolve": {
       "count": 5
@@ -857,39 +854,9 @@
       "count": 1
     }
   },
-  "apps/web/src/lib/features/home/components/SettingsModal.svelte": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 8
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
   "apps/web/src/lib/features/home/components/SidebarDownload.svelte": {
     "@typescript-eslint/no-unsafe-argument": {
       "count": 1
-    }
-  },
-  "apps/web/src/lib/features/home/components/lobby/DmView.svelte": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 7
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/web/src/lib/features/home/components/lobby/RoomMemberList.svelte": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 3
     }
   },
   "apps/web/src/lib/features/home/components/lobby/RoomPreviewChat.svelte": {
@@ -902,32 +869,6 @@
       "count": 2
     },
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
-    }
-  },
-  "apps/web/src/lib/features/home/model/friends.svelte.ts": {
-    "@typescript-eslint/no-floating-promises": {
-      "count": 1
-    },
-    "no-empty": {
-      "count": 1
-    },
-    "svelte/prefer-svelte-reactivity": {
-      "count": 6
-    }
-  },
-  "apps/web/src/lib/features/home/model/room-membership.svelte.ts": {
-    "svelte/prefer-svelte-reactivity": {
-      "count": 2
-    }
-  },
-  "apps/web/src/lib/features/home/model/room-presence.svelte.ts": {
-    "svelte/prefer-svelte-reactivity": {
-      "count": 1
-    }
-  },
-  "apps/web/src/lib/features/home/model/room-realtime.ts": {
-    "@typescript-eslint/consistent-type-imports": {
       "count": 2
     }
   },
@@ -1000,15 +941,6 @@
     }
   },
   "apps/web/src/lib/features/room/client/services/livekit-service.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-enum-comparison": {
-      "count": 3
-    },
     "no-useless-assignment": {
       "count": 1
     }
@@ -1077,31 +1009,14 @@
       "count": 1
     }
   },
-  "apps/web/src/lib/features/room/components/ParticipantTile.svelte": {
-    "@typescript-eslint/no-unused-expressions": {
-      "count": 1
-    }
-  },
   "apps/web/src/lib/features/room/components/RoomChat.svelte": {
     "@typescript-eslint/no-unsafe-argument": {
       "count": 2
     }
   },
   "apps/web/src/lib/features/room/components/RoomChatPanel.svelte": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 6
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 10
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
+      "count": 3
     },
     "svelte/prefer-svelte-reactivity": {
       "count": 1
@@ -1192,11 +1107,6 @@
       "count": 2
     }
   },
-  "apps/web/src/lib/shared/chat/Emoji.svelte": {
-    "@typescript-eslint/no-unused-expressions": {
-      "count": 1
-    }
-  },
   "apps/web/src/lib/shared/chat/EmojiComposer.svelte": {
     "svelte/no-dom-manipulating": {
       "count": 1
@@ -1219,9 +1129,6 @@
       "count": 1
     },
     "svelte/prefer-svelte-reactivity": {
-      "count": 1
-    },
-    "svelte/prefer-writable-derived": {
       "count": 1
     }
   },
@@ -1355,11 +1262,6 @@
   },
   "apps/web/src/lib/shared/presence-idle.ts": {
     "no-useless-assignment": {
-      "count": 1
-    }
-  },
-  "apps/web/src/lib/shared/ui/Avatar/Avatar.svelte": {
-    "@typescript-eslint/no-unused-expressions": {
       "count": 1
     }
   },

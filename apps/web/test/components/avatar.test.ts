@@ -35,3 +35,13 @@ test('an uploaded image is shown and falls back to the initial when it fails to 
   // The first letter, not half of the emoji.
   expect(container.textContent?.trim()).toBe('Б');
 });
+
+test('a new image gets a fresh attempt after the previous one failed', async () => {
+  const { container, rerender } = render(Avatar, { props: { name: 'Анна', src: '/avatars/old.webp' } });
+  container.querySelector('img')?.dispatchEvent(new Event('error'));
+  await Promise.resolve();
+  expect(container.querySelector('img')).toBeNull();
+
+  await rerender({ name: 'Анна', src: '/avatars/new.webp' });
+  expect(container.querySelector('img')?.getAttribute('src')).toBe('/avatars/new.webp');
+});

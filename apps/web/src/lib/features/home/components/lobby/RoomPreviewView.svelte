@@ -9,11 +9,11 @@
   import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
   import '$lib/features/room/styles/room.css';
   import RoomPreviewChat from './RoomPreviewChat.svelte';
-  import RoomMemberList from './RoomMemberList.svelte';
+  import RoomMemberList from '../../../../entities/room/components/RoomMemberList.svelte';
   import RoomViewHeader from './RoomViewHeader.svelte';
   import LobbyStreamTile from './LobbyStreamTile.svelte';
-  import { subscribeRoomPreview } from '../../model/room-realtime';
-  import { roomPresence } from '../../model/room-presence.svelte';
+  import { subscribeRoomPreview } from '../../../../entities/room/room-realtime';
+  import { roomPresence } from '../../../../entities/room/room-presence.svelte';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
 
   let {
@@ -265,3 +265,20 @@
     {/if}
   </div>
 </div>
+
+<style>
+  :global(.lobby-roomview) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  :global(.lobby-roomview-top) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 28px;
+  }
+</style>

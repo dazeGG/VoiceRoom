@@ -123,3 +123,45 @@
   {/if}
 </div>
 <ParticipantContextMenu />
+
+<style>
+  :global(.participant-focus-layout) {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: minmax(0, 1fr) auto;
+    place-items: center;
+    gap: var(--space-md);
+  }
+  :global(.participant-carousel) {
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  :where(.participant-carousel)::-webkit-scrollbar {
+    display: none;
+  }
+  :global(.stage-strip-title) {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+  }
+  :global(.stage-strip-kicker) {
+    color: var(--muted);
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    line-height: 1;
+    text-transform: uppercase;
+  }
+  :where(.stage-strip-title) strong {
+    overflow: hidden;
+    color: oklch(94% 0.012 92);
+    font-size: 0.92rem;
+    font-weight: 800;
+    line-height: 1.1;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+</style>

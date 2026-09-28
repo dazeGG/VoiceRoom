@@ -5,8 +5,8 @@
   import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
   import { Popover, PopoverMenuItem } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
-  import { DESKTOP_BUILDS, type DesktopBuildId } from '../model/desktop-builds';
-  import { startDesktopBuildDownload } from '../services/desktop-download';
+  import { DESKTOP_BUILDS, type DesktopBuildId } from '../../../platform/desktop-builds';
+  import { startDesktopBuildDownload } from '../../../platform/desktop-download';
 
   let open = $state(false);
   let release = $state<DesktopRelease | null>(null);
@@ -91,3 +91,20 @@
     {/if}
   {/snippet}
 </Popover>
+
+<style>
+  :global(.sidebar-download-head) {
+    padding: 6px 10px 8px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--warm-muted);
+  }
+  :global(.sidebar-download-note) {
+    padding: 8px 10px 4px;
+    font-size: 11.5px;
+    line-height: 1.4;
+    color: var(--amber);
+  }
+</style>

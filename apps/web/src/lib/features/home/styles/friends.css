@@ -415,41 +415,9 @@ html.is-desktop .sidebar-download {
   min-width: 268px;
   padding: 6px;
 }
-.sidebar-download-head {
-  padding: 6px 10px 8px;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--warm-muted);
-}
-.sidebar-download-note {
-  padding: 8px 10px 4px;
-  font-size: 11.5px;
-  line-height: 1.4;
-  color: var(--amber);
-}
 
 /* ============ MAIN AREA ============ */
 
-.lobby-main {
-  flex: 1;
-  min-width: 0;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-
-.lobby-embedded-room {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.lobby-embedded-room[hidden] {
-  display: none;
-}
 .lobby-page {
   flex: 1;
   min-height: 0;
@@ -697,21 +665,6 @@ html.is-desktop .sidebar-download {
 }
 
 /* room preview — mirrors the real in-room stage, read-only before joining */
-.lobby-roomview {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
-
-.lobby-roomview-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 20px 28px;
-}
 
 .lobby-roomview-actions {
   flex: none;
@@ -719,29 +672,6 @@ html.is-desktop .sidebar-download {
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
-}
-
-.lobby-roomview-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.lobby-roomview-back {
-  flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: 11px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  background: var(--control);
-  color: var(--warm-ink-dim);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-.lobby-roomview-back:hover {
-  background: var(--control-hover);
 }
 
 .lobby-roomview-name {
@@ -902,22 +832,6 @@ html.is-desktop .sidebar-download {
   color: var(--warm-faint);
 }
 
-.lobby-stage-error {
-  position: absolute;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 5;
-  margin: 0;
-  border: 1px solid rgba(232, 160, 148, 0.24);
-  border-radius: 999px;
-  background: color-mix(in oklch, var(--coral) 18%, var(--warm-950));
-  color: var(--coral);
-  padding: 8px 13px;
-  font-size: 12.5px;
-  font-weight: 700;
-}
-
 .lobby-roomview-join {
   position: absolute;
   bottom: 26px;
@@ -944,27 +858,6 @@ html.is-desktop .sidebar-download {
   background: var(--accent-hover);
 }
 
-.lobby-browse-room {
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: transparent;
-}
-
-.lobby-browse-topbar {
-  flex: none;
-  min-height: 68px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 20px 28px;
-  border-bottom: none;
-  background: transparent;
-}
-
 .lobby-browse-stage {
   flex: 1;
   min-height: 0;
@@ -986,45 +879,6 @@ html.is-desktop .sidebar-download {
 
 /* ============ DM ============ */
 
-.lobby-dm {
-  --lobby-dm-head-height: 65px;
-  position: relative;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
-.lobby-dm-col {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-}
-.lobby-dm-head {
-  flex: none;
-  min-height: var(--lobby-dm-head-height);
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 13px 24px;
-  border: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-  cursor: pointer;
-  transition: background 0.14s ease;
-  background: transparent;
-  width: 100%;
-  text-align: left;
-  color: inherit;
-}
-.lobby-dm-head:hover {
-  background: var(--control);
-}
-.lobby-dm-head-name {
-  font-size: 15.5px;
-  font-weight: 700;
-  color: var(--warm-ink);
-  letter-spacing: -0.01em;
-}
 .lobby-dm-head-status {
   font-size: 12px;
   margin-top: 2px;
@@ -1032,7 +886,7 @@ html.is-desktop .sidebar-download {
 .lobby-dm-head-status[data-presence='dnd'] {
   color: var(--coral);
 }
-.lobby-dm-head-status[data-presence='afk'] {
+.lobby-dm-head-status[data-presence='away'] {
   color: var(--amber);
 }
 .lobby-dm-head-status[data-presence='online'] {
@@ -1052,32 +906,8 @@ html.is-desktop .sidebar-download {
 
 /* Covers the thread while it renders and its artwork resolves, so the reader
    never watches messages reflow under a scroll position that is still moving. */
-.lobby-dm-loading {
-  position: sticky;
-  z-index: 2;
-  top: 0;
-  display: flex;
-  height: 100%;
-  min-height: 100%;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: -100%;
-  background: var(--paper-deep, var(--paper));
-  color: var(--warm-faint);
-  font-size: 13.5px;
-}
 
 /* Rendered, and therefore loading its images, but not yet shown. */
-.lobby-dm-thread.is-settling {
-  visibility: hidden;
-}
-.lobby-dm-thread {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  padding: 22px 24px;
-}
 
 .dm-chat-group {
   align-items: flex-start;
@@ -1094,67 +924,7 @@ html.is-desktop .sidebar-download {
 .dm-chat-content .attachment-mosaic {
   width: min(560px, 100%);
 }
-.lobby-room-invitation {
-  display: grid;
-  width: min(390px, 100%);
-  grid-template-columns: 38px minmax(0, 1fr);
-  gap: 10px 12px;
-  border: 1px solid color-mix(in oklch, var(--green), transparent 72%);
-  border-radius: 14px;
-  padding: 13px;
-  background: color-mix(in oklch, var(--paper-deep), var(--green) 5%);
-}
-.lobby-room-invitation-icon {
-  display: grid;
-  width: 38px;
-  height: 38px;
-  place-items: center;
-  border-radius: 50%;
-  background: color-mix(in oklch, var(--green), transparent 82%);
-  color: var(--green);
-}
-.lobby-room-invitation-copy {
-  display: grid;
-  align-content: center;
-  gap: 2px;
-  min-width: 0;
-}
-.lobby-room-invitation-copy strong {
-  color: var(--warm-ink);
-  font-size: 13.5px;
-}
-.lobby-room-invitation-copy span {
-  overflow: hidden;
-  color: var(--warm-muted);
-  font-size: 12.5px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.lobby-room-invitation-actions {
-  display: flex;
-  grid-column: 2;
-  justify-content: flex-end;
-  gap: 7px;
-}
-.lobby-room-invitation-actions button {
-  min-height: 32px;
-  border-radius: 8px;
-  padding: 0 11px;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 750;
-  cursor: pointer;
-}
-.lobby-room-invitation-dismiss {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: transparent;
-  color: var(--warm-muted);
-}
-.lobby-room-invitation-join {
-  border: 0;
-  background: var(--green);
-  color: oklch(14% 0.02 130);
-}
+
 .dm-chat-message a {
   color: inherit;
   text-decoration: underline;
@@ -1162,14 +932,6 @@ html.is-desktop .sidebar-download {
 }
 .dm-chat-message a:hover {
   opacity: 0.85;
-}
-
-.dm-msg-edited {
-  margin-left: 5px;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  opacity: 0.64;
-  white-space: nowrap;
 }
 
 .dm-msg-content {
@@ -1221,12 +983,7 @@ html.is-desktop .sidebar-download {
   cursor: default;
   opacity: 0.45;
 }
-.lobby-dm-compose {
-  position: relative;
-  flex: none;
-  padding: 14px 24px 20px;
-  --chat-typing-inset: 26px;
-}
+
 .lobby-dm-compose-row {
   display: flex;
   align-items: stretch;
@@ -1269,15 +1026,6 @@ html.is-desktop .sidebar-download {
   --composer-placeholder: var(--warm-faint);
 }
 
-.lobby-dm-empty {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--warm-faint);
-  font-size: 13.5px;
-}
-
 /* profile panel */
 .lobby-profile-panel {
   flex: none;
@@ -1286,127 +1034,6 @@ html.is-desktop .sidebar-download {
   overflow-y: auto;
   border-left: 1px solid rgba(255, 255, 255, 0.07);
   background: var(--panel);
-}
-.lobby-profile-cover {
-  position: relative;
-  height: var(--lobby-dm-head-height);
-  background: var(--profile-cover-accent, var(--panel-strong));
-}
-.lobby-profile-close {
-  position: absolute;
-  top: 50%;
-  right: 12px;
-  width: 34px;
-  height: 34px;
-  transform: translateY(-50%);
-  border-radius: 9px;
-  border: none;
-  background: color-mix(in oklch, var(--warm-950), transparent 36%);
-  color: var(--warm-ink);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
-}
-.lobby-profile-close:hover {
-  background: var(--warm-950);
-  color: var(--accent);
-}
-.lobby-profile-body {
-  padding: 0 20px 24px;
-  margin-top: -24px;
-}
-.lobby-profile-panel-name {
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--warm-ink);
-  letter-spacing: -0.02em;
-  margin-top: 12px;
-}
-.lobby-profile-panel-handle {
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  color: var(--warm-muted);
-  margin-top: 2px;
-}
-.lobby-profile-stats {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-  margin-top: 18px;
-}
-.lobby-profile-stat {
-  background: var(--panel-strong);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: 13px;
-  padding: 13px 14px;
-}
-.lobby-profile-stat-num {
-  font-size: 20px;
-  font-weight: 800;
-  color: var(--warm-ink);
-  letter-spacing: -0.02em;
-}
-.lobby-profile-stat-label {
-  font-size: 11px;
-  color: var(--warm-muted);
-  margin-top: 2px;
-}
-.lobby-profile-action {
-  width: 100%;
-  margin-top: 14px;
-  min-height: 46px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: var(--control);
-  color: var(--warm-ink-dim);
-  border-radius: 12px;
-  padding: 0 14px;
-  font-family: var(--font-ui);
-  font-size: 13.5px;
-  font-weight: 650;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease,
-    color 0.15s ease;
-}
-.lobby-profile-action svg {
-  flex: none;
-  color: var(--accent);
-}
-.lobby-profile-action:hover {
-  border-color: rgba(255, 255, 255, 0.16);
-  background: var(--control-hover);
-  color: var(--warm-ink);
-}
-.lobby-profile-action.is-muted svg {
-  color: var(--warm-muted);
-}
-.lobby-profile-action:disabled {
-  cursor: default;
-  opacity: 0.55;
-}
-.lobby-profile-action--danger {
-  margin-top: 10px;
-  border-color: color-mix(in oklch, var(--coral), transparent 58%);
-  background: color-mix(in oklch, var(--coral) 9%, transparent);
-  color: var(--coral);
-}
-.lobby-profile-action--danger svg {
-  color: currentColor;
-}
-.lobby-profile-action--danger:hover {
-  border-color: color-mix(in oklch, var(--coral), transparent 42%);
-  background: color-mix(in oklch, var(--coral) 17%, transparent);
-  color: var(--coral);
 }
 
 /* ============ REQUESTS / ADD ============ */

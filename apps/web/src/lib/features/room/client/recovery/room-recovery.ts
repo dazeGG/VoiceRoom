@@ -1,5 +1,5 @@
 import { RealtimeRecoveryController, classifyRecoveryFailure } from './realtime-recovery';
-import { requestActiveVoiceResync, setActiveVoiceResyncFailureHandler } from '$lib/features/home/model/room-realtime';
+import { requestActiveVoiceResync, setActiveVoiceResyncFailureHandler } from '$lib/entities/room/room-realtime';
 
 import { createLogger, reportClientLogs, type LogContext } from '$lib/shared/log';
 

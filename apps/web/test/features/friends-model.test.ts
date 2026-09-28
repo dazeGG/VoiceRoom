@@ -44,42 +44,43 @@ async function startLobby() {
     '/api/notifications/preferences': { body: { preferences: notificationPreferences() } }
   });
   vi.resetModules();
-  const friends = await import('../../src/lib/features/home/model/friends.svelte.ts');
-  stop = friends.initLobby('me');
-  await vi.waitFor(() => expect(friends.friendsState.loaded).toBe(true));
-  return friends;
+  const { LobbyStore } = await import('../../src/lib/features/home/model/lobby.svelte.ts');
+  const lobby = new LobbyStore();
+  stop = lobby.init('me');
+  await vi.waitFor(() => expect(lobby.loaded).toBe(true));
+  return lobby;
 }
 
-const onlineOf = (friends: Awaited<ReturnType<typeof startLobby>>, id: string) =>
-  friends.friendsState.friends.find((friend) => friend.user.id === id)?.online;
+const onlineOf = (lobby: Awaited<ReturnType<typeof startLobby>>, id: string) =>
+  lobby.friends.find((friend) => friend.user.id === id)?.online;
 
 test('the lobby loads friends and requests and knows each relationship', async () => {
-  const friends = await startLobby();
-  expect(friends.friendsState.friends.map((friend) => friend.user.id)).toEqual(['anna', 'boris']);
-  expect(friends.friendsState.incomingRequestCount).toBe(1);
-  await vi.waitFor(() => expect(friends.getFriendRelationship('vera')).toBe('incoming'));
-  expect(friends.getFriendRelationship('anna')).toBe('friend');
-  expect(friends.getFriendRelationship('gleb')).toBe('outgoing');
-  expect(friends.getFriendRelationship('stranger')).toBe('none');
+  const lobby = await startLobby();
+  expect(lobby.friends.map((friend) => friend.user.id)).toEqual(['anna', 'boris']);
+  expect(lobby.incomingRequestCount).toBe(1);
+  await vi.waitFor(() => expect(lobby.getFriendRelationship('vera')).toBe('incoming'));
+  expect(lobby.getFriendRelationship('anna')).toBe('friend');
+  expect(lobby.getFriendRelationship('gleb')).toBe('outgoing');
+  expect(lobby.getFriendRelationship('stranger')).toBe('none');
 });
 
 test('the realtime snapshot decides who is online, and presence events update it', async () => {
-  const friends = await startLobby();
+  const lobby = await startLobby();
   emit({ type: 'ready', payload: { onlineFriendIds: ['boris'] } });
-  expect(onlineOf(friends, 'anna')).toBe(false);
-  expect(onlineOf(friends, 'boris')).toBe(true);
+  expect(onlineOf(lobby, 'anna')).toBe(false);
+  expect(onlineOf(lobby, 'boris')).toBe(true);
 
   emit({ type: 'friend.presence', payload: { userId: 'anna', online: true } });
-  expect(onlineOf(friends, 'anna')).toBe(true);
+  expect(onlineOf(lobby, 'anna')).toBe(true);
 });
 
 test('a friend list refreshed after the snapshot keeps live presence for known friends', async () => {
-  const friends = await startLobby();
+  const lobby = await startLobby();
   emit({ type: 'ready', payload: { onlineFriendIds: ['boris'] } });
-  await friends.refreshFriends();
+  await lobby.refreshFriends();
   // The HTTP result says anna online, boris offline; the live snapshot wins.
-  expect(onlineOf(friends, 'anna')).toBe(false);
-  expect(onlineOf(friends, 'boris')).toBe(true);
+  expect(onlineOf(lobby, 'anna')).toBe(false);
+  expect(onlineOf(lobby, 'boris')).toBe(true);
 });
 
 test('a new friend request and an accepted request each play their sound', async () => {

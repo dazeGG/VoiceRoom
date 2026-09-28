@@ -150,3 +150,50 @@
     </button>
   </div>
 </div>
+
+<style>
+  :global(.screen-video) {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    background: var(--warm-950);
+    object-fit: contain;
+  }
+  :global(.screen-placeholder) {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    color: var(--muted);
+    font-size: 0.92rem;
+    font-weight: 800;
+  }
+  :global(.screen-meta-live) {
+    width: 8px;
+    height: 8px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 0 3px oklch(72% 0.16 164 / 0.14);
+  }
+  :where(.screen-placeholder)[hidden] {
+    display: none;
+  }
+  :global(.stream-volume-slider) {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 104px;
+    min-height: 0;
+    border: 0;
+    padding: 0;
+    background: transparent;
+    accent-color: var(--control-active);
+    cursor: pointer;
+    transform: translate(-50%, -50%) rotate(-90deg);
+    transform-origin: center;
+  }
+</style>

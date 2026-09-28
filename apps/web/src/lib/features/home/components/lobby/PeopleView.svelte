@@ -6,13 +6,9 @@
   import { iconMd, iconSm, iconXs } from '$lib/shared/ui/icons';
   import { copyText } from '$lib/shared/utils/clipboard';
   import { friendName } from '../../model/lobby-format';
-  import {
-    friendsState,
-    acceptRequest,
-    cancelRequest,
-    declineRequest,
-    addFriendByLogin
-  } from '../../model/friends.svelte';
+  import { useLobby } from '$lib/features/home/model/lobby-context';
+
+  const lobby = useLobby();
 
   let { user, onToast, onHome } = $props<{ user: AuthUser; onToast: (message: string) => void; onHome: () => void }>();
 
@@ -21,8 +17,8 @@
   let copied = $state(false);
   let busy = $state<Record<string, boolean>>({});
 
-  const incoming = $derived(friendsState.requests.incoming);
-  const outgoing = $derived(friendsState.requests.outgoing);
+  const incoming = $derived(lobby.requests.incoming);
+  const outgoing = $derived(lobby.requests.outgoing);
 
   function statusMessage(status: string): string {
     switch (status) {
@@ -42,7 +38,7 @@
     if (!login || sending) return;
     sending = true;
     try {
-      const { status } = await addFriendByLogin(login);
+      const { status } = await lobby.addFriendByLogin(login);
       onToast(statusMessage(status));
       query = '';
     } catch (error) {
@@ -155,7 +151,7 @@
                 type="button"
                 title="Принять"
                 disabled={busy[request.id]}
-                onclick={() => run(request.id, () => acceptRequest(request.id), 'Заявка принята')}
+                onclick={() => run(request.id, () => lobby.acceptRequest(request.id), 'Заявка принята')}
               >
                 <Check {...iconMd} aria-hidden="true" />
               </button>
@@ -164,7 +160,7 @@
                 type="button"
                 title="Отклонить"
                 disabled={busy[request.id]}
-                onclick={() => run(request.id, () => declineRequest(request.id), 'Заявка отклонена')}
+                onclick={() => run(request.id, () => lobby.declineRequest(request.id), 'Заявка отклонена')}
               >
                 <X {...iconSm} aria-hidden="true" />
               </button>
@@ -196,7 +192,7 @@
             <Button
               variant="ghost"
               disabled={busy[request.id]}
-              onclick={() => run(request.id, () => cancelRequest(request.id), 'Заявка отменена')}>Отменить</Button
+              onclick={() => run(request.id, () => lobby.cancelRequest(request.id), 'Заявка отменена')}>Отменить</Button
             >
           </div>
         {/each}
@@ -204,3 +200,139 @@
     </div>
   </div>
 </div>
+
+<style>
+  :global(.lr-eyebrow) {
+    font-family: var(--font-ui);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--warm-faint);
+  }
+  :global(.lr-section-link) {
+    border: none;
+    background: transparent;
+    color: var(--warm-muted);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0;
+  }
+  :where(.lr-section-link):hover {
+    color: var(--accent);
+  }
+  :global(.lr-grid-2) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px;
+  }
+  :global(.lr-req-card) {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-lg);
+    background: var(--panel);
+    margin-bottom: 10px;
+  }
+  :global(.lr-req-name) {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--warm-ink);
+  }
+  :global(.lr-req-handle) {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--warm-muted-dim);
+    margin-top: 2px;
+  }
+  :global(.lr-req-meta) {
+    font-size: 12px;
+    color: var(--warm-faint);
+    margin-top: 2px;
+  }
+  :global(.lr-req-pending) {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--warm-faint);
+    margin-top: 2px;
+  }
+  :global(.lr-req-pending-dot) {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--amber);
+  }
+  :global(.lr-req-actions) {
+    display: flex;
+    gap: 6px;
+    flex: none;
+  }
+  :global(.lr-add-bar) {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    max-width: 520px;
+  }
+  :global(.lr-add-hint) {
+    margin-top: 12px;
+    font-size: 12.5px;
+    color: var(--warm-faint);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  :where(.lr-add-hint) code {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--warm-muted);
+  }
+  :global(.lr-add-copy) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    color: var(--accent);
+    font-family: var(--font-ui);
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 4px;
+    border-radius: 6px;
+  }
+  :where(.lr-add-copy):hover {
+    background: color-mix(in oklch, var(--accent), transparent 88%);
+  }
+  :global(.people-back) {
+    margin-bottom: 18px;
+  }
+  :global(.people-section-label--add) {
+    margin: 24px 0 12px;
+  }
+  :global(.people-section-label--requests) {
+    margin: 32px 0 14px;
+  }
+  :global(.people-column-label) {
+    margin-bottom: 14px;
+  }
+  :global(.people-request-copy) {
+    flex: 1;
+    min-width: 0;
+  }
+  :global(.people-truncate) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+</style>

@@ -3,7 +3,7 @@
   import { MonitorDown, UserPlus, X } from '@lucide/svelte';
   import AuthDialog, { type AuthMode } from '$lib/features/auth/AuthDialog.svelte';
   import { session } from '$lib/features/auth/session.svelte';
-  import AppBenefitsModal from '$lib/features/home/components/AppBenefitsModal.svelte';
+  import AppBenefitsModal from '$lib/shared/components/AppBenefitsModal.svelte';
   import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
   import { readOpenInAppSignals, shouldOfferOpenInApp } from '$lib/platform/open-in-app';
   import { Button } from '$lib/shared/ui';
@@ -211,7 +211,7 @@
     border: 0;
     border-radius: 11px;
     background: transparent;
-    color: #8c8676;
+    color: var(--warm-560);
     cursor: pointer;
     transition:
       background 150ms var(--ease-out),

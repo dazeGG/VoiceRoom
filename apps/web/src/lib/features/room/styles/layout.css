@@ -84,7 +84,7 @@ body[data-screen='room'] .status-pill {
 .room-heading-trigger-chevron {
   flex: none;
   display: inline-flex;
-  color: #8c8676;
+  color: var(--warm-560);
   transition: transform 0.16s ease;
 }
 
@@ -102,7 +102,7 @@ body[data-screen='room'] .status-pill {
   border-radius: 11px;
   padding: 0 14px;
   background: var(--control);
-  color: #cfc9ba;
+  color: var(--warm-300);
   font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 600;
@@ -120,7 +120,7 @@ body[data-screen='room'] .status-pill {
 .room-chat-toggle[data-active='true'] {
   border-color: rgba(217, 211, 195, 0.5);
   background: var(--panel-strong);
-  color: #ece7d9;
+  color: var(--warm-100);
 }
 
 .room-chat-toggle svg {
@@ -244,11 +244,6 @@ body[data-screen='not-found'] {
   width: 100%;
 }
 
-.not-found-mascot {
-  display: inline-flex;
-  margin-bottom: 22px;
-}
-
 .start-panel {
   display: grid;
   gap: var(--space-lg);
@@ -267,7 +262,7 @@ body[data-screen='not-found'] {
   font-weight: 700;
   line-height: 1.04;
   letter-spacing: -0.03em;
-  color: #ece7d9;
+  color: var(--warm-100);
   text-wrap: balance;
 }
 
@@ -276,31 +271,7 @@ body[data-screen='not-found'] {
   margin: 26px 0 0;
   font-size: 18px;
   line-height: 1.55;
-  color: #9a9484;
-}
-
-.not-found-code {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 4px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 8px;
-  background: var(--control);
-  font-family: var(--font-mono);
-  font-size: 14.5px;
-  letter-spacing: 0.04em;
-  color: #cfc9ba;
-  vertical-align: middle;
-  overflow-wrap: anywhere;
-}
-
-.not-found-code-dot {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--coral);
+  color: var(--warm-500);
 }
 
 .not-found-actions {
@@ -344,25 +315,6 @@ body[data-screen='not-found'] {
 
 .not-found-home svg {
   display: block;
-}
-
-.start-divider {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  color: var(--muted);
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.start-divider::before,
-.start-divider::after {
-  height: 1px;
-  flex: 1;
-  background: var(--line);
-  content: '';
 }
 
 .room-actions {

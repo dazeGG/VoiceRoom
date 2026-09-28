@@ -100,16 +100,39 @@ copy the old pattern into new code.
 
 ```
 routes/                 SvelteKit routes (SPA, adapter-static)
-lib/features/<f>/        feature UI and state (home, room, auth)
+lib/features/<f>/        feature UI and state (home = the lobby, room, auth)
+lib/entities/            models and components both features use (room realtime,
+                         presence, membership, moderation, profile card)
 lib/shared/              UI primitives, chat, notifications, utils — never imports features
 lib/api/                 HTTP and WebSocket clients
 lib/platform/            desktop bridge, capability state
 ```
 
+- The lobby (`home`) shows rooms; a room never imports the lobby. What a
+  room needs from the lobby comes through a context
+  (`features/room/social.ts`); `entities`, `shared`, `platform` and `api`
+  never import `features/home` or `features/room`. ESLint enforces both.
 - Svelte 5 runes only (`$state`, `$derived`, `$props`, snippets).
 - `$effect` synchronises with the outside world (DOM, listeners, timers).
   Values computed from state are `$derived`; reactions to a user action belong
   in the action function, not in an effect watching the state it changed.
+- State with actions lives in classes in `model/*.svelte.ts` (`LobbyStore`,
+  `DmThread`, `ProfileDraft`, `RoomChatDraft`, `LobbyNotifications`), handed
+  down through context (`provideLobby`/`useLobby`) rather than module
+  singletons. Collections that change in place are `SvelteSet`/`SvelteMap`,
+  not revision counters.
+- A view that should start fresh for a new subject is mounted per subject
+  (`{#key}` or `{#if open}`) instead of resetting its state in an effect: the
+  settings mount on every opening and per account, a DM conversation per peer.
+- Large surfaces are split by concern: `settings/*` one component per tab,
+  `lobby/dm/*` for the direct thread, `RoomChatComposer` and pure layout in
+  `room-chat-view.ts` for the room chat, `services/livekit/*` behind
+  `livekit-service.ts`.
+- Styles: colours come from the tokens in `lib/shared/styles/app.css` (the
+  warm-neutral scale and status tints), not hex literals. CSS for a class used
+  by one component lives in that component's `<style>`; the global files keep
+  what several components share, page and state selectors (`[data-*]`), and
+  rules whose classes share an element with a global one.
 - Browser, desktop, media and LiveKit fallbacks stay explicit and testable.
   The room client (`lib/features/room/client`) has its own notes in
   `ARCHITECTURE.md` there.

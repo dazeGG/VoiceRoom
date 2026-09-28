@@ -183,7 +183,7 @@
   }
 
   .recovery-error {
-    color: #e8b3a8;
+    color: var(--coral-soft);
   }
 
   .recovery-codes {

@@ -10,7 +10,7 @@
   import { roomUi, closeChat, incrementUnreadChat, markChatRead, selectRoomPanel } from '../room-ui.svelte';
   import { roomSettingsUi } from '../room-settings.svelte';
   import RoomChatPanel from './RoomChatPanel.svelte';
-  import RoomMemberList from '$lib/features/home/components/lobby/RoomMemberList.svelte';
+  import RoomMemberList from '$lib/entities/room/components/RoomMemberList.svelte';
 
   let roomId = $state('');
   let peerId = $state('');

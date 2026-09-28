@@ -8,11 +8,13 @@
   import { closeChat, roomUi, selectRoomPanel, type RoomPanelTab } from '../room-ui.svelte';
   import { roomSettingsUi, openRoomSettings } from '../room-settings.svelte';
   import { showToast } from '../client/ui/toast';
-  import { friendsState } from '$lib/features/home/model/friends.svelte';
+  import { useRoomSocial } from '../social';
   import { getSortedParticipants } from '../participants-ui.svelte';
   import { markRoomChatRead } from '$lib/api/rooms';
-  import { roomPresence, setRoomUnreadCount } from '$lib/features/home/model/room-presence.svelte';
+  import { roomPresence, setRoomUnreadCount } from '$lib/entities/room/room-presence.svelte';
   import RoomCallTimer from './RoomCallTimer.svelte';
+
+  const social = useRoomSocial();
 
   const connection = $derived(getConnectionStatusView());
 
@@ -51,7 +53,7 @@
     <div class="room-heading-main">
       {#snippet roomInviteContent(close: () => void)}
         <RoomInviteFriendList
-          friends={friendsState.friends}
+          friends={social.friends()}
           roomId={roomClientState.roomId}
           presentUserIds={roomAccountIds}
           {close}

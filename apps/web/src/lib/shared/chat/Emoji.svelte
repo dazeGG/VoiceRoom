@@ -21,15 +21,11 @@
     inline?: boolean;
   } = $props();
 
-  let failed = $state(false);
   const url = $derived(emojiAssetUrl(emoji));
-  const box = $derived(typeof size === 'number' ? `${size}px` : size);
-
   // A different emoji deserves a fresh attempt at its own file.
-  $effect(() => {
-    url;
-    failed = false;
-  });
+  let failedUrl = $state<string | null>(null);
+  const failed = $derived(failedUrl === url);
+  const box = $derived(typeof size === 'number' ? `${size}px` : size);
 </script>
 
 {#if failed}
@@ -50,7 +46,7 @@
     draggable="false"
     loading="lazy"
     decoding="async"
-    onerror={() => (failed = true)}
+    onerror={() => (failedUrl = url)}
   />
 {/if}
 

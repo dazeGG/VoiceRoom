@@ -1,9 +1,7 @@
 <script lang="ts">
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import type { Snippet } from 'svelte';
-  import { ChevronRight, MessageSquare, Users, X } from '@lucide/svelte';
   import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
-  import { iconSm } from '$lib/shared/ui/icons';
   import { onMount, tick, untrack } from 'svelte';
   import {
     deleteRoomChatMessage,
@@ -15,20 +13,19 @@
     chatMessageFromRoomMessage,
     type ChatMessage
   } from '$lib/api/rooms';
-  import { beginRoomChatReadSession, setRoomUnreadCount } from '$lib/features/home/model/room-presence.svelte';
+  import { beginRoomChatReadSession, setRoomUnreadCount } from '$lib/entities/room/room-presence.svelte';
   import { session } from '$lib/features/auth/session.svelte';
-  import { subscribeRoomPreview } from '$lib/features/home/model/room-realtime';
-  import { formatChatDayLabel, isSameDay } from '$lib/shared/utils/chat-date';
+  import { subscribeRoomPreview } from '$lib/entities/room/room-realtime';
   import ChatText from '$lib/shared/components/ChatText.svelte';
   import { Avatar } from '$lib/shared/ui';
   import { copyText } from '$lib/shared/utils/clipboard';
-  import { getAvatarPresentation } from '../client/ui/avatar-presentation';
   import { playRoomChatMessageCue } from '../client/media/cues';
   import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '../client/room/lifecycle';
-  import { openProfileCardFor } from '$lib/features/home/profile-card-ui.svelte';
+  import { openProfileCardFor } from '$lib/entities/profile-card/profile-card-ui.svelte';
   import { getParticipantById } from '../client/room/participants';
   import { state as roomState } from '../client/core/state.svelte';
   import { mentionProfilePerson, participantProfilePerson, roomMessageProfilePerson } from '../profile-card-adapter';
+  import { useRoomSocial } from '../social';
   import { isRoomNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
   import { createAnchoredHistory } from '../room-history.svelte';
@@ -38,40 +35,29 @@
   import MessageHoverActions from '$lib/shared/chat/MessageHoverActions.svelte';
   import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions } from '$lib/shared/chat/frequent-reactions';
   import PinnedMessagesBar from './PinnedMessagesBar.svelte';
+  import RoomChatComposer from './RoomChatComposer.svelte';
+  import RoomPanelHeader from './RoomPanelHeader.svelte';
+  import MessageEditor from '$lib/shared/chat/MessageEditor.svelte';
+  import { buildChatDays, mentionsUser, restampAuthor, type ChatGroup } from '../room-chat-view';
+  import { RoomChatDraft, type OutgoingRoomMessage } from '../room-chat-draft.svelte';
   import { applyRoomPinsEvent, isMessagePinned, loadRoomPins, resetRoomPins, togglePin } from '../pins.svelte';
   import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
   import {
     dataTransferHasImages,
     getAttachmentComposeStore,
-    imageFilesFromClipboard,
     imageFilesFromDataTransfer,
     type AttachmentComposeStore
   } from '$lib/shared/chat/attachment-compose.svelte';
-  import AttachmentComposer from '$lib/shared/chat/AttachmentComposer.svelte';
-  import ComposerEmojiPicker from '$lib/shared/chat/ComposerEmojiPicker.svelte';
-  import TypingIndicator from '$lib/shared/chat/TypingIndicator.svelte';
-  import EmojiComposer from '$lib/shared/chat/EmojiComposer.svelte';
   import AttachmentDropOverlay from '$lib/shared/chat/AttachmentDropOverlay.svelte';
   import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
-  import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
   import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
   import LinkPreviewCard from '$lib/shared/chat/LinkPreviewCard.svelte';
-  import ReplyTargetBar from '$lib/shared/chat/ReplyTargetBar.svelte';
   import StructuredMessageContent from '$lib/shared/chat/StructuredMessageContent.svelte';
-  import { contentFromLegacyText } from '@voice-room/shared/room-message-content';
-  import { createMentionComposer } from '$lib/shared/chat/mention-composer.svelte';
-  import { loadChatDraft, saveChatDraft } from '$lib/shared/chat/chat-drafts';
-  import {
-    createTypingNotifier,
-    createTypingTracker,
-    formatTypingLabel,
-    typingActivityOf
-  } from '$lib/shared/chat/typing.svelte';
-  import { getAppRealtime } from '$lib/api/realtime';
-  import MentionAutocomplete from '$lib/shared/chat/MentionAutocomplete.svelte';
-  import { getRoomMembership, loadRoomMembership } from '$lib/features/home/model/room-membership.svelte';
-  import type { MembershipMember } from '@voice-room/shared/membership';
+  import { createTypingTracker, formatTypingLabel, typingActivityOf } from '$lib/shared/chat/typing.svelte';
+  import { getRoomMembership } from '$lib/entities/room/room-membership.svelte';
   import { createLogger, errorContext } from '$lib/shared/log';
+
+  const social = useRoomSocial();
 
   const log = createLogger('room:chat');
 
@@ -136,19 +122,15 @@
     participants?: Snippet;
   } = $props();
 
-  let draft = $state('');
   let messages = $state<ChatMessage[]>([]);
   let loading = $state(true);
   let sending = $state(false);
   let editingMessageId = $state('');
-  let editDraft = $state('');
-  let editSaving = $state(false);
   let error = $state('');
   let chatBody = $state<HTMLDivElement | null>(null);
-  let composeEl = $state<ReturnType<typeof EmojiComposer> | null>(null);
+  let composer = $state<{ focus(): void } | null>(null);
   let chatPinnedToBottom = true;
   let composerAttachmentCount = 0;
-  let editEl = $state<ReturnType<typeof EmojiComposer> | null>(null);
   let historyEnabled = $state(false);
   // On a phone the panel is the whole screen rather than a rail beside the
   // stage, so it closes with a cross instead of collapsing to the right.
@@ -159,7 +141,10 @@
   let readReconciliation: ReturnType<typeof createReadReconciliation> | null = null;
   let reactionsEnabled = $state(false);
   const reactions = createReactionStore();
-  let media = $state<AttachmentComposeStore | null>(null);
+  let mediaUploadsEnabled = $state(false);
+  const media = $derived<AttachmentComposeStore | null>(
+    mediaUploadsEnabled && roomId ? getAttachmentComposeStore('room', roomId) : null
+  );
   let attachmentDragDepth = $state(0);
   let repliesEnabled = $state(false);
   let engagementEnabled = $state(false);
@@ -175,7 +160,8 @@
   function toast(message: string, options?: { variant?: 'error' }): void {
     onToast?.(message, options);
   }
-  const mentionComposer = createMentionComposer();
+  const draft = new RoomChatDraft(untrack(() => roomId));
+  $effect(() => draft.restore(session.user?.id ?? ''));
   const history = createAnchoredHistory<ChatMessage>({
     loadPage: fetchRoomChatPage,
     compare: (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
@@ -204,53 +190,6 @@
       sendAttemptFingerprint = fingerprint;
     }
     return sendAttemptKey;
-  }
-
-  function onComposeKeydown(e: KeyboardEvent) {
-    if (e.isComposing) return;
-    if (mentionComposer.isOpen) {
-      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-        e.preventDefault();
-        mentionComposer.move(e.key === 'ArrowDown' ? 1 : -1);
-        return;
-      }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault();
-        chooseMention(mentionComposer.candidates[mentionComposer.activeIndex]);
-        return;
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        mentionComposer.close();
-        return;
-      }
-    }
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      void sendMessage();
-      return;
-    }
-    // ArrowUp in an empty composer edits the last own message, like Discord.
-    if (e.key === 'ArrowUp' && !draft.trim() && !editingMessageId) {
-      const lastOwn = findLastOwnMessage();
-      if (lastOwn) {
-        e.preventDefault();
-        startEditing(lastOwn);
-      }
-      return;
-    }
-  }
-
-  async function onComposePaste(event: ClipboardEvent): Promise<void> {
-    if (!media) return;
-    const files = imageFilesFromClipboard(event);
-    if (!files.length) return;
-    event.preventDefault();
-    try {
-      await media.addFiles(files);
-    } catch (cause) {
-      toast(cause instanceof Error ? cause.message : 'Не удалось вставить изображение', { variant: 'error' });
-    }
   }
 
   function onAttachmentDragEnter(event: DragEvent): void {
@@ -284,145 +223,31 @@
     }
   }
 
-  function showAttachmentError(message: string): void {
-    toast(message, { variant: 'error' });
-  }
-
-  async function updateMentionCandidates(): Promise<void> {
-    if (!engagementEnabled || !session.user?.id || !composeEl) {
-      mentionComposer.close();
-      return;
-    }
-    const caret = composeEl.getSelection().start;
-    const query = mentionComposer.update(draft, caret);
-    if (!query && !draft.slice(0, caret).endsWith('@')) return;
-    await loadRoomMembership(roomId, { query });
-    if (mentionComposer.query !== query) return;
-    mentionComposer.setCandidates(
-      getRoomMembership(roomId).members.filter((member) => member.userId !== session.user?.id)
-    );
-  }
-
-  function chooseMention(member: MembershipMember): void {
-    if (!composeEl) return;
-    const selected = mentionComposer.choose(draft, composeEl.getSelection().start, member);
-    if (!selected) return;
-    draft = selected.text;
-    void tick().then(() => {
-      composeEl?.focus();
-      composeEl?.setSelection(selected.caret);
-    });
-  }
-
   // Who else is typing in this room. Notices name the person the server saw,
   // keyed like message authors (account id, or the guest's peer id) so their
   // message clears them.
   const roomTyping = createTypingTracker();
   const typingLabel = $derived(formatTypingLabel(roomTyping.people));
-  const typingNotifier = createTypingNotifier((activity) => {
-    if (roomId) getAppRealtime().send('room.chat.typing', { roomId, activity });
-  });
 
   function typingKey(person: { userId?: string | null; authorUserId?: string | null; peerId?: string }): string {
     return person.userId || person.authorUserId || person.peerId || '';
   }
 
-  function onComposeInput(): void {
-    void updateMentionCandidates();
-    if (draft.trim()) typingNotifier.notify();
+  function editLastOwnMessage(): boolean {
+    if (editingMessageId) return false;
+    const lastOwn = messages.findLast(isOwnMessage);
+    if (!lastOwn) return false;
+    editingMessageId = lastOwn.id;
+    error = '';
+    return true;
   }
 
-  // The field remembers its caret while the picker has focus, so the emoji
-  // lands where the person was writing, within the field's length limit, and
-  // the field takes focus back and reports the input as if it were typed.
-  function insertEmoji(emoji: string): void {
-    composeEl?.insertText(emoji);
+  function replyTo(message: ChatMessage): void {
+    replyTarget = message;
+    composer?.focus();
   }
 
-  // Unsent text and its chosen mentions stay on this device per account and
-  // room. Guests have no account, so their composer starts empty every time.
-  const DRAFT_SAVE_DELAY_MS = 400;
-  let draftRestoredFor = '';
-  let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function draftOwnerKey(): string {
-    const userId = session.user?.id ?? '';
-    return userId && roomId ? `${userId}:${roomId}` : '';
-  }
-
-  function persistDraft(): void {
-    if (draftSaveTimer) {
-      clearTimeout(draftSaveTimer);
-      draftSaveTimer = null;
-    }
-    const userId = session.user?.id ?? '';
-    // Nothing is stored before the saved draft was brought back, or an empty
-    // composer would overwrite it.
-    if (!userId || draftOwnerKey() !== draftRestoredFor) return;
-    saveChatDraft(userId, { type: 'room', id: roomId }, { text: draft, mentions: mentionComposer.selected });
-  }
-
-  $effect(() => {
-    const key = draftOwnerKey();
-    untrack(() => {
-      if (!key || key === draftRestoredFor) return;
-      draftRestoredFor = key;
-      const userId = session.user?.id ?? '';
-      const saved = loadChatDraft(userId, { type: 'room', id: roomId });
-      if (!saved || draft) return;
-      draft = saved.text;
-      mentionComposer.restore(saved.mentions);
-    });
-  });
-
-  $effect(() => {
-    void draft;
-    void mentionComposer.selected;
-    untrack(() => {
-      if (!draftRestoredFor) return;
-      if (draftSaveTimer) clearTimeout(draftSaveTimer);
-      draftSaveTimer = setTimeout(persistDraft, DRAFT_SAVE_DELAY_MS);
-    });
-  });
-
-  $effect(() => {
-    window.addEventListener('pagehide', persistDraft);
-    return () => {
-      window.removeEventListener('pagehide', persistDraft);
-      persistDraft();
-    };
-  });
-
-  function findLastOwnMessage(): ChatMessage | null {
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-      if (isOwnMessage(messages[index])) return messages[index];
-    }
-    return null;
-  }
-
-  // Group consecutive messages from the same author (within 5 minutes) so the
-  // avatar + name + time render once per burst, like the design's chat rail.
-  interface ChatGroup {
-    key: string;
-    name: string;
-    peerId: string;
-    self: boolean;
-    avatarBackground: string;
-    avatarForeground: string;
-    avatarShadow: string;
-    avatarUrl: string | null;
-    time: string;
-    messages: ChatMessage[];
-  }
-
-  // Messages grouped by calendar day so each day renders under its own divider.
-  interface ChatDay {
-    key: string;
-    label: string;
-    groups: ChatGroup[];
-  }
-
-  const days = $derived(buildDays(messages));
+  const days = $derived(buildChatDays(messages, isOwnMessage));
   const messageIds = new Set<string>();
 
   $effect(() => {
@@ -444,46 +269,6 @@
     return endReadSession;
   });
 
-  function buildDays(items: ChatMessage[]): ChatDay[] {
-    const result: ChatDay[] = [];
-    for (const message of items) {
-      let day = result.at(-1);
-      if (!day || !isSameDay(Number(day.key), message.createdAt)) {
-        day = { key: String(message.createdAt), label: formatChatDayLabel(message.createdAt), groups: [] };
-        result.push(day);
-      }
-
-      const author = message.name || 'Гость';
-      const last = day.groups.at(-1);
-      const sameAuthor = last && last.peerId === message.peerId && last.name === author;
-      const close = last && message.createdAt - (last.messages.at(-1)?.createdAt ?? 0) < 5 * 60 * 1000;
-      if (sameAuthor && close) {
-        last!.messages.push(message);
-        continue;
-      }
-      const avatar = getAvatarPresentation({
-        avatarAccent: message.avatarAccent || undefined,
-        avatarColorKey: message.avatarColorKey,
-        avatarUrl: message.avatarUrl || undefined,
-        isLocal: isOwnMessage(message),
-        name: author
-      });
-      day.groups.push({
-        key: message.id,
-        name: author,
-        peerId: message.peerId,
-        self: isOwnMessage(message),
-        avatarBackground: avatar.background,
-        avatarForeground: avatar.foreground,
-        avatarShadow: avatar.shadow,
-        avatarUrl: avatar.src,
-        time: formatTime(message.createdAt),
-        messages: [message]
-      });
-    }
-    return result;
-  }
-
   function formatTime(createdAt: number): string {
     return new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
@@ -498,7 +283,7 @@
 
     reactions.setConversation({ type: 'room', id: roomId });
     void getCapabilityFeature('mediaUploads').then((enabled) => {
-      media = enabled ? getAttachmentComposeStore('room', roomId) : null;
+      mediaUploadsEnabled = enabled;
     });
     void getCapabilityFeature('reactions').then((enabled) => {
       reactionsEnabled = enabled;
@@ -569,25 +354,8 @@
       if (event.type === 'room.peer.updated') {
         const peer = event.payload.peer;
         if (!peer?.id) return;
-        const authored = (message: ChatMessage) =>
-          message.peerId === peer.id || Boolean(peer.accountUserId && message.authorUserId === peer.accountUserId);
-        const stale = (message: ChatMessage) =>
-          message.name !== peer.name ||
-          message.avatarUrl !== peer.avatarUrl ||
-          message.avatarAccent !== peer.avatarAccent ||
-          (Boolean(peer.avatarColorKey) && message.avatarColorKey !== peer.avatarColorKey);
-        if (!messages.some((message) => authored(message) && stale(message))) return;
-        messages = messages.map((message) =>
-          authored(message)
-            ? {
-                ...message,
-                name: peer.name || message.name,
-                avatarAccent: peer.avatarAccent,
-                avatarColorKey: peer.avatarColorKey || message.avatarColorKey,
-                avatarUrl: peer.avatarUrl
-              }
-            : message
-        );
+        const restamped = restampAuthor(messages, peer);
+        if (restamped) messages = restamped;
         return;
       }
       if (event.type === 'room.chat.typing') {
@@ -807,37 +575,13 @@
     }
   }
 
-  async function sendMessage(event?: SubmitEvent): Promise<void> {
-    event?.preventDefault();
-    if (!roomId || sending) return;
-
-    // Do not collapse whitespace; newlines are intentional (2.4.0).
-    const text = draft.trim();
-    if (!text && !media?.canSend) return;
-    if (media?.drafts.length && !media.canSend) return;
-
-    sending = true;
+  async function send(outgoing: OutgoingRoomMessage): Promise<boolean> {
     error = '';
-    let sent = false;
     try {
       // Resolved per send: the room rail reads a guest name that the name dialog
       // can persist after this component mounted.
-      const sendPayload = {
-        name: resolveDisplayName(),
-        ...peerCredentials(),
-        text,
-        content: engagementEnabled
-          ? mentionComposer.selected.length
-            ? mentionComposer.toContent(text)
-            : (contentFromLegacyText(text) ?? undefined)
-          : undefined,
-        attachmentIds: media?.readyIds ?? [],
-        replyTo: replyTarget ? { messageId: replyTarget.id } : undefined
-      };
-      const message = await postRoomChat(roomId, {
-        ...sendPayload,
-        idempotencyKey: idempotencyKeyFor(sendPayload)
-      });
+      const payload = { name: resolveDisplayName(), ...peerCredentials(), ...outgoing };
+      const message = await postRoomChat(roomId, { ...payload, idempotencyKey: idempotencyKeyFor(payload) });
       if (!messageIds.has(message.id) && !messages.some((item) => item.id === message.id)) {
         messageIds.add(message.id);
         if (historyEnabled) history.upsert(message);
@@ -847,23 +591,13 @@
           void settleAtBottom();
         }
       }
-      draft = '';
-      media?.clearBound();
-      replyTarget = null;
       sendAttemptKey = '';
       sendAttemptFingerprint = '';
-      mentionComposer.reset();
-      persistDraft();
-      typingNotifier.reset();
-      sent = true;
+      return true;
     } catch (err) {
       error = err instanceof Error ? err.message : 'Не удалось отправить сообщение';
-    } finally {
-      sending = false;
+      return false;
     }
-    if (!sent) return;
-    await tick();
-    composeEl?.focus();
   }
 
   function scrollToBottom(): void {
@@ -907,49 +641,15 @@
     }
   }
 
-  function startEditing(message: ChatMessage): void {
-    editingMessageId = message.id;
-    editDraft = message.text;
-    error = '';
-    void tick().then(() => {
-      editEl?.focus();
-      editEl?.setSelection(editDraft.length);
-    });
-  }
-
-  function cancelEditing(): void {
-    editingMessageId = '';
-    editDraft = '';
-    editSaving = false;
-  }
-
-  function onEditKeydown(event: KeyboardEvent): void {
-    if (event.isComposing) return;
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      cancelEditing();
-      return;
-    }
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      void saveEdit();
-    }
-  }
-
-  async function saveEdit(): Promise<void> {
-    const messageId = editingMessageId;
-    const text = editDraft.trim();
-    if (!roomId || !messageId || !text || editSaving) return;
-    editSaving = true;
+  async function saveEdit(messageId: string, text: string): Promise<void> {
     error = '';
     try {
       const edited = await editRoomChatMessage(roomId, messageId, { ...peerCredentials(), text });
       if (historyEnabled) history.upsert(edited);
       else messages = messages.map((message) => (message.id === edited.id ? edited : message));
-      cancelEditing();
     } catch (err) {
       error = err instanceof Error ? err.message : 'Не удалось изменить сообщение';
-      editSaving = false;
+      throw err;
     }
   }
 
@@ -966,7 +666,9 @@
     event.preventDefault();
     event.stopPropagation();
     const anchor = event.currentTarget;
-    const person = participant ? participantProfilePerson(participant) : roomMessageProfilePerson(group.messages[0]);
+    const person = participant
+      ? participantProfilePerson(social, participant)
+      : roomMessageProfilePerson(social, group.messages[0]);
     queueMicrotask(() => openProfileCardFor(person, anchor));
   }
 
@@ -977,17 +679,10 @@
     event.preventDefault();
     event.stopPropagation();
     const anchor = event.currentTarget;
-    const person = mentionProfilePerson(userId, label, getRoomMembership(roomId).members, [
+    const person = mentionProfilePerson(social, userId, label, getRoomMembership(roomId).members, [
       ...roomState.peers.values()
     ]);
     queueMicrotask(() => openProfileCardFor(person, anchor));
-  }
-
-  /** Whether this message points at the reader, so their own row stands out. */
-  function mentionsMe(message: ChatMessage): boolean {
-    const selfUserId = session.user?.id;
-    if (!selfUserId || message.content?.version !== 1) return false;
-    return message.content.segments.some((segment) => segment.type === 'mention' && segment.userId === selfUserId);
   }
 
   function openUserMenu(group: ChatGroup, event: MouseEvent): void {
@@ -1018,49 +713,18 @@
   ondrop={onAttachmentDrop}
 >
   {#if chatVisible && attachmentDragDepth > 0}<AttachmentDropOverlay />{/if}
-  <header class="chat-rail-head">
-    <div class="room-panel-tabs" role="tablist" aria-label="Раздел панели комнаты">
-      <button
-        id={chatTabId}
-        type="button"
-        role="tab"
-        aria-controls={chatPanelId}
-        aria-label="Чат"
-        aria-selected={activeTab === 'chat'}
-        data-active={activeTab === 'chat'}
-        title="Чат"
-        onclick={() => onSelectChat?.()}
-      >
-        <MessageSquare {...iconSm} aria-hidden="true" />
-        {#if unread > 0}<span class="room-panel-tab-unread" aria-hidden="true"></span>{/if}
-      </button>
-      <button
-        id={participantsTabId}
-        type="button"
-        role="tab"
-        aria-controls={participantsPanelId}
-        aria-label="Участники"
-        aria-selected={activeTab === 'participants'}
-        data-active={activeTab === 'participants'}
-        title="Участники"
-        onclick={() => onSelectParticipants?.()}
-      >
-        <Users {...iconSm} aria-hidden="true" />
-      </button>
-    </div>
-    <button
-      class="chat-rail-collapse"
-      type="button"
-      aria-label={mobile ? 'Закрыть панель' : 'Свернуть панель'}
-      onclick={() => onCollapse?.()}
-    >
-      {#if mobile}
-        <X {...iconSm} aria-hidden="true" />
-      {:else}
-        <ChevronRight {...iconSm} aria-hidden="true" />
-      {/if}
-    </button>
-  </header>
+  <RoomPanelHeader
+    {activeTab}
+    {unread}
+    {mobile}
+    {chatTabId}
+    {participantsTabId}
+    {chatPanelId}
+    {participantsPanelId}
+    {onSelectChat}
+    {onSelectParticipants}
+    {onCollapse}
+  />
 
   {#if activeTab === 'chat'}
     <PinnedMessagesBar
@@ -1142,7 +806,7 @@
                       >
                     {/if}
                     <time class="chat-msg-time" datetime={new Date(group.messages[0].createdAt).toISOString()}
-                      >{group.time}</time
+                      >{formatTime(group.createdAt)}</time
                     >
                   </div>
                   {#each group.messages as message (message.id)}
@@ -1150,29 +814,19 @@
                     <div
                       class="chat-msg-text"
                       class:is-context={menuMessage?.id === message.id}
-                      class:mentions-me={mentionsMe(message)}
+                      class:mentions-me={mentionsUser(message, session.user?.id)}
                       data-message-id={message.id}
                       data-group-first={message.id === group.messages[0].id}
                       oncontextmenu={(event) => openMessageMenu(message, event)}
                     >
                       {#if editingMessageId === message.id}
-                        <div class="chat-msg-edit">
-                          <EmojiComposer
-                            class="chat-msg-edit-input"
-                            bind:this={editEl}
-                            bind:value={editDraft}
-                            maxlength={500}
-                            ariaLabel="Текст сообщения"
-                            onkeydown={onEditKeydown}
-                            disabled={editSaving}
-                          />
-                          <div class="chat-msg-edit-actions">
-                            <button type="button" onclick={cancelEditing} disabled={editSaving}>Отмена</button>
-                            <button type="button" onclick={saveEdit} disabled={editSaving || !editDraft.trim()}
-                              >Сохранить</button
-                            >
-                          </div>
-                        </div>
+                        <MessageEditor
+                          text={message.text}
+                          variant="chat-msg"
+                          maxlength={500}
+                          onSave={(text: string) => saveEdit(message.id, text)}
+                          onClose={() => (editingMessageId = '')}
+                        />
                       {:else}
                         <div class="chat-msg-body">
                           {#if message.replyPreview}<ReplyPreview
@@ -1202,10 +856,7 @@
                           messageId={message.id}
                           userId={session.user?.id}
                           canReply={repliesEnabled}
-                          onReply={() => {
-                            replyTarget = message;
-                            composeEl?.focus();
-                          }}
+                          onReply={() => replyTo(message)}
                           onCopy={() => void copyMessageText(message)}
                           onMore={(event) => openMessageMenu(message, event)}
                         />
@@ -1226,56 +877,20 @@
       <p class="chat-rail-error">{error}</p>
     {/if}
 
-    <form class="chat-rail-compose" onsubmit={sendMessage} onpaste={onComposePaste}>
-      <div class="chat-compose-row attachment-compose-field">
-        {#if replyTarget}
-          {@const target = replyTarget}
-          <ReplyTargetBar
-            target={{
-              messageId: target.id,
-              deleted: false,
-              author: { id: target.authorUserId || target.peerId, name: target.name },
-              text: target.text
-            }}
-            onjump={jumpToMessage}
-            oncancel={() => (replyTarget = null)}
-          />
-        {/if}
-        {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
-        <div class="attachment-compose-controls">
-          {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}
-          <EmojiComposer
-            class="chat-rail-input chat-rail-textarea"
-            bind:this={composeEl}
-            bind:value={draft}
-            maxlength={500}
-            placeholder="Написать в комнату…"
-            onkeydown={onComposeKeydown}
-            oninput={onComposeInput}
-            oncompositionstart={() => mentionComposer.setComposing(true)}
-            oncompositionend={() => {
-              mentionComposer.setComposing(false);
-              void updateMentionCandidates();
-            }}
-            disabled={sending}
-          />
-          <ComposerEmojiPicker
-            userId={session.user?.id ?? ''}
-            disabled={sending}
-            onpick={insertEmoji}
-            onbrowse={() => typingNotifier.notify('emoji')}
-          />
-        </div>
-      </div>
-      {#if mentionComposer.isOpen}
-        <MentionAutocomplete
-          candidates={mentionComposer.candidates}
-          activeIndex={mentionComposer.activeIndex}
-          onselect={chooseMention}
-        />
-      {/if}
-      <TypingIndicator label={typingLabel} />
-    </form>
+    <RoomChatComposer
+      bind:this={composer}
+      bind:replyTarget
+      bind:sending
+      {roomId}
+      {draft}
+      {media}
+      {engagementEnabled}
+      {typingLabel}
+      {send}
+      onEditLast={editLastOwnMessage}
+      onJump={jumpToMessage}
+      onToast={toast}
+    />
   {:else if participants}
     <div class="room-panel-members" id={participantsPanelId} role="tabpanel" aria-labelledby={participantsTabId}>
       {@render participants()}
@@ -1305,13 +920,69 @@
     onClose={closeMessageMenu}
     onReact={(emoji) => reactFromMenu(target.id, emoji)}
     onOpenReactionPicker={() => openReactionPickerFor(target.id)}
-    onReply={() => {
-      replyTarget = target;
-      composeEl?.focus();
-    }}
+    onReply={() => replyTo(target)}
     onCopy={() => void copyMessageText(target)}
     onTogglePin={() => void togglePinned(target.id)}
-    onEdit={() => startEditing(target)}
+    onEdit={() => {
+      editingMessageId = target.id;
+      error = '';
+    }}
     onDelete={() => void deleteMessage(target.id)}
   />
 {/if}
+
+<style>
+  :global(.chat-rail-body) {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    padding: 18px 20px;
+  }
+  :global(.room-panel-members) {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 18px 16px 24px;
+  }
+  :where(.chat-rail-body) > :first-child {
+    margin-top: auto;
+  }
+  :global(.chat-day-section) {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+  }
+  :global(.chat-msg-body) {
+    display: grid;
+    min-width: 0;
+    flex: 1;
+    gap: 4px;
+    justify-items: start;
+  }
+  :where(.chat-msg-body) > * {
+    max-width: 100%;
+  }
+  :global(.chat-msg-edited) {
+    margin-left: 5px;
+    color: #777164;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    white-space: nowrap;
+  }
+  :global(.chat-rail-note),
+  :global(.chat-rail-error) {
+    margin: auto 0 0;
+    color: var(--warm-550);
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+  :global(.chat-rail-error) {
+    margin: 0;
+    padding: 0 20px 8px;
+    color: #d2a08c;
+  }
+</style>

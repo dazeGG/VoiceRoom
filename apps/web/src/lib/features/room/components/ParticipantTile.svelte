@@ -15,13 +15,11 @@
   let { participant, variant = 'grid' }: { participant: Participant; variant?: 'grid' | 'focus' | 'strip' } = $props();
 
   let tile = $state<HTMLElement>();
-  let imageFailed = $state(false);
+  // A new avatar gets a fresh attempt: only the URL that failed stays hidden.
+  let failedAvatarUrl = $state<string | null>(null);
 
   const avatar = $derived(getAvatarPresentation(participant));
-  $effect(() => {
-    participant.avatarUrl;
-    imageFailed = false;
-  });
+  const imageFailed = $derived(failedAvatarUrl !== null && failedAvatarUrl === avatar.src);
   const viewing = $derived(roomState.viewedScreenPeerId === participant.id);
   const canWatch = $derived(!participant.isLocal && participant.screen && !viewing);
   const screenActionLabel = $derived(roomState.screenRequesting ? 'Подключение' : 'Смотреть экран');
@@ -101,7 +99,7 @@
       {#if avatar.src && !imageFailed}<img
           src={avatar.src}
           alt=""
-          onerror={() => (imageFailed = true)}
+          onerror={() => (failedAvatarUrl = avatar.src)}
         />{:else}{avatar.initials}{/if}
     </span>
   </div>

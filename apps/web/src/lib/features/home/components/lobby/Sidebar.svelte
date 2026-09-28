@@ -7,10 +7,12 @@
   import { iconSm } from '$lib/shared/ui/icons';
   import { effectivePresenceStatus, normalizePresenceStatus, type PresenceStatus } from '$lib/shared/presence';
   import { friendName } from '../../model/lobby-format';
-  import { friendsState, openDm } from '../../model/friends.svelte';
+  import { useLobby } from '$lib/features/home/model/lobby-context';
   import { notificationPreferences, updatePresenceStatus } from '$lib/shared/notifications/preferences.svelte';
   import SidebarDownload from '../SidebarDownload.svelte';
   import VoiceCallWidget from './VoiceCallWidget.svelte';
+
+  const lobby = useLobby();
 
   let {
     user,
@@ -53,7 +55,7 @@
   }>();
 
   const sortedFriends = $derived(
-    [...friendsState.friends].sort((a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0))
+    [...lobby.friends].sort((a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0))
   );
 
   const selfName = $derived(user.displayName?.trim() || user.login);
@@ -75,7 +77,7 @@
     {
       value: 'away',
       label: 'Отошёл',
-      note: friendsState.automaticPresenceIdleAvailable ? 'Автоматически после 5 минут бездействия' : undefined
+      note: lobby.automaticPresenceIdleAvailable ? 'Автоматически после 5 минут бездействия' : undefined
     },
     {
       value: 'dnd',
@@ -219,18 +221,18 @@
 
   <div class="lv-side-scroll">
     <div class="lv-sec-head">
-      <span>Друзья — {friendsState.friends.length}</span>
+      <span>Друзья — {lobby.friends.length}</span>
       <div class="lv-sec-actions">
         <button class="lv-mini-btn" type="button" title="Заявки и добавить друга" onclick={onOpenPeople}>
           <UserPlus {...iconSm} aria-hidden="true" />
-          {#if friendsState.incomingRequestCount > 0}
+          {#if lobby.incomingRequestCount > 0}
             <span class="lv-mini-btn-dot"></span>
           {/if}
         </button>
       </div>
     </div>
 
-    {#if friendsState.friends.length === 0}
+    {#if lobby.friends.length === 0}
       <p class="lr-empty" style="padding:2px 7px 8px;">Пока нет друзей. Откройте «Заявки», чтобы добавить по логину.</p>
     {:else}
       {#each sortedFriends as entry (entry.user.id)}
@@ -242,9 +244,9 @@
         {@const friendNotificationsMuted = notificationPreferences.mutedPeerIds.includes(entry.user.id)}
         <button
           class="lv-row"
-          class:is-active={friendsState.selectedFriendId === entry.user.id && friendsState.view === 'dm'}
+          class:is-active={lobby.selectedFriendId === entry.user.id && lobby.view === 'dm'}
           type="button"
-          onclick={() => openDm(entry.user.id)}
+          onclick={() => lobby.openDm(entry.user.id)}
         >
           <Avatar
             name={friendName(entry.user)}
@@ -516,5 +518,105 @@
 
   :global(.lv-status-check) {
     color: var(--accent);
+  }
+  :global(.lv-side) {
+    width: var(--lv-side-w);
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--panel);
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  :global(.lv-side-head) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    margin: 8px;
+    padding: 10px 8px;
+    flex: none;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease;
+  }
+  :where(.lv-side-head):hover {
+    background: var(--control-hover);
+  }
+  :where(.lv-side-head):focus-visible {
+    outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));
+    outline-offset: -2px;
+  }
+  :global(.lv-brand-name) {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 14.5px;
+    color: var(--warm-ink);
+    flex: 1;
+    letter-spacing: -0.01em;
+  }
+  :global(.lv-side-scroll) {
+    flex: 1;
+    overflow: auto;
+    padding: 2px 8px 10px;
+  }
+  :global(.lv-sec-head) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 8px 6px;
+    font-family: var(--font-ui);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--warm-faint);
+  }
+  :global(.lv-sec-actions) {
+    display: flex;
+    gap: 2px;
+  }
+  :global(.lv-mini-btn) {
+    position: relative;
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    border: none;
+    background: transparent;
+    color: var(--warm-faint);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  :where(.lv-mini-btn):hover {
+    background: var(--control-hover);
+    color: var(--warm-ink);
+  }
+  :global(.lv-mini-btn-dot) {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--panel);
+  }
+  :global(.lv-profile) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    flex: none;
+  }
+  :global(.lv-profile-handle) {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--warm-muted-dim);
   }
 </style>

@@ -7,7 +7,7 @@ vi.mock('../../src/lib/api/moderation', () => ({
 
 const api = await import('../../src/lib/api/moderation');
 const { BAN_DURATIONS, banExpiryLabel, banRoomMember, banSubjectName, liftRoomBan } =
-  await import('../../src/lib/features/home/model/room-moderation.ts');
+  await import('../../src/lib/entities/room/room-moderation.ts');
 
 const ban = (overrides: Record<string, unknown> = {}) =>
   ({

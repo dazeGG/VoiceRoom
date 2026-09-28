@@ -73,3 +73,42 @@
     </PopoverMenuItem>
   {/snippet}
 </Popover>
+
+<style>
+  :global(.attachment-file-input) {
+    position: fixed;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+  :global(.attachment-add-button) {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    place-items: center;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--warm-muted);
+    cursor: pointer;
+    transition:
+      border-color 0.15s ease,
+      color 0.15s ease,
+      background 0.15s ease;
+  }
+  :where(.attachment-add-button):hover,
+  :where(.attachment-add-button)[aria-expanded='true'] {
+    background: var(--control);
+    color: var(--warm-ink);
+  }
+  :where(.attachment-add-button):focus-visible {
+    outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));
+    outline-offset: 2px;
+  }
+  :where(.attachment-add-button):disabled {
+    cursor: default;
+    opacity: 0.42;
+  }
+</style>

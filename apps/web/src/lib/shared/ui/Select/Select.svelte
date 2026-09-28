@@ -191,7 +191,7 @@
     min-height: var(--interactive-lg, 52px);
     padding: 0 14px 0 15px;
     background: var(--warm-900);
-    color: #ece7d9;
+    color: var(--warm-100);
     font-family: var(--font-ui);
     font-size: 14.5px;
     font-weight: 500;
@@ -221,7 +221,7 @@
   .select-trigger-chevron {
     flex: none;
     display: inline-flex;
-    color: #9a9484;
+    color: var(--warm-500);
     transition: transform 0.16s ease;
   }
 
@@ -270,7 +270,7 @@
   .select-trigger--compact[aria-expanded='true'] {
     border-color: transparent;
     background: var(--control);
-    color: #e7e2d4;
+    color: var(--warm-150);
   }
 
   .select-trigger--dock {
@@ -315,7 +315,7 @@
     font-family: var(--font-ui);
     font-size: 14px;
     font-weight: 500;
-    color: #e7e2d4;
+    color: var(--warm-150);
     text-align: left;
     cursor: pointer;
     transition: background 0.14s ease;

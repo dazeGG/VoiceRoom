@@ -1,5 +1,4 @@
 import { closeParticipantContextMenu } from '../../participant-context-ui.svelte';
-import { bumpParticipantsRevision, participantsUi } from '../../participants-ui.svelte';
 import { reactiveParticipant, state } from '../core/state.svelte';
 import { getScreenProfile } from '../media/profiles';
 import {
@@ -157,14 +156,15 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
   if (model.isLocal) {
     state.self = model;
     state.peers.delete(peerInfo.id);
-    participant = model;
+    // The reactive copy, not the model: changes made through the returned
+    // participant must reach the components reading state.self.
+    participant = state.self;
   } else {
     participant = reactiveParticipant(model);
     state.peers.set(peerInfo.id, participant);
   }
 
   refreshAllScreenActionsSoon();
-  refreshParticipantState();
   if (!participant.isLocal && participant.screen) {
     applyRemoteScreenCue(participant, false, true);
   }
@@ -241,8 +241,6 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   if (shouldRefreshScreenStage(peerInfo, hadScreen, hadScreenAudio, hadScreenStreamId, hadName)) {
     refreshScreenStageSoon();
   }
-
-  refreshParticipantState();
 }
 
 function shouldRefreshScreenTiles(
@@ -294,7 +292,6 @@ export function removePeer(peerId: string): void {
   state.peers.delete(peerId);
   if (state.peers.size === 0) setParticipantSpeaking(state.self, false);
   refreshScreenTilesSoon();
-  refreshParticipantState();
 }
 
 export function detachLiveKitParticipant(peer: Participant, voiceIssue = ''): void {
@@ -383,7 +380,6 @@ export function attachRemoteScreenStream(peer: Participant, stream: MediaStream)
     refreshScreenStageSoon();
   }
   updatePeerStatus(peer);
-  refreshParticipantState();
 }
 
 function mergeRemoteScreenStream(peer: Participant, stream: MediaStream): MediaStream {
@@ -425,7 +421,6 @@ export function detachRemoteScreenVideoTracks(peer: Participant, trackId = ''): 
   refreshScreenStageSoon();
   refreshScreenTilesSoon();
   updatePeerStatus(peer);
-  refreshParticipantState();
 }
 
 export function detachRemoteScreenAudioTrack(peer: Participant, trackId: string): void {
@@ -444,7 +439,6 @@ export function detachRemoteScreenAudioTrack(peer: Participant, trackId: string)
   refreshScreenStageSoon();
   refreshScreenTilesSoon();
   updatePeerStatus(peer);
-  refreshParticipantState();
 }
 
 export function detachRemoteScreen(peer: Participant): void {
@@ -453,7 +447,6 @@ export function detachRemoteScreen(peer: Participant): void {
   refreshScreenStageSoon();
   updatePeerStatus(peer);
   refreshAllScreenActionsSoon();
-  refreshParticipantState();
 }
 
 export function ensureRemoteAudioElement(
@@ -543,7 +536,6 @@ export function setParticipantSpeaking(participant: Participant | null, speaking
   const nextSpeaking = Boolean(speaking);
   if (participant.speaking === nextSpeaking) return;
   participant.speaking = nextSpeaking;
-  refreshParticipantState();
 }
 
 /**
@@ -585,15 +577,6 @@ export function updatePeerStatus(peer: Participant): void {
 function setParticipantStatus(peer: Participant, label: string): void {
   if (peer.statusLabel === label) return;
   peer.statusLabel = label;
-  refreshParticipantState();
-}
-
-export function refreshParticipantState(): void {
-  bumpParticipantsRevision();
-}
-
-export function refreshStageGridState(): void {
-  bumpParticipantsRevision();
 }
 
 export function getParticipantById(peerId: string): Participant | null {
@@ -603,6 +586,5 @@ export function getParticipantById(peerId: string): Participant | null {
 }
 
 export function getAllParticipants(): Participant[] {
-  void participantsUi.revision;
   return [...(state.self ? [state.self] : []), ...state.peers.values()];
 }
