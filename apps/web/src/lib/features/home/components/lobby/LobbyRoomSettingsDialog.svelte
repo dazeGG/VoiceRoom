@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { onDestroy, untrack } from 'svelte';
-  import { Ban, Pencil, SlidersHorizontal, Users, X } from '@lucide/svelte';
+  import { untrack } from 'svelte';
+  import { Ban, SlidersHorizontal, Users, X } from '@lucide/svelte';
   import type { OwnedRoom } from '$lib/api/auth';
-  import { deleteRoom, deleteRoomAvatar, updateRoom, uploadRoomAvatar } from '$lib/api/rooms';
-  import { Avatar, AvatarCropDialog } from '$lib/shared/ui';
+  import { deleteRoom, updateRoom } from '$lib/api/rooms';
+  import RoomAvatarField from '$lib/entities/room/components/RoomAvatarField.svelte';
+  import { saveRoomAvatarChange, type RoomAvatarChange } from '$lib/entities/room/room-avatar-change';
   import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import ModerationCenter from '../../../../entities/room/components/ModerationCenter.svelte';
@@ -33,12 +34,8 @@
   let deleting = $state(false);
   let confirmDelete = $state(false);
   let error = $state('');
-  let avatarInput = $state<HTMLInputElement>();
-  let avatarFile = $state<File | null>(null);
+  let avatarChange = $state<RoomAvatarChange>({ kind: 'keep' });
   let cropOpen = $state(false);
-  let pendingAvatar = $state<Blob | null>(null);
-  let avatarPreviewUrl = $state('');
-  let removeAvatarPending = $state(false);
   let moderationEnabled = $state(false);
   let membershipEnabled = $state(false);
   let section = $state<Section>('general');
@@ -50,12 +47,8 @@
       error = '';
       confirmDelete = false;
       section = 'general';
-      avatarFile = null;
+      avatarChange = { kind: 'keep' };
       cropOpen = false;
-      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
-      avatarPreviewUrl = '';
-      pendingAvatar = null;
-      removeAvatarPending = false;
       if (activeRoom) {
         void getCapabilityFeature('moderationCenter').then((enabled) => {
           moderationEnabled = enabled;
@@ -67,18 +60,13 @@
     });
   });
 
-  onDestroy(() => {
-    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
-  });
-
   async function save(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     if (!room || saving || !name.trim()) return;
     saving = true;
     try {
       await updateRoom(room.roomId, { name: name.trim() });
-      if (pendingAvatar) await uploadRoomAvatar(room.roomId, pendingAvatar);
-      else if (removeAvatarPending) await deleteRoomAvatar(room.roomId);
+      await saveRoomAvatarChange(room.roomId, avatarChange);
       onSaved();
       onClose();
       onToast('Комната обновлена');
@@ -101,39 +89,6 @@
       error = cause instanceof Error ? cause.message : 'Не удалось удалить комнату';
       deleting = false;
     }
-  }
-
-  function onAvatarFile(event: Event): void {
-    const input = event.currentTarget as HTMLInputElement;
-    const selected = input.files?.[0] ?? null;
-    input.value = '';
-    if (!selected) return;
-    if (!selected.type.startsWith('image/')) {
-      error = 'Выберите изображение JPEG, PNG или WebP';
-      return;
-    }
-    if (selected.size > 5 * 1024 * 1024) {
-      error = 'Изображение должно быть меньше 5 МБ';
-      return;
-    }
-    avatarFile = selected;
-    cropOpen = true;
-  }
-
-  async function saveAvatar(blob: Blob): Promise<void> {
-    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
-    pendingAvatar = blob;
-    avatarPreviewUrl = URL.createObjectURL(blob);
-    removeAvatarPending = false;
-    cropOpen = false;
-    avatarFile = null;
-  }
-
-  function removeAvatar(): void {
-    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
-    avatarPreviewUrl = '';
-    pendingAvatar = null;
-    removeAvatarPending = true;
   }
 
   function notifyModeration(message: string, options: ModerationNoticeOptions = {}): void {
@@ -237,42 +192,16 @@
           <form class="settings-content room-settings-content" onsubmit={save}>
             {#if error}<p class="dialog-error" role="alert">{error}</p>{/if}
             <div class="room-profile-head">
-              <div class="room-avatar-control">
-                <input
-                  bind:this={avatarInput}
-                  class="room-avatar-input"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  onchange={onAvatarFile}
-                />
-                <button
-                  class="room-avatar-edit"
-                  type="button"
-                  onclick={() => avatarInput?.click()}
+              {#key room.roomId}
+                <RoomAvatarField
+                  savedUrl={room.avatarUrl}
+                  name={name || room.roomId}
                   disabled={saving || deleting}
-                  aria-label={room.avatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
-                  title={room.avatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
-                >
-                  <Avatar
-                    name={name || room.roomId}
-                    src={avatarPreviewUrl || (removeAvatarPending ? null : room.avatarUrl)}
-                    shape="squircle"
-                    background="var(--room-avatar-bg)"
-                    size={58}
-                  />
-                  <span class="room-avatar-overlay" aria-hidden="true"><Pencil {...iconSm} /></span>
-                </button>
-                {#if avatarPreviewUrl || (room.avatarUrl && !removeAvatarPending)}
-                  <button
-                    class="room-avatar-remove"
-                    type="button"
-                    onclick={removeAvatar}
-                    disabled={saving || deleting}
-                    aria-label="Удалить аватар комнаты"
-                    title="Удалить аватар комнаты"><X {...iconSm} aria-hidden="true" /></button
-                  >
-                {/if}
-              </div>
+                  bind:change={avatarChange}
+                  bind:cropping={cropOpen}
+                  onError={(message: string) => (error = message)}
+                />
+              {/key}
               <label class="room-name-field"
                 ><span class="settings-field-label">Название</span><input
                   class="settings-input"
@@ -307,20 +236,6 @@
     </div>
   </div>
 {/if}
-
-<AvatarCropDialog
-  open={cropOpen}
-  file={avatarFile}
-  name={name || room?.name || room?.roomId || ''}
-  shape="squircle"
-  kind="room"
-  title="Аватар комнаты"
-  onClose={() => {
-    cropOpen = false;
-    avatarFile = null;
-  }}
-  onSave={saveAvatar}
-/>
 
 <style>
   .room-settings-modal {
@@ -360,89 +275,6 @@
     .room-settings-content {
       padding: 22px 18px;
     }
-  }
-
-  .room-avatar-control {
-    position: relative;
-    flex: none;
-    width: 58px;
-    height: 58px;
-  }
-  .room-avatar-input {
-    display: none;
-  }
-  .room-avatar-edit {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 58px;
-    height: 58px;
-    padding: 0;
-    overflow: hidden;
-    border: 0;
-    border-radius: 31%;
-    background: transparent;
-    color: #fff;
-    cursor: pointer;
-  }
-  .room-avatar-overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: inherit;
-    background: color-mix(in srgb, var(--warm-950) 58%, transparent);
-    opacity: 0;
-    transition: opacity 0.16s ease;
-    pointer-events: none;
-  }
-  .room-avatar-edit:not(:disabled):hover .room-avatar-overlay,
-  .room-avatar-edit:not(:disabled):focus-visible .room-avatar-overlay {
-    opacity: 1;
-  }
-  .room-avatar-edit:focus-visible {
-    outline: 2px solid var(--coral);
-    outline-offset: 3px;
-  }
-  .room-avatar-remove {
-    position: absolute;
-    z-index: 1;
-    top: -5px;
-    right: -5px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border: 2px solid var(--paper-deep);
-    border-radius: 50%;
-    background: var(--coral);
-    color: #fff;
-    cursor: pointer;
-    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34);
-    opacity: 0;
-    transition:
-      opacity 0.16s ease,
-      background 0.16s ease;
-  }
-  .room-avatar-control:hover .room-avatar-remove,
-  .room-avatar-control:focus-within .room-avatar-remove {
-    opacity: 1;
-  }
-  .room-avatar-remove:not(:disabled):hover {
-    background: color-mix(in oklch, var(--coral), var(--warm-950) 16%);
-  }
-  .room-avatar-remove:focus-visible {
-    outline: 2px solid #fff;
-    outline-offset: 2px;
-  }
-  .room-avatar-edit:disabled,
-  .room-avatar-remove:disabled {
-    cursor: default;
-    opacity: 0.6;
   }
 
   .dialog-danger-zone {

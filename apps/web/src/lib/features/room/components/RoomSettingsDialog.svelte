@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { Ban, ChevronDown, Pencil, SlidersHorizontal, Users, X } from '@lucide/svelte';
+  import { Ban, ChevronDown, SlidersHorizontal, Users, X } from '@lucide/svelte';
   import '$lib/shared/styles/settings.css';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import { Avatar, AvatarCropDialog } from '$lib/shared/ui';
   import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
-  import { deleteRoom, deleteRoomAvatar, updateRoom, uploadRoomAvatar } from '$lib/api/rooms';
+  import { deleteRoom, updateRoom } from '$lib/api/rooms';
+  import RoomAvatarField from '$lib/entities/room/components/RoomAvatarField.svelte';
+  import { saveRoomAvatarChange, type RoomAvatarChange } from '$lib/entities/room/room-avatar-change';
   import { state as roomClientState } from '../client/core/state.svelte';
   import { applyRoomUpdated } from '../client/room/lifecycle';
   import { showToast } from '../client/ui/toast';
@@ -26,13 +27,8 @@
   let saving = $state(false);
   let confirmingDelete = $state(false);
   let deleting = $state(false);
-  let avatarInput = $state<HTMLInputElement>();
-  let avatarFile = $state<File | null>(null);
+  let avatarChange = $state<RoomAvatarChange>({ kind: 'keep' });
   let cropOpen = $state(false);
-  let avatarSaving = $state(false);
-  let pendingAvatar = $state<Blob | null>(null);
-  let avatarPreviewUrl = $state('');
-  let removeAvatarPending = $state(false);
   let moderationEnabled = $state(false);
   let membershipEnabled = $state(false);
   let engagementEnabled = $state(false);
@@ -62,10 +58,7 @@
       name = roomClientState.roomName;
       error = '';
       confirmingDelete = false;
-      if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
-      avatarPreviewUrl = '';
-      pendingAvatar = null;
-      removeAvatarPending = false;
+      avatarChange = { kind: 'keep' };
     }
     wasOpen = roomSettingsUi.open;
   });
@@ -83,8 +76,7 @@
     error = '';
     try {
       let room = await updateRoom(roomClientState.roomId, { name: trimmed });
-      if (pendingAvatar) room = await uploadRoomAvatar(roomClientState.roomId, pendingAvatar);
-      else if (removeAvatarPending) room = await deleteRoomAvatar(roomClientState.roomId);
+      room = (await saveRoomAvatarChange(roomClientState.roomId, avatarChange)) ?? room;
       applyRoomUpdated(room);
       window.dispatchEvent(new CustomEvent('voice-room:rooms-changed', { detail: { roomId: room.roomId } }));
       closeRoomSettings();
@@ -110,39 +102,6 @@
     }
   }
 
-  function onAvatarFile(event: Event): void {
-    const input = event.currentTarget as HTMLInputElement;
-    const selected = input.files?.[0] ?? null;
-    input.value = '';
-    if (!selected) return;
-    if (!selected.type.startsWith('image/')) {
-      error = 'Выберите изображение JPEG, PNG или WebP';
-      return;
-    }
-    if (selected.size > 5 * 1024 * 1024) {
-      error = 'Изображение должно быть меньше 5 МБ';
-      return;
-    }
-    avatarFile = selected;
-    cropOpen = true;
-  }
-
-  async function saveAvatar(blob: Blob): Promise<void> {
-    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
-    pendingAvatar = blob;
-    avatarPreviewUrl = URL.createObjectURL(blob);
-    removeAvatarPending = false;
-    cropOpen = false;
-    avatarFile = null;
-  }
-
-  function removeAvatar(): void {
-    if (avatarPreviewUrl) URL.revokeObjectURL(avatarPreviewUrl);
-    avatarPreviewUrl = '';
-    pendingAvatar = null;
-    removeAvatarPending = true;
-  }
-
   async function saveNotificationLevel(event: Event): Promise<void> {
     notificationLevel = (event.currentTarget as HTMLSelectElement).value as RoomNotificationLevel;
     notificationSaving = true;
@@ -165,7 +124,7 @@
   }
 
   function onClose(): void {
-    if (saving || deleting || avatarSaving || cropOpen) return;
+    if (saving || deleting || cropOpen) return;
     closeRoomSettings();
   }
 
@@ -264,48 +223,13 @@
             {/if}
 
             <div class="room-profile-head">
-              <div class="room-avatar-field">
-                <div class="room-avatar-control">
-                  <input
-                    bind:this={avatarInput}
-                    class="room-avatar-input"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onchange={onAvatarFile}
-                  />
-                  <button
-                    class="room-avatar-edit"
-                    type="button"
-                    onclick={() => avatarInput?.click()}
-                    disabled={avatarSaving}
-                    aria-label={roomClientState.roomAvatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
-                    title={roomClientState.roomAvatarUrl ? 'Изменить аватар комнаты' : 'Загрузить аватар комнаты'}
-                  >
-                    <Avatar
-                      name={name || roomClientState.roomId}
-                      src={avatarPreviewUrl || (removeAvatarPending ? null : roomClientState.roomAvatarUrl)}
-                      shape="squircle"
-                      background="var(--room-avatar-bg)"
-                      size={58}
-                    />
-                    <span class="room-avatar-overlay" aria-hidden="true">
-                      <Pencil {...iconSm} />
-                    </span>
-                  </button>
-                  {#if avatarPreviewUrl || (roomClientState.roomAvatarUrl && !removeAvatarPending)}
-                    <button
-                      class="room-avatar-remove"
-                      type="button"
-                      onclick={removeAvatar}
-                      disabled={avatarSaving}
-                      aria-label="Удалить аватар комнаты"
-                      title="Удалить аватар комнаты"
-                    >
-                      <X {...iconSm} aria-hidden="true" />
-                    </button>
-                  {/if}
-                </div>
-              </div>
+              <RoomAvatarField
+                savedUrl={roomClientState.roomAvatarUrl}
+                name={name || roomClientState.roomId}
+                bind:change={avatarChange}
+                bind:cropping={cropOpen}
+                onError={(message: string) => (error = message)}
+              />
               <label class="room-name-field">
                 <span class="settings-field-label">Название</span>
                 <input class="settings-input" maxlength="60" placeholder="Название комнаты" bind:value={name} />
@@ -373,22 +297,6 @@
   </div>
 {/if}
 
-<AvatarCropDialog
-  open={cropOpen}
-  file={avatarFile}
-  name={name || roomClientState.roomName || roomClientState.roomId}
-  shape="squircle"
-  kind="room"
-  title="Аватар комнаты"
-  onClose={() => {
-    if (!avatarSaving) {
-      cropOpen = false;
-      avatarFile = null;
-    }
-  }}
-  onSave={saveAvatar}
-/>
-
 <style>
   .room-settings-modal {
     width: 780px;
@@ -423,9 +331,6 @@
     flex: 1;
     min-width: 0;
   }
-  .room-avatar-field {
-    flex: none;
-  }
 
   @media (max-width: 600px) {
     .room-settings-body[data-sectioned='true'] {
@@ -435,98 +340,6 @@
     .room-settings-content {
       padding: 22px 18px;
     }
-  }
-
-  .room-avatar-control {
-    position: relative;
-    width: 58px;
-    height: 58px;
-  }
-
-  .room-avatar-edit {
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 58px;
-    height: 58px;
-    padding: 0;
-    overflow: hidden;
-    border: 0;
-    border-radius: 31%;
-    background: transparent;
-    color: #fff;
-    cursor: pointer;
-  }
-
-  .room-avatar-input {
-    display: none;
-  }
-
-  .room-avatar-overlay {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: inherit;
-    background: color-mix(in srgb, var(--warm-950) 58%, transparent);
-    opacity: 0;
-    transition: opacity 0.16s ease;
-    pointer-events: none;
-  }
-
-  .room-avatar-edit:not(:disabled):hover .room-avatar-overlay,
-  .room-avatar-edit:not(:disabled):focus-visible .room-avatar-overlay {
-    opacity: 1;
-  }
-
-  .room-avatar-edit:focus-visible {
-    outline: 2px solid var(--coral);
-    outline-offset: 3px;
-  }
-
-  .room-avatar-remove {
-    position: absolute;
-    z-index: 1;
-    top: -5px;
-    right: -5px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border: 2px solid var(--paper-deep);
-    border-radius: 50%;
-    background: var(--coral);
-    color: #fff;
-    cursor: pointer;
-    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34);
-    opacity: 0;
-    transition:
-      opacity 0.16s ease,
-      background 0.16s ease;
-  }
-
-  .room-avatar-control:hover .room-avatar-remove,
-  .room-avatar-control:focus-within .room-avatar-remove {
-    opacity: 1;
-  }
-
-  .room-avatar-remove:not(:disabled):hover {
-    background: color-mix(in oklch, var(--coral), var(--warm-950) 16%);
-  }
-
-  .room-avatar-remove:focus-visible {
-    outline: 2px solid #fff;
-    outline-offset: 2px;
-  }
-
-  .room-avatar-edit:disabled,
-  .room-avatar-remove:disabled {
-    cursor: default;
-    opacity: 0.6;
   }
 
   .dialog-danger-zone {

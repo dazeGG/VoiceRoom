@@ -106,6 +106,7 @@
       <input
         type="text"
         placeholder="логин друга"
+        aria-label="Логин друга"
         autocapitalize="off"
         autocomplete="off"
         spellcheck="false"
