@@ -1,8 +1,4 @@
-import { SvelteSet } from 'svelte/reactivity';
-import { addRoomByCode, fetchMe, fetchOwnedRooms } from '$lib/api/auth';
-import { session, setUser } from '$lib/features/auth/session.svelte';
-import { roomNameFor } from '$lib/features/auth/account';
-import { roomSettingsUi } from '../../room-settings.svelte';
+import { session } from '$lib/features/auth/session.svelte';
 import { startUi } from '../../start-ui.svelte';
 import {
   clearConnectedVoiceRoom,
@@ -13,40 +9,20 @@ import {
 import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
 import { ApiError } from '$lib/api/client';
-import { createRoom } from '$lib/api/rooms';
 import { checkRoomExists } from '../net/api';
 import { postState } from './presence';
 import { errorMessage, wait } from '../core/utils';
-import { extractRoomId, rotateStoredPeerSession } from '../core/session';
+import { rotateStoredPeerSession } from '../core/session';
 import { isRoomEmbedded } from '../core/embed';
 import { openLeaveScreen } from '../../leave-screen.svelte';
 import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
-import {
-  getDisplayName,
-  persistName,
-  requestGuestNameForRoom,
-  requireSavedName,
-  updateNameStatuses
-} from '../ui/names';
+import { getDisplayName, updateNameStatuses } from '../ui/names';
 import { resetConnectionStatus, setServerConnectionStatus, setVoiceConnectionStatus } from '../ui/status';
 import { refreshCallControls, resetPushToTalkState } from '../ui/controls';
 import { refreshScreenControls, stopLocalScreenStream } from '../services/screen-share-service';
 import { closeScreenView, refreshScreenStage } from '../ui/screen-view';
-import {
-  createParticipant,
-  removeAudioElements,
-  removePeer,
-  syncPeers,
-  updateParticipant,
-  updatePeerStatus
-} from './participants';
-import {
-  connectLiveKitRoom,
-  disconnectLiveKitRoom,
-  syncAuthoritativeScreenPresence,
-  syncLiveKitParticipantById,
-  syncLiveKitParticipants
-} from '../services/livekit-service';
+import { createParticipant, removeAudioElements, updatePeerStatus } from './participants';
+import { connectLiveKitRoom, disconnectLiveKitRoom } from '../services/livekit-service';
 import {
   getLocalMicrophoneCapture,
   openLocalMicrophone,
@@ -55,13 +31,7 @@ import {
 } from '../services/microphone-service';
 import { attachMeter, startMeters, stopMeters } from '../media/meters';
 import { startPeerLatencyStats, startSpeakingStats, stopPeerLatencyStats, stopSpeakingStats } from './stats';
-import {
-  clearAllPeerJoinCues,
-  clearPeerJoinCue,
-  clearStreamViewerCues,
-  playPeerCue,
-  playPeerJoinCue
-} from '../media/cues';
+import { clearAllPeerJoinCues, clearStreamViewerCues, playPeerCue } from '../media/cues';
 import { cancelScreenSourcePicker } from '../ui/screen-source-picker';
 import { syncDesktopGlobalHotkeys } from '../services/desktop-hotkey-service';
 import { closeParticipantContextMenu } from '../../participant-context-ui.svelte';
@@ -73,14 +43,15 @@ import {
   refreshMicrophoneLevelMeter
 } from '../ui/devices';
 import { GATE_THRESHOLD_MIN_DB } from '../core/config';
-import { getAppRealtime, type RealtimeEvent } from '$lib/api/realtime';
+import { getAppRealtime } from '$lib/api/realtime';
 import {
   ensureAppRealtimeConnected,
   joinVoiceRoom,
   leaveVoiceRoom as sendVoiceLeave,
   subscribeRoomVoice
 } from '$lib/entities/room/room-realtime';
-import { applyRoomDeleted, applyRoomUpdated } from './lifecycle';
+import { resolveRoomEntryName } from './room-entry';
+import { createVoiceEventHandler } from './voice-events';
 import { markInAppRoomNavigation } from '$lib/platform/open-in-app';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
 import {
@@ -88,7 +59,6 @@ import {
   notifyRoomAppConnection,
   notifyRoomNetworkOffline,
   notifyRoomNetworkOnline,
-  notifyRoomSnapshotApplied,
   notifyLiveKitReconciled,
   startRoomRecovery
 } from '../recovery/room-recovery';
@@ -97,11 +67,15 @@ import { createLogger, errorContext } from '$lib/shared/log';
 
 const log = createLogger('room');
 
-type RoomEntryGateResult = 'authenticated' | 'anonymous' | 'failure';
-
 let voiceJoinSent = false;
 let joinAttemptGeneration = 0;
 let activeJoinAttempt: Promise<void> | null = null;
+
+const handleVoiceEvent = createVoiceEventHandler({
+  leaveRoom: () => leaveRoom(),
+  showModeration: (reason) => showRoomModerationScreen(reason),
+  showNotFound: () => showRoomNotFound()
+});
 
 function isCurrentJoinAttempt(generation: number): boolean {
   return generation === joinAttemptGeneration;
@@ -193,91 +167,6 @@ function getMissingRoomLabel(): string {
   }
 }
 
-export async function createRoomFromStart(): Promise<void> {
-  if (!requireSavedName(startUi.nameInput)) return;
-
-  startUi.createRoomLoading = true;
-  try {
-    openRoom(await createRoom());
-  } catch (error) {
-    log.error('room action failed', errorContext(error));
-    showToast(errorMessage(error) || 'Не удалось создать комнату');
-  } finally {
-    startUi.createRoomLoading = false;
-  }
-}
-
-export function joinRoomByCode(): void {
-  if (!requireSavedName(startUi.nameInput)) return;
-
-  const roomId = extractRoomId(startUi.roomCode);
-  if (!roomId) {
-    showToast('Введите код комнаты');
-    return;
-  }
-
-  openRoom(roomId);
-}
-
-export function handleRoomCodeKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Enter') return;
-  event.preventDefault();
-  joinRoomByCode();
-}
-
-function openRoom(roomId: string): void {
-  markInAppRoomNavigation();
-  window.location.href = `/r/${encodeURIComponent(roomId)}`;
-}
-
-async function autoSaveRoomForAuthenticatedUser(roomId: string): Promise<void> {
-  if (!roomId) return;
-  try {
-    await addRoomByCode(roomId);
-    window.dispatchEvent(new CustomEvent('voice-room:rooms-changed', { detail: { roomId } }));
-  } catch (error) {
-    // Auto-save is a convenience side effect: temporary rooms, already-pruned
-    // rooms, and transient bookmark failures must never block or noisy-toast
-    // the room entry flow.
-    log.debug('room auto-save skipped', errorContext(error));
-  }
-}
-
-async function resolveRoomEntryName(): Promise<RoomEntryGateResult> {
-  // Room links intentionally verify the account directly instead of using the
-  // home session loader: this route has no lobby session UI, and an auth-check
-  // failure must stop entry instead of silently treating the user as anonymous.
-  try {
-    const user = await fetchMe();
-    if (user) {
-      setUser(user);
-      persistName(roomNameFor(user));
-      void autoSaveRoomForAuthenticatedUser(state.roomId);
-      // Settings/delete UI is owner-only; the lobby's room list is the only
-      // place "owner" is known client-side, so cross-check it here.
-      try {
-        const owned = await fetchOwnedRooms();
-        roomSettingsUi.isOwner = owned.some((room) => room.roomId === state.roomId && room.relationship === 'owner');
-      } catch (ownedError) {
-        log.warn('failed to resolve room ownership', errorContext(ownedError));
-      }
-      return 'authenticated';
-    }
-  } catch (error) {
-    log.error('failed to check room entry session', errorContext(error));
-    showToast('Не удалось проверить аккаунт. Попробуйте обновить страницу.');
-    return 'failure';
-  }
-
-  try {
-    await requestGuestNameForRoom();
-    return 'anonymous';
-  } catch (error) {
-    log.warn('guest name request cancelled', errorContext(error));
-    return 'failure';
-  }
-}
-
 export async function joinRoom(event?: Event): Promise<void> {
   event?.preventDefault();
   if (state.joined || state.connecting) return;
@@ -345,7 +234,7 @@ async function performJoinRoom(generation: number): Promise<void> {
     ensureAppRealtimeConnected();
     state.voiceRealtimeTeardown?.();
     const detachVoiceEvents = subscribeRoomVoice(state.roomId, (event) => {
-      handleVoiceRealtimeEvent(event).catch((err) => {
+      handleVoiceEvent(event).catch((err) => {
         log.error('voice realtime handler failed', errorContext(err));
       });
     });
@@ -432,123 +321,6 @@ function formatJoinError(error: unknown): string {
 function isVoiceRouteError(error: unknown): boolean {
   const message = errorMessage(error);
   return /ice|no route|signal connection|failed to fetch|timeout|websocket/i.test(message);
-}
-
-async function handleVoiceRealtimeEvent(event: RealtimeEvent): Promise<void> {
-  if (event.type === 'pong') {
-    setServerConnectionStatus('connected');
-    return;
-  }
-
-  if (event.type === 'room.snapshot') {
-    const snapshot = event.payload;
-    if (snapshot.roomId !== state.roomId) return;
-    const peers = Array.isArray(snapshot.peers) ? snapshot.peers : [];
-    const localPeer = peers.find((peer) => peer.id === state.peerId);
-    const remotePeers = peers.filter((peer) => peer.id !== state.peerId);
-    state.serverPeerIds = new SvelteSet(remotePeers.map((peer) => peer.id).filter(Boolean));
-    state.serverPeerSyncReady = true;
-    // Prefer the server clock for the call widget timers: my joinedAt from the
-    // authoritative peer record, the shared call start from the room snapshot.
-    setVoiceSessionTiming({
-      joinedAt: localPeer?.joinedAt ?? state.self?.joinedAt ?? null,
-      roomActiveSince: snapshot.voiceActiveSince ?? null
-    });
-    setServerConnectionStatus('connected');
-    syncPeers([...state.serverPeerIds]);
-    if (localPeer) {
-      // Local controls and stream attendance are owned by this client; the snapshot
-      // may carry a stale server copy (e.g. changed while reconnecting), so keep them.
-      updateParticipant({
-        ...localPeer,
-        screenAuthoritative: true,
-        deafened: state.outputMuted,
-        isLocal: true,
-        muted: isMicrophoneShownMuted(),
-        viewedScreenPeerId: state.self?.viewedScreenPeerId ?? localPeer.viewedScreenPeerId
-      });
-    }
-    for (const peer of remotePeers) {
-      syncAuthoritativeScreenPresence(peer.id, Boolean(peer.screen));
-      createParticipant({ ...peer, screenAuthoritative: true });
-    }
-    syncLiveKitParticipants(state.livekitRoom);
-    notifyRoomSnapshotApplied({
-      appEpoch: getAppRealtime().getConnectionEpoch(),
-      active: snapshot.mode === 'active',
-      hasLocalPeer: Boolean(localPeer)
-    });
-    if (state.joined) postState().catch(() => {});
-    return;
-  }
-
-  if (event.type === 'error') {
-    if (event.payload.code === 'room_banned') {
-      showRoomModerationScreen('banned');
-      return;
-    }
-    showToast(event.payload.message || 'Ошибка realtime-соединения');
-    if (
-      event.payload.code === 'invalid_session' ||
-      event.payload.code === 'join_failed' ||
-      event.payload.code === 'room_full'
-    ) {
-      leaveRoom();
-      setVoiceConnectionStatus('error');
-    }
-    return;
-  }
-
-  if (event.type === 'room.not_found') {
-    showRoomNotFound();
-    return;
-  }
-
-  if (event.type === 'room.kicked' || event.type === 'room.banned') {
-    if (event.payload.roomId === state.roomId && (!event.payload.peerId || event.payload.peerId === state.peerId)) {
-      showRoomModerationScreen(event.type === 'room.banned' ? 'banned' : 'kicked');
-    }
-    return;
-  }
-
-  if (event.type === 'room.peer.joined') {
-    if (event.payload.peer?.id) state.serverPeerIds.add(event.payload.peer.id);
-    createParticipant({ ...event.payload.peer, screenAuthoritative: true });
-    syncLiveKitParticipantById(event.payload.peer?.id);
-    playPeerJoinCue(event.payload.peer?.id);
-    return;
-  }
-
-  if (event.type === 'room.peer.left') {
-    const hadPeer = state.peers.has(event.payload.peerId);
-    state.serverPeerIds.delete(event.payload.peerId);
-    removePeer(event.payload.peerId);
-    clearPeerJoinCue(event.payload.peerId);
-    if (hadPeer) playPeerCue('leave');
-    return;
-  }
-
-  if (event.type === 'room.peer.updated') {
-    syncAuthoritativeScreenPresence(event.payload.peer.id, Boolean(event.payload.peer.screen));
-    updateParticipant({ ...event.payload.peer, screenAuthoritative: Object.hasOwn(event.payload.peer, 'screen') });
-    return;
-  }
-
-  if (event.type === 'room.full') {
-    showToast(`Комната заполнена: максимум ${event.payload.maxRoomPeers}`);
-    leaveRoom();
-    return;
-  }
-
-  if (event.type === 'room.updated') {
-    applyRoomUpdated(event.payload.room);
-    return;
-  }
-
-  if (event.type === 'room.deleted') {
-    applyRoomDeleted(event.payload.roomId);
-    return;
-  }
 }
 
 export function leaveRoom(): void {

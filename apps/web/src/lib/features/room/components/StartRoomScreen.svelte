@@ -2,7 +2,7 @@
   import FeatureList from '$lib/shared/components/FeatureList.svelte';
   import { START_FEATURES } from '$lib/features/shared-content/start-features';
   import { state } from '../client/core/state.svelte';
-  import { createRoomFromStart, joinRoomByCode, handleRoomCodeKeydown } from '../client/room/room';
+  import { createRoomFromStart, joinRoomByCode, handleRoomCodeKeydown } from '../client/room/room-start';
   import { saveStartName, updateNameStatuses } from '../client/ui/names';
   import { startUi } from '../start-ui.svelte';
 </script>
