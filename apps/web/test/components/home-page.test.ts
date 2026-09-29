@@ -8,6 +8,7 @@ import { openProfileCardFor } from '../../src/lib/entities/profile-card/profile-
 import { stubFetch } from '../fixtures/fetch.ts';
 import { installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';
+import { stubMatchMedia } from '../helpers/match-media.ts';
 
 afterEach(cleanup);
 
@@ -18,16 +19,7 @@ test('a signed-in visit renders the lobby, and a profile card opens there', asyn
   window.addEventListener('unhandledrejection', onError);
   window.addEventListener('error', onError);
   installFakeWebSocket();
-  vi.stubGlobal('matchMedia', (media: string) => ({
-    matches: false,
-    media,
-    onchange: null,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-    addListener: () => {},
-    removeListener: () => {},
-    dispatchEvent: () => false
-  }));
+  stubMatchMedia();
   const user = authUser({ id: 'ada', login: 'ada', displayName: 'Ада' });
   stubFetch({
     'GET /api/auth/me': { body: { ok: true, user } },

@@ -156,7 +156,7 @@
     <span class="settings-section-title" id="accountPasswordTitle">Пароль</span>
     <form class="account-security-password" onsubmit={submitPasswordChange}>
       <div class="settings-password-fields">
-        <div>
+        <label>
           <span class="settings-field-label">Текущий пароль</span>
           <input
             class="settings-input"
@@ -166,8 +166,8 @@
             placeholder="••••••••"
             autocomplete="current-password"
           />
-        </div>
-        <div>
+        </label>
+        <label>
           <span class="settings-field-label">Новый пароль</span>
           <input
             class="settings-input"
@@ -176,7 +176,7 @@
             placeholder="Минимум {PASSWORD_MIN_LENGTH} символов"
             autocomplete="new-password"
           />
-        </div>
+        </label>
       </div>
       <div class="account-security-password-foot">
         <div class="settings-gate-hint">После смены пароля завершатся все сеансы, включая этот.</div>

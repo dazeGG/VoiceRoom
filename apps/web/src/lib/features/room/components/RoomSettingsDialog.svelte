@@ -306,10 +306,10 @@
                   {/if}
                 </div>
               </div>
-              <div class="room-name-field">
+              <label class="room-name-field">
                 <span class="settings-field-label">Название</span>
                 <input class="settings-input" maxlength="60" placeholder="Название комнаты" bind:value={name} />
-              </div>
+              </label>
             </div>
 
             {#if engagementEnabled}
