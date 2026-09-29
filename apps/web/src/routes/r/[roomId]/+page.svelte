@@ -153,8 +153,8 @@
   {#key routeRoomId}
     <RoomPage roomId={routeRoomId} autoJoin />
   {/key}
+  <!-- The lobby mounts its own host; a second one would fight it for the card. -->
+  <ProfileCardHost onToast={(message) => showToast(message)} />
 {/if}
-
-<ProfileCardHost onToast={(message) => showToast(message)} />
 
 <ToastStack toasts={toastState.items} onDismiss={dismissToast} />
