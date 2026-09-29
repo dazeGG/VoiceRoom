@@ -546,28 +546,10 @@ export function clearAllSpeaking(): void {
   }
 }
 
+// A remote tile names a real voice problem ("голос не подключен"); while the
+// voice is still connecting it shows nothing rather than a passing placeholder.
 export function updatePeerStatus(peer: Participant): void {
-  if (!peer.isLocal && peer.voiceIssue) {
-    setParticipantStatus(peer, peer.voiceIssue);
-    return;
-  }
-
-  if (peer.screen) {
-    setParticipantStatus(peer, '');
-    return;
-  }
-
-  if (!peer.isLocal && peer.livekitParticipant) {
-    setParticipantStatus(peer, '');
-    return;
-  }
-
-  if (peer.muted || peer.isLocal) {
-    setParticipantStatus(peer, '');
-    return;
-  }
-
-  setParticipantStatus(peer, '');
+  setParticipantStatus(peer, !peer.isLocal && peer.voiceIssue ? peer.voiceIssue : '');
 }
 
 function setParticipantStatus(peer: Participant, label: string): void {

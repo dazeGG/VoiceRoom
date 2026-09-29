@@ -7,7 +7,9 @@ import { createInitialRoomState } from '../../src/lib/features/room/client/model
 import {
   clearAllSpeaking,
   createParticipant,
-  syncPeers
+  detachLiveKitParticipant,
+  syncPeers,
+  updatePeerStatus
 } from '../../src/lib/features/room/client/room/participants.ts';
 import { startMeters, stopMeters } from '../../src/lib/features/room/client/media/meters.ts';
 import type { Participant } from '../../src/lib/features/room/client/core/types.ts';
@@ -99,4 +101,22 @@ test('clearing speaking turns every ring off at once', () => {
   expect(state.peers.get('loud')?.speaking).toBe(true);
   clearAllSpeaking();
   expect(state.peers.get('loud')?.speaking).toBe(false);
+});
+
+test('a remote tile shows no placeholder while its voice connects, only a real voice problem', () => {
+  const peer = createParticipant({ id: 'peer-a', name: 'A' });
+  expect(peer.statusLabel).toBe('');
+
+  detachLiveKitParticipant(peer);
+  updatePeerStatus(peer);
+  expect(peer.statusLabel).toBe('');
+
+  peer.voiceIssue = 'голос не подключен';
+  updatePeerStatus(peer);
+  expect(peer.statusLabel).toBe('голос не подключен');
+
+  const self = createParticipant({ id: 'me', name: 'Я' });
+  self.voiceIssue = 'голос не подключен';
+  updatePeerStatus(self);
+  expect(self.statusLabel).toBe('');
 });

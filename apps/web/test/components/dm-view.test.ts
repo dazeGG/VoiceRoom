@@ -133,3 +133,23 @@ test('an invitation is answered from the card by the invited side only', () => {
   expect(within(sent).getByText('Приглашение отправлено')).toBeTruthy();
   expect(within(sent).queryByRole('button')).toBeNull();
 });
+
+test('a thread stays behind the loading note until its emoji artwork has loaded', async () => {
+  const incomplete = vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(false);
+  const lobby = renderDm();
+  lobby.thread.loading = true;
+  flushSync();
+  expect(screen.getByRole('status').textContent).toBe('Загружаем переписку…');
+
+  lobby.thread.messages = [message('m1', 'ada', 'привет 👍')];
+  lobby.thread.loading = false;
+  flushSync();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(screen.getByRole('status').textContent).toBe('Загружаем переписку…');
+  expect(document.querySelector('.lobby-dm-thread')?.classList.contains('is-settling')).toBe(true);
+
+  incomplete.mockRestore();
+  for (const image of document.querySelectorAll('.lobby-dm-thread img')) image.dispatchEvent(new Event('load'));
+  await vi.waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+  expect(document.querySelector('.lobby-dm-thread')?.classList.contains('is-settling')).toBe(false);
+});

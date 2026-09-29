@@ -97,10 +97,11 @@
     {/if}
 
     <div class="lr-field">
-      <div class="lr-field-label">
+      <label class="lr-field-label" for="createRoomName">
         Название{#if tab === 'temp'}<span class="lr-field-label-soft"> · необязательно</span>{/if}
-      </div>
+      </label>
       <input
+        id="createRoomName"
         class="lr-dialog-input"
         maxlength="60"
         placeholder={tab === 'permanent' ? 'Название комнаты' : 'Название созвона'}
@@ -150,6 +151,7 @@
     margin-bottom: 4px;
   }
   :global(.lr-field-label) {
+    display: block;
     font-size: 12.5px;
     font-weight: 700;
     color: var(--warm-muted);
