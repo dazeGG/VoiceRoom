@@ -43,8 +43,11 @@
     </button>
 
     <form class="lv-join" onsubmit={submitJoin}>
+      <!-- A search field, so iCloud Passwords does not offer logins here. -->
       <input
         class="lv-join-input"
+        type="search"
+        name="room-search"
         placeholder="Код комнаты"
         maxlength="120"
         autocapitalize="off"

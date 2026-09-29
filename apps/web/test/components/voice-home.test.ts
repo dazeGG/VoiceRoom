@@ -33,7 +33,7 @@ function renderHome(rooms: ReturnType<typeof room>[] = []) {
 
 test('joining by code is one field that takes a code or a link and explains auto-save', async () => {
   const props = renderHome();
-  const field = screen.getByRole('textbox', { name: 'Код или ссылка на комнату' });
+  const field = screen.getByRole('searchbox', { name: 'Код или ссылка на комнату' });
   const hint = document.getElementById(field.getAttribute('aria-describedby') ?? '');
   expect(hint?.textContent).toMatch(/Постоянные комнаты сохраняются автоматически/);
 
@@ -87,7 +87,8 @@ test('a room with muted notifications shows a bell-off mark next to its name', a
 
 test('the code field is not a login: browsers and password managers are told to stay out', () => {
   renderHome();
-  const field = screen.getByRole('textbox', { name: 'Код или ссылка на комнату' });
+  // A search field: iCloud Passwords ignores autocomplete="off" but leaves these alone.
+  const field = screen.getByRole('searchbox', { name: 'Код или ссылка на комнату' });
   expect(field.getAttribute('autocomplete')).toBe('off');
   // The attributes 1Password, LastPass and Bitwarden read to skip a field.
   expect(field.hasAttribute('data-1p-ignore')).toBe(true);

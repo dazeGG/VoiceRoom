@@ -148,11 +148,15 @@
     style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;margin:24px 0 18px;"
   >
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
-      <!-- A room code, not a credential: browsers and password managers
-           (1Password, LastPass, Bitwarden) must not offer logins here. -->
+      <!-- A room code, not a credential. iCloud Passwords ignores
+           autocomplete="off" and offered its logins here, over the room list;
+           a search field is the one kind it leaves alone. The data-* skip
+           attributes do the same for 1Password, LastPass and Bitwarden. -->
       <form class="lv-join" onsubmit={submitJoinCode}>
         <input
           class="lv-join-input"
+          type="search"
+          name="room-search"
           placeholder="Код или ссылка"
           aria-label="Код или ссылка на комнату"
           aria-describedby="roomAutoSaveHint"

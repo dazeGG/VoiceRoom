@@ -531,6 +531,17 @@ html.is-desktop .home-app {
   letter-spacing: normal;
 }
 
+/* The room code fields are search inputs (see VoiceHome); they keep the look
+   of a plain text field. */
+.lv-join-input {
+  appearance: none;
+}
+
+.lv-join-input::-webkit-search-cancel-button,
+.lv-join-input::-webkit-search-decoration {
+  appearance: none;
+}
+
 .lv-join-btn {
   flex: none;
   border: none;

@@ -172,6 +172,17 @@
   color: var(--warm-faint);
 }
 
+/* The room code fields are search inputs (see VoiceHome); they keep the look
+   of a plain text field. */
+.lv-join-input {
+  appearance: none;
+}
+
+.lv-join-input::-webkit-search-cancel-button,
+.lv-join-input::-webkit-search-decoration {
+  appearance: none;
+}
+
 .lv-join-btn {
   border: none;
   border-left: 1px solid rgba(255, 255, 255, 0.1);
