@@ -70,7 +70,13 @@
 <svelte:window onkeydown={onKeydown} />
 
 {#snippet navItem(id: SettingsTab, label: string, Icon: typeof User)}
-  <button class="settings-nav-item" type="button" data-active={tab === id} onclick={() => (tab = id)}>
+  <button
+    class="settings-nav-item"
+    type="button"
+    data-active={tab === id}
+    aria-current={tab === id ? 'page' : undefined}
+    onclick={() => (tab = id)}
+  >
     <Icon {...iconMd} aria-hidden="true" />
     {label}
   </button>
