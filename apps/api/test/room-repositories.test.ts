@@ -189,6 +189,26 @@ test('a message never expires, shows its author as they are now, and edits in pl
   const edited = await store.editMessage('room1', 'm1', 'updated');
   assert.equal(edited?.text, 'updated');
   assert.ok(edited?.editedAt);
+
+  // Clients render the structured content before the plain text, so an edit
+  // that left the sent content in place kept showing the old words.
+  await store.appendMessage(
+    'room1',
+    {
+      id: 'm3',
+      peerId: 'peer2',
+      text: 'до правки',
+      content: { version: 1, segments: [{ type: 'text', text: 'до правки' }] },
+      createdAt: 2500,
+      authorUserId: ada.id
+    },
+    2500
+  );
+  const rewritten = await store.editMessage('room1', 'm3', 'после правки');
+  assert.deepEqual(rewritten?.content, { version: 1, segments: [{ type: 'text', text: 'после правки' }] });
+  assert.deepEqual((await store.getMessage('room1', 'm3'))?.content, rewritten?.content);
+  assert.equal(await store.softDeleteMessage('room1', 'm3'), true);
+
   assert.equal(await store.softDeleteMessage('room1', 'm1'), true);
   assert.equal(await store.softDeleteMessage('room1', 'm1'), false);
   assert.equal(await store.editMessage('room1', 'm1', 'again'), null, 'a deleted message is not edited');
@@ -199,7 +219,7 @@ test('a message never expires, shows its author as they are now, and edits in pl
   );
   assert.equal(
     (await pool.query<{ count: number }>('SELECT count(*)::int AS count FROM room_messages')).rows[0]?.count,
-    2,
+    3,
     'nothing is trimmed'
   );
 });

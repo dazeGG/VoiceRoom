@@ -8,6 +8,8 @@ import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
 import { createAnchoredHistory } from './room-history.svelte';
 import { mergeLatestWindow, restampAuthor } from './room-chat-view';
 
+const MAX_EARLY_EDITS = 50;
+
 export class RoomChatTimeline {
   messages = $state<ChatMessage[]>([]);
   loading = $state(true);
@@ -66,13 +68,27 @@ export class RoomChatTimeline {
   /** Adds a new message; answers false when it is already there. */
   add(message: ChatMessage): boolean {
     if (!message.id || this.has(message.id)) return false;
-    if (this.paged) this.#history.upsert(message);
-    else this.messages = [...this.messages, message];
+    const current = this.#earlyEdits[message.id] ?? message;
+    delete this.#earlyEdits[message.id];
+    if (this.paged) this.#history.upsert(current);
+    else this.messages = [...this.messages, current];
     return true;
   }
 
-  /** Replaces a message the list already has (an edit). */
+  // An edit can overtake its message: a link preview is published straight
+  // away, while the message itself may still be on its way through the
+  // delivery worker. The edit waits here and wins when the message arrives.
+  // Not reactive: nothing renders it.
+  #earlyEdits: Record<string, ChatMessage> = {};
+
+  /** Replaces a message the list has (an edit); one not there yet waits for it. */
   replace(message: ChatMessage): void {
+    if (!this.has(message.id)) {
+      this.#earlyEdits[message.id] = message;
+      const waiting = Object.keys(this.#earlyEdits);
+      if (waiting.length > MAX_EARLY_EDITS) delete this.#earlyEdits[waiting[0]];
+      return;
+    }
     if (this.paged) this.#history.upsert(message);
     else this.messages = this.messages.map((item) => (item.id === message.id ? message : item));
   }

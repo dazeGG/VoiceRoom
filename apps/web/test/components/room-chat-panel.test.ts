@@ -163,3 +163,40 @@ test("a guest's unsent text survives a look at the participants tab", async () =
   await rerender({ ...props, activeTab: 'chat' });
   expect(composer().textContent).toBe('не отправлено');
 });
+
+test('the next message can be typed while one is sending; a failed one comes back before it', async () => {
+  let fail = false;
+  stubRoom({
+    'POST /api/rooms/room/chat': () =>
+      fail
+        ? { status: 500, body: { ok: false, error: 'Сервер недоступен' } }
+        : { body: { ok: true, message: roomMessage('m4', 'me', 'первое') } }
+  });
+  // Each post waits until the test lets it answer.
+  const answer = globalThis.fetch;
+  let release = () => {};
+  vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (init?.method === 'POST' && url === '/api/rooms/room/chat') {
+      await new Promise<void>((resolve) => (release = resolve));
+    }
+    return answer(input, init);
+  });
+  renderPanel();
+  await screen.findByText('от Ады');
+
+  await userEvent.click(composer());
+  await userEvent.keyboard('первое{Enter}');
+  expect(composer().textContent).toBe('');
+  await userEvent.keyboard('второе');
+  release();
+  expect(await screen.findByText('первое', { selector: '.chat-msg-content *, .chat-msg-content' })).toBeTruthy();
+  expect(composer().textContent).toBe('второе');
+
+  fail = true;
+  await userEvent.keyboard('{Enter}');
+  await userEvent.keyboard('третье');
+  release();
+  expect(await screen.findByText(/Сервер недоступен|Не удалось/)).toBeTruthy();
+  await vi.waitFor(() => expect(composer().textContent).toMatch(/^второе\s*третье$/));
+});

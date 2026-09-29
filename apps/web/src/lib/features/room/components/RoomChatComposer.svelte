@@ -15,6 +15,7 @@
   import ComposerEmojiPicker from '$lib/shared/chat/ComposerEmojiPicker.svelte';
   import EmojiComposer from '$lib/shared/chat/EmojiComposer.svelte';
   import MentionAutocomplete from '$lib/shared/chat/MentionAutocomplete.svelte';
+  import type { SelectedMention } from '$lib/shared/chat/mention-composer.svelte';
   import ReplyTargetBar from '$lib/shared/chat/ReplyTargetBar.svelte';
   import TypingIndicator from '$lib/shared/chat/TypingIndicator.svelte';
   import { createTypingNotifier } from '$lib/shared/chat/typing.svelte';
@@ -105,25 +106,40 @@
     if (!text && !media?.canSend) return;
     if (media?.drafts.length && !media.canSend) return;
 
+    const outgoing = {
+      text,
+      content: mentions.selected.length ? mentions.toContent(text) : (contentFromPlainText(text) ?? undefined),
+      attachmentIds: media?.readyIds ?? [],
+      replyTo: replyTarget ? { messageId: replyTarget.id } : undefined
+    };
+    // The field empties at once and stays writable, so the next message can be
+    // typed while this one is on its way; a failure puts the text back.
+    const sentMentions = [...mentions.selected];
+    const sentReplyTarget = replyTarget;
+    draft.clear();
+    replyTarget = null;
     sending = true;
-    let sent: boolean;
+    let sent = false;
     try {
-      sent = await send({
-        text,
-        content: mentions.selected.length ? mentions.toContent(text) : (contentFromPlainText(text) ?? undefined),
-        attachmentIds: media?.readyIds ?? [],
-        replyTo: replyTarget ? { messageId: replyTarget.id } : undefined
-      });
+      sent = await send(outgoing);
     } finally {
       sending = false;
+      if (!sent) restoreUnsent(text, sentMentions, sentReplyTarget);
     }
     if (!sent) return;
-    draft.clear();
     media?.clearBound();
-    replyTarget = null;
     typingNotifier.reset();
     await tick();
     focus();
+  }
+
+  // Anything typed meanwhile stays after the text that did not go out.
+  function restoreUnsent(text: string, sentMentions: SelectedMention[], target: ChatMessage | null): void {
+    const typedMeanwhile = draft.text.trim();
+    draft.text = typedMeanwhile ? `${text}\n${draft.text}` : text;
+    mentions.restore([...sentMentions, ...mentions.selected]);
+    replyTarget ??= target;
+    draft.schedule();
   }
 
   function onKeydown(event: KeyboardEvent): void {
@@ -202,7 +218,6 @@
           mentions.setComposing(false);
           void updateMentionCandidates();
         }}
-        disabled={sending}
       />
       <ComposerEmojiPicker
         userId={session.user?.id ?? ''}

@@ -1,9 +1,14 @@
 import { cleanup, render, screen } from '@testing-library/svelte';
 import { afterEach, expect, test } from 'vitest';
 import RoomMemberList from '../../src/lib/entities/room/components/RoomMemberList.svelte';
+import { session } from '../../src/lib/features/auth/session.svelte';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { authUser } from '../fixtures/users.ts';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  session.user = null;
+});
 
 function member(userId: string, displayName: string, presenceStatus: string) {
   return {
@@ -34,6 +39,7 @@ test('the participants tab lists the roster from the server, split into online a
     }
   });
 
+  session.user = authUser();
   render(RoomMemberList, { props: { roomId: 'room-a' } });
 
   expect(await screen.findByText('В сети — 2')).toBeTruthy();
@@ -41,4 +47,13 @@ test('the participants tab lists the roster from the server, split into online a
   expect(screen.getByText('Anna')).toBeTruthy();
   expect(screen.getByText('Vera')).toBeTruthy();
   expect(calls.map((call) => call.url)).toEqual(['/api/rooms/room-a/members?limit=50']);
+});
+
+test('a guest is told the roster needs an account instead of getting an error', async () => {
+  const { calls } = stubFetch({});
+  render(RoomMemberList, { props: { roomId: 'room-b' } });
+
+  expect(screen.getByText('Список участников виден после входа в аккаунт.')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Повторить' })).toBeNull();
+  expect(calls).toEqual([]);
 });

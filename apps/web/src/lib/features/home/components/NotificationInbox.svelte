@@ -50,7 +50,17 @@
     void inbox.markRead(item.id);
     onopen(item);
   }
+
+  // Escape closes the panel, unless it belongs to something above it: a modal
+  // dialog (settings opened over the panel) or a handler that took the key.
+  function onWindowKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Escape' || event.defaultPrevented) return;
+    if (document.querySelector('[aria-modal="true"]')) return;
+    onclose?.();
+  }
 </script>
+
+<svelte:window onkeydown={onWindowKeydown} />
 
 <section class="notification-inbox" aria-labelledby="notification-inbox-title">
   <header class="notification-inbox-head">

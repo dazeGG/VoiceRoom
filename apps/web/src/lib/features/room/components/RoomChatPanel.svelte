@@ -400,6 +400,8 @@
   }
 
   async function markRealtimeRenderedRead(message: ChatMessage): Promise<void> {
+    // Read cursors and paged history are account-only; a guest has neither.
+    if (!timeline.paged || !readReconciliation) return;
     if (message.readCursor) {
       await markLatestRenderedRead(message.readCursor);
       return;

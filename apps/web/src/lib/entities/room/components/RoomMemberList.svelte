@@ -32,8 +32,12 @@
   // anchors to it because the menu item itself is gone once the menu closes.
   let menuAnchor: HTMLElement | null = null;
 
+  // The roster is account-only: the API answers a guest with 401.
+  const signedIn = $derived(Boolean(session.user?.id));
+
   $effect(() => {
     const currentRoomId = roomId;
+    if (!signedIn) return;
     untrack(() => {
       getRoomMembership(currentRoomId);
       void loadRoomMembership(currentRoomId);
@@ -169,7 +173,11 @@
     {#if roster?.error}{roster.error}{/if}
   </div>
 
-  {#if roster?.error && roster.members.length === 0}
+  {#if !signedIn}
+    <div class="room-member-list__notice">
+      <p>Список участников виден после входа в аккаунт.</p>
+    </div>
+  {:else if roster?.error && roster.members.length === 0}
     <div class="room-member-list__notice" role="alert">
       <p>{roster.error}</p>
       <button type="button" onclick={() => loadRoomMembership(roomId)}>Повторить</button>
