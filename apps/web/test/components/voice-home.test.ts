@@ -84,3 +84,13 @@ test('a room with muted notifications shows a bell-off mark next to its name', a
   expect(screen.getByRole('button', { name: /Планёрка/ }).contains(muted[0])).toBe(true);
   notificationPreferences.mutedRoomIds = [];
 });
+
+test('the code field is not a login: browsers and password managers are told to stay out', () => {
+  renderHome();
+  const field = screen.getByRole('textbox', { name: 'Код или ссылка на комнату' });
+  expect(field.getAttribute('autocomplete')).toBe('off');
+  // The attributes 1Password, LastPass and Bitwarden read to skip a field.
+  expect(field.hasAttribute('data-1p-ignore')).toBe(true);
+  expect(field.getAttribute('data-lpignore')).toBe('true');
+  expect(field.hasAttribute('data-bwignore')).toBe(true);
+});

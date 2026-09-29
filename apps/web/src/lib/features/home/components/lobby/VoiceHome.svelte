@@ -148,12 +148,20 @@
     style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;margin:24px 0 18px;"
   >
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;">
+      <!-- A room code, not a credential: browsers and password managers
+           (1Password, LastPass, Bitwarden) must not offer logins here. -->
       <form class="lv-join" onsubmit={submitJoinCode}>
         <input
           class="lv-join-input"
           placeholder="Код или ссылка"
           aria-label="Код или ссылка на комнату"
           aria-describedby="roomAutoSaveHint"
+          autocapitalize="off"
+          autocomplete="off"
+          spellcheck="false"
+          data-1p-ignore
+          data-lpignore="true"
+          data-bwignore
           bind:value={joinCode}
         />
         <span class="lv-join-hint" title="Постоянные комнаты сохраняются автоматически" aria-hidden="true">i</span>

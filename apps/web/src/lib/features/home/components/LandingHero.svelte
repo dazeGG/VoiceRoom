@@ -50,6 +50,9 @@
         autocapitalize="off"
         autocomplete="off"
         spellcheck="false"
+        data-1p-ignore
+        data-lpignore="true"
+        data-bwignore
         bind:value={roomCode}
         onkeydown={onRoomCodeKeydown}
       />
