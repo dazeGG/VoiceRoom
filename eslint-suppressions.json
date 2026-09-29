@@ -745,16 +745,16 @@
       "count": 1
     },
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 4
+      "count": 3
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 6
+      "count": 4
     },
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 4
     },
     "@typescript-eslint/no-unsafe-return": {
-      "count": 3
+      "count": 1
     },
     "svelte/no-navigation-without-resolve": {
       "count": 5

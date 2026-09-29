@@ -9,6 +9,7 @@
   import type { PublicUser } from '$lib/api/friends';
   import { getAppRealtime } from '$lib/api/realtime';
   import { useLobby } from '$lib/features/home/model/lobby-context';
+  import { LEGACY_READ } from '$lib/features/home/model/dm-thread.svelte';
   import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
   import type { AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
   import LinkPreviewCard from '$lib/shared/chat/LinkPreviewCard.svelte';
@@ -216,7 +217,7 @@
     const revision = lobby.thread.readRevision;
     const candidate = lobby.thread.readCandidate;
     if (!revision || !candidate) return;
-    void tick().then(() => readReconciliation?.advanceAfterRender(candidate === '__legacy__' ? undefined : candidate));
+    void tick().then(() => readReconciliation?.advanceAfterRender(candidate === LEGACY_READ ? undefined : candidate));
   });
 
   function onThreadScroll(): void {

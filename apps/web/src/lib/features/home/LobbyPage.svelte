@@ -2,13 +2,9 @@
   import { onMount } from 'svelte';
   import { getAppRealtime } from '$lib/api/realtime';
   import { pushState, replaceState } from '$app/navigation';
-  import type { AuthUser, OwnedRoom } from '$lib/api/auth';
-  import { fetchOwnedRooms } from '$lib/api/auth';
+  import type { AuthUser } from '$lib/api/auth';
   import { createRoom } from '$lib/api/rooms';
-  import { clearRoomPresence } from '../../entities/room/room-presence.svelte';
-  import { initLobbyRoomRealtime } from '../../entities/room/room-realtime';
   import { extractRoomId } from '$lib/shared/utils/room';
-  import SettingsModal from './components/SettingsModal.svelte';
   import RoomPage from '$lib/features/room/RoomPage.svelte';
   import {
     leaveActiveVoiceRoomWithCue,
@@ -48,19 +44,15 @@
     setViewedRoomFromRoute
   } from './model/room-navigation.svelte';
   import { roomDisplayName } from './model/rooms';
+  import { LobbyRooms } from './model/lobby-rooms.svelte';
+  import { AccountPrompts } from './model/account-prompts.svelte';
+  import LobbyAccountDialogs from './components/LobbyAccountDialogs.svelte';
   import {
     applyRoomSwitchDecision,
     readRoomSwitchConfirmEnabled,
     shouldConfirmRoomSwitch
   } from './model/room-switch-confirmation';
   import RoomSwitchDialog from './components/RoomSwitchDialog.svelte';
-  import WhatsNewDialog from './components/WhatsNewDialog.svelte';
-  import AppBenefitsModal from '../../shared/components/AppBenefitsModal.svelte';
-  import { shouldOpenAppPrompt } from '$lib/features/room/room-cta';
-  import { markAppPromptSeen } from '$lib/api/auth';
-  import LoginAlertDialog from './components/LoginAlertDialog.svelte';
-  import { fetchAccountSecurity, snoozeRecoveryCodesReminder } from '$lib/api/auth';
-  import { shouldShowRecoveryCodesReminder } from './model/account-security';
   import { clearSession, consumeExpectedSessionEnd, session as authSession } from '$lib/features/auth/session.svelte';
   import OpenInAppScreen from './components/OpenInAppScreen.svelte';
   import { bindDesktopLinks, type DesktopLink } from '$lib/platform/desktop-links';
@@ -78,15 +70,12 @@
   import './styles/friends.css';
   import '$lib/shared/styles/settings.css';
   import './styles/lobby-v2.css';
-  import { createLogger, errorContext } from '$lib/shared/log';
 
   const lobby = new LobbyStore();
   provideLobby(lobby);
 
   // Rooms shown inside the lobby see the account's friends through this.
   provideRoomSocial(lobby.roomSocial);
-
-  const log = createLogger('lobby');
 
   let { user, loggingOut, onLogout, onToast } = $props<{
     user: AuthUser | null;
@@ -95,19 +84,9 @@
     onToast: (message: string, options?: ToastOptions) => void;
   }>();
 
-  let rooms = $state<OwnedRoom[]>([]);
+  const rooms = new LobbyRooms((message) => onToast(message));
   let creating = $state(false);
   let createDialogOpen = $state(false);
-  let settingsOpen = $state(false);
-  let settingsTab = $state<'profile' | 'sound' | 'hotkeys' | 'notifications' | 'app' | 'security'>('profile');
-  let securityHighlight = $state<'recovery-codes' | 'password' | null>(null);
-  let recoveryCodesReminder = $state(false);
-  let loginAlertOpen = $state(false);
-  let whatsNewOpen = $state(false);
-  // The one-time app prompt after registration, decided per account by the API.
-  let appPromptAvailable = $state(false);
-  let appPromptOpen = $state(false);
-  let appPromptDone = $state(false);
   let previewSettingsRoomId = $state('');
   // Room waiting for "switch rooms?" while voice is connected elsewhere.
   let pendingRoomSwitchId = $state('');
@@ -119,36 +98,15 @@
   const autoJoinRoomId = $derived(roomNavigation.joinIntentRoomId);
   const connectedVoiceRoomId = $derived(getActiveVoiceRoomId());
 
-  // Opens once the lobby is quiet: no sign-in question or story on screen and no
-  // call joining or live, so it never covers the call or its audio-unlock prompt.
-  $effect(() => {
-    if (appPromptDone || appPromptOpen || !user) return;
-    if (
-      !shouldOpenAppPrompt({
-        appAvailable: appPromptAvailable,
-        hasUsedDesktopApp: user.hasUsedDesktopApp,
-        appPromptSeen: user.appPromptSeen,
-        otherDialogOpen: loginAlertOpen || whatsNewOpen,
-        voiceActive: Boolean(connectedVoiceRoomId || roomNavigation.joinIntentRoomId)
-      })
-    )
-      return;
-    appPromptOpen = true;
+  const prompts = new AccountPrompts({
+    user: () => user,
+    voiceActive: () => Boolean(connectedVoiceRoomId || roomNavigation.joinIntentRoomId),
+    onToast: (message, options) => onToast(message, options)
   });
 
-  onMount(() => {
-    // The desktop app exists for Windows and macOS browsers only.
-    appPromptAvailable = shouldOfferOpenInApp(readOpenInAppSignals());
-  });
-
-  function closeAppPrompt(): void {
-    appPromptOpen = false;
-    appPromptDone = true;
-    void markAppPromptSeen().catch((error) => log.warn('app prompt was not recorded', errorContext(error)));
-  }
-  const selectedRoom = $derived(rooms.find((room) => room.roomId === selectedRoomId) ?? null);
-  const previewSettingsRoom = $derived(rooms.find((room) => room.roomId === previewSettingsRoomId) ?? null);
-  const connectedVoiceRoom = $derived(rooms.find((room) => room.roomId === connectedVoiceRoomId) ?? null);
+  const selectedRoom = $derived(rooms.find(selectedRoomId));
+  const previewSettingsRoom = $derived(rooms.find(previewSettingsRoomId));
+  const connectedVoiceRoom = $derived(rooms.find(connectedVoiceRoomId));
   const notificationUsers = $derived(
     [...lobby.friends]
       .sort((a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0))
@@ -156,18 +114,6 @@
   );
   const connectedRoomVisible = $derived(connectedRoomIsViewed(lobby.mode));
   const embeddedRoomVisible = $derived(embeddedRoomIsVisible(lobby.mode));
-
-  function setRoomPeerCount(roomId: string, peers: number): void {
-    rooms = rooms.map((room) => (room.roomId === roomId ? { ...room, peers: Math.max(0, peers) } : room));
-  }
-
-  function decrementRoomPeerCount(roomId: string | null): void {
-    if (!roomId) return;
-    const current = rooms.find((room) => room.roomId === roomId)?.peers ?? 0;
-    setRoomPeerCount(roomId, Math.max(0, current - 1));
-    clearRoomPresence(roomId);
-    void refreshRooms();
-  }
 
   function restoreLobbyDocumentState(): void {
     document.body.dataset.screen = 'start';
@@ -210,26 +156,17 @@
   );
 
   onMount(() => {
-    void refreshRooms();
-    void refreshRecoveryCodesReminder();
+    void rooms.refresh();
+    prompts.start();
     const teardownNotifications = notifications.start();
     const teardownFriends = user ? lobby.init(user.id, user.doNotDisturb, user.presenceStatus) : () => {};
-    const teardownRooms = user
-      ? initLobbyRoomRealtime(
-          (updater) => {
-            rooms = updater(rooms);
-          },
-          () => {
-            void refreshRooms();
-          }
-        )
-      : () => {};
+    const teardownRooms = user ? rooms.follow() : () => {};
 
     function onEmbeddedLeave(event: Event): void {
       const closedRoomId =
         event instanceof CustomEvent && typeof event.detail?.roomId === 'string' ? event.detail.roomId : null;
       const closedViewedRoom = Boolean(closedRoomId && selectedRoomId === closedRoomId);
-      decrementRoomPeerCount(closedRoomId);
+      rooms.left(closedRoomId);
       closeEmbeddedRoom({ closedRoomId });
       if (closedViewedRoom) clearViewedRoom();
     }
@@ -248,7 +185,7 @@
     }
 
     function onRoomsChanged(): void {
-      void refreshRooms();
+      void rooms.refresh();
     }
 
     // On a fresh load/reload the URL is the only persisted state, so a /r/:id
@@ -341,7 +278,7 @@
       return lobby.friends;
     },
     get rooms() {
-      return rooms;
+      return rooms.list;
     },
     onDisconnect: () => void leaveConnectedVoiceRoom()
   });
@@ -352,15 +289,6 @@
       clearDisconnectedHiddenEmbed();
     }
   });
-
-  async function refreshRooms(): Promise<void> {
-    try {
-      rooms = await fetchOwnedRooms();
-    } catch (error) {
-      rooms = [];
-      onToast(error instanceof Error && error.message ? error.message : 'Не удалось загрузить комнаты');
-    }
-  }
 
   // Explicit voice enter/switch path. Browsing a room uses previewRoom(); this
   // path may remount the room client because the user chose to enter voice here.
@@ -389,11 +317,6 @@
     const roomId = pendingRoomSwitchId;
     pendingRoomSwitchId = '';
     if (roomId && applyRoomSwitchDecision({ dontAskAgain, proceed })) enterRoom(roomId);
-  }
-
-  function roomLabel(roomId: string): string {
-    const room = rooms.find((entry) => entry.roomId === roomId);
-    return room ? roomDisplayName(room) : roomId;
   }
 
   function openRoomInApp(): void {
@@ -442,7 +365,7 @@
     const leavingRoomId = connectedVoiceRoomId;
     const transition = resolveLeaveViewedConnectedRoom(leavingRoomId);
     await leaveActiveVoiceRoomWithCue();
-    decrementRoomPeerCount(leavingRoomId);
+    rooms.left(leavingRoomId);
     if (transition.closeEmbeddedRoom) {
       closeEmbeddedRoom();
       clearViewedRoom();
@@ -466,47 +389,12 @@
       const roomId = await createRoom(payload);
       createDialogOpen = false;
       requestEnterRoom(roomId);
-      if (payload.isStatic) void refreshRooms();
+      if (payload.isStatic) void rooms.refresh();
       onToast('Комната создана');
     } catch (error) {
       onToast(error instanceof Error && error.message ? error.message : 'Не удалось создать комнату');
     } finally {
       creating = false;
-    }
-  }
-
-  function openSettings(): void {
-    settingsTab = 'profile';
-    settingsOpen = true;
-  }
-
-  function openSecuritySettings(highlight: 'recovery-codes' | 'password' | null = null): void {
-    securityHighlight = highlight;
-    settingsTab = 'security';
-    settingsOpen = true;
-  }
-
-  function closeSettings(): void {
-    settingsOpen = false;
-    securityHighlight = null;
-    // Codes may have been created meanwhile.
-    void refreshRecoveryCodesReminder();
-  }
-
-  async function refreshRecoveryCodesReminder(): Promise<void> {
-    try {
-      recoveryCodesReminder = shouldShowRecoveryCodesReminder(await fetchAccountSecurity());
-    } catch {
-      // The reminder is optional; keep whatever was shown.
-    }
-  }
-
-  async function snoozeRecoveryCodes(): Promise<void> {
-    recoveryCodesReminder = false;
-    try {
-      await snoozeRecoveryCodesReminder();
-    } catch {
-      onToast('Не удалось отложить напоминание', { variant: 'error' });
     }
   }
 
@@ -549,15 +437,15 @@
 
 {#snippet voiceHome()}
   <VoiceHome
-    {rooms}
+    rooms={rooms.list}
     onOpenRoom={previewRoom}
     onCreateRoom={() => (createDialogOpen = true)}
     onJoinCode={handleJoin}
-    onRoomsChanged={refreshRooms}
+    onRoomsChanged={rooms.refresh}
     onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)}
-    {recoveryCodesReminder}
-    onOpenRecoveryCodes={() => openSecuritySettings('recovery-codes')}
-    onSnoozeRecoveryCodes={snoozeRecoveryCodes}
+    recoveryCodesReminder={prompts.recoveryCodesReminder}
+    onOpenRecoveryCodes={() => prompts.openSecuritySettings('recovery-codes')}
+    onSnoozeRecoveryCodes={prompts.snoozeRecoveryCodes}
     {onToast}
   />
 {/snippet}
@@ -568,7 +456,7 @@
       {user}
       onGoHome={goHome}
       onOpenPeople={openPeople}
-      onOpenSettings={openSettings}
+      onOpenSettings={prompts.openSettings}
       notificationsEnabled={notifications.enabled}
       notificationsOpen={notifications.open}
       notificationUnreadCount={notifications.inbox.unreadCount}
@@ -605,7 +493,7 @@
             : undefined}
           onRoomsChanged={() => {
             closeViewedRoom();
-            void refreshRooms();
+            void rooms.refresh();
           }}
           {onToast}
         />
@@ -626,7 +514,7 @@
               : undefined}
             onRoomsChanged={() => {
               closeViewedRoom();
-              void refreshRooms();
+              void rooms.refresh();
             }}
             {onToast}
           />
@@ -649,44 +537,30 @@
     onClose={() => (createDialogOpen = false)}
     onCreate={handleCreate}
   />
-  <SettingsModal
-    open={settingsOpen}
-    bind:tab={settingsTab}
+  <LobbyAccountDialogs
+    {prompts}
     {user}
     {notificationUsers}
-    notificationRooms={rooms}
+    notificationRooms={rooms.list}
     {loggingOut}
-    {securityHighlight}
-    onClose={closeSettings}
     {onToast}
     {onLogout}
   />
-  <LoginAlertDialog
-    onSecureAccount={(target) => openSecuritySettings(target)}
-    onOpenChange={(open) => (loginAlertOpen = open)}
-    {onToast}
-  />
-  <WhatsNewDialog
-    paused={loginAlertOpen}
-    onOpenSecurity={() => openSecuritySettings()}
-    onOpenChange={(open) => (whatsNewOpen = open)}
-  />
-  <AppBenefitsModal open={appPromptOpen} onClose={closeAppPrompt} />
   <LobbyRoomSettingsDialog
     room={previewSettingsRoom}
     onClose={() => (previewSettingsRoomId = '')}
-    onSaved={refreshRooms}
+    onSaved={rooms.refresh}
     onDeleted={() => {
       previewSettingsRoomId = '';
       closeViewedRoom();
-      void refreshRooms();
+      void rooms.refresh();
     }}
     {onToast}
   />
   <RoomSwitchDialog
     open={Boolean(pendingRoomSwitchId)}
-    fromName={roomLabel(connectedVoiceRoomId || '')}
-    toName={roomLabel(pendingRoomSwitchId)}
+    fromName={rooms.label(connectedVoiceRoomId || '')}
+    toName={rooms.label(pendingRoomSwitchId)}
     onConfirm={(dontAskAgain) => resolveRoomSwitch(true, dontAskAgain)}
     onCancel={() => resolveRoomSwitch(false)}
   />

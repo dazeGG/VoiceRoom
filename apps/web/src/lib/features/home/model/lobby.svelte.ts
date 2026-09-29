@@ -25,8 +25,6 @@ import {
   deleteDirectMessage,
   directMessageFromView,
   editDirectMessage,
-  fetchThread,
-  fetchThreadPage,
   markThreadRead,
   respondRoomInvite,
   sendDirectMessage,
@@ -41,31 +39,22 @@ import {
   playFriendRequestCue,
   playRingCue
 } from '$lib/features/room/client/media/cues';
-import {
-  canUseNotifications,
-  getNotificationDeliveryPermission,
-  routeNotificationEvent,
-  showBrowserNotification,
-  type NotificationActiveTarget
-} from '$lib/shared/notifications/router';
+import type { NotificationActiveTarget } from '$lib/shared/notifications/router';
 import { roomNavigation } from './room-navigation.svelte';
 import {
   areNotificationPreferencesLoadedFor,
   applyRealtimeNotificationPreferences,
   isPeerNotificationsMuted,
-  loadNotificationPreferences,
   notificationPreferences,
   prepareNotificationPreferences,
   resetNotificationPreferences,
-  syncNotificationPermission,
   updateAutomaticPresenceStatus
 } from '$lib/shared/notifications/preferences.svelte';
 import { startSystemPresenceIdleTracking } from '$lib/shared/presence-idle';
-import { createDmThreadResyncCoordinator } from './dm-thread-resync';
-import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
-import { createAnchoredHistory } from '$lib/features/room/room-history.svelte';
+import { DmThread } from './dm-thread.svelte';
+import { FriendPresence } from './friend-presence.svelte';
+import { BrowserNotificationRouting } from './browser-notification-routing';
 import type { RoomSocial } from '$lib/features/room/social';
-import { SvelteSet } from 'svelte/reactivity';
 
 export type LobbyMode = 'friends' | 'rooms';
 export type LobbyView = 'home' | 'dm' | 'people';
@@ -73,27 +62,9 @@ export type LobbyView = 'home' | 'dm' | 'people';
 // The lobby enters voice for this event through its usual confirmation flow.
 export const ENTER_ROOM_EVENT = 'voice-room:enter-room';
 
-const MAX_PENDING_NOTIFICATION_EVENTS = 100;
-const PENDING_NOTIFICATION_TTL_MS = 60_000;
 // Invitations used to be mirrored per device in localStorage; they now live in
 // the DM thread itself, so stale local copies are just cleaned up.
 const RESOLVED_ROOM_INVITATIONS_KEY = 'voice-room:resolved-invitations';
-
-/** The DM thread the lobby has open. */
-class DmThread {
-  peer = $state<PublicUser | null>(null);
-  messages = $state<DirectMessage[]>([]);
-  loading = $state(false);
-  loadingOlder = $state(false);
-  hasMoreBefore = $state(false);
-  historyEnabled = $state(false);
-  readCursorEnabled = $state(false);
-  /** The cursor to mark read once the newest message rendered ('__legacy__' without read cursors). */
-  readCandidate = $state<string | null>(null);
-  readRevision = $state(0);
-  historyError = $state('');
-  profileOpen = $state(false);
-}
 
 export class LobbyStore {
   automaticPresenceIdleAvailable = $state(false);
@@ -104,47 +75,24 @@ export class LobbyStore {
   mode = $state<LobbyMode>('friends');
   view = $state<LobbyView>('home');
   selectedFriendId = $state<string | null>(null);
-  readonly thread = new DmThread();
+  readonly thread = new DmThread({
+    isOpen: (peerId) => this.view === 'dm' && this.selectedFriendId === peerId,
+    onSnapshot: (peerId, messages) => {
+      const friend = this.findFriend(peerId);
+      if (!friend) return;
+      friend.unreadCount = 0;
+      const last = messages.at(-1);
+      if (last) this.bumpLastMessage(peerId, last);
+    },
+    isOwnMessage: (message) => message.senderId === this.selfId
+  });
   /** Friends currently typing to this account, keyed by their user id. */
   readonly dmTyping = createTypingTracker();
 
   private realtime: RealtimeHandle | null = null;
   private selfId = '';
-  // Realtime `ready` can arrive before the first friends fetch finishes. Keep
-  // the snapshot so a later refreshFriends() still applies the online flags.
-  private presenceReady = false;
-  private onlineFriendIds = new SvelteSet<string>();
-  private presenceKnownFriendIds = new SvelteSet<string>();
-  private pendingNotificationEvents: Array<{ event: RealtimeEvent; receivedAt: number }> = [];
-  private notificationPreferencesRetryTimer: ReturnType<typeof setTimeout> | null = null;
-
-  private readonly dmHistory = createAnchoredHistory<DirectMessage>({
-    loadPage: async (peerId, request) => fetchThreadPage(peerId, request),
-    compare: (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
-    onChange: (state) => {
-      this.thread.messages = state.messages;
-      this.thread.loading = state.loading;
-      this.thread.loadingOlder = state.loadingOlder;
-      this.thread.hasMoreBefore = state.hasMoreBefore;
-      this.thread.historyError = state.error;
-    }
-  });
-
-  private readonly threadResync = createDmThreadResyncCoordinator({
-    fetchSnapshot: fetchThread,
-    isCurrent: (peerId) => this.view === 'dm' && this.selectedFriendId === peerId,
-    applySnapshot: (peerId, { peer, messages }) => {
-      this.thread.peer = peer;
-      this.thread.messages = messages;
-      const friend = this.findFriend(peerId);
-      if (friend) {
-        friend.unreadCount = 0;
-        const last = messages.at(-1);
-        if (last) this.bumpLastMessage(peerId, last);
-      }
-    },
-    isOwnMessage: (message) => message.senderId === this.selfId
-  });
+  private readonly presence = new FriendPresence();
+  private readonly browserNotifications = new BrowserNotificationRouting(() => this.getActiveNotificationTarget());
 
   private clearLegacyResolvedRoomInvitations = (): void => {
     try {
@@ -158,29 +106,15 @@ export class LobbyStore {
     return this.friends.find((entry) => entry.user.id === userId);
   };
 
-  private friendOnlineFromPresence = (userId: string, fallback = false): boolean => {
-    return this.presenceReady && this.presenceKnownFriendIds.has(userId) ? this.onlineFriendIds.has(userId) : fallback;
-  };
-
   private applyOnlineToFriends = (): void => {
-    if (!this.presenceReady) return;
+    if (!this.presence.ready) return;
     for (const friend of this.friends) {
-      friend.online = this.onlineFriendIds.has(friend.user.id);
+      friend.online = this.presence.onlineOr(friend.user.id);
     }
   };
 
-  private setOnlineSnapshot = (ids: Iterable<string>): void => {
-    this.onlineFriendIds = new SvelteSet(ids);
-    this.presenceKnownFriendIds = new SvelteSet(this.friends.map((friend) => friend.user.id));
-    for (const userId of this.onlineFriendIds) this.presenceKnownFriendIds.add(userId);
-    this.presenceReady = true;
-    this.applyOnlineToFriends();
-  };
-
   private setFriendOnline = (userId: string, online: boolean): void => {
-    this.presenceKnownFriendIds.add(userId);
-    if (online) this.onlineFriendIds.add(userId);
-    else this.onlineFriendIds.delete(userId);
+    this.presence.set(userId, online);
     const friend = this.findFriend(userId);
     if (friend) friend.online = online;
   };
@@ -209,17 +143,10 @@ export class LobbyStore {
     // A friend created after the last `ready` snapshot is not represented in the
     // presence cache yet. Seed that one relationship from the fresh HTTP result;
     // subsequent presence events remain authoritative.
-    if (this.presenceReady) {
-      for (const friend of friends) {
-        if (this.presenceKnownFriendIds.has(friend.user.id)) continue;
-        this.presenceKnownFriendIds.add(friend.user.id);
-        if (friend.online) this.onlineFriendIds.add(friend.user.id);
-        else this.onlineFriendIds.delete(friend.user.id);
-      }
-    }
+    this.presence.seed(friends.map((friend) => ({ userId: friend.user.id, online: friend.online })));
     this.friends = friends.map((friend) => ({
       ...friend,
-      online: this.friendOnlineFromPresence(friend.user.id, friend.online)
+      online: this.presence.onlineOr(friend.user.id, friend.online)
     }));
     this.incomingRequestCount = incomingRequestCount;
     this.loaded = true;
@@ -234,9 +161,7 @@ export class LobbyStore {
   // teardown function for onMount cleanup.
   init = (currentUserId: string, initialDoNotDisturb = false, initialPresenceStatus?: PresenceStatus): (() => void) => {
     this.selfId = currentUserId;
-    this.presenceReady = false;
-    this.onlineFriendIds = new SvelteSet();
-    this.presenceKnownFriendIds = new SvelteSet();
+    this.presence.reset();
     this.clearLegacyResolvedRoomInvitations();
     if (!areNotificationPreferencesLoadedFor(currentUserId)) {
       prepareNotificationPreferences(currentUserId, initialDoNotDisturb, initialPresenceStatus);
@@ -245,7 +170,7 @@ export class LobbyStore {
     void Promise.all([this.refreshFriends(), this.refreshRequests()]).catch(() => {
       this.loaded = true;
     });
-    this.scheduleNotificationPreferencesLoad(currentUserId);
+    this.browserNotifications.start(currentUserId);
     this.automaticPresenceIdleAvailable = false;
     const stopPresenceIdleTracking = startSystemPresenceIdleTracking({
       getPresence: () => ({
@@ -262,16 +187,9 @@ export class LobbyStore {
       stopPresenceIdleTracking();
       this.realtime?.close();
       this.realtime = null;
-      this.presenceReady = false;
-      this.onlineFriendIds = new SvelteSet();
-      this.presenceKnownFriendIds = new SvelteSet();
-      if (this.notificationPreferencesRetryTimer) {
-        clearTimeout(this.notificationPreferencesRetryTimer);
-        this.notificationPreferencesRetryTimer = null;
-      }
-      this.pendingNotificationEvents = [];
-      this.threadResync.invalidate();
-      this.dmHistory.close();
+      this.presence.reset();
+      this.browserNotifications.stop();
+      this.thread.close();
       resetNotificationPreferences();
     };
   };
@@ -292,87 +210,26 @@ export class LobbyStore {
   };
 
   openDm = async (userId: string): Promise<void> => {
-    this.dmHistory.close();
-    this.threadResync.invalidate();
     this.mode = 'friends';
     this.selectedFriendId = userId;
     this.view = 'dm';
-    this.thread.loading = true;
-    this.thread.messages = [];
-    this.thread.readCandidate = null;
-    this.thread.historyError = '';
     // Locally clear the unread badge; the GET also marks read server-side.
     const friend = this.findFriend(userId);
-    if (friend) {
-      friend.unreadCount = 0;
-      this.thread.peer = friend.user;
-    }
-    try {
-      const [historyEnabled, readCursorEnabled] = await Promise.all([
-        getCapabilityFeature('historyCursor'),
-        getCapabilityFeature('readCursor')
-      ]).catch(() => [false, false] as const);
-      if (this.selectedFriendId !== userId) return;
-      this.thread.historyEnabled = historyEnabled;
-      this.thread.readCursorEnabled = readCursorEnabled;
-      if (historyEnabled) {
-        await this.dmHistory.open(userId);
-        if (this.selectedFriendId === userId) this.noteLatestThreadRendered();
-      } else {
-        this.dmHistory.close();
-        await this.threadResync.resync(userId);
-        if (this.selectedFriendId === userId) this.noteLatestThreadRendered();
-      }
-    } finally {
-      if (this.selectedFriendId === userId) this.thread.loading = false;
-    }
+    if (friend) friend.unreadCount = 0;
+    await this.thread.open(userId, friend?.user ?? null);
   };
 
   private resyncOpenThread = async (options: { force?: boolean } = {}): Promise<void> => {
     const peerId = this.selectedFriendId;
     if (this.view !== 'dm' || !peerId) return;
-    if (this.thread.historyEnabled) {
-      const page = await fetchThreadPage(peerId, { mode: 'latest' });
-      if (this.selectedFriendId !== peerId) return;
-      const firstCreatedAt = page.messages[0]?.createdAt;
-      this.dmHistory.reconcileLatest(
-        page.messages,
-        (message) => firstCreatedAt == null || message.createdAt >= firstCreatedAt
-      );
-      this.noteLatestThreadRendered();
-      return;
-    }
-    await this.threadResync.resync(peerId, options);
-    this.noteLatestThreadRendered();
+    await this.thread.resync(peerId, options);
   };
 
-  loadOlderThread = (scrollElement: HTMLElement | null): Promise<void> => {
-    if (!this.thread.historyEnabled) return Promise.resolve();
-    return this.dmHistory.loadOlder(scrollElement);
-  };
+  loadOlderThread = (scrollElement: HTMLElement | null): Promise<void> => this.thread.loadOlder(scrollElement);
 
-  private noteLatestThreadRendered = (cursor?: string): void => {
-    const candidate = cursor || [...this.thread.messages].reverse().find((message) => message.readCursor)?.readCursor;
-    this.thread.readCandidate = this.thread.readCursorEnabled ? (candidate ?? null) : '__legacy__';
-    this.thread.readRevision += 1;
-  };
+  toggleProfile = (): void => this.thread.toggleProfile();
 
-  private noteRealtimeThreadRendered = async (peerId: string, message: DirectMessage): Promise<void> => {
-    if (message.readCursor || !this.thread.readCursorEnabled) {
-      this.noteLatestThreadRendered(message.readCursor);
-      return;
-    }
-    if (this.selectedFriendId !== peerId) return;
-    await this.resyncOpenThread({ force: true }).catch(() => {});
-  };
-
-  toggleProfile = (): void => {
-    this.thread.profileOpen = !this.thread.profileOpen;
-  };
-
-  closeProfile = (): void => {
-    this.thread.profileOpen = false;
-  };
+  closeProfile = (): void => this.thread.closeProfile();
 
   // The lobby enters voice for this event through its usual confirmation flow.
 
@@ -383,7 +240,7 @@ export class LobbyStore {
     if (!message.invite) return;
     const peerId = message.senderId === this.selfId ? message.recipientId : message.senderId;
     const updated = await respondRoomInvite(peerId, message.id, action);
-    this.threadResync.recordUpsert(peerId, updated);
+    this.thread.recordUpsert(peerId, updated);
     this.applyEditedMessage(updated);
     if (action === 'accept') {
       const roomId = updated.invite?.roomId || message.invite.roomId;
@@ -403,8 +260,8 @@ export class LobbyStore {
     const body = text.trim();
     if (!peerId || (!body && attachmentIds.length === 0)) return;
     const message = await sendDirectMessage(peerId, body, attachmentIds, replyTo, idempotencyKey);
-    this.threadResync.recordUpsert(peerId, message);
-    this.appendToThread(message);
+    this.thread.recordUpsert(peerId, message);
+    this.thread.append(message);
     this.bumpLastMessage(peerId, message);
   };
 
@@ -412,11 +269,10 @@ export class LobbyStore {
     const peerId = this.selectedFriendId;
     if (!peerId || !messageId) return;
     await deleteDirectMessage(peerId, messageId);
-    this.threadResync.recordDelete(peerId, messageId);
-    // Remove locally; this.realtime delete will also arrive for other tabs. Refresh the
-    // summary so last-message ordering and unread badges reflect soft-deletes.
-    if (this.thread.historyEnabled) this.dmHistory.remove(messageId);
-    else this.thread.messages = this.thread.messages.filter((m) => m.id !== messageId);
+    this.thread.recordDelete(peerId, messageId);
+    // Remove locally; the realtime delete will also arrive for other tabs. Refresh
+    // the summary so last-message ordering and unread badges reflect soft-deletes.
+    this.thread.remove(messageId);
     await this.refreshFriends().catch(() => {});
   };
 
@@ -425,21 +281,8 @@ export class LobbyStore {
     const body = text.trim();
     if (!peerId || !messageId || !body) return;
     const message = await editDirectMessage(peerId, messageId, body);
-    this.threadResync.recordUpsert(peerId, message);
+    this.thread.recordUpsert(peerId, message);
     this.applyEditedMessage(message);
-  };
-
-  private appendToThread = (incoming: DirectMessage): void => {
-    // A link preview can arrive as an edit before the message itself is
-    // delivered; the later, preview-less copy must not wipe it.
-    const known = this.thread.messages.find((existing) => existing.id === incoming.id);
-    const message =
-      known?.linkPreview && !incoming.linkPreview ? { ...incoming, linkPreview: known.linkPreview } : incoming;
-    if (this.thread.historyEnabled) this.dmHistory.upsert(message);
-    else {
-      if (this.thread.messages.some((existing) => existing.id === message.id)) return;
-      this.thread.messages = [...this.thread.messages, message];
-    }
   };
 
   private bumpLastMessage = (peerId: string, message: DirectMessage): void => {
@@ -454,10 +297,7 @@ export class LobbyStore {
   };
 
   private applyEditedMessage = (message: DirectMessage): void => {
-    if (this.thread.historyEnabled) this.dmHistory.upsert(message);
-    else {
-      this.thread.messages = this.thread.messages.map((existing) => (existing.id === message.id ? message : existing));
-    }
+    this.thread.replace(message);
     const peerId = message.senderId === this.selfId ? message.recipientId : message.senderId;
     const friend = this.findFriend(peerId);
     if (friend?.lastMessage?.id === message.id) {
@@ -560,63 +400,20 @@ export class LobbyStore {
     return null;
   };
 
-  private handleNotificationRealtimeEvent = (event: RealtimeEvent): boolean => {
-    if (!event.type.startsWith('notification.')) return false;
-    if (!areNotificationPreferencesLoadedFor(this.selfId)) {
-      const now = Date.now();
-      this.pendingNotificationEvents = this.pendingNotificationEvents
-        .filter((entry) => now - entry.receivedAt <= PENDING_NOTIFICATION_TTL_MS)
-        .slice(-(MAX_PENDING_NOTIFICATION_EVENTS - 1));
-      this.pendingNotificationEvents.push({ event, receivedAt: now });
-      return true;
-    }
-    syncNotificationPermission();
-    const routed = routeNotificationEvent(event, {
-      userId: this.selfId,
-      activeTarget: this.getActiveNotificationTarget(),
-      mutedPeerIds: notificationPreferences.mutedPeerIds,
-      mutedRoomIds: notificationPreferences.mutedRoomIds,
-      privateNotifications: notificationPreferences.privateNotifications,
-      doNotDisturb: notificationPreferences.doNotDisturb,
-      notificationsAvailable: canUseNotifications() && notificationPreferences.notificationsEnabled,
-      permission: getNotificationDeliveryPermission()
-    });
-    if (routed.notify) void showBrowserNotification(routed.payload);
-    return true;
-  };
-
-  private flushPendingNotificationEvents = (): void => {
-    if (!areNotificationPreferencesLoadedFor(this.selfId) || this.pendingNotificationEvents.length === 0) return;
-    const now = Date.now();
-    const events = this.pendingNotificationEvents
-      .filter((entry) => now - entry.receivedAt <= PENDING_NOTIFICATION_TTL_MS)
-      .map((entry) => entry.event);
-    this.pendingNotificationEvents = [];
-    for (const event of events) this.handleNotificationRealtimeEvent(event);
-  };
-
-  private scheduleNotificationPreferencesLoad = (userId = this.selfId): void => {
-    if (areNotificationPreferencesLoadedFor(userId) || this.notificationPreferencesRetryTimer) return;
-    void loadNotificationPreferences(userId)
-      .then(this.flushPendingNotificationEvents)
-      .catch(() => {
-        this.notificationPreferencesRetryTimer = setTimeout(() => {
-          this.notificationPreferencesRetryTimer = null;
-          this.scheduleNotificationPreferencesLoad(userId);
-        }, 5000);
-      });
-  };
-
   private handleRealtimeEvent = (event: RealtimeEvent): void => {
     if (event.type === 'notification.settings.updated') {
       applyRealtimeNotificationPreferences(this.selfId, event.payload.preferences);
-      this.flushPendingNotificationEvents();
+      this.browserNotifications.flush();
       return;
     }
-    if (this.handleNotificationRealtimeEvent(event)) return;
+    if (this.browserNotifications.handle(event)) return;
     switch (event.type) {
       case 'ready': {
-        this.setOnlineSnapshot(event.payload.onlineFriendIds ?? []);
+        this.presence.snapshot(
+          event.payload.onlineFriendIds ?? [],
+          this.friends.map((friend) => friend.user.id)
+        );
+        this.applyOnlineToFriends();
         // A reconnect can miss edits while the socket is down. Re-fetch only the
         // currently visible thread so its bodies and editedAt markers converge.
         void this.resyncOpenThread({ force: true }).catch(() => {});
@@ -659,13 +456,13 @@ export class LobbyStore {
         const peerId = message.senderId === this.selfId ? message.recipientId : message.senderId;
         // The message itself ends that friend's "typing" state.
         if (message.senderId !== this.selfId) this.dmTyping.clear(message.senderId);
-        this.threadResync.recordUpsert(peerId, message);
+        this.thread.recordUpsert(peerId, message);
         this.bumpLastMessage(peerId, message);
         const isOpenThread = this.view === 'dm' && this.selectedFriendId === peerId;
         if (isOpenThread) {
-          this.appendToThread(message);
+          this.thread.append(message);
           if (message.senderId !== this.selfId) {
-            if (this.thread.readCursorEnabled) void this.noteRealtimeThreadRendered(peerId, message);
+            if (this.thread.readCursorEnabled) void this.thread.noteRealtimeRendered(peerId, message);
             else void markThreadRead(peerId);
           }
         } else if (message.senderId !== this.selfId) {
@@ -681,10 +478,8 @@ export class LobbyStore {
         // The peer read our messages: flip readAt on our sent bubbles.
         if (this.view === 'dm' && this.selectedFriendId === event.payload.userId) {
           const now = Date.now();
-          this.threadResync.recordRead(event.payload.userId, now);
-          this.thread.messages = this.thread.messages.map((message) =>
-            message.senderId === this.selfId && message.readAt == null ? { ...message, readAt: now } : message
-          );
+          this.thread.recordRead(event.payload.userId, now);
+          this.thread.markSentRead((message) => message.senderId === this.selfId, now);
         }
         break;
       }
@@ -692,9 +487,8 @@ export class LobbyStore {
         const mid = event.payload?.messageId;
         if (mid) {
           const peerId = event.payload.peerUserId ?? this.selectedFriendId;
-          if (peerId) this.threadResync.recordDelete(peerId, mid);
-          if (this.thread.historyEnabled) this.dmHistory.remove(mid);
-          else this.thread.messages = this.thread.messages.filter((m) => m.id !== mid);
+          if (peerId) this.thread.recordDelete(peerId, mid);
+          this.thread.remove(mid);
           void this.refreshFriends().catch(() => {});
         }
         break;
@@ -708,7 +502,7 @@ export class LobbyStore {
       case 'dm.message.edited': {
         const message = directMessageFromView(event.payload.message);
         const peerId = message.senderId === this.selfId ? message.recipientId : message.senderId;
-        this.threadResync.recordUpsert(peerId, message);
+        this.thread.recordUpsert(peerId, message);
         this.applyEditedMessage(message);
         break;
       }
