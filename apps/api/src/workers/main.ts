@@ -19,7 +19,10 @@ const workers: Readonly<Record<string, (env: NodeJS.ProcessEnv, pool: pg.Pool) =
   'notification-delivery': notificationDeliveryMain
 });
 
-async function main(env: NodeJS.ProcessEnv = process.env): Promise<void> {
+async function main(
+  env: NodeJS.ProcessEnv = process.env,
+  { stopSignal = stopSignalFromProcess() }: { stopSignal?: AbortSignal } = {}
+): Promise<void> {
   const workerName = String(env.VOICE_ROOM_WORKER || '').trim();
   const run = workers[workerName];
   if (!run) {
@@ -41,6 +44,32 @@ async function main(env: NodeJS.ProcessEnv = process.env): Promise<void> {
     await metrics.close();
     await pool.end();
   }
+  // A worker whose claims are off returns at once. Compose restarts a worker
+  // unless it was stopped (a host reboot ends every one with exit 0), so this
+  // one stays up, idle and without a heartbeat, until it is stopped.
+  await untilAborted(stopSignal);
+}
+
+function stopSignalFromProcess(): AbortSignal {
+  const controller = new AbortController();
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => controller.abort());
+  return controller.signal;
+}
+
+function untilAborted(signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.resolve();
+  return new Promise((resolve) => {
+    // A pending promise alone does not keep the process alive.
+    const keepAlive = setInterval(() => {}, 2 ** 30);
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearInterval(keepAlive);
+        resolve();
+      },
+      { once: true }
+    );
+  });
 }
 
 if (import.meta.main) {

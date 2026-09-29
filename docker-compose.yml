@@ -130,7 +130,7 @@ services:
 
   message-delivery:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
-    restart: on-failure
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -147,7 +147,7 @@ services:
 
   notification-delivery:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
-    restart: on-failure
+    restart: unless-stopped
     expose: ["9464"]
     depends_on:
       postgres:
@@ -168,7 +168,7 @@ services:
 
   media-processing:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
-    restart: on-failure
+    restart: unless-stopped
     expose: ["9464"]
     depends_on:
       postgres:
@@ -189,7 +189,7 @@ services:
 
   media-maintenance:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
-    restart: on-failure
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -208,7 +208,7 @@ services:
 
   media-reconciliation:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
-    restart: on-failure
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
