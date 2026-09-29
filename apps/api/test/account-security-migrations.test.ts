@@ -1,28 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
 import { Pool } from 'pg';
 
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createUserStore } from '../src/app/user-store.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { rollBackThrough } from './migration-steps.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
-const MIGRATIONS_DIR = path.join(import.meta.dirname, '../src/migrations');
 const FIRST_ACCOUNT_SECURITY_MIGRATION = '20260912120000_add_session_device_metadata';
-
-function rollbackCountThrough(name: string) {
-  const names = fs
-    .readdirSync(MIGRATIONS_DIR)
-    .filter((file) => file.endsWith('.cjs'))
-    .map((file) => file.replace(/\.c?js$/, ''))
-    .sort();
-  const index = names.indexOf(name);
-  assert.notEqual(index, -1, `${name} is missing from the migrations directory`);
-  return names.length - index;
-}
 
 async function sessionColumns(pool: Pool) {
   const result = await pool.query<{ column_name: string }>(
@@ -54,11 +41,7 @@ test('account security migrations apply, roll back cleanly and backfill existing
   const { user } = await store.createUser({ login: 'ada', password: 'lovelace-1843' });
   assert.ok(user);
 
-  const rollbackCount = rollbackCountThrough(FIRST_ACCOUNT_SECURITY_MIGRATION);
-  for (let index = 0; index < rollbackCount; index += 1) {
-    const rolledBack = await runMigrations({ databaseUrl, direction: 'down', logger: SILENT });
-    assert.equal(rolledBack.length, 1);
-  }
+  const rollbackCount = await rollBackThrough(databaseUrl, FIRST_ACCOUNT_SECURITY_MIGRATION);
   const columns = await sessionColumns(pool);
   for (const column of ['public_id', 'user_agent', 'location_label']) {
     assert.equal(columns.includes(column), false, `${column} must be dropped on rollback`);

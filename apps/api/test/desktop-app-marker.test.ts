@@ -1,8 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import fs from 'node:fs';
-import path from 'node:path';
 import { Pool } from 'pg';
 import type { Me, SignedIn } from '@voice-room/shared/contracts/account';
 
@@ -10,27 +8,16 @@ import { runMigrations } from '../src/lib/migrate.ts';
 import { createUserStore } from '../src/app/user-store.ts';
 import { hashSessionToken, publicUser, selfUser } from '../src/domains/account/user-records.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { rollBackThrough } from './migration-steps.ts';
 import { storedUser } from './fakes/index.ts';
 import { cookieFrom, request, startApiServer } from './fakes/server-process.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const MIGRATION = '20260916150000_backfill_desktop_app_marker';
-const MIGRATIONS_DIR = path.join(import.meta.dirname, '../src/migrations');
 const DESKTOP_APP =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) VoiceRoom/1.3.3 Chrome/138.0.0.0 Electron/37.2.0 Safari/537.36';
 const CHROME =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/139.0.0.0 Safari/537.36';
-
-function rollbackCountThrough(name: string) {
-  const names = fs
-    .readdirSync(MIGRATIONS_DIR)
-    .filter((file) => file.endsWith('.cjs'))
-    .map((file) => file.replace(/\.c?js$/, ''))
-    .sort();
-  const index = names.indexOf(name);
-  assert.notEqual(index, -1, `${name} is missing from the migrations directory`);
-  return names.length - index;
-}
 
 async function metadataOf(pool: Pool, userId: string) {
   const result = await pool.query<{ metadata: Record<string, unknown>; updated_at: Date }>(
@@ -65,8 +52,6 @@ async function setup(t: TestContext) {
 
 test('backfill marks desktop app users from sessions and login events, and only pre-release accounts as prompted', async (t) => {
   const { databaseUrl, pool, store } = await setup(t);
-  const rollbackCount = rollbackCountThrough(MIGRATION);
-  assert.equal(rollbackCount, 1, 'this test rolls back exactly the marker migration');
 
   const make = async (login: string, createdAt: string) => {
     const { user } = await store.createUser({ login, password: 'password123' });
@@ -100,10 +85,9 @@ test('backfill marks desktop app users from sessions and login events, and only 
   await insertSession(browserOnly, CHROME, '2026-09-08T08:00:00Z');
   await insertEvent(browserOnly, 'Chrome', '2026-09-08T08:00:00Z');
 
-  const down = await runMigrations({ databaseUrl, direction: 'down', logger: SILENT });
-  assert.equal(down.length, 1);
+  const rollbackCount = await rollBackThrough(databaseUrl, MIGRATION);
   const up = await runMigrations({ databaseUrl, logger: SILENT });
-  assert.equal(up.length, 1);
+  assert.equal(up.length, rollbackCount);
 
   const cutoff = Date.parse('2026-09-16T15:00:00Z');
   const expectations: Array<[string, number | undefined, number | undefined]> = [
@@ -120,7 +104,7 @@ test('backfill marks desktop app users from sessions and login events, and only 
   }
 
   // Rolling back removes both keys; re-applying never marks a late signup as prompted.
-  await runMigrations({ databaseUrl, direction: 'down', logger: SILENT });
+  await rollBackThrough(databaseUrl, MIGRATION);
   for (const [userId] of expectations) {
     const { metadata } = await metadataOf(pool, userId);
     assert.equal('desktopAppSeenAt' in metadata || 'appPromptSeenAt' in metadata, false);

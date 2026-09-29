@@ -17,9 +17,9 @@ import {
 } from '../src/domains/link-previews/link-preview.service.ts';
 import { createLinkPreviewStorage, reconcileLinkPreviewImages } from '../src/lib/link-preview-storage.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { rollBackThrough } from './migration-steps.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
-const MIGRATIONS_DIR = path.join(import.meta.dirname, '../src/migrations');
 const KEY = `lp_${'ab'.repeat(16)}.webp`;
 const OTHER_KEY = `lp_${'cd'.repeat(16)}.webp`;
 const PAGE =
@@ -189,15 +189,7 @@ test('the link preview migration applies and rolls back cleanly', async (t) => {
   await runMigrations({ databaseUrl, logger: SILENT });
   assert.equal(await tableExists(), true);
 
-  const names = fs
-    .readdirSync(MIGRATIONS_DIR)
-    .filter((file) => file.endsWith('.cjs'))
-    .sort();
-  const index = names.indexOf('20260913120000_create_link_previews.cjs');
-  assert.notEqual(index, -1);
-  for (let step = 0; step < names.length - index; step += 1) {
-    assert.equal((await runMigrations({ databaseUrl, direction: 'down', logger: SILENT })).length, 1);
-  }
+  await rollBackThrough(databaseUrl, '20260913120000_create_link_previews');
   assert.equal(await tableExists(), false);
 
   await runMigrations({ databaseUrl, logger: SILENT });

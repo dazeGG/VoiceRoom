@@ -49,18 +49,6 @@ export interface AccountRecoveryCodes {
   user_id: string;
 }
 
-export interface CapabilityRuntimeHeartbeats {
-  capability_tokens: Generated<string[]>;
-  contract_version: string | null;
-  manifest_digest: string | null;
-  manifest_schema_version: number | null;
-  public_capabilities: Generated<string[]>;
-  ready: Generated<boolean>;
-  runtime_id: string;
-  runtime_kind: string;
-  updated_at: Generated<Timestamp>;
-}
-
 export interface DirectMessageReactionRevisions {
   emoji: string;
   message_id: string;
@@ -499,7 +487,6 @@ export interface Users {
 export interface DB {
   account_login_events: AccountLoginEvents;
   account_recovery_codes: AccountRecoveryCodes;
-  capability_runtime_heartbeats: CapabilityRuntimeHeartbeats;
   direct_message_reaction_revisions: DirectMessageReactionRevisions;
   direct_message_reactions: DirectMessageReactions;
   direct_message_read_cursors: DirectMessageReadCursors;

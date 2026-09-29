@@ -9,15 +9,10 @@ import test from 'node:test';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createAttachmentRepository } from '../src/domains/media/attachment.repository.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { rollbackCountThrough } from './migration-steps.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 // Rolling back to just before the attachment byte limit also undoes every later migration.
-const BYTE_LIMIT_ROLLBACK_COUNT = (() => {
-  const files = fs
-    .readdirSync(path.resolve(import.meta.dirname, '../src/migrations'))
-    .filter((name) => name.endsWith('.cjs'))
-    .sort();
-  return files.length - files.indexOf('20260720162000_limit_message_attachment_bytes.cjs');
-})();
+const BYTE_LIMIT_ROLLBACK_COUNT = rollbackCountThrough('20260720162000_limit_message_attachment_bytes');
 
 test(
   'G73-A01 fresh PG schema is repeatable, bounded and N-1-readable',

@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import fs from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import { Pool } from 'pg';
@@ -8,6 +7,7 @@ import { runner } from 'node-pg-migrate';
 
 import { createTestDatabase } from './db-harness.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
+import { rollbackCountThrough } from './migration-steps.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const MIGRATIONS_DIR = path.resolve(import.meta.dirname, '../src/migrations');
@@ -15,23 +15,12 @@ const BACKFILL_MIGRATION = '20260911120000_backfill_room_memberships_from_bookma
 
 // Later migrations roll back and reapply together with the backfill, so the test
 // keeps exercising the backfill however many migrations are added after it.
-function stepsThroughBackfill() {
-  const names = fs
-    .readdirSync(MIGRATIONS_DIR)
-    .filter((file) => file.endsWith('.cjs'))
-    .map((file) => file.replace(/\.c?js$/, ''))
-    .sort();
-  const index = names.indexOf(BACKFILL_MIGRATION);
-  assert.notEqual(index, -1, `${BACKFILL_MIGRATION} is missing from the migrations directory`);
-  return names.length - index;
-}
-
 function step(databaseUrl: string, direction: 'up' | 'down') {
   return runner({
     databaseUrl,
     dir: MIGRATIONS_DIR,
     direction,
-    count: stepsThroughBackfill(),
+    count: rollbackCountThrough(BACKFILL_MIGRATION),
     migrationsTable: 'pgmigrations',
     logger: SILENT,
     noLock: true
