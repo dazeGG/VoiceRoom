@@ -19,7 +19,7 @@ const { withRosterPeer } = await import('./roster-harness.ts');
 const { renderPrometheus, resetMetricsForTest } = await import('../src/lib/metrics.ts');
 const { createCredentialBoundaryService } = await import('../src/domains/admission/credential-boundary.service.ts');
 const { createLiveKitAuthGateService } = await import('../src/domains/admission/livekit-auth-gate.service.ts');
-const { createRoomStore } = await import('../src/lib/room-store.ts');
+const { createRoomStore } = await import('../src/app/room-store.ts');
 const { runMigrations } = await import('../src/lib/migrate.ts');
 const { createTestDatabase } = await import('./db-harness.ts');
 

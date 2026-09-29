@@ -8,7 +8,8 @@ import { AccessToken, TrackSource } from 'livekit-server-sdk';
 import { createGateCredentialSigner } from '../../apps/api/src/domains/admission/gate-credential-signer.ts';
 import { createDbPool } from '../../apps/api/src/platform/db/pool.ts';
 import { runMigrations } from '../../apps/api/src/lib/migrate.ts';
-import { createRoomStore, type GatePrincipal } from '../../apps/api/src/lib/room-store.ts';
+import { createRoomStore } from '../../apps/api/src/app/room-store.ts';
+import type { GatePrincipal } from '../../apps/api/src/domains/admission/admission.service.ts';
 
 type ReplayCase = { detail: unknown; id: string; passed: boolean };
 type SocketOutcome = {

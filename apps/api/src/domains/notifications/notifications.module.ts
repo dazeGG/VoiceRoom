@@ -3,7 +3,7 @@
 
 import type pg from 'pg';
 import type { CursorCodec } from '../../platform/cursor-codec.ts';
-import type { createNotificationStore } from '../../lib/notification-store.ts';
+import type { createNotificationPreferencesRepository } from '../../domains/notifications/notification-preferences.repository.ts';
 import type { createActiveBanService } from '../moderation/active-ban.service.ts';
 import { createInboxRepository } from './inbox.repository.ts';
 import { createMentionEligibilityService } from './mention-eligibility.service.ts';
@@ -15,7 +15,7 @@ export interface NotificationsModuleDeps {
   pool: pg.Pool;
   cursorCodec: CursorCodec;
   activeBans: ReturnType<typeof createActiveBanService>;
-  notificationStore: ReturnType<typeof createNotificationStore>;
+  notificationPreferences: ReturnType<typeof createNotificationPreferencesRepository>;
 }
 
 export function createNotificationsModule(deps: NotificationsModuleDeps) {
@@ -31,7 +31,7 @@ export function createNotificationsModule(deps: NotificationsModuleDeps) {
     eligibility,
     outbox,
     cursorCodec: deps.cursorCodec,
-    notificationStore: deps.notificationStore
+    notificationPreferences: deps.notificationPreferences
   });
   return { eligibility, inbox, mentions, outbox, service };
 }

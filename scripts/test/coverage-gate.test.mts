@@ -18,7 +18,7 @@ import {
 } from '../coverage/check-release-250-coverage.mts';
 import { createTestDatabase } from '../../apps/api/test/db-harness.ts';
 import { runMigrations } from '../../apps/api/src/lib/migrate.ts';
-import { createRoomStore } from '../../apps/api/src/lib/room-store.ts';
+import { createRoomStore } from '../../apps/api/src/app/room-store.ts';
 
 const require = createRequire(import.meta.url);
 const { createGateCredentialSigner } = require('../../apps/api/src/domains/admission/gate-credential-signer.ts');

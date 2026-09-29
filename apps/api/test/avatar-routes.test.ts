@@ -9,7 +9,7 @@ import { createApiApp } from '../src/server.ts';
 import { createAvatarStorage } from '../src/lib/avatar-storage.ts';
 import type { StoreOverrides } from '../src/app/service-registry.ts';
 import { dbRoom, storedUser, userSession } from './fakes/index.ts';
-import type { StoredUser } from '../src/lib/user-store.ts';
+import type { StoredUser } from '../src/domains/account/user-records.ts';
 
 const OWNER_ID = '123e4567-e89b-12d3-a456-426614174000';
 const OTHER_ID = '123e4567-e89b-12d3-a456-426614174001';

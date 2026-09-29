@@ -33,7 +33,7 @@ import {
 import { Done } from '@voice-room/shared/contracts/http';
 import { cleanDisplayName, normalizeLogin } from '@voice-room/shared/validation';
 import type { ApiContext, ResolvedSession, SessionRecord, SessionUser } from '../../app/context.ts';
-import { selfUser } from '../../lib/user-store.ts';
+import { selfUser } from './user-records.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import type { AccountService, Device, OpenedSession } from './account.service.ts';
 

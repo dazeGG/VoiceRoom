@@ -76,7 +76,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
   });
   const notificationDispatch = createNotificationDispatch({
     push: () => services.getPushService(),
-    preferences: (userId) => services.getNotificationStore().getPreferences(userId),
+    preferences: (userId) => services.getNotificationPreferences().getPreferences(userId),
     notifyUser: (userId, event) => broadcastToUser(userId, event),
     logger: () => deps.logger()
   });

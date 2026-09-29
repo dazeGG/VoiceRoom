@@ -10,18 +10,22 @@ import { createAttachmentRepository } from '../media/attachment.repository.ts';
 import { createMediaJobRepository } from '../media/media-job.repository.ts';
 import type { EvictionType } from '../rooms/peer-eviction.ts';
 import type { LiveRoom, PresencePeer } from '../rooms/room-views.ts';
-import type { createRoomStore } from '../../lib/room-store.ts';
+import type { Queryable } from '../../platform/db/kysely.ts';
+import { normalizeGatePrincipal, type PrincipalRevocation } from '../admission/gate-credential.repository.ts';
+import type { GatePrincipal } from '../admission/admission.service.ts';
 import { createMessageModerationService } from './message-moderation.service.ts';
 import { createModerationRepository } from './moderation.repository.ts';
 import { createModerationService } from './moderation.service.ts';
-
-type RoomStore = ReturnType<typeof createRoomStore>;
 
 export interface ModerationModuleDeps {
   pool: pg.Pool;
   cursorCodec: CursorCodec;
   maxActiveBans: number;
-  roomStore: () => Pick<RoomStore, 'normalizeGatePrincipal' | 'revokeLiveKitGatePrincipalInTransaction'>;
+  /** Revokes a principal's LiveKit credentials on the ban's own connection. */
+  revokeGatePrincipal: (
+    client: Queryable,
+    input: { principal: GatePrincipal; roomId: string; now?: number }
+  ) => Promise<PrincipalRevocation>;
   getRoom: (roomId: string) => Promise<LiveRoom | null>;
   gatePrincipalForPeer: (roomId: string, peer: PresencePeer) => unknown;
   disconnectPeer: (
@@ -42,7 +46,7 @@ export function createModerationModule(deps: ModerationModuleDeps) {
     maxActiveBans: deps.maxActiveBans,
     resolvePrincipals: async ({ roomId, userId, guestIp }) => {
       if (userId) {
-        const principal = deps.roomStore().normalizeGatePrincipal({ accountUserId: userId, roomId });
+        const principal = normalizeGatePrincipal({ accountUserId: userId, roomId });
         return isGatePrincipal(principal) ? [principal] : [];
       }
       const room = await deps.getRoom(roomId);
@@ -54,7 +58,7 @@ export function createModerationModule(deps: ModerationModuleDeps) {
     },
     // The ban and the credential revocation commit together.
     revokePrincipalInTransaction: ({ client, principal, roomId, now }) =>
-      deps.roomStore().revokeLiveKitGatePrincipalInTransaction(client, { principal, roomId, now }),
+      deps.revokeGatePrincipal(client, { principal, roomId, now }),
     afterBanCommitted: async ({ roomId, userId, guestIp }) => {
       const room = await deps.getRoom(roomId);
       if (!room) return;

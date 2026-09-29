@@ -1,8 +1,8 @@
 import crypto from 'node:crypto';
 import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
-import { kyselyOn } from '../platform/db/kysely.ts';
-import type { PushSubscriptions } from '../platform/db/schema.ts';
+import { kyselyOn } from '../../platform/db/kysely.ts';
+import type { PushSubscriptions } from '../../platform/db/schema.ts';
 import { classifyPlatform, PLATFORM_CLASSES } from '@voice-room/shared/platform-class';
 import type { PlatformClass } from '@voice-room/shared/platform-class';
 
@@ -81,7 +81,13 @@ function resolvePlatformClass(metadata: Metadata | null | undefined): PlatformCl
   });
 }
 
-function createPushStore({ pool, maxSubscriptionsPerUser = 10 }: { pool: pg.Pool; maxSubscriptionsPerUser?: number }) {
+function createPushSubscriptionRepository({
+  pool,
+  maxSubscriptionsPerUser = 10
+}: {
+  pool: pg.Pool;
+  maxSubscriptionsPerUser?: number;
+}) {
   const db = kyselyOn(pool);
   const subscriptionLimit = Math.max(1, Math.floor(Number(maxSubscriptionsPerUser) || 10));
 
@@ -191,6 +197,6 @@ function createPushStore({ pool, maxSubscriptionsPerUser = 10 }: { pool: pg.Pool
   return { listByUserId, markSuccess, remove, removeByEndpoint, upsert };
 }
 
-export type PushStore = ReturnType<typeof createPushStore>;
+export type PushSubscriptionRepository = ReturnType<typeof createPushSubscriptionRepository>;
 
-export { createPushStore };
+export { createPushSubscriptionRepository };

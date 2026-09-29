@@ -1,6 +1,6 @@
 import type pg from 'pg';
 import { readEnvBool, readEnvInt } from '../lib/config.ts';
-import { createPushStore } from '../lib/push-store.ts';
+import { createPushSubscriptionRepository } from '../domains/notifications/push-subscription.repository.ts';
 import { createNotificationOutboxRepository } from '../domains/notifications/notification-outbox.repository.ts';
 import { createNotificationPushProvider } from '../domains/notifications/push-provider.ts';
 import { boundedBackoff, createLeaseRuntime } from '../platform/lease-runtime.ts';
@@ -191,7 +191,7 @@ async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
     return;
   }
   const outbox = createNotificationOutboxRepository({ pool });
-  const store = createPushStore({ pool });
+  const store = createPushSubscriptionRepository({ pool });
   const provider = createNotificationPushProvider({ store, env });
   const worker = createNotificationDeliveryWorker({
     outbox,

@@ -1,4 +1,4 @@
-import type { FriendStore } from '../../lib/friend-store.ts';
+import type { DmThreadRepository } from './dm-thread.repository.ts';
 
 type StoreMethod = (...args: unknown[]) => unknown;
 type Store = Record<string, unknown>;
@@ -14,7 +14,7 @@ const METHODS = [
   'softDeleteMessage'
 ] as const;
 
-export type DirectMessageRepository = Readonly<Pick<FriendStore, (typeof METHODS)[number]>>;
+export type DirectMessageRepository = Readonly<Pick<DmThreadRepository, (typeof METHODS)[number]>>;
 
 function requireMethod(store: Store | null | undefined, name: string): StoreMethod {
   if (!store || typeof store[name] !== 'function') {
@@ -25,7 +25,7 @@ function requireMethod(store: Store | null | undefined, name: string): StoreMeth
 
 function createDirectMessageRepository({
   store
-}: { store?: Store | FriendStore | null } = {}): DirectMessageRepository {
+}: { store?: Store | DmThreadRepository | null } = {}): DirectMessageRepository {
   if (!store) throw new TypeError('Direct message repository requires a store');
   // Each method forwards to the store's, checked when first called.
   const delegate = <Name extends keyof DirectMessageRepository>(name: Name): DirectMessageRepository[Name] =>

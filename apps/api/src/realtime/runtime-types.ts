@@ -1,4 +1,9 @@
-import type { RoomStore } from '../lib/room-store.ts';
+import type { GateCredentialRepository } from '../domains/admission/gate-credential.repository.ts';
+import type { RoomChatRepository } from '../domains/messaging/room-chat.repository.ts';
+import type { ServerMuteRepository } from '../domains/moderation/room-ban.repository.ts';
+import type { PeerIdentityRepository } from '../domains/rooms/peer-identity.repository.ts';
+import type { RoomAccessRepository } from '../domains/rooms/room-access.repository.ts';
+import type { RoomRepository } from '../domains/rooms/room.repository.ts';
 import type { PresenceRoom as RosterRoom, RosterPeer } from './room-presence.ts';
 
 // The in-memory records the room runtime and its reconnect leases share:
@@ -51,8 +56,15 @@ export type LeaseClaim =
   | { state: 'claimed' | 'finalizing' | 'busy' | 'failed-finalizer' | 'terminal' | LeaseState; record: LeaseRecord };
 export type FinalizeError = Error & { ownershipFinalized?: boolean; rollbackTerminal?: boolean; code?: string };
 
+type RoomRepositories = RoomRepository &
+  RoomAccessRepository &
+  RoomChatRepository &
+  PeerIdentityRepository &
+  GateCredentialRepository &
+  ServerMuteRepository;
+
 export type RuntimeRoomStore = Pick<
-  RoomStore,
+  RoomRepositories,
   | 'getRoom'
   | 'listMessages'
   | 'getOrCreatePeerIdentity'
@@ -62,7 +74,7 @@ export type RuntimeRoomStore = Pick<
 > &
   Partial<
     Pick<
-      RoomStore,
+      RoomRepositories,
       | 'revokeLiveKitGatePeer'
       | 'getRoomUnreadCount'
       | 'listNotificationRecipientUserIds'

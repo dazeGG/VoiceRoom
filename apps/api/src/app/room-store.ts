@@ -1,6 +1,6 @@
-// The room store the app composes: one object over the room repositories, the
-// shape route modules, the realtime layer and test fakes know. Each table's
-// queries live in its repository.
+// The room store the app composes: one object over the room repositories for
+// the registry and test overrides. Each table's queries live in its repository,
+// and domain and realtime code depend on those repositories' types.
 
 import type pg from 'pg';
 import { kyselyOn, type Queryable } from '../platform/db/kysely.ts';
@@ -15,11 +15,6 @@ import {
 } from '../domains/admission/gate-credential.repository.ts';
 import { createRoomBanRepository, createServerMuteRepository } from '../domains/moderation/room-ban.repository.ts';
 import type { GatePrincipal } from '../domains/admission/admission.service.ts';
-
-export type { GatePrincipal };
-export type { RoomCreation, RoomRelationship, StoredRoom } from '../domains/rooms/room.repository.ts';
-export type { AppendRoomMessageInput, StoredRoomMessage } from '../domains/messaging/room-chat.repository.ts';
-export type { PrincipalEpoch } from '../domains/admission/gate-credential.repository.ts';
 
 function createRoomStore({ pool, roomIdleTtlMs = 15 * 60 * 1000 }: { pool: pg.Pool; roomIdleTtlMs?: number }) {
   const db = kyselyOn(pool);

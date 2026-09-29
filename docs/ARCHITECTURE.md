@@ -78,6 +78,10 @@ Rules:
 - A rule about who may act on a resource is a pure function in
   `domains/<d>/<name>.policy.ts`; services and realtime paths call it rather
   than repeat the comparison.
+- `app/room-store.ts`, `app/user-store.ts` and `app/friend-store.ts` compose
+  a domain's repositories into one object for the registry and test overrides.
+  Domain and realtime code depend on the repository (or a `Pick` of it) they
+  use, never on these composites.
 - The process has one pg pool, created by the registry (`connect`) or the
   worker entry, and handed to every repository. Queries are Kysely over the
   generated `platform/db/schema.ts`. A repository-only transaction is
@@ -92,7 +96,6 @@ copy the old pattern into new code.
 
 | Gap | Where | Rule for new code |
 | --- | --- | --- |
-| Store facades under `lib/` | `lib/room-store.ts`, `lib/user-store.ts`, `lib/friend-store.ts` (facades over domain repositories), `lib/notification-store.ts`, `lib/push-store.ts` | depend on the domain repository, not the facade |
 | Capability readiness machinery (release-2.5 flags) | `platform/readiness.ts`, `platform/runtime-readiness*.ts`, `/api/capabilities` | gate new features without it |
 
 ## 5. Web layering

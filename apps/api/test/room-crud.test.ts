@@ -9,7 +9,7 @@ const { createApiApp, createApiServer } = await import('../src/server.ts');
 const { resolveRealtimeReconnectLeaseMs } = await import('../src/app/config.ts');
 const { openWs, sendWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType } = await import('./ws-harness.ts');
 import type { ClientCommands } from '@voice-room/shared/contracts/realtime';
-import type { StoredUser } from '../src/lib/user-store.ts';
+import type { StoredUser } from '../src/domains/account/user-records.ts';
 import { dbRoom, userSession, type DbRoom, type Fakes } from './fakes/index.ts';
 import { socketDir } from './fakes/server-process.ts';
 import type { FrameOf, WsSession } from './ws-harness.ts';

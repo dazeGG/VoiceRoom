@@ -3,14 +3,14 @@
 
 import type { IncomingMessage } from 'node:http';
 import { accountPeerIdFor, cleanName } from '@voice-room/shared/validation';
-import type { createUserStore } from '../lib/user-store.ts';
+import type { SessionRepository } from '../domains/account/session.repository.ts';
 import type { GeoLocator } from '../lib/geoip.ts';
 
 type SessionRequest = IncomingMessage & { voiceRoomUserId?: string };
 
 export interface SessionResolverDeps {
   readToken(req: IncomingMessage): string | null | undefined;
-  users(): Pick<ReturnType<typeof createUserStore>, 'getSessionUser'>;
+  users(): Pick<SessionRepository, 'getSessionUser'>;
   geo(): Pick<GeoLocator, 'locate'>;
   clientIp(req: IncomingMessage): string;
 }

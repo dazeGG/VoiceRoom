@@ -1,6 +1,6 @@
-// The account store: one object over the account repositories (users,
-// sessions, recovery codes, sign-in history), kept for the callers that take
-// a single store.
+// The account store the app composes: one object over the account repositories
+// (users, sessions, recovery codes, sign-in history) for the registry and test
+// overrides. Domain code depends on the repository it uses, not on this.
 
 import type pg from 'pg';
 import { createLoginEventRepository } from '../domains/account/login-event.repository.ts';
@@ -8,9 +8,6 @@ import { createRecoveryCodeRepository } from '../domains/account/recovery-code.r
 import { createSessionRepository } from '../domains/account/session.repository.ts';
 import { createUserRepository } from '../domains/account/user.repository.ts';
 import type { UserStoreLogger } from '../domains/account/user-records.ts';
-
-export { publicUser, selfUser, hashSessionToken } from '../domains/account/user-records.ts';
-export type { ProfileSource, PublicUser, StoredUser } from '../domains/account/user-records.ts';
 
 function createUserStore({
   logger,

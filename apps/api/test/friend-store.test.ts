@@ -2,8 +2,9 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 
-import { createFriendStore, orderedPair } from '../src/lib/friend-store.ts';
-import { createUserStore } from '../src/lib/user-store.ts';
+import { createFriendStore } from '../src/app/friend-store.ts';
+import { orderedPair } from '../src/domains/social/social-records.ts';
+import { createUserStore } from '../src/app/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 

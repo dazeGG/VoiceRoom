@@ -11,7 +11,8 @@ import {
   type CredentialBoundaryService,
   type GateRoomStore
 } from './credential-boundary.service.ts';
-import { createRoomStore } from '../../lib/room-store.ts';
+import { kyselyOn } from '../../platform/db/kysely.ts';
+import { createGateCredentialRepository } from './gate-credential.repository.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { createLogger } from '../../lib/logger.ts';
 import { normalizeLiveKitRoomPrefix, verifyAccessTokenBinding } from './livekit-token-binding.mts';
@@ -124,7 +125,7 @@ function createLiveKitAuthGateService({
   const upstream = cleanUpstreamUrl(upstreamUrl);
   if (!roomStore && !pool) throw new Error('The LiveKit auth gate needs a room store or a pool');
   // Tests hand in a fake pool, so the option type stays wider than the store's.
-  const store = (roomStore || createRoomStore({ pool: pool as pg.Pool })) as GateRoomStore;
+  const store = (roomStore || createGateCredentialRepository({ db: kyselyOn(pool as pg.Pool) })) as GateRoomStore;
   const credentialBoundary =
     boundary ||
     createCredentialBoundaryService({

@@ -6,7 +6,8 @@ import type { RoomMessage } from '@voice-room/shared/contracts/messages';
 import type { TypingActivity, ServerEnvelope } from '@voice-room/shared/realtime';
 import { cleanName } from '@voice-room/shared/validation';
 import { LOG_EVENTS } from '../lib/log-events.ts';
-import type { StoredUser, UserStore } from '../lib/user-store.ts';
+import type { StoredUser } from '../domains/account/user-records.ts';
+import type { UserRepository } from '../domains/account/user.repository.ts';
 import type { RoomChatMessage } from '../domains/messaging/room-chat-views.ts';
 import type { AccountMessage } from './account-events.ts';
 import { buildServerEnvelope } from './envelope.ts';
@@ -19,7 +20,7 @@ export interface RoomFanoutDeps {
   presenceRooms: Map<string, PresenceRoom>;
   wsRegistry: Pick<ConnectionRegistry, 'roomDetailSubscribers' | 'sendToConnection' | 'broadcastAccountEvent'>;
   getRoomStore: () => RuntimeRoomStore;
-  getUserStore?: (() => Pick<UserStore, 'getUserById'>) | null;
+  getUserStore?: (() => Pick<UserRepository, 'getUserById'>) | null;
   publicChatMessage: (message: RoomChatMessage) => RoomMessage;
   scheduleSummary: (roomId: string) => void;
   now: () => number;

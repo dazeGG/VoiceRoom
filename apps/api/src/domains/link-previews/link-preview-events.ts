@@ -2,7 +2,7 @@
 // whether one is needed; when it is ready it reaches readers as an edit of the
 // message, re-read in full so it carries its attachments and reply quote.
 
-import type { DirectMessage as StoredDirectMessage } from '../../lib/friend-store.ts';
+import type { DirectMessage as StoredDirectMessage } from '../social/social-records.ts';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { RoomMessage } from '@voice-room/shared/contracts/messages';
 import { firstPreviewableUrl } from '@voice-room/shared/link-preview';

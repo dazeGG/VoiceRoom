@@ -200,3 +200,5 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
     getUnreadCounts
   };
 }
+
+export type DmThreadRepository = ReturnType<typeof createDmThreadRepository>;

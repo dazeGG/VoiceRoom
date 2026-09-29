@@ -5,7 +5,7 @@
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
-import { publicUser, type StoredUser } from '../../lib/user-store.ts';
+import { publicUser, type StoredUser } from './user-records.ts';
 import type { GatePrincipal } from '../admission/admission.service.ts';
 import type { ConnectionRegistry, WsConnection } from '../../realtime/registry.ts';
 import type { AccountDeletionRepository } from './account-deletion.repository.ts';

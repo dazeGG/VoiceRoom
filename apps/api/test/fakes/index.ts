@@ -6,13 +6,13 @@
 import type { NotificationPreferences } from '@voice-room/shared/contracts/notifications';
 import type { LoginAlert } from '@voice-room/shared/contracts/account';
 import type { RoomMessage } from '@voice-room/shared/contracts/messages';
-import type { DirectMessage as StoredDirectMessage } from '../../src/lib/friend-store.ts';
+import type { DirectMessage as StoredDirectMessage } from '../../src/domains/social/social-records.ts';
 import type { LobbyRoom } from '@voice-room/shared/contracts/rooms';
 import type { PublicUser } from '@voice-room/shared/contracts/users';
 import type { DirectMessage } from '../../src/domains/messaging/direct-messages.service.ts';
 import type { StoredRoom } from '../../src/domains/rooms/room-views.ts';
-import type { StoredUser } from '../../src/lib/user-store.ts';
-import type { createRoomStore } from '../../src/lib/room-store.ts';
+import type { StoredUser } from '../../src/domains/account/user-records.ts';
+import type { createRoomStore } from '../../src/app/room-store.ts';
 import type { StoreOverrides } from '../../src/app/service-registry.ts';
 import type pg from 'pg';
 import type { Logger } from 'pino';

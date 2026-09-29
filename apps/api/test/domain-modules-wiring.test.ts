@@ -14,7 +14,6 @@ import { createModerationModule } from '../src/domains/moderation/moderation.mod
 import { createServiceRegistry, type ServiceRegistryDeps } from '../src/app/service-registry.ts';
 import type { LiveRoom, PresencePeer } from '../src/domains/rooms/room-views.ts';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
-import { normalizeGatePrincipal } from '../src/domains/admission/gate-credential.repository.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { fake, fakeDb } from './fakes/index.ts';
@@ -112,16 +111,13 @@ test(
       pool,
       cursorCodec,
       maxActiveBans: 10,
-      roomStore: () => ({
-        normalizeGatePrincipal,
-        revokeLiveKitGatePrincipalInTransaction: async (client, { principal }) => {
-          const inTransaction = client !== pool;
-          events.push(
-            `revoke ${principal.principalId}, in transaction: ${inTransaction}, committed bans: ${await banCount()}`
-          );
-          return { status: 'revoked', epoch: 1 };
-        }
-      }),
+      revokeGatePrincipal: async (client, { principal }) => {
+        const inTransaction = client !== pool;
+        events.push(
+          `revoke ${principal.principalId}, in transaction: ${inTransaction}, committed bans: ${await banCount()}`
+        );
+        return { status: 'revoked', epoch: 1 };
+      },
       getRoom: async (roomId) => (roomId === 'room' ? room : null),
       gatePrincipalForPeer: () => null,
       disconnectPeer: async (_room, target, type, options) => {

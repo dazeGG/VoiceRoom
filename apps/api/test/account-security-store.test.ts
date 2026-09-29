@@ -2,7 +2,7 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 
-import { createUserStore } from '../src/lib/user-store.ts';
+import { createUserStore } from '../src/app/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import {
   RECOVERY_CODES_REMINDER_SNOOZE_MS,

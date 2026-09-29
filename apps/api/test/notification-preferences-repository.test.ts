@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { createNotificationStore } from '../src/lib/notification-store.ts';
-import { createRoomStore } from '../src/lib/room-store.ts';
-import { createUserStore } from '../src/lib/user-store.ts';
+import { createNotificationPreferencesRepository } from '../src/domains/notifications/notification-preferences.repository.ts';
+import { createRoomStore } from '../src/app/room-store.ts';
+import { createUserStore } from '../src/app/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 
@@ -13,13 +13,13 @@ const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
 async function createStores(
   t: TestContext,
-  notificationOptions: Partial<Parameters<typeof createNotificationStore>[0]> = {}
+  notificationOptions: Partial<Parameters<typeof createNotificationPreferencesRepository>[0]> = {}
 ) {
   const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const users = createUserStore({ pool, logger: SILENT });
   const rooms = createRoomStore({ pool });
-  const notifications = createNotificationStore({ pool, ...notificationOptions });
+  const notifications = createNotificationPreferencesRepository({ pool, ...notificationOptions });
   t.after(async () => {
     await cleanup();
   });

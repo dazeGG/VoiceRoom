@@ -17,7 +17,7 @@ import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
 import { type RoomPeerMessage } from './legacy-events.ts';
 import type { RoomSnapshot } from '@voice-room/shared/contracts/realtime';
-import type { UserStore } from '../lib/user-store.ts';
+import type { UserRepository } from '../domains/account/user.repository.ts';
 import type { ConnectionRegistry, WsConnection } from './registry.ts';
 import { createReconnectLeases } from './reconnect-leases.ts';
 import { createRoomSummaries } from './room-summaries.ts';
@@ -62,7 +62,7 @@ export type RoomRuntimeDeps = {
   publicPeer: (peer: Peer) => PublicPeer;
   publicLobbyRoom: (room: StoredRoom) => LobbyRoom;
   publicChatMessage: (message: RoomChatMessage) => RoomMessage;
-  getUserStore?: (() => Pick<UserStore, 'getUserById'>) | null;
+  getUserStore?: (() => Pick<UserRepository, 'getUserById'>) | null;
   broadcast: (room: PresenceRoom, message: RoomPeerMessage, exceptPeerId?: string) => void;
   closePeer: (roomId: string, peerId: string, transportId: string | undefined, reason: string) => void;
   avatarColorForPeerId: (peerId: unknown) => string;

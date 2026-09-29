@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPushStore } from '../src/lib/push-store.ts';
-import { createUserStore } from '../src/lib/user-store.ts';
+import { createPushSubscriptionRepository } from '../src/domains/notifications/push-subscription.repository.ts';
+import { createUserStore } from '../src/app/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 
@@ -11,7 +11,7 @@ test('push subscription CRUD upserts endpoints and isolates deletion by user', a
   const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const users = createUserStore({ pool, logger: SILENT });
-  const pushes = createPushStore({ pool });
+  const pushes = createPushSubscriptionRepository({ pool });
   t.after(async () => {
     await cleanup();
   });
@@ -70,7 +70,7 @@ test('push subscriptions transactionally prune the oldest entries above the per-
   const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
   await runMigrations({ databaseUrl, logger: SILENT });
   const users = createUserStore({ pool, logger: SILENT });
-  const pushes = createPushStore({ pool, maxSubscriptionsPerUser: 2 });
+  const pushes = createPushSubscriptionRepository({ pool, maxSubscriptionsPerUser: 2 });
   t.after(async () => {
     await cleanup();
   });

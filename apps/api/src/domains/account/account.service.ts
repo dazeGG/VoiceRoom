@@ -22,7 +22,7 @@ import {
 } from '@voice-room/shared/account-security';
 import { isValidPassword } from '@voice-room/shared/validation';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
-import { hashSessionToken, selfUser, type StoredUser } from '../../lib/user-store.ts';
+import { hashSessionToken, selfUser, type StoredUser } from './user-records.ts';
 
 export type AccountUser = StoredUser;
 

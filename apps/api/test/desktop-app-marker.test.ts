@@ -7,7 +7,8 @@ import { Pool } from 'pg';
 import type { Me, SignedIn } from '@voice-room/shared/contracts/account';
 
 import { runMigrations } from '../src/lib/migrate.ts';
-import { createUserStore, hashSessionToken, publicUser, selfUser } from '../src/lib/user-store.ts';
+import { createUserStore } from '../src/app/user-store.ts';
+import { hashSessionToken, publicUser, selfUser } from '../src/domains/account/user-records.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { storedUser } from './fakes/index.ts';
 import { cookieFrom, request, startApiServer } from './fakes/server-process.ts';

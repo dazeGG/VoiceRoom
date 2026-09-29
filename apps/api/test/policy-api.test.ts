@@ -3,9 +3,9 @@ import test, { type TestContext } from 'node:test';
 import { normalizeNotificationLevel } from '@voice-room/shared/notifications';
 import { createNotificationService, type RoomLevelStore } from '../src/domains/notifications/notification.service.ts';
 import type { InboxRepository } from '../src/domains/notifications/inbox.repository.ts';
-import { createNotificationStore } from '../src/lib/notification-store.ts';
-import { createRoomStore } from '../src/lib/room-store.ts';
-import { createUserStore } from '../src/lib/user-store.ts';
+import { createNotificationPreferencesRepository } from '../src/domains/notifications/notification-preferences.repository.ts';
+import { createRoomStore } from '../src/app/room-store.ts';
+import { createUserStore } from '../src/app/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { fake, fakeDb } from './fakes/index.ts';
@@ -34,14 +34,14 @@ test('G61-A01 only all mentions none validate', () => {
 });
 test('G61-A02 PostgreSQL persists explicit levels across restart and keeps missing rows conservative', async (t) => {
   const f = await fixture(t);
-  let store = createNotificationStore({ pool: f.pool });
+  let store = createNotificationPreferencesRepository({ pool: f.pool });
   t.after(async () => {
     await f.cleanup();
   });
   assert.equal(await store.getRoomLevel(f), 'mentions');
   assert.deepEqual(await store.setRoomLevel({ ...f, level: 'all' }), { ok: true, level: 'all' });
   assert.equal(await store.getRoomLevel(f), 'all');
-  store = createNotificationStore({ pool: f.pool });
+  store = createNotificationPreferencesRepository({ pool: f.pool });
   assert.equal(await store.getRoomLevel(f), 'all');
   for (const level of ['mentions', 'none']) {
     assert.deepEqual(await store.setRoomLevel({ ...f, level }), { ok: true, level });
@@ -53,7 +53,7 @@ test('G61-A02 PostgreSQL persists explicit levels across restart and keeps missi
 });
 test('G61-A03 explicit all replaces legacy mute and concurrent updates retain one valid preference', async (t) => {
   const f = await fixture(t);
-  const store = createNotificationStore({ pool: f.pool });
+  const store = createNotificationPreferencesRepository({ pool: f.pool });
   const pool = f.pool;
   t.after(async () => {
     await f.cleanup();
@@ -83,7 +83,7 @@ test('G61-A03 explicit all replaces legacy mute and concurrent updates retain on
 });
 test('G61-A04 service preserves the explicit store level on GET and PUT paths', async () => {
   const calls: unknown[][] = [];
-  const notificationStore: RoomLevelStore = {
+  const notificationPreferences: RoomLevelStore = {
     async getRoomLevel(value) {
       calls.push(['get', value]);
       return 'all' as const;
@@ -93,7 +93,11 @@ test('G61-A04 service preserves the explicit store level on GET and PUT paths', 
       return { ok: true, level: value.level };
     }
   };
-  const service = createNotificationService({ pool: fakeDb(), inbox: fake<InboxRepository>(), notificationStore });
+  const service = createNotificationService({
+    pool: fakeDb(),
+    inbox: fake<InboxRepository>(),
+    notificationPreferences
+  });
 
   assert.equal(await service.getRoomLevel({ userId: 'user', roomId: 'room' }), 'all');
   assert.deepEqual(await service.setRoomLevel({ userId: 'user', roomId: 'room', level: 'all' }), {

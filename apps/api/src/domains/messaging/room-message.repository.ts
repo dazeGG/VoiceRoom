@@ -1,4 +1,7 @@
-import type { RoomStore } from '../../lib/room-store.ts';
+import type { RoomAccessRepository } from '../rooms/room-access.repository.ts';
+import type { RoomChatRepository } from './room-chat.repository.ts';
+
+type RoomMessageSource = RoomChatRepository & Pick<RoomAccessRepository, 'markRoomChatRead'>;
 
 type StoreMethod = (...args: unknown[]) => unknown;
 type Store = Record<string, unknown>;
@@ -12,7 +15,7 @@ const METHODS = [
   'softDeleteMessage'
 ] as const;
 
-export type RoomMessageRepository = Readonly<Pick<RoomStore, (typeof METHODS)[number]>>;
+export type RoomMessageRepository = Readonly<Pick<RoomMessageSource, (typeof METHODS)[number]>>;
 
 function requireMethod(store: Store | null | undefined, name: string): StoreMethod {
   if (!store || typeof store[name] !== 'function') {
@@ -21,7 +24,9 @@ function requireMethod(store: Store | null | undefined, name: string): StoreMeth
   return (store[name] as StoreMethod).bind(store);
 }
 
-function createRoomMessageRepository({ store }: { store?: Store | RoomStore | null } = {}): RoomMessageRepository {
+function createRoomMessageRepository({
+  store
+}: { store?: Store | RoomMessageSource | null } = {}): RoomMessageRepository {
   if (!store) throw new TypeError('Room message repository requires a store');
   // Each method forwards to the store's, checked when first called.
   const delegate = <Name extends keyof RoomMessageRepository>(name: Name): RoomMessageRepository[Name] =>

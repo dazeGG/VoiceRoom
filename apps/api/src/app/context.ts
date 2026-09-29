@@ -6,7 +6,7 @@
 
 import type { IncomingMessage } from 'node:http';
 import type { FastifyBaseLogger } from 'fastify';
-import type { StoredUser } from '../lib/user-store.ts';
+import type { StoredUser } from '../domains/account/user-records.ts';
 
 /** The signed-in account behind a session, as the user store reads it. */
 export type SessionUser = StoredUser;

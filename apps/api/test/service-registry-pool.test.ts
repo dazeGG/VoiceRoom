@@ -31,7 +31,7 @@ test('stores built by the registry query the installed pool, and close ends it o
   registry.applyOverrides({ pool });
 
   await registry.getUserStore().getUserById('11111111-1111-4111-8111-111111111111');
-  await registry.getPushStore().listByUserId('11111111-1111-4111-8111-111111111111');
+  await registry.getPushSubscriptions().listByUserId('11111111-1111-4111-8111-111111111111');
   assert.equal(db.calls.length, 2, 'both stores sent their query through the one pool');
   assert.equal(registry.getPool(), pool);
 

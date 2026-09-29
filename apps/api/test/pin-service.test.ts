@@ -8,8 +8,8 @@ import { createPinService, type PinEvent } from '../src/domains/messaging/pin.se
 import { registerPinRoutes } from '../src/domains/messaging/pins.routes.ts';
 import type { ApiContext } from '../src/app/context.ts';
 import { fake, storedUser } from './fakes/index.ts';
-import { createRoomStore } from '../src/lib/room-store.ts';
-import { createUserStore } from '../src/lib/user-store.ts';
+import { createRoomStore } from '../src/app/room-store.ts';
+import { createUserStore } from '../src/app/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 

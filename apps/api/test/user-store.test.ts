@@ -2,7 +2,8 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 
-import { createUserStore, publicUser } from '../src/lib/user-store.ts';
+import { createUserStore } from '../src/app/user-store.ts';
+import { publicUser } from '../src/domains/account/user-records.ts';
 import { AVATAR_COLOR_KEYS } from '@voice-room/shared/validation';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';

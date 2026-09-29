@@ -12,10 +12,10 @@ import { fake, notificationPreferences } from './fakes/index.ts';
 import type { StoreOverrides } from '../src/app/service-registry.ts';
 import type { ReadinessReport } from '../src/platform/readiness.ts';
 import type { NotificationPreferences } from '@voice-room/shared/contracts/notifications';
-import type { createPushStore } from '../src/lib/push-store.ts';
+import type { createPushSubscriptionRepository } from '../src/domains/notifications/push-subscription.repository.ts';
 
 type RoomStoreFake = NonNullable<StoreOverrides['store']>;
-type PushStore = ReturnType<typeof createPushStore>;
+type PushSubscriptionRepository = ReturnType<typeof createPushSubscriptionRepository>;
 const { resetMetricsForTest } = await import('../src/lib/metrics.ts');
 
 function createFakeStore(): RoomStoreFake {
@@ -279,8 +279,8 @@ test('createApiServer keeps the legacy http server contract while exposing app/i
 });
 
 test('push subscription routes require auth and validate subscription payloads', async (t) => {
-  const writes: Parameters<PushStore['upsert']>[0][] = [];
-  const removals: Parameters<PushStore['remove']>[0][] = [];
+  const writes: Parameters<PushSubscriptionRepository['upsert']>[0][] = [];
+  const removals: Parameters<PushSubscriptionRepository['remove']>[0][] = [];
   const app = createApiApp({
     store: createFakeStore(),
     users: {

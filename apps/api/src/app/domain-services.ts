@@ -167,7 +167,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     friends: services.getFriendStore,
     findUser: (userId) => services.getUserStore().getUserById(userId),
     isDmMuted: async (userId, peerUserId) => {
-      const notifications = services.getNotificationStore();
+      const notifications = services.getNotificationPreferences();
       return typeof notifications.isDmMuted === 'function' ? notifications.isDmMuted({ userId, peerUserId }) : false;
     },
     roomExists: async (roomId) => Boolean(await hub.getRoom(roomId)),
@@ -186,8 +186,8 @@ export function createDomainServices(deps: DomainServiceDeps) {
     scheduleLinkPreview: hub.linkPreviews.scheduleDirectLinkPreview
   });
   const notificationSettings = createNotificationSettingsService({
-    preferences: services.getNotificationStore,
-    pushes: services.getPushStore,
+    preferences: services.getNotificationPreferences,
+    pushes: services.getPushSubscriptions,
     pushConfig: () => services.getPushService().config,
     pushLimiter: limits.pushSubscriptions,
     setPresence: (userId, presenceStatus) => hub.registry()?.setUserPresenceStatus(userId, presenceStatus),

@@ -2,7 +2,7 @@
 // change that another person should see reaches them as an account event and,
 // where it matters, a push.
 
-import type { DirectMessage as StoredDirectMessage } from '../../lib/friend-store.ts';
+import type { DirectMessage as StoredDirectMessage } from './social-records.ts';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type {
   FriendLastMessage,

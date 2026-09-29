@@ -8,7 +8,7 @@ import {
 } from '../src/domains/moderation/active-ban.repository.ts';
 import { createActiveBanService } from '../src/domains/moderation/active-ban.service.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
-import { createRoomStore } from '../src/lib/room-store.ts';
+import { createRoomStore } from '../src/app/room-store.ts';
 import {
   MentionEligibilityError,
   createMentionEligibilityService

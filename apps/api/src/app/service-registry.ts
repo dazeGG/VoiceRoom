@@ -9,13 +9,15 @@
 import { type ServerEnvelope } from '@voice-room/shared/realtime';
 import type pg from 'pg';
 import { createDbPool } from '../platform/db/pool.ts';
+import { kyselyOn } from '../platform/db/kysely.ts';
+import { revokePrincipalInTransaction } from '../domains/admission/gate-credential.repository.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
-import { createRoomStore } from '../lib/room-store.ts';
-import { createUserStore } from '../lib/user-store.ts';
+import { createRoomStore } from './room-store.ts';
+import { createUserStore } from './user-store.ts';
 import { createGeoLocator } from '../lib/geoip.ts';
-import { createFriendStore } from '../lib/friend-store.ts';
-import { createNotificationStore } from '../lib/notification-store.ts';
-import { createPushStore } from '../lib/push-store.ts';
+import { createFriendStore } from './friend-store.ts';
+import { createNotificationPreferencesRepository } from '../domains/notifications/notification-preferences.repository.ts';
+import { createPushSubscriptionRepository } from '../domains/notifications/push-subscription.repository.ts';
 import { createPushService } from '../lib/push-service.ts';
 import { createAvatarStorage } from '../lib/avatar-storage.ts';
 import { createLinkPreviewFetcher } from '../lib/link-preview-fetcher.ts';
@@ -196,11 +198,11 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   const roomStore = lazy(() => createRoomStore({ pool: requirePool(), roomIdleTtlMs: ROOM_IDLE_TTL_MS }));
   const userStore = lazy(() => createUserStore({ pool: requirePool(), sessionTtlMs: SESSION_TTL_MS }));
   const friendStore = lazy(() => createFriendStore({ pool: requirePool() }));
-  const notificationStore = lazy(() => createNotificationStore({ pool: requirePool() }));
-  const pushStore = lazy(() =>
-    createPushStore({ pool: requirePool(), maxSubscriptionsPerUser: MAX_PUSH_SUBSCRIPTIONS_PER_USER })
+  const notificationPreferences = lazy(() => createNotificationPreferencesRepository({ pool: requirePool() }));
+  const pushSubscriptions = lazy(() =>
+    createPushSubscriptionRepository({ pool: requirePool(), maxSubscriptionsPerUser: MAX_PUSH_SUBSCRIPTIONS_PER_USER })
   );
-  const pushService = lazy(() => createPushService({ store: pushStore.get() }));
+  const pushService = lazy(() => createPushService({ store: pushSubscriptions.get() }));
   const geoLocator = lazy(() => createGeoLocator({ databasePath: GEOIP_DB_PATH }));
   const avatarStorage = lazy(() => createAvatarStorage());
   const linkPreviewStorage = lazy(() => createLinkPreviewStorage());
@@ -265,7 +267,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       pool,
       cursorCodec: history.get().cursorCodec,
       activeBans: activeBans.get()!,
-      notificationStore: notificationStore.get()
+      notificationPreferences: notificationPreferences.get()
     })
   );
   const moderation = pooled((pool) =>
@@ -273,7 +275,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       pool,
       cursorCodec: history.get().cursorCodec,
       maxActiveBans: MAX_ROOM_BANS,
-      roomStore: () => roomStore.get(),
+      revokeGatePrincipal: (client, input) => revokePrincipalInTransaction(kyselyOn(client), input),
       getRoom,
       gatePrincipalForPeer: deps.liveKitGatePrincipalForPeer,
       disconnectPeer: deps.disconnectModeratedPeer,
@@ -327,10 +329,10 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     friendStoreInviteExpiryEnabled = Boolean(options.friends?.expirePendingInvites);
     if (options.friends) friendStore.set(options.friends as ReturnType<typeof createFriendStore>);
     if (options.notifications)
-      notificationStore.set(options.notifications as ReturnType<typeof createNotificationStore>);
+      notificationPreferences.set(options.notifications as ReturnType<typeof createNotificationPreferencesRepository>);
     if (options.avatars) avatarStorage.set(options.avatars as ReturnType<typeof createAvatarStorage>);
-    if (options.pushes) pushStore.set(options.pushes as ReturnType<typeof createPushStore>);
-    else pushStore.reset();
+    if (options.pushes) pushSubscriptions.set(options.pushes as ReturnType<typeof createPushSubscriptionRepository>);
+    else pushSubscriptions.reset();
     if (options.push) pushService.set(options.push as ReturnType<typeof createPushService>);
     else pushService.reset();
     liveKitCredentials.set(options.liveKitCredentials as LiveKitCredentials | null | undefined);
@@ -378,8 +380,8 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     getUserStore: () => userStore.get(),
     getGeoLocator: () => geoLocator.get(),
     getFriendStore: () => friendStore.get(),
-    getNotificationStore: () => notificationStore.get(),
-    getPushStore: () => pushStore.get(),
+    getNotificationPreferences: () => notificationPreferences.get(),
+    getPushSubscriptions: () => pushSubscriptions.get(),
     getPushService: () => pushService.get(),
     getAvatarStorage: () => avatarStorage.get(),
     getLinkPreviewStorage: () => linkPreviewStorage.get(),

@@ -296,3 +296,5 @@ export function createUserRepository({ pool }: { pool: pg.Pool }) {
     snoozeRecoveryCodesReminder
   };
 }
+
+export type UserRepository = ReturnType<typeof createUserRepository>;

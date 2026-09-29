@@ -135,3 +135,5 @@ export function createPeerIdentityRepository({ db }: { db: Database }) {
 
   return { getOrCreatePeerIdentity, invalidatePeerIdentity };
 }
+
+export type PeerIdentityRepository = ReturnType<typeof createPeerIdentityRepository>;

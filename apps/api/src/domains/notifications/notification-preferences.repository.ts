@@ -3,7 +3,7 @@ import { sql } from 'kysely';
 import type pg from 'pg';
 import { cleanPresenceStatus } from '@voice-room/shared/validation';
 import type { NotificationLevel, NotificationPreferences } from '@voice-room/shared/contracts/notifications';
-import { kyselyOn, type Database, type Queryable } from '../platform/db/kysely.ts';
+import { kyselyOn, type Database, type Queryable } from '../../platform/db/kysely.ts';
 export type RoomNotificationLevel = NotificationLevel;
 export type { NotificationPreferences };
 type PreferencesInput = {
@@ -48,7 +48,7 @@ function mapPreferences({
   };
 }
 
-function createNotificationStore({
+function createNotificationPreferencesRepository({
   automaticPresenceLeaseMs = DEFAULT_AUTOMATIC_PRESENCE_LEASE_MS,
   pool
 }: {
@@ -416,6 +416,6 @@ function createNotificationStore({
   };
 }
 
-export type NotificationStore = ReturnType<typeof createNotificationStore>;
+export type NotificationPreferencesRepository = ReturnType<typeof createNotificationPreferencesRepository>;
 
-export { createNotificationStore };
+export { createNotificationPreferencesRepository };

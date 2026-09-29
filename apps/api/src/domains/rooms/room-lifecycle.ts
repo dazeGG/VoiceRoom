@@ -3,7 +3,7 @@
 // die with the room, and tearing a deleted room down.
 
 import type { RoomPeerMessage } from '../../realtime/legacy-events.ts';
-import type { DirectMessage as StoredDirectMessage } from '../../lib/friend-store.ts';
+import type { DirectMessage as StoredDirectMessage } from '../social/social-records.ts';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';

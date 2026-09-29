@@ -62,7 +62,7 @@ function inboxApp(t: TestContext, { enabled = true, signedIn = true }: { enabled
         return { updated: 2, revision: 5 };
       }
     }),
-    notificationStore: {
+    notificationPreferences: {
       async getRoomLevel({ roomId }) {
         return levels.get(roomId) ?? 'mentions';
       },

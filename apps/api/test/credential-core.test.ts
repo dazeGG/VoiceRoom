@@ -5,7 +5,7 @@ import { Pool } from 'pg';
 import { test } from 'node:test';
 import { createCredentialBoundaryService } from '../src/domains/admission/credential-boundary.service.ts';
 import type { GateClaims, GateCredentialSigner } from '../src/domains/admission/gate-credential-signer.ts';
-import { createRoomStore } from '../src/lib/room-store.ts';
+import { createRoomStore } from '../src/app/room-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 

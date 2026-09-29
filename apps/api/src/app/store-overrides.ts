@@ -1,11 +1,11 @@
 // What a test may hand an app instead of the database-backed stores.
 
 import type pg from 'pg';
-import type { createRoomStore } from '../lib/room-store.ts';
-import type { createUserStore } from '../lib/user-store.ts';
-import type { createFriendStore } from '../lib/friend-store.ts';
-import type { createNotificationStore } from '../lib/notification-store.ts';
-import type { createPushStore } from '../lib/push-store.ts';
+import type { createRoomStore } from './room-store.ts';
+import type { createUserStore } from './user-store.ts';
+import type { createFriendStore } from './friend-store.ts';
+import type { createNotificationPreferencesRepository } from '../domains/notifications/notification-preferences.repository.ts';
+import type { createPushSubscriptionRepository } from '../domains/notifications/push-subscription.repository.ts';
 import type { createPushService } from '../lib/push-service.ts';
 import type { createAvatarStorage } from '../lib/avatar-storage.ts';
 import type { createLiveKitCredentialProvider } from '../domains/admission/livekit-credential-provider.ts';
@@ -31,8 +31,8 @@ export type StoreOverrides = {
   store?: Fake<ReturnType<typeof createRoomStore>> | null;
   users?: Fake<ReturnType<typeof createUserStore>> | null;
   friends?: Fake<ReturnType<typeof createFriendStore>> | null;
-  notifications?: Fake<ReturnType<typeof createNotificationStore>> | null;
-  pushes?: Fake<ReturnType<typeof createPushStore>> | null;
+  notifications?: Fake<ReturnType<typeof createNotificationPreferencesRepository>> | null;
+  pushes?: Fake<ReturnType<typeof createPushSubscriptionRepository>> | null;
   push?: Fake<ReturnType<typeof createPushService>> | null;
   avatars?: Fake<ReturnType<typeof createAvatarStorage>> | null;
   liveKitCredentials?: Fake<ReturnType<typeof createLiveKitCredentialProvider>> | null;

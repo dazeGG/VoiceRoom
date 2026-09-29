@@ -1,4 +1,4 @@
-import type { StoredUser } from '../../lib/user-store.ts';
+import type { StoredUser } from '../account/user-records.ts';
 // A signed-in account's notification settings: per-conversation mutes,
 // private notification text, do-not-disturb and presence status (one
 // preference record), and the browser push subscriptions.

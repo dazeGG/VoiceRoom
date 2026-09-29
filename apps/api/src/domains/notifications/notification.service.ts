@@ -42,7 +42,7 @@ function createNotificationService({
   eligibility,
   outbox,
   cursorCodec,
-  notificationStore
+  notificationPreferences
 }: {
   pool?: pg.Pool | null;
   inbox?: InboxRepository;
@@ -50,7 +50,7 @@ function createNotificationService({
   eligibility?: MentionEligibilityService;
   outbox?: NotificationOutboxRepository;
   cursorCodec?: InboxCursorCodec;
-  notificationStore?: RoomLevelStore | null;
+  notificationPreferences?: RoomLevelStore | null;
 } = {}) {
   if (!pool?.query || !inbox) throw new TypeError('Notification service requires pool and inbox repository');
   const db = pool;
@@ -192,8 +192,8 @@ function createNotificationService({
   }
 
   async function getRoomLevel({ userId, roomId }: { userId: string; roomId: string }): Promise<NotificationLevel> {
-    if (notificationStore?.getRoomLevel) return notificationStore.getRoomLevel({ userId, roomId });
-    const prefs = await notificationStore?.getPreferences?.(userId);
+    if (notificationPreferences?.getRoomLevel) return notificationPreferences.getRoomLevel({ userId, roomId });
+    const prefs = await notificationPreferences?.getPreferences?.(userId);
     if (prefs?.roomLevels?.[roomId]) return prefs.roomLevels[roomId];
     return prefs?.mutedRoomIds?.includes(roomId) ? 'none' : 'mentions';
   }
@@ -201,7 +201,8 @@ function createNotificationService({
   async function setRoomLevel({ userId, roomId, level }: { userId: string; roomId: string; level: unknown }) {
     const normalized = normalizeNotificationLevel(level, '' as NotificationLevel);
     if (!normalized) return { ok: false as const, code: 'invalid_level' as const };
-    if (notificationStore?.setRoomLevel) return notificationStore.setRoomLevel({ userId, roomId, level: normalized });
+    if (notificationPreferences?.setRoomLevel)
+      return notificationPreferences.setRoomLevel({ userId, roomId, level: normalized });
     return { ok: false as const, code: 'not_supported' as const };
   }
 

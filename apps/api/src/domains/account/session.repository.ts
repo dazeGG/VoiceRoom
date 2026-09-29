@@ -246,3 +246,5 @@ export function createSessionRepository({
     revokeOtherSessions
   };
 }
+
+export type SessionRepository = ReturnType<typeof createSessionRepository>;

@@ -10,7 +10,7 @@ import type pg from 'pg';
 import type { DirectMessage as DirectMessageView, ReplyPreview } from '@voice-room/shared/contracts/messages';
 import type { PublicUser } from '@voice-room/shared/contracts/users';
 import crypto from 'node:crypto';
-import { publicUser } from '../../lib/user-store.ts';
+import { publicUser } from '../account/user-records.ts';
 import { isActiveAccount, type SocialUser } from '../social/social-views.ts';
 import { messageFingerprint, normalizeAttachmentIds } from './message-input.ts';
 import { requireReplyTarget } from './reply-projector.ts';

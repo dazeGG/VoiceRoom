@@ -2,11 +2,9 @@
 // (issued, verified and revoked against the room store) and the provider that
 // hands a joining peer its LiveKit token and gate credential.
 
-import type { createRoomStore } from '../../lib/room-store.ts';
+import type { GateCredentialRepository } from './gate-credential.repository.ts';
 import { createCredentialBoundaryService } from './credential-boundary.service.ts';
 import { createLiveKitCredentialProvider } from './livekit-credential-provider.ts';
-
-type RoomStore = ReturnType<typeof createRoomStore>;
 type LiveKitConfig = { enabled: boolean; apiKey: string; apiSecret: string; gateUrl: string };
 
 /** The boundary, or null without a 32-byte gate secret or a store that can hold gate credentials. */
@@ -15,7 +13,7 @@ export function createGateCredentialBoundary({
   secret,
   credentialTtlSeconds
 }: {
-  store: RoomStore;
+  store: GateCredentialRepository;
   secret: string;
   credentialTtlSeconds: number;
 }) {

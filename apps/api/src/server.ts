@@ -52,8 +52,8 @@ async function bootstrap({
     await roomStore.markActiveTemporaryRoomsEmpty();
     await roomStore.pruneRooms();
     const userStore = services.getUserStore();
-    const pushStore = services.getPushStore();
-    const pushService = createPushService({ store: pushStore, env, logger });
+    const pushSubscriptions = services.getPushSubscriptions();
+    const pushService = createPushService({ store: pushSubscriptions, env, logger });
     const avatarStorage = createAvatarStorage({ uploadsDir: readUploadsDir(env) });
     const reconciliation = await reconcileAvatarStorage({
       storage: avatarStorage,
@@ -99,8 +99,8 @@ async function bootstrap({
       store: roomStore,
       users: userStore,
       friends: services.getFriendStore(),
-      notifications: services.getNotificationStore(),
-      pushes: pushStore,
+      notifications: services.getNotificationPreferences(),
+      pushes: pushSubscriptions,
       push: pushService,
       avatars: avatarStorage,
       realtimeReconnectLeaseMs: resolveRealtimeReconnectLeaseMs(env)

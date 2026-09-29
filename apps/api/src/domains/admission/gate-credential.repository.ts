@@ -305,3 +305,5 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
     verifyLiveKitGateCredential
   };
 }
+
+export type GateCredentialRepository = ReturnType<typeof createGateCredentialRepository>;

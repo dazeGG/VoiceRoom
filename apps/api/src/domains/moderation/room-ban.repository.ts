@@ -255,3 +255,5 @@ export function createServerMuteRepository({ db }: { db: Database }) {
 
   return { clearRoomServerMute, isRoomServerMuted, listRoomServerMutes, setRoomServerMute };
 }
+
+export type ServerMuteRepository = ReturnType<typeof createServerMuteRepository>;

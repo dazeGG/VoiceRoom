@@ -6,7 +6,7 @@ import { Client } from 'pg';
 import { runner } from 'node-pg-migrate';
 import { test } from 'node:test';
 import { classifyPlatform } from '@voice-room/shared/platform-class';
-import { createPushStore } from '../src/lib/push-store.ts';
+import { createPushSubscriptionRepository } from '../src/domains/notifications/push-subscription.repository.ts';
 import { createTestDatabase } from './db-harness.ts';
 
 const MIGRATIONS_DIR = path.resolve(import.meta.dirname, '../src/migrations');
@@ -159,7 +159,7 @@ test(
     const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
     t.after(cleanup);
     await migrate(databaseUrl, PLATFORM_TIMESTAMP);
-    const store = createPushStore({ pool });
+    const store = createPushSubscriptionRepository({ pool });
 
     const corpus = [
       { userAgent: 'Mozilla/5.0 (iPhone; Mobile)' },

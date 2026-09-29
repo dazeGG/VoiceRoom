@@ -307,7 +307,7 @@
       "count": 2
     }
   },
-  "apps/api/src/lib/push-store.ts": {
+  "apps/api/src/domains/notifications/push-subscription.repository.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 1
     }

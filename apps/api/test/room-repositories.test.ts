@@ -4,8 +4,8 @@
 
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRoomStore } from '../src/lib/room-store.ts';
-import { createUserStore } from '../src/lib/user-store.ts';
+import { createRoomStore } from '../src/app/room-store.ts';
+import { createUserStore } from '../src/app/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { mapRoom } from '../src/domains/rooms/room.repository.ts';
 import { createTestDatabase } from './db-harness.ts';

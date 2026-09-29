@@ -20,7 +20,7 @@ import type { RoomsService } from '../src/domains/rooms/rooms.service.ts';
 import type { ApiContext } from '../src/app/context.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { fake, lobbyRoom, recordingLogger, storedUser, storedRoom } from './fakes/index.ts';
-import { selfUser } from '../src/lib/user-store.ts';
+import { selfUser } from '../src/domains/account/user-records.ts';
 
 const OWNER = selfUser(storedUser({ id: 'owner-1' }));
 const ROOM_CARD = lobbyRoom('room-1');

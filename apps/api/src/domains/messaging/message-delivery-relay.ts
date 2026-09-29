@@ -3,12 +3,12 @@
 // fans the message out to this replica's sockets. Claiming and retrying are
 // the worker's job (workers/message-delivery.ts), so nothing here runs on a timer.
 
-import type { DirectMessage as StoredDirectMessage } from '../../lib/friend-store.ts';
+import type { DirectMessage as StoredDirectMessage } from '../social/social-records.ts';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import type { MessageProjection } from './message-projection.ts';
-import type { StoredUser } from '../../lib/user-store.ts';
+import type { StoredUser } from '../account/user-records.ts';
 import type { RoomChatMessage } from './room-chat-views.ts';
 
 const CHANNEL = 'voice_room_message_delivery';

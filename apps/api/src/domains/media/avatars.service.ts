@@ -6,7 +6,7 @@ import type { Readable } from 'node:stream';
 import type { Logger } from 'pino';
 import { createAvatarKey, processAvatar } from '../../lib/avatar-processing.ts';
 import { validateAvatarKey } from '../../lib/avatar-storage.ts';
-import { selfUser, type StoredUser } from '../../lib/user-store.ts';
+import { selfUser, type StoredUser } from '../account/user-records.ts';
 import type { SelfUser } from '@voice-room/shared/contracts/account';
 import type { LobbyRoom } from '@voice-room/shared/contracts/rooms';
 import type { StoredRoom } from '../rooms/room-views.ts';
