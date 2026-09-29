@@ -19,7 +19,6 @@
     onGoHome,
     onOpenPeople,
     onOpenSettings,
-    notificationsEnabled = false,
     notificationsOpen = false,
     notificationUnreadCount = 0,
     onOpenNotifications,
@@ -38,7 +37,6 @@
     onGoHome: () => void;
     onOpenPeople: () => void;
     onOpenSettings: () => void;
-    notificationsEnabled?: boolean;
     notificationsOpen?: boolean;
     notificationUnreadCount?: number;
     onOpenNotifications?: () => void;
@@ -364,21 +362,19 @@
     </Popover>
     <div class="lv-profile-actions">
       <SidebarDownload />
-      {#if notificationsEnabled}
-        <button
-          class="lobby-gear lv-notification-button"
-          type="button"
-          title="Уведомления"
-          aria-label="Открыть уведомления"
-          aria-expanded={notificationsOpen}
-          onclick={onOpenNotifications}
-        >
-          <Bell {...iconSm} aria-hidden="true" />
-          {#if notificationUnreadCount > 0}
-            <span class="lv-notification-count">{notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}</span>
-          {/if}
-        </button>
-      {/if}
+      <button
+        class="lobby-gear lv-notification-button"
+        type="button"
+        title="Уведомления"
+        aria-label="Открыть уведомления"
+        aria-expanded={notificationsOpen}
+        onclick={onOpenNotifications}
+      >
+        <Bell {...iconSm} aria-hidden="true" />
+        {#if notificationUnreadCount > 0}
+          <span class="lv-notification-count">{notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}</span>
+        {/if}
+      </button>
       <button
         class="lobby-gear"
         type="button"

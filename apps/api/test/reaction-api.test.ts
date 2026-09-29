@@ -48,7 +48,6 @@ function service(overrides: Partial<Parameters<typeof createReactionService>[0]>
   return createReactionService({
     repository: repository(),
     cursorCodec: createCursorCodec({ keys: ['reaction-test-secret-must-be-at-least-32-bytes'] }),
-    writesEnabled: true,
     requireVisible: async ({ conversation, messageId, viewer }) => {
       if (messageId === 'deleted' || messageId === 'hidden') return false;
       if (conversation.type === 'dm') return viewer?.id === 'account' && conversation.id === 'peer';

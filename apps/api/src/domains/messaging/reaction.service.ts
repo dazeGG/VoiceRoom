@@ -5,7 +5,6 @@ import {
   normalizeReactionSummary,
   normalizeReactorPage,
   normalizeReactorQuery,
-  type ReactionMutation,
   type ReactionSummary,
   type ReactorPage
 } from '@voice-room/shared/reactions';
@@ -54,8 +53,6 @@ type VisibilityCheck = (input: {
   viewer: Viewer;
   operation: 'read' | 'write';
 }) => unknown;
-type WritesEnabled =
-  boolean | ((context: { conversation: Conversation; mutation: ReactionMutation; viewer: Viewer }) => unknown);
 
 export type ReactionEvent = {
   conversation: Conversation;
@@ -90,13 +87,11 @@ function createReactionService({
   repository,
   cursorCodec,
   requireVisible,
-  writesEnabled = false,
   publish
 }: {
   repository?: ReactionRepository;
   cursorCodec?: ReactionCursorCodec;
   requireVisible?: VisibilityCheck;
-  writesEnabled?: WritesEnabled;
   publish?: (event: ReactionEvent) => unknown;
 } = {}) {
   if (!repository?.setDesiredState || !repository?.listReactors) {
@@ -125,14 +120,6 @@ function createReactionService({
     if (visible !== true) {
       throw new ReactionServiceError('Message is not visible', 'message_not_visible', 404);
     }
-  }
-
-  async function canWrite(context: {
-    conversation: Conversation;
-    mutation: ReactionMutation;
-    viewer: Viewer;
-  }): Promise<boolean> {
-    return typeof writesEnabled === 'function' ? (await writesEnabled(context)) === true : writesEnabled === true;
   }
 
   async function getSummaries({
@@ -173,9 +160,6 @@ function createReactionService({
     }
     const userId = viewer.id;
     await assertVisible({ conversation, messageId: mutation.messageId, viewer, operation: 'write' });
-    if (!(await canWrite({ conversation, mutation, viewer }))) {
-      throw new ReactionServiceError('Reaction writes are disabled', 'reaction_write_disabled', 503);
-    }
 
     const execute = async (client?: Client) => {
       const result = await reactions.setDesiredState({

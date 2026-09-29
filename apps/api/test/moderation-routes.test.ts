@@ -1,6 +1,6 @@
 // The moderation centre over HTTP on a bare Fastify app: every outcome of
-// the moderation services maps to its answer, and the feature flag and the
-// session guard every route.
+// the moderation services maps to its answer, and the session guards every
+// route.
 
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
@@ -31,11 +31,7 @@ type Outcomes = {
   remove?: Awaited<ReturnType<MessageModerationService['deleteRoomMessage']>>;
 };
 
-function moderationApp(
-  t: TestContext,
-  outcomes: Outcomes = {},
-  { enabled = true, signedIn = true }: { enabled?: boolean; signedIn?: boolean } = {}
-) {
+function moderationApp(t: TestContext, outcomes: Outcomes = {}, { signedIn = true }: { signedIn?: boolean } = {}) {
   const app = fastify();
   t.after(() => app.close());
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
@@ -69,8 +65,7 @@ function moderationApp(
             }
           );
         }
-      },
-      enabled: () => enabled
+      }
     }
   );
   const call = async (method: 'GET' | 'PUT' | 'DELETE', url: string, payload?: object, headers = {}) => {
@@ -176,7 +171,7 @@ test('every refusal keeps its status, text and code', async (t) => {
   }
 });
 
-test('a signed-out caller and a disabled moderation centre are refused on every route', async (t) => {
+test('a signed-out caller is refused on every route', async (t) => {
   for (const [method, url] of [
     ['GET', BANS],
     ['PUT', BANS],
@@ -185,6 +180,5 @@ test('a signed-out caller and a disabled moderation centre are refused on every 
   ] as const) {
     const payload = method === 'PUT' ? {} : undefined;
     assert.equal((await moderationApp(t, {}, { signedIn: false }).call(method, url, payload)).status, 401, url);
-    assert.equal((await moderationApp(t, {}, { enabled: false }).call(method, url, payload)).status, 404, url);
   }
 });

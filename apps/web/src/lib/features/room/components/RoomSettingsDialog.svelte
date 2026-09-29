@@ -13,7 +13,6 @@
   import ModerationCenter from '$lib/entities/room/components/ModerationCenter.svelte';
   import RoomMemberList from '$lib/entities/room/components/RoomMemberList.svelte';
   import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '$lib/entities/room/room-moderation';
-  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
   import {
     fetchRoomNotificationLevel,
     setRoomNotificationLevel,
@@ -29,9 +28,6 @@
   let deleting = $state(false);
   let avatarChange = $state<RoomAvatarChange>({ kind: 'keep' });
   let cropOpen = $state(false);
-  let moderationEnabled = $state(false);
-  let membershipEnabled = $state(false);
-  let engagementEnabled = $state(false);
   let notificationLevel = $state<RoomNotificationLevel>('mentions');
   let notificationSaving = $state(false);
   let section = $state<Section>('general');
@@ -43,17 +39,9 @@
   let wasOpen = false;
   $effect(() => {
     if (roomSettingsUi.open && !wasOpen) {
-      void getCapabilityFeature('moderationCenter').then((enabled) => {
-        moderationEnabled = enabled;
-      });
-      void getCapabilityFeature('membership').then((enabled) => {
-        membershipEnabled = enabled;
-      });
-      void getCapabilityFeature('engagement').then(async (enabled) => {
-        engagementEnabled = enabled;
-        if (enabled)
-          notificationLevel = await fetchRoomNotificationLevel(roomClientState.roomId).catch(() => 'mentions');
-      });
+      void fetchRoomNotificationLevel(roomClientState.roomId)
+        .catch(() => 'mentions' as const)
+        .then((level) => (notificationLevel = level));
       section = 'general';
       name = roomClientState.roomName;
       error = '';
@@ -162,57 +150,47 @@
         </button>
       </div>
 
-      <div class="settings-body room-settings-body" data-sectioned={membershipEnabled || moderationEnabled}>
-        {#if membershipEnabled || moderationEnabled}
-          <nav class="settings-nav" aria-label="Разделы настроек комнаты">
-            <div class="settings-nav-main">
-              <button
-                class="settings-nav-item"
-                type="button"
-                data-active={section === 'general'}
-                aria-current={section === 'general' ? 'true' : undefined}
-                onclick={() => (section = 'general')}
-              >
-                <SlidersHorizontal {...iconMd} aria-hidden="true" />
-                Основное
-              </button>
-              {#if membershipEnabled}
-                <button
-                  class="settings-nav-item"
-                  type="button"
-                  data-active={section === 'members'}
-                  aria-current={section === 'members' ? 'true' : undefined}
-                  onclick={() => (section = 'members')}
-                >
-                  <Users {...iconMd} aria-hidden="true" />
-                  Участники
-                </button>
-              {/if}
-              {#if moderationEnabled}
-                <button
-                  class="settings-nav-item"
-                  type="button"
-                  data-active={section === 'bans'}
-                  aria-current={section === 'bans' ? 'true' : undefined}
-                  onclick={() => (section = 'bans')}
-                >
-                  <Ban {...iconMd} aria-hidden="true" />
-                  Блокировки
-                </button>
-              {/if}
-            </div>
-          </nav>
-        {/if}
-
-        {#if section === 'members' && membershipEnabled}
-          <div class="settings-content room-settings-content">
-            <RoomMemberList
-              roomId={roomClientState.roomId}
-              canModerate={moderationEnabled}
-              onNotify={notifyModeration}
-            />
+      <div class="settings-body room-settings-body">
+        <nav class="settings-nav" aria-label="Разделы настроек комнаты">
+          <div class="settings-nav-main">
+            <button
+              class="settings-nav-item"
+              type="button"
+              data-active={section === 'general'}
+              aria-current={section === 'general' ? 'true' : undefined}
+              onclick={() => (section = 'general')}
+            >
+              <SlidersHorizontal {...iconMd} aria-hidden="true" />
+              Основное
+            </button>
+            <button
+              class="settings-nav-item"
+              type="button"
+              data-active={section === 'members'}
+              aria-current={section === 'members' ? 'true' : undefined}
+              onclick={() => (section = 'members')}
+            >
+              <Users {...iconMd} aria-hidden="true" />
+              Участники
+            </button>
+            <button
+              class="settings-nav-item"
+              type="button"
+              data-active={section === 'bans'}
+              aria-current={section === 'bans' ? 'true' : undefined}
+              onclick={() => (section = 'bans')}
+            >
+              <Ban {...iconMd} aria-hidden="true" />
+              Блокировки
+            </button>
           </div>
-        {:else if section === 'bans' && moderationEnabled}
+        </nav>
+
+        {#if section === 'members'}
+          <div class="settings-content room-settings-content">
+            <RoomMemberList roomId={roomClientState.roomId} canModerate onNotify={notifyModeration} />
+          </div>
+        {:else if section === 'bans'}
           <div class="settings-content room-settings-content">
             <ModerationCenter roomId={roomClientState.roomId} onNotify={notifyModeration} />
           </div>
@@ -236,24 +214,22 @@
               </label>
             </div>
 
-            {#if engagementEnabled}
-              <label class="room-settings-notifications">
-                <span class="settings-field-label">Уведомления комнаты</span>
-                <span class="settings-select-wrap">
-                  <select
-                    class="settings-select"
-                    value={notificationLevel}
-                    onchange={saveNotificationLevel}
-                    disabled={notificationSaving}
-                  >
-                    <option value="all">Все сообщения</option>
-                    <option value="mentions">Упоминания и ответы</option>
-                    <option value="none">Выключены</option>
-                  </select>
-                  <span class="settings-select-chevron" aria-hidden="true"><ChevronDown {...iconSm} /></span>
-                </span>
-              </label>
-            {/if}
+            <label class="room-settings-notifications">
+              <span class="settings-field-label">Уведомления комнаты</span>
+              <span class="settings-select-wrap">
+                <select
+                  class="settings-select"
+                  value={notificationLevel}
+                  onchange={saveNotificationLevel}
+                  disabled={notificationSaving}
+                >
+                  <option value="all">Все сообщения</option>
+                  <option value="mentions">Упоминания и ответы</option>
+                  <option value="none">Выключены</option>
+                </select>
+                <span class="settings-select-chevron" aria-hidden="true"><ChevronDown {...iconSm} /></span>
+              </span>
+            </label>
 
             <div class="settings-actions">
               <button class="settings-cancel" type="button" onclick={onClose}>Отмена</button>
@@ -301,14 +277,10 @@
   .room-settings-modal {
     width: 780px;
   }
-  /* Without sections the dialog is just the general form, sized by its content;
-     with sections it keeps one height so switching tabs does not jump. */
+  /* One height for every section, so switching tabs does not jump. */
   .room-settings-body {
-    height: auto;
-    min-height: 0;
-  }
-  .room-settings-body[data-sectioned='true'] {
     height: min(560px, calc(90vh - 74px));
+    min-height: 0;
   }
   .room-settings-content {
     display: flex;
@@ -333,7 +305,7 @@
   }
 
   @media (max-width: 600px) {
-    .room-settings-body[data-sectioned='true'] {
+    .room-settings-body {
       height: auto;
       overflow-y: auto;
     }

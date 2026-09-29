@@ -10,36 +10,13 @@ type Env = Record<string, string | undefined>;
 
 export const DEFAULT_REALTIME_RECONNECT_LEASE_MS = 30000;
 
-/** A comma-separated environment list as a set; empty when unset. */
-export function readinessReadySetFromEnv(name: string, env: Env = process.env): Set<string> {
-  const raw = (env[name] || '').trim();
-  if (!raw) return new Set();
-  return new Set(
-    raw
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean)
-  );
-}
-
 export function resolveRealtimeReconnectLeaseMs(env: Env = process.env): number {
   const value = Number(env.REALTIME_RECONNECT_LEASE_MS);
   return Number.isInteger(value) && value >= 1000 && value <= 120000 ? value : DEFAULT_REALTIME_RECONNECT_LEASE_MS;
 }
 
-function readJsonObject(raw: string | undefined): Record<string, unknown> {
-  try {
-    const parsed = JSON.parse(raw || '{}');
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
 export function readApiConfig(env: Env = process.env) {
   const int = (name: string, fallback: number, min: number): number => readEnvInt(name, fallback, min, env);
-  const CAPABILITY_API_REPLICA_ID = (env.CAPABILITY_API_REPLICA_ID || env.HOSTNAME || 'api-primary').trim();
-  const expectedReplicas = readinessReadySetFromEnv('CAPABILITY_EXPECTED_API_REPLICA_IDS', env);
   const messageDeliveryMode = readMessageDeliveryMode(env);
 
   return Object.freeze({
@@ -76,12 +53,6 @@ export function readApiConfig(env: Env = process.env) {
     SESSION_TTL_MS: int('SESSION_TTL_MS', 30 * 24 * 60 * 60 * 1000, 60000),
     SESSION_COOKIE_NAME: 'vr_session',
     SESSION_COOKIE_SECURE: readEnvBool('SESSION_COOKIE_SECURE', env.NODE_ENV === 'production', env) as boolean,
-    CAPABILITY_DAG_PATH: (env.CAPABILITY_DAG_PATH || 'config/capability-dag.v1.json').trim(),
-    CAPABILITY_DESIRED: readJsonObject(env.CAPABILITY_DESIRED),
-    CAPABILITY_API_REPLICA_ID,
-    CAPABILITY_EXPECTED_API_REPLICA_IDS: expectedReplicas.size ? [...expectedReplicas] : [CAPABILITY_API_REPLICA_ID],
-    CAPABILITY_HEARTBEAT_INTERVAL_MS: int('CAPABILITY_HEARTBEAT_INTERVAL_MS', 5_000, 1_000),
-    CAPABILITY_HEARTBEAT_MAX_AGE_MS: int('CAPABILITY_HEARTBEAT_MAX_AGE_MS', 15_000, 3_000),
     AUTH_RATE_LIMIT: int('AUTH_RATE_LIMIT', 30, 0),
     AUTH_RATE_WINDOW_MS: int('AUTH_RATE_WINDOW_MS', 60000, 1000),
     LOGIN_FAILURE_LIMIT: int('LOGIN_FAILURE_LIMIT', 10, 0),

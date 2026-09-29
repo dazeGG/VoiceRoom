@@ -18,8 +18,6 @@ export interface MediaModuleDeps {
   pool: pg.Pool;
   storageDir: string;
   minFreeBytes: number;
-  /** Whether every API replica agrees on readiness; uploads pause without it. */
-  replicaConsensus: () => boolean;
   isBanned: (input: { roomId: string; userId: string }) => Promise<boolean>;
 }
 
@@ -29,7 +27,6 @@ export function createMediaModule(deps: MediaModuleDeps) {
   const pressure = createMediaPressureService({
     storagePath: storage.root,
     minFreeBytes: deps.minFreeBytes,
-    replicaConsensus: deps.replicaConsensus,
     onSnapshot: recordMediaPressure
   });
   const attachments = createAttachmentRepository({ pool });

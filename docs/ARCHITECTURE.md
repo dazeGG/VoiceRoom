@@ -40,7 +40,7 @@ transport   domains/<d>/<name>.routes.ts      Fastify handlers: parse, authorize
 application domains/<d>/<name>.service.ts     use cases; own transactions; no HTTP types
 domain      domains/<d>/<name>.policy.ts      pure rules (authorship, moderation, admission)
 data        domains/<d>/<name>.repository.ts  SQL; the only writers of their tables
-platform    platform/**                       http kit, origin guard, db, readiness
+platform    platform/**                       http kit, origin guard, db
 realtime    realtime/**                       WebSocket transport and in-memory presence
 composition server.ts, app/**                 entry (server.ts), config, per-app runtime, wiring
 ```
@@ -91,12 +91,13 @@ Rules:
 
 ## 4. Current state versus these rules
 
-Known gaps, in the order `.omc/plans/improvement-plan.md` closes them. Do not
-copy the old pattern into new code.
+No known gaps. When code falls behind a rule above, list it here as
+`| Gap | Where | Rule for new code |` so nobody copies the old pattern.
 
-| Gap | Where | Rule for new code |
-| --- | --- | --- |
-| Capability readiness machinery (release-2.5 flags) | `platform/readiness.ts`, `platform/runtime-readiness*.ts`, `/api/capabilities` | gate new features without it |
+Every release-2.5 feature is on everywhere; `/api/capabilities` answers all of
+them true only for clients built before that. Ship new features without a
+runtime flag; one that must stay dark is an environment variable read in
+`app/config.ts`, like `LINK_PREVIEWS_ENABLED`.
 
 ## 5. Web layering
 
@@ -107,7 +108,7 @@ lib/entities/            models and components both features use (room realtime,
                          presence, membership, moderation, profile card)
 lib/shared/              UI primitives, chat, notifications, utils — never imports features
 lib/api/                 HTTP and WebSocket clients
-lib/platform/            desktop bridge, capability state
+lib/platform/            desktop bridge, device boundary
 ```
 
 - The lobby (`home`) shows rooms; a room never imports the lobby. What a

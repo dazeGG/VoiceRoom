@@ -62,13 +62,7 @@ test('health keeps its public shape, headers and request id', async (t) => {
   const body = response.json();
   assert.equal(body.ok, true);
   assert.equal(typeof body.livekit, 'boolean');
-  assert.deepEqual(Object.keys(body.capabilityManifest).sort(), [
-    'contractVersion',
-    'digest',
-    'manifestRawSha256',
-    'replicaConsensus',
-    'schemaVersion'
-  ]);
+  assert.deepEqual(Object.keys(body).sort(), ['livekit', 'ok']);
   assert.equal(body.livekitUrl, undefined, 'the internal LiveKit address is not public');
   assertSecurityHeaders(response);
 });

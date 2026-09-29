@@ -6,6 +6,9 @@ import {
   type ReactionConversation
 } from '$lib/api/reactions';
 import { replaceReactionSnapshot } from './reaction-reconciliation';
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('chat:reactions');
 
 export type ReactionView = ReactionSummary & { pending: boolean; error: string };
 export type ReactorListState = {
@@ -44,6 +47,10 @@ export class ReactionStore {
   loadingMessages = $state<Record<string, true>>({});
   private requestSequence = 0;
   private reactorRequests: Record<string, number> = {};
+  // Messages whose reactions were asked for. Plain, not $state: a chat calls
+  // load() from an effect, and reactive loading state read there would re-run
+  // that effect after every answer and fetch again forever.
+  private requested: Record<string, true> = {};
 
   private conversationKey(): string {
     return this.conversation ? `${this.conversation.type}:${this.conversation.id}` : '';
@@ -62,6 +69,7 @@ export class ReactionStore {
     this.reactors = {};
     this.deletedMessages = {};
     this.loadingMessages = {};
+    this.requested = {};
     this.invalidateReactors();
   }
 
@@ -111,12 +119,19 @@ export class ReactionStore {
     this.summaries = { ...this.summaries, [messageId]: items };
   }
 
+  /** Fetches a message's reactions once; realtime events keep them current after that. */
   async load(messageId: string): Promise<void> {
+    if (this.requested[messageId]) return;
     const conversation = this.conversation;
-    if (!conversation || this.loadingMessages[messageId] || this.isDeleted(messageId)) return;
+    if (!conversation || this.isDeleted(messageId)) return;
+    this.requested[messageId] = true;
     this.loadingMessages = { ...this.loadingMessages, [messageId]: true };
     try {
       this.replace(messageId, await fetchReactionSummaries(conversation, messageId));
+    } catch (error) {
+      // Asked again the next time the message is shown.
+      delete this.requested[messageId];
+      log.warn('reactions did not load', errorContext(error));
     } finally {
       const next = { ...this.loadingMessages };
       delete next[messageId];
@@ -237,6 +252,7 @@ export class ReactionStore {
     this.reactors = {};
     this.deletedMessages = {};
     this.loadingMessages = {};
+    this.requested = {};
     this.invalidateReactors();
   }
 }

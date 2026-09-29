@@ -7,10 +7,9 @@ import assert from 'node:assert/strict';
 
 const { createApiApp, createApiServer } = await import('../src/server.ts');
 const { withRosterPeer } = await import('./roster-harness.ts');
-import { PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/capabilities';
-import { fake, notificationPreferences } from './fakes/index.ts';
+import { PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/contracts/ops';
+import { notificationPreferences } from './fakes/index.ts';
 import type { StoreOverrides } from '../src/app/service-registry.ts';
-import type { ReadinessReport } from '../src/platform/readiness.ts';
 import type { NotificationPreferences } from '@voice-room/shared/contracts/notifications';
 import type { createPushSubscriptionRepository } from '../src/domains/notifications/push-subscription.repository.ts';
 
@@ -146,96 +145,27 @@ test('every response carries the request id the server logged it under', async (
   assert.match(String(missing.headers['x-request-id'] ?? ''), /^[A-Za-z0-9._-]{1,64}$/);
 });
 
-test('healthz fails readiness when capability snapshot is unavailable', async (t) => {
-  const app = createApiApp({
-    store: createFakeStore(),
-    readinessProviderOverride: {
-      getSnapshot() {
-        throw new Error('manifest unavailable');
-      }
-    }
-  });
+test('healthz says the replica is serving and nothing about the topology behind it', async (t) => {
+  const app = createApiApp({ store: createFakeStore() });
   t.after(() => app.close());
 
   const health = await app.inject({ method: 'GET', url: '/api/healthz' });
-  assert.equal(health.statusCode, 503);
-  assert.deepEqual(health.json(), {
-    ok: false,
-    code: 'readiness_unavailable',
-    error: 'Readiness snapshot unavailable'
-  });
+  assert.equal(health.statusCode, 200);
+  assert.deepEqual(Object.keys(health.json()).sort(), ['livekit', 'ok']);
 });
 
-test('API lifecycle starts and stops runtime readiness', async () => {
-  let starts = 0;
-  let stops = 0;
-  const app = createApiApp({
-    store: createFakeStore(),
-    readinessProviderOverride: {
-      async start() {
-        starts += 1;
-        return fake<ReadinessReport>({ features: {} });
-      },
-      async stop() {
-        stops += 1;
-      },
-      getSnapshot() {
-        return fake<ReadinessReport>({ features: {} });
-      }
-    }
-  });
-
-  await app.ready();
-  assert.equal(starts, 1);
-  await app.close();
-  assert.equal(stops, 1);
-});
-
-test('capability route returns exactly the public boolean capability contract', async (t) => {
-  const app = createApiApp({
-    store: createFakeStore(),
-    readinessProviderOverride: {
-      getSnapshot() {
-        return fake<ReadinessReport>({
-          features: {
-            historyCursor: true,
-            mediaUploads: true,
-            unknownFutureFlag: true
-          }
-        });
-      }
-    }
-  });
+test('the capability route answers every feature on, for clients that still ask', async (t) => {
+  const app = createApiApp({ store: createFakeStore() });
   t.after(() => app.close());
 
   const response = await app.inject({ method: 'GET', url: '/api/capabilities' });
   assert.equal(response.statusCode, 200);
-  const features = response.json().features;
-  assert.deepEqual(Object.keys(features), PUBLIC_CAPABILITY_KEYS);
-  assert.equal(
-    Object.values(features).every((value) => typeof value === 'boolean'),
-    true
-  );
-  assert.equal(features.historyCursor, true);
-  assert.equal(features.mediaUploads, true);
-  assert.equal(features.readCursor, false);
-  assert.equal(features.unknownFutureFlag, undefined);
-});
-
-test('capability route defaults the public boolean contract when readiness throws', async (t) => {
-  const app = createApiApp({
-    store: createFakeStore(),
-    readinessProviderOverride: {
-      getSnapshot() {
-        throw new Error('manifest unavailable');
-      }
-    }
+  assert.equal(response.headers['cache-control'], 'no-store');
+  assert.deepEqual(response.json(), {
+    contractVersion: 1,
+    apiVersion: '2.5.0',
+    features: Object.fromEntries(PUBLIC_CAPABILITY_KEYS.map((key) => [key, true]))
   });
-  t.after(() => app.close());
-
-  const response = await app.inject({ method: 'GET', url: '/api/capabilities' });
-  assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json().features, Object.fromEntries(PUBLIC_CAPABILITY_KEYS.map((key) => [key, false])));
 });
 
 test('production cursor HMAC resolution has no membership fallback secret', () => {

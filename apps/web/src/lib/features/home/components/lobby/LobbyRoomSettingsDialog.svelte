@@ -11,7 +11,6 @@
   import RoomMemberList from '../../../../entities/room/components/RoomMemberList.svelte';
   import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '../../../../entities/room/room-moderation';
   import { dismissToast, type ToastOptions } from '../../model/toasts.svelte';
-  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
 
   type Section = 'general' | 'members' | 'bans';
 
@@ -36,8 +35,6 @@
   let error = $state('');
   let avatarChange = $state<RoomAvatarChange>({ kind: 'keep' });
   let cropOpen = $state(false);
-  let moderationEnabled = $state(false);
-  let membershipEnabled = $state(false);
   let section = $state<Section>('general');
 
   $effect(() => {
@@ -49,14 +46,6 @@
       section = 'general';
       avatarChange = { kind: 'keep' };
       cropOpen = false;
-      if (activeRoom) {
-        void getCapabilityFeature('moderationCenter').then((enabled) => {
-          moderationEnabled = enabled;
-        });
-        void getCapabilityFeature('membership').then((enabled) => {
-          membershipEnabled = enabled;
-        });
-      }
     });
   });
 
@@ -146,45 +135,38 @@
           data-dialog-initial-focus><X {...iconSm} /></button
         >
       </div>
-      <div class="settings-body room-settings-body" data-sectioned={membershipEnabled || moderationEnabled}>
-        {#if membershipEnabled || moderationEnabled}
-          <nav class="settings-nav" aria-label="Разделы настроек комнаты">
-            <div class="settings-nav-main">
-              <button
-                class="settings-nav-item"
-                type="button"
-                data-active={section === 'general'}
-                aria-current={section === 'general' ? 'true' : undefined}
-                onclick={() => (section = 'general')}
-                ><SlidersHorizontal {...iconMd} aria-hidden="true" />Основное</button
-              >
-              {#if membershipEnabled}
-                <button
-                  class="settings-nav-item"
-                  type="button"
-                  data-active={section === 'members'}
-                  aria-current={section === 'members' ? 'true' : undefined}
-                  onclick={() => (section = 'members')}><Users {...iconMd} aria-hidden="true" />Участники</button
-                >
-              {/if}
-              {#if moderationEnabled}
-                <button
-                  class="settings-nav-item"
-                  type="button"
-                  data-active={section === 'bans'}
-                  aria-current={section === 'bans' ? 'true' : undefined}
-                  onclick={() => (section = 'bans')}><Ban {...iconMd} aria-hidden="true" />Блокировки</button
-                >
-              {/if}
-            </div>
-          </nav>
-        {/if}
-
-        {#if section === 'members' && membershipEnabled}
-          <div class="settings-content room-settings-content">
-            <RoomMemberList roomId={room.roomId} canModerate={moderationEnabled} onNotify={notifyModeration} />
+      <div class="settings-body room-settings-body">
+        <nav class="settings-nav" aria-label="Разделы настроек комнаты">
+          <div class="settings-nav-main">
+            <button
+              class="settings-nav-item"
+              type="button"
+              data-active={section === 'general'}
+              aria-current={section === 'general' ? 'true' : undefined}
+              onclick={() => (section = 'general')}><SlidersHorizontal {...iconMd} aria-hidden="true" />Основное</button
+            >
+            <button
+              class="settings-nav-item"
+              type="button"
+              data-active={section === 'members'}
+              aria-current={section === 'members' ? 'true' : undefined}
+              onclick={() => (section = 'members')}><Users {...iconMd} aria-hidden="true" />Участники</button
+            >
+            <button
+              class="settings-nav-item"
+              type="button"
+              data-active={section === 'bans'}
+              aria-current={section === 'bans' ? 'true' : undefined}
+              onclick={() => (section = 'bans')}><Ban {...iconMd} aria-hidden="true" />Блокировки</button
+            >
           </div>
-        {:else if section === 'bans' && moderationEnabled}
+        </nav>
+
+        {#if section === 'members'}
+          <div class="settings-content room-settings-content">
+            <RoomMemberList roomId={room.roomId} canModerate onNotify={notifyModeration} />
+          </div>
+        {:else if section === 'bans'}
           <div class="settings-content room-settings-content">
             <ModerationCenter roomId={room.roomId} onNotify={notifyModeration} />
           </div>
@@ -241,14 +223,10 @@
   .room-settings-modal {
     width: min(780px, calc(100vw - 28px));
   }
-  /* Without sections the dialog is just the general form, sized by its content;
-     with sections it keeps one height so switching tabs does not jump. */
+  /* One height for every section, so switching tabs does not jump. */
   .room-settings-body {
-    height: auto;
-    min-height: 0;
-  }
-  .room-settings-body[data-sectioned='true'] {
     height: min(540px, calc(90vh - 74px));
+    min-height: 0;
   }
   .room-settings-content {
     display: flex;
@@ -268,7 +246,7 @@
   }
 
   @media (max-width: 600px) {
-    .room-settings-body[data-sectioned='true'] {
+    .room-settings-body {
       height: auto;
       overflow-y: auto;
     }

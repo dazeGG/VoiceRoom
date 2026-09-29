@@ -1,6 +1,6 @@
 // The mention/reply inbox over HTTP on a bare Fastify app, with the real
-// notification service over an in-memory inbox: what reaches the wire, the
-// feature flag and the session guard.
+// notification service over an in-memory inbox: what reaches the wire and the
+// session guard.
 
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
@@ -38,7 +38,7 @@ function row(overrides: Partial<InboxNotification> = {}): InboxNotification {
   };
 }
 
-function inboxApp(t: TestContext, { enabled = true, signedIn = true }: { enabled?: boolean; signedIn?: boolean } = {}) {
+function inboxApp(t: TestContext, { signedIn = true }: { signedIn?: boolean } = {}) {
   const app = fastify({ ajv: AJV_OPTIONS });
   t.after(() => app.close());
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
@@ -75,7 +75,7 @@ function inboxApp(t: TestContext, { enabled = true, signedIn = true }: { enabled
   registerNotificationRoutes(
     app,
     fake<ApiContext>({ resolveSession: async () => (signedIn ? { user: storedUser({ id: 'user-1' }) } : null) }),
-    { notifications, enabled: () => enabled }
+    { notifications }
   );
   return app;
 }
@@ -123,9 +123,7 @@ test('room levels round-trip and an unknown level is refused with its code', asy
   assert.deepEqual([bad.statusCode, bad.json<Failure>().code], [400, 'invalid_level']);
 });
 
-test('the inbox needs its feature and a session', async (t) => {
-  const off = await inboxApp(t, { enabled: false }).inject({ method: 'GET', url: '/api/notifications/inbox' });
-  assert.equal(off.statusCode, 404);
+test('the inbox needs a session', async (t) => {
   const anonymous = inboxApp(t, { signedIn: false });
   for (const [method, url] of [
     ['GET', '/api/notifications/inbox'],

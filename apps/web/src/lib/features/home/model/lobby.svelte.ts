@@ -25,7 +25,6 @@ import {
   deleteDirectMessage,
   directMessageFromView,
   editDirectMessage,
-  markThreadRead,
   respondRoomInvite,
   sendDirectMessage,
   type DirectMessage
@@ -75,17 +74,7 @@ export class LobbyStore {
   mode = $state<LobbyMode>('friends');
   view = $state<LobbyView>('home');
   selectedFriendId = $state<string | null>(null);
-  readonly thread = new DmThread({
-    isOpen: (peerId) => this.view === 'dm' && this.selectedFriendId === peerId,
-    onSnapshot: (peerId, messages) => {
-      const friend = this.findFriend(peerId);
-      if (!friend) return;
-      friend.unreadCount = 0;
-      const last = messages.at(-1);
-      if (last) this.bumpLastMessage(peerId, last);
-    },
-    isOwnMessage: (message) => message.senderId === this.selfId
-  });
+  readonly thread = new DmThread((peerId) => this.view === 'dm' && this.selectedFriendId === peerId);
   /** Friends currently typing to this account, keyed by their user id. */
   readonly dmTyping = createTypingTracker();
 
@@ -219,10 +208,10 @@ export class LobbyStore {
     await this.thread.open(userId, friend?.user ?? null);
   };
 
-  private resyncOpenThread = async (options: { force?: boolean } = {}): Promise<void> => {
+  private resyncOpenThread = async (): Promise<void> => {
     const peerId = this.selectedFriendId;
     if (this.view !== 'dm' || !peerId) return;
-    await this.thread.resync(peerId, options);
+    await this.thread.resync(peerId);
   };
 
   loadOlderThread = (scrollElement: HTMLElement | null): Promise<void> => this.thread.loadOlder(scrollElement);
@@ -240,7 +229,6 @@ export class LobbyStore {
     if (!message.invite) return;
     const peerId = message.senderId === this.selfId ? message.recipientId : message.senderId;
     const updated = await respondRoomInvite(peerId, message.id, action);
-    this.thread.recordUpsert(peerId, updated);
     this.applyEditedMessage(updated);
     if (action === 'accept') {
       const roomId = updated.invite?.roomId || message.invite.roomId;
@@ -260,7 +248,6 @@ export class LobbyStore {
     const body = text.trim();
     if (!peerId || (!body && attachmentIds.length === 0)) return;
     const message = await sendDirectMessage(peerId, body, attachmentIds, replyTo, idempotencyKey);
-    this.thread.recordUpsert(peerId, message);
     this.thread.append(message);
     this.bumpLastMessage(peerId, message);
   };
@@ -269,7 +256,6 @@ export class LobbyStore {
     const peerId = this.selectedFriendId;
     if (!peerId || !messageId) return;
     await deleteDirectMessage(peerId, messageId);
-    this.thread.recordDelete(peerId, messageId);
     // Remove locally; the realtime delete will also arrive for other tabs. Refresh
     // the summary so last-message ordering and unread badges reflect soft-deletes.
     this.thread.remove(messageId);
@@ -281,7 +267,6 @@ export class LobbyStore {
     const body = text.trim();
     if (!peerId || !messageId || !body) return;
     const message = await editDirectMessage(peerId, messageId, body);
-    this.thread.recordUpsert(peerId, message);
     this.applyEditedMessage(message);
   };
 
@@ -416,7 +401,7 @@ export class LobbyStore {
         this.applyOnlineToFriends();
         // A reconnect can miss edits while the socket is down. Re-fetch only the
         // currently visible thread so its bodies and editedAt markers converge.
-        void this.resyncOpenThread({ force: true }).catch(() => {});
+        void this.resyncOpenThread().catch(() => {});
         break;
       }
       case 'friend.presence': {
@@ -456,14 +441,12 @@ export class LobbyStore {
         const peerId = message.senderId === this.selfId ? message.recipientId : message.senderId;
         // The message itself ends that friend's "typing" state.
         if (message.senderId !== this.selfId) this.dmTyping.clear(message.senderId);
-        this.thread.recordUpsert(peerId, message);
         this.bumpLastMessage(peerId, message);
         const isOpenThread = this.view === 'dm' && this.selectedFriendId === peerId;
         if (isOpenThread) {
           this.thread.append(message);
           if (message.senderId !== this.selfId) {
-            if (this.thread.readCursorEnabled) void this.thread.noteRealtimeRendered(peerId, message);
-            else void markThreadRead(peerId);
+            void this.thread.noteRealtimeRendered(peerId, message);
           }
         } else if (message.senderId !== this.selfId) {
           // Invites already announced themselves with the ring cue.
@@ -478,7 +461,6 @@ export class LobbyStore {
         // The peer read our messages: flip readAt on our sent bubbles.
         if (this.view === 'dm' && this.selectedFriendId === event.payload.userId) {
           const now = Date.now();
-          this.thread.recordRead(event.payload.userId, now);
           this.thread.markSentRead((message) => message.senderId === this.selfId, now);
         }
         break;
@@ -486,8 +468,6 @@ export class LobbyStore {
       case 'dm.message.deleted': {
         const mid = event.payload?.messageId;
         if (mid) {
-          const peerId = event.payload.peerUserId ?? this.selectedFriendId;
-          if (peerId) this.thread.recordDelete(peerId, mid);
           this.thread.remove(mid);
           void this.refreshFriends().catch(() => {});
         }
@@ -500,10 +480,7 @@ export class LobbyStore {
         break;
       }
       case 'dm.message.edited': {
-        const message = directMessageFromView(event.payload.message);
-        const peerId = message.senderId === this.selfId ? message.recipientId : message.senderId;
-        this.thread.recordUpsert(peerId, message);
-        this.applyEditedMessage(message);
+        this.applyEditedMessage(directMessageFromView(event.payload.message));
         break;
       }
       default:

@@ -12,18 +12,11 @@ import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { CLIENT_LOG_LIMITS, normalizeClientLogBatch } from '../../lib/client-log-intake.ts';
 import type { DesktopReleaseService } from './desktop-release.service.ts';
 
-interface ReadinessSnapshot {
-  manifest?: { contractVersion?: string | null; schemaVersion?: number | null; digest?: string | null } | null;
-  replica?: { reason?: string | null } | null;
-  replicaConsensus?: boolean;
-}
-
 interface RateLimiter {
   check(key: string): { allowed: boolean; retryAfterSeconds: number };
 }
 
 export interface OpsRouteDeps {
-  readiness: { getSnapshot(): ReadinessSnapshot | null | undefined };
   livekitEnabled(): boolean;
   /** Prometheus exposition text for /api/metrics (Caddy restricts who can read it). */
   renderMetrics(): string;
@@ -37,28 +30,13 @@ export interface OpsRouteDeps {
 export function registerOpsRoutes(root: FastifyInstance, ctx: ApiContext, deps: OpsRouteDeps): void {
   const app = root.withTypeProvider<TypeBoxTypeProvider>();
 
-  app.get('/api/healthz', { schema: { response: { 200: Health, 503: Failure } } }, async (_request, reply) => {
-    let readiness: ReadinessSnapshot | null | undefined;
-    try {
-      readiness = deps.readiness.getSnapshot();
-    } catch {
-      return reply.code(503).send(failure('Readiness snapshot unavailable', { code: 'readiness_unavailable' }));
-    }
-    // Public and unauthenticated: it answers "is this replica serving?" and
-    // nothing about the topology behind it. The internal LiveKit address, the
-    // manifest's filesystem path and live room/peer counts stay in /api/metrics.
-    return {
-      livekit: deps.livekitEnabled(),
-      ok: true as const,
-      capabilityManifest: {
-        contractVersion: readiness?.manifest?.contractVersion || null,
-        schemaVersion: readiness?.manifest?.schemaVersion || null,
-        digest: readiness?.manifest?.digest || null,
-        replicaConsensus: readiness?.replica?.reason || (readiness?.replicaConsensus ? 'agree' : 'disagree'),
-        manifestRawSha256: readiness?.manifest?.digest || null
-      }
-    };
-  });
+  // Public and unauthenticated: it answers "is this replica serving?" and
+  // nothing about the topology behind it. The internal LiveKit address and live
+  // room/peer counts stay in /api/metrics.
+  app.get('/api/healthz', { schema: { response: { 200: Health } } }, async () => ({
+    livekit: deps.livekitEnabled(),
+    ok: true as const
+  }));
 
   app.get('/api/metrics', async (_request, reply) => {
     return reply.header('Content-Type', 'text/plain; version=0.0.4; charset=utf-8').send(deps.renderMetrics());

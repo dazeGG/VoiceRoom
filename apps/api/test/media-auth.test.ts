@@ -71,8 +71,6 @@ test('G82-A02 guessed and denied reads are indistinguishable 404 with private sa
   const visible = new Set([ID]);
   registerMediaRoutes(app, fake<ApiContext>({ resolveSession: async () => ({ user: storedUser({ id: 'member' }) }) }), {
     media: spy<MediaService>([]),
-    uploadsEnabled: () => true,
-    readsEnabled: () => true,
     visibility: {
       async open({ attachmentId }) {
         if (!visible.has(attachmentId)) {

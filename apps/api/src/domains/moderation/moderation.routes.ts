@@ -20,25 +20,18 @@ import { failure } from '../../platform/http/http-kit.ts';
 import type { MessageModerationService } from './message-moderation.service.ts';
 import type { ModerationService } from './moderation.service.ts';
 
-const NOT_FOUND = failure('Not found', { code: 'not_found' });
 const SIGN_IN_REQUIRED = failure('Authentication required', { code: 'authentication_required' });
 const OWNER_REQUIRED = failure('Owner access required', { code: 'owner_required' });
 
 export interface ModerationRoutesDeps {
   moderation: Pick<ModerationService, 'listActive' | 'putBan' | 'unban'>;
   messages: Pick<MessageModerationService, 'deleteRoomMessage'>;
-  /** The moderation centre is behind a capability flag until it is on everywhere. */
-  enabled(): boolean;
 }
 
 export function registerModerationRoutes(root: FastifyInstance, ctx: ApiContext, deps: ModerationRoutesDeps): void {
   const app = root.withTypeProvider<TypeBoxTypeProvider>();
 
   async function actor(request: FastifyRequest, reply: FastifyReply): Promise<string | null> {
-    if (!deps.enabled()) {
-      reply.code(404).send(NOT_FOUND);
-      return null;
-    }
     const userId = (await ctx.resolveSession(request.raw))?.user?.id;
     if (userId) return userId;
     reply.code(401).send(SIGN_IN_REQUIRED);

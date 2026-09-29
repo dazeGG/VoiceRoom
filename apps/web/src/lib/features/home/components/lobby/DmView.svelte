@@ -3,7 +3,6 @@
   import { User } from '@lucide/svelte';
   import { onMount } from 'svelte';
   import type { AuthUser } from '$lib/api/auth';
-  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
   import AttachmentDropOverlay from '$lib/shared/chat/AttachmentDropOverlay.svelte';
   import { getAttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
   import { AttachmentDrop } from '$lib/shared/chat/attachment-drop.svelte';
@@ -21,9 +20,6 @@
 
   let { self }: { self: AuthUser } = $props();
 
-  let reactionsEnabled = $state(false);
-  let repliesEnabled = $state(false);
-  let mediaUploadsEnabled = $state(false);
   let quickReactions = $state<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
   let sending = $state(false);
 
@@ -33,12 +29,9 @@
   const presence = $derived(effectivePresenceStatus(online, peer?.presenceStatus, peer?.doNotDisturb));
   // One compose store per conversation, kept across switches so a half-written
   // message's attachments are still there on return.
-  const media = $derived(mediaUploadsEnabled && peerId ? getAttachmentComposeStore('dm', peerId) : null);
+  const media = $derived(peerId ? getAttachmentComposeStore('dm', peerId) : null);
 
   onMount(() => {
-    void getCapabilityFeature('reactions').then((enabled) => (reactionsEnabled = enabled));
-    void getCapabilityFeature('replies').then((enabled) => (repliesEnabled = enabled));
-    void getCapabilityFeature('mediaUploads').then((enabled) => (mediaUploadsEnabled = enabled));
     void loadFrequentReactions('chat', self.id).then((emoji) => {
       if (emoji.length > 0) quickReactions = emoji;
     });
@@ -88,17 +81,7 @@
 
     {#if peerId}
       {#key peerId}
-        <DmConversation
-          bind:sending
-          {peerId}
-          {self}
-          {peer}
-          {presence}
-          {media}
-          {reactionsEnabled}
-          {repliesEnabled}
-          {quickReactions}
-        />
+        <DmConversation bind:sending {peerId} {self} {peer} {presence} {media} {quickReactions} />
       {/key}
     {/if}
   </div>

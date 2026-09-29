@@ -32,11 +32,7 @@ function draft(overrides: Partial<AttachmentDraft> = {}): AttachmentDraft {
   };
 }
 
-function mediaApp(
-  t: TestContext,
-  media: MediaService,
-  { signedIn = true, uploads = true }: { signedIn?: boolean; uploads?: boolean } = {}
-) {
+function mediaApp(t: TestContext, media: MediaService, { signedIn = true }: { signedIn?: boolean } = {}) {
   const app = fastify({ ajv: AJV_OPTIONS });
   t.after(() => app.close());
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
@@ -46,9 +42,7 @@ function mediaApp(
     fake<ApiContext>({ resolveSession: async () => (signedIn ? { user: storedUser({ id: 'owner-1' }) } : null) }),
     {
       media,
-      visibility: spy<{ open: () => Promise<never> }>([]),
-      uploadsEnabled: () => uploads,
-      readsEnabled: () => true
+      visibility: spy<{ open: () => Promise<never> }>([])
     }
   );
   return app;
@@ -134,10 +128,7 @@ test('owner operations answer the draft, and refusals keep their status and code
   );
 });
 
-test('uploads need the feature switched on and every route needs a session', async (t) => {
-  const off = mediaApp(t, spy<MediaService>([]), { uploads: false });
-  const disabled = await off.inject({ method: 'POST', url: '/api/media/attachments', payload: {} });
-  assert.deepEqual([disabled.statusCode, disabled.json<Failure>().code], [503, 'media_uploads_disabled']);
+test('every media route needs a session', async (t) => {
   const anonymous = mediaApp(t, spy<MediaService>([]), { signedIn: false });
   for (const [method, url] of [
     ['POST', '/api/media/attachments'],

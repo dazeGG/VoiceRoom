@@ -23,7 +23,6 @@
   import { mentionProfilePerson, participantProfilePerson, roomMessageProfilePerson } from '../profile-card-adapter';
   import { useRoomSocial } from '../social';
   import { isRoomNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
-  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
   import { RoomChatTimeline } from '../room-chat-timeline.svelte';
   import { createReadReconciliation } from '$lib/shared/chat/read-reconciliation.svelte';
   import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
@@ -119,16 +118,9 @@
   // On a phone the panel is the whole screen rather than a rail beside the
   // stage, so it closes with a cross instead of collapsing to the right.
   let mobile = $state(false);
-  let readCursorEnabled = $state(false);
   let readReconciliation: ReturnType<typeof createReadReconciliation> | null = null;
-  let reactionsEnabled = $state(false);
   const reactions = createReactionStore();
-  let mediaUploadsEnabled = $state(false);
-  const media = $derived<AttachmentComposeStore | null>(
-    mediaUploadsEnabled && roomId ? getAttachmentComposeStore('room', roomId) : null
-  );
-  let repliesEnabled = $state(false);
-  let engagementEnabled = $state(false);
+  const media = $derived<AttachmentComposeStore | null>(roomId ? getAttachmentComposeStore('room', roomId) : null);
   let replyTarget = $state<ChatMessage | null>(null);
   let menuMessage = $state<ChatMessage | null>(null);
   let menuX = $state(0);
@@ -183,7 +175,6 @@
   const days = $derived(buildChatDays(timeline.messages, isOwnMessage));
 
   $effect(() => {
-    if (!reactionsEnabled) return;
     for (const message of timeline.messages) void reactions.load(message.id);
   });
 
@@ -210,18 +201,6 @@
     }
 
     reactions.setConversation({ type: 'room', id: roomId });
-    void getCapabilityFeature('mediaUploads').then((enabled) => {
-      mediaUploadsEnabled = enabled;
-    });
-    void getCapabilityFeature('reactions').then((enabled) => {
-      reactionsEnabled = enabled;
-    });
-    void getCapabilityFeature('replies').then((enabled) => {
-      repliesEnabled = enabled;
-    });
-    void getCapabilityFeature('engagement').then((enabled) => {
-      engagementEnabled = enabled;
-    });
 
     const controller = new AbortController();
     void initializeHistory(controller.signal);
@@ -385,21 +364,14 @@
   }
 
   async function initializeHistory(signal: AbortSignal): Promise<void> {
-    const [canPage, canRead] = await Promise.all([
-      getCapabilityFeature('historyCursor'),
-      getCapabilityFeature('readCursor')
-    ]).catch(() => [false, false] as const);
-    if (signal.aborted) return;
     // Paged history is account-only: GET /chat/history answers a guest with 401
     // «Room is not available», which surfaced as a chat error in a room a guest
     // can otherwise read and write. Guests keep the recent-window endpoint.
-    const paged = canPage && Boolean(session.user?.id);
-    readCursorEnabled = canRead;
+    const paged = Boolean(session.user?.id);
     readReconciliation?.dispose();
     readReconciliation = session.user?.id
       ? createReadReconciliation({
           scope: `room:${roomId}`,
-          legacy: !canRead,
           commit: (cursor) => markRoomChatRead(roomId, cursor)
         })
       : null;
@@ -419,10 +391,7 @@
       // the visibility effect ran, so its scroll then was a no-op.
       await settleAtBottom();
     }
-    if (!signal.aborted && chatVisible) {
-      if (canRead) await tick().then(() => markLatestRenderedRead());
-      else await markRoomChatRead(roomId);
-    }
+    if (!signal.aborted && chatVisible) await tick().then(() => markLatestRenderedRead());
   }
 
   async function markLatestRenderedRead(cursor = timeline.latestReadCursor()): Promise<void> {
@@ -431,7 +400,7 @@
   }
 
   async function markRealtimeRenderedRead(message: ChatMessage): Promise<void> {
-    if (message.readCursor || !readCursorEnabled) {
+    if (message.readCursor) {
       await markLatestRenderedRead(message.readCursor);
       return;
     }
@@ -642,8 +611,6 @@
                 {editingMessageId}
                 menuMessageId={menuMessage?.id ?? ''}
                 {reactions}
-                {reactionsEnabled}
-                {repliesEnabled}
                 onOpenProfile={(event: MouseEvent) => openUserProfile(group, event)}
                 onAuthorMenu={(event: MouseEvent) => openUserMenu(group, event)}
                 onMessageMenu={openMessageMenu}
@@ -673,7 +640,6 @@
       {roomId}
       {draft}
       {media}
-      {engagementEnabled}
       {typingLabel}
       {send}
       onEditLast={editLastOwnMessage}
@@ -700,8 +666,7 @@
         .filter((summary) => summary.reactedByMe)
         .map((summary) => summary.emoji)
     )}
-    canReact={reactionsEnabled && Boolean(session.user?.id)}
-    canReply={repliesEnabled}
+    canReact={Boolean(session.user?.id)}
     canPin={Boolean(session.user?.id)}
     pinned={isMessagePinned(target.id)}
     canEdit={isOwnMessage(target)}

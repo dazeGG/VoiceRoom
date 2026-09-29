@@ -88,7 +88,6 @@ export interface RoomChatDeps {
   };
   getRoom(roomId: string): Promise<LiveRoom | null>;
   findRoomBan(roomId: string, userId: string | null | undefined, ip: string): Promise<unknown>;
-  feature(name: 'engagement' | 'replies' | 'mediaUploads'): boolean;
   prepareContent(input: { content: unknown; text: string }): { content: unknown; text: string };
   mentionUserIds(content: unknown, options: { creatorUserId: string }): MentionNormalization;
   limiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
@@ -148,12 +147,7 @@ export type PostOutcome =
   | ChatRefusal
   | {
       status:
-        | 'structured_unavailable'
-        | 'invalid_content'
-        | 'invalid_attachments'
-        | 'reply_unavailable'
-        | 'presence_required'
-        | 'media_unavailable';
+        'invalid_content' | 'invalid_attachments' | 'reply_unavailable' | 'presence_required' | 'media_unavailable';
     }
   | { status: 'invalid_mention'; code: MentionRefusal };
 
@@ -202,7 +196,6 @@ export function createRoomChatService(deps: RoomChatDeps) {
     let content: unknown;
     let mentionUserIds: string[] = [];
     if (input.content != null) {
-      if (!deps.feature('engagement')) return { status: 'structured_unavailable' };
       try {
         const prepared = deps.prepareContent({ content: input.content, text });
         content = prepared.content;
@@ -220,8 +213,7 @@ export function createRoomChatService(deps: RoomChatDeps) {
     if (!room) return { status: 'room_not_found' };
     if (await deps.findRoomBan(roomId, sessionUser?.id, clientIp)) return { status: 'room_banned' };
     if (attachmentIds === null) return { status: 'invalid_attachments' };
-    if (input.replyTo != null && (!replyToMessageId || !deps.feature('replies')))
-      return { status: 'reply_unavailable' };
+    if (input.replyTo != null && !replyToMessageId) return { status: 'reply_unavailable' };
     if (!text && attachmentIds.length === 0) return { status: 'empty' };
     const limited = rateLimited(clientIp, roomId);
     if (limited) return limited;
@@ -268,8 +260,7 @@ export function createRoomChatService(deps: RoomChatDeps) {
       ? `/api/avatars/${encodeURIComponent(authorUser.avatarKey)}`
       : activePeer?.avatarUrl || null;
     const media = attachmentIds.length > 0 ? deps.media() : null;
-    if (attachmentIds.length > 0 && (!authorUserId || !media || !deps.feature('mediaUploads')))
-      return { status: 'media_unavailable' };
+    if (attachmentIds.length > 0 && (!authorUserId || !media)) return { status: 'media_unavailable' };
     const replies = replyToMessageId ? deps.replies() : null;
     const notifications = deps.notifications();
     const delivery = deps.delivery();
@@ -322,12 +313,7 @@ export function createRoomChatService(deps: RoomChatDeps) {
                   client
                 );
               }
-              if (
-                authorUserId &&
-                notifications &&
-                deps.feature('engagement') &&
-                (mentionUserIds.length > 0 || replyTargetUserId)
-              ) {
+              if (authorUserId && notifications && (mentionUserIds.length > 0 || replyTargetUserId)) {
                 await notifications.service.createAddressedForMessage({
                   roomId,
                   messageId: inserted.id,

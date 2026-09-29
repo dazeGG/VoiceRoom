@@ -2,7 +2,6 @@ import type pg from 'pg';
 import { readDatabaseConfig } from '../lib/config.ts';
 import { createDbPool } from '../platform/db/pool.ts';
 import { startWorkerMetricsServer } from '../lib/worker-metrics-server.ts';
-import { startWorkerHeartbeat } from '../platform/worker-heartbeat.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
 import { main as mediaMaintenanceMain } from './media-maintenance.ts';
@@ -33,20 +32,18 @@ async function main(
     host: env.WORKER_METRICS_HOST || '0.0.0.0',
     port: Number(env.WORKER_METRICS_PORT || 9464)
   });
-  // The one pool of this process: the worker and its heartbeat share it.
+  // The one pool of this process.
   const pool = createDbPool({ databaseUrl: readDatabaseConfig(env).url, logger: log });
-  const heartbeat = await startWorkerHeartbeat({ env, pool, workerName });
   log.info({ evt: LOG_EVENTS.WORKER_STARTED, worker: workerName }, 'worker started');
   try {
     await run(env, pool);
   } finally {
-    await heartbeat.close();
     await metrics.close();
     await pool.end();
   }
   // A worker whose claims are off returns at once. Compose restarts a worker
   // unless it was stopped (a host reboot ends every one with exit 0), so this
-  // one stays up, idle and without a heartbeat, until it is stopped.
+  // one stays up, idle, until it is stopped.
   await untilAborted(stopSignal);
 }
 

@@ -146,7 +146,6 @@ type HarnessOptions = {
   softDeleteResult?: unknown;
   editResult?: null;
   lastReadAt?: number | null;
-  features?: Partial<Record<'engagement' | 'replies' | 'mediaUploads', boolean>>;
   notifications?: null;
   retireFails?: boolean;
   noMarkRoomRead?: boolean;
@@ -229,12 +228,6 @@ function harness(options: HarnessOptions = {}) {
       return options.lastReadAt === undefined ? 5 : options.lastReadAt;
     }
   };
-  const features: Record<'engagement' | 'replies' | 'mediaUploads', boolean> = {
-    engagement: true,
-    replies: true,
-    mediaUploads: true,
-    ...(options.features || {})
-  };
   const notifications: ReturnType<RoomChatDeps['notifications']> =
     options.notifications === null
       ? null
@@ -302,7 +295,6 @@ function harness(options: HarnessOptions = {}) {
     }),
     getRoom: async () => currentRoom,
     findRoomBan: async (_roomId, userId, ip) => (options.ban ? options.ban(userId, ip) : false),
-    feature: (name) => features[name],
     prepareContent: ({ content, text }) => {
       if (content === 'broken') throw new Error('bad content');
       return { content, text: text || 'from content' };
@@ -398,18 +390,12 @@ test('the list refuses missing rooms and banned viewers and projects media and r
 
 test('send refuses in the legacy order', async () => {
   const cases: Array<[HarnessOptions, Partial<PostInput>, string]> = [
-    [{ features: { engagement: false } }, { content: 'x' }, 'structured_unavailable'],
     [{}, { content: 'broken' }, 'invalid_content'],
     [{}, { content: 'bad-mention' }, 'invalid_mention'],
     [{ room: null }, {}, 'room_not_found'],
     [{ ban: () => true }, {}, 'room_banned'],
     [{}, { attachmentIds: ['bad'] }, 'invalid_attachments'],
     [{}, { replyTo: {}, replyToMessageId: '' }, 'reply_unavailable'],
-    [
-      { features: { replies: false } },
-      { replyTo: { messageId: UUID_A }, replyToMessageId: UUID_A },
-      'reply_unavailable'
-    ],
     [{}, { text: '   ' }, 'empty'],
     [{ rate: { allowed: false, retryAfterSeconds: 3 } }, {}, 'rate_limited'],
     [{}, {}, 'presence_required'],
@@ -421,7 +407,6 @@ test('send refuses in the legacy order', async () => {
     ],
     [{ peers: [guest] }, { peerId: guest.id, sessionToken: TOKEN, attachmentIds: [UUID_A] }, 'media_unavailable'],
     [{ media: null }, { user: ACCOUNT, attachmentIds: [UUID_A] }, 'media_unavailable'],
-    [{ features: { mediaUploads: false } }, { user: ACCOUNT, attachmentIds: [UUID_A] }, 'media_unavailable'],
     [{ appendResult: null }, { user: ACCOUNT }, 'empty']
   ];
   for (const [options, input, status] of cases) {
@@ -876,12 +861,6 @@ test('chat refusals keep their texts, codes and headers', async (t) => {
     ],
     ['post', { status: 'invalid_session' }, 403, { ok: false, error: 'Invalid peer session', code: 'invalid_session' }],
     ['post', { status: 'empty' }, 400, { ok: false, error: 'Invalid chat message', code: 'invalid_message' }],
-    [
-      'post',
-      { status: 'structured_unavailable' },
-      409,
-      { ok: false, error: 'Structured messages are unavailable', code: 'structured_messages_unavailable' }
-    ],
     [
       'post',
       { status: 'invalid_mention', code: 'self_mention' },

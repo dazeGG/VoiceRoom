@@ -38,7 +38,6 @@ beforeEach(() => {
   unread = 0;
   playRoomChatMessageCue.mockClear();
   const { calls } = stubFetch({
-    'GET /api/capabilities': { body: { ok: true, features: { engagement: true } } },
     'GET /api/notifications/inbox': () => ({ body: envelope() })
   });
   inboxLoads = () => calls.filter((call) => call.url === '/api/notifications/inbox').length;
@@ -58,7 +57,6 @@ function roomMessage(id: string): void {
 test('a new mention plays the cue once the inbox confirms it; plain traffic does not', async () => {
   const notifications = new LobbyNotifications();
   const teardown = notifications.start();
-  await vi.waitFor(() => expect(notifications.enabled).toBe(true));
 
   await vi.waitFor(() => expect(inboxLoads()).toBe(1));
   roomMessage('m1');

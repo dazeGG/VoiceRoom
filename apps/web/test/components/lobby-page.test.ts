@@ -37,7 +37,15 @@ function stubLobby() {
       }
     },
     'GET /api/friends/requests': { body: { ok: true, incoming: [], outgoing: [] } },
-    'GET /api/dm/bob': { body: { ok: true, peer: bob, messages: [], muted: false } }
+    'GET /api/dm/bob/history?mode=latest&limit=50': {
+      body: {
+        ok: true,
+        contractVersion: 1,
+        mode: 'latest',
+        messages: [],
+        pageInfo: { hasMoreBefore: false, hasMoreAfter: false }
+      }
+    }
   });
 }
 
@@ -81,5 +89,5 @@ test('a ?dm= link opens that conversation', async () => {
   renderLobby();
 
   expect(await screen.findByRole('region', { name: 'Личные сообщения' })).toBeTruthy();
-  await vi.waitFor(() => expect(calls.some((call) => call.url === '/api/dm/bob')).toBe(true));
+  await vi.waitFor(() => expect(calls.some((call) => call.url.startsWith('/api/dm/bob/history?'))).toBe(true));
 });

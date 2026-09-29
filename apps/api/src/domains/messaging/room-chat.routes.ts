@@ -52,10 +52,6 @@ function sendRefusal(reply: FastifyReply, roomId: string, refusal: Refusal) {
       return reply.code(403).send(failure('Not allowed to edit this message', { code: 'message_edit_forbidden' }));
     case 'not_allowed':
       return reply.code(403).send(failure('Not allowed to delete this message', { code: 'message_delete_forbidden' }));
-    case 'structured_unavailable':
-      return reply
-        .code(409)
-        .send(failure('Structured messages are unavailable', { code: 'structured_messages_unavailable' }));
     case 'invalid_mention':
       return reply.code(422).send(failure('Invalid mention target', { code: refusal.code }));
     case 'invalid_content':

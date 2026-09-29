@@ -18,7 +18,6 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   internal_error: 'Ошибка сервера, попробуйте позже',
   cross_origin_rejected: 'Запрос отклонён: откройте сайт заново',
   not_supported: 'Не поддерживается',
-  readiness_unavailable: UNAVAILABLE,
 
   account_not_found: 'Аккаунт не найден',
   account_deleted: 'Аккаунт удалён',
@@ -113,7 +112,6 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   message_rate_limited: 'Слишком много сообщений, попробуйте позже',
   message_edit_forbidden: 'Можно редактировать только свои сообщения',
   message_delete_forbidden: 'Можно удалять только свои сообщения',
-  structured_messages_unavailable: 'Форматированные сообщения сейчас недоступны',
   thread_not_found: 'Диалог не найден',
   thread_forbidden: 'Диалог недоступен',
   invite_not_found: 'Приглашение не найдено',
@@ -127,7 +125,6 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   invalid_conversation: 'Диалог недоступен',
   invalid_reaction: 'Эту реакцию поставить нельзя',
   invalid_reactor_query: 'Некорректный запрос',
-  reaction_write_disabled: 'Реакции сейчас недоступны',
   reaction_error: 'Не удалось поставить реакцию',
   account_required: 'Нужен аккаунт',
   pin_limit_reached: 'Достигнут предел закреплённых сообщений',

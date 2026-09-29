@@ -7,14 +7,12 @@ import type {
   DirectMessage as DirectMessageView,
   DirectMessageAnswer,
   DirectRead,
-  DirectThread,
   LinkPreview,
   MessageDeleted
 } from '@voice-room/shared/contracts/messages';
 import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
 import type { ReplyTarget } from '$lib/shared/chat/reply-store.svelte';
 import { api } from './client';
-import type { PublicUser } from './friends';
 
 // A room invitation embedded in a message: rendered as an actionable card in
 // the thread instead of a text bubble. Status changes arrive as message edits.
@@ -66,13 +64,6 @@ export interface DirectMessageHistoryPage {
 }
 
 // Opening a thread also clears its unread badge server-side.
-export async function fetchThread(
-  userId: string
-): Promise<{ peer: PublicUser; messages: DirectMessage[]; muted: boolean }> {
-  const { peer, messages, muted } = await api.get<DirectThread>(`/api/dm/${encodeURIComponent(userId)}`);
-  return { peer, messages: messages.map(directMessageFromView), muted };
-}
-
 export async function fetchThreadPage(
   userId: string,
   request: {

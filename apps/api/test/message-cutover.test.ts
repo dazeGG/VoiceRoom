@@ -3,7 +3,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { readMessageDeliveryMode } from '../src/lib/config.ts';
-import { createReadinessReport } from '../src/platform/readiness.ts';
 
 test('G40-A01 delivery cutover is reversible and rejects duplicate-producing overlap', () => {
   assert.deepEqual(readMessageDeliveryMode({}), { claimEnabled: false, directEmitEnabled: true });
@@ -42,28 +41,4 @@ test('G40-A01 API and worker compose services receive the same cutover vector', 
     assert.match(block, /MESSAGE_DIRECT_EMIT_ENABLED/);
     assert.match(block, /MESSAGE_DELIVERY_CLAIM_ENABLED/);
   }
-});
-
-test('G40-A02 missing worker readiness keeps worker-dependent capability false', () => {
-  const report = createReadinessReport(undefined, {
-    desired: { engagement: true },
-    binaryReady: ['shared.engagement.v1', 'api.engagement.v1', 'web.engagement.v1'],
-    schemaReady: ['G52', 'G55', 'G56'],
-    indexReady: ['G52', 'G56', 'G59'],
-    configReady: ['notification.policy'],
-    apiReady: ['G53', 'G57', 'G59', 'G61', 'G65'],
-    webReady: ['G54', 'G58', 'G60', 'G62', 'G64', 'G66'],
-    visibilityReady: ['G23'],
-    workerReady: [],
-    internalReady: [
-      'internal.idempotentSend',
-      'internal.messageDelivery',
-      'internal.structuredContent',
-      'internal.mentions',
-      'internal.notificationInbox',
-      'internal.notificationPolicies',
-      'internal.unreadNavigation'
-    ]
-  });
-  assert.equal(report.features.engagement, false);
 });

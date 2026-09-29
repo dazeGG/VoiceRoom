@@ -74,8 +74,6 @@ export type ServiceRegistryConfig = {
 
 // What the registry needs from the realtime layer.
 export type ServiceRegistryDeps = {
-  readinessProvider: { getSnapshot(): { replicaConsensus?: boolean } | null | undefined };
-  capabilityEnabled: (name: string) => boolean;
   getRoom: (roomId: string) => Promise<Room | null>;
   findRoomBan: (roomId: string, userId: string | null | undefined, ip: string | null | undefined) => Promise<unknown>;
   /** Sends a server event to every socket of an account; answers how many took it. */
@@ -158,7 +156,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     MEDIA_STORAGE_DIR = '/data/media',
     MEDIA_MIN_FREE_BYTES = 2 * 1024 * 1024 * 1024
   } = config;
-  const { readinessProvider, capabilityEnabled, getRoom, findRoomBan } = deps;
+  const { getRoom, findRoomBan } = deps;
   const broadcastRoomDetail = (roomId: string, envelope: ServerEnvelope) =>
     deps.roomRuntime()?.broadcastRoomDetail(roomId, envelope);
 
@@ -255,8 +253,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       canReadRoom: (roomId, userId) => roomStore.get().canUserReadRoomChat(roomId, userId),
       canReactInRoom: (roomId, userId) => roomStore.get().canUserReactInRoom(roomId, userId),
       broadcastRoomDetail,
-      sendToUser: (userId, envelope) => deps.sendToUser(userId, envelope),
-      writesEnabled: () => capabilityEnabled('reactions')
+      sendToUser: (userId, envelope) => deps.sendToUser(userId, envelope)
     })
   );
   const pins = pooled((pool) =>
@@ -287,7 +284,6 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       pool,
       storageDir: MEDIA_STORAGE_DIR,
       minFreeBytes: MEDIA_MIN_FREE_BYTES,
-      replicaConsensus: () => readinessProvider.getSnapshot()?.replicaConsensus === true,
       isBanned: (input) => activeBans.get()!.isBanned(input)
     })
   );

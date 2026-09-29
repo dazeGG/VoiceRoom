@@ -14,7 +14,6 @@
   import LobbyStreamTile from './LobbyStreamTile.svelte';
   import { subscribeRoomPreview } from '../../../../entities/room/room-realtime';
   import { roomPresence } from '../../../../entities/room/room-presence.svelte';
-  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
 
   let {
     room,
@@ -45,7 +44,6 @@
 
   let peers = $state<RoomPeer[]>([]);
   let loading = $state(true);
-  let membershipEnabled = $state(false);
   let activePanel = $state<'chat' | 'participants' | null>(null);
 
   const previewRoomId = $derived(room.roomId);
@@ -91,16 +89,6 @@
     return unsubscribe;
   });
 
-  $effect(() => {
-    let active = true;
-    void getCapabilityFeature('membership').then((enabled) => {
-      if (active) membershipEnabled = enabled;
-    });
-    return () => {
-      active = false;
-    };
-  });
-
   function peerName(peer: RoomPeer): string {
     return peer.name?.trim() || 'Гость';
   }
@@ -116,7 +104,6 @@
   }
 
   function selectPanel(panel: 'chat' | 'participants'): void {
-    if (panel === 'participants' && !membershipEnabled) return;
     activePanel = panel;
   }
 </script>
@@ -143,7 +130,6 @@
           aria-pressed={activePanel === 'participants'}
           data-active={activePanel === 'participants'}
           title="Участники"
-          disabled={!membershipEnabled}
           onclick={() => selectPanel('participants')}
         >
           <Users {...iconSm} aria-hidden="true" />
@@ -225,7 +211,7 @@
           onSelectParticipants={() => selectPanel('participants')}
         />
       {/key}
-    {:else if activePanel === 'participants' && membershipEnabled}
+    {:else if activePanel === 'participants'}
       <aside class="lobby-room-members" aria-label="Список участников комнаты">
         <header class="chat-rail-head">
           <div class="room-panel-tabs" role="tablist" aria-label="Раздел панели комнаты">

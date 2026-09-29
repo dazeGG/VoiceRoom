@@ -37,7 +37,6 @@ export interface DomainServiceDeps {
   hub: RealtimeHub;
   liveKit: LiveKit;
   limits: RateLimits;
-  featureEnabled: (name: string) => boolean;
   logger: () => Logger;
   /** The admission service, built with the app (it needs the roster wait). */
   admission: () => ReturnType<typeof createAdmissionService> | null;
@@ -111,7 +110,6 @@ export function createDomainServices(deps: DomainServiceDeps) {
     readService: () => services.getHistoryServices().read,
     getRoom: hub.getRoom,
     findRoomBan: hub.findRoomBan,
-    feature: deps.featureEnabled,
     prepareContent: (input) => createContentRepository().prepareWrite(input),
     mentionUserIds: mentionUserIdsFromContent,
     limiter: limits.roomChat,
@@ -172,7 +170,6 @@ export function createDomainServices(deps: DomainServiceDeps) {
     },
     roomExists: async (roomId) => Boolean(await hub.getRoom(roomId)),
     expireRoomInvitations: (senderId, roomId) => hub.roomLifecycle.expireRoomInvitations(senderId, roomId),
-    feature: deps.featureEnabled,
     limiter: limits.dm,
     media: services.getMediaServices,
     replies: () => createReplyRepository({ client: services.getPool() }),

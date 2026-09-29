@@ -23,8 +23,6 @@
     editingMessageId,
     menuMessageId,
     reactions,
-    reactionsEnabled,
-    repliesEnabled,
     onOpenProfile,
     onAuthorMenu,
     onMessageMenu,
@@ -40,8 +38,6 @@
     editingMessageId: string;
     menuMessageId: string;
     reactions: ReturnType<typeof createReactionStore>;
-    reactionsEnabled: boolean;
-    repliesEnabled: boolean;
     onOpenProfile: (event: MouseEvent) => void;
     onAuthorMenu: (event: MouseEvent) => void;
     onMessageMenu: (message: ChatMessage, event: MouseEvent) => void;
@@ -139,17 +135,12 @@
             >
             {#if message.linkPreview}<LinkPreviewCard preview={message.linkPreview} />{/if}
             {#if message.attachments?.length}<AttachmentMosaic attachments={message.attachments} />{/if}
-            {#if reactionsEnabled}<ReactionSummary
-                store={reactions}
-                messageId={message.id}
-                canMutate={Boolean(session.user?.id)}
-              />{/if}
+            <ReactionSummary store={reactions} messageId={message.id} canMutate={Boolean(session.user?.id)} />
           </div>
           <MessageHoverActions
-            reactionStore={reactionsEnabled && session.user?.id ? reactions : undefined}
+            reactionStore={session.user?.id ? reactions : undefined}
             messageId={message.id}
             userId={session.user?.id}
-            canReply={repliesEnabled}
             onReply={() => onReply(message)}
             onCopy={() => onCopy(message)}
             onMore={(event: MouseEvent) => onMessageMenu(message, event)}

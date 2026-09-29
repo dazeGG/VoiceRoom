@@ -1,7 +1,6 @@
 interface ReadReconciliationOptions {
   scope: string;
-  legacy: boolean;
-  commit: (cursor?: string) => Promise<string | void>;
+  commit: (cursor: string) => Promise<string | void>;
 }
 
 export function createReadReconciliation(options: ReadReconciliationOptions) {
@@ -20,15 +19,13 @@ export function createReadReconciliation(options: ReadReconciliationOptions) {
     while (!disposed && pending !== undefined) {
       const candidate = pending;
       pending = undefined;
-      if (!options.legacy && (!candidate || candidate === committed)) continue;
+      if (!candidate || candidate === committed) continue;
       try {
-        const accepted = await options.commit(options.legacy ? undefined : candidate);
-        committed = typeof accepted === 'string' && accepted ? accepted : candidate || committed;
-        if (candidate) seen.add(candidate);
-        if (committed) {
-          seen.add(committed);
-          channel?.postMessage({ cursor: committed, sequence: ++sequence, source });
-        }
+        const accepted = await options.commit(candidate);
+        committed = typeof accepted === 'string' && accepted ? accepted : candidate;
+        seen.add(candidate);
+        seen.add(committed);
+        channel?.postMessage({ cursor: committed, sequence: ++sequence, source });
       } catch {
         if (pending === undefined) pending = candidate;
         break;
@@ -37,8 +34,8 @@ export function createReadReconciliation(options: ReadReconciliationOptions) {
   }
 
   function advanceAfterRender(cursor?: string): Promise<void> {
-    if (disposed || (!options.legacy && !cursor)) return Promise.resolve();
-    pending = cursor ?? '';
+    if (disposed || !cursor) return Promise.resolve();
+    pending = cursor;
     if (!active) {
       active = drain().finally(() => {
         active = null;

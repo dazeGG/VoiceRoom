@@ -14,7 +14,6 @@
     quickReactions = [],
     activeReactions = new Set<string>(),
     canReact = false,
-    canReply = false,
     canPin = false,
     pinned = false,
     canEdit = false,
@@ -35,7 +34,6 @@
     quickReactions?: readonly string[];
     activeReactions?: Set<string>;
     canReact?: boolean;
-    canReply?: boolean;
     canPin?: boolean;
     pinned?: boolean;
     canEdit?: boolean;
@@ -121,7 +119,7 @@
         <PopoverDivider />
       {/if}
 
-      {#if canReply}
+      {#if onReply}
         <PopoverMenuItem label="Ответить" disabled={busy} onclick={() => pick(onReply, close)}>
           {#snippet icon()}<Reply {...iconMd} aria-hidden="true" />{/snippet}
         </PopoverMenuItem>

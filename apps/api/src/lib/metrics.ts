@@ -107,14 +107,12 @@ function renderPrometheus({
   activeWs = 0,
   activeGuestWs = 0,
   presenceRooms = 0,
-  presencePeers = 0,
-  capabilityReadiness = {}
+  presencePeers = 0
 }: {
   activeWs?: number;
   activeGuestWs?: number;
   presenceRooms?: number;
   presencePeers?: number;
-  capabilityReadiness?: Record<string, unknown>;
 } = {}): string {
   const lines = [
     '# HELP voice_room_api_http_requests_total Total HTTP requests handled by the API.',
@@ -217,11 +215,6 @@ function renderPrometheus({
     lines.push(
       metricLine('voice_room_api_maintenance_last_duration_seconds', { task: item.task }, item.lastDurationSeconds)
     );
-  }
-
-  for (const [key, value] of Object.entries(capabilityReadiness)) {
-    if (typeof value !== 'boolean') continue;
-    lines.push(metricLine('voice_room_api_capability_ready', { key }, Number(value)));
   }
 
   return `${lines.join('\n')}\n`;

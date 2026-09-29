@@ -22,8 +22,6 @@ import type { NotificationService } from './notification.service.ts';
 
 export interface NotificationRoutesDeps {
   notifications: NotificationService;
-  /** The inbox answers 404 while its feature is switched off. */
-  enabled(): boolean;
 }
 
 const answers = <Success>(success: Success) => ({ 200: success, '4xx': Failure });
@@ -37,10 +35,6 @@ export function registerNotificationRoutes(root: FastifyInstance, ctx: ApiContex
   const { notifications } = deps;
 
   async function signedIn(request: FastifyRequest, reply: FastifyReply): Promise<string | null> {
-    if (!deps.enabled()) {
-      reply.code(404).send(failure('Not found', { code: 'not_found' }));
-      return null;
-    }
     const userId = (await ctx.resolveSession(request.raw))?.user?.id;
     if (userId) return userId;
     reply.code(401).send(failure('Authentication required', { code: 'authentication_required' }));

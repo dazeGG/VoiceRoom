@@ -457,7 +457,6 @@
       onGoHome={goHome}
       onOpenPeople={openPeople}
       onOpenSettings={prompts.openSettings}
-      notificationsEnabled={notifications.enabled}
       notificationsOpen={notifications.open}
       notificationUnreadCount={notifications.inbox.unreadCount}
       onOpenNotifications={notifications.toggle}
@@ -568,7 +567,7 @@
   {#if openInAppRoomId}
     <OpenInAppScreen onRetry={openRoomInApp} onContinue={continueRoomInBrowser} />
   {/if}
-  {#if notifications.enabled && notifications.open}
+  {#if notifications.open}
     <aside class="notification-inbox-panel" aria-label="Панель уведомлений">
       <NotificationInbox
         inbox={notifications.inbox}

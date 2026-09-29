@@ -9,7 +9,6 @@
   import type { PublicUser } from '$lib/api/friends';
   import { getAppRealtime } from '$lib/api/realtime';
   import { useLobby } from '$lib/features/home/model/lobby-context';
-  import { LEGACY_READ } from '$lib/features/home/model/dm-thread.svelte';
   import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
   import type { AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
   import LinkPreviewCard from '$lib/shared/chat/LinkPreviewCard.svelte';
@@ -38,8 +37,6 @@
     peer,
     presence,
     media,
-    reactionsEnabled,
-    repliesEnabled,
     quickReactions,
     sending = $bindable(false)
   }: {
@@ -48,8 +45,6 @@
     peer: PublicUser | null;
     presence: PresenceStatus;
     media: AttachmentComposeStore | null;
-    reactionsEnabled: boolean;
-    repliesEnabled: boolean;
     quickReactions: string[];
     sending?: boolean;
   } = $props();
@@ -115,7 +110,6 @@
   );
 
   $effect(() => {
-    if (!reactionsEnabled) return;
     for (const message of lobby.thread.messages) {
       if (!message.invite) void reactions.load(message.id);
     }
@@ -198,10 +192,8 @@
   // Read receipts: what has been on screen is reported once it has rendered.
   let readReconciliation: ReturnType<typeof createReadReconciliation> | null = null;
   $effect(() => {
-    const cursorEnabled = lobby.thread.readCursorEnabled;
     const reconciliation = createReadReconciliation({
       scope: `dm:${peerId}`,
-      legacy: !cursorEnabled,
       commit: async (cursor) => {
         await markThreadRead(peerId, cursor);
       }
@@ -217,7 +209,7 @@
     const revision = lobby.thread.readRevision;
     const candidate = lobby.thread.readCandidate;
     if (!revision || !candidate) return;
-    void tick().then(() => readReconciliation?.advanceAfterRender(candidate === LEGACY_READ ? undefined : candidate));
+    void tick().then(() => readReconciliation?.advanceAfterRender(candidate));
   });
 
   function onThreadScroll(): void {
@@ -361,7 +353,7 @@
       {#if lobby.thread.historyError}
         <div class="lobby-dm-empty">{lobby.thread.historyError}</div>
       {/if}
-      {#if lobby.thread.historyEnabled && (lobby.thread.loadingOlder || lobby.thread.hasMoreBefore)}
+      {#if lobby.thread.loadingOlder || lobby.thread.hasMoreBefore}
         <button
           type="button"
           class="lobby-dm-empty"
@@ -433,13 +425,12 @@
                           >{/if}</span
                       >{/if}
                     {#if bubble.linkPreview}<LinkPreviewCard preview={bubble.linkPreview} />{/if}
-                    {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={bubble.id} />{/if}
+                    <ReactionSummary store={reactions} messageId={bubble.id} />
                   </div>
                   <MessageHoverActions
-                    reactionStore={reactionsEnabled ? reactions : undefined}
+                    reactionStore={reactions}
                     messageId={bubble.id}
                     userId={selfId}
-                    canReply={repliesEnabled}
                     onReply={() => replyTo(bubble)}
                     onCopy={() => void copyMessageText(bubble)}
                     onMore={(event: MouseEvent) => openMessageMenu(bubble, group.fromMe, event)}
@@ -480,8 +471,7 @@
         .filter((summary) => summary.reactedByMe)
         .map((summary) => summary.emoji)
     )}
-    canReact={reactionsEnabled && Boolean(selfId)}
-    canReply={repliesEnabled}
+    canReact={Boolean(selfId)}
     canEdit={menu.fromMe}
     canDelete={menu.fromMe}
     onClose={() => (menu = null)}

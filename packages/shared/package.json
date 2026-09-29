@@ -5,7 +5,6 @@
   "type": "module",
   "exports": {
     "./validation": "./src/validation.ts",
-    "./capabilities": "./src/capabilities.ts",
     "./messaging-history": "./src/messaging-history.ts",
     "./messaging-send": "./src/messaging-send.ts",
     "./membership": "./src/membership.ts",

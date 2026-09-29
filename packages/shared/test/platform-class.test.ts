@@ -26,7 +26,7 @@ test('platform-class classifies the same through its package export and its sour
 
 test('browser-facing shared modules expose named ESM exports', async () => {
   const expectedExports = {
-    capabilities: ['PUBLIC_CAPABILITY_KEYS'],
+    'contracts/ops': ['PUBLIC_CAPABILITY_KEYS'],
     emoji: ['cleanReactionEmoji', 'listReactionEmojis'],
     membership: ['normalizeMembershipEnvelope'],
     mentions: ['MAX_MENTION_CANDIDATES', 'MAX_MENTIONS_PER_MESSAGE'],

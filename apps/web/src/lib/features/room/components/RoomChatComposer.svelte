@@ -24,7 +24,6 @@
     roomId,
     draft,
     media,
-    engagementEnabled,
     typingLabel,
     replyTarget = $bindable(null),
     sending = $bindable(false),
@@ -37,7 +36,6 @@
     draft: RoomChatDraft;
     media: AttachmentComposeStore | null;
     /** Mentions are offered and sent as structured content. */
-    engagementEnabled: boolean;
     typingLabel: string;
     replyTarget?: ChatMessage | null;
     sending?: boolean;
@@ -68,7 +66,7 @@
 
   async function updateMentionCandidates(): Promise<void> {
     const selfId = session.user?.id;
-    if (!engagementEnabled || !selfId || !input) {
+    if (!selfId || !input) {
       mentions.close();
       return;
     }
@@ -112,11 +110,7 @@
     try {
       sent = await send({
         text,
-        content: engagementEnabled
-          ? mentions.selected.length
-            ? mentions.toContent(text)
-            : (contentFromPlainText(text) ?? undefined)
-          : undefined,
+        content: mentions.selected.length ? mentions.toContent(text) : (contentFromPlainText(text) ?? undefined),
         attachmentIds: media?.readyIds ?? [],
         replyTo: replyTarget ? { messageId: replyTarget.id } : undefined
       });

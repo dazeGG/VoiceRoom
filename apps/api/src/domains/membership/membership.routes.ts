@@ -11,7 +11,6 @@ import type { Membership } from './membership.repository.ts';
 import type { LeaveOutcome } from './membership.service.ts';
 import { mayLeaveRoom } from './membership.policy.ts';
 
-const NOT_FOUND = failure('Not found', { code: 'not_found' });
 const SIGN_IN_REQUIRED = failure('Authentication required', { code: 'authentication_required' });
 const OWNER_CANNOT_LEAVE = failure('Room owner cannot leave their room', { code: 'room_owner_cannot_leave' });
 
@@ -32,8 +31,6 @@ export interface MembershipRoutesDeps {
     getMembership(roomId: string, userId: string): Promise<Membership | null>;
     leaveRoom(input: { roomId: string; userId: string }): Promise<LeaveOutcome>;
   };
-  /** Room membership is behind a capability flag until it is on everywhere. */
-  enabled(): boolean;
   prepareLeave(input: { roomId: string; userId: string }): Promise<LeaveGate>;
   /** Leaving also takes the room off the account's list. */
   onLeft(input: { roomId: string; userId: string }): Promise<void>;
@@ -43,10 +40,6 @@ export function registerMembershipRoutes(root: FastifyInstance, ctx: ApiContext,
   const app = root.withTypeProvider<TypeBoxTypeProvider>();
 
   async function member(request: FastifyRequest, reply: FastifyReply): Promise<string | null> {
-    if (!deps.enabled()) {
-      reply.code(404).send(NOT_FOUND);
-      return null;
-    }
     const userId = (await ctx.resolveSession(request.raw))?.user?.id;
     if (userId) return userId;
     reply.code(401).send(SIGN_IN_REQUIRED);

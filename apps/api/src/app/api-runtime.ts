@@ -19,7 +19,6 @@ import {
   resolveCursorHmacKeys as resolveCursorHmacKeysFor,
   resolveRealtimeReconnectLeaseMs
 } from './config.ts';
-import { createApiReadiness } from './readiness.ts';
 import { registerApiRoutes } from './api-routes.ts';
 import { cleanLiveKitUrl } from '@voice-room/shared/validation';
 import { createLogger, hashIp } from '../lib/logger.ts';
@@ -36,16 +35,11 @@ import { MAX_UPLOAD_BYTES } from '../domains/media/media.service.ts';
 
 type Logger = ReturnType<typeof createLogger>;
 type Timer = ReturnType<typeof globalThis.setTimeout> | number;
-type ReadinessProvider = ReturnType<typeof createApiReadiness>;
-type AppReadiness = Pick<ReadinessProvider, 'getSnapshot'> & Partial<Pick<ReadinessProvider, 'start' | 'stop'>>;
 
 export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEnv } = {}) {
   const config = readApiConfig(env);
-  const readinessProvider = createApiReadiness(config, env, () => services.getPool());
 
   const services = createServiceRegistry(config, {
-    readinessProvider,
-    capabilityEnabled: (name) => capabilityEnabled(name),
     roomRuntime: () => hub.runtime(),
     getRoom: (roomId) => hub.getRoom(roomId),
     findRoomBan: (roomId, userId, ip) => hub.findRoomBan(roomId, userId, ip),
@@ -88,14 +82,6 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     processLogger = logger || null;
   }
 
-  function capabilityEnabled(name: string): boolean {
-    try {
-      return readinessProvider.getSnapshot()?.features?.[name] === true;
-    } catch {
-      return false;
-    }
-  }
-
   const limits = createRateLimits(config, env);
   let admissionService: ReturnType<typeof createAdmissionService> | null = null;
   const domain = createDomainServices({
@@ -105,7 +91,6 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     hub,
     liveKit,
     limits,
-    featureEnabled: capabilityEnabled,
     logger: () => getProcessLogger(),
     admission: () => admissionService
   });
@@ -161,7 +146,6 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     avatars = null,
     liveKitCredentials = null,
     membershipServicesOverride = null,
-    readinessProviderOverride = null,
     realtimeReconnectLeaseMs = resolveRealtimeReconnectLeaseMs(env),
     realtimeNow = Date.now,
     realtimeSetTimeout = globalThis.setTimeout,
@@ -179,8 +163,6 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     avatars?: StoreOverrides['avatars'];
     liveKitCredentials?: StoreOverrides['liveKitCredentials'];
     membershipServicesOverride?: StoreOverrides['membershipServicesOverride'];
-    /** Readiness as the app reads it; a test may hand just the snapshot. */
-    readinessProviderOverride?: AppReadiness | null;
     realtimeReconnectLeaseMs?: number;
     realtimeNow?: () => number;
     realtimeSetTimeout?(this: void, callback: () => void, ms: number): Timer;
@@ -231,13 +213,6 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
       hashIp
     };
 
-    const activeReadinessProvider = readinessProviderOverride || readinessProvider;
-    app.addHook('onReady', async () => {
-      await activeReadinessProvider.start?.();
-    });
-    app.addHook('onClose', async () => {
-      await activeReadinessProvider.stop?.();
-    });
     app.addHook('onReady', hub.deliveryRelay.start);
     app.addHook('onClose', hub.deliveryRelay.stop);
 
@@ -251,22 +226,13 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
       clientIp: (req) => getClientIp(req, config.TRUST_PROXY)
     });
 
-    const renderMetrics = () => {
-      const readiness = (() => {
-        try {
-          return activeReadinessProvider.getSnapshot();
-        } catch {
-          return null;
-        }
-      })();
-      return renderPrometheus({
+    const renderMetrics = () =>
+      renderPrometheus({
         activeWs: hub.registry()?.connections?.size || 0,
         activeGuestWs: hub.activeGuestConnections(),
         presenceRooms: hub.presenceRooms.size,
-        presencePeers: hub.presence.peerCount(),
-        capabilityReadiness: readiness?.features || {}
+        presencePeers: hub.presence.peerCount()
       });
-    };
 
     registerApiRoutes(app, apiContext, {
       config,
@@ -281,8 +247,6 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
       presenceRooms: hub.presenceRooms,
       roomRuntime,
       wsHandler,
-      readiness: activeReadinessProvider,
-      featureEnabled: capabilityEnabled,
       livekitEnabled: () => liveKit.config().enabled,
       renderMetrics
     });

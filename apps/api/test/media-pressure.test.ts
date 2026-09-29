@@ -29,18 +29,3 @@ test('G80-A01 2GiB boundary, claim stop and recovery hysteresis fail closed', as
   recordMediaPressure(pressure.getSnapshot());
   assert.match(renderPrometheus(), /voice_room_api_media_pressure_healthy\{reason="ready"\} 1/);
 });
-
-test('G80-A02 replica disagreement disables uploads despite healthy local statfs and requires a fresh agreeing check', async () => {
-  let consensus = false;
-  const pressure = createMediaPressureService({
-    storagePath: '/media',
-    checkIntervalMs: 0,
-    statfs: async () => ({ bavail: DEFAULT_MIN_FREE_BYTES + DEFAULT_RECOVERY_BYTES, bsize: 1 }),
-    replicaConsensus: async () => consensus
-  });
-  const disagreed = await pressure.measure({ force: true });
-  assert.equal(disagreed.healthy, false);
-  assert.equal(disagreed.reason, 'replica_disagreement');
-  consensus = true;
-  assert.equal((await pressure.measure({ force: true })).healthy, true);
-});

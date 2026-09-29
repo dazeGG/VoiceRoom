@@ -1,6 +1,6 @@
 // What the domain modules wire between services: who may see a message's
-// reactions, what a ban does inside and after its transaction, and what
-// pauses media uploads.
+// reactions, what a ban does inside and after its transaction, and the media
+// storage floor that pauses uploads.
 
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
@@ -40,7 +40,6 @@ function reactions(overrides: Partial<ReactionsModuleDeps> = {}) {
     },
     broadcastRoomDetail: () => {},
     sendToUser: () => 1,
-    writesEnabled: () => true,
     ...overrides
   });
   return { service: module.service, asked };
@@ -142,31 +141,32 @@ test(
   }
 );
 
-test('media uploads pause while the API replicas disagree on readiness', async (t) => {
+test('media uploads pause while the storage has less free space than configured', async (t) => {
   const storageDir = fs.mkdtempSync(path.join(os.tmpdir(), 'media-wiring-'));
   t.after(() => fs.rmSync(storageDir, { recursive: true, force: true }));
-  let consensus = false;
-  const registry = createServiceRegistry(
-    {
-      ROOM_IDLE_TTL_MS: 60_000,
-      SESSION_TTL_MS: 60_000,
-      GEOIP_DB_PATH: '',
-      LIVEKIT_GATE_SECRET: 'gate-secret-for-tests-0123456789abcdef',
-      LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS: 60,
-      LIVEKIT_TOKEN_TTL_SECONDS: 60,
-      MAX_ROOM_BANS: 10,
-      MAX_PUSH_SUBSCRIPTIONS_PER_USER: 5,
-      LINK_PREVIEWS_ENABLED: false,
-      MEDIA_STORAGE_DIR: storageDir,
-      MEDIA_MIN_FREE_BYTES: 1
-    },
-    fake<ServiceRegistryDeps>({ readinessProvider: { getSnapshot: () => ({ replicaConsensus: consensus }) } })
-  );
-  registry.applyOverrides({ pool: fakeDb() as unknown as pg.Pool });
-  const pressure = registry.getMediaServices()!.pressure;
+  const pressureWithFloor = (minFreeBytes: number) => {
+    const registry = createServiceRegistry(
+      {
+        ROOM_IDLE_TTL_MS: 60_000,
+        SESSION_TTL_MS: 60_000,
+        GEOIP_DB_PATH: '',
+        LIVEKIT_GATE_SECRET: 'gate-secret-for-tests-0123456789abcdef',
+        LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS: 60,
+        LIVEKIT_TOKEN_TTL_SECONDS: 60,
+        MAX_ROOM_BANS: 10,
+        MAX_PUSH_SUBSCRIPTIONS_PER_USER: 5,
+        LINK_PREVIEWS_ENABLED: false,
+        MEDIA_STORAGE_DIR: storageDir,
+        MEDIA_MIN_FREE_BYTES: minFreeBytes
+      },
+      fake<ServiceRegistryDeps>({})
+    );
+    registry.applyOverrides({ pool: fakeDb() as unknown as pg.Pool });
+    return registry.getMediaServices()!.pressure;
+  };
 
-  assert.equal((await pressure.measure({ force: true })).reason, 'replica_disagreement');
-  await assert.rejects(pressure.assertAcceptingUploads(), { code: 'MEDIA_PRESSURE' });
-  consensus = true;
-  assert.equal((await pressure.measure({ force: true })).reason, 'ready');
+  const full = pressureWithFloor(Number.MAX_SAFE_INTEGER);
+  assert.equal((await full.measure({ force: true })).reason, 'low_disk_space');
+  await assert.rejects(full.assertAcceptingUploads(), { code: 'MEDIA_PRESSURE' });
+  assert.equal((await pressureWithFloor(1).measure({ force: true })).reason, 'ready');
 });

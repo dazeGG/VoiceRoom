@@ -20,7 +20,6 @@ export interface ReactionsModuleDeps {
   broadcastRoomDetail: (roomId: string, envelope: ServerEnvelope) => void;
   /** Sends to every socket of an account; answers how many took it. */
   sendToUser: (userId: string, envelope: ServerEnvelope) => number;
-  writesEnabled: () => boolean;
 }
 
 export function createReactionsModule(deps: ReactionsModuleDeps) {
@@ -52,7 +51,6 @@ export function createReactionsModule(deps: ReactionsModuleDeps) {
       if (!viewer?.id) return false;
       return deps.directMessageVisible(viewer.id, conversation.id, messageId);
     },
-    writesEnabled: deps.writesEnabled,
     publish: realtime.publish
   });
   return { realtime, service };

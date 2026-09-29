@@ -7,7 +7,6 @@ test('G31-A01 multiple render advances coalesce to the newest pending cursor', a
   const gate = Promise.withResolvers<void>();
   const state = createReadReconciliation({
     scope: 'room:r',
-    legacy: false,
     commit: async (cursor) => {
       commits.push(cursor);
       if (commits.length === 1) await gate.promise;
@@ -28,7 +27,6 @@ test('G31-A02 older or around loads alone cannot advance reads', async () => {
   let commits = 0;
   const state = createReadReconciliation({
     scope: 'room:r',
-    legacy: false,
     commit: async () => {
       commits += 1;
     }
@@ -72,7 +70,6 @@ test('G31-A03 two tabs accept repeated newer cursors and suppress identical or o
     const commitsB: unknown[] = [];
     const tabA = createReadReconciliation({
       scope: 'room:tabs',
-      legacy: false,
       commit: async (cursor) => {
         commitsA.push(cursor);
         return cursor;
@@ -80,7 +77,6 @@ test('G31-A03 two tabs accept repeated newer cursors and suppress identical or o
     });
     const tabB = createReadReconciliation({
       scope: 'room:tabs',
-      legacy: false,
       commit: async (cursor) => {
         commitsB.push(cursor);
         return cursor;

@@ -25,8 +25,6 @@ export interface MediaRoutesDeps {
   visibility?: {
     open(input: { attachmentId: string; variant: unknown; viewerId: string }): Promise<OpenedMedia>;
   } | null;
-  uploadsEnabled(): boolean;
-  readsEnabled(): boolean;
 }
 
 function cleanAttachmentId(value: unknown): string {
@@ -35,7 +33,6 @@ function cleanAttachmentId(value: unknown): string {
 }
 
 const answers = { 200: AttachmentAnswer, '4xx': Failure, '5xx': Failure };
-const UPLOADS_DISABLED = failure('Media uploads are unavailable', { code: 'media_uploads_disabled' });
 
 async function noStore(_request: FastifyRequest, reply: FastifyReply): Promise<void> {
   reply.header('Cache-Control', 'no-store');
@@ -82,7 +79,6 @@ export function registerMediaRoutes(root: FastifyInstance, ctx: ApiContext, deps
     async (request, reply) => {
       const ownerId = await signedIn(request, reply);
       if (!ownerId) return reply;
-      if (!deps.uploadsEnabled()) return reply.code(503).send(UPLOADS_DISABLED);
       const { context, clientRequestId, bytes } = request.body;
       return answer(reply, () => media.createSlot({ ownerId, context, clientRequestId, bytes }), 201);
     }
@@ -96,7 +92,6 @@ export function registerMediaRoutes(root: FastifyInstance, ctx: ApiContext, deps
       if (!ownerId) return reply;
       const id = attachmentId(request.params.id, reply);
       if (!id) return reply;
-      if (!deps.uploadsEnabled()) return reply.code(503).send(UPLOADS_DISABLED);
       return answer(reply, async () => {
         let stream: AsyncIterable<unknown> | undefined = request.raw;
         let mimeType = String(request.headers['content-type'] || '').split(';')[0] ?? '';
@@ -130,7 +125,6 @@ export function registerMediaRoutes(root: FastifyInstance, ctx: ApiContext, deps
       if (!ownerId) return reply;
       const id = attachmentId(request.params.id, reply);
       if (!id) return reply;
-      if (!deps.uploadsEnabled()) return reply.code(503).send(UPLOADS_DISABLED);
       return answer(reply, () => media.retry({ id, ownerId }));
     }
   );
@@ -164,8 +158,6 @@ export function registerMediaRoutes(root: FastifyInstance, ctx: ApiContext, deps
       if (!viewerId) return reply;
       const id = attachmentId(request.params.id, reply);
       if (!id) return reply;
-      if (!deps.readsEnabled())
-        return reply.code(404).send(failure('Attachment not found', { code: 'media_not_found' }));
       const opened = await visibility.open({ attachmentId: id, variant: request.params.variant, viewerId });
       const disposition = request.query.download === '1' ? 'attachment' : 'inline';
       return reply

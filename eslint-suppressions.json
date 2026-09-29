@@ -2,12 +2,6 @@
   "apps/api/src/app/config.ts": {
     "@typescript-eslint/no-unnecessary-type-assertion": {
       "count": 7
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
     }
   },
   "apps/api/src/app/graceful-shutdown.ts": {
@@ -325,11 +319,6 @@
       "count": 1
     }
   },
-  "apps/api/src/platform/runtime-readiness.ts": {
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
   "apps/api/src/realtime/registry.ts": {
     "@typescript-eslint/no-base-to-string": {
       "count": 1
@@ -512,16 +501,16 @@
   },
   "apps/api/test/fastify.test.ts": {
     "@typescript-eslint/no-unsafe-argument": {
-      "count": 3
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
+      "count": 3
     },
     "@typescript-eslint/no-unsafe-call": {
       "count": 3
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 30
+      "count": 24
     }
   },
   "apps/api/test/friend-store.test.ts": {
@@ -636,7 +625,7 @@
       "count": 3
     },
     "@typescript-eslint/no-unsafe-member-access": {
-      "count": 11
+      "count": 10
     }
   },
   "apps/api/test/platform-class-persistence.test.ts": {
@@ -664,17 +653,6 @@
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 1
-    }
-  },
-  "apps/api/test/rescue-profile.test.ts": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 8
     }
   },
   "apps/api/test/room-crud.test.ts": {
@@ -1244,14 +1222,6 @@
   "packages/shared/src/attachments.ts": {
     "@typescript-eslint/no-base-to-string": {
       "count": 2
-    }
-  },
-  "packages/shared/src/capabilities.ts": {
-    "@typescript-eslint/no-base-to-string": {
-      "count": 13
-    },
-    "@typescript-eslint/no-unsafe-return": {
-      "count": 1
     }
   },
   "packages/shared/src/link-preview.ts": {

@@ -7,7 +7,7 @@ export type PressureSnapshot = Readonly<{
   checkedAt: number;
   freeBytes: number;
   healthy: boolean;
-  reason: 'unchecked' | 'ready' | 'replica_disagreement' | 'low_disk_space' | 'storage_unavailable';
+  reason: 'unchecked' | 'ready' | 'low_disk_space' | 'storage_unavailable';
 }>;
 
 type Statfs = (path: string) => Promise<{ bavail: number | bigint; bsize: number | bigint }>;
@@ -16,7 +16,6 @@ function createMediaPressureService({
   checkIntervalMs = 5_000,
   minFreeBytes = DEFAULT_MIN_FREE_BYTES,
   recoveryBytes = DEFAULT_RECOVERY_BYTES,
-  replicaConsensus = () => true,
   onSnapshot = () => {},
   statfs = fs.statfs as Statfs,
   storagePath
@@ -24,7 +23,6 @@ function createMediaPressureService({
   checkIntervalMs?: number;
   minFreeBytes?: number;
   recoveryBytes?: number;
-  replicaConsensus?: () => unknown;
   onSnapshot?: (snapshot: PressureSnapshot) => void;
   statfs?: Statfs;
   storagePath?: string;
@@ -43,13 +41,12 @@ function createMediaPressureService({
         const stats = await statfs(target);
         const freeBytes = Number(stats.bavail) * Number(stats.bsize);
         const threshold = snapshot.healthy ? minFreeBytes : minFreeBytes + recoveryBytes;
-        const replicasAgree = (await replicaConsensus()) === true;
         const localHealthy = Number.isFinite(freeBytes) && freeBytes >= threshold;
         snapshot = Object.freeze({
           checkedAt: Date.now(),
           freeBytes,
-          healthy: localHealthy && replicasAgree,
-          reason: !replicasAgree ? 'replica_disagreement' : localHealthy ? 'ready' : 'low_disk_space'
+          healthy: localHealthy,
+          reason: localHealthy ? 'ready' : 'low_disk_space'
         });
         onSnapshot(snapshot);
       } catch {

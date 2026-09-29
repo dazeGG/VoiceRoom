@@ -8,7 +8,6 @@ import type { createServiceRegistry } from './service-registry.ts';
 import type { readApiConfig } from './config.ts';
 import type { RoomRealtimeRuntime } from '../realtime/room-runtime.ts';
 import type { createWsHandler } from '../realtime/ws-handler.ts';
-import type { createRuntimeReadinessProvider } from '../platform/runtime-readiness.ts';
 import { registerCapabilityRoutes } from '../platform/capability-routes.ts';
 import { tokensMatch } from '../platform/crypto/tokens-match.ts';
 import type { PresencePeer } from '../domains/rooms/room-views.ts';
@@ -65,8 +64,6 @@ export interface ApiRouteDeps {
   presenceRooms: Map<string, { peers: Map<string, PresencePeer> }>;
   roomRuntime: RoomRealtimeRuntime;
   wsHandler: ReturnType<typeof createWsHandler>;
-  readiness: Pick<ReturnType<typeof createRuntimeReadinessProvider>, 'getSnapshot'>;
-  featureEnabled: (name: string) => boolean;
   livekitEnabled: () => boolean;
   renderMetrics: OpsRouteDeps['renderMetrics'];
 }
@@ -112,7 +109,6 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
     })
   });
   registerOpsRoutes(app, ctx, {
-    readiness: deps.readiness,
     livekitEnabled: deps.livekitEnabled,
     renderMetrics: deps.renderMetrics,
     pow: deps.limits.pow,
@@ -122,20 +118,13 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
     desktopRelease: deps.domain.desktopRelease
   });
 
-  registerCapabilityRoutes(app, deps.readiness);
+  registerCapabilityRoutes(app);
 
   const memberships = deps.services.getMembershipServices();
   if (memberships) {
     registerMembershipRoutes(app, ctx, {
       directory: memberships.directory,
       memberships: memberships.service,
-      enabled: () => {
-        try {
-          return deps.readiness.getSnapshot()?.features?.membership === true;
-        } catch {
-          return false;
-        }
-      },
       prepareLeave: ({ roomId, userId }) => deps.roomRuntime.disconnectAccountFromRoom({ roomId, userId }),
       onLeft: async ({ roomId, userId }) => {
         await deps.services.getRoomStore().removeRoomBookmarkForUser(userId, roomId);
@@ -167,8 +156,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
   const notificationDomain = deps.services.getNotificationServices();
   if (notificationDomain) {
     registerNotificationRoutes(app, ctx, {
-      notifications: notificationDomain.service,
-      enabled: () => deps.featureEnabled('engagement')
+      notifications: notificationDomain.service
     });
   }
 
@@ -176,8 +164,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
   if (moderation) {
     registerModerationRoutes(app, ctx, {
       moderation: moderation.service,
-      messages: moderation.messageService,
-      enabled: () => deps.featureEnabled('moderationCenter')
+      messages: moderation.messageService
     });
   }
 
@@ -185,9 +172,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
   if (media) {
     registerMediaRoutes(app, ctx, {
       media: media.service,
-      visibility: media.visibility,
-      uploadsEnabled: () => deps.featureEnabled('mediaUploads'),
-      readsEnabled: () => deps.featureEnabled('mediaRead')
+      visibility: media.visibility
     });
   }
 

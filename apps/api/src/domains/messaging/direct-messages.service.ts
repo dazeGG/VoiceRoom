@@ -83,7 +83,6 @@ export interface DirectMessagesDeps {
   isDmMuted(userId: string, peerUserId: string): Promise<boolean>;
   roomExists(roomId: string): Promise<boolean>;
   expireRoomInvitations(senderId: string, roomId: string): Promise<unknown>;
-  feature(name: 'replies' | 'mediaUploads'): boolean;
   limiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
   media(): { attachments: { bindReady(input: Record<string, unknown>, client: DbClient): Promise<unknown> } } | null;
   replies(): {
@@ -178,12 +177,11 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     const attachmentIds = normalizeAttachmentIds(input.attachmentIds);
     const { replyToMessageId, idempotencyKey } = input;
     if (attachmentIds === null) return { status: 'invalid_attachments' };
-    if (input.replyTo != null && (!replyToMessageId || !deps.feature('replies')))
-      return { status: 'reply_unavailable' };
+    if (input.replyTo != null && !replyToMessageId) return { status: 'reply_unavailable' };
     if (!text && attachmentIds.length === 0) return { status: 'empty' };
 
     const media = attachmentIds.length > 0 ? deps.media() : null;
-    if (attachmentIds.length > 0 && (!media || !deps.feature('mediaUploads'))) return { status: 'media_unavailable' };
+    if (attachmentIds.length > 0 && !media) return { status: 'media_unavailable' };
     const replies = replyToMessageId ? deps.replies() : null;
     const delivery = deps.delivery();
     let idempotencyLedgerKey = '';

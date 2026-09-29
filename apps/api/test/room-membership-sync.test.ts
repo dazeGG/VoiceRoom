@@ -34,7 +34,6 @@ function leaveRoute({
         return { status: leaveStatus, membership } as LeaveOutcome;
       }
     },
-    enabled: () => true,
     prepareLeave: async () => prepared,
     onLeft: async ({ roomId, userId }) => {
       onLeftCalls.push({ roomId, userId });
@@ -73,7 +72,7 @@ test('owners, failed leaves and refused disconnects keep the room on the list', 
   assert.deepEqual([...owner.onLeftCalls, ...failed.onLeftCalls, ...refused.onLeftCalls], []);
 });
 
-test('the member directory answers its page, and refuses outsiders, bad cursors and a disabled feature', async (t) => {
+test('the member directory answers its page, and refuses outsiders and bad cursors', async (t) => {
   const page = {
     contractVersion: 1 as const,
     roomId: 'static-room',
@@ -97,9 +96,8 @@ test('the member directory answers its page, and refuses outsiders, bad cursors 
   const seen: unknown[] = [];
   function directoryApp({
     answer = 'ok',
-    enabled = true,
     signedIn = true
-  }: { answer?: 'ok' | 'forbidden' | 'unauthorized' | 'bad-cursor'; enabled?: boolean; signedIn?: boolean } = {}) {
+  }: { answer?: 'ok' | 'forbidden' | 'unauthorized' | 'bad-cursor'; signedIn?: boolean } = {}) {
     const app = fastify();
     t.after(() => app.close());
     registerMembershipRoutes(
@@ -114,7 +112,6 @@ test('the member directory answers its page, and refuses outsiders, bad cursors 
           }
         },
         memberships: fake(),
-        enabled: () => enabled,
         prepareLeave: async () => true,
         onLeft: async () => {}
       }
@@ -137,5 +134,4 @@ test('the member directory answers its page, and refuses outsiders, bad cursors 
     code: 'invalid_cursor'
   });
   assert.equal((await directoryApp({ signedIn: false })()).statusCode, 401);
-  assert.equal((await directoryApp({ enabled: false })()).statusCode, 404);
 });

@@ -13,7 +13,6 @@ export const ERROR_CODES = [
   'internal_error',
   'cross_origin_rejected',
   'not_supported',
-  'readiness_unavailable',
 
   // Account
   'account_not_found',
@@ -113,7 +112,6 @@ export const ERROR_CODES = [
   'message_rate_limited',
   'message_edit_forbidden',
   'message_delete_forbidden',
-  'structured_messages_unavailable',
   'thread_not_found',
   'thread_forbidden',
   'invite_not_found',
@@ -127,7 +125,6 @@ export const ERROR_CODES = [
   'invalid_conversation',
   'invalid_reaction',
   'invalid_reactor_query',
-  'reaction_write_disabled',
   'account_required',
   'pin_limit_reached',
   'pin_error',

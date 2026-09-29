@@ -38,7 +38,6 @@ type HarnessOptions = {
   editResult?: null;
   delivery?: false;
   replay?: boolean;
-  features?: Partial<Record<'replies' | 'mediaUploads', boolean>>;
   readError?: Error;
   friends?: boolean;
   blocked?: boolean;
@@ -141,11 +140,6 @@ function harness(options: HarnessOptions = {}) {
             }
           }
         };
-  const features: Record<'replies' | 'mediaUploads', boolean> = {
-    replies: true,
-    mediaUploads: true,
-    ...(options.features || {})
-  };
   const service = createDirectMessagesService({
     messages: () => ({ direct }),
     readService: () => ({
@@ -173,7 +167,6 @@ function harness(options: HarnessOptions = {}) {
     expireRoomInvitations: async (senderId, roomId) => {
       calls.expired.push([senderId, roomId]);
     },
-    feature: (name) => features[name],
     limiter: { check: () => options.rate || { allowed: true } },
     media: () =>
       options.media === null
@@ -239,14 +232,8 @@ test('send refuses in the legacy order', async () => {
     [{ deleted: true }, {}, 'account_deleted'],
     [{}, { attachmentIds: 'x' }, 'invalid_attachments'],
     [{}, { replyTo: {} }, 'reply_unavailable'],
-    [
-      { features: { replies: false } },
-      { replyTo: { messageId: UUID_A }, replyToMessageId: UUID_A },
-      'reply_unavailable'
-    ],
     [{}, { text: '  ' }, 'empty'],
-    [{ media: null }, { attachmentIds: [UUID_A] }, 'media_unavailable'],
-    [{ features: { mediaUploads: false } }, { attachmentIds: [UUID_A] }, 'media_unavailable']
+    [{ media: null }, { attachmentIds: [UUID_A] }, 'media_unavailable']
   ];
   for (const [options, input, status] of cases) {
     assert.equal(

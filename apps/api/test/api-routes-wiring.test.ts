@@ -5,8 +5,7 @@ import assert from 'node:assert/strict';
 
 import { createApiRuntime } from '../src/app/api-runtime.ts';
 import { normalizeGatePrincipal } from '../src/domains/admission/gate-credential.repository.ts';
-import type { ReadinessReport } from '../src/platform/readiness.ts';
-import { fake, userSession } from './fakes/index.ts';
+import { userSession } from './fakes/index.ts';
 
 const ENV = { ...process.env, LIVEKIT_GATE_SECRET: 'gate-secret-for-tests-0123456789abcdef' };
 
@@ -48,8 +47,7 @@ test('leaving a room revokes the seat and takes the room off the account list', 
           return { status: 'left' };
         }
       }
-    },
-    readinessProviderOverride: { getSnapshot: () => fake<ReadinessReport>({ features: { membership: true } }) }
+    }
   });
   t.after(() => app.close());
 

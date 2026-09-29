@@ -4,16 +4,7 @@
 import { Type, type Static } from 'typebox';
 import { Nullable, Ok } from './http.ts';
 
-export const Health = Ok({
-  livekit: Type.Boolean(),
-  capabilityManifest: Type.Object({
-    contractVersion: Nullable(Type.String()),
-    schemaVersion: Nullable(Type.Number()),
-    digest: Nullable(Type.String()),
-    replicaConsensus: Type.String(),
-    manifestRawSha256: Nullable(Type.String())
-  })
-});
+export const Health = Ok({ livekit: Type.Boolean() });
 export type Health = Static<typeof Health>;
 
 /** Room creation needs a proof of work only while a difficulty is configured. */
@@ -48,6 +39,19 @@ export const ClientLogsAccepted = Ok({
 export type ClientLogsAccepted = Static<typeof ClientLogsAccepted>;
 
 /** The public feature flags; the only answer without `ok`. */
+/** The feature names clients built for release 2.5 still ask about; all are on. */
+export const PUBLIC_CAPABILITY_KEYS: readonly string[] = [
+  'historyCursor',
+  'readCursor',
+  'replies',
+  'membership',
+  'engagement',
+  'reactions',
+  'mediaRead',
+  'mediaUploads',
+  'moderationCenter'
+];
+
 export const Capabilities = Type.Object({
   contractVersion: Type.Literal(1),
   apiVersion: Type.String(),

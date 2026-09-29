@@ -3,13 +3,10 @@
 import { fetchNotificationInbox, markAllNotificationsRead, markNotificationRead } from '$lib/api/notifications';
 import { getAppRealtime } from '$lib/api/realtime';
 import { playRoomChatMessageCue } from '$lib/features/room/client/media/cues';
-import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
 import { createNotificationInbox } from '$lib/shared/notifications/inbox.svelte';
 import { notificationPreferences } from '$lib/shared/notifications/preferences.svelte';
 
 export class LobbyNotifications {
-  /** The server offers the inbox at all. */
-  enabled = $state(false);
   open = $state(false);
   readonly inbox = createNotificationInbox({
     list: fetchNotificationInbox,
@@ -30,12 +27,9 @@ export class LobbyNotifications {
    * conversation, not asking not to be reachable.
    */
   start = (): (() => void) => {
-    void getCapabilityFeature('engagement').then((enabled) => {
-      this.enabled = enabled;
-      if (enabled) void this.inbox.load();
-    });
+    void this.inbox.load();
     return getAppRealtime().subscribe((event) => {
-      if (!this.enabled || event.type !== 'notification.room.message') return;
+      if (event.type !== 'notification.room.message') return;
       const before = this.inbox.unreadCount;
       const messageId = event.payload?.message?.id;
       void this.inbox.load().then(() => {
