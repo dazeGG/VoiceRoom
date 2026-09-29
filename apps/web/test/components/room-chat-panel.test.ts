@@ -164,39 +164,49 @@ test("a guest's unsent text survives a look at the participants tab", async () =
   expect(composer().textContent).toBe('не отправлено');
 });
 
-test('the next message can be typed while one is sending; a failed one comes back before it', async () => {
+test('messages sent while one is on its way go out in order; a failed one comes back first', async () => {
   let fail = false;
-  stubRoom({
-    'POST /api/rooms/room/chat': () =>
-      fail
-        ? { status: 500, body: { ok: false, error: 'Сервер недоступен' } }
-        : { body: { ok: true, message: roomMessage('m4', 'me', 'первое') } }
+  const { calls } = stubRoom({
+    'POST /api/rooms/room/chat': (init) => {
+      if (fail) return { status: 500, body: { ok: false, error: 'Сервер недоступен' } };
+      const { text } = JSON.parse(init?.body as string) as { text: string };
+      return { body: { ok: true, message: roomMessage(`sent-${text}`, 'me', text) } };
+    }
   });
   // Each post waits until the test lets it answer.
   const answer = globalThis.fetch;
-  let release = () => {};
+  const waiting: Array<() => void> = [];
   vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     if (init?.method === 'POST' && url === '/api/rooms/room/chat') {
-      await new Promise<void>((resolve) => (release = resolve));
+      await new Promise<void>((resolve) => waiting.push(resolve));
     }
     return answer(input, init);
   });
+  const releaseNext = async () => {
+    await vi.waitFor(() => expect(waiting.length).toBeGreaterThan(0));
+    waiting.shift()!();
+  };
   renderPanel();
   await screen.findByText('от Ады');
 
   await userEvent.click(composer());
   await userEvent.keyboard('первое{Enter}');
   expect(composer().textContent).toBe('');
-  await userEvent.keyboard('второе');
-  release();
-  expect(await screen.findByText('первое', { selector: '.chat-msg-content *, .chat-msg-content' })).toBeTruthy();
-  expect(composer().textContent).toBe('второе');
+  await userEvent.keyboard('второе{Enter}');
+  expect(composer().textContent).toBe('');
+  await releaseNext();
+  await releaseNext();
+  expect(await screen.findByText('второе', { selector: '.chat-msg-content *, .chat-msg-content' })).toBeTruthy();
+  const texts = calls
+    .filter((call) => call.method === 'POST' && call.url === '/api/rooms/room/chat')
+    .map((call) => (call.body as { text: string }).text);
+  expect(texts).toEqual(['первое', 'второе']);
 
   fail = true;
-  await userEvent.keyboard('{Enter}');
-  await userEvent.keyboard('третье');
-  release();
+  await userEvent.keyboard('третье{Enter}');
+  await userEvent.keyboard('четвёртое');
+  await releaseNext();
   expect(await screen.findByText(/Сервер недоступен|Не удалось/)).toBeTruthy();
-  await vi.waitFor(() => expect(composer().textContent).toMatch(/^второе\s*третье$/));
+  await vi.waitFor(() => expect(composer().textContent).toMatch(/^третье\s*четвёртое$/));
 });

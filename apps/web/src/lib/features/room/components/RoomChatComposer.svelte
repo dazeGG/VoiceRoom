@@ -98,37 +98,53 @@
     draft.schedule();
   }
 
+  // Messages go out one at a time, in the order they were sent: the field
+  // empties at once and stays writable, so the next one can be typed and sent
+  // while the previous is still on its way.
+  let queue: Promise<void> = Promise.resolve();
+  let inFlight = 0;
+
   async function submit(event?: SubmitEvent): Promise<void> {
     event?.preventDefault();
-    if (!roomId || sending) return;
+    if (!roomId) return;
     // Do not collapse whitespace; newlines are intentional.
     const text = draft.text.trim();
-    if (!text && !media?.canSend) return;
-    if (media?.drafts.length && !media.canSend) return;
+    // Attachments belong to the message already on its way (their controls are
+    // locked meanwhile), so a queued message carries text only.
+    const withMedia = !sending && Boolean(media?.canSend);
+    if (!text && !withMedia) return;
+    if (!sending && media?.drafts.length && !media.canSend) return;
 
     const outgoing = {
       text,
       content: mentions.selected.length ? mentions.toContent(text) : (contentFromPlainText(text) ?? undefined),
-      attachmentIds: media?.readyIds ?? [],
+      attachmentIds: withMedia ? (media?.readyIds ?? []) : [],
       replyTo: replyTarget ? { messageId: replyTarget.id } : undefined
     };
-    // The field empties at once and stays writable, so the next message can be
-    // typed while this one is on its way; a failure puts the text back.
     const sentMentions = [...mentions.selected];
     const sentReplyTarget = replyTarget;
     draft.clear();
     replyTarget = null;
+    inFlight += 1;
     sending = true;
-    let sent = false;
+    const turn = queue.then(async () => {
+      let sent = false;
+      try {
+        sent = await send(outgoing);
+      } finally {
+        if (!sent) restoreUnsent(text, sentMentions, sentReplyTarget);
+      }
+      if (!sent) return;
+      if (withMedia) media?.clearBound();
+      typingNotifier.reset();
+    });
+    queue = turn.catch(() => {});
     try {
-      sent = await send(outgoing);
+      await turn;
     } finally {
-      sending = false;
-      if (!sent) restoreUnsent(text, sentMentions, sentReplyTarget);
+      inFlight -= 1;
+      sending = inFlight > 0;
     }
-    if (!sent) return;
-    media?.clearBound();
-    typingNotifier.reset();
     await tick();
     focus();
   }

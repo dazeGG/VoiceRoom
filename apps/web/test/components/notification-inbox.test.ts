@@ -2,7 +2,7 @@
 
 import { cleanup, render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, expect, onTestFinished, test, vi } from 'vitest';
 import NotificationInbox from '../../src/lib/features/home/components/NotificationInbox.svelte';
 import { createNotificationInbox } from '../../src/lib/shared/notifications/inbox.svelte';
 
@@ -17,6 +17,13 @@ function renderInbox() {
 
 test('Escape closes the notifications panel, like its close button', async () => {
   const onclose = renderInbox();
+  // The room keeps its own dialogs mounted and hidden; they do not count.
+  const hiddenDialog = document.createElement('div');
+  hiddenDialog.setAttribute('role', 'dialog');
+  hiddenDialog.setAttribute('aria-modal', 'true');
+  hiddenDialog.hidden = true;
+  document.body.append(hiddenDialog);
+  onTestFinished(() => hiddenDialog.remove());
 
   await userEvent.keyboard('{Escape}');
   expect(onclose).toHaveBeenCalledOnce();
