@@ -191,6 +191,11 @@
       "count": 2
     }
   },
+  "apps/api/src/domains/notifications/push-subscription.repository.ts": {
+    "@typescript-eslint/no-unnecessary-type-assertion": {
+      "count": 1
+    }
+  },
   "apps/api/src/domains/ops/desktop-release.service.ts": {
     "@typescript-eslint/no-base-to-string": {
       "count": 3
@@ -305,11 +310,6 @@
   "apps/api/src/lib/push-service.ts": {
     "@typescript-eslint/no-base-to-string": {
       "count": 2
-    }
-  },
-  "apps/api/src/domains/notifications/push-subscription.repository.ts": {
-    "@typescript-eslint/no-unnecessary-type-assertion": {
-      "count": 1
     }
   },
   "apps/api/src/platform/http/request-log.ts": {
@@ -941,14 +941,6 @@
   "apps/web/src/lib/features/room/components/RoomChat.svelte": {
     "@typescript-eslint/no-unsafe-argument": {
       "count": 2
-    }
-  },
-  "apps/web/src/lib/features/room/components/RoomChatPanel.svelte": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 3
-    },
-    "svelte/prefer-svelte-reactivity": {
-      "count": 1
     }
   },
   "apps/web/src/lib/features/room/components/RoomCtaSlot.svelte": {

@@ -98,3 +98,17 @@ export function mentionsUser(message: ChatMessage, userId: string | undefined): 
   if (!userId || message.content?.version !== 1) return false;
   return message.content.segments.some((segment) => segment.type === 'mention' && segment.userId === userId);
 }
+
+/**
+ * The recent window after the server's latest messages: known ids take the
+ * server's copy (edits missed while disconnected), new ones are added, and
+ * messages appended locally outside the window stay.
+ */
+export function mergeLatestWindow(shown: ChatMessage[], latest: ChatMessage[]): ChatMessage[] {
+  const known = new Set(shown.map((item) => item.id));
+  const latestById = new Map(latest.map((item) => [item.id, item]));
+  const incoming = latest.filter((item) => item?.id && !known.has(item.id));
+  return [...shown.map((item) => latestById.get(item.id) ?? item), ...incoming].sort(
+    (a, b) => a.createdAt - b.createdAt
+  );
+}

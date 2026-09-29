@@ -9,6 +9,7 @@
   import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
   import { imageFilesFromClipboard, type AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
   import { loadChatDraft, saveChatDraft } from '$lib/shared/chat/chat-drafts';
+  import { SendAttempt } from '$lib/shared/chat/send-attempt';
   import ComposerEmojiPicker from '$lib/shared/chat/ComposerEmojiPicker.svelte';
   import type { ComposerHandle } from '$lib/shared/chat/composer-handle';
   import EmojiComposer from '$lib/shared/chat/EmojiComposer.svelte';
@@ -49,8 +50,7 @@
   const conversation = { type: 'dm' as const, id: untrack(() => peerId) };
   let draft = $state(untrack(() => loadChatDraft(selfId, conversation)?.text ?? ''));
   let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
-  let sendAttemptKey = '';
-  let sendAttemptFingerprint = '';
+  const sendAttempt = new SendAttempt();
 
   const typingNotifier = createTypingNotifier((activity) => {
     getAppRealtime().send('dm.typing', { userId: conversation.id, activity });
@@ -86,17 +86,6 @@
     typingNotifier.reset();
   });
 
-  // One key per attempt: a retry of the same message reuses it, so the server
-  // stores the message once however many times it was sent.
-  function idempotencyKeyFor(value: unknown): string {
-    const fingerprint = JSON.stringify(value);
-    if (!sendAttemptKey || sendAttemptFingerprint !== fingerprint) {
-      sendAttemptKey = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      sendAttemptFingerprint = fingerprint;
-    }
-    return sendAttemptKey;
-  }
-
   async function submit(): Promise<void> {
     const text = draft.trim();
     if ((!text && !media?.canSend) || sending) return;
@@ -105,7 +94,7 @@
     try {
       const attachmentIds = media?.readyIds ?? [];
       const replyTo = replyTarget ? { messageId: replyTarget.id } : undefined;
-      await lobby.sendMessage(text, attachmentIds, replyTo, idempotencyKeyFor({ text, attachmentIds, replyTo }));
+      await lobby.sendMessage(text, attachmentIds, replyTo, sendAttempt.keyFor({ text, attachmentIds, replyTo }));
     } catch {
       // Keep the draft intact so the message can be retried.
       return;
@@ -119,8 +108,7 @@
     persistDraft();
     media?.clearBound();
     replyTarget = null;
-    sendAttemptKey = '';
-    sendAttemptFingerprint = '';
+    sendAttempt.reset();
     await tick();
     focus();
   }

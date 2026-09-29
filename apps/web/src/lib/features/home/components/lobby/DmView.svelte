@@ -5,11 +5,8 @@
   import type { AuthUser } from '$lib/api/auth';
   import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
   import AttachmentDropOverlay from '$lib/shared/chat/AttachmentDropOverlay.svelte';
-  import {
-    dataTransferHasImages,
-    getAttachmentComposeStore,
-    imageFilesFromDataTransfer
-  } from '$lib/shared/chat/attachment-compose.svelte';
+  import { getAttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
+  import { AttachmentDrop } from '$lib/shared/chat/attachment-drop.svelte';
   import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions } from '$lib/shared/chat/frequent-reactions';
   import { effectivePresenceStatus, presenceStatusLabel } from '$lib/shared/presence';
   import { Avatar } from '$lib/shared/ui';
@@ -29,7 +26,6 @@
   let mediaUploadsEnabled = $state(false);
   let quickReactions = $state<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
   let sending = $state(false);
-  let attachmentDragDepth = $state(0);
 
   const peerId = $derived(lobby.selectedFriendId ?? '');
   const peer = $derived(lobby.thread.peer);
@@ -48,52 +44,23 @@
     });
   });
 
-  function acceptsDrop(event: DragEvent): boolean {
-    return Boolean(media) && !sending && dataTransferHasImages(event.dataTransfer);
-  }
-
-  function onDragEnter(event: DragEvent): void {
-    if (!acceptsDrop(event)) return;
-    event.preventDefault();
-    attachmentDragDepth += 1;
-  }
-
-  function onDragOver(event: DragEvent): void {
-    if (!acceptsDrop(event)) return;
-    event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
-  }
-
-  function onDragLeave(event: DragEvent): void {
-    if (!attachmentDragDepth) return;
-    event.preventDefault();
-    attachmentDragDepth = Math.max(0, attachmentDragDepth - 1);
-  }
-
-  async function onDrop(event: DragEvent): Promise<void> {
-    if (!media) return;
-    const files = imageFilesFromDataTransfer(event.dataTransfer);
-    if (!files.length) return;
-    event.preventDefault();
-    attachmentDragDepth = 0;
-    try {
-      await media.addFiles(files);
-    } catch (cause) {
-      pushToast(cause instanceof Error ? cause.message : 'Не удалось загрузить изображение', { variant: 'error' });
-    }
-  }
+  const drop = new AttachmentDrop({
+    media: () => media,
+    busy: () => sending,
+    onError: (message) => pushToast(message, { variant: 'error' })
+  });
 </script>
 
 <div
   class="lobby-dm"
   role="region"
   aria-label="Личные сообщения"
-  ondragenter={onDragEnter}
-  ondragover={onDragOver}
-  ondragleave={onDragLeave}
-  ondrop={onDrop}
+  ondragenter={drop.enter}
+  ondragover={drop.over}
+  ondragleave={drop.leave}
+  ondrop={drop.drop}
 >
-  {#if attachmentDragDepth > 0}<AttachmentDropOverlay />{/if}
+  {#if drop.active}<AttachmentDropOverlay />{/if}
   <div class="lobby-dm-col">
     {#if peer}
       <button class="lobby-dm-head" type="button" onclick={lobby.toggleProfile}>
