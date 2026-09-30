@@ -190,6 +190,17 @@ test('renew, complete and fail work only while the lease and fence are held', { 
   });
   assert.equal(plain.lastError, 'plain failure');
 
+  // A reason that is not text is recorded as the generic one, never as "[object Object]".
+  await pool.query(`UPDATE media_processing_jobs SET available_at = current_timestamp WHERE id = $1`, [next.id]);
+  const [odd] = await jobs.claimBatch({ workerId: 'worker-1' });
+  assert.ok(odd);
+  const shapeless = await jobs.fail(odd.id, {
+    workerId: 'worker-1',
+    fencingToken: odd.fencingToken,
+    error: { message: { code: 42 } }
+  });
+  assert.equal(shapeless.lastError, 'Media job failed');
+
   await pool.query(`UPDATE media_processing_jobs SET available_at = current_timestamp WHERE id = $1`, [next.id]);
   const [last] = await jobs.claimBatch({ workerId: 'worker-1' });
   assert.ok(last);
@@ -205,6 +216,8 @@ test('renew, complete and fail work only while the lease and fence are held', { 
 test('jobs are found by id, the backlog has an age, and finished jobs are pruned', { skip }, async (t) => {
   const { pool, jobs, processing } = await setup(t);
   assert.equal(await jobs.oldestPendingAgeMs(), 0);
+  // Something that is not a database client is ignored in favour of the pool.
+  assert.equal(await jobs.oldestPendingAgeMs({ client: {} as never }), 0);
   const pending = await jobs.enqueue(await processing());
   assert.ok(pending);
   await pool.query(

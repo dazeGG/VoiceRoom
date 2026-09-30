@@ -264,6 +264,8 @@ function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
     );
   }
 
+  // An aggregate without GROUP BY always answers one row, and COALESCE makes
+  // an empty queue zero.
   async function oldestPendingAgeMs({ client }: { client?: Client } = {}): Promise<number> {
     const row = await on(client)
       .selectFrom('media_processing_jobs')
@@ -271,8 +273,8 @@ function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
         sql<string>`COALESCE(EXTRACT(EPOCH FROM (current_timestamp - MIN(created_at))) * 1000, 0)::bigint`.as('age_ms')
       )
       .where('state', 'in', ['pending', 'processing'])
-      .executeTakeFirst();
-    return Number(row?.age_ms || 0);
+      .executeTakeFirstOrThrow();
+    return Number(row.age_ms);
   }
 
   async function removeTerminalBefore(
