@@ -322,9 +322,15 @@ function enforceBaselineRatchet(
 
 // A module moved from .js to .ts keeps its protected-base policy through the
 // .ts entry, but only once the .js file is really gone: renaming the policy
-// entry alone must not unpolice a file that still exists.
+// entry alone must not unpolice a file that still exists. The move may also
+// put the layer behind a dot (`media-job-repository.js` to
+// `media-job.repository.ts`), the file naming G10-A05 asks for.
+const LAYER_SUFFIX = /-(routes|service|repository|policy|module)$/;
+
 function isRenamedToTypeScript(value: string, current: Set<string>, fileExists: FileExists) {
-  return value.endsWith('.js') && current.has(`${value.slice(0, -3)}.ts`) && !fileExists(value);
+  if (!value.endsWith('.js') || fileExists(value)) return false;
+  const stem = value.slice(0, -3);
+  return current.has(`${stem}.ts`) || current.has(`${stem.replace(LAYER_SUFFIX, '.$1')}.ts`);
 }
 
 function assertPolicySuperset(
