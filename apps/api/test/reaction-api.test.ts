@@ -3,7 +3,8 @@ import fastify from 'fastify';
 import test from 'node:test';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
 import { createReactionService, type ReactionRepository } from '../src/domains/messaging/reaction.service.ts';
-import { registerReactionRoutes } from '../src/domains/messaging/reactions.routes.ts';
+import { registerReactionRoutes, type ReactionRoutesDeps } from '../src/domains/messaging/reactions.routes.ts';
+import { createRepeatReadBrake } from '../src/domains/messaging/repeat-read-brake.ts';
 import type { ApiContext } from '../src/app/context.ts';
 import { fake } from './fakes/index.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
@@ -178,7 +179,7 @@ test('G69 routes preserve no-store reads and service authorization status', asyn
   // Every route answers no-store through the HTTP kit, as in the server.
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
   // A guest has no session: a visible room's reactions read fine, writing needs an account.
-  registerReactionRoutes(app, fake<ApiContext>({ resolveSession: async () => null }), {
+  registerReactionRoutes(app, fake<ApiContext>({ resolveSession: async () => null, clientIp: () => '203.0.113.7' }), {
     reactions: service({ requireVisible: async ({ conversation }) => conversation.id === 'room' })
   });
   const url = '/api/reactions/room/room/m';
@@ -187,4 +188,36 @@ test('G69 routes preserve no-store reads and service authorization status', asyn
   assert.equal(read.headers['cache-control'], 'no-store');
   const write = await app.inject({ method: 'PUT', url, payload: { emoji: '😀', active: true } });
   assert.equal(write.statusCode, 403);
+});
+
+test('a client re-reading one message in a loop is held and refused; other reads go on', async (t) => {
+  const app = fastify();
+  t.after(() => app.close());
+  registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
+  const held: number[] = [];
+  let reads = 0;
+  registerReactionRoutes(app, fake<ApiContext>({ resolveSession: async () => null, clientIp: () => '203.0.113.7' }), {
+    reactions: fake<ReactionRoutesDeps['reactions']>({
+      getSummaries: async () => {
+        reads += 1;
+        return [];
+      }
+    }),
+    repeatReads: createRepeatReadBrake({
+      allowed: 2,
+      sleep: async (ms) => {
+        held.push(ms);
+      }
+    })
+  });
+  const read = (messageId: string) => app.inject({ method: 'GET', url: `/api/reactions/dm/ada/${messageId}` });
+
+  assert.deepEqual([(await read('m1')).statusCode, (await read('m1')).statusCode], [200, 200]);
+  const repeat = await read('m1');
+  assert.equal(repeat.statusCode, 429);
+  assert.equal(repeat.json<{ code: string }>().code, 'rate_limited');
+  assert.deepEqual(held, [25_000], 'the repeat waited before it was refused');
+  assert.equal(reads, 2, 'a refused repeat reads nothing');
+
+  assert.equal((await read('m2')).statusCode, 200, 'another message is not braked');
 });
