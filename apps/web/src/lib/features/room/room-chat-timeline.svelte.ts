@@ -3,6 +3,7 @@
 // window, since paged history is account-only. Both keep the same list, so the
 // chat view adds, edits and removes messages without knowing which it has.
 
+import { ApiError } from '$lib/api/client';
 import { fetchRoomChat, fetchRoomChatPage, type ChatMessage } from '$lib/api/rooms';
 import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
 import { createAnchoredHistory } from './room-history.svelte';
@@ -19,8 +20,19 @@ export class RoomChatTimeline {
   /** Paged history (an account) rather than the recent window (a guest). */
   paged = $state(false);
 
+  // Paged history is for rooms the account keeps. A room just entered is not
+  // kept yet, and a temporary one never is; the API then answers room_forbidden.
+  #refused = false;
+
   #history = createAnchoredHistory<ChatMessage>({
-    loadPage: fetchRoomChatPage,
+    loadPage: async (roomId, request) => {
+      try {
+        return await fetchRoomChatPage(roomId, request);
+      } catch (error) {
+        if (error instanceof ApiError && error.code === 'room_forbidden') this.#refused = true;
+        throw error;
+      }
+    },
     compare: (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
     onChange: (state) => {
       this.messages = state.messages;
@@ -37,10 +49,16 @@ export class RoomChatTimeline {
     return this.messages.some((message) => message.id === messageId);
   }
 
-  /** Opens paged history around `anchorMessageId`, or at the newest message. */
-  open(roomId: string, anchorMessageId?: string): Promise<void> {
+  /**
+   * Opens paged history around `anchorMessageId`, or at the newest message. An
+   * account that is refused it reads the recent window instead, as a guest in
+   * the same room does.
+   */
+  async open(roomId: string, anchorMessageId?: string): Promise<void> {
     this.paged = true;
-    return this.#history.open(roomId, anchorMessageId);
+    this.#refused = false;
+    await this.#history.open(roomId, anchorMessageId);
+    if (this.#refused) await this.loadRecent(roomId);
   }
 
   /** Loads the recent window (the guest path); answers false when aborted. */

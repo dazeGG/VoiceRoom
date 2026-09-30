@@ -153,3 +153,19 @@ test('a thread stays behind the loading note until its emoji artwork has loaded'
   await vi.waitFor(() => expect(screen.queryByRole('status')).toBeNull());
   expect(document.querySelector('.lobby-dm-thread')?.classList.contains('is-settling')).toBe(false);
 });
+
+test("an open thread asks for each message's reactions once, however the answers come back", async () => {
+  const lobby = new LobbyStore();
+  open(lobby, ada, [message('m1', 'me', 'раз'), message('m2', 'ada', 'два'), message('m3', 'me', 'три')]);
+  const { calls } = stubFetch({
+    '/api/reactions/dm/ada/m1': { body: { ok: true, summaries: [] } },
+    '/api/reactions/dm/ada/m2': { body: { ok: true, summaries: [] } },
+    '/api/reactions/dm/ada/m3': { status: 500, body: { ok: false, error: 'boom' } }
+  });
+  render(DmView, { props: { self }, context: lobbyContext(lobby) });
+  await screen.findByText('три');
+  await new Promise((resolve) => setTimeout(resolve, 300));
+
+  const asked = calls.filter((call) => call.url.startsWith('/api/reactions/')).map((call) => call.url);
+  expect(asked.sort()).toEqual(['/api/reactions/dm/ada/m1', '/api/reactions/dm/ada/m2', '/api/reactions/dm/ada/m3']);
+});
