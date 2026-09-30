@@ -5,6 +5,8 @@ import RoomChatPanel from '../../src/lib/features/room/components/RoomChatPanel.
 import type { RoomMessage } from '@voice-room/shared/contracts/messages';
 import { stubFetch, type Reply } from '../fixtures/fetch.ts';
 import { installFakeWebSocket } from '../fixtures/fake-websocket.ts';
+import { authUser } from '../fixtures/users.ts';
+import { session } from '../../src/lib/features/auth/session.svelte';
 
 const NOW = Date.now();
 
@@ -46,7 +48,10 @@ beforeEach(() => {
   localStorage.clear();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  session.user = null;
+});
 
 function renderPanel(props: Record<string, unknown> = {}) {
   const base = {
@@ -209,4 +214,21 @@ test('messages sent while one is on its way go out in order; a failed one comes 
   await releaseNext();
   expect(await screen.findByText(/Сервер недоступен|Не удалось/)).toBeTruthy();
   await vi.waitFor(() => expect(composer().textContent).toMatch(/^третье\s*четвёртое$/));
+});
+
+test('an account refused paged history reads the recent window, like a guest, instead of an error', async () => {
+  // A room just entered is not kept yet (a temporary one never is), and paged
+  // history is for rooms the account keeps.
+  session.user = authUser();
+  const { calls } = stubRoom({
+    'GET /api/rooms/room/chat/history?mode=latest&limit=50': {
+      status: 403,
+      body: { ok: false, error: 'Room is not available', code: 'room_forbidden' }
+    }
+  });
+  renderPanel();
+
+  expect(await screen.findByText('от Ады')).toBeTruthy();
+  expect(screen.queryByText('Комната недоступна')).toBeNull();
+  expect(calls.some((call) => call.url === '/api/rooms/room/chat')).toBe(true);
 });
