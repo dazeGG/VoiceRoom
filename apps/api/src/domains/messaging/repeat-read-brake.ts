@@ -55,6 +55,9 @@ export function createRepeatReadBrake({
         await sleep(holdMs);
       } finally {
         held -= 1;
+        // The hold is not quiet time: the client asks again the moment it is
+        // refused, and must find the brake still on.
+        entry.last = now();
       }
     }
     return false;
