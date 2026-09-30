@@ -96,7 +96,9 @@
     background: var(--control);
     color: var(--warm-muted);
     cursor: pointer;
-    transition: background 0.15s ease, color 0.15s ease;
+    transition:
+      background 0.15s ease,
+      color 0.15s ease;
   }
 
   .ui-dialog-close:hover {

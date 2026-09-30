@@ -7,7 +7,8 @@
   import { goto } from '$app/navigation';
   import { X } from '@lucide/svelte';
   import { normalizeRecoveryCode } from '@voice-room/shared/account-security';
-  import { AuthRequestError, login, recoverAccount, register, restoreAccount, type AuthUser } from '$lib/api/auth';
+  import { login, recoverAccount, register, restoreAccount, type AuthUser } from '$lib/api/auth';
+  import { ApiError } from '$lib/api/client';
   import { iconMd } from '$lib/shared/ui/icons';
   import { LOGIN_HINT, PASSWORD_MIN_LENGTH, isValidPassword, normalizeLogin } from './account';
   import { session, setUser } from './session.svelte';
@@ -31,7 +32,10 @@
     onAuthenticated?: (user: AuthUser) => Promise<void> | void;
   } = $props();
 
-  const COPY: Record<AuthMode, { title: string; subtitle: string; submit: string; submitting: string; failure: string }> = {
+  const COPY: Record<
+    AuthMode,
+    { title: string; subtitle: string; submit: string; submitting: string; failure: string }
+  > = {
     login: {
       title: 'Вход',
       subtitle: 'Продолжите с сохранёнными комнатами и именем.',
@@ -101,7 +105,8 @@
   function validate(): string {
     if (isRegister && !normalizeLogin(loginValue)) return `Логин: ${LOGIN_HINT}`;
     if (isRecover && !normalizeLogin(loginValue)) return 'Введите логин аккаунта';
-    if (isRecover && !normalizeRecoveryCode(recoveryCode)) return 'Код восстановления — 16 символов, например ABCD-EFGH-JKMN-PQRS';
+    if (isRecover && !normalizeRecoveryCode(recoveryCode))
+      return 'Код восстановления — 16 символов, например ABCD-EFGH-JKMN-PQRS';
     if (!isLogin && !isValidPassword(password)) return `Пароль должен быть не короче ${PASSWORD_MIN_LENGTH} символов`;
     if (!isLogin && password !== passwordConfirm) return 'Пароли не совпадают';
     return '';
@@ -148,7 +153,7 @@
         leaving = await finish(user);
       }
     } catch (cause) {
-      if (isLogin && cause instanceof AuthRequestError && cause.code === 'account_deletion_pending') {
+      if (isLogin && cause instanceof ApiError && cause.code === 'account_deletion_pending') {
         pendingDeletionAt = Number(cause.details.deletionScheduledFor) || null;
         return;
       }
@@ -307,3 +312,111 @@
     {/if}
   </div>
 </dialog>
+
+<style>
+  :global(.auth-dialog-heading) {
+    padding-right: 44px;
+  }
+  :global(.auth-dialog-kicker) {
+    margin: 0 0 8px;
+    color: var(--accent);
+    font-family: var(--font-ui);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  :global(.auth-title) {
+    margin: 0;
+    color: var(--warm-ink);
+    font-family: var(--font-ui);
+    font-size: 23px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+  :global(.auth-subtitle) {
+    margin: 8px 0 0;
+    color: var(--warm-muted);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  :global(.auth-form) {
+    margin-top: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  :global(.auth-field) {
+    display: flex;
+    flex-direction: column;
+  }
+  :global(.auth-label) {
+    margin-bottom: 8px;
+    color: var(--warm-650);
+    font-family: var(--font-ui);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  :global(.auth-label-soft) {
+    color: #5a5547;
+    text-transform: none;
+    letter-spacing: 0.04em;
+  }
+  :global(.auth-submit) {
+    margin-top: 6px;
+    width: 100%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    border: none;
+    border-radius: 12px;
+    padding: 14px 0;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  :where(.auth-submit):hover {
+    background: var(--accent-hover);
+  }
+  :where(.auth-submit):disabled {
+    cursor: default;
+    opacity: 0.75;
+  }
+  :global(.auth-error) {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    border: 1px solid rgba(214, 109, 92, 0.4);
+    border-radius: 11px;
+    padding: 10px 13px;
+    background: color-mix(in oklch, var(--coral) 12%, transparent);
+    color: var(--coral-soft);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+  :global(.auth-restore) {
+    display: grid;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid color-mix(in oklch, var(--amber), transparent 55%);
+    border-radius: 11px;
+    background: color-mix(in oklch, var(--amber), transparent 88%);
+  }
+  :where(.auth-restore) p {
+    margin: 0;
+    color: var(--warm-ink);
+    font-size: 13.5px;
+    line-height: 1.45;
+  }
+  :where(.auth-restore) .auth-submit {
+    margin-top: 0;
+  }
+</style>

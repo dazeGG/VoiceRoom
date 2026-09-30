@@ -3,19 +3,23 @@
 // store only ever replaces its snapshot — there is no incremental merge to get
 // wrong.
 
-import {
-  fetchRoomPins,
-  pinRoomMessage,
-  pinSnapshot,
-  unpinRoomMessage,
-  type PinnedMessage
-} from '$lib/api/pins';
+import { fetchRoomPins, pinRoomMessage, pinSnapshot, unpinRoomMessage, type PinnedMessage } from '$lib/api/pins';
 
 export const roomPins = $state({
   roomId: '',
   pins: [] as PinnedMessage[],
-  loaded: false
+  loaded: false,
+  /** Whether the strip above the chat lists the pins or only counts them. */
+  expanded: false
 });
+
+// Every list the room gets goes through here. When the last pin goes the strip
+// folds back, so the next pin shows as a count again instead of reopening a
+// panel nobody asked for.
+function setPins(pins: PinnedMessage[]): void {
+  roomPins.pins = pins;
+  if (!pins.length) roomPins.expanded = false;
+}
 
 let inFlightRoomId = '';
 
@@ -26,14 +30,14 @@ export function isMessagePinned(messageId: string): boolean {
 export function resetRoomPins(): void {
   inFlightRoomId = '';
   roomPins.roomId = '';
-  roomPins.pins = [];
+  setPins([]);
   roomPins.loaded = false;
 }
 
 /** Applies a `room.pins` realtime payload. Ignores events for another room. */
 export function applyRoomPinsEvent(roomId: string, payload: { pins?: unknown; count?: unknown }): void {
   if (!roomId || roomId !== roomPins.roomId) return;
-  roomPins.pins = pinSnapshot(payload).pins;
+  setPins(pinSnapshot(payload).pins);
   roomPins.loaded = true;
 }
 
@@ -42,14 +46,14 @@ export async function loadRoomPins(roomId: string): Promise<void> {
   inFlightRoomId = roomId;
   if (roomPins.roomId !== roomId) {
     roomPins.roomId = roomId;
-    roomPins.pins = [];
+    setPins([]);
     roomPins.loaded = false;
   }
   try {
     const snapshot = await fetchRoomPins(roomId);
     // A room switch mid-request must not overwrite the new room's list.
     if (roomPins.roomId !== roomId) return;
-    roomPins.pins = snapshot.pins;
+    setPins(snapshot.pins);
     roomPins.loaded = true;
   } catch {
     if (roomPins.roomId === roomId) roomPins.loaded = true;
@@ -63,6 +67,6 @@ export async function togglePin(roomId: string, messageId: string): Promise<void
     ? await unpinRoomMessage(roomId, messageId)
     : await pinRoomMessage(roomId, messageId);
   if (roomPins.roomId !== roomId) return;
-  roomPins.pins = snapshot.pins;
+  setPins(snapshot.pins);
   roomPins.loaded = true;
 }

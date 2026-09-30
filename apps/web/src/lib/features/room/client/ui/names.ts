@@ -17,7 +17,7 @@ export function saveStartName(event: Event): void {
   saveNameFromValue(startUi.nameInput);
 }
 
-export function saveNameFromValue(rawValue: string): string {
+function saveNameFromValue(rawValue: string): string {
   const name = cleanDisplayName(rawValue);
   if (!name) {
     showToast('Введите имя');
@@ -84,7 +84,7 @@ export function resetGuestNameDialog(): void {
   reject?.();
 }
 
-export function setGuestNameDialogOpen(open: boolean): void {
+function setGuestNameDialogOpen(open: boolean): void {
   guestNameUi.open = open;
 }
 
@@ -109,7 +109,11 @@ export function handleGuestNameDialogClick(event: MouseEvent, input: HTMLInputEl
   }
 }
 
-export function handleGuestNameDialogKeydown(event: KeyboardEvent, dialog: HTMLElement, input: HTMLInputElement | null): void {
+export function handleGuestNameDialogKeydown(
+  event: KeyboardEvent,
+  dialog: HTMLElement,
+  input: HTMLInputElement | null
+): void {
   if (event.key === 'Escape') {
     event.preventDefault();
     input?.focus();
@@ -118,9 +122,9 @@ export function handleGuestNameDialogKeydown(event: KeyboardEvent, dialog: HTMLE
 
   if (event.key !== 'Tab') return;
 
-  const focusableElements = Array.from(
-    dialog.querySelectorAll<HTMLElement>('input, button')
-  ).filter((element) => !element.hasAttribute('disabled'));
+  const focusableElements = Array.from(dialog.querySelectorAll<HTMLElement>('input, button')).filter(
+    (element) => !element.hasAttribute('disabled')
+  );
   const first = focusableElements[0];
   const last = focusableElements.at(-1);
   if (!first || !last) return;
@@ -139,6 +143,8 @@ export function handleGuestNameDialogKeydown(event: KeyboardEvent, dialog: HTMLE
 
 export function persistName(name: string): void {
   state.savedName = name;
+  // A name saved elsewhere (the guest name dialog) fills an empty start form.
+  if (!startUi.nameInput) startUi.nameInput = name;
   localStorage.setItem('voice-room:name', name);
   updateNameStatuses(name);
 }

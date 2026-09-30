@@ -1,6 +1,6 @@
 import { wait } from './client/core/utils';
 import { playPeerCue } from './client/media/cues';
-import { leaveActiveRoomMembership } from '$lib/features/home/model/room-membership.svelte';
+import { leaveActiveRoomMembership } from '$lib/entities/room/room-membership.svelte';
 
 type LeaveHandler = () => void;
 type ControlHandler = () => void;

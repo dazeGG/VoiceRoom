@@ -1,10 +1,21 @@
+{
+  # TURN/TLS routing on :443, present only when TURN_ENABLED=true
+  # (config/caddy/entrypoint.sh copies the snippets into turn.d).
+  import /etc/caddy/turn.d/*.options
+}
+
+import /etc/caddy/turn.d/*.site
+
 {$DOMAIN} {
   encode zstd gzip
 
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
-    Content-Security-Policy "frame-ancestors 'none'; connect-src 'self' wss://{$LIVEKIT_DOMAIN} https://{$LIVEKIT_DOMAIN} stun: turn: turns:"
+    # The full policy (script hashes of this exact build, connect-src narrowed
+    # to LIVEKIT_DOMAIN) is generated when the image is built.
+    import /etc/caddy/csp.caddy
     Cross-Origin-Opener-Policy "same-origin"
+    X-Frame-Options "DENY"
     X-Content-Type-Options "nosniff"
     Referrer-Policy "same-origin"
     Permissions-Policy "microphone=(self), display-capture=(self), camera=(), geolocation=(), payment=()"
@@ -50,7 +61,7 @@
 }
 
 {$LIVEKIT_DOMAIN} {
-  encode zstd gzip
+  # Signaling is a WebSocket tunnel; compressing it only adds latency.
   reverse_proxy livekit-gate:3080
 
   header {

@@ -8,11 +8,13 @@
   import { closeChat, roomUi, selectRoomPanel, type RoomPanelTab } from '../room-ui.svelte';
   import { roomSettingsUi, openRoomSettings } from '../room-settings.svelte';
   import { showToast } from '../client/ui/toast';
-  import { friendsState } from '$lib/features/home/model/friends.svelte';
+  import { useRoomSocial } from '../social';
   import { getSortedParticipants } from '../participants-ui.svelte';
   import { markRoomChatRead } from '$lib/api/rooms';
-  import { roomPresence, setRoomUnreadCount } from '$lib/features/home/model/room-presence.svelte';
+  import { roomPresence, setRoomUnreadCount } from '$lib/entities/room/room-presence.svelte';
   import RoomCallTimer from './RoomCallTimer.svelte';
+
+  const social = useRoomSocial();
 
   const connection = $derived(getConnectionStatusView());
 
@@ -20,9 +22,15 @@
   // populates roomClientState.room* on join/rename, and these update without imperative DOM writes.
   const heading = $derived(roomClientState.roomName || roomClientState.roomId);
   const roomAccountIds = $derived(
-    new Set(getSortedParticipants().map((participant) => participant.accountUserId).filter(Boolean))
+    new Set(
+      getSortedParticipants()
+        .map((participant) => participant.accountUserId)
+        .filter(Boolean)
+    )
   );
-  const roomUnreadCount = $derived(Math.max(roomUi.unreadChat, roomPresence.unreadCountByRoomId[roomClientState.roomId] ?? 0));
+  const roomUnreadCount = $derived(
+    Math.max(roomUi.unreadChat, roomPresence.unreadCountByRoomId[roomClientState.roomId] ?? 0)
+  );
 
   function openRoomPanel(tab: RoomPanelTab): void {
     if (roomUi.chatOpen && roomUi.activePanel === tab) {
@@ -38,7 +46,6 @@
   function notifyRoomsChanged(): void {
     window.dispatchEvent(new CustomEvent('voice-room:rooms-changed', { detail: { roomId: roomClientState.roomId } }));
   }
-
 </script>
 
 <Topbar label="Новая голосовая комната" reload>
@@ -46,7 +53,7 @@
     <div class="room-heading-main">
       {#snippet roomInviteContent(close: () => void)}
         <RoomInviteFriendList
-          friends={friendsState.friends}
+          friends={social.friends()}
           roomId={roomClientState.roomId}
           presentUserIds={roomAccountIds}
           {close}
@@ -113,5 +120,10 @@
 </Topbar>
 
 <style>
-  .room-heading-actions { display: flex; flex: none; align-items: center; gap: 12px; }
+  .room-heading-actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 12px;
+  }
 </style>

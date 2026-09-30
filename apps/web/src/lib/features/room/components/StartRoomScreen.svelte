@@ -2,15 +2,9 @@
   import FeatureList from '$lib/shared/components/FeatureList.svelte';
   import { START_FEATURES } from '$lib/features/shared-content/start-features';
   import { state } from '../client/core/state.svelte';
-  import { createRoomFromStart, joinRoomByCode, handleRoomCodeKeydown } from '../client/room/room';
+  import { createRoomFromStart, joinRoomByCode, handleRoomCodeKeydown } from '../client/room/room-start';
   import { saveStartName, updateNameStatuses } from '../client/ui/names';
   import { startUi } from '../start-ui.svelte';
-
-  $effect(() => {
-    if (!startUi.nameInput && state.savedName) {
-      startUi.nameInput = state.savedName;
-    }
-  });
 </script>
 
 <main class="start-layout" id="startScreen" aria-label="Стартовый экран" hidden={state.screen !== 'start'}>
@@ -70,7 +64,45 @@
         />
       </label>
 
-      <button class="secondary-button" id="joinByCodeButton" type="button" onclick={joinRoomByCode}>Войти по коду</button>
+      <button class="secondary-button" id="joinByCodeButton" type="button" onclick={joinRoomByCode}
+        >Войти по коду</button
+      >
     </div>
   </section>
 </main>
+
+<style>
+  :global(.start-divider) {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    color: var(--muted);
+    font-size: 0.78rem;
+    font-weight: 800;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  :where(.start-divider)::before,
+  :where(.start-divider)::after {
+    height: 1px;
+    flex: 1;
+    background: var(--line);
+    content: '';
+  }
+  :global(.hero-title) {
+    margin: 18px 0 0;
+    font-family: var(--font-display);
+    font-weight: 700;
+    line-height: 1.03;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  :global(.hero-lead) {
+    margin: 22px 0 0;
+    max-width: 460px;
+    font-size: 17px;
+    font-weight: 400;
+    line-height: 1.55;
+    color: var(--hero-lead-ink, #b3ac9b);
+  }
+</style>

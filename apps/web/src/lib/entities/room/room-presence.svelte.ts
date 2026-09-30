@@ -1,0 +1,75 @@
+import type { RoomPeerSummary } from '@voice-room/shared/contracts/realtime';
+import type { RoomRealtimeSummary } from '$lib/api/realtime';
+import { untrack } from 'svelte';
+
+export const roomPresence = $state<{
+  peersByRoomId: Record<string, RoomPeerSummary[]>;
+  hiddenPeerCountByRoomId: Record<string, number>;
+  unreadCountByRoomId: Record<string, number>;
+}>({
+  peersByRoomId: {},
+  hiddenPeerCountByRoomId: {},
+  unreadCountByRoomId: {}
+});
+
+// Open chat views per room; a room being read keeps its unread count at zero.
+const roomChatReadSessions: Record<string, number> = {};
+
+function roomChatIsBeingRead(roomId: string): boolean {
+  return (roomChatReadSessions[roomId] ?? 0) > 0;
+}
+
+export function applyRoomSummary(summary: RoomRealtimeSummary): void {
+  roomPresence.peersByRoomId = {
+    ...roomPresence.peersByRoomId,
+    [summary.roomId]: summary.visiblePeers
+  };
+  roomPresence.hiddenPeerCountByRoomId = {
+    ...roomPresence.hiddenPeerCountByRoomId,
+    [summary.roomId]: summary.hiddenPeerCount
+  };
+  roomPresence.unreadCountByRoomId = {
+    ...roomPresence.unreadCountByRoomId,
+    [summary.roomId]: roomChatIsBeingRead(summary.roomId) ? 0 : (summary.unreadCount ?? 0)
+  };
+}
+
+export function setRoomUnreadCount(roomId: string, unreadCount: number): void {
+  const current = untrack(() => roomPresence.unreadCountByRoomId);
+  const nextUnreadCount = Math.max(0, unreadCount);
+  if (current[roomId] === nextUnreadCount) return;
+  roomPresence.unreadCountByRoomId = {
+    ...current,
+    [roomId]: nextUnreadCount
+  };
+}
+
+export function beginRoomChatReadSession(roomId: string): () => void {
+  if (!roomId) return () => {};
+  roomChatReadSessions[roomId] = (roomChatReadSessions[roomId] ?? 0) + 1;
+  setRoomUnreadCount(roomId, 0);
+
+  let active = true;
+  return () => {
+    if (!active) return;
+    active = false;
+    roomChatReadSessions[roomId] = Math.max(0, (roomChatReadSessions[roomId] ?? 1) - 1);
+  };
+}
+
+export function setRoomPresence(roomId: string, peers: RoomPeerSummary[], hiddenPeerCount = 0): void {
+  roomPresence.peersByRoomId = { ...roomPresence.peersByRoomId, [roomId]: peers };
+  roomPresence.hiddenPeerCountByRoomId = {
+    ...roomPresence.hiddenPeerCountByRoomId,
+    [roomId]: hiddenPeerCount
+  };
+}
+
+export function clearRoomPresence(roomId: string): void {
+  const { [roomId]: _peers, ...peersByRoomId } = roomPresence.peersByRoomId;
+  const { [roomId]: _hidden, ...hiddenPeerCountByRoomId } = roomPresence.hiddenPeerCountByRoomId;
+  const { [roomId]: _unread, ...unreadCountByRoomId } = roomPresence.unreadCountByRoomId;
+  roomPresence.peersByRoomId = peersByRoomId;
+  roomPresence.hiddenPeerCountByRoomId = hiddenPeerCountByRoomId;
+  roomPresence.unreadCountByRoomId = unreadCountByRoomId;
+}

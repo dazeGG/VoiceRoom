@@ -30,14 +30,18 @@
   const hasScreenSources = $derived(screenSourceUi.sources.some((s) => s.type === 'screen'));
   const hasWindowSources = $derived(screenSourceUi.sources.some((s) => s.type !== 'screen'));
   const showTabs = $derived(hasScreenSources && hasWindowSources);
-  const filteredSources = $derived(screenSourceUi.sources.filter((s) =>
-    screenSourceUi.tab === 'screens' ? s.type === 'screen' : s.type !== 'screen'
-  ));
+  const filteredSources = $derived(
+    screenSourceUi.sources.filter((s) => (screenSourceUi.tab === 'screens' ? s.type === 'screen' : s.type !== 'screen'))
+  );
   const selectedSource = $derived(screenSourceUi.sources.find((s) => s.id === screenSourceUi.selectedSourceId));
-  const qualityLabel = $derived(screenSourceUi.mode === 'text' ? 'Источник' : screenSourceUi.quality === 'high' ? '1080p' : '720p');
-  const fpsLabel = $derived(screenSourceUi.mode === 'text' ? '5 к/с' : '30 к/с');
+  const qualityLabel = $derived(
+    screenSourceUi.mode === 'text' ? 'Источник' : screenSourceUi.quality === 'high' ? '1080p' : '720p'
+  );
+  const fpsLabel = $derived(screenSourceUi.mode === 'text' ? '5 к/с' : `${screenSourceUi.fps} к/с`);
   const summaryName = $derived(selectedSource?.name ?? 'Не выбрано');
-  const summaryDetail = $derived(`${screenSourceUi.mode === 'text' ? 'Текст' : screenSourceUi.quality === 'high' ? 'HD' : 'SD'} · ${qualityLabel} · ${fpsLabel}${screenSourceUi.audio ? ' · звук' : ''}`);
+  const summaryDetail = $derived(
+    `${screenSourceUi.mode === 'text' ? 'Текст' : screenSourceUi.quality === 'high' ? 'HD' : 'SD'} · ${qualityLabel} · ${fpsLabel}${screenSourceUi.audio ? ' · звук' : ''}`
+  );
 
   $effect(() => {
     syncGuestNameDialogInert(guestNameUi.open, guestNameDialog ?? null);
@@ -48,7 +52,14 @@
   });
 </script>
 
-<div class="toast" id="toast" role="status" aria-live="polite" data-variant={toastUi.variant} data-visible={String(toastUi.visible)}>
+<div
+  class="toast"
+  id="toast"
+  role="status"
+  aria-live="polite"
+  data-variant={toastUi.variant}
+  data-visible={String(toastUi.visible)}
+>
   <span>{toastUi.message}</span>
   {#if toastUi.action && toastUi.actionLabel}
     <button type="button" onclick={() => void invokeToastAction()}>{toastUi.actionLabel}</button>
@@ -107,36 +118,31 @@
     <!-- Header -->
     <div class="screen-source-heading">
       <h2 id="screenSourceTitle">Выберите, что показать</h2>
-      <button
-        class="screen-source-close"
-        type="button"
-        aria-label="Отменить выбор"
-        onclick={cancelScreenSourcePicker}
-      >
+      <button class="screen-source-close" type="button" aria-label="Отменить выбор" onclick={cancelScreenSourcePicker}>
         <X {...iconMd} aria-hidden="true" />
       </button>
     </div>
 
     <!-- Tabs -->
     {#if showTabs}
-    <div class="screen-source-tabs">
-      <button
-        class="screen-source-tab"
-        aria-pressed={screenSourceUi.tab === 'screens'}
-        onclick={() => switchScreenTab('screens')}
-      >
-        <Monitor {...iconSm} aria-hidden="true" />
-        Экраны
-      </button>
-      <button
-        class="screen-source-tab"
-        aria-pressed={screenSourceUi.tab === 'windows'}
-        onclick={() => switchScreenTab('windows')}
-      >
-        <AppWindow {...iconSm} aria-hidden="true" />
-        Окна
-      </button>
-    </div>
+      <div class="screen-source-tabs">
+        <button
+          class="screen-source-tab"
+          aria-pressed={screenSourceUi.tab === 'screens'}
+          onclick={() => switchScreenTab('screens')}
+        >
+          <Monitor {...iconSm} aria-hidden="true" />
+          Экраны
+        </button>
+        <button
+          class="screen-source-tab"
+          aria-pressed={screenSourceUi.tab === 'windows'}
+          onclick={() => switchScreenTab('windows')}
+        >
+          <AppWindow {...iconSm} aria-hidden="true" />
+          Окна
+        </button>
+      </div>
     {/if}
 
     <!-- Source grid -->
@@ -148,7 +154,9 @@
           type="button"
           aria-pressed={selected}
           aria-label={source.name}
-          onclick={() => { screenSourceUi.selectedSourceId = source.id; }}
+          onclick={() => {
+            screenSourceUi.selectedSourceId = source.id;
+          }}
         >
           <span class="screen-source-preview">
             {#if source.thumbnail}
@@ -195,18 +203,39 @@
       <div class="screen-source-footer-actions">
         <!-- SD / HD toggle -->
         {#if screenSourceUi.mode === 'games'}
-        <div class="screen-source-res-toggle" role="group" aria-label="Качество">
-          <button
-            class="screen-source-res-btn"
-            aria-pressed={screenSourceUi.quality === 'balanced'}
-            onclick={() => { screenSourceUi.quality = 'balanced'; }}
-          >SD</button>
-          <button
-            class="screen-source-res-btn"
-            aria-pressed={screenSourceUi.quality === 'high'}
-            onclick={() => { screenSourceUi.quality = 'high'; }}
-          >HD</button>
-        </div>
+          <div class="screen-source-res-toggle" role="group" aria-label="Качество">
+            <button
+              class="screen-source-res-btn"
+              aria-pressed={screenSourceUi.quality === 'balanced'}
+              onclick={() => {
+                screenSourceUi.quality = 'balanced';
+              }}>SD</button
+            >
+            <button
+              class="screen-source-res-btn"
+              aria-pressed={screenSourceUi.quality === 'high'}
+              onclick={() => {
+                screenSourceUi.quality = 'high';
+              }}>HD</button
+            >
+          </div>
+          <div class="screen-source-res-toggle" role="group" aria-label="Частота кадров">
+            <button
+              class="screen-source-res-btn"
+              aria-pressed={screenSourceUi.fps === '30'}
+              onclick={() => {
+                screenSourceUi.fps = '30';
+              }}>30</button
+            >
+            <button
+              class="screen-source-res-btn"
+              aria-pressed={screenSourceUi.fps === '60'}
+              title="60 к/с: плавнее, но вдвое больше нагрузки на кодирование и сеть"
+              onclick={() => {
+                screenSourceUi.fps = '60';
+              }}>60</button
+            >
+          </div>
         {/if}
 
         <!-- Settings gear + popover -->
@@ -215,61 +244,69 @@
             class="screen-source-gear"
             aria-pressed={screenSourceUi.popOpen}
             title="Настройки стрима"
-            onclick={() => { screenSourceUi.popOpen = !screenSourceUi.popOpen; }}
+            onclick={() => {
+              screenSourceUi.popOpen = !screenSourceUi.popOpen;
+            }}
           >
             <Settings {...iconMd} aria-hidden="true" />
           </button>
 
           {#if screenSourceUi.popOpen}
-          <div class="screen-source-popover" role="dialog" aria-label="Настройки стрима">
-            <div class="screen-source-pop-label">Режим стрима</div>
-            <div class="screen-source-pop-presets">
+            <div class="screen-source-popover" role="dialog" aria-label="Настройки стрима">
+              <div class="screen-source-pop-label">Режим стрима</div>
+              <div class="screen-source-pop-presets">
+                <button
+                  class="screen-source-pop-preset"
+                  aria-pressed={screenSourceUi.mode === 'games'}
+                  onclick={() => {
+                    screenSourceUi.mode = 'games';
+                  }}
+                >
+                  <span class="screen-source-pop-icon">
+                    <Play {...iconSm} aria-hidden="true" />
+                  </span>
+                  <span class="screen-source-pop-info">
+                    <span class="screen-source-pop-title">Плавное видео</span>
+                    <span class="screen-source-pop-desc">30–60 к/с · для игр и видео</span>
+                  </span>
+                  <span class="screen-source-pop-radio" aria-hidden="true">
+                    {#if screenSourceUi.mode === 'games'}<span class="screen-source-pop-dot"></span>{/if}
+                  </span>
+                </button>
+                <button
+                  class="screen-source-pop-preset"
+                  aria-pressed={screenSourceUi.mode === 'text'}
+                  onclick={() => {
+                    screenSourceUi.mode = 'text';
+                  }}
+                >
+                  <span class="screen-source-pop-icon">
+                    <Type {...iconSm} aria-hidden="true" />
+                  </span>
+                  <span class="screen-source-pop-info">
+                    <span class="screen-source-pop-title">Чёткая картинка</span>
+                    <span class="screen-source-pop-desc">5 к/с · для текста и кода</span>
+                  </span>
+                  <span class="screen-source-pop-radio" aria-hidden="true">
+                    {#if screenSourceUi.mode === 'text'}<span class="screen-source-pop-dot"></span>{/if}
+                  </span>
+                </button>
+              </div>
+              <div class="screen-source-pop-sep"></div>
               <button
-                class="screen-source-pop-preset"
-                aria-pressed={screenSourceUi.mode === 'games'}
-                onclick={() => { screenSourceUi.mode = 'games'; }}
+                class="screen-source-pop-audio"
+                role="switch"
+                aria-checked={screenSourceUi.audio}
+                onclick={() => {
+                  screenSourceUi.audio = !screenSourceUi.audio;
+                }}
               >
-                <span class="screen-source-pop-icon">
-                  <Play {...iconSm} aria-hidden="true" />
-                </span>
-                <span class="screen-source-pop-info">
-                  <span class="screen-source-pop-title">Плавное видео</span>
-                  <span class="screen-source-pop-desc">30 к/с · для игр и видео</span>
-                </span>
-                <span class="screen-source-pop-radio" aria-hidden="true">
-                  {#if screenSourceUi.mode === 'games'}<span class="screen-source-pop-dot"></span>{/if}
-                </span>
-              </button>
-              <button
-                class="screen-source-pop-preset"
-                aria-pressed={screenSourceUi.mode === 'text'}
-                onclick={() => { screenSourceUi.mode = 'text'; }}
-              >
-                <span class="screen-source-pop-icon">
-                  <Type {...iconSm} aria-hidden="true" />
-                </span>
-                <span class="screen-source-pop-info">
-                  <span class="screen-source-pop-title">Чёткая картинка</span>
-                  <span class="screen-source-pop-desc">5 к/с · для текста и кода</span>
-                </span>
-                <span class="screen-source-pop-radio" aria-hidden="true">
-                  {#if screenSourceUi.mode === 'text'}<span class="screen-source-pop-dot"></span>{/if}
+                <span class="screen-source-pop-audio-label">Звук стрима</span>
+                <span class="screen-source-toggle" aria-hidden="true" data-on={screenSourceUi.audio}>
+                  <span class="screen-source-toggle-knob"></span>
                 </span>
               </button>
             </div>
-            <div class="screen-source-pop-sep"></div>
-            <button
-              class="screen-source-pop-audio"
-              role="switch"
-              aria-checked={screenSourceUi.audio}
-              onclick={() => { screenSourceUi.audio = !screenSourceUi.audio; }}
-            >
-              <span class="screen-source-pop-audio-label">Звук стрима</span>
-              <span class="screen-source-toggle" aria-hidden="true" data-on={screenSourceUi.audio}>
-                <span class="screen-source-toggle-knob"></span>
-              </span>
-            </button>
-          </div>
           {/if}
         </div>
 
@@ -294,4 +331,475 @@
   type="button"
   hidden={!startUi.soundButtonVisible}
   onclick={() => unlockAudio().catch((error) => log.warn('audio unlock failed', errorContext(error)))}
->Разрешить звук</button>
+  >Разрешить звук</button
+>
+
+<style>
+  :global(.guest-name-dialog) {
+    position: fixed;
+    inset: 0;
+    z-index: 22;
+    display: grid;
+    place-items: center;
+    padding: var(--space-lg);
+    background: color-mix(in srgb, var(--warm-950) 76%, transparent);
+  }
+  :global(.guest-name-panel) {
+    display: grid;
+    width: min(430px, 100%);
+    gap: var(--space-lg);
+    border: 1px solid oklch(36% 0.022 92);
+    border-radius: var(--radius-md);
+    padding: var(--space-lg);
+    background: var(--warm-800);
+    box-shadow: var(--shadow);
+  }
+  :global(.guest-name-form) {
+    display: grid;
+    gap: var(--space-md);
+  }
+  :global(.guest-name-error) {
+    min-height: 1.2em;
+    margin: calc(var(--space-xs) * -1) 0 0;
+    color: color-mix(in oklch, var(--coral), var(--ink) 22%);
+    font-size: 0.84rem;
+    font-weight: 750;
+  }
+  :global(.screen-source-close) {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 1px solid oklch(100% 0 0 / 0.1);
+    border-radius: 11px;
+    padding: 0;
+    background: var(--control);
+    color: oklch(72% 0.01 92);
+    transition:
+      background 140ms var(--ease-out),
+      color 140ms var(--ease-out);
+  }
+  :where(.screen-source-close):hover {
+    background: var(--control-hover);
+    color: oklch(96% 0.008 92);
+  }
+  :global(.screen-source-tabs) {
+    display: inline-flex;
+    gap: 4px;
+    margin: 20px 28px 0;
+    padding: 4px;
+    background: var(--warm-900);
+    border: 1px solid oklch(100% 0 0 / 0.08);
+    border-radius: 13px;
+  }
+  :global(.screen-source-tab) {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    border: none;
+    border-radius: 9px;
+    padding: 8px 15px;
+    background: transparent;
+    color: oklch(68% 0.01 92);
+    font-size: 0.84rem;
+    font-weight: 600;
+    transition: color 140ms var(--ease-out);
+  }
+  :where(.screen-source-tab)[aria-pressed='true'] {
+    background: var(--control-active);
+    color: oklch(8% 0.012 92);
+    font-weight: 700;
+  }
+  :where(.screen-source-tab):not([aria-pressed='true']):hover {
+    color: oklch(88% 0.008 92);
+  }
+  :global(.screen-source-option) {
+    display: grid;
+    min-width: 0;
+    grid-template-rows: auto minmax(42px, auto);
+    gap: 0;
+    border: 1.5px solid oklch(100% 0 0 / 0.08);
+    border-radius: 15px;
+    padding: 9px;
+    background: var(--panel);
+    color: inherit;
+    text-align: left;
+    transition:
+      border-color 140ms var(--ease-out),
+      background 140ms var(--ease-out);
+  }
+  :where(.screen-source-option)[aria-pressed='true'] {
+    border-color: oklch(91% 0.008 92 / 0.7);
+    background: var(--panel-strong);
+  }
+  :where(.screen-source-option):not([aria-pressed='true']):hover,
+  :where(.screen-source-option):not([aria-pressed='true']):focus-visible {
+    border-color: oklch(100% 0 0 / 0.2);
+    background: var(--control);
+  }
+  :global(.screen-source-preview) {
+    position: relative;
+    display: block;
+    width: 100%;
+    aspect-ratio: 16 / 10;
+    border-radius: 11px;
+    overflow: hidden;
+    background: var(--warm-950);
+  }
+  :where(.screen-source-preview) img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+  :global(.screen-source-placeholder) {
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+      135deg,
+      color-mix(in oklch, var(--control-line) 40%, transparent) 0 2px,
+      transparent 2px 11px
+    );
+  }
+  :global(.screen-source-ph-bar) {
+    position: absolute;
+    left: 11px;
+    top: 11px;
+    right: 11px;
+    height: 7px;
+    border-radius: 3px;
+    background: var(--control-hover);
+  }
+  :global(.screen-source-ph-left) {
+    position: absolute;
+    left: 11px;
+    top: 26px;
+    width: 38%;
+    bottom: 12px;
+    border-radius: 6px;
+    background: var(--control);
+  }
+  :global(.screen-source-ph-right) {
+    position: absolute;
+    left: calc(38% + 20px);
+    top: 26px;
+    right: 11px;
+    bottom: 12px;
+    border-radius: 6px;
+    background: var(--panel-strong);
+  }
+  :global(.screen-source-check) {
+    position: absolute;
+    top: 9px;
+    right: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--control-active);
+  }
+  :global(.screen-source-label) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    padding: 12px 4px 2px;
+    color: oklch(82% 0.009 92);
+    font-size: 0.875rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    transition: color 140ms var(--ease-out);
+  }
+  :where(.screen-source-option)[aria-pressed='true'] .screen-source-label {
+    color: oklch(96% 0.008 92);
+  }
+  :where(.screen-source-label) img {
+    width: 20px;
+    height: 20px;
+    flex: 0 0 auto;
+  }
+  :global(.screen-source-label svg) {
+    flex: 0 0 auto;
+    color: oklch(54% 0.01 92);
+    transition: color 140ms var(--ease-out);
+  }
+  :global(.screen-source-option[aria-pressed='true'] .screen-source-label svg) {
+    color: oklch(93% 0.008 92);
+  }
+  :where(.screen-source-label) > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  :global(.screen-source-footer) {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px;
+    border-top: 1px solid oklch(100% 0 0 / 0.07);
+    background: color-mix(in oklch, var(--warm-950), transparent 50%);
+    flex-wrap: wrap;
+  }
+  :global(.screen-source-summary) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+  }
+  :global(.screen-source-summary-icon) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 36px;
+    height: 36px;
+    border: 1px solid oklch(100% 0 0 / 0.09);
+    border-radius: 10px;
+    background: var(--control);
+    color: oklch(84% 0.009 92);
+  }
+  :global(.screen-source-summary-text) {
+    min-width: 0;
+  }
+  :global(.screen-source-summary-name) {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: oklch(96% 0.008 92);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  :global(.screen-source-summary-detail) {
+    font-size: 0.69rem;
+    font-family: var(--font-mono, monospace);
+    color: oklch(60% 0.012 92);
+    margin-top: 2px;
+  }
+  :global(.screen-source-footer-actions) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 auto;
+  }
+  :global(.screen-source-res-toggle) {
+    display: inline-flex;
+    gap: 3px;
+    padding: 3px;
+    background: var(--warm-900);
+    border: 1px solid oklch(100% 0 0 / 0.09);
+    border-radius: 11px;
+  }
+  :global(.screen-source-res-btn) {
+    border: none;
+    border-radius: 8px;
+    padding: 8px 16px;
+    background: transparent;
+    color: oklch(68% 0.01 92);
+    font-size: 0.81rem;
+    font-weight: 600;
+    transition:
+      background 140ms var(--ease-out),
+      color 140ms var(--ease-out);
+  }
+  :where(.screen-source-res-btn)[aria-pressed='true'] {
+    background: var(--control-active);
+    color: oklch(8% 0.012 92);
+    font-weight: 700;
+  }
+  :where(.screen-source-res-btn):not([aria-pressed='true']):hover {
+    color: oklch(88% 0.008 92);
+  }
+  :global(.screen-source-gear-wrap) {
+    position: relative;
+  }
+  :global(.screen-source-gear) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    flex: 0 0 auto;
+    border: 1px solid oklch(100% 0 0 / 0.09);
+    border-radius: 11px;
+    background: var(--control);
+    color: oklch(72% 0.01 92);
+    transition:
+      background 140ms var(--ease-out),
+      color 140ms var(--ease-out),
+      border-color 140ms var(--ease-out);
+  }
+  :where(.screen-source-gear)[aria-pressed='true'] {
+    border-color: oklch(91% 0.008 92 / 0.7);
+    background: var(--panel-strong);
+    color: oklch(96% 0.008 92);
+  }
+  :where(.screen-source-gear):not([aria-pressed='true']):hover {
+    background: var(--control-hover);
+    color: oklch(88% 0.008 92);
+  }
+  :global(.screen-source-popover) {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + 10px);
+    width: 320px;
+    z-index: 30;
+    padding: 16px;
+    background: var(--warm-800);
+    border: 1px solid oklch(100% 0 0 / 0.11);
+    border-radius: 16px;
+    box-shadow: 0 24px 60px oklch(0% 0 0 / 0.55);
+    animation: screen-pop 160ms var(--ease-out);
+    transform-origin: bottom right;
+  }
+  :global(.screen-source-pop-label) {
+    padding: 2px 4px 12px;
+    font-family: var(--font-ui, sans-serif);
+    font-size: 0.66rem;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: oklch(60% 0.012 92);
+  }
+  :global(.screen-source-pop-presets) {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  :global(.screen-source-pop-preset) {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    width: 100%;
+    padding: 9px;
+    border: 1px solid transparent;
+    border-radius: 11px;
+    background: transparent;
+    color: inherit;
+    text-align: left;
+    transition:
+      background 140ms var(--ease-out),
+      border-color 140ms var(--ease-out);
+  }
+  :where(.screen-source-pop-preset)[aria-pressed='true'] {
+    background: var(--panel-strong);
+    border-color: oklch(91% 0.008 92 / 0.28);
+  }
+  :where(.screen-source-pop-preset):not([aria-pressed='true']):hover {
+    background: var(--control);
+  }
+  :global(.screen-source-pop-icon) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: var(--control);
+    color: oklch(68% 0.01 92);
+    transition:
+      background 140ms var(--ease-out),
+      color 140ms var(--ease-out);
+  }
+  :where(.screen-source-pop-preset)[aria-pressed='true'] .screen-source-pop-icon {
+    background: var(--control-hover);
+    color: oklch(96% 0.008 92);
+  }
+  :global(.screen-source-pop-info) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+  }
+  :global(.screen-source-pop-title) {
+    font-size: 0.84rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    color: oklch(82% 0.009 92);
+    transition: color 140ms var(--ease-out);
+  }
+  :where(.screen-source-pop-preset)[aria-pressed='true'] .screen-source-pop-title {
+    color: oklch(96% 0.008 92);
+  }
+  :global(.screen-source-pop-desc) {
+    font-size: 0.72rem;
+    color: oklch(60% 0.012 92);
+    margin-top: 1px;
+  }
+  :global(.screen-source-pop-radio) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    width: 18px;
+    height: 18px;
+    border: 1.6px solid oklch(100% 0 0 / 0.22);
+    border-radius: 50%;
+    transition: border-color 140ms var(--ease-out);
+  }
+  :where(.screen-source-pop-preset)[aria-pressed='true'] .screen-source-pop-radio {
+    border-color: oklch(91% 0.008 92);
+  }
+  :global(.screen-source-pop-dot) {
+    display: block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--control-active);
+  }
+  :global(.screen-source-pop-sep) {
+    margin: 12px 0 0;
+    padding-top: 14px;
+    border-top: 1px solid oklch(100% 0 0 / 0.08);
+  }
+  :global(.screen-source-pop-audio) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    width: 100%;
+    padding: 9px 8px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: inherit;
+    transition: background 140ms var(--ease-out);
+  }
+  :where(.screen-source-pop-audio):hover {
+    background: var(--control);
+  }
+  :global(.screen-source-pop-audio-label) {
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: oklch(90% 0.008 92);
+  }
+  :global(.screen-source-launch) {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 42px;
+    padding: 0 20px;
+    border: none;
+    border-radius: 12px;
+    background: var(--control-active);
+    color: oklch(8% 0.012 92);
+    font-size: 0.91rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    transition:
+      transform 120ms var(--ease-out),
+      opacity 120ms var(--ease-out);
+  }
+  :where(.screen-source-launch):not(:disabled):hover {
+    transform: translateY(-1px);
+  }
+  :where(.screen-source-launch):disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+</style>

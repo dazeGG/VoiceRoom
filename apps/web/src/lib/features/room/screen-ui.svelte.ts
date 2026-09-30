@@ -6,6 +6,8 @@ import { getAllParticipants, getParticipantById } from './client/room/participan
 import type { Participant } from './client/core/types';
 
 export const screenUi = $state({
+  // Screen streams change in place (tracks come and go on the same MediaStream),
+  // which Svelte cannot see; the screen view bumps this after such a change.
   revision: 0,
   stageVisible: false,
   hasStream: false,
@@ -94,7 +96,7 @@ function getScreenViewers(ownerPeerId: string): Participant[] {
   return getAllParticipants().filter((participant) => participant.viewedScreenPeerId === ownerPeerId);
 }
 
-export function getViewerAvatarItem(viewer: Participant): AvatarStackItem {
+function getViewerAvatarItem(viewer: Participant): AvatarStackItem {
   const avatar = getAvatarPresentation(viewer);
   return {
     background: avatar.background,

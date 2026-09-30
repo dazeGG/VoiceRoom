@@ -21,7 +21,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-    command: ["node", "apps/api/src/scripts/migrate.js", "up"]
+    command: ["node", "apps/api/src/scripts/migrate.ts", "up"]
     environment:
       NODE_ENV: production
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
@@ -58,7 +58,8 @@ services:
       VOICE_ROOM_CURSOR_HMAC_KEYS: ${VOICE_ROOM_CURSOR_HMAC_KEYS:?set VOICE_ROOM_CURSOR_HMAC_KEYS in .env}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY in .env}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET in .env}
-      LIVEKIT_TOKEN_TTL_SECONDS: ${LIVEKIT_TOKEN_TTL_SECONDS:-21600}
+      LIVEKIT_TOKEN_TTL_SECONDS: ${LIVEKIT_TOKEN_TTL_SECONDS:-600}
+      LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS: ${LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS:-21600}
       LIVEKIT_ROOM_PREFIX: ${LIVEKIT_ROOM_PREFIX:-voice-room-}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
@@ -95,16 +96,6 @@ services:
       CLIENT_LOG_RATE_WINDOW_MS: ${CLIENT_LOG_RATE_WINDOW_MS:-60000}
       MAX_ROOM_BANS: ${MAX_ROOM_BANS:-100}
       POW_SECRET: ${POW_SECRET:-}
-      CAPABILITY_DESIRED: ${CAPABILITY_DESIRED:-{}}
-      CAPABILITY_READY_BINARY: ${CAPABILITY_READY_BINARY:-}
-      CAPABILITY_READY_SCHEMA: ${CAPABILITY_READY_SCHEMA:-}
-      CAPABILITY_READY_INDEX: ${CAPABILITY_READY_INDEX:-}
-      CAPABILITY_READY_CONFIG: ${CAPABILITY_READY_CONFIG:-}
-      CAPABILITY_READY_API: ${CAPABILITY_READY_API:-}
-      CAPABILITY_READY_WEB: ${CAPABILITY_READY_WEB:-}
-      CAPABILITY_READY_VISIBILITY: ${CAPABILITY_READY_VISIBILITY:-}
-      CAPABILITY_READY_WORKER: ${CAPABILITY_READY_WORKER:-}
-      CAPABILITY_READY_INTERNAL: ${CAPABILITY_READY_INTERNAL:-}
       UPLOADS_DIR: /data/uploads
       MEDIA_STORAGE_DIR: /data/media
       MEDIA_MIN_FREE_BYTES: ${MEDIA_MIN_FREE_BYTES:-2147483648}
@@ -129,7 +120,7 @@ services:
 
   message-delivery:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
-    restart: on-failure
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -146,7 +137,7 @@ services:
 
   notification-delivery:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
-    restart: on-failure
+    restart: unless-stopped
     expose: ["9464"]
     depends_on:
       postgres:
@@ -167,7 +158,7 @@ services:
 
   media-processing:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
-    restart: on-failure
+    restart: unless-stopped
     expose: ["9464"]
     depends_on:
       postgres:
@@ -188,7 +179,7 @@ services:
 
   media-maintenance:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
-    restart: on-failure
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -207,7 +198,7 @@ services:
 
   media-reconciliation:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
-    restart: on-failure
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -237,6 +228,10 @@ services:
       LIVEKIT_DOMAIN: ${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}
       LIVEKIT_GATE_PUBLIC_URL: ${LIVEKIT_GATE_PUBLIC_URL:-wss://${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}}
       API_METRICS_ALLOWED_REMOTE: ${API_METRICS_ALLOWED_REMOTE:-127.0.0.1}
+      # TURN/TLS on :443 for networks that block UDP and non-web ports. Needs a
+      # DNS record for TURN_DOMAIN pointing at this host (README, "TURN").
+      TURN_ENABLED: ${TURN_ENABLED:-false}
+      TURN_DOMAIN: ${TURN_DOMAIN:-}
     ports:
       - "80:80"
       - "443:443"
@@ -258,20 +253,40 @@ services:
           tcp_port: 7881
           udp_port: 7882
           use_external_ip: true
+        # The API admits at most MAX_ROOM_PEERS; the SFU cap is a backstop with
+        # room for a reconnecting peer's old and new session to overlap.
+        room:
+          max_participants: ${LIVEKIT_MAX_PARTICIPANTS:-24}
+        # Embedded TURN. TLS is terminated by Caddy on :443 (external_tls), so
+        # LiveKit advertises turns:TURN_DOMAIN:443 and listens on 5349 inside
+        # the compose network; TURN/UDP is published on 3478.
+        turn:
+          enabled: ${TURN_ENABLED:-false}
+          domain: "${TURN_DOMAIN:-}"
+          tls_port: 5349
+          udp_port: 3478
+          external_tls: true
+          # Relayed media comes back to the node IP, so the relay ports must be
+          # published like the RTC ports (one port per relayed participant).
+          relay_range_start: 30000
+          relay_range_end: 30099
         keys:
           "${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY in .env}": "${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET in .env}"
     expose:
       - "7880"
+      - "5349"
       - "${LIVEKIT_METRICS_PORT:-6789}"
     ports:
       - "${LIVEKIT_METRICS_BIND_ADDRESS:-127.0.0.1}:${LIVEKIT_METRICS_PORT:-6789}:${LIVEKIT_METRICS_PORT:-6789}"
       - "7881:7881/tcp"
       - "7882:7882/udp"
+      - "3478:3478/udp"
+      - "30000-30099:30000-30099/udp"
 
   livekit-gate:
     image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
     restart: unless-stopped
-    command: ["node", "apps/api/src/domains/admission/livekit-auth-gate-service.js"]
+    command: ["node", "apps/api/src/domains/admission/livekit-auth-gate.service.ts"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -283,6 +298,7 @@ services:
       NODE_ENV: production
       LIVEKIT_GATE_SECRET: ${LIVEKIT_GATE_SECRET:?set LIVEKIT_GATE_SECRET in .env}
       LIVEKIT_INTERNAL_URL: ws://livekit:7880
+      LIVEKIT_ROOM_PREFIX: ${LIVEKIT_ROOM_PREFIX:-voice-room-}
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
     expose:
       - "3080"

@@ -6,7 +6,7 @@
  * a renderer we control: Windows ships no flag glyphs, so `🇷🇺` comes out as
  * the letters "RU" there, and every OS draws the rest of the set differently.
  * The files are generated into `static/emoji/` from the pinned
- * `@discordapp/twemoji` package — see `scripts/build-emoji-assets.mjs`.
+ * `@discordapp/twemoji` package — see `scripts/build-emoji-assets.ts`.
  */
 
 /** Every code point of the sequence, upper-case hex, joined by `-`. */

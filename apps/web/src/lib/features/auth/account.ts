@@ -6,7 +6,9 @@ export const LOGIN_HINT = '3–32 символа: латиница, цифры, 
 // Client-side mirrors of the API validators. The server stays authoritative —
 // these only keep the forms from posting obviously invalid input.
 export function normalizeLogin(value: string): string {
-  const login = String(value || '').trim().toLowerCase();
+  const login = String(value || '')
+    .trim()
+    .toLowerCase();
   return /^[a-z0-9._-]{3,32}$/.test(login) ? login : '';
 }
 

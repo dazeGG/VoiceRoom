@@ -65,7 +65,12 @@
     <Avatar {name} src={avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={avatarSize} />
     <Ellipsis text={name} title={roomId} class={`room-menu-title ${titleClass}`.trim()} />
     {#if roomMuted}
-      <span class="room-menu-notifications-muted" role="img" aria-label="Уведомления отключены" title="Уведомления отключены">
+      <span
+        class="room-menu-notifications-muted"
+        role="img"
+        aria-label="Уведомления отключены"
+        title="Уведомления отключены"
+      >
         <BellOff {...iconSm} aria-hidden="true" />
       </span>
     {/if}

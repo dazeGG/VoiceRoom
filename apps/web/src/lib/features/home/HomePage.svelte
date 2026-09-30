@@ -18,17 +18,17 @@
   import AuthDialog, { type AuthMode } from '$lib/features/auth/AuthDialog.svelte';
   import LobbyPage from './LobbyPage.svelte';
   import { copyText } from '$lib/shared/utils/clipboard';
-  import { triggerDesktopDownload } from './services/desktop-download';
+  import { triggerDesktopDownload } from '../../platform/desktop-download';
   import { dismissToast, pushToast, toastState, type ToastOptions } from './model/toasts.svelte';
-  import { ProfileCardHost } from './components/profile-card';
   import { syncPushNotificationState } from './model/push-notifications.svelte';
   import {
     DESKTOP_BUILDS,
     QUARANTINE_CMD,
     desktopDownloadLabel,
     detectDesktopBuildId,
-    formatDesktopReleaseMeta
-  } from './model/desktop-builds';
+    formatDesktopReleaseMeta,
+    type DesktopBuildId
+  } from '../../platform/desktop-builds';
 
   let { initialAuthMode = null }: { initialAuthMode?: AuthMode | null } = $props();
 
@@ -38,7 +38,7 @@
   let loggingOut = $state(false);
   let authLoadError = $state(false);
 
-  let selectedBuildId = $state('mac-arm64');
+  let selectedBuildId = $state<DesktopBuildId>('mac-arm64');
   let appOpen = $state(false);
   let appDownloadState = $state<'idle' | 'loading' | 'done'>('idle');
   let cmdCopied = $state(false);
@@ -60,7 +60,9 @@
 
   const selectedBuild = $derived(DESKTOP_BUILDS.find((build) => build.id === selectedBuildId) ?? DESKTOP_BUILDS[0]);
   const selectedAsset = $derived(release?.assets[selectedBuildId] ?? null);
-  const appMeta = $derived(formatDesktopReleaseMeta(selectedBuild, selectedAsset, release, releaseLoading, releaseError));
+  const appMeta = $derived(
+    formatDesktopReleaseMeta(selectedBuild, selectedAsset, release, releaseLoading, releaseError)
+  );
   const downloadLabel = $derived(desktopDownloadLabel(appDownloadState));
 
   $effect(() => {
@@ -80,7 +82,6 @@
       window.clearTimeout(downloadResetTimer);
     };
   });
-
 
   function retrySessionLoad(): void {
     if (!session.loaded) return;
@@ -226,7 +227,10 @@
       <div class="auth-session-error-card">
         <p class="auth-loader-kicker">Сессия не проверена</p>
         <h1>Не удалось проверить аккаунт</h1>
-        <p>Проверьте подключение к серверу и повторите попытку. Мы не будем показывать лобби или сбрасывать сессию, пока проверка не пройдет.</p>
+        <p>
+          Проверьте подключение к серверу и повторите попытку. Мы не будем показывать лобби или сбрасывать сессию, пока
+          проверка не пройдет.
+        </p>
         <button class="home-primary-button" type="button" onclick={retrySessionLoad}>Повторить</button>
       </div>
     </main>
@@ -280,6 +284,40 @@
   {/key}
 {/if}
 
-<ProfileCardHost onToast={(message) => pushToast(message)} />
-
 <ToastStack toasts={toastState.items} onDismiss={dismissToast} />
+
+<style>
+  :global(.auth-loader-lines) {
+    display: grid;
+    gap: 10px;
+    margin-top: 24px;
+  }
+  :where(.auth-loader-lines) span {
+    height: 10px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--control), var(--control-hover), var(--control));
+    animation: auth-loader-shimmer 1.4s ease-in-out infinite;
+  }
+  :where(.auth-loader-lines) span:nth-child(2) {
+    width: 78%;
+    margin-inline: auto;
+    animation-delay: 0.12s;
+  }
+  :where(.auth-loader-lines) span:nth-child(3) {
+    width: 58%;
+    margin-inline: auto;
+    animation-delay: 0.24s;
+  }
+  :global(.landing-layout) {
+    width: min(100%, 1120px);
+    margin-inline: auto;
+    padding-top: clamp(20px, 5vh, 56px);
+    display: flex;
+    flex-direction: column;
+    gap: 48px;
+  }
+  :global(.landing-app-section) {
+    width: min(100%, 460px);
+    margin-inline: auto;
+  }
+</style>

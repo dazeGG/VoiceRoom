@@ -1,4 +1,4 @@
-// The explicit extension is required because desktop-autostart.test.js imports
+// The explicit extension is required because desktop-autostart.test.ts imports
 // this module natively under Node, where neither the `$lib` alias nor an
 // extensionless specifier resolves.
 import { createLogger, errorContext } from '../shared/log.ts';

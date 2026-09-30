@@ -31,9 +31,7 @@
     <span class="mobile-start-orb"><MascotIcon variant="look" size={52} /></span>
     <p class="mobile-start-kicker">Комната по ссылке за секунду</p>
     <h1 id="mobileStartTitle">Голосовая комната прямо в браузере</h1>
-    <p class="mobile-start-lead">
-      Создайте временную комнату и отправьте ссылку друзьям. Имя и регистрация не нужны.
-    </p>
+    <p class="mobile-start-lead">Создайте временную комнату и отправьте ссылку друзьям. Имя и регистрация не нужны.</p>
 
     <Button variant="primary" type="button" disabled={creating} onclick={createTempRoom}>
       {#if creating}
@@ -50,8 +48,7 @@
     </ul>
 
     <p class="mobile-start-note">
-      Комната живёт, пока в ней есть люди. Свои комнаты, друзья и личные сообщения —
-      на компьютере или в приложении.
+      Комната живёт, пока в ней есть люди. Свои комнаты, друзья и личные сообщения — на компьютере или в приложении.
     </p>
   </section>
 </main>

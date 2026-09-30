@@ -15,13 +15,11 @@
   let { participant, variant = 'grid' }: { participant: Participant; variant?: 'grid' | 'focus' | 'strip' } = $props();
 
   let tile = $state<HTMLElement>();
-  let imageFailed = $state(false);
+  // A new avatar gets a fresh attempt: only the URL that failed stays hidden.
+  let failedAvatarUrl = $state<string | null>(null);
 
   const avatar = $derived(getAvatarPresentation(participant));
-  $effect(() => {
-    participant.avatarUrl;
-    imageFailed = false;
-  });
+  const imageFailed = $derived(failedAvatarUrl !== null && failedAvatarUrl === avatar.src);
   const viewing = $derived(roomState.viewedScreenPeerId === participant.id);
   const canWatch = $derived(!participant.isLocal && participant.screen && !viewing);
   const screenActionLabel = $derived(roomState.screenRequesting ? 'Подключение' : 'Смотреть экран');
@@ -31,7 +29,9 @@
   // spotlights are mutually exclusive, so entering one leaves the other.
   function activateParticipant(): void {
     if (roomState.viewedScreenPeerId) {
-      void leaveScreenView({ quiet: true, keepPreview: true }).catch((error) => log.error('screen view action failed', errorContext(error)));
+      void leaveScreenView({ quiet: true, keepPreview: true }).catch((error) =>
+        log.error('screen view action failed', errorContext(error))
+      );
     }
     toggleParticipantFocus(participant.id);
   }
@@ -96,14 +96,22 @@
 >
   <div class="voice-ring" aria-hidden="true">
     <span class="avatar">
-      {#if avatar.src && !imageFailed}<img src={avatar.src} alt="" onerror={() => (imageFailed = true)} />{:else}{avatar.initials}{/if}
+      {#if avatar.src && !imageFailed}<img
+          src={avatar.src}
+          alt=""
+          onerror={() => (failedAvatarUrl = avatar.src)}
+        />{:else}{avatar.initials}{/if}
     </span>
   </div>
   <div class="participant-copy">
     <h2>
       <span class="participant-name"><EmojiText text={participant.name} /></span>
-      <span class="participant-muted-icon" aria-label="Микрофон выключен" title="Микрофон выключен"><MicOff {...iconSm} /></span>
-      <span class="participant-deafened-icon" aria-label="Звук выключен" title="Звук выключен"><HeadphoneOff {...iconSm} /></span>
+      <span class="participant-muted-icon" aria-label="Микрофон выключен" title="Микрофон выключен"
+        ><MicOff {...iconSm} /></span
+      >
+      <span class="participant-deafened-icon" aria-label="Звук выключен" title="Звук выключен"
+        ><HeadphoneOff {...iconSm} /></span
+      >
     </h2>
     {#if participant.statusLabel}
       <p>{participant.statusLabel}</p>

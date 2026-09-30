@@ -25,7 +25,11 @@ async function fillRegistration(page: Page, login: string): Promise<void> {
   await dialog.getByRole('button', { name: 'Создать аккаунт', exact: true }).click();
 }
 
-test('a guest creates an account from the room and is back in the same call as that account', async ({ browser, page, baseURL }) => {
+test('a guest creates an account from the room and is back in the same call as that account', async ({
+  browser,
+  page,
+  baseURL
+}) => {
   await registerViaUi(page, uniqueLogin('ctahost'));
   const roomName = `CTA ${uniqueLogin('room')}`;
   const roomId = await createPermanentRoom(page, roomName);
@@ -46,16 +50,22 @@ test('a guest creates an account from the room and is back in the same call as t
     await expect(guest.getByRole('button', { name: 'Открыть снова' })).toHaveCount(0);
     await expect(guest.getByRole('complementary', { name: 'Создать аккаунт' })).toHaveCount(0);
 
-    const me = await (await guest.context().request.get('/api/auth/me')).json() as { user: { login: string } | null };
+    const me = (await (await guest.context().request.get('/api/auth/me')).json()) as { user: { login: string } | null };
     expect(me.user?.login).toBe(login);
-    const rooms = await (await guest.context().request.get('/api/auth/rooms')).json() as { rooms?: Array<{ roomId: string }> };
+    const rooms = (await (await guest.context().request.get('/api/auth/rooms')).json()) as {
+      rooms?: Array<{ roomId: string }>;
+    };
     expect(rooms.rooms?.some((room) => room.roomId === roomId)).toBe(true);
   } finally {
     await guest.context().close();
   }
 });
 
-test('a guest leaving a permanent room is offered an account that keeps the room', async ({ browser, page, baseURL }) => {
+test('a guest leaving a permanent room is offered an account that keeps the room', async ({
+  browser,
+  page,
+  baseURL
+}) => {
   await registerViaUi(page, uniqueLogin('leavehost'));
   const roomName = `Leave ${uniqueLogin('room')}`;
   const roomId = await createPermanentRoom(page, roomName);
@@ -68,10 +78,7 @@ test('a guest leaving a permanent room is offered an account that keeps the room
     await screen.getByRole('button', { name: 'Создать аккаунт' }).click();
 
     const login = uniqueLogin('leaveguest');
-    await Promise.all([
-      guest.waitForURL((url) => url.pathname === '/'),
-      fillRegistration(guest, login)
-    ]);
+    await Promise.all([guest.waitForURL((url) => url.pathname === '/'), fillRegistration(guest, login)]);
     await expect(guest.locator('.lv-card', { hasText: roomName }).first()).toBeVisible({ timeout: 15_000 });
   } finally {
     await guest.context().close();

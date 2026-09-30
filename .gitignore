@@ -20,18 +20,16 @@ pnpm-debug.log*
 
 # Local scratch and generated artifacts
 graphify-out/
-.graphify/branch.json
-.graphify/worktree.json
-.graphify/needs_update
-.graphify/cache/
-.graphify/manifest.json
+# The knowledge graph is rebuilt locally (graphify update .); it is large and
+# goes stale between commits, so none of it is tracked.
+.graphify/
 work/
 outputs/
 deploy/
 dist/
 apps/web/build/
 apps/web/dist/
-apps/web/.svelte-kit/
+.svelte-kit/
 apps/api/uploads/
 # Downloaded DB-IP City Lite database (scripts/geoip/fetch-dbip-city-lite.mjs)
 /geoip/
@@ -42,6 +40,8 @@ caddy_config/
 
 # Test and coverage output
 coverage/
+# ...but not the coverage gate scripts.
+!scripts/coverage/
 .nyc_output/
 
 # Playwright e2e output
@@ -51,8 +51,5 @@ playwright-report/
 .claude/
 .omc/
 
-# Generated emoji artwork (see apps/web/scripts/build-emoji-assets.mjs)
+# Generated emoji artwork (see apps/web/scripts/build-emoji-assets.ts)
 apps/web/static/emoji/
-.graphify/.graphify_*
-.graphify/description-instructions/
-.graphify/label-instructions/

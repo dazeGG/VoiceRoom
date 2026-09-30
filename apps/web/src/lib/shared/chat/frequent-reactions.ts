@@ -16,15 +16,16 @@ export function frequentReactionKey(namespace: string, userId: string): string {
   return `${namespace}:${userId}`;
 }
 
-export function rankFrequentReactions(
-  entries: readonly FrequentReaction[],
-  limit = 3
-): FrequentReaction[] {
+export function rankFrequentReactions(entries: readonly FrequentReaction[], limit = 3): FrequentReaction[] {
   const byEmoji = new Map<string, FrequentReaction>();
   for (const entry of entries) {
     if (!entry.emoji) continue;
     const previous = byEmoji.get(entry.emoji);
-    if (!previous || entry.count > previous.count || (entry.count === previous.count && entry.lastUsedAt > previous.lastUsedAt)) {
+    if (
+      !previous ||
+      entry.count > previous.count ||
+      (entry.count === previous.count && entry.lastUsedAt > previous.lastUsedAt)
+    ) {
       byEmoji.set(entry.emoji, {
         emoji: entry.emoji,
         count: Math.max(0, entry.count),
@@ -33,7 +34,10 @@ export function rankFrequentReactions(
     }
   }
   return [...byEmoji.values()]
-    .sort((left, right) => right.count - left.count || right.lastUsedAt - left.lastUsedAt || left.emoji.localeCompare(right.emoji))
+    .sort(
+      (left, right) =>
+        right.count - left.count || right.lastUsedAt - left.lastUsedAt || left.emoji.localeCompare(right.emoji)
+    )
     .slice(0, limit);
 }
 
@@ -51,11 +55,13 @@ function normalizeEntries(value: unknown): FrequentReaction[] {
     if (!entry || typeof entry !== 'object') return [];
     const candidate = entry as Partial<FrequentReaction>;
     if (typeof candidate.emoji !== 'string') return [];
-    return [{
-      emoji: candidate.emoji,
-      count: Number.isFinite(candidate.count) ? Math.max(0, Number(candidate.count)) : 0,
-      lastUsedAt: Number.isFinite(candidate.lastUsedAt) ? Math.max(0, Number(candidate.lastUsedAt)) : 0
-    }];
+    return [
+      {
+        emoji: candidate.emoji,
+        count: Number.isFinite(candidate.count) ? Math.max(0, Number(candidate.count)) : 0,
+        lastUsedAt: Number.isFinite(candidate.lastUsedAt) ? Math.max(0, Number(candidate.lastUsedAt)) : 0
+      }
+    ];
   });
   const seen = new Set(entries.map((entry) => entry.emoji));
   for (const seed of seededEntries()) {

@@ -11,30 +11,12 @@
     Volume2,
     VolumeX
   } from '@lucide/svelte';
-  import {
-    banRoomPeer,
-    kickRoomPeer,
-    setRoomPeerServerMute,
-    undoRoomBan
-  } from '$lib/api/rooms';
+  import { banRoomPeer, kickRoomPeer, setRoomPeerServerMute, undoRoomBan } from '$lib/api/rooms';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { session } from '$lib/features/auth/session.svelte';
-  import {
-    acceptRequestByUserId,
-    addFriendByUserId,
-    getFriendRelationship,
-    openDm,
-    removeFriend,
-    setMode
-  } from '$lib/features/home/model/friends.svelte';
-  import { openProfileCardFor } from '$lib/features/home/profile-card-ui.svelte';
-  import {
-    ContextMenu,
-    PopoverDivider,
-    PopoverMenuItem,
-    PopoverMenuLabel,
-    Slider
-  } from '$lib/shared/ui';
+  import { useRoomSocial } from '../social';
+  import { openProfileCardFor } from '$lib/entities/profile-card/profile-card-ui.svelte';
+  import { ContextMenu, PopoverDivider, PopoverMenuItem, PopoverMenuLabel, Slider } from '$lib/shared/ui';
   import {
     getParticipantAudioPreference,
     getParticipantAudioPreferenceKey,
@@ -44,12 +26,11 @@
   import { getParticipantById } from '../client/room/participants';
   import { showToast } from '../client/ui/toast';
   import { participantProfilePerson } from '../profile-card-adapter';
-  import {
-    closeParticipantContextMenu,
-    participantContextMenu
-  } from '../participant-context-ui.svelte';
+  import { closeParticipantContextMenu, participantContextMenu } from '../participant-context-ui.svelte';
   import { roomSettingsUi } from '../room-settings.svelte';
   import { state as roomState } from '../client/core/state.svelte';
+
+  const social = useRoomSocial();
 
   let volumePercent = $state(100);
   let localMuted = $state(false);
@@ -66,7 +47,7 @@
   );
   const canModerate = $derived(Boolean(peer && roomSettingsUi.isOwner && !peer.isLocal));
   const relationship = $derived(
-    canUseSocialActions && peer?.accountUserId ? getFriendRelationship(peer.accountUserId) : 'none'
+    canUseSocialActions && peer?.accountUserId ? social.relationship(peer.accountUserId) : 'none'
   );
 
   $effect(() => {
@@ -96,12 +77,14 @@
     closeParticipantContextMenu(peer.id, false);
     void action()
       .catch((error) => showToast(errorToastMessage(error, fallback), { variant: 'error' }))
-      .finally(() => { moderating = false; });
+      .finally(() => {
+        moderating = false;
+      });
   }
 
   function showProfile(event: MouseEvent): void {
     if (!peer?.accountUserId) return;
-    const person = participantProfilePerson(peer);
+    const person = participantProfilePerson(social, peer);
     const anchor = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
     const anchorRect = anchor?.getBoundingClientRect() ?? null;
     const restoreFocus = participantContextMenu.restoreFocus;
@@ -125,8 +108,8 @@
     const accountUserId = peer?.accountUserId;
     if (!accountUserId) return;
     act(async () => {
-      setMode('friends');
-      await openDm(accountUserId);
+      social.showFriends();
+      await social.openDm(accountUserId);
     }, 'Не удалось открыть личные сообщения');
   }
 
@@ -134,7 +117,7 @@
     const accountUserId = peer?.accountUserId;
     if (!accountUserId) return;
     act(async () => {
-      const result = await addFriendByUserId(accountUserId);
+      const result = await social.addFriend(accountUserId);
       showToast(friendRequestToast(result.status));
     }, 'Не удалось отправить заявку в друзья');
   }
@@ -143,7 +126,7 @@
     const accountUserId = peer?.accountUserId;
     if (!accountUserId) return;
     act(async () => {
-      await acceptRequestByUserId(accountUserId);
+      await social.acceptRequest(accountUserId);
       showToast('Заявка принята');
     }, 'Не удалось принять заявку в друзья');
   }
@@ -153,7 +136,7 @@
     const name = peer?.name ?? 'Пользователь';
     if (!accountUserId) return;
     act(async () => {
-      await removeFriend(accountUserId);
+      await social.removeFriend(accountUserId);
       showToast(`${name} удалён из друзей`);
     }, 'Не удалось удалить из друзей');
   }
@@ -311,10 +294,22 @@
             </PopoverMenuItem>
           {/if}
 
-          <PopoverMenuItem role="button" label="Исключить из комнаты" variant="danger" disabled={moderating} onclick={kickParticipant}>
+          <PopoverMenuItem
+            role="button"
+            label="Исключить из комнаты"
+            variant="danger"
+            disabled={moderating}
+            onclick={kickParticipant}
+          >
             {#snippet icon()}<LogOut {...iconMd} aria-hidden="true" />{/snippet}
           </PopoverMenuItem>
-          <PopoverMenuItem role="button" label="Заблокировать в комнате" variant="danger" disabled={moderating} onclick={banParticipant}>
+          <PopoverMenuItem
+            role="button"
+            label="Заблокировать в комнате"
+            variant="danger"
+            disabled={moderating}
+            onclick={banParticipant}
+          >
             {#snippet icon()}<Ban {...iconMd} aria-hidden="true" />{/snippet}
           </PopoverMenuItem>
         {/if}

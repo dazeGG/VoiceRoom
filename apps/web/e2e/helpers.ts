@@ -26,7 +26,10 @@ export async function waitForHttpReady(
 // keep it lowercase alphanumeric.
 export function uniqueLogin(prefix = 'e2e'): string {
   const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  return `${prefix}${stamp}`.toLowerCase().replace(/[^a-z0-9_]/g, '').slice(0, 32);
+  return `${prefix}${stamp}`
+    .toLowerCase()
+    .replace(/[^a-z0-9_]/g, '')
+    .slice(0, 32);
 }
 
 export const PASSWORD = 'e2e-password-123';
@@ -77,9 +80,7 @@ export async function createPermanentRoom(page: Page, name: string): Promise<str
   await expect(dialog.getByRole('tab', { name: 'Постоянная' })).toHaveAttribute('aria-selected', 'true');
   await dialog.getByPlaceholder('Название комнаты').fill(name);
   const [createdResponse] = await Promise.all([
-    page.waitForResponse(
-      (response) => response.url().endsWith('/api/rooms') && response.request().method() === 'POST'
-    ),
+    page.waitForResponse((response) => response.url().endsWith('/api/rooms') && response.request().method() === 'POST'),
     dialog.getByRole('button', { name: 'Создать комнату' }).click()
   ]);
   const created = (await createdResponse.json()) as { roomId?: string; error?: string };

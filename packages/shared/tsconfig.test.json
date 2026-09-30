@@ -1,0 +1,11 @@
+{
+  // The tests run on Node, so unlike the shared sources they may use Node's
+  // types. Files that still carry `// @ts-nocheck` are not type-checked yet.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node"],
+    "noUnusedLocals": false
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts"],
+  "exclude": ["src/**/*.d.ts"]
+}

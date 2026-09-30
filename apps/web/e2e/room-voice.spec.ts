@@ -14,13 +14,19 @@ test('joining a room establishes voice through the public LiveKit gate', async (
     }
   };
   page.on('console', (message) => {
-    if (message.type() === 'error' || message.type() === 'warning' || message.text().includes('livekit_recovery_transition')) {
+    if (
+      message.type() === 'error' ||
+      message.type() === 'warning' ||
+      message.text().includes('livekit_recovery_transition')
+    ) {
       diagnostics.push(`console:${message.type()}:${message.text()}`);
     }
   });
   page.on('pageerror', (error) => diagnostics.push(`pageerror:${error.message}`));
   page.on('requestfailed', (request) => {
-    diagnostics.push(`requestfailed:${request.method()}:${diagnosticUrl(request.url())}:${request.failure()?.errorText || 'unknown'}`);
+    diagnostics.push(
+      `requestfailed:${request.method()}:${diagnosticUrl(request.url())}:${request.failure()?.errorText || 'unknown'}`
+    );
   });
   page.on('response', (response) => {
     if (response.url().includes('/api/livekit-token')) {
@@ -44,9 +50,7 @@ test('joining a room establishes voice through the public LiveKit gate', async (
   await expect(dialog).toBeVisible();
   await dialog.getByPlaceholder('Название комнаты').fill(`Voice join ${login}`);
   const [createdResponse] = await Promise.all([
-    page.waitForResponse(
-      (response) => response.url().endsWith('/api/rooms') && response.request().method() === 'POST'
-    ),
+    page.waitForResponse((response) => response.url().endsWith('/api/rooms') && response.request().method() === 'POST'),
     dialog.getByRole('button', { name: 'Создать комнату' }).click()
   ]);
   expect(createdResponse.ok()).toBe(true);
@@ -58,18 +62,25 @@ test('joining a room establishes voice through the public LiveKit gate', async (
     await expect(connection).toContainText('Голос подключен', { timeout: 30_000 });
   } catch (error) {
     const status = await page.locator('.status-pill').allTextContents();
-    const toast = await page.locator('#toast').textContent().catch(() => '');
-    throw new Error([
-      error instanceof Error ? error.message : String(error),
-      `status-pills:${JSON.stringify(status)}`,
-      `toast:${toast || ''}`,
-      ...diagnostics.slice(-30)
-    ].join('\n'));
+    const toast = await page
+      .locator('#toast')
+      .textContent()
+      .catch(() => '');
+    throw new Error(
+      [
+        error instanceof Error ? error.message : String(error),
+        `status-pills:${JSON.stringify(status)}`,
+        `toast:${toast || ''}`,
+        ...diagnostics.slice(-30)
+      ].join('\n')
+    );
   }
   await expect(page.locator('#toast')).not.toContainText('LiveKit недоступен');
-  await expect.poll(() => observedSockets.some((socket) => (
-    socket.host === expectedLiveKitHost
-      && socket.path.startsWith('/rtc')
-      && socket.hasGateCredential
-  ))).toBe(true);
+  await expect
+    .poll(() =>
+      observedSockets.some(
+        (socket) => socket.host === expectedLiveKitHost && socket.path.startsWith('/rtc') && socket.hasGateCredential
+      )
+    )
+    .toBe(true);
 });

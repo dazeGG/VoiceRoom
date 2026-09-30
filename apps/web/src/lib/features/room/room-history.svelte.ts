@@ -9,9 +9,18 @@ export interface AnchoredHistoryPage<T> {
 }
 
 interface AnchoredHistoryOptions<T extends { id: string }> {
-  loadPage: (scope: string, request: { mode: 'latest' | 'before' | 'around'; cursor?: string; messageId?: string; signal: AbortSignal }) => Promise<AnchoredHistoryPage<T>>;
+  loadPage: (
+    scope: string,
+    request: { mode: 'latest' | 'before' | 'around'; cursor?: string; messageId?: string; signal: AbortSignal }
+  ) => Promise<AnchoredHistoryPage<T>>;
   compare?: (left: T, right: T) => number;
-  onChange?: (state: { messages: T[]; loading: boolean; loadingOlder: boolean; hasMoreBefore: boolean; error: string }) => void;
+  onChange?: (state: {
+    messages: T[];
+    loading: boolean;
+    loadingOlder: boolean;
+    hasMoreBefore: boolean;
+    error: string;
+  }) => void;
 }
 
 export function createAnchoredHistory<T extends { id: string }>(options: AnchoredHistoryOptions<T>) {
@@ -68,9 +77,12 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
     state.error = '';
     notify();
     try {
-      const page = await options.loadPage(scope, messageId
-        ? { mode: 'around', messageId, signal: controller.signal }
-        : { mode: 'latest', signal: controller.signal });
+      const page = await options.loadPage(
+        scope,
+        messageId
+          ? { mode: 'around', messageId, signal: controller.signal }
+          : { mode: 'latest', signal: controller.signal }
+      );
       if (requestGeneration !== generation || controller.signal.aborted) return;
       state.messages = ordered([...page.messages]);
       state.before = page.pageInfo.before;

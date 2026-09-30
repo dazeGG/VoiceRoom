@@ -69,23 +69,43 @@
     {:else}
       <div class="profile-card-actions">
         {#if relationship === 'friend'}
-          <button class="profile-card-action profile-card-action--primary" type="button" disabled={busy} onclick={onMessage}>
+          <button
+            class="profile-card-action profile-card-action--primary"
+            type="button"
+            disabled={busy}
+            onclick={onMessage}
+          >
             <MessageSquare {...iconMd} aria-hidden="true" />
             Написать
           </button>
-          <button class="profile-card-action profile-card-action--danger" type="button" disabled={busy} onclick={onRemoveFriend}>
+          <button
+            class="profile-card-action profile-card-action--danger"
+            type="button"
+            disabled={busy}
+            onclick={onRemoveFriend}
+          >
             <UserMinus {...iconMd} aria-hidden="true" />
             Удалить из друзей
           </button>
         {:else if relationship === 'incoming'}
-          <button class="profile-card-action profile-card-action--primary" type="button" disabled={busy} onclick={onAcceptRequest}>
+          <button
+            class="profile-card-action profile-card-action--primary"
+            type="button"
+            disabled={busy}
+            onclick={onAcceptRequest}
+          >
             <Check {...iconMd} aria-hidden="true" />
             Принять заявку
           </button>
         {:else if relationship === 'outgoing'}
           <p class="profile-card-note">Заявка в друзья уже отправлена.</p>
         {:else}
-          <button class="profile-card-action profile-card-action--friendly" type="button" disabled={busy} onclick={onAddFriend}>
+          <button
+            class="profile-card-action profile-card-action--friendly"
+            type="button"
+            disabled={busy}
+            onclick={onAddFriend}
+          >
             <UserPlus {...iconMd} aria-hidden="true" />
             Добавить в друзья
           </button>
@@ -182,7 +202,6 @@
     gap: 8px;
   }
 
-
   .profile-card-action {
     display: inline-flex;
     align-items: center;
@@ -197,7 +216,9 @@
     font-size: 14.5px;
     font-weight: 800;
     cursor: pointer;
-    transition: background 0.14s ease, border-color 0.14s ease;
+    transition:
+      background 0.14s ease,
+      border-color 0.14s ease;
   }
 
   .profile-card-action:disabled {

@@ -2,14 +2,7 @@
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import type { EllipsisProps } from './types';
 
-  let {
-    text = '',
-    title,
-    class: className = '',
-    inline = false,
-    tag = 'span',
-    children
-  }: EllipsisProps = $props();
+  let { text = '', title, class: className = '', inline = false, tag = 'span', children }: EllipsisProps = $props();
 
   const resolvedTitle = $derived(title ?? text);
 </script>

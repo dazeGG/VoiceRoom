@@ -1,4 +1,4 @@
-import { SvelteMap } from 'svelte/reactivity';
+import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import {
   DEFAULT_SCREEN_FPS_ID,
   DEFAULT_SCREEN_PROFILE_ID,
@@ -10,6 +10,7 @@ import {
 } from '../core/config';
 import { getRoomIdFromPath, getStoredPeerSession } from '../core/session';
 import {
+  getStoredGateAuto,
   getStoredGateThresholdDb,
   getStoredMicrophoneMode,
   getStoredMicrophoneVolume,
@@ -31,10 +32,12 @@ export function createInitialRoomState(): AppState {
     connecting: false,
     voiceRealtimeTeardown: null,
     gateThresholdDb: getStoredGateThresholdDb(),
+    gateAuto: getStoredGateAuto(),
     joined: false,
     localConnectionQuality: 'unknown',
     livekitRoom: null,
     localPingMs: null,
+    localNetwork: { inboundLossPct: null, jitterMs: null, outboundLossPct: null, transport: null },
     localMicPublication: null,
     localScreenPublications: new Map(),
     localScreenAudioCapture: null,
@@ -73,15 +76,15 @@ export function createInitialRoomState(): AppState {
     screenMuted: false,
     screenRequesting: false,
     screenStarting: false,
-    screenCollapsedPeerIds: new Set(),
-    screenSubscribedPeerIds: new Set(),
+    screenCollapsedPeerIds: new SvelteSet(),
+    screenSubscribedPeerIds: new SvelteSet(),
     screenSourceRequest: null,
     screenStopping: false,
     screenVolume: getStoredStreamVolume(),
     stripCollapsed: false,
     self: null,
     serverConnection: 'idle',
-    serverPeerIds: new Set(),
+    serverPeerIds: new SvelteSet(),
     serverPeerSyncReady: false,
     sessionToken: peerSession.sessionToken,
     sharedScreenPeerId: '',

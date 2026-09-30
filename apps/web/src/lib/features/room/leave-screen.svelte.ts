@@ -9,7 +9,15 @@ export const leaveScreenUi = $state<{ open: boolean; roomId: string; isStatic: b
   guest: false
 });
 
-export function openLeaveScreen({ roomId, isStatic, guest }: { roomId: string; isStatic: boolean; guest: boolean }): void {
+export function openLeaveScreen({
+  roomId,
+  isStatic,
+  guest
+}: {
+  roomId: string;
+  isStatic: boolean;
+  guest: boolean;
+}): void {
   leaveScreenUi.roomId = roomId;
   leaveScreenUi.isStatic = isStatic;
   leaveScreenUi.guest = guest;

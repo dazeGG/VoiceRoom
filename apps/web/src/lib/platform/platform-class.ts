@@ -1,9 +1,5 @@
 import {
   classifyPlatform as classifySharedPlatform,
-  classifyPlatformPolicy as classifySharedPlatformPolicy,
-  platformPolicy as sharedPlatformPolicy,
-  PLATFORM_CLASS_CONTRACT,
-  PLATFORM_CLASSES,
   type PlatformClass,
   type PlatformPolicy,
   type PlatformSignals
@@ -24,12 +20,13 @@ function browserNavigator(): Navigator | null {
   return typeof navigator === 'undefined' ? null : navigator;
 }
 
-export function collectPlatformSignals(): PlatformSignals {
+function collectPlatformSignals(): PlatformSignals {
   const runtime = runtimeWindow()?.voiceRoomRuntime;
   const nav = browserNavigator();
-  const userAgentData = 'userAgentData' in (nav || {})
-    ? (nav as Navigator & { userAgentData?: { mobile?: boolean } }).userAgentData
-    : undefined;
+  const userAgentData =
+    'userAgentData' in (nav || {})
+      ? (nav as Navigator & { userAgentData?: { mobile?: boolean } }).userAgentData
+      : undefined;
 
   return {
     desktopBridge: runtime?.isDesktop === true,
@@ -44,17 +41,4 @@ export function classifyPlatform(input: PlatformSignals = collectPlatformSignals
   return classifySharedPlatform(input);
 }
 
-export function platformPolicy(platformClass: PlatformClass): PlatformPolicy {
-  return sharedPlatformPolicy(platformClass);
-}
-
-export function classifyPlatformPolicy(input: PlatformSignals = collectPlatformSignals()): PlatformPolicy {
-  return classifySharedPlatformPolicy(input);
-}
-
-export function isDesktopAllowed(input: PlatformSignals = collectPlatformSignals()): boolean {
-  return classifyPlatformPolicy(input).desktopAllowed;
-}
-
 export type { PlatformClass, PlatformPolicy, PlatformSignals };
-export { PLATFORM_CLASS_CONTRACT, PLATFORM_CLASSES };

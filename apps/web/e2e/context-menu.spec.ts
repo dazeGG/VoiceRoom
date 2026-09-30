@@ -105,7 +105,11 @@ test('friend rows open only the direct-message thread and do not expose a contex
   }
 });
 
-test('bookmarked room menu can remove the room from the list but cannot open owner settings', async ({ browser, page, baseURL }) => {
+test('bookmarked room menu can remove the room from the list but cannot open owner settings', async ({
+  browser,
+  page,
+  baseURL
+}) => {
   const ownerLogin = uniqueLogin('roomowner');
   const memberLogin = uniqueLogin('roommember');
   await registerViaUi(page, ownerLogin);

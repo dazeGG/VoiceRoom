@@ -56,9 +56,8 @@
   } = $props();
 
   let search = $state('');
-  let activeSectionKey = $state('frequent');
   let activeIndex = $state(0);
-  let skinTone = $state(NEUTRAL_TONE);
+  let skinTone = $state(loadSkinTone(SKIN_TONES.length));
   let toneMenuOpen = $state(false);
   let toneStripFor = $state('');
   let toneStripLeft = $state(0);
@@ -160,10 +159,6 @@
   const toneStripOptions = $derived(toneStripFor ? skinToneChoices(toneStripFor) : []);
 
   $effect(() => {
-    skinTone = loadSkinTone(SKIN_TONES.length);
-  });
-
-  $effect(() => {
     void tick().then(() => {
       searchInput?.focus();
       if (scroller) viewportHeight = scroller.clientHeight || viewportHeight;
@@ -176,14 +171,14 @@
 
   // Which category the reader is actually looking at, so the anchors stay honest
   // while they scroll instead of only when they click.
-  $effect(() => {
+  const activeSectionKey = $derived.by(() => {
     const position = scrollTop + 1;
     let current = layout.rows[0]?.sectionKey ?? 'frequent';
     for (const row of layout.rows) {
       if (row.kind !== 'header' || row.top > position) continue;
       current = row.sectionKey;
     }
-    activeSectionKey = current;
+    return current;
   });
 
   function onScroll(event: Event): void {
@@ -194,7 +189,6 @@
 
   function goToSection(key: string): void {
     search = '';
-    activeSectionKey = key;
     activeIndex = 0;
     void tick().then(() => {
       const top = layout.sectionTop.get(key);
@@ -216,9 +210,7 @@
     // first and let the window rebuild before reaching for the button.
     const row = layout.rows.find(
       (entry) =>
-        entry.kind === 'grid'
-        && activeIndex >= entry.firstIndex
-        && activeIndex < entry.firstIndex + entry.emojis.length
+        entry.kind === 'grid' && activeIndex >= entry.firstIndex && activeIndex < entry.firstIndex + entry.emojis.length
     );
     if (row && scroller) {
       if (row.top < scrollTop) scroller.scrollTop = row.top;
@@ -296,10 +288,7 @@
     const centre = tileBox.left - pickerBox.left + tileBox.width / 2;
     // Clamped to the panel: unclamped, a swatch row over the leftmost column
     // hung outside the picker and was clipped away.
-    toneStripLeft = Math.min(
-      Math.max(centre, half + TONE_STRIP_MARGIN),
-      pickerBox.width - half - TONE_STRIP_MARGIN
-    );
+    toneStripLeft = Math.min(Math.max(centre, half + TONE_STRIP_MARGIN), pickerBox.width - half - TONE_STRIP_MARGIN);
     toneStripTop = Math.max(tileBox.top - pickerBox.top, TONE_SWATCH + TONE_STRIP_MARGIN);
     toneStripFor = emoji;
   }
@@ -344,12 +333,7 @@
   }
 </script>
 
-<div
-  class="reaction-picker"
-  role="presentation"
-  bind:this={picker}
-  onpointerdown={dismissOverlays}
->
+<div class="reaction-picker" role="presentation" bind:this={picker} onpointerdown={dismissOverlays}>
   <div class="reaction-picker-head">
     <div class="reaction-picker-search-row">
       <label class="reaction-picker-search">
@@ -376,7 +360,8 @@
           aria-haspopup="true"
           aria-expanded={toneMenuOpen}
           onclick={() => (toneMenuOpen = !toneMenuOpen)}
-        ><Emoji emoji={withSkinTone(TONE_SWATCH_BASE, skinTone)} size={20} decorative /></button>
+          ><Emoji emoji={withSkinTone(TONE_SWATCH_BASE, skinTone)} size={20} decorative /></button
+        >
 
         {#if toneMenuOpen}
           <div class="reaction-tone-menu" role="menu" aria-label="Цвет кожи">
@@ -389,8 +374,8 @@
                 role="menuitemradio"
                 aria-checked={tone === skinTone}
                 aria-label={tone === NEUTRAL_TONE ? 'Без цвета кожи' : `Тон ${index}`}
-                onclick={() => chooseTone(tone)}
-              ><Emoji emoji={swatch} size={20} decorative /></button>
+                onclick={() => chooseTone(tone)}><Emoji emoji={swatch} size={20} decorative /></button
+              >
             {/each}
           </div>
         {/if}
@@ -415,8 +400,8 @@
           aria-label="Часто используемые"
           aria-current={activeSectionKey === 'frequent' ? 'true' : undefined}
           title="Часто используемые"
-          onclick={() => goToSection('frequent')}
-        >🕘</button>
+          onclick={() => goToSection('frequent')}>🕘</button
+        >
       {/if}
       {#each CATEGORIES as group (group.key)}
         <button
@@ -427,8 +412,8 @@
           aria-label={group.label}
           aria-current={activeSectionKey === group.key ? 'true' : undefined}
           title={group.label}
-          onclick={() => goToSection(group.key)}
-        ><Emoji emoji={group.icon} size={20} decorative /></button>
+          onclick={() => goToSection(group.key)}><Emoji emoji={group.icon} size={20} decorative /></button
+        >
       {/each}
     </div>
   </div>
@@ -499,11 +484,9 @@
       onpointerleave={scheduleToneClose}
     >
       {#each toneStripOptions as option (option)}
-        <button
-          type="button"
-          aria-label={optionLabel(option)}
-          onclick={() => chooseFromStrip(option)}
-        ><Emoji emoji={option} decorative /></button>
+        <button type="button" aria-label={optionLabel(option)} onclick={() => chooseFromStrip(option)}
+          ><Emoji emoji={option} decorative /></button
+        >
       {/each}
     </div>
   {/if}
@@ -511,7 +494,10 @@
 
 <style>
   /* The picker draws its own header and footer to the panel edges. */
-  :global(.reaction-picker-panel) { padding: 0; overflow: hidden; }
+  :global(.reaction-picker-panel) {
+    padding: 0;
+    overflow: hidden;
+  }
 
   .reaction-picker {
     position: relative;
@@ -521,11 +507,25 @@
     flex-direction: column;
   }
 
-  .reaction-picker-head { display: flex; flex: none; flex-direction: column; gap: 12px; padding: 14px 14px 10px; }
+  .reaction-picker-head {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px 14px 10px;
+  }
 
-  .reaction-picker-search-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .reaction-picker-search-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
 
-  .reaction-picker-search { flex: 1 1 auto; min-width: 0; }
+  .reaction-picker-search {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
 
   .reaction-picker-search input {
     width: 100%;
@@ -540,10 +540,18 @@
     font-size: 14.5px;
   }
 
-  .reaction-picker-search input::placeholder { color: var(--warm-muted-dim); }
-  .reaction-picker-search input:focus { border-color: color-mix(in oklch, var(--accent), transparent 40%); outline: none; }
+  .reaction-picker-search input::placeholder {
+    color: var(--warm-muted-dim);
+  }
+  .reaction-picker-search input:focus {
+    border-color: color-mix(in oklch, var(--accent), transparent 40%);
+    outline: none;
+  }
 
-  .reaction-tone { position: relative; flex: none; }
+  .reaction-tone {
+    position: relative;
+    flex: none;
+  }
 
   .reaction-tone-trigger {
     display: grid;
@@ -557,7 +565,10 @@
   }
 
   .reaction-tone-trigger:hover,
-  .reaction-tone-trigger:focus-visible { border-color: color-mix(in oklch, var(--accent), transparent 40%); outline: none; }
+  .reaction-tone-trigger:focus-visible {
+    border-color: color-mix(in oklch, var(--accent), transparent 40%);
+    outline: none;
+  }
 
   .reaction-tone-menu {
     position: absolute;
@@ -589,11 +600,18 @@
   .reaction-tone-option:focus-visible,
   .reaction-tone-option.is-active,
   .reaction-tone-strip button:hover,
-  .reaction-tone-strip button:focus-visible { background: color-mix(in oklch, var(--accent), transparent 86%); outline: none; }
+  .reaction-tone-strip button:focus-visible {
+    background: color-mix(in oklch, var(--accent), transparent 86%);
+    outline: none;
+  }
 
   /* One line, always: wrapping to a second row cost the grid a whole row of
      emoji for something the reader only glances at. */
-  .reaction-picker-anchors { display: flex; flex-wrap: nowrap; gap: 4px; }
+  .reaction-picker-anchors {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+  }
 
   .reaction-picker-anchor {
     display: grid;
@@ -612,7 +630,9 @@
   }
 
   .reaction-picker-anchor:hover,
-  .reaction-picker-anchor.is-active { background: color-mix(in oklch, var(--accent), transparent 86%); }
+  .reaction-picker-anchor.is-active {
+    background: color-mix(in oklch, var(--accent), transparent 86%);
+  }
 
   .reaction-picker-body {
     position: relative;
@@ -623,11 +643,15 @@
     overflow-y: auto;
   }
 
-  .reaction-picker-body:focus { outline: none; }
+  .reaction-picker-body:focus {
+    outline: none;
+  }
 
   /* Rows are positioned against the full-height spacer, so scrolling stays
      accurate while only the visible ones exist. */
-  .reaction-picker-spacer { position: relative; }
+  .reaction-picker-spacer {
+    position: relative;
+  }
 
   .reaction-picker-section {
     position: absolute;
@@ -679,7 +703,12 @@
     border-inline-start: 4px solid color-mix(in oklch, currentColor, transparent 62%);
   }
 
-  .reaction-picker-empty { margin: 8px 0; color: var(--warm-faint); font-size: 13px; text-align: center; }
+  .reaction-picker-empty {
+    margin: 8px 0;
+    color: var(--warm-faint);
+    font-size: 13px;
+    text-align: center;
+  }
 
   /* Anchored over the tile it belongs to and only as wide as its six swatches,
      rather than a full-width bar with empty space on both sides. */
@@ -702,5 +731,12 @@
     transform: translate(-50%, calc(-100% + 2px));
   }
 
-  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
 </style>

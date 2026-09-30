@@ -34,12 +34,9 @@
     const letter = trimmed.match(/[\p{L}\p{N}]/u)?.[0];
     return letter ? letter.toUpperCase() : '?';
   });
-  let imageFailed = $state(false);
-
-  $effect(() => {
-    src;
-    imageFailed = false;
-  });
+  // A new src gets a fresh attempt: only the src that failed stays hidden.
+  let failedSrc = $state<string | null>(null);
+  const imageFailed = $derived(failedSrc !== null && failedSrc === src);
 </script>
 
 <span
@@ -52,7 +49,7 @@
   aria-hidden="true"
 >
   {#if src && !imageFailed}
-    <img src={src} alt="" onerror={() => (imageFailed = true)} />
+    <img {src} alt="" onerror={() => (failedSrc = src)} />
   {:else}
     {initial}
   {/if}

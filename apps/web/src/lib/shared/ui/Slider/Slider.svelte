@@ -17,9 +17,7 @@
     onValueChange
   }: SliderProps = $props();
 
-  const fraction = $derived(
-    max > min ? Math.min(1, Math.max(0, (value - min) / (max - min))) : 0
-  );
+  const fraction = $derived(max > min ? Math.min(1, Math.max(0, (value - min) / (max - min))) : 0);
 
   let pointerActive = false;
 
@@ -46,11 +44,7 @@
   }
 </script>
 
-<div
-  class="vr-slider"
-  class:vr-slider--disabled={disabled}
-  style:--slider-fraction={fraction}
->
+<div class="vr-slider" class:vr-slider--disabled={disabled} style:--slider-fraction={fraction}>
   <div class="vr-slider-control">
     <span class="vr-slider-track" aria-hidden="true">
       {#if background}
@@ -68,7 +62,7 @@
       {max}
       {step}
       {disabled}
-      value={value}
+      {value}
       aria-label={ariaLabel}
       aria-valuetext={ariaValueText}
       oninput={handleInput}

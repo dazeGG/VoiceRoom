@@ -9,12 +9,11 @@
   import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
   import '$lib/features/room/styles/room.css';
   import RoomPreviewChat from './RoomPreviewChat.svelte';
-  import RoomMemberList from './RoomMemberList.svelte';
+  import RoomMemberList from '../../../../entities/room/components/RoomMemberList.svelte';
   import RoomViewHeader from './RoomViewHeader.svelte';
   import LobbyStreamTile from './LobbyStreamTile.svelte';
-  import { subscribeRoomPreview } from '../../model/room-realtime';
-  import { roomPresence } from '../../model/room-presence.svelte';
-  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
+  import { subscribeRoomPreview } from '../../../../entities/room/room-realtime';
+  import { roomPresence } from '../../../../entities/room/room-presence.svelte';
 
   let { room, user, onEnter, onBack, onOpenSettings, onRoomsChanged, onToast } = $props<{
     room: OwnedRoom;
@@ -31,7 +30,6 @@
   const roomUnreadCount = $derived(roomPresence.unreadCountByRoomId[previewRoomId] ?? room.unreadCount ?? 0);
   let peers = $state<RoomPeer[]>([]);
   let loading = $state(true);
-  let membershipEnabled = $state(false);
   let activePanel = $state<'chat' | 'participants' | null>(null);
 
   let loadError = $state('');
@@ -76,16 +74,6 @@
     return unsubscribe;
   });
 
-  $effect(() => {
-    let active = true;
-    void getCapabilityFeature('membership').then((enabled) => {
-      if (active) membershipEnabled = enabled;
-    });
-    return () => {
-      active = false;
-    };
-  });
-
   function peerName(peer: RoomPeer): string {
     return peer.name?.trim() || 'Гость';
   }
@@ -101,7 +89,6 @@
   }
 
   function selectPanel(panel: 'chat' | 'participants'): void {
-    if (panel === 'participants' && !membershipEnabled) return;
     activePanel = panel;
   }
 </script>
@@ -128,7 +115,6 @@
           aria-pressed={activePanel === 'participants'}
           data-active={activePanel === 'participants'}
           title="Участники"
-          disabled={!membershipEnabled}
           onclick={() => selectPanel('participants')}
         >
           <Users {...iconSm} aria-hidden="true" />
@@ -145,11 +131,7 @@
     <main class="lobby-browse-stage lobby-roomview-stage-pane" aria-label="Просмотр комнаты без подключения к голосу">
       <section class="stage lobby-preview-stage" aria-label="Участники комнаты">
         <div class="stage-strip" aria-label="Плитки комнаты">
-          <div
-            class="tile-grid"
-            data-count={Math.min(tileCount, 9)}
-            data-streams={Math.min(screenPeers.length, 9)}
-          >
+          <div class="tile-grid" data-count={Math.min(tileCount, 9)} data-streams={Math.min(screenPeers.length, 9)}>
             {#each screenPeers as peer (`screen-${peer.id}`)}
               <LobbyStreamTile {peer} {onEnter} />
             {/each}
@@ -167,7 +149,13 @@
                 style:--participant-avatar-shadow={avatar.shadow}
               >
                 <div class="voice-ring" aria-hidden="true">
-                  <span class="avatar">{avatar.initials}{#if avatar.src}<img src={avatar.src} alt="" onerror={(event) => event.currentTarget.remove()} />{/if}</span>
+                  <span class="avatar"
+                    >{avatar.initials}{#if avatar.src}<img
+                        src={avatar.src}
+                        alt=""
+                        onerror={(event) => event.currentTarget.remove()}
+                      />{/if}</span
+                  >
                 </div>
                 <div class="participant-copy">
                   <h2>
@@ -209,18 +197,38 @@
           onSelectParticipants={() => selectPanel('participants')}
         />
       {/key}
-    {:else if activePanel === 'participants' && membershipEnabled}
+    {:else if activePanel === 'participants'}
       <aside class="lobby-room-members" aria-label="Список участников комнаты">
         <header class="chat-rail-head">
           <div class="room-panel-tabs" role="tablist" aria-label="Раздел панели комнаты">
-            <button type="button" role="tab" aria-label="Чат" aria-selected="false" data-active="false" title="Чат" onclick={() => selectPanel('chat')}>
+            <button
+              type="button"
+              role="tab"
+              aria-label="Чат"
+              aria-selected="false"
+              data-active="false"
+              title="Чат"
+              onclick={() => selectPanel('chat')}
+            >
               <MessageSquare {...iconSm} aria-hidden="true" />
             </button>
-            <button type="button" role="tab" aria-label="Участники" aria-selected="true" data-active="true" title="Участники">
+            <button
+              type="button"
+              role="tab"
+              aria-label="Участники"
+              aria-selected="true"
+              data-active="true"
+              title="Участники"
+            >
               <Users {...iconSm} aria-hidden="true" />
             </button>
           </div>
-          <button class="chat-rail-collapse" type="button" aria-label="Свернуть панель" onclick={() => (activePanel = null)}>
+          <button
+            class="chat-rail-collapse"
+            type="button"
+            aria-label="Свернуть панель"
+            onclick={() => (activePanel = null)}
+          >
             <ChevronRight {...iconSm} aria-hidden="true" />
           </button>
         </header>
@@ -229,3 +237,40 @@
     {/if}
   </div>
 </div>
+
+<style>
+  :global(.lobby-stage-error) {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    margin: 0;
+    border: 1px solid rgba(232, 160, 148, 0.24);
+    border-radius: 999px;
+    background: color-mix(in oklch, var(--coral) 18%, var(--warm-950));
+    color: var(--coral);
+    padding: 8px 13px;
+    font-size: 12.5px;
+    font-weight: 700;
+  }
+  :global(.lobby-browse-room) {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: transparent;
+  }
+  :global(.lobby-browse-topbar) {
+    flex: none;
+    min-height: 68px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 20px 28px;
+    border-bottom: none;
+    background: transparent;
+  }
+</style>

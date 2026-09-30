@@ -4,19 +4,11 @@
   import ReactionPicker from './ReactionPicker.svelte';
   import type { ReactionStore } from './reaction-store.svelte';
 
-  let {
-    reactionStore,
-    messageId,
-    userId,
-    canReply = false,
-    onReply,
-    onCopy,
-    onMore
-  } = $props<{
+  let { reactionStore, messageId, userId, onReply, onCopy, onMore } = $props<{
     reactionStore?: ReactionStore;
     messageId: string;
     userId?: string;
-    canReply?: boolean;
+    /** Offers «Ответить» when given. */
     onReply?: () => void;
     onCopy: () => void;
     onMore: (event: MouseEvent) => void;
@@ -33,9 +25,25 @@
     <ReactionPicker store={reactionStore} {messageId} {userId} showQuickReactions={false} bind:open={pickerOpen} />
   {/if}
   {#if hasReactions}<span class="chat-msg-actions-divider" role="separator" aria-orientation="vertical"></span>{/if}
-  {#if canReply}
-    <button type="button" aria-label="Ответить" title="Ответить" onclick={onReply}><Reply {...iconSm} aria-hidden="true" /></button>
+  {#if onReply}
+    <button type="button" aria-label="Ответить" title="Ответить" onclick={onReply}
+      ><Reply {...iconSm} aria-hidden="true" /></button
+    >
   {/if}
-  <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={onCopy}><Copy {...iconSm} aria-hidden="true" /></button>
-  <button type="button" aria-label="Больше действий" title="Больше действий" onclick={onMore}><Ellipsis {...iconSm} aria-hidden="true" /></button>
+  <button type="button" aria-label="Копировать текст" title="Копировать текст" onclick={onCopy}
+    ><Copy {...iconSm} aria-hidden="true" /></button
+  >
+  <button type="button" aria-label="Больше действий" title="Больше действий" onclick={onMore}
+    ><Ellipsis {...iconSm} aria-hidden="true" /></button
+  >
 </div>
+
+<style>
+  :global(.chat-msg-actions-divider) {
+    width: 1px;
+    height: 24px;
+    flex: none;
+    margin: 0 2px;
+    background: var(--line);
+  }
+</style>

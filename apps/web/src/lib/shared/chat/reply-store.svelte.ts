@@ -32,7 +32,7 @@ function normalizeTarget(target: ReplyTarget | null | undefined): ReplyTarget | 
   };
 }
 
-export class ReplyStore {
+class ReplyStore {
   conversation = $state<ReplyConversation | null>(null);
   target = $state<ReplyTarget | null>(null);
   sending = $state(false);
@@ -118,9 +118,7 @@ export class ReplyStore {
       this.requestFocus();
       return true;
     } catch (error) {
-      this.error = error instanceof Error && error.message
-        ? error.message
-        : 'Не удалось отправить ответ';
+      this.error = error instanceof Error && error.message ? error.message : 'Не удалось отправить ответ';
       return false;
     } finally {
       this.sending = false;
@@ -141,5 +139,3 @@ export class ReplyStore {
 export function createReplyStore(): ReplyStore {
   return new ReplyStore();
 }
-
-export const replyStore = createReplyStore();

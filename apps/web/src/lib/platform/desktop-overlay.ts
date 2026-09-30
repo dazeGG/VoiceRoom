@@ -91,9 +91,7 @@ export async function readDesktopOverlaySettings(): Promise<DesktopOverlaySettin
   }
 }
 
-export async function updateDesktopOverlaySettings(
-  patch: DesktopOverlayPatch
-): Promise<DesktopOverlaySettings | null> {
+export async function updateDesktopOverlaySettings(patch: DesktopOverlayPatch): Promise<DesktopOverlaySettings | null> {
   const bridge = getBridge();
   if (!bridge?.setSettings) return null;
   const payload: DesktopOverlayPatch = {};

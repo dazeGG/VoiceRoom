@@ -1,23 +1,8 @@
 <script lang="ts">
-  import {
-    ChevronDown,
-    HeadphoneOff,
-    Headphones,
-    Mic,
-    MicOff,
-    ScreenShare,
-    ScreenShareOff,
-    X
-  } from '@lucide/svelte';
+  import { ChevronDown, HeadphoneOff, Headphones, Mic, MicOff, ScreenShare, ScreenShareOff, X } from '@lucide/svelte';
   import { Popover, Select, Slider } from '$lib/shared/ui';
-  import {
-    NOISE_MODE_SELECT_OPTIONS,
-    roomDeviceUi
-  } from '$lib/features/room/room-device-ui.svelte';
-  import {
-    GATE_THRESHOLD_MAX_DB,
-    GATE_THRESHOLD_MIN_DB
-  } from '../client/core/config';
+  import { NOISE_MODE_SELECT_OPTIONS, roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
+  import { GATE_THRESHOLD_MAX_DB, GATE_THRESHOLD_MIN_DB } from '../client/core/config';
   import {
     closeDevicePopover,
     closeOutputPopover,
@@ -27,6 +12,7 @@
     switchNoiseMode,
     switchOutputDevice,
     toggleGate,
+    toggleGateAuto,
     updateGateThresholdFromSlider
   } from '../client/ui/devices';
   import {
@@ -69,8 +55,6 @@
     toggle();
     if (!wasOpen) void refreshDevices();
   }
-
-
 </script>
 
 <div class="room-dock" aria-label="Управление голосом">
@@ -100,7 +84,8 @@
               <span class="dock-icon dock-icon-mic" aria-hidden="true"><Mic /></span>
               <span class="dock-icon dock-icon-muted" aria-hidden="true"><MicOff /></span>
               {#if roomClientState.microphoneMode === 'push-to-talk'}
-                <span class="dock-ptt-badge" data-active={roomClientState.pushToTalkActive} aria-hidden="true">PTT</span>
+                <span class="dock-ptt-badge" data-active={roomClientState.pushToTalkActive} aria-hidden="true">PTT</span
+                >
               {/if}
               <span class="sr-only" id="muteText">{callControls.label}</span>
             </button>
@@ -171,6 +156,21 @@
                 <span class="gate-switch-knob" aria-hidden="true"></span>
               </button>
             </div>
+            {#if gate.gateOn}
+              <div class="gate-field-head gate-auto-row">
+                <span>Автоматическая чувствительность</span>
+                <button
+                  class="gate-switch"
+                  type="button"
+                  role="switch"
+                  aria-checked={gate.auto}
+                  aria-label="Автоматическая чувствительность гейта"
+                  onclick={toggleGateAuto}
+                >
+                  <span class="gate-switch-knob" aria-hidden="true"></span>
+                </button>
+              </div>
+            {/if}
             <div class="gate-control" data-disabled={!gate.markerActive}>
               <Slider
                 value={gate.thresholdValue}
@@ -274,7 +274,12 @@
     <span class="dock-divider" aria-hidden="true"></span>
 
     <div class="dock-connection-wrap">
-      <div class="dock-connection" data-state={connection.stateName} role="status" aria-label={connection.label || 'Связь'}>
+      <div
+        class="dock-connection"
+        data-state={connection.stateName}
+        role="status"
+        aria-label={connection.label || 'Связь'}
+      >
         <span class="dock-bar" aria-hidden="true"></span>
         <span class="dock-bar" aria-hidden="true"></span>
         <span class="dock-bar" aria-hidden="true"></span>
@@ -285,7 +290,14 @@
       </span>
     </div>
 
-    <button class="dock-button leave-button" id="leaveButton" type="button" aria-label="Покинуть звонок" hidden={screenUi.hideLeaveButton} onclick={handleLeaveButtonClick}>
+    <button
+      class="dock-button leave-button"
+      id="leaveButton"
+      type="button"
+      aria-label="Покинуть звонок"
+      hidden={screenUi.hideLeaveButton}
+      onclick={handleLeaveButtonClick}
+    >
       <X aria-hidden="true" />
     </button>
     <button
@@ -294,9 +306,91 @@
       type="button"
       aria-label="Выйти со стрима"
       hidden={!screenUi.showScreenExit}
-      onclick={() => leaveScreenView({ keepPreview: false }).catch((error) => log.error('screen view action failed', errorContext(error)))}
+      onclick={() =>
+        leaveScreenView({ keepPreview: false }).catch((error) =>
+          log.error('screen view action failed', errorContext(error))
+        )}
     >
       <ScreenShareOff aria-hidden="true" />
     </button>
   </div>
 </div>
+
+<style>
+  :global(.dock-divider) {
+    width: 1px;
+    height: 28px;
+    flex: 0 0 auto;
+    margin: 0 2px;
+    background: var(--line);
+    pointer-events: none;
+  }
+  :global(.dock-connection-label) {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #bcd6c6;
+  }
+  :global(.dock-volume-head) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-xs);
+  }
+  :where(.dock-volume-head) output {
+    color: oklch(96% 0.008 92);
+    font-size: 0.78rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+  :global(.gate-field-head) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  :global(.gate-auto-row) {
+    margin-top: 8px;
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+  :global(.gate-switch) {
+    position: relative;
+    flex: none;
+    width: 36px;
+    height: 20px;
+    padding: 0;
+    border: 1px solid oklch(100% 0 0 / 0.12);
+    border-radius: 10px;
+    background: var(--control);
+    cursor: pointer;
+    transition:
+      background 0.16s ease,
+      border-color 0.16s ease;
+  }
+  :where(.gate-switch)::after {
+    content: '';
+    position: absolute;
+    inset: -12px -6px;
+    border-radius: var(--radius-pill);
+  }
+  :where(.gate-switch)[aria-checked='true'] {
+    border-color: oklch(72% 0.14 164 / 0.55);
+    background: color-mix(in oklch, var(--green) 30%, transparent);
+  }
+  :global(.gate-switch-knob) {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--muted);
+    transition:
+      left 0.16s ease,
+      background 0.16s ease;
+  }
+  :where(.gate-switch)[aria-checked='true'] .gate-switch-knob {
+    left: 17px;
+    background: var(--green);
+  }
+</style>

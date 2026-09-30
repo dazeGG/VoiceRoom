@@ -5,23 +5,20 @@
   import type { AuthUser } from '$lib/api/auth';
   import { Avatar, Badge, Popover, PopoverMenuLabel } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
-  import {
-    effectivePresenceStatus,
-    normalizePresenceStatus,
-    type PresenceStatus
-  } from '$lib/shared/presence';
+  import { effectivePresenceStatus, normalizePresenceStatus, type PresenceStatus } from '$lib/shared/presence';
   import { friendName } from '../../model/lobby-format';
-  import { friendsState, openDm } from '../../model/friends.svelte';
+  import { useLobby } from '$lib/features/home/model/lobby-context';
   import { notificationPreferences, updatePresenceStatus } from '$lib/shared/notifications/preferences.svelte';
   import SidebarDownload from '../SidebarDownload.svelte';
   import VoiceCallWidget from './VoiceCallWidget.svelte';
+
+  const lobby = useLobby();
 
   let {
     user,
     onGoHome,
     onOpenPeople,
     onOpenSettings,
-    notificationsEnabled = false,
     notificationsOpen = false,
     notificationUnreadCount = 0,
     onOpenNotifications,
@@ -40,7 +37,6 @@
     onGoHome: () => void;
     onOpenPeople: () => void;
     onOpenSettings: () => void;
-    notificationsEnabled?: boolean;
     notificationsOpen?: boolean;
     notificationUnreadCount?: number;
     onOpenNotifications?: () => void;
@@ -57,9 +53,7 @@
   }>();
 
   const sortedFriends = $derived(
-    [...friendsState.friends].sort(
-      (a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0)
-    )
+    [...lobby.friends].sort((a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0))
   );
 
   const selfName = $derived(user.displayName?.trim() || user.login);
@@ -70,18 +64,18 @@
       notificationPreferences.doNotDisturb ? 'dnd' : 'online'
     )
   );
-  const statusOptions = $derived<ReadonlyArray<{
-    value: PresenceStatus;
-    label: string;
-    note?: string;
-  }>>([
+  const statusOptions = $derived<
+    ReadonlyArray<{
+      value: PresenceStatus;
+      label: string;
+      note?: string;
+    }>
+  >([
     { value: 'online', label: 'В сети' },
     {
       value: 'away',
       label: 'Отошёл',
-      note: friendsState.automaticPresenceIdleAvailable
-        ? 'Автоматически после 5 минут бездействия'
-        : undefined
+      note: lobby.automaticPresenceIdleAvailable ? 'Автоматически после 5 минут бездействия' : undefined
     },
     {
       value: 'dnd',
@@ -97,7 +91,10 @@
   let statusTypeahead = '';
   let statusTypeaheadTimer: ReturnType<typeof setTimeout> | null = null;
   const selectedStatusIndex = $derived(
-    Math.max(0, statusOptions.findIndex((option) => option.value === selfPresence))
+    Math.max(
+      0,
+      statusOptions.findIndex((option) => option.value === selfPresence)
+    )
   );
 
   async function focusStatusOption(index = selectedStatusIndex): Promise<void> {
@@ -164,9 +161,7 @@
 
     const start = (activeStatusIndex + 1) % statusOptions.length;
     const ordered = [...statusOptions.slice(start), ...statusOptions.slice(0, start)];
-    const matched = ordered.find((option) =>
-      option.label.toLocaleLowerCase().startsWith(statusTypeahead)
-    );
+    const matched = ordered.find((option) => option.label.toLocaleLowerCase().startsWith(statusTypeahead));
     if (!matched) return;
     void focusStatusOption(statusOptions.findIndex((option) => option.value === matched.value));
   }
@@ -224,28 +219,32 @@
 
   <div class="lv-side-scroll">
     <div class="lv-sec-head">
-      <span>Друзья — {friendsState.friends.length}</span>
+      <span>Друзья — {lobby.friends.length}</span>
       <div class="lv-sec-actions">
         <button class="lv-mini-btn" type="button" title="Заявки и добавить друга" onclick={onOpenPeople}>
           <UserPlus {...iconSm} aria-hidden="true" />
-          {#if friendsState.incomingRequestCount > 0}
+          {#if lobby.incomingRequestCount > 0}
             <span class="lv-mini-btn-dot"></span>
           {/if}
         </button>
       </div>
     </div>
 
-    {#if friendsState.friends.length === 0}
+    {#if lobby.friends.length === 0}
       <p class="lr-empty" style="padding:2px 7px 8px;">Пока нет друзей. Откройте «Заявки», чтобы добавить по логину.</p>
     {:else}
       {#each sortedFriends as entry (entry.user.id)}
-        {@const friendPresence = effectivePresenceStatus(entry.online, entry.user.presenceStatus, entry.user.doNotDisturb)}
+        {@const friendPresence = effectivePresenceStatus(
+          entry.online,
+          entry.user.presenceStatus,
+          entry.user.doNotDisturb
+        )}
         {@const friendNotificationsMuted = notificationPreferences.mutedPeerIds.includes(entry.user.id)}
         <button
           class="lv-row"
-          class:is-active={friendsState.selectedFriendId === entry.user.id && friendsState.view === 'dm'}
+          class:is-active={lobby.selectedFriendId === entry.user.id && lobby.view === 'dm'}
           type="button"
-          onclick={() => openDm(entry.user.id)}
+          onclick={() => lobby.openDm(entry.user.id)}
         >
           <Avatar
             name={friendName(entry.user)}
@@ -260,9 +259,16 @@
           />
           <div style="min-width:0;flex:1;">
             <div class="lv-notification-title">
-              <div class="lv-row-name" style={`font-weight:${entry.unreadCount > 0 ? 750 : 650}`}><EmojiText text={friendName(entry.user)} /></div>
+              <div class="lv-row-name" style={`font-weight:${entry.unreadCount > 0 ? 750 : 650}`}>
+                <EmojiText text={friendName(entry.user)} />
+              </div>
               {#if friendNotificationsMuted}
-                <span class="lv-notification-muted" role="img" aria-label="Уведомления отключены" title="Уведомления отключены">
+                <span
+                  class="lv-notification-muted"
+                  role="img"
+                  aria-label="Уведомления отключены"
+                  title="Уведомления отключены"
+                >
                   <BellOff {...iconSm} aria-hidden="true" />
                 </span>
               {/if}
@@ -290,7 +296,13 @@
   {/if}
 
   <div class="lv-profile">
-    <Popover bind:open={statusPopoverOpen} placement="top-start" role="listbox" ariaLabel="Статус пользователя" panelClass="lv-status-popover">
+    <Popover
+      bind:open={statusPopoverOpen}
+      placement="top-start"
+      role="listbox"
+      ariaLabel="Статус пользователя"
+      panelClass="lv-status-popover"
+    >
       {#snippet trigger({ open, panelId })}
         <button
           type="button"
@@ -350,21 +362,19 @@
     </Popover>
     <div class="lv-profile-actions">
       <SidebarDownload />
-      {#if notificationsEnabled}
-        <button
-          class="lobby-gear lv-notification-button"
-          type="button"
-          title="Уведомления"
-          aria-label="Открыть уведомления"
-          aria-expanded={notificationsOpen}
-          onclick={onOpenNotifications}
-        >
-          <Bell {...iconSm} aria-hidden="true" />
-          {#if notificationUnreadCount > 0}
-            <span class="lv-notification-count">{notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}</span>
-          {/if}
-        </button>
-      {/if}
+      <button
+        class="lobby-gear lv-notification-button"
+        type="button"
+        title="Уведомления"
+        aria-label="Открыть уведомления"
+        aria-expanded={notificationsOpen}
+        onclick={onOpenNotifications}
+      >
+        <Bell {...iconSm} aria-hidden="true" />
+        {#if notificationUnreadCount > 0}
+          <span class="lv-notification-count">{notificationUnreadCount > 99 ? '99+' : notificationUnreadCount}</span>
+        {/if}
+      </button>
       <button
         class="lobby-gear"
         type="button"
@@ -401,7 +411,9 @@
     margin-left: auto;
   }
 
-  .lv-notification-button { position: relative; }
+  .lv-notification-button {
+    position: relative;
+  }
   .lv-notification-count {
     position: absolute;
     top: -5px;
@@ -444,7 +456,9 @@
     font: inherit;
     text-align: left;
     cursor: pointer;
-    transition: background 140ms ease, color 140ms ease;
+    transition:
+      background 140ms ease,
+      color 140ms ease;
   }
 
   /* Same accent wash the shared menu items use, so the status list reads as one
@@ -468,9 +482,15 @@
     background: var(--warm-faint);
   }
 
-  .lv-status-dot[data-status='online'] { background: var(--green); }
-  .lv-status-dot[data-status='away'] { background: var(--amber); }
-  .lv-status-dot[data-status='dnd'] { background: var(--coral); }
+  .lv-status-dot[data-status='online'] {
+    background: var(--green);
+  }
+  .lv-status-dot[data-status='away'] {
+    background: var(--amber);
+  }
+  .lv-status-dot[data-status='dnd'] {
+    background: var(--coral);
+  }
 
   .lv-status-copy {
     display: grid;
@@ -494,5 +514,105 @@
 
   :global(.lv-status-check) {
     color: var(--accent);
+  }
+  :global(.lv-side) {
+    width: var(--lv-side-w);
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--panel);
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+  }
+  :global(.lv-side-head) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    margin: 8px;
+    padding: 10px 8px;
+    flex: none;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    text-align: left;
+    transition: background 0.15s ease;
+  }
+  :where(.lv-side-head):hover {
+    background: var(--control-hover);
+  }
+  :where(.lv-side-head):focus-visible {
+    outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));
+    outline-offset: -2px;
+  }
+  :global(.lv-brand-name) {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 14.5px;
+    color: var(--warm-ink);
+    flex: 1;
+    letter-spacing: -0.01em;
+  }
+  :global(.lv-side-scroll) {
+    flex: 1;
+    overflow: auto;
+    padding: 2px 8px 10px;
+  }
+  :global(.lv-sec-head) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 8px 6px;
+    font-family: var(--font-ui);
+    font-size: 10.5px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--warm-faint);
+  }
+  :global(.lv-sec-actions) {
+    display: flex;
+    gap: 2px;
+  }
+  :global(.lv-mini-btn) {
+    position: relative;
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    border: none;
+    background: transparent;
+    color: var(--warm-faint);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+  :where(.lv-mini-btn):hover {
+    background: var(--control-hover);
+    color: var(--warm-ink);
+  }
+  :global(.lv-mini-btn-dot) {
+    position: absolute;
+    top: 1px;
+    right: 1px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px var(--panel);
+  }
+  :global(.lv-profile) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    flex: none;
+  }
+  :global(.lv-profile-handle) {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--warm-muted-dim);
   }
 </style>

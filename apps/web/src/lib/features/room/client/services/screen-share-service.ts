@@ -16,7 +16,8 @@ import { setLocalAppAudioSuppressed } from './media-playback-service';
 import { playStreamCue } from '../media/cues';
 import { getDisplayName } from '../ui/names';
 import { publishLocalScreenTracks, unpublishLocalScreenTracks } from './livekit-service';
-import { openScreenShare, stopLocalScreenAudioCapture } from './screen-capture-service';
+import { openScreenShare } from './screen-capture-service';
+import { stopLocalScreenAudioCapture } from './desktop-screen-audio';
 import { TRACK_SOURCE } from '../media/livekit-runtime';
 import { updateParticipant } from '../room/participants';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
@@ -42,7 +43,7 @@ export async function handleScreenButtonClick(): Promise<void> {
   await startScreenShare(getSelectedScreenProfileId());
 }
 
-export function getSelectedScreenProfileId(): string {
+function getSelectedScreenProfileId(): string {
   return getScreenProfileForMode(state.localScreenMode || DEFAULT_SCREEN_STREAM_MODE, state.localScreenProfileId).id;
 }
 
@@ -53,7 +54,7 @@ function applyLocalScreenProfileState(profile: ScreenProfile, mode: ScreenStream
   state.localScreenFpsId = profile.fpsId;
 }
 
-export async function startScreenShare(profileId: string = getSelectedScreenProfileId()): Promise<void> {
+async function startScreenShare(profileId: string = getSelectedScreenProfileId()): Promise<void> {
   if (!state.joined || state.connecting) {
     showToast('Сначала подключитесь к комнате');
     return;
@@ -107,7 +108,9 @@ export async function startScreenShare(profileId: string = getSelectedScreenProf
     const cancelled = isCaptureCancelled(error);
     if (!cancelled) log.error('screen share failed', errorContext(error));
     if (state.localScreenStream) {
-      await stopScreenShare({ notify: false, quiet: true }).catch((cleanupError) => log.error('screen share failed', errorContext(cleanupError)));
+      await stopScreenShare({ notify: false, quiet: true }).catch((cleanupError) =>
+        log.error('screen share failed', errorContext(cleanupError))
+      );
     } else {
       setLocalAppAudioSuppressed(false);
     }
@@ -121,7 +124,7 @@ export async function startScreenShare(profileId: string = getSelectedScreenProf
   }
 }
 
-export async function stopScreenShare(options: { notify?: boolean; quiet?: boolean } = {}): Promise<void> {
+async function stopScreenShare(options: { notify?: boolean; quiet?: boolean } = {}): Promise<void> {
   if (!state.localScreenStream || state.screenStopping) return;
 
   state.screenStopping = true;
@@ -161,7 +164,7 @@ export async function stopScreenShare(options: { notify?: boolean; quiet?: boole
 /** @deprecated Screen dock button is reactive in RoomDock.svelte. */
 export function refreshScreenControls(): void {}
 
-export function hasScreenAudio(): boolean {
+function hasScreenAudio(): boolean {
   return Boolean(state.localScreenStream?.getAudioTracks().some((track) => track.readyState !== 'ended'));
 }
 
@@ -172,7 +175,9 @@ function showScreenShareStartedToast(profile: ScreenProfile): void {
   }
 
   if (isSafariBrowser()) {
-    showToast(`Стрим запущен: ${profile.label}, без звука. Safari обычно не дает выбор системного звука для демонстрации.`);
+    showToast(
+      `Стрим запущен: ${profile.label}, без звука. Safari обычно не дает выбор системного звука для демонстрации.`
+    );
     return;
   }
 
@@ -250,9 +255,7 @@ async function updateLocalScreenStats(): Promise<void> {
     rttMs: parsed.rttMs ?? null,
     width: parsed.width || settings.width || 0
   };
-  state.localScreenStatsPrevious = parsed.previous
-    ? { ...parsed.previous, ...captureStats.previous }
-    : null;
+  state.localScreenStatsPrevious = parsed.previous ? { ...parsed.previous, ...captureStats.previous } : null;
 
   const peer = getActiveScreenPeer();
   if (peer?.isLocal) refreshScreenMeta(peer);
@@ -283,18 +286,18 @@ function readNativeCaptureStats(previous: ScreenStatsPrevious | null): {
   const snapshot = window.__voiceRoomNativeCaptureStats();
   const captureFramesReceived = Number(snapshot.framesReceived || 0);
   const captureFramesWritten = Number(snapshot.framesWritten || 0);
-  const capturePixelFormat = snapshot.pixelFormat === 'NV12' || snapshot.pixelFormat === 'BGRX'
-    ? snapshot.pixelFormat
-    : undefined;
-  const captureDropsBackpressure = Number(snapshot.framesDroppedBackpressure || 0)
-    + Number(snapshot.relay?.framesDroppedBackpressure || 0);
+  const capturePixelFormat =
+    snapshot.pixelFormat === 'NV12' || snapshot.pixelFormat === 'BGRX' ? snapshot.pixelFormat : undefined;
+  const captureDropsBackpressure =
+    Number(snapshot.framesDroppedBackpressure || 0) + Number(snapshot.relay?.framesDroppedBackpressure || 0);
   const captureRelayRestarts = Number(snapshot.relay?.restarts || 0);
 
   return {
     captureDropsBackpressure,
-    captureDropsBackpressureDelta: previous?.captureDropsBackpressure === undefined
-      ? 0
-      : Math.max(0, captureDropsBackpressure - Number(previous.captureDropsBackpressure || 0)),
+    captureDropsBackpressureDelta:
+      previous?.captureDropsBackpressure === undefined
+        ? 0
+        : Math.max(0, captureDropsBackpressure - Number(previous.captureDropsBackpressure || 0)),
     captureFramesReceived,
     captureFramesWritten,
     capturePixelFormat,
@@ -307,7 +310,10 @@ function readNativeCaptureStats(previous: ScreenStatsPrevious | null): {
   };
 }
 
-function parseLocalScreenStats(stats: RTCStatsReport | undefined, previous: ScreenStatsPrevious | null): ParsedScreenStats {
+function parseLocalScreenStats(
+  stats: RTCStatsReport | undefined,
+  previous: ScreenStatsPrevious | null
+): ParsedScreenStats {
   if (!stats?.forEach) return { previous: null };
 
   const codecs = new Map<string, any>();
@@ -343,21 +349,22 @@ function parseLocalScreenStats(stats: RTCStatsReport | undefined, previous: Scre
   const framesEncoded = Number(outbound.framesEncoded || 0);
   const timestamp = Number(outbound.timestamp || Date.now());
   const elapsedMs = previous?.timestamp ? timestamp - previous.timestamp : 0;
-  const bitrate = elapsedMs > 0 && bytesSent >= previous!.bytesSent
-    ? ((bytesSent - previous!.bytesSent) * 8 * 1000) / elapsedMs
-    : 0;
-  const fps = Number(outbound.framesPerSecond || 0) || (
-    elapsedMs > 0 && framesEncoded >= (previous?.framesEncoded ?? Number.POSITIVE_INFINITY)
+  const bitrate =
+    elapsedMs > 0 && bytesSent >= previous!.bytesSent ? ((bytesSent - previous!.bytesSent) * 8 * 1000) / elapsedMs : 0;
+  const fps =
+    Number(outbound.framesPerSecond || 0) ||
+    (elapsedMs > 0 && framesEncoded >= (previous?.framesEncoded ?? Number.POSITIVE_INFINITY)
       ? ((framesEncoded - previous!.framesEncoded) * 1000) / elapsedMs
-      : 0
-  );
+      : 0);
   const codec = getCodecNameFromStats(outbound, codecs);
   const encoderImplementation = String(outbound.encoderImplementation || '');
   const lossPct = Number.isFinite(remoteInbound?.fractionLost) ? remoteInbound.fractionLost * 100 : null;
   const rttMs = Number.isFinite(remoteInbound?.roundTripTime) ? remoteInbound.roundTripTime * 1000 : null;
-  const availableOutgoingBitrate = Number(candidatePair?.availableOutgoingBitrate || candidatePair?.availableOutgoingBitrate === 0
-    ? candidatePair.availableOutgoingBitrate
-    : candidatePair?.estimatedOutgoingBitrate || 0);
+  const availableOutgoingBitrate = Number(
+    candidatePair?.availableOutgoingBitrate || candidatePair?.availableOutgoingBitrate === 0
+      ? candidatePair.availableOutgoingBitrate
+      : candidatePair?.estimatedOutgoingBitrate || 0
+  );
   const framesDropped = Number(outbound.framesDropped || 0);
   const firCount = Number(outbound.firCount || 0);
   const nackCount = Number(outbound.nackCount || 0);
@@ -382,7 +389,16 @@ function parseLocalScreenStats(stats: RTCStatsReport | undefined, previous: Scre
     nackDelta: previous ? Math.max(0, nackCount - Number(previous.nackCount || 0)) : 0,
     pliCount,
     pliDelta: previous ? Math.max(0, pliCount - Number(previous.pliCount || 0)) : 0,
-    previous: { bytesSent, encoderImplementation, firCount, framesDropped, framesEncoded, nackCount, pliCount, timestamp },
+    previous: {
+      bytesSent,
+      encoderImplementation,
+      firCount,
+      framesDropped,
+      framesEncoded,
+      nackCount,
+      pliCount,
+      timestamp
+    },
     qualityLimitationReason: outbound.qualityLimitationReason || '',
     qpSum: Number(outbound.qpSum || 0),
     rttMs,

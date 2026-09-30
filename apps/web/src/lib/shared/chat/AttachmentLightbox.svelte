@@ -17,7 +17,11 @@
     alt?: string;
   }
 
-  let { items, index = 0, onclose }: {
+  let {
+    items,
+    index = 0,
+    onclose
+  }: {
     items: LightboxItem[];
     index?: number;
     onclose: () => void;
@@ -90,18 +94,36 @@
   }
 
   function keydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') { event.preventDefault(); onclose(); }
-    else if (event.key === 'ArrowLeft' && items.length > 1) { event.preventDefault(); move(-1); }
-    else if (event.key === 'ArrowRight' && items.length > 1) { event.preventDefault(); move(1); }
-    else if (event.key === '+' || event.key === '=') { event.preventDefault(); zoomTo(scale + STEP); }
-    else if (event.key === '-') { event.preventDefault(); zoomTo(scale - STEP); }
-    else if (event.key === '0') { event.preventDefault(); reset(); }
-    else if (event.key === 'Tab') {
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      onclose();
+    } else if (event.key === 'ArrowLeft' && items.length > 1) {
+      event.preventDefault();
+      move(-1);
+    } else if (event.key === 'ArrowRight' && items.length > 1) {
+      event.preventDefault();
+      move(1);
+    } else if (event.key === '+' || event.key === '=') {
+      event.preventDefault();
+      zoomTo(scale + STEP);
+    } else if (event.key === '-') {
+      event.preventDefault();
+      zoomTo(scale - STEP);
+    } else if (event.key === '0') {
+      event.preventDefault();
+      reset();
+    } else if (event.key === 'Tab') {
       const controls = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled),a[href]'));
       if (!controls.length) return;
-      const first = controls[0]; const last = controls.at(-1)!;
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      const first = controls[0];
+      const last = controls.at(-1)!;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
   }
 
@@ -116,7 +138,9 @@
 <div
   class="attachment-lightbox-backdrop"
   role="presentation"
-  onclick={(event) => { if (event.target === event.currentTarget) onclose(); }}
+  onclick={(event) => {
+    if (event.target === event.currentTarget) onclose();
+  }}
 >
   <div
     bind:this={dialog}
@@ -174,8 +198,102 @@
     </div>
 
     {#if items.length > 1}
-      <button class="attachment-previous" type="button" onclick={() => move(-1)} aria-label="Предыдущее изображение">‹</button>
-      <button class="attachment-next" type="button" onclick={() => move(1)} aria-label="Следующее изображение">›</button>
+      <button class="attachment-previous" type="button" onclick={() => move(-1)} aria-label="Предыдущее изображение"
+        >‹</button
+      >
+      <button class="attachment-next" type="button" onclick={() => move(1)} aria-label="Следующее изображение">›</button
+      >
     {/if}
   </div>
 </div>
+
+<style>
+  :global(.attachment-lightbox-counter) {
+    margin-right: auto;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    opacity: 0.75;
+  }
+  :global(.attachment-lightbox-tools) {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px;
+    border-radius: 13px;
+    background: color-mix(in oklch, var(--paper-deep), transparent 28%);
+  }
+  :where(.attachment-lightbox-tools) button,
+  :where(.attachment-lightbox-tools) a {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    place-items: center;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+  :where(.attachment-lightbox-tools) button:hover:not(:disabled),
+  :where(.attachment-lightbox-tools) button:focus-visible,
+  :where(.attachment-lightbox-tools) a:hover,
+  :where(.attachment-lightbox-tools) a:focus-visible {
+    background: color-mix(in oklch, var(--paper), transparent 62%);
+    outline: none;
+  }
+  :where(.attachment-lightbox-tools) button:disabled {
+    cursor: default;
+    opacity: 0.4;
+  }
+  :global(.attachment-lightbox-scale) {
+    min-width: 44px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    text-align: center;
+    opacity: 0.8;
+  }
+  :global(.attachment-lightbox-stage) {
+    display: grid;
+    place-items: center;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    cursor: zoom-in;
+    touch-action: none;
+  }
+  :where(.attachment-lightbox-stage).is-zoomed {
+    cursor: grab;
+  }
+  :where(.attachment-lightbox-stage).is-dragging {
+    cursor: grabbing;
+  }
+  :where(.attachment-lightbox-stage) img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transform-origin: center;
+    transition: transform 90ms ease-out;
+  }
+  :where(.attachment-lightbox-stage).is-dragging img {
+    transition: none;
+  }
+  :global(.attachment-previous),
+  :global(.attachment-next) {
+    position: absolute;
+    top: 50%;
+    width: 48px;
+    height: 64px;
+    border: 0;
+    border-radius: 10px;
+    font-size: 38px;
+    color: var(--ink);
+    background: color-mix(in oklch, var(--paper-deep), transparent 45%);
+  }
+  :global(.attachment-previous) {
+    left: 8px;
+  }
+  :global(.attachment-next) {
+    right: 8px;
+  }
+</style>

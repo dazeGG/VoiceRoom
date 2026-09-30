@@ -1,0 +1,20 @@
+# One line ending for every text file. Before 2026-09-24 endings were per
+# file (mostly LF, ~100 CRLF) and scripted edits flipped whole files.
+* text=auto eol=lf
+
+# Byte-pinned history: migration bytes are asserted by
+# apps/api/test/migration-history-integrity.test.ts and the emoji corpus by
+# its G07 content hash. Never convert them.
+apps/api/src/migrations/** -text
+packages/shared/src/emoji.ts -text
+
+*.wasm binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.mmdb binary

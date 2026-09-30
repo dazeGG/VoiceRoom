@@ -7,6 +7,7 @@ import {
   DEFAULT_NOTIFICATION_VOLUME,
   DEFAULT_PARTICIPANT_VOLUME,
   DEFAULT_STREAM_VOLUME,
+  GATE_AUTO_STORAGE_KEY,
   GATE_THRESHOLD_DB_STORAGE_KEY,
   GATE_THRESHOLD_MAX_DB,
   GATE_THRESHOLD_MIN_DB,
@@ -32,9 +33,7 @@ import {
 } from './config';
 
 export function getNoiseMode(mode: unknown): NoiseMode {
-  return typeof mode === 'string' && Object.hasOwn(NOISE_MODES, mode)
-    ? (mode as NoiseMode)
-    : DEFAULT_NOISE_MODE;
+  return typeof mode === 'string' && Object.hasOwn(NOISE_MODES, mode) ? (mode as NoiseMode) : DEFAULT_NOISE_MODE;
 }
 
 export function getStoredNoiseMode(): NoiseMode {
@@ -82,7 +81,6 @@ export function persistMicrophoneMode(mode: MicrophoneMode): MicrophoneMode {
   return value;
 }
 
-
 export function persistOutputMuted(muted: boolean): void {
   localStorage.setItem(OUTPUT_MUTED_STORAGE_KEY, String(Boolean(muted)));
 }
@@ -103,6 +101,25 @@ export function getNoiseModeLabel(mode: unknown): string {
   return NOISE_MODES[getNoiseMode(mode)].label;
 }
 
+// Automatic sensitivity lets the gate follow the noise floor instead of the
+// fixed slider threshold (static/audio-gate.worklet.js).
+export function getStoredGateAuto(): boolean {
+  try {
+    return localStorage.getItem(GATE_AUTO_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function persistGateAuto(auto: boolean): boolean {
+  try {
+    localStorage.setItem(GATE_AUTO_STORAGE_KEY, auto ? '1' : '0');
+  } catch {
+    // Storage may be unavailable; the choice still applies for this session.
+  }
+  return auto;
+}
+
 export function getStoredGateThresholdDb(): number {
   const storedValue = Number.parseInt(localStorage.getItem(GATE_THRESHOLD_DB_STORAGE_KEY) || '', 10);
   if (Number.isFinite(storedValue)) return clampGateThresholdDb(storedValue);
@@ -117,9 +134,7 @@ export function getStoredGateThresholdDb(): number {
 
 export function getStoredStreamVolume(): number {
   const storedValue = Number.parseFloat(localStorage.getItem(STREAM_VOLUME_STORAGE_KEY) || '');
-  return Number.isFinite(storedValue)
-    ? clampStreamVolume(storedValue)
-    : DEFAULT_STREAM_VOLUME;
+  return Number.isFinite(storedValue) ? clampStreamVolume(storedValue) : DEFAULT_STREAM_VOLUME;
 }
 
 export function storeStreamVolume(volume: number, maxVolume = MAX_STREAM_VOLUME): number {
@@ -138,9 +153,7 @@ export function normalizeStoredStreamVolume(volume: number, maxVolume = MAX_STRE
 
 export function clampStreamVolume(volume: number, maxVolume = MAX_STREAM_VOLUME): number {
   const upperBound = Math.min(MAX_STREAM_VOLUME, Math.max(0, maxVolume));
-  return Number.isFinite(volume)
-    ? Math.min(upperBound, Math.max(0, volume))
-    : DEFAULT_STREAM_VOLUME;
+  return Number.isFinite(volume) ? Math.min(upperBound, Math.max(0, volume)) : DEFAULT_STREAM_VOLUME;
 }
 
 export function clampGateThresholdDb(value: number): number {
@@ -156,11 +169,12 @@ export function amplitudeToDb(amplitude: number): number {
   return Math.max(GATE_THRESHOLD_MIN_DB, Math.min(GATE_THRESHOLD_MAX_DB, 20 * Math.log10(amplitude)));
 }
 
-export function previousGatePercentToDb(value: number): number {
+function previousGatePercentToDb(value: number): number {
   if (value <= 0) return DEFAULT_GATE_THRESHOLD_DB;
 
   const amount = Math.min(100, Math.max(0, value)) / 100;
-  const amplitude = PREVIOUS_GATE_MIN_AMPLITUDE + amount * amount * (PREVIOUS_GATE_MAX_AMPLITUDE - PREVIOUS_GATE_MIN_AMPLITUDE);
+  const amplitude =
+    PREVIOUS_GATE_MIN_AMPLITUDE + amount * amount * (PREVIOUS_GATE_MAX_AMPLITUDE - PREVIOUS_GATE_MIN_AMPLITUDE);
   return Math.round(amplitudeToDb(amplitude));
 }
 
@@ -223,8 +237,6 @@ export function storeParticipantAudioPreference(
   return next;
 }
 
-export function clampParticipantVolume(volume: number): number {
-  return Number.isFinite(volume)
-    ? Math.min(MAX_PARTICIPANT_VOLUME, Math.max(0, volume))
-    : DEFAULT_PARTICIPANT_VOLUME;
+function clampParticipantVolume(volume: number): number {
+  return Number.isFinite(volume) ? Math.min(MAX_PARTICIPANT_VOLUME, Math.max(0, volume)) : DEFAULT_PARTICIPANT_VOLUME;
 }

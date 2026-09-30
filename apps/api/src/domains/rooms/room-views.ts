@@ -1,0 +1,101 @@
+// What clients see of a room and of the peers in it: the shapes of
+// @voice-room/shared/contracts/rooms, which the HTTP routes register and the
+// realtime runtime sends over the socket.
+
+import type { RoomPeerMessage } from '../../realtime/legacy-events.ts';
+import type { LobbyRoom, PublicPeer } from '@voice-room/shared/contracts/rooms';
+import { avatarColorForPeerId } from './avatar-color.ts';
+import { failure, type Failure } from '../../platform/http/http-kit.ts';
+
+/** A peer as the in-memory presence roster holds it. */
+export interface PresencePeer {
+  id: string;
+  accountUserId?: string | null;
+  avatarAccent?: string | null;
+  avatarColorKey?: string | null;
+  avatarUrl?: string | null;
+  deafened?: boolean;
+  gateGuestPrincipalId?: string | null;
+  ip?: string;
+  joinedAt?: number;
+  muted?: boolean;
+  name?: string;
+  screen?: boolean;
+  screenAudio?: boolean;
+  screenProfileId?: string;
+  screenStreamId?: string;
+  serverMuted?: boolean;
+  sessionToken?: string;
+  transport?: { id?: string; send(message: RoomPeerMessage): boolean } | null;
+  viewedScreenPeerId?: string;
+}
+
+/** A room row as the store returns it. */
+export interface StoredRoom {
+  id: string;
+  avatarKey?: string | null;
+  createdAt: number;
+  emptySince?: number | null;
+  isStatic: boolean;
+  lastMessageAt?: number | null;
+  name: string;
+  ownerId?: string | null;
+  relationship?: string;
+  unreadCount?: number;
+}
+
+/** A stored room joined with its live presence roster. */
+export interface LiveRoom extends StoredRoom {
+  peers: Map<string, PresencePeer>;
+  /** Stamped when the room is read (server.ts getRoom). */
+  updatedAt: number;
+}
+
+export function roomAvatarUrl(avatarKey: string | null | undefined): string | null {
+  return avatarKey ? `/api/avatars/${encodeURIComponent(avatarKey)}` : null;
+}
+
+export function publicPeer(peer: PresencePeer): PublicPeer {
+  return {
+    accountUserId: peer.accountUserId || '',
+    avatarAccent: peer.avatarAccent || null,
+    avatarColorKey: peer.avatarColorKey || (avatarColorForPeerId(peer.id) as string),
+    avatarUrl: peer.avatarUrl || null,
+    deafened: peer.deafened,
+    id: peer.id,
+    joinedAt: peer.joinedAt,
+    muted: peer.muted,
+    name: peer.name,
+    screen: peer.screen,
+    serverMuted: Boolean(peer.serverMuted),
+    screenAudio: peer.screenAudio,
+    screenProfileId: peer.screenProfileId,
+    screenStreamId: peer.screenStreamId,
+    viewedScreenPeerId: peer.viewedScreenPeerId
+  };
+}
+
+export type { LobbyRoom, PublicPeer };
+
+/** The lobby card: the PUT response, the room list and the room.updated event. */
+export function publicLobbyRoom(room: StoredRoom, peerCount: number): LobbyRoom {
+  const result: LobbyRoom = {
+    avatarUrl: roomAvatarUrl(room.avatarKey),
+    createdAt: room.createdAt,
+    emptySince: room.emptySince,
+    isStatic: room.isStatic,
+    name: room.name,
+    peers: peerCount,
+    relationship: room.relationship || 'owner',
+    roomId: room.id
+  };
+  if (room.lastMessageAt !== undefined) result.lastMessageAt = room.lastMessageAt;
+  if (Number.isFinite(room.unreadCount)) result.unreadCount = Math.max(0, room.unreadCount as number);
+  return result;
+}
+
+const ROOM_BANNED_ERROR = 'Вы заблокированы в этой комнате';
+
+export function roomBanned(roomId: string): Failure & { roomId: string } {
+  return { ...failure(ROOM_BANNED_ERROR, { code: 'room_banned' }), roomId };
+}

@@ -75,8 +75,8 @@
       data-active={tab === 'permanent'}
       type="button"
       tabindex={tab === 'permanent' ? 0 : -1}
-      onclick={() => selectTab('permanent')}
-    >Постоянная</button>
+      onclick={() => selectTab('permanent')}>Постоянная</button
+    >
     <button
       bind:this={tempTab}
       id="createRoomTempTab"
@@ -87,8 +87,8 @@
       data-active={tab === 'temp'}
       type="button"
       tabindex={tab === 'temp' ? 0 : -1}
-      onclick={() => selectTab('temp')}
-    >Временная</button>
+      onclick={() => selectTab('temp')}>Временная</button
+    >
   </div>
 
   <form class="lr-dialog-form" onsubmit={submit}>
@@ -97,10 +97,11 @@
     {/if}
 
     <div class="lr-field">
-      <div class="lr-field-label">
+      <label class="lr-field-label" for="createRoomName">
         Название{#if tab === 'temp'}<span class="lr-field-label-soft"> · необязательно</span>{/if}
-      </div>
+      </label>
       <input
+        id="createRoomName"
         class="lr-dialog-input"
         maxlength="60"
         placeholder={tab === 'permanent' ? 'Название комнаты' : 'Название созвона'}
@@ -139,3 +140,88 @@
     </div>
   </form>
 </Dialog>
+
+<style>
+  :global(.lr-dialog-form) {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+  :global(.lr-field) {
+    margin-bottom: 4px;
+  }
+  :global(.lr-field-label) {
+    display: block;
+    font-size: 12.5px;
+    font-weight: 700;
+    color: var(--warm-muted);
+    margin-bottom: 8px;
+  }
+  :global(.lr-field-label-soft) {
+    color: var(--warm-faint);
+    font-weight: 500;
+  }
+  :global(.lr-dialog-input) {
+    width: 100%;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--radius-md);
+    padding: 13px 15px;
+    background: var(--warm-900);
+    color: var(--warm-ink);
+    font-family: var(--font-ui);
+    font-size: 15px;
+    outline: none;
+    transition: border-color 0.15s ease;
+  }
+  :where(.lr-dialog-input)::placeholder {
+    color: var(--warm-faint);
+  }
+  :where(.lr-dialog-input):focus {
+    border-color: var(--accent);
+  }
+  :global(.lr-dialog-tabs) {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-md);
+    background: var(--warm-950);
+  }
+  :global(.lr-dialog-note) {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    border-radius: var(--radius-md);
+    padding: 11px 13px;
+    font-size: 12.5px;
+    line-height: 1.4;
+  }
+  :global(.lr-dialog-note svg) {
+    flex: none;
+  }
+  :global(.lr-dialog-note--ok) {
+    border: 1px solid color-mix(in oklch, var(--green), transparent 78%);
+    background: color-mix(in oklch, var(--green), transparent 92%);
+    color: var(--warm-ink-dim);
+  }
+  :global(.lr-dialog-note--ok svg) {
+    stroke: var(--green);
+  }
+  :global(.lr-dialog-note--warn) {
+    border: 1px solid color-mix(in oklch, var(--amber), transparent 72%);
+    background: color-mix(in oklch, var(--amber), transparent 90%);
+    color: var(--warm-ink-dim);
+  }
+  :global(.lr-dialog-note--warn svg) {
+    stroke: var(--amber);
+  }
+  :global(.lr-dialog-error) {
+    margin: 0;
+    border: 1px solid color-mix(in oklch, var(--coral), transparent 60%);
+    border-radius: var(--radius-md);
+    padding: 9px 12px;
+    background: color-mix(in oklch, var(--coral), transparent 88%);
+    color: var(--warm-ink-dim);
+    font-size: 12.5px;
+  }
+</style>

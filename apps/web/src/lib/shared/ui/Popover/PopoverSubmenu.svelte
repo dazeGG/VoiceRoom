@@ -45,13 +45,11 @@
     const rightSpace = window.innerWidth - rowRect.right;
     const leftSpace = rowRect.left;
     side = rightSpace >= panelRect.width + 18 || rightSpace >= leftSpace ? 'right' : 'left';
-    panelLeft = side === 'right'
-      ? Math.min(window.innerWidth - panelRect.width - 8, rowRect.right + 10)
-      : Math.max(8, rowRect.left - panelRect.width - 10);
-    panelTop = Math.min(
-      Math.max(8, rowRect.top - 8),
-      Math.max(8, window.innerHeight - panelRect.height - 8)
-    );
+    panelLeft =
+      side === 'right'
+        ? Math.min(window.innerWidth - panelRect.width - 8, rowRect.right + 10)
+        : Math.max(8, rowRect.left - panelRect.width - 10);
+    panelTop = Math.min(Math.max(8, rowRect.top - 8), Math.max(8, window.innerHeight - panelRect.height - 8));
     await tick();
     if (focus && open) panel?.querySelector<HTMLElement>('[role="menuitem"]:not([disabled])')?.focus();
   }
@@ -109,7 +107,8 @@
       return;
     }
     if (event.key === 'ArrowDown') next = current < 0 ? 0 : (current + 1) % items.length;
-    else if (event.key === 'ArrowUp') next = current < 0 ? items.length - 1 : (current - 1 + items.length) % items.length;
+    else if (event.key === 'ArrowUp')
+      next = current < 0 ? items.length - 1 : (current - 1 + items.length) % items.length;
     else if (event.key === 'Home') next = 0;
     else if (event.key === 'End') next = items.length - 1;
     else return;
@@ -221,7 +220,13 @@
   }
 
   @keyframes popover-submenu-enter {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 </style>

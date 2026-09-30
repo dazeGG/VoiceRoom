@@ -35,7 +35,14 @@
         style:--avatar-bg={item.background}
         style:--avatar-fg={item.foreground || '#fff'}
         style:--avatar-shadow={item.shadow || 'none'}
-      ><Avatar name={item.label} src={item.src} size={size - 4} background={item.background} class="avatar-stack-avatar" /></span>
+        ><Avatar
+          name={item.label}
+          src={item.src}
+          size={size - 4}
+          background={item.background}
+          class="avatar-stack-avatar"
+        /></span
+      >
     {/each}
     {#if rest > 0}
       <span class="avatar-stack-rest" aria-label={`Ещё ${rest}`}>+{rest}</span>

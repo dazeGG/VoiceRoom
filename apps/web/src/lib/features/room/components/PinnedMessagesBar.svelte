@@ -16,14 +16,8 @@
     canUnpin?: boolean;
   } = $props();
 
-  let expanded = $state(false);
-
   const count = $derived(roomPins.pins.length);
-
-  // A pin removed while the list is open should not leave an empty panel behind.
-  $effect(() => {
-    if (count === 0) expanded = false;
-  });
+  const expanded = $derived(roomPins.expanded);
 
   function preview(text: string): string {
     const clean = text.replace(/\s+/g, ' ').trim();
@@ -37,7 +31,7 @@
       class="pinned-bar-toggle"
       type="button"
       aria-expanded={expanded}
-      onclick={() => (expanded = !expanded)}
+      onclick={() => (roomPins.expanded = !roomPins.expanded)}
     >
       <span class="pinned-bar-icon" aria-hidden="true"><Pin {...iconSm} /></span>
       <span class="pinned-bar-title">Закреплённые</span>

@@ -4,7 +4,7 @@ import { createPermanentRoom, enterRoom, registerViaUi, uniqueLogin } from './he
 async function enableCapabilities(page: Page, enabled: string[]): Promise<void> {
   await page.route('**/api/capabilities', async (route) => {
     const response = await route.fetch();
-    const body = await response.json() as { features?: Record<string, boolean> };
+    const body = (await response.json()) as { features?: Record<string, boolean> };
     await route.fulfill({
       response,
       json: {
@@ -17,16 +17,18 @@ async function enableCapabilities(page: Page, enabled: string[]): Promise<void> 
 
 test('manual polish renders the inbox between download/settings and opens it locally', async ({ page }) => {
   await enableCapabilities(page, ['engagement']);
-  await page.route('**/api/notifications/inbox*', (route) => route.fulfill({
-    json: {
-      contractVersion: 1,
-      notifications: [],
-      pageInfo: { hasMore: false },
-      unreadCount: 0,
-      revision: 0,
-      firstUnread: null
-    }
-  }));
+  await page.route('**/api/notifications/inbox*', (route) =>
+    route.fulfill({
+      json: {
+        contractVersion: 1,
+        notifications: [],
+        pageInfo: { hasMore: false },
+        unreadCount: 0,
+        revision: 0,
+        firstUnread: null
+      }
+    })
+  );
   await registerViaUi(page, uniqueLogin('inboxplacement'));
 
   const download = page.getByRole('button', { name: 'Скачать приложение' });
@@ -36,7 +38,9 @@ test('manual polish renders the inbox between download/settings and opens it loc
   await expect(notifications).toBeVisible();
   await expect(settings).toBeVisible();
   const [downloadBox, notificationBox, settingsBox] = await Promise.all([
-    download.boundingBox(), notifications.boundingBox(), settings.boundingBox()
+    download.boundingBox(),
+    notifications.boundingBox(),
+    settings.boundingBox()
   ]);
   expect(downloadBox).not.toBeNull();
   expect(notificationBox).not.toBeNull();
@@ -51,7 +55,11 @@ test('manual polish renders the inbox between download/settings and opens it loc
   await expect(page.getByRole('heading', { name: 'Уведомления', exact: true })).toHaveCount(0);
 });
 
-test('manual polish renders direct messages with the shared flat chat row and arrow reply action', async ({ browser, page, baseURL }) => {
+test('manual polish renders direct messages with the shared flat chat row and arrow reply action', async ({
+  browser,
+  page,
+  baseURL
+}) => {
   await enableCapabilities(page, ['replies']);
   const firstLogin = uniqueLogin('dmflatone');
   const secondLogin = uniqueLogin('dmflattwo');
@@ -79,12 +87,21 @@ test('manual polish renders direct messages with the shared flat chat row and ar
     // so a text lookup would drift away from the row under test.
     const sentMessage = page.locator('.dm-chat-message', { hasText: 'flat direct message' }).last();
     await expect(sentMessage).toBeVisible();
-    const message = page.locator(`.dm-chat-message[data-message-id="${await sentMessage.getAttribute('data-message-id')}"]`);
+    const message = page.locator(
+      `.dm-chat-message[data-message-id="${await sentMessage.getAttribute('data-message-id')}"]`
+    );
     await expect(message).toBeVisible();
-    await expect(message.locator('xpath=ancestor::div[contains(@class,"dm-chat-group")]')).toHaveAttribute('data-self', 'true');
+    await expect(message.locator('xpath=ancestor::div[contains(@class,"dm-chat-group")]')).toHaveAttribute(
+      'data-self',
+      'true'
+    );
     const style = await message.evaluate((element) => {
       const computed = getComputedStyle(element);
-      return { background: computed.backgroundColor, borderRadius: computed.borderRadius, marginLeft: computed.marginLeft };
+      return {
+        background: computed.backgroundColor,
+        borderRadius: computed.borderRadius,
+        marginLeft: computed.marginLeft
+      };
     });
     expect(style.background).toBe('rgba(0, 0, 0, 0)');
     expect(style.borderRadius).toBe('0px');
@@ -116,7 +133,9 @@ test('manual polish renders direct messages with the shared flat chat row and ar
   }
 });
 
-test('the lobby preview runs the same room chat as the rail, with jumpable quotes and clickable identity', async ({ page }) => {
+test('the lobby preview runs the same room chat as the rail, with jumpable quotes and clickable identity', async ({
+  page
+}) => {
   await enableCapabilities(page, ['reactions', 'replies']);
   const login = uniqueLogin('chatparity');
   await registerViaUi(page, login);
@@ -173,20 +192,28 @@ test('the lobby preview runs the same room chat as the rail, with jumpable quote
   await expect(railBody).toBeVisible({ timeout: 20_000 });
   await expect(railBody.locator('.chat-msg-text', { hasText: 'parity message' })).toBeVisible();
   await expect
-    .poll(async () => railBody.evaluate((element) => Math.round(element.scrollHeight - element.scrollTop - element.clientHeight)))
+    .poll(async () =>
+      railBody.evaluate((element) => Math.round(element.scrollHeight - element.scrollTop - element.clientHeight))
+    )
     .toBeLessThanOrEqual(2);
 });
 
-test('manual polish keeps the newest mention query, emits login-bound segments, and flips the picker at the viewport edge', async ({ page }) => {
+test('manual polish keeps the newest mention query, emits login-bound segments, and flips the picker at the viewport edge', async ({
+  page
+}) => {
   await enableCapabilities(page, ['engagement', 'reactions']);
   const login = uniqueLogin('mentionrace');
   await registerViaUi(page, login);
   const roomId = await createPermanentRoom(page, `Mention race ${login}`);
 
   let releaseSlow!: () => void;
-  const slowResponse = new Promise<void>((resolve) => { releaseSlow = resolve; });
+  const slowResponse = new Promise<void>((resolve) => {
+    releaseSlow = resolve;
+  });
   let slowRequested!: () => void;
-  const sawSlowRequest = new Promise<void>((resolve) => { slowRequested = resolve; });
+  const sawSlowRequest = new Promise<void>((resolve) => {
+    slowRequested = resolve;
+  });
   await page.route(`**/api/rooms/${roomId}/members?*`, async (route) => {
     const query = new URL(route.request().url()).searchParams.get('q');
     if (!query) return route.fallback();
@@ -199,18 +226,20 @@ test('manual polish keeps the newest mention query, emits login-bound segments, 
       json: {
         contractVersion: 1,
         roomId,
-        members: [{
-          userId: stable ? 'stable-user' : 'slow-user',
-          displayName: stable ? 'Display Name That Must Not Become The Token' : 'Stale Result',
-          login: stable ? 'stable_login' : 'slow_login',
-          avatarColorKey: 'green',
-          avatarUrl: null,
-          avatarAccent: null,
-          role: 'member',
-          joinedAt: Date.now(),
-          inVoice: false,
-          presenceStatus: 'online'
-        }],
+        members: [
+          {
+            userId: stable ? 'stable-user' : 'slow-user',
+            displayName: stable ? 'Display Name That Must Not Become The Token' : 'Stale Result',
+            login: stable ? 'stable_login' : 'slow_login',
+            avatarColorKey: 'green',
+            avatarUrl: null,
+            avatarAccent: null,
+            role: 'member',
+            joinedAt: Date.now(),
+            inVoice: false,
+            presenceStatus: 'online'
+          }
+        ],
         pageInfo: { hasMore: false },
         presenceRevision: stable ? 2 : 1
       }
@@ -254,7 +283,9 @@ test('manual polish keeps the newest mention query, emits login-bound segments, 
   await expect(page.getByRole('option', { name: /@slow_login/ })).toHaveCount(0);
   await stableOption.click();
   await expect.poll(() => composer.evaluate((element) => element.textContent)).toBe('@stable_login ');
-  const mentionRequest = page.waitForRequest((request) => request.method() === 'POST' && request.url().endsWith(`/api/rooms/${roomId}/chat`));
+  const mentionRequest = page.waitForRequest(
+    (request) => request.method() === 'POST' && request.url().endsWith(`/api/rooms/${roomId}/chat`)
+  );
   await composer.press('Enter');
   const payload = (await mentionRequest).postDataJSON() as { content?: { segments?: unknown[] } };
   expect(payload.content?.segments).toEqual([{ type: 'mention', userId: 'stable-user', label: '@stable_login' }]);
@@ -279,10 +310,16 @@ test('manual polish keeps the newest mention query, emits login-bound segments, 
   expect(pickerBox!.y).toBeGreaterThanOrEqual(8);
   expect(pickerBox!.y + pickerBox!.height).toBeLessThanOrEqual(420);
   await expect.poll(() => picker.evaluate((element) => getComputedStyle(element).position)).toBe('fixed');
-  await expect.poll(() => page.locator('.chat-rail-body').evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  await expect
+    .poll(() => page.locator('.chat-rail-body').evaluate((element) => element.scrollWidth <= element.clientWidth + 1))
+    .toBe(true);
 });
 
-test('room members panel releases navigation, switches to chat, collapses, and keeps speaking state binary', async ({ browser, page, baseURL }) => {
+test('room members panel releases navigation, switches to chat, collapses, and keeps speaking state binary', async ({
+  browser,
+  page,
+  baseURL
+}) => {
   await enableCapabilities(page, ['membership']);
   await page.setViewportSize({ width: 1440, height: 900 });
 
@@ -312,18 +349,20 @@ test('room members panel releases navigation, switches to chat, collapses, and k
         json: {
           contractVersion: 1,
           roomId,
-          members: [{
-            userId: 'room-navigation-owner',
-            displayName: ownerLogin,
-            login: ownerLogin,
-            avatarColorKey: 'green',
-            avatarUrl: null,
-            avatarAccent: null,
-            role: 'owner',
-            joinedAt: Date.now(),
-            inVoice: true,
-            presenceStatus: 'online'
-          }],
+          members: [
+            {
+              userId: 'room-navigation-owner',
+              displayName: ownerLogin,
+              login: ownerLogin,
+              avatarColorKey: 'green',
+              avatarUrl: null,
+              avatarAccent: null,
+              role: 'owner',
+              joinedAt: Date.now(),
+              inVoice: true,
+              presenceStatus: 'online'
+            }
+          ],
           pageInfo: { hasMore: false },
           presenceRevision: 1
         }
@@ -344,10 +383,17 @@ test('room members panel releases navigation, switches to chat, collapses, and k
     await page.keyboard.press('Escape');
 
     const panelChatTab = panel.getByRole('tab', { name: 'Чат' });
-    await expect.poll(() => panelChatTab.evaluate((element) => {
-      const rect = element.getBoundingClientRect();
-      return document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)?.closest('button') === element;
-    })).toBe(true);
+    await expect
+      .poll(() =>
+        panelChatTab.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          return (
+            document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2)?.closest('button') ===
+            element
+          );
+        })
+      )
+      .toBe(true);
     await panelChatTab.click();
     await expect(panel.locator('#room-panel-chat')).toBeVisible();
     await panel.getByRole('tab', { name: 'Участники' }).click();

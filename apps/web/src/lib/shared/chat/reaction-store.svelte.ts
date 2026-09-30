@@ -6,6 +6,9 @@ import {
   type ReactionConversation
 } from '$lib/api/reactions';
 import { replaceReactionSnapshot } from './reaction-reconciliation';
+import { createLogger, errorContext } from '$lib/shared/log';
+
+const log = createLogger('chat:reactions');
 
 export type ReactionView = ReactionSummary & { pending: boolean; error: string };
 export type ReactorListState = {
@@ -44,6 +47,10 @@ export class ReactionStore {
   loadingMessages = $state<Record<string, true>>({});
   private requestSequence = 0;
   private reactorRequests: Record<string, number> = {};
+  // Messages whose reactions were asked for. Plain, not $state: a chat calls
+  // load() from an effect, and reactive loading state read there would re-run
+  // that effect after every answer and fetch again forever.
+  private requested: Record<string, true> = {};
 
   private conversationKey(): string {
     return this.conversation ? `${this.conversation.type}:${this.conversation.id}` : '';
@@ -62,6 +69,7 @@ export class ReactionStore {
     this.reactors = {};
     this.deletedMessages = {};
     this.loadingMessages = {};
+    this.requested = {};
     this.invalidateReactors();
   }
 
@@ -111,12 +119,19 @@ export class ReactionStore {
     this.summaries = { ...this.summaries, [messageId]: items };
   }
 
+  /** Fetches a message's reactions once; realtime events keep them current after that. */
   async load(messageId: string): Promise<void> {
+    if (this.requested[messageId]) return;
     const conversation = this.conversation;
-    if (!conversation || this.loadingMessages[messageId] || this.isDeleted(messageId)) return;
+    if (!conversation || this.isDeleted(messageId)) return;
+    this.requested[messageId] = true;
     this.loadingMessages = { ...this.loadingMessages, [messageId]: true };
     try {
       this.replace(messageId, await fetchReactionSummaries(conversation, messageId));
+    } catch (error) {
+      // Asked again the next time the message is shown.
+      delete this.requested[messageId];
+      log.warn('reactions did not load', errorContext(error));
     } finally {
       const next = { ...this.loadingMessages };
       delete next[messageId];
@@ -146,7 +161,8 @@ export class ReactionStore {
 
     try {
       const authoritative = await setReactionDesired(conversation, messageId, emoji, desired);
-      if (this.isDeleted(messageId) || this.conversationKey() !== `${conversation.type}:${conversation.id}`) return false;
+      if (this.isDeleted(messageId) || this.conversationKey() !== `${conversation.type}:${conversation.id}`)
+        return false;
       const latest = [...this.forMessage(messageId)];
       const latestIndex = latest.findIndex((item) => item.emoji === emoji);
       if (latestIndex >= 0) latest[latestIndex] = { ...latest[latestIndex], pending: false };
@@ -154,7 +170,8 @@ export class ReactionStore {
       this.applyServer(messageId, authoritative);
       return true;
     } catch (error) {
-      if (this.isDeleted(messageId) || this.conversationKey() !== `${conversation.type}:${conversation.id}`) return false;
+      if (this.isDeleted(messageId) || this.conversationKey() !== `${conversation.type}:${conversation.id}`)
+        return false;
       const latest = [...this.forMessage(messageId)];
       const latestIndex = latest.findIndex((item) => item.emoji === emoji);
       if (current) {
@@ -174,9 +191,14 @@ export class ReactionStore {
   }
 
   reactorState(messageId: string, emoji: string): ReactorListState {
-    return this.reactors[reactorKey(messageId, emoji)] || {
-      reactors: [], nextCursor: null, loading: false, error: ''
-    };
+    return (
+      this.reactors[reactorKey(messageId, emoji)] || {
+        reactors: [],
+        nextCursor: null,
+        loading: false,
+        error: ''
+      }
+    );
   }
 
   async loadReactors(messageId: string, emoji: string, append = false): Promise<void> {
@@ -194,7 +216,12 @@ export class ReactionStore {
         cursor: append ? current.nextCursor : null,
         limit: 50
       });
-      if (this.reactorRequests[key] !== requestId || this.conversationKey() !== conversationKey || this.isDeleted(messageId)) return;
+      if (
+        this.reactorRequests[key] !== requestId ||
+        this.conversationKey() !== conversationKey ||
+        this.isDeleted(messageId)
+      )
+        return;
       const candidates = append ? [...current.reactors, ...page.reactors] : page.reactors;
       const reactors = [...new Map(candidates.map((reactor) => [reactor.userId, reactor])).values()];
       this.reactors = {
@@ -202,7 +229,12 @@ export class ReactionStore {
         [key]: { reactors, nextCursor: page.nextCursor, loading: false, error: '' }
       };
     } catch (error) {
-      if (this.reactorRequests[key] !== requestId || this.conversationKey() !== conversationKey || this.isDeleted(messageId)) return;
+      if (
+        this.reactorRequests[key] !== requestId ||
+        this.conversationKey() !== conversationKey ||
+        this.isDeleted(messageId)
+      )
+        return;
       this.reactors = {
         ...this.reactors,
         [key]: {
@@ -220,6 +252,7 @@ export class ReactionStore {
     this.reactors = {};
     this.deletedMessages = {};
     this.loadingMessages = {};
+    this.requested = {};
     this.invalidateReactors();
   }
 }

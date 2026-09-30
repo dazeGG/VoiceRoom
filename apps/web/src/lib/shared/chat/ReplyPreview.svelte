@@ -29,12 +29,12 @@
     onclick={jump}
   >
     {#if author}<strong><EmojiText text={author} /></strong>{/if}
-    <span><EmojiText text={text} /></span>
+    <span><EmojiText {text} /></span>
   </button>
 {:else}
   <div class="reply-preview" class:reply-preview-tombstone={preview.deleted} aria-label="Ответ на сообщение">
     {#if author}<strong><EmojiText text={author} /></strong>{/if}
-    <span><EmojiText text={text} /></span>
+    <span><EmojiText {text} /></span>
   </div>
 {/if}
 

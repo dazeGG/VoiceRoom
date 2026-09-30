@@ -13,9 +13,10 @@ export function getAvatarPresentation(
   label: string;
   src: string | null;
 } {
-  const accent = typeof participant.avatarAccent === 'string' && /^#[0-9a-f]{6}$/i.test(participant.avatarAccent)
-    ? participant.avatarAccent
-    : null;
+  const accent =
+    typeof participant.avatarAccent === 'string' && /^#[0-9a-f]{6}$/i.test(participant.avatarAccent)
+      ? participant.avatarAccent
+      : null;
 
   let background: string;
   let foreground: string;

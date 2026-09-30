@@ -155,7 +155,9 @@
   font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
 .lobby-add:hover {
@@ -184,7 +186,9 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   background: var(--panel);
-  transition: border-color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
 }
 
 .room-card:hover {
@@ -324,7 +328,6 @@
     animation: none;
   }
 }
-
 
 .room-card-temp--bookmark {
   border-color: rgba(154, 143, 106, 0.36);

@@ -1,0 +1,25 @@
+{
+  // The API source is strict TypeScript run by Node 24 as-is (type
+  // stripping), so only erasable syntax is allowed and nothing is emitted.
+  // The applied migrations stay byte-pinned .cjs and are not checked; the
+  // tests are included. See docs/ARCHITECTURE.md.
+  "compilerOptions": {
+    "target": "es2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2024"],
+    "types": ["node"],
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/**/*.ts", "src/**/*.mts", "test/**/*.ts", "test/**/*.mts"]
+}

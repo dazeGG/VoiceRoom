@@ -6,11 +6,7 @@
   import StageTiles from './StageTiles.svelte';
 </script>
 
-<main
-  class="room-layout"
-  id="roomScreen"
-  hidden={roomClientState.screen !== 'room'}
->
+<main class="room-layout" id="roomScreen" hidden={roomClientState.screen !== 'room'}>
   <section class="stage" aria-label="Голосовая комната">
     <ScreenStage />
     <StageTiles />

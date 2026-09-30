@@ -3,6 +3,7 @@ import type { SvelteMap } from 'svelte/reactivity';
 import type { HotkeyBinding } from '$lib/shared/ui/HotkeyRecorder/types';
 import type { MicrophoneMode, NoiseMode } from './config';
 import type { Participant, PeerInfo } from '../model/participants';
+import type { LobbyRoom } from '@voice-room/shared/contracts/rooms';
 export type { Participant, ParticipantViewRefs, PeerInfo } from '../model/participants';
 
 export type ScreenStreamMode = 'games' | 'text';
@@ -33,7 +34,8 @@ export interface MicProcessor {
   setGain?: (gain: number) => void;
   source: MediaStreamAudioSourceNode;
   setThreshold?: (threshold: number) => void;
-  type?: 'gate' | 'input-gain';
+  setAuto?: (auto: boolean) => void;
+  type?: 'gate' | 'input-gain' | 'rnnoise';
 }
 
 export interface MicrophoneCapture {
@@ -145,11 +147,23 @@ export interface RoomSessionState {
   sessionToken: string;
 }
 
+/**
+ * What the connection pill reports beyond ping: packet loss both ways, jitter
+ * of what we hear, and whether media had to fall back to TCP or a relay.
+ */
+export interface LocalNetworkStats {
+  inboundLossPct: number | null;
+  jitterMs: number | null;
+  outboundLossPct: number | null;
+  transport: 'udp' | 'tcp' | 'relay' | null;
+}
+
 export interface RoomConnectionState {
   connecting: boolean;
   voiceRealtimeTeardown: (() => void) | null;
   localConnectionQuality: string;
   localPingMs: number | null;
+  localNetwork: LocalNetworkStats;
   livekitRoom: Room | null;
   serverConnection: string;
   serverPeerIds: Set<string>;
@@ -166,6 +180,7 @@ export interface RoomAudioState {
   audioContext: AudioContext | null;
   audioUnlockPending: boolean;
   gateThresholdDb: number;
+  gateAuto: boolean;
   localMicPublication: LocalTrackPublication | null;
   localRawStream: MediaStream | null;
   localStream: MediaStream | null;
@@ -208,24 +223,10 @@ export interface RoomScreenState {
 }
 
 export interface AppState
-  extends RoomSessionState,
-    RoomConnectionState,
-    RoomParticipantState,
-    RoomAudioState,
-    RoomScreenState {}
+  extends RoomSessionState, RoomConnectionState, RoomParticipantState, RoomAudioState, RoomScreenState {}
 
-// Mirrors the server's publicLobbyRoom() shape (server.js) — the body carried
-// by both the PUT /api/rooms/:roomId response and the room-updated broadcast.
-export interface RoomLifecycleSummary {
-  avatarUrl: string | null;
-  createdAt: number;
-  emptySince: number | null;
-  isStatic: boolean;
-  name: string;
-  peers: number;
-  relationship: string;
-  roomId: string;
-}
+/** The lobby card the rename answer and the room.updated broadcast carry. */
+export type RoomLifecycleSummary = LobbyRoom;
 
 export type ServerMessage =
   | { type: 'hello'; peer: PeerInfo; peers: PeerInfo[]; roomId: string }
@@ -248,10 +249,7 @@ interface DesktopAudioFormatEvent {
 declare global {
   interface Window {
     voiceRoomDesktopCapture?: {
-      applyProfile?: (options: {
-        fpsId?: string;
-        qualityId?: string;
-      }) => Promise<{
+      applyProfile?: (options: { fpsId?: string; qualityId?: string }) => Promise<{
         fpsId?: string;
         maxHeight?: number;
         maxWidth?: number;
@@ -289,12 +287,8 @@ declare global {
     voiceRoomDesktopAudio?: {
       startSafeSystem: (options: { mode: string }) => Promise<{ sessionId: string }>;
       stop: (sessionId: string) => Promise<void>;
-      onData: (
-        callback: (payload: { sessionId: string; chunk: Uint8Array | ArrayBuffer }) => void
-      ) => () => void;
-      onEvent: (
-        callback: (payload: { sessionId: string; event: DesktopAudioFormatEvent }) => void
-      ) => () => void;
+      onData: (callback: (payload: { sessionId: string; chunk: Uint8Array | ArrayBuffer }) => void) => () => void;
+      onEvent: (callback: (payload: { sessionId: string; event: DesktopAudioFormatEvent }) => void) => () => void;
     };
     voiceRoomDesktopHotkeys?: {
       configure: (payload: {

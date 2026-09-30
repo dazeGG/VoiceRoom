@@ -1,17 +1,14 @@
 import type { PlacementAxis, PopoverPlacement } from './types';
 
-export const POPOVER_PANEL_GAP_PX = 10;
-export const POPOVER_VIEWPORT_MARGIN_PX = 8;
+const POPOVER_PANEL_GAP_PX = 10;
+const POPOVER_VIEWPORT_MARGIN_PX = 8;
 
 export function parsePlacement(placement: PopoverPlacement): PlacementAxis {
   const [vertical, horizontal] = placement.split('-') as ['top' | 'bottom', 'start' | 'end'];
   return { vertical, horizontal };
 }
 
-export function flipPlacementVertical(
-  placement: PopoverPlacement,
-  vertical: 'top' | 'bottom'
-): PopoverPlacement {
+function flipPlacementVertical(placement: PopoverPlacement, vertical: 'top' | 'bottom'): PopoverPlacement {
   const { horizontal } = parsePlacement(placement);
   return `${vertical}-${horizontal}`;
 }
@@ -40,15 +37,13 @@ export function resolvePopoverPlacement(
   const { spaceAbove, spaceBelow } = viewportSpaceAroundTrigger(triggerRect, viewportHeight);
 
   if (vertical === 'bottom') {
-    const overflowsBelow =
-      panelRect.bottom > viewportHeight - margin || panelRect.height > spaceBelow;
+    const overflowsBelow = panelRect.bottom > viewportHeight - margin || panelRect.height > spaceBelow;
     if (!overflowsBelow) return preferred;
     if (spaceAbove > spaceBelow) return flipPlacementVertical(preferred, 'top');
     return preferred;
   }
 
-  const overflowsAbove =
-    panelRect.top < margin || panelRect.height > spaceAbove;
+  const overflowsAbove = panelRect.top < margin || panelRect.height > spaceAbove;
   if (!overflowsAbove) return preferred;
   if (spaceBelow > spaceAbove) return flipPlacementVertical(preferred, 'bottom');
   return preferred;

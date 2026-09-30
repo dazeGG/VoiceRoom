@@ -29,8 +29,8 @@
   const friends = $derived(
     [...supplied].sort(
       (a, b) =>
-        Number(b.online) - Number(a.online)
-        || (a.user.displayName || a.user.login).localeCompare(b.user.displayName || b.user.login, 'ru')
+        Number(b.online) - Number(a.online) ||
+        (a.user.displayName || a.user.login).localeCompare(b.user.displayName || b.user.login, 'ru')
     )
   );
 
@@ -56,11 +56,7 @@
     {#each friends as friend (friend.user.id)}
       {@const name = friend.user.displayName || friend.user.login}
       {@const alreadyInRoom = presentUserIds.has(friend.user.id)}
-      {@const presence = effectivePresenceStatus(
-        friend.online,
-        friend.user.presenceStatus,
-        friend.user.doNotDisturb
-      )}
+      {@const presence = effectivePresenceStatus(friend.online, friend.user.presenceStatus, friend.user.doNotDisturb)}
       <button
         class="room-invite-friend"
         type="button"
@@ -120,7 +116,9 @@
     font-weight: 600;
     text-align: left;
     cursor: pointer;
-    transition: background 0.14s ease, color 0.14s ease;
+    transition:
+      background 0.14s ease,
+      color 0.14s ease;
   }
 
   .room-invite-friend:hover:not(:disabled),

@@ -14,7 +14,6 @@
     quickReactions = [],
     activeReactions = new Set<string>(),
     canReact = false,
-    canReply = false,
     canPin = false,
     pinned = false,
     canEdit = false,
@@ -35,7 +34,6 @@
     quickReactions?: readonly string[];
     activeReactions?: Set<string>;
     canReact?: boolean;
-    canReply?: boolean;
     canPin?: boolean;
     pinned?: boolean;
     canEdit?: boolean;
@@ -62,7 +60,11 @@
   function handleShortcut(event: KeyboardEvent): void {
     if (!open || event.isComposing || event.metaKey || event.ctrlKey || event.altKey) return;
     const target = event.target;
-    if (target instanceof HTMLElement && target.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]')) return;
+    if (
+      target instanceof HTMLElement &&
+      target.closest('input, textarea, select, [contenteditable="true"], [role="textbox"]')
+    )
+      return;
     if (event.key.toLowerCase() === 'e' && canEdit && onEdit) {
       event.preventDefault();
       event.stopPropagation();
@@ -96,8 +98,8 @@
               onclick={() => {
                 onReact?.(emoji);
                 close();
-              }}
-            ><Emoji {emoji} size={20} decorative /></button>
+              }}><Emoji {emoji} size={20} decorative /></button
+            >
           {/each}
           <button
             class="message-menu-reaction message-menu-reaction--more"
@@ -110,14 +112,14 @@
               const anchor = event.currentTarget;
               onOpenReactionPicker?.(anchor);
               close();
-            }}
-          ><SmilePlus {...iconMd} aria-hidden="true" /></button>
+            }}><SmilePlus {...iconMd} aria-hidden="true" /></button
+          >
         </div>
 
         <PopoverDivider />
       {/if}
 
-      {#if canReply}
+      {#if onReply}
         <PopoverMenuItem label="Ответить" disabled={busy} onclick={() => pick(onReply, close)}>
           {#snippet icon()}<Reply {...iconMd} aria-hidden="true" />{/snippet}
         </PopoverMenuItem>
@@ -192,7 +194,9 @@
     font-size: 20px;
     line-height: 1;
     cursor: pointer;
-    transition: background 0.14s ease, color 0.14s ease;
+    transition:
+      background 0.14s ease,
+      color 0.14s ease;
   }
 
   .message-menu-reaction:hover:not(:disabled),

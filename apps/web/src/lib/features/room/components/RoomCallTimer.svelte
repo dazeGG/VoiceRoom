@@ -30,8 +30,8 @@
   <span
     class="room-call-timer room-call-timer--{variant}"
     title="Длительность звонка в комнате"
-    aria-label={`Длительность звонка ${elapsed}`}
-  >{elapsed}</span>
+    aria-label={`Длительность звонка ${elapsed}`}>{elapsed}</span
+  >
 {/if}
 
 <style>

@@ -1,662 +1,62 @@
 <script lang="ts">
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
-  import { Bell, BellOff, DoorOpen, User, UserMinus, X } from '@lucide/svelte';
-  import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import { onMount, tick, untrack } from 'svelte';
-  import type { DirectMessage } from '$lib/api/dm';
+  import { User } from '@lucide/svelte';
+  import { onMount } from 'svelte';
   import type { AuthUser } from '$lib/api/auth';
-  import { Avatar } from '$lib/shared/ui';
-  import { effectivePresenceStatus } from '$lib/shared/presence';
-  import ChatText from '$lib/shared/components/ChatText.svelte';
-  import { friendName, formatDayLabel, formatTime, isSameDay } from '../../model/lobby-format';
-  import {
-    friendsState,
-    closeProfile,
-    deleteMessage,
-    editMessage as editDmMessage,
-    removeFriend,
-    respondRoomInvitation,
-    sendMessage,
-    loadOlderThread,
-    toggleProfile,
-    dmTyping
-  } from '../../model/friends.svelte';
-  import { createTypingNotifier, formatTypingLabel } from '$lib/shared/chat/typing.svelte';
-  import { isPeerNotificationsMuted, updatePeerNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
-  import { copyText } from '$lib/shared/utils/clipboard';
-  import { pushToast } from '../../model/toasts.svelte';
-  import { markThreadRead } from '$lib/api/dm';
-  import { createReadReconciliation } from '$lib/shared/chat/read-reconciliation.svelte';
-  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
-  import { getAppRealtime } from '$lib/api/realtime';
-  import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
-  import MessageContextMenu from '$lib/shared/chat/MessageContextMenu.svelte';
-  import MessageHoverActions from '$lib/shared/chat/MessageHoverActions.svelte';
-  import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions } from '$lib/shared/chat/frequent-reactions';
-  import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
-  import {
-    dataTransferHasImages,
-    getAttachmentComposeStore,
-    imageFilesFromClipboard,
-    imageFilesFromDataTransfer,
-    type AttachmentComposeStore
-  } from '$lib/shared/chat/attachment-compose.svelte';
-  import AttachmentComposer from '$lib/shared/chat/AttachmentComposer.svelte';
-  import ComposerEmojiPicker from '$lib/shared/chat/ComposerEmojiPicker.svelte';
-  import TypingIndicator from '$lib/shared/chat/TypingIndicator.svelte';
-  import EmojiComposer from '$lib/shared/chat/EmojiComposer.svelte';
   import AttachmentDropOverlay from '$lib/shared/chat/AttachmentDropOverlay.svelte';
-  import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
-  import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
-  import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
-  import LinkPreviewCard from '$lib/shared/chat/LinkPreviewCard.svelte';
-  import ReplyTargetBar from '$lib/shared/chat/ReplyTargetBar.svelte';
-  import { loadChatDraft, saveChatDraft } from '$lib/shared/chat/chat-drafts';
-  import { openProfileCardFor } from '../../profile-card-ui.svelte';
-  import type { ProfileCardPerson } from '$lib/shared/components/profile-card';
+  import { getAttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
+  import { AttachmentDrop } from '$lib/shared/chat/attachment-drop.svelte';
+  import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions } from '$lib/shared/chat/frequent-reactions';
+  import { effectivePresenceStatus, presenceStatusLabel } from '$lib/shared/presence';
+  import { Avatar } from '$lib/shared/ui';
+  import { iconMd } from '$lib/shared/ui/icons';
+  import { useLobby } from '$lib/features/home/model/lobby-context';
+  import { friendName } from '../../model/lobby-format';
+  import { pushToast } from '../../model/toasts.svelte';
+  import DmConversation from './dm/DmConversation.svelte';
+  import DmProfilePanel from './dm/DmProfilePanel.svelte';
 
-  let { selfId, self } = $props<{ selfId: string; self: AuthUser }>();
+  const lobby = useLobby();
 
-  let draft = $state('');
-  let sending = $state(false);
-  let editingMessageId = $state('');
-  let editDraft = $state('');
-  let editSaving = $state(false);
-  let scrollEl = $state<HTMLDivElement | null>(null);
-  let inputEl = $state<ReturnType<typeof EmojiComposer> | null>(null);
-  let threadPinnedToBottom = true;
-  let composerAttachmentCount = 0;
-  let editEl = $state<ReturnType<typeof EmojiComposer> | null>(null);
-  let readReconciliation: ReturnType<typeof createReadReconciliation> | null = null;
-  let reactionsEnabled = $state(false);
-  const reactions = createReactionStore();
-  let media = $state<AttachmentComposeStore | null>(null);
-  let attachmentDragDepth = $state(0);
-  let mediaUploadsEnabled = $state(false);
-  let repliesEnabled = $state(false);
-  let replyTarget = $state<DirectMessage | null>(null);
-  let menuMessage = $state<DirectMessage | null>(null);
-  let menuFromMe = $state(false);
-  let menuX = $state(0);
-  let menuY = $state(0);
+  let { self }: { self: AuthUser } = $props();
+
   let quickReactions = $state<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
-  let sendAttemptKey = '';
-  let sendAttemptFingerprint = '';
+  let sending = $state(false);
 
-  function idempotencyKeyFor(value: unknown): string {
-    const fingerprint = JSON.stringify(value);
-    if (!sendAttemptKey || sendAttemptFingerprint !== fingerprint) {
-      sendAttemptKey = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      sendAttemptFingerprint = fingerprint;
-    }
-    return sendAttemptKey;
-  }
-
-  function onKeydown(event: KeyboardEvent): void {
-    if (event.isComposing) return;
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      void submit();
-      return;
-    }
-    // ArrowUp in an empty composer edits the last own message, like Discord.
-    if (event.key === 'ArrowUp' && !draft.trim() && !editingMessageId) {
-      const lastOwn = findLastOwnMessage();
-      if (lastOwn) {
-        event.preventDefault();
-        startEditing(lastOwn);
-      }
-      return;
-    }
-  }
-
-  async function onComposePaste(event: ClipboardEvent): Promise<void> {
-    if (!media) return;
-    const files = imageFilesFromClipboard(event);
-    if (!files.length) return;
-    event.preventDefault();
-    try {
-      await media.addFiles(files);
-    } catch (cause) {
-      pushToast(cause instanceof Error ? cause.message : 'Не удалось вставить изображение', { variant: 'error' });
-    }
-  }
-
-  function onAttachmentDragEnter(event: DragEvent): void {
-    if (!media || sending || !dataTransferHasImages(event.dataTransfer)) return;
-    event.preventDefault();
-    attachmentDragDepth += 1;
-  }
-
-  function onAttachmentDragOver(event: DragEvent): void {
-    if (!media || sending || !dataTransferHasImages(event.dataTransfer)) return;
-    event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy';
-  }
-
-  function onAttachmentDragLeave(event: DragEvent): void {
-    if (!attachmentDragDepth) return;
-    event.preventDefault();
-    attachmentDragDepth = Math.max(0, attachmentDragDepth - 1);
-  }
-
-  async function onAttachmentDrop(event: DragEvent): Promise<void> {
-    if (!media) return;
-    const files = imageFilesFromDataTransfer(event.dataTransfer);
-    if (!files.length) return;
-    event.preventDefault();
-    attachmentDragDepth = 0;
-    try {
-      await media.addFiles(files);
-    } catch (cause) {
-      pushToast(cause instanceof Error ? cause.message : 'Не удалось загрузить изображение', { variant: 'error' });
-    }
-  }
-
-  function showAttachmentError(message: string): void {
-    pushToast(message, { variant: 'error' });
-  }
-
-  function findLastOwnMessage(): DirectMessage | null {
-    for (let index = friendsState.thread.length - 1; index >= 0; index -= 1) {
-      const message = friendsState.thread[index];
-      if (message.senderId === selfId && !message.invite) return message;
-    }
-    return null;
-  }
-
-  const peer = $derived(friendsState.threadPeer);
-  const friendEntry = $derived(
-    friendsState.friends.find((entry) => entry.user.id === friendsState.selectedFriendId)
-  );
-  const online = $derived(friendEntry?.online ?? false);
+  const peerId = $derived(lobby.selectedFriendId ?? '');
+  const peer = $derived(lobby.thread.peer);
+  const online = $derived(lobby.friends.find((entry) => entry.user.id === peerId)?.online ?? false);
   const presence = $derived(effectivePresenceStatus(online, peer?.presenceStatus, peer?.doNotDisturb));
-  const presenceLabel = $derived(
-    presence === 'dnd'
-      ? 'не беспокоить'
-      : presence === 'away'
-        ? 'отошёл'
-        : presence === 'online'
-          ? 'в сети'
-          : 'не в сети'
-  );
-  const peerMuted = $derived(isPeerNotificationsMuted(peer?.id));
-  const peerTypingActivity = $derived(peer ? dmTyping.activityOf(peer.id) : null);
-  const typingLabel = $derived(
-    peer && peerTypingActivity ? formatTypingLabel([{ name: friendName(peer), activity: peerTypingActivity }]) : ''
-  );
-  const typingNotifier = createTypingNotifier((activity) => {
-    if (draftPeerId) getAppRealtime().send('dm.typing', { userId: draftPeerId, activity });
-  });
-
-  function onComposeInput(): void {
-    if (draft.trim()) typingNotifier.notify();
-  }
-
-  // The field remembers its caret while the picker has focus, so the emoji
-  // lands where the person was writing, and the field takes focus back and
-  // reports the input as if it were typed.
-  function insertEmoji(emoji: string): void {
-    inputEl?.insertText(emoji);
-  }
-
-  function openSelfProfile(event: MouseEvent): void {
-    event.preventDefault();
-    event.stopPropagation();
-    const person: ProfileCardPerson = {
-      userId: selfId,
-      name: self.displayName?.trim() || self.login,
-      login: self.login,
-      avatarUrl: self.avatarUrl,
-      avatarColorKey: self.avatarColorKey,
-      avatarAccent: self.avatarAccent,
-      presence: 'online'
-    };
-    openProfileCardFor(person, event.currentTarget);
-  }
-
-  function jumpToMessage(messageId: string): void {
-    const row = scrollEl?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`);
-    if (!row) {
-      pushToast('Сообщение не загружено — прокрутите историю выше');
-      return;
-    }
-    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    row.classList.add('is-highlighted');
-    setTimeout(() => row.classList.remove('is-highlighted'), 1600);
-  }
-
-  function openMessageAuthorProfile(event: MouseEvent): void {
-    if (!peer) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const person: ProfileCardPerson = {
-      userId: peer.id,
-      name: friendName(peer),
-      login: peer.login,
-      avatarUrl: peer.avatarUrl,
-      avatarColorKey: peer.avatarColorKey,
-      avatarAccent: peer.avatarAccent,
-      presence
-    };
-    openProfileCardFor(person, event.currentTarget);
-  }
-  let muteSaving = $state(false);
-  let inviteResponding = $state('');
-  const profileAccent = $derived(peer?.avatarAccent || '');
-
-  $effect(() => {
-    const peerId = friendsState.selectedFriendId;
-    if (!peerId) {
-      reactions.reset();
-      media = null;
-      return;
-    }
-    reactions.setConversation({ type: 'dm', id: peerId });
-    media = mediaUploadsEnabled ? getAttachmentComposeStore('dm', peerId) : null;
-  });
-
-  $effect(() => {
-    if (!reactionsEnabled) return;
-    for (const message of friendsState.thread) {
-      if (!message.invite) void reactions.load(message.id);
-    }
-  });
-
-  $effect(() => {
-    const attachmentCount = media?.drafts.length ?? 0;
-    if (attachmentCount === composerAttachmentCount) return;
-    composerAttachmentCount = attachmentCount;
-    if (threadPinnedToBottom) {
-      void tick().then(() => {
-        if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
-      });
-    }
-  });
+  // One compose store per conversation, kept across switches so a half-written
+  // message's attachments are still there on return.
+  const media = $derived(peerId ? getAttachmentComposeStore('dm', peerId) : null);
 
   onMount(() => {
-    void getCapabilityFeature('reactions').then((enabled) => { reactionsEnabled = enabled; });
-    if (selfId) {
-      void loadFrequentReactions('chat', selfId).then((emoji) => {
-        if (emoji.length > 0) quickReactions = emoji;
-      });
-    }
-    void getCapabilityFeature('replies').then((enabled) => { repliesEnabled = enabled; });
-    void getCapabilityFeature('mediaUploads').then((enabled) => { mediaUploadsEnabled = enabled; });
-    return getAppRealtime().subscribe((event) => {
-      if (event.type !== 'reaction.updated' || event.payload.conversation.type !== 'dm') return;
-      if (event.payload.conversation.id !== friendsState.selectedFriendId) return;
-      reactions.applyServer(event.payload.messageId, event.payload.summary);
+    void loadFrequentReactions('chat', self.id).then((emoji) => {
+      if (emoji.length > 0) quickReactions = emoji;
     });
   });
 
-  interface Group {
-    key: string;
-    fromMe: boolean;
-    dayLabel: string | null;
-    bubbles: DirectMessage[];
-  }
-
-  // Group consecutive messages by sender, inserting a day separator when the
-  // calendar day changes.
-  const groups = $derived.by<Group[]>(() => {
-    const result: Group[] = [];
-    let prev: DirectMessage | null = null;
-    for (const message of friendsState.thread) {
-      const fromMe = message.senderId === selfId;
-      const newDay = !prev || !isSameDay(prev.createdAt, message.createdAt);
-      const sameGroup = prev && !newDay && prev.senderId === message.senderId && result.length > 0;
-      if (sameGroup) {
-        result[result.length - 1].bubbles.push(message);
-      } else {
-        result.push({
-          key: message.id,
-          fromMe,
-          dayLabel: newDay ? formatDayLabel(message.createdAt) : null,
-          bubbles: [message]
-        });
-      }
-      prev = message;
-    }
-    return result;
+  const drop = new AttachmentDrop({
+    media: () => media,
+    busy: () => sending,
+    onError: (message) => pushToast(message, { variant: 'error' })
   });
-
-  let lastAutoScrolledPeer = '';
-  let lastAutoScrolledMessage = '';
-
-  // A thread is not ready the moment its messages arrive: images and emoji are
-  // still resolving, and every one that lands changes the height, so a scroll
-  // to the bottom taken too early stops short. The placeholder therefore stays
-  // up while the thread renders behind it, and comes down once the artwork has
-  // settled and the view is actually at the newest message.
-  const SETTLE_TIMEOUT_MS = 2000;
-  let threadSettling = $state(false);
-  let settleToken = 0;
-
-  function pendingArtwork(root: HTMLElement): Promise<unknown> {
-    const images = [...root.querySelectorAll('img')].filter((image) => !image.complete);
-    if (!images.length) return Promise.resolve();
-    return Promise.all(
-      images.map(
-        (image) =>
-          new Promise<void>((resolve) => {
-            const done = (): void => {
-              image.removeEventListener('load', done);
-              image.removeEventListener('error', done);
-              resolve();
-            };
-            image.addEventListener('load', done);
-            image.addEventListener('error', done);
-          })
-      )
-    );
-  }
-
-  async function settleThread(token: number): Promise<void> {
-    await tick();
-    if (token !== settleToken) return;
-    if (scrollEl) {
-      // A slow or dead image must not hold the thread hostage.
-      await Promise.race([
-        pendingArtwork(scrollEl),
-        new Promise((resolve) => setTimeout(resolve, SETTLE_TIMEOUT_MS))
-      ]);
-    }
-    if (token !== settleToken) return;
-    await tick();
-    if (token !== settleToken) return;
-    if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
-    threadSettling = false;
-  }
-
-  $effect(() => {
-    const peerId = friendsState.selectedFriendId ?? '';
-    const loading = friendsState.threadLoading;
-    if (friendsState.view !== 'dm' || !peerId) {
-      threadSettling = false;
-      return;
-    }
-    if (loading) {
-      settleToken += 1;
-      threadSettling = true;
-      return;
-    }
-    void settleThread((settleToken += 1));
-  });
-
-  // Prepending older history keeps the same newest id, so it must not trigger
-  // this latest-message autoscroll and disturb the preserved anchor.
-  $effect(() => {
-    const peerId = friendsState.selectedFriendId ?? '';
-    const newestId = friendsState.thread.at(-1)?.id ?? '';
-    if (peerId === lastAutoScrolledPeer && newestId === lastAutoScrolledMessage) return;
-    lastAutoScrolledPeer = peerId;
-    lastAutoScrolledMessage = newestId;
-    void tick().then(() => {
-      if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
-    });
-  });
-
-  $effect(() => {
-    const peerId = friendsState.selectedFriendId;
-    const cursorEnabled = friendsState.threadReadCursorEnabled;
-    readReconciliation?.dispose();
-    readReconciliation = null;
-    if (friendsState.view !== 'dm' || !peerId) return;
-    readReconciliation = createReadReconciliation({
-      scope: `dm:${peerId}`,
-      legacy: !cursorEnabled,
-      commit: async (cursor) => {
-        await markThreadRead(peerId, cursor);
-      }
-    });
-    return () => {
-      readReconciliation?.dispose();
-      readReconciliation = null;
-    };
-  });
-
-  $effect(() => {
-    const revision = friendsState.threadReadRevision;
-    const candidate = friendsState.threadReadCandidate;
-    if (!revision || !candidate || !readReconciliation) return;
-    void tick().then(() => readReconciliation?.advanceAfterRender(candidate === '__legacy__' ? undefined : candidate));
-  });
-
-  function onThreadScroll(): void {
-    if (!scrollEl) return;
-    threadPinnedToBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight <= 48;
-    if (scrollEl.scrollTop > 32) return;
-    void loadOlderThread(scrollEl);
-  }
-
-  // Each thread keeps its own unsent text on this device: switching threads
-  // stores the one being left and brings back the one being opened.
-  const DRAFT_SAVE_DELAY_MS = 400;
-  let draftPeerId = '';
-  let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function persistDraft(): void {
-    if (draftSaveTimer) {
-      clearTimeout(draftSaveTimer);
-      draftSaveTimer = null;
-    }
-    if (draftPeerId) saveChatDraft(selfId, { type: 'dm', id: draftPeerId }, { text: draft });
-  }
-
-  $effect(() => {
-    const peerId = friendsState.selectedFriendId ?? '';
-    untrack(() => {
-      if (peerId === draftPeerId) return;
-      persistDraft();
-      typingNotifier.reset();
-      draftPeerId = peerId;
-      draft = peerId ? (loadChatDraft(selfId, { type: 'dm', id: peerId })?.text ?? '') : '';
-    });
-  });
-
-  $effect(() => {
-    void draft;
-    untrack(() => {
-      if (!draftPeerId) return;
-      if (draftSaveTimer) clearTimeout(draftSaveTimer);
-      draftSaveTimer = setTimeout(persistDraft, DRAFT_SAVE_DELAY_MS);
-    });
-  });
-
-  $effect(() => {
-    window.addEventListener('pagehide', persistDraft);
-    return () => {
-      window.removeEventListener('pagehide', persistDraft);
-      persistDraft();
-    };
-  });
-
-  // Focus the compose field when opening or switching DM threads.
-  $effect(() => {
-    const peerId = friendsState.selectedFriendId;
-    cancelEditing();
-    if (friendsState.view !== 'dm' || !peerId) return;
-    void tick().then(() => inputEl?.focus());
-  });
-
-  async function submit(): Promise<void> {
-    const text = draft.trim();
-    if ((!text && !media?.canSend) || sending) return;
-    if (media?.drafts.length && !media.canSend) return;
-    sending = true;
-    let sent = false;
-    const sentPeerId = draftPeerId;
-    try {
-      const attachmentIds = media?.readyIds ?? [];
-      const replyTo = replyTarget ? { messageId: replyTarget.id } : undefined;
-      await sendMessage(text, attachmentIds, replyTo, idempotencyKeyFor({ text, attachmentIds, replyTo }));
-      // The thread may have been switched while the message was on its way:
-      // only the draft that was actually sent goes away.
-      typingNotifier.reset();
-      if (sentPeerId === draftPeerId) {
-        draft = '';
-        persistDraft();
-      } else if (sentPeerId) {
-        saveChatDraft(selfId, { type: 'dm', id: sentPeerId }, { text: '' });
-      }
-      media?.clearBound();
-      replyTarget = null;
-      sendAttemptKey = '';
-      sendAttemptFingerprint = '';
-      sent = true;
-    } catch {
-      // Keep the draft intact so the message can be retried.
-    } finally {
-      sending = false;
-    }
-    if (!sent) return;
-    await tick();
-    inputEl?.focus();
-  }
-
-
-
-  async function togglePeerMute(): Promise<void> {
-    if (!peer || muteSaving) return;
-    muteSaving = true;
-    try {
-      await updatePeerNotificationsMuted(peer.id, !peerMuted);
-    } finally {
-      muteSaving = false;
-    }
-  }
-
-  async function handleRemove(): Promise<void> {
-    if (peer) await removeFriend(peer.id);
-  }
-
-  async function onDelete(mid: string): Promise<void> {
-    try {
-      await deleteMessage(mid);
-      reactions.markDeleted(mid);
-      pushToast('Сообщение удалено');
-    } catch (cause) {
-      pushToast(cause instanceof Error && cause.message ? cause.message : 'Не удалось удалить сообщение', { variant: 'error' });
-    }
-  }
-
-  // Invitations are interactive cards with their own buttons; a context menu on
-  // top of them would offer actions that do not apply.
-  function openMessageMenu(bubble: DirectMessage, fromMe: boolean, event: MouseEvent): void {
-    if (bubble.invite || editingMessageId === bubble.id) return;
-    event.preventDefault();
-    menuMessage = bubble;
-    menuFromMe = fromMe;
-    menuX = event.clientX;
-    menuY = event.clientY;
-  }
-
-  function closeMessageMenu(): void {
-    menuMessage = null;
-  }
-
-  // The picker lives in each bubble's hover toolbar; the menu entry drives it
-  // rather than mounting a second popover.
-  function openReactionPickerFor(messageId: string): void {
-    queueMicrotask(() => {
-      const row = scrollEl?.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`);
-      row?.querySelector<HTMLButtonElement>('.reaction-picker-trigger')?.click();
-    });
-  }
-
-  async function copyMessageText(message: DirectMessage): Promise<void> {
-    try {
-      await copyText(message.body);
-      pushToast('Сообщение скопировано');
-    } catch {
-      pushToast('Не удалось скопировать');
-    }
-  }
-
-  function inviteTitle(message: DirectMessage, fromMe: boolean): string {
-    const invite = message.invite;
-    if (!invite) return '';
-    if (invite.status === 'accepted') return 'Принял приглашение';
-    if (invite.status === 'declined') return 'Отклонил предложение';
-    if (invite.status === 'expired') return 'Приглашение завершено';
-    if (invite.expiresAt && invite.expiresAt <= Date.now()) return 'Приглашение истекло';
-    return fromMe ? 'Приглашение отправлено' : 'Приглашение в комнату';
-  }
-
-  function inviteActionable(message: DirectMessage, fromMe: boolean): boolean {
-    const invite = message.invite;
-    if (!invite || fromMe) return false;
-    return invite.status === 'pending' && (!invite.expiresAt || invite.expiresAt > Date.now());
-  }
-
-  async function onInviteRespond(message: DirectMessage, action: 'accept' | 'decline'): Promise<void> {
-    if (inviteResponding) return;
-    inviteResponding = message.id;
-    try {
-      await respondRoomInvitation(message, action);
-    } catch {
-      pushToast('Не удалось ответить на приглашение');
-    } finally {
-      inviteResponding = '';
-    }
-  }
-
-  function startEditing(message: DirectMessage): void {
-    editingMessageId = message.id;
-    editDraft = message.body;
-    void tick().then(() => {
-      editEl?.focus();
-      editEl?.setSelection(editDraft.length);
-    });
-  }
-
-  function cancelEditing(): void {
-    editingMessageId = '';
-    editDraft = '';
-    editSaving = false;
-  }
-
-  function onEditKeydown(event: KeyboardEvent): void {
-    if (event.isComposing) return;
-    if (event.key === 'Escape') {
-      event.preventDefault();
-      cancelEditing();
-      return;
-    }
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      void saveEdit();
-    }
-  }
-
-  async function saveEdit(): Promise<void> {
-    const messageId = editingMessageId;
-    const text = editDraft.trim();
-    if (!messageId || !text || editSaving) return;
-    editSaving = true;
-    try {
-      await editDmMessage(messageId, text);
-      cancelEditing();
-    } catch {
-      editSaving = false;
-    }
-  }
 </script>
 
 <div
   class="lobby-dm"
   role="region"
   aria-label="Личные сообщения"
-  ondragenter={onAttachmentDragEnter}
-  ondragover={onAttachmentDragOver}
-  ondragleave={onAttachmentDragLeave}
-  ondrop={onAttachmentDrop}
+  ondragenter={drop.enter}
+  ondragover={drop.over}
+  ondragleave={drop.leave}
+  ondrop={drop.drop}
 >
-  {#if attachmentDragDepth > 0}<AttachmentDropOverlay />{/if}
+  {#if drop.active}<AttachmentDropOverlay />{/if}
   <div class="lobby-dm-col">
     {#if peer}
-      <button class="lobby-dm-head" type="button" onclick={toggleProfile}>
+      <button class="lobby-dm-head" type="button" onclick={lobby.toggleProfile}>
         <Avatar
           name={friendName(peer)}
           src={peer.avatarUrl}
@@ -669,231 +69,79 @@
           showDot
           ring="var(--paper-deep)"
         />
-        <div style="flex:1;min-width:0;">
+        <div class="lobby-dm-head-text">
           <div class="lobby-dm-head-name"><EmojiText text={friendName(peer)} /></div>
-          <div class="lobby-dm-head-status" data-presence={presence}>{presenceLabel}</div>
+          <div class="lobby-dm-head-status" data-presence={presence}>{presenceStatusLabel(presence).toLowerCase()}</div>
         </div>
-        <span style="flex:none;width:34px;height:34px;display:flex;align-items:center;justify-content:center;color:#9a9484;">
+        <span class="lobby-dm-head-icon">
           <User {...iconMd} aria-hidden="true" />
         </span>
       </button>
     {/if}
 
-    <div class="lobby-dm-scroll lobby-scroll" bind:this={scrollEl} onscroll={onThreadScroll}>
-      {#if friendsState.threadLoading || threadSettling}
-        <div class="lobby-dm-loading" role="status">Загружаем переписку…</div>
-      {/if}
-      {#if friendsState.threadHistoryError && groups.length === 0}
-        <div class="lobby-dm-empty">{friendsState.threadHistoryError}</div>
-      {:else if groups.length === 0 && !friendsState.threadLoading && !threadSettling}
-        <div class="lobby-dm-empty">Здесь пока пусто. Напишите первым!</div>
-      {:else}
-        <div class="lobby-dm-thread" class:is-settling={threadSettling}>
-          {#if friendsState.threadHistoryError}
-            <div class="lobby-dm-empty">{friendsState.threadHistoryError}</div>
-          {/if}
-          {#if friendsState.threadHistoryEnabled && (friendsState.threadLoadingOlder || friendsState.threadHasMoreBefore)}
-            <button type="button" class="lobby-dm-empty" disabled={friendsState.threadLoadingOlder} onclick={() => void loadOlderThread(scrollEl)}>
-              {friendsState.threadLoadingOlder ? 'Загружаем…' : 'Показать предыдущие'}
-            </button>
-          {/if}
-          {#each groups as group (group.key)}
-            {#if group.dayLabel}
-              <div class="chat-day-divider"><span>{group.dayLabel}</span></div>
-            {/if}
-            <div class="chat-msg dm-chat-group" data-self={group.fromMe}>
-              {#if group.fromMe}
-                <button class="chat-avatar-button chat-msg-trigger" type="button" aria-haspopup="dialog" aria-label="Ваш профиль" onclick={openSelfProfile}>
-                  <Avatar class="chat-msg-avatar" name={self.displayName?.trim() || self.login} src={self.avatarUrl} colorKey={self.avatarColorKey} background={self.avatarAccent || undefined} size={34} />
-                </button>
-              {:else}
-                <button class="chat-avatar-button chat-msg-trigger" type="button" aria-haspopup="dialog" aria-label={`Профиль ${friendName(peer!)}`} onclick={openMessageAuthorProfile}>
-                  <Avatar class="chat-msg-avatar" name={friendName(peer!)} src={peer?.avatarUrl} colorKey={peer?.avatarColorKey} background={peer?.avatarAccent || undefined} size={34} />
-                </button>
-              {/if}
-              <div class="chat-msg-main">
-                <div class="chat-msg-meta">
-                  {#if group.fromMe}
-                    <button class="chat-msg-author chat-msg-trigger" type="button" style={`color:${self.avatarAccent || 'var(--accent)'}`} aria-haspopup="dialog" aria-label="Ваш профиль" onclick={openSelfProfile}><EmojiText text={self.displayName?.trim() || self.login} /></button>
-                  {:else}
-                    <button class="chat-msg-author chat-msg-trigger" type="button" style={`color:${peer?.avatarAccent || 'var(--accent)'}`} aria-haspopup="dialog" aria-label={`Профиль ${friendName(peer!)}`} onclick={openMessageAuthorProfile}><EmojiText text={friendName(peer!)} /></button>
-                  {/if}
-                  <time class="chat-msg-time" datetime={new Date(group.bubbles[0].createdAt).toISOString()}>{formatTime(group.bubbles[0].createdAt)}</time>
-                </div>
-                {#each group.bubbles as bubble (bubble.id)}
-                  <!-- svelte-ignore a11y_no_static_element_interactions -->
-                  <div
-                    class="chat-msg-text dm-chat-message"
-                    class:is-context={menuMessage?.id === bubble.id}
-                    data-message-id={bubble.id}
-                    data-group-first={bubble.id === group.bubbles[0].id}
-                    oncontextmenu={(event) => openMessageMenu(bubble, group.fromMe, event)}
-                  >
-                    {#if bubble.invite}
-                      <article class="lobby-room-invitation" data-status={bubble.invite.status}>
-                        <span class="lobby-room-invitation-icon"><DoorOpen {...iconMd} aria-hidden="true" /></span>
-                        <div class="lobby-room-invitation-copy">
-                          <strong>{inviteTitle(bubble, group.fromMe)}</strong>
-                          <span><EmojiText text={bubble.invite.roomName || bubble.invite.roomId} /></span>
-                        </div>
-                        {#if inviteActionable(bubble, group.fromMe)}
-                          <div class="lobby-room-invitation-actions">
-                            <button type="button" class="lobby-room-invitation-dismiss" disabled={inviteResponding === bubble.id} onclick={() => void onInviteRespond(bubble, 'decline')}>Не сейчас</button>
-                            <button type="button" class="lobby-room-invitation-join" disabled={inviteResponding === bubble.id} onclick={() => void onInviteRespond(bubble, 'accept')}>Войти</button>
-                          </div>
-                        {/if}
-                      </article>
-                    {:else if editingMessageId === bubble.id}
-                      <div class="dm-msg-edit">
-                        <EmojiComposer
-                          class="dm-msg-edit-input"
-                          bind:this={editEl}
-                          bind:value={editDraft}
-                          maxlength={2000}
-                          ariaLabel="Текст сообщения"
-                          onkeydown={onEditKeydown}
-                          disabled={editSaving}
-                        />
-                        <div class="dm-msg-edit-actions">
-                          <button type="button" onclick={cancelEditing} disabled={editSaving}>Отмена</button>
-                          <button type="button" onclick={saveEdit} disabled={editSaving || !editDraft.trim()}>Сохранить</button>
-                        </div>
-                      </div>
-                    {:else}
-                      <div class="dm-chat-content">
-                        {#if bubble.replyPreview}<ReplyPreview preview={bubble.replyPreview} interactive onjump={jumpToMessage} />{/if}
-                        {#if bubble.attachments?.length}<AttachmentMosaic attachments={bubble.attachments} />{/if}
-                        {#if bubble.body.trim()}<span class="chat-msg-content dm-msg-content"><ChatText text={bubble.body} />{#if bubble.editedAt}<span class="dm-msg-edited">(изменено)</span>{/if}</span>{/if}
-                        {#if bubble.linkPreview}<LinkPreviewCard preview={bubble.linkPreview} />{/if}
-                        {#if reactionsEnabled}<ReactionSummary store={reactions} messageId={bubble.id} />{/if}
-                      </div>
-                      <MessageHoverActions
-                        reactionStore={reactionsEnabled ? reactions : undefined}
-                        messageId={bubble.id}
-                        userId={selfId}
-                        canReply={repliesEnabled}
-                        onReply={() => { replyTarget = bubble; inputEl?.focus(); }}
-                        onCopy={() => void copyMessageText(bubble)}
-                        onMore={(event) => openMessageMenu(bubble, group.fromMe, event)}
-                      />
-                    {/if}
-                  </div>
-                {/each}
-              </div>
-            </div>
-          {/each}
-        </div>
-      {/if}
-    </div>
-
-    <div class="lobby-dm-compose" onpaste={onComposePaste}>
-      <div class="lobby-dm-compose-row attachment-compose-field">
-        {#if replyTarget}
-          {@const target = replyTarget}
-          <ReplyTargetBar
-            target={{ messageId: target.id, deleted: false, author: { id: target.senderId, name: target.senderId === selfId ? 'Вы' : friendName(peer!) }, text: target.body }}
-            onjump={jumpToMessage}
-            oncancel={() => (replyTarget = null)}
-          />
-        {/if}
-        {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
-        <div class="attachment-compose-controls">
-          {#if media}<AttachmentUploadControl store={media} disabled={sending} onerror={showAttachmentError} />{/if}
-          <EmojiComposer
-            class="lobby-dm-input lobby-dm-textarea"
-            placeholder="Написать сообщение…"
-            bind:this={inputEl}
-            bind:value={draft}
-            onkeydown={onKeydown}
-            oninput={onComposeInput}
-            disabled={sending}
-          />
-          <ComposerEmojiPicker
-            userId={selfId}
-            disabled={sending}
-            onpick={insertEmoji}
-            onbrowse={() => typingNotifier.notify('emoji')}
-          />
-        </div>
-      </div>
-      <TypingIndicator label={typingLabel} />
-    </div>
+    {#if peerId}
+      {#key peerId}
+        <DmConversation bind:sending {peerId} {self} {peer} {presence} {media} {quickReactions} />
+      {/key}
+    {/if}
   </div>
 
-  {#if friendsState.profileOpen && peer}
-    <div class="lobby-profile-panel lobby-scroll">
-      <div class="lobby-profile-cover" style:--profile-cover-accent={profileAccent || undefined}>
-        <button class="lobby-profile-close" type="button" aria-label="Закрыть" onclick={closeProfile}>
-          <X {...iconSm} aria-hidden="true" />
-        </button>
-      </div>
-      <div class="lobby-profile-body">
-        <Avatar
-          name={friendName(peer)}
-          src={peer.avatarUrl}
-          colorKey={peer.avatarColorKey}
-          background={peer.avatarAccent || undefined}
-          size={76}
-          online={presence === 'online'}
-          afk={presence === 'away'}
-          dnd={presence === 'dnd'}
-          showDot
-          ring="var(--paper-deep)"
-        />
-        <div class="lobby-profile-panel-name"><EmojiText text={friendName(peer)} /></div>
-        <div class="lobby-profile-panel-handle">@{peer.login}</div>
-
-        <div class="lobby-profile-stats">
-          <div class="lobby-profile-stat">
-            <div class="lobby-profile-stat-num">{friendsState.thread.length}</div>
-            <div class="lobby-profile-stat-label">сообщений</div>
-          </div>
-          <div class="lobby-profile-stat">
-            <div class="lobby-profile-stat-num">{online ? 'в сети' : '—'}</div>
-            <div class="lobby-profile-stat-label">статус</div>
-          </div>
-        </div>
-
-        <button
-          class="lobby-profile-action"
-          class:is-muted={peerMuted}
-          type="button"
-          onclick={togglePeerMute}
-          disabled={muteSaving}
-          data-notification-mute="dm"
-        >
-          {#if peerMuted}<BellOff {...iconMd} aria-hidden="true" />{:else}<Bell {...iconMd} aria-hidden="true" />{/if}
-          <span>{peerMuted ? 'Уведомления выключены' : 'Выключить уведомления'}</span>
-        </button>
-        <button class="lobby-profile-action lobby-profile-action--danger" type="button" onclick={handleRemove}>
-          <UserMinus {...iconMd} aria-hidden="true" />
-          <span>Удалить из друзей</span>
-        </button>
-      </div>
-    </div>
+  {#if lobby.thread.profileOpen && peer}
+    <DmProfilePanel {peer} {presence} {online} messageCount={lobby.thread.messages.length} />
   {/if}
 </div>
 
-{#if menuMessage}
-  {@const target = menuMessage}
-  <MessageContextMenu
-    open={Boolean(menuMessage)}
-    x={menuX}
-    y={menuY}
-    quickReactions={quickReactions}
-    activeReactions={new Set(
-      reactions.forMessage(target.id).filter((summary) => summary.reactedByMe).map((summary) => summary.emoji)
-    )}
-    canReact={reactionsEnabled && Boolean(selfId)}
-    canReply={repliesEnabled}
-    canEdit={menuFromMe}
-    canDelete={menuFromMe}
-    onClose={closeMessageMenu}
-    onReact={(emoji) => void reactions.toggle(target.id, emoji)}
-    onOpenReactionPicker={() => openReactionPickerFor(target.id)}
-    onReply={() => { replyTarget = target; inputEl?.focus(); }}
-    onCopy={() => void copyMessageText(target)}
-    onEdit={() => startEditing(target)}
-    onDelete={() => void onDelete(target.id)}
-  />
-{/if}
+<style>
+  :global(.lobby-dm) {
+    --lobby-dm-head-height: 65px;
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+  }
+  :global(.lobby-dm-col) {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  :global(.lobby-dm-head) {
+    flex: none;
+    min-height: var(--lobby-dm-head-height);
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 13px 24px;
+    border: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    cursor: pointer;
+    transition: background 0.14s ease;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    color: inherit;
+  }
+  :where(.lobby-dm-head):hover {
+    background: var(--control);
+  }
+  :global(.lobby-dm-head-text) {
+    flex: 1;
+    min-width: 0;
+  }
+  :global(.lobby-dm-head-icon) {
+    flex: none;
+    width: 34px;
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--warm-500);
+  }
+  :global(.lobby-dm-head-name) {
+    font-size: 15.5px;
+    font-weight: 700;
+    color: var(--warm-ink);
+    letter-spacing: -0.01em;
+  }
+</style>

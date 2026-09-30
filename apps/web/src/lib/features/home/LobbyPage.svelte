@@ -1,17 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getAppRealtime } from '$lib/api/realtime';
-  import { playRoomChatMessageCue } from '$lib/features/room/client/media/cues';
-  import { notificationPreferences } from '$lib/shared/notifications/preferences.svelte';
   import { pushState, replaceState } from '$app/navigation';
-  import type { AuthUser, OwnedRoom } from '$lib/api/auth';
-  import { fetchOwnedRooms } from '$lib/api/auth';
+  import type { AuthUser } from '$lib/api/auth';
   import { createRoom } from '$lib/api/rooms';
-  import { clearRoomPresence, roomPresence } from './model/room-presence.svelte';
-  import { countUnreadForBadge, syncDesktopBadgeCount } from '$lib/platform/desktop-attention';
-  import { initLobbyRoomRealtime } from './model/room-realtime';
   import { extractRoomId } from '$lib/shared/utils/room';
-  import SettingsModal from './components/SettingsModal.svelte';
   import RoomPage from '$lib/features/room/RoomPage.svelte';
   import {
     leaveActiveVoiceRoomWithCue,
@@ -28,10 +21,12 @@
   import RoomPreviewView from './components/lobby/RoomPreviewView.svelte';
   import LobbyRoomSettingsDialog from './components/lobby/LobbyRoomSettingsDialog.svelte';
   import NotificationInbox from './components/NotificationInbox.svelte';
-  import { createNotificationInbox } from '$lib/shared/notifications/inbox.svelte';
-  import { fetchNotificationInbox, markAllNotificationsRead, markNotificationRead } from '$lib/api/notifications';
-  import { getCapabilityFeature } from '$lib/platform/capability-state.svelte';
-  import { ENTER_ROOM_EVENT, friendsState, initLobby, openDm, showHome, showPeople } from './model/friends.svelte';
+  import { ProfileCardHost } from './components/profile-card';
+  import { ENTER_ROOM_EVENT, LobbyStore } from './model/lobby.svelte';
+  import { LobbyNotifications } from './model/lobby-notifications.svelte';
+  import { syncLobbyWithDesktop } from './model/desktop-sync.svelte';
+  import { provideLobby } from './model/lobby-context';
+  import { provideRoomSocial } from '$lib/features/room/social';
   import type { ToastOptions } from './model/toasts.svelte';
   import {
     getActiveVoiceRoomId,
@@ -49,26 +44,18 @@
     setViewedRoomFromRoute
   } from './model/room-navigation.svelte';
   import { roomDisplayName } from './model/rooms';
+  import { LobbyRooms } from './model/lobby-rooms.svelte';
+  import { AccountPrompts } from './model/account-prompts.svelte';
+  import LobbyAccountDialogs from './components/LobbyAccountDialogs.svelte';
   import {
     applyRoomSwitchDecision,
     readRoomSwitchConfirmEnabled,
     shouldConfirmRoomSwitch
   } from './model/room-switch-confirmation';
   import RoomSwitchDialog from './components/RoomSwitchDialog.svelte';
-  import WhatsNewDialog from './components/WhatsNewDialog.svelte';
-  import AppBenefitsModal from './components/AppBenefitsModal.svelte';
-  import { shouldOpenAppPrompt } from '$lib/features/room/room-cta';
-  import { markAppPromptSeen } from '$lib/api/auth';
-  import LoginAlertDialog from './components/LoginAlertDialog.svelte';
-  import { fetchAccountSecurity, snoozeRecoveryCodesReminder } from '$lib/api/auth';
-  import { shouldShowRecoveryCodesReminder } from './model/account-security';
   import { clearSession, consumeExpectedSessionEnd, session as authSession } from '$lib/features/auth/session.svelte';
   import OpenInAppScreen from './components/OpenInAppScreen.svelte';
   import { bindDesktopLinks, type DesktopLink } from '$lib/platform/desktop-links';
-  import { bindDesktopCallActions, syncDesktopCallState } from '$lib/platform/desktop-call';
-  import { syncDesktopOverlaySnapshot } from '$lib/platform/desktop-overlay';
-  import { getSortedParticipants } from '$lib/features/room/participants-ui.svelte';
-  import { syncDesktopDiagnosticsContext } from '$lib/platform/desktop-diagnostics';
   import {
     buildAppRoomLink,
     consumeInAppRoomNavigation,
@@ -81,11 +68,14 @@
   import '$lib/shared/styles/dialog.css';
   import '$lib/features/room/styles/chat-rail.css';
   import './styles/friends.css';
-  import './styles/settings.css';
+  import '$lib/shared/styles/settings.css';
   import './styles/lobby-v2.css';
-  import { createLogger, errorContext } from '$lib/shared/log';
 
-  const log = createLogger('lobby');
+  const lobby = new LobbyStore();
+  provideLobby(lobby);
+
+  // Rooms shown inside the lobby see the account's friends through this.
+  provideRoomSocial(lobby.roomSocial);
 
   let { user, loggingOut, onLogout, onToast } = $props<{
     user: AuthUser | null;
@@ -94,83 +84,36 @@
     onToast: (message: string, options?: ToastOptions) => void;
   }>();
 
-  let rooms = $state<OwnedRoom[]>([]);
+  const rooms = new LobbyRooms((message) => onToast(message));
   let creating = $state(false);
   let createDialogOpen = $state(false);
-  let settingsOpen = $state(false);
-  let settingsTab = $state<'profile' | 'sound' | 'hotkeys' | 'notifications' | 'app' | 'security'>('profile');
-  let securityHighlight = $state<'recovery-codes' | 'password' | null>(null);
-  let recoveryCodesReminder = $state(false);
-  let loginAlertOpen = $state(false);
-  let whatsNewOpen = $state(false);
-  // The one-time app prompt after registration, decided per account by the API.
-  let appPromptAvailable = $state(false);
-  let appPromptOpen = $state(false);
-  let appPromptDone = $state(false);
   let previewSettingsRoomId = $state('');
   // Room waiting for "switch rooms?" while voice is connected elsewhere.
   let pendingRoomSwitchId = $state('');
   // Room a browser offered to open in the desktop app before joining voice.
   let openInAppRoomId = $state('');
-  let notificationInboxEnabled = $state(false);
-  let notificationInboxOpen = $state(false);
-  const notificationInbox = createNotificationInbox({
-    list: fetchNotificationInbox,
-    read: markNotificationRead,
-    readAll: markAllNotificationsRead
-  });
+  const notifications = new LobbyNotifications();
   const selectedRoomId = $derived(roomNavigation.viewedRoomId);
   const embeddedRoomId = $derived(roomNavigation.embeddedRoomId);
   const autoJoinRoomId = $derived(roomNavigation.joinIntentRoomId);
   const connectedVoiceRoomId = $derived(getActiveVoiceRoomId());
 
-  // Opens once the lobby is quiet: no sign-in question or story on screen and no
-  // call joining or live, so it never covers the call or its audio-unlock prompt.
-  $effect(() => {
-    if (appPromptDone || appPromptOpen || !user) return;
-    if (!shouldOpenAppPrompt({
-      appAvailable: appPromptAvailable,
-      hasUsedDesktopApp: user.hasUsedDesktopApp,
-      appPromptSeen: user.appPromptSeen,
-      otherDialogOpen: loginAlertOpen || whatsNewOpen,
-      voiceActive: Boolean(connectedVoiceRoomId || roomNavigation.joinIntentRoomId)
-    })) return;
-    appPromptOpen = true;
+  const prompts = new AccountPrompts({
+    user: () => user,
+    voiceActive: () => Boolean(connectedVoiceRoomId || roomNavigation.joinIntentRoomId),
+    onToast: (message, options) => onToast(message, options)
   });
 
-  onMount(() => {
-    // The desktop app exists for Windows and macOS browsers only.
-    appPromptAvailable = shouldOfferOpenInApp(readOpenInAppSignals());
-  });
-
-  function closeAppPrompt(): void {
-    appPromptOpen = false;
-    appPromptDone = true;
-    void markAppPromptSeen().catch((error) => log.warn('app prompt was not recorded', errorContext(error)));
-  }
-  const selectedRoom = $derived(rooms.find((room) => room.roomId === selectedRoomId) ?? null);
-  const previewSettingsRoom = $derived(rooms.find((room) => room.roomId === previewSettingsRoomId) ?? null);
-  const connectedVoiceRoom = $derived(rooms.find((room) => room.roomId === connectedVoiceRoomId) ?? null);
+  const selectedRoom = $derived(rooms.find(selectedRoomId));
+  const previewSettingsRoom = $derived(rooms.find(previewSettingsRoomId));
+  const connectedVoiceRoom = $derived(rooms.find(connectedVoiceRoomId));
   const notificationUsers = $derived(
-    [...friendsState.friends]
+    [...lobby.friends]
       .sort((a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0))
       .map((entry) => entry.user)
   );
-  const connectedRoomVisible = $derived(connectedRoomIsViewed(friendsState.mode));
-  const embeddedRoomVisible = $derived(embeddedRoomIsVisible(friendsState.mode));
-
-
-  function setRoomPeerCount(roomId: string, peers: number): void {
-    rooms = rooms.map((room) => room.roomId === roomId ? { ...room, peers: Math.max(0, peers) } : room);
-  }
-
-  function decrementRoomPeerCount(roomId: string | null): void {
-    if (!roomId) return;
-    const current = rooms.find((room) => room.roomId === roomId)?.peers ?? 0;
-    setRoomPeerCount(roomId, Math.max(0, current - 1));
-    clearRoomPresence(roomId);
-    void refreshRooms();
-  }
+  const connectedRoomVisible = $derived(connectedRoomIsViewed(lobby.mode));
+  const embeddedRoomVisible = $derived(embeddedRoomIsVisible(lobby.mode));
 
   function restoreLobbyDocumentState(): void {
     document.body.dataset.screen = 'start';
@@ -187,8 +130,13 @@
     replaceState(target, {});
   }
 
-  function closeEmbeddedRoom({ replaceUrl = true, closedRoomId = embeddedRoomId }: { replaceUrl?: boolean; closedRoomId?: string | null } = {}): void {
-    const shouldReplaceUrl = Boolean(replaceUrl && closedRoomId && extractRoomId(window.location.pathname) === closedRoomId);
+  function closeEmbeddedRoom({
+    replaceUrl = true,
+    closedRoomId = embeddedRoomId
+  }: { replaceUrl?: boolean; closedRoomId?: string | null } = {}): void {
+    const shouldReplaceUrl = Boolean(
+      replaceUrl && closedRoomId && extractRoomId(window.location.pathname) === closedRoomId
+    );
     clearEmbeddedRoomState();
     restoreLobbyDocumentState();
     if (shouldReplaceUrl) {
@@ -198,56 +146,27 @@
 
   // The server closes the realtime socket with a dedicated code when this
   // device's session was ended elsewhere (another device, password recovery).
-  onMount(() => getAppRealtime().onSessionEnded(() => {
-    // Our own sign-out or password change already handles the UI.
-    if (consumeExpectedSessionEnd() || !authSession.user) return;
-    clearSession();
-    onToast('Сеанс на этом устройстве завершён. Войдите снова');
-  }));
+  onMount(() =>
+    getAppRealtime().onSessionEnded(() => {
+      // Our own sign-out or password change already handles the UI.
+      if (consumeExpectedSessionEnd() || !authSession.user) return;
+      clearSession();
+      onToast('Сеанс на этом устройстве завершён. Войдите снова');
+    })
+  );
 
   onMount(() => {
-    void refreshRooms();
-    void refreshRecoveryCodesReminder();
-    void getCapabilityFeature('engagement').then((enabled) => {
-      notificationInboxEnabled = enabled;
-      if (enabled) void notificationInbox.load();
-    });
-    // Without this the badge only ever caught up on a reload, so a mention that
-    // arrived while the lobby was open stayed invisible until then.
-    //
-    // The reload is also how a ping becomes audible. The realtime event fires
-    // for every message in every room you belong to, so it cannot tell you were
-    // the one addressed — the inbox can, because that is exactly what it holds.
-    // A rise in its unread count means someone named you, and that is worth a
-    // sound even in a room whose messages you muted: muting a room is asking not
-    // to hear the conversation, not asking not to be reachable.
-    const teardownNotifications = getAppRealtime().subscribe((event) => {
-      if (!notificationInboxEnabled) return;
-      if (event.type !== 'notification.room.message') return;
-      const before = notificationInbox.unreadCount;
-      const messageId = event.payload?.message?.id;
-      void notificationInbox.load().then(() => {
-        if (notificationInbox.unreadCount > before && !notificationPreferences.doNotDisturb) {
-          playRoomChatMessageCue(messageId);
-        }
-      });
-    });
-    const teardownFriends = user ? initLobby(user.id, user.doNotDisturb, user.presenceStatus) : () => {};
-    const teardownRooms = user
-      ? initLobbyRoomRealtime(
-          (updater) => {
-            rooms = updater(rooms);
-          },
-          () => {
-            void refreshRooms();
-          }
-        )
-      : () => {};
+    void rooms.refresh();
+    prompts.start();
+    const teardownNotifications = notifications.start();
+    const teardownFriends = user ? lobby.init(user.id, user.doNotDisturb, user.presenceStatus) : () => {};
+    const teardownRooms = user ? rooms.follow() : () => {};
 
     function onEmbeddedLeave(event: Event): void {
-      const closedRoomId = event instanceof CustomEvent && typeof event.detail?.roomId === 'string' ? event.detail.roomId : null;
+      const closedRoomId =
+        event instanceof CustomEvent && typeof event.detail?.roomId === 'string' ? event.detail.roomId : null;
       const closedViewedRoom = Boolean(closedRoomId && selectedRoomId === closedRoomId);
-      decrementRoomPeerCount(closedRoomId);
+      rooms.left(closedRoomId);
       closeEmbeddedRoom({ closedRoomId });
       if (closedViewedRoom) clearViewedRoom();
     }
@@ -256,7 +175,7 @@
       const roomId = extractRoomId(window.location.pathname);
       if (roomId) {
         setViewedRoomFromRoute(roomId);
-        friendsState.mode = 'rooms';
+        lobby.mode = 'rooms';
         replaceUrlWithActiveVoiceRoom();
         return;
       }
@@ -266,7 +185,7 @@
     }
 
     function onRoomsChanged(): void {
-      void refreshRooms();
+      void rooms.refresh();
     }
 
     // On a fresh load/reload the URL is the only persisted state, so a /r/:id
@@ -279,17 +198,17 @@
       // The browser cannot tell whether the desktop app picked the link up, so
       // it waits for an explicit choice instead of joining voice twice.
       openInAppRoomId = initialRoomId;
-      friendsState.mode = 'rooms';
+      lobby.mode = 'rooms';
       openRoomInApp();
     } else if (initialRoomId) {
       selectRoomForVoiceEntry(initialRoomId);
-      friendsState.mode = 'rooms';
+      lobby.mode = 'rooms';
     }
     const initialParams = new URLSearchParams(window.location.search);
     const initialDmId = initialParams.get('dm');
     if (!initialRoomId && initialDmId) {
       replaceState('/', {});
-      void openDm(initialDmId).catch(() => onToast('Не удалось открыть диалог'));
+      void lobby.openDm(initialDmId).catch(() => onToast('Не удалось открыть диалог'));
     }
     // A mention link — from the bell or from a push — lands here rather than on
     // /r/:roomId, so it previews the room and never joins voice.
@@ -301,16 +220,12 @@
     }
 
     function onEnterRoomRequest(event: Event): void {
-      const roomId = event instanceof CustomEvent && typeof event.detail?.roomId === 'string' ? event.detail.roomId : '';
+      const roomId =
+        event instanceof CustomEvent && typeof event.detail?.roomId === 'string' ? event.detail.roomId : '';
       if (roomId) requestEnterRoom(roomId);
     }
 
     const teardownDesktopLinks = bindDesktopLinks(openDesktopLink);
-    const teardownDesktopCall = bindDesktopCallActions({
-      'toggle-mic': toggleActiveVoiceMic,
-      'toggle-output': toggleActiveVoiceDeafen,
-      disconnect: () => void leaveConnectedVoiceRoom()
-    });
 
     window.addEventListener('voice-room:embedded-leave', onEmbeddedLeave);
     window.addEventListener('voice-room:rooms-changed', onRoomsChanged);
@@ -322,9 +237,6 @@
       teardownFriends();
       teardownRooms();
       teardownDesktopLinks();
-      teardownDesktopCall();
-      syncDesktopCallState({ active: false, micMuted: false, outputMuted: false, roomId: '', roomName: '' });
-      syncDesktopBadgeCount(0);
       window.removeEventListener('voice-room:embedded-leave', onEmbeddedLeave);
       window.removeEventListener('voice-room:rooms-changed', onRoomsChanged);
       window.removeEventListener('popstate', onPopState);
@@ -352,48 +264,23 @@
     delete document.body.dataset.stripCollapsed;
   });
 
-  $effect(() => {
-    syncDesktopCallState({
-      active: Boolean(connectedVoiceRoomId),
-      micMuted: voiceSession.muted,
-      outputMuted: voiceSession.deafened,
-      roomId: connectedVoiceRoomId || '',
-      roomName: connectedVoiceRoom ? roomDisplayName(connectedVoiceRoom) : connectedVoiceRoomId || ''
-    });
-  });
-
-  $effect(() => {
-    if (!connectedVoiceRoomId) {
-      syncDesktopOverlaySnapshot([]);
-      return;
-    }
-    syncDesktopOverlaySnapshot(getSortedParticipants().map((participant) => ({
-      avatarAccent: participant.avatarAccent || '',
-      avatarColorKey: participant.avatarColorKey || '',
-      avatarUrl: participant.avatarUrl || '',
-      id: participant.id,
-      micMuted: participant.muted,
-      name: participant.name || '',
-      outputMuted: participant.deafened,
-      self: participant.isLocal,
-      speaking: participant.speaking,
-      streaming: participant.screen
-    })));
-  });
-
-  $effect(() => {
-    syncDesktopDiagnosticsContext({ roomId: connectedVoiceRoomId || '', userId: user?.id || '' });
-  });
-
-  $effect(() => {
-    // Muted chats stay out of the icon count; the mention cue above is not
-    // affected by room mutes.
-    syncDesktopBadgeCount(countUnreadForBadge({
-      friends: friendsState.friends,
-      mutes: notificationPreferences,
-      roomUnreadById: roomPresence.unreadCountByRoomId,
-      rooms
-    }));
+  syncLobbyWithDesktop({
+    get userId() {
+      return user?.id || '';
+    },
+    get voiceRoomId() {
+      return connectedVoiceRoomId || '';
+    },
+    get voiceRoomName() {
+      return connectedVoiceRoom ? roomDisplayName(connectedVoiceRoom) : connectedVoiceRoomId || '';
+    },
+    get friends() {
+      return lobby.friends;
+    },
+    get rooms() {
+      return rooms.list;
+    },
+    onDisconnect: () => void leaveConnectedVoiceRoom()
   });
 
   $effect(() => {
@@ -403,20 +290,11 @@
     }
   });
 
-  async function refreshRooms(): Promise<void> {
-    try {
-      rooms = await fetchOwnedRooms();
-    } catch (error) {
-      rooms = [];
-      onToast(error instanceof Error && error.message ? error.message : 'Не удалось загрузить комнаты');
-    }
-  }
-
   // Explicit voice enter/switch path. Browsing a room uses previewRoom(); this
   // path may remount the room client because the user chose to enter voice here.
   function enterRoom(roomId: string): void {
     selectRoomForVoiceEntry(roomId);
-    friendsState.mode = 'rooms';
+    lobby.mode = 'rooms';
     pushState(`/r/${encodeURIComponent(roomId)}`, {});
   }
 
@@ -441,11 +319,6 @@
     if (roomId && applyRoomSwitchDecision({ dontAskAgain, proceed })) enterRoom(roomId);
   }
 
-  function roomLabel(roomId: string): string {
-    const room = rooms.find((entry) => entry.roomId === roomId);
-    return room ? roomDisplayName(room) : roomId;
-  }
-
   function openRoomInApp(): void {
     const link = buildAppRoomLink(openInAppRoomId, window.location.hostname);
     if (!link) {
@@ -460,18 +333,18 @@
     openInAppRoomId = '';
     if (!roomId) return;
     selectRoomForVoiceEntry(roomId);
-    friendsState.mode = 'rooms';
+    lobby.mode = 'rooms';
   }
 
   function openDesktopLink(link: DesktopLink): void {
     if (link.kind === 'room') requestEnterRoom(link.roomId);
     else if (link.kind === 'mention') openRoomMessage(link.roomId, link.messageId);
-    else if (link.kind === 'dm') void openDm(link.dmId).catch(() => onToast('Не удалось открыть диалог'));
+    else if (link.kind === 'dm') void lobby.openDm(link.dmId).catch(() => onToast('Не удалось открыть диалог'));
   }
 
   function previewRoom(roomId: string): void {
     selectRoomPreview(roomId);
-    friendsState.mode = 'rooms';
+    lobby.mode = 'rooms';
     replaceUrlWithActiveVoiceRoom();
   }
 
@@ -484,7 +357,7 @@
   function openConnectedVoiceRoom(): void {
     const openedRoomId = openActiveVoiceRoom();
     if (!openedRoomId) return;
-    friendsState.mode = 'rooms';
+    lobby.mode = 'rooms';
     pushState(`/r/${encodeURIComponent(openedRoomId)}`, {});
   }
 
@@ -492,7 +365,7 @@
     const leavingRoomId = connectedVoiceRoomId;
     const transition = resolveLeaveViewedConnectedRoom(leavingRoomId);
     await leaveActiveVoiceRoomWithCue();
-    decrementRoomPeerCount(leavingRoomId);
+    rooms.left(leavingRoomId);
     if (transition.closeEmbeddedRoom) {
       closeEmbeddedRoom();
       clearViewedRoom();
@@ -516,7 +389,7 @@
       const roomId = await createRoom(payload);
       createDialogOpen = false;
       requestEnterRoom(roomId);
-      if (payload.isStatic) void refreshRooms();
+      if (payload.isStatic) void rooms.refresh();
       onToast('Комната создана');
     } catch (error) {
       onToast(error instanceof Error && error.message ? error.message : 'Не удалось создать комнату');
@@ -525,48 +398,13 @@
     }
   }
 
-  function openSettings(): void {
-    settingsTab = 'profile';
-    settingsOpen = true;
-  }
-
-  function openSecuritySettings(highlight: 'recovery-codes' | 'password' | null = null): void {
-    securityHighlight = highlight;
-    settingsTab = 'security';
-    settingsOpen = true;
-  }
-
-  function closeSettings(): void {
-    settingsOpen = false;
-    securityHighlight = null;
-    // Codes may have been created meanwhile.
-    void refreshRecoveryCodesReminder();
-  }
-
-  async function refreshRecoveryCodesReminder(): Promise<void> {
-    try {
-      recoveryCodesReminder = shouldShowRecoveryCodesReminder(await fetchAccountSecurity());
-    } catch {
-      // The reminder is optional; keep whatever was shown.
-    }
-  }
-
-  async function snoozeRecoveryCodes(): Promise<void> {
-    recoveryCodesReminder = false;
-    try {
-      await snoozeRecoveryCodesReminder();
-    } catch {
-      onToast('Не удалось отложить напоминание', { variant: 'error' });
-    }
-  }
-
   function openPeople(): void {
-    friendsState.mode = 'friends';
-    showPeople();
+    lobby.mode = 'friends';
+    lobby.showPeople();
   }
 
   function goHome(): void {
-    showHome();
+    lobby.showHome();
     if (selectedRoomId) closeViewedRoom();
   }
 
@@ -580,7 +418,7 @@
    * and it reloaded the page while still failing to open the chat.
    */
   function openRoomMessage(roomId: string, messageId: string): void {
-    friendsState.mode = 'rooms';
+    lobby.mode = 'rooms';
     if (getActiveVoiceRoomId() === roomId) {
       // Already in that room: its own chat is the one to show.
       openActiveVoiceRoom();
@@ -592,11 +430,25 @@
   }
 
   function openNotification(item: import('@voice-room/shared/notifications').NotificationItem): void {
-    notificationInboxOpen = false;
+    notifications.open = false;
     openRoomMessage(item.roomId, item.sourceMessageId);
   }
 </script>
 
+{#snippet voiceHome()}
+  <VoiceHome
+    rooms={rooms.list}
+    onOpenRoom={previewRoom}
+    onCreateRoom={() => (createDialogOpen = true)}
+    onJoinCode={handleJoin}
+    onRoomsChanged={rooms.refresh}
+    onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)}
+    recoveryCodesReminder={prompts.recoveryCodesReminder}
+    onOpenRecoveryCodes={() => prompts.openSecuritySettings('recovery-codes')}
+    onSnoozeRecoveryCodes={prompts.snoozeRecoveryCodes}
+    {onToast}
+  />
+{/snippet}
 
 {#if user}
   <div class="lobby-shell lv dens-cozy">
@@ -604,14 +456,10 @@
       {user}
       onGoHome={goHome}
       onOpenPeople={openPeople}
-      onOpenSettings={openSettings}
-      notificationsEnabled={notificationInboxEnabled}
-      notificationsOpen={notificationInboxOpen}
-      notificationUnreadCount={notificationInbox.unreadCount}
-      onOpenNotifications={() => {
-        notificationInboxOpen = !notificationInboxOpen;
-        if (notificationInboxOpen) void notificationInbox.load();
-      }}
+      onOpenSettings={prompts.openSettings}
+      notificationsOpen={notifications.open}
+      notificationUnreadCount={notifications.inbox.unreadCount}
+      onOpenNotifications={notifications.toggle}
       {onToast}
       activeVoiceRoomId={connectedVoiceRoomId}
       activeVoiceRoomName={connectedVoiceRoom ? roomDisplayName(connectedVoiceRoom) : connectedVoiceRoomId || ''}
@@ -628,85 +476,158 @@
       {#if embeddedRoomId}
         <div class="lobby-embedded-room" hidden={!embeddedRoomVisible}>
           {#key embeddedRoomId}
-            <RoomPage embeddedRoomId={embeddedRoomId} autoJoin={autoJoinRoomId === embeddedRoomId} />
+            <RoomPage {embeddedRoomId} autoJoin={autoJoinRoomId === embeddedRoomId} />
           {/key}
         </div>
       {/if}
 
-      {#if friendsState.mode === 'rooms' && selectedRoom && connectedVoiceRoomId && selectedRoom.roomId !== connectedVoiceRoomId}
-        <RoomBrowseView {user} room={selectedRoom} onEnter={() => requestEnterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} onRoomsChanged={() => { closeViewedRoom(); void refreshRooms(); }} {onToast} />
-      {:else if friendsState.mode === 'rooms' && selectedRoom && (!embeddedRoomId || !embeddedRoomVisible)}
+      {#if lobby.mode === 'rooms' && selectedRoom && connectedVoiceRoomId && selectedRoom.roomId !== connectedVoiceRoomId}
+        <RoomBrowseView
+          {user}
+          room={selectedRoom}
+          onEnter={() => requestEnterRoom(selectedRoom.roomId)}
+          onBack={closeViewedRoom}
+          onOpenSettings={selectedRoom.relationship === 'owner'
+            ? () => (previewSettingsRoomId = selectedRoom.roomId)
+            : undefined}
+          onRoomsChanged={() => {
+            closeViewedRoom();
+            void rooms.refresh();
+          }}
+          {onToast}
+        />
+      {:else if lobby.mode === 'rooms' && selectedRoom && (!embeddedRoomId || !embeddedRoomVisible)}
         {@const anchor = previewAnchor?.roomId === selectedRoom.roomId ? previewAnchor : null}
         <!-- Keyed on the anchor so a second mention in a room already on screen
              still reopens its chat on the new message. -->
         {#key anchor?.messageId ?? ''}
-        <RoomPreviewView {user} room={selectedRoom} initialPanel={anchor ? 'chat' : null} aroundMessageId={anchor?.messageId} onEnter={() => requestEnterRoom(selectedRoom.roomId)} onBack={closeViewedRoom} onOpenSettings={selectedRoom.relationship === 'owner' ? () => (previewSettingsRoomId = selectedRoom.roomId) : undefined} onRoomsChanged={() => { closeViewedRoom(); void refreshRooms(); }} {onToast} />
+          <RoomPreviewView
+            {user}
+            room={selectedRoom}
+            initialPanel={anchor ? 'chat' : null}
+            aroundMessageId={anchor?.messageId}
+            onEnter={() => requestEnterRoom(selectedRoom.roomId)}
+            onBack={closeViewedRoom}
+            onOpenSettings={selectedRoom.relationship === 'owner'
+              ? () => (previewSettingsRoomId = selectedRoom.roomId)
+              : undefined}
+            onRoomsChanged={() => {
+              closeViewedRoom();
+              void rooms.refresh();
+            }}
+            {onToast}
+          />
         {/key}
-      {:else if friendsState.mode === 'rooms' && !embeddedRoomVisible}
-        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onRoomsChanged={refreshRooms} onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)} {recoveryCodesReminder} onOpenRecoveryCodes={() => openSecuritySettings('recovery-codes')} onSnoozeRecoveryCodes={snoozeRecoveryCodes} {onToast} />
-      {:else if friendsState.mode === 'friends' && friendsState.view === 'dm'}
-        <DmView selfId={user.id} self={user} />
-      {:else if friendsState.mode === 'friends' && friendsState.view === 'people'}
+      {:else if lobby.mode === 'rooms' && !embeddedRoomVisible}
+        {@render voiceHome()}
+      {:else if lobby.mode === 'friends' && lobby.view === 'dm'}
+        <DmView self={user} />
+      {:else if lobby.mode === 'friends' && lobby.view === 'people'}
         <PeopleView {user} {onToast} onHome={goHome} />
-      {:else if friendsState.mode === 'friends'}
-        <VoiceHome {rooms} onOpenRoom={previewRoom} onCreateRoom={() => (createDialogOpen = true)} onJoinCode={handleJoin} onRoomsChanged={refreshRooms} onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)} {recoveryCodesReminder} onOpenRecoveryCodes={() => openSecuritySettings('recovery-codes')} onSnoozeRecoveryCodes={snoozeRecoveryCodes} {onToast} />
+      {:else if lobby.mode === 'friends'}
+        {@render voiceHome()}
       {/if}
     </main>
   </div>
 
-  <CreateRoomDialog open={createDialogOpen} {creating} onClose={() => (createDialogOpen = false)} onCreate={handleCreate} />
-  <SettingsModal
-    open={settingsOpen}
-    bind:tab={settingsTab}
+  <CreateRoomDialog
+    open={createDialogOpen}
+    {creating}
+    onClose={() => (createDialogOpen = false)}
+    onCreate={handleCreate}
+  />
+  <LobbyAccountDialogs
+    {prompts}
     {user}
     {notificationUsers}
-    notificationRooms={rooms}
+    notificationRooms={rooms.list}
     {loggingOut}
-    {securityHighlight}
-    onClose={closeSettings}
     {onToast}
     {onLogout}
   />
-  <LoginAlertDialog
-    onSecureAccount={(target) => openSecuritySettings(target)}
-    onOpenChange={(open) => (loginAlertOpen = open)}
+  <LobbyRoomSettingsDialog
+    room={previewSettingsRoom}
+    onClose={() => (previewSettingsRoomId = '')}
+    onSaved={rooms.refresh}
+    onDeleted={() => {
+      previewSettingsRoomId = '';
+      closeViewedRoom();
+      void rooms.refresh();
+    }}
     {onToast}
   />
-  <WhatsNewDialog
-    paused={loginAlertOpen}
-    onOpenSecurity={() => openSecuritySettings()}
-    onOpenChange={(open) => (whatsNewOpen = open)}
-  />
-  <AppBenefitsModal open={appPromptOpen} onClose={closeAppPrompt} />
-  <LobbyRoomSettingsDialog room={previewSettingsRoom} onClose={() => (previewSettingsRoomId = '')} onSaved={refreshRooms} onDeleted={() => { previewSettingsRoomId = ''; closeViewedRoom(); void refreshRooms(); }} {onToast} />
   <RoomSwitchDialog
     open={Boolean(pendingRoomSwitchId)}
-    fromName={roomLabel(connectedVoiceRoomId || '')}
-    toName={roomLabel(pendingRoomSwitchId)}
+    fromName={rooms.label(connectedVoiceRoomId || '')}
+    toName={rooms.label(pendingRoomSwitchId)}
     onConfirm={(dontAskAgain) => resolveRoomSwitch(true, dontAskAgain)}
     onCancel={() => resolveRoomSwitch(false)}
   />
+  <ProfileCardHost {onToast} />
   {#if openInAppRoomId}
     <OpenInAppScreen onRetry={openRoomInApp} onContinue={continueRoomInBrowser} />
   {/if}
-  {#if notificationInboxEnabled}
-    {#if notificationInboxOpen}
-      <aside class="notification-inbox-panel" aria-label="Панель уведомлений">
-        <NotificationInbox
-          inbox={notificationInbox}
-          onopen={openNotification}
-          onclose={() => (notificationInboxOpen = false)}
-        />
-      </aside>
-    {/if}
+  {#if notifications.open}
+    <aside class="notification-inbox-panel" aria-label="Панель уведомлений">
+      <NotificationInbox
+        inbox={notifications.inbox}
+        onopen={openNotification}
+        onclose={() => (notifications.open = false)}
+      />
+    </aside>
   {/if}
 {/if}
 
 <style>
   /* The panel clips; the list inside it is what scrolls. */
-  .notification-inbox-panel { position: fixed; z-index: 71; left: 326px; bottom: 16px; display: flex; width: min(420px, calc(100vw - 358px)); max-height: min(620px, calc(100vh - 32px)); overflow: hidden; border: 1px solid var(--line); border-radius: 16px; background: var(--paper); box-shadow: var(--shadow); }
-  .notification-inbox-panel :global(.notification-inbox) { flex: 1 1 auto; min-width: 0; }
+  .notification-inbox-panel {
+    position: fixed;
+    z-index: 71;
+    left: 326px;
+    bottom: 16px;
+    display: flex;
+    width: min(420px, calc(100vw - 358px));
+    max-height: min(620px, calc(100vh - 32px));
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: var(--paper);
+    box-shadow: var(--shadow);
+  }
+  .notification-inbox-panel :global(.notification-inbox) {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
   @media (max-width: 900px) {
-    .notification-inbox-panel { left: 12px; right: 12px; bottom: 76px; width: auto; max-height: min(560px, calc(100vh - 96px)); }
+    .notification-inbox-panel {
+      left: 12px;
+      right: 12px;
+      bottom: 76px;
+      width: auto;
+      max-height: min(560px, calc(100vh - 96px));
+    }
+  }
+  :global(.lobby-main) {
+    flex: 1;
+    min-width: 0;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  :global(.lobby-embedded-room) {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  :where(.lobby-embedded-room)[hidden] {
+    display: none;
+  }
+  :global(.lv-main) {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 </style>

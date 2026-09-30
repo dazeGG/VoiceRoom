@@ -1,0 +1,115 @@
+import { test, onTestFinished, vi } from 'vitest';
+import assert from 'node:assert/strict';
+import * as shared from '@voice-room/shared/realtime';
+
+async function loadTyping() {
+  vi.resetModules();
+  return import('../src/lib/shared/chat/typing.svelte.ts');
+}
+
+const typing = (name: string) => ({ name, activity: 'typing' as const });
+const emoji = (name: string) => ({ name, activity: 'emoji' as const });
+
+test('the browser keeps the same typing timings and activities as the shared realtime contract', async () => {
+  const typingModule = await loadTyping();
+  assert.equal(typingModule.TYPING_NOTICE_INTERVAL_MS, shared.TYPING_NOTICE_INTERVAL_MS);
+  assert.equal(typingModule.TYPING_NOTICE_TTL_MS, shared.TYPING_NOTICE_TTL_MS);
+  assert.deepEqual([...typingModule.TYPING_ACTIVITIES], [...shared.TYPING_ACTIVITIES]);
+});
+
+test('the typing line names up to three people and then stops counting', async () => {
+  const { formatTypingLabel } = await loadTyping();
+  assert.equal(formatTypingLabel([]), '');
+  assert.equal(formatTypingLabel([typing(' '), typing('')]), '');
+  assert.equal(formatTypingLabel([typing('Аня')]), 'Аня печатает…');
+  assert.equal(formatTypingLabel([typing('Аня'), typing('Боря')]), 'Аня и Боря печатают…');
+  assert.equal(formatTypingLabel([typing('Аня'), typing('Боря'), typing('Вика')]), 'Аня, Боря и Вика печатают…');
+  assert.equal(
+    formatTypingLabel([typing('Аня'), typing('Боря'), typing('Вика'), typing('Гоша')]),
+    'Несколько человек печатают…'
+  );
+});
+
+test('someone with the emoji picker open is shown as choosing an emoji, next to those who type', async () => {
+  const { formatTypingLabel, typingActivityOf } = await loadTyping();
+  assert.equal(formatTypingLabel([emoji('Аня')]), 'Аня выбирает эмодзи…');
+  assert.equal(formatTypingLabel([emoji('Аня'), emoji('Боря')]), 'Аня и Боря выбирают эмодзи…');
+  assert.equal(formatTypingLabel([emoji('Аня'), typing('Боря')]), 'Боря печатает, Аня выбирает эмодзи…');
+  assert.equal(
+    formatTypingLabel([typing('Аня'), emoji('Боря'), typing('Вика')]),
+    'Аня и Вика печатают, Боря выбирает эмодзи…'
+  );
+  assert.equal(
+    formatTypingLabel([emoji('Аня'), emoji('Боря'), typing('Вика'), typing('Гоша')]),
+    'Несколько человек печатают…'
+  );
+
+  // A notice from an older client has no activity and still means typing.
+  assert.equal(typingActivityOf(undefined), 'typing');
+  assert.equal(typingActivityOf('recording'), 'typing');
+  assert.equal(typingActivityOf('emoji'), 'emoji');
+});
+
+test('a notice goes out at most once per interval, right away after a reset or a switch of activity', async () => {
+  const { createTypingNotifier } = await loadTyping();
+  let clock = 0;
+  const sent: unknown[] = [];
+  const notifier = createTypingNotifier(
+    (activity) => {
+      sent.push(activity);
+    },
+    { intervalMs: 2500, now: () => clock }
+  );
+
+  notifier.notify();
+  clock = 1000;
+  notifier.notify();
+  assert.deepEqual(sent, ['typing']);
+  clock = 2500;
+  notifier.notify();
+  assert.deepEqual(sent, ['typing', 'typing']);
+  clock = 2600;
+  notifier.reset();
+  notifier.notify();
+  assert.equal(sent.length, 3);
+
+  clock = 2700;
+  notifier.notify('emoji');
+  notifier.notify('emoji');
+  clock = 2800;
+  notifier.notify('typing');
+  assert.deepEqual(
+    sent.slice(3),
+    ['emoji', 'typing'],
+    'opening the picker and typing again are both announced at once'
+  );
+});
+
+test('a typist stays listed with what they do until their message or the notice expires', async () => {
+  const { createTypingTracker } = await loadTyping();
+  let clock = 0;
+  const tracker = createTypingTracker({ ttlMs: 6000, now: () => clock });
+  onTestFinished(() => tracker.reset());
+
+  tracker.note('user-a', 'Аня');
+  tracker.note('peer-b', 'Гость', 'emoji');
+  tracker.note('user-a', 'Аня');
+  assert.deepEqual(tracker.people, [emoji('Гость'), typing('Аня')], 'a repeated notice does not duplicate the person');
+  assert.equal(tracker.has('peer-b'), true);
+  assert.equal(tracker.activityOf('peer-b'), 'emoji');
+  assert.equal(tracker.activityOf('nobody'), null);
+
+  tracker.note('peer-b', 'Гость', 'typing');
+  assert.equal(tracker.activityOf('peer-b'), 'typing');
+  tracker.clear('peer-b');
+  assert.deepEqual(tracker.people, [typing('Аня')]);
+
+  clock = 5999;
+  tracker.prune();
+  assert.deepEqual(tracker.people, [typing('Аня')]);
+  clock = 6000;
+  tracker.prune();
+  assert.deepEqual(tracker.people, []);
+  tracker.note('', 'nobody');
+  assert.deepEqual(tracker.people, []);
+});

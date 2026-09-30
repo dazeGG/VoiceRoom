@@ -33,7 +33,7 @@
 }
 
 .dialog-title {
-  color: #ece7d9;
+  color: var(--warm-100);
   font-family: var(--font-ui);
   font-size: 17px;
   font-weight: 700;
@@ -49,14 +49,16 @@
   border: none;
   border-radius: 9px;
   background: var(--control);
-  color: #9a9484;
+  color: var(--warm-500);
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .dialog-close:hover {
   background: var(--control-hover);
-  color: #ece7d9;
+  color: var(--warm-100);
 }
 
 .dialog-tabs {
@@ -75,17 +77,19 @@
   border-radius: 9px;
   padding: 9px 0;
   background: transparent;
-  color: #9a9484;
+  color: var(--warm-500);
   font-family: var(--font-ui);
   font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .dialog-tab[data-active='true'] {
   background: var(--control-active);
-  color: #17150f;
+  color: var(--warm-800);
   font-weight: 700;
 }
 
@@ -107,7 +111,7 @@
   border-radius: 11px;
   padding: 9px 12px;
   background: color-mix(in oklch, var(--coral) 12%, transparent);
-  color: #e8b3a8;
+  color: var(--coral-soft);
   font-size: 12.5px;
 }
 
@@ -118,7 +122,7 @@
 
 .dialog-label {
   margin-bottom: 9px;
-  color: #6f6a5c;
+  color: var(--warm-650);
   font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0.14em;
@@ -136,7 +140,7 @@
   border-radius: 12px;
   padding: 13px 15px;
   background: var(--warm-900);
-  color: #ece7d9;
+  color: var(--warm-100);
   font-family: var(--font-ui);
   font-size: 15px;
   outline: none;
@@ -144,7 +148,7 @@
 }
 
 .dialog-input::placeholder {
-  color: #6f6a5c;
+  color: var(--warm-650);
 }
 
 .dialog-input:focus {
@@ -179,7 +183,7 @@
 }
 
 .dialog-note--ok svg {
-  stroke: #7ec99a;
+  stroke: var(--green-soft);
 }
 
 .dialog-note--warn {
@@ -203,7 +207,7 @@
   border-radius: 12px;
   padding: 13px 20px;
   background: transparent;
-  color: #cfc9ba;
+  color: var(--warm-300);
   font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 600;
@@ -225,7 +229,7 @@
   border-radius: 12px;
   padding: 13px 0;
   background: var(--control-active);
-  color: #17150f;
+  color: var(--warm-800);
   font-family: var(--font-ui);
   font-size: 14.5px;
   font-weight: 700;
@@ -244,5 +248,5 @@
 
 .dialog-submit .home-spinner {
   border-color: rgba(23, 21, 15, 0.25);
-  border-top-color: #17150f;
+  border-top-color: var(--warm-800);
 }

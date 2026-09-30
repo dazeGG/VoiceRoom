@@ -21,7 +21,11 @@
   } from '../model/login-alerts';
   import type { ToastOptions } from '../model/toasts.svelte';
 
-  let { onSecureAccount, onOpenChange = () => {}, onToast } = $props<{
+  let {
+    onSecureAccount,
+    onOpenChange = () => {},
+    onToast
+  } = $props<{
     onSecureAccount: (target: SecureAccountTarget) => void;
     onOpenChange?: (open: boolean) => void;
     onToast: (message: string, options?: ToastOptions) => void;
@@ -124,7 +128,11 @@
         <button class="login-alert-button login-alert-button--danger" type="button" onclick={() => secure('password')}>
           Сменить пароль
         </button>
-        <button class="login-alert-button login-alert-button--ghost" type="button" onclick={() => secure('recovery-codes')}>
+        <button
+          class="login-alert-button login-alert-button--ghost"
+          type="button"
+          onclick={() => secure('recovery-codes')}
+        >
           {secured.recoveryCodes.remaining > 0 ? 'Обновить коды восстановления' : 'Создать коды восстановления'}
         </button>
         <button class="login-alert-later" type="button" onclick={() => (secured = null)}>Позже</button>

@@ -17,12 +17,13 @@
     onValueChange
   }: SelectProps = $props();
 
-  const selectedLabel = $derived(
-    options.find((option) => option.value === value)?.label
-      ?? options[0]?.label
-      ?? '—'
+  const selectedLabel = $derived(options.find((option) => option.value === value)?.label ?? options[0]?.label ?? '—');
+  const selectedIndex = $derived(
+    Math.max(
+      0,
+      options.findIndex((option) => option.value === value)
+    )
   );
-  const selectedIndex = $derived(Math.max(0, options.findIndex((option) => option.value === value)));
 
   let open = $state(false);
   let activeIndex = $state(0);
@@ -190,14 +191,16 @@
     min-height: var(--interactive-lg, 52px);
     padding: 0 14px 0 15px;
     background: var(--warm-900);
-    color: #ece7d9;
+    color: var(--warm-100);
     font-family: var(--font-ui);
     font-size: 14.5px;
     font-weight: 500;
     line-height: 1;
     text-align: left;
     cursor: pointer;
-    transition: border-color 0.15s ease, background 0.15s ease;
+    transition:
+      border-color 0.15s ease,
+      background 0.15s ease;
   }
 
   .select-trigger:hover:not(:disabled),
@@ -218,7 +221,7 @@
   .select-trigger-chevron {
     flex: none;
     display: inline-flex;
-    color: #9a9484;
+    color: var(--warm-500);
     transition: transform 0.16s ease;
   }
 
@@ -267,7 +270,7 @@
   .select-trigger--compact[aria-expanded='true'] {
     border-color: transparent;
     background: var(--control);
-    color: #e7e2d4;
+    color: var(--warm-150);
   }
 
   .select-trigger--dock {
@@ -312,7 +315,7 @@
     font-family: var(--font-ui);
     font-size: 14px;
     font-weight: 500;
-    color: #e7e2d4;
+    color: var(--warm-150);
     text-align: left;
     cursor: pointer;
     transition: background 0.14s ease;

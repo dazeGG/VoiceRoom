@@ -1,5 +1,5 @@
-import { RealtimeRecoveryController, classifyRecoveryFailure } from './realtime-recovery.js';
-import { requestActiveVoiceResync, setActiveVoiceResyncFailureHandler } from '$lib/features/home/model/room-realtime';
+import { RealtimeRecoveryController, classifyRecoveryFailure } from './realtime-recovery';
+import { requestActiveVoiceResync, setActiveVoiceResyncFailureHandler } from '$lib/entities/room/room-realtime';
 
 import { createLogger, reportClientLogs, type LogContext } from '$lib/shared/log';
 
@@ -118,16 +118,4 @@ export function notifyLiveKitDisconnected(): void {
 
 export function isCurrentRoomRecoveryEpoch(epoch: number): boolean {
   return controller?.isCurrent(epoch) ?? false;
-}
-
-export function getRoomRecoverySnapshot(): Readonly<{
-  epoch: number;
-  phase: string;
-  appEpoch: number;
-  snapshotReady: boolean;
-  livekitReady: boolean;
-  attempts: number;
-  inFlight: boolean;
-}> | null {
-  return controller?.getSnapshot() ?? null;
 }

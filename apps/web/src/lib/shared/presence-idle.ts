@@ -2,9 +2,7 @@ import type { PresenceStatus } from '$lib/shared/presence';
 
 export const PRESENCE_IDLE_THRESHOLD_SECONDS = 5 * 60;
 export const PRESENCE_ACTIVE_LEASE_SECONDS = 3 * 60;
-const PRESENCE_LEASE_RENEWAL_TARGET_SECONDS = PRESENCE_IDLE_THRESHOLD_SECONDS
-  - PRESENCE_ACTIVE_LEASE_SECONDS
-  - 15;
+const PRESENCE_LEASE_RENEWAL_TARGET_SECONDS = PRESENCE_IDLE_THRESHOLD_SECONDS - PRESENCE_ACTIVE_LEASE_SECONDS - 15;
 const PRESENCE_IDLE_RETRY_INTERVAL_MS = 5_000;
 const PRESENCE_IDLE_INACTIVE_STATUS_INTERVAL_MS = 60_000;
 
@@ -85,12 +83,13 @@ export function createPresenceIdleController({
       // Stop renewing this client's lease early enough for it to expire near the
       // away threshold. Another active desktop keeps renewing its own lease and
       // therefore still prevents account-wide AFK.
-      const shouldRenewOnline = presence.loaded !== false
-        && presence.presenceStatus === 'online'
-        && idleSeconds !== null
-        && Number.isSafeInteger(idleSeconds)
-        && idleSeconds >= 0
-        && idleSeconds < PRESENCE_IDLE_THRESHOLD_SECONDS - PRESENCE_ACTIVE_LEASE_SECONDS;
+      const shouldRenewOnline =
+        presence.loaded !== false &&
+        presence.presenceStatus === 'online' &&
+        idleSeconds !== null &&
+        Number.isSafeInteger(idleSeconds) &&
+        idleSeconds >= 0 &&
+        idleSeconds < PRESENCE_IDLE_THRESHOLD_SECONDS - PRESENCE_ACTIVE_LEASE_SECONDS;
       if (nextStatus || shouldRenewOnline) await updatePresence(nextStatus || 'online');
     } while (evaluateAgain && !stopped);
     return lastIdleSeconds;
@@ -135,10 +134,7 @@ export function getNextPresenceIdleCheckDelayMs({
   const remainingSeconds = Math.max(0, PRESENCE_IDLE_THRESHOLD_SECONDS - idleSeconds);
   if (remainingSeconds === 0) return PRESENCE_IDLE_RETRY_INTERVAL_MS;
   if (idleSeconds < PRESENCE_LEASE_RENEWAL_TARGET_SECONDS) {
-    return Math.max(
-      PRESENCE_IDLE_RETRY_INTERVAL_MS,
-      (PRESENCE_LEASE_RENEWAL_TARGET_SECONDS - idleSeconds) * 1_000
-    );
+    return Math.max(PRESENCE_IDLE_RETRY_INTERVAL_MS, (PRESENCE_LEASE_RENEWAL_TARGET_SECONDS - idleSeconds) * 1_000);
   }
   return Math.max(PRESENCE_IDLE_RETRY_INTERVAL_MS, remainingSeconds * 1_000);
 }

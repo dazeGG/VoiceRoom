@@ -79,7 +79,10 @@ export function readOpenInAppSignals(): OpenInAppSignals {
  * ignore it; Firefox would replace the page with an error, so it gets a hidden
  * frame instead of a top-level navigation.
  */
-export function launchAppLink(url: string, target: { document: Document; location: Location; navigator: Navigator } = window): void {
+export function launchAppLink(
+  url: string,
+  target: { document: Document; location: Location; navigator: Navigator } = window
+): void {
   if (/Firefox\//.test(target.navigator.userAgent)) {
     const frame = target.document.createElement('iframe');
     frame.hidden = true;

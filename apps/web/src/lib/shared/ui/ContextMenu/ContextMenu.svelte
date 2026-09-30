@@ -68,9 +68,11 @@
     const currentIndex = items.indexOf(document.activeElement as HTMLElement);
     const active = document.activeElement;
     const activeElement = active instanceof HTMLElement ? active : null;
-    const ownsNavigation = Boolean(activeElement?.closest(
-      'input, textarea, select, [contenteditable="true"], [role="textbox"], [role="slider"], [role="grid"], [role="tablist"]'
-    ));
+    const ownsNavigation = Boolean(
+      activeElement?.closest(
+        'input, textarea, select, [contenteditable="true"], [role="textbox"], [role="slider"], [role="grid"], [role="tablist"]'
+      )
+    );
     const activeScope = activeElement?.parentElement?.closest<HTMLElement>('[role="menu"], [role="listbox"]');
 
     if (event.key === 'Escape') {
@@ -216,7 +218,13 @@
   /* Keep the panel inside its measured viewport bounds for the whole entrance.
      Movement here would temporarily push edge-aligned menus outside the gap. */
   @keyframes context-menu-enter {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 </style>

@@ -1,4 +1,4 @@
-import { updateVoicePeer } from '$lib/features/home/model/room-realtime';
+import { updateVoicePeer } from '$lib/entities/room/room-realtime';
 import { state } from '../core/state.svelte';
 import { getDisplayName } from '../ui/names';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';

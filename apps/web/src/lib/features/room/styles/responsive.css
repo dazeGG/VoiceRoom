@@ -13,24 +13,24 @@
     font-size: 2rem;
   }
 
-  .tile-grid[data-count="5"],
-  .tile-grid[data-count="6"],
-  .tile-grid[data-count="7"],
-  .tile-grid[data-count="8"],
-  .tile-grid[data-count="9"] {
+  .tile-grid[data-count='5'],
+  .tile-grid[data-count='6'],
+  .tile-grid[data-count='7'],
+  .tile-grid[data-count='8'],
+  .tile-grid[data-count='9'] {
     --tile-columns: 3;
   }
 
   /* Re-centre the incomplete bottom rows for the narrowed 3-column layouts. */
-  .tile-grid[data-count="7"] :is(.stream-tile, .participant):nth-child(5) {
+  .tile-grid[data-count='7'] :is(.stream-tile, .participant):nth-child(5) {
     grid-column: span 2;
   }
 
-  .tile-grid[data-count="7"] :is(.stream-tile, .participant):nth-child(7) {
+  .tile-grid[data-count='7'] :is(.stream-tile, .participant):nth-child(7) {
     grid-column: 3 / span 2;
   }
 
-  .tile-grid[data-count="8"] :is(.stream-tile, .participant):nth-child(7) {
+  .tile-grid[data-count='8'] :is(.stream-tile, .participant):nth-child(7) {
     grid-column: 2 / span 2;
   }
 
@@ -69,7 +69,7 @@
     width: 100%;
   }
 
-  body[data-screen="room"] .status-pill {
+  body[data-screen='room'] .status-pill {
     width: auto;
     min-width: 0;
     max-width: 46vw;
@@ -101,40 +101,40 @@
     justify-content: stretch;
   }
 
-  .tile-grid[data-count="2"],
-  .tile-grid[data-count="3"],
-  .tile-grid[data-count="4"],
-  .tile-grid[data-count="5"],
-  .tile-grid[data-count="6"],
-  .tile-grid[data-count="7"],
-  .tile-grid[data-count="8"],
-  .tile-grid[data-count="9"] {
+  .tile-grid[data-count='2'],
+  .tile-grid[data-count='3'],
+  .tile-grid[data-count='4'],
+  .tile-grid[data-count='5'],
+  .tile-grid[data-count='6'],
+  .tile-grid[data-count='7'],
+  .tile-grid[data-count='8'],
+  .tile-grid[data-count='9'] {
     --tile-columns: 2;
   }
 
   /* Two columns: keep each single-tile trailing row centred, and reset the
      wider-layout nudges that no longer apply. */
-  .tile-grid[data-count="5"] :is(.stream-tile, .participant):nth-child(4) {
+  .tile-grid[data-count='5'] :is(.stream-tile, .participant):nth-child(4) {
     grid-column: span 2;
   }
 
-  .tile-grid[data-count="5"] :is(.stream-tile, .participant):nth-child(5) {
+  .tile-grid[data-count='5'] :is(.stream-tile, .participant):nth-child(5) {
     grid-column: 2 / span 2;
   }
 
-  .tile-grid[data-count="7"] :is(.stream-tile, .participant):nth-child(5) {
+  .tile-grid[data-count='7'] :is(.stream-tile, .participant):nth-child(5) {
     grid-column: span 2;
   }
 
-  .tile-grid[data-count="7"] :is(.stream-tile, .participant):nth-child(7) {
+  .tile-grid[data-count='7'] :is(.stream-tile, .participant):nth-child(7) {
     grid-column: 2 / span 2;
   }
 
-  .tile-grid[data-count="8"] :is(.stream-tile, .participant):nth-child(7) {
+  .tile-grid[data-count='8'] :is(.stream-tile, .participant):nth-child(7) {
     grid-column: span 2;
   }
 
-  .tile-grid[data-count="9"] :is(.stream-tile, .participant):nth-child(9) {
+  .tile-grid[data-count='9'] :is(.stream-tile, .participant):nth-child(9) {
     grid-column: 2 / span 2;
   }
 
@@ -150,7 +150,7 @@
     gap: var(--space-xs);
   }
 
-  body[data-screen-view="true"] .stage {
+  body[data-screen-view='true'] .stage {
     padding: var(--space-sm) var(--space-sm) 88px;
   }
 
@@ -239,27 +239,28 @@
    44px touch target even on the narrowest viewports. The whole cluster goes,
    not just the button: an empty flex child still spends the shell's gap and
    pushed the divider off-centre between the headphones and the signal bars. */
-html[data-platform-class="mobile"] .dock-cluster--screen {
+html[data-platform-class='mobile'] .dock-cluster--screen {
   display: none;
 }
 
-html[data-platform-class="mobile"] :is(.mic-button, .output-button, .leave-button, .screen-exit-button, .dock-connection) {
+html[data-platform-class='mobile']
+  :is(.mic-button, .output-button, .leave-button, .screen-exit-button, .dock-connection) {
   min-width: 44px;
   min-height: 44px;
 }
 
-html[data-platform-class="mobile"] .dock-split {
+html[data-platform-class='mobile'] .dock-split {
   min-height: 44px;
 }
 
 /* The heading tabs are the only way into chat on a phone, so they get the same
    44px target as the dock. */
-html[data-platform-class="mobile"] :is(.room-panel-tabs--topbar, .chat-rail-head .room-panel-tabs) button {
+html[data-platform-class='mobile'] :is(.room-panel-tabs--topbar, .chat-rail-head .room-panel-tabs) button {
   width: 40px;
   height: 40px;
 }
 
-html[data-platform-class="mobile"] .chat-rail-collapse {
+html[data-platform-class='mobile'] .chat-rail-collapse {
   width: 40px;
   height: 40px;
   border-radius: 11px;

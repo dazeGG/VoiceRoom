@@ -4,11 +4,7 @@
 
 <script lang="ts">
   import { tick } from 'svelte';
-  import {
-    parsePlacement,
-    resolvePopoverPlacement,
-    viewportSpaceAroundTrigger
-  } from './popover-placement';
+  import { parsePlacement, resolvePopoverPlacement, viewportSpaceAroundTrigger } from './popover-placement';
   import type {
     PopoverCloseReason,
     PopoverContentState,
@@ -81,9 +77,7 @@
     // anchor so the available-space calculation matches the CSS geometry.
     const anchorRect = root.getBoundingClientRect();
     const panelRect = panel.getBoundingClientRect();
-    const nextPlacement = flip
-      ? resolvePopoverPlacement(anchorRect, panelRect, placement)
-      : placement;
+    const nextPlacement = flip ? resolvePopoverPlacement(anchorRect, panelRect, placement) : placement;
     resolvedPlacement = nextPlacement;
     const { spaceAbove, spaceBelow } = viewportSpaceAroundTrigger(anchorRect);
     const panelStyle = getComputedStyle(panel);
@@ -100,20 +94,10 @@
       const axis = parsePlacement(nextPlacement);
       const panelWidth = panelRect.width;
       const panelHeight = Math.min(panelRect.height, availableHeight + panelChromeHeight);
-      const desiredLeft = axis.horizontal === 'start'
-        ? anchorRect.left
-        : anchorRect.right - panelWidth;
-      floatingLeft = Math.min(
-        Math.max(8, desiredLeft),
-        Math.max(8, window.innerWidth - panelWidth - 8)
-      );
-      const desiredTop = axis.vertical === 'top'
-        ? anchorRect.top - panelHeight - 10
-        : anchorRect.bottom + 10;
-      floatingTop = Math.min(
-        Math.max(8, desiredTop),
-        Math.max(8, window.innerHeight - panelHeight - 8)
-      );
+      const desiredLeft = axis.horizontal === 'start' ? anchorRect.left : anchorRect.right - panelWidth;
+      floatingLeft = Math.min(Math.max(8, desiredLeft), Math.max(8, window.innerWidth - panelWidth - 8));
+      const desiredTop = axis.vertical === 'top' ? anchorRect.top - panelHeight - 10 : anchorRect.bottom + 10;
+      floatingTop = Math.min(Math.max(8, desiredTop), Math.max(8, window.innerHeight - panelHeight - 8));
       floatingPositioned = true;
     }
   }
@@ -241,7 +225,12 @@
   } satisfies PopoverContentState);
 </script>
 
-<svelte:window onpointerdown={onWindowPointerDown} onkeydown={onWindowKeydown} onresize={repositionFloating} onscroll={repositionFloating} />
+<svelte:window
+  onpointerdown={onWindowPointerDown}
+  onkeydown={onWindowKeydown}
+  onresize={repositionFloating}
+  onscroll={repositionFloating}
+/>
 
 <div class={`popover-root ${rootClass}`.trim()} bind:this={root} data-overlay-id={panelId} onfocusout={onFocusOut}>
   {@render trigger(triggerState)}
@@ -305,8 +294,14 @@
   }
 
   @keyframes popover-panel-enter {
-    from { opacity: 0; transform: translateY(4px); }
-    to { opacity: 1; transform: translateY(0); }
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
 
   .popover-panel--closed {

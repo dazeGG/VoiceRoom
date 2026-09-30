@@ -7,6 +7,7 @@ import type { Participant } from '../core/types';
 import { setVoiceConnectionStatus } from '../ui/status';
 import {
   getSharedAudioContext,
+  playVoiceElement,
   releaseMediaStreamElement,
   routeMediaStreamElement,
   syncAudioBusOutput,
@@ -48,8 +49,8 @@ export function applyRemoteParticipantAudioPreferences(peer: Participant): void 
   const muted = isAppPlaybackMuted() || preference.muted || preference.volume <= 0;
   for (const audio of peer.audioElements.values()) {
     try {
-      const routed = routeMediaStreamElement(audio, 'voice', { muted, volume: preference.volume });
-      if (routed && !muted && getSharedAudioContext().state !== 'running') {
+      const path = playVoiceElement(audio, { muted, volume: preference.volume });
+      if (path === 'mixed' && !muted && getSharedAudioContext().state !== 'running') {
         queueAudioUnlock({ showFallback: true });
       }
     } catch (error) {
@@ -73,9 +74,7 @@ export function applyScreenMediaElementVolume(
   mediaElement: HTMLMediaElement,
   options: { boostAllowed: boolean; muted: boolean; volume: number }
 ): boolean {
-  const volume = Number.isFinite(options.volume)
-    ? Math.min(MAX_STREAM_VOLUME, Math.max(0, options.volume))
-    : 1;
+  const volume = Number.isFinite(options.volume) ? Math.min(MAX_STREAM_VOLUME, Math.max(0, options.volume)) : 1;
   if (!options.boostAllowed) {
     releaseMediaStreamElement(mediaElement);
     mediaElement.volume = 1;
@@ -138,13 +137,18 @@ export function handleAudioUnlockGesture(): void {
 }
 
 function shouldAttemptAudioUnlock(): boolean {
-  return state.audioUnlockPending
-    || state.voiceConnection === 'playback-blocked'
-    || state.audioContext?.state === 'suspended';
+  return (
+    state.audioUnlockPending ||
+    state.voiceConnection === 'playback-blocked' ||
+    state.audioContext?.state === 'suspended'
+  );
 }
 
 export async function unlockAudio(): Promise<void> {
   await unlockAudioBus();
+  // Voices on the direct path are unmuted media elements: a play() the
+  // browser refused before this gesture has to be retried now.
+  syncRemoteAudioPlayback();
   await Promise.allSettled(getMicrophoneProcessors(state.micProcessor).map((processor) => processor.context?.resume()));
   state.audioUnlockPending = false;
   startUi.soundButtonVisible = false;

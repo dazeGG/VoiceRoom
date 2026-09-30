@@ -4,11 +4,7 @@
   import { iconSm } from '$lib/shared/ui/icons';
   import { Popover } from '$lib/shared/ui';
   import EmojiPickerPanel from './EmojiPickerPanel.svelte';
-  import {
-    DEFAULT_FREQUENT_REACTIONS,
-    loadFrequentReactions,
-    recordFrequentReaction
-  } from './frequent-reactions';
+  import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions, recordFrequentReaction } from './frequent-reactions';
   import { TYPING_NOTICE_INTERVAL_MS } from './typing.svelte';
 
   // Shares the frequent list with reactions: the same few emoji tend to be the
@@ -87,8 +83,8 @@
       aria-haspopup="dialog"
       aria-expanded={open}
       aria-controls={panelId}
-      onclick={toggle}
-    ><Smile {...iconSm} aria-hidden="true" /></button>
+      onclick={toggle}><Smile {...iconSm} aria-hidden="true" /></button
+    >
   {/snippet}
 
   {#snippet content({ close })}
@@ -123,7 +119,9 @@
     background: transparent;
     color: var(--warm-muted);
     cursor: pointer;
-    transition: color 0.15s ease, background 0.15s ease;
+    transition:
+      color 0.15s ease,
+      background 0.15s ease;
   }
 
   .composer-emoji-trigger:hover,

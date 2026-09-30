@@ -21,7 +21,7 @@
     height: 14px;
     margin: 0;
     overflow: hidden;
-    color: var(--warm-muted, #8e897b);
+    color: var(--warm-muted, var(--warm-550));
     font-size: 11.5px;
     line-height: 14px;
     pointer-events: none;
@@ -29,5 +29,7 @@
     white-space: nowrap;
   }
 
-  .chat-typing:empty { visibility: hidden; }
+  .chat-typing:empty {
+    visibility: hidden;
+  }
 </style>

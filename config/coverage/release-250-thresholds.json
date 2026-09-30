@@ -31,10 +31,10 @@
       "name": "auth-admission",
       "enforcement": "on-changed",
       "paths": [
-        "apps/api/src/domains/admission/credential-boundary-service.js",
-        "apps/api/src/domains/admission/gate-credential-signer.js",
-        "apps/api/src/domains/admission/livekit-auth-gate-service.js",
-        "apps/api/src/domains/admission/livekit-credential-provider.js"
+        "apps/api/src/domains/admission/credential-boundary.service.ts",
+        "apps/api/src/domains/admission/gate-credential-signer.ts",
+        "apps/api/src/domains/admission/livekit-auth-gate.service.ts",
+        "apps/api/src/domains/admission/livekit-credential-provider.ts"
       ],
       "pathPatterns": []
     },
@@ -42,8 +42,8 @@
       "name": "media",
       "enforcement": "on-changed",
       "paths": [
-        "apps/api/src/domains/media/attachment-repository.js",
-        "apps/api/src/domains/media/media-job-repository.js",
+        "apps/api/src/domains/media/attachment.repository.ts",
+        "apps/api/src/domains/media/media-job.repository.ts",
         "apps/web/src/lib/features/room/client/media/screen-receiver-demand.ts"
       ],
       "pathPatterns": []
@@ -51,8 +51,8 @@
   ],
   "businessPathPatterns": [
     "apps/api/src/domains/admission/",
-    "apps/api/src/domains/media/attachment-repository.js",
-    "apps/api/src/domains/media/media-job-repository.js",
+    "apps/api/src/domains/media/attachment.repository.ts",
+    "apps/api/src/domains/media/media-job.repository.ts",
     "apps/web/src/lib/api/auth.ts",
     "apps/web/src/lib/features/room/client/media/screen-receiver-demand.ts"
   ],
@@ -60,8 +60,7 @@
     "/test/",
     "/e2e/",
     "/migrations/",
-    "packages/shared/src/emoji.js",
-    "packages/shared/src/emoji.mjs",
+    "packages/shared/src/emoji.ts",
     ".d.ts"
   ]
 }

@@ -1,8 +1,8 @@
-import type { RoomPeer } from '$lib/api/rooms';
+import type { RoomPeerSummary } from '@voice-room/shared/contracts/realtime';
 import type { AvatarStackItem } from '$lib/shared/ui';
 import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
 
-export function roomPeerAvatarItems(peers: RoomPeer[]): AvatarStackItem[] {
+export function roomPeerAvatarItems(peers: RoomPeerSummary[]): AvatarStackItem[] {
   return peers.map((peer) => {
     const avatar = getAvatarPresentation({
       avatarAccent: peer.avatarAccent || undefined,

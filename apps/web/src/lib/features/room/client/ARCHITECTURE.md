@@ -25,8 +25,9 @@ stage rendering. Client modules own media/session side effects after the lazy
 
 Some service modules are still larger than the preferred component size:
 
-- `screen-capture-service.ts` — source selection, profile constraints, audio
-  mixing and capture cleanup share one browser permission lifecycle.
+- `screen-capture-service.ts` — source selection, profile constraints and capture
+  cleanup share one browser permission lifecycle. The desktop app's native system
+  audio (PCM through an AudioWorklet) lives in `desktop-screen-audio.ts`.
 - `screen-share-service.ts` — local share state, publication and UI controls must
   update atomically around the same local stream.
 - `livekit-service.ts` — connection, publication and subscription handlers depend
@@ -37,7 +38,9 @@ Some service modules are still larger than the preferred component size:
 - `participants.ts` — participant domain state, remote audio element lifecycle and
   LiveKit track attachment remain imperative; visual rendering lives in Svelte.
 - `room.ts` — route/lifecycle coordinator; it should remain orchestration-only and
-  delegate browser/media details to services.
+  delegate browser/media details to services. Start-screen actions are in
+  `room-start.ts`, the entry check (account or guest name) in `room-entry.ts`, and
+  the joined room's voice events in `voice-events.ts`.
 
 New UI work should prefer Svelte components plus reactive view derivations instead
 of adding new global selectors or cross-module DOM mutation.

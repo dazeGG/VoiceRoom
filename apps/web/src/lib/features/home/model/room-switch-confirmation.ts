@@ -34,7 +34,13 @@ export function shouldConfirmRoomSwitch({
  * "Don't ask again" only sticks when the user actually switched; cancelling
  * never silences future questions.
  */
-export function applyRoomSwitchDecision({ proceed, dontAskAgain }: { proceed: boolean; dontAskAgain: boolean }): boolean {
+export function applyRoomSwitchDecision({
+  proceed,
+  dontAskAgain
+}: {
+  proceed: boolean;
+  dontAskAgain: boolean;
+}): boolean {
   if (proceed && dontAskAgain) writeRoomSwitchConfirmEnabled(false);
   return proceed;
 }

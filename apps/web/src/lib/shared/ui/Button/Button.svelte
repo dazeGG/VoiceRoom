@@ -12,12 +12,7 @@
   }: ButtonProps = $props();
 </script>
 
-<button
-  class="ui-button ui-button--{variant} {className}"
-  {type}
-  {disabled}
-  {onclick}
->
+<button class="ui-button ui-button--{variant} {className}" {type} {disabled} {onclick}>
   {#if icon}<span class="ui-button-icon">{@render icon()}</span>{/if}
   {#if children}{@render children()}{/if}
 </button>
@@ -39,7 +34,11 @@
     line-height: 1;
     letter-spacing: -0.01em;
     cursor: pointer;
-    transition: background 0.15s ease, box-shadow 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    transition:
+      background 0.15s ease,
+      box-shadow 0.15s ease,
+      color 0.15s ease,
+      border-color 0.15s ease;
   }
 
   .ui-button-icon {

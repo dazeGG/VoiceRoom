@@ -1,0 +1,178 @@
+# VoiceRoom architecture
+
+Rules for new code, the current state of the code, and where the two still
+differ. Table ownership lives in `ARCHITECTURE_2.5.md` and
+`config/import-boundaries.v1.json`. The history of how the API got here
+(`server.js` split, CommonJS → ES modules, JavaScript → TypeScript) is in git.
+
+## 1. Repository shape: one monorepo
+
+API, web and `packages/shared` stay in one repository.
+
+- `packages/shared` is a live contract (validators, realtime envelopes, screen
+  profile ids, reserved peer ids). One change updates the contract and both
+  consumers atomically.
+- Versions move in lockstep (2.6.x everywhere), and CI boots the whole stack
+  for the voice-join smoke test.
+- Deployables are already separate: the `api`, `worker` and `web` images are
+  built and rolled out independently.
+- The desktop shell is its own repository (own release cadence and signing).
+
+Revisit only with separate teams per side, independent release cadences, or a
+public API with third-party clients.
+
+## 2. Languages and runtime
+
+- Everything is strict TypeScript. The API and `packages/shared` run on Node 24
+  type stripping with no build step: erasable syntax only, imports with
+  explicit `.ts` extensions, `tsc` in `npm run check`. The web is compiled by
+  Vite/SvelteKit.
+- JavaScript stays only where it must: the byte-pinned `.cjs` migrations,
+  `scripts/geoip/fetch-dbip-city-lite.mjs` (host crontabs run it by path), the
+  AudioWorklet modules in `apps/web/static` (served unbundled) and
+  `apps/web/svelte.config.js`.
+- Line endings are LF everywhere (`.gitattributes`).
+
+## 3. API layering
+
+```
+transport   domains/<d>/<name>.routes.ts      Fastify handlers: parse, authorize, call, reply
+application domains/<d>/<name>.service.ts     use cases; own transactions; no HTTP types
+domain      domains/<d>/<name>.policy.ts      pure rules (authorship, moderation, admission)
+data        domains/<d>/<name>.repository.ts  SQL; the only writers of their tables
+platform    platform/**                       http kit, origin guard, db
+realtime    realtime/**                       WebSocket transport and in-memory presence
+composition server.ts, app/**                 entry (server.ts), config, per-app runtime, wiring
+```
+
+Rules:
+
+- A handler never touches SQL and never re-implements an authorization rule.
+  Every rule about who may act on a resource lives in one policy function that
+  both the HTTP route and the WebSocket path call.
+- Cross-cutting request checks (origin/CSRF, request ids, security headers)
+  are global Fastify hooks, not per-route calls.
+- Route input and output are TypeBox schemas registered with Fastify. The
+  schemas live in `packages/shared/src/contracts/<domain>.ts`; the web client
+  types its calls from the same module, so a payload changes in one place.
+- A route lets a service error through: the one error handler
+  (`platform/http/http-kit.ts`) answers with the error's status and code, or
+  a 500 with the route's `config.errorFallback` code. Routes do not catch to
+  format a failure.
+- Every failure is `{ ok: false, error, code }` with `code` from
+  `contracts/errors.ts` (`ERROR_CODES`). The web shows the text for the code
+  (`lib/api/error-texts.ts`, a `Record<ErrorCode, string>`), so adding a code
+  without its text fails `npm run check`.
+- WebSocket frames are typed by `contracts/realtime.ts`: `ClientCommands` and
+  `ServerEvents` map each `type` to its payload. The server builds frames with
+  `buildServerEnvelope`, the handler dispatches commands with an exhaustive
+  `switch`, and the web receives `ServerEvent`.
+- Route modules receive an explicit `ApiContext` plus their dependencies; no
+  new module-level singletons.
+- Configuration is read only by `app/config.ts` (`readApiConfig(env)`).
+- An app is composed by `createApiRuntime({ env })` (`app/api-runtime.ts`):
+  the service registry (stores and `domains/<d>/<d>.module.ts` wiring), the
+  realtime hub, the domain services and the routes (`app/api-routes.ts`).
+  Nothing lives in module scope, so every app a test builds has its own
+  state. `server.ts` is only the process entry.
+- A rule about who may act on a resource is a pure function in
+  `domains/<d>/<name>.policy.ts`; services and realtime paths call it rather
+  than repeat the comparison.
+- `app/room-store.ts`, `app/user-store.ts` and `app/friend-store.ts` compose
+  a domain's repositories into one object for the registry and test overrides.
+  Domain and realtime code depend on the repository (or a `Pick` of it) they
+  use, never on these composites.
+- The process has one pg pool, created by the registry (`connect`) or the
+  worker entry, and handed to every repository. Queries are Kysely over the
+  generated `platform/db/schema.ts`. A repository-only transaction is
+  `db.transaction()`; a service that passes one connection between
+  repositories opens it with `transaction(pool, …)` from `platform/db/pool.ts`,
+  and the repositories run on it through `kyselyOn(client)`.
+
+## 4. Current state versus these rules
+
+No known gaps. When code falls behind a rule above, list it here as
+`| Gap | Where | Rule for new code |` so nobody copies the old pattern.
+
+Every release-2.5 feature is on everywhere; `/api/capabilities` answers all of
+them true only for clients built before that. Ship new features without a
+runtime flag; one that must stay dark is an environment variable read in
+`app/config.ts`, like `LINK_PREVIEWS_ENABLED`.
+
+## 5. Web layering
+
+```
+routes/                 SvelteKit routes (SPA, adapter-static)
+lib/features/<f>/        feature UI and state (home = the lobby, room, auth)
+lib/entities/            models and components both features use (room realtime,
+                         presence, membership, moderation, profile card)
+lib/shared/              UI primitives, chat, notifications, utils — never imports features
+lib/api/                 HTTP and WebSocket clients
+lib/platform/            desktop bridge, device boundary
+```
+
+- The lobby (`home`) shows rooms; a room never imports the lobby. What a
+  room needs from the lobby comes through a context
+  (`features/room/social.ts`); `entities`, `shared`, `platform` and `api`
+  never import `features/home` or `features/room`. ESLint enforces both.
+- Svelte 5 runes only (`$state`, `$derived`, `$props`, snippets).
+- `$effect` synchronises with the outside world (DOM, listeners, timers).
+  Values computed from state are `$derived`; reactions to a user action belong
+  in the action function, not in an effect watching the state it changed.
+- State with actions lives in classes in `model/*.svelte.ts` (`LobbyStore`,
+  `DmThread`, `ProfileDraft`, `RoomChatDraft`, `LobbyNotifications`), handed
+  down through context (`provideLobby`/`useLobby`) rather than module
+  singletons. Collections that change in place are `SvelteSet`/`SvelteMap`,
+  not revision counters.
+- A view that should start fresh for a new subject is mounted per subject
+  (`{#key}` or `{#if open}`) instead of resetting its state in an effect: the
+  settings mount on every opening and per account, a DM conversation per peer.
+- Large surfaces are split by concern: `settings/*` one component per tab,
+  `lobby/dm/*` for the direct thread, `RoomChatComposer` and pure layout in
+  `room-chat-view.ts` for the room chat, `services/livekit/*` behind
+  `livekit-service.ts`.
+- Styles: colours come from the tokens in `lib/shared/styles/app.css` (the
+  warm-neutral scale and status tints), not hex literals. CSS for a class used
+  by one component lives in that component's `<style>`; the global files keep
+  what several components share, page and state selectors (`[data-*]`), and
+  rules whose classes share an element with a global one.
+- Browser, desktop, media and LiveKit fallbacks stay explicit and testable.
+  The room client (`lib/features/room/client`) has its own notes in
+  `ARCHITECTURE.md` there.
+
+## 6. Tests
+
+- Tests exercise behaviour: call the module, render the component, send the
+  request. They do not read source files and match their text; the only
+  allowed file reads are deployment configuration (Caddyfile, compose files,
+  Dockerfile, CSP) and migrations. `scripts/check-test-source-reads.mts` in
+  `npm run check` fails a test that reads a code file under `src/`.
+- API tests run against a real PostgreSQL (`test/db-harness.ts`) where the
+  behaviour touches SQL.
+- Critical user flows have Playwright coverage under `apps/web/e2e`.
+
+## 7. Runtime state and scaling
+
+Presence, realtime connections and rate-limit counters live in process memory,
+so the API runs as exactly one replica. The path to more replicas:
+
+1. Rate limits and login-failure counters move to PostgreSQL (or Redis).
+2. Presence moves to a shared store; fan-out uses PostgreSQL LISTEN/NOTIFY,
+   which the message outbox already uses.
+3. WebSocket sessions become sticky at the proxy.
+
+LiveKit is a single node. Multi-node needs Redis for LiveKit and
+region-aware admission.
+
+## 8. Media pipeline
+
+- Capture: one AudioContext, `source → RNNoise → gate (manual or automatic
+  sensitivity) → gain (limiter only above 100%) → destination`, published as
+  Opus 64 kbps with DTX and RED.
+- Playback: each remote voice plays on its own media element, so Chrome's echo
+  canceller uses it as reference; only a boost above 100% goes through the Web
+  Audio mix.
+- Screen share: VP9 for text, H.264 for motion, VP8 backup, degradation
+  preference at publish, 30/60 FPS; screen audio stereo without RED.
+- Network: UDP 7882, TCP 7881, and opt-in TURN/TLS on the shared :443
+  (`TURN_ENABLED`), plus TURN/UDP 3478.

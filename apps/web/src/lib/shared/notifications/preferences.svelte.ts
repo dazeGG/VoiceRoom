@@ -119,26 +119,16 @@ export function resetNotificationPreferences(): void {
   syncNotificationPermission();
 }
 
-export function prepareNotificationPreferences(
-  userId: string,
-  doNotDisturb: boolean,
-  presenceStatus?: unknown
-): void {
+export function prepareNotificationPreferences(userId: string, doNotDisturb: boolean, presenceStatus?: unknown): void {
   resetNotificationPreferences();
   activeUserId = userId;
-  notificationPreferences.presenceStatus = normalizePresenceStatus(
-    presenceStatus,
-    doNotDisturb ? 'dnd' : 'online'
-  );
+  notificationPreferences.presenceStatus = normalizePresenceStatus(presenceStatus, doNotDisturb ? 'dnd' : 'online');
   notificationPreferences.presenceStatusAutomatic = false;
   notificationPreferences.doNotDisturb = Boolean(doNotDisturb);
   setDoNotDisturbPlaybackSuppressed(doNotDisturb);
 }
 
-export function applyRealtimeNotificationPreferences(
-  userId: string,
-  preferences: NotificationPreferences
-): void {
+export function applyRealtimeNotificationPreferences(userId: string, preferences: NotificationPreferences): void {
   if (activeUserId !== userId) return;
   preferenceGeneration += 1;
   notificationPreferences.loading = false;

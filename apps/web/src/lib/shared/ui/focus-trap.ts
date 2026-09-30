@@ -27,7 +27,7 @@ function getFocusableElements(root: HTMLElement): HTMLElement[] {
 
 function focusInitialElement(root: HTMLElement, selector?: string): void {
   const explicitTarget = selector ? root.querySelector(selector) : null;
-  const target = isHTMLElement(explicitTarget) ? explicitTarget : getFocusableElements(root)[0] ?? root;
+  const target = isHTMLElement(explicitTarget) ? explicitTarget : (getFocusableElements(root)[0] ?? root);
   target.focus({ preventScroll: true });
 }
 

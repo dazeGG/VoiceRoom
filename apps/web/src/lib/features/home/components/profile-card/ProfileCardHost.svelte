@@ -1,20 +1,14 @@
 <script lang="ts">
-  // Binds the presentational ProfileCard to the friends model and the shared
-  // open/close store. Mounted once per app surface (lobby and room) so each can
-  // route toasts to its own stack.
+  // Binds the presentational ProfileCard to the account's social graph and the
+  // shared open/close store. The lobby mounts it, inside the context that
+  // provides that graph; without one every person is a stranger.
   import { ContextMenu } from '$lib/shared/ui';
   import { ProfileCard, type ProfileCardRelationship } from '$lib/shared/components/profile-card';
   import { session } from '$lib/features/auth/session.svelte';
-  import { closeProfileCard, profileCardUi } from '../../profile-card-ui.svelte';
-  import {
-    acceptRequestByUserId,
-    addFriendByUserId,
-    friendsState,
-    getFriendRelationship,
-    openDm,
-    removeFriend,
-    setMode
-  } from '../../model/friends.svelte';
+  import { closeProfileCard, profileCardUi } from '../../../../entities/profile-card/profile-card-ui.svelte';
+  import { useRoomSocial } from '$lib/features/room/social';
+
+  const social = useRoomSocial();
 
   let { onToast }: { onToast?: (message: string) => void } = $props();
 
@@ -25,13 +19,11 @@
     person?.userId && person.userId === session.user?.id
       ? 'self'
       : person?.userId
-        ? getFriendRelationship(person.userId)
+        ? social.relationship(person.userId)
         : 'unavailable'
   );
   const friendsSince = $derived(
-    person?.userId
-      ? friendsState.friends.find((entry) => entry.user.id === person.userId)?.friendsSince ?? null
-      : null
+    person?.userId ? (social.friends().find((entry) => entry.user.id === person.userId)?.friendsSince ?? null) : null
   );
 
   // Every action closes the card first: the result shows up in the list or the
@@ -53,8 +45,8 @@
     const userId = person?.userId;
     if (!userId) return;
     void run(async () => {
-      setMode('friends');
-      await openDm(userId);
+      social.showFriends();
+      await social.openDm(userId);
     }, 'Не удалось открыть личные сообщения');
   }
 
@@ -62,7 +54,7 @@
     const userId = person?.userId;
     if (!userId) return;
     void run(async () => {
-      const result = await addFriendByUserId(userId);
+      const result = await social.addFriend(userId);
       onToast?.(result.status === 'accepted' ? 'Теперь вы друзья' : 'Заявка в друзья отправлена');
     }, 'Не удалось отправить заявку в друзья');
   }
@@ -71,7 +63,7 @@
     const userId = person?.userId;
     if (!userId) return;
     void run(async () => {
-      await acceptRequestByUserId(userId);
+      await social.acceptRequest(userId);
       onToast?.('Заявка принята');
     }, 'Не удалось принять заявку');
   }
@@ -80,7 +72,7 @@
     const userId = person?.userId;
     if (!userId) return;
     void run(async () => {
-      await removeFriend(userId);
+      await social.removeFriend(userId);
       onToast?.(`${person?.name ?? 'Пользователь'} удалён из друзей`);
     }, 'Не удалось удалить друга');
   }

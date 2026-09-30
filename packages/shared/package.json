@@ -1,117 +1,49 @@
 {
   "name": "@voice-room/shared",
-  "version": "2.6.4",
+  "version": "2.7.0",
   "private": true,
-  "type": "commonjs",
+  "type": "module",
   "exports": {
-    "./validation": {
-      "types": "./src/validation.d.ts",
-      "import": "./src/validation.js",
-      "require": "./src/validation.js"
-    },
-    "./capabilities": {
-      "types": "./src/capabilities.d.ts",
-      "import": "./src/capabilities.mjs",
-      "require": "./src/capabilities.js"
-    },
-    "./messaging-history": {
-      "types": "./src/messaging-history.d.ts",
-      "import": "./src/messaging-history.js",
-      "require": "./src/messaging-history.js"
-    },
-    "./messaging-send": {
-      "types": "./src/messaging-send.d.ts",
-      "import": "./src/messaging-send.js",
-      "require": "./src/messaging-send.js"
-    },
-    "./membership": {
-      "types": "./src/membership.d.ts",
-      "import": "./src/membership.mjs",
-      "require": "./src/membership.js"
-    },
-    "./link-preview": {
-      "types": "./src/link-preview.d.ts",
-      "import": "./src/link-preview.mjs",
-      "require": "./src/link-preview.js"
-    },
-    "./room-message-content": {
-      "types": "./src/room-message-content.d.ts",
-      "import": "./src/room-message-content.mjs",
-      "require": "./src/room-message-content.js"
-    },
-    "./reactions": {
-      "types": "./src/reactions.d.ts",
-      "import": "./src/reactions.mjs",
-      "require": "./src/reactions.js"
-    },
-    "./attachments": {
-      "types": "./src/attachments.d.ts",
-      "import": "./src/attachments.js",
-      "require": "./src/attachments.js"
-    },
-    "./mentions": {
-      "types": "./src/mentions.d.ts",
-      "import": "./src/mentions.mjs",
-      "require": "./src/mentions.js"
-    },
-    "./notifications": {
-      "types": "./src/notifications.d.ts",
-      "import": "./src/notifications.mjs",
-      "require": "./src/notifications.js"
-    },
-    "./moderation": {
-      "types": "./src/moderation.d.ts",
-      "import": "./src/moderation.mjs",
-      "require": "./src/moderation.js"
-    },
-    "./realtime": {
-      "types": "./src/realtime.d.ts",
-      "import": "./src/realtime.js",
-      "require": "./src/realtime.js"
-    },
-    "./avatar-accent": {
-      "types": "./src/avatar-accent.d.ts",
-      "import": "./src/avatar-accent.mjs",
-      "require": "./src/avatar-accent.js"
-    },
-    "./emoji": {
-      "types": "./src/emoji.d.ts",
-      "import": "./src/emoji.mjs",
-      "require": "./src/emoji.js"
-    },
-    "./runtime-config": {
-      "types": "./src/runtime-config.d.ts",
-      "import": "./src/runtime-config.mjs",
-      "require": "./src/runtime-config.js"
-    },
-    "./platform-class": {
-      "types": "./src/platform-class.d.ts",
-      "import": "./src/platform-class.mjs",
-      "require": "./src/platform-class.js"
-    },
-    "./visual-identity": {
-      "types": "./src/visual-identity.d.ts",
-      "import": "./src/visual-identity.mjs",
-      "require": "./src/visual-identity.json"
-    },
-    "./emoji-groups": {
-      "types": "./src/emoji-groups.d.ts",
-      "import": "./src/emoji-groups.mjs",
-      "require": "./src/emoji-groups.js"
-    },
-    "./emoji-skin-tones": {
-      "types": "./src/emoji-skin-tones.d.ts",
-      "import": "./src/emoji-skin-tones.mjs",
-      "require": "./src/emoji-skin-tones.js"
-    },
-    "./account-security": {
-      "types": "./src/account-security.d.ts",
-      "import": "./src/account-security.mjs",
-      "require": "./src/account-security.js"
-    }
+    "./validation": "./src/validation.ts",
+    "./messaging-history": "./src/messaging-history.ts",
+    "./messaging-send": "./src/messaging-send.ts",
+    "./membership": "./src/membership.ts",
+    "./link-preview": "./src/link-preview.ts",
+    "./room-message-content": "./src/room-message-content.ts",
+    "./reactions": "./src/reactions.ts",
+    "./attachments": "./src/attachments.ts",
+    "./mentions": "./src/mentions.ts",
+    "./notifications": "./src/notifications.ts",
+    "./moderation": "./src/moderation.ts",
+    "./realtime": "./src/realtime.ts",
+    "./avatar-accent": "./src/avatar-accent.ts",
+    "./emoji": "./src/emoji.ts",
+    "./runtime-config": "./src/runtime-config.ts",
+    "./platform-class": "./src/platform-class.ts",
+    "./visual-identity": "./src/visual-identity.ts",
+    "./emoji-groups": "./src/emoji-groups.ts",
+    "./emoji-skin-tones": "./src/emoji-skin-tones.ts",
+    "./account-security": "./src/account-security.ts",
+    "./contracts/http": "./src/contracts/http.ts",
+    "./contracts/users": "./src/contracts/users.ts",
+    "./contracts/social": "./src/contracts/social.ts",
+    "./contracts/account": "./src/contracts/account.ts",
+    "./contracts/rooms": "./src/contracts/rooms.ts",
+    "./contracts/membership": "./src/contracts/membership.ts",
+    "./contracts/moderation": "./src/contracts/moderation.ts",
+    "./contracts/messages": "./src/contracts/messages.ts",
+    "./contracts/notifications": "./src/contracts/notifications.ts",
+    "./contracts/media": "./src/contracts/media.ts",
+    "./contracts/ops": "./src/contracts/ops.ts",
+    "./contracts/admission": "./src/contracts/admission.ts",
+    "./contracts/errors": "./src/contracts/errors.ts",
+    "./contracts/realtime": "./src/contracts/realtime.ts"
   },
   "scripts": {
-    "check": "node --check src/validation.js && node --check src/realtime.js && node --check src/avatar-accent.js && node --check src/avatar-accent.mjs && node --check src/emoji.js && node --check src/emoji.mjs && node --check src/emoji-groups.js && node --check src/emoji-groups.mjs && node --check src/emoji-skin-tones.js && node --check src/emoji-skin-tones.mjs && node --check src/runtime-config.js && node --check src/runtime-config.mjs && node --check src/capabilities.js && node --check src/capabilities.mjs && node --check src/platform-class.js && node --check src/platform-class.mjs && node --check src/messaging-history.js && node --check src/messaging-send.js && node --check src/membership.js && node --check src/membership.mjs && node --check src/room-message-content.js && node --check src/room-message-content.mjs && node --check src/reactions.js && node --check src/reactions.mjs && node --check src/attachments.js && node --check src/mentions.js && node --check src/mentions.mjs && node --check src/notifications.js && node --check src/notifications.mjs && node --check src/moderation.js && node --check src/moderation.mjs && node --check src/account-security.js && node --check src/account-security.mjs && node --check src/link-preview.js && node --check src/link-preview.mjs",
-    "test": "node --test test/*.test.js"
+    "check": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "test": "node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "typebox": "^1.3.34"
   }
 }

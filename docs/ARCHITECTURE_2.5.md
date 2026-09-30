@@ -6,15 +6,15 @@ This document records the release 2.5 brownfield ownership gates. It describes t
 
 | Area | Current owner | Allowed persistence writes |
 | --- | --- | --- |
-| API listener and route composition | `apps/api/src/server.js` | None directly; routes call stores |
-| Rooms, memberships, messages, bans and room reads | `apps/api/src/lib/room-store.js` | `rooms`, `room_memberships`, `room_bookmarks`, `room_peer_identities`, `room_messages`, `room_bans`, `room_chat_reads` |
-| Users and sessions | `apps/api/src/lib/user-store.js` | `users`, `sessions`, user-owned cleanup of `push_subscriptions` |
-| Friends and direct messages | `apps/api/src/lib/friend-store.js` | `friend_requests`, `friendships`, `direct_messages` |
-| Notification preferences and mutes | `apps/api/src/lib/notification-store.js` | `notification_preferences`, `notification_dm_mutes`, `notification_room_mutes`, notification-owned user preference columns |
-| Push subscriptions | `apps/api/src/lib/push-store.js` | `push_subscriptions` |
-| Account deletion lifecycle | `apps/api/src/domains/account/account-deletion-repository.js` | `users` deletion columns and anonymization, `reserved_logins`, `rooms` ownership hand-over; on the finished deletion only, the deleted account's rows in `sessions`, `room_memberships`, `room_bookmarks`, `room_chat_reads`, `friendships`, `friend_requests`, `user_blocks`, notification preference, mute and inbox tables, `push_subscriptions`, `account_recovery_codes` and `account_login_events` |
-| Link previews | `apps/api/src/domains/link-previews/*`, `apps/api/src/lib/link-preview-*.js` | `link_previews`, the `metadata.linkPreview` key of `room_messages` and `direct_messages`, image files under `uploads/link-previews` |
-| Schema migrations | `apps/api/src/migrations/*.js` | All schema-owned tables during migration only |
+| API listener and route composition | `apps/api/src/server.ts` | None directly; routes call stores |
+| Rooms, memberships, messages, bans and room reads | `apps/api/src/domains/rooms/*.repository.ts (composed in apps/api/src/app/room-store.ts)` | `rooms`, `room_memberships`, `room_bookmarks`, `room_peer_identities`, `room_messages`, `room_bans`, `room_chat_reads` |
+| Users and sessions | `apps/api/src/domains/account/*.repository.ts (composed in apps/api/src/app/user-store.ts)` | `users`, `sessions`, user-owned cleanup of `push_subscriptions` |
+| Friends and direct messages | `apps/api/src/domains/social/*.repository.ts (composed in apps/api/src/app/friend-store.ts)` | `friend_requests`, `friendships`, `direct_messages` |
+| Notification preferences and mutes | `apps/api/src/domains/notifications/notification-preferences.repository.ts` | `notification_preferences`, `notification_dm_mutes`, `notification_room_mutes`, notification-owned user preference columns |
+| Push subscriptions | `apps/api/src/domains/notifications/push-subscription.repository.ts` | `push_subscriptions` |
+| Account deletion lifecycle | `apps/api/src/domains/account/account-deletion.repository.ts` | `users` deletion columns and anonymization, `reserved_logins`, `rooms` ownership hand-over; on the finished deletion only, the deleted account's rows in `sessions`, `room_memberships`, `room_bookmarks`, `room_chat_reads`, `friendships`, `friend_requests`, `user_blocks`, notification preference, mute and inbox tables, `push_subscriptions`, `account_recovery_codes` and `account_login_events` |
+| Link previews | `apps/api/src/domains/link-previews/*`, `apps/api/src/lib/link-preview-*.ts` | `link_previews`, the `metadata.linkPreview` key of `room_messages` and `direct_messages`, image files under `uploads/link-previews` |
+| Schema migrations | `apps/api/src/migrations/*.{cjs,ts}` | All schema-owned tables during migration only |
 
 ## Import Boundaries
 
@@ -24,4 +24,4 @@ Persistence access is isolated to store, migration and migration-runner files. R
 
 ## Runtime Boundary
 
-The current listener bootstrap lives in `apps/api/src/server.js`. Timers that already exist there are characterized as current API runtime behavior. New worker loops or lease timers must be introduced through explicit worker entrypoints in later goals, not hidden inside listener or route modules.
+The current listener bootstrap lives in `apps/api/src/server.ts`. Timers that already exist there are characterized as current API runtime behavior. New worker loops or lease timers must be introduced through explicit worker entrypoints in later goals, not hidden inside listener or route modules.
