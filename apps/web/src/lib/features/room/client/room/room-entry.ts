@@ -15,14 +15,15 @@ const log = createLogger('room');
 export type RoomEntryGateResult = 'authenticated' | 'anonymous' | 'failure';
 
 async function autoSaveRoomForAuthenticatedUser(roomId: string): Promise<void> {
-  if (!roomId) return;
+  // Only a permanent room can be kept; the room check has already said which this is.
+  if (!roomId || !state.roomIsStatic) return;
   try {
     await addRoomByCode(roomId);
     window.dispatchEvent(new CustomEvent('voice-room:rooms-changed', { detail: { roomId } }));
   } catch (error) {
-    // Auto-save is a convenience side effect: temporary rooms, already-pruned
-    // rooms, and transient bookmark failures must never block or noisy-toast
-    // the room entry flow.
+    // Auto-save is a convenience side effect: already-pruned rooms and
+    // transient bookmark failures must never block or noisy-toast the room
+    // entry flow.
     log.debug('room auto-save skipped', errorContext(error));
   }
 }

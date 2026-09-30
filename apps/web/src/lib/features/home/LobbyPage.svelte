@@ -64,6 +64,7 @@
     shouldOfferOpenInApp
   } from '$lib/platform/open-in-app';
   import { openChat, roomUi } from '$lib/features/room/room-ui.svelte';
+  import { state as roomClientState } from '$lib/features/room/client/core/state.svelte';
   import '$lib/shared/styles/typography.css';
   import '$lib/shared/styles/dialog.css';
   import '$lib/features/room/styles/chat-rail.css';
@@ -107,6 +108,13 @@
   const selectedRoom = $derived(rooms.find(selectedRoomId));
   const previewSettingsRoom = $derived(rooms.find(previewSettingsRoomId));
   const connectedVoiceRoom = $derived(rooms.find(connectedVoiceRoomId));
+  // A room the list does not have (a temporary one, or one not kept yet) is
+  // named by the room client that is connected to it.
+  const connectedVoiceRoomName = $derived(
+    connectedVoiceRoom
+      ? roomDisplayName(connectedVoiceRoom)
+      : (roomClientState.roomId === connectedVoiceRoomId && roomClientState.roomName) || connectedVoiceRoomId || ''
+  );
   const notificationUsers = $derived(
     [...lobby.friends]
       .sort((a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0))
@@ -272,7 +280,7 @@
       return connectedVoiceRoomId || '';
     },
     get voiceRoomName() {
-      return connectedVoiceRoom ? roomDisplayName(connectedVoiceRoom) : connectedVoiceRoomId || '';
+      return connectedVoiceRoomName;
     },
     get friends() {
       return lobby.friends;
@@ -462,7 +470,7 @@
       onOpenNotifications={notifications.toggle}
       {onToast}
       activeVoiceRoomId={connectedVoiceRoomId}
-      activeVoiceRoomName={connectedVoiceRoom ? roomDisplayName(connectedVoiceRoom) : connectedVoiceRoomId || ''}
+      activeVoiceRoomName={connectedVoiceRoomName}
       activeVoiceRoomAvatarUrl={connectedVoiceRoom?.avatarUrl ?? null}
       activeVoiceMuted={voiceSession.muted}
       activeVoiceDeafened={voiceSession.deafened}
@@ -558,7 +566,7 @@
   />
   <RoomSwitchDialog
     open={Boolean(pendingRoomSwitchId)}
-    fromName={rooms.label(connectedVoiceRoomId || '')}
+    fromName={connectedVoiceRoomName}
     toName={rooms.label(pendingRoomSwitchId)}
     onConfirm={(dontAskAgain) => resolveRoomSwitch(true, dontAskAgain)}
     onCancel={() => resolveRoomSwitch(false)}

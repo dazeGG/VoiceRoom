@@ -34,11 +34,19 @@ function expectedMigrationCatalog(dir: string = DEFAULT_MIGRATIONS_DIR): string[
     .sort();
 }
 
+// node-pg-migrate reads a 13- or 17-digit file prefix as a time. Ours have 14
+// (yyyymmddhhmmss, and applied names are pinned), so it reports each one as an
+// error on every run and then orders them by the number, which is right.
+const FALSE_TIMESTAMP_ERROR = /^Can't determine timestamp for \d{14}$/;
+
 function migrationLogger(logger: MigrationLogSink | null | undefined): Required<MigrationLogSink> {
   return {
     info: (...items) => logger?.info?.(...items),
     warn: (...items) => logger?.warn?.(...items),
-    error: (...items) => logger?.error?.(...items),
+    error: (...items) => {
+      if (items.length === 1 && typeof items[0] === 'string' && FALSE_TIMESTAMP_ERROR.test(items[0])) return;
+      logger?.error?.(...items);
+    },
     // node-pg-migrate calls `log` for progress; pino has no such level, so it
     // lands on info rather than disappearing through optional chaining.
     log: (...items) => (logger?.log ? logger.log(...items) : logger?.info?.(...items))
@@ -307,6 +315,7 @@ async function runMigrations({
 
 export {
   expectedMigrationCatalog,
+  migrationLogger,
   assertMigrationReady,
   advisoryLockParts,
   runMigrations,

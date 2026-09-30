@@ -10,6 +10,8 @@ import { stubFetch } from '../fixtures/fetch.ts';
 import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';
 import { stubMatchMedia } from '../helpers/match-media.ts';
+import { state as roomClientState } from '../../src/lib/features/room/client/core/state.svelte';
+import { voiceSession } from '../../src/lib/features/room/voice-session.svelte';
 
 vi.mock('$app/navigation', () => ({ pushState: vi.fn(), replaceState: vi.fn(), goto: vi.fn(async () => {}) }));
 
@@ -24,6 +26,9 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   window.history.replaceState(null, '', '/');
+  voiceSession.roomId = null;
+  roomClientState.roomId = '';
+  roomClientState.roomName = '';
 });
 
 function stubLobby() {
@@ -90,4 +95,14 @@ test('a ?dm= link opens that conversation', async () => {
 
   expect(await screen.findByRole('region', { name: 'Личные сообщения' })).toBeTruthy();
   await vi.waitFor(() => expect(calls.some((call) => call.url.startsWith('/api/dm/bob/history?'))).toBe(true));
+});
+
+test('the call card names a room the list does not have, such as a temporary one', async () => {
+  stubLobby();
+  roomClientState.roomId = 'tmp123';
+  roomClientState.roomName = 'Созвон';
+  voiceSession.roomId = 'tmp123';
+  renderLobby();
+
+  expect(await screen.findByRole('button', { name: 'Открыть комнату Созвон' })).toBeTruthy();
 });

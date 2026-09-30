@@ -61,6 +61,19 @@ test('a signed-in account enters under its name, saves the room to its list and 
   window.removeEventListener('voice-room:rooms-changed', changed);
 });
 
+test('a temporary room is not offered to the account list: only permanent rooms can be kept', async () => {
+  const app = await load({
+    '/api/rooms/abc123': { body: { ok: true, exists: true, name: 'Созвон', isStatic: false, avatarUrl: null } },
+    '/api/auth/me': { body: { user: authUser({ displayName: 'Аня' }) } },
+    '/api/auth/rooms': { body: { rooms: [] } }
+  });
+
+  await expect(app.showRoomRoute()).resolves.toBe(true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  expect(app.fetchStub.calls.filter((call) => call.method === 'POST')).toEqual([]);
+});
+
 test('a failed account check stops entry instead of treating the visitor as a guest', async () => {
   const app = await load({ ...roomExists, '/api/auth/me': { status: 500 } });
   await expect(app.showRoomRoute()).resolves.toBe(false);

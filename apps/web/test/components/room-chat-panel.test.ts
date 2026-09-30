@@ -231,4 +231,29 @@ test('an account refused paged history reads the recent window, like a guest, in
   expect(await screen.findByText('от Ады')).toBeTruthy();
   expect(screen.queryByText('Комната недоступна')).toBeNull();
   expect(calls.some((call) => call.url === '/api/rooms/room/chat')).toBe(true);
+  // Pins are for rooms the account keeps too: no point asking here.
+  expect(calls.filter((call) => call.url.endsWith('/pins'))).toEqual([]);
+});
+
+test('pins are asked for in a room the account keeps, and never by a guest', async () => {
+  const guest = stubRoom();
+  renderPanel();
+  await screen.findByText('от Ады');
+  expect(guest.calls.filter((call) => call.url.endsWith('/pins'))).toEqual([]);
+  cleanup();
+
+  session.user = authUser();
+  const keeper = stubRoom({
+    'GET /api/rooms/room/chat/history?mode=latest&limit=50': {
+      body: {
+        ok: true,
+        contractVersion: 1,
+        mode: 'latest',
+        messages: [],
+        pageInfo: { hasMoreBefore: false, hasMoreAfter: false }
+      }
+    }
+  });
+  renderPanel();
+  await vi.waitFor(() => expect(keeper.calls.some((call) => call.url.endsWith('/pins'))).toBe(true));
 });
