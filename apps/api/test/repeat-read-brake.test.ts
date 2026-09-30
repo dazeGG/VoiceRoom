@@ -75,3 +75,20 @@ test('past the cap of held repeats the rest are refused at once, and old keys ar
   await admit('c');
   assert.equal(await admit('a'), true);
 });
+
+test('the time a repeat spent held does not count as quiet, so the loop is not let through again', async () => {
+  // The hold is longer than the quiet time, as in production (25 s against 20 s).
+  const clock = { now: 0 };
+  const made = createRepeatReadBrake({
+    allowed: 2,
+    quietMs: 1_000,
+    holdMs: 1_500,
+    now: () => clock.now,
+    sleep: async (ms) => {
+      clock.now += ms;
+    }
+  });
+  assert.deepEqual([await made.admit('a'), await made.admit('a')], [true, true]);
+  // The looping client asks again the moment each refusal arrives.
+  for (let lap = 0; lap < 5; lap += 1) assert.equal(await made.admit('a'), false, `lap ${lap}`);
+});
