@@ -329,6 +329,44 @@ test('G08-A03d a .js policy entry carries over to its .ts successor only once th
   );
 });
 
+test('G08-A03d2 a layer-named successor (-service.js to .service.ts) carries the entry once the .js file is gone', () => {
+  const legacy = 'apps/api/src/domains/media/attachment-repository.js';
+  const typed = 'apps/api/src/domains/media/attachment.repository.ts';
+  const base = thresholdFixture({
+    strictBranchPaths: [legacy],
+    businessPathPatterns: [...thresholds.businessPathPatterns, legacy]
+  });
+  const renamed = thresholdFixture({
+    strictBranchPaths: [typed],
+    businessPathPatterns: [...thresholds.businessPathPatterns, typed]
+  });
+  const summary = {
+    ...greenSummary,
+    files: { ...greenSummary.files, [typed]: { lines: { pct: 100 }, branches: { pct: 100 } } }
+  };
+  const check = (thresholdsUnderTest: CoverageThresholds, fileExists: (file: string) => boolean) =>
+    enforceCoverage({ coverageSummary: summary, thresholds: thresholdsUnderTest, baseThresholds: base, fileExists });
+
+  assert.equal(check(renamed, () => false).ratchetMode, 'protected-base-ratchet');
+  assert.throws(
+    () => check(renamed, () => true),
+    /may not remove or narrow protected-base policy entry: apps\/api\/src\/domains\/media\/attachment-repository\.js/i
+  );
+  // Only the layer suffix may move behind a dot; another name is a removal.
+  const unrelated = 'apps/api/src/domains/media/attachment.policy.ts';
+  assert.throws(
+    () =>
+      check(
+        thresholdFixture({
+          strictBranchPaths: [unrelated],
+          businessPathPatterns: [...thresholds.businessPathPatterns, unrelated]
+        }),
+        () => false
+      ),
+    /may not remove or narrow protected-base policy entry/i
+  );
+});
+
 test('G08-A03e a .ts exclusion may only replace the .js/.mjs exclusions of a module that is gone', () => {
   const base = thresholdFixture({
     ignoredPathPatterns: [
