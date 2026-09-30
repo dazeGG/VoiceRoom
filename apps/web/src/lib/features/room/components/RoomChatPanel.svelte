@@ -282,7 +282,6 @@
       }
     });
 
-    void loadRoomPins(roomId);
     if (session.user?.id) {
       void loadFrequentReactions('chat', session.user.id).then((emoji) => {
         if (emoji.length > 0) quickReactions = emoji;
@@ -378,6 +377,9 @@
     const anchorMessageId = aroundMessageId || new URL(window.location.href).searchParams.get('around') || undefined;
     if (paged) await timeline.open(roomId, anchorMessageId);
     else await refreshMessages(signal);
+    // Pins, like paged history, are for a room the account keeps: a guest and
+    // an account that was just refused that history would only be refused again.
+    if (timeline.paged && !signal.aborted) void loadRoomPins(roomId);
     if (anchorMessageId && !signal.aborted) {
       await tick();
       chatPinnedToBottom = false;

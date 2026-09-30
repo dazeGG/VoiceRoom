@@ -40,7 +40,9 @@
     selectRoomPanel(tab);
     if (tab !== 'chat') return;
     setRoomUnreadCount(roomClientState.roomId, 0);
-    if (roomClientState.self?.accountUserId) void markRoomChatRead(roomClientState.roomId).catch(() => {});
+    // Read state is kept for rooms in the account's list; a temporary room is never there.
+    if (roomClientState.self?.accountUserId && roomClientState.roomIsStatic)
+      void markRoomChatRead(roomClientState.roomId).catch(() => {});
   }
 
   function notifyRoomsChanged(): void {
