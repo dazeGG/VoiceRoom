@@ -37,6 +37,23 @@ test('a message without structured content shows its plain text', () => {
   expect(screen.getByText('просто текст')).toBeTruthy();
 });
 
+test('a link typed in a message is a link, as in plain text', () => {
+  render(StructuredMessageContent, {
+    props: {
+      content: {
+        version: 1,
+        segments: [{ type: 'text', text: 'глянь https://store.steampowered.com/app/413150 вечером' }]
+      }
+    }
+  });
+  const link = screen.getByRole('link', { name: 'https://store.steampowered.com/app/413150' });
+  expect(link.getAttribute('href')).toBe('https://store.steampowered.com/app/413150');
+  expect(link.getAttribute('target')).toBe('_blank');
+  expect(link.closest('.structured-message')?.textContent).toBe(
+    'глянь https://store.steampowered.com/app/413150 вечером'
+  );
+});
+
 test('mention suggestions show face, name and login, mark the active one and pick on click', async () => {
   const onselect = vi.fn();
   const member = (userId: string, displayName: string, login: string, role = 'member') => ({

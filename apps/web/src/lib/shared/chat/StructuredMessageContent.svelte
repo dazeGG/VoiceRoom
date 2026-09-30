@@ -3,8 +3,10 @@
   // button that opens that person's card, the same card their avatar or name in
   // the message header opens. Without a handler — a preview, a quoted reply —
   // it stays plain text rather than offering an action that leads nowhere.
+  // Text segments find their links the way plain chat text does: a message is
+  // sent as one text segment, so a typed link is only found here.
   import type { RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
-  import EmojiText from './EmojiText.svelte';
+  import ChatText from '$lib/shared/components/ChatText.svelte';
 
   let {
     content,
@@ -23,7 +25,7 @@
 
 {#if content?.version === 1 && Array.isArray(content.segments)}
   <span class="structured-message">
-    {#each content.segments as segment}{#if segment.type === 'text'}<EmojiText
+    {#each content.segments as segment}{#if segment.type === 'text'}<ChatText
           text={segment.text}
         />{:else if segment.type === 'link'}<a href={segment.href} target="_blank" rel="noopener noreferrer"
           >{segment.label}</a
@@ -38,7 +40,7 @@
           >{/if}{/if}{/each}
   </span>
 {:else}
-  <span><EmojiText text={fallback} /></span>
+  <span><ChatText text={fallback} /></span>
 {/if}
 
 <style>
