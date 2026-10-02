@@ -399,8 +399,10 @@ export class LobbyStore {
           this.friends.map((friend) => friend.user.id)
         );
         this.applyOnlineToFriends();
-        // A reconnect can miss edits while the socket is down. Re-fetch only the
-        // currently visible thread so its bodies and editedAt markers converge.
+        // A reconnect can miss messages and edits while the socket is down. The
+        // friend list carries each chat's unread count and last message, and the
+        // open thread is re-fetched so its bodies and editedAt markers converge.
+        void this.refreshFriends().catch(() => {});
         void this.resyncOpenThread().catch(() => {});
         break;
       }
