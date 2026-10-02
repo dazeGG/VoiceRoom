@@ -100,6 +100,7 @@ type RelayOptions = {
   outbox?: boolean;
   findUserFails?: boolean;
   event?: unknown;
+  missed?: unknown[];
 };
 
 function relayHarness({
@@ -107,7 +108,8 @@ function relayHarness({
   pool = true,
   outbox = true,
   findUserFails = false,
-  event = null
+  event = null,
+  missed = []
 }: RelayOptions = {}) {
   const calls = {
     chat: [] as unknown[],
@@ -116,25 +118,34 @@ function relayHarness({
     errors: [] as unknown[],
     queries: [] as string[],
     released: 0,
-    failUnlisten: false
+    destroyed: 0,
+    failUnlisten: false,
+    replaySince: [] as Date[]
   };
   const logger = recordingLogger();
-  const client = Object.assign(new EventEmitter(), {
-    async query(sql: string) {
-      calls.queries.push(sql);
-      if (sql.startsWith('UNLISTEN') && calls.failUnlisten) throw new Error('gone');
-    },
-    release() {
-      calls.released += 1;
-    }
-  });
+  // Each connect is a new connection, as the pool hands out after a loss.
+  const clients: Array<ReturnType<typeof newClient>> = [];
+  function newClient() {
+    return Object.assign(new EventEmitter(), {
+      async query(sql: string) {
+        calls.queries.push(sql);
+        if (sql.startsWith('UNLISTEN') && calls.failUnlisten) throw new Error('gone');
+      },
+      release(error?: Error) {
+        if (error) calls.destroyed += 1;
+        else calls.released += 1;
+      }
+    });
+  }
   const relay = createMessageDeliveryRelay({
     enabled,
     pool: () =>
       pool
         ? {
             async connect() {
-              return client;
+              const next = newClient();
+              clients.push(next);
+              return next;
             }
           }
         : null,
@@ -144,6 +155,10 @@ function relayHarness({
             async getEvent(id) {
               if (id === 'broken') throw new Error('db');
               return id === 'e1' ? { payload: event } : null;
+            },
+            async listDeliveredSince(since) {
+              calls.replaySince.push(since);
+              return missed.map((payload) => ({ payload }));
             }
           }
         : null,
@@ -160,7 +175,12 @@ function relayHarness({
     logger: () => logger
   });
   const errors = () => logger.records.map((record) => record.evt);
-  return { calls, client, errors, relay };
+  const client = (index: number) => {
+    const opened = clients[index];
+    assert.ok(opened, `connection ${index} was never opened`);
+    return opened;
+  };
+  return { calls, client, clients, errors, relay };
 }
 
 test('relayed room and DM messages reach sockets and raise the DM notification', async () => {
@@ -203,12 +223,18 @@ test('relayed room and DM messages reach sockets and raise the DM notification',
 
 test('the listener LISTENs once, dispatches notified outbox events and cleans up', async () => {
   const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
-  const { calls, client, errors, relay } = relayHarness({
+  const {
+    calls,
+    client: opened,
+    errors,
+    relay
+  } = relayHarness({
     event: { type: 'message.created', conversation: { type: 'room', id: 'r1' }, message: { id: 'm1' } }
   });
   await relay.start();
   await relay.start();
   assert.deepEqual(calls.queries, ['LISTEN voice_room_message_delivery']);
+  const client = opened(0);
   client.emit('notification', { channel: 'other', payload: '{"eventId":"e1"}' });
   client.emit('notification', { channel: 'voice_room_message_delivery', payload: '{"eventId":"e1"}' });
   client.emit('notification', { channel: 'voice_room_message_delivery', payload: '{}' });
@@ -216,18 +242,57 @@ test('the listener LISTENs once, dispatches notified outbox events and cleans up
   client.emit('notification', { channel: 'voice_room_message_delivery', payload: '{"eventId":"missing"}' });
   client.emit('notification', { channel: 'voice_room_message_delivery', payload: '{"eventId":"broken"}' });
   client.emit('notification', { channel: 'voice_room_message_delivery', payload: 'not json' });
-  client.emit('error', new Error('socket'));
   await settle();
   assert.deepEqual(calls.chat, [['r1', 'm1']]);
-  assert.deepEqual(
-    errors().sort(),
-    ['msg.event_dispatch_failed', 'msg.event_dispatch_failed', 'msg.listener_failed'].sort()
-  );
+  assert.deepEqual(errors().sort(), ['msg.event_dispatch_failed', 'msg.event_dispatch_failed'].sort());
   calls.failUnlisten = true;
   await relay.stop();
   await relay.stop();
   assert.equal(calls.released, 1);
   assert.equal(client.listenerCount('notification'), 0);
+});
+
+test('a lost LISTEN connection is reopened and the events delivered meanwhile are replayed', async () => {
+  const { calls, client, clients, errors, relay } = relayHarness({
+    missed: [
+      { type: 'message.created', conversation: { type: 'room', id: 'r1' }, message: { id: 'm1' } },
+      {
+        type: 'message.created',
+        conversation: { type: 'dm', id: 'u2' },
+        message: { id: 'm2', senderId: 'u1', recipientId: 'u2' }
+      }
+    ]
+  });
+  await relay.start();
+  const before = Date.now();
+  client(0).emit('error', new Error('terminating connection due to administrator command'));
+  client(0).emit('end');
+  // The broken connection is destroyed, not handed back to the pool.
+  assert.equal(calls.destroyed, 1);
+  assert.equal(client(0).listenerCount('notification'), 0);
+
+  await new Promise((resolve) => setTimeout(resolve, 1_200));
+  assert.equal(clients.length, 2);
+  assert.deepEqual(calls.queries, ['LISTEN voice_room_message_delivery', 'LISTEN voice_room_message_delivery']);
+  const [since] = calls.replaySince;
+  assert.equal(calls.replaySince.length, 1);
+  assert.ok(since && since.getTime() >= before);
+  assert.deepEqual(calls.chat, [['r1', 'm1']]);
+  assert.deepEqual(calls.events, [
+    ['u1', 'dm-message'],
+    ['u2', 'dm-message']
+  ]);
+  assert.deepEqual(errors(), ['msg.listener_failed', 'msg.listener_restored']);
+  await relay.stop();
+});
+
+test('stopping while a reconnect is pending opens nothing more', async () => {
+  const { client, clients, relay } = relayHarness();
+  await relay.start();
+  client(0).emit('error', new Error('gone'));
+  await relay.stop();
+  await new Promise((resolve) => setTimeout(resolve, 1_200));
+  assert.equal(clients.length, 1);
 });
 
 test('the listener stays off when disabled or without a pool or outbox', async () => {

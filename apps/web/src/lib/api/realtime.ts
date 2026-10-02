@@ -30,6 +30,9 @@ const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 8000;
 const HEARTBEAT_MS = 15000;
 const HEARTBEAT_TIMEOUT_MS = 30000;
+// After the tab comes back or the network returns, a socket that does not
+// answer a ping this fast is treated as dead rather than waited on.
+const LIVENESS_PROBE_MS = 5000;
 // Mirrors the API close code for sockets whose account session was ended.
 const SESSION_ENDED_CLOSE_CODE = 4401;
 
@@ -74,11 +77,15 @@ class AppRealtimeConnection {
   private connectionEpoch = 0;
   private openGeneration = 0;
   private heartbeatWatchdog = new RealtimeHeartbeatWatchdog({ timeoutMs: HEARTBEAT_TIMEOUT_MS });
+  private lastPongAt = 0;
+  private probeTimer: ReturnType<typeof setTimeout> | null = null;
+  private lifecycleAttached = false;
 
   subscribe(handler: (event: RealtimeEvent) => void): () => void {
     if (isRealtimeBlocked()) return () => {};
     this.handlers.add(handler);
     this.refCount += 1;
+    this.attachLifecycle();
     this.ensureConnected();
     return () => {
       this.handlers.delete(handler);
@@ -107,7 +114,62 @@ class AppRealtimeConnection {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    if (this.probeTimer) {
+      clearTimeout(this.probeTimer);
+      this.probeTimer = null;
+    }
     this.heartbeatWatchdog.reset();
+  }
+
+  // A socket whose peer stopped answering is dropped at once. close() on a
+  // dead connection can wait a long time for the closing handshake before
+  // onclose fires, and every message sent meanwhile is lost.
+  private abandonSocket(): void {
+    const socket = this.socket;
+    this.openGeneration += 1;
+    this.clearTimers();
+    this.socket = null;
+    try {
+      socket?.close(4000, 'heartbeat_timeout');
+    } catch {
+      // The socket is already gone.
+    }
+    this.emitState(false);
+    this.scheduleReconnect();
+  }
+
+  // Waking from sleep, coming back to the tab or regaining the network is when
+  // a socket that still looks open is most likely dead.
+  private checkLiveness = (): void => {
+    if (this.closedByClient || this.refCount === 0) return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      this.reconnectAttempt = 0;
+      this.ensureConnected();
+      return;
+    }
+    if (this.probeTimer) return;
+    const sentAt = Date.now();
+    const socket = this.socket;
+    this.send('ping', { at: sentAt });
+    this.probeTimer = setTimeout(() => {
+      this.probeTimer = null;
+      if (this.socket === socket && this.lastPongAt < sentAt) this.abandonSocket();
+    }, LIVENESS_PROBE_MS);
+  };
+
+  private attachLifecycle(): void {
+    if (this.lifecycleAttached || typeof window === 'undefined') return;
+    this.lifecycleAttached = true;
+    window.addEventListener('online', this.checkLiveness);
+    document.addEventListener('visibilitychange', this.checkLiveness);
+  }
+
+  private detachLifecycle(): void {
+    if (!this.lifecycleAttached) return;
+    this.lifecycleAttached = false;
+    window.removeEventListener('online', this.checkLiveness);
+    document.removeEventListener('visibilitychange', this.checkLiveness);
   }
 
   private emit(event: RealtimeEvent): void {
@@ -138,11 +200,7 @@ class AppRealtimeConnection {
     this.heartbeatWatchdog.reset();
     this.heartbeatTimer = setInterval(() => {
       if (this.heartbeatWatchdog.isTimedOut()) {
-        if (this.heartbeatTimer) {
-          clearInterval(this.heartbeatTimer);
-          this.heartbeatTimer = null;
-        }
-        this.socket?.close(4000, 'heartbeat_timeout');
+        this.abandonSocket();
         return;
       }
       this.heartbeatWatchdog.recordPing();
@@ -181,7 +239,10 @@ class AppRealtimeConnection {
         return;
       }
       const parsed = parseRealtimeEvent(frame);
-      if (parsed?.type === 'pong') this.heartbeatWatchdog.recordPong();
+      if (parsed?.type === 'pong') {
+        this.lastPongAt = Date.now();
+        this.heartbeatWatchdog.recordPong();
+      }
       if (parsed) this.emit(parsed);
     };
     socket.onclose = (event?: CloseEvent) => {
@@ -256,6 +317,7 @@ class AppRealtimeConnection {
 
   private disconnect(): void {
     this.closedByClient = true;
+    this.detachLifecycle();
     this.openGeneration += 1;
     this.clearTimers();
     this.outboundQueue.length = 0;

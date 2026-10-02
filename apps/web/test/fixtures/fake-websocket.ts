@@ -24,8 +24,15 @@ export class FakeWebSocket {
     this.sent.push(JSON.parse(frame) as { type: string; payload: unknown });
   }
 
+  /** A connection whose network is gone: closing it never completes. */
+  dead = false;
+
   close(code = 1000): void {
     if (this.readyState === FakeWebSocket.CLOSED) return;
+    if (this.dead) {
+      this.readyState = FakeWebSocket.CLOSING;
+      return;
+    }
     this.readyState = FakeWebSocket.CLOSED;
     this.onclose?.({ code });
   }
