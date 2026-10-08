@@ -134,6 +134,26 @@ test('a saved microphone and speaker survive a list without them', async () => {
   expect(roomDeviceUi.outputDeviceId).toBe('headphones');
 });
 
+test("Chrome's default and communications aliases do not show up as extra devices", async () => {
+  const { devices, roomDeviceUi } = await load();
+  listed = [
+    device('audioinput', 'default', 'fifine'),
+    device('audioinput', 'communications', 'fifine'),
+    device('audioinput', 'fifine'),
+    device('audiooutput', 'default', 'speakers'),
+    device('audiooutput', 'communications', 'speakers'),
+    device('audiooutput', 'speakers')
+  ];
+  await devices.refreshDevices();
+
+  expect(roomDeviceUi.microphoneOptions.map((option) => option.value)).toEqual(['', 'fifine']);
+  expect(roomDeviceUi.outputOptions.map((option) => option.value)).toEqual(['', 'speakers']);
+
+  const settings = await import('../../src/lib/features/home/model/sound-settings.ts');
+  expect((await settings.enumerateMicrophones()).map((option) => option.deviceId)).toEqual(['fifine']);
+  expect((await settings.enumerateSpeakers()).map((option) => option.deviceId)).toEqual(['speakers']);
+});
+
 test('an unplugged microphone is reopened and swapped under the publication', async () => {
   const { state, open, stop, joinWith, livekit } = await load();
   const first = fakeCapture('usb-mic');

@@ -12,7 +12,6 @@ import {
   DEFAULT_MICROPHONE_VOLUME,
   DEFAULT_NOISE_MODE,
   DEFAULT_NOTIFICATION_VOLUME,
-  GATE_AUTO_STORAGE_KEY,
   GATE_THRESHOLD_DB_STORAGE_KEY,
   GATE_THRESHOLD_MAX_DB,
   GATE_THRESHOLD_MIN_DB,
@@ -23,6 +22,7 @@ import {
   type MicrophoneMode,
   type NoiseMode
 } from '$lib/features/room/client/core/config';
+import { listPhysicalDevices } from '$lib/shared/audio/device-list';
 import {
   amplitudeToDb,
   clampGateThresholdDb,
@@ -64,7 +64,6 @@ export interface SoundSettings {
   outputDeviceId: string;
   noiseMode: NoiseMode;
   gateThresholdDb: number;
-  gateAuto: boolean;
   masterVolume: number;
   microphoneMode: MicrophoneMode;
   microphoneVolume: number;
@@ -99,7 +98,6 @@ export function readSoundSettings(): SoundSettings {
   try {
     return {
       gateThresholdDb: getStoredGateThresholdDb(),
-      gateAuto: localStorage.getItem(GATE_AUTO_STORAGE_KEY) === '1',
       masterVolume: getStoredMasterVolume(),
       microphoneMode: getStoredMicrophoneMode(),
       microphoneVolume: getStoredMicrophoneVolume(),
@@ -111,7 +109,6 @@ export function readSoundSettings(): SoundSettings {
   } catch {
     return {
       gateThresholdDb: DEFAULT_GATE_THRESHOLD_DB,
-      gateAuto: false,
       masterVolume: DEFAULT_MASTER_VOLUME,
       microphoneMode: DEFAULT_MICROPHONE_MODE,
       microphoneVolume: DEFAULT_MICROPHONE_VOLUME,
@@ -150,15 +147,6 @@ export function persistNoiseMode(mode: string): NoiseMode {
   return next;
 }
 
-export function persistGateAuto(auto: boolean): boolean {
-  try {
-    localStorage.setItem(GATE_AUTO_STORAGE_KEY, auto ? '1' : '0');
-  } catch {
-    // Ignore storage failures.
-  }
-  return auto;
-}
-
 export function persistGateThreshold(thresholdDb: number): number {
   const value = clampGateThresholdDb(Math.round(thresholdDb));
   try {
@@ -173,12 +161,10 @@ async function enumerate(kind: MediaDeviceKind, fallback: string): Promise<Devic
   if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return [];
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
-    return devices
-      .filter((device) => device.kind === kind)
-      .map((device, index) => ({
-        deviceId: device.deviceId,
-        label: device.label || `${fallback} ${index + 1}`
-      }));
+    return listPhysicalDevices(devices, kind).map((device, index) => ({
+      deviceId: device.deviceId,
+      label: device.label || `${fallback} ${index + 1}`
+    }));
   } catch {
     return [];
   }

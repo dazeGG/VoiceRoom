@@ -24,7 +24,6 @@
     switchNoiseMode,
     switchOutputDevice,
     toggleGate,
-    toggleGateAuto,
     updateGateThresholdFromSlider
   } from '../client/ui/devices';
   import {
@@ -182,21 +181,6 @@
                 <span class="gate-switch-knob" aria-hidden="true"></span>
               </button>
             </div>
-            {#if gate.gateOn}
-              <div class="gate-field-head gate-auto-row">
-                <span>Автоматическая чувствительность</span>
-                <button
-                  class="gate-switch"
-                  type="button"
-                  role="switch"
-                  aria-checked={gate.auto}
-                  aria-label="Автоматическая чувствительность гейта"
-                  onclick={toggleGateAuto}
-                >
-                  <span class="gate-switch-knob" aria-hidden="true"></span>
-                </button>
-              </div>
-            {/if}
             <div class="gate-control" data-disabled={!gate.markerActive}>
               <Slider
                 value={gate.thresholdValue}
@@ -429,11 +413,6 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-  }
-  :global(.gate-auto-row) {
-    margin-top: 8px;
-    color: var(--muted);
-    font-size: 0.82rem;
   }
   :global(.gate-switch) {
     position: relative;
