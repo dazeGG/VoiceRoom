@@ -181,29 +181,69 @@
 
 .stream-volume-popover {
   position: absolute;
-  right: 0;
+  left: 50%;
   bottom: calc(100% + var(--space-xs));
-  display: block;
-  width: 42px;
-  height: 142px;
-  border: 1px solid oklch(86% 0.012 92 / 0.2);
-  border-radius: var(--radius-sm);
-  padding: var(--space-sm) 0;
-  background: color-mix(in srgb, var(--warm-950) 94%, transparent);
-  box-shadow: 0 18px 36px oklch(5% 0.01 92 / 0.38);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 48px;
+  border-radius: 999px;
+  padding: var(--space-sm) 0 var(--space-md);
+  background: color-mix(in srgb, var(--warm-950) 72%, transparent);
+  box-shadow: 0 12px 28px oklch(5% 0.01 92 / 0.3);
+  backdrop-filter: blur(10px);
+  visibility: hidden;
   opacity: 0;
-  pointer-events: none;
-  transform: translateY(6px);
+  transform: translate(-50%, 6px);
+  /* Hiding waits a beat so a pointer heading for the slider never loses it. */
   transition:
-    opacity 140ms var(--ease-out),
-    transform 140ms var(--ease-out);
+    opacity 140ms var(--ease-out) 160ms,
+    transform 140ms var(--ease-out) 160ms,
+    visibility 0s linear 300ms;
+}
+
+/* Covers the gap above the button, so moving up to the slider keeps hover. */
+.stream-volume-popover::after {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  height: calc(var(--space-xs) + 2px);
+  content: '';
 }
 
 .stream-volume-control:hover .stream-volume-popover,
 .stream-volume-control:focus-within .stream-volume-popover {
+  visibility: visible;
   opacity: 1;
-  pointer-events: auto;
-  transform: translateY(0);
+  transform: translate(-50%, 0);
+  transition:
+    opacity 140ms var(--ease-out),
+    transform 140ms var(--ease-out),
+    visibility 0s;
+}
+
+.stream-volume-value {
+  min-width: 36px;
+  border-radius: 999px;
+  padding: 2px 0;
+  color: oklch(97% 0.008 92);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.stream-volume-value[data-muted='true'] {
+  color: oklch(72% 0.01 92 / 0.72);
+}
+
+.stream-volume-track {
+  position: relative;
+  width: 100%;
+  height: 100px;
 }
 
 .stream-volume-icon-off,

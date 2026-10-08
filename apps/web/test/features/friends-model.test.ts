@@ -1,7 +1,7 @@
 // The lobby's friends model: loading, live presence and relationships.
 
 import { afterEach, expect, test, vi } from 'vitest';
-import { stubFetch } from '../fixtures/fetch.ts';
+import { stubFetch, type Reply } from '../fixtures/fetch.ts';
 import { notificationPreferences } from '../fixtures/users.ts';
 
 type Handler = (event: { type: string; payload: Record<string, unknown> }) => void;
@@ -29,17 +29,19 @@ afterEach(() => {
   stop = null;
 });
 
-async function startLobby() {
+const friendList = {
+  body: {
+    friends: [
+      { user: user('anna'), online: true },
+      { user: user('boris'), online: false }
+    ],
+    incomingRequestCount: 1
+  }
+};
+
+async function startLobby(friends: Reply = friendList) {
   stubFetch({
-    '/api/friends': {
-      body: {
-        friends: [
-          { user: user('anna'), online: true },
-          { user: user('boris'), online: false }
-        ],
-        incomingRequestCount: 1
-      }
-    },
+    '/api/friends': friends,
     '/api/friends/requests': { body: { incoming: [{ user: user('vera') }], outgoing: [{ user: user('gleb') }] } },
     '/api/notifications/preferences': { body: { preferences: notificationPreferences() } }
   });
@@ -90,4 +92,20 @@ test('a new friend request and an accepted request each play their sound', async
   expect(cues.playFriendRequestCue).toHaveBeenCalledTimes(1);
   emit({ type: 'friend.accepted', payload: { friend: { user: user('dima'), online: true } } });
   expect(cues.playFriendAcceptedCue).toHaveBeenCalledTimes(1);
+});
+
+test('a reconnect picks up direct messages that arrived while the socket was down', async () => {
+  let unread = 0;
+  const lobby = await startLobby(() => ({
+    body: {
+      friends: [{ user: user('anna'), online: true, unreadCount: unread, lastMessage: null }],
+      incomingRequestCount: 0
+    }
+  }));
+  emit({ type: 'ready', payload: { onlineFriendIds: ['anna'] } });
+  // anna writes in the gap between the old socket dying and the new one opening,
+  // so no dm.message ever reaches this client; only the next snapshot can tell.
+  unread = 2;
+  emit({ type: 'ready', payload: { onlineFriendIds: ['anna'] } });
+  await vi.waitFor(() => expect(lobby.friends[0]?.unreadCount).toBe(2));
 });

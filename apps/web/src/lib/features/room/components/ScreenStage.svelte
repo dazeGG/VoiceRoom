@@ -122,17 +122,22 @@
         <span class="stream-volume-icon stream-volume-icon-off" aria-hidden="true"><VolumeX /></span>
       </button>
       <div class="stream-volume-popover" id="streamVolumePopover">
-        <input
-          class="stream-volume-slider"
-          id="streamVolumeSlider"
-          bind:this={volumeSliderEl}
-          type="range"
-          min="0"
-          max={volume.maxPercent}
-          value={volume.valuePercent}
-          aria-label="Громкость стрима"
-          oninput={() => updateScreenVolumeFromSlider()}
-        />
+        <output class="stream-volume-value" for="streamVolumeSlider" data-muted={String(volume.muted)}>
+          {volume.valuePercent}%
+        </output>
+        <div class="stream-volume-track">
+          <input
+            class="stream-volume-slider"
+            id="streamVolumeSlider"
+            bind:this={volumeSliderEl}
+            type="range"
+            min="0"
+            max={volume.maxPercent}
+            value={volume.valuePercent}
+            aria-label="Громкость стрима"
+            oninput={() => updateScreenVolumeFromSlider()}
+          />
+        </div>
       </div>
     </div>
 
@@ -186,7 +191,7 @@
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 104px;
+    width: 100px;
     min-height: 0;
     border: 0;
     padding: 0;

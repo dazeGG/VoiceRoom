@@ -62,6 +62,7 @@ const LOG_EVENTS = Object.freeze({
   // Messaging and delivery.
   MESSAGE_EVENT_DISPATCH_FAILED: 'msg.event_dispatch_failed',
   MESSAGE_LISTENER_FAILED: 'msg.listener_failed',
+  MESSAGE_LISTENER_RESTORED: 'msg.listener_restored',
   MESSAGE_DELIVERY_FAILED: 'msg.delivery_failed',
   MESSAGE_PIN_REFRESH_FAILED: 'msg.pin_refresh_failed',
   MESSAGE_AUTHOR_PROFILE_FAILED: 'msg.author_profile_failed',

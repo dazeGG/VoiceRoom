@@ -338,11 +338,27 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
     return row ? mapOutboxRow(row as OutboxRow) : null;
   }
 
+  // What the worker delivered from `since` on, oldest first: the events an API
+  // replica missed while its LISTEN connection was down.
+  async function listDeliveredSince(since: Date, limit = 500): Promise<OutboxEvent[]> {
+    const rows = await db
+      .selectFrom('message_delivery_outbox')
+      .selectAll()
+      .where('status', '=', 'delivered')
+      .where('delivered_at', '>=', since)
+      .orderBy('delivered_at')
+      .orderBy('event_id')
+      .limit(positiveInteger(limit, 500, 1_000))
+      .execute();
+    return rows.map((row) => mapOutboxRow(row as OutboxRow));
+  }
+
   return Object.freeze({
     acquireLease,
     claimBatch,
     enqueue,
     getEvent,
+    listDeliveredSince,
     markDelivered,
     publishPostgres,
     recordHeartbeat,

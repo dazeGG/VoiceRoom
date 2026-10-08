@@ -154,3 +154,28 @@ test('an event is announced on its notification channel', { skip }, async (t) =>
     /Invalid PostgreSQL/
   );
 });
+
+test('a replica that lost its listener reads what was delivered since, oldest first', { skip }, async (t) => {
+  const { pool, outbox, enqueue } = await setup(t);
+  await enqueue('before');
+  await enqueue('after-1');
+  await enqueue('after-2');
+  await enqueue('pending');
+  const lease = await outbox.acquireLease({ identity: IDENTITY, ownerId: 'worker-1' });
+  assert.ok(lease.acquired);
+  const held = { identity: IDENTITY, ownerId: 'worker-1', fencingToken: lease.fencingToken };
+  await outbox.claimBatch({ ...held, limit: 3 });
+  await outbox.markDelivered('event-before', held);
+  await pool.query(
+    `UPDATE message_delivery_outbox SET delivered_at = current_timestamp - interval '1 minute' WHERE event_id = 'event-before'`
+  );
+  const { rows } = await pool.query<{ now: Date }>("SELECT current_timestamp - interval '1 second' AS now");
+  await outbox.markDelivered('event-after-1', held);
+  await outbox.markDelivered('event-after-2', held);
+
+  const missed = await outbox.listDeliveredSince(rows[0]!.now);
+  assert.deepEqual(
+    missed.map((event) => event.messageId),
+    ['after-1', 'after-2']
+  );
+});

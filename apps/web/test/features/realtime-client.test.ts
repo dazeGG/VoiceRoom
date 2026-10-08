@@ -112,3 +112,64 @@ test('connecting eagerly cancels a scheduled reconnect, so one socket and one he
   expect(vi.getTimerCount()).toBe(1);
   unsubscribe();
 });
+
+test('a dead socket is replaced even when closing it never completes', async () => {
+  const realtime = await load();
+  const handle = realtime.connectRealtime(() => {});
+  const first = FakeWebSocket.latest();
+  first.open();
+  first.dead = true;
+  await vi.advanceTimersByTimeAsync(60_000);
+  expect(FakeWebSocket.instances).toHaveLength(2);
+  expect(realtime.getAppRealtime().isConnected()).toBe(false);
+  handle.close();
+});
+
+function setVisibility(state: DocumentVisibilityState) {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+  document.dispatchEvent(new Event('visibilitychange'));
+}
+
+test('coming back to the tab drops a socket that no longer answers, and keeps one that does', async () => {
+  const realtime = await load();
+  const handle = realtime.connectRealtime(() => {});
+  const first = FakeWebSocket.latest();
+  first.open();
+
+  setVisibility('visible');
+  expect(first.sent.at(-1)?.type).toBe('ping');
+  first.receive({ type: 'pong', payload: { at: 1 } });
+  await vi.advanceTimersByTimeAsync(6_000);
+  expect(FakeWebSocket.instances).toHaveLength(1);
+
+  first.dead = true;
+  setVisibility('visible');
+  await vi.advanceTimersByTimeAsync(6_000);
+  expect(FakeWebSocket.instances).toHaveLength(2);
+  handle.close();
+});
+
+test('the network coming back reconnects at once instead of waiting out the backoff', async () => {
+  const realtime = await load();
+  const handle = realtime.connectRealtime(() => {});
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    FakeWebSocket.latest().serverClose(1006);
+    await vi.advanceTimersByTimeAsync(10_000);
+  }
+  FakeWebSocket.latest().serverClose(1006);
+  const before = FakeWebSocket.instances.length;
+
+  window.dispatchEvent(new Event('online'));
+  expect(FakeWebSocket.instances).toHaveLength(before + 1);
+  handle.close();
+});
+
+test('after the last unsubscribe, tab and network events open nothing', async () => {
+  const realtime = await load();
+  const handle = realtime.connectRealtime(() => {});
+  FakeWebSocket.latest().open();
+  handle.close();
+  window.dispatchEvent(new Event('online'));
+  setVisibility('visible');
+  expect(FakeWebSocket.instances).toHaveLength(1);
+});

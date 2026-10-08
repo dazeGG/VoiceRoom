@@ -6,7 +6,7 @@ import { errorMessage, isCaptureCancelled, isSafariBrowser, stopStream } from '.
 import {
   createSourceScreenProfile,
   getPreferredScreenVideoCodec,
-  getScreenDegradationPreference,
+  SCREEN_DEGRADATION_PREFERENCE,
   getScreenModeForProfile,
   getScreenProfile,
   getScreenProfileForMode
@@ -435,12 +435,10 @@ async function applyScreenSenderEncoding(sender: RTCRtpSender, profile: ScreenPr
   const parameters = sender.getParameters();
   if (!parameters.encodings?.length) parameters.encodings = [{}];
 
-  const contentHint = sender.track?.contentHint || profile.contentHint;
-  const degradationPreference = getScreenDegradationPreference(contentHint);
   const primaryEncoding = getPrimaryScreenEncoding(parameters.encodings);
   primaryEncoding.maxBitrate = profile.videoBitrate;
   primaryEncoding.maxFramerate = profile.frameRate;
-  parameters.degradationPreference = degradationPreference;
+  parameters.degradationPreference = SCREEN_DEGRADATION_PREFERENCE;
 
   await sender.setParameters(parameters);
 }

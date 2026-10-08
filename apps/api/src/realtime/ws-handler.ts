@@ -41,6 +41,10 @@ type WsSocket = RealtimeSocket & {
   on(event: 'error', listener: (error: Error) => void): unknown;
 };
 
+// A client opens with hello, its restored subscriptions and whatever it queued
+// offline; more than this before the session resolves is not a client.
+const MAX_EARLY_FRAMES = 64;
+
 function createWsHandler({
   registry,
   roomRuntime,
@@ -284,7 +288,70 @@ function createWsHandler({
   }
 
   async function handleConnection(socket: WsSocket, req: IncomingMessage): Promise<void> {
+    // The client speaks as soon as its socket opens (hello, the subscriptions
+    // it restores after a reconnect, commands queued while offline), and the
+    // session lookup below takes a database round trip. The listeners go on
+    // first, so nothing that arrives meanwhile is dropped: frames wait until
+    // the connection is registered and has its ready frame, and a socket that
+    // closes in that window is never registered at all.
+    let connection: WsConnection | null = null;
+    let early: unknown[] | null = [];
+    let endedEarly = false;
+
+    socket.on('message', (raw: unknown) => {
+      if (early) {
+        if (early.length >= MAX_EARLY_FRAMES) {
+          socket.close(1008, 'Too many frames before ready');
+          return;
+        }
+        early.push(raw);
+        return;
+      }
+      if (connection) handleRaw(connection, raw, req);
+    });
+
+    // The close code and how long the socket lived are what separate a normal
+    // navigation (1001, minutes) from the instability being chased: an abnormal
+    // 1006 seconds after connecting, repeated per user.
+    // A socket error is followed by its own 'close', so the record is emitted
+    // once: counting ws.closed must equal the number of sockets that ended,
+    // not the number of ways each one ended.
+    let closeReported = false;
+    function reportClosed({
+      code = 0,
+      reason = '',
+      error = null
+    }: { code?: unknown; reason?: unknown; error?: unknown } = {}): void {
+      if (closeReported || !connection) return;
+      closeReported = true;
+      logger[error ? 'warn' : 'info'](
+        {
+          evt: LOG_EVENTS.WS_CLOSED,
+          connId: connection.id,
+          userId: connection.userId || undefined,
+          code: Number(code) || 0,
+          reason: String(reason || '').slice(0, 120) || undefined,
+          durationMs: now() - connection.openedAt,
+          err: error || undefined
+        },
+        error ? 'ws closed after a socket error' : 'ws closed'
+      );
+    }
+
+    socket.on('close', (code: number, reason: unknown) => {
+      endedEarly = true;
+      reportClosed({ code, reason });
+      registry.removeConnection(connection);
+    });
+
+    socket.on('error', (error: Error) => {
+      endedEarly = true;
+      reportClosed({ reason: 'socket_error', error });
+      registry.removeConnection(connection);
+    });
+
     const session = await resolveSessionUser(req);
+    if (endedEarly) return;
     const sessionUser = session?.user || null;
 
     // Check the limit before registering: adding first and then removing would
@@ -320,7 +387,7 @@ function createWsHandler({
     }
 
     const clientIp = getClientIp(req);
-    const connection = sessionUser
+    const opened = sessionUser
       ? registry.addConnection(
           sessionUser.id,
           socket,
@@ -329,13 +396,14 @@ function createWsHandler({
           session?.session?.tokenHash
         )
       : registry.addGuestConnection(socket, guestIp);
+    connection = opened;
 
     logger.info(
       {
         evt: LOG_EVENTS.WS_CONNECTED,
-        connId: connection.id,
-        userId: connection.userId || undefined,
-        guest: connection.guest,
+        connId: opened.id,
+        userId: opened.userId || undefined,
+        guest: opened.guest,
         ipHash: hashIp(clientIp)
       },
       'ws connected'
@@ -349,79 +417,46 @@ function createWsHandler({
         logger.error(
           {
             evt: LOG_EVENTS.WS_FRIENDS_LOAD_FAILED,
-            connId: connection.id,
+            connId: opened.id,
             userId: sessionUser.id,
             err: error
           },
           'failed to load friends for the ws ready frame'
         );
       }
-      registry.sendReady(connection, {
+      if (opened.closed) return;
+      registry.sendReady(opened, {
         userId: sessionUser.id,
         onlineFriendIds: friendIds.filter((friendId) => isUserOnline(friendId))
       });
-      void roomRuntime.sendAccountSummaries(connection, sessionUser.id);
+      void roomRuntime.sendAccountSummaries(opened, sessionUser.id);
     } else {
-      registry.sendReady(connection, { guest: true });
+      registry.sendReady(opened, { guest: true });
     }
 
-    socket.on('message', (raw: unknown) => {
-      if (connection.closed) return;
-      const parsed = parseInboundMessage(String(raw));
-      if (!parsed.ok) {
-        registry.sendToConnection(connection, buildServerErrorEnvelope(parsed.code, 'Invalid WebSocket message'));
-        return;
-      }
-      if (parsed.envelope.type === 'hello' || parsed.envelope.type === 'ping') {
-        // Heartbeats do not mutate room intent and must not wait behind storage.
-        void handleMessage(connection, parsed.envelope, req).catch(reportMessageError);
-        return;
-      }
+    const waiting = early;
+    early = null;
+    for (const raw of waiting) handleRaw(opened, raw, req);
+  }
 
-      // Preserve wire order across stateful handlers that await authorization
-      // or storage. Without this queue, JOIN→LEAVE and JOIN1→JOIN2 can execute
-      // in reverse before the room runtime registers their intent.
-      const envelope = parsed.envelope;
-      enqueueMessage(connection, () => handleMessage(connection, envelope, req));
-    });
-
-    // The close code and how long the socket lived are what separate a normal
-    // navigation (1001, minutes) from the instability being chased: an abnormal
-    // 1006 seconds after connecting, repeated per user.
-    // A socket error is followed by its own 'close', so the record is emitted
-    // once: counting ws.closed must equal the number of sockets that ended,
-    // not the number of ways each one ended.
-    let closeReported = false;
-    function reportClosed({
-      code = 0,
-      reason = '',
-      error = null
-    }: { code?: unknown; reason?: unknown; error?: unknown } = {}): void {
-      if (closeReported) return;
-      closeReported = true;
-      logger[error ? 'warn' : 'info'](
-        {
-          evt: LOG_EVENTS.WS_CLOSED,
-          connId: connection.id,
-          userId: connection.userId || undefined,
-          code: Number(code) || 0,
-          reason: String(reason || '').slice(0, 120) || undefined,
-          durationMs: now() - connection.openedAt,
-          err: error || undefined
-        },
-        error ? 'ws closed after a socket error' : 'ws closed'
-      );
+  function handleRaw(connection: WsConnection, raw: unknown, req: IncomingMessage): void {
+    if (connection.closed) return;
+    const parsed = parseInboundMessage(String(raw));
+    if (!parsed.ok) {
+      registry.sendToConnection(connection, buildServerErrorEnvelope(parsed.code, 'Invalid WebSocket message'));
+      return;
+    }
+    if (parsed.envelope.type === 'hello' || parsed.envelope.type === 'ping') {
+      // Heartbeats do not mutate room intent and must not wait behind storage.
+      void handleMessage(connection, parsed.envelope, req).catch(reportMessageError);
+      return;
     }
 
-    socket.on('close', (code: number, reason: unknown) => {
-      reportClosed({ code, reason });
-      registry.removeConnection(connection);
-    });
-
-    socket.on('error', (error: Error) => {
-      reportClosed({ reason: 'socket_error', error });
-      registry.removeConnection(connection);
-    });
+    // Preserve wire order across stateful handlers that await authorization
+    // or storage. Without this queue, JOIN→LEAVE and JOIN1→JOIN2 can execute
+    // in reverse before the room runtime registers their intent.
+    const envelope = parsed.envelope;
+    enqueueMessage(connection, () => handleMessage(connection, envelope, req));
   }
 
   return {

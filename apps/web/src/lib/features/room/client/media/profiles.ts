@@ -110,9 +110,12 @@ export function getPreferredScreenVideoCodec(contentHint = 'motion'): 'h264' | '
   return 'vp8';
 }
 
-export function getScreenDegradationPreference(contentHint: string): RTCDegradationPreference {
-  return contentHint === 'motion' ? 'maintain-framerate' : 'maintain-resolution';
-}
+/**
+ * Every mode keeps its resolution. With "maintain-framerate" (or "balanced")
+ * Chrome starts a 720p stream at 180p and climbs back over about a minute, both
+ * when the share starts and when dynacast wakes a paused layer for a new viewer.
+ */
+export const SCREEN_DEGRADATION_PREFERENCE: RTCDegradationPreference = 'maintain-resolution';
 
 export async function getScreenPublishVideoOptions(profile: ScreenProfile): Promise<TrackPublishOptions> {
   const { VideoPreset } = await loadLiveKitClient();
@@ -130,9 +133,9 @@ export async function getScreenPublishVideoOptions(profile: ScreenProfile): Prom
             codec: SCREEN_VIDEO_BACKUP_CODEC,
             encoding
           },
-    // Decided at publish, not only on a later profile switch: motion keeps
-    // its frame rate under congestion, text keeps its resolution.
-    degradationPreference: getScreenDegradationPreference(profile.contentHint),
+    // Decided at publish, not only on a later profile switch, so the first
+    // frames already go out at the full resolution.
+    degradationPreference: SCREEN_DEGRADATION_PREFERENCE,
     screenShareSimulcastLayers: getScreenSimulcastLayers(profile, VideoPreset),
     screenShareEncoding: encoding,
     simulcast: true,

@@ -7,6 +7,45 @@ type RoomDetailHandler = (event: RealtimeEvent) => void;
 const previewSubscriptions = new Map<string, number>();
 const detailHandlers = new Map<string, Set<RoomDetailHandler>>();
 
+// The server answers a preview subscription with the room's snapshot, or says
+// it is gone or closed to this client. Until one of those arrives the
+// subscription is sent again: one lost frame would otherwise leave the room's
+// chat deaf until a reload.
+const PREVIEW_ACK_MS = 4_000;
+const PREVIEW_MAX_ATTEMPTS = 4;
+const pendingPreviewAcks = new Map<string, { attempts: number; timer: ReturnType<typeof setTimeout> }>();
+
+function clearPreviewAck(roomId: string): void {
+  const pending = pendingPreviewAcks.get(roomId);
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  pendingPreviewAcks.delete(roomId);
+}
+
+function sendPreviewSubscribe(roomId: string, attempts = 0): void {
+  getAppRealtime().send('room.preview.subscribe', { roomId });
+  armPreviewAck(roomId, attempts + 1);
+}
+
+function armPreviewAck(roomId: string, attempts: number): void {
+  clearPreviewAck(roomId);
+  if (attempts >= PREVIEW_MAX_ATTEMPTS) return;
+  const timer = setTimeout(() => {
+    pendingPreviewAcks.delete(roomId);
+    if (!previewSubscriptions.has(roomId)) return;
+    // A frame still queued behind a closed socket was not lost: it goes out
+    // when the socket opens, so the wait starts over instead of resending.
+    if (getAppRealtime().isConnected()) sendPreviewSubscribe(roomId, attempts);
+    else armPreviewAck(roomId, attempts);
+  }, PREVIEW_ACK_MS);
+  pendingPreviewAcks.set(roomId, { attempts, timer });
+}
+
+function acknowledgePreview(event: RealtimeEvent): void {
+  if (event.type !== 'room.snapshot' && event.type !== 'room.not_found' && event.type !== 'room.banned') return;
+  clearPreviewAck(event.payload.roomId);
+}
+
 function roomDetailEventTargetsRoom(event: RealtimeEvent, roomId: string): boolean {
   if (event.type === 'room.snapshot') return event.payload.roomId === roomId;
   const payload: unknown = 'payload' in event ? event.payload : null;
@@ -33,6 +72,7 @@ function retainDetailDispatch(): void {
   if (detailDispatchUnsub) return;
   detailDispatchUnsub = getAppRealtime().subscribe((event) => {
     acknowledgeActiveVoiceResync(event);
+    acknowledgePreview(event);
     if (event.type === 'pong') {
       // Heartbeat has no roomId; every room handler may use it as liveness.
       for (const roomId of detailHandlers.keys()) dispatchRoomDetail(roomId, event);
@@ -152,9 +192,7 @@ function ensureReconnectRestore(): void {
     lastRestoreEpoch = connectionEpoch;
     lastActiveResyncKey = '';
     clearActiveResync();
-    for (const roomId of previewSubscriptions.keys()) {
-      getAppRealtime().send('room.preview.subscribe', { roomId });
-    }
+    for (const roomId of previewSubscriptions.keys()) sendPreviewSubscribe(roomId);
     if (activeVoiceJoin) {
       getAppRealtime().send('room.join', activeVoiceJoin);
     }
@@ -224,9 +262,7 @@ export function subscribeRoomPreview(roomId: string, handler: RoomDetailHandler)
 
   const count = (previewSubscriptions.get(roomId) ?? 0) + 1;
   previewSubscriptions.set(roomId, count);
-  if (count === 1) {
-    conn.send('room.preview.subscribe', { roomId });
-  }
+  if (count === 1) sendPreviewSubscribe(roomId);
 
   return () => {
     handlers?.delete(handler);
@@ -236,6 +272,7 @@ export function subscribeRoomPreview(roomId: string, handler: RoomDetailHandler)
     const next = (previewSubscriptions.get(roomId) ?? 1) - 1;
     if (next <= 0) {
       previewSubscriptions.delete(roomId);
+      clearPreviewAck(roomId);
       conn.send('room.preview.unsubscribe', { roomId });
     } else {
       previewSubscriptions.set(roomId, next);
