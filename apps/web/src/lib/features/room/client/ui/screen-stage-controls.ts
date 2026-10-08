@@ -284,6 +284,11 @@ function activateScreenStageUi(): void {
 
   screenUiIdleTimer = window.setTimeout(() => {
     if (!screenStagePointerInside || !screenUi.stageVisible) return;
+    // A pointer resting on the volume slider or a button is not idle.
+    if (document.getElementById('screenViewControls')?.matches(':hover')) {
+      activateScreenStageUi();
+      return;
+    }
     blurFocusedStreamControl();
     screenUi.uiActive = false;
   }, SCREEN_UI_IDLE_MS);

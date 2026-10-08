@@ -5,13 +5,13 @@ import {
   createScreenProfileId,
   createSourceScreenProfile,
   getPreferredScreenVideoCodec,
-  getScreenDegradationPreference,
   getScreenModeForProfile,
   getScreenModeSummary,
   getScreenProfile,
   getScreenProfileForMode,
   getScreenProfileLabels,
-  getScreenPublishVideoOptions
+  getScreenPublishVideoOptions,
+  SCREEN_DEGRADATION_PREFERENCE
 } from '../../src/lib/features/room/client/media/profiles.ts';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -54,9 +54,8 @@ test('text prefers VP9 and motion H.264, with VP8 when neither is available', ()
   expect(getPreferredScreenVideoCodec('motion')).toBe('vp8');
 });
 
-test('under congestion motion keeps its frame rate and text keeps its resolution', () => {
-  expect(getScreenDegradationPreference('motion')).toBe('maintain-framerate');
-  expect(getScreenDegradationPreference('detail')).toBe('maintain-resolution');
+test('every mode keeps its resolution, so a stream never starts downscaled', () => {
+  expect(SCREEN_DEGRADATION_PREFERENCE).toBe('maintain-resolution');
 });
 
 test('publishing caps bitrate and frame rate, adds a VP8 backup and one 540p simulcast layer', async () => {
@@ -65,7 +64,7 @@ test('publishing caps bitrate and frame rate, adds a VP8 backup and one 540p sim
   const options = await getScreenPublishVideoOptions(profile);
   expect(options).toMatchObject({
     videoCodec: 'h264',
-    degradationPreference: 'maintain-framerate',
+    degradationPreference: 'maintain-resolution',
     screenShareEncoding: { maxBitrate: 7_000_000, maxFramerate: 30 },
     backupCodec: { codec: 'vp8' },
     simulcast: true
