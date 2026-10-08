@@ -60,13 +60,15 @@ export function getCallControlsView(): CallControlsView {
     ? state.connecting
       ? 'Подключение'
       : 'Подключить микрофон'
-    : state.microphoneMode === 'push-to-talk'
-      ? state.pushToTalkActive
-        ? 'Push-to-talk: микрофон открыт'
-        : 'Push-to-talk: микрофон закрыт'
-      : state.muted
-        ? 'Включить микрофон'
-        : 'Выключить микрофон';
+    : state.microphoneMissing
+      ? 'Микрофона нет: подключить'
+      : state.microphoneMode === 'push-to-talk'
+        ? state.pushToTalkActive
+          ? 'Push-to-talk: микрофон открыт'
+          : 'Push-to-talk: микрофон закрыт'
+        : state.muted
+          ? 'Включить микрофон'
+          : 'Выключить микрофон';
 
   return {
     label,
@@ -76,13 +78,15 @@ export function getCallControlsView(): CallControlsView {
       ? 'connecting'
       : !state.joined
         ? 'idle'
-        : state.microphoneMode === 'push-to-talk'
-          ? state.pushToTalkActive
-            ? 'ptt-active'
-            : 'ptt'
-          : state.muted
-            ? 'muted'
-            : 'live'
+        : state.microphoneMissing
+          ? 'muted'
+          : state.microphoneMode === 'push-to-talk'
+            ? state.pushToTalkActive
+              ? 'ptt-active'
+              : 'ptt'
+            : state.muted
+              ? 'muted'
+              : 'live'
   };
 }
 
@@ -168,7 +172,29 @@ function syncShownMicrophoneMute(): void {
   postState().catch(() => {});
 }
 
+/**
+ * After the call gained or lost its microphone: unmute a microphone the user
+ * just asked for, and show everyone the current state either way.
+ */
+export function syncMicrophoneControls(options: { unmute?: boolean } = {}): void {
+  if (options.unmute && state.localStream && state.microphoneMode === 'open' && !state.outputMuted) {
+    setMicrophoneMuted(false, { playCue: false });
+    return;
+  }
+  syncShownMicrophoneMute();
+}
+
 function toggleMute(): void {
+  if (!state.localStream) {
+    // Joined without a microphone: the button tries to add one.
+    void import('./devices')
+      .then((devices) => devices.attachMicrophone())
+      .then((attached) => {
+        if (attached) syncMicrophoneControls({ unmute: true });
+      })
+      .catch((error) => log.warn('microphone attach failed', errorContext(error)));
+    return;
+  }
   if (state.microphoneMode === 'push-to-talk' && !state.outputMuted) {
     showToast('В режиме Push-to-talk удерживайте назначенную клавишу');
     return;

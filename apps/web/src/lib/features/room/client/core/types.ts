@@ -184,6 +184,8 @@ export interface RoomAudioState {
   localMicPublication: LocalTrackPublication | null;
   localRawStream: MediaStream | null;
   localStream: MediaStream | null;
+  /** In the call without a microphone: none was found or access was refused. */
+  microphoneMissing: boolean;
   localAppAudioSuppressed: boolean;
   microphoneDeviceId: string;
   microphoneMode: MicrophoneMode;

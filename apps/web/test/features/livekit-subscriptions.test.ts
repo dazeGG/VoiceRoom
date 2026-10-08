@@ -198,3 +198,13 @@ test('a token request is not retried once the join was abandoned, nor for other 
   await expect(other.service.connectLiveKitRoom('Анна', () => true)).rejects.toThrow('room full');
   vi.useRealTimers();
 });
+
+test('a call without a microphone still connects, to listen, and publishes nothing', async () => {
+  const lk = await loadLiveKitHarness({ autoResolveClient: true });
+  lk.state.localStream = null;
+
+  await expect(lk.service.connectLiveKitRoom('Анна', () => true)).resolves.toBe(true);
+  const room = lk.rooms.at(-1)!;
+  expect(room.disconnected).toBe(false);
+  expect(room.published).toEqual([]);
+});

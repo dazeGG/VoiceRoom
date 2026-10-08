@@ -106,8 +106,10 @@ async function loadLocalCamera(getUserMedia: (constraints: MediaStreamConstraint
     }
   };
   Object.assign(lk.state, { joined: true, livekitRoom: room, self: { id: 'self' }, cameraDeviceId: '' });
+  const showToast = vi.fn();
+  vi.doMock('../../src/lib/features/room/client/ui/toast', () => ({ showToast }));
   const camera = await import('../../src/lib/features/room/client/services/camera-service.ts');
-  return { lk, camera, published, unpublished };
+  return { lk, camera, published, unpublished, showToast };
 }
 
 test('turning the camera on captures 720p and publishes it with lighter layers; off stops it', async () => {
@@ -133,15 +135,16 @@ test('turning the camera on captures 720p and publishes it with lighter layers; 
   expect(lk.state.localCameraStream).toBeNull();
 });
 
-test('a camera that is unplugged turns itself off', async () => {
+test('a camera that is unplugged turns itself off and says so', async () => {
   const capture = fakeCapture();
-  const { lk, camera, unpublished } = await loadLocalCamera(async () => capture.stream);
+  const { lk, camera, unpublished, showToast } = await loadLocalCamera(async () => capture.stream);
   await camera.toggleCamera();
 
   capture.end();
   await flushMicrotasks();
   expect(lk.state.localCameraStream).toBeNull();
   expect(unpublished).toEqual([capture.track]);
+  expect(showToast).toHaveBeenCalledWith('Камера отключилась');
 });
 
 test('a refused camera stays off and nothing is published', async () => {

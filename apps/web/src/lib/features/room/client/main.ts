@@ -15,7 +15,7 @@ import {
   syncDesktopGlobalHotkeys,
   type DesktopHotkeyRegistrationResult
 } from './services/desktop-hotkey-service';
-import { refreshDevices, refreshMicrophoneLevelMeter } from './ui/devices';
+import { handleDeviceChange, refreshMicrophoneLevelMeter } from './ui/devices';
 import {
   beginPushToTalk,
   endPushToTalk,
@@ -209,9 +209,7 @@ export function mountRoomClient(
   document.addEventListener('pointerdown', handleAudioUnlockGesture, { passive: true, signal: listenerSignal });
   document.addEventListener('keydown', handleAudioUnlockGesture, { signal: listenerSignal });
   document.addEventListener('fullscreenchange', updateScreenFullscreenState, { signal: listenerSignal });
-  navigator.mediaDevices?.addEventListener?.('devicechange', () => refreshDevices().catch(() => {}), {
-    signal: listenerSignal
-  });
+  navigator.mediaDevices?.addEventListener?.('devicechange', handleDeviceChange, { signal: listenerSignal });
   window.addEventListener('beforeunload', leaveRoom, { signal: listenerSignal });
   syncOutputDeviceUiState();
   refreshStageStripControls();

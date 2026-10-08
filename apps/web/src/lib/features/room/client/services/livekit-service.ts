@@ -33,6 +33,7 @@ export {
   findLocalMicrophonePublication,
   publishLocalMicrophone,
   publishLocalScreenTracks,
+  replaceLocalMicrophoneTrack,
   syncLocalMicrophonePublicationMuted,
   unpublishLocalMicrophone,
   unpublishLocalScreenTracks
@@ -103,23 +104,26 @@ export async function connectLiveKitRoom(name: string, isCurrent: () => boolean 
     return false;
   }
 
+  // Without a microphone the call is joined to listen: nothing to publish.
   const stream = state.localStream;
-  try {
-    const published = await publishLocalMicrophoneForRoom(
-      room,
-      stream,
-      () => isCurrent() && state.livekitRoom === room && state.localStream === stream
-    );
-    if (!published) {
-      await disconnectLiveKitRoomInstance(room);
-      return false;
+  if (stream) {
+    try {
+      const published = await publishLocalMicrophoneForRoom(
+        room,
+        stream,
+        () => isCurrent() && state.livekitRoom === room && state.localStream === stream
+      );
+      if (!published) {
+        await disconnectLiveKitRoomInstance(room);
+        return false;
+      }
+    } catch (error) {
+      if (!isCurrent() || state.livekitRoom !== room) {
+        await disconnectLiveKitRoomInstance(room);
+        return false;
+      }
+      throw error;
     }
-  } catch (error) {
-    if (!isCurrent() || state.livekitRoom !== room) {
-      await disconnectLiveKitRoomInstance(room);
-      return false;
-    }
-    throw error;
   }
 
   if (!isCurrent() || state.livekitRoom !== room) {
@@ -182,8 +186,10 @@ export async function attemptFreshLiveKitReplacement({
       return { retryable: true, code: 'transport_error' };
     }
 
-    microphonePublication = await publishLocalMicrophoneForRoom(candidate, microphoneStream, isCurrent, false);
-    if (!microphonePublication || !isCurrent()) {
+    if (microphoneStream) {
+      microphonePublication = await publishLocalMicrophoneForRoom(candidate, microphoneStream, isCurrent, false);
+    }
+    if ((microphoneStream && !microphonePublication) || !isCurrent()) {
       await disconnectLiveKitRoomInstance(candidate);
       return { retryable: true, code: 'transport_error' };
     }

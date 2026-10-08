@@ -9,6 +9,7 @@ import { state } from './state.svelte';
  * microphone in every mode.
  */
 export function isMicrophoneShownMuted(): boolean {
+  if (state.microphoneMissing) return true;
   if (!state.muted) return false;
   return state.microphoneMode !== 'push-to-talk' || state.outputMuted;
 }

@@ -61,6 +61,18 @@ export async function unpublishLocalMicrophone(stopOnUnpublish = false): Promise
   state.localMicPublication = null;
 }
 
+/**
+ * Puts a new capture under the published microphone instead of unpublishing
+ * it: peers keep their subscription and hear no gap. False when there is no
+ * publication to swap into.
+ */
+export async function replaceLocalMicrophoneTrack(track: MediaStreamTrack): Promise<boolean> {
+  const publication = state.localMicPublication;
+  if (!state.livekitRoom || !publication?.track) return false;
+  await publication.track.replaceTrack(track, true);
+  return true;
+}
+
 export async function syncLocalMicrophonePublicationMuted(): Promise<void> {
   const publication = state.localMicPublication;
   if (!publication) return;

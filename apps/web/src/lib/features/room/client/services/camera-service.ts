@@ -84,7 +84,9 @@ function adoptCameraStream(stream: MediaStream): void {
   state.localCameraStream = stream;
   // Unplugging the camera or revoking access ends the track.
   stream.getVideoTracks()[0]?.addEventListener('ended', () => {
-    if (state.localCameraStream === stream) void stopCamera();
+    if (state.localCameraStream !== stream) return;
+    void stopCamera();
+    showToast('Камера отключилась');
   });
   if (state.self) {
     state.self.camera = true;
