@@ -7,6 +7,7 @@ import {
   OUTPUT_DEVICE_STORAGE_KEY
 } from '../core/config';
 import type { SelectOption } from '$lib/shared/ui';
+import { listPhysicalDevices } from '$lib/shared/audio/device-list';
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { state } from '../core/state.svelte';
 import { clampGateThresholdDb, getDbMeterPosition, getNoiseModeLabel, persistGateAuto } from '../core/settings';
@@ -148,9 +149,9 @@ export async function refreshDevices(): Promise<MediaDeviceInfo[]> {
   if (!navigator.mediaDevices?.enumerateDevices) return [];
 
   const devices = await navigator.mediaDevices.enumerateDevices();
-  const microphones = devices.filter((device) => device.kind === 'audioinput');
-  const outputs = devices.filter((device) => device.kind === 'audiooutput');
-  const cameras = devices.filter((device) => device.kind === 'videoinput');
+  const microphones = listPhysicalDevices(devices, 'audioinput');
+  const outputs = listPhysicalDevices(devices, 'audiooutput');
+  const cameras = listPhysicalDevices(devices, 'videoinput');
 
   roomDeviceUi.microphoneOptions = buildDeviceOptions(microphones, {
     defaultLabel: 'Системный',

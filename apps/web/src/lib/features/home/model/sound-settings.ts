@@ -23,6 +23,7 @@ import {
   type MicrophoneMode,
   type NoiseMode
 } from '$lib/features/room/client/core/config';
+import { listPhysicalDevices } from '$lib/shared/audio/device-list';
 import {
   amplitudeToDb,
   clampGateThresholdDb,
@@ -173,12 +174,10 @@ async function enumerate(kind: MediaDeviceKind, fallback: string): Promise<Devic
   if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) return [];
   try {
     const devices = await navigator.mediaDevices.enumerateDevices();
-    return devices
-      .filter((device) => device.kind === kind)
-      .map((device, index) => ({
-        deviceId: device.deviceId,
-        label: device.label || `${fallback} ${index + 1}`
-      }));
+    return listPhysicalDevices(devices, kind).map((device, index) => ({
+      deviceId: device.deviceId,
+      label: device.label || `${fallback} ${index + 1}`
+    }));
   } catch {
     return [];
   }
