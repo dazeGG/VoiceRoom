@@ -20,10 +20,12 @@ import { getDisplayName, updateNameStatuses } from '../ui/names';
 import { resetConnectionStatus, setServerConnectionStatus, setVoiceConnectionStatus } from '../ui/status';
 import { refreshCallControls, resetPushToTalkState } from '../ui/controls';
 import { refreshScreenControls, stopLocalScreenStream } from '../services/screen-share-service';
+import { stopLocalCamera } from '../services/camera-service';
 import { closeScreenView, refreshScreenStage } from '../ui/screen-view';
 import { createParticipant, removeAudioElements, updatePeerStatus } from './participants';
 import { connectLiveKitRoom, disconnectLiveKitRoom } from '../services/livekit-service';
 import {
+  describeMicrophoneError,
   getLocalMicrophoneCapture,
   openLocalMicrophone,
   setLocalMicrophoneCapture,
@@ -38,9 +40,11 @@ import { closeParticipantContextMenu } from '../../participant-context-ui.svelte
 import {
   clearGateSwitchTimer,
   closeDevicePopover,
+  closeCameraPopover,
   closeOutputPopover,
   refreshDevices,
-  refreshMicrophoneLevelMeter
+  refreshMicrophoneLevelMeter,
+  watchLocalMicrophone
 } from '../ui/devices';
 import { GATE_THRESHOLD_MIN_DB } from '../core/config';
 import { getAppRealtime } from '$lib/api/realtime';
@@ -54,6 +58,7 @@ import { resolveRoomEntryName } from './room-entry';
 import { createVoiceEventHandler } from './voice-events';
 import { markInAppRoomNavigation } from '$lib/platform/open-in-app';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
+import type { MicrophoneCapture } from '../core/types';
 import {
   cancelRoomRecovery,
   notifyRoomAppConnection,
@@ -207,12 +212,17 @@ async function performJoinRoom(generation: number): Promise<void> {
     }
     if (state.microphoneMode === 'push-to-talk') state.muted = true;
 
-    const microphoneCapture = await openLocalMicrophone();
+    const microphoneCapture = await openJoinMicrophone();
     if (!isCurrent()) {
-      stopMicrophoneCapture(microphoneCapture);
+      if (microphoneCapture) stopMicrophoneCapture(microphoneCapture);
       return;
     }
-    setLocalMicrophoneCapture(microphoneCapture);
+    if (microphoneCapture) {
+      setLocalMicrophoneCapture(microphoneCapture);
+      watchLocalMicrophone();
+    } else {
+      state.microphoneMissing = true;
+    }
     await refreshDevices();
     if (!isCurrent()) return;
 
@@ -310,6 +320,20 @@ async function performJoinRoom(generation: number): Promise<void> {
   }
 }
 
+/**
+ * A missing or refused microphone does not keep anyone out of the call: they
+ * join to listen, and the microphone button or a plugged-in device adds it.
+ */
+async function openJoinMicrophone(): Promise<MicrophoneCapture | null> {
+  try {
+    return await openLocalMicrophone();
+  } catch (error) {
+    log.warn('joining without a microphone', errorContext(error));
+    showToast(`${describeMicrophoneError(error)}: вы в комнате без микрофона`, { duration: 8000 });
+    return null;
+  }
+}
+
 function formatJoinError(error: unknown): string {
   const message = errorMessage(error);
   if (/signal connection|failed to fetch/i.test(message)) {
@@ -372,11 +396,13 @@ export function leaveRoom(): void {
   state.self = null;
   stopLocalStream();
   stopLocalScreenStream();
+  stopLocalCamera();
   stopMeters();
   stopPeerLatencyStats();
   stopSpeakingStats();
 
   state.muted = false;
+  state.microphoneMissing = false;
   resetPushToTalkState();
   clearAllPeerJoinCues();
   clearStreamViewerCues();
@@ -384,6 +410,7 @@ export function leaveRoom(): void {
   refreshScreenControls();
   closeDevicePopover();
   closeOutputPopover();
+  closeCameraPopover();
   resetConnectionStatus();
   clearConnectedVoiceRoom(disconnectedRoomId);
 }

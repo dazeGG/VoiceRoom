@@ -62,7 +62,7 @@ function createLiveKitCredentialProvider({
       name,
       ttl: ttlSeconds
     });
-    const canPublishSources = [TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO];
+    const canPublishSources = [TrackSource.CAMERA, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO];
     if (canPublishMicrophone !== false) canPublishSources.unshift(TrackSource.MICROPHONE);
     // Chat, reactions and presence travel over the API, never LiveKit data
     // packets, and the client binds no data handler. Granting data would only

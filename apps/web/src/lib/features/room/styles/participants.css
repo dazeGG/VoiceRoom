@@ -207,6 +207,44 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   box-shadow: inset 0 0 0 1px var(--green);
 }
 
+/* A camera fills the tile in place of the avatar; the name stays on top and
+   the speaking border is drawn over the picture. */
+.participant-camera {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--warm-950);
+  object-fit: cover;
+}
+
+.participant-camera[data-mirrored='true'] {
+  transform: scaleX(-1);
+}
+
+.participant-focus-stage > .participant .participant-camera {
+  object-fit: contain;
+}
+
+.participant[data-camera='true'] .voice-ring {
+  display: none;
+}
+
+/* An inset shadow would sit under the video, so the ring is an overlay. */
+.participant[data-camera='true'][data-speaking='true']::after {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border: 2px solid var(--green);
+  border-radius: inherit;
+  content: '';
+  pointer-events: none;
+}
+
+.participant[data-camera='true'] .participant-copy {
+  z-index: 1;
+}
+
 .voice-ring {
   display: grid;
   width: 86px;

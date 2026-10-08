@@ -44,8 +44,8 @@ export function isLiveKitParticipantAlreadyGone(error: unknown): boolean {
 }
 
 // Server mute is enforced at the SFU, not just in the client: microphone is
-// removed from the participant's allowed sources while screen sharing and data
-// remain intact, and the live microphone track is muted immediately.
+// removed from the participant's allowed sources while the camera, screen sharing
+// and data remain intact, and the live microphone track is muted immediately.
 export function resolveServerMutePermission<T extends ParticipantPermissionLike>(
   currentPermission: T = {} as T,
   muted: boolean
@@ -54,7 +54,7 @@ export function resolveServerMutePermission<T extends ParticipantPermissionLike>
   const currentSources =
     declaredSources.length > 0
       ? declaredSources
-      : [TrackSource.MICROPHONE, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO];
+      : [TrackSource.MICROPHONE, TrackSource.CAMERA, TrackSource.SCREEN_SHARE, TrackSource.SCREEN_SHARE_AUDIO];
   const canPublishSources = muted
     ? currentSources.filter((source) => source !== TrackSource.MICROPHONE)
     : [...new Set([...currentSources, TrackSource.MICROPHONE])];

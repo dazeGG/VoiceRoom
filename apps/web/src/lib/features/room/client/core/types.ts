@@ -184,6 +184,8 @@ export interface RoomAudioState {
   localMicPublication: LocalTrackPublication | null;
   localRawStream: MediaStream | null;
   localStream: MediaStream | null;
+  /** In the call without a microphone: none was found or access was refused. */
+  microphoneMissing: boolean;
   localAppAudioSuppressed: boolean;
   microphoneDeviceId: string;
   microphoneMode: MicrophoneMode;
@@ -222,8 +224,22 @@ export interface RoomScreenState {
   viewedScreenPeerId: string;
 }
 
+export interface RoomCameraState {
+  cameraDeviceId: string;
+  /** Capture is being opened; the button waits instead of starting a second one. */
+  cameraStarting: boolean;
+  localCameraPublication: LocalTrackPublication | null;
+  localCameraStream: MediaStream | null;
+}
+
 export interface AppState
-  extends RoomSessionState, RoomConnectionState, RoomParticipantState, RoomAudioState, RoomScreenState {}
+  extends
+    RoomSessionState,
+    RoomConnectionState,
+    RoomParticipantState,
+    RoomAudioState,
+    RoomScreenState,
+    RoomCameraState {}
 
 /** The lobby card the rename answer and the room.updated broadcast carry. */
 export type RoomLifecycleSummary = LobbyRoom;

@@ -27,6 +27,9 @@ export interface Participant {
   avatarAccent: string;
   avatarColorKey: string;
   avatarUrl: string;
+  /** A camera track is published; `cameraStream` is set once it is received. */
+  camera: boolean;
+  cameraStream: MediaStream | null;
   deafened: boolean;
   id: string;
   incomingVoiceActive: boolean;

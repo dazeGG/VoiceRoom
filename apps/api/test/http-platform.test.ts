@@ -30,7 +30,8 @@ test('the CSP admits the gate everywhere and the local SFU only outside producti
   assert.equal(dev['X-Content-Type-Options'], 'nosniff');
   const prod = securityHeaders({ connectSources: [], production: true });
   assert.doesNotMatch(String(prod['Content-Security-Policy']), /localhost/);
-  assert.match(String(prod['Permissions-Policy']), /camera=\(\)/);
+  // The page may ask for its own camera, never an embedded frame's.
+  assert.match(String(prod['Permissions-Policy']), /camera=\(self\)/);
 });
 
 test('the request line is levelled by status, skips health checks and hashes the address', () => {

@@ -1,13 +1,18 @@
-// Our own tracks on the LiveKit room: the microphone and the shared screen.
+// Our own tracks on the LiveKit room: the microphone, the camera and the shared screen.
 
 import type { LocalTrackPublication, Room, Track } from 'livekit-client';
-import { MICROPHONE_AUDIO_BITRATE, SCREEN_AUDIO_BITRATE } from '../../core/config';
+import {
+  CAMERA_CAPTURE,
+  CAMERA_VIDEO_BITRATE,
+  MICROPHONE_AUDIO_BITRATE,
+  SCREEN_AUDIO_BITRATE
+} from '../../core/config';
 import { state } from '../../core/state.svelte';
 import { getScreenProfile, getScreenPublishVideoOptions } from '../../media/profiles';
-import { TRACK_SOURCE } from '../../media/livekit-runtime';
+import { loadLiveKitClient, TRACK_SOURCE } from '../../media/livekit-runtime';
 import { isMicrophoneShownMuted } from '../../core/microphone-mute';
 
-import { isMicrophonePublication } from './publication-kinds';
+import { isCameraPublication, isMicrophonePublication } from './publication-kinds';
 
 export async function publishLocalMicrophone(): Promise<void> {
   const room = state.livekitRoom;
@@ -56,6 +61,18 @@ export async function unpublishLocalMicrophone(stopOnUnpublish = false): Promise
   state.localMicPublication = null;
 }
 
+/**
+ * Puts a new capture under the published microphone instead of unpublishing
+ * it: peers keep their subscription and hear no gap. False when there is no
+ * publication to swap into.
+ */
+export async function replaceLocalMicrophoneTrack(track: MediaStreamTrack): Promise<boolean> {
+  const publication = state.localMicPublication;
+  if (!state.livekitRoom || !publication?.track) return false;
+  await publication.track.replaceTrack(track, true);
+  return true;
+}
+
 export async function syncLocalMicrophonePublicationMuted(): Promise<void> {
   const publication = state.localMicPublication;
   if (!publication) return;
@@ -70,6 +87,72 @@ async function syncMicrophonePublicationMuted(publication: LocalTrackPublication
     await publication.mute();
   } else {
     await publication.unmute();
+  }
+}
+
+export async function publishLocalCamera(): Promise<void> {
+  const room = state.livekitRoom;
+  const stream = state.localCameraStream;
+  if (!room || !stream) return;
+  const publication = await publishLocalCameraForRoom(
+    room,
+    stream,
+    () => state.livekitRoom === room && state.localCameraStream === stream
+  );
+  if (publication && state.livekitRoom === room && state.localCameraStream === stream) {
+    state.localCameraPublication = publication;
+  }
+}
+
+export async function publishLocalCameraForRoom(
+  room: Room,
+  stream: MediaStream | null,
+  isCurrent: () => boolean
+): Promise<LocalTrackPublication | null> {
+  const [track] = stream?.getVideoTracks() ?? [];
+  if (!track || track.readyState === 'ended' || !isCurrent()) return null;
+  const { VideoPresets } = await loadLiveKitClient();
+  if (!isCurrent()) return null;
+
+  // Simulcast: a grid tile asks for a small layer, the spotlight for the top one.
+  const publication = await room.localParticipant.publishTrack(track, {
+    name: 'camera',
+    simulcast: true,
+    source: TRACK_SOURCE.Camera as Track.Source,
+    videoEncoding: { maxBitrate: CAMERA_VIDEO_BITRATE, maxFramerate: CAMERA_CAPTURE.frameRate },
+    videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360]
+  });
+  if (!isCurrent()) {
+    await room.localParticipant.unpublishTrack(publication.track ?? track, false).catch(() => {});
+    return null;
+  }
+  return publication;
+}
+
+export async function unpublishLocalCamera(): Promise<void> {
+  const room = state.livekitRoom;
+  const track = state.localCameraPublication?.track;
+  state.localCameraPublication = null;
+  if (!room || !track) return;
+  // The capture is stopped by its owner, not by LiveKit.
+  await room.localParticipant.unpublishTrack(track, false);
+}
+
+export async function ensureLocalCameraPublished(room: Room, isCurrent: () => boolean): Promise<void> {
+  const stream = state.localCameraStream;
+  if (!stream || !isCurrent()) return;
+  const existing = [...room.localParticipant.trackPublications.values()].find(isCameraPublication);
+  if (existing) {
+    state.localCameraPublication = existing;
+    return;
+  }
+  const publication = await publishLocalCameraForRoom(
+    room,
+    stream,
+    () => isCurrent() && state.livekitRoom === room && state.localCameraStream === stream
+  );
+  if (publication && isCurrent() && state.livekitRoom === room && state.localCameraStream === stream) {
+    state.localCameraPublication = publication;
   }
 }
 

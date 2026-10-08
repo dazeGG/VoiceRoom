@@ -13,7 +13,9 @@ import type {
 import { state } from '../../core/state.svelte';
 import { clearPeerJoinCue } from '../../media/cues';
 import { loadLiveKitClient } from '../../media/livekit-runtime';
+import { getCameraReceiverDemand } from '../../media/camera-receiver-demand';
 import { getScreenReceiverDemand } from '../../media/screen-receiver-demand';
+import { participantsUi } from '../../../participants-ui.svelte';
 import { getScreenPublicationPresence } from '../../media/screen-publication-state';
 import { createScreenSubscriptionRetryController } from '../../media/screen-subscription-retry';
 import {
@@ -36,6 +38,7 @@ import { subscribeRoomRecoveryTransitions } from '../../recovery/room-recovery';
 import { ScreenRecoveryGraceController } from '../../recovery/screen-recovery-grace';
 
 import {
+  isCameraPublication,
   isMicrophonePublication,
   isScreenAudioPublication,
   isScreenPublication,
@@ -153,6 +156,9 @@ export function updateLiveKitPublicationState(peer: Participant, publication: Tr
     peer.voiceIssue = '';
     updatePeerStatus(peer);
   }
+  if (isCameraPublication(publication)) {
+    peer.camera = true;
+  }
 }
 
 export function syncLiveKitPublicationSubscription(peer: Participant, publication: TrackPublication): void {
@@ -161,6 +167,12 @@ export function syncLiveKitPublicationSubscription(peer: Participant, publicatio
 
   if (isMicrophonePublication(publication)) {
     setRemotePublicationSubscribed(remotePublication, !state.outputMuted);
+    return;
+  }
+
+  if (isCameraPublication(publication)) {
+    setRemotePublicationSubscribed(remotePublication, true);
+    void applyRemoteCameraDemand(peer, remotePublication);
     return;
   }
 
@@ -212,6 +224,29 @@ async function applyRemoteScreenVideoDemand(peer: Participant, publication: Remo
 
   const quality = getRemoteScreenDemand(peer) === 'stage' ? VideoQuality.HIGH : VideoQuality.LOW;
   publication.setVideoQuality(quality);
+}
+
+async function applyRemoteCameraDemand(peer: Participant, publication: RemoteTrackPublication): Promise<void> {
+  const { VideoQuality } = await loadLiveKitClient();
+  if (publication.isDesired === false) return;
+  if (peer.livekitParticipant?.trackPublications.get(publication.trackSid) !== publication) return;
+  const demand = getCameraReceiverDemand(peer.id, {
+    focusedPeerId: participantsUi.focusedParticipantId,
+    participantCount: state.peers.size + (state.self ? 1 : 0),
+    screenOnStage: Boolean(state.viewedScreenPeerId)
+  });
+  publication.setVideoQuality(
+    demand === 'high' ? VideoQuality.HIGH : demand === 'medium' ? VideoQuality.MEDIUM : VideoQuality.LOW
+  );
+}
+
+/** Re-picks every camera layer after the layout changed (focus, a screen, a join). */
+export function syncRemoteCameraDemand(): void {
+  for (const peer of state.peers.values()) {
+    peer.livekitParticipant?.trackPublications.forEach((publication) => {
+      if (isCameraPublication(publication)) void applyRemoteCameraDemand(peer, publication as RemoteTrackPublication);
+    });
+  }
 }
 
 export function handleLiveKitTrackSubscriptionFailed(
@@ -354,6 +389,13 @@ export function handleLiveKitTrackSubscribed(
     return;
   }
 
+  if (isCameraPublication(publication)) {
+    peer.camera = true;
+    peer.cameraStream = mediaTrack.readyState === 'ended' ? null : new MediaStream([mediaTrack]);
+    void applyRemoteCameraDemand(peer, publication);
+    return;
+  }
+
   const stream = track.mediaStream || new MediaStream([mediaTrack]);
   if (isScreenVideoPublication(publication)) {
     screenRecoveryGrace.cancel(peer.id);
@@ -387,6 +429,11 @@ export function handleLiveKitTrackUnsubscribed(
   const peer = state.peers.get(participant.identity);
   if (!peer) return;
 
+  if (isCameraPublication(publication)) {
+    if (peer.cameraStream?.getVideoTracks()[0] === track.mediaStreamTrack) peer.cameraStream = null;
+    return;
+  }
+
   if (isScreenVideoPublication(publication)) {
     detachRemoteScreenVideoTrack(peer, track.mediaStreamTrack.id);
     if (shouldSubscribeToScreen(peer)) void scheduleScreenSubscriptionRetry(peer, publication);
@@ -414,6 +461,12 @@ export function handleLiveKitTrackUnpublished(
   clearScreenSubscriptionRetry(publication);
   const peer = state.peers.get(participant.identity);
   if (!peer) return;
+
+  if (isCameraPublication(publication)) {
+    peer.camera = false;
+    peer.cameraStream = null;
+    return;
+  }
 
   const remainingPublications = participant.trackPublications
     ? [...participant.trackPublications.values()].filter((candidate) => candidate.trackSid !== publication.trackSid)

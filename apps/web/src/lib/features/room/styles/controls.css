@@ -163,9 +163,10 @@ button:focus-visible {
     color 150ms var(--ease-out);
 }
 
-/* Toggle half of a split (mic / headphones). */
+/* Toggle half of a split (mic / headphones / camera). */
 .mic-button,
-.output-button {
+.output-button,
+.camera-button {
   width: 46px;
   height: 46px;
   background: var(--control);
@@ -177,7 +178,8 @@ button:focus-visible {
 }
 
 .mic-button:hover,
-.output-button:hover {
+.output-button:hover,
+.camera-button:hover {
   background: var(--control-hover);
 }
 
@@ -301,6 +303,30 @@ button:focus-visible {
 
 .screen-button[data-state='live'] .dock-icon-screen-stop {
   display: grid;
+}
+
+/* Camera: off by default (crossed icon); on reads green like an active PTT. */
+.camera-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.dock-icon-camera,
+.camera-button[data-state='on'] .dock-icon-camera-off {
+  display: none;
+}
+
+.camera-button[data-state='on'] .dock-icon-camera {
+  display: grid;
+}
+
+.camera-button[data-state='on'] {
+  background: color-mix(in oklch, var(--green) 16%, transparent);
+  color: #a8e2c5;
+}
+
+.camera-button[data-state='on']:hover {
+  background: color-mix(in oklch, var(--green) 24%, transparent);
 }
 
 /* Connection: signal bars + a ping popover on hover (VoiceDock). Colour tracks

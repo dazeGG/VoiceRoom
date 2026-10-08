@@ -10,12 +10,15 @@ export const NOISE_MODE_SELECT_OPTIONS: SelectOption[] = [
 export const roomDeviceUi = $state({
   microphoneId: '',
   outputDeviceId: '',
+  cameraId: '',
   noiseMode: 'off',
   microphoneOptions: [{ value: '', label: 'Системный' }] as SelectOption[],
   outputOptions: [{ value: '', label: 'Системный' }] as SelectOption[],
+  cameraOptions: [{ value: '', label: 'Системная' }] as SelectOption[],
   outputDisabled: false,
   devicePopoverOpen: false,
   outputPopoverOpen: false,
+  cameraPopoverOpen: false,
   microphoneVolume: 100,
   micLevelDb: GATE_THRESHOLD_MIN_DB
 });

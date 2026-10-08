@@ -50,6 +50,8 @@ function createParticipantModel(peerInfo: PeerInfo, isLocal: boolean): Participa
     avatarAccent: peerInfo.avatarAccent || '',
     avatarColorKey: peerInfo.avatarColorKey || '',
     avatarUrl: peerInfo.avatarUrl || '',
+    camera: false,
+    cameraStream: null,
     deafened: Boolean(peerInfo.deafened),
     id: peerInfo.id,
     incomingVoiceActive: false,

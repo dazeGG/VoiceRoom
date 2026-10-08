@@ -420,6 +420,15 @@ function createProcessingAudioContext(): AudioContext {
   }
 }
 
+/** Why the microphone could not be opened, for a listener who joins without one. */
+export function describeMicrophoneError(error: unknown): string {
+  const name = (error as { name?: string } | null)?.name;
+  if (name === 'NotAllowedError' || name === 'SecurityError') return 'Нет доступа к микрофону';
+  if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'Микрофон не найден';
+  if (name === 'NotReadableError' || name === 'AbortError') return 'Микрофон занят другим приложением';
+  return 'Микрофон недоступен';
+}
+
 export function getLocalMicrophoneCapture(): MicrophoneCapture {
   return {
     processor: state.micProcessor,

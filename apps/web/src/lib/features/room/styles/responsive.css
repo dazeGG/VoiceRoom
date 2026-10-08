@@ -221,6 +221,7 @@
 
   .mic-button,
   .output-button,
+  .camera-button,
   .screen-button,
   .leave-button,
   .screen-exit-button,
@@ -244,7 +245,7 @@ html[data-platform-class='mobile'] .dock-cluster--screen {
 }
 
 html[data-platform-class='mobile']
-  :is(.mic-button, .output-button, .leave-button, .screen-exit-button, .dock-connection) {
+  :is(.mic-button, .output-button, .camera-button, .leave-button, .screen-exit-button, .dock-connection) {
   min-width: 44px;
   min-height: 44px;
 }

@@ -116,13 +116,19 @@ export async function loadLiveKitHarness(
     Room: FakeRoom,
     RoomEvent,
     SubscriptionError: { SE_CODEC_UNSUPPORTED: 1 },
-    VideoQuality: { HIGH: 2, LOW: 0 },
+    VideoQuality: { HIGH: 2, MEDIUM: 1, LOW: 0 },
+    VideoPresets: { h180: { resolution: { height: 180 } }, h360: { resolution: { height: 360 } } },
     VideoPreset: class {
       constructor(readonly encoding: unknown) {}
     }
   };
 
-  vi.doMock(`${P}/core/config`, () => ({ MICROPHONE_AUDIO_BITRATE: 64_000, SCREEN_AUDIO_BITRATE: 192_000 }));
+  vi.doMock(`${P}/core/config`, () => ({
+    CAMERA_CAPTURE: { width: 1280, height: 720, frameRate: 30 },
+    CAMERA_VIDEO_BITRATE: 1_700_000,
+    MICROPHONE_AUDIO_BITRATE: 64_000,
+    SCREEN_AUDIO_BITRATE: 192_000
+  }));
   vi.doMock('../../src/lib/features/room/start-ui.svelte', () => ({ startUi: {} }));
   vi.doMock(`${P}/core/state.svelte`, () => ({ state }));
   vi.doMock(`${P}/ui/status`, () => ({ setVoiceConnectionStatus: () => {} }));
@@ -141,7 +147,12 @@ export async function loadLiveKitHarness(
     getScreenPublishVideoOptions: () => ({})
   }));
   vi.doMock(`${P}/media/livekit-runtime`, () => ({
-    TRACK_SOURCE: { Microphone: 'microphone', ScreenShare: 'screen-video', ScreenShareAudio: 'screen-audio' },
+    TRACK_SOURCE: {
+      Camera: 'camera',
+      Microphone: 'microphone',
+      ScreenShare: 'screen-video',
+      ScreenShareAudio: 'screen-audio'
+    },
     loadLiveKitClient: () =>
       options.autoResolveClient
         ? Promise.resolve(livekitClient)
@@ -256,7 +267,7 @@ export async function loadLiveKitHarness(
 
 /** A fake remote publication that records subscription and quality requests. */
 export function fakePublication(
-  source: 'microphone' | 'screen-video' | 'screen-audio',
+  source: 'camera' | 'microphone' | 'screen-video' | 'screen-audio',
   extra: Record<string, unknown> = {}
 ) {
   const calls = { subscribed: [] as boolean[], quality: [] as unknown[] };

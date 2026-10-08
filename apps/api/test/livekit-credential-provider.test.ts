@@ -163,4 +163,5 @@ test('server-muted admission omits microphone publishing while preserving screen
   assert.equal(sources.includes('microphone'), false, 'microphone TrackSource is absent');
   assert.equal(sources.includes('screen_share'), true, 'screen-share TrackSource remains allowed');
   assert.equal(sources.includes('screen_share_audio'), true, 'screen-share audio TrackSource remains allowed');
+  assert.equal(sources.includes('camera'), true, 'a server-muted peer can still turn the camera on');
 });

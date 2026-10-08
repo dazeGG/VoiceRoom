@@ -23,6 +23,17 @@
   const viewing = $derived(roomState.viewedScreenPeerId === participant.id);
   const canWatch = $derived(!participant.isLocal && participant.screen && !viewing);
   const screenActionLabel = $derived(roomState.screenRequesting ? 'Подключение' : 'Смотреть экран');
+  const cameraStream = $derived(participant.cameraStream);
+
+  function showCamera(stream: MediaStream) {
+    return (video: HTMLVideoElement) => {
+      video.srcObject = stream;
+      void video.play().catch(() => {});
+      return () => {
+        video.srcObject = null;
+      };
+    };
+  }
 
   // A participant tile always spotlights the person; their stream stays a
   // separate tile (StreamTile) that spotlights the screen instead. The two
@@ -80,6 +91,7 @@
   data-deafened={String(participant.deafened)}
   data-muted={String(participant.muted)}
   data-screen={String(participant.screen)}
+  data-camera={cameraStream ? 'true' : undefined}
   data-speaking={String(participant.speaking)}
   tabindex="0"
   aria-haspopup={participant.isLocal ? undefined : 'dialog'}
@@ -94,6 +106,16 @@
   oncontextmenu={handleContextMenu}
   onkeydown={handleKeydown}
 >
+  {#if cameraStream}
+    <video
+      class="participant-camera"
+      {@attach showCamera(cameraStream)}
+      data-mirrored={participant.isLocal ? 'true' : undefined}
+      autoplay
+      playsinline
+      muted
+    ></video>
+  {/if}
   <div class="voice-ring" aria-hidden="true">
     <span class="avatar">
       {#if avatar.src && !imageFailed}<img
