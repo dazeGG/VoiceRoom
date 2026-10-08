@@ -34,7 +34,6 @@ export interface MicProcessor {
   setGain?: (gain: number) => void;
   source: MediaStreamAudioSourceNode;
   setThreshold?: (threshold: number) => void;
-  setAuto?: (auto: boolean) => void;
   type?: 'gate' | 'input-gain' | 'rnnoise';
 }
 
@@ -180,7 +179,6 @@ export interface RoomAudioState {
   audioContext: AudioContext | null;
   audioUnlockPending: boolean;
   gateThresholdDb: number;
-  gateAuto: boolean;
   localMicPublication: LocalTrackPublication | null;
   localRawStream: MediaStream | null;
   localStream: MediaStream | null;

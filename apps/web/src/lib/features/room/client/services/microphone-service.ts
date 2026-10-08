@@ -25,7 +25,7 @@ import { createLogger, errorContext } from '$lib/shared/log';
 
 const log = createLogger('room:mic');
 
-type GateNode = AudioNode & { setAuto?: (auto: boolean) => void; setThreshold?: (threshold: number) => void };
+type GateNode = AudioNode & { setThreshold?: (threshold: number) => void };
 
 interface NoiseGateEnvelope {
   attackCoefficient: number;
@@ -57,13 +57,6 @@ export function syncPushToTalkGate(): void {
   const threshold = state.pushToTalkActive ? 0 : getGateThresholdAmplitude();
   for (const processor of getMicrophoneProcessors(state.micProcessor)) {
     if (processor.type === 'gate') processor.setThreshold?.(threshold);
-  }
-}
-
-/** Pushes the automatic-sensitivity choice into a running gate. */
-export function syncGateAuto(): void {
-  for (const processor of getMicrophoneProcessors(state.micProcessor)) {
-    if (processor.type === 'gate') processor.setAuto?.(state.gateAuto);
   }
 }
 
@@ -156,7 +149,6 @@ async function buildCapturePipeline(rawStream: MediaStream, mode: NoiseMode): Pr
         context,
         destination,
         node: gate,
-        setAuto: (auto: boolean) => gate.setAuto?.(auto),
         setThreshold: (nextThreshold: number) => {
           setNoiseGateNodeThreshold(gate, nextThreshold);
         },
@@ -279,9 +271,6 @@ async function createNoiseGateNode(context: AudioContext, threshold: number): Pr
       node.setThreshold = (nextThreshold: number) => {
         (node as AudioWorkletNode).port.postMessage({ threshold: nextThreshold, type: 'set-threshold' });
       };
-      node.setAuto = (auto: boolean) => {
-        (node as AudioWorkletNode).port.postMessage({ auto, type: 'set-auto' });
-      };
       return node;
     } catch (error) {
       log.warn('AudioWorklet gate unavailable, using ScriptProcessor', errorContext(error));
@@ -300,10 +289,7 @@ function createNoiseGateOptions(threshold: number) {
     floorGain: GATE_FLOOR_GAIN,
     holdMs: GATE_HOLD_MS,
     releaseMs: GATE_RELEASE_MS,
-    threshold,
-    // The ScriptProcessor fallback keeps the manual threshold; only the
-    // worklet implements automatic sensitivity.
-    auto: state.gateAuto
+    threshold
   };
 }
 
