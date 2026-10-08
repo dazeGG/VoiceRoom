@@ -20,6 +20,7 @@ import { getDisplayName, updateNameStatuses } from '../ui/names';
 import { resetConnectionStatus, setServerConnectionStatus, setVoiceConnectionStatus } from '../ui/status';
 import { refreshCallControls, resetPushToTalkState } from '../ui/controls';
 import { refreshScreenControls, stopLocalScreenStream } from '../services/screen-share-service';
+import { stopLocalCamera } from '../services/camera-service';
 import { closeScreenView, refreshScreenStage } from '../ui/screen-view';
 import { createParticipant, removeAudioElements, updatePeerStatus } from './participants';
 import { connectLiveKitRoom, disconnectLiveKitRoom } from '../services/livekit-service';
@@ -38,6 +39,7 @@ import { closeParticipantContextMenu } from '../../participant-context-ui.svelte
 import {
   clearGateSwitchTimer,
   closeDevicePopover,
+  closeCameraPopover,
   closeOutputPopover,
   refreshDevices,
   refreshMicrophoneLevelMeter
@@ -372,6 +374,7 @@ export function leaveRoom(): void {
   state.self = null;
   stopLocalStream();
   stopLocalScreenStream();
+  stopLocalCamera();
   stopMeters();
   stopPeerLatencyStats();
   stopSpeakingStats();
@@ -384,6 +387,7 @@ export function leaveRoom(): void {
   refreshScreenControls();
   closeDevicePopover();
   closeOutputPopover();
+  closeCameraPopover();
   resetConnectionStatus();
   clearConnectedVoiceRoom(disconnectedRoomId);
 }

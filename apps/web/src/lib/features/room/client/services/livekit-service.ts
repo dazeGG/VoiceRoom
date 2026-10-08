@@ -56,6 +56,7 @@ import {
 } from './livekit/transport';
 import {
   disposeCandidatePublications,
+  ensureLocalCameraPublished,
   ensureLocalMicrophonePublished,
   ensureLocalScreenPublished,
   publishLocalMicrophoneForRoom,
@@ -125,6 +126,8 @@ export async function connectLiveKitRoom(name: string, isCurrent: () => boolean 
     await disconnectLiveKitRoomInstance(room);
     return false;
   }
+  // A camera turned on while the call was still connecting goes out now.
+  void republishLocalCamera(room, () => isCurrent() && state.livekitRoom === room);
   syncLiveKitParticipants(room);
   setVoiceConnectionStatus('connected');
   return true;
@@ -196,12 +199,14 @@ export async function attemptFreshLiveKitReplacement({
     state.livekitRoom = candidate;
     state.localMicPublication = microphonePublication;
     state.localScreenPublications = screenPublications;
+    state.localCameraPublication = null;
     clearAllScreenSubscriptionRetries();
     syncLiveKitParticipants(candidate);
     retryDemandedScreenSubscriptions(candidate);
     syncLiveKitVoiceSubscriptions();
     syncRemoteAudioPlayback();
     setVoiceConnectionStatus('connected');
+    void republishLocalCamera(candidate, () => state.livekitRoom === candidate);
 
     if (oldRoom && oldRoom !== candidate) await disconnectLiveKitRoomInstance(oldRoom);
     logLiveKitTransition('info', { event: 'fresh_replacement', result: 'succeeded' });
@@ -370,6 +375,7 @@ export async function disconnectLiveKitRoomInstance(room: Room): Promise<void> {
     clearAllScreenSubscriptionRetries();
     state.livekitRoom = null;
     state.localMicPublication = null;
+    state.localCameraPublication = null;
     state.localScreenPublications.clear();
   }
 
@@ -378,6 +384,15 @@ export async function disconnectLiveKitRoomInstance(room: Room): Promise<void> {
     await room.disconnect(false);
   } catch {
     logLiveKitTransition('warn', { event: 'disconnect', result: 'failed' });
+  }
+}
+
+// The camera is optional: failing to publish it never fails the call.
+async function republishLocalCamera(room: Room, isCurrent: () => boolean): Promise<void> {
+  try {
+    await ensureLocalCameraPublished(room, isCurrent);
+  } catch {
+    logLiveKitTransition('warn', { event: 'camera_republish', result: 'failed' });
   }
 }
 
@@ -396,6 +411,8 @@ async function recoverLiveKitRoom(
   await ensureLocalMicrophonePublished();
   if (!isCurrent()) return;
   await ensureLocalScreenPublished(room, isCurrent);
+  if (!isCurrent()) return;
+  await republishLocalCamera(room, isCurrent);
   if (!isCurrent()) return;
   syncLiveKitVoiceSubscriptions();
   syncRemoteAudioPlayback();

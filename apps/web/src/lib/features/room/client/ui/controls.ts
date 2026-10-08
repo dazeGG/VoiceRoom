@@ -41,6 +41,13 @@ export interface OutputControlsView {
   stateName: 'muted' | 'live';
 }
 
+export interface CameraControlsView {
+  label: string;
+  ariaPressed: boolean;
+  disabled: boolean;
+  stateName: 'off' | 'on';
+}
+
 export interface ScreenControlsView {
   label: string;
   ariaPressed: boolean;
@@ -85,6 +92,16 @@ export function getOutputControlsView(): OutputControlsView {
     label,
     ariaPressed: state.outputMuted,
     stateName: state.outputMuted ? 'muted' : 'live'
+  };
+}
+
+export function getCameraControlsView(): CameraControlsView {
+  const on = Boolean(state.localCameraStream);
+  return {
+    label: on ? 'Выключить камеру' : 'Включить камеру',
+    ariaPressed: on,
+    disabled: !state.joined || state.connecting || state.cameraStarting,
+    stateName: on ? 'on' : 'off'
   };
 }
 

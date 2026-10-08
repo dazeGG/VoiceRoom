@@ -1,4 +1,5 @@
 export const TRACK_SOURCE = {
+  Camera: 'camera',
   Microphone: 'microphone',
   ScreenShare: 'screen_share',
   ScreenShareAudio: 'screen_share_audio'

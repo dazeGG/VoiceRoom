@@ -31,6 +31,7 @@ export const MICROPHONE_MODE_STORAGE_KEY = 'voice-room:microphone-mode';
 export const DEFAULT_MICROPHONE_MODE = 'open';
 export const PUSH_TO_TALK_RELEASE_HOLD_MS = 200;
 export const MICROPHONE_DEVICE_STORAGE_KEY = 'voice-room:microphone-device-id';
+export const CAMERA_DEVICE_STORAGE_KEY = 'voice-room:camera-device-id';
 export const NOISE_MODE_STORAGE_KEY = 'voice-room:noise-mode';
 export const OUTPUT_DEVICE_STORAGE_KEY = 'voice-room:output-device-id';
 export const OUTPUT_MUTED_STORAGE_KEY = 'voice-room:output-muted';
@@ -95,6 +96,10 @@ export const SCREEN_STREAM_MODE_PROFILES = {
 } as const;
 export const MICROPHONE_AUDIO_BITRATE = 64_000;
 export const SCREEN_AUDIO_BITRATE = 192_000;
+
+/** Camera capture and its top layer; viewers in the grid get a lighter layer. */
+export const CAMERA_CAPTURE = { width: 1280, height: 720, frameRate: 30 } as const;
+export const CAMERA_VIDEO_BITRATE = 1_700_000;
 export const SCREEN_STATS_INTERVAL_MS = 1500;
 export const SCREEN_VIDEO_BACKUP_CODEC: string = 'vp8';
 export const PEER_SESSION_STORAGE_PREFIX = 'voice-room:peer-session:';

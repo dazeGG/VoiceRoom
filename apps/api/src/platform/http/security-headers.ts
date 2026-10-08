@@ -54,7 +54,7 @@ export function securityHeaders({
       "style-src 'self'"
     ].join('; '),
     'Cross-Origin-Opener-Policy': 'same-origin',
-    'Permissions-Policy': 'microphone=(self), display-capture=(self), camera=(), geolocation=(), payment=()',
+    'Permissions-Policy': 'microphone=(self), display-capture=(self), camera=(self), geolocation=(), payment=()',
     'Referrer-Policy': 'same-origin',
     'X-Content-Type-Options': 'nosniff'
   };

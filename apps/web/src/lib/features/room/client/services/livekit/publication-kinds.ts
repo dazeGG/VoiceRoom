@@ -8,6 +8,10 @@ function sourceOf(publication: TrackPublication | null | undefined): string | un
   return publication?.source;
 }
 
+export function isCameraPublication(publication: TrackPublication | null | undefined): boolean {
+  return sourceOf(publication) === TRACK_SOURCE.Camera;
+}
+
 export function isMicrophonePublication(publication: TrackPublication | null | undefined): boolean {
   return sourceOf(publication) === TRACK_SOURCE.Microphone;
 }

@@ -506,8 +506,12 @@ test('LiveKit admin server mute narrows the grant, mutes the mic and falls back 
 });
 
 test('mute permissions and "already gone" classification', () => {
-  assert.deepEqual(resolveServerMutePermission(undefined, true).canPublishSources, [3, 4]);
-  assert.deepEqual(resolveServerMutePermission({ canPublishSources: [] }, false).canPublishSources.sort(), [2, 3, 4]);
+  // TrackSource: 1 camera, 2 microphone, 3 screen share, 4 screen share audio.
+  assert.deepEqual(resolveServerMutePermission(undefined, true).canPublishSources, [1, 3, 4]);
+  assert.deepEqual(
+    resolveServerMutePermission({ canPublishSources: [] }, false).canPublishSources.sort(),
+    [1, 2, 3, 4]
+  );
   assert.equal(isLiveKitParticipantAlreadyGone({ code: 'NOT_FOUND' }), true);
   assert.equal(isLiveKitParticipantAlreadyGone(null), false);
   assert.equal(tokensMatch('abc', 'abc'), true);

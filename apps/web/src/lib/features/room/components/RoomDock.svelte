@@ -1,9 +1,21 @@
 <script lang="ts">
-  import { ChevronDown, HeadphoneOff, Headphones, Mic, MicOff, ScreenShare, ScreenShareOff, X } from '@lucide/svelte';
+  import {
+    ChevronDown,
+    HeadphoneOff,
+    Headphones,
+    Mic,
+    MicOff,
+    ScreenShare,
+    ScreenShareOff,
+    Video,
+    VideoOff,
+    X
+  } from '@lucide/svelte';
   import { Popover, Select, Slider } from '$lib/shared/ui';
   import { NOISE_MODE_SELECT_OPTIONS, roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
   import { GATE_THRESHOLD_MAX_DB, GATE_THRESHOLD_MIN_DB } from '../client/core/config';
   import {
+    closeCameraPopover,
     closeDevicePopover,
     closeOutputPopover,
     getGateControlView,
@@ -17,6 +29,7 @@
   } from '../client/ui/devices';
   import {
     getCallControlsView,
+    getCameraControlsView,
     getOutputControlsView,
     getScreenControlsView,
     handleMicButtonClick,
@@ -28,6 +41,7 @@
   import { leaveScreenView } from '../client/ui/screen-view';
   import { state as roomClientState } from '../client/core/state.svelte';
   import { setMicrophoneVolume } from '../client/services/microphone-service';
+  import { switchCamera, toggleCamera } from '../client/services/camera-service';
 
   import { screenUi } from '../screen-ui.svelte';
   import { createLogger, errorContext } from '$lib/shared/log';
@@ -38,11 +52,13 @@
   const callControls = $derived(getCallControlsView());
   const outputControls = $derived(getOutputControlsView());
   const screenControls = $derived(getScreenControlsView());
+  const cameraControls = $derived(getCameraControlsView());
   const gate = $derived(getGateControlView());
 
   function toggleDevicePopover(event: MouseEvent, toggle: () => void): void {
     event.stopPropagation();
     closeOutputPopover();
+    closeCameraPopover();
     const wasOpen = roomDeviceUi.devicePopoverOpen;
     toggle();
     if (!wasOpen) void refreshDevices();
@@ -51,8 +67,18 @@
   function toggleOutputPopover(event: MouseEvent, toggle: () => void): void {
     event.stopPropagation();
     closeDevicePopover();
+    closeCameraPopover();
     const wasOpen = roomDeviceUi.outputPopoverOpen;
     toggle();
+    if (!wasOpen) void refreshDevices();
+  }
+
+  function toggleCameraPopover(event: MouseEvent): void {
+    event.stopPropagation();
+    closeDevicePopover();
+    closeOutputPopover();
+    const wasOpen = roomDeviceUi.cameraPopoverOpen;
+    roomDeviceUi.cameraPopoverOpen = !wasOpen;
     if (!wasOpen) void refreshDevices();
   }
 </script>
@@ -248,6 +274,62 @@
               flip
               disabled={roomDeviceUi.outputDisabled}
               onValueChange={() => void switchOutputDevice()}
+            />
+          </label>
+        {/snippet}
+      </Popover>
+    </div>
+
+    <div class="dock-cluster">
+      <Popover
+        bind:open={roomDeviceUi.cameraPopoverOpen}
+        placement="top-end"
+        role="dialog"
+        ariaLabel="Настройки камеры"
+        rootClass="dock-anchor"
+        panelClass="device-popover camera-popover"
+        keepContentMounted
+      >
+        {#snippet trigger({ open, panelId })}
+          <div class="dock-split">
+            <button
+              class="dock-button camera-button"
+              id="cameraButton"
+              type="button"
+              aria-pressed={cameraControls.ariaPressed}
+              aria-label={cameraControls.label}
+              data-state={cameraControls.stateName}
+              disabled={cameraControls.disabled}
+              onclick={() => void toggleCamera()}
+            >
+              <span class="dock-icon dock-icon-camera" aria-hidden="true"><Video /></span>
+              <span class="dock-icon dock-icon-camera-off" aria-hidden="true"><VideoOff /></span>
+              <span class="sr-only">{cameraControls.label}</span>
+            </button>
+            <button
+              class="dock-menu-button"
+              id="cameraMenuButton"
+              type="button"
+              aria-expanded={open}
+              aria-controls={panelId}
+              aria-label="Выбрать камеру"
+              onclick={toggleCameraPopover}
+            >
+              <ChevronDown />
+            </button>
+          </div>
+        {/snippet}
+
+        {#snippet content()}
+          <label class="field">
+            <span>Камера</span>
+            <Select
+              bind:value={roomDeviceUi.cameraId}
+              options={roomDeviceUi.cameraOptions}
+              label="Камера"
+              variant="dock"
+              flip
+              onValueChange={() => void switchCamera(roomDeviceUi.cameraId)}
             />
           </label>
         {/snippet}

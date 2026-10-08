@@ -133,6 +133,7 @@ export async function refreshDevices(): Promise<void> {
   const devices = await navigator.mediaDevices.enumerateDevices();
   const microphones = devices.filter((device) => device.kind === 'audioinput');
   const outputs = devices.filter((device) => device.kind === 'audiooutput');
+  const cameras = devices.filter((device) => device.kind === 'videoinput');
 
   roomDeviceUi.microphoneOptions = buildDeviceOptions(microphones, {
     defaultLabel: 'Системный',
@@ -158,6 +159,12 @@ export async function refreshDevices(): Promise<void> {
     roomDeviceUi.outputDeviceId = currentOutputId;
     confirmedOutputDeviceId = currentOutputId;
   }
+
+  roomDeviceUi.cameraOptions = buildDeviceOptions(cameras, {
+    defaultLabel: 'Системная',
+    fallbackLabel: 'Камера'
+  });
+  roomDeviceUi.cameraId = hasOptionValue(roomDeviceUi.cameraOptions, state.cameraDeviceId) ? state.cameraDeviceId : '';
 
   syncOutputDeviceUiStateSoon();
 }
@@ -313,4 +320,8 @@ export function closeDevicePopover(): void {
 
 export function closeOutputPopover(): void {
   roomDeviceUi.outputPopoverOpen = false;
+}
+
+export function closeCameraPopover(): void {
+  roomDeviceUi.cameraPopoverOpen = false;
 }
