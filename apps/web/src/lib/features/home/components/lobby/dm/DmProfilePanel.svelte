@@ -140,7 +140,7 @@
   }
   :global(.lobby-profile-stat) {
     background: var(--vr-surface-3);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    border: 1px solid var(--vr-line);
     border-radius: 13px;
     padding: 13px 14px;
   }
@@ -163,7 +163,7 @@
     align-items: center;
     justify-content: flex-start;
     gap: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--vr-line-strong);
     background: var(--vr-surface-3);
     color: var(--vr-text);
     border-radius: 12px;
@@ -183,7 +183,7 @@
     color: var(--vr-accent);
   }
   :where(.lobby-profile-action):hover {
-    border-color: rgba(255, 255, 255, 0.16);
+    border-color: var(--vr-line-strong);
     background: var(--vr-surface-3-hover);
     color: var(--vr-text);
   }

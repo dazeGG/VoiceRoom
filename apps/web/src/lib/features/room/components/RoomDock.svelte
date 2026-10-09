@@ -5,11 +5,11 @@
     Headphones,
     Mic,
     MicOff,
+    PhoneOff,
     ScreenShare,
     ScreenShareOff,
     Video,
-    VideoOff,
-    X
+    VideoOff
   } from '@lucide/svelte';
   import { Popover, Select, Slider } from '$lib/shared/ui';
   import { NOISE_MODE_SELECT_OPTIONS, roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
@@ -364,7 +364,7 @@
       hidden={screenUi.hideLeaveButton}
       onclick={handleLeaveButtonClick}
     >
-      <X aria-hidden="true" />
+      <PhoneOff aria-hidden="true" />
     </button>
     <button
       class="dock-button screen-exit-button"
@@ -394,7 +394,7 @@
   :global(.dock-connection-label) {
     font-size: 12.5px;
     font-weight: 600;
-    color: #bcd6c6;
+    color: var(--vr-text);
   }
   :global(.dock-volume-head) {
     display: flex;
@@ -404,9 +404,10 @@
     margin-bottom: var(--space-xs);
   }
   :where(.dock-volume-head) output {
-    color: oklch(96% 0.008 92);
+    color: var(--vr-text);
+    font-family: var(--font-mono);
     font-size: 0.78rem;
-    font-weight: 800;
+    font-weight: 500;
     font-variant-numeric: tabular-nums;
   }
   :global(.gate-field-head) {
@@ -420,7 +421,7 @@
     width: 36px;
     height: 20px;
     padding: 0;
-    border: 1px solid oklch(100% 0 0 / 0.12);
+    border: 0;
     border-radius: 10px;
     background: var(--vr-surface-3);
     cursor: pointer;
@@ -435,8 +436,7 @@
     border-radius: var(--radius-pill);
   }
   :where(.gate-switch)[aria-checked='true'] {
-    border-color: oklch(72% 0.14 164 / 0.55);
-    background: color-mix(in oklch, var(--vr-online) 30%, transparent);
+    background: var(--vr-accent);
   }
   :global(.gate-switch-knob) {
     position: absolute;
@@ -452,6 +452,6 @@
   }
   :where(.gate-switch)[aria-checked='true'] .gate-switch-knob {
     left: 17px;
-    background: var(--vr-online);
+    background: var(--vr-accent-ink);
   }
 </style>

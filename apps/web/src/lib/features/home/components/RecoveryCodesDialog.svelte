@@ -192,7 +192,7 @@
     gap: 8px 16px;
     margin: 14px 0;
     padding: 14px 16px 14px 36px;
-    border: 1px solid var(--vr-line-strong, rgba(255, 255, 255, 0.1));
+    border: 1px solid var(--vr-line-strong, var(--vr-line-strong));
     border-radius: 12px;
     background: var(--vr-bg);
     color: var(--vr-text-3);

@@ -50,12 +50,13 @@
   }
 
   .structured-message__mention {
-    padding: 0;
+    padding: 0 3px;
     border: 0;
-    background: transparent;
+    border-radius: 5px;
+    background: var(--vr-accent-soft);
     color: var(--vr-accent);
     font: inherit;
-    font-weight: 600;
+    font-weight: 500;
   }
 
   button.structured-message__mention {
@@ -64,8 +65,7 @@
 
   button.structured-message__mention:hover,
   button.structured-message__mention:focus-visible {
-    border-radius: 4px;
-    background: color-mix(in oklch, var(--vr-accent), transparent 84%);
+    background: var(--vr-accent-soft-hover);
     outline: none;
   }
 </style>

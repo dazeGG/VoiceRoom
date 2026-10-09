@@ -12,10 +12,8 @@
 
 .field span {
   color: var(--vr-text-2);
-  font-size: 0.8rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .name-status {
@@ -26,37 +24,33 @@
 }
 
 .name-status[data-state='saved'] {
-  color: oklch(82% 0.018 92);
+  color: var(--vr-text-2);
 }
 
 .name-status[data-state='dirty'] {
-  color: color-mix(in oklch, var(--vr-away), var(--vr-text) 36%);
+  color: var(--vr-away);
 }
 
 input,
 select {
   width: 100%;
-  min-height: 46px;
+  min-height: 44px;
   border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-sm);
-  padding: 0 12px;
-  background: var(--vr-bg);
+  border-radius: 12px;
+  padding: 0 14px;
+  background: var(--vr-surface-2);
   color: var(--vr-text);
   outline: none;
-  transition:
-    background 150ms var(--ease-out),
-    border-color 150ms var(--ease-out),
-    box-shadow 150ms var(--ease-out);
+  transition: border-color 150ms var(--ease-out);
 }
 
 input::placeholder {
-  color: oklch(58% 0.025 88);
+  color: var(--vr-text-3);
 }
 
 input:hover,
 select:hover {
-  border-color: color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 16%);
-  background: var(--vr-surface-2);
+  border-color: var(--vr-line-strong);
 }
 
 input:focus,
@@ -64,76 +58,78 @@ input:focus-visible,
 select:focus,
 select:focus-visible {
   outline: none;
-  border-color: var(--focus-border);
-  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  border-color: var(--vr-accent-line);
   box-shadow: none;
 }
 
 button:focus-visible {
-  outline: none;
-  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  outline: 2px solid var(--vr-accent);
+  outline-offset: 2px;
   box-shadow: none;
 }
 
 .primary-button {
   width: 100%;
-  border-color: color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 20%);
-  background: var(--vr-text);
-  color: oklch(9% 0.012 92);
-  font-weight: 800;
+  border-color: transparent;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+  font-weight: 600;
 }
 
 .secondary-button {
   width: 100%;
-  background: var(--vr-surface);
+  background: var(--vr-surface-2);
   color: var(--vr-text);
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .primary-button:hover {
-  background: var(--vr-text);
+  background: var(--vr-accent-hover);
 }
 
 .secondary-button:hover {
   background: var(--vr-surface-3);
 }
 
+/* The dock floats over the bottom of the stage, centred in it whatever the
+   rail or the lobby sidebar take up. */
 .room-dock {
-  position: fixed;
+  position: absolute;
   right: 0;
-  bottom: max(var(--space-lg), env(safe-area-inset-bottom));
+  bottom: 20px;
   left: 0;
   z-index: 3;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding-inline: var(--space-lg);
+  padding-inline: 20px;
   pointer-events: none;
 }
 
-/* Single rounded pill holding every control — recreates VoiceDock.dc.html 1:1. */
 .dock-shell {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 9px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  border: 1px solid var(--vr-line-strong);
   border-radius: 18px;
-  padding: 10px 11px;
-  background: color-mix(in srgb, color-mix(in srgb, var(--vr-surface-2) 60%, var(--vr-bg)) 90%, transparent);
+  padding: 8px;
+  background: var(--vr-dock-bg);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--vr-shadow-dock);
   pointer-events: auto;
 }
 
-/* Mic / headphones split. The outer cluster is a positioning anchor for the
-   settings popover; the inner .dock-split is the rounded-rect that clips the
-   toggle + chevron into one pill. */
+/* Mic / headphones / camera: a toggle plus a chevron that picks the device. The
+   outer cluster anchors the settings popover; the inner split clips the two
+   halves into one rounded block that takes the state colour. */
 .dock-cluster {
   display: flex;
 }
 
-/* Anchor popover centering to the mic/headphones split pill (toggle + chevron). */
 .dock-anchor {
   position: relative;
   width: fit-content;
@@ -142,10 +138,22 @@ button:focus-visible {
 .dock-split {
   display: flex;
   align-items: stretch;
-  height: 46px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 13px;
+  height: 44px;
+  border-radius: 12px;
   overflow: hidden;
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
+}
+
+.dock-split:has(.mic-button[data-state='muted']),
+.dock-split:has(.output-button[data-state='muted']) {
+  background: var(--vr-danger-off);
+  color: var(--vr-danger);
+}
+
+.dock-split:has(.camera-button[data-state='on']) {
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
 }
 
 .dock-button,
@@ -156,6 +164,7 @@ button:focus-visible {
   padding: 0;
   border: 0;
   background: transparent;
+  color: inherit;
   cursor: pointer;
   pointer-events: auto;
   transition:
@@ -163,37 +172,30 @@ button:focus-visible {
     color 150ms var(--ease-out);
 }
 
-/* Toggle half of a split (mic / headphones / camera). */
 .mic-button,
 .output-button,
 .camera-button {
-  width: 46px;
-  height: 46px;
-  background: var(--vr-surface-3);
-  color: #d7d1c2;
-}
-
-.mic-button {
   position: relative;
+  width: 44px;
+  height: 44px;
 }
 
 .mic-button:hover,
 .output-button:hover,
-.camera-button:hover {
-  background: var(--vr-surface-3-hover);
+.camera-button:hover,
+.dock-menu-button:hover {
+  background: var(--vr-hover);
 }
 
-/* Settings-chevron half. */
 .dock-menu-button {
-  width: 26px;
-  height: 46px;
-  border-left: 1px solid rgba(255, 255, 255, 0.09);
-  background: var(--vr-surface-3);
-  color: var(--vr-text-3);
+  width: 24px;
+  height: 44px;
+  border-left: 1px solid var(--vr-line);
+  opacity: 0.7;
 }
 
 .dock-menu-button:hover {
-  background: var(--vr-surface-3-hover);
+  opacity: 1;
 }
 
 /* Standalone square buttons (screen / leave / connection). */
@@ -201,10 +203,10 @@ button:focus-visible {
 .leave-button,
 .screen-exit-button,
 .dock-connection {
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
-  border-radius: 13px;
+  border-radius: 12px;
 }
 
 .dock-button svg {
@@ -222,22 +224,9 @@ button:focus-visible {
   place-items: center;
 }
 
-/* Muted / deafened toggles turn coral, matching VoiceDock. */
-.mic-button[data-state='muted'],
-.output-button[data-state='muted'] {
-  background: color-mix(in oklch, var(--vr-danger) 16%, transparent);
-  color: #e8a094;
-}
-
-.mic-button[data-state='muted']:hover,
-.output-button[data-state='muted']:hover {
-  background: color-mix(in oklch, var(--vr-danger) 24%, transparent);
-}
-
 .screen-button {
-  border: 1px solid rgba(255, 255, 255, 0.08);
   background: var(--vr-surface-3);
-  color: #d7d1c2;
+  color: var(--vr-text);
 }
 
 .screen-button:hover {
@@ -249,15 +238,14 @@ button:focus-visible {
   opacity: 0.5;
 }
 
+/* Sharing the screen fills the button with the accent. */
 .screen-button[data-state='live'] {
-  border-color: color-mix(in oklch, var(--vr-online), var(--vr-line-strong) 18%);
-  background: var(--vr-online);
-  color: oklch(99% 0.004 92);
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
 }
 
 .screen-button[data-state='live']:hover {
   background: var(--vr-accent-hover);
-  color: oklch(99% 0.004 92);
 }
 
 .dock-icon-muted,
@@ -273,9 +261,9 @@ button:focus-visible {
   display: grid;
 }
 
-.mic-button[data-state='ptt-active'] {
-  background: color-mix(in oklch, var(--vr-online) 16%, transparent);
-  color: #a8e2c5;
+.dock-split:has(.mic-button[data-state='ptt-active']) {
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
 }
 
 .dock-ptt-badge {
@@ -284,17 +272,17 @@ button:focus-visible {
   bottom: 2px;
   border-radius: 4px;
   padding: 1px 3px;
-  background: color-mix(in oklch, var(--vr-line-strong) 60%, transparent);
+  background: var(--vr-hover);
   color: var(--vr-text-2);
   font-size: 7px;
-  font-weight: 800;
+  font-weight: 700;
   line-height: 1.15;
   letter-spacing: 0.04em;
 }
 
 .dock-ptt-badge[data-active='true'] {
-  background: color-mix(in oklch, var(--vr-online) 28%, transparent);
-  color: #c4efd9;
+  background: var(--vr-accent-soft-hover);
+  color: var(--vr-accent);
 }
 
 .output-button[data-state='muted'] .dock-icon-output-muted {
@@ -305,7 +293,6 @@ button:focus-visible {
   display: grid;
 }
 
-/* Camera: off by default (crossed icon); on reads green like an active PTT. */
 .camera-button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
@@ -320,17 +307,7 @@ button:focus-visible {
   display: grid;
 }
 
-.camera-button[data-state='on'] {
-  background: color-mix(in oklch, var(--vr-online) 16%, transparent);
-  color: #a8e2c5;
-}
-
-.camera-button[data-state='on']:hover {
-  background: color-mix(in oklch, var(--vr-online) 24%, transparent);
-}
-
-/* Connection: signal bars + a ping popover on hover (VoiceDock). Colour tracks
-   the same state machine the old top-bar status pill used. */
+/* Connection: signal bars, with the ping on hover. */
 .dock-connection-wrap {
   position: relative;
   display: flex;
@@ -340,22 +317,17 @@ button:focus-visible {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  gap: 2.5px;
-  padding: 14px 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  gap: 3px;
+  padding: 0 0 14px;
   background: var(--vr-surface-3);
   pointer-events: auto;
   cursor: default;
 }
 
-.dock-connection:hover {
-  background: var(--vr-surface-3-hover);
-}
-
 .dock-bar {
   width: 3px;
-  border-radius: 1.5px;
-  background: var(--vr-line-strong);
+  border-radius: 2px;
+  background: var(--vr-text-3);
 }
 
 .dock-bar:nth-child(1) {
@@ -371,7 +343,7 @@ button:focus-visible {
 }
 
 .dock-connection[data-state='connected'] .dock-bar {
-  background: var(--vr-online);
+  background: var(--vr-accent);
 }
 
 .dock-connection[data-state='connecting'] .dock-bar {
@@ -395,27 +367,15 @@ button:focus-visible {
   align-items: center;
   gap: 8px;
   white-space: nowrap;
-  border: 1px solid rgba(255, 255, 255, 0.11);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 10px;
   padding: 8px 12px;
   background: var(--vr-surface-2);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+  box-shadow: var(--vr-shadow-popover);
 }
 
 .dock-connection-wrap:hover .dock-connection-popover {
   display: flex;
-}
-
-.dock-connection-popover::after {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  width: 0;
-  height: 0;
-  transform: translateX(-50%);
-  border: 5px solid transparent;
-  border-top-color: var(--vr-surface-2);
 }
 
 .dock-connection-dot {
@@ -423,7 +383,7 @@ button:focus-visible {
   height: 7px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: var(--vr-online);
+  background: var(--vr-accent);
 }
 
 .dock-connection[data-state='connecting'] + .dock-connection-popover .dock-connection-dot {
@@ -439,46 +399,29 @@ button:focus-visible {
 }
 
 .dock-connection[data-state='idle'] + .dock-connection-popover .dock-connection-dot {
-  background: var(--vr-line-strong);
+  background: var(--vr-text-3);
 }
 
-/* Keep the floating dock centred in the lobby main area (not over the sidebar). */
-body[data-lobby-embedded='true'] .room-dock {
-  left: var(--lobby-sidebar-width, 312px);
-}
-
-/* Keep the floating dock centred in the voice area when the chat rail is open. */
-@media (min-width: 901px) {
-  body[data-chat-open='true'] .room-dock {
-    right: var(--room-panel-width);
-  }
-
-  body[data-lobby-embedded='true'][data-chat-open='true'] .room-dock {
-    left: var(--lobby-sidebar-width, 312px);
-    right: var(--room-panel-width);
-  }
-}
-
-.leave-button {
-  border: 1px solid rgba(216, 99, 74, 0.5);
-  background: var(--vr-danger);
-  color: #fff;
-  pointer-events: auto;
-}
-
-.leave-button:hover {
-  background: color-mix(in oklch, var(--vr-danger), var(--vr-bg) 16%);
-}
-
+.leave-button,
 .screen-exit-button {
-  border: 1px solid rgba(216, 99, 74, 0.5);
   background: var(--vr-danger);
-  color: #fff;
+  color: var(--vr-on-danger);
   pointer-events: auto;
 }
 
+.leave-button:hover,
 .screen-exit-button:hover {
-  background: color-mix(in oklch, var(--vr-danger), var(--vr-bg) 16%);
+  background: color-mix(in oklch, var(--vr-danger), var(--vr-on-danger) 12%);
+}
+
+/* A narrow stage drops the device chevrons and the signal bars and lets the
+   dock wrap. */
+@container stage (max-width: 619px) {
+  .dock-menu-button,
+  .dock-connection-wrap,
+  .dock-divider {
+    display: none;
+  }
 }
 
 /* .dock-anchor prefix bumps specificity above Popover's own scoped
@@ -498,12 +441,12 @@ body[data-lobby-embedded='true'] .room-dock {
   /* Visible overflow: Select listboxes are absolutely positioned inside the
      panel; hidden clipped long device lists when a dropdown opened. */
   overflow: visible;
-  border: 1px solid oklch(34% 0.02 92);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 18px;
   padding: var(--space-lg);
   background: var(--vr-surface-2);
-  color: oklch(96% 0.008 92);
-  box-shadow: 0 22px 54px oklch(6% 0.02 92 / 0.46);
+  color: var(--vr-text);
+  box-shadow: var(--vr-shadow-popover);
 }
 
 .device-popover .field {
@@ -533,9 +476,10 @@ body[data-lobby-embedded='true'] .room-dock {
 }
 
 .gate-control output {
-  color: oklch(96% 0.008 92);
+  color: var(--vr-text);
+  font-family: var(--font-mono);
   font-size: 0.78rem;
-  font-weight: 800;
+  font-weight: 500;
   text-align: right;
   white-space: nowrap;
 }
@@ -544,7 +488,7 @@ body[data-lobby-embedded='true'] .room-dock {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, color-mix(in oklch, var(--vr-online), var(--vr-bg) 22%), var(--vr-online));
+  background: var(--vr-accent);
   transform: scaleX(0);
   transform-origin: left center;
   transition:
@@ -553,7 +497,7 @@ body[data-lobby-embedded='true'] .room-dock {
 }
 
 .mic-level-fill[data-state='closed'] {
-  background: linear-gradient(90deg, var(--vr-surface-3), var(--vr-surface-3-hover));
+  background: var(--vr-surface-3-hover);
 }
 
 .sound-button {

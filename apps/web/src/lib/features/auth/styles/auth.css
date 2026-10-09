@@ -61,14 +61,14 @@
 
 .auth-dialog-close:focus-visible,
 .auth-link:focus-visible {
-  outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));
+  outline: 2px solid var(--focus-border);
   outline-offset: 3px;
 }
 
 .auth-input {
   width: 100%;
   min-height: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 12px;
   padding: 13px 15px;
   background: var(--vr-bg);
@@ -84,13 +84,13 @@
 }
 
 .auth-input:hover {
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: var(--vr-line-strong);
   background: var(--vr-bg);
 }
 
 .auth-input:focus {
   border-color: var(--focus-border);
-  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  border-color: var(--focus-border);
   box-shadow: none;
 }
 
@@ -99,7 +99,7 @@
   align-items: center;
   gap: 4px;
   padding: 0 8px 0 15px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 12px;
   background: var(--vr-bg);
   transition: border-color 0.15s ease;
@@ -107,7 +107,7 @@
 
 .auth-password:focus-within {
   border-color: var(--focus-border);
-  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  border-color: var(--focus-border);
   box-shadow: none;
 }
 

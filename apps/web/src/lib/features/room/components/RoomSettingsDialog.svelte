@@ -315,7 +315,7 @@
   }
 
   .dialog-danger-zone {
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 1px solid var(--vr-line);
     margin-top: 4px;
     padding-top: 14px;
   }
@@ -385,7 +385,7 @@
     -moz-appearance: none;
     appearance: none;
     padding: 13px 40px 13px 15px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 12px;
     background: var(--vr-bg);
     color: var(--vr-text);

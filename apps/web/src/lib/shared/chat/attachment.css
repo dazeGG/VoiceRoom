@@ -7,9 +7,9 @@
   align-items: stretch;
   gap: 0;
   min-width: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 13px;
-  background: var(--vr-bg);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 14px;
+  background: var(--vr-surface-2);
   transition: border-color 0.15s ease;
 }
 
@@ -20,13 +20,13 @@
 }
 
 .attachment-compose-field:focus-within {
-  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  border-color: var(--vr-accent-line);
 }
 
 .attachment-compose-field textarea,
 .attachment-compose-field [role='textbox'] {
   border: 0 !important;
-  background: var(--vr-bg) !important;
+  background: var(--vr-surface-2) !important;
   box-shadow: none !important;
 }
 

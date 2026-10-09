@@ -43,7 +43,7 @@
   flex-direction: column;
   width: min(1040px, 100%);
   max-height: min(740px, calc(100vh - 48px));
-  border: 1px solid oklch(100% 0 0 / 0.1);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 22px;
   overflow: hidden;
   background:
@@ -68,7 +68,7 @@
   font-weight: 800;
   line-height: 1.08;
   letter-spacing: -0.02em;
-  color: oklch(96% 0.008 92);
+  color: var(--vr-text);
 }
 
 /* Tabs */

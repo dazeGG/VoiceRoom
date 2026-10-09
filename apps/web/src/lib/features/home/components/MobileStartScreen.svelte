@@ -72,7 +72,7 @@
     gap: 14px;
     width: min(440px, 100%);
     padding: clamp(22px, 6vw, 30px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--vr-line-strong);
     border-radius: var(--radius-xl);
     background: var(--vr-surface-2);
     box-shadow: var(--vr-shadow-popover);
@@ -146,7 +146,7 @@
     align-items: center;
     gap: 6px;
     padding: 6px 11px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--vr-line);
     border-radius: var(--radius-pill);
     background: var(--vr-surface-3);
     color: var(--vr-text);

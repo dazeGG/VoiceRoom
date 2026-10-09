@@ -45,7 +45,7 @@
   style:height={`${size}px`}
   style:font-size={`${fontSize}px`}
   style:background={background || palette.background}
-  style:color={foreground || palette.foreground}
+  style:color={foreground || (background ? 'var(--vr-text)' : palette.foreground)}
   aria-hidden="true"
 >
   {#if src && !imageFailed}

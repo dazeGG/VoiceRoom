@@ -1,6 +1,6 @@
-/* In-room chat as a collapsible right rail (screen 02b of the «Комнаты и чат
-   v2» design). It sits in-flow beside the voice stage and is toggled by the
-   «Чат» button in the top bar; when hidden it leaves no layout footprint. */
+/* In-room chat as a collapsible right rail. In-flow beside the stage on wide
+   windows (layout.css gives it its own grid column), floating over the stage
+   below 1200px. The lobby preview uses the same panel. */
 
 :root {
   --room-panel-width: 360px;
@@ -13,30 +13,33 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-left: 1px solid rgba(255, 255, 255, 0.07);
-  background: color-mix(in oklch, var(--vr-bg), transparent 45%);
+  border-left: 1px solid var(--vr-line);
+  background: var(--vr-surface);
 }
 
 .room-chat-rail[hidden] {
   display: none;
 }
 
-@media (min-width: 901px) {
-  .room-chat-rail {
-    position: fixed;
+/* The rail takes the second column of the room grid, over the full height. */
+body[data-screen='room'] .room-chat-rail {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  min-width: 0;
+}
+
+/* Below 1200px the rail floats over the stage instead of squeezing it. */
+@media (max-width: 1199px) {
+  body[data-screen='room'] .room-chat-rail {
+    position: absolute;
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
     top: 0;
     right: 0;
     bottom: 0;
-    z-index: 18;
-    height: 100dvh;
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in oklch, var(--vr-surface-2), transparent 4%),
-        color-mix(in oklch, var(--vr-bg), transparent 2%)
-      ),
-      var(--vr-bg);
-    box-shadow: -22px 0 54px rgba(0, 0, 0, 0.28);
+    z-index: 6;
+    max-width: 100%;
+    box-shadow: -24px 0 60px oklch(0% 0 0 / 0.45);
   }
 }
 
@@ -44,19 +47,27 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   padding: 12px 14px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--vr-line);
 }
 
+/* Segment control shared by the top bar (icons) and the rail header (words). */
 .room-panel-tabs {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
   padding: 3px;
+  border: 1px solid var(--vr-line);
   border-radius: 11px;
-  background: color-mix(in oklch, var(--vr-surface-3), transparent 36%);
+  background: var(--vr-surface-2);
+}
+
+.chat-rail-head .room-panel-tabs {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
 }
 
 .room-panel-tabs button {
@@ -64,62 +75,75 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
+  gap: 6px;
   width: 36px;
-  height: 34px;
+  height: 30px;
   border: 0;
   border-radius: 8px;
   padding: 0;
   background: transparent;
-  color: var(--vr-text-3);
+  color: var(--vr-text-2);
   font-family: var(--font-ui);
-  font-size: 12.5px;
-  font-weight: 650;
+  font-size: 13.5px;
+  font-weight: 500;
   cursor: pointer;
   transition:
     background 0.15s ease,
-    color 0.15s ease,
-    box-shadow 0.15s ease;
+    color 0.15s ease;
+}
+
+.chat-rail-head .room-panel-tabs button {
+  width: auto;
+}
+
+.room-panel-tab-count {
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 400;
 }
 
 .room-panel-tab-unread {
   position: absolute;
   top: 5px;
-  right: 5px;
-  width: 6px;
-  height: 6px;
-  border: 1px solid var(--vr-surface-2);
+  right: 7px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: var(--vr-accent);
+  box-shadow: 0 0 0 2px var(--vr-surface-2);
+}
+
+.chat-rail-head .room-panel-tab-unread {
+  position: static;
+  box-shadow: none;
 }
 
 .room-panel-tabs button:hover {
-  color: #d5cfbf;
+  color: var(--vr-text);
 }
 
 .room-panel-tabs button[data-active='true'] {
-  background: color-mix(in oklch, var(--vr-surface-3), transparent 18%);
-  color: #f0eadc;
-  box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.06),
-    0 3px 10px rgba(0, 0, 0, 0.18);
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
 }
 
 .room-panel-tabs button:focus-visible {
-  outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));
+  outline: 2px solid var(--vr-accent);
   outline-offset: 2px;
 }
 
 .chat-rail-collapse {
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border: none;
   border-radius: 9px;
-  background: var(--vr-surface-3);
-  color: var(--vr-text-3);
+  background: transparent;
+  color: var(--vr-text-2);
   cursor: pointer;
   transition:
     background 0.15s ease,
@@ -127,7 +151,7 @@
 }
 
 .chat-rail-collapse:hover {
-  background: var(--vr-surface-3-hover);
+  background: var(--vr-hover);
   color: var(--vr-text);
 }
 
@@ -146,21 +170,21 @@
 
 .chat-day-divider span {
   flex: none;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--vr-line);
   border-radius: 999px;
-  padding: 5px 13px;
-  background: color-mix(in oklch, var(--vr-surface-2), transparent 8%);
-  color: var(--vr-text);
+  padding: 4px 12px;
+  background: var(--vr-surface);
+  color: var(--vr-text-3);
   font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.08em;
-  backdrop-filter: blur(8px);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .chat-msg {
   position: relative;
   display: flex;
-  gap: 11px;
+  gap: 10px;
   isolation: isolate;
 }
 
@@ -169,18 +193,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  color: #f3eee2;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .chat-avatar-button {
   flex: none;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -199,14 +222,15 @@
 }
 
 .chat-msg-author {
-  font-size: 13.5px;
-  font-weight: 700;
+  color: var(--vr-text);
+  font-size: 14px;
+  font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* Message rows reach 45px into the avatar column to widen the hover target, and
+/* Message rows reach 42px into the avatar column to widen the hover target, and
    being positioned they paint over it. Lift the identity triggers back on top so
    the avatar and the name stay clickable. */
 .chat-avatar-button,
@@ -240,7 +264,7 @@ button.chat-msg-author {
 
 .chat-msg-avatar.chat-msg-trigger:hover,
 .chat-msg-avatar.chat-msg-trigger:focus-visible {
-  outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));
+  outline: 2px solid var(--vr-accent);
   outline-offset: 2px;
 }
 
@@ -248,7 +272,7 @@ button.chat-msg-author {
   flex: none;
   color: var(--vr-text-3);
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 11px;
 }
 
 .chat-msg-text {
@@ -260,72 +284,57 @@ button.chat-msg-author {
   display: flex;
   min-width: 0;
   align-items: flex-start;
-  width: calc(100% + 45px);
-  margin: 2px 0 0 -45px;
-  padding: 3px 38px 3px 45px;
-  color: #c4bdac;
-  font-size: 13.5px;
-  line-height: 1.5;
+  width: calc(100% + 42px);
+  margin: 2px 0 0 -42px;
+  padding: 3px 38px 3px 42px;
+  color: var(--vr-text);
+  font-size: 14px;
+  line-height: 1.45;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
+/* The hover wash spans the whole row; on the first message of a group it
+   reaches up to take in the avatar and the name. */
 .chat-msg-text::before {
   content: '';
   position: absolute;
   z-index: -1;
   inset: -3px -20px;
+  border-radius: 12px;
   background: transparent;
   transition: background 120ms ease;
 }
 
 .chat-msg-text[data-group-first='true']::before {
   top: -25px;
-  left: -45px;
+  left: -42px;
 }
 
 .chat-msg-text:hover::before,
 .chat-msg-text:focus-within::before {
-  background: color-mix(in oklch, var(--vr-surface-3), transparent 65%);
+  background: var(--vr-hover);
 }
 
-/* A message that names you stays lit with a marker down its edge, so it is
-   findable by scrolling back rather than only at the moment it arrives. The
-   hover and context-menu rules come later and still win, so pointing at it
-   behaves like pointing at any other message. */
+/* A message that names you stays lit, so it is findable by scrolling back. The
+   hover and context-menu rules come later and still win. */
 .chat-msg-text.mentions-me::before {
-  background: color-mix(in oklch, var(--vr-online), transparent 90%);
+  background: color-mix(in oklch, var(--vr-accent), transparent 95%);
 }
 
-/* The marker spans whatever the tint spans, so on the first message of a group
-   it runs past the author line rather than starting halfway down. */
-.chat-msg-text.mentions-me::after {
-  content: '';
-  position: absolute;
-  top: -3px;
-  bottom: -3px;
-  left: -20px;
-  width: 2px;
-  border-radius: 2px;
-  background: var(--vr-online);
-}
-
-/* Room above the author line to match the room below the text: without it the
-   tint started flush against the avatar while the bottom kept its padding. */
-.chat-msg-text.mentions-me[data-group-first='true']::before,
-.chat-msg-text.mentions-me[data-group-first='true']::after {
+.chat-msg-text.mentions-me[data-group-first='true']::before {
   top: -30px;
 }
 
 /* While its context menu is open the message stays lit, so it is obvious which
    message the menu belongs to. */
 .chat-msg-text.is-context::before {
-  background: color-mix(in oklch, var(--vr-accent), transparent 92%);
+  background: var(--vr-accent-soft);
 }
 
 /* Brief flash after jumping here from the pinned bar. */
 .chat-msg-text.is-highlighted::before {
-  background: color-mix(in oklch, var(--vr-accent), transparent 86%);
+  background: var(--vr-accent-soft-hover);
   transition: background 400ms ease;
 }
 
@@ -348,12 +357,11 @@ button.chat-msg-author {
   align-items: center;
   gap: 4px;
   overflow: visible;
-  padding: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--vr-surface-2) 94%, transparent);
-  backdrop-filter: blur(20px);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  padding: 4px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 12px;
+  background: var(--vr-surface-2);
+  box-shadow: var(--vr-shadow-popover);
   opacity: 0;
   transform: translateY(2px);
   pointer-events: none;
@@ -393,11 +401,11 @@ button.chat-msg-author {
 }
 .chat-msg-actions > button {
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   place-items: center;
   border: 0;
-  border-radius: 12px;
+  border-radius: 9px;
   padding: 0;
   background: transparent;
   color: var(--vr-text-2);
@@ -409,13 +417,13 @@ button.chat-msg-author {
 
 .chat-msg-actions button:hover,
 .chat-msg-actions button:focus-visible {
-  background: color-mix(in oklch, var(--vr-accent), transparent 86%);
+  background: var(--vr-hover);
   color: var(--vr-text);
   outline: none;
 }
 .chat-msg-actions .chat-msg-action-danger:hover,
 .chat-msg-actions .chat-msg-action-danger:focus-visible {
-  background: color-mix(in oklch, var(--vr-danger), transparent 86%);
+  background: var(--vr-danger-hover);
   color: var(--vr-danger);
 }
 
@@ -434,18 +442,18 @@ button.chat-msg-author {
   min-height: 54px;
   max-height: 180px;
   box-sizing: border-box;
-  border: 1px solid rgba(255, 255, 255, 0.13);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 8px;
   outline: none;
-  background: var(--vr-bg);
-  color: #d8d1c0;
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
   font: inherit;
   line-height: 1.45;
   padding: 7px 9px;
 }
 
 .chat-msg-edit-input:focus {
-  border-color: rgba(184, 166, 120, 0.58);
+  border-color: var(--vr-accent-line);
 }
 
 .chat-msg-edit-actions {
@@ -455,10 +463,10 @@ button.chat-msg-author {
 }
 
 .chat-msg-edit-actions button {
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 6px;
   background: var(--vr-surface-3);
-  color: #aaa393;
+  color: var(--vr-text-2);
   cursor: pointer;
   font-size: 10px;
   padding: 4px 7px;
@@ -485,7 +493,7 @@ button.chat-msg-author {
   padding: 0 2px;
 }
 .chat-msg-delete:hover {
-  color: #c66;
+  color: var(--vr-danger);
   opacity: 1;
 }
 .chat-msg[data-self='true'] .chat-msg-delete {
@@ -509,10 +517,10 @@ button.chat-msg-author {
   flex: 1;
   min-width: 0;
   min-height: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 13px;
   padding: 10px 14px;
-  background: var(--vr-bg);
+  background: var(--vr-surface-2);
   color: var(--vr-text);
   font-family: var(--font-ui);
   font-size: 14px;
@@ -547,13 +555,14 @@ button.chat-msg-author {
 
 .chat-rail-input:focus,
 .chat-rail-input:focus-visible {
-  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  border-color: var(--vr-accent-line);
   box-shadow: none;
 }
 
 /* On narrow screens the rail overlays the room instead of squeezing the grid. */
 @media (max-width: 900px) {
-  .room-chat-rail {
+  .room-chat-rail,
+  body[data-screen='room'] .room-chat-rail {
     position: fixed;
     top: 76px;
     right: 12px;
@@ -561,15 +570,35 @@ button.chat-msg-author {
     left: 12px;
     width: auto;
     z-index: 20;
-    border: 1px solid rgba(255, 255, 255, 0.09);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 18px;
-    background:
-      linear-gradient(
-        180deg,
-        color-mix(in oklch, var(--vr-surface-2), transparent 2%),
-        color-mix(in oklch, var(--vr-bg), transparent 2%)
-      ),
-      var(--vr-bg);
-    box-shadow: 0 22px 44px rgba(0, 0, 0, 0.4);
+    background: var(--vr-surface);
+    box-shadow: var(--vr-shadow-popover);
   }
+}
+
+.chat-rail-send {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin: 6px 6px 6px 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.chat-rail-send:hover:not(:disabled) {
+  background: var(--vr-accent-hover);
+}
+
+.chat-rail-send:disabled {
+  background: var(--vr-surface-3);
+  color: var(--vr-text-3);
+  cursor: default;
+  opacity: 1;
 }

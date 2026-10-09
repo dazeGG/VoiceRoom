@@ -181,7 +181,7 @@
     justify-items: center;
     gap: 6px;
     padding: 28px 16px;
-    border: 1px dashed rgba(255, 255, 255, 0.09);
+    border: 1px dashed var(--vr-line);
     border-radius: 14px;
     color: var(--vr-text-3);
     font-size: 12.5px;
@@ -263,7 +263,7 @@
   .room-bans-more {
     justify-self: stretch;
     min-height: 38px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 10px;
     background: transparent;
     color: var(--vr-text);

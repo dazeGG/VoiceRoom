@@ -187,7 +187,7 @@
     align-items: center;
     margin: 16px 0 18px;
     padding: 12px 14px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--vr-line);
     border-radius: 12px;
     background: var(--vr-bg);
   }
@@ -263,7 +263,7 @@
   }
 
   .login-alert-button--ghost {
-    border-color: rgba(255, 255, 255, 0.12);
+    border-color: var(--vr-line-strong);
     background: transparent;
     color: var(--vr-text);
   }

@@ -228,7 +228,7 @@
   .stories-card {
     width: min(520px, 100%);
     padding: 14px 16px 16px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--vr-line-strong);
     border-radius: var(--radius-xl);
     background: var(--vr-surface-2);
     box-shadow: var(--vr-shadow-popover);
@@ -321,7 +321,7 @@
     width: 100%;
     height: auto;
     aspect-ratio: 4 / 3;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--vr-line);
     border-radius: var(--radius-lg);
     background: var(--vr-surface);
     object-fit: cover;

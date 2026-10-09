@@ -68,8 +68,10 @@
 <style>
   .pinned-bar {
     flex: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-    background: color-mix(in oklch, var(--vr-surface-3), transparent 82%);
+    margin: 12px 14px 0;
+    border: 1px solid var(--vr-line);
+    border-radius: 12px;
+    background: var(--vr-surface-2);
   }
 
   .pinned-bar-toggle {
@@ -84,7 +86,7 @@
     color: var(--vr-text-2);
     font-family: var(--font-ui);
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 500;
     cursor: pointer;
   }
 
@@ -139,7 +141,7 @@
   }
 
   .pinned-bar-item:hover {
-    background: color-mix(in oklch, var(--vr-accent), transparent 92%);
+    background: var(--vr-hover);
   }
 
   .pinned-bar-jump {
@@ -186,7 +188,7 @@
   }
 
   .pinned-bar-unpin:hover {
-    background: color-mix(in oklch, var(--vr-danger), transparent 86%);
+    background: var(--vr-danger-hover);
     color: var(--vr-danger);
   }
 </style>

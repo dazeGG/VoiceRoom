@@ -20,7 +20,7 @@
   width: 940px;
   max-width: 100%;
   max-height: 90vh;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 20px;
   background: var(--vr-surface-2);
   box-shadow: 0 40px 90px rgba(0, 0, 0, 0.6);
@@ -32,7 +32,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid var(--vr-line);
 }
 
 .settings-title {
@@ -48,7 +48,7 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--vr-line);
   border-radius: 9px;
   background: var(--vr-surface-3);
   color: var(--vr-text-2);
@@ -76,7 +76,7 @@
   gap: 4px;
   width: 194px;
   padding: 16px 12px;
-  border-right: 1px solid rgba(255, 255, 255, 0.07);
+  border-right: 1px solid var(--vr-line);
 }
 
 .settings-nav-main {
@@ -160,7 +160,7 @@
 .settings-input {
   width: 100%;
   padding: 13px 15px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 12px;
   background: var(--vr-bg);
   color: var(--vr-text);
@@ -176,7 +176,7 @@
 
 .settings-input:focus {
   border-color: var(--focus-border);
-  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  border-color: var(--focus-border);
   box-shadow: none;
 }
 
@@ -224,7 +224,7 @@
 
 .settings-cancel {
   padding: 12px 20px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 12px;
   background: transparent;
   color: var(--vr-text);
@@ -299,7 +299,7 @@
   width: 42px;
   height: 24px;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 12px;
   background: var(--vr-surface-3);
   cursor: pointer;
@@ -392,7 +392,7 @@
 .settings-hotkeys {
   display: grid;
   gap: 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.09);
+  border-top: 1px solid var(--vr-line);
   padding-top: 22px;
 }
 
@@ -510,7 +510,7 @@
 
 .settings-notification-empty {
   padding: 14px;
-  border: 1px dashed rgba(255, 255, 255, 0.09);
+  border: 1px dashed var(--vr-line);
   border-radius: 12px;
   color: var(--vr-text-3);
   font-size: 12px;
@@ -590,7 +590,7 @@
     align-items: stretch;
     width: 100%;
     border-right: none;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    border-bottom: 1px solid var(--vr-line);
   }
 
   .settings-nav-main {

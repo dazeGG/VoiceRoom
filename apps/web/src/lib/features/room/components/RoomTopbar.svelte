@@ -1,7 +1,9 @@
 <script lang="ts">
-  import { MessageSquare, Users } from '@lucide/svelte';
+  import { Link, MessageSquare, UserPlus, Users } from '@lucide/svelte';
   import Topbar from '$lib/shared/components/Topbar.svelte';
-  import { iconSm } from '$lib/shared/ui/icons';
+  import { Popover, PopoverDivider, PopoverMenuItem, PopoverMenuLabel } from '$lib/shared/ui';
+  import { iconMd, iconSm } from '$lib/shared/ui/icons';
+  import { copyText } from '$lib/shared/utils/clipboard';
   import { RoomInviteFriendList, RoomMenu } from '$lib/shared/components/room-menu';
   import { state as roomClientState } from '../client/core/state.svelte';
   import { getConnectionStatusView } from '../client/ui/status';
@@ -45,23 +47,34 @@
       void markRoomChatRead(roomClientState.roomId).catch(() => {});
   }
 
+  async function copyInviteLink(close: () => void): Promise<void> {
+    try {
+      await copyText(`${window.location.origin}/r/${encodeURIComponent(roomClientState.roomId)}`);
+      showToast('Ссылка скопирована');
+    } catch {
+      showToast('Не удалось скопировать');
+    }
+    close();
+  }
+
   function notifyRoomsChanged(): void {
     window.dispatchEvent(new CustomEvent('voice-room:rooms-changed', { detail: { roomId: roomClientState.roomId } }));
   }
 </script>
 
+{#snippet roomInviteContent(close: () => void)}
+  <RoomInviteFriendList
+    friends={social.friends()}
+    roomId={roomClientState.roomId}
+    presentUserIds={roomAccountIds}
+    {close}
+    onToast={showToast}
+  />
+{/snippet}
+
 <Topbar label="Новая голосовая комната" reload>
   <div class="room-heading topbar-room-heading" aria-label="Комната" hidden={roomClientState.screen !== 'room'}>
     <div class="room-heading-main">
-      {#snippet roomInviteContent(close: () => void)}
-        <RoomInviteFriendList
-          friends={social.friends()}
-          roomId={roomClientState.roomId}
-          presentUserIds={roomAccountIds}
-          {close}
-          onToast={showToast}
-        />
-      {/snippet}
       <RoomMenu
         roomId={roomClientState.roomId}
         name={heading}
@@ -84,6 +97,32 @@
 
     <div class="room-heading-actions">
       <RoomCallTimer />
+      <Popover placement="bottom-end" role="menu" ariaLabel="Пригласить в комнату" panelClass="room-invite-popover">
+        {#snippet trigger({ open, toggle, panelId })}
+          <button
+            class="room-invite-button"
+            type="button"
+            aria-haspopup="menu"
+            aria-expanded={open}
+            aria-controls={panelId}
+            title="Пригласить"
+            onclick={toggle}
+          >
+            <UserPlus {...iconSm} aria-hidden="true" />
+            <span class="room-invite-label">Пригласить</span>
+          </button>
+        {/snippet}
+        {#snippet content({ close }: { close: () => void })}
+          <PopoverMenuItem label="Скопировать ссылку" onclick={() => void copyInviteLink(close)}>
+            {#snippet icon()}<Link {...iconMd} aria-hidden="true" />{/snippet}
+          </PopoverMenuItem>
+          {#if roomClientState.self?.accountUserId}
+            <PopoverDivider />
+            <PopoverMenuLabel text="Позвать друга" />
+            {@render roomInviteContent(close)}
+          {/if}
+        {/snippet}
+      </Popover>
       <div class="room-panel-tabs room-panel-tabs--topbar" role="group" aria-label="Открыть раздел панели комнаты">
         <button
           type="button"
@@ -120,12 +159,3 @@
     <span>{connection.label}</span>
   </div>
 </Topbar>
-
-<style>
-  .room-heading-actions {
-    display: flex;
-    flex: none;
-    align-items: center;
-    gap: 12px;
-  }
-</style>

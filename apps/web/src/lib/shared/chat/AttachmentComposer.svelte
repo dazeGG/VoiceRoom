@@ -139,7 +139,7 @@
     width: 72px;
     height: 72px;
     flex: none;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 12px;
     background: var(--vr-bg);
   }

@@ -68,13 +68,15 @@
     align-items: center;
     height: 26px;
     overflow: visible;
-    border: 1px solid color-mix(in oklch, currentColor, transparent 82%);
-    border-radius: 8px;
-    background: color-mix(in oklch, currentColor, transparent 94%);
+    border: 1px solid var(--vr-line);
+    border-radius: 999px;
+    background: var(--vr-surface-2);
+    color: var(--vr-text-2);
   }
   .reaction-chip.reacted {
-    border-color: var(--vr-online);
-    background: color-mix(in oklch, var(--vr-online), transparent 88%);
+    border-color: var(--vr-accent-line);
+    background: var(--vr-accent-soft);
+    color: var(--vr-accent);
   }
   .reaction-chip.pending {
     opacity: 0.65;

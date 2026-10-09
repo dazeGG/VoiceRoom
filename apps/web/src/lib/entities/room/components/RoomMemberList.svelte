@@ -316,7 +316,7 @@
     color: var(--vr-text);
   }
   .room-member-list__menu-trigger:focus-visible {
-    outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));
+    outline: 2px solid var(--focus-border);
     outline-offset: -2px;
   }
   .room-member-list__menu-trigger:disabled {

@@ -5,8 +5,12 @@
   grid-template-rows: minmax(0, 1fr);
   gap: var(--space-md);
   overflow: hidden;
-  padding: var(--space-sm) var(--space-xl) 104px;
+  padding: 20px 20px 96px;
   background: transparent;
+  /* Responsive rules follow the stage's own width, not the window's: the chat
+     rail can take 360px of it. */
+  container-type: inline-size;
+  container-name: stage;
 }
 
 /* The in-room top-bar heading (.room-heading.topbar-room-heading) is laid out
@@ -59,7 +63,7 @@ h1 {
 .secondary-button:hover,
 .sound-button:hover {
   border-color: color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 22%);
-  box-shadow: 0 0 0 3px oklch(84% 0.012 92 / 0.1);
+  box-shadow: 0 0 0 3px var(--vr-line-strong);
 }
 
 .tool-button:active,

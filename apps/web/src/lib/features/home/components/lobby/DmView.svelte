@@ -114,7 +114,7 @@
     gap: 12px;
     padding: 13px 24px;
     border: 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    border-bottom: 1px solid var(--vr-line);
     cursor: pointer;
     transition: background 0.14s ease;
     background: transparent;

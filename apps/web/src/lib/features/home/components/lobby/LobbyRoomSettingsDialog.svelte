@@ -258,7 +258,7 @@
   .dialog-danger-zone {
     margin-top: 4px;
     padding-top: 14px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 1px solid var(--vr-line);
   }
   .dialog-danger-trigger {
     padding: 9px 14px;

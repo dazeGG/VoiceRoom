@@ -171,7 +171,7 @@
 
   .delete-account-room {
     padding: 10px 12px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--vr-line);
     border-radius: 10px;
     background: var(--vr-bg);
   }

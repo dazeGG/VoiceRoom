@@ -102,7 +102,7 @@
   .hotkey-recorder-field,
   .hotkey-recorder-reset {
     min-height: 38px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 10px;
     background: var(--vr-surface-3);
     color: var(--vr-text, #f1ecdf);
@@ -120,7 +120,7 @@
 
   .hotkey-recorder-field:hover,
   .hotkey-recorder-reset:hover {
-    border-color: rgba(255, 255, 255, 0.22);
+    border-color: color-mix(in oklch, var(--vr-text) 22%, transparent);
     background: var(--vr-surface-3-hover);
   }
 

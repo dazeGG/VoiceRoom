@@ -157,7 +157,7 @@
   }
   :where(.stage-strip-title) strong {
     overflow: hidden;
-    color: oklch(94% 0.012 92);
+    color: var(--vr-text);
     font-size: 0.92rem;
     font-weight: 800;
     line-height: 1.1;

@@ -532,7 +532,7 @@
     height: 44px;
     box-sizing: border-box;
     padding: 0 14px;
-    border: 1px solid rgba(255, 255, 255, 0.09);
+    border: 1px solid var(--vr-line);
     border-radius: 15px;
     background: color-mix(in oklch, var(--vr-surface-3), transparent 45%);
     color: var(--vr-text);
@@ -558,7 +558,7 @@
     width: 44px;
     height: 44px;
     place-items: center;
-    border: 1px solid rgba(255, 255, 255, 0.09);
+    border: 1px solid var(--vr-line);
     border-radius: 15px;
     background: color-mix(in oklch, var(--vr-surface-3), transparent 45%);
     cursor: pointer;
@@ -577,7 +577,7 @@
     inset-inline-end: 0;
     display: flex;
     gap: 2px;
-    border: 1px solid rgba(255, 255, 255, 0.09);
+    border: 1px solid var(--vr-line);
     border-radius: 13px;
     padding: 4px;
     background: var(--vr-bg);
@@ -719,7 +719,7 @@
     width: max-content;
     align-items: center;
     gap: 2px;
-    border: 1px solid rgba(255, 255, 255, 0.09);
+    border: 1px solid var(--vr-line);
     border-radius: 15px;
     /* Padding, gap and swatch size are mirrored by the TONE_* constants, which
        clamp the strip inside the panel before it can be measured. */

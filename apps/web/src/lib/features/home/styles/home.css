@@ -2,7 +2,7 @@
 .home-card {
   display: flex;
   flex-direction: column;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid var(--vr-line);
   border-radius: 20px;
   padding: 6px 24px 24px;
   background: var(--vr-surface);
@@ -12,7 +12,7 @@
   flex: 1;
   min-width: 0;
   min-height: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 12px;
   padding: 13px 15px;
   background: var(--vr-bg);
@@ -28,13 +28,13 @@
 }
 
 .home-input:hover {
-  border-color: rgba(255, 255, 255, 0.16);
+  border-color: var(--vr-line-strong);
   background: var(--vr-bg);
 }
 
 .home-input:focus {
   border-color: var(--focus-border);
-  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  border-color: var(--focus-border);
   box-shadow: none;
 }
 
@@ -49,7 +49,7 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 12px;
   padding: 0 16px;
   background: var(--vr-surface-3);
@@ -95,7 +95,7 @@
 .home-list-card {
   display: flex;
   flex-direction: column;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--vr-line);
   border-radius: 20px;
   padding: 20px 24px 22px;
   background: var(--vr-surface);
@@ -148,7 +148,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--vr-line);
   border-radius: 14px;
   padding: 12px 14px;
   background: var(--vr-surface-3);
@@ -218,7 +218,7 @@
 
 /* Secondary card — collapsible desktop app */
 .home-app {
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid var(--vr-line);
   border-radius: 20px;
   padding: 20px 24px 22px;
   background: var(--vr-surface);
@@ -309,7 +309,7 @@ html.is-desktop .home-app {
 .auth-loader-card {
   width: min(100%, 420px);
   padding: 34px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--vr-line);
   border-radius: 24px;
   background:
     radial-gradient(circle at 50% 0%, color-mix(in oklch, var(--vr-text) 11%, transparent), transparent 58%),
@@ -499,7 +499,7 @@ html.is-desktop .home-app {
   display: flex;
   align-items: stretch;
   height: var(--interactive-lg);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--vr-line-strong);
   border-radius: var(--interactive-radius);
   background: var(--vr-bg);
   overflow: hidden;
@@ -545,7 +545,7 @@ html.is-desktop .home-app {
 .lv-join-btn {
   flex: none;
   border: none;
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-left: 1px solid var(--vr-line-strong);
   background: var(--vr-surface-3);
   color: var(--vr-text, var(--vr-text));
   font-family: var(--font-ui);

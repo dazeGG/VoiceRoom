@@ -90,7 +90,7 @@
     cursor: pointer;
   }
   :global(.lobby-room-invitation-dismiss) {
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--vr-line-strong);
     background: transparent;
     color: var(--vr-text-2);
   }

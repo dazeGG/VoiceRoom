@@ -19,7 +19,7 @@ const SURFACE_TOKEN_VALUES: Record<string, string> = {
 const SURFACE_TOKENS = Object.keys(SURFACE_TOKEN_VALUES);
 
 const SEMANTIC_TOKEN =
-  /var\(--(?:vr-(?:accent|online|away|dnd|offline|danger|success|warning|info|text|line|hover|badge|backdrop|scrim|dock|on)[\w-]*|avatar-[\w-]+|focus-border|participant-[\w-]+|preview-[\w-]+|profile-cover-accent|slider-fill|toast-accent)/;
+  /var\(--(?:vr-(?:accent|online|away|dnd|offline|danger|success|warning|info|text|line|hover|badge|backdrop|scrim|dock|video|on)[\w-]*|avatar-[\w-]+|focus-border|participant-[\w-]+|preview-[\w-]+|profile-cover-accent|slider-fill|toast-accent)/;
 const SEMANTIC_SELECTOR =
   /(?:\[aria-pressed|accent|action|active|avatar|away|check|connected|danger|decline|delete|destructive|dnd|dock-bar|error|exit|idle|launch|leave|live|not-found|offline|online|owner|record|remove|room-chat-unread|screen-source-pop-dot|status|stop|submit|success|thumb|toggle|warning)/i;
 const IMAGE_SELECTOR =

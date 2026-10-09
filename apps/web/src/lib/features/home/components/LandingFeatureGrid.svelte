@@ -23,7 +23,7 @@
 
 <style>
   :global(.landing-feature) {
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--vr-line);
     border-radius: 16px;
     padding: 18px 18px 20px;
     background: var(--vr-surface);
@@ -33,7 +33,7 @@
   }
   :where(.landing-feature):hover {
     background: var(--vr-surface-3);
-    border-color: rgba(255, 255, 255, 0.14);
+    border-color: var(--vr-line-strong);
   }
   :global(.landing-feature-head) {
     display: flex;
@@ -49,7 +49,7 @@
     height: 38px;
     border-radius: 11px;
     background: var(--vr-surface-3);
-    border: 1px solid rgba(255, 255, 255, 0.09);
+    border: 1px solid var(--vr-line);
     color: var(--vr-accent);
   }
   :global(.landing-feature-num) {

@@ -101,7 +101,6 @@
   style:--level={participant.level.toFixed(3)}
   style:--participant-pastel={avatar.background}
   style:--participant-avatar-fg={avatar.foreground}
-  style:--participant-avatar-shadow={avatar.shadow}
   onclick={handleTileClick}
   oncontextmenu={handleContextMenu}
   onkeydown={handleKeydown}
@@ -128,6 +127,7 @@
   <div class="participant-copy">
     <h2>
       <span class="participant-name"><EmojiText text={participant.name} /></span>
+      {#if participant.isLocal}<span class="participant-you">вы</span>{/if}
       <span class="participant-muted-icon" aria-label="Микрофон выключен" title="Микрофон выключен"
         ><MicOff {...iconSm} /></span
       >

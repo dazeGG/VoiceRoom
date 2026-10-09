@@ -131,7 +131,7 @@
   }
 
   .composer-emoji-trigger:focus-visible {
-    outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));
+    outline: 2px solid var(--focus-border);
     outline-offset: 2px;
   }
 

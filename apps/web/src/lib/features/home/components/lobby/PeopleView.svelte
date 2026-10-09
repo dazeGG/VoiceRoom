@@ -236,7 +236,7 @@
     align-items: center;
     gap: 12px;
     padding: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--vr-line);
     border-radius: var(--radius-lg);
     background: var(--vr-surface);
     margin-bottom: 10px;

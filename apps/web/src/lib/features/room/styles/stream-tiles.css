@@ -28,32 +28,25 @@
   aspect-ratio: 16 / 9;
   grid-column: span 2;
   border: 0;
-  border-radius: var(--radius-sm);
+  border-radius: 16px;
   padding: 0;
   overflow: hidden;
-  background: var(--vr-surface);
-  color: oklch(90% 0.008 92);
+  background: var(--vr-video-bg);
+  box-shadow: inset 0 0 0 1px var(--vr-line);
+  color: var(--vr-text);
   text-align: left;
-  transition:
-    background 160ms var(--ease-out),
-    box-shadow 160ms var(--ease-out);
+  cursor: pointer;
+  transition: box-shadow 160ms var(--ease-out);
 }
 
 .stream-tile[data-idle='true']:hover,
 .stream-tile[data-idle='true']:focus-visible {
-  background: var(--vr-surface-3);
-  box-shadow: inset 0 0 0 1px oklch(78% 0.01 92 / 0.12);
-}
-
-.stream-tile[data-preview='true'] {
-  background: var(--vr-bg);
-  cursor: pointer;
+  box-shadow: inset 0 0 0 1px var(--vr-accent-line);
 }
 
 .stream-tile[data-preview='true']:hover,
 .stream-tile[data-preview='true']:focus-visible {
-  background: var(--vr-bg);
-  box-shadow: none;
+  box-shadow: inset 0 0 0 1px var(--vr-line);
 }
 
 .stream-tile-preview {
@@ -62,11 +55,15 @@
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: var(--vr-bg);
+  background: var(--vr-video-bg);
 }
 
 .stream-tile-icon {
-  color: oklch(72% 0.01 92 / 0.42);
+  color: var(--vr-text-3);
+}
+
+.stream-tile[data-idle='true'] .stream-tile-icon {
+  display: none;
 }
 
 .stream-tile-icon svg {
@@ -76,23 +73,23 @@
 
 .stream-tile-profile-meta {
   position: absolute;
-  top: var(--space-xs);
-  left: var(--space-xs);
+  top: 8px;
+  left: 8px;
   z-index: 2;
   display: inline-flex;
-  max-width: calc(100% - var(--space-xs) * 2);
+  max-width: calc(100% - 16px);
   align-items: center;
   overflow: hidden;
-  border-radius: 999px;
-  padding: 4px 8px;
-  background: color-mix(in srgb, var(--vr-bg) 82%, transparent);
-  color: oklch(96% 0.008 92);
-  font-size: 0.72rem;
-  font-weight: 800;
-  line-height: 1.1;
+  border-radius: 8px;
+  padding: 0 9px;
+  height: 26px;
+  background: var(--vr-scrim);
+  color: var(--vr-text-2);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
-  backdrop-filter: blur(10px);
   pointer-events: none;
 }
 
@@ -102,42 +99,40 @@
 
 .stream-tile-copy {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
+  left: 8px;
+  bottom: 8px;
   z-index: 1;
   display: grid;
   justify-items: start;
   min-width: 0;
-  padding: var(--space-sm);
-  background: transparent;
+  max-width: calc(100% - 16px);
   pointer-events: none;
 }
 
-.stream-tile[data-collapsed='true'] .stream-tile-copy {
-  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--vr-bg) 84%, transparent) 68%);
-}
-
-.stream-tile-copy strong {
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  color: oklch(97% 0.006 92);
-  font-size: 0.86rem;
-  font-weight: 800;
-  line-height: 1.15;
-  text-overflow: ellipsis;
+/* The name plate says «Стрим» and shows who is streaming. */
+.stream-tile-plate {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 9px 0 4px;
+  border-radius: 8px;
+  background: var(--vr-scrim);
+  color: var(--vr-text);
+  font-size: 13px;
+  font-weight: 500;
   white-space: nowrap;
 }
 
-.stream-tile[data-collapsed='true'] .stream-tile-copy strong {
-  text-shadow: 0 1px 8px oklch(8% 0.01 92 / 0.72);
-}
-
-.stream-tile-copy-idle strong {
-  color: oklch(88% 0.008 92);
-  font-size: 0.8rem;
-  font-weight: 780;
+.stream-tile-mini-avatar {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
 }
 
 .stream-tile-actions {
@@ -151,20 +146,8 @@
   flex-wrap: wrap;
   justify-content: center;
   gap: 6px;
-  opacity: 0;
+  transform: translate(-50%, -50%);
   pointer-events: none;
-  transform: translate(-50%, -50%) scale(0.96);
-  transition:
-    opacity 140ms var(--ease-out),
-    transform 140ms var(--ease-out);
-}
-
-.stream-tile[data-idle='true']:hover .stream-tile-actions,
-.stream-tile[data-idle='true']:focus-visible .stream-tile-actions,
-.stream-tile[data-idle='true']:focus-within .stream-tile-actions {
-  opacity: 1;
-  pointer-events: auto;
-  transform: translate(-50%, -50%) scale(1);
 }
 
 .stream-tile[data-preview='true']:not([data-collapsed='true']) .stream-tile-actions {

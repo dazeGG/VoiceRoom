@@ -60,6 +60,17 @@
   }
 
   .room-call-timer--topbar {
-    font-size: 15px;
+    gap: 8px;
+    color: var(--vr-text-2);
+    font-size: 13px;
+  }
+
+  .room-call-timer--topbar::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--vr-accent);
+    box-shadow: 0 0 0 3px var(--vr-accent-soft);
   }
 </style>

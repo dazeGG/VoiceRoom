@@ -9,6 +9,7 @@
   --vr-surface: oklch(17.5% 0.005 260);
   --vr-surface-2: oklch(19.5% 0.006 260);
   --vr-surface-3: oklch(24% 0.006 260);
+  --vr-surface-2-hover: oklch(21% 0.006 260);
   --vr-surface-3-hover: oklch(28% 0.006 260);
   --vr-hover: oklch(100% 0 0 / 0.045);
   --vr-line: oklch(100% 0 0 / 0.07);
@@ -44,6 +45,7 @@
 
   /* The name plate over video and the dim layer behind modals. */
   --vr-scrim: oklch(12% 0.005 260 / 0.78);
+  --vr-video-bg: oklch(13% 0.005 260);
   --vr-backdrop: oklch(0% 0 0 / 0.6);
   --vr-dock-bg: oklch(19% 0.006 260 / 0.92);
 

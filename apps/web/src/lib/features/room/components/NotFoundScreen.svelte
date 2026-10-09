@@ -42,7 +42,7 @@
     align-items: center;
     gap: 7px;
     padding: 4px 10px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 8px;
     background: var(--vr-surface-3);
     font-family: var(--font-mono);

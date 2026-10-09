@@ -160,7 +160,7 @@
     gap: 12px;
     max-width: 100%;
     padding: 10px 11px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 18px;
     background: color-mix(in srgb, color-mix(in srgb, var(--vr-surface-2) 60%, var(--vr-bg)) 90%, transparent);
     backdrop-filter: blur(14px);
@@ -174,7 +174,7 @@
     flex: none;
     width: 38px;
     height: 38px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--vr-line);
     border-radius: 13px;
     background: color-mix(in oklch, var(--vr-accent) 14%, var(--vr-surface-3));
     color: var(--vr-accent);

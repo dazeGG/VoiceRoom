@@ -286,7 +286,7 @@
   }
   .crop-dialog {
     width: min(820px, 100%);
-    border: 1px solid rgb(255 255 255 / 0.1);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 20px;
     background: var(--vr-surface-2);
     box-shadow: 0 36px 90px rgb(0 0 0 / 0.6);
@@ -298,7 +298,7 @@
     align-items: flex-start;
     justify-content: space-between;
     padding: 20px 22px;
-    border-bottom: 1px solid rgb(255 255 255 / 0.08);
+    border-bottom: 1px solid var(--vr-line);
   }
   .crop-head h2 {
     margin: 0;
@@ -314,7 +314,7 @@
     place-items: center;
     width: 34px;
     height: 34px;
-    border: 1px solid rgb(255 255 255 / 0.1);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 10px;
     background: var(--vr-surface-3);
     color: inherit;
@@ -396,7 +396,7 @@
   .crop-user-tile span,
   .crop-sidebar-preview span,
   .crop-room-preview span {
-    color: rgb(255 255 255 / 0.62);
+    color: color-mix(in oklch, var(--vr-text) 62%, transparent);
     font-size: 11px;
   }
   .crop-sidebar-preview,
@@ -405,7 +405,7 @@
     align-items: center;
     gap: 11px;
     padding: 13px;
-    border: 1px solid rgb(255 255 255 / 0.08);
+    border: 1px solid var(--vr-line);
     border-radius: 14px;
     background: var(--vr-surface);
   }
@@ -432,7 +432,7 @@
     justify-content: flex-end;
     gap: 10px;
     padding: 17px 22px;
-    border-top: 1px solid rgb(255 255 255 / 0.08);
+    border-top: 1px solid var(--vr-line);
   }
   .crop-actions button {
     display: inline-flex;
@@ -446,7 +446,7 @@
     cursor: pointer;
   }
   .crop-cancel {
-    border: 1px solid rgb(255 255 255 / 0.12);
+    border: 1px solid var(--vr-line-strong);
     background: transparent;
     color: var(--vr-text, #d5cfc4);
   }

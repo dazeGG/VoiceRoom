@@ -431,7 +431,7 @@
 <style>
   :global(.settings-sound-device-section) {
     padding-top: 20px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 1px solid var(--vr-line);
   }
   :global(.settings-gate) {
     display: grid;
@@ -453,7 +453,7 @@
     margin-top: 8px;
   }
   :global(.settings-sound-preview) {
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 10px;
     padding: 8px 12px;
     background: var(--vr-surface-3);
@@ -468,7 +468,7 @@
   }
   :where(.settings-sound-preview):hover {
     background: var(--vr-surface-3-hover);
-    border-color: rgba(255, 255, 255, 0.22);
+    border-color: color-mix(in oklch, var(--vr-text) 22%, transparent);
   }
   :where(.settings-sound-preview):disabled {
     cursor: wait;
@@ -486,7 +486,7 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 12px;
     padding: 4px;
     background: var(--vr-bg);

@@ -78,9 +78,8 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
 
 .participant {
   --level: 0;
-  --participant-pastel: oklch(54% 0.22 276);
-  --participant-avatar-fg: #fff;
-  --participant-avatar-shadow: 0 10px 24px rgba(88, 101, 242, 0.32);
+  --participant-pastel: oklch(74% 0.1 278);
+  --participant-avatar-fg: oklch(25% 0.05 278);
   position: relative;
   display: grid;
   min-height: 0;
@@ -90,15 +89,20 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   /* Size container so descendant avatar/ring elements can scale down on short tiles. */
   container-type: size;
   place-items: center;
-  border: 1px solid color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 8%);
-  border-radius: var(--radius-sm);
-  padding: clamp(var(--space-sm), 2.2vh, var(--space-lg)) var(--space-md);
+  border: 0;
+  border-radius: 16px;
+  padding: 0;
   overflow: hidden;
-  background: color-mix(in oklch, var(--participant-pastel), var(--vr-bg) 30%);
-  box-shadow: none;
+  background: var(--vr-surface-2);
+  /* The outline is inset so it is drawn over the video of a camera tile too. */
+  box-shadow: inset 0 0 0 1px var(--vr-line);
   transition:
     background 180ms ease,
-    opacity 180ms ease;
+    box-shadow 180ms ease;
+}
+
+.participant:hover {
+  background: var(--vr-surface-2-hover);
 }
 
 .participant:not([data-local='true']) {
@@ -143,10 +147,11 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   margin-inline: auto;
 }
 .participant-focus-strip :is(.participant, .stream-tile) {
-  width: 142px;
-  height: 80px;
-  flex: 0 0 142px;
+  width: 148px;
+  height: 84px;
+  flex: 0 0 148px;
   align-self: center;
+  border-radius: 12px;
 }
 /* Carousel tiles stay minimal: no watch/status chrome, just the tile itself. */
 .participant-focus-strip .stream-tile-actions,
@@ -154,24 +159,33 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
 .participant-focus-strip .participant-screen-action {
   display: none;
 }
-.participant-focus-strip .participant {
-  padding: var(--space-xs);
-}
 .participant-focus-strip .participant-copy {
-  right: var(--space-xs);
-  bottom: var(--space-xs);
-  left: var(--space-xs);
+  left: 5px;
+  bottom: 5px;
+  max-width: calc(100% - 10px);
 }
 .participant-focus-strip .participant h2 {
-  max-width: calc(100% - 2px);
-  padding: 3px 6px;
-  font-size: 0.72rem;
+  height: 20px;
+  gap: 4px;
+  border-radius: 6px;
+  padding: 0 6px;
+  font-size: 11.5px;
 }
-.participant-focus-strip .stream-tile-copy {
-  padding: var(--space-xs);
+.participant-focus-strip .participant-you {
+  display: none;
 }
-.participant-focus-strip .stream-tile-copy strong {
-  font-size: 0.72rem;
+.participant-focus-strip .participant-muted-icon,
+.participant-focus-strip .participant-deafened-icon,
+.participant-focus-strip .participant-muted-icon svg,
+.participant-focus-strip .participant-deafened-icon svg {
+  width: 12px;
+  height: 12px;
+}
+.participant-focus-strip .voice-ring {
+  height: 34px;
+}
+.participant-focus-strip .avatar {
+  font-size: 13px;
 }
 .participant-focus-strip .stream-tile-icon svg {
   width: 24px;
@@ -184,7 +198,7 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   place-items: center;
   border: 1px solid var(--vr-line-strong);
   border-radius: 50%;
-  background: var(--vr-surface);
+  background: var(--vr-surface-2);
   color: var(--vr-text-2);
   cursor: pointer;
 }
@@ -198,17 +212,12 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   opacity: 1;
 }
 
-.participant[data-screen='true'] {
-  border-color: color-mix(in oklch, var(--vr-line-strong), var(--vr-info) 16%);
-}
-
 .participant[data-speaking='true'] {
-  border-color: var(--vr-online);
-  box-shadow: inset 0 0 0 1px var(--vr-online);
+  box-shadow: inset 0 0 0 2px var(--vr-accent);
 }
 
 /* A camera fills the tile in place of the avatar; the name stays on top and
-   the speaking border is drawn over the picture. */
+   the speaking outline is drawn over the picture. */
 .participant-camera {
   position: absolute;
   inset: 0;
@@ -230,49 +239,48 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   display: none;
 }
 
-/* An inset shadow would sit under the video, so the ring is an overlay. */
-.participant[data-camera='true'][data-speaking='true']::after {
+/* An inset shadow would sit under the video, so the outline is an overlay. */
+.participant[data-camera='true']::after {
   position: absolute;
   inset: 0;
   z-index: 1;
-  border: 2px solid var(--vr-online);
   border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--vr-line);
   content: '';
   pointer-events: none;
+}
+
+.participant[data-camera='true'][data-speaking='true']::after {
+  box-shadow: inset 0 0 0 2px var(--vr-accent);
 }
 
 .participant[data-camera='true'] .participant-copy {
   z-index: 1;
 }
 
+/* The avatar is 76px, or 40% of a short tile. */
 .voice-ring {
   display: grid;
-  width: 86px;
-  height: 86px;
+  height: min(76px, 40cqh);
+  aspect-ratio: 1;
   place-items: center;
   border-radius: 50%;
   background: transparent;
 }
 
-.participant[data-speaking='true'] .voice-ring {
-  box-shadow: none;
-}
-
 .avatar {
   position: relative;
   display: grid;
-  width: 74px;
-  height: 74px;
+  width: 100%;
+  height: 100%;
   place-items: center;
   border: 0;
   border-radius: 50%;
   background: var(--participant-pastel);
   color: var(--participant-avatar-fg);
-  font-size: 1.38rem;
-  font-weight: 800;
+  font-size: min(22px, 11.5cqh);
+  font-weight: 600;
   overflow: hidden;
-  box-shadow: none;
-  transition: transform 160ms ease;
 }
 
 .avatar > img {
@@ -282,47 +290,6 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   height: 100%;
   border-radius: inherit;
   object-fit: cover;
-}
-
-.participant[data-speaking='true'] .avatar {
-  box-shadow: none;
-}
-
-/* Scale the avatar/ring down as the tile gets shorter so it never clips. */
-@container (max-height: 210px) {
-  .voice-ring {
-    width: 64px;
-    height: 64px;
-  }
-  .avatar {
-    width: 56px;
-    height: 56px;
-    font-size: 1.18rem;
-  }
-}
-
-@container (max-height: 150px) {
-  .voice-ring {
-    width: 50px;
-    height: 50px;
-  }
-  .avatar {
-    width: 44px;
-    height: 44px;
-    font-size: 1rem;
-  }
-}
-
-@container (max-height: 104px) {
-  .voice-ring {
-    width: 38px;
-    height: 38px;
-  }
-  .avatar {
-    width: 34px;
-    height: 34px;
-    font-size: 0.85rem;
-  }
 }
 
 .participant[data-screen='true']:not([data-local='true']) {
@@ -339,12 +306,12 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
 
 .participant-copy {
   position: absolute;
-  right: var(--space-sm);
-  bottom: var(--space-sm);
-  left: var(--space-sm);
+  left: 8px;
+  bottom: 8px;
   display: grid;
   justify-items: start;
-  gap: var(--space-2xs);
+  gap: 4px;
+  max-width: calc(100% - 16px);
   min-width: 0;
 }
 
@@ -353,15 +320,16 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   align-items: center;
   gap: 6px;
   max-width: 100%;
+  height: 26px;
   margin: 0;
   overflow: hidden;
-  border-radius: 7px;
-  padding: 5px 8px;
-  background: color-mix(in oklch, var(--vr-bg), transparent 16%);
-  color: oklch(98% 0.006 92);
-  font-size: 0.9rem;
-  font-weight: 800;
-  line-height: 1.15;
+  border-radius: 8px;
+  padding: 0 9px;
+  background: var(--vr-scrim);
+  color: var(--vr-text);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -372,20 +340,25 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   text-overflow: ellipsis;
 }
 
+.participant-you {
+  flex: none;
+  color: var(--vr-text-3);
+}
+
 .participant-muted-icon,
 .participant-deafened-icon {
   display: none;
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   flex: 0 0 auto;
   place-items: center;
-  color: oklch(93% 0.034 32);
+  color: var(--vr-danger);
 }
 
 .participant-muted-icon svg,
 .participant-deafened-icon svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
 }
 
 .participant[data-muted='true'] .participant-muted-icon {
@@ -402,10 +375,10 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   overflow: hidden;
   border-radius: 999px;
   padding: 3px 7px;
-  background: color-mix(in oklch, var(--vr-bg), transparent 22%);
-  color: oklch(86% 0.035 86);
+  background: var(--vr-scrim);
+  color: var(--vr-text-2);
   font-size: 0.76rem;
-  font-weight: 800;
+  font-weight: 500;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -417,24 +390,20 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 12%);
+  border: 0;
   border-radius: 999px;
-  padding: 0 10px;
-  background: var(--vr-text);
-  color: oklch(9% 0.012 92);
-  font-size: 0.76rem;
-  font-weight: 800;
+  padding: 0 12px;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+  font-size: 13px;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
-  transition:
-    background 160ms var(--ease-out),
-    border-color 160ms var(--ease-out),
-    transform 160ms var(--ease-out);
+  transition: background 160ms var(--ease-out);
 }
 
 .participant-screen-action:hover {
-  background: var(--vr-text);
-  transform: translateY(-1px);
+  background: var(--vr-accent-hover);
 }
 
 .participant-screen-action .lucide {

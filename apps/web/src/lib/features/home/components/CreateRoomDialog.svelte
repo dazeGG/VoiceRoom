@@ -163,7 +163,7 @@
   }
   :global(.lr-dialog-input) {
     width: 100%;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--vr-line-strong);
     border-radius: var(--radius-md);
     padding: 13px 15px;
     background: var(--vr-bg);
@@ -183,7 +183,7 @@
     display: flex;
     gap: 4px;
     padding: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--vr-line);
     border-radius: var(--radius-md);
     background: var(--vr-bg);
   }

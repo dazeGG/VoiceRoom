@@ -15,6 +15,7 @@ export interface ChatGroup {
   peerId: string;
   self: boolean;
   avatarBackground: string;
+  avatarForeground: string;
   avatarUrl: string | null;
   createdAt: number;
   messages: ChatMessage[];
@@ -57,6 +58,7 @@ export function buildChatDays(items: ChatMessage[], isOwn: (message: ChatMessage
       peerId: message.peerId,
       self,
       avatarBackground: avatar.background,
+      avatarForeground: avatar.foreground,
       avatarUrl: avatar.src,
       createdAt: message.createdAt,
       messages: [message]

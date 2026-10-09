@@ -105,7 +105,7 @@
     gap: 14px;
     width: min(440px, 100%);
     padding: 26px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--vr-line-strong);
     border-radius: var(--radius-xl);
     background: var(--vr-surface-2);
     box-shadow: var(--vr-shadow-popover);

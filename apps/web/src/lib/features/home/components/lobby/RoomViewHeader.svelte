@@ -60,7 +60,7 @@
     width: 40px;
     height: 40px;
     border-radius: 11px;
-    border: 1px solid rgba(255, 255, 255, 0.09);
+    border: 1px solid var(--vr-line);
     background: var(--vr-surface-3);
     color: var(--vr-text);
     display: flex;

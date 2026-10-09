@@ -164,7 +164,7 @@
     justify-content: center;
     gap: 9px;
     width: 100%;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 12px;
     padding: 14px;
     background: var(--vr-surface-3);
@@ -206,7 +206,7 @@
     display: flex;
     align-items: stretch;
     gap: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--vr-line);
     border-radius: 11px;
     padding: 10px 11px;
     background: var(--vr-bg);
@@ -227,7 +227,7 @@
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 8px;
     padding: 6px 10px;
     background: var(--vr-surface-3);

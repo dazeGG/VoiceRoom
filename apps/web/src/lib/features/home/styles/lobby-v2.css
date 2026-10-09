@@ -188,7 +188,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--vr-line-strong);
   border-radius: var(--radius-md);
   padding: 9px 12px;
   background: var(--vr-bg);
@@ -223,7 +223,7 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--vr-line-strong);
   background: var(--vr-surface-3);
   color: var(--vr-text);
 }
@@ -254,7 +254,7 @@
   align-items: center;
   gap: 8px;
   flex: 1;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--vr-line-strong);
   border-radius: var(--radius-md);
   height: var(--interactive-lg, 52px);
   padding: 0 14px;

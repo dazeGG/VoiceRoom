@@ -9,6 +9,7 @@
   import { openParticipantContextMenu } from '../participant-context-ui.svelte';
   import { roomUi, closeChat, incrementUnreadChat, markChatRead, selectRoomPanel } from '../room-ui.svelte';
   import { roomSettingsUi } from '../room-settings.svelte';
+  import { getParticipantCount } from '../participants-ui.svelte';
   import RoomChatPanel from './RoomChatPanel.svelte';
   import RoomMemberList from '$lib/entities/room/components/RoomMemberList.svelte';
 
@@ -66,6 +67,7 @@
     activeTab={roomUi.activePanel === 'participants' ? 'participants' : 'chat'}
     visible={roomUi.chatOpen}
     unread={roomUi.unreadChat}
+    participantCount={getParticipantCount()}
     chatTabId="room-panel-chat-tab"
     participantsTabId="room-panel-participants-tab"
     chatPanelId="room-panel-chat"
