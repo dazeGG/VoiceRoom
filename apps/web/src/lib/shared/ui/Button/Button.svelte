@@ -3,6 +3,7 @@
 
   let {
     variant = 'ghost',
+    size = 'md',
     type = 'button',
     disabled = false,
     class: className = '',
@@ -12,7 +13,7 @@
   }: ButtonProps = $props();
 </script>
 
-<button class="ui-button ui-button--{variant} {className}" {type} {disabled} {onclick}>
+<button class="ui-button ui-button--{variant} ui-button--size-{size} {className}" {type} {disabled} {onclick}>
   {#if icon}<span class="ui-button-icon">{@render icon()}</span>{/if}
   {#if children}{@render children()}{/if}
 </button>
@@ -60,6 +61,21 @@
     border-radius: 10px;
   }
 
+  .ui-button--size-lg {
+    height: 44px;
+    min-height: 44px;
+    padding-inline: 18px;
+    border-radius: 12px;
+  }
+
+  .ui-button--size-xl {
+    height: 50px;
+    min-height: 50px;
+    padding-inline: 22px;
+    border-radius: 13px;
+    font-size: 15px;
+  }
+
   .ui-button--primary {
     background: var(--vr-accent);
     color: var(--vr-accent-ink);
@@ -89,6 +105,7 @@
   }
 
   .ui-button--soft {
+    border-color: var(--vr-accent-line);
     background: var(--vr-accent-soft);
     color: var(--vr-accent);
   }

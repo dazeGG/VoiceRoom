@@ -236,7 +236,10 @@
       <div class="lv-empty">
         <Users {...iconSm} aria-hidden="true" />
         <p>Пока нет друзей. Откройте «Заявки», чтобы добавить по логину.</p>
-        <Button variant="soft" class="compact" onclick={onOpenPeople}>Добавить друга</Button>
+        <Button variant="soft" class="compact" onclick={onOpenPeople}>
+          {#snippet icon()}<UserPlus {...iconSm} aria-hidden="true" />{/snippet}
+          Добавить друга
+        </Button>
       </div>
     {:else}
       {#each sortedFriends as entry (entry.user.id)}
@@ -426,14 +429,13 @@
   .lv-empty {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 10px;
-    margin: 4px 0;
-    padding: 18px 14px;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 4px 4px 0;
+    padding: 16px;
     border: 1px dashed var(--vr-line-strong);
     border-radius: 14px;
-    color: var(--vr-text-3);
-    text-align: center;
+    color: var(--vr-text-2);
   }
 
   .lv-empty p {

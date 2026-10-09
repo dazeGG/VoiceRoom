@@ -85,122 +85,62 @@
   opacity: 0.85;
 }
 
-/* ---- room live cards (main pane) ---- */
-.lv-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
-  gap: var(--lv-gap);
-}
-
-@media (min-width: 1500px) {
-  .lv-cards {
-    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-  }
-}
-
-.lv-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: var(--radius-lg);
-  background: var(--panel);
-  cursor: pointer;
-  text-align: left;
-  font: inherit;
-  color: inherit;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
-}
-
-.lv-card-head {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  min-width: 0;
-}
-
-.lv-card.has-unread .lv-card-head {
-  padding-right: 40px;
-}
-
-.lv-card:hover {
-  background: var(--panel-strong);
-  border-color: rgba(255, 255, 255, 0.14);
-}
-
-.lv-card.is-live {
-  border-color: color-mix(in oklch, var(--green), transparent 68%);
-}
-
-.lv-card.is-context {
-  background: var(--panel-strong);
-  border-color: color-mix(in oklch, var(--accent), transparent 58%);
-}
-
 /* ---- joined "join by code" group ---- */
 .lv-join {
   display: flex;
   align-items: stretch;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: var(--interactive-radius, var(--radius-md));
-  background: var(--warm-900);
+  height: 44px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 12px;
+  background: var(--vr-surface-2);
   overflow: hidden;
-  height: var(--interactive-lg, 52px);
 }
 
 .lv-join:focus-within {
-  border-color: var(--accent);
+  border-color: var(--vr-accent-line);
 }
 
 .lv-join-input {
+  appearance: none;
+  width: 190px;
+  height: 100%;
+  padding: 0 14px;
   border: none;
   background: transparent;
   outline: none;
-  color: var(--warm-ink);
-  height: 100%;
+  color: var(--vr-text);
   font-family: var(--font-mono);
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1;
-  padding: 0 16px;
-  width: 178px;
 }
 
 .lv-join-input::placeholder {
-  color: var(--warm-faint);
+  color: var(--vr-text-3);
 }
 
 /* The room code fields are search inputs (see VoiceHome); they keep the look
    of a plain text field. */
-.lv-join-input {
-  appearance: none;
-}
-
 .lv-join-input::-webkit-search-cancel-button,
 .lv-join-input::-webkit-search-decoration {
   appearance: none;
 }
 
 .lv-join-btn {
+  padding: 0 16px;
   border: none;
-  border-left: 1px solid rgba(255, 255, 255, 0.1);
-  background: var(--control);
-  color: var(--warm-ink);
+  border-left: 1px solid var(--vr-line-strong);
+  background: transparent;
+  color: var(--vr-text);
   font-family: var(--font-ui);
-  font-size: 15px;
-  font-weight: 760;
+  font-size: 14px;
+  font-weight: 500;
   line-height: 1;
-  letter-spacing: -0.01em;
-  padding: 0 var(--interactive-pad-x, 22px);
   cursor: pointer;
   transition: background 0.13s ease;
 }
 
 .lv-join-btn:hover {
-  background: var(--control-hover);
+  background: var(--vr-hover);
 }
 
 /* ---- shared "lr" text/utility classes ---- */
@@ -214,7 +154,7 @@
 }
 
 .lr-empty {
-  color: var(--warm-faint);
+  color: var(--vr-text-3);
   font-size: 13.5px;
   margin: 0;
 }
