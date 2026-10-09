@@ -4,13 +4,13 @@
   import { iconXs } from '$lib/shared/ui/icons';
   import type { ToastStackProps } from './types';
 
-  let { toasts, onDismiss }: ToastStackProps = $props();
+  let { toasts, onDismiss, id }: ToastStackProps = $props();
   const visibleToasts = $derived(toasts.slice(-3));
   const queuedCount = $derived(Math.max(0, toasts.length - visibleToasts.length));
 </script>
 
 {#if toasts.length > 0}
-  <div class="ui-toaststack" role="status" aria-live="polite">
+  <div class="ui-toaststack" {id} role="status" aria-live="polite">
     {#if queuedCount > 0}<span class="ui-toast-queue">+{queuedCount} в очереди</span>{/if}
     {#each visibleToasts as toast (toast.id)}
       <div

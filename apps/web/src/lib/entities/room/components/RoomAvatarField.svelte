@@ -4,7 +4,7 @@
   // settings are saved. Mount it per opening (and per room) to start from what
   // is saved.
   import { onDestroy } from 'svelte';
-  import { Pencil, X } from '@lucide/svelte';
+  import { Camera, X } from '@lucide/svelte';
   import { Avatar, AvatarCropDialog } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
   import type { RoomAvatarChange } from '../room-avatar-change';
@@ -89,9 +89,9 @@
     aria-label={editLabel}
     title={editLabel}
   >
-    <Avatar {name} src={shownUrl} shape="squircle" background="var(--vr-surface-3)" size={58} />
-    <span class="room-avatar-overlay" aria-hidden="true"><Pencil {...iconSm} /></span>
+    <Avatar {name} src={shownUrl} shape="squircle" background="var(--vr-surface-3)" size={76} />
   </button>
+  <span class="room-avatar-camera" aria-hidden="true"><Camera {...iconSm} /></span>
   {#if shownUrl}
     <button
       class="room-avatar-remove"
@@ -122,8 +122,8 @@
   .room-avatar-control {
     position: relative;
     flex: none;
-    width: 58px;
-    height: 58px;
+    width: 76px;
+    height: 76px;
   }
   .room-avatar-input {
     display: none;
@@ -133,34 +133,32 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 58px;
-    height: 58px;
+    width: 76px;
+    height: 76px;
     padding: 0;
     overflow: hidden;
     border: 0;
     border-radius: 31%;
     background: transparent;
-    color: #fff;
+    color: var(--vr-text);
     cursor: pointer;
   }
-  .room-avatar-overlay {
+  .room-avatar-camera {
     position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: inherit;
-    background: color-mix(in srgb, var(--vr-bg) 58%, transparent);
-    opacity: 0;
-    transition: opacity 0.16s ease;
+    right: -4px;
+    bottom: -4px;
+    display: grid;
+    width: 26px;
+    height: 26px;
+    place-items: center;
+    border: 2px solid var(--vr-surface);
+    border-radius: 50%;
+    background: var(--vr-accent);
+    color: var(--vr-accent-ink);
     pointer-events: none;
   }
-  .room-avatar-edit:not(:disabled):hover .room-avatar-overlay,
-  .room-avatar-edit:not(:disabled):focus-visible .room-avatar-overlay {
-    opacity: 1;
-  }
   .room-avatar-edit:focus-visible {
-    outline: 2px solid var(--vr-danger);
+    outline: 2px solid var(--vr-accent);
     outline-offset: 3px;
   }
   .room-avatar-remove {
@@ -174,12 +172,11 @@
     width: 22px;
     height: 22px;
     padding: 0;
-    border: 2px solid var(--vr-bg);
+    border: 2px solid var(--vr-surface);
     border-radius: 50%;
     background: var(--vr-danger);
-    color: #fff;
+    color: var(--vr-on-danger);
     cursor: pointer;
-    box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34);
     opacity: 0;
     transition:
       opacity 0.16s ease,
@@ -190,10 +187,10 @@
     opacity: 1;
   }
   .room-avatar-remove:not(:disabled):hover {
-    background: color-mix(in oklch, var(--vr-danger), var(--vr-bg) 16%);
+    background: color-mix(in oklch, var(--vr-danger), var(--vr-on-danger) 12%);
   }
   .room-avatar-remove:focus-visible {
-    outline: 2px solid #fff;
+    outline: 2px solid var(--vr-text);
     outline-offset: 2px;
   }
   .room-avatar-edit:disabled,

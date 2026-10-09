@@ -42,8 +42,8 @@ test('the participants tab lists the roster from the server, split into online a
   session.user = authUser();
   render(RoomMemberList, { props: { roomId: 'room-a' } });
 
-  expect(await screen.findByText('В сети — 2')).toBeTruthy();
-  expect(screen.getByText('Не в сети — 1')).toBeTruthy();
+  expect(await screen.findByRole('heading', { name: 'В сети 2' })).toBeTruthy();
+  expect(screen.getByRole('heading', { name: 'Не в сети 1' })).toBeTruthy();
   expect(screen.getByText('Anna')).toBeTruthy();
   expect(screen.getByText('Vera')).toBeTruthy();
   expect(calls.map((call) => call.url)).toEqual(['/api/rooms/room-a/members?limit=50']);

@@ -1,13 +1,14 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { Ban, Ellipsis, User } from '@lucide/svelte';
+  import { Ban, Ellipsis, User, UserX } from '@lucide/svelte';
   import Avatar from '$lib/shared/ui/Avatar/Avatar.svelte';
   import { Popover, PopoverDivider, PopoverMenuItem, PopoverSubmenu } from '$lib/shared/ui';
   import type { PopoverContentState, PopoverTriggerState } from '$lib/shared/ui/Popover';
   import { iconMd } from '$lib/shared/ui/icons';
   import { session } from '$lib/features/auth/session.svelte';
   import { getRoomMembership, loadRoomMembership, roomMembershipState } from '../room-membership.svelte';
-  import { BAN_DURATIONS, banRoomMember, type ModerationNotice } from '../room-moderation';
+  import { BAN_DURATIONS, banRoomMember, kickRoomMember, type ModerationNotice } from '../room-moderation';
+  import { roomPresence } from '../room-presence.svelte';
   import type { MembershipMember } from '$lib/api/memberships';
   import type { ModerationDuration } from '$lib/api/moderation';
   import { openProfileCardFor } from '../../profile-card/profile-card-ui.svelte';
@@ -76,6 +77,23 @@
     queueMicrotask(() => openProfileCardFor(profilePerson(member), anchor));
   }
 
+  // Only someone in the call has a live peer to take out of it.
+  function livePeerId(member: MembershipMember): string {
+    const peers = roomPresence.peersByRoomId[roomId] ?? [];
+    return peers.find((peer) => peer.accountUserId === member.userId)?.id ?? '';
+  }
+
+  async function kick(member: MembershipMember): Promise<void> {
+    const peerId = livePeerId(member);
+    if (banningUserId || !peerId) return;
+    banningUserId = member.userId;
+    try {
+      await kickRoomMember(roomId, { peerId, name: nameFor(member) }, onNotify);
+    } finally {
+      banningUserId = '';
+    }
+  }
+
   async function ban(member: MembershipMember, duration: ModerationDuration): Promise<void> {
     if (banningUserId) return;
     banningUserId = member.userId;
@@ -106,7 +124,12 @@
         dnd={member.presenceStatus === 'dnd'}
         afk={member.presenceStatus === 'afk'}
       />
-      <span><strong>{nameFor(member)}</strong><small>@{member.login}</small></span>
+      <span
+        ><strong
+          >{nameFor(member)}{#if member.userId === session.user?.id}<em class="room-member-list__you">вы</em
+            >{/if}</strong
+        ><small>@{member.login}</small></span
+      >
     </button>
 
     {#if canModerateMember(member)}
@@ -144,6 +167,17 @@
               {#snippet icon()}<User {...iconMd} aria-hidden="true" />{/snippet}
             </PopoverMenuItem>
             <PopoverDivider />
+            <PopoverMenuItem
+              label="Выгнать"
+              variant="danger"
+              disabled={!livePeerId(member)}
+              onclick={() => {
+                close();
+                void kick(member);
+              }}
+            >
+              {#snippet icon()}<UserX {...iconMd} aria-hidden="true" />{/snippet}
+            </PopoverMenuItem>
             <PopoverSubmenu label="Заблокировать" ariaLabel={`Срок блокировки ${nameFor(member)}`}>
               {#snippet icon()}<Ban {...iconMd} aria-hidden="true" />{/snippet}
               {#snippet content({ close: closeSubmenu }: { close: () => void })}
@@ -183,14 +217,14 @@
       <button type="button" onclick={() => loadRoomMembership(roomId)}>Повторить</button>
     </div>
   {:else}
-    <h3>В сети — {onlineMembers.length}</h3>
+    <h3>В сети <span class="room-member-list__count">{onlineMembers.length}</span></h3>
     <ul aria-label="Участники в сети">
       {#each onlineMembers as member (member.userId)}
         <li>{@render memberRow(member)}</li>
       {/each}
     </ul>
 
-    <h3>Не в сети — {offlineMembers.length}</h3>
+    <h3>Не в сети <span class="room-member-list__count">{offlineMembers.length}</span></h3>
     <ul aria-label="Участники не в сети">
       {#each offlineMembers as member (member.userId)}
         <li>{@render memberRow(member)}</li>
@@ -215,7 +249,7 @@
 <style>
   .room-member-list {
     display: grid;
-    gap: 12px;
+    gap: 4px;
     min-width: 240px;
   }
   h3,
@@ -223,14 +257,26 @@
     margin: 0;
   }
   h3 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px 8px;
     color: var(--vr-text-2);
-    font-size: 12px;
-    font-weight: 700;
-    text-transform: uppercase;
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+  h3:not(:first-child) {
+    margin-top: 14px;
+  }
+  .room-member-list__count {
+    color: var(--vr-text-3);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 400;
   }
   ul {
     display: grid;
-    gap: 4px;
+    gap: 2px;
     margin: 0;
     padding: 0;
     list-style: none;
@@ -243,12 +289,12 @@
     display: flex;
     align-items: center;
     min-width: 0;
-    border-radius: 12px;
+    border-radius: 10px;
     transition: background 120ms ease;
   }
   .room-member-list__row:hover,
   .room-member-list__row:focus-within {
-    background: color-mix(in oklch, var(--vr-surface-3), transparent 52%);
+    background: var(--vr-hover);
   }
   .room-member-list__member {
     display: flex;
@@ -256,9 +302,9 @@
     align-items: center;
     gap: 10px;
     min-width: 0;
-    padding: 8px;
+    padding: 8px 10px;
     border: 0;
-    border-radius: 12px;
+    border-radius: 10px;
     background: transparent;
     color: inherit;
     font: inherit;
@@ -266,7 +312,8 @@
     cursor: pointer;
   }
   .room-member-list__member:focus-visible {
-    outline: none;
+    outline: 2px solid var(--vr-accent);
+    outline-offset: -2px;
   }
   .room-member-list__member > span {
     display: grid;
@@ -280,10 +327,19 @@
   }
   strong {
     font-size: 14px;
+    font-weight: 500;
+  }
+  .room-member-list__you {
+    margin-left: 6px;
+    color: var(--vr-text-3);
+    font-size: 13px;
+    font-style: normal;
+    font-weight: 400;
   }
   small {
-    color: var(--vr-text-2);
-    font-size: 12px;
+    color: var(--vr-text-3);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
   }
   .room-member-list__row :global(.room-member-list__menu-root) {
     margin-right: 6px;
@@ -299,24 +355,17 @@
     background: transparent;
     color: var(--vr-text-3);
     cursor: pointer;
-    opacity: 0;
     transition:
-      opacity 120ms ease,
       background 120ms ease,
       color 120ms ease;
   }
-  .room-member-list__row:hover .room-member-list__menu-trigger,
-  .room-member-list__menu-trigger:focus-visible,
-  .room-member-list__menu-trigger[data-open='true'] {
-    opacity: 1;
-  }
   .room-member-list__menu-trigger:hover:not(:disabled),
   .room-member-list__menu-trigger[data-open='true'] {
-    background: var(--vr-surface-3-hover);
+    background: var(--vr-hover);
     color: var(--vr-text);
   }
   .room-member-list__menu-trigger:focus-visible {
-    outline: 2px solid var(--focus-border);
+    outline: 2px solid var(--vr-accent);
     outline-offset: -2px;
   }
   .room-member-list__menu-trigger:disabled {
@@ -329,11 +378,6 @@
     flex-direction: column;
     gap: 2px;
   }
-  @media (hover: none) {
-    .room-member-list__menu-trigger {
-      opacity: 1;
-    }
-  }
   .room-member-list__notice,
   .room-member-list__empty {
     color: var(--vr-text-2);
@@ -344,8 +388,8 @@
     min-height: 38px;
     border: 1px solid var(--vr-line-strong);
     border-radius: 10px;
-    background: var(--vr-bg);
-    color: inherit;
+    background: transparent;
+    color: var(--vr-text);
   }
   .sr-only {
     position: absolute;

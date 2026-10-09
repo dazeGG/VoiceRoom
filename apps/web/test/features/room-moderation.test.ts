@@ -4,10 +4,19 @@ vi.mock('../../src/lib/api/moderation', () => ({
   putBan: vi.fn(),
   unban: vi.fn()
 }));
+vi.mock('../../src/lib/api/rooms', () => ({ kickRoomPeer: vi.fn() }));
 
 const api = await import('../../src/lib/api/moderation');
-const { BAN_DURATIONS, banExpiryLabel, banRoomMember, banSubjectName, liftRoomBan } =
-  await import('../../src/lib/entities/room/room-moderation.ts');
+const roomsApi = await import('../../src/lib/api/rooms');
+const {
+  BAN_DURATIONS,
+  BAN_UNDO_DURATION_MS,
+  banExpiryLabel,
+  banRoomMember,
+  banSubjectName,
+  kickRoomMember,
+  liftRoomBan
+} = await import('../../src/lib/entities/room/room-moderation.ts');
 
 const ban = (overrides: Record<string, unknown> = {}) =>
   ({
@@ -60,4 +69,25 @@ test('the bans list names people instead of showing raw ids', () => {
   expect(banSubjectName(ban({ subject: { kind: 'account', profile: null } }))).toBe('Участник');
   expect(banExpiryLabel(ban())).toBe('Навсегда');
   expect(banExpiryLabel(ban({ expiresAt: Date.UTC(2026, 9, 1) }))).toMatch(/^До /);
+});
+
+test('the undo window of a ban is six seconds', () => {
+  expect(BAN_UNDO_DURATION_MS).toBe(6000);
+});
+
+test('kicking takes the live peer out and says they can come back by the link', async () => {
+  vi.mocked(roomsApi.kickRoomPeer).mockResolvedValue();
+  const notify = vi.fn();
+
+  expect(await kickRoomMember('room-a', { peerId: 'peer-1', name: 'Анна' }, notify)).toBe(true);
+  expect(roomsApi.kickRoomPeer).toHaveBeenCalledWith('room-a', 'peer-1');
+  expect(notify).toHaveBeenCalledWith('Анна выгнан из комнаты', { description: 'Сможет вернуться по ссылке' });
+});
+
+test('a failed kick is reported as an error', async () => {
+  vi.mocked(roomsApi.kickRoomPeer).mockRejectedValue(new Error('Нет прав'));
+  const notify = vi.fn();
+
+  expect(await kickRoomMember('room-a', { peerId: 'peer-1', name: 'Анна' }, notify)).toBe(false);
+  expect(notify).toHaveBeenCalledWith('Нет прав', { variant: 'error' });
 });

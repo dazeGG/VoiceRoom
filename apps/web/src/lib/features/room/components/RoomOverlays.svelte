@@ -10,7 +10,8 @@
   } from '../client/ui/screen-source-picker';
   import { guestNameUi } from '../guest-name-ui.svelte';
   import { screenSourceUi } from '../screen-source-ui.svelte';
-  import { invokeToastAction, toastUi } from '../toast-ui.svelte';
+  import { dismissToastUi, toastUi } from '../toast-ui.svelte';
+  import { ToastStack } from '$lib/shared/ui';
   import { startUi } from '../start-ui.svelte';
   import { unlockAudio } from '../client/services/media-playback-service';
   import {
@@ -52,19 +53,7 @@
   });
 </script>
 
-<div
-  class="toast"
-  id="toast"
-  role="status"
-  aria-live="polite"
-  data-variant={toastUi.variant}
-  data-visible={String(toastUi.visible)}
->
-  <span>{toastUi.message}</span>
-  {#if toastUi.action && toastUi.actionLabel}
-    <button type="button" onclick={() => void invokeToastAction()}>{toastUi.actionLabel}</button>
-  {/if}
-</div>
+<ToastStack id="toast" toasts={toastUi.items} onDismiss={dismissToastUi} />
 
 <div
   bind:this={guestNameDialog}

@@ -117,54 +117,6 @@ body:not([data-screen='room']) .topbar {
   font-size: clamp(2.75rem, 4.8vw, 3.625rem);
 }
 
-.toast {
-  position: fixed;
-  right: var(--space-lg);
-  bottom: var(--space-lg);
-  /* Above modal dialogs (settings overlay is 60): an action a dialog starts,
-     like a ban with its undo, must stay reachable while the dialog is open. */
-  z-index: 200;
-  max-width: min(360px, calc(100vw - 32px));
-  border: 1px solid color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 18%);
-  border-radius: var(--radius-sm);
-  padding: 12px 14px;
-  background: var(--vr-surface-2);
-  color: var(--vr-text);
-  font-weight: 750;
-  line-height: 1.35;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(10px);
-  transition:
-    opacity 180ms var(--ease-out),
-    transform 180ms var(--ease-out);
-  overflow-wrap: anywhere;
-  white-space: pre-line;
-}
-
-.toast[data-visible='true'] {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.toast[data-variant='error'] {
-  max-width: min(720px, calc(100vw - 32px));
-  border-color: color-mix(in oklch, var(--vr-danger), var(--vr-text) 20%);
-  font-size: 0.86rem;
-}
-
-.toast button {
-  margin-left: 10px;
-  border: 0;
-  border-radius: 8px;
-  padding: 5px 9px;
-  background: var(--vr-surface-3);
-  color: inherit;
-  font: inherit;
-  font-weight: 800;
-  cursor: pointer;
-}
-
 @keyframes blink {
   50% {
     opacity: 0.35;
@@ -196,11 +148,10 @@ body:not([data-screen='room']) .topbar {
     font-size: 2.25rem;
   }
 
-  body[data-screen='room'] .toast,
-  body[data-screen='checking'] .toast {
+  /* In the room the toasts sit above the dock. */
+  body[data-screen='room'] .ui-toaststack,
+  body[data-screen='checking'] .ui-toaststack {
     right: var(--space-md);
     bottom: calc(max(var(--space-lg), env(safe-area-inset-bottom)) + 72px);
-    left: var(--space-md);
-    max-width: none;
   }
 }

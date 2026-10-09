@@ -36,6 +36,8 @@
   let avatarChange = $state<RoomAvatarChange>({ kind: 'keep' });
   let cropOpen = $state(false);
   let section = $state<Section>('general');
+  // Save waits until the name or the picture actually changes.
+  const dirty = $derived(Boolean(room) && (name.trim() !== (room?.name ?? '') || avatarChange.kind !== 'keep'));
 
   $effect(() => {
     const activeRoom = room;
@@ -84,6 +86,7 @@
     const undo = options.undo;
     onToast(message, {
       variant: options.variant,
+      description: options.description,
       duration: undo ? BAN_UNDO_DURATION_MS : undefined,
       // The stack keeps a toast open after its action, so undo closes it first:
       // a second click would otherwise try to lift an already lifted ban.
@@ -196,7 +199,7 @@
               <button class="settings-cancel" type="button" onclick={onClose}>Отмена</button><button
                 class="settings-save"
                 type="submit"
-                disabled={saving || !name.trim()}>{saving ? 'Сохраняем…' : 'Сохранить'}</button
+                disabled={saving || !name.trim() || !dirty}>{saving ? 'Сохраняем…' : 'Сохранить'}</button
               >
             </div>
             <div class="dialog-danger-zone">
@@ -223,16 +226,19 @@
   .room-settings-modal {
     width: min(780px, calc(100vw - 28px));
   }
+  .room-settings-modal .settings-nav-item {
+    gap: 10px;
+  }
   /* One height for every section, so switching tabs does not jump. */
   .room-settings-body {
-    height: min(540px, calc(90vh - 74px));
+    height: min(532px, calc(90vh - 74px));
     min-height: 0;
   }
   .room-settings-content {
     display: flex;
     flex-direction: column;
     gap: 24px;
-    padding: 26px;
+    padding: 24px;
   }
   .room-profile-head {
     display: flex;
@@ -253,63 +259,5 @@
     .room-settings-content {
       padding: 22px 18px;
     }
-  }
-
-  .dialog-danger-zone {
-    margin-top: 4px;
-    padding-top: 14px;
-    border-top: 1px solid var(--vr-line);
-  }
-  .dialog-danger-trigger {
-    padding: 9px 14px;
-    border: 1px solid rgba(239, 68, 68, 0.4);
-    border-radius: 10px;
-    background: transparent;
-    color: var(--vr-danger);
-    font-family: var(--font-ui);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition:
-      background-color 0.15s ease,
-      border-color 0.15s ease;
-  }
-  .dialog-danger-trigger:hover {
-    border-color: rgba(239, 68, 68, 0.6);
-    background: color-mix(in oklch, var(--vr-danger) 10%, transparent);
-  }
-  .dialog-danger-note {
-    margin: 0 0 10px;
-    color: rgba(248, 113, 113, 0.92);
-    font-size: 13px;
-    line-height: 1.45;
-  }
-  .dialog-danger-actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-  }
-  .dialog-danger-confirm {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 9px 14px;
-    border: 0;
-    border-radius: 10px;
-    background: var(--vr-danger);
-    color: #fff;
-    font-family: var(--font-ui);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    transition: background-color 0.15s ease;
-  }
-  .dialog-danger-confirm:hover {
-    background: color-mix(in oklch, var(--vr-danger), var(--vr-bg) 20%);
-  }
-  .dialog-danger-confirm:disabled,
-  .dialog-danger-trigger:disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
   }
 </style>

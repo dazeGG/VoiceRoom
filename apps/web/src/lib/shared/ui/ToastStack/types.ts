@@ -11,6 +11,8 @@ export interface ToastItem {
 }
 
 export interface ToastStackProps {
+  /** Id for the stack's container, for hosts that need to find it. */
+  id?: string;
   toasts: ToastItem[];
   onDismiss: (id: string) => void;
 }
