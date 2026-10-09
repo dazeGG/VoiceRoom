@@ -1,7 +1,7 @@
 <script lang="ts">
   import { Check, MessageSquare, UserMinus, UserPlus } from '@lucide/svelte';
-  import { Avatar, Ellipsis } from '$lib/shared/ui';
-  import { iconMd } from '$lib/shared/ui/icons';
+  import { Avatar, Button, Ellipsis } from '$lib/shared/ui';
+  import { iconSm } from '$lib/shared/ui/icons';
   import { getAvatarColor } from '$lib/visual/tokens';
   import type { ProfileCardProps } from './types';
 
@@ -18,8 +18,7 @@
 
   // The card itself takes the person's avatar colour, washed into the surface
   // from the top, so it reads as theirs even when they use a photo — where the
-  // accent would otherwise be invisible. A separate banner band above the
-  // content only added a shape to explain.
+  // accent would otherwise be invisible.
   const accent = $derived(person.avatarAccent || getAvatarColor(person.avatarColorKey).background);
   const friendsSinceLabel = $derived.by(() => {
     if (relationship !== 'friend' || !friendsSince) return '';
@@ -43,8 +42,8 @@
         online={person.presence === 'online'}
         afk={person.presence === 'away'}
         dnd={person.presence === 'dnd'}
-        showDot
-        ring="var(--profile-surface)"
+        showDot={relationship !== 'unavailable'}
+        ring="var(--vr-surface-2)"
       />
     </span>
 
@@ -66,49 +65,29 @@
       <!-- Identity only: social actions against your own account are invalid. -->
     {:else if relationship === 'unavailable'}
       <p class="profile-card-note">Гость комнаты — профиль и дружба недоступны.</p>
+    {:else if relationship === 'outgoing'}
+      <p class="profile-card-note">Заявка в друзья уже отправлена.</p>
     {:else}
       <div class="profile-card-actions">
         {#if relationship === 'friend'}
-          <button
-            class="profile-card-action profile-card-action--primary"
-            type="button"
-            disabled={busy}
-            onclick={onMessage}
-          >
-            <MessageSquare {...iconMd} aria-hidden="true" />
+          <Button variant="primary" disabled={busy} onclick={onMessage}>
+            {#snippet icon()}<MessageSquare {...iconSm} aria-hidden="true" />{/snippet}
             Написать
-          </button>
-          <button
-            class="profile-card-action profile-card-action--danger"
-            type="button"
-            disabled={busy}
-            onclick={onRemoveFriend}
-          >
-            <UserMinus {...iconMd} aria-hidden="true" />
+          </Button>
+          <Button variant="danger-ghost" disabled={busy} onclick={onRemoveFriend}>
+            {#snippet icon()}<UserMinus {...iconSm} aria-hidden="true" />{/snippet}
             Удалить из друзей
-          </button>
+          </Button>
         {:else if relationship === 'incoming'}
-          <button
-            class="profile-card-action profile-card-action--primary"
-            type="button"
-            disabled={busy}
-            onclick={onAcceptRequest}
-          >
-            <Check {...iconMd} aria-hidden="true" />
+          <Button variant="primary" disabled={busy} onclick={onAcceptRequest}>
+            {#snippet icon()}<Check {...iconSm} aria-hidden="true" />{/snippet}
             Принять заявку
-          </button>
-        {:else if relationship === 'outgoing'}
-          <p class="profile-card-note">Заявка в друзья уже отправлена.</p>
+          </Button>
         {:else}
-          <button
-            class="profile-card-action profile-card-action--friendly"
-            type="button"
-            disabled={busy}
-            onclick={onAddFriend}
-          >
-            <UserPlus {...iconMd} aria-hidden="true" />
+          <Button variant="soft" disabled={busy} onclick={onAddFriend}>
+            {#snippet icon()}<UserPlus {...iconSm} aria-hidden="true" />{/snippet}
             Добавить в друзья
-          </button>
+          </Button>
         {/if}
       </div>
     {/if}
@@ -116,56 +95,44 @@
 </div>
 
 <style>
-  /* One padding value all round, and one rhythm: lines that belong together sit
-     tight, groups are separated by a single larger step. */
   .profile-card {
-    --profile-surface: color-mix(in oklch, var(--profile-accent), var(--warm-900) 88%);
-    --profile-pad: 20px;
-    --profile-group-gap: 18px;
-    width: min(320px, calc(100vw - 28px));
+    width: min(300px, calc(100vw - 28px));
     overflow: hidden;
-    border-radius: 20px;
     background: linear-gradient(
       180deg,
-      color-mix(in oklch, var(--profile-accent), var(--warm-900) 72%),
-      var(--profile-surface) 180px
+      color-mix(in oklch, var(--profile-accent) 30%, var(--vr-surface-2)) 0%,
+      var(--vr-surface-2) 58%
     );
   }
 
   .profile-card-body {
     display: flex;
     flex-direction: column;
-    gap: var(--profile-group-gap);
-    padding: var(--profile-pad);
+    gap: 16px;
+    padding: 20px;
   }
 
   .profile-card-avatar {
     display: inline-flex;
     align-self: flex-start;
-    border-radius: 50%;
-    box-shadow: 0 0 0 4px color-mix(in oklch, var(--profile-accent), var(--warm-900) 72%);
   }
 
-  /* The name and the handle are one thing said twice, so they read as a block. */
   .profile-card-identity {
     display: flex;
     min-width: 0;
     flex-direction: column;
-    gap: 3px;
-    /* Closer to the face than to the next group. */
-    margin-top: calc(4px - var(--profile-group-gap));
+    gap: 2px;
   }
 
   :global(.profile-card-name) {
-    color: var(--warm-ink);
-    font-family: var(--font-display, var(--font-ui));
-    font-size: 21px;
-    font-weight: 700;
+    color: var(--vr-text);
+    font-size: 19px;
+    font-weight: 600;
     letter-spacing: -0.02em;
   }
 
   :global(.profile-card-handle) {
-    color: var(--warm-muted-dim);
+    color: var(--vr-text-2);
     font-family: var(--font-mono);
     font-size: 12.5px;
   }
@@ -173,85 +140,38 @@
   .profile-card-since {
     display: flex;
     flex-direction: column;
-    gap: 3px;
+    gap: 2px;
+    padding-top: 14px;
+    border-top: 1px solid var(--vr-line);
   }
 
   .profile-card-since-label {
-    color: var(--warm-faint);
-    font-family: var(--font-mono);
-    font-size: 10.5px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
+    color: var(--vr-text-3);
+    font-size: 12px;
   }
 
   .profile-card-since-value {
-    color: var(--warm-muted);
+    color: var(--vr-text);
     font-size: 13.5px;
   }
 
   .profile-card-note {
     margin: 0;
-    color: var(--warm-muted-dim);
+    padding: 10px 12px;
+    border-radius: 11px;
+    background: var(--vr-hover);
+    color: var(--vr-text-2);
     font-size: 13px;
-    line-height: 1.5;
+    line-height: 1.45;
   }
 
   .profile-card-actions {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
   }
 
-  .profile-card-action {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
-    height: 44px;
-    border: 1px solid transparent;
-    border-radius: 14px;
-    background: var(--control);
-    color: var(--warm-ink);
-    font-family: var(--font-ui);
-    font-size: 14.5px;
-    font-weight: 800;
-    cursor: pointer;
-    transition:
-      background 0.14s ease,
-      border-color 0.14s ease;
-  }
-
-  .profile-card-action:disabled {
-    cursor: default;
-    opacity: 0.6;
-  }
-
-  .profile-card-action--primary {
-    background: var(--accent);
-    color: var(--accent-ink);
-  }
-
-  .profile-card-action--primary:hover:not(:disabled) {
-    background: var(--accent-hover);
-  }
-
-  .profile-card-action--friendly {
-    background: color-mix(in oklch, var(--green), transparent 84%);
-    border-color: color-mix(in oklch, var(--green), transparent 62%);
-    color: var(--green);
-  }
-
-  .profile-card-action--friendly:hover:not(:disabled) {
-    background: color-mix(in oklch, var(--green), transparent 74%);
-  }
-
-  .profile-card-action--danger {
-    background: color-mix(in oklch, var(--coral), transparent 86%);
-    color: var(--coral);
-    font-weight: 700;
-  }
-
-  .profile-card-action--danger:hover:not(:disabled) {
-    background: color-mix(in oklch, var(--coral), transparent 76%);
+  .profile-card-actions :global(.ui-button) {
+    width: 100%;
   }
 </style>

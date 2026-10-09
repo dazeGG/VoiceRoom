@@ -20,7 +20,9 @@
   }: AvatarProps = $props();
 
   const fontSize = $derived(Math.round(size * 0.39));
-  const dotSize = $derived(Math.max(10, Math.round(size * 0.3)));
+  // 11px on list-sized avatars, 17px on the big profile one.
+  const large = $derived(size >= 56);
+  const dotSize = $derived(large ? 17 : 11);
   const presence = $derived(dnd ? 'dnd' : afk ? 'afk' : online ? 'online' : 'offline');
   const presenceColors = {
     dnd: 'var(--vr-dnd)',
@@ -57,6 +59,9 @@
       data-status={presence}
       style:width={`${dotSize}px`}
       style:height={`${dotSize}px`}
+      style:border-width={large ? '3px' : '2px'}
+      style:right={large ? '1px' : '-2px'}
+      style:bottom={large ? '1px' : '-2px'}
       style:background={dotColor}
       style:border-color={ring}
     ></span>
@@ -89,9 +94,7 @@
 
   .ui-avatar-dot {
     position: absolute;
-    right: -1px;
-    bottom: -1px;
     border-radius: 50%;
-    border: 2px solid;
+    border-style: solid;
   }
 </style>

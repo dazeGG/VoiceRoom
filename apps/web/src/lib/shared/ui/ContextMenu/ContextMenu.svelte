@@ -187,6 +187,7 @@
   .context-menu-panel--bare {
     gap: 0;
     padding: 0;
+    border-radius: 18px;
     /* The content owns the rounded corners, so clip anything that overflows
        them (the profile-card banner). */
     overflow: hidden;
