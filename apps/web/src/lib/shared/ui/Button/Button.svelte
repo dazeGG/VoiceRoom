@@ -23,16 +23,16 @@
     align-items: center;
     justify-content: center;
     gap: var(--interactive-gap, 10px);
-    height: var(--interactive-lg, 52px);
-    min-height: var(--interactive-lg, 52px);
-    padding: 0 var(--interactive-pad-x, 22px);
-    border: none;
-    border-radius: var(--radius-md);
+    height: 40px;
+    min-height: 40px;
+    padding: 0 18px;
+    border: 1px solid transparent;
+    border-radius: 11px;
     font-family: var(--font-ui);
-    font-size: 15px;
-    font-weight: 760;
+    font-size: 14px;
+    font-weight: 600;
     line-height: 1;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.005em;
     cursor: pointer;
     transition:
       background 0.15s ease,
@@ -53,30 +53,66 @@
 
   .ui-button.compact,
   .ui-button--compact {
-    height: var(--interactive-md, 40px);
-    min-height: var(--interactive-md, 40px);
-    padding-inline: 18px;
+    height: 34px;
+    min-height: 34px;
+    padding-inline: 14px;
     font-size: 13.5px;
+    border-radius: 10px;
   }
 
   .ui-button--primary {
-    background: var(--accent);
-    color: var(--accent-ink);
-    box-shadow: var(--shadow-glow, 0 10px 26px oklch(89% 0.24 122 / 0.28));
+    background: var(--vr-accent);
+    color: var(--vr-accent-ink);
   }
 
   .ui-button--primary:hover:not(:disabled) {
-    background: var(--accent-hover);
+    background: var(--vr-accent-hover);
   }
 
   .ui-button--ghost {
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: var(--control);
-    color: var(--warm-ink);
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
   }
 
   .ui-button--ghost:hover:not(:disabled) {
-    background: var(--control-hover);
+    background: var(--vr-surface-3-hover);
+  }
+
+  .ui-button--outline {
+    border-color: var(--vr-line-strong);
+    background: transparent;
+    color: var(--vr-text);
+  }
+
+  .ui-button--outline:hover:not(:disabled) {
+    background: var(--vr-hover);
+  }
+
+  .ui-button--soft {
+    background: var(--vr-accent-soft);
+    color: var(--vr-accent);
+  }
+
+  .ui-button--soft:hover:not(:disabled) {
+    background: var(--vr-accent-soft-hover);
+  }
+
+  .ui-button--danger {
+    background: var(--vr-danger);
+    color: var(--vr-on-danger);
+  }
+
+  .ui-button--danger:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--vr-danger), var(--vr-on-danger) 12%);
+  }
+
+  .ui-button--danger-ghost {
+    background: transparent;
+    color: var(--vr-danger);
+  }
+
+  .ui-button--danger-ghost:hover:not(:disabled) {
+    background: var(--vr-danger-hover);
   }
 
   .ui-button:disabled {

@@ -33,13 +33,14 @@
         role="img"
         aria-label={item.label}
         style:--avatar-bg={item.background}
-        style:--avatar-fg={item.foreground || '#fff'}
+        style:--avatar-fg={item.foreground}
         style:--avatar-shadow={item.shadow || 'none'}
         ><Avatar
           name={item.label}
           src={item.src}
           size={size - 4}
           background={item.background}
+          foreground={item.foreground}
           class="avatar-stack-avatar"
         /></span
       >
@@ -68,11 +69,11 @@
     width: var(--avatar-stack-size, 24px);
     height: var(--avatar-stack-size, 24px);
     margin-left: calc(var(--avatar-stack-size, 24px) * -0.28);
-    border: 2px solid var(--avatar-stack-ring, #15130f);
+    border: 2px solid var(--avatar-stack-ring, var(--vr-surface-2));
     border-radius: 999px;
     font-family: var(--font-ui, sans-serif);
     font-size: var(--avatar-stack-font, 10px);
-    font-weight: 800;
+    font-weight: 600;
     line-height: 1;
     letter-spacing: -0.04em;
   }
@@ -84,7 +85,7 @@
 
   .avatar-stack-item {
     background: var(--avatar-bg, var(--room-avatar-bg));
-    color: var(--avatar-fg, #fff);
+    color: var(--avatar-fg, var(--vr-text));
     box-shadow: var(--avatar-shadow, none);
   }
 
@@ -93,8 +94,7 @@
   }
 
   .avatar-stack-rest {
-    background: var(--panel-strong);
-    color: #e8e1d2;
-    box-shadow: 0 8px 18px rgb(0 0 0 / 0.22);
+    background: var(--vr-surface-3);
+    color: var(--vr-text-2);
   }
 </style>

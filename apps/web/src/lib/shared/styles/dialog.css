@@ -11,17 +11,17 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: color-mix(in srgb, var(--warm-950) 62%, transparent);
+  background: var(--vr-backdrop);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 }
 
 .dialog-card {
   width: min(430px, 100%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 20px;
-  background: var(--warm-800);
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  background: var(--vr-surface);
+  box-shadow: var(--vr-shadow-modal);
   overflow: hidden;
 }
 
@@ -33,11 +33,11 @@
 }
 
 .dialog-title {
-  color: var(--warm-100);
+  color: var(--vr-text);
   font-family: var(--font-ui);
   font-size: 17px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-weight: 600;
+  letter-spacing: -0.015em;
 }
 
 .dialog-close {
@@ -48,8 +48,8 @@
   height: 30px;
   border: none;
   border-radius: 9px;
-  background: var(--control);
-  color: var(--warm-500);
+  background: transparent;
+  color: var(--vr-text-2);
   cursor: pointer;
   transition:
     background 0.15s ease,
@@ -57,45 +57,49 @@
 }
 
 .dialog-close:hover {
-  background: var(--control-hover);
-  color: var(--warm-100);
+  background: var(--vr-hover);
+  color: var(--vr-text);
 }
 
 .dialog-tabs {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   margin: 0 22px;
-  padding: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  background: var(--warm-900);
+  padding: 3px;
+  border: 1px solid var(--vr-line);
+  border-radius: 14px;
+  background: var(--vr-surface-2);
 }
 
 .dialog-tab {
   flex: 1;
   border: none;
-  border-radius: 9px;
+  border-radius: 11px;
   padding: 9px 0;
   background: transparent;
-  color: var(--warm-500);
+  color: var(--vr-text-2);
   font-family: var(--font-ui);
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
   transition:
     background 0.15s ease,
     color 0.15s ease;
 }
 
+.dialog-tab:hover:not([data-active='true']) {
+  background: var(--vr-hover);
+  color: var(--vr-text);
+}
+
 .dialog-tab[data-active='true'] {
-  background: var(--control-active);
-  color: var(--warm-800);
-  font-weight: 700;
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
 }
 
 .dialog-tab--temp[data-active='true'] {
-  background: var(--amber);
-  color: #1a1206;
+  background: var(--vr-away);
+  color: var(--vr-accent-ink);
 }
 
 .dialog-body {
@@ -107,11 +111,10 @@
 
 .dialog-error {
   margin: 0;
-  border: 1px solid rgba(214, 109, 92, 0.4);
   border-radius: 11px;
   padding: 9px 12px;
-  background: color-mix(in oklch, var(--coral) 12%, transparent);
-  color: var(--coral-soft);
+  background: var(--vr-danger-soft);
+  color: var(--vr-danger);
   font-size: 12.5px;
 }
 
@@ -121,39 +124,37 @@
 }
 
 .dialog-label {
-  margin-bottom: 9px;
-  color: var(--warm-650);
+  margin-bottom: 8px;
+  color: var(--vr-text-2);
   font-family: var(--font-ui);
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .dialog-label-soft {
-  color: #5a5547;
+  color: var(--vr-text-3);
 }
 
 .dialog-input {
   width: 100%;
-  min-height: 0;
-  border: 1px solid rgba(154, 143, 106, 0.5);
+  min-height: 44px;
+  border: 1px solid var(--vr-line-strong);
   border-radius: 12px;
-  padding: 13px 15px;
-  background: var(--warm-900);
-  color: var(--warm-100);
+  padding: 0 14px;
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
   font-family: var(--font-ui);
-  font-size: 15px;
+  font-size: 14.5px;
   outline: none;
   transition: border-color 0.15s ease;
 }
 
 .dialog-input::placeholder {
-  color: var(--warm-650);
+  color: var(--vr-text-3);
 }
 
 .dialog-input:focus {
-  border-color: var(--focus-border);
-  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  border-color: var(--vr-accent-line);
   box-shadow: none;
 }
 
@@ -177,23 +178,21 @@
 }
 
 .dialog-note--ok {
-  border: 1px solid rgba(79, 174, 116, 0.22);
-  background: color-mix(in oklch, var(--green) 8%, transparent);
-  color: #a9c9b6;
+  background: var(--vr-accent-soft);
+  color: var(--vr-text-2);
 }
 
 .dialog-note--ok svg {
-  stroke: var(--green-soft);
+  stroke: var(--vr-online);
 }
 
 .dialog-note--warn {
-  border: 1px solid rgba(199, 140, 62, 0.28);
-  background: color-mix(in oklch, var(--amber) 10%, transparent);
-  color: #e3b780;
+  background: color-mix(in oklch, var(--vr-warning), transparent 88%);
+  color: var(--vr-warning);
 }
 
 .dialog-note--warn svg {
-  stroke: #e3b780;
+  stroke: var(--vr-warning);
 }
 
 .dialog-actions {
@@ -203,11 +202,12 @@
 
 .dialog-cancel {
   flex: none;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-  padding: 13px 20px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 11px;
+  padding: 0 20px;
+  min-height: 42px;
   background: transparent;
-  color: var(--warm-300);
+  color: var(--vr-text);
   font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 600;
@@ -216,7 +216,7 @@
 }
 
 .dialog-cancel:hover {
-  background: var(--control);
+  background: var(--vr-hover);
 }
 
 .dialog-submit {
@@ -226,19 +226,20 @@
   justify-content: center;
   gap: 9px;
   border: none;
-  border-radius: 12px;
-  padding: 13px 0;
-  background: var(--control-active);
-  color: var(--warm-800);
+  border-radius: 11px;
+  min-height: 42px;
+  padding: 0;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
   font-family: var(--font-ui);
   font-size: 14.5px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   transition: background 0.15s ease;
 }
 
 .dialog-submit:hover {
-  background: var(--control-active-hover);
+  background: var(--vr-accent-hover);
 }
 
 .dialog-submit:disabled {
@@ -247,6 +248,6 @@
 }
 
 .dialog-submit .home-spinner {
-  border-color: rgba(23, 21, 15, 0.25);
-  border-top-color: var(--warm-800);
+  border-color: color-mix(in oklch, var(--vr-accent-ink), transparent 75%);
+  border-top-color: var(--vr-accent-ink);
 }

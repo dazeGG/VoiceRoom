@@ -13,31 +13,30 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
     border-radius: var(--radius-pill);
     font-family: var(--font-ui);
-    font-size: 10.5px;
-    font-weight: 700;
+    font-size: 11.5px;
+    font-weight: 600;
     line-height: 1;
   }
 
   .ui-badge--default {
-    background: var(--accent);
-    color: var(--accent-ink);
+    background: var(--vr-accent);
+    color: var(--vr-accent-ink);
   }
 
   .ui-badge--muted {
-    background: var(--control-hover);
-    color: var(--warm-muted);
+    background: var(--vr-badge-muted-bg);
+    color: var(--vr-badge-muted-ink);
   }
 
   .ui-badge--warning {
-    background: color-mix(in oklch, var(--amber), transparent 78%);
-    color: var(--amber);
-    border: 1px solid color-mix(in oklch, var(--amber), transparent 55%);
-    font-family: var(--font-ui);
+    background: color-mix(in oklch, var(--vr-away), transparent 78%);
+    color: var(--vr-away);
+    border: 1px solid color-mix(in oklch, var(--vr-away), transparent 55%);
     text-transform: uppercase;
     letter-spacing: 0.08em;
   }

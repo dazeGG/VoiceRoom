@@ -10,6 +10,7 @@
     size = 36,
     shape = 'circle',
     background = null,
+    foreground = null,
     online = null,
     showDot = false,
     dnd = false,
@@ -42,7 +43,7 @@
   style:height={`${size}px`}
   style:font-size={`${fontSize}px`}
   style:background={background || palette.background}
-  style:color={palette.foreground}
+  style:color={foreground || palette.foreground}
   aria-hidden="true"
 >
   {#if src && !imageFailed}

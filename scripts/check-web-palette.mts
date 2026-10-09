@@ -31,7 +31,7 @@ const LEGACY_SURFACE_TOKENS = [
 const SURFACE_TOKENS = [...Object.keys(SURFACE_TOKEN_VALUES), ...LEGACY_SURFACE_TOKENS];
 
 const SEMANTIC_TOKEN =
-  /var\(--(?:vr-(?:accent|online|away|dnd|offline|danger|success|warning|info|text|line|hover)[\w-]*|accent(?:-[\w-]+)?|amber|avatar-[\w-]+|blue|coral|focus-border|green|ink|line|muted|participant-[\w-]+|preview-[\w-]+|profile-cover-accent|room-avatar-bg|slider-fill|stream-live(?:-hover)?|toast-accent|warm-(?:faint|ink(?:-dim)?|muted(?:-dim)?))\b/;
+  /var\(--(?:vr-(?:accent|online|away|dnd|offline|danger|success|warning|info|text|line|hover|badge|backdrop|scrim|dock|on)[\w-]*|accent(?:-[\w-]+)?|amber|avatar-[\w-]+|blue|coral|focus-border|green|ink|line|muted|participant-[\w-]+|preview-[\w-]+|profile-cover-accent|room-avatar-bg|slider-fill|stream-live(?:-hover)?|toast-accent|warm-(?:faint|ink(?:-dim)?|muted(?:-dim)?))\b/;
 const SEMANTIC_SELECTOR =
   /(?:\[aria-pressed|accent|action|active|avatar|away|check|connected|danger|decline|delete|destructive|dnd|dock-bar|error|exit|idle|launch|leave|live|not-found|offline|online|owner|record|remove|room-chat-unread|screen-source-pop-dot|status|stop|submit|success|thumb|toggle|warning)/i;
 const IMAGE_SELECTOR =

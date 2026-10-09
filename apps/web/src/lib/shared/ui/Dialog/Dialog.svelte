@@ -57,16 +57,16 @@
     align-items: center;
     justify-content: center;
     padding: 24px;
-    background: color-mix(in srgb, var(--warm-950) 62%, transparent);
+    background: var(--vr-backdrop);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
   }
 
   .ui-dialog-card {
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: var(--radius-xl);
-    background: var(--warm-800);
-    box-shadow: var(--shadow);
+    border: 1px solid var(--vr-line-strong);
+    border-radius: 20px;
+    background: var(--vr-surface);
+    box-shadow: var(--vr-shadow-modal);
     overflow: hidden;
   }
 
@@ -78,11 +78,11 @@
   }
 
   .ui-dialog-title {
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-family: var(--font-ui);
     font-size: 17px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
+    font-weight: 600;
+    letter-spacing: -0.015em;
   }
 
   .ui-dialog-close {
@@ -93,8 +93,8 @@
     height: 30px;
     border: none;
     border-radius: var(--radius-sm);
-    background: var(--control);
-    color: var(--warm-muted);
+    background: transparent;
+    color: var(--vr-text-2);
     cursor: pointer;
     transition:
       background 0.15s ease,
@@ -102,8 +102,8 @@
   }
 
   .ui-dialog-close:hover {
-    background: var(--control-hover);
-    color: var(--warm-ink);
+    background: var(--vr-hover);
+    color: var(--vr-text);
   }
 
   .ui-dialog-body {

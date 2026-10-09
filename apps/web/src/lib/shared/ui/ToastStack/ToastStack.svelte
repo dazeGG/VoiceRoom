@@ -1,6 +1,6 @@
 <script lang="ts">
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
-  import { Bell, Check, CircleAlert, Info, TriangleAlert, X } from '@lucide/svelte';
+  import { Check, CircleAlert, Info, TriangleAlert, X } from '@lucide/svelte';
   import { iconXs } from '$lib/shared/ui/icons';
   import type { ToastStackProps } from './types';
 
@@ -18,13 +18,14 @@
         data-variant={toast.variant ?? 'default'}
         style:--toast-duration={`${toast.duration ?? 3200}ms`}
       >
-        <span class="ui-toast-icon" aria-hidden="true">
-          {#if toast.variant === 'success'}<Check {...iconXs} />
-          {:else if toast.variant === 'error'}<CircleAlert {...iconXs} />
-          {:else if toast.variant === 'warning'}<TriangleAlert {...iconXs} />
-          {:else if toast.variant === 'info'}<Info {...iconXs} />
-          {:else}<Bell {...iconXs} />{/if}
-        </span>
+        {#if toast.variant && toast.variant !== 'default'}
+          <span class="ui-toast-icon" aria-hidden="true">
+            {#if toast.variant === 'success'}<Check {...iconXs} />
+            {:else if toast.variant === 'error'}<CircleAlert {...iconXs} />
+            {:else if toast.variant === 'warning'}<TriangleAlert {...iconXs} />
+            {:else}<Info {...iconXs} />{/if}
+          </span>
+        {/if}
         <span class="ui-toast-copy"
           ><strong class="ui-toast-message"><EmojiText text={toast.message} /></strong>{#if toast.description}<span
               class="ui-toast-description">{toast.description}</span
@@ -67,21 +68,21 @@
   }
 
   .ui-toast {
-    --toast-accent: var(--warm-muted);
+    --toast-accent: var(--vr-text-2);
     position: relative;
     display: flex;
     width: min(382px, calc(100vw - 32px));
     align-items: flex-start;
     gap: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 16px;
     padding: 13px 42px 15px 14px;
     overflow: hidden;
-    background: var(--warm-800);
-    box-shadow: 0 16px 44px oklch(4% 0.01 92 / 0.38);
-    color: var(--warm-ink);
+    background: var(--vr-surface-3);
+    box-shadow: var(--vr-shadow-toast);
+    color: var(--vr-text);
     font-family: var(--font-ui);
-    font-weight: 700;
+    font-weight: 600;
     font-size: 13.5px;
     line-height: 1.35;
     overflow-wrap: anywhere;
@@ -89,19 +90,16 @@
   }
 
   .ui-toast[data-variant='error'] {
-    --toast-accent: var(--coral);
-    border-color: color-mix(in oklch, var(--coral), transparent 48%);
-    background: color-mix(in oklch, var(--coral) 14%, var(--warm-800));
-    box-shadow: 0 16px 44px color-mix(in oklch, var(--coral), transparent 78%);
+    --toast-accent: var(--vr-danger);
   }
   .ui-toast[data-variant='success'] {
-    --toast-accent: var(--green);
+    --toast-accent: var(--vr-success);
   }
   .ui-toast[data-variant='warning'] {
-    --toast-accent: oklch(78% 0.15 83);
+    --toast-accent: var(--vr-warning);
   }
   .ui-toast[data-variant='info'] {
-    --toast-accent: var(--blue);
+    --toast-accent: var(--vr-info);
   }
   .ui-toast-icon {
     display: grid;
@@ -110,7 +108,7 @@
     flex: none;
     place-items: center;
     border-radius: 50%;
-    background: color-mix(in oklch, var(--toast-accent), transparent 82%);
+    background: color-mix(in oklch, var(--toast-accent), transparent 86%);
     color: var(--toast-accent);
   }
   .ui-toast-copy {
@@ -124,16 +122,16 @@
     white-space: pre-line;
   }
   .ui-toast-description {
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font-size: 12.5px;
-    font-weight: 550;
+    font-weight: 400;
   }
   .ui-toast-queue {
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 999px;
     padding: 5px 10px;
-    background: var(--warm-900);
-    color: var(--warm-muted);
+    background: var(--vr-surface-3);
+    color: var(--vr-text-2);
     font: 500 11px var(--font-mono);
   }
 
@@ -144,18 +142,19 @@
   }
 
   .ui-toast-action {
-    border: 1px solid rgba(255, 255, 255, 0.13);
+    border: none;
     border-radius: 7px;
-    padding: 4px 7px;
-    background: var(--control);
-    color: var(--warm-ink);
+    padding: 4px 8px;
+    background: transparent;
+    color: var(--vr-accent);
     font: inherit;
-    font-size: 12px;
+    font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
   }
 
   .ui-toast-action:hover {
-    background: var(--control-hover);
+    background: var(--vr-accent-soft);
   }
 
   .ui-toast-close {
@@ -172,7 +171,7 @@
     border: none;
     border-radius: 6px;
     background: transparent;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     cursor: pointer;
   }
   .ui-toast-progress {
@@ -188,8 +187,8 @@
   }
 
   .ui-toast-close:hover {
-    background: var(--control);
-    color: var(--warm-ink);
+    background: var(--vr-hover);
+    color: var(--vr-text);
   }
 
   @keyframes ui-toast-in {

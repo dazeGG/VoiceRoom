@@ -1,7 +1,7 @@
 import type { Snippet } from 'svelte';
 
 export interface ButtonProps {
-  variant?: 'primary' | 'ghost';
+  variant?: 'primary' | 'ghost' | 'outline' | 'soft' | 'danger' | 'danger-ghost';
   type?: 'button' | 'submit';
   disabled?: boolean;
   class?: string;

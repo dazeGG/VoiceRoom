@@ -177,12 +177,11 @@
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior: contain;
-    padding: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    background: color-mix(in srgb, var(--warm-800) 94%, transparent);
-    backdrop-filter: blur(20px);
-    box-shadow: 0 26px 70px rgba(0, 0, 0, 0.62);
+    padding: 6px;
+    border: 1px solid var(--vr-line-strong);
+    border-radius: 12px;
+    background: var(--vr-surface-2);
+    box-shadow: var(--vr-shadow-popover);
   }
 
   .context-menu-panel--bare {
@@ -205,7 +204,7 @@
   }
 
   .context-menu-panel :global([role='menuitem']:focus-visible) {
-    outline: 2px solid color-mix(in oklch, var(--accent), white 12%);
+    outline: 2px solid var(--vr-accent);
     outline-offset: 1px;
   }
 
