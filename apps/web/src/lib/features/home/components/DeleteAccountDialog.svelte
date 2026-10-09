@@ -147,11 +147,11 @@
   }
 
   .delete-account-text {
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
   }
 
   .delete-account-error {
-    color: var(--coral-soft);
+    color: var(--vr-danger);
   }
 
   .delete-account-list {
@@ -159,7 +159,7 @@
     gap: 4px;
     margin: -6px 0 0;
     padding-left: 20px;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font-size: 13.5px;
     line-height: 1.45;
   }
@@ -173,19 +173,19 @@
     padding: 10px 12px;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 10px;
-    background: var(--warm-900);
+    background: var(--vr-bg);
   }
 
   .delete-account-room strong {
     display: block;
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-size: 13.5px;
   }
 
   .delete-account-room small {
     display: block;
     margin-top: 2px;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-size: 12.5px;
   }
 
@@ -193,7 +193,7 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-size: 14px;
     cursor: pointer;
   }
@@ -202,15 +202,15 @@
     width: 16px;
     height: 16px;
     margin: 0;
-    accent-color: var(--coral);
+    accent-color: var(--vr-danger);
   }
 
   .delete-account-submit {
     min-height: 40px;
     padding: 0 18px;
-    border: 1px solid color-mix(in oklch, var(--coral), transparent 45%);
+    border: 1px solid color-mix(in oklch, var(--vr-danger), transparent 45%);
     border-radius: 12px;
-    background: color-mix(in oklch, var(--coral), transparent 78%);
+    background: color-mix(in oklch, var(--vr-danger), transparent 78%);
     color: #f3c2b8;
     font: inherit;
     font-size: 14px;
@@ -219,7 +219,7 @@
   }
 
   .delete-account-submit:hover:not(:disabled) {
-    background: color-mix(in oklch, var(--coral), transparent 66%);
+    background: color-mix(in oklch, var(--vr-danger), transparent 66%);
   }
 
   .delete-account-submit:disabled {

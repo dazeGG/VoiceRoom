@@ -53,10 +53,10 @@
     max-height: 280px;
     overflow: auto;
     padding: 6px;
-    border: 1px solid var(--line);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 12px;
-    background: var(--paper);
-    box-shadow: var(--shadow);
+    background: var(--vr-bg);
+    box-shadow: var(--vr-shadow-popover);
   }
   button {
     display: flex;
@@ -71,7 +71,7 @@
   }
   button.active,
   button:hover {
-    background: color-mix(in oklch, var(--paper), var(--ink) 8%);
+    background: color-mix(in oklch, var(--vr-bg), var(--vr-text) 8%);
   }
   .mention-names {
     display: grid;
@@ -85,6 +85,6 @@
     white-space: nowrap;
   }
   small {
-    color: var(--muted);
+    color: var(--vr-text-2);
   }
 </style>

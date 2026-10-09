@@ -145,8 +145,8 @@
     margin: 0;
     padding: 6px 12px;
     border-radius: var(--radius-pill);
-    background: color-mix(in srgb, var(--warm-800) 88%, transparent);
-    color: var(--warm-muted);
+    background: color-mix(in srgb, var(--vr-surface-2) 88%, transparent);
+    color: var(--vr-text-2);
     font-size: 12px;
     text-align: center;
   }
@@ -162,7 +162,7 @@
     padding: 10px 11px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 18px;
-    background: color-mix(in srgb, color-mix(in srgb, var(--warm-800) 60%, var(--warm-900)) 90%, transparent);
+    background: color-mix(in srgb, color-mix(in srgb, var(--vr-surface-2) 60%, var(--vr-bg)) 90%, transparent);
     backdrop-filter: blur(14px);
     -webkit-backdrop-filter: blur(14px);
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
@@ -176,8 +176,8 @@
     height: 38px;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 13px;
-    background: color-mix(in oklch, var(--accent) 14%, var(--control));
-    color: var(--accent);
+    background: color-mix(in oklch, var(--vr-accent) 14%, var(--vr-surface-3));
+    color: var(--vr-accent);
   }
 
   .room-cta-copy {
@@ -189,7 +189,7 @@
   }
 
   .room-cta-title {
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-size: 14px;
     font-weight: 700;
     letter-spacing: -0.01em;
@@ -197,7 +197,7 @@
   }
 
   .room-cta-text {
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font-size: 12.5px;
     line-height: 1.35;
   }
@@ -211,7 +211,7 @@
     border: 0;
     border-radius: 11px;
     background: transparent;
-    color: var(--warm-560);
+    color: var(--vr-text-3);
     cursor: pointer;
     transition:
       background 150ms var(--ease-out),
@@ -219,8 +219,8 @@
   }
 
   .room-cta-close:hover {
-    background: var(--control-hover);
-    color: var(--warm-ink);
+    background: var(--vr-surface-3-hover);
+    color: var(--vr-text);
   }
 
   /* Narrow: the copy keeps the full width next to the icon and the action drops

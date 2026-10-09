@@ -175,7 +175,7 @@
 
   .login-alert-text {
     margin: 0;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font-size: 14px;
     line-height: 1.45;
   }
@@ -189,7 +189,7 @@
     padding: 12px 14px;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 12px;
-    background: var(--warm-900);
+    background: var(--vr-bg);
   }
 
   .login-alert-icon {
@@ -199,20 +199,20 @@
     width: 38px;
     height: 38px;
     border-radius: 11px;
-    background: var(--control);
-    color: var(--warm-ink);
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
   }
 
   .login-alert-device strong {
     display: block;
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-size: 14px;
   }
 
   .login-alert-device small {
     display: block;
     margin-top: 2px;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-size: 12.5px;
   }
 
@@ -244,32 +244,32 @@
   }
 
   .login-alert-button--safe {
-    background: var(--green);
-    color: var(--accent-ink);
+    background: var(--vr-online);
+    color: var(--vr-accent-ink);
   }
 
   .login-alert-button--safe:hover:not(:disabled) {
-    background: color-mix(in oklch, var(--green), transparent 12%);
+    background: color-mix(in oklch, var(--vr-online), transparent 12%);
   }
 
   .login-alert-button--danger {
-    border-color: color-mix(in oklch, var(--coral), transparent 45%);
-    background: color-mix(in oklch, var(--coral), transparent 78%);
+    border-color: color-mix(in oklch, var(--vr-danger), transparent 45%);
+    background: color-mix(in oklch, var(--vr-danger), transparent 78%);
     color: #f3c2b8;
   }
 
   .login-alert-button--danger:hover:not(:disabled) {
-    background: color-mix(in oklch, var(--coral), transparent 66%);
+    background: color-mix(in oklch, var(--vr-danger), transparent 66%);
   }
 
   .login-alert-button--ghost {
     border-color: rgba(255, 255, 255, 0.12);
     background: transparent;
-    color: var(--warm-ink);
+    color: var(--vr-text);
   }
 
   .login-alert-button--ghost:hover {
-    background: var(--control);
+    background: var(--vr-surface-3);
   }
 
   .login-alert-later {
@@ -277,13 +277,13 @@
     padding: 6px 10px;
     border: none;
     background: none;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font: inherit;
     font-size: 13px;
     cursor: pointer;
   }
 
   .login-alert-later:hover {
-    color: var(--warm-ink);
+    color: var(--vr-text);
   }
 </style>

@@ -5,7 +5,7 @@
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 20px;
   padding: 6px 24px 24px;
-  background: var(--panel);
+  background: var(--vr-surface);
 }
 
 .home-input {
@@ -15,8 +15,8 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 13px 15px;
-  background: var(--warm-900);
-  color: var(--warm-100);
+  background: var(--vr-bg);
+  color: var(--vr-text);
   font-family: var(--font-ui);
   font-size: 15px;
   outline: none;
@@ -24,12 +24,12 @@
 }
 
 .home-input::placeholder {
-  color: var(--warm-650);
+  color: var(--vr-text-3);
 }
 
 .home-input:hover {
   border-color: rgba(255, 255, 255, 0.16);
-  background: var(--warm-900);
+  background: var(--vr-bg);
 }
 
 .home-input:focus {
@@ -52,8 +52,8 @@
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 12px;
   padding: 0 16px;
-  background: var(--control);
-  color: var(--warm-100);
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
   font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 600;
@@ -62,14 +62,14 @@
 }
 
 .home-ghost-button:hover {
-  background: var(--control-hover);
+  background: var(--vr-surface-3-hover);
 }
 
 .home-or {
   display: flex;
   align-items: center;
   gap: 12px;
-  color: var(--warm-650);
+  color: var(--vr-text-3);
   font-size: 12px;
 }
 
@@ -78,7 +78,7 @@
   content: '';
   flex: 1;
   height: 1px;
-  background: var(--control-line);
+  background: var(--vr-line-strong);
 }
 
 .home-ghost-button--small {
@@ -98,7 +98,7 @@
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 20px;
   padding: 20px 24px 22px;
-  background: var(--panel);
+  background: var(--vr-surface);
 }
 
 .home-list-head {
@@ -111,7 +111,7 @@
 .home-list-kicker {
   display: block;
   margin-bottom: 3px;
-  color: var(--warm-550);
+  color: var(--vr-text-3);
   font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0.12em;
@@ -120,7 +120,7 @@
 
 .home-list-title {
   margin: 0;
-  color: var(--warm-100);
+  color: var(--vr-text);
   font-family: var(--font-ui);
   font-size: 16px;
   font-weight: 700;
@@ -130,7 +130,7 @@
   flex: none;
   padding: 3px 8px;
   border-radius: 999px;
-  background: var(--control);
+  background: var(--vr-surface-3);
   color: #b7b0a0;
   font-family: var(--font-ui);
   font-size: 12px;
@@ -151,7 +151,7 @@
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 14px;
   padding: 12px 14px;
-  background: var(--panel-strong);
+  background: var(--vr-surface-3);
 }
 
 .home-room-row-main {
@@ -165,8 +165,8 @@
   flex: none;
   padding: 3px 7px;
   border-radius: 999px;
-  background: color-mix(in oklch, var(--green) 12%, transparent);
-  color: var(--green-soft);
+  background: color-mix(in oklch, var(--vr-online) 12%, transparent);
+  color: var(--vr-success);
   font-family: var(--font-ui);
   font-size: 10px;
   letter-spacing: 0.12em;
@@ -176,7 +176,7 @@
 .home-room-row-code {
   min-width: 0;
   overflow: hidden;
-  color: var(--warm-100);
+  color: var(--vr-text);
   font-family: var(--font-mono);
   font-size: 13px;
   text-overflow: ellipsis;
@@ -192,13 +192,13 @@
 
 .home-list-empty {
   margin: 18px 0 0;
-  color: var(--warm-550);
+  color: var(--vr-text-3);
   font-size: 12.5px;
   line-height: 1.5;
 }
 
 .home-list-empty b {
-  color: var(--warm-100);
+  color: var(--vr-text);
 }
 
 .home-spinner {
@@ -206,7 +206,7 @@
   height: 14px;
   border-radius: 50%;
   border: 2px solid rgba(236, 231, 217, 0.25);
-  border-top-color: var(--warm-100);
+  border-top-color: var(--vr-text);
   animation: home-spin 0.7s linear infinite;
 }
 
@@ -221,7 +221,7 @@
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 20px;
   padding: 20px 24px 22px;
-  background: var(--panel);
+  background: var(--vr-surface);
 }
 
 /* Inside the Electron shell the preload tags <html> with .is-desktop before
@@ -233,7 +233,7 @@ html.is-desktop .home-app {
 
 .home-app-chevron {
   display: inline-flex;
-  color: var(--warm-faint);
+  color: var(--vr-text-3);
   transition: transform 0.2s ease;
 }
 
@@ -254,8 +254,8 @@ html.is-desktop .home-app {
   border: 1px solid rgba(154, 143, 106, 0.55);
   border-radius: 12px;
   padding: 13px 40px 13px 15px;
-  background: var(--warm-900);
-  color: var(--warm-100);
+  background: var(--vr-bg);
+  color: var(--vr-text);
   font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 500;
@@ -265,12 +265,12 @@ html.is-desktop .home-app {
 
 .home-select:hover {
   border-color: rgba(154, 143, 106, 0.7);
-  background: var(--warm-900);
+  background: var(--vr-bg);
 }
 
 .home-select option {
-  background: var(--warm-800);
-  color: var(--warm-100);
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
 }
 
 .home-select-chevron {
@@ -280,17 +280,17 @@ html.is-desktop .home-app {
   transform: translateY(-50%);
   pointer-events: none;
   display: inline-flex;
-  color: var(--warm-500);
+  color: var(--vr-text-3);
 }
 
 .home-room-row-presence {
   flex: none;
-  color: var(--warm-550);
+  color: var(--vr-text-3);
   font-size: 12px;
 }
 
 .home-room-row-presence[data-live='true'] {
-  color: var(--green-soft);
+  color: var(--vr-success);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -312,8 +312,8 @@ html.is-desktop .home-app {
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 24px;
   background:
-    radial-gradient(circle at 50% 0%, color-mix(in oklch, var(--control-active) 11%, transparent), transparent 58%),
-    var(--panel);
+    radial-gradient(circle at 50% 0%, color-mix(in oklch, var(--vr-text) 11%, transparent), transparent 58%),
+    var(--vr-surface);
   text-align: center;
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.28);
 }
@@ -325,7 +325,7 @@ html.is-desktop .home-app {
 
 .auth-loader-kicker {
   margin: 0 0 8px;
-  color: var(--warm-500);
+  color: var(--vr-text-3);
   font-family: var(--font-ui);
   font-size: 11px;
   letter-spacing: 0.16em;
@@ -334,7 +334,7 @@ html.is-desktop .home-app {
 
 .auth-loader h1 {
   margin: 0;
-  color: var(--warm-100);
+  color: var(--vr-text);
   font-size: clamp(24px, 4vw, 34px);
   letter-spacing: -0.04em;
 }
@@ -360,7 +360,7 @@ html.is-desktop .home-app {
   width: min(520px, 100%);
   border: 1px solid rgba(244, 114, 182, 0.22);
   border-radius: 28px;
-  background: var(--warm-800);
+  background: var(--vr-surface-2);
   box-shadow: 0 24px 80px rgba(8, 6, 18, 0.34);
   padding: 28px;
   text-align: center;
@@ -417,31 +417,31 @@ html.is-desktop .home-app {
 }
 
 .landing-header-auth-link:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--vr-accent);
   outline-offset: 3px;
 }
 
 .landing-header-auth-link--login {
-  border: 1px solid color-mix(in oklch, var(--warm-ink-dim), transparent 76%);
-  background: var(--control);
-  color: var(--warm-ink-dim, var(--warm-100));
+  border: 1px solid color-mix(in oklch, var(--vr-text), transparent 76%);
+  background: var(--vr-surface-3);
+  color: var(--vr-text, var(--vr-text));
 }
 
 .landing-header-auth-link--login:hover {
-  border-color: color-mix(in oklch, var(--warm-ink-dim), transparent 56%);
-  background: var(--control-hover);
-  color: var(--warm-ink, var(--warm-ink));
+  border-color: color-mix(in oklch, var(--vr-text), transparent 56%);
+  background: var(--vr-surface-3-hover);
+  color: var(--vr-text, var(--vr-text));
 }
 
 .landing-header-auth-link--register {
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: var(--accent-ink);
+  border: 1px solid var(--vr-accent);
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
 }
 
 .landing-header-auth-link--register:hover {
-  border-color: var(--accent-hover);
-  background: var(--accent-hover);
+  border-color: var(--vr-accent-hover);
+  background: var(--vr-accent-hover);
 }
 
 .landing-header-auth-link--register span {
@@ -471,8 +471,8 @@ html.is-desktop .home-app {
   border: none;
   border-radius: var(--interactive-radius);
   padding: 0 26px;
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
   font-family: var(--font-ui);
   font-size: 15.5px;
   font-weight: 700;
@@ -482,7 +482,7 @@ html.is-desktop .home-app {
 }
 
 .landing-primary-button:hover {
-  background: var(--accent-hover);
+  background: var(--vr-accent-hover);
 }
 
 .landing-primary-button:disabled {
@@ -491,8 +491,8 @@ html.is-desktop .home-app {
 }
 
 .landing-primary-button .home-spinner {
-  border-color: color-mix(in oklch, var(--accent-ink), transparent 75%);
-  border-top-color: var(--accent-ink);
+  border-color: color-mix(in oklch, var(--vr-accent-ink), transparent 75%);
+  border-top-color: var(--vr-accent-ink);
 }
 
 .lv-join {
@@ -501,14 +501,14 @@ html.is-desktop .home-app {
   height: var(--interactive-lg);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--interactive-radius);
-  background: var(--warm-900);
+  background: var(--vr-bg);
   overflow: hidden;
   transition: border-color 0.15s ease;
 }
 
 .lv-join:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-glow);
+  border-color: var(--vr-accent);
+  box-shadow: 0 0 0 3px var(--vr-accent-soft);
 }
 
 .lv-join-input {
@@ -518,7 +518,7 @@ html.is-desktop .home-app {
   background: transparent;
   outline: none;
   padding: 0 16px;
-  color: var(--warm-ink, var(--warm-100));
+  color: var(--vr-text, var(--vr-text));
   height: 100%;
   font-family: var(--font-mono);
   font-size: 14px;
@@ -527,7 +527,7 @@ html.is-desktop .home-app {
 }
 
 .lv-join-input::placeholder {
-  color: var(--warm-faint, var(--warm-faint));
+  color: var(--vr-text-3, var(--vr-text-3));
   letter-spacing: normal;
 }
 
@@ -546,8 +546,8 @@ html.is-desktop .home-app {
   flex: none;
   border: none;
   border-left: 1px solid rgba(255, 255, 255, 0.1);
-  background: var(--control);
-  color: var(--warm-ink, var(--warm-100));
+  background: var(--vr-surface-3);
+  color: var(--vr-text, var(--vr-text));
   font-family: var(--font-ui);
   font-size: 14px;
   font-weight: 700;
@@ -557,7 +557,7 @@ html.is-desktop .home-app {
 }
 
 .lv-join-btn:hover {
-  background: var(--control-hover);
+  background: var(--vr-surface-3-hover);
 }
 
 .lv-join-btn:disabled {

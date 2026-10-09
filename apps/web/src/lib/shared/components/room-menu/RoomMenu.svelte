@@ -62,7 +62,7 @@
     aria-controls={panelId}
     onclick={toggle}
   >
-    <Avatar {name} src={avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={avatarSize} />
+    <Avatar {name} src={avatarUrl} shape="squircle" background="var(--vr-surface-3)" size={avatarSize} />
     <Ellipsis text={name} title={roomId} class={`room-menu-title ${titleClass}`.trim()} />
     {#if roomMuted}
       <span
@@ -127,7 +127,7 @@
   .room-menu-notifications-muted {
     flex: none;
     display: inline-flex;
-    color: var(--warm-ink-dim);
+    color: var(--vr-text);
   }
 
   .room-menu-trigger[aria-expanded='true'] .room-menu-chevron {

@@ -48,7 +48,7 @@
       afk={presence === 'away'}
       dnd={presence === 'dnd'}
       showDot
-      ring="var(--paper-deep)"
+      ring="var(--vr-bg)"
     />
     <div class="lobby-profile-panel-name"><EmojiText text={friendName(peer)} /></div>
     <div class="lobby-profile-panel-handle">@{peer.login}</div>
@@ -90,7 +90,7 @@
   :global(.lobby-profile-cover) {
     position: relative;
     height: var(--lobby-dm-head-height);
-    background: var(--profile-cover-accent, var(--panel-strong));
+    background: var(--profile-cover-accent, var(--vr-surface-3));
   }
   :global(.lobby-profile-close) {
     position: absolute;
@@ -101,8 +101,8 @@
     transform: translateY(-50%);
     border-radius: 9px;
     border: none;
-    background: color-mix(in oklch, var(--warm-950), transparent 36%);
-    color: var(--warm-ink);
+    background: color-mix(in oklch, var(--vr-bg), transparent 36%);
+    color: var(--vr-text);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -112,8 +112,8 @@
       color 0.15s ease;
   }
   :where(.lobby-profile-close):hover {
-    background: var(--warm-950);
-    color: var(--accent);
+    background: var(--vr-bg);
+    color: var(--vr-accent);
   }
   :global(.lobby-profile-body) {
     padding: 0 20px 24px;
@@ -122,14 +122,14 @@
   :global(.lobby-profile-panel-name) {
     font-size: 20px;
     font-weight: 800;
-    color: var(--warm-ink);
+    color: var(--vr-text);
     letter-spacing: -0.02em;
     margin-top: 12px;
   }
   :global(.lobby-profile-panel-handle) {
     font-family: var(--font-mono);
     font-size: 12.5px;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     margin-top: 2px;
   }
   :global(.lobby-profile-stats) {
@@ -139,7 +139,7 @@
     margin-top: 18px;
   }
   :global(.lobby-profile-stat) {
-    background: var(--panel-strong);
+    background: var(--vr-surface-3);
     border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 13px;
     padding: 13px 14px;
@@ -147,12 +147,12 @@
   :global(.lobby-profile-stat-num) {
     font-size: 20px;
     font-weight: 800;
-    color: var(--warm-ink);
+    color: var(--vr-text);
     letter-spacing: -0.02em;
   }
   :global(.lobby-profile-stat-label) {
     font-size: 11px;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     margin-top: 2px;
   }
   :global(.lobby-profile-action) {
@@ -164,8 +164,8 @@
     justify-content: flex-start;
     gap: 10px;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    background: var(--control);
-    color: var(--warm-ink-dim);
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
     border-radius: 12px;
     padding: 0 14px;
     font-family: var(--font-ui);
@@ -180,15 +180,15 @@
   }
   :global(.lobby-profile-action svg) {
     flex: none;
-    color: var(--accent);
+    color: var(--vr-accent);
   }
   :where(.lobby-profile-action):hover {
     border-color: rgba(255, 255, 255, 0.16);
-    background: var(--control-hover);
-    color: var(--warm-ink);
+    background: var(--vr-surface-3-hover);
+    color: var(--vr-text);
   }
   :global(.lobby-profile-action.is-muted svg) {
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
   }
   :where(.lobby-profile-action):disabled {
     cursor: default;
@@ -196,16 +196,16 @@
   }
   :global(.lobby-profile-action--danger) {
     margin-top: 10px;
-    border-color: color-mix(in oklch, var(--coral), transparent 58%);
-    background: color-mix(in oklch, var(--coral) 9%, transparent);
-    color: var(--coral);
+    border-color: color-mix(in oklch, var(--vr-danger), transparent 58%);
+    background: color-mix(in oklch, var(--vr-danger) 9%, transparent);
+    color: var(--vr-danger);
   }
   :global(.lobby-profile-action--danger svg) {
     color: currentColor;
   }
   :where(.lobby-profile-action--danger):hover {
-    border-color: color-mix(in oklch, var(--coral), transparent 42%);
-    background: color-mix(in oklch, var(--coral) 17%, transparent);
-    color: var(--coral);
+    border-color: color-mix(in oklch, var(--vr-danger), transparent 42%);
+    background: color-mix(in oklch, var(--vr-danger) 17%, transparent);
+    color: var(--vr-danger);
   }
 </style>

@@ -364,7 +364,7 @@
         </button>
       {/if}
       {#each groups as group (group.key)}
-        {@const accent = (group.fromMe ? self.avatarAccent : peer?.avatarAccent) || 'var(--accent)'}
+        {@const accent = (group.fromMe ? self.avatarAccent : peer?.avatarAccent) || 'var(--vr-accent)'}
         {#if group.dayLabel}
           <div class="chat-day-divider"><span>{group.dayLabel}</span></div>
         {/if}
@@ -495,8 +495,8 @@
     align-items: center;
     justify-content: center;
     margin-bottom: -100%;
-    background: var(--paper-deep, var(--paper));
-    color: var(--warm-faint);
+    background: var(--vr-bg, var(--vr-bg));
+    color: var(--vr-text-3);
     font-size: 13.5px;
   }
   :where(.lobby-dm-thread).is-settling {
@@ -521,7 +521,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-size: 13.5px;
   }
 </style>

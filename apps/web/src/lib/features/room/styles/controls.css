@@ -11,7 +11,7 @@
 }
 
 .field span {
-  color: var(--muted);
+  color: var(--vr-text-2);
   font-size: 0.8rem;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -20,7 +20,7 @@
 
 .name-status {
   margin: calc(var(--space-xs) * -1) 0 0;
-  color: var(--muted);
+  color: var(--vr-text-2);
   font-size: 0.82rem;
   font-weight: 700;
 }
@@ -30,18 +30,18 @@
 }
 
 .name-status[data-state='dirty'] {
-  color: color-mix(in oklch, var(--amber), var(--ink) 36%);
+  color: color-mix(in oklch, var(--vr-away), var(--vr-text) 36%);
 }
 
 input,
 select {
   width: 100%;
   min-height: 46px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--vr-line-strong);
   border-radius: var(--radius-sm);
   padding: 0 12px;
-  background: var(--warm-900);
-  color: var(--ink);
+  background: var(--vr-bg);
+  color: var(--vr-text);
   outline: none;
   transition:
     background 150ms var(--ease-out),
@@ -55,8 +55,8 @@ input::placeholder {
 
 input:hover,
 select:hover {
-  border-color: color-mix(in oklch, var(--control-line), var(--ink) 16%);
-  background: var(--warm-800);
+  border-color: color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 16%);
+  background: var(--vr-surface-2);
 }
 
 input:focus,
@@ -77,25 +77,25 @@ button:focus-visible {
 
 .primary-button {
   width: 100%;
-  border-color: color-mix(in oklch, var(--control-line), var(--ink) 20%);
-  background: var(--control-active);
+  border-color: color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 20%);
+  background: var(--vr-text);
   color: oklch(9% 0.012 92);
   font-weight: 800;
 }
 
 .secondary-button {
   width: 100%;
-  background: var(--panel);
-  color: var(--ink);
+  background: var(--vr-surface);
+  color: var(--vr-text);
   font-weight: 800;
 }
 
 .primary-button:hover {
-  background: var(--control-active-hover);
+  background: var(--vr-text);
 }
 
 .secondary-button:hover {
-  background: var(--panel-strong);
+  background: var(--vr-surface-3);
 }
 
 .room-dock {
@@ -119,7 +119,7 @@ button:focus-visible {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 18px;
   padding: 10px 11px;
-  background: color-mix(in srgb, color-mix(in srgb, var(--warm-800) 60%, var(--warm-900)) 90%, transparent);
+  background: color-mix(in srgb, color-mix(in srgb, var(--vr-surface-2) 60%, var(--vr-bg)) 90%, transparent);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
@@ -169,7 +169,7 @@ button:focus-visible {
 .camera-button {
   width: 46px;
   height: 46px;
-  background: var(--control);
+  background: var(--vr-surface-3);
   color: #d7d1c2;
 }
 
@@ -180,7 +180,7 @@ button:focus-visible {
 .mic-button:hover,
 .output-button:hover,
 .camera-button:hover {
-  background: var(--control-hover);
+  background: var(--vr-surface-3-hover);
 }
 
 /* Settings-chevron half. */
@@ -188,12 +188,12 @@ button:focus-visible {
   width: 26px;
   height: 46px;
   border-left: 1px solid rgba(255, 255, 255, 0.09);
-  background: var(--control);
-  color: var(--warm-560);
+  background: var(--vr-surface-3);
+  color: var(--vr-text-3);
 }
 
 .dock-menu-button:hover {
-  background: var(--control-hover);
+  background: var(--vr-surface-3-hover);
 }
 
 /* Standalone square buttons (screen / leave / connection). */
@@ -225,23 +225,23 @@ button:focus-visible {
 /* Muted / deafened toggles turn coral, matching VoiceDock. */
 .mic-button[data-state='muted'],
 .output-button[data-state='muted'] {
-  background: color-mix(in oklch, var(--coral) 16%, transparent);
+  background: color-mix(in oklch, var(--vr-danger) 16%, transparent);
   color: #e8a094;
 }
 
 .mic-button[data-state='muted']:hover,
 .output-button[data-state='muted']:hover {
-  background: color-mix(in oklch, var(--coral) 24%, transparent);
+  background: color-mix(in oklch, var(--vr-danger) 24%, transparent);
 }
 
 .screen-button {
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: var(--control);
+  background: var(--vr-surface-3);
   color: #d7d1c2;
 }
 
 .screen-button:hover {
-  background: var(--control-hover);
+  background: var(--vr-surface-3-hover);
 }
 
 .screen-button:disabled {
@@ -250,13 +250,13 @@ button:focus-visible {
 }
 
 .screen-button[data-state='live'] {
-  border-color: color-mix(in oklch, var(--stream-live), var(--line) 18%);
-  background: var(--stream-live);
+  border-color: color-mix(in oklch, var(--vr-online), var(--vr-line-strong) 18%);
+  background: var(--vr-online);
   color: oklch(99% 0.004 92);
 }
 
 .screen-button[data-state='live']:hover {
-  background: var(--stream-live-hover);
+  background: var(--vr-accent-hover);
   color: oklch(99% 0.004 92);
 }
 
@@ -274,7 +274,7 @@ button:focus-visible {
 }
 
 .mic-button[data-state='ptt-active'] {
-  background: color-mix(in oklch, var(--green) 16%, transparent);
+  background: color-mix(in oklch, var(--vr-online) 16%, transparent);
   color: #a8e2c5;
 }
 
@@ -284,8 +284,8 @@ button:focus-visible {
   bottom: 2px;
   border-radius: 4px;
   padding: 1px 3px;
-  background: color-mix(in oklch, var(--line) 60%, transparent);
-  color: var(--muted);
+  background: color-mix(in oklch, var(--vr-line-strong) 60%, transparent);
+  color: var(--vr-text-2);
   font-size: 7px;
   font-weight: 800;
   line-height: 1.15;
@@ -293,7 +293,7 @@ button:focus-visible {
 }
 
 .dock-ptt-badge[data-active='true'] {
-  background: color-mix(in oklch, var(--green) 28%, transparent);
+  background: color-mix(in oklch, var(--vr-online) 28%, transparent);
   color: #c4efd9;
 }
 
@@ -321,12 +321,12 @@ button:focus-visible {
 }
 
 .camera-button[data-state='on'] {
-  background: color-mix(in oklch, var(--green) 16%, transparent);
+  background: color-mix(in oklch, var(--vr-online) 16%, transparent);
   color: #a8e2c5;
 }
 
 .camera-button[data-state='on']:hover {
-  background: color-mix(in oklch, var(--green) 24%, transparent);
+  background: color-mix(in oklch, var(--vr-online) 24%, transparent);
 }
 
 /* Connection: signal bars + a ping popover on hover (VoiceDock). Colour tracks
@@ -343,19 +343,19 @@ button:focus-visible {
   gap: 2.5px;
   padding: 14px 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: var(--control);
+  background: var(--vr-surface-3);
   pointer-events: auto;
   cursor: default;
 }
 
 .dock-connection:hover {
-  background: var(--control-hover);
+  background: var(--vr-surface-3-hover);
 }
 
 .dock-bar {
   width: 3px;
   border-radius: 1.5px;
-  background: var(--control-line);
+  background: var(--vr-line-strong);
 }
 
 .dock-bar:nth-child(1) {
@@ -371,19 +371,19 @@ button:focus-visible {
 }
 
 .dock-connection[data-state='connected'] .dock-bar {
-  background: var(--green);
+  background: var(--vr-online);
 }
 
 .dock-connection[data-state='connecting'] .dock-bar {
-  background: var(--blue);
+  background: var(--vr-info);
 }
 
 .dock-connection[data-state='warning'] .dock-bar {
-  background: var(--amber);
+  background: var(--vr-away);
 }
 
 .dock-connection[data-state='error'] .dock-bar {
-  background: var(--coral);
+  background: var(--vr-danger);
 }
 
 .dock-connection-popover {
@@ -398,7 +398,7 @@ button:focus-visible {
   border: 1px solid rgba(255, 255, 255, 0.11);
   border-radius: 10px;
   padding: 8px 12px;
-  background: var(--warm-800);
+  background: var(--vr-surface-2);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
 }
 
@@ -415,7 +415,7 @@ button:focus-visible {
   height: 0;
   transform: translateX(-50%);
   border: 5px solid transparent;
-  border-top-color: var(--warm-800);
+  border-top-color: var(--vr-surface-2);
 }
 
 .dock-connection-dot {
@@ -423,23 +423,23 @@ button:focus-visible {
   height: 7px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: var(--green);
+  background: var(--vr-online);
 }
 
 .dock-connection[data-state='connecting'] + .dock-connection-popover .dock-connection-dot {
-  background: var(--blue);
+  background: var(--vr-info);
 }
 
 .dock-connection[data-state='warning'] + .dock-connection-popover .dock-connection-dot {
-  background: var(--amber);
+  background: var(--vr-away);
 }
 
 .dock-connection[data-state='error'] + .dock-connection-popover .dock-connection-dot {
-  background: var(--coral);
+  background: var(--vr-danger);
 }
 
 .dock-connection[data-state='idle'] + .dock-connection-popover .dock-connection-dot {
-  background: var(--control-line);
+  background: var(--vr-line-strong);
 }
 
 /* Keep the floating dock centred in the lobby main area (not over the sidebar). */
@@ -461,24 +461,24 @@ body[data-lobby-embedded='true'] .room-dock {
 
 .leave-button {
   border: 1px solid rgba(216, 99, 74, 0.5);
-  background: var(--coral);
+  background: var(--vr-danger);
   color: #fff;
   pointer-events: auto;
 }
 
 .leave-button:hover {
-  background: color-mix(in oklch, var(--coral), var(--warm-950) 16%);
+  background: color-mix(in oklch, var(--vr-danger), var(--vr-bg) 16%);
 }
 
 .screen-exit-button {
   border: 1px solid rgba(216, 99, 74, 0.5);
-  background: var(--coral);
+  background: var(--vr-danger);
   color: #fff;
   pointer-events: auto;
 }
 
 .screen-exit-button:hover {
-  background: color-mix(in oklch, var(--coral), var(--warm-950) 16%);
+  background: color-mix(in oklch, var(--vr-danger), var(--vr-bg) 16%);
 }
 
 /* .dock-anchor prefix bumps specificity above Popover's own scoped
@@ -501,7 +501,7 @@ body[data-lobby-embedded='true'] .room-dock {
   border: 1px solid oklch(34% 0.02 92);
   border-radius: var(--radius-md);
   padding: var(--space-lg);
-  background: var(--warm-800);
+  background: var(--vr-surface-2);
   color: oklch(96% 0.008 92);
   box-shadow: 0 22px 54px oklch(6% 0.02 92 / 0.46);
 }
@@ -511,7 +511,7 @@ body[data-lobby-embedded='true'] .room-dock {
 }
 
 .device-popover .field span {
-  color: var(--muted);
+  color: var(--vr-text-2);
 }
 
 .device-popover .select-root,
@@ -544,7 +544,7 @@ body[data-lobby-embedded='true'] .room-dock {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, color-mix(in oklch, var(--green), var(--warm-950) 22%), var(--green));
+  background: linear-gradient(90deg, color-mix(in oklch, var(--vr-online), var(--vr-bg) 22%), var(--vr-online));
   transform: scaleX(0);
   transform-origin: left center;
   transition:
@@ -553,22 +553,22 @@ body[data-lobby-embedded='true'] .room-dock {
 }
 
 .mic-level-fill[data-state='closed'] {
-  background: linear-gradient(90deg, var(--panel-strong), var(--control-hover));
+  background: linear-gradient(90deg, var(--vr-surface-3), var(--vr-surface-3-hover));
 }
 
 .sound-button {
   min-height: 48px;
-  border: 1px solid var(--control-line);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 999px;
   padding: 0 18px;
-  background: var(--control);
-  color: var(--ink);
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
   font-weight: 800;
   pointer-events: auto;
 }
 
 .sound-button:hover {
-  background: var(--control-hover);
+  background: var(--vr-surface-3-hover);
 }
 
 .room-chat-unread {
@@ -580,8 +580,8 @@ body[data-lobby-embedded='true'] .room-dock {
   margin-left: 2px;
   padding: 0 5px;
   border-radius: 999px;
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
   font-family: var(--font-ui);
   font-size: 10px;
   font-weight: 800;
@@ -589,6 +589,6 @@ body[data-lobby-embedded='true'] .room-dock {
 }
 
 .room-chat-unread[data-muted='true'] {
-  background: var(--control-hover);
-  color: var(--warm-muted);
+  background: var(--vr-surface-3-hover);
+  color: var(--vr-text-2);
 }

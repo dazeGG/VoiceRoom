@@ -67,7 +67,7 @@
           afk={presence === 'away'}
           dnd={presence === 'dnd'}
           showDot
-          ring="var(--paper-deep)"
+          ring="var(--vr-bg)"
         />
         <div class="lobby-dm-head-text">
           <div class="lobby-dm-head-name"><EmojiText text={friendName(peer)} /></div>
@@ -123,7 +123,7 @@
     color: inherit;
   }
   :where(.lobby-dm-head):hover {
-    background: var(--control);
+    background: var(--vr-surface-3);
   }
   :global(.lobby-dm-head-text) {
     flex: 1;
@@ -136,12 +136,12 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--warm-500);
+    color: var(--vr-text-3);
   }
   :global(.lobby-dm-head-name) {
     font-size: 15.5px;
     font-weight: 700;
-    color: var(--warm-ink);
+    color: var(--vr-text);
     letter-spacing: -0.01em;
   }
 </style>

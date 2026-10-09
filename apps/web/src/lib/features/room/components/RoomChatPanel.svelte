@@ -734,7 +734,7 @@
   :global(.chat-rail-note),
   :global(.chat-rail-error) {
     margin: auto 0 0;
-    color: var(--warm-550);
+    color: var(--vr-text-3);
     font-size: 12.5px;
     line-height: 1.45;
   }

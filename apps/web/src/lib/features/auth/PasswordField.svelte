@@ -45,7 +45,7 @@
     height: 32px;
     border: none;
     background: transparent;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     cursor: pointer;
     transition: color 0.15s ease;
   }

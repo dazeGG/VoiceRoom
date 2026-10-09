@@ -84,7 +84,7 @@
   }
 
   .avatar-stack-item {
-    background: var(--avatar-bg, var(--room-avatar-bg));
+    background: var(--avatar-bg, var(--vr-surface-3));
     color: var(--avatar-fg, var(--vr-text));
     box-shadow: var(--avatar-shadow, none);
   }

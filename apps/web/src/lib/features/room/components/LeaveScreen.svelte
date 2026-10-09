@@ -94,7 +94,7 @@
     align-items: center;
     justify-content: center;
     padding: 24px;
-    background: color-mix(in srgb, var(--warm-950) 78%, transparent);
+    background: color-mix(in srgb, var(--vr-bg) 78%, transparent);
     backdrop-filter: blur(6px);
     -webkit-backdrop-filter: blur(6px);
   }
@@ -107,13 +107,13 @@
     padding: 26px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-xl);
-    background: var(--warm-800);
-    box-shadow: var(--shadow);
+    background: var(--vr-surface-2);
+    box-shadow: var(--vr-shadow-popover);
   }
 
   .guest-leave-card h1 {
     margin: 0;
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-family: var(--font-ui);
     font-size: 20px;
     font-weight: 700;
@@ -121,7 +121,7 @@
 
   .guest-leave-card p {
     margin: 0;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font-size: 14px;
     line-height: 1.5;
   }

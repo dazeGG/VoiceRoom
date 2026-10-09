@@ -43,10 +43,10 @@
     width: min(390px, 100%);
     grid-template-columns: 38px minmax(0, 1fr);
     gap: 10px 12px;
-    border: 1px solid color-mix(in oklch, var(--green), transparent 72%);
+    border: 1px solid color-mix(in oklch, var(--vr-online), transparent 72%);
     border-radius: 14px;
     padding: 13px;
-    background: color-mix(in oklch, var(--paper-deep), var(--green) 5%);
+    background: color-mix(in oklch, var(--vr-bg), var(--vr-online) 5%);
   }
   :global(.lobby-room-invitation-icon) {
     display: grid;
@@ -54,8 +54,8 @@
     height: 38px;
     place-items: center;
     border-radius: 50%;
-    background: color-mix(in oklch, var(--green), transparent 82%);
-    color: var(--green);
+    background: color-mix(in oklch, var(--vr-online), transparent 82%);
+    color: var(--vr-online);
   }
   :global(.lobby-room-invitation-copy) {
     display: grid;
@@ -64,12 +64,12 @@
     min-width: 0;
   }
   :where(.lobby-room-invitation-copy) strong {
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-size: 13.5px;
   }
   :where(.lobby-room-invitation-copy) span {
     overflow: hidden;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font-size: 12.5px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -92,11 +92,11 @@
   :global(.lobby-room-invitation-dismiss) {
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: transparent;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
   }
   :global(.lobby-room-invitation-join) {
     border: 0;
-    background: var(--green);
+    background: var(--vr-online);
     color: oklch(14% 0.02 130);
   }
 </style>

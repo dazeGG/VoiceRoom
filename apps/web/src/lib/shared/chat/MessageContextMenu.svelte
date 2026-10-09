@@ -189,8 +189,8 @@
     place-items: center;
     border: 0;
     border-radius: 14px;
-    background: color-mix(in oklch, var(--control), transparent 55%);
-    color: var(--warm-muted);
+    background: color-mix(in oklch, var(--vr-surface-3), transparent 55%);
+    color: var(--vr-text-2);
     font-size: 20px;
     line-height: 1;
     cursor: pointer;
@@ -202,8 +202,8 @@
   .message-menu-reaction:hover:not(:disabled),
   .message-menu-reaction:focus-visible:not(:disabled),
   .message-menu-reaction.is-active {
-    background: color-mix(in oklch, var(--accent), transparent 86%);
-    color: var(--warm-ink);
+    background: color-mix(in oklch, var(--vr-accent), transparent 86%);
+    color: var(--vr-text);
   }
 
   .message-menu-reaction:disabled {

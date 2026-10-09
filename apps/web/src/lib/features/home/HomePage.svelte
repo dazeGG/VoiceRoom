@@ -295,7 +295,7 @@
   :where(.auth-loader-lines) span {
     height: 10px;
     border-radius: 999px;
-    background: linear-gradient(90deg, var(--control), var(--control-hover), var(--control));
+    background: linear-gradient(90deg, var(--vr-surface-3), var(--vr-surface-3-hover), var(--vr-surface-3));
     animation: auth-loader-shimmer 1.4s ease-in-out infinite;
   }
   :where(.auth-loader-lines) span:nth-child(2) {

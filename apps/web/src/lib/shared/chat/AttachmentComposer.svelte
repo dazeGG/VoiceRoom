@@ -102,7 +102,7 @@
   }
   :global(.attachment-compose-error) {
     margin: 6px 12px 0;
-    color: var(--coral);
+    color: var(--vr-danger);
     font-size: 12px;
   }
   :global(.attachment-draft-open) {
@@ -123,7 +123,7 @@
     object-fit: cover;
   }
   :where(.attachment-draft-open):focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--vr-accent);
     outline-offset: 2px;
   }
   :global(.attachment-draft-list) {
@@ -141,7 +141,7 @@
     flex: none;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 12px;
-    background: var(--warm-900);
+    background: var(--vr-bg);
   }
   :global(.attachment-draft > img) {
     display: block;
@@ -157,7 +157,7 @@
     place-items: center;
     overflow: hidden;
     border-radius: inherit;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
   }
   :global(.attachment-draft-loading) {
     position: absolute;
@@ -167,14 +167,14 @@
     color: white;
     overflow: hidden;
     border-radius: inherit;
-    background: color-mix(in srgb, var(--warm-950) 56%, transparent);
+    background: color-mix(in srgb, var(--vr-bg) 56%, transparent);
     backdrop-filter: brightness(0.68);
   }
   :global(.attachment-draft-loading svg) {
     box-sizing: content-box;
     padding: 8px;
     border-radius: 50%;
-    background: color-mix(in srgb, var(--warm-950) 82%, transparent);
+    background: color-mix(in srgb, var(--vr-bg) 82%, transparent);
     animation: attachment-spin 0.9s linear infinite;
   }
   :global(.attachment-draft-remove),
@@ -189,7 +189,7 @@
     border: 0;
     border-radius: 50%;
     color: white;
-    background: color-mix(in srgb, var(--warm-950) 90%, transparent);
+    background: color-mix(in srgb, var(--vr-bg) 90%, transparent);
     cursor: pointer;
     transition:
       opacity 0.14s ease,
@@ -201,10 +201,10 @@
     right: -6px;
     width: 22px;
     height: 22px;
-    border: 2px solid var(--paper-deep);
+    border: 2px solid var(--vr-bg);
     color: white;
-    background: var(--coral);
-    box-shadow: 0 2px 7px color-mix(in srgb, var(--warm-950) 66%, transparent);
+    background: var(--vr-danger);
+    box-shadow: 0 2px 7px color-mix(in srgb, var(--vr-bg) 66%, transparent);
     opacity: 0;
   }
   :where(.attachment-draft):hover .attachment-draft-remove,
@@ -212,7 +212,7 @@
     opacity: 1;
   }
   :where(.attachment-draft-remove):not(:disabled):hover {
-    background: color-mix(in oklch, var(--coral), var(--warm-950) 16%);
+    background: color-mix(in oklch, var(--vr-danger), var(--vr-bg) 16%);
   }
   :where(.attachment-draft-remove):focus-visible {
     outline: 2px solid white;

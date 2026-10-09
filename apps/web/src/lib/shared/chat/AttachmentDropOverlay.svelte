@@ -19,10 +19,10 @@
     place-content: center;
     justify-items: center;
     gap: 8px;
-    border: 2px dashed color-mix(in oklch, var(--accent) 72%, white);
+    border: 2px dashed color-mix(in oklch, var(--vr-accent) 72%, white);
     border-radius: 18px;
-    color: var(--warm-ink);
-    background: color-mix(in oklch, var(--warm-950), transparent 8%);
+    color: var(--vr-text);
+    background: color-mix(in oklch, var(--vr-bg), transparent 8%);
     backdrop-filter: blur(12px);
     pointer-events: none;
   }
@@ -30,7 +30,7 @@
     font-size: 16px;
   }
   :where(.attachment-drop-overlay) > span:last-child {
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font-size: 12px;
   }
   :global(.attachment-drop-icon) {
@@ -39,7 +39,7 @@
     height: 54px;
     place-items: center;
     border-radius: 16px;
-    color: var(--warm-950);
-    background: var(--accent);
+    color: var(--vr-bg);
+    background: var(--vr-accent);
   }
 </style>

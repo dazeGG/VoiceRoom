@@ -7,17 +7,17 @@
   max-width: none;
   max-height: calc(100dvh - 32px);
   margin: auto;
-  border: 1px solid color-mix(in oklch, var(--warm-ink), transparent 88%);
+  border: 1px solid color-mix(in oklch, var(--vr-text), transparent 88%);
   border-radius: var(--radius-xl);
   padding: 0;
   overflow: hidden;
-  background: var(--warm-800);
-  color: var(--warm-ink);
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
   box-shadow: 0 32px 96px rgba(0, 0, 0, 0.62);
 }
 
 .auth-dialog::backdrop {
-  background: color-mix(in srgb, var(--warm-950) 74%, transparent);
+  background: color-mix(in srgb, var(--vr-bg) 74%, transparent);
   backdrop-filter: blur(5px);
   -webkit-backdrop-filter: blur(5px);
 }
@@ -28,7 +28,7 @@
   overflow-y: auto;
   padding: 34px 32px 28px;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklch, var(--warm-ink), transparent 78%) transparent;
+  scrollbar-color: color-mix(in oklch, var(--vr-text), transparent 78%) transparent;
 }
 
 .auth-dialog-close {
@@ -40,10 +40,10 @@
   height: var(--interactive-sm);
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in oklch, var(--warm-ink), transparent 90%);
+  border: 1px solid color-mix(in oklch, var(--vr-text), transparent 90%);
   border-radius: var(--radius-sm);
-  background: var(--control);
-  color: var(--warm-muted);
+  background: var(--vr-surface-3);
+  color: var(--vr-text-2);
   cursor: pointer;
   transition:
     background 160ms var(--ease-out),
@@ -53,9 +53,9 @@
 }
 
 .auth-dialog-close:hover {
-  border-color: color-mix(in oklch, var(--warm-ink), transparent 80%);
-  background: var(--control-hover);
-  color: var(--warm-ink);
+  border-color: color-mix(in oklch, var(--vr-text), transparent 80%);
+  background: var(--vr-surface-3-hover);
+  color: var(--vr-text);
   transform: rotate(3deg);
 }
 
@@ -71,8 +71,8 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 13px 15px;
-  background: var(--warm-900);
-  color: var(--warm-100);
+  background: var(--vr-bg);
+  color: var(--vr-text);
   font-family: var(--font-ui);
   font-size: 15px;
   outline: none;
@@ -80,12 +80,12 @@
 }
 
 .auth-input::placeholder {
-  color: var(--warm-650);
+  color: var(--vr-text-3);
 }
 
 .auth-input:hover {
   border-color: rgba(255, 255, 255, 0.16);
-  background: var(--warm-900);
+  background: var(--vr-bg);
 }
 
 .auth-input:focus {
@@ -101,7 +101,7 @@
   padding: 0 8px 0 15px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
-  background: var(--warm-900);
+  background: var(--vr-bg);
   transition: border-color 0.15s ease;
 }
 
@@ -128,12 +128,12 @@
 .auth-foot {
   margin-top: 22px;
   text-align: center;
-  color: var(--warm-560);
+  color: var(--vr-text-3);
   font-size: 13.5px;
 }
 
 .auth-link {
-  color: var(--accent);
+  color: var(--vr-accent);
   font-weight: 700;
   text-decoration: none;
   cursor: pointer;
@@ -171,8 +171,8 @@ button.auth-link:disabled {
   width: 15px;
   height: 15px;
   border-radius: 50%;
-  border: 2px solid color-mix(in oklch, var(--accent-ink), transparent 72%);
-  border-top-color: var(--accent-ink);
+  border: 2px solid color-mix(in oklch, var(--vr-accent-ink), transparent 72%);
+  border-top-color: var(--vr-accent-ink);
   animation: auth-spin 0.7s linear infinite;
 }
 

@@ -128,8 +128,8 @@
   .reaction-quick-trigger:focus-visible,
   .reaction-picker-trigger:hover,
   .reaction-picker-trigger:focus-visible {
-    background: color-mix(in oklch, var(--accent), transparent 86%);
-    color: var(--accent);
+    background: color-mix(in oklch, var(--vr-accent), transparent 86%);
+    color: var(--vr-accent);
     outline: none;
   }
 </style>

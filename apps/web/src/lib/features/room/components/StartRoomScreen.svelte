@@ -76,7 +76,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-sm);
-    color: var(--muted);
+    color: var(--vr-text-2);
     font-size: 0.78rem;
     font-weight: 800;
     letter-spacing: 0.08em;
@@ -86,7 +86,7 @@
   :where(.start-divider)::after {
     height: 1px;
     flex: 1;
-    background: var(--line);
+    background: var(--vr-line-strong);
     content: '';
   }
   :global(.hero-title) {

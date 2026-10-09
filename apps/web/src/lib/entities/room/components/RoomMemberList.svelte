@@ -223,7 +223,7 @@
     margin: 0;
   }
   h3 {
-    color: var(--ink-muted);
+    color: var(--vr-text-2);
     font-size: 12px;
     font-weight: 700;
     text-transform: uppercase;
@@ -248,7 +248,7 @@
   }
   .room-member-list__row:hover,
   .room-member-list__row:focus-within {
-    background: color-mix(in oklch, var(--control), transparent 52%);
+    background: color-mix(in oklch, var(--vr-surface-3), transparent 52%);
   }
   .room-member-list__member {
     display: flex;
@@ -282,7 +282,7 @@
     font-size: 14px;
   }
   small {
-    color: var(--ink-muted);
+    color: var(--vr-text-2);
     font-size: 12px;
   }
   .room-member-list__row :global(.room-member-list__menu-root) {
@@ -297,7 +297,7 @@
     border: 0;
     border-radius: 9px;
     background: transparent;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     cursor: pointer;
     opacity: 0;
     transition:
@@ -312,8 +312,8 @@
   }
   .room-member-list__menu-trigger:hover:not(:disabled),
   .room-member-list__menu-trigger[data-open='true'] {
-    background: var(--control-hover);
-    color: var(--warm-ink);
+    background: var(--vr-surface-3-hover);
+    color: var(--vr-text);
   }
   .room-member-list__menu-trigger:focus-visible {
     outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));
@@ -336,15 +336,15 @@
   }
   .room-member-list__notice,
   .room-member-list__empty {
-    color: var(--ink-muted);
+    color: var(--vr-text-2);
     font-size: 13px;
   }
   .room-member-list__more {
     justify-self: stretch;
     min-height: 38px;
-    border: 1px solid var(--line);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 10px;
-    background: var(--paper);
+    background: var(--vr-bg);
     color: inherit;
   }
   .sr-only {

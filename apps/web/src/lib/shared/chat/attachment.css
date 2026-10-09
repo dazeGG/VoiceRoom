@@ -9,7 +9,7 @@
   min-width: 0;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 13px;
-  background: var(--warm-900);
+  background: var(--vr-bg);
   transition: border-color 0.15s ease;
 }
 
@@ -26,7 +26,7 @@
 .attachment-compose-field textarea,
 .attachment-compose-field [role='textbox'] {
   border: 0 !important;
-  background: var(--warm-900) !important;
+  background: var(--vr-bg) !important;
   box-shadow: none !important;
 }
 
@@ -67,7 +67,7 @@
   min-width: 0;
   padding: 0;
   border: 0;
-  background: color-mix(in oklch, var(--paper), var(--ink) 10%);
+  background: color-mix(in oklch, var(--vr-bg), var(--vr-text) 10%);
   overflow: hidden;
 }
 .attachment-tile img {
@@ -98,7 +98,7 @@
   display: grid;
   place-items: center;
   padding: 20px;
-  background: color-mix(in oklch, var(--paper-deep), transparent 6%);
+  background: color-mix(in oklch, var(--vr-bg), transparent 6%);
 }
 /* Header, then the stage taking whatever is left. Without the explicit rows the
    stage was sized by its own content, so a screenshot larger than the dialog
@@ -109,7 +109,7 @@
   grid-template-rows: auto minmax(0, 1fr);
   width: min(96vw, 1200px);
   height: min(92vh, 900px);
-  color: var(--ink);
+  color: var(--vr-text);
 }
 .attachment-lightbox header {
   z-index: 2;

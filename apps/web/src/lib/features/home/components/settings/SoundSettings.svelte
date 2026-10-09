@@ -440,7 +440,7 @@
     gap: 14px;
   }
   :global(.settings-sound-value) {
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-family: var(--font-ui);
     font-size: 13px;
     font-weight: 700;
@@ -456,8 +456,8 @@
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 10px;
     padding: 8px 12px;
-    background: var(--control);
-    color: var(--warm-ink);
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
     font-family: var(--font-ui);
     font-size: 12.5px;
     font-weight: 700;
@@ -467,7 +467,7 @@
       border-color 150ms ease;
   }
   :where(.settings-sound-preview):hover {
-    background: var(--control-hover);
+    background: var(--vr-surface-3-hover);
     border-color: rgba(255, 255, 255, 0.22);
   }
   :where(.settings-sound-preview):disabled {
@@ -476,7 +476,7 @@
   }
   :global(.settings-gate-value) {
     text-align: right;
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-family: var(--font-ui);
     font-size: 13px;
     font-weight: 700;
@@ -489,22 +489,22 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 12px;
     padding: 4px;
-    background: var(--warm-900);
+    background: var(--vr-bg);
   }
   :where(.settings-mode-toggle) button {
     min-height: 36px;
     border: 0;
     border-radius: 8px;
     background: transparent;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font-family: var(--font-ui);
     font-size: 12.5px;
     font-weight: 700;
     cursor: pointer;
   }
   :where(.settings-mode-toggle) button[aria-checked='true'] {
-    background: color-mix(in oklch, var(--green) 16%, transparent);
-    color: var(--warm-ink);
+    background: color-mix(in oklch, var(--vr-online) 16%, transparent);
+    color: var(--vr-text);
     box-shadow: inset 0 0 0 1px rgba(52, 201, 138, 0.28);
   }
 </style>

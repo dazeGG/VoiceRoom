@@ -90,11 +90,11 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   /* Size container so descendant avatar/ring elements can scale down on short tiles. */
   container-type: size;
   place-items: center;
-  border: 1px solid color-mix(in oklch, var(--line), var(--ink) 8%);
+  border: 1px solid color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 8%);
   border-radius: var(--radius-sm);
   padding: clamp(var(--space-sm), 2.2vh, var(--space-lg)) var(--space-md);
   overflow: hidden;
-  background: color-mix(in oklch, var(--participant-pastel), var(--paper-deep) 30%);
+  background: color-mix(in oklch, var(--participant-pastel), var(--vr-bg) 30%);
   box-shadow: none;
   transition:
     background 180ms ease,
@@ -182,10 +182,10 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   width: 34px;
   height: 34px;
   place-items: center;
-  border: 1px solid var(--line);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 50%;
-  background: var(--panel);
-  color: var(--warm-muted);
+  background: var(--vr-surface);
+  color: var(--vr-text-2);
   cursor: pointer;
 }
 /* Arrows appear only when there is another page on that side. */
@@ -199,12 +199,12 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
 }
 
 .participant[data-screen='true'] {
-  border-color: color-mix(in oklch, var(--line), var(--blue) 16%);
+  border-color: color-mix(in oklch, var(--vr-line-strong), var(--vr-info) 16%);
 }
 
 .participant[data-speaking='true'] {
-  border-color: var(--green);
-  box-shadow: inset 0 0 0 1px var(--green);
+  border-color: var(--vr-online);
+  box-shadow: inset 0 0 0 1px var(--vr-online);
 }
 
 /* A camera fills the tile in place of the avatar; the name stays on top and
@@ -214,7 +214,7 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   inset: 0;
   width: 100%;
   height: 100%;
-  background: var(--warm-950);
+  background: var(--vr-bg);
   object-fit: cover;
 }
 
@@ -235,7 +235,7 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   position: absolute;
   inset: 0;
   z-index: 1;
-  border: 2px solid var(--green);
+  border: 2px solid var(--vr-online);
   border-radius: inherit;
   content: '';
   pointer-events: none;
@@ -357,7 +357,7 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   overflow: hidden;
   border-radius: 7px;
   padding: 5px 8px;
-  background: color-mix(in oklch, var(--warm-950), transparent 16%);
+  background: color-mix(in oklch, var(--vr-bg), transparent 16%);
   color: oklch(98% 0.006 92);
   font-size: 0.9rem;
   font-weight: 800;
@@ -402,7 +402,7 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   overflow: hidden;
   border-radius: 999px;
   padding: 3px 7px;
-  background: color-mix(in oklch, var(--warm-950), transparent 22%);
+  background: color-mix(in oklch, var(--vr-bg), transparent 22%);
   color: oklch(86% 0.035 86);
   font-size: 0.76rem;
   font-weight: 800;
@@ -417,10 +417,10 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  border: 1px solid color-mix(in oklch, var(--control-line), var(--ink) 12%);
+  border: 1px solid color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 12%);
   border-radius: 999px;
   padding: 0 10px;
-  background: var(--control-active);
+  background: var(--vr-text);
   color: oklch(9% 0.012 92);
   font-size: 0.76rem;
   font-weight: 800;
@@ -433,7 +433,7 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
 }
 
 .participant-screen-action:hover {
-  background: var(--control-active-hover);
+  background: var(--vr-text);
   transform: translateY(-1px);
 }
 

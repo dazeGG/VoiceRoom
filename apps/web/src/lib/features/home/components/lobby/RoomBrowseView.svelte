@@ -248,8 +248,8 @@
     margin: 0;
     border: 1px solid rgba(232, 160, 148, 0.24);
     border-radius: 999px;
-    background: color-mix(in oklch, var(--coral) 18%, var(--warm-950));
-    color: var(--coral);
+    background: color-mix(in oklch, var(--vr-danger) 18%, var(--vr-bg));
+    color: var(--vr-danger);
     padding: 8px 13px;
     font-size: 12.5px;
     font-weight: 700;

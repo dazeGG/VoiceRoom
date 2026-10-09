@@ -37,7 +37,7 @@ h1 {
 .leave-button,
 .sound-button {
   min-height: 44px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--vr-line-strong);
   border-radius: var(--radius-sm);
   padding: 0 16px;
   transition:
@@ -49,8 +49,8 @@ h1 {
 }
 
 .tool-button {
-  background: var(--panel);
-  color: var(--ink);
+  background: var(--vr-surface);
+  color: var(--vr-text);
   font-weight: 750;
 }
 
@@ -58,7 +58,7 @@ h1 {
 .primary-button:hover,
 .secondary-button:hover,
 .sound-button:hover {
-  border-color: color-mix(in oklch, var(--control-line), var(--ink) 22%);
+  border-color: color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 22%);
   box-shadow: 0 0 0 3px oklch(84% 0.012 92 / 0.1);
 }
 
@@ -103,11 +103,11 @@ body[data-stage-summary='hidden'] .stage-strip-bar {
   height: 34px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid var(--line);
+  border: 1px solid var(--vr-line-strong);
   border-radius: var(--radius-sm);
   padding: 0;
-  background: var(--warm-900);
-  color: var(--muted);
+  background: var(--vr-bg);
+  color: var(--vr-text-2);
   transition:
     background 140ms var(--ease-out),
     border-color 140ms var(--ease-out),
@@ -115,9 +115,9 @@ body[data-stage-summary='hidden'] .stage-strip-bar {
 }
 
 .strip-toggle-button:hover {
-  border-color: color-mix(in oklch, var(--control-line), var(--ink) 18%);
-  background: var(--control);
-  color: var(--ink);
+  border-color: color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 18%);
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
 }
 
 .strip-toggle-button svg {

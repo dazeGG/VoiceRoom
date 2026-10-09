@@ -391,9 +391,9 @@
     gap: 12px;
     min-height: 54px;
     padding: 8px 8px 8px 14px;
-    border: 1px solid color-mix(in oklch, var(--warm-faint), transparent 84%);
+    border: 1px solid color-mix(in oklch, var(--vr-text-3), transparent 84%);
     border-radius: var(--radius-md);
-    background: color-mix(in oklch, var(--panel-strong), transparent 45%);
+    background: color-mix(in oklch, var(--vr-surface-3), transparent 45%);
   }
   :global(.settings-overlay-window-text) {
     display: flex;
@@ -409,17 +409,17 @@
     white-space: nowrap;
   }
   :global(.settings-overlay-window-name) {
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-size: 13px;
     font-weight: 650;
   }
   :global(.settings-overlay-window-exe) {
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-size: 12px;
   }
   :global(.settings-overlay-window-empty) {
     padding: 6px 0;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-size: 12.5px;
     line-height: 1.45;
   }
@@ -428,8 +428,8 @@
     margin-right: 6px;
     padding: 4px 10px;
     border-radius: var(--radius-pill);
-    background: color-mix(in oklch, var(--green), transparent 86%);
-    color: var(--green);
+    background: color-mix(in oklch, var(--vr-online), transparent 86%);
+    color: var(--vr-online);
     font: 700 12px var(--font-ui);
   }
   :global(.settings-overlay-add) {
@@ -438,7 +438,7 @@
     padding: 0 14px;
     border: none;
     border-radius: 11px;
-    background: var(--green);
+    background: var(--vr-online);
     color: oklch(20% 0.05 150);
     font: 700 12.5px var(--font-ui);
     cursor: pointer;
@@ -467,8 +467,8 @@
     min-height: 28px;
     padding: 0 3px 0 11px;
     border-radius: var(--radius-pill);
-    background: color-mix(in oklch, var(--panel-strong), transparent 25%);
-    color: var(--warm-ink);
+    background: color-mix(in oklch, var(--vr-surface-3), transparent 25%);
+    color: var(--vr-text);
     font-size: 12px;
   }
   :where(.settings-overlay-allowed-item) > span {
@@ -486,11 +486,11 @@
     border: none;
     border-radius: 50%;
     background: transparent;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     cursor: pointer;
   }
   :where(.settings-overlay-remove):hover:not(:disabled) {
-    background: color-mix(in oklch, var(--coral), transparent 84%);
-    color: var(--coral);
+    background: color-mix(in oklch, var(--vr-danger), transparent 84%);
+    color: var(--vr-danger);
   }
 </style>

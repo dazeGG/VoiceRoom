@@ -21,7 +21,7 @@
     height: 14px;
     margin: 0;
     overflow: hidden;
-    color: var(--warm-muted, var(--warm-550));
+    color: var(--vr-text-2, var(--vr-text-3));
     font-size: 11.5px;
     line-height: 14px;
     pointer-events: none;

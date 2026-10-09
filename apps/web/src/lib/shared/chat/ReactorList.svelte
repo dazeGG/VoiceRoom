@@ -111,7 +111,7 @@
   .avatar {
     display: grid;
     place-items: center;
-    background: color-mix(in oklch, var(--paper), var(--ink) 14%);
+    background: color-mix(in oklch, var(--vr-bg), var(--vr-text) 14%);
   }
   p {
     margin: 8px 2px;
@@ -124,6 +124,6 @@
     border: 0;
     border-radius: 9px;
     color: inherit;
-    background: color-mix(in oklch, var(--paper), var(--ink) 10%);
+    background: color-mix(in oklch, var(--vr-bg), var(--vr-text) 10%);
   }
 </style>

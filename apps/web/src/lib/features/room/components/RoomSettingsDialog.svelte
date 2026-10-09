@@ -324,7 +324,7 @@
     background: transparent;
     border: 1px solid rgba(239, 68, 68, 0.4);
     border-radius: 10px;
-    color: var(--danger-soft);
+    color: var(--vr-danger);
     cursor: pointer;
     font-size: 13px;
     font-weight: 600;
@@ -335,7 +335,7 @@
   }
 
   .dialog-danger-trigger:hover {
-    background: color-mix(in oklch, var(--coral) 10%, transparent);
+    background: color-mix(in oklch, var(--vr-danger) 10%, transparent);
     border-color: rgba(239, 68, 68, 0.6);
   }
 
@@ -354,7 +354,7 @@
 
   .dialog-danger-confirm {
     align-items: center;
-    background: var(--coral);
+    background: var(--vr-danger);
     border: none;
     border-radius: 10px;
     color: #fff;
@@ -368,7 +368,7 @@
   }
 
   .dialog-danger-confirm:hover {
-    background: color-mix(in oklch, var(--coral), var(--warm-950) 20%);
+    background: color-mix(in oklch, var(--vr-danger), var(--vr-bg) 20%);
   }
 
   .dialog-danger-confirm:disabled,
@@ -387,8 +387,8 @@
     padding: 13px 40px 13px 15px;
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 12px;
-    background: var(--warm-900);
-    color: var(--warm-ink);
+    background: var(--vr-bg);
+    color: var(--vr-text);
     font-family: var(--font-ui);
     font-size: 14.5px;
     font-weight: 500;
@@ -396,8 +396,8 @@
     cursor: pointer;
   }
   :where(.settings-select) option {
-    background: var(--warm-800);
-    color: var(--warm-ink);
+    background: var(--vr-surface-2);
+    color: var(--vr-text);
   }
   :global(.settings-select-chevron) {
     position: absolute;
@@ -406,6 +406,6 @@
     transform: translateY(-50%);
     display: inline-flex;
     pointer-events: none;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
   }
 </style>

@@ -73,8 +73,8 @@
     background: color-mix(in oklch, currentColor, transparent 94%);
   }
   .reaction-chip.reacted {
-    border-color: var(--green);
-    background: color-mix(in oklch, var(--green), transparent 88%);
+    border-color: var(--vr-online);
+    background: color-mix(in oklch, var(--vr-online), transparent 88%);
   }
   .reaction-chip.pending {
     opacity: 0.65;

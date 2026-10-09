@@ -220,7 +220,7 @@
     align-items: center;
     justify-content: center;
     padding: 16px;
-    background: color-mix(in srgb, var(--warm-950) 62%, transparent);
+    background: color-mix(in srgb, var(--vr-bg) 62%, transparent);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
   }
@@ -230,8 +230,8 @@
     padding: 14px 16px 16px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-xl);
-    background: var(--warm-800);
-    box-shadow: var(--shadow);
+    background: var(--vr-surface-2);
+    box-shadow: var(--vr-shadow-popover);
     outline: none;
   }
 
@@ -245,13 +245,13 @@
     height: 3px;
     overflow: hidden;
     border-radius: var(--radius-pill);
-    background: color-mix(in oklch, var(--warm-ink), transparent 82%);
+    background: color-mix(in oklch, var(--vr-text), transparent 82%);
   }
 
   .stories-fill {
     display: block;
     height: 100%;
-    background: var(--warm-ink);
+    background: var(--vr-text);
     transform-origin: left center;
   }
 
@@ -284,7 +284,7 @@
   }
 
   .stories-kicker {
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font-size: 12px;
   }
 
@@ -293,7 +293,7 @@
     border: none;
     border-radius: var(--radius-sm);
     background: none;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font: inherit;
     font-size: 13px;
     cursor: pointer;
@@ -301,8 +301,8 @@
 
   .stories-quiet:hover,
   .stories-quiet:focus-visible {
-    background: var(--control);
-    color: var(--warm-ink);
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
   }
 
   .stories-stage {
@@ -323,7 +323,7 @@
     aspect-ratio: 4 / 3;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: var(--radius-lg);
-    background: var(--panel);
+    background: var(--vr-surface);
     object-fit: cover;
     user-select: none;
   }
@@ -341,7 +341,7 @@
 
   .stories-title {
     margin: 16px 0 4px;
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-family: var(--font-ui);
     font-size: 18px;
     font-weight: 700;
@@ -351,7 +351,7 @@
   .stories-text {
     min-height: calc(2 * 1.45em);
     margin: 0;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font-size: 14px;
     line-height: 1.45;
   }

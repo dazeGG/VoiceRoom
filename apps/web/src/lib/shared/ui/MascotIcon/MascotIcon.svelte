@@ -52,11 +52,11 @@
 
 <style>
   .mascot-head {
-    fill: var(--accent);
+    fill: var(--vr-accent);
   }
 
   .mascot-eye {
-    fill: var(--accent);
+    fill: var(--vr-accent);
   }
 
   .mascot-icon--blink .mascot-eyes {
@@ -115,7 +115,7 @@
   .mascot-x-fade {
     opacity: 0;
     fill: none;
-    stroke: var(--accent);
+    stroke: var(--vr-accent);
     stroke-width: 4;
     stroke-linecap: round;
     animation: mascot-x-in 1.8s linear forwards;

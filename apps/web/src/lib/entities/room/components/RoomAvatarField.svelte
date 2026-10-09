@@ -89,7 +89,7 @@
     aria-label={editLabel}
     title={editLabel}
   >
-    <Avatar {name} src={shownUrl} shape="squircle" background="var(--room-avatar-bg)" size={58} />
+    <Avatar {name} src={shownUrl} shape="squircle" background="var(--vr-surface-3)" size={58} />
     <span class="room-avatar-overlay" aria-hidden="true"><Pencil {...iconSm} /></span>
   </button>
   {#if shownUrl}
@@ -150,7 +150,7 @@
     align-items: center;
     justify-content: center;
     border-radius: inherit;
-    background: color-mix(in srgb, var(--warm-950) 58%, transparent);
+    background: color-mix(in srgb, var(--vr-bg) 58%, transparent);
     opacity: 0;
     transition: opacity 0.16s ease;
     pointer-events: none;
@@ -160,7 +160,7 @@
     opacity: 1;
   }
   .room-avatar-edit:focus-visible {
-    outline: 2px solid var(--coral);
+    outline: 2px solid var(--vr-danger);
     outline-offset: 3px;
   }
   .room-avatar-remove {
@@ -174,9 +174,9 @@
     width: 22px;
     height: 22px;
     padding: 0;
-    border: 2px solid var(--paper-deep);
+    border: 2px solid var(--vr-bg);
     border-radius: 50%;
-    background: var(--coral);
+    background: var(--vr-danger);
     color: #fff;
     cursor: pointer;
     box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34);
@@ -190,7 +190,7 @@
     opacity: 1;
   }
   .room-avatar-remove:not(:disabled):hover {
-    background: color-mix(in oklch, var(--coral), var(--warm-950) 16%);
+    background: color-mix(in oklch, var(--vr-danger), var(--vr-bg) 16%);
   }
   .room-avatar-remove:focus-visible {
     outline: 2px solid #fff;

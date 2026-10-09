@@ -220,7 +220,7 @@
     gap: 2px;
     padding: 4px;
     border-radius: 13px;
-    background: color-mix(in oklch, var(--paper-deep), transparent 28%);
+    background: color-mix(in oklch, var(--vr-bg), transparent 28%);
   }
   :where(.attachment-lightbox-tools) button,
   :where(.attachment-lightbox-tools) a {
@@ -238,7 +238,7 @@
   :where(.attachment-lightbox-tools) button:focus-visible,
   :where(.attachment-lightbox-tools) a:hover,
   :where(.attachment-lightbox-tools) a:focus-visible {
-    background: color-mix(in oklch, var(--paper), transparent 62%);
+    background: color-mix(in oklch, var(--vr-bg), transparent 62%);
     outline: none;
   }
   :where(.attachment-lightbox-tools) button:disabled {
@@ -287,8 +287,8 @@
     border: 0;
     border-radius: 10px;
     font-size: 38px;
-    color: var(--ink);
-    background: color-mix(in oklch, var(--paper-deep), transparent 45%);
+    color: var(--vr-text);
+    background: color-mix(in oklch, var(--vr-bg), transparent 45%);
   }
   :global(.attachment-previous) {
     left: 8px;

@@ -148,7 +148,7 @@
     gap: 2px;
   }
   :global(.stage-strip-kicker) {
-    color: var(--muted);
+    color: var(--vr-text-2);
     font-size: 0.72rem;
     font-weight: 800;
     letter-spacing: 0.06em;

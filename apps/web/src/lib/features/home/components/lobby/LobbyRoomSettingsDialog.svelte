@@ -265,7 +265,7 @@
     border: 1px solid rgba(239, 68, 68, 0.4);
     border-radius: 10px;
     background: transparent;
-    color: var(--danger-soft);
+    color: var(--vr-danger);
     font-family: var(--font-ui);
     font-size: 13px;
     font-weight: 600;
@@ -276,7 +276,7 @@
   }
   .dialog-danger-trigger:hover {
     border-color: rgba(239, 68, 68, 0.6);
-    background: color-mix(in oklch, var(--coral) 10%, transparent);
+    background: color-mix(in oklch, var(--vr-danger) 10%, transparent);
   }
   .dialog-danger-note {
     margin: 0 0 10px;
@@ -296,7 +296,7 @@
     padding: 9px 14px;
     border: 0;
     border-radius: 10px;
-    background: var(--coral);
+    background: var(--vr-danger);
     color: #fff;
     font-family: var(--font-ui);
     font-size: 13px;
@@ -305,7 +305,7 @@
     transition: background-color 0.15s ease;
   }
   .dialog-danger-confirm:hover {
-    background: color-mix(in oklch, var(--coral), var(--warm-950) 20%);
+    background: color-mix(in oklch, var(--vr-danger), var(--vr-bg) 20%);
   }
   .dialog-danger-confirm:disabled,
   .dialog-danger-trigger:disabled {

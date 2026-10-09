@@ -77,55 +77,6 @@
   --vr-danger-hover: oklch(58% 0.2 15 / 0.1);
 }
 
-/* Legacy names, mapped onto the --vr-* tokens so screens that have not been
-   redesigned yet follow the theme. Remove an alias once nothing reads it. */
-:root {
-  --paper: var(--vr-bg);
-  --paper-deep: var(--vr-bg);
-  --panel: var(--vr-surface);
-  --panel-strong: var(--vr-surface-3);
-  --control: var(--vr-surface-3);
-  --control-hover: var(--vr-surface-3-hover);
-  --control-active: var(--vr-text);
-  --control-active-hover: var(--vr-text);
-  --control-line: var(--vr-line-strong);
-  --room-avatar-bg: var(--vr-surface-3);
-  --ink: var(--vr-text);
-  --muted: var(--vr-text-2);
-  --line: var(--vr-line-strong);
-  --green: var(--vr-online);
-  --stream-live: var(--vr-online);
-  --stream-live-hover: var(--vr-accent-hover);
-  --coral: var(--vr-danger);
-  --amber: var(--vr-away);
-  --accent: var(--vr-accent);
-  --accent-hover: var(--vr-accent-hover);
-  --accent-ink: var(--vr-accent-ink);
-  --accent-glow: transparent;
-  --shadow: var(--vr-shadow-popover);
-  --shadow-glow: none;
-
-  --warm-ink: var(--vr-text);
-  --warm-ink-dim: var(--vr-text);
-  --warm-muted: var(--vr-text-2);
-  --warm-muted-dim: var(--vr-text-2);
-  --warm-faint: var(--vr-text-3);
-  --warm-100: var(--vr-text);
-  --warm-150: var(--vr-text);
-  --warm-300: var(--vr-text-2);
-  --warm-500: var(--vr-text-3);
-  --warm-550: var(--vr-text-3);
-  --warm-560: var(--vr-text-3);
-  --warm-650: var(--vr-text-3);
-  --warm-800: var(--vr-surface-2);
-  --warm-850: var(--vr-surface);
-  --warm-900: var(--vr-bg);
-  --warm-950: var(--vr-bg);
-  --green-soft: var(--vr-success);
-  --coral-soft: var(--vr-danger);
-  --danger-soft: var(--vr-danger);
-}
-
 /* Thin accent scrollbars everywhere. Firefox only gets the standard
    properties when ::-webkit-scrollbar is unsupported, since they would
    otherwise override the webkit styling in Chromium. */

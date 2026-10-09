@@ -60,7 +60,7 @@
     display: grid;
     place-items: center;
     padding: 24px 16px calc(24px + env(safe-area-inset-bottom));
-    background: var(--paper-deep);
+    background: var(--vr-bg);
     font-family: var(--font-ui);
   }
 
@@ -74,8 +74,8 @@
     padding: clamp(22px, 6vw, 30px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-xl);
-    background: var(--warm-800);
-    box-shadow: var(--shadow);
+    background: var(--vr-surface-2);
+    box-shadow: var(--vr-shadow-popover);
   }
 
   .mobile-start-orb {
@@ -84,12 +84,12 @@
     width: 64px;
     height: 64px;
     border-radius: 20px;
-    background: color-mix(in oklch, var(--accent) 12%, var(--control));
+    background: color-mix(in oklch, var(--vr-accent) 12%, var(--vr-surface-3));
   }
 
   .mobile-start-kicker {
     margin: 0;
-    color: var(--accent);
+    color: var(--vr-accent);
     font-size: 12px;
     font-weight: 800;
     letter-spacing: 0.06em;
@@ -98,7 +98,7 @@
 
   .mobile-start-card h1 {
     margin: 0;
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-size: clamp(24px, 7vw, 30px);
     font-weight: 700;
     letter-spacing: -0.02em;
@@ -107,7 +107,7 @@
 
   .mobile-start-lead {
     margin: 0;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font-size: 14.5px;
     line-height: 1.5;
   }
@@ -120,8 +120,8 @@
   .mobile-start-spinner {
     width: 15px;
     height: 15px;
-    border: 2px solid color-mix(in srgb, var(--accent-ink) 35%, transparent);
-    border-top-color: var(--accent-ink);
+    border: 2px solid color-mix(in srgb, var(--vr-accent-ink) 35%, transparent);
+    border-top-color: var(--vr-accent-ink);
     border-radius: 50%;
     animation: mobile-start-spin 0.7s linear infinite;
   }
@@ -148,15 +148,15 @@
     padding: 6px 11px;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: var(--radius-pill);
-    background: var(--control);
-    color: var(--warm-ink);
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
     font-size: 12.5px;
     font-weight: 650;
   }
 
   .mobile-start-note {
     margin: 0;
-    color: var(--muted);
+    color: var(--vr-text-2);
     font-size: 12.5px;
     line-height: 1.45;
   }

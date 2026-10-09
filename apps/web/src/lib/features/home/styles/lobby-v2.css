@@ -12,8 +12,8 @@
      height:100% here would resolve to auto and collapse the whole shell
      (and everything nested inside it, incl. the embedded room) to content
      height instead of the viewport. Do not add height here. */
-  background: var(--paper);
-  color: var(--ink);
+  background: var(--vr-bg);
+  color: var(--vr-text);
   font-family: var(--font-ui);
   --lv-side-w: 280px;
   --lv-row-pad: 0 10px;
@@ -150,7 +150,7 @@
   font-weight: 800;
   letter-spacing: -0.015em;
   margin-top: 6px;
-  color: var(--warm-ink);
+  color: var(--vr-text);
 }
 
 .lr-empty {
@@ -169,13 +169,13 @@
   justify-content: center;
   border: none;
   background: transparent;
-  color: var(--warm-muted);
+  color: var(--vr-text-2);
   cursor: pointer;
 }
 
 .lr-icon-btn:hover {
-  background: var(--control-hover);
-  color: var(--warm-ink);
+  background: var(--vr-surface-3-hover);
+  color: var(--vr-text);
 }
 
 /* ---- callout (friend requests banner) ---- */
@@ -191,8 +191,8 @@
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: var(--radius-md);
   padding: 9px 12px;
-  background: var(--warm-900);
-  color: var(--warm-muted);
+  background: var(--vr-bg);
+  color: var(--vr-text-2);
 }
 
 .lr-search input {
@@ -200,17 +200,17 @@
   border: none;
   background: transparent;
   outline: none;
-  color: var(--warm-ink);
+  color: var(--vr-text);
   font-family: var(--font-ui);
   font-size: 13.5px;
 }
 
 .lr-search input::placeholder {
-  color: var(--warm-faint);
+  color: var(--vr-text-3);
 }
 
 .lr-search:focus-within {
-  border-color: var(--accent);
+  border-color: var(--vr-accent);
 }
 
 /* ---- requests list (People screen) ---- */
@@ -224,27 +224,27 @@
   justify-content: center;
   cursor: pointer;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  background: var(--control);
-  color: var(--warm-ink);
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
 }
 
 .lr-req-btn:hover {
-  background: var(--control-hover);
+  background: var(--vr-surface-3-hover);
 }
 
 .lr-req-btn.accept {
-  color: var(--green);
+  color: var(--vr-online);
 }
 
 .lr-req-btn.accept:hover {
-  background: color-mix(in oklch, var(--green), transparent 82%);
-  border-color: color-mix(in oklch, var(--green), transparent 50%);
+  background: color-mix(in oklch, var(--vr-online), transparent 82%);
+  border-color: color-mix(in oklch, var(--vr-online), transparent 50%);
 }
 
 .lr-req-btn.decline:hover {
-  color: var(--coral);
-  background: color-mix(in oklch, var(--coral), transparent 82%);
-  border-color: color-mix(in oklch, var(--coral), transparent 50%);
+  color: var(--vr-danger);
+  background: color-mix(in oklch, var(--vr-danger), transparent 82%);
+  border-color: color-mix(in oklch, var(--vr-danger), transparent 50%);
 }
 
 /* ---- add friend ---- */
@@ -258,11 +258,11 @@
   border-radius: var(--radius-md);
   height: var(--interactive-lg, 52px);
   padding: 0 14px;
-  background: var(--warm-900);
+  background: var(--vr-bg);
 }
 
 .lr-add-field .at {
-  color: var(--warm-faint);
+  color: var(--vr-text-3);
   font-family: var(--font-mono);
   font-weight: 500;
 }
@@ -272,7 +272,7 @@
   border: none;
   background: transparent;
   outline: none;
-  color: var(--warm-ink);
+  color: var(--vr-text);
   font-family: var(--font-mono);
   font-size: 14px;
   height: 100%;
@@ -280,7 +280,7 @@
 }
 
 .lr-add-field:focus-within {
-  border-color: var(--accent);
+  border-color: var(--vr-accent);
 }
 
 .people-title {
@@ -295,7 +295,7 @@
   border-radius: 12px;
   padding: 9px 0;
   background: transparent;
-  color: var(--warm-muted);
+  color: var(--vr-text-2);
   font-family: var(--font-ui);
   font-size: 13.5px;
   font-weight: 600;
@@ -311,8 +311,8 @@
 }
 
 .lr-dialog-tab[data-active='true'] {
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
   font-weight: 700;
 }
 

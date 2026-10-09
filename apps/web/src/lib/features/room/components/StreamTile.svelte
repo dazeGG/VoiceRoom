@@ -128,7 +128,7 @@
     width: 100%;
     height: 100%;
     border: 0;
-    background: var(--paper-deep);
+    background: var(--vr-bg);
     object-fit: cover;
   }
   :global(.stream-tile-action) {
@@ -138,7 +138,7 @@
     justify-content: center;
     border-radius: 999px;
     padding: 0 14px;
-    background: var(--control-active);
+    background: var(--vr-text);
     color: oklch(9% 0.012 92);
     font-size: 0.82rem;
     font-weight: 800;

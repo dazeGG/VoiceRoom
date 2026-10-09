@@ -319,7 +319,7 @@
   }
   :global(.auth-dialog-kicker) {
     margin: 0 0 8px;
-    color: var(--accent);
+    color: var(--vr-accent);
     font-family: var(--font-ui);
     font-size: 10px;
     font-weight: 800;
@@ -328,7 +328,7 @@
   }
   :global(.auth-title) {
     margin: 0;
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-family: var(--font-ui);
     font-size: 23px;
     font-weight: 800;
@@ -336,7 +336,7 @@
   }
   :global(.auth-subtitle) {
     margin: 8px 0 0;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font-size: 14px;
     line-height: 1.5;
   }
@@ -352,7 +352,7 @@
   }
   :global(.auth-label) {
     margin-bottom: 8px;
-    color: var(--warm-650);
+    color: var(--vr-text-3);
     font-family: var(--font-ui);
     font-size: 11px;
     font-weight: 500;
@@ -374,8 +374,8 @@
     border: none;
     border-radius: 12px;
     padding: 14px 0;
-    background: var(--accent);
-    color: var(--accent-ink);
+    background: var(--vr-accent);
+    color: var(--vr-accent-ink);
     font-family: var(--font-ui);
     font-size: 15px;
     font-weight: 700;
@@ -383,7 +383,7 @@
     transition: background 0.15s ease;
   }
   :where(.auth-submit):hover {
-    background: var(--accent-hover);
+    background: var(--vr-accent-hover);
   }
   :where(.auth-submit):disabled {
     cursor: default;
@@ -397,8 +397,8 @@
     border: 1px solid rgba(214, 109, 92, 0.4);
     border-radius: 11px;
     padding: 10px 13px;
-    background: color-mix(in oklch, var(--coral) 12%, transparent);
-    color: var(--coral-soft);
+    background: color-mix(in oklch, var(--vr-danger) 12%, transparent);
+    color: var(--vr-danger);
     font-size: 13px;
     line-height: 1.45;
   }
@@ -406,13 +406,13 @@
     display: grid;
     gap: 10px;
     padding: 12px 14px;
-    border: 1px solid color-mix(in oklch, var(--amber), transparent 55%);
+    border: 1px solid color-mix(in oklch, var(--vr-away), transparent 55%);
     border-radius: 11px;
-    background: color-mix(in oklch, var(--amber), transparent 88%);
+    background: color-mix(in oklch, var(--vr-away), transparent 88%);
   }
   :where(.auth-restore) p {
     margin: 0;
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-size: 13.5px;
     line-height: 1.45;
   }

@@ -91,7 +91,7 @@
     border: 0;
     border-radius: 8px;
     background: transparent;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     cursor: pointer;
     transition:
       border-color 0.15s ease,
@@ -100,8 +100,8 @@
   }
   :where(.attachment-add-button):hover,
   :where(.attachment-add-button)[aria-expanded='true'] {
-    background: var(--control);
-    color: var(--warm-ink);
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
   }
   :where(.attachment-add-button):focus-visible {
     outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));

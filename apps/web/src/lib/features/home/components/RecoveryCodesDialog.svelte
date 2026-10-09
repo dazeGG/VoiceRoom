@@ -175,15 +175,15 @@
   }
 
   .recovery-text {
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
   }
 
   .recovery-warning {
-    color: var(--amber, #e0b457);
+    color: var(--vr-away, #e0b457);
   }
 
   .recovery-error {
-    color: var(--coral-soft);
+    color: var(--vr-danger);
   }
 
   .recovery-codes {
@@ -192,15 +192,15 @@
     gap: 8px 16px;
     margin: 14px 0;
     padding: 14px 16px 14px 36px;
-    border: 1px solid var(--control-line, rgba(255, 255, 255, 0.1));
+    border: 1px solid var(--vr-line-strong, rgba(255, 255, 255, 0.1));
     border-radius: 12px;
-    background: var(--warm-900);
-    color: var(--warm-faint);
+    background: var(--vr-bg);
+    color: var(--vr-text-3);
     outline: none;
   }
 
   .recovery-codes code {
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
     font-size: 14px;
     letter-spacing: 0.04em;
@@ -218,7 +218,7 @@
     align-items: center;
     gap: 8px;
     margin: 14px 0 4px;
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-size: 14px;
     cursor: pointer;
   }
@@ -227,7 +227,7 @@
     width: 16px;
     height: 16px;
     margin: 0;
-    accent-color: var(--accent, currentColor);
+    accent-color: var(--vr-accent, currentColor);
   }
 
   @media (max-width: 460px) {

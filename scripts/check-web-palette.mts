@@ -16,22 +16,10 @@ const SURFACE_TOKEN_VALUES: Record<string, string> = {
   '--vr-surface-2': 'oklch(19.5% 0.006 260)',
   '--vr-surface-3': 'oklch(24% 0.006 260)'
 };
-// Legacy aliases of those tokens, still read by screens that predate the
-// redesign. Drop each one with its last user.
-const LEGACY_SURFACE_TOKENS = [
-  '--paper-deep',
-  '--paper',
-  '--panel',
-  '--panel-strong',
-  '--control',
-  '--warm-800',
-  '--warm-900',
-  '--warm-950'
-];
-const SURFACE_TOKENS = [...Object.keys(SURFACE_TOKEN_VALUES), ...LEGACY_SURFACE_TOKENS];
+const SURFACE_TOKENS = Object.keys(SURFACE_TOKEN_VALUES);
 
 const SEMANTIC_TOKEN =
-  /var\(--(?:vr-(?:accent|online|away|dnd|offline|danger|success|warning|info|text|line|hover|badge|backdrop|scrim|dock|on)[\w-]*|accent(?:-[\w-]+)?|amber|avatar-[\w-]+|blue|coral|focus-border|green|ink|line|muted|participant-[\w-]+|preview-[\w-]+|profile-cover-accent|room-avatar-bg|slider-fill|stream-live(?:-hover)?|toast-accent|warm-(?:faint|ink(?:-dim)?|muted(?:-dim)?))\b/;
+  /var\(--(?:vr-(?:accent|online|away|dnd|offline|danger|success|warning|info|text|line|hover|badge|backdrop|scrim|dock|on)[\w-]*|avatar-[\w-]+|focus-border|participant-[\w-]+|preview-[\w-]+|profile-cover-accent|slider-fill|toast-accent)/;
 const SEMANTIC_SELECTOR =
   /(?:\[aria-pressed|accent|action|active|avatar|away|check|connected|danger|decline|delete|destructive|dnd|dock-bar|error|exit|idle|launch|leave|live|not-found|offline|online|owner|record|remove|room-chat-unread|screen-source-pop-dot|status|stop|submit|success|thumb|toggle|warning)/i;
 const IMAGE_SELECTOR =

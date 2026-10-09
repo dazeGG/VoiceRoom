@@ -388,7 +388,7 @@
     height: 28px;
     flex: 0 0 auto;
     margin: 0 2px;
-    background: var(--line);
+    background: var(--vr-line-strong);
     pointer-events: none;
   }
   :global(.dock-connection-label) {
@@ -422,7 +422,7 @@
     padding: 0;
     border: 1px solid oklch(100% 0 0 / 0.12);
     border-radius: 10px;
-    background: var(--control);
+    background: var(--vr-surface-3);
     cursor: pointer;
     transition:
       background 0.16s ease,
@@ -436,7 +436,7 @@
   }
   :where(.gate-switch)[aria-checked='true'] {
     border-color: oklch(72% 0.14 164 / 0.55);
-    background: color-mix(in oklch, var(--green) 30%, transparent);
+    background: color-mix(in oklch, var(--vr-online) 30%, transparent);
   }
   :global(.gate-switch-knob) {
     position: absolute;
@@ -445,13 +445,13 @@
     width: 16px;
     height: 16px;
     border-radius: 50%;
-    background: var(--muted);
+    background: var(--vr-text-2);
     transition:
       left 0.16s ease,
       background 0.16s ease;
   }
   :where(.gate-switch)[aria-checked='true'] .gate-switch-knob {
     left: 17px;
-    background: var(--green);
+    background: var(--vr-online);
   }
 </style>

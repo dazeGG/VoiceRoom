@@ -336,8 +336,8 @@
     width: 32px;
     height: 32px;
     border-radius: 10px;
-    background: var(--control);
-    color: var(--warm-muted);
+    background: var(--vr-surface-3);
+    color: var(--vr-text-2);
   }
 
   /* The shared row style sets these in the mono face meant for @logins. */
@@ -347,7 +347,7 @@
   }
 
   .account-security-row[data-warning='true'] .account-security-icon {
-    color: var(--amber, #e0b457);
+    color: var(--vr-away, #e0b457);
   }
 
   .account-security-action {
@@ -362,18 +362,18 @@
   @keyframes account-security-highlight {
     0%,
     100% {
-      box-shadow: 0 0 0 0 color-mix(in oklch, var(--accent), transparent 40%);
+      box-shadow: 0 0 0 0 color-mix(in oklch, var(--vr-accent), transparent 40%);
     }
 
     50% {
-      box-shadow: 0 0 0 7px color-mix(in oklch, var(--accent), transparent 80%);
+      box-shadow: 0 0 0 7px color-mix(in oklch, var(--vr-accent), transparent 80%);
     }
   }
 
   @media (prefers-reduced-motion: reduce) {
     .account-security-action[data-highlight='true'] {
       animation: none;
-      outline: 2px solid var(--accent);
+      outline: 2px solid var(--vr-accent);
       outline-offset: 3px;
     }
   }

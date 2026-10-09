@@ -133,7 +133,7 @@
   }
   :global(.home-app-title) {
     display: block;
-    color: var(--warm-300);
+    color: var(--vr-text-2);
     font-size: 14px;
     font-weight: 600;
     letter-spacing: -0.01em;
@@ -141,7 +141,7 @@
   :global(.home-app-sub) {
     display: block;
     margin-top: 2px;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-size: 12.5px;
   }
   :global(.home-app-body) {
@@ -155,7 +155,7 @@
     font-family: var(--font-ui);
     font-size: 11px;
     letter-spacing: 0.14em;
-    color: var(--warm-650);
+    color: var(--vr-text-3);
     text-transform: uppercase;
   }
   :global(.home-dl) {
@@ -167,8 +167,8 @@
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 12px;
     padding: 14px;
-    background: var(--control);
-    color: var(--warm-100);
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
     font-family: var(--font-ui);
     font-size: 14px;
     font-weight: 600;
@@ -181,24 +181,24 @@
     opacity: 0.7;
   }
   :where(.home-dl):hover {
-    background: var(--control-hover);
+    background: var(--vr-surface-3-hover);
   }
   :global(.home-app-meta) {
     margin: 0;
     font-family: var(--font-mono);
     font-size: 11.5px;
     letter-spacing: 0.02em;
-    color: var(--warm-650);
+    color: var(--vr-text-3);
   }
   :global(.home-app-note) {
     margin: 2px 0 0;
-    color: var(--warm-560);
+    color: var(--vr-text-3);
     font-size: 12px;
     line-height: 1.55;
   }
   :global(.home-cmd-label) {
     margin: 0 0 8px;
-    color: var(--warm-560);
+    color: var(--vr-text-3);
     font-size: 12px;
     line-height: 1.5;
   }
@@ -209,7 +209,7 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 11px;
     padding: 10px 11px;
-    background: var(--warm-900);
+    background: var(--vr-bg);
   }
   :where(.home-cmd) code {
     flex: 1;
@@ -218,7 +218,7 @@
     font-family: var(--font-mono);
     font-size: 11px;
     line-height: 1.5;
-    color: var(--warm-300);
+    color: var(--vr-text-2);
     word-break: break-all;
   }
   :global(.home-cmd-copy) {
@@ -230,8 +230,8 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
     padding: 6px 10px;
-    background: var(--control);
-    color: var(--warm-300);
+    background: var(--vr-surface-3);
+    color: var(--vr-text-2);
     font-family: var(--font-ui);
     font-size: 11px;
     font-weight: 600;
@@ -239,6 +239,6 @@
     transition: background 0.15s ease;
   }
   :where(.home-cmd-copy):hover {
-    background: var(--control-hover);
+    background: var(--vr-surface-3-hover);
   }
 </style>

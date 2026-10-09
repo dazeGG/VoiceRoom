@@ -124,7 +124,7 @@
   .room-bans {
     display: grid;
     gap: 16px;
-    color: var(--warm-ink);
+    color: var(--vr-text);
   }
   .room-bans-head {
     display: grid;
@@ -141,14 +141,14 @@
   .room-bans-count {
     padding: 1px 8px;
     border-radius: var(--radius-pill, 999px);
-    background: var(--control);
-    color: var(--warm-muted);
+    background: var(--vr-surface-3);
+    color: var(--vr-text-2);
     font-size: 12px;
     font-variant-numeric: tabular-nums;
   }
   .room-bans-head p {
     margin: 0;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-size: 12.5px;
     line-height: 1.5;
   }
@@ -159,8 +159,8 @@
     gap: 12px;
     padding: 10px 12px;
     border-radius: 10px;
-    background: color-mix(in oklch, var(--coral) 12%, transparent);
-    color: var(--coral);
+    background: color-mix(in oklch, var(--vr-danger) 12%, transparent);
+    color: var(--vr-danger);
     font-size: 13px;
   }
   .room-bans-error button {
@@ -173,7 +173,7 @@
   }
   .room-bans-loading {
     margin: 0;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-size: 13px;
   }
   .room-bans-empty {
@@ -183,12 +183,12 @@
     padding: 28px 16px;
     border: 1px dashed rgba(255, 255, 255, 0.09);
     border-radius: 14px;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-size: 12.5px;
     text-align: center;
   }
   .room-bans-empty strong {
-    color: var(--warm-ink-dim);
+    color: var(--vr-text);
     font-size: 14px;
   }
   .room-bans-empty-icon {
@@ -198,8 +198,8 @@
     margin-bottom: 4px;
     place-items: center;
     border-radius: 12px;
-    background: var(--control);
-    color: var(--warm-muted);
+    background: var(--vr-surface-3);
+    color: var(--vr-text-2);
   }
   .room-bans-list {
     display: grid;
@@ -217,7 +217,7 @@
     border-radius: 12px;
   }
   .room-ban:hover {
-    background: var(--control);
+    background: var(--vr-surface-3);
   }
   .room-ban-body {
     display: grid;
@@ -240,22 +240,22 @@
     font-size: 14px;
   }
   .room-ban-name small {
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-size: 12px;
   }
   .room-ban-term {
     display: inline-flex;
     align-items: center;
     gap: 5px;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font-size: 12px;
   }
   .room-ban-term[data-permanent='true'] {
-    color: var(--coral);
+    color: var(--vr-danger);
   }
   .room-ban-reason {
     margin: 0;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-size: 12px;
     line-height: 1.4;
     overflow-wrap: anywhere;
@@ -266,12 +266,12 @@
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 10px;
     background: transparent;
-    color: var(--warm-ink-dim);
+    color: var(--vr-text);
     font: 600 13px var(--font-ui);
     cursor: pointer;
   }
   .room-bans-more:hover:not(:disabled) {
-    background: var(--control);
+    background: var(--vr-surface-3);
   }
   .room-bans-more:disabled {
     cursor: default;

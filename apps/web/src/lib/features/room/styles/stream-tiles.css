@@ -31,7 +31,7 @@
   border-radius: var(--radius-sm);
   padding: 0;
   overflow: hidden;
-  background: var(--panel);
+  background: var(--vr-surface);
   color: oklch(90% 0.008 92);
   text-align: left;
   transition:
@@ -41,18 +41,18 @@
 
 .stream-tile[data-idle='true']:hover,
 .stream-tile[data-idle='true']:focus-visible {
-  background: var(--panel-strong);
+  background: var(--vr-surface-3);
   box-shadow: inset 0 0 0 1px oklch(78% 0.01 92 / 0.12);
 }
 
 .stream-tile[data-preview='true'] {
-  background: var(--paper-deep);
+  background: var(--vr-bg);
   cursor: pointer;
 }
 
 .stream-tile[data-preview='true']:hover,
 .stream-tile[data-preview='true']:focus-visible {
-  background: var(--paper-deep);
+  background: var(--vr-bg);
   box-shadow: none;
 }
 
@@ -62,7 +62,7 @@
   display: grid;
   place-items: center;
   overflow: hidden;
-  background: var(--paper-deep);
+  background: var(--vr-bg);
 }
 
 .stream-tile-icon {
@@ -85,7 +85,7 @@
   overflow: hidden;
   border-radius: 999px;
   padding: 4px 8px;
-  background: color-mix(in srgb, var(--warm-950) 82%, transparent);
+  background: color-mix(in srgb, var(--vr-bg) 82%, transparent);
   color: oklch(96% 0.008 92);
   font-size: 0.72rem;
   font-weight: 800;
@@ -115,7 +115,7 @@
 }
 
 .stream-tile[data-collapsed='true'] .stream-tile-copy {
-  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--warm-950) 84%, transparent) 68%);
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--vr-bg) 84%, transparent) 68%);
 }
 
 .stream-tile-copy strong {

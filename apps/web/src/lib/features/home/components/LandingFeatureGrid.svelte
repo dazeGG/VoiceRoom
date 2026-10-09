@@ -26,13 +26,13 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 16px;
     padding: 18px 18px 20px;
-    background: var(--panel);
+    background: var(--vr-surface);
     transition:
       background 0.15s ease,
       border-color 0.15s ease;
   }
   :where(.landing-feature):hover {
-    background: var(--panel-strong);
+    background: var(--vr-surface-3);
     border-color: rgba(255, 255, 255, 0.14);
   }
   :global(.landing-feature-head) {
@@ -48,15 +48,15 @@
     width: 38px;
     height: 38px;
     border-radius: 11px;
-    background: var(--control);
+    background: var(--vr-surface-3);
     border: 1px solid rgba(255, 255, 255, 0.09);
-    color: var(--accent);
+    color: var(--vr-accent);
   }
   :global(.landing-feature-num) {
     font-family: var(--font-ui);
     font-size: 11.5px;
     letter-spacing: 0.1em;
-    color: var(--warm-faint, var(--warm-faint));
+    color: var(--vr-text-3, var(--vr-text-3));
   }
   :global(.landing-feature-title) {
     margin: 0;
@@ -64,12 +64,12 @@
     font-weight: 700;
     letter-spacing: -0.01em;
     line-height: 1.25;
-    color: var(--warm-ink, var(--warm-100));
+    color: var(--vr-text, var(--vr-text));
   }
   :global(.landing-feature-desc) {
     margin: 7px 0 0;
     font-size: 13px;
     line-height: 1.5;
-    color: var(--warm-muted-dim, var(--warm-muted-dim));
+    color: var(--vr-text-2, var(--vr-text-2));
   }
 </style>

@@ -10,7 +10,7 @@
 .guest-name-heading {
   display: grid;
   gap: var(--space-xs);
-  --eyebrow-ink: var(--muted);
+  --eyebrow-ink: var(--vr-text-2);
 }
 
 .guest-name-heading h2,
@@ -24,7 +24,7 @@
 }
 
 .guest-name-heading p:not(.eyebrow) {
-  color: var(--muted);
+  color: var(--vr-text-2);
   font-size: 0.95rem;
 }
 
@@ -35,7 +35,7 @@
   display: grid;
   place-items: center;
   padding: var(--space-lg);
-  background: color-mix(in srgb, var(--warm-950) 76%, transparent);
+  background: color-mix(in srgb, var(--vr-bg) 76%, transparent);
 }
 
 .screen-source-panel {
@@ -47,9 +47,9 @@
   border-radius: 22px;
   overflow: hidden;
   background:
-    radial-gradient(78% 90% at 100% 0%, color-mix(in oklch, var(--panel-strong), transparent 74%), transparent 56%),
-    radial-gradient(60% 74% at 0% 4%, color-mix(in oklch, var(--panel), transparent 82%), transparent 54%),
-    var(--warm-800);
+    radial-gradient(78% 90% at 100% 0%, color-mix(in oklch, var(--vr-surface-3), transparent 74%), transparent 56%),
+    radial-gradient(60% 74% at 0% 4%, color-mix(in oklch, var(--vr-surface), transparent 82%), transparent 54%),
+    var(--vr-surface-2);
   box-shadow: 0 34px 80px oklch(10% 0.01 92 / 0.6);
 }
 
@@ -119,12 +119,12 @@
   width: 36px;
   height: 21px;
   border-radius: 11px;
-  background: var(--control);
+  background: var(--vr-surface-3);
   transition: background 180ms var(--ease-out);
 }
 
 .screen-source-toggle[data-on='true'] {
-  background: var(--green);
+  background: var(--vr-online);
 }
 
 .screen-source-toggle-knob {
@@ -134,7 +134,7 @@
   width: 17px;
   height: 17px;
   border-radius: 50%;
-  background: var(--control-active);
+  background: var(--vr-text);
   transition: transform 180ms var(--ease-out);
 }
 

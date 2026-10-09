@@ -14,7 +14,7 @@
   flex-direction: column;
   min-height: 0;
   border-left: 1px solid rgba(255, 255, 255, 0.07);
-  background: color-mix(in oklch, var(--warm-950), transparent 45%);
+  background: color-mix(in oklch, var(--vr-bg), transparent 45%);
 }
 
 .room-chat-rail[hidden] {
@@ -32,10 +32,10 @@
     background:
       linear-gradient(
         180deg,
-        color-mix(in oklch, var(--warm-800), transparent 4%),
-        color-mix(in oklch, var(--warm-950), transparent 2%)
+        color-mix(in oklch, var(--vr-surface-2), transparent 4%),
+        color-mix(in oklch, var(--vr-bg), transparent 2%)
       ),
-      var(--warm-950);
+      var(--vr-bg);
     box-shadow: -22px 0 54px rgba(0, 0, 0, 0.28);
   }
 }
@@ -56,7 +56,7 @@
   min-width: 0;
   padding: 3px;
   border-radius: 11px;
-  background: color-mix(in oklch, var(--control), transparent 36%);
+  background: color-mix(in oklch, var(--vr-surface-3), transparent 36%);
 }
 
 .room-panel-tabs button {
@@ -71,7 +71,7 @@
   border-radius: 8px;
   padding: 0;
   background: transparent;
-  color: var(--warm-550);
+  color: var(--vr-text-3);
   font-family: var(--font-ui);
   font-size: 12.5px;
   font-weight: 650;
@@ -88,9 +88,9 @@
   right: 5px;
   width: 6px;
   height: 6px;
-  border: 1px solid var(--warm-800);
+  border: 1px solid var(--vr-surface-2);
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--vr-accent);
 }
 
 .room-panel-tabs button:hover {
@@ -98,7 +98,7 @@
 }
 
 .room-panel-tabs button[data-active='true'] {
-  background: color-mix(in oklch, var(--warm-700), transparent 18%);
+  background: color-mix(in oklch, var(--vr-surface-3), transparent 18%);
   color: #f0eadc;
   box-shadow:
     0 1px 0 rgba(255, 255, 255, 0.06),
@@ -118,8 +118,8 @@
   height: 30px;
   border: none;
   border-radius: 9px;
-  background: var(--control);
-  color: var(--warm-500);
+  background: var(--vr-surface-3);
+  color: var(--vr-text-3);
   cursor: pointer;
   transition:
     background 0.15s ease,
@@ -127,8 +127,8 @@
 }
 
 .chat-rail-collapse:hover {
-  background: var(--control-hover);
-  color: var(--warm-100);
+  background: var(--vr-surface-3-hover);
+  color: var(--vr-text);
 }
 
 /* Anchor content to the bottom without `justify-content: flex-end`: that would
@@ -149,8 +149,8 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
   padding: 5px 13px;
-  background: color-mix(in oklch, var(--warm-800), transparent 8%);
-  color: var(--warm-ink-dim);
+  background: color-mix(in oklch, var(--vr-surface-2), transparent 8%);
+  color: var(--vr-text);
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.08em;
@@ -246,7 +246,7 @@ button.chat-msg-author {
 
 .chat-msg-time {
   flex: none;
-  color: var(--warm-650);
+  color: var(--vr-text-3);
   font-family: var(--font-mono);
   font-size: 10.5px;
 }
@@ -286,7 +286,7 @@ button.chat-msg-author {
 
 .chat-msg-text:hover::before,
 .chat-msg-text:focus-within::before {
-  background: color-mix(in oklch, var(--control), transparent 65%);
+  background: color-mix(in oklch, var(--vr-surface-3), transparent 65%);
 }
 
 /* A message that names you stays lit with a marker down its edge, so it is
@@ -294,7 +294,7 @@ button.chat-msg-author {
    hover and context-menu rules come later and still win, so pointing at it
    behaves like pointing at any other message. */
 .chat-msg-text.mentions-me::before {
-  background: color-mix(in oklch, var(--green), transparent 90%);
+  background: color-mix(in oklch, var(--vr-online), transparent 90%);
 }
 
 /* The marker spans whatever the tint spans, so on the first message of a group
@@ -307,7 +307,7 @@ button.chat-msg-author {
   left: -20px;
   width: 2px;
   border-radius: 2px;
-  background: var(--green);
+  background: var(--vr-online);
 }
 
 /* Room above the author line to match the room below the text: without it the
@@ -320,12 +320,12 @@ button.chat-msg-author {
 /* While its context menu is open the message stays lit, so it is obvious which
    message the menu belongs to. */
 .chat-msg-text.is-context::before {
-  background: color-mix(in oklch, var(--accent), transparent 92%);
+  background: color-mix(in oklch, var(--vr-accent), transparent 92%);
 }
 
 /* Brief flash after jumping here from the pinned bar. */
 .chat-msg-text.is-highlighted::before {
-  background: color-mix(in oklch, var(--accent), transparent 86%);
+  background: color-mix(in oklch, var(--vr-accent), transparent 86%);
   transition: background 400ms ease;
 }
 
@@ -351,7 +351,7 @@ button.chat-msg-author {
   padding: 5px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 16px;
-  background: color-mix(in srgb, var(--warm-800) 94%, transparent);
+  background: color-mix(in srgb, var(--vr-surface-2) 94%, transparent);
   backdrop-filter: blur(20px);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
   opacity: 0;
@@ -400,7 +400,7 @@ button.chat-msg-author {
   border-radius: 12px;
   padding: 0;
   background: transparent;
-  color: var(--warm-muted);
+  color: var(--vr-text-2);
   cursor: pointer;
   transition:
     background 120ms ease,
@@ -409,14 +409,14 @@ button.chat-msg-author {
 
 .chat-msg-actions button:hover,
 .chat-msg-actions button:focus-visible {
-  background: color-mix(in oklch, var(--accent), transparent 86%);
-  color: var(--warm-ink);
+  background: color-mix(in oklch, var(--vr-accent), transparent 86%);
+  color: var(--vr-text);
   outline: none;
 }
 .chat-msg-actions .chat-msg-action-danger:hover,
 .chat-msg-actions .chat-msg-action-danger:focus-visible {
-  background: color-mix(in oklch, var(--coral), transparent 86%);
-  color: var(--coral);
+  background: color-mix(in oklch, var(--vr-danger), transparent 86%);
+  color: var(--vr-danger);
 }
 
 .chat-msg-text + .chat-msg-text {
@@ -437,7 +437,7 @@ button.chat-msg-author {
   border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: 8px;
   outline: none;
-  background: var(--warm-900);
+  background: var(--vr-bg);
   color: #d8d1c0;
   font: inherit;
   line-height: 1.45;
@@ -457,7 +457,7 @@ button.chat-msg-author {
 .chat-msg-edit-actions button {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 6px;
-  background: var(--control);
+  background: var(--vr-surface-3);
   color: #aaa393;
   cursor: pointer;
   font-size: 10px;
@@ -512,8 +512,8 @@ button.chat-msg-author {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 13px;
   padding: 10px 14px;
-  background: var(--warm-900);
-  color: var(--warm-100);
+  background: var(--vr-bg);
+  color: var(--vr-text);
   font-family: var(--font-ui);
   font-size: 14px;
   outline: none;
@@ -542,7 +542,7 @@ button.chat-msg-author {
 }
 
 .chat-rail-input::placeholder {
-  color: var(--warm-650);
+  color: var(--vr-text-3);
 }
 
 .chat-rail-input:focus,
@@ -566,10 +566,10 @@ button.chat-msg-author {
     background:
       linear-gradient(
         180deg,
-        color-mix(in oklch, var(--warm-800), transparent 2%),
-        color-mix(in oklch, var(--warm-900), transparent 2%)
+        color-mix(in oklch, var(--vr-surface-2), transparent 2%),
+        color-mix(in oklch, var(--vr-bg), transparent 2%)
       ),
-      var(--warm-950);
+      var(--vr-bg);
     box-shadow: 0 22px 44px rgba(0, 0, 0, 0.4);
   }
 }

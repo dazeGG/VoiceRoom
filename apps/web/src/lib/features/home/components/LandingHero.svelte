@@ -81,7 +81,7 @@
     font-size: 12px;
     letter-spacing: 0.2em;
     text-transform: uppercase;
-    color: var(--accent);
+    color: var(--vr-accent);
   }
   :global(.landing-title) {
     margin: 0;
@@ -91,18 +91,18 @@
     font-size: clamp(2.5rem, 5.5vw, 4.125rem);
     line-height: 1;
     letter-spacing: -0.035em;
-    color: var(--warm-ink, var(--warm-100));
+    color: var(--vr-text, var(--vr-text));
   }
   :global(.landing-lead) {
     margin: 22px 0 0;
     max-width: 540px;
     font-size: 17.5px;
     line-height: 1.55;
-    color: var(--warm-muted, var(--warm-muted));
+    color: var(--vr-text-2, var(--vr-text-2));
   }
   :global(.landing-disclaimer) {
     margin: 16px 0 0;
-    color: var(--warm-faint, var(--warm-faint));
+    color: var(--vr-text-3, var(--vr-text-3));
     font-size: 13px;
   }
 </style>

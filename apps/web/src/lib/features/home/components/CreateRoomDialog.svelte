@@ -154,11 +154,11 @@
     display: block;
     font-size: 12.5px;
     font-weight: 700;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     margin-bottom: 8px;
   }
   :global(.lr-field-label-soft) {
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-weight: 500;
   }
   :global(.lr-dialog-input) {
@@ -166,18 +166,18 @@
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: var(--radius-md);
     padding: 13px 15px;
-    background: var(--warm-900);
-    color: var(--warm-ink);
+    background: var(--vr-bg);
+    color: var(--vr-text);
     font-family: var(--font-ui);
     font-size: 15px;
     outline: none;
     transition: border-color 0.15s ease;
   }
   :where(.lr-dialog-input)::placeholder {
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
   }
   :where(.lr-dialog-input):focus {
-    border-color: var(--accent);
+    border-color: var(--vr-accent);
   }
   :global(.lr-dialog-tabs) {
     display: flex;
@@ -185,7 +185,7 @@
     padding: 4px;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: var(--radius-md);
-    background: var(--warm-950);
+    background: var(--vr-bg);
   }
   :global(.lr-dialog-note) {
     display: flex;
@@ -200,28 +200,28 @@
     flex: none;
   }
   :global(.lr-dialog-note--ok) {
-    border: 1px solid color-mix(in oklch, var(--green), transparent 78%);
-    background: color-mix(in oklch, var(--green), transparent 92%);
-    color: var(--warm-ink-dim);
+    border: 1px solid color-mix(in oklch, var(--vr-online), transparent 78%);
+    background: color-mix(in oklch, var(--vr-online), transparent 92%);
+    color: var(--vr-text);
   }
   :global(.lr-dialog-note--ok svg) {
-    stroke: var(--green);
+    stroke: var(--vr-online);
   }
   :global(.lr-dialog-note--warn) {
-    border: 1px solid color-mix(in oklch, var(--amber), transparent 72%);
-    background: color-mix(in oklch, var(--amber), transparent 90%);
-    color: var(--warm-ink-dim);
+    border: 1px solid color-mix(in oklch, var(--vr-away), transparent 72%);
+    background: color-mix(in oklch, var(--vr-away), transparent 90%);
+    color: var(--vr-text);
   }
   :global(.lr-dialog-note--warn svg) {
-    stroke: var(--amber);
+    stroke: var(--vr-away);
   }
   :global(.lr-dialog-error) {
     margin: 0;
-    border: 1px solid color-mix(in oklch, var(--coral), transparent 60%);
+    border: 1px solid color-mix(in oklch, var(--vr-danger), transparent 60%);
     border-radius: var(--radius-md);
     padding: 9px 12px;
-    background: color-mix(in oklch, var(--coral), transparent 88%);
-    color: var(--warm-ink-dim);
+    background: color-mix(in oklch, var(--vr-danger), transparent 88%);
+    color: var(--vr-text);
     font-size: 12.5px;
   }
 </style>

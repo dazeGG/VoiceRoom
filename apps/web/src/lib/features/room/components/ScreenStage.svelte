@@ -164,7 +164,7 @@
     min-height: 0;
     border: 0;
     border-radius: 0;
-    background: var(--warm-950);
+    background: var(--vr-bg);
     object-fit: contain;
   }
   :global(.screen-placeholder) {
@@ -172,7 +172,7 @@
     inset: 0;
     display: grid;
     place-items: center;
-    color: var(--muted);
+    color: var(--vr-text-2);
     font-size: 0.92rem;
     font-weight: 800;
   }
@@ -181,7 +181,7 @@
     height: 8px;
     flex: 0 0 auto;
     border-radius: 50%;
-    background: var(--green);
+    background: var(--vr-online);
     box-shadow: 0 0 0 3px oklch(72% 0.16 164 / 0.14);
   }
   :where(.screen-placeholder)[hidden] {
@@ -196,7 +196,7 @@
     border: 0;
     padding: 0;
     background: transparent;
-    accent-color: var(--control-active);
+    accent-color: var(--vr-text);
     cursor: pointer;
     transform: translate(-50%, -50%) rotate(-90deg);
     transform-origin: center;

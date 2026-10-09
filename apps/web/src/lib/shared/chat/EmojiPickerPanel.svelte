@@ -534,17 +534,17 @@
     padding: 0 14px;
     border: 1px solid rgba(255, 255, 255, 0.09);
     border-radius: 15px;
-    background: color-mix(in oklch, var(--control), transparent 45%);
-    color: var(--warm-ink);
+    background: color-mix(in oklch, var(--vr-surface-3), transparent 45%);
+    color: var(--vr-text);
     font-family: var(--font-ui);
     font-size: 14.5px;
   }
 
   .reaction-picker-search input::placeholder {
-    color: var(--warm-muted-dim);
+    color: var(--vr-text-2);
   }
   .reaction-picker-search input:focus {
-    border-color: color-mix(in oklch, var(--accent), transparent 40%);
+    border-color: color-mix(in oklch, var(--vr-accent), transparent 40%);
     outline: none;
   }
 
@@ -560,13 +560,13 @@
     place-items: center;
     border: 1px solid rgba(255, 255, 255, 0.09);
     border-radius: 15px;
-    background: color-mix(in oklch, var(--control), transparent 45%);
+    background: color-mix(in oklch, var(--vr-surface-3), transparent 45%);
     cursor: pointer;
   }
 
   .reaction-tone-trigger:hover,
   .reaction-tone-trigger:focus-visible {
-    border-color: color-mix(in oklch, var(--accent), transparent 40%);
+    border-color: color-mix(in oklch, var(--vr-accent), transparent 40%);
     outline: none;
   }
 
@@ -580,7 +580,7 @@
     border: 1px solid rgba(255, 255, 255, 0.09);
     border-radius: 13px;
     padding: 4px;
-    background: var(--warm-900);
+    background: var(--vr-bg);
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
   }
 
@@ -601,7 +601,7 @@
   .reaction-tone-option.is-active,
   .reaction-tone-strip button:hover,
   .reaction-tone-strip button:focus-visible {
-    background: color-mix(in oklch, var(--accent), transparent 86%);
+    background: color-mix(in oklch, var(--vr-accent), transparent 86%);
     outline: none;
   }
 
@@ -622,7 +622,7 @@
     place-items: center;
     border: 0;
     border-radius: 13px;
-    background: color-mix(in oklch, var(--control), transparent 55%);
+    background: color-mix(in oklch, var(--vr-surface-3), transparent 55%);
     font-size: 18px;
     line-height: 1;
     cursor: pointer;
@@ -631,7 +631,7 @@
 
   .reaction-picker-anchor:hover,
   .reaction-picker-anchor.is-active {
-    background: color-mix(in oklch, var(--accent), transparent 86%);
+    background: color-mix(in oklch, var(--vr-accent), transparent 86%);
   }
 
   .reaction-picker-body {
@@ -659,7 +659,7 @@
     display: flex;
     height: 28px;
     align-items: center;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-family: var(--font-mono);
     font-size: 10.5px;
     letter-spacing: 0.14em;
@@ -687,7 +687,7 @@
 
   .reaction-picker-grid button:hover,
   .reaction-picker-grid button:focus-visible {
-    background: color-mix(in oklch, var(--accent), transparent 86%);
+    background: color-mix(in oklch, var(--vr-accent), transparent 86%);
     outline: none;
   }
 
@@ -705,7 +705,7 @@
 
   .reaction-picker-empty {
     margin: 8px 0;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-size: 13px;
     text-align: center;
   }
@@ -724,7 +724,7 @@
     /* Padding, gap and swatch size are mirrored by the TONE_* constants, which
        clamp the strip inside the panel before it can be measured. */
     padding: 5px;
-    background: var(--warm-900);
+    background: var(--vr-bg);
     box-shadow: 0 14px 30px rgba(0, 0, 0, 0.46);
     /* Overlaps its tile by a couple of pixels: a gap here is a dead zone the
        pointer crosses on the way to the swatches. */

@@ -351,7 +351,7 @@
   .emoji-composer[data-empty]::before {
     position: absolute;
     content: attr(placeholder);
-    color: var(--composer-placeholder, var(--warm-650));
+    color: var(--composer-placeholder, var(--vr-text-3));
     pointer-events: none;
   }
 

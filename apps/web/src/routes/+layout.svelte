@@ -52,8 +52,8 @@
     display: grid;
     place-items: center;
     padding: 24px;
-    color: var(--ink);
-    background: var(--paper-deep);
+    color: var(--vr-text);
+    background: var(--vr-bg);
     font-family: var(--font-ui);
   }
 
@@ -61,9 +61,9 @@
     box-sizing: border-box;
     width: min(100%, 520px);
     padding: clamp(24px, 7vw, 48px);
-    border: 1px solid var(--line);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 24px;
-    background: var(--panel);
+    background: var(--vr-surface);
   }
 
   .device-boundary__card h1 {
@@ -74,7 +74,7 @@
 
   .device-boundary__card p {
     margin: 0;
-    color: var(--muted);
+    color: var(--vr-text-2);
     line-height: 1.5;
   }
 </style>

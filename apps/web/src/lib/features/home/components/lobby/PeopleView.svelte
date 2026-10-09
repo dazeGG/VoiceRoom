@@ -208,12 +208,12 @@
     font-size: 11px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
   }
   :global(.lr-section-link) {
     border: none;
     background: transparent;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font-family: var(--font-ui);
     font-size: 13px;
     font-weight: 600;
@@ -224,7 +224,7 @@
     padding: 0;
   }
   :where(.lr-section-link):hover {
-    color: var(--accent);
+    color: var(--vr-accent);
   }
   :global(.lr-grid-2) {
     display: grid;
@@ -238,23 +238,23 @@
     padding: 12px;
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: var(--radius-lg);
-    background: var(--panel);
+    background: var(--vr-surface);
     margin-bottom: 10px;
   }
   :global(.lr-req-name) {
     font-size: 14px;
     font-weight: 700;
-    color: var(--warm-ink);
+    color: var(--vr-text);
   }
   :global(.lr-req-handle) {
     font-family: var(--font-mono);
     font-size: 11px;
-    color: var(--warm-muted-dim);
+    color: var(--vr-text-2);
     margin-top: 2px;
   }
   :global(.lr-req-meta) {
     font-size: 12px;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     margin-top: 2px;
   }
   :global(.lr-req-pending) {
@@ -262,7 +262,7 @@
     align-items: center;
     gap: 6px;
     font-size: 12px;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     margin-top: 2px;
   }
   :global(.lr-req-pending-dot) {
@@ -270,7 +270,7 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--amber);
+    background: var(--vr-away);
   }
   :global(.lr-req-actions) {
     display: flex;
@@ -287,7 +287,7 @@
   :global(.lr-add-hint) {
     margin-top: 12px;
     font-size: 12.5px;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     display: flex;
     align-items: center;
     flex-wrap: wrap;
@@ -296,7 +296,7 @@
   :where(.lr-add-hint) code {
     font-family: var(--font-mono);
     font-size: 12.5px;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
   }
   :global(.lr-add-copy) {
     display: inline-flex;
@@ -305,7 +305,7 @@
     border: none;
     background: transparent;
     cursor: pointer;
-    color: var(--accent);
+    color: var(--vr-accent);
     font-family: var(--font-ui);
     font-size: 12px;
     font-weight: 600;
@@ -313,7 +313,7 @@
     border-radius: 6px;
   }
   :where(.lr-add-copy):hover {
-    background: color-mix(in oklch, var(--accent), transparent 88%);
+    background: color-mix(in oklch, var(--vr-accent), transparent 88%);
   }
   :global(.people-back) {
     margin-bottom: 18px;

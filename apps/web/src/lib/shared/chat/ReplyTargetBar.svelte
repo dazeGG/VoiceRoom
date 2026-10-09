@@ -61,7 +61,7 @@
     border-radius: 9px;
     padding: 0;
     background: transparent;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     cursor: pointer;
     transition:
       background 120ms ease,
@@ -70,8 +70,8 @@
 
   .reply-target-cancel:hover,
   .reply-target-cancel:focus-visible {
-    background: color-mix(in oklch, var(--coral), transparent 86%);
-    color: var(--coral);
+    background: color-mix(in oklch, var(--vr-danger), transparent 86%);
+    color: var(--vr-danger);
     outline: none;
   }
 </style>

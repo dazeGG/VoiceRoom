@@ -104,7 +104,7 @@
 
 <div class="room-menu-content" data-room-menu-content>
   <div class="room-menu-head">
-    <Avatar {name} src={avatarUrl} shape="squircle" background="var(--room-avatar-bg)" size={44} />
+    <Avatar {name} src={avatarUrl} shape="squircle" background="var(--vr-surface-3)" size={44} />
     <div class="room-menu-info">
       <Ellipsis class="room-menu-name" text={name} />
       <Ellipsis class="room-menu-code" text={roomId} />
@@ -202,7 +202,7 @@
   }
 
   :global(.room-menu-name) {
-    color: var(--warm-ink, var(--warm-100));
+    color: var(--vr-text, var(--vr-text));
     font-family: var(--font-ui);
     font-size: 15px;
     font-weight: 700;
@@ -210,7 +210,7 @@
   }
 
   :global(.room-menu-code) {
-    color: var(--warm-muted, var(--warm-500));
+    color: var(--vr-text-2, var(--vr-text-3));
     font-family: var(--font-mono);
     font-size: 12px;
     letter-spacing: 0.02em;

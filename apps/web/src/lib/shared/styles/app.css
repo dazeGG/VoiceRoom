@@ -4,7 +4,7 @@
 :root {
   color-scheme: dark;
   --focus-border: color-mix(in oklch, var(--vr-text), transparent 28%);
-  --focus-ring: color-mix(in oklch, var(--ink), transparent 68%);
+  --focus-ring: color-mix(in oklch, var(--vr-text), transparent 68%);
   --radius-sm: 8px;
   --radius-md: 14px;
   --radius-lg: 20px;
@@ -125,11 +125,11 @@ body:not([data-screen='room']) .topbar {
      like a ban with its undo, must stay reachable while the dialog is open. */
   z-index: 200;
   max-width: min(360px, calc(100vw - 32px));
-  border: 1px solid color-mix(in oklch, var(--control-line), var(--ink) 18%);
+  border: 1px solid color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 18%);
   border-radius: var(--radius-sm);
   padding: 12px 14px;
-  background: var(--warm-800);
-  color: var(--ink);
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
   font-weight: 750;
   line-height: 1.35;
   opacity: 0;
@@ -149,7 +149,7 @@ body:not([data-screen='room']) .topbar {
 
 .toast[data-variant='error'] {
   max-width: min(720px, calc(100vw - 32px));
-  border-color: color-mix(in oklch, var(--coral), var(--ink) 20%);
+  border-color: color-mix(in oklch, var(--vr-danger), var(--vr-text) 20%);
   font-size: 0.86rem;
 }
 
@@ -158,7 +158,7 @@ body:not([data-screen='room']) .topbar {
   border: 0;
   border-radius: 8px;
   padding: 5px 9px;
-  background: var(--control);
+  background: var(--vr-surface-3);
   color: inherit;
   font: inherit;
   font-weight: 800;

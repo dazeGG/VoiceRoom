@@ -69,7 +69,7 @@ body[data-screen='room'] .status-pill {
 .room-heading-trigger:hover,
 .room-heading-trigger[aria-expanded='true'] {
   border-color: rgba(255, 255, 255, 0.1);
-  background: var(--control);
+  background: var(--vr-surface-3);
 }
 
 .room-heading-title {
@@ -84,7 +84,7 @@ body[data-screen='room'] .status-pill {
 .room-heading-trigger-chevron {
   flex: none;
   display: inline-flex;
-  color: var(--warm-560);
+  color: var(--vr-text-3);
   transition: transform 0.16s ease;
 }
 
@@ -101,8 +101,8 @@ body[data-screen='room'] .status-pill {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 11px;
   padding: 0 14px;
-  background: var(--control);
-  color: var(--warm-300);
+  background: var(--vr-surface-3);
+  color: var(--vr-text-2);
   font-family: var(--font-ui);
   font-size: 13px;
   font-weight: 600;
@@ -114,13 +114,13 @@ body[data-screen='room'] .status-pill {
 }
 
 .room-chat-toggle:hover {
-  background: var(--control-hover);
+  background: var(--vr-surface-3-hover);
 }
 
 .room-chat-toggle[data-active='true'] {
   border-color: rgba(217, 211, 195, 0.5);
-  background: var(--panel-strong);
-  color: var(--warm-100);
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
 }
 
 .room-chat-toggle svg {
@@ -135,11 +135,11 @@ body[data-screen='room'] .status-pill {
   margin-left: auto;
   justify-content: center;
   gap: var(--space-xs);
-  border: 1px solid var(--line);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 999px;
   padding: 8px 12px;
-  background: var(--warm-800);
-  color: var(--muted);
+  background: var(--vr-surface-2);
+  color: var(--vr-text-2);
   font-size: 0.875rem;
   font-weight: 700;
   white-space: nowrap;
@@ -149,24 +149,24 @@ body[data-screen='room'] .status-pill {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--amber);
+  background: var(--vr-away);
 }
 
 .status-pill[data-state='connected'] .status-dot {
-  background: var(--green);
+  background: var(--vr-online);
 }
 
 .status-pill[data-state='error'] .status-dot {
-  background: var(--coral);
+  background: var(--vr-danger);
 }
 
 .status-pill[data-state='warning'] .status-dot {
-  background: var(--amber);
+  background: var(--vr-away);
 }
 
 .status-pill[data-state='connecting'] .status-dot {
   animation: blink 1s infinite;
-  background: var(--blue);
+  background: var(--vr-info);
 }
 
 .room-layout {
@@ -208,9 +208,9 @@ body[data-lobby-embedded='true'] .room-embedded-shell .topbar {
    a left-aligned headline, a mono code chip and a single home CTA — no card. */
 body[data-screen='not-found'] {
   background:
-    radial-gradient(58% 64% at 88% 14%, color-mix(in oklch, var(--warm-800), transparent 66%), transparent 56%),
-    radial-gradient(52% 60% at 4% 92%, color-mix(in oklch, var(--panel), transparent 80%), transparent 54%),
-    var(--warm-950);
+    radial-gradient(58% 64% at 88% 14%, color-mix(in oklch, var(--vr-surface-2), transparent 66%), transparent 56%),
+    radial-gradient(52% 60% at 4% 92%, color-mix(in oklch, var(--vr-surface), transparent 80%), transparent 54%),
+    var(--vr-bg);
 }
 
 .not-found-layout {
@@ -247,11 +247,11 @@ body[data-screen='not-found'] {
 .start-panel {
   display: grid;
   gap: var(--space-lg);
-  border: 1px solid var(--line);
+  border: 1px solid var(--vr-line-strong);
   border-radius: var(--radius-md);
   padding: var(--space-xl);
-  background: linear-gradient(180deg, var(--panel-strong), var(--panel)), var(--panel);
-  box-shadow: var(--shadow);
+  background: linear-gradient(180deg, var(--vr-surface-3), var(--vr-surface)), var(--vr-surface);
+  box-shadow: var(--vr-shadow-popover);
 }
 
 .not-found-title {
@@ -262,7 +262,7 @@ body[data-screen='not-found'] {
   font-weight: 700;
   line-height: 1.04;
   letter-spacing: -0.03em;
-  color: var(--warm-100);
+  color: var(--vr-text);
   text-wrap: balance;
 }
 
@@ -271,7 +271,7 @@ body[data-screen='not-found'] {
   margin: 26px 0 0;
   font-size: 18px;
   line-height: 1.55;
-  color: var(--warm-500);
+  color: var(--vr-text-3);
 }
 
 .not-found-actions {
@@ -285,7 +285,7 @@ body[data-screen='not-found'] {
   border: none;
   border-radius: 13px;
   padding: 14px 22px;
-  background: var(--control-active);
+  background: var(--vr-text);
   color: #1a1813;
   font-family: var(--font-ui);
   font-size: 15px;
@@ -299,7 +299,7 @@ body[data-screen='not-found'] {
 }
 
 .not-found-home:hover {
-  background: var(--control-active-hover);
+  background: var(--vr-text);
   transform: translateY(-1px);
 }
 

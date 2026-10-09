@@ -53,7 +53,7 @@
     padding: 0;
     border: 0;
     background: transparent;
-    color: var(--accent);
+    color: var(--vr-accent);
     font: inherit;
     font-weight: 600;
   }
@@ -65,7 +65,7 @@
   button.structured-message__mention:hover,
   button.structured-message__mention:focus-visible {
     border-radius: 4px;
-    background: color-mix(in oklch, var(--accent), transparent 84%);
+    background: color-mix(in oklch, var(--vr-accent), transparent 84%);
     outline: none;
   }
 </style>

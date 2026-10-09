@@ -10,8 +10,8 @@
   border: 1px solid oklch(31% 0.018 92);
   border-radius: var(--radius-sm);
   background:
-    radial-gradient(circle at 18% 18%, color-mix(in oklch, var(--panel-strong) 16%, transparent), transparent 34%),
-    var(--warm-950);
+    radial-gradient(circle at 18% 18%, color-mix(in oklch, var(--vr-surface-3) 16%, transparent), transparent 34%),
+    var(--vr-bg);
 }
 
 .screen-meta {
@@ -27,7 +27,7 @@
   border: 1px solid oklch(86% 0.012 92 / 0.14);
   border-radius: var(--radius-sm);
   padding: 7px 9px;
-  background: color-mix(in srgb, var(--warm-950) 78%, transparent);
+  background: color-mix(in srgb, var(--vr-bg) 78%, transparent);
   color: oklch(96% 0.008 92);
   box-shadow: 0 14px 34px oklch(5% 0.012 92 / 0.32);
   opacity: 1;
@@ -56,7 +56,7 @@
 
 .screen-meta-detail {
   max-width: min(360px, 48vw);
-  color: var(--muted);
+  color: var(--vr-text-2);
   font-weight: 780;
 }
 
@@ -82,7 +82,7 @@
   place-items: center;
   border: 1px solid oklch(96% 0.008 92 / 0.22);
   border-radius: 50%;
-  background: var(--avatar-bg, var(--room-avatar-bg));
+  background: var(--avatar-bg, var(--vr-surface-3));
   color: var(--avatar-fg, #fff);
   box-shadow: var(--avatar-shadow, 0 8px 18px rgb(88 101 242 / 0.24));
   font-size: 0.62rem;
@@ -93,7 +93,7 @@
 }
 
 .screen-meta-viewers-rest {
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  background: color-mix(in srgb, var(--vr-surface) 92%, transparent);
   color: oklch(92% 0.008 92);
   box-shadow: none;
 }
@@ -148,7 +148,7 @@
   border: 1px solid oklch(86% 0.012 92 / 0.18);
   border-radius: var(--radius-sm);
   padding: 0;
-  background: color-mix(in srgb, var(--warm-950) 88%, transparent);
+  background: color-mix(in srgb, var(--vr-bg) 88%, transparent);
   color: oklch(97% 0.008 92);
   box-shadow: 0 12px 28px oklch(5% 0.01 92 / 0.3);
   transition:
@@ -160,7 +160,7 @@
 .screen-control-button:hover,
 .stream-volume-control:focus-within .stream-volume-button {
   border-color: oklch(88% 0.012 92 / 0.36);
-  background: color-mix(in srgb, var(--control-hover) 94%, transparent);
+  background: color-mix(in srgb, var(--vr-surface-3-hover) 94%, transparent);
   transform: translateY(-1px);
 }
 
@@ -190,7 +190,7 @@
   width: 48px;
   border-radius: 999px;
   padding: var(--space-sm) 0 var(--space-md);
-  background: color-mix(in srgb, var(--warm-950) 72%, transparent);
+  background: color-mix(in srgb, var(--vr-bg) 72%, transparent);
   box-shadow: 0 12px 28px oklch(5% 0.01 92 / 0.3);
   backdrop-filter: blur(10px);
   visibility: hidden;

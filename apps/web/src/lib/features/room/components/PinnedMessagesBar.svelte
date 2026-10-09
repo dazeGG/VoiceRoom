@@ -69,7 +69,7 @@
   .pinned-bar {
     flex: none;
     border-bottom: 1px solid rgba(255, 255, 255, 0.07);
-    background: color-mix(in oklch, var(--control), transparent 82%);
+    background: color-mix(in oklch, var(--vr-surface-3), transparent 82%);
   }
 
   .pinned-bar-toggle {
@@ -81,7 +81,7 @@
     padding: 0 12px;
     border: 0;
     background: transparent;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font-family: var(--font-ui);
     font-size: 13px;
     font-weight: 700;
@@ -89,13 +89,13 @@
   }
 
   .pinned-bar-toggle:hover {
-    color: var(--warm-ink);
+    color: var(--vr-text);
   }
 
   .pinned-bar-icon {
     display: inline-flex;
     flex: none;
-    color: var(--accent);
+    color: var(--vr-accent);
   }
 
   .pinned-bar-title {
@@ -105,7 +105,7 @@
 
   .pinned-bar-count {
     flex: none;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-family: var(--font-mono);
     font-size: 11.5px;
   }
@@ -139,7 +139,7 @@
   }
 
   .pinned-bar-item:hover {
-    background: color-mix(in oklch, var(--accent), transparent 92%);
+    background: color-mix(in oklch, var(--vr-accent), transparent 92%);
   }
 
   .pinned-bar-jump {
@@ -158,14 +158,14 @@
   }
 
   .pinned-bar-author {
-    color: var(--warm-muted-dim);
+    color: var(--vr-text-2);
     font-size: 11.5px;
     font-weight: 700;
   }
 
   .pinned-bar-text {
     overflow: hidden;
-    color: var(--warm-ink-dim);
+    color: var(--vr-text);
     font-size: 13px;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -181,12 +181,12 @@
     border: 0;
     border-radius: 9px;
     background: transparent;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     cursor: pointer;
   }
 
   .pinned-bar-unpin:hover {
-    background: color-mix(in oklch, var(--coral), transparent 86%);
-    color: var(--coral);
+    background: color-mix(in oklch, var(--vr-danger), transparent 86%);
+    color: var(--vr-danger);
   }
 </style>
