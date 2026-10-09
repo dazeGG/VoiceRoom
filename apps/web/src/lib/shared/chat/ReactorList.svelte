@@ -2,6 +2,7 @@
   import EmojiText from './EmojiText.svelte';
   import { onMount } from 'svelte';
   import Emoji from './Emoji.svelte';
+  import { avatarInitial } from '$lib/shared/utils/avatar-initial';
   import type { ReactionStore } from './reaction-store.svelte';
 
   let {
@@ -42,9 +43,7 @@
           {#if reactor.avatarUrl}
             <img src={reactor.avatarUrl} alt="" width="28" height="28" />
           {:else}
-            <span class="avatar" aria-hidden="true"
-              >{(reactor.displayName.match(/[\p{L}\p{N}]/u)?.[0] ?? '?').toUpperCase()}</span
-            >
+            <span class="avatar" aria-hidden="true">{avatarInitial(reactor.displayName)}</span>
           {/if}
           <span><EmojiText text={reactor.displayName} /></span>
         </li>

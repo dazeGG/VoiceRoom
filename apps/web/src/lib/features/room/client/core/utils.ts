@@ -1,3 +1,5 @@
+import { avatarInitial } from '$lib/shared/utils/avatar-initial';
+
 export function wait(ms: number): Promise<void> {
   return new Promise((resolve) => {
     window.setTimeout(resolve, ms);
@@ -12,14 +14,7 @@ export function cleanDisplayName(value: unknown): string {
 }
 
 export function getInitials(name: string): string {
-  const words = String(name || 'Гость')
-    .trim()
-    .split(/\s+/);
-  return words
-    .slice(0, 2)
-    .map((word) => word[0])
-    .join('')
-    .toUpperCase();
+  return avatarInitial(name || 'Гость');
 }
 
 export function isSafariBrowser(): boolean {

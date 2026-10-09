@@ -3,6 +3,7 @@
   import { page } from '$app/state';
   import { applyDesktopBoundaryToDocument } from '$lib/platform/desktop-boundary';
   import { installEmojiCopy } from '$lib/shared/chat/emoji-copy';
+  import { initTheme } from '$lib/shared/theme/theme.svelte';
 
   let { children } = $props();
   let boundaryReady = $state(false);
@@ -15,6 +16,7 @@
   const allowed = $derived(desktopAllowed || (roomClientAllowed && MOBILE_ROUTES.includes(page.route.id ?? '')));
 
   onMount(() => {
+    initTheme();
     const policy = applyDesktopBoundaryToDocument();
     desktopAllowed = policy.desktopAllowed;
     roomClientAllowed = policy.roomClientAllowed;

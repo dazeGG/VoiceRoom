@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Style check for the web app, run by `npm run check`: backgrounds use the
-// canonical palette tokens declared in app.css instead of one-off colours.
+// canonical palette tokens declared in theme.css instead of one-off colours.
 // Exits 1 and lists every violation as `file:line selector -> value`.
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -9,20 +9,29 @@ import { relative, resolve } from 'node:path';
 const webRoot = resolve(import.meta.dirname, '../apps/web');
 const sourceRoot = resolve(webRoot, 'src');
 
+// Surface tokens of the default theme; theme.css must declare exactly these.
 const SURFACE_TOKEN_VALUES: Record<string, string> = {
-  '--paper-deep': 'oklch(8.5% 0.032 112)',
-  '--paper': 'oklch(13% 0.038 112)',
-  '--panel': 'oklch(19% 0.042 112)',
-  '--panel-strong': 'oklch(25% 0.045 112)',
-  '--control': 'oklch(22% 0.043 112)',
-  '--warm-800': '#16140f',
-  '--warm-900': '#0c0b08',
-  '--warm-950': '#0a0907'
+  '--vr-bg': 'oklch(15.5% 0.005 260)',
+  '--vr-surface': 'oklch(17.5% 0.005 260)',
+  '--vr-surface-2': 'oklch(19.5% 0.006 260)',
+  '--vr-surface-3': 'oklch(24% 0.006 260)'
 };
-const SURFACE_TOKENS = Object.keys(SURFACE_TOKEN_VALUES);
+// Legacy aliases of those tokens, still read by screens that predate the
+// redesign. Drop each one with its last user.
+const LEGACY_SURFACE_TOKENS = [
+  '--paper-deep',
+  '--paper',
+  '--panel',
+  '--panel-strong',
+  '--control',
+  '--warm-800',
+  '--warm-900',
+  '--warm-950'
+];
+const SURFACE_TOKENS = [...Object.keys(SURFACE_TOKEN_VALUES), ...LEGACY_SURFACE_TOKENS];
 
 const SEMANTIC_TOKEN =
-  /var\(--(?:accent(?:-[\w-]+)?|amber|avatar-[\w-]+|blue|coral|focus-border|green|ink|line|muted|participant-[\w-]+|preview-[\w-]+|profile-cover-accent|room-avatar-bg|slider-fill|stream-live(?:-hover)?|toast-accent|warm-(?:faint|ink(?:-dim)?|muted(?:-dim)?))\b/;
+  /var\(--(?:vr-(?:accent|online|away|dnd|offline|danger|success|warning|info|text|line|hover)[\w-]*|accent(?:-[\w-]+)?|amber|avatar-[\w-]+|blue|coral|focus-border|green|ink|line|muted|participant-[\w-]+|preview-[\w-]+|profile-cover-accent|room-avatar-bg|slider-fill|stream-live(?:-hover)?|toast-accent|warm-(?:faint|ink(?:-dim)?|muted(?:-dim)?))\b/;
 const SEMANTIC_SELECTOR =
   /(?:\[aria-pressed|accent|action|active|avatar|away|check|connected|danger|decline|delete|destructive|dnd|dock-bar|error|exit|idle|launch|leave|live|not-found|offline|online|owner|record|remove|room-chat-unread|screen-source-pop-dot|status|stop|submit|success|thumb|toggle|warning)/i;
 const IMAGE_SELECTOR =
@@ -79,10 +88,10 @@ function isAllowedBackground(selector: string, value: string): boolean {
 
 const problems: string[] = [];
 
-const appCss = readFileSync(resolve(sourceRoot, 'lib/shared/styles/app.css'), 'utf8');
-for (const token of SURFACE_TOKENS) {
-  const value = appCss.match(new RegExp(`${token}\\s*:\\s*([^;]+)`))?.[1]?.trim();
-  if (!value) problems.push(`app.css does not declare ${token}`);
+const themeCss = readFileSync(resolve(sourceRoot, 'lib/shared/styles/theme.css'), 'utf8');
+for (const token of Object.keys(SURFACE_TOKEN_VALUES)) {
+  const value = themeCss.match(new RegExp(`${token}\\s*:\\s*([^;]+)`))?.[1]?.trim();
+  if (!value) problems.push(`theme.css does not declare ${token}`);
   else if (value !== SURFACE_TOKEN_VALUES[token])
     problems.push(`${token}: expected ${SURFACE_TOKEN_VALUES[token]}, found ${value}`);
 }
@@ -111,6 +120,6 @@ for (const absolute of sourceFiles(sourceRoot)) {
 }
 
 if (problems.length > 0) {
-  process.stderr.write(`Backgrounds must use the palette tokens in app.css:\n${problems.sort().join('\n')}\n`);
+  process.stderr.write(`Backgrounds must use the palette tokens in theme.css:\n${problems.sort().join('\n')}\n`);
   process.exit(1);
 }

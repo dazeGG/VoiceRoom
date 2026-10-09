@@ -1,0 +1,158 @@
+/* Semantic colour tokens (--vr-*). A theme is one block of these variables on
+   the root element, selected through [data-theme]; components never carry raw
+   colours. graphite-volt is the default. */
+:root,
+:root[data-theme='graphite-volt'] {
+  color-scheme: dark;
+
+  --vr-bg: oklch(15.5% 0.005 260);
+  --vr-surface: oklch(17.5% 0.005 260);
+  --vr-surface-2: oklch(19.5% 0.006 260);
+  --vr-surface-3: oklch(24% 0.006 260);
+  --vr-surface-3-hover: oklch(28% 0.006 260);
+  --vr-hover: oklch(100% 0 0 / 0.045);
+  --vr-line: oklch(100% 0 0 / 0.07);
+  --vr-line-strong: oklch(100% 0 0 / 0.12);
+  --vr-text: oklch(96% 0.003 260);
+  --vr-text-2: oklch(72% 0.006 260);
+  --vr-text-3: oklch(54% 0.006 260);
+
+  --vr-accent: oklch(90% 0.19 125);
+  --vr-accent-hover: oklch(94% 0.16 125);
+  --vr-accent-ink: oklch(20% 0.04 125);
+  --vr-accent-soft: oklch(90% 0.19 125 / 0.09);
+  --vr-accent-soft-hover: oklch(90% 0.19 125 / 0.16);
+  --vr-accent-line: oklch(90% 0.19 125 / 0.32);
+
+  --vr-online: var(--vr-accent);
+  --vr-away: oklch(80% 0.12 80);
+  --vr-dnd: oklch(64% 0.18 25);
+  --vr-offline: oklch(46% 0.006 260);
+
+  --vr-danger: oklch(60% 0.19 25);
+  --vr-danger-soft: oklch(60% 0.19 25 / 0.14);
+  --vr-danger-off: oklch(60% 0.19 25 / 0.18);
+  --vr-danger-hover: oklch(60% 0.19 25 / 0.1);
+  --vr-on-danger: oklch(100% 0 0);
+
+  --vr-success: oklch(78% 0.15 150);
+  --vr-warning: oklch(80% 0.14 83);
+  --vr-info: oklch(75% 0.12 240);
+
+  --vr-badge-muted-bg: oklch(30% 0.006 260);
+  --vr-badge-muted-ink: oklch(68% 0.006 260);
+
+  /* The name plate over video and the dim layer behind modals. */
+  --vr-scrim: oklch(12% 0.005 260 / 0.78);
+  --vr-backdrop: oklch(0% 0 0 / 0.6);
+  --vr-dock-bg: oklch(19% 0.006 260 / 0.92);
+
+  --vr-shadow-popover: 0 24px 64px oklch(0% 0 0 / 0.55);
+  --vr-shadow-modal: 0 40px 100px oklch(0% 0 0 / 0.55);
+  --vr-shadow-dock: 0 18px 50px oklch(0% 0 0 / 0.5);
+  --vr-shadow-toast: 0 16px 44px oklch(0% 0 0 / 0.42);
+}
+
+:root[data-theme='graphite-ice'] {
+  --vr-accent: oklch(84% 0.12 220);
+  --vr-accent-hover: oklch(89% 0.1 220);
+  --vr-accent-ink: oklch(20% 0.04 230);
+  --vr-accent-soft: oklch(84% 0.12 220 / 0.09);
+  --vr-accent-soft-hover: oklch(84% 0.12 220 / 0.16);
+  --vr-accent-line: oklch(84% 0.12 220 / 0.32);
+  --vr-online: oklch(78% 0.14 155);
+}
+
+:root[data-theme='graphite-coral'] {
+  --vr-accent: oklch(75% 0.15 35);
+  --vr-accent-hover: oklch(80% 0.13 35);
+  --vr-accent-ink: oklch(20% 0.05 35);
+  --vr-accent-soft: oklch(75% 0.15 35 / 0.1);
+  --vr-accent-soft-hover: oklch(75% 0.15 35 / 0.17);
+  --vr-accent-line: oklch(75% 0.15 35 / 0.32);
+  --vr-online: oklch(78% 0.14 155);
+  --vr-danger: oklch(58% 0.2 15);
+  --vr-danger-soft: oklch(58% 0.2 15 / 0.14);
+  --vr-danger-off: oklch(58% 0.2 15 / 0.18);
+  --vr-danger-hover: oklch(58% 0.2 15 / 0.1);
+}
+
+/* Legacy names, mapped onto the --vr-* tokens so screens that have not been
+   redesigned yet follow the theme. Remove an alias once nothing reads it. */
+:root {
+  --paper: var(--vr-bg);
+  --paper-deep: var(--vr-bg);
+  --panel: var(--vr-surface);
+  --panel-strong: var(--vr-surface-3);
+  --control: var(--vr-surface-3);
+  --control-hover: var(--vr-surface-3-hover);
+  --control-active: var(--vr-text);
+  --control-active-hover: var(--vr-text);
+  --control-line: var(--vr-line-strong);
+  --room-avatar-bg: var(--vr-surface-3);
+  --ink: var(--vr-text);
+  --muted: var(--vr-text-2);
+  --line: var(--vr-line-strong);
+  --green: var(--vr-online);
+  --stream-live: var(--vr-online);
+  --stream-live-hover: var(--vr-accent-hover);
+  --coral: var(--vr-danger);
+  --amber: var(--vr-away);
+  --accent: var(--vr-accent);
+  --accent-hover: var(--vr-accent-hover);
+  --accent-ink: var(--vr-accent-ink);
+  --accent-glow: transparent;
+  --shadow: var(--vr-shadow-popover);
+  --shadow-glow: none;
+
+  --warm-ink: var(--vr-text);
+  --warm-ink-dim: var(--vr-text);
+  --warm-muted: var(--vr-text-2);
+  --warm-muted-dim: var(--vr-text-2);
+  --warm-faint: var(--vr-text-3);
+  --warm-100: var(--vr-text);
+  --warm-150: var(--vr-text);
+  --warm-300: var(--vr-text-2);
+  --warm-500: var(--vr-text-3);
+  --warm-550: var(--vr-text-3);
+  --warm-560: var(--vr-text-3);
+  --warm-650: var(--vr-text-3);
+  --warm-800: var(--vr-surface-2);
+  --warm-850: var(--vr-surface);
+  --warm-900: var(--vr-bg);
+  --warm-950: var(--vr-bg);
+  --green-soft: var(--vr-success);
+  --coral-soft: var(--vr-danger);
+  --danger-soft: var(--vr-danger);
+}
+
+/* Thin accent scrollbars everywhere. Firefox only gets the standard
+   properties when ::-webkit-scrollbar is unsupported, since they would
+   otherwise override the webkit styling in Chromium. */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--vr-accent) transparent;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 99px;
+  background: var(--vr-accent);
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-button {
+  display: none;
+}
