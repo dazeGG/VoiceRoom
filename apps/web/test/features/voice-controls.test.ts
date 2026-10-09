@@ -17,7 +17,8 @@ const { state } = await import('../../src/lib/features/room/client/core/state.sv
 const { createInitialRoomState } = await import('../../src/lib/features/room/client/model/room-state.ts');
 const hotkeys = await import('../../src/lib/features/room/client/core/hotkeys.ts');
 const { isMicrophoneShownMuted } = await import('../../src/lib/features/room/client/core/microphone-mute.ts');
-const { beginPushToTalk, endPushToTalk } = await import('../../src/lib/features/room/client/ui/controls.ts');
+const { beginPushToTalk, endPushToTalk, toggleMicrophoneMuted, toggleOutputMute } =
+  await import('../../src/lib/features/room/client/ui/controls.ts');
 const { getStoredMicrophoneVolume, persistMicrophoneVolume } =
   await import('../../src/lib/features/room/client/core/settings.ts');
 const { formatHotkeyBinding, hotkeyBindingFromEvent, hotkeyMatchesEvent } =
@@ -140,4 +141,37 @@ test('microphone volume is stored as a whole percent between 0 and 200', () => {
   expect(getStoredMicrophoneVolume()).toBe(150);
   expect(persistMicrophoneVolume(500)).toBe(200);
   expect(persistMicrophoneVolume(-5)).toBe(0);
+});
+
+test('deafen mutes the microphone and undeafen restores the state it had before', () => {
+  const call = { microphoneMode: 'open', joined: true, localStream: { getAudioTracks: () => [] } } as const;
+
+  Object.assign(state, call, { muted: false });
+  toggleOutputMute();
+  expect(state.outputMuted).toBe(true);
+  expect(state.muted).toBe(true);
+  toggleOutputMute();
+  expect(state.outputMuted).toBe(false);
+  expect(state.muted).toBe(false);
+
+  Object.assign(state, call, { muted: true });
+  toggleOutputMute();
+  toggleOutputMute();
+  expect(state.outputMuted).toBe(false);
+  expect(state.muted).toBe(true);
+});
+
+test('pressing the microphone while deafened turns on both sound and microphone', () => {
+  Object.assign(state, {
+    microphoneMode: 'open',
+    joined: true,
+    localStream: { getAudioTracks: () => [] },
+    muted: true
+  });
+  toggleOutputMute();
+  expect(state.outputMuted).toBe(true);
+
+  toggleMicrophoneMuted();
+  expect(state.outputMuted).toBe(false);
+  expect(state.muted).toBe(false);
 });

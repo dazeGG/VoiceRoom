@@ -15,8 +15,8 @@
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-ui);
-  --lv-side-w: 312px;
-  --lv-row-pad: 9px 10px;
+  --lv-side-w: 280px;
+  --lv-row-pad: 0 10px;
   --lv-name: 13.5px;
   --lv-sub: 11.5px;
   --lv-gap: 16px;
@@ -38,25 +38,26 @@
   cursor: pointer;
   text-align: left;
   color: inherit;
-  border-radius: 12px;
+  height: 42px;
+  border-radius: 10px;
   padding: var(--lv-row-pad);
   font-family: var(--font-ui);
   transition: background 0.13s ease;
 }
 
 .lv-row:hover {
-  background: var(--control-hover);
+  background: var(--vr-hover);
 }
 
 .lv-row.is-active,
 .lv-row.is-context {
-  background: color-mix(in oklch, var(--accent), transparent 88%);
+  background: var(--vr-accent-soft);
 }
 
 .lv-row-name {
-  font-size: var(--lv-name);
-  font-weight: 650;
-  color: var(--warm-ink);
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--vr-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -77,7 +78,7 @@
 .lv-notification-muted {
   display: inline-flex;
   flex: none;
-  color: var(--warm-faint);
+  color: var(--vr-text-3);
 }
 
 .lv-row-sub--muted {

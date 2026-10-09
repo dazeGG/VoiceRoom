@@ -1,9 +1,9 @@
 <script lang="ts">
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
-  import { Bell, BellOff, Check, Settings, UserPlus } from '@lucide/svelte';
+  import { Bell, BellOff, Check, Settings, UserPlus, Users } from '@lucide/svelte';
   import { tick } from 'svelte';
   import type { AuthUser } from '$lib/api/auth';
-  import { Avatar, Badge, Popover, PopoverMenuLabel } from '$lib/shared/ui';
+  import { Avatar, Badge, Button, Popover, PopoverMenuLabel } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
   import { effectivePresenceStatus, normalizePresenceStatus, type PresenceStatus } from '$lib/shared/presence';
   import { friendName } from '../../model/lobby-format';
@@ -213,13 +213,15 @@
 
 <aside class="lv-side">
   <button class="lv-side-head" type="button" title="Главная" onclick={onGoHome}>
-    <img src="/voiceroom-mascot.svg" width="26" height="26" alt="Voice Room" />
+    <span class="lv-brand-mark" role="img" aria-label="Voice Room"></span>
     <span class="lv-brand-name">Voice Room</span>
   </button>
 
   <div class="lv-side-scroll">
     <div class="lv-sec-head">
-      <span>Друзья — {lobby.friends.length}</span>
+      <span class="lv-sec-title"
+        >Друзья{#if lobby.friends.length > 0}<span class="lv-sec-count">{lobby.friends.length}</span>{/if}</span
+      >
       <div class="lv-sec-actions">
         <button class="lv-mini-btn" type="button" title="Заявки и добавить друга" onclick={onOpenPeople}>
           <UserPlus {...iconSm} aria-hidden="true" />
@@ -231,7 +233,11 @@
     </div>
 
     {#if lobby.friends.length === 0}
-      <p class="lr-empty" style="padding:2px 7px 8px;">Пока нет друзей. Откройте «Заявки», чтобы добавить по логину.</p>
+      <div class="lv-empty">
+        <Users {...iconSm} aria-hidden="true" />
+        <p>Пока нет друзей. Откройте «Заявки», чтобы добавить по логину.</p>
+        <Button variant="soft" class="compact" onclick={onOpenPeople}>Добавить друга</Button>
+      </div>
     {:else}
       {#each sortedFriends as entry (entry.user.id)}
         {@const friendPresence = effectivePresenceStatus(
@@ -255,11 +261,12 @@
             afk={friendPresence === 'away'}
             dnd={friendPresence === 'dnd'}
             showDot
-            ring="var(--panel)"
+            size={30}
+            ring="var(--vr-surface)"
           />
-          <div style="min-width:0;flex:1;">
+          <div class="lv-row-body">
             <div class="lv-notification-title">
-              <div class="lv-row-name" style={`font-weight:${entry.unreadCount > 0 ? 750 : 650}`}>
+              <div class="lv-row-name">
                 <EmojiText text={friendName(entry.user)} />
               </div>
               {#if friendNotificationsMuted}
@@ -318,16 +325,16 @@
             src={user.avatarUrl}
             colorKey={user.avatarColorKey}
             background={user.avatarAccent || undefined}
-            size={34}
+            size={32}
             online={selfPresence === 'online'}
             afk={selfPresence === 'away'}
             dnd={selfPresence === 'dnd'}
             showDot
-            ring="var(--panel)"
+            ring="var(--vr-surface)"
           />
-          <span style="min-width:0;flex:1;text-align:left;">
-            <span class="lv-row-name" style="display:block;"><EmojiText text={selfName} /></span>
-            <span class="lv-profile-handle" style="display:block;">@{user.login}</span>
+          <span class="lv-profile-names">
+            <span class="lv-profile-name"><EmojiText text={selfName} /></span>
+            <span class="lv-profile-handle">@{user.login}</span>
           </span>
         </button>
       {/snippet}
@@ -364,6 +371,7 @@
       <SidebarDownload />
       <button
         class="lobby-gear lv-notification-button"
+        class:is-open={notificationsOpen}
         type="button"
         title="Уведомления"
         aria-label="Открыть уведомления"
@@ -389,12 +397,58 @@
 </aside>
 
 <style>
+  .lv-brand-mark {
+    width: 22px;
+    height: 22px;
+    flex: none;
+    background: var(--vr-accent);
+    mask: url('/voiceroom-mascot.svg') center / contain no-repeat;
+  }
+
+  .lv-sec-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .lv-sec-count {
+    color: var(--vr-text-3);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 400;
+  }
+
+  .lv-row-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .lv-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+    margin: 4px 0;
+    padding: 18px 14px;
+    border: 1px dashed var(--vr-line-strong);
+    border-radius: 14px;
+    color: var(--vr-text-3);
+    text-align: center;
+  }
+
+  .lv-empty p {
+    margin: 0;
+    color: var(--vr-text-2);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
   .lv-profile-user {
     display: flex;
     flex: 1;
     min-width: 0;
     align-items: center;
-    gap: 9px;
+    gap: 10px;
     border: 0;
     padding: 0;
     background: transparent;
@@ -402,33 +456,54 @@
     cursor: pointer;
   }
 
+  .lv-profile-names {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    text-align: left;
+  }
+
+  .lv-profile-name {
+    overflow: hidden;
+    font-size: 14px;
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .lv-profile-actions {
     display: flex;
     flex: none;
     align-items: center;
     justify-content: flex-end;
-    gap: 10px;
+    gap: 2px;
     margin-left: auto;
   }
 
   .lv-notification-button {
     position: relative;
   }
+  .lv-notification-button.is-open {
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
+  }
   .lv-notification-count {
     position: absolute;
-    top: -5px;
-    right: -5px;
+    top: -6px;
+    right: -6px;
+    box-sizing: content-box;
     display: grid;
-    min-width: 17px;
-    height: 17px;
+    min-width: 10px;
+    height: 14px;
     place-items: center;
-    border: 2px solid var(--panel);
+    border: 2px solid var(--vr-surface);
     border-radius: 999px;
-    padding: 0 3px;
-    background: var(--coral);
-    color: var(--ink);
-    font-family: var(--font-mono);
+    padding: 0 2px;
+    background: var(--vr-accent);
+    color: var(--vr-accent-ink);
     font-size: 9px;
+    font-weight: 700;
     line-height: 1;
   }
 
@@ -448,11 +523,11 @@
     gap: 11px;
     width: 100%;
     min-height: 40px;
-    padding: 8px 12px;
+    padding: 8px 10px;
     border: 0;
-    border-radius: 12px;
+    border-radius: 8px;
     background: transparent;
-    color: var(--warm-ink-dim);
+    color: var(--vr-text);
     font: inherit;
     text-align: left;
     cursor: pointer;
@@ -461,13 +536,10 @@
       color 140ms ease;
   }
 
-  /* Same accent wash the shared menu items use, so the status list reads as one
-     family with every other menu. */
   .lv-status-option:hover,
   .lv-status-option:focus-visible,
   .lv-status-option.is-selected {
-    background: color-mix(in oklch, var(--accent), transparent 88%);
-    color: var(--warm-ink);
+    background: var(--vr-hover);
   }
 
   .lv-status-option:disabled {
@@ -479,17 +551,17 @@
     width: 11px;
     height: 11px;
     border-radius: 50%;
-    background: var(--warm-faint);
+    background: var(--vr-offline);
   }
 
   .lv-status-dot[data-status='online'] {
-    background: var(--green);
+    background: var(--vr-online);
   }
   .lv-status-dot[data-status='away'] {
-    background: var(--amber);
+    background: var(--vr-away);
   }
   .lv-status-dot[data-status='dnd'] {
-    background: var(--coral);
+    background: var(--vr-dnd);
   }
 
   .lv-status-copy {
@@ -500,20 +572,19 @@
 
   .lv-status-label {
     color: currentColor;
-    font-size: 14.5px;
-    font-weight: 600;
+    font-size: 14px;
     line-height: 1.25;
   }
 
   .lv-status-note {
     max-width: 29ch;
-    color: var(--warm-faint);
-    font-size: 11px;
+    color: var(--vr-text-3);
+    font-size: 11.5px;
     line-height: 1.4;
   }
 
   :global(.lv-status-check) {
-    color: var(--accent);
+    color: var(--vr-accent);
   }
   :global(.lv-side) {
     width: var(--lv-side-w);
@@ -521,19 +592,18 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    background: var(--panel);
-    border-right: 1px solid rgba(255, 255, 255, 0.08);
+    background: var(--vr-surface);
+    border-right: 1px solid var(--vr-line);
   }
   :global(.lv-side-head) {
     display: flex;
     align-items: center;
     gap: 10px;
-    min-height: 48px;
-    margin: 8px;
-    padding: 10px 8px;
+    margin: 8px 8px 4px;
+    padding: 12px;
     flex: none;
     border: none;
-    border-radius: var(--radius-md);
+    border-radius: 12px;
     background: transparent;
     color: inherit;
     cursor: pointer;
@@ -541,35 +611,32 @@
     transition: background 0.15s ease;
   }
   :where(.lv-side-head):hover {
-    background: var(--control-hover);
+    background: var(--vr-hover);
   }
   :where(.lv-side-head):focus-visible {
-    outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));
+    outline: 2px solid var(--vr-accent);
     outline-offset: -2px;
   }
   :global(.lv-brand-name) {
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 14.5px;
-    color: var(--warm-ink);
     flex: 1;
+    color: var(--vr-text);
+    font-size: 15px;
+    font-weight: 600;
     letter-spacing: -0.01em;
   }
   :global(.lv-side-scroll) {
     flex: 1;
     overflow: auto;
-    padding: 2px 8px 10px;
+    padding: 4px 10px;
   }
   :global(.lv-sec-head) {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 8px 6px;
-    font-family: var(--font-ui);
-    font-size: 10.5px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--warm-faint);
+    padding: 10px 10px 6px;
+    color: var(--vr-text-2);
+    font-size: 12.5px;
+    font-weight: 500;
   }
   :global(.lv-sec-actions) {
     display: flex;
@@ -577,42 +644,42 @@
   }
   :global(.lv-mini-btn) {
     position: relative;
-    width: 22px;
-    height: 22px;
-    border-radius: 7px;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
     border: none;
     background: transparent;
-    color: var(--warm-faint);
+    color: var(--vr-text-2);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
   }
   :where(.lv-mini-btn):hover {
-    background: var(--control-hover);
-    color: var(--warm-ink);
+    background: var(--vr-hover);
+    color: var(--vr-text);
   }
   :global(.lv-mini-btn-dot) {
     position: absolute;
-    top: 1px;
-    right: 1px;
+    top: 3px;
+    right: 3px;
     width: 7px;
     height: 7px;
     border-radius: 50%;
-    background: var(--accent);
-    box-shadow: 0 0 0 2px var(--panel);
+    background: var(--vr-accent);
+    box-shadow: 0 0 0 2px var(--vr-surface);
   }
   :global(.lv-profile) {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 12px 14px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 12px 16px;
+    border-top: 1px solid var(--vr-line);
     flex: none;
   }
   :global(.lv-profile-handle) {
+    color: var(--vr-text-3);
     font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--warm-muted-dim);
+    font-size: 11.5px;
   }
 </style>

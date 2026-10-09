@@ -385,8 +385,8 @@
   height: 32px;
   border-radius: 9px;
   border: none;
-  background: var(--control);
-  color: var(--warm-muted);
+  background: transparent;
+  color: var(--vr-text-2);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -394,7 +394,8 @@
   transition: background 0.15s ease;
 }
 .lobby-gear:hover {
-  background: var(--control-hover);
+  background: var(--vr-hover);
+  color: var(--vr-text);
 }
 
 .sidebar-download {

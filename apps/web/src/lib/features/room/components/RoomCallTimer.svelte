@@ -1,7 +1,7 @@
 <script lang="ts">
   import { voiceSession } from '../voice-session.svelte';
 
-  let { variant = 'topbar' } = $props<{ variant?: 'sidebar' | 'topbar' }>();
+  let { variant = 'topbar', separator = false } = $props<{ variant?: 'sidebar' | 'topbar'; separator?: boolean }>();
 
   let now = $state(Date.now());
 
@@ -27,6 +27,7 @@
 </script>
 
 {#if elapsed}
+  {#if separator}<span class="room-call-timer-separator" aria-hidden="true">·</span>{/if}
   <span
     class="room-call-timer room-call-timer--{variant}"
     title="Длительность звонка в комнате"
@@ -39,9 +40,9 @@
     display: inline-flex;
     align-items: center;
     flex: none;
-    color: var(--accent);
-    font-family: var(--font-ui);
-    font-weight: 800;
+    color: var(--vr-accent);
+    font-family: var(--font-mono);
+    font-weight: 500;
     font-variant-numeric: tabular-nums;
     line-height: 1;
     letter-spacing: 0.01em;
@@ -49,7 +50,13 @@
   }
 
   .room-call-timer--sidebar {
-    font-size: 14px;
+    color: var(--vr-text-2);
+    font-size: 12px;
+  }
+
+  .room-call-timer-separator {
+    color: var(--vr-text-3);
+    font-size: 12px;
   }
 
   .room-call-timer--topbar {
