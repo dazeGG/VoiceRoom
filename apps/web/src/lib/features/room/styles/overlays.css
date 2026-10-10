@@ -9,8 +9,22 @@
 
 .guest-name-heading {
   display: grid;
-  gap: var(--space-xs);
-  --eyebrow-ink: var(--vr-text-2);
+  gap: 8px;
+}
+
+.guest-name-heading .eyebrow {
+  color: var(--vr-accent);
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+#guestNameSubmitButton {
+  min-height: 48px;
+  border-color: transparent;
+  border-radius: 12px;
+  font-size: 15px;
 }
 
 .guest-name-heading h2,
@@ -19,13 +33,16 @@
 }
 
 .guest-name-heading h2 {
-  font-size: 1.55rem;
-  line-height: 1.08;
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
 }
 
 .guest-name-heading p:not(.eyebrow) {
   color: var(--vr-text-2);
-  font-size: 0.95rem;
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 .screen-source-dialog {

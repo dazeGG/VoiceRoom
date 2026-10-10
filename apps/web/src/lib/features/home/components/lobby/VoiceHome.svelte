@@ -327,7 +327,6 @@
     display: flex;
     flex-direction: column;
     gap: 28px;
-    max-width: 1080px;
   }
 
   .lv-home-head {

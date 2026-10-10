@@ -69,7 +69,7 @@
 >
   <section class="guest-name-panel">
     <div class="guest-name-heading">
-      <p class="eyebrow">вход в комнату</p>
+      <p class="eyebrow">Вход в комнату</p>
       <h2 id="guestNameTitle">Как вас зовут?</h2>
       <p>Имя будет видно участникам этой голосовой комнаты.</p>
     </div>
@@ -331,17 +331,18 @@
     display: grid;
     place-items: center;
     padding: var(--space-lg);
-    background: color-mix(in srgb, var(--vr-bg) 76%, transparent);
+    background: var(--vr-backdrop);
+    backdrop-filter: blur(3px);
   }
   :global(.guest-name-panel) {
     display: grid;
     width: min(430px, 100%);
-    gap: var(--space-lg);
-    border: 1px solid var(--vr-text-3);
-    border-radius: var(--radius-md);
-    padding: var(--space-lg);
-    background: var(--vr-surface-2);
-    box-shadow: var(--vr-shadow-popover);
+    gap: 22px;
+    border: 1px solid var(--vr-line-strong);
+    border-radius: 20px;
+    padding: 28px;
+    background: var(--vr-surface);
+    box-shadow: var(--vr-shadow-modal);
   }
   :global(.guest-name-form) {
     display: grid;
@@ -351,8 +352,8 @@
     min-height: 1.2em;
     margin: calc(var(--space-xs) * -1) 0 0;
     color: color-mix(in oklch, var(--vr-danger), var(--vr-text) 22%);
-    font-size: 0.84rem;
-    font-weight: 750;
+    font-size: 13px;
+    font-weight: 500;
   }
   :global(.screen-source-close) {
     display: grid;
