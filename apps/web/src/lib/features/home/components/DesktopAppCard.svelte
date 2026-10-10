@@ -128,8 +128,9 @@
     flex-direction: column;
     gap: 20px;
     width: 100%;
+    min-width: 0;
     max-width: 480px;
-    justify-self: center;
+    justify-self: end;
     padding: 24px;
     border: 1px solid var(--vr-line-strong);
     border-radius: 22px;
@@ -274,7 +275,9 @@
 
   .desktop-card-note {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
+    min-width: 0;
     color: var(--vr-text-3);
     font-size: 12px;
     line-height: 1.5;
@@ -285,6 +288,7 @@
   }
 
   .desktop-card-cmd {
+    min-width: 0;
     display: flex;
     align-items: center;
     gap: 8px;
