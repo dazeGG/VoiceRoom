@@ -123,7 +123,7 @@
     color: inherit;
   }
   :where(.lobby-dm-head):hover {
-    background: var(--vr-surface-3);
+    background: var(--vr-hover);
   }
   :global(.lobby-dm-head-text) {
     flex: 1;
@@ -140,7 +140,7 @@
   }
   :global(.lobby-dm-head-name) {
     font-size: 15.5px;
-    font-weight: 700;
+    font-weight: 600;
     color: var(--vr-text);
     letter-spacing: -0.01em;
   }

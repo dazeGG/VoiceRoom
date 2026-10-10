@@ -43,19 +43,19 @@
     width: min(390px, 100%);
     grid-template-columns: 38px minmax(0, 1fr);
     gap: 10px 12px;
-    border: 1px solid color-mix(in oklch, var(--vr-online), transparent 72%);
+    border: 1px solid var(--vr-accent-line);
     border-radius: 14px;
     padding: 13px;
-    background: color-mix(in oklch, var(--vr-bg), var(--vr-online) 5%);
+    background: var(--vr-surface-2);
   }
   :global(.lobby-room-invitation-icon) {
     display: grid;
     width: 38px;
     height: 38px;
     place-items: center;
-    border-radius: 50%;
-    background: color-mix(in oklch, var(--vr-online), transparent 82%);
-    color: var(--vr-online);
+    border-radius: 11px;
+    background: var(--vr-accent-soft);
+    color: var(--vr-accent);
   }
   :global(.lobby-room-invitation-copy) {
     display: grid;
@@ -82,21 +82,21 @@
   }
   :where(.lobby-room-invitation-actions) button {
     min-height: 32px;
-    border-radius: 8px;
-    padding: 0 11px;
+    border-radius: 9px;
+    padding: 0 14px;
     font: inherit;
-    font-size: 12px;
-    font-weight: 750;
+    font-size: 13px;
+    font-weight: 600;
     cursor: pointer;
   }
   :global(.lobby-room-invitation-dismiss) {
-    border: 1px solid var(--vr-line-strong);
-    background: transparent;
-    color: var(--vr-text-2);
+    border: 0;
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
   }
   :global(.lobby-room-invitation-join) {
     border: 0;
-    background: var(--vr-online);
-    color: oklch(14% 0.02 130);
+    background: var(--vr-accent);
+    color: var(--vr-accent-ink);
   }
 </style>

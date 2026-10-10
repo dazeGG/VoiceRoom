@@ -45,10 +45,11 @@
     width: 100%;
     gap: 2px;
     border: 0;
-    border-inline-start: 3px solid color-mix(in oklch, var(--vr-online), transparent 25%);
+    border-inline-start: 3px solid var(--vr-accent-line);
+    border-radius: 4px;
     margin: 0;
     padding: 4px 8px;
-    background: color-mix(in oklch, currentColor, transparent 94%);
+    background: var(--vr-hover);
     color: inherit;
     font: inherit;
     text-align: start;

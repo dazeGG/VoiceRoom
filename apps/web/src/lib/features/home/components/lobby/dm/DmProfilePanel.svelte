@@ -89,8 +89,8 @@
 <style>
   :global(.lobby-profile-cover) {
     position: relative;
-    height: var(--lobby-dm-head-height);
-    background: var(--profile-cover-accent, var(--vr-surface-3));
+    height: 88px;
+    background: color-mix(in oklch, var(--profile-cover-accent, var(--vr-surface-3)) 30%, var(--vr-surface-2));
   }
   :global(.lobby-profile-close) {
     position: absolute;
@@ -101,7 +101,7 @@
     transform: translateY(-50%);
     border-radius: 9px;
     border: none;
-    background: color-mix(in oklch, var(--vr-bg), transparent 36%);
+    background: var(--vr-scrim);
     color: var(--vr-text);
     display: flex;
     align-items: center;
@@ -113,7 +113,7 @@
   }
   :where(.lobby-profile-close):hover {
     background: var(--vr-bg);
-    color: var(--vr-accent);
+    color: var(--vr-text);
   }
   :global(.lobby-profile-body) {
     padding: 0 20px 24px;
@@ -121,7 +121,7 @@
   }
   :global(.lobby-profile-panel-name) {
     font-size: 20px;
-    font-weight: 800;
+    font-weight: 600;
     color: var(--vr-text);
     letter-spacing: -0.02em;
     margin-top: 12px;
@@ -139,14 +139,14 @@
     margin-top: 18px;
   }
   :global(.lobby-profile-stat) {
-    background: var(--vr-surface-3);
+    background: var(--vr-surface-2);
     border: 1px solid var(--vr-line);
-    border-radius: 13px;
+    border-radius: 14px;
     padding: 13px 14px;
   }
   :global(.lobby-profile-stat-num) {
     font-size: 20px;
-    font-weight: 800;
+    font-weight: 600;
     color: var(--vr-text);
     letter-spacing: -0.02em;
   }
@@ -158,19 +158,19 @@
   :global(.lobby-profile-action) {
     width: 100%;
     margin-top: 14px;
-    min-height: 46px;
+    min-height: 40px;
     display: flex;
     align-items: center;
     justify-content: flex-start;
     gap: 10px;
-    border: 1px solid var(--vr-line-strong);
-    background: var(--vr-surface-3);
+    border: 0;
+    background: var(--vr-hover);
     color: var(--vr-text);
-    border-radius: 12px;
+    border-radius: 11px;
     padding: 0 14px;
     font-family: var(--font-ui);
-    font-size: 13.5px;
-    font-weight: 650;
+    font-size: 14px;
+    font-weight: 500;
     text-align: left;
     cursor: pointer;
     transition:
@@ -180,11 +180,10 @@
   }
   :global(.lobby-profile-action svg) {
     flex: none;
-    color: var(--vr-accent);
+    color: var(--vr-text-2);
   }
   :where(.lobby-profile-action):hover {
-    border-color: var(--vr-line-strong);
-    background: var(--vr-surface-3-hover);
+    background: var(--vr-surface-3);
     color: var(--vr-text);
   }
   :global(.lobby-profile-action.is-muted svg) {
@@ -196,16 +195,14 @@
   }
   :global(.lobby-profile-action--danger) {
     margin-top: 10px;
-    border-color: color-mix(in oklch, var(--vr-danger), transparent 58%);
-    background: color-mix(in oklch, var(--vr-danger) 9%, transparent);
+    background: transparent;
     color: var(--vr-danger);
   }
   :global(.lobby-profile-action--danger svg) {
     color: currentColor;
   }
   :where(.lobby-profile-action--danger):hover {
-    border-color: color-mix(in oklch, var(--vr-danger), transparent 42%);
-    background: color-mix(in oklch, var(--vr-danger) 17%, transparent);
+    background: var(--vr-danger-hover);
     color: var(--vr-danger);
   }
 </style>

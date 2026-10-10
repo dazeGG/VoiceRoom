@@ -21,6 +21,7 @@
 </script>
 
 <div class="reply-target">
+  <span class="reply-target-label">В ответ</span>
   <ReplyPreview preview={target} interactive={Boolean(onjump) && !target.deleted} {onjump} />
   <button
     class="reply-target-cancel"
@@ -49,6 +50,12 @@
     border-start-end-radius: 8px;
     border-end-end-radius: 8px;
     padding-block: 5px;
+  }
+
+  .reply-target-label {
+    flex: none;
+    color: var(--vr-text-2);
+    font-size: 13px;
   }
 
   .reply-target-cancel {
