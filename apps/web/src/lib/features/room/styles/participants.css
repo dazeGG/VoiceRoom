@@ -96,9 +96,8 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   background: var(--vr-surface-2);
   /* The outline is inset so it is drawn over the video of a camera tile too. */
   box-shadow: inset 0 0 0 1px var(--vr-line);
-  transition:
-    background 180ms ease,
-    box-shadow 180ms ease;
+  /* The speaking outline switches at once: it must not fade in and out. */
+  transition: background 180ms ease;
 }
 
 .participant:hover {
