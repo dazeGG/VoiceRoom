@@ -13,7 +13,7 @@
   import { syncAudioBusOutput, syncAudioBusSettings } from '$lib/features/room/client/services/audio-bus';
   import { setMicrophoneVolume } from '$lib/features/room/client/services/microphone-service';
   import { setMicrophoneMode } from '$lib/features/room/client/ui/controls';
-  import { Select, Slider } from '$lib/shared/ui';
+  import { SegmentControl, Select, Slider } from '$lib/shared/ui';
   import {
     enumerateMicrophones,
     enumerateSpeakers,
@@ -86,7 +86,10 @@
     { value: '', label: 'Системный' },
     ...speakers.map((speaker) => ({ value: speaker.deviceId, label: speaker.label }))
   ]);
-  const noiseOptions = NOISE_OPTIONS.map((option) => ({ value: option.value, label: option.label }));
+  const NOISE_ORDER = ['off', 'browser', 'rnnoise'];
+  const noiseOptions = [...NOISE_OPTIONS]
+    .sort((a, b) => NOISE_ORDER.indexOf(a.value) - NOISE_ORDER.indexOf(b.value))
+    .map((option) => ({ value: option.value, label: option.label }));
 
   onMount(() => {
     void enumerateMicrophones().then((list) => (microphones = list));
@@ -265,12 +268,12 @@
 
       <div class="settings-sound-device-section">
         <span class="settings-field-label">Шумоподавление</span>
-        <Select
-          bind:value={noiseMode}
+        <SegmentControl
           options={noiseOptions}
-          label="Шумоподавление"
-          variant="field"
-          onValueChange={onNoiseChange}
+          value={noiseMode}
+          onChange={onNoiseChange}
+          ariaLabel="Шумоподавление"
+          class="settings-segment"
         />
       </div>
 
@@ -399,20 +402,16 @@
     <div class="settings-hotkeys">
       <div>
         <span class="settings-section-title">Режим микрофона</span>
-        <div class="settings-mode-toggle" role="radiogroup" aria-label="Режим микрофона">
-          <button
-            type="button"
-            role="radio"
-            aria-checked={microphoneMode === 'open'}
-            onclick={() => changeMicrophoneMode('open')}>Открытый микрофон</button
-          >
-          <button
-            type="button"
-            role="radio"
-            aria-checked={microphoneMode === 'push-to-talk'}
-            onclick={() => changeMicrophoneMode('push-to-talk')}>Push-to-talk</button
-          >
-        </div>
+        <SegmentControl
+          options={[
+            { value: 'open', label: 'Открытый микрофон' },
+            { value: 'push-to-talk', label: 'Push-to-talk' }
+          ]}
+          value={microphoneMode}
+          onChange={changeMicrophoneMode}
+          ariaLabel="Режим микрофона"
+          class="settings-segment"
+        />
         <div class="settings-gate-hint">В Push-to-talk микрофон открыт, пока вы удерживаете назначенную клавишу.</div>
       </div>
 
@@ -442,8 +441,9 @@
   :global(.settings-sound-value) {
     color: var(--vr-text);
     font-family: var(--font-ui);
-    font-size: 13px;
-    font-weight: 700;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    font-weight: 500;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
@@ -456,19 +456,18 @@
     border: 1px solid var(--vr-line-strong);
     border-radius: 10px;
     padding: 8px 12px;
-    background: var(--vr-surface-3);
+    background: transparent;
     color: var(--vr-text);
     font-family: var(--font-ui);
-    font-size: 12.5px;
-    font-weight: 700;
+    font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
     transition:
       background 150ms ease,
       border-color 150ms ease;
   }
   :where(.settings-sound-preview):hover {
-    background: var(--vr-surface-3-hover);
-    border-color: color-mix(in oklch, var(--vr-text) 22%, transparent);
+    background: var(--vr-hover);
   }
   :where(.settings-sound-preview):disabled {
     cursor: wait;
@@ -477,34 +476,16 @@
   :global(.settings-gate-value) {
     text-align: right;
     color: var(--vr-text);
-    font-family: var(--font-ui);
-    font-size: 13px;
-    font-weight: 700;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    font-weight: 500;
     white-space: nowrap;
   }
-  :global(.settings-mode-toggle) {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 4px;
-    border: 1px solid var(--vr-line-strong);
-    border-radius: 12px;
-    padding: 4px;
-    background: var(--vr-bg);
+  :global(.settings-segment) {
+    display: flex;
+    width: 100%;
   }
-  :where(.settings-mode-toggle) button {
-    min-height: 36px;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    color: var(--vr-text-2);
-    font-family: var(--font-ui);
-    font-size: 12.5px;
-    font-weight: 700;
-    cursor: pointer;
-  }
-  :where(.settings-mode-toggle) button[aria-checked='true'] {
-    background: color-mix(in oklch, var(--vr-online) 16%, transparent);
-    color: var(--vr-text);
-    box-shadow: inset 0 0 0 1px rgba(52, 201, 138, 0.28);
+  :global(.settings-segment .ui-segment-item) {
+    flex: 1;
   }
 </style>

@@ -66,7 +66,7 @@
   /* Fixed height so the modal doesn't jump when switching Профиль / Звук.
      No flex-grow here — that would let content drive the height and reintroduce
      the jump. */
-  height: 620px;
+  height: 612px;
 }
 
 .settings-nav {

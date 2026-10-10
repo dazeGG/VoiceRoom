@@ -9,7 +9,7 @@ import { readOpenInAppSignals, shouldOfferOpenInApp } from '$lib/platform/open-i
 import { createLogger, errorContext } from '$lib/shared/log';
 import { shouldShowRecoveryCodesReminder } from './account-security';
 
-export type SettingsTab = 'profile' | 'sound' | 'hotkeys' | 'notifications' | 'app' | 'security';
+export type SettingsTab = 'profile' | 'sound' | 'hotkeys' | 'notifications' | 'app' | 'security' | 'appearance';
 export type SecurityHighlight = 'recovery-codes' | 'password' | null;
 
 const log = createLogger('lobby');

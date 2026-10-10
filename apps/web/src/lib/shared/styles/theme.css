@@ -2,7 +2,7 @@
    the root element, selected through [data-theme]; components never carry raw
    colours. graphite-volt is the default. */
 :root,
-:root[data-theme='graphite-volt'] {
+[data-theme='graphite-volt'] {
   color-scheme: dark;
 
   --vr-bg: oklch(15.5% 0.005 260);
@@ -55,7 +55,7 @@
   --vr-shadow-toast: 0 16px 44px oklch(0% 0 0 / 0.42);
 }
 
-:root[data-theme='graphite-ice'] {
+[data-theme='graphite-ice'] {
   --vr-accent: oklch(84% 0.12 220);
   --vr-accent-hover: oklch(89% 0.1 220);
   --vr-accent-ink: oklch(20% 0.04 230);
@@ -65,7 +65,7 @@
   --vr-online: oklch(78% 0.14 155);
 }
 
-:root[data-theme='graphite-coral'] {
+[data-theme='graphite-coral'] {
   --vr-accent: oklch(75% 0.15 35);
   --vr-accent-hover: oklch(80% 0.13 35);
   --vr-accent-ink: oklch(20% 0.05 35);
