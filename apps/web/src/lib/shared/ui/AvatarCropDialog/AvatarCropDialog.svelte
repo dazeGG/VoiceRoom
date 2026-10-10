@@ -249,7 +249,7 @@
               <span>плитка разговора</span>
             </div>
             <div class="crop-sidebar-preview">
-              <Avatar {name} src={previewUrl} size={34} online showDot ring="#24221d" />
+              <Avatar {name} src={previewUrl} size={34} online showDot ring="var(--vr-surface)" />
               <div><strong><EmojiText text={name || 'Ваш профиль'} /></strong><span>в сети</span></div>
             </div>
           {:else}
@@ -290,7 +290,7 @@
     border-radius: 20px;
     background: var(--vr-surface-2);
     box-shadow: 0 36px 90px rgb(0 0 0 / 0.6);
-    color: var(--vr-text, #f5efe4);
+    color: var(--vr-text);
     overflow: hidden;
   }
   .crop-head {
@@ -306,7 +306,7 @@
   }
   .crop-head p {
     margin: 5px 0 0;
-    color: var(--vr-text-3, #8e887c);
+    color: var(--vr-text-3);
     font-size: 13px;
   }
   .crop-head button {
@@ -360,12 +360,12 @@
     gap: 14px;
     margin: 18px auto 0;
     max-width: 430px;
-    color: var(--vr-text-2, #aaa397);
+    color: var(--vr-text-2);
     font-size: 12px;
     font-weight: 700;
   }
   .crop-zoom input {
-    accent-color: var(--vr-accent, #d9f27c);
+    accent-color: var(--vr-accent);
   }
   .crop-preview {
     display: flex;
@@ -373,7 +373,7 @@
     gap: 14px;
   }
   .crop-preview-label {
-    color: var(--vr-text-3, #8e887c);
+    color: var(--vr-text-3);
     font-family: var(--font-ui, sans-serif);
     font-size: 10px;
     letter-spacing: 0.14em;
@@ -448,7 +448,7 @@
   .crop-cancel {
     border: 1px solid var(--vr-line-strong);
     background: transparent;
-    color: var(--vr-text, #d5cfc4);
+    color: var(--vr-text);
   }
   .crop-save {
     border: 0;

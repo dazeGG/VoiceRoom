@@ -347,7 +347,7 @@
   }
 
   .account-security-row[data-warning='true'] .account-security-icon {
-    color: var(--vr-away, #e0b457);
+    color: var(--vr-away);
   }
 
   .account-security-action {

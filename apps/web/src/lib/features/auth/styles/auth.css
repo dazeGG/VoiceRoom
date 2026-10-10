@@ -143,10 +143,6 @@
   font-weight: 600;
 }
 
-.auth-foot--secondary {
-  margin-top: 8px;
-}
-
 .auth-input--code {
   font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
   letter-spacing: 0.06em;

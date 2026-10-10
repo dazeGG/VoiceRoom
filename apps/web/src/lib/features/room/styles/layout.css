@@ -250,7 +250,7 @@ body[data-screen='not-found'] {
   font-size: 46vw;
   line-height: 0.8;
   letter-spacing: -0.05em;
-  color: rgba(236, 231, 217, 0.035);
+  color: color-mix(in oklch, var(--vr-text) 4%, transparent);
   pointer-events: none;
   user-select: none;
   white-space: nowrap;
@@ -301,8 +301,8 @@ body[data-screen='not-found'] {
   border: none;
   border-radius: 13px;
   padding: 14px 22px;
-  background: var(--vr-text);
-  color: #1a1813;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
   font-family: var(--font-ui);
   font-size: 15px;
   font-weight: 700;

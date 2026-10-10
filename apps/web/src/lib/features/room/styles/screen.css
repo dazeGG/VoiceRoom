@@ -7,7 +7,7 @@
   min-height: 0;
   margin-inline: auto;
   overflow: hidden;
-  border: 1px solid oklch(31% 0.018 92);
+  border: 1px solid var(--vr-line);
   border-radius: var(--radius-sm);
   background:
     radial-gradient(circle at 18% 18%, color-mix(in oklch, var(--vr-surface-3) 16%, transparent), transparent 34%),
@@ -73,31 +73,6 @@
   display: none;
 }
 
-.screen-meta-viewer-avatar,
-.screen-meta-viewers-rest {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid color-mix(in oklch, var(--vr-text) 22%, transparent);
-  border-radius: 50%;
-  background: var(--avatar-bg, var(--vr-surface-3));
-  color: var(--avatar-fg, #fff);
-  box-shadow: var(--avatar-shadow, 0 8px 18px rgb(88 101 242 / 0.24));
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.screen-meta-viewers-rest {
-  background: color-mix(in srgb, var(--vr-surface) 92%, transparent);
-  color: var(--vr-text);
-  box-shadow: none;
-}
-
 .screen-meta-sep {
   flex: 0 0 auto;
   align-self: center;
@@ -110,10 +85,6 @@
 
 .screen-meta-sep[hidden],
 .screen-meta-detail[hidden] {
-  display: none;
-}
-
-.screen-meta-stats[hidden] {
   display: none;
 }
 

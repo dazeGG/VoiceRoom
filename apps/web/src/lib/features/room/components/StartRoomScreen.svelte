@@ -103,6 +103,6 @@
     font-size: 17px;
     font-weight: 400;
     line-height: 1.55;
-    color: var(--hero-lead-ink, #b3ac9b);
+    color: var(--vr-text-2);
   }
 </style>

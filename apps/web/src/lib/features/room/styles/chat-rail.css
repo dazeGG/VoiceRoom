@@ -421,11 +421,6 @@ button.chat-msg-author {
   color: var(--vr-text);
   outline: none;
 }
-.chat-msg-actions .chat-msg-action-danger:hover,
-.chat-msg-actions .chat-msg-action-danger:focus-visible {
-  background: var(--vr-danger-hover);
-  color: var(--vr-danger);
-}
 
 .chat-msg-text + .chat-msg-text {
   margin-top: 3px;
@@ -437,46 +432,6 @@ button.chat-msg-author {
   margin-top: 4px;
 }
 
-.chat-msg-edit-input {
-  width: 100%;
-  min-height: 54px;
-  max-height: 180px;
-  box-sizing: border-box;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 8px;
-  outline: none;
-  background: var(--vr-surface-2);
-  color: var(--vr-text);
-  font: inherit;
-  line-height: 1.45;
-  padding: 7px 9px;
-}
-
-.chat-msg-edit-input:focus {
-  border-color: var(--vr-accent-line);
-}
-
-.chat-msg-edit-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 6px;
-}
-
-.chat-msg-edit-actions button {
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 6px;
-  background: var(--vr-surface-3);
-  color: var(--vr-text-2);
-  cursor: pointer;
-  font-size: 10px;
-  padding: 4px 7px;
-}
-
-.chat-msg-edit-actions button:disabled {
-  cursor: default;
-  opacity: 0.45;
-}
-
 .chat-msg-text a {
   color: inherit;
   text-decoration: underline;
@@ -484,20 +439,6 @@ button.chat-msg-author {
 }
 .chat-msg-text a:hover {
   opacity: 0.85;
-}
-
-.chat-msg-delete {
-  margin-left: 6px;
-  font-size: 11px;
-  line-height: 1;
-  padding: 0 2px;
-}
-.chat-msg-delete:hover {
-  color: var(--vr-danger);
-  opacity: 1;
-}
-.chat-msg[data-self='true'] .chat-msg-delete {
-  opacity: 0.7;
 }
 
 .chat-rail-compose {

@@ -1,211 +1,10 @@
 /* Primary card */
-.home-card {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--vr-line);
-  border-radius: 20px;
-  padding: 6px 24px 24px;
-  background: var(--vr-surface);
-}
-
-.home-input {
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 12px;
-  padding: 13px 15px;
-  background: var(--vr-bg);
-  color: var(--vr-text);
-  font-family: var(--font-ui);
-  font-size: 15px;
-  outline: none;
-  transition: border-color 0.15s ease;
-}
-
-.home-input::placeholder {
-  color: var(--vr-text-3);
-}
-
-.home-input:hover {
-  border-color: var(--vr-line-strong);
-  background: var(--vr-bg);
-}
-
-.home-input:focus {
-  border-color: var(--focus-border);
-  border-color: var(--focus-border);
-  box-shadow: none;
-}
-
-.home-input--code {
-  font-family: var(--font-mono);
-  letter-spacing: 0.04em;
-}
-
-.home-ghost-button {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 12px;
-  padding: 0 16px;
-  background: var(--vr-surface-3);
-  color: var(--vr-text);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.home-ghost-button:hover {
-  background: var(--vr-surface-3-hover);
-}
-
-.home-or {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--vr-text-3);
-  font-size: 12px;
-}
-
-.home-or::before,
-.home-or::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--vr-line-strong);
-}
-
-.home-ghost-button--small {
-  height: 34px;
-  padding: 0 12px;
-  font-size: 13px;
-}
-
-.home-spinner--small {
-  width: 12px;
-  height: 12px;
-}
-
-.home-list-card {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--vr-line);
-  border-radius: 20px;
-  padding: 20px 24px 22px;
-  background: var(--vr-surface);
-}
-
-.home-list-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.home-list-kicker {
-  display: block;
-  margin-bottom: 3px;
-  color: var(--vr-text-3);
-  font-family: var(--font-ui);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.home-list-title {
-  margin: 0;
-  color: var(--vr-text);
-  font-family: var(--font-ui);
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.home-list-count {
-  flex: none;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: var(--vr-surface-3);
-  color: #b7b0a0;
-  font-family: var(--font-ui);
-  font-size: 12px;
-}
-
-.home-room-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.home-room-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  border: 1px solid var(--vr-line);
-  border-radius: 14px;
-  padding: 12px 14px;
-  background: var(--vr-surface-3);
-}
-
-.home-room-row-main {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.home-room-row-badge {
-  flex: none;
-  padding: 3px 7px;
-  border-radius: 999px;
-  background: color-mix(in oklch, var(--vr-online) 12%, transparent);
-  color: var(--vr-success);
-  font-family: var(--font-ui);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.home-room-row-code {
-  min-width: 0;
-  overflow: hidden;
-  color: var(--vr-text);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.home-room-row-actions {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.home-list-empty {
-  margin: 18px 0 0;
-  color: var(--vr-text-3);
-  font-size: 12.5px;
-  line-height: 1.5;
-}
-
-.home-list-empty b {
-  color: var(--vr-text);
-}
 
 .home-spinner {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  border: 2px solid rgba(236, 231, 217, 0.25);
+  border: 2px solid var(--vr-line-strong);
   border-top-color: var(--vr-text);
   animation: home-spin 0.7s linear infinite;
 }
@@ -217,81 +16,10 @@
 }
 
 /* Secondary card — collapsible desktop app */
-.home-app {
-  border: 1px solid var(--vr-line);
-  border-radius: 20px;
-  padding: 20px 24px 22px;
-  background: var(--vr-surface);
-}
 
 /* Inside the Electron shell the preload tags <html> with .is-desktop before
      page scripts run, so the download card is hidden with no flash. Contract:
      window.voiceRoomDesktop = { isDesktop, isElectron, platform, version }. */
-html.is-desktop .home-app {
-  display: none;
-}
-
-.home-app-chevron {
-  display: inline-flex;
-  color: var(--vr-text-3);
-  transition: transform 0.2s ease;
-}
-
-.home-app[data-open='true'] .home-app-chevron {
-  transform: rotate(180deg);
-}
-
-.home-select-wrap {
-  position: relative;
-}
-
-.home-select {
-  width: 100%;
-  min-height: 0;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  border: 1px solid rgba(154, 143, 106, 0.55);
-  border-radius: 12px;
-  padding: 13px 40px 13px 15px;
-  background: var(--vr-bg);
-  color: var(--vr-text);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  font-weight: 500;
-  outline: none;
-  cursor: pointer;
-}
-
-.home-select:hover {
-  border-color: rgba(154, 143, 106, 0.7);
-  background: var(--vr-bg);
-}
-
-.home-select option {
-  background: var(--vr-surface-2);
-  color: var(--vr-text);
-}
-
-.home-select-chevron {
-  position: absolute;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  pointer-events: none;
-  display: inline-flex;
-  color: var(--vr-text-3);
-}
-
-.home-room-row-presence {
-  flex: none;
-  color: var(--vr-text-3);
-  font-size: 12px;
-}
-
-.home-room-row-presence[data-live='true'] {
-  color: var(--vr-success);
-}
 
 @media (prefers-reduced-motion: reduce) {
   .home-spinner {
@@ -358,23 +86,23 @@ html.is-desktop .home-app {
 
 .auth-session-error-card {
   width: min(520px, 100%);
-  border: 1px solid rgba(244, 114, 182, 0.22);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 28px;
   background: var(--vr-surface-2);
-  box-shadow: 0 24px 80px rgba(8, 6, 18, 0.34);
+  box-shadow: var(--vr-shadow-modal);
   padding: 28px;
   text-align: center;
 }
 
 .auth-session-error-card h1 {
   margin: 8px 0 10px;
-  color: #fff;
+  color: var(--vr-text);
   font-size: clamp(1.65rem, 4vw, 2.35rem);
 }
 
 .auth-session-error-card p:not(.auth-loader-kicker) {
   margin: 0 0 22px;
-  color: rgba(236, 229, 255, 0.72);
+  color: var(--vr-text-2);
   line-height: 1.55;
 }
 
@@ -389,70 +117,6 @@ html.is-desktop .home-app {
   gap: 8px;
 }
 
-.landing-header-auth-link {
-  display: inline-flex;
-  height: var(--interactive-md);
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border-radius: var(--interactive-radius);
-  padding-inline: 16px;
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1;
-  text-decoration: none;
-  transition:
-    color 160ms var(--ease-out),
-    background 160ms var(--ease-out),
-    border-color 160ms var(--ease-out),
-    transform 160ms var(--ease-out);
-}
-
-.landing-header-auth-link:hover {
-  transform: translateY(-1px);
-}
-
-.landing-header-auth-link:active {
-  transform: translateY(0);
-}
-
-.landing-header-auth-link:focus-visible {
-  outline: 2px solid var(--vr-accent);
-  outline-offset: 3px;
-}
-
-.landing-header-auth-link--login {
-  border: 1px solid color-mix(in oklch, var(--vr-text), transparent 76%);
-  background: var(--vr-surface-3);
-  color: var(--vr-text, var(--vr-text));
-}
-
-.landing-header-auth-link--login:hover {
-  border-color: color-mix(in oklch, var(--vr-text), transparent 56%);
-  background: var(--vr-surface-3-hover);
-  color: var(--vr-text, var(--vr-text));
-}
-
-.landing-header-auth-link--register {
-  border: 1px solid var(--vr-accent);
-  background: var(--vr-accent);
-  color: var(--vr-accent-ink);
-}
-
-.landing-header-auth-link--register:hover {
-  border-color: var(--vr-accent-hover);
-  background: var(--vr-accent-hover);
-}
-
-.landing-header-auth-link--register span {
-  font-size: 17px;
-  transition: transform 160ms var(--ease-out);
-}
-
-.landing-header-auth-link--register:hover span {
-  transform: translateX(2px);
-}
-
 .landing-cta-row {
   display: flex;
   align-items: stretch;
@@ -460,39 +124,6 @@ html.is-desktop .home-app {
   justify-content: center;
   gap: 12px;
   margin-top: 32px;
-}
-
-.landing-primary-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  height: var(--interactive-lg);
-  border: none;
-  border-radius: var(--interactive-radius);
-  padding: 0 26px;
-  background: var(--vr-accent);
-  color: var(--vr-accent-ink);
-  font-family: var(--font-ui);
-  font-size: 15.5px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.landing-primary-button:hover {
-  background: var(--vr-accent-hover);
-}
-
-.landing-primary-button:disabled {
-  cursor: default;
-  opacity: 0.8;
-}
-
-.landing-primary-button .home-spinner {
-  border-color: color-mix(in oklch, var(--vr-accent-ink), transparent 75%);
-  border-top-color: var(--vr-accent-ink);
 }
 
 .lv-join {
@@ -583,12 +214,6 @@ html.is-desktop .home-app {
     gap: 6px;
   }
 
-  .landing-header-auth-link {
-    height: var(--interactive-sm);
-    padding-inline: 12px;
-    font-size: 13px;
-  }
-
   .landing-cta-row {
     flex-direction: column;
     align-items: stretch;
@@ -606,18 +231,5 @@ html.is-desktop .home-app {
 @media (max-width: 440px) {
   .topbar:has(.landing-header-auth) .brand span {
     display: none;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .landing-header-auth-link,
-  .landing-header-auth-link--register span {
-    transition: none;
-  }
-
-  .landing-header-auth-link:hover,
-  .landing-header-auth-link:active,
-  .landing-header-auth-link--register:hover span {
-    transform: none;
   }
 }

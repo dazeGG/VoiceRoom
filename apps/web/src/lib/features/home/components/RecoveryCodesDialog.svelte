@@ -179,7 +179,7 @@
   }
 
   .recovery-warning {
-    color: var(--vr-away, #e0b457);
+    color: var(--vr-away);
   }
 
   .recovery-error {

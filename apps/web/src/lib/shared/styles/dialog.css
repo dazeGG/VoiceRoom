@@ -97,11 +97,6 @@
   color: var(--vr-text);
 }
 
-.dialog-tab--temp[data-active='true'] {
-  background: var(--vr-away);
-  color: var(--vr-accent-ink);
-}
-
 .dialog-body {
   display: flex;
   flex-direction: column;
@@ -116,23 +111,6 @@
   background: var(--vr-danger-soft);
   color: var(--vr-danger);
   font-size: 12.5px;
-}
-
-.dialog-field {
-  display: flex;
-  flex-direction: column;
-}
-
-.dialog-label {
-  margin-bottom: 8px;
-  color: var(--vr-text-2);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.dialog-label-soft {
-  color: var(--vr-text-3);
 }
 
 .dialog-input {
@@ -156,11 +134,6 @@
 .dialog-input:focus {
   border-color: var(--vr-accent-line);
   box-shadow: none;
-}
-
-.dialog-input--mono {
-  font-family: var(--font-mono);
-  letter-spacing: 0.02em;
 }
 
 .dialog-note {
@@ -198,56 +171,4 @@
 .dialog-actions {
   display: flex;
   gap: 10px;
-}
-
-.dialog-cancel {
-  flex: none;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 11px;
-  padding: 0 20px;
-  min-height: 42px;
-  background: transparent;
-  color: var(--vr-text);
-  font-family: var(--font-ui);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.dialog-cancel:hover {
-  background: var(--vr-hover);
-}
-
-.dialog-submit {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  border: none;
-  border-radius: 11px;
-  min-height: 42px;
-  padding: 0;
-  background: var(--vr-accent);
-  color: var(--vr-accent-ink);
-  font-family: var(--font-ui);
-  font-size: 14.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.dialog-submit:hover {
-  background: var(--vr-accent-hover);
-}
-
-.dialog-submit:disabled {
-  cursor: default;
-  opacity: 0.8;
-}
-
-.dialog-submit .home-spinner {
-  border-color: color-mix(in oklch, var(--vr-accent-ink), transparent 75%);
-  border-top-color: var(--vr-accent-ink);
 }

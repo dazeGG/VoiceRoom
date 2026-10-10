@@ -139,7 +139,7 @@
     border-radius: 50%;
     font-size: 22px;
     font-weight: 700;
-    color: #fff;
+    color: var(--vr-text);
   }
   :global(.settings-profile-avatar img) {
     border-radius: inherit;
@@ -158,7 +158,7 @@
     border: 0;
     border-radius: 50%;
     background: transparent;
-    color: #fff;
+    color: var(--vr-text);
     cursor: pointer;
     overflow: hidden;
   }
@@ -196,7 +196,7 @@
     border: 2px solid var(--vr-bg);
     border-radius: 50%;
     background: var(--vr-danger);
-    color: #fff;
+    color: var(--vr-text);
     cursor: pointer;
     box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34);
     opacity: 0;
@@ -212,7 +212,7 @@
     background: color-mix(in oklch, var(--vr-danger), var(--vr-bg) 16%);
   }
   :where(.settings-avatar-remove):focus-visible {
-    outline: 2px solid #fff;
+    outline: 2px solid var(--vr-text);
     outline-offset: 2px;
   }
   :where(.settings-avatar-edit):disabled,

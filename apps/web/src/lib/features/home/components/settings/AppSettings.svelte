@@ -439,7 +439,7 @@
     border: none;
     border-radius: 11px;
     background: var(--vr-online);
-    color: oklch(20% 0.05 150);
+    color: var(--vr-accent-ink);
     font: 700 12.5px var(--font-ui);
     cursor: pointer;
     transition: filter 0.15s ease;

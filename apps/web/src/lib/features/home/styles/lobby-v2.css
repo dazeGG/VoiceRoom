@@ -81,10 +81,6 @@
   color: var(--vr-text-3);
 }
 
-.lv-row-sub--muted {
-  opacity: 0.85;
-}
-
 /* ---- joined "join by code" group ---- */
 .lv-join {
   display: flex;
@@ -159,59 +155,12 @@
   margin: 0;
 }
 
-.lr-icon-btn {
-  flex: none;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: transparent;
-  color: var(--vr-text-2);
-  cursor: pointer;
-}
-
-.lr-icon-btn:hover {
-  background: var(--vr-surface-3-hover);
-  color: var(--vr-text);
-}
-
 /* ---- callout (friend requests banner) ---- */
 
 /* A callout with its own dismiss control: a button cannot nest another, so the
    frame is a plain box holding the main action and the dismiss button. */
 
 /* ---- search field ---- */
-.lr-search {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-md);
-  padding: 9px 12px;
-  background: var(--vr-bg);
-  color: var(--vr-text-2);
-}
-
-.lr-search input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  outline: none;
-  color: var(--vr-text);
-  font-family: var(--font-ui);
-  font-size: 13.5px;
-}
-
-.lr-search input::placeholder {
-  color: var(--vr-text-3);
-}
-
-.lr-search:focus-within {
-  border-color: var(--vr-accent);
-}
 
 /* ---- requests list (People screen) ---- */
 

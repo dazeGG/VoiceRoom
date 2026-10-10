@@ -78,8 +78,8 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
 
 .participant {
   --level: 0;
-  --participant-pastel: oklch(74% 0.1 278);
-  --participant-avatar-fg: oklch(25% 0.05 278);
+  --participant-pastel: var(--vr-surface-3);
+  --participant-avatar-fg: var(--vr-text);
   position: relative;
   display: grid;
   min-height: 0;

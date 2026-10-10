@@ -185,11 +185,6 @@
   box-shadow: none;
 }
 
-.settings-divider {
-  height: 1px;
-  background: var(--vr-line-strong);
-}
-
 .settings-actions {
   display: flex;
   justify-content: flex-end;

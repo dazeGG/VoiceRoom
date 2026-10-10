@@ -211,7 +211,7 @@
     border: 1px solid color-mix(in oklch, var(--vr-danger), transparent 45%);
     border-radius: 12px;
     background: color-mix(in oklch, var(--vr-danger), transparent 78%);
-    color: #f3c2b8;
+    color: var(--vr-danger);
     font: inherit;
     font-size: 14px;
     font-weight: 700;

@@ -159,7 +159,7 @@
             {/if}
             {#if selected}
               <span class="screen-source-check" aria-hidden="true">
-                <Check {...iconXs} color="#17150f" aria-hidden="true" />
+                <Check {...iconXs} color="var(--vr-accent-ink)" aria-hidden="true" />
               </span>
             {/if}
           </span>
@@ -396,8 +396,8 @@
     transition: color 140ms var(--ease-out);
   }
   :where(.screen-source-tab)[aria-pressed='true'] {
-    background: var(--vr-text);
-    color: oklch(8% 0.012 92);
+    background: var(--vr-accent);
+    color: var(--vr-accent-ink);
     font-weight: 700;
   }
   :where(.screen-source-tab):not([aria-pressed='true']):hover {
@@ -596,8 +596,8 @@
       color 140ms var(--ease-out);
   }
   :where(.screen-source-res-btn)[aria-pressed='true'] {
-    background: var(--vr-text);
-    color: oklch(8% 0.012 92);
+    background: var(--vr-accent);
+    color: var(--vr-accent-ink);
     font-weight: 700;
   }
   :where(.screen-source-res-btn):not([aria-pressed='true']):hover {
@@ -775,8 +775,8 @@
     padding: 0 20px;
     border: none;
     border-radius: 12px;
-    background: var(--vr-text);
-    color: oklch(8% 0.012 92);
+    background: var(--vr-accent);
+    color: var(--vr-accent-ink);
     font-size: 0.91rem;
     font-weight: 700;
     letter-spacing: -0.01em;

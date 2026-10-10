@@ -35,7 +35,6 @@ h1 {
   gap: var(--space-xs);
 }
 
-.tool-button,
 .primary-button,
 .secondary-button,
 .leave-button,
@@ -52,13 +51,6 @@ h1 {
     transform 160ms var(--ease-out);
 }
 
-.tool-button {
-  background: var(--vr-surface);
-  color: var(--vr-text);
-  font-weight: 750;
-}
-
-.tool-button:hover,
 .primary-button:hover,
 .secondary-button:hover,
 .sound-button:hover {
@@ -66,7 +58,6 @@ h1 {
   box-shadow: 0 0 0 3px var(--vr-line-strong);
 }
 
-.tool-button:active,
 .primary-button:active,
 .secondary-button:active,
 .sound-button:active {

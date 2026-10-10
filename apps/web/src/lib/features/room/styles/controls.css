@@ -1,5 +1,4 @@
 .name-panel,
-.join-panel,
 .room-actions {
   display: grid;
   gap: var(--space-md);
@@ -513,26 +512,4 @@ button:focus-visible {
 
 .sound-button:hover {
   background: var(--vr-surface-3-hover);
-}
-
-.room-chat-unread {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  margin-left: 2px;
-  padding: 0 5px;
-  border-radius: 999px;
-  background: var(--vr-accent);
-  color: var(--vr-accent-ink);
-  font-family: var(--font-ui);
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.room-chat-unread[data-muted='true'] {
-  background: var(--vr-surface-3-hover);
-  color: var(--vr-text-2);
 }

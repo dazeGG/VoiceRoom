@@ -255,7 +255,7 @@
   .login-alert-button--danger {
     border-color: color-mix(in oklch, var(--vr-danger), transparent 45%);
     background: color-mix(in oklch, var(--vr-danger), transparent 78%);
-    color: #f3c2b8;
+    color: var(--vr-danger);
   }
 
   .login-alert-button--danger:hover:not(:disabled) {

@@ -38,8 +38,8 @@
 - Room settings opened from the lobby and from an active room must expose the same avatar edit/remove behavior and the same destructive-action hierarchy.
 
 ## Visual language
-- Color: dark olive/warm neutral surfaces with electric-lime primary CTA.
-- Typography: Comfortaa is reserved for intentional brand/display text at supported 400-700 weights. Nunito is the default functional UI face. JetBrains Mono is reserved for room codes, handles, timestamps, and technical text.
+- Color: graphite neutral surfaces (`--vr-*` tokens in `apps/web/src/lib/shared/styles/theme.css`) with one accent per theme (Volt by default, Ice, Coral); components never use raw colours.
+- Typography: Onest is the UI face (400-700, self-hosted). JetBrains Mono is reserved for room codes, handles, timestamps, and technical text.
 - Spacing/layout rhythm: 4pt scale; common gaps 8/10/12/16px; action rails use 52px large height.
 - Shape/radius/elevation: 14px default interactive radius, pill only for deliberate pill affordances. Room avatars are squircle-shaped and use the neutral `--room-avatar-bg` fallback until an image is uploaded.
 - Motion: quick hover/focus transitions, no decorative motion required.
