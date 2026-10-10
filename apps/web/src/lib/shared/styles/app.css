@@ -93,7 +93,7 @@ body:not([data-screen='room']) .app-shell {
 }
 
 body:not([data-screen='room']) .topbar {
-  width: min(100%, 1020px);
+  width: min(100%, 1160px);
   margin-inline: auto;
 }
 
