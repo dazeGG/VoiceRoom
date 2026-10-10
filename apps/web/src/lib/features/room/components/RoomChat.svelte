@@ -2,7 +2,7 @@
   // The in-room rail: it owns the room-shell wiring (peer session, panel state,
   // participant menu) and renders the shared room chat panel for everything the
   // lobby preview also shows.
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { cleanDisplayName } from '$lib/shared/utils/text';
   import { showToast } from '../client/ui/toast';
   import { getRoomIdFromPath, getStoredPeerSession } from '../client/core/session';
@@ -10,6 +10,8 @@
   import { roomUi, closeChat, incrementUnreadChat, markChatRead, selectRoomPanel } from '../room-ui.svelte';
   import { roomSettingsUi } from '../room-settings.svelte';
   import { getParticipantCount } from '../participants-ui.svelte';
+  import { roomMemberTotal, ensureRoomMembership } from '$lib/entities/room/room-membership.svelte';
+  import { session } from '$lib/features/auth/session.svelte';
   import RoomChatPanel from './RoomChatPanel.svelte';
   import RoomMemberList from '$lib/entities/room/components/RoomMemberList.svelte';
 
@@ -24,6 +26,11 @@
     peerId = peerSession.peerId;
     sessionToken = peerSession.sessionToken;
     ready = true;
+  });
+
+  $effect(() => {
+    const id = roomId;
+    if (id && session.user?.id) untrack(() => ensureRoomMembership(id));
   });
 
   // Reflect chat state onto <body> so the room layout + dock can react in CSS.
@@ -67,7 +74,7 @@
     activeTab={roomUi.activePanel === 'participants' ? 'participants' : 'chat'}
     visible={roomUi.chatOpen}
     unread={roomUi.unreadChat}
-    participantCount={getParticipantCount()}
+    participantCount={roomMemberTotal(roomId, getParticipantCount())}
     chatTabId="room-panel-chat-tab"
     participantsTabId="room-panel-participants-tab"
     chatPanelId="room-panel-chat"

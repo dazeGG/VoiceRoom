@@ -13,6 +13,8 @@
   import RoomViewHeader from './RoomViewHeader.svelte';
   import LobbyStreamTile from './LobbyStreamTile.svelte';
   import RoomPreviewDock from './RoomPreviewDock.svelte';
+  import { roomMemberTotal, ensureRoomMembership } from '../../../../entities/room/room-membership.svelte';
+  import { session } from '$lib/features/auth/session.svelte';
   import RoomPanelHeader from '$lib/features/room/components/RoomPanelHeader.svelte';
   import { subscribeRoomPreview } from '../../../../entities/room/room-realtime';
   import { roomPresence } from '../../../../entities/room/room-presence.svelte';
@@ -53,6 +55,11 @@
   const screenPeers = $derived(peers.filter((peer) => peer.screen));
   const presentUserIds = $derived(new Set(peers.map((peer) => peer.accountUserId || '').filter(Boolean)));
   const tileCount = $derived(peers.length + screenPeers.length);
+  const memberTotal = $derived(roomMemberTotal(previewRoomId, peers.length));
+  $effect(() => {
+    const id = previewRoomId;
+    if (session.user?.id) untrack(() => ensureRoomMembership(id));
+  });
 
   function applySnapshot(peerList: RoomPeer[]): void {
     peers = peerList;
@@ -205,7 +212,7 @@
           {aroundMessageId}
           canModerate={room.relationship === 'owner'}
           {onToast}
-          participantCount={peers.length}
+          participantCount={memberTotal}
           onClose={() => (activePanel = null)}
           onSelectParticipants={() => selectPanel('participants')}
         />
@@ -215,7 +222,7 @@
         <RoomPanelHeader
           activeTab="participants"
           unread={0}
-          participantCount={peers.length}
+          participantCount={memberTotal}
           mobile={false}
           onSelectChat={() => selectPanel('chat')}
           onCollapse={() => (activePanel = null)}
@@ -242,7 +249,9 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 14px 20px;
+    padding: 0 20px;
+    box-sizing: border-box;
+    min-height: var(--vr-room-head-h);
     border-bottom: 1px solid var(--vr-line);
   }
 </style>

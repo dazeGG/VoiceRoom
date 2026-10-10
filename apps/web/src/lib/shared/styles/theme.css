@@ -3,6 +3,8 @@
    colours. graphite-volt is the default. */
 :root,
 [data-theme='graphite-volt'] {
+  /* One height for the room top bar and the side panel header, so their divider lines meet. */
+  --vr-room-head-h: 69px;
   color-scheme: dark;
 
   --vr-bg: oklch(15.5% 0.005 260);

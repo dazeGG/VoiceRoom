@@ -48,7 +48,9 @@ body[data-screen='room'] .room-chat-rail {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  padding: 12px 14px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  min-height: var(--vr-room-head-h);
   border-bottom: 1px solid var(--vr-line);
 }
 
