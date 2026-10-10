@@ -50,6 +50,6 @@
     transition: color 0.15s ease;
   }
   :where(.auth-eye):hover {
-    color: #b7b0a0;
+    color: var(--vr-text-2);
   }
 </style>

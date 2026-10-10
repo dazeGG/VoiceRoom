@@ -1,244 +1,318 @@
 <script lang="ts">
-  import { Check, ChevronDown, Copy, Download, ExternalLink, Monitor } from '@lucide/svelte';
-  import { Select } from '$lib/shared/ui';
-  import { iconMd, iconSm, iconXs } from '$lib/shared/ui/icons';
+  // The desktop app: what it adds and one row per build. The build for this
+  // computer is filled with the accent; a click downloads the latest release,
+  // or opens the releases page when it cannot be fetched.
+  import { onMount } from 'svelte';
+  import { Check, Clapperboard, Copy, Download, Gamepad2, Keyboard, Power } from '@lucide/svelte';
+  import Fa from 'svelte-fa';
+  import { faApple, faWindows } from '@fortawesome/free-brands-svg-icons';
+  import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
+  import { MascotIcon } from '$lib/shared/ui';
+  import { iconSm, iconXs } from '$lib/shared/ui/icons';
+  import { copyText } from '$lib/shared/utils/clipboard';
   import {
     DESKTOP_BUILDS,
     QUARANTINE_CMD,
-    RELEASES_URL,
-    type DesktopBuild,
+    detectDesktopBuildId,
+    formatDesktopReleaseMeta,
     type DesktopBuildId
   } from '../../../platform/desktop-builds';
+  import { startDesktopBuildDownload } from '../../../platform/desktop-download';
 
-  const BUILD_OPTIONS = DESKTOP_BUILDS.map((build) => ({ value: build.id, label: build.label }));
+  let { title = 'Voice Room Desktop' }: { title?: string } = $props();
 
-  let {
-    appOpen,
-    selectedBuildId = $bindable(),
-    selectedBuild,
-    releaseError,
-    releaseLoading,
-    appDownloadState,
-    cmdCopied,
-    appMeta,
-    appDownloadLabel,
-    onToggleApp,
-    onDownload,
-    onCopyCommand
-  } = $props<{
-    appOpen: boolean;
-    selectedBuildId: DesktopBuildId;
-    selectedBuild: DesktopBuild;
-    releaseError: boolean;
-    releaseLoading: boolean;
-    appDownloadState: 'idle' | 'loading' | 'done';
-    cmdCopied: boolean;
-    appMeta: string;
-    appDownloadLabel: string;
-    onToggleApp: () => void;
-    onDownload: () => void;
-    onCopyCommand: () => void;
-  }>();
+  const PERKS = [
+    { text: 'Оверлей поверх игры', icon: Gamepad2 },
+    { text: 'Стрим со звуком системы', icon: Clapperboard },
+    { text: 'Горячие клавиши в свёрнутом окне', icon: Keyboard },
+    { text: 'Автозапуск и работа из трея', icon: Power }
+  ];
+
+  let release = $state<DesktopRelease | null>(null);
+  let releaseLoading = $state(true);
+  let releaseError = $state(false);
+  let recommendedId = $state<DesktopBuildId>('mac-arm64');
+  let downloadingId = $state('');
+  let cmdCopied = $state(false);
+
+  onMount(() => {
+    recommendedId = detectDesktopBuildId();
+    void fetchDesktopRelease()
+      .then((value) => (release = value))
+      .catch(() => (releaseError = true))
+      .finally(() => (releaseLoading = false));
+  });
+
+  function download(buildId: DesktopBuildId): void {
+    if (downloadingId) return;
+    downloadingId = buildId;
+    startDesktopBuildDownload(release, buildId);
+    window.setTimeout(() => (downloadingId = ''), 1500);
+  }
+
+  async function copyCommand(): Promise<void> {
+    try {
+      await copyText(QUARANTINE_CMD);
+    } catch {
+      // Clipboard may be unavailable; still show feedback.
+    }
+    cmdCopied = true;
+    window.setTimeout(() => (cmdCopied = false), 2000);
+  }
 </script>
 
-<section class="home-app" data-open={appOpen} aria-label="Десктоп-приложение">
-  <button class="home-app-head" type="button" aria-expanded={appOpen} onclick={onToggleApp}>
-    <span class="home-app-head-main">
-      <Monitor {...iconMd} color="#9a9484" aria-hidden="true" />
-      <span>
-        <span class="home-app-title">Десктоп-приложение</span>
-        <span class="home-app-sub">Своё окно и горячие клавиши · macOS и Windows</span>
-      </span>
+<section class="desktop-card" id="download" aria-label="Десктоп-приложение">
+  <div class="desktop-card-head">
+    <span class="desktop-card-icon"><MascotIcon variant="blink" size={32} /></span>
+    <span class="desktop-card-titles">
+      <span class="desktop-card-title">{title}</span>
+      <span class="desktop-card-sub">Всё то же, что в браузере, и немного больше</span>
     </span>
-    <span class="home-app-chevron" aria-hidden="true">
-      <ChevronDown {...iconSm} aria-hidden="true" />
-    </span>
-  </button>
+  </div>
 
-  {#if appOpen}
-    <div class="home-app-body">
-      <div>
-        <div class="home-app-fieldlabel">Платформа</div>
-        <Select bind:value={selectedBuildId} options={BUILD_OPTIONS} label="Платформа" variant="home" />
-      </div>
+  <ul class="desktop-card-perks">
+    {#each PERKS as perk (perk.text)}
+      {@const Icon = perk.icon}
+      <li>
+        <span class="desktop-card-perk-icon"><Icon size={14} aria-hidden="true" /></span>
+        {perk.text}
+      </li>
+    {/each}
+  </ul>
 
-      {#if releaseError}
-        <a class="home-dl" href={RELEASES_URL} target="_blank" rel="noopener">
-          <ExternalLink {...iconSm} aria-hidden="true" />
-          Открыть страницу загрузок
-        </a>
-      {:else}
-        <button
-          class="home-dl"
-          type="button"
-          disabled={releaseLoading || appDownloadState === 'loading'}
-          onclick={onDownload}
-        >
-          {#if appDownloadState === 'loading' || releaseLoading}
-            <span class="home-spinner" aria-hidden="true"></span>
-          {:else if appDownloadState === 'done'}
-            <Check {...iconSm} color="#7ec99a" aria-hidden="true" />
-          {:else}
-            <Download {...iconSm} aria-hidden="true" />
-          {/if}
-          {appDownloadLabel}
-        </button>
-      {/if}
+  <div class="desktop-card-builds">
+    {#each DESKTOP_BUILDS as build (build.id)}
+      <button
+        class="desktop-build"
+        class:is-recommended={build.id === recommendedId}
+        type="button"
+        disabled={downloadingId === build.id}
+        onclick={() => download(build.id)}
+      >
+        <span class="desktop-build-icon">
+          <Fa icon={build.mac ? faApple : faWindows} size="sm" />
+        </span>
+        <span class="desktop-build-copy">
+          <span class="desktop-build-name">{build.label}</span>
+          <span class="desktop-build-meta"
+            >{formatDesktopReleaseMeta(build, release?.assets?.[build.id], release, releaseLoading, releaseError)}</span
+          >
+        </span>
+        {#if downloadingId === build.id}
+          <Check {...iconSm} aria-hidden="true" />
+        {:else}
+          <Download {...iconSm} aria-hidden="true" />
+        {/if}
+      </button>
+    {/each}
+  </div>
 
-      <p class="home-app-meta">{appMeta}</p>
-
-      {#if selectedBuild.mac}
-        <div>
-          <p class="home-cmd-label">Приложение не подписано. После установки выполните в Терминале:</p>
-          <div class="home-cmd">
-            <code>{QUARANTINE_CMD}</code>
-            <button class="home-cmd-copy" type="button" onclick={onCopyCommand}>
-              {#if cmdCopied}
-                <Check {...iconXs} color="#7ec99a" aria-hidden="true" />
-              {:else}
-                <Copy {...iconXs} aria-hidden="true" />
-              {/if}
-              {cmdCopied ? 'Скопировано' : 'Копировать'}
-            </button>
-          </div>
-        </div>
-      {:else}
-        <p class="home-app-note">
-          Приложение не подписано. Если SmartScreen покажет «Приложение не проверено» — нажмите «Подробнее» → «Выполнить
-          в любом случае».
-        </p>
-      {/if}
+  <div class="desktop-card-note">
+    <p>
+      Приложение не подписано. В macOS после установки выполните в Терминале, в Windows — «Подробнее» → «Выполнить в
+      любом случае».
+    </p>
+    <div class="desktop-card-cmd">
+      <code>{QUARANTINE_CMD}</code>
+      <button type="button" onclick={copyCommand}>
+        {#if cmdCopied}<Check {...iconXs} aria-hidden="true" />{:else}<Copy {...iconXs} aria-hidden="true" />{/if}
+        {cmdCopied ? 'Скопировано' : 'Копировать'}
+      </button>
     </div>
-  {/if}
+  </div>
 </section>
 
 <style>
-  :global(.home-app-head) {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    width: 100%;
-    padding: 0;
-    border: none;
-    background: none;
-    color: inherit;
-    text-align: left;
-    cursor: pointer;
-  }
-  :global(.home-app-head-main) {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-  :global(.home-app-title) {
-    display: block;
-    color: var(--vr-text-2);
-    font-size: 14px;
-    font-weight: 600;
-    letter-spacing: -0.01em;
-  }
-  :global(.home-app-sub) {
-    display: block;
-    margin-top: 2px;
-    color: var(--vr-text-3);
-    font-size: 12.5px;
-  }
-  :global(.home-app-body) {
-    margin-top: 18px;
+  .desktop-card {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-  }
-  :global(.home-app-fieldlabel) {
-    margin-bottom: 8px;
-    font-family: var(--font-ui);
-    font-size: 11px;
-    letter-spacing: 0.14em;
-    color: var(--vr-text-3);
-    text-transform: uppercase;
-  }
-  :global(.home-dl) {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 9px;
+    gap: 20px;
     width: 100%;
+    max-width: 480px;
+    justify-self: center;
+    padding: 24px;
     border: 1px solid var(--vr-line-strong);
-    border-radius: 12px;
-    padding: 14px;
-    background: var(--vr-surface-3);
-    color: var(--vr-text);
-    font-family: var(--font-ui);
-    font-size: 14px;
-    font-weight: 600;
-    text-decoration: none;
-    cursor: pointer;
-    transition: background 0.15s ease;
+    border-radius: 22px;
+    background: var(--vr-surface);
+    box-shadow: var(--vr-shadow-modal);
   }
-  :where(.home-dl):disabled {
-    cursor: default;
-    opacity: 0.7;
-  }
-  :where(.home-dl):hover {
-    background: var(--vr-surface-3-hover);
-  }
-  :global(.home-app-meta) {
-    margin: 0;
-    font-family: var(--font-mono);
-    font-size: 11.5px;
-    letter-spacing: 0.02em;
-    color: var(--vr-text-3);
-  }
-  :global(.home-app-note) {
-    margin: 2px 0 0;
-    color: var(--vr-text-3);
-    font-size: 12px;
-    line-height: 1.55;
-  }
-  :global(.home-cmd-label) {
-    margin: 0 0 8px;
-    color: var(--vr-text-3);
-    font-size: 12px;
-    line-height: 1.5;
-  }
-  :global(.home-cmd) {
+
+  .desktop-card-head {
     display: flex;
-    align-items: stretch;
-    gap: 8px;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .desktop-card-icon {
+    display: grid;
+    width: 56px;
+    height: 56px;
+    flex: none;
+    place-items: center;
     border: 1px solid var(--vr-line);
-    border-radius: 11px;
-    padding: 10px 11px;
+    border-radius: 16px;
     background: var(--vr-bg);
   }
-  :where(.home-cmd) code {
-    flex: 1;
+
+  .desktop-card-titles {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .desktop-card-title {
+    color: var(--vr-text);
+    font-size: 19px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+
+  .desktop-card-sub {
+    color: var(--vr-text-2);
+    font-size: 13px;
+  }
+
+  .desktop-card-perks {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .desktop-card-perks li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--vr-text);
+    font-size: 13.5px;
+  }
+
+  .desktop-card-perk-icon {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    flex: none;
+    place-items: center;
+    border-radius: 8px;
+    background: var(--vr-surface-2);
+    color: var(--vr-accent);
+  }
+
+  .desktop-card-builds {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-top: 4px;
+  }
+
+  .desktop-build {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--vr-line);
+    border-radius: 13px;
+    background: var(--vr-surface-2);
+    color: var(--vr-text);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition:
+      background 0.15s ease,
+      border-color 0.15s ease;
+  }
+
+  .desktop-build:hover:not(:disabled) {
+    border-color: var(--vr-line-strong);
+    background: var(--vr-surface-3);
+  }
+
+  .desktop-build.is-recommended {
+    border-color: transparent;
+    background: var(--vr-accent);
+    color: var(--vr-accent-ink);
+  }
+
+  .desktop-build.is-recommended:hover:not(:disabled) {
+    background: var(--vr-accent-hover);
+  }
+
+  .desktop-build-icon {
+    display: grid;
+    width: 34px;
+    height: 34px;
+    flex: none;
+    place-items: center;
+    border-radius: 10px;
+    background: var(--vr-bg);
+  }
+
+  .desktop-build.is-recommended .desktop-build-icon {
+    background: color-mix(in oklch, var(--vr-accent-ink), transparent 88%);
+  }
+
+  .desktop-build-copy {
+    display: flex;
     min-width: 0;
-    align-self: center;
+    flex: 1;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .desktop-build-name {
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .desktop-build-meta {
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    opacity: 0.7;
+  }
+
+  .desktop-card-note {
+    display: grid;
+    gap: 8px;
+    color: var(--vr-text-3);
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .desktop-card-note p {
+    margin: 0;
+  }
+
+  .desktop-card-cmd {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 10px;
+    background: var(--vr-bg);
+  }
+
+  .desktop-card-cmd code {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    color: var(--vr-text-2);
     font-family: var(--font-mono);
     font-size: 11px;
-    line-height: 1.5;
-    color: var(--vr-text-2);
-    word-break: break-all;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  :global(.home-cmd-copy) {
-    flex: none;
-    align-self: center;
+
+  .desktop-card-cmd button {
     display: inline-flex;
+    flex: none;
     align-items: center;
-    gap: 5px;
-    border: 1px solid var(--vr-line-strong);
-    border-radius: 8px;
-    padding: 6px 10px;
-    background: var(--vr-surface-3);
-    color: var(--vr-text-2);
-    font-family: var(--font-ui);
-    font-size: 11px;
-    font-weight: 600;
+    gap: 4px;
+    border: 0;
+    background: transparent;
+    color: var(--vr-accent);
+    font: 500 12px var(--font-ui);
     cursor: pointer;
-    transition: background 0.15s ease;
-  }
-  :where(.home-cmd-copy):hover {
-    background: var(--vr-surface-3-hover);
   }
 </style>

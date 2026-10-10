@@ -37,10 +37,12 @@ function renderSettings(tab: SettingsTab = 'profile') {
   return within(screen.getByRole('navigation', { name: 'Разделы настроек' }));
 }
 
-test('a browser tab has no hotkeys, app section or microphone mode', async () => {
+test('a browser tab has no hotkeys or microphone mode, and its app section offers the desktop builds', async () => {
   const nav = renderSettings();
   expect(nav.queryByRole('button', { name: 'Горячие клавиши' })).toBeNull();
-  expect(nav.queryByRole('button', { name: 'Приложение' })).toBeNull();
+  await userEvent.click(nav.getByRole('button', { name: 'Приложение' }));
+  expect(screen.getByText('macOS · Apple Silicon')).toBeTruthy();
+  expect(screen.getByText('Windows · 64-bit')).toBeTruthy();
 
   await userEvent.click(nav.getByRole('button', { name: 'Звук' }));
   expect(nav.getByRole('button', { name: 'Звук' }).getAttribute('aria-current')).toBe('page');

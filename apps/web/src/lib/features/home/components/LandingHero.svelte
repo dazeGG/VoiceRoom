@@ -1,5 +1,6 @@
 <script lang="ts">
   import { ArrowRight } from '@lucide/svelte';
+  import { Button } from '$lib/shared/ui';
   import { START_FEATURES } from '$lib/features/shared-content/start-features';
   import { iconMd } from '$lib/shared/ui/icons';
   import LandingFeatureGrid from './LandingFeatureGrid.svelte';
@@ -27,28 +28,29 @@
 </script>
 
 <section class="landing-hero" aria-labelledby="landingTitle">
-  <p class="landing-kicker">Комната по ссылке за секунду</p>
-  <h1 class="landing-title" id="landingTitle">Голосовая комната без лишних дверей</h1>
+  <p class="landing-kicker"><span class="landing-kicker-dot"></span>Комната по ссылке за секунду</p>
+  <h1 class="landing-title" id="landingTitle">Голосовые комнаты для своих</h1>
   <p class="landing-lead">
     Нажмите — и вы уже в комнате. Код и ссылка появятся сразу. Аккаунт нужен, только чтобы сохранять комнаты.
   </p>
 
   <div class="landing-cta-row">
-    <button class="landing-primary-button" type="button" disabled={creatingTemp} onclick={onCreateTemp}>
+    <Button variant="primary" size="xl" disabled={creatingTemp} onclick={onCreateTemp}>
       {#if creatingTemp}
         <span class="home-spinner" aria-hidden="true"></span>
       {/if}
-      Создать временную комнату
+      Создать комнату
       <ArrowRight {...iconMd} aria-hidden="true" />
-    </button>
+    </Button>
 
-    <form class="lv-join" onsubmit={submitJoin}>
+    <form class="landing-join" onsubmit={submitJoin}>
       <!-- A search field, so iCloud Passwords does not offer logins here. -->
       <input
-        class="lv-join-input"
+        class="landing-join-input"
         type="search"
         name="room-search"
         placeholder="Код комнаты"
+        aria-label="Код комнаты"
         maxlength="120"
         autocapitalize="off"
         autocomplete="off"
@@ -59,7 +61,7 @@
         bind:value={roomCode}
         onkeydown={onRoomCodeKeydown}
       />
-      <button class="lv-join-btn" type="submit" disabled={joining}>Войти</button>
+      <button class="landing-join-btn" type="submit" disabled={joining}>Войти</button>
     </form>
   </div>
 
@@ -69,40 +71,98 @@
 </section>
 
 <style>
-  :global(.landing-hero) {
+  .landing-hero {
     display: flex;
     flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+  }
+  .landing-kicker {
+    display: flex;
     align-items: center;
-    text-align: center;
-  }
-  :global(.landing-kicker) {
-    margin: 0 0 20px;
-    font-family: var(--font-ui);
-    font-size: 12px;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
+    gap: 8px;
+    margin: 0 0 16px;
     color: var(--vr-accent);
+    font-size: 13.5px;
+    font-weight: 500;
   }
-  :global(.landing-title) {
+  .landing-kicker-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--vr-accent);
+    box-shadow: 0 0 0 3px var(--vr-accent-soft);
+  }
+  .landing-title {
     margin: 0;
-    max-width: 16ch;
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: clamp(2.5rem, 5.5vw, 4.125rem);
-    line-height: 1;
+    color: var(--vr-text);
+    font-size: clamp(34px, 4.6vw, 58px);
+    font-weight: 600;
+    line-height: 1.04;
     letter-spacing: -0.035em;
-    color: var(--vr-text, var(--vr-text));
+    text-wrap: balance;
   }
-  :global(.landing-lead) {
-    margin: 22px 0 0;
-    max-width: 540px;
-    font-size: 17.5px;
+  .landing-lead {
+    max-width: 500px;
+    margin: 18px 0 0;
+    color: var(--vr-text-2);
+    font-size: 17px;
     line-height: 1.55;
-    color: var(--vr-text-2, var(--vr-text-2));
+    text-wrap: pretty;
   }
-  :global(.landing-disclaimer) {
-    margin: 16px 0 0;
-    color: var(--vr-text-3, var(--vr-text-3));
+  .landing-cta-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 28px;
+  }
+  .landing-join {
+    display: flex;
+    align-items: stretch;
+    height: 50px;
+    overflow: hidden;
+    border: 1px solid var(--vr-line-strong);
+    border-radius: 13px;
+    background: var(--vr-surface-2);
+  }
+  .landing-join:focus-within {
+    border-color: var(--vr-accent-line);
+  }
+  .landing-join-input {
+    appearance: none;
+    width: 170px;
+    height: 100%;
+    padding: 0 16px;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--vr-text);
+    font-family: var(--font-mono);
+    font-size: 14px;
+  }
+  .landing-join-input::placeholder {
+    color: var(--vr-text-3);
+  }
+  .landing-join-input::-webkit-search-cancel-button,
+  .landing-join-input::-webkit-search-decoration {
+    appearance: none;
+  }
+  .landing-join-btn {
+    padding: 0 18px;
+    border: 0;
+    border-left: 1px solid var(--vr-line-strong);
+    background: transparent;
+    color: var(--vr-text);
+    font: 500 14.5px var(--font-ui);
+    cursor: pointer;
+  }
+  .landing-join-btn:hover:not(:disabled) {
+    background: var(--vr-hover);
+  }
+  .landing-disclaimer {
+    margin: 14px 0 0;
+    color: var(--vr-text-3);
     font-size: 13px;
   }
 </style>

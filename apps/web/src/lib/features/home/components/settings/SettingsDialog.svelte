@@ -14,6 +14,7 @@
   import { readSettingsSupport } from '../../model/settings-support';
   import type { ToastOptions } from '../../model/toasts.svelte';
   import AccountSecuritySettings from '../AccountSecuritySettings.svelte';
+  import DesktopAppCard from '../DesktopAppCard.svelte';
   import AppearanceSettings from './AppearanceSettings.svelte';
   import AppSettings from './AppSettings.svelte';
   import HotkeySettings from './HotkeySettings.svelte';
@@ -45,7 +46,8 @@
   } = $props();
 
   const support = readSettingsSupport();
-  const appTab = support.desktopApp && (support.autostart || support.overlay);
+  // On the web the tab offers the desktop builds; in the app, its own settings.
+  const appTab = support.desktopApp ? support.autostart || support.overlay : true;
   // The dialog remounts for another account, so the first user is the one.
   const profile = new ProfileDraft(untrack(() => user));
   // A dialog opened from the security tab owns focus and Escape while it is up.
@@ -139,7 +141,11 @@
         {:else if tab === 'hotkeys' && support.desktopApp}
           <HotkeySettings globalHotkeys={support.globalHotkeys} {onToast} />
         {:else if tab === 'app' && appTab}
-          <AppSettings {support} {onToast} />
+          {#if support.desktopApp}
+            <AppSettings {support} {onToast} />
+          {:else}
+            <DesktopAppCard title="Voice Room для компьютера" />
+          {/if}
         {:else}
           <NotificationSettings {support} users={notificationUsers} rooms={notificationRooms} {onToast} />
         {/if}

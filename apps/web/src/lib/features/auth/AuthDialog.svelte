@@ -5,7 +5,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
-  import { X } from '@lucide/svelte';
+  import { CircleAlert, X } from '@lucide/svelte';
   import { normalizeRecoveryCode } from '@voice-room/shared/account-security';
   import { login, recoverAccount, register, restoreAccount, type AuthUser } from '$lib/api/auth';
   import { ApiError } from '$lib/api/client';
@@ -193,6 +193,7 @@
     </button>
 
     <div class="auth-dialog-heading">
+      <span class="auth-dialog-mark" aria-hidden="true"></span>
       <p class="auth-dialog-kicker">Ваши комнаты всегда рядом</p>
       <h1 class="auth-title" id="authDialogTitle">{copy.title}</h1>
       <p class="auth-subtitle">{copy.subtitle}</p>
@@ -200,7 +201,7 @@
 
     <form class="auth-form" onsubmit={handleSubmit}>
       {#if error}
-        <p class="auth-error" role="alert">{error}</p>
+        <p class="auth-error" role="alert"><CircleAlert {...iconMd} aria-hidden="true" />{error}</p>
       {/if}
 
       {#if isLogin && pendingDeletionAt !== null}
@@ -271,6 +272,9 @@
           placeholder={isLogin ? 'Ваш пароль' : 'Минимум 8 символов'}
           bind:value={password}
         />
+        {#if isLogin}
+          <button type="button" class="auth-forgot" onclick={() => switchMode('recover')}>Забыли пароль?</button>
+        {/if}
       </div>
 
       {#if !isLogin}
@@ -300,10 +304,6 @@
         Нет аккаунта?
         <button type="button" class="auth-link" onclick={() => switchMode('register')}>Зарегистрироваться</button>
       </p>
-      <p class="auth-foot auth-foot--secondary">
-        Забыли пароль?
-        <button type="button" class="auth-link" onclick={() => switchMode('recover')}>Восстановить по коду</button>
-      </p>
     {:else}
       <p class="auth-foot">
         {isRecover ? 'Вспомнили пароль?' : 'Уже есть аккаунт?'}
@@ -321,18 +321,37 @@
     margin: 0 0 8px;
     color: var(--vr-accent);
     font-family: var(--font-ui);
-    font-size: 10px;
-    font-weight: 800;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
+    font-size: 12.5px;
+    font-weight: 500;
+  }
+  :global(.auth-dialog-mark) {
+    display: block;
+    width: 30px;
+    height: 30px;
+    margin-bottom: 8px;
+    background: var(--vr-accent);
+    mask: url('/voiceroom-mascot.svg') center / contain no-repeat;
+  }
+  :global(.auth-forgot) {
+    align-self: flex-end;
+    margin-top: 8px;
+    border: 0;
+    background: none;
+    padding: 0;
+    color: var(--vr-text-2);
+    font: 500 13px var(--font-ui);
+    cursor: pointer;
+  }
+  :where(.auth-forgot):hover {
+    color: var(--vr-text);
   }
   :global(.auth-title) {
     margin: 0;
     color: var(--vr-text);
     font-family: var(--font-ui);
-    font-size: 23px;
-    font-weight: 800;
-    letter-spacing: -0.02em;
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.025em;
   }
   :global(.auth-subtitle) {
     margin: 8px 0 0;
@@ -352,17 +371,13 @@
   }
   :global(.auth-label) {
     margin-bottom: 8px;
-    color: var(--vr-text-3);
+    color: var(--vr-text-2);
     font-family: var(--font-ui);
-    font-size: 11px;
+    font-size: 13px;
     font-weight: 500;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
   }
   :global(.auth-label-soft) {
-    color: #5a5547;
-    text-transform: none;
-    letter-spacing: 0.04em;
+    color: var(--vr-text-3);
   }
   :global(.auth-submit) {
     margin-top: 6px;
@@ -373,12 +388,13 @@
     gap: 9px;
     border: none;
     border-radius: 12px;
-    padding: 14px 0;
+    height: 48px;
+    padding: 0;
     background: var(--vr-accent);
     color: var(--vr-accent-ink);
     font-family: var(--font-ui);
     font-size: 15px;
-    font-weight: 700;
+    font-weight: 600;
     cursor: pointer;
     transition: background 0.15s ease;
   }
@@ -394,10 +410,10 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    border: 1px solid rgba(214, 109, 92, 0.4);
+    border: 0;
     border-radius: 11px;
     padding: 10px 13px;
-    background: color-mix(in oklch, var(--vr-danger) 12%, transparent);
+    background: var(--vr-danger-soft);
     color: var(--vr-danger);
     font-size: 13px;
     line-height: 1.45;
@@ -406,7 +422,7 @@
     display: grid;
     gap: 10px;
     padding: 12px 14px;
-    border: 1px solid color-mix(in oklch, var(--vr-away), transparent 55%);
+    border: 0;
     border-radius: 11px;
     background: color-mix(in oklch, var(--vr-away), transparent 88%);
   }

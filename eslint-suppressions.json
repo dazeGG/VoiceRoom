@@ -715,7 +715,7 @@
       "count": 1
     },
     "svelte/no-navigation-without-resolve": {
-      "count": 4
+      "count": 3
     }
   },
   "apps/web/src/lib/features/home/LobbyPage.svelte": {
@@ -743,16 +743,6 @@
       "count": 1
     },
     "@typescript-eslint/no-unsafe-return": {
-      "count": 1
-    }
-  },
-  "apps/web/src/lib/features/home/components/DesktopAppCard.svelte": {
-    "svelte/no-navigation-without-resolve": {
-      "count": 1
-    }
-  },
-  "apps/web/src/lib/features/home/components/LandingFeatureGrid.svelte": {
-    "svelte/require-each-key": {
       "count": 1
     }
   },

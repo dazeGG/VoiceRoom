@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { ArrowRight } from '@lucide/svelte';
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { createRoom } from '$lib/api/rooms';
-  import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
   import { loadSession, session } from '$lib/features/auth/session.svelte';
   import { signOut } from './model/sign-out';
   import Topbar from '$lib/shared/components/Topbar.svelte';
@@ -17,18 +17,8 @@
   import LandingHero from './components/LandingHero.svelte';
   import AuthDialog, { type AuthMode } from '$lib/features/auth/AuthDialog.svelte';
   import LobbyPage from './LobbyPage.svelte';
-  import { copyText } from '$lib/shared/utils/clipboard';
-  import { triggerDesktopDownload } from '../../platform/desktop-download';
   import { dismissToast, pushToast, toastState, type ToastOptions } from './model/toasts.svelte';
   import { syncPushNotificationState } from './model/push-notifications.svelte';
-  import {
-    DESKTOP_BUILDS,
-    QUARANTINE_CMD,
-    desktopDownloadLabel,
-    detectDesktopBuildId,
-    formatDesktopReleaseMeta,
-    type DesktopBuildId
-  } from '../../platform/desktop-builds';
 
   let { initialAuthMode = null }: { initialAuthMode?: AuthMode | null } = $props();
 
@@ -38,18 +28,6 @@
   let loggingOut = $state(false);
   let authLoadError = $state(false);
 
-  let selectedBuildId = $state<DesktopBuildId>('mac-arm64');
-  let appOpen = $state(false);
-  let appDownloadState = $state<'idle' | 'loading' | 'done'>('idle');
-  let cmdCopied = $state(false);
-  let copyResetTimer = 0;
-  let downloadTimer = 0;
-  let downloadResetTimer = 0;
-
-  let release = $state<DesktopRelease | null>(null);
-  let releaseLoading = $state(false);
-  let releaseError = $state(false);
-
   const user = $derived(session.user);
   const showLobby = $derived(session.loaded && Boolean(user));
   const authMode = $derived.by<AuthMode | null>(() => {
@@ -58,28 +36,17 @@
     return initialAuthMode;
   });
 
-  const selectedBuild = $derived(DESKTOP_BUILDS.find((build) => build.id === selectedBuildId) ?? DESKTOP_BUILDS[0]);
-  const selectedAsset = $derived(release?.assets[selectedBuildId] ?? null);
-  const appMeta = $derived(
-    formatDesktopReleaseMeta(selectedBuild, selectedAsset, release, releaseLoading, releaseError)
-  );
-  const downloadLabel = $derived(desktopDownloadLabel(appDownloadState));
-
   $effect(() => {
     void syncPushNotificationState(user?.id ?? null);
   });
 
   onMount(() => {
     document.body.dataset.screen = 'start';
-    selectedBuildId = detectDesktopBuildId();
     void loadSession().catch(() => {
       authLoadError = true;
     });
     return () => {
       delete document.body.dataset.screen;
-      window.clearTimeout(copyResetTimer);
-      window.clearTimeout(downloadTimer);
-      window.clearTimeout(downloadResetTimer);
     };
   });
 
@@ -139,60 +106,6 @@
     window.location.href = `/r/${encodeURIComponent(roomId)}`;
   }
 
-  async function ensureRelease(): Promise<void> {
-    if (release || releaseLoading) return;
-    releaseLoading = true;
-    releaseError = false;
-    try {
-      release = await fetchDesktopRelease();
-    } catch {
-      releaseError = true;
-    } finally {
-      releaseLoading = false;
-    }
-  }
-
-  function handleAppDownload(): void {
-    if (appDownloadState === 'loading' || releaseLoading) return;
-    const asset = selectedAsset;
-    if (!asset) {
-      void ensureRelease();
-      return;
-    }
-
-    appDownloadState = 'loading';
-    triggerDesktopDownload(asset.url);
-
-    window.clearTimeout(downloadTimer);
-    downloadTimer = window.setTimeout(() => {
-      appDownloadState = 'done';
-    }, 1200);
-
-    window.clearTimeout(downloadResetTimer);
-    downloadResetTimer = window.setTimeout(() => {
-      appDownloadState = 'idle';
-    }, 4800);
-  }
-
-  async function copyQuarantineCommand(): Promise<void> {
-    try {
-      await copyText(QUARANTINE_CMD);
-    } catch {
-      // Clipboard may be unavailable; still show feedback.
-    }
-
-    cmdCopied = true;
-    window.clearTimeout(copyResetTimer);
-    copyResetTimer = window.setTimeout(() => {
-      cmdCopied = false;
-    }, 2000);
-  }
-
-  function toggleApp(): void {
-    appOpen = !appOpen;
-    if (appOpen) void ensureRelease();
-  }
-
   function showToast(message: string, options?: ToastOptions): void {
     pushToast(message, options);
   }
@@ -239,14 +152,13 @@
   <LobbyPage {user} {loggingOut} onLogout={handleLogout} onToast={showToast} />
 {:else}
   <div class="app-shell">
-    <Topbar label="Новая голосовая комната">
-      <nav class="landing-header-auth" aria-label="Аккаунт">
-        <a class="landing-header-auth-link landing-header-auth-link--login" href="/?auth=login">Войти</a>
-        <a class="landing-header-auth-link landing-header-auth-link--register" href="/?auth=register">
-          Регистрация <span aria-hidden="true">→</span>
-        </a>
-      </nav>
-    </Topbar>
+    <div class="landing-container">
+      <Topbar label="Новая голосовая комната">
+        <nav class="landing-header-auth" aria-label="Аккаунт">
+          <a class="landing-header-login" href="/?auth=login">Войти <ArrowRight size={15} aria-hidden="true" /></a>
+        </nav>
+      </Topbar>
+    </div>
 
     <main class="landing-layout" id="startScreen" aria-label="Стартовый экран">
       <LandingHero
@@ -257,23 +169,7 @@
         onJoin={handleJoinRoom}
         onRoomCodeKeydown={handleRoomCodeKeydown}
       />
-
-      <div class="landing-app-section" hidden>
-        <DesktopAppCard
-          bind:selectedBuildId
-          {appOpen}
-          {selectedBuild}
-          {releaseError}
-          {releaseLoading}
-          {appDownloadState}
-          {cmdCopied}
-          {appMeta}
-          appDownloadLabel={downloadLabel}
-          onToggleApp={toggleApp}
-          onDownload={handleAppDownload}
-          onCopyCommand={copyQuarantineCommand}
-        />
-      </div>
+      <DesktopAppCard />
     </main>
   </div>
 {/if}
@@ -308,16 +204,36 @@
     margin-inline: auto;
     animation-delay: 0.24s;
   }
-  :global(.landing-layout) {
-    width: min(100%, 1120px);
+  :global(.landing-container) {
+    width: min(100%, 1160px);
     margin-inline: auto;
-    padding-top: clamp(20px, 5vh, 56px);
-    display: flex;
-    flex-direction: column;
-    gap: 48px;
   }
-  :global(.landing-app-section) {
-    width: min(100%, 460px);
+  :global(body:not([data-screen='room']) .landing-container .topbar) {
+    width: 100%;
+  }
+  :global(.landing-header-login) {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 38px;
+    padding: 0 16px;
+    border: 1px solid var(--vr-line-strong);
+    border-radius: 10px;
+    color: var(--vr-text);
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+  }
+  :global(.landing-header-login:hover) {
+    background: var(--vr-hover);
+  }
+  :global(.landing-layout) {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+    align-items: center;
+    gap: 40px;
+    width: min(100%, 1160px);
     margin-inline: auto;
+    padding: 24px 0 40px;
   }
 </style>
