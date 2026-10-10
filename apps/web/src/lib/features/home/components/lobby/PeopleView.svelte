@@ -114,7 +114,12 @@
         onkeydown={onKeydown}
       />
     </label>
-    <Button variant="primary" disabled={sending || !query.trim()} onclick={sendByLogin}>Отправить заявку</Button>
+    <Button
+      variant={query.trim() ? 'primary' : 'ghost'}
+      size="lg"
+      disabled={sending || !query.trim()}
+      onclick={sendByLogin}>Отправить заявку</Button
+    >
   </div>
   <div class="lr-add-hint">
     Ваш логин <code>@{user.login}</code>
@@ -128,12 +133,14 @@
   <div class="lr-eyebrow people-section-label people-section-label--requests">Заявки</div>
   <div class="lr-grid-2">
     <div>
-      <div class="lr-eyebrow people-column-label">Входящие — {incoming.length}</div>
+      <div class="lr-eyebrow people-column-label">
+        Входящие <span class="people-count">{incoming.length}</span>
+      </div>
       {#if incoming.length === 0}
         <p class="lr-empty">Новых заявок нет.</p>
       {:else}
         {#each incoming as request (request.id)}
-          <div class="lr-req-card">
+          <div class="lr-req-card lr-req-card--incoming">
             <Avatar
               name={friendName(request.user)}
               src={request.user.avatarUrl}
@@ -172,7 +179,9 @@
     </div>
 
     <div>
-      <div class="lr-eyebrow people-column-label">Исходящие — {outgoing.length}</div>
+      <div class="lr-eyebrow people-column-label">
+        Исходящие <span class="people-count">{outgoing.length}</span>
+      </div>
       {#if outgoing.length === 0}
         <p class="lr-empty">Вы пока никому не отправляли заявки.</p>
       {:else}
@@ -191,7 +200,8 @@
               <div class="lr-req-pending"><span class="lr-req-pending-dot"></span>заявка отправлена · ждём ответа</div>
             </div>
             <Button
-              variant="ghost"
+              variant="outline"
+              class="compact"
               disabled={busy[request.id]}
               onclick={() => run(request.id, () => lobby.cancelRequest(request.id), 'Заявка отменена')}>Отменить</Button
             >
@@ -205,10 +215,16 @@
 <style>
   :global(.lr-eyebrow) {
     font-family: var(--font-ui);
-    font-size: 11px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--vr-text-2);
+  }
+  :global(.people-count) {
+    margin-left: 6px;
     color: var(--vr-text-3);
+    font-family: var(--font-mono);
+    font-size: 11.5px;
+    font-weight: 400;
   }
   :global(.lr-section-link) {
     border: none;
@@ -236,20 +252,23 @@
     align-items: center;
     gap: 12px;
     padding: 12px;
-    border: 1px solid var(--vr-line);
-    border-radius: var(--radius-lg);
-    background: var(--vr-surface);
+    border: 1px solid var(--vr-line-strong);
+    border-radius: 14px;
+    background: var(--vr-surface-2);
     margin-bottom: 10px;
   }
+  :global(.lr-req-card--incoming) {
+    border-color: var(--vr-accent-line);
+  }
   :global(.lr-req-name) {
-    font-size: 14px;
-    font-weight: 700;
+    font-size: 14.5px;
+    font-weight: 600;
     color: var(--vr-text);
   }
   :global(.lr-req-handle) {
     font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--vr-text-2);
+    font-size: 11.5px;
+    color: var(--vr-text-3);
     margin-top: 2px;
   }
   :global(.lr-req-meta) {
@@ -313,7 +332,7 @@
     border-radius: 6px;
   }
   :where(.lr-add-copy):hover {
-    background: color-mix(in oklch, var(--vr-accent), transparent 88%);
+    background: var(--vr-accent-soft);
   }
   :global(.people-back) {
     margin-bottom: 18px;
