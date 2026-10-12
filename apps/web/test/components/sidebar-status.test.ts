@@ -78,3 +78,12 @@ test('a refused change keeps the old status and says so', async () => {
   await vi.waitFor(() => expect(onToast).toHaveBeenCalledWith('Не удалось изменить статус'));
   expect(preferences.presenceStatus).toBe('online');
 });
+
+test('the status list is drawn outside the sidebar so its edge cannot clip it', async () => {
+  stubFetch({});
+  renderSidebar();
+
+  await userEvent.click(screen.getByRole('button', { name: /Ада/ }));
+  const panel = await screen.findByRole('listbox', { name: 'Статус пользователя' });
+  expect(panel.parentElement).toBe(document.body);
+});

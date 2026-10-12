@@ -46,6 +46,7 @@
   bind:open
   placement="top-end"
   flip
+  floating
   role="menu"
   ariaLabel="Скачать приложение"
   rootClass="sidebar-download"

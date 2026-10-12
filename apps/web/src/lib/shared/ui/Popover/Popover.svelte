@@ -56,6 +56,12 @@
     }
   });
 
+  // A floating panel stays hidden until placed, and a consumer may open it by
+  // setting `open` itself rather than through the trigger's toggle.
+  $effect(() => {
+    if (open && floating && !floatingPositioned) repositionFloating();
+  });
+
   $effect(() => {
     if (!open || role !== 'menu') return;
     void focusMenuAfterOpen();
