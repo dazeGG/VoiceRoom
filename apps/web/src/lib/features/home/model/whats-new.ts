@@ -6,7 +6,7 @@ export interface WhatsNewSlide {
   alt: string;
   title: string;
   text: string;
-  action?: 'security';
+  action?: 'appearance';
 }
 
 // Two to four headline changes, a line of text each; everything else belongs
@@ -15,29 +15,23 @@ export interface WhatsNewSlide {
 // WHATS_NEW_VERSION in the shared contract together with these slides.
 export const WHATS_NEW_SLIDES: readonly WhatsNewSlide[] = [
   {
-    image: '/whats-new/2.6.0/emoji.webp',
-    alt: 'Переписка с эмодзи; над полем сообщения видно, что собеседник выбирает эмодзи',
-    title: 'Эмодзи везде одинаковые',
-    text: 'Кнопка эмодзи в поле сообщения, и на любом компьютере они выглядят так же.'
+    image: '/whats-new/2.8.0/look.webp',
+    alt: 'Лобби Voice Room в новом графитовом оформлении: друзья слева, комната в эфире и список комнат',
+    title: 'Новый внешний вид',
+    text: 'Графитовая палитра, новый шрифт и заново нарисованные экраны: лобби, звонок, сообщения и настройки.'
   },
   {
-    image: '/whats-new/2.6.0/links.webp',
-    alt: 'Сообщение со ссылкой на игру в Steam и карточкой с обложкой, названием и описанием',
-    title: 'Превью ссылок',
-    text: 'Под сообщением со ссылкой сразу видно, что за страница.'
+    image: '/whats-new/2.8.0/camera.webp',
+    alt: 'Звонок в комнате: двое участников с включённой камерой и третий с аватаром, внизу панель управления с кнопкой камеры',
+    title: 'Камера в звонке',
+    text: 'Включайте камеру кнопкой на панели звонка, а устройство выбирайте рядом, в меню.'
   },
   {
-    image: '/whats-new/2.6.0/security.webp',
-    alt: 'Окно «Новый вход в аккаунт» с устройством, городом и кнопками «Это не я» и «Это я»',
-    title: 'Аккаунт под защитой',
-    text: 'О входе с нового устройства спросим сразу, а в настройках видны все сеансы.'
-  },
-  {
-    image: '/whats-new/2.6.0/recovery.webp',
-    alt: 'Окно «Сохраните коды восстановления» с десятью одноразовыми кодами и кнопками «Скопировать» и «Скачать .txt»',
-    title: 'Коды восстановления',
-    text: 'Забыли пароль? Войдите по одноразовому коду, создайте их в «Безопасности».',
-    action: 'security'
+    image: '/whats-new/2.8.0/accent.webp',
+    alt: 'Настройки, вкладка «Внешний вид»: три карточки темы Volt, Ice и Coral, выбрана Coral',
+    title: 'Свой акцент',
+    text: 'Выберите цвет акцента, Volt, Ice или Coral, и он сразу применится во всём приложении.',
+    action: 'appearance'
   }
 ];
 

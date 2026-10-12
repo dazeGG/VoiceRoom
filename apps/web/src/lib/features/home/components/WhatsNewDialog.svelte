@@ -7,11 +7,11 @@
 
   let {
     paused = false,
-    onOpenSecurity,
+    onOpenAppearance,
     onOpenChange
   } = $props<{
     paused?: boolean;
-    onOpenSecurity: () => void;
+    onOpenAppearance: () => void;
     /** Lets the lobby hold back other prompts while the story is on screen. */
     onOpenChange?: (open: boolean) => void;
   }>();
@@ -81,10 +81,10 @@
   });
 
   // Recorded as seen however the dialog is closed, so each release is shown once.
-  function finish(openSecurity: boolean): void {
+  function finish(openAppearance: boolean): void {
     due = false;
     void markWhatsNewSeen().catch(() => {});
-    if (openSecurity) onOpenSecurity();
+    if (openAppearance) onOpenAppearance();
   }
 
   function step(delta: number): void {
@@ -198,7 +198,7 @@
           <button class="stories-quiet" type="button" onclick={() => step(-1)}>Назад</button>
         {/if}
         <span class="stories-spacer"></span>
-        {#if last && slide.action === 'security'}
+        {#if last && slide.action === 'appearance'}
           <Button variant="ghost" type="button" onclick={() => finish(true)}>Настроить</Button>
         {/if}
         {#if last}

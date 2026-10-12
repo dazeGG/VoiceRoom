@@ -48,7 +48,7 @@
 />
 <WhatsNewDialog
   paused={prompts.loginAlertOpen}
-  onOpenSecurity={() => prompts.openSecuritySettings()}
+  onOpenAppearance={() => prompts.openAppearanceSettings()}
   onOpenChange={(open: boolean) => (prompts.whatsNewOpen = open)}
 />
 <AppBenefitsModal open={prompts.appPromptOpen} onClose={prompts.closeAppPrompt} />
