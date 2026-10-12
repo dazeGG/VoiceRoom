@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import type { Attachment } from 'svelte/attachments';
   import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
   import { onMount, tick, untrack } from 'svelte';
   import {
@@ -465,6 +466,22 @@
     chatBody.scrollTop = chatBody.scrollHeight;
   }
 
+  // Images, link previews and emoji that finish loading (or a resized window)
+  // change the height after a message rendered: a reader at the newest message
+  // stays on it. The observer runs after layout and before paint, so the
+  // correction never shows as a jump. It watches the chat body and every day
+  // section, since the sections sit straight in the scrolling body.
+  const heightObserver =
+    typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(() => {
+          if (chatPinnedToBottom) scrollToBottom();
+        });
+  const keepsNewestInView: Attachment<HTMLElement> = (element) => {
+    heightObserver?.observe(element);
+    return () => heightObserver?.unobserve(element);
+  };
+
   // Attachments and emoji fonts resize rows after the first paint, so a single
   // scroll lands short of the newest message. Re-pin across the next frames
   // until the height stops moving.
@@ -595,6 +612,7 @@
       role="tabpanel"
       aria-labelledby={chatTabId}
       bind:this={chatBody}
+      {@attach keepsNewestInView}
       onscroll={onHistoryScroll}
     >
       {#if timeline.loading}
@@ -611,7 +629,7 @@
           </button>
         {/if}
         {#each days as day (day.key)}
-          <section class="chat-day-section" aria-label={day.label}>
+          <section class="chat-day-section" aria-label={day.label} {@attach keepsNewestInView}>
             <div class="chat-day-divider" role="separator" aria-label={day.label}>
               <span>{day.label}</span>
             </div>

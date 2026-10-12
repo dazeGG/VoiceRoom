@@ -257,3 +257,42 @@ test('pins are asked for in a room the account keeps, and never by a guest', asy
   renderPanel();
   await vi.waitFor(() => expect(keeper.calls.some((call) => call.url.endsWith('/pins'))).toBe(true));
 });
+
+test('a reader at the newest message stays on it when loading artwork grows the chat', async () => {
+  const observed: Element[] = [];
+  let onResize = () => {};
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback: () => void) {
+        onResize = callback;
+      }
+      observe(element: Element) {
+        observed.push(element);
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  stubRoom();
+  renderPanel();
+  await screen.findByText('от Ады');
+  const body = document.querySelector<HTMLElement>('.chat-rail-body')!;
+  expect(observed).toContain(body);
+  expect(observed.some((element) => element.classList.contains('chat-day-section'))).toBe(true);
+
+  let height = 1000;
+  Object.defineProperty(body, 'scrollHeight', { configurable: true, get: () => height });
+  Object.defineProperty(body, 'clientHeight', { configurable: true, get: () => 400 });
+  body.scrollTop = 600;
+  body.dispatchEvent(new Event('scroll'));
+  height = 1300;
+  onResize();
+  expect(body.scrollTop).toBe(1300);
+
+  body.scrollTop = 100;
+  body.dispatchEvent(new Event('scroll'));
+  height = 1600;
+  onResize();
+  expect(body.scrollTop).toBe(100);
+});
