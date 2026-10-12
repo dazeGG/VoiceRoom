@@ -12,6 +12,7 @@ import type {
 } from '@voice-room/shared/contracts/messages';
 import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
 import type { ReplyTarget } from '$lib/shared/chat/reply-store.svelte';
+import type { ReactionSummary } from '@voice-room/shared/reactions';
 import { api } from './client';
 
 // A room invitation embedded in a message: rendered as an actionable card in
@@ -39,6 +40,8 @@ export interface DirectMessage {
   linkPreview?: LinkPreview;
   replyTo?: { messageId: string };
   replyPreview?: ReplyTarget;
+  /** The reactions a history page carried; realtime keeps the reaction store current after that. */
+  reactions?: ReactionSummary[];
 }
 
 export function directMessageFromView(message: DirectMessageView): DirectMessage {
@@ -114,7 +117,8 @@ function directMessageFromHistory(message: DirectHistoryMessage): DirectMessage 
     attachments: message.attachments,
     linkPreview: normalizeLinkPreview(message.linkPreview ?? metadata.linkPreview) ?? undefined,
     replyTo: message.replyTo ?? undefined,
-    replyPreview: message.replyPreview ?? undefined
+    replyPreview: message.replyPreview ?? undefined,
+    reactions: message.reactions
   };
 }
 

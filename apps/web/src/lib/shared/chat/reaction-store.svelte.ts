@@ -1,3 +1,4 @@
+import { untrack } from 'svelte';
 import type { ReactionSummary, Reactor } from '@voice-room/shared/reactions';
 import {
   fetchReactionSummaries,
@@ -51,6 +52,8 @@ export class ReactionStore {
   // load() from an effect, and reactive loading state read there would re-run
   // that effect after every answer and fetch again forever.
   private requested: Record<string, true> = {};
+  // The page snapshot each message's reactions were last taken from. Plain, as above.
+  private snapshots: Record<string, string> = {};
 
   private conversationKey(): string {
     return this.conversation ? `${this.conversation.type}:${this.conversation.id}` : '';
@@ -70,6 +73,7 @@ export class ReactionStore {
     this.deletedMessages = {};
     this.loadingMessages = {};
     this.requested = {};
+    this.snapshots = {};
     this.invalidateReactors();
   }
 
@@ -117,6 +121,27 @@ export class ReactionStore {
       items.push(next);
     }
     this.summaries = { ...this.summaries, [messageId]: items };
+  }
+
+  /**
+   * Shows a message's reactions: those its history page carried, or fetched
+   * once when it came without them (a live message, a guest's recent window).
+   */
+  show(message: { id: string; reactions?: ReactionSummary[] }): void {
+    if (!message.reactions) {
+      void this.load(message.id);
+      return;
+    }
+    // Only a snapshot not taken yet replaces what is shown: a message keeps
+    // its page's copy while realtime events move the store past it.
+    const signature = message.reactions
+      .map((item) => `${item.emoji}:${item.count}:${item.reactedByMe}:${item.revision}`)
+      .join('|');
+    if (this.snapshots[message.id] === signature) return;
+    this.snapshots[message.id] = signature;
+    this.requested[message.id] = true;
+    const summaries = message.reactions;
+    untrack(() => this.replace(message.id, summaries));
   }
 
   /** Fetches a message's reactions once; realtime events keep them current after that. */
@@ -253,6 +278,7 @@ export class ReactionStore {
     this.deletedMessages = {};
     this.loadingMessages = {};
     this.requested = {};
+    this.snapshots = {};
     this.invalidateReactors();
   }
 }

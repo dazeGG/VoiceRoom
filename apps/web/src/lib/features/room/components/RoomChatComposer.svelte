@@ -17,7 +17,6 @@
   import ComposerEmojiPicker from '$lib/shared/chat/ComposerEmojiPicker.svelte';
   import EmojiComposer from '$lib/shared/chat/EmojiComposer.svelte';
   import MentionAutocomplete from '$lib/shared/chat/MentionAutocomplete.svelte';
-  import type { SelectedMention } from '$lib/shared/chat/mention-composer.svelte';
   import ReplyTargetBar from '$lib/shared/chat/ReplyTargetBar.svelte';
   import TypingIndicator from '$lib/shared/chat/TypingIndicator.svelte';
   import { createTypingNotifier } from '$lib/shared/chat/typing.svelte';
@@ -29,7 +28,6 @@
     media,
     typingLabel,
     replyTarget = $bindable(null),
-    sending = $bindable(false),
     send,
     onEditLast,
     onJump,
@@ -41,9 +39,8 @@
     /** Mentions are offered and sent as structured content. */
     typingLabel: string;
     replyTarget?: ChatMessage | null;
-    sending?: boolean;
-    /** Posts the message; answers whether it went out. */
-    send: (message: OutgoingRoomMessage) => Promise<boolean>;
+    /** Puts the message on its way; the panel shows it until the server has it. */
+    send: (message: OutgoingRoomMessage) => void;
     /** ArrowUp in an empty field; answers whether a message went into editing. */
     onEditLast: () => boolean;
     onJump: (messageId: string) => void;
@@ -100,64 +97,32 @@
     draft.schedule();
   }
 
-  // Messages go out one at a time, in the order they were sent: the field
-  // empties at once and stays writable, so the next one can be typed and sent
-  // while the previous is still on its way.
-  let queue: Promise<void> = Promise.resolve();
-  let inFlight = 0;
-
+  // The field empties at once and stays writable: the message joins the
+  // panel's outbox, which shows it in the chat until the server has it, so the
+  // next one can be written and sent while the previous is still on its way.
   async function submit(event?: SubmitEvent): Promise<void> {
     event?.preventDefault();
     if (!roomId) return;
     // Do not collapse whitespace; newlines are intentional.
     const text = draft.text.trim();
-    // Attachments belong to the message already on its way (their controls are
-    // locked meanwhile), so a queued message carries text only.
-    const withMedia = !sending && Boolean(media?.canSend);
+    const withMedia = Boolean(media?.canSend);
     if (!text && !withMedia) return;
-    if (!sending && media?.drafts.length && !media.canSend) return;
+    // Images still uploading would be left behind.
+    if (media?.drafts.length && !media.canSend) return;
 
-    const outgoing = {
+    send({
       text,
       content: mentions.selected.length ? mentions.toContent(text) : (contentFromPlainText(text) ?? undefined),
       attachmentIds: withMedia ? (media?.readyIds ?? []) : [],
       replyTo: replyTarget ? { messageId: replyTarget.id } : undefined
-    };
-    const sentMentions = [...mentions.selected];
-    const sentReplyTarget = replyTarget;
+    });
     draft.clear();
     replyTarget = null;
-    inFlight += 1;
-    sending = true;
-    const turn = queue.then(async () => {
-      let sent = false;
-      try {
-        sent = await send(outgoing);
-      } finally {
-        if (!sent) restoreUnsent(text, sentMentions, sentReplyTarget);
-      }
-      if (!sent) return;
-      if (withMedia) media?.clearBound();
-      typingNotifier.reset();
-    });
-    queue = turn.catch(() => {});
-    try {
-      await turn;
-    } finally {
-      inFlight -= 1;
-      sending = inFlight > 0;
-    }
+    // The uploaded images now belong to the message; the field starts afresh.
+    if (withMedia) media?.clearBound();
+    typingNotifier.reset();
     await tick();
     focus();
-  }
-
-  // Anything typed meanwhile stays after the text that did not go out.
-  function restoreUnsent(text: string, sentMentions: SelectedMention[], target: ChatMessage | null): void {
-    const typedMeanwhile = draft.text.trim();
-    draft.text = typedMeanwhile ? `${text}\n${draft.text}` : text;
-    mentions.restore([...sentMentions, ...mentions.selected]);
-    replyTarget ??= target;
-    draft.schedule();
   }
 
   function onKeydown(event: KeyboardEvent): void {
@@ -216,11 +181,10 @@
         oncancel={() => (replyTarget = null)}
       />
     {/if}
-    {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
+    {#if media}<AttachmentComposer store={media} />{/if}
     <div class="attachment-compose-controls">
       {#if media}<AttachmentUploadControl
           store={media}
-          disabled={sending}
           onerror={(message: string) => onToast(message, { variant: 'error' })}
         />{/if}
       <EmojiComposer
@@ -239,7 +203,6 @@
       />
       <ComposerEmojiPicker
         userId={session.user?.id ?? ''}
-        disabled={sending}
         onpick={(emoji: string) => input?.insertText(emoji)}
         onbrowse={() => typingNotifier.notify('emoji')}
       />
@@ -248,7 +211,7 @@
         type="submit"
         aria-label="Отправить"
         title="Отправить"
-        disabled={sending || !(draft.text.trim() || media?.canSend)}
+        disabled={!(draft.text.trim() || media?.canSend)}
       >
         <ArrowUp {...iconSm} aria-hidden="true" />
       </button>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import type { Attachment } from 'svelte/attachments';
   import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
   import { onMount, tick, untrack } from 'svelte';
   import {
@@ -37,7 +38,8 @@
   import { applyRoomPinsEvent, isMessagePinned, loadRoomPins, resetRoomPins, togglePin } from '../pins.svelte';
   import { getAttachmentComposeStore, type AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
   import { AttachmentDrop } from '$lib/shared/chat/attachment-drop.svelte';
-  import { SendAttempt } from '$lib/shared/chat/send-attempt';
+  import { Outbox } from '$lib/shared/chat/outbox.svelte';
+  import OutgoingMessages from '$lib/shared/chat/OutgoingMessages.svelte';
   import AttachmentDropOverlay from '$lib/shared/chat/AttachmentDropOverlay.svelte';
   import { createTypingTracker, formatTypingLabel, typingActivityOf } from '$lib/shared/chat/typing.svelte';
   import { getRoomMembership } from '$lib/entities/room/room-membership.svelte';
@@ -111,7 +113,6 @@
   } = $props();
 
   const timeline = new RoomChatTimeline();
-  let sending = $state(false);
   let editingMessageId = $state('');
   let chatBody = $state<HTMLDivElement | null>(null);
   let composer = $state<{ focus(): void } | null>(null);
@@ -128,7 +129,6 @@
   let menuX = $state(0);
   let menuY = $state(0);
   let quickReactions = $state<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
-  const sendAttempt = new SendAttempt();
   const chatVisible = $derived(visible && activeTab === 'chat');
 
   function toast(message: string, options?: { variant?: 'error' }): void {
@@ -146,7 +146,6 @@
 
   const drop = new AttachmentDrop({
     media: () => media,
-    busy: () => sending,
     onError: (message) => toast(message, { variant: 'error' })
   });
 
@@ -177,7 +176,7 @@
   const days = $derived(buildChatDays(timeline.messages, isOwnMessage));
 
   $effect(() => {
-    for (const message of timeline.messages) void reactions.load(message.id);
+    for (const message of timeline.messages) reactions.show(message);
   });
 
   function isOwnMessage(message: ChatMessage): boolean {
@@ -377,8 +376,12 @@
         })
       : null;
     const anchorMessageId = aroundMessageId || new URL(window.location.href).searchParams.get('around') || undefined;
-    if (paged) await timeline.open(roomId, anchorMessageId);
-    else await refreshMessages(signal);
+    if (paged) {
+      const opening = timeline.open(roomId, anchorMessageId);
+      // A room visited before shows its kept messages at once: park on the newest.
+      if (!anchorMessageId && chatVisible && timeline.messages.length > 0) void settleAtBottom();
+      await opening;
+    } else await refreshMessages(signal);
     // Pins, like paged history, are for a room the account keeps: a guest and
     // an account that was just refused that history would only be refused again.
     if (timeline.paged && !signal.aborted) void loadRoomPins(roomId);
@@ -437,29 +440,43 @@
     }
   }
 
-  async function send(outgoing: OutgoingRoomMessage): Promise<boolean> {
-    timeline.error = '';
-    try {
-      // Resolved per send: the room rail reads a guest name that the name dialog
-      // can persist after this component mounted.
-      const payload = { name: resolveDisplayName(), ...peerCredentials(), ...outgoing };
-      const message = await postRoomChat(roomId, { ...payload, idempotencyKey: sendAttempt.keyFor(payload) });
-      if (timeline.add(message) && chatVisible) {
-        onRead?.();
-        void settleAtBottom();
-      }
-      sendAttempt.reset();
-      return true;
-    } catch (err) {
-      timeline.error = err instanceof Error ? err.message : 'Не удалось отправить сообщение';
-      return false;
+  // Messages on their way: shown at the foot of the chat until the server has
+  // them, then they join it like any other.
+  const outbox = new Outbox<OutgoingRoomMessage, ChatMessage>({
+    // Resolved per send: the room rail reads a guest name that the name dialog
+    // can persist after this component mounted.
+    deliver: (outgoing, idempotencyKey) =>
+      postRoomChat(roomId, { name: resolveDisplayName(), ...peerCredentials(), ...outgoing, idempotencyKey }),
+    onSent: (message) => {
+      if (timeline.add(message) && chatVisible) onRead?.();
     }
+  });
+
+  function send(outgoing: OutgoingRoomMessage): void {
+    outbox.enqueue(outgoing);
+    if (chatVisible) void settleAtBottom();
   }
 
   function scrollToBottom(): void {
     if (!chatBody) return;
     chatBody.scrollTop = chatBody.scrollHeight;
   }
+
+  // Images, link previews and emoji that finish loading (or a resized window)
+  // change the height after a message rendered: a reader at the newest message
+  // stays on it. The observer runs after layout and before paint, so the
+  // correction never shows as a jump. It watches the chat body and every day
+  // section, since the sections sit straight in the scrolling body.
+  const heightObserver =
+    typeof ResizeObserver === 'undefined'
+      ? null
+      : new ResizeObserver(() => {
+          if (chatPinnedToBottom) scrollToBottom();
+        });
+  const keepsNewestInView: Attachment<HTMLElement> = (element) => {
+    heightObserver?.observe(element);
+    return () => heightObserver?.unobserve(element);
+  };
 
   // Attachments and emoji fonts resize rows after the first paint, so a single
   // scroll lands short of the newest message. Re-pin across the next frames
@@ -591,6 +608,7 @@
       role="tabpanel"
       aria-labelledby={chatTabId}
       bind:this={chatBody}
+      {@attach keepsNewestInView}
       onscroll={onHistoryScroll}
     >
       {#if timeline.loading}
@@ -607,7 +625,7 @@
           </button>
         {/if}
         {#each days as day (day.key)}
-          <section class="chat-day-section" aria-label={day.label}>
+          <section class="chat-day-section" aria-label={day.label} {@attach keepsNewestInView}>
             <div class="chat-day-divider" role="separator" aria-label={day.label}>
               <span>{day.label}</span>
             </div>
@@ -631,9 +649,16 @@
             {/each}
           </section>
         {/each}
-      {:else}
+      {:else if !outbox.items.length}
         <p class="chat-rail-note">Пока пусто. Напишите первое сообщение.</p>
       {/if}
+      <OutgoingMessages
+        items={outbox.items}
+        textOf={(outgoing: OutgoingRoomMessage) => outgoing.text}
+        attachmentsOf={(outgoing: OutgoingRoomMessage) => outgoing.attachmentIds?.length ?? 0}
+        onRetry={(localId: string) => outbox.retry(localId)}
+        onDiscard={(localId: string) => outbox.discard(localId)}
+      />
     </div>
 
     {#if timeline.error}
@@ -643,7 +668,6 @@
     <RoomChatComposer
       bind:this={composer}
       bind:replyTarget
-      bind:sending
       {roomId}
       {draft}
       {media}

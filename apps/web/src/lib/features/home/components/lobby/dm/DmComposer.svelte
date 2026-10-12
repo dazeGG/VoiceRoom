@@ -11,7 +11,6 @@
   import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
   import { imageFilesFromClipboard, type AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
   import { loadChatDraft, saveChatDraft } from '$lib/shared/chat/chat-drafts';
-  import { SendAttempt } from '$lib/shared/chat/send-attempt';
   import ComposerEmojiPicker from '$lib/shared/chat/ComposerEmojiPicker.svelte';
   import type { ComposerHandle } from '$lib/shared/chat/composer-handle';
   import EmojiComposer from '$lib/shared/chat/EmojiComposer.svelte';
@@ -27,7 +26,6 @@
     media,
     typingLabel,
     replyTarget = $bindable(null),
-    sending = $bindable(false),
     onEditLast,
     onJump
   }: {
@@ -38,7 +36,6 @@
     /** Who is typing on the other side, if anyone. */
     typingLabel: string;
     replyTarget?: DirectMessage | null;
-    sending?: boolean;
     /** ArrowUp in an empty field; answers whether a message went into editing. */
     onEditLast: () => boolean;
     onJump: (messageId: string) => void;
@@ -52,7 +49,6 @@
   const conversation = { type: 'dm' as const, id: untrack(() => peerId) };
   let draft = $state(untrack(() => loadChatDraft(selfId, conversation)?.text ?? ''));
   let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
-  const sendAttempt = new SendAttempt();
 
   const typingNotifier = createTypingNotifier((activity) => {
     getAppRealtime().send('dm.typing', { userId: conversation.id, activity });
@@ -88,29 +84,25 @@
     typingNotifier.reset();
   });
 
+  // The field empties at once and stays writable: the message joins the
+  // thread's outbox, which shows it until the server has it, so the next one
+  // can be written and sent while the previous is still on its way.
   async function submit(): Promise<void> {
     const text = draft.trim();
-    if ((!text && !media?.canSend) || sending) return;
+    if (!text && !media?.canSend) return;
+    // Images still uploading would be left behind.
     if (media?.drafts.length && !media.canSend) return;
-    sending = true;
-    try {
-      const attachmentIds = media?.readyIds ?? [];
-      const replyTo = replyTarget ? { messageId: replyTarget.id } : undefined;
-      await lobby.sendMessage(text, attachmentIds, replyTo, sendAttempt.keyFor({ text, attachmentIds, replyTo }));
-    } catch {
-      // Keep the draft intact so the message can be retried.
-      return;
-    } finally {
-      sending = false;
-    }
+    lobby.outboxFor(conversation.id).enqueue({
+      text,
+      attachmentIds: media?.readyIds ?? [],
+      replyTo: replyTarget ? { messageId: replyTarget.id } : undefined
+    });
     typingNotifier.reset();
-    // Stored at once: the thread may have been left while the message was on
-    // its way, and then this field is gone but its saved text is not.
     draft = '';
     persistDraft();
+    // The uploaded images now belong to the message; the field starts afresh.
     media?.clearBound();
     replyTarget = null;
-    sendAttempt.reset();
     await tick();
     focus();
   }
@@ -161,11 +153,10 @@
         oncancel={() => (replyTarget = null)}
       />
     {/if}
-    {#if media}<AttachmentComposer store={media} disabled={sending} />{/if}
+    {#if media}<AttachmentComposer store={media} />{/if}
     <div class="attachment-compose-controls">
       {#if media}<AttachmentUploadControl
           store={media}
-          disabled={sending}
           onerror={(message: string) => pushToast(message, { variant: 'error' })}
         />{/if}
       <EmojiComposer
@@ -175,20 +166,14 @@
         bind:value={draft}
         onkeydown={onKeydown}
         oninput={onInput}
-        disabled={sending}
       />
-      <ComposerEmojiPicker
-        userId={selfId}
-        disabled={sending}
-        onpick={insertEmoji}
-        onbrowse={() => typingNotifier.notify('emoji')}
-      />
+      <ComposerEmojiPicker userId={selfId} onpick={insertEmoji} onbrowse={() => typingNotifier.notify('emoji')} />
       <button
         class="lobby-dm-send"
         type="submit"
         aria-label="Отправить"
         title="Отправить"
-        disabled={sending || !(draft.trim() || media?.canSend)}
+        disabled={!(draft.trim() || media?.canSend)}
         onclick={() => void submit()}
       >
         <ArrowUp {...iconSm} aria-hidden="true" />

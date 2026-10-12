@@ -41,6 +41,10 @@ function projection({ attachments = true, replies = true } = {}) {
               async listForMessage(context, id) {
                 calls.push(['list', context, id]);
                 return [ATTACHMENT, { ...ATTACHMENT, id: 'a2', state: 'processing', processedBytes: 0 }];
+              },
+              async listForMessages(context, ids) {
+                calls.push(['list-many', context, ids]);
+                return new Map([[ids[0] as string, [ATTACHMENT]]]);
               }
             }
           : null,
@@ -90,6 +94,18 @@ test('projection adds attachments and the reply quote', async () => {
   assert.deepEqual((await offline.projectMedia('room', { id: 'm' })).attachments, []);
   const replying = { id: 'm', replyTo: { messageId: 'x' } };
   assert.equal(await offline.projectReply('room', replying), replying);
+});
+
+test('a page of messages gets its attachments in one lookup', async () => {
+  const { calls, projection: p } = projection();
+  const page = await p.projectMediaMany('room', [{ id: 'm1' }, { id: 'm2' }]);
+  assert.deepEqual(calls, [['list-many', 'room', ['m1', 'm2']]]);
+  assert.deepEqual(
+    page.map((message) => message.attachments.map((a) => a.id)),
+    [['a1'], []]
+  );
+  const offline = projection({ attachments: false }).projection;
+  assert.deepEqual(await offline.projectMediaMany('dm', [{ id: 'm' }]), [{ id: 'm', attachments: [] }]);
 });
 
 // --- relay ------------------------------------------------------------------------

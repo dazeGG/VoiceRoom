@@ -130,7 +130,7 @@ test('only the author may edit; the owner of the room may also delete', async ()
   expect(moderated.some((label) => label.includes('Удалить'))).toBe(true);
 });
 
-test('a sent message posts as the viewing peer and empties the composer; a failed one keeps the text', async () => {
+test('a failed message stays in the chat with its error and goes out again, as the same message, on retry', async () => {
   const sent = roomMessage('m4', 'me', 'привет всем');
   let fail = true;
   const { calls } = stubRoom({
@@ -142,18 +142,30 @@ test('a sent message posts as the viewing peer and empties the composer; a faile
 
   await userEvent.click(composer());
   await userEvent.keyboard('привет всем{Enter}');
-  expect(await screen.findByText(/Сервер недоступен|Не удалось/)).toBeTruthy();
-  expect(composer().textContent).toBe('привет всем');
+  expect(composer().textContent).toBe('');
+  const failed = await screen.findByRole('alert');
+  expect(failed.textContent).toMatch(/Не отправлено/);
+  expect(screen.getByText('привет всем', { selector: '.outgoing-message__text' })).toBeTruthy();
 
   fail = false;
-  await userEvent.keyboard('{Enter}');
+  await userEvent.click(within(failed).getByRole('button', { name: 'Повторить' }));
   expect(await screen.findByText('привет всем', { selector: '.chat-msg-content *, .chat-msg-content' })).toBeTruthy();
-  expect(composer().textContent).toBe('');
+  await vi.waitFor(() => expect(document.querySelector('.outgoing-message')).toBeNull());
   const posts = calls.filter((call) => call.method === 'POST' && call.url === '/api/rooms/room/chat');
   expect(posts[1]?.body).toMatchObject({ name: 'Я', peerId: 'me', sessionToken: 'token', text: 'привет всем' });
   expect((posts[0]?.body as { idempotencyKey: string }).idempotencyKey).toBe(
     (posts[1]?.body as { idempotencyKey: string }).idempotencyKey
   );
+});
+
+test('a failed message can be dropped from the chat', async () => {
+  stubRoom({ 'POST /api/rooms/room/chat': { status: 500, body: { ok: false, error: 'Сервер недоступен' } } });
+  renderPanel();
+  await screen.findByText('от Ады');
+  await userEvent.click(composer());
+  await userEvent.keyboard('не нужно{Enter}');
+  await userEvent.click(within(await screen.findByRole('alert')).getByRole('button', { name: 'Удалить' }));
+  expect(screen.queryByText('не нужно')).toBeNull();
 });
 
 test("a guest's unsent text survives a look at the participants tab", async () => {
@@ -169,7 +181,7 @@ test("a guest's unsent text survives a look at the participants tab", async () =
   expect(composer().textContent).toBe('не отправлено');
 });
 
-test('messages sent while one is on its way go out in order; a failed one comes back first', async () => {
+test('messages sent while one is on its way show dimmed and go out in order; a failed one does not hold up the rest', async () => {
   let fail = false;
   const { calls } = stubRoom({
     'POST /api/rooms/room/chat': (init) => {
@@ -200,20 +212,32 @@ test('messages sent while one is on its way go out in order; a failed one comes 
   expect(composer().textContent).toBe('');
   await userEvent.keyboard('второе{Enter}');
   expect(composer().textContent).toBe('');
+  expect([...document.querySelectorAll('.outgoing-message__text')].map((element) => element.textContent)).toEqual([
+    'первое',
+    'второе'
+  ]);
+  expect(screen.getAllByText('Отправляется…')).toHaveLength(2);
   await releaseNext();
   await releaseNext();
   expect(await screen.findByText('второе', { selector: '.chat-msg-content *, .chat-msg-content' })).toBeTruthy();
-  const texts = calls
-    .filter((call) => call.method === 'POST' && call.url === '/api/rooms/room/chat')
-    .map((call) => (call.body as { text: string }).text);
-  expect(texts).toEqual(['первое', 'второе']);
+  await vi.waitFor(() => expect(document.querySelector('.outgoing-message')).toBeNull());
+  const texts = () =>
+    calls
+      .filter((call) => call.method === 'POST' && call.url === '/api/rooms/room/chat')
+      .map((call) => (call.body as { text: string }).text);
+  expect(texts()).toEqual(['первое', 'второе']);
 
   fail = true;
   await userEvent.keyboard('третье{Enter}');
-  await userEvent.keyboard('четвёртое');
+  await userEvent.keyboard('четвёртое{Enter}');
   await releaseNext();
-  expect(await screen.findByText(/Сервер недоступен|Не удалось/)).toBeTruthy();
-  await vi.waitFor(() => expect(composer().textContent).toMatch(/^третье\s*четвёртое$/));
+  expect(await screen.findByRole('alert')).toBeTruthy();
+  fail = false;
+  await releaseNext();
+  expect(await screen.findByText('четвёртое', { selector: '.chat-msg-content *, .chat-msg-content' })).toBeTruthy();
+  expect(texts()).toEqual(['первое', 'второе', 'третье', 'четвёртое']);
+  expect(screen.getByText('третье', { selector: '.outgoing-message__text' })).toBeTruthy();
+  expect(composer().textContent).toBe('');
 });
 
 test('an account refused paged history reads the recent window, like a guest, instead of an error', async () => {
@@ -256,4 +280,43 @@ test('pins are asked for in a room the account keeps, and never by a guest', asy
   });
   renderPanel();
   await vi.waitFor(() => expect(keeper.calls.some((call) => call.url.endsWith('/pins'))).toBe(true));
+});
+
+test('a reader at the newest message stays on it when loading artwork grows the chat', async () => {
+  const observed: Element[] = [];
+  let onResize = () => {};
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback: () => void) {
+        onResize = callback;
+      }
+      observe(element: Element) {
+        observed.push(element);
+      }
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  stubRoom();
+  renderPanel();
+  await screen.findByText('от Ады');
+  const body = document.querySelector<HTMLElement>('.chat-rail-body')!;
+  expect(observed).toContain(body);
+  expect(observed.some((element) => element.classList.contains('chat-day-section'))).toBe(true);
+
+  let height = 1000;
+  Object.defineProperty(body, 'scrollHeight', { configurable: true, get: () => height });
+  Object.defineProperty(body, 'clientHeight', { configurable: true, get: () => 400 });
+  body.scrollTop = 600;
+  body.dispatchEvent(new Event('scroll'));
+  height = 1300;
+  onResize();
+  expect(body.scrollTop).toBe(1300);
+
+  body.scrollTop = 100;
+  body.dispatchEvent(new Event('scroll'));
+  height = 1600;
+  onResize();
+  expect(body.scrollTop).toBe(100);
 });

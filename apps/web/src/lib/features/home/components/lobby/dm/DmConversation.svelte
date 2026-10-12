@@ -30,6 +30,8 @@
   import { pushToast } from '../../../model/toasts.svelte';
   import DmComposer from './DmComposer.svelte';
   import DmInviteCard from './DmInviteCard.svelte';
+  import OutgoingMessages from '$lib/shared/chat/OutgoingMessages.svelte';
+  import type { OutgoingDirectMessage } from '$lib/features/home/model/lobby.svelte';
 
   let {
     peerId,
@@ -37,8 +39,7 @@
     peer,
     presence,
     media,
-    quickReactions,
-    sending = $bindable(false)
+    quickReactions
   }: {
     peerId: string;
     self: AuthUser;
@@ -46,10 +47,11 @@
     presence: PresenceStatus;
     media: AttachmentComposeStore | null;
     quickReactions: string[];
-    sending?: boolean;
   } = $props();
 
   const lobby = useLobby();
+  // The view is mounted per peer, like the reaction store below.
+  const outbox = lobby.outboxFor(untrack(() => peerId));
   const selfId = $derived(self.id);
   const selfName = $derived(self.displayName?.trim() || self.login);
   const peerName = $derived(peer ? friendName(peer) : '');
@@ -111,7 +113,7 @@
 
   $effect(() => {
     for (const message of lobby.thread.messages) {
-      if (!message.invite) void reactions.load(message.id);
+      if (!message.invite) reactions.show(message);
     }
   });
 
@@ -128,59 +130,36 @@
     if (threadPinnedToBottom) void tick().then(scrollToBottom);
   });
 
-  // A thread is not ready the moment its messages arrive: images and emoji are
-  // still resolving, and every one that lands changes the height, so a scroll
-  // to the bottom taken too early stops short. The placeholder therefore stays
-  // up while the thread renders behind it, and comes down once the artwork has
-  // settled and the view is actually at the newest message.
-  const SETTLE_TIMEOUT_MS = 2000;
-  let threadSettling = $state(false);
-  let settleToken = 0;
-
-  function pendingArtwork(root: HTMLElement): Promise<unknown> {
-    const images = [...root.querySelectorAll('img')].filter((image) => !image.complete);
-    if (!images.length) return Promise.resolve();
-    return Promise.all(
-      images.map(
-        (image) =>
-          new Promise<void>((resolve) => {
-            const done = (): void => {
-              image.removeEventListener('load', done);
-              image.removeEventListener('error', done);
-              resolve();
-            };
-            image.addEventListener('load', done);
-            image.addEventListener('error', done);
-          })
-      )
-    );
-  }
-
-  async function settleThread(token: number): Promise<void> {
-    await tick();
-    if (token !== settleToken) return;
-    if (scrollEl) {
-      // A slow or dead image must not hold the thread hostage.
-      await Promise.race([pendingArtwork(scrollEl), new Promise((resolve) => setTimeout(resolve, SETTLE_TIMEOUT_MS))]);
-    }
-    if (token !== settleToken) return;
-    await tick();
-    if (token !== settleToken) return;
-    scrollToBottom();
-    threadSettling = false;
-  }
-
+  // The thread shows as soon as its messages arrive; images and emoji keep
+  // loading after that. Attachments, link previews and emoji hold their size
+  // before they load, and anything that still changes the height (a font, an
+  // image without known dimensions, the window) is caught here: a reader at
+  // the newest message stays on it. The observer runs after layout and before
+  // paint, so the correction never shows as a jump.
+  let threadEl = $state<HTMLDivElement | null>(null);
   $effect(() => {
-    if (lobby.thread.loading) {
-      settleToken += 1;
-      threadSettling = true;
-      return;
-    }
-    void settleThread((settleToken += 1));
+    if (!scrollEl || !threadEl || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => {
+      if (threadPinnedToBottom) scrollToBottom();
+    });
+    observer.observe(threadEl);
+    observer.observe(scrollEl);
+    return () => observer.disconnect();
   });
 
   // Prepending older history keeps the same newest id, so it must not trigger
   // this latest-message autoscroll and disturb the preserved anchor.
+  // A message just sent shows at the foot of the thread: the view goes there.
+  let outgoingCount = 0;
+  $effect(() => {
+    const count = outbox.items.length;
+    const grew = count > outgoingCount;
+    outgoingCount = count;
+    if (!grew) return;
+    threadPinnedToBottom = true;
+    void tick().then(scrollToBottom);
+  });
+
   let lastAutoScrolledMessage: string | null = null;
   $effect(() => {
     const newestId = lobby.thread.messages.at(-1)?.id ?? '';
@@ -341,15 +320,15 @@
 {/snippet}
 
 <div class="lobby-dm-scroll lobby-scroll" bind:this={scrollEl} onscroll={onThreadScroll}>
-  {#if lobby.thread.loading || threadSettling}
+  {#if lobby.thread.loading}
     <div class="lobby-dm-loading" role="status">Загружаем переписку…</div>
   {/if}
   {#if lobby.thread.historyError && groups.length === 0}
     <div class="lobby-dm-empty">{lobby.thread.historyError}</div>
-  {:else if groups.length === 0 && !lobby.thread.loading && !threadSettling}
+  {:else if groups.length === 0 && !lobby.thread.loading && !outbox.items.length}
     <div class="lobby-dm-empty">Здесь пока пусто. Напишите первым!</div>
   {:else}
-    <div class="lobby-dm-thread" class:is-settling={threadSettling}>
+    <div class="lobby-dm-thread" bind:this={threadEl}>
       {#if lobby.thread.historyError}
         <div class="lobby-dm-empty">{lobby.thread.historyError}</div>
       {/if}
@@ -439,6 +418,13 @@
           </div>
         </div>
       {/each}
+      <OutgoingMessages
+        items={outbox.items}
+        textOf={(outgoing: OutgoingDirectMessage) => outgoing.text}
+        attachmentsOf={(outgoing: OutgoingDirectMessage) => outgoing.attachmentIds.length}
+        onRetry={(localId: string) => outbox.retry(localId)}
+        onDiscard={(localId: string) => outbox.discard(localId)}
+      />
     </div>
   {/if}
 </div>
@@ -446,7 +432,6 @@
 <DmComposer
   bind:this={composer}
   bind:replyTarget
-  bind:sending
   {peerId}
   {selfId}
   {peerName}
@@ -496,9 +481,6 @@
     background: var(--vr-bg, var(--vr-bg));
     color: var(--vr-text-3);
     font-size: 13.5px;
-  }
-  :where(.lobby-dm-thread).is-settling {
-    visibility: hidden;
   }
   :global(.lobby-dm-thread) {
     margin-top: auto;

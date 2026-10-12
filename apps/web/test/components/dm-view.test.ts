@@ -134,7 +134,7 @@ test('an invitation is answered from the card by the invited side only', () => {
   expect(within(sent).queryByRole('button')).toBeNull();
 });
 
-test('a thread stays behind the loading note until its emoji artwork has loaded', async () => {
+test('a thread shows its messages as soon as they arrive, while its artwork is still loading', () => {
   const incomplete = vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(false);
   const lobby = renderDm();
   lobby.thread.loading = true;
@@ -144,14 +144,41 @@ test('a thread stays behind the loading note until its emoji artwork has loaded'
   lobby.thread.messages = [message('m1', 'ada', 'привет 👍')];
   lobby.thread.loading = false;
   flushSync();
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(screen.getByRole('status').textContent).toBe('Загружаем переписку…');
-  expect(document.querySelector('.lobby-dm-thread')?.classList.contains('is-settling')).toBe(true);
-
+  expect(screen.queryByRole('status')).toBeNull();
+  expect(screen.getByText(/привет/)).toBeTruthy();
   incomplete.mockRestore();
-  for (const image of document.querySelectorAll('.lobby-dm-thread img')) image.dispatchEvent(new Event('load'));
-  await vi.waitFor(() => expect(screen.queryByRole('status')).toBeNull());
-  expect(document.querySelector('.lobby-dm-thread')?.classList.contains('is-settling')).toBe(false);
+});
+
+test('a reader at the newest message stays on it when loading artwork grows the thread', () => {
+  const observers: Array<() => void> = [];
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback: () => void) {
+        observers.push(callback);
+      }
+      observe() {}
+      disconnect() {}
+    }
+  );
+  renderDm(ada, [message('m1', 'ada', 'картинка'), message('m2', 'me', 'ответ')]);
+  const scroll = document.querySelector<HTMLElement>('.lobby-dm-scroll')!;
+  let height = 1000;
+  Object.defineProperty(scroll, 'scrollHeight', { configurable: true, get: () => height });
+  Object.defineProperty(scroll, 'clientHeight', { configurable: true, get: () => 400 });
+  expect(observers).toHaveLength(1);
+
+  scroll.scrollTop = 600;
+  scroll.dispatchEvent(new Event('scroll'));
+  height = 1300;
+  observers[0]();
+  expect(scroll.scrollTop).toBe(1300);
+
+  scroll.scrollTop = 100;
+  scroll.dispatchEvent(new Event('scroll'));
+  height = 1600;
+  observers[0]();
+  expect(scroll.scrollTop).toBe(100);
 });
 
 test("an open thread asks for each message's reactions once, however the answers come back", async () => {
@@ -168,4 +195,35 @@ test("an open thread asks for each message's reactions once, however the answers
 
   const asked = calls.filter((call) => call.url.startsWith('/api/reactions/')).map((call) => call.url);
   expect(asked.sort()).toEqual(['/api/reactions/dm/ada/m1', '/api/reactions/dm/ada/m2', '/api/reactions/dm/ada/m3']);
+});
+
+test('a sent message empties the field at once, shows dimmed, and a failed one waits in its thread to be retried', async () => {
+  let fail = true;
+  const { calls } = stubFetch({
+    'POST /api/dm/ada': () =>
+      fail
+        ? { status: 500, body: { ok: false, error: 'Сервер недоступен' } }
+        : { body: { ok: true, message: message('sent-1', 'me', 'привет') } },
+    'POST /api/dm/ada/read': { body: { ok: true } }
+  });
+  const lobby = renderDm(ada);
+  await userEvent.click(composer());
+  await userEvent.keyboard('привет{Enter}');
+  expect(composer().textContent).toBe('');
+  expect(screen.getByText('привет', { selector: '.outgoing-message__text' })).toBeTruthy();
+  const failed = await screen.findByRole('alert');
+  expect(failed.textContent).toMatch(/Не отправлено/);
+
+  open(lobby, bob);
+  expect(document.querySelector('.outgoing-message')).toBeNull();
+  open(lobby, ada);
+  fail = false;
+  await userEvent.click(within(await screen.findByRole('alert')).getByRole('button', { name: 'Повторить' }));
+  expect(await screen.findByText('привет', { selector: '.dm-msg-content *, .dm-msg-content' })).toBeTruthy();
+  await vi.waitFor(() => expect(document.querySelector('.outgoing-message')).toBeNull());
+  const keys = calls
+    .filter((call) => call.method === 'POST' && call.url === '/api/dm/ada')
+    .map((call) => (call.body as { idempotencyKey: string }).idempotencyKey);
+  expect(keys).toHaveLength(2);
+  expect(keys[0]).toBe(keys[1]);
 });

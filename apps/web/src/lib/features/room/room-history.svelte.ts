@@ -1,4 +1,5 @@
 import { tick } from 'svelte';
+import { readHistoryCache, writeHistoryCache } from '$lib/shared/chat/history-cache';
 
 export interface AnchoredHistoryPage<T> {
   messages: T[];
@@ -14,6 +15,8 @@ interface AnchoredHistoryOptions<T extends { id: string }> {
     request: { mode: 'latest' | 'before' | 'around'; cursor?: string; messageId?: string; signal: AbortSignal }
   ) => Promise<AnchoredHistoryPage<T>>;
   compare?: (left: T, right: T) => number;
+  /** Where a scope's newest messages are kept between visits; without it nothing is kept. */
+  cacheKey?: (scope: string) => string;
   onChange?: (state: {
     messages: T[];
     loading: boolean;
@@ -28,6 +31,8 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
   let generation = 0;
   let controller: AbortController | null = null;
   let olderPromise: Promise<void> | null = null;
+  // The kept copy is shown and the newest page is on its way.
+  let revalidating = false;
 
   const state = $state({
     messages: [] as T[],
@@ -56,21 +61,33 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
         continue;
       }
       const defined = Object.fromEntries(Object.entries(item).filter(([, value]) => value !== undefined));
-      byId.set(item.id, { ...current, ...defined } as T);
+      byId.set(item.id, { ...current, ...defined });
     }
     state.messages = ordered(Array.from(byId.values()));
     notify();
   }
 
+  // What was shown is kept for the next visit, with the edits and messages
+  // realtime added while it was open.
+  function remember(): void {
+    if (!scope || !options.cacheKey || state.loading || revalidating) return;
+    writeHistoryCache(options.cacheKey(scope), $state.snapshot(state.messages));
+  }
+
   async function open(nextScope: string, messageId?: string): Promise<void> {
+    remember();
     generation += 1;
     const requestGeneration = generation;
     scope = nextScope;
     controller?.abort();
     controller = new AbortController();
     olderPromise = null;
-    state.messages = [];
-    state.loading = true;
+    // A visit to the newest messages starts from the copy kept last time and
+    // swaps in the page once it arrives; a linked message has no such copy.
+    const cached = !messageId && options.cacheKey ? readHistoryCache<T>(options.cacheKey(nextScope)) : undefined;
+    revalidating = Boolean(cached);
+    state.messages = cached ? ordered(cached) : [];
+    state.loading = !cached;
     state.loadingOlder = false;
     state.before = undefined;
     state.hasMoreBefore = false;
@@ -94,6 +111,7 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
       notify();
     } finally {
       if (requestGeneration === generation) {
+        revalidating = false;
         state.loading = false;
         notify();
       }
@@ -102,6 +120,8 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
 
   function loadOlder(scrollElement: HTMLElement | null): Promise<void> {
     if (olderPromise) return olderPromise;
+    // The kept copy has no cursor of its own; older pages wait for the page.
+    if (revalidating) return Promise.resolve();
     if (!scope || !state.hasMoreBefore || !state.before) return Promise.resolve();
     const requestScope = scope;
     const requestGeneration = generation;
@@ -159,6 +179,7 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
   }
 
   function close(): void {
+    remember();
     generation += 1;
     scope = '';
     controller?.abort();

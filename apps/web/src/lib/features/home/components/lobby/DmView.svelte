@@ -21,7 +21,6 @@
   let { self }: { self: AuthUser } = $props();
 
   let quickReactions = $state<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
-  let sending = $state(false);
 
   const peerId = $derived(lobby.selectedFriendId ?? '');
   const peer = $derived(lobby.thread.peer);
@@ -39,7 +38,6 @@
 
   const drop = new AttachmentDrop({
     media: () => media,
-    busy: () => sending,
     onError: (message) => pushToast(message, { variant: 'error' })
   });
 </script>
@@ -81,7 +79,7 @@
 
     {#if peerId}
       {#key peerId}
-        <DmConversation bind:sending {peerId} {self} {peer} {presence} {media} {quickReactions} />
+        <DmConversation {peerId} {self} {peer} {presence} {media} {quickReactions} />
       {/key}
     {/if}
   </div>

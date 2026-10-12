@@ -34,6 +34,7 @@ export class RoomChatTimeline {
       }
     },
     compare: (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
+    cacheKey: (roomId) => `room:${roomId}`,
     onChange: (state) => {
       this.messages = state.messages;
       this.loading = state.loading;
