@@ -67,6 +67,11 @@ export class AccountPrompts {
     this.settingsOpen = true;
   };
 
+  openAppearanceSettings = (): void => {
+    this.settingsTab = 'appearance';
+    this.settingsOpen = true;
+  };
+
   closeSettings = (): void => {
     this.settingsOpen = false;
     this.securityHighlight = null;

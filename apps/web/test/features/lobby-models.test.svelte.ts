@@ -94,6 +94,8 @@ test('settings open on a tab, and security opens with what to highlight', () => 
     expect([prompts.settingsOpen, prompts.securityHighlight]).toEqual([false, null]);
     prompts.openSettings();
     expect(prompts.settingsTab).toBe('profile');
+    prompts.openAppearanceSettings();
+    expect([prompts.settingsOpen, prompts.settingsTab]).toEqual([true, 'appearance']);
   } finally {
     stop();
   }
