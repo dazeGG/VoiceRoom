@@ -309,6 +309,8 @@
     <Popover
       bind:open={statusPopoverOpen}
       placement="top-start"
+      flip
+      floating
       role="listbox"
       ariaLabel="Статус пользователя"
       panelClass="lv-status-popover"
