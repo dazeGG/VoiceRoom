@@ -407,8 +407,8 @@ function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } =
         .execute()
     );
     for (const attachment of attachments) {
-      const messageId = context === 'room' ? attachment.roomMessageId : attachment.directMessageId;
-      if (!messageId) continue;
+      // Set on every row the query matched.
+      const messageId = (context === 'room' ? attachment.roomMessageId : attachment.directMessageId) as string;
       const list = byMessage.get(messageId);
       if (list) list.push(attachment);
       else byMessage.set(messageId, [attachment]);
