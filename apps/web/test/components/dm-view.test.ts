@@ -196,3 +196,34 @@ test("an open thread asks for each message's reactions once, however the answers
   const asked = calls.filter((call) => call.url.startsWith('/api/reactions/')).map((call) => call.url);
   expect(asked.sort()).toEqual(['/api/reactions/dm/ada/m1', '/api/reactions/dm/ada/m2', '/api/reactions/dm/ada/m3']);
 });
+
+test('a sent message empties the field at once, shows dimmed, and a failed one waits in its thread to be retried', async () => {
+  let fail = true;
+  const { calls } = stubFetch({
+    'POST /api/dm/ada': () =>
+      fail
+        ? { status: 500, body: { ok: false, error: 'Сервер недоступен' } }
+        : { body: { ok: true, message: message('sent-1', 'me', 'привет') } },
+    'POST /api/dm/ada/read': { body: { ok: true } }
+  });
+  const lobby = renderDm(ada);
+  await userEvent.click(composer());
+  await userEvent.keyboard('привет{Enter}');
+  expect(composer().textContent).toBe('');
+  expect(screen.getByText('привет', { selector: '.outgoing-message__text' })).toBeTruthy();
+  const failed = await screen.findByRole('alert');
+  expect(failed.textContent).toMatch(/Не отправлено/);
+
+  open(lobby, bob);
+  expect(document.querySelector('.outgoing-message')).toBeNull();
+  open(lobby, ada);
+  fail = false;
+  await userEvent.click(within(await screen.findByRole('alert')).getByRole('button', { name: 'Повторить' }));
+  expect(await screen.findByText('привет', { selector: '.dm-msg-content *, .dm-msg-content' })).toBeTruthy();
+  await vi.waitFor(() => expect(document.querySelector('.outgoing-message')).toBeNull());
+  const keys = calls
+    .filter((call) => call.method === 'POST' && call.url === '/api/dm/ada')
+    .map((call) => (call.body as { idempotencyKey: string }).idempotencyKey);
+  expect(keys).toHaveLength(2);
+  expect(keys[0]).toBe(keys[1]);
+});

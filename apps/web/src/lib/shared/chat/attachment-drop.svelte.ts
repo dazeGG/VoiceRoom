@@ -13,17 +13,10 @@ export class AttachmentDrop {
   depth = $state(0);
 
   #media: () => AttachmentComposeStore | null;
-  #busy: () => boolean;
   #onError: (message: string) => void;
 
-  constructor(options: {
-    media: () => AttachmentComposeStore | null;
-    /** While a message is being sent the surface takes no drops. */
-    busy: () => boolean;
-    onError: (message: string) => void;
-  }) {
+  constructor(options: { media: () => AttachmentComposeStore | null; onError: (message: string) => void }) {
     this.#media = options.media;
-    this.#busy = options.busy;
     this.#onError = options.onError;
   }
 
@@ -32,7 +25,7 @@ export class AttachmentDrop {
   }
 
   #accepts(event: DragEvent): boolean {
-    return Boolean(this.#media()) && !this.#busy() && dataTransferHasImages(event.dataTransfer);
+    return Boolean(this.#media()) && dataTransferHasImages(event.dataTransfer);
   }
 
   enter = (event: DragEvent): void => {

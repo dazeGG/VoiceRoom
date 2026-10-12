@@ -51,6 +51,8 @@ import {
 } from '$lib/shared/notifications/preferences.svelte';
 import { startSystemPresenceIdleTracking } from '$lib/shared/presence-idle';
 import { DmThread } from './dm-thread.svelte';
+import { SvelteMap } from 'svelte/reactivity';
+import { Outbox } from '$lib/shared/chat/outbox.svelte';
 import { FriendPresence } from './friend-presence.svelte';
 import { BrowserNotificationRouting } from './browser-notification-routing';
 import type { RoomSocial } from '$lib/features/room/social';
@@ -64,6 +66,13 @@ export const ENTER_ROOM_EVENT = 'voice-room:enter-room';
 // Invitations used to be mirrored per device in localStorage; they now live in
 // the DM thread itself, so stale local copies are just cleaned up.
 const RESOLVED_ROOM_INVITATIONS_KEY = 'voice-room:resolved-invitations';
+
+/** A direct message on its way, as the composer hands it over. */
+export interface OutgoingDirectMessage {
+  text: string;
+  attachmentIds: string[];
+  replyTo: { messageId: string } | undefined;
+}
 
 export class LobbyStore {
   automaticPresenceIdleAvailable = $state(false);
@@ -238,18 +247,25 @@ export class LobbyStore {
 
   // --- DM -----------------------------------------------------------------
 
-  sendMessage = async (
-    text: string,
-    attachmentIds: string[] = [],
-    replyTo?: { messageId: string },
-    idempotencyKey?: string
-  ): Promise<void> => {
-    const peerId = this.selectedFriendId;
-    const body = text.trim();
-    if (!peerId || (!body && attachmentIds.length === 0)) return;
-    const message = await sendDirectMessage(peerId, body, attachmentIds, replyTo, idempotencyKey);
-    this.thread.append(message);
-    this.bumpLastMessage(peerId, message);
+  // Each thread's messages on their way. Kept here rather than in the thread's
+  // view, so they keep going out, and a failed one waits, while another thread
+  // is open.
+  private readonly outboxes = new SvelteMap<string, Outbox<OutgoingDirectMessage, DirectMessage>>();
+
+  outboxFor = (peerId: string): Outbox<OutgoingDirectMessage, DirectMessage> => {
+    let outbox = this.outboxes.get(peerId);
+    if (!outbox) {
+      outbox = new Outbox({
+        deliver: ({ text, attachmentIds, replyTo }, idempotencyKey) =>
+          sendDirectMessage(peerId, text, attachmentIds, replyTo, idempotencyKey),
+        onSent: (message) => {
+          if (this.selectedFriendId === peerId) this.thread.append(message);
+          this.bumpLastMessage(peerId, message);
+        }
+      });
+      this.outboxes.set(peerId, outbox);
+    }
+    return outbox;
   };
 
   deleteMessage = async (messageId: string): Promise<void> => {

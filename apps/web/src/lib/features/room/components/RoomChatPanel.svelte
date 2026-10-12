@@ -38,7 +38,8 @@
   import { applyRoomPinsEvent, isMessagePinned, loadRoomPins, resetRoomPins, togglePin } from '../pins.svelte';
   import { getAttachmentComposeStore, type AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
   import { AttachmentDrop } from '$lib/shared/chat/attachment-drop.svelte';
-  import { SendAttempt } from '$lib/shared/chat/send-attempt';
+  import { Outbox } from '$lib/shared/chat/outbox.svelte';
+  import OutgoingMessages from '$lib/shared/chat/OutgoingMessages.svelte';
   import AttachmentDropOverlay from '$lib/shared/chat/AttachmentDropOverlay.svelte';
   import { createTypingTracker, formatTypingLabel, typingActivityOf } from '$lib/shared/chat/typing.svelte';
   import { getRoomMembership } from '$lib/entities/room/room-membership.svelte';
@@ -112,7 +113,6 @@
   } = $props();
 
   const timeline = new RoomChatTimeline();
-  let sending = $state(false);
   let editingMessageId = $state('');
   let chatBody = $state<HTMLDivElement | null>(null);
   let composer = $state<{ focus(): void } | null>(null);
@@ -129,7 +129,6 @@
   let menuX = $state(0);
   let menuY = $state(0);
   let quickReactions = $state<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
-  const sendAttempt = new SendAttempt();
   const chatVisible = $derived(visible && activeTab === 'chat');
 
   function toast(message: string, options?: { variant?: 'error' }): void {
@@ -147,7 +146,6 @@
 
   const drop = new AttachmentDrop({
     media: () => media,
-    busy: () => sending,
     onError: (message) => toast(message, { variant: 'error' })
   });
 
@@ -442,23 +440,21 @@
     }
   }
 
-  async function send(outgoing: OutgoingRoomMessage): Promise<boolean> {
-    timeline.error = '';
-    try {
-      // Resolved per send: the room rail reads a guest name that the name dialog
-      // can persist after this component mounted.
-      const payload = { name: resolveDisplayName(), ...peerCredentials(), ...outgoing };
-      const message = await postRoomChat(roomId, { ...payload, idempotencyKey: sendAttempt.keyFor(payload) });
-      if (timeline.add(message) && chatVisible) {
-        onRead?.();
-        void settleAtBottom();
-      }
-      sendAttempt.reset();
-      return true;
-    } catch (err) {
-      timeline.error = err instanceof Error ? err.message : 'Не удалось отправить сообщение';
-      return false;
+  // Messages on their way: shown at the foot of the chat until the server has
+  // them, then they join it like any other.
+  const outbox = new Outbox<OutgoingRoomMessage, ChatMessage>({
+    // Resolved per send: the room rail reads a guest name that the name dialog
+    // can persist after this component mounted.
+    deliver: (outgoing, idempotencyKey) =>
+      postRoomChat(roomId, { name: resolveDisplayName(), ...peerCredentials(), ...outgoing, idempotencyKey }),
+    onSent: (message) => {
+      if (timeline.add(message) && chatVisible) onRead?.();
     }
+  });
+
+  function send(outgoing: OutgoingRoomMessage): void {
+    outbox.enqueue(outgoing);
+    if (chatVisible) void settleAtBottom();
   }
 
   function scrollToBottom(): void {
@@ -653,9 +649,16 @@
             {/each}
           </section>
         {/each}
-      {:else}
+      {:else if !outbox.items.length}
         <p class="chat-rail-note">Пока пусто. Напишите первое сообщение.</p>
       {/if}
+      <OutgoingMessages
+        items={outbox.items}
+        textOf={(outgoing: OutgoingRoomMessage) => outgoing.text}
+        attachmentsOf={(outgoing: OutgoingRoomMessage) => outgoing.attachmentIds?.length ?? 0}
+        onRetry={(localId: string) => outbox.retry(localId)}
+        onDiscard={(localId: string) => outbox.discard(localId)}
+      />
     </div>
 
     {#if timeline.error}
@@ -665,7 +668,6 @@
     <RoomChatComposer
       bind:this={composer}
       bind:replyTarget
-      bind:sending
       {roomId}
       {draft}
       {media}

@@ -30,6 +30,8 @@
   import { pushToast } from '../../../model/toasts.svelte';
   import DmComposer from './DmComposer.svelte';
   import DmInviteCard from './DmInviteCard.svelte';
+  import OutgoingMessages from '$lib/shared/chat/OutgoingMessages.svelte';
+  import type { OutgoingDirectMessage } from '$lib/features/home/model/lobby.svelte';
 
   let {
     peerId,
@@ -37,8 +39,7 @@
     peer,
     presence,
     media,
-    quickReactions,
-    sending = $bindable(false)
+    quickReactions
   }: {
     peerId: string;
     self: AuthUser;
@@ -46,10 +47,11 @@
     presence: PresenceStatus;
     media: AttachmentComposeStore | null;
     quickReactions: string[];
-    sending?: boolean;
   } = $props();
 
   const lobby = useLobby();
+  // The view is mounted per peer, like the reaction store below.
+  const outbox = lobby.outboxFor(untrack(() => peerId));
   const selfId = $derived(self.id);
   const selfName = $derived(self.displayName?.trim() || self.login);
   const peerName = $derived(peer ? friendName(peer) : '');
@@ -147,6 +149,17 @@
 
   // Prepending older history keeps the same newest id, so it must not trigger
   // this latest-message autoscroll and disturb the preserved anchor.
+  // A message just sent shows at the foot of the thread: the view goes there.
+  let outgoingCount = 0;
+  $effect(() => {
+    const count = outbox.items.length;
+    const grew = count > outgoingCount;
+    outgoingCount = count;
+    if (!grew) return;
+    threadPinnedToBottom = true;
+    void tick().then(scrollToBottom);
+  });
+
   let lastAutoScrolledMessage: string | null = null;
   $effect(() => {
     const newestId = lobby.thread.messages.at(-1)?.id ?? '';
@@ -312,7 +325,7 @@
   {/if}
   {#if lobby.thread.historyError && groups.length === 0}
     <div class="lobby-dm-empty">{lobby.thread.historyError}</div>
-  {:else if groups.length === 0 && !lobby.thread.loading}
+  {:else if groups.length === 0 && !lobby.thread.loading && !outbox.items.length}
     <div class="lobby-dm-empty">Здесь пока пусто. Напишите первым!</div>
   {:else}
     <div class="lobby-dm-thread" bind:this={threadEl}>
@@ -405,6 +418,13 @@
           </div>
         </div>
       {/each}
+      <OutgoingMessages
+        items={outbox.items}
+        textOf={(outgoing: OutgoingDirectMessage) => outgoing.text}
+        attachmentsOf={(outgoing: OutgoingDirectMessage) => outgoing.attachmentIds.length}
+        onRetry={(localId: string) => outbox.retry(localId)}
+        onDiscard={(localId: string) => outbox.discard(localId)}
+      />
     </div>
   {/if}
 </div>
@@ -412,7 +432,6 @@
 <DmComposer
   bind:this={composer}
   bind:replyTarget
-  bind:sending
   {peerId}
   {selfId}
   {peerName}
