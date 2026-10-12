@@ -93,8 +93,8 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   border-radius: 16px;
   padding: 0;
   overflow: hidden;
-  /* The avatar's colour tints the tile, as before the redesign. */
-  --participant-tile-bg: color-mix(in oklch, var(--participant-pastel), var(--vr-surface-2) 78%);
+  /* The avatar's colour fills the tile, 70% of it as before the redesign. */
+  --participant-tile-bg: color-mix(in oklch, var(--participant-pastel), var(--vr-bg) 30%);
   background: var(--participant-tile-bg);
   /* The outline is inset so it is drawn over the video of a camera tile too. */
   box-shadow: inset 0 0 0 1px var(--vr-line);
