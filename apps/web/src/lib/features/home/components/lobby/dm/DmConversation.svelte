@@ -111,7 +111,7 @@
 
   $effect(() => {
     for (const message of lobby.thread.messages) {
-      if (!message.invite) void reactions.load(message.id);
+      if (!message.invite) reactions.show(message);
     }
   });
 

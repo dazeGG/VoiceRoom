@@ -24,6 +24,7 @@ export class DmThread {
   #history = createAnchoredHistory<DirectMessage>({
     loadPage: async (peerId, request) => fetchThreadPage(peerId, request),
     compare: (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
+    cacheKey: (peerId) => `dm:${peerId}`,
     onChange: (state) => {
       this.messages = state.messages;
       this.loading = state.loading;

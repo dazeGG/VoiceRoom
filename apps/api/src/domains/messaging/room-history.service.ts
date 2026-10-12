@@ -4,6 +4,7 @@ import type {
   LinkPreview,
   MessageContent,
   ReplyPointer,
+  ReactionSummary,
   ReplyPreview,
   RoomHistoryMessage,
   RoomHistoryPage
@@ -35,6 +36,7 @@ export type StoredRoomMessage = {
   linkPreview?: LinkPreview | null;
   replyTo?: ReplyPointer | null;
   replyPreview?: ReplyPreview | null;
+  reactions?: ReactionSummary[];
 };
 
 type HistoryPage = { messages: StoredRoomMessage[]; hasMoreBefore: boolean; hasMoreAfter: boolean };
@@ -77,17 +79,18 @@ function createRoomHistoryService({
   repository,
   cursorCodec,
   visibilityPolicy,
-  projectMessage,
+  projectMessages,
   now = () => new Date()
 }: {
   repository?: RoomHistoryRepository;
   cursorCodec?: HistoryCursorCodec;
   visibilityPolicy?: VisibilityPolicy;
-  projectMessage?: (input: {
-    message: StoredRoomMessage;
+  /** Adds what a page's messages carry beyond their row, for the whole page at once. */
+  projectMessages?: (input: {
+    messages: StoredRoomMessage[];
     roomId: string;
     access: Access;
-  }) => Promise<StoredRoomMessage> | StoredRoomMessage;
+  }) => Promise<StoredRoomMessage[]> | StoredRoomMessage[];
   now?: () => Date;
 } = {}) {
   if (!repository) throw new TypeError('room history repository is required');
@@ -149,6 +152,7 @@ function createRoomHistoryService({
       linkPreview: message.linkPreview ?? undefined,
       replyTo: message.replyTo,
       replyPreview: message.replyPreview,
+      reactions: message.reactions,
       cursor: encodeTuple(roomId, tuple),
       readCursor: encodeTuple(roomId, tuple, 'room-read')
     };
@@ -203,8 +207,8 @@ function createRoomHistoryService({
       if (await canView(message, access)) visible.push(message);
     }
     const projected =
-      typeof projectMessage === 'function'
-        ? await Promise.all(visible.map((message) => projectMessage({ message, roomId: normalizedRoomId, access })))
+      typeof projectMessages === 'function' && visible.length > 0
+        ? await projectMessages({ messages: visible, roomId: normalizedRoomId, access })
         : visible;
     const messages = projected.map((message) => toDto(normalizedRoomId, message));
 

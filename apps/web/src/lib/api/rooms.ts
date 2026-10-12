@@ -22,6 +22,7 @@ import type {
 import { api, orNull } from './client';
 import { createRoomProof } from './pow';
 import type { ReplyTarget } from '$lib/shared/chat/reply-store.svelte';
+import type { ReactionSummary } from '@voice-room/shared/reactions';
 import type { RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
 import { projectRoomMessageContent } from '@voice-room/shared/room-message-content';
 
@@ -86,6 +87,8 @@ export interface ChatMessage {
   linkPreview?: LinkPreview;
   replyTo?: { messageId: string };
   replyPreview?: ReplyTarget;
+  /** The reactions a history page carried; realtime keeps the reaction store current after that. */
+  reactions?: ReactionSummary[];
 }
 
 /** A message that never expires shows no countdown. */
@@ -218,7 +221,8 @@ function roomMessageFromHistory(roomId: string, message: RoomHistoryMessage): Ch
     attachments: message.attachments,
     linkPreview: message.linkPreview,
     replyTo: message.replyTo ?? undefined,
-    replyPreview: message.replyPreview ?? undefined
+    replyPreview: message.replyPreview ?? undefined,
+    reactions: message.reactions
   };
 }
 

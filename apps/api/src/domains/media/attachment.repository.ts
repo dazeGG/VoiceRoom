@@ -388,6 +388,34 @@ function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } =
     );
   }
 
+  /** The attachments of several messages in one query, by message id. */
+  async function listForMessages(
+    context: string,
+    messageIds: string[],
+    { client }: { client?: Client } = {}
+  ): Promise<Map<string, Attachment[]>> {
+    const column = context === 'room' ? 'room_message_id' : context === 'dm' ? 'direct_message_id' : null;
+    if (!column) throw new TypeError('Invalid attachment context');
+    const byMessage = new Map<string, Attachment[]>();
+    if (messageIds.length === 0) return byMessage;
+    const attachments = await rows(
+      on(client)
+        .selectFrom('message_attachments')
+        .selectAll()
+        .where(column, 'in', messageIds)
+        .orderBy('attachment_order', 'asc')
+        .execute()
+    );
+    for (const attachment of attachments) {
+      const messageId = context === 'room' ? attachment.roomMessageId : attachment.directMessageId;
+      if (!messageId) continue;
+      const list = byMessage.get(messageId);
+      if (list) list.push(attachment);
+      else byMessage.set(messageId, [attachment]);
+    }
+    return byMessage;
+  }
+
   async function listCleanupCandidates({ limit = 500, client }: { limit?: unknown; client?: Client } = {}): Promise<
     Attachment[]
   > {
@@ -557,6 +585,7 @@ function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } =
     findById,
     listCleanupCandidates,
     listForMessage,
+    listForMessages,
     listOwnerDrafts,
     listProcessingWithoutActiveJob,
     listStorageKeys,

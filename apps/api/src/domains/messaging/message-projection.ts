@@ -19,7 +19,10 @@ export interface StoredAttachment {
 }
 
 export interface MessageProjectionDeps {
-  attachments(): { listForMessage(context: Context, messageId: string): Promise<StoredAttachment[]> } | null;
+  attachments(): {
+    listForMessage(context: Context, messageId: string): Promise<StoredAttachment[]>;
+    listForMessages(context: Context, messageIds: string[]): Promise<Map<string, StoredAttachment[]>>;
+  } | null;
   replies(): {
     getRoomPreview(input: { roomId?: string; messageId: string }): Promise<ReplyPreview | null>;
     getDirectPreview(input: { userId?: string; peerId?: string; messageId: string }): Promise<ReplyPreview | null>;
@@ -53,6 +56,23 @@ export function createMessageProjection(deps: MessageProjectionDeps) {
     return { ...message, attachments: stored.map(publicAttachment) };
   }
 
+  /** projectMedia for a whole page: one query instead of one per message. */
+  async function projectMediaMany<T extends { id?: string }>(
+    context: Context,
+    messages: T[]
+  ): Promise<Array<T & { attachments: Attachment[] }>> {
+    const attachments = deps.attachments();
+    const ids = messages.flatMap((message) => (message?.id ? [message.id] : []));
+    const stored =
+      attachments && ids.length
+        ? await attachments.listForMessages(context, ids)
+        : new Map<string, StoredAttachment[]>();
+    return messages.map((message) => ({
+      ...message,
+      attachments: ((message?.id && stored.get(message.id)) || []).map(publicAttachment)
+    }));
+  }
+
   async function projectReply<T extends { replyTo?: { messageId?: string } | null }>(
     context: Context,
     message: T,
@@ -78,7 +98,7 @@ export function createMessageProjection(deps: MessageProjectionDeps) {
     return projectReply(context, await projectMedia(context, message), options);
   }
 
-  return { projectMedia, projectReply, project };
+  return { projectMedia, projectMediaMany, projectReply, project };
 }
 
 export type MessageProjection = ReturnType<typeof createMessageProjection>;

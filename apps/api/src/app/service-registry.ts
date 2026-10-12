@@ -78,7 +78,7 @@ export type ServiceRegistryDeps = {
   findRoomBan: (roomId: string, userId: string | null | undefined, ip: string | null | undefined) => Promise<unknown>;
   /** Sends a server event to every socket of an account; answers how many took it. */
   sendToUser: (userId: string, envelope: ServerEnvelope) => number;
-  attachMediaProjection: ReturnType<typeof createMessageProjection>['projectMedia'];
+  attachMediaProjectionMany: ReturnType<typeof createMessageProjection>['projectMediaMany'];
   disconnectModeratedPeer: (
     room: Room,
     peer: PresencePeer,
@@ -216,7 +216,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     createHistoryModule({
       pool: requirePool(),
       cursorCodec: cursorCodec('history'),
-      projectMedia: deps.attachMediaProjection,
+      projectMediaMany: deps.attachMediaProjectionMany,
       canReadRoom: (roomId, userId) => roomStore.get().canUserReadRoomChat(roomId, userId)
     })
   );

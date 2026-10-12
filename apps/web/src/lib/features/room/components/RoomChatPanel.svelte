@@ -177,7 +177,7 @@
   const days = $derived(buildChatDays(timeline.messages, isOwnMessage));
 
   $effect(() => {
-    for (const message of timeline.messages) void reactions.load(message.id);
+    for (const message of timeline.messages) reactions.show(message);
   });
 
   function isOwnMessage(message: ChatMessage): boolean {
@@ -377,8 +377,12 @@
         })
       : null;
     const anchorMessageId = aroundMessageId || new URL(window.location.href).searchParams.get('around') || undefined;
-    if (paged) await timeline.open(roomId, anchorMessageId);
-    else await refreshMessages(signal);
+    if (paged) {
+      const opening = timeline.open(roomId, anchorMessageId);
+      // A room visited before shows its kept messages at once: park on the newest.
+      if (!anchorMessageId && chatVisible && timeline.messages.length > 0) void settleAtBottom();
+      await opening;
+    } else await refreshMessages(signal);
     // Pins, like paged history, are for a room the account keeps: a guest and
     // an account that was just refused that history would only be refused again.
     if (timeline.paged && !signal.aborted) void loadRoomPins(roomId);

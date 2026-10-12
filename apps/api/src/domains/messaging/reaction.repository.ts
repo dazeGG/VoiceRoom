@@ -228,6 +228,37 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
     return rows.map((row) => mapSummary(row, userId));
   }
 
+  /** listSummaries for a page of messages in one query, by message id. */
+  async function listSummariesForMessages({
+    type,
+    messageIds,
+    userId,
+    client: override
+  }: Target & { messageIds: string[] } & Override): Promise<Map<string, StoredReactionSummary[]>> {
+    const { reactions, revisions } = contextTables(type);
+    const byMessage = new Map<string, StoredReactionSummary[]>();
+    if (messageIds.length === 0) return byMessage;
+    const rows = await on(override)
+      .selectFrom(asRevisions(revisions))
+      .innerJoin(asReactions(reactions), (join) =>
+        join.onRef('r.message_id', '=', 'v.message_id').onRef('r.emoji', '=', 'v.emoji')
+      )
+      .select(['v.message_id', 'v.emoji', 'v.revision', ...summaryColumns(userId)])
+      .where('v.message_id', 'in', messageIds)
+      .groupBy(['v.message_id', 'v.emoji', 'v.revision'])
+      .orderBy('v.message_id')
+      .orderBy(sql`MIN(r.created_at)`)
+      .orderBy('v.emoji')
+      .execute();
+    for (const row of rows) {
+      const list = byMessage.get(row.message_id);
+      const summary = mapSummary(row, userId);
+      if (list) list.push(summary);
+      else byMessage.set(row.message_id, [summary]);
+    }
+    return byMessage;
+  }
+
   // Who reacted with an emoji, oldest first, paged by (created_at, user_id).
   async function listReactors({
     type,
@@ -270,6 +301,7 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
     getSummary,
     listReactors,
     listSummaries,
+    listSummariesForMessages,
     setDesiredState,
     transaction
   });

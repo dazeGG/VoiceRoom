@@ -3,6 +3,7 @@ import type {
   Attachment,
   DirectHistoryMessage,
   DirectHistoryPage,
+  ReactionSummary,
   ReplyPointer,
   ReplyPreview
 } from '@voice-room/shared/contracts/messages';
@@ -28,6 +29,7 @@ export type StoredDirectMessage = {
   attachments?: Attachment[];
   replyTo?: ReplyPointer | null;
   replyPreview?: ReplyPreview | null;
+  reactions?: ReactionSummary[];
 };
 
 function text(value: unknown): string | undefined {
@@ -91,16 +93,17 @@ function createDmHistoryService({
   repository,
   cursorCodec,
   visibilityPolicy,
-  projectMessage
+  projectMessages
 }: {
   repository?: DmHistoryRepository;
   cursorCodec?: HistoryCursorCodec;
   visibilityPolicy?: VisibilityPolicy;
-  projectMessage?: (input: {
-    message: StoredDirectMessage;
+  /** Adds what a page's messages carry beyond their row, for the whole page at once. */
+  projectMessages?: (input: {
+    messages: StoredDirectMessage[];
     userId: string;
     peerId: string;
-  }) => Promise<StoredDirectMessage> | StoredDirectMessage;
+  }) => Promise<StoredDirectMessage[]> | StoredDirectMessage[];
 } = {}) {
   if (!repository) throw new TypeError('DM history repository is required');
   if (!cursorCodec?.encode || !cursorCodec?.decode) throw new TypeError('cursor codec is required');
@@ -149,6 +152,7 @@ function createDmHistoryService({
       linkPreview: normalizeLinkPreview(message.metadata?.linkPreview) || undefined,
       replyTo: message.replyTo,
       replyPreview: message.replyPreview,
+      reactions: message.reactions,
       cursor: encodeTuple(userId, peerId, tuple),
       readCursor: encodeTuple(userId, peerId, tuple, 'dm-read')
     };
@@ -199,8 +203,8 @@ function createDmHistoryService({
       if (await canView(message, viewer)) visible.push(message);
     }
     const projected =
-      typeof projectMessage === 'function'
-        ? await Promise.all(visible.map((message) => projectMessage({ message, userId: viewer, peerId: peer })))
+      typeof projectMessages === 'function' && visible.length > 0
+        ? await projectMessages({ messages: visible, userId: viewer, peerId: peer })
         : visible;
     const messages = projected.map((message) => toDto(viewer, peer, message));
 

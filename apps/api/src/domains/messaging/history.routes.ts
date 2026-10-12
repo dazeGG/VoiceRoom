@@ -12,7 +12,11 @@ type Query = Record<string, string | undefined>;
 
 export interface HistoryRoutesDeps {
   rooms: {
-    getPage(input: { roomId: string; query: Query; access: { authorized: true } }): Promise<RoomHistoryPage>;
+    getPage(input: {
+      roomId: string;
+      query: Query;
+      access: { authorized: true; userId: string };
+    }): Promise<RoomHistoryPage>;
   };
   directs: { getPage(input: { userId: string; peerId: string; query: Query }): Promise<DirectHistoryPage> };
   /** Whether the account may read the room's chat (owner, member or bookmark). */
@@ -35,7 +39,7 @@ export function registerHistoryRoutes(root: FastifyInstance, ctx: ApiContext, de
       if (!userId || !(await deps.canReadRoom(roomId, userId))) {
         return reply.code(userId ? 403 : 401).send(failure('Room is not available', { code: 'room_forbidden' }));
       }
-      return await deps.rooms.getPage({ roomId, query: request.query, access: { authorized: true } });
+      return await deps.rooms.getPage({ roomId, query: request.query, access: { authorized: true, userId } });
     }
   );
 

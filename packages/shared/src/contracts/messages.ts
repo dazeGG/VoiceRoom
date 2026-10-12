@@ -210,6 +210,14 @@ export const HistoryContent = Type.Union([
   Type.Object({ type: Type.Literal('text'), text: Type.String() })
 ]);
 
+export const ReactionSummary = Type.Object({
+  emoji: Type.String(),
+  count: Type.Number(),
+  reactedByMe: Type.Boolean(),
+  revision: Type.String()
+});
+export type ReactionSummary = Static<typeof ReactionSummary>;
+
 const HistoryMessageFields = {
   id: Type.String(),
   createdAt: Nullable(Type.Number()),
@@ -219,6 +227,8 @@ const HistoryMessageFields = {
   linkPreview: Type.Optional(LinkPreview),
   replyTo: Type.Optional(Nullable(ReplyPointer)),
   replyPreview: Type.Optional(Nullable(ReplyPreview)),
+  /** The reactions when the page was read; realtime events keep them current after that. */
+  reactions: Type.Optional(Type.Array(ReactionSummary)),
   /** Opaque: where to page from. */
   cursor: Type.String(),
   /** Opaque: what to send to mark the conversation read up to here. */
@@ -289,14 +299,6 @@ export const ReactionParams = Type.Object({
   conversationId: Type.String(),
   messageId: Type.String()
 });
-
-export const ReactionSummary = Type.Object({
-  emoji: Type.String(),
-  count: Type.Number(),
-  reactedByMe: Type.Boolean(),
-  revision: Type.String()
-});
-export type ReactionSummary = Static<typeof ReactionSummary>;
 
 export const ReactionSummaries = Ok({ summaries: Type.Array(ReactionSummary) });
 export type ReactionSummaries = Static<typeof ReactionSummaries>;

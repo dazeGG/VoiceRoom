@@ -1,5 +1,6 @@
 import { fetchMe, type AuthUser } from '$lib/api/auth';
 import { clearChatDrafts, resumeChatDrafts } from '$lib/shared/chat/chat-drafts';
+import { clearHistoryCache } from '$lib/shared/chat/history-cache';
 import { roomNameFor } from './account';
 
 // App-wide auth state. `loaded` flips true once the first /auth/me resolves so
@@ -74,6 +75,7 @@ export function clearSession(): void {
   // The session ended on this device (sign-out, password change, deletion or a
   // revoked session): unsent texts must not outlive it on a shared computer.
   clearChatDrafts();
+  clearHistoryCache();
   session.user = null;
   session.loaded = true;
   syncRoomName(null);

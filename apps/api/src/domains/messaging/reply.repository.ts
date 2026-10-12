@@ -115,6 +115,20 @@ function mapDirectTarget(row: DirectTargetRow | null): DirectReplyTarget | null 
   };
 }
 
+// A quoted message that is gone, or not this conversation's, shows as a tombstone.
+function previewsById(
+  ids: string[],
+  found: Map<string, RoomReplyTarget | DirectReplyTarget | null>,
+  now: number | undefined
+): Map<string, ReplyPreview | null> {
+  return new Map(
+    ids.map((id) => {
+      const target = found.get(id);
+      return [id, target ? projectReplyPreview(target, { now }) : projectReplyTombstone(id)];
+    })
+  );
+}
+
 // The author's current account name, or the name the guest wrote under.
 const roomAuthorName = sql<string | null>`COALESCE(NULLIF(u.display_name, ''), u.login, m.name)`.as('author_name');
 const directAuthorName = sql<string | null>`COALESCE(NULLIF(u.display_name, ''), u.login)`.as('author_name');
@@ -126,24 +140,27 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     return kyselyOn(requireQuery(override || defaultClient));
   }
 
-  function roomTarget(db: Database, roomId: string | undefined, messageId: string | undefined) {
-    return db
+  // One message id, or several for a page of quotes.
+  function roomTarget(db: Database, roomId: string | undefined, messageId: string | string[] | undefined) {
+    const query = db
       .selectFrom('room_messages as m')
       .leftJoin('users as u', 'u.id', 'm.author_user_id')
       .selectAll('m')
       .select(roomAuthorName)
-      .where('m.room_id', '=', roomId as string)
-      .where('m.id', '=', messageId as string);
+      .where('m.room_id', '=', roomId as string);
+    return Array.isArray(messageId)
+      ? query.where('m.id', 'in', messageId)
+      : query.where('m.id', '=', messageId as string);
   }
 
-  function directTarget(db: Database, userId?: string, peerId?: string, messageId?: string) {
+  function directTarget(db: Database, userId?: string, peerId?: string, messageId?: string | string[]) {
+    const query = db
+      .selectFrom('direct_messages as m')
+      .leftJoin('users as u', 'u.id', 'm.sender_id')
+      .selectAll('m')
+      .select(directAuthorName);
     return (
-      db
-        .selectFrom('direct_messages as m')
-        .leftJoin('users as u', 'u.id', 'm.sender_id')
-        .selectAll('m')
-        .select(directAuthorName)
-        .where('m.id', '=', messageId as string)
+      (Array.isArray(messageId) ? query.where('m.id', 'in', messageId) : query.where('m.id', '=', messageId as string))
         // Between these two users, either direction.
         .where((eb) =>
           eb.or([
@@ -199,6 +216,38 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     const row = await directTarget(on(override), userId, peerId, messageId).executeTakeFirst();
     const target = mapDirectTarget((row as DirectTargetRow | undefined) || null);
     return target ? projectReplyPreview(target, { now }) : projectReplyTombstone(messageId);
+  }
+
+  /** Previews of several quoted room messages in one query, by quoted message id. */
+  async function getRoomPreviews({
+    roomId,
+    messageIds,
+    client: override,
+    now
+  }: { roomId?: string; messageIds: string[]; now?: number } & Override): Promise<Map<string, ReplyPreview | null>> {
+    const ids = [...new Set(messageIds)];
+    if (ids.length === 0) return new Map();
+    const rows = (await roomTarget(on(override), roomId, ids).execute()) as RoomTargetRow[];
+    return previewsById(ids, new Map(rows.map((row) => [row.id, mapRoomTarget(row)])), now);
+  }
+
+  /** Previews of several quoted direct messages in one query, by quoted message id. */
+  async function getDirectPreviews({
+    userId,
+    peerId,
+    messageIds,
+    client: override,
+    now
+  }: {
+    userId?: string;
+    peerId?: string;
+    messageIds: string[];
+    now?: number;
+  } & Override): Promise<Map<string, ReplyPreview | null>> {
+    const ids = [...new Set(messageIds)];
+    if (ids.length === 0) return new Map();
+    const rows = (await directTarget(on(override), userId, peerId, ids).execute()) as DirectTargetRow[];
+    return previewsById(ids, new Map(rows.map((row) => [row.id, mapDirectTarget(row)])), now);
   }
 
   async function insertRoomReply({
@@ -261,7 +310,9 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
 
   return Object.freeze({
     getDirectPreview,
+    getDirectPreviews,
     getRoomPreview,
+    getRoomPreviews,
     insertDirectReply,
     insertRoomReply,
     lockDirectTarget,
