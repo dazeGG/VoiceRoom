@@ -42,12 +42,14 @@
 {/if}
 
 <style>
+  /* Lined up with the text of the messages above: the chat's 32px avatar
+     column and its 10px gap (.chat-msg in chat-rail.css). */
   .outgoing-messages {
     display: flex;
     flex-direction: column;
     gap: 8px;
     margin: 0;
-    padding: 0;
+    padding: 0 0 0 42px;
     list-style: none;
   }
 
@@ -55,24 +57,24 @@
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 4px;
+    gap: 2px;
   }
 
   .outgoing-message__bubble {
-    max-width: min(100%, 520px);
-    padding: 8px 12px;
-    border-radius: 12px;
-    background: var(--vr-surface-2);
-    opacity: 0.55;
+    max-width: 100%;
+    opacity: 0.5;
   }
 
   .is-failed .outgoing-message__bubble {
-    opacity: 0.8;
-    outline: 1px solid color-mix(in oklch, var(--vr-danger), transparent 40%);
+    opacity: 0.85;
   }
 
+  /* Set like a sent message's text (.chat-msg-text). */
   .outgoing-message__text {
     margin: 0;
+    color: var(--vr-text);
+    font-size: 14px;
+    line-height: 1.45;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
