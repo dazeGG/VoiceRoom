@@ -134,7 +134,7 @@ test('an invitation is answered from the card by the invited side only', () => {
   expect(within(sent).queryByRole('button')).toBeNull();
 });
 
-test('a thread stays behind the loading note until its emoji artwork has loaded', async () => {
+test('a thread shows its messages as soon as they arrive, while its artwork is still loading', () => {
   const incomplete = vi.spyOn(HTMLImageElement.prototype, 'complete', 'get').mockReturnValue(false);
   const lobby = renderDm();
   lobby.thread.loading = true;
@@ -144,14 +144,41 @@ test('a thread stays behind the loading note until its emoji artwork has loaded'
   lobby.thread.messages = [message('m1', 'ada', 'привет 👍')];
   lobby.thread.loading = false;
   flushSync();
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  expect(screen.getByRole('status').textContent).toBe('Загружаем переписку…');
-  expect(document.querySelector('.lobby-dm-thread')?.classList.contains('is-settling')).toBe(true);
-
+  expect(screen.queryByRole('status')).toBeNull();
+  expect(screen.getByText(/привет/)).toBeTruthy();
   incomplete.mockRestore();
-  for (const image of document.querySelectorAll('.lobby-dm-thread img')) image.dispatchEvent(new Event('load'));
-  await vi.waitFor(() => expect(screen.queryByRole('status')).toBeNull());
-  expect(document.querySelector('.lobby-dm-thread')?.classList.contains('is-settling')).toBe(false);
+});
+
+test('a reader at the newest message stays on it when loading artwork grows the thread', () => {
+  const observers: Array<() => void> = [];
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(callback: () => void) {
+        observers.push(callback);
+      }
+      observe() {}
+      disconnect() {}
+    }
+  );
+  renderDm(ada, [message('m1', 'ada', 'картинка'), message('m2', 'me', 'ответ')]);
+  const scroll = document.querySelector<HTMLElement>('.lobby-dm-scroll')!;
+  let height = 1000;
+  Object.defineProperty(scroll, 'scrollHeight', { configurable: true, get: () => height });
+  Object.defineProperty(scroll, 'clientHeight', { configurable: true, get: () => 400 });
+  expect(observers).toHaveLength(1);
+
+  scroll.scrollTop = 600;
+  scroll.dispatchEvent(new Event('scroll'));
+  height = 1300;
+  observers[0]();
+  expect(scroll.scrollTop).toBe(1300);
+
+  scroll.scrollTop = 100;
+  scroll.dispatchEvent(new Event('scroll'));
+  height = 1600;
+  observers[0]();
+  expect(scroll.scrollTop).toBe(100);
 });
 
 test("an open thread asks for each message's reactions once, however the answers come back", async () => {
