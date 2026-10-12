@@ -32,7 +32,7 @@
 <style>
   .room-switch-text {
     margin: 0;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font-size: 14px;
     line-height: 1.45;
   }
@@ -41,7 +41,7 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-size: 14px;
     cursor: pointer;
   }
@@ -50,6 +50,6 @@
     width: 16px;
     height: 16px;
     margin: 0;
-    accent-color: var(--accent, currentColor);
+    accent-color: var(--vr-accent, currentColor);
   }
 </style>

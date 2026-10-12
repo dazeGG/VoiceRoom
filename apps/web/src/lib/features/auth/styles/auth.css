@@ -7,28 +7,26 @@
   max-width: none;
   max-height: calc(100dvh - 32px);
   margin: auto;
-  border: 1px solid color-mix(in oklch, var(--warm-ink), transparent 88%);
-  border-radius: var(--radius-xl);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 20px;
   padding: 0;
   overflow: hidden;
-  background: var(--warm-800);
-  color: var(--warm-ink);
-  box-shadow: 0 32px 96px rgba(0, 0, 0, 0.62);
+  background: var(--vr-surface);
+  color: var(--vr-text);
+  box-shadow: var(--vr-shadow-modal);
 }
 
 .auth-dialog::backdrop {
-  background: color-mix(in srgb, var(--warm-950) 74%, transparent);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  background: var(--vr-backdrop);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
 }
 
 .auth-dialog-panel {
   position: relative;
   max-height: calc(100dvh - 32px);
   overflow-y: auto;
-  padding: 34px 32px 28px;
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklch, var(--warm-ink), transparent 78%) transparent;
+  padding: 28px;
 }
 
 .auth-dialog-close {
@@ -40,10 +38,10 @@
   height: var(--interactive-sm);
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in oklch, var(--warm-ink), transparent 90%);
-  border-radius: var(--radius-sm);
-  background: var(--control);
-  color: var(--warm-muted);
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--vr-text-2);
   cursor: pointer;
   transition:
     background 160ms var(--ease-out),
@@ -53,26 +51,25 @@
 }
 
 .auth-dialog-close:hover {
-  border-color: color-mix(in oklch, var(--warm-ink), transparent 80%);
-  background: var(--control-hover);
-  color: var(--warm-ink);
-  transform: rotate(3deg);
+  background: var(--vr-hover);
+  color: var(--vr-text);
 }
 
 .auth-dialog-close:focus-visible,
 .auth-link:focus-visible {
-  outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));
+  outline: 2px solid var(--focus-border);
   outline-offset: 3px;
 }
 
 .auth-input {
   width: 100%;
   min-height: 0;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 12px;
-  padding: 13px 15px;
-  background: var(--warm-900);
-  color: var(--warm-100);
+  height: 46px;
+  padding: 0 15px;
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
   font-family: var(--font-ui);
   font-size: 15px;
   outline: none;
@@ -80,17 +77,15 @@
 }
 
 .auth-input::placeholder {
-  color: var(--warm-650);
+  color: var(--vr-text-3);
 }
 
 .auth-input:hover {
-  border-color: rgba(255, 255, 255, 0.16);
-  background: var(--warm-900);
+  border-color: var(--vr-line-strong);
 }
 
 .auth-input:focus {
-  border-color: var(--focus-border);
-  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  border-color: var(--vr-accent-line);
   box-shadow: none;
 }
 
@@ -99,15 +94,14 @@
   align-items: center;
   gap: 4px;
   padding: 0 8px 0 15px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--vr-line-strong);
   border-radius: 12px;
-  background: var(--warm-900);
+  background: var(--vr-surface-2);
   transition: border-color 0.15s ease;
 }
 
 .auth-password:focus-within {
-  border-color: var(--focus-border);
-  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  border-color: var(--vr-accent-line);
   box-shadow: none;
 }
 
@@ -116,7 +110,8 @@
   min-width: 0;
   border: none;
   border-radius: 0;
-  padding: 13px 0;
+  height: 44px;
+  padding: 0;
   background: transparent;
 }
 
@@ -128,13 +123,13 @@
 .auth-foot {
   margin-top: 22px;
   text-align: center;
-  color: var(--warm-560);
+  color: var(--vr-text-2);
   font-size: 13.5px;
 }
 
 .auth-link {
-  color: var(--accent);
-  font-weight: 700;
+  color: var(--vr-accent);
+  font-weight: 600;
   text-decoration: none;
   cursor: pointer;
 }
@@ -146,10 +141,6 @@
   padding: 0;
   font: inherit;
   font-weight: 600;
-}
-
-.auth-foot--secondary {
-  margin-top: 8px;
 }
 
 .auth-input--code {
@@ -171,8 +162,8 @@ button.auth-link:disabled {
   width: 15px;
   height: 15px;
   border-radius: 50%;
-  border: 2px solid color-mix(in oklch, var(--accent-ink), transparent 72%);
-  border-top-color: var(--accent-ink);
+  border: 2px solid color-mix(in oklch, var(--vr-accent-ink), transparent 72%);
+  border-top-color: var(--vr-accent-ink);
   animation: auth-spin 0.7s linear infinite;
 }
 

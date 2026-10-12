@@ -72,7 +72,8 @@
         name={group.name}
         src={group.avatarUrl}
         background={group.avatarBackground}
-        size={34}
+        foreground={group.avatarForeground}
+        size={32}
       />
     </button>
   {:else}
@@ -81,7 +82,8 @@
       name={group.name}
       src={group.avatarUrl}
       background={group.avatarBackground}
-      size={34}
+      foreground={group.avatarForeground}
+      size={32}
     />
   {/if}
   <div class="chat-msg-main">
@@ -90,14 +92,13 @@
         <button
           class="chat-msg-author chat-msg-trigger"
           type="button"
-          style={`color:${group.avatarBackground}`}
           aria-haspopup="dialog"
           aria-label={profileLabel}
           onclick={onOpenProfile}
           oncontextmenu={onAuthorMenu}><EmojiText text={group.name} /></button
         >
       {:else}
-        <span class="chat-msg-author" style={`color:${group.avatarBackground}`}><EmojiText text={group.name} /></span>
+        <span class="chat-msg-author"><EmojiText text={group.name} /></span>
       {/if}
       <time class="chat-msg-time" datetime={new Date(group.messages[0].createdAt).toISOString()}
         >{formatTime(group.createdAt)}</time

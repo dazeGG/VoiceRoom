@@ -75,7 +75,8 @@ test('joining a room establishes voice through the public LiveKit gate', async (
       ].join('\n')
     );
   }
-  await expect(page.locator('#toast')).not.toContainText('LiveKit недоступен');
+  // The toast stack only exists while a toast is up, so check for the text itself.
+  await expect(page.locator('#toast', { hasText: 'LiveKit недоступен' })).toHaveCount(0);
   await expect
     .poll(() =>
       observedSockets.some(

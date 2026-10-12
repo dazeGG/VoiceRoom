@@ -72,7 +72,7 @@ const RECOVERY_CODE_PATTERN = /^[0-9A-HJKMNP-TV-Z]{16}$/;
 // The release whose "what's new" announcement the web client shows. Accounts
 // remember the last announcement they saw and new accounts start at this one,
 // so only people who used an earlier release are shown it.
-export const WHATS_NEW_VERSION: string = '2.6.0';
+export const WHATS_NEW_VERSION: string = '2.8.0';
 export const RECOVERY_CODES_REMINDER_SNOOZE_MS: number = 3 * 24 * 60 * 60 * 1000;
 // A sign-in from a device and city the account has not used within this window
 // asks the account whether it was them; an unanswered question expires after

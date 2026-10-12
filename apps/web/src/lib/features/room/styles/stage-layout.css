@@ -5,8 +5,12 @@
   grid-template-rows: minmax(0, 1fr);
   gap: var(--space-md);
   overflow: hidden;
-  padding: var(--space-sm) var(--space-xl) 104px;
+  padding: 20px 20px 96px;
   background: transparent;
+  /* Responsive rules follow the stage's own width, not the window's: the chat
+     rail can take 360px of it. */
+  container-type: inline-size;
+  container-name: stage;
 }
 
 /* The in-room top-bar heading (.room-heading.topbar-room-heading) is laid out
@@ -31,13 +35,12 @@ h1 {
   gap: var(--space-xs);
 }
 
-.tool-button,
 .primary-button,
 .secondary-button,
 .leave-button,
 .sound-button {
   min-height: 44px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--vr-line-strong);
   border-radius: var(--radius-sm);
   padding: 0 16px;
   transition:
@@ -48,21 +51,13 @@ h1 {
     transform 160ms var(--ease-out);
 }
 
-.tool-button {
-  background: var(--panel);
-  color: var(--ink);
-  font-weight: 750;
-}
-
-.tool-button:hover,
 .primary-button:hover,
 .secondary-button:hover,
 .sound-button:hover {
-  border-color: color-mix(in oklch, var(--control-line), var(--ink) 22%);
-  box-shadow: 0 0 0 3px oklch(84% 0.012 92 / 0.1);
+  border-color: color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 22%);
+  box-shadow: 0 0 0 3px var(--vr-line-strong);
 }
 
-.tool-button:active,
 .primary-button:active,
 .secondary-button:active,
 .sound-button:active {
@@ -103,11 +98,11 @@ body[data-stage-summary='hidden'] .stage-strip-bar {
   height: 34px;
   flex: 0 0 auto;
   place-items: center;
-  border: 1px solid var(--line);
+  border: 1px solid var(--vr-line-strong);
   border-radius: var(--radius-sm);
   padding: 0;
-  background: var(--warm-900);
-  color: var(--muted);
+  background: var(--vr-bg);
+  color: var(--vr-text-2);
   transition:
     background 140ms var(--ease-out),
     border-color 140ms var(--ease-out),
@@ -115,9 +110,9 @@ body[data-stage-summary='hidden'] .stage-strip-bar {
 }
 
 .strip-toggle-button:hover {
-  border-color: color-mix(in oklch, var(--control-line), var(--ink) 18%);
-  background: var(--control);
-  color: var(--ink);
+  border-color: color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 18%);
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
 }
 
 .strip-toggle-button svg {

@@ -186,15 +186,15 @@
     gap: 10px;
     width: 100%;
     min-width: 0;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 12px;
-    min-height: var(--interactive-lg, 52px);
+    min-height: 44px;
     padding: 0 14px 0 15px;
-    background: var(--warm-900);
-    color: var(--warm-100);
+    background: var(--vr-surface-2);
+    color: var(--vr-text);
     font-family: var(--font-ui);
-    font-size: 14.5px;
-    font-weight: 500;
+    font-size: 14px;
+    font-weight: 400;
     line-height: 1;
     text-align: left;
     cursor: pointer;
@@ -205,7 +205,7 @@
 
   .select-trigger:hover:not(:disabled),
   .select-trigger[aria-expanded='true'] {
-    border-color: rgba(154, 143, 106, 0.7);
+    border-color: var(--vr-accent-line);
   }
 
   .select-trigger:disabled {
@@ -221,7 +221,7 @@
   .select-trigger-chevron {
     flex: none;
     display: inline-flex;
-    color: var(--warm-500);
+    color: var(--vr-text-3);
     transition: transform 0.16s ease;
   }
 
@@ -245,13 +245,13 @@
   }
 
   .select-trigger--home {
-    border-color: rgba(154, 143, 106, 0.55);
+    border-color: var(--vr-line-strong);
   }
 
   .select-trigger--home:hover:not(:disabled),
   .select-trigger--home[aria-expanded='true'] {
-    border-color: rgba(154, 143, 106, 0.7);
-    background: var(--warm-900);
+    border-color: var(--vr-accent-line);
+    background: var(--vr-surface-2);
   }
 
   .select-trigger--compact {
@@ -262,26 +262,26 @@
     border: none;
     border-radius: 0;
     background: transparent;
-    color: #bdb7a8;
+    color: var(--vr-text-2);
     font-size: 13px;
   }
 
   .select-trigger--compact:hover:not(:disabled),
   .select-trigger--compact[aria-expanded='true'] {
     border-color: transparent;
-    background: var(--control);
-    color: var(--warm-150);
+    background: var(--vr-hover);
+    color: var(--vr-text);
   }
 
   .select-trigger--dock {
     position: relative;
     justify-content: flex-start;
     gap: 0;
-    border-color: oklch(34% 0.02 92);
+    border-color: var(--vr-line-strong);
     border-radius: var(--radius-sm, 10px);
     padding: 10px 36px 10px 12px;
-    background: var(--warm-900);
-    color: oklch(96% 0.008 92);
+    background: var(--vr-surface-2);
+    color: var(--vr-text);
     font-size: 14px;
   }
 
@@ -294,7 +294,7 @@
 
   .select-trigger--dock:hover:not(:disabled),
   .select-trigger--dock[aria-expanded='true'] {
-    border-color: oklch(42% 0.02 92);
+    border-color: var(--vr-accent-line);
   }
 
   .select-trigger--dock[aria-expanded='true'] .select-trigger-chevron {
@@ -308,25 +308,25 @@
     gap: 10px;
     width: 100%;
     min-width: 0;
-    padding: 10px 12px;
+    padding: 9px 10px;
     border: none;
-    border-radius: 10px;
+    border-radius: 8px;
     background: transparent;
     font-family: var(--font-ui);
     font-size: 14px;
-    font-weight: 500;
-    color: var(--warm-150);
+    font-weight: 400;
+    color: var(--vr-text);
     text-align: left;
     cursor: pointer;
     transition: background 0.14s ease;
   }
 
   .popover-option:hover {
-    background: var(--control);
+    background: var(--vr-hover);
   }
 
   .popover-option[data-selected='true'] {
-    background: var(--control-hover);
+    background: var(--vr-accent-soft);
   }
 
   .popover-option:disabled {

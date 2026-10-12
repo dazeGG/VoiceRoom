@@ -2,6 +2,8 @@
   // The compose field of one thread. It is mounted per thread, so the unsent
   // text it brings back and stores belongs to that thread alone.
   import { onDestroy, onMount, tick, untrack } from 'svelte';
+  import { ArrowUp } from '@lucide/svelte';
+  import { iconSm } from '$lib/shared/ui/icons';
   import type { DirectMessage } from '$lib/api/dm';
   import { getAppRealtime } from '$lib/api/realtime';
   import { useLobby } from '$lib/features/home/model/lobby-context';
@@ -181,12 +183,44 @@
         onpick={insertEmoji}
         onbrowse={() => typingNotifier.notify('emoji')}
       />
+      <button
+        class="lobby-dm-send"
+        type="submit"
+        aria-label="Отправить"
+        title="Отправить"
+        disabled={sending || !(draft.trim() || media?.canSend)}
+        onclick={() => void submit()}
+      >
+        <ArrowUp {...iconSm} aria-hidden="true" />
+      </button>
     </div>
   </div>
   <TypingIndicator label={typingLabel} />
 </div>
 
 <style>
+  :global(.lobby-dm-send) {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    margin: 6px 6px 6px 0;
+    border: 0;
+    border-radius: 10px;
+    background: var(--vr-accent);
+    color: var(--vr-accent-ink);
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  :global(.lobby-dm-send:hover:not(:disabled)) {
+    background: var(--vr-accent-hover);
+  }
+  :global(.lobby-dm-send:disabled) {
+    background: var(--vr-surface-3);
+    color: var(--vr-text-3);
+    cursor: default;
+  }
   :global(.lobby-dm-compose) {
     position: relative;
     flex: none;

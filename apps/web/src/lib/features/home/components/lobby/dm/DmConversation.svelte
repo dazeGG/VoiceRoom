@@ -335,7 +335,7 @@
       src={fromMe ? self.avatarUrl : peer?.avatarUrl}
       colorKey={fromMe ? self.avatarColorKey : peer?.avatarColorKey}
       background={(fromMe ? self.avatarAccent : peer?.avatarAccent) || undefined}
-      size={34}
+      size={32}
     />
   </button>
 {/snippet}
@@ -364,7 +364,6 @@
         </button>
       {/if}
       {#each groups as group (group.key)}
-        {@const accent = (group.fromMe ? self.avatarAccent : peer?.avatarAccent) || 'var(--accent)'}
         {#if group.dayLabel}
           <div class="chat-day-divider"><span>{group.dayLabel}</span></div>
         {/if}
@@ -375,7 +374,6 @@
               <button
                 class="chat-msg-author chat-msg-trigger"
                 type="button"
-                style={`color:${accent}`}
                 aria-haspopup="dialog"
                 aria-label={group.fromMe ? 'Ваш профиль' : `Профиль ${peerName}`}
                 onclick={(event) => openProfile(event, group.fromMe)}
@@ -495,8 +493,8 @@
     align-items: center;
     justify-content: center;
     margin-bottom: -100%;
-    background: var(--paper-deep, var(--paper));
-    color: var(--warm-faint);
+    background: var(--vr-bg, var(--vr-bg));
+    color: var(--vr-text-3);
     font-size: 13.5px;
   }
   :where(.lobby-dm-thread).is-settling {
@@ -512,8 +510,8 @@
   :global(.dm-msg-edited) {
     margin-left: 5px;
     font-family: var(--font-mono);
-    font-size: 9px;
-    opacity: 0.64;
+    font-size: 11px;
+    color: var(--vr-text-3);
     white-space: nowrap;
   }
   :global(.lobby-dm-empty) {
@@ -521,7 +519,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-size: 13.5px;
   }
 </style>

@@ -2,7 +2,7 @@
   // The open settings. Mounted fresh on every opening, so each tab starts from
   // what is saved; only the profile edits live here, so they survive a look at
   // another tab before saving.
-  import { Bell, Keyboard, LogOut, Mic, Monitor, ShieldCheck, User, X } from '@lucide/svelte';
+  import { Bell, Keyboard, LogOut, Mic, Monitor, Palette, ShieldCheck, User, X } from '@lucide/svelte';
   import { onDestroy, onMount, untrack } from 'svelte';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import type { PublicUser } from '$lib/api/friends';
@@ -14,6 +14,8 @@
   import { readSettingsSupport } from '../../model/settings-support';
   import type { ToastOptions } from '../../model/toasts.svelte';
   import AccountSecuritySettings from '../AccountSecuritySettings.svelte';
+  import DesktopAppCard from '../DesktopAppCard.svelte';
+  import AppearanceSettings from './AppearanceSettings.svelte';
   import AppSettings from './AppSettings.svelte';
   import HotkeySettings from './HotkeySettings.svelte';
   import NotificationSettings from './NotificationSettings.svelte';
@@ -44,7 +46,8 @@
   } = $props();
 
   const support = readSettingsSupport();
-  const appTab = support.desktopApp && (support.autostart || support.overlay);
+  // On the web the tab offers the desktop builds; in the app, its own settings.
+  const appTab = support.desktopApp ? support.autostart || support.overlay : true;
   // The dialog remounts for another account, so the first user is the one.
   const profile = new ProfileDraft(untrack(() => user));
   // A dialog opened from the security tab owns focus and Escape while it is up.
@@ -104,9 +107,10 @@
           {@render navItem('profile', 'Профиль', User)}
           {@render navItem('security', 'Безопасность', ShieldCheck)}
           {@render navItem('sound', 'Звук', Mic)}
-          {#if support.desktopApp}{@render navItem('hotkeys', 'Хоткеи', Keyboard)}{/if}
-          {#if appTab}{@render navItem('app', 'Приложение', Monitor)}{/if}
           {@render navItem('notifications', 'Уведомления', Bell)}
+          {@render navItem('appearance', 'Внешний вид', Palette)}
+          {#if support.desktopApp}{@render navItem('hotkeys', 'Горячие клавиши', Keyboard)}{/if}
+          {#if appTab}{@render navItem('app', 'Приложение', Monitor)}{/if}
         </div>
         <button
           class="settings-nav-item settings-nav-item--danger"
@@ -132,10 +136,16 @@
           />
         {:else if tab === 'sound'}
           <SoundSettings desktopApp={support.desktopApp} {onToast} />
+        {:else if tab === 'appearance'}
+          <AppearanceSettings />
         {:else if tab === 'hotkeys' && support.desktopApp}
           <HotkeySettings globalHotkeys={support.globalHotkeys} {onToast} />
         {:else if tab === 'app' && appTab}
-          <AppSettings {support} {onToast} />
+          {#if support.desktopApp}
+            <AppSettings {support} {onToast} />
+          {:else}
+            <DesktopAppCard title="Voice Room для компьютера" />
+          {/if}
         {:else}
           <NotificationSettings {support} users={notificationUsers} rooms={notificationRooms} {onToast} />
         {/if}

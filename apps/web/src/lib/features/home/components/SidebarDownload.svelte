@@ -99,12 +99,12 @@
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
   }
   :global(.sidebar-download-note) {
     padding: 8px 10px 4px;
     font-size: 11.5px;
     line-height: 1.4;
-    color: var(--amber);
+    color: var(--vr-away);
   }
 </style>

@@ -4,7 +4,7 @@
   // and how long ago — and offers exactly one bulk action. "К первому
   // непрочитанному" is gone: every unread row is already one click away, and
   // the two buttons together overflowed the header into a horizontal scrollbar.
-  import { Bell, Check, X } from '@lucide/svelte';
+  import { Bell, Check, CircleAlert, X } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
   import type { NotificationItem, NotificationReason } from '@voice-room/shared/notifications';
   import type { createNotificationInbox } from '$lib/shared/notifications/inbox.svelte';
@@ -14,11 +14,14 @@
   let {
     inbox,
     onopen,
-    onclose
+    onclose,
+    roomLabel
   }: {
     inbox: Inbox;
     onopen: (item: NotificationItem) => void;
     onclose?: () => void;
+    /** Name of the room a notification came from. */
+    roomLabel?: (roomId: string) => string;
   } = $props();
 
   const REASON_LABELS: Record<NotificationReason, string> = {
@@ -97,32 +100,50 @@
   <div class="notification-inbox-body">
     {#if inbox.error}
       <div class="notification-inbox-state">
+        <span class="notification-inbox-glyph notification-inbox-glyph--error"
+          ><CircleAlert size={20} aria-hidden="true" /></span
+        >
         <p role="alert">{inbox.error}</p>
         <button class="notification-inbox-retry" type="button" onclick={() => void inbox.load()}>Повторить</button>
       </div>
     {:else if inbox.loading && inbox.items.length === 0}
-      <div class="notification-inbox-state"><p>Загружаем…</p></div>
+      <div class="notification-inbox-skeleton">
+        {#each [72, 58, 84, 64] as width, index (index)}
+          <div class="notification-inbox-skeleton-row" aria-hidden="true">
+            <span class="notification-inbox-dot notification-inbox-dot--skeleton"></span>
+            <span class="notification-inbox-skeleton-lines">
+              <span style:width={`${width}%`}></span>
+              <span class="is-short"></span>
+            </span>
+          </div>
+        {/each}
+        <p>Загружаем…</p>
+      </div>
     {:else if inbox.items.length === 0}
-      <div class="notification-inbox-state notification-inbox-empty">
-        <Bell size={22} aria-hidden="true" />
+      <div class="notification-inbox-state">
+        <span class="notification-inbox-glyph"><Bell size={20} aria-hidden="true" /></span>
         <p>Новых уведомлений нет</p>
       </div>
     {:else}
       <ul class="notification-inbox-list">
         {#each inbox.items as item (item.id)}
+          {@const where = roomLabel?.(item.roomId)}
           <li class:unread={!item.readAt}>
             <button type="button" onclick={() => open(item)}>
               <span class="notification-inbox-dot" aria-hidden="true"></span>
               <span class="notification-inbox-text">
-                <strong
+                <strong class:is-retracted={Boolean(item.retractedAt)}
                   ><EmojiText
                     text={item.retractedAt ? 'Сообщение недоступно' : item.body || 'Новое уведомление'}
                   /></strong
                 >
                 <small>
                   <span class="notification-inbox-reason">{reasonLabel(item.reasons)}</span>
-                  {#if timeAgo(item.createdAt)}<span class="notification-inbox-time">{timeAgo(item.createdAt)}</span
-                    >{/if}
+                  {#if where}<span class="notification-inbox-room">{where}</span>{/if}
+                  {#if timeAgo(item.createdAt)}
+                    <span aria-hidden="true">·</span>
+                    <span class="notification-inbox-time">{timeAgo(item.createdAt)}</span>
+                  {/if}
                 </small>
               </span>
             </button>
@@ -153,39 +174,39 @@
     display: flex;
     flex: none;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     padding: 14px 12px 12px 18px;
-    border-bottom: 1px solid var(--line);
+    border-bottom: 1px solid var(--vr-line);
   }
 
   h2 {
     display: flex;
     min-width: 0;
+    flex: 1;
     align-items: center;
     gap: 8px;
     margin: 0;
-    font-size: 15px;
-    font-weight: 700;
+    font-size: 16px;
+    font-weight: 600;
     letter-spacing: -0.01em;
   }
 
   .notification-inbox-count {
-    display: grid;
+    display: flex;
     min-width: 20px;
     height: 20px;
-    place-items: center;
+    align-items: center;
+    justify-content: center;
     padding: 0 6px;
     border-radius: 999px;
-    background: var(--coral);
-    color: var(--paper-deep);
-    font-family: var(--font-mono);
-    font-size: 11px;
-    font-weight: 500;
+    background: var(--vr-accent);
+    color: var(--vr-accent-ink);
+    font-size: 11.5px;
+    font-weight: 600;
   }
 
   .notification-inbox-tools {
     display: flex;
-    margin-left: auto;
     align-items: center;
     gap: 4px;
   }
@@ -199,9 +220,10 @@
     border: 0;
     border-radius: 9px;
     background: transparent;
-    color: var(--muted);
+    color: var(--vr-text-2);
     font-family: var(--font-ui);
-    font-size: 12.5px;
+    font-size: 13px;
+    font-weight: 500;
     white-space: nowrap;
     cursor: pointer;
     transition:
@@ -218,7 +240,7 @@
     border: 0;
     border-radius: 9px;
     background: transparent;
-    color: var(--muted);
+    color: var(--vr-text-2);
     cursor: pointer;
     transition:
       background 0.14s ease,
@@ -229,26 +251,24 @@
   .notification-inbox-read-all:focus-visible,
   .notification-inbox-dismiss:hover,
   .notification-inbox-dismiss:focus-visible {
-    background: color-mix(in oklch, var(--paper), var(--ink) 8%);
-    color: var(--ink);
+    background: var(--vr-hover);
+    color: var(--vr-text);
     outline: none;
   }
 
-  /* The list scrolls, the panel does not: a header that overflowed used to give
-     the whole panel a horizontal scrollbar. */
+  /* The list scrolls, the panel does not. */
   .notification-inbox-body {
     min-height: 0;
     flex: 1 1 auto;
-    padding: 6px;
-    overflow-y: auto;
     overflow-x: hidden;
+    overflow-y: auto;
   }
 
   .notification-inbox-list {
     display: grid;
-    gap: 2px;
+    gap: 0;
     margin: 0;
-    padding: 0;
+    padding: 6px;
     list-style: none;
   }
 
@@ -256,10 +276,10 @@
     display: flex;
     width: 100%;
     align-items: flex-start;
-    gap: 9px;
-    padding: 10px 12px;
+    gap: 12px;
+    padding: 12px;
     border: 0;
-    border-radius: 11px;
+    border-radius: 12px;
     background: transparent;
     color: inherit;
     font: inherit;
@@ -270,15 +290,14 @@
 
   li button:hover,
   li button:focus-visible {
-    background: color-mix(in oklch, var(--paper), var(--ink) 7%);
+    background: var(--vr-hover);
     outline: none;
   }
 
-  /* The unread marker is a dot in the gutter rather than a filled row, so a
-     screen of unread notifications does not read as one solid block. */
+  /* The unread marker is a dot in the gutter rather than a filled row. */
   .notification-inbox-dot {
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
     flex: none;
     margin-top: 6px;
     border-radius: 50%;
@@ -286,21 +305,28 @@
   }
 
   li.unread .notification-inbox-dot {
-    background: var(--coral);
+    background: var(--vr-accent);
+  }
+
+  .notification-inbox-dot--skeleton {
+    background: var(--vr-surface-3);
   }
 
   .notification-inbox-text {
-    display: grid;
+    display: flex;
     min-width: 0;
-    gap: 3px;
+    flex: 1;
+    flex-direction: column;
+    gap: 4px;
   }
 
   strong {
     overflow: hidden;
-    color: var(--muted);
-    font-size: 13.5px;
-    font-weight: 600;
-    line-height: 1.35;
+    overflow-wrap: anywhere;
+    color: var(--vr-text-2);
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1.4;
     display: -webkit-box;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
@@ -308,67 +334,131 @@
   }
 
   li.unread strong {
-    color: var(--ink);
+    color: var(--vr-text);
+    font-weight: 600;
+  }
+
+  strong.is-retracted {
+    font-style: italic;
   }
 
   small {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
-    gap: 7px;
-    color: var(--muted);
-    font-size: 11.5px;
+    gap: 6px;
+    color: var(--vr-text-3);
+    font-size: 12px;
   }
 
   .notification-inbox-reason {
     padding: 1px 7px;
     border-radius: 999px;
-    background: color-mix(in oklch, var(--paper), var(--ink) 9%);
-    font-size: 11px;
+    background: var(--vr-hover);
+    color: var(--vr-text-2);
+    font-weight: 500;
   }
 
-  .notification-inbox-time {
-    font-family: var(--font-mono);
+  li.unread .notification-inbox-reason {
+    background: var(--vr-accent-soft);
+    color: var(--vr-accent);
   }
 
   .notification-inbox-state {
-    display: grid;
-    justify-items: center;
-    gap: 10px;
-    padding: 34px 18px;
-    color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 44px 24px;
+    color: var(--vr-text-3);
     text-align: center;
   }
 
-  .notification-inbox-empty {
-    color: var(--warm-faint, var(--muted));
+  .notification-inbox-glyph {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    border-radius: 13px;
+    background: var(--vr-surface-3);
+  }
+
+  .notification-inbox-glyph--error {
+    background: var(--vr-danger-soft);
+    color: var(--vr-danger);
   }
 
   .notification-inbox-state p {
     margin: 0;
+    color: var(--vr-text-2);
+    font-size: 14px;
+  }
+
+  .notification-inbox-skeleton {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .notification-inbox-skeleton p {
+    margin: 0;
+    color: var(--vr-text-3);
     font-size: 13px;
+    text-align: center;
+  }
+
+  .notification-inbox-skeleton-row {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+  }
+
+  .notification-inbox-skeleton-lines {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .notification-inbox-skeleton-lines span {
+    display: block;
+    height: 12px;
+    border-radius: 6px;
+    background: var(--vr-surface-3);
+  }
+
+  .notification-inbox-skeleton-lines .is-short {
+    width: 40%;
+    height: 10px;
+    border-radius: 5px;
+    opacity: 0.6;
   }
 
   .notification-inbox-retry,
   .notification-inbox-more {
-    height: 34px;
-    padding: 0 14px;
-    border: 1px solid var(--line);
+    height: 36px;
+    padding: 0 16px;
+    border: 1px solid var(--vr-line-strong);
     border-radius: 10px;
     background: transparent;
-    color: inherit;
+    color: var(--vr-text);
     font-family: var(--font-ui);
-    font-size: 12.5px;
+    font-size: 13.5px;
+    font-weight: 500;
     cursor: pointer;
   }
 
   .notification-inbox-more {
-    width: calc(100% - 12px);
-    margin: 6px;
+    width: calc(100% - 24px);
+    height: 38px;
+    margin: 2px 12px 12px;
+    border-radius: 11px;
   }
 
   .notification-inbox-retry:hover,
   .notification-inbox-more:hover:not(:disabled) {
-    background: color-mix(in oklch, var(--paper), var(--ink) 7%);
+    background: var(--vr-hover);
   }
 
   .notification-inbox-more:disabled {

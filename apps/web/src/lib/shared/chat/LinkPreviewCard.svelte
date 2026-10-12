@@ -46,7 +46,7 @@
     width: min(100%, 440px);
     margin-top: 6px;
     overflow: hidden;
-    border-inline-start: 3px solid color-mix(in oklch, var(--green), transparent 25%);
+    border-inline-start: 3px solid color-mix(in oklch, var(--vr-online), transparent 25%);
     border-radius: 6px;
     background: color-mix(in oklch, currentColor, transparent 94%);
     color: inherit;

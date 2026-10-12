@@ -4,7 +4,7 @@
 
 <svelte:head>
   <title>Регистрация · Voice Room</title>
-  <meta name="theme-color" content="#10110f" />
+  <meta name="theme-color" content="#131416" />
 </svelte:head>
 
 <HomePage initialAuthMode="register" />

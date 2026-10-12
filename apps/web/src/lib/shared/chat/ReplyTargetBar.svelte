@@ -21,6 +21,7 @@
 </script>
 
 <div class="reply-target">
+  <span class="reply-target-label">В ответ</span>
   <ReplyPreview preview={target} interactive={Boolean(onjump) && !target.deleted} {onjump} />
   <button
     class="reply-target-cancel"
@@ -51,6 +52,12 @@
     padding-block: 5px;
   }
 
+  .reply-target-label {
+    flex: none;
+    color: var(--vr-text-2);
+    font-size: 13px;
+  }
+
   .reply-target-cancel {
     display: grid;
     width: 28px;
@@ -61,7 +68,7 @@
     border-radius: 9px;
     padding: 0;
     background: transparent;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     cursor: pointer;
     transition:
       background 120ms ease,
@@ -70,8 +77,8 @@
 
   .reply-target-cancel:hover,
   .reply-target-cancel:focus-visible {
-    background: color-mix(in oklch, var(--coral), transparent 86%);
-    color: var(--coral);
+    background: color-mix(in oklch, var(--vr-danger), transparent 86%);
+    color: var(--vr-danger);
     outline: none;
   }
 </style>

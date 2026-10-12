@@ -329,7 +329,7 @@
   .participant-menu-note {
     margin: 0;
     padding: 4px 12px 10px;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-size: 13px;
     line-height: 1.45;
   }
@@ -352,13 +352,13 @@
     flex: 1;
     align-items: center;
     gap: 10px;
-    color: var(--warm-ink-dim);
+    color: var(--vr-text);
     font-size: 14px;
     font-weight: 600;
   }
 
   .participant-menu-volume-value {
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-family: var(--font-mono);
     font-size: 11.5px;
   }

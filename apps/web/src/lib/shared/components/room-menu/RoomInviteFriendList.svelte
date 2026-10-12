@@ -95,7 +95,7 @@
   .room-invite-empty {
     margin: 0;
     padding: 8px 12px;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-size: 13px;
     line-height: 1.45;
   }
@@ -110,7 +110,7 @@
     border: none;
     border-radius: 12px;
     background: transparent;
-    color: var(--warm-ink-dim);
+    color: var(--vr-text);
     font-family: var(--font-ui);
     font-size: 14.5px;
     font-weight: 600;
@@ -123,8 +123,8 @@
 
   .room-invite-friend:hover:not(:disabled),
   .room-invite-friend:focus-visible:not(:disabled) {
-    background: color-mix(in oklch, var(--accent), transparent 88%);
-    color: var(--warm-ink);
+    background: color-mix(in oklch, var(--vr-accent), transparent 88%);
+    color: var(--vr-text);
   }
 
   .room-invite-friend:disabled {
@@ -142,7 +142,7 @@
 
   .room-invite-friend-note {
     flex: none;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-family: var(--font-mono);
     font-size: 11px;
   }

@@ -2,6 +2,8 @@
   // The room chat's compose form: text with @mentions, emoji, attachments and a
   // reply target. Sending itself belongs to the panel, which owns the messages.
   import { onDestroy, onMount, tick } from 'svelte';
+  import { ArrowUp } from '@lucide/svelte';
+  import { iconSm } from '$lib/shared/ui/icons';
   import type { MembershipMember } from '@voice-room/shared/membership';
   import { contentFromPlainText } from '@voice-room/shared/room-message-content';
   import type { ChatMessage } from '$lib/api/rooms';
@@ -241,6 +243,15 @@
         onpick={(emoji: string) => input?.insertText(emoji)}
         onbrowse={() => typingNotifier.notify('emoji')}
       />
+      <button
+        class="chat-rail-send"
+        type="submit"
+        aria-label="Отправить"
+        title="Отправить"
+        disabled={sending || !(draft.text.trim() || media?.canSend)}
+      >
+        <ArrowUp {...iconSm} aria-hidden="true" />
+      </button>
     </div>
   </div>
   {#if mentions.isOpen}

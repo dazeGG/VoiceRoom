@@ -206,11 +206,11 @@
     z-index: 160;
     min-width: 244px;
     max-width: min(268px, calc(100vw - 28px));
-    padding: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 18px;
-    background: var(--warm-800);
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+    padding: 6px;
+    border: 1px solid var(--vr-line-strong);
+    border-radius: 12px;
+    background: var(--vr-surface-2);
+    box-shadow: var(--vr-shadow-popover);
   }
 
   @media (prefers-reduced-motion: no-preference) {

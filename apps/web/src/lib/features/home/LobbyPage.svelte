@@ -86,6 +86,7 @@
   }>();
 
   const rooms = new LobbyRooms((message) => onToast(message));
+  const roomLabel = (roomId: string): string => rooms.label(roomId);
   let creating = $state(false);
   let createDialogOpen = $state(false);
   let previewSettingsRoomId = $state('');
@@ -581,6 +582,7 @@
         inbox={notifications.inbox}
         onopen={openNotification}
         onclose={() => (notifications.open = false)}
+        {roomLabel}
       />
     </aside>
   {/if}
@@ -591,20 +593,31 @@
   .notification-inbox-panel {
     position: fixed;
     z-index: 71;
-    left: 326px;
+    left: 292px;
     bottom: 16px;
     display: flex;
-    width: min(420px, calc(100vw - 358px));
+    width: min(420px, calc(100vw - 316px));
     max-height: min(620px, calc(100vh - 32px));
     overflow: hidden;
-    border: 1px solid var(--line);
-    border-radius: 16px;
-    background: var(--paper);
-    box-shadow: var(--shadow);
+    border: 1px solid var(--vr-line-strong);
+    border-radius: 18px;
+    background: var(--vr-surface-2);
+    box-shadow: var(--vr-shadow-popover);
+    animation: notification-inbox-in 140ms ease-out;
   }
   .notification-inbox-panel :global(.notification-inbox) {
     flex: 1 1 auto;
     min-width: 0;
+  }
+  @keyframes notification-inbox-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
   }
   @media (max-width: 900px) {
     .notification-inbox-panel {

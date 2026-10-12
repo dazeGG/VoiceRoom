@@ -65,13 +65,13 @@
   }
 
   .app-benefits strong {
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-size: 14px;
     font-weight: 700;
   }
 
   .app-benefits span {
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     font-size: 13px;
     line-height: 1.45;
   }

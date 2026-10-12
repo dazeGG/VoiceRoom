@@ -95,3 +95,19 @@ test('the code field is not a login: browsers and password managers are told to 
   expect(field.getAttribute('data-lpignore')).toBe('true');
   expect(field.hasAttribute('data-bwignore')).toBe(true);
 });
+
+test('rooms with people are listed under «Сейчас в эфире», the rest under «Остальные»', () => {
+  renderHome([room('quiet', 'Тихая', 0), room('busy', 'Шумная', 3)]);
+  const live = screen.getByRole('region', { name: 'Сейчас в эфире' });
+  const rest = screen.getByRole('region', { name: 'Остальные' });
+  expect(live.textContent).toContain('Шумная');
+  expect(live.textContent).not.toContain('Тихая');
+  expect(rest.textContent).toContain('Тихая');
+  expect(rest.textContent).toContain('тихо');
+});
+
+test('without rooms there is a prompt to create the first one and no room sections', () => {
+  renderHome();
+  expect(screen.getByText('У вас пока нет комнат — создайте первую кнопкой выше.')).toBeTruthy();
+  expect(screen.queryByRole('region', { name: 'Сейчас в эфире' })).toBeNull();
+});

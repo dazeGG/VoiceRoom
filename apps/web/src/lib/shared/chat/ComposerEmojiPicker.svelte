@@ -117,7 +117,7 @@
     border: 0;
     border-radius: 8px;
     background: transparent;
-    color: var(--warm-muted);
+    color: var(--vr-text-2);
     cursor: pointer;
     transition:
       color 0.15s ease,
@@ -126,12 +126,12 @@
 
   .composer-emoji-trigger:hover,
   .composer-emoji-trigger[aria-expanded='true'] {
-    background: var(--control);
-    color: var(--warm-ink);
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
   }
 
   .composer-emoji-trigger:focus-visible {
-    outline: 2px solid var(--focus-border, rgba(255, 255, 255, 0.72));
+    outline: 2px solid var(--focus-border);
     outline-offset: 2px;
   }
 

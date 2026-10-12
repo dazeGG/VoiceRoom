@@ -131,3 +131,15 @@ export async function leaveActiveRoomMembership(roomId: string): Promise<boolean
   clearRoomMembership(roomId);
   return result.left;
 }
+
+/** Everyone who belongs to the room, online or not; `fallback` stands in until the roster has loaded. */
+export function roomMemberTotal(roomId: string, fallback = 0): number {
+  const entry = roomMembershipState.byRoomId[roomId];
+  return entry?.cachedMembers.length ? entry.cachedMembers.length : fallback;
+}
+
+/** Fetch the roster once for a view that only needs its size. */
+export function ensureRoomMembership(roomId: string): void {
+  const entry = getRoomMembership(roomId);
+  if (!entry.loaded && !entry.loading) void loadRoomMembership(roomId);
+}

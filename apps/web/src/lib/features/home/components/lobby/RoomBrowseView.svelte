@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
-  import { ChevronRight, LogIn, MessageSquare, MicOff, Users } from '@lucide/svelte';
-  import { iconMd, iconSm } from '$lib/shared/ui/icons';
+  import { MessageSquare, MicOff, Users } from '@lucide/svelte';
+  import { iconSm } from '$lib/shared/ui/icons';
   import type { AuthUser, OwnedRoom } from '$lib/api/auth';
   import type { RoomPeer } from '$lib/api/rooms';
   import type { RealtimeEvent } from '$lib/api/realtime';
@@ -12,6 +13,10 @@
   import RoomMemberList from '../../../../entities/room/components/RoomMemberList.svelte';
   import RoomViewHeader from './RoomViewHeader.svelte';
   import LobbyStreamTile from './LobbyStreamTile.svelte';
+  import RoomPreviewDock from './RoomPreviewDock.svelte';
+  import { roomMemberTotal, ensureRoomMembership } from '../../../../entities/room/room-membership.svelte';
+  import { session } from '$lib/features/auth/session.svelte';
+  import RoomPanelHeader from '$lib/features/room/components/RoomPanelHeader.svelte';
   import { subscribeRoomPreview } from '../../../../entities/room/room-realtime';
   import { roomPresence } from '../../../../entities/room/room-presence.svelte';
 
@@ -36,6 +41,11 @@
   const screenPeers = $derived(peers.filter((peer) => peer.screen));
   const presentUserIds = $derived(new Set(peers.map((peer) => peer.accountUserId || '').filter(Boolean)));
   const tileCount = $derived(peers.length + screenPeers.length);
+  const memberTotal = $derived(roomMemberTotal(previewRoomId, peers.length));
+  $effect(() => {
+    const id = previewRoomId;
+    if (session.user?.id) untrack(() => ensureRoomMembership(id));
+  });
 
   function handlePreviewEvent(event: RealtimeEvent): void {
     if (event.type === 'room.snapshot' && event.payload.roomId === room.roomId) {
@@ -146,7 +156,6 @@
                 style:--level="0"
                 style:--participant-pastel={avatar.background}
                 style:--participant-avatar-fg={avatar.foreground}
-                style:--participant-avatar-shadow={avatar.shadow}
               >
                 <div class="voice-ring" aria-hidden="true">
                   <span class="avatar"
@@ -180,10 +189,7 @@
         </div>
       {/if}
 
-      <button class="lobby-roomview-join" type="button" onclick={onEnter}>
-        <LogIn {...iconMd} aria-hidden="true" />
-        Войти в комнату
-      </button>
+      <RoomPreviewDock {onEnter} />
     </main>
 
     {#if activePanel === 'chat'}
@@ -193,45 +199,21 @@
           {user}
           canModerate={room.relationship === 'owner'}
           {onToast}
+          participantCount={memberTotal}
           onClose={() => (activePanel = null)}
           onSelectParticipants={() => selectPanel('participants')}
         />
       {/key}
     {:else if activePanel === 'participants'}
       <aside class="lobby-room-members" aria-label="Список участников комнаты">
-        <header class="chat-rail-head">
-          <div class="room-panel-tabs" role="tablist" aria-label="Раздел панели комнаты">
-            <button
-              type="button"
-              role="tab"
-              aria-label="Чат"
-              aria-selected="false"
-              data-active="false"
-              title="Чат"
-              onclick={() => selectPanel('chat')}
-            >
-              <MessageSquare {...iconSm} aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-label="Участники"
-              aria-selected="true"
-              data-active="true"
-              title="Участники"
-            >
-              <Users {...iconSm} aria-hidden="true" />
-            </button>
-          </div>
-          <button
-            class="chat-rail-collapse"
-            type="button"
-            aria-label="Свернуть панель"
-            onclick={() => (activePanel = null)}
-          >
-            <ChevronRight {...iconSm} aria-hidden="true" />
-          </button>
-        </header>
+        <RoomPanelHeader
+          activeTab="participants"
+          unread={0}
+          participantCount={memberTotal}
+          mobile={false}
+          onSelectChat={() => selectPanel('chat')}
+          onCollapse={() => (activePanel = null)}
+        />
         <div class="lobby-room-members-body"><RoomMemberList roomId={previewRoomId} /></div>
       </aside>
     {/if}
@@ -246,31 +228,32 @@
     transform: translateX(-50%);
     z-index: 5;
     margin: 0;
-    border: 1px solid rgba(232, 160, 148, 0.24);
     border-radius: 999px;
-    background: color-mix(in oklch, var(--coral) 18%, var(--warm-950));
-    color: var(--coral);
+    background: var(--vr-danger-soft);
+    color: var(--vr-danger);
     padding: 8px 13px;
     font-size: 12.5px;
-    font-weight: 700;
+    font-weight: 600;
   }
   :global(.lobby-browse-room) {
     position: relative;
     flex: 1;
     min-height: 0;
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
     background: transparent;
   }
   :global(.lobby-browse-topbar) {
     flex: none;
-    min-height: 68px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    padding: 20px 28px;
-    border-bottom: none;
+    padding: 0 20px;
+    box-sizing: border-box;
+    min-height: var(--vr-room-head-h);
+    border-bottom: 1px solid var(--vr-line);
     background: transparent;
   }
 </style>

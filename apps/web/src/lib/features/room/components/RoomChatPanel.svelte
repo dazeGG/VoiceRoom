@@ -61,6 +61,7 @@
     activeTab = 'chat',
     visible = true,
     unread = 0,
+    participantCount = 0,
     chatTabId = undefined,
     participantsTabId = undefined,
     chatPanelId = undefined,
@@ -86,6 +87,7 @@
     activeTab?: 'chat' | 'participants';
     visible?: boolean;
     unread?: number;
+    participantCount?: number;
     chatTabId?: string;
     participantsTabId?: string;
     chatPanelId?: string;
@@ -566,6 +568,7 @@
   <RoomPanelHeader
     {activeTab}
     {unread}
+    {participantCount}
     {mobile}
     {chatTabId}
     {participantsTabId}
@@ -726,21 +729,21 @@
   }
   :global(.chat-msg-edited) {
     margin-left: 5px;
-    color: #777164;
+    color: var(--vr-text-3);
     font-family: var(--font-mono);
-    font-size: 9.5px;
+    font-size: 10.5px;
     white-space: nowrap;
   }
   :global(.chat-rail-note),
   :global(.chat-rail-error) {
     margin: auto 0 0;
-    color: var(--warm-550);
+    color: var(--vr-text-3);
     font-size: 12.5px;
     line-height: 1.45;
   }
   :global(.chat-rail-error) {
     margin: 0;
     padding: 0 20px 8px;
-    color: #d2a08c;
+    color: var(--vr-danger);
   }
 </style>

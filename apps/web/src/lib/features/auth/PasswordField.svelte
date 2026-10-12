@@ -45,11 +45,11 @@
     height: 32px;
     border: none;
     background: transparent;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     cursor: pointer;
     transition: color 0.15s ease;
   }
   :where(.auth-eye):hover {
-    color: #b7b0a0;
+    color: var(--vr-text-2);
   }
 </style>

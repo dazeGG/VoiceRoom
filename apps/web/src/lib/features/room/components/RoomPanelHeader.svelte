@@ -1,10 +1,11 @@
 <script lang="ts">
-  import { ChevronRight, MessageSquare, Users, X } from '@lucide/svelte';
+  import { PanelRightClose, X } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
 
   let {
     activeTab,
     unread,
+    participantCount = 0,
     mobile,
     chatTabId,
     participantsTabId,
@@ -16,6 +17,8 @@
   }: {
     activeTab: 'chat' | 'participants';
     unread: number;
+    /** People in the room, shown beside «Участники». */
+    participantCount?: number;
     /** On a phone the panel is the whole screen, so it closes instead of collapsing. */
     mobile: boolean;
     chatTabId?: string;
@@ -41,7 +44,7 @@
       title="Чат"
       onclick={() => onSelectChat?.()}
     >
-      <MessageSquare {...iconSm} aria-hidden="true" />
+      <span>Чат</span>
       {#if unread > 0}<span class="room-panel-tab-unread" aria-hidden="true"></span>{/if}
     </button>
     <button
@@ -55,7 +58,8 @@
       title="Участники"
       onclick={() => onSelectParticipants?.()}
     >
-      <Users {...iconSm} aria-hidden="true" />
+      <span>Участники</span>
+      {#if participantCount > 0}<span class="room-panel-tab-count" aria-hidden="true">{participantCount}</span>{/if}
     </button>
   </div>
   <button
@@ -67,7 +71,7 @@
     {#if mobile}
       <X {...iconSm} aria-hidden="true" />
     {:else}
-      <ChevronRight {...iconSm} aria-hidden="true" />
+      <PanelRightClose {...iconSm} aria-hidden="true" />
     {/if}
   </button>
 </header>

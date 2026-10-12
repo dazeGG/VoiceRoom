@@ -12,10 +12,8 @@
   .popover-menu-label {
     display: block;
     padding: 11px 12px 6px;
-    color: var(--warm-faint);
-    font-family: var(--font-mono);
-    font-size: 10.5px;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
+    color: var(--vr-text-3);
+    font-size: 12px;
+    font-weight: 500;
   }
 </style>

@@ -139,7 +139,7 @@
     border-radius: 50%;
     font-size: 22px;
     font-weight: 700;
-    color: #fff;
+    color: var(--vr-text);
   }
   :global(.settings-profile-avatar img) {
     border-radius: inherit;
@@ -158,7 +158,7 @@
     border: 0;
     border-radius: 50%;
     background: transparent;
-    color: #fff;
+    color: var(--vr-text);
     cursor: pointer;
     overflow: hidden;
   }
@@ -169,7 +169,7 @@
     align-items: center;
     justify-content: center;
     border-radius: inherit;
-    background: color-mix(in srgb, var(--warm-950) 58%, transparent);
+    background: color-mix(in srgb, var(--vr-bg) 58%, transparent);
     opacity: 0;
     transition: opacity 0.16s ease;
     pointer-events: none;
@@ -179,7 +179,7 @@
     opacity: 1;
   }
   :where(.settings-avatar-edit):focus-visible {
-    outline: 2px solid var(--coral);
+    outline: 2px solid var(--vr-danger);
     outline-offset: 3px;
   }
   :global(.settings-avatar-remove) {
@@ -193,10 +193,10 @@
     width: 22px;
     height: 22px;
     padding: 0;
-    border: 2px solid var(--paper-deep);
+    border: 2px solid var(--vr-bg);
     border-radius: 50%;
-    background: var(--coral);
-    color: #fff;
+    background: var(--vr-danger);
+    color: var(--vr-text);
     cursor: pointer;
     box-shadow: 0 2px 7px rgba(0, 0, 0, 0.34);
     opacity: 0;
@@ -209,10 +209,10 @@
     opacity: 1;
   }
   :where(.settings-avatar-remove):not(:disabled):hover {
-    background: color-mix(in oklch, var(--coral), var(--warm-950) 16%);
+    background: color-mix(in oklch, var(--vr-danger), var(--vr-bg) 16%);
   }
   :where(.settings-avatar-remove):focus-visible {
-    outline: 2px solid #fff;
+    outline: 2px solid var(--vr-text);
     outline-offset: 2px;
   }
   :where(.settings-avatar-edit):disabled,
@@ -221,14 +221,14 @@
     opacity: 0.6;
   }
   :global(.settings-profile-name) {
-    color: var(--warm-ink);
+    color: var(--vr-text);
     font-size: 17px;
     font-weight: 700;
     letter-spacing: -0.01em;
   }
   :global(.settings-profile-sub) {
     margin-top: 3px;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-family: var(--font-mono);
     font-size: 11.5px;
   }

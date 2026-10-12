@@ -44,6 +44,6 @@
     height: 24px;
     flex: none;
     margin: 0 2px;
-    background: var(--line);
+    background: var(--vr-line-strong);
   }
 </style>

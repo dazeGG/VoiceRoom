@@ -7,9 +7,9 @@
   import type { AvatarCropDialogProps } from './types';
 
   const DEFAULT_ACCENT = {
-    background: 'var(--panel-strong)',
-    foreground: 'var(--warm-ink)',
-    shadow: 'var(--shadow)'
+    background: 'var(--vr-surface-3)',
+    foreground: 'var(--vr-text)',
+    shadow: 'var(--vr-shadow-popover)'
   };
 
   let { file, name, open, shape, title, kind, onClose, onSave }: AvatarCropDialogProps = $props();
@@ -249,12 +249,12 @@
               <span>плитка разговора</span>
             </div>
             <div class="crop-sidebar-preview">
-              <Avatar {name} src={previewUrl} size={34} online showDot ring="#24221d" />
+              <Avatar {name} src={previewUrl} size={34} online showDot ring="var(--vr-surface)" />
               <div><strong><EmojiText text={name || 'Ваш профиль'} /></strong><span>в сети</span></div>
             </div>
           {:else}
             <div class="crop-room-preview">
-              <Avatar {name} src={previewUrl} shape="squircle" size={48} background="var(--room-avatar-bg)" />
+              <Avatar {name} src={previewUrl} shape="squircle" size={48} background="var(--vr-surface-3)" />
               <div><strong><EmojiText text={name || 'Комната'} /></strong><span>карточка лобби</span></div>
             </div>
           {/if}
@@ -281,16 +281,16 @@
     display: grid;
     place-items: center;
     padding: 24px;
-    background: color-mix(in srgb, var(--warm-950) 72%, transparent);
+    background: color-mix(in srgb, var(--vr-bg) 72%, transparent);
     backdrop-filter: blur(8px);
   }
   .crop-dialog {
     width: min(820px, 100%);
-    border: 1px solid rgb(255 255 255 / 0.1);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 20px;
-    background: var(--warm-800);
+    background: var(--vr-surface-2);
     box-shadow: 0 36px 90px rgb(0 0 0 / 0.6);
-    color: var(--warm-ink, #f5efe4);
+    color: var(--vr-text);
     overflow: hidden;
   }
   .crop-head {
@@ -298,7 +298,7 @@
     align-items: flex-start;
     justify-content: space-between;
     padding: 20px 22px;
-    border-bottom: 1px solid rgb(255 255 255 / 0.08);
+    border-bottom: 1px solid var(--vr-line);
   }
   .crop-head h2 {
     margin: 0;
@@ -306,7 +306,7 @@
   }
   .crop-head p {
     margin: 5px 0 0;
-    color: var(--warm-faint, #8e887c);
+    color: var(--vr-text-3);
     font-size: 13px;
   }
   .crop-head button {
@@ -314,9 +314,9 @@
     place-items: center;
     width: 34px;
     height: 34px;
-    border: 1px solid rgb(255 255 255 / 0.1);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 10px;
-    background: var(--control);
+    background: var(--vr-surface-3);
     color: inherit;
     cursor: pointer;
   }
@@ -335,7 +335,7 @@
     aspect-ratio: 1;
     margin: auto;
     overflow: hidden;
-    background: var(--warm-950);
+    background: var(--vr-bg);
     touch-action: none;
   }
   .crop-stage--circle {
@@ -360,12 +360,12 @@
     gap: 14px;
     margin: 18px auto 0;
     max-width: 430px;
-    color: var(--warm-muted, #aaa397);
+    color: var(--vr-text-2);
     font-size: 12px;
     font-weight: 700;
   }
   .crop-zoom input {
-    accent-color: var(--accent, #d9f27c);
+    accent-color: var(--vr-accent);
   }
   .crop-preview {
     display: flex;
@@ -373,7 +373,7 @@
     gap: 14px;
   }
   .crop-preview-label {
-    color: var(--warm-faint, #8e887c);
+    color: var(--vr-text-3);
     font-family: var(--font-ui, sans-serif);
     font-size: 10px;
     letter-spacing: 0.14em;
@@ -396,7 +396,7 @@
   .crop-user-tile span,
   .crop-sidebar-preview span,
   .crop-room-preview span {
-    color: rgb(255 255 255 / 0.62);
+    color: color-mix(in oklch, var(--vr-text) 62%, transparent);
     font-size: 11px;
   }
   .crop-sidebar-preview,
@@ -405,9 +405,9 @@
     align-items: center;
     gap: 11px;
     padding: 13px;
-    border: 1px solid rgb(255 255 255 / 0.08);
+    border: 1px solid var(--vr-line);
     border-radius: 14px;
-    background: var(--panel);
+    background: var(--vr-surface);
   }
   .crop-sidebar-preview div,
   .crop-room-preview div {
@@ -424,7 +424,7 @@
   }
   .crop-error {
     margin: 0 24px 12px;
-    color: var(--danger-soft);
+    color: var(--vr-danger);
     font-size: 13px;
   }
   .crop-actions {
@@ -432,7 +432,7 @@
     justify-content: flex-end;
     gap: 10px;
     padding: 17px 22px;
-    border-top: 1px solid rgb(255 255 255 / 0.08);
+    border-top: 1px solid var(--vr-line);
   }
   .crop-actions button {
     display: inline-flex;
@@ -446,14 +446,14 @@
     cursor: pointer;
   }
   .crop-cancel {
-    border: 1px solid rgb(255 255 255 / 0.12);
+    border: 1px solid var(--vr-line-strong);
     background: transparent;
-    color: var(--warm-ink-dim, #d5cfc4);
+    color: var(--vr-text);
   }
   .crop-save {
     border: 0;
-    background: var(--accent);
-    color: var(--accent-ink);
+    background: var(--vr-accent);
+    color: var(--vr-accent-ink);
   }
   .crop-actions button:disabled,
   .crop-head button:disabled {

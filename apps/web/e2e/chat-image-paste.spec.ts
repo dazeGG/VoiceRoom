@@ -34,7 +34,7 @@ test('image attachments support picker, removal, drag-and-drop, paste, and sendi
   await input.focus();
   await expect
     .poll(() => composeField.evaluate((element) => getComputedStyle(element).borderColor))
-    .toBe('rgba(255, 255, 255, 0.72)');
+    .toBe('oklch(0.9 0.19 125 / 0.32)');
 
   await page.route('**/api/media/attachments/*/content', async (route) => {
     await new Promise((resolve) => setTimeout(resolve, 500));

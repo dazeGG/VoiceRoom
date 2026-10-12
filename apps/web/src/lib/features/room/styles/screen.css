@@ -7,11 +7,11 @@
   min-height: 0;
   margin-inline: auto;
   overflow: hidden;
-  border: 1px solid oklch(31% 0.018 92);
+  border: 1px solid var(--vr-line);
   border-radius: var(--radius-sm);
   background:
-    radial-gradient(circle at 18% 18%, color-mix(in oklch, var(--panel-strong) 16%, transparent), transparent 34%),
-    var(--warm-950);
+    radial-gradient(circle at 18% 18%, color-mix(in oklch, var(--vr-surface-3) 16%, transparent), transparent 34%),
+    var(--vr-bg);
 }
 
 .screen-meta {
@@ -24,11 +24,11 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  border: 1px solid oklch(86% 0.012 92 / 0.14);
+  border: 1px solid var(--vr-line-strong);
   border-radius: var(--radius-sm);
   padding: 7px 9px;
-  background: color-mix(in srgb, var(--warm-950) 78%, transparent);
-  color: oklch(96% 0.008 92);
+  background: color-mix(in srgb, var(--vr-bg) 78%, transparent);
+  color: var(--vr-text);
   box-shadow: 0 14px 34px oklch(5% 0.012 92 / 0.32);
   opacity: 1;
   pointer-events: none;
@@ -56,7 +56,7 @@
 
 .screen-meta-detail {
   max-width: min(360px, 48vw);
-  color: var(--muted);
+  color: var(--vr-text-2);
   font-weight: 780;
 }
 
@@ -66,42 +66,17 @@
   align-items: center;
   gap: 5px;
   overflow: visible;
-  color: oklch(88% 0.012 92);
+  color: var(--vr-text);
 }
 
 .screen-meta-viewers[hidden] {
   display: none;
 }
 
-.screen-meta-viewer-avatar,
-.screen-meta-viewers-rest {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid oklch(96% 0.008 92 / 0.22);
-  border-radius: 50%;
-  background: var(--avatar-bg, var(--room-avatar-bg));
-  color: var(--avatar-fg, #fff);
-  box-shadow: var(--avatar-shadow, 0 8px 18px rgb(88 101 242 / 0.24));
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: -0.04em;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.screen-meta-viewers-rest {
-  background: color-mix(in srgb, var(--panel) 92%, transparent);
-  color: oklch(92% 0.008 92);
-  box-shadow: none;
-}
-
 .screen-meta-sep {
   flex: 0 0 auto;
   align-self: center;
-  color: oklch(72% 0.01 92 / 0.72);
+  color: color-mix(in oklch, var(--vr-text) 72%, transparent);
   font-size: 0.92rem;
   font-weight: 800;
   line-height: 1;
@@ -110,10 +85,6 @@
 
 .screen-meta-sep[hidden],
 .screen-meta-detail[hidden] {
-  display: none;
-}
-
-.screen-meta-stats[hidden] {
   display: none;
 }
 
@@ -145,11 +116,11 @@
   width: 42px;
   height: 42px;
   place-items: center;
-  border: 1px solid oklch(86% 0.012 92 / 0.18);
+  border: 1px solid var(--vr-line-strong);
   border-radius: var(--radius-sm);
   padding: 0;
-  background: color-mix(in srgb, var(--warm-950) 88%, transparent);
-  color: oklch(97% 0.008 92);
+  background: color-mix(in srgb, var(--vr-bg) 88%, transparent);
+  color: var(--vr-text);
   box-shadow: 0 12px 28px oklch(5% 0.01 92 / 0.3);
   transition:
     background 140ms var(--ease-out),
@@ -159,8 +130,8 @@
 
 .screen-control-button:hover,
 .stream-volume-control:focus-within .stream-volume-button {
-  border-color: oklch(88% 0.012 92 / 0.36);
-  background: color-mix(in srgb, var(--control-hover) 94%, transparent);
+  border-color: color-mix(in oklch, var(--vr-text) 36%, transparent);
+  background: color-mix(in srgb, var(--vr-surface-3-hover) 94%, transparent);
   transform: translateY(-1px);
 }
 
@@ -190,7 +161,7 @@
   width: 48px;
   border-radius: 999px;
   padding: var(--space-sm) 0 var(--space-md);
-  background: color-mix(in srgb, var(--warm-950) 72%, transparent);
+  background: color-mix(in srgb, var(--vr-bg) 72%, transparent);
   box-shadow: 0 12px 28px oklch(5% 0.01 92 / 0.3);
   backdrop-filter: blur(10px);
   visibility: hidden;
@@ -228,7 +199,7 @@
   min-width: 36px;
   border-radius: 999px;
   padding: 2px 0;
-  color: oklch(97% 0.008 92);
+  color: var(--vr-text);
   font-size: 0.72rem;
   font-variant-numeric: tabular-nums;
   font-weight: 800;
@@ -237,7 +208,7 @@
 }
 
 .stream-volume-value[data-muted='true'] {
-  color: oklch(72% 0.01 92 / 0.72);
+  color: color-mix(in oklch, var(--vr-text) 72%, transparent);
 }
 
 .stream-volume-track {

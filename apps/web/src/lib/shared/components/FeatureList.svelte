@@ -37,19 +37,19 @@
     padding-top: 2px;
     font-family: var(--font-ui);
     font-size: 12px;
-    color: var(--feature-num-ink, var(--warm-650));
+    color: var(--feature-num-ink, var(--vr-text-3));
   }
   :global(.feature-title) {
     margin: 0;
     font-size: 15px;
     font-weight: 600;
-    color: var(--feature-title-ink, var(--warm-150));
+    color: var(--feature-title-ink, var(--vr-text));
     letter-spacing: -0.01em;
   }
   :global(.feature-desc) {
     margin: 3px 0 0;
     font-size: 14px;
-    color: var(--feature-desc-ink, var(--warm-560));
+    color: var(--feature-desc-ink, var(--vr-text-3));
     line-height: 1.5;
   }
 </style>

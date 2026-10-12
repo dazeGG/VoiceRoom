@@ -72,6 +72,7 @@ test('a shared screen gets its own tile that enters the room, and goes when the 
   });
 
   const tile = await screen.findByRole('button', { name: 'Войти и смотреть стрим Ада' });
+  expect(screen.getByText('Стрим откроется после входа')).toBeTruthy();
   expect(document.querySelectorAll('.lobby-preview-participant')).toHaveLength(2);
   await userEvent.click(tile);
   expect(onEnter).toHaveBeenCalledOnce();
@@ -79,4 +80,19 @@ test('a shared screen gets its own tile that enters the room, and goes when the 
   socket.receive({ type: 'room.peer.updated', payload: { roomId: 'kitchen', peer: { ...ada, screen: false } } });
   await vi.waitFor(() => expect(screen.queryByRole('button', { name: 'Войти и смотреть стрим Ада' })).toBeNull());
   expect(document.querySelectorAll('.lobby-preview-participant')).toHaveLength(2);
+});
+
+test('before joining there is no call dock, only a note and one way in', async () => {
+  const onEnter = vi.fn();
+  render(RoomPreviewView, {
+    props: { room, user: authUser(), onEnter, onBack: vi.fn() },
+    context: lobbyContext(new LobbyStore())
+  });
+
+  expect(await screen.findByText('Звук и видео включатся после входа')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Выбрать микрофон' })).toBeNull();
+  expect(document.querySelector('[data-speaking="true"]')).toBeNull();
+
+  await userEvent.click(screen.getByRole('button', { name: 'Войти в комнату' }));
+  expect(onEnter).toHaveBeenCalledOnce();
 });

@@ -280,11 +280,10 @@
     z-index: 50;
     min-width: 0;
     padding: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    background: color-mix(in srgb, var(--warm-800) 94%, transparent);
-    backdrop-filter: blur(20px);
-    box-shadow: 0 26px 70px rgba(0, 0, 0, 0.62);
+    border: 1px solid var(--vr-line-strong);
+    border-radius: 12px;
+    background: var(--vr-surface-2);
+    box-shadow: var(--vr-shadow-popover);
   }
 
   @media (prefers-reduced-motion: no-preference) {

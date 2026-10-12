@@ -1,10 +1,12 @@
 import { putBan, unban, type ActiveBan, type ModerationDuration } from '$lib/api/moderation';
+import { kickRoomPeer } from '$lib/api/rooms';
 
 // Room owners moderate from two settings dialogs (in the room and in the lobby)
 // that each show toasts through their own stack, so moderation reports through
 // this one callback shape and each dialog adapts it.
 export type ModerationNoticeOptions = {
   variant?: 'error';
+  description?: string;
   undo?: { label: string; run: () => void };
 };
 
@@ -17,7 +19,7 @@ export const BAN_DURATIONS: ReadonlyArray<{ value: ModerationDuration; label: st
   { value: 'permanent', label: 'Навсегда', phrase: 'навсегда' }
 ];
 
-export const BAN_UNDO_DURATION_MS = 10_000;
+export const BAN_UNDO_DURATION_MS = 6000;
 
 function idempotencyKey(): string {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -36,6 +38,22 @@ export function banSubjectName(ban: ActiveBan): string {
 export function banExpiryLabel(ban: ActiveBan): string {
   if (ban.expiresAt == null) return 'Навсегда';
   return `До ${new Intl.DateTimeFormat('ru', { dateStyle: 'medium', timeStyle: 'short' }).format(ban.expiresAt)}`;
+}
+
+/** Takes a person out of the live call; they can come back by the link. */
+export async function kickRoomMember(
+  roomId: string,
+  member: { peerId: string; name: string },
+  notify: ModerationNotice
+): Promise<boolean> {
+  try {
+    await kickRoomPeer(roomId, member.peerId);
+    notify(`${member.name} выгнан из комнаты`, { description: 'Сможет вернуться по ссылке' });
+    return true;
+  } catch (cause) {
+    notify(errorMessage(cause, 'Не удалось выгнать участника'), { variant: 'error' });
+    return false;
+  }
 }
 
 export async function banRoomMember(

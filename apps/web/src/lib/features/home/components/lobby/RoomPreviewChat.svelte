@@ -11,6 +11,7 @@
     user,
     aroundMessageId = undefined,
     canModerate = false,
+    participantCount = 0,
     onClose,
     onSelectParticipants,
     onToast
@@ -21,6 +22,7 @@
     aroundMessageId?: string;
     /** The viewer owns the room and may delete anyone's message. */
     canModerate?: boolean;
+    participantCount?: number;
     onClose?: () => void;
     onSelectParticipants?: () => void;
     onToast?: (message: string) => void;
@@ -39,6 +41,7 @@
   ariaLabel="Чат комнаты"
   {aroundMessageId}
   {canModerate}
+  {participantCount}
   onSelectParticipants={() => onSelectParticipants?.()}
   onCollapse={() => onClose?.()}
   onToast={(message) => onToast?.(message)}

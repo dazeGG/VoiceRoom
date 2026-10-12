@@ -22,3 +22,5 @@ export { ToastStack } from './ToastStack';
 export type { ToastItem, ToastStackProps } from './ToastStack';
 export { MascotIcon } from './MascotIcon';
 export type { MascotIconProps, MascotVariant } from './MascotIcon';
+export { SegmentControl } from './SegmentControl';
+export type { SegmentControlProps, SegmentOption } from './SegmentControl';

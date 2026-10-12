@@ -275,7 +275,7 @@
                   name={room.name?.trim() || room.roomId}
                   src={room.avatarUrl}
                   shape="squircle"
-                  background="var(--room-avatar-bg)"
+                  background="var(--vr-surface-3)"
                   size={32}
                 />
                 <span class="settings-notification-name">
@@ -365,6 +365,6 @@
   :global(.settings-notification-muted) {
     display: inline-flex;
     flex: none;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
   }
 </style>

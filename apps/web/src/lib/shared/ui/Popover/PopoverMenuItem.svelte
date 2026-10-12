@@ -61,17 +61,17 @@
   .popover-menu-item {
     display: flex;
     align-items: center;
-    gap: 11px;
+    gap: 10px;
     width: 100%;
-    height: 40px;
-    padding: 0 12px;
+    height: 36px;
+    padding: 0 10px;
     border: none;
-    border-radius: 12px;
+    border-radius: 8px;
     background: transparent;
-    color: var(--warm-ink-dim);
+    color: var(--vr-text);
     font-family: var(--font-ui);
-    font-size: 14.5px;
-    font-weight: 600;
+    font-size: 14px;
+    font-weight: 400;
     text-align: left;
     cursor: pointer;
     transition:
@@ -84,8 +84,8 @@
   .popover-menu-item:hover:not(:disabled),
   .popover-menu-item:focus-visible:not(:disabled),
   .popover-menu-item.is-selected {
-    background: color-mix(in oklch, var(--accent), transparent 88%);
-    color: var(--warm-ink);
+    background: var(--vr-hover);
+    color: var(--vr-text);
   }
 
   .popover-menu-item:disabled {
@@ -109,7 +109,7 @@
 
   .popover-menu-item-hint {
     flex: none;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
     font-family: var(--font-mono);
     font-size: 11.5px;
     font-weight: 500;
@@ -119,37 +119,37 @@
   .popover-menu-item-chevron {
     flex: none;
     display: inline-flex;
-    color: var(--warm-faint);
+    color: var(--vr-text-3);
   }
 
   .popover-menu-item-check,
   .popover-menu-item-chevron.is-active {
-    color: var(--accent);
+    color: var(--vr-accent);
   }
 
   .popover-menu-item--accent {
-    color: var(--warm-ink);
+    color: var(--vr-text);
   }
 
   .popover-menu-item--friendly {
-    color: var(--green);
+    color: var(--vr-online);
   }
 
   .popover-menu-item--friendly:hover:not(:disabled),
   .popover-menu-item--friendly:focus-visible:not(:disabled),
   .popover-menu-item--friendly.is-selected {
-    background: color-mix(in oklch, var(--green), transparent 86%);
-    color: var(--green);
+    background: var(--vr-accent-soft);
+    color: var(--vr-online);
   }
 
   .popover-menu-item--danger {
-    color: var(--coral);
+    color: var(--vr-danger);
   }
 
   .popover-menu-item--danger:hover:not(:disabled),
   .popover-menu-item--danger:focus-visible:not(:disabled),
   .popover-menu-item--danger.is-selected {
-    background: color-mix(in oklch, var(--coral), transparent 86%);
-    color: var(--coral);
+    background: var(--vr-danger-hover);
+    color: var(--vr-danger);
   }
 </style>

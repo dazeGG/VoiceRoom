@@ -102,10 +102,10 @@
   .hotkey-recorder-field,
   .hotkey-recorder-reset {
     min-height: 38px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--vr-line-strong);
     border-radius: 10px;
-    background: var(--control);
-    color: var(--warm-ink, #f1ecdf);
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
     cursor: pointer;
     transition:
       border-color 150ms ease,
@@ -120,16 +120,16 @@
 
   .hotkey-recorder-field:hover,
   .hotkey-recorder-reset:hover {
-    border-color: rgba(255, 255, 255, 0.22);
-    background: var(--control-hover);
+    border-color: color-mix(in oklch, var(--vr-text) 22%, transparent);
+    background: var(--vr-surface-3-hover);
   }
 
   .hotkey-recorder-field:focus-visible,
   .hotkey-recorder-reset:focus-visible,
   .hotkey-recorder-field[aria-pressed='true'] {
-    border-color: var(--green, #64c99a);
+    border-color: var(--vr-online);
     outline: none;
-    box-shadow: 0 0 0 2px color-mix(in oklch, var(--green, #64c99a) 18%, transparent);
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--vr-online) 18%, transparent);
   }
 
   .hotkey-recorder-value {
@@ -143,7 +143,7 @@
   }
 
   .hotkey-recorder-value[data-empty='true'] {
-    color: var(--warm-faint, #8f897b);
+    color: var(--vr-text-3);
     font-weight: 600;
   }
 
@@ -151,7 +151,7 @@
     display: grid;
     place-items: center;
     padding: 0;
-    color: var(--warm-muted, #aaa394);
+    color: var(--vr-text-2);
   }
 
   button:disabled {

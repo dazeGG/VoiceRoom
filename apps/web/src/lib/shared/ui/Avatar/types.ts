@@ -5,6 +5,8 @@ export interface AvatarProps {
   size?: number;
   shape?: 'circle' | 'squircle';
   background?: string | null;
+  /** Letter colour to go with a custom `background`; the palette's otherwise. */
+  foreground?: string | null;
   online?: boolean | null;
   showDot?: boolean;
   dnd?: boolean;

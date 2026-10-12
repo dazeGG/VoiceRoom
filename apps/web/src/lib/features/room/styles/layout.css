@@ -6,19 +6,7 @@
   min-width: 0;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-md);
-}
-
-body[data-screen='room'] .topbar {
-  align-items: center;
-}
-
-/* .app-shell's shared padding-top (var(--space-lg) = 24px) is 4px taller than
-   the lobby room preview's own header padding (.lobby-roomview-top: 20px), so
-   the two screens jump on join. Match the preview's top offset here instead of
-   touching the shared .app-shell padding used by every other screen. */
-body[data-screen='room'] .app-shell {
-  padding-top: 20px;
+  gap: 12px;
 }
 
 body[data-screen='room'] .brand {
@@ -29,154 +17,41 @@ body[data-screen='room'] .topbar-room-heading {
   display: flex;
 }
 
-/* The connection state moved into the dock (v2 design), so the old top-right
-   status pill is suppressed in-room. */
+/* The connection state lives in the dock, so the old top-right pill is
+   suppressed in-room. */
 body[data-screen='room'] .status-pill {
   display: none;
 }
 
-.room-heading-main {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: var(--space-sm);
+/* The room is one grid: the top bar and the stage in the first column, the
+   chat rail beside them when it is open. The layout wrapper only groups. */
+body[data-screen='room'] .app-shell {
+  position: relative;
+  height: 100dvh;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
 }
 
-.room-heading-trigger {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: var(--space-sm);
-  max-width: 100%;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  padding: 4px 10px 4px 4px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  transition:
-    background 150ms var(--ease-out),
-    border-color 150ms var(--ease-out);
-}
-
-.room-heading-title-wrap {
-  display: flex;
-  margin: 0;
-  min-width: 0;
-  align-items: center;
-}
-
-.room-heading-trigger:hover,
-.room-heading-trigger[aria-expanded='true'] {
-  border-color: rgba(255, 255, 255, 0.1);
-  background: var(--control);
-}
-
-.room-heading-title {
-  max-width: min(46vw, 22ch);
-  font-family: var(--font-ui);
-  font-size: 1.35rem;
-  font-weight: 500;
-  letter-spacing: -0.01em;
-  line-height: 1.05;
-}
-
-.room-heading-trigger-chevron {
-  flex: none;
-  display: inline-flex;
-  color: var(--warm-560);
-  transition: transform 0.16s ease;
-}
-
-.room-heading-trigger[aria-expanded='true'] .room-heading-trigger-chevron {
-  transform: rotate(180deg);
-}
-
-.room-chat-toggle {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 7px;
-  height: 36px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 11px;
-  padding: 0 14px;
-  background: var(--control);
-  color: var(--warm-300);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition:
-    background 150ms var(--ease-out),
-    color 150ms var(--ease-out),
-    border-color 150ms var(--ease-out);
-}
-
-.room-chat-toggle:hover {
-  background: var(--control-hover);
-}
-
-.room-chat-toggle[data-active='true'] {
-  border-color: rgba(217, 211, 195, 0.5);
-  background: var(--panel-strong);
-  color: var(--warm-100);
-}
-
-.room-chat-toggle svg {
-  width: 15px;
-  height: 15px;
-}
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  min-width: 178px;
-  margin-left: auto;
-  justify-content: center;
-  gap: var(--space-xs);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 8px 12px;
-  background: var(--warm-800);
-  color: var(--muted);
-  font-size: 0.875rem;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--amber);
-}
-
-.status-pill[data-state='connected'] .status-dot {
-  background: var(--green);
-}
-
-.status-pill[data-state='error'] .status-dot {
-  background: var(--coral);
-}
-
-.status-pill[data-state='warning'] .status-dot {
-  background: var(--amber);
-}
-
-.status-pill[data-state='connecting'] .status-dot {
-  animation: blink 1s infinite;
-  background: var(--blue);
+body[data-screen='room'] .topbar {
+  grid-column: 1;
+  grid-row: 1;
+  padding: 0 20px;
+  box-sizing: border-box;
+  min-height: var(--vr-room-head-h);
+  border-bottom: 1px solid var(--vr-line);
+  container-type: inline-size;
 }
 
 .room-layout {
-  display: flex;
-  min-width: 0;
-  min-height: 0;
+  display: contents;
 }
 
 .room-layout > .stage {
-  flex: 1 1 auto;
+  grid-column: 1;
+  grid-row: 2;
   min-width: 0;
 }
 
@@ -194,13 +69,158 @@ body[data-lobby-embedded='true'] .app-shell.room-embedded-shell {
 body[data-lobby-embedded='true'] .room-embedded-shell .topbar {
   width: 100%;
   margin-inline: 0;
-  padding: 20px 28px;
+  padding: 0 20px;
+  box-sizing: border-box;
+  min-height: var(--vr-room-head-h);
 }
 
-@media (min-width: 901px) {
-  body[data-chat-open='true'] .room-layout {
-    padding-right: var(--room-panel-width);
+/* With the rail open there is a second column; below 1200px it floats over the
+   stage instead (see chat-rail.css) and the grid stays single-column. */
+@media (min-width: 1200px) {
+  body[data-screen='room'][data-chat-open='true'] .app-shell {
+    grid-template-columns: minmax(0, 1fr) var(--room-panel-width);
   }
+}
+
+.room-heading-main {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.room-heading-trigger {
+  display: inline-flex;
+  min-width: 60px;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  border: 0;
+  border-radius: 12px;
+  padding: 4px 10px 4px 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background 150ms var(--ease-out);
+}
+
+.room-heading-title-wrap {
+  display: flex;
+  margin: 0;
+  min-width: 0;
+  align-items: center;
+}
+
+.room-heading-trigger:hover,
+.room-heading-trigger[aria-expanded='true'] {
+  background: var(--vr-hover);
+}
+
+.room-heading-title {
+  max-width: min(46vw, 28ch);
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.room-heading-trigger-chevron {
+  flex: none;
+  display: inline-flex;
+  color: var(--vr-text-3);
+  transition: transform 0.16s ease;
+}
+
+.room-heading-trigger[aria-expanded='true'] .room-heading-trigger-chevron {
+  transform: rotate(180deg);
+}
+
+.room-heading-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+/* The invite button is a label plus an icon; narrow stages keep the icon. */
+.room-invite-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.room-invite-button:hover,
+.room-invite-button[aria-expanded='true'] {
+  background: var(--vr-hover);
+}
+
+.room-invite-popover {
+  width: min(300px, calc(100vw - 24px));
+}
+
+.room-invite-label {
+  display: inline;
+}
+
+@container (max-width: 699px) {
+  .room-invite-label {
+    display: none;
+  }
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-width: 178px;
+  margin-left: auto;
+  justify-content: center;
+  gap: var(--space-xs);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: var(--vr-surface-2);
+  color: var(--vr-text-2);
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--vr-away);
+}
+
+.status-pill[data-state='connected'] .status-dot {
+  background: var(--vr-online);
+}
+
+.status-pill[data-state='error'] .status-dot {
+  background: var(--vr-danger);
+}
+
+.status-pill[data-state='warning'] .status-dot {
+  background: var(--vr-away);
+}
+
+.status-pill[data-state='connecting'] .status-dot {
+  animation: blink 1s infinite;
+  background: var(--vr-info);
 }
 
 /* 404 — "room not found". A full-bleed editorial surface (per the Claude
@@ -208,9 +228,9 @@ body[data-lobby-embedded='true'] .room-embedded-shell .topbar {
    a left-aligned headline, a mono code chip and a single home CTA — no card. */
 body[data-screen='not-found'] {
   background:
-    radial-gradient(58% 64% at 88% 14%, color-mix(in oklch, var(--warm-800), transparent 66%), transparent 56%),
-    radial-gradient(52% 60% at 4% 92%, color-mix(in oklch, var(--panel), transparent 80%), transparent 54%),
-    var(--warm-950);
+    radial-gradient(58% 64% at 88% 14%, color-mix(in oklch, var(--vr-surface-2), transparent 66%), transparent 56%),
+    radial-gradient(52% 60% at 4% 92%, color-mix(in oklch, var(--vr-surface), transparent 80%), transparent 54%),
+    var(--vr-bg);
 }
 
 .not-found-layout {
@@ -234,7 +254,7 @@ body[data-screen='not-found'] {
   font-size: 46vw;
   line-height: 0.8;
   letter-spacing: -0.05em;
-  color: rgba(236, 231, 217, 0.035);
+  color: color-mix(in oklch, var(--vr-text) 4%, transparent);
   pointer-events: none;
   user-select: none;
   white-space: nowrap;
@@ -247,11 +267,11 @@ body[data-screen='not-found'] {
 .start-panel {
   display: grid;
   gap: var(--space-lg);
-  border: 1px solid var(--line);
+  border: 1px solid var(--vr-line-strong);
   border-radius: var(--radius-md);
   padding: var(--space-xl);
-  background: linear-gradient(180deg, var(--panel-strong), var(--panel)), var(--panel);
-  box-shadow: var(--shadow);
+  background: linear-gradient(180deg, var(--vr-surface-3), var(--vr-surface)), var(--vr-surface);
+  box-shadow: var(--vr-shadow-popover);
 }
 
 .not-found-title {
@@ -262,7 +282,7 @@ body[data-screen='not-found'] {
   font-weight: 700;
   line-height: 1.04;
   letter-spacing: -0.03em;
-  color: var(--warm-100);
+  color: var(--vr-text);
   text-wrap: balance;
 }
 
@@ -271,7 +291,7 @@ body[data-screen='not-found'] {
   margin: 26px 0 0;
   font-size: 18px;
   line-height: 1.55;
-  color: var(--warm-500);
+  color: var(--vr-text-3);
 }
 
 .not-found-actions {
@@ -285,8 +305,8 @@ body[data-screen='not-found'] {
   border: none;
   border-radius: 13px;
   padding: 14px 22px;
-  background: var(--control-active);
-  color: #1a1813;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
   font-family: var(--font-ui);
   font-size: 15px;
   font-weight: 700;
@@ -299,7 +319,7 @@ body[data-screen='not-found'] {
 }
 
 .not-found-home:hover {
-  background: var(--control-active-hover);
+  background: var(--vr-text);
   transform: translateY(-1px);
 }
 
@@ -309,7 +329,7 @@ body[data-screen='not-found'] {
 
 .not-found-home:focus-visible {
   outline: none;
-  border-color: var(--focus-border, rgba(255, 255, 255, 0.72));
+  border-color: var(--focus-border);
   box-shadow: none;
 }
 

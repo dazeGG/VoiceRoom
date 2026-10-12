@@ -11,7 +11,7 @@
 
 <header class="topbar">
   <a class="brand" href="/" aria-label={label} data-sveltekit-reload={reload ? '' : undefined}>
-    <img class="brand-mark" src="/voiceroom-mascot.svg" width="32" height="32" alt="" aria-hidden="true" />
+    <span class="brand-mark" aria-hidden="true"></span>
     <span>Voice Room</span>
   </a>
   {#if children}{@render children()}{/if}
@@ -19,9 +19,11 @@
 
 <style>
   :global(.brand-mark) {
-    width: 32px;
-    height: 32px;
+    width: 24px;
+    height: 24px;
     display: block;
     flex: 0 0 auto;
+    background: var(--vr-accent);
+    mask: url('/voiceroom-mascot.svg') center / contain no-repeat;
   }
 </style>
