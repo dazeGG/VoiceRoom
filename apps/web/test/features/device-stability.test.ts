@@ -26,7 +26,10 @@ vi.mock('../../src/lib/features/room/client/services/microphone-service', async 
   openLocalMicrophone: vi.fn(),
   stopMicrophoneCapture: vi.fn()
 }));
-vi.mock('../../src/lib/features/room/client/media/meters', () => ({ attachMeter: vi.fn() }));
+vi.mock('../../src/lib/features/room/client/media/meters', () => ({
+  attachMeter: vi.fn(),
+  syncSpeakingThresholds: vi.fn()
+}));
 vi.mock('../../src/lib/features/room/client/room/participants', () => ({ setParticipantSpeaking: vi.fn() }));
 vi.mock('../../src/lib/features/room/client/ui/controls', () => ({
   syncMicrophoneControls: vi.fn(),

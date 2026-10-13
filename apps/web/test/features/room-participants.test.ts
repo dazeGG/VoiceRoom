@@ -11,20 +11,19 @@ import {
   syncPeers,
   updatePeerStatus
 } from '../../src/lib/features/room/client/room/participants.ts';
-import { startMeters, stopMeters } from '../../src/lib/features/room/client/media/meters.ts';
+import { METER_INTERVAL_MS, startMeters, stopMeters } from '../../src/lib/features/room/client/media/meters.ts';
 import type { Participant } from '../../src/lib/features/room/client/core/types.ts';
-
-let frames: FrameRequestCallback[] = [];
 
 beforeEach(() => {
   Object.assign(state, createInitialRoomState());
   state.peerId = 'me';
-  frames = [];
-  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => frames.push(callback));
-  vi.stubGlobal('cancelAnimationFrame', () => {});
+  vi.useFakeTimers();
 });
 
-afterEach(() => stopMeters());
+afterEach(() => {
+  stopMeters();
+  vi.useRealTimers();
+});
 
 /** An analyser whose samples swing by `amplitude` around silence (0..127). */
 function analyser(amplitude: number) {
@@ -45,9 +44,7 @@ function withAnalyser(participant: Participant, amplitude: number): Participant 
 }
 
 function runFrame(): void {
-  const pending = frames;
-  frames = [];
-  for (const frame of pending) frame(performance.now());
+  vi.advanceTimersByTime(METER_INTERVAL_MS);
 }
 
 test('the local participant is the self tile, even when a copy of it was listed as a peer', () => {
@@ -81,9 +78,31 @@ test('a remote voice above the speaking level lights its ring, silence and a mut
   expect(state.peers.get('loud')?.speaking).toBe(true);
   expect(state.peers.get('quiet')?.speaking).toBe(false);
   expect(state.peers.get('muted')?.speaking).toBe(false);
-  expect(loud.level).toBeGreaterThan(0);
-  expect(muted.level).toBe(0);
-  expect(quiet.level).toBe(0);
+  expect([loud, quiet, muted].every((participant) => !('level' in participant))).toBe(true);
+});
+
+test('the rings are read on a fixed timer, not every display frame', () => {
+  withAnalyser(createParticipant({ id: 'loud', name: 'Громкий' }), 60);
+  let readings = 0;
+  const peer = state.peers.get('loud')!;
+  const original = peer.analyser!;
+  peer.analyser = {
+    ...original,
+    frequencyBinCount: original.frequencyBinCount,
+    getByteTimeDomainData(data: Uint8Array) {
+      readings += 1;
+      original.getByteTimeDomainData(data as Uint8Array<ArrayBuffer>);
+    }
+  };
+
+  startMeters();
+  startMeters();
+  vi.advanceTimersByTime(1000);
+  expect(readings).toBe(Math.floor(1000 / METER_INTERVAL_MS));
+
+  stopMeters();
+  vi.advanceTimersByTime(1000);
+  expect(readings).toBe(Math.floor(1000 / METER_INTERVAL_MS));
 });
 
 test('while deafened no ring claims someone is audible', () => {

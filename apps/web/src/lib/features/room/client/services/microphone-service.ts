@@ -19,6 +19,7 @@ import { state } from '../core/state.svelte';
 import { dbToAmplitude, getNoiseMode, persistMicrophoneVolume } from '../core/settings';
 import { showToast } from '../ui/toast';
 import { disconnectAudioNode, stopStream } from '../core/utils';
+import { isMicrophoneShownMuted } from '../core/microphone-mute';
 import type { MicProcessor, MicrophoneCapture } from '../core/types';
 
 import { createLogger, errorContext } from '$lib/shared/log';
@@ -157,6 +158,13 @@ async function buildCapturePipeline(rawStream: MediaStream, mode: NoiseMode): Pr
       });
     }
 
+    const silenceFloor = await createOptionalSilenceFloorNode(context);
+    if (silenceFloor) {
+      tail.connect(silenceFloor);
+      tail = silenceFloor;
+      processors.push({ context, destination, node: silenceFloor, source, type: 'silence-floor' });
+    }
+
     processors.push(createInputGainStage(context, tail, destination, source));
     await context.resume();
 
@@ -251,6 +259,29 @@ async function createOptionalGateNode(context: AudioContext): Promise<GateNode |
   } catch (error) {
     log.warn('noise gate unavailable', errorContext(error));
     showToast('Гейт недоступен, микрофон работает без него');
+    return null;
+  }
+}
+
+/**
+ * Turns the inaudible residue RNNoise or a closed gate leaves into exact zeros,
+ * the only input on which Opus DTX stops sending (see audio-gate.worklet.js).
+ * Optional: without it the call sounds the same and only uploads its silence.
+ */
+async function createOptionalSilenceFloorNode(context: AudioContext): Promise<AudioNode | null> {
+  if (!window.AudioWorkletNode || !context.audioWorklet?.addModule) return null;
+  try {
+    await context.audioWorklet.addModule(AUDIO_GATE_WORKLET_URL);
+    return new AudioWorkletNode(context, 'voice-room-silence-floor', {
+      channelCount: 1,
+      channelCountMode: 'explicit',
+      channelInterpretation: 'speakers',
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      outputChannelCount: [1]
+    });
+  } catch (error) {
+    log.warn('silence floor unavailable', errorContext(error));
     return null;
   }
 }
@@ -429,6 +460,60 @@ export function setLocalMicrophoneCapture(capture: MicrophoneCapture): void {
   state.micProcessor = capture.processor;
   roomDeviceUi.microphoneVolume = state.microphoneVolume;
   setMicrophoneCaptureEnabled(capture, !state.muted);
+  syncMicrophoneProcessing();
+}
+
+/**
+ * A muted microphone sends nothing, yet RNNoise and the gate went on processing
+ * every sample of it. After a few seconds of a real mute (the button or deafen)
+ * the capture's AudioContext is suspended; unmuting resumes it in tens of
+ * milliseconds. Push-to-talk with the key up is not a mute: its capture keeps
+ * running so the first word after a key press is never clipped.
+ */
+export const PROCESSING_SUSPEND_DELAY_MS = 3000;
+/** A context we suspended that is not running again by then gets a fresh capture. */
+export const PROCESSING_RESUME_CHECK_MS = 1500;
+
+let processingSuspendTimer = 0;
+const suspendedContexts = new WeakSet<AudioContext>();
+
+function isMicrophoneProcessingIdle(): boolean {
+  return state.muted && isMicrophoneShownMuted();
+}
+
+export function syncMicrophoneProcessing(): void {
+  window.clearTimeout(processingSuspendTimer);
+  processingSuspendTimer = 0;
+  const processor = state.micProcessor;
+  const context = getMicrophoneProcessors(processor)[0]?.context;
+  if (!context || context.state === 'closed') return;
+
+  if (!isMicrophoneProcessingIdle()) {
+    // Only a context this module suspended is resumed here: anything else
+    // keeps the capture's own start-up behaviour.
+    if (suspendedContexts.has(context)) resumeMicrophoneProcessing(processor, context);
+    return;
+  }
+
+  processingSuspendTimer = window.setTimeout(() => {
+    processingSuspendTimer = 0;
+    if (state.micProcessor !== processor || !isMicrophoneProcessingIdle() || context.state !== 'running') return;
+    suspendedContexts.add(context);
+    context.suspend().catch((error) => log.warn('microphone processing suspend failed', errorContext(error)));
+  }, PROCESSING_SUSPEND_DELAY_MS);
+}
+
+function resumeMicrophoneProcessing(processor: MicrophoneCapture['processor'], context: AudioContext): void {
+  suspendedContexts.delete(context);
+  // Resolves after any suspend still in flight, so a quick unmute wins.
+  context.resume().catch((error) => log.warn('microphone processing resume failed', errorContext(error)));
+  window.setTimeout(() => {
+    if (state.micProcessor !== processor || isMicrophoneProcessingIdle() || context.state === 'running') return;
+    log.warn('microphone processing did not resume', { contextState: context.state });
+    void import('../ui/devices')
+      .then((devices) => devices.reopenMicrophone())
+      .catch((error) => log.warn('microphone reopen failed', errorContext(error)));
+  }, PROCESSING_RESUME_CHECK_MS);
 }
 
 export function setMicrophoneCaptureEnabled(capture: MicrophoneCapture, enabled: boolean): void {

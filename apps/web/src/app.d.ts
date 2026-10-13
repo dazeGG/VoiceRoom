@@ -51,6 +51,11 @@ declare global {
       setSnapshot: (snapshot: { participants?: unknown[] }) => Promise<unknown>;
       setSuspended: (suspended: boolean) => Promise<unknown>;
     };
+    voiceRoomDesktopSystem?: {
+      getState: () => Promise<unknown>;
+      onState: (handler: (payload: unknown) => void) => () => void;
+      onWake: (handler: (payload: unknown) => void) => () => void;
+    };
     voiceRoomRuntime?: {
       isDesktop?: boolean;
       platform?: string;

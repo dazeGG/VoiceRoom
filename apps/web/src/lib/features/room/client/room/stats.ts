@@ -1,15 +1,14 @@
 import type { RemoteTrack } from 'livekit-client';
-import { PEER_LATENCY_INTERVAL_MS, SPEAKING_STATS_INTERVAL_MS } from '../core/config';
+import { PEER_LATENCY_INTERVAL_MS } from '../core/config';
 import { state } from '../core/state.svelte';
 import { findFirstLocalPublication, findLocalMicrophonePublication } from '../services/livekit-service';
-import { setParticipantSpeaking } from './participants';
+import { recordNetworkSample } from './call-quality';
 
 import { createLogger, errorContext } from '$lib/shared/log';
 
 const log = createLogger('room:stats');
 
 let peerLatencyTimer = 0;
-let speakingStatsTimer = 0;
 
 export function startPeerLatencyStats(): void {
   if (peerLatencyTimer) return;
@@ -30,6 +29,8 @@ async function updatePeerLatencyStats(): Promise<void> {
 
   await updateLocalLiveKitLatency();
   await updateInboundAudioStats();
+  if (!state.joined) return;
+  recordNetworkSample({ ...state.localNetwork, rttMs: state.localPingMs });
 }
 
 // Cumulative inbound counters from the previous poll, per stats id, so loss is
@@ -141,37 +142,4 @@ export function getOutboundNetworkFromStats(stats: RTCStatsReport | undefined): 
     }
   }
   return { lossPct, transport };
-}
-
-export function startSpeakingStats(): void {
-  if (speakingStatsTimer) return;
-
-  const tick = () => {
-    updateSpeakingStats().catch((error) => log.warn('speaking stats unavailable', errorContext(error)));
-  };
-  speakingStatsTimer = window.setInterval(tick, SPEAKING_STATS_INTERVAL_MS);
-  tick();
-}
-
-export function stopSpeakingStats(): void {
-  if (speakingStatsTimer) window.clearInterval(speakingStatsTimer);
-  speakingStatsTimer = 0;
-  setParticipantSpeaking(state.self, false);
-  for (const peer of state.peers.values()) {
-    peer.incomingVoiceActive = false;
-    setParticipantSpeaking(peer, false);
-  }
-}
-
-async function updateSpeakingStats(): Promise<void> {
-  if (!state.joined) return;
-
-  for (const peer of state.peers.values()) {
-    peer.incomingVoiceActive = Boolean(peer.livekitParticipant?.isSpeaking);
-    // The audio meter owns the ring whenever it can see the decoded track; the
-    // server's view only fills in before the analyser is attached, because it
-    // is sampled on an interval and lags audible speech.
-    if (peer.analyser) continue;
-    setParticipantSpeaking(peer, !peer.muted && !state.outputMuted && peer.incomingVoiceActive);
-  }
 }

@@ -1,6 +1,6 @@
 {
   "name": "@voice-room/web",
-  "version": "2.8.5",
+  "version": "2.8.6",
   "private": true,
   "type": "module",
   "scripts": {
@@ -18,7 +18,7 @@
     "@fortawesome/free-brands-svg-icons": "^7.3.0",
     "@lucide/svelte": "^1.24.0",
     "@voice-room/shared": "file:../../packages/shared",
-    "livekit-client": "^2.19.2",
+    "livekit-client": "^2.22.4",
     "svelte-fa": "^4.0.4"
   },
   "devDependencies": {
