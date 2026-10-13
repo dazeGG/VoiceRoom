@@ -28,6 +28,7 @@
   import { createReadReconciliation } from '$lib/shared/chat/read-reconciliation.svelte';
   import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
   import MessageContextMenu from '$lib/shared/chat/MessageContextMenu.svelte';
+  import ReportMessageDialog from '$lib/shared/chat/ReportMessageDialog.svelte';
   import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions } from '$lib/shared/chat/frequent-reactions';
   import PinnedMessagesBar from './PinnedMessagesBar.svelte';
   import RoomChatComposer from './RoomChatComposer.svelte';
@@ -126,6 +127,7 @@
   const media = $derived<AttachmentComposeStore | null>(roomId ? getAttachmentComposeStore('room', roomId) : null);
   let replyTarget = $state<ChatMessage | null>(null);
   let menuMessage = $state<ChatMessage | null>(null);
+  let reportedMessageId = $state<string | null>(null);
   let menuX = $state(0);
   let menuY = $state(0);
   let quickReactions = $state<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
@@ -713,6 +715,15 @@
       timeline.error = '';
     }}
     onDelete={() => void deleteMessage(target.id)}
+    onReport={session.user?.id && !isOwnMessage(target) ? () => (reportedMessageId = target.id) : undefined}
+  />
+{/if}
+
+{#if reportedMessageId && roomId}
+  <ReportMessageDialog
+    target={{ kind: 'room_message', roomId, messageId: reportedMessageId }}
+    onClose={() => (reportedMessageId = null)}
+    onReported={(message: string) => toast(message)}
   />
 {/if}
 

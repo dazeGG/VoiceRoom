@@ -182,6 +182,8 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `MAX_REALTIME_STREAMS_PER_USER` | `8` | Max concurrent WebSocket streams per authenticated user. |
 | `MAX_GUEST_STREAMS_PER_IP` | `8` | Max concurrent guest WebSocket streams per client IP. |
 | `MAX_ROOM_BANS` | `100` | Максимум активных блокировок на постоянную комнату. |
+| `PLATFORM_ADMIN_USER_IDS` | empty | Id аккаунтов через запятую, которые разбирают жалобы на `/admin/reports` и могут удалить любое сообщение. Пусто — жалобы копятся, но разбирать их в приложении некому. См. `docs/LEGAL.md`. |
+| `REPORT_RATE_LIMIT` / `REPORT_RATE_WINDOW_MS` | `10` / `60000` | Лимит жалоб от одного аккаунта за окно. |
 | `VAPID_PUBLIC_KEY` / `VAPID_SUBJECT` | empty | Публичная часть и контакт Web Push; вместе с secret `VAPID_PRIVATE_KEY` образуют полный VAPID-конфиг. Если любое значение отсутствует, push выключается без остановки API. |
 | `MAX_PUSH_SUBSCRIPTIONS_PER_USER` | `10` | Maximum retained Web Push subscriptions per account; older entries are pruned transactionally. |
 | `PUSH_SUBSCRIPTION_RATE_LIMIT` | `20` | Maximum Web Push subscription create/delete mutations per account per window. |

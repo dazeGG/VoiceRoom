@@ -15,6 +15,7 @@
   import { MascotIcon, ToastStack } from '$lib/shared/ui';
   import DesktopAppCard from './components/DesktopAppCard.svelte';
   import LandingHero from './components/LandingHero.svelte';
+  import LegalLinks from '$lib/shared/components/LegalLinks.svelte';
   import AuthDialog, { type AuthMode } from '$lib/features/auth/AuthDialog.svelte';
   import LobbyPage from './LobbyPage.svelte';
   import { dismissToast, pushToast, toastState, type ToastOptions } from './model/toasts.svelte';
@@ -171,6 +172,9 @@
       />
       <DesktopAppCard />
     </main>
+    <footer class="landing-legal">
+      <LegalLinks />
+    </footer>
   </div>
 {/if}
 
@@ -183,6 +187,9 @@
 <ToastStack toasts={toastState.items} onDismiss={dismissToast} />
 
 <style>
+  .landing-legal {
+    padding: 8px 16px 24px;
+  }
   :global(.auth-loader-lines) {
     display: grid;
     gap: 10px;

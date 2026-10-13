@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { applyDesktopBoundaryToDocument } from '$lib/platform/desktop-boundary';
+  import { isMobileRoute } from '$lib/platform/mobile-routes';
   import { installEmojiCopy } from '$lib/shared/chat/emoji-copy';
   import { initTheme } from '$lib/shared/theme/theme.svelte';
 
@@ -9,11 +10,9 @@
   let boundaryReady = $state(false);
   let desktopAllowed = $state(false);
   let roomClientAllowed = $state(false);
-  // Phones get the room page, and `/`, where the route offers to start one;
-  // the lobby and the account screens stay desktop-only and keep the block
+  // Phones get only the routes in mobile-routes.ts; the rest keep the block
   // screen below.
-  const MOBILE_ROUTES = ['/r/[roomId]', '/'];
-  const allowed = $derived(desktopAllowed || (roomClientAllowed && MOBILE_ROUTES.includes(page.route.id ?? '')));
+  const allowed = $derived(desktopAllowed || (roomClientAllowed && isMobileRoute(page.route.id)));
 
   onMount(() => {
     initTheme();

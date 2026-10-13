@@ -5,6 +5,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { resolve } from '$app/paths';
   import { CircleAlert, X } from '@lucide/svelte';
   import { normalizeRecoveryCode } from '@voice-room/shared/account-security';
   import { login, recoverAccount, register, restoreAccount, type AuthUser } from '$lib/api/auth';
@@ -289,6 +290,14 @@
         </div>
       {/if}
 
+      {#if isRegister}
+        <p class="auth-consent">
+          Нажимая «{copy.submit}», вы подтверждаете, что вам исполнилось 14 лет, принимаете
+          <a href={resolve('/terms')} target="_blank" rel="noopener">Пользовательское соглашение</a> и ознакомились с
+          <a href={resolve('/privacy')} target="_blank" rel="noopener">Политикой обработки персональных данных</a>.
+        </p>
+      {/if}
+
       <button class="auth-submit" type="submit" disabled={submitting || !session.loaded}>
         {#if submitting}
           <span class="auth-spinner" aria-hidden="true"></span>
@@ -314,6 +323,15 @@
 </dialog>
 
 <style>
+  .auth-consent {
+    margin: 0;
+    color: var(--vr-text-3);
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+  .auth-consent a {
+    color: var(--vr-text-2);
+  }
   :global(.auth-dialog-heading) {
     padding-right: 44px;
   }

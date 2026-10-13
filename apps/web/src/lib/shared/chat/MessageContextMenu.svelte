@@ -2,8 +2,8 @@
   // Right-click menu shared by the room chat and DMs. Quick reactions sit at the
   // top so the most common action needs no submenu; everything else is a normal
   // menu row. Which rows appear is decided by the caller through the flags.
-  import { Copy, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2 } from '@lucide/svelte';
-  import { ContextMenu, PopoverDivider, PopoverMenuItem } from '$lib/shared/ui';
+  import { Copy, Flag, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2 } from '@lucide/svelte';
+  import { ContextMenu, PopoverDivider, PopoverMenuItem, type ContextMenuContentState } from '$lib/shared/ui';
   import { iconMd } from '$lib/shared/ui/icons';
   import Emoji from './Emoji.svelte';
 
@@ -26,7 +26,8 @@
     onCopy,
     onTogglePin,
     onEdit,
-    onDelete
+    onDelete,
+    onReport
   }: {
     open: boolean;
     x: number;
@@ -47,6 +48,8 @@
     onTogglePin?: () => void;
     onEdit?: () => void;
     onDelete?: () => void;
+    /** Reporting to the service operator; the row appears only when given. */
+    onReport?: () => void;
   } = $props();
 
   function pick(action: (() => void) | undefined, close: () => void): void {
@@ -82,7 +85,7 @@
 <svelte:window onkeydown={handleShortcut} />
 
 <ContextMenu {open} {x} {y} ariaLabel="Действия с сообщением" {onClose}>
-  {#snippet content({ close })}
+  {#snippet content({ close }: ContextMenuContentState)}
     <div class="message-menu">
       {#if canReact && quickReactions.length > 0}
         <div class="message-menu-reactions" role="group" aria-label="Быстрые реакции">
@@ -148,6 +151,20 @@
       {#if canEdit}
         <PopoverMenuItem label="Изменить" hint="E" disabled={busy} onclick={() => pick(onEdit, close)}>
           {#snippet icon()}<Pencil {...iconMd} aria-hidden="true" />{/snippet}
+        </PopoverMenuItem>
+      {/if}
+
+      {#if onReport}
+        <PopoverDivider />
+        <PopoverMenuItem
+          label="Пожаловаться"
+          disabled={busy}
+          onclick={() => {
+            onReport();
+            close();
+          }}
+        >
+          {#snippet icon()}<Flag {...iconMd} aria-hidden="true" />{/snippet}
         </PopoverMenuItem>
       {/if}
 

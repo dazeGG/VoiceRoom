@@ -73,6 +73,16 @@ export function readApiConfig(env: Env = process.env) {
     PUSH_SUBSCRIPTION_RATE_LIMIT: int('PUSH_SUBSCRIPTION_RATE_LIMIT', 20, 0),
     PUSH_SUBSCRIPTION_RATE_WINDOW_MS: int('PUSH_SUBSCRIPTION_RATE_WINDOW_MS', 60000, 1000),
     MAX_PUSH_SUBSCRIPTIONS_PER_USER: int('MAX_PUSH_SUBSCRIPTIONS_PER_USER', 10, 1),
+    // Accounts that review reports and may remove any message. Empty means
+    // reports are still collected, but nobody can review them in the app.
+    PLATFORM_ADMIN_USER_IDS: Object.freeze(
+      String(env.PLATFORM_ADMIN_USER_IDS || '')
+        .split(',')
+        .map((id) => id.trim())
+        .filter(Boolean)
+    ),
+    REPORT_RATE_LIMIT: int('REPORT_RATE_LIMIT', 10, 0),
+    REPORT_RATE_WINDOW_MS: int('REPORT_RATE_WINDOW_MS', 60000, 1000),
     // Browser log intake is a public write path into the log stream, so it
     // stays off unless an operator turns it on per environment.
     CLIENT_LOG_INTAKE_ENABLED: readEnvBool('CLIENT_LOG_INTAKE_ENABLED', false, env) as boolean,
