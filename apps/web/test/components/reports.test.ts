@@ -27,6 +27,15 @@ test('the message menu offers a report only when the caller allows it', async ()
   expect(onClose).toHaveBeenCalled();
 });
 
+test('reporting sits with deleting in one red moderation group', () => {
+  render(MessageContextMenu, { props: { ...menuProps, canDelete: true, onDelete: vi.fn(), onReport: vi.fn() } });
+  const report = screen.getByRole('menuitem', { name: /Пожаловаться/ });
+  const remove = screen.getByRole('menuitem', { name: /Удалить/ });
+  expect(report.nextElementSibling).toBe(remove);
+  expect(report.previousElementSibling?.getAttribute('role')).toBe('separator');
+  for (const item of [report, remove]) expect(item.className).toContain('popover-menu-item--danger');
+});
+
 test('a report needs a reason and sends the target, the reason and the comment', async () => {
   const { calls } = stubFetch({ 'POST /api/reports': { status: 201, body: { ok: true, status: 'filed' } } });
   const onReported = vi.fn();
@@ -37,7 +46,9 @@ test('a report needs a reason and sends the target, the reason and the comment',
 
   const submit = screen.getByRole('button', { name: 'Отправить жалобу' });
   expect((submit as HTMLButtonElement).disabled).toBe(true);
-  await userEvent.click(screen.getByLabelText('Спам или реклама'));
+  await userEvent.click(screen.getByText('Спам или реклама'));
+  expect(screen.getByRole('radio', { name: 'Спам или реклама' })).toHaveProperty('checked', true);
+  expect(screen.getByRole('radio', { name: 'Другое' })).toHaveProperty('checked', false);
   await userEvent.type(screen.getByLabelText(/Комментарий/), '  реклама казино  ');
   await userEvent.click(submit);
 

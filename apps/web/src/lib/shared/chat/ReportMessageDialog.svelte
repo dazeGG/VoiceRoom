@@ -49,9 +49,16 @@
     <fieldset class="report-reasons">
       <legend class="report-label">Что не так с сообщением?</legend>
       {#each REASONS as option (option.value)}
-        <label class="report-reason">
-          <input type="radio" name="report-reason" value={option.value} bind:group={reason} />
-          <span>{option.label}</span>
+        <label class="report-reason" class:is-selected={reason === option.value}>
+          <input
+            class="report-reason-input"
+            type="radio"
+            name="report-reason"
+            value={option.value}
+            bind:group={reason}
+          />
+          <span class="report-reason-mark" aria-hidden="true"></span>
+          <span class="report-reason-text">{option.label}</span>
         </label>
       {/each}
     </fieldset>
@@ -92,7 +99,7 @@
 
   .report-reasons {
     display: grid;
-    gap: 8px;
+    gap: 6px;
     margin: 0;
     padding: 0;
     border: 0;
@@ -113,17 +120,83 @@
     font-weight: 400;
   }
 
+  /* The whole row is the choice: a quiet surface row with its own mark. The
+     native radio stays for the keyboard and screen readers but is hidden, so
+     the room's global `input` rules (full width, 44px tall) cannot touch it. */
   .report-reason {
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+    min-height: 44px;
+    padding: 0 14px;
+    border: 1px solid var(--vr-line);
+    border-radius: 12px;
+    background: var(--vr-surface-2);
     color: var(--vr-text);
     font-size: 14px;
     cursor: pointer;
+    transition:
+      border-color 0.14s ease,
+      background 0.14s ease;
   }
 
-  .report-reason input {
-    accent-color: var(--vr-accent);
+  .report-reason:hover {
+    background: var(--vr-surface-2-hover);
+  }
+
+  .report-reason.is-selected {
+    border-color: var(--vr-accent-line);
+    background: color-mix(in oklch, var(--vr-accent), transparent 90%);
+  }
+
+  .report-reason:has(.report-reason-input:focus-visible) {
+    border-color: var(--vr-accent-line);
+  }
+
+  .report-reason-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .report-reason-mark {
+    display: grid;
+    flex: none;
+    width: 18px;
+    height: 18px;
+    place-items: center;
+    border: 1.5px solid var(--vr-line-strong);
+    border-radius: 50%;
+    transition: border-color 0.14s ease;
+  }
+
+  .report-reason-mark::after {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--vr-accent);
+    content: '';
+    transform: scale(0);
+    transition: transform 0.14s ease;
+  }
+
+  .report-reason.is-selected .report-reason-mark {
+    border-color: var(--vr-accent);
+  }
+
+  .report-reason.is-selected .report-reason-mark::after {
+    transform: scale(1);
+  }
+
+  .report-reason-text {
+    line-height: 1.3;
   }
 
   .report-comment {

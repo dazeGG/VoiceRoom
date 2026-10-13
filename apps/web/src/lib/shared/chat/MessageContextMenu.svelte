@@ -154,10 +154,15 @@
         </PopoverMenuItem>
       {/if}
 
-      {#if onReport}
+      <!-- Moderation: reporting and deleting sit together, both in red. -->
+      {#if onReport || canDelete}
         <PopoverDivider />
+      {/if}
+
+      {#if onReport}
         <PopoverMenuItem
           label="Пожаловаться"
+          variant="danger"
           disabled={busy}
           onclick={() => {
             onReport();
@@ -169,7 +174,6 @@
       {/if}
 
       {#if canDelete}
-        <PopoverDivider />
         <PopoverMenuItem
           label="Удалить"
           hint="⌫"
