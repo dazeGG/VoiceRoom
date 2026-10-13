@@ -95,6 +95,9 @@ main() {
   }
   prune_oldest 'db-*.dump'
   prune_oldest 'env-*'
+  # Backups older than the privacy policy's retention go too, manual ones
+  # included. The script comes from the commit just checked out.
+  bash scripts/cd/prune-backups.sh . || true
   # Cleanup must not turn a finished rollout into a failed job.
   prune_release_images
   docker image prune -af --filter 'until=72h' > /dev/null || true
