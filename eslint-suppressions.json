@@ -1002,14 +1002,6 @@
       "count": 1
     }
   },
-  "apps/web/src/lib/shared/chat/MessageContextMenu.svelte": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 5
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    }
-  },
   "apps/web/src/lib/shared/chat/ReactionPicker.svelte": {
     "@typescript-eslint/no-unsafe-argument": {
       "count": 2

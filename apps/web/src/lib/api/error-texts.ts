@@ -163,6 +163,10 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   avatar_too_large: 'Аватар должен быть не больше 5 МБ',
   upload_rate_limited: 'Слишком много загрузок, попробуйте позже',
   image_not_found: 'Изображение не найдено',
+  report_target_not_found: 'Сообщение не найдено или уже удалено',
+  report_own_message: 'Нельзя пожаловаться на своё сообщение',
+  report_not_found: 'Жалоба уже рассмотрена',
+  platform_admin_required: 'Раздел доступен только администратору сервиса',
 
   desktop_release_unavailable: 'Не удалось получить данные о релизе'
 };
