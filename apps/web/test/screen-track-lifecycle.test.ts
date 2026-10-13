@@ -21,7 +21,11 @@ async function loadParticipantScreenLifecycle() {
     playStreamCue: () => {},
     playStreamViewerCue: () => {}
   }));
-  vi.doMock('../src/lib/features/room/client/media/meters', () => ({ attachMeter: () => {} }));
+  vi.doMock('../src/lib/features/room/client/media/meters', () => ({
+    attachMeter: () => {},
+    detachMeter: () => {},
+    refreshSpeaking: () => {}
+  }));
   vi.doMock('../src/lib/features/room/client/services/livekit-service', () => ({
     syncLiveKitScreenSubscriptions: () => {}
   }));

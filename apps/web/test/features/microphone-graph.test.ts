@@ -1,6 +1,6 @@
-// The microphone capture graph runs source → RNNoise → gate → gain →
-// destination; the limiter joins only while the microphone is boosted above
-// 100%, since its look-ahead would otherwise delay every word.
+// The microphone capture graph runs source → RNNoise → gate → silence floor →
+// gain → destination; the limiter joins only while the microphone is boosted
+// above 100%, since its look-ahead would otherwise delay every word.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
@@ -98,11 +98,16 @@ beforeEach(() => {
   vi.stubGlobal(
     'AudioWorkletNode',
     class {
-      readonly name = 'gate';
+      readonly name: string;
       readonly port = { postMessage() {} };
-      constructor(readonly context: FakeContext) {}
+      constructor(
+        readonly context: FakeContext,
+        processorName: string
+      ) {
+        this.name = processorName === 'voice-room-silence-floor' ? 'silence-floor' : 'gate';
+      }
       connect(target: FakeNode) {
-        this.context.edges.push(`gate → ${target.name}`);
+        this.context.edges.push(`${this.name} → ${target.name}`);
       }
       disconnect() {}
     }
@@ -118,15 +123,31 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-test('RNNoise comes before the gate and the gain feeds the destination directly', async () => {
+test('RNNoise comes before the gate, the silence floor last before the gain, and the gain feeds the destination directly', async () => {
   state.noiseMode = 'rnnoise';
   state.microphoneVolume = 100;
   const capture: MicrophoneCapture = await openLocalMicrophone();
 
   expect(capture.mode).toBe('rnnoise');
   expect([...latest().edges].sort()).toEqual(
-    ['source → rnnoise', 'rnnoise → gate', 'gate → gain', 'gain → destination', 'limiter → destination'].sort()
+    [
+      'source → rnnoise',
+      'rnnoise → gate',
+      'gate → silence-floor',
+      'silence-floor → gain',
+      'gain → destination',
+      'limiter → destination'
+    ].sort()
   );
+});
+
+test('without AudioWorklet the capture still works, only without the silence floor', async () => {
+  vi.stubGlobal('AudioWorkletNode', undefined);
+  state.noiseMode = 'browser';
+  state.gateThresholdDb = -100;
+  state.microphoneVolume = 100;
+  await openLocalMicrophone();
+  expect([...latest().edges].sort()).toEqual(['source → gain', 'gain → destination', 'limiter → destination'].sort());
 });
 
 test('boosting above 100% routes the gain through the limiter, and back when lowered', async () => {

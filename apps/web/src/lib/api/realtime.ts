@@ -141,8 +141,18 @@ class AppRealtimeConnection {
   // Waking from sleep, coming back to the tab or regaining the network is when
   // a socket that still looks open is most likely dead.
   private checkLiveness = (): void => {
-    if (this.closedByClient || this.refCount === 0) return;
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    this.probeLiveness();
+  };
+
+  /**
+   * Checks the socket now instead of after the heartbeat timeout. The desktop
+   * app calls this when the computer wakes from sleep or the lock screen; its
+   * page reads as visible during a call even when the window is hidden, so no
+   * visibilitychange would ever do it.
+   */
+  probeLiveness(): void {
+    if (this.closedByClient || this.refCount === 0) return;
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       this.reconnectAttempt = 0;
       this.ensureConnected();
@@ -156,7 +166,7 @@ class AppRealtimeConnection {
       this.probeTimer = null;
       if (this.socket === socket && this.lastPongAt < sentAt) this.abandonSocket();
     }, LIVENESS_PROBE_MS);
-  };
+  }
 
   private attachLifecycle(): void {
     if (this.lifecycleAttached || typeof window === 'undefined') return;

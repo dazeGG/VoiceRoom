@@ -48,7 +48,6 @@ export const STREAM_CUE_DEDUPE_MS = 1500;
 export const STREAM_VIEWER_CUE_DEDUPE_MS = 1200;
 export const GATE_CAPTURE_SWITCH_DEBOUNCE_MS = 700;
 export const LOCAL_GATE_DISABLED_SPEAKING_DB = -42;
-export const SPEAKING_STATS_INTERVAL_MS = 200;
 /**
  * Speaking threshold for a remote participant, measured on their decoded audio
  * in this tab. Deliberately below the local gate: the ring answers "is this

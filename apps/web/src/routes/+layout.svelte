@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/state';
   import { applyDesktopBoundaryToDocument } from '$lib/platform/desktop-boundary';
+  import { bindDesktopSystem } from '$lib/platform/desktop-system';
   import { isMobileRoute } from '$lib/platform/mobile-routes';
   import { installEmojiCopy } from '$lib/shared/chat/emoji-copy';
   import { initTheme } from '$lib/shared/theme/theme.svelte';
@@ -20,8 +21,17 @@
     desktopAllowed = policy.desktopAllowed;
     roomClientAllowed = policy.roomClientAllowed;
     boundaryReady = true;
+    // Game mode and wake-ups from the desktop app; nothing in a browser.
+    // The realtime module loads lazily: pages without a socket never need it.
+    const unbindDesktopSystem = bindDesktopSystem({
+      onWake: () => void import('$lib/api/realtime').then((realtime) => realtime.getAppRealtime().probeLiveness())
+    });
     // Emoji drawn as artwork copy as their characters anywhere in the app.
-    return installEmojiCopy();
+    const removeEmojiCopy = installEmojiCopy();
+    return () => {
+      unbindDesktopSystem();
+      removeEmojiCopy();
+    };
   });
 </script>
 

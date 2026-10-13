@@ -164,6 +164,29 @@ test('the network coming back reconnects at once instead of waiting out the back
   handle.close();
 });
 
+test('a desktop wake-up probes the socket even while the page reads as hidden', async () => {
+  const realtime = await load();
+  const handle = realtime.connectRealtime(() => {});
+  const first = FakeWebSocket.latest();
+  first.open();
+  setVisibility('hidden');
+
+  first.dead = true;
+  realtime.getAppRealtime().probeLiveness();
+  expect(first.sent.at(-1)?.type).toBe('ping');
+  await vi.advanceTimersByTimeAsync(6_000);
+  expect(FakeWebSocket.instances).toHaveLength(2);
+
+  // A hidden tab alone still does not probe: only an explicit wake-up does.
+  const second = FakeWebSocket.latest();
+  second.open();
+  const sentBefore = second.sent.length;
+  setVisibility('hidden');
+  expect(second.sent).toHaveLength(sentBefore);
+  setVisibility('visible');
+  handle.close();
+});
+
 test('after the last unsubscribe, tab and network events open nothing', async () => {
   const realtime = await load();
   const handle = realtime.connectRealtime(() => {});

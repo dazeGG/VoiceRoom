@@ -40,6 +40,7 @@
   import { leaveScreenView } from '../client/ui/screen-view';
   import { state as roomClientState } from '../client/core/state.svelte';
   import { setMicrophoneVolume } from '../client/services/microphone-service';
+  import { setMicrophoneLevelReporting } from '../client/media/meters';
   import { switchCamera, toggleCamera } from '../client/services/camera-service';
 
   import { screenUi } from '../screen-ui.svelte';
@@ -53,6 +54,12 @@
   const screenControls = $derived(getScreenControlsView());
   const cameraControls = $derived(getCameraControlsView());
   const gate = $derived(getGateControlView());
+
+  // The live microphone level is only reported while its popover is open.
+  $effect(() => {
+    setMicrophoneLevelReporting(roomDeviceUi.devicePopoverOpen);
+    return () => setMicrophoneLevelReporting(false);
+  });
 
   function toggleDevicePopover(event: MouseEvent, toggle: () => void): void {
     event.stopPropagation();
