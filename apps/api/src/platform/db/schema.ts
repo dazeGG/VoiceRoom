@@ -49,6 +49,20 @@ export interface AccountRecoveryCodes {
   user_id: string;
 }
 
+export interface ContentReports {
+  comment: Generated<string>;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  message_id: string;
+  reason: string;
+  reporter_user_id: string;
+  resolved_at: Timestamp | null;
+  resolved_by_user_id: string | null;
+  room_id: string | null;
+  status: Generated<string>;
+  target_kind: string;
+}
+
 export interface DirectMessageReactionRevisions {
   emoji: string;
   message_id: string;
@@ -487,6 +501,7 @@ export interface Users {
 export interface DB {
   account_login_events: AccountLoginEvents;
   account_recovery_codes: AccountRecoveryCodes;
+  content_reports: ContentReports;
   direct_message_reaction_revisions: DirectMessageReactionRevisions;
   direct_message_reactions: DirectMessageReactions;
   direct_message_read_cursors: DirectMessageReadCursors;

@@ -1,8 +1,91 @@
 // PCM chunks from the desktop audio helper become float samples; a chunk cut
-// mid-sample drops the partial tail instead of misreading it.
+// mid-sample drops the partial tail instead of misreading it. Mid-stream helper
+// restarts stay silent; a final non-zero exit reports the stream audio as lost.
 
-import { expect, test } from 'vitest';
-import { getDesktopPcmSamples } from '../../src/lib/features/room/client/services/desktop-screen-audio';
+import { afterEach, expect, test, vi } from 'vitest';
+import { state } from '../../src/lib/features/room/client/core/state.svelte';
+import {
+  getDesktopPcmSamples,
+  onDesktopScreenAudioLost,
+  startDesktopSafeScreenAudioCapture,
+  stopLocalScreenAudioCapture
+} from '../../src/lib/features/room/client/services/desktop-screen-audio';
+
+type BridgeEvent = { sessionId: string; event: Record<string, unknown> };
+
+function installDesktopAudioBridge() {
+  const eventListeners = new Set<(payload: BridgeEvent) => void>();
+  const emit = (event: Record<string, unknown>) => {
+    for (const listener of [...eventListeners]) listener({ event, sessionId: '7' });
+  };
+  const bridge = {
+    onData: () => () => {},
+    onEvent: (listener: (payload: BridgeEvent) => void) => {
+      eventListeners.add(listener);
+      return () => eventListeners.delete(listener);
+    },
+    startSafeSystem: vi.fn(async () => {
+      queueMicrotask(() => emit({ channels: 2, event: 'format', sampleRate: 48000 }));
+      return { sessionId: '7' };
+    }),
+    stop: vi.fn(async () => {})
+  };
+  vi.stubGlobal('voiceRoomDesktopAudio', bridge);
+
+  const track = { addEventListener() {}, contentHint: '', removeEventListener() {} };
+  class FakeAudioContext {
+    audioWorklet = { addModule: async () => {} };
+    close = async () => {};
+    createMediaStreamDestination() {
+      return { disconnect() {}, stream: { getAudioTracks: () => [track] } };
+    }
+  }
+  class FakeAudioWorkletNode {
+    port = { postMessage() {} };
+    connect() {}
+    disconnect() {}
+  }
+  vi.stubGlobal('AudioContext', FakeAudioContext);
+  vi.stubGlobal('AudioWorkletNode', FakeAudioWorkletNode);
+  return { bridge, emit, eventListeners };
+}
+
+afterEach(() => {
+  stopLocalScreenAudioCapture();
+  vi.unstubAllGlobals();
+});
+
+test('a helper restart keeps the stream audio; a final failed exit reports it lost', async () => {
+  const { emit } = installDesktopAudioBridge();
+  const lost = vi.fn();
+  const unsubscribe = onDesktopScreenAudioLost(lost);
+  state.localScreenAudioCapture = await startDesktopSafeScreenAudioCapture();
+
+  emit({ attempt: 1, delayMs: 0, event: 'restarting' });
+  emit({ channels: 2, event: 'format', sampleRate: 48000 });
+  expect(lost).not.toHaveBeenCalled();
+  expect(state.localScreenAudioCapture?.sessionId).toBe('7');
+
+  emit({ code: 3, event: 'exit', signal: null });
+  expect(lost).toHaveBeenCalledTimes(1);
+  unsubscribe();
+});
+
+test('a clean exit or an exit after the share stopped is not a loss', async () => {
+  const { emit, eventListeners } = installDesktopAudioBridge();
+  const lost = vi.fn();
+  const unsubscribe = onDesktopScreenAudioLost(lost);
+  state.localScreenAudioCapture = await startDesktopSafeScreenAudioCapture();
+
+  emit({ code: 0, event: 'exit', signal: null });
+  expect(lost).not.toHaveBeenCalled();
+
+  stopLocalScreenAudioCapture();
+  expect(eventListeners.size).toBe(0);
+  emit({ code: 3, event: 'exit', signal: null });
+  expect(lost).not.toHaveBeenCalled();
+  unsubscribe();
+});
 
 test('whole float samples are read, a partial tail and empty chunks give nothing extra', () => {
   const floats = new Float32Array([0.25, -0.5, 1]);

@@ -109,9 +109,30 @@ function createMessageModerationService({
     actorUserId?: string;
   } = {}): Promise<MessageDeletionOutcome> {
     if (!roomId || !messageId || !actorUserId) return { status: 'invalid', deletion: null };
+    return remove(roomId, messageId, (client) => owners.authorizeOwner(roomId, actorUserId, { client }));
+  }
+
+  // The service operator removes a reported message from any room; the caller
+  // has already checked the platform administrator.
+  async function removeRoomMessageAsOperator({
+    roomId,
+    messageId
+  }: {
+    roomId: string;
+    messageId: string;
+  }): Promise<MessageDeletionOutcome> {
+    if (!roomId || !messageId) return { status: 'invalid', deletion: null };
+    return remove(roomId, messageId, async () => true);
+  }
+
+  async function remove(
+    roomId: string,
+    messageId: string,
+    authorize: (client: QueryClient) => Promise<boolean>
+  ): Promise<MessageDeletionOutcome> {
     const timestamp = new Date(now());
     const result = await transaction(pool, async (client: pg.PoolClient): Promise<MessageDeletionOutcome> => {
-      if (!(await owners.authorizeOwner(roomId, actorUserId, { client }))) {
+      if (!(await authorize(client))) {
         return { status: 'forbidden', deletion: null };
       }
       const trx = kyselyOn(client);
@@ -146,7 +167,7 @@ function createMessageModerationService({
     return result;
   }
 
-  return Object.freeze({ deleteRoomMessage });
+  return Object.freeze({ deleteRoomMessage, removeRoomMessageAsOperator });
 }
 
 export type MessageModerationService = ReturnType<typeof createMessageModerationService>;

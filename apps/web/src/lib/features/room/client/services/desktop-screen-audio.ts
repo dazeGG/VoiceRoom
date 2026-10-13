@@ -2,6 +2,10 @@
 // streams PCM chunks, which an AudioWorklet turns into a MediaStream track the
 // share publishes. The helper reports its format first; a capture that never
 // hears it gives up after three seconds.
+//
+// The desktop app restarts a helper that dies mid-stream under the same session,
+// so the track survives short gaps. A non-zero 'exit' means it gave up: the
+// share keeps its video but has lost its sound, and the lost-audio handler is told.
 
 import { DESKTOP_AUDIO_SOURCE_WORKLET_URL } from '../core/config';
 import { state } from '../core/state.svelte';
@@ -10,6 +14,30 @@ import { disconnectAudioNode } from '../core/utils';
 import { createLogger, errorContext } from '$lib/shared/log';
 
 const log = createLogger('room:screen-capture');
+
+type DesktopScreenAudioLostHandler = () => void;
+let audioLostHandler: DesktopScreenAudioLostHandler | null = null;
+
+export function onDesktopScreenAudioLost(handler: DesktopScreenAudioLostHandler): () => void {
+  audioLostHandler = handler;
+  return () => {
+    if (audioLostHandler === handler) audioLostHandler = null;
+  };
+}
+
+function handleLiveSessionEvent(
+  sessionId: string,
+  event: { event?: string; attempt?: number; delayMs?: number; code?: number | null; signal?: string | null }
+): void {
+  if (state.localScreenAudioCapture?.sessionId !== sessionId) return;
+  if (event.event === 'restarting') {
+    log.warn('native desktop audio restarting', { attempt: event.attempt ?? null, delayMs: event.delayMs ?? null });
+    return;
+  }
+  if (event.event !== 'exit' || event.code === 0) return;
+  log.error('native desktop audio lost', { code: event.code ?? null, signal: event.signal ?? null });
+  audioLostHandler?.();
+}
 
 export function hasNativeDesktopSafeAudio(): boolean {
   const bridge = window.voiceRoomDesktopAudio;
@@ -38,6 +66,10 @@ export async function startDesktopSafeScreenAudioCapture(): Promise<DesktopAudio
 
   const removeEventListener = window.voiceRoomDesktopAudio!.onEvent(({ sessionId: payloadSessionId, event }) => {
     if (sessionId && payloadSessionId !== sessionId) return;
+    if (formatEvent && event) {
+      handleLiveSessionEvent(payloadSessionId, event);
+      return;
+    }
     if (event?.event === 'format') {
       formatEvent = event;
       resolveFormat(event);

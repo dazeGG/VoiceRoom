@@ -14,6 +14,7 @@
   import LinkPreviewCard from '$lib/shared/chat/LinkPreviewCard.svelte';
   import MessageEditor from '$lib/shared/chat/MessageEditor.svelte';
   import MessageContextMenu from '$lib/shared/chat/MessageContextMenu.svelte';
+  import ReportMessageDialog from '$lib/shared/chat/ReportMessageDialog.svelte';
   import MessageHoverActions from '$lib/shared/chat/MessageHoverActions.svelte';
   import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
   import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
@@ -62,6 +63,7 @@
   let editingMessageId = $state('');
   let replyTarget = $state<DirectMessage | null>(null);
   let menu = $state<{ message: DirectMessage; fromMe: boolean; x: number; y: number } | null>(null);
+  let reportedMessageId = $state<string | null>(null);
   let inviteResponding = $state('');
 
   const reactions = createReactionStore();
@@ -464,6 +466,15 @@
     onCopy={() => void copyMessageText(target)}
     onEdit={() => (editingMessageId = target.id)}
     onDelete={() => void deleteMessage(target.id)}
+    onReport={menu.fromMe ? undefined : () => (reportedMessageId = target.id)}
+  />
+{/if}
+
+{#if reportedMessageId}
+  <ReportMessageDialog
+    target={{ kind: 'direct_message', messageId: reportedMessageId }}
+    onClose={() => (reportedMessageId = null)}
+    onReported={(message: string) => pushToast(message)}
   />
 {/if}
 

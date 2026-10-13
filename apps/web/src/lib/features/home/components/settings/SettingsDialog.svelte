@@ -20,6 +20,7 @@
   import HotkeySettings from './HotkeySettings.svelte';
   import NotificationSettings from './NotificationSettings.svelte';
   import ProfileSettings from './ProfileSettings.svelte';
+  import LegalLinks from '$lib/shared/components/LegalLinks.svelte';
   import SoundSettings from './SoundSettings.svelte';
   import type { SettingsTab } from './types';
 
@@ -112,6 +113,7 @@
           {#if support.desktopApp}{@render navItem('hotkeys', 'Горячие клавиши', Keyboard)}{/if}
           {#if appTab}{@render navItem('app', 'Приложение', Monitor)}{/if}
         </div>
+        <LegalLinks compact newTab />
         <button
           class="settings-nav-item settings-nav-item--danger"
           type="button"

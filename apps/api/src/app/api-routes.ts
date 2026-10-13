@@ -27,6 +27,7 @@ import { registerNotificationRoutes } from '../domains/notifications/notificatio
 import { registerNotificationSettingsRoutes } from '../domains/notifications/notification-settings.routes.ts';
 import { registerOpsRoutes } from '../domains/ops/ops.routes.ts';
 import { registerPeerModerationRoutes } from '../domains/rooms/peer-moderation.routes.ts';
+import { registerReportRoutes } from '../domains/reports/reports.routes.ts';
 import { registerRoomRoutes } from '../domains/rooms/rooms.routes.ts';
 import { registerFriendsRoutes } from '../domains/social/friends.routes.ts';
 
@@ -53,6 +54,7 @@ export interface ApiRouteDeps {
     notificationSettings: Parameters<typeof registerNotificationSettingsRoutes>[2];
     avatars: Parameters<typeof registerAvatarRoutes>[2]['avatars'];
     account: Parameters<typeof registerAccountRoutes>[2]['account'];
+    reports: Parameters<typeof registerReportRoutes>[2]['reports'];
     desktopRelease: OpsRouteDeps['desktopRelease'];
   };
   limits: RateLimits;
@@ -166,6 +168,10 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
       moderation: moderation.service,
       messages: moderation.messageService
     });
+  }
+
+  if (deps.services.getReportRepository()) {
+    registerReportRoutes(app, ctx, { reports: deps.domain.reports, limiter: deps.limits.reports });
   }
 
   const media = deps.services.getMediaServices();

@@ -253,11 +253,18 @@ export type ServerMessage =
   | { type: 'room-updated'; room: RoomLifecycleSummary }
   | { type: 'room-deleted'; roomId: string };
 
+// Events from the desktop app's stream-audio helper. Desktop 1.4.4+ restarts a
+// crashed helper under the same session ('restarting') and sends 'exit' only when
+// it gives up.
 interface DesktopAudioFormatEvent {
-  event: 'format' | 'error';
+  event: 'format' | 'error' | 'warning' | 'started' | 'stopped' | 'log' | 'restarting' | 'exit';
   message?: string;
   channels?: number;
   sampleRate?: number;
+  attempt?: number;
+  delayMs?: number;
+  code?: number | null;
+  signal?: string | null;
 }
 
 declare global {

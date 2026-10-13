@@ -17,7 +17,7 @@ import { playStreamCue } from '../media/cues';
 import { getDisplayName } from '../ui/names';
 import { publishLocalScreenTracks, unpublishLocalScreenTracks } from './livekit-service';
 import { openScreenShare } from './screen-capture-service';
-import { stopLocalScreenAudioCapture } from './desktop-screen-audio';
+import { onDesktopScreenAudioLost, stopLocalScreenAudioCapture } from './desktop-screen-audio';
 import { TRACK_SOURCE } from '../media/livekit-runtime';
 import { updateParticipant } from '../room/participants';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
@@ -33,6 +33,25 @@ import type { ParsedScreenStats, ScreenProfile, ScreenStatsPrevious, ScreenStrea
 import { createLogger, errorContext } from '$lib/shared/log';
 
 const log = createLogger('room:screen-share');
+
+// The desktop app gave up restarting its stream-audio helper: the picture keeps
+// going without sound. Offer a restart, which reopens the picker.
+onDesktopScreenAudioLost(() => {
+  if (!state.localScreenStream) return;
+  showToast('Звук стрима пропал', {
+    action: restartScreenShare,
+    actionLabel: 'Перезапустить',
+    description: 'Картинка продолжает идти. Перезапустите демонстрацию, чтобы вернуть звук.',
+    duration: 15000,
+    variant: 'error'
+  });
+});
+
+async function restartScreenShare(): Promise<void> {
+  const profileId = getSelectedScreenProfileId();
+  await stopScreenShare({ quiet: true });
+  await startScreenShare(profileId);
+}
 
 export async function handleScreenButtonClick(): Promise<void> {
   if (state.localScreenStream) {
@@ -82,8 +101,10 @@ async function startScreenShare(profileId: string = getSelectedScreenProfileId()
     applyLocalScreenProfileState(profile, mode);
     state.screenStopping = false;
     setLocalAppAudioSuppressed(false);
+    // 'ended' never fires for our own stop(): the OS, the browser's sharing bar,
+    // a closed window or a capture helper that gave up ended the share.
     videoTrack.addEventListener('ended', () => {
-      stopScreenShare().catch((error) => log.error('screen share failed', errorContext(error)));
+      stopScreenShare({ offerRestart: true }).catch((error) => log.error('screen share failed', errorContext(error)));
     });
     await publishLocalScreenTracks();
     await applyLocalScreenEncodingProfile(profile);
@@ -124,12 +145,14 @@ async function startScreenShare(profileId: string = getSelectedScreenProfileId()
   }
 }
 
-async function stopScreenShare(options: { notify?: boolean; quiet?: boolean } = {}): Promise<void> {
+async function stopScreenShare(
+  options: { notify?: boolean; offerRestart?: boolean; quiet?: boolean } = {}
+): Promise<void> {
   if (!state.localScreenStream || state.screenStopping) return;
 
   state.screenStopping = true;
   try {
-    const { notify = true, quiet = false } = options;
+    const { notify = true, offerRestart = false, quiet = false } = options;
     const previousStream = state.localScreenStream;
     state.localScreenStream = null;
     stopLocalScreenStatsMonitor({ refresh: false });
@@ -153,7 +176,15 @@ async function stopScreenShare(options: { notify?: boolean; quiet?: boolean } = 
     if (notify) await postState();
     if (!quiet) {
       playStreamCue('stop');
-      showToast('Демонстрация остановлена');
+      showToast(
+        'Демонстрация остановлена',
+        offerRestart && state.joined
+          ? {
+              action: () => startScreenShare(getSelectedScreenProfileId()),
+              actionLabel: 'Показать снова'
+            }
+          : undefined
+      );
     }
   } finally {
     state.screenStopping = false;
