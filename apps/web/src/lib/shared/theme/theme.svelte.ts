@@ -1,5 +1,8 @@
 // The colour theme: the choice is remembered in localStorage and applied as
-// data-theme on the root element, where theme.css swaps the --vr-* tokens.
+// data-theme on the root element, where theme.css swaps the --vr-* tokens. The
+// desktop app is told the active theme so its app icon follows it.
+import { reportDesktopAppIconTheme } from '../../platform/desktop-app-icon';
+
 export const THEMES = [
   { id: 'graphite-volt', label: 'Volt' },
   { id: 'graphite-ice', label: 'Ice' },
@@ -35,11 +38,13 @@ export const themeState = $state<{ current: ThemeId }>({ current: DEFAULT_THEME 
 export function initTheme(): void {
   themeState.current = readStoredTheme();
   applyTheme(themeState.current);
+  void reportDesktopAppIconTheme(themeState.current);
 }
 
 export function setTheme(id: ThemeId): void {
   themeState.current = id;
   applyTheme(id);
+  void reportDesktopAppIconTheme(id);
   try {
     localStorage.setItem(THEME_STORAGE_KEY, id);
   } catch {
