@@ -166,6 +166,12 @@ export const ERROR_CODES = [
   'upload_rate_limited',
   'image_not_found',
 
+  // Reports to the operator
+  'report_target_not_found',
+  'report_own_message',
+  'report_not_found',
+  'platform_admin_required',
+
   // Desktop app
   'desktop_release_unavailable'
 ] as const;

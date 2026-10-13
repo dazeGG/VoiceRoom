@@ -37,7 +37,8 @@
     "./contracts/ops": "./src/contracts/ops.ts",
     "./contracts/admission": "./src/contracts/admission.ts",
     "./contracts/errors": "./src/contracts/errors.ts",
-    "./contracts/realtime": "./src/contracts/realtime.ts"
+    "./contracts/realtime": "./src/contracts/realtime.ts",
+    "./contracts/reports": "./src/contracts/reports.ts"
   },
   "scripts": {
     "check": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
