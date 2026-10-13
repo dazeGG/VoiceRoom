@@ -27,7 +27,8 @@ export function createRateLimits(config: ApiConfig, env: NodeJS.ProcessEnv) {
     friendRequests: limiter(config.FRIEND_REQUEST_RATE_LIMIT, config.FRIEND_REQUEST_RATE_WINDOW_MS),
     avatarUploads: limiter(config.AVATAR_UPLOAD_RATE_LIMIT, config.AVATAR_UPLOAD_RATE_WINDOW_MS),
     pushSubscriptions: limiter(config.PUSH_SUBSCRIPTION_RATE_LIMIT, config.PUSH_SUBSCRIPTION_RATE_WINDOW_MS),
-    clientLogs: limiter(config.CLIENT_LOG_RATE_LIMIT, config.CLIENT_LOG_RATE_WINDOW_MS)
+    clientLogs: limiter(config.CLIENT_LOG_RATE_LIMIT, config.CLIENT_LOG_RATE_WINDOW_MS),
+    reports: limiter(config.REPORT_RATE_LIMIT, config.REPORT_RATE_WINDOW_MS)
   };
 }
 

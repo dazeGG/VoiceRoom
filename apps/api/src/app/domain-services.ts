@@ -18,6 +18,7 @@ import { createReplyRepository } from '../domains/messaging/reply.repository.ts'
 import { createRoomChatService } from '../domains/messaging/room-chat.service.ts';
 import { createNotificationSettingsService } from '../domains/notifications/notification-settings.service.ts';
 import { createDesktopReleaseService } from '../domains/ops/desktop-release.service.ts';
+import { createReportService } from '../domains/reports/report.service.ts';
 import { createPeerEviction } from '../domains/rooms/peer-eviction.ts';
 import { createPeerModerationService } from '../domains/rooms/peer-moderation.service.ts';
 import { publicPeer } from '../domains/rooms/room-views.ts';
@@ -201,6 +202,22 @@ export function createDomainServices(deps: DomainServiceDeps) {
     announceRoomUpdate: (roomId, room) => hub.roomLifecycle.announceRoomUpdate(roomId, room)
   });
 
+  const reports = createReportService({
+    repository: () => {
+      const repository = services.getReportRepository();
+      if (!repository) throw new Error('Reports require the database');
+      return repository;
+    },
+    adminUserIds: config.PLATFORM_ADMIN_USER_IDS,
+    canReadRoom: (roomId, userId) => services.getRoomStore().canUserReadRoomChat(roomId, userId),
+    removeRoomMessage: async (input) => {
+      const moderation = services.getModerationServices();
+      if (!moderation) throw new Error('Message removal requires the database');
+      return moderation.messageService.removeRoomMessageAsOperator(input);
+    },
+    removeDirectMessage: (input) => directMessages.removeAsOperator(input)
+  });
+
   const desktopReleaseService = createDesktopReleaseService({
     repo: config.DESKTOP_RELEASE_REPO,
     cacheMs: config.DESKTOP_RELEASE_CACHE_MS,
@@ -220,6 +237,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     directMessages,
     notificationSettings,
     avatars: avatarsService,
+    reports,
     desktopRelease: desktopReleaseService
   };
 }

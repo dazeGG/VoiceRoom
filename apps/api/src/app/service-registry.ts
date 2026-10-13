@@ -43,6 +43,7 @@ import { createReactionsModule } from '../domains/messaging/reactions.module.ts'
 import { createPinsModule } from '../domains/messaging/pins.module.ts';
 import { createNotificationsModule } from '../domains/notifications/notifications.module.ts';
 import { createModerationModule } from '../domains/moderation/moderation.module.ts';
+import { createReportRepository } from '../domains/reports/report.repository.ts';
 import { createMediaModule } from '../domains/media/media.module.ts';
 import { createMembershipModule, type MembershipModule } from '../domains/membership/membership.module.ts';
 import type { EvictionType } from '../domains/rooms/peer-eviction.ts';
@@ -236,6 +237,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   );
 
   const accountDeletions = pooled((pool) => createAccountDeletionRepository({ pool }));
+  const reportRepository = pooled((pool) => createReportRepository({ pool }));
   const activeBans = pooled((pool) => createActiveBanService({ pool }));
   const delivery = pooled((pool) => ({
     idempotency: createMessageIdempotencyRepository(),
@@ -334,7 +336,8 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     liveKitCredentials.set(options.liveKitCredentials as LiveKitCredentials | null | undefined);
     memberships.set(options.membershipServicesOverride as MembershipModule | null | undefined);
     for (const derived of [messageService, history, credentialBoundary]) derived.reset();
-    for (const derived of [reactions, pins, notifications, moderation, media, activeBans, delivery]) derived.reset();
+    for (const derived of [reactions, pins, notifications, moderation, media, activeBans, delivery, reportRepository])
+      derived.reset();
     return { roomStoreChanged };
   }
 
@@ -385,6 +388,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     getHistoryServices: () => history.get(),
     getPool,
     getAccountDeletionRepository: () => accountDeletions.get(),
+    getReportRepository: () => reportRepository.get(),
     getReactionServices: () => reactions.get(),
     getPinServices: () => pins.get(),
     getMessageDeliveryServices: () => delivery.get(),

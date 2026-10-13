@@ -338,6 +338,26 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     return { status: 'deleted' };
   }
 
+  // The service operator removes a reported message; the caller has already
+  // checked the platform administrator. Both sides see it go like a deletion
+  // by the sender.
+  async function removeAsOperator({
+    senderId,
+    recipientId,
+    messageId
+  }: {
+    senderId: string;
+    recipientId: string;
+    messageId: string;
+  }): Promise<Status<'deleted' | 'not_found'>> {
+    const current = await deps.messages().direct.getMessage(senderId, recipientId, messageId);
+    if (!current || !isDirectSender(current, senderId)) return { status: 'not_found' };
+    if (!(await deps.messages().direct.softDeleteMessage(messageId))) return { status: 'not_found' };
+    deps.notifyUser(recipientId, { type: 'dm.message.deleted', messageId, peerUserId: senderId });
+    deps.notifyUser(senderId, { type: 'dm.message.deleted', messageId, peerUserId: recipientId });
+    return { status: 'deleted' };
+  }
+
   async function edit(
     userId: string,
     peerId: string,
@@ -367,7 +387,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     return { status: 'edited', message };
   }
 
-  return { thread, send, respondInvite, markRead, remove, edit };
+  return { thread, send, respondInvite, markRead, remove, removeAsOperator, edit };
 }
 
 export type DirectMessagesService = ReturnType<typeof createDirectMessagesService>;
