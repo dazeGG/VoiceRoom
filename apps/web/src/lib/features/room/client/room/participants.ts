@@ -17,6 +17,15 @@ function attachMeterSoon(participant: Participant | null, stream: MediaStream | 
   void import('../media/meters').then((module) => module.attachMeter(participant, stream));
 }
 
+function detachMeterSoon(participant: Participant): void {
+  void import('../media/meters').then((module) => module.detachMeter(participant));
+}
+
+function refreshSpeakingSoon(participant: Participant): void {
+  if (!participant.meter) return;
+  void import('../media/meters').then((module) => module.refreshSpeaking(participant));
+}
+
 function syncLiveKitScreenSubscriptionsSoon(peer: Participant): void {
   void import('../services/livekit-service').then((module) => module.syncLiveKitScreenSubscriptions(peer));
 }
@@ -54,17 +63,17 @@ function createParticipantModel(peerInfo: PeerInfo, isLocal: boolean): Participa
     cameraStream: null,
     deafened: Boolean(peerInfo.deafened),
     id: peerInfo.id,
-    incomingVoiceActive: false,
     isLocal,
     joinedAt: peerInfo.joinedAt ?? Date.now(),
     livekitParticipant: null,
     connectionQuality: 'unknown',
+    meter: null,
     meterData: null,
     muted: Boolean(peerInfo.muted),
     speaking: false,
+    voiceDetected: false,
     speakingHoldUntil: 0,
     statusLabel: '',
-    level: 0,
     name,
     micReceiver: null,
     screen: Boolean(peerInfo.screen),
@@ -207,9 +216,11 @@ export function updateParticipant(peerInfo: PeerInfo): void {
     participant.viewedScreenPeerId = peerInfo.viewedScreenPeerId || '';
     applyStreamViewerCue(participant, hadViewedScreenOwnerId, participant.viewedScreenPeerId);
   }
-  if (Object.hasOwn(peerInfo, 'muted') && participant.muted) {
-    participant.incomingVoiceActive = false;
-    setParticipantSpeaking(participant, false);
+  if (Object.hasOwn(peerInfo, 'muted')) {
+    // Muted drops the ring at once; unmuted mid-sentence relights it from what
+    // the speaking detector is hearing right now.
+    if (participant.muted) setParticipantSpeaking(participant, false);
+    else refreshSpeakingSoon(participant);
   }
   if (hasScreenUpdate) {
     applyRemoteScreenCue(participant, hadScreen, participant.screen);
@@ -281,6 +292,7 @@ export function removePeer(peerId: string): void {
   clearPeerJoinCue(peerId);
   clearRemoteScreenCue(peerId);
   removeAudioElements(peer);
+  detachMeterSoon(peer);
   state.screenCollapsedPeerIds.delete(peerId);
   state.screenSubscribedPeerIds.delete(peerId);
   if (attendedRemovedScreen) disconnectScreenSoon(peerId);
@@ -297,7 +309,6 @@ export function detachLiveKitParticipant(peer: Participant, voiceIssue = ''): vo
   peer.voiceIssue = voiceIssue;
   peer.micReceiver = null;
   removeAudioElements(peer);
-  peer.incomingVoiceActive = false;
   setParticipantSpeaking(peer, false);
   updatePeerStatus(peer);
 }
@@ -320,7 +331,9 @@ export function attachRemoteTrack(
     peer.stream = mediaStream;
     peer.micReceiver = receiver ?? null;
     ensureRemoteAudioElement(peer, track, mediaStream, receiver);
-    if (!peer.analyser) attachMeterSoon(peer, new MediaStream([track]));
+    // A resubscribed voice arrives as a new track: the meter moves to it, or the
+    // ring would stay on the dead one.
+    if (peer.meter?.track !== track) attachMeterSoon(peer, new MediaStream([track]));
     updatePeerStatus(peer);
   }
 }
@@ -503,7 +516,6 @@ function attachRemoteAudioTrack(
       audio.remove();
       peer.audioElements.delete(track.id);
       if (peer.micReceiver === receiver) peer.micReceiver = null;
-      peer.incomingVoiceActive = false;
       setParticipantSpeaking(peer, false);
     },
     { once: true }
@@ -542,10 +554,7 @@ export function setParticipantSpeaking(participant: Participant | null, speaking
  */
 export function clearAllSpeaking(): void {
   setParticipantSpeaking(state.self, false);
-  for (const peer of state.peers.values()) {
-    peer.incomingVoiceActive = false;
-    setParticipantSpeaking(peer, false);
-  }
+  for (const peer of state.peers.values()) setParticipantSpeaking(peer, false);
 }
 
 // A remote tile names a real voice problem ("голос не подключен"); while the

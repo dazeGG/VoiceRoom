@@ -23,7 +23,8 @@ import { refreshScreenControls, stopLocalScreenStream } from '../services/screen
 import { stopLocalCamera } from '../services/camera-service';
 import { closeScreenView, refreshScreenStage } from '../ui/screen-view';
 import { createParticipant, removeAudioElements, updatePeerStatus } from './participants';
-import { connectLiveKitRoom, disconnectLiveKitRoom } from '../services/livekit-service';
+import { connectLiveKitRoom, disconnectLiveKitRoom, syncRemoteVideoVisibility } from '../services/livekit-service';
+import { onAppVisibilityChange } from '$lib/platform/app-visibility';
 import {
   describeMicrophoneError,
   getLocalMicrophoneCapture,
@@ -32,7 +33,7 @@ import {
   stopMicrophoneCapture
 } from '../services/microphone-service';
 import { attachMeter, startMeters, stopMeters } from '../media/meters';
-import { startPeerLatencyStats, startSpeakingStats, stopPeerLatencyStats, stopSpeakingStats } from './stats';
+import { startPeerLatencyStats, stopPeerLatencyStats } from './stats';
 import { clearAllPeerJoinCues, clearStreamViewerCues, playPeerCue } from '../media/cues';
 import { cancelScreenSourcePicker } from '../ui/screen-source-picker';
 import { syncDesktopGlobalHotkeys } from '../services/desktop-hotkey-service';
@@ -44,8 +45,11 @@ import {
   closeOutputPopover,
   refreshDevices,
   refreshMicrophoneLevelMeter,
+  relieveNoiseSuppression,
   watchLocalMicrophone
 } from '../ui/devices';
+import { startCpuPressureWatch, stopCpuPressureWatch } from '../services/cpu-pressure';
+import { finishCallQuality, recordCpuPressure, recordCpuRelief, startCallQuality } from './call-quality';
 import { GATE_THRESHOLD_MIN_DB } from '../core/config';
 import { getAppRealtime } from '$lib/api/realtime';
 import {
@@ -73,6 +77,7 @@ import { createLogger, errorContext } from '$lib/shared/log';
 const log = createLogger('room');
 
 let voiceJoinSent = false;
+let stopVideoVisibilitySync: (() => void) | null = null;
 let joinAttemptGeneration = 0;
 let activeJoinAttempt: Promise<void> | null = null;
 
@@ -289,7 +294,19 @@ async function performJoinRoom(generation: number): Promise<void> {
     refreshScreenControls();
     startMeters();
     startPeerLatencyStats();
-    startSpeakingStats();
+    // Remote video pauses while the app cannot be seen (tray, minimized, background tab).
+    stopVideoVisibilitySync?.();
+    stopVideoVisibilitySync = onAppVisibilityChange(() => syncRemoteVideoVisibility());
+    syncRemoteVideoVisibility();
+    startCallQuality();
+    startCpuPressureWatch({
+      onCritical: () => {
+        void relieveNoiseSuppression().then((switched) => {
+          if (switched) recordCpuRelief();
+        });
+      },
+      onState: recordCpuPressure
+    });
     playPeerCue('join');
   } catch (error) {
     if (!isCurrent()) {
@@ -399,7 +416,10 @@ export function leaveRoom(): void {
   stopLocalCamera();
   stopMeters();
   stopPeerLatencyStats();
-  stopSpeakingStats();
+  stopVideoVisibilitySync?.();
+  stopVideoVisibilitySync = null;
+  stopCpuPressureWatch();
+  finishCallQuality();
 
   state.muted = false;
   state.microphoneMissing = false;

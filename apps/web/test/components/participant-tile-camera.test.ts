@@ -27,7 +27,6 @@ function participant(extra: Partial<Participant> = {}): Participant {
     deafened: false,
     id: 'peer-a',
     isLocal: false,
-    level: 0,
     muted: false,
     name: 'Вася',
     screen: false,

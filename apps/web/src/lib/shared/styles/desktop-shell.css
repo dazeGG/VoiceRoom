@@ -50,3 +50,13 @@ html.is-desktop.is-shell-fullscreen .app-shell {
   height: 100%;
   max-height: 100%;
 }
+
+/* Game mode (desktop-system.ts): a game is in front and this window is not, so
+   nobody sees the page animate. Looping animations hold still instead of
+   repainting behind the game; they carry on from where they stopped as soon as
+   the window comes back. */
+html.is-desktop.vr-game-mode *,
+html.is-desktop.vr-game-mode *::before,
+html.is-desktop.vr-game-mode *::after {
+  animation-play-state: paused !important;
+}

@@ -1,4 +1,5 @@
 import type { Participant as LiveKitParticipant } from 'livekit-client';
+import type { VoiceMeter } from '../media/meters';
 
 export interface PeerInfo {
   accountUserId?: string;
@@ -32,18 +33,20 @@ export interface Participant {
   cameraStream: MediaStream | null;
   deafened: boolean;
   id: string;
-  incomingVoiceActive: boolean;
   isLocal: boolean;
   joinedAt: number;
   livekitParticipant: LiveKitParticipant | null;
   connectionQuality: string;
+  /** The speaking detector (or analyser) on this participant's voice, see media/meters. */
+  meter: VoiceMeter | null;
   meterData: Uint8Array<ArrayBuffer> | null;
   muted: boolean;
   speaking: boolean;
+  /** What the detector last heard, before mute, deafen and push-to-talk rules. */
+  voiceDetected: boolean;
   /** Meter-loop bookkeeping: while `now` is under this, the ring stays lit. */
   speakingHoldUntil: number;
   statusLabel: string;
-  level: number;
   name: string;
   micReceiver: RTCRtpReceiver | null;
   screen: boolean;

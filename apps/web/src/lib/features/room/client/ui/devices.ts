@@ -29,7 +29,7 @@ import {
   unpublishLocalMicrophone
 } from '../services/livekit-service';
 import { supportsAudioOutputSelection, syncAudioOutputDevices } from '../services/media-playback-service';
-import { attachMeter } from '../media/meters';
+import { attachMeter, syncSpeakingThresholds } from '../media/meters';
 import { setParticipantSpeaking } from '../room/participants';
 import type { MicrophoneCapture } from '../core/types';
 
@@ -95,6 +95,8 @@ function setGateThresholdDb(value: string | number): void {
   const threshold = Number.parseInt(String(value), 10);
   state.gateThresholdDb = Number.isFinite(threshold) ? clampGateThresholdDb(threshold) : DEFAULT_GATE_THRESHOLD_DB;
   localStorage.setItem(GATE_THRESHOLD_DB_STORAGE_KEY, String(state.gateThresholdDb));
+  // The own ring lights at the gate's threshold, so the detector follows it.
+  syncSpeakingThresholds();
 }
 
 export function refreshMicrophoneLevelMeter(db: number): void {
@@ -417,6 +419,37 @@ export function watchLocalMicrophone(): void {
     },
     { once: true }
   );
+}
+
+/** The capture stopped running on its own (see microphone-service): open a fresh one. */
+export function reopenMicrophone(): Promise<boolean> {
+  return restartMicrophone({
+    failureMessage: 'Микрофон перестал работать: выберите его заново',
+    refreshDeviceList: false,
+    successMessage: 'Микрофон переподключен'
+  });
+}
+
+/**
+ * The computer is overloaded (see cpu-pressure.ts). Like Discord turning Krisp
+ * off, RNNoise gives way to the browser's own noise suppression, which costs
+ * next to nothing. Only for this call: the saved choice stays RNNoise, so the
+ * next call starts with it again.
+ */
+export async function relieveNoiseSuppression(): Promise<boolean> {
+  if (!state.joined || !state.localStream || state.noiseMode !== 'rnnoise') return false;
+  state.noiseMode = 'browser';
+  roomDeviceUi.noiseMode = 'browser';
+  const switched = await restartMicrophone({
+    failureMessage: 'Не удалось включить облегчённый шумодав',
+    refreshDeviceList: false,
+    successMessage: 'Компьютер перегружен: включён облегчённый шумодав'
+  });
+  if (!switched && state.noiseMode === 'browser') {
+    state.noiseMode = 'rnnoise';
+    roomDeviceUi.noiseMode = 'rnnoise';
+  }
+  return switched;
 }
 
 export async function switchNoiseMode(): Promise<void> {

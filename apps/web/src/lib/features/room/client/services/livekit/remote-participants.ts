@@ -36,6 +36,7 @@ import { refreshScreenAction, refreshScreenStage, refreshScreenTiles } from '../
 import type { Participant } from '../../core/types';
 import { subscribeRoomRecoveryTransitions } from '../../recovery/room-recovery';
 import { ScreenRecoveryGraceController } from '../../recovery/screen-recovery-grace';
+import { isAppVisible } from '$lib/platform/app-visibility';
 
 import {
   isCameraPublication,
@@ -172,6 +173,7 @@ export function syncLiveKitPublicationSubscription(peer: Participant, publicatio
 
   if (isCameraPublication(publication)) {
     setRemotePublicationSubscribed(remotePublication, true);
+    applyRemoteVideoVisibility(remotePublication);
     void applyRemoteCameraDemand(peer, remotePublication);
     return;
   }
@@ -181,6 +183,7 @@ export function syncLiveKitPublicationSubscription(peer: Participant, publicatio
     if (!subscribed) clearScreenSubscriptionRetry(remotePublication);
     setRemotePublicationSubscribed(remotePublication, subscribed);
     if (subscribed && isScreenVideoPublication(publication)) {
+      applyRemoteVideoVisibility(remotePublication);
       void applyRemoteScreenVideoDemand(peer, remotePublication);
     }
     if (subscribed) {
@@ -240,6 +243,28 @@ async function applyRemoteCameraDemand(peer: Participant, publication: RemoteTra
   );
 }
 
+/**
+ * Remote video (cameras and screens) is received only while someone can see
+ * the app: in the tray, minimized or in a background tab the SFU stops sending
+ * it. The subscription stays, so the picture is back with the next keyframe as
+ * soon as the app is shown, and screen audio and voices keep playing.
+ */
+function applyRemoteVideoVisibility(publication: TrackPublication): void {
+  if (!isCameraPublication(publication) && !isScreenVideoPublication(publication)) return;
+  const remotePublication = publication as RemoteTrackPublication;
+  // setEnabled only works on a publication we subscribe to.
+  if (typeof remotePublication.setEnabled !== 'function' || remotePublication.isDesired === false) return;
+  const visible = isAppVisible();
+  if (remotePublication.isEnabled === visible) return;
+  remotePublication.setEnabled(visible);
+}
+
+export function syncRemoteVideoVisibility(): void {
+  for (const peer of state.peers.values()) {
+    peer.livekitParticipant?.trackPublications.forEach(applyRemoteVideoVisibility);
+  }
+}
+
 /** Re-picks every camera layer after the layout changed (focus, a screen, a join). */
 export function syncRemoteCameraDemand(): void {
   for (const peer of state.peers.values()) {
@@ -293,6 +318,7 @@ async function scheduleScreenSubscriptionRetry(
     retry: () => {
       publication.setSubscribed(false);
       publication.setSubscribed(true);
+      applyRemoteVideoVisibility(publication);
       if (isScreenVideoPublication(publication)) void applyRemoteScreenVideoDemand(peer, publication);
     }
   });
@@ -392,6 +418,7 @@ export function handleLiveKitTrackSubscribed(
   if (isCameraPublication(publication)) {
     peer.camera = true;
     peer.cameraStream = mediaTrack.readyState === 'ended' ? null : new MediaStream([mediaTrack]);
+    applyRemoteVideoVisibility(publication);
     void applyRemoteCameraDemand(peer, publication);
     return;
   }
@@ -399,6 +426,7 @@ export function handleLiveKitTrackSubscribed(
   const stream = track.mediaStream || new MediaStream([mediaTrack]);
   if (isScreenVideoPublication(publication)) {
     screenRecoveryGrace.cancel(peer.id);
+    applyRemoteVideoVisibility(publication);
     void applyRemoteScreenVideoDemand(peer, publication);
     attachRemoteScreenStream(peer, stream);
     if (mediaTrack.readyState !== 'ended') clearScreenSubscriptionRetry(publication);

@@ -98,7 +98,6 @@
   aria-label={participant.isLocal
     ? undefined
     : `${participant.name}. Откройте контекстное меню Shift+F10 или клавишей меню.`}
-  style:--level={participant.level.toFixed(3)}
   style:--participant-pastel={avatar.background}
   style:--participant-avatar-fg={avatar.foreground}
   onclick={handleTileClick}

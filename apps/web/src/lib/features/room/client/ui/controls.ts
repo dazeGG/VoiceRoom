@@ -6,11 +6,13 @@ import { playMicCue, playOutputCue } from '../media/cues';
 import {
   getLocalMicrophoneCapture,
   setMicrophoneCaptureEnabled,
+  syncMicrophoneProcessing,
   syncPushToTalkGate
 } from '../services/microphone-service';
 import { syncLiveKitVoiceSubscriptions, syncLocalMicrophonePublicationMuted } from '../services/livekit-service';
 import { getDisplayName } from './names';
 import { clearAllSpeaking, updateParticipant } from '../room/participants';
+import { refreshAllSpeaking } from '../media/meters';
 import { persistMicrophoneMode, persistOutputMuted } from '../core/settings';
 import { showToast } from './toast';
 import { setVoiceControlsState } from '$lib/features/room/voice-session.svelte';
@@ -23,9 +25,16 @@ const log = createLogger('room:controls');
 
 let pushToTalkReleaseTimer = 0;
 
-/** Mirror the current mic/output mute state to the lobby voice-session store. */
+/**
+ * Mirror the current mic/output mute state to the lobby voice-session store.
+ * Every mute, deafen and push-to-talk change passes here, so the capture's
+ * processing follows it too (paused after a few seconds of a real mute), and
+ * detector-driven rings re-apply the rules without waiting for the next sound.
+ */
 function syncVoiceSessionControls(): void {
   setVoiceControlsState({ muted: isMicrophoneShownMuted(), deafened: state.outputMuted });
+  syncMicrophoneProcessing();
+  refreshAllSpeaking();
 }
 
 export interface CallControlsView {
@@ -237,6 +246,8 @@ export function beginPushToTalk(): boolean {
   state.pushToTalkActive = true;
   syncPushToTalkGate();
   setMicrophoneMuted(false, { playCue: false });
+  // The ring lights with the key even when the mute state did not change.
+  refreshAllSpeaking();
   return true;
 }
 
@@ -264,6 +275,7 @@ export function resetPushToTalkState(): void {
   pushToTalkReleaseTimer = 0;
   state.pushToTalkActive = false;
   syncPushToTalkGate();
+  refreshAllSpeaking();
 }
 
 export async function handleMicButtonClick(event: Event): Promise<void> {

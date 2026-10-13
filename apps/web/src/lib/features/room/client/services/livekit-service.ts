@@ -16,6 +16,7 @@ import {
   type RecoveryAttemptOutcome
 } from '../recovery/room-recovery';
 import { LiveKitReconcileGeneration } from '../recovery/livekit-reconcile-generation';
+import { recordReconnect } from '../room/call-quality';
 
 import { isMicrophonePublication } from './livekit/publication-kinds';
 
@@ -45,6 +46,7 @@ export {
   syncLiveKitParticipants,
   syncLiveKitScreenSubscriptions,
   syncLiveKitVoiceSubscriptions,
+  syncRemoteVideoVisibility,
   updateLiveKitPublicationState
 } from './livekit/remote-participants';
 import {
@@ -250,6 +252,7 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
     if (!current()) return;
     reconcileGeneration.invalidate();
     notifyLiveKitReconnecting();
+    if (state.joined) recordReconnect();
     if (state.joined || state.connecting) setVoiceConnectionStatus('reconnecting');
   });
   room.on(RoomEvent.Reconnected, () => {
@@ -265,7 +268,10 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
   room.on(RoomEvent.Disconnected, () => {
     if (!current()) return;
     reconcileGeneration.invalidate();
-    if (state.joined) setVoiceConnectionStatus('lost');
+    if (state.joined) {
+      recordReconnect();
+      setVoiceConnectionStatus('lost');
+    }
     notifyLiveKitDisconnected();
   });
   room.on(RoomEvent.ParticipantConnected, (participant) => {
@@ -341,9 +347,11 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
     if (!current()) return;
     const activeIds = new Set(speakers.map((participant) => participant.identity));
     for (const peer of state.peers.values()) {
-      // Fallback only — see the note in `updateSpeakingStats`.
-      if (peer.analyser) continue;
-      setParticipantSpeaking(peer, !state.outputMuted && activeIds.has(peer.id));
+      // Fallback only: this tab's own speaking detector (media/meters) owns the
+      // ring once it hears the decoded voice; the server's list is sampled on an
+      // interval and lags audible speech.
+      if (peer.meter?.detector || peer.analyser) continue;
+      setParticipantSpeaking(peer, !peer.muted && !state.outputMuted && activeIds.has(peer.id));
     }
   });
   room.on(RoomEvent.ConnectionQualityChanged, (quality, participant) => {
