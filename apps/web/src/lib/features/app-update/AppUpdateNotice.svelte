@@ -23,9 +23,12 @@
 
 <style>
   .app-update {
+    /* Top centre: the lobby sidebar keeps its profile controls bottom-left and
+       the room chat its composer bottom-right. */
     position: fixed;
-    left: 16px;
-    bottom: 16px;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
     z-index: 900;
     display: inline-flex;
     align-items: center;
