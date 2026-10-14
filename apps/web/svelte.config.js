@@ -29,6 +29,12 @@ function liveKitConnectSources(env = process.env) {
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
   kit: {
+    // Polls /_app/version.json so open tabs learn of a deploy and show the
+    // update notice (routes/+layout.svelte). The default name is the build
+    // time; a deploy that leaves the web build cached changes nothing here.
+    version: {
+      pollInterval: 5 * 60_000
+    },
     adapter: adapter({
       assets: 'dist',
       pages: 'dist',

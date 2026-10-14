@@ -56,6 +56,11 @@ declare global {
       onState: (handler: (payload: unknown) => void) => () => void;
       onWake: (handler: (payload: unknown) => void) => () => void;
     };
+    voiceRoomDesktopUpdate?: {
+      getState: () => Promise<unknown>;
+      onState: (handler: (payload: unknown) => void) => () => void;
+      install: () => Promise<unknown>;
+    };
     voiceRoomRuntime?: {
       isDesktop?: boolean;
       platform?: string;
