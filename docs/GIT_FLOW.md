@@ -10,7 +10,7 @@ This repository uses Git Flow for all development and releases. This file is the
 ## Working branches
 
 - `feature/<short-name>` — all normal product work, UI/backend changes, documentation, chores, and planned fixes. Branch from `develop`; open PR back into `develop`.
-- `release/<version>` — release stabilization. Branch from `develop`; allow only release notes, versioning, QA fixes, and polish. Merge into `main` and back into `develop`.
+- `release/<version>` — release stabilization. Branch from `develop`; allow only versioning, QA fixes, and polish. Merge into `main` and back into `develop`.
 - `hotfix/<short-name>` or `hotfix/<version>` — urgent production fixes. Branch from `main`; merge into `main` and back into `develop`.
 
 ## Pull request rules
@@ -44,12 +44,13 @@ This repository uses Git Flow for all development and releases. This file is the
 
 1. Confirm `develop` is green and the preceding production tag exists.
 2. Create `release/<version>` from the audited `develop` commit.
-3. Allow only versioning, release notes, migrations/operations notes, QA fixes, and release polish on the release branch.
+3. Allow only versioning, migrations, QA fixes, and release polish on the release branch. Migrations, new environment variables and rollback steps go into the release PR description.
 4. Run the repository gates, plus every gate of a matching `docs/RELEASE_<version>_PLAN.md` if the release has one; statements in a plan are requirements until fresh evidence proves them.
 5. Open the release PR into `main`. Do not merge it while required jobs or release gates are failing.
 6. After explicit approval, merge into `main`, verify the production version, and create the annotated tag `v<version>` on the release commit.
-7. Merge the release result back into `develop` so versioning and stabilization fixes are not lost.
-8. Delete the release branch only after both directions are complete and the tag is verified.
+7. Publish the release notes on GitHub Releases, in English; they are not kept in the repository. A minor or major version (`x.y.0`) gets its own release, titled `VoiceRoom x.y.0`. A patch gets no release of its own: add a `### x.y.z` entry under `## Patch releases` on the `x.y.0` release with `gh release edit`. Notes describe user-facing changes only; a patch without any says so in one line.
+8. Merge the release result back into `develop` so versioning and stabilization fixes are not lost.
+9. Delete the release branch only after both directions are complete and the tag is verified.
 
 ## Hotfix workflow
 
