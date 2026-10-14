@@ -123,3 +123,51 @@ test('the LiveKit gate stops at once on SIGTERM, cutting the signal connections 
   assert.equal(poolClosed, true);
   assert.equal(server.listening, false);
 });
+
+test('the gate shuts down once on SIGTERM or SIGINT, and a pool that fails to close exits with 1', async () => {
+  const { installGateShutdown } = await import('../src/domains/admission/livekit-auth-gate.service.ts');
+  const server = http.createServer(() => {});
+  await listening(server);
+  const exits: number[] = [];
+  const logger = recordingLogger();
+  const signals = new EventEmitter();
+  let closes = 0;
+  installGateShutdown(server, {
+    logger,
+    closePool: async () => {
+      closes += 1;
+      throw new Error('pool already gone');
+    },
+    exit: (code) => exits.push(code),
+    signals: signals as unknown as Pick<NodeJS.Process, 'once'>
+  });
+
+  signals.emit('SIGTERM');
+  signals.emit('SIGINT');
+  while (exits.length === 0) await new Promise((resolve) => setTimeout(resolve, 5));
+
+  assert.equal(closes, 1, 'a second signal does not start a second shutdown');
+  assert.deepEqual(exits, [1]);
+  assert.ok(logger.records.some((record) => record.evt === 'boot.shutdown_failed'));
+});
+
+test('a gate whose pool never closes is cut off by the timeout', async () => {
+  const { installGateShutdown } = await import('../src/domains/admission/livekit-auth-gate.service.ts');
+  const server = http.createServer(() => {});
+  await listening(server);
+  const exits: number[] = [];
+  const logger = recordingLogger();
+  const shutdown = installGateShutdown(server, {
+    logger,
+    closePool: () => new Promise<void>(() => {}),
+    exit: (code) => exits.push(code),
+    timeoutMs: 30,
+    signals: new EventEmitter() as unknown as Pick<NodeJS.Process, 'once'>
+  });
+
+  void shutdown('SIGTERM');
+  await new Promise((resolve) => setTimeout(resolve, 80));
+
+  assert.deepEqual(exits, [1]);
+  assert.ok(logger.records.some((record) => record.evt === 'boot.shutdown_timeout'));
+});
