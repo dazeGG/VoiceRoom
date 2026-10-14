@@ -1,4 +1,6 @@
 {
+  # A deploy waits for Caddy to stop; open WebSockets reconnect on their own.
+  grace_period 2s
   # TURN/TLS routing on :443, present only when TURN_ENABLED=true
   # (config/caddy/entrypoint.sh copies the snippets into turn.d).
   import /etc/caddy/turn.d/*.options

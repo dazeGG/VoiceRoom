@@ -115,7 +115,14 @@ async function bootstrap({
       logger,
       exit
     });
-    installGracefulShutdown(server, {
+    const closable = {
+      // Closing the Fastify app, not just its http.Server, runs the onClose
+      // hooks: the message delivery listener gives its pool client back, and
+      // only then can the pool end.
+      close: (callback: () => void) => void server.app.close().then(callback, callback),
+      closeAllConnections: () => server.closeAllConnections()
+    };
+    installGracefulShutdown(closable, {
       logger,
       exit,
       sockets: runtime.sockets,

@@ -128,6 +128,11 @@ services:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: unless-stopped
     depends_on:
+      # Workers start once the API is healthy, so on a deploy the API and the
+      # gate get the CPU first and are back sooner; the workers catch up from
+      # the outbox.
+      api:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       migrate:
@@ -146,6 +151,8 @@ services:
     restart: unless-stopped
     expose: ["9464"]
     depends_on:
+      api:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       migrate:
@@ -167,6 +174,8 @@ services:
     restart: unless-stopped
     expose: ["9464"]
     depends_on:
+      api:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       migrate:
@@ -187,6 +196,8 @@ services:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: unless-stopped
     depends_on:
+      api:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       migrate:
@@ -206,6 +217,8 @@ services:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: unless-stopped
     depends_on:
+      api:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       migrate:
@@ -225,8 +238,10 @@ services:
     image: ${VOICEROOM_WEB_IMAGE:?set immutable VOICEROOM_WEB_IMAGE digest}
     restart: unless-stopped
     depends_on:
+      # Not waiting for a healthy API: the site and the LiveKit signal route
+      # come back at once, and /api answers 502 for the seconds the API boots.
       api:
-        condition: service_healthy
+        condition: service_started
       livekit-gate:
         condition: service_started
     environment:
