@@ -54,6 +54,7 @@ COPY --from=caddy-build /usr/bin/caddy /usr/bin/caddy
 COPY Caddyfile /etc/caddy/Caddyfile
 COPY config/caddy/turn.options config/caddy/turn.site /etc/caddy/turn-available/
 COPY --chmod=0755 config/caddy/entrypoint.sh /usr/local/bin/voiceroom-caddy
+COPY --chmod=0755 config/caddy/archive-assets.sh /usr/local/bin/voiceroom-archive-assets
 COPY --from=web-build /app/csp.caddy /etc/caddy/csp.caddy
 COPY --from=web-build /app/apps/web/dist /srv/web
 

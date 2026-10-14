@@ -53,7 +53,7 @@ test(
   'G17-A01 fresh migration is idempotent and application rollback preserves N-1 reads',
   { skip: !process.env.TEST_DATABASE_URL },
   async (t) => {
-    const { cleanup, databaseUrl } = await createTestDatabase(t);
+    const { cleanup, databaseUrl } = await createTestDatabase(t, { empty: true });
     t.after(cleanup);
 
     const applied = await migrate(databaseUrl, PLATFORM_TIMESTAMP);
@@ -96,7 +96,7 @@ test(
   'G17-A01 upgrade reclassifies 10k rows within five seconds and removes every raw platform signal',
   { skip: !process.env.TEST_DATABASE_URL },
   async (t) => {
-    const { cleanup, databaseUrl } = await createTestDatabase(t);
+    const { cleanup, databaseUrl } = await createTestDatabase(t, { empty: true });
     t.after(cleanup);
     await migrate(databaseUrl, BASE_TIMESTAMP);
 
@@ -156,7 +156,7 @@ test(
   'G17-A02 store and PostgreSQL upgrade equal the shared classifier corpus without persisting signals',
   { skip: !process.env.TEST_DATABASE_URL },
   async (t) => {
-    const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
+    const { cleanup, databaseUrl, pool } = await createTestDatabase(t, { empty: true });
     t.after(cleanup);
     await migrate(databaseUrl, PLATFORM_TIMESTAMP);
     const store = createPushSubscriptionRepository({ pool });
@@ -199,7 +199,7 @@ test(
       'utf8'
     );
     assert.match(migrationSource, /SET LOCAL lock_timeout = '5s'/);
-    const { cleanup, databaseUrl } = await createTestDatabase(t);
+    const { cleanup, databaseUrl } = await createTestDatabase(t, { empty: true });
     t.after(cleanup);
     await migrate(databaseUrl, BASE_TIMESTAMP);
     await migrate(databaseUrl, PLATFORM_TIMESTAMP);

@@ -11,7 +11,7 @@ const NEW_TABLES = ['room_message_pins', 'user_blocks', 'room_server_mutes'];
 const FIRST_CONTEXT_MENU_MIGRATION = '20260809120000_create_room_message_pins.cjs';
 
 test('context-menu migrations apply fresh, no-op at head, roll back, and reapply', async (t) => {
-  const { cleanup, databaseUrl } = await createTestDatabase(t);
+  const { cleanup, databaseUrl } = await createTestDatabase(t, { empty: true });
   const client = new Client({ connectionString: databaseUrl });
   t.after(async () => {
     await client.end().catch(() => {});

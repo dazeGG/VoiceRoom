@@ -256,7 +256,7 @@ test(
   'G15-A03 an existing PostgreSQL database is unready until the exact guarded catalog reaches this build head',
   { skip: !process.env.TEST_DATABASE_URL },
   async (t) => {
-    const db = await createTestDatabase(t);
+    const db = await createTestDatabase(t, { empty: true });
     t.after(() => db.cleanup());
     await assert.rejects(assertMigrationReady({ databaseUrl: db.databaseUrl }), /guard or catalog is absent/);
     await runMigrations({ databaseUrl: db.databaseUrl, logger: { log() {}, info() {}, warn() {}, error() {} } });

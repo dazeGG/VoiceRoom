@@ -29,6 +29,8 @@ export interface LiveKitHarness {
   refusal(message: string, code: string, status?: number): Error;
   /** Every LiveKit Room the service created, in order. */
   rooms: Array<{
+    /** What the service passed to `new Room()`. */
+    roomOptions: Record<string, unknown>;
     connectedUrl: string;
     connectOptions: Record<string, unknown>;
     disconnected: boolean;
@@ -92,7 +94,7 @@ export async function loadLiveKitHarness(
         this.unpublished.push(track);
       }
     };
-    constructor() {
+    constructor(readonly roomOptions: Record<string, unknown> = {}) {
       rooms.push(this);
     }
     async connect(url: string, _token: string, connectOptions: Record<string, unknown> = {}) {

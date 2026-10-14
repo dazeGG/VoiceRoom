@@ -118,7 +118,7 @@ test('shutdown closes sockets, the server and the stores once, then exits cleanl
   assert.deepEqual(calls.closedSockets, [1001]);
   assert.equal(calls.stores, 1);
   assert.deepEqual(calls.exits, [0]);
-  assert.deepEqual(events(), ['boot.shutdown_started']);
+  assert.deepEqual(events(), ['boot.shutdown_started', 'boot.shutdown_completed']);
 });
 
 test('a failed or hanging shutdown exits with 1', async () => {

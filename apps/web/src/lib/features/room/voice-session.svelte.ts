@@ -1,6 +1,7 @@
 import { wait } from './client/core/utils';
 import { playPeerCue } from './client/media/cues';
 import { leaveActiveRoomMembership } from '$lib/entities/room/room-membership.svelte';
+import { callActivity } from '$lib/shared/call-activity.svelte';
 
 type LeaveHandler = () => void;
 type ControlHandler = () => void;
@@ -27,6 +28,7 @@ let activeToggleDeafen: ControlHandler | null = null;
 
 export function setConnectedVoiceRoom(roomId: string): void {
   voiceSession.roomId = roomId || null;
+  callActivity.active = voiceSession.roomId !== null;
 }
 
 export function setVoiceSessionTiming(next: { joinedAt?: number | null; roomActiveSince?: number | null }): void {
@@ -37,6 +39,7 @@ export function setVoiceSessionTiming(next: { joinedAt?: number | null; roomActi
 export function clearConnectedVoiceRoom(roomId?: string): void {
   if (!roomId || voiceSession.roomId === roomId) {
     voiceSession.roomId = null;
+    callActivity.active = false;
     voiceSession.muted = false;
     voiceSession.deafened = false;
     voiceSession.joinedAt = null;

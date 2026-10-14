@@ -121,11 +121,18 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+      # Probe every second while starting, so a deploy switches over as soon as the API is up.
+      start_interval: 1s
 
   message-delivery:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: unless-stopped
     depends_on:
+      # Workers start once the API is healthy, so on a deploy the API and the
+      # gate get the CPU first and are back sooner; the workers catch up from
+      # the outbox.
+      api:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       migrate:
@@ -144,6 +151,8 @@ services:
     restart: unless-stopped
     expose: ["9464"]
     depends_on:
+      api:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       migrate:
@@ -165,6 +174,8 @@ services:
     restart: unless-stopped
     expose: ["9464"]
     depends_on:
+      api:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       migrate:
@@ -185,6 +196,8 @@ services:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: unless-stopped
     depends_on:
+      api:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       migrate:
@@ -204,6 +217,8 @@ services:
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: unless-stopped
     depends_on:
+      api:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       migrate:
@@ -223,8 +238,10 @@ services:
     image: ${VOICEROOM_WEB_IMAGE:?set immutable VOICEROOM_WEB_IMAGE digest}
     restart: unless-stopped
     depends_on:
+      # Not waiting for a healthy API: the site and the LiveKit signal route
+      # come back at once, and /api answers 502 for the seconds the API boots.
       api:
-        condition: service_healthy
+        condition: service_started
       livekit-gate:
         condition: service_started
     environment:
@@ -233,7 +250,7 @@ services:
       LIVEKIT_GATE_PUBLIC_URL: ${LIVEKIT_GATE_PUBLIC_URL:-wss://${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}}
       API_METRICS_ALLOWED_REMOTE: ${API_METRICS_ALLOWED_REMOTE:-127.0.0.1}
       # TURN/TLS on :443 for networks that block UDP and non-web ports. Needs a
-      # DNS record for TURN_DOMAIN pointing at this host (README, "TURN").
+      # DNS record for TURN_DOMAIN pointing at this host (docs/SELF_HOSTING.md, "TURN").
       TURN_ENABLED: ${TURN_ENABLED:-false}
       TURN_DOMAIN: ${TURN_DOMAIN:-}
     ports:
@@ -242,6 +259,8 @@ services:
     volumes:
       - caddy_data:/data
       - caddy_config:/config
+      # Web chunks of earlier releases, for tabs opened before a deploy.
+      - web_archive:/srv/archive
 
   livekit:
     image: ${LIVEKIT_IMAGE:-livekit/livekit-server:v1.13.2}
@@ -312,6 +331,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
+      start_interval: 1s
 
 volumes:
   caddy_data:
@@ -319,3 +339,4 @@ volumes:
   postgres_data:
   uploads:
   media:
+  web_archive:

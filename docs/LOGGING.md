@@ -4,9 +4,6 @@ Logs answer one question that metrics cannot: *what happened to this user, in th
 room, at this moment*. `/api/metrics` already reports how many requests failed;
 this document covers how to find out why.
 
-Operational scraping, dashboards and the firewall contract live in
-[`MONITORING_AGENT.md`](MONITORING_AGENT.md).
-
 ## Shape
 
 Every record is a single JSON line written by pino, from the API, the workers and

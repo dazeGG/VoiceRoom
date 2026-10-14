@@ -1,6 +1,10 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { page } from '$app/state';
+  import { beforeNavigate } from '$app/navigation';
+  import { page, updated } from '$app/state';
+  import { AppUpdate } from '$lib/features/app-update/app-update.svelte';
+  import AppUpdateNotice from '$lib/features/app-update/AppUpdateNotice.svelte';
+  import { callActivity } from '$lib/shared/call-activity.svelte';
   import { applyDesktopBoundaryToDocument } from '$lib/platform/desktop-boundary';
   import { bindDesktopSystem } from '$lib/platform/desktop-system';
   import { isMobileRoute } from '$lib/platform/mobile-routes';
@@ -15,6 +19,21 @@
   // screen below.
   const allowed = $derived(desktopAllowed || (roomClientAllowed && isMobileRoute(page.route.id)));
 
+  // A new deploy (SvelteKit's version check) or a downloaded desktop shell.
+  const appUpdate = new AppUpdate({ webUpdated: () => updated.current });
+
+  // Once a new web app is out, the next move inside the app loads it as a
+  // full page, so it arrives without a separate reload; never during a call.
+  beforeNavigate(({ willUnload, to }) => {
+    if (updated.current && !willUnload && to?.url && !callActivity.active) {
+      window.location.href = to.url.href;
+    }
+  });
+
+  function checkForUpdate(): void {
+    void updated.check().catch(() => {});
+  }
+
   onMount(() => {
     initTheme();
     const policy = applyDesktopBoundaryToDocument();
@@ -28,9 +47,26 @@
     });
     // Emoji drawn as artwork copy as their characters anywhere in the app.
     const removeEmojiCopy = installEmojiCopy();
+    const unbindAppUpdate = appUpdate.bind();
+    // Besides SvelteKit's periodic poll, look for a new version when the tab
+    // comes back into view and after the realtime socket reconnects: a deploy
+    // restarts the server, so a reconnect is when a new version is likely.
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') checkForUpdate();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    let stopRestore: (() => void) | null = null;
+    let unmounted = false;
+    void import('$lib/api/realtime').then((realtime) => {
+      if (!unmounted) stopRestore = realtime.getAppRealtime().onRestore(checkForUpdate);
+    });
     return () => {
+      unmounted = true;
       unbindDesktopSystem();
       removeEmojiCopy();
+      unbindAppUpdate();
+      document.removeEventListener('visibilitychange', onVisibility);
+      stopRestore?.();
     };
   });
 </script>
@@ -44,6 +80,7 @@
   </main>
 {:else if allowed}
   {@render children()}
+  <AppUpdateNotice update={appUpdate} inCall={callActivity.active} />
 {:else}
   <main class="device-boundary" aria-label="Неподдерживаемое устройство" aria-live="polite">
     <section class="device-boundary__card">

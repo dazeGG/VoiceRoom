@@ -1,8 +1,7 @@
 # VoiceRoom architecture
 
 Rules for new code, the current state of the code, and where the two still
-differ. Table ownership lives in `ARCHITECTURE_2.5.md` and
-`config/import-boundaries.v1.json`. The history of how the API got here
+differ. Import rules live in `config/import-boundaries.v1.json`. The history of how the API got here
 (`server.js` split, CommonJS → ES modules, JavaScript → TypeScript) is in git.
 
 ## 1. Repository shape: one monorepo
