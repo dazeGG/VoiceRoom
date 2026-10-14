@@ -233,7 +233,7 @@ services:
       LIVEKIT_GATE_PUBLIC_URL: ${LIVEKIT_GATE_PUBLIC_URL:-wss://${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}}
       API_METRICS_ALLOWED_REMOTE: ${API_METRICS_ALLOWED_REMOTE:-127.0.0.1}
       # TURN/TLS on :443 for networks that block UDP and non-web ports. Needs a
-      # DNS record for TURN_DOMAIN pointing at this host (README, "TURN").
+      # DNS record for TURN_DOMAIN pointing at this host (docs/SELF_HOSTING.md, "TURN").
       TURN_ENABLED: ${TURN_ENABLED:-false}
       TURN_DOMAIN: ${TURN_DOMAIN:-}
     ports:
