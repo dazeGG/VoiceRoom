@@ -161,7 +161,7 @@ VAPID_SUBJECT
 - **deploy-dev** — push в `develop` сразу выкатывается на dev (environment `dev`, https://dev.voiceroom.ru).
 - **deploy-production** — тег `v*` на коммите из `main`, совпадающий с версией в `package.json`; job ждёт Approve в environment `production` (https://voiceroom.ru).
 
-Выкатку делает `scripts/cd/remote-deploy.sh` на сервере по SSH: бэкап `.env` и `pg_dump` в `deploy-backups/ci/` (хранятся 5 последних, а дампы и копии `.env` старше 30 дней удаляются и в `deploy-backups/ci/`, и в `deploy-backups/manual/`), `git checkout` коммита, `docker pull` образов, подстановка `VOICEROOM_*_IMAGE` в `.env`, `docker compose config`, `docker compose up -d --wait`. Если любой шаг падает, возвращаются прежние коммит, `.env` и контейнеры. Миграции при этом **не откатываются** — после неудачной миграции восстанавливайте БД из дампа (см. [`operations/PREDEPLOY_MIGRATIONS.md`](./operations/PREDEPLOY_MIGRATIONS.md)).
+Выкатку делает `scripts/cd/remote-deploy.sh` на сервере по SSH: бэкап `.env` и `pg_dump` в `deploy-backups/ci/` (хранятся 5 последних, а дампы и копии `.env` старше 30 дней удаляются и в `deploy-backups/ci/`, и в `deploy-backups/manual/`), `git checkout` коммита, `docker pull` образов, подстановка `VOICEROOM_*_IMAGE` в `.env`, `docker compose config`, `docker compose up -d --wait`. Если любой шаг падает, возвращаются прежние коммит, `.env` и контейнеры. Миграции при этом **не откатываются** — после неудачной миграции восстанавливайте БД из дампа (см. «Миграции» ниже).
 
 Каждый environment хранит свои secrets `SSH_HOST`, `SSH_USER`, `SSH_KEY` и variables `DEPLOY_PATH`, `SSH_FINGERPRINT` (ED25519-отпечаток хоста; без совпадения деплой не стартует). Серверный `.env` (как минимум `DOMAIN`, `POSTGRES_PASSWORD`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `LIVEKIT_GATE_SECRET`, `VOICE_ROOM_CURSOR_HMAC_KEYS`) живёт на сервере, а не в Actions.
 
@@ -179,6 +179,8 @@ npm --workspace @voice-room/api run db:rollback
 
 `DATABASE_URL` — основное хранилище комнат, сообщений и аккаунтов. В production миграции применяет одноразовый сервис `migrate` до старта `api`, а API только проверяет, что схема готова. Вне production API сам применяет миграции при старте (`MIGRATE_ON_START`). Для compose можно не задавать `DATABASE_URL` явно: он собирается из `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` и service name `postgres`.
 
+Сервис `migrate` берёт advisory lock репозитория с таймаутом 5 секунд, отмечает прогон как `running`, выполняет миграции по порядку в одной транзакции, проверяет, что lock всё ещё у него, и отмечает `clean`. Ошибка или потеря lock оставляет отметку `dirty`, и production API с ней не стартует. Снять диагностированную отметку можно только явной командой `--clear-dirty`, которой тоже нужен lock. В production запрещены `--no-lock`, автоматические миграции при старте API и down-миграции: откат — это предыдущий образ приложения на расширенной схеме.
+
 ## Docker
 
 Production compose запускает образы `api`, `worker` и `web` из одного Dockerfile:
@@ -188,7 +190,7 @@ Production compose запускает образы `api`, `worker` и `web` из
 - `api` — Node.js API на `:3000`, хранит аватарки в volume `uploads`, вложения в volume `media` и отвечает только на `/api/*`;
 - воркеры `message-delivery`, `notification-delivery`, `media-processing`, `media-maintenance` и `media-reconciliation` — доставка сообщений и уведомлений и обработка медиа;
 - `caddy` — frontend static build из `apps/web/dist`, reverse proxy для `/api/*` и отдельный reverse proxy для LiveKit domain;
-- `livekit` — LiveKit SFU, `livekit-gate` — auth-gate перед ним (см. [`ops/livekit-auth-gate.md`](./ops/livekit-auth-gate.md)).
+- `livekit` — LiveKit SFU, `livekit-gate` — auth-gate перед ним (см. [`LIVEKIT_GATE.md`](./LIVEKIT_GATE.md)).
 
 Production-like запуск:
 
@@ -216,7 +218,21 @@ npm run dev:down
 
 Для Docker/production используйте отдельный prod-like `.env`: браузеры подключаются к `LIVEKIT_GATE_PUBLIC_URL` (по умолчанию `wss://$LIVEKIT_DOMAIN`), а API обращается к SFU по внутреннему `ws://livekit:7880`, зафиксированному в compose. Не задавайте публичный адрес через legacy-переменную `LIVEKIT_URL`: старое значение может оставаться в `.env`, но production API больше не использует его вместо внутреннего service URL.
 
-В production приложение должно стоять за HTTPS, volumes `postgres_data` и `uploads` нужно бэкапить как единый согласованный набор, а LiveKit должен иметь публично доступные ICE/TCP и ICE/UDP порты. `postgres_data` содержит ключи аватарок, а `uploads` — соответствующие WebP-файлы; потеря одного из volumes делает резервную копию неполной. Для файловой копии volumes остановите оба изменяющих их сервиса (`docker compose stop api postgres`), сохраните `postgres_data` и `uploads`, затем запустите Postgres, дождитесь healthy-состояния и запустите API. Если Postgres останавливать нельзя, остановите API, сделайте согласованный `pg_dump`/`pg_basebackup`, отдельно заархивируйте неизменяемый в этот момент `uploads` и только после этого верните API. Альтернатива — атомарный snapshot обоих volumes на уровне хранилища. Вложения чата лежат в volume `media`; их бэкап и восстановление описаны в [`operations/MEDIA_BACKUP_RESTORE.md`](./operations/MEDIA_BACKUP_RESTORE.md). Для пользователей за строгими корпоративными сетями включите TURN (раздел ниже).
+В production приложение должно стоять за HTTPS, volumes `postgres_data` и `uploads` нужно бэкапить как единый согласованный набор, а LiveKit должен иметь публично доступные ICE/TCP и ICE/UDP порты. `postgres_data` содержит ключи аватарок, а `uploads` — соответствующие WebP-файлы; потеря одного из volumes делает резервную копию неполной. Для файловой копии volumes остановите оба изменяющих их сервиса (`docker compose stop api postgres`), сохраните `postgres_data` и `uploads`, затем запустите Postgres, дождитесь healthy-состояния и запустите API. Если Postgres останавливать нельзя, остановите API, сделайте согласованный `pg_dump`/`pg_basebackup`, отдельно заархивируйте неизменяемый в этот момент `uploads` и только после этого верните API. Альтернатива — атомарный snapshot обоих volumes на уровне хранилища. Вложения чата лежат в volume `media`.
+
+Согласованный бэкап медиа — это дамп PostgreSQL вместе с деревом загрузок; половина пары не восстанавливается. Снимите дамп, пока запись медиа остановлена, и соберите снимок:
+
+```sh
+node scripts/backup/create-coordinated-snapshot.mts --database /safe/input/database.dump --uploads /safe/input/uploads --catalog /safe/input/media-catalog.json --output /safe/archive/snapshot-001 --namespace restore-drill-001
+```
+
+Скрипт копирует обе части в один каталог и пишет их размеры и SHA-256 в `manifest.json`. Восстанавливать можно только в новый каталог внутри изолированного корня; команда проверяет пути, размеры и хеши и отказывается от symlink, существующих целей и неполных пар:
+
+```sh
+node scripts/restore/restore-coordinated-snapshot.mts --snapshot /safe/archive/snapshot-001 --allowed-root /tmp/voice-room-restore-drill --target /tmp/voice-room-restore-drill/restored --namespace restore-drill-001
+```
+
+Каталог (`--catalog`) содержит `attachments` с `id`, `state`, `access`, `width`, `height` и массив `leases`. При восстановлении все захваченные задачи `leased` возвращаются в `pending` без владельца, а `restore-report.json` записывает их число. После `pg_restore` сверьте каталог со строками базы до запуска первого воркера и убедитесь, что очистка и обработка продолжились без дублей вложений. Для пользователей за строгими корпоративными сетями включите TURN (раздел ниже).
 
 ### TURN/TLS на 443
 

@@ -454,17 +454,6 @@
       "count": 4
     }
   },
-  "apps/api/test/credential-core.test.ts": {
-    "@typescript-eslint/no-unsafe-assignment": {
-      "count": 1
-    },
-    "@typescript-eslint/no-unsafe-call": {
-      "count": 2
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 2
-    }
-  },
   "apps/api/test/db-harness.test.ts": {
     "@typescript-eslint/unbound-method": {
       "count": 1

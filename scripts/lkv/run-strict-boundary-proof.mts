@@ -65,7 +65,6 @@ export async function runStrictBoundaryProof(
     attempts: ATTEMPTS,
     greenF11Allowed: status === 'STRICT_BOUNDARY_PROVEN',
     amendmentRequired: status === 'BLOCKED_FOR_AMENDMENT',
-    amendmentPath: 'docs/releases/2.5.0/amendments/G05-STRICT-LKV.json',
     successorStartAllowed: status === 'STRICT_BOUNDARY_PROVEN'
   };
   return report;

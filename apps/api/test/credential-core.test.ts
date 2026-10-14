@@ -56,7 +56,7 @@ test(
   }
 );
 
-test('G47-A02 migration catalog has one applied credential schema and an explicit amendment', () => {
+test('G47-A02 migration catalog has one applied credential schema', () => {
   const root = path.resolve(import.meta.dirname, '../../..');
   const migrations = fs
     .readdirSync(path.join(root, 'apps/api/src/migrations'))
@@ -65,17 +65,5 @@ test('G47-A02 migration catalog has one applied credential schema and an explici
   assert.equal(
     fs.existsSync(path.join(root, 'apps/api/src/migrations/20260718130000_create_room_credential_epochs.cjs')),
     false
-  );
-  const amendment = JSON.parse(
-    fs.readFileSync(path.join(root, 'docs/releases/2.5.0/amendments/G47-MIGRATION-CATALOG.json'), 'utf8')
-  );
-  // The 2.5.0 amendment predates the .cjs rename; the migration is the same file.
-  assert.equal(
-    amendment.appliedPath.replace(/\.c?js$/, ''),
-    'apps/api/src/migrations/20260720160000_create_livekit_gate_credentials'
-  );
-  assert.equal(
-    amendment.supersedesCatalogEntry.replace(/\.c?js$/, ''),
-    'apps/api/src/migrations/20260718130000_create_room_credential_epochs'
   );
 });
