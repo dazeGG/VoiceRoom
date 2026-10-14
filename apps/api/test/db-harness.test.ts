@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import pg from 'pg';
+import { assertMigrationReady, runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 
 // A pool resolves end() once its clients are out of the pool, before their
@@ -33,5 +34,46 @@ test(
     await db.cleanup();
     await new Promise((resolve) => setTimeout(resolve, 200));
     assert.deepEqual(errors, [], 'no client of the ended pool was cut off by cleanup');
+  }
+);
+
+const SILENT = { log() {}, info() {}, warn() {}, error() {} };
+
+test(
+  'a test database comes fully migrated, so running the migrations again changes nothing',
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (t) => {
+    const db = await createTestDatabase(t);
+    t.after(db.cleanup);
+    assert.equal(await assertMigrationReady({ databaseUrl: db.databaseUrl }), true);
+    assert.deepEqual(await runMigrations({ databaseUrl: db.databaseUrl, logger: SILENT }), []);
+  }
+);
+
+test(
+  'an empty test database has no schema until the migrations run',
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (t) => {
+    const db = await createTestDatabase(t, { empty: true });
+    t.after(db.cleanup);
+    await assert.rejects(assertMigrationReady({ databaseUrl: db.databaseUrl }), /absent/);
+    assert.ok((await runMigrations({ databaseUrl: db.databaseUrl, logger: SILENT })).length > 0);
+    assert.equal(await assertMigrationReady({ databaseUrl: db.databaseUrl }), true);
+  }
+);
+
+test(
+  'test databases copied from the same template do not share rows',
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (t) => {
+    const first = await createTestDatabase(t);
+    const second = await createTestDatabase(t);
+    t.after(async () => {
+      await first.cleanup();
+      await second.cleanup();
+    });
+    await first.pool.query(`INSERT INTO rooms (id, creator_ip) VALUES ('harness-room', '')`);
+    const { rows } = await second.pool.query(`SELECT id FROM rooms WHERE id = 'harness-room'`);
+    assert.deepEqual(rows, []);
   }
 );

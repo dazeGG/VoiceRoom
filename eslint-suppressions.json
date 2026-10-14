@@ -459,11 +459,6 @@
       "count": 1
     }
   },
-  "apps/api/test/db-harness.ts": {
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 1
-    }
-  },
   "apps/api/test/desktop-app-marker.test.ts": {
     "@typescript-eslint/no-unsafe-member-access": {
       "count": 1
