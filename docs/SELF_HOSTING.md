@@ -91,7 +91,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `HOST` | `127.0.0.1` | Host for host-only API. Compose sets `0.0.0.0`. |
 | `PORT` | `3000` | API port. |
 | `SOCKET_PATH` | empty | Unix socket вместо TCP, если нужен. |
-| `API_METRICS_ALLOWED_REMOTE` | `127.0.0.1` | Caddy allowlist для публичного пути `/api/metrics`; задайте Tailscale IP/range status-сервера, иначе endpoint закрыт снаружи. |
+| `API_METRICS_ALLOWED_REMOTE` | `127.0.0.1` | Caddy allowlist для публичного пути `/api/metrics`; задайте адрес или диапазон, с которого собираются метрики, иначе endpoint закрыт снаружи. |
 | `DESKTOP_RELEASE_REPO` | `dazeGG/VoiceRoomDesktop` | Repo для latest desktop release. |
 | `DESKTOP_RELEASE_CACHE_MS` | `600000` | Cache TTL для desktop release metadata. |
 | `GEOIP_DB_PATH` | empty (host) / `/data/geoip/dbip-city-lite.mmdb` (compose) | Локальная база [DB-IP City Lite](https://db-ip.com) (CC BY 4.0) для города и страны в списке устройств. Скачивается командой `node scripts/geoip/fetch-dbip-city-lite.mjs geoip/dbip-city-lite.mmdb` в каталог деплоя; обновлять раз в месяц и перезапускать `api`. Без файла список устройств показывается без города. |
