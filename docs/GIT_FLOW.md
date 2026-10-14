@@ -47,7 +47,7 @@ This repository uses Git Flow for all development and releases. This file is the
 3. Allow only versioning, migrations, QA fixes, and release polish on the release branch. Migrations, new environment variables and rollback steps go into the release PR description.
 4. Run the repository gates, plus every gate of a matching `docs/RELEASE_<version>_PLAN.md` if the release has one; statements in a plan are requirements until fresh evidence proves them.
 5. Open the release PR into `main`. Do not merge it while required jobs or release gates are failing.
-6. After explicit approval, merge into `main`, verify the production version, and create the annotated tag `v<version>` on the release commit.
+6. After explicit approval, merge into `main`, verify the production version, and create the annotated tag `v<version>` on the release commit. Pushing the tag deploys production at once; merging the release PR is the release decision, there is no second approval.
 7. Publish the release notes on GitHub Releases, in English; they are not kept in the repository. A minor or major version (`x.y.0`) gets its own release, titled `VoiceRoom x.y.0`. A patch gets no release of its own: add a `### x.y.z` entry under `## Patch releases` on the `x.y.0` release with `gh release edit`. Notes describe user-facing changes only; a patch without any says so in one line.
 8. Merge the release result back into `develop` so versioning and stabilization fixes are not lost.
 9. Delete the release branch only after both directions are complete and the tag is verified.
