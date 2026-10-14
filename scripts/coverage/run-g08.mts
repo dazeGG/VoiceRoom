@@ -21,7 +21,7 @@ mkdirSync(V8_DIR, { recursive: true });
 run(
   [
     '--test',
-    '--test-concurrency=1',
+    '--test-concurrency=4',
     'scripts/test/coverage-gate.test.mts',
     'packages/shared/test/*.test.ts',
     'apps/api/test/*.test.ts'

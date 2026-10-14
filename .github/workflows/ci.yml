@@ -58,8 +58,9 @@ jobs:
       - run: npm run check
       - run: npm run build
 
+  # API and web tests run as separate jobs so neither waits for the other.
   test:
-    name: Tests
+    name: API tests
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -86,7 +87,20 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
       - run: npm ci
-      - run: npm test
+      - run: npm --workspace @voice-room/shared run test
+      - run: npm --workspace @voice-room/api run test
+
+  test-web:
+    name: Web tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm --workspace @voice-room/web run test
 
   voice-join:
     name: Voice room join smoke
@@ -105,14 +119,13 @@ jobs:
         run: docker compose -f docker-compose.ci.yml up -d --build --wait --wait-timeout 180
       - name: Join voice and verify chat behavior through production-like services
         run: npm --workspace @voice-room/web run e2e -- e2e/room-voice.spec.ts e2e/chat-image-paste.spec.ts e2e/manual-chat-polish.spec.ts e2e/chat-drafts.spec.ts e2e/chat-typing.spec.ts e2e/guest-account-cta.spec.ts e2e/mobile-room.spec.ts --project=chromium --retries=0
+      # No teardown step: a hosted runner is discarded after the job together
+      # with its containers and volumes.
       - name: Capture voice stack diagnostics
         if: failure()
         run: |
           docker compose -f docker-compose.ci.yml ps
           docker compose -f docker-compose.ci.yml logs --no-color --tail=250
-      - name: Always tear down the voice stack
-        if: always()
-        run: docker compose -f docker-compose.ci.yml down --volumes --remove-orphans
 
   goal-g05:
     name: G05 strict LiveKit gate proof
@@ -199,7 +212,7 @@ jobs:
 
   images:
     name: Publish ${{ matrix.target }} image
-    needs: [check, test, voice-join, goal-g05]
+    needs: [check, test, test-web, voice-join, goal-g05]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:

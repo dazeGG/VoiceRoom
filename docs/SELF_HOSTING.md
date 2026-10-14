@@ -151,11 +151,11 @@ VAPID_SUBJECT
 
 - **policy** — проверяет допустимый Git Flow маршрут PR и Conventional Commit формат PR title.
 - **check** — `npm ci`, `npm run check` (tsc, svelte-check, ESLint и Prettier по shared, api и web), `npm run build` (Vite).
-- **test** — `npm test` против эфемерного PostgreSQL service-контейнера. `TEST_DATABASE_URL` задаётся прямо в workflow одноразовым значением — секрет для этого **не нужен** (test harness создаёт/удаляет временную БД на каждый тест).
+- **test** — тесты shared и API против эфемерного PostgreSQL service-контейнера, файлы API-тестов идут в 4 потока, каждый тест получает копию шаблонной базы. **test-web** — тесты веба (Vitest) отдельным job параллельно с API. `TEST_DATABASE_URL` задаётся прямо в workflow одноразовым значением — секрет для этого **не нужен** (test harness создаёт/удаляет временную БД на каждый тест).
 - **voice-join** — проверка входа в голосовую комнату через LiveKit.
 - **G05 / G08** — строгий LiveKit-профиль и порог покрытия изменённого кода.
 
-**Деплой** (`.github/workflows/deploy.yml`, вызывается из `ci.yml` только после зелёных `check`, `test`, `voice-join` и G05):
+**Деплой** (`.github/workflows/deploy.yml`, вызывается из `ci.yml` только после зелёных `check`, `test`, `test-web`, `voice-join` и G05):
 
 - **images** — на каждый push в `develop`, `main` и тег `v*` собирает таргеты `api`, `worker`, `web` и публикует `ghcr.io/dazegg/voiceroom-<target>:<commit-sha>`.
 - **deploy-dev** — push в `develop` сразу выкатывается на dev (environment `dev`, https://dev.voiceroom.ru).
