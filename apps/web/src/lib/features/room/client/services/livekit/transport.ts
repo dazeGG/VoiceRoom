@@ -6,6 +6,7 @@ import { state } from '../../core/state.svelte';
 import { ApiError } from '$lib/api/client';
 import { requestLiveKitToken, type LiveKitCredentials } from '../../net/api';
 import { loadLiveKitClient } from '../../media/livekit-runtime';
+import { createSignalReconnectPolicy } from './reconnect-policy';
 import { createLogger } from '$lib/shared/log';
 
 const log = createLogger('room:livekit');
@@ -96,7 +97,8 @@ export async function connectLiveKitWithFallback(
     if (!isCurrent()) return null;
     const room = new Room({
       adaptiveStream: false,
-      dynacast: true
+      dynacast: true,
+      reconnectPolicy: createSignalReconnectPolicy()
     });
 
     try {

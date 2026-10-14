@@ -13,4 +13,6 @@ if [ "${TURN_ENABLED:-false}" = "true" ]; then
   cp /etc/caddy/turn-available/turn.options /etc/caddy/turn-available/turn.site /etc/caddy/turn.d/
 fi
 
+voiceroom-archive-assets
+
 exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile

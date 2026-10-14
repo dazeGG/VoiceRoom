@@ -303,13 +303,81 @@ function createLiveKitAuthGateService({
   };
 }
 
-export { DEFAULT_GATE_PATH, createLiveKitAuthGateService, extractCredential };
+// SIGTERM: stop listening, cut every client connection (proxied signal
+// sockets included; the proxy drops their upstream side with them), close the
+// pool and exit. LiveKit clients resume through the next gate on their own, so
+// there is nothing to wait for, and a deploy waits for this process to exit.
+function installGateShutdown(
+  server: http.Server,
+  options: {
+    logger: Pick<ReturnType<typeof createLogger>, 'info' | 'error'>;
+    closePool: () => Promise<void>;
+    exit?: (code: number) => void;
+    timeoutMs?: number;
+    signals?: Pick<NodeJS.Process, 'once'>;
+  }
+): (signal: string) => Promise<void> {
+  const {
+    logger,
+    closePool,
+    exit = (code: number) => process.exit(code),
+    timeoutMs = 3000,
+    signals = process
+  } = options;
+  const connections = new Set<net.Socket>();
+  server.on('connection', (socket: net.Socket) => {
+    connections.add(socket);
+    socket.once('close', () => connections.delete(socket));
+  });
+  let shuttingDown = false;
+
+  async function shutdown(signal: string): Promise<void> {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    const started = Date.now();
+    logger.info({ evt: LOG_EVENTS.SHUTDOWN_STARTED, service: 'livekit-auth-gate', signal }, 'shutting down');
+    const timeout = setTimeout(() => {
+      logger.error({ evt: LOG_EVENTS.SHUTDOWN_TIMEOUT, service: 'livekit-auth-gate', timeoutMs }, 'shutdown timed out');
+      exit(1);
+    }, timeoutMs);
+    timeout.unref?.();
+    const closed = new Promise<void>((resolve) => server.close(() => resolve()));
+    const cut = connections.size;
+    for (const socket of connections) destroySocket(socket);
+    try {
+      await closed;
+      await closePool();
+      clearTimeout(timeout);
+      logger.info(
+        {
+          evt: LOG_EVENTS.SHUTDOWN_COMPLETED,
+          service: 'livekit-auth-gate',
+          connections: cut,
+          ms: Date.now() - started
+        },
+        'shut down'
+      );
+      exit(0);
+    } catch (error) {
+      clearTimeout(timeout);
+      logger.error({ evt: LOG_EVENTS.SHUTDOWN_FAILED, service: 'livekit-auth-gate', err: error }, 'shutdown failed');
+      exit(1);
+    }
+  }
+
+  signals.once('SIGTERM', () => void shutdown('SIGTERM'));
+  signals.once('SIGINT', () => void shutdown('SIGINT'));
+  return shutdown;
+}
+
+export { DEFAULT_GATE_PATH, createLiveKitAuthGateService, extractCredential, installGateShutdown };
 
 if (import.meta.main) {
   const logger = createLogger({ name: 'livekit-auth-gate' });
   try {
+    const pool = createDbPool({ databaseUrl: readDatabaseConfig(process.env).url, logger });
     const service = createLiveKitAuthGateService({
-      pool: createDbPool({ databaseUrl: readDatabaseConfig(process.env).url, logger }),
+      pool,
       gatePath: process.env.LIVEKIT_GATE_PATH || DEFAULT_GATE_PATH,
       logger,
       secret: process.env.LIVEKIT_GATE_SECRET,
@@ -317,7 +385,9 @@ if (import.meta.main) {
     });
     const port = Number(process.env.LIVEKIT_GATE_PORT || 3080);
     const host = process.env.LIVEKIT_GATE_HOST || '0.0.0.0';
-    service.createServer().listen(port, host, () => {
+    const server = service.createServer();
+    installGateShutdown(server, { logger, closePool: () => pool.end() });
+    server.listen(port, host, () => {
       logger.info(
         { evt: LOG_EVENTS.LISTENING, service: 'livekit-auth-gate', host, port, path: service.path },
         'LiveKit auth gate listening'

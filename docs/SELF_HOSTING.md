@@ -189,7 +189,7 @@ Production compose запускает образы `api`, `worker` и `web` из
 - `migrate` — одноразовый прогон миграций до старта остальных сервисов;
 - `api` — Node.js API на `:3000`, хранит аватарки в volume `uploads`, вложения в volume `media` и отвечает только на `/api/*`;
 - воркеры `message-delivery`, `notification-delivery`, `media-processing`, `media-maintenance` и `media-reconciliation` — доставка сообщений и уведомлений и обработка медиа;
-- `caddy` — frontend static build из `apps/web/dist`, reverse proxy для `/api/*` и отдельный reverse proxy для LiveKit domain;
+- `caddy` — frontend static build из `apps/web/dist`, reverse proxy для `/api/*` и отдельный reverse proxy для LiveKit domain. JS-чанки прошлых релизов он держит в volume `web_archive` 30 дней, чтобы вкладки, открытые до выкатки, продолжали работать;
 - `livekit` — LiveKit SFU, `livekit-gate` — auth-gate перед ним (см. [`LIVEKIT_GATE.md`](./LIVEKIT_GATE.md)).
 
 Production-like запуск:

@@ -9,6 +9,7 @@ const LOG_EVENTS = Object.freeze({
   // Process lifecycle.
   BOOTSTRAP_FAILED: 'boot.failed',
   SHUTDOWN_STARTED: 'boot.shutdown_started',
+  SHUTDOWN_COMPLETED: 'boot.shutdown_completed',
   SHUTDOWN_TIMEOUT: 'boot.shutdown_timeout',
   SHUTDOWN_FAILED: 'boot.shutdown_failed',
   LISTENING: 'boot.listening',
