@@ -5,15 +5,9 @@
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
   import { ApiError } from '$lib/api/client';
-  import { fetchOpenReports, resolveReport, type AdminReport, type ReportReason } from '$lib/api/reports';
+  import { fetchOpenReports, resolveReport, type AdminReport } from '$lib/api/reports';
   import { Button } from '$lib/shared/ui';
-
-  const REASON_LABELS: Record<ReportReason, string> = {
-    spam: 'Спам или реклама',
-    abuse: 'Оскорбления или угрозы',
-    illegal: 'Запрещённый контент',
-    other: 'Другое'
-  };
+  import { REPORT_REASON_LABELS as REASON_LABELS } from './report-reasons';
 
   let reports = $state<AdminReport[]>([]);
   let status = $state<'loading' | 'ready' | 'signed_out' | 'forbidden' | 'failed'>('loading');

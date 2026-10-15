@@ -2,43 +2,42 @@
   // The server minute by minute, as the API recorded it: processor, memory,
   // disk, database, the API process, live connections and requests.
   import { onMount } from 'svelte';
-  import { fetchSystemStats, type SystemRange, type SystemSample, type SystemStats } from '$lib/api/admin';
-  import { SegmentControl } from '$lib/shared/ui';
+  import { fetchSystemStats, type SystemSample, type SystemStats } from '$lib/api/admin';
   import AdminNotice from './AdminNotice.svelte';
   import TimeChart from './charts/TimeChart.svelte';
   import { formatBytes, formatMs, formatPercent, formatSampleTime } from './format';
   import { loadFailure, type LoadFailure } from './load-state';
+  import TimeRangePicker from './TimeRangePicker.svelte';
+  import { SYSTEM_PRESETS, systemQuery, type TimeRange } from './time-range';
 
-  const RANGES: { value: SystemRange; label: string }[] = [
-    { value: '6h', label: '6 часов' },
-    { value: '24h', label: 'Сутки' },
-    { value: '7d', label: 'Неделя' },
-    { value: '30d', label: '30 дней' }
-  ];
   const GB = 1024 ** 3;
   const MB = 1024 ** 2;
+  const DAY = 24 * 60 * 60 * 1000;
 
-  let range = $state<SystemRange>('24h');
+  let range = $state<TimeRange>({ kind: 'preset', id: '24h' });
   let stats = $state<SystemStats | null>(null);
   let failure = $state<LoadFailure | null>(null);
   let loading = $state(false);
+  let request = 0;
 
-  async function load(next: SystemRange): Promise<void> {
+  async function load(next: TimeRange): Promise<void> {
     range = next;
     loading = true;
+    // A slower answer for a range already left behind is dropped.
+    const mine = ++request;
     try {
-      const loaded = await fetchSystemStats(next);
-      if (range !== next) return;
+      const loaded = await fetchSystemStats(systemQuery(next, SYSTEM_PRESETS, Date.now()));
+      if (mine !== request) return;
       stats = loaded;
       failure = null;
     } catch (cause) {
-      if (range === next) failure = loadFailure(cause, 'Не удалось загрузить данные сервера');
+      if (mine === request) failure = loadFailure(cause, 'Не удалось загрузить данные сервера');
     } finally {
-      if (range === next) loading = false;
+      if (mine === request) loading = false;
     }
   }
 
-  function changeRange(next: SystemRange): void {
+  function changeRange(next: TimeRange): void {
     void load(next);
   }
 
@@ -47,7 +46,9 @@
   });
 
   const samples = $derived(stats?.samples ?? []);
-  const withDate = $derived(range === '7d' || range === '30d');
+  // Spans longer than a day show the date with the clock.
+  const withDate = $derived(stats ? stats.to - stats.from > DAY : false);
+  const resolved = $derived(stats ? { from: stats.from, to: stats.to } : null);
   const labels = $derived(samples.map((sample) => formatSampleTime(sample.at, withDate)));
   const scaled = (pick: (sample: SystemSample) => number | null, unit: number) =>
     samples.map((sample) => {
@@ -67,7 +68,7 @@
 </script>
 
 <div class="admin-toolbar">
-  <SegmentControl options={RANGES} value={range} onChange={changeRange} ariaLabel="Период" size="sm" />
+  <TimeRangePicker value={range} presets={SYSTEM_PRESETS} withTime onChange={changeRange} {resolved} />
   {#if loading && stats}<span class="admin-quiet">Обновляем…</span>{/if}
 </div>
 

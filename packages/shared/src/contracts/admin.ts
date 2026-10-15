@@ -6,7 +6,19 @@
 import { Type, type Static } from 'typebox';
 import { Nullable, Ok } from './http.ts';
 
-export const AdminAccess = Ok({ admin: Type.Boolean() });
+/** Whether the panel is this account's, and for an administrator how many reports wait. */
+export const AdminAccess = Ok({ admin: Type.Boolean(), openReports: Type.Number() });
+
+/** What the realtime layer tells administrators when the open reports change. */
+export interface AdminReportsEvent {
+  openReports: number;
+  /** Set when the change is a new report. */
+  filed: null | {
+    reason: 'spam' | 'abuse' | 'illegal' | 'other';
+    targetKind: 'room_message' | 'direct_message';
+    roomName: string | null;
+  };
+}
 export type AdminAccess = Static<typeof AdminAccess>;
 
 /** The numbers the running API holds in memory right now. */
@@ -66,12 +78,17 @@ export const AdminOverview = Ok({
 });
 export type AdminOverview = Static<typeof AdminOverview>;
 
-export const PRODUCT_RANGES = ['7d', '30d', '90d', '365d'] as const;
-export type ProductRange = (typeof PRODUCT_RANGES)[number];
+/** A Moscow day, 'YYYY-MM-DD'. */
+export const DayString = Type.String({ pattern: '^\\d{4}-\\d{2}-\\d{2}$' });
 
-export const ProductQuery = Type.Object({
-  range: Type.Optional(Type.Union([Type.Literal('7d'), Type.Literal('30d'), Type.Literal('90d'), Type.Literal('365d')]))
-});
+/** The longest span of days one answer covers. */
+export const MAX_PRODUCT_DAYS = 1100;
+
+/**
+ * The days to show, both included; without them the last 30 days. The server
+ * keeps the span within MAX_PRODUCT_DAYS and starts it no earlier than the first account.
+ */
+export const ProductQuery = Type.Object({ from: Type.Optional(DayString), to: Type.Optional(DayString) });
 export type ProductQuery = Static<typeof ProductQuery>;
 
 /** One Moscow day of the product. Voice is counted on the day a stay began. */
@@ -109,7 +126,9 @@ export const RetentionWeek = Type.Object({
 export type RetentionWeek = Static<typeof RetentionWeek>;
 
 export const ProductStats = Ok({
-  range: Type.String(),
+  /** The days the answer covers, after the server clamped the request. */
+  from: Type.String(),
+  to: Type.String(),
   /** Every day of the range, oldest first, zeros included. */
   days: Type.Array(ProductDay),
   /** Accounts before the range began, so a running total can start from it. */
@@ -120,12 +139,14 @@ export const ProductStats = Ok({
 });
 export type ProductStats = Static<typeof ProductStats>;
 
-export const SYSTEM_RANGES = ['6h', '24h', '7d', '30d'] as const;
-export type SystemRange = (typeof SYSTEM_RANGES)[number];
+/** Milliseconds since the epoch, as a query string carries them. */
+export const MillisString = Type.String({ pattern: '^\\d{1,15}$' });
 
-export const SystemQuery = Type.Object({
-  range: Type.Optional(Type.Union([Type.Literal('6h'), Type.Literal('24h'), Type.Literal('7d'), Type.Literal('30d')]))
-});
+/** How long the server keeps its minutes. */
+export const SYSTEM_KEEP_DAYS = 30;
+
+/** The span to show, in milliseconds; without it the last 24 hours. */
+export const SystemQuery = Type.Object({ from: Type.Optional(MillisString), to: Type.Optional(MillisString) });
 export type SystemQuery = Static<typeof SystemQuery>;
 
 /**
@@ -133,7 +154,8 @@ export type SystemQuery = Static<typeof SystemQuery>;
  * highest value (a spike must not average away), request counts are summed.
  */
 export const SystemStats = Ok({
-  range: Type.String(),
+  from: Type.Number(),
+  to: Type.Number(),
   bucketSeconds: Type.Number(),
   samples: Type.Array(SystemSample)
 });

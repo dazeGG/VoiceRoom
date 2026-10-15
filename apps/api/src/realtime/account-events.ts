@@ -24,7 +24,8 @@ export type AccountMessage =
   | Tagged<'notification.friend.accepted', ServerEvents['notification.friend.accepted']>
   | Tagged<'room.kicked' | 'room.banned', ServerEvents['room.kicked']>
   | Tagged<'account.login.new', ServerEvents['account.login.new']>
-  | Tagged<'account.login.resolved', ServerEvents['account.login.resolved']>;
+  | Tagged<'account.login.resolved', ServerEvents['account.login.resolved']>
+  | Tagged<'admin.reports', ServerEvents['admin.reports']>;
 
 function toWsAccountEvent(message: AccountMessage): ServerEnvelope {
   switch (message.type) {
@@ -101,6 +102,8 @@ function toWsAccountEvent(message: AccountMessage): ServerEnvelope {
         alertId: message.alertId,
         resolution: message.resolution
       });
+    case 'admin.reports':
+      return buildServerEnvelope('admin.reports', { openReports: message.openReports, filed: message.filed });
   }
 }
 

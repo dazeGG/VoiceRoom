@@ -69,13 +69,15 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
     };
   }
 
-  /** Every Moscow day of the last `days`, oldest first, with zeros where nothing happened. */
-  async function productDays(days: number): Promise<{ days: ProductDay[]; accountsBefore: number }> {
-    const first = sql`(now() AT TIME ZONE ${MSK})::date - ${days - 1}::int`;
+  /** Every Moscow day from `from` to `to` (both included, oldest first), with zeros where nothing happened. */
+  async function productDays(from: string, to: string): Promise<{ days: ProductDay[]; accountsBefore: number }> {
+    const first = sql`${from}::date`;
+    const last = sql`${to}::date`;
     const since = sql`(${first})::timestamp AT TIME ZONE ${MSK}`;
+    const until = sql`(${last} + 1)::timestamp AT TIME ZONE ${MSK}`;
     const result = await sql<Record<string, unknown>>`
       WITH span AS (
-        SELECT generate_series(${first}, (now() AT TIME ZONE ${MSK})::date, interval '1 day')::date AS day
+        SELECT generate_series(${first}, ${last}, interval '1 day')::date AS day
       ),
       activity AS (
         SELECT day,
@@ -83,11 +85,11 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
                count(*) FILTER (WHERE desktop_app) AS desktop_app,
                count(*) FILTER (WHERE browser) AS browser,
                count(*) FILTER (WHERE mobile) AS mobile
-        FROM user_activity_days WHERE day >= ${first} GROUP BY day
+        FROM user_activity_days WHERE day BETWEEN ${first} AND ${last} GROUP BY day
       ),
       accounts AS (
         SELECT ${mskDay('created_at')} AS day, count(*) AS new_accounts
-        FROM users WHERE created_at >= ${since} GROUP BY 1
+        FROM users WHERE created_at >= ${since} AND created_at < ${until} GROUP BY 1
       ),
       messages AS (
         SELECT day, count(*) FILTER (WHERE kind = 'room') AS room_messages,
@@ -95,9 +97,9 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
                count(DISTINCT author) AS message_authors
         FROM (
           SELECT ${mskDay('created_at')} AS day, 'room' AS kind, author_user_id AS author
-          FROM room_messages WHERE created_at >= ${since}
+          FROM room_messages WHERE created_at >= ${since} AND created_at < ${until}
           UNION ALL
-          SELECT ${mskDay('created_at')}, 'dm', sender_id FROM direct_messages WHERE created_at >= ${since}
+          SELECT ${mskDay('created_at')}, 'dm', sender_id FROM direct_messages WHERE created_at >= ${since} AND created_at < ${until}
         ) sent
         GROUP BY day
       ),
@@ -105,7 +107,7 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
         SELECT ${mskDay('created_at')} AS day,
                count(*) FILTER (WHERE is_static) AS static_rooms,
                count(*) FILTER (WHERE NOT is_static) AS temporary_rooms
-        FROM rooms WHERE created_at >= ${since} GROUP BY 1
+        FROM rooms WHERE created_at >= ${since} AND created_at < ${until} GROUP BY 1
       ),
       voice AS (
         SELECT ${mskDay('joined_at')} AS day,
@@ -113,13 +115,13 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
                sum(extract(epoch FROM left_at - joined_at)) FILTER (WHERE user_id IS NULL) / 3600.0 AS guest_hours,
                count(*) AS joins,
                count(DISTINCT user_id) AS accounts
-        FROM voice_sessions WHERE joined_at >= ${since} GROUP BY 1
+        FROM voice_sessions WHERE joined_at >= ${since} AND joined_at < ${until} GROUP BY 1
       ),
       peaks AS (
         SELECT ${mskDay('at')} AS day,
                max(online_accounts) AS online, max(guest_connections) AS guests,
                max(voice_peers) AS voice_peers, max(voice_rooms) AS voice_rooms
-        FROM product_snapshots WHERE at >= ${since} GROUP BY 1
+        FROM product_snapshots WHERE at >= ${since} AND at < ${until} GROUP BY 1
       )
       SELECT to_char(span.day, 'YYYY-MM-DD') AS day,
              activity.active_accounts, activity.desktop_app, activity.browser, activity.mobile,
@@ -203,7 +205,19 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
     }));
   }
 
-  return Object.freeze({ overview, productDays, retention });
+  async function openReports(): Promise<number> {
+    const result = await sql<{ count: string }>`SELECT count(*) FROM content_reports WHERE status = 'open'`.execute(db);
+    return n(result.rows[0]?.count);
+  }
+
+  /** The Moscow day of the first account, or null without one. */
+  async function firstAccountDay(): Promise<string | null> {
+    const result = await sql<{ day: string | null }>`
+      SELECT to_char(min(${mskDay('created_at')}), 'YYYY-MM-DD') AS day FROM users`.execute(db);
+    return result.rows[0]?.day ?? null;
+  }
+
+  return Object.freeze({ overview, productDays, retention, openReports, firstAccountDay });
 }
 
 export type AdminStatsRepository = ReturnType<typeof createAdminStatsRepository>;

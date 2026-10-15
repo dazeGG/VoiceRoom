@@ -20,7 +20,7 @@ const SIGN_IN_REQUIRED = failure('Authentication required', { code: 'authenticat
 const ADMIN_REQUIRED = failure('Platform administrator access required', { code: 'platform_admin_required' });
 
 export interface AdminRoutesDeps {
-  admin: Pick<AdminService, 'isAdmin' | 'overview' | 'product' | 'system'>;
+  admin: Pick<AdminService, 'access' | 'overview' | 'product' | 'system'>;
 }
 
 export function registerAdminRoutes(root: FastifyInstance, ctx: ApiContext, deps: AdminRoutesDeps): void {
@@ -39,7 +39,7 @@ export function registerAdminRoutes(root: FastifyInstance, ctx: ApiContext, deps
     async (request, reply) => {
       const userId = await actor(request, reply);
       if (!userId) return reply;
-      return { ok: true as const, admin: deps.admin.isAdmin(userId) };
+      return { ok: true as const, ...(await deps.admin.access(userId)) };
     }
   );
 
@@ -61,7 +61,7 @@ export function registerAdminRoutes(root: FastifyInstance, ctx: ApiContext, deps
     async (request, reply) => {
       const userId = await actor(request, reply);
       if (!userId) return reply;
-      const stats = await deps.admin.product(userId, request.query.range);
+      const stats = await deps.admin.product(userId, request.query);
       if (!stats) return reply.code(403).send(ADMIN_REQUIRED);
       return { ok: true as const, ...stats };
     }
@@ -73,7 +73,7 @@ export function registerAdminRoutes(root: FastifyInstance, ctx: ApiContext, deps
     async (request, reply) => {
       const userId = await actor(request, reply);
       if (!userId) return reply;
-      const stats = await deps.admin.system(userId, request.query.range);
+      const stats = await deps.admin.system(userId, request.query);
       if (!stats) return reply.code(403).send(ADMIN_REQUIRED);
       return { ok: true as const, ...stats };
     }

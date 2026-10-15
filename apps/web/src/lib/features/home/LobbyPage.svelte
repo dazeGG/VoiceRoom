@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { getAppRealtime } from '$lib/api/realtime';
   import { pushState, replaceState } from '$app/navigation';
+  import { resolve } from '$app/paths';
   import type { AuthUser } from '$lib/api/auth';
   import { createRoom } from '$lib/api/rooms';
   import { extractRoomId } from '$lib/shared/utils/room';
@@ -18,7 +19,9 @@
   import DmView from './components/lobby/DmView.svelte';
   import PeopleView from './components/lobby/PeopleView.svelte';
   import AdminPanel from '$lib/features/admin/AdminPanel.svelte';
-  import { fetchAdminAccess } from '$lib/api/admin';
+  import { fetchAdminAccess, type AdminReportsEvent } from '$lib/api/admin';
+  import { describeFiledReport } from '$lib/features/admin/report-reasons';
+  import { adminPath, adminTabFromPath, type AdminTab } from '$lib/features/admin/tabs';
   import RoomBrowseView from './components/lobby/RoomBrowseView.svelte';
   import RoomPreviewView from './components/lobby/RoomPreviewView.svelte';
   import LobbyRoomSettingsDialog from './components/lobby/LobbyRoomSettingsDialog.svelte';
@@ -29,7 +32,7 @@
   import { syncLobbyWithDesktop } from './model/desktop-sync.svelte';
   import { provideLobby } from './model/lobby-context';
   import { provideRoomSocial } from '$lib/features/room/social';
-  import type { ToastOptions } from './model/toasts.svelte';
+  import { dismissToast, type ToastOptions } from './model/toasts.svelte';
   import {
     getActiveVoiceRoomId,
     clearDisconnectedHiddenEmbed,
@@ -75,6 +78,9 @@
   import './styles/lobby-v2.css';
 
   const lobby = new LobbyStore();
+  // /admin/<tab> opens the panel at once, before anything rewrites the address.
+  const initialAdminTab = adminTabFromPath(window.location.pathname);
+  if (initialAdminTab) lobby.showAdmin(initialAdminTab);
   provideLobby(lobby);
 
   // Rooms shown inside the lobby see the account's friends through this.
@@ -90,6 +96,52 @@
   const rooms = new LobbyRooms((message) => onToast(message));
   // The admin panel's entry shows only to the accounts the server names.
   let isAdmin = $state(false);
+  let openReports = $state(0);
+  // Bumped on every change to the open reports, so an open list reloads.
+  let reportsVersion = $state(0);
+  const adminOpen = $derived(lobby.mode === 'friends' && lobby.view === 'admin');
+
+  const adminHref = (tab: AdminTab) => resolve('/admin/[[tab]]', { tab: tab === 'overview' ? undefined : tab });
+
+  function openAdmin(tab: AdminTab = lobby.adminTab): void {
+    lobby.showAdmin(tab);
+    if (window.location.pathname !== adminPath(tab)) pushState(adminHref(tab), {});
+  }
+
+  function selectAdminTab(tab: AdminTab): void {
+    lobby.adminTab = tab;
+    if (window.location.pathname !== adminPath(tab)) replaceState(adminHref(tab), {});
+  }
+
+  // Leaving the panel any way (home, a room, a chat) gives the address back.
+  $effect(() => {
+    if (adminOpen) return;
+    untrack(() => {
+      if (adminTabFromPath(window.location.pathname)) replaceUrlWithActiveVoiceRoom();
+    });
+  });
+
+  function reportsChanged(event: AdminReportsEvent): void {
+    openReports = event.openReports;
+    reportsVersion += 1;
+    const filed = event.filed;
+    if (!filed) return;
+    // It stays until closed: a report must not slip by while the admin is away.
+    onToast('Новая жалоба', {
+      description: describeFiledReport(filed),
+      variant: 'warning',
+      duration: 0,
+      actions: [
+        {
+          label: 'Посмотреть',
+          onClick: (toastId: string) => {
+            dismissToast(toastId);
+            openAdmin('reports');
+          }
+        }
+      ]
+    });
+  }
   const roomLabel = (roomId: string): string => rooms.label(roomId);
   let creating = $state(false);
   let createDialogOpen = $state(false);
@@ -176,7 +228,10 @@
     const teardownRooms = user ? rooms.follow() : () => {};
     if (user) {
       fetchAdminAccess().then(
-        (admin) => (isAdmin = admin),
+        (access) => {
+          isAdmin = access.admin;
+          openReports = access.openReports;
+        },
         // Without an answer the entry stays hidden; /admin still works.
         () => {}
       );
@@ -191,7 +246,17 @@
       if (closedViewedRoom) clearViewedRoom();
     }
 
+    const unsubscribeAdmin = getAppRealtime().subscribe((event) => {
+      if (event.type === 'admin.reports') reportsChanged(event.payload);
+    });
+
     function onPopState(): void {
+      const poppedAdminTab = adminTabFromPath(window.location.pathname);
+      if (poppedAdminTab) {
+        lobby.showAdmin(poppedAdminTab);
+        return;
+      }
+      if (lobby.view === 'admin') lobby.showHome();
       const roomId = extractRoomId(window.location.pathname);
       if (roomId) {
         setViewedRoomFromRoute(roomId);
@@ -257,6 +322,7 @@
       teardownFriends();
       teardownRooms();
       teardownDesktopLinks();
+      unsubscribeAdmin();
       window.removeEventListener('voice-room:embedded-leave', onEmbeddedLeave);
       window.removeEventListener('voice-room:rooms-changed', onRoomsChanged);
       window.removeEventListener('popstate', onPopState);
@@ -477,8 +543,9 @@
       onGoHome={goHome}
       onOpenPeople={openPeople}
       onOpenSettings={prompts.openSettings}
-      onOpenAdmin={isAdmin ? lobby.showAdmin : undefined}
-      adminOpen={lobby.mode === 'friends' && lobby.view === 'admin'}
+      onOpenAdmin={isAdmin ? () => openAdmin() : undefined}
+      {adminOpen}
+      adminBadge={openReports}
       notificationsOpen={notifications.open}
       notificationUnreadCount={notifications.inbox.unreadCount}
       onOpenNotifications={notifications.toggle}
@@ -546,8 +613,8 @@
         <DmView self={user} />
       {:else if lobby.mode === 'friends' && lobby.view === 'people'}
         <PeopleView {user} {onToast} onHome={goHome} />
-      {:else if lobby.mode === 'friends' && lobby.view === 'admin' && isAdmin}
-        <AdminPanel />
+      {:else if adminOpen}
+        <AdminPanel tab={lobby.adminTab} onTabChange={selectAdminTab} {openReports} {reportsVersion} />
       {:else if lobby.mode === 'friends'}
         {@render voiceHome()}
       {/if}

@@ -2,44 +2,44 @@
   // How the product changes day by day: people, messages, rooms, voice, peaks,
   // and whether newly registered accounts come back.
   import { onMount } from 'svelte';
-  import { fetchProductStats, type ProductRange, type ProductStats } from '$lib/api/admin';
-  import { SegmentControl } from '$lib/shared/ui';
+  import { fetchProductStats, type ProductStats } from '$lib/api/admin';
   import AdminNotice from './AdminNotice.svelte';
   import TimeChart from './charts/TimeChart.svelte';
   import { formatDay, formatHours } from './format';
   import { loadFailure, type LoadFailure } from './load-state';
+  import TimeRangePicker from './TimeRangePicker.svelte';
+  import { PRODUCT_PRESETS, productQuery, type TimeRange } from './time-range';
 
-  const RANGES: { value: ProductRange; label: string }[] = [
-    { value: '7d', label: '7 дней' },
-    { value: '30d', label: '30 дней' },
-    { value: '90d', label: '90 дней' },
-    { value: '365d', label: 'Год' }
-  ];
-
-  let range = $state<ProductRange>('30d');
+  let range = $state<TimeRange>({ kind: 'preset', id: '30d' });
   let stats = $state<ProductStats | null>(null);
   let failure = $state<LoadFailure | null>(null);
   let loading = $state(false);
+  let request = 0;
 
-  async function load(next: ProductRange): Promise<void> {
+  async function load(next: TimeRange): Promise<void> {
     range = next;
     loading = true;
+    // A slower answer for a range already left behind is dropped.
+    const mine = ++request;
     try {
-      const loaded = await fetchProductStats(next);
-      // A slower answer for a range already left behind is dropped.
-      if (range !== next) return;
+      const loaded = await fetchProductStats(productQuery(next, PRODUCT_PRESETS, Date.now()));
+      if (mine !== request) return;
       stats = loaded;
       failure = null;
     } catch (cause) {
-      if (range === next) failure = loadFailure(cause, 'Не удалось загрузить статистику');
+      if (mine === request) failure = loadFailure(cause, 'Не удалось загрузить статистику');
     } finally {
-      if (range === next) loading = false;
+      if (mine === request) loading = false;
     }
   }
 
-  function changeRange(next: ProductRange): void {
+  function changeRange(next: TimeRange): void {
     void load(next);
   }
+
+  const resolved = $derived(
+    stats ? { from: Date.parse(`${stats.from}T12:00`), to: Date.parse(`${stats.to}T12:00`) } : null
+  );
 
   onMount(() => {
     void load(range);
@@ -58,7 +58,7 @@
 </script>
 
 <div class="admin-toolbar">
-  <SegmentControl options={RANGES} value={range} onChange={changeRange} ariaLabel="Период" size="sm" />
+  <TimeRangePicker value={range} presets={PRODUCT_PRESETS} withTime={false} onChange={changeRange} {resolved} />
   {#if loading && stats}<span class="admin-refreshing">Обновляем…</span>{/if}
 </div>
 

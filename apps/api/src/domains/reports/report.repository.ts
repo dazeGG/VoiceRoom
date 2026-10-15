@@ -13,6 +13,7 @@ export type ReportedRoomMessage = {
   deleted: boolean;
   /** A persistent room; a temporary one is open to anyone with its link. */
   roomIsStatic: boolean;
+  roomName: string;
 };
 export type ReportedDirectMessage = { senderId: string; recipientId: string; deleted: boolean };
 export type OpenReport = { id: string; targetKind: ReportTargetKind; roomId: string | null; messageId: string };
@@ -32,7 +33,14 @@ export function createReportRepository({ pool }: { pool: pg.Pool }) {
     const row = await db
       .selectFrom('room_messages as m')
       .innerJoin('rooms as r', 'r.id', 'm.room_id')
-      .select(['m.room_id', 'm.author_user_id', 'm.deleted_at', 'r.is_static', 'r.deleted_at as room_deleted_at'])
+      .select([
+        'm.room_id',
+        'm.author_user_id',
+        'm.deleted_at',
+        'r.is_static',
+        'r.name as room_name',
+        'r.deleted_at as room_deleted_at'
+      ])
       .where('m.room_id', '=', roomId)
       .where('m.id', '=', messageId)
       .executeTakeFirst();
@@ -41,7 +49,8 @@ export function createReportRepository({ pool }: { pool: pg.Pool }) {
           roomId: row.room_id,
           authorUserId: row.author_user_id,
           deleted: Boolean(row.deleted_at || row.room_deleted_at),
-          roomIsStatic: row.is_static
+          roomIsStatic: row.is_static,
+          roomName: row.room_name
         }
       : null;
   }
@@ -195,7 +204,24 @@ export function createReportRepository({ pool }: { pool: pg.Pool }) {
     });
   }
 
-  return Object.freeze({ findRoomMessage, findDirectMessage, fileReport, findOpenReport, resolveTarget, listOpen });
+  async function countOpen(): Promise<number> {
+    const row = await db
+      .selectFrom('content_reports')
+      .select((eb) => eb.fn.countAll<string>().as('count'))
+      .where('status', '=', 'open')
+      .executeTakeFirst();
+    return Number(row?.count ?? 0);
+  }
+
+  return Object.freeze({
+    findRoomMessage,
+    findDirectMessage,
+    fileReport,
+    findOpenReport,
+    resolveTarget,
+    listOpen,
+    countOpen
+  });
 }
 
 export type ReportRepository = ReturnType<typeof createReportRepository>;

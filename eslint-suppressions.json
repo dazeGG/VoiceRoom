@@ -1141,11 +1141,6 @@
       "count": 1
     }
   },
-  "apps/web/src/routes/+page.svelte": {
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 1
-    }
-  },
   "apps/web/src/routes/r/[roomId]/+page.svelte": {
     "@typescript-eslint/no-unsafe-argument": {
       "count": 1

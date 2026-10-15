@@ -56,6 +56,7 @@ import { Outbox } from '$lib/shared/chat/outbox.svelte';
 import { FriendPresence } from './friend-presence.svelte';
 import { BrowserNotificationRouting } from './browser-notification-routing';
 import type { RoomSocial } from '$lib/features/room/social';
+import type { AdminTab } from '$lib/features/admin/tabs';
 
 export type LobbyMode = 'friends' | 'rooms';
 export type LobbyView = 'home' | 'dm' | 'people' | 'admin';
@@ -82,6 +83,7 @@ export class LobbyStore {
   requests = $state<{ incoming: IncomingRequest[]; outgoing: OutgoingRequest[] }>({ incoming: [], outgoing: [] });
   mode = $state<LobbyMode>('friends');
   view = $state<LobbyView>('home');
+  adminTab = $state<AdminTab>('overview');
   selectedFriendId = $state<string | null>(null);
   readonly thread = new DmThread((peerId) => this.view === 'dm' && this.selectedFriendId === peerId);
   /** Friends currently typing to this account, keyed by their user id. */
@@ -208,9 +210,10 @@ export class LobbyStore {
   };
 
   /** The admin panel, beside the friends list like the people view; a call keeps going. */
-  showAdmin = (): void => {
+  showAdmin = (tab: AdminTab = this.adminTab): void => {
     this.mode = 'friends';
     this.view = 'admin';
+    this.adminTab = tab;
   };
 
   openDm = async (userId: string): Promise<void> => {

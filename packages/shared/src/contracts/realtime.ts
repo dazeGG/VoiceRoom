@@ -5,6 +5,7 @@
 // `{ id?, type, payload }`, and a refusal is the `error` frame.
 
 import type { LoginAlert } from './account.ts';
+import type { AdminReportsEvent } from './admin.ts';
 import type { DirectMessage, PinnedMessage, RoomMessage } from './messages.ts';
 import type { NotificationPreferences } from './notifications.ts';
 import type { LobbyRoom, PublicPeer } from './rooms.ts';
@@ -115,6 +116,8 @@ export type ServerEvents = {
   'notification.settings.updated': { preferences: NotificationPreferences };
   'account.login.new': { alert: LoginAlert };
   'account.login.resolved': { alertId: string; resolution: 'confirmed' | 'denied' };
+  /** To platform administrators only: the open reports changed. */
+  'admin.reports': AdminReportsEvent;
 
   // Direct messages
   'dm.message': { message: DirectMessage };

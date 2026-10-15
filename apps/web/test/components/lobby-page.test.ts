@@ -1,8 +1,11 @@
 // The lobby signs out when the server ends this device's session: quietly when
 // this device asked for it, with a message when it happened elsewhere. A
-// ?dm= link lands on that conversation.
+// ?dm= link lands on that conversation. An administrator gets the panel in
+// the header, at its own address, and a new report as a notice that stays.
 
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { cleanup, render, screen, within } from '@testing-library/svelte';
+import userEvent from '@testing-library/user-event';
+import { pushState, replaceState } from '$app/navigation';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import LobbyPage from '../../src/lib/features/home/LobbyPage.svelte';
 import { expectSessionEnd, session, setUser } from '../../src/lib/features/auth/session.svelte';
@@ -12,6 +15,7 @@ import { authUser } from '../fixtures/users.ts';
 import { stubMatchMedia } from '../helpers/match-media.ts';
 import { state as roomClientState } from '../../src/lib/features/room/client/core/state.svelte';
 import { voiceSession } from '../../src/lib/features/room/voice-session.svelte';
+import type { ToastOptions } from '../../src/lib/features/home/model/toasts.svelte';
 
 vi.mock('$app/navigation', () => ({ pushState: vi.fn(), replaceState: vi.fn(), goto: vi.fn(async () => {}) }));
 
@@ -31,8 +35,9 @@ afterEach(() => {
   roomClientState.roomName = '';
 });
 
-function stubLobby() {
+function stubLobby(extra: Parameters<typeof stubFetch>[0] = {}) {
   return stubFetch({
+    ...extra,
     'GET /api/auth/rooms': { body: { ok: true, rooms: [] } },
     'GET /api/friends': {
       body: {
@@ -55,7 +60,7 @@ function stubLobby() {
 }
 
 function renderLobby() {
-  const onToast = vi.fn();
+  const onToast = vi.fn<(message: string, options?: ToastOptions) => void>();
   render(LobbyPage, { props: { user, loggingOut: false, onLogout: vi.fn(), onToast } });
   return onToast;
 }
@@ -105,4 +110,67 @@ test('the call card names a room the list does not have, such as a temporary one
   renderLobby();
 
   expect(await screen.findByRole('button', { name: 'Открыть комнату Созвон' })).toBeTruthy();
+});
+
+const asAdmin = (openReports = 0) => ({
+  'GET /api/admin/access': { body: { ok: true, admin: true, openReports } }
+});
+
+test('an administrator gets the panel beside the logo, with the open reports on it', async () => {
+  stubLobby(asAdmin(2));
+  renderLobby();
+  const entry = await screen.findByRole('button', { name: 'Открыть админку' });
+  expect(within(entry).getByLabelText('открытых жалоб: 2')).toBeTruthy();
+  await userEvent.click(entry);
+  expect(await screen.findByRole('heading', { name: 'Админка' })).toBeTruthy();
+  expect(vi.mocked(pushState)).toHaveBeenCalledWith('/admin', {});
+
+  await userEvent.click(screen.getByRole('tab', { name: 'Сервер' }));
+  expect(vi.mocked(replaceState)).toHaveBeenCalledWith('/admin/system', {});
+});
+
+test('an account the server does not name gets no entry', async () => {
+  stubLobby({ 'GET /api/admin/access': { body: { ok: true, admin: false, openReports: 0 } } });
+  renderLobby();
+  await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Открыть настройки' })).toBeTruthy());
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  expect(screen.queryByRole('button', { name: 'Открыть админку' })).toBeNull();
+});
+
+test('/admin/<tab> opens the panel on that tab, and leaving it gives the address back', async () => {
+  window.history.replaceState(null, '', '/admin/system');
+  stubLobby(asAdmin());
+  renderLobby();
+  expect((await screen.findByRole('tab', { name: 'Сервер' })).getAttribute('aria-selected')).toBe('true');
+
+  await userEvent.click(screen.getByTitle('Главная'));
+  await vi.waitFor(() => expect(vi.mocked(replaceState)).toHaveBeenCalledWith('/', {}));
+});
+
+test('a new report reaches the administrator as a notice that stays until closed and leads to the reports', async () => {
+  stubLobby(asAdmin(0));
+  const onToast = renderLobby();
+  const current = await socket();
+  await screen.findByRole('button', { name: 'Открыть админку' });
+
+  current.receive({
+    type: 'admin.reports',
+    payload: { openReports: 1, filed: { reason: 'spam', targetKind: 'room_message', roomName: 'Кухня' } }
+  });
+  await vi.waitFor(() => expect(onToast).toHaveBeenCalledWith('Новая жалоба', expect.anything()));
+  const options = onToast.mock.calls.find(([message]) => message === 'Новая жалоба')![1]!;
+  expect(options).toMatchObject({ duration: 0, description: 'Спам или реклама · комната «Кухня»' });
+  expect(
+    within(screen.getByRole('button', { name: 'Открыть админку' })).getByLabelText('открытых жалоб: 1')
+  ).toBeTruthy();
+
+  options.actions![0].onClick('toast-1');
+  expect((await screen.findByRole('tab', { name: /Жалобы/ })).getAttribute('aria-selected')).toBe('true');
+  expect(vi.mocked(pushState)).toHaveBeenCalledWith('/admin/reports', {});
+
+  // A resolved report only moves the count.
+  onToast.mockClear();
+  current.receive({ type: 'admin.reports', payload: { openReports: 0, filed: null } });
+  await vi.waitFor(() => expect(screen.queryByLabelText('открытых жалоб: 1')).toBeNull());
+  expect(onToast).not.toHaveBeenCalled();
 });

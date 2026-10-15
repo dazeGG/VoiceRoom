@@ -194,7 +194,7 @@ test('minutes are kept once, folded into buckets, pruned, and the migration roll
   );
   assert.deepEqual(rows.rows, [{ http_requests: 15, http_5xx: 1, cpu_pct: 30 }]);
 
-  const buckets = await repository.buckets(new Date('2026-10-16T09:00:00Z'), 300);
+  const buckets = await repository.buckets(new Date('2026-10-16T09:00:00Z'), new Date('2026-10-16T12:00:00Z'), 300);
   assert.deepEqual(
     buckets.map((bucket) => new Date(bucket.at).toISOString()),
     ['2026-10-16T10:00:00.000Z', '2026-10-16T10:05:00.000Z']
@@ -205,7 +205,16 @@ test('minutes are kept once, folded into buckets, pruned, and the migration roll
   assert.equal(busy!.http5xx, 1);
   // (15 × 20 + 30 × 40) / 45: weighted by the requests of each minute.
   assert.equal(Math.round(busy!.httpAvgMs!), 33);
-  assert.deepEqual(await repository.buckets(new Date('2026-10-16T11:00:00Z'), 60), []);
+  assert.deepEqual(
+    await repository.buckets(new Date('2026-10-16T11:00:00Z'), new Date('2026-10-16T12:00:00Z'), 60),
+    []
+  );
+  // The end bounds the span: the minutes after it stay out.
+  const early = await repository.buckets(new Date('2026-10-16T09:00:00Z'), new Date('2026-10-16T10:01:00Z'), 60);
+  assert.deepEqual(
+    early.map((bucket) => new Date(bucket.at).toISOString()),
+    ['2026-10-16T10:00:00.000Z', '2026-10-16T10:01:00.000Z']
+  );
 
   assert.equal(await repository.pruneBefore(new Date('2026-10-16T10:05:00Z')), 3);
   assert.equal((await pool.query('SELECT 1 FROM system_snapshots')).rowCount, 1);

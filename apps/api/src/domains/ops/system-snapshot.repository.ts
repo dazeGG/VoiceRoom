@@ -93,11 +93,11 @@ export function createSystemSnapshotRepository({ pool }: { pool: pg.Pool }) {
   }
 
   /**
-   * The minutes since `since` folded into buckets of `bucketSeconds`: gauges
+   * The minutes from `since` to `until` folded into buckets of `bucketSeconds`: gauges
    * keep the bucket's highest value, requests are summed and their average
    * time is weighted by count.
    */
-  async function buckets(since: Date, bucketSeconds: number): Promise<StoredSystemSnapshot[]> {
+  async function buckets(since: Date, until: Date, bucketSeconds: number): Promise<StoredSystemSnapshot[]> {
     // A literal, not a parameter: GROUP BY and the select list must be the
     // same expression, and two parameters are two expressions to Postgres.
     const seconds = sql.lit(Math.max(1, Math.floor(bucketSeconds)));
@@ -128,6 +128,7 @@ export function createSystemSnapshotRepository({ pool }: { pool: pg.Pool }) {
         )
       ])
       .where('at', '>=', since)
+      .where('at', '<=', until)
       .groupBy(bucket)
       .orderBy(bucket)
       .execute();

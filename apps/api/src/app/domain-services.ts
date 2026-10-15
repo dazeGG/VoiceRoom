@@ -8,7 +8,7 @@ import type { RoomPeerMessage } from '../realtime/legacy-events.ts';
 import { buildServerEnvelope } from '../realtime/envelope.ts';
 import { mentionUserIdsFromContent } from '@voice-room/shared/mentions';
 import { LOG_EVENTS } from '../lib/log-events.ts';
-import type { LiveNumbers } from '@voice-room/shared/contracts/admin';
+import type { AdminReportsEvent, LiveNumbers } from '@voice-room/shared/contracts/admin';
 import packageJson from '../../package.json' with { type: 'json' };
 import { createAccountService } from '../domains/account/account.service.ts';
 import { createAdminService } from '../domains/admin/admin.service.ts';
@@ -207,6 +207,22 @@ export function createDomainServices(deps: DomainServiceDeps) {
     announceRoomUpdate: (roomId, room) => hub.roomLifecycle.announceRoomUpdate(roomId, room)
   });
 
+  // A change in the open reports reaches every administrator online; it never fails the report.
+  async function announceReports(filed: AdminReportsEvent['filed']): Promise<void> {
+    try {
+      const repository = services.getReportRepository();
+      if (!repository) return;
+      const openReports = await repository.countOpen();
+      for (const adminId of config.PLATFORM_ADMIN_USER_IDS) {
+        hub.broadcastToUser(adminId, { type: 'admin.reports', openReports, filed });
+      }
+    } catch (error) {
+      deps
+        .logger()
+        .error({ evt: LOG_EVENTS.REPORT_ANNOUNCE_FAILED, err: error }, 'failed to announce reports to administrators');
+    }
+  }
+
   const reports = createReportService({
     repository: () => {
       const repository = services.getReportRepository();
@@ -220,7 +236,8 @@ export function createDomainServices(deps: DomainServiceDeps) {
       if (!moderation) throw new Error('Message removal requires the database');
       return moderation.messageService.removeRoomMessageAsOperator(input);
     },
-    removeDirectMessage: (input) => directMessages.removeAsOperator(input)
+    removeDirectMessage: (input) => directMessages.removeAsOperator(input),
+    reportsChanged: (filed) => void announceReports(filed)
   });
 
   const admin = createAdminService({

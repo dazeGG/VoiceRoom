@@ -1,8 +1,7 @@
 <script lang="ts">
-  // The platform administrator's panel: what is happening now, how the product
-  // changes, how the server is doing, and the reports. Opens inside the app
-  // (a call keeps going) and as its own page at /admin.
-  import { resolve } from '$app/paths';
+  // The platform administrator's panel: the dashboard, how the product
+  // changes, how the server is doing, and the reports. It opens inside the
+  // lobby, so a call keeps going; the lobby keeps the tab in the address.
   import { SegmentControl } from '$lib/shared/ui';
   import AdminOverview from './AdminOverview.svelte';
   import AdminProduct from './AdminProduct.svelte';
@@ -10,36 +9,60 @@
   import ReportsReview from './ReportsReview.svelte';
   import type { AdminTab } from './tabs';
 
-  let { tab = $bindable('overview'), standalone = false }: { tab?: AdminTab; standalone?: boolean } = $props();
+  let {
+    tab = 'overview',
+    onTabChange,
+    openReports = 0,
+    reportsVersion = 0
+  }: {
+    tab?: AdminTab;
+    onTabChange?: (tab: AdminTab) => void;
+    /** The badge on the reports tab. */
+    openReports?: number;
+    /** Bumped when the open reports change, so an open list reloads. */
+    reportsVersion?: number;
+  } = $props();
+
+  // Without a listener the panel switches tabs itself.
+  let localTab = $state<AdminTab | null>(null);
+  const current = $derived(onTabChange ? tab : (localTab ?? tab));
 
   function selectTab(value: AdminTab): void {
-    tab = value;
+    if (onTabChange) onTabChange(value);
+    else localTab = value;
   }
-
-  const TABS: { value: AdminTab; label: string }[] = [
-    { value: 'overview', label: 'Обзор' },
-    { value: 'product', label: 'Продукт' },
-    { value: 'system', label: 'Сервер' },
-    { value: 'reports', label: 'Жалобы' }
-  ];
 </script>
 
-<div class="admin-panel" class:is-standalone={standalone}>
+{#snippet reportsCount()}
+  {#if openReports > 0}<span class="admin-tab-count" aria-label={`открытых: ${openReports}`}>{openReports}</span>{/if}
+{/snippet}
+
+<div class="admin-panel">
   <header class="admin-head">
-    {#if standalone}<a class="admin-back" href={resolve('/')}>← Voice Room</a>{/if}
     <h1>Админка</h1>
-    <SegmentControl kind="tabs" options={TABS} value={tab} onChange={selectTab} ariaLabel="Разделы" />
+    <SegmentControl
+      kind="tabs"
+      options={[
+        { value: 'overview', label: 'Обзор' },
+        { value: 'product', label: 'Продукт' },
+        { value: 'system', label: 'Сервер' },
+        { value: 'reports', label: 'Жалобы', suffix: reportsCount }
+      ]}
+      value={current}
+      onChange={selectTab}
+      ariaLabel="Разделы"
+    />
   </header>
 
-  <div class="admin-body" role="tabpanel" aria-label={TABS.find((item) => item.value === tab)?.label}>
-    {#if tab === 'overview'}
-      <AdminOverview onOpenReports={() => (tab = 'reports')} />
-    {:else if tab === 'product'}
+  <div class="admin-body" role="tabpanel">
+    {#if current === 'overview'}
+      <AdminOverview onOpenReports={() => selectTab('reports')} />
+    {:else if current === 'product'}
       <AdminProduct />
-    {:else if tab === 'system'}
+    {:else if current === 'system'}
       <AdminSystem />
     {:else}
-      <ReportsReview />
+      {#key reportsVersion}<ReportsReview />{/key}
     {/if}
   </div>
 </div>
@@ -60,13 +83,6 @@
     font-family: var(--font-ui);
   }
 
-  .admin-panel.is-standalone {
-    height: auto;
-    min-height: 100dvh;
-    overflow: visible;
-    padding: 24px 16px 64px;
-  }
-
   .admin-head {
     display: flex;
     flex-wrap: wrap;
@@ -79,14 +95,24 @@
     font-size: 22px;
   }
 
-  .admin-back {
-    flex-basis: 100%;
-    color: var(--vr-text-2);
-  }
-
   .admin-body {
     display: grid;
     gap: 22px;
     min-width: 0;
+  }
+
+  .admin-tab-count {
+    display: inline-grid;
+    min-width: 18px;
+    height: 18px;
+    margin-left: 6px;
+    padding: 0 5px;
+    place-items: center;
+    border-radius: 999px;
+    background: var(--vr-danger);
+    color: var(--vr-on-danger);
+    font-size: 11px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
   }
 </style>
