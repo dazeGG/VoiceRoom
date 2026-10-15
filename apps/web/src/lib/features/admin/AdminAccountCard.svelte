@@ -424,7 +424,7 @@
 
   .card-tiles {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
     gap: 10px;
   }
 
@@ -446,7 +446,8 @@
 
   .card-tile-value {
     color: var(--vr-text);
-    font-size: 22px;
+    font-size: 18px;
+    white-space: nowrap;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
   }
