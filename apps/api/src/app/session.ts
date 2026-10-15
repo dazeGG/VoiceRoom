@@ -5,6 +5,7 @@ import type { IncomingMessage } from 'node:http';
 import { accountPeerIdFor, cleanName } from '@voice-room/shared/validation';
 import type { SessionRepository } from '../domains/account/session.repository.ts';
 import type { GeoLocator } from '../lib/geoip.ts';
+import type { ActivityTracker } from '../domains/account/activity.service.ts';
 
 type SessionRequest = IncomingMessage & { voiceRoomUserId?: string };
 
@@ -13,20 +14,26 @@ export interface SessionResolverDeps {
   users(): Pick<SessionRepository, 'getSessionUser'>;
   geo(): Pick<GeoLocator, 'locate'>;
   clientIp(req: IncomingMessage): string;
+  /** Marks the account active for the day. */
+  activity?: Pick<ActivityTracker, 'sawRequest'>;
 }
 
 export function createSessionResolver(deps: SessionResolverDeps) {
   async function resolve(req: SessionRequest) {
     const token = deps.readToken(req);
     if (!token) return null;
+    const userAgent = String(req.headers['user-agent'] || '');
     const session = await deps.users().getSessionUser(token, Date.now(), {
-      userAgent: String(req.headers['user-agent'] || ''),
+      userAgent,
       resolveLocation: () => deps.geo().locate(deps.clientIp(req))
     });
     // Stamped for the request-completed record: without it every authenticated
     // request looks anonymous in the log and a user's report cannot be traced to
     // the requests they actually made.
-    if (session?.user?.id) req.voiceRoomUserId = session.user.id;
+    if (session?.user?.id) {
+      req.voiceRoomUserId = session.user.id;
+      deps.activity?.sawRequest(session.user.id, userAgent);
+    }
     return session;
   }
 

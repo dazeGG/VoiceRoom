@@ -63,7 +63,8 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     runtime: () => roomRuntime,
     logger: () => deps.logger(),
     occupancyRetry: { baseMs: 1000, maxMs: 30000 },
-    roster: { waitMs: config.LIVEKIT_ROSTER_WAIT_MS, pollMs: config.ROSTER_POLL_INTERVAL_MS }
+    roster: { waitMs: config.LIVEKIT_ROSTER_WAIT_MS, pollMs: config.ROSTER_POLL_INTERVAL_MS },
+    sessions: () => services.getVoiceSessionRepository()
   });
   const presenceRooms = roomPresence.rooms;
   const { attach: attachPresence, broadcast, closePeer, queueOccupancy: queueRoomOccupancyTransition } = roomPresence;

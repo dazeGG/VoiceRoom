@@ -303,6 +303,20 @@ export interface NotificationRoomMutes {
   user_id: string;
 }
 
+export interface Pgmigrations {
+  id: Generated<number>;
+  name: string;
+  run_on: Timestamp;
+}
+
+export interface ProductSnapshots {
+  at: Timestamp;
+  guest_connections: Generated<number>;
+  online_accounts: Generated<number>;
+  voice_peers: Generated<number>;
+  voice_rooms: Generated<number>;
+}
+
 export interface PushSubscriptions {
   auth: string;
   created_at: Generated<Timestamp>;
@@ -458,6 +472,14 @@ export interface Sessions {
   user_id: string;
 }
 
+export interface UserActivityDays {
+  browser: Generated<boolean>;
+  day: Timestamp;
+  desktop_app: Generated<boolean>;
+  mobile: Generated<boolean>;
+  user_id: string;
+}
+
 export interface UserBlocks {
   blocked_id: string;
   blocker_id: string;
@@ -498,6 +520,21 @@ export interface Users {
   updated_at: Generated<Timestamp>;
 }
 
+export interface VoiceroomMigrationGuard {
+  id: number;
+  marker: string | null;
+  state: string;
+  updated_at: Generated<Timestamp>;
+}
+
+export interface VoiceSessions {
+  id: Generated<string>;
+  joined_at: Timestamp;
+  left_at: Timestamp;
+  room_id: string;
+  user_id: string | null;
+}
+
 export interface DB {
   account_login_events: AccountLoginEvents;
   account_recovery_codes: AccountRecoveryCodes;
@@ -521,6 +558,8 @@ export interface DB {
   notification_outbox: NotificationOutbox;
   notification_preferences: NotificationPreferences;
   notification_room_mutes: NotificationRoomMutes;
+  pgmigrations: Pgmigrations;
+  product_snapshots: ProductSnapshots;
   push_subscriptions: PushSubscriptions;
   reserved_logins: ReservedLogins;
   room_bans: RoomBans;
@@ -536,7 +575,10 @@ export interface DB {
   room_server_mutes: RoomServerMutes;
   rooms: Rooms;
   sessions: Sessions;
+  user_activity_days: UserActivityDays;
   user_blocks: UserBlocks;
   user_notifications: UserNotifications;
   users: Users;
+  voice_sessions: VoiceSessions;
+  voiceroom_migration_guard: VoiceroomMigrationGuard;
 }

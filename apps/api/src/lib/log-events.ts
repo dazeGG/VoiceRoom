@@ -28,6 +28,7 @@ const LOG_EVENTS = Object.freeze({
 
   // Accounts and sessions.
   AUTH_SIGN_IN_RECORD_FAILED: 'auth.sign_in_record_failed',
+  ACCOUNT_ACTIVITY_RECORD_FAILED: 'account.activity_record_failed',
   ACCOUNT_DELETION_FAILED: 'account.deletion_failed',
   ACCOUNT_SESSION_VOICE_END_FAILED: 'account.session_voice_end_failed',
 
@@ -49,7 +50,9 @@ const LOG_EVENTS = Object.freeze({
   ROOM_OCCUPANCY_RETRY_FAILED: 'room.occupancy_retry_failed',
   ROOM_TYPING_FORWARD_FAILED: 'room.typing_forward_failed',
   ROOM_SUMMARY_RECIPIENTS_FAILED: 'room.summary_recipients_failed',
+  ROOM_SUMMARY_FLUSH_FAILED: 'room.summary_flush_failed',
   ROOM_INVITATION_EXPIRY_FAILED: 'room.invitation_expiry_failed',
+  ROOM_VOICE_SESSION_RECORD_FAILED: 'room.voice_session_record_failed',
 
   // LiveKit admission boundary.
   LIVEKIT_ADMISSION_DENIED: 'livekit.admission_denied',

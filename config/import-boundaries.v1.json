@@ -80,7 +80,10 @@
       "notification_dm_mutes": ["apps/api/src/domains/notifications/notification-preferences.repository.ts"],
       "notification_room_mutes": ["apps/api/src/domains/notifications/notification-preferences.repository.ts"],
       "push_subscriptions": ["apps/api/src/domains/notifications/push-subscription.repository.ts", "apps/api/src/domains/account/user.repository.ts"],
-      "content_reports": ["apps/api/src/domains/reports/report.repository.ts"]
+      "content_reports": ["apps/api/src/domains/reports/report.repository.ts"],
+      "voice_sessions": ["apps/api/src/domains/rooms/voice-session.repository.ts"],
+      "user_activity_days": ["apps/api/src/domains/account/activity.repository.ts"],
+      "product_snapshots": ["apps/api/src/domains/ops/product-snapshot.repository.ts"]
     },
     "crossDomainWriters": {
       "apps/api/src/domains/account/account-deletion.repository.ts": [
@@ -96,7 +99,9 @@
         "user_blocks",
         "notification_preferences",
         "notification_dm_mutes",
-        "notification_room_mutes"
+        "notification_room_mutes",
+        "voice_sessions",
+        "user_activity_days"
       ]
     },
     "ownerPathPrefixes": ["apps/api/src/migrations/"]

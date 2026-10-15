@@ -1,6 +1,6 @@
 {
   "name": "@voice-room/api",
-  "version": "2.8.7",
+  "version": "2.8.8",
   "private": true,
   "type": "module",
   "scripts": {
@@ -11,7 +11,7 @@
     "test:g05": "node --test test/livekit-boundary.test.ts",
     "db:migrate": "node src/scripts/migrate.ts up",
     "db:rollback": "node src/scripts/migrate.ts down",
-    "db:types": "kysely-codegen --dialect postgres --out-file src/platform/db/schema.ts --exclude-pattern \"{pgmigrations,voiceroom_migration_guard}\"",
+    "db:types": "kysely-codegen --dialect postgres --out-file src/platform/db/schema.ts --exclude-pattern \"{pgmigrations,voiceroom_migration_guard,analytics.*}\"",
     "pretest": "node test/require-test-database-url.ts"
   },
   "dependencies": {

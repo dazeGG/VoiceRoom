@@ -1,11 +1,13 @@
 // The in-memory voice roster of every room: who is in it, delivering legacy
-// room events to them, taking a peer out, and keeping the durable
-// active/empty marker of each room in step with the roster.
+// room events to them, taking a peer out, keeping the durable active/empty
+// marker of each room in step with the roster, and recording each finished
+// stay in voice.
 
 import type { RoomPeerMessage } from './legacy-events.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { publicPeer, type PresencePeer } from '../domains/rooms/room-views.ts';
+import type { FinishedVoiceSession, VoiceSessionRepository } from '../domains/rooms/voice-session.repository.ts';
 import { clearViewedScreenPeerReferences } from './room-runtime.ts';
 
 /** How the server reaches a peer's socket; closing it is the socket owner's business. */
@@ -45,12 +47,20 @@ export interface RoomPresenceDeps {
   logger(): Pick<Logger, 'error'>;
   occupancyRetry: { baseMs: number; maxMs: number };
   roster: { waitMs: number; pollMs: number };
+  /** Where finished stays in voice go; null while no database is installed. */
+  sessions?(): Pick<VoiceSessionRepository, 'recordSessions'> | null;
+  now?: () => number;
 }
 
 export function createRoomPresence(deps: RoomPresenceDeps) {
+  const now = deps.now ?? Date.now;
   const rooms = new Map<string, PresenceRoom>();
   const occupancyQueue = new Map<string, Promise<void>>();
   const occupancyRetries = new Map<string, { attempt: number; timer: ReturnType<typeof setTimeout> | null }>();
+  const sessionWrites = new Set<Promise<void>>();
+  // Set once the stays still open were recorded at shutdown, so a peer that
+  // leaves afterwards is not recorded twice.
+  let sessionsClosed = false;
 
   function room(roomId: string): PresenceRoom {
     let current = rooms.get(roomId);
@@ -134,6 +144,47 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
     return transition;
   }
 
+  function finishedSession(roomId: string, peer: RosterPeer, leftAt: number): FinishedVoiceSession | null {
+    if (!peer.joinedAt) return null;
+    return { roomId, userId: peer.accountUserId || null, joinedAt: peer.joinedAt, leftAt };
+  }
+
+  // A lost write costs one usage row, so it is logged rather than retried.
+  function recordSessions(sessions: FinishedVoiceSession[]): void {
+    const repository = deps.sessions?.();
+    if (!repository || sessions.length === 0) return;
+    const write = repository.recordSessions(sessions).catch((error) => {
+      deps
+        .logger()
+        .error(
+          { evt: LOG_EVENTS.ROOM_VOICE_SESSION_RECORD_FAILED, sessions: sessions.length, err: error },
+          'failed to record voice sessions'
+        );
+    });
+    sessionWrites.add(write);
+    void write.finally(() => sessionWrites.delete(write));
+  }
+
+  /**
+   * Records every stay still in the roster as ending now and waits for the
+   * writes in flight. The process is stopping: its roster dies with it.
+   */
+  async function recordOpenSessions(): Promise<void> {
+    if (!sessionsClosed) {
+      sessionsClosed = true;
+      const leftAt = now();
+      const open: FinishedVoiceSession[] = [];
+      for (const current of rooms.values()) {
+        for (const peer of current.peers.values()) {
+          const session = finishedSession(current.id, peer, leftAt);
+          if (session) open.push(session);
+        }
+      }
+      recordSessions(open);
+    }
+    await Promise.all([...sessionWrites]);
+  }
+
   function sendEvent(peer: RosterPeer | null | undefined, message: RoomPeerMessage): boolean {
     const sent = peer?.transport?.send(message) ?? false;
     if (!sent && peer) peer.closed = true;
@@ -171,6 +222,9 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
     current.closed = true;
     target.peers.delete(peerId);
     if (!current.replaced) {
+      // A reconnect keeps the seat (and its joinedAt), so this is the end of the stay.
+      const session = sessionsClosed ? null : finishedSession(roomId, current, now());
+      if (session) recordSessions([session]);
       publishClearedScreenViewers(target, peerId);
       broadcast(target, { type: 'peer-left', peerId, reason });
       deps.runtime()?.mirrorLegacyRoomEvent(roomId, { type: 'peer-left', peerId, reason });
@@ -231,6 +285,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
     rooms.clear();
     occupancyQueue.clear();
     clearOccupancyRetries();
+    sessionsClosed = false;
   }
 
   return {
@@ -246,6 +301,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
     prune,
     reset,
     clearOccupancyRetries,
+    recordOpenSessions,
     peerCount: () => [...rooms.values()].reduce((count, current) => count + current.peers.size, 0)
   };
 }
