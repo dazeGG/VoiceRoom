@@ -12,11 +12,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
-    # Only for a read-only analytics role (docs/SELF_HOSTING.md, "Продуктовая
-    # аналитика"): bind it to a private address such as a Tailscale IP, never a
-    # public one. The default keeps it on the host.
-    ports:
-      - "${POSTGRES_ANALYTICS_BIND_ADDRESS:-127.0.0.1}:${POSTGRES_ANALYTICS_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
