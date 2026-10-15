@@ -6,6 +6,8 @@ import {
   normalizeSessionToken,
   cleanName,
   cleanDisplayName,
+  cleanGuestName,
+  isReservedName,
   cleanStreamId,
   cleanScreenProfileId,
   cleanLiveKitUrl,
@@ -158,4 +160,32 @@ test('presence statuses expose and accept only the canonical vocabulary', () => 
   assert.equal(cleanPresenceStatus('Online'), '');
   assert.equal(cleanPresenceStatus(' away '), '');
   assert.equal(cleanPresenceStatus(null), '');
+});
+
+test('isReservedName catches the service name however it is spelled', () => {
+  for (const name of [
+    'VoiceRoom',
+    'voiceroom',
+    'Voice Room',
+    'voice_room_support',
+    'Администрация VoiceRoom',
+    'V0iceR00m',
+    'VоiсeRооm', // Cyrillic о and с
+    'Vóice Róom',
+    'Войс Рум',
+    'войсрум',
+    'Воисрум'
+  ]) {
+    assert.equal(isReservedName(name), true, name);
+  }
+  for (const name of ['', 'Voice', 'Room', 'Vova', 'voicemail room', 'Войска', 'Рустам', 'alice']) {
+    assert.equal(isReservedName(name), false, name);
+  }
+  assert.equal(isReservedName(null), false);
+});
+
+test('cleanGuestName turns a guest posing as the service into Guest', () => {
+  assert.equal(cleanGuestName('  Voice   Room '), 'Guest');
+  assert.equal(cleanGuestName('Маша'), 'Маша');
+  assert.equal(cleanGuestName(''), 'Guest');
 });

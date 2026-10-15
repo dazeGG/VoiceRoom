@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Check, MessageSquare, UserMinus, UserPlus } from '@lucide/svelte';
-  import { Avatar, Button, Ellipsis } from '$lib/shared/ui';
+  import { AccountBadge, Avatar, Button, Ellipsis } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
   import { getAvatarColor } from '$lib/visual/tokens';
   import type { ProfileCardProps } from './types';
@@ -48,7 +48,10 @@
     </span>
 
     <span class="profile-card-identity">
-      <Ellipsis class="profile-card-name" text={person.name} tag="span" />
+      <span class="profile-card-name-row">
+        <Ellipsis class="profile-card-name" text={person.name} tag="span" />
+        <AccountBadge userId={person.userId} size={18} />
+      </span>
       {#if person.login}
         <Ellipsis class="profile-card-handle" text={`@${person.login}`} tag="span" />
       {/if}
@@ -124,7 +127,14 @@
     gap: 2px;
   }
 
+  .profile-card-name-row {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+  }
+
   :global(.profile-card-name) {
+    min-width: 0;
     color: var(--vr-text);
     font-size: 19px;
     font-weight: 600;

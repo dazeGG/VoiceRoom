@@ -1,9 +1,9 @@
 <script lang="ts">
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
-  import { Bell, BellOff, Check, Settings, UserPlus, Users } from '@lucide/svelte';
+  import { Bell, BellOff, Check, LayoutDashboard, Settings, UserPlus, Users } from '@lucide/svelte';
   import { tick } from 'svelte';
   import type { AuthUser } from '$lib/api/auth';
-  import { Avatar, Badge, Button, Popover, PopoverMenuLabel } from '$lib/shared/ui';
+  import { AccountBadge, Avatar, Badge, Button, Popover, PopoverMenuLabel } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
   import { effectivePresenceStatus, normalizePresenceStatus, type PresenceStatus } from '$lib/shared/presence';
   import { friendName } from '../../model/lobby-format';
@@ -19,6 +19,9 @@
     onGoHome,
     onOpenPeople,
     onOpenSettings,
+    onOpenAdmin,
+    adminOpen = false,
+    adminBadge = 0,
     notificationsOpen = false,
     notificationUnreadCount = 0,
     onOpenNotifications,
@@ -37,6 +40,11 @@
     onGoHome: () => void;
     onOpenPeople: () => void;
     onOpenSettings: () => void;
+    /** Given to a platform administrator only. */
+    onOpenAdmin?: () => void;
+    adminOpen?: boolean;
+    /** Open reports, shown on the admin entry. */
+    adminBadge?: number;
     notificationsOpen?: boolean;
     notificationUnreadCount?: number;
     onOpenNotifications?: () => void;
@@ -212,10 +220,30 @@
 </script>
 
 <aside class="lv-side">
-  <button class="lv-side-head" type="button" title="Главная" onclick={onGoHome}>
-    <span class="lv-brand-mark" role="img" aria-label="Voice Room"></span>
-    <span class="lv-brand-name">Voice Room</span>
-  </button>
+  <div class="lv-side-top">
+    <button class="lv-side-head" type="button" title="Главная" onclick={onGoHome}>
+      <span class="lv-brand-mark" role="img" aria-label="Voice Room"></span>
+      <span class="lv-brand-name">Voice Room</span>
+    </button>
+    {#if onOpenAdmin}
+      <button
+        class="lobby-gear lv-admin-button"
+        class:is-open={adminOpen}
+        type="button"
+        title="Админка"
+        aria-label="Открыть админку"
+        aria-pressed={adminOpen}
+        onclick={onOpenAdmin}
+      >
+        <LayoutDashboard {...iconSm} aria-hidden="true" />
+        {#if adminBadge > 0}
+          <span class="lv-notification-count" aria-label={`открытых жалоб: ${adminBadge}`}
+            >{adminBadge > 99 ? '99+' : adminBadge}</span
+          >
+        {/if}
+      </button>
+    {/if}
+  </div>
 
   <div class="lv-side-scroll">
     <div class="lv-sec-head">
@@ -270,7 +298,7 @@
           <div class="lv-row-body">
             <div class="lv-notification-title">
               <div class="lv-row-name">
-                <EmojiText text={friendName(entry.user)} />
+                <EmojiText text={friendName(entry.user)} /><AccountBadge userId={entry.user.id} />
               </div>
               {#if friendNotificationsMuted}
                 <span
@@ -488,7 +516,23 @@
   .lv-notification-button {
     position: relative;
   }
-  .lv-notification-button.is-open {
+  .lv-side-top {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin: 8px 12px 4px 8px;
+    flex: none;
+  }
+  .lv-side-top :global(.lv-side-head) {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+  }
+  .lv-admin-button {
+    position: relative;
+  }
+  .lv-notification-button.is-open,
+  .lv-admin-button.is-open {
     background: var(--vr-surface-3);
     color: var(--vr-text);
   }

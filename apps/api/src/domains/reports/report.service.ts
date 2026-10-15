@@ -1,9 +1,12 @@
 // Reports to the service operator: filing one, and the platform
 // administrator's review that either removes the message for everyone or
-// dismisses the reports.
+// dismisses the reports. Both tell the administrators online that the open
+// reports changed.
 
+import type { AdminReportsEvent } from '@voice-room/shared/contracts/admin';
 import { REPORT_COMMENT_MAX_LENGTH, type AdminReport, type ReportBody } from '@voice-room/shared/contracts/reports';
-import { canReportDirectMessage, isPlatformAdmin } from './report.policy.ts';
+import { isPlatformAdmin } from '../admin/admin.policy.ts';
+import { canReportDirectMessage } from './report.policy.ts';
 import type { ReportRepository } from './report.repository.ts';
 
 export interface ReportServiceDeps {
@@ -15,6 +18,8 @@ export interface ReportServiceDeps {
   canReadRoom(roomId: string, userId: string): Promise<boolean>;
   removeRoomMessage(input: { roomId: string; messageId: string }): Promise<unknown>;
   removeDirectMessage(input: { senderId: string; recipientId: string; messageId: string }): Promise<unknown>;
+  /** Fire and forget: the administrators online learn of it; a failure there never fails the report. */
+  reportsChanged?(filed: AdminReportsEvent['filed']): void;
   now?: () => number;
 }
 
@@ -32,6 +37,7 @@ export function createReportService(deps: ReportServiceDeps) {
     const repository = deps.repository();
     const { target } = body;
     let roomId: string | null = null;
+    let roomName: string | null = null;
     if (target.kind === 'room_message') {
       const message = await repository.findRoomMessage(target.roomId, target.messageId);
       // A persistent room shows its chat to members only; a temporary room to
@@ -43,6 +49,7 @@ export function createReportService(deps: ReportServiceDeps) {
       if (!message || !visible) return { status: 'target_not_found' };
       if (message.authorUserId === reporterUserId) return { status: 'own_message' };
       roomId = target.roomId;
+      roomName = message.roomName || null;
     } else {
       const message = await repository.findDirectMessage(target.messageId);
       const access = canReportDirectMessage(message && !message.deleted ? message : null, reporterUserId);
@@ -57,7 +64,9 @@ export function createReportService(deps: ReportServiceDeps) {
       reason: body.reason,
       comment: (body.comment ?? '').trim().slice(0, REPORT_COMMENT_MAX_LENGTH)
     });
-    return { status: filed ? 'filed' : 'already_filed' };
+    if (!filed) return { status: 'already_filed' };
+    deps.reportsChanged?.({ reason: body.reason, targetKind: target.kind, roomName });
+    return { status: 'filed' };
   }
 
   async function listOpen(actorUserId: string): Promise<AdminReport[] | null> {
@@ -97,6 +106,7 @@ export function createReportService(deps: ReportServiceDeps) {
       resolvedByUserId: actorUserId,
       at: new Date(now())
     });
+    deps.reportsChanged?.(null);
     return { status: 'resolved', resolved };
   }
 

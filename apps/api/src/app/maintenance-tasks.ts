@@ -1,5 +1,5 @@
 // The periodic sweeps a running API performs (platform/maintenance.ts runs
-// them): idle rooms, product snapshots, sessions, sign-in history, finished
+// them): idle rooms, product and system snapshots, sessions, sign-in history, finished
 // account deletions, expired link previews and deleted-message retention.
 
 import type { MaintenanceTask } from '../platform/maintenance.ts';
@@ -7,6 +7,7 @@ import type { MaintenanceTask } from '../platform/maintenance.ts';
 export interface ApiMaintenanceDeps {
   pruneRooms(): Promise<unknown>;
   sampleProduct(): Promise<unknown>;
+  sampleSystem(): Promise<unknown>;
   users(): { pruneSessions(): Promise<unknown>; pruneLoginEvents(): Promise<unknown> };
   finalizeDueDeletions(): Promise<unknown>;
   linkPreviews(): { pruneExpired(): Promise<unknown> } | null;
@@ -27,6 +28,12 @@ export function apiMaintenanceTasks(deps: ApiMaintenanceDeps): MaintenanceTask[]
       label: 'product-snapshot',
       failureMessage: 'product snapshot timer failed',
       run: () => deps.sampleProduct()
+    },
+    {
+      name: 'system_snapshot',
+      label: 'system-snapshot',
+      failureMessage: 'system snapshot timer failed',
+      run: () => deps.sampleSystem()
     },
     {
       name: 'session_prune',

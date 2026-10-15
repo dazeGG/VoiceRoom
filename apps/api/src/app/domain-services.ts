@@ -8,7 +8,11 @@ import type { RoomPeerMessage } from '../realtime/legacy-events.ts';
 import { buildServerEnvelope } from '../realtime/envelope.ts';
 import { mentionUserIdsFromContent } from '@voice-room/shared/mentions';
 import { LOG_EVENTS } from '../lib/log-events.ts';
+import type { AdminReportsEvent, LiveNumbers } from '@voice-room/shared/contracts/admin';
+import packageJson from '../../package.json' with { type: 'json' };
 import { createAccountService } from '../domains/account/account.service.ts';
+import { createAdminService } from '../domains/admin/admin.service.ts';
+import { createAdminAccountsService } from '../domains/admin/admin-accounts.service.ts';
 import { createSessionCookies } from '../domains/account/session-cookie.ts';
 import type { createAdmissionService } from '../domains/admission/admission.service.ts';
 import { createAvatarsService } from '../domains/media/avatars.service.ts';
@@ -41,6 +45,10 @@ export interface DomainServiceDeps {
   logger: () => Logger;
   /** The admission service, built with the app (it needs the roster wait). */
   admission: () => ReturnType<typeof createAdmissionService> | null;
+  /** What the realtime layer holds right now: the admin panel shows it. */
+  liveNumbers: () => LiveNumbers;
+  /** The accounts with a socket open right now. */
+  liveAccountIds: () => string[];
 }
 
 export function createDomainServices(deps: DomainServiceDeps) {
@@ -202,6 +210,22 @@ export function createDomainServices(deps: DomainServiceDeps) {
     announceRoomUpdate: (roomId, room) => hub.roomLifecycle.announceRoomUpdate(roomId, room)
   });
 
+  // A change in the open reports reaches every administrator online; it never fails the report.
+  async function announceReports(filed: AdminReportsEvent['filed']): Promise<void> {
+    try {
+      const repository = services.getReportRepository();
+      if (!repository) return;
+      const openReports = await repository.countOpen();
+      for (const adminId of config.PLATFORM_ADMIN_USER_IDS) {
+        hub.broadcastToUser(adminId, { type: 'admin.reports', openReports, filed });
+      }
+    } catch (error) {
+      deps
+        .logger()
+        .error({ evt: LOG_EVENTS.REPORT_ANNOUNCE_FAILED, err: error }, 'failed to announce reports to administrators');
+    }
+  }
+
   const reports = createReportService({
     repository: () => {
       const repository = services.getReportRepository();
@@ -215,7 +239,47 @@ export function createDomainServices(deps: DomainServiceDeps) {
       if (!moderation) throw new Error('Message removal requires the database');
       return moderation.messageService.removeRoomMessageAsOperator(input);
     },
-    removeDirectMessage: (input) => directMessages.removeAsOperator(input)
+    removeDirectMessage: (input) => directMessages.removeAsOperator(input),
+    reportsChanged: (filed) => void announceReports(filed)
+  });
+
+  const admin = createAdminService({
+    adminUserIds: config.PLATFORM_ADMIN_USER_IDS,
+    stats: () => {
+      const repository = services.getAdminStatsRepository();
+      if (!repository) throw new Error('Admin statistics require the database');
+      return repository;
+    },
+    systemSnapshots: () => {
+      const repository = services.getSystemSnapshotRepository();
+      if (!repository) throw new Error('Admin statistics require the database');
+      return repository;
+    },
+    live: deps.liveNumbers,
+    livekitEnabled: () => deps.liveKit.config().enabled,
+    version: packageJson.version,
+    startedAt: Date.now()
+  });
+
+  const required = <T>(repository: T | null | undefined): T => {
+    if (!repository) throw new Error('The admin panel requires the database');
+    return repository;
+  };
+  const adminAccounts = createAdminAccountsService({
+    adminUserIds: config.PLATFORM_ADMIN_USER_IDS,
+    accounts: () => required(services.getAdminAccountsRepository()),
+    standing: () => required(services.getAccountStandingRepository()),
+    deletions: services.getAccountDeletionRepository,
+    actions: () => required(services.getAdminActionRepository()),
+    onlineUserIds: deps.liveAccountIds,
+    endSessionConnections: (input) => hub.accountLifecycle.endSessionConnections(input),
+    profileChanged: async (userId) => {
+      const user = await services.getUserStore().getUserById(userId);
+      if (!user) return;
+      hub.roomLifecycle.refreshActiveProfile(user);
+      await hub.broadcastUserProfileToFriends(user, { log: deps.logger() });
+    },
+    logger: () => deps.logger()
   });
 
   const desktopReleaseService = createDesktopReleaseService({
@@ -238,6 +302,8 @@ export function createDomainServices(deps: DomainServiceDeps) {
     notificationSettings,
     avatars: avatarsService,
     reports,
+    admin,
+    adminAccounts,
     desktopRelease: desktopReleaseService
   };
 }

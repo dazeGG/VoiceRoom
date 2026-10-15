@@ -25,7 +25,13 @@ import { createLogger, hashIp } from '../lib/logger.ts';
 import { getClientIp } from '../lib/rate-limit.ts';
 import { createRateLimits } from './rate-limits.ts';
 import { createDomainServices } from './domain-services.ts';
-import { observeMaintenance, recordCredentialRevokeCleanupFailure, renderPrometheus } from '../lib/metrics.ts';
+import {
+  httpTotals,
+  observeMaintenance,
+  recordCredentialRevokeCleanupFailure,
+  renderPrometheus
+} from '../lib/metrics.ts';
+import { createHostProbe } from '../platform/host-probe.ts';
 import { createFastifyApp } from '../platform/http/fastify-app.ts';
 import { asHttpServer, type ApiServer } from '../platform/http/http-server.ts';
 export type { ApiServer };
@@ -33,6 +39,7 @@ export type { ApiServer };
 import { createAdmissionService } from '../domains/admission/admission.service.ts';
 import { createActivityTracker } from '../domains/account/activity.service.ts';
 import { createProductSampler } from '../domains/ops/product-snapshot.service.ts';
+import { createSystemSampler } from '../domains/ops/system-snapshot.service.ts';
 import { MAX_UPLOAD_BYTES } from '../domains/media/media.service.ts';
 
 type Logger = ReturnType<typeof createLogger>;
@@ -64,6 +71,27 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     removeAvatar: (key, log) => domain.avatars.removeFile(key, log)
   });
 
+  /** The accounts with an open realtime socket, once per socket. */
+  function liveAccountIds(): string[] {
+    const accountIds: string[] = [];
+    for (const connection of hub.registry()?.connections?.values?.() || []) {
+      if (connection.userId) accountIds.push(connection.userId);
+    }
+    return accountIds;
+  }
+
+  function liveVoice() {
+    return {
+      guestConnections: hub.activeGuestConnections(),
+      voicePeers: hub.presence.peerCount(),
+      voiceRooms: [...hub.presenceRooms.values()].filter((room) => room.peers.size > 0).length
+    };
+  }
+
+  function liveNumbers() {
+    return { ...liveVoice(), onlineAccounts: new Set(liveAccountIds()).size };
+  }
+
   function resolveCursorHmacKeys(options: Parameters<typeof resolveCursorHmacKeysFor>[0]): string {
     return resolveCursorHmacKeysFor({ fallbackGateSecret: config.LIVEKIT_GATE_SECRET, ...options });
   }
@@ -94,7 +122,9 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     liveKit,
     limits,
     logger: () => getProcessLogger(),
-    admission: () => admissionService
+    admission: () => admissionService,
+    liveNumbers,
+    liveAccountIds: () => [...new Set(liveAccountIds())]
   });
   const { sessionCookies } = domain;
 
@@ -125,20 +155,18 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
   });
   const resolveSessionUser = sessions.resolve;
   const productSampler = createProductSampler({
-    live: () => {
-      const accountIds: string[] = [];
-      for (const connection of hub.registry()?.connections?.values?.() || []) {
-        if (connection.userId) accountIds.push(connection.userId);
-      }
-      return {
-        accountIds,
-        guestConnections: hub.activeGuestConnections(),
-        voicePeers: hub.presence.peerCount(),
-        voiceRooms: [...hub.presenceRooms.values()].filter((room) => room.peers.size > 0).length
-      };
-    },
+    live: () => ({ ...liveVoice(), accountIds: liveAccountIds() }),
     snapshots: services.getProductSnapshotRepository,
     activity
+  });
+  const systemSampler = createSystemSampler({
+    host: createHostProbe(),
+    http: httpTotals,
+    live: () => ({
+      ...liveVoice(),
+      wsConnections: hub.registry()?.connections?.size || 0
+    }),
+    snapshots: services.getSystemSnapshotRepository
   });
 
   function startPruneTimer(server: ApiServer, logger: Logger = getProcessLogger()) {
@@ -151,6 +179,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
       tasks: apiMaintenanceTasks({
         pruneRooms: () => hub.presence.prune(),
         sampleProduct: () => productSampler.sample(),
+        sampleSystem: () => systemSampler.sample(),
         users: services.getUserStore,
         finalizeDueDeletions: () => hub.accountLifecycle.finalizeDueDeletions(),
         linkPreviews: services.getLinkPreviewService,

@@ -13,6 +13,7 @@ export type { AvatarCropDialogProps, AvatarCropShape } from './AvatarCropDialog'
 export { Button } from './Button';
 export type { ButtonProps } from './Button';
 export { Badge } from './Badge';
+export { AccountBadge } from './AccountBadge';
 export type { BadgeProps } from './Badge';
 export { Switch } from './Switch';
 export type { SwitchProps } from './Switch';

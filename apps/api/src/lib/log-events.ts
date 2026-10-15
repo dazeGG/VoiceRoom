@@ -32,6 +32,10 @@ const LOG_EVENTS = Object.freeze({
   ACCOUNT_DELETION_FAILED: 'account.deletion_failed',
   ACCOUNT_SESSION_VOICE_END_FAILED: 'account.session_voice_end_failed',
 
+  // Reports to the operator.
+  REPORT_ANNOUNCE_FAILED: 'report.announce_failed',
+  ADMIN_ACTION_LOG_FAILED: 'admin.action_log_failed',
+
   // Realtime transport.
   WS_CONNECTED: 'ws.connected',
   WS_CLOSED: 'ws.closed',

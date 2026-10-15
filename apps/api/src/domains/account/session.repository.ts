@@ -12,6 +12,7 @@ import {
   SESSION_TOUCH_INTERVAL_MS,
   UUID_PATTERN,
   type UserStoreLogger,
+  activeBlock,
   cleanLocationLabel,
   cleanUserAgent,
   createSessionToken,
@@ -95,6 +96,10 @@ export function createSessionRepository({
       .where('s.expires_at', '>', toDate(now))
       .executeTakeFirst();
     if (!row) return null;
+    const user = mapUser(row)!;
+    // A block ends the account's sessions at once; this keeps one that
+    // slipped through (opened in the same instant) from working either.
+    if (activeBlock(user, now)) return null;
 
     if (toMillis(row.session_last_seen_at) <= now - SESSION_TOUCH_INTERVAL_MS) {
       void touchSession({ tokenHash, now, userAgent, resolveLocation }).catch((error: unknown) =>
@@ -109,7 +114,7 @@ export function createSessionRepository({
         token,
         tokenHash
       },
-      user: mapUser(row)
+      user
     };
   }
 

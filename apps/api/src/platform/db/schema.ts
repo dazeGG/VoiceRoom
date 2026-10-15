@@ -49,6 +49,16 @@ export interface AccountRecoveryCodes {
   user_id: string;
 }
 
+export interface AdminActions {
+  action: string;
+  admin_user_id: string;
+  created_at: Generated<Timestamp>;
+  details: Generated<Json>;
+  id: Generated<string>;
+  reason: Generated<string>;
+  target_user_id: string;
+}
+
 export interface ContentReports {
   comment: Generated<string>;
   created_at: Generated<Timestamp>;
@@ -472,6 +482,26 @@ export interface Sessions {
   user_id: string;
 }
 
+export interface SystemSnapshots {
+  api_rss_bytes: Generated<Int8>;
+  at: Timestamp;
+  cpu_pct: number | null;
+  db_bytes: Int8 | null;
+  disk_total_bytes: Int8 | null;
+  disk_used_bytes: Int8 | null;
+  event_loop_p99_ms: Generated<number>;
+  guest_connections: Generated<number>;
+  http_5xx: Generated<number>;
+  http_avg_ms: number | null;
+  http_requests: Generated<number>;
+  load1: Generated<number>;
+  mem_total_bytes: Generated<Int8>;
+  mem_used_bytes: Generated<Int8>;
+  voice_peers: Generated<number>;
+  voice_rooms: Generated<number>;
+  ws_connections: Generated<number>;
+}
+
 export interface UserActivityDays {
   browser: Generated<boolean>;
   day: Timestamp;
@@ -505,6 +535,10 @@ export interface Users {
   avatar_accent: string | null;
   avatar_color_key: Generated<string>;
   avatar_key: string | null;
+  badge: string | null;
+  block_reason: Generated<string>;
+  blocked_at: Timestamp | null;
+  blocked_until: Timestamp | null;
   created_at: Generated<Timestamp>;
   deleted_at: Timestamp | null;
   deletion_requested_at: Timestamp | null;
@@ -538,6 +572,7 @@ export interface VoiceSessions {
 export interface DB {
   account_login_events: AccountLoginEvents;
   account_recovery_codes: AccountRecoveryCodes;
+  admin_actions: AdminActions;
   content_reports: ContentReports;
   direct_message_reaction_revisions: DirectMessageReactionRevisions;
   direct_message_reactions: DirectMessageReactions;
@@ -575,6 +610,7 @@ export interface DB {
   room_server_mutes: RoomServerMutes;
   rooms: Rooms;
   sessions: Sessions;
+  system_snapshots: SystemSnapshots;
   user_activity_days: UserActivityDays;
   user_blocks: UserBlocks;
   user_notifications: UserNotifications;

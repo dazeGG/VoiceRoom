@@ -54,12 +54,14 @@
       "users": [
         "apps/api/src/domains/account/user.repository.ts",
         "apps/api/src/domains/account/session.repository.ts",
+        "apps/api/src/domains/account/account-standing.repository.ts",
         "apps/api/src/domains/notifications/notification-preferences.repository.ts"
       ],
       "sessions": [
         "apps/api/src/domains/account/session.repository.ts",
         "apps/api/src/domains/account/user.repository.ts",
-        "apps/api/src/domains/account/login-event.repository.ts"
+        "apps/api/src/domains/account/login-event.repository.ts",
+        "apps/api/src/domains/account/account-standing.repository.ts"
       ],
       "friend_requests": [
         "apps/api/src/domains/social/friend-request.repository.ts",
@@ -79,11 +81,13 @@
       "notification_preferences": ["apps/api/src/domains/notifications/notification-preferences.repository.ts"],
       "notification_dm_mutes": ["apps/api/src/domains/notifications/notification-preferences.repository.ts"],
       "notification_room_mutes": ["apps/api/src/domains/notifications/notification-preferences.repository.ts"],
-      "push_subscriptions": ["apps/api/src/domains/notifications/push-subscription.repository.ts", "apps/api/src/domains/account/user.repository.ts"],
+      "push_subscriptions": ["apps/api/src/domains/notifications/push-subscription.repository.ts", "apps/api/src/domains/account/user.repository.ts", "apps/api/src/domains/account/account-standing.repository.ts"],
       "content_reports": ["apps/api/src/domains/reports/report.repository.ts"],
       "voice_sessions": ["apps/api/src/domains/rooms/voice-session.repository.ts"],
       "user_activity_days": ["apps/api/src/domains/account/activity.repository.ts"],
-      "product_snapshots": ["apps/api/src/domains/ops/product-snapshot.repository.ts"]
+      "product_snapshots": ["apps/api/src/domains/ops/product-snapshot.repository.ts"],
+      "system_snapshots": ["apps/api/src/domains/ops/system-snapshot.repository.ts"],
+      "admin_actions": ["apps/api/src/domains/admin/admin-action.repository.ts"]
     },
     "crossDomainWriters": {
       "apps/api/src/domains/account/account-deletion.repository.ts": [

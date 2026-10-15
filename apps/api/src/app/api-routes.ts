@@ -28,6 +28,7 @@ import { registerNotificationSettingsRoutes } from '../domains/notifications/not
 import { registerOpsRoutes } from '../domains/ops/ops.routes.ts';
 import { registerPeerModerationRoutes } from '../domains/rooms/peer-moderation.routes.ts';
 import { registerReportRoutes } from '../domains/reports/reports.routes.ts';
+import { registerAdminRoutes } from '../domains/admin/admin.routes.ts';
 import { registerRoomRoutes } from '../domains/rooms/rooms.routes.ts';
 import { registerFriendsRoutes } from '../domains/social/friends.routes.ts';
 
@@ -55,6 +56,8 @@ export interface ApiRouteDeps {
     avatars: Parameters<typeof registerAvatarRoutes>[2]['avatars'];
     account: Parameters<typeof registerAccountRoutes>[2]['account'];
     reports: Parameters<typeof registerReportRoutes>[2]['reports'];
+    admin: Parameters<typeof registerAdminRoutes>[2]['admin'];
+    adminAccounts: Parameters<typeof registerAdminRoutes>[2]['accounts'];
     desktopRelease: OpsRouteDeps['desktopRelease'];
   };
   limits: RateLimits;
@@ -172,6 +175,10 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
 
   if (deps.services.getReportRepository()) {
     registerReportRoutes(app, ctx, { reports: deps.domain.reports, limiter: deps.limits.reports });
+  }
+
+  if (deps.services.getAdminStatsRepository()) {
+    registerAdminRoutes(app, ctx, { admin: deps.domain.admin, accounts: deps.domain.adminAccounts });
   }
 
   const media = deps.services.getMediaServices();

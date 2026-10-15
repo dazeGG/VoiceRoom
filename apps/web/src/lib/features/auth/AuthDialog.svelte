@@ -11,7 +11,7 @@
   import { login, recoverAccount, register, restoreAccount, type AuthUser } from '$lib/api/auth';
   import { ApiError } from '$lib/api/client';
   import { iconMd } from '$lib/shared/ui/icons';
-  import { LOGIN_HINT, PASSWORD_MIN_LENGTH, isValidPassword, normalizeLogin } from './account';
+  import { LOGIN_HINT, PASSWORD_MIN_LENGTH, blockedMessage, isValidPassword, normalizeLogin } from './account';
   import { session, setUser } from './session.svelte';
   import PasswordField from './PasswordField.svelte';
   import './styles/auth.css';
@@ -154,6 +154,10 @@
         leaving = await finish(user);
       }
     } catch (cause) {
+      if (cause instanceof ApiError && cause.code === 'account_blocked') {
+        error = blockedMessage(cause.details);
+        return;
+      }
       if (isLogin && cause instanceof ApiError && cause.code === 'account_deletion_pending') {
         pendingDeletionAt = Number(cause.details.deletionScheduledFor) || null;
         return;
@@ -174,7 +178,12 @@
       pendingDeletionAt = null;
       leaving = await finish(user);
     } catch (cause) {
-      error = cause instanceof Error && cause.message ? cause.message : 'Не удалось восстановить аккаунт';
+      error =
+        cause instanceof ApiError && cause.code === 'account_blocked'
+          ? blockedMessage(cause.details)
+          : cause instanceof Error && cause.message
+            ? cause.message
+            : 'Не удалось восстановить аккаунт';
     } finally {
       if (!leaving) submitting = false;
     }

@@ -24,7 +24,7 @@
   import ChatText from '$lib/shared/components/ChatText.svelte';
   import type { ProfileCardPerson } from '$lib/shared/components/profile-card';
   import type { PresenceStatus } from '$lib/shared/presence';
-  import { Avatar } from '$lib/shared/ui';
+  import { AccountBadge, Avatar } from '$lib/shared/ui';
   import { copyText } from '$lib/shared/utils/clipboard';
   import { openProfileCardFor } from '../../../../../entities/profile-card/profile-card-ui.svelte';
   import { formatDayLabel, formatTime, friendName, isSameDay } from '../../../model/lobby-format';
@@ -358,7 +358,9 @@
                 aria-haspopup="dialog"
                 aria-label={group.fromMe ? 'Ваш профиль' : `Профиль ${peerName}`}
                 onclick={(event) => openProfile(event, group.fromMe)}
-                ><EmojiText text={group.fromMe ? selfName : peerName} /></button
+                ><EmojiText text={group.fromMe ? selfName : peerName} /><AccountBadge
+                  userId={group.fromMe ? selfId : peerId}
+                /></button
               >
               <time class="chat-msg-time" datetime={new Date(group.bubbles[0].createdAt).toISOString()}
                 >{formatTime(group.bubbles[0].createdAt)}</time

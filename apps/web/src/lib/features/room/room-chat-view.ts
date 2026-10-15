@@ -13,6 +13,8 @@ export interface ChatGroup {
   key: string;
   name: string;
   peerId: string;
+  /** The author's account, for the mark by the name; null for a guest. */
+  authorUserId: string | null;
   self: boolean;
   avatarBackground: string;
   avatarForeground: string;
@@ -56,6 +58,7 @@ export function buildChatDays(items: ChatMessage[], isOwn: (message: ChatMessage
       key: message.id,
       name: author,
       peerId: message.peerId,
+      authorUserId: message.authorUserId || null,
       self,
       avatarBackground: avatar.background,
       avatarForeground: avatar.foreground,

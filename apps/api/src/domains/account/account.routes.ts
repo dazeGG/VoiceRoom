@@ -35,7 +35,7 @@ import { cleanDisplayName, normalizeLogin } from '@voice-room/shared/validation'
 import type { ApiContext, ResolvedSession, SessionRecord, SessionUser } from '../../app/context.ts';
 import { selfUser } from './user-records.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
-import type { AccountService, Device, OpenedSession } from './account.service.ts';
+import type { AccountService, Blocked, Device, OpenedSession } from './account.service.ts';
 
 const answers = <Success>(success: Success) => ({ 200: success, '4xx': AccountFailure, 503: AccountFailure });
 
@@ -45,6 +45,7 @@ const ACCOUNT_NOT_FOUND = failure('Аккаунт не найден', { code: 'a
 const SHORT_PASSWORD = failure('Пароль должен быть не короче 8 символов', { code: 'password_too_short' });
 const WRONG_CREDENTIALS = failure('Неверный логин или пароль', { code: 'invalid_credentials' });
 const WRONG_PASSWORD = failure('Неверный пароль', { code: 'wrong_password' });
+const RESERVED_NAME = failure('Это имя зарезервировано за VoiceRoom', { code: 'reserved_name' });
 const DELETION_UNAVAILABLE = failure('Удаление аккаунта сейчас недоступно', { code: 'account_deletion_unavailable' });
 
 export interface AccountRoutesDeps {
@@ -99,6 +100,15 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
 
   const device = (request: FastifyRequest) => () => deps.device(request.raw);
 
+  // The right password on a blocked account: it is told why and until when.
+  function blocked(reply: FastifyReply, result: Blocked) {
+    return reply.code(403).send({
+      ...failure('Аккаунт заблокирован', { code: 'account_blocked' }),
+      blockedUntil: result.blockedUntil,
+      blockReason: result.blockReason
+    });
+  }
+
   // --- sign-in and recovery ---------------------------------------------------
 
   app.post(
@@ -132,6 +142,8 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
           return reply.code(400).send(failure('Пароли не совпадают', { code: 'passwords_mismatch' }));
         case 'login_taken':
           return reply.code(409).send(failure('Этот логин уже занят', { code: 'login_taken' }));
+        case 'reserved_name':
+          return reply.code(400).send(RESERVED_NAME);
         case 'signed_in':
           return openSession(reply, 201, result);
       }
@@ -156,6 +168,8 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
           return reply.code(401).send(WRONG_CREDENTIALS);
         case 'throttled':
           return tooMany(reply, result.retryAfterSeconds);
+        case 'blocked':
+          return blocked(reply, result);
         case 'deletion_pending':
           return reply.code(409).send({
             ...failure('Аккаунт ожидает удаления', { code: 'account_deletion_pending' }),
@@ -198,6 +212,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
       if (result.status === 'invalid_new_password') return reply.code(400).send(SHORT_PASSWORD);
       if (result.status === 'invalid_code')
         return reply.code(401).send(failure('Неверный логин или код восстановления', { code: 'invalid_recovery' }));
+      if (result.status === 'blocked') return blocked(reply, result);
       return openSession(reply, 200, result, { recoveryCodes: { remaining: result.remaining } });
     }
   );
@@ -218,6 +233,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
       if (result.status === 'expired')
         return reply.code(410).send(failure('Аккаунт уже удалён', { code: 'account_already_deleted' }));
       if (result.status === 'invalid_credentials') return reply.code(401).send(WRONG_CREDENTIALS);
+      if (result.status === 'blocked') return blocked(reply, result);
       return openSession(reply, 200, result);
     }
   );
@@ -235,6 +251,7 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
       if (!me) return reply;
       const result = await account.updateProfile(me.user.id, cleanDisplayName(request.body.displayName), request.log);
       if (result.status === 'not_found') return reply.code(404).send(ACCOUNT_NOT_FOUND);
+      if (result.status === 'reserved_name') return reply.code(400).send(RESERVED_NAME);
       return { ok: true as const, user: result.user };
     }
   );

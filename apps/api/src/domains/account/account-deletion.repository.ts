@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
+import type { Json } from '../../platform/db/schema.ts';
 import { verifyPassword } from '../../lib/password.ts';
 import {
   ACCOUNT_DELETION_GRACE_MS,
@@ -21,9 +22,12 @@ type UserRow = {
   password_hash: string;
   avatar_key: string | null;
   avatar_accent: string | null;
-  metadata: { deletedProfile?: DeletedProfile } | null;
+  metadata: { deletedProfile?: DeletedProfile; deletionByAdmin?: string } | null;
   deletion_requested_at: Date | string | null;
   deleted_at: Date | string | null;
+  blocked_at: Date | string | null;
+  blocked_until: Date | string | null;
+  block_reason: string;
 };
 
 type OwnedRoomRow = {
@@ -38,7 +42,15 @@ type OwnedRoomRow = {
 export type DeletionRequest =
   { status: 'not_found' | 'invalid_password' } | { status: 'already_requested' | 'requested'; scheduledFor: number };
 
-export type AccountRestore = { status: 'invalid' | 'expired'; userId: null } | { status: 'restored'; userId: string };
+export type AccountRestore =
+  | { status: 'invalid' | 'expired'; userId: null }
+  | { status: 'blocked'; userId: null; blockedUntil: number | null; blockReason: string }
+  | { status: 'restored'; userId: string };
+
+export type OperatorDeletion =
+  { status: 'not_found' } | { status: 'already_requested' | 'requested'; scheduledFor: number };
+
+export type DeletionCancel = { status: 'not_found' | 'not_by_admin' } | { status: 'cancelled' };
 
 export type DeletionFinish =
   | { status: 'not_due' }
@@ -156,6 +168,46 @@ function removePersonalData(trx: Database, userId: string) {
   ]);
 }
 
+// Hides the account while it waits: the anonymous name everywhere, the
+// profile kept aside for a restore, every session and push subscription gone.
+async function hideForDeletion(trx: Database, user: UserRow, now: number, adminUserId: string | null = null) {
+  const deletedProfile = {
+    displayName: user.display_name || '',
+    avatarKey: user.avatar_key || null,
+    avatarAccent: user.avatar_accent || null
+  };
+  const kept = sql<Json>`jsonb_set(metadata, '{deletedProfile}', ${JSON.stringify(deletedProfile)}::jsonb, true)`;
+  await trx
+    .updateTable('users')
+    .set({
+      deletion_requested_at: toDate(now),
+      display_name: DELETED_ACCOUNT_NAME,
+      avatar_key: null,
+      avatar_accent: null,
+      metadata: adminUserId
+        ? sql<Json>`jsonb_set(${kept}, '{deletionByAdmin}', to_jsonb(${adminUserId}::text), true)`
+        : kept,
+      updated_at: toDate(now)
+    })
+    .where('id', '=', user.id)
+    .execute();
+  await trx.deleteFrom('sessions').where('user_id', '=', user.id).execute();
+  await trx.deleteFrom('push_subscriptions').where('user_id', '=', user.id).execute();
+}
+
+// The profile a waiting account kept aside, back in place.
+function restoredProfile(user: UserRow, now: number) {
+  const profile: DeletedProfile = user.metadata?.deletedProfile || {};
+  return {
+    deletion_requested_at: null,
+    display_name: typeof profile.displayName === 'string' ? profile.displayName : '',
+    avatar_key: profile.avatarKey || null,
+    avatar_accent: profile.avatarAccent || null,
+    metadata: sql<Json>`metadata - 'deletedProfile' - 'deletionByAdmin'`,
+    updated_at: toDate(now)
+  };
+}
+
 function lockUser(trx: Database, column: 'id' | 'login', value: string) {
   return trx.selectFrom('users').selectAll().where(column, '=', value).forUpdate().executeTakeFirst() as Promise<
     UserRow | undefined
@@ -210,27 +262,63 @@ function createAccountDeletionRepository({
         };
       }
       if (!(await verifyPassword(currentPassword, user.password_hash))) return { status: 'invalid_password' };
+      await hideForDeletion(trx, user, now);
+      return { status: 'requested', scheduledFor: now + ACCOUNT_DELETION_GRACE_MS };
+    });
+  }
 
-      const deletedProfile = {
-        displayName: user.display_name || '',
-        avatarKey: user.avatar_key || null,
-        avatarAccent: user.avatar_accent || null
-      };
+  // The platform administrator's deletion: the same grace period, but the
+  // account is blocked for good with the reason, so its owner cannot restore
+  // it; only an administrator can call it off.
+  async function requestDeletionByOperator({
+    userId,
+    adminUserId,
+    reason,
+    now = clock()
+  }: {
+    userId: string;
+    adminUserId: string;
+    reason: string;
+    now?: number;
+  }): Promise<OperatorDeletion> {
+    return db.transaction().execute(async (trx): Promise<OperatorDeletion> => {
+      const user = await lockUser(trx, 'id', userId);
+      if (!user || user.deleted_at) return { status: 'not_found' };
+      if (user.deletion_requested_at) {
+        return {
+          status: 'already_requested',
+          scheduledFor: (toMillis(user.deletion_requested_at) as number) + ACCOUNT_DELETION_GRACE_MS
+        };
+      }
+      await hideForDeletion(trx, user, now, adminUserId);
       await trx
         .updateTable('users')
-        .set({
-          deletion_requested_at: toDate(now),
-          display_name: DELETED_ACCOUNT_NAME,
-          avatar_key: null,
-          avatar_accent: null,
-          metadata: sql`jsonb_set(metadata, '{deletedProfile}', ${JSON.stringify(deletedProfile)}::jsonb, true)`,
-          updated_at: toDate(now)
-        })
+        .set({ blocked_at: toDate(now), blocked_until: null, block_reason: reason })
         .where('id', '=', userId)
         .execute();
-      await trx.deleteFrom('sessions').where('user_id', '=', userId).execute();
-      await trx.deleteFrom('push_subscriptions').where('user_id', '=', userId).execute();
       return { status: 'requested', scheduledFor: now + ACCOUNT_DELETION_GRACE_MS };
+    });
+  }
+
+  // Calls off an administrator's deletion: the profile comes back and the
+  // block the deletion set is lifted. A deletion its owner asked for stays theirs.
+  async function cancelOperatorDeletion({
+    userId,
+    now = clock()
+  }: {
+    userId: string;
+    now?: number;
+  }): Promise<DeletionCancel> {
+    return db.transaction().execute(async (trx): Promise<DeletionCancel> => {
+      const user = await lockUser(trx, 'id', userId);
+      if (!user || user.deleted_at || !user.deletion_requested_at) return { status: 'not_found' };
+      if (!user.metadata?.deletionByAdmin) return { status: 'not_by_admin' };
+      await trx
+        .updateTable('users')
+        .set({ ...restoredProfile(user, now), blocked_at: null, blocked_until: null, block_reason: '' })
+        .where('id', '=', user.id)
+        .execute();
+      return { status: 'cancelled' };
     });
   }
 
@@ -252,20 +340,11 @@ function createAccountDeletionRepository({
       if (!pending || !passwordMatches) return { status: 'invalid', userId: null };
       if ((toMillis(user.deletion_requested_at) as number) + ACCOUNT_DELETION_GRACE_MS <= now)
         return { status: 'expired', userId: null };
+      const blockedUntil = user.blocked_until ? (toMillis(user.blocked_until) as number) : null;
+      if (user.blocked_at && (blockedUntil === null || blockedUntil > now))
+        return { status: 'blocked', userId: null, blockedUntil, blockReason: user.block_reason || '' };
 
-      const profile: DeletedProfile = user.metadata?.deletedProfile || {};
-      await trx
-        .updateTable('users')
-        .set({
-          deletion_requested_at: null,
-          display_name: typeof profile.displayName === 'string' ? profile.displayName : '',
-          avatar_key: profile.avatarKey || null,
-          avatar_accent: profile.avatarAccent || null,
-          metadata: sql`metadata - 'deletedProfile'`,
-          updated_at: toDate(now)
-        })
-        .where('id', '=', user.id)
-        .execute();
+      await trx.updateTable('users').set(restoredProfile(user, now)).where('id', '=', user.id).execute();
       return { status: 'restored', userId: user.id };
     });
   }
@@ -369,11 +448,13 @@ function createAccountDeletionRepository({
   }
 
   return Object.freeze({
+    cancelOperatorDeletion,
     finalizeDeletion,
     isLoginReserved,
     listDueDeletions,
     previewDeletion,
     requestDeletion,
+    requestDeletionByOperator,
     restoreAccount
   });
 }
