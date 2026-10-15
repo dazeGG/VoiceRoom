@@ -150,7 +150,8 @@ function removePersonalData(trx: Database, userId: string) {
     trx.deleteFrom('push_subscriptions').where('user_id', '=', userId).execute(),
     trx.deleteFrom('sessions').where('user_id', '=', userId).execute(),
     trx.deleteFrom('account_recovery_codes').where('user_id', '=', userId).execute(),
-    trx.deleteFrom('account_login_events').where('user_id', '=', userId).execute()
+    trx.deleteFrom('account_login_events').where('user_id', '=', userId).execute(),
+    trx.deleteFrom('voice_sessions').where('user_id', '=', userId).execute()
   ]);
 }
 

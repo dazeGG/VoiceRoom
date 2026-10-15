@@ -498,6 +498,14 @@ export interface Users {
   updated_at: Generated<Timestamp>;
 }
 
+export interface VoiceSessions {
+  id: Generated<string>;
+  joined_at: Timestamp;
+  left_at: Timestamp;
+  room_id: string;
+  user_id: string | null;
+}
+
 export interface DB {
   account_login_events: AccountLoginEvents;
   account_recovery_codes: AccountRecoveryCodes;
@@ -539,4 +547,5 @@ export interface DB {
   user_blocks: UserBlocks;
   user_notifications: UserNotifications;
   users: Users;
+  voice_sessions: VoiceSessions;
 }

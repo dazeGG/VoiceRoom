@@ -1,13 +1,19 @@
 // Branch-by-branch proofs for the in-memory voice roster (realtime/room-presence.ts):
 // attaching stored rooms, delivering events, closing seats only from their
-// own transport, the serialized occupancy writes with retry, the roster wait
-// and the idle-room sweep.
+// own transport, the serialized occupancy writes with retry, the roster wait,
+// the idle-room sweep and the record of each finished stay in voice.
 
 import type { RoomPeerMessage } from '../src/realtime/legacy-events.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createRoomPresence, type OccupancyStore, type RosterPeer } from '../src/realtime/room-presence.ts';
+import {
+  createRoomPresence,
+  type OccupancyStore,
+  type RoomPresenceDeps,
+  type RosterPeer
+} from '../src/realtime/room-presence.ts';
+import type { FinishedVoiceSession } from '../src/domains/rooms/voice-session.repository.ts';
 import { fake, recordingLogger } from './fakes/index.ts';
 
 /** A roster seat with just an id (and a transport when a test sends to it). */
@@ -33,13 +39,17 @@ type HarnessOptions = {
   runtime?: boolean;
   retry?: { baseMs: number; maxMs: number };
   roster?: { waitMs: number; pollMs: number };
+  sessions?: RoomPresenceDeps['sessions'];
+  now?: () => number;
 };
 
 function harness({
   store = {},
   runtime = true,
   retry = { baseMs: 1, maxMs: 4 },
-  roster = { waitMs: 30, pollMs: 5 }
+  roster = { waitMs: 30, pollMs: 5 },
+  sessions,
+  now
 }: HarnessOptions = {}) {
   const logger = recordingLogger();
   const calls = {
@@ -74,9 +84,25 @@ function harness({
         : null,
     logger: () => logger,
     occupancyRetry: retry,
-    roster
+    roster,
+    sessions,
+    now
   });
   return { calls, presence };
+}
+
+/** A voice session sink that keeps what it was given. */
+function sessionSink({ fails = false } = {}) {
+  const recorded: FinishedVoiceSession[][] = [];
+  return {
+    recorded,
+    sessions: () => ({
+      async recordSessions(batch: FinishedVoiceSession[]) {
+        if (fails) throw new Error('db down');
+        recorded.push(batch);
+      }
+    })
+  };
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 20));
@@ -239,4 +265,63 @@ test('the idle sweep reconciles live rooms first and forgets rooms the store dro
   await presence.prune(1000);
   assert.deepEqual(order, ['active:kept', 'prune']);
   assert.deepEqual([...presence.rooms.keys()], ['kept']);
+});
+
+test('a seat that leaves is recorded as one finished stay; an account keeps its id and a guest has none', async () => {
+  const sink = sessionSink();
+  const { presence } = harness({ sessions: sink.sessions, now: () => 5000 });
+  const room = presence.room('r1');
+  room.peers.set('ada', { id: 'ada', accountUserId: 'user-ada', joinedAt: 1000, transport: transport('ta') });
+  room.peers.set('guest', { id: 'guest', accountUserId: '', joinedAt: 2000, transport: transport('tg') });
+  room.peers.set('unjoined', { id: 'unjoined', transport: transport('tu') });
+
+  presence.closePeer('r1', 'ada', 'stale-transport');
+  assert.deepEqual(sink.recorded, [], 'a stale transport ends nothing');
+
+  presence.closePeer('r1', 'ada', 'ta');
+  presence.closePeer('r1', 'guest', 'tg', 'kicked');
+  presence.closePeer('r1', 'unjoined', 'tu');
+  await presence.recordOpenSessions();
+  assert.deepEqual(sink.recorded, [
+    [{ roomId: 'r1', userId: 'user-ada', joinedAt: 1000, leftAt: 5000 }],
+    [{ roomId: 'r1', userId: null, joinedAt: 2000, leftAt: 5000 }]
+  ]);
+});
+
+test('stopping records every stay still in voice once; a leave after that is not recorded again', async () => {
+  const sink = sessionSink();
+  const { presence } = harness({ sessions: sink.sessions, now: () => 9000 });
+  presence.room('r1').peers.set('a', { id: 'a', accountUserId: 'user-a', joinedAt: 1000, transport: transport('ta') });
+  presence.room('r2').peers.set('b', { id: 'b', joinedAt: 3000, transport: transport('tb') });
+
+  await presence.recordOpenSessions();
+  await presence.recordOpenSessions();
+  presence.closePeer('r1', 'a', 'ta');
+  await presence.recordOpenSessions();
+  assert.deepEqual(sink.recorded, [
+    [
+      { roomId: 'r1', userId: 'user-a', joinedAt: 1000, leftAt: 9000 },
+      { roomId: 'r2', userId: null, joinedAt: 3000, leftAt: 9000 }
+    ]
+  ]);
+
+  presence.reset();
+  presence.room('r3').peers.set('c', { id: 'c', joinedAt: 4000, transport: transport('tc') });
+  presence.closePeer('r3', 'c', 'tc');
+  await presence.recordOpenSessions();
+  assert.equal(sink.recorded.length, 2, 'a reset app records again');
+});
+
+test('a failed stay write is logged, and without a database nothing is written', async () => {
+  const failing = harness({ sessions: sessionSink({ fails: true }).sessions });
+  failing.presence.room('r1').peers.set('p', { id: 'p', joinedAt: 1000, transport: transport('tp') });
+  failing.presence.closePeer('r1', 'p', 'tp');
+  await failing.presence.recordOpenSessions();
+  assert.ok(failing.calls.errors.includes('room.voice_session_record_failed'));
+
+  const offline = harness({ sessions: () => null });
+  offline.presence.room('r1').peers.set('p', { id: 'p', joinedAt: 1000, transport: transport('tp') });
+  offline.presence.closePeer('r1', 'p', 'tp');
+  await offline.presence.recordOpenSessions();
+  assert.deepEqual(offline.calls.errors, []);
 });

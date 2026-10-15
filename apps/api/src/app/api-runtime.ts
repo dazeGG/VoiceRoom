@@ -261,6 +261,8 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
   }
 
   async function closeStores(logger: Pick<Logger, 'error'> = getProcessLogger()): Promise<void> {
+    // The roster ends with the process: its open stays are written while the pool is still up.
+    await hub.presence.recordOpenSessions();
     await services.close(logger);
   }
 
