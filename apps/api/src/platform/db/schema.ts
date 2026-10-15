@@ -49,6 +49,16 @@ export interface AccountRecoveryCodes {
   user_id: string;
 }
 
+export interface AdminActions {
+  action: string;
+  admin_user_id: string;
+  created_at: Generated<Timestamp>;
+  details: Generated<Json>;
+  id: Generated<string>;
+  reason: Generated<string>;
+  target_user_id: string;
+}
+
 export interface ContentReports {
   comment: Generated<string>;
   created_at: Generated<Timestamp>;
@@ -525,6 +535,10 @@ export interface Users {
   avatar_accent: string | null;
   avatar_color_key: Generated<string>;
   avatar_key: string | null;
+  badge: string | null;
+  block_reason: Generated<string>;
+  blocked_at: Timestamp | null;
+  blocked_until: Timestamp | null;
   created_at: Generated<Timestamp>;
   deleted_at: Timestamp | null;
   deletion_requested_at: Timestamp | null;
@@ -558,6 +572,7 @@ export interface VoiceSessions {
 export interface DB {
   account_login_events: AccountLoginEvents;
   account_recovery_codes: AccountRecoveryCodes;
+  admin_actions: AdminActions;
   content_reports: ContentReports;
   direct_message_reaction_revisions: DirectMessageReactionRevisions;
   direct_message_reactions: DirectMessageReactions;

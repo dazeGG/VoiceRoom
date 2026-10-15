@@ -167,6 +167,11 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   report_own_message: 'Нельзя пожаловаться на своё сообщение',
   report_not_found: 'Жалоба уже рассмотрена',
   platform_admin_required: 'Раздел доступен только администратору сервиса',
+  account_blocked: 'Аккаунт заблокирован',
+  reserved_name: 'Это имя зарезервировано за VoiceRoom',
+  cannot_moderate_admin: 'Аккаунт администратора нельзя заблокировать или удалить',
+  confirmation_mismatch: 'Логин не совпадает с этим аккаунтом',
+  deletion_not_by_admin: 'Удаление попросил сам пользователь, отменить его может только он',
 
   desktop_release_unavailable: 'Не удалось получить данные о релизе'
 };

@@ -5,7 +5,7 @@ import crypto from 'node:crypto';
 import { sql, type Selectable } from 'kysely';
 import type { AccountLoginEvents, Json, Users } from '../../platform/db/schema.ts';
 import type { SelfUser as SelfProfile } from '@voice-room/shared/contracts/account';
-import type { PublicUser as PublicProfile } from '@voice-room/shared/contracts/users';
+import type { AccountBadge, PublicUser as PublicProfile } from '@voice-room/shared/contracts/users';
 import { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
 import { RECOVERY_CODE_ALPHABET, RECOVERY_CODE_LENGTH } from '@voice-room/shared/account-security';
 
@@ -44,6 +44,20 @@ export function randomAvatarColorKey(): string {
   return AVATAR_COLOR_KEYS[crypto.randomInt(AVATAR_COLOR_KEYS.length)] as string;
 }
 
+export function cleanBadge(value: unknown): AccountBadge | null {
+  return value === 'official' || value === 'verified' ? value : null;
+}
+
+/** A block in force at `now`: set, and either for good or not yet over. */
+export function activeBlock(
+  user: { blockedAt: number | null; blockedUntil: number | null; blockReason: string },
+  now: number = Date.now()
+): { until: number | null; reason: string } | null {
+  if (user.blockedAt === null) return null;
+  if (user.blockedUntil !== null && user.blockedUntil <= now) return null;
+  return { until: user.blockedUntil, reason: user.blockReason };
+}
+
 export function mapUser(row: Selectable<Users> | null | undefined) {
   if (!row) return null;
   const presenceStatus = cleanPresenceStatus(row.presence_status) || (row.dnd ? 'dnd' : 'online');
@@ -59,6 +73,10 @@ export function mapUser(row: Selectable<Users> | null | undefined) {
     passwordHash: row.password_hash,
     presenceStatus,
     deletionRequestedAt: row.deletion_requested_at ? toMillis(row.deletion_requested_at) : null,
+    blockedAt: row.blocked_at ? toMillis(row.blocked_at) : null,
+    blockedUntil: row.blocked_until ? toMillis(row.blocked_until) : null,
+    blockReason: row.block_reason || '',
+    badge: cleanBadge(row.badge),
     deletedAt: row.deleted_at ? toMillis(row.deleted_at) : null,
     desktopAppSeenAt: metadataMillis(row.metadata, 'desktopAppSeenAt'),
     appPromptSeenAt: metadataMillis(row.metadata, 'appPromptSeenAt')

@@ -7,7 +7,7 @@ import {
   normalizeRoomId,
   normalizePeerId,
   normalizeSessionToken,
-  cleanName,
+  cleanGuestName,
   cleanStreamId,
   cleanScreenProfileId
 } from '@voice-room/shared/validation';
@@ -399,7 +399,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
 
     const stoppedScreen = Object.hasOwn(patch, 'screen') && peer.screen && !patch.screen;
 
-    if (Object.hasOwn(patch, 'name') && !peer.accountUserId) peer.name = cleanName(patch.name);
+    if (Object.hasOwn(patch, 'name') && !peer.accountUserId) peer.name = cleanGuestName(patch.name);
     // A moderator mute outranks the client: the participant may still mute
     // itself, but an unmute is dropped until the owner lifts the server mute.
     if (Object.hasOwn(patch, 'muted')) peer.muted = peer.serverMuted || Boolean(patch.muted);

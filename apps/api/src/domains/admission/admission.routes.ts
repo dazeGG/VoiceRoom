@@ -6,7 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { LiveKitAdmission, LiveKitTokenBody } from '@voice-room/shared/contracts/admission';
 import { RoomFailure } from '@voice-room/shared/contracts/rooms';
 import {
-  cleanName,
+  cleanGuestName,
   isReservedPeerId,
   normalizePeerId,
   normalizeRoomId,
@@ -90,7 +90,7 @@ export function registerAdmissionRoutes(root: FastifyInstance, ctx: ApiContext, 
         roomId,
         peerId,
         sessionToken,
-        name: cleanName(request.body.name),
+        name: cleanGuestName(request.body.name),
         user: session?.user ?? null,
         clientIp: ctx.clientIp(request.raw),
         log: request.log

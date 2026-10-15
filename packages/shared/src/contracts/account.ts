@@ -15,10 +15,15 @@ export const SelfUser = Type.Object({
 });
 export type SelfUser = Static<typeof SelfUser>;
 
-/** An account failure; a sign-in to an account waiting for deletion says when it goes. */
+/**
+ * An account failure; a sign-in to an account waiting for deletion says when
+ * it goes, one to a blocked account says why and until when (null: for good).
+ */
 export const AccountFailure = Type.Object({
   ...Failure.properties,
-  deletionScheduledFor: Type.Optional(Type.Number())
+  deletionScheduledFor: Type.Optional(Type.Number()),
+  blockedUntil: Type.Optional(Nullable(Type.Number())),
+  blockReason: Type.Optional(Type.String())
 });
 export type AccountFailure = Static<typeof AccountFailure>;
 

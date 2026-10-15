@@ -12,6 +12,17 @@ export const PresenceStatus = Type.Union([
 ]);
 export type PresenceStatus = Static<typeof PresenceStatus>;
 
+/** The mark next to an account's name: the service's own account, or (later) a verified person. */
+export const AccountBadge = Type.Union([Type.Literal('official'), Type.Literal('verified')]);
+export type AccountBadge = Static<typeof AccountBadge>;
+
+/** GET /api/badges: the few accounts that carry a mark; clients look names up by id. */
+export const BadgeList = Type.Object({
+  ok: Type.Literal(true),
+  badges: Type.Array(Type.Object({ userId: Type.String(), badge: AccountBadge }))
+});
+export type BadgeList = Static<typeof BadgeList>;
+
 export const PublicUser = Type.Object({
   avatarAccent: Nullable(Type.String()),
   avatarColorKey: Type.String(),

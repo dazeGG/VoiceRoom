@@ -5,6 +5,7 @@
 
 import { Type, type Static } from 'typebox';
 import { Nullable, Ok } from './http.ts';
+import { AccountBadge } from './users.ts';
 
 /** Whether the panel is this account's, and for an administrator how many reports wait. */
 export const AdminAccess = Ok({ admin: Type.Boolean(), openReports: Type.Number() });
@@ -160,3 +161,172 @@ export const SystemStats = Ok({
   samples: Type.Array(SystemSample)
 });
 export type SystemStats = Static<typeof SystemStats>;
+
+// --- accounts -----------------------------------------------------------------
+
+/** Accounts on one page of the list. */
+export const ACCOUNTS_PAGE_SIZE = 50;
+/** The days of an account's own activity chart. */
+export const ACCOUNT_DAYS = 90;
+export const ADMIN_REASON_MAX_LENGTH = 300;
+
+/**
+ * Which accounts the list shows: everyone, online now, registered in the last
+ * week, active in the last week, gone (not seen for two weeks), blocked,
+ * waiting to be deleted, or carrying a mark.
+ */
+export const AccountsFilter = Type.Union([
+  Type.Literal('all'),
+  Type.Literal('online'),
+  Type.Literal('new'),
+  Type.Literal('active'),
+  Type.Literal('gone'),
+  Type.Literal('blocked'),
+  Type.Literal('deleting'),
+  Type.Literal('badged')
+]);
+export type AccountsFilter = Static<typeof AccountsFilter>;
+
+export const AccountsSort = Type.Union([
+  Type.Literal('created'),
+  Type.Literal('lastSeen'),
+  Type.Literal('activeDays'),
+  Type.Literal('voice'),
+  Type.Literal('messages'),
+  Type.Literal('reports'),
+  Type.Literal('name')
+]);
+export type AccountsSort = Static<typeof AccountsSort>;
+
+/** Search by name, login or id; without a sort the newest come first. Pages count from 1. */
+export const AccountsQuery = Type.Object({
+  q: Type.Optional(Type.String({ maxLength: 100 })),
+  filter: Type.Optional(AccountsFilter),
+  sort: Type.Optional(AccountsSort),
+  order: Type.Optional(Type.Union([Type.Literal('asc'), Type.Literal('desc')])),
+  page: Type.Optional(Type.String({ pattern: '^[1-9][0-9]{0,5}$' }))
+});
+export type AccountsQuery = Static<typeof AccountsQuery>;
+
+/** Waiting to be deleted wins over blocked: an administrator's deletion blocks too. */
+export const AccountStatus = Type.Union([Type.Literal('active'), Type.Literal('blocked'), Type.Literal('deleting')]);
+export type AccountStatus = Static<typeof AccountStatus>;
+
+/** One account in the list. Voice is in minutes; messages count room and direct ones. */
+export const AccountRow = Type.Object({
+  id: Type.String(),
+  login: Type.String(),
+  displayName: Type.String(),
+  avatarUrl: Nullable(Type.String()),
+  avatarColorKey: Type.String(),
+  avatarAccent: Nullable(Type.String()),
+  createdAt: Type.Number(),
+  /** The latest of registration, an active day and a session's last request. */
+  lastSeenAt: Type.Number(),
+  activeDays: Type.Number(),
+  /** The kinds of client used in the last 30 days. */
+  clients: Type.Object({ desktopApp: Type.Boolean(), browser: Type.Boolean(), mobile: Type.Boolean() }),
+  voiceMinutes: Type.Number(),
+  messages: Type.Number(),
+  ownedRooms: Type.Number(),
+  /** Reports filed against this account's messages, open or not. */
+  reportsAgainst: Type.Number(),
+  online: Type.Boolean(),
+  admin: Type.Boolean(),
+  badge: Nullable(AccountBadge),
+  status: AccountStatus
+});
+export type AccountRow = Static<typeof AccountRow>;
+
+export const AccountsPage = Ok({
+  accounts: Type.Array(AccountRow),
+  total: Type.Number(),
+  page: Type.Number(),
+  pageSize: Type.Number()
+});
+export type AccountsPage = Static<typeof AccountsPage>;
+
+export const AccountBlock = Type.Object({
+  at: Type.Number(),
+  /** Null: for good. */
+  until: Nullable(Type.Number()),
+  reason: Type.String()
+});
+export type AccountBlock = Static<typeof AccountBlock>;
+
+export const AdminActionKind = Type.Union([
+  Type.Literal('block'),
+  Type.Literal('unblock'),
+  Type.Literal('logout'),
+  Type.Literal('delete'),
+  Type.Literal('cancel_deletion'),
+  Type.Literal('badge')
+]);
+export type AdminActionKind = Static<typeof AdminActionKind>;
+
+/** One entry of what administrators did to an account. */
+export const AdminActionEntry = Type.Object({
+  id: Type.String(),
+  at: Type.Number(),
+  action: AdminActionKind,
+  reason: Type.String(),
+  adminName: Type.String(),
+  /** A block's end (null: for good); null for other actions. */
+  until: Nullable(Type.Number()),
+  /** The mark a badge action set (null: taken away). */
+  badge: Nullable(AccountBadge)
+});
+export type AdminActionEntry = Static<typeof AdminActionEntry>;
+
+/** One Moscow day of an account. */
+export const AccountDay = Type.Object({
+  day: Type.String(),
+  active: Type.Boolean(),
+  messages: Type.Number(),
+  voiceMinutes: Type.Number()
+});
+export type AccountDay = Static<typeof AccountDay>;
+
+/** A signed-in device, without where it is. */
+export const AccountDevice = Type.Object({
+  client: Type.String(),
+  os: Type.String(),
+  createdAt: Type.Number(),
+  lastSeenAt: Type.Number()
+});
+export type AccountDevice = Static<typeof AccountDevice>;
+
+export const AccountDetail = Ok({
+  account: AccountRow,
+  block: Nullable(AccountBlock),
+  deletion: Nullable(Type.Object({ scheduledFor: Type.Number(), byAdmin: Type.Boolean() })),
+  /** The last ACCOUNT_DAYS Moscow days, oldest first. */
+  days: Type.Array(AccountDay),
+  ownedRooms: Type.Array(Type.Object({ id: Type.String(), name: Type.String(), members: Type.Number() })),
+  memberOf: Type.Number(),
+  devices: Type.Array(AccountDevice),
+  reports: Type.Object({ against: Type.Number(), againstOpen: Type.Number(), filed: Type.Number() }),
+  actions: Type.Array(AdminActionEntry)
+});
+export type AccountDetail = Static<typeof AccountDetail>;
+
+export const BlockDuration = Type.Union([
+  Type.Literal('day'),
+  Type.Literal('week'),
+  Type.Literal('month'),
+  Type.Literal('forever')
+]);
+export type BlockDuration = Static<typeof BlockDuration>;
+
+const Reason = Type.String({ minLength: 1, maxLength: ADMIN_REASON_MAX_LENGTH });
+
+/** The reason is shown to the account at sign-in. */
+export const BlockBody = Type.Object({ duration: BlockDuration, reason: Reason });
+export type BlockBody = Static<typeof BlockBody>;
+
+/** The account's login typed again, so the wrong account is not deleted by a slip. */
+export const DeleteAccountBody = Type.Object({ login: Type.String({ maxLength: 64 }), reason: Reason });
+export type DeleteAccountBody = Static<typeof DeleteAccountBody>;
+
+export const BadgeBody = Type.Object({ badge: Nullable(AccountBadge) });
+export type BadgeBody = Static<typeof BadgeBody>;

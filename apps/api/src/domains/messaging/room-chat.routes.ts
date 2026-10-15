@@ -16,7 +16,7 @@ import {
   RoomRead
 } from '@voice-room/shared/contracts/messages';
 import type { FastifyInstance, FastifyReply } from 'fastify';
-import { cleanName, normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voice-room/shared/validation';
+import { cleanGuestName, normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voice-room/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import { roomBanned } from '../rooms/room-views.ts';
@@ -112,7 +112,7 @@ export function registerRoomChatRoutes(root: FastifyInstance, ctx: ApiContext, c
         roomId,
         peerId: normalizePeerId(body.peerId),
         sessionToken: normalizeSessionToken(body.sessionToken),
-        name: cleanName(body.name),
+        name: cleanGuestName(body.name),
         text: body.text,
         content: body.content,
         attachmentIds: body.attachmentIds,

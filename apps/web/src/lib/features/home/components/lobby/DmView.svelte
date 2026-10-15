@@ -8,7 +8,7 @@
   import { AttachmentDrop } from '$lib/shared/chat/attachment-drop.svelte';
   import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions } from '$lib/shared/chat/frequent-reactions';
   import { effectivePresenceStatus, presenceStatusLabel } from '$lib/shared/presence';
-  import { Avatar } from '$lib/shared/ui';
+  import { AccountBadge, Avatar } from '$lib/shared/ui';
   import { iconMd } from '$lib/shared/ui/icons';
   import { useLobby } from '$lib/features/home/model/lobby-context';
   import { friendName } from '../../model/lobby-format';
@@ -68,7 +68,7 @@
           ring="var(--vr-bg)"
         />
         <div class="lobby-dm-head-text">
-          <div class="lobby-dm-head-name"><EmojiText text={friendName(peer)} /></div>
+          <div class="lobby-dm-head-name"><EmojiText text={friendName(peer)} /><AccountBadge userId={peer.id} /></div>
           <div class="lobby-dm-head-status" data-presence={presence}>{presenceStatusLabel(presence).toLowerCase()}</div>
         </div>
         <span class="lobby-dm-head-icon">

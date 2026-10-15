@@ -10,6 +10,7 @@
   import { isMobileRoute } from '$lib/platform/mobile-routes';
   import { installEmojiCopy } from '$lib/shared/chat/emoji-copy';
   import { initTheme } from '$lib/shared/theme/theme.svelte';
+  import { loadAccountBadges } from '$lib/api/badges';
 
   let { children } = $props();
   let boundaryReady = $state(false);
@@ -36,6 +37,7 @@
 
   onMount(() => {
     initTheme();
+    void loadAccountBadges();
     const policy = applyDesktopBoundaryToDocument();
     desktopAllowed = policy.desktopAllowed;
     roomClientAllowed = policy.roomClientAllowed;

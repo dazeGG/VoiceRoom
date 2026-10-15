@@ -84,6 +84,8 @@ export class LobbyStore {
   mode = $state<LobbyMode>('friends');
   view = $state<LobbyView>('home');
   adminTab = $state<AdminTab>('overview');
+  /** The account whose card the accounts tab shows; null is the list. */
+  adminAccountId = $state<string | null>(null);
   selectedFriendId = $state<string | null>(null);
   readonly thread = new DmThread((peerId) => this.view === 'dm' && this.selectedFriendId === peerId);
   /** Friends currently typing to this account, keyed by their user id. */
@@ -210,10 +212,11 @@ export class LobbyStore {
   };
 
   /** The admin panel, beside the friends list like the people view; a call keeps going. */
-  showAdmin = (tab: AdminTab = this.adminTab): void => {
+  showAdmin = (tab: AdminTab = this.adminTab, accountId: string | null = null): void => {
     this.mode = 'friends';
     this.view = 'admin';
     this.adminTab = tab;
+    this.adminAccountId = tab === 'accounts' ? accountId : null;
   };
 
   openDm = async (userId: string): Promise<void> => {

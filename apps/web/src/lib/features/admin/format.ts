@@ -55,3 +55,37 @@ export function formatSince(from: number, now: number): string {
   if (hours > 0) return `${hours} ч ${minutes % 60} мин`;
   return `${minutes} мин`;
 }
+
+const shortDate = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' });
+const dateTime = new Intl.DateTimeFormat('ru-RU', {
+  day: 'numeric',
+  month: 'short',
+  hour: '2-digit',
+  minute: '2-digit'
+});
+
+/** '15 окт. 2026 г.' */
+export function formatDate(at: number): string {
+  return shortDate.format(at);
+}
+
+/** '15 окт., 14:30' */
+export function formatDateTime(at: number): string {
+  return dateTime.format(at);
+}
+
+/** When someone was last seen, by calendar day: "сегодня", "вчера", "5 дн назад", or the date after two months. */
+export function formatAgo(at: number, now: number): string {
+  const startOfDay = (time: number) => new Date(time).setHours(0, 0, 0, 0);
+  const days = Math.round((startOfDay(now) - startOfDay(at)) / (24 * 60 * 60 * 1000));
+  if (days <= 0) return 'сегодня';
+  if (days === 1) return 'вчера';
+  if (days < 60) return `${days} дн назад`;
+  return formatDate(at);
+}
+
+/** Voice time: "35 мин" under an hour, "2,5 ч" from there. */
+export function formatMinutes(minutes: number): string {
+  if (minutes <= 0) return '—';
+  return minutes < 60 ? `${Math.round(minutes)} мин` : formatHours(minutes / 60);
+}

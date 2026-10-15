@@ -12,6 +12,7 @@ import type { AdminReportsEvent, LiveNumbers } from '@voice-room/shared/contract
 import packageJson from '../../package.json' with { type: 'json' };
 import { createAccountService } from '../domains/account/account.service.ts';
 import { createAdminService } from '../domains/admin/admin.service.ts';
+import { createAdminAccountsService } from '../domains/admin/admin-accounts.service.ts';
 import { createSessionCookies } from '../domains/account/session-cookie.ts';
 import type { createAdmissionService } from '../domains/admission/admission.service.ts';
 import { createAvatarsService } from '../domains/media/avatars.service.ts';
@@ -46,6 +47,8 @@ export interface DomainServiceDeps {
   admission: () => ReturnType<typeof createAdmissionService> | null;
   /** What the realtime layer holds right now: the admin panel shows it. */
   liveNumbers: () => LiveNumbers;
+  /** The accounts with a socket open right now. */
+  liveAccountIds: () => string[];
 }
 
 export function createDomainServices(deps: DomainServiceDeps) {
@@ -258,6 +261,27 @@ export function createDomainServices(deps: DomainServiceDeps) {
     startedAt: Date.now()
   });
 
+  const required = <T>(repository: T | null | undefined): T => {
+    if (!repository) throw new Error('The admin panel requires the database');
+    return repository;
+  };
+  const adminAccounts = createAdminAccountsService({
+    adminUserIds: config.PLATFORM_ADMIN_USER_IDS,
+    accounts: () => required(services.getAdminAccountsRepository()),
+    standing: () => required(services.getAccountStandingRepository()),
+    deletions: services.getAccountDeletionRepository,
+    actions: () => required(services.getAdminActionRepository()),
+    onlineUserIds: deps.liveAccountIds,
+    endSessionConnections: (input) => hub.accountLifecycle.endSessionConnections(input),
+    profileChanged: async (userId) => {
+      const user = await services.getUserStore().getUserById(userId);
+      if (!user) return;
+      hub.roomLifecycle.refreshActiveProfile(user);
+      await hub.broadcastUserProfileToFriends(user, { log: deps.logger() });
+    },
+    logger: () => deps.logger()
+  });
+
   const desktopReleaseService = createDesktopReleaseService({
     repo: config.DESKTOP_RELEASE_REPO,
     cacheMs: config.DESKTOP_RELEASE_CACHE_MS,
@@ -279,6 +303,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     avatars: avatarsService,
     reports,
     admin,
+    adminAccounts,
     desktopRelease: desktopReleaseService
   };
 }

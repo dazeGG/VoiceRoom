@@ -6,6 +6,7 @@
 import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
 import type { ClientCommands, RoomSnapshot } from '@voice-room/shared/contracts/realtime';
 import {
+  cleanGuestName,
   cleanName,
   isReservedPeerId,
   normalizePeerId,
@@ -195,7 +196,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
     const roomId = normalizeRoomId(payload.roomId);
     const peerId = normalizePeerId(payload.peerId);
     const sessionToken = normalizeSessionToken(payload.sessionToken);
-    const name = cleanName(sessionUser?.displayName || sessionUser?.login || payload.name);
+    const name = sessionUser ? cleanName(sessionUser.displayName || sessionUser.login) : cleanGuestName(payload.name);
 
     // `auth-<userId>` is the API's own account peer id (shared/validation), so
     // a voice peer may never claim it.

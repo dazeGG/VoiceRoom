@@ -123,7 +123,8 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     limits,
     logger: () => getProcessLogger(),
     admission: () => admissionService,
-    liveNumbers
+    liveNumbers,
+    liveAccountIds: () => [...new Set(liveAccountIds())]
   });
   const { sessionCookies } = domain;
 

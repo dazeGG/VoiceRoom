@@ -21,7 +21,7 @@
   import AdminPanel from '$lib/features/admin/AdminPanel.svelte';
   import { fetchAdminAccess, type AdminReportsEvent } from '$lib/api/admin';
   import { describeFiledReport } from '$lib/features/admin/report-reasons';
-  import { adminPath, adminTabFromPath, type AdminTab } from '$lib/features/admin/tabs';
+  import { adminLocationFromPath, adminPath, type AdminTab } from '$lib/features/admin/tabs';
   import RoomBrowseView from './components/lobby/RoomBrowseView.svelte';
   import RoomPreviewView from './components/lobby/RoomPreviewView.svelte';
   import LobbyRoomSettingsDialog from './components/lobby/LobbyRoomSettingsDialog.svelte';
@@ -79,8 +79,8 @@
 
   const lobby = new LobbyStore();
   // /admin/<tab> opens the panel at once, before anything rewrites the address.
-  const initialAdminTab = adminTabFromPath(window.location.pathname);
-  if (initialAdminTab) lobby.showAdmin(initialAdminTab);
+  const initialAdmin = adminLocationFromPath(window.location.pathname);
+  if (initialAdmin) lobby.showAdmin(initialAdmin.tab, initialAdmin.accountId);
   provideLobby(lobby);
 
   // Rooms shown inside the lobby see the account's friends through this.
@@ -101,7 +101,10 @@
   let reportsVersion = $state(0);
   const adminOpen = $derived(lobby.mode === 'friends' && lobby.view === 'admin');
 
-  const adminHref = (tab: AdminTab) => resolve('/admin/[[tab]]', { tab: tab === 'overview' ? undefined : tab });
+  const adminHref = (tab: AdminTab, accountId: string | null = null) =>
+    tab === 'accounts' && accountId
+      ? resolve('/admin/accounts/[id]', { id: accountId })
+      : resolve('/admin/[[tab]]', { tab: tab === 'overview' ? undefined : tab });
 
   function openAdmin(tab: AdminTab = lobby.adminTab): void {
     lobby.showAdmin(tab);
@@ -110,14 +113,24 @@
 
   function selectAdminTab(tab: AdminTab): void {
     lobby.adminTab = tab;
+    lobby.adminAccountId = null;
     if (window.location.pathname !== adminPath(tab)) replaceState(adminHref(tab), {});
+  }
+
+  // An account's card gets its own address, so Back returns to the list.
+  function selectAdminAccount(accountId: string | null): void {
+    lobby.adminAccountId = accountId;
+    const path = adminPath('accounts', accountId);
+    if (window.location.pathname === path) return;
+    if (accountId) pushState(adminHref('accounts', accountId), {});
+    else replaceState(adminHref('accounts'), {});
   }
 
   // Leaving the panel any way (home, a room, a chat) gives the address back.
   $effect(() => {
     if (adminOpen) return;
     untrack(() => {
-      if (adminTabFromPath(window.location.pathname)) replaceUrlWithActiveVoiceRoom();
+      if (adminLocationFromPath(window.location.pathname)) replaceUrlWithActiveVoiceRoom();
     });
   });
 
@@ -251,9 +264,9 @@
     });
 
     function onPopState(): void {
-      const poppedAdminTab = adminTabFromPath(window.location.pathname);
-      if (poppedAdminTab) {
-        lobby.showAdmin(poppedAdminTab);
+      const poppedAdmin = adminLocationFromPath(window.location.pathname);
+      if (poppedAdmin) {
+        lobby.showAdmin(poppedAdmin.tab, poppedAdmin.accountId);
         return;
       }
       if (lobby.view === 'admin') lobby.showHome();
@@ -614,7 +627,14 @@
       {:else if lobby.mode === 'friends' && lobby.view === 'people'}
         <PeopleView {user} {onToast} onHome={goHome} />
       {:else if adminOpen}
-        <AdminPanel tab={lobby.adminTab} onTabChange={selectAdminTab} {openReports} {reportsVersion} />
+        <AdminPanel
+          tab={lobby.adminTab}
+          onTabChange={selectAdminTab}
+          accountId={lobby.adminAccountId}
+          onAccountChange={selectAdminAccount}
+          {openReports}
+          {reportsVersion}
+        />
       {:else if lobby.mode === 'friends'}
         {@render voiceHome()}
       {/if}

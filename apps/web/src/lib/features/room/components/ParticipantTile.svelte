@@ -1,5 +1,6 @@
 <script lang="ts">
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
+  import { AccountBadge } from '$lib/shared/ui';
   import { HeadphoneOff, MicOff, MonitorPlay } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
   import { getAvatarPresentation } from '../client/ui/avatar-presentation';
@@ -126,6 +127,7 @@
   <div class="participant-copy">
     <h2>
       <span class="participant-name"><EmojiText text={participant.name} /></span>
+      <AccountBadge userId={participant.accountUserId} />
       {#if participant.isLocal}<span class="participant-you">вы</span>{/if}
       <span class="participant-muted-icon" aria-label="Микрофон выключен" title="Микрофон выключен"
         ><MicOff {...iconSm} /></span

@@ -34,6 +34,7 @@ const LOG_EVENTS = Object.freeze({
 
   // Reports to the operator.
   REPORT_ANNOUNCE_FAILED: 'report.announce_failed',
+  ADMIN_ACTION_LOG_FAILED: 'admin.action_log_failed',
 
   // Realtime transport.
   WS_CONNECTED: 'ws.connected',

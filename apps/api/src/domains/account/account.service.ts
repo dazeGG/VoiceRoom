@@ -20,9 +20,9 @@ import {
   formatRecoveryCode,
   isDeletedAccountLogin
 } from '@voice-room/shared/account-security';
-import { isValidPassword } from '@voice-room/shared/validation';
+import { isReservedName, isValidPassword } from '@voice-room/shared/validation';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
-import { hashSessionToken, selfUser, type StoredUser } from './user-records.ts';
+import { activeBlock, hashSessionToken, selfUser, type StoredUser } from './user-records.ts';
 
 export type AccountUser = StoredUser;
 
@@ -89,7 +89,10 @@ export interface AccountDeletionRepository {
     userId: string;
     currentPassword: string;
   }): Promise<{ status: string; scheduledFor?: number }>;
-  restoreAccount(input: { login: string; password: string }): Promise<{ status: string; userId: string | null }>;
+  restoreAccount(input: {
+    login: string;
+    password: string;
+  }): Promise<{ status: string; userId: string | null; blockedUntil?: number | null; blockReason?: string }>;
 }
 
 export type LoginKind = 'register' | 'login' | 'recovery';
@@ -113,6 +116,13 @@ export interface AccountDeps {
 
 export type { SelfUser };
 export type OpenedSession = { status: 'signed_in'; token: string; user: SelfUser };
+/** The answer to the right password on a blocked account: why, and until when (null: for good). */
+export type Blocked = { status: 'blocked'; blockedUntil: number | null; blockReason: string };
+
+function blockedAnswer(user: AccountUser): Blocked | null {
+  const block = activeBlock(user);
+  return block ? { status: 'blocked', blockedUntil: block.until, blockReason: block.reason } : null;
+}
 
 function describeLoginDevice(alert: LoginAlert): string {
   const device = [alert.client || 'Неизвестный браузер', alert.os].filter(Boolean).join(' · ');
@@ -182,8 +192,12 @@ export function createAccountService(deps: AccountDeps) {
     password: string;
     passwordConfirm: string;
     device: () => Promise<Device>;
-  }): Promise<OpenedSession | Status<'invalid_login' | 'invalid_password' | 'password_mismatch' | 'login_taken'>> {
+  }): Promise<
+    OpenedSession | Status<'invalid_login' | 'invalid_password' | 'password_mismatch' | 'login_taken' | 'reserved_name'>
+  > {
     if (!input.login) return { status: 'invalid_login' };
+    // Only the official account carries the service's name, and it is never a new one.
+    if (isReservedName(input.login) || isReservedName(input.displayName)) return { status: 'reserved_name' };
     if (!isValidPassword(input.password)) return { status: 'invalid_password' };
     if (input.password !== input.passwordConfirm) return { status: 'password_mismatch' };
     // A deleted account's login stays taken, so nobody can pose as that person.
@@ -203,6 +217,7 @@ export function createAccountService(deps: AccountDeps) {
   }): Promise<
     | OpenedSession
     | Status<'invalid_credentials'>
+    | Blocked
     | { status: 'throttled'; retryAfterSeconds: number }
     | { status: 'deletion_pending'; deletionScheduledFor: number }
   > {
@@ -215,6 +230,10 @@ export function createAccountService(deps: AccountDeps) {
     const user = await deps.users().verifyCredentials(input.login, input.password);
     if (!user) return { status: 'invalid_credentials' };
     deps.loginFailures.reset(input.login);
+    // A block is told only to whoever knows the password. It comes before a
+    // pending deletion: an administrator's deletion blocks too, and offers no restore.
+    const blocked = blockedAnswer(user);
+    if (blocked) return blocked;
     // The right password on an account waiting to be deleted offers a restore.
     if (user.deletionRequestedAt)
       return { status: 'deletion_pending', deletionScheduledFor: user.deletionRequestedAt + ACCOUNT_DELETION_GRACE_MS };
@@ -231,7 +250,12 @@ export function createAccountService(deps: AccountDeps) {
     userId: string,
     displayName: string,
     log?: Pick<Logger, 'error'>
-  ): Promise<{ status: 'updated'; user: SelfUser } | NotFound> {
+  ): Promise<{ status: 'updated'; user: SelfUser } | Status<'reserved_name'> | NotFound> {
+    if (isReservedName(displayName)) {
+      const current = await deps.users().getUserById(userId);
+      if (!current) return { status: 'not_found' };
+      if (current.badge !== 'official') return { status: 'reserved_name' };
+    }
     const user = await deps.users().updateDisplayName({ userId, displayName });
     if (!user) return { status: 'not_found' };
     deps.refreshActiveProfile(user);
@@ -364,7 +388,7 @@ export function createAccountService(deps: AccountDeps) {
     code: unknown;
     newPassword: string;
     device: () => Promise<Device>;
-  }): Promise<(OpenedSession & { remaining: number }) | Status<'invalid_new_password' | 'invalid_code'>> {
+  }): Promise<(OpenedSession & { remaining: number }) | Blocked | Status<'invalid_new_password' | 'invalid_code'>> {
     if (!isValidPassword(input.newPassword)) return { status: 'invalid_new_password' };
     const result = await deps
       .users()
@@ -372,6 +396,9 @@ export function createAccountService(deps: AccountDeps) {
     if (result.status !== 'recovered') return { status: 'invalid_code' };
     const user = result.user as AccountUser;
     await deps.endSessionConnections({ userId: user.id });
+    // The code proves the account is theirs, not that it may be used again.
+    const blocked = blockedAnswer(user);
+    if (blocked) return blocked;
     const opened = await openSession(user, input.device, 'recovery');
     return { ...opened, remaining: result.remaining ?? 0 };
   }
@@ -412,13 +439,15 @@ export function createAccountService(deps: AccountDeps) {
   async function restore(
     input: { login: string; password: string; device: () => Promise<Device> },
     log?: Pick<Logger, 'error'>
-  ): Promise<OpenedSession | Status<'expired' | 'invalid_credentials'>> {
+  ): Promise<OpenedSession | Blocked | Status<'expired' | 'invalid_credentials'>> {
     const repository = deps.deletions() as AccountDeletionRepository;
     const result =
       input.login && input.password
         ? await repository.restoreAccount({ login: input.login, password: input.password })
         : { status: 'invalid', userId: null };
     if (result.status === 'expired') return { status: 'expired' };
+    if (result.status === 'blocked')
+      return { status: 'blocked', blockedUntil: result.blockedUntil ?? null, blockReason: result.blockReason ?? '' };
     if (result.status !== 'restored') return { status: 'invalid_credentials' };
     const user = (await deps.users().getUserById(result.userId as string)) as AccountUser;
     const opened = await openSession(user, input.device, 'login');

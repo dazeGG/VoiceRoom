@@ -102,6 +102,54 @@ export function cleanDisplayName(value: unknown): string {
   return value.replace(/\s+/g, ' ').trim().slice(0, 40);
 }
 
+// Cyrillic and digit look-alikes of Latin letters, so "VоiсeRооm" with
+// Cyrillic о and с or "V0iceRoom" read as the service's name too.
+const LOOKALIKES: Record<string, string> = {
+  а: 'a',
+  в: 'b',
+  е: 'e',
+  ё: 'e',
+  и: 'u',
+  й: 'u',
+  к: 'k',
+  м: 'm',
+  н: 'h',
+  о: 'o',
+  р: 'p',
+  с: 'c',
+  т: 't',
+  у: 'y',
+  х: 'x',
+  '0': 'o',
+  '1': 'i',
+  '3': 'e',
+  l: 'i',
+  '|': 'i',
+  '!': 'i'
+};
+const SERVICE_NAMES = ['voiceroom', 'войсрум', 'воисрум'];
+
+/**
+ * Whether a name or login poses as the service itself ("VoiceRoom",
+ * "voice_room", "Войс Рум", "VoiceRoom Support"): only the official account
+ * may carry it.
+ */
+export function isReservedName(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  const lower = value.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '');
+  const cyrillic = lower.replace(/[^а-яё]/g, '');
+  const latin = Array.from(lower, (char) => LOOKALIKES[char] ?? char)
+    .join('')
+    .replace(/[^a-z]/g, '');
+  return SERVICE_NAMES.some((name) => cyrillic.includes(name) || latin.includes(name));
+}
+
+/** A guest's name in a room: one posing as the service becomes "Guest". */
+export function cleanGuestName(value: unknown): string {
+  const name = cleanName(value);
+  return isReservedName(name) ? 'Guest' : name;
+}
+
 export const PASSWORD_MIN_LENGTH = 8;
 export const PASSWORD_MAX_LENGTH = 200;
 

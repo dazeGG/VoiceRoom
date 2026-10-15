@@ -3,7 +3,7 @@
   import { Bell, BellOff, Check, LayoutDashboard, Settings, UserPlus, Users } from '@lucide/svelte';
   import { tick } from 'svelte';
   import type { AuthUser } from '$lib/api/auth';
-  import { Avatar, Badge, Button, Popover, PopoverMenuLabel } from '$lib/shared/ui';
+  import { AccountBadge, Avatar, Badge, Button, Popover, PopoverMenuLabel } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
   import { effectivePresenceStatus, normalizePresenceStatus, type PresenceStatus } from '$lib/shared/presence';
   import { friendName } from '../../model/lobby-format';
@@ -298,7 +298,7 @@
           <div class="lv-row-body">
             <div class="lv-notification-title">
               <div class="lv-row-name">
-                <EmojiText text={friendName(entry.user)} />
+                <EmojiText text={friendName(entry.user)} /><AccountBadge userId={entry.user.id} />
               </div>
               {#if friendNotificationsMuted}
                 <span

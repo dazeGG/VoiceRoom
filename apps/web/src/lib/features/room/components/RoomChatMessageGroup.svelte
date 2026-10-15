@@ -6,7 +6,7 @@
   import { session } from '$lib/features/auth/session.svelte';
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import ChatText from '$lib/shared/components/ChatText.svelte';
-  import { Avatar } from '$lib/shared/ui';
+  import { AccountBadge, Avatar } from '$lib/shared/ui';
   import MessageEditor from '$lib/shared/chat/MessageEditor.svelte';
   import MessageHoverActions from '$lib/shared/chat/MessageHoverActions.svelte';
   import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
@@ -95,10 +95,11 @@
           aria-haspopup="dialog"
           aria-label={profileLabel}
           onclick={onOpenProfile}
-          oncontextmenu={onAuthorMenu}><EmojiText text={group.name} /></button
+          oncontextmenu={onAuthorMenu}
+          ><EmojiText text={group.name} /><AccountBadge userId={group.authorUserId} /></button
         >
       {:else}
-        <span class="chat-msg-author"><EmojiText text={group.name} /></span>
+        <span class="chat-msg-author"><EmojiText text={group.name} /><AccountBadge userId={group.authorUserId} /></span>
       {/if}
       <time class="chat-msg-time" datetime={new Date(group.messages[0].createdAt).toISOString()}
         >{formatTime(group.createdAt)}</time

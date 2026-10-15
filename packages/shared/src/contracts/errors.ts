@@ -172,6 +172,13 @@ export const ERROR_CODES = [
   'report_not_found',
   'platform_admin_required',
 
+  // The administrator's account actions
+  'account_blocked',
+  'reserved_name',
+  'cannot_moderate_admin',
+  'confirmation_mismatch',
+  'deletion_not_by_admin',
+
   // Desktop app
   'desktop_release_unavailable'
 ] as const;

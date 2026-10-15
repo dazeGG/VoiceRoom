@@ -49,6 +49,9 @@ import { createActivityRepository } from '../domains/account/activity.repository
 import { createProductSnapshotRepository } from '../domains/ops/product-snapshot.repository.ts';
 import { createSystemSnapshotRepository } from '../domains/ops/system-snapshot.repository.ts';
 import { createAdminStatsRepository } from '../domains/admin/admin-stats.repository.ts';
+import { createAdminAccountsRepository } from '../domains/admin/admin-accounts.repository.ts';
+import { createAdminActionRepository } from '../domains/admin/admin-action.repository.ts';
+import { createAccountStandingRepository } from '../domains/account/account-standing.repository.ts';
 import { createMediaModule } from '../domains/media/media.module.ts';
 import { createMembershipModule, type MembershipModule } from '../domains/membership/membership.module.ts';
 import type { EvictionType } from '../domains/rooms/peer-eviction.ts';
@@ -248,6 +251,9 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   const productSnapshots = pooled((pool) => createProductSnapshotRepository({ pool }));
   const systemSnapshots = pooled((pool) => createSystemSnapshotRepository({ pool }));
   const adminStats = pooled((pool) => createAdminStatsRepository({ pool }));
+  const adminAccounts = pooled((pool) => createAdminAccountsRepository({ pool }));
+  const adminActions = pooled((pool) => createAdminActionRepository({ pool }));
+  const accountStanding = pooled((pool) => createAccountStandingRepository({ pool }));
   const activeBans = pooled((pool) => createActiveBanService({ pool }));
   const delivery = pooled((pool) => ({
     idempotency: createMessageIdempotencyRepository(),
@@ -418,6 +424,9 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     getProductSnapshotRepository: () => productSnapshots.get(),
     getSystemSnapshotRepository: () => systemSnapshots.get(),
     getAdminStatsRepository: () => adminStats.get(),
+    getAdminAccountsRepository: () => adminAccounts.get(),
+    getAdminActionRepository: () => adminActions.get(),
+    getAccountStandingRepository: () => accountStanding.get(),
     getReactionServices: () => reactions.get(),
     getPinServices: () => pins.get(),
     getMessageDeliveryServices: () => delivery.get(),

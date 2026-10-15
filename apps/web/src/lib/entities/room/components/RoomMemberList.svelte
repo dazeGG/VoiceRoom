@@ -2,7 +2,7 @@
   import { untrack } from 'svelte';
   import { Ban, Ellipsis, User, UserX } from '@lucide/svelte';
   import Avatar from '$lib/shared/ui/Avatar/Avatar.svelte';
-  import { Popover, PopoverDivider, PopoverMenuItem, PopoverSubmenu } from '$lib/shared/ui';
+  import { AccountBadge, Popover, PopoverDivider, PopoverMenuItem, PopoverSubmenu } from '$lib/shared/ui';
   import type { PopoverContentState, PopoverTriggerState } from '$lib/shared/ui/Popover';
   import { iconMd } from '$lib/shared/ui/icons';
   import { session } from '$lib/features/auth/session.svelte';
@@ -126,7 +126,8 @@
       />
       <span
         ><strong
-          >{nameFor(member)}{#if member.userId === session.user?.id}<em class="room-member-list__you">вы</em
+          >{nameFor(member)}<AccountBadge userId={member.userId} />{#if member.userId === session.user?.id}<em
+              class="room-member-list__you">вы</em
             >{/if}</strong
         ><small>@{member.login}</small></span
       >
