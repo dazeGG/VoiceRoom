@@ -91,7 +91,8 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `HOST` | `127.0.0.1` | Host for host-only API. Compose sets `0.0.0.0`. |
 | `PORT` | `3000` | API port. |
 | `SOCKET_PATH` | empty | Unix socket вместо TCP, если нужен. |
-| `API_METRICS_ALLOWED_REMOTE` | `127.0.0.1` | Caddy allowlist для публичного пути `/api/metrics`; задайте адрес или диапазон, с которого собираются метрики, иначе endpoint закрыт снаружи. |
+| `API_METRICS_ALLOWED_REMOTE` | `127.0.0.1` | Caddy allowlist для публичного пути `/api/metrics`; задайте адрес или диапазон, с которого собираются метрики, иначе endpoint закрыт снаружи. Несколько адресов — через пробел. |
+| `POSTGRES_ANALYTICS_BIND_ADDRESS` / `POSTGRES_ANALYTICS_PORT` | `127.0.0.1` / `5432` | Адрес и порт, на которых compose публикует Postgres для роли аналитики (раздел «Продуктовая аналитика»). Только приватный адрес (Tailscale, VPN), никогда публичный. |
 | `DESKTOP_RELEASE_REPO` | `dazeGG/VoiceRoomDesktop` | Repo для latest desktop release. |
 | `DESKTOP_RELEASE_CACHE_MS` | `600000` | Cache TTL для desktop release metadata. |
 | `GEOIP_DB_PATH` | empty (host) / `/data/geoip/dbip-city-lite.mmdb` (compose) | Локальная база [DB-IP City Lite](https://db-ip.com) (CC BY 4.0) для города и страны в списке устройств. Скачивается командой `node scripts/geoip/fetch-dbip-city-lite.mjs geoip/dbip-city-lite.mmdb` в каталог деплоя; обновлять раз в месяц и перезапускать `api`. Без файла список устройств показывается без города. |
@@ -245,6 +246,30 @@ node scripts/restore/restore-coordinated-snapshot.mts --snapshot /safe/archive/s
 
 Если relay через Docker-bridge не заработает (hairpin NAT до публичного IP ноды зависит от хоста), следующий шаг — `network_mode: host` для сервиса `livekit`.
 
+
+## Продуктовая аналитика
+
+API пишет для дашбордов три вещи, и все они хранятся бессрочно:
+
+- `voice_sessions` — одна строка на каждый заход в войс (комната, аккаунт или гость, вход и выход);
+- `user_activity_days` — в какие дни аккаунт был активен и с какого клиента (десктоп-приложение, телефон, браузер). День считается по Москве;
+- `product_snapshots` — пики каждой четверти часа: аккаунтов онлайн, гостевых подключений, людей и комнат в войсе.
+
+Читать их нужно через схему `analytics`, а не напрямую. Её представления (`accounts`, `activity_days`, `messages`, `rooms`, `voice_sessions`, `snapshots`) не содержат логинов, имён, текстов сообщений и кодов комнат: аккаунты и комнаты в них — только md5-ключи. Представления выполняются с правами владельца, поэтому роли для дашборда хватает доступа к одной этой схеме.
+
+Роль создаёт оператор (роли в Postgres общие для всего кластера, поэтому миграция их не создаёт). Под суперпользователем базы, например `docker compose exec postgres psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"`:
+
+```sql
+CREATE ROLE analytics_reader LOGIN PASSWORD '<длинный случайный пароль>';
+ALTER ROLE analytics_reader SET default_transaction_read_only = on;
+ALTER ROLE analytics_reader SET statement_timeout = '15s';
+GRANT USAGE ON SCHEMA analytics TO analytics_reader;
+GRANT SELECT ON ALL TABLES IN SCHEMA analytics TO analytics_reader;
+-- Представления, которые добавят будущие миграции, станут доступны сами.
+ALTER DEFAULT PRIVILEGES FOR ROLE "<POSTGRES_USER>" IN SCHEMA analytics GRANT SELECT ON TABLES TO analytics_reader;
+```
+
+Затем задайте в `.env` `POSTGRES_ANALYTICS_BIND_ADDRESS` (приватный адрес хоста, например его Tailscale IP) и выполните `docker compose up -d postgres`. Пересоздание контейнера Postgres — это несколько секунд недоступности базы. Ограничьте порт фаерволом до адреса, с которого ходит дашборд.
 
 ## Ручной release smoke: static room + chat persist after API restart
 

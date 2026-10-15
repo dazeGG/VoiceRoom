@@ -31,6 +31,8 @@ import { asHttpServer, type ApiServer } from '../platform/http/http-server.ts';
 export type { ApiServer };
 
 import { createAdmissionService } from '../domains/admission/admission.service.ts';
+import { createActivityTracker } from '../domains/account/activity.service.ts';
+import { createProductSampler } from '../domains/ops/product-snapshot.service.ts';
 import { MAX_UPLOAD_BYTES } from '../domains/media/media.service.ts';
 
 type Logger = ReturnType<typeof createLogger>;
@@ -110,13 +112,34 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
   function getSessionToken(req: IncomingMessage) {
     return sessionCookies.read(req);
   }
+  const activity = createActivityTracker({
+    repository: services.getActivityRepository,
+    logger: () => getProcessLogger()
+  });
   const sessions = createSessionResolver({
     readToken: getSessionToken,
     users: services.getUserStore,
     geo: services.getGeoLocator,
-    clientIp: (req) => getClientIp(req, config.TRUST_PROXY)
+    clientIp: (req) => getClientIp(req, config.TRUST_PROXY),
+    activity
   });
   const resolveSessionUser = sessions.resolve;
+  const productSampler = createProductSampler({
+    live: () => {
+      const accountIds: string[] = [];
+      for (const connection of hub.registry()?.connections?.values?.() || []) {
+        if (connection.userId) accountIds.push(connection.userId);
+      }
+      return {
+        accountIds,
+        guestConnections: hub.activeGuestConnections(),
+        voicePeers: hub.presence.peerCount(),
+        voiceRooms: [...hub.presenceRooms.values()].filter((room) => room.peers.size > 0).length
+      };
+    },
+    snapshots: services.getProductSnapshotRepository,
+    activity
+  });
 
   function startPruneTimer(server: ApiServer, logger: Logger = getProcessLogger()) {
     return startMaintenanceTimers(server, {
@@ -127,6 +150,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
       logger,
       tasks: apiMaintenanceTasks({
         pruneRooms: () => hub.presence.prune(),
+        sampleProduct: () => productSampler.sample(),
         users: services.getUserStore,
         finalizeDueDeletions: () => hub.accountLifecycle.finalizeDueDeletions(),
         linkPreviews: services.getLinkPreviewService,

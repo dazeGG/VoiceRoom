@@ -28,6 +28,7 @@ const LOG_EVENTS = Object.freeze({
 
   // Accounts and sessions.
   AUTH_SIGN_IN_RECORD_FAILED: 'auth.sign_in_record_failed',
+  ACCOUNT_ACTIVITY_RECORD_FAILED: 'account.activity_record_failed',
   ACCOUNT_DELETION_FAILED: 'account.deletion_failed',
   ACCOUNT_SESSION_VOICE_END_FAILED: 'account.session_voice_end_failed',
 

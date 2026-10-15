@@ -159,6 +159,10 @@ test('finishing a deletion hands rooms to the longest-standing member, removes p
     `INSERT INTO voice_sessions (room_id, user_id, joined_at, left_at) VALUES ('shared-room', $1, $2, $2), ('shared-room', NULL, $2, $2)`,
     [ada.id, new Date(start)]
   );
+  await pool.query(`INSERT INTO user_activity_days (user_id, day) VALUES ($1, '2026-10-15'), ($2, '2026-10-15')`, [
+    ada.id,
+    grace.id
+  ]);
 
   const preview = await deletion.previewDeletion({ userId: ada.id, now: start + DAY });
   assert.deepEqual(preview, {
@@ -206,6 +210,12 @@ test('finishing a deletion hands rooms to the longest-standing member, removes p
   assert.equal(await count('SELECT count(*) FROM friendships WHERE user_a_id = $1 OR user_b_id = $1'), 0);
   assert.equal(await count('SELECT count(*) FROM account_recovery_codes WHERE user_id = $1'), 0);
   assert.equal(await count('SELECT count(*) FROM voice_sessions WHERE user_id = $1'), 0);
+  assert.equal(await count('SELECT count(*) FROM user_activity_days WHERE user_id = $1'), 0);
+  assert.equal(
+    await count('SELECT count(*) FROM user_activity_days WHERE user_id <> $1'),
+    1,
+    "another account's days stay"
+  );
   assert.equal(
     Number((await pool.query<{ count: string }>('SELECT count(*) FROM voice_sessions')).rows[0]?.count),
     1,
