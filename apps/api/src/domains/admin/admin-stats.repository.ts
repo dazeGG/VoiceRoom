@@ -1,0 +1,209 @@
+// The product numbers of the admin panel, counted from the tables that hold
+// them. Read only; days are Moscow days, the same as the activity marks.
+
+import type pg from 'pg';
+import { sql } from 'kysely';
+import type { ProductDay, RetentionWeek } from '@voice-room/shared/contracts/admin';
+import { kyselyOn } from '../../platform/db/kysely.ts';
+
+const MSK = sql.lit('Europe/Moscow');
+const mskDay = (column: string) => sql`(${sql.ref(column)} AT TIME ZONE ${MSK})::date`;
+
+export type OverviewCounts = {
+  day: string;
+  activeToday: number;
+  newToday: number;
+  messagesToday: number;
+  voiceJoinsToday: number;
+  voiceMinutesToday: number;
+  accounts: number;
+  staticRooms: number;
+  temporaryRooms: number;
+  messages: number;
+  weeklyActive: number;
+  monthlyActive: number;
+  openReports: number;
+};
+
+const n = (value: unknown): number => Number(value) || 0;
+const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
+  const db = kyselyOn(pool);
+
+  async function overview(): Promise<OverviewCounts> {
+    const today = sql`(now() AT TIME ZONE ${MSK})::date`;
+    const result = await sql<Record<string, unknown>>`
+      SELECT
+        to_char(${today}, 'YYYY-MM-DD') AS day,
+        (SELECT count(*) FROM user_activity_days WHERE day = ${today}) AS active_today,
+        (SELECT count(*) FROM users WHERE ${mskDay('created_at')} = ${today}) AS new_today,
+        (SELECT count(*) FROM room_messages WHERE ${mskDay('created_at')} = ${today})
+          + (SELECT count(*) FROM direct_messages WHERE ${mskDay('created_at')} = ${today}) AS messages_today,
+        (SELECT count(*) FROM voice_sessions WHERE ${mskDay('joined_at')} = ${today}) AS voice_joins_today,
+        (SELECT coalesce(sum(extract(epoch FROM left_at - joined_at)), 0) / 60.0
+           FROM voice_sessions WHERE ${mskDay('joined_at')} = ${today}) AS voice_minutes_today,
+        (SELECT count(*) FROM users WHERE deleted_at IS NULL) AS accounts,
+        (SELECT count(*) FROM rooms WHERE is_static AND deleted_at IS NULL) AS static_rooms,
+        (SELECT count(*) FROM rooms WHERE NOT is_static AND deleted_at IS NULL) AS temporary_rooms,
+        (SELECT count(*) FROM room_messages) + (SELECT count(*) FROM direct_messages) AS messages,
+        (SELECT count(DISTINCT user_id) FROM user_activity_days WHERE day > ${today} - 7) AS weekly_active,
+        (SELECT count(DISTINCT user_id) FROM user_activity_days WHERE day > ${today} - 30) AS monthly_active,
+        (SELECT count(*) FROM content_reports WHERE status = 'open') AS open_reports
+    `.execute(db);
+    const row = result.rows[0] ?? {};
+    return {
+      day: text(row.day),
+      activeToday: n(row.active_today),
+      newToday: n(row.new_today),
+      messagesToday: n(row.messages_today),
+      voiceJoinsToday: n(row.voice_joins_today),
+      voiceMinutesToday: Math.round(n(row.voice_minutes_today)),
+      accounts: n(row.accounts),
+      staticRooms: n(row.static_rooms),
+      temporaryRooms: n(row.temporary_rooms),
+      messages: n(row.messages),
+      weeklyActive: n(row.weekly_active),
+      monthlyActive: n(row.monthly_active),
+      openReports: n(row.open_reports)
+    };
+  }
+
+  /** Every Moscow day of the last `days`, oldest first, with zeros where nothing happened. */
+  async function productDays(days: number): Promise<{ days: ProductDay[]; accountsBefore: number }> {
+    const first = sql`(now() AT TIME ZONE ${MSK})::date - ${days - 1}::int`;
+    const since = sql`(${first})::timestamp AT TIME ZONE ${MSK}`;
+    const result = await sql<Record<string, unknown>>`
+      WITH span AS (
+        SELECT generate_series(${first}, (now() AT TIME ZONE ${MSK})::date, interval '1 day')::date AS day
+      ),
+      activity AS (
+        SELECT day,
+               count(*) AS active_accounts,
+               count(*) FILTER (WHERE desktop_app) AS desktop_app,
+               count(*) FILTER (WHERE browser) AS browser,
+               count(*) FILTER (WHERE mobile) AS mobile
+        FROM user_activity_days WHERE day >= ${first} GROUP BY day
+      ),
+      accounts AS (
+        SELECT ${mskDay('created_at')} AS day, count(*) AS new_accounts
+        FROM users WHERE created_at >= ${since} GROUP BY 1
+      ),
+      messages AS (
+        SELECT day, count(*) FILTER (WHERE kind = 'room') AS room_messages,
+               count(*) FILTER (WHERE kind = 'dm') AS direct_messages,
+               count(DISTINCT author) AS message_authors
+        FROM (
+          SELECT ${mskDay('created_at')} AS day, 'room' AS kind, author_user_id AS author
+          FROM room_messages WHERE created_at >= ${since}
+          UNION ALL
+          SELECT ${mskDay('created_at')}, 'dm', sender_id FROM direct_messages WHERE created_at >= ${since}
+        ) sent
+        GROUP BY day
+      ),
+      rooms_created AS (
+        SELECT ${mskDay('created_at')} AS day,
+               count(*) FILTER (WHERE is_static) AS static_rooms,
+               count(*) FILTER (WHERE NOT is_static) AS temporary_rooms
+        FROM rooms WHERE created_at >= ${since} GROUP BY 1
+      ),
+      voice AS (
+        SELECT ${mskDay('joined_at')} AS day,
+               sum(extract(epoch FROM left_at - joined_at)) FILTER (WHERE user_id IS NOT NULL) / 3600.0 AS account_hours,
+               sum(extract(epoch FROM left_at - joined_at)) FILTER (WHERE user_id IS NULL) / 3600.0 AS guest_hours,
+               count(*) AS joins,
+               count(DISTINCT user_id) AS accounts
+        FROM voice_sessions WHERE joined_at >= ${since} GROUP BY 1
+      ),
+      peaks AS (
+        SELECT ${mskDay('at')} AS day,
+               max(online_accounts) AS online, max(guest_connections) AS guests,
+               max(voice_peers) AS voice_peers, max(voice_rooms) AS voice_rooms
+        FROM product_snapshots WHERE at >= ${since} GROUP BY 1
+      )
+      SELECT to_char(span.day, 'YYYY-MM-DD') AS day,
+             activity.active_accounts, activity.desktop_app, activity.browser, activity.mobile,
+             accounts.new_accounts,
+             messages.room_messages, messages.direct_messages, messages.message_authors,
+             rooms_created.static_rooms, rooms_created.temporary_rooms,
+             voice.account_hours, voice.guest_hours, voice.joins, voice.accounts AS voice_accounts,
+             peaks.online, peaks.guests, peaks.voice_peers, peaks.voice_rooms
+      FROM span
+      LEFT JOIN activity USING (day)
+      LEFT JOIN accounts USING (day)
+      LEFT JOIN messages USING (day)
+      LEFT JOIN rooms_created USING (day)
+      LEFT JOIN voice USING (day)
+      LEFT JOIN peaks USING (day)
+      ORDER BY span.day
+    `.execute(db);
+    const before = await sql<{ count: string }>`SELECT count(*) FROM users WHERE created_at < ${since}`.execute(db);
+    const hours = (value: unknown) => Math.round(n(value) * 100) / 100;
+    return {
+      accountsBefore: n(before.rows[0]?.count),
+      days: result.rows.map((row) => ({
+        day: text(row.day),
+        activeAccounts: n(row.active_accounts),
+        desktopApp: n(row.desktop_app),
+        browser: n(row.browser),
+        mobile: n(row.mobile),
+        newAccounts: n(row.new_accounts),
+        roomMessages: n(row.room_messages),
+        directMessages: n(row.direct_messages),
+        messageAuthors: n(row.message_authors),
+        staticRoomsCreated: n(row.static_rooms),
+        temporaryRoomsCreated: n(row.temporary_rooms),
+        voiceAccountHours: hours(row.account_hours),
+        voiceGuestHours: hours(row.guest_hours),
+        voiceJoins: n(row.joins),
+        voiceAccounts: n(row.voice_accounts),
+        peakOnline: n(row.online),
+        peakGuests: n(row.guests),
+        peakVoicePeers: n(row.voice_peers),
+        peakVoiceRooms: n(row.voice_rooms)
+      }))
+    };
+  }
+
+  /**
+   * The accounts of each registration week (newest first, the last `weeks`)
+   * and the share that was active again 1–7, 8–14 and 15–30 days after signing up.
+   */
+  async function retention(weeks: number): Promise<RetentionWeek[]> {
+    const result = await sql<Record<string, unknown>>`
+      WITH cohort AS (
+        SELECT id AS user_id,
+               date_trunc('week', created_at AT TIME ZONE ${MSK})::date AS week,
+               ${mskDay('created_at')} AS signup
+        FROM users WHERE deleted_at IS NULL
+      ),
+      returned AS (
+        SELECT c.user_id,
+               bool_or(a.day - c.signup BETWEEN 1 AND 7) AS w1,
+               bool_or(a.day - c.signup BETWEEN 8 AND 14) AS w2,
+               bool_or(a.day - c.signup BETWEEN 15 AND 30) AS m1
+        FROM cohort c JOIN user_activity_days a USING (user_id)
+        GROUP BY c.user_id
+      )
+      SELECT to_char(c.week, 'YYYY-MM-DD') AS week,
+             count(*) AS accounts,
+             round(100.0 * count(*) FILTER (WHERE r.w1) / count(*)) AS w1,
+             round(100.0 * count(*) FILTER (WHERE r.w2) / count(*)) AS w2,
+             round(100.0 * count(*) FILTER (WHERE r.m1) / count(*)) AS m1
+      FROM cohort c LEFT JOIN returned r USING (user_id)
+      GROUP BY c.week ORDER BY c.week DESC
+      LIMIT ${weeks}
+    `.execute(db);
+    return result.rows.map((row) => ({
+      week: text(row.week),
+      accounts: n(row.accounts),
+      returnedWeek1Pct: n(row.w1),
+      returnedWeek2Pct: n(row.w2),
+      returnedMonth1Pct: n(row.m1)
+    }));
+  }
+
+  return Object.freeze({ overview, productDays, retention });
+}
+
+export type AdminStatsRepository = ReturnType<typeof createAdminStatsRepository>;

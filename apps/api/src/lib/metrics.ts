@@ -220,6 +220,19 @@ function renderPrometheus({
   return `${lines.join('\n')}\n`;
 }
 
+/** Every request answered since the process started: the system sampler turns it into per-minute numbers. */
+function httpTotals(): { count: number; errors5xx: number; durationSecondsSum: number } {
+  let count = 0;
+  let errors5xx = 0;
+  let durationSecondsSum = 0;
+  for (const item of httpRequests.values()) {
+    count += item.count;
+    durationSecondsSum += item.durationSecondsSum;
+    if (item.status.startsWith('5')) errors5xx += item.count;
+  }
+  return { count, errors5xx, durationSecondsSum };
+}
+
 function resetMetricsForTest(): void {
   httpRequests.clear();
   maintenanceTasks.clear();
@@ -232,6 +245,7 @@ function resetMetricsForTest(): void {
 }
 
 export {
+  httpTotals,
   observeMaintenance,
   recordHttpRequest,
   recordMaintenanceDuration,

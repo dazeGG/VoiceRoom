@@ -1,13 +1,12 @@
 <script lang="ts">
-  // The platform administrator's review of open reports: each shows the message
-  // as it stands now, and one decision closes every report of that message.
+  // The platform administrator's review of open reports, a tab of the admin
+  // panel: each shows the message as it stands now, and one decision closes
+  // every report of that message.
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
   import { ApiError } from '$lib/api/client';
   import { fetchOpenReports, resolveReport, type AdminReport, type ReportReason } from '$lib/api/reports';
   import { Button } from '$lib/shared/ui';
-  import '$lib/shared/styles/typography.css';
-  import '$lib/shared/styles/app.css';
 
   const REASON_LABELS: Record<ReportReason, string> = {
     spam: 'Спам или реклама',
@@ -64,12 +63,7 @@
   });
 </script>
 
-<main class="reports-page">
-  <header class="reports-header">
-    <a class="reports-back" href={resolve('/')}>← Voice Room</a>
-    <h1>Жалобы</h1>
-  </header>
-
+<div class="reports">
   {#if status === 'loading'}
     <p class="reports-note" aria-busy="true">Загружаем жалобы…</p>
   {:else if status === 'signed_out'}
@@ -123,24 +117,14 @@
       </ul>
     {/if}
   {/if}
-</main>
+</div>
 
 <style>
-  .reports-page {
-    max-width: 860px;
-    min-height: 100dvh;
-    margin: 0 auto;
-    padding: 24px 16px 64px;
-    color: var(--vr-text);
-    font-family: var(--font-ui);
+  .reports {
+    display: grid;
+    gap: 14px;
   }
 
-  .reports-header h1 {
-    margin: 12px 0 20px;
-    font-size: 28px;
-  }
-
-  .reports-back,
   .reports-note a {
     color: var(--vr-text-2);
   }

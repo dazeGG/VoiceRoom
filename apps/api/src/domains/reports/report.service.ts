@@ -3,7 +3,8 @@
 // dismisses the reports.
 
 import { REPORT_COMMENT_MAX_LENGTH, type AdminReport, type ReportBody } from '@voice-room/shared/contracts/reports';
-import { canReportDirectMessage, isPlatformAdmin } from './report.policy.ts';
+import { isPlatformAdmin } from '../admin/admin.policy.ts';
+import { canReportDirectMessage } from './report.policy.ts';
 import type { ReportRepository } from './report.repository.ts';
 
 export interface ReportServiceDeps {

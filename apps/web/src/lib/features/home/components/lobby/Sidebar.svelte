@@ -1,6 +1,6 @@
 <script lang="ts">
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
-  import { Bell, BellOff, Check, Settings, UserPlus, Users } from '@lucide/svelte';
+  import { Bell, BellOff, Check, LayoutDashboard, Settings, UserPlus, Users } from '@lucide/svelte';
   import { tick } from 'svelte';
   import type { AuthUser } from '$lib/api/auth';
   import { Avatar, Badge, Button, Popover, PopoverMenuLabel } from '$lib/shared/ui';
@@ -19,6 +19,8 @@
     onGoHome,
     onOpenPeople,
     onOpenSettings,
+    onOpenAdmin,
+    adminOpen = false,
     notificationsOpen = false,
     notificationUnreadCount = 0,
     onOpenNotifications,
@@ -37,6 +39,9 @@
     onGoHome: () => void;
     onOpenPeople: () => void;
     onOpenSettings: () => void;
+    /** Given to a platform administrator only. */
+    onOpenAdmin?: () => void;
+    adminOpen?: boolean;
     notificationsOpen?: boolean;
     notificationUnreadCount?: number;
     onOpenNotifications?: () => void;
@@ -374,6 +379,19 @@
     </Popover>
     <div class="lv-profile-actions">
       <SidebarDownload />
+      {#if onOpenAdmin}
+        <button
+          class="lobby-gear lv-admin-button"
+          class:is-open={adminOpen}
+          type="button"
+          title="Админка"
+          aria-label="Открыть админку"
+          aria-pressed={adminOpen}
+          onclick={onOpenAdmin}
+        >
+          <LayoutDashboard {...iconSm} aria-hidden="true" />
+        </button>
+      {/if}
       <button
         class="lobby-gear lv-notification-button"
         class:is-open={notificationsOpen}
@@ -488,7 +506,8 @@
   .lv-notification-button {
     position: relative;
   }
-  .lv-notification-button.is-open {
+  .lv-notification-button.is-open,
+  .lv-admin-button.is-open {
     background: var(--vr-surface-3);
     color: var(--vr-text);
   }

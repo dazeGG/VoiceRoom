@@ -83,7 +83,8 @@
       "content_reports": ["apps/api/src/domains/reports/report.repository.ts"],
       "voice_sessions": ["apps/api/src/domains/rooms/voice-session.repository.ts"],
       "user_activity_days": ["apps/api/src/domains/account/activity.repository.ts"],
-      "product_snapshots": ["apps/api/src/domains/ops/product-snapshot.repository.ts"]
+      "product_snapshots": ["apps/api/src/domains/ops/product-snapshot.repository.ts"],
+      "system_snapshots": ["apps/api/src/domains/ops/system-snapshot.repository.ts"]
     },
     "crossDomainWriters": {
       "apps/api/src/domains/account/account-deletion.repository.ts": [

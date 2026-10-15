@@ -58,7 +58,7 @@ import { BrowserNotificationRouting } from './browser-notification-routing';
 import type { RoomSocial } from '$lib/features/room/social';
 
 export type LobbyMode = 'friends' | 'rooms';
-export type LobbyView = 'home' | 'dm' | 'people';
+export type LobbyView = 'home' | 'dm' | 'people' | 'admin';
 
 // The lobby enters voice for this event through its usual confirmation flow.
 export const ENTER_ROOM_EVENT = 'voice-room:enter-room';
@@ -205,6 +205,12 @@ export class LobbyStore {
   showPeople = (): void => {
     this.view = 'people';
     void this.refreshRequests().catch(() => {});
+  };
+
+  /** The admin panel, beside the friends list like the people view; a call keeps going. */
+  showAdmin = (): void => {
+    this.mode = 'friends';
+    this.view = 'admin';
   };
 
   openDm = async (userId: string): Promise<void> => {

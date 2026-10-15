@@ -17,6 +17,8 @@
   import VoiceHome from './components/lobby/VoiceHome.svelte';
   import DmView from './components/lobby/DmView.svelte';
   import PeopleView from './components/lobby/PeopleView.svelte';
+  import AdminPanel from '$lib/features/admin/AdminPanel.svelte';
+  import { fetchAdminAccess } from '$lib/api/admin';
   import RoomBrowseView from './components/lobby/RoomBrowseView.svelte';
   import RoomPreviewView from './components/lobby/RoomPreviewView.svelte';
   import LobbyRoomSettingsDialog from './components/lobby/LobbyRoomSettingsDialog.svelte';
@@ -86,6 +88,8 @@
   }>();
 
   const rooms = new LobbyRooms((message) => onToast(message));
+  // The admin panel's entry shows only to the accounts the server names.
+  let isAdmin = $state(false);
   const roomLabel = (roomId: string): string => rooms.label(roomId);
   let creating = $state(false);
   let createDialogOpen = $state(false);
@@ -170,6 +174,13 @@
     const teardownNotifications = notifications.start();
     const teardownFriends = user ? lobby.init(user.id, user.doNotDisturb, user.presenceStatus) : () => {};
     const teardownRooms = user ? rooms.follow() : () => {};
+    if (user) {
+      fetchAdminAccess().then(
+        (admin) => (isAdmin = admin),
+        // Without an answer the entry stays hidden; /admin still works.
+        () => {}
+      );
+    }
 
     function onEmbeddedLeave(event: Event): void {
       const closedRoomId =
@@ -466,6 +477,8 @@
       onGoHome={goHome}
       onOpenPeople={openPeople}
       onOpenSettings={prompts.openSettings}
+      onOpenAdmin={isAdmin ? lobby.showAdmin : undefined}
+      adminOpen={lobby.mode === 'friends' && lobby.view === 'admin'}
       notificationsOpen={notifications.open}
       notificationUnreadCount={notifications.inbox.unreadCount}
       onOpenNotifications={notifications.toggle}
@@ -533,6 +546,8 @@
         <DmView self={user} />
       {:else if lobby.mode === 'friends' && lobby.view === 'people'}
         <PeopleView {user} {onToast} onHome={goHome} />
+      {:else if lobby.mode === 'friends' && lobby.view === 'admin' && isAdmin}
+        <AdminPanel />
       {:else if lobby.mode === 'friends'}
         {@render voiceHome()}
       {/if}

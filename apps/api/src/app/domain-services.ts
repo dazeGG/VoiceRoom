@@ -8,7 +8,10 @@ import type { RoomPeerMessage } from '../realtime/legacy-events.ts';
 import { buildServerEnvelope } from '../realtime/envelope.ts';
 import { mentionUserIdsFromContent } from '@voice-room/shared/mentions';
 import { LOG_EVENTS } from '../lib/log-events.ts';
+import type { LiveNumbers } from '@voice-room/shared/contracts/admin';
+import packageJson from '../../package.json' with { type: 'json' };
 import { createAccountService } from '../domains/account/account.service.ts';
+import { createAdminService } from '../domains/admin/admin.service.ts';
 import { createSessionCookies } from '../domains/account/session-cookie.ts';
 import type { createAdmissionService } from '../domains/admission/admission.service.ts';
 import { createAvatarsService } from '../domains/media/avatars.service.ts';
@@ -41,6 +44,8 @@ export interface DomainServiceDeps {
   logger: () => Logger;
   /** The admission service, built with the app (it needs the roster wait). */
   admission: () => ReturnType<typeof createAdmissionService> | null;
+  /** What the realtime layer holds right now: the admin panel shows it. */
+  liveNumbers: () => LiveNumbers;
 }
 
 export function createDomainServices(deps: DomainServiceDeps) {
@@ -218,6 +223,24 @@ export function createDomainServices(deps: DomainServiceDeps) {
     removeDirectMessage: (input) => directMessages.removeAsOperator(input)
   });
 
+  const admin = createAdminService({
+    adminUserIds: config.PLATFORM_ADMIN_USER_IDS,
+    stats: () => {
+      const repository = services.getAdminStatsRepository();
+      if (!repository) throw new Error('Admin statistics require the database');
+      return repository;
+    },
+    systemSnapshots: () => {
+      const repository = services.getSystemSnapshotRepository();
+      if (!repository) throw new Error('Admin statistics require the database');
+      return repository;
+    },
+    live: deps.liveNumbers,
+    livekitEnabled: () => deps.liveKit.config().enabled,
+    version: packageJson.version,
+    startedAt: Date.now()
+  });
+
   const desktopReleaseService = createDesktopReleaseService({
     repo: config.DESKTOP_RELEASE_REPO,
     cacheMs: config.DESKTOP_RELEASE_CACHE_MS,
@@ -238,6 +261,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     notificationSettings,
     avatars: avatarsService,
     reports,
+    admin,
     desktopRelease: desktopReleaseService
   };
 }

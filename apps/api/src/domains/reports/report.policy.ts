@@ -1,9 +1,4 @@
-// Who may review reports and what an account may report.
-
-/** A platform administrator is an account the operator named in PLATFORM_ADMIN_USER_IDS. */
-export function isPlatformAdmin(adminUserIds: readonly string[], userId: string | null | undefined): boolean {
-  return Boolean(userId && adminUserIds.includes(userId));
-}
+// What an account may report. Who reviews reports is admin.policy.ts.
 
 /**
  * A direct message can be reported by its recipient only: the sender can

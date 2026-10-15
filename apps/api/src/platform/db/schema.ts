@@ -472,6 +472,26 @@ export interface Sessions {
   user_id: string;
 }
 
+export interface SystemSnapshots {
+  api_rss_bytes: Generated<Int8>;
+  at: Timestamp;
+  cpu_pct: number | null;
+  db_bytes: Int8 | null;
+  disk_total_bytes: Int8 | null;
+  disk_used_bytes: Int8 | null;
+  event_loop_p99_ms: Generated<number>;
+  guest_connections: Generated<number>;
+  http_5xx: Generated<number>;
+  http_avg_ms: number | null;
+  http_requests: Generated<number>;
+  load1: Generated<number>;
+  mem_total_bytes: Generated<Int8>;
+  mem_used_bytes: Generated<Int8>;
+  voice_peers: Generated<number>;
+  voice_rooms: Generated<number>;
+  ws_connections: Generated<number>;
+}
+
 export interface UserActivityDays {
   browser: Generated<boolean>;
   day: Timestamp;
@@ -575,6 +595,7 @@ export interface DB {
   room_server_mutes: RoomServerMutes;
   rooms: Rooms;
   sessions: Sessions;
+  system_snapshots: SystemSnapshots;
   user_activity_days: UserActivityDays;
   user_blocks: UserBlocks;
   user_notifications: UserNotifications;
