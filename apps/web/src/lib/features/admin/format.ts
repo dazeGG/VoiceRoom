@@ -89,3 +89,10 @@ export function formatMinutes(minutes: number): string {
   if (minutes <= 0) return '—';
   return minutes < 60 ? `${Math.round(minutes)} мин` : formatHours(minutes / 60);
 }
+
+const numericDate = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+/** '15.10.2026' */
+export function formatNumericDate(at: number): string {
+  return numericDate.format(at);
+}

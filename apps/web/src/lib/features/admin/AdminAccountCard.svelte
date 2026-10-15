@@ -25,7 +25,7 @@
   import AdminNotice from './AdminNotice.svelte';
   import TimeChart from './charts/TimeChart.svelte';
   import { blockTerm, describeAction } from './accounts';
-  import { formatAgo, formatCount, formatDate, formatDateTime, formatDay, formatMinutes } from './format';
+  import { formatAgo, formatCount, formatDateTime, formatDay, formatMinutes, formatNumericDate } from './format';
   import { loadFailure, type LoadFailure } from './load-state';
 
   let { userId, onBack }: { userId: string; onBack: () => void } = $props();
@@ -174,7 +174,7 @@
   <section class="card-tiles" aria-label="Цифры">
     <div class="card-tile">
       <span class="card-tile-label">Регистрация</span><span class="card-tile-value"
-        >{formatDate(account.createdAt)}</span
+        >{formatNumericDate(account.createdAt)}</span
       >
     </div>
     <div class="card-tile">
@@ -424,7 +424,7 @@
 
   .card-tiles {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 125px), 1fr));
     gap: 10px;
   }
 
