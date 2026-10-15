@@ -13,15 +13,10 @@ html.is-desktop .app-shell {
   min-height: 0;
 }
 
-@media (min-width: 901px) {
-  html.is-desktop .room-chat-rail {
-    top: var(--voice-room-shell-topbar, 0px);
-    height: calc(100dvh - var(--voice-room-shell-topbar, 0px));
-    max-height: calc(100dvh - var(--voice-room-shell-topbar, 0px));
-    bottom: auto;
-  }
-}
-
+/* The shell pads <html> by the topbar, so the page already starts below it;
+   only what is fixed to the window (the narrow-screen rail, the update
+   notice) needs the topbar added. The wide rail sits in the room grid beside
+   the room header and takes no offset of its own. */
 @media (max-width: 900px) {
   html.is-desktop .room-chat-rail {
     top: calc(var(--voice-room-shell-topbar, 0px) + 44px);
