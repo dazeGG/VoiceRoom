@@ -180,7 +180,8 @@
 
   .time-range-preset.is-selected {
     background: var(--vr-accent-soft);
-    color: var(--vr-accent-ink);
+    color: var(--vr-accent);
+    font-weight: 600;
   }
 
   .time-range-custom {

@@ -28,10 +28,22 @@
 
   function formatNumber(value: number): string {
     if (Math.abs(value) >= 1000) return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 1 }).format(value);
-    return String(Math.round(value * 100) / 100);
+    return new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value);
   }
 
   /** A round top for the axis: 1, 2 or 5 times a power of ten. */
+  /** The smallest of 1, 2 or 5 times a power of ten that is at least `value`. */
+  function niceStep(value: number): number {
+    const power = 10 ** Math.floor(Math.log10(value));
+    for (const step of [1, 2, 5, 10]) if (step * power >= value) return step * power;
+    return 10 * power;
+  }
+
+  /** Counts get whole-number gridlines: four equal steps of a round size. */
+  function countMax(value: number): number {
+    return 4 * Math.max(1, niceStep(value / 4));
+  }
+
   function niceMax(value: number): number {
     if (!(value > 0)) return 1;
     const power = 10 ** Math.floor(Math.log10(value));
@@ -40,6 +52,9 @@
   }
 
   const count = $derived(labels.length);
+  const wholeNumbers = $derived(
+    series.every((line) => line.values.every((value) => value === null || Number.isInteger(value)))
+  );
   const plotWidth = $derived(Math.max(0, width - PAD.left - PAD.right));
   const plotHeight = $derived(Math.max(0, height - PAD.top - PAD.bottom));
   const top = $derived.by(() => {
@@ -53,7 +68,7 @@
         for (const line of series) max = Math.max(max, line.values[index] ?? 0);
       }
     }
-    return niceMax(max);
+    return wholeNumbers ? countMax(max) : niceMax(max);
   });
   const step = $derived(count > 1 ? plotWidth / (kind === 'bar' ? count : count - 1) : plotWidth);
   const x = (index: number) =>

@@ -423,6 +423,29 @@ test('a chart stacks bars, breaks lines at gaps, and shows the values under the 
   expect(screen.getByText('Пока нет данных')).toBeTruthy();
 });
 
+test('counts get whole-number gridlines, fractions keep round ones', () => {
+  const axis = (container: HTMLElement) =>
+    [...container.querySelectorAll('text.chart-axis[text-anchor="end"]')].map((node) => node.textContent?.trim());
+  const counts = render(TimeChart, {
+    props: { title: 'Аккаунты', labels: ['15.10', '16.10'], series: [{ name: 'Всего', values: [0, 1], color: 'red' }] }
+  });
+  expect(axis(counts.container)).toEqual(['0', '1', '2', '3', '4']);
+  counts.unmount();
+  const many = render(TimeChart, {
+    props: {
+      title: 'Сообщения',
+      labels: ['15.10', '16.10'],
+      series: [{ name: 'Всего', values: [3, 37], color: 'red' }]
+    }
+  });
+  expect(axis(many.container)).toEqual(['0', '10', '20', '30', '40']);
+  many.unmount();
+  const hours = render(TimeChart, {
+    props: { title: 'Часы', labels: ['15.10', '16.10'], series: [{ name: 'Всего', values: [0.5, 1], color: 'red' }] }
+  });
+  expect(axis(hours.container)).toEqual(['0', '0,25', '0,5', '0,75', '1']);
+});
+
 test('a sparkline draws a trend from two points and leaves a gap where a value is missing', () => {
   const drawn = render(Sparkline, { props: { values: [1, null, 3, 4], label: 'Тренд' } });
   const line = drawn.container.querySelector('path.spark-line')!.getAttribute('d')!;

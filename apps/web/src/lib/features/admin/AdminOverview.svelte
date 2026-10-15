@@ -299,7 +299,7 @@
 
   .kpis {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 165px), 1fr));
     gap: 12px;
   }
 
