@@ -49,6 +49,7 @@ const LOG_EVENTS = Object.freeze({
   ROOM_OCCUPANCY_RETRY_FAILED: 'room.occupancy_retry_failed',
   ROOM_TYPING_FORWARD_FAILED: 'room.typing_forward_failed',
   ROOM_SUMMARY_RECIPIENTS_FAILED: 'room.summary_recipients_failed',
+  ROOM_SUMMARY_FLUSH_FAILED: 'room.summary_flush_failed',
   ROOM_INVITATION_EXPIRY_FAILED: 'room.invitation_expiry_failed',
 
   // LiveKit admission boundary.

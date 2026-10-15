@@ -93,8 +93,12 @@ export function createRoomSummaries(deps: RoomSummaryDeps) {
 
   const summaryCoalescer = createSummaryCoalescer({
     delayMs: SUMMARY_COALESCE_MS,
+    // Nothing awaits a coalesced flush, so a failure (the database is away) is
+    // logged here; left unhandled it would end the process.
     flush: (roomId) => {
-      void flushSummary(roomId);
+      flushSummary(roomId).catch((error: unknown) => {
+        logger.error({ evt: LOG_EVENTS.ROOM_SUMMARY_FLUSH_FAILED, roomId, err: error }, 'failed to send room summary');
+      });
     }
   });
 
