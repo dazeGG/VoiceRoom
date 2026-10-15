@@ -26,7 +26,8 @@
     /* Top centre: the lobby sidebar keeps its profile controls bottom-left and
        the room chat its composer bottom-right. */
     position: fixed;
-    top: 14px;
+    /* The desktop shell's topbar covers the top of the window. */
+    top: calc(var(--voice-room-shell-topbar, 0px) + 14px);
     left: 50%;
     transform: translateX(-50%);
     z-index: 900;
