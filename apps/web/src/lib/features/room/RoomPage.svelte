@@ -12,6 +12,7 @@
   import RoomOverlays from './components/RoomOverlays.svelte';
   import RoomSettingsDialog from './components/RoomSettingsDialog.svelte';
   import RoomStage from './components/RoomStage.svelte';
+  import MobileCallStage from './components/MobileCallStage.svelte';
   import RoomTopbar from './components/RoomTopbar.svelte';
   import StartRoomScreen from './components/StartRoomScreen.svelte';
   import { applyDesktopBoundaryToDocument, setRoomRouteActive } from '$lib/platform/desktop-boundary';
@@ -58,6 +59,7 @@
   <RoomCtaSlot />
   <StartRoomScreen />
   <RoomStage />
+  <MobileCallStage />
   <RoomEntryErrorScreen />
   <RoomModerationScreen />
   <NotFoundScreen />

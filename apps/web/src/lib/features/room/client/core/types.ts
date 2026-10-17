@@ -222,8 +222,12 @@ export interface RoomScreenState {
   viewedScreenPeerId: string;
 }
 
+export type CameraFacing = 'user' | 'environment';
+
 export interface RoomCameraState {
   cameraDeviceId: string;
+  /** Which way the phone camera looks; only the front one is shown mirrored. */
+  cameraFacing: CameraFacing;
   /** Capture is being opened; the button waits instead of starting a second one. */
   cameraStarting: boolean;
   localCameraPublication: LocalTrackPublication | null;

@@ -62,3 +62,17 @@ test('our own camera is mirrored', () => {
   });
   expect(container.querySelector('video')?.getAttribute('data-mirrored')).toBe('true');
 });
+
+test('a phone turned to its back camera is not mirrored', async () => {
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+  const { state } = await import('../../src/lib/features/room/client/core/state.svelte');
+  state.cameraFacing = 'environment';
+  try {
+    const { container } = render(ParticipantTile, {
+      participant: participant({ isLocal: true, camera: true, cameraStream: new FakeStream() as MediaStream })
+    });
+    expect(container.querySelector('video')?.hasAttribute('data-mirrored')).toBe(false);
+  } finally {
+    state.cameraFacing = 'user';
+  }
+});

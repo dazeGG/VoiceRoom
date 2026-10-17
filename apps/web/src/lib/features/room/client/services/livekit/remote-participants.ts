@@ -16,6 +16,7 @@ import { loadLiveKitClient } from '../../media/livekit-runtime';
 import { getCameraReceiverDemand } from '../../media/camera-receiver-demand';
 import { getScreenReceiverDemand } from '../../media/screen-receiver-demand';
 import { participantsUi } from '../../../participants-ui.svelte';
+import { getMobileSpotlightPeerId, isMobileCallActive } from '../../../mobile-call-ui.svelte';
 import { getScreenPublicationPresence } from '../../media/screen-publication-state';
 import { createScreenSubscriptionRetryController } from '../../media/screen-subscription-retry';
 import {
@@ -234,7 +235,8 @@ async function applyRemoteCameraDemand(peer: Participant, publication: RemoteTra
   if (publication.isDesired === false) return;
   if (peer.livekitParticipant?.trackPublications.get(publication.trackSid) !== publication) return;
   const demand = getCameraReceiverDemand(peer.id, {
-    focusedPeerId: participantsUi.focusedParticipantId,
+    // A phone draws its own layout; the desktop spotlight under it may be stale.
+    focusedPeerId: isMobileCallActive() ? getMobileSpotlightPeerId() : participantsUi.focusedParticipantId,
     participantCount: state.peers.size + (state.self ? 1 : 0),
     screenOnStage: Boolean(state.viewedScreenPeerId)
   });

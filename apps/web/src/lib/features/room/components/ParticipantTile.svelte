@@ -109,7 +109,7 @@
     <video
       class="participant-camera"
       {@attach showCamera(cameraStream)}
-      data-mirrored={participant.isLocal ? 'true' : undefined}
+      data-mirrored={participant.isLocal && roomState.cameraFacing !== 'environment' ? 'true' : undefined}
       autoplay
       playsinline
       muted

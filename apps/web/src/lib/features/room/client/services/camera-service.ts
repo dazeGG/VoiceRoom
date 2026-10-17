@@ -3,6 +3,7 @@
 
 import { CAMERA_CAPTURE, CAMERA_DEVICE_STORAGE_KEY } from '../core/config';
 import { state } from '../core/state.svelte';
+import type { CameraFacing } from '../core/types';
 import { stopStream } from '../core/utils';
 import { showToast } from '../ui/toast';
 import { publishLocalCamera, unpublishLocalCamera } from './livekit/local-publications';
@@ -80,7 +81,58 @@ export async function switchCamera(deviceId: string): Promise<void> {
   }
 }
 
-function adoptCameraStream(stream: MediaStream): void {
+/**
+ * A phone turns between its front and back camera. Most phones open one
+ * camera at a time, so the current capture is released before the other one
+ * opens; if the other one fails, the camera comes back the way it looked.
+ */
+export async function flipCamera(): Promise<void> {
+  const previous = state.localCameraStream;
+  if (!previous || state.cameraStarting) return;
+  const to: CameraFacing = state.cameraFacing === 'user' ? 'environment' : 'user';
+  // Reopened by its device if the other side fails: not every camera reports a facing.
+  const previousDeviceId = previous.getVideoTracks()[0]?.getSettings?.().deviceId ?? '';
+
+  state.cameraStarting = true;
+  try {
+    await unpublishLocalCamera().catch((error) => log.warn('camera unpublish failed', errorContext(error)));
+    stopStream(previous);
+    let next: MediaStream;
+    let facing: CameraFacing | undefined;
+    try {
+      next = await openFacingCapture(to);
+      facing = to;
+      // The facing now picks the camera; a remembered device would override it.
+      persistCameraDeviceId('');
+    } catch (error) {
+      log.warn('camera flip failed', errorContext(error));
+      showToast(isMissingDeviceError(error) ? 'Другой камеры нет' : describeCameraError(error));
+      next = await openCameraCapture(previousDeviceId);
+    }
+    // Leaving the room while the capture opened drops it.
+    if (state.localCameraStream !== previous) {
+      stopStream(next);
+      return;
+    }
+    adoptCameraStream(next, facing);
+    await publishLocalCamera();
+  } catch (error) {
+    log.warn('camera reopen failed', errorContext(error));
+    await stopCamera();
+    showToast(describeCameraError(error));
+  } finally {
+    state.cameraStarting = false;
+  }
+}
+
+/**
+ * `opened` is the side that was asked for; what the camera says about itself
+ * wins, so a back camera chosen by its device is not shown mirrored.
+ */
+function adoptCameraStream(stream: MediaStream, opened?: CameraFacing): void {
+  const reported = stream.getVideoTracks()[0]?.getSettings?.().facingMode;
+  if (reported === 'user' || reported === 'environment') state.cameraFacing = reported;
+  else state.cameraFacing = opened ?? 'user';
   state.localCameraStream = stream;
   // Unplugging the camera or revoking access ends the track.
   stream.getVideoTracks()[0]?.addEventListener('ended', () => {
@@ -102,13 +154,29 @@ function releaseLocalCamera(): void {
   }
 }
 
+const CAMERA_VIDEO_CONSTRAINTS = {
+  width: { ideal: CAMERA_CAPTURE.width },
+  height: { ideal: CAMERA_CAPTURE.height },
+  frameRate: { ideal: CAMERA_CAPTURE.frameRate, max: CAMERA_CAPTURE.frameRate }
+};
+
+function openFacingCapture(facing: CameraFacing): Promise<MediaStream> {
+  return navigator.mediaDevices.getUserMedia({
+    audio: false,
+    video: { ...CAMERA_VIDEO_CONSTRAINTS, facingMode: { exact: facing } }
+  });
+}
+
 async function openCameraCapture(deviceId: string): Promise<MediaStream> {
-  const video = {
-    width: { ideal: CAMERA_CAPTURE.width },
-    height: { ideal: CAMERA_CAPTURE.height },
-    frameRate: { ideal: CAMERA_CAPTURE.frameRate, max: CAMERA_CAPTURE.frameRate }
-  };
-  if (!deviceId) return navigator.mediaDevices.getUserMedia({ audio: false, video });
+  const video = CAMERA_VIDEO_CONSTRAINTS;
+  // Without a chosen device a phone turned to its back camera opens it again.
+  // Nothing else asks for a facing: on a computer it would prefer the built-in
+  // camera over the default one.
+  if (!deviceId)
+    return navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: state.cameraFacing === 'environment' ? { ...video, facingMode: { ideal: 'environment' } } : video
+    });
 
   try {
     return await navigator.mediaDevices.getUserMedia({

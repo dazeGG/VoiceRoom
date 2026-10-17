@@ -7,13 +7,12 @@
   import { RoomInviteFriendList, RoomMenu } from '$lib/shared/components/room-menu';
   import { state as roomClientState } from '../client/core/state.svelte';
   import { getConnectionStatusView } from '../client/ui/status';
-  import { closeChat, roomUi, selectRoomPanel, type RoomPanelTab } from '../room-ui.svelte';
+  import { roomUi } from '../room-ui.svelte';
+  import { getRoomUnreadCount, toggleRoomPanel } from '../room-panel-toggle.svelte';
   import { roomSettingsUi, openRoomSettings } from '../room-settings.svelte';
   import { showToast } from '../client/ui/toast';
   import { useRoomSocial } from '../social';
   import { getSortedParticipants } from '../participants-ui.svelte';
-  import { markRoomChatRead } from '$lib/api/rooms';
-  import { roomPresence, setRoomUnreadCount } from '$lib/entities/room/room-presence.svelte';
   import RoomCallTimer from './RoomCallTimer.svelte';
 
   const social = useRoomSocial();
@@ -30,22 +29,7 @@
         .filter(Boolean)
     )
   );
-  const roomUnreadCount = $derived(
-    Math.max(roomUi.unreadChat, roomPresence.unreadCountByRoomId[roomClientState.roomId] ?? 0)
-  );
-
-  function openRoomPanel(tab: RoomPanelTab): void {
-    if (roomUi.chatOpen && roomUi.activePanel === tab) {
-      closeChat();
-      return;
-    }
-    selectRoomPanel(tab);
-    if (tab !== 'chat') return;
-    setRoomUnreadCount(roomClientState.roomId, 0);
-    // Read state is kept for rooms in the account's list; a temporary room is never there.
-    if (roomClientState.self?.accountUserId && roomClientState.roomIsStatic)
-      void markRoomChatRead(roomClientState.roomId).catch(() => {});
-  }
+  const roomUnreadCount = $derived(getRoomUnreadCount());
 
   async function copyInviteLink(close: () => void): Promise<void> {
     try {
@@ -130,7 +114,7 @@
           aria-pressed={roomUi.chatOpen && roomUi.activePanel === 'chat'}
           data-active={roomUi.chatOpen && roomUi.activePanel === 'chat'}
           title="Чат"
-          onclick={() => openRoomPanel('chat')}
+          onclick={() => toggleRoomPanel('chat')}
         >
           <MessageSquare {...iconSm} aria-hidden="true" />
           {#if roomUnreadCount > 0}<span class="room-panel-tab-unread" aria-hidden="true"></span>{/if}
@@ -141,7 +125,7 @@
           aria-pressed={roomUi.chatOpen && roomUi.activePanel === 'participants'}
           data-active={roomUi.chatOpen && roomUi.activePanel === 'participants'}
           title="Участники"
-          onclick={() => openRoomPanel('participants')}
+          onclick={() => toggleRoomPanel('participants')}
         >
           <Users {...iconSm} aria-hidden="true" />
         </button>
