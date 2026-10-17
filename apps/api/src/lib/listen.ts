@@ -34,7 +34,7 @@ function startApiListener({
 
   function logListenAddress(mode: 'tcp' | 'unix', address: AddressInfo | string | null): void {
     if (mode === 'unix') {
-      logger.info({ evt: LOG_EVENTS.LISTENING, transport: 'unix', address }, 'Voice Room API is listening');
+      logger.info({ evt: LOG_EVENTS.LISTENING, transport: 'unix', address }, 'VoiceRoom API is listening');
       return;
     }
 
@@ -43,12 +43,12 @@ function startApiListener({
     const listenPort = actual?.port || port;
     logger.info(
       { evt: LOG_EVENTS.LISTENING, transport: 'tcp', host: listenHost, port: listenPort },
-      'Voice Room API is listening'
+      'VoiceRoom API is listening'
     );
   }
 
   function failToStart(error: unknown): void {
-    logger.fatal({ evt: LOG_EVENTS.BOOTSTRAP_FAILED, err: error }, 'Voice Room API failed to start');
+    logger.fatal({ evt: LOG_EVENTS.BOOTSTRAP_FAILED, err: error }, 'VoiceRoom API failed to start');
     if (typeof process !== 'undefined') {
       process.exitCode = 1;
     }

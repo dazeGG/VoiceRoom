@@ -177,7 +177,7 @@
       </div>
 
       <div class="stories-head">
-        <span class="stories-kicker">Что нового в Voice Room · {index + 1} из {WHATS_NEW_SLIDES.length}</span>
+        <span class="stories-kicker">Что нового в VoiceRoom · {index + 1} из {WHATS_NEW_SLIDES.length}</span>
         {#if !last}
           <button class="stories-quiet" type="button" onclick={() => finish(false)}>Пропустить</button>
         {/if}

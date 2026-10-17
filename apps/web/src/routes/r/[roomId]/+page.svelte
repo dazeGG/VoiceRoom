@@ -97,7 +97,7 @@
 </script>
 
 <svelte:head>
-  <title>Voice Room</title>
+  <title>VoiceRoom</title>
   <meta name="theme-color" content="#131416" />
 </svelte:head>
 
@@ -107,7 +107,7 @@
       <div class="auth-loader-card">
         <span class="auth-loader-orb"><MascotIcon variant="look" size={52} /></span>
         <p class="auth-loader-kicker">Проверяем устройство</p>
-        <h1>Voice Room запускается</h1>
+        <h1>VoiceRoom запускается</h1>
       </div>
     </main>
   </div>
@@ -117,7 +117,7 @@
       <div class="auth-session-error-card">
         <p class="auth-loader-kicker">Desktop only</p>
         <h1>Откройте комнату на компьютере</h1>
-        <p>Мобильные браузеры не подключаются к realtime, LiveKit, медиа и push-инфраструктуре Voice Room.</p>
+        <p>Мобильные браузеры не подключаются к realtime, LiveKit, медиа и push-инфраструктуре VoiceRoom.</p>
       </div>
     </main>
   </div>

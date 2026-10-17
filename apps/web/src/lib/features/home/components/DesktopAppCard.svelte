@@ -19,7 +19,9 @@
   } from '../../../platform/desktop-builds';
   import { startDesktopBuildDownload } from '../../../platform/desktop-download';
 
-  let { title = 'Voice Room Desktop' }: { title?: string } = $props();
+  // Embedded, it is a settings tab: no card of its own around it, the perks
+  // side by side so the whole tab fits without scrolling.
+  let { title = 'VoiceRoom Desktop', embedded = false }: { title?: string; embedded?: boolean } = $props();
 
   const PERKS = [
     { text: 'Оверлей поверх игры', icon: Gamepad2 },
@@ -61,7 +63,12 @@
   }
 </script>
 
-<section class="desktop-card" id="download" aria-label="Десктоп-приложение">
+<section
+  class="desktop-card"
+  class:is-embedded={embedded}
+  id={embedded ? undefined : 'download'}
+  aria-label="Десктоп-приложение"
+>
   <div class="desktop-card-head">
     <span class="desktop-card-icon"><MascotIcon variant="blink" size={32} /></span>
     <span class="desktop-card-titles">
@@ -136,6 +143,27 @@
     border-radius: 22px;
     background: var(--vr-surface);
     box-shadow: var(--vr-shadow-modal);
+  }
+
+  .desktop-card.is-embedded {
+    max-width: none;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .desktop-card.is-embedded .desktop-card-perks {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 16px;
+  }
+
+  @media (max-width: 600px) {
+    .desktop-card.is-embedded .desktop-card-perks {
+      grid-template-columns: minmax(0, 1fr);
+    }
   }
 
   .desktop-card-head {

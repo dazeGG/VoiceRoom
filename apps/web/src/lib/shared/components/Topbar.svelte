@@ -1,9 +1,10 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
+  import BetaMark from './BetaMark.svelte';
   import './topbar.css';
 
   let {
-    label = 'На главную Voice Room',
+    label = 'На главную VoiceRoom',
     reload = false,
     children
   }: { label?: string; reload?: boolean; children?: Snippet } = $props();
@@ -12,7 +13,8 @@
 <header class="topbar">
   <a class="brand" href="/" aria-label={label} data-sveltekit-reload={reload ? '' : undefined}>
     <span class="brand-mark" aria-hidden="true"></span>
-    <span>Voice Room</span>
+    <span>VoiceRoom</span>
+    <BetaMark />
   </a>
   {#if children}{@render children()}{/if}
 </header>

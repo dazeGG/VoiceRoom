@@ -174,10 +174,17 @@ test('the history loads a page at a time and narrows to one room', async () => {
   expect(within(table).getByRole('button', { name: 'gone' })).toBeTruthy();
   expect(within(table).getByText('удалена')).toBeTruthy();
 
-  await userEvent.click(screen.getByRole('button', { name: 'Показать ещё' }));
-  await waitFor(() => expect(within(table).getAllByRole('row')).toHaveLength(1 + 5));
-  expect(within(table).getByText('@alice')).toBeTruthy();
-  expect(screen.queryByRole('button', { name: 'Показать ещё' })).toBeNull();
+  // The next page replaces this one; going back asks for the first page again.
+  expect(screen.getByRole('button', { name: 'Назад' }).hasAttribute('disabled')).toBe(true);
+  await userEvent.click(screen.getByRole('button', { name: 'Дальше' }));
+  await waitFor(() => expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(1 + 1));
+  expect(within(screen.getByRole('table')).getByText('@alice')).toBeTruthy();
+  expect(screen.getByText('Страница 2')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Дальше' }).hasAttribute('disabled')).toBe(true);
+  await userEvent.click(screen.getByRole('button', { name: 'Назад' }));
+  await waitFor(() => expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(1 + 4));
+  expect(urls.at(-1)?.searchParams.has('after')).toBe(false);
+  expect(screen.getByText('Страница 1')).toBeTruthy();
 
   // A live room's name narrows the list; the chip takes it back to every room.
   await userEvent.click(
@@ -192,6 +199,26 @@ test('the history loads a page at a time and narrows to one room', async () => {
   // So does a room in the history, a gone one too.
   await userEvent.click(within(screen.getByRole('table')).getByRole('button', { name: 'gone' }));
   await waitFor(() => expect(urls.at(-1)?.searchParams.get('roomId')).toBe('gone'));
+});
+
+test('a stay shows when it ended next to when it began, and its length in hours and minutes', async () => {
+  const joinedAt = new Date(2026, 9, 15, 14, 30).getTime();
+  stubApi({
+    'GET /api/admin/rooms': () => live([]),
+    'GET /api/admin/rooms/history': () =>
+      history([
+        stay('s-long', { joinedAt, leftAt: joinedAt + 85 * MINUTE }),
+        stay('s-night', { joinedAt: joinedAt + 9 * 60 * MINUTE, leftAt: joinedAt + 10 * 60 * MINUTE })
+      ])
+  });
+  render(AdminPanel, { props: { tab: 'rooms' } });
+
+  const [, long, night] = within(await screen.findByRole('table')).getAllByRole('row');
+  expect(within(long).getByText('15 окт., 14:30 – 15:55')).toBeTruthy();
+  expect(within(long).getByText('1 ч 25 мин')).toBeTruthy();
+  // Past midnight the end carries its own date.
+  expect(within(night).getByText('15 окт., 23:30 – 16 окт., 00:30')).toBeTruthy();
+  expect(within(night).getByText('1 ч')).toBeTruthy();
 });
 
 test('the rooms tab has its own address', () => {

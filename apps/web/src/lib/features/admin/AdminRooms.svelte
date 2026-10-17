@@ -4,7 +4,17 @@
   // accounts, times and the kind of client only: nothing said in a room. An
   // account opens its card; a room's name narrows the history to it.
   import { onMount } from 'svelte';
-  import { AppWindow, Globe, HeadphoneOff, MicOff, MonitorUp, Smartphone, X } from '@lucide/svelte';
+  import {
+    AppWindow,
+    ChevronLeft,
+    ChevronRight,
+    Globe,
+    HeadphoneOff,
+    MicOff,
+    MonitorUp,
+    Smartphone,
+    X
+  } from '@lucide/svelte';
   import {
     fetchLiveRooms,
     fetchRoomHistory,
@@ -17,7 +27,7 @@
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { AccountBadge, Avatar, Button } from '$lib/shared/ui';
   import AdminNotice from './AdminNotice.svelte';
-  import { formatCount, formatDateTime, formatMinutes, formatSince } from './format';
+  import { formatCount, formatDuration, formatSince, formatTimeSpan } from './format';
   import { loadFailure, type LoadFailure } from './load-state';
 
   let { onOpenAccount }: { onOpenAccount: (accountId: string) => void } = $props();
@@ -29,7 +39,10 @@
   let now = $state(Date.now());
 
   let stays = $state<RoomStay[]>([]);
-  let next = $state<string | null>(null);
+  // The cursor each page opens with, the first one's empty; the API pages by
+  // cursor, so a page already passed is only reached again through its own.
+  let pageCursors = $state<(string | undefined)[]>([undefined]);
+  let pageIndex = $state(0);
   let keepDays = $state<number | null>(null);
   let historyLoaded = $state(false);
   let historyFailure = $state<LoadFailure | null>(null);
@@ -48,18 +61,19 @@
     now = Date.now();
   }
 
-  async function loadHistory(more = false): Promise<void> {
+  async function loadHistory(index = 0): Promise<void> {
     historyLoading = true;
-    // An answer for a room already left behind is dropped.
+    // An answer for a room or page already left behind is dropped.
     const mine = ++historyRequest;
     try {
       const page: RoomHistory = await fetchRoomHistory({
         roomId: historyRoom?.id,
-        after: more ? (next ?? undefined) : undefined
+        after: index > 0 ? pageCursors[index] : undefined
       });
       if (mine !== historyRequest) return;
-      stays = more ? [...stays, ...page.stays] : page.stays;
-      next = page.next;
+      stays = page.stays;
+      pageIndex = index;
+      pageCursors = [...pageCursors.slice(0, index + 1), ...(page.next ? [page.next] : [])];
       keepDays = page.keepDays;
       historyLoaded = true;
       historyFailure = null;
@@ -76,6 +90,8 @@
   // history is narrowed in place.
   function showRoomHistory(room: { id: string; name: string | null } | null, scroll = false): void {
     historyRoom = room;
+    pageCursors = [undefined];
+    pageIndex = 0;
     void loadHistory();
     if (scroll) historySection?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }
@@ -100,6 +116,7 @@
   const nameOf = (account: RoomAccount) => account.displayName || account.login;
   // Under a minute reads as just now, not as "0 мин".
   const fresh = (at: number) => now - at < 60_000;
+  const hasNextPage = $derived(pageCursors.length > pageIndex + 1);
 </script>
 
 {#snippet accountLink(account: RoomAccount)}
@@ -216,7 +233,7 @@
       <table class="rooms-table">
         <thead>
           <tr>
-            <th scope="col">Вошёл</th>
+            <th scope="col">Вошёл — вышел</th>
             <th scope="col" class="is-number">Сколько</th>
             <th scope="col">Комната</th>
             <th scope="col">Кто</th>
@@ -225,8 +242,8 @@
         <tbody>
           {#each stays as stay (stay.id)}
             <tr>
-              <td>{formatDateTime(stay.joinedAt)}</td>
-              <td class="is-number">{formatMinutes((stay.leftAt - stay.joinedAt) / 60_000)}</td>
+              <td>{formatTimeSpan(stay.joinedAt, stay.leftAt)}</td>
+              <td class="is-number">{formatDuration(stay.leftAt - stay.joinedAt)}</td>
               <td>
                 <button
                   type="button"
@@ -248,8 +265,24 @@
         </tbody>
       </table>
     </div>
-    {#if next}
-      <Button variant="outline" disabled={historyLoading} onclick={() => void loadHistory(true)}>Показать ещё</Button>
+    {#if pageIndex > 0 || hasNextPage}
+      <nav class="rooms-pager" aria-label="Страницы истории">
+        <Button
+          variant="outline"
+          disabled={historyLoading || pageIndex === 0}
+          onclick={() => void loadHistory(pageIndex - 1)}
+        >
+          <ChevronLeft size={14} aria-hidden="true" />Назад
+        </Button>
+        <span class="rooms-quiet" aria-current="page">Страница {pageIndex + 1}</span>
+        <Button
+          variant="outline"
+          disabled={historyLoading || !hasNextPage}
+          onclick={() => void loadHistory(pageIndex + 1)}
+        >
+          Дальше<ChevronRight size={14} aria-hidden="true" />
+        </Button>
+      </nav>
     {/if}
   {/if}
   {#if keepDays}
@@ -460,6 +493,12 @@
     font-size: 12.5px;
     font-weight: 600;
     cursor: pointer;
+  }
+
+  .rooms-pager {
+    display: flex;
+    align-items: center;
+    gap: 12px;
   }
 
   .rooms-table-wrap {

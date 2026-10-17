@@ -45,7 +45,7 @@ test('G18-A01 blocks every desktop-only entry route before child effects mount',
       await page.goto(route);
       const boundary = page.getByRole('main', { name: 'Неподдерживаемое устройство' });
       await expect(boundary).toBeVisible();
-      await expect(page.getByRole('heading', { name: 'Откройте Voice Room на компьютере' })).toBeVisible();
+      await expect(page.getByRole('heading', { name: 'Откройте VoiceRoom на компьютере' })).toBeVisible();
       await expect(page.locator('main[aria-label="Неподдерживаемое устройство"]')).toHaveCount(1);
       await page.waitForTimeout(250);
       expect(prohibitedCalls, `${route} issued prohibited calls`).toEqual([]);

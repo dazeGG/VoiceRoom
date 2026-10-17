@@ -339,7 +339,7 @@ export type BadgeBody = Static<typeof BadgeBody>;
  */
 export const VOICE_HISTORY_KEEP_DAYS = 90;
 /** Stays on one page of a room history. */
-export const ROOM_HISTORY_PAGE_SIZE = 100;
+export const ROOM_HISTORY_PAGE_SIZE = 30;
 
 /** An account as the rooms section shows it: enough for a name, an avatar and a link to its card. */
 export const RoomAccount = Type.Object({

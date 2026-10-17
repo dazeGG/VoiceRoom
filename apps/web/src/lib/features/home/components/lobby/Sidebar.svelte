@@ -9,6 +9,7 @@
   import { friendName } from '../../model/lobby-format';
   import { useLobby } from '$lib/features/home/model/lobby-context';
   import { notificationPreferences, updatePresenceStatus } from '$lib/shared/notifications/preferences.svelte';
+  import BetaMark from '$lib/shared/components/BetaMark.svelte';
   import SidebarDownload from '../SidebarDownload.svelte';
   import VoiceCallWidget from './VoiceCallWidget.svelte';
 
@@ -222,8 +223,9 @@
 <aside class="lv-side">
   <div class="lv-side-top">
     <button class="lv-side-head" type="button" title="Главная" onclick={onGoHome}>
-      <span class="lv-brand-mark" role="img" aria-label="Voice Room"></span>
-      <span class="lv-brand-name">Voice Room</span>
+      <span class="lv-brand-mark" role="img" aria-label="VoiceRoom"></span>
+      <span class="lv-brand-name">VoiceRoom</span>
+      <BetaMark />
     </button>
     {#if onOpenAdmin}
       <button
@@ -666,7 +668,7 @@
     outline-offset: -2px;
   }
   :global(.lv-brand-name) {
-    flex: 1;
+    min-width: 0;
     color: var(--vr-text);
     font-size: 15px;
     font-weight: 600;

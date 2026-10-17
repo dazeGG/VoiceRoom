@@ -1,6 +1,6 @@
 import type { DesktopAsset, DesktopRelease } from '$lib/api/desktop';
 
-export const QUARANTINE_CMD = 'sudo xattr -rd com.apple.quarantine /Applications/Voice\\ Room.app';
+export const QUARANTINE_CMD = 'sudo xattr -rd com.apple.quarantine /Applications/VoiceRoom.app';
 export const RELEASES_URL = 'https://github.com/dazeGG/VoiceRoomDesktop/releases/latest';
 
 /** A platform the desktop app is built for; each has one asset in a release. */

@@ -103,7 +103,7 @@ export function mountRoomClient(
           const explanation = reasons.has('modifier-required')
             ? 'Для букв и цифр добавьте Ctrl, ⌘, Alt или Shift.'
             : reasons.has('input-monitoring-required')
-              ? 'Разрешите Voice Room «Мониторинг ввода» в системных настройках macOS и переподключитесь к голосу.'
+              ? 'Разрешите VoiceRoom «Мониторинг ввода» в системных настройках macOS и переподключитесь к голосу.'
               : reasons.has('duplicate-binding')
                 ? 'Назначьте действиям разные сочетания.'
                 : reasons.has('unsupported-key')

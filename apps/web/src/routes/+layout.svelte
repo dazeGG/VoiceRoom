@@ -82,7 +82,7 @@
   <main class="device-boundary" aria-label="Проверка устройства" aria-busy="true">
     <section class="device-boundary__card">
       <p>Проверяем устройство</p>
-      <h1>Voice Room запускается</h1>
+      <h1>VoiceRoom запускается</h1>
     </section>
   </main>
 {:else if allowed}
@@ -94,7 +94,7 @@
   <main class="device-boundary" aria-label="Неподдерживаемое устройство" aria-live="polite">
     <section class="device-boundary__card">
       <p>Desktop only</p>
-      <h1>Откройте Voice Room на компьютере</h1>
+      <h1>Откройте VoiceRoom на компьютере</h1>
       <p>Мобильный клиент не запускает сессию, realtime, голос, медиа или push-уведомления.</p>
     </section>
   </main>
