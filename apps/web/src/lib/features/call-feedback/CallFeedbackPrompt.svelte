@@ -1,11 +1,14 @@
 <script lang="ts">
-  // "How was the call?" after leaving one: a small card in the corner, not a
-  // dialog, hidden during a call. It shows the question about the call just
-  // left, then a short thanks.
+  // "How was the call?" after leaving one, as its own window in the middle of
+  // the page: the end of a call, the same window the leave screen is. Hidden
+  // during a call, and while the leave screen is up, which asks the question
+  // itself. A click beside it closes it as the cross does; an answer leaves a
+  // short thanks.
+  import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
   import CallFeedbackCard from './CallFeedbackCard.svelte';
   import { callFeedback } from './call-feedback.svelte';
 
-  let { inCall = false }: { inCall?: boolean } = $props();
+  let { hidden = false }: { hidden?: boolean } = $props();
 
   const THANKS_MS = 2500;
 
@@ -18,45 +21,69 @@
     const timer = setTimeout(() => (thanked = false), THANKS_MS);
     return () => clearTimeout(timer);
   });
+
+  function onOverlayClick(event: MouseEvent & { currentTarget: HTMLElement }): void {
+    if (event.target !== event.currentTarget) return;
+    const cross = event.currentTarget.querySelector<HTMLButtonElement>('[data-feedback-close]');
+    if (cross) cross.click();
+    else thanked = false;
+  }
 </script>
 
-{#if !inCall && (call || thanked)}
-  <aside class="call-feedback" aria-labelledby="callFeedbackTitle">
-    {#if call}
-      {#key call}<CallFeedbackCard {call} onAnswered={() => (thanked = true)} />{/key}
-    {:else}
-      <p class="call-feedback-thanks" id="callFeedbackTitle" role="status">
-        Спасибо! Это помогает делать звонки лучше.
-      </p>
-    {/if}
-  </aside>
+{#if !hidden && (call || thanked)}
+  <div class="call-feedback-overlay" role="presentation" onclick={onOverlayClick}>
+    <div
+      class="call-feedback"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="callFeedbackTitle"
+      tabindex="-1"
+      use:dialogFocusTrap={{ enabled: true, initialFocus: '.call-feedback-thumb' }}
+    >
+      {#if call}
+        {#key call}<CallFeedbackCard {call} onAnswered={() => (thanked = true)} />{/key}
+      {:else}
+        <p class="call-feedback-thanks" id="callFeedbackTitle" role="status">
+          Спасибо! Это помогает делать звонки лучше.
+        </p>
+      {/if}
+    </div>
+  </div>
 {/if}
 
 <style>
-  .call-feedback {
-    /* Bottom right, above the page and the guest's leave screen: the update
-       notice keeps the top centre. */
+  .call-feedback-overlay {
     position: fixed;
-    right: 20px;
-    bottom: 20px;
-    z-index: 60;
-    display: grid;
-    gap: 12px;
-    width: min(340px, calc(100vw - 32px));
-    padding: 14px 16px 16px;
+    inset: 0;
+    z-index: 45;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: var(--vr-backdrop);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+  }
+
+  .call-feedback {
+    width: min(420px, 100%);
+    max-height: 100%;
+    padding: 22px 24px 24px;
+    overflow-y: auto;
     border: 1px solid var(--vr-line-strong);
     border-radius: var(--radius-xl);
-    background: var(--vr-surface);
-    box-shadow: var(--vr-shadow-popover);
+    background: var(--vr-surface-2);
+    box-shadow: var(--vr-shadow-modal);
     color: var(--vr-text);
     font-family: var(--font-ui);
-    animation: call-feedback-in 0.2s ease-out;
+    outline: none;
+    animation: call-feedback-in 0.18s ease-out;
   }
 
   @keyframes call-feedback-in {
     from {
       opacity: 0;
-      transform: translateY(8px);
+      transform: translateY(6px) scale(0.98);
     }
   }
 
@@ -66,18 +93,10 @@
     }
   }
 
-  @media (max-width: 560px) {
-    .call-feedback {
-      right: 16px;
-      bottom: calc(16px + env(safe-area-inset-bottom, 0px));
-      left: 16px;
-      width: auto;
-    }
-  }
-
   .call-feedback-thanks {
     margin: 0;
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
+    text-align: center;
   }
 </style>

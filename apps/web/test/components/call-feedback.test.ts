@@ -1,7 +1,7 @@
 // "How was the call?": when the app asks after a call, the card that asks,
 // and the admin panel tab that reads the answers.
 
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { cleanup, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { AdminCallFeedbackPage, CallFeedbackCall } from '@voice-room/shared/contracts/feedback';
@@ -19,6 +19,8 @@ import {
 } from '../../src/lib/features/call-feedback/call-feedback.svelte.ts';
 import CallFeedbackPrompt from '../../src/lib/features/call-feedback/CallFeedbackPrompt.svelte';
 import CallFeedbackReview from '../../src/lib/features/admin/CallFeedbackReview.svelte';
+import LeaveScreen from '../../src/lib/features/room/components/LeaveScreen.svelte';
+import { leaveScreenUi, openLeaveScreen } from '../../src/lib/features/room/leave-screen.svelte.ts';
 import {
   finishCallQuality,
   recordNetworkSample,
@@ -144,7 +146,9 @@ test('a thumb opens what went wrong; the answer goes with the tags and the comme
   callFeedback.call = call;
   render(CallFeedbackPrompt);
 
-  expect(screen.getByRole('heading', { name: 'Как прошёл звонок?' })).toBeTruthy();
+  // One window in the middle of the page, focus on the first thumb.
+  expect(screen.getByRole('dialog', { name: 'Как прошёл звонок?' })).toBeTruthy();
+  await vi.waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Хорошо' })));
   expect(screen.getByText('Звонок длился 25 мин')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Отправить' })).toBeNull();
 
@@ -182,6 +186,45 @@ test('the cross closes the question without an answer, and a chosen thumb is sen
   expect(calls[0]?.body).toEqual({ rating: 'good', tags: [], call });
 });
 
+test('a click beside the window closes it as the cross does', async () => {
+  const { calls } = stubFetch({});
+  leave(T0);
+  render(CallFeedbackPrompt);
+  await userEvent.click(screen.getByRole('dialog', { name: 'Как прошёл звонок?' }));
+  expect(callFeedback.call, 'a click inside keeps it').toEqual(call);
+
+  await userEvent.click(screen.getByRole('presentation'));
+  expect(callFeedback.call).toBeNull();
+  expect(calls).toHaveLength(0);
+  // Closed unanswered: the next question waits twice as long.
+  leave(T0 + 4 * DAY);
+  expect(callFeedback.call).toBeNull();
+});
+
+test('on the leave screen the question is the top of that window, not a second one', async () => {
+  const { calls } = stubFetch({ 'POST /api/feedback/calls': { status: 201, body: { ok: true } } });
+  openLeaveScreen({ roomId: 'kitchen', isStatic: false, guest: true });
+  callFeedback.call = call;
+  render(LeaveScreen);
+  render(CallFeedbackPrompt, { props: { hidden: leaveScreenUi.open } });
+
+  const window = screen.getByRole('dialog', { name: 'Вы вышли из комнаты' });
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  expect(within(window).getByRole('heading', { name: 'Как прошёл звонок?' })).toBeTruthy();
+  expect(within(window).queryByRole('button', { name: 'Закрыть' }), 'the window has its own ways out').toBeNull();
+  expect(within(window).getByRole('button', { name: 'Создать аккаунт' })).toBeTruthy();
+
+  await userEvent.click(within(window).getByRole('button', { name: 'Плохо' }));
+  await userEvent.click(within(window).getByRole('button', { name: 'Задержка' }));
+  await userEvent.click(within(window).getByRole('button', { name: 'Отправить' }));
+  expect(within(window).getByRole('status').textContent).toContain('Спасибо за отзыв');
+  expect(within(window).queryByRole('heading', { name: 'Как прошёл звонок?' })).toBeNull();
+  expect(within(window).getByRole('button', { name: 'Создать аккаунт' })).toBeTruthy();
+  await vi.waitFor(() => expect(calls).toHaveLength(1));
+  expect(calls[0]?.body).toEqual({ rating: 'bad', tags: ['delay'], call });
+  leaveScreenUi.open = false;
+});
+
 function setVisibility(value: DocumentVisibilityState): void {
   Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => value });
   document.dispatchEvent(new Event('visibilitychange'));
@@ -190,10 +233,10 @@ function setVisibility(value: DocumentVisibilityState): void {
 test('the question waits out a call, and goes away unanswered only after a minute in view', async () => {
   vi.useFakeTimers({ now: T0 });
   leave(T0);
-  const view = render(CallFeedbackPrompt, { props: { inCall: true } });
+  const view = render(CallFeedbackPrompt, { props: { hidden: true } });
   expect(screen.queryByRole('heading', { name: 'Как прошёл звонок?' })).toBeNull();
 
-  await view.rerender({ inCall: false });
+  await view.rerender({ hidden: false });
   expect(screen.getByRole('heading', { name: 'Как прошёл звонок?' })).toBeTruthy();
   setVisibility('hidden');
   await vi.advanceTimersByTimeAsync(5 * 60_000);

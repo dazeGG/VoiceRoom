@@ -4,6 +4,8 @@
   import { addRoomByCode } from '$lib/api/auth';
   import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
   import { Button } from '$lib/shared/ui';
+  import CallFeedbackCard from '$lib/features/call-feedback/CallFeedbackCard.svelte';
+  import { callFeedback, skipCallFeedback } from '$lib/features/call-feedback/call-feedback.svelte';
   import { leaveScreenUi } from '../leave-screen.svelte';
   import { createLogger, errorContext } from '$lib/shared/log';
 
@@ -13,18 +15,25 @@
   // `/` is desktop-only, so a phone never leaves this page on its own.
   let mobile = $state(false);
   let accountCreated = $state(false);
+  let feedbackThanked = $state(false);
 
   onMount(() => {
     mobile = !getDesktopBoundaryPolicy().desktopAllowed;
   });
 
   const offerAccount = $derived(leaveScreenUi.guest && !accountCreated);
+  // "How was the call?" is the top of this window rather than a second one.
+  const feedbackCall = $derived(callFeedback.call);
 
+  // Leaving the window with the question unanswered is passing on it, so the
+  // next page does not ask it again.
   function goHome(): void {
+    skipCallFeedback();
     window.location.href = '/';
   }
 
   function rejoin(): void {
+    skipCallFeedback();
     window.location.href = `/r/${encodeURIComponent(leaveScreenUi.roomId)}`;
   }
 
@@ -50,6 +59,15 @@
 {#if leaveScreenUi.open}
   <div class="guest-leave" role="dialog" aria-modal="true" aria-labelledby="leaveScreenTitle">
     <div class="guest-leave-card">
+      {#if feedbackCall}
+        {#key feedbackCall}
+          <CallFeedbackCard call={feedbackCall} hosted onAnswered={() => (feedbackThanked = true)} />
+        {/key}
+        <hr class="guest-leave-divider" />
+      {:else if feedbackThanked}
+        <p class="guest-leave-thanks" role="status">Спасибо за отзыв! Это помогает делать звонки лучше.</p>
+        <hr class="guest-leave-divider" />
+      {/if}
       <h1 id="leaveScreenTitle">{accountCreated ? 'Аккаунт создан' : 'Вы вышли из комнаты'}</h1>
       {#if offerAccount}
         {#if leaveScreenUi.isStatic}
@@ -104,11 +122,27 @@
     flex-direction: column;
     gap: 14px;
     width: min(440px, 100%);
+    max-height: 100%;
     padding: 26px;
+    overflow-y: auto;
     border: 1px solid var(--vr-line-strong);
     border-radius: var(--radius-xl);
     background: var(--vr-surface-2);
     box-shadow: var(--vr-shadow-popover);
+    color: var(--vr-text);
+    font-family: var(--font-ui);
+  }
+
+  .guest-leave-divider {
+    width: 100%;
+    margin: 6px 0;
+    border: 0;
+    border-top: 1px solid var(--vr-line);
+  }
+
+  .guest-leave-card .guest-leave-thanks {
+    color: var(--vr-text);
+    font-weight: 600;
   }
 
   .guest-leave-card h1 {

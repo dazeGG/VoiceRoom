@@ -1,7 +1,9 @@
 <script lang="ts">
   // The question about one call: a thumb opens what went well or wrong and a
   // comment; the cross or Escape closes it. Mounted per call, so a new
-  // question starts with nothing chosen.
+  // question starts with nothing chosen. `hosted` is the question as the top
+  // of the leave screen: that window has its own ways out, so the question
+  // has no cross, no Escape and does not go away by itself.
   import { ThumbsDown, ThumbsUp, X } from '@lucide/svelte';
   import {
     CALL_FEEDBACK_COMMENT_MAX_LENGTH,
@@ -13,7 +15,11 @@
   import { answerCallFeedback, dropCallFeedback, skipCallFeedback } from './call-feedback.svelte';
   import { CALL_FEEDBACK_TAG_LABELS } from './tags';
 
-  let { call, onAnswered }: { call: CallFeedbackCall; onAnswered: () => void } = $props();
+  let {
+    call,
+    onAnswered,
+    hosted = false
+  }: { call: CallFeedbackCall; onAnswered: () => void; hosted?: boolean } = $props();
 
   /** How long an untouched question stays on a page someone is looking at. */
   const UNANSWERED_CLOSE_MS = 60_000;
@@ -28,7 +34,7 @@
   // Untouched, the question goes away by itself, but only counting the time
   // the page is in view, and without counting as a skip: it may go unseen.
   $effect(() => {
-    if (rating) return;
+    if (rating || hosted) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const arm = () => {
       clearTimeout(timer);
@@ -65,7 +71,7 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && card?.contains(document.activeElement)) close();
+    if (!hosted && event.key === 'Escape' && card?.contains(document.activeElement)) close();
   }
 </script>
 
@@ -77,9 +83,11 @@
       <h2 id="callFeedbackTitle">Как прошёл звонок?</h2>
       <p class="call-feedback-sub">Звонок длился {minutes} мин</p>
     </div>
-    <button class="call-feedback-close" type="button" aria-label="Закрыть" onclick={close}>
-      <X {...iconSm} aria-hidden="true" />
-    </button>
+    {#if !hosted}
+      <button class="call-feedback-close" type="button" aria-label="Закрыть" data-feedback-close onclick={close}>
+        <X {...iconSm} aria-hidden="true" />
+      </button>
+    {/if}
   </div>
 
   <div class="call-feedback-thumbs">
@@ -142,14 +150,14 @@
 
   .call-feedback-head h2 {
     margin: 0;
-    font-size: 15px;
+    font-size: 18px;
     font-weight: 700;
   }
 
   .call-feedback-sub {
-    margin: 2px 0 0;
+    margin: 3px 0 0;
     color: var(--vr-text-3);
-    font-size: 12.5px;
+    font-size: 13px;
   }
 
   .call-feedback-close {
