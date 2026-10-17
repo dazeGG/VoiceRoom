@@ -40,15 +40,17 @@ test(
       ).length,
       1
     );
-    const first = await quota.reserve({
+    // Which of the nine loses the race is up to the database; retry one that won.
+    const won = results.findIndex((item) => item.status === 'fulfilled');
+    const wonResult = results[won];
+    assert.ok(wonResult?.status === 'fulfilled');
+    const retried = await quota.reserve({
       ownerId: 'quota-owner',
       context: 'room',
-      clientRequestId: 'request-0',
+      clientRequestId: `request-${won}`,
       bytes: 1024
     });
-    const [firstResult] = results;
-    assert.ok(firstResult?.status === 'fulfilled');
-    assert.equal(first?.id, firstResult.value?.id);
+    assert.equal(retried?.id, wonResult.value?.id);
   }
 );
 
