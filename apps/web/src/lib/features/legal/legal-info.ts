@@ -9,7 +9,7 @@ import { VOICE_HISTORY_KEEP_DAYS } from '@voice-room/shared/contracts/admin';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 export const LEGAL = Object.freeze({
-  service: 'Voice Room',
+  service: 'VoiceRoom',
   site: 'voiceroom.ru',
   operator: 'Ефремов Владимир Владимирович',
   operatorStatus: 'физическое лицо, плательщик налога на профессиональный доход (самозанятый)',

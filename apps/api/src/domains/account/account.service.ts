@@ -161,7 +161,7 @@ export function createAccountService(deps: AccountDeps) {
         {
           type: 'account.login',
           title: kind === 'recovery' ? 'Вход по коду восстановления' : 'Новый вход в аккаунт',
-          body: `${describeLoginDevice(alert)}. Если это были не вы, откройте Voice Room.`,
+          body: `${describeLoginDevice(alert)}. Если это были не вы, откройте VoiceRoom.`,
           tag: `login-alert:${alert.id}`,
           dedupeKey: `login-alert:${alert.id}`,
           url: '/'

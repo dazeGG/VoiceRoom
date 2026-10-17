@@ -25,10 +25,14 @@ export interface LiveKitHarness {
   detachedScreens: string[];
   retries: { scheduled: Array<{ peerId: string }>; cleared: number; clearedAll: number };
   audio: { ensured: Array<{ peerId: string }> };
+  /** Every toast the service showed, in order. */
+  toasts: string[];
   /** A refusal from the API as the real client raises it. */
   refusal(message: string, code: string, status?: number): Error;
   /** Every LiveKit Room the service created, in order. */
   rooms: Array<{
+    /** Handlers the service bound, by RoomEvent name. */
+    listeners: Map<string, Array<(...args: unknown[]) => void>>;
     /** What the service passed to `new Room()`. */
     roomOptions: Record<string, unknown>;
     connectedUrl: string;
@@ -48,6 +52,8 @@ export async function loadLiveKitHarness(
     requestToken?: () => Promise<{ token: string; url?: string; urls?: string[] }>;
     /** LiveKit URLs whose connect() fails. */
     failingUrls?: string[];
+    /** What the raw-microphone silence check answers. */
+    inputSilent?: () => Promise<boolean>;
     /** Whether a recovery epoch is still current. */
     recoveryEpochCurrent?: () => boolean;
   } = {}
@@ -68,6 +74,7 @@ export async function loadLiveKitHarness(
   const detachedScreens: string[] = [];
   const retries: LiveKitHarness['retries'] = { scheduled: [], cleared: 0, clearedAll: 0 };
   const audio: LiveKitHarness['audio'] = { ensured: [] };
+  const toasts: string[] = [];
   const rooms: FakeRoom[] = [];
   const failingUrls = new Set<string>(options.failingUrls ?? []);
   class FakeRoom {
@@ -134,7 +141,14 @@ export async function loadLiveKitHarness(
   vi.doMock('../../src/lib/features/room/start-ui.svelte', () => ({ startUi: {} }));
   vi.doMock(`${P}/core/state.svelte`, () => ({ state }));
   vi.doMock(`${P}/ui/status`, () => ({ setVoiceConnectionStatus: () => {} }));
-  vi.doMock(`${P}/ui/toast`, () => ({ showToast: () => {} }));
+  vi.doMock(`${P}/ui/toast`, () => ({
+    showToast: (message: string) => {
+      toasts.push(message);
+    }
+  }));
+  vi.doMock(`${P}/media/input-silence`, () => ({
+    isMicrophoneInputSilent: options.inputSilent ?? (async () => false)
+  }));
   const { ApiError } = await import('../../src/lib/api/client.ts');
   vi.doMock(`${P}/net/api`, () => ({
     requestLiveKitToken: options.requestToken ?? (async () => ({}))
@@ -262,6 +276,7 @@ export async function loadLiveKitHarness(
     detachedScreens,
     retries,
     audio,
+    toasts,
     refusal: (message, code, status = 0) => new ApiError(message, status, { code }),
     rooms
   };

@@ -6,6 +6,7 @@ import { showToast } from '../ui/toast';
 import { ApiError } from '$lib/api/client';
 import { queueAudioUnlock, syncRemoteAudioPlayback } from './media-playback-service';
 import { loadLiveKitClient } from '../media/livekit-runtime';
+import { isMicrophoneInputSilent } from '../media/input-silence';
 import { detachLiveKitParticipant, setParticipantSpeaking, updateParticipant } from '../room/participants';
 import {
   isCurrentRoomRecoveryEpoch,
@@ -321,8 +322,14 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
     }
   });
   room.on(RoomEvent.LocalAudioSilenceDetected, () => {
-    if (!current()) return;
-    if (!state.muted) showToast('Микрофон не передает звук');
+    if (!current() || state.muted) return;
+    const [rawTrack] = state.localRawStream?.getAudioTracks() ?? [];
+    if (!rawTrack) return;
+    void isMicrophoneInputSilent(rawTrack).then((silent) => {
+      if (silent && current() && !state.muted && state.localRawStream?.getAudioTracks()[0] === rawTrack) {
+        showToast('Микрофон не передает звук');
+      }
+    });
   });
   room.on(RoomEvent.TrackPublished, (publication, participant) => {
     if (!current()) return;

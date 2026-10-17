@@ -130,7 +130,7 @@ async function bootstrap({
     });
     return server;
   } catch (error) {
-    logger.fatal({ evt: LOG_EVENTS.BOOTSTRAP_FAILED, err: error }, 'Voice Room API failed to bootstrap');
+    logger.fatal({ evt: LOG_EVENTS.BOOTSTRAP_FAILED, err: error }, 'VoiceRoom API failed to bootstrap');
     if (exit === process.exit && typeof process !== 'undefined') {
       process.exitCode = 1;
     }

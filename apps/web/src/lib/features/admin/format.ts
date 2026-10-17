@@ -90,6 +90,24 @@ export function formatMinutes(minutes: number): string {
   return minutes < 60 ? `${Math.round(minutes)} мин` : formatHours(minutes / 60);
 }
 
+/** One stay's length in whole minutes: "45 мин", "1 ч 25 мин", "2 ч"; under a minute "< 1 мин". */
+export function formatDuration(ms: number): string {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return '< 1 мин';
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  if (hours === 0) return `${rest} мин`;
+  return rest ? `${hours} ч ${rest} мин` : `${hours} ч`;
+}
+
+const clock = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' });
+
+/** '15 окт., 14:30 – 15:55', the end with its date only when it fell on another day. */
+export function formatTimeSpan(from: number, to: number): string {
+  const sameDay = new Date(from).toDateString() === new Date(to).toDateString();
+  return `${formatDateTime(from)} – ${sameDay ? clock.format(to) : formatDateTime(to)}`;
+}
+
 const numericDate = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' });
 
 /** '15.10.2026' */

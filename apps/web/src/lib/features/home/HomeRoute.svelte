@@ -29,7 +29,7 @@
 </script>
 
 <svelte:head>
-  <title>Voice Room</title>
+  <title>VoiceRoom</title>
   <meta name="theme-color" content="#131416" />
 </svelte:head>
 
@@ -38,7 +38,7 @@
     <main class="auth-loader" aria-label="Проверка устройства" aria-busy="true">
       <div class="auth-loader-card">
         <p class="auth-loader-kicker">Проверяем устройство</p>
-        <h1>Voice Room запускается</h1>
+        <h1>VoiceRoom запускается</h1>
       </div>
     </main>
   </div>
@@ -52,7 +52,7 @@
     <main class="auth-session-error" aria-label="Неподдерживаемое устройство" aria-live="polite">
       <div class="auth-session-error-card">
         <p class="auth-loader-kicker">Desktop only</p>
-        <h1>Откройте Voice Room на компьютере</h1>
+        <h1>Откройте VoiceRoom на компьютере</h1>
         <p>Мобильные браузеры не запускают этот клиент: realtime, голос, медиа и push-уведомления здесь отключены.</p>
       </div>
     </main>

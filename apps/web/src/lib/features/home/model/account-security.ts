@@ -33,7 +33,7 @@ export function recoveryCodesSummary(status: RecoveryCodesStatus): string {
 
 export function recoveryCodesFileText(codes: string[], login: string, createdAt = new Date()): string {
   return [
-    'Voice Room — коды восстановления',
+    'VoiceRoom — коды восстановления',
     `Аккаунт: ${login}`,
     `Созданы: ${createdAt.toLocaleString('ru-RU')}`,
     '',

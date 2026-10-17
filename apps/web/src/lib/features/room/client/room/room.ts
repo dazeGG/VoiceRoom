@@ -107,7 +107,7 @@ function isCurrentJoinAttempt(generation: number): boolean {
 export function showStartScreen(): void {
   document.body.dataset.screen = 'start';
   state.screen = 'start';
-  document.title = 'Voice Room';
+  document.title = 'VoiceRoom';
   updateNameStatuses();
 }
 
@@ -137,7 +137,7 @@ export async function showRoomRoute(): Promise<boolean> {
 // outside the component tree — stays here; it runs on screen entry and rename.
 export function refreshRoomHeading(): void {
   const heading = state.roomName || state.roomId;
-  document.title = `${heading} · Voice Room`;
+  document.title = `${heading} · VoiceRoom`;
 }
 
 function showRoomScreen(): void {
@@ -156,14 +156,14 @@ export function showRoomEntryFailure(): void {
   leaveRoom();
   document.body.dataset.screen = 'entry-error';
   state.screen = 'entry-error';
-  document.title = 'Не удалось проверить вход · Voice Room';
+  document.title = 'Не удалось проверить вход · VoiceRoom';
 }
 
 export function showRoomNotFound(): void {
   leaveRoom();
   document.body.dataset.screen = 'not-found';
   state.screen = 'not-found';
-  document.title = 'Комната не найдена · Voice Room';
+  document.title = 'Комната не найдена · VoiceRoom';
   startUi.missingRoomCode = state.roomId || getMissingRoomLabel();
 }
 
@@ -175,7 +175,7 @@ function showRoomModerationScreen(reason: 'banned' | 'kicked'): void {
   state.moderationReason = reason;
   document.body.dataset.screen = 'moderation';
   state.screen = 'moderation';
-  document.title = reason === 'banned' ? 'Доступ к комнате закрыт · Voice Room' : 'Вы исключены · Voice Room';
+  document.title = reason === 'banned' ? 'Доступ к комнате закрыт · VoiceRoom' : 'Вы исключены · VoiceRoom';
 }
 
 function getMissingRoomLabel(): string {

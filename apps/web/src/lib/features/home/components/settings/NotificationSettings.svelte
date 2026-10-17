@@ -93,10 +93,10 @@
       if (permission === 'granted') {
         if (support.desktopApp) {
           void showBrowserNotification({
-            body: 'Voice Room сможет показывать уведомления, пока приложение открыто.',
+            body: 'VoiceRoom сможет показывать уведомления, пока приложение открыто.',
             dedupeKey: `settings-notifications-enabled:${Date.now()}`,
             tag: 'settings-notifications-enabled',
-            title: 'Уведомления Voice Room включены'
+            title: 'Уведомления VoiceRoom включены'
           });
         }
       } else if (permission === 'denied') onToast('Разрешите уведомления в настройках браузера');

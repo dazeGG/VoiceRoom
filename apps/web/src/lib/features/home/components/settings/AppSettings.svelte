@@ -313,7 +313,7 @@
         </button>
       </div>
       <div class="settings-gate-hint">
-        {#if autostartSupported}Voice Room откроется при входе в систему.
+        {#if autostartSupported}VoiceRoom откроется при входе в систему.
         {:else}Автозапуск недоступен в этой сборке приложения.{/if}
       </div>
     </div>
@@ -334,8 +334,8 @@
         </button>
       </div>
       <div class="settings-gate-hint">
-        {#if support.mac}При автозапуске окно не откроется — Voice Room будет ждать в Dock.
-        {:else}При автозапуске окно не откроется — Voice Room будет ждать в трее.{/if}
+        {#if support.mac}При автозапуске окно не откроется — VoiceRoom будет ждать в Dock.
+        {:else}При автозапуске окно не откроется — VoiceRoom будет ждать в трее.{/if}
       </div>
     </div>
 
@@ -355,8 +355,8 @@
           </button>
         </div>
         <div class="settings-gate-hint">
-          Уведомления Windows о сообщениях и заявках в друзья, без системного звука. Звуки Voice Room и счётчик на
-          панели задач от этого не зависят.
+          Уведомления Windows о сообщениях и заявках в друзья, без системного звука. Звуки VoiceRoom и счётчик на панели
+          задач от этого не зависят.
         </div>
       </div>
     {/if}

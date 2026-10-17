@@ -122,7 +122,7 @@
 
 {#if !session.loaded}
   <div class="app-shell">
-    <Topbar label="Voice Room" />
+    <Topbar label="VoiceRoom" />
     <main class="auth-loader" aria-label="Загрузка аккаунта" aria-busy="true">
       <div class="auth-loader-card">
         <span class="auth-loader-orb"><MascotIcon variant="blink" size={52} /></span>
@@ -136,7 +136,7 @@
   </div>
 {:else if authLoadError}
   <div class="app-shell">
-    <Topbar label="Voice Room" />
+    <Topbar label="VoiceRoom" />
     <main class="auth-session-error" aria-label="Ошибка проверки аккаунта" aria-live="polite">
       <div class="auth-session-error-card">
         <p class="auth-loader-kicker">Сессия не проверена</p>

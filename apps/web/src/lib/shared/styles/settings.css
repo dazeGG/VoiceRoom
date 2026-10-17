@@ -545,7 +545,7 @@
   opacity: 0.6;
 }
 
-/* Desktop overlay: the last window before Voice Room, offered as a game. */
+/* Desktop overlay: the last window before VoiceRoom, offered as a game. */
 .settings-overlay-games {
   padding-top: 18px;
   border-top: 1px solid var(--vr-line);

@@ -146,7 +146,7 @@
           {#if support.desktopApp}
             <AppSettings {support} {onToast} />
           {:else}
-            <DesktopAppCard title="Voice Room для компьютера" />
+            <DesktopAppCard title="VoiceRoom для компьютера" embedded />
           {/if}
         {:else}
           <NotificationSettings {support} users={notificationUsers} rooms={notificationRooms} {onToast} />

@@ -3,7 +3,7 @@
 </script>
 
 <svelte:head>
-  <title>Вход · Voice Room</title>
+  <title>Вход · VoiceRoom</title>
   <meta name="theme-color" content="#131416" />
 </svelte:head>
 

@@ -199,7 +199,7 @@
     delete document.body.dataset.lobbyEmbedded;
     delete document.body.dataset.screenView;
     delete document.body.dataset.stripCollapsed;
-    document.title = 'Voice Room';
+    document.title = 'VoiceRoom';
   }
 
   function replaceUrlWithActiveVoiceRoom(roomId: string | null = connectedVoiceRoomId): void {
@@ -574,7 +574,7 @@
       onToggleVoiceDeafen={toggleActiveVoiceDeafen}
     />
 
-    <main class="lobby-main lv-main" aria-label="Главная Voice Room">
+    <main class="lobby-main lv-main" aria-label="Главная VoiceRoom">
       {#if embeddedRoomId}
         <div class="lobby-embedded-room" hidden={!embeddedRoomVisible}>
           {#key embeddedRoomId}

@@ -35,7 +35,7 @@
   }
 </script>
 
-<Dialog {open} title="Voice Room на компьютере" {onClose} width={460}>
+<Dialog {open} title="VoiceRoom на компьютере" {onClose} width={460}>
   <ul class="app-benefits">
     {#each BENEFITS as benefit (benefit.title)}
       <li>

@@ -395,7 +395,7 @@
         <span class="settings-switch-knob" aria-hidden="true"></span>
       </button>
     </div>
-    <div class="settings-gate-hint">Когда вы уже в голосе, Voice Room уточнит, прежде чем переключить звонок.</div>
+    <div class="settings-gate-hint">Когда вы уже в голосе, VoiceRoom уточнит, прежде чем переключить звонок.</div>
   </div>
 
   {#if desktopApp}
