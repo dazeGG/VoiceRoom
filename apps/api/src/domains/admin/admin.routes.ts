@@ -1,5 +1,6 @@
 // The admin panel over HTTP: any signed-in account learns whether it is an
-// administrator; the numbers and the accounts answer an administrator only.
+// administrator; the numbers, the accounts and the rooms answer an
+// administrator only.
 // Which accounts carry a mark is public: every client shows it by the name.
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
@@ -15,6 +16,9 @@ import {
   BadgeBody,
   BlockBody,
   DeleteAccountBody,
+  LiveRooms,
+  RoomHistory,
+  RoomHistoryQuery,
   ProductQuery,
   ProductStats,
   SystemQuery,
@@ -23,6 +27,7 @@ import {
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import type { AccountAction, AdminAccountsService } from './admin-accounts.service.ts';
+import type { AdminRoomsService } from './admin-rooms.service.ts';
 import type { AdminService } from './admin.service.ts';
 
 const SIGN_IN_REQUIRED = failure('Authentication required', { code: 'authentication_required' });
@@ -49,6 +54,7 @@ export interface AdminRoutesDeps {
     AdminAccountsService,
     'list' | 'detail' | 'block' | 'unblock' | 'signOutEverywhere' | 'remove' | 'cancelDeletion' | 'setBadge' | 'badges'
   >;
+  rooms: Pick<AdminRoomsService, 'live' | 'history'>;
 }
 
 export function registerAdminRoutes(root: FastifyInstance, ctx: ApiContext, deps: AdminRoutesDeps): void {
@@ -104,6 +110,28 @@ export function registerAdminRoutes(root: FastifyInstance, ctx: ApiContext, deps
       const stats = await deps.admin.system(userId, request.query);
       if (!stats) return reply.code(403).send(ADMIN_REQUIRED);
       return { ok: true as const, ...stats };
+    }
+  );
+
+  // --- rooms ------------------------------------------------------------------
+
+  app.get('/api/admin/rooms', { schema: { response: { 200: LiveRooms, '4xx': Failure } } }, async (request, reply) => {
+    const userId = await actor(request, reply);
+    if (!userId) return reply;
+    const live = await deps.rooms.live(userId);
+    if (!live) return reply.code(403).send(ADMIN_REQUIRED);
+    return { ok: true as const, ...live };
+  });
+
+  app.get(
+    '/api/admin/rooms/history',
+    { schema: { querystring: RoomHistoryQuery, response: { 200: RoomHistory, '4xx': Failure } } },
+    async (request, reply) => {
+      const userId = await actor(request, reply);
+      if (!userId) return reply;
+      const history = await deps.rooms.history(userId, request.query);
+      if (!history) return reply.code(403).send(ADMIN_REQUIRED);
+      return { ok: true as const, ...history };
     }
   );
 

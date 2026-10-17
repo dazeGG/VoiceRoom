@@ -565,7 +565,7 @@ export interface VoiceSessions {
   id: Generated<string>;
   joined_at: Timestamp;
   left_at: Timestamp;
-  room_id: string;
+  room_id: string | null;
   user_id: string | null;
 }
 

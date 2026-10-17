@@ -1,8 +1,12 @@
 // The periodic sweeps a running API performs (platform/maintenance.ts runs
 // them): idle rooms, product and system snapshots, sessions, sign-in history, finished
-// account deletions, expired link previews and deleted-message retention.
+// account deletions, expired link previews, deleted-message retention and the
+// rooms of old stays in voice.
 
+import { VOICE_HISTORY_KEEP_DAYS } from '@voice-room/shared/contracts/admin';
 import type { MaintenanceTask } from '../platform/maintenance.ts';
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export interface ApiMaintenanceDeps {
   pruneRooms(): Promise<unknown>;
@@ -12,10 +16,13 @@ export interface ApiMaintenanceDeps {
   finalizeDueDeletions(): Promise<unknown>;
   linkPreviews(): { pruneExpired(): Promise<unknown> } | null;
   rooms(): { purgeDeleted?: (options: { olderThanMs: number }) => Promise<unknown> };
+  voiceSessions(): { forgetRoomsBefore(cutoff: Date): Promise<unknown> } | null;
+  now?: () => number;
   retention: { intervalMs: number; keepDeletedMs: number };
 }
 
 export function apiMaintenanceTasks(deps: ApiMaintenanceDeps): MaintenanceTask[] {
+  const now = deps.now ?? Date.now;
   return [
     {
       name: 'room_prune',
@@ -66,6 +73,13 @@ export function apiMaintenanceTasks(deps: ApiMaintenanceDeps): MaintenanceTask[]
       failureMessage: 'retention purge timer failed',
       enabled: () => deps.retention.intervalMs > 0 && Boolean(deps.rooms().purgeDeleted),
       run: async () => deps.rooms().purgeDeleted?.({ olderThanMs: deps.retention.keepDeletedMs })
+    },
+    {
+      name: 'voice_history_forget',
+      label: 'voice-history-forget',
+      failureMessage: 'voice history forget timer failed',
+      enabled: () => Boolean(deps.voiceSessions()),
+      run: async () => deps.voiceSessions()?.forgetRoomsBefore(new Date(now() - VOICE_HISTORY_KEEP_DAYS * DAY_MS))
     }
   ];
 }

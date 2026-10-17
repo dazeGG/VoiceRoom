@@ -31,7 +31,9 @@
 
   <main class="legal-main">
     <h1 class="legal-title">{title}</h1>
-    <p class="legal-date">Редакция от {LEGAL.effectiveDate}</p>
+    <p class="legal-date">
+      Редакция от {current === 'privacy' ? LEGAL.privacyEffectiveDate : LEGAL.effectiveDate}
+    </p>
     <article class="legal-text">
       {@render children()}
     </article>

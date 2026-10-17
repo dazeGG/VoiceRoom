@@ -1,7 +1,7 @@
 // The admin panel's tabs and the addresses the lobby keeps them in; an
 // account's card has its own address under the accounts tab.
 
-export const ADMIN_TABS = ['overview', 'product', 'system', 'accounts', 'reports'] as const;
+export const ADMIN_TABS = ['overview', 'product', 'system', 'accounts', 'rooms', 'reports'] as const;
 export type AdminTab = (typeof ADMIN_TABS)[number];
 
 /** Where in the panel an address points: a tab, and on the accounts tab maybe one account. */
