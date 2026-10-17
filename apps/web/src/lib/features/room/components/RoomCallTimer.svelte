@@ -1,7 +1,10 @@
 <script lang="ts">
   import { voiceSession } from '../voice-session.svelte';
 
-  let { variant = 'topbar', separator = false } = $props<{ variant?: 'sidebar' | 'topbar'; separator?: boolean }>();
+  let { variant = 'topbar', separator = false } = $props<{
+    variant?: 'sidebar' | 'topbar' | 'bubble';
+    separator?: boolean;
+  }>();
 
   let now = $state(Date.now());
 
@@ -65,7 +68,15 @@
     font-size: 13px;
   }
 
-  .room-call-timer--topbar::before {
+  /* The phone shows the timer alone over the call while its controls are hidden. */
+  .room-call-timer--bubble {
+    gap: 8px;
+    color: var(--vr-text);
+    font-size: 12.5px;
+  }
+
+  .room-call-timer--topbar::before,
+  .room-call-timer--bubble::before {
     content: '';
     width: 6px;
     height: 6px;

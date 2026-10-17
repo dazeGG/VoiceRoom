@@ -41,6 +41,14 @@ beforeEach(() => {
   installFakeWebSocket();
   stubMatchMedia();
   stubFetch({});
+  // The tile grid sizes itself to its box; jsdom has no layout to watch.
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe(): void {}
+      disconnect(): void {}
+    }
+  );
 });
 afterEach(cleanup);
 

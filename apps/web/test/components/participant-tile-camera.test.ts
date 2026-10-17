@@ -62,3 +62,78 @@ test('our own camera is mirrored', () => {
   });
   expect(container.querySelector('video')?.getAttribute('data-mirrored')).toBe('true');
 });
+
+test('a phone turned to its back camera is not mirrored', async () => {
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+  const { state } = await import('../../src/lib/features/room/client/core/state.svelte');
+  state.cameraFacing = 'environment';
+  try {
+    const { container } = render(ParticipantTile, {
+      participant: participant({ isLocal: true, camera: true, cameraStream: new FakeStream() as MediaStream })
+    });
+    expect(container.querySelector('video')?.hasAttribute('data-mirrored')).toBe(false);
+  } finally {
+    state.cameraFacing = 'user';
+  }
+});
+
+// Safari on iPhone can draw a starting camera small in the middle of its box
+// until the box changes size. The picture stays hidden until it has been
+// nudged a pixel wider and back, which makes Safari lay it out again.
+test('a starting camera is laid out again before it is shown, and again when it changes size', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+  const frames: FrameRequestCallback[] = [];
+  vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => frames.push(callback));
+  vi.stubGlobal('cancelAnimationFrame', () => {});
+  const paint = (): void => {
+    while (frames.length > 0) frames.shift()!(0);
+  };
+  try {
+    const { container } = render(ParticipantTile, {
+      participant: participant({ camera: true, cameraStream: new FakeStream() as MediaStream })
+    });
+    const video = container.querySelector<HTMLVideoElement>('video')!;
+    expect(video.style.opacity).toBe('0');
+
+    video.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(0);
+    expect(video.style.width).toBe('calc(100% + 1px)');
+    paint();
+    expect(video.style.width).toBe('');
+    expect(video.style.opacity).toBe('');
+
+    video.dispatchEvent(new Event('resize'));
+    expect(video.style.width).toBe('calc(100% + 1px)');
+    paint();
+    expect(video.style.width).toBe('');
+
+    // A camera warming up for the first time can settle late: it is nudged again seconds on.
+    vi.advanceTimersByTime(3000);
+    paint();
+    expect(video.style.width).toBe('');
+    vi.advanceTimersByTime(6000);
+    expect(video.style.width).toBe('calc(100% + 1px)');
+    paint();
+    expect(video.style.width).toBe('');
+  } finally {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  }
+});
+
+test('a camera that never reports a frame is shown anyway', () => {
+  vi.useFakeTimers();
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+  try {
+    const { container } = render(ParticipantTile, {
+      participant: participant({ camera: true, cameraStream: new FakeStream() as MediaStream })
+    });
+    const video = container.querySelector<HTMLVideoElement>('video')!;
+    expect(video.style.opacity).toBe('0');
+    vi.advanceTimersByTime(1500);
+    expect(video.style.opacity).toBe('');
+  } finally {
+    vi.useRealTimers();
+  }
+});

@@ -41,6 +41,7 @@ export function createInitialRoomState(): AppState {
     localCameraPublication: null,
     localCameraStream: null,
     cameraDeviceId: localStorage.getItem(CAMERA_DEVICE_STORAGE_KEY) || '',
+    cameraFacing: 'user',
     cameraStarting: false,
     localScreenPublications: new Map(),
     localScreenAudioCapture: null,

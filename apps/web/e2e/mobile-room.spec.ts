@@ -47,7 +47,13 @@ async function expectJoinedPhoneRoom(page: Page): Promise<void> {
     overflow.extra,
     `no horizontal scroll; wider than the screen: ${overflow.offenders.join(', ')}`
   ).toBeLessThanOrEqual(0);
-  for (const selector of ['.mic-button', '.output-button', '.leave-button']) {
+  // With no camera on the phone keeps the room stage's 16:9 tiles, edge to edge.
+  const viewport = page.viewportSize()!;
+  const mainTile = await page.locator('.mc-tile:not([data-variant="pip"])').first().boundingBox();
+  expect(mainTile, 'main tile').not.toBeNull();
+  expect(mainTile!.width).toBeGreaterThan(viewport.width * 0.9);
+  expect(mainTile!.width / mainTile!.height, 'main tile shape').toBeCloseTo(16 / 9, 1);
+  for (const selector of ['.mc-dock-mic', '.mc-dock-output', '.mc-dock-leave']) {
     const box = await page.locator(selector).first().boundingBox();
     expect(box, selector).not.toBeNull();
     expect(box!.width, `${selector} width`).toBeGreaterThanOrEqual(44);
@@ -78,8 +84,20 @@ test('a guest on a phone joins a room, chats, and stays on the room page after l
       await expect(guest.getByRole('complementary', { name: 'Скачать приложение' })).toHaveCount(0);
     });
 
+    await test.step('a tap on the call hides the controls and the timer brings them back', async () => {
+      const call = guest.locator('.mobile-call');
+      const showControls = guest.getByRole('button', { name: 'Показать управление' });
+      // The controls hide on their own after 5 s; the steps above may have taken that long.
+      if ((await call.getAttribute('data-chrome')) === 'hidden') await showControls.click();
+      await expect(call).toHaveAttribute('data-chrome', 'visible');
+      await guest.locator('.mc-tile:not([data-variant="pip"])').first().click();
+      await expect(call).toHaveAttribute('data-chrome', 'hidden');
+      await showControls.click();
+      await expect(call).toHaveAttribute('data-chrome', 'visible');
+    });
+
     await test.step('guest chats from the phone', async () => {
-      await guest.getByRole('button', { name: 'Чат', exact: true }).first().click();
+      await guest.getByRole('button', { name: 'Чат', exact: true }).click();
       const composer = guest.getByPlaceholder('Написать в комнату…');
       await expect(composer).toBeVisible({ timeout: 20_000 });
       await composer.fill('привет с телефона');

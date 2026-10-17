@@ -8,27 +8,6 @@
     padding-inline: var(--space-md);
   }
 
-  .tile-grid[data-count='5'],
-  .tile-grid[data-count='6'],
-  .tile-grid[data-count='7'],
-  .tile-grid[data-count='8'],
-  .tile-grid[data-count='9'] {
-    --tile-columns: 3;
-  }
-
-  /* Re-centre the incomplete bottom rows for the narrowed 3-column layouts. */
-  .tile-grid[data-count='7'] :is(.stream-tile, .participant):nth-child(5) {
-    grid-column: span 2;
-  }
-
-  .tile-grid[data-count='7'] :is(.stream-tile, .participant):nth-child(7) {
-    grid-column: 3 / span 2;
-  }
-
-  .tile-grid[data-count='8'] :is(.stream-tile, .participant):nth-child(7) {
-    grid-column: 2 / span 2;
-  }
-
   h1 {
     font-size: 2.4rem;
   }
@@ -152,46 +131,6 @@
   .screen-source-options {
     max-height: calc(100vh - 160px);
     grid-template-columns: 1fr;
-  }
-}
-
-/* A stage narrower than 520px shows two columns of tiles, whatever the window. */
-@container stage (max-width: 519px) {
-  .tile-grid[data-count='2'],
-  .tile-grid[data-count='3'],
-  .tile-grid[data-count='4'],
-  .tile-grid[data-count='5'],
-  .tile-grid[data-count='6'],
-  .tile-grid[data-count='7'],
-  .tile-grid[data-count='8'],
-  .tile-grid[data-count='9'] {
-    --tile-columns: 2;
-  }
-
-  /* Two columns: keep each single-tile trailing row centred, and reset the
-     wider-layout nudges that no longer apply. */
-  .tile-grid[data-count='5'] :is(.stream-tile, .participant):nth-child(4) {
-    grid-column: span 2;
-  }
-
-  .tile-grid[data-count='5'] :is(.stream-tile, .participant):nth-child(5) {
-    grid-column: 2 / span 2;
-  }
-
-  .tile-grid[data-count='7'] :is(.stream-tile, .participant):nth-child(5) {
-    grid-column: span 2;
-  }
-
-  .tile-grid[data-count='7'] :is(.stream-tile, .participant):nth-child(7) {
-    grid-column: 2 / span 2;
-  }
-
-  .tile-grid[data-count='8'] :is(.stream-tile, .participant):nth-child(7) {
-    grid-column: span 2;
-  }
-
-  .tile-grid[data-count='9'] :is(.stream-tile, .participant):nth-child(9) {
-    grid-column: 2 / span 2;
   }
 }
 

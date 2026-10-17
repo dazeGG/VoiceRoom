@@ -6,6 +6,7 @@
   import { getAvatarPresentation } from '../client/ui/avatar-presentation';
   import { state as roomState } from '../client/core/state.svelte';
   import { enterScreenView, leaveScreenView } from '../client/ui/screen-view';
+  import { keepVideoFitted } from '../client/ui/video-fit';
   import { openParticipantContextMenu } from '../participant-context-ui.svelte';
   import { toggleParticipantFocus } from '../participants-ui.svelte';
   import type { Participant } from '../client/core/types';
@@ -109,7 +110,8 @@
     <video
       class="participant-camera"
       {@attach showCamera(cameraStream)}
-      data-mirrored={participant.isLocal ? 'true' : undefined}
+      {@attach keepVideoFitted}
+      data-mirrored={participant.isLocal && roomState.cameraFacing !== 'environment' ? 'true' : undefined}
       autoplay
       playsinline
       muted
