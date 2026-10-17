@@ -7,6 +7,7 @@
   import type { RoomPeer } from '$lib/api/rooms';
   import type { RealtimeEvent } from '$lib/api/realtime';
   import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
+  import { fitTiles } from '$lib/features/room/client/ui/tile-grid';
   import '$lib/features/room/styles/room.css';
   import RoomPreviewChat from './RoomPreviewChat.svelte';
   import RoomMemberList from '../../../../entities/room/components/RoomMemberList.svelte';
@@ -155,7 +156,12 @@
     <div class="lobby-roomview-stage-pane">
       <section class="stage lobby-preview-stage" aria-label="Участники комнаты">
         <div class="stage-strip" aria-label="Плитки комнаты">
-          <div class="tile-grid" data-count={Math.min(tileCount, 9)} data-streams={Math.min(screenPeers.length, 9)}>
+          <div
+            class="tile-grid"
+            data-count={Math.min(tileCount, 9)}
+            data-streams={Math.min(screenPeers.length, 9)}
+            {@attach fitTiles}
+          >
             {#each screenPeers as peer (`screen-${peer.id}`)}
               <LobbyStreamTile {peer} {onEnter} />
             {/each}

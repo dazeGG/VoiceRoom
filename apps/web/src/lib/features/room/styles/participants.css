@@ -8,74 +8,6 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   min-height: clamp(180px, calc(100dvh - 360px), 360px);
 }
 
-/* Per-participant-count grids. Each tile is a fixed 16:9 frame; the block is
-   capped in width and centred. Layouts follow the "Плитки звонка" spec:
-   incomplete bottom rows (3, 5, 7) get their trailing tile nudged one
-   half-track so the short row sits centred under the row above. */
-.tile-grid[data-count='1'] {
-  --tile-columns: 1;
-  --grid-aspect: 1.7778;
-}
-
-.tile-grid[data-count='2'] {
-  --tile-columns: 2;
-  --grid-aspect: 3.5556;
-}
-
-.tile-grid[data-count='3'] {
-  --tile-columns: 2;
-  --grid-aspect: 1.7778;
-}
-
-.tile-grid[data-count='3'] :is(.stream-tile, .participant):nth-child(3) {
-  grid-column: 2 / span 2;
-}
-
-.tile-grid[data-count='4'] {
-  --tile-columns: 2;
-  --grid-aspect: 1.7778;
-}
-
-.tile-grid[data-count='5'] {
-  --tile-columns: 3;
-  --grid-aspect: 2.6667;
-}
-
-.tile-grid[data-count='5'] :is(.stream-tile, .participant):nth-child(4) {
-  grid-column: 2 / span 2;
-}
-
-.tile-grid[data-count='6'] {
-  --tile-columns: 3;
-  --grid-aspect: 2.6667;
-}
-
-.tile-grid[data-count='7'] {
-  --tile-columns: 4;
-  --grid-aspect: 3.5556;
-}
-
-.tile-grid[data-count='7'] :is(.stream-tile, .participant):nth-child(5) {
-  grid-column: 2 / span 2;
-}
-
-.tile-grid[data-count='8'] {
-  --tile-columns: 4;
-  --grid-aspect: 3.5556;
-}
-
-.tile-grid[data-count='9'] {
-  --tile-columns: 3;
-  --grid-aspect: 1.7778;
-}
-
-.tile-grid[data-count]:not([data-count='0']) {
-  width: min(100%, calc(100cqh * var(--grid-aspect)));
-  height: auto;
-  aspect-ratio: var(--grid-aspect);
-  align-self: center;
-}
-
 .participant {
   --participant-pastel: var(--vr-surface-3);
   --participant-avatar-fg: var(--vr-text);
@@ -84,7 +16,6 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   min-height: 0;
   height: auto;
   aspect-ratio: 16 / 9;
-  grid-column: span 2;
   /* Size container so descendant avatar/ring elements can scale down on short tiles. */
   container-type: size;
   place-items: center;
@@ -255,11 +186,13 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   z-index: 1;
 }
 
-/* The avatar is 76px, or 40% of a short tile. */
+/* The avatar grows with the tile, from 76px up to 160px, and never takes more
+   than 40% of its height; its letters keep their share of it. */
 .voice-ring {
   display: grid;
-  height: min(76px, 40cqh);
+  height: min(40cqh, clamp(76px, 9cqw, 160px));
   aspect-ratio: 1;
+  container-type: size;
   place-items: center;
   border-radius: 50%;
   background: transparent;
@@ -287,6 +220,11 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   height: 100%;
   border-radius: inherit;
   object-fit: cover;
+}
+
+/* In a tile the letters keep their share of an avatar of any size. */
+:where(.voice-ring) > .avatar {
+  font-size: 29cqh;
 }
 
 .participant[data-screen='true']:not([data-local='true']) {
@@ -407,4 +345,25 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   width: 15px;
   height: 15px;
   flex: 0 0 auto;
+}
+
+/* A small tile, many to a screen, gets a smaller name plate and no status line. */
+@container (max-width: 239px) {
+  .participant-copy {
+    left: 6px;
+    bottom: 6px;
+    max-width: calc(100% - 12px);
+  }
+
+  .participant h2 {
+    height: 22px;
+    gap: 4px;
+    border-radius: 7px;
+    padding: 0 7px;
+    font-size: 12px;
+  }
+
+  .participant p {
+    display: none;
+  }
 }
