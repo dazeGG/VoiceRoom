@@ -22,7 +22,7 @@
   });
 
   const offerAccount = $derived(leaveScreenUi.guest && !accountCreated);
-  // "How was the call?" is the top of this window rather than a second one.
+  // "How was the call?" is the bottom of this window rather than a second one.
   const feedbackCall = $derived(callFeedback.call);
 
   // Leaving the window with the question unanswered is passing on it, so the
@@ -59,15 +59,6 @@
 {#if leaveScreenUi.open}
   <div class="guest-leave" role="dialog" aria-modal="true" aria-labelledby="leaveScreenTitle">
     <div class="guest-leave-card">
-      {#if feedbackCall}
-        {#key feedbackCall}
-          <CallFeedbackCard call={feedbackCall} hosted onAnswered={() => (feedbackThanked = true)} />
-        {/key}
-        <hr class="guest-leave-divider" />
-      {:else if feedbackThanked}
-        <p class="guest-leave-thanks" role="status">Спасибо за отзыв! Это помогает делать звонки лучше.</p>
-        <hr class="guest-leave-divider" />
-      {/if}
       <h1 id="leaveScreenTitle">{accountCreated ? 'Аккаунт создан' : 'Вы вышли из комнаты'}</h1>
       {#if offerAccount}
         {#if leaveScreenUi.isStatic}
@@ -90,6 +81,15 @@
           <Button variant="primary" type="button" onclick={rejoin}>Вернуться в звонок</Button>
         {/if}
       </div>
+      {#if feedbackCall}
+        <hr class="guest-leave-divider" />
+        {#key feedbackCall}
+          <CallFeedbackCard call={feedbackCall} hosted onAnswered={() => (feedbackThanked = true)} />
+        {/key}
+      {:else if feedbackThanked}
+        <hr class="guest-leave-divider" />
+        <p class="guest-leave-thanks" role="status">Спасибо за отзыв! Это помогает делать звонки лучше.</p>
+      {/if}
     </div>
   </div>
 {/if}

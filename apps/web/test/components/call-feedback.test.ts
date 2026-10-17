@@ -201,7 +201,7 @@ test('a click beside the window closes it as the cross does', async () => {
   expect(callFeedback.call).toBeNull();
 });
 
-test('on the leave screen the question is the top of that window, not a second one', async () => {
+test('on the leave screen the question is the bottom of that window, not a second one', async () => {
   const { calls } = stubFetch({ 'POST /api/feedback/calls': { status: 201, body: { ok: true } } });
   openLeaveScreen({ roomId: 'kitchen', isStatic: false, guest: true });
   callFeedback.call = call;
@@ -210,11 +210,17 @@ test('on the leave screen the question is the top of that window, not a second o
 
   const window = screen.getByRole('dialog', { name: 'Вы вышли из комнаты' });
   expect(screen.getAllByRole('dialog')).toHaveLength(1);
-  expect(within(window).getByRole('heading', { name: 'Как прошёл звонок?' })).toBeTruthy();
+  const question = within(window).getByRole('heading', { name: 'Как прошёл звонок?' });
+  const offer = within(window).getByRole('button', { name: 'Создать аккаунт' });
+  expect(
+    offer.compareDocumentPosition(question) & Node.DOCUMENT_POSITION_FOLLOWING,
+    'the offer comes first'
+  ).toBeTruthy();
   expect(within(window).queryByRole('button', { name: 'Закрыть' }), 'the window has its own ways out').toBeNull();
-  expect(within(window).getByRole('button', { name: 'Создать аккаунт' })).toBeTruthy();
 
+  // A thumb alone is a whole answer: nothing else needs filling in.
   await userEvent.click(within(window).getByRole('button', { name: 'Плохо' }));
+  expect(within(window).getByLabelText('Комментарий').getAttribute('placeholder')).not.toMatch(/необязательно/i);
   await userEvent.click(within(window).getByRole('button', { name: 'Задержка' }));
   await userEvent.click(within(window).getByRole('button', { name: 'Отправить' }));
   expect(within(window).getByRole('status').textContent).toContain('Спасибо за отзыв');

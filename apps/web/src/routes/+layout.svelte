@@ -88,7 +88,7 @@
 {:else if allowed}
   {@render children()}
   <AppUpdateNotice update={appUpdate} inCall={callActivity.active} />
-  <!-- The leave screen asks the question itself, as the top of its own window. -->
+  <!-- The leave screen asks the question itself, as the bottom of its own window. -->
   <CallFeedbackPrompt hidden={callActivity.active || leaveScreenUi.open} />
 {:else}
   <main class="device-boundary" aria-label="Неподдерживаемое устройство" aria-live="polite">

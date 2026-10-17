@@ -1,7 +1,7 @@
 <script lang="ts">
   // The question about one call: a thumb opens what went well or wrong and a
   // comment; the cross or Escape closes it. Mounted per call, so a new
-  // question starts with nothing chosen. `hosted` is the question as the top
+  // question starts with nothing chosen. `hosted` is the question as the bottom
   // of the leave screen: that window has its own ways out, so the question
   // has no cross, no Escape and does not go away by itself.
   import { ThumbsDown, ThumbsUp, X } from '@lucide/svelte';
@@ -126,7 +126,7 @@
         aria-label="Комментарий"
         rows="2"
         maxlength={CALL_FEEDBACK_COMMENT_MAX_LENGTH}
-        placeholder={rating === 'good' ? 'Что ещё улучшить? Необязательно' : 'Расскажите подробнее. Необязательно'}
+        placeholder={rating === 'good' ? 'Что ещё улучшить?' : 'Что случилось? Расскажите подробнее'}
         bind:value={comment}></textarea>
       <div class="call-feedback-actions">
         <Button variant="primary" type="submit">Отправить</Button>
