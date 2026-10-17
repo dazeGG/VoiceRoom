@@ -58,7 +58,8 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
           joinedAt: peer.joinedAt ?? null,
           muted: Boolean(peer.muted),
           deafened: Boolean(peer.deafened),
-          screen: Boolean(peer.screen)
+          screen: Boolean(peer.screen),
+          client: peer.client ?? null
         }))
         .sort((a, b) => (a.joinedAt ?? Infinity) - (b.joinedAt ?? Infinity));
       const row = roomById.get(room.id);

@@ -3,6 +3,7 @@ import type { PeerUpdatePayload } from './room-runtime.ts';
 import { normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voice-room/shared/validation';
 import { normalizeTypingActivity } from '@voice-room/shared/realtime';
 import type { IncomingMessage } from 'node:http';
+import { clientKind } from '@voice-room/shared/account-security';
 import type { TypingActivity } from '@voice-room/shared/realtime';
 import type { ClientCommand } from '@voice-room/shared/contracts/realtime';
 import { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } from './envelope.ts';
@@ -397,6 +398,7 @@ function createWsHandler({
         )
       : registry.addGuestConnection(socket, guestIp);
     connection = opened;
+    opened.client = clientKind(req.headers?.['user-agent']);
 
     logger.info(
       {

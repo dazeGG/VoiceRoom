@@ -83,6 +83,8 @@ export function readApiConfig(env: Env = process.env) {
     ),
     REPORT_RATE_LIMIT: int('REPORT_RATE_LIMIT', 10, 0),
     REPORT_RATE_WINDOW_MS: int('REPORT_RATE_WINDOW_MS', 60000, 1000),
+    CALL_FEEDBACK_RATE_LIMIT: int('CALL_FEEDBACK_RATE_LIMIT', 5, 0),
+    CALL_FEEDBACK_RATE_WINDOW_MS: int('CALL_FEEDBACK_RATE_WINDOW_MS', 600000, 1000),
     // Browser log intake is a public write path into the log stream, so it
     // stays off unless an operator turns it on per environment.
     CLIENT_LOG_INTAKE_ENABLED: readEnvBool('CLIENT_LOG_INTAKE_ENABLED', false, env) as boolean,

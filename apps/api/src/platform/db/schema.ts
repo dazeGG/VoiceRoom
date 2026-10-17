@@ -59,6 +59,20 @@ export interface AdminActions {
   target_user_id: string;
 }
 
+export interface CallFeedback {
+  comment: Generated<string>;
+  created_at: Generated<Timestamp>;
+  duration_s: number;
+  id: Generated<string>;
+  peers: number;
+  platform: string;
+  quality: Json | null;
+  rating: string;
+  room_id: string;
+  tags: Generated<string[]>;
+  user_id: string | null;
+}
+
 export interface ContentReports {
   comment: Generated<string>;
   created_at: Generated<Timestamp>;
@@ -573,6 +587,7 @@ export interface DB {
   account_login_events: AccountLoginEvents;
   account_recovery_codes: AccountRecoveryCodes;
   admin_actions: AdminActions;
+  call_feedback: CallFeedback;
   content_reports: ContentReports;
   direct_message_reaction_revisions: DirectMessageReactionRevisions;
   direct_message_reactions: DirectMessageReactions;

@@ -4,6 +4,9 @@
   import { page, updated } from '$app/state';
   import { AppUpdate } from '$lib/features/app-update/app-update.svelte';
   import AppUpdateNotice from '$lib/features/app-update/AppUpdateNotice.svelte';
+  import { restorePendingCallFeedback } from '$lib/features/call-feedback/call-feedback.svelte';
+  import CallFeedbackPrompt from '$lib/features/call-feedback/CallFeedbackPrompt.svelte';
+  import { leaveScreenUi } from '$lib/features/room/leave-screen.svelte';
   import { callActivity } from '$lib/shared/call-activity.svelte';
   import { applyDesktopBoundaryToDocument } from '$lib/platform/desktop-boundary';
   import { bindDesktopSystem } from '$lib/platform/desktop-system';
@@ -38,6 +41,8 @@
   onMount(() => {
     initTheme();
     void loadAccountBadges();
+    // "How was the call?" asked by a leave on the page before this load.
+    restorePendingCallFeedback();
     const policy = applyDesktopBoundaryToDocument();
     desktopAllowed = policy.desktopAllowed;
     roomClientAllowed = policy.roomClientAllowed;
@@ -83,6 +88,8 @@
 {:else if allowed}
   {@render children()}
   <AppUpdateNotice update={appUpdate} inCall={callActivity.active} />
+  <!-- The leave screen asks the question itself, as the bottom of its own window. -->
+  <CallFeedbackPrompt hidden={callActivity.active || leaveScreenUi.open} />
 {:else}
   <main class="device-boundary" aria-label="Неподдерживаемое устройство" aria-live="polite">
     <section class="device-boundary__card">

@@ -34,6 +34,7 @@ interface CallQuality {
   inboundLoss: Series;
   jitter: Series;
   outboundLoss: Series;
+  peersMax: number;
   reconnects: number;
   rtt: Series;
   startedAt: number;
@@ -66,6 +67,7 @@ export function startCallQuality(now = Date.now()): void {
     inboundLoss: emptySeries(),
     jitter: emptySeries(),
     outboundLoss: emptySeries(),
+    peersMax: 0,
     reconnects: 0,
     rtt: emptySeries(),
     startedAt: now,
@@ -85,6 +87,11 @@ export function recordNetworkSample(sample: NetworkSample): void {
   }
 }
 
+/** How many other people are in the call now; the call keeps its largest company. */
+export function recordPeerCount(count: number): void {
+  if (current) current.peersMax = Math.max(current.peersMax, count);
+}
+
 export function recordReconnect(): void {
   if (current) current.reconnects += 1;
 }
@@ -97,9 +104,22 @@ export function recordCpuRelief(): void {
   if (current) current.cpuRelieved = true;
 }
 
+/** The call's numbers that "how was the call?" sends along with the answer. */
+export interface CallStats {
+  durationS: number;
+  peersMax: number;
+  rttAvgMs: number | null;
+  inboundLossAvgPct: number | null;
+  outboundLossAvgPct: number | null;
+  jitterAvgMs: number | null;
+  reconnects: number;
+  transport: NetworkSample['transport'];
+}
+
 export interface CallQualitySummary {
   context: LogContext;
   degraded: boolean;
+  stats: CallStats;
 }
 
 /** Ends the call's account. Returns null when no call was being measured. */
@@ -111,16 +131,20 @@ export function finishCallQuality(now = Date.now()): CallQualitySummary | null {
   const durationMs = Math.max(0, now - quality.startedAt);
   const inboundLoss = average(quality.inboundLoss);
   const outboundLoss = average(quality.outboundLoss);
-  const context: LogContext = {
+  const stats: CallStats = {
     durationS: Math.round(durationMs / 1000),
+    peersMax: quality.peersMax,
+    rttAvgMs: average(quality.rtt),
     inboundLossAvgPct: inboundLoss,
-    inboundLossMaxPct: quality.inboundLoss.count ? quality.inboundLoss.max : null,
     outboundLossAvgPct: outboundLoss,
     jitterAvgMs: average(quality.jitter),
-    rttAvgMs: average(quality.rtt),
-    rttMaxMs: quality.rtt.count ? quality.rtt.max : null,
-    transport: quality.transport,
     reconnects: quality.reconnects,
+    transport: quality.transport
+  };
+  const context: LogContext = {
+    ...stats,
+    inboundLossMaxPct: quality.inboundLoss.count ? quality.inboundLoss.max : null,
+    rttMaxMs: quality.rtt.count ? quality.rtt.max : null,
     cpuPressureMax: quality.cpu,
     cpuRelieved: quality.cpuRelieved
   };
@@ -133,5 +157,5 @@ export function finishCallQuality(now = Date.now()): CallQualitySummary | null {
 
   log.info('call quality', context);
   if (degraded) void reportClientLogs('call_quality_degraded');
-  return { context, degraded };
+  return { context, degraded, stats };
 }

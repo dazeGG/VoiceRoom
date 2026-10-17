@@ -43,6 +43,7 @@ import { createReactionsModule } from '../domains/messaging/reactions.module.ts'
 import { createPinsModule } from '../domains/messaging/pins.module.ts';
 import { createNotificationsModule } from '../domains/notifications/notifications.module.ts';
 import { createModerationModule } from '../domains/moderation/moderation.module.ts';
+import { createCallFeedbackRepository } from '../domains/feedback/call-feedback.repository.ts';
 import { createReportRepository } from '../domains/reports/report.repository.ts';
 import { createVoiceSessionRepository } from '../domains/rooms/voice-session.repository.ts';
 import { createActivityRepository } from '../domains/account/activity.repository.ts';
@@ -247,6 +248,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
 
   const accountDeletions = pooled((pool) => createAccountDeletionRepository({ pool }));
   const reportRepository = pooled((pool) => createReportRepository({ pool }));
+  const callFeedback = pooled((pool) => createCallFeedbackRepository({ pool }));
   const voiceSessions = pooled((pool) => createVoiceSessionRepository({ pool }));
   const activity = pooled((pool) => createActivityRepository({ pool }));
   const productSnapshots = pooled((pool) => createProductSnapshotRepository({ pool }));
@@ -363,6 +365,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       activeBans,
       delivery,
       reportRepository,
+      callFeedback,
       voiceSessions,
       activity,
       productSnapshots,
@@ -421,6 +424,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     getPool,
     getAccountDeletionRepository: () => accountDeletions.get(),
     getReportRepository: () => reportRepository.get(),
+    getCallFeedbackRepository: () => callFeedback.get(),
     getVoiceSessionRepository: () => voiceSessions.get(),
     getActivityRepository: () => activity.get(),
     getProductSnapshotRepository: () => productSnapshots.get(),

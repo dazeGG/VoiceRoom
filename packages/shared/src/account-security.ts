@@ -203,6 +203,17 @@ export function isDesktopAppUserAgent(value: unknown): boolean {
   return CLIENT_RULES[0]![0].test(userAgent);
 }
 
+/** Which kind of client a user agent is: the desktop app, a phone, or a browser on a computer. */
+export type ClientKind = 'desktop_app' | 'mobile' | 'browser';
+
+/** Null when there is no user agent to tell. */
+export function clientKind(userAgent: string | null | undefined): ClientKind | null {
+  if (!userAgent) return null;
+  if (isDesktopAppUserAgent(userAgent)) return 'desktop_app';
+  const { os } = describeUserAgent(userAgent);
+  return os === 'Android' || os === 'iOS' ? 'mobile' : 'browser';
+}
+
 // Facts about the signed-in account that only the account itself receives.
 // An older API sends neither flag: the app banner may then show, but the
 // one-time post-registration prompt never does.

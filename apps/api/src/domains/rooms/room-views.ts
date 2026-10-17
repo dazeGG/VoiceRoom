@@ -4,6 +4,7 @@
 
 import type { RoomPeerMessage } from '../../realtime/legacy-events.ts';
 import type { LobbyRoom, PublicPeer } from '@voice-room/shared/contracts/rooms';
+import type { ClientKind } from '@voice-room/shared/account-security';
 import { avatarColorForPeerId } from './avatar-color.ts';
 import { failure, type Failure } from '../../platform/http/http-kit.ts';
 
@@ -14,6 +15,8 @@ export interface PresencePeer {
   avatarAccent?: string | null;
   avatarColorKey?: string | null;
   avatarUrl?: string | null;
+  /** The desktop app, a phone or a browser, from the socket that took the seat. */
+  client?: ClientKind | null;
   deafened?: boolean;
   gateGuestPrincipalId?: string | null;
   ip?: string;

@@ -1,7 +1,7 @@
 // The periodic sweeps a running API performs (platform/maintenance.ts runs
 // them): idle rooms, product and system snapshots, sessions, sign-in history, finished
-// account deletions, expired link previews, deleted-message retention and the
-// rooms of old stays in voice.
+// account deletions, expired link previews, deleted-message retention, the
+// rooms of old stays in voice and the authors of old call feedback.
 
 import { VOICE_HISTORY_KEEP_DAYS } from '@voice-room/shared/contracts/admin';
 import type { MaintenanceTask } from '../platform/maintenance.ts';
@@ -17,6 +17,7 @@ export interface ApiMaintenanceDeps {
   linkPreviews(): { pruneExpired(): Promise<unknown> } | null;
   rooms(): { purgeDeleted?: (options: { olderThanMs: number }) => Promise<unknown> };
   voiceSessions(): { forgetRoomsBefore(cutoff: Date): Promise<unknown> } | null;
+  callFeedback(): { forgetAuthorsBefore(cutoff: Date): Promise<unknown> } | null;
   now?: () => number;
   retention: { intervalMs: number; keepDeletedMs: number };
 }
@@ -80,6 +81,15 @@ export function apiMaintenanceTasks(deps: ApiMaintenanceDeps): MaintenanceTask[]
       failureMessage: 'voice history forget timer failed',
       enabled: () => Boolean(deps.voiceSessions()),
       run: async () => deps.voiceSessions()?.forgetRoomsBefore(new Date(now() - VOICE_HISTORY_KEEP_DAYS * DAY_MS))
+    },
+    {
+      // An answer about a call says who was in which room as long as a stay in
+      // voice does, then keeps only the room and what was said.
+      name: 'call_feedback_forget',
+      label: 'call-feedback-forget',
+      failureMessage: 'call feedback forget timer failed',
+      enabled: () => Boolean(deps.callFeedback()),
+      run: async () => deps.callFeedback()?.forgetAuthorsBefore(new Date(now() - VOICE_HISTORY_KEEP_DAYS * DAY_MS))
     }
   ];
 }

@@ -365,6 +365,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         avatarUrl: sessionUser?.avatarKey ? `/api/avatars/${encodeURIComponent(sessionUser.avatarKey)}` : null,
         id: peerId,
         gateGuestPrincipalId: identityResult.identity?.id || '',
+        client: connection.client,
         ip: clientIp || '',
         joinedAt: previous?.joinedAt ?? Date.now(),
         muted: Boolean(previous?.muted || persistedServerMuted),
