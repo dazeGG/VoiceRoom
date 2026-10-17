@@ -164,7 +164,9 @@ function removePersonalData(trx: Database, userId: string) {
     trx.deleteFrom('account_recovery_codes').where('user_id', '=', userId).execute(),
     trx.deleteFrom('account_login_events').where('user_id', '=', userId).execute(),
     trx.deleteFrom('voice_sessions').where('user_id', '=', userId).execute(),
-    trx.deleteFrom('user_activity_days').where('user_id', '=', userId).execute()
+    trx.deleteFrom('user_activity_days').where('user_id', '=', userId).execute(),
+    // Call feedback stays for the numbers but no longer says whose it was.
+    trx.updateTable('call_feedback').set({ user_id: null }).where('user_id', '=', userId).execute()
   ]);
 }
 

@@ -23,6 +23,7 @@ import { createReplyRepository } from '../domains/messaging/reply.repository.ts'
 import { createRoomChatService } from '../domains/messaging/room-chat.service.ts';
 import { createNotificationSettingsService } from '../domains/notifications/notification-settings.service.ts';
 import { createDesktopReleaseService } from '../domains/ops/desktop-release.service.ts';
+import { createCallFeedbackService } from '../domains/feedback/call-feedback.service.ts';
 import { createReportService } from '../domains/reports/report.service.ts';
 import { createPeerEviction } from '../domains/rooms/peer-eviction.ts';
 import { createPeerModerationService } from '../domains/rooms/peer-moderation.service.ts';
@@ -244,6 +245,15 @@ export function createDomainServices(deps: DomainServiceDeps) {
     reportsChanged: (filed) => void announceReports(filed)
   });
 
+  const callFeedback = createCallFeedbackService({
+    repository: () => {
+      const repository = services.getCallFeedbackRepository();
+      if (!repository) throw new Error('Call feedback requires the database');
+      return repository;
+    },
+    adminUserIds: config.PLATFORM_ADMIN_USER_IDS
+  });
+
   const admin = createAdminService({
     adminUserIds: config.PLATFORM_ADMIN_USER_IDS,
     stats: () => {
@@ -309,6 +319,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     notificationSettings,
     avatars: avatarsService,
     reports,
+    callFeedback,
     admin,
     adminAccounts,
     adminRooms,

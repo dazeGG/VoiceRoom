@@ -163,6 +163,11 @@ test('finishing a deletion hands rooms to the longest-standing member, removes p
     ada.id,
     grace.id
   ]);
+  await pool.query(
+    `INSERT INTO call_feedback (user_id, rating, comment, room_id, duration_s, peers, platform)
+     VALUES ($1, 'bad', 'эхо', 'shared-room', 600, 2, 'browser')`,
+    [ada.id]
+  );
 
   const preview = await deletion.previewDeletion({ userId: ada.id, now: start + DAY });
   assert.deepEqual(preview, {
@@ -220,6 +225,14 @@ test('finishing a deletion hands rooms to the longest-standing member, removes p
     Number((await pool.query<{ count: string }>('SELECT count(*) FROM voice_sessions')).rows[0]?.count),
     1,
     "a guest's stay in the same room stays"
+  );
+  assert.equal(await count('SELECT count(*) FROM call_feedback WHERE user_id = $1'), 0);
+  assert.equal(
+    Number(
+      (await pool.query<{ count: string }>(`SELECT count(*) FROM call_feedback WHERE comment = 'эхо'`)).rows[0]?.count
+    ),
+    1,
+    'the call feedback stays, without its author'
   );
   assert.equal(
     await count('SELECT count(*) FROM direct_messages WHERE sender_id = $1'),

@@ -7,6 +7,7 @@ import {
   releaseRemoteAudioElement
 } from '../services/media-playback-service';
 import { STREAM_CUE_DEDUPE_MS } from '../core/config';
+import { recordPeerCount } from './call-quality';
 import { clearPeerJoinCue, playStreamCue, playStreamViewerCue } from '../media/cues';
 import type { Participant, PeerInfo } from '../core/types';
 
@@ -169,6 +170,7 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
   } else {
     participant = reactiveParticipant(model);
     state.peers.set(peerInfo.id, participant);
+    recordPeerCount(state.peers.size);
   }
 
   refreshAllScreenActionsSoon();

@@ -15,6 +15,12 @@ import { errorMessage, wait } from '../core/utils';
 import { rotateStoredPeerSession } from '../core/session';
 import { isRoomEmbedded } from '../core/embed';
 import { openLeaveScreen } from '../../leave-screen.svelte';
+import { CALL_FEEDBACK_MAX_DURATION_S } from '@voice-room/shared/contracts/feedback';
+import {
+  dropCallFeedback,
+  noteCallFinished,
+  offerCallFeedback
+} from '$lib/features/call-feedback/call-feedback.svelte';
 import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
 import { getDisplayName, updateNameStatuses } from '../ui/names';
 import { resetConnectionStatus, setServerConnectionStatus, setVoiceConnectionStatus } from '../ui/status';
@@ -49,7 +55,14 @@ import {
   watchLocalMicrophone
 } from '../ui/devices';
 import { startCpuPressureWatch, stopCpuPressureWatch } from '../services/cpu-pressure';
-import { finishCallQuality, recordCpuPressure, recordCpuRelief, startCallQuality } from './call-quality';
+import {
+  finishCallQuality,
+  type CallQualitySummary,
+  recordCpuPressure,
+  recordCpuRelief,
+  recordPeerCount,
+  startCallQuality
+} from './call-quality';
 import { GATE_THRESHOLD_MIN_DB } from '../core/config';
 import { getAppRealtime } from '$lib/api/realtime';
 import {
@@ -298,7 +311,10 @@ async function performJoinRoom(generation: number): Promise<void> {
     stopVideoVisibilitySync?.();
     stopVideoVisibilitySync = onAppVisibilityChange(() => syncRemoteVideoVisibility());
     syncRemoteVideoVisibility();
+    // A question still open about an earlier call would now be about this one.
+    dropCallFeedback();
     startCallQuality();
+    recordPeerCount(state.peers.size);
     startCpuPressureWatch({
       onCritical: () => {
         void relieveNoiseSuppression().then((switched) => {
@@ -419,7 +435,7 @@ export function leaveRoom(): void {
   stopVideoVisibilitySync?.();
   stopVideoVisibilitySync = null;
   stopCpuPressureWatch();
-  finishCallQuality();
+  noteFinishedCall(disconnectedRoomId, finishCallQuality());
 
   state.muted = false;
   state.microphoneMissing = false;
@@ -433,6 +449,30 @@ export function leaveRoom(): void {
   closeCameraPopover();
   resetConnectionStatus();
   clearConnectedVoiceRoom(disconnectedRoomId);
+}
+
+// What "how was the call?" sends along with an answer, should the leave ask it.
+function noteFinishedCall(roomId: string, summary: CallQualitySummary | null): void {
+  if (!roomId || !summary) {
+    noteCallFinished(null);
+    return;
+  }
+  const { stats } = summary;
+  const desktopApp = Boolean(window.voiceRoomRuntime?.isDesktop);
+  noteCallFinished({
+    roomId,
+    durationS: Math.min(stats.durationS, CALL_FEEDBACK_MAX_DURATION_S),
+    peers: stats.peersMax,
+    platform: desktopApp ? 'desktop_app' : getDesktopBoundaryPolicy().desktopAllowed ? 'browser' : 'mobile',
+    quality: {
+      rttAvgMs: stats.rttAvgMs,
+      inboundLossAvgPct: stats.inboundLossAvgPct,
+      outboundLossAvgPct: stats.outboundLossAvgPct,
+      jitterAvgMs: stats.jitterAvgMs,
+      reconnects: stats.reconnects,
+      transport: stats.transport
+    }
+  });
 }
 
 function stopLocalStream(): void {
@@ -453,6 +493,7 @@ export async function handleLeaveButtonClick(): Promise<void> {
     playPeerCue('leave');
     await wait(180);
     leaveRoom();
+    offerCallFeedback();
   }
 
   if (isRoomEmbedded()) {

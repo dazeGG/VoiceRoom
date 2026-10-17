@@ -1,7 +1,7 @@
 <script lang="ts">
   // The platform administrator's panel: the dashboard, how the product
-  // changes, how the server is doing, the accounts, who is in which room, and
-  // the reports. It opens inside the
+  // changes, how the server is doing, the accounts, who is in which room, the
+  // reports, and what people say about their calls. It opens inside the
   // lobby, so a call keeps going; the lobby keeps the tab in the address.
   import { SegmentControl } from '$lib/shared/ui';
   import AdminAccounts from './AdminAccounts.svelte';
@@ -9,6 +9,7 @@
   import AdminProduct from './AdminProduct.svelte';
   import AdminRooms from './AdminRooms.svelte';
   import AdminSystem from './AdminSystem.svelte';
+  import CallFeedbackReview from './CallFeedbackReview.svelte';
   import ReportsReview from './ReportsReview.svelte';
   import type { AdminTab } from './tabs';
 
@@ -71,7 +72,8 @@
         { value: 'system', label: 'Сервер' },
         { value: 'accounts', label: 'Аккаунты' },
         { value: 'rooms', label: 'Комнаты' },
-        { value: 'reports', label: 'Жалобы', suffix: reportsCount }
+        { value: 'reports', label: 'Жалобы', suffix: reportsCount },
+        { value: 'feedback', label: 'Отзывы' }
       ]}
       value={current}
       onChange={selectTab}
@@ -90,6 +92,8 @@
       <AdminAccounts accountId={currentAccountId} onOpenAccount={openAccount} />
     {:else if current === 'rooms'}
       <AdminRooms onOpenAccount={showAccount} />
+    {:else if current === 'feedback'}
+      <CallFeedbackReview />
     {:else}
       {#key reportsVersion}<ReportsReview />{/key}
     {/if}
