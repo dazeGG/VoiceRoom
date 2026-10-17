@@ -49,6 +49,8 @@ export interface VoiceJoinDeps {
   closePeer: (roomId: string, peerId: string, transportId: string | undefined, reason: string) => void;
   avatarColorForPeerId: (peerId: unknown) => string;
   MAX_ROOM_PEERS: number;
+  /** People in voice across every room; 0 leaves the server uncapped. */
+  MAX_VOICE_PEERS?: number;
   tokensMatch: (expected: string | null | undefined, actual: string | null | undefined) => boolean;
   sessionAvatarColorKey: (user: SessionUser) => string;
   queueRoomOccupancyTransition: (roomId: string) => Promise<unknown>;
@@ -76,6 +78,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
     closePeer,
     avatarColorForPeerId,
     MAX_ROOM_PEERS,
+    MAX_VOICE_PEERS = 0,
     tokensMatch,
     sessionAvatarColorKey,
     queueRoomOccupancyTransition,
@@ -87,6 +90,12 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
     buildRoomSnapshot,
     leaveVoiceRoom
   } = deps;
+
+  function countVoicePeers(): number {
+    let total = 0;
+    for (const room of presenceRooms.values()) total += room.peers.size;
+    return total;
+  }
   const scheduleSummaryBroadcast = summaries.schedule;
   const voiceJoinStates = new Map<string, { latestAuthorized: number; pending: number }>();
   let joinRequestSequenceCounter = 0;
@@ -348,6 +357,17 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         return { ok: false, code: 'room_full' };
       }
 
+      // The SFU shares one host with the API and the database: past its
+      // memory and CPU budget it takes the whole server down, so new people
+      // wait while those already in voice (and reconnecting) keep their seat.
+      if (!reconnecting && MAX_VOICE_PEERS > 0 && countVoicePeers() >= MAX_VOICE_PEERS) {
+        wsRegistry.sendToConnection(
+          connection,
+          buildServerEnvelope('server.full', { roomId, maxVoicePeers: MAX_VOICE_PEERS })
+        );
+        return { ok: false, code: 'server_full' };
+      }
+
       if (previous) {
         previous.closed = true;
         previous.replaced = true;
@@ -370,6 +390,8 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         joinedAt: previous?.joinedAt ?? Date.now(),
         muted: Boolean(previous?.muted || persistedServerMuted),
         name: reconnecting && !sessionUser ? (previous?.name ?? name) : name,
+        camera: previous?.camera ?? false,
+        mediaClaims: previous?.mediaClaims,
         screen: previous?.screen ?? false,
         screenAudio: previous?.screenAudio ?? false,
         screenProfileId: previous?.screenProfileId ?? '',

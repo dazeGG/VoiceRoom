@@ -7,6 +7,8 @@ import type { CameraFacing } from '../core/types';
 import { stopStream } from '../core/utils';
 import { showToast } from '../ui/toast';
 import { publishLocalCamera, unpublishLocalCamera } from './livekit/local-publications';
+import { askForMedia, describeMediaRefusal } from './media-grant';
+import { postState } from '../room/presence';
 import { createLogger, errorContext } from '$lib/shared/log';
 
 const log = createLogger('room:camera');
@@ -29,6 +31,11 @@ async function startCamera(): Promise<void> {
 
   state.cameraStarting = true;
   try {
+    const grant = await askForMedia('camera');
+    if (grant && !grant.granted) {
+      showToast(describeMediaRefusal(grant), { duration: 12000, variant: 'error' });
+      return;
+    }
     const stream = await openCameraCapture(state.cameraDeviceId);
     if (!state.joined) {
       stopStream(stream);
@@ -36,6 +43,8 @@ async function startCamera(): Promise<void> {
     }
     adoptCameraStream(stream);
     await publishLocalCamera();
+    // The server counts the camera against its media budget from here on.
+    await postState();
   } catch (error) {
     log.warn('camera start failed', errorContext(error));
     await stopCamera();
@@ -50,6 +59,7 @@ export async function stopCamera(): Promise<void> {
   releaseLocalCamera();
   await unpublishLocalCamera().catch((error) => log.warn('camera unpublish failed', errorContext(error)));
   if (stream) stopStream(stream);
+  if (stream) await postState();
 }
 
 /** Leaving the room: the LiveKit room goes away with the publication. */

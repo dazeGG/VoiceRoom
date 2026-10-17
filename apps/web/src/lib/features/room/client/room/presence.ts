@@ -14,6 +14,7 @@ export async function postState(): Promise<void> {
     roomId: state.roomId,
     sessionToken: state.sessionToken,
     patch: {
+      camera: Boolean(state.localCameraStream),
       deafened: state.outputMuted,
       muted: isMicrophoneShownMuted(),
       name: getDisplayName(),

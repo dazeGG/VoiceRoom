@@ -49,6 +49,7 @@ const LOG_EVENTS = Object.freeze({
   // Voice rooms.
   ROOM_JOINED: 'room.joined',
   ROOM_JOIN_REJECTED: 'room.join_rejected',
+  ROOM_MEDIA_REFUSED: 'room.media_refused',
   ROOM_LEFT: 'room.left',
   ROOM_OCCUPANCY_PERSIST_FAILED: 'room.occupancy_persist_failed',
   ROOM_OCCUPANCY_RETRY_FAILED: 'room.occupancy_retry_failed',

@@ -4,6 +4,7 @@
 
 import { SvelteSet } from 'svelte/reactivity';
 import { getAppRealtime, type RealtimeEvent } from '$lib/api/realtime';
+import { isMediaRequestError } from '$lib/entities/room/room-realtime';
 import { setVoiceSessionTiming } from '../../voice-session.svelte';
 import { state } from '../core/state.svelte';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
@@ -75,6 +76,8 @@ export function createVoiceEventHandler(room: {
     }
 
     if (event.type === 'error') {
+      // A refused media request falls back on its own; it is not the room's error.
+      if (isMediaRequestError(event.payload.id)) return;
       if (event.payload.code === 'room_banned') {
         room.showModeration('banned');
         return;
@@ -128,6 +131,12 @@ export function createVoiceEventHandler(room: {
 
     if (event.type === 'room.full') {
       showToast(`Комната заполнена: максимум ${event.payload.maxRoomPeers}`);
+      leaveRoom();
+      return;
+    }
+
+    if (event.type === 'server.full') {
+      showToast('Сервер сейчас заполнен. Попробуйте зайти через пару минут');
       leaveRoom();
       return;
     }

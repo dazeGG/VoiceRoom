@@ -1,3 +1,4 @@
+import type { ClientCommands, MediaGrant } from '@voice-room/shared/contracts/realtime';
 import { getAppRealtime, type RealtimeEvent, type RoomSnapshot } from '$lib/api/realtime';
 import { applyRoomSummary } from './room-presence.svelte';
 import type { OwnedRoom } from '$lib/api/auth';
@@ -337,6 +338,41 @@ export function updateVoicePeer(payload: {
   patch: Record<string, unknown>;
 }): void {
   getAppRealtime().send('room.peer.update', payload);
+}
+
+// A server that never answers (an older one, or a socket that dropped) must
+// not cost the person their stream: the request then resolves null and the
+// caller goes ahead as before.
+const MEDIA_GRANT_TIMEOUT_MS = 4_000;
+let mediaRequestSequence = 0;
+const pendingMediaRequestIds = new Set<string>();
+
+/** An error frame that answers a media request: the request handles it, nobody shows it. */
+export function isMediaRequestError(id: string | undefined): boolean {
+  return Boolean(id && pendingMediaRequestIds.has(id));
+}
+
+/** Asks the server whether a screen share or a camera may start, and at which screen profile. */
+export function requestMediaGrant(payload: ClientCommands['room.media.request']): Promise<MediaGrant | null> {
+  const conn = getAppRealtime();
+  const id = `media-${++mediaRequestSequence}`;
+  return new Promise((resolve) => {
+    let unsubscribe = () => {};
+    const timer = setTimeout(() => finish(null), MEDIA_GRANT_TIMEOUT_MS);
+    function finish(grant: MediaGrant | null): void {
+      clearTimeout(timer);
+      // Other handlers see the same frame after this one; they skip it while the id is pending.
+      queueMicrotask(() => pendingMediaRequestIds.delete(id));
+      unsubscribe();
+      resolve(grant);
+    }
+    unsubscribe = conn.subscribe((event) => {
+      if (event.type === 'room.media.grant' && event.id === id) finish(event.payload);
+      else if (event.type === 'error' && event.payload.id === id) finish(null);
+    });
+    pendingMediaRequestIds.add(id);
+    conn.send('room.media.request', payload, id);
+  });
 }
 
 export function ensureAppRealtimeConnected(): void {

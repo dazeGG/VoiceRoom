@@ -50,12 +50,25 @@ export type PeerPatch = {
   name?: string;
   muted?: boolean;
   deafened?: boolean;
+  camera?: boolean;
   screen?: boolean;
   screenAudio?: boolean;
   screenProfileId?: string;
   screenStreamId?: string;
   viewedScreenPeerId?: string | null;
 };
+
+/** A video source the server's media budget counts. */
+export type MediaKind = 'screen' | 'camera';
+
+/**
+ * The answer to room.media.request, sent with the request's id. A grant may
+ * carry a lower screen profile than the one asked for when the server is busy.
+ */
+export type MediaGrant =
+  | { roomId: string; kind: MediaKind; granted: true; profileId?: string }
+  | { roomId: string; kind: MediaKind; granted: false; reason: 'server_busy' }
+  | { roomId: string; kind: MediaKind; granted: false; reason: 'room_screens_full'; maxRoomScreens: number };
 
 export type ClientCommands = {
   hello: Record<string, never>;
@@ -65,6 +78,8 @@ export type ClientCommands = {
   'room.join': VoiceTarget & { name: string };
   'room.leave': VoiceTarget;
   'room.peer.update': VoiceTarget & { patch: PeerPatch };
+  /** Asked before a screen share or a camera starts; answered with room.media.grant. */
+  'room.media.request': VoiceTarget & { kind: MediaKind; profileId?: string };
   'room.chat.typing': { roomId: string; activity?: TypingActivity };
   'dm.typing': { userId: string; activity?: TypingActivity };
 };
@@ -148,6 +163,9 @@ export type ServerEvents = {
   'room.deleted': { roomId: string };
   'room.not_found': { roomId: string };
   'room.full': { roomId: string; maxRoomPeers: number };
+  /** Voice refused because the whole server holds MAX_VOICE_PEERS people already. */
+  'server.full': { roomId: string; maxVoicePeers: number };
+  'room.media.grant': MediaGrant;
   'room.kicked': { roomId: string; peerId?: string };
   'room.banned': { roomId: string; peerId?: string };
   'room.left': { roomId: string; peerId: string; reason: string };
