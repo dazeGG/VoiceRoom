@@ -6,6 +6,7 @@
   import { getAvatarPresentation } from '../client/ui/avatar-presentation';
   import { state as roomState } from '../client/core/state.svelte';
   import { enterScreenView } from '../client/ui/screen-view';
+  import { keepVideoFitted } from '../client/ui/video-fit';
   import type { Participant } from '../client/core/types';
   import { createLogger, errorContext } from '$lib/shared/log';
 
@@ -105,6 +106,7 @@
       class="mc-tile-video"
       {@attach showCamera(cameraStream)}
       {@attach reportFrame}
+      {@attach keepVideoFitted}
       data-mirrored={mirrored ? 'true' : undefined}
       autoplay
       playsinline

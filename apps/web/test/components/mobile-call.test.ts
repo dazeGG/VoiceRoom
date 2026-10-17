@@ -174,6 +174,9 @@ test('two people: my picture-in-picture takes the shape my camera sends, with no
 
   await sendFrames(videos[0], 1280, 720);
   expect(Number(pip.style.getPropertyValue('--pip-ratio'))).toBeCloseTo(16 / 9);
+  // Safari on iPhone is made to lay the new size out again.
+  expect(videos[0].style.objectFit).toBe('fill');
+  await vi.waitFor(() => expect(videos[0].style.objectFit).toBe(''));
   await sendFrames(videos[0], 720, 1080);
   expect(Number(pip.style.getPropertyValue('--pip-ratio'))).toBeCloseTo(2 / 3);
 
