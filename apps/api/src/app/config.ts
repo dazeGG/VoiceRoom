@@ -25,6 +25,11 @@ export function readApiConfig(env: Env = process.env) {
     PORT: int('PORT', 3000, 1),
     SOCKET_PATH: (env.SOCKET_PATH || '').trim(),
     MAX_ROOM_PEERS: int('MAX_ROOM_PEERS', 12, 1),
+    // People in voice on the whole server; 0 leaves it uncapped.
+    MAX_VOICE_PEERS: int('MAX_VOICE_PEERS', 0, 0),
+    MEDIA_BUDGET_MBPS: int('MEDIA_BUDGET_MBPS', 0, 0),
+    MEDIA_BUDGET_VOICE_PEERS: int('MEDIA_BUDGET_VOICE_PEERS', 0, 0),
+    MAX_ROOM_SCREENS: int('MAX_ROOM_SCREENS', 0, 0),
     MAX_ROOMS: int('MAX_ROOMS', 100, 1),
     KEEPALIVE_MS: int('SSE_KEEPALIVE_MS', 15000, 1000),
     BODY_LIMIT_BYTES: int('BODY_LIMIT_BYTES', 65536, 1024),

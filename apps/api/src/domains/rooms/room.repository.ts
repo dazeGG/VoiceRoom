@@ -103,6 +103,16 @@ async function countLiveRooms(db: Database): Promise<number> {
   return row?.count || 0;
 }
 
+async function countLiveTemporaryRooms(db: Database): Promise<number> {
+  const row = await db
+    .selectFrom('rooms')
+    .select(countAll)
+    .where('deleted_at', 'is', null)
+    .where('is_static', '=', false)
+    .executeTakeFirst();
+  return row?.count || 0;
+}
+
 type NewRoom = { id: string; creatorIp: string; isStatic: boolean; ownerId: string | null; name: string; at: Date };
 
 function insertRoom(db: Database, room: NewRoom) {
@@ -198,7 +208,10 @@ export function createRoomRepository({ db, roomIdleTtlMs = 15 * 60 * 1000 }: { d
           return { room: null, status: 'quota_exceeded' };
         }
       }
-      if ((await countLiveRooms(trx)) >= maxRooms) {
+      // maxRooms caps temporary rooms only. Persistent rooms are capped per
+      // owner and never expire, so counting them here would lock everyone out
+      // of creating rooms once enough accounts made theirs.
+      if (!isStatic && (await countLiveTemporaryRooms(trx)) >= maxRooms) {
         return { room: null, status: 'capacity_exceeded' };
       }
 

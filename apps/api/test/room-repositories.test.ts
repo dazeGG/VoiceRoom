@@ -144,11 +144,40 @@ test('room creation checks the owner, the per-owner and per-address quotas and t
   assert.equal(await store.countQuotaRoomsForIp('ip'), 1);
 
   assert.equal(await store.countRooms(), 3);
-  assert.deepEqual(await store.createRoomWithQuota({ roomId: 't3', creatorIp: 'other', maxRooms: 3 }), {
+  assert.deepEqual(await store.createRoomWithQuota({ roomId: 't3', creatorIp: 'other', maxRooms: 1 }), {
     room: null,
     status: 'capacity_exceeded'
   });
   assert.equal(await store.getRoom('t3'), null, 'a refused room is not written');
+});
+
+test('maxRooms caps live temporary rooms; persistent rooms never count toward it', { skip }, async (t) => {
+  const { store, user } = await setup(t);
+  for (const name of ['ann', 'ben']) {
+    const owner = await user(name);
+    const created = await store.createRoomWithQuota({
+      roomId: `s-${name}`,
+      isStatic: true,
+      ownerId: owner.id,
+      maxRooms: 2
+    });
+    assert.equal(created.status, 'created');
+  }
+
+  for (const roomId of ['t1', 't2']) {
+    assert.equal((await store.createRoomWithQuota({ roomId, creatorIp: roomId, maxRooms: 2 })).status, 'created');
+  }
+  assert.deepEqual(await store.createRoomWithQuota({ roomId: 't3', creatorIp: 't3', maxRooms: 2 }), {
+    room: null,
+    status: 'capacity_exceeded'
+  });
+
+  const carl = await user('carl');
+  assert.equal(
+    (await store.createRoomWithQuota({ roomId: 's-carl', isStatic: true, ownerId: carl.id, maxRooms: 2 })).status,
+    'created',
+    'an account still makes its persistent room with the temporary rooms at the cap'
+  );
 });
 
 test('a message never expires, shows its author as they are now, and edits in place', { skip }, async (t) => {

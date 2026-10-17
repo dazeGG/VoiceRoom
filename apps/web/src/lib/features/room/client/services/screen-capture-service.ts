@@ -449,7 +449,7 @@ async function selectDesktopCaptureSource(): Promise<ScreenSourceSelection> {
   return showScreenSourcePicker(sources);
 }
 
-async function applyScreenCaptureProfile(stream: MediaStream, profile: ScreenProfile): Promise<void> {
+export async function applyScreenCaptureProfile(stream: MediaStream, profile: ScreenProfile): Promise<void> {
   const [videoTrack] = stream.getVideoTracks();
   if (!videoTrack) return;
 

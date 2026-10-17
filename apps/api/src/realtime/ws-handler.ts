@@ -1,11 +1,11 @@
 import type { JoinPayload } from './voice-join.ts';
-import type { PeerUpdatePayload } from './room-runtime.ts';
+import type { MediaRequestPayload, PeerUpdatePayload } from './room-runtime.ts';
 import { normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voice-room/shared/validation';
 import { normalizeTypingActivity } from '@voice-room/shared/realtime';
 import type { IncomingMessage } from 'node:http';
 import { clientKind } from '@voice-room/shared/account-security';
 import type { TypingActivity } from '@voice-room/shared/realtime';
-import type { ClientCommand } from '@voice-room/shared/contracts/realtime';
+import type { ClientCommand, MediaGrant } from '@voice-room/shared/contracts/realtime';
 import { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } from './envelope.ts';
 import { createTypingThrottle } from './typing-throttle.ts';
 import type { ConnectionRegistry, RealtimeSocket, WsConnection } from './registry.ts';
@@ -32,6 +32,10 @@ export interface WsRoomRuntime {
     target: { roomId: string; peerId: string; sessionToken: string }
   ): Promise<unknown>;
   updatePeerState(connection: WsConnection, payload: PeerUpdatePayload): Promise<{ ok: boolean; code?: string }>;
+  requestMedia(
+    connection: WsConnection,
+    payload: MediaRequestPayload
+  ): { ok: true; grant: MediaGrant } | { ok: false; code: string };
   broadcastRoomTyping(connection: WsConnection, roomId: string, activity: TypingActivity): unknown;
   sendAccountSummaries(connection: WsConnection, userId: string): Promise<unknown>;
 }
@@ -265,6 +269,31 @@ function createWsHandler({
             buildServerErrorEnvelope(result.code || 'update_failed', 'Peer update rejected', envelope.id)
           );
         }
+        return;
+      }
+
+      case 'room.media.request': {
+        const result = roomRuntime.requestMedia(connection, envelope.payload);
+        if (!result.ok) {
+          registry.sendToConnection(
+            connection,
+            buildServerErrorEnvelope(result.code, 'Media request rejected', envelope.id)
+          );
+          return;
+        }
+        if (!result.grant.granted) {
+          logger.info(
+            {
+              evt: LOG_EVENTS.ROOM_MEDIA_REFUSED,
+              connId: connection.id,
+              roomId: result.grant.roomId,
+              kind: result.grant.kind,
+              reason: result.grant.reason
+            },
+            'media request refused'
+          );
+        }
+        registry.sendToConnection(connection, buildServerEnvelope('room.media.grant', result.grant, envelope.id));
         return;
       }
 

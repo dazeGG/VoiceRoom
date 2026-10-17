@@ -1,0 +1,13 @@
+# Load-test stand only. Publishes LiveKit signalling and the API so the
+# generator reaches them directly: `lk load-test` without the auth gate's
+# per-join credential, ws-load.mts without Caddy (it sets X-Forwarded-For
+# itself). setup-stand.sh lets only the generator's address through. An SSH
+# tunnel is not enough: one SSH connection drops joins once hundreds of
+# participants connect within a second. Never apply this file on prod or dev.
+services:
+  livekit:
+    ports:
+      - "7880:7880"
+  api:
+    ports:
+      - "3000:3000"

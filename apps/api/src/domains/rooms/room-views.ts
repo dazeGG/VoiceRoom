@@ -15,12 +15,15 @@ export interface PresencePeer {
   avatarAccent?: string | null;
   avatarColorKey?: string | null;
   avatarUrl?: string | null;
+  camera?: boolean;
   /** The desktop app, a phone or a browser, from the socket that took the seat. */
   client?: ClientKind | null;
   deafened?: boolean;
   gateGuestPrincipalId?: string | null;
   ip?: string;
   joinedAt?: number;
+  /** Granted media that has not shown up in presence yet; see realtime/media-budget.ts. */
+  mediaClaims?: { screen?: { profileId: string; expiresAt: number }; camera?: { expiresAt: number } };
   muted?: boolean;
   name?: string;
   screen?: boolean;

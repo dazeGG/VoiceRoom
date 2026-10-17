@@ -1,3 +1,5 @@
+import { SCREEN_BITRATE_BY_QUALITY } from '@voice-room/shared/media-budget';
+
 export const DEFAULT_NOISE_MODE = 'rnnoise';
 export const DEFAULT_GATE_THRESHOLD_DB = -100;
 export const GATE_THRESHOLD_DB_STORAGE_KEY = 'voice-room:gate-threshold-db';
@@ -103,7 +105,7 @@ export const SCREEN_VIDEO_BACKUP_CODEC: string = 'vp8';
 export const PEER_SESSION_STORAGE_PREFIX = 'voice-room:peer-session:';
 
 export interface ScreenQualityOption {
-  bitrateByFps: Record<string, number>;
+  bitrateByFps: Readonly<Record<string, number>>;
   height: number;
   id: string;
   label: string;
@@ -113,36 +115,21 @@ export interface ScreenQualityOption {
 
 export const SCREEN_QUALITY_OPTIONS: Record<string, ScreenQualityOption> = {
   balanced: {
-    bitrateByFps: {
-      5: 1_200_000,
-      15: 3_000_000,
-      30: 5_000_000,
-      60: 7_500_000
-    },
+    bitrateByFps: SCREEN_BITRATE_BY_QUALITY.balanced,
     height: 720,
     id: 'balanced',
     label: '720p',
     width: 1280
   },
   high: {
-    bitrateByFps: {
-      5: 1_800_000,
-      15: 4_000_000,
-      30: 7_000_000,
-      60: 10_000_000
-    },
+    bitrateByFps: SCREEN_BITRATE_BY_QUALITY.high,
     height: 1080,
     id: 'high',
     label: '1080p',
     width: 1920
   },
   source: {
-    bitrateByFps: {
-      5: 1_800_000,
-      15: 3_000_000,
-      30: 7_000_000,
-      60: 10_000_000
-    },
+    bitrateByFps: SCREEN_BITRATE_BY_QUALITY.source,
     height: 0,
     id: 'source',
     label: 'Источник',

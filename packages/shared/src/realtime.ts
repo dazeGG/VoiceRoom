@@ -38,6 +38,7 @@ export const KNOWN_CLIENT_TYPES: ReadonlySet<string> = new Set<ClientCommandType
   'room.join',
   'room.leave',
   'room.peer.update',
+  'room.media.request',
   'room.chat.typing',
   'dm.typing'
 ]);
@@ -182,7 +183,7 @@ export function validateClientCommand(
     if (!normalizeRoomId(payload.roomId)) return { ok: false, code: 'invalid_room_id' };
   }
 
-  if (input.type === 'room.join' || input.type === 'room.leave') {
+  if (input.type === 'room.join' || input.type === 'room.leave' || input.type === 'room.media.request') {
     if (!normalizeRoomId(payload.roomId)) return { ok: false, code: 'invalid_room_id' };
     if (!normalizePeerId(payload.peerId)) return { ok: false, code: 'invalid_peer_id' };
     if (!normalizeSessionToken(payload.sessionToken)) return { ok: false, code: 'invalid_session_token' };
@@ -190,6 +191,10 @@ export function validateClientCommand(
 
   if (input.type === 'room.join' && !cleanName(payload.name)) {
     return { ok: false, code: 'invalid_name' };
+  }
+
+  if (input.type === 'room.media.request' && payload.kind !== 'screen' && payload.kind !== 'camera') {
+    return { ok: false, code: 'invalid_media_kind' };
   }
 
   if (input.type === 'room.chat.typing' && !normalizeRoomId(payload.roomId)) {

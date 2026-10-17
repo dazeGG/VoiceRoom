@@ -23,6 +23,7 @@ import { createReconnectLeases } from './reconnect-leases.ts';
 import { createRoomSummaries } from './room-summaries.ts';
 import { createRoomFanout } from './room-fanout.ts';
 import { createVoiceJoin } from './voice-join.ts';
+import { claimMedia, decideMediaRequest, MEDIA_MIN_VIEWERS } from './media-budget.ts';
 import type {
   FinalizeError,
   LeaseRecord,
@@ -67,6 +68,13 @@ export type RoomRuntimeDeps = {
   closePeer: (roomId: string, peerId: string, transportId: string | undefined, reason: string) => void;
   avatarColorForPeerId: (peerId: unknown) => string;
   MAX_ROOM_PEERS: number;
+  MAX_VOICE_PEERS?: number;
+  /** Server-wide video budget in Mbit/s; 0 turns it off. */
+  MEDIA_BUDGET_MBPS?: number;
+  /** People in voice at which the video budget reaches zero; 0 keeps it whole. */
+  MEDIA_BUDGET_VOICE_PEERS?: number;
+  /** Screen shares one room may run at once; 0 turns it off. */
+  MAX_ROOM_SCREENS?: number;
   tokensMatch: (expected: string | null | undefined, actual: string | null | undefined) => boolean;
   sessionAvatarColorKey: (user: SessionUser) => string;
   queueRoomOccupancyTransition?: (roomId: string) => Promise<unknown>;
@@ -104,6 +112,8 @@ function clearViewedScreenPeerReferences(room: PresenceRoom | null | undefined, 
 
 /** A room.peer.update command; the runtime normalizes every field itself. */
 export type PeerUpdatePayload = Partial<ClientCommands['room.peer.update']>;
+/** A room.media.request command; the kind and profile are normalized here. */
+export type MediaRequestPayload = Partial<ClientCommands['room.media.request']>;
 
 function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
   const {
@@ -119,6 +129,10 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     closePeer,
     avatarColorForPeerId,
     MAX_ROOM_PEERS,
+    MAX_VOICE_PEERS = 0,
+    MEDIA_BUDGET_MBPS = 0,
+    MEDIA_BUDGET_VOICE_PEERS = 0,
+    MAX_ROOM_SCREENS = 0,
     tokensMatch,
     sessionAvatarColorKey,
     queueRoomOccupancyTransition = async (roomId: string) => getRoomStore().markRoomActive(roomId),
@@ -173,6 +187,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     closePeer,
     avatarColorForPeerId,
     MAX_ROOM_PEERS,
+    MAX_VOICE_PEERS,
     tokensMatch,
     sessionAvatarColorKey,
     queueRoomOccupancyTransition,
@@ -378,11 +393,15 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     return { ok: true, disconnected: peers.length };
   }
 
-  async function updatePeerState(connection: WsConnection, payload: PeerUpdatePayload) {
-    const roomId = normalizeRoomId(payload.roomId);
-    const peerId = normalizePeerId(payload.peerId);
-    const sessionToken = normalizeSessionToken(payload.sessionToken);
-    const patch = payload.patch && typeof payload.patch === 'object' ? payload.patch : {};
+  // The peer behind a command that speaks for a voice session: it must be the
+  // session this connection holds right now.
+  function activePeer(
+    connection: WsConnection,
+    target: { roomId?: unknown; peerId?: unknown; sessionToken?: unknown }
+  ): { ok: true; room: PresenceRoom; peer: Peer } | { ok: false; code: string } {
+    const roomId = normalizeRoomId(target.roomId);
+    const peerId = normalizePeerId(target.peerId);
+    const sessionToken = normalizeSessionToken(target.sessionToken);
 
     const room = presenceRooms.get(roomId);
     const peer = room?.peers.get(peerId);
@@ -396,14 +415,32 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     ) {
       return { ok: false, code: 'not_active_peer' };
     }
+    return { ok: true, room, peer };
+  }
+
+  async function updatePeerState(connection: WsConnection, payload: PeerUpdatePayload) {
+    const roomId = normalizeRoomId(payload.roomId);
+    const patch = payload.patch && typeof payload.patch === 'object' ? payload.patch : {};
+
+    const active = activePeer(connection, payload);
+    if (!active.ok) return active;
+    const { room, peer } = active;
 
     const stoppedScreen = Object.hasOwn(patch, 'screen') && peer.screen && !patch.screen;
+    // A claim holds the budget until the stream is in presence, and ends with
+    // it. A patch that only repeats "no screen" between the grant and the
+    // publish keeps it.
+    if (patch.screen === true || stoppedScreen) delete peer.mediaClaims?.screen;
+    if (patch.camera === true || (Object.hasOwn(patch, 'camera') && peer.camera && !patch.camera)) {
+      delete peer.mediaClaims?.camera;
+    }
 
     if (Object.hasOwn(patch, 'name') && !peer.accountUserId) peer.name = cleanGuestName(patch.name);
     // A moderator mute outranks the client: the participant may still mute
     // itself, but an unmute is dropped until the owner lifts the server mute.
     if (Object.hasOwn(patch, 'muted')) peer.muted = peer.serverMuted || Boolean(patch.muted);
     if (Object.hasOwn(patch, 'deafened')) peer.deafened = Boolean(patch.deafened);
+    if (Object.hasOwn(patch, 'camera')) peer.camera = Boolean(patch.camera);
     if (Object.hasOwn(patch, 'screen')) peer.screen = Boolean(patch.screen);
     if (Object.hasOwn(patch, 'screenAudio')) peer.screenAudio = Boolean(patch.screenAudio);
     if (Object.hasOwn(patch, 'screenProfileId')) peer.screenProfileId = cleanScreenProfileId(patch.screenProfileId);
@@ -423,6 +460,30 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     fanout.mirrorLegacyRoomEvent(roomId, { type: 'peer-updated', peer: publicPeer(peer) });
     scheduleSummaryBroadcast(roomId);
     return { ok: true, peer: publicPeer(peer) };
+  }
+
+  // Asked before a screen share or a camera starts. A grant holds its share of
+  // the budget until the stream shows up in presence.
+  function requestMedia(connection: WsConnection, payload: MediaRequestPayload) {
+    const active = activePeer(connection, payload);
+    if (!active.ok) return active;
+    const at = now();
+    const grant = decideMediaRequest({
+      rooms: presenceRooms.values(),
+      room: active.room,
+      peer: active.peer,
+      kind: payload.kind === 'camera' ? 'camera' : 'screen',
+      profileId: cleanScreenProfileId(payload.profileId),
+      limits: {
+        budgetBps: MEDIA_BUDGET_MBPS * 1_000_000,
+        maxRoomScreens: MAX_ROOM_SCREENS,
+        minViewers: Math.min(MEDIA_MIN_VIEWERS, Math.max(0, MAX_ROOM_PEERS - 1)),
+        voicePeersAtZero: MEDIA_BUDGET_VOICE_PEERS
+      },
+      now: at
+    });
+    claimMedia(active.peer, grant, at);
+    return { ok: true as const, grant };
   }
 
   // Push current summaries for every room visible to the account over one
@@ -499,6 +560,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     joinVoiceRoom,
     leaveVoiceRoom,
     mirrorLegacyRoomEvent: fanout.mirrorLegacyRoomEvent,
+    requestMedia,
     scheduleSummaryBroadcast,
     sendRoomSummaryToUser: summaries.sendToUser,
     sendAccountSummaries,

@@ -16,7 +16,9 @@ import { setLocalAppAudioSuppressed } from './media-playback-service';
 import { playStreamCue } from '../media/cues';
 import { getDisplayName } from '../ui/names';
 import { publishLocalScreenTracks, unpublishLocalScreenTracks } from './livekit-service';
-import { openScreenShare } from './screen-capture-service';
+import { applyScreenCaptureProfile, openScreenShare } from './screen-capture-service';
+import { askForMedia, describeMediaRefusal } from './media-grant';
+import { screenProfileBitrate } from '@voice-room/shared/media-budget';
 import { onDesktopScreenAudioLost, stopLocalScreenAudioCapture } from './desktop-screen-audio';
 import { TRACK_SOURCE } from '../media/livekit-runtime';
 import { updateParticipant } from '../room/participants';
@@ -94,8 +96,26 @@ async function startScreenShare(profileId: string = getSelectedScreenProfileId()
       return;
     }
 
-    profile = createSourceScreenProfile(profile, videoTrack);
     const mode = capture.mode || getScreenModeForProfile(profile.id);
+    // Asked once the picker settled the profile: a busy server may offer a
+    // lower one, or refuse. The person's chosen mode stays as it was.
+    const grant = await askForMedia('screen', profile.id);
+    // While the server answered, the person may have left the room or ended
+    // the capture from the browser's sharing bar.
+    if ((grant && !grant.granted) || !state.joined || videoTrack.readyState === 'ended') {
+      stopLocalScreenAudioCapture();
+      stopStream(stream);
+      if (grant && !grant.granted) showToast(describeMediaRefusal(grant), { duration: 12000, variant: 'error' });
+      return;
+    }
+    const requestedLabel = profile.label;
+    const grantedProfileId = grant?.profileId || profile.id;
+    const lowered = screenProfileBitrate(grantedProfileId) < screenProfileBitrate(profile.id);
+    if (lowered) {
+      profile = getScreenProfile(grantedProfileId);
+      await applyScreenCaptureProfile(stream, profile);
+    }
+    profile = createSourceScreenProfile(profile, videoTrack);
 
     state.localScreenStream = stream;
     applyLocalScreenProfileState(profile, mode);
@@ -124,7 +144,11 @@ async function startScreenShare(profileId: string = getSelectedScreenProfileId()
     await postState();
 
     playStreamCue('start');
-    showScreenShareStartedToast(profile);
+    if (lowered) {
+      showToast(`Сервер загружен: стрим идёт в ${profile.label} вместо ${requestedLabel}`, { duration: 8000 });
+    } else {
+      showScreenShareStartedToast(profile);
+    }
   } catch (error) {
     const cancelled = isCaptureCancelled(error);
     if (!cancelled) log.error('screen share failed', errorContext(error));

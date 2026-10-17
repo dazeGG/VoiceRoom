@@ -71,6 +71,10 @@ services:
       RING_RATE_WINDOW_MS: ${RING_RATE_WINDOW_MS:-30000}
       RING_TTL_MS: ${RING_TTL_MS:-30000}
       MAX_ROOM_PEERS: ${MAX_ROOM_PEERS:-12}
+      MAX_VOICE_PEERS: ${MAX_VOICE_PEERS:-0}
+      MEDIA_BUDGET_MBPS: ${MEDIA_BUDGET_MBPS:-0}
+      MEDIA_BUDGET_VOICE_PEERS: ${MEDIA_BUDGET_VOICE_PEERS:-0}
+      MAX_ROOM_SCREENS: ${MAX_ROOM_SCREENS:-0}
       MAX_ROOMS: ${MAX_ROOMS:-100}
       MAX_EMPTY_ROOMS_PER_IP: ${MAX_EMPTY_ROOMS_PER_IP:-3}
       ROOM_CREATE_POW_DIFFICULTY: ${ROOM_CREATE_POW_DIFFICULTY:-14}
@@ -267,6 +271,11 @@ services:
   livekit:
     image: ${LIVEKIT_IMAGE:-livekit/livekit-server:v1.13.2}
     restart: unless-stopped
+    # LiveKit takes about 2 MB per participant. With no cap, a host without swap
+    # that runs out of memory stops answering altogether (API and database
+    # included); with one, the OOM killer takes only LiveKit and it restarts.
+    # 0 leaves it uncapped.
+    mem_limit: ${LIVEKIT_MEMORY_LIMIT:-0}
     environment:
       LIVEKIT_CONFIG: |
         port: 7880
@@ -282,6 +291,11 @@ services:
         # room for a reconnecting peer's old and new session to overlap.
         room:
           max_participants: ${LIVEKIT_MAX_PARTICIPANTS:-24}
+        # Node backstop behind the API's MAX_VOICE_PEERS: once media in + out
+        # passes this many bytes a second, LiveKit answers new joins with 503
+        # and keeps the calls already running. 0 turns it off.
+        limit:
+          bytes_per_sec: ${LIVEKIT_LIMIT_BYTES_PER_SEC:-0}
         # Embedded TURN. TLS is terminated by Caddy on :443 (external_tls), so
         # LiveKit advertises turns:TURN_DOMAIN:443 and listens on 5349 inside
         # the compose network; TURN/UDP is published on 3478.

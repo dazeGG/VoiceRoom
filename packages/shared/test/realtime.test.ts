@@ -55,6 +55,23 @@ test('a typing notice says whether the person types or picks an emoji, and means
   });
 });
 
+test('a media request names the voice session and whether it is a screen share or a camera', () => {
+  const target = { roomId: 'abcdefghij', peerId: 'peer-0001', sessionToken: 't'.repeat(32) };
+  assert.equal(validateClientCommand({ type: 'room.media.request', payload: { ...target, kind: 'screen' } }).ok, true);
+  assert.equal(validateClientCommand({ type: 'room.media.request', payload: { ...target, kind: 'camera' } }).ok, true);
+  assert.deepEqual(validateClientCommand({ type: 'room.media.request', payload: { ...target, kind: 'microphone' } }), {
+    ok: false,
+    code: 'invalid_media_kind'
+  });
+  assert.deepEqual(
+    validateClientCommand({ type: 'room.media.request', payload: { roomId: 'abcdefghij', kind: 'screen' } }),
+    {
+      ok: false,
+      code: 'invalid_peer_id'
+    }
+  );
+});
+
 test('parseClientEnvelope accepts valid envelopes', () => {
   const result = parseClientEnvelope(JSON.stringify({ type: 'ping', payload: { at: 1 } }));
   assert.equal(result.ok, true);

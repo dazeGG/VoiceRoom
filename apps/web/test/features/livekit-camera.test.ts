@@ -2,6 +2,7 @@
 // its tile needs, and our own camera is captured, published and stopped.
 
 import { afterEach, expect, test, vi } from 'vitest';
+import type { MediaGrant } from '@voice-room/shared/contracts/realtime';
 import { fakeParticipant, fakePublication, flushMicrotasks, loadLiveKitHarness } from '../helpers/livekit-harness.ts';
 
 const LOW = 0;
@@ -89,8 +90,19 @@ function fakeCapture(settings: MediaTrackSettings = {}) {
   return { stream, track, end: () => ended.forEach((listener) => listener()) };
 }
 
-async function loadLocalCamera(getUserMedia: (constraints: MediaStreamConstraints) => Promise<unknown>) {
+// The server's answer to the camera's media request; null is no answer at all.
+const GRANTED: MediaGrant = { roomId: 'room-1', kind: 'camera', granted: true };
+
+async function loadLocalCamera(
+  getUserMedia: (constraints: MediaStreamConstraints) => Promise<unknown>,
+  grant: MediaGrant | null = GRANTED
+) {
   const lk = await loadLiveKitHarness({ autoResolveClient: true });
+  const presence: Array<Record<string, unknown>> = [];
+  vi.doMock('../../src/lib/entities/room/room-realtime', () => ({
+    requestMediaGrant: async () => grant,
+    updateVoicePeer: (payload: { patch: Record<string, unknown> }) => presence.push(payload.patch)
+  }));
   vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
   const published: Array<{ track: unknown; options: Record<string, unknown> }> = [];
   const unpublished: unknown[] = [];
@@ -116,7 +128,7 @@ async function loadLocalCamera(getUserMedia: (constraints: MediaStreamConstraint
   const showToast = vi.fn();
   vi.doMock('../../src/lib/features/room/client/ui/toast', () => ({ showToast }));
   const camera = await import('../../src/lib/features/room/client/services/camera-service.ts');
-  return { lk, camera, published, unpublished, showToast };
+  return { lk, camera, published, unpublished, showToast, presence };
 }
 
 test('turning the camera on captures 720p and publishes it with lighter layers; off stops it', async () => {
@@ -305,4 +317,33 @@ test('a camera that tells no facing is taken for a front one, not left as the ba
   expect(lk.state.cameraFacing).toBe('environment');
   await camera.switchCamera('usb-webcam');
   expect(lk.state.cameraFacing).toBe('user');
+});
+
+test('the camera tells the server it is on and off, so the media budget counts it', async () => {
+  const capture = fakeCapture();
+  const { camera, presence } = await loadLocalCamera(async () => capture.stream);
+
+  await camera.toggleCamera();
+  expect(presence.at(-1)).toMatchObject({ camera: true });
+  await camera.toggleCamera();
+  expect(presence.at(-1)).toMatchObject({ camera: false });
+});
+
+test('a busy server keeps the camera off before it is even opened, and says why', async () => {
+  const getUserMedia = vi.fn(async () => fakeCapture().stream);
+  const { lk, camera, published, showToast } = await loadLocalCamera(getUserMedia, {
+    roomId: 'room-1',
+    kind: 'camera',
+    granted: false,
+    reason: 'server_busy'
+  });
+
+  await camera.toggleCamera();
+  expect(getUserMedia).not.toHaveBeenCalled();
+  expect(published).toEqual([]);
+  expect(lk.state.cameraStarting).toBe(false);
+  expect(showToast).toHaveBeenCalledWith('Сервер сейчас загружен, камера недоступна. Попробуйте через пару минут', {
+    duration: 12000,
+    variant: 'error'
+  });
 });
