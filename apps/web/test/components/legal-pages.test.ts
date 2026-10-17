@@ -39,6 +39,10 @@ test('the privacy policy names the operator, the contact and the retention perio
   expect(text).toMatch(/восстановить в течение 7 дней/);
   expect(text).toMatch(/История входов — 90 дней/);
   expect(text).toMatch(/не дольше 30 дней/);
+  // What the administration sees of the calls, and how long a stay keeps its room.
+  expect(text).toContain('администрация сервиса видит, кто сейчас в звонках комнат');
+  expect(text).toContain('Содержимое звонков мы не слушаем и не записываем');
+  expect(text).toMatch(/История участия в звонках связана с комнатой 90 дней/);
   expect(screen.getAllByRole('link', { name: 'support@voiceroom.ru' })[0]?.getAttribute('href')).toBe(
     'mailto:support@voiceroom.ru'
   );

@@ -58,6 +58,7 @@ export interface ApiRouteDeps {
     reports: Parameters<typeof registerReportRoutes>[2]['reports'];
     admin: Parameters<typeof registerAdminRoutes>[2]['admin'];
     adminAccounts: Parameters<typeof registerAdminRoutes>[2]['accounts'];
+    adminRooms: Parameters<typeof registerAdminRoutes>[2]['rooms'];
     desktopRelease: OpsRouteDeps['desktopRelease'];
   };
   limits: RateLimits;
@@ -178,7 +179,11 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
   }
 
   if (deps.services.getAdminStatsRepository()) {
-    registerAdminRoutes(app, ctx, { admin: deps.domain.admin, accounts: deps.domain.adminAccounts });
+    registerAdminRoutes(app, ctx, {
+      admin: deps.domain.admin,
+      accounts: deps.domain.adminAccounts,
+      rooms: deps.domain.adminRooms
+    });
   }
 
   const media = deps.services.getMediaServices();

@@ -330,3 +330,88 @@ export type DeleteAccountBody = Static<typeof DeleteAccountBody>;
 
 export const BadgeBody = Type.Object({ badge: Nullable(AccountBadge) });
 export type BadgeBody = Static<typeof BadgeBody>;
+
+// --- rooms --------------------------------------------------------------------
+
+/**
+ * How long a stay in voice keeps the room it was in. Past it the stay only
+ * counts towards the usage numbers: who talked with whom is forgotten.
+ */
+export const VOICE_HISTORY_KEEP_DAYS = 90;
+/** Stays on one page of a room history. */
+export const ROOM_HISTORY_PAGE_SIZE = 100;
+
+/** An account as the rooms section shows it: enough for a name, an avatar and a link to its card. */
+export const RoomAccount = Type.Object({
+  id: Type.String(),
+  login: Type.String(),
+  displayName: Type.String(),
+  avatarUrl: Nullable(Type.String()),
+  avatarColorKey: Type.String(),
+  avatarAccent: Nullable(Type.String())
+});
+export type RoomAccount = Static<typeof RoomAccount>;
+
+/** Someone in a room's voice now: an account, or a guest known only by the name given to the room. */
+export const LiveRoomPeer = Type.Object({
+  peerId: Type.String(),
+  name: Type.String(),
+  /** Null for a guest. */
+  account: Nullable(RoomAccount),
+  avatarColorKey: Type.String(),
+  joinedAt: Nullable(Type.Number()),
+  muted: Type.Boolean(),
+  deafened: Type.Boolean(),
+  screen: Type.Boolean()
+});
+export type LiveRoomPeer = Static<typeof LiveRoomPeer>;
+
+/** A room with someone in its voice. */
+export const LiveRoom = Type.Object({
+  roomId: Type.String(),
+  name: Type.String(),
+  isStatic: Type.Boolean(),
+  avatarUrl: Nullable(Type.String()),
+  /** Null for a temporary room, which nobody owns. */
+  owner: Nullable(RoomAccount),
+  /** When the earliest of those still in voice came in. */
+  since: Nullable(Type.Number()),
+  peers: Type.Array(LiveRoomPeer)
+});
+export type LiveRoom = Static<typeof LiveRoom>;
+
+/** The rooms with someone in voice right now, the fullest first. */
+export const LiveRooms = Ok({ rooms: Type.Array(LiveRoom) });
+export type LiveRooms = Static<typeof LiveRooms>;
+
+/** Where a page of history continues: the end and id of the last stay shown. */
+export const HistoryCursor = Type.String({ pattern: '^[0-9]{1,15}_[0-9a-f-]{36}$' });
+
+/** Finished stays, the latest first, of one room or of all. */
+export const RoomHistoryQuery = Type.Object({
+  roomId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+  after: Type.Optional(HistoryCursor)
+});
+export type RoomHistoryQuery = Static<typeof RoomHistoryQuery>;
+
+/** One finished stay in a room's voice. */
+export const RoomStay = Type.Object({
+  id: Type.String(),
+  roomId: Type.String(),
+  /** Null when the room is gone: temporary rooms are removed once empty. */
+  roomName: Nullable(Type.String()),
+  isStatic: Nullable(Type.Boolean()),
+  /** Null for a guest; a guest's name is not kept. */
+  account: Nullable(RoomAccount),
+  joinedAt: Type.Number(),
+  leftAt: Type.Number()
+});
+export type RoomStay = Static<typeof RoomStay>;
+
+export const RoomHistory = Ok({
+  stays: Type.Array(RoomStay),
+  /** Null on the last page. */
+  next: Nullable(HistoryCursor),
+  keepDays: Type.Number()
+});
+export type RoomHistory = Static<typeof RoomHistory>;

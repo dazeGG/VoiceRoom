@@ -184,6 +184,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
         finalizeDueDeletions: () => hub.accountLifecycle.finalizeDueDeletions(),
         linkPreviews: services.getLinkPreviewService,
         rooms: services.getRoomStore,
+        voiceSessions: services.getVoiceSessionRepository,
         retention: { intervalMs: config.RETENTION_PURGE_INTERVAL_MS, keepDeletedMs: config.RETENTION_KEEP_DELETED_MS }
       })
     });

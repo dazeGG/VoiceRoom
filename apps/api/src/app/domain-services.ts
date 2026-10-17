@@ -13,6 +13,7 @@ import packageJson from '../../package.json' with { type: 'json' };
 import { createAccountService } from '../domains/account/account.service.ts';
 import { createAdminService } from '../domains/admin/admin.service.ts';
 import { createAdminAccountsService } from '../domains/admin/admin-accounts.service.ts';
+import { createAdminRoomsService } from '../domains/admin/admin-rooms.service.ts';
 import { createSessionCookies } from '../domains/account/session-cookie.ts';
 import type { createAdmissionService } from '../domains/admission/admission.service.ts';
 import { createAvatarsService } from '../domains/media/avatars.service.ts';
@@ -282,6 +283,12 @@ export function createDomainServices(deps: DomainServiceDeps) {
     logger: () => deps.logger()
   });
 
+  const adminRooms = createAdminRoomsService({
+    adminUserIds: config.PLATFORM_ADMIN_USER_IDS,
+    presenceRooms: () => hub.presenceRooms.values(),
+    repository: () => required(services.getAdminRoomsRepository())
+  });
+
   const desktopReleaseService = createDesktopReleaseService({
     repo: config.DESKTOP_RELEASE_REPO,
     cacheMs: config.DESKTOP_RELEASE_CACHE_MS,
@@ -304,6 +311,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     reports,
     admin,
     adminAccounts,
+    adminRooms,
     desktopRelease: desktopReleaseService
   };
 }

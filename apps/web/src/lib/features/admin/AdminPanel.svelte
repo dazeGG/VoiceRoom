@@ -1,11 +1,13 @@
 <script lang="ts">
   // The platform administrator's panel: the dashboard, how the product
-  // changes, how the server is doing, and the reports. It opens inside the
+  // changes, how the server is doing, the accounts, who is in which room, and
+  // the reports. It opens inside the
   // lobby, so a call keeps going; the lobby keeps the tab in the address.
   import { SegmentControl } from '$lib/shared/ui';
   import AdminAccounts from './AdminAccounts.svelte';
   import AdminOverview from './AdminOverview.svelte';
   import AdminProduct from './AdminProduct.svelte';
+  import AdminRooms from './AdminRooms.svelte';
   import AdminSystem from './AdminSystem.svelte';
   import ReportsReview from './ReportsReview.svelte';
   import type { AdminTab } from './tabs';
@@ -46,6 +48,12 @@
     if (onAccountChange) onAccountChange(value);
     else localAccountId = value;
   }
+
+  // Someone in the rooms section opens on the accounts tab, as a card.
+  function showAccount(value: string): void {
+    selectTab('accounts');
+    openAccount(value);
+  }
 </script>
 
 {#snippet reportsCount()}
@@ -62,6 +70,7 @@
         { value: 'product', label: 'Продукт' },
         { value: 'system', label: 'Сервер' },
         { value: 'accounts', label: 'Аккаунты' },
+        { value: 'rooms', label: 'Комнаты' },
         { value: 'reports', label: 'Жалобы', suffix: reportsCount }
       ]}
       value={current}
@@ -79,6 +88,8 @@
       <AdminSystem />
     {:else if current === 'accounts'}
       <AdminAccounts accountId={currentAccountId} onOpenAccount={openAccount} />
+    {:else if current === 'rooms'}
+      <AdminRooms onOpenAccount={showAccount} />
     {:else}
       {#key reportsVersion}<ReportsReview />{/key}
     {/if}

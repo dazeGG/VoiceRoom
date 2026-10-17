@@ -50,6 +50,7 @@ import { createProductSnapshotRepository } from '../domains/ops/product-snapshot
 import { createSystemSnapshotRepository } from '../domains/ops/system-snapshot.repository.ts';
 import { createAdminStatsRepository } from '../domains/admin/admin-stats.repository.ts';
 import { createAdminAccountsRepository } from '../domains/admin/admin-accounts.repository.ts';
+import { createAdminRoomsRepository } from '../domains/admin/admin-rooms.repository.ts';
 import { createAdminActionRepository } from '../domains/admin/admin-action.repository.ts';
 import { createAccountStandingRepository } from '../domains/account/account-standing.repository.ts';
 import { createMediaModule } from '../domains/media/media.module.ts';
@@ -252,6 +253,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   const systemSnapshots = pooled((pool) => createSystemSnapshotRepository({ pool }));
   const adminStats = pooled((pool) => createAdminStatsRepository({ pool }));
   const adminAccounts = pooled((pool) => createAdminAccountsRepository({ pool }));
+  const adminRooms = pooled((pool) => createAdminRoomsRepository({ pool }));
   const adminActions = pooled((pool) => createAdminActionRepository({ pool }));
   const accountStanding = pooled((pool) => createAccountStandingRepository({ pool }));
   const activeBans = pooled((pool) => createActiveBanService({ pool }));
@@ -425,6 +427,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     getSystemSnapshotRepository: () => systemSnapshots.get(),
     getAdminStatsRepository: () => adminStats.get(),
     getAdminAccountsRepository: () => adminAccounts.get(),
+    getAdminRoomsRepository: () => adminRooms.get(),
     getAdminActionRepository: () => adminActions.get(),
     getAccountStandingRepository: () => accountStanding.get(),
     getReactionServices: () => reactions.get(),

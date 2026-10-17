@@ -1,5 +1,5 @@
-// The platform administrator's panel: whether this account may open it, and
-// the product and server numbers it shows.
+// The platform administrator's panel: whether this account may open it, the
+// product and server numbers it shows, the accounts and the rooms.
 
 import type {
   AccountDetail,
@@ -7,7 +7,10 @@ import type {
   AccountsQuery,
   AdminAccess,
   AdminOverview,
+  LiveRooms,
   ProductQuery,
+  RoomHistory,
+  RoomHistoryQuery,
   ProductStats,
   SystemQuery,
   SystemStats,
@@ -29,6 +32,12 @@ export type {
   BlockDuration,
   AdminOverview,
   AdminReportsEvent,
+  LiveRoom,
+  LiveRoomPeer,
+  LiveRooms,
+  RoomAccount,
+  RoomHistory,
+  RoomStay,
   ProductDay,
   ProductStats,
   RetentionWeek,
@@ -61,6 +70,16 @@ export async function fetchProductStats(query: ProductQuery = {}): Promise<Produ
 export async function fetchSystemStats(query: SystemQuery = {}): Promise<SystemStats> {
   return api.get<SystemStats>(`/api/admin/system${search(query)}`, {
     fallback: 'Не удалось загрузить данные сервера'
+  });
+}
+
+export async function fetchLiveRooms(): Promise<LiveRooms> {
+  return api.get<LiveRooms>('/api/admin/rooms', { fallback: 'Не удалось загрузить комнаты' });
+}
+
+export async function fetchRoomHistory(query: RoomHistoryQuery = {}): Promise<RoomHistory> {
+  return api.get<RoomHistory>(`/api/admin/rooms/history${search(query)}`, {
+    fallback: 'Не удалось загрузить историю'
   });
 }
 

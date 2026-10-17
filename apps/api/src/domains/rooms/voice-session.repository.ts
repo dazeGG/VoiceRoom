@@ -1,4 +1,5 @@
-// Finished stays in a room's voice, kept for usage numbers. The only writer of
+// Finished stays in a room's voice, kept for usage numbers and, while they
+// still carry their room, the admin panel's room history. The only writer of
 // voice_sessions (the account deletion purge aside).
 
 import type pg from 'pg';
@@ -30,7 +31,18 @@ export function createVoiceSessionRepository({ pool }: { pool: pg.Pool }) {
       .execute();
   }
 
-  return Object.freeze({ recordSessions });
+  /** Clears the room of every stay that began before the cutoff (the indexed end); answers how many. */
+  async function forgetRoomsBefore(cutoff: Date): Promise<number> {
+    const result = await db
+      .updateTable('voice_sessions')
+      .set({ room_id: null })
+      .where('room_id', 'is not', null)
+      .where('joined_at', '<', cutoff)
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
+  }
+
+  return Object.freeze({ recordSessions, forgetRoomsBefore });
 }
 
 export type VoiceSessionRepository = ReturnType<typeof createVoiceSessionRepository>;
