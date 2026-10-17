@@ -1,7 +1,7 @@
 <!-- The stage the service is at, next to the logo: a quiet accent pill, not a
      warning. The hint says what it means for the person using it. -->
-<span class="beta-mark" title="VoiceRoom в бета-версии: мы активно его дорабатываем, что-то может работать неидеально"
-  >Бета</span
+<span class="beta-mark" title="VoiceRoom в бета-версии: активно дорабатывается, что-то может работать неидеально"
+  >Beta</span
 >
 
 <style>
