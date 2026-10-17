@@ -90,7 +90,9 @@
   style:--participant-avatar-fg={avatar.foreground}
 >
   {#if cameraStream}
-    <!-- The picture-in-picture takes the camera's own shape, so nothing is left to fill. -->
+    <!-- The picture-in-picture takes the camera's own shape, so nothing is left to fill:
+         its picture fills the box outright, and Safari on iPhone has no stale size to fit
+         it by (WebKit bug 275210). -->
     {#if variant !== 'pip'}
       <video
         class="mc-tile-backdrop"
@@ -107,6 +109,7 @@
       {@attach showCamera(cameraStream)}
       {@attach reportFrame}
       {@attach keepVideoFitted}
+      style:object-fit={variant === 'pip' ? 'fill' : undefined}
       data-mirrored={mirrored ? 'true' : undefined}
       autoplay
       playsinline
@@ -216,11 +219,6 @@
     height: 100%;
     object-fit: contain;
     pointer-events: none;
-  }
-
-  /* The box already has the camera's shape: cover only hides a pixel of rounding. */
-  .mc-tile[data-variant='pip'] .mc-tile-video {
-    object-fit: cover;
   }
 
   .mc-tile-backdrop[data-mirrored='true'] {

@@ -205,6 +205,8 @@ test('two people: my picture-in-picture takes the shape my camera sends, with no
 
   await sendFrames(videos[0], 1280, 720);
   expect(Number(pip.style.getPropertyValue('--pip-ratio'))).toBeCloseTo(16 / 9);
+  // The box has the camera's shape, so the picture fills it outright.
+  expect(videos[0].style.objectFit).toBe('fill');
   // Safari on iPhone is made to lay the new size out again: a pixel wider, then back.
   expect(videos[0].style.width).toBe('calc(100% + 1px)');
   await vi.waitFor(() => expect(videos[0].style.width).toBe(''));

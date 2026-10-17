@@ -107,6 +107,15 @@ test('a starting camera is laid out again before it is shown, and again when it 
     expect(video.style.width).toBe('calc(100% + 1px)');
     paint();
     expect(video.style.width).toBe('');
+
+    // A camera warming up for the first time can settle late: it is nudged again seconds on.
+    vi.advanceTimersByTime(3000);
+    paint();
+    expect(video.style.width).toBe('');
+    vi.advanceTimersByTime(6000);
+    expect(video.style.width).toBe('calc(100% + 1px)');
+    paint();
+    expect(video.style.width).toBe('');
   } finally {
     vi.useRealTimers();
     vi.unstubAllGlobals();

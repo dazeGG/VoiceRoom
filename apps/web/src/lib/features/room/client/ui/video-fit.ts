@@ -2,13 +2,16 @@
 // small in the middle of its box, with dark bars around it, until the box
 // itself changes size (WebKit bug 275210). Nothing tells the page when Safari
 // gets it wrong, so the picture is nudged a pixel wider and back on its first
-// frames and whenever it changes size; Safari then lays it out again. It is
-// kept hidden until the first nudge, so the wrong size is never seen.
+// frames, for a few seconds after, and whenever it changes size; Safari then
+// lays it out again. It is kept hidden until the first nudge. A camera that
+// warms up for the first time can settle its size late, hence the later nudges.
 
 /** Frames after the start on which the picture is nudged: early, then less often. */
 const NUDGE_FRAMES = new Set([1, 2, 4, 8, 16, 32, 64]);
 /** Without frame callbacks the nudges run on a timer after the picture starts. */
 const NUDGE_DELAYS_MS = [0, 100, 300, 700, 1500, 3000];
+/** Later nudges for every picture, whatever reports its frames. */
+const LATE_NUDGES_MS = [2500, 4000, 6000, 9000];
 /** A picture that never reports a frame is shown anyway. */
 const REVEAL_LIMIT_MS = 1500;
 
@@ -54,6 +57,7 @@ export function keepVideoFitted(element: HTMLVideoElement): () => void {
     started = true;
     if (typeof video.requestVideoFrameCallback === 'function') frameHandle = video.requestVideoFrameCallback(onFrame);
     else for (const delay of NUDGE_DELAYS_MS) timers.push(window.setTimeout(nudge, delay));
+    for (const delay of LATE_NUDGES_MS) timers.push(window.setTimeout(nudge, delay));
   };
 
   video.addEventListener('loadedmetadata', onStart);
