@@ -86,7 +86,7 @@
       {:else if scene.kind === 'focus'}
         <MobileCallFocus big={scene.big} self={scene.self} strip={scene.strip} />
       {:else}
-        <MobileCallGrid pages={scene.pages} />
+        <MobileCallGrid pages={scene.pages} voiceOnly={scene.voiceOnly} />
       {/if}
     </div>
 

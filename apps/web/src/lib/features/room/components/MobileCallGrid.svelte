@@ -1,12 +1,13 @@
 <script lang="ts">
   // Everyone at once, filling the screen: rows of equal height, the tiles of a
-  // row sharing its width. Past nine people the grid pages sideways.
+  // row sharing its width. With no camera on the tiles keep the room stage's
+  // 16:9 shape instead. Past nine people the grid pages sideways.
   import type { Participant } from '../client/core/types';
   import { mobileCallUi, pinInFocus, toggleChrome } from '../mobile-call-ui.svelte';
   import MobileCallTile from './MobileCallTile.svelte';
   import MobileCameraFlip from './MobileCameraFlip.svelte';
 
-  let { pages }: { pages: Participant[][][] } = $props();
+  let { pages, voiceOnly = false }: { pages: Participant[][][]; voiceOnly?: boolean } = $props();
 
   let scroller = $state<HTMLElement>();
   let page = $state(0);
@@ -28,22 +29,26 @@
     return rows.flatMap((row) => row.map((participant) => ({ participant, span: 6 / row.length })));
   }
 
-  // My own tile puts me in focus to see my camera big (alone, there is nothing to
-  // focus between); anyone else's shows or hides the controls.
+  // My own camera tile puts me in focus to see my camera big (alone, there is
+  // nothing to focus between); any other tile shows or hides the controls.
   function tapTile(participant: Participant): void {
-    if (participant.isLocal && !alone) pinInFocus(participant.id);
+    if (participant.isLocal && participant.camera && !alone) pinInFocus(participant.id);
     else toggleChrome();
   }
 </script>
 
-<div class="mc-grid" data-paged={pages.length > 1 ? 'true' : undefined}>
+<div
+  class="mc-grid"
+  data-paged={pages.length > 1 ? 'true' : undefined}
+  data-voice-only={voiceOnly ? 'true' : undefined}
+>
   <div class="mc-grid-pages" bind:this={scroller} onscroll={syncPage}>
     {#each pages as rows, index (index)}
       <div
         class="mc-grid-page"
         role="group"
         aria-label={`Страница ${index + 1}`}
-        style:grid-template-rows={`repeat(${rows.length}, minmax(0, 1fr))`}
+        style:grid-template-rows={`repeat(${rows.length}, ${voiceOnly ? 'auto' : 'minmax(0, 1fr)'})`}
       >
         <!-- One flat list keyed by person: moving to another row keeps the tile and its video. -->
         {#each cells(rows) as { participant, span } (participant.id)}
@@ -117,6 +122,15 @@
   .mc-grid-cell {
     min-width: 0;
     min-height: 0;
+  }
+
+  /* Voices only: 16:9 tiles like the room stage, gathered in the middle. */
+  .mc-grid[data-voice-only='true'] .mc-grid-page {
+    align-content: safe center;
+  }
+
+  .mc-grid[data-voice-only='true'] .mc-grid-cell {
+    aspect-ratio: 16 / 9;
   }
 
   .mc-grid-flip {

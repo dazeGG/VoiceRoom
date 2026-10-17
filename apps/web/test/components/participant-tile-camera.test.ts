@@ -77,28 +77,54 @@ test('a phone turned to its back camera is not mirrored', async () => {
   }
 });
 
-// Safari on iPhone keeps drawing a camera at the size of its first frames
-// until its layout changes; the tile flips the fit for a moment to force it.
-test('a camera that starts or changes size is laid out again', async () => {
+// Safari on iPhone can draw a starting camera small in the middle of its box
+// until the box changes size. The picture stays hidden until it has been
+// nudged a pixel wider and back, which makes Safari lay it out again.
+test('a starting camera is laid out again before it is shown, and again when it changes size', async () => {
+  vi.useFakeTimers();
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
   const frames: FrameRequestCallback[] = [];
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => frames.push(callback));
   vi.stubGlobal('cancelAnimationFrame', () => {});
+  const paint = (): void => {
+    while (frames.length > 0) frames.shift()!(0);
+  };
   try {
     const { container } = render(ParticipantTile, {
       participant: participant({ camera: true, cameraStream: new FakeStream() as MediaStream })
     });
     const video = container.querySelector<HTMLVideoElement>('video')!;
-    expect(video.style.objectFit).toBe('');
+    expect(video.style.opacity).toBe('0');
 
-    for (const type of ['playing', 'resize']) {
-      video.dispatchEvent(new Event(type));
-      expect(video.style.objectFit).toBe('fill');
-      // Two frames later the tile's own fit is back.
-      while (frames.length > 0) frames.shift()!(0);
-      expect(video.style.objectFit).toBe('');
-    }
+    video.dispatchEvent(new Event('playing'));
+    vi.advanceTimersByTime(0);
+    expect(video.style.width).toBe('calc(100% + 1px)');
+    paint();
+    expect(video.style.width).toBe('');
+    expect(video.style.opacity).toBe('');
+
+    video.dispatchEvent(new Event('resize'));
+    expect(video.style.width).toBe('calc(100% + 1px)');
+    paint();
+    expect(video.style.width).toBe('');
   } finally {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
+  }
+});
+
+test('a camera that never reports a frame is shown anyway', () => {
+  vi.useFakeTimers();
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+  try {
+    const { container } = render(ParticipantTile, {
+      participant: participant({ camera: true, cameraStream: new FakeStream() as MediaStream })
+    });
+    const video = container.querySelector<HTMLVideoElement>('video')!;
+    expect(video.style.opacity).toBe('0');
+    vi.advanceTimersByTime(1500);
+    expect(video.style.opacity).toBe('');
+  } finally {
+    vi.useRealTimers();
   }
 });

@@ -53,7 +53,7 @@ export const mobileCallUi = $state<MobileCallUiState>({
 
 export type MobileCallScene =
   | { kind: 'duo'; big: Participant; pip: Participant; pipExpanded: boolean }
-  | { kind: 'grid'; pages: Participant[][][] }
+  | { kind: 'grid'; pages: Participant[][][]; voiceOnly: boolean }
   | { kind: 'focus'; big: Participant; self: Participant | null; strip: Participant[] };
 
 let activeSpeakerId = '';
@@ -77,9 +77,11 @@ export function getMobileCallScene(): MobileCallScene {
   const others = everyone.filter((participant) => !participant.isLocal);
   activeSpeakerId = nextActiveSpeaker(activeSpeakerId, others);
 
-  // A swap or a grown picture belongs to the person it was made with; someone
-  // new in their place starts from the plain layout.
-  if (self && others.length === 1) {
+  // Two people face to face once either camera is on; without one they sit in
+  // the grid like on the room stage. A swap or a grown picture belongs to the
+  // person it was made with; someone new in their place starts from the plain layout.
+  const withCamera = (participant: Participant): boolean => participant.camera || Boolean(participant.cameraStream);
+  if (self && others.length === 1 && (withCamera(self) || withCamera(others[0]))) {
     const [other] = others;
     const swapped = mobileCallUi.duoSwappedWith === other.id;
     return swapped
@@ -107,7 +109,8 @@ export function getMobileCallScene(): MobileCallScene {
 
   return {
     kind: 'grid',
-    pages: gridPages(self?.id ?? '', otherIds).map((rows) => rows.map((row) => row.map(byId)))
+    pages: gridPages(self?.id ?? '', otherIds).map((rows) => rows.map((row) => row.map(byId))),
+    voiceOnly: !everyone.some(withCamera)
   };
 }
 

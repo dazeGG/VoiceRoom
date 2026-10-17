@@ -47,13 +47,12 @@ async function expectJoinedPhoneRoom(page: Page): Promise<void> {
     overflow.extra,
     `no horizontal scroll; wider than the screen: ${overflow.offenders.join(', ')}`
   ).toBeLessThanOrEqual(0);
-  // The phone draws the call full screen: alone or face to face, the main tile
-  // fills the screen instead of a 16:9 strip in the middle.
+  // With no camera on the phone keeps the room stage's 16:9 tiles, edge to edge.
   const viewport = page.viewportSize()!;
   const mainTile = await page.locator('.mc-tile:not([data-variant="pip"])').first().boundingBox();
   expect(mainTile, 'main tile').not.toBeNull();
   expect(mainTile!.width).toBeGreaterThan(viewport.width * 0.9);
-  expect(mainTile!.height, 'main tile height').toBeGreaterThan(viewport.height * 0.6);
+  expect(mainTile!.width / mainTile!.height, 'main tile shape').toBeCloseTo(16 / 9, 1);
   for (const selector of ['.mc-dock-mic', '.mc-dock-output', '.mc-dock-leave']) {
     const box = await page.locator(selector).first().boundingBox();
     expect(box, selector).not.toBeNull();
