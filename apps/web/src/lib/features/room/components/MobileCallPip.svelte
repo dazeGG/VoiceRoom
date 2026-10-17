@@ -21,7 +21,19 @@
   // The click that ends a drag must not count as a tap.
   let dragged = false;
 
+  /** The shape without a camera picture: an upright phone frame. */
+  const AVATAR_RATIO = 100 / 178;
+
+  let frame = $state<number | null>(null);
+
   const participant = $derived(scene.pip);
+  // The picture-in-picture takes the shape of what the camera sends, within
+  // sane bounds for a broken report.
+  const ratio = $derived(participant.cameraStream && frame ? Math.min(Math.max(frame, 1 / 3), 3) : AVATAR_RATIO);
+  function followFrame(next: number | null): void {
+    frame = next;
+  }
+
   const expanded = $derived(scene.pipExpanded);
   const canFlip = $derived(expanded && Boolean(participant.cameraStream));
 
@@ -105,19 +117,27 @@
   data-corner={corner}
   data-expanded={expanded ? 'true' : undefined}
   data-dragging={dragging ? 'true' : undefined}
+  style:--pip-ratio={ratio}
   style:transform={dragging ? `translate(${offsetX}px, ${offsetY}px)` : undefined}
   {@attach followDrag}
 >
-  <MobileCallTile {participant} variant="pip" ontap={handleTap} />
+  <MobileCallTile {participant} variant="pip" ontap={handleTap} onframe={followFrame} />
   {#if canFlip}
     <div class="mc-pip-flip"><MobileCameraFlip variant="round" /></div>
   {/if}
 </div>
 
 <style>
+  /* The longer side is fixed and the shorter one follows the camera, shrunk
+     further only when the band is too small to hold it. */
   .mc-pip {
-    --pip-w: 100px;
-    --pip-h: 178px;
+    --pip-long: 178px;
+    --pip-w: min(
+      calc(var(--pip-long) * min(1, var(--pip-ratio))),
+      calc(100cqw - 20px),
+      calc((100cqh - 8px) * var(--pip-ratio))
+    );
+    --pip-h: calc(var(--pip-w) / var(--pip-ratio));
     position: absolute;
     left: var(--pip-x);
     top: var(--pip-y);
@@ -140,8 +160,7 @@
 
   /* Grown to turn the camera: twice the size, as far as the screen allows. */
   .mc-pip[data-expanded='true'] {
-    --pip-w: 200px;
-    --pip-h: min(356px, calc(100% - 8px));
+    --pip-long: 356px;
     border-radius: 18px;
   }
 

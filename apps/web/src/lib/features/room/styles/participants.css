@@ -216,23 +216,20 @@ body[data-screen-view='true'][data-strip-collapsed='true'] .stage-strip {
   box-shadow: inset 0 0 0 2px var(--vr-accent);
 }
 
-/* A camera fills the tile in place of the avatar; the name stays on top and
-   the speaking outline is drawn over the picture. */
+/* A camera replaces the avatar; the name stays on top and the speaking
+   outline is drawn over the picture. The picture is never cropped: whatever
+   shape the camera sends is fitted whole, with dark bars beside it. */
 .participant-camera {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  background: var(--vr-bg);
-  object-fit: cover;
+  background: var(--vr-video-bg);
+  object-fit: contain;
 }
 
 .participant-camera[data-mirrored='true'] {
   transform: scaleX(-1);
-}
-
-.participant-focus-stage > .participant .participant-camera {
-  object-fit: contain;
 }
 
 .participant[data-camera='true'] .voice-ring {

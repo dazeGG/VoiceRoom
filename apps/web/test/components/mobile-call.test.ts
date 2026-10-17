@@ -149,6 +149,45 @@ test('two people: my picture grows with the camera switch, then swaps me full sc
   expect(tile('me').dataset.variant).toBe('pip');
 });
 
+// A camera reports its size only once frames arrive, and a phone camera can
+// change it while it starts or turns.
+async function sendFrames(video: HTMLVideoElement, width: number, height: number): Promise<void> {
+  Object.defineProperty(video, 'videoWidth', { configurable: true, value: width });
+  Object.defineProperty(video, 'videoHeight', { configurable: true, value: height });
+  await fireEvent(video, new Event('resize'));
+}
+
+test('two people: my picture-in-picture takes the shape my camera sends, with nothing left over', async () => {
+  const self = person('me', {
+    isLocal: true,
+    name: 'Кирилл',
+    camera: true,
+    cameraStream: new FakeStream() as MediaStream
+  });
+  enterRoom(1);
+  state.self = self;
+  render(MobileCallStage);
+  const pip = document.querySelector<HTMLElement>('.mc-pip')!;
+  // One picture only: no blurred copy to fill bars that are not there.
+  const videos = pip.querySelectorAll('video');
+  expect(videos).toHaveLength(1);
+
+  await sendFrames(videos[0], 1280, 720);
+  expect(Number(pip.style.getPropertyValue('--pip-ratio'))).toBeCloseTo(16 / 9);
+  await sendFrames(videos[0], 720, 1080);
+  expect(Number(pip.style.getPropertyValue('--pip-ratio'))).toBeCloseTo(2 / 3);
+
+  // The shape stays when the picture grows to show the camera switch.
+  await tap('me');
+  expect(pip.dataset.expanded).toBe('true');
+  expect(Number(pip.style.getPropertyValue('--pip-ratio'))).toBeCloseTo(2 / 3);
+
+  // Without a camera the bubble is an upright phone frame again.
+  self.camera = false;
+  self.cameraStream = null;
+  await vi.waitFor(() => expect(Number(pip.style.getPropertyValue('--pip-ratio'))).toBeCloseTo(100 / 178));
+});
+
 test('two people: a tap beside my grown picture shrinks it back instead of hiding the controls', async () => {
   enterRoom(1);
   render(MobileCallStage);

@@ -143,6 +143,8 @@
     right: 0;
     bottom: var(--mc-bottom);
     left: 0;
+    /* The picture-in-picture measures itself against the band. */
+    container-type: size;
     transition:
       top 350ms cubic-bezier(0.2, 0.8, 0.2, 1),
       bottom 350ms cubic-bezier(0.2, 0.8, 0.2, 1);

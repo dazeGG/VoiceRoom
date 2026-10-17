@@ -14,12 +14,15 @@
   let {
     participant,
     variant = 'grid',
-    ontap
+    ontap,
+    onframe
   }: {
     participant: Participant;
     /** `bleed` fills the whole screen, `pip` is the floating picture-in-picture. */
     variant?: 'grid' | 'focus' | 'strip' | 'bleed' | 'pip';
     ontap: () => void;
+    /** The camera's width over its height, `null` while there is no picture. */
+    onframe?: (ratio: number | null) => void;
   } = $props();
 
   // A new avatar gets a fresh attempt: only the URL that failed stays hidden.
@@ -38,6 +41,22 @@
       return () => {
         video.srcObject = null;
       };
+    };
+  }
+
+  // A phone camera can change its shape while it starts or turns, so the size
+  // is reported on every change, not only once.
+  function reportFrame(video: HTMLVideoElement): () => void {
+    const report = (): void => {
+      if (video.videoWidth > 0 && video.videoHeight > 0) onframe?.(video.videoWidth / video.videoHeight);
+    };
+    video.addEventListener('loadedmetadata', report);
+    video.addEventListener('resize', report);
+    report();
+    return () => {
+      video.removeEventListener('loadedmetadata', report);
+      video.removeEventListener('resize', report);
+      onframe?.(null);
     };
   }
 
@@ -70,18 +89,22 @@
   style:--participant-avatar-fg={avatar.foreground}
 >
   {#if cameraStream}
-    <video
-      class="mc-tile-backdrop"
-      {@attach showCamera(cameraStream)}
-      data-mirrored={mirrored ? 'true' : undefined}
-      aria-hidden="true"
-      autoplay
-      playsinline
-      muted
-    ></video>
+    <!-- The picture-in-picture takes the camera's own shape, so nothing is left to fill. -->
+    {#if variant !== 'pip'}
+      <video
+        class="mc-tile-backdrop"
+        {@attach showCamera(cameraStream)}
+        data-mirrored={mirrored ? 'true' : undefined}
+        aria-hidden="true"
+        autoplay
+        playsinline
+        muted
+      ></video>
+    {/if}
     <video
       class="mc-tile-video"
       {@attach showCamera(cameraStream)}
+      {@attach reportFrame}
       data-mirrored={mirrored ? 'true' : undefined}
       autoplay
       playsinline
@@ -191,6 +214,11 @@
     height: 100%;
     object-fit: contain;
     pointer-events: none;
+  }
+
+  /* The box already has the camera's shape: cover only hides a pixel of rounding. */
+  .mc-tile[data-variant='pip'] .mc-tile-video {
+    object-fit: cover;
   }
 
   .mc-tile-backdrop[data-mirrored='true'] {
