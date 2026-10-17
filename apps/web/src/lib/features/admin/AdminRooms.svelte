@@ -1,14 +1,15 @@
 <script lang="ts">
-  // Who is in which room's voice right now, refreshed every few seconds, and
-  // the finished stays before, the latest first. Names, accounts and times
-  // only: nothing said in a room. An account opens its card; a room narrows
-  // the history to it.
+  // Who is in which room's voice right now, a card per room, refreshed every
+  // few seconds, and the finished stays before, the latest first. Names,
+  // accounts, times and the kind of client only: nothing said in a room. An
+  // account opens its card; a room's name narrows the history to it.
   import { onMount } from 'svelte';
-  import { HeadphoneOff, MicOff, MonitorUp, X } from '@lucide/svelte';
+  import { AppWindow, Globe, HeadphoneOff, MicOff, MonitorUp, Smartphone, X } from '@lucide/svelte';
   import {
     fetchLiveRooms,
     fetchRoomHistory,
     type LiveRoom,
+    type LiveRoomPeer,
     type RoomAccount,
     type RoomHistory,
     type RoomStay
@@ -69,10 +70,21 @@
     }
   }
 
-  function showRoomHistory(room: { id: string; name: string | null } | null): void {
+  let historySection = $state<HTMLElement | null>(null);
+
+  // A live room's name brings its history into view; a room already in the
+  // history is narrowed in place.
+  function showRoomHistory(room: { id: string; name: string | null } | null, scroll = false): void {
     historyRoom = room;
     void loadHistory();
+    if (scroll) historySection?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }
+
+  const CLIENTS: Record<NonNullable<LiveRoomPeer['client']>, { label: string; icon: typeof Globe }> = {
+    desktop_app: { label: 'приложение', icon: AppWindow },
+    browser: { label: 'браузер', icon: Globe },
+    mobile: { label: 'телефон', icon: Smartphone }
+  };
 
   onMount(() => {
     void loadLive();
@@ -116,24 +128,27 @@
     <p class="rooms-quiet">Сейчас никто не в звонке.</p>
   {:else}
     {#if liveFailure}<p class="rooms-error" role="alert">{liveFailure.message}</p>{/if}
-    <ul class="rooms-live">
+    <ul class="rooms-live" aria-labelledby="rooms-live-title">
       {#each rooms as room (room.roomId)}
         <li class="rooms-card">
           <div class="rooms-card-head">
-            <strong class="rooms-card-name"><EmojiText text={room.name} /></strong>
+            <button
+              type="button"
+              class="rooms-card-name"
+              title="Показать историю звонков этой комнаты"
+              onclick={() => showRoomHistory({ id: room.roomId, name: room.name }, true)}
+            >
+              <EmojiText text={room.name} />
+            </button>
             <span class="rooms-chip">{room.isStatic ? 'постоянная' : 'временная'}</span>
-            {#if room.since}<span class="rooms-quiet"
-                >{fresh(room.since) ? 'только начался' : `идёт ${formatSince(room.since, now)}`}</span
+          </div>
+          <div class="rooms-card-meta">
+            <span>{formatCount(room.peers.length)} в звонке</span>
+            {#if room.since}<span>{fresh(room.since) ? 'только начался' : `идёт ${formatSince(room.since, now)}`}</span
               >{/if}
-            <span class="rooms-card-actions">
-              {#if room.owner}
-                <span class="rooms-quiet">владелец</span>
-                {@render accountLink(room.owner)}
-              {/if}
-              <Button variant="outline" onclick={() => showRoomHistory({ id: room.roomId, name: room.name })}
-                >История</Button
-              >
-            </span>
+            {#if room.owner}
+              <span class="rooms-card-owner">владелец {@render accountLink(room.owner)}</span>
+            {/if}
           </div>
           <ul class="rooms-peers">
             {#each room.peers as peer (peer.peerId)}
@@ -150,6 +165,10 @@
                 {:else}
                   <span class="rooms-guest"><EmojiText text={peer.name} /></span>
                   <span class="rooms-chip">гость</span>
+                {/if}
+                {#if peer.client}
+                  {@const client = CLIENTS[peer.client]}
+                  <span class="rooms-client"><client.icon size={13} aria-hidden="true" />{client.label}</span>
                 {/if}
                 <span class="rooms-peer-state">
                   {#if peer.muted}<span title="Микрофон выключен" aria-label="Микрофон выключен"
@@ -174,7 +193,7 @@
   {/if}
 </section>
 
-<section class="rooms-section" aria-labelledby="rooms-history-title">
+<section class="rooms-section" aria-labelledby="rooms-history-title" bind:this={historySection}>
   <header class="rooms-head">
     <h2 id="rooms-history-title">История звонков</h2>
     {#if historyRoom}
@@ -214,10 +233,12 @@
                   class="rooms-room"
                   onclick={() => showRoomHistory({ id: stay.roomId, name: stay.roomName })}
                 >
-                  {#if stay.roomName}<EmojiText text={stay.roomName} />{:else}<span class="rooms-quiet"
-                      >удалённая комната</span
+                  <!-- A temporary room is gone once empty; its code is what it was called. -->
+                  {#if stay.roomName}<EmojiText text={stay.roomName} />{:else}<span class="rooms-code"
+                      >{stay.roomId}</span
                     >{/if}
                 </button>
+                {#if !stay.roomName}<span class="rooms-chip">удалена</span>{/if}
               </td>
               <td>
                 {#if stay.account}{@render accountLink(stay.account)}{:else}<span class="rooms-quiet">гость</span>{/if}
@@ -278,13 +299,16 @@
   }
 
   .rooms-live {
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+    align-items: start;
     gap: 12px;
   }
 
   .rooms-card {
     display: grid;
-    gap: 10px;
-    padding: 12px 14px;
+    gap: 8px;
+    min-width: 0;
+    padding: 14px 16px;
     border: 1px solid var(--vr-line);
     border-radius: 14px;
     background: var(--vr-surface);
@@ -292,33 +316,74 @@
 
   .rooms-card-head {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 6px 10px;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
   }
 
   .rooms-card-name {
     min-width: 0;
+    padding: 0;
     overflow: hidden;
-    font-size: 14.5px;
+    border: 0;
+    background: none;
+    color: var(--vr-text);
+    font: inherit;
+    font-size: 15px;
+    font-weight: 700;
+    text-align: left;
     text-overflow: ellipsis;
     white-space: nowrap;
+    cursor: pointer;
   }
 
-  .rooms-card-actions {
+  .rooms-card-name:hover {
+    color: var(--vr-accent);
+  }
+
+  .rooms-card-meta {
     display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 2px 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--vr-line);
+    color: var(--vr-text-3);
+    font-size: 12.5px;
+  }
+
+  .rooms-card-owner {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+
+  .rooms-client {
+    display: inline-flex;
     align-items: center;
-    gap: 8px;
-    margin-left: auto;
+    gap: 4px;
+    color: var(--vr-text-3);
+    font-size: 12px;
+  }
+
+  .rooms-code {
+    font-family: var(--font-mono);
+    font-weight: 400;
   }
 
   .rooms-chip {
+    flex: none;
     padding: 1px 7px;
     border-radius: 999px;
     background: var(--vr-surface-3);
     color: var(--vr-text-2);
     font-size: 11px;
     font-weight: 600;
+  }
+
+  .rooms-table .rooms-chip {
+    margin-left: 8px;
   }
 
   .rooms-peers {

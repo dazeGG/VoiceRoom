@@ -4,9 +4,9 @@
 // rest are answered from memory, so a request never waits on it.
 
 import type { Logger } from 'pino';
-import { describeUserAgent, isDesktopAppUserAgent } from '@voice-room/shared/account-security';
+import { clientKind } from '@voice-room/shared/account-security';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
-import type { ActivityMark, ActivityRepository, ClientKind } from './activity.repository.ts';
+import type { ActivityMark, ActivityRepository } from './activity.repository.ts';
 
 // Days are counted in Moscow time, where the users are: a late evening call
 // belongs to that evening, not to the next UTC day.
@@ -14,13 +14,6 @@ const DAY_OFFSET_MS = 3 * 60 * 60 * 1000;
 
 export function activityDay(at: number): string {
   return new Date(at + DAY_OFFSET_MS).toISOString().slice(0, 10);
-}
-
-export function clientKind(userAgent: string | null | undefined): ClientKind | null {
-  if (!userAgent) return null;
-  if (isDesktopAppUserAgent(userAgent)) return 'desktop_app';
-  const { os } = describeUserAgent(userAgent);
-  return os === 'Android' || os === 'iOS' ? 'mobile' : 'browser';
 }
 
 export interface ActivityTrackerDeps {

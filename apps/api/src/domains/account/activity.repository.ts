@@ -3,9 +3,8 @@
 
 import type pg from 'pg';
 import { sql } from 'kysely';
+import type { ClientKind } from '@voice-room/shared/account-security';
 import { kyselyOn } from '../../platform/db/kysely.ts';
-
-export type ClientKind = 'desktop_app' | 'mobile' | 'browser';
 
 export type ActivityMark = {
   userId: string;

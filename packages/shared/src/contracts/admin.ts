@@ -362,7 +362,9 @@ export const LiveRoomPeer = Type.Object({
   joinedAt: Nullable(Type.Number()),
   muted: Type.Boolean(),
   deafened: Type.Boolean(),
-  screen: Type.Boolean()
+  screen: Type.Boolean(),
+  /** The desktop app, a phone or a browser; null when the socket sent no user agent. */
+  client: Nullable(Type.Union([Type.Literal('desktop_app'), Type.Literal('mobile'), Type.Literal('browser')]))
 });
 export type LiveRoomPeer = Static<typeof LiveRoomPeer>;
 

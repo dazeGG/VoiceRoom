@@ -54,7 +54,8 @@ function kitchen(): LiveRoom {
         joinedAt: Date.now() - 30 * MINUTE,
         muted: true,
         deafened: false,
-        screen: false
+        screen: false,
+        client: 'desktop_app'
       },
       {
         peerId: 'p-guest',
@@ -64,7 +65,8 @@ function kitchen(): LiveRoom {
         joinedAt: Date.now() - 5 * MINUTE,
         muted: false,
         deafened: false,
-        screen: true
+        screen: true,
+        client: 'mobile'
       }
     ]
   };
@@ -117,7 +119,7 @@ test('the tab shows who is in voice now, accounts by login and guests by name, a
   });
   render(AdminPanel, { props: { tab: 'rooms' } });
 
-  const card = (await screen.findByText('Кухня')).closest('li')!;
+  const card = (await screen.findByRole('button', { name: 'Кухня' })).closest('li')!;
   const people = within(card).getAllByRole('listitem');
   expect(people).toHaveLength(2);
   expect(within(people[0]).getByText('@alice')).toBeTruthy();
@@ -125,6 +127,9 @@ test('the tab shows who is in voice now, accounts by login and guests by name, a
   expect(within(people[1]).getByText('Петя')).toBeTruthy();
   expect(within(people[1]).getByText('гость')).toBeTruthy();
   expect(within(people[1]).getByLabelText('Показывает экран')).toBeTruthy();
+  // Where each one sits: the desktop app, a phone or a browser.
+  expect(within(people[0]).getByText('приложение')).toBeTruthy();
+  expect(within(people[1]).getByText('телефон')).toBeTruthy();
   expect(within(card).getByText('постоянная')).toBeTruthy();
   expect(screen.getByText(/комнат: 1, людей: 2/)).toBeTruthy();
   expect(await screen.findByText('Завершённых звонков пока нет.')).toBeTruthy();
@@ -165,15 +170,19 @@ test('the history loads a page at a time and narrows to one room', async () => {
 
   const table = await screen.findByRole('table');
   expect(within(table).getAllByRole('row')).toHaveLength(1 + 4);
-  expect(within(table).getByText('удалённая комната')).toBeTruthy();
+  // A temporary room is gone once empty: its row shows the code it was called by.
+  expect(within(table).getByRole('button', { name: 'gone' })).toBeTruthy();
+  expect(within(table).getByText('удалена')).toBeTruthy();
 
   await userEvent.click(screen.getByRole('button', { name: 'Показать ещё' }));
   await waitFor(() => expect(within(table).getAllByRole('row')).toHaveLength(1 + 5));
   expect(within(table).getByText('@alice')).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Показать ещё' })).toBeNull();
 
-  // A live room's history button narrows the list; the chip takes it back to every room.
-  await userEvent.click(screen.getByRole('button', { name: 'История' }));
+  // A live room's name narrows the list; the chip takes it back to every room.
+  await userEvent.click(
+    within(screen.getByRole('list', { name: 'Сейчас в звонках' })).getByRole('button', { name: 'Кухня' })
+  );
   await waitFor(() => expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(2));
   expect(urls.at(-1)?.searchParams.get('roomId')).toBe('kitchen');
   await userEvent.click(screen.getByRole('button', { name: /Показать все комнаты/ }));
@@ -181,7 +190,7 @@ test('the history loads a page at a time and narrows to one room', async () => {
   expect(urls.at(-1)?.searchParams.has('roomId')).toBe(false);
 
   // So does a room in the history, a gone one too.
-  await userEvent.click(within(screen.getByRole('table')).getByRole('button', { name: 'удалённая комната' }));
+  await userEvent.click(within(screen.getByRole('table')).getByRole('button', { name: 'gone' }));
   await waitFor(() => expect(urls.at(-1)?.searchParams.get('roomId')).toBe('gone'));
 });
 

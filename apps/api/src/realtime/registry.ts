@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { cleanPresenceStatus } from '@voice-room/shared/validation';
 import type { PresenceStatus } from '@voice-room/shared/validation';
+import type { ClientKind } from '@voice-room/shared/account-security';
 import type { ServerEnvelope, TypingActivity } from '@voice-room/shared/realtime';
 import type { createTypingThrottle } from './typing-throttle.ts';
 import type { ServerEvents } from '@voice-room/shared/contracts/realtime';
@@ -22,6 +23,8 @@ export type WsConnection = {
   guest: boolean;
   authSessionHash: string;
   clientIp: string;
+  /** Which client the socket came from, by its user agent; null when it sent none. */
+  client: ClientKind | null;
   guestIp: string | null;
   socket: RealtimeSocket;
   presenceStatus: PresenceStatus;
@@ -137,6 +140,7 @@ function createConnectionRegistry({
       guest: !userId,
       authSessionHash: userId ? String(authSessionHash || '') : '',
       clientIp: clientIp || '',
+      client: null,
       guestIp: null,
       socket,
       presenceStatus: cleanPresenceStatus(presenceStatus) || 'online',

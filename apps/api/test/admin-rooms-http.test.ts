@@ -20,6 +20,10 @@ import { joinVoiceRoom, openWs, sendWs } from './ws-harness.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const skip = !process.env.TEST_DATABASE_URL;
 const ADMIN_ID = '00000000-0000-4000-8000-0000000000ad';
+const DESKTOP_APP_UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) VoiceRoom/1.4.6 Chrome/130.0.0.0 Electron/33.0.0 Safari/537.36';
+const IPHONE_UA =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
 
 async function waitFor<T>(read: () => Promise<T>, done: (value: T) => boolean, timeoutMs = 10000): Promise<T> {
   const started = Date.now();
@@ -55,8 +59,9 @@ test('an administrator sees who is in voice now and the stays before, a page at 
     [aliceId]
   );
 
-  const aliceWs = openWs(socketPath, { cookie: alice });
-  const guestWs = openWs(socketPath);
+  // Alice sits in the desktop app, the guest on a phone; the socket's user agent tells.
+  const aliceWs = openWs(socketPath, { cookie: alice, headers: { 'User-Agent': DESKTOP_APP_UA } });
+  const guestWs = openWs(socketPath, { headers: { 'User-Agent': IPHONE_UA } });
   await Promise.all([aliceWs.ready, guestWs.ready]);
   const aliceVoice = { roomId: 'kitchen', peerId: 'alice-peer', sessionToken: 'a'.repeat(32) };
   await joinVoiceRoom(aliceWs, { ...aliceVoice, name: 'Алиса' });
@@ -86,6 +91,10 @@ test('an administrator sees who is in voice now and the stays before, a page at 
     ]
   );
   assert.equal(kitchen!.since, kitchen!.peers[0]!.joinedAt);
+  assert.deepEqual(
+    kitchen!.peers.map((peer) => peer.client),
+    ['desktop_app', 'mobile']
+  );
 
   // Alice leaves: her stay is the history's latest, and the guest stays in the room.
   sendWs(aliceWs.ws, 'room.leave', aliceVoice);
