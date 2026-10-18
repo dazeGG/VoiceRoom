@@ -1,18 +1,8 @@
 /// <reference lib="webworker" />
 
-declare const self: ServiceWorkerGlobalScope;
+import { parsePushPayload, type PushPayload } from '@voice-room/shared/notifications';
 
-type PushPayload = {
-  title?: string;
-  body?: string;
-  tag?: string;
-  url?: string;
-  dedupeKey?: string;
-  notificationId?: string;
-  revision?: number;
-  type?: string;
-  expiresAt?: number;
-};
+declare const self: ServiceWorkerGlobalScope;
 
 function serviceWorkerRunsOnMobile(): boolean {
   const nav = self.navigator as Navigator & { userAgentData?: { mobile?: boolean } };
@@ -32,13 +22,13 @@ self.addEventListener('push', (event) => {
       if (serviceWorkerRunsOnMobile()) return;
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       if (windows.some((client) => client.visibilityState === 'visible' && client.focused)) return;
-      let payload: PushPayload = {};
+      let payload: PushPayload;
       try {
-        payload = event.data?.json() || {};
+        payload = parsePushPayload(event.data?.json());
       } catch {
         payload = { body: event.data?.text() || '' };
       }
-      if (Number.isFinite(payload.expiresAt) && Number(payload.expiresAt) <= Date.now()) return;
+      if (payload.expiresAt !== undefined && payload.expiresAt <= Date.now()) return;
       await self.registration.showNotification(payload.title || 'VoiceRoom', {
         body: payload.body || '',
         data: {
@@ -59,7 +49,7 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(
     (async () => {
-      const target = new URL(String(event.notification.data?.url || '/'), self.location.origin);
+      const target = new URL(parsePushPayload(event.notification.data).url || '/', self.location.origin);
       if (target.origin !== self.location.origin) target.href = new URL('/', self.location.origin).href;
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       const sameOrigin = windows.find((client) => new URL(client.url).origin === target.origin);

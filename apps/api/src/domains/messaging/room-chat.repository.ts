@@ -187,15 +187,25 @@ export function createRoomChatRepository({ db, pool }: { db: Database; pool: pg.
     return mapMessageOrNull(row);
   }
 
-  async function softDeleteMessage(roomId: string, messageId: string): Promise<boolean> {
-    const result = await db
-      .updateTable('room_messages')
-      .set({ deleted_at: sql<Date>`now()` })
-      .where('room_id', '=', roomId)
-      .where('id', '=', messageId)
-      .where('deleted_at', 'is', null)
-      .executeTakeFirst();
-    return result.numUpdatedRows > 0n;
+  // The unit of work runs on the deletion's connection, once the message is
+  // gone, so whatever it removes with the message commits with it.
+  async function softDeleteMessage(
+    roomId: string,
+    messageId: string,
+    { unitOfWork = null }: { unitOfWork?: ((client: pg.PoolClient) => Promise<void>) | null } = {}
+  ): Promise<boolean> {
+    return transaction(pool, async (client) => {
+      const result = await kyselyOn(client)
+        .updateTable('room_messages')
+        .set({ deleted_at: sql<Date>`now()` })
+        .where('room_id', '=', roomId)
+        .where('id', '=', messageId)
+        .where('deleted_at', 'is', null)
+        .executeTakeFirst();
+      if (result.numUpdatedRows === 0n) return false;
+      if (unitOfWork) await unitOfWork(client);
+      return true;
+    });
   }
 
   // An edit is plain text, so the structured content is rebuilt from it:

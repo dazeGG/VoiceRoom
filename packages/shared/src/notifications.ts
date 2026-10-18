@@ -36,15 +36,24 @@ export interface NotificationEnvelope {
   revision: number;
   firstUnread: NotificationItem | null;
 }
-export type ProviderPayload = {
-  contractVersion: 1;
-  notificationId: string;
-  revision: number;
-  dedupeKey: string;
-  title: string;
-  body: string;
-  route: string;
+/** What a Web Push carries: every API push sends it, the service worker reads it. */
+export type PushPayload = {
+  title?: string;
+  body?: string;
+  tag?: string;
+  /** The same-site path a click on the notification opens. */
+  url?: string;
+  dedupeKey?: string;
+  notificationId?: string;
+  revision?: number;
+  type?: string;
+  /** Epoch milliseconds; the service worker drops the push after it. */
+  expiresAt?: number;
 };
+/** The mention/reply push the notification outbox queues. */
+export type ProviderPayload = Required<
+  Pick<PushPayload, 'notificationId' | 'revision' | 'dedupeKey' | 'title' | 'body' | 'url'>
+> & { contractVersion: 1 };
 
 type Loose = Record<string, unknown>;
 
@@ -182,6 +191,32 @@ export function buildProviderPayload(
     body: privateNotifications
       ? 'Откройте VoiceRoom, чтобы посмотреть уведомление.'
       : notification.body || 'У вас новое уведомление',
-    route: notificationRoute(notification)
+    url: notificationRoute(notification)
+  };
+}
+
+/** Reads a received push, keeping only the fields of `PushPayload` that have its types. */
+export function parsePushPayload(input: unknown): PushPayload {
+  if (!input || typeof input !== 'object') return {};
+  const fields = new Map<string, unknown>(Object.entries(input));
+  const text = (key: string): string | undefined => {
+    const value = fields.get(key);
+    return typeof value === 'string' ? value : undefined;
+  };
+  const finite = (key: string): number | undefined => {
+    const value = fields.get(key);
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  };
+  return {
+    title: text('title'),
+    body: text('body'),
+    tag: text('tag'),
+    // Mention/reply pushes queued in the outbox before 2.10.2 name it `route`.
+    url: text('url') ?? text('route'),
+    dedupeKey: text('dedupeKey'),
+    notificationId: text('notificationId'),
+    revision: finite('revision'),
+    type: text('type'),
+    expiresAt: finite('expiresAt')
   };
 }

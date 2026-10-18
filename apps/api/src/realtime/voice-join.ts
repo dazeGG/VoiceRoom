@@ -163,11 +163,24 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
     connection.pendingVoiceJoin = null;
   }
 
+  // Gives back a seat this join took: the peer leaves the room and, if the
+  // connection still holds that seat, it stops being the connection's voice.
+  function releaseSeat(
+    connection: WsConnection,
+    roomId: string,
+    peerId: string,
+    transportId: string,
+    reason: string
+  ): void {
+    closePeer(roomId, peerId, transportId, reason);
+    if (connection.activeVoice?.transportId !== transportId) return;
+    connection.activeVoice = null;
+    if (!connection.previewRoomIds.has(roomId)) wsRegistry.unregisterConnectionForRoom(connection, roomId);
+  }
+
   function supersededVoiceJoin(connection: WsConnection, roomId: string, transportId = ''): JoinResult {
     if (transportId && connection.activeVoice?.transportId === transportId) {
-      closePeer(roomId, connection.activeVoice.peerId, transportId, 'replaced');
-      connection.activeVoice = null;
-      if (!connection.previewRoomIds.has(roomId)) wsRegistry.unregisterConnectionForRoom(connection, roomId);
+      releaseSeat(connection, roomId, connection.activeVoice.peerId, transportId, 'replaced');
     }
     return { ok: false, code: 'superseded_join', message: 'Join replaced by a newer connection' };
   }
@@ -453,6 +466,21 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         room.peers.get(peerId)?.transport?.id !== transport.id
       ) {
         return supersededVoiceJoin(connection, roomId, transport.id);
+      }
+
+      // A ban evicts the peers its post-commit roster read finds, so one that
+      // committed after the check above, before this seat was taken, missed it.
+      // Check again with the seat taken: a ban committed later finds the peer.
+      let lateBan: unknown;
+      try {
+        lateBan = await findRoomBan(roomId, sessionUser?.id, clientIp);
+      } catch (error) {
+        releaseSeat(connection, roomId, peerId, transport.id, 'lost');
+        throw error;
+      }
+      if (lateBan) {
+        releaseSeat(connection, roomId, peerId, transport.id, 'banned');
+        return { ok: false, code: 'room_banned', message: 'Вы заблокированы в этой комнате' };
       }
 
       const snapshot = await buildRoomSnapshot(roomId, 'active');

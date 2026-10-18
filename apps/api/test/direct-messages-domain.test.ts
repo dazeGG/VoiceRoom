@@ -17,6 +17,8 @@ import {
 } from '../src/domains/messaging/direct-messages.service.ts';
 import { registerDirectMessageRoutes } from '../src/domains/messaging/direct-messages.routes.ts';
 import type { ApiContext } from '../src/app/context.ts';
+import { createMessageReadService, type MessageReadRepository } from '../src/domains/messaging/message-read.service.ts';
+import { createCursorCodec } from '../src/platform/cursor-codec.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { fake, storedUser, directMessage, publicUser } from './fakes/index.ts';
 
@@ -39,6 +41,7 @@ type HarnessOptions = {
   delivery?: false;
   replay?: boolean;
   readError?: Error;
+  readService?: ReturnType<DirectMessagesDeps['readService']>;
   friends?: boolean;
   blocked?: boolean;
   noPeer?: boolean;
@@ -142,12 +145,13 @@ function harness(options: HarnessOptions = {}) {
         };
   const service = createDirectMessagesService({
     messages: () => ({ direct }),
-    readService: () => ({
-      async advanceDm(input) {
-        if (options.readError) throw options.readError;
-        return { cursor: input.cursor, readThrough: 3 };
-      }
-    }),
+    readService: () =>
+      options.readService ?? {
+        async advanceDm(input) {
+          if (options.readError) throw options.readError;
+          return { cursor: input.cursor, readThrough: 3 };
+        }
+      },
     friends: () => ({
       areFriends: async () => options.friends ?? true,
       isBlockedBetween: async () => options.blocked ?? false
@@ -175,6 +179,18 @@ function harness(options: HarnessOptions = {}) {
             attachments: {
               async bindReady(input) {
                 calls.bound.push(input.attachmentIds);
+              },
+              // Deleting runs on the real store; the DB suite covers it.
+              async listForMessage() {
+                return [];
+              },
+              async markDeleted() {
+                return null;
+              }
+            },
+            jobs: {
+              async enqueue() {
+                return null;
               }
             }
           },
@@ -353,18 +369,12 @@ test('marking read by cursor or up to now', async () => {
   const nothing = harness({ readCount: 0 });
   await nothing.service.markRead('user-1', PEER, undefined);
   assert.deepEqual(nothing.calls.events, []);
-  assert.deepEqual(
-    await harness({
-      readError: Object.assign(new Error('Stale'), { statusCode: 409, code: 'invalid_cursor' })
-    }).service.markRead('u', PEER, 'c'),
-    { status: 'invalid_cursor', statusCode: 409, code: 'invalid_cursor', error: 'Stale' }
-  );
-  assert.deepEqual(await harness({ readError: new Error() }).service.markRead('u', PEER, 'c'), {
-    status: 'invalid_cursor',
-    statusCode: 400,
-    code: 'invalid_read_cursor',
-    error: 'invalid_read_cursor'
-  });
+  // A failed cursor read is not turned into an outcome: the error reaches the
+  // central handler, which knows a refused cursor from a server failure.
+  const stale = Object.assign(new Error('Stale'), { statusCode: 409, code: 'invalid_cursor' });
+  const refused = harness({ readError: stale });
+  await assert.rejects(refused.service.markRead('u', PEER, 'c'), stale);
+  assert.deepEqual(refused.calls.events, []);
 });
 
 test('delete and edit belong to the sender', async () => {
@@ -557,13 +567,6 @@ test('DM refusals keep their texts and codes', async (t) => {
       409,
       'Приглашение уже обработано'
     ],
-    [
-      'markRead',
-      { status: 'invalid_cursor', statusCode: 409, code: 'invalid_cursor', error: 'Stale' },
-      ['POST', `/api/dm/${PEER}/read`, { cursor: 'c' }],
-      409,
-      'Stale'
-    ],
     ['edit', { status: 'empty' }, ['PATCH', `/api/dm/${PEER}/messages/${UUID_A}`, {}], 400, 'Пустое сообщение'],
     ['edit', { status: 'not_found' }, ['PATCH', `/api/dm/${PEER}/messages/${UUID_A}`, {}], 404, 'Сообщение не найдено'],
     [
@@ -604,4 +607,59 @@ test('DM refusals keep their texts and codes', async (t) => {
   assert.deepEqual([limited.retryAfter, limited.body.retryAfterSeconds], ['5', 5]);
   const blocked = await call(routeApp(t, { send: { status: 'blocked' } }).app, ...post);
   assert.equal(blocked.body.code, 'relationship_blocked');
+});
+
+test('a failing DM read store answers 500 without its text; a bad cursor still answers 400', async (t) => {
+  const codec = createCursorCodec({ keys: ['m'.repeat(32)] });
+  const participants = [ME.id, PEER].sort().join(':');
+  const cursor = codec.encode({
+    purpose: 'dm-read',
+    context: `dm:${participants}`,
+    tuple: { createdAtMicros: '9', id: 'm9' }
+  });
+  // What pg throws when the read table is unreachable: no statusCode, and a
+  // message that names the schema.
+  const storeDown = Object.assign(new Error('relation "dm_read_states" does not exist'), { code: '42P01' });
+  const failures: unknown[] = [];
+  const app = fastify();
+  registerHttpKit(app, {
+    securityHeaders: () => ({}),
+    recordRequest() {},
+    logRequest() {},
+    logHandlerFailure: (_request, _route, error) => failures.push(error)
+  });
+  const { service } = harness({
+    readService: createMessageReadService({
+      cursorCodec: codec,
+      repository: fake<MessageReadRepository>({
+        async advanceDm() {
+          throw storeDown;
+        }
+      })
+    })
+  });
+  registerDirectMessageRoutes(
+    app,
+    {
+      logger: fake<ApiContext['logger']>(),
+      clientIp: () => 'ip',
+      resolveSession: async () => ({ user: ME }),
+      hashIp: (ip: string) => ip
+    },
+    service
+  );
+  t.after(() => app.close());
+
+  const down = await call(app, 'POST', `/api/dm/${PEER}/read`, { cursor });
+  assert.deepEqual(
+    [down.status, down.body],
+    [500, { ok: false, error: 'Internal server error', code: 'internal_error' }]
+  );
+  assert.deepEqual(failures, [storeDown], 'the central handler logs the store failure');
+
+  const bad = await call(app, 'POST', `/api/dm/${PEER}/read`, { cursor: 'not-a-cursor' });
+  assert.deepEqual(
+    [bad.status, bad.body],
+    [400, { ok: false, error: 'Invalid read cursor', code: 'invalid_read_cursor' }]
+  );
 });

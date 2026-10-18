@@ -36,6 +36,14 @@ function errorName(error: unknown): string {
   return error instanceof Error ? error.name : '';
 }
 
+/** A failure whose message is written for the user and can go straight into a toast. */
+export class UserFacingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UserFacingError';
+  }
+}
+
 export function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   return String(error || '');

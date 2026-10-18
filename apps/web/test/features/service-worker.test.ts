@@ -1,7 +1,8 @@
 // The service worker shows a push only when no window is being looked at, and
 // a click opens its target on this site only, reusing an open window.
 
-import { beforeEach, expect, test, vi } from 'vitest';
+import { beforeEach, expect, test, vi, type Mock } from 'vitest';
+import { buildProviderPayload } from '@voice-room/shared/notifications';
 import { freshImport } from '../helpers/fresh-module.ts';
 
 type Handler = (event: Record<string, unknown>) => void;
@@ -16,7 +17,7 @@ type FakeWindow = {
 const ORIGIN = 'https://voiceroom.ru';
 let handlers: Record<string, Handler>;
 let windows: FakeWindow[];
-let showNotification: ReturnType<typeof vi.fn>;
+let showNotification: Mock<(title: string, options: NotificationOptions) => Promise<void>>;
 let openWindow: ReturnType<typeof vi.fn>;
 
 function fakeWindow(extra: Partial<FakeWindow> = {}): FakeWindow {
@@ -33,7 +34,7 @@ function fakeWindow(extra: Partial<FakeWindow> = {}): FakeWindow {
 beforeEach(async () => {
   handlers = {};
   windows = [];
-  showNotification = vi.fn(async () => {});
+  showNotification = vi.fn<(title: string, options: NotificationOptions) => Promise<void>>(async () => {});
   openWindow = vi.fn(async () => null);
   vi.stubGlobal('self', {
     navigator: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', platform: 'Win32', maxTouchPoints: 0 },
@@ -87,4 +88,23 @@ test('a click opens a same-site target in an open window, and never another site
   windows = [];
   await fire('notificationclick', { notification: { close, data: { url: 'https://evil.example/phish' } } });
   expect(openWindow).toHaveBeenCalledWith(`${ORIGIN}/`);
+});
+
+test('a mention push from the API opens its room and message when clicked', async () => {
+  const payload = buildProviderPayload({
+    id: 'n1',
+    roomId: 'r1',
+    sourceMessageId: 'm1',
+    actorUserId: 'u1',
+    reasons: ['mention'],
+    revision: 2,
+    body: '@ada hi'
+  });
+  await push(JSON.parse(JSON.stringify(payload)));
+  const shown: unknown = showNotification.mock.lastCall?.[1]?.data;
+
+  const open = fakeWindow();
+  windows = [open];
+  await fire('notificationclick', { notification: { close: vi.fn(), data: shown } });
+  expect(open.navigate).toHaveBeenCalledWith(`${ORIGIN}/?room=r1&message=m1`);
 });

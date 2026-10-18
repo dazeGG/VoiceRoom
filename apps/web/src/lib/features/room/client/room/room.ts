@@ -11,7 +11,7 @@ import { showToast } from '../ui/toast';
 import { ApiError } from '$lib/api/client';
 import { checkRoomExists } from '../net/api';
 import { postState } from './presence';
-import { errorMessage, wait } from '../core/utils';
+import { UserFacingError, wait } from '../core/utils';
 import { rotateStoredPeerSession } from '../core/session';
 import { isRoomEmbedded } from '../core/embed';
 import { openLeaveScreen } from '../../leave-screen.svelte';
@@ -30,6 +30,7 @@ import { stopLocalCamera } from '../services/camera-service';
 import { closeScreenView, refreshScreenStage } from '../ui/screen-view';
 import { createParticipant, removeAudioElements, updatePeerStatus } from './participants';
 import { connectLiveKitRoom, disconnectLiveKitRoom, syncRemoteVideoVisibility } from '../services/livekit-service';
+import { LiveKitTransportError } from '../services/livekit/transport';
 import { onAppVisibilityChange } from '$lib/platform/app-visibility';
 import {
   describeMicrophoneError,
@@ -333,7 +334,7 @@ async function performJoinRoom(generation: number): Promise<void> {
     log.error('room action failed', errorContext(error));
     const banned = error instanceof ApiError && error.code === 'room_banned';
     if (!banned) showToast(formatJoinError(error));
-    setVoiceConnectionStatus(isVoiceRouteError(error) ? 'no-route' : 'error');
+    setVoiceConnectionStatus(error instanceof LiveKitTransportError ? 'no-route' : 'error');
     if (voiceJoinSent && state.roomId && state.peerId && state.sessionToken) {
       sendVoiceLeave({ roomId: state.roomId, peerId: state.peerId, sessionToken: state.sessionToken });
       voiceJoinSent = false;
@@ -368,16 +369,11 @@ async function openJoinMicrophone(): Promise<MicrophoneCapture | null> {
 }
 
 function formatJoinError(error: unknown): string {
-  const message = errorMessage(error);
-  if (/signal connection|failed to fetch/i.test(message)) {
+  if (error instanceof LiveKitTransportError) {
     return 'LiveKit недоступен: проверьте LIVEKIT_GATE_PUBLIC_URL и перезапустите VoiceRoom';
   }
-  return message || 'Не удалось подключиться';
-}
-
-function isVoiceRouteError(error: unknown): boolean {
-  const message = errorMessage(error);
-  return /ice|no route|signal connection|failed to fetch|timeout|websocket/i.test(message);
+  if (error instanceof ApiError || error instanceof UserFacingError) return error.message;
+  return 'Не удалось подключиться';
 }
 
 export function leaveRoom(): void {

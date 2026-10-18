@@ -5,9 +5,7 @@
 // how it is spelled over HTTP. Checks run in the order the legacy handler ran
 // them, so a request that fails two checks still gets the same answer.
 
-import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import type { MentionNormalization, MentionRefusal } from '@voice-room/shared/mentions';
-import { errorCode } from '../../platform/http/http-kit.ts';
 import type pg from 'pg';
 import crypto from 'node:crypto';
 import type { Logger } from 'pino';
@@ -23,6 +21,12 @@ import { requireReplyTarget } from './reply-projector.ts';
 import { publicChatMessage, type RoomChatMessage } from './room-chat-views.ts';
 import type { ReplyPreview } from '@voice-room/shared/contracts/messages';
 import { mayModerateRoomMessage, roomMessageAuthorship } from './room-message.policy.ts';
+import {
+  revokeAttachmentsOnDelete,
+  type DeleteUnitOfWork,
+  type CleanupJobs,
+  type RevocableAttachments
+} from '../media/attachment-revocation.service.ts';
 
 type DbClient = Pick<pg.PoolClient, 'query'> | null | undefined;
 
@@ -53,7 +57,11 @@ export interface RoomMessages {
   listMessages(roomId: string, options: { limit: number }): Promise<RoomChatMessage[]>;
   appendMessage(roomId: string, input: AppendInput): Promise<RoomChatMessage | null>;
   getMessage(roomId: string, messageId: string): Promise<RoomChatMessage | null>;
-  softDeleteMessage(roomId: string, messageId: string): Promise<unknown>;
+  softDeleteMessage(
+    roomId: string,
+    messageId: string,
+    options?: { unitOfWork?: DeleteUnitOfWork | null }
+  ): Promise<unknown>;
   editMessage(roomId: string, messageId: string, text: string): Promise<RoomChatMessage | null>;
   markRoomChatRead(roomId: string, userId: string): Promise<number | null | undefined>;
 }
@@ -92,7 +100,12 @@ export interface RoomChatDeps {
   mentionUserIds(content: unknown, options: { creatorUserId: string }): MentionNormalization;
   limiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
   findUser(userId: string): Promise<ChatAuthor | null>;
-  media(): { attachments: { bindReady(input: Record<string, unknown>, client: DbClient): Promise<unknown> } } | null;
+  media(): {
+    attachments: RevocableAttachments & {
+      bindReady(input: Record<string, unknown>, client: DbClient): Promise<unknown>;
+    };
+    jobs: CleanupJobs;
+  } | null;
   replies(): {
     lockRoomTarget(input: {
       roomId: string;
@@ -422,7 +435,12 @@ export function createRoomChatService(deps: RoomChatDeps) {
       return { status: 'not_allowed' };
     }
 
-    if (!(await deps.messages().room.softDeleteMessage(roomId, messageId))) return { status: 'message_not_found' };
+    // Its attachments go with it, so their files are cleaned up and stop
+    // counting toward the author's quota.
+    const deleted = await deps.messages().room.softDeleteMessage(roomId, messageId, {
+      unitOfWork: revokeAttachmentsOnDelete(deps.media(), 'room', messageId)
+    });
+    if (!deleted) return { status: 'message_not_found' };
     // Voice peers and preview watchers both get it as a room-detail envelope:
     // the legacy peer broadcast treats unknown event names as failures.
     deps.broadcastRoomDetail(roomId, deps.roomDetailEvent('room.chat.deleted', { roomId, messageId }));
@@ -449,30 +467,18 @@ export function createRoomChatService(deps: RoomChatDeps) {
     }
   }
 
-  type ReadOutcome =
-    | { status: 'read'; result: Record<string, unknown> }
-    | { status: 'room_not_found' }
-    | { status: 'invalid_cursor'; statusCode: number; code: ErrorCode; error: string };
+  type ReadOutcome = { status: 'read'; result: Record<string, unknown> } | { status: 'room_not_found' };
 
   // A cursor advances the durable read point; without one the legacy
-  // wall-clock read marks everything up to now.
+  // wall-clock read marks everything up to now. A refused cursor throws a
+  // MessageReadError that carries its own status and code; any other failure
+  // is a server error. Both reach the central error handler unchanged.
   async function markRead(roomId: string, userId: string, cursor: unknown): Promise<ReadOutcome> {
     if (typeof cursor === 'string' && cursor) {
-      try {
-        const result = await deps.readService().advanceRoom({ cursor, roomId, userId });
-        await retireRoomNotifications(roomId, userId, result.readThrough);
-        await deps.sendRoomSummaryToUser(roomId, userId);
-        return { status: 'read', result };
-      } catch (error) {
-        const failure = error as { statusCode?: number; message?: string };
-        const code = errorCode(failure, 'invalid_read_cursor');
-        return {
-          status: 'invalid_cursor',
-          statusCode: failure.statusCode || 400,
-          code,
-          error: failure.message || code
-        };
-      }
+      const result = await deps.readService().advanceRoom({ cursor, roomId, userId });
+      await retireRoomNotifications(roomId, userId, result.readThrough);
+      await deps.sendRoomSummaryToUser(roomId, userId);
+      return { status: 'read', result };
     }
 
     const lastReadAt = await deps.messages().room.markRoomChatRead(roomId, userId);

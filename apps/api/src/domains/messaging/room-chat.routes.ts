@@ -193,8 +193,6 @@ export function registerRoomChatRoutes(root: FastifyInstance, ctx: ApiContext, c
       const result = await chat.markRead(roomId, userId, request.body.cursor);
       if (result.status === 'room_not_found')
         return reply.code(404).send(failure('Комната не найдена', { code: 'room_not_found' }));
-      if (result.status === 'invalid_cursor')
-        return reply.code(result.statusCode).send(failure(result.error, { code: result.code }));
       return { ok: true as const, ...result.result };
     }
   );

@@ -27,6 +27,8 @@ import {
   type RoomChatService,
   type RoomMessages
 } from '../src/domains/messaging/room-chat.service.ts';
+import { createMessageReadService, type MessageReadRepository } from '../src/domains/messaging/message-read.service.ts';
+import { createCursorCodec } from '../src/platform/cursor-codec.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { fake, recordingLogger, storedUser } from './fakes/index.ts';
 
@@ -152,6 +154,7 @@ type HarnessOptions = {
   delivery?: false;
   replay?: boolean;
   readError?: Error;
+  readService?: ReturnType<RoomChatDeps['readService']>;
   ban?: (userId: string | null | undefined, ip: string) => boolean;
   rate?: { allowed: boolean; retryAfterSeconds?: number };
   findUserFails?: boolean;
@@ -287,12 +290,13 @@ function harness(options: HarnessOptions = {}) {
         };
   const service = createRoomChatService({
     messages: () => ({ room: messages }),
-    readService: () => ({
-      async advanceRoom(input) {
-        if (options.readError) throw options.readError;
-        return { readThrough: 77, cursor: input.cursor };
-      }
-    }),
+    readService: () =>
+      options.readService ?? {
+        async advanceRoom(input) {
+          if (options.readError) throw options.readError;
+          return { readThrough: 77, cursor: input.cursor };
+        }
+      },
     getRoom: async () => currentRoom,
     findRoomBan: async (_roomId, userId, ip) => (options.ban ? options.ban(userId, ip) : false),
     prepareContent: ({ content, text }) => {
@@ -315,6 +319,18 @@ function harness(options: HarnessOptions = {}) {
             attachments: {
               async bindReady(input) {
                 calls.bound.push(input);
+              },
+              // Deleting runs on the real store; the DB suite covers it.
+              async listForMessage() {
+                return [];
+              },
+              async markDeleted() {
+                return null;
+              }
+            },
+            jobs: {
+              async enqueue() {
+                return null;
               }
             }
           },
@@ -696,16 +712,13 @@ test('marking read advances the cursor or the wall clock and retires notificatio
     'room_not_found'
   );
 
-  const bad = await harness({
-    readError: Object.assign(new Error('Stale cursor'), { statusCode: 409, code: 'invalid_cursor' })
-  }).service.markRead('room-1', 'user-1', 'c');
-  assert.deepEqual(bad, { status: 'invalid_cursor', statusCode: 409, code: 'invalid_cursor', error: 'Stale cursor' });
-  assert.deepEqual(await harness({ readError: new Error() }).service.markRead('room-1', 'user-1', 'c'), {
-    status: 'invalid_cursor',
-    statusCode: 400,
-    code: 'invalid_read_cursor',
-    error: 'invalid_read_cursor'
-  });
+  // A failed cursor read is not turned into an outcome: the error reaches the
+  // central handler, which knows a refused cursor from a server failure.
+  const stale = Object.assign(new Error('Stale cursor'), { statusCode: 409, code: 'invalid_cursor' });
+  const refused = harness({ readError: stale });
+  await assert.rejects(refused.service.markRead('room-1', 'user-1', 'c'), stale);
+  assert.deepEqual(refused.calls.retired, []);
+  assert.deepEqual(refused.calls.summaries, []);
 
   // Retiring is best effort and a missing inbox is a quiet no-op.
   const failing = harness({ retireFails: true });
@@ -944,7 +957,7 @@ test('chat refusals keep their texts, codes and headers', async (t) => {
   });
 });
 
-test('marking read needs a session, a room and a usable cursor', async (t) => {
+test('marking read needs a session and a room', async (t) => {
   assert.deepEqual(
     await call(routeApp(t).app, 'POST', '/api/rooms/room-1/read', {}).then((r) => [r.status, r.body.error]),
     [401, 'Требуется вход']
@@ -953,13 +966,59 @@ test('marking read needs a session, a room and a usable cursor', async (t) => {
   assert.equal((await call(signedIn.app, 'POST', '/api/rooms/%20/read')).status, 404);
   const gone = routeApp(t, { read: { status: 'room_not_found' } }, { user: ACCOUNT });
   assert.equal((await call(gone.app, 'POST', '/api/rooms/room-1/read', {})).status, 404);
-  const stale = routeApp(
-    t,
-    { read: { status: 'invalid_cursor', statusCode: 409, code: 'invalid_cursor', error: 'Stale cursor' } },
-    { user: ACCOUNT }
+});
+
+test('a failing read store answers 500 without its text; a bad cursor still answers 400', async (t) => {
+  const codec = createCursorCodec({ keys: ['m'.repeat(32)] });
+  const cursor = codec.encode({
+    purpose: 'room-read',
+    context: 'room:room-1',
+    tuple: { createdAtMicros: '9', id: 'm9' }
+  });
+  // What pg throws when the read table is unreachable: no statusCode, and a
+  // message that names the schema.
+  const storeDown = Object.assign(new Error('relation "room_read_states" does not exist'), { code: '42P01' });
+  const failures: unknown[] = [];
+  const app = fastify();
+  registerHttpKit(app, {
+    securityHeaders: () => ({}),
+    recordRequest() {},
+    logRequest() {},
+    logHandlerFailure: (_request, _route, error) => failures.push(error)
+  });
+  const { service } = harness({
+    readService: createMessageReadService({
+      authorizeRoomRead: async () => true,
+      cursorCodec: codec,
+      repository: fake<MessageReadRepository>({
+        async advanceRoom() {
+          throw storeDown;
+        }
+      })
+    })
+  });
+  registerRoomChatRoutes(
+    app,
+    {
+      logger: fake<ApiContext['logger']>(),
+      clientIp: () => '203.0.113.1',
+      resolveSession: async () => ({ user: storedUser(ACCOUNT) }),
+      hashIp: (ip: string) => ip
+    },
+    service
   );
+  t.after(() => app.close());
+
+  const down = await call(app, 'POST', '/api/rooms/room-1/read', { cursor });
   assert.deepEqual(
-    await call(stale.app, 'POST', '/api/rooms/room-1/read', { cursor: 'c' }).then((r) => [r.status, r.body]),
-    [409, { ok: false, error: 'Stale cursor', code: 'invalid_cursor' }]
+    [down.status, down.body],
+    [500, { ok: false, error: 'Internal server error', code: 'internal_error' }]
+  );
+  assert.deepEqual(failures, [storeDown], 'the central handler logs the store failure');
+
+  const bad = await call(app, 'POST', '/api/rooms/room-1/read', { cursor: 'not-a-cursor' });
+  assert.deepEqual(
+    [bad.status, bad.body],
+    [400, { ok: false, error: 'Invalid read cursor', code: 'invalid_read_cursor' }]
   );
 });

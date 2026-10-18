@@ -11,6 +11,7 @@ import { state } from '../../core/state.svelte';
 import { getScreenProfile, getScreenPublishVideoOptions } from '../../media/profiles';
 import { loadLiveKitClient, TRACK_SOURCE } from '../../media/livekit-runtime';
 import { isMicrophoneShownMuted } from '../../core/microphone-mute';
+import { UserFacingError } from '../../core/utils';
 
 import { isCameraPublication, isMicrophonePublication } from './publication-kinds';
 
@@ -29,7 +30,7 @@ export async function publishLocalMicrophoneForRoom(
 ): Promise<LocalTrackPublication | null> {
   if (!stream || !isCurrent()) return null;
   const [track] = stream.getAudioTracks();
-  if (!track) throw new Error('Браузер не отдал аудио-трек');
+  if (!track) throw new UserFacingError('Браузер не отдал аудио-трек');
 
   const publication = await room.localParticipant.publishTrack(track, {
     audioPreset: { maxBitrate: MICROPHONE_AUDIO_BITRATE },

@@ -156,8 +156,6 @@ export function registerDirectMessageRoutes(root: FastifyInstance, ctx: ApiConte
       const peerId = cleanUuid(request.params.userId);
       if (!peerId) return reply.code(404).send(THREAD_NOT_FOUND);
       const result = await dms.markRead(user.id, peerId, request.body.cursor);
-      if (result.status === 'invalid_cursor')
-        return reply.code(result.statusCode).send(failure(result.error, { code: result.code }));
       return { ok: true as const, ...result.result };
     }
   );

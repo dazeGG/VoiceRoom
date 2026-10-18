@@ -3,6 +3,7 @@
 
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
+import type { PushPayload as WebPushPayload } from '@voice-room/shared/notifications';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { resolvePushTtl, shouldDeliverPush } from '../../lib/push-service.ts';
 import { notificationActor, type SocialUser } from '../social/social-views.ts';
@@ -13,14 +14,12 @@ interface Preferences {
   [key: string]: unknown;
 }
 
-export interface PushPayload {
+export type PushPayload = WebPushPayload & {
   type: string;
   title: string;
-  body?: string;
   /** Replaces the body for accounts that chose private notification text. */
   privateBody?: string;
-  [key: string]: unknown;
-}
+};
 
 export interface PushContext {
   /** Security alerts reach the account even in do-not-disturb. */
@@ -34,7 +33,7 @@ export interface PushContext {
 export interface NotificationDispatchDeps {
   push(): {
     config: { enabled: boolean };
-    sendToUser(userId: string, payload: Record<string, unknown>, context: Record<string, unknown>): Promise<unknown>;
+    sendToUser(userId: string, payload: WebPushPayload, context: Record<string, unknown>): Promise<unknown>;
   };
   preferences(userId: string): Promise<Preferences>;
   notifyUser(userId: string, event: AccountMessage): number;

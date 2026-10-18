@@ -4,8 +4,6 @@
 // order the legacy handlers ran them.
 
 import type { AccountMessage } from '../../realtime/account-events.ts';
-import type { ErrorCode } from '@voice-room/shared/contracts/errors';
-import { errorCode } from '../../platform/http/http-kit.ts';
 import type pg from 'pg';
 import type { DirectMessage as DirectMessageView, ReplyPreview } from '@voice-room/shared/contracts/messages';
 import type { PublicUser } from '@voice-room/shared/contracts/users';
@@ -15,6 +13,12 @@ import { isActiveAccount, type SocialUser } from '../social/social-views.ts';
 import { messageFingerprint, normalizeAttachmentIds } from './message-input.ts';
 import { requireReplyTarget } from './reply-projector.ts';
 import { isDirectSender } from './direct-message.policy.ts';
+import {
+  revokeAttachmentsOnDelete,
+  type DeleteUnitOfWork,
+  type CleanupJobs,
+  type RevocableAttachments
+} from '../media/attachment-revocation.service.ts';
 
 type DbClient = Pick<pg.PoolClient, 'query'> | null | undefined;
 type Status<T extends string> = T extends string ? { status: T } : never;
@@ -40,7 +44,7 @@ export interface DirectMessageStore {
     recipientId: string;
     status: 'accepted' | 'declined';
   }): Promise<DirectMessage | null>;
-  softDeleteMessage(messageId: string): Promise<unknown>;
+  softDeleteMessage(messageId: string, options?: { unitOfWork?: DeleteUnitOfWork | null }): Promise<unknown>;
   editMessage(input: {
     messageId: string;
     senderId: string;
@@ -84,7 +88,12 @@ export interface DirectMessagesDeps {
   roomExists(roomId: string): Promise<boolean>;
   expireRoomInvitations(senderId: string, roomId: string): Promise<unknown>;
   limiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
-  media(): { attachments: { bindReady(input: Record<string, unknown>, client: DbClient): Promise<unknown> } } | null;
+  media(): {
+    attachments: RevocableAttachments & {
+      bindReady(input: Record<string, unknown>, client: DbClient): Promise<unknown>;
+    };
+    jobs: CleanupJobs;
+  } | null;
   replies(): {
     lockDirectTarget(input: { userId: string; peerId: string; messageId: string; client: DbClient }): Promise<unknown>;
   };
@@ -292,34 +301,30 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
   }
 
   // A cursor advances the durable read point; without one everything up to
-  // now is read.
+  // now is read. A refused cursor throws a MessageReadError that carries its
+  // own status and code; any other failure is a server error. Both reach the
+  // central error handler unchanged.
   async function markRead(
     userId: string,
     peerId: string,
     cursor: unknown
-  ): Promise<
-    | { status: 'read'; result: Record<string, unknown> }
-    | { status: 'invalid_cursor'; statusCode: number; code: ErrorCode; error: string }
-  > {
+  ): Promise<{ status: 'read'; result: Record<string, unknown> }> {
     if (typeof cursor === 'string' && cursor) {
-      try {
-        const result = await deps.readService().advanceDm({ cursor, peerId, userId });
-        deps.notifyUser(peerId, { type: 'dm-read', userId });
-        return { status: 'read', result };
-      } catch (error) {
-        const failure = error as { statusCode?: number; message?: string };
-        const code = errorCode(failure, 'invalid_read_cursor');
-        return {
-          status: 'invalid_cursor',
-          statusCode: failure.statusCode || 400,
-          code,
-          error: failure.message || code
-        };
-      }
+      const result = await deps.readService().advanceDm({ cursor, peerId, userId });
+      deps.notifyUser(peerId, { type: 'dm-read', userId });
+      return { status: 'read', result };
     }
     const result = await deps.messages().direct.markRead({ userId, peerId });
     if (result.count > 0) deps.notifyUser(peerId, { type: 'dm-read', userId });
     return { status: 'read', result: { count: result.count } };
+  }
+
+  // A deleted message takes its attachments with it, so their files are
+  // cleaned up and stop counting toward the sender's quota.
+  function softDelete(messageId: string): Promise<unknown> {
+    return deps.messages().direct.softDeleteMessage(messageId, {
+      unitOfWork: revokeAttachmentsOnDelete(deps.media(), 'dm', messageId)
+    });
   }
 
   // Only the sender deletes, and it is gone for both sides. Each side indexes
@@ -332,7 +337,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     const current = await deps.messages().direct.getMessage(userId, peerId, messageId);
     if (!current) return { status: 'not_found' };
     if (!isDirectSender(current, userId)) return { status: 'not_sender' };
-    if (!(await deps.messages().direct.softDeleteMessage(messageId))) return { status: 'not_found' };
+    if (!(await softDelete(messageId))) return { status: 'not_found' };
     deps.notifyUser(peerId, { type: 'dm.message.deleted', messageId, peerUserId: userId });
     deps.notifyUser(userId, { type: 'dm.message.deleted', messageId, peerUserId: peerId });
     return { status: 'deleted' };
@@ -352,7 +357,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
   }): Promise<Status<'deleted' | 'not_found'>> {
     const current = await deps.messages().direct.getMessage(senderId, recipientId, messageId);
     if (!current || !isDirectSender(current, senderId)) return { status: 'not_found' };
-    if (!(await deps.messages().direct.softDeleteMessage(messageId))) return { status: 'not_found' };
+    if (!(await softDelete(messageId))) return { status: 'not_found' };
     deps.notifyUser(recipientId, { type: 'dm.message.deleted', messageId, peerUserId: senderId });
     deps.notifyUser(senderId, { type: 'dm.message.deleted', messageId, peerUserId: recipientId });
     return { status: 'deleted' };
