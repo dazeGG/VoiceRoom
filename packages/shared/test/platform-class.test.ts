@@ -28,10 +28,8 @@ test('browser-facing shared modules expose named ESM exports', async () => {
   const expectedExports = {
     'contracts/ops': ['PUBLIC_CAPABILITY_KEYS'],
     emoji: ['cleanReactionEmoji', 'listReactionEmojis'],
-    membership: ['normalizeMembershipEnvelope'],
     mentions: ['MAX_MENTION_CANDIDATES', 'MAX_MENTIONS_PER_MESSAGE'],
     moderation: ['MODERATION_DEFAULT_LIMIT', 'MODERATION_MAX_LIMIT', 'normalizeActiveBan', 'normalizeBanMutation'],
-    notifications: ['normalizeNotificationEnvelope'],
     'platform-class': ['classifyPlatformPolicy'],
     reactions: ['normalizeReactionSummary', 'normalizeReactorPage'],
     'room-message-content': ['contentFromPlainText', 'projectRoomMessageContent'],

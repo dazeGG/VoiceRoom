@@ -3,6 +3,7 @@
 // order, editing, deleting, marking read, and the HTTP answer each outcome
 // becomes. Everything runs on fakes; the integration suites cover the store.
 
+import type { Attachment } from '@voice-room/shared/contracts/messages';
 import { buildServerEnvelope } from '@voice-room/shared/realtime';
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
@@ -35,7 +36,7 @@ import { fake, recordingLogger, storedUser } from './fakes/index.ts';
 const UUID_A = '11111111-1111-4111-8111-111111111111';
 const UUID_B = '22222222-2222-4222-8222-222222222222';
 const TOKEN = 't'.repeat(32);
-const PICTURE = {
+const PICTURE: Attachment = {
   id: 'a1',
   context: 'room',
   order: 0,

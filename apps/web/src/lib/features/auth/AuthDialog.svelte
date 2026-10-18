@@ -8,8 +8,9 @@
   import { resolve } from '$app/paths';
   import { CircleAlert, X } from '@lucide/svelte';
   import { normalizeRecoveryCode } from '@voice-room/shared/account-security';
+  import { AccountFailure } from '@voice-room/shared/contracts/account';
   import { login, recoverAccount, register, restoreAccount, type AuthUser } from '$lib/api/auth';
-  import { ApiError } from '$lib/api/client';
+  import { ApiError, failureBody } from '$lib/api/client';
   import { iconMd } from '$lib/shared/ui/icons';
   import { LOGIN_HINT, PASSWORD_MIN_LENGTH, blockedMessage, isValidPassword, normalizeLogin } from './account';
   import { session, setUser } from './session.svelte';
@@ -155,11 +156,11 @@
       }
     } catch (cause) {
       if (cause instanceof ApiError && cause.code === 'account_blocked') {
-        error = blockedMessage(cause.details);
+        error = blockedMessage(failureBody(cause, AccountFailure) ?? {});
         return;
       }
       if (isLogin && cause instanceof ApiError && cause.code === 'account_deletion_pending') {
-        pendingDeletionAt = Number(cause.details.deletionScheduledFor) || null;
+        pendingDeletionAt = failureBody(cause, AccountFailure)?.deletionScheduledFor || null;
         return;
       }
       error = cause instanceof Error && cause.message ? cause.message : copy.failure;
@@ -180,7 +181,7 @@
     } catch (cause) {
       error =
         cause instanceof ApiError && cause.code === 'account_blocked'
-          ? blockedMessage(cause.details)
+          ? blockedMessage(failureBody(cause, AccountFailure) ?? {})
           : cause instanceof Error && cause.message
             ? cause.message
             : 'Не удалось восстановить аккаунт';

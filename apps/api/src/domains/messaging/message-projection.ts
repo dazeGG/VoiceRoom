@@ -1,20 +1,21 @@
 // What a stored message carries when it leaves the API: its attachments
 // (public fields only) and, for a reply, the quoted message preview.
 
+import type { AttachmentContext, AttachmentState } from '@voice-room/shared/contracts/media';
 import type { Attachment, ReplyPreview } from '@voice-room/shared/contracts/messages';
 
 type Context = 'room' | 'dm';
 
 export interface StoredAttachment {
   id: string;
-  context: string;
+  context: AttachmentContext;
   order: number;
   mimeType: string | null;
   processedBytes?: number | null;
   originalBytes?: number | null;
   width?: number | null;
   height?: number | null;
-  state: string;
+  state: AttachmentState;
   [key: string]: unknown;
 }
 

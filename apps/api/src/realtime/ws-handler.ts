@@ -1,11 +1,14 @@
-import type { JoinPayload } from './voice-join.ts';
-import type { MediaRequestPayload, PeerUpdatePayload } from './room-runtime.ts';
-import { normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voice-room/shared/validation';
-import { normalizeTypingActivity } from '@voice-room/shared/realtime';
+import type { JoinResult } from './voice-join.ts';
 import type { IncomingMessage } from 'node:http';
 import { clientKind } from '@voice-room/shared/account-security';
-import type { TypingActivity } from '@voice-room/shared/realtime';
-import type { ClientCommand, MediaGrant } from '@voice-room/shared/contracts/realtime';
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';
+import type {
+  ClientCommand,
+  ClientCommands,
+  MediaGrant,
+  TypingActivity,
+  VoiceTarget
+} from '@voice-room/shared/contracts/realtime';
 import { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } from './envelope.ts';
 import { createTypingThrottle } from './typing-throttle.ts';
 import type { ConnectionRegistry, RealtimeSocket, WsConnection } from './registry.ts';
@@ -16,26 +19,25 @@ import { createLogger, hashIp } from '../lib/logger.ts';
 type InboundEnvelope = ClientCommand;
 type SessionUser = { id: string; presenceStatus?: unknown; [key: string]: unknown };
 type ResolvedSession = { user?: SessionUser | null; session?: { tokenHash?: string } | null } | null | undefined;
-type JoinResult = { ok: boolean; code?: string; message?: string };
 export interface WsRoomRuntime {
   subscribePreview(connection: WsConnection, roomId: string): Promise<unknown>;
   unsubscribePreview(connection: WsConnection, roomId: string): unknown;
   joinVoiceRoom(
     connection: WsConnection,
-    payload: JoinPayload,
+    payload: ClientCommands['room.join'],
     user: SessionUser | null,
     clientIp: string,
     requestId?: string
   ): Promise<JoinResult>;
-  leaveVoiceRoom(
+  leaveVoiceRoom(connection: WsConnection, target: VoiceTarget): Promise<unknown>;
+  updatePeerState(
     connection: WsConnection,
-    target: { roomId: string; peerId: string; sessionToken: string }
-  ): Promise<unknown>;
-  updatePeerState(connection: WsConnection, payload: PeerUpdatePayload): Promise<{ ok: boolean; code?: string }>;
+    payload: ClientCommands['room.peer.update']
+  ): Promise<{ ok: true } | { ok: false; code: ErrorCode }>;
   requestMedia(
     connection: WsConnection,
-    payload: MediaRequestPayload
-  ): { ok: true; grant: MediaGrant } | { ok: false; code: string };
+    payload: ClientCommands['room.media.request']
+  ): { ok: true; grant: MediaGrant } | { ok: false; code: ErrorCode };
   broadcastRoomTyping(connection: WsConnection, roomId: string, activity: TypingActivity): unknown;
   sendAccountSummaries(connection: WsConnection, userId: string): Promise<unknown>;
 }
@@ -167,21 +169,12 @@ function createWsHandler({
       }
 
       case 'room.preview.subscribe': {
-        const roomId = normalizeRoomId(envelope.payload.roomId);
-        if (!roomId) {
-          registry.sendToConnection(
-            connection,
-            buildServerErrorEnvelope('invalid_room_id', 'Invalid room id', envelope.id)
-          );
-          return;
-        }
-        await roomRuntime.subscribePreview(connection, roomId);
+        await roomRuntime.subscribePreview(connection, envelope.payload.roomId);
         return;
       }
 
       case 'room.preview.unsubscribe': {
-        const roomId = normalizeRoomId(envelope.payload.roomId);
-        if (roomId) roomRuntime.unsubscribePreview(connection, roomId);
+        roomRuntime.unsubscribePreview(connection, envelope.payload.roomId);
         return;
       }
 
@@ -198,7 +191,7 @@ function createWsHandler({
           getClientIp(req),
           envelope.id
         );
-        const joinRoomId = normalizeRoomId(envelope.payload.roomId);
+        const joinRoomId = envelope.payload.roomId;
         if (result.ok) {
           logger.info(
             {
@@ -217,7 +210,7 @@ function createWsHandler({
               connId: connection.id,
               userId: connection.userId || undefined,
               roomId: joinRoomId,
-              code: result.code || 'join_failed'
+              code: result.code
             },
             'room join rejected'
           );
@@ -226,19 +219,10 @@ function createWsHandler({
         if (!result.ok && result.code === 'room_banned') {
           registry.sendToConnection(
             connection,
-            buildServerEnvelope(
-              'room.banned',
-              {
-                roomId: envelope.payload.roomId
-              },
-              envelope.id
-            )
+            buildServerEnvelope('room.banned', { roomId: envelope.payload.roomId }, envelope.id)
           );
         } else if (!result.ok && result.message) {
-          registry.sendToConnection(
-            connection,
-            buildServerErrorEnvelope(result.code || 'join_failed', result.message, envelope.id)
-          );
+          registry.sendToConnection(connection, buildServerErrorEnvelope(result.code, result.message, envelope.id));
         }
         return;
       }
@@ -249,15 +233,11 @@ function createWsHandler({
             evt: LOG_EVENTS.ROOM_LEFT,
             connId: connection.id,
             userId: connection.userId || undefined,
-            roomId: normalizeRoomId(envelope.payload.roomId)
+            roomId: envelope.payload.roomId
           },
           'room left'
         );
-        await roomRuntime.leaveVoiceRoom(connection, {
-          roomId: normalizeRoomId(envelope.payload.roomId),
-          peerId: normalizePeerId(envelope.payload.peerId),
-          sessionToken: normalizeSessionToken(envelope.payload.sessionToken)
-        });
+        await roomRuntime.leaveVoiceRoom(connection, envelope.payload);
         return;
       }
 
@@ -266,7 +246,7 @@ function createWsHandler({
         if (!result.ok) {
           registry.sendToConnection(
             connection,
-            buildServerErrorEnvelope(result.code || 'update_failed', 'Peer update rejected', envelope.id)
+            buildServerErrorEnvelope(result.code, 'Peer update rejected', envelope.id)
           );
         }
         return;
@@ -300,18 +280,14 @@ function createWsHandler({
       case 'room.chat.typing': {
         await roomRuntime.broadcastRoomTyping(
           connection,
-          normalizeRoomId(envelope.payload.roomId),
-          normalizeTypingActivity(envelope.payload.activity) || 'typing'
+          envelope.payload.roomId,
+          envelope.payload.activity ?? 'typing'
         );
         return;
       }
 
       case 'dm.typing': {
-        await forwardDirectTyping(
-          connection,
-          envelope.payload.userId,
-          normalizeTypingActivity(envelope.payload.activity) || 'typing'
-        );
+        forwardDirectTyping(connection, envelope.payload.userId, envelope.payload.activity ?? 'typing');
         return;
       }
     }

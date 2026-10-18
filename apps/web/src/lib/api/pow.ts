@@ -1,4 +1,4 @@
-import type { PowChallenge } from '@voice-room/shared/contracts/ops';
+import { PowChallenge } from '@voice-room/shared/contracts/ops';
 import { api } from './client';
 
 const ROOM_PROOF_BATCH_SIZE = 250;
@@ -9,7 +9,7 @@ export interface RoomProof {
 }
 
 export async function createRoomProof(): Promise<RoomProof | null> {
-  const challenge = await api.get<PowChallenge>('/api/pow-challenge');
+  const challenge = await api.get('/api/pow-challenge', PowChallenge);
   if (!challenge.required) return null;
 
   if (!window.crypto?.subtle || typeof TextEncoder !== 'function') {

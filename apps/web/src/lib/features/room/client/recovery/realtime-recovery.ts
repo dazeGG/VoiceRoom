@@ -1,3 +1,5 @@
+import { RETRYABLE_JOIN_CODES, TERMINAL_JOIN_CODES } from '@voice-room/shared/contracts/errors';
+
 export type RecoveryPhase =
   'idle' | 'waiting-app-snapshot' | 'waiting-livekit' | 'recovering' | 'healthy' | 'failed' | 'cancelled';
 
@@ -45,28 +47,13 @@ const DEFAULT_RETRY_DELAYS_MS: readonly number[] = Object.freeze([500, 1_000, 2_
 const DEFAULT_MAX_ATTEMPTS = 5;
 const DEFAULT_COOLDOWN_MS = 10_000;
 
-const TERMINAL_CODES = new Set([
-  'authentication_required',
-  'invalid_join',
-  'invalid_session',
-  'room_banned',
-  'room_full',
-  'room_not_found'
-]);
-
-const RETRYABLE_CODES = new Set([
-  'livekit_gate_credential_unavailable',
-  'livekit_gate_principal_unavailable',
-  'livekit_gate_unavailable',
-  'membership_persist_failed',
-  'membership_unavailable',
-  // The server only admits peers its roster knows; during recovery the
-  // realtime re-join can still be on its way.
-  'not_in_room',
+// The server's join failures (contracts/errors), plus the client's own:
+// a request that never got an answer and a transport that broke.
+const TERMINAL_CODES: ReadonlySet<string> = new Set<string>(TERMINAL_JOIN_CODES);
+const RETRYABLE_CODES: ReadonlySet<string> = new Set<string>([
+  ...RETRYABLE_JOIN_CODES,
   'network_error',
-  'transport_error',
-  'reconnect_finalize_failed',
-  'superseded_join'
+  'transport_error'
 ]);
 
 const SAFE_CODES = new Set([...TERMINAL_CODES, ...RETRYABLE_CODES, 'unknown_error']);

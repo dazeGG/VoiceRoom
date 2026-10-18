@@ -3,6 +3,7 @@
 
 import { Type, type Static } from 'typebox';
 import { Failure, Nullable, Ok } from './http.ts';
+import { AttachmentContext, AttachmentState } from './media.ts';
 import { PublicUser } from './users.ts';
 
 // --- the parts of a message --------------------------------------------------
@@ -22,13 +23,13 @@ export type MessageContent = Static<typeof MessageContent>;
 /** An image on a message: public fields only; `url` is set once it is ready. */
 export const Attachment = Type.Object({
   id: Type.String(),
-  context: Type.String(),
+  context: AttachmentContext,
   order: Type.Number(),
   mimeType: Nullable(Type.String()),
   bytes: Nullable(Type.Number()),
   width: Nullable(Type.Number()),
   height: Nullable(Type.Number()),
-  state: Type.String(),
+  state: AttachmentState,
   url: Nullable(Type.String())
 });
 export type Attachment = Static<typeof Attachment>;
@@ -136,16 +137,19 @@ export type RoomRead = Static<typeof RoomRead>;
 
 // --- direct messages -------------------------------------------------------------
 
+export const InviteStatus = Type.Union([
+  Type.Literal('pending'),
+  Type.Literal('accepted'),
+  Type.Literal('declined'),
+  Type.Literal('expired')
+]);
+export type InviteStatus = Static<typeof InviteStatus>;
+
 /** A room invitation carried by a direct message; its status changes arrive as edits. */
 export const DirectMessageInvite = Type.Object({
   roomId: Type.String(),
   roomName: Type.String(),
-  status: Type.Union([
-    Type.Literal('pending'),
-    Type.Literal('accepted'),
-    Type.Literal('declined'),
-    Type.Literal('expired')
-  ]),
+  status: InviteStatus,
   expiresAt: Nullable(Type.Number())
 });
 export type DirectMessageInvite = Static<typeof DirectMessageInvite>;
@@ -195,6 +199,15 @@ export const DirectRead = Ok({
 export type DirectRead = Static<typeof DirectRead>;
 
 // --- history pages ---------------------------------------------------------------
+
+/** Which page: the newest, older or newer than a cursor, or the one around it. */
+export const HistoryMode = Type.Union([
+  Type.Literal('latest'),
+  Type.Literal('before'),
+  Type.Literal('after'),
+  Type.Literal('around')
+]);
+export type HistoryMode = Static<typeof HistoryMode>;
 
 export const HistoryQuery = Type.Object({
   mode: Type.Optional(Type.String()),
@@ -252,10 +265,10 @@ export type RoomHistoryMessage = Static<typeof RoomHistoryMessage>;
 
 /** What a direct message's metadata can say: a room invitation and a link preview. */
 export const DirectMessageMetadata = Type.Object({
-  kind: Type.Optional(Type.String()),
+  kind: Type.Optional(Type.Literal('room-invite')),
   roomId: Type.Optional(Type.String()),
   roomName: Type.Optional(Type.String()),
-  status: Type.Optional(Type.String()),
+  status: Type.Optional(InviteStatus),
   expiresAt: Type.Optional(Nullable(Type.Number())),
   linkPreview: Type.Optional(LinkPreview)
 });
@@ -273,7 +286,7 @@ export type DirectHistoryMessage = Static<typeof DirectHistoryMessage>;
 function HistoryPage<Message extends typeof RoomHistoryMessage | typeof DirectHistoryMessage>(message: Message) {
   return Type.Object({
     contractVersion: Type.Literal(1),
-    mode: Type.Union([Type.Literal('latest'), Type.Literal('before'), Type.Literal('after'), Type.Literal('around')]),
+    mode: HistoryMode,
     messages: Type.Array(message),
     pageInfo: Type.Object({
       before: Type.Optional(Type.String()),
@@ -319,7 +332,13 @@ export const Reactor = Type.Object({
   displayName: Type.String(),
   avatarUrl: Nullable(Type.String())
 });
-export const ReactorPage = Ok({ reactors: Type.Array(Reactor), nextCursor: Nullable(Type.String()) });
+export type Reactor = Static<typeof Reactor>;
+
+/** One page of who reacted with an emoji; `nextCursor` is null on the last page. */
+export const ReactorList = Type.Object({ reactors: Type.Array(Reactor), nextCursor: Nullable(Type.String()) });
+export type ReactorList = Static<typeof ReactorList>;
+
+export const ReactorPage = Ok(ReactorList.properties);
 export type ReactorPage = Static<typeof ReactorPage>;
 
 // --- pins ------------------------------------------------------------------------------

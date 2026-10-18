@@ -1,4 +1,4 @@
-import { putBan, unban, type ActiveBan, type ModerationDuration } from '$lib/api/moderation';
+import { putBan, unban, type Ban, type ModerationDuration } from '$lib/api/moderation';
 import { kickRoomPeer } from '$lib/api/rooms';
 
 // Room owners moderate from two settings dialogs (in the room and in the lobby)
@@ -29,13 +29,13 @@ function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message ? cause.message : fallback;
 }
 
-export function banSubjectName(ban: ActiveBan): string {
+export function banSubjectName(ban: Ban): string {
   const profile = ban.subject.profile;
   if (profile) return profile.displayName || profile.login;
   return ban.subject.kind === 'guest' ? 'Гость' : 'Участник';
 }
 
-export function banExpiryLabel(ban: ActiveBan): string {
+export function banExpiryLabel(ban: Ban): string {
   if (ban.expiresAt == null) return 'Навсегда';
   return `До ${new Intl.DateTimeFormat('ru', { dateStyle: 'medium', timeStyle: 'short' }).format(ban.expiresAt)}`;
 }
@@ -61,7 +61,7 @@ export async function banRoomMember(
   member: { userId: string; name: string },
   duration: ModerationDuration,
   notify: ModerationNotice
-): Promise<ActiveBan | null> {
+): Promise<Ban | null> {
   const phrase = BAN_DURATIONS.find((option) => option.value === duration)?.phrase ?? '';
   try {
     const ban = await putBan(roomId, { userId: member.userId, guestIp: null, duration, reason: '' }, idempotencyKey());
@@ -77,7 +77,7 @@ export async function banRoomMember(
 
 export async function liftRoomBan(
   roomId: string,
-  ban: ActiveBan,
+  ban: Ban,
   notify: ModerationNotice,
   message = `${banSubjectName(ban)} разблокирован`
 ): Promise<boolean> {

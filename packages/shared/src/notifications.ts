@@ -1,41 +1,15 @@
-// Mention and reply notifications: the per-room level, the inbox envelope,
-// where a notification takes you, and the payload a push provider sends.
+// Mention and reply notifications: the per-room level, building the inbox
+// page (its shape is contracts/notifications.ts), where a notification takes
+// you, and the payload a push provider sends.
+
+import type { InboxItem, InboxPage, NotificationLevel, NotificationReason } from './contracts/notifications.ts';
 
 export const NOTIFICATION_CONTRACT_VERSION = 1 as const;
 export const NOTIFICATION_DEFAULT_LIMIT = 50 as const;
 export const NOTIFICATION_MAX_LIMIT = 100 as const;
-export const NOTIFICATION_LEVELS: readonly ['all', 'mentions', 'none'] = Object.freeze([
-  'all',
-  'mentions',
-  'none'
-] as const);
-export const NOTIFICATION_REASONS: readonly ['mention', 'reply'] = Object.freeze(['mention', 'reply'] as const);
+export const NOTIFICATION_LEVELS: readonly NotificationLevel[] = Object.freeze(['all', 'mentions', 'none'] as const);
+export const NOTIFICATION_REASONS: readonly NotificationReason[] = Object.freeze(['mention', 'reply'] as const);
 
-export type NotificationLevel = 'all' | 'mentions' | 'none';
-export type NotificationReason = 'mention' | 'reply';
-export interface NotificationItem {
-  id: string;
-  roomId: string;
-  sourceMessageId: string;
-  actorUserId: string;
-  reasons: NotificationReason[];
-  revision: number;
-  /** Epoch milliseconds, like every time the API sends. */
-  createdAt: number | null;
-  updatedAt: number | null;
-  readAt: number | null;
-  retractedAt: number | null;
-  body: string;
-  cursor?: string;
-}
-export interface NotificationEnvelope {
-  contractVersion: 1;
-  notifications: NotificationItem[];
-  pageInfo: { nextCursor?: string; hasMore: boolean };
-  unreadCount: number;
-  revision: number;
-  firstUnread: NotificationItem | null;
-}
 /** What a Web Push carries: every API push sends it, the service worker reads it. */
 export type PushPayload = {
   title?: string;
@@ -66,8 +40,7 @@ function cleanString(value: unknown, max = 256): string {
   return text && text.length <= max ? text : '';
 }
 
-// Rows carry what the database driver returns (a Date or an ISO string);
-// an envelope read back on the web already carries numbers.
+// Rows carry what the database driver returns (a Date, an ISO string or a number).
 function epochMillis(value: unknown): number | null {
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.getTime();
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
@@ -88,7 +61,7 @@ export function normalizeNotificationLimit(value: unknown, fallback: number = NO
   return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, NOTIFICATION_MAX_LIMIT) : fallback;
 }
 
-export function normalizeNotificationItem(input: unknown): NotificationItem | null {
+export function normalizeNotificationItem(input: unknown): InboxItem | null {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
   const value = input as Loose;
   const id = cleanString(value.id ?? value.notificationId, 160);
@@ -129,37 +102,16 @@ export function buildNotificationEnvelope({
   unreadCount?: unknown;
   revision?: unknown;
   firstUnread?: unknown;
-} = {}): NotificationEnvelope {
+} = {}): InboxPage {
   return {
     contractVersion: NOTIFICATION_CONTRACT_VERSION,
     notifications: Array.isArray(notifications)
-      ? notifications.map(normalizeNotificationItem).filter((item): item is NotificationItem => Boolean(item))
+      ? notifications.map(normalizeNotificationItem).filter((item): item is InboxItem => Boolean(item))
       : [],
     pageInfo: { nextCursor: cleanString(nextCursor, 4096) || undefined, hasMore: Boolean(hasMore) },
     unreadCount: Math.max(0, Number.isSafeInteger(Number(unreadCount)) ? Number(unreadCount) : 0),
     revision: Math.max(0, Number.isSafeInteger(Number(revision)) ? Number(revision) : 0),
     firstUnread: normalizeNotificationItem(firstUnread)
-  };
-}
-
-export function normalizeNotificationEnvelope(
-  input: unknown
-): { ok: true; envelope: NotificationEnvelope } | { ok: false; code: string } {
-  const value = input as Loose | null;
-  if (!value || typeof value !== 'object' || value.contractVersion !== NOTIFICATION_CONTRACT_VERSION) {
-    return { ok: false, code: 'invalid_notification_envelope' };
-  }
-  const pageInfo = value.pageInfo as Loose | null | undefined;
-  return {
-    ok: true,
-    envelope: buildNotificationEnvelope({
-      notifications: value.notifications,
-      nextCursor: pageInfo?.nextCursor,
-      hasMore: pageInfo?.hasMore,
-      unreadCount: value.unreadCount,
-      revision: value.revision,
-      firstUnread: value.firstUnread
-    })
   };
 }
 
@@ -169,7 +121,7 @@ export function normalizeNotificationEnvelope(
  * back inside this room" and joins voice on load, which a mention must never do.
  */
 export function notificationRoute(
-  item: Partial<Pick<NotificationItem, 'roomId' | 'sourceMessageId'>> | null | undefined
+  item: Partial<Pick<InboxItem, 'roomId' | 'sourceMessageId'>> | null | undefined
 ): string {
   const roomId = encodeURIComponent(String(item?.roomId || ''));
   const messageId = encodeURIComponent(String(item?.sourceMessageId || ''));

@@ -6,7 +6,7 @@
   // the two buttons together overflowed the header into a horizontal scrollbar.
   import { Bell, Check, CircleAlert, X } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
-  import type { NotificationItem, NotificationReason } from '@voice-room/shared/notifications';
+  import type { InboxItem, NotificationReason } from '@voice-room/shared/contracts/notifications';
   import type { createNotificationInbox } from '$lib/shared/notifications/inbox.svelte';
 
   type Inbox = ReturnType<typeof createNotificationInbox>;
@@ -18,7 +18,7 @@
     roomLabel
   }: {
     inbox: Inbox;
-    onopen: (item: NotificationItem) => void;
+    onopen: (item: InboxItem) => void;
     onclose?: () => void;
     /** Name of the room a notification came from. */
     roomLabel?: (roomId: string) => string;
@@ -49,7 +49,7 @@
     return new Date(at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
   }
 
-  function open(item: NotificationItem): void {
+  function open(item: InboxItem): void {
     void inbox.markRead(item.id);
     onopen(item);
   }

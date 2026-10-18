@@ -86,3 +86,13 @@ test('G45-A02 non-members cannot enumerate and empty presence is offline', async
   assert.deepEqual(await service.list({ roomId: 'room', viewerUserId: 'outsider' }), { status: 'forbidden' });
   assert.deepEqual(presenceForUser(null, 'u'), { inVoice: false, presenceStatus: 'offline' });
 });
+
+test('an account the registry holds as away is listed afk, not offline', () => {
+  assert.deepEqual(
+    presenceForUser({ byUserId: { u: [{ presenceStatus: 'away' }, { presenceStatus: 'offline' }] } }, 'u'),
+    {
+      inVoice: false,
+      presenceStatus: 'afk'
+    }
+  );
+});

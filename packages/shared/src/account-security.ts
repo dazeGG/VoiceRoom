@@ -61,7 +61,6 @@ export interface AccountDeletionPreview {
 
 type Loose = Record<string, unknown>;
 
-export const ACCOUNT_SECURITY_CONTRACT_VERSION = 1 as const;
 export const RECOVERY_CODE_COUNT = 10 as const;
 export const RECOVERY_CODE_LENGTH = 16 as const;
 export const RECOVERY_CODE_GROUP_LENGTH = 4 as const;

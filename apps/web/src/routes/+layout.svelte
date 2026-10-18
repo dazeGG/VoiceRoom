@@ -14,6 +14,7 @@
   import { installEmojiCopy } from '$lib/shared/chat/emoji-copy';
   import { initTheme } from '$lib/shared/theme/theme.svelte';
   import { loadAccountBadges } from '$lib/api/badges';
+  import { onContractViolation } from '$lib/api/contract-violations';
 
   let { children } = $props();
   let boundaryReady = $state(false);
@@ -56,12 +57,14 @@
     const removeEmojiCopy = installEmojiCopy();
     const unbindAppUpdate = appUpdate.bind();
     // Besides SvelteKit's periodic poll, look for a new version when the tab
-    // comes back into view and after the realtime socket reconnects: a deploy
-    // restarts the server, so a reconnect is when a new version is likely.
+    // comes back into view, after the realtime socket reconnects (a deploy
+    // restarts the server, so a reconnect is when a new version is likely) and
+    // when the server sends data this build's contract does not know.
     const onVisibility = () => {
       if (document.visibilityState === 'visible') checkForUpdate();
     };
     document.addEventListener('visibilitychange', onVisibility);
+    const stopContractWatch = onContractViolation(checkForUpdate);
     let stopRestore: (() => void) | null = null;
     let unmounted = false;
     void import('$lib/api/realtime').then((realtime) => {
@@ -74,6 +77,7 @@
       unbindAppUpdate();
       document.removeEventListener('visibilitychange', onVisibility);
       stopRestore?.();
+      stopContractWatch();
     };
   });
 </script>

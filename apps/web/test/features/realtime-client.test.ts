@@ -3,7 +3,7 @@
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
-import { freshImport } from '../helpers/fresh-module.ts';
+import { freshImport, muteWarnings } from '../helpers/fresh-module.ts';
 import type * as RealtimeModule from '../../src/lib/api/realtime.ts';
 
 async function load() {
@@ -39,6 +39,49 @@ test('events reach every subscriber; server errors arrive as error events', asyn
     { type: 'friend.presence', payload: { userId: 'anna', online: true } },
     { type: 'error', payload: { code: 'forbidden', message: 'Нет доступа', id: 'req-1' } }
   ]);
+  handle.close();
+});
+
+test('a frame outside the realtime contract is dropped and the next good one still arrives', async () => {
+  const realtime = await load();
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  const events: unknown[] = [];
+  const handle = realtime.connectRealtime((event) => events.push(event));
+  const socket = FakeWebSocket.latest();
+  socket.open();
+  socket.receive({ type: 'friend.presence', payload: { userId: 'anna', online: 'yes' } });
+  socket.receive({ type: 'friend.presence' });
+  socket.receive({ type: 'room.teleported', payload: {} });
+  socket.receive({ type: 'error', error: { code: 'no_such_code', message: 'Новое' } });
+  socket.receive({ payload: {} });
+  socket.receive({ type: 'friend.presence', payload: { userId: 'anna', online: false } });
+  // A refusal with a code newer than this build still arrives, without a code.
+  expect(events).toEqual([
+    { type: 'error', payload: { code: '', message: 'Новое' } },
+    { type: 'friend.presence', payload: { userId: 'anna', online: false } }
+  ]);
+  handle.close();
+  warn.mockRestore();
+});
+
+test('frames outside the contract ask for a version check at most once a minute', async () => {
+  const realtime = await load();
+  const { onContractViolation } = await import('../../src/lib/api/contract-violations.ts');
+  muteWarnings();
+  const violated = vi.fn();
+  onContractViolation(violated);
+  const handle = realtime.connectRealtime(() => {});
+  const socket = FakeWebSocket.latest();
+  socket.open();
+
+  socket.receive({ type: 'friend.presence', payload: { userId: 'anna', online: false } });
+  expect(violated).not.toHaveBeenCalled();
+  socket.receive({ type: 'room.teleported', payload: {} });
+  socket.receive({ type: 'friend.presence', payload: { userId: 'anna', online: 'yes' } });
+  expect(violated).toHaveBeenCalledTimes(1);
+  vi.setSystemTime(Date.now() + 60_000);
+  socket.receive({ type: 'room.teleported', payload: {} });
+  expect(violated).toHaveBeenCalledTimes(2);
   handle.close();
 });
 

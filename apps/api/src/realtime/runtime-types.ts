@@ -1,3 +1,4 @@
+import type { PeerLeaveReason } from '@voice-room/shared/contracts/realtime';
 import type { GateCredentialRepository } from '../domains/admission/gate-credential.repository.ts';
 import type { RoomChatRepository } from '../domains/messaging/room-chat.repository.ts';
 import type { ServerMuteRepository } from '../domains/moderation/room-ban.repository.ts';
@@ -15,11 +16,19 @@ export type Peer = RosterPeer;
 export type PresenceRoom = RosterRoom;
 export type Timer = ReturnType<typeof globalThis.setTimeout> | number;
 export type VoiceTarget = { roomId: string; peerId: string; sessionToken?: string; transportId?: string };
+/** Why a lease ends: how the peer left, or the moderation that evicted it. */
+export type LeaseReason = PeerLeaveReason | 'room.kicked' | 'room.banned';
+/** How a peer whose lease ended left its seat, as room.peer.left tells the room. */
+export function leaveReasonOf(reason: LeaseReason): PeerLeaveReason {
+  if (reason === 'room.kicked') return 'kicked';
+  if (reason === 'room.banned') return 'banned';
+  return reason;
+}
 export type FinalizeContext = {
   roomId: string;
   peerId: string;
   peer: Peer | null;
-  reason: string;
+  reason: LeaseReason;
   ownershipFinalized: boolean;
 };
 export type FinalizePeer = (context: FinalizeContext) => Promise<{ finalized?: boolean } | void | undefined>;
@@ -44,7 +53,7 @@ export type LeaseRecord = {
   timer: Timer | null;
   finalizerPromise: Promise<FinalizeResult> | null;
   finalizeCallbacks: FinalizePeer[];
-  terminalReason: string;
+  terminalReason: LeaseReason | '';
   terminalAtJoinSequence: number;
   claimRequestSequence: number;
   finalizerErrorCode: string;

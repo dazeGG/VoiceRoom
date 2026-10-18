@@ -4,7 +4,7 @@
   // alongside both names: two people can share a display name, and the login is
   // what actually goes into the message.
   import { Avatar } from '$lib/shared/ui';
-  import type { MembershipMember } from '@voice-room/shared/membership';
+  import type { MembershipMember } from '@voice-room/shared/contracts/membership';
 
   let {
     candidates,

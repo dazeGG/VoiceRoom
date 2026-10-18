@@ -1,10 +1,12 @@
 // The notifications inbox: paging, read state, and links that open the
 // message without joining the room's voice.
 
+import type { InboxItem, InboxPage } from '@voice-room/shared/contracts/notifications';
 import { expect, test, vi } from 'vitest';
+import { ApiError } from '../../src/lib/api/client.ts';
 import { createNotificationInbox, notificationRoute } from '../../src/lib/shared/notifications/inbox.svelte.ts';
 
-const item = (id: string, readAt: number | null = null) => ({
+const item = (id: string, readAt: number | null = null): InboxItem => ({
   id,
   roomId: 'room-a',
   sourceMessageId: `m-${id}`,
@@ -17,7 +19,7 @@ const item = (id: string, readAt: number | null = null) => ({
   retractedAt: null,
   body: 'текст'
 });
-const envelope = (notifications: unknown[], extra: Record<string, unknown> = {}) => ({
+const envelope = (notifications: InboxItem[], extra: Partial<InboxPage> = {}): InboxPage => ({
   contractVersion: 1,
   notifications,
   pageInfo: { hasMore: false },
@@ -36,7 +38,7 @@ test('the inbox loads pages without duplicates and reports a broken answer', asy
     .fn()
     .mockResolvedValueOnce(envelope([item('1'), item('2')], { pageInfo: { hasMore: true, nextCursor: 'c2' } }))
     .mockResolvedValueOnce(envelope([item('2'), item('3')]))
-    .mockResolvedValueOnce({ nonsense: true });
+    .mockRejectedValueOnce(new ApiError('Сервер прислал непонятный ответ, обновите страницу', 200));
   const inbox = createNotificationInbox({ list, read: vi.fn(), readAll: vi.fn() });
 
   await inbox.load();
@@ -46,15 +48,15 @@ test('the inbox loads pages without duplicates and reports a broken answer', asy
   expect(inbox.items.map((entry) => entry.id)).toEqual(['1', '2', '3']);
 
   await inbox.load();
-  expect(inbox.error).toBe('Некорректный ответ сервера');
+  expect(inbox.error).toBe('Сервер прислал непонятный ответ, обновите страницу');
   expect(inbox.loading).toBe(false);
 });
 
 test('reading one or all updates the unread count from the server answer', async () => {
   const inbox = createNotificationInbox({
     list: vi.fn(async () => envelope([item('1'), item('2')])),
-    read: vi.fn(async () => ({ unreadCount: 1, revision: 2 })),
-    readAll: vi.fn(async () => ({ unreadCount: 0, revision: 3 }))
+    read: vi.fn(async (id: string) => ({ ok: true as const, notification: item(id, 5), unreadCount: 1, revision: 2 })),
+    readAll: vi.fn(async () => ({ ok: true as const, updated: 2, unreadCount: 0, revision: 3 }))
   });
   await inbox.load();
   expect(inbox.unreadCount).toBe(2);

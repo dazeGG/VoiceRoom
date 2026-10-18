@@ -2,7 +2,7 @@
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { onMount } from 'svelte';
   import { Ban, Clock } from '@lucide/svelte';
-  import type { ActiveBan } from '@voice-room/shared/moderation';
+  import type { Ban as RoomBan } from '@voice-room/shared/contracts/moderation';
   import { fetchActiveBans } from '$lib/api/moderation';
   import { Avatar } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
@@ -18,7 +18,7 @@
     onNotify?: ModerationNotice;
   } = $props();
 
-  let bans = $state<ActiveBan[]>([]);
+  let bans = $state<RoomBan[]>([]);
   let nextCursor = $state<string>();
   let loading = $state(true);
   let loadingMore = $state(false);
@@ -41,7 +41,7 @@
     }
   }
 
-  async function lift(ban: ActiveBan): Promise<void> {
+  async function lift(ban: RoomBan): Promise<void> {
     if (liftingId) return;
     liftingId = ban.id;
     try {

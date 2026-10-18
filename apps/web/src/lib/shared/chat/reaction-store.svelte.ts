@@ -1,5 +1,5 @@
 import { untrack } from 'svelte';
-import type { ReactionSummary, Reactor } from '@voice-room/shared/reactions';
+import type { ReactionSummary, Reactor } from '@voice-room/shared/contracts/messages';
 import {
   fetchReactionSummaries,
   fetchReactors,

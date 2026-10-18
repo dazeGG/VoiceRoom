@@ -12,10 +12,12 @@
   import { roomSettingsUi, openRoomSettings } from '../room-settings.svelte';
   import { showToast } from '../client/ui/toast';
   import { useRoomSocial } from '../social';
+  import { useRoomShell } from '../shell';
   import { getSortedParticipants } from '../participants-ui.svelte';
   import RoomCallTimer from './RoomCallTimer.svelte';
 
   const social = useRoomSocial();
+  const shell = useRoomShell();
 
   const connection = $derived(getConnectionStatusView());
 
@@ -42,7 +44,7 @@
   }
 
   function notifyRoomsChanged(): void {
-    window.dispatchEvent(new CustomEvent('voice-room:rooms-changed', { detail: { roomId: roomClientState.roomId } }));
+    shell.roomsChanged(roomClientState.roomId);
   }
 </script>
 

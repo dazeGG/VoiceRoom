@@ -3,6 +3,7 @@ import type {
   Attachment,
   DirectHistoryMessage,
   DirectHistoryPage,
+  InviteStatus,
   ReactionSummary,
   ReplyPointer,
   ReplyPreview
@@ -36,15 +37,17 @@ function text(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
+const INVITE_STATUSES: readonly InviteStatus[] = ['pending', 'accepted', 'declined', 'expired'];
+
 // Only what a client may read from the metadata: the room invitation and the
 // link preview. Everything else in it stays server-side.
 function publicMetadata(metadata: Loose | null | undefined): DirectHistoryMessage['metadata'] {
   if (!metadata) return null;
   return {
-    kind: text(metadata.kind),
+    kind: metadata.kind === 'room-invite' ? 'room-invite' : undefined,
     roomId: text(metadata.roomId),
     roomName: text(metadata.roomName),
-    status: text(metadata.status),
+    status: INVITE_STATUSES.find((status) => status === metadata.status),
     expiresAt: metadata.expiresAt === undefined ? undefined : epochMillis(metadata.expiresAt),
     linkPreview: normalizeLinkPreview(metadata.linkPreview) || undefined
   };

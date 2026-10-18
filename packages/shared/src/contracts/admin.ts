@@ -11,15 +11,18 @@ import { AccountBadge } from './users.ts';
 export const AdminAccess = Ok({ admin: Type.Boolean(), openReports: Type.Number() });
 
 /** What the realtime layer tells administrators when the open reports change. */
-export interface AdminReportsEvent {
-  openReports: number;
+export const AdminReportsEvent = Type.Object({
+  openReports: Type.Number(),
   /** Set when the change is a new report. */
-  filed: null | {
-    reason: 'spam' | 'abuse' | 'illegal' | 'other';
-    targetKind: 'room_message' | 'direct_message';
-    roomName: string | null;
-  };
-}
+  filed: Nullable(
+    Type.Object({
+      reason: Type.Union([Type.Literal('spam'), Type.Literal('abuse'), Type.Literal('illegal'), Type.Literal('other')]),
+      targetKind: Type.Union([Type.Literal('room_message'), Type.Literal('direct_message')]),
+      roomName: Nullable(Type.String())
+    })
+  )
+});
+export type AdminReportsEvent = Static<typeof AdminReportsEvent>;
 export type AdminAccess = Static<typeof AdminAccess>;
 
 /** The numbers the running API holds in memory right now. */

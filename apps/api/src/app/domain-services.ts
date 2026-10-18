@@ -56,7 +56,11 @@ export interface DomainServiceDeps {
 export function createDomainServices(deps: DomainServiceDeps) {
   const { config, services, hub, liveKit, limits } = deps;
 
-  async function refreshPinsAfterMessageMutation(roomId: string, action: string, messageId: string): Promise<void> {
+  async function refreshPinsAfterMessageMutation(
+    roomId: string,
+    action: 'message-deleted' | 'message-edited',
+    messageId: string
+  ): Promise<void> {
     const service = services.getPinServices()?.service;
     if (!service?.refresh) return;
     try {

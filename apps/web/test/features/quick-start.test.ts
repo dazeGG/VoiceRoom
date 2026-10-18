@@ -7,8 +7,21 @@ import { stubFetch } from '../fixtures/fetch.ts';
 
 test('a temporary room is created without a proof when the server does not require one', async () => {
   const { calls } = stubFetch({
-    '/api/pow-challenge': { body: { required: false } },
-    'POST /api/rooms': { status: 201, body: { ok: true, roomId: 'tmp123' } }
+    '/api/pow-challenge': { body: { ok: true, required: false } },
+    'POST /api/rooms': {
+      status: 201,
+      body: {
+        ok: true,
+        roomId: 'tmp123',
+        name: '',
+        avatarUrl: null,
+        createdAt: 1,
+        isStatic: false,
+        maxRooms: 10,
+        maxRoomPeers: 25,
+        owned: false
+      }
+    }
   });
   await expect(createRoom({ isStatic: false })).resolves.toBe('tmp123');
   expect(calls.at(-1)).toEqual({ method: 'POST', url: '/api/rooms', body: { isStatic: false, name: '', proof: null } });
@@ -17,8 +30,30 @@ test('a temporary room is created without a proof when the server does not requi
 
 test('a required proof of work is solved and sent with the create call', async () => {
   const { calls } = stubFetch({
-    '/api/pow-challenge': { body: { required: true, challenge: 'abc', difficulty: 4, expiresAt: Date.now() + 60_000 } },
-    'POST /api/rooms': { status: 201, body: { ok: true, roomId: 'tmp456' } }
+    '/api/pow-challenge': {
+      body: {
+        ok: true,
+        required: true,
+        algorithm: 'sha256',
+        challenge: 'abc',
+        difficulty: 4,
+        expiresAt: Date.now() + 60_000
+      }
+    },
+    'POST /api/rooms': {
+      status: 201,
+      body: {
+        ok: true,
+        roomId: 'tmp456',
+        name: '',
+        avatarUrl: null,
+        createdAt: 1,
+        isStatic: false,
+        maxRooms: 10,
+        maxRoomPeers: 25,
+        owned: false
+      }
+    }
   });
   await expect(createRoom()).resolves.toBe('tmp456');
   const body = calls.at(-1)?.body as { proof: { challenge: string; nonce: number } };
@@ -28,7 +63,7 @@ test('a required proof of work is solved and sent with the create call', async (
 
 test('a refused create call surfaces the server message', async () => {
   stubFetch({
-    '/api/pow-challenge': { body: { required: false } },
+    '/api/pow-challenge': { body: { ok: true, required: false } },
     'POST /api/rooms': { status: 429, body: { ok: false, error: 'Too many rooms created, try again later' } }
   });
   await expect(createRoom()).rejects.toThrow('Too many rooms created, try again later');

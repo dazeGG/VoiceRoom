@@ -1,12 +1,11 @@
 import type { ErrorCode } from '@voice-room/shared/contracts/errors';
+import type { ReactionSummary, ReactorList } from '@voice-room/shared/contracts/messages';
 import type pg from 'pg';
 import {
   normalizeReactionMutation,
   normalizeReactionSummary,
   normalizeReactorPage,
-  normalizeReactorQuery,
-  type ReactionSummary,
-  type ReactorPage
+  normalizeReactorQuery
 } from '@voice-room/shared/reactions';
 
 type Conversation = { type: 'room' | 'dm'; id: string };
@@ -205,7 +204,7 @@ function createReactionService({
     emoji?: unknown;
     query?: unknown;
     viewer?: Viewer;
-  } = {}): Promise<ReactorPage> {
+  } = {}): Promise<ReactorList> {
     const conversation = normalizeConversation(rawConversation);
     const normalizedMutation = normalizeReactionMutation({ messageId, emoji, active: true });
     const normalizedQuery = normalizeReactorQuery(query);

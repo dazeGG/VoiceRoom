@@ -1,5 +1,8 @@
 // Room bans: how long a ban lasts, what an owner submits to ban someone, and
-// the page of active bans with the banned account's profile when it is known.
+// building the page of active bans (its shape is contracts/moderation.ts) with
+// the banned account's profile when it is known.
+
+import type { Ban, BanPage, BanProfile } from './contracts/moderation.ts';
 
 export type ModerationDuration = '1h' | '1d' | '7d' | 'permanent';
 export interface BanMutation {
@@ -7,28 +10,6 @@ export interface BanMutation {
   guestIp: string | null;
   duration: ModerationDuration;
   reason: string;
-}
-export interface ActiveBanProfile {
-  displayName: string;
-  login: string;
-  avatarUrl: string | null;
-  avatarColorKey: string;
-  avatarAccent: string | null;
-}
-export interface ActiveBan {
-  id: string;
-  roomId: string;
-  subject: { kind: 'account' | 'guest'; userId: string | null; profile?: ActiveBanProfile };
-  reason: string;
-  createdAt: number;
-  updatedAt: number;
-  expiresAt: number | null;
-}
-export interface ModerationPage {
-  contractVersion: 1;
-  roomId: string;
-  bans: ActiveBan[];
-  pageInfo: { nextCursor?: string; hasMore: boolean };
 }
 
 type Loose = Record<string, unknown>;
@@ -101,7 +82,7 @@ export function normalizeModerationPageRequest(value: Loose = {}): { cursor?: st
 // Who an account ban is about, so an owner reads a name instead of a user id.
 // Optional: bans created before the profile was projected, and guest bans,
 // carry none.
-function normalizeBanProfile(value: unknown): ActiveBanProfile | null {
+function normalizeBanProfile(value: unknown): BanProfile | null {
   if (!isRecord(value)) return null;
   const login = cleanString(value.login, 64);
   if (!login) return null;
@@ -115,7 +96,7 @@ function normalizeBanProfile(value: unknown): ActiveBanProfile | null {
   };
 }
 
-export function normalizeActiveBan(value: unknown): ActiveBan | null {
+export function normalizeActiveBan(value: unknown): Ban | null {
   if (!isRecord(value)) return null;
   const subject = value.subject as Loose | null | undefined;
   const id = cleanString(value.id, 36);
@@ -149,11 +130,11 @@ export function buildModerationPage({
   bans?: unknown[];
   nextCursor?: unknown;
   hasMore?: unknown;
-} = {}): ModerationPage {
+} = {}): BanPage {
   return {
     contractVersion: MODERATION_CONTRACT_VERSION,
     roomId: cleanString(roomId, 48),
-    bans: Array.isArray(bans) ? bans.map(normalizeActiveBan).filter((ban): ban is ActiveBan => Boolean(ban)) : [],
+    bans: Array.isArray(bans) ? bans.map(normalizeActiveBan).filter((ban): ban is Ban => Boolean(ban)) : [],
     pageInfo: {
       nextCursor: cleanString(nextCursor, 4096) || undefined,
       hasMore: Boolean(hasMore)

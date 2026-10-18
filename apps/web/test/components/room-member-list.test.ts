@@ -1,3 +1,4 @@
+import type { MemberPresenceStatus } from '@voice-room/shared/contracts/membership';
 import { cleanup, render, screen } from '@testing-library/svelte';
 import { afterEach, expect, test } from 'vitest';
 import RoomMemberList from '../../src/lib/entities/room/components/RoomMemberList.svelte';
@@ -10,13 +11,16 @@ afterEach(() => {
   session.user = null;
 });
 
-function member(userId: string, displayName: string, presenceStatus: string) {
+function member(userId: string, displayName: string, presenceStatus: MemberPresenceStatus) {
   return {
     userId,
     displayName,
     login: displayName.toLowerCase(),
     avatarColorKey: 'blue',
+    avatarUrl: null,
+    avatarAccent: null,
     role: 'member',
+    joinedAt: null,
     presenceStatus,
     inVoice: false
   };

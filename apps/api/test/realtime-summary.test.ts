@@ -59,7 +59,7 @@ test('chat messages schedule personalized unread summaries for room recipients',
         lobbyRoom(value.id, {
           isStatic: value.isStatic,
           name: value.name,
-          relationship: value.relationship,
+          relationship: value.relationship || 'owner',
           unreadCount: value.unreadCount
         }),
       avatarColorForPeerId: () => 'blurple'

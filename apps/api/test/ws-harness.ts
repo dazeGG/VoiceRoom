@@ -1,18 +1,23 @@
 // A real WebSocket client for tests against a listening API: every frame the
-// server sends is kept, typed by the realtime contract, and tests wait for
-// the one they expect.
+// server sends is checked against the realtime contract and kept, and tests
+// wait for the one they expect. A frame the contract refuses (the web would
+// drop it) fails the test that received it.
 
 import net from 'node:net';
 import type { IncomingMessage } from 'node:http';
 import type { FastifyInstance } from 'fastify';
 import WebSocket from 'ws';
 import type { ClientCommands, ClientCommandType, ServerFrame } from '@voice-room/shared/contracts/realtime';
+import { parseServerFrame } from '@voice-room/shared/realtime';
 
 export type FrameType = ServerFrame['type'];
 
 function parseFrame(raw: WebSocket.RawData): ServerFrame {
   const bytes = Array.isArray(raw) ? Buffer.concat(raw) : Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
-  return JSON.parse(bytes.toString('utf8')) as ServerFrame;
+  const text = bytes.toString('utf8');
+  const parsed = parseServerFrame(JSON.parse(text));
+  if (!parsed.ok) throw new Error(`The server sent a ${parsed.type || 'typeless'} frame outside the contract: ${text}`);
+  return parsed.frame;
 }
 export type FrameOf<Type extends FrameType> = Extract<ServerFrame, { type: Type }>;
 

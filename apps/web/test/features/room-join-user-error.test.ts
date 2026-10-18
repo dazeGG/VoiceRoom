@@ -27,7 +27,19 @@ test('a join failure meant for the user shows its own message', async () => {
   vi.resetModules();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({
-    '/api/rooms/abc123': { body: { ok: true, exists: true, name: 'Планёрка', isStatic: true, avatarUrl: null } }
+    '/api/rooms/abc123': {
+      body: {
+        ok: true,
+        exists: true,
+        roomId: 'abc123',
+        name: 'Планёрка',
+        isStatic: true,
+        avatarUrl: null,
+        createdAt: 1,
+        maxRoomPeers: 25,
+        peers: 0
+      }
+    }
   });
   const room = await import('../../src/lib/features/room/client/room/room.ts');
   const { state } = await import('../../src/lib/features/room/client/core/state.svelte.ts');

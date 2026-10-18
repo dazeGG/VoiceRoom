@@ -50,7 +50,7 @@ function renderTab() {
 }
 
 test('permission is asked only when the switch is pressed, and a grant turns it on quietly', async () => {
-  stubFetch({ 'GET /api/blocks': { body: { ok: true, users: [] } } });
+  stubFetch({ 'GET /api/blocks': { body: { ok: true, blocked: [], users: [] } } });
   const requestPermission = stubNotification('granted');
   const onToast = renderTab();
 
@@ -66,7 +66,7 @@ test('permission is asked only when the switch is pressed, and a grant turns it 
 });
 
 test('a refused permission says where to change it', async () => {
-  stubFetch({ 'GET /api/blocks': { body: { ok: true, users: [] } } });
+  stubFetch({ 'GET /api/blocks': { body: { ok: true, blocked: [], users: [] } } });
   stubNotification('denied');
   const onToast = renderTab();
 
@@ -76,7 +76,7 @@ test('a refused permission says where to change it', async () => {
 
 test('push that the server does not offer is reported as an error', async () => {
   stubFetch({
-    'GET /api/blocks': { body: { ok: true, users: [] } },
+    'GET /api/blocks': { body: { ok: true, blocked: [], users: [] } },
     'GET /api/push/config': { body: { ok: true, enabled: false, vapidPublicKey: '' } }
   });
   stubNotification('granted');

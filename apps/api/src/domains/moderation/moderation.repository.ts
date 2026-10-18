@@ -3,7 +3,7 @@ import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { fromMicros, microsOf } from '../../platform/db/micros.ts';
-import type { ActiveBan, ActiveBanProfile } from '@voice-room/shared/moderation';
+import type { Ban, BanProfile } from '@voice-room/shared/contracts/moderation';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Client = QueryClient | null | undefined;
@@ -31,11 +31,6 @@ export type ModerationBanRow = {
   avatar_accent?: string | null;
 };
 
-export type ModerationBan = Omit<ActiveBan, 'createdAt' | 'updatedAt'> & {
-  createdAt: number | null;
-  updatedAt: number | null;
-};
-
 function asDate(value: unknown): Date {
   if (value instanceof Date) return value;
   const number = Number(value);
@@ -50,7 +45,7 @@ function toMillis(value: unknown): number | null {
 
 // Only the active list joins users, so rows from mutations carry no login and
 // project no profile.
-function mapBanProfile(row: ModerationBanRow): ActiveBanProfile | null {
+function mapBanProfile(row: ModerationBanRow): BanProfile | null {
   if (!row.user_id || !row.login) return null;
   return {
     displayName: row.display_name || '',
@@ -61,7 +56,7 @@ function mapBanProfile(row: ModerationBanRow): ActiveBanProfile | null {
   };
 }
 
-function mapModerationBan(row: ModerationBanRow | null | undefined): ModerationBan | null {
+function mapModerationBan(row: ModerationBanRow | null | undefined): Ban | null {
   if (!row) return null;
   const profile = mapBanProfile(row);
   return {
@@ -152,7 +147,7 @@ function createModerationRepository({
     roomId: string,
     idempotencyKey: string,
     { client }: { client?: Client } = {}
-  ): Promise<ModerationBan | null> {
+  ): Promise<Ban | null> {
     if (!roomId || !idempotencyKey) return null;
     const row = await on(client)
       .selectFrom('room_bans')
@@ -210,7 +205,7 @@ function createModerationRepository({
     idempotencyKey: string;
     at?: TimeInput;
     client?: Client;
-  }): Promise<ModerationBan | null> {
+  }): Promise<Ban | null> {
     const timestamp = asDate(at);
     const row = await on(client)
       .insertInto('room_bans')
@@ -246,7 +241,7 @@ function createModerationRepository({
     idempotencyKey: string;
     at?: TimeInput;
     client?: Client;
-  }): Promise<ModerationBan | null> {
+  }): Promise<Ban | null> {
     const row = await on(client)
       .updateTable('room_bans')
       .set({
@@ -276,7 +271,7 @@ function createModerationRepository({
     limit?: number;
     at?: TimeInput;
     client?: Client;
-  }): Promise<{ bans: ModerationBan[]; hasMore: boolean; nextCursor: string | undefined }> {
+  }): Promise<{ bans: Ban[]; hasMore: boolean; nextCursor: string | undefined }> {
     const after = cursor ? decodeCursor(roomId, cursor) : null;
     if (cursor && !after) {
       const error = new Error('Invalid moderation cursor') as Error & { code?: string };
@@ -307,7 +302,7 @@ function createModerationRepository({
     const hasMore = found.length > limit;
     const rows = hasMore ? found.slice(0, limit) : found;
     return {
-      bans: rows.map((row) => bans(row) as ModerationBan),
+      bans: rows.map((row) => bans(row) as Ban),
       hasMore,
       nextCursor: hasMore ? encodeCursor(roomId, rows.at(-1)) : undefined
     };
@@ -324,7 +319,7 @@ function createModerationRepository({
     banId: string;
     at?: TimeInput;
     client?: Client;
-  }): Promise<{ ban: ModerationBan | null; found: boolean }> {
+  }): Promise<{ ban: Ban | null; found: boolean }> {
     const timestamp = asDate(at);
     const row = await on(client)
       .updateTable('room_bans')

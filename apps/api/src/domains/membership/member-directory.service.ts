@@ -1,8 +1,10 @@
 import {
-  buildMembershipEnvelope,
-  normalizeMembershipRequest,
-  type MembershipEnvelope
-} from '@voice-room/shared/membership';
+  memberPresenceStatus,
+  type MemberPage,
+  type MemberPresenceStatus
+} from '@voice-room/shared/contracts/membership';
+import type { PresenceStatus } from '@voice-room/shared/contracts/users';
+import { buildMembershipEnvelope, normalizeMembershipRequest } from '@voice-room/shared/membership';
 import type { DirectoryCursorTuple, MembershipRepository } from './membership.repository.ts';
 
 const CURSOR_PURPOSE = 'room-members-directory';
@@ -23,13 +25,12 @@ export interface DirectoryCursorCodec {
   decode(cursor: string, options: { purpose: string; context: string }): DirectoryCursorTuple;
 }
 
-export type DirectoryListing =
-  { status: 'unauthorized' | 'forbidden' } | { status: 'ok'; envelope: MembershipEnvelope };
+export type DirectoryListing = { status: 'unauthorized' | 'forbidden' } | { status: 'ok'; envelope: MemberPage };
 
 function presenceForUser(
   snapshot: PresenceSnapshot,
   userId: string
-): { inVoice: boolean; presenceStatus: 'dnd' | 'online' | 'afk' | 'offline' } {
+): { inVoice: boolean; presenceStatus: MemberPresenceStatus } {
   const byUserId = snapshot?.byUserId;
   const raw =
     byUserId instanceof Map
@@ -39,14 +40,14 @@ function presenceForUser(
   const connections = Array.isArray(raw) ? raw : [raw];
   const inVoice = connections.some((entry) => entry?.inVoice === true || entry?.voice === true || entry?.roomId);
   const statuses = connections.map((entry) => entry?.presenceStatus || entry?.status);
-  const presenceStatus = statuses.includes('dnd')
+  const status: PresenceStatus = statuses.includes('dnd')
     ? 'dnd'
     : statuses.includes('online')
       ? 'online'
-      : statuses.includes('afk')
-        ? 'afk'
+      : statuses.includes('away')
+        ? 'away'
         : 'offline';
-  return { inVoice: Boolean(inVoice), presenceStatus };
+  return { inVoice: Boolean(inVoice), presenceStatus: memberPresenceStatus(status) };
 }
 
 function createMemberDirectoryService({

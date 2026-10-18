@@ -4,7 +4,7 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import { ArrowUp } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
-  import type { MembershipMember } from '@voice-room/shared/membership';
+  import type { MembershipMember } from '@voice-room/shared/contracts/membership';
   import { contentFromPlainText } from '@voice-room/shared/room-message-content';
   import type { ChatMessage } from '$lib/api/rooms';
   import { getAppRealtime } from '$lib/api/realtime';

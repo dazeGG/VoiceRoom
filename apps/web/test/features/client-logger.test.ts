@@ -112,7 +112,8 @@ test('a failed API response is logged with the request id the server gave it', a
   const log = await load();
   log.clearLogBuffer();
   const { api } = await import('../../src/lib/api/client.ts');
-  await expect(api.get('/api/friends')).rejects.toThrow('Нет доступа');
+  const { Done } = await import('@voice-room/shared/contracts/http');
+  await expect(api.get('/api/friends', Done)).rejects.toThrow('Нет доступа');
   const records = (await import('../../src/lib/shared/log.ts')).readLogBuffer();
   expect(records.at(-1)).toMatchObject({
     level: 'warn',

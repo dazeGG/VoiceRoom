@@ -15,7 +15,7 @@ function renderDialog() {
 test('codes are created with the current password, shown once, and the dialog closes only after "saved"', async () => {
   const codes = Array.from({ length: 10 }, (_, index) => `CODE-${index}`);
   const { calls } = stubFetch({
-    'POST /api/auth/recovery-codes': { body: { codes, recoveryCodes: { remaining: 10, generatedAt: 1 } } }
+    'POST /api/auth/recovery-codes': { body: { ok: true, codes, recoveryCodes: { remaining: 10, generatedAt: 1 } } }
   });
   const props = renderDialog();
 

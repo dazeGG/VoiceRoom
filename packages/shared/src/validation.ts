@@ -2,6 +2,7 @@
 // avatar colours, presence and screen-share profiles. Each returns the clean
 // value or an empty string, never throws.
 
+import type { PresenceStatus } from './contracts/users.ts';
 import visualIdentity from './visual-identity.ts';
 
 export type AvatarColorKey =
@@ -21,8 +22,6 @@ export type AvatarColorKey =
   | 'blue'
   | 'indigo'
   | 'slate';
-
-export type PresenceStatus = 'online' | 'away' | 'dnd' | 'offline';
 
 export const SCREEN_PROFILE_IDS: ReadonlySet<string> = new Set([
   'balanced',

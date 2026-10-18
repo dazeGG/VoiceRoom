@@ -35,6 +35,10 @@ export const PublicPeer = Type.Object({
 });
 export type PublicPeer = Static<typeof PublicPeer>;
 
+/** How an account holds a room in its list. */
+export const RoomRelationship = Type.Union([Type.Literal('owner'), Type.Literal('bookmarked'), Type.Literal('member')]);
+export type RoomRelationship = Static<typeof RoomRelationship>;
+
 /** The lobby card: the rename answer, the room list and the room.updated event. */
 export const LobbyRoom = Type.Object({
   avatarUrl: Nullable(Type.String()),
@@ -44,8 +48,7 @@ export const LobbyRoom = Type.Object({
   lastMessageAt: Type.Optional(Nullable(Type.Number())),
   name: Type.String(),
   peers: Type.Number(),
-  /** How the account holds the room: 'owner', 'bookmarked' or 'member'. */
-  relationship: Type.String(),
+  relationship: RoomRelationship,
   roomId: Type.String(),
   unreadCount: Type.Optional(Type.Number())
 });

@@ -21,7 +21,7 @@ beforeEach(() => localStorage.clear());
 
 test('preferences load from the server once per account', async () => {
   const { calls } = stubFetch({
-    '/api/notifications/preferences': { body: { preferences: prefs({ mutedRoomIds: ['room-a'] }) } }
+    '/api/notifications/preferences': { body: { ok: true, preferences: prefs({ mutedRoomIds: ['room-a'] }) } }
   });
   const n = await load();
   await n.loadNotificationPreferences('user-1');
@@ -34,7 +34,7 @@ test('preferences load from the server once per account', async () => {
 
 test('muting a room or a person goes to the server and shows its answer', async () => {
   const { calls } = stubFetch({
-    '/api/notifications/preferences': { body: { preferences: prefs() } },
+    '/api/notifications/preferences': { body: { ok: true, preferences: prefs() } },
     'PUT /api/notifications/room/room-a/mute': {
       body: { ok: true, muted: true, preferences: prefs({ mutedRoomIds: ['room-a'] }) }
     },
@@ -56,8 +56,10 @@ test('muting a room or a person goes to the server and shows its answer', async 
 
 test('do-not-disturb silences cues and shows as the dnd status', async () => {
   stubFetch({
-    '/api/notifications/preferences': { body: { preferences: prefs() } },
-    'POST /api/notifications/settings': { body: { preferences: prefs({ doNotDisturb: true, presenceStatus: 'dnd' }) } }
+    '/api/notifications/preferences': { body: { ok: true, preferences: prefs() } },
+    'POST /api/notifications/settings': {
+      body: { ok: true, preferences: prefs({ doNotDisturb: true, presenceStatus: 'dnd' }) }
+    }
   });
   const n = await load();
   await n.loadNotificationPreferences('user-1');
@@ -69,7 +71,7 @@ test('do-not-disturb silences cues and shows as the dnd status', async () => {
 
 test('a mutation answer arriving after the account changed is ignored', async () => {
   stubFetch({
-    '/api/notifications/preferences': { body: { preferences: prefs() } },
+    '/api/notifications/preferences': { body: { ok: true, preferences: prefs() } },
     'PUT /api/notifications/room/room-a/mute': {
       body: { ok: true, muted: true, preferences: prefs({ mutedRoomIds: ['room-a'] }) }
     }
@@ -83,7 +85,7 @@ test('a mutation answer arriving after the account changed is ignored', async ()
 });
 
 test('settings pushed over realtime replace the local copy only for the signed-in account', async () => {
-  stubFetch({ '/api/notifications/preferences': { body: { preferences: prefs() } } });
+  stubFetch({ '/api/notifications/preferences': { body: { ok: true, preferences: prefs() } } });
   const n = await load();
   await n.loadNotificationPreferences('user-1');
   n.applyRealtimeNotificationPreferences('someone-else', prefs({ mutedRoomIds: ['x'] }));

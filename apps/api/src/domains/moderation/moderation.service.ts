@@ -1,19 +1,18 @@
 import type pg from 'pg';
+import type { Ban, BanPage } from '@voice-room/shared/contracts/moderation';
 import {
   buildModerationPage,
   durationToExpiresAt,
   normalizeBanMutation,
   normalizeIdempotencyKey,
   normalizeModerationPageRequest,
-  type BanMutation,
-  type ModerationPage
+  type BanMutation
 } from '@voice-room/shared/moderation';
 import { sql } from 'kysely';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { transaction } from '../../platform/db/pool.ts';
 import {
   createModerationRepository,
-  type ModerationBan,
   type ModerationCursorCodec,
   type ModerationRepository
 } from './moderation.repository.ts';
@@ -24,10 +23,10 @@ export type CredentialPrincipal = { principalType: 'account' | 'guest'; principa
 
 export type BanOutcome =
   | { status: 'invalid' | 'forbidden' | 'revocation_unavailable' | 'cap_exceeded'; ban: null }
-  | { status: 'replayed' | 'updated' | 'created'; ban: ModerationBan | null };
+  | { status: 'replayed' | 'updated' | 'created'; ban: Ban | null };
 
 export type UnbanOutcome =
-  { status: 'invalid' | 'forbidden' | 'not_found'; ban: null } | { status: 'unbanned'; ban: ModerationBan | null };
+  { status: 'invalid' | 'forbidden' | 'not_found'; ban: null } | { status: 'unbanned'; ban: Ban | null };
 
 type PutBanInput = { roomId: string; actorUserId: string; input?: unknown; idempotencyKey?: unknown };
 
@@ -73,7 +72,7 @@ function createModerationService({
     roomId: string;
     actorUserId: string;
     query?: Record<string, unknown>;
-  }): Promise<{ status: 'forbidden'; envelope: null } | { status: 'ok'; envelope: ModerationPage }> {
+  }): Promise<{ status: 'forbidden'; envelope: null } | { status: 'ok'; envelope: BanPage }> {
     if (!(await authorizeOwner(roomId, actorUserId))) return { status: 'forbidden', envelope: null };
     const page = normalizeModerationPageRequest(query);
     const result = await repository.listActive({ roomId, ...page, at: now() });

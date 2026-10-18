@@ -1,13 +1,12 @@
 import type pg from 'pg';
+import type { InboxPage, NotificationLevel } from '@voice-room/shared/contracts/notifications';
 import { transaction } from '../../platform/db/pool.ts';
 import {
   buildNotificationEnvelope,
   buildProviderPayload,
   normalizeNotificationItem,
   normalizeNotificationLevel,
-  normalizeNotificationLimit,
-  type NotificationEnvelope,
-  type NotificationLevel
+  normalizeNotificationLimit
 } from '@voice-room/shared/notifications';
 import type { CursorTuple, InboxNotification, InboxRepository } from './inbox.repository.ts';
 import type { MentionEligibilityService } from './mention-eligibility.service.ts';
@@ -66,7 +65,7 @@ function createNotificationService({
     userId: string;
     cursor?: string;
     limit?: unknown;
-  }): Promise<NotificationEnvelope> {
+  }): Promise<InboxPage> {
     const pageSize = normalizeNotificationLimit(limit);
     const before = cursor ? cursorCodec!.decode(cursor, { purpose: 'notification-inbox', context: userId }) : null;
     const [rows, unread, firstUnread] = await Promise.all([

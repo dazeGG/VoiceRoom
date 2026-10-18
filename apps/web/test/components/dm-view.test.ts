@@ -15,7 +15,7 @@ const bob = authUser({ id: 'bob', login: 'bob', displayName: 'Боб' });
 
 function message(id: string, senderId: string, body: string, extra: Partial<DirectMessage> = {}): DirectMessage {
   const recipientId = senderId === 'me' ? 'ada' : 'me';
-  return { id, senderId, recipientId, body, createdAt: 1_000, editedAt: null, readAt: null, ...extra };
+  return { id, senderId, recipientId, body, createdAt: 1_000, editedAt: null, readAt: null, invite: null, ...extra };
 }
 
 beforeEach(() => {

@@ -6,6 +6,7 @@ import { roomNameFor } from '$lib/features/auth/account';
 import { setUser } from '$lib/features/auth/session.svelte';
 import { createLogger, errorContext } from '$lib/shared/log';
 import { roomSettingsUi } from '../../room-settings.svelte';
+import { getRoomShell } from '../core/embed';
 import { state } from '../core/state.svelte';
 import { persistName, requestGuestNameForRoom } from '../ui/names';
 import { showToast } from '../ui/toast';
@@ -19,7 +20,7 @@ async function autoSaveRoomForAuthenticatedUser(roomId: string): Promise<void> {
   if (!roomId || !state.roomIsStatic) return;
   try {
     await addRoomByCode(roomId);
-    window.dispatchEvent(new CustomEvent('voice-room:rooms-changed', { detail: { roomId } }));
+    getRoomShell().roomsChanged(roomId);
   } catch (error) {
     // Auto-save is a convenience side effect: already-pruned rooms and
     // transient bookmark failures must never block or noisy-toast the room

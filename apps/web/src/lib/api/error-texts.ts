@@ -2,12 +2,13 @@
 // `error` text is only a fallback for a code this build does not know yet (a
 // newer server), so every refusal reads the same wherever the web shows it.
 
-import type { ErrorCode } from '@voice-room/shared/contracts/errors';
+import { isErrorCode, type ErrorCode } from '@voice-room/shared/contracts/errors';
 
 const TRY_LATER = 'Слишком много попыток, попробуйте позже';
 const UNAVAILABLE = 'Сервис временно недоступен, попробуйте позже';
 const VOICE_UNAVAILABLE = 'Голосовая связь временно недоступна';
 const IMAGE_FAILED = 'Не удалось загрузить изображение';
+const REALTIME_REJECTED = 'Сервер не понял запрос, обновите страницу';
 
 export const ERROR_TEXTS: Record<ErrorCode, string> = {
   invalid_request: 'Некорректный запрос',
@@ -173,10 +174,36 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   confirmation_mismatch: 'Логин не совпадает с этим аккаунтом',
   deletion_not_by_admin: 'Удаление попросил сам пользователь, отменить его может только он',
 
-  desktop_release_unavailable: 'Не удалось получить данные о релизе'
+  desktop_release_unavailable: 'Не удалось получить данные о релизе',
+
+  invalid_response: 'Сервер прислал непонятный ответ, обновите страницу',
+
+  invalid_json: REALTIME_REJECTED,
+  invalid_envelope: REALTIME_REJECTED,
+  invalid_payload: REALTIME_REJECTED,
+  unknown_type: REALTIME_REJECTED,
+  invalid_ping: REALTIME_REJECTED,
+  invalid_room_id: 'Неверный код комнаты',
+  invalid_peer_id: 'Неверный участник, обновите страницу',
+  invalid_session_token: 'Сессия участника недействительна',
+  invalid_name: 'Неверное имя',
+  invalid_media_kind: 'Неизвестный вид трансляции',
+  invalid_user_id: 'Неверный пользователь',
+  invalid_typing_activity: REALTIME_REJECTED,
+
+  invalid_join: 'Не удалось войти в комнату, обновите страницу',
+  superseded_join: 'Вход в комнату продолжен в другом окне',
+  reconnect_finalize_failed: 'Предыдущее подключение ещё закрывается, попробуйте ещё раз',
+  join_failed: 'Не удалось войти в комнату',
+  not_active_peer: 'Вы уже не в голосовом канале этой комнаты',
+  update_failed: 'Не удалось обновить состояние в комнате',
+  server_full: 'Сервер переполнен, попробуйте позже',
+  credential_boundary_unavailable: VOICE_UNAVAILABLE,
+  principal_unavailable: VOICE_UNAVAILABLE,
+  revoke_failed: 'Не удалось отключить доступ к комнате, попробуйте ещё раз'
 };
 
 /** The text for a failure code, or null when this build does not know the code. */
 export function errorText(code: string): string | null {
-  return Object.hasOwn(ERROR_TEXTS, code) ? ERROR_TEXTS[code as ErrorCode] : null;
+  return isErrorCode(code) ? ERROR_TEXTS[code] : null;
 }

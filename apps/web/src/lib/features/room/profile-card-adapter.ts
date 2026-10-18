@@ -7,7 +7,7 @@ import type { RoomSocial } from './social';
 import type { PresenceStatus } from '$lib/shared/presence';
 import type { Participant } from './client/model/participants';
 import type { ChatMessage } from '$lib/api/rooms';
-import type { MembershipMember } from '@voice-room/shared/membership';
+import type { MembershipMember } from '@voice-room/shared/contracts/membership';
 
 function presenceFor(social: RoomSocial, accountUserId: string): PresenceStatus {
   if (!accountUserId) return 'online';

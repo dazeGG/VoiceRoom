@@ -1,4 +1,4 @@
-import type { MembershipMember } from '@voice-room/shared/membership';
+import type { MembershipMember } from '@voice-room/shared/contracts/membership';
 import { MAX_MENTION_CANDIDATES, MAX_MENTIONS_PER_MESSAGE } from '@voice-room/shared/mentions';
 import type { RoomMessageContentV1, RoomMessageSegmentV1 } from '@voice-room/shared/room-message-content';
 

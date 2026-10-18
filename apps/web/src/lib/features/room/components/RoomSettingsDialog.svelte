@@ -10,6 +10,7 @@
   import { applyRoomUpdated } from '../client/room/lifecycle';
   import { showToast } from '../client/ui/toast';
   import { roomSettingsUi, closeRoomSettings } from '../room-settings.svelte';
+  import { useRoomShell } from '../shell';
   import ModerationCenter from '$lib/entities/room/components/ModerationCenter.svelte';
   import RoomMemberList from '$lib/entities/room/components/RoomMemberList.svelte';
   import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '$lib/entities/room/room-moderation';
@@ -20,6 +21,8 @@
   } from '$lib/api/notifications';
 
   type Section = 'general' | 'members' | 'bans';
+
+  const shell = useRoomShell();
 
   let name = $state('');
   let error = $state('');
@@ -68,7 +71,7 @@
       let room = await updateRoom(roomClientState.roomId, { name: trimmed });
       room = (await saveRoomAvatarChange(roomClientState.roomId, avatarChange)) ?? room;
       applyRoomUpdated(room);
-      window.dispatchEvent(new CustomEvent('voice-room:rooms-changed', { detail: { roomId: room.roomId } }));
+      shell.roomsChanged(room.roomId);
       closeRoomSettings();
       showToast('Комната обновлена');
     } catch (err) {

@@ -3,12 +3,14 @@
 
 import { expect, test } from 'vitest';
 import { fetchThreadPage, respondRoomInvite } from '../../src/lib/api/dm.ts';
+import type { DirectHistoryMessage } from '@voice-room/shared/contracts/messages';
+import { directHistoryMessage, directMessage } from '../fixtures/answers.ts';
 import { stubFetch } from '../fixtures/fetch.ts';
 
 const PEER = '22222222-2222-4222-8222-222222222222';
 
-function historyMessage(id: string, metadata: Record<string, unknown>) {
-  return { id, author: { userId: PEER }, content: { text: '' }, createdAt: 1000, metadata };
+function historyMessage(id: string, metadata: DirectHistoryMessage['metadata']) {
+  return directHistoryMessage({ id, author: { userId: PEER }, createdAt: 1000, metadata });
 }
 
 test('a history page turns room-invite metadata into an invitation with its outcome', async () => {
@@ -21,7 +23,7 @@ test('a history page turns room-invite metadata into an invitation with its outc
         messages: [
           historyMessage('m1', { kind: 'room-invite', roomId: 'abc123', roomName: 'Планёрка', expiresAt: 5000 }),
           historyMessage('m2', { kind: 'room-invite', roomId: 'abc123', roomName: 'Планёрка', status: 'declined' }),
-          historyMessage('m3', { kind: 'room-invite', roomId: 'abc123', status: 'bogus' }),
+          historyMessage('m3', { kind: 'room-invite', roomId: 'abc123' }),
           historyMessage('m4', {})
         ]
       }
@@ -39,7 +41,15 @@ test('a history page turns room-invite metadata into an invitation with its outc
 
 test('answering an invitation posts the decision for that message', async () => {
   const { calls } = stubFetch({
-    [`POST /api/dm/${PEER}/invites/m1/respond`]: { body: { message: { id: 'm1', invite: { status: 'accepted' } } } }
+    [`POST /api/dm/${PEER}/invites/m1/respond`]: {
+      body: {
+        ok: true,
+        message: directMessage({
+          id: 'm1',
+          invite: { roomId: 'abc123', roomName: 'Планёрка', status: 'accepted', expiresAt: null }
+        })
+      }
+    }
   });
   const message = await respondRoomInvite(PEER, 'm1', 'accept');
   expect(calls).toEqual([{ method: 'POST', url: `/api/dm/${PEER}/invites/m1/respond`, body: { action: 'accept' } }]);

@@ -1,16 +1,10 @@
 import type { StoredRoom } from '../domains/rooms/room-views.ts';
 import type { RoomChatMessage } from '../domains/messaging/room-chat-views.ts';
-import type { ClientCommands } from '@voice-room/shared/contracts/realtime';
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';
+import type { ClientCommands, PeerLeaveReason, VoiceTarget } from '@voice-room/shared/contracts/realtime';
 import type { RoomMessage } from '@voice-room/shared/contracts/messages';
 import type { LobbyRoom, PublicPeer } from '@voice-room/shared/contracts/rooms';
-import {
-  normalizeRoomId,
-  normalizePeerId,
-  normalizeSessionToken,
-  cleanGuestName,
-  cleanStreamId,
-  cleanScreenProfileId
-} from '@voice-room/shared/validation';
+import { normalizePeerId, cleanGuestName, cleanStreamId, cleanScreenProfileId } from '@voice-room/shared/validation';
 import { buildServerEnvelope } from './envelope.ts';
 import { buildRoomRealtimeSummaryFromLobbyRoom } from './summary.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
@@ -24,8 +18,10 @@ import { createRoomSummaries } from './room-summaries.ts';
 import { createRoomFanout } from './room-fanout.ts';
 import { createVoiceJoin } from './voice-join.ts';
 import { claimMedia, decideMediaRequest, MEDIA_MIN_VIEWERS } from './media-budget.ts';
+import { leaveReasonOf } from './runtime-types.ts';
 import type {
   FinalizeError,
+  LeaseReason,
   LeaseRecord,
   Peer,
   PresenceRoom,
@@ -45,7 +41,6 @@ type SessionUser =
     }
   | null
   | undefined;
-type JoinResult = { ok: boolean; code?: string; message?: string; reconnecting?: boolean };
 type GatePrincipal = { principalType: 'account' | 'guest'; principalId: string };
 type RuntimeCredentialBoundary = {
   revokePeer?: (input: { roomId: string; accountUserId: string | null; guestPrincipalId: string }) => Promise<unknown>;
@@ -65,7 +60,7 @@ export type RoomRuntimeDeps = {
   publicChatMessage: (message: RoomChatMessage) => RoomMessage;
   getUserStore?: (() => Pick<UserRepository, 'getUserById'>) | null;
   broadcast: (room: PresenceRoom, message: RoomPeerMessage, exceptPeerId?: string) => void;
-  closePeer: (roomId: string, peerId: string, transportId: string | undefined, reason: string) => void;
+  closePeer: (roomId: string, peerId: string, transportId: string | undefined, reason: PeerLeaveReason) => void;
   avatarColorForPeerId: (peerId: unknown) => string;
   MAX_ROOM_PEERS: number;
   MAX_VOICE_PEERS?: number;
@@ -109,11 +104,6 @@ function clearViewedScreenPeerReferences(room: PresenceRoom | null | undefined, 
   }
   return clearedViewers;
 }
-
-/** A room.peer.update command; the runtime normalizes every field itself. */
-export type PeerUpdatePayload = Partial<ClientCommands['room.peer.update']>;
-/** A room.media.request command; the kind and profile are normalized here. */
-export type MediaRequestPayload = Partial<ClientCommands['room.media.request']>;
 
 function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
   const {
@@ -208,7 +198,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
   }: {
     record: LeaseRecord;
     peer: Peer;
-    reason: string;
+    reason: LeaseReason;
   }): Promise<{ finalized: true }> {
     if (credentialBoundary?.revokePeer) {
       await credentialBoundary.revokePeer({
@@ -226,7 +216,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
       });
     }
 
-    closePeer(record.roomId, record.peerId, record.transportId, reason);
+    closePeer(record.roomId, record.peerId, record.transportId, leaveReasonOf(reason));
     try {
       await removeLiveKitParticipant(record.roomId, record.peerId);
     } catch (error) {
@@ -294,13 +284,13 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
 
   async function leaveVoiceRoom(
     connection: WsConnection,
-    payload: { roomId?: string; peerId?: string; sessionToken?: string } | null = connection.activeVoice,
+    payload: { roomId: string; peerId: string; sessionToken?: string } | null = connection.activeVoice,
     { cancelPendingJoin = true }: { cancelPendingJoin?: boolean } = {}
   ): Promise<void> {
     if (cancelPendingJoin) cancelConnectionVoiceJoin(connection, payload);
-    if (!payload?.roomId || !payload.peerId) return;
+    if (!payload) return;
     const activeVoice = connection.activeVoice;
-    const sessionToken = normalizeSessionToken(payload.sessionToken || activeVoice?.sessionToken);
+    const sessionToken = payload.sessionToken || activeVoice?.sessionToken || '';
     const ownsRequestedPeer =
       activeVoice?.roomId === payload.roomId &&
       activeVoice?.peerId === payload.peerId &&
@@ -339,7 +329,9 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     roomId,
     userId,
     reason = 'left-room'
-  }: { roomId?: string; userId?: string; reason?: string } = {}) {
+  }: { roomId?: string; userId?: string; reason?: PeerLeaveReason } = {}): Promise<
+    { ok: true; disconnected: number } | { ok: false; code: ErrorCode; disconnected: 0 }
+  > {
     if (!roomId || !userId || !credentialBoundary?.resolvePrincipal || !credentialBoundary?.revokePrincipal) {
       return { ok: false, code: 'credential_boundary_unavailable', disconnected: 0 };
     }
@@ -353,6 +345,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
       principalRevocationPromise ||= boundary.revokePrincipal({ roomId, principal });
       return principalRevocationPromise;
     };
+    let revokeFailed = false;
     try {
       await leases.cancelAccount({
         roomId,
@@ -362,22 +355,22 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
           if (!peer) return;
           const revoked = await revokePrincipalOnce();
           if (revoked?.status !== 'revoked') {
-            const error = new Error(revoked?.status || 'revoke_failed') as FinalizeError;
-            error.code = revoked?.status || 'revoke_failed';
+            revokeFailed = true;
+            const error: FinalizeError = new Error(revoked?.status || 'revoke_failed');
+            error.code = 'revoke_failed';
             throw error;
           }
           if (!ownershipFinalized) closePeer(roomId, peer.id, peer.transport?.id, reason);
           if (!ownershipFinalized) await removeLiveKitParticipant(roomId, peer.id);
         }
       });
-    } catch (error) {
-      return { ok: false, code: (error as FinalizeError | null)?.code || 'finalize_failed', disconnected: 0 };
+    } catch {
+      return { ok: false, code: revokeFailed ? 'revoke_failed' : 'reconnect_finalize_failed', disconnected: 0 };
     }
 
     if (peers.length === 0) {
       const revoked = await revokePrincipalOnce();
-      if (revoked?.status !== 'revoked')
-        return { ok: false, code: revoked?.status || 'revoke_failed', disconnected: 0 };
+      if (revoked?.status !== 'revoked') return { ok: false, code: 'revoke_failed', disconnected: 0 };
     }
 
     for (const peer of peers) {
@@ -397,12 +390,8 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
   // session this connection holds right now.
   function activePeer(
     connection: WsConnection,
-    target: { roomId?: unknown; peerId?: unknown; sessionToken?: unknown }
-  ): { ok: true; room: PresenceRoom; peer: Peer } | { ok: false; code: string } {
-    const roomId = normalizeRoomId(target.roomId);
-    const peerId = normalizePeerId(target.peerId);
-    const sessionToken = normalizeSessionToken(target.sessionToken);
-
+    { roomId, peerId, sessionToken }: VoiceTarget
+  ): { ok: true; room: PresenceRoom; peer: Peer } | { ok: false; code: ErrorCode } {
     const room = presenceRooms.get(roomId);
     const peer = room?.peers.get(peerId);
     if (!room || !peer || !tokensMatch(peer.sessionToken, sessionToken)) {
@@ -418,9 +407,8 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     return { ok: true, room, peer };
   }
 
-  async function updatePeerState(connection: WsConnection, payload: PeerUpdatePayload) {
-    const roomId = normalizeRoomId(payload.roomId);
-    const patch = payload.patch && typeof payload.patch === 'object' ? payload.patch : {};
+  async function updatePeerState(connection: WsConnection, payload: ClientCommands['room.peer.update']) {
+    const { roomId, patch } = payload;
 
     const active = activePeer(connection, payload);
     if (!active.ok) return active;
@@ -459,12 +447,12 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     broadcast(room, { type: 'peer-updated', peer: publicPeer(peer) });
     fanout.mirrorLegacyRoomEvent(roomId, { type: 'peer-updated', peer: publicPeer(peer) });
     scheduleSummaryBroadcast(roomId);
-    return { ok: true, peer: publicPeer(peer) };
+    return { ok: true as const, peer: publicPeer(peer) };
   }
 
   // Asked before a screen share or a camera starts. A grant holds its share of
   // the budget until the stream shows up in presence.
-  function requestMedia(connection: WsConnection, payload: MediaRequestPayload) {
+  function requestMedia(connection: WsConnection, payload: ClientCommands['room.media.request']) {
     const active = activePeer(connection, payload);
     if (!active.ok) return active;
     const at = now();
@@ -472,7 +460,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
       rooms: presenceRooms.values(),
       room: active.room,
       peer: active.peer,
-      kind: payload.kind === 'camera' ? 'camera' : 'screen',
+      kind: payload.kind,
       profileId: cleanScreenProfileId(payload.profileId),
       limits: {
         budgetBps: MEDIA_BUDGET_MBPS * 1_000_000,

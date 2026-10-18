@@ -4,6 +4,13 @@
 // the same types, so a field one side drops is a type error on the other.
 
 import { Type, type Static, type TProperties, type TSchema } from 'typebox';
+import { Value } from 'typebox/value';
+
+/** Why `value` does not match `schema`: the first failing path and its message, for logs. */
+export function firstMismatch(schema: TSchema, value: unknown): string {
+  const [error] = Value.Errors(schema, value);
+  return error ? `${error.instancePath || '/'}: ${error.message}` : '';
+}
 
 /**
  * `code` is one of ERROR_CODES (./errors.ts); the web picks the user's text

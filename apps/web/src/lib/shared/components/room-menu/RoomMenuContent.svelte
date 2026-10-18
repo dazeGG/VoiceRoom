@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Bell, BellOff, Copy, Link, Settings, Trash2, UserRoundPlus } from '@lucide/svelte';
-  import type { RoomRelationship } from '$lib/api/auth';
+  import type { RoomRelationship } from '@voice-room/shared/contracts/rooms';
   import type { Friend } from '$lib/api/friends';
   import { removeRoomFromList } from '$lib/api/auth';
   import { Avatar, Ellipsis, PopoverDivider, PopoverMenuItem, PopoverMenuLabel, PopoverSubmenu } from '$lib/shared/ui';

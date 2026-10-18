@@ -1,4 +1,4 @@
-import type { PresenceStatus } from '@voice-room/shared/validation';
+import type { PresenceStatus } from '@voice-room/shared/contracts/users';
 
 export type { PresenceStatus };
 

@@ -1,4 +1,4 @@
-import type { LiveKitAdmission } from '@voice-room/shared/contracts/admission';
+import { LiveKitAdmission } from '@voice-room/shared/contracts/admission';
 import { api } from '$lib/api/client';
 import { fetchRoomStatus } from '$lib/api/rooms';
 import { resolveLiveKitUrls } from '$lib/platform/runtime-config';
@@ -13,7 +13,7 @@ export async function requestLiveKitToken(input: {
   roomId: string;
   sessionToken: string;
 }): Promise<LiveKitCredentials> {
-  const admission = await api.post<LiveKitAdmission>('/api/livekit-token', input);
+  const admission = await api.post('/api/livekit-token', LiveKitAdmission, input);
   return { ...admission, urls: await resolveLiveKitUrls(admission.url) };
 }
 

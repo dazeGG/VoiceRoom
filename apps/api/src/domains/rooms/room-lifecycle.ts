@@ -17,7 +17,7 @@ interface RoomRuntime {
   scheduleSummaryBroadcast(roomId: string): void;
   cancelRoomReconnectLeases(input: {
     roomId: string;
-    reason: string;
+    reason: 'deleted';
     finalizePeer(input: { peer?: RosterPeer | null; ownershipFinalized: boolean }): Promise<{ finalized: boolean }>;
   }): Promise<unknown>;
 }

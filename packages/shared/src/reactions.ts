@@ -1,12 +1,11 @@
-// Emoji reactions on a message: the toggle a client sends, the per-emoji
-// summary it receives and the paginated list of who reacted.
+// Emoji reactions on a message: the toggle a client sends, and the checks on
+// the per-emoji summary and the paginated list of who reacted (their shapes
+// are contracts/messages.ts).
 
+import type { Reactor, ReactorList, ReactionSummary } from './contracts/messages.ts';
 import { cleanReactionEmoji } from './emoji.ts';
 
 export type ReactionMutation = { messageId: string; emoji: string; active: boolean };
-export type ReactionSummary = { emoji: string; count: number; reactedByMe: boolean; revision: string };
-export type Reactor = { userId: string; displayName: string; avatarUrl: string | null };
-export type ReactorPage = { reactors: Reactor[]; nextCursor: string | null };
 
 type Loose = Record<string, unknown>;
 
@@ -61,7 +60,7 @@ export function normalizeReactorQuery(value: unknown = {}): { cursor: string | n
   return { cursor, limit };
 }
 
-export function normalizeReactorPage(value: unknown): ReactorPage | null {
+export function normalizeReactorPage(value: unknown): ReactorList | null {
   if (!value || typeof value !== 'object' || !Array.isArray((value as Loose).reactors)) return null;
   const input = value as Loose;
   const reactors = (input.reactors as (Loose | null)[]).map((reactor) => {

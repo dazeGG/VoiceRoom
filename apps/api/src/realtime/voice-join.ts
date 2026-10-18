@@ -4,15 +4,9 @@
 // peer's transport, and the snapshot and roster events that follow.
 
 import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
-import type { ClientCommands, RoomSnapshot } from '@voice-room/shared/contracts/realtime';
-import {
-  cleanGuestName,
-  cleanName,
-  isReservedPeerId,
-  normalizePeerId,
-  normalizeRoomId,
-  normalizeSessionToken
-} from '@voice-room/shared/validation';
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';
+import type { ClientCommands, PeerLeaveReason, RoomSnapshot } from '@voice-room/shared/contracts/realtime';
+import { cleanGuestName, cleanName, isReservedPeerId } from '@voice-room/shared/validation';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { buildServerEnvelope } from './envelope.ts';
 import { legacyPeerMessageToWs, type RoomPeerMessage } from './legacy-events.ts';
@@ -34,10 +28,9 @@ type SessionUser =
     }
   | null
   | undefined;
-export type JoinResult = { ok: boolean; code?: string; message?: string; reconnecting?: boolean };
-/** A room.join command; the runtime normalizes every field itself. */
-export type JoinPayload = Partial<ClientCommands['room.join']>;
-type LeavePayload = { roomId?: string; peerId?: string; sessionToken?: string } | null;
+/** How a room.join ended; a refusal with a message also goes to the client as an error frame. */
+export type JoinResult = { ok: true; reconnecting: boolean } | { ok: false; code: ErrorCode; message?: string };
+type LeavePayload = { roomId: string; peerId: string; sessionToken?: string } | null;
 
 export interface VoiceJoinDeps {
   presenceRooms: Map<string, PresenceRoom>;
@@ -46,7 +39,7 @@ export interface VoiceJoinDeps {
   getRoom: (roomId: string) => Promise<PresenceRoom | null>;
   publicPeer: (peer: Peer) => PublicPeer;
   broadcast: (room: PresenceRoom, message: RoomPeerMessage, exceptPeerId?: string) => void;
-  closePeer: (roomId: string, peerId: string, transportId: string | undefined, reason: string) => void;
+  closePeer: (roomId: string, peerId: string, transportId: string | undefined, reason: PeerLeaveReason) => void;
   avatarColorForPeerId: (peerId: unknown) => string;
   MAX_ROOM_PEERS: number;
   /** People in voice across every room; 0 leaves the server uncapped. */
@@ -150,16 +143,11 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
 
   function cancelConnectionVoiceJoin(
     connection: WsConnection,
-    payload: { roomId?: unknown; peerId?: unknown } | null = null
+    payload: { roomId: string; peerId: string } | null = null
   ): void {
     const pending = connection.pendingVoiceJoin;
     if (!pending) return;
-    if (
-      payload &&
-      (normalizeRoomId(payload.roomId) !== pending.roomId || normalizePeerId(payload.peerId) !== pending.peerId)
-    ) {
-      return;
-    }
+    if (payload && (payload.roomId !== pending.roomId || payload.peerId !== pending.peerId)) return;
     connection.pendingVoiceJoin = null;
   }
 
@@ -170,7 +158,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
     roomId: string,
     peerId: string,
     transportId: string,
-    reason: string
+    reason: PeerLeaveReason
   ): void {
     closePeer(roomId, peerId, transportId, reason);
     if (connection.activeVoice?.transportId !== transportId) return;
@@ -209,20 +197,18 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
 
   async function joinVoiceRoom(
     connection: WsConnection,
-    payload: JoinPayload,
+    payload: ClientCommands['room.join'],
     sessionUser: SessionUser,
     clientIp = '',
     requestId = ''
   ): Promise<JoinResult> {
     const joinRequestSequence = ++joinRequestSequenceCounter;
-    const roomId = normalizeRoomId(payload.roomId);
-    const peerId = normalizePeerId(payload.peerId);
-    const sessionToken = normalizeSessionToken(payload.sessionToken);
+    const { roomId, peerId, sessionToken } = payload;
     const name = sessionUser ? cleanName(sessionUser.displayName || sessionUser.login) : cleanGuestName(payload.name);
 
     // `auth-<userId>` is the API's own account peer id (shared/validation), so
     // a voice peer may never claim it.
-    if (!roomId || !peerId || !sessionToken || isReservedPeerId(peerId)) {
+    if (isReservedPeerId(peerId)) {
       return { ok: false, code: 'invalid_join', message: 'Invalid room, peer, or session token' };
     }
 

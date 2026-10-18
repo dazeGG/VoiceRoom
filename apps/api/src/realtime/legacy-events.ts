@@ -3,7 +3,7 @@
 // that could not map a message would report a failed send and the peer
 // would be dropped as lost.
 
-import type { ServerEvents } from '@voice-room/shared/contracts/realtime';
+import type { PeerLeaveReason, ServerEvents } from '@voice-room/shared/contracts/realtime';
 import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import { buildServerEnvelope } from './envelope.ts';
 
@@ -12,7 +12,7 @@ type Tagged<Type extends string, Fields> = { type: Type } & Fields;
 export type RoomPeerMessage =
   | Tagged<'ping', ServerEvents['pong']>
   | Tagged<'peer-joined' | 'peer-updated', Pick<ServerEvents['room.peer.joined'], 'peer'>>
-  | Tagged<'peer-left', { peerId: string; reason?: string }>
+  | Tagged<'peer-left', { peerId: string; reason?: PeerLeaveReason }>
   | Tagged<'room-updated', ServerEvents['room.updated']>
   | Tagged<'room-deleted', ServerEvents['room.deleted']>
   | Tagged<'room-not-found', { roomId?: string }>

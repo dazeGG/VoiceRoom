@@ -3,7 +3,7 @@
 // realtime runtime sends over the socket.
 
 import type { RoomPeerMessage } from '../../realtime/legacy-events.ts';
-import type { LobbyRoom, PublicPeer } from '@voice-room/shared/contracts/rooms';
+import type { LobbyRoom, PublicPeer, RoomRelationship } from '@voice-room/shared/contracts/rooms';
 import type { ClientKind } from '@voice-room/shared/account-security';
 import { avatarColorForPeerId } from './avatar-color.ts';
 import { failure, type Failure } from '../../platform/http/http-kit.ts';
@@ -46,7 +46,8 @@ export interface StoredRoom {
   lastMessageAt?: number | null;
   name: string;
   ownerId?: string | null;
-  relationship?: string;
+  /** '' when the listing did not say. */
+  relationship?: RoomRelationship | '';
   unreadCount?: number;
 }
 

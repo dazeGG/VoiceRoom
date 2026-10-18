@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { cleanPresenceStatus } from '@voice-room/shared/validation';
-import type { PresenceStatus } from '@voice-room/shared/validation';
+import type { PresenceStatus } from '@voice-room/shared/contracts/users';
 import type { ClientKind } from '@voice-room/shared/account-security';
 import type { ServerEnvelope, TypingActivity } from '@voice-room/shared/realtime';
 import type { createTypingThrottle } from './typing-throttle.ts';

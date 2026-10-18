@@ -21,13 +21,3 @@ test('G21-A01 history request limits and opaque cursors are exact', () => {
     code: 'invalid_cursor'
   });
 });
-
-test('G21-A02 read cursors originate only from normalized message DTOs and future envelopes fall back', () => {
-  assert.equal(history.getReadCursorFromMessage({ id: 'm', readCursor: 'opaque_cursor' }), 'opaque_cursor');
-  assert.equal(history.getReadCursorFromMessage({ readCursor: 'opaque_cursor' }), '');
-  assert.deepEqual(history.normalizeHistoryEnvelope({ contractVersion: 99, messages: [{ id: 'm' }] }), {
-    ok: true,
-    legacy: true,
-    messages: []
-  });
-});

@@ -4,6 +4,7 @@
 // failure is rethrown marked `ownershipFinalized` so the reconnect lease does
 // not hand the seat back.
 
+import type { PeerLeaveReason } from '@voice-room/shared/contracts/realtime';
 import type { RoomPeerMessage } from '../../realtime/legacy-events.ts';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { LiveRoom, PresencePeer } from './room-views.ts';
@@ -24,7 +25,7 @@ export interface ReconnectRuntime {
   finalizeReconnectPeers(input: {
     roomId: string;
     peerIds: string[];
-    reason: string;
+    reason: EvictionType;
     finalizePeer(input: {
       peerId: string;
       peer?: PresencePeer | null;
@@ -41,7 +42,7 @@ export interface PeerEvictionDeps {
   notifyUser(userId: string, event: AccountMessage): void;
   /** Drops the voice seat any socket of this peer still holds in the room. */
   detachVoiceConnections(roomId: string, peerId: string): void;
-  closePeer(roomId: string, peerId: string, transportId: string | undefined, reason: string): void;
+  closePeer(roomId: string, peerId: string, transportId: string | undefined, reason: PeerLeaveReason): void;
   removeParticipant(roomId: string, peerId: string): Promise<void>;
 }
 

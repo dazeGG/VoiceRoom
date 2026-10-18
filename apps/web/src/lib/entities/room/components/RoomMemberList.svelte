@@ -9,7 +9,7 @@
   import { getRoomMembership, loadRoomMembership, roomMembershipState } from '../room-membership.svelte';
   import { BAN_DURATIONS, banRoomMember, kickRoomMember, type ModerationNotice } from '../room-moderation';
   import { roomPresence } from '../room-presence.svelte';
-  import type { MembershipMember } from '$lib/api/memberships';
+  import { presenceOfMember, type MembershipMember } from '@voice-room/shared/contracts/membership';
   import type { ModerationDuration } from '$lib/api/moderation';
   import { openProfileCardFor } from '../../profile-card/profile-card-ui.svelte';
   import type { ProfileCardPerson } from '$lib/shared/components/profile-card';
@@ -61,7 +61,7 @@
       avatarUrl: member.avatarUrl,
       avatarColorKey: member.avatarColorKey,
       avatarAccent: member.avatarAccent,
-      presence: member.presenceStatus === 'afk' ? 'away' : member.presenceStatus
+      presence: presenceOfMember(member.presenceStatus)
     };
   }
 

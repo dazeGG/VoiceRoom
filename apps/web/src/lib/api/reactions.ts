@@ -1,10 +1,10 @@
-import type {
+import {
   ReactionSet,
   ReactionSummaries,
-  ReactionSummary,
-  ReactorPage as ReactorPageAnswer
+  ReactorPage,
+  type ReactionSummary,
+  type ReactorList
 } from '@voice-room/shared/contracts/messages';
-import type { ReactorPage } from '@voice-room/shared/reactions';
 import { api } from './client';
 
 export type ReactionConversation = { type: 'room' | 'dm'; id: string };
@@ -17,7 +17,7 @@ export async function fetchReactionSummaries(
   conversation: ReactionConversation,
   messageId: string
 ): Promise<ReactionSummary[]> {
-  return (await api.get<ReactionSummaries>(reactionUrl(conversation, messageId))).summaries;
+  return (await api.get(reactionUrl(conversation, messageId), ReactionSummaries)).summaries;
 }
 
 export async function setReactionDesired(
@@ -26,7 +26,7 @@ export async function setReactionDesired(
   emoji: string,
   active: boolean
 ): Promise<ReactionSummary> {
-  return (await api.put<ReactionSet>(reactionUrl(conversation, messageId), { emoji, active })).summary;
+  return (await api.put(reactionUrl(conversation, messageId), ReactionSet, { emoji, active })).summary;
 }
 
 export async function fetchReactors(
@@ -34,14 +34,15 @@ export async function fetchReactors(
   messageId: string,
   emoji: string,
   options: { cursor?: string | null; limit?: number } = {}
-): Promise<ReactorPage> {
+): Promise<ReactorList> {
   const params = new URLSearchParams({
     emoji,
     limit: String(options.limit ?? 50)
   });
   if (options.cursor) params.set('cursor', options.cursor);
-  const { reactors, nextCursor } = await api.get<ReactorPageAnswer>(
-    `${reactionUrl(conversation, messageId)}/reactors?${params}`
+  const { reactors, nextCursor } = await api.get(
+    `${reactionUrl(conversation, messageId)}/reactors?${params}`,
+    ReactorPage
   );
   return { reactors, nextCursor };
 }

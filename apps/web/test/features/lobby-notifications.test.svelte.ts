@@ -50,7 +50,12 @@ afterEach(() => {
 function roomMessage(id: string): void {
   socket.receive({
     type: 'notification.room.message',
-    payload: { roomId: 'room', message: { id } }
+    payload: {
+      dedupeKey: `room:${id}`,
+      room: { roomId: 'room' },
+      sender: { id: 'anna' },
+      message: { id, body: 'hi', createdAt: 1 }
+    }
   });
 }
 

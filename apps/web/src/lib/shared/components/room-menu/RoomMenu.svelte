@@ -1,6 +1,6 @@
 <script lang="ts">
   import { BellOff, ChevronDown } from '@lucide/svelte';
-  import type { RoomRelationship } from '$lib/api/auth';
+  import type { RoomRelationship } from '@voice-room/shared/contracts/rooms';
   import type { Friend } from '$lib/api/friends';
   import { Avatar, Ellipsis, Popover } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';

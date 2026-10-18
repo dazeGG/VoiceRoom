@@ -9,7 +9,7 @@ const loadSessionModule = () => freshImport<typeof SessionModule>('/src/lib/feat
 beforeEach(() => localStorage.clear());
 
 test('the first load asks the server once, even for concurrent callers', async () => {
-  const { calls } = stubFetch({ '/api/auth/me': { body: { user: authUser() } } });
+  const { calls } = stubFetch({ '/api/auth/me': { body: { ok: true, user: authUser() } } });
   const { loadSession, session } = await loadSessionModule();
 
   const [first, second] = await Promise.all([loadSession(), loadSession()]);
@@ -24,7 +24,7 @@ test('the first load asks the server once, even for concurrent callers', async (
 });
 
 test('a signed-in account fills the voice room name; there is no local session hint', async () => {
-  stubFetch({ '/api/auth/me': { body: { user: authUser({ displayName: '  ', login: 'boris' }) } } });
+  stubFetch({ '/api/auth/me': { body: { ok: true, user: authUser({ displayName: '  ', login: 'boris' }) } } });
   const { loadSession } = await loadSessionModule();
 
   await loadSession();
@@ -43,7 +43,7 @@ test('a failed session check is reported, not shown as a signed-out visitor', as
 });
 
 test('a forced reload asks again and signing out forgets the room name', async () => {
-  const { calls } = stubFetch({ '/api/auth/me': { body: { user: authUser() } } });
+  const { calls } = stubFetch({ '/api/auth/me': { body: { ok: true, user: authUser() } } });
   const { clearSession, loadSession, session } = await loadSessionModule();
 
   await loadSession();

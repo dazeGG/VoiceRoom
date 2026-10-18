@@ -10,7 +10,11 @@ import {
   type RuntimeRoomStore
 } from '../src/realtime/room-runtime.ts';
 import type { ConnectionRegistry, WsConnection } from '../src/realtime/registry.ts';
+import type { JoinResult } from '../src/realtime/voice-join.ts';
 import { fake } from './fakes/index.ts';
+
+/** The code a join was refused with, or null when it took the seat. */
+const codeOf = (result: JoinResult) => (result.ok ? null : result.code);
 
 const ROOM_ID = 'room1';
 const OWNER_ID = 'peer-owner1';
@@ -429,7 +433,7 @@ test('newer concurrent join wins even when its identity lookup finishes first', 
   });
   const firstConnection = fake<WsConnection>({ activeVoice: null, previewRoomIds: new Set() });
   const secondConnection = fake<WsConnection>({ activeVoice: null, previewRoomIds: new Set() });
-  const payload = { roomId: ROOM_ID, peerId: OWNER_ID, sessionToken: OWNER_TOKEN };
+  const payload = { roomId: ROOM_ID, peerId: OWNER_ID, sessionToken: OWNER_TOKEN, name: 'Owner' };
 
   const firstJoin = runtime.joinVoiceRoom(firstConnection, { ...payload, name: 'First' }, null);
   const secondJoin = runtime.joinVoiceRoom(secondConnection, { ...payload, name: 'Second' }, null);
@@ -446,7 +450,7 @@ test('newer concurrent join wins even when its identity lookup finishes first', 
   const firstResult = await firstJoin;
 
   assert.equal(secondResult.ok, true);
-  assert.equal(firstResult.code, 'superseded_join');
+  assert.equal(codeOf(firstResult), 'superseded_join');
   assert.equal(room.peers.get(OWNER_ID)?.transport?.id, secondConnection.activeVoice?.transportId);
 });
 
@@ -466,7 +470,7 @@ test('older join cannot replace a newer join after a delayed room lookup', async
   });
   const firstConnection = fake<WsConnection>({ activeVoice: null, previewRoomIds: new Set() });
   const secondConnection = fake<WsConnection>({ activeVoice: null, previewRoomIds: new Set() });
-  const payload = { roomId: ROOM_ID, peerId: OWNER_ID, sessionToken: OWNER_TOKEN };
+  const payload = { roomId: ROOM_ID, peerId: OWNER_ID, sessionToken: OWNER_TOKEN, name: 'Owner' };
 
   const firstJoin = runtime.joinVoiceRoom(firstConnection, { ...payload, name: 'First' }, null);
   const secondJoin = runtime.joinVoiceRoom(secondConnection, { ...payload, name: 'Second' }, null);
@@ -478,7 +482,7 @@ test('older join cannot replace a newer join after a delayed room lookup', async
   const firstResult = await firstJoin;
 
   assert.equal(secondResult.ok, true);
-  assert.equal(firstResult.code, 'superseded_join');
+  assert.equal(codeOf(firstResult), 'superseded_join');
   assert.equal(room.peers.get(OWNER_ID)?.transport?.id, secondConnection.activeVoice?.transportId);
 });
 
@@ -499,7 +503,7 @@ test('initial join is announced even when a reconnect replaces it during occupan
   });
   const firstConnection = fake<WsConnection>({ activeVoice: null, previewRoomIds: new Set() });
   const secondConnection = fake<WsConnection>({ activeVoice: null, previewRoomIds: new Set() });
-  const payload = { roomId: ROOM_ID, peerId: OWNER_ID, sessionToken: OWNER_TOKEN };
+  const payload = { roomId: ROOM_ID, peerId: OWNER_ID, sessionToken: OWNER_TOKEN, name: 'Owner' };
 
   const firstJoin = runtime.joinVoiceRoom(firstConnection, { ...payload, name: 'First' }, null);
   while (occupancyTransitions.length < 1) await Promise.resolve();
@@ -512,7 +516,7 @@ test('initial join is announced even when a reconnect replaces it during occupan
   const firstResult = await firstJoin;
 
   assert.equal(secondResult.ok, true);
-  assert.equal(firstResult.code, 'superseded_join');
+  assert.equal(codeOf(firstResult), 'superseded_join');
   assert.deepEqual(
     broadcasts.map((message) => message.type),
     ['peer-joined']
@@ -579,7 +583,7 @@ test('explicit leave cancels a join before it can attach a peer', async () => {
     }
   });
   const connection = fake<WsConnection>({ activeVoice: null, closed: false, previewRoomIds: new Set() });
-  const payload = { roomId: ROOM_ID, peerId: OWNER_ID, sessionToken: OWNER_TOKEN };
+  const payload = { roomId: ROOM_ID, peerId: OWNER_ID, sessionToken: OWNER_TOKEN, name: 'Owner' };
 
   const join = runtime.joinVoiceRoom(connection, payload, null);
   while (!releaseIdentity) await Promise.resolve();
@@ -587,7 +591,7 @@ test('explicit leave cancels a join before it can attach a peer', async () => {
   releaseIdentity?.({ status: 'ok', identity: { avatarColorKey: 'blue' } });
   const result = await join;
 
-  assert.equal(result.code, 'superseded_join');
+  assert.equal(codeOf(result), 'superseded_join');
   assert.equal(connection.activeVoice, null);
   assert.equal(room.peers.size, 0);
 });
@@ -605,7 +609,7 @@ test('connection cleanup cancels a join before it can create a ghost peer', asyn
     }
   });
   const connection = fake<WsConnection>({ activeVoice: null, closed: false, previewRoomIds: new Set() });
-  const payload = { roomId: ROOM_ID, peerId: OWNER_ID, sessionToken: OWNER_TOKEN };
+  const payload = { roomId: ROOM_ID, peerId: OWNER_ID, sessionToken: OWNER_TOKEN, name: 'Owner' };
 
   const join = runtime.joinVoiceRoom(connection, payload, null);
   while (!releaseIdentity) await Promise.resolve();
@@ -614,7 +618,7 @@ test('connection cleanup cancels a join before it can create a ghost peer', asyn
   releaseIdentity?.({ status: 'ok', identity: { avatarColorKey: 'blue' } });
   const result = await join;
 
-  assert.equal(result.code, 'superseded_join');
+  assert.equal(codeOf(result), 'superseded_join');
   assert.equal(connection.activeVoice, null);
   assert.equal(room.peers.size, 0);
 });
@@ -654,7 +658,8 @@ test('newer room join wins across different peer keys on one connection', async 
     {
       roomId: ROOM_ID,
       peerId: OWNER_ID,
-      sessionToken: OWNER_TOKEN
+      sessionToken: OWNER_TOKEN,
+      name: 'Owner'
     },
     null
   );
@@ -664,7 +669,8 @@ test('newer room join wins across different peer keys on one connection', async 
     {
       roomId: secondRoomId,
       peerId: secondPeerId,
-      sessionToken: secondToken
+      sessionToken: secondToken,
+      name: 'Second'
     },
     null
   );
@@ -672,7 +678,7 @@ test('newer room join wins across different peer keys on one connection', async 
   const firstResult = await firstJoin;
 
   assert.equal(secondResult.ok, true);
-  assert.equal(firstResult.code, 'superseded_join');
+  assert.equal(codeOf(firstResult), 'superseded_join');
   assert.equal(firstRoom.peers.size, 0);
   assert.equal(secondRoom.peers.get(secondPeerId).transport.id, connection.activeVoice?.transportId);
   assert.equal(connection.activeVoice?.roomId, secondRoomId);
@@ -703,7 +709,8 @@ test('same connection cannot leave an orphan when it changes peer id in one room
     {
       roomId: ROOM_ID,
       peerId: OWNER_ID,
-      sessionToken: OWNER_TOKEN
+      sessionToken: OWNER_TOKEN,
+      name: 'Owner'
     },
     null
   );
@@ -712,7 +719,8 @@ test('same connection cannot leave an orphan when it changes peer id in one room
     {
       roomId: ROOM_ID,
       peerId: secondPeerId,
-      sessionToken: secondToken
+      sessionToken: secondToken,
+      name: 'Second'
     },
     null
   );
@@ -1039,7 +1047,7 @@ test('terminal ownership invalidates an in-flight claimed replacement without re
   resolveIdentity?.({ status: 'ok', identity: { id: 'identity-owner', avatarColorKey: 'blue' } });
 
   const result = await replacement;
-  assert.equal(result.code, 'superseded_join');
+  assert.equal(codeOf(result), 'superseded_join');
   assert.equal(room.peers.has(OWNER_ID), false);
   assert.equal(revoked.length, 1);
   assert.equal(closed.length, 1);
@@ -1171,7 +1179,7 @@ test('membership removal terminal-claims leases before one principal revoke and 
     },
     { id: 'account-owner' }
   );
-  assert.equal(lateJoin.code, 'superseded_join');
+  assert.equal(codeOf(lateJoin), 'superseded_join');
   assert.equal(closed.length, 1);
   assert.equal(principalRevokes.length, 1);
 });
@@ -1256,7 +1264,7 @@ test('only one replacement may claim a pending reconnect lease', async () => {
     },
     null
   );
-  assert.equal(second.code, 'superseded_join');
+  assert.equal(codeOf(second), 'superseded_join');
 
   resolveIdentity?.({ status: 'ok', identity: { id: 'identity-owner', avatarColorKey: 'blue' } });
   assert.equal((await first).ok, true);
@@ -1310,7 +1318,7 @@ test('failed expiry finalizer blocks admission until credential revoke retry suc
     },
     null
   );
-  assert.equal(blocked.code, 'reconnect_finalize_failed');
+  assert.equal(codeOf(blocked), 'reconnect_finalize_failed');
   assert.equal(room.peers.has(OWNER_ID), true);
   assert.equal(closed.length, 0);
 
@@ -1387,7 +1395,7 @@ test('terminal prerequisite keeps ownership when the claimed transport disconnec
   releaseTerminal?.();
   await terminal;
   const result = await replacement;
-  assert.equal(result.code, 'superseded_join');
+  assert.equal(codeOf(result), 'superseded_join');
   assert.equal(identityCalls, 0);
 });
 
@@ -1466,7 +1474,7 @@ test('explicit leave only terminates the old generation and allows immediate sam
 });
 
 test('kick terminal ownership rejects same-session resurrection', async () => {
-  for (const reason of ['kicked', 'room.kicked']) {
+  for (const reason of ['kicked', 'room.kicked'] as const) {
     const scheduler = createManualScheduler();
     const revoked: unknown[] = [];
     const closed: Closed[] = [];
@@ -1486,7 +1494,7 @@ test('kick terminal ownership rejects same-session resurrection', async () => {
       null
     );
 
-    assert.equal(result.code, 'superseded_join', reason);
+    assert.equal(codeOf(result), 'superseded_join', reason);
     assert.equal(room.peers.has(OWNER_ID), false, reason);
   }
 });
@@ -1528,7 +1536,7 @@ test('membership finalizer failure does not close the peer or report successful 
     userId: 'account-owner',
     reason: 'membership-left'
   });
-  assert.deepEqual(result, { ok: false, code: 'unavailable', disconnected: 0 });
+  assert.deepEqual(result, { ok: false, code: 'revoke_failed', disconnected: 0 });
   assert.equal(room.peers.has(OWNER_ID), true);
   assert.deepEqual(closed, []);
   assert.deepEqual(removeCalls, []);
@@ -1642,7 +1650,7 @@ test('claimed replacements are superseded by delete, kick, and membership termin
     }
     resolveIdentity?.({ status: 'ok', identity: { id: 'identity-owner', avatarColorKey: 'blue' } });
     const result = await replacement;
-    assert.equal(result.code, 'superseded_join', scope);
+    assert.equal(codeOf(result), 'superseded_join', scope);
     assert.equal(room.peers.has(OWNER_ID), false, scope);
     assert.equal(closed.length, 1, scope);
   }
@@ -1694,7 +1702,7 @@ test('terminal scope finalizes the current authoritative transport instead of an
   await runtime.cancelRoomReconnectLeases({ roomId: ROOM_ID, reason: 'deleted' });
   resolveIdentity?.({ status: 'ok', identity: { id: 'identity-owner', avatarColorKey: 'blue' } });
 
-  assert.equal((await obsoleteJoin).code, 'superseded_join');
+  assert.equal(codeOf(await obsoleteJoin), 'superseded_join');
   assert.equal(room.peers.has(OWNER_ID), false);
   assert.equal(closed.length, 1);
   assert.equal(closed[0]?.transportId, 'transport-authoritative');

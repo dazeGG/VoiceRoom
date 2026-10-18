@@ -1,6 +1,5 @@
 // Who a message mentions: unique account ids, never the author, at most five.
 
-export const MENTIONS_CONTRACT_VERSION = 1 as const;
 export const MAX_MENTIONS_PER_MESSAGE = 5 as const;
 export const MAX_MENTION_CANDIDATES = 8 as const;
 

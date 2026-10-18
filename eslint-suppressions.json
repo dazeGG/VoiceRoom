@@ -325,17 +325,11 @@
     }
   },
   "apps/api/src/realtime/room-runtime.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    },
     "no-useless-assignment": {
       "count": 1
     }
   },
   "apps/api/src/realtime/ws-handler.ts": {
-    "@typescript-eslint/await-thenable": {
-      "count": 1
-    },
     "@typescript-eslint/no-base-to-string": {
       "count": 1
     },
@@ -697,17 +691,11 @@
     }
   },
   "apps/web/src/lib/features/home/LobbyPage.svelte": {
-    "@typescript-eslint/consistent-type-imports": {
+    "@typescript-eslint/no-unsafe-argument": {
       "count": 1
     },
-    "@typescript-eslint/no-unsafe-argument": {
-      "count": 3
-    },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 4
-    },
-    "@typescript-eslint/no-unsafe-member-access": {
-      "count": 4
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 1

@@ -13,7 +13,7 @@ import { checkRoomExists } from '../net/api';
 import { postState } from './presence';
 import { UserFacingError, wait } from '../core/utils';
 import { rotateStoredPeerSession } from '../core/session';
-import { isRoomEmbedded } from '../core/embed';
+import { getRoomShell, isRoomEmbedded } from '../core/embed';
 import { openLeaveScreen } from '../../leave-screen.svelte';
 import { CALL_FEEDBACK_MAX_DURATION_S } from '@voice-room/shared/contracts/feedback';
 import {
@@ -493,7 +493,7 @@ export async function handleLeaveButtonClick(): Promise<void> {
   }
 
   if (isRoomEmbedded()) {
-    window.dispatchEvent(new CustomEvent('voice-room:embedded-leave', { detail: { roomId } }));
+    getRoomShell().roomLeft(roomId);
     return;
   }
 

@@ -159,11 +159,15 @@ test('the history loads a page at a time and narrows to one room', async () => {
   const urls = stubApi({
     'GET /api/admin/rooms': () => live([kitchen()]),
     'GET /api/admin/rooms/history': (url) => {
-      if (url.searchParams.get('after') === 'cursor-1') return history([stay('s-old', { account: alice })]);
+      if (url.searchParams.get('after') === '1700000000000_11111111-1111-4111-8111-111111111111')
+        return history([stay('s-old', { account: alice })]);
       if (url.searchParams.get('roomId') === 'gone')
         return history([stay('s-gone', { roomId: 'gone', roomName: null })]);
       if (url.searchParams.get('roomId') === 'kitchen') return history([stay('s-kitchen')]);
-      return history([...pageOne, stay('s-gone', { roomId: 'gone', roomName: null })], 'cursor-1');
+      return history(
+        [...pageOne, stay('s-gone', { roomId: 'gone', roomName: null })],
+        '1700000000000_11111111-1111-4111-8111-111111111111'
+      );
     }
   });
   render(AdminPanel, { props: { tab: 'rooms' } });

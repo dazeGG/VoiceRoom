@@ -3,6 +3,7 @@
 // itself changing or going away.
 
 import { SvelteSet } from 'svelte/reactivity';
+import { errorText } from '$lib/api/error-texts';
 import { getAppRealtime, type RealtimeEvent } from '$lib/api/realtime';
 import { isMediaRequestError } from '$lib/entities/room/room-realtime';
 import { setVoiceSessionTiming } from '../../voice-session.svelte';
@@ -82,7 +83,7 @@ export function createVoiceEventHandler(room: {
         room.showModeration('banned');
         return;
       }
-      showToast(event.payload.message || 'Ошибка realtime-соединения');
+      showToast(errorText(event.payload.code) ?? 'Ошибка realtime-соединения');
       if (
         event.payload.code === 'invalid_session' ||
         event.payload.code === 'join_failed' ||

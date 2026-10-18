@@ -95,7 +95,7 @@ function createHandler(
         sessionToken: String(payload.sessionToken),
         transportId: `transport:${String(payload.peerId)}`
       };
-      return { ok: true };
+      return { ok: true, reconnecting: false };
     },
     async leaveVoiceRoom(connection, payload) {
       observed.lastLeavePayload = payload;

@@ -28,8 +28,29 @@ test('LiveKit being unreachable shows a Russian toast and "no route to voice"', 
   vi.resetModules();
   vi.stubGlobal('WebSocket', FakeWebSocket);
   stubFetch({
-    '/api/rooms/abc123': { body: { ok: true, exists: true, name: 'Планёрка', isStatic: true, avatarUrl: null } },
-    'POST /api/livekit-token': { body: { token: 'token', url: 'wss://lk.example' } }
+    '/api/rooms/abc123': {
+      body: {
+        ok: true,
+        exists: true,
+        roomId: 'abc123',
+        name: 'Планёрка',
+        isStatic: true,
+        avatarUrl: null,
+        createdAt: 1,
+        maxRoomPeers: 25,
+        peers: 0
+      }
+    },
+    'POST /api/livekit-token': {
+      body: {
+        ok: true,
+        gateCredentialId: 'gate',
+        room: 'lk-room',
+        token: 'token',
+        ttlSeconds: 60,
+        url: 'wss://lk.example'
+      }
+    }
   });
   const room = await import('../../src/lib/features/room/client/room/room.ts');
   const { state } = await import('../../src/lib/features/room/client/core/state.svelte.ts');

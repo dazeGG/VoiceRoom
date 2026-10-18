@@ -4,6 +4,7 @@
   import { pushState, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
   import type { AuthUser } from '$lib/api/auth';
+  import type { InboxItem } from '@voice-room/shared/contracts/notifications';
   import { createRoom } from '$lib/api/rooms';
   import { extractRoomId } from '$lib/shared/utils/room';
   import RoomPage from '$lib/features/room/RoomPage.svelte';
@@ -27,11 +28,12 @@
   import LobbyRoomSettingsDialog from './components/lobby/LobbyRoomSettingsDialog.svelte';
   import NotificationInbox from './components/NotificationInbox.svelte';
   import { ProfileCardHost } from './components/profile-card';
-  import { ENTER_ROOM_EVENT, LobbyStore } from './model/lobby.svelte';
+  import { LobbyStore } from './model/lobby.svelte';
   import { LobbyNotifications } from './model/lobby-notifications.svelte';
   import { syncLobbyWithDesktop } from './model/desktop-sync.svelte';
   import { provideLobby } from './model/lobby-context';
   import { provideRoomSocial } from '$lib/features/room/social';
+  import { provideRoomShell } from '$lib/features/room/shell';
   import { dismissToast, type ToastOptions } from './model/toasts.svelte';
   import {
     getActiveVoiceRoomId,
@@ -77,7 +79,7 @@
   import '$lib/shared/styles/settings.css';
   import './styles/lobby-v2.css';
 
-  const lobby = new LobbyStore();
+  const lobby = new LobbyStore({ onEnterRoom: (roomId) => requestEnterRoom(roomId) });
   // /admin/<tab> opens the panel at once, before anything rewrites the address.
   const initialAdmin = adminLocationFromPath(window.location.pathname);
   if (initialAdmin) lobby.showAdmin(initialAdmin.tab, initialAdmin.accountId);
@@ -94,6 +96,11 @@
   }>();
 
   const rooms = new LobbyRooms((message) => onToast(message));
+  // What the room shown in the lobby tells it.
+  provideRoomShell({
+    roomLeft: (roomId) => closeLeftRoom(roomId),
+    roomsChanged: () => void rooms.refresh()
+  });
   // The admin panel's entry shows only to the accounts the server names.
   let isAdmin = $state(false);
   let openReports = $state(0);
@@ -222,6 +229,14 @@
     }
   }
 
+  // The room shown here was left from its own leave button.
+  function closeLeftRoom(closedRoomId: string): void {
+    const closedViewedRoom = Boolean(closedRoomId && selectedRoomId === closedRoomId);
+    rooms.left(closedRoomId);
+    closeEmbeddedRoom({ closedRoomId });
+    if (closedViewedRoom) clearViewedRoom();
+  }
+
   // The server closes the realtime socket with a dedicated code when this
   // device's session was ended elsewhere (another device, password recovery).
   onMount(() =>
@@ -250,15 +265,6 @@
       );
     }
 
-    function onEmbeddedLeave(event: Event): void {
-      const closedRoomId =
-        event instanceof CustomEvent && typeof event.detail?.roomId === 'string' ? event.detail.roomId : null;
-      const closedViewedRoom = Boolean(closedRoomId && selectedRoomId === closedRoomId);
-      rooms.left(closedRoomId);
-      closeEmbeddedRoom({ closedRoomId });
-      if (closedViewedRoom) clearViewedRoom();
-    }
-
     const unsubscribeAdmin = getAppRealtime().subscribe((event) => {
       if (event.type === 'admin.reports') reportsChanged(event.payload);
     });
@@ -280,10 +286,6 @@
       const transition = routeToHome();
       if (transition.closeEmbeddedRoom) closeEmbeddedRoom({ replaceUrl: false });
       replaceUrlWithActiveVoiceRoom();
-    }
-
-    function onRoomsChanged(): void {
-      void rooms.refresh();
     }
 
     // On a fresh load/reload the URL is the only persisted state, so a /r/:id
@@ -317,27 +319,15 @@
       openRoomMessage(linkedRoomId, linkedMessageId);
     }
 
-    function onEnterRoomRequest(event: Event): void {
-      const roomId =
-        event instanceof CustomEvent && typeof event.detail?.roomId === 'string' ? event.detail.roomId : '';
-      if (roomId) requestEnterRoom(roomId);
-    }
-
     const teardownDesktopLinks = bindDesktopLinks(openDesktopLink);
 
-    window.addEventListener('voice-room:embedded-leave', onEmbeddedLeave);
-    window.addEventListener('voice-room:rooms-changed', onRoomsChanged);
     window.addEventListener('popstate', onPopState);
-    window.addEventListener(ENTER_ROOM_EVENT, onEnterRoomRequest);
     return () => {
-      window.removeEventListener(ENTER_ROOM_EVENT, onEnterRoomRequest);
       teardownNotifications();
       teardownFriends();
       teardownRooms();
       teardownDesktopLinks();
       unsubscribeAdmin();
-      window.removeEventListener('voice-room:embedded-leave', onEmbeddedLeave);
-      window.removeEventListener('voice-room:rooms-changed', onRoomsChanged);
       window.removeEventListener('popstate', onPopState);
     };
   });
@@ -528,7 +518,7 @@
     selectRoomPreview(roomId);
   }
 
-  function openNotification(item: import('@voice-room/shared/notifications').NotificationItem): void {
+  function openNotification(item: InboxItem): void {
     notifications.open = false;
     openRoomMessage(item.roomId, item.sourceMessageId);
   }

@@ -3,6 +3,7 @@
 // marker of each room in step with the roster, and recording each finished
 // stay in voice.
 
+import type { PeerLeaveReason } from '@voice-room/shared/contracts/realtime';
 import type { RoomPeerMessage } from './legacy-events.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../lib/log-events.ts';
@@ -213,7 +214,12 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
 
   // Only the transport that owns the seat can close it: a replaced tab's late
   // close must not remove its replacement.
-  function closePeer(roomId: string, peerId: string, transportId: string | undefined, reason = 'left'): void {
+  function closePeer(
+    roomId: string,
+    peerId: string,
+    transportId: string | undefined,
+    reason: PeerLeaveReason = 'left'
+  ): void {
     const target = rooms.get(roomId);
     if (!target) return;
     const current = target.peers.get(peerId);

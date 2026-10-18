@@ -5,7 +5,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 
-import { createMessageProjection, publicAttachment } from '../src/domains/messaging/message-projection.ts';
+import {
+  createMessageProjection,
+  publicAttachment,
+  type StoredAttachment
+} from '../src/domains/messaging/message-projection.ts';
 import { createMessageDeliveryRelay } from '../src/domains/messaging/message-delivery-relay.ts';
 import { createNotificationDispatch } from '../src/domains/notifications/notification-dispatch.ts';
 import {
@@ -17,7 +21,7 @@ import { fake, recordingLogger, storedUser, roomMessage, storedDirectMessage } f
 type Sent = { userId: string; payload: Record<string, unknown>; context: Record<string, unknown> };
 const idOf = (message: unknown) => (message as { id?: string }).id;
 
-const ATTACHMENT = {
+const ATTACHMENT: StoredAttachment = {
   id: 'a1',
   context: 'room',
   order: 0,

@@ -1,6 +1,7 @@
 import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import type pg from 'pg';
 import type { PinnedMessage } from '@voice-room/shared/contracts/messages';
+import type { PinAction } from '@voice-room/shared/contracts/realtime';
 // Any room participant may pin, so the only guard against a room turning into
 // an unbounded pin list is this cap. Discord uses 50; matching it keeps the
 // pinned bar scrollable rather than endless.
@@ -20,12 +21,17 @@ export interface PinRepository {
   transaction?<T>(callback: (client: Client) => Promise<T>): Promise<T>;
 }
 
-export type PinEvent = PinSnapshot & { roomId: string; action: string; messageId: string; actorUserId: string | null };
+export type PinEvent = PinSnapshot & {
+  roomId: string;
+  action: PinAction;
+  messageId: string;
+  actorUserId: string | null;
+};
 
 export type PinService = Readonly<{
   list(input?: { roomId?: unknown }): Promise<PinSnapshot>;
   pin(input?: { roomId?: unknown; messageId?: unknown; viewer?: Viewer }): Promise<PinSnapshot>;
-  refresh(input?: { roomId?: unknown; action?: string; messageId?: string }): Promise<PinSnapshot>;
+  refresh(input?: { roomId?: unknown; action?: PinAction; messageId?: string }): Promise<PinSnapshot>;
   unpin(input?: { roomId?: unknown; messageId?: unknown; viewer?: Viewer }): Promise<PinSnapshot>;
 }>;
 
@@ -150,7 +156,7 @@ function createPinService({
     roomId: rawRoomId,
     action = 'refreshed',
     messageId = ''
-  }: { roomId?: unknown; action?: string; messageId?: string } = {}): Promise<PinSnapshot> {
+  }: { roomId?: unknown; action?: PinAction; messageId?: string } = {}): Promise<PinSnapshot> {
     const roomId = normalizeRoomId(rawRoomId);
     const current = await snapshot(roomId);
     await publisher({ roomId, action, messageId, actorUserId: null, ...current });

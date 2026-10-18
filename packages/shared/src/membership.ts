@@ -1,34 +1,13 @@
-// Room membership: the page request for a room's member list and the
-// envelope with each member's role, presence and voice state.
+// Room membership: the page request for a room's member list and building
+// the page (its shape is contracts/membership.ts) with each member's role,
+// presence and voice state.
+
+import type { MemberPage, MemberPresenceStatus, MembershipMember, MembershipRole } from './contracts/membership.ts';
 
 export const MEMBERSHIP_CONTRACT_VERSION = 1 as const;
 export const MEMBERSHIP_DEFAULT_LIMIT = 50 as const;
 export const MEMBERSHIP_MAX_LIMIT = 100 as const;
-export const MEMBERSHIP_ROLES: readonly ['owner', 'member'] = Object.freeze(['owner', 'member'] as const);
-
-export type MembershipRole = 'owner' | 'member';
-export type MemberPresenceStatus = 'online' | 'afk' | 'dnd' | 'offline';
-
-export interface MembershipMember {
-  userId: string;
-  displayName: string;
-  login: string;
-  avatarColorKey: string;
-  avatarUrl: string | null;
-  avatarAccent: string | null;
-  role: MembershipRole;
-  joinedAt: number | null;
-  inVoice: boolean;
-  presenceStatus: MemberPresenceStatus;
-}
-
-export interface MembershipEnvelope {
-  contractVersion: 1;
-  roomId: string;
-  members: MembershipMember[];
-  pageInfo: { nextCursor?: string; hasMore: boolean };
-  presenceRevision: number;
-}
+export const MEMBERSHIP_ROLES: readonly MembershipRole[] = Object.freeze(['owner', 'member'] as const);
 
 type Loose = Record<string, unknown>;
 
@@ -101,7 +80,7 @@ export function buildMembershipEnvelope({
   nextCursor?: unknown;
   hasMore?: unknown;
   presenceRevision?: unknown;
-} = {}): MembershipEnvelope {
+} = {}): MemberPage {
   return {
     contractVersion: MEMBERSHIP_CONTRACT_VERSION,
     roomId: cleanString(roomId, 48),
@@ -114,22 +93,4 @@ export function buildMembershipEnvelope({
     },
     presenceRevision: Math.max(0, Number.isSafeInteger(Number(presenceRevision)) ? Number(presenceRevision) : 0)
   };
-}
-
-export function normalizeMembershipEnvelope(
-  value: unknown
-): { ok: true; envelope: MembershipEnvelope } | { ok: false; code: string } {
-  if (!isObject(value) || value.contractVersion !== MEMBERSHIP_CONTRACT_VERSION) {
-    return { ok: false, code: 'invalid_membership_envelope' };
-  }
-  const pageInfo = value.pageInfo as Loose | null | undefined;
-  const envelope = buildMembershipEnvelope({
-    roomId: value.roomId,
-    members: value.members as unknown[],
-    nextCursor: pageInfo?.nextCursor,
-    hasMore: pageInfo?.hasMore,
-    presenceRevision: value.presenceRevision
-  });
-  if (!envelope.roomId) return { ok: false, code: 'invalid_membership_envelope' };
-  return { ok: true, envelope };
 }

@@ -5,13 +5,13 @@
 // membership loss end leases terminally. Every transition is a synchronous
 // compare-and-set on the record before any await.
 
-import { normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voice-room/shared/validation';
 import { unrefTimer } from './runtime-types.ts';
 import type {
   FinalizeError,
   FinalizePeer,
   FinalizeResult,
   LeaseClaim,
+  LeaseReason,
   LeaseRecord,
   Peer,
   PresenceRoom,
@@ -28,7 +28,7 @@ export interface ReconnectLeaseDeps {
   /** Requested lease length; outside 1–120 s it falls back to 30 s. */
   leaseMs: number;
   /** Ends a peer the lease still owns when nobody reclaimed it. */
-  finalizeOwnedPeer: (input: { record: LeaseRecord; peer: Peer; reason: string }) => Promise<unknown>;
+  finalizeOwnedPeer: (input: { record: LeaseRecord; peer: Peer; reason: LeaseReason }) => Promise<unknown>;
   /** The latest voice join request; a terminal lease blocks joins issued before it. */
   joinSequence: () => number;
 }
@@ -66,7 +66,7 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
 
   async function runLeaseFinalizer(
     record: LeaseRecord,
-    reason: string,
+    reason: LeaseReason,
     finalizePeer: FinalizePeer | null
   ): Promise<FinalizeResult> {
     if (finalizePeer && !record.finalizeCallbacks.includes(finalizePeer)) {
@@ -86,7 +86,7 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
               roomId: record.roomId,
               peerId: record.peerId,
               peer: record.peer,
-              reason: record.terminalReason,
+              reason: record.terminalReason || reason,
               ownershipFinalized: false
             });
             ownershipFinalized = (result as { finalized?: boolean } | undefined)?.finalized !== false;
@@ -150,14 +150,17 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
     return record.finalizerPromise;
   }
 
-  function startLeaseFinalizer(record: LeaseRecord, reason: string): void {
+  function startLeaseFinalizer(record: LeaseRecord, reason: LeaseReason): void {
     void runLeaseFinalizer(record, reason, null).catch(() => {
       // The record remains in a typed failed-finalizer state. Replacement and
       // terminal paths must explicitly retry/adopt it before admission proceeds.
     });
   }
 
-  async function retryFailedLeaseFinalizer(record: LeaseRecord, reason = 'lost'): Promise<FinalizeResult | null> {
+  async function retryFailedLeaseFinalizer(
+    record: LeaseRecord,
+    reason: LeaseReason = 'lost'
+  ): Promise<FinalizeResult | null> {
     if (record.state !== 'finalizer-failed' && record.state !== 'terminal-finalizer-failed') {
       return record.finalizerPromise;
     }
@@ -270,7 +273,7 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
 
   function terminalClaimRecord(
     record: LeaseRecord,
-    reason: string,
+    reason: LeaseReason,
     finalizePeer: FinalizePeer | null | undefined
   ): LeaseRecord {
     const adoptingFailedFinalizer = record.state === 'finalizer-failed' || record.state === 'terminal-finalizer-failed';
@@ -326,7 +329,7 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
     return records;
   }
 
-  async function settleLeaseFinalizers(records: LeaseRecord[], reason: string): Promise<FinalizeResult[]> {
+  async function settleLeaseFinalizers(records: LeaseRecord[], reason: LeaseReason): Promise<FinalizeResult[]> {
     const settled = await Promise.allSettled(records.map((record) => runLeaseFinalizer(record, reason, null)));
     const rejected = settled.find((result) => result.status === 'rejected');
     if (rejected) throw rejected.reason;
@@ -344,7 +347,7 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
     }: {
       roomId: string;
       peerId: string;
-      reason?: string;
+      reason?: LeaseReason;
       finalizePeer?: FinalizePeer | null;
       expectedSessionToken?: string;
       expectedTransportId?: string;
@@ -362,15 +365,13 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
     peerId,
     sessionToken,
     reason = 'left'
-  }: { roomId?: unknown; peerId?: unknown; sessionToken?: unknown; reason?: string } = {}) {
-    const normalizedRoomId = normalizeRoomId(roomId);
-    const normalizedPeerId = normalizePeerId(peerId);
-    const normalizedSessionToken = normalizeSessionToken(sessionToken);
-    if (!normalizedRoomId || !normalizedPeerId || !normalizedSessionToken) {
-      return { ok: false, finalized: false, code: 'invalid_session' };
-    }
-
-    const record = reconnectLeases.get(reconnectLeaseKey(normalizedRoomId, normalizedPeerId, normalizedSessionToken));
+  }: {
+    roomId: string;
+    peerId: string;
+    sessionToken: string;
+    reason?: LeaseReason;
+  }): Promise<FinalizeResult> {
+    const record = reconnectLeases.get(reconnectLeaseKey(roomId, peerId, sessionToken));
     // A leave replayed by a fresh application socket may only terminate the
     // disconnected transport's existing lease. Never synthesize a lease here:
     // doing so would let a delayed leave tear down a newer active replacement.
@@ -392,7 +393,7 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
       roomId,
       reason = 'deleted',
       finalizePeer = null
-    }: { roomId: string; reason?: string; finalizePeer?: FinalizePeer | null } = {} as { roomId: string }
+    }: { roomId: string; reason?: LeaseReason; finalizePeer?: FinalizePeer | null } = {} as { roomId: string }
   ) {
     const peerIds = new Set([
       ...[...reconnectLeases.values()].filter((record) => record.roomId === roomId).map((record) => record.peerId),
@@ -410,7 +411,7 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
       userId,
       reason = 'membership-left',
       finalizePeer = null
-    }: { roomId: string; userId: string; reason?: string; finalizePeer?: FinalizePeer | null } = {} as {
+    }: { roomId: string; userId: string; reason?: LeaseReason; finalizePeer?: FinalizePeer | null } = {} as {
       roomId: string;
       userId: string;
     }
@@ -434,9 +435,9 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
       peerIds = [],
       reason,
       finalizePeer
-    }: { roomId: string; peerIds?: string[]; reason: string; finalizePeer?: FinalizePeer | null } = {} as {
+    }: { roomId: string; peerIds?: string[]; reason: LeaseReason; finalizePeer?: FinalizePeer | null } = {} as {
       roomId: string;
-      reason: string;
+      reason: LeaseReason;
     }
   ) {
     const records = [...new Set(peerIds)].flatMap((peerId) => recordsForPeer(roomId, peerId));
