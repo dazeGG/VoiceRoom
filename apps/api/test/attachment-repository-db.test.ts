@@ -29,7 +29,7 @@ test('markCleanupDeleted executes the stale-upload predicate against PostgreSQL'
   await pool.query(
     `INSERT INTO message_attachments (id, owner_id, context, state, updated_at)
      VALUES ($1, $2, 'room', 'uploading', current_timestamp - interval '2 hours')`,
-    [attachmentId, created.user!.id]
+    [attachmentId, created.user.id]
   );
 
   const repository = createAttachmentRepository({ pool });
