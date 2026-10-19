@@ -5,7 +5,8 @@ import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database, type Queryable } from '../../platform/db/kysely.ts';
-import { escapeLike, friendOf, mapPublicUser, now, orderedPair, toMillis } from './social-records.ts';
+import { escapeLike, friendOf, mapPublicUser, now, orderedPair } from './social-records.ts';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 import { unreadCountsFor } from '../messaging/dm-thread.repository.ts';
 
 export async function friendsOn(q: Database, a: string, b: string): Promise<boolean> {
@@ -86,13 +87,13 @@ export function createFriendshipRepository({ pool }: { pool: pg.Pool }) {
     const lastMessage = new Map(
       last.map((row) => [
         row.peer,
-        { id: row.id, body: row.body, createdAt: toMillis(row.created_at), fromMe: row.sender_id === userId }
+        { id: row.id, body: row.body, createdAt: epochMillis(row.created_at), fromMe: row.sender_id === userId }
       ])
     );
 
     return friends.map((row) => ({
       user: mapPublicUser(row),
-      friendsSince: toMillis(row.friends_since),
+      friendsSince: epochMillis(row.friends_since),
       unreadCount: unread.get(row.id) || 0,
       lastMessage: lastMessage.get(row.id) || null
     }));

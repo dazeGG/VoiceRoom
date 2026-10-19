@@ -138,10 +138,10 @@ export function createLoginEventRepository({ pool }: { pool: pg.Pool }) {
     now?: number;
   }) {
     if (typeof alertId !== 'string' || !UUID_PATTERN.test(alertId)) {
-      return { status: 'not_found', revokedTokenHash: null };
+      return { status: 'not_found' as const, revokedTokenHash: null };
     }
     if (resolution !== 'confirmed' && resolution !== 'denied') {
-      return { status: 'not_found', revokedTokenHash: null };
+      return { status: 'not_found' as const, revokedTokenHash: null };
     }
     return db.transaction().execute(async (trx) => {
       const resolved = await trx
@@ -155,16 +155,16 @@ export function createLoginEventRepository({ pool }: { pool: pg.Pool }) {
         .where(sql<boolean>`session_public_id IS DISTINCT FROM ${currentSessionPublicId}::uuid`)
         .returning('session_public_id')
         .execute();
-      if (resolved.length !== 1) return { status: 'not_found', revokedTokenHash: null };
+      if (resolved.length !== 1) return { status: 'not_found' as const, revokedTokenHash: null };
       const sessionPublicId = resolved[0]?.session_public_id;
-      if (resolution !== 'denied' || !sessionPublicId) return { status: 'resolved', revokedTokenHash: null };
+      if (resolution !== 'denied' || !sessionPublicId) return { status: 'resolved' as const, revokedTokenHash: null };
       const deleted = await trx
         .deleteFrom('sessions')
         .where('user_id', '=', userId)
         .where('public_id', '=', sessionPublicId)
         .returning('id')
         .executeTakeFirst();
-      return { status: 'resolved', revokedTokenHash: deleted?.id || null };
+      return { status: 'resolved' as const, revokedTokenHash: deleted?.id || null };
     });
   }
 

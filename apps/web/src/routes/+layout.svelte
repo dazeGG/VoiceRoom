@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, type Snippet } from 'svelte';
   import { beforeNavigate } from '$app/navigation';
   import { page, updated } from '$app/state';
   import { AppUpdate } from '$lib/features/app-update/app-update.svelte';
@@ -16,7 +16,7 @@
   import { loadAccountBadges } from '$lib/api/badges';
   import { onContractViolation } from '$lib/api/contract-violations';
 
-  let { children } = $props();
+  let { children }: { children: Snippet } = $props();
   let boundaryReady = $state(false);
   let desktopAllowed = $state(false);
   let roomClientAllowed = $state(false);

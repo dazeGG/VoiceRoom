@@ -348,9 +348,9 @@ type ServerEventFrames = typeof ServerEventFrames;
 
 export type ServerEventType = keyof ServerEventFrames;
 export type ServerEvents = { [Type in ServerEventType]: Static<ServerEventFrames[Type]>['payload'] };
-export type ServerEvent = {
-  [Type in ServerEventType]: { id?: string; type: Type; payload: ServerEvents[Type] };
-}[ServerEventType];
+/** The event of one type. */
+export type ServerEventOf<Type extends ServerEventType> = { id?: string; type: Type; payload: ServerEvents[Type] };
+export type ServerEvent = { [Type in ServerEventType]: ServerEventOf<Type> }[ServerEventType];
 
 /**
  * A refused command or an unusable frame; `id` echoes the command's. The API

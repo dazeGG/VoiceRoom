@@ -6,10 +6,14 @@
 import { ApiError } from '$lib/api/client';
 import { fetchRoomChat, fetchRoomChatPage, type ChatMessage } from '$lib/api/rooms';
 import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
+import { createHistoryCache } from '$lib/shared/chat/history-cache';
 import { createAnchoredHistory } from './room-history.svelte';
 import { mergeLatestWindow, restampAuthor } from './room-chat-view';
 
 const MAX_EARLY_EDITS = 50;
+
+/** Room chats kept between visits, by room id. */
+const roomHistoryCache = createHistoryCache<ChatMessage>((messages) => $state.snapshot(messages));
 
 export class RoomChatTimeline {
   messages = $state<ChatMessage[]>([]);
@@ -34,7 +38,7 @@ export class RoomChatTimeline {
       }
     },
     compare: (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
-    cacheKey: (roomId) => `room:${roomId}`,
+    cache: roomHistoryCache,
     onChange: (state) => {
       this.messages = state.messages;
       this.loading = state.loading;

@@ -5,7 +5,8 @@
 // person is doing by then, so the other side never keeps showing "выбирает
 // эмодзи" after they went back to typing, and alternating activities still
 // cannot get past the budget.
-type Timer = ReturnType<typeof setTimeout> | number;
+import { type Timer, unrefTimer } from './runtime-types.ts';
+
 type Forward<Activity> = (activity: Activity) => void;
 type Entry<Activity> = {
   at: number;
@@ -39,7 +40,9 @@ function createTypingThrottle<Activity = string>({
     targets.delete(key);
     targets.set(key, entry);
     while (targets.size > maxTargets) {
-      const [oldestKey, oldest] = targets.entries().next().value as [string, Entry<Activity>];
+      const next = targets.entries().next();
+      if (next.done) break;
+      const [oldestKey, oldest] = next.value;
       if (oldest.timer) clearTimer(oldest.timer);
       targets.delete(oldestKey);
     }
@@ -65,16 +68,16 @@ function createTypingThrottle<Activity = string>({
     if (!entry.timer) {
       entry.timer = setTimer(
         () => {
-          const latest = entry.pending as NonNullable<Entry<Activity>['pending']>;
+          const latest = entry.pending;
           entry.timer = null;
           entry.pending = null;
           // Back where the last notice left them: the other side already shows
           // it, and a late copy could land after the message it belongs to.
-          if (latest.activity !== entry.activity) send(entry, latest.activity, latest.forward);
+          if (latest && latest.activity !== entry.activity) send(entry, latest.activity, latest.forward);
         },
         Math.max(0, wait)
       );
-      (entry.timer as { unref?: () => unknown }).unref?.();
+      unrefTimer(entry.timer);
     }
     return false;
   }

@@ -90,9 +90,7 @@ function createNotificationPreferencesRepository({
       privateNotifications: preferences?.private_notifications || false,
       mutedPeerIds: dmMutes.map((row) => row.peer_user_id),
       mutedRoomIds: roomMutes.filter((row) => row.level === 'none').map((row) => row.room_id),
-      roomLevels: Object.fromEntries(
-        roomMutes.map((row) => [row.room_id, (row.level || 'none') as RoomNotificationLevel])
-      )
+      roomLevels: Object.fromEntries(roomMutes.map((row) => [row.room_id, isRoomLevel(row.level) ? row.level : 'none']))
     });
   }
 
@@ -387,7 +385,8 @@ function createNotificationPreferencesRepository({
       .where('user_id', '=', userId)
       .where('room_id', '=', roomId)
       .executeTakeFirst();
-    return (row?.level || 'mentions') as RoomNotificationLevel;
+    const level = row?.level;
+    return isRoomLevel(level) ? level : 'mentions';
   }
 
   async function isRoomMuted({ userId, roomId }: { userId: string; roomId: string }): Promise<boolean> {

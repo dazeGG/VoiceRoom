@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import { sql, type Selectable } from 'kysely';
 import type { Database } from '../../platform/db/kysely.ts';
 import type { Rooms } from '../../platform/db/schema.ts';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 
 export type RoomRelationship = 'owner' | 'bookmarked' | 'member' | '';
 /** A room row, plus the per-user columns some listings add. */
@@ -33,10 +34,10 @@ export function toDate(ms: unknown): Date {
   return new Date(normalizePositiveInt(ms, Date.now()));
 }
 
-export function toMillis(value: unknown): number {
+/** A stored time as epoch milliseconds; now when it does not parse. */
+export function toMillis(value: Date | string): number {
   if (value instanceof Date) return value.getTime();
-  const parsed = Date.parse(value as string);
-  return Number.isFinite(parsed) ? parsed : Date.now();
+  return epochMillis(value) ?? Date.now();
 }
 
 export function mapRoom(row: RoomRow) {

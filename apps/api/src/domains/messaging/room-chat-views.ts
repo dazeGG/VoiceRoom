@@ -10,6 +10,7 @@ import type {
   ReplyPreview,
   RoomMessage
 } from '@voice-room/shared/contracts/messages';
+import { isRecord } from '@voice-room/shared/guards';
 import { avatarColorForPeerId } from '../rooms/avatar-color.ts';
 
 export interface RoomChatMessage {
@@ -34,11 +35,20 @@ export interface RoomChatMessage {
   idempotencyReplay?: boolean;
 }
 
+/**
+ * A chat message read back from JSON this API wrote (an outbox event, an
+ * idempotent replay): checked for the id it is known by; the rest is as the
+ * writer stored it.
+ */
+export function isStoredChatMessage(value: unknown): value is RoomChatMessage {
+  return isRecord(value) && typeof value.id === 'string';
+}
+
 export function publicChatMessage(message: RoomChatMessage): RoomMessage {
   return {
     authorUserId: message.authorUserId || null,
     avatarAccent: message.avatarAccent || null,
-    avatarColorKey: message.avatarColorKey || (avatarColorForPeerId(message.peerId) as string),
+    avatarColorKey: message.avatarColorKey || avatarColorForPeerId(message.peerId),
     avatarUrl:
       message.avatarUrl || (message.avatarKey ? `/api/avatars/${encodeURIComponent(message.avatarKey)}` : null),
     createdAt: message.createdAt,

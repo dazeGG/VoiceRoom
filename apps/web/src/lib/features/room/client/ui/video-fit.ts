@@ -21,7 +21,8 @@ type FrameCallbackVideo = HTMLVideoElement & {
 };
 
 export function keepVideoFitted(element: HTMLVideoElement): () => void {
-  const video = element as FrameCallbackVideo;
+  // Older Safari and Firefox lack the frame callbacks lib.dom declares as always there.
+  const video: FrameCallbackVideo = element;
   let started = false;
   let frameCount = 0;
   let frameHandle = 0;

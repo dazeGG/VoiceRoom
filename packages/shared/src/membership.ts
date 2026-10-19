@@ -3,6 +3,7 @@
 // presence and voice state.
 
 import type { MemberPage, MemberPresenceStatus, MembershipMember, MembershipRole } from './contracts/membership.ts';
+import { isOneOf, isRecord } from './guards.ts';
 
 export const MEMBERSHIP_CONTRACT_VERSION = 1 as const;
 export const MEMBERSHIP_DEFAULT_LIMIT = 50 as const;
@@ -11,12 +12,7 @@ export const MEMBERSHIP_ROLES: readonly MembershipRole[] = Object.freeze(['owner
 
 type Loose = Record<string, unknown>;
 
-const MEMBERSHIP_ROLE_SET = new Set<unknown>(MEMBERSHIP_ROLES);
-const MEMBER_PRESENCE_STATUSES: readonly unknown[] = ['online', 'afk', 'dnd', 'offline'];
-
-function isObject(value: unknown): value is Loose {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
+const MEMBER_PRESENCE_STATUSES: readonly MemberPresenceStatus[] = ['online', 'afk', 'dnd', 'offline'];
 
 function cleanString(value: unknown, max = 256): string {
   if (typeof value !== 'string') return '';
@@ -47,13 +43,11 @@ export function normalizeMembershipRequest(value: Loose = {}): {
 }
 
 export function normalizeMembershipMember(value: unknown): MembershipMember | null {
-  if (!isObject(value)) return null;
+  if (!isRecord(value)) return null;
   const userId = cleanString(value.userId ?? value.id, 36);
   if (!userId) return null;
-  const role = MEMBERSHIP_ROLE_SET.has(value.role) ? (value.role as MembershipRole) : 'member';
-  const presenceStatus = MEMBER_PRESENCE_STATUSES.includes(value.presenceStatus)
-    ? (value.presenceStatus as MemberPresenceStatus)
-    : 'offline';
+  const role = isOneOf(MEMBERSHIP_ROLES, value.role) ? value.role : 'member';
+  const presenceStatus = isOneOf(MEMBER_PRESENCE_STATUSES, value.presenceStatus) ? value.presenceStatus : 'offline';
   return {
     userId,
     displayName: cleanString(value.displayName, 120),

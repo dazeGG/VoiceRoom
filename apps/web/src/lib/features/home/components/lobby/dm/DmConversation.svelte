@@ -18,7 +18,7 @@
   import MessageHoverActions from '$lib/shared/chat/MessageHoverActions.svelte';
   import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
   import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
-  import { createReadReconciliation } from '$lib/shared/chat/read-reconciliation.svelte';
+  import { createReadReconciliation } from '$lib/shared/chat/read-reconciliation';
   import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
   import { formatTypingLabel } from '$lib/shared/chat/typing.svelte';
   import ChatText from '$lib/shared/components/ChatText.svelte';

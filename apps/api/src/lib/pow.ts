@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { fieldOf } from '../platform/record.ts';
 
 export type PowChallenge = { challengeId: string; difficulty: number; issuedAt: number; signature: string };
 export type PowVerdict =
@@ -15,7 +16,7 @@ function hasLeadingZeroBits(buffer: Uint8Array, bits: number): boolean {
 
   if (remainingBits === 0) return true;
   const mask = 0xff << (8 - remainingBits);
-  return ((buffer[fullBytes] as number) & mask) === 0;
+  return ((buffer[fullBytes] ?? 0) & mask) === 0;
 }
 
 function parsePowChallenge(challenge: unknown): PowChallenge | null {
@@ -24,7 +25,7 @@ function parsePowChallenge(challenge: unknown): PowChallenge | null {
   const parts = challenge.split('.');
   if (parts.length !== 4) return null;
 
-  const [challengeId, issuedAtValue, difficultyValue, signature] = parts as [string, string, string, string];
+  const [challengeId = '', issuedAtValue = '', difficultyValue = '', signature = ''] = parts;
   const issuedAt = Number.parseInt(issuedAtValue, 10);
   const difficulty = Number.parseInt(difficultyValue, 10);
   if (!/^[A-Za-z0-9_-]{16,64}$/.test(challengeId)) return null;
@@ -36,7 +37,7 @@ function parsePowChallenge(challenge: unknown): PowChallenge | null {
 }
 
 function normalizePowNonce(value: unknown): string {
-  if (Number.isSafeInteger(value) && (value as number) >= 0) return String(value);
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0) return String(value);
   if (typeof value === 'string' && /^(0|[1-9]\d{0,15})$/.test(value)) return value;
   return '';
 }
@@ -80,9 +81,9 @@ function createProofOfWork({
     if (difficulty <= 0) return { ok: true };
     prune(now);
 
-    const submitted = proof as { challenge?: unknown; nonce?: unknown } | null | undefined;
-    const challenge = typeof submitted?.challenge === 'string' ? submitted.challenge : '';
-    const nonce = normalizePowNonce(submitted?.nonce);
+    const submittedChallenge = fieldOf(proof, 'challenge');
+    const challenge = typeof submittedChallenge === 'string' ? submittedChallenge : '';
+    const nonce = normalizePowNonce(fieldOf(proof, 'nonce'));
     const parsed = parsePowChallenge(challenge);
     if (!parsed || !nonce) {
       return { ok: false, status: 403, error: 'Room creation proof is required', code: 'pow_required' };

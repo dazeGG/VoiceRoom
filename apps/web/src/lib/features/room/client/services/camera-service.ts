@@ -5,6 +5,7 @@ import { CAMERA_CAPTURE, CAMERA_DEVICE_STORAGE_KEY } from '../core/config';
 import { state } from '../core/state.svelte';
 import type { CameraFacing } from '../core/types';
 import { stopStream } from '../core/utils';
+import { isRecord } from '@voice-room/shared/guards';
 import { showToast } from '../ui/toast';
 import { publishLocalCamera, unpublishLocalCamera } from './livekit/local-publications';
 import { askForMedia, describeMediaRefusal } from './media-grant';
@@ -57,7 +58,7 @@ async function startCamera(): Promise<void> {
 export async function stopCamera(): Promise<void> {
   const stream = state.localCameraStream;
   releaseLocalCamera();
-  await unpublishLocalCamera().catch((error) => log.warn('camera unpublish failed', errorContext(error)));
+  await unpublishLocalCamera().catch((error: unknown) => log.warn('camera unpublish failed', errorContext(error)));
   if (stream) stopStream(stream);
   if (stream) await postState();
 }
@@ -79,7 +80,7 @@ export async function switchCamera(deviceId: string): Promise<void> {
   try {
     const next = await openCameraCapture(state.cameraDeviceId);
     const previous = state.localCameraStream;
-    await unpublishLocalCamera().catch((error) => log.warn('camera unpublish failed', errorContext(error)));
+    await unpublishLocalCamera().catch((error: unknown) => log.warn('camera unpublish failed', errorContext(error)));
     if (previous) stopStream(previous);
     adoptCameraStream(next);
     await publishLocalCamera();
@@ -105,7 +106,7 @@ export async function flipCamera(): Promise<void> {
 
   state.cameraStarting = true;
   try {
-    await unpublishLocalCamera().catch((error) => log.warn('camera unpublish failed', errorContext(error)));
+    await unpublishLocalCamera().catch((error: unknown) => log.warn('camera unpublish failed', errorContext(error)));
     stopStream(previous);
     let next: MediaStream;
     let facing: CameraFacing | undefined;
@@ -212,12 +213,12 @@ function persistCameraDeviceId(deviceId: string): void {
 }
 
 function isMissingDeviceError(error: unknown): boolean {
-  const name = (error as { name?: string } | null)?.name;
+  const name = isRecord(error) ? error.name : undefined;
   return name === 'NotFoundError' || name === 'OverconstrainedError';
 }
 
 export function describeCameraError(error: unknown): string {
-  const name = (error as { name?: string } | null)?.name;
+  const name = isRecord(error) ? error.name : undefined;
   if (name === 'NotAllowedError' || name === 'SecurityError') return 'Нет доступа к камере: разрешите её в браузере';
   if (isMissingDeviceError(error)) return 'Камера не найдена';
   if (name === 'NotReadableError' || name === 'AbortError') return 'Камера занята другим приложением';

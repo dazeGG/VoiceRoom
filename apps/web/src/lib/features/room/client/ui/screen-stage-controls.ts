@@ -185,7 +185,9 @@ function hasDesktopWindowControls(): boolean {
 
 export async function setDesktopScreenFullscreen(fullscreen: boolean): Promise<void> {
   const stage = getScreenStage();
-  const active = await window.voiceRoomWindow!.setFullscreen(fullscreen);
+  const desktopWindow = window.voiceRoomWindow;
+  if (!desktopWindow) throw new Error('Desktop window controls are unavailable.');
+  const active = await desktopWindow.setFullscreen(fullscreen);
   if (active) {
     document.body.dataset.desktopScreenFullscreen = 'true';
   } else {

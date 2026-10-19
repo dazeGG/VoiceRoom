@@ -24,6 +24,7 @@ import {
 } from '../src/domains/admission/livekit-admin.ts';
 import { liveKitHttpUrl, readLiveKitConfig, type LiveKitConfig } from '../src/domains/admission/livekit-config.ts';
 import { tokensMatch } from '../src/platform/crypto/tokens-match.ts';
+import { fieldOf } from '../src/platform/record.ts';
 import { fake, recordingLogger } from './fakes/index.ts';
 
 const ENABLED: LiveKitConfig = {
@@ -345,7 +346,8 @@ test('credential cleanup failures are metered and never hide the primary failure
     (error) =>
       error instanceof AggregateError &&
       error.errors[0] === primary &&
-      (error.errors[1] as { code?: string }).code === 'credential_revoke_cleanup_refused'
+      fieldOf(error.errors[1], 'code') === 'credential_revoke_cleanup_refused' &&
+      error.cause === primary
   );
   await assert.rejects(
     revokeIssuedAdmission({
@@ -495,13 +497,21 @@ test('LiveKit admin server mute narrows the grant, mutes the mic and falls back 
 
   getError = Object.assign(new Error('sfu said 404'), { status: 404 });
   assert.deepEqual(await admin.setParticipantMuted('room-1', 'peer-1', true), { status: 'offline' });
-  getError = new Error('sfu down');
+  const muteFailure = new Error('sfu down');
+  getError = muteFailure;
   calls.length = 0;
   assert.deepEqual(await admin.setParticipantMuted('room-1', 'peer-1', true), { status: 'disconnected' });
   assert.deepEqual(calls, [['remove']]);
   await assert.rejects(admin.setParticipantMuted('room-1', 'peer-1', false), /sfu down/);
   removeError = new Error('remove failed');
-  await assert.rejects(admin.setParticipantMuted('room-1', 'peer-1', true), (error) => error instanceof AggregateError);
+  await assert.rejects(
+    admin.setParticipantMuted('room-1', 'peer-1', true),
+    (error) =>
+      error instanceof AggregateError &&
+      error.errors[0] === muteFailure &&
+      error.errors[1] === removeError &&
+      error.cause === muteFailure
+  );
   assert.equal(logger.records[0]?.evt, 'livekit.mute_failed');
 });
 

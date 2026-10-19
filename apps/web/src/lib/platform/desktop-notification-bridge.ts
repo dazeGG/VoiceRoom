@@ -1,29 +1,11 @@
-import type { DesktopNotificationPayload } from '$lib/shared/notifications/router';
-import { classifyPlatform } from './platform-class';
+// The desktop shell shows system notifications through this bridge. A browser,
+// or a shell older than it, has none and notifications fall back to the page's
+// Notification API.
 
-type BridgeResult = { ok?: boolean; reason?: string } | null | undefined | void;
-type DesktopBridge = { show(payload: DesktopNotificationPayload): BridgeResult | Promise<BridgeResult> };
+export type DesktopNotificationBridge = NonNullable<Window['voiceRoomDesktopNotifications']>;
 
-function resolveBridge(): DesktopBridge | null {
-  if (classifyPlatform() !== 'desktop') return null;
-  const candidate = (globalThis as typeof globalThis & { voiceRoomDesktopNotifications?: unknown })
-    .voiceRoomDesktopNotifications;
-  if (!candidate || typeof candidate !== 'object' || typeof (candidate as DesktopBridge).show !== 'function')
-    return null;
-  return candidate as DesktopBridge;
-}
-
-export async function showDesktopNotification(
-  payload: DesktopNotificationPayload
-): Promise<{ shown: boolean; reason?: string }> {
-  const bridge = resolveBridge();
-  if (!bridge) return { shown: false, reason: 'desktop_bridge_unavailable' };
-  try {
-    const result = await bridge.show(payload);
-    return result && result.ok === false
-      ? { shown: false, reason: result.reason || 'desktop_bridge_rejected' }
-      : { shown: true };
-  } catch {
-    return { shown: false, reason: 'desktop_bridge_failed' };
-  }
+export function getDesktopNotificationBridge(): DesktopNotificationBridge | null {
+  if (typeof window === 'undefined') return null;
+  const bridge = window.voiceRoomDesktopNotifications;
+  return bridge && typeof bridge.show === 'function' ? bridge : null;
 }

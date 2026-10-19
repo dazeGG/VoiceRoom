@@ -1,9 +1,11 @@
 import type pg from 'pg';
-import { readEnvBool, readEnvInt } from '../lib/config.ts';
+import { isArray, isRecord } from '@voice-room/shared/guards';
+import { readNotificationDeliveryWorkerConfig } from '../app/config.ts';
+import { epochMillis } from '../platform/epoch-millis.ts';
 import { createPushSubscriptionRepository } from '../domains/notifications/push-subscription.repository.ts';
 import { createNotificationOutboxRepository } from '../domains/notifications/notification-outbox.repository.ts';
 import { createNotificationPushProvider } from '../domains/notifications/push-provider.ts';
-import { boundedBackoff, createLeaseRuntime } from '../platform/lease-runtime.ts';
+import { boundedBackoff, createLeaseRuntime, delay } from '../platform/lease-runtime.ts';
 import type { FenceGuard } from '../platform/lease-runtime.ts';
 import type { NotificationOutboxRepository } from '../domains/notifications/notification-outbox.repository.ts';
 import { recordNotificationOldestPending } from '../lib/metrics.ts';
@@ -21,22 +23,6 @@ type Provider = {
 };
 
 const LEASE_IDENTITY = 'notification-delivery.G63';
-
-function wait(ms: number, signal: AbortSignal): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    if (signal.aborted) return reject(signal.reason);
-    const timer = setTimeout(done, ms);
-    function done() {
-      signal.removeEventListener('abort', cancel);
-      resolve();
-    }
-    function cancel() {
-      clearTimeout(timer);
-      reject(signal.reason);
-    }
-    signal.addEventListener('abort', cancel, { once: true });
-  });
-}
 
 function createNotificationDeliveryWorker({
   outbox,
@@ -67,7 +53,7 @@ function createNotificationDeliveryWorker({
   function observe(ok: boolean) {
     const cutoff = Date.now() - 600000;
     outcomes.push({ at: Date.now(), ok });
-    while ((outcomes[0]?.at as number) < cutoff) outcomes.shift();
+    while ((outcomes[0]?.at ?? Infinity) < cutoff) outcomes.shift();
     const failures = outcomes.filter((item) => !item.ok).length;
     if (failures >= 10 || (outcomes.length >= 100 && failures / outcomes.length > 0.05))
       disabledReason = 'provider_failure_threshold';
@@ -80,18 +66,18 @@ function createNotificationDeliveryWorker({
       observeOldestPending(await store.oldestPendingAgeMs());
       if (disabledReason) {
         await store.recordHeartbeat({ ...lease, ready: false });
-        await wait(idleMs, guard.signal);
+        await delay(idleMs, guard.signal);
         continue;
       }
       const jobs = await store.claimBatch({ ...lease, limit: batchSize, staleClaimMs: leaseMs });
       if (!jobs.length) {
-        await wait(idleMs, guard.signal);
+        await delay(idleMs, guard.signal);
         continue;
       }
       for (const job of jobs) {
         guard.assertOwned();
         try {
-          const ageMs = Date.now() - new Date(job.createdAt as string).getTime();
+          const ageMs = Date.now() - (epochMillis(job.createdAt) ?? Number.NaN);
           if (ageMs > 15 * 60 * 1000) {
             disabledReason = 'oldest_pending_exceeded';
             await store.reschedule(job.eventId, lease, {
@@ -107,7 +93,7 @@ function createNotificationDeliveryWorker({
               'notification outbox age exceeds five minutes'
             );
           const current = await store.loadCurrent(job);
-          const reasons = (current?.reasons as string[] | undefined) || [];
+          const reasons = isArray(current?.reasons) ? current.reasons : [];
           const addressed = reasons.includes('mention') || reasons.includes('reply');
           const suppressed =
             !current ||
@@ -120,13 +106,12 @@ function createNotificationDeliveryWorker({
             observe(true);
             continue;
           }
+          const payload = isRecord(job.payload) ? job.payload : {};
           const result = await push.deliver({
             ...job,
             payload: {
-              ...(job.payload as Record<string, any>),
-              body: current!.private_notifications
-                ? 'Откройте VoiceRoom, чтобы посмотреть уведомление.'
-                : (job.payload as Record<string, any> | null)?.body
+              ...payload,
+              body: current.private_notifications ? 'Откройте VoiceRoom, чтобы посмотреть уведомление.' : payload.body
             }
           });
           guard.assertOwned();
@@ -183,7 +168,8 @@ function createNotificationDeliveryWorker({
 }
 
 async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
-  if (!readEnvBool('NOTIFICATION_DELIVERY_CLAIM_ENABLED', false, env)) {
+  const config = readNotificationDeliveryWorkerConfig(env);
+  if (!config.CLAIM_ENABLED) {
     createLogger({ env, name: 'worker.notification-delivery' }).info(
       { evt: LOG_EVENTS.WORKER_DISABLED, worker: 'notification-delivery', reason: 'claims_disabled' },
       'notification delivery claims are disabled'
@@ -196,10 +182,10 @@ async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
   const worker = createNotificationDeliveryWorker({
     outbox,
     provider,
-    batchSize: readEnvInt('NOTIFICATION_DELIVERY_BATCH_SIZE', 50, 1, env),
-    leaseMs: readEnvInt('NOTIFICATION_DELIVERY_LEASE_MS', 120000, 1000, env),
-    renewMs: readEnvInt('NOTIFICATION_DELIVERY_RENEW_MS', 30000, 100, env),
-    maxAttempts: readEnvInt('NOTIFICATION_DELIVERY_MAX_ATTEMPTS', 8, 1, env)
+    batchSize: config.BATCH_SIZE,
+    leaseMs: config.LEASE_MS,
+    renewMs: config.RENEW_MS,
+    maxAttempts: config.MAX_ATTEMPTS
   });
   let stopping: Promise<void> | undefined;
   const stop = (): Promise<void> => stopping || (stopping = worker.stop());

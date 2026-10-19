@@ -3,6 +3,7 @@
 // you, and the payload a push provider sends.
 
 import type { InboxItem, InboxPage, NotificationLevel, NotificationReason } from './contracts/notifications.ts';
+import { isArray, isOneOf, isRecord } from './guards.ts';
 
 export const NOTIFICATION_CONTRACT_VERSION = 1 as const;
 export const NOTIFICATION_DEFAULT_LIMIT = 50 as const;
@@ -29,11 +30,6 @@ export type ProviderPayload = Required<
   Pick<PushPayload, 'notificationId' | 'revision' | 'dedupeKey' | 'title' | 'body' | 'url'>
 > & { contractVersion: 1 };
 
-type Loose = Record<string, unknown>;
-
-const NOTIFICATION_LEVEL_SET = new Set<unknown>(NOTIFICATION_LEVELS);
-const NOTIFICATION_REASON_SET = new Set<unknown>(NOTIFICATION_REASONS);
-
 function cleanString(value: unknown, max = 256): string {
   if (typeof value !== 'string') return '';
   const text = value.trim();
@@ -53,7 +49,7 @@ export function normalizeNotificationLevel(
   value: unknown,
   fallback: NotificationLevel = 'mentions'
 ): NotificationLevel {
-  return NOTIFICATION_LEVEL_SET.has(value) ? (value as NotificationLevel) : fallback;
+  return isOneOf(NOTIFICATION_LEVELS, value) ? value : fallback;
 }
 
 export function normalizeNotificationLimit(value: unknown, fallback: number = NOTIFICATION_DEFAULT_LIMIT): number {
@@ -62,14 +58,14 @@ export function normalizeNotificationLimit(value: unknown, fallback: number = NO
 }
 
 export function normalizeNotificationItem(input: unknown): InboxItem | null {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
-  const value = input as Loose;
+  if (!isRecord(input)) return null;
+  const value = input;
   const id = cleanString(value.id ?? value.notificationId, 160);
   const roomId = cleanString(value.roomId, 48);
   const sourceMessageId = cleanString(value.sourceMessageId ?? value.messageId, 160);
   const actorUserId = cleanString(value.actorUserId, 36);
-  const reasons = Array.isArray(value.reasons)
-    ? [...new Set(value.reasons.filter((reason): reason is NotificationReason => NOTIFICATION_REASON_SET.has(reason)))]
+  const reasons = isArray(value.reasons)
+    ? [...new Set(value.reasons.filter((reason) => isOneOf(NOTIFICATION_REASONS, reason)))]
     : [];
   if (!id || !roomId || !sourceMessageId || !actorUserId || reasons.length === 0) return null;
   return {
@@ -105,7 +101,7 @@ export function buildNotificationEnvelope({
 } = {}): InboxPage {
   return {
     contractVersion: NOTIFICATION_CONTRACT_VERSION,
-    notifications: Array.isArray(notifications)
+    notifications: isArray(notifications)
       ? notifications.map(normalizeNotificationItem).filter((item): item is InboxItem => Boolean(item))
       : [],
     pageInfo: { nextCursor: cleanString(nextCursor, 4096) || undefined, hasMore: Boolean(hasMore) },

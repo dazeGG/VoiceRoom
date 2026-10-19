@@ -263,7 +263,7 @@ async function performJoinRoom(generation: number): Promise<void> {
     ensureAppRealtimeConnected();
     state.voiceRealtimeTeardown?.();
     const detachVoiceEvents = subscribeRoomVoice(state.roomId, (event) => {
-      handleVoiceEvent(event).catch((err) => {
+      handleVoiceEvent(event).catch((err: unknown) => {
         log.error('voice realtime handler failed', errorContext(err));
       });
     });
@@ -410,7 +410,7 @@ export function leaveRoom(): void {
   state.voiceRealtimeTeardown = null;
   state.serverPeerIds.clear();
   state.serverPeerSyncReady = false;
-  disconnectLiveKitRoom().catch((error) => log.warn('liveKit disconnect failed', errorContext(error)));
+  disconnectLiveKitRoom().catch((error: unknown) => log.warn('liveKit disconnect failed', errorContext(error)));
   if (state.screenSourceRequest) cancelScreenSourcePicker();
   closeScreenView();
   closeParticipantContextMenu();

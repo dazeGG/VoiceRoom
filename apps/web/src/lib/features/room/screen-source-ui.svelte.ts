@@ -1,13 +1,25 @@
 import type { DesktopCaptureSource } from './client/core/types';
 
-export const screenSourceUi = $state({
+interface ScreenSourceUiState {
+  open: boolean;
+  sources: DesktopCaptureSource[];
+  tab: 'screens' | 'windows';
+  selectedSourceId: string | null;
+  mode: 'games' | 'text';
+  quality: 'balanced' | 'high';
+  fps: '30' | '60';
+  audio: boolean;
+  popOpen: boolean;
+}
+
+export const screenSourceUi = $state<ScreenSourceUiState>({
   open: false,
-  sources: [] as DesktopCaptureSource[],
-  tab: 'screens' as 'screens' | 'windows',
-  selectedSourceId: null as string | null,
-  mode: 'games' as 'games' | 'text',
-  quality: 'balanced' as 'balanced' | 'high',
-  fps: '30' as '30' | '60',
+  sources: [],
+  tab: 'screens',
+  selectedSourceId: null,
+  mode: 'games',
+  quality: 'balanced',
+  fps: '30',
   audio: true,
   popOpen: false
 });

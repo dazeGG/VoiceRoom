@@ -25,9 +25,7 @@ function createContentRepository(): ContentRepository {
   } {
     const normalized = content == null ? contentFromPlainText(text) : normalizeRoomMessageContent(content);
     if (!normalized) {
-      const error = new TypeError('Invalid room message content') as TypeError & { code?: string };
-      error.code = 'INVALID_MESSAGE_CONTENT';
-      throw error;
+      throw Object.assign(new TypeError('Invalid room message content'), { code: 'INVALID_MESSAGE_CONTENT' });
     }
     return { content: normalized, text: projectRoomMessageContent(normalized, text) };
   }

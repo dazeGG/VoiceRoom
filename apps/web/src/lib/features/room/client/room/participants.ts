@@ -332,7 +332,7 @@ export function attachRemoteTrack(
   if (track.kind === 'audio') {
     peer.stream = mediaStream;
     peer.micReceiver = receiver ?? null;
-    ensureRemoteAudioElement(peer, track, mediaStream, receiver);
+    ensureRemoteAudioElement(peer, track, receiver);
     // A resubscribed voice arrives as a new track: the meter moves to it, or the
     // ring would stay on the dead one.
     if (peer.meter?.track !== track) attachMeterSoon(peer, new MediaStream([track]));
@@ -465,7 +465,6 @@ export function detachRemoteScreen(peer: Participant): void {
 export function ensureRemoteAudioElement(
   peer: Participant,
   track: MediaStreamTrack,
-  stream: MediaStream | null = null,
   receiver: RTCRtpReceiver | null | undefined = null
 ): void {
   if (track.kind !== 'audio' || track.readyState === 'ended') return;
@@ -490,19 +489,19 @@ export function ensureRemoteAudioElement(
     audio.remove();
   }
 
-  attachRemoteAudioTrack(peer, track, stream, receiver);
+  attachRemoteAudioTrack(peer, track, receiver);
 }
 
 function attachRemoteAudioTrack(
   peer: Participant,
   track: MediaStreamTrack,
-  stream: MediaStream | null = null,
   receiver: RTCRtpReceiver | null | undefined = null
 ): void {
   const audio = document.createElement('audio');
   audio.autoplay = true;
   audio.muted = true;
-  (audio as HTMLAudioElement & { playsInline: boolean }).playsInline = true;
+  // Not on HTMLAudioElement in lib.dom; iOS reads it from any media element.
+  Object.assign(audio, { playsInline: true });
   // The activator and WebAudio source must contain exactly this microphone
   // track; a LiveKit stream can also carry screen audio.
   audio.srcObject = new MediaStream([track]);

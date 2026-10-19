@@ -1,4 +1,4 @@
-import type { ToastItem } from '$lib/shared/ui';
+import type { ToastItem } from '$lib/shared/ui/ToastStack/types';
 
 // The in-room toasts, shown by the same ToastStack as the lobby's: several can
 // be up at once, each closing on its own timer.

@@ -7,7 +7,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type pg from 'pg';
 
 import { createReactionsModule, type ReactionsModuleDeps } from '../src/domains/messaging/reactions.module.ts';
 import { createModerationModule } from '../src/domains/moderation/moderation.module.ts';
@@ -161,7 +160,7 @@ test('media uploads pause while the storage has less free space than configured'
       },
       fake<ServiceRegistryDeps>({})
     );
-    registry.applyOverrides({ pool: fakeDb() as unknown as pg.Pool });
+    registry.applyOverrides({ pool: fakeDb() });
     return registry.getMediaServices()!.pressure;
   };
 

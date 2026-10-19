@@ -18,6 +18,8 @@
     type DesktopOverlayForeground,
     type DesktopOverlayPatch,
     type DesktopOverlaySettings,
+    isOverlayAnchor,
+    isOverlayAvatarSize,
     type OverlayAnchor,
     type OverlayAvatarSize
   } from '$lib/platform/desktop-overlay';
@@ -211,7 +213,9 @@
         label="Положение оверлея"
         variant="field"
         disabled={overlaySaving || !overlayEnabled}
-        onValueChange={(value) => void changeOverlay({ anchor: value as OverlayAnchor })}
+        onValueChange={(value: string) => {
+          if (isOverlayAnchor(value)) void changeOverlay({ anchor: value });
+        }}
       />
     </div>
 
@@ -227,7 +231,9 @@
         label="Размер аватаров в оверлее"
         variant="field"
         disabled={overlaySaving || !overlayEnabled}
-        onValueChange={(value) => void changeOverlay({ avatarSize: value as OverlayAvatarSize })}
+        onValueChange={(value: string) => {
+          if (isOverlayAvatarSize(value)) void changeOverlay({ avatarSize: value });
+        }}
       />
     </div>
 

@@ -14,7 +14,7 @@ import {
   type RoomPeerSummary,
   type RoomRealtimeSummary,
   type RoomTypist,
-  type ServerEvent,
+  type ServerEventOf,
   type ServerEvents,
   type ServerEventType,
   type ServerFrame,
@@ -22,6 +22,7 @@ import {
 } from './contracts/realtime.ts';
 import { RoomRelationship } from './contracts/rooms.ts';
 import { cleanName } from './validation.ts';
+import { isRecord } from './guards.ts';
 import { firstMismatch } from './contracts/http.ts';
 
 export const MAX_VISIBLE_ROOM_PEERS = 5 as const;
@@ -30,8 +31,6 @@ export const SUMMARY_COALESCE_MS = 75 as const;
 export type { RoomPeerSummary, RoomRealtimeSummary, RoomTypist, TypingActivity };
 /** Any frame the server sends. */
 export type ServerEnvelope = ServerFrame;
-
-type Loose = Record<string, unknown>;
 
 /** The commands the WS server handles: exactly the contract's command map. */
 export const KNOWN_CLIENT_TYPES: ReadonlySet<string> = new Set(Object.keys(ClientCommandFrames));
@@ -44,10 +43,6 @@ export const TYPING_NOTICE_TTL_MS = 6000 as const;
 // What the person is doing in the composer.
 export const TYPING_ACTIVITIES: readonly TypingActivity[] = Object.freeze(['typing', 'emoji']);
 
-function isPlainObject(value: unknown): value is Loose {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
 function isClientCommandType(type: string): type is ClientCommandType {
   return Object.hasOwn(ClientCommandFrames, type);
 }
@@ -57,7 +52,7 @@ function isServerEventType(type: string): type is ServerEventType {
 }
 
 /** A frame as it arrived: a type and an object payload, not yet checked against its command. */
-type RawEnvelope = { id?: string; type: string; payload: Loose };
+type RawEnvelope = { id?: string; type: string; payload: Record<string, unknown> };
 
 export function parseClientEnvelope(
   raw: unknown
@@ -73,11 +68,11 @@ export function parseClientEnvelope(
     return { ok: false, code: 'invalid_json' };
   }
 
-  if (!isPlainObject(parsed) || typeof parsed.type !== 'string' || !parsed.type.trim()) {
+  if (!isRecord(parsed) || typeof parsed.type !== 'string' || !parsed.type.trim()) {
     return { ok: false, code: 'invalid_envelope' };
   }
 
-  if (parsed.payload !== undefined && !isPlainObject(parsed.payload) && parsed.payload !== null) {
+  if (parsed.payload !== undefined && !isRecord(parsed.payload) && parsed.payload !== null) {
     return { ok: false, code: 'invalid_payload' };
   }
 
@@ -87,7 +82,7 @@ export function parseClientEnvelope(
       id: typeof parsed.id === 'string' ? parsed.id : undefined,
       type: parsed.type.trim(),
       // No payload, or null, sends nothing.
-      payload: isPlainObject(parsed.payload) ? parsed.payload : {}
+      payload: isRecord(parsed.payload) ? parsed.payload : {}
     }
   };
 }
@@ -97,8 +92,8 @@ export function buildServerEnvelope<Type extends ServerEventType>(
   type: Type,
   payload: ServerEvents[Type],
   id?: unknown
-): Extract<ServerEvent, { type: Type }> {
-  const envelope = { type, payload } as Extract<ServerEvent, { type: Type }>;
+): ServerEventOf<Type> {
+  const envelope: ServerEventOf<Type> = { type, payload };
   if (typeof id === 'string' && id) envelope.id = id;
   return envelope;
 }
@@ -116,42 +111,68 @@ function relationshipOf(value: unknown): RoomRelationship {
   return Value.Check(RoomRelationship, value) ? value : 'owner';
 }
 
-export function toRoomPeerSummary(peer: Loose, resolveAvatarColorKey?: unknown): RoomPeerSummary {
-  const resolver =
-    typeof resolveAvatarColorKey === 'function' ? (resolveAvatarColorKey as (peerId: unknown) => string) : () => '';
+/** A peer the lobby card shows: a public peer, of which only these fields are read. */
+export type PeerSummarySource = {
+  id: string;
+  accountUserId?: string | null;
+  avatarAccent?: string | null;
+  avatarColorKey?: string | null;
+  avatarUrl?: string | null;
+  muted?: boolean;
+  name?: string;
+};
+
+/** A room the lobby card describes: a lobby room (`roomId`) or a stored one (`id`). */
+export type RoomSummarySource = {
+  roomId?: string;
+  id?: string;
+  avatarUrl?: string | null;
+  name?: string;
+  isStatic?: boolean;
+  relationship?: string;
+  lastMessageAt?: number | null;
+  unreadCount?: number;
+};
+
+/** Picks a peer's avatar colour when it carries none. */
+export type AvatarColorResolver = (peerId: string) => string;
+
+export function toRoomPeerSummary(
+  peer: PeerSummarySource,
+  resolveAvatarColorKey?: AvatarColorResolver
+): RoomPeerSummary {
   return {
-    id: peer.id as string,
-    accountUserId: (peer.accountUserId as string) || undefined,
-    avatarAccent: (peer.avatarAccent as string | null | undefined) ?? null,
-    avatarColorKey: (peer.avatarColorKey as string) || resolver(peer.id) || 'blurple',
-    avatarUrl: (peer.avatarUrl as string | null | undefined) ?? null,
+    id: peer.id,
+    accountUserId: peer.accountUserId || undefined,
+    avatarAccent: peer.avatarAccent ?? null,
+    avatarColorKey: peer.avatarColorKey || resolveAvatarColorKey?.(peer.id) || 'blurple',
+    avatarUrl: peer.avatarUrl ?? null,
     muted: Boolean(peer.muted),
     name: cleanName(peer.name)
   };
 }
 
 export function buildRoomRealtimeSummary(
-  room: Loose,
-  peers: unknown,
-  resolveAvatarColorKey?: unknown
+  room: RoomSummarySource,
+  peers: readonly PeerSummarySource[],
+  resolveAvatarColorKey?: AvatarColorResolver
 ): RoomRealtimeSummary {
-  const peerList = Array.isArray(peers) ? (peers as Loose[]) : [];
-  const visiblePeers = peerList
+  const visiblePeers = peers
     .slice(0, MAX_VISIBLE_ROOM_PEERS)
     .map((peer) => toRoomPeerSummary(peer, resolveAvatarColorKey));
-  const peerCount = peerList.length;
+  const peerCount = peers.length;
 
   return {
-    roomId: (room.roomId as string) || (room.id as string) || '',
-    avatarUrl: (room.avatarUrl as string | null | undefined) ?? null,
-    name: (room.name as string) || '',
+    roomId: room.roomId || room.id || '',
+    avatarUrl: room.avatarUrl ?? null,
+    name: room.name || '',
     isStatic: Boolean(room.isStatic),
     relationship: relationshipOf(room.relationship),
     peers: peerCount,
     visiblePeers,
     hiddenPeerCount: Math.max(0, peerCount - visiblePeers.length),
-    lastMessageAt: (room.lastMessageAt as number | null | undefined) ?? null,
-    unreadCount: (room.unreadCount as number | undefined) ?? undefined
+    lastMessageAt: room.lastMessageAt ?? null,
+    unreadCount: room.unreadCount
   };
 }
 
@@ -188,7 +209,7 @@ function refusalCode(schema: TSchema, payload: unknown): ErrorCode {
 export function validateClientCommand(
   envelope: unknown
 ): { ok: true; envelope: ClientCommand } | { ok: false; code: ErrorCode } {
-  if (!isPlainObject(envelope) || typeof envelope.type !== 'string') {
+  if (!isRecord(envelope) || typeof envelope.type !== 'string') {
     return { ok: false, code: 'invalid_envelope' };
   }
   const type = envelope.type;
@@ -198,7 +219,7 @@ export function validateClientCommand(
 
   const schema = ClientCommandFrames[type];
   const payloadSchema = schema.properties.payload;
-  const payload = Value.Clean(payloadSchema, isPlainObject(envelope.payload) ? Value.Clone(envelope.payload) : {});
+  const payload = Value.Clean(payloadSchema, isRecord(envelope.payload) ? Value.Clone(envelope.payload) : {});
   const id = typeof envelope.id === 'string' && envelope.id ? envelope.id : undefined;
   const command = { ...(id ? { id } : {}), type, payload };
   if (!Value.Check(schema, command)) {
@@ -216,7 +237,7 @@ export function validateClientCommand(
 export function parseServerFrame(
   frame: unknown
 ): { ok: true; frame: ServerFrame } | { ok: false; type: string; reason: string } {
-  if (!isPlainObject(frame) || typeof frame.type !== 'string') return { ok: false, type: '', reason: 'not a frame' };
+  if (!isRecord(frame) || typeof frame.type !== 'string') return { ok: false, type: '', reason: 'not a frame' };
   const type = frame.type;
   if (type === 'error') {
     return Value.Check(ServerErrorFrame, frame)

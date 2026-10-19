@@ -19,6 +19,7 @@ import { createRoomFanout } from './room-fanout.ts';
 import { createVoiceJoin } from './voice-join.ts';
 import { claimMedia, decideMediaRequest, MEDIA_MIN_VIEWERS } from './media-budget.ts';
 import { leaveReasonOf } from './runtime-types.ts';
+import { isRecord } from '@voice-room/shared/guards';
 import type {
   FinalizeError,
   LeaseReason,
@@ -206,8 +207,8 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
         accountUserId: peer.accountUserId || null,
         guestPrincipalId: peer.gateGuestPrincipalId || ''
       });
-    } else if (typeof getRoomStore().revokeLiveKitGatePeer === 'function') {
-      await getRoomStore().revokeLiveKitGatePeer!({
+    } else {
+      await getRoomStore().revokeLiveKitGatePeer?.({
         roomId: record.roomId,
         peerId: record.peerId,
         accountUserId: peer.accountUserId || null,
@@ -220,7 +221,8 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     try {
       await removeLiveKitParticipant(record.roomId, record.peerId);
     } catch (error) {
-      (error as FinalizeError).ownershipFinalized = true;
+      // The seat is already released; only the LiveKit removal failed.
+      if (isRecord(error)) Object.assign(error, { ownershipFinalized: true });
       throw error;
     }
     scheduleSummaryBroadcast(record.roomId);
@@ -332,17 +334,18 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
   }: { roomId?: string; userId?: string; reason?: PeerLeaveReason } = {}): Promise<
     { ok: true; disconnected: number } | { ok: false; code: ErrorCode; disconnected: 0 }
   > {
-    if (!roomId || !userId || !credentialBoundary?.resolvePrincipal || !credentialBoundary?.revokePrincipal) {
+    const resolvePrincipal = credentialBoundary?.resolvePrincipal;
+    const revokePrincipal = credentialBoundary?.revokePrincipal;
+    if (!roomId || !userId || !resolvePrincipal || !revokePrincipal) {
       return { ok: false, code: 'credential_boundary_unavailable', disconnected: 0 };
     }
-    const boundary = credentialBoundary as Required<RuntimeCredentialBoundary>;
-    const principal = boundary.resolvePrincipal({ roomId, accountUserId: userId });
+    const principal = resolvePrincipal({ roomId, accountUserId: userId });
     if (!principal) return { ok: false, code: 'principal_unavailable', disconnected: 0 };
     const room = presenceRooms.get(roomId);
     const peers = [...(room?.peers?.values?.() || [])].filter((peer) => peer.accountUserId === userId);
-    let principalRevocationPromise: ReturnType<Required<RuntimeCredentialBoundary>['revokePrincipal']> | null = null;
+    let principalRevocationPromise: ReturnType<typeof revokePrincipal> | null = null;
     const revokePrincipalOnce = () => {
-      principalRevocationPromise ||= boundary.revokePrincipal({ roomId, principal });
+      principalRevocationPromise ||= revokePrincipal({ roomId, principal });
       return principalRevocationPromise;
     };
     let revokeFailed = false;
@@ -480,7 +483,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
   // empty rooms are sent too).
   async function sendAccountSummaries(connection: WsConnection, userId: string): Promise<void> {
     if (!userId) return;
-    let rooms: Awaited<ReturnType<RuntimeRoomStore['listVisibleRoomsForUser']>> = [];
+    let rooms: Awaited<ReturnType<RuntimeRoomStore['listVisibleRoomsForUser']>>;
     try {
       rooms = await getRoomStore().listVisibleRoomsForUser(userId);
     } catch (error) {

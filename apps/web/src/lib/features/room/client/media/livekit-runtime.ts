@@ -1,3 +1,5 @@
+import type * as LiveKitClientModule from './livekit-client';
+
 export const TRACK_SOURCE = {
   Camera: 'camera',
   Microphone: 'microphone',
@@ -5,9 +7,9 @@ export const TRACK_SOURCE = {
   ScreenShareAudio: 'screen_share_audio'
 } as const;
 
-let livekitClientPromise: Promise<typeof import('./livekit-client')> | null = null;
+let livekitClientPromise: Promise<typeof LiveKitClientModule> | null = null;
 
-export function loadLiveKitClient(): Promise<typeof import('./livekit-client')> {
+export function loadLiveKitClient(): Promise<typeof LiveKitClientModule> {
   livekitClientPromise ||= import('./livekit-client');
   return livekitClientPromise;
 }

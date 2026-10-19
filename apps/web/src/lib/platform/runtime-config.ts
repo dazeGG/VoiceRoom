@@ -1,3 +1,4 @@
+import { isArray, isRecord } from '@voice-room/shared/guards';
 import {
   DEFAULT_RUNTIME_CONFIG,
   parseRuntimeConfig,
@@ -17,10 +18,10 @@ type RuntimeConfigOptions = {
 const SENSITIVE_KEY_PATTERNS: RegExp[] = [/(api[-_]?key)/i, /(secret|token|credential|password)/i];
 
 function hasSuspiciousSecrets(value: unknown): boolean {
-  if (!value || typeof value !== 'object') return false;
-  if (value instanceof Array) return value.some(hasSuspiciousSecrets);
+  if (isArray(value)) return value.some(hasSuspiciousSecrets);
+  if (!isRecord(value)) return false;
 
-  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+  for (const [key, nested] of Object.entries(value)) {
     if (SENSITIVE_KEY_PATTERNS.some((pattern) => pattern.test(key))) return true;
     if (typeof nested === 'object' && hasSuspiciousSecrets(nested)) return true;
   }

@@ -116,7 +116,8 @@
 
   function onPointerMove(event: PointerEvent): void {
     if (count === 0 || plotWidth <= 0) return;
-    const box = (event.currentTarget as SVGElement).getBoundingClientRect();
+    if (!(event.currentTarget instanceof Element)) return;
+    const box = event.currentTarget.getBoundingClientRect();
     const offset = event.clientX - box.left - PAD.left;
     const index = kind === 'bar' ? Math.floor(offset / step) : Math.round(offset / (step || 1));
     hover = Math.min(count - 1, Math.max(0, index));

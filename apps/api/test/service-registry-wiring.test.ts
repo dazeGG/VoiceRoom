@@ -3,7 +3,6 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type pg from 'pg';
 import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import { createServiceRegistry, type ServiceRegistryDeps } from '../src/app/service-registry.ts';
 import { fake, fakeDb } from './fakes/index.ts';
@@ -22,7 +21,7 @@ const CONFIG = {
 
 function registryOnFakes(deps: Partial<ServiceRegistryDeps> = {}) {
   const registry = createServiceRegistry(CONFIG, fake<ServiceRegistryDeps>(deps));
-  registry.applyOverrides({ pool: fakeDb() as unknown as pg.Pool });
+  registry.applyOverrides({ pool: fakeDb() });
   return registry;
 }
 

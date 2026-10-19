@@ -84,7 +84,7 @@
     onCollapse={closeChat}
     onRead={markChatRead}
     onUnreadMessage={incrementUnreadChat}
-    onToast={(message, options) => showToast(message, options)}
+    onToast={showToast}
     onAuthorContextMenu={openAuthorMenu}
     canModerate={roomSettingsUi.isOwner}
   >

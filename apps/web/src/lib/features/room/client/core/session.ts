@@ -1,5 +1,6 @@
 import { PEER_SESSION_STORAGE_PREFIX } from './config';
 import type { PeerSession } from './types';
+import { isRecord } from '@voice-room/shared/guards';
 
 export function getRoomIdFromPath(): string {
   const match = window.location.pathname.match(/^\/r\/([A-Za-z0-9_-]{3,48})\/?$/);
@@ -26,9 +27,9 @@ export function getStoredPeerSession(roomId: string): PeerSession {
 
   const storageKey = `${PEER_SESSION_STORAGE_PREFIX}${roomId}`;
   try {
-    const stored = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
-    const peerId = typeof stored?.peerId === 'string' ? stored.peerId : '';
-    const sessionToken = typeof stored?.sessionToken === 'string' ? stored.sessionToken : '';
+    const stored: unknown = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
+    const peerId = isRecord(stored) && typeof stored.peerId === 'string' ? stored.peerId : '';
+    const sessionToken = isRecord(stored) && typeof stored.sessionToken === 'string' ? stored.sessionToken : '';
     if (/^[A-Za-z0-9_-]{8,80}$/.test(peerId) && /^[A-Za-z0-9_-]{32,128}$/.test(sessionToken)) {
       return { peerId, sessionToken };
     }

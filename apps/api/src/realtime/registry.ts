@@ -54,7 +54,7 @@ type PresenceRegistry = {
 };
 type PresenceRoom =
   { updatedAt?: unknown; peers?: { values?: () => Iterable<{ accountUserId?: string | null }> } } | null | undefined;
-type RegistryLogger = { error(...args: unknown[]): void };
+type RegistryLogger = { error(fields: object, message: string): void };
 
 function createConnectionId(prefix: string): string {
   return `${prefix}:${Date.now()}:${crypto.randomBytes(4).toString('hex')}`;
@@ -72,7 +72,7 @@ function buildRoomMembershipPresenceSnapshot(
       entries.push({
         inVoice: connection.activeVoice?.roomId === roomId,
         roomId: connection.activeVoice?.roomId || null,
-        presenceStatus: connection.presenceStatus || registry!.userPresenceStatuses.get(userId) || 'online'
+        presenceStatus: connection.presenceStatus || registry?.userPresenceStatuses.get(userId) || 'online'
       });
     }
     if (entries.length) byUserId.set(userId, entries);
@@ -138,7 +138,7 @@ function createConnectionRegistry({
       id: createConnectionId(userId || 'guest'),
       userId: userId || null,
       guest: !userId,
-      authSessionHash: userId ? String(authSessionHash || '') : '',
+      authSessionHash: userId && typeof authSessionHash === 'string' ? authSessionHash : '',
       clientIp: clientIp || '',
       client: null,
       guestIp: null,
@@ -198,7 +198,7 @@ function createConnectionRegistry({
 
   async function notifyFriendsPresence(userId: string, online: boolean): Promise<void> {
     if (!onPresenceChange || !userId) return;
-    let friendIds: string[] = [];
+    let friendIds: string[];
     try {
       friendIds = await getFriendIds(userId);
     } catch (error) {
@@ -209,7 +209,7 @@ function createConnectionRegistry({
       return;
     }
     for (const friendId of friendIds) {
-      onPresenceChange!(friendId, userId, online);
+      onPresenceChange(friendId, userId, online);
     }
   }
 
@@ -359,7 +359,11 @@ function createConnectionRegistry({
     );
   }
 
-  function closeConnections(targets: Iterable<WsConnection>, code = 4401, reason = 'Session revoked'): void {
+  function closeConnections(
+    targets: Iterable<WsConnection, unknown, unknown>,
+    code = 4401,
+    reason = 'Session revoked'
+  ): void {
     for (const connection of targets) {
       try {
         connection.socket.close(code, reason);

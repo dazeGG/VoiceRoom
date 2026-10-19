@@ -2,13 +2,20 @@ import { browser } from '$app/environment';
 import { deletePushSubscription, fetchPushConfig, savePushSubscription } from '$lib/api/push';
 import { isDesktopBoundaryBlocked } from '$lib/platform/desktop-boundary';
 
-export const pushNotifications = $state({
+export const pushNotifications = $state<{
+  active: boolean;
+  busy: boolean;
+  loaded: boolean;
+  serverEnabled: boolean;
+  supported: boolean;
+  userId: string | null;
+}>({
   active: false,
   busy: false,
   loaded: false,
   serverEnabled: false,
   supported: false,
-  userId: null as string | null
+  userId: null
 });
 
 let syncGeneration = 0;

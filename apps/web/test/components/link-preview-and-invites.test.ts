@@ -24,7 +24,7 @@ test('a link preview opens the link in a new tab without sharing this page, and 
   const link = screen.getByRole('link');
   expect(link.getAttribute('href')).toBe('https://store.example/game');
   expect(link.getAttribute('target')).toBe('_blank');
-  expect(link.getAttribute('rel')).toBe('noopener noreferrer nofollow');
+  expect(link.getAttribute('rel')).toBe('noopener noreferrer nofollow external');
   expect(link.querySelector('img')?.getAttribute('src')).toBe(`/api/link-previews/${KEY}`);
   expect(link.textContent).toContain('Игра');
 });

@@ -3,16 +3,30 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PG_MIGRATE_LOCK_ID, runner } from 'node-pg-migrate';
 import { readDatabaseConfig } from './config.ts';
+import { readNodeEnv } from '../app/config.ts';
+import { codeOf } from '../platform/error-code.ts';
 import { LOG_EVENTS } from './log-events.ts';
 import { createLogger } from './logger.ts';
 
 type LogMethod = (...items: unknown[]) => void;
 type MigrationLogSink = { info?: LogMethod; warn?: LogMethod; error?: LogMethod; log?: LogMethod };
-type QueryClient = { query(text: string, values?: unknown[]): Promise<{ rows: Record<string, any>[] }> };
+// A row as pg hands it over: each field is checked where it is read.
+type Row = Record<string, unknown>;
+type QueryClient = { query(text: string, values?: unknown[]): Promise<{ rows: Row[] }> };
 type MigrationClient = QueryClient & { connect(): Promise<unknown>; end(): Promise<unknown> };
 type ClientFactory = (connectionString: string) => MigrationClient;
 type RunMigration = Awaited<ReturnType<typeof runner>>[number];
-type MigrationRunner = (options: Record<string, unknown>) => Promise<RunMigration[]>;
+type MigrationRunnerOptions = {
+  dir: string;
+  direction: 'up' | 'down';
+  migrationsTable: string;
+  count: number | undefined;
+  singleTransaction: boolean;
+  checkOrder: boolean;
+  logger: Required<MigrationLogSink>;
+  noLock: boolean;
+} & ({ databaseUrl: string } | { dbClient: MigrationClient });
+type MigrationRunner = (options: MigrationRunnerOptions) => Promise<RunMigration[]>;
 export type MigrationGuardState = 'clean' | 'running' | 'dirty';
 
 const DEFAULT_MIGRATIONS_DIR = path.resolve(import.meta.dirname, '..', 'migrations');
@@ -53,9 +67,22 @@ function migrationLogger(logger: MigrationLogSink | null | undefined): Required<
   };
 }
 
-async function query(client: QueryClient, text: string, values: unknown[] = []): Promise<Record<string, any>[]> {
+async function query(client: QueryClient, text: string, values: unknown[] = []): Promise<Row[]> {
   const { rows } = await client.query(text, values);
   return rows;
+}
+
+function textOf(value: unknown): string {
+  return typeof value === 'string' ? value : '';
+}
+
+// node-pg-migrate runs on a pg Client; the client factory may hand out
+// anything that queries, so the default runner checks what it got.
+function runNodePgMigrate(options: MigrationRunnerOptions): Promise<RunMigration[]> {
+  if (!('dbClient' in options)) return runner(options);
+  const { dbClient, ...rest } = options;
+  if (!(dbClient instanceof Client)) throw new TypeError('node-pg-migrate needs a pg Client');
+  return runner({ ...rest, dbClient });
 }
 
 async function ensureMigrationGuardSchema(client: QueryClient): Promise<string> {
@@ -81,7 +108,7 @@ async function ensureMigrationGuardSchema(client: QueryClient): Promise<string> 
     return MIGRATION_GUARD_STATES.clean;
   }
 
-  return (rows[0] as { state: string }).state;
+  return textOf(rows[0]?.state);
 }
 
 async function setMigrationGuardState(
@@ -107,7 +134,7 @@ async function assertNoDirtyMigrationState(client: QueryClient): Promise<void> {
   const state = await ensureMigrationGuardSchema(client);
   if (state === MIGRATION_GUARD_STATES.dirty || state === MIGRATION_GUARD_STATES.running) {
     const rows = await query(client, `SELECT marker FROM ${MIGRATION_GUARD_TABLE} WHERE id = $1`, [MIGRATION_GUARD_ID]);
-    const marker = rows[0]?.marker;
+    const marker = textOf(rows[0]?.marker);
     throw new Error(`Aborting migrations because migration guard state is ${state}: ${marker || 'unknown reason'}`);
   }
 }
@@ -117,8 +144,8 @@ async function acquireMigrationLock(client: QueryClient, lockValue: number | big
   try {
     await query(client, 'SELECT pg_advisory_lock($1)', [lockValue]);
   } catch (error) {
-    if ((error as { code?: unknown } | null)?.code === '57014') {
-      throw new Error(`Timed out waiting ${LOCK_TIMEOUT_MS}ms for the migration lock`);
+    if (codeOf(error) === '57014') {
+      throw new Error(`Timed out waiting ${LOCK_TIMEOUT_MS}ms for the migration lock`, { cause: error });
     }
     throw error;
   } finally {
@@ -185,14 +212,16 @@ async function assertMigrationReady({
     const rows = await query(client, `SELECT state, marker FROM ${MIGRATION_GUARD_TABLE} WHERE id = $1`, [
       MIGRATION_GUARD_ID
     ]);
-    const state = rows[0]?.state;
+    const state = textOf(rows[0]?.state);
     if (state === MIGRATION_GUARD_STATES.running || state === MIGRATION_GUARD_STATES.dirty) {
-      throw new Error(`API rollout blocked by migration guard state ${state}: ${rows[0]?.marker || 'unknown reason'}`);
+      throw new Error(
+        `API rollout blocked by migration guard state ${state}: ${textOf(rows[0]?.marker) || 'unknown reason'}`
+      );
     }
     if (state !== MIGRATION_GUARD_STATES.clean)
       throw new Error(`API rollout blocked by unknown migration guard state ${state || 'missing'}`);
-    const applied = (await query(client, `SELECT name FROM ${DEFAULT_MIGRATIONS_TABLE} ORDER BY name ASC`)).map(
-      (row) => row.name
+    const applied = (await query(client, `SELECT name FROM ${DEFAULT_MIGRATIONS_TABLE} ORDER BY name ASC`)).map((row) =>
+      textOf(row.name)
     );
     const expected = expectedMigrationCatalog(dir);
     if (applied.length !== expected.length || applied.some((name, index) => name !== expected[index])) {
@@ -211,11 +240,11 @@ async function runMigrations({
   direction = 'up',
   dir = DEFAULT_MIGRATIONS_DIR,
   logger = createLogger({ name: 'api' }),
-  noLock = process.env.NODE_ENV === 'test',
+  noLock = readNodeEnv() === 'test',
   lockValue = PG_MIGRATE_LOCK_ID,
   clearDirty = false,
   clientFactory = (connectionString: string) => new Client({ connectionString }),
-  migrationRunner = runner as unknown as MigrationRunner
+  migrationRunner = runNodePgMigrate
 }: {
   databaseUrl?: string;
   direction?: 'up' | 'down';
@@ -298,7 +327,7 @@ async function runMigrations({
       await setMigrationGuardState(
         client,
         MIGRATION_GUARD_STATES.dirty,
-        `direction=${direction}, error=${(error as Error).message}`
+        `direction=${direction}, error=${error instanceof Error ? error.message : String(error)}`
       ).catch(() => {});
     }
     throw error;

@@ -1,7 +1,9 @@
 import crypto from 'node:crypto';
+import { textOf } from '@voice-room/shared/guards';
 import { firstPreviewableUrl, normalizeLinkPreview, type LinkPreview } from '@voice-room/shared/link-preview';
 import { decodeHtmlBody, extractLinkPreviewMetadata } from '../../lib/link-preview-html.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
+import { codeOf } from '../../platform/error-code.ts';
 import { createLogger } from '../../lib/logger.ts';
 import type { LinkPreviewRepository } from './link-preview.repository.ts';
 
@@ -91,7 +93,8 @@ function createLinkPreviewService({
     const urlHash = hashUrl(url);
     const cached = await repository.getCached(urlHash, now());
     if (cached) return cached.status === 'ready' ? normalizeLinkPreview(cached.preview) : null;
-    if (inflight.has(urlHash)) return inflight.get(urlHash)!;
+    const pending = inflight.get(urlHash);
+    if (pending) return pending;
     // Under a flood of new links, skip rather than queue without bound.
     if (active >= MAX_CONCURRENT_FETCHES && waiting.length >= MAX_WAITING_FETCHES) return null;
 
@@ -101,7 +104,7 @@ function createLinkPreviewService({
       try {
         preview = await buildPreview(url);
       } catch (error) {
-        failureCode = String((error as { code?: unknown } | null | undefined)?.code || 'fetch_failed').slice(0, 32);
+        failureCode = (textOf(codeOf(error)) || 'fetch_failed').slice(0, 32);
       }
       await repository.saveCached({
         urlHash,

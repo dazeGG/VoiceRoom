@@ -2,6 +2,8 @@
 // capped in size, never HTML, with a plain-text projection for everything
 // that shows only text.
 
+import { isArray, isRecord, textOf } from './guards.ts';
+
 export type RoomMessageTextSegmentV1 = { type: 'text'; text: string };
 export type RoomMessageLinkSegmentV1 = { type: 'link'; href: string; label: string };
 export type RoomMessageMentionSegmentV1 = { type: 'mention'; userId: string; label: string };
@@ -37,17 +39,15 @@ function cleanHttpUrl(value: unknown): string | null {
   }
 }
 
-// Node's Buffer when present (the API), TextEncoder in the browser.
-const NodeBuffer = (globalThis as { Buffer?: { byteLength(value: string, encoding: 'utf8'): number } }).Buffer;
+const utf8 = new TextEncoder();
 
 function utf8ByteLength(value: string): number {
-  if (typeof NodeBuffer !== 'undefined') return NodeBuffer.byteLength(value, 'utf8');
-  return new TextEncoder().encode(value).byteLength;
+  return utf8.encode(value).byteLength;
 }
 
 function normalizeSegment(input: unknown): RoomMessageSegmentV1 | null {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
-  const segment = input as Record<string, unknown>;
+  if (!isRecord(input)) return null;
+  const segment = input;
   if (segment.type === 'text') {
     const text = cleanString(segment.text, MAX_TEXT_LENGTH, { allowEmpty: true });
     return text === null ? null : { type: 'text', text };
@@ -66,12 +66,15 @@ function normalizeSegment(input: unknown): RoomMessageSegmentV1 | null {
 }
 
 export function normalizeRoomMessageContent(input: unknown): RoomMessageContentV1 | null {
-  const value = input as { version?: unknown; segments?: unknown } | null;
-  if (!value || typeof value !== 'object' || Array.isArray(value) || value.version !== CONTENT_VERSION) return null;
-  if (!Array.isArray(value.segments) || value.segments.length < 1 || value.segments.length > MAX_SEGMENTS) return null;
-  const segments = value.segments.map(normalizeSegment);
-  if (segments.some((segment) => !segment)) return null;
-  const normalized: RoomMessageContentV1 = { version: CONTENT_VERSION, segments: segments as RoomMessageSegmentV1[] };
+  if (!isRecord(input) || input.version !== CONTENT_VERSION) return null;
+  if (!isArray(input.segments) || input.segments.length < 1 || input.segments.length > MAX_SEGMENTS) return null;
+  const segments: RoomMessageSegmentV1[] = [];
+  for (const item of input.segments) {
+    const segment = normalizeSegment(item);
+    if (!segment) return null;
+    segments.push(segment);
+  }
+  const normalized: RoomMessageContentV1 = { version: CONTENT_VERSION, segments };
   if (utf8ByteLength(JSON.stringify(normalized)) > MAX_CONTENT_BYTES) return null;
   const text = projectKnownContent(normalized);
   return text.trim() ? normalized : null;
@@ -88,7 +91,7 @@ function projectKnownContent(content: RoomMessageContentV1): string {
 
 export function projectRoomMessageContent(value: unknown, plainText: unknown = ''): string {
   const normalized = normalizeRoomMessageContent(value);
-  return normalized ? projectKnownContent(normalized) : String(plainText || '');
+  return normalized ? projectKnownContent(normalized) : textOf(plainText);
 }
 
 export function contentFromPlainText(value: unknown): RoomMessageContentV1 | null {

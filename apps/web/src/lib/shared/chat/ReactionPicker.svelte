@@ -1,7 +1,7 @@
 <script lang="ts">
   import { SmilePlus } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
-  import { Popover } from '$lib/shared/ui';
+  import { Popover, type PopoverContentState, type PopoverTriggerState } from '$lib/shared/ui';
   import Emoji from './Emoji.svelte';
   import EmojiPickerPanel from './EmojiPickerPanel.svelte';
   import type { ReactionStore } from './reaction-store.svelte';
@@ -75,7 +75,7 @@
       ariaLabel="Выбор реакции"
       panelClass="reaction-picker-panel"
     >
-      {#snippet trigger({ toggle, panelId })}
+      {#snippet trigger({ toggle, panelId }: PopoverTriggerState)}
         <button
           class="reaction-picker-trigger"
           type="button"
@@ -89,8 +89,8 @@
         >
       {/snippet}
 
-      {#snippet content({ close })}
-        <EmojiPickerPanel {frequentEmoji} onpick={(emoji) => void choose(emoji, close)} />
+      {#snippet content({ close }: PopoverContentState)}
+        <EmojiPickerPanel {frequentEmoji} onpick={(emoji: string) => void choose(emoji, close)} />
       {/snippet}
     </Popover>
   </div>

@@ -210,7 +210,7 @@
   }
 
   function replaceUrlWithActiveVoiceRoom(roomId: string | null = connectedVoiceRoomId): void {
-    const target = roomId ? `/r/${encodeURIComponent(roomId)}` : '/';
+    const target = roomId ? resolve('/r/[roomId]', { roomId: encodeURIComponent(roomId) }) : resolve('/');
     if (`${window.location.pathname}${window.location.search}` === target) return;
     replaceState(target, {});
   }
@@ -307,7 +307,7 @@
     const initialParams = new URLSearchParams(window.location.search);
     const initialDmId = initialParams.get('dm');
     if (!initialRoomId && initialDmId) {
-      replaceState('/', {});
+      replaceState(resolve('/'), {});
       void lobby.openDm(initialDmId).catch(() => onToast('Не удалось открыть диалог'));
     }
     // A mention link — from the bell or from a push — lands here rather than on
@@ -315,7 +315,7 @@
     const linkedRoomId = initialParams.get('room');
     const linkedMessageId = initialParams.get('message');
     if (!initialRoomId && linkedRoomId && linkedMessageId) {
-      replaceState('/', {});
+      replaceState(resolve('/'), {});
       openRoomMessage(linkedRoomId, linkedMessageId);
     }
 
@@ -384,7 +384,7 @@
   function enterRoom(roomId: string): void {
     selectRoomForVoiceEntry(roomId);
     lobby.mode = 'rooms';
-    pushState(`/r/${encodeURIComponent(roomId)}`, {});
+    pushState(resolve('/r/[roomId]', { roomId: encodeURIComponent(roomId) }), {});
   }
 
   // Every way into voice goes through here, so switching away from a live call
@@ -447,7 +447,7 @@
     const openedRoomId = openActiveVoiceRoom();
     if (!openedRoomId) return;
     lobby.mode = 'rooms';
-    pushState(`/r/${encodeURIComponent(openedRoomId)}`, {});
+    pushState(resolve('/r/[roomId]', { roomId: encodeURIComponent(openedRoomId) }), {});
   }
 
   async function leaveConnectedVoiceRoom(): Promise<void> {
@@ -531,7 +531,7 @@
     onCreateRoom={() => (createDialogOpen = true)}
     onJoinCode={handleJoin}
     onRoomsChanged={rooms.refresh}
-    onOpenRoomSettings={(roomId) => (previewSettingsRoomId = roomId)}
+    onOpenRoomSettings={(roomId: string) => (previewSettingsRoomId = roomId)}
     recoveryCodesReminder={prompts.recoveryCodesReminder}
     onOpenRecoveryCodes={() => prompts.openSecuritySettings('recovery-codes')}
     onSnoozeRecoveryCodes={prompts.snoozeRecoveryCodes}
@@ -661,7 +661,7 @@
     open={Boolean(pendingRoomSwitchId)}
     fromName={connectedVoiceRoomName}
     toName={rooms.label(pendingRoomSwitchId)}
-    onConfirm={(dontAskAgain) => resolveRoomSwitch(true, dontAskAgain)}
+    onConfirm={(dontAskAgain: boolean) => resolveRoomSwitch(true, dontAskAgain)}
     onCancel={() => resolveRoomSwitch(false)}
   />
   <ProfileCardHost {onToast} />

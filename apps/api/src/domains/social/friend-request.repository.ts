@@ -5,7 +5,8 @@ import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
-import { lockUserPair, mapPublicUser, now, toMillis } from './social-records.ts';
+import { lockUserPair, mapPublicUser, now } from './social-records.ts';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 import { friendsOn, insertFriendship } from './friendship.repository.ts';
 import { blockedOn } from './user-block.repository.ts';
 
@@ -130,13 +131,13 @@ export function createFriendRequestRepository({ pool }: { pool: pg.Pool }) {
     return {
       incoming: incoming.map((row) => ({
         id: row.request_id,
-        createdAt: toMillis(row.request_created_at),
+        createdAt: epochMillis(row.request_created_at),
         mutualFriends: row.mutual || 0,
         user: mapPublicUser(row)
       })),
       outgoing: outgoing.map((row) => ({
         id: row.request_id,
-        createdAt: toMillis(row.request_created_at),
+        createdAt: epochMillis(row.request_created_at),
         user: mapPublicUser(row)
       }))
     };

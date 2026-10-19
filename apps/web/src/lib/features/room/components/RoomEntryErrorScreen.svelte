@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { state } from '../client/core/state.svelte';
   import { showRoomRoute } from '../client/room/room';
 </script>
@@ -19,7 +20,7 @@
       <button class="not-found-home" id="entryRetryButton" type="button" onclick={() => void showRoomRoute()}
         >Повторить проверку</button
       >
-      <a class="not-found-home" href="/" data-sveltekit-reload>На стартовый экран</a>
+      <a class="not-found-home" href={resolve('/')} data-sveltekit-reload>На стартовый экран</a>
     </div>
   </div>
 </main>

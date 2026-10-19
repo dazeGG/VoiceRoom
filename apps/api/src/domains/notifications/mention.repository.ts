@@ -28,6 +28,8 @@ export type Mention = {
   retractedAt: unknown;
 };
 
+function mapMention(row: MentionRow): Mention;
+function mapMention(row: MentionRow | null | undefined): Mention | null;
 function mapMention(row: MentionRow | null | undefined): Mention | null {
   return row
     ? {
@@ -106,7 +108,7 @@ function createMentionRepository({ pool }: { pool?: QueryClient | null } = {}) {
       .where('retracted_at', 'is', null)
       .orderBy('target_user_id')
       .execute();
-    return rows.map((row) => mapMention(row as MentionRow) as Mention);
+    return rows.map((row) => mapMention(row));
   }
 
   async function retractForMessage(messageId: string, { client }: { client?: Client } = {}): Promise<Mention[]> {
@@ -117,7 +119,7 @@ function createMentionRepository({ pool }: { pool?: QueryClient | null } = {}) {
       .where('retracted_at', 'is', null)
       .returningAll()
       .execute();
-    return rows.map((row) => mapMention(row as MentionRow) as Mention);
+    return rows.map((row) => mapMention(row));
   }
 
   return { listActive, replaceForMessage, retractForMessage };

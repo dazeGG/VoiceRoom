@@ -16,6 +16,7 @@ import {
 import type { AccountBadge } from '@voice-room/shared/contracts/users';
 import { ACCOUNT_DELETION_GRACE_MS, describeUserAgent } from '@voice-room/shared/account-security';
 import { kyselyOn } from '../../platform/db/kysely.ts';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 
 const MSK = sql.lit('Europe/Moscow');
 const TODAY = sql`(now() AT TIME ZONE ${MSK})::date`;
@@ -60,11 +61,6 @@ export interface StoredAccountDetail {
 }
 
 const n = (value: unknown): number => Number(value) || 0;
-const millis = (value: unknown): number | null => {
-  if (value === null || value === undefined) return null;
-  const time = value instanceof Date ? value.getTime() : typeof value === 'string' ? Date.parse(value) : NaN;
-  return Number.isFinite(time) ? time : null;
-};
 
 const SORT_COLUMNS: Record<AccountsSort, RawBuilder<unknown>> = {
   created: sql`created_at`,
@@ -167,9 +163,9 @@ function searchClause(q: string): RawBuilder<unknown> {
 
 function mapRow(row: Record<string, unknown>, now: number): StoredAccountRow {
   const avatarKey = typeof row.avatar_key === 'string' && row.avatar_key ? row.avatar_key : null;
-  const blockedAt = millis(row.blocked_at);
-  const blockedUntil = millis(row.blocked_until);
-  const deletionAt = millis(row.deletion_requested_at);
+  const blockedAt = epochMillis(row.blocked_at);
+  const blockedUntil = epochMillis(row.blocked_until);
+  const deletionAt = epochMillis(row.deletion_requested_at);
   const badge = row.badge === 'official' || row.badge === 'verified' ? row.badge : null;
   return {
     id: String(row.id),
@@ -178,8 +174,8 @@ function mapRow(row: Record<string, unknown>, now: number): StoredAccountRow {
     avatarUrl: avatarKey ? `/api/avatars/${encodeURIComponent(avatarKey)}` : null,
     avatarColorKey: typeof row.avatar_color_key === 'string' ? row.avatar_color_key : 'blurple',
     avatarAccent: typeof row.avatar_accent === 'string' && row.avatar_accent ? row.avatar_accent : null,
-    createdAt: millis(row.created_at) ?? 0,
-    lastSeenAt: millis(row.last_seen) ?? millis(row.created_at) ?? 0,
+    createdAt: epochMillis(row.created_at) ?? 0,
+    lastSeenAt: epochMillis(row.last_seen) ?? epochMillis(row.created_at) ?? 0,
     activeDays: n(row.active_days),
     clients: { desktopApp: row.desktop_app === true, browser: row.browser === true, mobile: row.mobile === true },
     voiceMinutes: Math.round(n(row.voice_minutes)),
@@ -293,8 +289,8 @@ export function createAdminAccountsRepository({ pool }: { pool: pg.Pool }) {
         return {
           client: device.client,
           os: device.os,
-          createdAt: millis(session.created_at) ?? 0,
-          lastSeenAt: millis(session.last_seen_at) ?? 0
+          createdAt: epochMillis(session.created_at) ?? 0,
+          lastSeenAt: epochMillis(session.last_seen_at) ?? 0
         };
       }),
       reports: { against: n(counted.against), againstOpen: n(counted.against_open), filed: n(counted.filed) }

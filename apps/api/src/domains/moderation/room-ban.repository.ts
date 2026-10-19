@@ -5,6 +5,7 @@
 
 import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
+import { isOneOf } from '@voice-room/shared/guards';
 import { transaction } from '../../platform/db/pool.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { RoomBans } from '../../platform/db/schema.ts';
@@ -197,15 +198,16 @@ export function createServerMuteRepository({ db }: { db: Database }) {
     roomId,
     principal,
     mutedBy
-  }: { roomId?: string; principal?: GatePrincipal | null; mutedBy?: unknown } = {}) {
-    if (!isGatePrincipal(principal)) return { status: 'invalid' };
+  }: { roomId?: string; principal?: GatePrincipal | null; mutedBy?: string | null } = {}) {
+    // muted_by is NOT NULL: only a room with an owner has someone to mute on its behalf.
+    if (!roomId || !mutedBy || !isGatePrincipal(principal)) return { status: 'invalid' };
     const result = await db
       .insertInto('room_server_mutes')
       .values({
-        room_id: roomId as string,
+        room_id: roomId,
         principal_type: principal.principalType,
         principal_id: principal.principalId,
-        muted_by: mutedBy as string
+        muted_by: mutedBy
       })
       .onConflict((oc) => oc.columns(['room_id', 'principal_type', 'principal_id']).doNothing())
       .executeTakeFirst();
@@ -216,10 +218,10 @@ export function createServerMuteRepository({ db }: { db: Database }) {
     roomId,
     principal
   }: { roomId?: string; principal?: GatePrincipal | null } = {}) {
-    if (!isGatePrincipal(principal)) return { status: 'invalid' };
+    if (!roomId || !isGatePrincipal(principal)) return { status: 'invalid' };
     const result = await db
       .deleteFrom('room_server_mutes')
-      .where('room_id', '=', roomId as string)
+      .where('room_id', '=', roomId)
       .where('principal_type', '=', principal.principalType)
       .where('principal_id', '=', principal.principalId)
       .executeTakeFirst();
@@ -230,11 +232,11 @@ export function createServerMuteRepository({ db }: { db: Database }) {
     roomId,
     principal
   }: { roomId?: string; principal?: GatePrincipal | null } = {}): Promise<boolean> {
-    if (!isGatePrincipal(principal)) return false;
+    if (!roomId || !isGatePrincipal(principal)) return false;
     const row = await db
       .selectFrom('room_server_mutes')
       .select('room_id')
-      .where('room_id', '=', roomId as string)
+      .where('room_id', '=', roomId)
       .where('principal_type', '=', principal.principalType)
       .where('principal_id', '=', principal.principalId)
       .executeTakeFirst();
@@ -247,10 +249,12 @@ export function createServerMuteRepository({ db }: { db: Database }) {
       .select(['principal_type', 'principal_id'])
       .where('room_id', '=', roomId)
       .execute();
-    return rows.map((row) => ({
-      principalType: row.principal_type as GatePrincipal['principalType'],
-      principalId: row.principal_id
-    }));
+    // The table's check allows only these principal types.
+    return rows.flatMap((row) =>
+      isOneOf(['account', 'guest'], row.principal_type)
+        ? [{ principalType: row.principal_type, principalId: row.principal_id }]
+        : []
+    );
   }
 
   return { clearRoomServerMute, isRoomServerMuted, listRoomServerMutes, setRoomServerMute };

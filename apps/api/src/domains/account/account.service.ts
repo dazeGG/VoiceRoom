@@ -23,6 +23,7 @@ import {
 import { isReservedName, isValidPassword } from '@voice-room/shared/validation';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { activeBlock, hashSessionToken, selfUser, type StoredUser } from './user-records.ts';
+import type { AccountRestore, DeletionRequest } from './account-deletion.repository.ts';
 
 export type AccountUser = StoredUser;
 
@@ -40,7 +41,7 @@ export interface AccountUserStore {
     login: string;
     displayName: string;
     password: string;
-  }): Promise<{ status: string; user?: AccountUser | null }>;
+  }): Promise<{ status: 'created'; user: AccountUser } | { status: 'login_taken'; user?: null }>;
   createSession(input: { userId: string } & Device): Promise<{ token: string; publicId: string }>;
   getUserById(userId: string): Promise<AccountUser | null>;
   verifyCredentials(login: string, password: string): Promise<AccountUser | null>;
@@ -62,7 +63,10 @@ export interface AccountUserStore {
     currentSessionPublicId: string;
   }): Promise<{ status: string; revokedTokenHash?: string | null }>;
   listSessions(input: { userId: string; currentTokenHash: string }): Promise<AccountSession[]>;
-  revokeSession(input: { userId: string; publicId: string }): Promise<{ status: string; tokenHash?: string | null }>;
+  revokeSession(input: {
+    userId: string;
+    publicId: string;
+  }): Promise<{ status: 'revoked'; tokenHash: string } | { status: 'not_found'; tokenHash?: null }>;
   revokeOtherSessions(input: { userId: string; keepTokenHash: string }): Promise<{ tokenHashes: string[] }>;
   generateRecoveryCodes(input: {
     userId: string;
@@ -72,7 +76,10 @@ export interface AccountUserStore {
     login: string;
     code: unknown;
     newPassword: string;
-  }): Promise<{ status: string; user?: AccountUser | null; remaining?: number }>;
+  }): Promise<
+    | { status: 'recovered'; user: AccountUser; remaining?: number }
+    | { status: 'invalid'; user?: null; remaining?: number }
+  >;
   recordLogin(input: {
     userId: string;
     sessionPublicId: string;
@@ -85,14 +92,8 @@ export interface AccountUserStore {
 export interface AccountDeletionRepository {
   isLoginReserved(login: string): Promise<boolean>;
   previewDeletion(input: { userId: string }): Promise<AccountDeletionPreview>;
-  requestDeletion(input: {
-    userId: string;
-    currentPassword: string;
-  }): Promise<{ status: string; scheduledFor?: number }>;
-  restoreAccount(input: {
-    login: string;
-    password: string;
-  }): Promise<{ status: string; userId: string | null; blockedUntil?: number | null; blockReason?: string }>;
+  requestDeletion(input: { userId: string; currentPassword: string }): Promise<DeletionRequest>;
+  restoreAccount(input: { login: string; password: string }): Promise<AccountRestore>;
 }
 
 export type LoginKind = 'register' | 'login' | 'recovery';
@@ -207,7 +208,7 @@ export function createAccountService(deps: AccountDeps) {
       .users()
       .createUser({ login: input.login, displayName: input.displayName, password: input.password });
     if (created.status === 'login_taken') return { status: 'login_taken' };
-    return openSession(created.user as AccountUser, input.device, 'register');
+    return openSession(created.user, input.device, 'register');
   }
 
   async function login(input: {
@@ -243,7 +244,7 @@ export function createAccountService(deps: AccountDeps) {
   async function logout(token: string): Promise<void> {
     if (!token) return;
     await deps.users().deleteSession(token);
-    await deps.endSessionConnections({ tokenHashes: [hashSessionToken(token) as string] });
+    await deps.endSessionConnections({ tokenHashes: [hashSessionToken(token)] });
   }
 
   async function updateProfile(
@@ -297,7 +298,7 @@ export function createAccountService(deps: AccountDeps) {
 
   async function whatsNew(userId: string) {
     const notices = await deps.users().getAccountNotices(userId);
-    return { current: WHATS_NEW_VERSION as string, lastSeen: notices.whatsNewSeen };
+    return { current: WHATS_NEW_VERSION, lastSeen: notices.whatsNewSeen };
   }
 
   async function markWhatsNewSeen(
@@ -305,7 +306,7 @@ export function createAccountService(deps: AccountDeps) {
   ): Promise<{ status: 'seen'; whatsNew: { current: string; lastSeen: string | null } } | NotFound> {
     const result = await deps.users().markWhatsNewSeen({ userId });
     if (result.status !== 'seen') return { status: 'not_found' };
-    return { status: 'seen', whatsNew: { current: WHATS_NEW_VERSION as string, lastSeen: result.whatsNewSeen } };
+    return { status: 'seen', whatsNew: { current: WHATS_NEW_VERSION, lastSeen: result.whatsNewSeen } };
   }
 
   async function markAppPromptSeen(userId: string): Promise<Status<'seen'> | NotFound> {
@@ -355,7 +356,7 @@ export function createAccountService(deps: AccountDeps) {
     if (publicId && publicId === String(currentSessionPublicId).toLowerCase()) return { status: 'current_session' };
     const result = await deps.users().revokeSession({ userId, publicId });
     if (result.status !== 'revoked') return { status: 'not_found' };
-    await deps.endSessionConnections({ userId, tokenHashes: [result.tokenHash as string] });
+    await deps.endSessionConnections({ userId, tokenHashes: [result.tokenHash] });
     return { status: 'revoked' };
   }
 
@@ -394,7 +395,7 @@ export function createAccountService(deps: AccountDeps) {
       .users()
       .recoverWithCode({ login: input.login, code: input.code, newPassword: input.newPassword });
     if (result.status !== 'recovered') return { status: 'invalid_code' };
-    const user = result.user as AccountUser;
+    const { user } = result;
     await deps.endSessionConnections({ userId: user.id });
     // The code proves the account is theirs, not that it may be used again.
     const blocked = blockedAnswer(user);
@@ -429,27 +430,29 @@ export function createAccountService(deps: AccountDeps) {
     if (result.status === 'invalid_password') return { status: 'invalid_password' };
     if (result.status === 'not_found') return { status: 'not_found' };
     if (result.status === 'already_requested')
-      return { status: 'already_requested', deletionScheduledFor: result.scheduledFor as number };
+      return { status: 'already_requested', deletionScheduledFor: result.scheduledFor };
     await deps.endSessionConnections({ userId });
     const hidden = await deps.users().getUserById(userId);
     if (hidden) await deps.broadcastProfileToFriends(hidden, log);
-    return { status: 'scheduled', deletionScheduledFor: result.scheduledFor as number };
+    return { status: 'scheduled', deletionScheduledFor: result.scheduledFor };
   }
 
   async function restore(
     input: { login: string; password: string; device: () => Promise<Device> },
     log?: Pick<Logger, 'error'>
   ): Promise<OpenedSession | Blocked | Status<'expired' | 'invalid_credentials'>> {
-    const repository = deps.deletions() as AccountDeletionRepository;
-    const result =
-      input.login && input.password
+    // The routes answer 503 before calling this when deletion is unavailable.
+    const repository = deps.deletions();
+    const result: AccountRestore =
+      repository && input.login && input.password
         ? await repository.restoreAccount({ login: input.login, password: input.password })
         : { status: 'invalid', userId: null };
     if (result.status === 'expired') return { status: 'expired' };
     if (result.status === 'blocked')
-      return { status: 'blocked', blockedUntil: result.blockedUntil ?? null, blockReason: result.blockReason ?? '' };
+      return { status: 'blocked', blockedUntil: result.blockedUntil, blockReason: result.blockReason };
     if (result.status !== 'restored') return { status: 'invalid_credentials' };
-    const user = (await deps.users().getUserById(result.userId as string)) as AccountUser;
+    const user = await deps.users().getUserById(result.userId);
+    if (!user) throw new Error('the restored account is gone');
     const opened = await openSession(user, input.device, 'login');
     await deps.broadcastProfileToFriends(user, log);
     return opened;

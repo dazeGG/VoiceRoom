@@ -27,7 +27,11 @@ test('issued admission cleanup failure is logged, metered and preserves the prim
       log: logger,
       roomId: 'room'
     }),
-    (error) => error instanceof AggregateError && error.errors.includes(primary) && error.errors.includes(cleanup)
+    (error) =>
+      error instanceof AggregateError &&
+      error.errors.includes(primary) &&
+      error.errors.includes(cleanup) &&
+      error.cause === primary
   );
   assert.equal(failures, 1);
   assert.equal(logger.records.length, 1);

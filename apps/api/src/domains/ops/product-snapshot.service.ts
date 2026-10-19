@@ -8,7 +8,7 @@ export const SNAPSHOT_BUCKET_MS = 15 * 60 * 1000;
 
 export type LiveNumbers = {
   /** The accounts with at least one open realtime socket. */
-  accountIds: Iterable<string>;
+  accountIds: Iterable<string, unknown, unknown>;
   guestConnections: number;
   voicePeers: number;
   voiceRooms: number;
@@ -17,7 +17,7 @@ export type LiveNumbers = {
 export interface ProductSamplerDeps {
   live(): LiveNumbers;
   snapshots(): Pick<ProductSnapshotRepository, 'recordPeaks'> | null;
-  activity: { sawConnected(userIds: Iterable<string>): void };
+  activity: { sawConnected(userIds: Iterable<string, unknown, unknown>): void };
   now?: () => number;
 }
 

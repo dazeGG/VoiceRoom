@@ -25,7 +25,7 @@
   import { useRoomSocial } from '../social';
   import { isRoomNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
   import { RoomChatTimeline } from '../room-chat-timeline.svelte';
-  import { createReadReconciliation } from '$lib/shared/chat/read-reconciliation.svelte';
+  import { createReadReconciliation } from '$lib/shared/chat/read-reconciliation';
   import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
   import MessageContextMenu from '$lib/shared/chat/MessageContextMenu.svelte';
   import ReportMessageDialog from '$lib/shared/chat/ReportMessageDialog.svelte';
@@ -37,7 +37,8 @@
   import { buildChatDays, type ChatGroup } from '../room-chat-view';
   import { RoomChatDraft, type OutgoingRoomMessage } from '../room-chat-draft.svelte';
   import { applyRoomPinsEvent, isMessagePinned, loadRoomPins, resetRoomPins, togglePin } from '../pins.svelte';
-  import { getAttachmentComposeStore, type AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
+  import type { AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
+  import { getAttachmentComposeStore } from '$lib/shared/chat/attachment-compose-stores';
   import { AttachmentDrop } from '$lib/shared/chat/attachment-drop.svelte';
   import { Outbox } from '$lib/shared/chat/outbox.svelte';
   import OutgoingMessages from '$lib/shared/chat/OutgoingMessages.svelte';

@@ -23,7 +23,7 @@ export function readMetaPolicy(html: string) {
 }
 
 export function buildHeaderPolicy(metaPolicy: string) {
-  const directives = new Map();
+  const directives = new Map<string, string>();
   for (const part of String(metaPolicy).split(';')) {
     const trimmed = part.trim();
     if (!trimmed) continue;

@@ -5,14 +5,11 @@ import { beforeEach, expect, test } from 'vitest';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { notificationPreferences } from '../fixtures/users.ts';
 import { freshImport } from '../helpers/fresh-module.ts';
-import type * as PreferencesModule from '../../src/lib/shared/notifications/preferences.svelte.ts';
 
 const prefs = notificationPreferences;
 
 async function load() {
-  const preferences = await freshImport<typeof PreferencesModule>(
-    '/src/lib/shared/notifications/preferences.svelte.ts'
-  );
+  const preferences = await freshImport(() => import('../../src/lib/shared/notifications/preferences.svelte.ts'));
   const playback = await import('../../src/lib/shared/audio/playback-policy.svelte.ts');
   return { ...preferences, ...playback };
 }

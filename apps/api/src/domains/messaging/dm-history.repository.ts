@@ -1,4 +1,5 @@
 import { sql } from 'kysely';
+import { isRecord } from '@voice-room/shared/guards';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { fromMicros, microsOf } from '../../platform/db/micros.ts';
@@ -15,7 +16,7 @@ type DirectMessageRow = {
   created_at_micros: string;
   edited_at: unknown;
   read_at: unknown;
-  metadata: Record<string, unknown> | null;
+  metadata: unknown;
   reply_to_message_id: string | null;
 };
 
@@ -35,7 +36,7 @@ export type HistoryDirectMessage = {
 type Page = { messages: HistoryDirectMessage[]; hasMoreBefore: boolean; hasMoreAfter: boolean };
 
 function boundedLimit(value: unknown): number {
-  return Math.max(1, Math.min(100, Number.isInteger(value) ? (value as number) : 50));
+  return Math.max(1, Math.min(100, typeof value === 'number' && Number.isInteger(value) ? value : 50));
 }
 
 const COMPARE = { before: '<', after: '>', 'at-or-after': '>=' } as const;
@@ -98,14 +99,14 @@ function mapDirectMessage(row: DirectMessageRow): HistoryDirectMessage {
     createdAtMicros: row.created_at_micros,
     editedAt: row.edited_at || null,
     readAt: row.read_at || null,
-    metadata: row.metadata || {},
+    metadata: isRecord(row.metadata) ? row.metadata : {},
     replyTo: row.reply_to_message_id ? { messageId: row.reply_to_message_id } : undefined
   };
 }
 
 function createDmHistoryRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
-  const toMessages = (rows: unknown[]) => rows.map((row) => mapDirectMessage(row as DirectMessageRow));
+  const toMessages = (rows: DirectMessageRow[]) => rows.map(mapDirectMessage);
 
   async function canReadThread({ userId, peerId }: { userId: string; peerId: string }): Promise<boolean> {
     if (!userId || !peerId || userId === peerId) return false;

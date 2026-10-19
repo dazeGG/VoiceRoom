@@ -4,7 +4,7 @@ import { kyselyOn } from '../../platform/db/kysely.ts';
 import { fromMicros } from '../../platform/db/micros.ts';
 
 type ReadTuple = { id: string; createdAtMicros: string | number | bigint };
-type ReadCursorRow = { last_read_message_created_at: unknown; last_read_message_id: string };
+type ReadCursorRow = { last_read_message_created_at: unknown; last_read_message_id: string | null };
 export type ReadAdvance = ReadCursorRow | { unchanged: true } | null;
 
 export type MessageReadRepository = Readonly<{
@@ -73,7 +73,7 @@ function createMessageReadRepository({ pool }: { pool: pg.Pool }): MessageReadRe
         )
         .returning(['last_read_message_created_at', 'last_read_message_id'])
         .executeTakeFirst();
-      return (advanced as ReadCursorRow | undefined) || { unchanged: true };
+      return advanced || { unchanged: true };
     });
   }
 
@@ -136,7 +136,7 @@ function createMessageReadRepository({ pool }: { pool: pg.Pool }): MessageReadRe
         .where('deleted_at', 'is', null)
         .where(sql<boolean>`(created_at, id) <= (${at}, ${target.id})`)
         .execute();
-      return (advanced as ReadCursorRow | undefined) || { unchanged: true };
+      return advanced || { unchanged: true };
     });
   }
 

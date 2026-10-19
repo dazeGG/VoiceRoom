@@ -75,7 +75,9 @@
 
   function watchScreen(event: MouseEvent): void {
     event.stopPropagation();
-    void enterScreenView(participant.id).catch((error) => log.error('screen view action failed', errorContext(error)));
+    void enterScreenView(participant.id).catch((error: unknown) =>
+      log.error('screen view action failed', errorContext(error))
+    );
   }
 </script>
 

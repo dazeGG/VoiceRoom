@@ -1,7 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { MonitorDown, UserPlus, X } from '@lucide/svelte';
-  import AuthDialog, { type AuthMode } from '$lib/features/auth/AuthDialog.svelte';
+  import AuthDialog from '$lib/features/auth/AuthDialog.svelte';
+  import type { AuthMode } from '$lib/features/auth/auth-mode';
   import { session } from '$lib/features/auth/session.svelte';
   import AppBenefitsModal from '$lib/shared/components/AppBenefitsModal.svelte';
   import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
@@ -102,7 +103,7 @@
   <AuthDialog
     mode={authMode}
     onClose={() => (authMode = null)}
-    onModeChange={(mode) => (authMode = mode)}
+    onModeChange={(mode: AuthMode) => (authMode = mode)}
     onAuthenticated={() => rejoinRoomSignedIn(roomClientState.roomId)}
   />
 {/if}

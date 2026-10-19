@@ -26,21 +26,23 @@ export interface PeerSession {
   sessionToken: string;
 }
 
-export interface MicProcessor {
+interface MicStageBase {
   context: AudioContext;
   destination: MediaStreamAudioDestinationNode;
   node: AudioNode;
-  nodes?: AudioNode[];
-  setGain?: (gain: number) => void;
   source: MediaStreamAudioSourceNode;
-  setThreshold?: (threshold: number) => void;
-  type?: 'gate' | 'input-gain' | 'rnnoise' | 'silence-floor';
 }
+
+/** One stage of the microphone chain: a gate always takes a threshold, the input gain a gain. */
+export type MicProcessor =
+  | (MicStageBase & { type: 'rnnoise' | 'silence-floor' })
+  | (MicStageBase & { type: 'gate'; setThreshold: (threshold: number) => void })
+  | (MicStageBase & { type: 'input-gain'; nodes: AudioNode[]; setGain: (gain: number) => void });
 
 export interface MicrophoneCapture {
   kind?: string;
   mode?: NoiseMode;
-  processor: MicProcessor | MicProcessor[] | null;
+  processor: MicProcessor[] | null;
   rawStream: MediaStream | null;
   stream: MediaStream | null;
 }
@@ -189,7 +191,7 @@ export interface RoomAudioState {
   microphoneMode: MicrophoneMode;
   microphoneVolume: number;
   micMutedBeforeOutputMute: boolean;
-  micProcessor: MicProcessor | MicProcessor[] | null;
+  micProcessor: MicProcessor[] | null;
   muted: boolean;
   noiseMode: NoiseMode;
   outputDeviceId: string;

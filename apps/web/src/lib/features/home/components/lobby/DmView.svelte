@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import type { AuthUser } from '$lib/api/auth';
   import AttachmentDropOverlay from '$lib/shared/chat/AttachmentDropOverlay.svelte';
-  import { getAttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
+  import { getAttachmentComposeStore } from '$lib/shared/chat/attachment-compose-stores';
   import { AttachmentDrop } from '$lib/shared/chat/attachment-drop.svelte';
   import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions } from '$lib/shared/chat/frequent-reactions';
   import { effectivePresenceStatus, presenceStatusLabel } from '$lib/shared/presence';

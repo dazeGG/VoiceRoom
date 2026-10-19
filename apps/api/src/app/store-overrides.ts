@@ -24,6 +24,16 @@ export type Fake<Store> = {
     : unknown;
 };
 
+/**
+ * The fake, standing where its store goes. This is the test seam's one act of
+ * trust: a fake has only what its test reaches, and a call to anything else
+ * fails loudly in that test.
+ */
+export function standIn<Store>(fake: Fake<Store>): Store;
+export function standIn(fake: unknown): unknown {
+  return fake;
+}
+
 /** Stores and services a test supplies instead of the database-backed ones. */
 export type StoreOverrides = {
   /** A pool for the database-backed services the test does not fake. */

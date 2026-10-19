@@ -1,39 +1,37 @@
-import { RealtimeRecoveryController, classifyRecoveryFailure } from './realtime-recovery';
+import {
+  RealtimeRecoveryController,
+  classifyRecoveryFailure,
+  type RecoveryTransition,
+  type ReplacementOutcome
+} from './realtime-recovery';
 import { requestActiveVoiceResync, setActiveVoiceResyncFailureHandler } from '$lib/entities/room/room-realtime';
 
 import { createLogger, reportClientLogs, type LogContext } from '$lib/shared/log';
 
 const log = createLogger('room:recovery');
 
-export type RecoveryAttemptOutcome = {
-  ok?: boolean;
-  retryable?: boolean;
-  status?: number;
-  code?: string;
-};
-
 export type RoomRecoveryLiveKitAdapter = {
-  attemptFreshReplacement: (context: { epoch: number; attempt: number }) => Promise<RecoveryAttemptOutcome>;
+  attemptFreshReplacement: (context: { epoch: number; attempt: number }) => Promise<ReplacementOutcome>;
 };
 
 let controller: RealtimeRecoveryController | null = null;
 let liveKitAdapter: RoomRecoveryLiveKitAdapter | null = null;
-const transitionHandlers = new Set<(event: Readonly<Record<string, unknown>>) => void>();
+const transitionHandlers = new Set<(event: RecoveryTransition) => void>();
 
 // The recovery state machine already emits a flat record of primitives per
 // transition, which is exactly the trail needed to tell a brief blip from a
 // call that never came back. Every transition is buffered; only the terminal
 // failure is raised and reported, so the ordinary reconnect stays quiet.
-function logTransition(event: Record<string, unknown>): void {
+function logTransition(event: RecoveryTransition): void {
   const context: LogContext = {
-    epoch: Number(event.epoch) || 0,
-    trigger: String(event.trigger ?? ''),
-    phase: String(event.phase ?? ''),
-    attempt: Number(event.attempt) || 0,
-    elapsed: String(event.elapsed ?? ''),
-    status: Number(event.status) || 0,
-    code: String(event.code ?? ''),
-    result: String(event.result ?? '')
+    epoch: event.epoch,
+    trigger: event.trigger,
+    phase: event.phase,
+    attempt: event.attempt,
+    elapsed: event.elapsed,
+    status: event.status,
+    code: event.code,
+    result: event.result
   };
 
   if (event.phase === 'failed') {
@@ -46,9 +44,7 @@ function logTransition(event: Record<string, unknown>): void {
   for (const handler of transitionHandlers) handler(event);
 }
 
-export function subscribeRoomRecoveryTransitions(
-  handler: (event: Readonly<Record<string, unknown>>) => void
-): () => void {
+export function subscribeRoomRecoveryTransitions(handler: (event: RecoveryTransition) => void): () => void {
   transitionHandlers.add(handler);
   return () => transitionHandlers.delete(handler);
 }

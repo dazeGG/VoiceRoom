@@ -3,7 +3,7 @@
 // accounts, friends, direct messages, notification settings, avatars and the
 // desktop release feed.
 
-import type { Logger } from 'pino';
+import type { FastifyBaseLogger } from 'fastify';
 import type { RoomPeerMessage } from '../realtime/legacy-events.ts';
 import { buildServerEnvelope } from '../realtime/envelope.ts';
 import { mentionUserIdsFromContent } from '@voice-room/shared/mentions';
@@ -15,7 +15,7 @@ import { createAdminService } from '../domains/admin/admin.service.ts';
 import { createAdminAccountsService } from '../domains/admin/admin-accounts.service.ts';
 import { createAdminRoomsService } from '../domains/admin/admin-rooms.service.ts';
 import { createSessionCookies } from '../domains/account/session-cookie.ts';
-import type { createAdmissionService } from '../domains/admission/admission.service.ts';
+import type { AdmissionService } from '../domains/admission/admission.service.ts';
 import { createAvatarsService } from '../domains/media/avatars.service.ts';
 import { createContentRepository } from '../domains/messaging/content.repository.ts';
 import { createDirectMessagesService } from '../domains/messaging/direct-messages.service.ts';
@@ -39,14 +39,12 @@ import { sessionAvatarColorKey, sessionChatPeerId, sessionDisplayName } from './
 
 export interface DomainServiceDeps {
   config: ReturnType<typeof readApiConfig>;
-  env: NodeJS.ProcessEnv;
   services: ReturnType<typeof createServiceRegistry>;
   hub: RealtimeHub;
   liveKit: LiveKit;
   limits: RateLimits;
-  logger: () => Logger;
-  /** The admission service, built with the app (it needs the roster wait). */
-  admission: () => ReturnType<typeof createAdmissionService> | null;
+  logger: () => FastifyBaseLogger;
+  admission: Pick<AdmissionService, 'revokeForServerMute'>;
   /** What the realtime layer holds right now: the admin panel shows it. */
   liveNumbers: () => LiveNumbers;
   /** The accounts with a socket open right now. */
@@ -94,11 +92,11 @@ export function createDomainServices(deps: DomainServiceDeps) {
     notifyPeer: (peer, event) => hub.presence.sendEvent(peer, event),
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
     detachVoiceConnections: (roomId, peerId) => {
-      for (const connection of hub.registry()?.connections.values() || []) {
+      for (const connection of hub.registry.connections.values()) {
         if (connection.activeVoice?.roomId !== roomId || connection.activeVoice?.peerId !== peerId) continue;
         connection.activeVoice = null;
         connection.previewRoomIds.delete(roomId);
-        hub.registry()!.unregisterConnectionForRoom(connection, roomId);
+        hub.registry.unregisterConnectionForRoom(connection, roomId);
       }
     },
     closePeer: (roomId, peerId, transportId, reason) => hub.presence.closePeer(roomId, peerId, transportId, reason),
@@ -109,12 +107,12 @@ export function createDomainServices(deps: DomainServiceDeps) {
     eviction: peerEviction,
     gatePrincipalForPeer: (roomId, peer) => hub.liveKitGatePrincipalForPeer(roomId, peer),
     livekitConfig: () => liveKit.config(),
-    revokeForServerMute: (input) => deps.admission()!.revokeForServerMute(input),
+    revokeForServerMute: (input) => deps.admission.revokeForServerMute(input),
     setParticipantMuted: (roomId, peerId, muted) => liveKit.setParticipantMuted(roomId, peerId, muted),
     announcePeerUpdated: (room, peer) => {
       const event: RoomPeerMessage = { type: 'peer-updated', peer: publicPeer(peer) };
       hub.presence.broadcast(room, event);
-      hub.runtime()?.mirrorLegacyRoomEvent(room.id, event);
+      hub.runtime().mirrorLegacyRoomEvent(room.id, event);
     },
     notifyPeer: (peer, event) => hub.presence.sendEvent(peer, event),
     maxBans: config.MAX_ROOM_BANS,
@@ -137,13 +135,13 @@ export function createDomainServices(deps: DomainServiceDeps) {
     projectReply: hub.projection.projectReply,
     identity: { chatPeerId: sessionChatPeerId, avatarColorKey: sessionAvatarColorKey, displayName: sessionDisplayName },
     directEmit: config.MESSAGE_DIRECT_EMIT_ENABLED,
-    broadcastChatMessage: (roomId, message) => hub.runtime()?.broadcastChatMessage(roomId, message),
-    broadcastRoomDetail: (roomId, event) => hub.runtime()?.broadcastRoomDetail?.(roomId, event),
+    broadcastChatMessage: (roomId, message) => hub.runtime().broadcastChatMessage(roomId, message),
+    broadcastRoomDetail: (roomId, event) => hub.runtime().broadcastRoomDetail(roomId, event),
     roomDetailEvent: buildServerEnvelope,
     scheduleLinkPreview: hub.linkPreviews.scheduleRoomLinkPreview,
     refreshPins: refreshPinsAfterMessageMutation,
     sendRoomSummaryToUser: async (roomId, userId) => {
-      await hub.runtime()?.sendRoomSummaryToUser(roomId, userId);
+      await hub.runtime().sendRoomSummaryToUser(roomId, userId);
     },
     logger: () => deps.logger()
   });
@@ -202,7 +200,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     pushes: services.getPushSubscriptions,
     pushConfig: () => services.getPushService().config,
     pushLimiter: limits.pushSubscriptions,
-    setPresence: (userId, presenceStatus) => hub.registry()?.setUserPresenceStatus(userId, presenceStatus),
+    setPresence: (userId, presenceStatus) => hub.registry.setUserPresenceStatus(userId, presenceStatus),
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
     broadcastProfileToFriends: (user, log) => hub.broadcastUserProfileToFriends(user, { log })
   });
@@ -307,8 +305,14 @@ export function createDomainServices(deps: DomainServiceDeps) {
     repo: config.DESKTOP_RELEASE_REPO,
     cacheMs: config.DESKTOP_RELEASE_CACHE_MS,
     timeoutMs: config.DESKTOP_RELEASE_TIMEOUT_MS,
-    githubToken: (deps.env.GITHUB_TOKEN || '').trim() || undefined,
-    logger: { warn: (...args: unknown[]) => deps.logger().warn(...(args as [unknown])) }
+    githubToken: config.GITHUB_TOKEN || undefined,
+    // The process logger of the moment: the app's, once it started.
+    logger: {
+      get warn() {
+        const logger = deps.logger();
+        return logger.warn.bind(logger);
+      }
+    }
   });
 
   return {

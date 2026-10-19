@@ -4,11 +4,10 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { freshImport, muteWarnings } from '../helpers/fresh-module.ts';
-import type * as RealtimeModule from '../../src/lib/api/realtime.ts';
 
 async function load() {
   installFakeWebSocket();
-  return freshImport<typeof RealtimeModule>('/src/lib/api/realtime.ts');
+  return freshImport(() => import('../../src/lib/api/realtime.ts'));
 }
 
 beforeEach(() => vi.useFakeTimers());

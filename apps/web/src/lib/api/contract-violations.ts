@@ -4,7 +4,7 @@
 // at most once a minute: one mismatch on a frequent event in every open tab
 // must not turn into a storm of version checks.
 
-import { createLogger } from '$lib/shared/log';
+import { createLogger } from '../shared/log.ts';
 
 const log = createLogger('contract');
 

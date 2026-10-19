@@ -1,4 +1,5 @@
 import { sql } from 'kysely';
+import { isRecord } from '@voice-room/shared/guards';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { fromMicros, microsOf } from '../../platform/db/micros.ts';
@@ -23,7 +24,7 @@ type RoomMessageRow = {
   avatar_color_key: string | null;
   avatar_key: string | null;
   avatar_accent: string | null;
-  metadata: { linkPreview?: unknown } | null;
+  metadata: unknown;
   reply_to_message_id: string | null;
 };
 
@@ -47,16 +48,16 @@ export type HistoryRoomMessage = {
 };
 
 type Page = { messages: HistoryRoomMessage[]; hasMoreBefore: boolean; hasMoreAfter: boolean };
-type SideInput = { roomId: string; anchor: Anchor; limit?: unknown; now: unknown };
+type SideInput = { roomId: string; anchor: Anchor; limit?: unknown; now: Date };
 
 function boundedLimit(value: unknown): number {
-  return Math.max(1, Math.min(100, Number.isInteger(value) ? (value as number) : 50));
+  return Math.max(1, Math.min(100, typeof value === 'number' && Number.isInteger(value) ? value : 50));
 }
 
 const COMPARE = { before: '<', after: '>', 'at-or-after': '>=' } as const;
 
 // Room messages with the author's current profile, or the guest identity's colour.
-function roomMessages(db: Database, roomId: string, now: unknown) {
+function roomMessages(db: Database, roomId: string, now: Date) {
   return db
     .selectFrom('room_messages as m')
     .leftJoin('room_peer_identities as rpi', (join) =>
@@ -73,7 +74,7 @@ function roomMessages(db: Database, roomId: string, now: unknown) {
     ])
     .where('m.room_id', '=', roomId)
     .where('m.deleted_at', 'is', null)
-    .where((eb) => eb.or([eb('m.expires_at', 'is', null), eb('m.expires_at', '>', now as Date)]));
+    .where((eb) => eb.or([eb('m.expires_at', 'is', null), eb('m.expires_at', '>', now)]));
 }
 
 function mapRoomMessage(row: RoomMessageRow): HistoryRoomMessage {
@@ -92,14 +93,14 @@ function mapRoomMessage(row: RoomMessageRow): HistoryRoomMessage {
     avatarColorKey: row.avatar_color_key || null,
     avatarKey: row.avatar_key || null,
     avatarAccent: row.avatar_accent || null,
-    linkPreview: normalizeLinkPreview(row.metadata?.linkPreview) || undefined,
+    linkPreview: normalizeLinkPreview(isRecord(row.metadata) ? row.metadata.linkPreview : undefined) || undefined,
     replyTo: row.reply_to_message_id ? { messageId: row.reply_to_message_id } : undefined
   };
 }
 
 function createRoomHistoryRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
-  const toMessages = (rows: unknown[]) => rows.map((row) => mapRoomMessage(row as RoomMessageRow));
+  const toMessages = (rows: RoomMessageRow[]) => rows.map(mapRoomMessage);
 
   async function roomExists(roomId: string): Promise<boolean> {
     const row = await db
@@ -143,7 +144,7 @@ function createRoomHistoryRepository({ pool }: { pool: pg.Pool }) {
     return toMessages(rows);
   }
 
-  async function listLatest({ roomId, limit, now }: { roomId: string; limit?: unknown; now: unknown }): Promise<Page> {
+  async function listLatest({ roomId, limit, now }: { roomId: string; limit?: unknown; now: Date }): Promise<Page> {
     const found = await roomMessages(db, roomId, now)
       .orderBy('m.created_at', 'desc')
       .orderBy('m.id', 'desc')

@@ -74,7 +74,7 @@ export function registerRoomChatRoutes(root: FastifyInstance, ctx: ApiContext, c
 
   async function caller(raw: Parameters<ApiContext['resolveSession']>[0]): Promise<Caller> {
     const session = await ctx.resolveSession(raw);
-    return { user: (session?.user ?? null) as Caller['user'], clientIp: ctx.clientIp(raw) };
+    return { user: session?.user ?? null, clientIp: ctx.clientIp(raw) };
   }
 
   app.get(
@@ -118,7 +118,7 @@ export function registerRoomChatRoutes(root: FastifyInstance, ctx: ApiContext, c
         attachmentIds: body.attachmentIds,
         replyTo,
         replyToMessageId: replyTo == null ? '' : cleanUuid(replyTo?.messageId),
-        idempotencyKey: requestIdempotencyKey(request.raw as { headers?: Record<string, unknown> }, body)
+        idempotencyKey: requestIdempotencyKey(request.raw, body)
       });
       if (result.status !== 'created') return sendRefusal(reply, roomId, result);
       return reply.code(201).send({ ok: true as const, message: publicChatMessage(result.message) });

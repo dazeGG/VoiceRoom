@@ -38,9 +38,8 @@
   const DAY = 24 * HOUR;
 
   /** Coarse on purpose: the exact second of a mention has never mattered. */
-  function timeAgo(value: unknown): string {
-    const at = typeof value === 'number' ? value : Date.parse(String(value ?? ''));
-    if (!Number.isFinite(at)) return '';
+  function timeAgo(at: number | null): string {
+    if (at === null || !Number.isFinite(at)) return '';
     const elapsed = Date.now() - at;
     if (elapsed < MINUTE) return 'только что';
     if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)} мин назад`;

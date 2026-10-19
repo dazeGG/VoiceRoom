@@ -49,6 +49,13 @@ function supportsContextSink(): boolean {
   return typeof AudioContext !== 'undefined' && 'setSinkId' in AudioContext.prototype;
 }
 
+// AudioContext.setSinkId (Chrome 110+) is not in lib.dom yet.
+function hasContextSink(
+  context: AudioContext
+): context is AudioContext & { setSinkId: (sinkId: string) => Promise<void> } {
+  return 'setSinkId' in context && typeof context.setSinkId === 'function';
+}
+
 function supportsElementSink(): boolean {
   return typeof HTMLMediaElement !== 'undefined' && 'setSinkId' in HTMLMediaElement.prototype;
 }
@@ -123,9 +130,9 @@ function connectDefaultOutput(current: AudioBusGraph): void {
 async function applyAudioBusOutput(sinkId: string): Promise<boolean> {
   const current = getAudioBusGraph();
 
-  if (supportsContextSink()) {
+  const contextWithSink = current.context;
+  if (supportsContextSink() && hasContextSink(contextWithSink)) {
     removeSinkElement();
-    const contextWithSink = current.context as AudioContext & { setSinkId: (id: string) => Promise<void> };
     const selected = await transitionAudioOutput({
       disconnect: () => current.limiter.disconnect(),
       select: () => contextWithSink.setSinkId(sinkId),
@@ -140,17 +147,18 @@ async function applyAudioBusOutput(sinkId: string): Promise<boolean> {
       connectDefaultOutput(current);
       return true;
     }
-    sinkDestination ||= current.context.createMediaStreamDestination();
-    sinkElement ||= document.createElement('audio');
-    sinkElement.autoplay = true;
-    (sinkElement as HTMLAudioElement & { playsInline: boolean }).playsInline = true;
+    const destination = (sinkDestination ||= current.context.createMediaStreamDestination());
+    const element = (sinkElement ||= document.createElement('audio'));
+    element.autoplay = true;
+    // Not on HTMLAudioElement in lib.dom; iOS reads it from any media element.
+    Object.assign(element, { playsInline: true });
     const selected = await transitionAudioOutput({
       disconnect: () => current.limiter.disconnect(),
-      select: () => sinkElement!.setSinkId(sinkId),
+      select: () => element.setSinkId(sinkId),
       connect: () => {
-        sinkElement!.srcObject = sinkDestination!.stream;
-        if (!sinkElement!.isConnected) document.body.append(sinkElement!);
-        current.limiter.connect(sinkDestination!);
+        element.srcObject = destination.stream;
+        if (!element.isConnected) document.body.append(element);
+        current.limiter.connect(destination);
       }
     });
     if (!selected) {
@@ -195,9 +203,10 @@ function outputGain(): number {
 
 function applyElementSink(element: HTMLMediaElement, sinkId: string): void {
   if (!supportsElementSink()) return;
-  const withSink = element as HTMLMediaElement & { sinkId?: string };
-  if ((withSink.sinkId || '') === sinkId) return;
-  element.setSinkId(sinkId).catch((error) => log.warn('voice element output device unavailable', errorContext(error)));
+  if ((element.sinkId || '') === sinkId) return;
+  element
+    .setSinkId(sinkId)
+    .catch((error: unknown) => log.warn('voice element output device unavailable', errorContext(error)));
 }
 
 /**

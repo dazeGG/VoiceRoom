@@ -45,7 +45,7 @@ beforeEach(async () => {
     clients: { matchAll: async () => windows, openWindow },
     registration: { showNotification }
   });
-  await freshImport('/src/service-worker.ts');
+  await freshImport(() => import('../../src/service-worker.ts'));
 });
 
 async function fire(type: string, event: Record<string, unknown>): Promise<void> {

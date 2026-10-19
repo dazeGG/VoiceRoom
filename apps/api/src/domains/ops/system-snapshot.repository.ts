@@ -4,6 +4,7 @@
 import type pg from 'pg';
 import { sql } from 'kysely';
 import { kyselyOn } from '../../platform/db/kysely.ts';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 
 export type SystemSnapshot = {
   /** The start of the minute. */
@@ -140,7 +141,7 @@ export function createSystemSnapshotRepository({ pool }: { pool: pg.Pool }) {
 
 function fromRow(row: Record<string, unknown>): StoredSystemSnapshot {
   return {
-    at: new Date(row.at as Date | string).getTime(),
+    at: epochMillis(row.at) ?? Number.NaN,
     cpuPct: maybeNumber(row.cpu_pct),
     load1: number(row.load1),
     memUsedBytes: number(row.mem_used_bytes),

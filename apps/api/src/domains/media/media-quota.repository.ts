@@ -1,4 +1,5 @@
 import type pg from 'pg';
+import { canConnect } from '../../platform/db/connectable.ts';
 import { transaction } from '../../platform/db/pool.ts';
 import type { AttachmentRepository } from './attachment.repository.ts';
 
@@ -14,9 +15,9 @@ function createMediaQuotaRepository({
   if (!attachmentRepository?.quotaUsage || !attachmentRepository?.lockOwner) {
     throw new TypeError('Attachment repository with quota support is required');
   }
-  if (!pool?.connect) throw new TypeError('A PostgreSQL pool is required');
+  if (!canConnect(pool)) throw new TypeError('A PostgreSQL pool is required');
   const attachments = attachmentRepository;
-  const db = pool as { connect: () => Promise<pg.PoolClient> };
+  const db = pool;
 
   async function withOwnerReservation<T>(
     ownerId: string,

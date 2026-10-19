@@ -12,6 +12,7 @@
     VideoOff
   } from '@lucide/svelte';
   import { Popover, Select, Slider } from '$lib/shared/ui';
+  import type { PopoverTriggerState } from '$lib/shared/ui/Popover';
   import { NOISE_MODE_SELECT_OPTIONS, roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
   import { GATE_THRESHOLD_MAX_DB, GATE_THRESHOLD_MIN_DB } from '../client/core/config';
   import {
@@ -101,7 +102,7 @@
         panelClass="device-popover"
         keepContentMounted
       >
-        {#snippet trigger({ open, toggle, panelId })}
+        {#snippet trigger({ open, toggle, panelId }: PopoverTriggerState)}
           <div class="dock-split">
             <button
               class="dock-button mic-button"
@@ -225,7 +226,7 @@
         panelClass="device-popover output-popover"
         keepContentMounted
       >
-        {#snippet trigger({ open, toggle, panelId })}
+        {#snippet trigger({ open, toggle, panelId }: PopoverTriggerState)}
           <div class="dock-split">
             <button
               class="dock-button output-button"
@@ -281,7 +282,7 @@
         panelClass="device-popover camera-popover"
         keepContentMounted
       >
-        {#snippet trigger({ open, panelId })}
+        {#snippet trigger({ open, panelId }: PopoverTriggerState)}
           <div class="dock-split">
             <button
               class="dock-button camera-button"
@@ -380,7 +381,7 @@
       aria-label="Выйти со стрима"
       hidden={!screenUi.showScreenExit}
       onclick={() =>
-        leaveScreenView({ keepPreview: false }).catch((error) =>
+        leaveScreenView({ keepPreview: false }).catch((error: unknown) =>
           log.error('screen view action failed', errorContext(error))
         )}
     >

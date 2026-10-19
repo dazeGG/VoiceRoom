@@ -7,7 +7,9 @@ import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
 import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
 import { contentFromPlainText } from '@voice-room/shared/room-message-content';
-import type { MessageContent } from '@voice-room/shared/contracts/messages';
+import { MessageContent } from '@voice-room/shared/contracts/messages';
+import { isRecord } from '@voice-room/shared/guards';
+import { Value } from 'typebox/value';
 import { transaction } from '../../platform/db/pool.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { RoomMessages } from '../../platform/db/schema.ts';
@@ -21,12 +23,13 @@ type MessageRow = Selectable<RoomMessages> & {
 };
 export type StoredRoomMessage = ReturnType<typeof mapMessage>;
 
-type UnitOfWorkHooks = {
+// A replay answers with the message the caller stored on the first send.
+type UnitOfWorkHooks<Replayed> = {
   beforeUnitOfWork?:
-    ((client: pg.PoolClient) => Promise<{ replay?: boolean; message?: unknown } | null | undefined>) | null;
+    ((client: pg.PoolClient) => Promise<{ replay: true; message: Replayed } | null | undefined>) | null;
   unitOfWork?: ((client: pg.PoolClient, message: StoredRoomMessage) => Promise<unknown>) | null;
 };
-export type AppendRoomMessageInput = UnitOfWorkHooks & {
+export type AppendRoomMessageInput<Replayed = StoredRoomMessage> = UnitOfWorkHooks<Replayed> & {
   id?: unknown;
   createdAt?: unknown;
   peerId?: unknown;
@@ -42,8 +45,7 @@ export type AppendRoomMessageInput = UnitOfWorkHooks & {
 const DEFAULT_LIST_LIMIT = 500;
 
 function linkPreviewOf(metadata: unknown) {
-  const preview = (metadata as { linkPreview?: unknown } | null)?.linkPreview;
-  return normalizeLinkPreview(preview);
+  return normalizeLinkPreview(isRecord(metadata) ? metadata.linkPreview : undefined);
 }
 
 function mapMessage(row: MessageRow) {
@@ -61,7 +63,7 @@ function mapMessage(row: MessageRow) {
     roomId: row.room_id,
     text: row.text || '',
     // The column holds the content validated when the message was sent.
-    ...(row.content ? { content: row.content as MessageContent } : {}),
+    ...(row.content && Value.Check(MessageContent, row.content) ? { content: row.content } : {}),
     ...(linkPreview ? { linkPreview } : {}),
     ...(row.reply_to_message_id ? { replyTo: { messageId: row.reply_to_message_id } } : {}),
     // 2.4.0: author for ownership (nullable for guests/legacy)
@@ -83,9 +85,9 @@ const authorColumns = [
 ];
 
 export function createRoomChatRepository({ db, pool }: { db: Database; pool: pg.Pool }) {
-  async function appendMessage(
+  async function appendMessage<Replayed extends object = StoredRoomMessage>(
     roomId: string,
-    message: AppendRoomMessageInput | null | undefined,
+    message: AppendRoomMessageInput<Replayed> | null | undefined,
     now: number = Date.now()
   ) {
     const id = typeof message?.id === 'string' && message.id ? message.id : crypto.randomUUID();
@@ -104,7 +106,7 @@ export function createRoomChatRepository({ db, pool }: { db: Database; pool: pg.
 
       if (typeof message?.beforeUnitOfWork === 'function') {
         const prepared = await message.beforeUnitOfWork(client);
-        if (prepared?.replay) return { ...(prepared.message as StoredRoomMessage), idempotencyReplay: true };
+        if (prepared?.replay) return { ...prepared.message, idempotencyReplay: true };
       }
 
       const inserted = await trx

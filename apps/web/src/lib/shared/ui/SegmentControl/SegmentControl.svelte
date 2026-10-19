@@ -17,7 +17,9 @@
     if (!['ArrowRight', 'ArrowLeft', 'ArrowDown', 'ArrowUp'].includes(event.key)) return;
     event.preventDefault();
     const step = event.key === 'ArrowRight' || event.key === 'ArrowDown' ? 1 : -1;
-    const buttons = (event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLElement>('button');
+    const segment = event.currentTarget;
+    const buttons =
+      segment instanceof HTMLElement ? segment.parentElement?.querySelectorAll<HTMLElement>('button') : undefined;
     for (let offset = 1; offset <= options.length; offset += 1) {
       const nextIndex = (index + step * offset + options.length * offset) % options.length;
       const next = options[nextIndex];

@@ -19,6 +19,7 @@ import {
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import type { NotificationService } from './notification.service.ts';
+import { codeOf } from '../../platform/error-code.ts';
 
 export interface NotificationRoutesDeps {
   notifications: NotificationService;
@@ -50,7 +51,7 @@ export function registerNotificationRoutes(root: FastifyInstance, ctx: ApiContex
       try {
         return await notifications.list({ userId, cursor: request.query.cursor, limit: request.query.limit });
       } catch (error) {
-        if ((error as { code?: unknown } | null)?.code === 'invalid_cursor')
+        if (codeOf(error) === 'invalid_cursor')
           return reply.code(400).send(failure('Invalid cursor', { code: 'invalid_cursor' }));
         throw error;
       }

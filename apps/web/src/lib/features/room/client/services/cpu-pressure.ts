@@ -40,7 +40,12 @@ function isPressureState(value: unknown): value is CpuPressureState {
 }
 
 function getPressureObserver(): PressureObserverConstructor | undefined {
-  return (globalThis as { PressureObserver?: PressureObserverConstructor }).PressureObserver;
+  return globalThis.PressureObserver;
+}
+
+// The Compute Pressure API is not in lib.dom yet; browsers without it leave it undefined.
+declare global {
+  var PressureObserver: PressureObserverConstructor | undefined;
 }
 
 function clearCriticalTimer(): void {

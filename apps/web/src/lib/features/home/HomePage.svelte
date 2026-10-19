@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { ArrowRight } from '@lucide/svelte';
   import { goto } from '$app/navigation';
+  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { createRoom } from '$lib/api/rooms';
   import { loadSession, session } from '$lib/features/auth/session.svelte';
@@ -16,7 +17,8 @@
   import DesktopAppCard from './components/DesktopAppCard.svelte';
   import LandingHero from './components/LandingHero.svelte';
   import LegalLinks from '$lib/shared/components/LegalLinks.svelte';
-  import AuthDialog, { type AuthMode } from '$lib/features/auth/AuthDialog.svelte';
+  import AuthDialog from '$lib/features/auth/AuthDialog.svelte';
+  import type { AuthMode } from '$lib/features/auth/auth-mode';
   import LobbyPage from './LobbyPage.svelte';
   import { dismissToast, pushToast, toastState, type ToastOptions } from './model/toasts.svelte';
   import { syncPushNotificationState } from './model/push-notifications.svelte';
@@ -112,7 +114,7 @@
   }
 
   function closeAuthDialog(): void {
-    void goto('/', { replaceState: true, noScroll: true });
+    void goto(resolve('/'), { replaceState: true, noScroll: true });
   }
 
   function switchAuthMode(mode: AuthMode): void {

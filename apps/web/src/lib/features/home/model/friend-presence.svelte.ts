@@ -16,7 +16,7 @@ export class FriendPresence {
   }
 
   /** The realtime `ready` snapshot: `onlineIds` online, every other known friend offline. */
-  snapshot(onlineIds: Iterable<string>, friendIds: Iterable<string>): void {
+  snapshot(onlineIds: readonly string[], friendIds: readonly string[]): void {
     this.#online = new SvelteSet(onlineIds);
     this.#known = new SvelteSet(friendIds);
     for (const userId of this.#online) this.#known.add(userId);
@@ -30,7 +30,7 @@ export class FriendPresence {
   }
 
   /** Friends from a fresh fetch that presence has not heard of yet take the fetch's flag. */
-  seed(friends: Iterable<{ userId: string; online: boolean }>): void {
+  seed(friends: readonly { userId: string; online: boolean }[]): void {
     if (!this.#ready) return;
     for (const friend of friends) {
       if (this.#known.has(friend.userId)) continue;

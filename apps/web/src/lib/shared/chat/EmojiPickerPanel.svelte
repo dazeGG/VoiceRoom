@@ -62,14 +62,14 @@
   let toneStripFor = $state('');
   let toneStripLeft = $state(0);
   let toneStripTop = $state(0);
-  let strip: HTMLDivElement | null = $state(null);
-  let scroller: HTMLDivElement | null = $state(null);
-  let searchInput: HTMLInputElement | null = $state(null);
+  let strip = $state<HTMLDivElement | null>(null);
+  let scroller = $state<HTMLDivElement | null>(null);
+  let searchInput = $state<HTMLInputElement | null>(null);
   let scrollTop = $state(0);
   let viewportHeight = $state(300);
   let toneHoverTimer = 0;
   let toneCloseTimer = 0;
-  let picker: HTMLDivElement | null = $state(null);
+  let picker = $state<HTMLDivElement | null>(null);
 
   const searching = $derived(search.trim().length > 0);
 
@@ -101,27 +101,27 @@
     return withSkinTone(emoji, skinTone);
   }
 
-  type PickerRow =
-    | { kind: 'header'; key: string; sectionKey: string; label: string; top: number; height: number }
-    | {
-        kind: 'grid';
-        key: string;
-        sectionKey: string;
-        emojis: string[];
-        firstIndex: number;
-        top: number;
-        height: number;
-      };
+  type HeaderRow = { kind: 'header'; key: string; sectionKey: string; label: string; top: number; height: number };
+  type GridRow = {
+    kind: 'grid';
+    key: string;
+    sectionKey: string;
+    emojis: string[];
+    firstIndex: number;
+    top: number;
+    height: number;
+  };
+  type PickerRow = HeaderRow | GridRow;
 
   const layout = $derived.by(() => {
     const rows: PickerRow[] = [];
     const flat: string[] = [];
-    const sectionTop = new Map<string, number>();
+    const sectionTops: [string, number][] = [];
     let top = 0;
 
     for (const section of sections) {
       if (!section.emojis.length) continue;
-      sectionTop.set(section.key, top);
+      sectionTops.push([section.key, top]);
       rows.push({
         kind: 'header',
         key: `${section.key}:header`,
@@ -147,7 +147,7 @@
       flat.push(...section.emojis);
     }
 
-    return { rows, flat, sectionTop, totalHeight: top };
+    return { rows, flat, sectionTop: new Map(sectionTops), totalHeight: top };
   });
 
   const visibleRows = $derived.by(() => {
@@ -182,7 +182,8 @@
   });
 
   function onScroll(event: Event): void {
-    const target = event.currentTarget as HTMLDivElement;
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLElement)) return;
     scrollTop = target.scrollTop;
     viewportHeight = target.clientHeight;
   }
@@ -239,12 +240,12 @@
   }
 
   function categoryKeydown(event: KeyboardEvent): void {
-    const anchors = Array.from(
-      (event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('[data-category]')
-    );
-    const current = anchors.indexOf(document.activeElement as HTMLButtonElement);
+    const toolbar = event.currentTarget;
+    if (!(toolbar instanceof HTMLElement)) return;
+    const anchors = Array.from(toolbar.querySelectorAll<HTMLButtonElement>('[data-category]'));
+    const current = anchors.findIndex((anchor) => anchor === document.activeElement);
     if (current < 0) return;
-    let next = current;
+    let next: number;
     if (event.key === 'ArrowRight') next = (current + 1) % anchors.length;
     else if (event.key === 'ArrowLeft') next = (current - 1 + anchors.length) % anchors.length;
     else if (event.key === 'Home') next = 0;
@@ -306,8 +307,8 @@
   }
 
   function beginToneHover(emoji: string, event: PointerEvent): void {
-    const tile = event.currentTarget as HTMLElement;
-    if (!hasSkinToneChoices(emoji)) return;
+    const tile = event.currentTarget;
+    if (!(tile instanceof HTMLElement) || !hasSkinToneChoices(emoji)) return;
     window.clearTimeout(toneHoverTimer);
     toneHoverTimer = window.setTimeout(() => openToneStrip(emoji, tile), TONE_HOVER_DELAY_MS);
   }
@@ -332,6 +333,37 @@
     onpick(emoji);
   }
 </script>
+
+{#snippet gridRow(row: GridRow)}
+  <div class="reaction-picker-grid" style:top={`${row.top}px`} role="row">
+    {#each row.emojis as emoji, column (emoji)}
+      {@const index = row.firstIndex + column}
+      {@const display = toned(emoji)}
+      <button
+        type="button"
+        role="gridcell"
+        data-option-index={index}
+        tabindex={index === activeIndex ? 0 : -1}
+        aria-label={optionLabel(display)}
+        aria-haspopup={hasSkinToneChoices(emoji) ? 'true' : undefined}
+        onclick={() => choose(display)}
+        oncontextmenu={(event) => {
+          if (!hasSkinToneChoices(emoji)) return;
+          event.preventDefault();
+          openToneStrip(emoji, event.currentTarget);
+        }}
+        onfocus={() => (activeIndex = index)}
+        onpointerenter={(event) => beginToneHover(emoji, event)}
+        onpointerleave={leaveTile}
+      >
+        <Emoji emoji={display} decorative />
+        {#if hasSkinToneChoices(emoji)}
+          <span class="reaction-picker-tone-hint" aria-hidden="true"></span>
+        {/if}
+      </button>
+    {/each}
+  </div>
+{/snippet}
 
 <div class="reaction-picker" role="presentation" bind:this={picker} onpointerdown={dismissOverlays}>
   <div class="reaction-picker-head">
@@ -432,34 +464,7 @@
         {#if row.kind === 'header'}
           <span class="reaction-picker-section" style:top={`${row.top}px`}>{row.label}</span>
         {:else}
-          <div class="reaction-picker-grid" style:top={`${row.top}px`} role="row">
-            {#each row.emojis as emoji, column (emoji)}
-              {@const index = row.firstIndex + column}
-              {@const display = toned(emoji)}
-              <button
-                type="button"
-                role="gridcell"
-                data-option-index={index}
-                tabindex={index === activeIndex ? 0 : -1}
-                aria-label={optionLabel(display)}
-                aria-haspopup={hasSkinToneChoices(emoji) ? 'true' : undefined}
-                onclick={() => choose(display)}
-                oncontextmenu={(event) => {
-                  if (!hasSkinToneChoices(emoji)) return;
-                  event.preventDefault();
-                  openToneStrip(emoji, event.currentTarget as HTMLElement);
-                }}
-                onfocus={() => (activeIndex = index)}
-                onpointerenter={(event) => beginToneHover(emoji, event)}
-                onpointerleave={leaveTile}
-              >
-                <Emoji emoji={display} decorative />
-                {#if hasSkinToneChoices(emoji)}
-                  <span class="reaction-picker-tone-hint" aria-hidden="true"></span>
-                {/if}
-              </button>
-            {/each}
-          </div>
+          {@render gridRow(row)}
         {/if}
       {/each}
     </div>

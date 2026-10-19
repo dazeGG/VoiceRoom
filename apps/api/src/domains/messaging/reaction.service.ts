@@ -7,6 +7,7 @@ import {
   normalizeReactorPage,
   normalizeReactorQuery
 } from '@voice-room/shared/reactions';
+import { isRecord, textOf } from '@voice-room/shared/guards';
 
 type Conversation = { type: 'room' | 'dm'; id: string };
 type Viewer = { id?: string; guest?: boolean; isGuest?: boolean; [key: string]: unknown } | null | undefined;
@@ -73,9 +74,9 @@ class ReactionServiceError extends Error {
 }
 
 function normalizeConversation(input: unknown): Conversation {
-  const value = input as { type?: unknown; id?: unknown } | null | undefined;
-  const type = value?.type === 'room' || value?.type === 'dm' ? value.type : '';
-  const id = typeof value?.id === 'string' ? value.id.trim() : '';
+  const value = isRecord(input) ? input : {};
+  const type = value.type === 'room' || value.type === 'dm' ? value.type : '';
+  const id = typeof value.id === 'string' ? value.id.trim() : '';
   if (!type || !id || id.length > 128) {
     throw new ReactionServiceError('Invalid conversation', 'invalid_conversation', 400);
   }
@@ -131,7 +132,7 @@ function createReactionService({
     viewer?: Viewer;
   } = {}): Promise<ReactionSummary[]> {
     const conversation = normalizeConversation(rawConversation);
-    const cleanMessageId = String(messageId || '').trim();
+    const cleanMessageId = textOf(messageId).trim();
     if (!cleanMessageId) throw new ReactionServiceError('Invalid message', 'invalid_message', 400);
     await assertVisible({ conversation, messageId: cleanMessageId, viewer, operation: 'read' });
     const summaries = await reactions.listSummaries({

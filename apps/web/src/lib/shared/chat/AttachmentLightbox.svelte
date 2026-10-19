@@ -78,7 +78,7 @@
     dragging = true;
     dragStartX = event.clientX - offsetX;
     dragStartY = event.clientY - offsetY;
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    if (event.currentTarget instanceof Element) event.currentTarget.setPointerCapture(event.pointerId);
   }
 
   function onPointerMove(event: PointerEvent): void {
@@ -90,7 +90,7 @@
   function onPointerUp(event: PointerEvent): void {
     if (!dragging) return;
     dragging = false;
-    (event.currentTarget as HTMLElement).releasePointerCapture?.(event.pointerId);
+    if (event.currentTarget instanceof Element) event.currentTarget.releasePointerCapture?.(event.pointerId);
   }
 
   function keydown(event: KeyboardEvent): void {
@@ -114,9 +114,9 @@
       reset();
     } else if (event.key === 'Tab') {
       const controls = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled),a[href]'));
-      if (!controls.length) return;
       const first = controls[0];
-      const last = controls.at(-1)!;
+      const last = controls.at(-1);
+      if (!first || !last) return;
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
@@ -165,7 +165,9 @@
           <RotateCcw {...iconSm} aria-hidden="true" />
         </button>
         {#if item.downloadHref}
-          <a href={item.downloadHref} download aria-label="Скачать"><Download {...iconSm} aria-hidden="true" /></a>
+          <a href={item.downloadHref} download rel="external" aria-label="Скачать"
+            ><Download {...iconSm} aria-hidden="true" /></a
+          >
         {/if}
         <button type="button" onclick={onclose} aria-label="Закрыть просмотр">
           <X {...iconSm} aria-hidden="true" />
@@ -173,7 +175,6 @@
       </div>
     </header>
 
-    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
     <div
       class="attachment-lightbox-stage"
       class:is-zoomed={zoomed}

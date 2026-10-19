@@ -1,5 +1,6 @@
 import { fetchMe, type AuthUser } from '$lib/api/auth';
 import { clearChatDrafts, resumeChatDrafts } from '$lib/shared/chat/chat-drafts';
+import { clearAttachmentComposeStores } from '$lib/shared/chat/attachment-compose-stores';
 import { clearHistoryCache } from '$lib/shared/chat/history-cache';
 import { roomNameFor } from './account';
 
@@ -60,7 +61,7 @@ export async function loadSession(force = false): Promise<AuthUser | null> {
       setUser(user);
       return user;
     })
-    .catch((error) => {
+    .catch((error: unknown) => {
       session.loaded = true;
       throw error;
     })
@@ -75,6 +76,7 @@ export function clearSession(): void {
   // The session ended on this device (sign-out, password change, deletion or a
   // revoked session): unsent texts must not outlive it on a shared computer.
   clearChatDrafts();
+  clearAttachmentComposeStores();
   clearHistoryCache();
   session.user = null;
   session.loaded = true;

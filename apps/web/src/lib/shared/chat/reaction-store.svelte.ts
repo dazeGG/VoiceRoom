@@ -8,6 +8,7 @@ import {
 } from '$lib/api/reactions';
 import { replaceReactionSnapshot } from './reaction-reconciliation';
 import { createLogger, errorContext } from '$lib/shared/log';
+import { uniqueBy } from '$lib/shared/utils/collections';
 
 const log = createLogger('chat:reactions');
 
@@ -248,7 +249,7 @@ export class ReactionStore {
       )
         return;
       const candidates = append ? [...current.reactors, ...page.reactors] : page.reactors;
-      const reactors = [...new Map(candidates.map((reactor) => [reactor.userId, reactor])).values()];
+      const reactors = uniqueBy(candidates, (reactor) => reactor.userId);
       this.reactors = {
         ...this.reactors,
         [key]: { reactors, nextCursor: page.nextCursor, loading: false, error: '' }

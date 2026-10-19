@@ -74,7 +74,7 @@ export function createRoomSummaries(deps: RoomSummaryDeps) {
     roomId: string,
     userId: string,
     room: StoredRoom | null = null,
-    roomPeers: unknown[] | null = null
+    roomPeers: readonly PublicPeer[] | null = null
   ): Promise<boolean> {
     if (!roomId || !userId) return false;
     const dbRoom = room || (await getRoomStore().getRoom(roomId));

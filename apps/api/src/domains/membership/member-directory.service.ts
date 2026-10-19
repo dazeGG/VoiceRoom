@@ -32,10 +32,7 @@ function presenceForUser(
   userId: string
 ): { inVoice: boolean; presenceStatus: MemberPresenceStatus } {
   const byUserId = snapshot?.byUserId;
-  const raw =
-    byUserId instanceof Map
-      ? byUserId.get(userId)
-      : (byUserId as Record<string, PresenceEntry | PresenceEntry[]> | undefined)?.[userId];
+  const raw = byUserId instanceof Map ? byUserId.get(userId) : byUserId?.[userId];
   if (!raw) return { inVoice: false, presenceStatus: 'offline' };
   const connections = Array.isArray(raw) ? raw : [raw];
   const inVoice = connections.some((entry) => entry?.inVoice === true || entry?.voice === true || entry?.roomId);

@@ -6,8 +6,8 @@
 // compare-and-set on the record before any await.
 
 import { unrefTimer } from './runtime-types.ts';
+import { fieldOf } from '../platform/record.ts';
 import type {
-  FinalizeError,
   FinalizePeer,
   FinalizeResult,
   LeaseClaim,
@@ -31,6 +31,15 @@ export interface ReconnectLeaseDeps {
   finalizeOwnedPeer: (input: { record: LeaseRecord; peer: Peer; reason: LeaseReason }) => Promise<unknown>;
   /** The latest voice join request; a terminal lease blocks joins issued before it. */
   joinSequence: () => number;
+}
+
+// A finalizer's answer or failure may say the seat is already released.
+function ownershipFinalizedBy(result: unknown): boolean {
+  return fieldOf(result, 'ownershipFinalized') === true;
+}
+
+function finalizedBy(result: unknown): boolean {
+  return fieldOf(result, 'finalized') !== false;
 }
 
 export function createReconnectLeases(deps: ReconnectLeaseDeps) {
@@ -76,7 +85,7 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
 
     record.finalizerPromise = (async (): Promise<FinalizeResult> => {
       let ownershipFinalized = false;
-      let failure: FinalizeError | null = null;
+      let failure: unknown = null;
       const ownedPeer = currentLeasePeer(record);
       if (ownedPeer) {
         try {
@@ -89,19 +98,19 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
               reason: record.terminalReason || reason,
               ownershipFinalized: false
             });
-            ownershipFinalized = (result as { finalized?: boolean } | undefined)?.finalized !== false;
+            ownershipFinalized = finalizedBy(result);
           } else {
             await deps.finalizeOwnedPeer({ record, peer: ownedPeer, reason });
             ownershipFinalized = true;
           }
         } catch (error) {
-          failure = error as FinalizeError;
-          ownershipFinalized = (error as FinalizeError | null)?.ownershipFinalized === true;
+          failure = error;
+          ownershipFinalized = ownershipFinalizedBy(error);
         }
       }
 
-      for (let index = 0; index < record.finalizeCallbacks.length; index += 1) {
-        const callback = record.finalizeCallbacks[index] as FinalizePeer;
+      // A callback queued while an earlier one runs is still reached.
+      for (const callback of record.finalizeCallbacks) {
         try {
           const result = await callback({
             roomId: record.roomId,
@@ -110,15 +119,14 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
             reason: record.terminalReason || reason,
             ownershipFinalized
           });
-          if (!ownershipFinalized)
-            ownershipFinalized = (result as { finalized?: boolean } | undefined)?.finalized !== false;
+          if (!ownershipFinalized) ownershipFinalized = finalizedBy(result);
         } catch (error) {
-          failure ||= error as FinalizeError;
-          if (!ownershipFinalized) ownershipFinalized = (error as FinalizeError | null)?.ownershipFinalized === true;
+          failure ||= error;
+          if (!ownershipFinalized) ownershipFinalized = ownershipFinalizedBy(error);
         }
       }
 
-      if (failure?.rollbackTerminal === true && !ownershipFinalized) {
+      if (fieldOf(failure, 'rollbackTerminal') === true && !ownershipFinalized) {
         record.terminalReason = '';
         record.terminalAtJoinSequence = 0;
         record.finalizeCallbacks.length = 0;
@@ -132,7 +140,8 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
         }
       } else if (failure && !ownershipFinalized) {
         record.state = record.terminalReason ? 'terminal-finalizer-failed' : 'finalizer-failed';
-        record.finalizerErrorCode = failure?.code || 'reconnect_finalize_failed';
+        const code = fieldOf(failure, 'code');
+        record.finalizerErrorCode = typeof code === 'string' && code ? code : 'reconnect_finalize_failed';
       } else if (record.terminalReason) {
         record.state = 'terminal';
         record.timer = scheduleTimeout(() => {
@@ -144,7 +153,9 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
       } else if (reconnectLeases.get(record.key) === record) {
         reconnectLeases.delete(record.key);
       }
-      if (failure) throw failure;
+      // Rethrown as caught: a finalizer may fail with anything.
+      const failed = Boolean(failure);
+      if (failed) throw failure;
       return { ok: true, finalized: ownershipFinalized };
     })();
     return record.finalizerPromise;
@@ -171,17 +182,15 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
   }
 
   function createReconnectLease(activeVoice: VoiceTarget): LeaseRecord | null {
+    const { sessionToken, transportId } = activeVoice;
     const room = presenceRooms.get(activeVoice.roomId);
     const peer = room?.peers?.get(activeVoice.peerId);
-    if (
-      !peer ||
-      peer.transport?.id !== activeVoice.transportId ||
-      !tokensMatch(peer.sessionToken, activeVoice.sessionToken)
-    ) {
+    // An empty token never matches, so a lease always has one.
+    if (!peer || !sessionToken || peer.transport?.id !== transportId || !tokensMatch(peer.sessionToken, sessionToken)) {
       return null;
     }
 
-    const key = reconnectLeaseKey(activeVoice.roomId, activeVoice.peerId, activeVoice.sessionToken as string);
+    const key = reconnectLeaseKey(activeVoice.roomId, activeVoice.peerId, sessionToken);
     const existing = reconnectLeases.get(key);
     if (existing && existing.transportId === activeVoice.transportId) {
       return existing;
@@ -192,8 +201,8 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
       key,
       roomId: activeVoice.roomId,
       peerId: activeVoice.peerId,
-      sessionToken: activeVoice.sessionToken as string,
-      transportId: activeVoice.transportId as string,
+      sessionToken,
+      transportId,
       generation: ++reconnectLeaseGeneration,
       deadline: now() + leaseDurationMs,
       state: 'pending',
@@ -331,28 +340,29 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
 
   async function settleLeaseFinalizers(records: LeaseRecord[], reason: LeaseReason): Promise<FinalizeResult[]> {
     const settled = await Promise.allSettled(records.map((record) => runLeaseFinalizer(record, reason, null)));
-    const rejected = settled.find((result) => result.status === 'rejected');
-    if (rejected) throw rejected.reason;
-    return settled.map((result) => (result as PromiseFulfilledResult<FinalizeResult>).value);
+    const results: FinalizeResult[] = [];
+    for (const result of settled) {
+      if (result.status === 'rejected') throw fieldOf(result, 'reason');
+      results.push(result.value);
+    }
+    return results;
   }
 
-  async function finalizeReconnectLease(
-    {
-      roomId,
-      peerId,
-      reason = 'left',
-      finalizePeer = null,
-      expectedSessionToken = '',
-      expectedTransportId = ''
-    }: {
-      roomId: string;
-      peerId: string;
-      reason?: LeaseReason;
-      finalizePeer?: FinalizePeer | null;
-      expectedSessionToken?: string;
-      expectedTransportId?: string;
-    } = {} as { roomId: string; peerId: string }
-  ) {
+  async function finalizeReconnectLease({
+    roomId,
+    peerId,
+    reason = 'left',
+    finalizePeer = null,
+    expectedSessionToken = '',
+    expectedTransportId = ''
+  }: {
+    roomId: string;
+    peerId: string;
+    reason?: LeaseReason;
+    finalizePeer?: FinalizePeer | null;
+    expectedSessionToken?: string;
+    expectedTransportId?: string;
+  }) {
     const records = recordsForPeer(roomId, peerId, { expectedSessionToken, expectedTransportId });
     // Claim every matching generation synchronously before the first await.
     for (const record of records) terminalClaimRecord(record, reason, finalizePeer);
@@ -388,13 +398,15 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
     return { ok: true, finalized: Boolean(result?.finalized) };
   }
 
-  async function cancelRoomReconnectLeases(
-    {
-      roomId,
-      reason = 'deleted',
-      finalizePeer = null
-    }: { roomId: string; reason?: LeaseReason; finalizePeer?: FinalizePeer | null } = {} as { roomId: string }
-  ) {
+  async function cancelRoomReconnectLeases({
+    roomId,
+    reason = 'deleted',
+    finalizePeer = null
+  }: {
+    roomId: string;
+    reason?: LeaseReason;
+    finalizePeer?: FinalizePeer | null;
+  }) {
     const peerIds = new Set([
       ...[...reconnectLeases.values()].filter((record) => record.roomId === roomId).map((record) => record.peerId),
       ...[...(presenceRooms.get(roomId)?.peers?.keys?.() || [])]
@@ -405,17 +417,17 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
     return { ok: true, finalized: results.filter((result) => result.finalized).length };
   }
 
-  async function cancelAccountReconnectLeases(
-    {
-      roomId,
-      userId,
-      reason = 'membership-left',
-      finalizePeer = null
-    }: { roomId: string; userId: string; reason?: LeaseReason; finalizePeer?: FinalizePeer | null } = {} as {
-      roomId: string;
-      userId: string;
-    }
-  ) {
+  async function cancelAccountReconnectLeases({
+    roomId,
+    userId,
+    reason = 'membership-left',
+    finalizePeer = null
+  }: {
+    roomId: string;
+    userId: string;
+    reason?: LeaseReason;
+    finalizePeer?: FinalizePeer | null;
+  }) {
     const peerIds = new Set<string>();
     for (const record of reconnectLeases.values()) {
       if (record.roomId === roomId && record.peer?.accountUserId === userId) peerIds.add(record.peerId);
@@ -429,17 +441,17 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
     return { ok: true, finalized: results.filter((result) => result.finalized).length };
   }
 
-  async function finalizeReconnectPeers(
-    {
-      roomId,
-      peerIds = [],
-      reason,
-      finalizePeer
-    }: { roomId: string; peerIds?: string[]; reason: LeaseReason; finalizePeer?: FinalizePeer | null } = {} as {
-      roomId: string;
-      reason: LeaseReason;
-    }
-  ) {
+  async function finalizeReconnectPeers({
+    roomId,
+    peerIds = [],
+    reason,
+    finalizePeer
+  }: {
+    roomId: string;
+    peerIds?: string[];
+    reason: LeaseReason;
+    finalizePeer?: FinalizePeer | null;
+  }) {
     const records = [...new Set(peerIds)].flatMap((peerId) => recordsForPeer(roomId, peerId));
     for (const record of records) terminalClaimRecord(record, reason, finalizePeer);
     const results = await settleLeaseFinalizers(records, reason);

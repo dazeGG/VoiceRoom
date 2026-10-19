@@ -1,6 +1,7 @@
 import type { AttachmentRepository } from './attachment.repository.ts';
 import type { MediaJobRepository } from './media-job.repository.ts';
 import type { MediaStorage } from './storage.ts';
+import { codeOf } from '../../platform/error-code.ts';
 
 export type MediaCleanupResult = Readonly<{
   inspected: number;
@@ -39,7 +40,7 @@ function createMediaMaintenanceService({
       const deleted = await attachments.markCleanupDeleted(candidate.id);
       if (!deleted) continue;
       await files.removeAttachment(candidate.id).catch((error: unknown) => {
-        if ((error as { code?: unknown } | null | undefined)?.code !== 'ENOENT') throw error;
+        if (codeOf(error) !== 'ENOENT') throw error;
       });
       await attachments.clearPhysicalData(candidate.id);
       removed += 1;

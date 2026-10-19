@@ -76,7 +76,11 @@ function createFailureLimiter({
     for (const [key, entry] of entries) {
       if (now - entry.startedAt >= windowMs) entries.delete(key);
     }
-    while (entries.size >= maxEntries) entries.delete(entries.keys().next().value as string);
+    while (entries.size >= maxEntries) {
+      const oldest = entries.keys().next();
+      if (oldest.done) break;
+      entries.delete(oldest.value);
+    }
   }
 
   function current(key: string, now: number): Entry | null {

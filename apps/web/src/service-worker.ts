@@ -5,11 +5,13 @@ import { parsePushPayload, type PushPayload } from '@voice-room/shared/notificat
 declare const self: ServiceWorkerGlobalScope;
 
 function serviceWorkerRunsOnMobile(): boolean {
-  const nav = self.navigator as Navigator & { userAgentData?: { mobile?: boolean } };
+  const nav = self.navigator;
   if (typeof nav.userAgentData?.mobile === 'boolean') return nav.userAgentData.mobile;
   const userAgent = nav.userAgent || '';
   const platform = nav.platform || '';
-  const maxTouchPoints = Number.isFinite(nav.maxTouchPoints) ? Number(nav.maxTouchPoints) : 0;
+  // WorkerNavigator does not declare it, but Chromium's service workers expose it.
+  const touchPoints = 'maxTouchPoints' in nav ? nav.maxTouchPoints : undefined;
+  const maxTouchPoints = typeof touchPoints === 'number' && Number.isFinite(touchPoints) ? touchPoints : 0;
   return (
     /android|iphone|ipod|ipad|windows phone|mobile/i.test(userAgent) ||
     (/^MacIntel$/i.test(platform) && maxTouchPoints > 1)

@@ -1,3 +1,4 @@
+import { isRecord } from '@voice-room/shared/guards';
 import { createLogger, errorContext } from '$lib/shared/log';
 
 const log = createLogger('desktop:diagnostics');
@@ -24,7 +25,7 @@ export async function openDesktopLogsFolder(): Promise<boolean> {
   if (typeof bridge?.openLogsFolder !== 'function') return false;
   try {
     const result = await bridge.openLogsFolder();
-    return (result as { ok?: unknown } | null)?.ok === true;
+    return isRecord(result) && result.ok === true;
   } catch (error) {
     log.warn('desktop logs folder failed to open', errorContext(error));
     return false;
@@ -37,7 +38,7 @@ export async function copyDesktopDiagnostics(): Promise<boolean> {
   if (typeof bridge?.copyInfo !== 'function') return false;
   try {
     const result = await bridge.copyInfo();
-    return (result as { ok?: unknown } | null)?.ok === true;
+    return isRecord(result) && result.ok === true;
   } catch (error) {
     log.warn('desktop diagnostics copy failed', errorContext(error));
     return false;
@@ -53,7 +54,7 @@ export function syncDesktopDiagnosticsContext(context: DesktopDiagnosticsContext
   lastContextKey = key;
   void Promise.resolve()
     .then(() => bridge.setContext(payload))
-    .catch((error) => {
+    .catch((error: unknown) => {
       if (lastContextKey === key) lastContextKey = '';
       log.warn('desktop diagnostics context sync failed', errorContext(error));
     });

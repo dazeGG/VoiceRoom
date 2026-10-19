@@ -46,7 +46,8 @@ export type LeaseRecord = {
   roomId: string;
   peerId: string;
   sessionToken: string;
-  transportId: string;
+  /** The seat's transport when the lease began; undefined if it carried no id. */
+  transportId: string | undefined;
   generation: number;
   deadline: number;
   state: LeaseState;

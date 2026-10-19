@@ -3,6 +3,8 @@ import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { fromMicros, microsOf } from '../../platform/db/micros.ts';
+import { CursorCodecError } from '../../platform/cursor-codec.ts';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 import type { Ban, BanProfile } from '@voice-room/shared/contracts/moderation';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
@@ -31,16 +33,16 @@ export type ModerationBanRow = {
   avatar_accent?: string | null;
 };
 
+// A guest ban needs the address; the column is NOT NULL.
+function requireGuestIp(guestIp: string | null): string {
+  if (guestIp === null) throw new TypeError('A guest ban needs an address');
+  return guestIp;
+}
+
 function asDate(value: unknown): Date {
   if (value instanceof Date) return value;
   const number = Number(value);
   return new Date(Number.isFinite(number) ? number : Date.now());
-}
-
-function toMillis(value: unknown): number | null {
-  if (value instanceof Date) return value.getTime();
-  const parsed = Date.parse(value as string);
-  return Number.isFinite(parsed) ? parsed : null;
 }
 
 // Only the active list joins users, so rows from mutations carry no login and
@@ -56,6 +58,8 @@ function mapBanProfile(row: ModerationBanRow): BanProfile | null {
   };
 }
 
+function mapModerationBan(row: ModerationBanRow): Ban;
+function mapModerationBan(row: ModerationBanRow | null | undefined): Ban | null;
 function mapModerationBan(row: ModerationBanRow | null | undefined): Ban | null {
   if (!row) return null;
   const profile = mapBanProfile(row);
@@ -68,9 +72,9 @@ function mapModerationBan(row: ModerationBanRow | null | undefined): Ban | null 
       ...(profile ? { profile } : {})
     },
     reason: row.reason || '',
-    createdAt: toMillis(row.created_at),
-    updatedAt: toMillis(row.updated_at || row.created_at),
-    expiresAt: row.expires_at ? toMillis(row.expires_at) : null
+    createdAt: epochMillis(row.created_at),
+    updatedAt: epochMillis(row.updated_at || row.created_at),
+    expiresAt: row.expires_at ? epochMillis(row.expires_at) : null
   };
 }
 
@@ -83,7 +87,7 @@ function createModerationRepository({
   const base = pool;
   const codec = cursorCodec;
   const on = (client: Client): Database => kyselyOn(client?.query ? client : base);
-  const bans = (row: unknown) => mapModerationBan(row as ModerationBanRow | undefined);
+  const bans = (row: ModerationBanRow | undefined) => mapModerationBan(row);
 
   function encodeCursor(roomId: string, row: ModerationBanRow | undefined): string | undefined {
     if (!row?.created_at || !row?.id) return undefined;
@@ -184,7 +188,7 @@ function createModerationRepository({
       .limit(1)
       .forUpdate()
       .executeTakeFirst();
-    return (row as ModerationBanRow | undefined) || null;
+    return row || null;
   }
 
   async function create({
@@ -213,8 +217,7 @@ function createModerationRepository({
         id: crypto.randomUUID(),
         room_id: roomId,
         user_id: userId,
-        // A guest ban needs the address; without one the NOT NULL column refuses it.
-        ip: userId ? '' : (guestIp as string),
+        ip: userId ? '' : requireGuestIp(guestIp),
         created_at: timestamp,
         expires_at: expiresAt == null ? null : asDate(expiresAt),
         metadata: '{}',
@@ -274,9 +277,7 @@ function createModerationRepository({
   }): Promise<{ bans: Ban[]; hasMore: boolean; nextCursor: string | undefined }> {
     const after = cursor ? decodeCursor(roomId, cursor) : null;
     if (cursor && !after) {
-      const error = new Error('Invalid moderation cursor') as Error & { code?: string };
-      error.code = 'invalid_cursor';
-      throw error;
+      throw new CursorCodecError('Invalid moderation cursor');
     }
     let query = activeBans(on(client), roomId, at)
       .leftJoin('users as u', 'u.id', 'rb.user_id')
@@ -294,15 +295,15 @@ function createModerationRepository({
         sql<boolean>`(rb.created_at, rb.id) < (${fromMicros(after.createdAtMicros)}, ${after.id}::varchar(36))`
       );
     }
-    const found = (await query
+    const found = await query
       .orderBy('rb.created_at', 'desc')
       .orderBy('rb.id', 'desc')
       .limit(limit + 1)
-      .execute()) as ModerationBanRow[];
+      .execute();
     const hasMore = found.length > limit;
     const rows = hasMore ? found.slice(0, limit) : found;
     return {
-      bans: rows.map((row) => bans(row) as Ban),
+      bans: rows.map((row) => mapModerationBan(row)),
       hasMore,
       nextCursor: hasMore ? encodeCursor(roomId, rows.at(-1)) : undefined
     };

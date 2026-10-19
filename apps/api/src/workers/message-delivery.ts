@@ -1,10 +1,11 @@
 import type pg from 'pg';
-import { readEnvInt, readMessageDeliveryMode } from '../lib/config.ts';
+import { readMessageDeliveryWorkerConfig } from '../app/config.ts';
 import { createMessageOutboxRepository } from '../domains/messaging/message-outbox.repository.ts';
-import { boundedBackoff, createLeaseRuntime } from '../platform/lease-runtime.ts';
+import { boundedBackoff, createLeaseRuntime, delay } from '../platform/lease-runtime.ts';
 import type { FenceGuard, LeaseRuntime } from '../platform/lease-runtime.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
+import { fieldOf } from '../platform/record.ts';
 
 type MessageOutbox = ReturnType<typeof createMessageOutboxRepository>;
 type Deliver = (
@@ -19,23 +20,6 @@ type WorkerLogger = {
 };
 
 const LEASE_IDENTITY = 'message-delivery.G38';
-
-function wait(ms: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.reject(signal.reason || new Error('Worker stopped'));
-  return new Promise<void>((resolve, reject) => {
-    const timer = setTimeout(done, ms);
-    function done() {
-      signal.removeEventListener('abort', cancel);
-      resolve();
-    }
-    function cancel() {
-      clearTimeout(timer);
-      signal.removeEventListener('abort', cancel);
-      reject(signal.reason || new Error('Worker stopped'));
-    }
-    signal.addEventListener('abort', cancel, { once: true });
-  });
-}
 
 function createMessageDeliveryWorker({
   batchSize = 100,
@@ -60,11 +44,15 @@ function createMessageDeliveryWorker({
 } = {}) {
   if (!outbox) throw new TypeError('Message delivery outbox repository is required');
   const store = outbox;
+  // Without an adapter the event id is announced over Postgres NOTIFY.
   const dispatch: Deliver =
-    deliver || ((event) => store.publishPostgres(event as Parameters<MessageOutbox['publishPostgres']>[0]));
+    deliver ||
+    ((event) => {
+      const eventId = fieldOf(event, 'eventId');
+      return store.publishPostgres({ eventId: typeof eventId === 'string' ? eventId : '' });
+    });
   if (typeof dispatch !== 'function') throw new TypeError('Message delivery adapter must be a function');
 
-  let runtime: LeaseRuntime;
   const leaseAdapter = {
     acquire: (lease: Parameters<MessageOutbox['acquireLease']>[0]) => store.acquireLease(lease),
     release: (lease: Parameters<MessageOutbox['releaseLease']>[0]) => store.releaseLease(lease),
@@ -88,7 +76,7 @@ function createMessageDeliveryWorker({
       });
 
       if (!events.length) {
-        await wait(idleMs, guard.signal);
+        await delay(idleMs, guard.signal);
         continue;
       }
 
@@ -128,7 +116,7 @@ function createMessageDeliveryWorker({
     }
   }
 
-  runtime = createLeaseRuntime({
+  const runtime: LeaseRuntime = createLeaseRuntime({
     ...leaseAdapter,
     identity: LEASE_IDENTITY,
     idleMs,
@@ -157,7 +145,8 @@ function createMessageDeliveryWorker({
 }
 
 async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
-  if (!readMessageDeliveryMode(env).claimEnabled) {
+  const config = readMessageDeliveryWorkerConfig(env);
+  if (!config.CLAIM_ENABLED) {
     createLogger({ env, name: 'worker.message-delivery' }).info(
       { evt: LOG_EVENTS.WORKER_DISABLED, worker: 'message-delivery', reason: 'claims_disabled' },
       'message delivery claims are disabled'
@@ -167,13 +156,13 @@ async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
 
   const outbox = createMessageOutboxRepository({ pool });
   const worker = createMessageDeliveryWorker({
-    batchSize: readEnvInt('MESSAGE_DELIVERY_BATCH_SIZE', 100, 1, env),
-    idleMs: readEnvInt('MESSAGE_DELIVERY_IDLE_MS', 250, 10, env),
-    leaseMs: readEnvInt('MESSAGE_DELIVERY_LEASE_MS', 30_000, 1_000, env),
-    maxAttempts: readEnvInt('MESSAGE_DELIVERY_MAX_ATTEMPTS', 12, 1, env),
+    batchSize: config.BATCH_SIZE,
+    idleMs: config.IDLE_MS,
+    leaseMs: config.LEASE_MS,
+    maxAttempts: config.MAX_ATTEMPTS,
     outbox,
-    renewMs: readEnvInt('MESSAGE_DELIVERY_RENEW_MS', 10_000, 100, env),
-    staleClaimMs: readEnvInt('MESSAGE_DELIVERY_STALE_CLAIM_MS', 60_000, 1_000, env)
+    renewMs: config.RENEW_MS,
+    staleClaimMs: config.STALE_CLAIM_MS
   });
 
   let stopPromise: Promise<void> | null = null;

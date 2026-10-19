@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createPermanentRoom, registerViaUi, uniqueLogin } from './helpers';
+import { boxOf, createPermanentRoom, incomingFriendRequestIds, registerViaUi, uniqueLogin } from './helpers';
 
 test('room context menu supports pointer, keyboard navigation, focus restore, and viewport edges', async ({ page }) => {
   const login = uniqueLogin('context');
@@ -41,12 +41,11 @@ test('room context menu supports pointer, keyboard navigation, focus restore, an
     clientY: 4
   });
   await expect(menu).toBeVisible();
-  const box = await menu.boundingBox();
-  expect(box).not.toBeNull();
-  expect(box!.x).toBeGreaterThanOrEqual(8);
-  expect(box!.y).toBeGreaterThanOrEqual(8);
-  expect(box!.x + box!.width).toBeLessThanOrEqual(352);
-  expect(box!.y + box!.height).toBeLessThanOrEqual(232);
+  const box = await boxOf(menu);
+  expect(box.x).toBeGreaterThanOrEqual(8);
+  expect(box.y).toBeGreaterThanOrEqual(8);
+  expect(box.x + box.width).toBeLessThanOrEqual(352);
+  expect(box.y + box.height).toBeLessThanOrEqual(232);
 
   await page.setViewportSize({ width: 360, height: 120 });
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -81,10 +80,7 @@ test('friend rows open only the direct-message thread and do not expose a contex
     });
     expect(requestResponse.ok()).toBe(true);
 
-    const requestsResponse = await page.context().request.get('/api/friends/requests');
-    expect(requestsResponse.ok()).toBe(true);
-    const requests = (await requestsResponse.json()) as { incoming?: Array<{ id: string }> };
-    const requestId = requests.incoming?.[0]?.id;
+    const [requestId] = await incomingFriendRequestIds(page);
     expect(requestId).toBeTruthy();
 
     const acceptResponse = await page.context().request.post(`/api/friends/requests/${requestId}/accept`, {

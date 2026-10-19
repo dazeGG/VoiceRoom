@@ -3,12 +3,18 @@
 
 import type { ProfileCardPerson } from '$lib/shared/components/profile-card';
 
-export const profileCardUi = $state({
+export const profileCardUi = $state<{
+  open: boolean;
+  x: number;
+  y: number;
+  person: ProfileCardPerson | null;
+  restoreFocus: HTMLElement | null;
+}>({
   open: false,
   x: 0,
   y: 0,
-  person: null as ProfileCardPerson | null,
-  restoreFocus: null as HTMLElement | null
+  person: null,
+  restoreFocus: null
 });
 
 export type ProfileCardAnchor = {

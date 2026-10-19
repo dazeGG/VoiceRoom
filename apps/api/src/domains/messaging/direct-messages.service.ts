@@ -9,8 +9,11 @@ import type { DirectMessage as DirectMessageView, ReplyPreview } from '@voice-ro
 import type { PublicUser } from '@voice-room/shared/contracts/users';
 import crypto from 'node:crypto';
 import { publicUser } from '../account/user-records.ts';
+import { isStoredDirectMessage } from '../social/social-records.ts';
 import { isActiveAccount, type SocialUser } from '../social/social-views.ts';
+import { textOf } from '@voice-room/shared/guards';
 import { messageFingerprint, normalizeAttachmentIds } from './message-input.ts';
+import { replayedMessage, type SendReservation } from './message-idempotency.repository.ts';
 import { requireReplyTarget } from './reply-projector.ts';
 import { isDirectSender } from './direct-message.policy.ts';
 import {
@@ -55,10 +58,7 @@ export interface DirectMessageStore {
 
 interface Delivery {
   idempotency: {
-    reserve(
-      client: DbClient,
-      input: Record<string, unknown>
-    ): Promise<{ kind: string; ledgerKey?: string; response?: { body?: unknown } }>;
+    reserve(client: DbClient, input: Record<string, unknown>): Promise<SendReservation>;
     complete(
       client: DbClient,
       key: string,
@@ -115,7 +115,7 @@ export interface DirectMessagesDeps {
 
 // Multiline like room chat, but up to 2000 characters and no line cap.
 export function cleanDmText(value: unknown): string {
-  return String(value || '')
+  return textOf(value)
     .replace(/[^\S\n]+/g, ' ')
     .replace(/ *\n */g, '\n')
     .replace(/\n{3,}/g, '\n\n')
@@ -211,13 +211,12 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
                 key: idempotencyKey,
                 fingerprint: messageFingerprint({ text, attachmentIds, replyToMessageId })
               });
-              if (reservation.kind === 'replay')
-                return {
-                  replay: true as const,
-                  message: (reservation.response?.body as { message?: DirectMessage } | undefined)
-                    ?.message as DirectMessage
-                };
-              idempotencyLedgerKey = reservation.ledgerKey as string;
+              if (reservation.kind === 'replay') {
+                const message = replayedMessage(reservation);
+                if (!isStoredDirectMessage(message)) throw new Error('The idempotent replay holds no direct message');
+                return { replay: true as const, message };
+              }
+              idempotencyLedgerKey = reservation.ledgerKey;
               return null;
             }
           : null,

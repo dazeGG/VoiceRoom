@@ -35,7 +35,8 @@ async function transaction<T>(
   pool: Pick<pg.Pool, 'connect'> | null | undefined,
   callback: (client: pg.PoolClient) => Promise<T>
 ): Promise<T> {
-  const client = await pool!.connect();
+  if (!pool) throw new Error('No PostgreSQL pool is installed');
+  const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const result = await callback(client);

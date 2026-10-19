@@ -7,7 +7,7 @@
 // socket fan-out) comes in through `deps`.
 
 import { type ServerEnvelope } from '@voice-room/shared/realtime';
-import type pg from 'pg';
+import pg from 'pg';
 import { createDbPool } from '../platform/db/pool.ts';
 import { kyselyOn } from '../platform/db/kysely.ts';
 import { revokePrincipalInTransaction } from '../domains/admission/gate-credential.repository.ts';
@@ -35,8 +35,8 @@ import { createMessageVisibilityService } from '../domains/messaging/message-vis
 import { createRoomMessageRepository } from '../domains/messaging/room-message.repository.ts';
 import { createActiveBanService } from '../domains/moderation/active-ban.service.ts';
 import { createCursorCodec } from '../platform/cursor-codec.ts';
-import { resolveCursorHmacKeys } from './config.ts';
-import type { StoreOverrides } from './store-overrides.ts';
+import { DEFAULT_MEDIA_STORAGE_DIR, resolveCursorHmacKeys, type PushConfig } from './config.ts';
+import { standIn, type StoreOverrides } from './store-overrides.ts';
 export type { Fake, StoreOverrides } from './store-overrides.ts';
 import { createHistoryModule } from '../domains/messaging/history.module.ts';
 import { createReactionsModule } from '../domains/messaging/reactions.module.ts';
@@ -77,6 +77,10 @@ export type ServiceRegistryConfig = {
   MAX_ROOM_BANS: number;
   MAX_PUSH_SUBSCRIPTIONS_PER_USER: number;
   LINK_PREVIEWS_ENABLED: boolean;
+  /** Where avatars and preview images live; defaults to the API's uploads folder. */
+  UPLOADS_DIR?: string;
+  /** VAPID settings for web push; read from the process environment when absent. */
+  PUSH?: PushConfig;
   /** Where uploaded chat media lives; defaults to /data/media. */
   MEDIA_STORAGE_DIR?: string;
   /** Uploads pause below this much free space; defaults to 2 GiB. */
@@ -104,33 +108,25 @@ export type ServiceRegistryDeps = {
   roomRuntime: () => { broadcastRoomDetail(roomId: string, envelope: ServerEnvelope): void } | null | undefined;
 };
 
-type RoomStore = ReturnType<typeof createRoomStore>;
 type LiveKitCredentials = NonNullable<ReturnType<typeof createLiveKitProvider>>;
 const missingPool = () => Promise.reject(new Error('No PostgreSQL pool is installed'));
-const MISSING_POOL = { query: missingPool, connect: missingPool } as unknown as pg.Pool;
 
 /** A value built on first use; a test may set it, and a reset rebuilds it. */
 function lazy<T>(build: () => T) {
-  let value: T | undefined;
-  let built = false;
+  let slot: { value: T } | null = null;
   return {
     get(): T {
-      if (!built) {
-        value = build();
-        built = true;
-      }
-      return value as T;
+      slot ??= { value: build() };
+      return slot.value;
     },
     set(next: T): void {
-      value = next;
-      built = true;
+      slot = { value: next };
     },
     reset(): void {
-      value = undefined;
-      built = false;
+      slot = null;
     },
     /** The value if something built or set it, without building it. */
-    peek: (): T | undefined => value
+    peek: (): T | undefined => slot?.value
   };
 }
 
@@ -164,7 +160,9 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     MAX_ROOM_BANS,
     MAX_PUSH_SUBSCRIPTIONS_PER_USER,
     LINK_PREVIEWS_ENABLED,
-    MEDIA_STORAGE_DIR = '/data/media',
+    UPLOADS_DIR,
+    PUSH,
+    MEDIA_STORAGE_DIR = DEFAULT_MEDIA_STORAGE_DIR,
     MEDIA_MIN_FREE_BYTES = 2 * 1024 * 1024 * 1024
   } = config;
   const { getRoom, findRoomBan } = deps;
@@ -180,9 +178,11 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   }
 
   // Apps built on fakes still construct the services they do not fake; those
-  // only fail once they actually reach for the database.
+  // only fail once they actually reach for the database. This pool never
+  // connects: both ways in reject.
+  const unconnectedPool: pg.Pool = Object.assign(new pg.Pool(), { query: missingPool, connect: missingPool });
   function requirePool(): pg.Pool {
-    return pool ?? MISSING_POOL;
+    return pool ?? unconnectedPool;
   }
 
   /** A service that exists only while a pool is installed; a test may set one. */
@@ -211,10 +211,10 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   const pushSubscriptions = lazy(() =>
     createPushSubscriptionRepository({ pool: requirePool(), maxSubscriptionsPerUser: MAX_PUSH_SUBSCRIPTIONS_PER_USER })
   );
-  const pushService = lazy(() => createPushService({ store: pushSubscriptions.get() }));
+  const pushService = lazy(() => createPushService({ store: pushSubscriptions.get(), config: PUSH }));
   const geoLocator = lazy(() => createGeoLocator({ databasePath: GEOIP_DB_PATH }));
-  const avatarStorage = lazy(() => createAvatarStorage());
-  const linkPreviewStorage = lazy(() => createLinkPreviewStorage());
+  const avatarStorage = lazy(() => createAvatarStorage({ uploadsDir: UPLOADS_DIR }));
+  const linkPreviewStorage = lazy(() => createLinkPreviewStorage({ uploadsDir: UPLOADS_DIR }));
 
   const messageService = lazy(() =>
     createMessageService({
@@ -259,6 +259,12 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   const adminActions = pooled((pool) => createAdminActionRepository({ pool }));
   const accountStanding = pooled((pool) => createAccountStandingRepository({ pool }));
   const activeBans = pooled((pool) => createActiveBanService({ pool }));
+  // Built only by services that exist while a pool is installed, so it is there too.
+  function requireActiveBans(): NonNullable<ReturnType<typeof activeBans.get>> {
+    const service = activeBans.get();
+    if (!service) throw new Error('No PostgreSQL pool is installed');
+    return service;
+  }
   const delivery = pooled((pool) => ({
     idempotency: createMessageIdempotencyRepository(),
     outbox: createMessageOutboxRepository({ pool })
@@ -285,7 +291,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     createNotificationsModule({
       pool,
       cursorCodec: history.get().cursorCodec,
-      activeBans: activeBans.get()!,
+      activeBans: requireActiveBans(),
       notificationPreferences: notificationPreferences.get()
     })
   );
@@ -306,7 +312,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       pool,
       storageDir: MEDIA_STORAGE_DIR,
       minFreeBytes: MEDIA_MIN_FREE_BYTES,
-      isBanned: (input) => activeBans.get()!.isBanned(input)
+      isBanned: (input) => requireActiveBans().isBanned(input)
     })
   );
   const memberships = pooled<MembershipModule>((pool) =>
@@ -314,7 +320,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       pool,
       cursorCodec: cursorCodec('membership'),
       // The membership service only tests the ban for truthiness.
-      isBanned: ({ roomId, userId, ip }) => findRoomBan(roomId, userId, ip) as Promise<boolean>,
+      isBanned: async ({ roomId, userId, ip }) => Boolean(await findRoomBan(roomId, userId, ip)),
       presenceSnapshot: deps.roomMembershipPresenceSnapshot
     })
   );
@@ -342,19 +348,20 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   function applyOverrides(options: StoreOverrides = {}): { roomStoreChanged: boolean } {
     if (options.pool) pool = options.pool;
     const roomStoreChanged = Boolean(options.store && options.store !== roomStore.peek());
-    if (options.store) roomStore.set(options.store as RoomStore);
-    if (options.users) userStore.set(options.users as ReturnType<typeof createUserStore>);
+    if (options.store) roomStore.set(standIn(options.store));
+    if (options.users) userStore.set(standIn(options.users));
     friendStoreInviteExpiryEnabled = Boolean(options.friends?.expirePendingInvites);
-    if (options.friends) friendStore.set(options.friends as ReturnType<typeof createFriendStore>);
-    if (options.notifications)
-      notificationPreferences.set(options.notifications as ReturnType<typeof createNotificationPreferencesRepository>);
-    if (options.avatars) avatarStorage.set(options.avatars as ReturnType<typeof createAvatarStorage>);
-    if (options.pushes) pushSubscriptions.set(options.pushes as ReturnType<typeof createPushSubscriptionRepository>);
+    if (options.friends) friendStore.set(standIn(options.friends));
+    if (options.notifications) notificationPreferences.set(standIn(options.notifications));
+    if (options.avatars) avatarStorage.set(standIn(options.avatars));
+    if (options.pushes) pushSubscriptions.set(standIn(options.pushes));
     else pushSubscriptions.reset();
-    if (options.push) pushService.set(options.push as ReturnType<typeof createPushService>);
+    if (options.push) pushService.set(standIn(options.push));
     else pushService.reset();
-    liveKitCredentials.set(options.liveKitCredentials as LiveKitCredentials | null | undefined);
-    memberships.set(options.membershipServicesOverride as MembershipModule | null | undefined);
+    liveKitCredentials.set(options.liveKitCredentials && standIn<LiveKitCredentials>(options.liveKitCredentials));
+    memberships.set(
+      options.membershipServicesOverride && standIn<MembershipModule>(options.membershipServicesOverride)
+    );
     for (const derived of [messageService, history, credentialBoundary]) derived.reset();
     for (const derived of [
       reactions,

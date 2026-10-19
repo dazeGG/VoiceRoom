@@ -56,7 +56,11 @@ export interface FinalizeOptions<T> {
   beforeFinalize?: (() => Promise<T>) | null;
 }
 
-type OwnershipError = Error & { ownershipFinalized?: boolean };
+/** The cleanup failure, marked so the reconnect lease does not hand the seat back. */
+export function markOwnershipFinalized(failure: unknown): Error & { ownershipFinalized: true } {
+  const error = failure instanceof Error ? failure : new Error('Peer cleanup failed', { cause: failure });
+  return Object.assign(error, { ownershipFinalized: true as const });
+}
 
 export function createPeerEviction(deps: PeerEvictionDeps) {
   async function evictPeer(
@@ -100,10 +104,7 @@ export function createPeerEviction(deps: PeerEvictionDeps) {
         failure ||= error;
       }
     }
-    if (failure) {
-      (failure as OwnershipError).ownershipFinalized = true;
-      throw failure;
-    }
+    if (failure) throw markOwnershipFinalized(failure);
     return { finalized: true };
   }
 
@@ -121,7 +122,9 @@ export function createPeerEviction(deps: PeerEvictionDeps) {
       prerequisite ||= Promise.resolve().then(beforeFinalize);
       prerequisiteResult = await prerequisite;
     };
-    await deps.runtime()!.finalizeReconnectPeers({
+    const runtime = deps.runtime();
+    if (!runtime) throw new Error('The realtime runtime is not running');
+    await runtime.finalizeReconnectPeers({
       roomId: room.id,
       peerIds: peers.map((peer) => peer.id),
       reason: type,

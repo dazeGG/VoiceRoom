@@ -1,6 +1,8 @@
-import { sql } from 'kysely';
+import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
+import { canConnect } from '../../platform/db/connectable.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
+import type { RoomMessageReactionRevisions, RoomMessageReactions } from '../../platform/db/schema.ts';
 import { transaction as runInTransaction } from '../../platform/db/pool.ts';
 
 // Room and DM reactions live in tables with the same columns.
@@ -42,28 +44,28 @@ export type StoredReactor = {
   cursorTuple: { createdAtMicros: string; id: string };
 };
 
-type Target = { type?: string; messageId?: string; emoji?: string; userId?: string | null };
+type Target = { type: string; messageId: string; emoji: string };
 
-function requireQuery(client: QueryClient | null | undefined): QueryClient {
+function requireQuery<T extends QueryClient>(client: T | null | undefined): T {
   if (!client || typeof client.query !== 'function') {
     throw new TypeError('Reaction repository requires a PostgreSQL query client');
   }
   return client;
 }
 
-// Aliased joins are typed against the room pair; Kysely cannot alias a union
-// of table names, and the DM tables have the same columns.
+// Aliased joins over either pair of tables: Kysely cannot alias a union of
+// table names, so the rows are typed as the room pair's (the DM tables have
+// the same columns).
 function asRevisions(table: RevisionTable) {
-  return `${table} as v` as 'room_message_reaction_revisions as v';
+  return sql<Selectable<RoomMessageReactionRevisions>>`${sql.table(table)}`.as('v');
 }
 function asReactions(table: ReactionTable) {
-  return `${table} as r` as 'room_message_reactions as r';
+  return sql<Selectable<RoomMessageReactions>>`${sql.table(table)}`.as('r');
 }
 
-function contextTables(type: string | undefined): { reactions: ReactionTable; revisions: RevisionTable } {
-  const tables = CONTEXT_TABLES[type as keyof typeof CONTEXT_TABLES];
-  if (!tables) throw new TypeError('Reaction context must be room or dm');
-  return tables;
+function contextTables(type: string): { reactions: ReactionTable; revisions: RevisionTable } {
+  if (type !== 'room' && type !== 'dm') throw new TypeError('Reaction context must be room or dm');
+  return CONTEXT_TABLES[type];
 }
 
 function mapSummary(row: SummaryRow, userId: string | null | undefined): StoredReactionSummary {
@@ -88,7 +90,7 @@ function mapReactor(row: ReactorRow): StoredReactor {
 }
 
 function createReactionRepository({ client }: { client?: ReactionPool | null } = {}) {
-  const defaultClient: ReactionPool | null = client ? (requireQuery(client) as ReactionPool) : null;
+  const defaultClient = client ? requireQuery(client) : null;
   const queryClient = (override?: QueryClient | null): QueryClient => requireQuery(override || defaultClient);
   const on = (override?: QueryClient | null): Database => kyselyOn(queryClient(override));
 
@@ -96,25 +98,25 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
   // every call so the toggle and its summary commit together.
   async function transaction<T>(callback: (client: QueryClient) => Promise<T>): Promise<T> {
     if (typeof callback !== 'function') throw new TypeError('Transaction callback is required');
-    if (typeof defaultClient?.connect !== 'function') return callback(queryClient());
-    return runInTransaction(defaultClient as Pick<pg.Pool, 'connect'>, callback);
+    if (!canConnect(defaultClient)) return callback(queryClient());
+    return runInTransaction(defaultClient, callback);
   }
 
   // The per-emoji revision row exists from the first toggle on, locked for the
   // rest of the caller's transaction.
-  async function ensureRevision({ type, messageId, emoji, client: override }: Target & Override = {}): Promise<string> {
+  async function ensureRevision({ type, messageId, emoji, client: override }: Target & Override): Promise<string> {
     const db = on(override);
     const { revisions } = contextTables(type);
     await db
       .insertInto(revisions)
-      .values({ message_id: messageId as string, emoji: emoji as string })
+      .values({ message_id: messageId, emoji })
       .onConflict((oc) => oc.columns(['message_id', 'emoji']).doNothing())
       .execute();
     const row = await db
       .selectFrom(revisions)
       .select('revision')
-      .where('message_id', '=', messageId as string)
-      .where('emoji', '=', emoji as string)
+      .where('message_id', '=', messageId)
+      .where('emoji', '=', emoji)
       .forUpdate()
       .executeTakeFirst();
     return String(row?.revision || 0);
@@ -126,14 +128,14 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
     emoji,
     userId,
     client: override
-  }: Target & Override = {}): Promise<boolean> {
+  }: Target & { userId: string } & Override): Promise<boolean> {
     const { reactions } = contextTables(type);
     const row = await on(override)
       .selectFrom(reactions)
       .select('user_id')
-      .where('message_id', '=', messageId as string)
-      .where('emoji', '=', emoji as string)
-      .where('user_id', '=', userId as string)
+      .where('message_id', '=', messageId)
+      .where('emoji', '=', emoji)
+      .where('user_id', '=', userId)
       .executeTakeFirst();
     return Boolean(row);
   }
@@ -145,7 +147,7 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
     userId,
     active,
     client: override
-  }: Target & { active?: boolean } & Override = {}): Promise<{ changed: boolean; revision: string }> {
+  }: Target & { userId: string; active?: boolean } & Override): Promise<{ changed: boolean; revision: string }> {
     const db = on(override);
     const { reactions, revisions } = contextTables(type);
     const currentRevision = await ensureRevision({ type, messageId, emoji, client: override });
@@ -159,23 +161,20 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
     const bumped = await db
       .updateTable(revisions)
       .set({ revision: sql<string>`revision + 1`, updated_at: sql<Date>`current_timestamp` })
-      .where('message_id', '=', messageId as string)
-      .where('emoji', '=', emoji as string)
+      .where('message_id', '=', messageId)
+      .where('emoji', '=', emoji)
       .returning('revision')
       .executeTakeFirstOrThrow();
     const revision = String(bumped.revision);
 
     if (active) {
-      await db
-        .insertInto(reactions)
-        .values({ message_id: messageId as string, emoji: emoji as string, user_id: userId as string, revision })
-        .execute();
+      await db.insertInto(reactions).values({ message_id: messageId, emoji, user_id: userId, revision }).execute();
     } else {
       await db
         .deleteFrom(reactions)
-        .where('message_id', '=', messageId as string)
-        .where('emoji', '=', emoji as string)
-        .where('user_id', '=', userId as string)
+        .where('message_id', '=', messageId)
+        .where('emoji', '=', emoji)
+        .where('user_id', '=', userId)
         .execute();
     }
 
@@ -195,7 +194,7 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
     emoji,
     userId,
     client: override
-  }: Target & Override = {}): Promise<StoredReactionSummary> {
+  }: Target & { userId?: string | null } & Override): Promise<StoredReactionSummary> {
     const { reactions, revisions } = contextTables(type);
     const row = await on(override)
       .selectFrom(asRevisions(revisions))
@@ -203,16 +202,19 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
         join.onRef('r.message_id', '=', 'v.message_id').onRef('r.emoji', '=', 'v.emoji')
       )
       .select(['v.emoji', 'v.revision', ...summaryColumns(userId)])
-      .where('v.message_id', '=', messageId as string)
-      .where('v.emoji', '=', emoji as string)
+      .where('v.message_id', '=', messageId)
+      .where('v.emoji', '=', emoji)
       .groupBy(['v.emoji', 'v.revision'])
       .executeTakeFirst();
-    return row ? mapSummary(row, userId) : { emoji: emoji as string, count: 0, reactedByMe: false, revision: '0' };
+    return row ? mapSummary(row, userId) : { emoji, count: 0, reactedByMe: false, revision: '0' };
   }
 
-  async function listSummaries({ type, messageId, userId, client: override }: Target & Override = {}): Promise<
-    StoredReactionSummary[]
-  > {
+  async function listSummaries({
+    type,
+    messageId,
+    userId,
+    client: override
+  }: Omit<Target, 'emoji'> & { userId?: string | null } & Override): Promise<StoredReactionSummary[]> {
     const { reactions, revisions } = contextTables(type);
     const rows = await on(override)
       .selectFrom(asRevisions(revisions))
@@ -220,7 +222,7 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
         join.onRef('r.message_id', '=', 'v.message_id').onRef('r.emoji', '=', 'v.emoji')
       )
       .select(['v.emoji', 'v.revision', ...summaryColumns(userId)])
-      .where('v.message_id', '=', messageId as string)
+      .where('v.message_id', '=', messageId)
       .groupBy(['v.emoji', 'v.revision'])
       .orderBy(sql`MIN(r.created_at)`)
       .orderBy('v.emoji')
@@ -234,7 +236,9 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
     messageIds,
     userId,
     client: override
-  }: Target & { messageIds: string[] } & Override): Promise<Map<string, StoredReactionSummary[]>> {
+  }: Pick<Target, 'type'> & { messageIds: string[]; userId?: string | null } & Override): Promise<
+    Map<string, StoredReactionSummary[]>
+  > {
     const { reactions, revisions } = contextTables(type);
     const byMessage = new Map<string, StoredReactionSummary[]>();
     if (messageIds.length === 0) return byMessage;
@@ -268,9 +272,9 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
     after,
     client: override
   }: Target & {
-    limit?: number;
+    limit: number;
     after?: { createdAtMicros: string; id: string } | null;
-  } & Override = {}): Promise<StoredReactor[]> {
+  } & Override): Promise<StoredReactor[]> {
     const { reactions } = contextTables(type);
     let query = on(override)
       .selectFrom(asReactions(reactions))
@@ -281,18 +285,14 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
         'u.avatar_key',
         sql<string>`FLOOR(EXTRACT(EPOCH FROM r.created_at) * 1000000)::bigint`.as('created_at_micros')
       ])
-      .where('r.message_id', '=', messageId as string)
-      .where('r.emoji', '=', emoji as string);
+      .where('r.message_id', '=', messageId)
+      .where('r.emoji', '=', emoji);
     if (after) {
       query = query.where(
         sql<boolean>`(r.created_at, r.user_id) > (to_timestamp(${after.createdAtMicros}::numeric / 1000000), ${after.id})`
       );
     }
-    const rows = await query
-      .orderBy('r.created_at', 'asc')
-      .orderBy('r.user_id', 'asc')
-      .limit(limit as number)
-      .execute();
+    const rows = await query.orderBy('r.created_at', 'asc').orderBy('r.user_id', 'asc').limit(limit).execute();
     return rows.map(mapReactor);
   }
 

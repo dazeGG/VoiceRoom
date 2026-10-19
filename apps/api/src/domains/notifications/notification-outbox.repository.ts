@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
+import { isRecord } from '@voice-room/shared/guards';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
@@ -41,6 +42,8 @@ class NotificationFenceError extends Error {
   }
 }
 
+function mapRow(row: OutboxRow): NotificationOutboxEvent;
+function mapRow(row: OutboxRow | null | undefined): NotificationOutboxEvent | null;
 function mapRow(row: OutboxRow | null | undefined): NotificationOutboxEvent | null {
   return row
     ? {
@@ -241,7 +244,7 @@ function createNotificationOutboxRepository({ pool }: { pool?: QueryClient | nul
       .whereRef('o.event_id', '=', 'candidates.event_id')
       .returningAll('o')
       .execute();
-    return rows.map((row) => mapRow(row as OutboxRow) as NotificationOutboxEvent);
+    return rows.map((row) => mapRow(row));
   }
 
   // Only the worker holding the lease the event was claimed under may settle it.
@@ -279,18 +282,18 @@ function createNotificationOutboxRepository({ pool }: { pool?: QueryClient | nul
       error,
       maxAttempts = 8
     }: {
-      delayMs?: number;
+      delayMs: number;
       error?: unknown;
       maxAttempts?: number;
-    } = {}
+    }
   ): Promise<void> {
-    const reason = (error as { message?: unknown } | null | undefined)?.message || error || 'delivery failed';
+    const reason = (isRecord(error) && error.message) || error || 'delivery failed';
     const exhausted = sql<boolean>`o.attempts >= ${maxAttempts}`;
     const result = await settle(eventId, lease)
       .set({
         status: sql<string>`CASE WHEN ${exhausted} THEN 'dead' ELSE 'pending' END`,
         dead_at: sql<Date | null>`CASE WHEN ${exhausted} THEN current_timestamp ELSE o.dead_at END`,
-        available_at: after(delayMs as number),
+        available_at: after(delayMs),
         last_error: (typeof reason === 'string' ? reason : 'delivery failed').slice(0, 2000),
         claimed_at: null,
         claimed_fencing_token: null,

@@ -2,20 +2,21 @@
 // reply target ids and the idempotency key. Shared by room chat and DMs.
 
 import crypto from 'node:crypto';
+import { isArray, textOf } from '@voice-room/shared/guards';
 
 const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 const MAX_MESSAGE_ATTACHMENTS = 4;
 
 export function cleanUuid(value: unknown): string {
-  const id = String(value || '').trim();
+  const id = textOf(value).trim();
   return UUID.test(id) ? id : '';
 }
 
 /** `[]` when absent, `null` when malformed, duplicated or too many. */
 export function normalizeAttachmentIds(value: unknown): string[] | null {
   if (value === undefined) return [];
-  if (!Array.isArray(value) || value.length > MAX_MESSAGE_ATTACHMENTS) return null;
+  if (!isArray(value) || value.length > MAX_MESSAGE_ATTACHMENTS) return null;
   const ids = value.map((id) => cleanUuid(id));
   return ids.every(Boolean) && new Set(ids).size === ids.length ? ids : null;
 }
@@ -37,7 +38,7 @@ export function messageFingerprint(value: unknown): string {
 // Multiline since 2.4.0: horizontal whitespace runs collapse, blank lines are
 // capped at one, at most 20 lines and 500 characters survive.
 export function cleanChatText(value: unknown): string {
-  let text = String(value || '')
+  let text = textOf(value)
     .replace(/[^\S\n]+/g, ' ')
     .replace(/ *\n */g, '\n')
     .replace(/\n{3,}/g, '\n\n')

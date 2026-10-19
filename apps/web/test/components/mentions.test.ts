@@ -22,7 +22,7 @@ test('a mention in a message opens that person when a handler is given', async (
   await userEvent.click(screen.getByRole('button', { name: 'Открыть профиль @anna' }));
   expect(onmention).toHaveBeenCalledWith('u-anna', 'anna', expect.any(MouseEvent));
   const link = screen.getByRole('link', { name: 'example.com/a' });
-  expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+  expect(link.getAttribute('rel')).toBe('noopener noreferrer external');
   expect(link.getAttribute('target')).toBe('_blank');
 });
 

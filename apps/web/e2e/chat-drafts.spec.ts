@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { createPermanentRoom, registerViaUi, uniqueLogin } from './helpers';
+import { createPermanentRoom, incomingFriendRequestIds, registerViaUi, uniqueLogin } from './helpers';
 
 async function registerFriend(
   browser: Browser,
@@ -13,9 +13,7 @@ async function registerFriend(
 }
 
 async function acceptIncomingRequests(page: Page): Promise<void> {
-  const incoming = await page.context().request.get('/api/friends/requests');
-  const ids =
-    ((await incoming.json()) as { incoming?: Array<{ id: string }> }).incoming?.map((request) => request.id) ?? [];
+  const ids = await incomingFriendRequestIds(page);
   expect(ids.length).toBeGreaterThan(0);
   for (const id of ids) {
     const accepted = await page.context().request.post(`/api/friends/requests/${id}/accept`, { data: {} });

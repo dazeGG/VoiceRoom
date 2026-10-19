@@ -8,6 +8,8 @@ import type { MediaStorage } from '../domains/media/storage.ts';
 import { recordMediaOldestPending } from '../lib/metrics.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
+import { readWorkerConfig } from '../app/config.ts';
+import { codeOf } from '../platform/error-code.ts';
 
 type WorkerLogger = {
   info?(...args: unknown[]): void;
@@ -15,7 +17,6 @@ type WorkerLogger = {
   error(...args: unknown[]): void;
   fatal?(...args: unknown[]): void;
 };
-type CodedError = Error & { code?: string };
 
 const DEFAULTS = Object.freeze({ batchSize: 10, concurrency: 2, leaseMs: 120_000, maxAttempts: 5, timeoutMs: 30_000 });
 
@@ -29,9 +30,7 @@ function timeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
     promise,
     new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
-        const error: CodedError = new Error('Media processing timed out');
-        error.code = 'media_processing_timeout';
-        reject(error);
+        reject(Object.assign(new Error('Media processing timed out'), { code: 'media_processing_timeout' }));
       }, timeoutMs);
       timer.unref?.();
     })
@@ -50,7 +49,9 @@ function delay(milliseconds: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
-async function transform(stream: AsyncIterable<Buffer | Uint8Array>): Promise<{ preview: Buffer; processed: Buffer }> {
+async function transform(
+  stream: AsyncIterable<Buffer | Uint8Array, unknown, unknown>
+): Promise<{ preview: Buffer; processed: Buffer }> {
   const chunks: Buffer[] = [];
   let bytes = 0;
   for await (const chunk of stream) {
@@ -78,36 +79,33 @@ async function transform(stream: AsyncIterable<Buffer | Uint8Array>): Promise<{ 
   return { preview, processed };
 }
 
-function createMediaProcessingWorker(
-  {
-    attachmentRepository,
-    jobRepository,
-    pressureService,
-    storage,
-    workerId = `media-${crypto.randomUUID()}`,
-    batchSize = DEFAULTS.batchSize,
-    concurrency = DEFAULTS.concurrency,
-    leaseMs = DEFAULTS.leaseMs,
-    maxAttempts = DEFAULTS.maxAttempts,
-    timeoutMs = DEFAULTS.timeoutMs,
-    observeOldestPending = recordMediaOldestPending,
-    logger = createLogger({ name: 'worker.media-processing' })
-  }: {
-    attachmentRepository: AttachmentRepository;
-    jobRepository: MediaJobRepository;
-    pressureService?: { canClaimWork(): Promise<boolean> } | null;
-    storage: MediaStorage;
-    workerId?: string;
-    batchSize?: number;
-    concurrency?: number;
-    leaseMs?: number;
-    maxAttempts?: number;
-    timeoutMs?: number;
-    observeOldestPending?: (ageMs: unknown) => void;
-    logger?: WorkerLogger;
-    // JS callers may omit the dependencies; the check below reports that.
-  } = {} as { attachmentRepository: AttachmentRepository; jobRepository: MediaJobRepository; storage: MediaStorage }
-) {
+function createMediaProcessingWorker({
+  attachmentRepository,
+  jobRepository,
+  pressureService,
+  storage,
+  workerId = `media-${crypto.randomUUID()}`,
+  batchSize = DEFAULTS.batchSize,
+  concurrency = DEFAULTS.concurrency,
+  leaseMs = DEFAULTS.leaseMs,
+  maxAttempts = DEFAULTS.maxAttempts,
+  timeoutMs = DEFAULTS.timeoutMs,
+  observeOldestPending = recordMediaOldestPending,
+  logger = createLogger({ name: 'worker.media-processing' })
+}: {
+  attachmentRepository: AttachmentRepository;
+  jobRepository: MediaJobRepository;
+  pressureService?: { canClaimWork(): Promise<boolean> } | null;
+  storage: MediaStorage;
+  workerId?: string;
+  batchSize?: number;
+  concurrency?: number;
+  leaseMs?: number;
+  maxAttempts?: number;
+  timeoutMs?: number;
+  observeOldestPending?: (ageMs: unknown) => void;
+  logger?: WorkerLogger;
+}) {
   if (!attachmentRepository || !jobRepository || !storage)
     throw new TypeError('Media processing dependencies are required');
   let stopping = false;
@@ -143,7 +141,7 @@ function createMediaProcessingWorker(
         }
       });
     } catch (error) {
-      if (error instanceof MediaJobFenceError || (error as CodedError | null)?.code === 'MEDIA_JOB_FENCE_LOST') return;
+      if (error instanceof MediaJobFenceError || codeOf(error) === 'MEDIA_JOB_FENCE_LOST') return;
       try {
         const failed = await jobRepository.fail(job.id, {
           workerId,
@@ -168,11 +166,13 @@ function createMediaProcessingWorker(
           },
           dead ? 'media job exhausted its attempts' : 'media job attempt failed'
         );
-        if (dead)
+        if (dead) {
+          const code = codeOf(error);
           await attachmentRepository.markFailed(
             job.attachmentId,
-            (error as CodedError | null)?.code || 'media_processing_failed'
+            typeof code === 'string' && code ? code : 'media_processing_failed'
           );
+        }
       } catch (failure) {
         if (!(failure instanceof MediaJobFenceError)) throw failure;
       }
@@ -209,12 +209,13 @@ function createMediaProcessingWorker(
 }
 
 async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
-  if (String(env.MEDIA_PROCESSING_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
+  const config = readWorkerConfig(env);
+  if (!config.MEDIA_PROCESSING_CLAIM_ENABLED) return;
   const { createAttachmentRepository } = await import('../domains/media/attachment.repository.ts');
   const { createMediaJobRepository } = await import('../domains/media/media-job.repository.ts');
   const { createMediaPressureService } = await import('../domains/media/media-pressure.service.ts');
   const { createMediaStorage } = await import('../domains/media/storage.ts');
-  const storage = createMediaStorage({ rootDir: env.MEDIA_STORAGE_DIR || '/data/media' });
+  const storage = createMediaStorage({ rootDir: config.MEDIA_STORAGE_DIR });
   await storage.freeSpace();
   const worker = createMediaProcessingWorker({
     attachmentRepository: createAttachmentRepository({ pool }),

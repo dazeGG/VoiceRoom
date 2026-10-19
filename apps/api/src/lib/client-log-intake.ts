@@ -2,6 +2,8 @@
 // the size of the log stream, and whatever they carry ends up in the same
 // storage as server records. Everything here is therefore a hard cap applied
 // before a record is emitted, never a best effort applied after.
+import { isArray, isRecord } from '@voice-room/shared/guards';
+
 const CLIENT_LOG_LIMITS = Object.freeze({
   maxEvents: 100,
   maxMessageChars: 200,
@@ -27,16 +29,6 @@ export type ClientLogEvent = {
   stale: boolean;
   ctx: ClientLogContext | undefined;
 };
-type RawClientLogEvent = {
-  msg?: unknown;
-  message?: unknown;
-  ns?: unknown;
-  namespace?: unknown;
-  at?: unknown;
-  level?: unknown;
-  ctx?: unknown;
-  context?: unknown;
-};
 const NAMESPACE_PATTERN = /^[A-Za-z0-9:._-]+$/;
 const SESSION_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
 
@@ -52,13 +44,19 @@ function redactSecrets(text: string): string {
   return text.replace(URL_QUERY_PATTERN, '$1?…').replace(SECRET_PATTERN, '[redacted]');
 }
 
+// Control characters (U+0000-U+001F and U+007F) would let a caller forge
+// extra lines in a line-delimited log stream, so they become spaces rather
+// than escapes.
+function blankControlCharacters(text: string): string {
+  return Array.from(text, (char) => {
+    const code = char.codePointAt(0) ?? 0;
+    return code < 0x20 || code === 0x7f ? ' ' : char;
+  }).join('');
+}
+
 function cleanText(value: unknown, maxChars: number): string {
   if (typeof value !== 'string') return '';
-  // Control characters would let a caller forge extra lines in a line-delimited
-  // log stream, so they are stripped rather than escaped.
-  return redactSecrets(value.replace(/[\u0000-\u001f\u007f]/g, ' '))
-    .trim()
-    .slice(0, maxChars);
+  return redactSecrets(blankControlCharacters(value)).trim().slice(0, maxChars);
 }
 
 function cleanSessionId(value: unknown): string {
@@ -72,15 +70,15 @@ function cleanNamespace(value: unknown): string {
 }
 
 function cleanLevel(value: unknown): ClientLogLevel {
-  const text = String(value || '').toLowerCase();
-  return (CLIENT_LOG_LEVELS as readonly string[]).includes(text) ? (text as ClientLogLevel) : 'info';
+  const text = typeof value === 'string' ? value.toLowerCase() : '';
+  return CLIENT_LOG_LEVELS.find((level) => level === text) ?? 'info';
 }
 
 // Only primitives survive. An object or array would let a caller nest an
 // arbitrarily large structure into one record, and a function or symbol has no
 // meaning once serialized.
 function cleanContext(value: unknown): ClientLogContext | undefined {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  if (!isRecord(value)) return undefined;
   const context: ClientLogContext = {};
   let keys = 0;
   for (const [rawKey, rawValue] of Object.entries(value)) {
@@ -106,8 +104,8 @@ function cleanTimestamp(value: unknown, now: number): { at: number; stale: boole
 }
 
 function normalizeClientLogEvent(input: unknown, now: number): ClientLogEvent | null {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
-  const raw = input as RawClientLogEvent;
+  if (!isRecord(input)) return null;
+  const raw = input;
   const message = cleanText(raw.msg ?? raw.message, CLIENT_LOG_LIMITS.maxMessageChars);
   const namespace = cleanNamespace(raw.ns ?? raw.namespace);
   // A record with neither a message nor a namespace names nothing and would
@@ -131,8 +129,8 @@ function normalizeClientLogBatch(
   body: unknown,
   { now = Date.now() }: { now?: number } = {}
 ): { sessionId: string; events: ClientLogEvent[]; dropped: number } {
-  const source = (body && typeof body === 'object' ? body : {}) as { events?: unknown; sessionId?: unknown };
-  const rawEvents: unknown[] = Array.isArray(source.events) ? source.events : [];
+  const source = isRecord(body) ? body : {};
+  const rawEvents = isArray(source.events) ? source.events : [];
   const considered = rawEvents.slice(0, CLIENT_LOG_LIMITS.maxEvents);
   const events: ClientLogEvent[] = [];
   for (const raw of considered) {

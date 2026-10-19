@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+// By path, not package name: the script runs from a checkout without node_modules.
+import { isArray, isRecord } from '../../packages/shared/src/guards.ts';
 
 function args(argv: string[]) {
   const values: Record<string, string | undefined> = {};
@@ -19,9 +21,25 @@ function assertRegular(file: string, label: string) {
   const stat = fs.lstatSync(file);
   if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`${label} must be a regular file`);
 }
-function resolveSnapshotFile(root: string, relative: string | undefined, label: string) {
-  if (!relative || path.isAbsolute(relative) || relative.split(/[\\/]/).includes('..'))
-    throw new Error(`Unsafe ${label} path in manifest`);
+// The manifest and the catalog are JSON from disk: every field is read as
+// unknown and checked before use.
+/** A field of a JSON object; undefined for anything that is not one. */
+function field(value: unknown, key: string): unknown {
+  return isRecord(value) ? value[key] : undefined;
+}
+function isSafeRelativePath(relative: unknown): relative is string {
+  return (
+    typeof relative === 'string' &&
+    relative !== '' &&
+    !path.isAbsolute(relative) &&
+    !relative.split(/[\\/]/).includes('..')
+  );
+}
+function isLeased(lease: unknown): lease is Record<string, unknown> {
+  return isRecord(lease) && lease.state === 'leased';
+}
+function resolveSnapshotFile(root: string, relative: unknown, label: string) {
+  if (!isSafeRelativePath(relative)) throw new Error(`Unsafe ${label} path in manifest`);
   let current = root;
   for (const component of relative.split(/[\\/]/)) {
     current = path.join(current, component);
@@ -40,8 +58,6 @@ type RestoreOptions = {
   namespace?: string;
 };
 
-type CatalogLease = { state?: string } | null | undefined;
-
 export function restoreCoordinatedSnapshot({ snapshot, target, allowedRoot, namespace }: RestoreOptions) {
   if (!snapshot || !target || !allowedRoot || !namespace)
     throw new Error('snapshot, target, allowedRoot and namespace are required');
@@ -52,59 +68,74 @@ export function restoreCoordinatedSnapshot({ snapshot, target, allowedRoot, name
   if (!inside(root, destination)) throw new Error('Restore target escapes the allowed root');
   if (fs.existsSync(destination)) throw new Error('Restore target must not exist');
   assertRegular(path.join(source, 'manifest.json'), 'Snapshot manifest');
-  const manifest = JSON.parse(fs.readFileSync(path.join(source, 'manifest.json'), 'utf8'));
-  if (manifest.contract !== 'voice-room.coordinated-media-snapshot/v1' || manifest.namespace !== namespace)
+  const manifest: unknown = JSON.parse(fs.readFileSync(path.join(source, 'manifest.json'), 'utf8'));
+  if (
+    !isRecord(manifest) ||
+    manifest.contract !== 'voice-room.coordinated-media-snapshot/v1' ||
+    manifest.namespace !== namespace
+  )
     throw new Error('Snapshot namespace or contract mismatch');
-  if (!manifest.database || !manifest.catalog || !Array.isArray(manifest.uploads))
+  const { database: databaseEntry, catalog: catalogEntry, uploads } = manifest;
+  if (!databaseEntry || !catalogEntry || !isArray(uploads))
     throw new Error('Snapshot DB/uploads/catalog set is incomplete');
-  const database = resolveSnapshotFile(source, manifest.database.path, 'Database dump');
-  const catalog = resolveSnapshotFile(source, manifest.catalog.path, 'Media catalog');
-  if (sha256(database) !== manifest.database.sha256 || fs.statSync(database).size !== manifest.database.bytes)
+  const database = resolveSnapshotFile(source, field(databaseEntry, 'path'), 'Database dump');
+  const catalog = resolveSnapshotFile(source, field(catalogEntry, 'path'), 'Media catalog');
+  if (
+    sha256(database) !== field(databaseEntry, 'sha256') ||
+    fs.statSync(database).size !== field(databaseEntry, 'bytes')
+  )
     throw new Error('Database dump hash or size mismatch');
-  if (sha256(catalog) !== manifest.catalog.sha256 || fs.statSync(catalog).size !== manifest.catalog.bytes)
+  if (sha256(catalog) !== field(catalogEntry, 'sha256') || fs.statSync(catalog).size !== field(catalogEntry, 'bytes'))
     throw new Error('Media catalog hash or size mismatch');
-  const catalogValue = JSON.parse(fs.readFileSync(catalog, 'utf8'));
-  if (!Array.isArray(catalogValue.attachments) || !Array.isArray(catalogValue.leases))
-    throw new Error('Invalid media catalog');
-  const states = new Set(['draft', 'uploaded', 'processing', 'ready', 'failed', 'deleted']);
-  const access = new Set(['room', 'dm', 'denied']);
-  for (const attachment of catalogValue.attachments) {
+  const catalogValue: unknown = JSON.parse(fs.readFileSync(catalog, 'utf8'));
+  if (!isRecord(catalogValue)) throw new Error('Invalid media catalog');
+  const { attachments, leases } = catalogValue;
+  if (!isArray(attachments) || !isArray(leases)) throw new Error('Invalid media catalog');
+  const states = new Set<unknown>(['draft', 'uploaded', 'processing', 'ready', 'failed', 'deleted']);
+  const access = new Set<unknown>(['room', 'dm', 'denied']);
+  for (const attachment of attachments) {
+    const width = field(attachment, 'width');
+    const height = field(attachment, 'height');
     if (
-      !attachment?.id ||
-      !states.has(attachment.state) ||
-      !access.has(attachment.access) ||
-      !Number.isInteger(attachment.width) ||
-      attachment.width < 1 ||
-      !Number.isInteger(attachment.height) ||
-      attachment.height < 1
+      !field(attachment, 'id') ||
+      !states.has(field(attachment, 'state')) ||
+      !access.has(field(attachment, 'access')) ||
+      typeof width !== 'number' ||
+      !Number.isInteger(width) ||
+      width < 1 ||
+      typeof height !== 'number' ||
+      !Number.isInteger(height) ||
+      height < 1
     )
       throw new Error('Invalid attachment dimensions, state or access in media catalog');
   }
-  for (const item of manifest.uploads) {
-    if (!item?.path || path.isAbsolute(item.path) || item.path.split(/[\\/]/).includes('..'))
-      throw new Error('Unsafe Upload path in manifest');
-    const file = resolveSnapshotFile(source, path.posix.join('uploads', item?.path || ''), 'Upload');
-    if (sha256(file) !== item.sha256 || fs.statSync(file).size !== item.bytes)
-      throw new Error(`Upload hash or size mismatch: ${item.path}`);
+  const uploadPaths: string[] = [];
+  for (const item of uploads) {
+    const uploadPath = field(item, 'path');
+    if (!isSafeRelativePath(uploadPath)) throw new Error('Unsafe Upload path in manifest');
+    const file = resolveSnapshotFile(source, path.posix.join('uploads', uploadPath), 'Upload');
+    if (sha256(file) !== field(item, 'sha256') || fs.statSync(file).size !== field(item, 'bytes'))
+      throw new Error(`Upload hash or size mismatch: ${uploadPath}`);
+    uploadPaths.push(uploadPath);
   }
   const staging = fs.mkdtempSync(path.join(root, '.restore-'));
   try {
     fs.copyFileSync(database, path.join(staging, 'database.dump'), fs.constants.COPYFILE_EXCL);
     const restoredCatalog = {
       ...catalogValue,
-      leases: catalogValue.leases.map((lease: CatalogLease) =>
-        lease?.state === 'leased' ? { ...lease, state: 'pending', leaseOwner: null, leaseExpiresAt: null } : lease
+      leases: leases.map((lease) =>
+        isLeased(lease) ? { ...lease, state: 'pending', leaseOwner: null, leaseExpiresAt: null } : lease
       )
     };
     fs.writeFileSync(path.join(staging, 'media-catalog.json'), `${JSON.stringify(restoredCatalog, null, 2)}\n`, {
       flag: 'wx'
     });
     fs.mkdirSync(path.join(staging, 'uploads'));
-    for (const item of manifest.uploads) {
-      const output = path.join(staging, 'uploads', ...item.path.split('/'));
+    for (const uploadPath of uploadPaths) {
+      const output = path.join(staging, 'uploads', ...uploadPath.split('/'));
       fs.mkdirSync(path.dirname(output), { recursive: true });
       fs.copyFileSync(
-        resolveSnapshotFile(source, path.posix.join('uploads', item.path), 'Upload'),
+        resolveSnapshotFile(source, path.posix.join('uploads', uploadPath), 'Upload'),
         output,
         fs.constants.COPYFILE_EXCL
       );
@@ -112,7 +143,7 @@ export function restoreCoordinatedSnapshot({ snapshot, target, allowedRoot, name
     const report = {
       contract: 'voice-room.coordinated-media-restore/v1',
       namespace,
-      leasesRecovered: catalogValue.leases.filter((lease: CatalogLease) => lease?.state === 'leased').length,
+      leasesRecovered: leases.filter(isLeased).length,
       restoredAt: new Date().toISOString()
     };
     fs.writeFileSync(path.join(staging, 'restore-report.json'), `${JSON.stringify(report, null, 2)}\n`, { flag: 'wx' });

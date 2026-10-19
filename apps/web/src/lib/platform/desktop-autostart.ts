@@ -2,6 +2,7 @@
 // this module natively under Node, where neither the `$lib` alias nor an
 // extensionless specifier resolves.
 import { createLogger, errorContext } from '../shared/log.ts';
+import { isRecord } from '@voice-room/shared/guards';
 
 const log = createLogger('desktop:autostart');
 
@@ -20,8 +21,8 @@ function getBridge(): Window['voiceRoomDesktopAutostart'] | undefined {
 }
 
 function normalizeSettings(value: unknown): DesktopAutostartSettings | null {
-  if (!value || typeof value !== 'object') return null;
-  const source = value as Record<string, unknown>;
+  if (!isRecord(value)) return null;
+  const source = value;
   const settings: DesktopAutostartSettings = {
     openAtLogin: source.openAtLogin === true,
     startMinimized: source.startMinimized === true,

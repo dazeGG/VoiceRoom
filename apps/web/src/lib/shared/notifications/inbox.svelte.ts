@@ -1,5 +1,6 @@
 import type { InboxItem, InboxItemRead, InboxPage, InboxReadAll } from '@voice-room/shared/contracts/notifications';
 import { notificationRoute as sharedNotificationRoute } from '@voice-room/shared/notifications';
+import { uniqueBy } from '$lib/shared/utils/collections';
 
 /** The inbox routes; their answers are checked against the contract by the API client. */
 export type NotificationInboxTransport = {
@@ -26,7 +27,7 @@ export function createNotificationInbox(transport: NotificationInboxTransport) {
 
   function apply(envelope: InboxPage, append: boolean): void {
     const next = append ? [...items, ...envelope.notifications] : envelope.notifications;
-    items = [...new Map(next.map((item) => [item.id, item])).values()];
+    items = uniqueBy(next, (item) => item.id);
     unreadCount = envelope.unreadCount;
     revision = Math.max(revision, envelope.revision);
     firstUnread = envelope.firstUnread;

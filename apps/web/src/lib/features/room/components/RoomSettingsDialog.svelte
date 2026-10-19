@@ -3,6 +3,8 @@
   import '$lib/shared/styles/settings.css';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
+  import { Value } from 'typebox/value';
+  import { NotificationLevel } from '@voice-room/shared/contracts/notifications';
   import { deleteRoom, updateRoom } from '$lib/api/rooms';
   import RoomAvatarField from '$lib/entities/room/components/RoomAvatarField.svelte';
   import { saveRoomAvatarChange, type RoomAvatarChange } from '$lib/entities/room/room-avatar-change';
@@ -96,7 +98,9 @@
   }
 
   async function saveNotificationLevel(event: Event): Promise<void> {
-    notificationLevel = (event.currentTarget as HTMLSelectElement).value as RoomNotificationLevel;
+    const select = event.currentTarget;
+    if (!(select instanceof HTMLSelectElement) || !Value.Check(NotificationLevel, select.value)) return;
+    notificationLevel = select.value;
     notificationSaving = true;
     try {
       await setRoomNotificationLevel(roomClientState.roomId, notificationLevel);

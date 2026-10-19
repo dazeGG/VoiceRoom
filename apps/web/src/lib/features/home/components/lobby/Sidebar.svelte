@@ -3,7 +3,16 @@
   import { Bell, BellOff, Check, LayoutDashboard, Settings, UserPlus, Users } from '@lucide/svelte';
   import { tick } from 'svelte';
   import type { AuthUser } from '$lib/api/auth';
-  import { AccountBadge, Avatar, Badge, Button, Popover, PopoverMenuLabel } from '$lib/shared/ui';
+  import {
+    AccountBadge,
+    Avatar,
+    Badge,
+    Button,
+    Popover,
+    PopoverMenuLabel,
+    type PopoverContentState,
+    type PopoverTriggerState
+  } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
   import { effectivePresenceStatus, normalizePresenceStatus, type PresenceStatus } from '$lib/shared/presence';
   import { friendName } from '../../model/lobby-format';
@@ -96,7 +105,7 @@
   let statusSaving = $state<PresenceStatus | null>(null);
   let statusPopoverOpen = $state(false);
   let activeStatusIndex = $state(0);
-  let statusOptionRefs: HTMLButtonElement[] = [];
+  const statusOptionRefs: (HTMLButtonElement | undefined)[] = [];
   let statusTypeahead = '';
   let statusTypeaheadTimer: ReturnType<typeof setTimeout> | null = null;
   const selectedStatusIndex = $derived(
@@ -124,12 +133,12 @@
     statusOptionRefs[index] = node;
     return {
       update(nextIndex: number) {
-        delete statusOptionRefs[index];
+        statusOptionRefs[index] = undefined;
         index = nextIndex;
         statusOptionRefs[index] = node;
       },
       destroy() {
-        delete statusOptionRefs[index];
+        statusOptionRefs[index] = undefined;
       }
     };
   }
@@ -345,7 +354,7 @@
       ariaLabel="Статус пользователя"
       panelClass="lv-status-popover"
     >
-      {#snippet trigger({ open, panelId })}
+      {#snippet trigger({ open, panelId }: PopoverTriggerState)}
         <button
           type="button"
           class="lv-profile-user"
@@ -373,7 +382,7 @@
           </span>
         </button>
       {/snippet}
-      {#snippet content({ close })}
+      {#snippet content({ close }: PopoverContentState)}
         <PopoverMenuLabel text="Статус" />
         <div class="lv-status-list">
           {#each statusOptions as option, index (option.value)}

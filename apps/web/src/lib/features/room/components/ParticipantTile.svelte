@@ -42,7 +42,7 @@
   // spotlights are mutually exclusive, so entering one leaves the other.
   function activateParticipant(): void {
     if (roomState.viewedScreenPeerId) {
-      void leaveScreenView({ quiet: true, keepPreview: true }).catch((error) =>
+      void leaveScreenView({ quiet: true, keepPreview: true }).catch((error: unknown) =>
         log.error('screen view action failed', errorContext(error))
       );
     }
@@ -50,13 +50,15 @@
   }
 
   function handleTileClick(event: MouseEvent): void {
-    if ((event.target as HTMLElement | null)?.closest('button, select, input, a')) return;
+    if (event.target instanceof Element && event.target.closest('button, select, input, a')) return;
     activateParticipant();
   }
 
   function handleScreenAction(event: MouseEvent): void {
     event.stopPropagation();
-    void enterScreenView(participant.id).catch((error) => log.error('screen view action failed', errorContext(error)));
+    void enterScreenView(participant.id).catch((error: unknown) =>
+      log.error('screen view action failed', errorContext(error))
+    );
   }
 
   function handleContextMenu(event: MouseEvent): void {

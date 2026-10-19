@@ -1,7 +1,7 @@
 import { URL } from 'node:url';
 import { AccessToken, TrackSource } from 'livekit-server-sdk';
 import { normalizeLiveKitServerUrl } from '@voice-room/shared/runtime-config';
-import type { CredentialIssue, GatePrincipal, IssuedCredential } from './credential-boundary.service.ts';
+import type { CredentialIssue, GatePrincipal } from './credential-boundary.service.ts';
 
 export type LiveKitAdmission = {
   gateCredentialId: string;
@@ -52,9 +52,9 @@ function createLiveKitCredentialProvider({
       return { status: 'unavailable', admission: null };
     }
     const gate = await credentials.issueCredential({ roomId, peerId, principal });
-    if (gate.status !== 'issued') return { status: gate.status, admission: null };
     // An issued answer always carries its credential.
-    const credential = gate.credential as IssuedCredential;
+    const { credential } = gate;
+    if (gate.status !== 'issued' || !credential) return { status: gate.status, admission: null };
 
     const token = new AccessToken(apiKey, apiSecret, {
       identity: peerId,

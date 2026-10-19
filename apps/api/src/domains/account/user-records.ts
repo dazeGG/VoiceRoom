@@ -7,10 +7,11 @@ import type { AccountLoginEvents, Json, Users } from '../../platform/db/schema.t
 import type { SelfUser as SelfProfile } from '@voice-room/shared/contracts/account';
 import type { AccountBadge, PublicUser as PublicProfile } from '@voice-room/shared/contracts/users';
 import { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 import { RECOVERY_CODE_ALPHABET, RECOVERY_CODE_LENGTH } from '@voice-room/shared/account-security';
 
 export type UserStoreLogger = { warn(...args: unknown[]): void };
-export type StoredUser = NonNullable<ReturnType<typeof mapUser>>;
+export type StoredUser = ReturnType<typeof storedUser>;
 export type PublicUser = PublicProfile;
 
 export const DEFAULT_SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -28,20 +29,14 @@ export function toDate(ms: unknown): Date {
   return new Date(Number.isFinite(next) && next >= 0 ? next : Date.now());
 }
 
-export function toMillis(value: unknown): number {
-  if (value instanceof Date) return value.getTime();
-  const parsed = Date.parse(value as string);
-  return Number.isFinite(parsed) ? parsed : Date.now();
-}
-
 // Per-account markers kept in `users.metadata` as epoch milliseconds.
-function metadataMillis(metadata: unknown, key: string): number | null {
-  const value = Number(metadata && typeof metadata === 'object' ? (metadata as Record<string, unknown>)[key] : NaN);
+function metadataMillis(metadata: Json, key: string): number | null {
+  const value = Number(metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata[key] : NaN);
   return Number.isSafeInteger(value) && value > 0 ? value : null;
 }
 
 export function randomAvatarColorKey(): string {
-  return AVATAR_COLOR_KEYS[crypto.randomInt(AVATAR_COLOR_KEYS.length)] as string;
+  return AVATAR_COLOR_KEYS[crypto.randomInt(AVATAR_COLOR_KEYS.length)] ?? 'blurple';
 }
 
 export function cleanBadge(value: unknown): AccountBadge | null {
@@ -58,26 +53,29 @@ export function activeBlock(
   return { until: user.blockedUntil, reason: user.blockReason };
 }
 
-export function mapUser(row: Selectable<Users> | null | undefined) {
-  if (!row) return null;
+export function mapUser(row: Selectable<Users> | null | undefined): StoredUser | null {
+  return row ? storedUser(row) : null;
+}
+
+export function storedUser(row: Selectable<Users>) {
   const presenceStatus = cleanPresenceStatus(row.presence_status) || (row.dnd ? 'dnd' : 'online');
   return {
     avatarAccent: row.avatar_accent || null,
     avatarColorKey: cleanAvatarColorKey(row.avatar_color_key) || 'blurple',
     avatarKey: row.avatar_key || null,
-    createdAt: toMillis(row.created_at),
+    createdAt: epochMillis(row.created_at) ?? Date.now(),
     displayName: row.display_name || '',
     doNotDisturb: presenceStatus === 'dnd',
     id: row.id,
     login: row.login,
     passwordHash: row.password_hash,
     presenceStatus,
-    deletionRequestedAt: row.deletion_requested_at ? toMillis(row.deletion_requested_at) : null,
-    blockedAt: row.blocked_at ? toMillis(row.blocked_at) : null,
-    blockedUntil: row.blocked_until ? toMillis(row.blocked_until) : null,
+    deletionRequestedAt: epochMillis(row.deletion_requested_at),
+    blockedAt: epochMillis(row.blocked_at),
+    blockedUntil: epochMillis(row.blocked_until),
     blockReason: row.block_reason || '',
     badge: cleanBadge(row.badge),
-    deletedAt: row.deleted_at ? toMillis(row.deleted_at) : null,
+    deletedAt: epochMillis(row.deleted_at),
     desktopAppSeenAt: metadataMillis(row.metadata, 'desktopAppSeenAt'),
     appPromptSeenAt: metadataMillis(row.metadata, 'appPromptSeenAt')
   };
@@ -158,7 +156,7 @@ export function mapLoginAlert(row: Selectable<AccountLoginEvents>) {
     client: row.client || '',
     os: row.os || '',
     location: row.location_label || '',
-    createdAt: toMillis(row.created_at)
+    createdAt: epochMillis(row.created_at) ?? Date.now()
   };
 }
 

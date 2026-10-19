@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
+import { isRecord } from '@voice-room/shared/guards';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 
 const DEFAULT_RETENTION_MS = 24 * 60 * 60 * 1000;
@@ -30,6 +31,16 @@ export type Reservation =
   | { kind: 'replay'; ledgerKey: string; response: IdempotentReplay }
   | { kind: 'pending'; ledgerKey: string }
   | { kind: 'reserved'; ledgerKey: string };
+
+/** What a send path reads of a reservation: the answer to repeat, or the ledger key to complete. */
+export type SendReservation =
+  { kind: 'replay'; response?: { body?: unknown } } | { kind: 'pending' | 'reserved'; ledgerKey: string };
+
+/** The `message` of the answer a replay repeats, still to be checked by the caller. */
+export function replayedMessage(reservation: { response?: { body?: unknown } }): unknown {
+  const body = reservation.response?.body;
+  return isRecord(body) ? body.message : undefined;
+}
 
 export type IdempotencyInput = {
   actorType?: unknown;
@@ -64,7 +75,7 @@ class IdempotencyQuotaError extends Error {
 }
 
 function requireQuery(client: unknown): asserts client is QueryClient {
-  if (!client || typeof (client as QueryClient).query !== 'function') {
+  if (!isRecord(client) || typeof client.query !== 'function') {
     throw new TypeError('An active PostgreSQL transaction client is required');
   }
 }
@@ -222,9 +233,12 @@ function createMessageIdempotencyRepository({
     return rowToReplay(row);
   }
 
-  async function pruneExpired(client: unknown, { limit = 500 }: { limit?: unknown } = {}): Promise<number | null> {
+  async function pruneExpired(
+    client: unknown,
+    { limit = 500 }: { limit?: number | string } = {}
+  ): Promise<number | null> {
     requireQuery(client);
-    const boundedLimit = Math.max(1, Math.min(5_000, Number.parseInt(limit as string, 10) || 500));
+    const boundedLimit = Math.max(1, Math.min(5_000, Number.parseInt(String(limit), 10) || 500));
     const result = await kyselyOn(client)
       .deleteFrom('message_send_idempotency')
       .where('ledger_key', 'in', (eb) =>

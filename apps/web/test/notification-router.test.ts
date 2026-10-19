@@ -4,7 +4,7 @@ import type * as Router from '../src/lib/shared/notifications/router.ts';
 import assert from 'node:assert/strict';
 
 async function loadRouter() {
-  return freshImport<typeof Router>('/src/lib/shared/notifications/router.ts');
+  return freshImport(() => import('../src/lib/shared/notifications/router.ts'));
 }
 
 function reasonOf(result: Router.NotificationRouteResult) {

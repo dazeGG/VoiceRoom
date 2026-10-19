@@ -6,6 +6,8 @@
 import type { FastifyError, FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { isErrorCode, type ErrorCode } from '@voice-room/shared/contracts/errors';
 import type { Failure as FailureBody } from '@voice-room/shared/contracts/http';
+import { codeOf } from '../error-code.ts';
+import { fieldOf } from '../record.ts';
 
 declare module 'fastify' {
   interface FastifyContextConfig {
@@ -45,7 +47,7 @@ export function failure(error: string, { code }: { code: ErrorCode }): Failure {
 
 /** The code an error carries when it is a catalogued one, `fallback` otherwise. */
 export function errorCode(error: unknown, fallback: ErrorCode): ErrorCode {
-  const code = (error as { code?: unknown } | null)?.code;
+  const code = codeOf(error);
   return isErrorCode(code) ? code : fallback;
 }
 
@@ -74,7 +76,7 @@ export async function optionalJsonBody(request: FastifyRequest): Promise<void> {
 function validationMessage(errors: NonNullable<FastifyError['validation']>): string {
   const [first] = errors;
   const field = first?.instancePath.replace(/^\//, '');
-  const type = (first?.params as { type?: unknown } | undefined)?.type;
+  const type = fieldOf(first?.params, 'type');
   if (errors.length === 1 && first?.keyword === 'type' && field && !field.includes('/') && typeof type === 'string') {
     return `${field} must be a ${type}`;
   }

@@ -1,6 +1,14 @@
 <script lang="ts">
   import { BellOff, Plus, ShieldCheck, UserPlus, X } from '@lucide/svelte';
-  import { Avatar, AvatarStack, Badge, Button, ContextMenu, Ellipsis } from '$lib/shared/ui';
+  import {
+    Avatar,
+    AvatarStack,
+    Badge,
+    Button,
+    ContextMenu,
+    Ellipsis,
+    type ContextMenuContentState
+  } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import type { OwnedRoom } from '$lib/api/auth';
   import { roomPresence } from '../../../../entities/room/room-presence.svelte';
@@ -300,7 +308,7 @@
     restoreFocus={contextTrigger}
     onClose={closeRoomContextMenu}
   >
-    {#snippet content({ close })}
+    {#snippet content({ close }: ContextMenuContentState)}
       {#key contextRoom.roomId}
         <RoomMenuContent
           roomId={contextRoom.roomId}

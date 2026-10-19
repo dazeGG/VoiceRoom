@@ -1,5 +1,3 @@
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
 process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 
 import test from 'node:test';
@@ -9,8 +7,15 @@ const { createApiApp, createApiServer } = await import('../src/server.ts');
 const { withRosterPeer } = await import('./roster-harness.ts');
 import { PUBLIC_CAPABILITY_KEYS } from '@voice-room/shared/contracts/ops';
 import { notificationPreferences } from './fakes/index.ts';
+import { checked } from './helpers/checked.ts';
+import { Failure } from '@voice-room/shared/contracts/http';
+import { Health } from '@voice-room/shared/contracts/ops';
+import { RoomCreated } from '@voice-room/shared/contracts/rooms';
+import { DirectMessageAnswer, RoomMessageAnswer } from '@voice-room/shared/contracts/messages';
+import { FriendRequestSent } from '@voice-room/shared/contracts/social';
+import type { PresenceStatus } from '@voice-room/shared/contracts/users';
+import { Muted, Preferences } from '@voice-room/shared/contracts/notifications';
 import type { StoreOverrides } from '../src/app/service-registry.ts';
-import type { NotificationPreferences } from '@voice-room/shared/contracts/notifications';
 import type { createPushSubscriptionRepository } from '../src/domains/notifications/push-subscription.repository.ts';
 
 type RoomStoreFake = NonNullable<StoreOverrides['store']>;
@@ -40,11 +45,11 @@ function createFakeStore(): RoomStoreFake {
       isStatic,
       name,
       messages: [],
-      peers: new Map(),
+      peers: new Map<string, unknown>(),
       updatedAt: now
     };
     rooms.set(roomId ?? '', room);
-    return { ...room, peers: new Map() };
+    return { ...room, peers: new Map<string, unknown>() };
   }
   return {
     async countQuotaRoomsForIp() {
@@ -60,7 +65,7 @@ function createFakeStore(): RoomStoreFake {
     },
     async getRoom(roomId) {
       const room = rooms.get(roomId);
-      return room ? { ...room, peers: new Map() } : null;
+      return room ? { ...room, peers: new Map<string, unknown>() } : null;
     },
     async getOrCreatePeerIdentity({ peerId, sessionToken }) {
       if (typeof sessionToken === 'string' && sessionToken.startsWith('bad')) {
@@ -92,7 +97,7 @@ test('createApiApp exposes a Fastify app with inject-based routes', async (t) =>
 
   const health = await app.inject({ method: 'GET', url: '/api/healthz' });
   assert.equal(health.statusCode, 200);
-  assert.equal(health.json().ok, true);
+  assert.equal(checked(Health, health.json()).ok, true);
 
   const created = await app.inject({
     method: 'POST',
@@ -100,7 +105,7 @@ test('createApiApp exposes a Fastify app with inject-based routes', async (t) =>
     payload: { isStatic: false }
   });
   assert.equal(created.statusCode, 201);
-  assert.equal(created.json().ok, true);
+  assert.equal(checked(RoomCreated, created.json()).ok, true);
 
   const legacyVisualRoom = await app.inject({
     method: 'POST',
@@ -168,8 +173,8 @@ test('the capability route answers every feature on, for clients that still ask'
   });
 });
 
-test('production cursor HMAC resolution has no membership fallback secret', () => {
-  const { resolveCursorHmacKeys } = require('../src/app/config.ts');
+test('production cursor HMAC resolution has no membership fallback secret', async () => {
+  const { resolveCursorHmacKeys } = await import('../src/app/config.ts');
 
   assert.throws(
     () =>
@@ -337,7 +342,7 @@ test('auth session store failures return 5xx instead of anonymous auth state', a
   });
 
   assert.equal(response.statusCode, 500);
-  assert.equal(response.json().error, 'Internal server error');
+  assert.equal(checked(Failure, response.json()).error, 'Internal server error');
 });
 
 test('logout session store failures return 5xx instead of false success', async (t) => {
@@ -358,7 +363,7 @@ test('logout session store failures return 5xx instead of false success', async 
   });
 
   assert.equal(response.statusCode, 500);
-  assert.equal(response.json().error, 'Internal server error');
+  assert.equal(checked(Failure, response.json()).error, 'Internal server error');
 });
 
 test('cookie-authenticated writes reject cross-origin browser requests', async (t) => {
@@ -385,7 +390,7 @@ test('cookie-authenticated writes reject cross-origin browser requests', async (
   });
 
   assert.equal(response.statusCode, 403);
-  assert.equal(response.json().error, 'Cross-origin request rejected');
+  assert.equal(checked(Failure, response.json()).error, 'Cross-origin request rejected');
   assert.equal(deleted, false);
 
   const sameOrigin = await app.inject({
@@ -422,7 +427,7 @@ test('moderation routes require the owner of a static room', async (t) => {
     store: {
       ...baseStore,
       async getRoom() {
-        return { id: 'room-1', isStatic: true, ownerId: 'other-user', peers: new Map() };
+        return { id: 'room-1', isStatic: true, ownerId: 'other-user', peers: new Map<string, unknown>() };
       }
     }
   });
@@ -434,7 +439,7 @@ test('moderation routes require the owner of a static room', async (t) => {
     store: {
       ...baseStore,
       async getRoom() {
-        return { id: 'room-2', isStatic: false, ownerId: userId, peers: new Map() };
+        return { id: 'room-2', isStatic: false, ownerId: userId, peers: new Map<string, unknown>() };
       }
     }
   });
@@ -447,8 +452,8 @@ test('message edit routes reuse send validation and never grant room owners an a
   const authorId = '22222222-2222-4222-8222-222222222222';
   const peerId = '33333333-3333-4333-8333-333333333333';
   const roomId = 'room-edit1';
-  let roomEdit = null;
-  let dmEdit = null;
+  let roomEdit: unknown = null;
+  let dmEdit: unknown = null;
   let bannedUserId: string | null = null;
   const roomMessage = {
     authorUserId: authorId,
@@ -468,7 +473,7 @@ test('message edit routes reuse send validation and never grant room owners an a
       return input?.userId === bannedUserId ? { id: 'ban-1' } : null;
     },
     async getRoom() {
-      return { id: roomId, isStatic: true, ownerId, peers: new Map() };
+      return { id: roomId, isStatic: true, ownerId, peers: new Map<string, unknown>() };
     },
     async getMessage() {
       return roomMessage;
@@ -527,14 +532,15 @@ test('message edit routes reuse send validation and never grant room owners an a
   });
   assert.equal(authorRoomEdit.statusCode, 200);
   assert.deepEqual(roomEdit, { roomId, messageId: 'room-message-1', text: 'updated\n\nline' });
-  assert.equal(authorRoomEdit.json().message.editedAt, 200);
-  assert.equal(authorRoomEdit.json().message.authorUserId, authorId);
+  const authorRoomEdited = checked(RoomMessageAnswer, authorRoomEdit.json());
+  assert.equal(authorRoomEdited.message.editedAt, 200);
+  assert.equal(authorRoomEdited.message.authorUserId, authorId);
 
   bannedUserId = authorId;
   roomEdit = null;
   const bannedRoomEdit = await request(`/api/rooms/${roomId}/chat/room-message-1`, 'author-session');
   assert.equal(bannedRoomEdit.statusCode, 403);
-  assert.equal(bannedRoomEdit.json().code, 'room_banned');
+  assert.equal(checked(Failure, bannedRoomEdit.json()).code, 'room_banned');
   assert.equal(roomEdit, null);
   bannedUserId = null;
 
@@ -550,11 +556,11 @@ test('message edit routes reuse send validation and never grant room owners an a
     recipientId: peerId,
     body: 'updated\n\nline'
   });
-  assert.equal(authorDmEdit.json().message.editedAt, 200);
+  assert.equal(checked(DirectMessageAnswer, authorDmEdit.json()).message.editedAt, 200);
 });
 
 test('friend request route accepts account user id targets', async (t) => {
-  let requestInput = null;
+  let requestInput: unknown = null;
   const app = createApiApp({
     store: createFakeStore(),
     users: {
@@ -598,7 +604,7 @@ test('friend request route accepts account user id targets', async (t) => {
   });
 
   assert.equal(response.statusCode, 201);
-  assert.equal(response.json().status, 'sent');
+  assert.equal(checked(FriendRequestSent, response.json()).status, 'sent');
   assert.deepEqual(requestInput, {
     requesterId: '11111111-1111-4111-8111-111111111111',
     addresseeLogin: '',
@@ -633,7 +639,7 @@ test('notification preference routes require auth and expose defaults', async (t
     headers: { cookie: 'vr_session=session-token' }
   });
   assert.equal(response.statusCode, 200);
-  assert.deepEqual(response.json().preferences, notificationPreferences());
+  assert.deepEqual(checked(Preferences, response.json()).preferences, notificationPreferences());
 });
 
 test('notification mute and privacy routes call notification store and map statuses', async (t) => {
@@ -684,7 +690,7 @@ test('notification mute and privacy routes call notification store and map statu
     payload: { muted: true }
   });
   assert.equal(dm.statusCode, 200);
-  assert.equal(dm.json().muted, true);
+  assert.equal(checked(Muted, dm.json()).muted, true);
   assert.deepEqual(calls[0], [
     'dm',
     {
@@ -725,7 +731,7 @@ test('notification mute and privacy routes call notification store and map statu
     payload: { privateNotifications: true }
   });
   assert.equal(privacy.statusCode, 200);
-  assert.equal(privacy.json().preferences.privateNotifications, true);
+  assert.equal(checked(Preferences, privacy.json()).preferences.privateNotifications, true);
   assert.deepEqual(calls[2], [
     'privacy',
     {
@@ -745,7 +751,7 @@ test('notification mute and privacy routes call notification store and map statu
     payload: { dnd: true }
   });
   assert.equal(dnd.statusCode, 200);
-  assert.equal(dnd.json().preferences.doNotDisturb, true);
+  assert.equal(checked(Preferences, dnd.json()).preferences.doNotDisturb, true);
   assert.deepEqual(calls[3], [
     'dnd',
     {
@@ -780,13 +786,14 @@ test('presence status route requires auth, validates canonical values, and syncs
       }
     },
     notifications: {
-      async setPresenceStatus(input) {
+      // The route hands over only a status it has validated.
+      async setPresenceStatus(input: { userId: string; presenceStatus: PresenceStatus; automatic?: unknown }) {
         calls.push(input);
         return {
           status: 'updated',
           preferences: notificationPreferences({
             doNotDisturb: input.presenceStatus === 'dnd',
-            presenceStatus: input.presenceStatus as NotificationPreferences['presenceStatus'],
+            presenceStatus: input.presenceStatus,
             presenceStatusAutomatic: Boolean(input.automatic && input.presenceStatus === 'away')
           })
         };
@@ -815,8 +822,9 @@ test('presence status route requires auth, validates canonical values, and syncs
       payload: { status }
     });
     assert.equal(response.statusCode, 200);
-    assert.equal(response.json().preferences.presenceStatus, status);
-    assert.equal(response.json().preferences.doNotDisturb, status === 'dnd');
+    const { preferences } = checked(Preferences, response.json());
+    assert.equal(preferences.presenceStatus, status);
+    assert.equal(preferences.doNotDisturb, status === 'dnd');
   }
   assert.deepEqual(
     calls,
@@ -834,8 +842,9 @@ test('presence status route requires auth, validates canonical values, and syncs
     payload: { status: 'away', automatic: true }
   });
   assert.equal(automaticAway.statusCode, 200);
-  assert.equal(automaticAway.json().preferences.presenceStatus, 'away');
-  assert.equal(automaticAway.json().preferences.presenceStatusAutomatic, true);
+  const automaticPreferences = checked(Preferences, automaticAway.json()).preferences;
+  assert.equal(automaticPreferences.presenceStatus, 'away');
+  assert.equal(automaticPreferences.presenceStatusAutomatic, true);
   assert.deepEqual(calls.at(-1), {
     automatic: true,
     userId: currentUserId,
@@ -920,7 +929,7 @@ test('notification mutation routes reject invalid booleans and targets before st
     payload: { muted: true }
   });
   assert.equal(dmSelf.statusCode, 400);
-  assert.equal(dmSelf.json().ok, false);
+  assert.equal(checked(Failure, dmSelf.json()).ok, false);
 
   const invalidPeer = await app.inject({
     method: 'PUT',
@@ -929,7 +938,7 @@ test('notification mutation routes reject invalid booleans and targets before st
     payload: { muted: true }
   });
   assert.equal(invalidPeer.statusCode, 404);
-  assert.equal(invalidPeer.json().ok, false);
+  assert.equal(checked(Failure, invalidPeer.json()).ok, false);
 
   const invalidRoomPayload = await app.inject({
     method: 'PUT',
@@ -947,7 +956,7 @@ test('notification mutation routes reject invalid booleans and targets before st
     payload: { muted: true }
   });
   assert.equal(invalidRoom.statusCode, 404);
-  assert.equal(invalidRoom.json().ok, false);
+  assert.equal(checked(Failure, invalidRoom.json()).ok, false);
 
   const invalidPrivacy = await app.inject({
     method: 'PUT',
@@ -1046,7 +1055,7 @@ test('livekit token uses authenticated user avatar color for room peer identity'
     payload: {
       name: 'вовощ',
       peerId: 'peer0001',
-      roomId: room.json().roomId,
+      roomId: checked(RoomCreated, room.json()).roomId,
       sessionToken: 'goodtoken123456789012345678901234'
     }
   });
@@ -1103,11 +1112,11 @@ test('livekit token validates persisted anonymous peer identity before issuing v
     payload: {
       name: 'Mallory',
       peerId: 'peer0001',
-      roomId: room.json().roomId,
+      roomId: checked(RoomCreated, room.json()).roomId,
       sessionToken: 'badtoken123456789012345678901234'
     }
   });
 
   assert.equal(response.statusCode, 403);
-  assert.match(response.json().error, /недействительна/i);
+  assert.match(checked(Failure, response.json()).error, /недействительна/i);
 });

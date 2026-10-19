@@ -24,7 +24,7 @@ function createLinkPreviewRepository({ pool }: { pool: QueryClient }) {
       .where('expires_at', '>', new Date(now))
       .executeTakeFirst();
     return row
-      ? { status: row.status as CachedPreview['status'], preview: row.preview, failureCode: row.failure_code }
+      ? { status: row.status === 'ready' ? 'ready' : 'failed', preview: row.preview, failureCode: row.failure_code }
       : null;
   }
 

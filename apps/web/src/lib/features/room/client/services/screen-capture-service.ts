@@ -3,6 +3,7 @@ import { state } from '../core/state.svelte';
 import { showToast } from '../ui/toast';
 import { createScreenProfileId, getScreenProfile } from '../media/profiles';
 import { createAbortError, isCaptureCancelled } from '../core/utils';
+import { isRecord } from '@voice-room/shared/guards';
 import { showScreenSourcePicker } from '../ui/screen-source-picker';
 import { setLocalAppAudioSuppressed } from './media-playback-service';
 import { hasNativeDesktopSafeAudio, startDesktopSafeScreenAudioCapture } from './desktop-screen-audio';
@@ -17,7 +18,28 @@ interface CaptureAttemptDetail {
   method: string;
 }
 
-type CaptureError = Error & { captureAttemptDetails?: CaptureAttemptDetail[] };
+/** Every way a desktop capture was tried, and how each one failed. */
+class DesktopCaptureError extends Error {
+  readonly captureAttemptDetails: CaptureAttemptDetail[];
+
+  constructor(message: string, name: string, captureAttemptDetails: CaptureAttemptDetail[]) {
+    super(message);
+    this.name = name;
+    this.captureAttemptDetails = captureAttemptDetails;
+  }
+}
+
+/** Chrome's display-capture hints, not in lib.dom yet. */
+interface ChromeDisplayMediaOptions extends DisplayMediaStreamOptions {
+  audio?: boolean | (MediaTrackConstraints & { suppressLocalAudioPlayback?: boolean });
+  selfBrowserSurface?: 'exclude' | 'include';
+  surfaceSwitching?: 'exclude' | 'include';
+  systemAudio?: 'exclude' | 'include';
+  windowAudio?: 'exclude' | 'system' | 'window';
+}
+
+/** Electron's desktop source, picked with Chrome's legacy `mandatory` constraints. */
+type DesktopTrackConstraints = MediaTrackConstraints & { mandatory: Record<string, string | number> };
 
 export interface ScreenShareCapture {
   mode?: ScreenStreamMode;
@@ -74,7 +96,7 @@ async function openBrowserScreenShare(profile: ScreenProfile): Promise<MediaStre
       })
     );
   } catch (error) {
-    if ((error as Error)?.name !== 'TypeError') throw error;
+    if (!isRecord(error) || error.name !== 'TypeError') throw error;
     stream = await navigator.mediaDevices.getDisplayMedia(
       createBrowserDisplayMediaConstraints(profile, {
         audio: wantsScreenShareAudio(),
@@ -91,7 +113,7 @@ async function openBrowserScreenShare(profile: ScreenProfile): Promise<MediaStre
 function createBrowserDisplayMediaConstraints(
   profile: ScreenProfile,
   options: { audio?: boolean; includeAudioHints?: boolean; suppressLocalAudioPlayback?: boolean } = {}
-): DisplayMediaStreamOptions {
+): ChromeDisplayMediaOptions {
   const { audio = true, includeAudioHints = true, suppressLocalAudioPlayback = false } = options;
   const video = createScreenVideoConstraints(profile);
 
@@ -118,7 +140,7 @@ function createBrowserDisplayMediaConstraints(
           windowAudio: 'system'
         }
       : {})
-  } as DisplayMediaStreamOptions;
+  };
 }
 
 function createScreenVideoConstraints(profile: ScreenProfile): DisplayMediaStreamOptions['video'] {
@@ -145,7 +167,6 @@ async function openDesktopScreenShare(profile: ScreenProfile): Promise<ScreenSha
   const selectedProfile = getDesktopPickerProfile(selection, profile);
   const withAudio = selection.streamAudioEnabled === true;
   let stream: MediaStream;
-  let audioCaptureError: unknown = null;
 
   if (!withAudio) {
     stream = await openDesktopStream(source.id, selectedProfile, { audio: false, audioMode: 'none' });
@@ -188,12 +209,11 @@ async function openDesktopScreenShare(profile: ScreenProfile): Promise<ScreenSha
       setLocalAppAudioSuppressed(false);
       throw error;
     }
-    audioCaptureError = error;
     log.warn('desktop audio capture unavailable, retrying without audio', errorContext(error));
     try {
       stream = await openDesktopStream(source.id, selectedProfile, { audio: false, audioMode: 'none' });
     } catch (videoError) {
-      throw mergeDesktopCaptureErrors(audioCaptureError, videoError);
+      throw mergeDesktopCaptureErrors(error, videoError);
     }
   }
 
@@ -214,7 +234,9 @@ async function openDesktopScreenShareWithPicker(profile: ScreenProfile): Promise
 }
 
 async function openDesktopCapturePicker(profile: ScreenProfile): Promise<DesktopPickerSelection> {
-  const selection = await window.voiceRoomDesktopCapture!.openPicker!({
+  const bridge = window.voiceRoomDesktopCapture;
+  if (!bridge?.openPicker) throw new Error('Desktop-оболочка не поддерживает выбор источника экрана.');
+  const selection = await bridge.openPicker({
     fpsId: state.localScreenFpsId || profile.fpsId,
     qualityId: state.localScreenQualityId || profile.qualityId,
     streamAudioEnabled: true
@@ -308,19 +330,21 @@ async function openDesktopStream(
   throw new Error('Desktop-оболочка не поддерживает захват экрана в этой сборке.');
 }
 
-function mergeDesktopCaptureErrors(...errors: unknown[]): CaptureError {
-  const attemptDetails = errors.flatMap(
-    (error) => (error as CaptureError)?.captureAttemptDetails || [{ error, method: 'unknown' }]
+function mergeDesktopCaptureErrors(...errors: unknown[]): DesktopCaptureError {
+  const attemptDetails = errors.flatMap((error) =>
+    error instanceof DesktopCaptureError ? error.captureAttemptDetails : [{ error, method: 'unknown' }]
   );
   return createDesktopCaptureError(attemptDetails);
 }
 
-function createDesktopCaptureError(attemptDetails: CaptureAttemptDetail[]): CaptureError {
-  const lastError = attemptDetails.at(-1)?.error as Error | undefined;
-  const error: CaptureError = new Error(formatDesktopCaptureError(attemptDetails));
-  error.name = lastError?.name || 'DesktopCaptureError';
-  error.captureAttemptDetails = attemptDetails;
-  return error;
+function createDesktopCaptureError(attemptDetails: CaptureAttemptDetail[]): DesktopCaptureError {
+  const lastError = attemptDetails.at(-1)?.error;
+  const lastName = isRecord(lastError) && typeof lastError.name === 'string' ? lastError.name : '';
+  return new DesktopCaptureError(
+    formatDesktopCaptureError(attemptDetails),
+    lastName || 'DesktopCaptureError',
+    attemptDetails
+  );
 }
 
 function formatDesktopCaptureError(attemptDetails: CaptureAttemptDetail[]): string {
@@ -344,14 +368,15 @@ function formatCaptureAttemptError({ error, method }: CaptureAttemptDetail): str
 function formatCaptureError(error: unknown): string {
   if (!error) return 'unknown error';
 
-  const errorObject = error as Error & { constraint?: string; code?: number };
-  const name = errorObject.name || errorObject.constructor?.name || 'Error';
-  const message = errorObject.message || String(error);
+  const fields = isRecord(error) ? error : {};
+  const name = (typeof fields.name === 'string' && fields.name) || 'Error';
+  const primitive = typeof error === 'string' || typeof error === 'number' || typeof error === 'boolean';
+  const message = (typeof fields.message === 'string' && fields.message) || (primitive ? String(error) : '');
   const details: string[] = [];
-  if (errorObject.constraint) details.push(`constraint=${errorObject.constraint}`);
-  if (errorObject.code) details.push(`code=${errorObject.code}`);
+  if (typeof fields.constraint === 'string' && fields.constraint) details.push(`constraint=${fields.constraint}`);
+  if (typeof fields.code === 'number' && fields.code) details.push(`code=${fields.code}`);
 
-  return [name, message, ...details].join(': ');
+  return [name, message, ...details].filter(Boolean).join(': ');
 }
 
 function createDesktopCaptureAttempts(
@@ -416,32 +441,27 @@ function createDesktopMediaConstraints(
   withAudio: boolean,
   profile: ScreenProfile = getScreenProfile(DEFAULT_SCREEN_PROFILE_ID)
 ): MediaStreamConstraints {
-  return {
-    audio: withAudio
-      ? {
-          mandatory: {
-            chromeMediaSource: 'desktop'
-          }
-        }
-      : false,
-    video: {
-      mandatory: {
-        chromeMediaSource: 'desktop',
-        chromeMediaSourceId: sourceId,
-        maxFrameRate: profile.frameRate,
-        ...(SCREEN_QUALITY_OPTIONS[profile.qualityId]?.source
-          ? {}
-          : {
-              maxHeight: profile.height,
-              maxWidth: profile.width
-            })
-      }
+  const audio: DesktopTrackConstraints = { mandatory: { chromeMediaSource: 'desktop' } };
+  const video: DesktopTrackConstraints = {
+    mandatory: {
+      chromeMediaSource: 'desktop',
+      chromeMediaSourceId: sourceId,
+      maxFrameRate: profile.frameRate,
+      ...(SCREEN_QUALITY_OPTIONS[profile.qualityId]?.source
+        ? {}
+        : {
+            maxHeight: profile.height,
+            maxWidth: profile.width
+          })
     }
-  } as unknown as MediaStreamConstraints;
+  };
+  return { audio: withAudio ? audio : false, video };
 }
 
 async function selectDesktopCaptureSource(): Promise<ScreenSourceSelection> {
-  const sources = await window.voiceRoomDesktopCapture!.getSources!();
+  const bridge = window.voiceRoomDesktopCapture;
+  if (!bridge?.getSources) throw new Error('Desktop-оболочка не отдаёт список источников экрана.');
+  const sources = await bridge.getSources();
   if (!sources.length) {
     throw new Error('Нет доступных источников экрана');
   }

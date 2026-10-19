@@ -52,7 +52,7 @@ function viewersIn(room: PresenceRoom): number {
  * `except` leaves out one peer's own source of one kind: a restart replaces it.
  */
 export function serverMediaBps(
-  rooms: Iterable<PresenceRoom>,
+  rooms: Iterable<PresenceRoom, unknown, unknown>,
   now: number,
   except?: { peer: Peer; kind: MediaKind }
 ): number {
@@ -71,7 +71,7 @@ export function serverMediaBps(
 
 /** Whether `peer` may start a screen share or a camera now, and at which screen profile. */
 export function decideMediaRequest(input: {
-  rooms: Iterable<PresenceRoom>;
+  rooms: Iterable<PresenceRoom, unknown, unknown>;
   room: PresenceRoom;
   peer: Peer;
   kind: MediaKind;

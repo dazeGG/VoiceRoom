@@ -1,13 +1,12 @@
 import { buildRoomRealtimeSummary } from '@voice-room/shared/realtime';
-import type { RoomRealtimeSummary } from '@voice-room/shared/realtime';
+import type { AvatarColorResolver, RoomRealtimeSummary } from '@voice-room/shared/realtime';
 
 function buildRoomRealtimeSummaryFromLobbyRoom(
   room: Parameters<typeof buildRoomRealtimeSummary>[0],
-  peers: unknown,
-  resolveAvatarColorKey?: unknown
+  peers: Parameters<typeof buildRoomRealtimeSummary>[1],
+  resolveAvatarColorKey?: AvatarColorResolver
 ): RoomRealtimeSummary {
-  const peerList = Array.isArray(peers) ? peers : [];
-  return buildRoomRealtimeSummary(room, peerList, resolveAvatarColorKey);
+  return buildRoomRealtimeSummary(room, peers, resolveAvatarColorKey);
 }
 
 function createSummaryCoalescer({ delayMs, flush }: { delayMs: number; flush: (roomId: string) => void }) {

@@ -58,7 +58,14 @@ interface RateLimiter {
 
 interface RoomListStore {
   listVisibleRoomsForUser(userId: string): Promise<StoredRoom[]>;
-  addRoomBookmarkForUser(userId: string, roomId: string): Promise<{ status: string; room?: StoredRoom | null }>;
+  addRoomBookmarkForUser(
+    userId: string,
+    roomId: string
+  ): Promise<
+    | { status: 'bookmarked'; room: StoredRoom }
+    | { status: 'not_found'; room: null }
+    | { status: 'temporary_room'; room: null }
+  >;
   removeRoomBookmarkForUser(userId: string, roomId: string): Promise<{ status: string; removed?: boolean }>;
 }
 
@@ -264,7 +271,7 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
       }
     },
     async (request, reply) => {
-      const body = request.body as Record<string, unknown>;
+      const { body } = request;
       const roomId: string = normalizeRoomId(body.roomId);
       const peerId: string = normalizePeerId(body.peerId);
       const sessionToken: string = normalizeSessionToken(body.sessionToken);
@@ -302,7 +309,7 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
       const userId = await sessionUserId(request.raw);
       if (!userId) return reply.code(401).send(failure('Требуется вход', { code: 'authentication_required' }));
       const rooms = await deps.store().listVisibleRoomsForUser(userId);
-      return { ok: true as const, rooms: rooms.map(deps.lobbyRoom) };
+      return { ok: true as const, rooms: rooms.map((room) => deps.lobbyRoom(room)) };
     }
   );
 
@@ -329,7 +336,7 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
           .code(400)
           .send(failure('В список можно добавить только постоянную комнату', { code: 'room_not_static' }));
       deps.invalidateRecipientCache(roomId);
-      return { ok: true as const, room: deps.lobbyRoom(added.room as StoredRoom) };
+      return { ok: true as const, room: deps.lobbyRoom(added.room) };
     }
   );
 

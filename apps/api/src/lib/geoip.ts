@@ -2,32 +2,30 @@ import fs from 'node:fs';
 import net from 'node:net';
 import { LOG_EVENTS } from './log-events.ts';
 import { createLogger } from './logger.ts';
+import { isRecord } from '@voice-room/shared/guards';
+import { fieldOf } from '../platform/record.ts';
 
 const LOCATION_LABEL_MAX_LENGTH = 120;
 
 type Names = Record<string, unknown>;
-type Place = { names?: Names } | null | undefined;
-type GeoRecord = { city?: Place; country?: Place } | null | undefined;
 type GeoReader = { get(address: string): unknown };
 type GeoLogger = { warn(...args: unknown[]): void; error(...args: unknown[]): void };
 
 export type GeoLocator = Readonly<{ enabled: boolean; locate(ip: unknown): Promise<string>; warm(): Promise<boolean> }>;
 
 function normalizeAddress(value: unknown): string {
-  const address = String(value || '')
-    .trim()
-    .replace(/^::ffff:(?=\d+\.\d+\.\d+\.\d+$)/i, '');
+  const address = (typeof value === 'string' ? value : '').trim().replace(/^::ffff:(?=\d+\.\d+\.\d+\.\d+$)/i, '');
   return net.isIP(address) ? address : '';
 }
 
 function namesOf(place: unknown): Names {
-  const names = place && typeof place === 'object' ? (place as { names?: unknown }).names : null;
-  return names && typeof names === 'object' ? (names as Names) : {};
+  const names = fieldOf(place, 'names');
+  return isRecord(names) ? names : {};
 }
 
 // DB-IP Lite names cities in English only and sometimes appends the district
 // in parentheses ("Moscow (Tsentralnyy administrativnyy okrug)").
-function placeName(place: Place, language: string): string {
+function placeName(place: unknown, language: string): string {
   const names = namesOf(place);
   const name = names[language] || names.en || '';
   return typeof name === 'string' ? name.replace(/\s*\([^)]*\)\s*$/, '').trim() : '';
@@ -36,10 +34,10 @@ function placeName(place: Place, language: string): string {
 // One language per label: Russian only when the city itself has a Russian
 // name, so a lookup never produces "Moscow, Россия".
 function formatLocation(input: unknown): string {
-  if (!input || typeof input !== 'object') return '';
-  const record = input as GeoRecord & object;
-  const language = !record.city || namesOf(record.city).ru ? 'ru' : 'en';
-  return [placeName(record.city, language), placeName(record.country, language)]
+  if (!isRecord(input)) return '';
+  const { city, country } = input;
+  const language = !city || namesOf(city).ru ? 'ru' : 'en';
+  return [placeName(city, language), placeName(country, language)]
     .filter(Boolean)
     .join(', ')
     .slice(0, LOCATION_LABEL_MAX_LENGTH);
@@ -70,8 +68,7 @@ function createGeoLocator({
         );
         return null;
       }
-      const open =
-        openReader || ((path: string) => import('maxmind').then((maxmind) => maxmind.open(path) as Promise<GeoReader>));
+      const open = openReader || ((path: string) => import('maxmind').then((maxmind) => maxmind.open(path)));
       return open(databasePath);
     })().catch((error: unknown) => {
       logger.error(

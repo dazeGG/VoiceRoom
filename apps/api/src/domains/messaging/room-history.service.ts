@@ -9,6 +9,7 @@ import type {
   RoomHistoryMessage,
   RoomHistoryPage
 } from '@voice-room/shared/contracts/messages';
+import { textOf } from '@voice-room/shared/guards';
 import { normalizeHistoryRequest } from '@voice-room/shared/messaging-history';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 
@@ -163,7 +164,7 @@ function createRoomHistoryService({
     query = {},
     access = { authorized: true }
   }: { roomId?: unknown; query?: Loose; access?: Access } = {}): Promise<RoomHistoryPage> {
-    const normalizedRoomId = String(roomId || '').trim();
+    const normalizedRoomId = textOf(roomId).trim();
     if (!normalizedRoomId) throw new RoomHistoryError('room_not_found', 404, 'Room not found');
 
     let normalizedQuery = query;
@@ -179,29 +180,19 @@ function createRoomHistoryService({
     }
 
     const { mode, limit, cursor } = parsed.request;
-    let anchor: Tuple | undefined;
-    if (mode !== 'latest') {
+    let page: HistoryPage;
+    if (mode === 'latest') {
+      page = await history.listLatest({ roomId: normalizedRoomId, anchor: undefined, limit, now: now() });
+    } else {
+      let anchor: Tuple;
       try {
         anchor = decodeTuple(normalizedRoomId, cursor);
       } catch {
         throw new RoomHistoryError('invalid_cursor', 400, 'Invalid history cursor');
       }
+      const method = ({ before: 'listBefore', after: 'listAfter', around: 'listAround' } as const)[mode];
+      page = await history[method]({ roomId: normalizedRoomId, anchor, limit, now: now() });
     }
-
-    const method = (
-      {
-        latest: 'listLatest',
-        before: 'listBefore',
-        after: 'listAfter',
-        around: 'listAround'
-      } as const
-    )[mode];
-    const page = await (history[method] as (input: ListInput) => Promise<HistoryPage>)({
-      roomId: normalizedRoomId,
-      anchor,
-      limit,
-      now: now()
-    });
     const visible: StoredRoomMessage[] = [];
     for (const message of page.messages) {
       if (await canView(message, access)) visible.push(message);

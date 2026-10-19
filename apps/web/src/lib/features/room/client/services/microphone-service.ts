@@ -19,6 +19,7 @@ import { state } from '../core/state.svelte';
 import { dbToAmplitude, getNoiseMode, persistMicrophoneVolume } from '../core/settings';
 import { showToast } from '../ui/toast';
 import { disconnectAudioNode, stopStream } from '../core/utils';
+import { isRecord } from '@voice-room/shared/guards';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
 import type { MicProcessor, MicrophoneCapture } from '../core/types';
 
@@ -26,7 +27,20 @@ import { createLogger, errorContext } from '$lib/shared/log';
 
 const log = createLogger('room:mic');
 
-type GateNode = AudioNode & { setThreshold?: (threshold: number) => void };
+/** The gate's node and how to move its threshold: a worklet message or the ScriptProcessor's envelope. */
+interface GateStage {
+  node: AudioNode;
+  setThreshold: (threshold: number) => void;
+}
+
+/** What the RNNoise asset module (a static file without typings) exports. */
+interface RnnoiseModule {
+  RNNoiseNode: {
+    register(context: BaseAudioContext, assets: unknown): Promise<void>;
+    new (context: BaseAudioContext): AudioWorkletNode;
+  };
+  rnnoise_loadAssets: (options: { moduleSrc: string; scriptSrc: string }) => unknown;
+}
 
 interface NoiseGateEnvelope {
   attackCoefficient: number;
@@ -43,7 +57,7 @@ interface NoiseGateEnvelope {
   threshold: number;
 }
 
-let rnnoiseModulePromise: Promise<any> | null = null;
+let rnnoiseModulePromise: Promise<RnnoiseModule> | null = null;
 
 export function isGateDisabled(): boolean {
   return state.gateThresholdDb <= GATE_THRESHOLD_MIN_DB;
@@ -57,7 +71,7 @@ export function isGateDisabled(): boolean {
 export function syncPushToTalkGate(): void {
   const threshold = state.pushToTalkActive ? 0 : getGateThresholdAmplitude();
   for (const processor of getMicrophoneProcessors(state.micProcessor)) {
-    if (processor.type === 'gate') processor.setThreshold?.(threshold);
+    if (processor.type === 'gate') processor.setThreshold(threshold);
   }
 }
 
@@ -144,18 +158,9 @@ async function buildCapturePipeline(rawStream: MediaStream, mode: NoiseMode): Pr
 
     const gate = await createOptionalGateNode(context);
     if (gate) {
-      tail.connect(gate);
-      tail = gate;
-      processors.push({
-        context,
-        destination,
-        node: gate,
-        setThreshold: (nextThreshold: number) => {
-          setNoiseGateNodeThreshold(gate, nextThreshold);
-        },
-        source,
-        type: 'gate'
-      });
+      tail.connect(gate.node);
+      tail = gate.node;
+      processors.push({ context, destination, node: gate.node, setThreshold: gate.setThreshold, source, type: 'gate' });
     }
 
     const silenceFloor = await createOptionalSilenceFloorNode(context);
@@ -246,12 +251,12 @@ export function setMicrophoneVolume(volume: number): number {
   roomDeviceUi.microphoneVolume = nextVolume;
   const gain = nextVolume / 100;
   for (const processor of getMicrophoneProcessors(state.micProcessor)) {
-    if (processor.type === 'input-gain') processor.setGain?.(gain);
+    if (processor.type === 'input-gain') processor.setGain(gain);
   }
   return nextVolume;
 }
 
-async function createOptionalGateNode(context: AudioContext): Promise<GateNode | null> {
+async function createOptionalGateNode(context: AudioContext): Promise<GateStage | null> {
   const threshold = getGateThresholdAmplitude();
   if (threshold <= 0) return null;
   try {
@@ -286,11 +291,11 @@ async function createOptionalSilenceFloorNode(context: AudioContext): Promise<Au
   }
 }
 
-async function createNoiseGateNode(context: AudioContext, threshold: number): Promise<GateNode> {
+async function createNoiseGateNode(context: AudioContext, threshold: number): Promise<GateStage> {
   if (window.AudioWorkletNode && context.audioWorklet?.addModule) {
     try {
       await context.audioWorklet.addModule(AUDIO_GATE_WORKLET_URL);
-      const node: GateNode = new AudioWorkletNode(context, 'voice-room-noise-gate', {
+      const node = new AudioWorkletNode(context, 'voice-room-noise-gate', {
         channelCount: 1,
         channelCountMode: 'explicit',
         channelInterpretation: 'speakers',
@@ -299,10 +304,12 @@ async function createNoiseGateNode(context: AudioContext, threshold: number): Pr
         outputChannelCount: [1],
         processorOptions: createNoiseGateOptions(threshold)
       });
-      node.setThreshold = (nextThreshold: number) => {
-        (node as AudioWorkletNode).port.postMessage({ threshold: nextThreshold, type: 'set-threshold' });
+      return {
+        node,
+        setThreshold: (nextThreshold: number) => {
+          node.port.postMessage({ threshold: nextThreshold, type: 'set-threshold' });
+        }
       };
-      return node;
     } catch (error) {
       log.warn('AudioWorklet gate unavailable, using ScriptProcessor', errorContext(error));
     }
@@ -324,15 +331,14 @@ function createNoiseGateOptions(threshold: number) {
   };
 }
 
-function createScriptProcessorNoiseGateNode(context: AudioContext, threshold: number): GateNode {
+function createScriptProcessorNoiseGateNode(context: AudioContext, threshold: number): GateStage {
   if (typeof context.createScriptProcessor !== 'function') {
     throw new Error('ScriptProcessor недоступен');
   }
 
-  const gate: GateNode = context.createScriptProcessor(GATE_PROCESSOR_BUFFER_SIZE, 1, 1);
+  const gate = context.createScriptProcessor(GATE_PROCESSOR_BUFFER_SIZE, 1, 1);
   const envelope = createNoiseGateEnvelope(threshold, context.sampleRate || 48000);
-  gate.setThreshold = (nextThreshold: number) => setNoiseGateEnvelopeThreshold(envelope, nextThreshold);
-  (gate as ScriptProcessorNode).onaudioprocess = (event) => {
+  gate.onaudioprocess = (event) => {
     const input = event.inputBuffer.getChannelData(0);
     const output = event.outputBuffer.getChannelData(0);
 
@@ -341,15 +347,10 @@ function createScriptProcessorNoiseGateNode(context: AudioContext, threshold: nu
     }
   };
 
-  return gate;
-}
-
-function setNoiseGateNodeThreshold(node: GateNode, threshold: number): boolean {
-  if (typeof node?.setThreshold === 'function') {
-    node.setThreshold(threshold);
-    return true;
-  }
-  return false;
+  return {
+    node: gate,
+    setThreshold: (nextThreshold: number) => setNoiseGateEnvelopeThreshold(envelope, nextThreshold)
+  };
 }
 
 function setNoiseGateEnvelopeThreshold(envelope: NoiseGateEnvelope, threshold: number): void {
@@ -422,9 +423,16 @@ async function createRnnoiseNode(context: AudioContext): Promise<AudioNode> {
   return new RNNoiseNode(context);
 }
 
-function loadRnnoiseModule(): Promise<any> {
-  rnnoiseModulePromise ||= import(/* @vite-ignore */ `${RNNOISE_ASSET_BASE}rnnoise.mjs`);
+function loadRnnoiseModule(): Promise<RnnoiseModule> {
+  rnnoiseModulePromise ||= import(/* @vite-ignore */ `${RNNOISE_ASSET_BASE}rnnoise.mjs`).then((module: unknown) => {
+    if (!isRnnoiseModule(module)) throw new Error('RNNoise module has an unexpected shape');
+    return module;
+  });
   return rnnoiseModulePromise;
+}
+
+function isRnnoiseModule(value: unknown): value is RnnoiseModule {
+  return isRecord(value) && typeof value.RNNoiseNode === 'function' && typeof value.rnnoise_loadAssets === 'function';
 }
 
 function createProcessingAudioContext(): AudioContext {
@@ -439,7 +447,7 @@ function createProcessingAudioContext(): AudioContext {
 
 /** Why the microphone could not be opened, for a listener who joins without one. */
 export function describeMicrophoneError(error: unknown): string {
-  const name = (error as { name?: string } | null)?.name;
+  const name = isRecord(error) ? error.name : undefined;
   if (name === 'NotAllowedError' || name === 'SecurityError') return 'Нет доступа к микрофону';
   if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'Микрофон не найден';
   if (name === 'NotReadableError' || name === 'AbortError') return 'Микрофон занят другим приложением';
@@ -499,20 +507,20 @@ export function syncMicrophoneProcessing(): void {
     processingSuspendTimer = 0;
     if (state.micProcessor !== processor || !isMicrophoneProcessingIdle() || context.state !== 'running') return;
     suspendedContexts.add(context);
-    context.suspend().catch((error) => log.warn('microphone processing suspend failed', errorContext(error)));
+    context.suspend().catch((error: unknown) => log.warn('microphone processing suspend failed', errorContext(error)));
   }, PROCESSING_SUSPEND_DELAY_MS);
 }
 
 function resumeMicrophoneProcessing(processor: MicrophoneCapture['processor'], context: AudioContext): void {
   suspendedContexts.delete(context);
   // Resolves after any suspend still in flight, so a quick unmute wins.
-  context.resume().catch((error) => log.warn('microphone processing resume failed', errorContext(error)));
+  context.resume().catch((error: unknown) => log.warn('microphone processing resume failed', errorContext(error)));
   window.setTimeout(() => {
     if (state.micProcessor !== processor || isMicrophoneProcessingIdle() || context.state === 'running') return;
     log.warn('microphone processing did not resume', { contextState: context.state });
     void import('../ui/devices')
       .then((devices) => devices.reopenMicrophone())
-      .catch((error) => log.warn('microphone reopen failed', errorContext(error)));
+      .catch((error: unknown) => log.warn('microphone reopen failed', errorContext(error)));
   }, PROCESSING_RESUME_CHECK_MS);
 }
 
@@ -529,9 +537,9 @@ export function stopMicrophoneCapture(capture: MicrophoneCapture): void {
   for (const processor of processors) {
     disconnectAudioNode(processor.source);
     disconnectAudioNode(processor.node);
-    for (const node of processor.nodes || []) disconnectAudioNode(node);
+    if (processor.type === 'input-gain') for (const node of processor.nodes) disconnectAudioNode(node);
     disconnectAudioNode(processor.destination);
-    if (processor.context) contexts.add(processor.context);
+    contexts.add(processor.context);
   }
   // Every stage of one capture shares a single context.
   for (const context of contexts) context.close().catch(() => {});
@@ -544,7 +552,6 @@ export function stopMicrophoneCapture(capture: MicrophoneCapture): void {
   for (const stream of streams) stopStream(stream);
 }
 
-export function getMicrophoneProcessors(processor: MicProcessor | MicProcessor[] | null): MicProcessor[] {
-  if (!processor) return [];
-  return Array.isArray(processor) ? processor.filter(Boolean) : [processor];
+export function getMicrophoneProcessors(processor: MicProcessor[] | null): MicProcessor[] {
+  return processor || [];
 }

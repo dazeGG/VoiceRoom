@@ -73,13 +73,13 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
   }
 
   /** Joins a stored room with its live roster (the roster object is shared, not copied). */
-  function attach<T extends { id: string; peers?: unknown }>(
+  function attach<T extends { id: string; peers?: Map<string, RosterPeer> }>(
     dbRoom: T | null
   ): (T & { peers: Map<string, RosterPeer> }) | null {
     if (!dbRoom) return null;
     const presence = room(dbRoom.id);
     if (dbRoom.peers instanceof Map && dbRoom.peers !== presence.peers) {
-      for (const [peerId, peer] of dbRoom.peers as Map<string, RosterPeer>) {
+      for (const [peerId, peer] of dbRoom.peers) {
         if (!presence.peers.has(peerId)) presence.peers.set(peerId, peer);
       }
     }
@@ -102,7 +102,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
     retry.timer = setTimeout(() => {
       if (occupancyRetries.get(roomId) !== retry) return;
       retry.timer = null;
-      void queueOccupancy(roomId).catch((error) => {
+      void queueOccupancy(roomId).catch((error: unknown) => {
         deps
           .logger()
           .error(
@@ -154,7 +154,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
   function recordSessions(sessions: FinishedVoiceSession[]): void {
     const repository = deps.sessions?.();
     if (!repository || sessions.length === 0) return;
-    const write = repository.recordSessions(sessions).catch((error) => {
+    const write = repository.recordSessions(sessions).catch((error: unknown) => {
       deps
         .logger()
         .error(
@@ -239,7 +239,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
     if (target.peers.size === 0) {
       // The call ended: reset the in-memory call clock (never persisted).
       target.voiceActiveSince = null;
-      void queueOccupancy(roomId).catch((error) => {
+      void queueOccupancy(roomId).catch((error: unknown) => {
         deps
           .logger()
           .error(

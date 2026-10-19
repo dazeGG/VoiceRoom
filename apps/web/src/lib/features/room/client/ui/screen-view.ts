@@ -25,9 +25,10 @@ function syncLiveKitScreenSubscriptionsSoon(peer: Participant): void {
   void import('../services/livekit-service').then((module) => module.syncLiveKitScreenSubscriptions(peer));
 }
 
-export function handleScreenStageClick(event: MouseEvent): void {
+export function handleScreenStageClick(event: Event): void {
   if (!state.viewedScreenPeerId || !screenUi.stageVisible) return;
-  const target = event.target as Element;
+  const target = event.target;
+  if (!(target instanceof Element)) return;
   if (
     target.closest('.screen-view-controls') ||
     target.closest('.screen-meta') ||
@@ -36,7 +37,9 @@ export function handleScreenStageClick(event: MouseEvent): void {
     return;
   }
 
-  leaveScreenView({ keepPreview: true }).catch((error) => log.error('screen view action failed', errorContext(error)));
+  leaveScreenView({ keepPreview: true }).catch((error: unknown) =>
+    log.error('screen view action failed', errorContext(error))
+  );
 }
 
 export function openLocalStreamPreview(): void {
@@ -248,7 +251,9 @@ export function hideScreenStage(): void {
     document.exitFullscreen().catch(() => {});
   }
   if (document.body.dataset.desktopScreenFullscreen === 'true') {
-    setDesktopScreenFullscreen(false).catch((error) => log.error('screen view action failed', errorContext(error)));
+    setDesktopScreenFullscreen(false).catch((error: unknown) =>
+      log.error('screen view action failed', errorContext(error))
+    );
   }
   refreshScreenTiles();
   refreshStageStripControls();

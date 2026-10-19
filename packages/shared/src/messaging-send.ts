@@ -2,6 +2,8 @@
 // cards a reply may not target, and the delivery event the outbox emits.
 // The reply pointer and quote are contracts/messages.ts.
 
+import { isOneOf, isRecord } from './guards.ts';
+
 export const SEND_CONTRACT_VERSION = 1 as const;
 export const REPLY_PREVIEW_TEXT_MAX_LENGTH = 280 as const;
 export const DELIVERY_EVENT_TYPES: readonly ['message.created', 'message.updated', 'message.deleted'] = Object.freeze([
@@ -23,10 +25,6 @@ export type MessageDeliveryEvent = {
 
 type Loose = Record<string, unknown>;
 
-function isObject(value: unknown): value is Loose {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
-}
-
 function cleanString(value: unknown, max: number): string {
   if (typeof value !== 'string') return '';
   const trimmed = value.trim();
@@ -34,7 +32,7 @@ function cleanString(value: unknown, max: number): string {
 }
 
 export function normalizeConversation(value: unknown): ConversationRef | null {
-  if (!isObject(value)) return null;
+  if (!isRecord(value)) return null;
   const type = value.type === 'dm' ? 'dm' : value.type === 'room' ? 'room' : '';
   const id = cleanString(value.id ?? value.roomId ?? value.userId ?? value.conversationId, 160);
   return type && id ? { type, id } : null;
@@ -45,7 +43,7 @@ export function isSystemCard(value: unknown): boolean {
     value === 'system' ||
     value === 'system-card' ||
     value === 'invite' ||
-    (isObject(value) && (value.type === 'system' || value.type === 'system-card' || value.system === true))
+    (isRecord(value) && (value.type === 'system' || value.type === 'system-card' || value.system === true))
   );
 }
 
@@ -53,9 +51,7 @@ export function buildMessageDeliveryEvent(value: Loose = {}): MessageDeliveryEve
   const eventId = cleanString(value.eventId ?? value.id, 160);
   const messageId = cleanString(value.messageId, 160);
   const conversation = normalizeConversation(value.conversation);
-  const type = (DELIVERY_EVENT_TYPES as readonly unknown[]).includes(value.type)
-    ? (value.type as MessageDeliveryEvent['type'])
-    : '';
+  const type = isOneOf(DELIVERY_EVENT_TYPES, value.type) ? value.type : '';
   if (!eventId || !messageId || !conversation || !type) return null;
 
   return {
@@ -65,6 +61,6 @@ export function buildMessageDeliveryEvent(value: Loose = {}): MessageDeliveryEve
     conversation,
     messageId,
     cursor: typeof value.cursor === 'string' && value.cursor ? value.cursor : undefined,
-    message: isObject(value.message) ? value.message : undefined
+    message: isRecord(value.message) ? value.message : undefined
   };
 }

@@ -2,7 +2,7 @@ import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 
 test('G31-A01 multiple render advances coalesce to the newest pending cursor', async () => {
-  const { createReadReconciliation } = await import('../src/lib/shared/chat/read-reconciliation.svelte.ts');
+  const { createReadReconciliation } = await import('../src/lib/shared/chat/read-reconciliation.ts');
   const commits: unknown[] = [];
   const gate = Promise.withResolvers<void>();
   const state = createReadReconciliation({
@@ -23,7 +23,7 @@ test('G31-A01 multiple render advances coalesce to the newest pending cursor', a
 });
 
 test('G31-A02 older or around loads alone cannot advance reads', async () => {
-  const { createReadReconciliation } = await import('../src/lib/shared/chat/read-reconciliation.svelte.ts');
+  const { createReadReconciliation } = await import('../src/lib/shared/chat/read-reconciliation.ts');
   let commits = 0;
   const state = createReadReconciliation({
     scope: 'room:r',
@@ -65,7 +65,7 @@ test('G31-A03 two tabs accept repeated newer cursors and suppress identical or o
   }
   vi.stubGlobal('BroadcastChannel', FakeBroadcastChannel);
   try {
-    const { createReadReconciliation } = await import('../src/lib/shared/chat/read-reconciliation.svelte.ts');
+    const { createReadReconciliation } = await import('../src/lib/shared/chat/read-reconciliation.ts');
     const commitsA: unknown[] = [];
     const commitsB: unknown[] = [];
     const tabA = createReadReconciliation({

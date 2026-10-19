@@ -6,6 +6,10 @@
 import { fetchThreadPage, type DirectMessage } from '$lib/api/dm';
 import type { PublicUser } from '$lib/api/friends';
 import { createAnchoredHistory } from '$lib/features/room/room-history.svelte';
+import { createHistoryCache } from '$lib/shared/chat/history-cache';
+
+/** Conversations kept between visits, by peer id. */
+const dmHistoryCache = createHistoryCache<DirectMessage>((messages) => $state.snapshot(messages));
 
 export class DmThread {
   peer = $state<PublicUser | null>(null);
@@ -24,7 +28,7 @@ export class DmThread {
   #history = createAnchoredHistory<DirectMessage>({
     loadPage: async (peerId, request) => fetchThreadPage(peerId, request),
     compare: (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
-    cacheKey: (peerId) => `dm:${peerId}`,
+    cache: dmHistoryCache,
     onChange: (state) => {
       this.messages = state.messages;
       this.loading = state.loading;

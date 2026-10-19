@@ -7,23 +7,18 @@
 // was down are replayed: otherwise live chat would stop until a restart while
 // the outbox and the health check both looked fine.
 
-import type { DirectMessage as StoredDirectMessage } from '../social/social-records.ts';
+import { isRecord } from '@voice-room/shared/guards';
+import { isStoredDirectMessage } from '../social/social-records.ts';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import type { MessageProjection } from './message-projection.ts';
 import type { StoredUser } from '../account/user-records.ts';
-import type { RoomChatMessage } from './room-chat-views.ts';
+import { isStoredChatMessage, type RoomChatMessage } from './room-chat-views.ts';
 
 const CHANNEL = 'voice_room_message_delivery';
 const RETRY_BASE_MS = 1_000;
 const RETRY_MAX_MS = 30_000;
-
-interface DeliveryEvent {
-  type?: string;
-  conversation?: { type?: string; id?: string };
-  message?: { senderId?: string; recipientId?: string; [key: string]: unknown };
-}
 
 interface ListenClient {
   on(event: 'notification', listener: (notification: { channel: string; payload?: string }) => void): unknown;
@@ -61,19 +56,22 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
     onNotification: (notification: { channel: string; payload?: string }) => void;
   } | null = null;
 
-  async function dispatchMessageDeliveryEvent(event: DeliveryEvent | null | undefined): Promise<void> {
-    if (!event || event.type !== 'message.created' || !event.message) return;
-    if (event.conversation?.type === 'room') {
-      const roomId = event.conversation.id as string;
+  // The outbox stores the event its writer enqueued; dispatch checks its fields.
+  async function dispatchMessageDeliveryEvent(event: unknown): Promise<void> {
+    if (!isRecord(event) || event.type !== 'message.created') return;
+    const { conversation, message } = event;
+    if (!isRecord(conversation) || typeof conversation.id !== 'string') return;
+    if (conversation.type === 'room') {
+      const roomId = conversation.id;
       // The outbox carries the stored message; the runtime makes it public.
-      const message = event.message as unknown as RoomChatMessage;
+      if (!isStoredChatMessage(message)) return;
       deps.broadcastChatMessage(roomId, await deps.projection.project('room', message, { roomId }));
       return;
     }
-    if (event.conversation?.type === 'dm') {
+    if (conversation.type === 'dm') {
       // The outbox carries the stored message as the store wrote it.
-      const message = event.message as unknown as StoredDirectMessage;
-      const peerId = message.senderId === event.conversation.id ? message.recipientId : event.conversation.id;
+      if (!isStoredDirectMessage(message)) return;
+      const peerId = message.senderId === conversation.id ? message.recipientId : conversation.id;
       const projected = await deps.projection.project('dm', message, { userId: message.senderId, peerId });
       deps.notifyUser(message.senderId, { type: 'dm-message', message: projected });
       deps.notifyUser(message.recipientId, { type: 'dm-message', message: projected });
@@ -128,7 +126,7 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
     lostAt = null;
     const events = await outbox.listDeliveredSince(since);
     for (const event of events) {
-      await dispatchMessageDeliveryEvent(event.payload as DeliveryEvent).catch(reportDispatchFailure);
+      await dispatchMessageDeliveryEvent(event.payload).catch(reportDispatchFailure);
     }
     deps
       .logger()
@@ -151,10 +149,10 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
       const onNotification = (notification: { channel: string; payload?: string }) => {
         if (notification.channel !== CHANNEL) return;
         void (async () => {
-          const parsed = JSON.parse(notification.payload || '{}') as { eventId?: string };
-          const row = parsed.eventId ? await outbox.getEvent(parsed.eventId) : null;
-          // The outbox stores the event its writer enqueued; dispatch checks its fields.
-          if (row?.payload) await dispatchMessageDeliveryEvent(row.payload as DeliveryEvent);
+          const parsed: unknown = JSON.parse(notification.payload || '{}');
+          const eventId = isRecord(parsed) && typeof parsed.eventId === 'string' ? parsed.eventId : '';
+          const row = eventId ? await outbox.getEvent(eventId) : null;
+          if (row?.payload) await dispatchMessageDeliveryEvent(row.payload);
         })().catch(reportDispatchFailure);
       };
       client.on('notification', onNotification);

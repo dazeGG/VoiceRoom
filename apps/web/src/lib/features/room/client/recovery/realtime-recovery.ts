@@ -1,18 +1,24 @@
 import { RETRYABLE_JOIN_CODES, TERMINAL_JOIN_CODES } from '@voice-room/shared/contracts/errors';
+import {
+  cancelGlobalTimer,
+  scheduleGlobalTimer,
+  type CancelTimer,
+  type ScheduleTimer,
+  type TimerHandle
+} from '../core/timers';
+import { isRecord } from '@voice-room/shared/guards';
 
 export type RecoveryPhase =
   'idle' | 'waiting-app-snapshot' | 'waiting-livekit' | 'recovering' | 'healthy' | 'failed' | 'cancelled';
 
-export type RecoveryFailure = {
-  retryable: boolean;
-  result: 'terminal' | 'retryable';
-  status: number;
-  code: string;
-};
+/** A replacement attempt that failed: whether to try again, and why. */
+export type AttemptFailure = { ok?: false; retryable: boolean; status?: number; code?: string };
 
-/** What an attempt resolves to: `{ ok: true }`, a classified failure, or whatever it rejected with. */
-export type ReplacementOutcome =
-  { ok?: boolean; retryable?: boolean; status?: number; code?: string } | null | undefined;
+/** What one replacement attempt comes to: it worked, or it failed. */
+export type ReplacementOutcome = { ok: true } | AttemptFailure;
+
+/** A failure classified from a rejection or a refused snapshot request. */
+export type RecoveryFailure = AttemptFailure & { result: 'terminal' | 'retryable'; status: number; code: string };
 
 export type RecoveryTransition = Readonly<{
   epoch: number;
@@ -25,10 +31,6 @@ export type RecoveryTransition = Readonly<{
   code: string;
   result: string;
 }>;
-
-type TimerHandle = unknown;
-type ScheduleTimer = (callback: () => void, delay: number) => TimerHandle;
-type CancelTimer = (timer: TimerHandle) => void;
 
 export interface RealtimeRecoveryOptions {
   attemptReplacement: (context: { epoch: number; attempt: number }) => ReplacementOutcome | Promise<ReplacementOutcome>;
@@ -63,9 +65,9 @@ export function sanitizeRecoveryCode(value: unknown): string {
 }
 
 export function classifyRecoveryFailure(input: unknown): RecoveryFailure {
-  const error = input as { code?: unknown; status?: unknown } | null | undefined;
-  const rawCode = typeof error?.code === 'string' ? error.code : '';
-  const status = Number.isInteger(error?.status) ? (error?.status as number) : 0;
+  const error = isRecord(input) ? input : {};
+  const rawCode = typeof error.code === 'string' ? error.code : '';
+  const status = typeof error.status === 'number' && Number.isInteger(error.status) ? error.status : 0;
   if (TERMINAL_CODES.has(rawCode)) {
     return { retryable: false, result: 'terminal', status, code: rawCode };
   }
@@ -124,8 +126,8 @@ export class RealtimeRecoveryController {
     requestAppSnapshot,
     onTransition = (_event) => {},
     now = Date.now,
-    setTimeout: schedule = (callback, delay) => globalThis.setTimeout(callback, delay),
-    clearTimeout: cancel = (timer) => globalThis.clearTimeout(timer as ReturnType<typeof globalThis.setTimeout>),
+    setTimeout: schedule = scheduleGlobalTimer,
+    clearTimeout: cancel = cancelGlobalTimer,
     random = Math.random,
     retryDelaysMs = DEFAULT_RETRY_DELAYS_MS,
     maxAttempts = DEFAULT_MAX_ATTEMPTS,
@@ -410,7 +412,7 @@ export class RealtimeRecoveryController {
   finishAttempt(epoch: number, effectGeneration: number, attempt: number, outcome: ReplacementOutcome): void {
     if (!this.isCurrent(epoch) || effectGeneration !== this.effectGeneration) return;
     this.inFlight = false;
-    if (outcome?.ok === true) {
+    if (outcome.ok === true) {
       this.livekitReady = true;
       this.replacementRequired = false;
       this.emit('replacement_attempt', 'succeeded', attempt);
@@ -418,13 +420,11 @@ export class RealtimeRecoveryController {
       else this.setPhase('waiting-app-snapshot', 'replacement_succeeded');
       return;
     }
-    const classified: ReplacementOutcome =
-      typeof outcome?.retryable === 'boolean' ? outcome : classifyRecoveryFailure(outcome);
-    const code = sanitizeRecoveryCode(classified?.code);
-    const status = Number.isInteger(classified?.status) ? (classified?.status as number) : 0;
-    this.emit('replacement_attempt', classified?.retryable ? 'retryable' : 'terminal', attempt, status, code);
+    const code = sanitizeRecoveryCode(outcome.code);
+    const status = outcome.status !== undefined && Number.isInteger(outcome.status) ? outcome.status : 0;
+    this.emit('replacement_attempt', outcome.retryable ? 'retryable' : 'terminal', attempt, status, code);
     const failure = { status, code };
-    if (!classified?.retryable) {
+    if (!outcome.retryable) {
       this.fail('terminal', failure);
       return;
     }

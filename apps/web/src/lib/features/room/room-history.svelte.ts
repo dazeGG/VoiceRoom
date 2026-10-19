@@ -1,5 +1,6 @@
 import { tick } from 'svelte';
-import { readHistoryCache, writeHistoryCache } from '$lib/shared/chat/history-cache';
+import type { HistoryCache } from '$lib/shared/chat/history-cache';
+import { keysOf, mergeById } from '$lib/shared/utils/collections';
 
 export interface AnchoredHistoryPage<T> {
   messages: T[];
@@ -16,14 +17,17 @@ interface AnchoredHistoryOptions<T extends { id: string }> {
   ) => Promise<AnchoredHistoryPage<T>>;
   compare?: (left: T, right: T) => number;
   /** Where a scope's newest messages are kept between visits; without it nothing is kept. */
-  cacheKey?: (scope: string) => string;
-  onChange?: (state: {
-    messages: T[];
-    loading: boolean;
-    loadingOlder: boolean;
-    hasMoreBefore: boolean;
-    error: string;
-  }) => void;
+  cache?: HistoryCache<T>;
+  onChange?: (state: AnchoredHistoryState<T>) => void;
+}
+
+interface AnchoredHistoryState<T> {
+  messages: T[];
+  loading: boolean;
+  loadingOlder: boolean;
+  hasMoreBefore: boolean;
+  before: string | undefined;
+  error: string;
 }
 
 export function createAnchoredHistory<T extends { id: string }>(options: AnchoredHistoryOptions<T>) {
@@ -34,12 +38,12 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
   // The kept copy is shown and the newest page is on its way.
   let revalidating = false;
 
-  const state = $state({
-    messages: [] as T[],
+  const state = $state<AnchoredHistoryState<T>>({
+    messages: [],
     loading: false,
     loadingOlder: false,
     hasMoreBefore: false,
-    before: undefined as string | undefined,
+    before: undefined,
     error: ''
   });
 
@@ -52,26 +56,15 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
   }
 
   function merge(items: T[]): void {
-    const byId = new Map(state.messages.map((item) => [item.id, item]));
-    for (const item of items) {
-      if (!item?.id) continue;
-      const current = byId.get(item.id);
-      if (!current) {
-        byId.set(item.id, item);
-        continue;
-      }
-      const defined = Object.fromEntries(Object.entries(item).filter(([, value]) => value !== undefined));
-      byId.set(item.id, { ...current, ...defined });
-    }
-    state.messages = ordered(Array.from(byId.values()));
+    state.messages = ordered(mergeById(state.messages, items));
     notify();
   }
 
   // What was shown is kept for the next visit, with the edits and messages
   // realtime added while it was open.
   function remember(): void {
-    if (!scope || !options.cacheKey || state.loading || revalidating) return;
-    writeHistoryCache(options.cacheKey(scope), $state.snapshot(state.messages));
+    if (!scope || !options.cache || state.loading || revalidating) return;
+    options.cache.write(scope, state.messages);
   }
 
   async function open(nextScope: string, messageId?: string): Promise<void> {
@@ -84,7 +77,7 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
     olderPromise = null;
     // A visit to the newest messages starts from the copy kept last time and
     // swaps in the page once it arrives; a linked message has no such copy.
-    const cached = !messageId && options.cacheKey ? readHistoryCache<T>(options.cacheKey(nextScope)) : undefined;
+    const cached = !messageId && options.cache ? options.cache.read(nextScope) : undefined;
     revalidating = Boolean(cached);
     state.messages = cached ? ordered(cached) : [];
     state.loading = !cached;
@@ -133,7 +126,7 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
     state.loadingOlder = true;
     state.error = '';
     notify();
-    let promise!: Promise<void>;
+    let promise: Promise<void> | null = null;
     promise = (async () => {
       try {
         const page = await options.loadPage(requestScope, { mode: 'before', cursor, signal: requestController.signal });
@@ -173,7 +166,7 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
   }
 
   function reconcileLatest(items: T[], belongsToLatestWindow: (item: T) => boolean): void {
-    const incomingIds = new Set(items.map((item) => item.id));
+    const incomingIds = keysOf(items, (item) => item.id);
     state.messages = state.messages.filter((item) => !belongsToLatestWindow(item) || incomingIds.has(item.id));
     merge(items);
   }

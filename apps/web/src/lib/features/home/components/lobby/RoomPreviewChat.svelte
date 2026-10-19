@@ -44,5 +44,5 @@
   {participantCount}
   onSelectParticipants={() => onSelectParticipants?.()}
   onCollapse={() => onClose?.()}
-  onToast={(message) => onToast?.(message)}
+  onToast={(message: string) => onToast?.(message)}
 />

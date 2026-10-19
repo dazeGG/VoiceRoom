@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import { state } from '../client/core/state.svelte';
 
   const banned = $derived(state.moderationReason === 'banned');
@@ -16,7 +17,7 @@
         : 'Соединение остановлено владельцем комнаты. Вы можете вернуться на главный экран.'}
     </p>
     <div class="not-found-actions">
-      <a class="not-found-home" href="/" data-sveltekit-reload>На главный экран</a>
+      <a class="not-found-home" href={resolve('/')} data-sveltekit-reload>На главный экран</a>
     </div>
   </div>
 </main>

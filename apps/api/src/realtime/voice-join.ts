@@ -15,7 +15,7 @@ import type { ReconnectLeases } from './reconnect-leases.ts';
 import type { ConnectionRegistry, WsConnection } from './registry.ts';
 import type { createRoomFanout } from './room-fanout.ts';
 import type { createRoomSummaries } from './room-summaries.ts';
-import type { FinalizeError, Peer, PresenceRoom, RuntimeLogger, RuntimeRoomStore } from './runtime-types.ts';
+import type { Peer, PresenceRoom, RuntimeLogger, RuntimeRoomStore } from './runtime-types.ts';
 
 type SessionUser =
   | {
@@ -182,9 +182,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
   ): Promise<boolean> {
     const store = getRoomStore();
     if (typeof store?.isRoomServerMuted !== 'function' || typeof store?.normalizeGatePrincipal !== 'function') {
-      const error = new Error('Server mute authority is unavailable') as FinalizeError;
-      error.code = 'server_mute_unavailable';
-      throw error;
+      throw Object.assign(new Error('Server mute authority is unavailable'), { code: 'server_mute_unavailable' });
     }
     const principal = store.normalizeGatePrincipal({
       accountUserId: peer.accountUserId || null,
@@ -289,19 +287,21 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };
       }
 
-      const identityResult = (await getRoomStore().getOrCreatePeerIdentity({
+      const identityResult = await getRoomStore().getOrCreatePeerIdentity({
         roomId,
         peerId,
         sessionToken,
         displayName: name,
         avatarColorKey: sessionAvatarColorKey(sessionUser)
-      }))!;
+      });
       if (claimedSessionWasTerminated()) {
         return { ok: false, code: 'superseded_join', message: 'Peer session was terminated' };
       }
       if (!isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)) {
         return supersededVoiceJoin(connection, roomId);
       }
+      // Null only if the identity row vanished mid-transaction.
+      if (!identityResult) throw new Error('the peer identity vanished while it was being created');
       if (identityResult.status === 'token_mismatch') {
         terminalClaimFailure = true;
         return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };

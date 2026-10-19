@@ -4,9 +4,8 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { freshImport } from '../helpers/fresh-module.ts';
-import type * as LogModule from '../../src/lib/shared/log.ts';
 
-const load = () => freshImport<typeof LogModule>('/src/lib/shared/log.ts');
+const load = () => freshImport(() => import('../../src/lib/shared/log.ts'));
 
 beforeEach(() => {
   vi.useFakeTimers();

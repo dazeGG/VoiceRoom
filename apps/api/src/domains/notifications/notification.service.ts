@@ -1,11 +1,12 @@
 import type pg from 'pg';
 import type { InboxPage, NotificationLevel } from '@voice-room/shared/contracts/notifications';
 import { transaction } from '../../platform/db/pool.ts';
+import { isOneOf } from '@voice-room/shared/guards';
 import {
   buildNotificationEnvelope,
   buildProviderPayload,
+  NOTIFICATION_LEVELS,
   normalizeNotificationItem,
-  normalizeNotificationLevel,
   normalizeNotificationLimit
 } from '@voice-room/shared/notifications';
 import type { CursorTuple, InboxNotification, InboxRepository } from './inbox.repository.ts';
@@ -54,6 +55,10 @@ function createNotificationService({
   if (!pool?.query || !inbox) throw new TypeError('Notification service requires pool and inbox repository');
   const db = pool;
   const items = inbox;
+  function requireCodec(): InboxCursorCodec {
+    if (!cursorCodec) throw new TypeError('Notification service requires a cursor codec');
+    return cursorCodec;
+  }
   const encode = (item: InboxNotification): string | undefined =>
     cursorCodec?.encode({ purpose: 'notification-inbox', context: item.recipientUserId, tuple: item.cursorTuple });
 
@@ -67,7 +72,7 @@ function createNotificationService({
     limit?: unknown;
   }): Promise<InboxPage> {
     const pageSize = normalizeNotificationLimit(limit);
-    const before = cursor ? cursorCodec!.decode(cursor, { purpose: 'notification-inbox', context: userId }) : null;
+    const before = cursor ? requireCodec().decode(cursor, { purpose: 'notification-inbox', context: userId }) : null;
     const [rows, unread, firstUnread] = await Promise.all([
       items.list({ recipientUserId: userId, limit: pageSize, before }),
       items.unreadCount(userId),
@@ -76,9 +81,10 @@ function createNotificationService({
     const hasMore = rows.length > pageSize;
     const visible = hasMore ? rows.slice(0, pageSize) : rows;
     const page = visible.map((row) => ({ ...row, cursor: encode(row), body: row.retractedAt ? '' : row.body }));
+    const last = visible.at(-1);
     return buildNotificationEnvelope({
       notifications: page,
-      nextCursor: hasMore ? encode(visible.at(-1)!) : undefined,
+      nextCursor: hasMore && last ? encode(last) : undefined,
       hasMore,
       unreadCount: unread.count,
       revision: unread.revision,
@@ -107,7 +113,7 @@ function createNotificationService({
       ok: true as const,
       updated: typeof result === 'number' ? result : result.updated,
       unreadCount: unread.count,
-      revision: Math.max(unread.revision, Number((result as { revision?: unknown })?.revision) || 0)
+      revision: Math.max(unread.revision, typeof result === 'number' ? 0 : Number(result.revision) || 0)
     };
   }
 
@@ -154,8 +160,11 @@ function createNotificationService({
     client?: QueryClient | null;
   }): Promise<InboxNotification[]> {
     const run = async (tx: QueryClient): Promise<InboxNotification[]> => {
-      const eligible = await eligibility!.validate({ roomId, creatorUserId, targetUserIds, client: tx });
-      await mentions!.replaceForMessage({ roomId, messageId, creatorUserId, targetUserIds: eligible, client: tx });
+      if (!eligibility || !mentions || !outbox) {
+        throw new TypeError('Addressed notifications need mention eligibility, mentions and an outbox');
+      }
+      const eligible = await eligibility.validate({ roomId, creatorUserId, targetUserIds, client: tx });
+      await mentions.replaceForMessage({ roomId, messageId, creatorUserId, targetUserIds: eligible, client: tx });
       const recipientReasons = new Map<string, Set<string>>();
       for (const userId of eligible) recipientReasons.set(userId, new Set(['mention']));
       if (replyTargetUserId && replyTargetUserId !== creatorUserId) {
@@ -165,8 +174,7 @@ function createNotificationService({
       }
       const created: InboxNotification[] = [];
       for (const [recipientUserId, reasons] of recipientReasons) {
-        // upsert always returns the row it wrote.
-        const item = (await items.upsert({
+        const item = await items.upsert({
           recipientUserId,
           actorUserId: creatorUserId,
           roomId,
@@ -174,9 +182,11 @@ function createNotificationService({
           reasons: [...reasons],
           body,
           client: tx
-        }))!;
+        });
+        // upsert always returns the row it wrote.
+        if (!item) throw new Error('The notification upsert returned no row');
         const payload = buildProviderPayload(item);
-        await outbox!.enqueue({
+        await outbox.enqueue({
           notificationId: item.id,
           recipientUserId,
           revision: item.revision,
@@ -198,10 +208,8 @@ function createNotificationService({
   }
 
   async function setRoomLevel({ userId, roomId, level }: { userId: string; roomId: string; level: unknown }) {
-    const normalized = normalizeNotificationLevel(level, '' as NotificationLevel);
-    if (!normalized) return { ok: false as const, code: 'invalid_level' as const };
-    if (notificationPreferences?.setRoomLevel)
-      return notificationPreferences.setRoomLevel({ userId, roomId, level: normalized });
+    if (!isOneOf(NOTIFICATION_LEVELS, level)) return { ok: false as const, code: 'invalid_level' as const };
+    if (notificationPreferences?.setRoomLevel) return notificationPreferences.setRoomLevel({ userId, roomId, level });
     return { ok: false as const, code: 'not_supported' as const };
   }
 

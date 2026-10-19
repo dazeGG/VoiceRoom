@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Image, Plus } from '@lucide/svelte';
-  import { Popover, PopoverMenuItem } from '$lib/shared/ui';
+  import { Popover, PopoverMenuItem, type PopoverContentState, type PopoverTriggerState } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
   import type { AttachmentComposeStore } from './attachment-compose.svelte';
   import './attachment.css';
@@ -39,7 +39,7 @@
   panelClass="attachment-upload-popover"
   keepContentMounted
 >
-  {#snippet trigger({ toggle, panelId, open })}
+  {#snippet trigger({ toggle, panelId, open }: PopoverTriggerState)}
     <button
       class="attachment-add-button"
       type="button"
@@ -53,7 +53,7 @@
       <Plus {...iconSm} aria-hidden="true" />
     </button>
   {/snippet}
-  {#snippet content({ close })}
+  {#snippet content({ close }: PopoverContentState)}
     <input
       bind:this={input}
       class="attachment-file-input"

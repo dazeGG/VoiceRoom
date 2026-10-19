@@ -52,6 +52,12 @@ type WsSocket = RealtimeSocket & {
 // offline; more than this before the session resolves is not a client.
 const MAX_EARLY_FRAMES = 64;
 
+// ws hands the close reason over as a Buffer; tests and fakes may pass text.
+function closeReasonText(reason: unknown): string {
+  if (typeof reason === 'string') return reason;
+  return Buffer.isBuffer(reason) ? reason.toString() : '';
+}
+
 function createWsHandler({
   registry,
   roomRuntime,
@@ -116,39 +122,45 @@ function createWsHandler({
   function forwardDirectTyping(connection: WsConnection, peerId: string, activity: TypingActivity = 'typing'): void {
     const { userId } = connection;
     if (!userId || peerId === userId) return;
-    const sender = connection as WsConnection & { userId: string };
     connection.dmTypingThrottle ??= createTypingThrottle<TypingActivity>({ now });
     connection.dmTypingThrottle.offer(peerId, activity, (value: TypingActivity) => {
-      sendDirectTyping(sender, peerId, value).catch((error) => reportMessageError(error, connection, 'dm.typing'));
+      sendDirectTyping(connection, userId, peerId, value).catch((error: unknown) =>
+        reportMessageError(error, connection, 'dm.typing')
+      );
     });
   }
 
   async function sendDirectTyping(
-    connection: WsConnection & { userId: string },
+    connection: WsConnection,
+    userId: string,
     peerId: string,
     activity: TypingActivity
   ): Promise<void> {
-    const cache: Map<string, { allowed: boolean; checkedAt: number }> = (connection.dmTypingPermission ??= new Map());
+    const cache = (connection.dmTypingPermission ??= new Map<string, { allowed: boolean; checkedAt: number }>());
     const entry = cache.get(peerId) || { allowed: false, checkedAt: -Infinity };
     cache.delete(peerId);
     cache.set(peerId, entry);
-    while (cache.size > DM_TYPING_THREAD_LIMIT) cache.delete(cache.keys().next().value as string);
+    while (cache.size > DM_TYPING_THREAD_LIMIT) {
+      const oldest = cache.keys().next();
+      if (oldest.done) break;
+      cache.delete(oldest.value);
+    }
     if (now() - entry.checkedAt >= DM_TYPING_PERMISSION_TTL_MS) {
       if (!spendTypingLookup(connection)) return;
-      entry.allowed = Boolean(await canTypeToUser(connection.userId, peerId));
+      entry.allowed = Boolean(await canTypeToUser(userId, peerId));
       entry.checkedAt = now();
     }
     if (!entry.allowed || connection.closed) return;
-    registry.sendToUser(peerId, buildServerEnvelope('dm.typing', { userId: connection.userId, activity }));
+    registry.sendToUser(peerId, buildServerEnvelope('dm.typing', { userId, activity }));
   }
 
   function enqueueMessage(connection: WsConnection, task: () => Promise<unknown>): void {
-    connection.inboundMessageQueue = (connection.inboundMessageQueue || Promise.resolve())
+    connection.inboundMessageQueue = connection.inboundMessageQueue
       .then(() => {
         if (connection.closed) return;
         return task();
       })
-      .catch((error) => reportMessageError(error, connection));
+      .catch((error: unknown) => reportMessageError(error, connection));
   }
 
   async function handleMessage(
@@ -336,7 +348,7 @@ function createWsHandler({
           connId: connection.id,
           userId: connection.userId || undefined,
           code: Number(code) || 0,
-          reason: String(reason || '').slice(0, 120) || undefined,
+          reason: closeReasonText(reason).slice(0, 120) || undefined,
           durationMs: now() - connection.openedAt,
           err: error || undefined
         },

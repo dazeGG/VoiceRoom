@@ -17,7 +17,7 @@ function presenceFor(social: RoomSocial, accountUserId: string): PresenceStatus 
   if (!friend) return 'online';
   if (!friend.online) return 'offline';
   if (friend.user.doNotDisturb) return 'dnd';
-  return (friend.user.presenceStatus as PresenceStatus) || 'online';
+  return friend.user.presenceStatus || 'online';
 }
 
 export function participantProfilePerson(social: RoomSocial, participant: Participant): ProfileCardPerson {

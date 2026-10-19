@@ -1,4 +1,4 @@
-import type { Participant as LiveKitParticipant } from 'livekit-client';
+import type { RemoteParticipant } from 'livekit-client';
 import type { VoiceMeter } from '../media/meters';
 
 export interface PeerInfo {
@@ -35,7 +35,7 @@ export interface Participant {
   id: string;
   isLocal: boolean;
   joinedAt: number;
-  livekitParticipant: LiveKitParticipant | null;
+  livekitParticipant: RemoteParticipant | null;
   connectionQuality: string;
   /** The speaking detector (or analyser) on this participant's voice, see media/meters. */
   meter: VoiceMeter | null;

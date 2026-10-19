@@ -13,7 +13,7 @@ import {
   SCREEN_VIDEO_BACKUP_CODEC
 } from '../core/config';
 import type { ScreenProfile, ScreenStreamMode } from '../core/types';
-import { loadLiveKitClient, TRACK_SOURCE } from './livekit-runtime';
+import { loadLiveKitClient } from './livekit-runtime';
 
 export function getScreenProfile(profileId: string): ScreenProfile {
   const { qualityId, fpsId } = parseScreenProfileId(profileId);
@@ -44,8 +44,9 @@ export function getScreenProfileForMode(
 
 export function getScreenModeForProfile(profileId: string): ScreenStreamMode {
   const profile = getScreenProfile(profileId);
-  for (const [mode, modeProfileId] of Object.entries(SCREEN_STREAM_MODE_PROFILES)) {
-    if (profile.id === getScreenProfile(modeProfileId).id) return mode as ScreenStreamMode;
+  const modes: ScreenStreamMode[] = ['games', 'text'];
+  for (const mode of modes) {
+    if (profile.id === getScreenProfile(SCREEN_STREAM_MODE_PROFILES[mode]).id) return mode;
   }
   return profile.fpsId === '5' ? 'text' : 'games';
 }
@@ -118,7 +119,7 @@ export function getPreferredScreenVideoCodec(contentHint = 'motion'): 'h264' | '
 export const SCREEN_DEGRADATION_PREFERENCE: RTCDegradationPreference = 'maintain-resolution';
 
 export async function getScreenPublishVideoOptions(profile: ScreenProfile): Promise<TrackPublishOptions> {
-  const { VideoPreset } = await loadLiveKitClient();
+  const { Track, VideoPreset } = await loadLiveKitClient();
   const videoCodec = getPreferredScreenVideoCodec(profile.contentHint);
   const encoding = {
     maxBitrate: profile.videoBitrate,
@@ -139,9 +140,9 @@ export async function getScreenPublishVideoOptions(profile: ScreenProfile): Prom
     screenShareSimulcastLayers: getScreenSimulcastLayers(profile, VideoPreset),
     screenShareEncoding: encoding,
     simulcast: true,
-    source: TRACK_SOURCE.ScreenShare,
+    source: Track.Source.ScreenShare,
     videoCodec
-  } as TrackPublishOptions;
+  };
 }
 
 function getScreenSimulcastLayers(profile: ScreenProfile, VideoPresetClass: typeof VideoPreset): VideoPreset[] {

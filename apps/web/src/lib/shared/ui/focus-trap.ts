@@ -37,7 +37,7 @@ export function dialogFocusTrap(root: HTMLElement, options: FocusTrapOptions = {
     initialFocus: options.initialFocus ?? '[data-dialog-initial-focus]',
     restoreFocus: options.restoreFocus ?? true
   };
-  let opener: HTMLElement | null = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const opener: HTMLElement | null = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   let active = false;
   let hasActivated = false;
 

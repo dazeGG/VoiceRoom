@@ -1,4 +1,6 @@
+import { isRecord, textOf } from '@voice-room/shared/guards';
 import { REPLY_PREVIEW_TEXT_MAX_LENGTH, isSystemCard } from '@voice-room/shared/messaging-send';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 
 const REPLY_TOMBSTONE_TEXT = 'Сообщение недоступно';
 
@@ -19,42 +21,32 @@ class ReplyTargetUnavailableError extends Error {
   }
 }
 
-function toMillis(value: unknown): number | null {
-  if (value == null) return null;
-  if (value instanceof Date) return value.getTime();
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  const parsed = Date.parse(value as string);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
+// Room and direct messages, stored rows and their projections, all name
+// their fields differently; the quote reads whichever is there.
 function messageId(message: unknown): string {
-  const value = message as Loose | null | undefined;
-  return String(value?.id || value?.messageId || value?.message_id || '');
+  const value = isRecord(message) ? message : {};
+  return textOf(value.id || value.messageId || value.message_id);
 }
 
-function isInvitation(message: Loose | null | undefined): boolean {
-  const metadata = message?.metadata as Loose | null | undefined;
-  return message?.invite != null || metadata?.kind === 'room-invite' || message?.kind === 'room-invite';
+function isInvitation(message: Loose): boolean {
+  const metadata = isRecord(message.metadata) ? message.metadata : {};
+  return message.invite != null || metadata.kind === 'room-invite' || message.kind === 'room-invite';
 }
 
-function isReplyTargetKindAllowed(input: unknown): boolean {
-  const message = input as Loose | null | undefined;
-  if (!message || !messageId(message)) return false;
-  return (
-    !isInvitation(message) && !isSystemCard(message?.content ?? message?.kind ?? message?.type ?? message?.metadata)
-  );
+function isReplyTargetKindAllowed(message: unknown): boolean {
+  if (!isRecord(message) || !messageId(message)) return false;
+  return !isInvitation(message) && !isSystemCard(message.content ?? message.kind ?? message.type ?? message.metadata);
 }
 
-function isUnavailable(input: unknown, now: number = Date.now()): boolean {
-  const message = input as Loose | null | undefined;
-  if (!message) return true;
+function isUnavailable(message: unknown, now: number = Date.now()): boolean {
+  if (!isRecord(message)) return true;
   if (message.deleted === true || message.deletedAt || message.deleted_at) return true;
-  const expiresAt = toMillis(message.expiresAt ?? message.expires_at);
+  const expiresAt = epochMillis(message.expiresAt ?? message.expires_at);
   return expiresAt !== null && expiresAt <= now;
 }
 
 function projectAuthor(message: Loose): ReplyAuthor | undefined {
-  const named = message.author as Loose | null | undefined;
+  const named = isRecord(message.author) ? message.author : {};
   const id =
     message.authorUserId ||
     message.author_user_id ||
@@ -62,15 +54,15 @@ function projectAuthor(message: Loose): ReplyAuthor | undefined {
     message.sender_id ||
     message.peerId ||
     message.peer_id;
-  const name = message.name || message.displayName || named?.name || named?.displayName;
+  const name = message.name || message.displayName || named.name || named.displayName;
   const author: ReplyAuthor = {};
-  if (id) author.id = String(id);
-  if (name) author.name = String(name);
+  if (textOf(id)) author.id = textOf(id);
+  if (textOf(name)) author.name = textOf(name);
   return Object.keys(author).length ? author : undefined;
 }
 
 function projectText(message: Loose): string | undefined {
-  const value = message.text ?? message.body ?? (message.content as Loose | null | undefined)?.text;
+  const value = message.text ?? message.body ?? (isRecord(message.content) ? message.content.text : undefined);
   if (typeof value !== 'string') return undefined;
   const normalized = value.trim().replace(/\s+/g, ' ');
   return normalized ? normalized.slice(0, REPLY_PREVIEW_TEXT_MAX_LENGTH) : undefined;
@@ -87,7 +79,7 @@ function projectReplyTombstone(pointer: unknown): ReplyPreview {
 
 function projectReplyPreview(message: unknown, { now = Date.now() }: { now?: number } = {}): ReplyPreview | null {
   const id = messageId(message);
-  if (!id) return null;
+  if (!id || !isRecord(message)) return null;
   if (isUnavailable(message, now)) return projectReplyTombstone(id);
   if (!isReplyTargetKindAllowed(message)) return null;
 
@@ -96,8 +88,8 @@ function projectReplyPreview(message: unknown, { now = Date.now() }: { now?: num
     messageId: id,
     deleted: false
   };
-  const author = projectAuthor(message as Loose);
-  const text = projectText(message as Loose);
+  const author = projectAuthor(message);
+  const text = projectText(message);
   if (author) preview.author = author;
   if (text) preview.text = text;
   return Object.freeze(preview);

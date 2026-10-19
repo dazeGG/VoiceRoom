@@ -1,4 +1,5 @@
 import type pg from 'pg';
+import { isArray } from '@voice-room/shared/guards';
 import { createActiveBanRepository, type ActiveBanRecord, type ActiveBanRepository } from './active-ban.repository.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
@@ -36,7 +37,7 @@ function createActiveBanService({
   } = {}): Promise<string[]> {
     const normalized = Array.from(
       new Set(
-        (Array.isArray(userIds) ? userIds : [])
+        (isArray(userIds) ? userIds : [])
           .filter((userId): userId is string => typeof userId === 'string' && Boolean(userId.trim()))
           .map((userId) => userId.trim())
       )

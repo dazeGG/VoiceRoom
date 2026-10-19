@@ -2,14 +2,7 @@
 // which of their tracks to subscribe to, and what to do as tracks come and go.
 // Screens get a grace period through reconnects before they count as gone.
 
-import type {
-  Participant as LiveKitParticipant,
-  Room,
-  RemoteParticipant,
-  RemoteTrack,
-  RemoteTrackPublication,
-  TrackPublication
-} from 'livekit-client';
+import type { Room, RemoteParticipant, RemoteTrack, RemoteTrackPublication, TrackPublication } from 'livekit-client';
 import { state } from '../../core/state.svelte';
 import { clearPeerJoinCue } from '../../media/cues';
 import { loadLiveKitClient } from '../../media/livekit-runtime';
@@ -52,8 +45,7 @@ const screenSubscriptionRetryController = createScreenSubscriptionRetryControlle
 const screenRecoveryGrace = new ScreenRecoveryGraceController();
 
 subscribeRoomRecoveryTransitions((event) => {
-  const phase = typeof event.phase === 'string' ? event.phase : '';
-  const epoch = Number(event.epoch || 0);
+  const { epoch, phase } = event;
   if (phase === 'recovering' || phase === 'waiting-app-snapshot' || phase === 'waiting-livekit') {
     screenRecoveryGrace.beginGlobal(epoch);
   } else if (phase === 'healthy') {
@@ -89,7 +81,7 @@ export function syncLiveKitParticipant(participant: RemoteParticipant | null | u
   return peer;
 }
 
-export function createLiveKitParticipant(participant: LiveKitParticipant): Participant | null {
+export function createLiveKitParticipant(participant: RemoteParticipant): Participant | null {
   if (!isServerKnownRemotePeer(participant.identity)) return null;
 
   const screenPresence = getScreenPublicationPresence(
@@ -136,7 +128,7 @@ function prunePeersOutsideServerList(): void {
   }
 }
 
-export function updateLiveKitPublicationState(peer: Participant, publication: TrackPublication): void {
+export function updateLiveKitPublicationState(peer: Participant, publication: RemoteTrackPublication): void {
   if (isScreenVideoPublication(publication)) {
     if (peer.screenAuthoritative === false) return;
     screenRecoveryGrace.cancel(peer.id);
@@ -163,34 +155,33 @@ export function updateLiveKitPublicationState(peer: Participant, publication: Tr
   }
 }
 
-export function syncLiveKitPublicationSubscription(peer: Participant, publication: TrackPublication): void {
-  const remotePublication = publication as RemoteTrackPublication;
-  if (typeof remotePublication.setSubscribed !== 'function') return;
+export function syncLiveKitPublicationSubscription(peer: Participant, publication: RemoteTrackPublication): void {
+  if (typeof publication.setSubscribed !== 'function') return;
 
   if (isMicrophonePublication(publication)) {
-    setRemotePublicationSubscribed(remotePublication, !state.outputMuted);
+    setRemotePublicationSubscribed(publication, !state.outputMuted);
     return;
   }
 
   if (isCameraPublication(publication)) {
-    setRemotePublicationSubscribed(remotePublication, true);
-    applyRemoteVideoVisibility(remotePublication);
-    void applyRemoteCameraDemand(peer, remotePublication);
+    setRemotePublicationSubscribed(publication, true);
+    applyRemoteVideoVisibility(publication);
+    void applyRemoteCameraDemand(peer, publication);
     return;
   }
 
   if (isScreenPublication(publication)) {
     const subscribed = shouldSubscribeToScreen(peer);
-    if (!subscribed) clearScreenSubscriptionRetry(remotePublication);
-    setRemotePublicationSubscribed(remotePublication, subscribed);
+    if (!subscribed) clearScreenSubscriptionRetry(publication);
+    setRemotePublicationSubscribed(publication, subscribed);
     if (subscribed && isScreenVideoPublication(publication)) {
-      applyRemoteVideoVisibility(remotePublication);
-      void applyRemoteScreenVideoDemand(peer, remotePublication);
+      applyRemoteVideoVisibility(publication);
+      void applyRemoteScreenVideoDemand(peer, publication);
     }
     if (subscribed) {
-      const attached = attachSubscribedRemoteScreenTrack(peer, remotePublication);
-      if (!attached && remotePublication.isSubscribed && remotePublication.track) {
-        void scheduleScreenSubscriptionRetry(peer, remotePublication);
+      const attached = attachSubscribedRemoteScreenTrack(peer, publication);
+      if (!attached && publication.isSubscribed && publication.track) {
+        void scheduleScreenSubscriptionRetry(peer, publication);
       }
     }
   }
@@ -199,7 +190,7 @@ export function syncLiveKitPublicationSubscription(peer: Participant, publicatio
 function attachSubscribedRemoteScreenTrack(peer: Participant, publication: RemoteTrackPublication): boolean {
   if (!isScreenPublication(publication) || publication.isSubscribed === false) return false;
 
-  const track = publication.track as RemoteTrack | null | undefined;
+  const track = publication.track;
   const mediaTrack = track?.mediaStreamTrack;
   if (!track || !mediaTrack || mediaTrack.readyState === 'ended') return false;
 
@@ -251,14 +242,13 @@ async function applyRemoteCameraDemand(peer: Participant, publication: RemoteTra
  * it. The subscription stays, so the picture is back with the next keyframe as
  * soon as the app is shown, and screen audio and voices keep playing.
  */
-function applyRemoteVideoVisibility(publication: TrackPublication): void {
+function applyRemoteVideoVisibility(publication: RemoteTrackPublication): void {
   if (!isCameraPublication(publication) && !isScreenVideoPublication(publication)) return;
-  const remotePublication = publication as RemoteTrackPublication;
   // setEnabled only works on a publication we subscribe to.
-  if (typeof remotePublication.setEnabled !== 'function' || remotePublication.isDesired === false) return;
+  if (typeof publication.setEnabled !== 'function' || publication.isDesired === false) return;
   const visible = isAppVisible();
-  if (remotePublication.isEnabled === visible) return;
-  remotePublication.setEnabled(visible);
+  if (publication.isEnabled === visible) return;
+  publication.setEnabled(visible);
 }
 
 export function syncRemoteVideoVisibility(): void {
@@ -271,7 +261,7 @@ export function syncRemoteVideoVisibility(): void {
 export function syncRemoteCameraDemand(): void {
   for (const peer of state.peers.values()) {
     peer.livekitParticipant?.trackPublications.forEach((publication) => {
-      if (isCameraPublication(publication)) void applyRemoteCameraDemand(peer, publication as RemoteTrackPublication);
+      if (isCameraPublication(publication)) void applyRemoteCameraDemand(peer, publication);
     });
   }
 }
@@ -286,8 +276,8 @@ export function handleLiveKitTrackSubscriptionFailed(
   if (!peer) return;
 
   const publication = participant.trackPublications.get(trackSid);
-  if (isScreenPublication(publication)) {
-    void scheduleScreenSubscriptionRetry(peer, publication as RemoteTrackPublication, error);
+  if (publication && isScreenPublication(publication)) {
+    void scheduleScreenSubscriptionRetry(peer, publication, error);
     return;
   }
   if (!isMicrophonePublication(publication)) return;
@@ -379,21 +369,20 @@ export function retryDemandedScreenSubscriptions(room: Room): void {
   });
 }
 
-function ensureRemoteMicrophonePlayback(peer: Participant, publication: TrackPublication): void {
+function ensureRemoteMicrophonePlayback(peer: Participant, publication: RemoteTrackPublication): void {
   if (!isMicrophonePublication(publication)) return;
   if (state.outputMuted) return;
 
-  const remotePublication = publication as RemoteTrackPublication;
-  const track = remotePublication.track as RemoteTrack | null | undefined;
+  const track = publication.track;
   const mediaTrack = track?.mediaStreamTrack;
   if (!mediaTrack || mediaTrack.kind !== 'audio' || mediaTrack.readyState === 'ended') return;
-  if (remotePublication.isSubscribed === false) return;
+  if (publication.isSubscribed === false) return;
 
   peer.voiceIssue = '';
   const stream = track.mediaStream || new MediaStream([mediaTrack]);
   peer.stream = stream;
   peer.micReceiver = track.receiver ?? peer.micReceiver;
-  ensureRemoteAudioElement(peer, mediaTrack, stream, track.receiver);
+  ensureRemoteAudioElement(peer, mediaTrack, track.receiver);
   updatePeerStatus(peer);
 }
 

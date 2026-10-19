@@ -151,6 +151,7 @@ export async function revokeIssuedAdmission({
   log: Pick<Logger, 'error'> | undefined;
   roomId: string;
 }): Promise<void> {
+  let cleanupFailure: { error: unknown } | null = null;
   try {
     const revoked = await boundary?.revokeCredential({ credentialId, roomId, principal });
     if (revoked?.status !== 'revoked') {
@@ -170,12 +171,19 @@ export async function revokeIssuedAdmission({
       },
       'issued admission credential cleanup failed'
     );
-    if (cause)
-      throw new AggregateError([cause, cleanupError], 'Admission persistence and credential cleanup both failed', {
-        cause
-      });
-    throw cleanupError;
+    cleanupFailure = { error: cleanupError };
   }
+  if (!cleanupFailure) return;
+  // The original failure stays the cause: the cleanup only ran because of it.
+  if (cause)
+    throw new AggregateError(
+      [cause, cleanupFailure.error],
+      'Admission persistence and credential cleanup both failed',
+      {
+        cause
+      }
+    );
+  throw cleanupFailure.error;
 }
 
 export function createAdmissionService(deps: AdmissionDeps) {
@@ -208,14 +216,15 @@ export function createAdmissionService(deps: AdmissionDeps) {
     }
 
     const store = deps.store();
-    // Null only if the identity row vanished mid-transaction.
-    const identity = (await store.getOrCreatePeerIdentity({
+    const identity = await store.getOrCreatePeerIdentity({
       roomId,
       peerId,
       sessionToken,
       displayName: name,
       avatarColorKey: user?.avatarColorKey || ''
-    }))!;
+    });
+    // Null only if the identity row vanished mid-transaction.
+    if (!identity) throw new Error('the peer identity vanished while it was being created');
     if (identity.status === 'token_mismatch') return refuse('invalid_session');
     const principal = store.normalizeGatePrincipal({
       accountUserId: user?.id || null,
@@ -262,7 +271,7 @@ export function createAdmissionService(deps: AdmissionDeps) {
         cause,
         credentialId,
         principal,
-        recordFailure: deps.recordRevokeFailure,
+        recordFailure: () => deps.recordRevokeFailure(),
         log,
         roomId
       });

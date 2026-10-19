@@ -1,5 +1,6 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test';
-import { PASSWORD, createPermanentRoom, registerViaUi, uniqueLogin } from './helpers';
+import { defined } from '../test/helpers/assert';
+import { PASSWORD, boxOf, createPermanentRoom, registerViaUi, uniqueLogin } from './helpers';
 
 // A covered control fails fast with a named locator instead of hanging the test.
 test.use({ actionTimeout: 15_000 });
@@ -48,16 +49,14 @@ async function expectJoinedPhoneRoom(page: Page): Promise<void> {
     `no horizontal scroll; wider than the screen: ${overflow.offenders.join(', ')}`
   ).toBeLessThanOrEqual(0);
   // With no camera on the phone keeps the room stage's 16:9 tiles, edge to edge.
-  const viewport = page.viewportSize()!;
-  const mainTile = await page.locator('.mc-tile:not([data-variant="pip"])').first().boundingBox();
-  expect(mainTile, 'main tile').not.toBeNull();
-  expect(mainTile!.width).toBeGreaterThan(viewport.width * 0.9);
-  expect(mainTile!.width / mainTile!.height, 'main tile shape').toBeCloseTo(16 / 9, 1);
+  const viewport = defined(page.viewportSize(), 'viewport');
+  const mainTile = await boxOf(page.locator('.mc-tile:not([data-variant="pip"])').first());
+  expect(mainTile.width).toBeGreaterThan(viewport.width * 0.9);
+  expect(mainTile.width / mainTile.height, 'main tile shape').toBeCloseTo(16 / 9, 1);
   for (const selector of ['.mc-dock-mic', '.mc-dock-output', '.mc-dock-leave']) {
-    const box = await page.locator(selector).first().boundingBox();
-    expect(box, selector).not.toBeNull();
-    expect(box!.width, `${selector} width`).toBeGreaterThanOrEqual(44);
-    expect(box!.height, `${selector} height`).toBeGreaterThanOrEqual(44);
+    const box = await boxOf(page.locator(selector).first());
+    expect(box.width, `${selector} width`).toBeGreaterThanOrEqual(44);
+    expect(box.height, `${selector} height`).toBeGreaterThanOrEqual(44);
   }
 }
 

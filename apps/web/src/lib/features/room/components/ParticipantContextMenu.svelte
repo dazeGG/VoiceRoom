@@ -76,7 +76,7 @@
     moderating = true;
     closeParticipantContextMenu(peer.id, false);
     void action()
-      .catch((error) => showToast(errorToastMessage(error, fallback), { variant: 'error' }))
+      .catch((error: unknown) => showToast(errorToastMessage(error, fallback), { variant: 'error' }))
       .finally(() => {
         moderating = false;
       });

@@ -1,6 +1,7 @@
 import type { MembershipMember } from '@voice-room/shared/contracts/membership';
 import { MAX_MENTION_CANDIDATES, MAX_MENTIONS_PER_MESSAGE } from '@voice-room/shared/mentions';
 import type { RoomMessageContentV1, RoomMessageSegmentV1 } from '@voice-room/shared/room-message-content';
+import { keysOf } from '$lib/shared/utils/collections';
 
 export type SelectedMention = Pick<MembershipMember, 'userId' | 'displayName' | 'login'>;
 
@@ -28,7 +29,7 @@ export function createMentionComposer() {
   }
 
   function setCandidates(value: MembershipMember[]): void {
-    const chosen = new Set(selected.map((item) => item.userId));
+    const chosen = keysOf(selected, (item) => item.userId);
     candidates = value.filter((item) => !chosen.has(item.userId)).slice(0, MAX_MENTION_CANDIDATES);
     activeIndex = Math.min(activeIndex, Math.max(0, candidates.length - 1));
   }

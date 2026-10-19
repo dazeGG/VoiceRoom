@@ -242,7 +242,7 @@ class AppRealtimeConnection {
       this.startHeartbeat();
       this.emitState(true);
     };
-    socket.onmessage = (event) => {
+    socket.onmessage = (event: MessageEvent<unknown>) => {
       if (this.socket !== socket || generation !== this.openGeneration) return;
       let frame: unknown;
       try {

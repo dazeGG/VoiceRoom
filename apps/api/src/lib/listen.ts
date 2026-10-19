@@ -3,6 +3,7 @@ import net from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { LOG_EVENTS } from './log-events.ts';
 import { createLogger } from './logger.ts';
+import { codeOf } from '../platform/error-code.ts';
 
 type ListenLogger = { info(...args: unknown[]): void; warn(...args: unknown[]): void; fatal(...args: unknown[]): void };
 type ListenableServer = {
@@ -13,7 +14,7 @@ type ListenableServer = {
 };
 
 function startApiListener({
-  exit = process.exit,
+  exit = (code) => process.exit(code),
   host = '127.0.0.1',
   logger = createLogger({ name: 'api' }),
   port = 3000,
@@ -99,7 +100,7 @@ function startApiListener({
           try {
             fs.unlinkSync(socketPath);
           } catch (unlinkError) {
-            if ((unlinkError as NodeJS.ErrnoException).code !== 'ENOENT') {
+            if (codeOf(unlinkError) !== 'ENOENT') {
               failToStart(unlinkError);
               return;
             }

@@ -125,6 +125,15 @@ export async function loadLiveKitHarness(
     Room: FakeRoom,
     RoomEvent,
     SubscriptionError: { SE_CODEC_UNSUPPORTED: 1 },
+    // The same values as the TRACK_SOURCE fake below, so published tracks read back as their kind.
+    Track: {
+      Source: {
+        Camera: 'camera',
+        Microphone: 'microphone',
+        ScreenShare: 'screen-video',
+        ScreenShareAudio: 'screen-audio'
+      }
+    },
     VideoQuality: { HIGH: 2, MEDIUM: 1, LOW: 0 },
     VideoPresets: { h180: { resolution: { height: 180 } }, h360: { resolution: { height: 360 } } },
     VideoPreset: class {

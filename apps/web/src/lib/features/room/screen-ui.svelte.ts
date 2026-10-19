@@ -5,7 +5,20 @@ import { getScreenProfileLabels } from './client/media/profiles';
 import { getAllParticipants, getParticipantById } from './client/room/participants';
 import type { Participant } from './client/core/types';
 
-export const screenUi = $state({
+interface ScreenUiState {
+  revision: number;
+  stageVisible: boolean;
+  hasStream: boolean;
+  showControls: boolean;
+  showPlaceholder: boolean;
+  showMeta: boolean;
+  uiActive: boolean;
+  activeStream: MediaStream | null;
+  hideLeaveButton: boolean;
+  showScreenExit: boolean;
+}
+
+export const screenUi = $state<ScreenUiState>({
   // Screen streams change in place (tracks come and go on the same MediaStream),
   // which Svelte cannot see; the screen view bumps this after such a change.
   revision: 0,
@@ -15,7 +28,7 @@ export const screenUi = $state({
   showPlaceholder: true,
   showMeta: false,
   uiActive: false,
-  activeStream: null as MediaStream | null,
+  activeStream: null,
   hideLeaveButton: false,
   showScreenExit: false
 });

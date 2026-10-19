@@ -5,7 +5,9 @@ import { sql, type ExpressionBuilder, type Selectable } from 'kysely';
 import { type Database } from '../../platform/db/kysely.ts';
 import { cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
 import { normalizeLinkPreview, type LinkPreview } from '@voice-room/shared/link-preview';
+import { isRecord } from '@voice-room/shared/guards';
 import type { DB, DirectMessages, Users } from '../../platform/db/schema.ts';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 
 export type Metadata = Record<string, unknown>;
 export type UserRow = Pick<
@@ -44,13 +46,6 @@ export interface DirectMessage {
   deletedAt: number | null;
 }
 
-export function toMillis(value: unknown): number | null {
-  if (value == null) return null;
-  if (value instanceof Date) return value.getTime();
-  const parsed = Date.parse(value as string);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 // Public shape for a user row joined from the `users` table (snake_case). Never
 // leaks the password hash; mirrors user-store's publicUser fields.
 export function mapPublicUser(row: UserRow) {
@@ -59,7 +54,7 @@ export function mapPublicUser(row: UserRow) {
     avatarAccent: row.avatar_accent || null,
     avatarColorKey: cleanAvatarColorKey(row.avatar_color_key) || 'blurple',
     avatarUrl: row.avatar_key ? `/api/avatars/${encodeURIComponent(row.avatar_key)}` : null,
-    createdAt: toMillis(row.created_at),
+    createdAt: epochMillis(row.created_at),
     displayName: row.display_name || '',
     doNotDisturb: presenceStatus === 'dnd',
     id: row.id,
@@ -81,24 +76,38 @@ function mapInvite(metadata: Metadata | null | undefined): DirectMessageInvite |
   };
 }
 
+/**
+ * A direct message read back from JSON this API wrote (an outbox event, an
+ * idempotent replay): checked for the ids it is addressed by; the rest is as
+ * the writer stored it.
+ */
+export function isStoredDirectMessage(value: unknown): value is DirectMessage {
+  return (
+    isRecord(value) &&
+    typeof value.id === 'string' &&
+    typeof value.senderId === 'string' &&
+    typeof value.recipientId === 'string'
+  );
+}
+
 export function mapMessage(row: Selectable<DirectMessages>): DirectMessage;
 export function mapMessage(row: Selectable<DirectMessages> | null | undefined): DirectMessage | null;
 export function mapMessage(row: Selectable<DirectMessages> | null | undefined): DirectMessage | null {
   if (!row) return null;
-  const metadata = row.metadata as Metadata | null;
+  const metadata = isRecord(row.metadata) ? row.metadata : null;
   return {
     id: row.id,
     senderId: row.sender_id,
     recipientId: row.recipient_id,
     body: row.body,
-    createdAt: toMillis(row.created_at),
-    editedAt: toMillis(row.edited_at),
-    readAt: toMillis(row.read_at),
+    createdAt: epochMillis(row.created_at),
+    editedAt: epochMillis(row.edited_at),
+    readAt: epochMillis(row.read_at),
     invite: mapInvite(metadata),
     linkPreview: normalizeLinkPreview(metadata?.linkPreview) || undefined,
     replyTo: row.reply_to_message_id ? { messageId: row.reply_to_message_id } : undefined,
     // deletedAt kept internal; callers filter before map
-    deletedAt: row.deleted_at ? toMillis(row.deleted_at) : null
+    deletedAt: row.deleted_at ? epochMillis(row.deleted_at) : null
   };
 }
 

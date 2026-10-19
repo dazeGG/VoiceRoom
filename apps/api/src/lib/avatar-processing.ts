@@ -9,10 +9,13 @@ const MAX_INPUT_PIXELS = 40 * 1024 * 1024;
 
 export type ProcessedAvatar = { accent: string; buffer: Buffer; hash: string };
 
-function httpError(message: string, statusCode: number): Error & { statusCode: number; cause?: unknown } {
-  const error = new Error(message) as Error & { statusCode: number; cause?: unknown };
-  error.statusCode = statusCode;
-  return error;
+class AvatarError extends Error {
+  readonly statusCode: number;
+
+  constructor(message: string, statusCode: number, options?: ErrorOptions) {
+    super(message, options);
+    this.statusCode = statusCode;
+  }
 }
 
 function detectAvatarFormat(buffer: Buffer): string {
@@ -22,10 +25,10 @@ function detectAvatarFormat(buffer: Buffer): string {
 
 async function processAvatar(buffer: unknown): Promise<ProcessedAvatar> {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0 || buffer.length > MAX_AVATAR_BYTES) {
-    throw httpError('Avatar file must be at most 5 MB', 413);
+    throw new AvatarError('Avatar file must be at most 5 MB', 413);
   }
   if (!detectAvatarFormat(buffer)) {
-    throw httpError('Only JPEG, PNG, and WebP images are supported', 415);
+    throw new AvatarError('Only JPEG, PNG, and WebP images are supported', 415);
   }
 
   let output: Buffer;
@@ -40,9 +43,7 @@ async function processAvatar(buffer: unknown): Promise<ProcessedAvatar> {
       .webp({ quality: 86, effort: 4 })
       .toBuffer();
   } catch (cause) {
-    const error = httpError('Invalid or unsafe image', 400);
-    error.cause = cause;
-    throw error;
+    throw new AvatarError('Invalid or unsafe image', 400, { cause });
   }
 
   const { data, info } = await sharp(output).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -55,7 +56,7 @@ async function processAvatar(buffer: unknown): Promise<ProcessedAvatar> {
 }
 
 function createAvatarKey(kind: string, id: unknown, hash: string): string {
-  const normalizedId = String(id || '');
+  const normalizedId = typeof id === 'string' ? id : '';
   const validId =
     kind === 'user'
       ? /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalizedId)

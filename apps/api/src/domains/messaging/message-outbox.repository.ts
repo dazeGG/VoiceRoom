@@ -1,27 +1,21 @@
 import crypto from 'node:crypto';
-import { sql, type ExpressionBuilder } from 'kysely';
+import { sql, type ExpressionBuilder, type Selectable } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn } from '../../platform/db/kysely.ts';
-import type { DB } from '../../platform/db/schema.ts';
-import { buildMessageDeliveryEvent, type MessageDeliveryEvent } from '@voice-room/shared/messaging-send';
+import type { DB, MessageDeliveryOutbox } from '../../platform/db/schema.ts';
+import { isOneOf, isRecord } from '@voice-room/shared/guards';
+import {
+  DELIVERY_EVENT_TYPES,
+  buildMessageDeliveryEvent,
+  type MessageDeliveryEvent
+} from '@voice-room/shared/messaging-send';
 
 const DEFAULT_CLAIM_LIMIT = 100;
 const DEFAULT_STALE_CLAIM_MS = 60_000;
 
 type QueryClient = Pick<pg.Pool, 'query'>;
 
-type OutboxRow = {
-  event_id: string;
-  logical_key: string;
-  event_type: MessageDeliveryEvent['type'];
-  conversation_type: 'room' | 'dm';
-  conversation_id: string;
-  message_id: string;
-  revision: number | string;
-  payload: unknown;
-  attempts: number | string;
-  claimed_fencing_token: number | string | null;
-};
+type OutboxRow = Selectable<MessageDeliveryOutbox>;
 
 export type OutboxEvent = Readonly<{
   eventId: string;
@@ -48,7 +42,7 @@ class MessageDeliveryFenceError extends Error {
 }
 
 function requireQuery(value: unknown, label = 'PostgreSQL executor'): asserts value is QueryClient {
-  if (!value || typeof (value as QueryClient).query !== 'function') throw new TypeError(`${label} is required`);
+  if (!isRecord(value) || typeof value.query !== 'function') throw new TypeError(`${label} is required`);
 }
 
 function encodeParts(parts: string[]): string {
@@ -65,7 +59,7 @@ function logicalKey(event: MessageDeliveryEvent, revision: number): string {
 }
 
 function positiveInteger(value: unknown, fallback: number, max: number = Number.MAX_SAFE_INTEGER): number {
-  const parsed = Number.parseInt(value as string, 10);
+  const parsed = Number.parseInt(String(value), 10);
   return Number.isSafeInteger(parsed) && parsed > 0 ? Math.min(parsed, max) : fallback;
 }
 
@@ -85,12 +79,16 @@ function holdsLease(eb: ExpressionBuilder<DB, 'message_delivery_outbox'>, lease:
   );
 }
 
+// The table's checks allow only these event and conversation types.
 function mapOutboxRow(row: OutboxRow): OutboxEvent {
+  const type = isOneOf(DELIVERY_EVENT_TYPES, row.event_type) ? row.event_type : null;
+  const conversationType = isOneOf(['room', 'dm'], row.conversation_type) ? row.conversation_type : null;
+  if (!type || !conversationType) throw new TypeError(`Outbox event ${row.event_id} has an unknown type`);
   return Object.freeze({
     eventId: row.event_id,
     logicalKey: row.logical_key,
-    type: row.event_type,
-    conversation: Object.freeze({ type: row.conversation_type, id: row.conversation_id }),
+    type,
+    conversation: Object.freeze({ type: conversationType, id: row.conversation_id }),
     messageId: row.message_id,
     revision: Number(row.revision),
     payload: row.payload,
@@ -131,7 +129,7 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
       )
       .returningAll()
       .executeTakeFirstOrThrow();
-    return mapOutboxRow(row as OutboxRow);
+    return mapOutboxRow(row);
   }
 
   // A lease is taken when it is free or expired, or renewed by its owner; each
@@ -261,7 +259,7 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
       .whereRef('outbox.event_id', '=', 'candidates.event_id')
       .returningAll('outbox')
       .execute();
-    return rows.map((row) => mapOutboxRow(row as OutboxRow));
+    return rows.map(mapOutboxRow);
   }
 
   function claimedUnderLease(eventId: string, lease: DeliveryLease) {
@@ -302,7 +300,7 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
       maxAttempts?: unknown;
     } = {}
   ): Promise<void> {
-    const reason = (error as { message?: unknown } | null | undefined)?.message || error || 'Message delivery failed';
+    const reason = (isRecord(error) && error.message) || error || 'Message delivery failed';
     const message = (typeof reason === 'string' ? reason : 'Message delivery failed').slice(0, 2_000);
     const attemptsLeft = sql<boolean>`attempts < ${positiveInteger(maxAttempts, 12, 100)}`;
     const result = await claimedUnderLease(eventId, lease)
@@ -335,7 +333,7 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
       .where('event_id', '=', eventId)
       .limit(1)
       .executeTakeFirst();
-    return row ? mapOutboxRow(row as OutboxRow) : null;
+    return row ? mapOutboxRow(row) : null;
   }
 
   // What the worker delivered from `since` on, oldest first: the events an API
@@ -350,7 +348,7 @@ function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } =
       .orderBy('event_id')
       .limit(positiveInteger(limit, 500, 1_000))
       .execute();
-    return rows.map((row) => mapOutboxRow(row as OutboxRow));
+    return rows.map(mapOutboxRow);
   }
 
   return Object.freeze({

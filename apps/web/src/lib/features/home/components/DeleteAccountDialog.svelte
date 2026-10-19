@@ -32,7 +32,7 @@
       .then((result) => {
         if (!cancelled) preview = result;
       })
-      .catch((cause) => {
+      .catch((cause: unknown) => {
         if (!cancelled)
           error = cause instanceof Error && cause.message ? cause.message : 'Не удалось подготовить удаление';
       });

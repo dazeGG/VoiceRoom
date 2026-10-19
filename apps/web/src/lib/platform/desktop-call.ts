@@ -1,3 +1,4 @@
+import { isOneOf, isRecord } from '@voice-room/shared/guards';
 import { createLogger, errorContext } from '$lib/shared/log';
 
 const log = createLogger('desktop:call');
@@ -42,7 +43,7 @@ export function syncDesktopCallState(state: DesktopCallState): void {
   lastSentKey = key;
   void Promise.resolve()
     .then(() => bridge.setState(payload))
-    .catch((error) => {
+    .catch((error: unknown) => {
       if (lastSentKey === key) lastSentKey = '';
       log.warn('desktop call state sync failed', errorContext(error));
     });
@@ -52,10 +53,8 @@ export function bindDesktopCallActions(handlers: Record<DesktopCallAction, () =>
   const bridge = getBridge();
   if (typeof bridge?.onAction !== 'function') return () => {};
   const unsubscribe = bridge.onAction((payload) => {
-    const action = (payload as { action?: unknown } | null)?.action;
-    if (typeof action === 'string' && CALL_ACTIONS.includes(action as DesktopCallAction)) {
-      handlers[action as DesktopCallAction]();
-    }
+    const action = isRecord(payload) ? payload.action : undefined;
+    if (isOneOf(CALL_ACTIONS, action)) handlers[action]();
   });
   return typeof unsubscribe === 'function' ? unsubscribe : () => {};
 }

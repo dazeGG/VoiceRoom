@@ -1,5 +1,8 @@
+import { Type } from 'typebox';
+import { Value } from 'typebox/value';
+import { MembershipMember } from '@voice-room/shared/contracts/membership';
 import { browser } from '$app/environment';
-import { fetchRoomMemberships, leaveRoomMembership, type MembershipMember } from '$lib/api/memberships';
+import { fetchRoomMemberships, leaveRoomMembership } from '$lib/api/memberships';
 
 interface RoomMembershipEntry {
   cachedMembers: MembershipMember[];
@@ -15,6 +18,11 @@ interface RoomMembershipEntry {
 }
 
 const CACHE_PREFIX = 'voice-room:membership:v1:';
+/** What persist() writes; a revision that does not read as a number counts as none. */
+const CachedMembership = Type.Object({
+  members: Type.Array(MembershipMember),
+  presenceRevision: Type.Optional(Type.Unknown())
+});
 
 export const roomMembershipState = $state<{ byRoomId: Record<string, RoomMembershipEntry> }>({ byRoomId: {} });
 
@@ -39,8 +47,8 @@ function cacheKey(roomId: string): string {
 function readCache(roomId: string): RoomMembershipEntry | null {
   if (!browser) return null;
   try {
-    const parsed = JSON.parse(localStorage.getItem(cacheKey(roomId)) || 'null') as Partial<RoomMembershipEntry> | null;
-    if (!parsed || !Array.isArray(parsed.members)) return null;
+    const parsed: unknown = JSON.parse(localStorage.getItem(cacheKey(roomId)) || 'null');
+    if (!Value.Check(CachedMembership, parsed)) return null;
     return {
       ...emptyEntry(),
       cachedMembers: parsed.members,

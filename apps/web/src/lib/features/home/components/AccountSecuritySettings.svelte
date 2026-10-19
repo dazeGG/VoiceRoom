@@ -307,7 +307,7 @@
   {login}
   replacing={Boolean(recoveryCodes?.generatedAt && recoveryCodes.remaining > 0)}
   onClose={() => (codesDialogOpen = false)}
-  onGenerated={(status) => (recoveryCodes = status)}
+  onGenerated={(status: RecoveryCodesStatus) => (recoveryCodes = status)}
   {onToast}
 />
 

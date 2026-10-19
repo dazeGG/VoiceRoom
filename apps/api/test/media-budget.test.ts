@@ -4,6 +4,7 @@ import type { MediaGrant } from '@voice-room/shared/contracts/realtime';
 import { createRoomRealtimeRuntime, type RoomRuntimeDeps } from '../src/realtime/room-runtime.ts';
 import type { WsConnection } from '../src/realtime/registry.ts';
 import { fake } from './fakes/index.ts';
+import { defined } from './helpers/assert-defined.ts';
 import { runtimeDeps } from './fakes/room-runtime.ts';
 
 type TestRoom = Parameters<RoomRuntimeDeps['broadcast']>[0];
@@ -67,10 +68,14 @@ async function seat(runtime: Runtime, roomId: string, n: number): Promise<Seat> 
   return { conn, target };
 }
 
-async function seats(runtime: Runtime, roomId: string, count: number): Promise<Seat[]> {
-  const result: Seat[] = [];
-  for (let n = 1; n <= count; n += 1) result.push(await seat(runtime, roomId, n));
-  return result;
+// At least two people, so a test can name the first two.
+async function seats(runtime: Runtime, roomId: string, count: number): Promise<[Seat, Seat, ...Seat[]]> {
+  assert.ok(count >= 2, 'seats() seats at least two people');
+  const first = await seat(runtime, roomId, 1);
+  const second = await seat(runtime, roomId, 2);
+  const rest: Seat[] = [];
+  for (let n = 3; n <= count; n += 1) rest.push(await seat(runtime, roomId, n));
+  return [first, second, ...rest];
 }
 
 function ask(runtime: Runtime, { conn, target }: Seat, kind: 'screen' | 'camera', profileId?: string) {
@@ -90,7 +95,7 @@ test('a screen share fits the budget at the quality asked for', async () => {
   const { runtime } = budgetRuntime({ MEDIA_BUDGET_MBPS: 80 });
   const [first] = await seats(runtime, 'room-a', 9);
 
-  assert.deepEqual(ask(runtime, first!, 'screen', 'high-60'), {
+  assert.deepEqual(ask(runtime, first, 'screen', 'high-60'), {
     roomId: 'room-a',
     kind: 'screen',
     granted: true,
@@ -102,17 +107,17 @@ test('a busy server offers the best 720p profile that still fits', async () => {
   const { runtime } = budgetRuntime({ MEDIA_BUDGET_MBPS: 120 });
   const [first, second] = await seats(runtime, 'room-a', 9);
 
-  ask(runtime, first!, 'screen', 'high-60');
+  ask(runtime, first, 'screen', 'high-60');
   // 40 Mbit/s left: 720p 60 FPS needs 60, 720p 30 FPS needs exactly 40.
-  assert.equal(profileOf(ask(runtime, second!, 'screen', 'high-60')), 'balanced-30');
+  assert.equal(profileOf(ask(runtime, second, 'screen', 'high-60')), 'balanced-30');
 });
 
 test('a full budget refuses the screen share outright', async () => {
   const { runtime } = budgetRuntime({ MEDIA_BUDGET_MBPS: 80 });
   const [first, second] = await seats(runtime, 'room-a', 9);
 
-  ask(runtime, first!, 'screen', 'high-60');
-  assert.deepEqual(ask(runtime, second!, 'screen', 'balanced-5'), {
+  ask(runtime, first, 'screen', 'high-60');
+  assert.deepEqual(ask(runtime, second, 'screen', 'balanced-5'), {
     roomId: 'room-a',
     kind: 'screen',
     granted: false,
@@ -125,58 +130,58 @@ test('the budget is shared by every room on the server', async () => {
   const [streamer] = await seats(runtime, 'room-a', 9);
   const [other] = await seats(runtime, 'room-b', 2);
 
-  ask(runtime, streamer!, 'screen', 'high-60');
-  assert.equal(ask(runtime, other!, 'screen', 'balanced-30')?.granted, false);
+  ask(runtime, streamer, 'screen', 'high-60');
+  assert.equal(ask(runtime, other, 'screen', 'balanced-30')?.granted, false);
 });
 
 test('a stream started without asking, by an older client, still counts', async () => {
   const { runtime } = budgetRuntime({ MEDIA_BUDGET_MBPS: 80 });
   const [legacy, second] = await seats(runtime, 'room-a', 9);
 
-  await runtime.updatePeerState(legacy!.conn, {
-    ...legacy!.target,
+  await runtime.updatePeerState(legacy.conn, {
+    ...legacy.target,
     patch: { screen: true, screenProfileId: 'high-60' }
   });
-  assert.equal(ask(runtime, second!, 'screen', 'balanced-5')?.granted, false);
+  assert.equal(ask(runtime, second, 'screen', 'balanced-5')?.granted, false);
 });
 
 test('a stopped stream gives its share back', async () => {
   const { runtime } = budgetRuntime({ MEDIA_BUDGET_MBPS: 80 });
   const [first, second] = await seats(runtime, 'room-a', 9);
 
-  ask(runtime, first!, 'screen', 'high-60');
-  await runtime.updatePeerState(first!.conn, { ...first!.target, patch: { screen: true, screenProfileId: 'high-60' } });
-  await runtime.updatePeerState(first!.conn, { ...first!.target, patch: { screen: false, screenProfileId: '' } });
+  ask(runtime, first, 'screen', 'high-60');
+  await runtime.updatePeerState(first.conn, { ...first.target, patch: { screen: true, screenProfileId: 'high-60' } });
+  await runtime.updatePeerState(first.conn, { ...first.target, patch: { screen: false, screenProfileId: '' } });
 
-  assert.equal(profileOf(ask(runtime, second!, 'screen', 'high-60')), 'high-60');
+  assert.equal(profileOf(ask(runtime, second, 'screen', 'high-60')), 'high-60');
 });
 
 test('a grant holds its share until the stream is published, even through other presence updates', async () => {
   const { runtime } = budgetRuntime({ MEDIA_BUDGET_MBPS: 80 });
   const [first, second] = await seats(runtime, 'room-a', 9);
 
-  ask(runtime, first!, 'screen', 'high-60');
-  await runtime.updatePeerState(first!.conn, { ...first!.target, patch: { muted: true, screen: false } });
+  ask(runtime, first, 'screen', 'high-60');
+  await runtime.updatePeerState(first.conn, { ...first.target, patch: { muted: true, screen: false } });
 
-  assert.equal(ask(runtime, second!, 'screen', 'balanced-5')?.granted, false);
+  assert.equal(ask(runtime, second, 'screen', 'balanced-5')?.granted, false);
 });
 
 test('a grant that never turned into a stream lapses after a minute', async () => {
   const { clock, runtime } = budgetRuntime({ MEDIA_BUDGET_MBPS: 80 });
   const [first, second] = await seats(runtime, 'room-a', 9);
 
-  ask(runtime, first!, 'screen', 'high-60');
+  ask(runtime, first, 'screen', 'high-60');
   clock.now += 60_001;
 
-  assert.equal(profileOf(ask(runtime, second!, 'screen', 'high-60')), 'high-60');
+  assert.equal(profileOf(ask(runtime, second, 'screen', 'high-60')), 'high-60');
 });
 
 test('asking again replaces your own share instead of adding to it', async () => {
   const { runtime } = budgetRuntime({ MEDIA_BUDGET_MBPS: 80 });
   const [first] = await seats(runtime, 'room-a', 9);
 
-  ask(runtime, first!, 'screen', 'high-60');
-  assert.equal(profileOf(ask(runtime, first!, 'screen', 'high-60')), 'high-60');
+  ask(runtime, first, 'screen', 'high-60');
+  assert.equal(profileOf(ask(runtime, first, 'screen', 'high-60')), 'high-60');
 });
 
 test('a new stream in a small room is charged as if the room had nine people, since rooms grow', async () => {
@@ -184,7 +189,7 @@ test('a new stream in a small room is charged as if the room had nine people, si
   const [first] = await seats(runtime, 'room-a', 2);
 
   // Eight viewers counted: 1080p 60 FPS would be 80, 720p 60 FPS 60, 720p 30 FPS 40.
-  assert.equal(profileOf(ask(runtime, first!, 'screen', 'high-60')), 'balanced-30');
+  assert.equal(profileOf(ask(runtime, first, 'screen', 'high-60')), 'balanced-30');
 });
 
 test('people in voice take their share of the budget before any stream', async () => {
@@ -193,7 +198,7 @@ test('people in voice take their share of the budget before any stream', async (
   const { runtime } = budgetRuntime({ MEDIA_BUDGET_MBPS: 100, MEDIA_BUDGET_VOICE_PEERS: 20 });
   const [first] = await seats(runtime, 'room-a', 9);
 
-  assert.equal(profileOf(ask(runtime, first!, 'screen', 'high-60')), 'balanced-30');
+  assert.equal(profileOf(ask(runtime, first, 'screen', 'high-60')), 'balanced-30');
 });
 
 test('no video is left once the server holds MEDIA_BUDGET_VOICE_PEERS people in voice, in any rooms', async () => {
@@ -201,7 +206,7 @@ test('no video is left once the server holds MEDIA_BUDGET_VOICE_PEERS people in 
   const [first] = await seats(runtime, 'room-a', 9);
   await seats(runtime, 'room-b', 9);
 
-  assert.deepEqual(ask(runtime, first!, 'camera'), {
+  assert.deepEqual(ask(runtime, first, 'camera'), {
     roomId: 'room-a',
     kind: 'camera',
     granted: false,
@@ -214,26 +219,26 @@ test('a camera claim ends when the camera goes on and off, and survives repeats 
   const { runtime } = budgetRuntime({ MEDIA_BUDGET_MBPS: 4 });
   const [first, second] = await seats(runtime, 'room-a', 9);
 
-  ask(runtime, first!, 'camera');
-  await runtime.updatePeerState(first!.conn, { ...first!.target, patch: { camera: false, muted: true } });
-  assert.equal(ask(runtime, second!, 'camera')?.granted, false);
+  ask(runtime, first, 'camera');
+  await runtime.updatePeerState(first.conn, { ...first.target, patch: { camera: false, muted: true } });
+  assert.equal(ask(runtime, second, 'camera')?.granted, false);
 
-  await runtime.updatePeerState(first!.conn, { ...first!.target, patch: { camera: true } });
-  assert.equal(ask(runtime, second!, 'camera')?.granted, false);
-  await runtime.updatePeerState(first!.conn, { ...first!.target, patch: { camera: false } });
-  assert.equal(ask(runtime, second!, 'camera')?.granted, true);
+  await runtime.updatePeerState(first.conn, { ...first.target, patch: { camera: true } });
+  assert.equal(ask(runtime, second, 'camera')?.granted, false);
+  await runtime.updatePeerState(first.conn, { ...first.target, patch: { camera: false } });
+  assert.equal(ask(runtime, second, 'camera')?.granted, true);
 });
 
 test('a camera that is on stays counted when its owner reconnects', async () => {
   const { runtime } = budgetRuntime({ MEDIA_BUDGET_MBPS: 4 });
   const [first, second] = await seats(runtime, 'room-a', 9);
 
-  ask(runtime, first!, 'camera');
-  await runtime.updatePeerState(first!.conn, { ...first!.target, patch: { camera: true } });
+  ask(runtime, first, 'camera');
+  await runtime.updatePeerState(first.conn, { ...first.target, patch: { camera: true } });
   const again = connection();
-  assert.equal((await runtime.joinVoiceRoom(again, { ...first!.target, name: 'Peer 1' }, null)).ok, true);
+  assert.equal((await runtime.joinVoiceRoom(again, { ...first.target, name: 'Peer 1' }, null)).ok, true);
 
-  assert.equal(ask(runtime, second!, 'camera')?.granted, false);
+  assert.equal(ask(runtime, second, 'camera')?.granted, false);
 });
 
 test('a camera costs its 360p layer for each viewer', async () => {
@@ -241,9 +246,9 @@ test('a camera costs its 360p layer for each viewer', async () => {
   const { runtime } = budgetRuntime({ MEDIA_BUDGET_MBPS: 9 });
   const people = await seats(runtime, 'room-a', 10);
 
-  assert.deepEqual(ask(runtime, people[0]!, 'camera'), { roomId: 'room-a', kind: 'camera', granted: true });
-  assert.equal(ask(runtime, people[1]!, 'camera')?.granted, true);
-  assert.deepEqual(ask(runtime, people[2]!, 'camera'), {
+  assert.deepEqual(ask(runtime, people[0], 'camera'), { roomId: 'room-a', kind: 'camera', granted: true });
+  assert.equal(ask(runtime, people[1], 'camera')?.granted, true);
+  assert.deepEqual(ask(runtime, defined(people[2], 'the third person'), 'camera'), {
     roomId: 'room-a',
     kind: 'camera',
     granted: false,
@@ -254,17 +259,17 @@ test('a camera costs its 360p layer for each viewer', async () => {
 test('a room runs at most MAX_ROOM_SCREENS screen shares, other rooms are not affected', async () => {
   const { runtime } = budgetRuntime({ MAX_ROOM_SCREENS: 1 });
   const [first, second] = await seats(runtime, 'room-a', 2);
-  const [elsewhere] = await seats(runtime, 'room-b', 1);
+  const elsewhere = await seat(runtime, 'room-b', 1);
 
-  ask(runtime, first!, 'screen', 'balanced-30');
-  assert.deepEqual(ask(runtime, second!, 'screen', 'balanced-30'), {
+  ask(runtime, first, 'screen', 'balanced-30');
+  assert.deepEqual(ask(runtime, second, 'screen', 'balanced-30'), {
     roomId: 'room-a',
     kind: 'screen',
     granted: false,
     reason: 'room_screens_full',
     maxRoomScreens: 1
   });
-  assert.equal(ask(runtime, elsewhere!, 'screen', 'balanced-30')?.granted, true);
+  assert.equal(ask(runtime, elsewhere, 'screen', 'balanced-30')?.granted, true);
 });
 
 test('with no limits set every request is granted as asked', async () => {
@@ -278,12 +283,12 @@ test('only the connection that holds the voice session may ask', async () => {
   const { runtime } = budgetRuntime({ MEDIA_BUDGET_MBPS: 80 });
   const [first] = await seats(runtime, 'room-a', 2);
 
-  assert.deepEqual(runtime.requestMedia(connection(), { ...first!.target, kind: 'screen' }), {
+  assert.deepEqual(runtime.requestMedia(connection(), { ...first.target, kind: 'screen' }), {
     ok: false,
     code: 'not_active_peer'
   });
   assert.deepEqual(
-    runtime.requestMedia(first!.conn, { ...first!.target, sessionToken: 'x'.repeat(32), kind: 'screen' }),
+    runtime.requestMedia(first.conn, { ...first.target, sessionToken: 'x'.repeat(32), kind: 'screen' }),
     { ok: false, code: 'invalid_session' }
   );
 });

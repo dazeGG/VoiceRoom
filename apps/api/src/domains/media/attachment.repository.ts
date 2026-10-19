@@ -3,6 +3,7 @@ import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { MessageAttachments } from '../../platform/db/schema.ts';
+import { isArray, isRecord } from '@voice-room/shared/guards';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type AttachmentPool = QueryClient & { connect?: () => Promise<pg.PoolClient> };
@@ -11,11 +12,7 @@ type Client = QueryClient | null | undefined;
 export type AttachmentContext = 'room' | 'dm';
 export type AttachmentState = 'uploading' | 'processing' | 'ready' | 'failed' | 'deleted';
 
-type AttachmentRow = Omit<Selectable<MessageAttachments>, 'context' | 'state' | 'metadata'> & {
-  context: AttachmentContext;
-  state: AttachmentState;
-  metadata: Record<string, unknown> | null;
-};
+type AttachmentRow = Selectable<MessageAttachments>;
 
 export type Attachment = Readonly<{
   id: string;
@@ -58,6 +55,9 @@ export type AttachmentDraft = {
 };
 
 const CONTEXTS = new Set<string>(['room', 'dm']);
+const STATES: ReadonlySet<string> = new Set<AttachmentState>(['uploading', 'processing', 'ready', 'failed', 'deleted']);
+// The table's CHECK constraints keep both columns to these values.
+const isState = (value: string): value is AttachmentState => STATES.has(value);
 const MIME_TYPES = new Set<unknown>(['image/jpeg', 'image/png', 'image/webp']);
 // Uploads that never finished, failures, and ready files nobody sent.
 const CLEANUP_CANDIDATE_PREDICATE = sql<boolean>`(
@@ -74,13 +74,17 @@ function requiredText(value: unknown, name: string, max = 256): string {
 }
 
 function mapAttachment(row: AttachmentRow | null | undefined): Attachment | null {
-  if (!row) return null;
+  return row ? attachmentFromRow(row) : null;
+}
+
+function attachmentFromRow(row: AttachmentRow): Attachment {
+  const state = isState(row.state) ? row.state : 'failed';
   return Object.freeze({
     id: row.id,
     ownerId: row.owner_id,
-    context: row.context,
-    state: row.state === 'uploading' ? 'pending' : row.state,
-    internalState: row.state,
+    context: row.context === 'dm' ? 'dm' : 'room',
+    state: state === 'uploading' ? 'pending' : state,
+    internalState: state,
     clientRequestId: row.client_request_id,
     reservedBytes: row.reserved_bytes == null ? null : Number(row.reserved_bytes),
     reservationExpiresAt: row.reservation_expires_at,
@@ -99,7 +103,7 @@ function mapAttachment(row: AttachmentRow | null | undefined): Attachment | null
     directMessageId: row.direct_message_id,
     order: row.attachment_order ?? 0,
     failureCode: row.failure_code,
-    metadata: row.metadata || {},
+    metadata: isRecord(row.metadata) ? row.metadata : {},
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     uploadedAt: row.uploaded_at,
@@ -114,10 +118,8 @@ function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } =
   if (!pool || typeof pool.query !== 'function') throw new TypeError('A PostgreSQL pool is required');
   const base = pool;
   const on = (client: Client): Database => kyselyOn(client && typeof client.query === 'function' ? client : base);
-  const rows = (query: Promise<Selectable<MessageAttachments>[]>) =>
-    query.then((found) => found.map((row) => mapAttachment(row as AttachmentRow) as Attachment));
-  const row = (query: Promise<Selectable<MessageAttachments> | undefined>) =>
-    query.then((found) => mapAttachment(found as AttachmentRow | undefined));
+  const rows = (query: Promise<AttachmentRow[]>) => query.then((found) => found.map(attachmentFromRow));
+  const row = (query: Promise<AttachmentRow | undefined>) => query.then(mapAttachment);
 
   async function createDraft(
     {
@@ -336,18 +338,20 @@ function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } =
     },
     client?: Client
   ): Promise<Attachment[]> {
-    if (!Array.isArray(attachmentIds) || attachmentIds.length < 1 || attachmentIds.length > 4) {
+    if (!isArray(attachmentIds) || attachmentIds.length < 1 || attachmentIds.length > 4) {
       throw new TypeError('Between one and four attachment ids are required');
     }
     if (new Set(attachmentIds).size !== attachmentIds.length) {
       throw new TypeError('Attachment ids must be unique');
     }
+    const ids = attachmentIds.filter((id): id is string => typeof id === 'string');
+    if (ids.length !== attachmentIds.length) throw new TypeError('Attachment ids must be strings');
     const messageColumn = context === 'room' ? 'room_message_id' : context === 'dm' ? 'direct_message_id' : null;
     if (!messageColumn) throw new TypeError('Invalid attachment context');
     const result = await sql<AttachmentRow>`
       WITH requested AS MATERIALIZED (
         SELECT id::uuid, ordinality - 1 AS attachment_order
-        FROM unnest(${attachmentIds as string[]}::text[]) WITH ORDINALITY AS requested(id, ordinality)
+        FROM unnest(${ids}::text[]) WITH ORDINALITY AS requested(id, ordinality)
       ), candidates AS MATERIALIZED (
         SELECT attachment.id, requested.attachment_order
         FROM message_attachments AS attachment
@@ -363,12 +367,10 @@ function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } =
       WHERE attachment.id = candidates.id
         AND (SELECT count(*) FROM candidates) = (SELECT count(*) FROM requested)
       RETURNING attachment.*`.execute(on(client));
-    if (result.rows.length !== attachmentIds.length) {
+    if (result.rows.length !== ids.length) {
       throw new Error('One or more attachments cannot be bound');
     }
-    return result.rows
-      .map((bound) => mapAttachment(bound) as Attachment)
-      .sort((left, right) => left.order - right.order);
+    return result.rows.map(attachmentFromRow).sort((left, right) => left.order - right.order);
   }
 
   async function listForMessage(
@@ -408,7 +410,8 @@ function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } =
     );
     for (const attachment of attachments) {
       // Set on every row the query matched.
-      const messageId = (context === 'room' ? attachment.roomMessageId : attachment.directMessageId) as string;
+      const messageId = context === 'room' ? attachment.roomMessageId : attachment.directMessageId;
+      if (!messageId) continue;
       const list = byMessage.get(messageId);
       if (list) list.push(attachment);
       else byMessage.set(messageId, [attachment]);

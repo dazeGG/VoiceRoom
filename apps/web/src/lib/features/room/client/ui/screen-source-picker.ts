@@ -72,7 +72,7 @@ function closeScreenSourcePicker() {
 }
 
 export function closeScreenSourceOnBackdrop(event: MouseEvent | PointerEvent): void {
-  if ((event.target as HTMLElement).id === 'screenSourceDialog') cancelScreenSourcePicker();
+  if (event.target instanceof Element && event.target.id === 'screenSourceDialog') cancelScreenSourcePicker();
 }
 
 export function closeScreenSourceOnEscape(event: KeyboardEvent): void {

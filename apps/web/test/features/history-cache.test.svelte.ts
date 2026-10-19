@@ -4,7 +4,7 @@
 
 import { afterEach, expect, test } from 'vitest';
 import { createAnchoredHistory, type AnchoredHistoryPage } from '../../src/lib/features/room/room-history.svelte';
-import { clearHistoryCache } from '../../src/lib/shared/chat/history-cache';
+import { clearHistoryCache, createHistoryCache } from '../../src/lib/shared/chat/history-cache';
 
 type Item = { id: string; createdAt: number; text: string };
 
@@ -35,7 +35,7 @@ function history() {
       return answer.promise;
     },
     compare: (left, right) => left.createdAt - right.createdAt,
-    cacheKey: (scope) => `test:${scope}`
+    cache: createHistoryCache<Item>((messages) => $state.snapshot(messages))
   });
   return { anchored, pending };
 }
@@ -117,4 +117,20 @@ test('a kept copy stays shown when the newest page fails', async () => {
   expect(ids(anchored.state.messages)).toEqual(['m1']);
   expect(anchored.state.error).toBe('сеть');
   expect(anchored.state.loading).toBe(false);
+});
+
+test('the room and DM caches share one limit of kept conversations, the least recently used going first', () => {
+  const rooms = createHistoryCache<Item>((messages) => [...messages]);
+  const directs = createHistoryCache<Item>((messages) => [...messages]);
+  for (let index = 0; index < 20; index += 1) rooms.write(`r${index}`, [item(`m${index}`, index)]);
+  expect(rooms.read('r0')).toHaveLength(1);
+
+  directs.write('d0', [item('x1', 1)]);
+  expect(rooms.read('r1')).toBeUndefined();
+  expect(rooms.read('r0')).toHaveLength(1);
+  expect(directs.read('d0')).toHaveLength(1);
+
+  clearHistoryCache();
+  expect(rooms.read('r0')).toBeUndefined();
+  expect(directs.read('d0')).toBeUndefined();
 });

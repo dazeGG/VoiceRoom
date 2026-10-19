@@ -46,7 +46,10 @@ export function createRepeatReadBrake({
     // Re-inserting keeps the map ordered by last use, so the oldest key is first.
     seen.delete(key);
     seen.set(key, entry);
-    if (seen.size > maxKeys) seen.delete(seen.keys().next().value as string);
+    if (seen.size > maxKeys) {
+      const oldest = seen.keys().next();
+      if (!oldest.done) seen.delete(oldest.value);
+    }
     if (entry.count <= allowed) return true;
 
     if (held < maxHeld) {

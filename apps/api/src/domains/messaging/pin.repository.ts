@@ -2,22 +2,22 @@ import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { transaction as runInTransaction } from '../../platform/db/pool.ts';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 import { normalizeRoomMessageContent, type RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
-type PinPool = QueryClient & { connect?: () => Promise<pg.PoolClient> };
 
 type PinRow = {
   message_id: string;
   pinned_by: string;
   pinned_by_name: string | null;
-  pinned_at: Date | string | null;
+  pinned_at: Date;
   peer_id: string | null;
   author_user_id: string | null;
   name: string | null;
   text: string | null;
   content: unknown;
-  created_at: Date | string | null;
+  created_at: Date;
 };
 
 export type StoredPin = {
@@ -33,24 +33,12 @@ export type StoredPin = {
 
 type Override = { client?: QueryClient | null };
 
-function requireQuery(client: QueryClient | null | undefined): QueryClient {
-  if (!client || typeof client.query !== 'function') {
-    throw new TypeError('Pin repository requires a PostgreSQL query client');
-  }
-  return client;
-}
-
-function toMillis(value: Date | string | null): number | null {
-  if (!value) return null;
-  return value instanceof Date ? value.getTime() : new Date(value).getTime();
-}
-
 function mapPin(row: PinRow): StoredPin {
   return {
     messageId: row.message_id,
     pinnedBy: row.pinned_by,
     pinnedByName: row.pinned_by_name || '',
-    pinnedAt: toMillis(row.pinned_at),
+    pinnedAt: epochMillis(row.pinned_at),
     author: {
       peerId: row.peer_id || '',
       userId: row.author_user_id || null,
@@ -58,33 +46,28 @@ function mapPin(row: PinRow): StoredPin {
     },
     text: row.text || '',
     content: normalizeRoomMessageContent(row.content),
-    createdAt: toMillis(row.created_at)
+    createdAt: epochMillis(row.created_at)
   };
 }
 
-function createPinRepository({ client }: { client?: PinPool | null } = {}) {
-  const defaultClient: PinPool | null = client ? (requireQuery(client) as PinPool) : null;
-  const queryClient = (override?: QueryClient | null): QueryClient => requireQuery(override || defaultClient);
-
+function createPinRepository({ client }: { client: pg.Pool }) {
   async function transaction<T>(callback: (client: QueryClient) => Promise<T>): Promise<T> {
-    if (typeof callback !== 'function') throw new TypeError('Transaction callback is required');
-    if (typeof defaultClient?.connect !== 'function') return callback(queryClient());
-    return runInTransaction(defaultClient as Pick<pg.Pool, 'connect'>, callback);
+    return runInTransaction(client, callback);
   }
 
-  const on = (override?: QueryClient | null): Database => kyselyOn(queryClient(override));
+  const on = (override?: QueryClient | null): Database => kyselyOn(override || client);
 
-  async function lockRoom({ roomId, client: override }: { roomId?: string } & Override = {}): Promise<void> {
+  async function lockRoom({ roomId, client: override }: { roomId: string } & Override): Promise<void> {
     await sql`SELECT pg_advisory_xact_lock(hashtext(${`voice-room:room-pins:${roomId}`}))`.execute(on(override));
   }
 
   // Pins whose message is still there; deleted messages are dropped here rather
   // than in the service so the count and the list can never disagree.
-  function livePins(db: Database, roomId: string | undefined) {
+  function livePins(db: Database, roomId: string) {
     return db
       .selectFrom('room_message_pins as p')
       .innerJoin('room_messages as m', 'm.id', 'p.message_id')
-      .where('p.room_id', '=', roomId as string)
+      .where('p.room_id', '=', roomId)
       .where('m.deleted_at', 'is', null);
   }
 
@@ -93,7 +76,7 @@ function createPinRepository({ client }: { client?: PinPool | null } = {}) {
     roomId,
     limit = 50,
     client: override
-  }: { roomId?: string; limit?: number } & Override = {}): Promise<StoredPin[]> {
+  }: { roomId: string; limit?: number } & Override): Promise<StoredPin[]> {
     const db = on(override);
     const rows = await livePins(db, roomId)
       .leftJoin('users as pinner', 'pinner.id', 'p.pinned_by')
@@ -116,7 +99,7 @@ function createPinRepository({ client }: { client?: PinPool | null } = {}) {
     return rows.map(mapPin);
   }
 
-  async function countPins({ roomId, client: override }: { roomId?: string } & Override = {}): Promise<number> {
+  async function countPins({ roomId, client: override }: { roomId: string } & Override): Promise<number> {
     const row = await livePins(on(override), roomId)
       .select(sql<number>`COUNT(*)::int`.as('count'))
       .executeTakeFirst();
@@ -129,12 +112,12 @@ function createPinRepository({ client }: { client?: PinPool | null } = {}) {
     roomId,
     messageId,
     client: override
-  }: { roomId?: string; messageId?: string } & Override = {}): Promise<boolean> {
+  }: { roomId: string; messageId: string } & Override): Promise<boolean> {
     const row = await on(override)
       .selectFrom('room_messages')
       .select('id')
-      .where('id', '=', messageId as string)
-      .where('room_id', '=', roomId as string)
+      .where('id', '=', messageId)
+      .where('room_id', '=', roomId)
       .where('deleted_at', 'is', null)
       .executeTakeFirst();
     return Boolean(row);
@@ -145,10 +128,10 @@ function createPinRepository({ client }: { client?: PinPool | null } = {}) {
     messageId,
     userId,
     client: override
-  }: { roomId?: string; messageId?: string; userId?: string } & Override = {}): Promise<{ changed: boolean }> {
+  }: { roomId: string; messageId: string; userId: string } & Override): Promise<{ changed: boolean }> {
     const result = await on(override)
       .insertInto('room_message_pins')
-      .values({ room_id: roomId as string, message_id: messageId as string, pinned_by: userId as string })
+      .values({ room_id: roomId, message_id: messageId, pinned_by: userId })
       .onConflict((oc) => oc.columns(['room_id', 'message_id']).doNothing())
       .executeTakeFirst();
     return { changed: Number(result.numInsertedOrUpdatedRows ?? 0) > 0 };
@@ -158,11 +141,11 @@ function createPinRepository({ client }: { client?: PinPool | null } = {}) {
     roomId,
     messageId,
     client: override
-  }: { roomId?: string; messageId?: string } & Override = {}): Promise<{ changed: boolean }> {
+  }: { roomId: string; messageId: string } & Override): Promise<{ changed: boolean }> {
     const result = await on(override)
       .deleteFrom('room_message_pins')
-      .where('room_id', '=', roomId as string)
-      .where('message_id', '=', messageId as string)
+      .where('room_id', '=', roomId)
+      .where('message_id', '=', messageId)
       .executeTakeFirst();
     return { changed: result.numDeletedRows > 0n };
   }

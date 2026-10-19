@@ -25,9 +25,9 @@
 
 {#if content?.version === 1 && Array.isArray(content.segments)}
   <span class="structured-message">
-    {#each content.segments as segment}{#if segment.type === 'text'}<ChatText
+    {#each content.segments as segment, i (i)}{#if segment.type === 'text'}<ChatText
           text={segment.text}
-        />{:else if segment.type === 'link'}<a href={segment.href} target="_blank" rel="noopener noreferrer"
+        />{:else if segment.type === 'link'}<a href={segment.href} target="_blank" rel="noopener noreferrer external"
           >{segment.label}</a
         >{:else if segment.type === 'mention'}{#if onmention && segment.userId}<button
             class="structured-message__mention"

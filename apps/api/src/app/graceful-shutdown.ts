@@ -28,7 +28,13 @@ export function installGracefulShutdown(
   server: ClosableServer,
   options: GracefulShutdownOptions
 ): (signal: string) => Promise<void> {
-  const { logger, exit = process.exit, timeoutMs = 8000, socketGraceMs = 1000, signals = process } = options;
+  const {
+    logger,
+    exit = (code: number) => process.exit(code),
+    timeoutMs = 8000,
+    socketGraceMs = 1000,
+    signals = process
+  } = options;
   let shuttingDown = false;
 
   async function shutdown(signal: string): Promise<void> {

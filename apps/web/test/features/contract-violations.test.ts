@@ -6,12 +6,11 @@ import { expect, test, vi } from 'vitest';
 import { Type } from 'typebox';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { freshImport, muteWarnings } from '../helpers/fresh-module.ts';
-import type * as ClientModule from '../../src/lib/api/client.ts';
 
 const Counted = Type.Object({ ok: Type.Literal(true), n: Type.Number() });
 
 test('an answer outside its contract asks for a version check', async () => {
-  const { api } = await freshImport<typeof ClientModule>('/src/lib/api/client.ts');
+  const { api } = await freshImport(() => import('../../src/lib/api/client.ts'));
   const { onContractViolation } = await import('../../src/lib/api/contract-violations.ts');
   muteWarnings();
   const violated = vi.fn();

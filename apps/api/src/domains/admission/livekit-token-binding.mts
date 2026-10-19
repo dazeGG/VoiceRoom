@@ -7,6 +7,7 @@
 // does not match the credential it just admitted.
 
 import type { IncomingHttpHeaders } from 'node:http';
+import { isArray } from '@voice-room/shared/guards';
 
 export const DEFAULT_ROOM_PREFIX = 'voice-room-';
 // A JWT minted for this admission is signed moments after the gate credential;
@@ -39,10 +40,11 @@ export type BindingResult =
 export type TokenExtraction =
   { ok: true; token: string } | { ok: false; code: 'missing_token' | 'ambiguous_token' | 'malformed_authorization' };
 
+/** The JWT claims the binding reads; LiveKit puts the room in `video.room`. */
 interface LiveKitJwtPayload {
-  sub?: unknown;
-  nbf?: unknown;
-  video?: { room?: unknown } | null;
+  sub: unknown;
+  nbf: unknown;
+  room: unknown;
 }
 
 export function normalizeLiveKitRoomPrefix(value: string | null | undefined = process.env.LIVEKIT_ROOM_PREFIX): string {
@@ -55,20 +57,26 @@ export function getLiveKitRoomName(roomId: string, prefix: string = normalizeLiv
 }
 
 export function decodeJwtPayload(token: string): LiveKitJwtPayload | null {
-  const parts = String(token || '').split('.');
+  const parts = (token || '').split('.');
   if (parts.length !== 3 || !parts[1]) return null;
+  let payload: unknown;
   try {
-    const payload: unknown = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-    return payload && typeof payload === 'object' && !Array.isArray(payload) ? (payload as LiveKitJwtPayload) : null;
+    payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
   } catch {
     return null;
   }
+  if (!payload || typeof payload !== 'object' || isArray(payload)) return null;
+  const video = 'video' in payload ? payload.video : undefined;
+  return {
+    sub: 'sub' in payload ? payload.sub : undefined,
+    nbf: 'nbf' in payload ? payload.nbf : undefined,
+    room: video && typeof video === 'object' && 'room' in video ? video.room : undefined
+  };
 }
 
 // '' when there is no header, null when it is present but unusable.
-function readBearer(headers: IncomingHttpHeaders): string | null {
-  const value: unknown = headers.authorization;
-  if (Array.isArray(value)) return value.length === 1 ? readBearer({ authorization: value[0] }) : null;
+function readBearer(value: unknown): string | null {
+  if (isArray(value)) return value.length === 1 ? readBearer(value[0]) : null;
   if (typeof value !== 'string' || !value) return '';
   const match = /^Bearer\s+(\S+)$/i.exec(value.trim());
   return match?.[1] ?? null;
@@ -82,7 +90,7 @@ export function extractAccessToken(requestUrl: string | undefined, headers: Inco
   const parsed = new URL(requestUrl || '/', 'ws://gate.local');
   const queryTokens = parsed.searchParams.getAll('access_token');
   if (queryTokens.length > 1) return { ok: false, code: 'ambiguous_token' };
-  const bearer = readBearer(headers);
+  const bearer = readBearer(headers.authorization);
   if (bearer === null) return { ok: false, code: 'malformed_authorization' };
   const queryToken = queryTokens[0] || '';
   if (bearer && queryToken && bearer !== queryToken) return { ok: false, code: 'ambiguous_token' };
@@ -107,7 +115,7 @@ export function verifyAccessTokenBinding({
   const payload = decodeJwtPayload(extracted.token);
   if (!payload) return { ok: false, code: 'malformed_token' };
   if (typeof payload.sub !== 'string' || payload.sub !== claims.peer) return { ok: false, code: 'identity_mismatch' };
-  const room = payload.video && typeof payload.video === 'object' ? payload.video.room : undefined;
+  const { room } = payload;
   if (typeof room !== 'string' || room !== getLiveKitRoomName(claims.room, roomPrefix)) {
     return { ok: false, code: 'room_mismatch' };
   }

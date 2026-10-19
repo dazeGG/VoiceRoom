@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { MediaError } from './storage.ts';
 
 const DEFAULT_MIN_FREE_BYTES = 2 * 1024 * 1024 * 1024;
 const DEFAULT_RECOVERY_BYTES = 256 * 1024 * 1024;
@@ -17,7 +18,7 @@ function createMediaPressureService({
   minFreeBytes = DEFAULT_MIN_FREE_BYTES,
   recoveryBytes = DEFAULT_RECOVERY_BYTES,
   onSnapshot = () => {},
-  statfs = fs.statfs as Statfs,
+  statfs = fs.statfs,
   storagePath
 }: {
   checkIntervalMs?: number;
@@ -68,13 +69,7 @@ function createMediaPressureService({
   async function assertAcceptingUploads(): Promise<PressureSnapshot> {
     const state = await measure();
     if (!state.healthy) {
-      const error = new Error('Media uploads are temporarily unavailable') as Error & {
-        code?: string;
-        statusCode?: number;
-      };
-      error.code = 'MEDIA_PRESSURE';
-      error.statusCode = 503;
-      throw error;
+      throw new MediaError('MEDIA_PRESSURE', 'Media uploads are temporarily unavailable', 503);
     }
     return state;
   }

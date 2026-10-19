@@ -4,7 +4,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { installFakeWebSocket, FakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { freshImport } from '../helpers/fresh-module.ts';
-import type * as BoundaryModule from '../../src/lib/platform/desktop-boundary.ts';
 
 const IPHONE =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Mobile/15E148 Safari/604.1';
@@ -18,7 +17,7 @@ function useDevice(userAgent: string, maxTouchPoints = 0) {
 
 async function load() {
   installFakeWebSocket();
-  const boundary = await freshImport<typeof BoundaryModule>('/src/lib/platform/desktop-boundary.ts');
+  const boundary = await freshImport(() => import('../../src/lib/platform/desktop-boundary.ts'));
   const realtime = await import('../../src/lib/api/realtime.ts');
   return { boundary, realtime };
 }

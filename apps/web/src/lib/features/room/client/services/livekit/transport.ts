@@ -76,7 +76,7 @@ export async function connectLiveKitWithFallback(
     try {
       await room.connect(url, credentials.token, {
         autoSubscribe: false,
-        ...(isForcedRelayDiagnostic() ? { rtcConfig: { iceTransportPolicy: 'relay' as RTCIceTransportPolicy } } : {})
+        ...(isForcedRelayDiagnostic() ? { rtcConfig: { iceTransportPolicy: 'relay' as const } } : {})
       });
       if (!isCurrent()) {
         // Never bound or committed, so there is no room state to unwind.

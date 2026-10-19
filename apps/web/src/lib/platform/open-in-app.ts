@@ -64,7 +64,7 @@ export function shouldOfferOpenInApp(signals: OpenInAppSignals): boolean {
 
 export function readOpenInAppSignals(): OpenInAppSignals {
   if (typeof window === 'undefined') return { desktopBridge: false };
-  const nav = window.navigator as Navigator & { userAgentData?: { mobile?: boolean } };
+  const nav = window.navigator;
   return {
     automated: nav.webdriver === true,
     desktopBridge: Boolean(window.voiceRoomRuntime?.isDesktop),

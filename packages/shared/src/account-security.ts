@@ -1,6 +1,8 @@
 // Account security: recovery codes, sign-in alerts, session descriptions,
 // the "what's new" announcement, and account deletion.
 
+import { isOneOf, isRecord } from './guards.ts';
+
 export interface UserAgentDescription {
   client: string;
   os: string;
@@ -59,8 +61,6 @@ export interface AccountDeletionPreview {
   rooms: AccountDeletionRoom[];
 }
 
-type Loose = Record<string, unknown>;
-
 export const RECOVERY_CODE_COUNT = 10 as const;
 export const RECOVERY_CODE_LENGTH = 16 as const;
 export const RECOVERY_CODE_GROUP_LENGTH = 4 as const;
@@ -91,8 +91,9 @@ const RELEASE_VERSION_PATTERN = /^(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})\.(0|[1-9]\d
 
 // Order matters: Chromium-based browsers also carry "Chrome/" and "Safari/",
 // and the desktop shell is Electron, which carries both as well.
+const DESKTOP_APP_PATTERN = /VoiceRoom|Electron\//i;
 const CLIENT_RULES: readonly (readonly [RegExp, string])[] = Object.freeze([
-  [/VoiceRoom|Electron\//i, 'VoiceRoom Desktop'],
+  [DESKTOP_APP_PATTERN, 'VoiceRoom Desktop'],
   [/YaBrowser\//, 'Яндекс Браузер'],
   [/Edg(?:A|iOS)?\//, 'Edge'],
   [/OPR\/|Opera/, 'Opera'],
@@ -144,7 +145,9 @@ export function compareReleaseVersions(left: unknown, right: unknown): -1 | 0 | 
   const leftParts = a.split('.').map(Number);
   const rightParts = b.split('.').map(Number);
   for (let index = 0; index < 3; index += 1) {
-    if (leftParts[index] !== rightParts[index]) return leftParts[index]! < rightParts[index]! ? -1 : 1;
+    const leftPart = leftParts[index] ?? 0;
+    const rightPart = rightParts[index] ?? 0;
+    if (leftPart !== rightPart) return leftPart < rightPart ? -1 : 1;
   }
   return 0;
 }
@@ -171,10 +174,10 @@ export function isDeletedAccountLogin(value: unknown): boolean {
 }
 
 export function normalizeLoginAlert(input: unknown): LoginAlert | null {
-  if (!input || typeof input !== 'object') return null;
-  const value = input as Loose;
+  if (!isRecord(input)) return null;
+  const value = input;
   const id = typeof value.id === 'string' && UUID_PATTERN.test(value.id) ? value.id.toLowerCase() : '';
-  const kind = (LOGIN_ALERT_KINDS as readonly unknown[]).includes(value.kind) ? (value.kind as LoginAlertKind) : '';
+  const kind = isOneOf(LOGIN_ALERT_KINDS, value.kind) ? value.kind : '';
   const createdAt = Number(value.createdAt);
   if (!id || !kind || !Number.isSafeInteger(createdAt) || createdAt < 0) return null;
   return {
@@ -199,7 +202,7 @@ export function describeUserAgent(value: unknown): UserAgentDescription {
 // this rule, so they can never disagree about who has used the app.
 export function isDesktopAppUserAgent(value: unknown): boolean {
   const userAgent = typeof value === 'string' ? value.slice(0, 512) : '';
-  return CLIENT_RULES[0]![0].test(userAgent);
+  return DESKTOP_APP_PATTERN.test(userAgent);
 }
 
 /** Which kind of client a user agent is: the desktop app, a phone, or a browser on a computer. */
@@ -217,7 +220,7 @@ export function clientKind(userAgent: string | null | undefined): ClientKind | n
 // An older API sends neither flag: the app banner may then show, but the
 // one-time post-registration prompt never does.
 export function normalizeSelfUserFlags(value: unknown): SelfUserFlags {
-  const source = (value && typeof value === 'object' ? value : {}) as Loose;
+  const source = isRecord(value) ? value : {};
   return {
     hasUsedDesktopApp: source.hasUsedDesktopApp === true,
     appPromptSeen: source.appPromptSeen !== false
@@ -229,8 +232,8 @@ function boundedText(value: unknown, max: number): string {
 }
 
 export function normalizeAccountSession(input: unknown): AccountSession | null {
-  if (!input || typeof input !== 'object') return null;
-  const value = input as Loose;
+  if (!isRecord(input)) return null;
+  const value = input;
   const id =
     typeof value.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.id)
       ? value.id.toLowerCase()

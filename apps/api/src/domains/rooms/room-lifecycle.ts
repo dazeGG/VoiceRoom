@@ -8,8 +8,8 @@ import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import type { RoomPresence, RosterPeer } from '../../realtime/room-presence.ts';
-import type { GatePrincipalPeer } from '../admission/gate-principal.ts';
 import { publicLobbyRoom, publicPeer, roomAvatarUrl, type StoredRoom } from './room-views.ts';
+import { markOwnershipFinalized } from './peer-eviction.ts';
 
 interface RoomRuntime {
   mirrorLegacyRoomEvent(roomId: string, message: RoomPeerMessage): void;
@@ -49,8 +49,6 @@ export interface RoomLifecycleDeps {
   displayName(user: ProfileUser): string;
   logger(): Pick<Logger, 'error'>;
 }
-
-type OwnershipError = Error & { ownershipFinalized?: boolean };
 
 export function createRoomLifecycle(deps: RoomLifecycleDeps) {
   const { presence } = deps;
@@ -121,7 +119,7 @@ export function createRoomLifecycle(deps: RoomLifecycleDeps) {
     deps.runtime()?.invalidateRecipientCache(roomId);
     // Invitations outlive the inviter's session, so the deleted room is the
     // only thing left that can invalidate them.
-    void expireRoomInvitations(null, roomId).catch((error) => {
+    void expireRoomInvitations(null, roomId).catch((error: unknown) => {
       deps
         .logger()
         .error({ evt: LOG_EVENTS.ROOM_INVITATION_EXPIRY_FAILED, err: error }, 'failed to expire room invitations');
@@ -135,13 +133,14 @@ export function createRoomLifecycle(deps: RoomLifecycleDeps) {
         reason: 'deleted',
         finalizePeer: async ({ peer, ownershipFinalized }) => {
           if (!peer || ownershipFinalized) return { finalized: ownershipFinalized };
-          const principalPeer = peer as GatePrincipalPeer & RosterPeer;
           let failure: unknown = null;
           try {
-            await deps.credentials()!.revokePeer({
+            const credentials = deps.credentials();
+            if (!credentials) throw new Error('No gate credential boundary to revoke the peer');
+            await credentials.revokePeer({
               roomId,
-              accountUserId: principalPeer.accountUserId || null,
-              guestPrincipalId: principalPeer.gateGuestPrincipalId || ''
+              accountUserId: peer.accountUserId || null,
+              guestPrincipalId: peer.gateGuestPrincipalId || ''
             });
           } catch (error) {
             failure = error;
@@ -152,10 +151,7 @@ export function createRoomLifecycle(deps: RoomLifecycleDeps) {
           } catch (error) {
             failure ||= error;
           }
-          if (failure) {
-            (failure as OwnershipError).ownershipFinalized = true;
-            throw failure;
-          }
+          if (failure) throw markOwnershipFinalized(failure);
           return { finalized: true };
         }
       });

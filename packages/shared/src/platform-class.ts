@@ -1,6 +1,8 @@
 // Which kind of device the client runs on, and what that allows: the desktop
 // app features stay off on mobile, the room page works everywhere.
 
+import { isOneOf } from './guards.ts';
+
 export type PlatformClass = 'desktop' | 'mobile' | 'unknown';
 
 export interface PlatformSignals {
@@ -51,8 +53,8 @@ export function classifyPlatform(input: PlatformSignals = {}): PlatformClass {
 }
 
 export function platformPolicy(platformClass: unknown): PlatformPolicy {
-  const normalized: PlatformClass = (Object.values(PLATFORM_CLASSES) as unknown[]).includes(platformClass)
-    ? (platformClass as PlatformClass)
+  const normalized: PlatformClass = isOneOf(Object.values(PLATFORM_CLASSES), platformClass)
+    ? platformClass
     : PLATFORM_CLASSES.unknown;
   return {
     contractVersion: PLATFORM_CLASS_CONTRACT,

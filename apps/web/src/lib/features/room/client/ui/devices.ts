@@ -180,7 +180,7 @@ export function handleDeviceChange(): void {
   window.clearTimeout(deviceChangeTimer);
   deviceChangeTimer = window.setTimeout(() => {
     deviceChangeTimer = 0;
-    followDeviceChange().catch((error) => log.warn('device change handling failed', errorContext(error)));
+    followDeviceChange().catch((error: unknown) => log.warn('device change handling failed', errorContext(error)));
   }, DEVICE_CHANGE_SETTLE_MS);
 }
 
@@ -330,9 +330,11 @@ export function attachMicrophone(options: { automatic?: boolean } = {}): Promise
     state.microphoneMissing = false;
     setLocalMicrophoneCapture(capture);
     watchLocalMicrophone();
-    await publishLocalMicrophone().catch((error) => log.warn('microphone publish failed', errorContext(error)));
+    await publishLocalMicrophone().catch((error: unknown) =>
+      log.warn('microphone publish failed', errorContext(error))
+    );
     attachMeter(state.self, state.localStream);
-    await refreshDevices().catch((error) => log.warn('device list failed', errorContext(error)));
+    await refreshDevices().catch((error: unknown) => log.warn('device list failed', errorContext(error)));
     showToast(options.automatic ? 'Микрофон найден: включите его кнопкой микрофона' : 'Микрофон подключен');
     return true;
   });
@@ -341,7 +343,9 @@ export function attachMicrophone(options: { automatic?: boolean } = {}): Promise
 /** The microphone is gone and none can replace it: stay in the call to listen. */
 async function detachMicrophone(): Promise<void> {
   const capture = getLocalMicrophoneCapture();
-  await unpublishLocalMicrophone(false).catch((error) => log.warn('microphone unpublish failed', errorContext(error)));
+  await unpublishLocalMicrophone(false).catch((error: unknown) =>
+    log.warn('microphone unpublish failed', errorContext(error))
+  );
   stopMicrophoneCapture(capture);
   state.localStream = null;
   state.localRawStream = null;
@@ -386,11 +390,14 @@ async function replaceMicrophoneCapture(options: SwitchMicrophoneOptions): Promi
   stopMicrophoneCapture(previousCapture);
   if (!replaced) {
     // Nothing published yet; a reconnect publishes whatever capture is current.
-    await publishLocalMicrophone().catch((error) => log.warn('microphone publish failed', errorContext(error)));
+    await publishLocalMicrophone().catch((error: unknown) =>
+      log.warn('microphone publish failed', errorContext(error))
+    );
   }
   attachMeter(state.self, state.localStream);
   setParticipantSpeaking(state.self, false);
-  if (refreshDeviceList) await refreshDevices().catch((error) => log.warn('device list failed', errorContext(error)));
+  if (refreshDeviceList)
+    await refreshDevices().catch((error: unknown) => log.warn('device list failed', errorContext(error)));
   showToast(typeof successMessage === 'function' ? successMessage(nextCapture) : successMessage);
   return true;
 }
@@ -480,20 +487,18 @@ export function updateGateThresholdFromSlider(value: string | number): void {
       failureMessage: 'Не удалось применить гейт',
       refreshDeviceList: false,
       successMessage: isGateDisabled() ? 'Гейт выключен' : `Гейт: ${state.gateThresholdDb} dB`
-    }).catch((error) => log.error('device action failed', errorContext(error)));
+    }).catch((error: unknown) => log.error('device action failed', errorContext(error)));
   }, GATE_CAPTURE_SWITCH_DEBOUNCE_MS);
 }
 
 function updateActiveGateThreshold(threshold: number): boolean {
-  const gateProcessors = getMicrophoneProcessors(state.micProcessor).filter(
-    (processor) => processor.type === 'gate' && typeof processor.setThreshold === 'function'
-  );
-  if (gateProcessors.length === 0) return false;
-
-  for (const processor of gateProcessors) {
-    processor.setThreshold!(threshold);
+  let applied = false;
+  for (const processor of getMicrophoneProcessors(state.micProcessor)) {
+    if (processor.type !== 'gate') continue;
+    processor.setThreshold(threshold);
+    applied = true;
   }
-  return true;
+  return applied;
 }
 
 export async function switchOutputDevice(): Promise<void> {

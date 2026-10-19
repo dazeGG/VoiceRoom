@@ -9,7 +9,7 @@ const asScope = (scope: object) => scope as IdleScope;
 import assert from 'node:assert/strict';
 
 async function loadPresenceIdle() {
-  return freshImport<typeof PresenceIdle>('/src/lib/shared/presence-idle.ts');
+  return freshImport(() => import('../src/lib/shared/presence-idle.ts'));
 }
 
 test('automatic presence policy only restores idle-driven away', async () => {

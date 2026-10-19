@@ -17,8 +17,9 @@ import { avatarColorForPeerId } from '../rooms/avatar-color.ts';
 import { tokensMatch } from '../../platform/crypto/tokens-match.ts';
 import type { LiveRoom, PresencePeer } from '../rooms/room-views.ts';
 import { cleanChatText, messageFingerprint, normalizeAttachmentIds } from './message-input.ts';
+import { replayedMessage, type SendReservation } from './message-idempotency.repository.ts';
 import { requireReplyTarget } from './reply-projector.ts';
-import { publicChatMessage, type RoomChatMessage } from './room-chat-views.ts';
+import { isStoredChatMessage, publicChatMessage, type RoomChatMessage } from './room-chat-views.ts';
 import type { ReplyPreview } from '@voice-room/shared/contracts/messages';
 import { mayModerateRoomMessage, roomMessageAuthorship } from './room-message.policy.ts';
 import {
@@ -68,12 +69,7 @@ export interface RoomMessages {
 
 interface Delivery {
   idempotency: {
-    reserve(
-      client: DbClient,
-      input: Record<string, unknown>
-    ): Promise<
-      { kind: 'replay'; response: { body?: { message?: RoomChatMessage } } } | { kind: string; ledgerKey: string }
-    >;
+    reserve(client: DbClient, input: Record<string, unknown>): Promise<SendReservation>;
     complete(
       client: DbClient,
       key: string,
@@ -239,7 +235,7 @@ export function createRoomChatService(deps: RoomChatDeps) {
     const activePeer =
       requestedPeerId && !isReservedPeerId(requestedPeerId) ? (room.peers.get(requestedPeerId) ?? null) : null;
     let peerId = activePeer ? requestedPeerId : deps.identity.chatPeerId(sessionUser);
-    let avatarColorKey: string = deps.identity.avatarColorKey(sessionUser) || (avatarColorForPeerId(peerId) as string);
+    let avatarColorKey: string = deps.identity.avatarColorKey(sessionUser) || avatarColorForPeerId(peerId);
     if (activePeer) {
       if (!isLivePeer(activePeer, input.sessionToken)) return { status: 'invalid_session' };
       if (await deps.findRoomBan(roomId, activePeer.accountUserId, activePeer.ip || clientIp))
@@ -247,7 +243,7 @@ export function createRoomChatService(deps: RoomChatDeps) {
       peerId = activePeer.id;
       if (deps.identity.avatarColorKey(sessionUser))
         activePeer.avatarColorKey = deps.identity.avatarColorKey(sessionUser);
-      avatarColorKey = activePeer.avatarColorKey || (avatarColorForPeerId(peerId) as string);
+      avatarColorKey = activePeer.avatarColorKey || avatarColorForPeerId(peerId);
     } else if (!sessionUser) {
       return { status: 'presence_required' };
     }
@@ -302,13 +298,11 @@ export function createRoomChatService(deps: RoomChatDeps) {
                 fingerprint: messageFingerprint({ text, content, attachmentIds, replyToMessageId })
               });
               if (reservation.kind === 'replay') {
-                return {
-                  replay: true as const,
-                  message: (reservation as { response: { body?: { message?: RoomChatMessage } } }).response.body
-                    ?.message as RoomChatMessage
-                };
+                const message = replayedMessage(reservation);
+                if (!isStoredChatMessage(message)) throw new Error('The idempotent replay holds no chat message');
+                return { replay: true as const, message };
               }
-              idempotencyLedgerKey = (reservation as { ledgerKey: string }).ledgerKey;
+              idempotencyLedgerKey = reservation.ledgerKey;
               return null;
             }
           : null,

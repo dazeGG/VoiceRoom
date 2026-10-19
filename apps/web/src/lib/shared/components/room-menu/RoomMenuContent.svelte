@@ -8,6 +8,7 @@
   import { copyText } from '$lib/shared/utils/clipboard';
   import { isRoomNotificationsMuted, updateRoomNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
   import RoomInviteFriendList from './RoomInviteFriendList.svelte';
+  import type { Snippet } from 'svelte';
 
   let {
     roomId,
@@ -33,7 +34,7 @@
     close: (restoreFocus?: boolean) => void;
     canClose?: (roomId: string) => boolean;
     onOpenSettings?: () => void;
-    inviteContent?: import('svelte').Snippet<[close: () => void]>;
+    inviteContent?: Snippet<[close: () => void]>;
     onRoomsChanged?: () => void;
     onToast?: (message: string) => void;
     showNotificationControls?: boolean;
@@ -122,7 +123,7 @@
   {:else if friends}
     <PopoverSubmenu label="Пригласить" ariaLabel={`Позвать друга в ${name}`}>
       {#snippet icon()}<UserRoundPlus {...iconMd} aria-hidden="true" />{/snippet}
-      {#snippet content({ close: closeSubmenu })}
+      {#snippet content({ close: closeSubmenu }: { close: () => void })}
         <RoomInviteFriendList
           {friends}
           {roomId}

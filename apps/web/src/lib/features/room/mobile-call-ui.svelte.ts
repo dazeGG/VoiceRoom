@@ -89,7 +89,7 @@ export function getMobileCallScene(): MobileCallScene {
       : { kind: 'duo', big: other, pip: self, pipExpanded: mobileCallUi.pipExpandedWith === other.id };
   }
 
-  const byId = (id: string) => everyone.find((participant) => participant.id === id)!;
+  const byId = (id: string) => everyone.find((participant) => participant.id === id);
   const otherIds = others.map((participant) => participant.id);
   if (mobileCallUi.view === 'focus' && everyone.length > 1) {
     const bigId = focusSpotlight({
@@ -99,17 +99,19 @@ export function getMobileCallScene(): MobileCallScene {
       activeSpeakerId
     });
     const big = byId(bigId);
-    return {
-      kind: 'focus',
-      big,
-      self: big.isLocal ? null : self,
-      strip: others.filter((participant) => participant.id !== bigId)
-    };
+    if (big) {
+      return {
+        kind: 'focus',
+        big,
+        self: big.isLocal ? null : self,
+        strip: others.filter((participant) => participant.id !== bigId)
+      };
+    }
   }
 
   return {
     kind: 'grid',
-    pages: gridPages(self?.id ?? '', otherIds).map((rows) => rows.map((row) => row.map(byId))),
+    pages: gridPages(self?.id ?? '', otherIds).map((rows) => rows.map((row) => row.flatMap((id) => byId(id) ?? []))),
     voiceOnly: !everyone.some(withCamera)
   };
 }

@@ -70,12 +70,12 @@ function createCredentialBoundaryService({
   roomStore?: GateRoomStore;
   secret?: unknown;
   signer?: GateCredentialSigner;
-  now?: unknown;
+  now?: () => number;
   credentialTtlMs?: unknown;
 } = {}) {
   if (!roomStore) throw new TypeError('roomStore is required');
   const store = roomStore;
-  const clock: () => number = typeof now === 'function' ? (now as () => number) : Date.now;
+  const clock = now;
   const ttlMs = Math.max(60_000, Number(credentialTtlMs) || DEFAULT_CREDENTIAL_TTL_MS);
 
   function resolvePrincipal({
@@ -143,6 +143,7 @@ function createCredentialBoundaryService({
   }
 
   async function authorizeCredential(value: unknown): Promise<CredentialAuthorization> {
+    if (typeof value !== 'string') return { ok: false, code: 'malformed' };
     const verified = signer.verify(value);
     if (!verified.ok) return { ok: false, code: verified.code };
     const claims = verified.claims;

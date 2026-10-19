@@ -2,17 +2,40 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import type { Readable } from 'node:stream';
 import path from 'node:path';
+import { codeOf } from '../../platform/error-code.ts';
 
 export type MediaVariant = 'original' | 'processed' | 'preview';
-type MediaSource = Buffer | Uint8Array | AsyncIterable<unknown> | Iterable<unknown>;
+/** Bytes arriving in pieces: an upload stream, or a list of buffers. */
+export type ByteChunks = AsyncIterable<unknown, unknown, undefined> | Iterable<unknown, unknown, undefined>;
+type MediaSource = Buffer | Uint8Array | ByteChunks;
+
+/** A media failure callers tell apart by `code`, with the HTTP status when it has one. */
+export class MediaError extends Error {
+  declare code: string;
+  declare statusCode?: number;
+
+  constructor(code: string, message: string, statusCode?: number) {
+    super(message);
+    this.code = code;
+    if (statusCode !== undefined) this.statusCode = statusCode;
+  }
+}
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
-const VARIANTS = new Set<unknown>(['original', 'processed', 'preview']);
+// Platforms that cannot fsync a directory handle answer with one of these.
+const UNSYNCABLE_DIRECTORY_CODES: ReadonlySet<unknown> = new Set(['EINVAL', 'ENOTSUP', 'EPERM']);
 const STORAGE_KEY_PATTERN = new RegExp(`^(${UUID_PATTERN.source.slice(1, -1)})/(original|processed|preview)$`);
 const TEMPORARY_FILE_PATTERN = /^\.(original|processed|preview)\.[0-9a-f-]{36}\.tmp$/;
 
-function errorCode(error: unknown): unknown {
-  return (error as { code?: unknown } | null | undefined)?.code;
+function isVariant(value: unknown): value is MediaVariant {
+  return value === 'original' || value === 'processed' || value === 'preview';
+}
+
+/** One chunk of an upload as a Buffer. */
+export function chunkBuffer(chunk: unknown): Buffer {
+  if (Buffer.isBuffer(chunk)) return chunk;
+  if (chunk instanceof Uint8Array || typeof chunk === 'string') return Buffer.from(chunk);
+  throw new TypeError('Media contents must be made of bytes');
 }
 
 function validateAttachmentId(value: unknown): string {
@@ -22,8 +45,8 @@ function validateAttachmentId(value: unknown): string {
 }
 
 function validateVariant(value: unknown): MediaVariant {
-  if (!VARIANTS.has(value)) throw new TypeError('Invalid media variant');
-  return value as MediaVariant;
+  if (!isVariant(value)) throw new TypeError('Invalid media variant');
+  return value;
 }
 
 function createStorageKey(attachmentId: unknown, variant: unknown): string {
@@ -31,17 +54,13 @@ function createStorageKey(attachmentId: unknown, variant: unknown): string {
 }
 
 function parseStorageKey(value: unknown): Readonly<{ attachmentId: string; variant: MediaVariant }> {
-  const match = typeof value === 'string' ? STORAGE_KEY_PATTERN.exec(value) : null;
-  if (!match) throw new TypeError('Invalid media storage key');
-  return Object.freeze({ attachmentId: match[1] as string, variant: match[2] as MediaVariant });
+  const [, attachmentId, variant] = (typeof value === 'string' && STORAGE_KEY_PATTERN.exec(value)) || [];
+  if (attachmentId === undefined || !isVariant(variant)) throw new TypeError('Invalid media storage key');
+  return Object.freeze({ attachmentId, variant });
 }
 
-function contentChunks(source: unknown): Iterable<unknown> | AsyncIterable<unknown> {
-  if (Buffer.isBuffer(source) || source instanceof Uint8Array) return [source];
-  const candidate = source as { [Symbol.asyncIterator]?: unknown; [Symbol.iterator]?: unknown } | null | undefined;
-  if (candidate && typeof candidate[Symbol.asyncIterator] === 'function') return source as AsyncIterable<unknown>;
-  if (candidate && typeof candidate[Symbol.iterator] === 'function') return source as Iterable<unknown>;
-  throw new TypeError('Media contents must be a Buffer, Uint8Array, or iterable stream');
+function contentChunks(source: MediaSource): ByteChunks {
+  return Buffer.isBuffer(source) || source instanceof Uint8Array ? [source] : source;
 }
 
 function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?: string } = {}) {
@@ -61,6 +80,7 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
     if (realPath !== expectedRealPath) throw new Error('Private media namespace escaped its configured path');
   }
 
+  // Returns the root's real path, which every namespace check compares against.
   async function ensureRoot(): Promise<string> {
     await fs.promises.mkdir(root, { recursive: true, mode: 0o700 });
     const stat = await fs.promises.lstat(root);
@@ -73,28 +93,28 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
     }
     canonicalRoot = realPath;
     await fs.promises.chmod(root, 0o700);
-    return root;
+    return realPath;
   }
 
   async function ensureAttachmentDirectory(attachmentId: unknown): Promise<string> {
     const id = validateAttachmentId(attachmentId);
-    await ensureRoot();
+    const realRoot = await ensureRoot();
     const directory = path.join(root, id);
     await fs.promises.mkdir(directory, { recursive: true, mode: 0o700 });
-    await assertDirectory(directory, path.join(canonicalRoot as string, id));
+    await assertDirectory(directory, path.join(realRoot, id));
     await fs.promises.chmod(directory, 0o700);
     return directory;
   }
 
   async function existingAttachmentDirectory(attachmentId: unknown): Promise<string | null> {
     const id = validateAttachmentId(attachmentId);
-    await ensureRoot();
+    const realRoot = await ensureRoot();
     const directory = path.join(root, id);
     try {
-      await assertDirectory(directory, path.join(canonicalRoot as string, id));
+      await assertDirectory(directory, path.join(realRoot, id));
       return directory;
     } catch (error) {
-      if (errorCode(error) === 'ENOENT') return null;
+      if (codeOf(error) === 'ENOENT') return null;
       throw error;
     }
   }
@@ -106,7 +126,7 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
       await handle.sync().catch((error: unknown) => {
         // Windows does not permit fsync on directory handles. File data was
         // already synced before rename; retain directory fsync where supported.
-        if (!['EINVAL', 'ENOTSUP', 'EPERM'].includes(errorCode(error) as string)) throw error;
+        if (!UNSYNCABLE_DIRECTORY_CODES.has(codeOf(error))) throw error;
       });
     } finally {
       await handle?.close();
@@ -116,7 +136,7 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
   async function save(
     attachmentId: unknown,
     variant: unknown,
-    source: MediaSource | unknown,
+    source: MediaSource,
     { maxBytes = Infinity }: { maxBytes?: number } = {}
   ): Promise<Readonly<{ key: string; bytes: number }>> {
     const id = validateAttachmentId(attachmentId);
@@ -130,13 +150,9 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
     try {
       handle = await fs.promises.open(temporary, flags, 0o600);
       for await (const value of contentChunks(source)) {
-        const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value as Uint8Array);
+        const chunk = chunkBuffer(value);
         bytes += chunk.length;
-        if (bytes > maxBytes) {
-          const error = new Error('Media contents exceed the allowed size') as Error & { code?: string };
-          error.code = 'MEDIA_TOO_LARGE';
-          throw error;
-        }
+        if (bytes > maxBytes) throw new MediaError('MEDIA_TOO_LARGE', 'Media contents exceed the allowed size');
         let offset = 0;
         while (offset < chunk.length) {
           const result = await handle.write(chunk, offset, chunk.length - offset);
@@ -153,7 +169,7 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
     } catch (error) {
       await handle?.close().catch(() => {});
       await fs.promises.unlink(temporary).catch((unlinkError: unknown) => {
-        if (errorCode(unlinkError) !== 'ENOENT') throw unlinkError;
+        if (codeOf(unlinkError) !== 'ENOENT') throw unlinkError;
       });
       throw error;
     }
@@ -164,11 +180,7 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
     variant: unknown
   ): Promise<Readonly<{ key: string; bytes: number; stream: Readable }>> {
     const directory = await existingAttachmentDirectory(attachmentId);
-    if (!directory) {
-      const error = new Error('Media object does not exist') as Error & { code?: string };
-      error.code = 'ENOENT';
-      throw error;
-    }
+    if (!directory) throw new MediaError('ENOENT', 'Media object does not exist');
     const file = path.join(directory, validateVariant(variant));
     const handle = await fs.promises.open(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW || 0));
     try {
@@ -200,7 +212,7 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
       await syncDirectory(directory);
       return true;
     } catch (error) {
-      if (errorCode(error) === 'ENOENT') return false;
+      if (codeOf(error) === 'ENOENT') return false;
       throw error;
     }
   }
@@ -210,7 +222,7 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
     if (!directory) return false;
     const entries = await fs.promises.readdir(directory, { withFileTypes: true });
     for (const entry of entries) {
-      const managedName = VARIANTS.has(entry.name) || TEMPORARY_FILE_PATTERN.test(entry.name);
+      const managedName = isVariant(entry.name) || TEMPORARY_FILE_PATTERN.test(entry.name);
       if (!managedName || !entry.isFile() || entry.isSymbolicLink()) {
         throw new Error('Refusing to remove a media namespace containing foreign objects');
       }
@@ -232,11 +244,12 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
       if (!entry.isDirectory() || entry.isSymbolicLink()) {
         throw new Error('Private media namespace contains an invalid attachment directory');
       }
-      // assertDirectory above this call rules out a missing directory.
-      const directory = (await existingAttachmentDirectory(entry.name)) as string;
+      // Gone since the listing above: it holds no keys.
+      const directory = await existingAttachmentDirectory(entry.name);
+      if (!directory) continue;
       const variants = await fs.promises.readdir(directory, { withFileTypes: true });
       for (const variant of variants) {
-        if (VARIANTS.has(variant.name) && variant.isFile() && !variant.isSymbolicLink()) {
+        if (isVariant(variant.name) && variant.isFile() && !variant.isSymbolicLink()) {
           keys.push(createStorageKey(entry.name, variant.name));
         } else if (!TEMPORARY_FILE_PATTERN.test(variant.name) || !variant.isFile() || variant.isSymbolicLink()) {
           throw new Error('Private media attachment namespace contains a foreign object');
@@ -268,7 +281,8 @@ function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?
     for (const entry of entries) {
       if (removed.length >= Math.max(1, Math.min(Number(limit) || 500, 500))) break;
       if (!UUID_PATTERN.test(entry.name) || !entry.isDirectory() || entry.isSymbolicLink()) continue;
-      const directory = (await existingAttachmentDirectory(entry.name)) as string;
+      const directory = await existingAttachmentDirectory(entry.name);
+      if (!directory) continue;
       const variants = await fs.promises.readdir(directory, { withFileTypes: true });
       for (const variant of variants) {
         if (removed.length >= limit) break;

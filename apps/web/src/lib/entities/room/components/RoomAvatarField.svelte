@@ -42,7 +42,8 @@
   });
 
   function pick(event: Event): void {
-    const target = event.currentTarget as HTMLInputElement;
+    const target = event.currentTarget;
+    if (!(target instanceof HTMLInputElement)) return;
     const selected = target.files?.[0] ?? null;
     target.value = '';
     if (!selected) return;

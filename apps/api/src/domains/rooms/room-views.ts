@@ -66,7 +66,7 @@ export function publicPeer(peer: PresencePeer): PublicPeer {
   return {
     accountUserId: peer.accountUserId || '',
     avatarAccent: peer.avatarAccent || null,
-    avatarColorKey: peer.avatarColorKey || (avatarColorForPeerId(peer.id) as string),
+    avatarColorKey: peer.avatarColorKey || avatarColorForPeerId(peer.id),
     avatarUrl: peer.avatarUrl || null,
     deafened: peer.deafened,
     id: peer.id,
@@ -97,7 +97,8 @@ export function publicLobbyRoom(room: StoredRoom, peerCount: number): LobbyRoom 
     roomId: room.id
   };
   if (room.lastMessageAt !== undefined) result.lastMessageAt = room.lastMessageAt;
-  if (Number.isFinite(room.unreadCount)) result.unreadCount = Math.max(0, room.unreadCount as number);
+  const unread = room.unreadCount;
+  if (typeof unread === 'number' && Number.isFinite(unread)) result.unreadCount = Math.max(0, unread);
   return result;
 }
 

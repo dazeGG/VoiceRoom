@@ -5,9 +5,17 @@
 
 import { fetchRoomPins, pinRoomMessage, unpinRoomMessage, type PinnedMessage } from '$lib/api/pins';
 
-export const roomPins = $state({
+interface RoomPinsState {
+  roomId: string;
+  pins: PinnedMessage[];
+  loaded: boolean;
+  /** Whether the strip above the chat lists the pins or only counts them. */
+  expanded: boolean;
+}
+
+export const roomPins = $state<RoomPinsState>({
   roomId: '',
-  pins: [] as PinnedMessage[],
+  pins: [],
   loaded: false,
   /** Whether the strip above the chat lists the pins or only counts them. */
   expanded: false

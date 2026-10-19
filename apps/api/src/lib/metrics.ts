@@ -54,7 +54,7 @@ function recordHttpRequest({
 }
 
 function recordMaintenanceDuration(task: unknown, durationMs: unknown): void {
-  const name = String(task || 'unknown');
+  const name = typeof task === 'string' && task ? task : 'unknown';
   const current = maintenanceTasks.get(name) || {
     task: name,
     count: 0,
@@ -76,7 +76,7 @@ function recordMediaPressure(snapshot: MediaPressureSnapshot = {}): void {
   mediaPressure = {
     freeBytes: Math.max(0, Number(snapshot.freeBytes) || 0),
     healthy: snapshot.healthy === true,
-    reason: String(snapshot.reason || 'unknown')
+    reason: typeof snapshot.reason === 'string' && snapshot.reason ? snapshot.reason : 'unknown'
   };
 }
 

@@ -8,28 +8,27 @@ import type { FastifyInstance } from 'fastify';
 export type ApiServer = http.Server & { app: FastifyInstance; inject: FastifyInstance['inject'] };
 
 export function asHttpServer(app: FastifyInstance): ApiServer {
-  const server = app.server as ApiServer;
+  const server: http.Server = app.server;
   const listen = server.listen.bind(server);
-  server.app = app;
-  server.inject = app.inject.bind(app);
-  const listenAfterReady = (...args: unknown[]) => {
+  // listen() takes Node's many argument shapes; they pass through untouched,
+  // only the trailing callback is held back until the app is ready.
+  server.listen = (...args: unknown[]) => {
     const last = args.at(-1);
-    const callback = typeof last === 'function' ? (last as (error?: Error) => void) : null;
+    const callback = typeof last === 'function' ? last : null;
     const listenArgs = callback ? args.slice(0, -1) : args;
 
     app.ready((error) => {
       if (error) {
         if (callback) {
-          callback(error);
+          Reflect.apply(callback, undefined, [error]);
           return;
         }
         server.emit('error', error);
         return;
       }
-      (listen as (...listenArgs: unknown[]) => void)(...listenArgs, callback || undefined);
+      Reflect.apply(listen, undefined, [...listenArgs, callback || undefined]);
     });
     return server;
   };
-  server.listen = listenAfterReady as ApiServer['listen'];
-  return server;
+  return Object.assign(server, { app, inject: app.inject.bind(app) });
 }

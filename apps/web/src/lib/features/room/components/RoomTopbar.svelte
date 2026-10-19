@@ -2,6 +2,7 @@
   import { Link, MessageSquare, UserPlus, Users } from '@lucide/svelte';
   import Topbar from '$lib/shared/components/Topbar.svelte';
   import { Popover, PopoverDivider, PopoverMenuItem, PopoverMenuLabel } from '$lib/shared/ui';
+  import type { PopoverContentState, PopoverTriggerState } from '$lib/shared/ui/Popover';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { copyText } from '$lib/shared/utils/clipboard';
   import { RoomInviteFriendList, RoomMenu } from '$lib/shared/components/room-menu';
@@ -84,7 +85,7 @@
     <div class="room-heading-actions">
       <RoomCallTimer />
       <Popover placement="bottom-end" role="menu" ariaLabel="Пригласить в комнату" panelClass="room-invite-popover">
-        {#snippet trigger({ open, toggle, panelId })}
+        {#snippet trigger({ open, toggle, panelId }: PopoverTriggerState)}
           <button
             class="room-invite-button"
             type="button"
@@ -98,7 +99,7 @@
             <span class="room-invite-label">Пригласить</span>
           </button>
         {/snippet}
-        {#snippet content({ close }: { close: () => void })}
+        {#snippet content({ close }: PopoverContentState)}
           <PopoverMenuItem label="Скопировать ссылку" onclick={() => void copyInviteLink(close)}>
             {#snippet icon()}<Link {...iconMd} aria-hidden="true" />{/snippet}
           </PopoverMenuItem>

@@ -147,7 +147,7 @@ function setMicrophoneMuted(muted: boolean, options: { playCue?: boolean; post?:
 
   state.muted = nextMuted;
   setMicrophoneCaptureEnabled(getLocalMicrophoneCapture(), !state.muted);
-  syncLocalMicrophonePublicationMuted().catch((error) =>
+  syncLocalMicrophonePublicationMuted().catch((error: unknown) =>
     log.warn('liveKit microphone mute failed', errorContext(error))
   );
 
@@ -168,7 +168,7 @@ function setMicrophoneMuted(muted: boolean, options: { playCue?: boolean; post?:
  * `setMicrophoneMuted` has nothing to do but the room must stop showing a mute.
  */
 function syncShownMicrophoneMute(): void {
-  syncLocalMicrophonePublicationMuted().catch((error) =>
+  syncLocalMicrophonePublicationMuted().catch((error: unknown) =>
     log.warn('liveKit microphone mute failed', errorContext(error))
   );
   updateParticipant({
@@ -201,7 +201,7 @@ function toggleMute(): void {
       .then((attached) => {
         if (attached) syncMicrophoneControls({ unmute: true });
       })
-      .catch((error) => log.warn('microphone attach failed', errorContext(error)));
+      .catch((error: unknown) => log.warn('microphone attach failed', errorContext(error)));
     return;
   }
   if (state.microphoneMode === 'push-to-talk' && !state.outputMuted) {
@@ -319,7 +319,7 @@ export function toggleOutputMute(options: { unmuteMicrophone?: boolean } = {}): 
 
   // Deafen changes whether an idle push-to-talk microphone shows as muted even
   // when `state.muted` stays put, so the SFU publication is resynced either way.
-  syncLocalMicrophonePublicationMuted().catch((error) =>
+  syncLocalMicrophonePublicationMuted().catch((error: unknown) =>
     log.warn('liveKit microphone mute failed', errorContext(error))
   );
 

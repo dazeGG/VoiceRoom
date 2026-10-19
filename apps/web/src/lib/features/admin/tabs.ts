@@ -1,6 +1,8 @@
 // The admin panel's tabs and the addresses the lobby keeps them in; an
 // account's card has its own address under the accounts tab.
 
+import { isOneOf } from '@voice-room/shared/guards';
+
 export const ADMIN_TABS = ['overview', 'product', 'system', 'accounts', 'rooms', 'reports', 'feedback'] as const;
 export type AdminTab = (typeof ADMIN_TABS)[number];
 
@@ -10,7 +12,7 @@ export interface AdminLocation {
   accountId: string | null;
 }
 
-const isTab = (value: string): value is AdminTab => (ADMIN_TABS as readonly string[]).includes(value);
+const isTab = (value: string): value is AdminTab => isOneOf(ADMIN_TABS, value);
 
 /** /admin is the dashboard, and so is an unknown tab; /admin/accounts/<id> is a card. Null outside /admin. */
 export function adminLocationFromPath(pathname: string): AdminLocation | null {

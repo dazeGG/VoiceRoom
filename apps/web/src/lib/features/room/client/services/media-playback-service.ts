@@ -133,7 +133,7 @@ function hasPendingStreamWatchGate(): boolean {
 
 export function handleAudioUnlockGesture(): void {
   if (!shouldAttemptAudioUnlock()) return;
-  unlockAudio().catch((error) => log.warn('audio unlock failed', errorContext(error)));
+  unlockAudio().catch((error: unknown) => log.warn('audio unlock failed', errorContext(error)));
 }
 
 function shouldAttemptAudioUnlock(): boolean {

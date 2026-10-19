@@ -1,22 +1,19 @@
 import crypto from 'node:crypto';
-import { sql, type ExpressionBuilder } from 'kysely';
+import { sql, type ExpressionBuilder, type Selectable } from 'kysely';
 import type pg from 'pg';
+import { isArray, isRecord } from '@voice-room/shared/guards';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
-import type { DB } from '../../platform/db/schema.ts';
+import type { DB, RoomBans } from '../../platform/db/schema.ts';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Client = QueryClient | null | undefined;
 type TimeInput = Date | number | string;
 
-type BanRow = {
-  id: string;
-  room_id: string;
-  user_id: string | null;
-  ip: string | null;
-  created_at: Date | string;
-  expires_at: Date | string | null;
-  metadata: Record<string, unknown> | null;
-};
+type BanRow = Pick<
+  Selectable<RoomBans>,
+  'id' | 'room_id' | 'user_id' | 'ip' | 'created_at' | 'expires_at' | 'metadata'
+>;
 
 export type ActiveBanRecord = {
   id: string;
@@ -36,12 +33,6 @@ function toDate(value: unknown): Date {
   return new Date(Number.isFinite(numeric) ? numeric : Date.now());
 }
 
-function toMillis(value: unknown): number | null {
-  if (value instanceof Date) return value.getTime();
-  const parsed = Date.parse(value as string);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 function mapActiveBan(row: BanRow | null | undefined): ActiveBanRecord | null {
   if (!row) return null;
   return {
@@ -49,9 +40,9 @@ function mapActiveBan(row: BanRow | null | undefined): ActiveBanRecord | null {
     roomId: row.room_id,
     userId: row.user_id || null,
     ip: row.ip || '',
-    createdAt: toMillis(row.created_at),
-    expiresAt: row.expires_at ? toMillis(row.expires_at) : null,
-    metadata: row.metadata || {}
+    createdAt: epochMillis(row.created_at),
+    expiresAt: row.expires_at ? epochMillis(row.expires_at) : null,
+    metadata: isRecord(row.metadata) ? row.metadata : {}
   };
 }
 
@@ -97,18 +88,18 @@ function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClien
       .selectAll()
       .where('room_id', '=', roomId)
       .where(active(at))
-      .where((eb) => {
-        const matches = [];
-        if (normalizedUserId) matches.push(eb('user_id', '=', normalizedUserId));
-        if (normalizedIp) matches.push(eb.and([eb('user_id', 'is', null), eb('ip', '=', normalizedIp)]));
-        return eb.or(matches);
-      })
+      .where((eb) =>
+        eb.or([
+          ...(normalizedUserId ? [eb('user_id', '=', normalizedUserId)] : []),
+          ...(normalizedIp ? [eb.and([eb('user_id', 'is', null), eb('ip', '=', normalizedIp)])] : [])
+        ])
+      )
       .orderBy(sql`CASE WHEN user_id IS NOT NULL THEN 0 ELSE 1 END`)
       .orderBy('created_at', 'desc')
       .orderBy('id', 'desc')
       .limit(1)
       .executeTakeFirst();
-    return mapActiveBan(row as BanRow | undefined);
+    return mapActiveBan(row);
   }
 
   async function countActive(
@@ -138,7 +129,7 @@ function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClien
   } = {}): Promise<string[]> {
     const normalizedUserIds = Array.from(
       new Set(
-        (Array.isArray(userIds) ? userIds : [])
+        (isArray(userIds) ? userIds : [])
           .filter((userId): userId is string => typeof userId === 'string' && Boolean(userId.trim()))
           .map((userId) => userId.trim())
       )
@@ -187,7 +178,7 @@ function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClien
       })
       .returningAll()
       .executeTakeFirst();
-    return mapActiveBan(row as BanRow | undefined);
+    return mapActiveBan(row);
   }
 
   return { countActive, filterActiveUserIds, findActive, insert, mapActiveBan, normalizePrincipal };

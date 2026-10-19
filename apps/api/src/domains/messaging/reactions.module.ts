@@ -32,7 +32,11 @@ export function createReactionsModule(deps: ReactionsModuleDeps) {
     // A reaction event is already a server event, so it skips the account
     // event mapping (which knows only the legacy account messages).
     broadcastAccount: (userId, event) => deps.sendToUser(userId, event) > 0,
-    resolveDirectRecipients: ({ actorUserId, conversation }) => [actorUserId, conversation!.id] as string[]
+    // An empty id is skipped by the adapter.
+    resolveDirectRecipients: ({ actorUserId, conversation }) => [
+      typeof actorUserId === 'string' ? actorUserId : '',
+      conversation?.id ?? ''
+    ]
   });
   const service = createReactionService({
     repository: createReactionRepository({ client: deps.pool }),

@@ -3,6 +3,7 @@
 
 import { sql } from 'kysely';
 import type pg from 'pg';
+import { isOneOf } from '@voice-room/shared/guards';
 import { transaction } from '../../platform/db/pool.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { ActiveBanService } from '../moderation/active-ban.service.ts';
@@ -19,8 +20,8 @@ import {
 
 type BanChecks = Pick<ActiveBanService, 'isBanned' | 'filterEligibleUserIds'>;
 
-function withRelationship(room: StoredRoom, relationship: unknown) {
-  return { ...room, relationship: (relationship || '') as RoomRelationship };
+function withRelationship(room: StoredRoom, relationship: unknown): StoredRoom & { relationship: RoomRelationship } {
+  return { ...room, relationship: isOneOf(['owner', 'bookmarked', 'member'], relationship) ? relationship : '' };
 }
 
 // Messages count as unread after the reader's cursor; without a cursor, history
@@ -250,7 +251,7 @@ export function createRoomAccessRepository({ db, pool, bans }: { db: Database; p
   }
 
   async function addRoomBookmarkForUser(userId: string, roomId: string, now: number = Date.now()) {
-    if (!userId || !roomId) return { room: null, status: 'not_found' };
+    if (!userId || !roomId) return { room: null, status: 'not_found' as const };
     return transaction(pool, async (client) => {
       const trx = kyselyOn(client);
       const room = mapRoomOrNull(
@@ -261,8 +262,8 @@ export function createRoomAccessRepository({ db, pool, bans }: { db: Database; p
           .where('deleted_at', 'is', null)
           .executeTakeFirst()
       );
-      if (!room) return { room: null, status: 'not_found' };
-      if (!room.isStatic) return { room: null, status: 'temporary_room' };
+      if (!room) return { room: null, status: 'not_found' as const };
+      if (!room.isStatic) return { room: null, status: 'temporary_room' as const };
 
       const at = toDate(now);
       await trx
@@ -289,7 +290,7 @@ export function createRoomAccessRepository({ db, pool, bans }: { db: Database; p
           .onConflict((oc) => oc.columns(['room_id', 'user_id']).doNothing())
           .execute();
       }
-      return { room: withRelationship(room, owner ? 'owner' : 'bookmarked'), status: 'bookmarked' };
+      return { room: withRelationship(room, owner ? 'owner' : 'bookmarked'), status: 'bookmarked' as const };
     });
   }
 

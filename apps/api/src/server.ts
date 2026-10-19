@@ -3,8 +3,8 @@
 
 import { createApiRuntime, type ApiServer } from './app/api-runtime.ts';
 import { installGracefulShutdown } from './app/graceful-shutdown.ts';
-import { resolveRealtimeReconnectLeaseMs } from './app/config.ts';
-import { readEnvBool, readDatabaseConfig, readUploadsDir } from './lib/config.ts';
+import { readBootstrapConfig } from './app/config.ts';
+import { readDatabaseConfig } from './lib/config.ts';
 import { LOG_EVENTS } from './lib/log-events.ts';
 import { createLogger } from './lib/logger.ts';
 import { reconcileAvatarStorage } from './lib/avatar-reconciliation.ts';
@@ -31,18 +31,21 @@ function createApiServer(options: AppOptions = {}): ApiServer {
 async function bootstrap({
   env = process.env,
   logger = createLogger({ env, name: 'api' }),
-  exit = process.exit
+  exit
 }: {
   env?: NodeJS.ProcessEnv;
   logger?: Logger;
   exit?: (code?: number) => void;
 } = {}): Promise<ApiServer | null> {
+  // Without an injected exit the process itself ends.
+  const stop = exit ?? ((code?: number) => process.exit(code));
   try {
     const database = readDatabaseConfig(env);
-    if (readEnvBool('MIGRATE_ON_START', env.NODE_ENV !== 'production', env)) {
+    const startup = readBootstrapConfig(env);
+    if (startup.MIGRATE_ON_START) {
       await runMigrations({ databaseUrl: database.url, logger });
     }
-    if (env.NODE_ENV === 'production') {
+    if (startup.PRODUCTION) {
       await assertMigrationReady({ databaseUrl: database.url });
     }
     const runtime = createApiRuntime({ env });
@@ -53,8 +56,8 @@ async function bootstrap({
     await roomStore.pruneRooms();
     const userStore = services.getUserStore();
     const pushSubscriptions = services.getPushSubscriptions();
-    const pushService = createPushService({ store: pushSubscriptions, env, logger });
-    const avatarStorage = createAvatarStorage({ uploadsDir: readUploadsDir(env) });
+    const pushService = createPushService({ store: pushSubscriptions, config: runtime.config.PUSH, logger });
+    const avatarStorage = createAvatarStorage({ uploadsDir: runtime.config.UPLOADS_DIR });
     const reconciliation = await reconcileAvatarStorage({
       storage: avatarStorage,
       userStore,
@@ -66,7 +69,7 @@ async function bootstrap({
         'removed orphaned avatar files'
       );
     }
-    const linkPreviewStorage = createLinkPreviewStorage({ uploadsDir: readUploadsDir(env) });
+    const linkPreviewStorage = createLinkPreviewStorage({ uploadsDir: runtime.config.UPLOADS_DIR });
     services.install({
       pushService,
       avatarStorage,
@@ -102,8 +105,7 @@ async function bootstrap({
       notifications: services.getNotificationPreferences(),
       pushes: pushSubscriptions,
       push: pushService,
-      avatars: avatarStorage,
-      realtimeReconnectLeaseMs: resolveRealtimeReconnectLeaseMs(env)
+      avatars: avatarStorage
     });
     await server.app.ready();
     runtime.startPruneTimer(server, logger);
@@ -113,7 +115,7 @@ async function bootstrap({
       server,
       socketPath: runtime.config.SOCKET_PATH,
       logger,
-      exit
+      exit: stop
     });
     const closable = {
       // Closing the Fastify app, not just its http.Server, runs the onClose
@@ -124,17 +126,15 @@ async function bootstrap({
     };
     installGracefulShutdown(closable, {
       logger,
-      exit,
+      exit: stop,
       sockets: runtime.sockets,
       closeStores: runtime.closeStores
     });
     return server;
   } catch (error) {
     logger.fatal({ evt: LOG_EVENTS.BOOTSTRAP_FAILED, err: error }, 'VoiceRoom API failed to bootstrap');
-    if (exit === process.exit && typeof process !== 'undefined') {
-      process.exitCode = 1;
-    }
-    exit(1);
+    if (!exit) process.exitCode = 1;
+    stop(1);
     return null;
   }
 }

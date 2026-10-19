@@ -2,7 +2,9 @@ import crypto from 'node:crypto';
 import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
+import { canConnect } from '../../platform/db/connectable.ts';
 import { transaction } from '../../platform/db/pool.ts';
+import { fieldOf } from '../../platform/record.ts';
 import type { MediaProcessingJobs } from '../../platform/db/schema.ts';
 import type { Attachment, AttachmentRepository } from './attachment.repository.ts';
 
@@ -12,16 +14,14 @@ type Client = QueryClient | null | undefined;
 
 export type MediaJobKind = 'process' | 'cleanup';
 
-type MediaJobRow = Omit<Selectable<MediaProcessingJobs>, 'kind' | 'state'> & {
-  kind: MediaJobKind;
-  state: 'pending' | 'processing' | 'completed' | 'dead';
-};
+type MediaJobRow = Selectable<MediaProcessingJobs>;
+type MediaJobState = 'pending' | 'processing' | 'completed' | 'dead';
 
 export type MediaJob = Readonly<{
   id: string;
   attachmentId: string;
   kind: MediaJobKind;
-  state: MediaJobRow['state'];
+  state: MediaJobState;
   attempts: number;
   availableAt: unknown;
   claimedBy: string | null;
@@ -38,6 +38,9 @@ export type MediaJob = Readonly<{
 type JobLease = { workerId: string; fencingToken: number; client?: Client };
 
 const JOB_KINDS = new Set<unknown>(['process', 'cleanup']);
+const JOB_STATES: ReadonlySet<string> = new Set<MediaJobState>(['pending', 'processing', 'completed', 'dead']);
+// The table's CHECK constraints keep both columns to these values.
+const isJobState = (value: string): value is MediaJobState => JOB_STATES.has(value);
 
 class MediaJobFenceError extends Error {
   declare code: string;
@@ -50,12 +53,15 @@ class MediaJobFenceError extends Error {
 }
 
 function mapMediaJob(row: MediaJobRow | null | undefined): MediaJob | null {
-  if (!row) return null;
+  return row ? jobFromRow(row) : null;
+}
+
+function jobFromRow(row: MediaJobRow): MediaJob {
   return Object.freeze({
     id: row.id,
     attachmentId: row.attachment_id,
-    kind: row.kind,
-    state: row.state,
+    kind: row.kind === 'cleanup' ? 'cleanup' : 'process',
+    state: isJobState(row.state) ? row.state : 'dead',
     attempts: row.attempts,
     availableAt: row.available_at,
     claimedBy: row.claimed_by,
@@ -94,10 +100,10 @@ function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new TypeError('A PostgreSQL pool is required');
   const base = pool;
   const on = (client: Client): Database => kyselyOn(client && typeof client.query === 'function' ? client : base);
-  const job = (row: Selectable<MediaProcessingJobs> | undefined) => mapMediaJob(row as MediaJobRow | undefined);
-  const leased = (row: Selectable<MediaProcessingJobs> | undefined): MediaJob => {
+  const job = mapMediaJob;
+  const leased = (row: MediaJobRow | undefined): MediaJob => {
     if (!row) throw new MediaJobFenceError();
-    return job(row) as MediaJob;
+    return jobFromRow(row);
   };
 
   // One live (pending or processing) job per attachment and kind.
@@ -191,7 +197,7 @@ function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
       .whereRef('job.id', '=', 'candidates.id')
       .returningAll('job')
       .execute();
-    return claimed.map((row) => job(row) as MediaJob);
+    return claimed.map(jobFromRow);
   }
 
   async function renew(
@@ -236,7 +242,7 @@ function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
       client
     }: JobLease & { error?: unknown; retryDelayMs?: unknown; maxAttempts?: unknown }
   ): Promise<MediaJob> {
-    const reason = (error as { message?: unknown } | null | undefined)?.message || error || 'Media job failed';
+    const reason = fieldOf(error, 'message') || error || 'Media job failed';
     const message = (typeof reason === 'string' ? reason : 'Media job failed').slice(0, 2_000);
     const attemptsLeft = sql<boolean>`attempts < ${positiveInteger(maxAttempts, 5, 100)}`;
     return leased(
@@ -314,9 +320,9 @@ function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
       attachmentResult: Parameters<AttachmentRepository['markReady']>[1];
     }
   ): Promise<Attachment> {
-    if (!base.connect || !attachmentRepository?.markReady)
+    if (!canConnect(base) || !attachmentRepository?.markReady)
       throw new TypeError('Processing completion dependencies are required');
-    return transaction(base as Pick<pg.Pool, 'connect'>, async (client) => {
+    return transaction(base, async (client) => {
       const owned = await kyselyOn(client)
         .selectFrom('media_processing_jobs')
         .select('attachment_id')

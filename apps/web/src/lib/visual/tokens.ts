@@ -1,5 +1,5 @@
 import visualIdentity from '@voice-room/shared/visual-identity';
-import type { AvatarColorKey } from '@voice-room/shared/validation';
+import { isAvatarColorKey, type AvatarColorKey } from '@voice-room/shared/validation';
 
 export type { AvatarColorKey };
 
@@ -41,7 +41,7 @@ export function avatarForeground(hue: number): string {
 }
 
 export function getAvatarColor(key: string | null | undefined): AvatarColorToken {
-  const colorKey = (key && key in AVATAR_HUES ? key : 'blurple') as AvatarColorKey;
+  const colorKey = isAvatarColorKey(key) ? key : 'blurple';
   const hue = AVATAR_HUES[colorKey];
   return {
     key: colorKey,

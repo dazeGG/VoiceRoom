@@ -4,7 +4,6 @@
 
 import { afterEach, expect, test } from 'vitest';
 import { freshImport, muteWarnings, stubWindow } from './helpers/fresh-module.ts';
-import type * as DesktopSystem from '../src/lib/platform/desktop-system.ts';
 
 const flush = () => new Promise((resolveFlush) => setImmediate(resolveFlush));
 
@@ -39,7 +38,7 @@ function fakeBridge(initialGameMode = false) {
 async function load(bridge?: unknown) {
   stubWindow(bridge ? { voiceRoomDesktopSystem: bridge } : {});
   muteWarnings();
-  return freshImport<typeof DesktopSystem>('/src/lib/platform/desktop-system.ts');
+  return freshImport(() => import('../src/lib/platform/desktop-system.ts'));
 }
 
 test('without a desktop bridge binding is a no-op', async () => {

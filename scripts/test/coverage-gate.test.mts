@@ -9,6 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { createRequire } from 'node:module';
+import pg from 'pg';
 
 import {
   checkCoverage as enforceCoverage,
@@ -19,15 +20,22 @@ import {
 import { createTestDatabase } from '../../apps/api/test/db-harness.ts';
 import { runMigrations } from '../../apps/api/src/lib/migrate.ts';
 import { createRoomStore } from '../../apps/api/src/app/room-store.ts';
-
-const require = createRequire(import.meta.url);
-const { createGateCredentialSigner } = require('../../apps/api/src/domains/admission/gate-credential-signer.ts');
-const {
+import { createGateCredentialSigner } from '../../apps/api/src/domains/admission/gate-credential-signer.ts';
+import {
   createLiveKitAuthGateService,
   extractCredential
-} = require('../../apps/api/src/domains/admission/livekit-auth-gate.service.ts');
+} from '../../apps/api/src/domains/admission/livekit-auth-gate.service.ts';
+import type { GateRoomStore } from '../../apps/api/src/domains/admission/credential-boundary.service.ts';
+import { normalizeGatePrincipal } from '../../apps/api/src/domains/admission/gate-credential.repository.ts';
+import { publicChatMessage } from '../../apps/api/src/domains/messaging/room-chat-views.ts';
+import { publicLobbyRoom, publicPeer } from '../../apps/api/src/domains/rooms/room-views.ts';
+import { createRoomRealtimeRuntime, type RuntimeRoomStore } from '../../apps/api/src/realtime/room-runtime.ts';
+import { createConnectionRegistry } from '../../apps/api/src/realtime/registry.ts';
+import type { PresenceRoom } from '../../apps/api/src/realtime/runtime-types.ts';
+import { isRecord } from '@voice-room/shared/guards';
+
+const require = createRequire(import.meta.url);
 const SILENT_LOGGER = { log() {}, info() {}, warn() {}, error() {} };
-const { createRoomRealtimeRuntime } = require('../../apps/api/src/realtime/room-runtime.ts');
 const SECRET = 'g08-test-livekit-gate-secret-at-least-32-bytes';
 const WEB_ROOM_COVERAGE_SCRIPT = String.raw`
   import fs from "node:fs";
@@ -111,6 +119,11 @@ const SERVER_INTERNAL_COVERAGE_SCRIPT = String.raw`
   // getLiveKitConnectSources moved to platform/http/security-headers.ts (apps/api/test/http-platform.test.ts).
   })().catch((error) => { console.error(error); process.exitCode = 1; });
 `;
+
+/** The refusal code of a signer verification or gate decision; 'ok' when it passed. */
+function codeOf(result: { ok: true } | { ok: false; code: string }): string {
+  return result.ok ? 'ok' : result.code;
+}
 
 function checkCoverage(options: Parameters<typeof enforceCoverage>[0]) {
   return enforceCoverage({
@@ -859,7 +872,7 @@ test(
       (
         await store.createRoomBanWithLiveKitGateRevocations({
           ip: '127.0.0.1',
-          principals: [{ principalType: 'root', principalId: 'bad' } as never],
+          principals: [{ principalType: 'guest', principalId: ' ' }],
           roomId: 'room-1'
         })
       ).status,
@@ -907,15 +920,38 @@ test(
 );
 
 test('G08 realtime join retains and revokes the exact gate principal', async () => {
-  const room = { id: 'room123456', peers: new Map(), updatedAt: 0 };
-  const revoked: Array<{ accountUserId?: string; guestPrincipalId?: string }> = [];
+  const room: PresenceRoom = { id: 'room123456', peers: new Map(), updatedAt: 0 };
+  const storedRoom = {
+    avatarKey: null,
+    createdAt: 0,
+    creatorIp: '',
+    emptySince: null,
+    id: room.id,
+    isStatic: true,
+    lastMessageAt: undefined,
+    name: 'Room',
+    ownerId: null,
+    unreadCount: undefined,
+    updatedAt: 0
+  };
+  const revoked: Array<{ accountUserId?: string | null; guestPrincipalId?: string }> = [];
   const identityIds = ['identity-1', ''];
-  const store = {
-    async getOrCreatePeerIdentity() {
-      return { status: 'created', identity: { id: identityIds.shift(), avatarColorKey: 'blue' } };
+  const store: RuntimeRoomStore = {
+    async getOrCreatePeerIdentity({ roomId, peerId }) {
+      const identity = {
+        avatarColorKey: 'blue',
+        createdAt: 0,
+        displayName: '',
+        id: identityIds.shift() ?? '',
+        lastSeenAt: 0,
+        peerId,
+        roomId,
+        sessionTokenHash: ''
+      };
+      return { status: 'created', identity };
     },
     async getRoom() {
-      return room;
+      return storedRoom;
     },
     async isRoomServerMuted() {
       return false;
@@ -926,46 +962,41 @@ test('G08 realtime join retains and revokes the exact gate principal', async () 
     async listSummaryRecipientUserIds() {
       return [];
     },
-    async markRoomActive() {},
-    normalizeGatePrincipal({ accountUserId, guestPrincipalId }: { accountUserId?: string; guestPrincipalId?: string }) {
-      if (accountUserId) return { principalType: 'account', principalId: accountUserId };
-      if (guestPrincipalId) return { principalType: 'guest', principalId: guestPrincipalId };
-      return null;
-    },
-    async revokeLiveKitGatePeer(value: { accountUserId?: string; guestPrincipalId?: string }) {
-      revoked.push(value);
-    }
-  };
-  const wsRegistry = {
-    registerConnectionForRoom() {},
-    roomDetailSubscribers() {
+    async listVisibleRoomsForUser() {
       return [];
     },
-    sendToConnection() {},
-    sendToUser() {},
-    unregisterConnectionForRoom() {}
+    async markRoomActive() {
+      return storedRoom;
+    },
+    normalizeGatePrincipal,
+    async revokeLiveKitGatePeer(value) {
+      revoked.push(value ?? {});
+      return { status: 'revoked', epoch: 1 };
+    }
   };
+  // The real registry and view mappers; only the store and the sockets are doubles.
+  const wsRegistry = createConnectionRegistry({
+    maxConnectionsPerUser: 10,
+    keepaliveMs: 30_000,
+    getFriendIds: async () => [],
+    logger: SILENT_LOGGER
+  });
   const runtime = createRoomRealtimeRuntime({
     presenceRooms: new Map([[room.id, room]]),
     wsRegistry,
     getRoomStore: () => store,
     getRoom: async () => room,
-    publicPeer: (peer: unknown) => peer,
-    publicLobbyRoom: (value: unknown) => value,
-    publicChatMessage: (value: unknown) => value,
+    publicPeer,
+    publicLobbyRoom: (value) => publicLobbyRoom(value, 0),
+    publicChatMessage,
     broadcast() {},
     closePeer() {},
     avatarColorForPeerId: () => 'blue',
     MAX_ROOM_PEERS: 10,
-    tokensMatch: (left: string, right: string) => left === right,
+    tokensMatch: (left, right) => left === right,
     sessionAvatarColorKey: () => 'blue'
   });
-  const makeConnection = () => ({
-    activeVoice: null,
-    closed: false,
-    pendingVoiceJoin: null,
-    previewRoomIds: new Set()
-  });
+  const makeConnection = () => wsRegistry.addGuestConnection({ readyState: 1, send() {}, close() {} }, '127.0.0.1');
   const token = 't'.repeat(32);
   const first = makeConnection();
   assert.equal(
@@ -979,7 +1010,7 @@ test('G08 realtime join retains and revokes the exact gate principal', async () 
     ).ok,
     true
   );
-  assert.equal(room.peers.get('peer0001').gateGuestPrincipalId, 'identity-1');
+  assert.equal(room.peers.get('peer0001')?.gateGuestPrincipalId, 'identity-1');
   await runtime.leaveVoiceRoom(first);
   const second = makeConnection();
   assert.equal(
@@ -993,7 +1024,7 @@ test('G08 realtime join retains and revokes the exact gate principal', async () 
     ).ok,
     true
   );
-  assert.equal(room.peers.get('peer0002').gateGuestPrincipalId, '');
+  assert.equal(room.peers.get('peer0002')?.gateGuestPrincipalId, '');
   await runtime.leaveVoiceRoom(second);
   await runtime.leaveVoiceRoom(makeConnection(), { roomId: room.id, peerId: 'missing1' });
   assert.equal(revoked.length, 2);
@@ -1004,7 +1035,7 @@ test('G08 realtime join retains and revokes the exact gate principal', async () 
 test('G08 admission signer exported decisions are fully exercised', () => {
   assert.throws(() => createGateCredentialSigner(), /at least 32/);
   assert.throws(() => createGateCredentialSigner({ secret: ' short ' }), /at least 32/);
-  const signer = createGateCredentialSigner({ secret: SECRET, now: 1000 });
+  const signer = createGateCredentialSigner({ secret: SECRET });
   assert.throws(() => signer.sign(), /invalid gate credential payload/i);
   const valid = {
     credentialId: 'cred-g08',
@@ -1031,32 +1062,34 @@ test('G08 admission signer exported decisions are fully exercised', () => {
     assert.throws(() => signer.sign({ ...valid, ...patch }), /invalid gate credential/i);
   const credential = signer.sign({ ...valid, expiresAt: Date.now() + 10000 });
   assert.equal(signer.hash(credential).length, 64);
-  assert.equal(signer.hash(), crypto.createHash('sha256').update('').digest('hex'));
+  assert.equal(signer.hash(''), crypto.createHash('sha256').update('').digest('hex'));
   assert.equal(signer.verify(credential).ok, true);
-  assert.equal(signer.verify('').code, 'malformed');
-  assert.equal(signer.verify(`wrong.${credential.split('.').slice(1).join('.')}`).code, 'malformed');
-  assert.equal(signer.verify(`${credential}x`).code, 'bad_signature');
-  const parts = credential.split('.');
-  assert.equal(signer.verify(`${parts[0]}.${parts[1]}.${'x'.repeat(parts[2].length)}`).code, 'bad_signature');
+  assert.equal(codeOf(signer.verify('')), 'malformed');
+  assert.equal(codeOf(signer.verify(`wrong.${credential.split('.').slice(1).join('.')}`)), 'malformed');
+  assert.equal(codeOf(signer.verify(`${credential}x`)), 'bad_signature');
+  const [prefix = '', payloadPart = '', signaturePart = ''] = credential.split('.');
+  assert.equal(codeOf(signer.verify(`${prefix}.${payloadPart}.${'x'.repeat(signaturePart.length)}`)), 'bad_signature');
 
   const signedClaims = (claimsText: string) => {
     const payload = Buffer.from(claimsText).toString('base64url');
     const signature = crypto.createHmac('sha256', SECRET).update(payload).digest('base64url');
     return `vrg1.${payload}.${signature}`;
   };
-  assert.equal(signer.verify(signedClaims('{')).code, 'malformed_payload');
-  assert.equal(signer.verify(signedClaims('')).code, 'malformed_payload');
+  assert.equal(codeOf(signer.verify(signedClaims('{'))), 'malformed_payload');
+  assert.equal(codeOf(signer.verify(signedClaims(''))), 'malformed_payload');
+  const signedPayload: unknown = JSON.parse(Buffer.from(payloadPart, 'base64url').toString());
+  assert.ok(isRecord(signedPayload));
   for (const claims of [
-    { ...JSON.parse(Buffer.from(parts[1], 'base64url').toString()), iat: null },
-    { ...JSON.parse(Buffer.from(parts[1], 'base64url').toString()), exp: null },
-    { ...JSON.parse(Buffer.from(parts[1], 'base64url').toString()), pEpoch: 1.5 },
-    { ...JSON.parse(Buffer.from(parts[1], 'base64url').toString()), pEpoch: -1 },
-    { ...JSON.parse(Buffer.from(parts[1], 'base64url').toString()), exp: 1000 }
+    { ...signedPayload, iat: null },
+    { ...signedPayload, exp: null },
+    { ...signedPayload, pEpoch: 1.5 },
+    { ...signedPayload, pEpoch: -1 },
+    { ...signedPayload, exp: 1000 }
   ])
-    assert.equal(signer.verify(signedClaims(JSON.stringify(claims))).code, 'invalid_claims');
+    assert.equal(codeOf(signer.verify(signedClaims(JSON.stringify(claims)))), 'invalid_claims');
   const expiredCredential = createGateCredentialSigner({ secret: SECRET, now: () => 1000 }).sign(valid);
   const expiredSigner = createGateCredentialSigner({ secret: SECRET, now: () => 2000 });
-  assert.equal(expiredSigner.verify(expiredCredential).code, 'expired');
+  assert.equal(codeOf(expiredSigner.verify(expiredCredential)), 'expired');
   // A credential stamped past the allowed clock skew is refused; an unusable
   // skew setting counts as none.
   const futureCredential = createGateCredentialSigner({ secret: SECRET, now: () => 100_000 }).sign({
@@ -1065,13 +1098,15 @@ test('G08 admission signer exported decisions are fully exercised', () => {
     expiresAt: 200_000
   });
   assert.equal(
-    createGateCredentialSigner({ secret: SECRET, now: () => 1000 }).verify(futureCredential).code,
+    codeOf(createGateCredentialSigner({ secret: SECRET, now: () => 1000 }).verify(futureCredential)),
     'issued_in_future'
   );
   assert.equal(
-    createGateCredentialSigner({ secret: SECRET, now: () => 90_000, maxFutureSkewMs: 'not a number' }).verify(
-      futureCredential
-    ).code,
+    codeOf(
+      createGateCredentialSigner({ secret: SECRET, now: () => 90_000, maxFutureSkewMs: Number.NaN }).verify(
+        futureCredential
+      )
+    ),
     'issued_in_future'
   );
   assert.equal(createGateCredentialSigner({ secret: SECRET, now: () => 90_000 }).verify(futureCredential).ok, true);
@@ -1134,10 +1169,12 @@ test('G08 admission gate service exported decisions and server paths are exercis
   });
   let ready = true;
   let decision = 'allowed';
-  const store = {
+  const store: GateRoomStore = {
     assertLiveKitGateReady: async () => {
       if (!ready) throw new Error('not ready');
     },
+    getLiveKitGatePrincipalEpoch: async () => ({ status: 'ready', epoch: 0 }),
+    createLiveKitGateCredential: async () => ({ status: 'created' }),
     verifyLiveKitGateCredential: async () => {
       if (decision === 'throw') throw new Error('db down');
       return { status: decision };
@@ -1168,7 +1205,8 @@ test('G08 admission gate service exported decisions and server paths are exercis
   assert.equal(createLiveKitAuthGateService({ roomStore: store, secret: SECRET }).upstream.hostname, '127.0.0.1');
   assert.ok(
     createLiveKitAuthGateService({
-      pool: { query: async () => ({ rows: [] }) },
+      // An idle pool: the gate only builds its repository on it, nothing connects.
+      pool: new pg.Pool({ connectionString: 'postgres://unused@127.0.0.1:1/unused' }),
       secret: SECRET,
       upstreamUrl: 'ws://livekit'
     })
@@ -1179,8 +1217,8 @@ test('G08 admission gate service exported decisions and server paths are exercis
   );
   assert.equal((await gate.authorize(`/rtc?vr_gate_credential=${credential}`)).ok, true);
   decision = 'denied';
-  assert.equal((await gate.authorize(`/rtc?vr_gate_credential=${credential}`)).code, 'denied');
-  assert.equal((await gate.authorize('/rtc')).code, 'malformed');
+  assert.equal(codeOf(await gate.authorize(`/rtc?vr_gate_credential=${credential}`)), 'denied');
+  assert.equal(codeOf(await gate.authorize('/rtc')), 'malformed');
   const server = gate.createServer();
   t.after(() => server.close());
 

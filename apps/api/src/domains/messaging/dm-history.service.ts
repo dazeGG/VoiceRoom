@@ -8,6 +8,7 @@ import type {
   ReplyPointer,
   ReplyPreview
 } from '@voice-room/shared/contracts/messages';
+import { textOf } from '@voice-room/shared/guards';
 import { normalizeHistoryRequest } from '@voice-room/shared/messaging-history';
 import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
 import { epochMillis } from '../../platform/epoch-millis.ts';
@@ -166,8 +167,8 @@ function createDmHistoryService({
     peerId,
     query = {}
   }: { userId?: unknown; peerId?: unknown; query?: Loose } = {}): Promise<DirectHistoryPage> {
-    const viewer = String(userId || '').trim();
-    const peer = String(peerId || '').trim();
+    const viewer = textOf(userId).trim();
+    const peer = textOf(peerId).trim();
     if (!viewer) throw new DmHistoryError('authentication_required', 401, 'Authentication required');
     if (!peer || viewer === peer) throw new DmHistoryError('thread_not_found', 404, 'Thread not found');
 
@@ -178,29 +179,20 @@ function createDmHistoryService({
     }
 
     const { mode, limit, cursor } = parsed.request;
-    let anchor: Tuple | undefined;
-    if (mode !== 'latest') {
+    const base = { userId: viewer, peerId: peer, limit };
+    let page: HistoryPage;
+    if (mode === 'latest') {
+      page = await history.listLatest({ ...base, anchor: undefined });
+    } else {
+      let anchor: Tuple;
       try {
         anchor = decodeTuple(viewer, peer, cursor);
       } catch {
         throw new DmHistoryError('invalid_cursor', 400, 'Invalid history cursor');
       }
+      const method = ({ before: 'listBefore', after: 'listAfter', around: 'listAround' } as const)[mode];
+      page = await history[method]({ ...base, anchor });
     }
-
-    const method = (
-      {
-        latest: 'listLatest',
-        before: 'listBefore',
-        after: 'listAfter',
-        around: 'listAround'
-      } as const
-    )[mode];
-    const page = await (history[method] as (input: ListInput) => Promise<HistoryPage>)({
-      userId: viewer,
-      peerId: peer,
-      anchor,
-      limit
-    });
     const visible: StoredDirectMessage[] = [];
     for (const message of page.messages) {
       if (await canView(message, viewer)) visible.push(message);

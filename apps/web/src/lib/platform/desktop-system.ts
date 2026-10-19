@@ -1,3 +1,4 @@
+import { isOneOf, isRecord } from '@voice-room/shared/guards';
 import { createLogger, errorContext } from '$lib/shared/log';
 import { setDesktopWindowVisible } from './app-visibility';
 
@@ -27,19 +28,17 @@ function getBridge(): Window['voiceRoomDesktopSystem'] | undefined {
 }
 
 export function normalizeGameMode(value: unknown): boolean {
-  return Boolean(value && typeof value === 'object' && (value as { gameMode?: unknown }).gameMode === true);
+  return isRecord(value) && value.gameMode === true;
 }
 
 /** A shell that does not report it (older than this field) counts as visible. */
 export function normalizeWindowVisible(value: unknown): boolean {
-  return !(value && typeof value === 'object' && (value as { windowVisible?: unknown }).windowVisible === false);
+  return !(isRecord(value) && value.windowVisible === false);
 }
 
 export function normalizeWakeReason(value: unknown): DesktopWakeReason | null {
-  const reason = value && typeof value === 'object' ? (value as { reason?: unknown }).reason : undefined;
-  return typeof reason === 'string' && (WAKE_REASONS as readonly string[]).includes(reason)
-    ? (reason as DesktopWakeReason)
-    : null;
+  const reason = isRecord(value) ? value.reason : undefined;
+  return isOneOf(WAKE_REASONS, reason) ? reason : null;
 }
 
 export function applyGameMode(active: boolean): void {
@@ -83,7 +82,7 @@ export function bindDesktopSystem(handlers: DesktopSystemHandlers): () => void {
       .then((state) => {
         if (!pushed) applyState(state);
       })
-      .catch((error) => log.warn('desktop system state unavailable', errorContext(error)));
+      .catch((error: unknown) => log.warn('desktop system state unavailable', errorContext(error)));
   }
 
   return () => {

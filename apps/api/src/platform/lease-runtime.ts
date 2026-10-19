@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
+import { fieldOf } from './record.ts';
 
 const DEFAULT_LEASE_MS = 30_000;
 const DEFAULT_RENEW_MS = 10_000;
@@ -38,13 +39,12 @@ class LeaseLostError extends Error {
 }
 
 function abortError(signal: AbortSignal | undefined): Error {
-  if (signal?.reason instanceof Error) return signal.reason;
-  const error = new Error('Lease runtime stopped') as Error & { code?: string };
-  error.name = 'AbortError';
-  error.code = 'ABORT_ERR';
-  return error;
+  const reason = fieldOf(signal, 'reason');
+  if (reason instanceof Error) return reason;
+  return Object.assign(new Error('Lease runtime stopped'), { name: 'AbortError', code: 'ABORT_ERR' });
 }
 
+/** Waits `ms`; an abort rejects at once with the signal's reason (or an AbortError). */
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) return Promise.reject(abortError(signal));
   return new Promise((resolve, reject) => {
@@ -140,7 +140,7 @@ function createLeaseRuntime({
     request: LeaseReference & { leaseMs: number; signal: AbortSignal }
   ) => Promise<{ renewed?: boolean } | null | undefined> | { renewed?: boolean } | null | undefined;
   renewMs?: number;
-  run?: (guard: FenceGuard) => Promise<unknown> | unknown;
+  run?: (guard: FenceGuard) => unknown;
   sleep?: Sleep;
 } = {}) {
   if (!identity || typeof identity !== 'string') throw new TypeError('Lease identity is required');
@@ -272,4 +272,4 @@ function createLeaseRuntime({
 
 export type LeaseRuntime = ReturnType<typeof createLeaseRuntime>;
 
-export { LeaseLostError, boundedBackoff, createLeaseRuntime };
+export { LeaseLostError, boundedBackoff, createLeaseRuntime, delay };

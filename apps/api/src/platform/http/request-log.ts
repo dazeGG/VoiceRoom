@@ -5,8 +5,7 @@
 import type { FastifyRequest } from 'fastify';
 import type { IncomingMessage } from 'node:http';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
-
-type RawRequest = IncomingMessage & { voiceRoomUserId?: string };
+import { fieldOf } from '../record.ts';
 
 export function requestRouteLabel(request: {
   routeOptions?: { url?: string };
@@ -20,22 +19,25 @@ export function createRequestLog({
   clientIp,
   hashIp
 }: {
-  clientIp(req: IncomingMessage): string;
-  hashIp(ip: string): string;
+  clientIp: (req: Pick<IncomingMessage, 'socket' | 'headers'>) => string;
+  hashIp: (ip: string) => string;
 }) {
   return function logHttpRequest(request: FastifyRequest, statusCode: number, durationMs: number): void {
-    const route = requestRouteLabel(request as FastifyRequest & { routerPath?: string });
+    const route = requestRouteLabel(request);
     if (route === '/api/healthz') return;
     const level = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
-    const raw = request.raw as RawRequest | undefined;
+    // A request built without its Node message (a test's) still logs.
+    const raw: IncomingMessage | undefined = request.raw;
+    // The session resolver marks the message with the account it signed in.
+    const userId = fieldOf(raw, 'voiceRoomUserId');
     request.log?.[level]?.(
       {
         evt: LOG_EVENTS.HTTP_REQUEST,
         method: request.method,
         route,
         statusCode,
-        userId: raw?.voiceRoomUserId || undefined,
-        ipHash: hashIp(clientIp(raw || (request as unknown as IncomingMessage))),
+        userId: typeof userId === 'string' && userId ? userId : undefined,
+        ipHash: hashIp(clientIp(raw ?? request)),
         durationMs: Math.round(durationMs * 100) / 100
       },
       'request completed'

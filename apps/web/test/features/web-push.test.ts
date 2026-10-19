@@ -4,7 +4,6 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { freshImport, stubWindow } from '../helpers/fresh-module.ts';
-import type * as PushModule from '../../src/lib/features/home/model/push-notifications.svelte.ts';
 
 function fakePushManager(existing: boolean) {
   const subscription = {
@@ -29,7 +28,7 @@ function stubNotification(permission: NotificationPermission, requested: Notific
   vi.stubGlobal('Notification', { permission, requestPermission: vi.fn(async () => requested) });
 }
 
-const load = () => freshImport<typeof PushModule>('/src/lib/features/home/model/push-notifications.svelte.ts');
+const load = () => freshImport(() => import('../../src/lib/features/home/model/push-notifications.svelte.ts'));
 
 beforeEach(() => stubNotification('granted'));
 afterEach(() => {

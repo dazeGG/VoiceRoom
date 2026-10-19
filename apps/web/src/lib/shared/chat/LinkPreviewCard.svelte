@@ -16,7 +16,7 @@
   class:link-preview--with-image={Boolean(imageUrl)}
   href={preview.url}
   target="_blank"
-  rel="noopener noreferrer nofollow"
+  rel="noopener noreferrer nofollow external"
 >
   {#if imageUrl && preview.image}
     <span class="link-preview__thumb">

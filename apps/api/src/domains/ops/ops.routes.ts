@@ -44,13 +44,14 @@ export function registerOpsRoutes(root: FastifyInstance, ctx: ApiContext, deps: 
 
   app.get('/api/pow-challenge', { schema: { response: { 200: PowChallenge } } }, async (request) => {
     deps.pow.prune();
-    if (deps.powDifficulty <= 0) return { ok: true as const, required: false as const };
     const now = Date.now();
+    // Null only without a difficulty.
+    const challenge = deps.powDifficulty > 0 ? deps.pow.createChallenge(ctx.clientIp(request.raw), now) : null;
+    if (!challenge) return { ok: true as const, required: false as const };
     return {
       ok: true as const,
       algorithm: 'sha256' as const,
-      // Null only without a difficulty, which returned above.
-      challenge: deps.pow.createChallenge(ctx.clientIp(request.raw), now)!,
+      challenge,
       difficulty: deps.powDifficulty,
       expiresAt: now + deps.powTtlMs,
       required: true as const
@@ -108,7 +109,7 @@ export function registerOpsRoutes(root: FastifyInstance, ctx: ApiContext, deps: 
         ipHash: ctx.hashIp(clientIp)
       };
       for (const event of batch.events) {
-        const level = event.level as 'debug' | 'info' | 'warn' | 'error';
+        const level = event.level;
         request.log[level](
           {
             evt: LOG_EVENTS.CLIENT_REPORT,

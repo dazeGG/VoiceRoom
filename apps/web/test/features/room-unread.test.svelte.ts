@@ -5,9 +5,8 @@ import * as presence from '../../src/lib/entities/room/room-presence.svelte.ts';
 import { expect, test } from 'vitest';
 import { freshImport } from '../helpers/fresh-module.ts';
 import type { RoomRealtimeSummary } from '../../src/lib/api/realtime.ts';
-import type * as RoomPresenceModule from '../../src/lib/entities/room/room-presence.svelte.ts';
 
-const loadFresh = () => freshImport<typeof RoomPresenceModule>('/src/lib/entities/room/room-presence.svelte.ts');
+const loadFresh = () => freshImport(() => import('../../src/lib/entities/room/room-presence.svelte.ts'));
 
 function summary(roomId: string, unreadCount: number): RoomRealtimeSummary {
   return {

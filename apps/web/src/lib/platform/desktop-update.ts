@@ -1,3 +1,4 @@
+import { isOneOf, isRecord } from '@voice-room/shared/guards';
 import { createLogger, errorContext } from '$lib/shared/log';
 
 const log = createLogger('desktop:update');
@@ -23,11 +24,8 @@ function getBridge(): Window['voiceRoomDesktopUpdate'] | undefined {
 }
 
 export function normalizeDesktopUpdate(value: unknown): DesktopUpdateState {
-  const record = value && typeof value === 'object' ? (value as { status?: unknown; version?: unknown }) : {};
-  const status =
-    typeof record.status === 'string' && (STATUSES as readonly string[]).includes(record.status)
-      ? (record.status as DesktopUpdateStatus)
-      : 'none';
+  const record = isRecord(value) ? value : {};
+  const status = isOneOf(STATUSES, record.status) ? record.status : 'none';
   return { status, version: typeof record.version === 'string' ? record.version : '' };
 }
 
@@ -43,7 +41,7 @@ export function bindDesktopUpdate(onState: (state: DesktopUpdateState) => void):
   void Promise.resolve()
     .then(() => bridge.getState())
     .then(apply)
-    .catch((error) => log.warn('desktop update state failed', errorContext(error)));
+    .catch((error: unknown) => log.warn('desktop update state failed', errorContext(error)));
   return () => {
     disposed = true;
     unsubscribe();

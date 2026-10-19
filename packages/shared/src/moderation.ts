@@ -3,6 +3,7 @@
 // the banned account's profile when it is known.
 
 import type { Ban, BanPage, BanProfile } from './contracts/moderation.ts';
+import { isOneOf, isRecord } from './guards.ts';
 
 export type ModerationDuration = '1h' | '1d' | '7d' | 'permanent';
 export interface BanMutation {
@@ -31,10 +32,6 @@ export const MODERATION_DURATION_MS: Readonly<Record<ModerationDuration, number 
   permanent: null
 });
 
-function isRecord(value: unknown): value is Loose {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
 function cleanString(value: unknown, maxLength: number): string {
   if (typeof value !== 'string') return '';
   const text = value.trim();
@@ -48,7 +45,7 @@ export function normalizeModerationLimit(value: unknown, fallback: number = MODE
 }
 
 export function normalizeBanDuration(value: unknown): ModerationDuration | null {
-  return (MODERATION_DURATIONS as readonly unknown[]).includes(value) ? (value as ModerationDuration) : null;
+  return isOneOf(MODERATION_DURATIONS, value) ? value : null;
 }
 
 export function durationToExpiresAt(duration: unknown, now: number = Date.now()): number | null | undefined {
@@ -98,7 +95,7 @@ function normalizeBanProfile(value: unknown): BanProfile | null {
 
 export function normalizeActiveBan(value: unknown): Ban | null {
   if (!isRecord(value)) return null;
-  const subject = value.subject as Loose | null | undefined;
+  const subject = isRecord(value.subject) ? value.subject : undefined;
   const id = cleanString(value.id, 36);
   const roomId = cleanString(value.roomId, 48);
   const userId = cleanString(subject?.userId ?? value.userId, 36) || null;

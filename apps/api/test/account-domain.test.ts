@@ -12,6 +12,7 @@ import {
   type AccountService,
   type AccountUserStore
 } from '../src/domains/account/account.service.ts';
+import type { AccountRestore, DeletionRequest } from '../src/domains/account/account-deletion.repository.ts';
 import { registerAccountRoutes } from '../src/domains/account/account.routes.ts';
 import { createSessionCookies, parseCookies } from '../src/domains/account/session-cookie.ts';
 import type { ApiContext } from '../src/app/context.ts';
@@ -141,12 +142,12 @@ function harness(
     },
     ...overrides
   };
-  const requests: Record<string, { status: string; scheduledFor?: number }> = {
+  const requests: Record<string, DeletionRequest> = {
     'right-password': { status: 'requested', scheduledFor: 99 },
     again: { status: 'already_requested', scheduledFor: 88 },
     missing: { status: 'not_found' }
   };
-  const restores: Record<string, { status: string; userId: string | null }> = {
+  const restores: Record<string, AccountRestore> = {
     ok: { status: 'restored', userId: 'user-1' },
     old: { status: 'expired', userId: null }
   };

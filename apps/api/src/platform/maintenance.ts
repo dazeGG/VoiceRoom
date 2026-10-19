@@ -50,7 +50,7 @@ export function startMaintenanceTimers(
       if (task.enabled && !task.enabled()) continue;
       void options
         .observe(task.name, () => task.run())
-        .catch((error) => {
+        .catch((error: unknown) => {
           logger.error({ evt: LOG_EVENTS.MAINTENANCE_TASK_FAILED, task: task.label, err: error }, task.failureMessage);
         });
     }

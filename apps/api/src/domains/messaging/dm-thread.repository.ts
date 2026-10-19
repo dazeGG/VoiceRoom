@@ -100,7 +100,8 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
     return mapMessage(row);
   }
 
-  async function sendMessage({
+  // A replay answers with the message the caller stored on the first send.
+  async function sendMessage<Replayed extends object = DirectMessage>({
     senderId,
     recipientId,
     body,
@@ -115,7 +116,7 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
     metadata?: Metadata | null;
     replyToMessageId?: string | null;
     beforeUnitOfWork?:
-      ((client: pg.PoolClient) => Promise<{ replay?: boolean; message?: unknown } | null | undefined>) | null;
+      ((client: pg.PoolClient) => Promise<{ replay: true; message: Replayed } | null | undefined>) | null;
     unitOfWork?: ((client: pg.PoolClient, message: DirectMessage) => Promise<unknown>) | null;
   }) {
     const id = crypto.randomUUID();
@@ -123,7 +124,7 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
     return transaction(pool, async (client) => {
       if (typeof beforeUnitOfWork === 'function') {
         const prepared = await beforeUnitOfWork(client);
-        if (prepared?.replay) return { ...(prepared.message as DirectMessage), idempotencyReplay: true };
+        if (prepared?.replay) return { ...prepared.message, idempotencyReplay: true };
       }
       const row = await kyselyOn(client)
         .insertInto('direct_messages')

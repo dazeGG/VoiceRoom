@@ -42,7 +42,7 @@ export function registerDirectMessageRoutes(root: FastifyInstance, ctx: ApiConte
 
   async function signedIn(request: FastifyRequest, reply: FastifyReply): Promise<SocialUser | null> {
     const user = (await ctx.resolveSession(request.raw))?.user;
-    if (user) return user as SocialUser;
+    if (user) return user;
     reply.code(401).send(failure('Требуется вход', { code: 'authentication_required' }));
     return null;
   }
@@ -85,7 +85,7 @@ export function registerDirectMessageRoutes(root: FastifyInstance, ctx: ApiConte
         attachmentIds: body.attachmentIds,
         replyTo,
         replyToMessageId: replyTo == null ? '' : cleanUuid(replyTo?.messageId),
-        idempotencyKey: requestIdempotencyKey(request.raw as { headers?: Record<string, unknown> }, body)
+        idempotencyKey: requestIdempotencyKey(request.raw, body)
       });
       switch (result.status) {
         case 'rate_limited':

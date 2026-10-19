@@ -54,10 +54,17 @@ const now = sql<Date>`current_timestamp`;
 // Returns null for "no bound" and undefined for a value that is not a time.
 function readBound(through: unknown): Date | null | undefined {
   if (through == null) return null;
-  const bound = through instanceof Date ? through : new Date(through as string | number);
-  return Number.isNaN(bound.getTime()) ? undefined : bound;
+  const bound =
+    through instanceof Date
+      ? through
+      : typeof through === 'string' || typeof through === 'number'
+        ? new Date(through)
+        : null;
+  return !bound || Number.isNaN(bound.getTime()) ? undefined : bound;
 }
 
+function mapRow(row: NotificationRow): InboxNotification;
+function mapRow(row: NotificationRow | null | undefined): InboxNotification | null;
 function mapRow(row: NotificationRow | null | undefined): InboxNotification | null {
   return row
     ? {
@@ -85,7 +92,7 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
   if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
   const db = kyselyOn(pool);
   const on = (client: Client): Database => (client?.query ? kyselyOn(client) : db);
-  const rows = (found: unknown[]) => found.map((row) => mapRow(row as NotificationRow) as InboxNotification);
+  const rows = (found: NotificationRow[]) => found.map((row) => mapRow(row));
 
   // Writes join the caller's transaction, or run in their own.
   function mutate<T>(client: Client, callback: (db: Database) => Promise<T>): Promise<T> {
@@ -301,7 +308,7 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
         .where('retracted_at', 'is', null)
         .orderBy('recipient_user_id')
         .execute();
-      const retracted: unknown[] = [];
+      const retracted: NotificationRow[] = [];
       for (const { recipient_user_id: recipientUserId } of recipients) {
         const revision = await allocateRevision(tx, recipientUserId);
         retracted.push(

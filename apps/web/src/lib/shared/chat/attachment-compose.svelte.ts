@@ -1,3 +1,4 @@
+import { isArray } from '@voice-room/shared/guards';
 import {
   createAttachmentSlot,
   deleteAttachment,
@@ -15,7 +16,6 @@ export interface ComposeDraft extends AttachmentDraft {
   error: string | null;
 }
 
-const stores = new Map<string, AttachmentComposeStore>();
 const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
 function disposePreview(draft: ComposeDraft): void {
@@ -36,9 +36,8 @@ export class AttachmentComposeStore {
     this.storageKey = `voice-room:attachment-drafts:${context}:${contextId}`;
     if (typeof localStorage !== 'undefined') {
       try {
-        const ids = JSON.parse(localStorage.getItem(this.storageKey) || '[]');
-        if (Array.isArray(ids) && ids.length)
-          void this.resume(ids.filter((id): id is string => typeof id === 'string'));
+        const ids: unknown = JSON.parse(localStorage.getItem(this.storageKey) || '[]');
+        if (isArray(ids) && ids.length) void this.resume(ids.filter((id): id is string => typeof id === 'string'));
       } catch {
         localStorage.removeItem(this.storageKey);
       }
@@ -52,7 +51,7 @@ export class AttachmentComposeStore {
     return this.drafts.length > 0 && this.drafts.every((draft) => draft.state === 'ready');
   }
 
-  async addFiles(files: Iterable<File>): Promise<void> {
+  async addFiles(files: Iterable<File, unknown, unknown>): Promise<void> {
     this.lastError = null;
     const candidates = Array.from(files).slice(0, Math.max(0, 4 - this.drafts.length));
     for (const file of candidates) {
@@ -170,16 +169,6 @@ export class AttachmentComposeStore {
   }
 }
 
-export function getAttachmentComposeStore(context: AttachmentContext, contextId: string): AttachmentComposeStore {
-  const key = `${context}:${contextId}`;
-  let store = stores.get(key);
-  if (!store) {
-    store = new AttachmentComposeStore(context, contextId);
-    stores.set(key, store);
-  }
-  return store;
-}
-
 export function imageFilesFromClipboard(event: ClipboardEvent): File[] {
   const data = event.clipboardData;
   if (!data) return [];
@@ -201,15 +190,4 @@ export function dataTransferHasImages(data: DataTransfer | null): boolean {
   const fileItems = Array.from(data.items).filter((item) => item.kind === 'file');
   if (fileItems.some((item) => allowedTypes.has(item.type))) return true;
   return fileItems.length === 0 && Array.from(data.types).includes('Files');
-}
-
-export function clearAttachmentComposeStores(): void {
-  for (const store of stores.values()) store.discard();
-  stores.clear();
-  if (typeof localStorage !== 'undefined') {
-    for (let index = localStorage.length - 1; index >= 0; index -= 1) {
-      const key = localStorage.key(index);
-      if (key?.startsWith('voice-room:attachment-drafts:')) localStorage.removeItem(key);
-    }
-  }
 }

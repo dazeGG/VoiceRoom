@@ -17,11 +17,14 @@ export interface GatePrincipalStore {
 }
 
 export function isGatePrincipal(value: unknown): value is GatePrincipal {
-  const principal = value as Partial<GatePrincipal> | null | undefined;
   return (
-    (principal?.principalType === 'account' || principal?.principalType === 'guest') &&
-    typeof principal.principalId === 'string' &&
-    principal.principalId.trim().length > 0
+    typeof value === 'object' &&
+    value !== null &&
+    'principalType' in value &&
+    (value.principalType === 'account' || value.principalType === 'guest') &&
+    'principalId' in value &&
+    typeof value.principalId === 'string' &&
+    value.principalId.trim().length > 0
   );
 }
 

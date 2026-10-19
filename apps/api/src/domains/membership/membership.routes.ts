@@ -7,6 +7,7 @@ import { MemberPage, MembersQuery, MembershipLeft } from '@voice-room/shared/con
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import type { DirectoryListing } from './member-directory.service.ts';
+import { codeOf } from '../../platform/error-code.ts';
 import type { Membership } from './membership.repository.ts';
 import type { LeaveOutcome } from './membership.service.ts';
 import { mayLeaveRoom } from './membership.policy.ts';
@@ -66,7 +67,7 @@ export function registerMembershipRoutes(root: FastifyInstance, ctx: ApiContext,
         if (result.status !== 'ok') return reply.code(401).send(SIGN_IN_REQUIRED);
         return result.envelope;
       } catch (error) {
-        if ((error as { code?: unknown } | null)?.code === 'invalid_cursor')
+        if (codeOf(error) === 'invalid_cursor')
           return reply.code(400).send(failure('Invalid cursor', { code: 'invalid_cursor' }));
         throw error;
       }

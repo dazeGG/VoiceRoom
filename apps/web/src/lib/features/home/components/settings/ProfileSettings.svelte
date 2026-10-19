@@ -27,7 +27,8 @@
   const avatarAction = $derived(user?.avatarUrl ? 'Изменить аватар' : 'Загрузить аватар');
 
   function onAvatarFile(event: Event): void {
-    const input = event.currentTarget as HTMLInputElement;
+    const input = event.currentTarget;
+    if (!(input instanceof HTMLInputElement)) return;
     const selected = input.files?.[0] ?? null;
     input.value = '';
     if (!selected) return;

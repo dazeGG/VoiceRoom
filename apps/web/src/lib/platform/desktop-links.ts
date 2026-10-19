@@ -1,3 +1,5 @@
+import { isRecord } from '@voice-room/shared/guards';
+
 export type DesktopLink =
   | { kind: 'room'; roomId: string }
   | { kind: 'mention'; roomId: string; messageId: string }
@@ -18,8 +20,8 @@ function matches(pattern: RegExp, value: unknown): value is string {
 }
 
 export function normalizeDesktopLink(value: unknown): DesktopLink | null {
-  if (!value || typeof value !== 'object') return null;
-  const source = value as Record<string, unknown>;
+  if (!isRecord(value)) return null;
+  const source = value;
   switch (source.kind) {
     case 'room':
       return matches(ROOM_ID_PATTERN, source.roomId) ? { kind: 'room', roomId: source.roomId } : null;

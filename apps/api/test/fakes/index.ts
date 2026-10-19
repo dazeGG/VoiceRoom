@@ -20,8 +20,25 @@ import type { Attachment } from '../../src/domains/media/attachment.repository.t
 import type { MediaJob } from '../../src/domains/media/media-job.repository.ts';
 import type { NotificationOutboxEvent } from '../../src/domains/notifications/notification-outbox.repository.ts';
 
-export function fake<T>(implementation: Partial<T> = {}): T {
-  return implementation as T;
+/**
+ * The double, standing where the real `T` goes. This is the tests' one act of
+ * trust (like `standIn` for the app's store overrides): every member the double
+ * has is checked against `T`, and a member it lacks fails loudly in the test
+ * that reaches it.
+ */
+export function fake<T>(implementation?: Partial<T>): T;
+export function fake(implementation: unknown = {}): unknown {
+  return implementation;
+}
+
+/**
+ * A double for a library type whose overloads no double can meet member by
+ * member (pg's query, pino's child): it has the members the code under test
+ * calls, and a call to anything else fails loudly in that test.
+ */
+function libraryDouble<T>(double: object): T;
+function libraryDouble(double: unknown): unknown {
+  return double;
 }
 
 /**
@@ -29,15 +46,20 @@ export function fake<T>(implementation: Partial<T> = {}): T {
  * undefined: for tests asserting that a dependency is never (or only) used.
  */
 export function spy<T extends object>(calls: string[]): T {
-  return new Proxy({} as T, {
-    get: (_target, property) =>
-      typeof property === 'string'
-        ? (..._args: unknown[]) => {
-            calls.push(property);
-            return Promise.resolve(undefined);
-          }
-        : undefined
-  });
+  return fake<T>(
+    new Proxy(
+      {},
+      {
+        get: (_target, property) =>
+          typeof property === 'string'
+            ? (..._args: unknown[]) => {
+                calls.push(property);
+                return Promise.resolve(undefined);
+              }
+            : undefined
+      }
+    )
+  );
 }
 
 /** A pg query result with just the fields code reads (rows, rowCount). */
@@ -56,16 +78,17 @@ export type SqlCall = { text: string; values: unknown[] };
  * recorded in `calls`. connect() hands out the same object as the client.
  * It is typed as a pg pool and client too, so code that takes either accepts it.
  */
-export function fakeDb(answer: (text: string, values: unknown[]) => unknown = () => result()) {
+export function fakeDb(
+  answer: (text: string, values: unknown[]) => pg.QueryResult | Promise<pg.QueryResult> = () => result()
+) {
   const calls: SqlCall[] = [];
   const db = {
     calls,
     released: 0,
-    async query(text: string | { text: string }, values: unknown[] = []) {
+    async query(text: string | { text: string }, values: unknown[] = []): Promise<pg.QueryResult> {
       const sql = typeof text === 'string' ? text : text.text;
       calls.push({ text: sql, values });
-      const answered = await answer(sql, values);
-      return (answered ?? result()) as pg.QueryResult;
+      return answer(sql, values);
     },
     async connect() {
       return db;
@@ -75,39 +98,7 @@ export function fakeDb(answer: (text: string, values: unknown[]) => unknown = ()
     },
     async end() {}
   };
-  return db as typeof db & pg.Pool & pg.PoolClient;
-}
-
-export type ScopedCall = { scope: 'pool' | 'client'; text: string; values: unknown[] };
-
-/**
- * A pool whose connect() hands out one transaction client; both share
- * `answer`, and every statement is recorded with the side it ran on (BEGIN,
- * COMMIT and ROLLBACK are answered by the client itself).
- */
-export function fakePoolWithClient(answer: (text: string, values: unknown[], calls: ScopedCall[]) => unknown) {
-  const calls: ScopedCall[] = [];
-  const client = fakeDb((text, values) => {
-    calls.push({ scope: 'client', text, values });
-    if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') return result();
-    return answer(text, values, calls);
-  });
-  client.release = () => {
-    calls.push({ scope: 'client', text: 'release', values: [] });
-  };
-  const pool = {
-    calls,
-    async query(text: string, values: unknown[] = []) {
-      calls.push({ scope: 'pool', text, values });
-      return ((await answer(text, values, calls)) ?? result()) as pg.QueryResult;
-    },
-    async connect() {
-      calls.push({ scope: 'pool', text: 'connect', values: [] });
-      return client;
-    },
-    async end() {}
-  };
-  return pool as typeof pool & pg.Pool;
+  return libraryDouble<typeof db & pg.Pool & pg.PoolClient>(db);
 }
 
 export function attachment(overrides: Partial<Attachment> = {}): Attachment {
@@ -365,5 +356,5 @@ export function recordingLogger() {
     log: at('info'),
     child: () => logger
   };
-  return logger as typeof logger & Logger;
+  return libraryDouble<typeof logger & Logger>(logger);
 }
