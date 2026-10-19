@@ -1,4 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
+import type { RoomMessageAnswer } from '@voice-room/shared/contracts/messages';
+import type { RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
 import { createPermanentRoom, enterRoom, registerViaUi, uniqueLogin } from './helpers';
 
 async function enableCapabilities(page: Page, enabled: string[]): Promise<void> {
@@ -251,24 +253,29 @@ test('manual polish keeps the newest mention query, emits login-bound segments, 
   });
   let messageOrdinal = 0;
   await page.route(`**/api/rooms/${roomId}/chat`, async (route) => {
-    const body = route.request().postDataJSON() as { text: string; content?: unknown; name?: string };
+    const body = route.request().postDataJSON() as { text: string; content?: RoomMessageContentV1; name?: string };
     messageOrdinal += 1;
-    await route.fulfill({
-      json: {
-        message: {
-          id: `manual-polish-${messageOrdinal}`,
-          peerId: 'manual-polish-peer',
-          authorUserId: 'manual-polish-user',
-          name: body.name || login,
-          text: body.text,
-          content: body.content,
-          createdAt: Date.now() + messageOrdinal,
-          editedAt: null,
-          expiresAt: Date.now() + 60_000,
-          attachments: []
-        }
+    // Built as the route's contract answer: the web refuses any other shape.
+    const answer = {
+      ok: true,
+      message: {
+        id: `manual-polish-${messageOrdinal}`,
+        roomId,
+        peerId: 'manual-polish-peer',
+        authorUserId: 'manual-polish-user',
+        name: body.name || login,
+        avatarAccent: null,
+        avatarColorKey: 'green',
+        avatarUrl: null,
+        text: body.text,
+        content: body.content ?? null,
+        createdAt: Date.now() + messageOrdinal,
+        editedAt: null,
+        expiresAt: Date.now() + 60_000,
+        attachments: []
       }
-    });
+    } satisfies RoomMessageAnswer;
+    await route.fulfill({ json: answer });
   });
 
   await enterRoom(page, roomId);
