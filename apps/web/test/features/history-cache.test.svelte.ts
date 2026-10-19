@@ -9,9 +9,13 @@ import { clearHistoryCache, createHistoryCache } from '../../src/lib/shared/chat
 type Item = { id: string; createdAt: number; text: string };
 
 function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => (resolve = done));
-  return { promise, resolve };
+  let resolve: (value: T) => void = () => {};
+  let reject: (reason: unknown) => void = () => {};
+  const promise = new Promise<T>((done, fail) => {
+    resolve = done;
+    reject = fail;
+  });
+  return { promise, resolve, reject };
 }
 
 function page(...items: Item[]): AnchoredHistoryPage<Item> {
@@ -112,7 +116,7 @@ test('a kept copy stays shown when the newest page fails', async () => {
   anchored.close();
 
   const again = anchored.open('a');
-  pending[1].answer.resolve(Promise.reject(new Error('сеть')) as never);
+  pending[1].answer.reject(new Error('сеть'));
   await again;
   expect(ids(anchored.state.messages)).toEqual(['m1']);
   expect(anchored.state.error).toBe('сеть');

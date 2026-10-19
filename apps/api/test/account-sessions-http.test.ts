@@ -1,6 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import type {
+import {
   Me,
   Recovered,
   RecoveryCodesGenerated,
@@ -42,7 +42,7 @@ async function signIn(
 }
 
 async function me(socketPath: string, cookie: string) {
-  const response = await request<Me>(socketPath, { pathname: '/api/auth/me', cookie });
+  const response = await request(socketPath, { pathname: '/api/auth/me', cookie }, Me);
   assert.equal(response.status, 200);
   return response.body.user;
 }
@@ -54,7 +54,7 @@ test('signed-in devices are listed without secrets and an ended session loses it
 
   assert.equal((await request(socketPath, { pathname: '/api/auth/sessions' })).status, 401);
 
-  const listed = await request<Sessions>(socketPath, { pathname: '/api/auth/sessions', cookie: laptop });
+  const listed = await request(socketPath, { pathname: '/api/auth/sessions', cookie: laptop }, Sessions);
   assert.equal(listed.status, 200);
   assert.equal(listed.body.sessions.length, 2);
   for (const session of listed.body.sessions) {
@@ -102,12 +102,16 @@ test('signed-in devices are listed without secrets and an ended session loses it
   assert.equal(garbage.status, 404);
 
   const phone = await signIn(socketPath, { userAgent: FIREFOX_LINUX });
-  const revoked = await request<SessionsRevoked>(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/sessions/revoke-others',
-    cookie: laptop,
-    body: {}
-  });
+  const revoked = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/auth/sessions/revoke-others',
+      cookie: laptop,
+      body: {}
+    },
+    SessionsRevoked
+  );
   assert.equal(revoked.status, 200);
   assert.equal(revoked.body.revoked, 1);
   assert.equal(await me(socketPath, phone), null);
@@ -118,13 +122,13 @@ test('recovery codes restore access over HTTP and end every earlier session', as
   const socketPath = await startServer(t);
   const cookie = await signIn(socketPath, { register: true });
 
-  const initial = await request<Security>(socketPath, { pathname: '/api/auth/security', cookie });
+  const initial = await request(socketPath, { pathname: '/api/auth/security', cookie }, Security);
   assert.equal(initial.status, 200);
   assert.deepEqual(initial.body.recoveryCodes, { remaining: 0, generatedAt: null });
   assert.deepEqual(initial.body.recoveryCodesReminder, { snoozedUntil: null });
 
   // A freshly registered account starts at the current announcement.
-  const whatsNew = await request<WhatsNewAnswer>(socketPath, { pathname: '/api/auth/whats-new', cookie });
+  const whatsNew = await request(socketPath, { pathname: '/api/auth/whats-new', cookie }, WhatsNewAnswer);
   assert.equal(whatsNew.status, 200);
   assert.match(whatsNew.body.whatsNew.current, /^\d+\.\d+\.\d+$/);
   assert.equal(whatsNew.body.whatsNew.lastSeen, whatsNew.body.whatsNew.current);
@@ -138,40 +142,52 @@ test('recovery codes restore access over HTTP and end every earlier session', as
   });
   assert.equal(wrongPassword.status, 400);
 
-  const generated = await request<RecoveryCodesGenerated>(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/recovery-codes',
-    cookie,
-    body: { currentPassword: 'password123' }
-  });
+  const generated = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/auth/recovery-codes',
+      cookie,
+      body: { currentPassword: 'password123' }
+    },
+    RecoveryCodesGenerated
+  );
   assert.equal(generated.status, 200);
   assert.equal(generated.headers['cache-control'], 'no-store');
   assert.equal(generated.body.codes.length, 10);
   for (const code of generated.body.codes) assert.match(code, FORMATTED_CODE);
   assert.equal(
-    (await request<Security>(socketPath, { pathname: '/api/auth/security', cookie })).body.recoveryCodes.remaining,
+    (await request(socketPath, { pathname: '/api/auth/security', cookie }, Security)).body.recoveryCodes.remaining,
     10
   );
 
-  const snoozed = await request<ReminderSnoozed>(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/recovery-codes/reminder/snooze',
-    cookie,
-    body: {}
-  });
+  const snoozed = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/auth/recovery-codes/reminder/snooze',
+      cookie,
+      body: {}
+    },
+    ReminderSnoozed
+  );
   assert.equal(snoozed.status, 200);
   assert.ok((snoozed.body.recoveryCodesReminder.snoozedUntil ?? 0) > Date.now() + 2 * 24 * 60 * 60 * 1000);
   assert.deepEqual(
-    (await request<Security>(socketPath, { pathname: '/api/auth/security', cookie })).body.recoveryCodesReminder,
+    (await request(socketPath, { pathname: '/api/auth/security', cookie }, Security)).body.recoveryCodesReminder,
     snoozed.body.recoveryCodesReminder
   );
 
-  const seen = await request<WhatsNewAnswer>(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/whats-new/seen',
-    cookie,
-    body: {}
-  });
+  const seen = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/auth/whats-new/seen',
+      cookie,
+      body: {}
+    },
+    WhatsNewAnswer
+  );
   assert.equal(seen.status, 200);
   assert.equal(seen.body.whatsNew.lastSeen, seen.body.whatsNew.current);
 
@@ -196,12 +212,16 @@ test('recovery codes restore access over HTTP and end every earlier session', as
   });
   assert.equal(shortPassword.status, 400, 'a rejected password must not spend the code');
 
-  const recovered = await request<Recovered>(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/recover',
-    headers: { 'User-Agent': FIREFOX_LINUX },
-    body: { login: 'ADA', code: code.toLowerCase(), newPassword: 'brand-new-password' }
-  });
+  const recovered = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/auth/recover',
+      headers: { 'User-Agent': FIREFOX_LINUX },
+      body: { login: 'ADA', code: code.toLowerCase(), newPassword: 'brand-new-password' }
+    },
+    Recovered
+  );
   assert.equal(recovered.status, 200);
   assert.equal(recovered.body.user.login, 'ada');
   assert.equal('passwordHash' in recovered.body.user, false);

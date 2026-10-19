@@ -9,6 +9,7 @@
 
 import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { isRecord } from '../../packages/shared/src/guards.ts';
 
 interface StopInput {
   stop_hook_active?: boolean;
@@ -16,7 +17,8 @@ interface StopInput {
 
 function readInput(): StopInput {
   try {
-    return JSON.parse(readFileSync(0, 'utf8')) as StopInput;
+    const input: unknown = JSON.parse(readFileSync(0, 'utf8'));
+    return isRecord(input) ? { stop_hook_active: Boolean(input.stop_hook_active) } : {};
   } catch {
     return {};
   }

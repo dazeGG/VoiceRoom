@@ -9,6 +9,8 @@
 
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
+import { Type } from 'typebox';
+import { Value } from 'typebox/value';
 
 const repoRoot = resolve(import.meta.dirname, '..');
 const BASELINE_PATH = resolve(repoRoot, 'config/test-source-reads.json');
@@ -52,7 +54,10 @@ function sourceReads(tree: string): string[] {
   return found;
 }
 
-const baseline = JSON.parse(readFileSync(BASELINE_PATH, 'utf8')) as Record<string, number>;
+const baseline: unknown = JSON.parse(readFileSync(BASELINE_PATH, 'utf8'));
+if (!Value.Check(Type.Record(Type.String(), Type.Number()), baseline)) {
+  throw new Error(`${BASELINE_PATH} must map each test tree to its count of source reads`);
+}
 const update = process.argv.includes('--update');
 const verbose = process.argv.includes('--list');
 let failed = false;

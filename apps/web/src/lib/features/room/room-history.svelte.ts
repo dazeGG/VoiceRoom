@@ -111,7 +111,8 @@ export function createAnchoredHistory<T extends { id: string }>(options: Anchore
     }
   }
 
-  function loadOlder(scrollElement: HTMLElement | null): Promise<void> {
+  // Only the scroll position is read and kept, so a scroll box will do.
+  function loadOlder(scrollElement: Pick<HTMLElement, 'scrollHeight' | 'scrollTop'> | null): Promise<void> {
     if (olderPromise) return olderPromise;
     // The kept copy has no cursor of its own; older pages wait for the page.
     if (revalidating) return Promise.resolve();

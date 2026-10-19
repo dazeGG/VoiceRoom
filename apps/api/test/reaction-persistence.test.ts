@@ -3,7 +3,9 @@ import { Pool } from 'pg';
 import test, { type TestContext } from 'node:test';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createReactionRepository } from '../src/domains/messaging/reaction.repository.ts';
+import { Type } from 'typebox';
 import { createTestDatabase } from './db-harness.ts';
+import { CountRow, queryRow, queryRows } from './helpers/checked.ts';
 
 async function fixture(t: TestContext) {
   const db = await createTestDatabase(t);
@@ -48,14 +50,18 @@ test(
     assert.equal(first.revision, duplicate.revision);
 
     await Promise.all(Array.from({ length: 20 }, (_, index) => set(index % 2 === 0)));
-    const state = await pool.query(
+    const state = await queryRow(
+      pool,
+      CountRow,
       `SELECT count(*)::int AS count FROM room_message_reactions WHERE message_id = 'reaction-message' AND emoji = '😀' AND user_id = 'actor'`
     );
-    const revision = await pool.query(
+    const revision = await queryRow(
+      pool,
+      Type.Object({ revision: Type.String() }),
       `SELECT revision FROM room_message_reaction_revisions WHERE message_id = 'reaction-message' AND emoji = '😀'`
     );
-    assert.ok(state.rows[0].count === 0 || state.rows[0].count === 1);
-    assert.ok(BigInt(revision.rows[0].revision) >= 1n);
+    assert.ok(state.count === 0 || state.count === 1);
+    assert.ok(BigInt(revision.revision) >= 1n);
 
     await assert.rejects(
       repository.transaction(async (client) => {
@@ -72,7 +78,8 @@ test(
       /rollback/
     );
     assert.equal(
-      (await pool.query(`SELECT count(*)::int AS count FROM room_message_reactions WHERE emoji = '👩🏽‍💻'`)).rows[0].count,
+      (await queryRow(pool, CountRow, `SELECT count(*)::int AS count FROM room_message_reactions WHERE emoji = '👩🏽‍💻'`))
+        .count,
       0
     );
   }
@@ -113,8 +120,12 @@ test(
     }
     assert.equal(seen.size, 10000);
     const indexes = (
-      await pool.query(`SELECT indexdef FROM pg_indexes WHERE tablename = 'room_message_reactions'`)
-    ).rows
+      await queryRows(
+        pool,
+        Type.Object({ indexdef: Type.String() }),
+        `SELECT indexdef FROM pg_indexes WHERE tablename = 'room_message_reactions'`
+      )
+    )
       .map((row) => row.indexdef)
       .join('\n');
     assert.match(indexes, /message_id, emoji, created_at, user_id/);

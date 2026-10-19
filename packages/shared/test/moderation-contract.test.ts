@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as moderation from '../src/moderation.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 const base = { id: 'ban-1', roomId: 'room-1', createdAt: 1, updatedAt: 1, expiresAt: null, reason: '' };
 
@@ -23,7 +24,7 @@ test('G88-C01 account bans keep a sanitized profile of the banned user', async (
         }
       }
     });
-    assert.deepEqual(ban!.subject, {
+    assert.deepEqual(defined(ban, 'the ban').subject, {
       kind: 'account',
       userId: 'user-1',
       profile: {
@@ -39,22 +40,27 @@ test('G88-C01 account bans keep a sanitized profile of the banned user', async (
       ...base,
       subject: { userId: 'user-1', profile: { login: 'anna', avatarUrl: 'https://example.com/a.png' } }
     });
-    assert.equal(foreignAvatar!.subject.profile!.avatarUrl, null);
+    assert.equal(defined(defined(foreignAvatar, 'the ban').subject.profile, 'the profile').avatarUrl, null);
   }
 });
 
 test('G88-C02 guests and profiles without a login stay profile-free', async () => {
   for (const contract of await contracts()) {
     assert.deepEqual(
-      contract.normalizeActiveBan({ ...base, subject: { userId: 'user-1', profile: { displayName: 'Без логина' } } })!
-        .subject,
+      defined(
+        contract.normalizeActiveBan({ ...base, subject: { userId: 'user-1', profile: { displayName: 'Без логина' } } }),
+        'the ban'
+      ).subject,
       { kind: 'account', userId: 'user-1' }
     );
     assert.deepEqual(
-      contract.normalizeActiveBan({ ...base, subject: { userId: null, profile: { login: 'guest' } } })!.subject,
+      defined(
+        contract.normalizeActiveBan({ ...base, subject: { userId: null, profile: { login: 'guest' } } }),
+        'the ban'
+      ).subject,
       { kind: 'guest', userId: null }
     );
-    assert.deepEqual(contract.normalizeActiveBan({ ...base, userId: 'user-2' })!.subject, {
+    assert.deepEqual(defined(contract.normalizeActiveBan({ ...base, userId: 'user-2' }), 'the ban').subject, {
       kind: 'account',
       userId: 'user-2'
     });

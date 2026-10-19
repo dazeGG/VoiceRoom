@@ -10,11 +10,12 @@ import {
   switchScreenTab
 } from '../../src/lib/features/room/client/ui/screen-source-picker.ts';
 import { screenSourceUi } from '../../src/lib/features/room/screen-source-ui.svelte.ts';
+import type { DesktopCaptureSource } from '../../src/lib/features/room/client/core/types.ts';
 
-const sources = [
+const sources: DesktopCaptureSource[] = [
   { id: 'screen:1', name: 'Экран 1', type: 'screen' },
   { id: 'window:7', name: 'Игра', type: 'window' }
-] as never[];
+];
 
 beforeEach(() => Object.assign(state, createInitialRoomState()));
 

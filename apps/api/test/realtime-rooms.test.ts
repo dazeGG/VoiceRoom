@@ -9,8 +9,8 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { openWs, sendWs, joinVoiceRoom, subscribeRoomPreview, waitForWsType, countWsType } from './ws-harness.ts';
-import type { SignedIn } from '@voice-room/shared/contracts/account';
-import type { RoomCreated } from '@voice-room/shared/contracts/rooms';
+import { SignedIn } from '@voice-room/shared/contracts/account';
+import { RoomCreated } from '@voice-room/shared/contracts/rooms';
 import { createTestDatabase } from './db-harness.ts';
 import {
   cookieFrom,
@@ -22,11 +22,15 @@ import {
 } from './fakes/server-process.ts';
 
 async function register(socketPath: string, login: string) {
-  const response = await request<SignedIn>(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/register',
-    body: { login, displayName: login, password: 'password123', passwordConfirm: 'password123' }
-  });
+  const response = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/auth/register',
+      body: { login, displayName: login, password: 'password123', passwordConfirm: 'password123' }
+    },
+    SignedIn
+  );
   assert.equal(response.status, 201);
   return { cookie: cookieFrom(response.setCookie), user: response.body.user };
 }
@@ -59,12 +63,16 @@ test('room owner receives bounded room.summary as peers join and leave', async (
   const { socketPath, logs } = await withServer(t);
   try {
     const owner = await register(socketPath, 'summary-owner');
-    const created = await request<RoomCreated>(socketPath, {
-      method: 'POST',
-      pathname: '/api/rooms',
-      body: { isStatic: true },
-      cookie: owner.cookie
-    });
+    const created = await request(
+      socketPath,
+      {
+        method: 'POST',
+        pathname: '/api/rooms',
+        body: { isStatic: true },
+        cookie: owner.cookie
+      },
+      RoomCreated
+    );
     assert.equal(created.status, 201);
     const roomId = created.body.roomId;
 
@@ -73,7 +81,7 @@ test('room owner receives bounded room.summary as peers join and leave', async (
     await ownerWs.ready;
 
     // Six guests join voice — one over the visible cap of five.
-    const peers = [];
+    const peers: Array<{ peer: ReturnType<typeof openWs>; creds: ReturnType<typeof voiceCreds> }> = [];
     for (let i = 1; i <= 6; i += 1) {
       const creds = voiceCreds(i);
       const peer = openWs(socketPath);
@@ -126,7 +134,7 @@ test('room owner receives bounded room.summary as peers join and leave', async (
 test('preview subscribe streams peer diffs and unsubscribe stops them', async (t) => {
   const { socketPath, logs } = await withServer(t);
   try {
-    const created = await request<RoomCreated>(socketPath, { method: 'POST', pathname: '/api/rooms', body: {} });
+    const created = await request(socketPath, { method: 'POST', pathname: '/api/rooms', body: {} }, RoomCreated);
     assert.equal(created.status, 201);
     const roomId = created.body.roomId;
 
@@ -175,7 +183,7 @@ test('preview subscribe streams peer diffs and unsubscribe stops them', async (t
 test('idle connection receives no room detail without subscribe or join', async (t) => {
   const { socketPath, logs } = await withServer(t);
   try {
-    const created = await request<RoomCreated>(socketPath, { method: 'POST', pathname: '/api/rooms', body: {} });
+    const created = await request(socketPath, { method: 'POST', pathname: '/api/rooms', body: {} }, RoomCreated);
     assert.equal(created.status, 201);
     const roomId = created.body.roomId;
 

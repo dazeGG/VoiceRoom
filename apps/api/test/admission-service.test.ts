@@ -53,10 +53,10 @@ function issued(result: AdmissionResult) {
 
 function setup(overrides: Partial<AdmissionDeps> = {}) {
   const calls = {
-    issued: [] as Parameters<CredentialProvider['issueAdmission']>[0][],
-    revokedCredentials: [] as Array<string | undefined>,
-    revokedPrincipals: [] as unknown[],
-    persisted: [] as unknown[],
+    issued: new Array<Parameters<CredentialProvider['issueAdmission']>[0]>(),
+    revokedCredentials: new Array<string | undefined>(),
+    revokedPrincipals: new Array<unknown>(),
+    persisted: new Array<unknown>(),
     failures: 0
   };
   let muted = false;
@@ -343,11 +343,14 @@ test('credential cleanup failures are metered and never hide the primary failure
       log,
       roomId: 'r'
     }),
-    (error) =>
-      error instanceof AggregateError &&
-      error.errors[0] === primary &&
-      fieldOf(error.errors[1], 'code') === 'credential_revoke_cleanup_refused' &&
-      error.cause === primary
+    (error) => {
+      assert.ok(error instanceof AggregateError);
+      const { errors }: { errors: unknown[] } = error;
+      assert.equal(errors[0], primary);
+      assert.equal(fieldOf(errors[1], 'code'), 'credential_revoke_cleanup_refused');
+      assert.equal(error.cause, primary, 'the cause is the primary failure');
+      return true;
+    }
   );
   await assert.rejects(
     revokeIssuedAdmission({
@@ -504,14 +507,14 @@ test('LiveKit admin server mute narrows the grant, mutes the mic and falls back 
   assert.deepEqual(calls, [['remove']]);
   await assert.rejects(admin.setParticipantMuted('room-1', 'peer-1', false), /sfu down/);
   removeError = new Error('remove failed');
-  await assert.rejects(
-    admin.setParticipantMuted('room-1', 'peer-1', true),
-    (error) =>
-      error instanceof AggregateError &&
-      error.errors[0] === muteFailure &&
-      error.errors[1] === removeError &&
-      error.cause === muteFailure
-  );
+  await assert.rejects(admin.setParticipantMuted('room-1', 'peer-1', true), (error) => {
+    assert.ok(error instanceof AggregateError);
+    const { errors }: { errors: unknown[] } = error;
+    assert.equal(errors[0], muteFailure);
+    assert.equal(errors[1], removeError);
+    assert.equal(error.cause, muteFailure, 'the cause is the mute failure');
+    return true;
+  });
   assert.equal(logger.records[0]?.evt, 'livekit.mute_failed');
 });
 

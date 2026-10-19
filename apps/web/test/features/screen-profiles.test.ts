@@ -76,7 +76,9 @@ test('publishing caps bitrate and frame rate, adds a VP8 backup and one 540p sim
 
 test('a source-quality profile scales its bitrate with the captured pixels, within a cap', () => {
   const base = getScreenProfile('source-5');
-  const track = { getSettings: () => ({ width: 3840, height: 2160 }) } as MediaStreamTrack;
+  // jsdom has no MediaStreamTrack: a plain class stands in for it.
+  vi.stubGlobal('MediaStreamTrack', class {});
+  const track = Object.assign(new MediaStreamTrack(), { getSettings: () => ({ width: 3840, height: 2160 }) });
   const scaled = createSourceScreenProfile(base, track);
   expect(scaled).toMatchObject({ width: 3840, height: 2160, label: '3840×2160 5 FPS' });
   expect(scaled.videoBitrate).toBeGreaterThan(base.videoBitrate);

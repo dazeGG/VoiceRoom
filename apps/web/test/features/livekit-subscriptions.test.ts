@@ -2,6 +2,7 @@
 // on, and screen shares only while someone here watches them.
 
 import { expect, test, vi } from 'vitest';
+import { defined } from '../helpers/assert.ts';
 import { fakeParticipant, fakePublication, flushMicrotasks, loadLiveKitHarness } from '../helpers/livekit-harness.ts';
 
 function liveAudioTrack() {
@@ -17,7 +18,7 @@ test('remote voices are subscribed while the output is on and unsubscribed while
   const mic = fakePublication('microphone', { isSubscribed: true, track: liveAudioTrack() });
   const participant = fakeParticipant('peer-a', [mic.publication]);
   lk.state.livekitRoom = { remoteParticipants: new Map([['peer-a', participant]]) };
-  lk.service.syncLiveKitParticipant(participant as never);
+  lk.syncParticipant(participant);
 
   lk.service.syncLiveKitVoiceSubscriptions();
   expect(mic.calls.subscribed.at(-1)).toBe(true);
@@ -35,7 +36,7 @@ test('an unchanged subscription is not requested again', async () => {
   const mic = fakePublication('microphone', { isDesired: true, isSubscribed: true });
   const participant = fakeParticipant('peer-a', [mic.publication]);
   lk.state.livekitRoom = { remoteParticipants: new Map([['peer-a', participant]]) };
-  lk.service.syncLiveKitParticipant(participant as never);
+  lk.syncParticipant(participant);
   lk.service.syncLiveKitVoiceSubscriptions();
   expect(mic.calls.subscribed).toEqual([]);
 });
@@ -43,7 +44,7 @@ test('an unchanged subscription is not requested again', async () => {
 test('a screen nobody here watches is not subscribed', async () => {
   const lk = await loadLiveKitHarness({ autoResolveClient: true });
   const screen = fakePublication('screen-video');
-  lk.service.syncLiveKitParticipant(fakeParticipant('streamer', [screen.publication]) as never);
+  lk.syncParticipant(fakeParticipant('streamer', [screen.publication]));
   await flushMicrotasks();
   expect(screen.calls.subscribed.filter(Boolean)).toEqual([]);
   expect(screen.calls.quality).toEqual([]);
@@ -53,14 +54,14 @@ test('a watched screen is subscribed first and then asked for high quality; a pr
   const lk = await loadLiveKitHarness({ autoResolveClient: true });
   const staged = fakePublication('screen-video');
   lk.state.viewedScreenPeerId = 'streamer';
-  lk.service.syncLiveKitParticipant(fakeParticipant('streamer', [staged.publication]) as never);
+  lk.syncParticipant(fakeParticipant('streamer', [staged.publication]));
   await flushMicrotasks();
   expect(staged.calls.subscribed).toEqual([true]);
   expect(staged.calls.quality).toEqual([2]);
 
   const preview = fakePublication('screen-video');
   lk.state.screenSubscribedPeerIds.add('other');
-  lk.service.syncLiveKitParticipant(fakeParticipant('other', [preview.publication]) as never);
+  lk.syncParticipant(fakeParticipant('other', [preview.publication]));
   await flushMicrotasks();
   expect(preview.calls.quality).toEqual([0]);
 });
@@ -73,12 +74,10 @@ test('a subscribed screen whose track already ended is scheduled for a retry', a
     isSubscribed: true,
     track: { mediaStreamTrack: { id: 't', readyState: 'ended' }, mediaStream: { id: 's' } }
   });
-  lk.service.syncLiveKitParticipant(fakeParticipant('streamer', [ended.publication]) as never);
+  lk.syncParticipant(fakeParticipant('streamer', [ended.publication]));
   await flushMicrotasks();
   // The retry controller coalesces requests by key (screen-subscription-retry.test.ts).
-  expect(new Set(lk.retries.scheduled.map((entry) => (entry as { key?: string }).key))).toEqual(
-    new Set(['screen-video-sid'])
-  );
+  expect(new Set(lk.retries.scheduled.map((entry) => entry.key))).toEqual(new Set(['screen-video-sid']));
 });
 
 // Moved from screen-livekit-resync.test.ts.
@@ -92,7 +91,7 @@ test('participant resync preserves screen demand while only screen audio remains
   const screenAudio = fakePublication('screen-audio');
   const participant = fakeParticipant(existing.id, [screenAudio.publication], { isScreenShareEnabled: false });
 
-  const synced = lk.service.syncLiveKitParticipant(participant as never);
+  const synced = lk.syncParticipant(participant);
 
   expect(synced).toBe(existing);
   expect(existing).toMatchObject({ screen: true, screenAudio: true, livekitParticipant: participant });
@@ -106,15 +105,16 @@ test('async quality demand ignores a screen publication replaced under the same 
   const participant = fakeParticipant('peer-republished', [stale.publication]);
   lk.state.viewedScreenPeerId = participant.identity;
 
-  const peer = lk.service.syncLiveKitParticipant(participant as never);
+  const peer = lk.syncParticipant(participant);
   expect(lk.livekitClientResolvers).toHaveLength(1);
 
-  (participant.trackPublications as Map<string, unknown>).set(stale.publication.trackSid, {
+  const replacement = {
     ...stale.publication,
     setVideoQuality() {
       throw new Error('replacement quality is handled by its own demand sync');
     }
-  });
+  };
+  participant.trackPublications.set(stale.publication.trackSid, replacement);
   lk.livekitClientResolvers.shift()?.();
   await flushMicrotasks();
 
@@ -143,7 +143,7 @@ test('late screen subscription cannot override authoritative screen stop', async
     }
   });
 
-  const synced = lk.service.syncLiveKitParticipant(fakeParticipant(existing.id, [screen.publication]) as never);
+  const synced = lk.syncParticipant(fakeParticipant(existing.id, [screen.publication]));
 
   expect(synced).toBe(existing);
   expect(lk.screenAttachments).toEqual([]);
@@ -204,7 +204,7 @@ test('a call without a microphone still connects, to listen, and publishes nothi
   lk.state.localStream = null;
 
   await expect(lk.service.connectLiveKitRoom('Анна', () => true)).resolves.toBe(true);
-  const room = lk.rooms.at(-1)!;
+  const room = defined(lk.rooms.at(-1), 'LiveKit room');
   expect(room.disconnected).toBe(false);
   expect(room.published).toEqual([]);
 });

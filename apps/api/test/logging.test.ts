@@ -11,22 +11,27 @@ import {
   normalizeRequestId
 } from '../src/lib/logger.ts';
 import { CLIENT_LOG_LIMITS, normalizeClientLogBatch } from '../src/lib/client-log-intake.ts';
+import { Type, type Static } from 'typebox';
+import { checked } from './helpers/checked.ts';
 
 // Captures what a logger actually serializes, which is the only way to assert
 // on redaction: the fields are removed by pino at write time, not before.
 // A serialized record; fields the tests read are named.
-type LogRecord = {
-  [key: string]: unknown;
-  nested?: Record<string, unknown>;
-  err?: { type: string; message: string; stack: string };
-  version?: string;
-};
+const LogRecord = Type.Intersect([
+  Type.Record(Type.String(), Type.Unknown()),
+  Type.Object({
+    nested: Type.Optional(Type.Record(Type.String(), Type.Unknown())),
+    err: Type.Optional(Type.Object({ type: Type.String(), message: Type.String(), stack: Type.String() })),
+    version: Type.Optional(Type.String())
+  })
+]);
+type LogRecord = Static<typeof LogRecord>;
 
 function captureLogger(options: Partial<Parameters<typeof createLogger>[0]> = {}) {
   const records: LogRecord[] = [];
   const destination = new Writable({
-    write(chunk, _encoding, done) {
-      records.push(JSON.parse(String(chunk)) as LogRecord);
+    write(chunk: Buffer, _encoding, done) {
+      records.push(checked(LogRecord, JSON.parse(chunk.toString()), 'log record'));
       done();
     }
   });

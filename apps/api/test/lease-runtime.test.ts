@@ -27,9 +27,20 @@ test('G35-A02 renewal loss aborts work before a guarded side effect', async () =
       sleepCount += 1;
       if (sleepCount === 1) return;
       if (!signal) return;
-      if (signal.aborted) throw signal.reason;
+      // throwIfAborted throws the abort reason, typed as what it is: unknown.
+      signal.throwIfAborted();
       await new Promise((resolve, reject) =>
-        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+        signal.addEventListener(
+          'abort',
+          () => {
+            try {
+              signal.throwIfAborted();
+            } catch (reason: unknown) {
+              reject(reason instanceof Error ? reason : new Error(String(reason)));
+            }
+          },
+          { once: true }
+        )
       );
     },
     run: async (guard) => {

@@ -1,3 +1,4 @@
+import { isRecord } from '@voice-room/shared/guards';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -28,7 +29,9 @@ test('bootstrap fails before listen when DATABASE_URL is missing', async () => {
   const fatal = logs.filter((record) => record.level === 'fatal');
   assert.equal(fatal.length, 1);
   assert.equal(fatal[0]?.evt, 'boot.failed');
-  assert.match((fatal[0]?.err as Error | undefined)?.message ?? '', /DATABASE_URL is required/);
+  const failure = fatal[0]?.err;
+  assert.ok(isRecord(failure) && typeof failure.message === 'string', 'the fatal record carries its error');
+  assert.match(failure.message, /DATABASE_URL is required/);
 });
 
 test(

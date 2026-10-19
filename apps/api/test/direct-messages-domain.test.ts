@@ -20,7 +20,10 @@ import type { ApiContext } from '../src/app/context.ts';
 import { createMessageReadService, type MessageReadRepository } from '../src/domains/messaging/message-read.service.ts';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
-import { fake, storedUser, directMessage, publicUser } from './fakes/index.ts';
+import type pg from 'pg';
+import { fake, storedUser, directMessage, publicUser, storedDirectMessage } from './fakes/index.ts';
+import { defined } from './helpers/assert-defined.ts';
+import { recordingService, type Answers } from './helpers/recording-service.ts';
 
 const ME = storedUser({ id: 'user-1', login: 'alice', displayName: 'Alice' });
 const PEER = '22222222-2222-4222-8222-222222222222';
@@ -40,6 +43,8 @@ type HarnessOptions = {
   editResult?: null;
   delivery?: false;
   replay?: boolean;
+  /** The message the replayed ledger entry holds; a stored message by default. */
+  replayed?: unknown;
   readError?: Error;
   readService?: ReturnType<DirectMessagesDeps['readService']>;
   friends?: boolean;
@@ -53,19 +58,24 @@ type HarnessOptions = {
 };
 
 // The stores hand the unit-of-work callbacks a transaction marker, not a client.
-const transactionMarker = (name: string) => ({ transaction: name }) as never;
+const transactions = new Map<unknown, string>();
+function transactionMarker(name: string) {
+  const client = fake<Pick<pg.PoolClient, 'query'>>({});
+  transactions.set(client, name);
+  return client;
+}
 
 function harness(options: HarnessOptions = {}) {
   const calls = {
     lockedIn: '',
-    events: [] as unknown[][],
-    recipients: [] as string[],
-    previews: [] as boolean[],
-    bound: [] as unknown[],
-    outbox: [] as unknown[],
-    completed: [] as string[],
-    expired: [] as unknown[][],
-    sent: [] as Parameters<DirectMessageStore['sendMessage']>[0][]
+    events: new Array<unknown[]>(),
+    recipients: new Array<string>(),
+    previews: new Array<boolean>(),
+    bound: new Array<unknown>(),
+    outbox: new Array<unknown>(),
+    completed: new Array<string>(),
+    expired: new Array<unknown[]>(),
+    sent: new Array<Parameters<DirectMessageStore['sendMessage']>[0]>()
   };
   const messages = options.messages || {};
   const stored = (messageId: string) => {
@@ -127,7 +137,13 @@ function harness(options: HarnessOptions = {}) {
                     kind: 'replay',
                     response: {
                       body: {
-                        message: { id: 'old', senderId: 'user-1', recipientId: PEER, replyTo: { messageId: 'm1' } }
+                        message:
+                          options.replayed ??
+                          storedDirectMessage('old', {
+                            senderId: 'user-1',
+                            recipientId: PEER,
+                            replyTo: { messageId: 'm1' }
+                          })
                       }
                     }
                   }
@@ -196,7 +212,7 @@ function harness(options: HarnessOptions = {}) {
           },
     replies: () => ({
       async lockDirectTarget(input) {
-        calls.lockedIn = (input.client as unknown as { transaction: string }).transaction;
+        calls.lockedIn = transactions.get(input.client) ?? '';
         return { id: 'm1', text: 'target', createdAt: Date.now() };
       }
     }),
@@ -219,8 +235,8 @@ test('the thread needs a friendship and a live account, and marks the thread rea
   const { calls, service } = harness();
   const listed = await service.thread(ME, PEER);
   assert.equal(listed.status, 'listed');
-  assert.equal('passwordHash' in (listed.peer as object), false);
-  assert.equal('hasUsedDesktopApp' in (listed.peer as object), false);
+  assert.equal(Object.keys(listed.peer ?? {}).includes('passwordHash'), false);
+  assert.equal(Object.keys(listed.peer ?? {}).includes('hasUsedDesktopApp'), false);
   assert.equal(listed.muted, true);
   assert.deepEqual(
     listed.messages.map((m) => Boolean(m.replyPreview)),
@@ -304,6 +320,18 @@ test('an idempotent replay answers the stored message without delivering again',
   assert.deepEqual([calls.events, calls.previews], [[], []]);
 });
 
+test('a replayed ledger entry that is not a whole stored message is refused, not answered', async () => {
+  const { calls, service } = harness({
+    replay: true,
+    replayed: { id: 'old', senderId: 'user-1', recipientId: PEER, replyTo: { messageId: 'm1' } }
+  });
+  await assert.rejects(
+    service.send(ME, PEER, { ...sendBase, idempotencyKey: 'idem-key-1' }),
+    /The idempotent replay holds no direct message/
+  );
+  assert.deepEqual([calls.events, calls.previews], [[], []]);
+});
+
 const invite = directMessage({
   id: 'inv',
   senderId: PEER,
@@ -351,7 +379,7 @@ test('answering a room invitation', async () => {
   const { calls, service } = harness({ messages });
   const answered = await service.respondInvite(ME, PEER, 'inv', 'accepted');
   assert.ok('message' in answered);
-  assert.equal((answered.message.invite as { status?: string } | null | undefined)?.status, 'accepted');
+  assert.equal(answered.message.invite?.status, 'accepted');
   assert.deepEqual(calls.events, [
     [PEER, 'dm.message.edited'],
     ['user-1', 'dm.message.edited']
@@ -425,18 +453,26 @@ test('delete and edit belong to the sender', async () => {
 
 function routeApp(
   t: TestContext,
-  outcomes: Record<string, unknown> = {},
+  outcomes: Answers<DirectMessagesService> = {},
   { signedIn = true }: { signedIn?: boolean } = {}
 ) {
   const app = fastify();
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
-  const seen: Record<string, unknown[]> = {};
-  const record =
-    (name: string, value: unknown) =>
-    async (...args: unknown[]) => {
-      seen[name] = args;
-      return outcomes[name] ?? value;
-    };
+  const { service, seen } = recordingService<DirectMessagesService>({
+    thread: { status: 'listed', peer: publicUser(PEER), messages: [], muted: false },
+    send: {
+      status: 'sent',
+      message: directMessage({ id: 'm', senderId: 'user-1', recipientId: PEER })
+    },
+    respondInvite: { status: 'answered', message: invite },
+    markRead: { status: 'read', result: { count: 2 } },
+    remove: { status: 'deleted' },
+    edit: {
+      status: 'edited',
+      message: directMessage({ id: 'm', senderId: 'user-1', recipientId: PEER, body: 'e' })
+    },
+    ...outcomes
+  });
   registerDirectMessageRoutes(
     app,
     {
@@ -445,20 +481,7 @@ function routeApp(
       resolveSession: async () => (signedIn ? { user: ME } : null),
       hashIp: (ip: string) => ip
     },
-    fake<DirectMessagesService>({
-      thread: record('thread', { status: 'listed', peer: publicUser(PEER), messages: [], muted: false }),
-      send: record('send', {
-        status: 'sent',
-        message: directMessage({ id: 'm', senderId: 'user-1', recipientId: PEER })
-      }),
-      respondInvite: record('respondInvite', { status: 'answered', message: invite }),
-      markRead: record('markRead', { status: 'read', result: { count: 2 } }),
-      remove: record('remove', { status: 'deleted' }),
-      edit: record('edit', {
-        status: 'edited',
-        message: directMessage({ id: 'm', senderId: 'user-1', recipientId: PEER, body: 'e' })
-      })
-    } as Partial<Record<keyof DirectMessagesService, unknown>> as Partial<DirectMessagesService>)
+    service
   );
   t.after(() => app.close());
   return { app, seen };
@@ -466,15 +489,17 @@ function routeApp(
 
 type Body = { ok?: boolean; error?: string } & Record<string, unknown>;
 
+type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+
 async function call(
   app: FastifyInstance,
-  method: string,
+  method: Method,
   url: string,
   payload?: object,
   headers: Record<string, string> = {}
 ) {
   const response = await app.inject({
-    method: method as 'GET' | 'POST' | 'PATCH' | 'DELETE',
+    method,
     url,
     headers,
     ...(payload === undefined ? {} : { payload })
@@ -482,7 +507,7 @@ async function call(
   return { status: response.statusCode, body: response.json<Body>(), retryAfter: response.headers['retry-after'] };
 }
 
-type Route = [string, string, object?];
+type Route = [Method, string, object?];
 
 const ROUTES: Route[] = [
   ['GET', `/api/dm/${PEER}`],
@@ -511,7 +536,7 @@ test('every DM route needs a session, a valid peer and answers', async (t) => {
     { text: 'hi', replyTo: { messageId: UUID_A } },
     { 'idempotency-key': 'header-key-1' }
   );
-  const sent = seen.send?.[2] as SendInput;
+  const [, , sent] = defined(seen.send, 'the send call');
   assert.deepEqual([sent.replyToMessageId, sent.idempotencyKey], [UUID_A, 'header-key-1']);
   await call(app, 'POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'decline' });
   assert.equal(seen.respondInvite?.[3], 'declined');
@@ -521,87 +546,88 @@ test('every DM route needs a session, a valid peer and answers', async (t) => {
 
 test('DM refusals keep their texts and codes', async (t) => {
   const post: Route = ['POST', `/api/dm/${PEER}`, { text: 'x' }];
-  const cases: Array<[string, { status?: string } & Record<string, unknown>, Route, number, string]> = [
-    ['thread', { status: 'not_friends' }, ['GET', `/api/dm/${PEER}`], 403, 'Вы не друзья'],
-    ['thread', { status: 'user_not_found' }, ['GET', `/api/dm/${PEER}`], 404, 'Пользователь не найден'],
-    ['send', { status: 'not_friends' }, post, 403, 'Вы не друзья'],
-    ['send', { status: 'blocked' }, post, 403, 'Сообщение недоступно'],
-    ['send', { status: 'account_deleted' }, post, 403, 'Аккаунт удалён'],
-    ['send', { status: 'invalid_attachments' }, post, 400, 'Invalid attachments'],
-    ['send', { status: 'reply_unavailable' }, post, 409, 'Reply target is unavailable'],
-    ['send', { status: 'empty' }, post, 400, 'Пустое сообщение'],
-    ['send', { status: 'media_unavailable' }, post, 503, 'Media uploads are unavailable'],
-    ['send', { status: 'rate_limited', retryAfterSeconds: 5 }, post, 429, 'Слишком много сообщений, попробуйте позже'],
+  const cases: Array<[Answers<DirectMessagesService>, Route, number, string]> = [
+    [{ thread: { status: 'not_friends' } }, ['GET', `/api/dm/${PEER}`], 403, 'Вы не друзья'],
+    [{ thread: { status: 'user_not_found' } }, ['GET', `/api/dm/${PEER}`], 404, 'Пользователь не найден'],
+    [{ send: { status: 'not_friends' } }, post, 403, 'Вы не друзья'],
+    [{ send: { status: 'blocked' } }, post, 403, 'Сообщение недоступно'],
+    [{ send: { status: 'account_deleted' } }, post, 403, 'Аккаунт удалён'],
+    [{ send: { status: 'invalid_attachments' } }, post, 400, 'Invalid attachments'],
+    [{ send: { status: 'reply_unavailable' } }, post, 409, 'Reply target is unavailable'],
+    [{ send: { status: 'empty' } }, post, 400, 'Пустое сообщение'],
+    [{ send: { status: 'media_unavailable' } }, post, 503, 'Media uploads are unavailable'],
     [
-      'respondInvite',
-      {},
-      ['POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'maybe' }],
-      400,
-      'Неверное действие'
+      { send: { status: 'rate_limited', retryAfterSeconds: 5 } },
+      post,
+      429,
+      'Слишком много сообщений, попробуйте позже'
     ],
+    [{}, ['POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'maybe' }], 400, 'Неверное действие'],
     [
-      'respondInvite',
-      { status: 'not_found' },
+      { respondInvite: { status: 'not_found' } },
       ['POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'accept' }],
       404,
       'Приглашение не найдено'
     ],
     [
-      'respondInvite',
-      { status: 'not_invited' },
+      { respondInvite: { status: 'not_invited' } },
       ['POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'accept' }],
       403,
       'Отвечать может только приглашённый'
     ],
     [
-      'respondInvite',
-      { status: 'room_gone' },
+      { respondInvite: { status: 'room_gone' } },
       ['POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'accept' }],
       410,
       'Комната больше не существует'
     ],
     [
-      'respondInvite',
-      { status: 'already_answered' },
+      { respondInvite: { status: 'already_answered' } },
       ['POST', `/api/dm/${PEER}/invites/${UUID_A}/respond`, { action: 'accept' }],
       409,
       'Приглашение уже обработано'
     ],
-    ['edit', { status: 'empty' }, ['PATCH', `/api/dm/${PEER}/messages/${UUID_A}`, {}], 400, 'Пустое сообщение'],
-    ['edit', { status: 'not_found' }, ['PATCH', `/api/dm/${PEER}/messages/${UUID_A}`, {}], 404, 'Сообщение не найдено'],
+    [{ edit: { status: 'empty' } }, ['PATCH', `/api/dm/${PEER}/messages/${UUID_A}`, {}], 400, 'Пустое сообщение'],
     [
-      'edit',
-      { status: 'not_sender' },
+      { edit: { status: 'not_found' } },
+      ['PATCH', `/api/dm/${PEER}/messages/${UUID_A}`, {}],
+      404,
+      'Сообщение не найдено'
+    ],
+    [
+      { edit: { status: 'not_sender' } },
       ['PATCH', `/api/dm/${PEER}/messages/${UUID_A}`, {}],
       403,
       'Можно редактировать только свои сообщения'
     ],
     [
-      'edit',
-      { status: 'invitation' },
+      { edit: { status: 'invitation' } },
       ['PATCH', `/api/dm/${PEER}/messages/${UUID_A}`, {}],
       403,
       'Приглашение нельзя редактировать'
     ],
     [
-      'edit',
-      { status: 'rate_limited', retryAfterSeconds: 5 },
+      { edit: { status: 'rate_limited', retryAfterSeconds: 5 } },
       ['PATCH', `/api/dm/${PEER}/messages/${UUID_A}`, {}],
       429,
       'Слишком много сообщений, попробуйте позже'
     ],
-    ['remove', { status: 'not_found' }, ['DELETE', `/api/dm/${PEER}/messages/${UUID_A}`], 404, 'Сообщение не найдено'],
     [
-      'remove',
-      { status: 'not_sender' },
+      { remove: { status: 'not_found' } },
+      ['DELETE', `/api/dm/${PEER}/messages/${UUID_A}`],
+      404,
+      'Сообщение не найдено'
+    ],
+    [
+      { remove: { status: 'not_sender' } },
       ['DELETE', `/api/dm/${PEER}/messages/${UUID_A}`],
       403,
       'Можно удалять только свои сообщения'
     ]
   ];
-  for (const [name, outcome, [method, url, payload], status, error] of cases) {
-    const response = await call(routeApp(t, { [name]: outcome }).app, method, url, payload);
-    assert.deepEqual([response.status, response.body.error], [status, error], `${name} ${outcome.status}`);
+  for (const [outcome, [method, url, payload], status, error] of cases) {
+    const response = await call(routeApp(t, outcome).app, method, url, payload);
+    assert.deepEqual([response.status, response.body.error], [status, error], JSON.stringify(outcome));
   }
   const limited = await call(routeApp(t, { send: { status: 'rate_limited', retryAfterSeconds: 5 } }).app, ...post);
   assert.deepEqual([limited.retryAfter, limited.body.retryAfterSeconds], ['5', 5]);

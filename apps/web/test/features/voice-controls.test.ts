@@ -24,8 +24,15 @@ const { getStoredMicrophoneVolume, persistMicrophoneVolume } =
 const { formatHotkeyBinding, hotkeyBindingFromEvent, hotkeyMatchesEvent } =
   await import('../../src/lib/shared/ui/HotkeyRecorder/hotkey.ts');
 
-const key = (overrides: Partial<KeyboardEvent> = {}) =>
-  ({ altKey: false, code: 'KeyM', ctrlKey: true, metaKey: false, shiftKey: true, ...overrides }) as KeyboardEvent;
+const key = (overrides: KeyboardEventInit = {}) =>
+  new KeyboardEvent('keydown', {
+    altKey: false,
+    code: 'KeyM',
+    ctrlKey: true,
+    metaKey: false,
+    shiftKey: true,
+    ...overrides
+  });
 
 beforeEach(() => {
   localStorage.clear();

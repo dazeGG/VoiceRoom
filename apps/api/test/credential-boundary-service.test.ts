@@ -12,6 +12,7 @@ import type {
   GateVerification
 } from '../src/domains/admission/gate-credential-signer.ts';
 import { fake } from './fakes/index.ts';
+import { mistyped } from './helpers/mistyped.ts';
 
 const PRINCIPAL: GatePrincipal = { principalId: 'room-1:guest-1', principalType: 'guest' };
 const CLAIMS: GateClaims = {
@@ -121,7 +122,8 @@ test('credential boundary fails closed for invalid, unavailable, and denied deci
       return { status: 'revoked' };
     },
     async getLiveKitGatePrincipalEpoch() {
-      return { status: 'unavailable' } as never;
+      // A status the port does not know fails closed like a refusal.
+      return mistyped({ status: 'unavailable' });
     },
     async verifyLiveKitGateCredential() {
       return undefined;

@@ -3,13 +3,20 @@
 // avatar back.
 
 import { cleanup, render } from '@testing-library/svelte';
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import ParticipantTile from '../../src/lib/features/room/components/ParticipantTile.svelte';
 import { reactiveParticipant } from '../../src/lib/features/room/client/core/state.svelte';
 import type { Participant } from '../../src/lib/features/room/client/core/types';
+import { participant as freshParticipant } from '../fixtures/participant';
+import { defined, instanceOf } from '../helpers/assert';
 
 // A class instance, like a real MediaStream: $state does not proxy it.
+// Registered as the global MediaStream, so `new MediaStream()` builds one.
 class FakeStream {}
+
+beforeEach(() => {
+  vi.stubGlobal('MediaStream', FakeStream);
+});
 
 afterEach(() => {
   cleanup();
@@ -17,33 +24,17 @@ afterEach(() => {
 });
 
 function participant(extra: Partial<Participant> = {}): Participant {
-  return reactiveParticipant({
-    accountUserId: '',
-    avatarAccent: '',
-    avatarColorKey: 'blue',
-    avatarUrl: '',
-    camera: false,
-    cameraStream: null,
-    deafened: false,
-    id: 'peer-a',
-    isLocal: false,
-    muted: false,
-    name: 'Вася',
-    screen: false,
-    speaking: false,
-    statusLabel: '',
-    ...extra
-  } as Participant);
+  return reactiveParticipant(freshParticipant({ avatarColorKey: 'blue', id: 'peer-a', name: 'Вася', ...extra }));
 }
 
 test('a camera replaces the avatar and goes away when it is turned off', async () => {
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
-  const stream = new FakeStream() as MediaStream;
+  const stream = new MediaStream();
   const person = participant({ camera: true, cameraStream: stream });
   const { container } = render(ParticipantTile, { participant: person });
 
-  const tile = container.querySelector('.participant')!;
-  const video = container.querySelector<HTMLVideoElement>('video.participant-camera')!;
+  const tile = defined(container.querySelector('.participant'), 'tile');
+  const video = instanceOf(container.querySelector('video.participant-camera'), HTMLVideoElement, 'camera video');
   expect(tile.getAttribute('data-camera')).toBe('true');
   expect(video.srcObject).toBe(stream);
   expect(video.muted).toBe(true);
@@ -58,7 +49,7 @@ test('a camera replaces the avatar and goes away when it is turned off', async (
 test('our own camera is mirrored', () => {
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
   const { container } = render(ParticipantTile, {
-    participant: participant({ isLocal: true, camera: true, cameraStream: new FakeStream() as MediaStream })
+    participant: participant({ isLocal: true, camera: true, cameraStream: new MediaStream() })
   });
   expect(container.querySelector('video')?.getAttribute('data-mirrored')).toBe('true');
 });
@@ -69,7 +60,7 @@ test('a phone turned to its back camera is not mirrored', async () => {
   state.cameraFacing = 'environment';
   try {
     const { container } = render(ParticipantTile, {
-      participant: participant({ isLocal: true, camera: true, cameraStream: new FakeStream() as MediaStream })
+      participant: participant({ isLocal: true, camera: true, cameraStream: new MediaStream() })
     });
     expect(container.querySelector('video')?.hasAttribute('data-mirrored')).toBe(false);
   } finally {
@@ -87,13 +78,13 @@ test('a starting camera is laid out again before it is shown, and again when it 
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => frames.push(callback));
   vi.stubGlobal('cancelAnimationFrame', () => {});
   const paint = (): void => {
-    while (frames.length > 0) frames.shift()!(0);
+    for (let frame = frames.shift(); frame; frame = frames.shift()) frame(0);
   };
   try {
     const { container } = render(ParticipantTile, {
-      participant: participant({ camera: true, cameraStream: new FakeStream() as MediaStream })
+      participant: participant({ camera: true, cameraStream: new MediaStream() })
     });
-    const video = container.querySelector<HTMLVideoElement>('video')!;
+    const video = instanceOf(container.querySelector('video'), HTMLVideoElement, 'camera video');
     expect(video.style.opacity).toBe('0');
 
     video.dispatchEvent(new Event('playing'));
@@ -127,9 +118,9 @@ test('a camera that never reports a frame is shown anyway', () => {
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
   try {
     const { container } = render(ParticipantTile, {
-      participant: participant({ camera: true, cameraStream: new FakeStream() as MediaStream })
+      participant: participant({ camera: true, cameraStream: new MediaStream() })
     });
-    const video = container.querySelector<HTMLVideoElement>('video')!;
+    const video = instanceOf(container.querySelector('video'), HTMLVideoElement, 'camera video');
     expect(video.style.opacity).toBe('0');
     vi.advanceTimersByTime(1500);
     expect(video.style.opacity).toBe('');

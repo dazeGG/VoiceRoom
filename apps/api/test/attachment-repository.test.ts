@@ -189,11 +189,24 @@ test('a draft moves through upload, processing, failure and deletion', { skip },
     /Invalid client request id/
   );
   await assert.rejects(
-    () => repository.markUploaded(draft.id, { mimeType: 'text/plain' } as never),
+    () =>
+      repository.markUploaded(draft.id, {
+        mimeType: 'text/plain',
+        bytes: 1,
+        width: 1,
+        height: 1,
+        originalStorageKey: 'original'
+      }),
     /Invalid attachment MIME type/
   );
   await assert.rejects(
-    () => repository.markReady(draft.id, { processedStorageKey: '', previewStorageKey: 'preview' } as never),
+    () =>
+      repository.markReady(draft.id, {
+        processedStorageKey: '',
+        previewStorageKey: 'preview',
+        processedBytes: 1,
+        previewBytes: 1
+      }),
     /Invalid processed storage key/
   );
 });

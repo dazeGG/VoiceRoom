@@ -51,7 +51,9 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(
     (async () => {
-      const target = new URL(parsePushPayload(event.notification.data).url || '/', self.location.origin);
+      // The DOM types a notification's data as any; it is whatever the push put there.
+      const { data }: { data: unknown } = event.notification;
+      const target = new URL(parsePushPayload(data).url || '/', self.location.origin);
       if (target.origin !== self.location.origin) target.href = new URL('/', self.location.origin).href;
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       const sameOrigin = windows.find((client) => new URL(client.url).origin === target.origin);

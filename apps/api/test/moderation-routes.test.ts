@@ -12,6 +12,7 @@ import type { ModerationService } from '../src/domains/moderation/moderation.ser
 import { registerModerationRoutes } from '../src/domains/moderation/moderation.routes.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { fake, storedUser } from './fakes/index.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 const BAN = {
   id: 'ban-1',
@@ -35,7 +36,12 @@ function moderationApp(t: TestContext, outcomes: Outcomes = {}, { signedIn = tru
   const app = fastify();
   t.after(() => app.close());
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
-  const seen: Record<string, unknown> = {};
+  const seen: {
+    list?: Parameters<ModerationService['listActive']>[0];
+    put?: unknown;
+    unban?: unknown;
+    remove?: unknown;
+  } = {};
   registerModerationRoutes(
     app,
     fake<ApiContext>({ resolveSession: async () => (signedIn ? { user: storedUser({ id: 'owner-1' }) } : null) }),
@@ -80,7 +86,7 @@ const BANS = '/api/rooms/room-1/moderation/bans';
 test('the owner lists, saves and lifts bans', async (t) => {
   const { call, seen } = moderationApp(t);
   assert.deepEqual(await call('GET', `${BANS}?cursor=c&limit=10`), { status: 200, body: PAGE });
-  const listed = seen.list as { roomId: string; actorUserId: string; query: object };
+  const listed = defined(seen.list, 'the list request');
   assert.deepEqual(
     [listed.roomId, listed.actorUserId, { ...listed.query }],
     ['room-1', 'owner-1', { cursor: 'c', limit: '10' }]

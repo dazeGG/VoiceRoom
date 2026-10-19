@@ -39,7 +39,7 @@ test('joining by code is one field that takes a code or a link and explains auto
 
   await userEvent.type(field, 'abc123{Enter}');
   expect(props.onJoinCode).toHaveBeenCalledWith('abc123');
-  expect((field as HTMLInputElement).value).toBe('');
+  expect(field).toHaveProperty('value', '');
 });
 
 test('an empty or blank code is not submitted', async () => {

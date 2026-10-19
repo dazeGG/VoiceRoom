@@ -4,6 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
+import { isRecord } from '@voice-room/shared/guards';
 
 import {
   createMessageProjection,
@@ -11,15 +12,17 @@ import {
   type StoredAttachment
 } from '../src/domains/messaging/message-projection.ts';
 import { createMessageDeliveryRelay } from '../src/domains/messaging/message-delivery-relay.ts';
+import { LOG_EVENTS } from '../src/lib/log-events.ts';
 import { createNotificationDispatch } from '../src/domains/notifications/notification-dispatch.ts';
 import {
   createLinkPreviewEvents,
   type LinkPreviewEventsDeps
 } from '../src/domains/link-previews/link-preview-events.ts';
 import { fake, recordingLogger, storedUser, roomMessage, storedDirectMessage } from './fakes/index.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 type Sent = { userId: string; payload: Record<string, unknown>; context: Record<string, unknown> };
-const idOf = (message: unknown) => (message as { id?: string }).id;
+const idOf = (message: unknown) => (isRecord(message) && typeof message.id === 'string' ? message.id : undefined);
 
 const ATTACHMENT: StoredAttachment = {
   id: 'a1',
@@ -48,7 +51,7 @@ function projection({ attachments = true, replies = true } = {}) {
               },
               async listForMessages(context, ids) {
                 calls.push(['list-many', context, ids]);
-                return new Map([[ids[0] as string, [ATTACHMENT]]]);
+                return new Map([[defined(ids[0], 'a message id'), [ATTACHMENT]]]);
               }
             }
           : null,
@@ -85,14 +88,15 @@ test('projection adds attachments and the reply quote', async () => {
     room.attachments.map((a) => a.url),
     ['/api/media/attachments/a1/preview', null]
   );
-  assert.deepEqual((room as { replyPreview?: unknown }).replyPreview, { messageId: 'room-quote', deleted: false });
+  assert.deepEqual('replyPreview' in room ? room.replyPreview : undefined, { messageId: 'room-quote', deleted: false });
   const dm = await p.project('dm', { id: 'm2', replyTo: { messageId: 'm0' } }, { userId: 'u1', peerId: 'u2' });
-  assert.deepEqual((dm as { replyPreview?: unknown }).replyPreview, { messageId: 'dm-quote', deleted: false });
+  assert.deepEqual('replyPreview' in dm ? dm.replyPreview : undefined, { messageId: 'dm-quote', deleted: false });
   assert.deepEqual(calls.at(-1), ['dm', { userId: 'u1', peerId: 'u2', messageId: 'm0' }]);
   assert.deepEqual((await p.projectMedia('room', {})).attachments, []);
   const plain: { id: string; replyTo?: null } = { id: 'm3' };
   assert.equal(await p.projectReply('room', plain), plain);
-  assert.equal(await p.projectReply('room', null as never), null);
+  const unreplied = { id: 'm4', replyTo: null };
+  assert.equal(await p.projectReply('room', unreplied), unreplied);
 
   const offline = projection({ attachments: false, replies: false }).projection;
   assert.deepEqual((await offline.projectMedia('room', { id: 'm' })).attachments, []);
@@ -131,16 +135,26 @@ function relayHarness({
   event = null,
   missed = []
 }: RelayOptions = {}) {
-  const calls = {
-    chat: [] as unknown[],
-    events: [] as unknown[],
-    dm: [] as unknown[],
-    errors: [] as unknown[],
-    queries: [] as string[],
+  const calls: {
+    chat: unknown[];
+    events: unknown[];
+    dm: unknown[];
+    errors: unknown[];
+    queries: string[];
+    released: number;
+    destroyed: number;
+    failUnlisten: boolean;
+    replaySince: Date[];
+  } = {
+    chat: [],
+    events: [],
+    dm: [],
+    errors: [],
+    queries: [],
     released: 0,
     destroyed: 0,
     failUnlisten: false,
-    replaySince: [] as Date[]
+    replaySince: []
   };
   const logger = recordingLogger();
   // Each connect is a new connection, as the pool hands out after a loss.
@@ -209,17 +223,21 @@ test('relayed room and DM messages reach sockets and raise the DM notification',
   await relay.dispatch({ type: 'message.deleted', message: {} });
   await relay.dispatch({ type: 'message.created' });
   await relay.dispatch({ type: 'message.created', conversation: { type: 'other' }, message: {} });
-  await relay.dispatch({ type: 'message.created', conversation: { type: 'room', id: 'r1' }, message: { id: 'm1' } });
+  await relay.dispatch({
+    type: 'message.created',
+    conversation: { type: 'room', id: 'r1' },
+    message: roomMessage('m1')
+  });
   assert.deepEqual(calls.chat, [['r1', 'm1']]);
   await relay.dispatch({
     type: 'message.created',
     conversation: { type: 'dm', id: 'u2' },
-    message: { id: 'm2', senderId: 'u1', recipientId: 'u2' }
+    message: storedDirectMessage('m2', { senderId: 'u1', recipientId: 'u2' })
   });
   await relay.dispatch({
     type: 'message.created',
     conversation: { type: 'dm', id: 'u1' },
-    message: { id: 'm3', senderId: 'u1', recipientId: 'u2' }
+    message: storedDirectMessage('m3', { senderId: 'u1', recipientId: 'u2' })
   });
   assert.deepEqual(calls.events, [
     ['u1', 'dm-message'],
@@ -236,9 +254,26 @@ test('relayed room and DM messages reach sockets and raise the DM notification',
   await noSender.relay.dispatch({
     type: 'message.created',
     conversation: { type: 'dm', id: 'u2' },
-    message: { id: 'm', senderId: 'u1', recipientId: 'u2' }
+    message: storedDirectMessage('m', { senderId: 'u1', recipientId: 'u2' })
   });
   assert.deepEqual(noSender.calls.dm, []);
+});
+
+test('a stored message that does not fit its contract is logged, not delivered', async () => {
+  const { calls, errors, relay } = relayHarness();
+  await relay.dispatch({
+    type: 'message.created',
+    conversation: { type: 'room', id: 'r1' },
+    message: { ...roomMessage('m1'), createdAt: 'yesterday' }
+  });
+  await relay.dispatch({
+    type: 'message.created',
+    conversation: { type: 'dm', id: 'u2' },
+    message: { ...storedDirectMessage('m2', { senderId: 'u1', recipientId: 'u2' }), createdAt: 'yesterday' }
+  });
+  assert.deepEqual(calls.chat, []);
+  assert.deepEqual(calls.events, []);
+  assert.deepEqual(errors(), [LOG_EVENTS.MESSAGE_EVENT_DISPATCH_FAILED, LOG_EVENTS.MESSAGE_EVENT_DISPATCH_FAILED]);
 });
 
 test('the listener LISTENs once, dispatches notified outbox events and cleans up', async () => {
@@ -249,7 +284,7 @@ test('the listener LISTENs once, dispatches notified outbox events and cleans up
     errors,
     relay
   } = relayHarness({
-    event: { type: 'message.created', conversation: { type: 'room', id: 'r1' }, message: { id: 'm1' } }
+    event: { type: 'message.created', conversation: { type: 'room', id: 'r1' }, message: roomMessage('m1') }
   });
   await relay.start();
   await relay.start();
@@ -275,11 +310,11 @@ test('the listener LISTENs once, dispatches notified outbox events and cleans up
 test('a lost LISTEN connection is reopened and the events delivered meanwhile are replayed', async () => {
   const { calls, client, clients, errors, relay } = relayHarness({
     missed: [
-      { type: 'message.created', conversation: { type: 'room', id: 'r1' }, message: { id: 'm1' } },
+      { type: 'message.created', conversation: { type: 'room', id: 'r1' }, message: roomMessage('m1') },
       {
         type: 'message.created',
         conversation: { type: 'dm', id: 'u2' },
-        message: { id: 'm2', senderId: 'u1', recipientId: 'u2' }
+        message: storedDirectMessage('m2', { senderId: 'u1', recipientId: 'u2' })
       }
     ]
   });
@@ -326,7 +361,12 @@ test('the listener stays off when disabled or without a pool or outbox', async (
 // --- notification dispatch ------------------------------------------------------------
 
 function dispatchHarness({ enabled = true, preferences = {}, sendFails = false, preferencesFail = false } = {}) {
-  const calls = { sent: [] as Sent[], events: [] as unknown[], warnings: [] as unknown[], errors: [] as unknown[] };
+  const calls: { sent: Sent[]; events: unknown[]; warnings: unknown[]; errors: unknown[] } = {
+    sent: [],
+    events: [],
+    warnings: [],
+    errors: []
+  };
   const dispatch = createNotificationDispatch({
     push: () => ({
       config: { enabled },

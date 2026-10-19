@@ -16,9 +16,10 @@ import {
   stopMeters,
   syncSpeakingThresholds
 } from '../../src/lib/features/room/client/media/meters.ts';
+import { defined } from '../helpers/assert.ts';
 
 const refreshMicrophoneLevelMeter = vi.hoisted(() => vi.fn());
-const context = vi.hoisted((): { value: unknown } => ({ value: null }));
+const context = vi.hoisted((): { value: FakeContext | null } => ({ value: null }));
 
 vi.mock('../../src/lib/features/room/client/services/media-playback-service', () => ({
   getSharedAudioContext: () => context.value
@@ -38,13 +39,14 @@ class FakeNode {
 
 class FakeDetector extends FakeNode {
   static instances: FakeDetector[] = [];
-  port = {
-    onmessage: null as ((event: { data: unknown }) => void) | null,
-    sent: [] as unknown[],
-    postMessage(data: unknown) {
-      this.sent.push(data);
-    }
-  };
+  port: { onmessage: ((event: { data: unknown }) => void) | null; sent: unknown[]; postMessage(data: unknown): void } =
+    {
+      onmessage: null,
+      sent: [],
+      postMessage(data) {
+        this.sent.push(data);
+      }
+    };
   constructor(
     readonly context: unknown,
     readonly name: string,
@@ -76,6 +78,7 @@ class FakeContext {
   }
 }
 
+// Registered as the global MediaStream, so `new MediaStream()` builds one.
 class FakeStream {
   constructor(private readonly track: object = {}) {}
   getAudioTracks() {
@@ -91,6 +94,7 @@ beforeEach(() => {
   FakeDetector.instances = [];
   context.value = new FakeContext();
   vi.stubGlobal('AudioWorkletNode', FakeDetector);
+  vi.stubGlobal('MediaStream', FakeStream);
   refreshMicrophoneLevelMeter.mockClear();
 });
 
@@ -103,9 +107,9 @@ afterEach(() => {
 
 async function attached(id: string, name = id) {
   const participant = createParticipant({ id, name });
-  attachMeter(participant, new FakeStream() as unknown as MediaStream);
+  attachMeter(participant, new MediaStream());
   await flush();
-  return { participant, detector: FakeDetector.instances.at(-1)! };
+  return { participant, detector: defined(FakeDetector.instances.at(-1), 'speaking detector') };
 }
 
 test('a remote ring follows the detector messages and needs no timer', async () => {
@@ -176,10 +180,10 @@ test('the microphone level is reported only while the popover asks for it', asyn
 
 test('a new track replaces the meter, and the old detector is silenced and disconnected', async () => {
   const { participant, detector: first } = await attached('peer-a');
-  const firstSource = (context.value as FakeContext).sources[0];
-  attachMeter(participant, new FakeStream() as unknown as MediaStream);
+  const firstSource = defined(context.value, 'audio context').sources[0];
+  attachMeter(participant, new MediaStream());
   await flush();
-  const second = FakeDetector.instances.at(-1)!;
+  const second = defined(FakeDetector.instances.at(-1), 'speaking detector');
 
   expect(second).not.toBe(first);
   expect(first.port.onmessage).toBeNull();
@@ -196,7 +200,7 @@ test('without AudioWorklet an analyser is polled on the fallback timer', async (
   vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
   vi.stubGlobal('AudioWorkletNode', undefined);
   const participant = createParticipant({ id: 'peer-a', name: 'A' });
-  attachMeter(participant, new FakeStream() as unknown as MediaStream);
+  attachMeter(participant, new MediaStream());
   expect(participant.analyser).not.toBeNull();
   startMeters();
   expect(vi.getTimerCount()).toBe(1);
@@ -205,9 +209,9 @@ test('without AudioWorklet an analyser is polled on the fallback timer', async (
 });
 
 test('a failing worklet module falls back to the analyser', async () => {
-  (context.value as FakeContext).addModule.mockRejectedValueOnce(new Error('blocked'));
+  defined(context.value, 'audio context').addModule.mockRejectedValueOnce(new Error('blocked'));
   const participant = createParticipant({ id: 'peer-a', name: 'A' });
-  attachMeter(participant, new FakeStream() as unknown as MediaStream);
+  attachMeter(participant, new MediaStream());
   await flush();
   expect(FakeDetector.instances).toHaveLength(0);
   expect(participant.analyser).not.toBeNull();

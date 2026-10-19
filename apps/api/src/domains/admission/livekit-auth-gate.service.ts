@@ -329,7 +329,7 @@ function installGateShutdown(
     closePool: () => Promise<void>;
     exit?: (code: number) => void;
     timeoutMs?: number;
-    signals?: Pick<NodeJS.Process, 'once'>;
+    signals?: { once(signal: NodeJS.Signals, listener: () => void): unknown };
   }
 ): (signal: string) => Promise<void> {
   const {

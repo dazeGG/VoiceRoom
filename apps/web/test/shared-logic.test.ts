@@ -3,7 +3,7 @@ import { frequentReactionKey, rankFrequentReactions } from '../src/lib/shared/ch
 import { effectivePresenceStatus, presenceStatusLabel } from '../src/lib/shared/presence.ts';
 import { parseChatLinks } from '../src/lib/shared/utils/linkify.ts';
 import { clearScreenAttendance, setScreenAttendance } from '../src/lib/features/room/client/model/screen-attendance.ts';
-import type { Participant } from '../src/lib/features/room/client/core/types.ts';
+import { participant } from './fixtures/participant.ts';
 
 test('chat links keep hosts, paths and query strings, drop trailing punctuation, and never link scripts', () => {
   const url = 'https://spb.hh.ru/vacancy/134530018?nhtmFrom=chat';
@@ -39,7 +39,7 @@ test('frequent reactions are per user, ranked by count then recency, three at mo
 });
 
 test('watching a stream is one stream at a time and reports only real changes', () => {
-  const self = { viewedScreenPeerId: '' } as Participant;
+  const self = participant();
   expect(setScreenAttendance(self, 'screen-a')).toBe(true);
   expect(self.viewedScreenPeerId).toBe('screen-a');
   expect(setScreenAttendance(self, 'screen-a')).toBe(false);

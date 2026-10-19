@@ -36,6 +36,7 @@ import { lobbyContext } from '../../src/lib/features/home/model/lobby-context';
 import { prepareNotificationPreferences } from '../../src/lib/shared/notifications/preferences.svelte';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { authUser } from '../fixtures/users.ts';
+import { defined, instanceOf } from '../helpers/assert.ts';
 
 const GB = 1024 ** 3;
 const HOUR = 3_600_000;
@@ -175,7 +176,7 @@ test('the dashboard shows the headline numbers, how they moved, and the server a
   render(AdminPanel);
 
   const headline = await screen.findByRole('region', { name: 'Главное' });
-  const tile = (label: string) => within(headline).getByText(label).closest('.kpi') as HTMLElement;
+  const tile = (label: string) => instanceOf(within(headline).getByText(label).closest('.kpi'), HTMLElement, label);
   expect(within(tile('Онлайн сейчас')).getByText('5')).toBeTruthy();
   expect(within(tile('Онлайн сейчас')).getByText('и 2 гостевых подключений')).toBeTruthy();
   expect(within(tile('Активны сегодня')).getByText('+1 к вчера')).toBeTruthy();
@@ -191,9 +192,14 @@ test('the dashboard shows the headline numbers, how they moved, and the server a
   expect(within(server).getByText('Диск').closest('.gauge')?.getAttribute('data-level')).toBe('bad');
   expect(within(server).getByText(/Версия 2\.9\.0 · работает 3 ч 0 мин/)).toBeTruthy();
   // Two weeks of days and the last day of minutes.
-  const productCall = calls.find((url) => url.pathname === '/api/admin/product')!;
+  const productCall = defined(
+    calls.find((url) => url.pathname === '/api/admin/product'),
+    'product request'
+  );
   const span =
-    (Date.parse(productCall.searchParams.get('to')!) - Date.parse(productCall.searchParams.get('from')!)) / DAY;
+    (Date.parse(defined(productCall.searchParams.get('to'), 'to')) -
+      Date.parse(defined(productCall.searchParams.get('from'), 'from'))) /
+    DAY;
   expect(span).toBe(13);
 
   // Open reports lead to their tab.
@@ -261,7 +267,7 @@ test('the server tab draws the minutes over the chosen span and says when there 
   await userEvent.click(screen.getByRole('button', { name: 'Период: Последние сутки' }));
   await userEvent.click(await screen.findByRole('option', { name: 'Последний час' }));
   expect(await screen.findByText(/Замеров за этот период нет/)).toBeTruthy();
-  const last = calls.at(-1)!;
+  const last = defined(calls.at(-1), 'last request');
   expect(Number(last.searchParams.get('to')) - Number(last.searchParams.get('from'))).toBe(HOUR);
 });
 
@@ -402,12 +408,12 @@ test('a chart stacks bars, breaks lines at gaps, and shows the values under the 
       note: 'Весь сервер.'
     }
   });
-  const path = document.querySelector('path.chart-line')!.getAttribute('d')!;
-  expect(path.match(/M/g)).toHaveLength(2);
+  const path = document.querySelector('path.chart-line')?.getAttribute('d');
+  expect(path?.match(/M/g)).toHaveLength(2);
   expect(screen.getByText('Весь сервер.')).toBeTruthy();
 
   const svg = screen.getByRole('img', { name: 'Процессор' });
-  svg.getBoundingClientRect = () => ({ left: 0, top: 0, width: PLOT_WIDTH, height: 180 }) as DOMRect;
+  svg.getBoundingClientRect = () => new DOMRect(0, 0, PLOT_WIDTH, 180);
   // The plot starts 44px in; the last point sits at its right edge.
   await fireEvent.pointerMove(svg, { clientX: PLOT_WIDTH - 12 });
   const tip = screen.getByRole('status');
@@ -448,9 +454,9 @@ test('counts get whole-number gridlines, fractions keep round ones', () => {
 
 test('a sparkline draws a trend from two points and leaves a gap where a value is missing', () => {
   const drawn = render(Sparkline, { props: { values: [1, null, 3, 4], label: 'Тренд' } });
-  const line = drawn.container.querySelector('path.spark-line')!.getAttribute('d')!;
-  expect(line.match(/M/g)).toHaveLength(2);
-  expect(drawn.container.querySelector('path.spark-area')!.getAttribute('d')).toMatch(/Z$/);
+  const line = drawn.container.querySelector('path.spark-line')?.getAttribute('d');
+  expect(line?.match(/M/g)).toHaveLength(2);
+  expect(drawn.container.querySelector('path.spark-area')?.getAttribute('d')).toMatch(/Z$/);
   drawn.unmount();
   const flat = render(Sparkline, { props: { values: [5], label: 'Одна точка' } });
   expect(flat.container.querySelector('svg')).toBeNull();

@@ -97,7 +97,7 @@ describe('fitTiles', () => {
     document.body.innerHTML = '';
   });
 
-  function makeGrid(width: number, height: number, tiles: number): HTMLElement {
+  function makeGrid(width: number, height: number, tiles: number) {
     vi.stubGlobal(
       'ResizeObserver',
       class {
@@ -113,24 +113,22 @@ describe('fitTiles', () => {
     let size = { width, height };
     Object.defineProperty(grid, 'clientWidth', { get: () => size.width });
     Object.defineProperty(grid, 'clientHeight', { get: () => size.height });
-    Object.defineProperty(grid, 'resizeTo', {
-      value: (next: { width: number; height: number }) => {
-        size = next;
-      }
-    });
+    const resizeTo = (next: { width: number; height: number }) => {
+      size = next;
+    };
     for (let index = 0; index < tiles; index += 1) grid.append(document.createElement('div'));
     document.body.append(grid);
-    return grid;
+    return { grid, resizeTo };
   }
 
   test('sizes the tiles to the grid, again when it resizes and when someone joins', async () => {
-    const grid = makeGrid(1200, 600, 2);
+    const { grid, resizeTo } = makeGrid(1200, 600, 2);
     const stop = fitTiles(grid);
     expect(grid.style.getPropertyValue('--tile-width')).toBe('592px');
     expect(grid.style.getPropertyValue('--tile-gutter')).toBe('0px');
     expect(grid.dataset.scroll).toBe('false');
 
-    (grid as HTMLElement & { resizeTo: (size: { width: number; height: number }) => void }).resizeTo({
+    resizeTo({
       width: 400,
       height: 800
     });
@@ -151,7 +149,7 @@ describe('fitTiles', () => {
   });
 
   test('leaves a hidden grid to the stylesheet', () => {
-    const grid = makeGrid(0, 0, 3);
+    const { grid } = makeGrid(0, 0, 3);
     fitTiles(grid);
     expect(grid.style.getPropertyValue('--tile-width')).toBe('');
   });

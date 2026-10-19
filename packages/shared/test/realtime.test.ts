@@ -13,6 +13,7 @@ import {
   buildRoomRealtimeSummary,
   validateClientCommand
 } from '../src/realtime.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 test('typing notices name a room or a user and carry nothing the server trusts', () => {
   assert.ok(TYPING_NOTICE_TTL_MS > TYPING_NOTICE_INTERVAL_MS, 'a repeated notice arrives before the last one expires');
@@ -120,8 +121,9 @@ test('buildRoomRealtimeSummary caps visible peers and sets hiddenPeerCount', () 
   assert.equal(summary.hiddenPeerCount, 3);
   assert.equal(summary.name, 'Lobby');
   assert.equal(summary.avatarUrl, '/api/avatars/room_room1_deadbeef.webp');
-  assert.equal(summary.visiblePeers[0]!.avatarAccent, '#123456');
-  assert.equal(summary.visiblePeers[0]!.avatarUrl, '/api/avatars/av_0_deadbeef.webp');
+  const firstPeer = defined(summary.visiblePeers[0], 'the first visible peer');
+  assert.equal(firstPeer.avatarAccent, '#123456');
+  assert.equal(firstPeer.avatarUrl, '/api/avatars/av_0_deadbeef.webp');
   assert.equal('emoji' in summary, false);
 });
 
@@ -132,8 +134,9 @@ test('realtime avatar fields remain nullable for legacy summaries', () => {
   assert.equal(peer.avatarAccent, null);
   assert.equal(peer.avatarUrl, null);
   assert.equal(summary.avatarUrl, null);
-  assert.equal(summary.visiblePeers[0]!.avatarAccent, null);
-  assert.equal(summary.visiblePeers[0]!.avatarUrl, null);
+  const firstPeer = defined(summary.visiblePeers[0], 'the first visible peer');
+  assert.equal(firstPeer.avatarAccent, null);
+  assert.equal(firstPeer.avatarUrl, null);
 });
 
 test('validateClientCommand enforces ping payload', () => {

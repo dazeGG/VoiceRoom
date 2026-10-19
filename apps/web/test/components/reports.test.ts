@@ -45,7 +45,7 @@ test('a report needs a reason and sends the target, the reason and the comment',
   });
 
   const submit = screen.getByRole('button', { name: 'Отправить жалобу' });
-  expect((submit as HTMLButtonElement).disabled).toBe(true);
+  expect(submit).toHaveProperty('disabled', true);
   await userEvent.click(screen.getByText('Спам или реклама'));
   expect(screen.getByRole('radio', { name: 'Спам или реклама' })).toHaveProperty('checked', true);
   expect(screen.getByRole('radio', { name: 'Другое' })).toHaveProperty('checked', false);

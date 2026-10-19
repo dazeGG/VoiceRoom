@@ -4,6 +4,8 @@
 import { expect, test } from 'vitest';
 import { createRoom } from '../../src/lib/api/rooms.ts';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { CreateRoomBody } from '@voice-room/shared/contracts/rooms';
+import { defined, parse } from '../helpers/assert.ts';
 
 test('a temporary room is created without a proof when the server does not require one', async () => {
   const { calls } = stubFetch({
@@ -56,9 +58,9 @@ test('a required proof of work is solved and sent with the create call', async (
     }
   });
   await expect(createRoom()).resolves.toBe('tmp456');
-  const body = calls.at(-1)?.body as { proof: { challenge: string; nonce: number } };
-  expect(body.proof.challenge).toBe('abc');
-  expect(Number.isInteger(body.proof.nonce)).toBe(true);
+  const proof = defined(parse(CreateRoomBody, calls.at(-1)?.body).proof, 'proof of work');
+  expect(proof.challenge).toBe('abc');
+  expect(Number.isInteger(proof.nonce)).toBe(true);
 });
 
 test('a refused create call surfaces the server message', async () => {

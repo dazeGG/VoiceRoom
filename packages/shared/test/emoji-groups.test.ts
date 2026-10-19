@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import { listReactionEmojis } from '../src/emoji.ts';
 import * as emojiGroups from '../src/emoji-groups.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 test('reaction emoji groups are an immutable ordered partition of the frozen corpus', async () => {
   const groups = emojiGroups.listReactionEmojiGroups();
@@ -22,7 +23,10 @@ test('reaction emoji groups are an immutable ordered partition of the frozen cor
   assert.strictEqual(emojiGroups.listReactionEmojiGroups(), groups);
 
   for (const group of groups) {
-    assert.equal(emojiGroups.reactionEmojiGroupKey(group.emojis[0]!), group.key);
+    assert.equal(
+      emojiGroups.reactionEmojiGroupKey(defined(group.emojis[0], `the first emoji of ${group.key}`)),
+      group.key
+    );
   }
   assert.equal(emojiGroups.reactionEmojiGroupKey('not-an-emoji'), '');
 });

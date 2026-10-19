@@ -17,6 +17,11 @@ export function instanceOf<T>(value: unknown, type: abstract new (...args: never
   return value;
 }
 
+/** JSON text parsed as `unknown` (JSON.parse types it as any), to check before use. */
+export function parseJson(text: string): unknown {
+  return JSON.parse(text);
+}
+
 /** `value` checked against a contract schema, e.g. a request body a test captured. */
 export function parse<Schema extends TSchema>(schema: Schema, value: unknown): Static<Schema> {
   if (!Value.Check(schema, value)) throw new Error(`unexpected shape: ${firstMismatch(schema, value)}`);

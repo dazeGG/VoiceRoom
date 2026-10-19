@@ -2,7 +2,9 @@
 // fakes, so tests can drive LiveKit participants and publications directly.
 // Each call gives a fresh module graph and fresh fakes.
 
+import type { RoomOptions } from 'livekit-client';
 import { vi } from 'vitest';
+import type { Participant } from '../../src/lib/features/room/client/core/types.ts';
 import type * as LiveKitServiceModule from '../../src/lib/features/room/client/services/livekit-service.ts';
 
 type Peer = Record<string, unknown> & { id: string };
@@ -17,29 +19,38 @@ export interface LiveKitHarness {
     serverPeerIds: Set<string>;
     serverPeerSyncReady: boolean;
     viewedScreenPeerId: string;
+    livekitRoom?: { remoteParticipants?: Map<string, unknown>; [key: string]: unknown } | null;
+    self?: Peer | null;
     [key: string]: unknown;
   };
   /** Pending loadLiveKitClient() calls; call one to resolve it. */
   livekitClientResolvers: Array<() => void>;
   screenAttachments: Array<{ peer: Peer; stream: unknown }>;
   detachedScreens: string[];
-  retries: { scheduled: Array<{ peerId: string }>; cleared: number; clearedAll: number };
+  retries: { scheduled: Array<{ key: string }>; cleared: number; clearedAll: number };
   audio: { ensured: Array<{ peerId: string }> };
   /** Every toast the service showed, in order. */
   toasts: string[];
   /** A refusal from the API as the real client raises it. */
   refusal(message: string, code: string, status?: number): Error;
+  /**
+   * Hands a fake remote participant to the service the way LiveKit holds it:
+   * in the room's participant list, synced by its identity.
+   */
+  syncParticipant(participant: { identity: string }): Participant | null;
   /** Every LiveKit Room the service created, in order. */
   rooms: Array<{
     /** Handlers the service bound, by RoomEvent name. */
     listeners: Map<string, Array<(...args: unknown[]) => void>>;
     /** What the service passed to `new Room()`. */
-    roomOptions: Record<string, unknown>;
+    roomOptions: RoomOptions;
     connectedUrl: string;
     connectOptions: Record<string, unknown>;
     disconnected: boolean;
     published: Array<{ track: unknown; options: Record<string, unknown> }>;
     unpublished: unknown[];
+    /** Calls the handlers bound to a RoomEvent, as LiveKit does. */
+    emit(event: string, ...args: unknown[]): void;
   }>;
 }
 
@@ -101,7 +112,7 @@ export async function loadLiveKitHarness(
         this.unpublished.push(track);
       }
     };
-    constructor(readonly roomOptions: Record<string, unknown> = {}) {
+    constructor(readonly roomOptions: RoomOptions = {}) {
       rooms.push(this);
     }
     async connect(url: string, _token: string, connectOptions: Record<string, unknown> = {}) {
@@ -112,6 +123,9 @@ export async function loadLiveKitHarness(
     on(event: string, handler: (...args: unknown[]) => void) {
       this.listeners.set(event, [...(this.listeners.get(event) ?? []), handler]);
       return this;
+    }
+    emit(event: string, ...args: unknown[]) {
+      for (const handler of this.listeners.get(event) ?? []) handler(...args);
     }
     removeAllListeners() {
       this.listeners.clear();
@@ -193,7 +207,7 @@ export async function loadLiveKitHarness(
       clearAll: () => {
         retries.clearedAll += 1;
       },
-      schedule: (input: { peerId: string }) => {
+      schedule: (input: { key: string }) => {
         retries.scheduled.push(input);
       }
     })
@@ -287,6 +301,11 @@ export async function loadLiveKitHarness(
     audio,
     toasts,
     refusal: (message, code, status = 0) => new ApiError(message, status, { code }),
+    syncParticipant: (participant) => {
+      const room = (state.livekitRoom ??= {});
+      (room.remoteParticipants ??= new Map()).set(participant.identity, participant);
+      return service.syncLiveKitParticipantById(participant.identity);
+    },
     rooms
   };
 }
@@ -296,7 +315,7 @@ export function fakePublication(
   source: 'camera' | 'microphone' | 'screen-video' | 'screen-audio',
   extra: Record<string, unknown> = {}
 ) {
-  const calls = { subscribed: [] as boolean[], quality: [] as unknown[] };
+  const calls: { subscribed: boolean[]; quality: unknown[] } = { subscribed: [], quality: [] };
   const publication = {
     source,
     trackSid: `${source}-sid`,
@@ -317,15 +336,13 @@ export function fakePublication(
 
 export function fakeParticipant(
   identity: string,
-  publications: Array<{ trackSid: string }>,
+  publications: Array<{ trackSid: string; source?: string }>,
   extra: Record<string, unknown> = {}
 ) {
   return {
     identity,
     isLocal: false,
-    isScreenShareEnabled: publications.some(
-      (publication) => (publication as { source?: string }).source === 'screen-video'
-    ),
+    isScreenShareEnabled: publications.some((publication) => publication.source === 'screen-video'),
     joinedAt: new Date(0),
     name: identity,
     trackPublications: new Map(publications.map((publication) => [publication.trackSid, publication])),

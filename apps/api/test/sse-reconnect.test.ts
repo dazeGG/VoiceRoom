@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import { createTestDatabase } from './db-harness.ts';
 import {
   dumpServerLogs,
+  AnswerEnvelope,
   postJson,
   socketDir,
   startServer,
@@ -12,7 +13,7 @@ import {
   type ServerLogs
 } from './fakes/server-process.ts';
 import { openWs, joinVoiceRoom, sendRawWs, sendWs, waitForWsType } from './ws-harness.ts';
-import type { PeerState, RoomCreated } from '@voice-room/shared/contracts/rooms';
+import { PeerState, RoomCreated } from '@voice-room/shared/contracts/rooms';
 
 const PEER_A = 'peer-alice1';
 const PEER_B = 'peer-bobbb1';
@@ -33,7 +34,7 @@ test('WS reconnect preserves presence and avoids spurious join/leave events', as
   try {
     await waitForHealthz(socketPath);
 
-    const created = await postJson<RoomCreated>(socketPath, '/api/rooms', {});
+    const created = await postJson(socketPath, '/api/rooms', RoomCreated, {});
     assert.equal(created.status, 201);
     const roomId = created.body.roomId;
 
@@ -99,7 +100,7 @@ test('WS reconnect preserves presence and avoids spurious join/leave events', as
     // A leave without the session token is refused, so the replaced socket cannot remove the peer.
     sendRawWs(peerA2.ws, { type: 'room.leave', payload: { roomId, peerId: PEER_A } });
     await wait(150);
-    const afterStaleLeave = await postJson(socketPath, '/api/state', {
+    const afterStaleLeave = await postJson(socketPath, '/api/state', AnswerEnvelope, {
       roomId,
       peerId: PEER_A,
       sessionToken: TOKEN_A
@@ -111,7 +112,7 @@ test('WS reconnect preserves presence and avoids spurious join/leave events', as
     );
 
     const beforeStaleWrite = peerB.frames.length;
-    const staleWrite = await postJson(socketPath, '/api/state', {
+    const staleWrite = await postJson(socketPath, '/api/state', AnswerEnvelope, {
       roomId,
       peerId: PEER_A,
       sessionToken: TOKEN_A,
@@ -122,7 +123,7 @@ test('WS reconnect preserves presence and avoids spurious join/leave events', as
     assert.equal(staleWrite.status, 409);
     assert.equal(staleWrite.body.code, 'state_updates_require_websocket');
 
-    const state = await postJson<PeerState>(socketPath, '/api/state', {
+    const state = await postJson(socketPath, '/api/state', PeerState, {
       roomId,
       peerId: PEER_A,
       sessionToken: TOKEN_A
@@ -133,7 +134,7 @@ test('WS reconnect preserves presence and avoids spurious join/leave events', as
     assert.equal(state.body.peer.deafened, true);
     assert.equal(state.body.peer.screen, true);
 
-    const viewerState = await postJson<PeerState>(socketPath, '/api/state', {
+    const viewerState = await postJson(socketPath, '/api/state', PeerState, {
       roomId,
       peerId: PEER_B,
       sessionToken: TOKEN_B

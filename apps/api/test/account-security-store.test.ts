@@ -205,7 +205,8 @@ test('recovery codes are handed out once, work once and replace the password eve
     currentPassword: 'new-password-1',
     now: 3_000
   });
-  assert.equal((regenerated.codes as string[]).includes(String(second)), false);
+  assert.ok(regenerated.status === 'generated');
+  assert.equal(regenerated.codes.includes(String(second)), false);
   assert.equal(
     (await store.recoverWithCode({ login: 'ada', code: second, newPassword: 'new-password-2' })).status,
     'invalid'

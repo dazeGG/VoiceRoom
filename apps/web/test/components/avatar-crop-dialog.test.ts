@@ -4,6 +4,11 @@ import { afterEach, expect, test, vi } from 'vitest';
 import AvatarCropDialog from '../../src/lib/shared/ui/AvatarCropDialog/AvatarCropDialog.svelte';
 import { stubCanvasAndImages } from '../helpers/fake-canvas.ts';
 
+vi.mock(
+  '../../src/lib/shared/ui/AvatarCropDialog/canvas-2d.ts',
+  async () => (await import('../helpers/fake-canvas.ts')).fakeCanvas2d
+);
+
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();

@@ -21,14 +21,15 @@ test(
     await Promise.all(Array.from({ length: 24 }, () => pool.query('SELECT pg_sleep(0.002)')));
 
     // Make every client say goodbye a little late, the way a busy CI runner does.
-    const sendTerminate = pg.Connection.prototype.end;
-    pg.Connection.prototype.end = function lateEnd(...args) {
-      setTimeout(() => sendTerminate.apply(this, args), 60);
+    const connection: { end: (this: pg.Connection) => void } = pg.Connection.prototype;
+    const sendTerminate = connection.end;
+    connection.end = function lateEnd() {
+      setTimeout(() => sendTerminate.call(this), 60);
     };
     try {
       await pool.end();
     } finally {
-      pg.Connection.prototype.end = sendTerminate;
+      connection.end = sendTerminate;
     }
 
     await db.cleanup();
@@ -73,7 +74,7 @@ test(
       await second.cleanup();
     });
     await first.pool.query(`INSERT INTO rooms (id, creator_ip) VALUES ('harness-room', '')`);
-    const { rows } = await second.pool.query(`SELECT id FROM rooms WHERE id = 'harness-room'`);
-    assert.deepEqual(rows, []);
+    const { rowCount } = await second.pool.query(`SELECT id FROM rooms WHERE id = 'harness-room'`);
+    assert.equal(rowCount, 0);
   }
 );

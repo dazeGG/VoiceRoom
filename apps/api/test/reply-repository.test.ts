@@ -10,6 +10,7 @@ import { createContentRepository } from '../src/domains/messaging/content.reposi
 import { transaction } from '../src/platform/db/pool.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { fieldOf } from '../src/platform/record.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const skip = !process.env.TEST_DATABASE_URL;
@@ -48,7 +49,8 @@ test('a room reply points at its target, and the preview names the author as the
     ['reply-1', 'from-ada', '', 'ответ'],
     'an account reply keeps no name snapshot'
   );
-  assert.equal(new Date(reply?.createdAt as Date).getTime(), 1_000);
+  assert.ok(reply?.createdAt instanceof Date, 'the reply has its creation time');
+  assert.equal(reply.createdAt.getTime(), 1_000);
   const guest = await replies.insertRoomReply({
     roomId: 'room-1',
     targetMessageId: 'from-guest',
@@ -117,7 +119,7 @@ test('editing structured content rewrites the text and marks the message edited'
   );
   assert.equal(updated?.text, 'новый текст');
   assert.ok(updated?.edited_at);
-  assert.deepEqual((updated?.content as { version?: number } | null)?.version, 1);
+  assert.deepEqual(fieldOf(updated?.content, 'version'), 1);
   await pool.query(`UPDATE room_messages SET deleted_at = now() WHERE id = 'from-guest'`);
   assert.equal(
     await transaction(pool, (client) => content.update({ client, messageId: 'from-guest', text: 'x' })),

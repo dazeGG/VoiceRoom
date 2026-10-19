@@ -6,20 +6,21 @@ type FakeTimer = { at: number; callback: () => void };
 
 function createClock() {
   let time = 0;
-  let timers: FakeTimer[] = [];
+  let nextId = 1;
+  // The throttle keeps a timer as an opaque handle: here, a number naming it.
+  const timers = new Map<number, FakeTimer>();
   return {
     now: () => time,
-    setTimer(callback: () => void, delay: number): FakeTimer & number {
-      const timer = { at: time + delay, callback };
-      timers.push(timer);
-      // The throttle keeps a timer as an opaque handle.
-      return timer as FakeTimer & number;
+    setTimer: (callback: () => void, delay: number): number => {
+      const id = nextId++;
+      timers.set(id, { at: time + delay, callback });
+      return id;
     },
     advance(ms: number) {
       time += ms;
-      const due = timers.filter((timer) => timer.at <= time).sort((left, right) => left.at - right.at);
-      timers = timers.filter((timer) => timer.at > time);
-      for (const timer of due) timer.callback();
+      const due = [...timers].filter(([, timer]) => timer.at <= time).sort(([, left], [, right]) => left.at - right.at);
+      for (const [id] of due) timers.delete(id);
+      for (const [, timer] of due) timer.callback();
     }
   };
 }

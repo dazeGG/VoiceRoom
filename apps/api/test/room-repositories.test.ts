@@ -9,6 +9,7 @@ import { createUserStore } from '../src/app/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { mapRoom } from '../src/domains/rooms/room.repository.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { AnyRow, queryRows } from './helpers/checked.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const skip = !process.env.TEST_DATABASE_URL;
@@ -113,11 +114,13 @@ test('room creation checks the owner, the per-owner and per-address quotas and t
     assert.equal(created.status, 'created');
     assert.equal(created.room?.ownerId, owner.id);
   }
-  const memberships = await pool.query(
+  const memberships = await queryRows(
+    pool,
+    AnyRow,
     'SELECT room_id, role FROM room_memberships WHERE user_id = $1 ORDER BY room_id',
     [owner.id]
   );
-  assert.deepEqual(memberships.rows, [
+  assert.deepEqual(memberships, [
     { room_id: 's1', role: 'owner' },
     { room_id: 's2', role: 'owner' }
   ]);
@@ -187,11 +190,9 @@ test('a message never expires, shows its author as they are now, and edits in pl
 
   assert.equal(await store.appendMessage('missing', { text: 'hi' }), null, 'no message in a missing room');
 
-  const guest = await store.appendMessage(
-    'room1',
-    { id: 'm1', peerId: 'peer1', name: 'Гость', text: 'hello', createdAt: 1000, expiresAt: 2000 } as never,
-    1000
-  );
+  // A field the store does not take: a stored message never expires.
+  const withExpiry = { id: 'm1', peerId: 'peer1', name: 'Гость', text: 'hello', createdAt: 1000, expiresAt: 2000 };
+  const guest = await store.appendMessage('room1', withExpiry, 1000);
   assert.equal(guest?.expiresAt, null, 'a requested expiry is ignored');
   assert.equal(guest?.name, 'Гость');
 
@@ -261,7 +262,7 @@ test('appendMessage runs the unit of work in its transaction and rolls back with
       id: 'doomed',
       text: 'x',
       async unitOfWork(client, message) {
-        const seen = await client.query('SELECT id FROM room_messages WHERE id = $1', [message.id]);
+        const seen = await client.query<{ id: string }>('SELECT id FROM room_messages WHERE id = $1', [message.id]);
         assert.equal(seen.rowCount, 1, 'the unit of work sees the message on the same connection');
         throw new Error('outbox failed');
       }

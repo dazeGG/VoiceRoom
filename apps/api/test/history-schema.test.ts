@@ -7,6 +7,7 @@ import { createDmHistoryRepository } from '../src/domains/messaging/dm-history.r
 import { createRoomHistoryRepository } from '../src/domains/messaging/room-history.repository.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 const quiet = { log() {}, info() {}, warn() {}, error() {} };
 
@@ -59,7 +60,7 @@ test(
     let page = await rooms.listLatest({ roomId: 'room', limit: 3, now });
     seenRoom.unshift(...page.messages.map((message) => message.id));
     while (page.hasMoreBefore) {
-      const first = page.messages[0]!;
+      const first = defined(page.messages[0], 'the first message of the page');
       page = await rooms.listBefore({
         roomId: 'room',
         anchor: { id: first.id, createdAtMicros: first.createdAtMicros },
@@ -75,7 +76,7 @@ test(
     let dmPage = await dms.listLatest({ userId: 'a', peerId: 'b', limit: 3 });
     seenDm.unshift(...dmPage.messages.map((message) => message.id));
     while (dmPage.hasMoreBefore) {
-      const first = dmPage.messages[0]!;
+      const first = defined(dmPage.messages[0], 'the first message of the page');
       dmPage = await dms.listBefore({
         userId: 'a',
         peerId: 'b',

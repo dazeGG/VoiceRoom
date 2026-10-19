@@ -4,8 +4,12 @@
 import { sql, type ExpressionBuilder, type Selectable } from 'kysely';
 import { type Database } from '../../platform/db/kysely.ts';
 import { cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
-import { normalizeLinkPreview, type LinkPreview } from '@voice-room/shared/link-preview';
+import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
 import { isRecord } from '@voice-room/shared/guards';
+import { Nullable } from '@voice-room/shared/contracts/http';
+import { DirectMessage as DirectMessageView, ReplyPointer } from '@voice-room/shared/contracts/messages';
+import { Type, type Static } from 'typebox';
+import { Value } from 'typebox/value';
 import type { DB, DirectMessages, Users } from '../../platform/db/schema.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 
@@ -31,20 +35,17 @@ export type DirectMessageInvite = {
   expiresAt: number | null;
 };
 
-/** A direct message as stored; deletedAt stays internal, callers filter on it. */
-export interface DirectMessage {
-  id: string;
-  senderId: string;
-  recipientId: string;
-  body: string;
-  createdAt: number | null;
-  editedAt: number | null;
-  readAt: number | null;
-  invite: DirectMessageInvite | null;
-  linkPreview: LinkPreview | undefined;
-  replyTo: { messageId: string } | undefined;
-  deletedAt: number | null;
-}
+/**
+ * A direct message as stored: the contract DirectMessage without the parts
+ * its public view adds (attachments, reply preview). deletedAt stays
+ * internal, callers filter on it.
+ */
+const StoredDirectMessage = Type.Object({
+  ...Type.Omit(DirectMessageView, ['attachments', 'replyPreview', 'replyTo']).properties,
+  replyTo: Type.Optional(ReplyPointer),
+  deletedAt: Nullable(Type.Number())
+});
+export type DirectMessage = Static<typeof StoredDirectMessage>;
 
 // Public shape for a user row joined from the `users` table (snake_case). Never
 // leaks the password hash; mirrors user-store's publicUser fields.
@@ -76,18 +77,9 @@ function mapInvite(metadata: Metadata | null | undefined): DirectMessageInvite |
   };
 }
 
-/**
- * A direct message read back from JSON this API wrote (an outbox event, an
- * idempotent replay): checked for the ids it is addressed by; the rest is as
- * the writer stored it.
- */
+/** A direct message read back from JSON this API wrote (an outbox event, an idempotent replay). */
 export function isStoredDirectMessage(value: unknown): value is DirectMessage {
-  return (
-    isRecord(value) &&
-    typeof value.id === 'string' &&
-    typeof value.senderId === 'string' &&
-    typeof value.recipientId === 'string'
-  );
+  return Value.Check(StoredDirectMessage, value);
 }
 
 export function mapMessage(row: Selectable<DirectMessages>): DirectMessage;

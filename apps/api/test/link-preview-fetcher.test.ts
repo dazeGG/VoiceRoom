@@ -1,7 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import type { AddressInfo } from 'node:net';
 import { MAX_PAGE_BYTES, createLinkPreviewFetcher, isPublicAddress } from '../src/lib/link-preview-fetcher.ts';
 
 // A local site the tests reach through a fake DNS answer. The default address
@@ -23,7 +22,9 @@ async function startSite(t: TestContext, routes: Record<string, Route>) {
     server.closeAllConnections();
     server.close();
   });
-  return `http://site.test:${(server.address() as AddressInfo).port}`;
+  const address = server.address();
+  assert.ok(address && typeof address === 'object');
+  return `http://site.test:${address.port}`;
 }
 
 type LookupCallback = (

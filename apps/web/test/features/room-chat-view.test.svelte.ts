@@ -3,6 +3,7 @@ import type { ChatMessage } from '../../src/lib/api/rooms.ts';
 import { buildChatDays, mentionsUser, restampAuthor } from '../../src/lib/features/room/room-chat-view.ts';
 import { RoomChatDraft } from '../../src/lib/features/room/room-chat-draft.svelte.ts';
 import { loadChatDraft, saveChatDraft } from '../../src/lib/shared/chat/chat-drafts.ts';
+import { defined } from '../helpers/assert.ts';
 
 const MINUTE = 60_000;
 const DAY_ONE = new Date(2026, 6, 1, 12, 0).getTime();
@@ -93,7 +94,7 @@ test('a peer update re-stamps what that peer, or the same account elsewhere, wro
     ['m2', 'Ада', '/a.webp', 'green'],
     ['m3', 'Боб', null, 'blue']
   ]);
-  expect(restampAuthor(restamped!, peer), 'nothing left to update').toBeNull();
+  expect(restampAuthor(defined(restamped, 'restamped messages'), peer), 'nothing left to update').toBeNull();
 });
 
 test('a message mentions the reader only through a structured mention of their account', () => {

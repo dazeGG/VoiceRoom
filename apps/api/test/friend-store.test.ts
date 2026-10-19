@@ -191,7 +191,7 @@ test('decline and cancel leave no friendship', async (t) => {
 test('respond/cancel reject requests the user does not own', async (t) => {
   const { users, friends } = await createStores(t);
   const alice = await makeUser(users, 'alice');
-  const bob = await makeUser(users, 'bob');
+  await makeUser(users, 'bob');
   const eve = await makeUser(users, 'eve');
 
   const sent = await friends.sendRequest({ requesterId: alice.id, addresseeLogin: 'bob' });

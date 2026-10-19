@@ -11,8 +11,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Pool, type PoolClient } from 'pg';
-import type { Me, SignedIn } from '@voice-room/shared/contracts/account';
-import type { AdminReportPage } from '@voice-room/shared/contracts/reports';
+import { Me, SignedIn } from '@voice-room/shared/contracts/account';
+import { AdminReportPage } from '@voice-room/shared/contracts/reports';
+import { DirectMessageAnswer, RoomMessageAnswer } from '@voice-room/shared/contracts/messages';
+import { RoomCreated } from '@voice-room/shared/contracts/rooms';
 import { createAttachmentRepository } from '../src/domains/media/attachment.repository.ts';
 import { revokeMessageAttachments } from '../src/domains/media/attachment-revocation.service.ts';
 import { createDmThreadRepository } from '../src/domains/messaging/dm-thread.repository.ts';
@@ -47,7 +49,7 @@ async function setup(t: TestContext) {
   const alice = await registerAccount(socketPath, 'alice');
   const bob = await registerAccount(socketPath, 'bob');
   const idOf = async (cookie: string) => {
-    const user = (await request<Me>(socketPath, { pathname: '/api/auth/me', cookie })).body.user;
+    const user = (await request(socketPath, { pathname: '/api/auth/me', cookie }, Me)).body.user;
     assert.ok(user);
     return user.id;
   };
@@ -81,12 +83,16 @@ async function setup(t: TestContext) {
   const usedBytes = async () => (await attachments.quotaUsage(aliceId)).usedBytes;
 
   const sendDm = async (attachmentId: string) => {
-    const sent = await request<{ message: { id: string } }>(socketPath, {
-      method: 'POST',
-      pathname: `/api/dm/${bobId}`,
-      cookie: alice,
-      body: { text: 'look', attachmentIds: [attachmentId] }
-    });
+    const sent = await request(
+      socketPath,
+      {
+        method: 'POST',
+        pathname: `/api/dm/${bobId}`,
+        cookie: alice,
+        body: { text: 'look', attachmentIds: [attachmentId] }
+      },
+      DirectMessageAnswer
+    );
     assert.equal(sent.status, 201);
     return sent.body.message.id;
   };
@@ -96,20 +102,23 @@ async function setup(t: TestContext) {
 
 test('the author deleting a room message deletes its attachment and queues its cleanup', { skip }, async (t) => {
   const { socketPath, alice, readyAttachment, stored, usedBytes } = await setup(t);
-  const room = await request<{ roomId: string }>(socketPath, {
-    method: 'POST',
-    pathname: '/api/rooms',
-    cookie: alice,
-    body: { isStatic: true, name: 'files' }
-  });
+  const room = await request(
+    socketPath,
+    { method: 'POST', pathname: '/api/rooms', cookie: alice, body: { isStatic: true, name: 'files' } },
+    RoomCreated
+  );
   assert.equal(room.status, 201);
   const attachmentId = await readyAttachment('room');
-  const sent = await request<{ message: { id: string } }>(socketPath, {
-    method: 'POST',
-    pathname: `/api/rooms/${room.body.roomId}/chat`,
-    cookie: alice,
-    body: { text: 'look', attachmentIds: [attachmentId] }
-  });
+  const sent = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: `/api/rooms/${room.body.roomId}/chat`,
+      cookie: alice,
+      body: { text: 'look', attachmentIds: [attachmentId] }
+    },
+    RoomMessageAnswer
+  );
   assert.equal(sent.status, 201);
   assert.equal(await usedBytes(), BYTES);
 
@@ -155,14 +164,18 @@ test('the operator removing a reported direct message deletes its attachment', {
     ADMIN_ID,
     await hashPassword('password123')
   ]);
-  const signedIn = await request<SignedIn>(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/login',
-    body: { login: 'root', password: 'password123' }
-  });
+  const signedIn = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/auth/login',
+      body: { login: 'root', password: 'password123' }
+    },
+    SignedIn
+  );
   assert.equal(signedIn.status, 200);
   const admin = cookieFrom(signedIn.setCookie);
-  const open = await request<AdminReportPage>(socketPath, { pathname: '/api/admin/reports', cookie: admin });
+  const open = await request(socketPath, { pathname: '/api/admin/reports', cookie: admin }, AdminReportPage);
   const report = open.body.reports[0];
   assert.ok(report);
   const resolved = await request(socketPath, {

@@ -53,10 +53,10 @@ function harness({
 }: HarnessOptions = {}) {
   const logger = recordingLogger();
   const calls = {
-    active: [] as unknown[],
-    empty: [] as unknown[],
-    summaries: [] as unknown[],
-    mirrored: [] as unknown[],
+    active: new Array<unknown>(),
+    empty: new Array<unknown>(),
+    summaries: new Array<unknown>(),
+    mirrored: new Array<unknown>(),
     get errors() {
       return logger.records.filter((record) => record.level === 'error').map((record) => record.evt);
     }
@@ -79,7 +79,7 @@ function harness({
       runtime
         ? {
             scheduleSummaryBroadcast: (roomId) => calls.summaries.push(roomId),
-            mirrorLegacyRoomEvent: (_roomId, message) => calls.mirrored.push((message as { type?: string }).type)
+            mirrorLegacyRoomEvent: (_roomId, message) => calls.mirrored.push(message.type)
           }
         : null,
     logger: () => logger,

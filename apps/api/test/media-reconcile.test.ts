@@ -38,7 +38,8 @@ test('G79-A01 missing ready files raise P0, orphans are removed and lost process
       },
       parseStorageKey(key) {
         const [attachmentId = '', variant = 'original'] = String(key).split('/');
-        return { attachmentId, variant: variant as MediaVariant };
+        const variants: MediaVariant[] = ['original', 'processed', 'preview'];
+        return { attachmentId, variant: variants.find((known) => known === variant) ?? 'original' };
       },
       async remove(id, variant) {
         removed.push(`${String(id)}/${String(variant)}`);

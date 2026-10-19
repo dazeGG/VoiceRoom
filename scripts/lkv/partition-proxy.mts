@@ -9,7 +9,8 @@ type ProxyOptions = {
   listenHost?: string;
   targetHost?: string;
   targetPort?: number | string;
-  mode?: PartitionMode;
+  /** Anything but 'partitioned' leaves the proxy open; the CLI passes --mode through as given. */
+  mode?: string;
 };
 
 export function createPartitionProxy(options: ProxyOptions = {}) {
@@ -75,8 +76,7 @@ function readCliOptions(): ProxyOptions {
     listenHost: values['listen-host'],
     targetHost: values['target-host'],
     targetPort: values['target-port'],
-    // Not validated here: anything but 'partitioned' leaves the proxy open.
-    mode: values.mode as PartitionMode
+    mode: values.mode
   };
 }
 

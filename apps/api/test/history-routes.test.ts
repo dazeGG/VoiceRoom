@@ -16,6 +16,8 @@ import { createRoomHistoryService, type RoomHistoryRepository } from '../src/dom
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { fake, storedUser } from './fakes/index.ts';
+import { DirectHistoryPage, RoomHistoryPage } from '@voice-room/shared/contracts/messages';
+import { checked } from './helpers/checked.ts';
 
 const codec = createCursorCodec({ keys: ['h'.repeat(32)] });
 const PREVIEW = { url: 'https://example.com/', title: 'Example', description: '', siteName: '', image: null };
@@ -89,7 +91,7 @@ function historyApp(t: TestContext, overrides: Partial<HistoryRoutesDeps> = {}, 
 test('a room history page goes out whole, link previews and epoch times included', async (t) => {
   const answer = await historyApp(t)('/api/rooms/room-1/chat/history?mode=latest&limit=20');
   assert.equal(answer.status, 200);
-  const [message] = answer.body.messages as Array<Record<string, unknown>>;
+  const [message] = checked(RoomHistoryPage, answer.body, 'the room history page').messages;
   assert.ok(message);
   assert.deepEqual(message.linkPreview, PREVIEW);
   assert.equal(message.createdAt, Date.parse('2026-01-01T00:00:00.000Z'));
@@ -107,7 +109,7 @@ test('a room history page goes out whole, link previews and epoch times included
 test('a DM history page carries only the public metadata', async (t) => {
   const answer = await historyApp(t)('/api/dm/friend/history');
   assert.equal(answer.status, 200);
-  const [message] = answer.body.messages as Array<Record<string, unknown>>;
+  const [message] = checked(DirectHistoryPage, answer.body, 'the DM history page').messages;
   assert.ok(message);
   assert.deepEqual(message.metadata, { kind: 'room-invite', roomId: 'room-1', roomName: 'Room', status: 'pending' });
   assert.deepEqual(message.content, { type: 'text', text: 'hi' });

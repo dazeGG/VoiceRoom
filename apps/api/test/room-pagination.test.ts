@@ -1,3 +1,4 @@
+import { isRecord } from '@voice-room/shared/guards';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
@@ -54,7 +55,7 @@ test('G26-A02 visibility filtering cannot create duplicates', async () => {
   const service = createRoomHistoryService({
     repository,
     cursorCodec: codec,
-    visibilityPolicy: { canViewRoomMessage: ({ message: item }) => (item as { id: string }).id !== 'hidden' }
+    visibilityPolicy: { canViewRoomMessage: ({ message: item }) => !isRecord(item) || item.id !== 'hidden' }
   });
   assert.deepEqual(
     (await service.getPage({ roomId: 'room-a' })).messages.map(({ id }) => id),

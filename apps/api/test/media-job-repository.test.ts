@@ -15,7 +15,7 @@ import {
 import { createAttachmentRepository, type AttachmentRepository } from '../src/domains/media/attachment.repository.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
-import { fake } from './fakes/index.ts';
+import { fake, fakeDb } from './fakes/index.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const skip = !process.env.TEST_DATABASE_URL;
@@ -164,7 +164,8 @@ test('renew, complete and fail work only while the lease and fence are held', { 
     maxAttempts: 999
   });
   assert.deepEqual([retried.state, retried.lastError, retried.claimedBy], ['pending', 'failed', null]);
-  assert.ok(new Date(retried.availableAt as Date).getTime() > Date.now() + 60_000, 'retried after the delay');
+  assert.ok(retried.availableAt instanceof Date, 'the retry time is a timestamp');
+  assert.ok(retried.availableAt.getTime() > Date.now() + 60_000, 'retried after the delay');
   await assert.rejects(() => jobs.fail(job.id, lease), MediaJobFenceError, 'a failed job no longer holds the lease');
 
   await pool.query(`UPDATE media_processing_jobs SET available_at = current_timestamp WHERE id = $1`, [job.id]);
@@ -217,7 +218,7 @@ test('jobs are found by id, the backlog has an age, and finished jobs are pruned
   const { pool, jobs, processing } = await setup(t);
   assert.equal(await jobs.oldestPendingAgeMs(), 0);
   // Something that is not a database client is ignored in favour of the pool.
-  assert.equal(await jobs.oldestPendingAgeMs({ client: {} as never }), 0);
+  assert.equal(await jobs.oldestPendingAgeMs({ client: fake<pg.PoolClient>({}) }), 0);
   const pending = await jobs.enqueue(await processing());
   assert.ok(pending);
   await pool.query(
@@ -304,16 +305,15 @@ test('completion always gives its connection back, even when the transaction plu
     query: pool.query.bind(pool),
     async connect() {
       const client = await pool.connect();
-      const query = client.query.bind(client) as (text: string, values?: unknown[]) => Promise<unknown>;
-      return Object.assign(Object.create(client) as pg.PoolClient, {
-        query: (text: string, values?: unknown[]) =>
-          text === failOn ? Promise.reject(new Error(`${text} failed`)) : query(text, values),
-        release: () => {
-          releases += 1;
-          client.release();
-          if (failOn === 'release') throw new Error('release failed');
-        }
-      });
+      const double = fakeDb((text, values) =>
+        text === failOn ? Promise.reject(new Error(`${text} failed`)) : client.query(text, values)
+      );
+      double.release = () => {
+        releases += 1;
+        client.release();
+        if (failOn === 'release') throw new Error('release failed');
+      };
+      return double;
     }
   };
   const jobs = createMediaJobRepository({ pool: faulty });

@@ -8,6 +8,7 @@ import {
   type GateCredentialSigner,
   type GatePrincipalType
 } from '../../apps/api/src/domains/admission/gate-credential-signer.ts';
+import { isRecord } from '../../packages/shared/src/guards.ts';
 
 type Principal = { principalType: GatePrincipalType; principalId: string };
 type PrincipalKey = Principal & { roomId: string };
@@ -117,9 +118,7 @@ function readTopologyEvidence() {
   const compose = fs.readFileSync('docker-compose.yml', 'utf8');
   const lkv = fs.readFileSync('docker-compose.lkv.yml', 'utf8');
   const caddy = fs.readFileSync('Caddyfile', 'utf8');
-  const config = JSON.parse(fs.readFileSync('config/livekit/external-auth-gate.v1.json', 'utf8')) as {
-    publicSignaling?: { fallbackAllowed?: boolean };
-  };
+  const config: unknown = JSON.parse(fs.readFileSync('config/livekit/external-auth-gate.v1.json', 'utf8'));
   const productionGateCommandOk =
     /command:\s*\["node",\s*"apps\/api\/src\/domains\/admission\/livekit-auth-gate\.service\.ts"\]/.test(compose);
   const internalLiveKitDefaultOk = /LIVEKIT_URL:\s*\$\{LIVEKIT_URL:-ws:\/\/livekit:7880\}/.test(compose);
@@ -258,7 +257,9 @@ export async function runAuthGateProof() {
           topology.internalLiveKitDefaultOk &&
           topology.caddyTargetsGate &&
           topology.noProductionHostBind7880 &&
-          topology.config.publicSignaling?.fallbackAllowed === false &&
+          isRecord(topology.config) &&
+          isRecord(topology.config.publicSignaling) &&
+          topology.config.publicSignaling.fallbackAllowed === false &&
           topology.lkvRunnable,
         reason: 'parsed production compose/Caddy/config route public signaling to gate and keep LiveKit 7880 internal'
       },

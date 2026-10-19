@@ -19,6 +19,7 @@ import {
   AVATAR_COLOR_KEYS,
   PRESENCE_STATUSES
 } from '../src/validation.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 test('normalizeRoomId accepts valid ids and trims', () => {
   assert.equal(normalizeRoomId('abc'), 'abc');
@@ -149,7 +150,7 @@ test('avatar color keys are curated tokens only', () => {
   assert.equal(cleanAvatarColorKey('red'), '');
   assert.equal(cleanAvatarColorKey('BLURPLE'), '');
   assert.equal(cleanAvatarColorKey(' blurple '), '');
-  assert.equal(cleanAvatarColorKey(AVATAR_COLOR_KEYS[0]!.toUpperCase()), '');
+  assert.equal(cleanAvatarColorKey(defined(AVATAR_COLOR_KEYS[0], 'the first color key').toUpperCase()), '');
   assert.equal(cleanAvatarColorKey(null), '');
 });
 

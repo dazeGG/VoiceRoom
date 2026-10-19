@@ -14,8 +14,10 @@ afterEach(cleanup);
 
 test('a signed-in visit renders the lobby, and a profile card opens there', async () => {
   const errors: unknown[] = [];
-  const onError = (event: PromiseRejectionEvent | ErrorEvent) =>
-    errors.push('reason' in event ? event.reason : event.error);
+  const onError = (event: PromiseRejectionEvent | ErrorEvent) => {
+    const failure: { reason?: unknown; error?: unknown } = event;
+    errors.push('reason' in event ? failure.reason : failure.error);
+  };
   window.addEventListener('unhandledrejection', onError);
   window.addEventListener('error', onError);
   installFakeWebSocket();

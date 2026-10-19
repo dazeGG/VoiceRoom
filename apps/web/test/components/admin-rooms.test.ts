@@ -9,6 +9,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { LiveRoom, LiveRooms, RoomHistory, RoomStay } from '@voice-room/shared/contracts/admin';
 import AdminPanel from '../../src/lib/features/admin/AdminPanel.svelte';
 import { adminLocationFromPath, adminPath } from '../../src/lib/features/admin/tabs';
+import { instanceOf } from '../helpers/assert.ts';
 
 const MINUTE = 60_000;
 
@@ -119,7 +120,11 @@ test('the tab shows who is in voice now, accounts by login and guests by name, a
   });
   render(AdminPanel, { props: { tab: 'rooms' } });
 
-  const card = (await screen.findByRole('button', { name: 'Кухня' })).closest('li')!;
+  const card = instanceOf(
+    (await screen.findByRole('button', { name: 'Кухня' })).closest('li'),
+    HTMLElement,
+    'room card'
+  );
   const people = within(card).getAllByRole('listitem');
   expect(people).toHaveLength(2);
   expect(within(people[0]).getByText('@alice')).toBeTruthy();

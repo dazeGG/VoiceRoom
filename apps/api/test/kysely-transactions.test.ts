@@ -8,6 +8,7 @@ import { transaction } from '../src/platform/db/pool.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { kyselyOn, withTransaction } from '../src/platform/db/kysely.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { mistyped } from './helpers/mistyped.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const skip = !process.env.TEST_DATABASE_URL;
@@ -77,7 +78,7 @@ test('a failed rollback still reports the error that aborted the transaction', a
       released = true;
     }
   };
-  const pool = { connect: async () => client } as unknown as Parameters<typeof transaction>[0];
+  const pool = mistyped<Parameters<typeof transaction>[0]>({ connect: async () => client });
   await assert.rejects(
     transaction(pool, async () => {
       throw new Error('quota exceeded');

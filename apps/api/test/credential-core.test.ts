@@ -9,23 +9,29 @@ import { createRoomStore } from '../src/app/room-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 
-// Readable credentials: the JSON of the claims instead of a signed token.
+// Readable credentials: the JSON of the claims instead of a signed token;
+// verifying hands back the claims that were signed.
+const signed = new Map<string, GateClaims>();
 const signer: GateCredentialSigner = {
   hash: (value) => `hash-${String(value)}`.padEnd(64, '0').slice(0, 64),
-  sign: (claims = {}) =>
-    JSON.stringify({
-      peer: claims.peerId,
-      pEpoch: claims.principalEpoch,
-      pId: claims.principalId,
-      pType: claims.principalType,
-      room: claims.roomId
-    }),
+  sign: (input = {}) => {
+    const claims: GateClaims = {
+      cid: input.credentialId ?? '',
+      exp: input.expiresAt ?? 0,
+      iat: input.issuedAt ?? 0,
+      peer: input.peerId ?? '',
+      pEpoch: input.principalEpoch ?? 0,
+      pId: input.principalId ?? '',
+      pType: input.principalType === 'guest' ? 'guest' : 'account',
+      room: input.roomId ?? ''
+    };
+    const credential = JSON.stringify(claims);
+    signed.set(credential, claims);
+    return credential;
+  },
   verify: (value) => {
-    try {
-      return { ok: true, claims: JSON.parse(String(value)) as GateClaims };
-    } catch {
-      return { ok: false, code: 'malformed' };
-    }
+    const claims = typeof value === 'string' ? signed.get(value) : undefined;
+    return claims ? { ok: true, claims } : { ok: false, code: 'malformed' };
   }
 };
 

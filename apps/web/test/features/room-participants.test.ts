@@ -13,6 +13,8 @@ import {
 } from '../../src/lib/features/room/client/room/participants.ts';
 import { METER_INTERVAL_MS, startMeters, stopMeters } from '../../src/lib/features/room/client/media/meters.ts';
 import type { Participant } from '../../src/lib/features/room/client/core/types.ts';
+import type { MeterAnalyser } from '../../src/lib/features/room/client/model/participants.ts';
+import { defined } from '../helpers/assert.ts';
 
 beforeEach(() => {
   Object.assign(state, createInitialRoomState());
@@ -26,15 +28,15 @@ afterEach(() => {
 });
 
 /** An analyser whose samples swing by `amplitude` around silence (0..127). */
-function analyser(amplitude: number) {
+function analyser(amplitude: number): MeterAnalyser {
   return {
     frequencyBinCount: 64,
-    getByteTimeDomainData(data: Uint8Array) {
+    getByteTimeDomainData(data) {
       data.forEach((_, index) => {
         data[index] = 128 + (index % 2 === 0 ? amplitude : -amplitude);
       });
     }
-  } as unknown as AnalyserNode;
+  };
 }
 
 function withAnalyser(participant: Participant, amplitude: number): Participant {
@@ -84,14 +86,13 @@ test('a remote voice above the speaking level lights its ring, silence and a mut
 test('the rings are read on a fixed timer, not every display frame', () => {
   withAnalyser(createParticipant({ id: 'loud', name: 'Громкий' }), 60);
   let readings = 0;
-  const peer = state.peers.get('loud')!;
-  const original = peer.analyser!;
+  const peer = defined(state.peers.get('loud'), 'the loud peer');
+  const original = defined(peer.analyser, "the loud peer's analyser");
   peer.analyser = {
-    ...original,
     frequencyBinCount: original.frequencyBinCount,
-    getByteTimeDomainData(data: Uint8Array) {
+    getByteTimeDomainData(data) {
       readings += 1;
-      original.getByteTimeDomainData(data as Uint8Array<ArrayBuffer>);
+      original.getByteTimeDomainData(data);
     }
   };
 

@@ -4,12 +4,15 @@ process.env.ROOM_CHAT_RATE_LIMIT = '0';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type http from 'node:http';
-import type { AddressInfo } from 'node:net';
 import type { FastifyBaseLogger } from 'fastify';
-import type { RoomChat, RoomMessageAnswer } from '@voice-room/shared/contracts/messages';
-import type { RoomCreated, RoomStatus } from '@voice-room/shared/contracts/rooms';
+import { Failure } from '@voice-room/shared/contracts/http';
+import { RoomChat, RoomMessageAnswer } from '@voice-room/shared/contracts/messages';
+import { RoomCreated, RoomStatus } from '@voice-room/shared/contracts/rooms';
+import type { TSchema } from 'typebox';
+import { checked } from './helpers/checked.ts';
+import type { PresencePeer } from '../src/domains/rooms/room-views.ts';
+import { listeningPort } from './helpers/listening-port.ts';
 import { dbRoom, fake, type DbRoom, type Fakes } from './fakes/index.ts';
-import type { ApiBody } from './fakes/server-process.ts';
 
 const { createApiServer } = await import('../src/server.ts');
 const { createApiRuntime } = await import('../src/app/api-runtime.ts');
@@ -67,7 +70,7 @@ function createFakeStore() {
       updatedAt: now
     });
     rooms.set(roomId, room);
-    return { ...room, peers: new Map() };
+    return { ...room, peers: new Map<string, PresencePeer>() };
   };
   return {
     rooms,
@@ -92,7 +95,7 @@ function createFakeStore() {
     },
     async getRoom(roomId) {
       const room = rooms.get(roomId);
-      return room ? { ...room, peers: new Map() } : null;
+      return room ? { ...room, peers: new Map<string, PresencePeer>() } : null;
     },
     async getOrCreatePeerIdentity({ peerId, sessionToken } = { roomId: '', peerId: '', sessionToken: '' }) {
       if (typeof sessionToken === 'string' && sessionToken.startsWith('bad')) {
@@ -131,7 +134,7 @@ function createFakeStore() {
 
 function listen(server: http.Server) {
   return new Promise<number>((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve((server.address() as AddressInfo).port));
+    server.listen(0, '127.0.0.1', () => resolve(listeningPort(server)));
   });
 }
 
@@ -139,9 +142,10 @@ function close(server: http.Server) {
   return new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
 }
 
-async function request<Body = ApiBody>(
+async function request<const Schema extends TSchema>(
   port: number,
   path: string,
+  schema: Schema,
   { method = 'GET', body }: { method?: string; body?: unknown } = {}
 ) {
   const response = await fetch(`http://127.0.0.1:${port}${path}`, {
@@ -149,7 +153,7 @@ async function request<Body = ApiBody>(
     headers: body ? { 'content-type': 'application/json' } : undefined,
     body: body ? JSON.stringify(body) : undefined
   });
-  return { response, json: (await response.json()) as Body & ApiBody };
+  return { response, json: checked(schema, await response.json(), `${method} ${path}`) };
 }
 
 test('server create/chat handlers use async store and reject anonymous link-only chat', async () => {
@@ -157,18 +161,18 @@ test('server create/chat handlers use async store and reject anonymous link-only
   const server = createApiServer({ store });
   const port = await listen(server);
   try {
-    const created = await request<RoomCreated>(port, '/api/rooms', { method: 'POST', body: { isStatic: false } });
+    const created = await request(port, '/api/rooms', RoomCreated, { method: 'POST', body: { isStatic: false } });
     assert.equal(created.response.status, 201);
     assert.equal(created.json.isStatic, false);
 
-    const posted = await request(port, `/api/rooms/${created.json.roomId}/chat`, {
+    const posted = await request(port, `/api/rooms/${created.json.roomId}/chat`, Failure, {
       method: 'POST',
       body: { name: 'Link user', text: 'hello from link' }
     });
     assert.equal(posted.response.status, 403);
     assert.equal(posted.json.error, 'Active room presence or login required');
 
-    const listed = await request<RoomChat>(port, `/api/rooms/${created.json.roomId}/chat`);
+    const listed = await request(port, `/api/rooms/${created.json.roomId}/chat`, RoomChat);
     assert.equal(listed.response.status, 200);
     assert.equal(listed.json.messages.length, 0);
   } finally {
@@ -192,20 +196,20 @@ test('server preserves active voice peer spoof protection and rejects anonymous 
   });
 
   try {
-    const activePost = await request<RoomMessageAnswer>(port, '/api/rooms/room1/chat', {
+    const activePost = await request(port, '/api/rooms/room1/chat', RoomMessageAnswer, {
       method: 'POST',
       body: { peerId: 'peer0001', sessionToken: 'goodtoken12345678901234567890123', name: 'Ada', text: 'from voice' }
     });
     assert.equal(activePost.response.status, 201);
     assert.equal(activePost.json.message.avatarColorKey, 'blurple');
 
-    const spoof = await request(port, '/api/rooms/room1/chat', {
+    const spoof = await request(port, '/api/rooms/room1/chat', Failure, {
       method: 'POST',
       body: { peerId: 'peer0001', sessionToken: 'badtoken123456789012345678901234', name: 'Mallory', text: 'spoof' }
     });
     assert.equal(spoof.response.status, 403);
 
-    const linkOnly = await request(port, '/api/rooms/room1/chat', {
+    const linkOnly = await request(port, '/api/rooms/room1/chat', Failure, {
       method: 'POST',
       body: { name: 'Link user', text: 'allowed' }
     });
@@ -319,7 +323,7 @@ test('server serializes a late empty write before the active write of a concurre
 
     const deadline = Date.now() + 5000;
     while (true) {
-      const status = await request<RoomStatus>(port, '/api/rooms/room-occupancy-race');
+      const status = await request(port, '/api/rooms/room-occupancy-race', RoomStatus);
       if (status.json.peers === 1) break;
       if (Date.now() >= deadline) throw new Error('joining peer was not installed while empty write was pending');
       await new Promise((resolve) => setTimeout(resolve, 10));

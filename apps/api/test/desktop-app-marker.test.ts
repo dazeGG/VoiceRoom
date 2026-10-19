@@ -2,12 +2,14 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { Pool } from 'pg';
-import type { Me, SignedIn } from '@voice-room/shared/contracts/account';
+import { Me, SignedIn } from '@voice-room/shared/contracts/account';
 
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createUserStore } from '../src/app/user-store.ts';
 import { hashSessionToken, publicUser, selfUser } from '../src/domains/account/user-records.ts';
+import { Type } from 'typebox';
 import { createTestDatabase } from './db-harness.ts';
+import { queryRow } from './helpers/checked.ts';
 import { rollBackThrough } from './migration-steps.ts';
 import { storedUser } from './fakes/index.ts';
 import { cookieFrom, request, startApiServer } from './fakes/server-process.ts';
@@ -162,11 +164,13 @@ test('the hourly touch stamps a session that predates the marker, without rewrit
   ]);
   await store.getSessionUser(session.token, Date.now() + 5_000, { userAgent: DESKTOP_APP });
   await waitFor(async () => {
-    const result = await pool.query(
+    const { touched } = await queryRow(
+      pool,
+      Type.Object({ touched: Type.Boolean() }),
       `SELECT last_seen_at > now() - interval '1 hour' AS touched FROM sessions WHERE id = $1`,
       [hashSessionToken(session.token)]
     );
-    return result.rows[0].touched;
+    return touched;
   });
   assert.deepEqual(await metadataOf(pool, user.id), stamped);
 });
@@ -215,23 +219,31 @@ test('self responses carry the flags and the app prompt endpoint records them', 
   const { socketPath } = await startApiServer(t, { prefix: 'voice-room-marker-', env: { AUTH_RATE_LIMIT: '0' } });
   const credentials = { login: 'hedy', password: 'password123', passwordConfirm: 'password123' };
 
-  const registered = await request<SignedIn>(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/register',
-    body: credentials,
-    headers: { 'User-Agent': CHROME }
-  });
+  const registered = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/auth/register',
+      body: credentials,
+      headers: { 'User-Agent': CHROME }
+    },
+    SignedIn
+  );
   const cookie = cookieFrom(registered.setCookie);
   assert.equal(registered.status, 201);
   assert.equal(registered.body.user.hasUsedDesktopApp, false);
   assert.equal(registered.body.user.appPromptSeen, false);
 
-  const fromApp = await request<SignedIn>(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/login',
-    body: { login: credentials.login, password: credentials.password },
-    headers: { 'User-Agent': DESKTOP_APP }
-  });
+  const fromApp = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/auth/login',
+      body: { login: credentials.login, password: credentials.password },
+      headers: { 'User-Agent': DESKTOP_APP }
+    },
+    SignedIn
+  );
   assert.equal(fromApp.status, 200);
   assert.equal(
     fromApp.body.user.hasUsedDesktopApp,
@@ -257,7 +269,7 @@ test('self responses carry the flags and the app prompt endpoint records them', 
     assert.deepEqual(seen.body, { ok: true, appPromptSeen: true });
   }
 
-  const me = await request<Me>(socketPath, { pathname: '/api/auth/me', cookie });
+  const me = await request(socketPath, { pathname: '/api/auth/me', cookie }, Me);
   assert.equal(me.status, 200);
   assert.equal(me.body.user?.hasUsedDesktopApp, true);
   assert.equal(me.body.user.appPromptSeen, true);

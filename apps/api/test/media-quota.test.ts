@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { settleAll } from './helpers/settle.ts';
 import { Pool } from 'pg';
 import test from 'node:test';
 import { runMigrations } from '../src/lib/migrate.ts';
@@ -6,6 +7,7 @@ import { createAttachmentRepository } from '../src/domains/media/attachment.repo
 import { createMediaQuotaRepository, type MediaQuotaRepository } from '../src/domains/media/media-quota.repository.ts';
 import { createMediaQuotaService } from '../src/domains/media/media-quota.service.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { codeOf } from '../src/platform/error-code.ts';
 import { attachment, fakeDb } from './fakes/index.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
@@ -28,22 +30,17 @@ test(
       attachmentRepository: attachments,
       quotaRepository: createMediaQuotaRepository({ attachmentRepository: attachments, pool })
     });
-    const results = await Promise.allSettled(
+    const results = await settleAll(
       Array.from({ length: 9 }, (_, index) =>
         quota.reserve({ ownerId: 'quota-owner', context: 'room', clientRequestId: `request-${index}`, bytes: 1024 })
       )
     );
-    assert.equal(results.filter((item) => item.status === 'fulfilled').length, 8);
-    assert.equal(
-      results.filter(
-        (item) => item.status === 'rejected' && (item.reason as { code?: string }).code === 'media_pending_limit'
-      ).length,
-      1
-    );
+    assert.equal(results.filter((item) => item.ok).length, 8);
+    assert.equal(results.filter((item) => !item.ok && codeOf(item.error) === 'media_pending_limit').length, 1);
     // Which of the nine loses the race is up to the database; retry one that won.
-    const won = results.findIndex((item) => item.status === 'fulfilled');
+    const won = results.findIndex((item) => item.ok);
     const wonResult = results[won];
-    assert.ok(wonResult?.status === 'fulfilled');
+    assert.ok(wonResult?.ok);
     const retried = await quota.reserve({
       ownerId: 'quota-owner',
       context: 'room',

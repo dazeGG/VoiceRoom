@@ -28,6 +28,7 @@ import {
   startCallQuality
 } from '../../src/lib/features/room/client/room/call-quality.ts';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { defined } from '../helpers/assert.ts';
 
 const DAY = 24 * 60 * 60 * 1000;
 const T0 = Date.UTC(2026, 9, 17, 12);
@@ -399,15 +400,15 @@ test('a slow reply for an earlier choice does not replace the latest one', async
   );
   render(CallFeedbackReview);
   await vi.waitFor(() => expect(replies.has('/api/admin/feedback?days=30')).toBe(true));
-  replies.get('/api/admin/feedback?days=30')!(page);
+  defined(replies.get('/api/admin/feedback?days=30'), 'month reply')(page);
   expect(await screen.findByText('75%')).toBeTruthy();
 
   await userEvent.click(screen.getByRole('radio', { name: 'Год' }));
   await userEvent.click(screen.getByRole('radio', { name: '7 дней' }));
   const week = { ...page, days: 7, summary: { good: 1, bad: 1, tags: [] }, entries: [] };
-  replies.get('/api/admin/feedback?days=7')!(week);
+  defined(replies.get('/api/admin/feedback?days=7'), 'week reply')(week);
   expect(await screen.findByText('50%')).toBeTruthy();
-  replies.get('/api/admin/feedback?days=365')!(page);
+  defined(replies.get('/api/admin/feedback?days=365'), 'year reply')(page);
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(screen.getByText('50%')).toBeTruthy();
   expect(screen.queryByText('75%')).toBeNull();

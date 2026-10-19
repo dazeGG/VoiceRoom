@@ -127,14 +127,15 @@ test('message edit rate limits run after ownership and before storage or realtim
   };
 
   const app = createApiApp({ store: roomStore, friends: friendStore, users: userStore });
-  let realtime: Awaited<ReturnType<typeof injectWs>> | undefined;
+  const sockets: Array<Awaited<ReturnType<typeof injectWs>>> = [];
   t.after(async () => {
-    realtime?.ws.terminate();
+    for (const socket of sockets) socket.ws.terminate();
     await app.close();
   });
   await app.ready();
 
-  realtime = await injectWs(app, { cookie: 'vr_session=author-session' });
+  const realtime = await injectWs(app, { cookie: 'vr_session=author-session' });
+  sockets.push(realtime);
   sendWs(realtime.ws, 'room.preview.subscribe', { roomId: ROOM_ID });
   await waitForWsType(realtime.frames, 'room.snapshot', (frame) => frame.payload.roomId === ROOM_ID, 1000);
 

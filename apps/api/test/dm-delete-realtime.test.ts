@@ -42,17 +42,16 @@ test('DM delete realtime identifies the counterpart separately for sender and re
     }
   });
 
-  let sender: Awaited<ReturnType<typeof injectWs>> | undefined;
-  let recipient: Awaited<ReturnType<typeof injectWs>> | undefined;
+  const sockets: Array<Awaited<ReturnType<typeof injectWs>>> = [];
   t.after(async () => {
-    sender?.ws.terminate();
-    recipient?.ws.terminate();
+    for (const socket of sockets) socket.ws.terminate();
     await app.close();
   });
   await app.ready();
 
-  sender = await injectWs(app, { cookie: 'vr_session=sender-session', remoteAddress: '127.0.0.1' });
-  recipient = await injectWs(app, { cookie: 'vr_session=recipient-session', remoteAddress: '127.0.0.2' });
+  const sender = await injectWs(app, { cookie: 'vr_session=sender-session', remoteAddress: '127.0.0.1' });
+  const recipient = await injectWs(app, { cookie: 'vr_session=recipient-session', remoteAddress: '127.0.0.2' });
+  sockets.push(sender, recipient);
 
   const response = await app.inject({
     method: 'DELETE',

@@ -6,6 +6,7 @@ import { Pool } from 'pg';
 import { readDatabaseConfig } from '../src/lib/config.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createDbPool } from '../src/platform/db/pool.ts';
+import { codeOf } from '../src/platform/error-code.ts';
 
 const MIGRATIONS_DIR = path.resolve(import.meta.dirname, '../src/migrations');
 const TEMPLATE_PREFIX = 'voice_room_test_template_';
@@ -72,8 +73,8 @@ function templateName() {
 }
 
 async function databaseExists(admin: Pool, name: string) {
-  const { rows } = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [name]);
-  return rows.length > 0;
+  const { rowCount } = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [name]);
+  return (rowCount ?? 0) > 0;
 }
 
 let template: Promise<string> | undefined;
@@ -92,7 +93,7 @@ async function buildTemplate(admin: Pool, baseUrl: string) {
     await admin.query(`ALTER DATABASE ${quoteIdent(scratch)} RENAME TO ${quoteIdent(name)}`);
   } catch (error) {
     await admin.query(`DROP DATABASE IF EXISTS ${quoteIdent(scratch)}`);
-    if ((error as { code?: string }).code !== '42P04') throw error;
+    if (codeOf(error) !== '42P04') throw error;
     return name;
   }
   // Templates of older migration sets are of no further use.

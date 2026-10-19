@@ -54,16 +54,18 @@ async function fire(type: string, event: Record<string, unknown>): Promise<void>
   await done;
 }
 
+// NotificationOptions types its data as any; read it as unknown.
+const dataOf = (options: { data?: unknown }): unknown => options.data;
+
 const push = (payload: unknown) => fire('push', { data: { json: () => payload, text: () => '' } });
 
 test('a push is shown while no window is in front, and suppressed for a focused visible one', async () => {
   windows = [fakeWindow({ visibilityState: 'visible', focused: false })];
   await push({ title: 'Ада', body: 'привет', url: '/?dm=ada', tag: 'dm:ada' });
-  const [title, options] = showNotification.mock.calls[0] as [
-    string,
-    Omit<NotificationOptions, 'data'> & { data: { url: string } }
-  ];
-  expect([title, options.body, options.tag, options.data.url]).toEqual(['Ада', 'привет', 'dm:ada', '/?dm=ada']);
+  const [title, options] = showNotification.mock.calls[0];
+  const data = dataOf(options);
+  expect([title, options.body, options.tag]).toEqual(['Ада', 'привет', 'dm:ada']);
+  expect(data).toHaveProperty('url', '/?dm=ada');
 
   showNotification.mockClear();
   windows = [fakeWindow({ visibilityState: 'visible', focused: true })];
@@ -101,7 +103,8 @@ test('a mention push from the API opens its room and message when clicked', asyn
     body: '@ada hi'
   });
   await push(JSON.parse(JSON.stringify(payload)));
-  const shown: unknown = showNotification.mock.lastCall?.[1]?.data;
+  const shownOptions: { data?: unknown } | undefined = showNotification.mock.lastCall?.[1];
+  const shown = shownOptions?.data;
 
   const open = fakeWindow();
   windows = [open];

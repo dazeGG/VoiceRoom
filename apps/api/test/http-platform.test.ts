@@ -11,6 +11,7 @@ import { liveKitConnectSources, securityHeaders } from '../src/platform/http/sec
 import { createRequestLog, requestRouteLabel } from '../src/platform/http/request-log.ts';
 import { installGracefulShutdown } from '../src/app/graceful-shutdown.ts';
 import { recordingLogger } from './fakes/index.ts';
+import { mistyped } from './helpers/mistyped.ts';
 
 test('LiveKit connect sources treat localhost and 127.0.0.1 as one host', () => {
   assert.deepEqual(liveKitConnectSources(''), []);
@@ -40,18 +41,18 @@ test('the request line is levelled by status, skips health checks and hashes the
   const logRequest = createRequestLog({ clientIp: () => '203.0.113.9', hashIp: (ip) => `hash(${ip})` });
   // Just the request fields the log line reads.
   const request = (url: string, extra = {}) =>
-    ({
+    mistyped<FastifyRequest>({
       method: 'GET',
       routeOptions: { url },
       raw: { voiceRoomUserId: 'u1' },
       log,
       ...extra
-    }) as unknown as FastifyRequest;
+    });
   logRequest(request('/api/healthz'), 200, 1);
   logRequest(request('/api/rooms'), 200, 1.234);
   logRequest(request('/api/rooms'), 404, 2);
   logRequest(request('/api/rooms'), 503, 3);
-  logRequest({ method: 'GET', url: '/raw', log } as unknown as FastifyRequest, 200, 1);
+  logRequest(mistyped({ method: 'GET', url: '/raw', log }), 200, 1);
   assert.deepEqual(
     lines.map(({ level }) => level),
     ['info', 'warn', 'error', 'info']
@@ -67,7 +68,7 @@ test('the request line is levelled by status, skips health checks and hashes the
     durationMs: 1.23
   });
   assert.equal(lines[3]?.userId, undefined);
-  logRequest({ method: 'GET', url: '/nolog' } as unknown as FastifyRequest, 200, 1);
+  logRequest(mistyped({ method: 'GET', url: '/nolog' }), 200, 1);
   assert.equal(requestRouteLabel({}), 'unknown');
   assert.equal(requestRouteLabel({ routerPath: '/legacy' }), '/legacy');
 });
@@ -104,7 +105,7 @@ function shutdownHarness({ closeFails = false, hang = false } = {}) {
     },
     exit: (code: number) => calls.exits.push(code),
     timeoutMs: 20,
-    signals: signals as unknown as Pick<NodeJS.Process, 'once'>
+    signals: signals
   });
   const events = () => logger.records.map((record) => record.evt);
   return { calls, events, shutdown, signals };

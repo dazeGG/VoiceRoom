@@ -6,6 +6,7 @@ import path from 'node:path';
 import { once } from 'node:events';
 
 import { createAvatarStorage, validateAvatarKey } from '../src/lib/avatar-storage.ts';
+import { mistyped } from './helpers/mistyped.ts';
 
 const USER_KEY = 'av_123e4567-e89b-12d3-a456-426614174000_deadbeef.webp';
 const ROOM_KEY = 'room_abcdefghij_0123abcd.webp';
@@ -81,5 +82,8 @@ test('avatar storage requires Buffer contents', async (t) => {
   const uploadsDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'avatar-storage-'));
   t.after(() => fs.promises.rm(uploadsDir, { recursive: true, force: true }));
 
-  await assert.rejects(createAvatarStorage({ uploadsDir }).save(USER_KEY, 'not-a-buffer' as never), /must be a Buffer/);
+  await assert.rejects(
+    createAvatarStorage({ uploadsDir }).save(USER_KEY, mistyped<Buffer>('not-a-buffer')),
+    /must be a Buffer/
+  );
 });

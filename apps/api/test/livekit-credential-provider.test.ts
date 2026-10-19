@@ -1,12 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { Type } from 'typebox';
 import { createLiveKitCredentialProvider } from '../src/domains/admission/livekit-credential-provider.ts';
+import { checked } from './helpers/checked.ts';
+import { mistyped } from './helpers/mistyped.ts';
 
 type AdmissionInput = NonNullable<Parameters<ReturnType<typeof createLiveKitCredentialProvider>['issueAdmission']>[0]>;
 
-function jwtPayload(token: string): { video: { canPublishSources: string[] } } {
-  return JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8'));
+const JwtPayload = Type.Object({ video: Type.Object({ canPublishSources: Type.Array(Type.String()) }) });
+
+function jwtPayload(token: string) {
+  return checked(
+    JwtPayload,
+    JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8')),
+    'the token payload'
+  );
 }
 
 function issued(id: string, value: string) {
@@ -50,7 +59,7 @@ test('livekit credential provider rejects missing admission input without issuin
 
 test('livekit credential provider requires an issuing boundary', () => {
   assert.throws(() => createLiveKitCredentialProvider(), /credential boundary is required/);
-  assert.throws(() => createLiveKitCredentialProvider({ boundary: {} as never }), /credential boundary is required/);
+  assert.throws(() => createLiveKitCredentialProvider({ boundary: mistyped({}) }), /credential boundary is required/);
 });
 
 test('livekit credential provider preserves boundary refusal without minting a LiveKit token', async () => {

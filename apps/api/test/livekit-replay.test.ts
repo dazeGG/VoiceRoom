@@ -3,6 +3,13 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { Type } from 'typebox';
+import { checked } from './helpers/checked.ts';
+
+const ReplayReport = Type.Object({
+  goal: Type.String(),
+  cases: Type.Array(Type.Object({ tokenId: Type.Unknown() }))
+});
 
 const repositoryRoot = path.resolve(import.meta.dirname, '../../..');
 
@@ -62,8 +69,8 @@ test('G04 replay scenario CLI emits deterministic JSON', () => {
     encoding: 'utf8'
   });
   assert.equal(result.status, 0, result.stderr);
-  const report = JSON.parse(result.stdout);
+  const report = checked(ReplayReport, JSON.parse(result.stdout), 'replay report');
   assert.equal(report.goal, 'G04');
   assert.equal(report.cases.length, 6);
-  assert.equal(new Set(report.cases.map((entry: { tokenId: unknown }) => entry.tokenId)).size, 1);
+  assert.equal(new Set(report.cases.map((entry) => entry.tokenId)).size, 1);
 });

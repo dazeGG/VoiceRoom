@@ -2,11 +2,14 @@ process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 process.env.LIVEKIT_GATE_SECRET = 'g48-test-livekit-gate-secret-at-least-32-bytes';
 
 import assert from 'node:assert/strict';
+import type { PresencePeer } from '../src/domains/rooms/room-views.ts';
 import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { Pool } from 'pg';
 import { test } from 'node:test';
+import { Type } from 'typebox';
+import { checked } from './helpers/checked.ts';
 import type { CredentialProvider } from '../src/domains/admission/admission.service.ts';
 import type {
   CredentialIssue,
@@ -165,10 +168,11 @@ test(
     // The gate also binds the LiveKit JWT to the credential; mint a matching unsigned
     // one from the credential's own claims (LiveKit, not the gate, checks signatures).
     const accessTokenFor = (credential: string) => {
-      const claims = JSON.parse(Buffer.from(credential.split('.')[1] || '', 'base64url').toString('utf8') || '{}') as {
-        peer?: string;
-        room?: string;
-      };
+      const claims = checked(
+        Type.Object({ peer: Type.Optional(Type.String()), room: Type.Optional(Type.String()) }),
+        JSON.parse(Buffer.from(credential.split('.')[1] || '', 'base64url').toString('utf8') || '{}'),
+        'credential claims'
+      );
       const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
       return `${encode({ alg: 'HS256' })}.${encode({ sub: claims.peer, nbf: Math.floor(Date.now() / 1000), video: { room: `voice-room-${claims.room}` } })}.signature`;
     };
@@ -176,7 +180,9 @@ test(
       let token = '';
       try {
         token = accessTokenFor(credential);
-      } catch {}
+      } catch {
+        // A credential the gate cannot read keeps the empty token.
+      }
       return `/rtc?access_token=${token}&vr_gate_credential=${encodeURIComponent(credential)}`;
     };
     assert.match(await upgrade(gatePort, pathFor(tabA)), /^HTTP\/1\.1 101/);
@@ -311,7 +317,7 @@ test('G48-A03 issued credential fails closed when membership persistence and rev
         createdAt: now,
         updatedAt: now,
         emptySince: now,
-        peers: new Map()
+        peers: new Map<string, PresencePeer>()
       };
       rooms.set(roomId, room);
       return room;

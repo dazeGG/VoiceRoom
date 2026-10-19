@@ -2,10 +2,11 @@ import { cleanup, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import RoomChatPanel from '../../src/lib/features/room/components/RoomChatPanel.svelte';
-import type { RoomMessage } from '@voice-room/shared/contracts/messages';
+import { PostRoomMessageBody, type RoomMessage } from '@voice-room/shared/contracts/messages';
 import { stubFetch, type Reply } from '../fixtures/fetch.ts';
 import { installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';
+import { defined, instanceOf, parse } from '../helpers/assert.ts';
 import { session } from '../../src/lib/features/auth/session.svelte';
 
 const NOW = Date.now();
@@ -79,8 +80,8 @@ test('ArrowUp in an empty composer edits the latest own message and saves it as 
   await userEvent.keyboard('{ArrowUp}');
   expect(editor()?.textContent).toBe('последнее моё');
 
-  await userEvent.clear(editor()!);
-  await userEvent.type(editor()!, 'исправлено{Enter}');
+  await userEvent.clear(defined(editor(), 'editor'));
+  await userEvent.type(defined(editor(), 'editor'), 'исправлено{Enter}');
   expect(await screen.findByText('исправлено')).toBeTruthy();
   expect(editor()).toBeNull();
   expect(calls.find((call) => call.method === 'PATCH')?.body).toEqual({
@@ -101,7 +102,7 @@ test('a refused edit keeps the editor open and says why', async () => {
 });
 
 async function menuLabels(text: string): Promise<string[]> {
-  const row = screen.getByText(text).closest<HTMLElement>('[data-message-id]')!;
+  const row = instanceOf(screen.getByText(text).closest('[data-message-id]'), HTMLElement, 'message row');
   await userEvent.pointer({ keys: '[MouseRight]', target: row });
   const menu = await screen.findByRole('menu');
   const labels = within(menu)
@@ -153,8 +154,8 @@ test('a failed message stays in the chat with its error and goes out again, as t
   await vi.waitFor(() => expect(document.querySelector('.outgoing-message')).toBeNull());
   const posts = calls.filter((call) => call.method === 'POST' && call.url === '/api/rooms/room/chat');
   expect(posts[1]?.body).toMatchObject({ name: 'Я', peerId: 'me', sessionToken: 'token', text: 'привет всем' });
-  expect((posts[0]?.body as { idempotencyKey: string }).idempotencyKey).toBe(
-    (posts[1]?.body as { idempotencyKey: string }).idempotencyKey
+  expect(parse(PostRoomMessageBody, posts[0]?.body).idempotencyKey).toBe(
+    parse(PostRoomMessageBody, posts[1]?.body).idempotencyKey
   );
 });
 
@@ -186,7 +187,8 @@ test('messages sent while one is on its way show dimmed and go out in order; a f
   const { calls } = stubRoom({
     'POST /api/rooms/room/chat': (init) => {
       if (fail) return { status: 500, body: { ok: false, error: 'Сервер недоступен' } };
-      const { text } = JSON.parse(init?.body as string) as { text: string };
+      const posted: unknown = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
+      const text = defined(parse(PostRoomMessageBody, posted).text, 'posted text');
       return { body: { ok: true, message: roomMessage(`sent-${text}`, 'me', text) } };
     }
   });
@@ -202,7 +204,7 @@ test('messages sent while one is on its way show dimmed and go out in order; a f
   });
   const releaseNext = async () => {
     await vi.waitFor(() => expect(waiting.length).toBeGreaterThan(0));
-    waiting.shift()!();
+    defined(waiting.shift(), 'a waiting post')();
   };
   renderPanel();
   await screen.findByText('от Ады');
@@ -224,7 +226,7 @@ test('messages sent while one is on its way show dimmed and go out in order; a f
   const texts = () =>
     calls
       .filter((call) => call.method === 'POST' && call.url === '/api/rooms/room/chat')
-      .map((call) => (call.body as { text: string }).text);
+      .map((call) => parse(PostRoomMessageBody, call.body).text);
   expect(texts()).toEqual(['первое', 'второе']);
 
   fail = true;
@@ -301,7 +303,7 @@ test('a reader at the newest message stays on it when loading artwork grows the 
   stubRoom();
   renderPanel();
   await screen.findByText('от Ады');
-  const body = document.querySelector<HTMLElement>('.chat-rail-body')!;
+  const body = instanceOf(document.querySelector('.chat-rail-body'), HTMLElement, 'chat body');
   expect(observed).toContain(body);
   expect(observed.some((element) => element.classList.contains('chat-day-section'))).toBe(true);
 

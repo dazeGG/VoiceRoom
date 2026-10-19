@@ -4,7 +4,6 @@
 // drop it) fails the test that received it.
 
 import net from 'node:net';
-import type { IncomingMessage } from 'node:http';
 import type { FastifyInstance } from 'fastify';
 import WebSocket from 'ws';
 import type { ClientCommands, ClientCommandType, ServerFrame } from '@voice-room/shared/contracts/realtime';
@@ -71,9 +70,8 @@ function waitForWsType<Type extends FrameType>(
   const started = Date.now();
   return new Promise((resolve, reject) => {
     const check = () => {
-      const found = frames
-        .slice(sinceIndex)
-        .find((frame): frame is FrameOf<Type> => frame.type === type && predicate(frame as FrameOf<Type>));
+      const ofType = (frame: ServerFrame): frame is FrameOf<Type> => frame.type === type;
+      const found = frames.slice(sinceIndex).filter(ofType).find(predicate);
       if (found) {
         resolve(found);
         return;
@@ -134,6 +132,13 @@ function subscribeRoomPreview(
  * A socket to an in-process app (Fastify injectWS, no listening server),
  * signed in with `cookie`; resolves once the server's ready frame arrived.
  */
+// A socket that only answers its address, the one field injectWS reads.
+function socketFrom(remoteAddress: string): net.Socket {
+  const socket = new net.Socket();
+  Object.defineProperty(socket, 'remoteAddress', { value: remoteAddress });
+  return socket;
+}
+
 async function injectWs(
   app: FastifyInstance,
   { cookie, remoteAddress = '127.0.0.1' }: { cookie?: string; remoteAddress?: string } = {}
@@ -142,7 +147,7 @@ async function injectWs(
   const ws = await app.injectWS(
     '/api/ws',
     // injectWS reads only the address from the socket it is handed.
-    { headers: cookie ? { cookie } : {}, socket: { remoteAddress } as IncomingMessage['socket'] },
+    { headers: cookie ? { cookie } : {}, socket: socketFrom(remoteAddress) },
     {
       onInit(socket: WebSocket) {
         socket.on('message', (raw: WebSocket.RawData) => frames.push(parseFrame(raw)));

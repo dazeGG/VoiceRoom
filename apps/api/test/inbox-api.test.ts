@@ -3,7 +3,9 @@ import { Pool } from 'pg';
 import test from 'node:test';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createInboxRepository } from '../src/domains/notifications/inbox.repository.ts';
+import { Type } from 'typebox';
 import { createTestDatabase } from './db-harness.ts';
+import { DateColumn, queryRow } from './helpers/checked.ts';
 
 const sorted = (...revisions: unknown[]) => revisions.map(Number).sort((a, b) => a - b);
 
@@ -26,14 +28,15 @@ test(
       `INSERT INTO users(id,login,display_name,password_hash) VALUES ('actor','actor','Actor','x'),('recipient','recipient','Recipient','x'),('other','other','Other','x');INSERT INTO rooms(id,creator_ip) VALUES ('room','');INSERT INTO room_messages(id,room_id,text,created_at) SELECT 'm'||lpad(gs::text,63,'0'),'room','body',current_timestamp+(gs*interval '1 microsecond') FROM generate_series(1,100000) gs;INSERT INTO user_notifications(id,recipient_user_id,actor_user_id,room_id,source_message_id,reasons,revision,created_at,updated_at) SELECT 'n'||lpad(gs::text,35,'0'),'recipient','actor','room','m'||lpad(gs::text,63,'0'),ARRAY['mention'],gs,current_timestamp+(gs*interval '1 microsecond'),current_timestamp FROM generate_series(1,100000) gs`
     );
     const repo = createInboxRepository({ pool });
-    const before = (await pool.query(`SELECT max(updated_at) value FROM user_notifications`)).rows[0].value;
+    const LatestUpdate = Type.Object({ value: DateColumn });
+    const before = (await queryRow(pool, LatestUpdate, `SELECT max(updated_at) value FROM user_notifications`)).value;
     const started = Date.now();
     const page = await repo.list({ recipientUserId: 'recipient', limit: 100 });
     assert.equal(page.length, 101);
     assert.ok(Date.now() - started < 750);
     assert.equal((await repo.list({ recipientUserId: 'other', limit: 100 })).length, 0);
-    const after = (await pool.query(`SELECT max(updated_at) value FROM user_notifications`)).rows[0].value;
-    assert.equal(new Date(after).getTime(), new Date(before).getTime());
+    const after = (await queryRow(pool, LatestUpdate, `SELECT max(updated_at) value FROM user_notifications`)).value;
+    assert.equal(after.getTime(), before.getTime());
   }
 );
 test(

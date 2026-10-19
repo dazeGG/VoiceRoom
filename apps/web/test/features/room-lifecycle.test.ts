@@ -3,6 +3,7 @@
 // for the room this client is in.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { lobbyRoom } from '../fixtures/answers.ts';
 
 const showRoomNotFound = vi.fn();
 const refreshRoomHeading = vi.fn();
@@ -54,7 +55,7 @@ test('frames about another room are ignored', async () => {
   const room = await load();
   room.applyRoomDeleted('room-b');
   room.applyRoomNotFound('room-b');
-  room.applyRoomUpdated({ roomId: 'room-b', name: 'Other', avatarUrl: null, isStatic: true } as never);
+  room.applyRoomUpdated(lobbyRoom({ roomId: 'room-b', name: 'Other', avatarUrl: null, isStatic: true }));
   await settle();
   expect(showRoomNotFound).not.toHaveBeenCalled();
   expect(room.state.roomName).not.toBe('Other');
@@ -74,7 +75,7 @@ test('a missing room shows the not-found screen unless it is already shown', asy
 
 test('a room update renames the room and refreshes the heading while the room is on screen', async () => {
   const room = await load();
-  room.applyRoomUpdated({ roomId: 'room-a', name: 'Планёрка', avatarUrl: '/a.webp', isStatic: true } as never);
+  room.applyRoomUpdated(lobbyRoom({ roomId: 'room-a', name: 'Планёрка', avatarUrl: '/a.webp', isStatic: true }));
   await settle();
   expect(room.state).toMatchObject({ roomName: 'Планёрка', roomAvatarUrl: '/a.webp', roomIsStatic: true });
   expect(refreshRoomHeading).toHaveBeenCalledTimes(1);

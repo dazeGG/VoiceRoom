@@ -1,6 +1,6 @@
 import test from 'node:test';
 import type { StoredRoom } from '../src/domains/rooms/room-views.ts';
-import { lobbyRoom } from './fakes/index.ts';
+import { dbRoom, lobbyRoom } from './fakes/index.ts';
 import assert from 'node:assert/strict';
 import { buildRoomRealtimeSummaryFromLobbyRoom } from '../src/realtime/summary.ts';
 import { createRoomRealtimeRuntime } from '../src/realtime/room-runtime.ts';
@@ -34,11 +34,10 @@ test('buildRoomRealtimeSummaryFromLobbyRoom mirrors shared summary rules', () =>
 
 test('chat messages schedule personalized unread summaries for room recipients', async () => {
   const sent: Array<{ userId: string; unreadCount: unknown }> = [];
-  const room: StoredRoom = { id: 'room1', createdAt: 0, isStatic: true, name: 'Test room', relationship: 'owner' };
   const runtime = createRoomRealtimeRuntime(
     runtimeDeps({
       store: {
-        getRoom: async () => room as never,
+        getRoom: async () => dbRoom('room1', { createdAt: 0, name: 'Test room' }),
         async getRoomUnreadCount(_roomId, userId) {
           return userId === 'owner' ? 2 : 5;
         },

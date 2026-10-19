@@ -5,7 +5,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fastify from 'fastify';
-import type pg from 'pg';
 
 import type { Failure } from '@voice-room/shared/contracts/http';
 import type { InboxItemRead, InboxPage } from '@voice-room/shared/contracts/notifications';
@@ -14,7 +13,7 @@ import type { InboxNotification, InboxRepository } from '../src/domains/notifica
 import { createNotificationService } from '../src/domains/notifications/notification.service.ts';
 import { registerNotificationRoutes } from '../src/domains/notifications/notifications.routes.ts';
 import { AJV_OPTIONS, registerHttpKit } from '../src/platform/http/http-kit.ts';
-import { fake, storedUser } from './fakes/index.ts';
+import { fake, fakeDb, storedUser } from './fakes/index.ts';
 
 const CREATED = new Date('2026-09-01T10:00:00.000Z');
 const READ = new Date('2026-09-01T11:00:00.000Z');
@@ -44,7 +43,7 @@ function inboxApp(t: TestContext, { signedIn = true }: { signedIn?: boolean } = 
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
   const levels = new Map<string, 'all' | 'mentions' | 'none'>();
   const notifications = createNotificationService({
-    pool: fake<pg.Pool>({ query: (async () => ({ rows: [] })) as unknown as pg.Pool['query'] }),
+    pool: fakeDb(),
     inbox: fake<InboxRepository>({
       async list() {
         return [row(), row({ id: 'n-2', retractedAt: READ, body: 'gone' })];

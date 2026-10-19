@@ -21,6 +21,10 @@ import type { ApiContext } from '../src/app/context.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { fake, lobbyRoom, recordingLogger, storedUser, storedRoom } from './fakes/index.ts';
 import { selfUser } from '../src/domains/account/user-records.ts';
+import type { LiveRoom } from '../src/domains/rooms/room-views.ts';
+import { fieldOf } from '../src/platform/record.ts';
+import { mistyped } from './helpers/mistyped.ts';
+import { recordingService, type Answers } from './helpers/recording-service.ts';
 
 const OWNER = selfUser(storedUser({ id: 'owner-1' }));
 const ROOM_CARD = lobbyRoom('room-1');
@@ -66,11 +70,11 @@ function harness({
   readError?: Error | 'sync' | null;
 } = {}) {
   const calls = {
-    saved: [] as string[],
-    removed: [] as string[],
-    refreshed: [] as string[],
-    friends: [] as string[],
-    announced: [] as string[]
+    saved: new Array<string>(),
+    removed: new Array<string>(),
+    refreshed: new Array<string>(),
+    friends: new Array<string>(),
+    announced: new Array<string>()
   };
   const storage: AvatarStorage = {
     async save(key) {
@@ -118,7 +122,7 @@ function harness({
 // The avatar URL of an account update the test expects to succeed.
 function avatarUrlOf(result: Awaited<ReturnType<AvatarsService['setUserAvatar']>>) {
   assert.ok('user' in result);
-  const { avatarUrl } = result.user as { avatarUrl?: string };
+  const { avatarUrl } = result.user;
   assert.ok(avatarUrl);
   return avatarUrl;
 }
@@ -229,7 +233,7 @@ type RouteOptions = {
 
 function routeApp(
   t: TestContext,
-  outcomes: Record<string, unknown> = {},
+  outcomes: Answers<AvatarsService> = {},
   {
     user = { id: 'owner-1' },
     room = { id: 'room-1', ownerId: 'owner-1', isStatic: true },
@@ -239,13 +243,13 @@ function routeApp(
   const app = fastify();
   void app.register(fastifyMultipart, { limits: { fileSize: 10 * 1024 * 1024, files: 1, parts: 2 } });
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
-  const seen: Record<string, unknown[]> = {};
-  const record =
-    (name: string, value: unknown) =>
-    async (...args: unknown[]) => {
-      seen[name] = args;
-      return outcomes[name] ?? value;
-    };
+  const { service, seen } = recordingService<AvatarsService>({
+    setUserAvatar: { status: 'updated', user: OWNER },
+    clearUserAvatar: { status: 'updated', user: OWNER },
+    setRoomAvatar: { status: 'updated', room: ROOM_CARD },
+    clearRoomAvatar: { status: 'updated', room: ROOM_CARD },
+    ...outcomes
+  });
   registerAvatarRoutes(
     app,
     {
@@ -256,19 +260,17 @@ function routeApp(
     },
     {
       avatars: fake<AvatarsService>({
-        setUserAvatar: record('setUserAvatar', { status: 'updated', user: OWNER }),
-        clearUserAvatar: record('clearUserAvatar', { status: 'updated', user: OWNER }),
-        setRoomAvatar: record('setRoomAvatar', { status: 'updated', room: ROOM_CARD }),
-        clearRoomAvatar: record('clearRoomAvatar', { status: 'updated', room: ROOM_CARD }),
+        ...service,
         openAvatar: async (key: string) => (key === 'missing' ? null : Readable.from(['img'])),
         openLinkPreviewImage: async (key: string) => (key === 'missing' ? null : Readable.from(['img'])),
         removeFile: async () => {}
-      } as Partial<Record<keyof AvatarsService, unknown>> as Partial<AvatarsService>),
+      }),
       rooms: fake<RoomsService>({
         async checkOwner(userId, roomId) {
           if (!userId) return { status: 'unauthenticated' };
           if (!room || room.id !== roomId) return { status: 'not_found' };
-          return room.ownerId === userId ? { status: 'owner', room: room as never } : { status: 'forbidden' };
+          const live: LiveRoom = { ...storedRoom(room), peers: new Map(), updatedAt: 1 };
+          return room.ownerId === userId ? { status: 'owner', room: live } : { status: 'forbidden' };
         }
       }),
       uploadLimiter: { check: () => (limited ? { allowed: false, retryAfterSeconds: 8 } : { allowed: true }) }
@@ -278,7 +280,7 @@ function routeApp(
   return { app, seen };
 }
 
-type Answer = { status: number; body: { error?: string } & Record<string, unknown>; headers: Record<string, unknown> };
+type Answer = { status: number; body: unknown; error: unknown; headers: Record<string, unknown> };
 
 async function call(
   app: FastifyInstance,
@@ -287,13 +289,13 @@ async function call(
   extra: Partial<InjectOptions> = {}
 ): Promise<Answer> {
   const response = await app.inject({ method, url, ...extra });
-  let body: unknown = null;
+  let body: unknown;
   try {
     body = response.json();
   } catch {
     body = response.body;
   }
-  return { status: response.statusCode, body: body as Answer['body'], headers: response.headers };
+  return { status: response.statusCode, body, error: fieldOf(body, 'error'), headers: response.headers };
 }
 
 test('uploads read the avatar field and answer the service outcome', async (t) => {
@@ -312,9 +314,9 @@ test('uploads read the avatar field and answer the service outcome', async (t) =
   });
 
   const wrongField = await call(app, 'POST', '/api/auth/avatar', multipart('picture', PNG));
-  assert.deepEqual([wrongField.status, wrongField.body.error], [400, 'Multipart field "avatar" is required']);
+  assert.deepEqual([wrongField.status, wrongField.error], [400, 'Multipart field "avatar" is required']);
   const tooBig = await call(app, 'POST', '/api/auth/avatar', multipart('avatar', Buffer.alloc(5 * 1024 * 1024 + 10)));
-  assert.deepEqual([tooBig.status, tooBig.body.error], [413, 'Avatar file must be at most 5 MB']);
+  assert.deepEqual([tooBig.status, tooBig.error], [413, 'Avatar file must be at most 5 MB']);
   const notMultipart = await call(app, 'POST', '/api/auth/avatar', { payload: {} });
   assert.equal(notMultipart.status >= 400, true);
 });
@@ -340,27 +342,24 @@ test('avatar refusals: session, owner, limit and vanished targets', async (t) =>
   for (const url of ['/api/auth/avatar', '/api/rooms/room-1/avatar']) {
     const limited = await call(routeApp(t, {}, { limited: true }).app, 'POST', url, multipart('avatar', PNG));
     assert.deepEqual(
-      [limited.status, limited.headers['retry-after'], limited.body.error],
+      [limited.status, limited.headers['retry-after'], limited.error],
       [429, '8', 'Слишком много загрузок, попробуйте позже']
     );
   }
-  const gone = { status: 'not_found' };
+  const gone = { status: 'not_found' } as const;
   const app = routeApp(t, {
     setUserAvatar: gone,
     clearUserAvatar: gone,
     setRoomAvatar: gone,
     clearRoomAvatar: gone
   }).app;
+  assert.deepEqual((await call(app, 'POST', '/api/auth/avatar', multipart('avatar', PNG))).error, 'Аккаунт не найден');
+  assert.deepEqual((await call(app, 'DELETE', '/api/auth/avatar')).error, 'Аккаунт не найден');
   assert.deepEqual(
-    (await call(app, 'POST', '/api/auth/avatar', multipart('avatar', PNG))).body.error,
-    'Аккаунт не найден'
-  );
-  assert.deepEqual((await call(app, 'DELETE', '/api/auth/avatar')).body.error, 'Аккаунт не найден');
-  assert.deepEqual(
-    (await call(app, 'POST', '/api/rooms/room-1/avatar', multipart('avatar', PNG))).body.error,
+    (await call(app, 'POST', '/api/rooms/room-1/avatar', multipart('avatar', PNG))).error,
     'Комната не найдена'
   );
-  assert.deepEqual((await call(app, 'DELETE', '/api/rooms/room-1/avatar')).body.error, 'Комната не найдена');
+  assert.deepEqual((await call(app, 'DELETE', '/api/rooms/room-1/avatar')).error, 'Комната не найдена');
 });
 
 test('served images are immutable WebP; missing ones are a JSON 404', async (t) => {
@@ -386,10 +385,10 @@ test('served images are immutable WebP; missing ones are a JSON 404', async (t) 
 
 // A multipart request whose file() answers as given; only file() is read.
 function upload(file: () => Promise<unknown>) {
-  return fake<FastifyRequest>({ file } as Partial<Record<keyof FastifyRequest, unknown>> as Partial<FastifyRequest>);
+  return fake<FastifyRequest>({ file: mistyped(file) });
 }
 
-const statusOf = (error: unknown) => (error as { statusCode?: number }).statusCode;
+const statusOf = (error: unknown) => fieldOf(error, 'statusCode');
 
 test('readAvatarUpload rethrows unexpected multipart failures', async () => {
   await assert.rejects(
@@ -426,7 +425,7 @@ test('readAvatarUpload rethrows unexpected multipart failures', async () => {
         })
       )
     ),
-    (error) => (error as Error).message === 'Avatar file must be at most 5 MB'
+    (error) => error instanceof Error && error.message === 'Avatar file must be at most 5 MB'
   );
   await assert.rejects(
     readAvatarUpload(

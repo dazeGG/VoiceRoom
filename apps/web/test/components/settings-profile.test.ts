@@ -8,6 +8,12 @@ import { stubFetch } from '../fixtures/fetch.ts';
 import { authUser } from '../fixtures/users.ts';
 import { stubCanvasAndImages } from '../helpers/fake-canvas.ts';
 
+vi.mock(
+  '../../src/lib/shared/ui/AvatarCropDialog/canvas-2d.ts',
+  async () => (await import('../helpers/fake-canvas.ts')).fakeCanvas2d
+);
+import { instanceOf } from '../helpers/assert.ts';
+
 const saved = authUser({ displayName: 'Аня', avatarUrl: '/avatars/anya.webp' });
 
 beforeEach(() => {
@@ -36,7 +42,7 @@ function renderSettings(user: AuthUser = saved) {
 const profileImage = () => document.querySelector<HTMLImageElement>('.settings-profile-avatar img');
 
 async function pickAndCrop(): Promise<void> {
-  const input = document.querySelector<HTMLInputElement>('.settings-avatar-input')!;
+  const input = instanceOf(document.querySelector('.settings-avatar-input'), HTMLInputElement, 'avatar input');
   await userEvent.upload(input, new File(['picture'], 'me.png', { type: 'image/png' }));
   const done = await screen.findByRole('button', { name: 'Готово' });
   await vi.waitFor(() => expect(done).toHaveProperty('disabled', false));
@@ -57,7 +63,7 @@ test('a cropped avatar is previewed, and uploaded only when the profile is saved
   await userEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
   const upload = calls.find((call) => call.url === '/api/auth/avatar');
   expect(upload?.method).toBe('POST');
-  expect((upload?.body as FormData).get('avatar')).toBeInstanceOf(Blob);
+  expect(instanceOf(upload?.body, FormData, 'upload body').get('avatar')).toBeInstanceOf(Blob);
   expect(session.user?.avatarUrl).toBe('/avatars/anya-2.webp');
   expect(props.onToast).toHaveBeenCalledWith('Изменения сохранены');
   expect(props.onClose).toHaveBeenCalled();
@@ -92,7 +98,7 @@ test('a new crop after a removal uploads instead of deleting', async () => {
 
 test('a file that is not an image, or is too large, never reaches the crop dialog', async () => {
   const { props } = renderSettings();
-  const input = document.querySelector<HTMLInputElement>('.settings-avatar-input')!;
+  const input = instanceOf(document.querySelector('.settings-avatar-input'), HTMLInputElement, 'avatar input');
 
   await fireEvent.change(input, { target: { files: [new File(['text'], 'notes.txt', { type: 'text/plain' })] } });
   expect(props.onToast).toHaveBeenLastCalledWith('Выберите изображение JPEG, PNG или WebP');

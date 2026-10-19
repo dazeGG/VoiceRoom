@@ -4,6 +4,8 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { freshImport } from '../helpers/fresh-module.ts';
+import { Type } from 'typebox';
+import { parse } from '../helpers/assert.ts';
 
 const load = () => freshImport(() => import('../../src/lib/shared/log.ts'));
 
@@ -53,7 +55,10 @@ test('a report sends the buffer with a page session id and no account id, then d
   log.createLogger('room').error('voice failed');
 
   await expect(log.reportClientLogs('join failed')).resolves.toBe(true);
-  const body = calls[0]?.body as { sessionId: string; events: Array<{ msg: string }> };
+  const body = parse(
+    Type.Object({ sessionId: Type.String(), events: Type.Array(Type.Object({ msg: Type.String() })) }),
+    calls[0]?.body
+  );
   expect(body.sessionId).toMatch(/^web-/);
   expect(JSON.stringify(body)).not.toMatch(/userId/);
   expect(body.events.map((event) => event.msg)).toEqual(['voice failed', 'join failed']);
@@ -92,8 +97,7 @@ test('uncaught errors and rejected promises are captured', async () => {
   window.dispatchEvent(
     new ErrorEvent('error', { message: 'boom', filename: 'https://voiceroom.ru/app.js?v=secret', lineno: 7 })
   );
-  const rejection = new Event('unhandledrejection') as Event & { reason: unknown };
-  rejection.reason = new Error('nope');
+  const rejection = Object.assign(new Event('unhandledrejection'), { reason: new Error('nope') });
   window.dispatchEvent(rejection);
   const records = log.readLogBuffer();
   expect(records.map((record) => record.msg)).toEqual(['uncaught error', 'unhandled rejection']);

@@ -20,8 +20,12 @@ test('release queue metrics exclude expected hidden 404s and count only invarian
   });
   await assert.rejects(service.requireVisible(attachment({ id: 'a' }), 'intruder'));
   await assert.rejects(
-    // A bound row with a context the schema forbids: an invariant failure.
-    service.requireVisible(attachment({ id: 'a', boundAt: new Date(), context: 'unknown' as never }), 'intruder')
+    // A bound row with a context the schema forbids: an invariant failure. The
+    // row type cannot hold that context, so it is laid over a typed one.
+    service.requireVisible(
+      Object.assign(attachment({ id: 'a', boundAt: new Date() }), { context: 'unknown' }),
+      'intruder'
+    )
   );
   metrics.recordCredentialRevokeCleanupFailure();
   const output = metrics.renderPrometheus();

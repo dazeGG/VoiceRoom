@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { hasLeadingZeroBits, parsePowChallenge, normalizePowNonce, createProofOfWork } from '../src/lib/pow.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 // Brute-forces a nonce the same way the browser client does.
 // A challenge is null only with difficulty 0, which these cases never use.
@@ -98,7 +99,7 @@ test('a tampered signature is rejected', () => {
   const ip = '1.2.3.4';
   const challenge = pow.createChallenge(ip);
   const nonce = solveChallenge(challenge, 8);
-  const parts = challenge!.split('.');
+  const parts = defined(challenge, 'a challenge').split('.');
   parts[3] = crypto.randomBytes(32).toString('base64url');
   const tampered = parts.join('.');
   assert.equal(pow.verify(ip, { challenge: tampered, nonce }).ok, false);

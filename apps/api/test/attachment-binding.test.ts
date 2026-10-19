@@ -5,6 +5,8 @@ import test, { type TestContext } from 'node:test';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createAttachmentRepository } from '../src/domains/media/attachment.repository.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { Type } from 'typebox';
+import { CountRow, queryRow } from './helpers/checked.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
 async function setup(t: TestContext) {
@@ -84,11 +86,17 @@ test(
       client.release();
     }
     assert.equal(
-      (await pool.query(`SELECT count(*)::int count FROM room_messages WHERE id='rolled-back'`)).rows[0].count,
+      (await queryRow(pool, CountRow, `SELECT count(*)::int count FROM room_messages WHERE id='rolled-back'`)).count,
       0
     );
     assert.equal(
-      (await pool.query(`SELECT text FROM room_messages WHERE id='room-message'`)).rows[0].text,
+      (
+        await queryRow(
+          pool,
+          Type.Object({ text: Type.String() }),
+          `SELECT text FROM room_messages WHERE id='room-message'`
+        )
+      ).text,
       '[Изображения: 2]'
     );
   }

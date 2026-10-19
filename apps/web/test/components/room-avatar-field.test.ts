@@ -8,6 +8,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import LobbyRoomSettingsDialog from '../../src/lib/features/home/components/lobby/LobbyRoomSettingsDialog.svelte';
 import type { OwnedRoom } from '../../src/lib/api/auth';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { instanceOf } from '../helpers/assert.ts';
 
 afterEach(cleanup);
 
@@ -61,7 +62,7 @@ test('removing the avatar shows the initials at once and deletes it only on save
 
 test('a file that is not an image never reaches the crop dialog', async () => {
   renderSettings(null);
-  const input = document.querySelector<HTMLInputElement>('.room-avatar-input')!;
+  const input = instanceOf(document.querySelector('.room-avatar-input'), HTMLInputElement, 'avatar input');
   await userEvent.upload(input, new File(['x'], 'notes.txt', { type: 'text/plain' }), { applyAccept: false });
   expect((await screen.findByRole('alert')).textContent).toBe('Выберите изображение JPEG, PNG или WebP');
   expect(screen.queryByRole('dialog', { name: 'Аватар комнаты' })).toBeNull();

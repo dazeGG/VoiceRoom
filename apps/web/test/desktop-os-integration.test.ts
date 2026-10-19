@@ -205,23 +205,24 @@ test('open in app targets desktop browsers only with the right scheme', async ()
 test('open in app navigates Chromium and uses a hidden frame in Firefox', async () => {
   const service = await loadModule(() => import('../src/lib/platform/open-in-app.ts'), {});
   const chromium = {
-    document: {},
+    document,
     location: { href: 'https://voiceroom.ru/r/abc123' },
     navigator: { userAgent: 'Chrome/146' }
   };
-  service.launchAppLink('voiceroom://r/abc123', chromium as never);
+  service.launchAppLink('voiceroom://r/abc123', chromium);
   assert.equal(chromium.location.href, 'voiceroom://r/abc123');
+  assert.equal(document.querySelector('iframe'), null, 'Chromium navigates, no frame');
 
-  const appended: unknown[] = [];
-  const frame = { hidden: false, remove() {}, src: '' };
   const firefox = {
-    document: { body: { appendChild: (node: unknown) => appended.push(node) }, createElement: () => frame },
+    document,
     location: { href: 'https://voiceroom.ru/r/abc123' },
     navigator: { userAgent: 'Mozilla/5.0 Firefox/150.0' }
   };
-  service.launchAppLink('voiceroom://r/abc123', firefox as never);
+  service.launchAppLink('voiceroom://r/abc123', firefox);
   assert.equal(firefox.location.href, 'https://voiceroom.ru/r/abc123');
-  assert.deepEqual(appended, [frame]);
+  const frame = document.querySelector('iframe');
+  assert.ok(frame, 'Firefox opens the link in a frame');
+  onTestFinished(() => frame.remove());
   assert.equal(frame.hidden, true);
   assert.equal(frame.src, 'voiceroom://r/abc123');
 });

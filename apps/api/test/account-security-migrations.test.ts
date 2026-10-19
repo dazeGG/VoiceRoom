@@ -2,11 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import { Pool } from 'pg';
+import { Type } from 'typebox';
 
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createUserStore } from '../src/app/user-store.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { rollBackThrough } from './migration-steps.ts';
+import { queryRows } from './helpers/checked.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const FIRST_ACCOUNT_SECURITY_MIGRATION = '20260912120000_add_session_device_metadata';
@@ -57,11 +60,15 @@ test('account security migrations apply, roll back cleanly and backfill existing
 
   const reapplied = await runMigrations({ databaseUrl, logger: SILENT });
   assert.equal(reapplied.length, rollbackCount);
-  const backfilled = await pool.query(`SELECT public_id, user_agent, location_label FROM sessions WHERE user_id = $1`, [
-    user.id
-  ]);
-  assert.equal(backfilled.rowCount, 1);
-  assert.match(backfilled.rows[0].public_id, /^[0-9a-f-]{36}$/);
-  assert.equal(backfilled.rows[0].user_agent, '');
-  assert.equal(backfilled.rows[0].location_label, '');
+  const backfilled = await queryRows(
+    pool,
+    Type.Object({ public_id: Type.String(), user_agent: Type.String(), location_label: Type.String() }),
+    `SELECT public_id, user_agent, location_label FROM sessions WHERE user_id = $1`,
+    [user.id]
+  );
+  assert.equal(backfilled.length, 1);
+  const session = defined(backfilled[0], 'the backfilled session');
+  assert.match(session.public_id, /^[0-9a-f-]{36}$/);
+  assert.equal(session.user_agent, '');
+  assert.equal(session.location_label, '');
 });

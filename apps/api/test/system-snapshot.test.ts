@@ -14,6 +14,8 @@ import { httpTotals, recordHttpRequest, resetMetricsForTest } from '../src/lib/m
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { rollBackThrough } from './migration-steps.ts';
+import { defined } from './helpers/assert-defined.ts';
+import { AnyRow, queryRows } from './helpers/checked.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const skip = !process.env.TEST_DATABASE_URL;
@@ -53,7 +55,7 @@ test('a tick writes the minute from the counters since the last tick and prunes 
   let clock = Date.parse('2026-10-16T10:05:42Z');
   const sampler = createSystemSampler({
     host,
-    http: () => http.shift()!,
+    http: () => defined(http.shift(), 'an http reading'),
     live: () => ({ wsConnections: 5, guestConnections: 1, voicePeers: 3, voiceRooms: 1 }),
     snapshots: () => ({
       record: async (snapshot) => {
@@ -73,21 +75,22 @@ test('a tick writes the minute from the counters since the last tick and prunes 
   await sampler.sample();
 
   assert.equal(recorded.length, 2);
-  const [first, second] = recorded;
-  assert.equal(first!.at.toISOString(), '2026-10-16T10:05:00.000Z');
-  assert.equal(first!.cpuPct, 40);
-  assert.equal(first!.memUsedBytes, 3 * GB);
-  assert.equal(first!.diskUsedBytes, 40 * GB);
-  assert.equal(first!.diskTotalBytes, 100 * GB);
-  assert.equal(first!.httpRequests, 4);
-  assert.equal(first!.http5xx, 1);
-  assert.equal(Math.round(first!.httpAvgMs!), 50);
-  assert.deepEqual([first!.wsConnections, first!.guestConnections, first!.voicePeers, first!.voiceRooms], [5, 1, 3, 1]);
-  assert.equal(first!.eventLoopP99Ms, 12);
+  const first = defined(recorded[0], 'the first minute');
+  const second = defined(recorded[1], 'the second minute');
+  assert.equal(first.at.toISOString(), '2026-10-16T10:05:00.000Z');
+  assert.equal(first.cpuPct, 40);
+  assert.equal(first.memUsedBytes, 3 * GB);
+  assert.equal(first.diskUsedBytes, 40 * GB);
+  assert.equal(first.diskTotalBytes, 100 * GB);
+  assert.equal(first.httpRequests, 4);
+  assert.equal(first.http5xx, 1);
+  assert.equal(Math.round(defined(first.httpAvgMs, 'the average time')), 50);
+  assert.deepEqual([first.wsConnections, first.guestConnections, first.voicePeers, first.voiceRooms], [5, 1, 3, 1]);
+  assert.equal(first.eventLoopP99Ms, 12);
   // A quiet minute has no average time, not a zero one.
-  assert.equal(second!.httpRequests, 0);
-  assert.equal(second!.httpAvgMs, null);
-  assert.equal(second!.cpuPct, 60);
+  assert.equal(second.httpRequests, 0);
+  assert.equal(second.httpAvgMs, null);
+  assert.equal(second.cpuPct, 60);
   assert.deepEqual(
     pruned.map((cutoff) => cutoff.toISOString()),
     ['2026-10-16T09:05:00.000Z', '2026-10-16T09:06:00.000Z']
@@ -109,8 +112,9 @@ test('a host without disk figures and an API without a database still sample', a
     })
   });
   await withDb.sample();
-  assert.equal(records[0]!.diskUsedBytes, null);
-  assert.equal(records[0]!.diskTotalBytes, null);
+  const sampled = defined(records[0], 'the sampled minute');
+  assert.equal(sampled.diskUsedBytes, null);
+  assert.equal(sampled.diskTotalBytes, null);
 
   const withoutDb = createSystemSampler({
     host,
@@ -184,10 +188,10 @@ test('minutes are kept once, folded into buckets, pruned, and the migration roll
   await repository.record(minute('2026-10-16T10:02:00Z', { cpuPct: null, httpRequests: 0, httpAvgMs: null }));
   await repository.record(minute('2026-10-16T10:07:00Z', { diskUsedBytes: null, diskTotalBytes: null }));
 
-  const latest = await repository.latest();
-  assert.equal(latest!.at, Date.parse('2026-10-16T10:07:00Z'));
-  assert.equal(latest!.diskUsedBytes, null);
-  assert.ok(latest!.dbBytes! > 0, 'the database measures its own size');
+  const latest = defined(await repository.latest(), 'the latest minute');
+  assert.equal(latest.at, Date.parse('2026-10-16T10:07:00Z'));
+  assert.equal(latest.diskUsedBytes, null);
+  assert.ok(defined(latest.dbBytes, 'the database size') > 0, 'the database measures its own size');
 
   const rows = await pool.query<{ http_requests: number; http_5xx: number; cpu_pct: number }>(
     `SELECT http_requests, http_5xx, cpu_pct FROM system_snapshots WHERE at = '2026-10-16T10:00:00Z'`
@@ -199,12 +203,12 @@ test('minutes are kept once, folded into buckets, pruned, and the migration roll
     buckets.map((bucket) => new Date(bucket.at).toISOString()),
     ['2026-10-16T10:00:00.000Z', '2026-10-16T10:05:00.000Z']
   );
-  const [busy] = buckets;
-  assert.equal(busy!.cpuPct, 90, 'a gauge keeps its highest minute');
-  assert.equal(busy!.httpRequests, 45);
-  assert.equal(busy!.http5xx, 1);
+  const busy = defined(buckets[0], 'the busy bucket');
+  assert.equal(busy.cpuPct, 90, 'a gauge keeps its highest minute');
+  assert.equal(busy.httpRequests, 45);
+  assert.equal(busy.http5xx, 1);
   // (15 × 20 + 30 × 40) / 45: weighted by the requests of each minute.
-  assert.equal(Math.round(busy!.httpAvgMs!), 33);
+  assert.equal(Math.round(defined(busy.httpAvgMs, 'the average time')), 33);
   assert.deepEqual(
     await repository.buckets(new Date('2026-10-16T11:00:00Z'), new Date('2026-10-16T12:00:00Z'), 60),
     []
@@ -220,8 +224,8 @@ test('minutes are kept once, folded into buckets, pruned, and the migration roll
   assert.equal((await pool.query('SELECT 1 FROM system_snapshots')).rowCount, 1);
 
   await rollBackThrough(databaseUrl, '20261016120000_create_system_snapshots');
-  const gone = await pool.query(`SELECT to_regclass('public.system_snapshots') AS name`);
-  assert.deepEqual(gone.rows, [{ name: null }]);
+  const gone = await queryRows(pool, AnyRow, `SELECT to_regclass('public.system_snapshots') AS name`);
+  assert.deepEqual(gone, [{ name: null }]);
   await runMigrations({ databaseUrl, logger: SILENT });
   assert.equal(await repository.latest(), null);
 });

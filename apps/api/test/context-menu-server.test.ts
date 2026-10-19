@@ -4,7 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { TrackSource } from 'livekit-server-sdk';
-import { dbRoom, userSession, type DbRoom, type Fakes } from './fakes/index.ts';
+import { dbRoom, userSession, type Fakes } from './fakes/index.ts';
+import { fieldOf } from '../src/platform/record.ts';
 const { createApiApp } = await import('../src/server.ts');
 const { isLiveKitParticipantAlreadyGone, resolveServerMutePermission } =
   await import('../src/domains/admission/livekit-admin.ts');
@@ -14,7 +15,10 @@ const BOB_ID = '22222222-2222-4222-8222-222222222222';
 
 type Bookmark = { removed: boolean; status: string };
 
+const contextRoom = () => dbRoom('context-room', { name: 'Context room', ownerId: ALICE_ID });
+
 function createStore({
+  room = contextRoom(),
   muteLookup = async (): Promise<boolean> => false,
   removeBookmark = async (
     _userId: string | null | undefined,
@@ -24,7 +28,7 @@ function createStore({
     status: 'removed'
   })
 } = {}): Fakes['store'] {
-  const rooms = new Map([['context-room', dbRoom('context-room', { name: 'Context room', ownerId: ALICE_ID })]]);
+  const rooms = new Map([[room.id, room]]);
   return {
     async countQuotaRoomsForIp() {
       return 0;
@@ -79,7 +83,7 @@ test('room list removal rejects owners and removes only bookmarked rooms', async
     headers: { cookie: 'vr_session=alice-session' }
   });
   assert.equal(owner.statusCode, 403);
-  assert.equal(owner.json().code, 'room_owner');
+  assert.equal(fieldOf(owner.json(), 'code'), 'room_owner');
 
   const member = await app.inject({
     method: 'DELETE',
@@ -87,7 +91,7 @@ test('room list removal rejects owners and removes only bookmarked rooms', async
     headers: { cookie: 'vr_session=bob-session' }
   });
   assert.equal(member.statusCode, 200);
-  assert.equal(member.json().removed, true);
+  assert.equal(fieldOf(member.json(), 'removed'), true);
   assert.deepEqual(calls, [
     { userId: ALICE_ID, roomId: 'context-room' },
     { userId: BOB_ID, roomId: 'context-room' }
@@ -135,7 +139,7 @@ test('a block in either direction rejects direct-message sends before persistenc
       payload: { text: 'blocked message' }
     });
     assert.equal(response.statusCode, 403);
-    assert.equal(response.json().code, 'relationship_blocked');
+    assert.equal(fieldOf(response.json(), 'code'), 'relationship_blocked');
   }
   assert.equal(sends, 0);
 });
@@ -171,21 +175,22 @@ test('a block in either direction rejects room rings before invite persistence',
       payload: { userId }
     });
     assert.equal(response.statusCode, 403);
-    assert.equal(response.json().code, 'relationship_blocked');
+    assert.equal(fieldOf(response.json(), 'code'), 'relationship_blocked');
   }
   assert.equal(sends, 0);
 });
 
 test('LiveKit admission fails closed when persisted server-mute lookup fails', async (t) => {
   let issued = 0;
+  // Admission is only for peers already in the room roster.
+  const room = contextRoom();
   const store = createStore({
+    room,
     muteLookup: async () => {
       throw new Error('database unavailable');
     }
   });
-  // Admission is only for peers already in the room roster.
-  const room = (await store.getRoom?.('context-room')) as DbRoom | null;
-  room?.peers.set('peer-alice', {
+  room.peers.set('peer-alice', {
     id: 'peer-alice',
     name: 'Alice',
     sessionToken: 'goodtoken123456789012345678901234'

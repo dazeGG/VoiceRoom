@@ -33,8 +33,8 @@ async function loadScreenShare(grant: MediaGrant | null, whileAsking: (state: { 
   const state = {
     joined: true,
     connecting: false,
-    localScreenStream: null as unknown,
-    localScreenPublications: new Map(),
+    localScreenStream: null,
+    localScreenPublications: new Map<string, unknown>(),
     localScreenMode: 'games',
     localScreenProfileId: 'balanced-30',
     peerId: 'peer-self1',

@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 import AttachmentLightbox from '../../src/lib/shared/chat/AttachmentLightbox.svelte';
+import { defined } from '../helpers/assert.ts';
 
 afterEach(cleanup);
 
@@ -41,7 +42,7 @@ test('zoom goes up and down in steps between 100% and 600% and resets with 0', a
   expect(scale()).toBe('600%');
   await fireEvent.keyDown(dialog, { key: '0' });
   expect(scale()).toBe('100%');
-  await fireEvent.wheel(dialog.querySelector('img')!.parentElement!, { deltaY: -100 });
+  await fireEvent.wheel(defined(dialog.querySelector('img')?.parentElement, 'image frame'), { deltaY: -100 });
   expect(scale()).toBe('140%');
 });
 

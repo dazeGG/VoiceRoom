@@ -10,6 +10,7 @@ import Licenses from '../../src/lib/features/legal/Licenses.svelte';
 import PrivacyPolicy from '../../src/lib/features/legal/PrivacyPolicy.svelte';
 import TermsOfService from '../../src/lib/features/legal/TermsOfService.svelte';
 import { isMobileRoute } from '../../src/lib/platform/mobile-routes.ts';
+import { instanceOf } from '../helpers/assert.ts';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn(async () => {}) }));
 
@@ -61,12 +62,12 @@ test('the terms set the minimum age and say how to report', () => {
 
 test('the licences page carries the Twemoji and DB-IP attribution', () => {
   render(Licenses);
-  const twemoji = screen.getByRole('link', { name: 'Twemoji' }).closest('li') as HTMLElement;
+  const twemoji = instanceOf(screen.getByRole('link', { name: 'Twemoji' }).closest('li'), HTMLElement, 'Twemoji');
   expect(twemoji.textContent).toContain('© Twitter, Inc.');
   expect(within(twemoji).getByRole('link', { name: 'CC BY 4.0' }).getAttribute('href')).toBe(
     'https://creativecommons.org/licenses/by/4.0/'
   );
-  const dbip = screen.getByRole('link', { name: 'DB-IP City Lite' }).closest('li') as HTMLElement;
+  const dbip = instanceOf(screen.getByRole('link', { name: 'DB-IP City Lite' }).closest('li'), HTMLElement, 'DB-IP');
   expect(dbip.textContent).toMatch(/IP Geolocation by\s+DB-IP/);
 });
 

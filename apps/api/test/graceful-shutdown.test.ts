@@ -14,7 +14,9 @@ import { recordingLogger } from './fakes/index.ts';
 
 async function listening(server: http.Server): Promise<number> {
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  return (server.address() as net.AddressInfo).port;
+  const address = server.address();
+  assert.ok(address && typeof address === 'object');
+  return address.port;
 }
 
 function rawConnection(port: number, payload: string): Promise<net.Socket> {
@@ -58,7 +60,7 @@ test('a realtime peer that never answers the close and a request still in flight
     exit: (code) => exits.push(code),
     timeoutMs: 5_000,
     socketGraceMs: 100,
-    signals: new EventEmitter() as unknown as Pick<NodeJS.Process, 'once'>
+    signals: new EventEmitter()
   });
 
   const finished = await Promise.race([
@@ -80,7 +82,7 @@ test('the shutdown log says how long each step took', async () => {
     sockets: () => [],
     closeStores: async () => {},
     exit: () => {},
-    signals: new EventEmitter() as unknown as Pick<NodeJS.Process, 'once'>
+    signals: new EventEmitter()
   });
 
   await shutdown('SIGTERM');
@@ -104,7 +106,7 @@ test('the LiveKit gate stops at once on SIGTERM, cutting the signal connections 
       poolClosed = true;
     },
     exit: (code) => exits.push(code),
-    signals: signals as unknown as Pick<NodeJS.Process, 'once'>
+    signals: signals
   });
   const port = await listening(server);
   // An open signal connection: an upgrade the gate is proxying never ends by itself.
@@ -139,7 +141,7 @@ test('the gate shuts down once on SIGTERM or SIGINT, and a pool that fails to cl
       throw new Error('pool already gone');
     },
     exit: (code) => exits.push(code),
-    signals: signals as unknown as Pick<NodeJS.Process, 'once'>
+    signals: signals
   });
 
   signals.emit('SIGTERM');
@@ -162,7 +164,7 @@ test('a gate whose pool never closes is cut off by the timeout', async () => {
     closePool: () => new Promise<void>(() => {}),
     exit: (code) => exits.push(code),
     timeoutMs: 30,
-    signals: new EventEmitter() as unknown as Pick<NodeJS.Process, 'once'>
+    signals: new EventEmitter()
   });
 
   void shutdown('SIGTERM');

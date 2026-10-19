@@ -3,7 +3,9 @@ import test from 'node:test';
 
 import * as platform from '../src/platform-class.ts';
 
-const CORPUS = Object.freeze([
+// The signals come from the browser unchecked: an input is any object, so the
+// corpus can carry deliberately malformed ones.
+const CORPUS: readonly { name: string; input: object; expected: platform.PlatformClass }[] = Object.freeze([
   {
     name: 'iOS Safari',
     input: {
@@ -50,14 +52,13 @@ const CORPUS = Object.freeze([
 
 test('G16-A01 classifies the canonical platform corpus deterministically', async () => {
   for (const fixture of CORPUS) {
-    // The corpus includes deliberately malformed signals.
-    assert.equal(platform.classifyPlatform(fixture.input as platform.PlatformSignals), fixture.expected, fixture.name);
+    assert.equal(platform.classifyPlatform(fixture.input), fixture.expected, fixture.name);
   }
 });
 
 test('G16-A02 policy is fail-open only for unknown and never returns raw signals', () => {
   for (const fixture of CORPUS) {
-    const policy = platform.classifyPlatformPolicy(fixture.input as platform.PlatformSignals);
+    const policy = platform.classifyPlatformPolicy(fixture.input);
     assert.deepEqual(Object.keys(policy).sort(), [
       'contractVersion',
       'desktopAllowed',

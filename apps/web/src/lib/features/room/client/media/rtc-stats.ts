@@ -50,8 +50,11 @@ export interface RtcStat {
   readonly mime: string | undefined;
 }
 
+/** What reading a report needs: RTCStatsReport, or a stand-in that walks its entries. */
+export type RtcStatsSource = { forEach(callback: (value: unknown) => void): void };
+
 /** The report's entries by id; empty when there is no report. */
-export function readRtcStats(report: RTCStatsReport | null | undefined): Map<string, RtcStat> {
+export function readRtcStats(report: RtcStatsSource | null | undefined): Map<string, RtcStat> {
   const stats = new Map<string, RtcStat>();
   report?.forEach((value: unknown) => {
     const stat = toRtcStat(value);

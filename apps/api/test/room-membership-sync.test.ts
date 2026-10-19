@@ -1,3 +1,4 @@
+import { isRecord } from '@voice-room/shared/guards';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
@@ -9,6 +10,14 @@ import type { LeaveOutcome } from '../src/domains/membership/membership.service.
 import { fake, storedUser } from './fakes/index.ts';
 
 type LeaveStatus = 'invalid' | 'not_active' | 'owner_required' | 'left';
+
+// What the membership store answers for a leave with this status: a missing
+// membership can only be invalid or not active.
+function leaveOutcome(status: LeaveStatus, membership: Membership | null): LeaveOutcome {
+  if (status === 'invalid') return { membership: null, status };
+  if (membership === null) return { membership: null, status: 'not_active' };
+  return { membership, status };
+}
 
 function membershipRow(role: 'owner' | 'member'): Membership {
   return { id: 'm', roomId: 'static-room', userId: 'user-1', role, createdAt: null, updatedAt: null, metadata: {} };
@@ -31,7 +40,7 @@ function leaveRoute({
         return membership;
       },
       async leaveRoom() {
-        return { status: leaveStatus, membership } as LeaveOutcome;
+        return leaveOutcome(leaveStatus, membership);
       }
     },
     prepareLeave: async () => prepared,
@@ -124,7 +133,9 @@ test('the member directory answers its page, and refuses outsiders and bad curso
   assert.deepEqual(listed.json(), page);
   assert.deepEqual(seen[0], { roomId: 'static-room', viewerUserId: 'user-1', cursor: 'c1', limit: '20', query: 'an' });
   await directoryApp()('/api/rooms/static-room/members?query=old');
-  assert.equal((seen[1] as { query?: string }).query, 'old');
+  const second = seen[1];
+  assert.ok(isRecord(second));
+  assert.equal(second.query, 'old');
 
   assert.equal((await directoryApp({ answer: 'forbidden' })()).statusCode, 403);
   assert.equal((await directoryApp({ answer: 'unauthorized' })()).statusCode, 401);

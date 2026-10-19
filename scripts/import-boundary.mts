@@ -2,6 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { Type, type Static } from 'typebox';
+import { Value } from 'typebox/value';
 
 // Paths in the config are relative to the repository root, not the caller's cwd.
 const REPO_ROOT = path.resolve(import.meta.dirname, '..');
@@ -15,7 +17,14 @@ function readSource(filePath: string): string | null {
   return fs.existsSync(resolved) ? fs.readFileSync(resolved, 'utf8') : null;
 }
 
-type ImportRule = { id: string; sources: string[]; forbidden: string[]; message: string };
+const ImportRule = Type.Object({
+  id: Type.String(),
+  sources: Type.Array(Type.String()),
+  forbidden: Type.Array(Type.String()),
+  message: Type.String()
+});
+type ImportRule = Static<typeof ImportRule>;
+const ImportConfig = Type.Object({ importRules: Type.Optional(Type.Array(ImportRule)) });
 type Violation = { ruleId: string; filePath: string; imported: string; message: string };
 
 function normalizePath(value: string): string {
@@ -40,7 +49,7 @@ function globToRegExp(glob: string): RegExp {
   const value = normalizePath(glob);
   let pattern = '';
   for (let index = 0; index < value.length; index += 1) {
-    const char = value[index] as string;
+    const char = value.charAt(index);
     if (char === '*' && value[index + 1] === '*') {
       pattern += '.*';
       index += 1;
@@ -73,7 +82,7 @@ function extractImports(source: string): string[] {
     /\bexport\s+[^'"]+\s+from\s+['"]([^'"]+)['"]/g
   ];
   for (const pattern of patterns) {
-    for (const match of source.matchAll(pattern)) imports.push(match[1] as string);
+    for (const [, imported] of source.matchAll(pattern)) if (imported) imports.push(imported);
   }
   return imports;
 }
@@ -106,15 +115,19 @@ function parseArgs(argv: string[]): { config: string; files: string[] } {
   const args: { config: string; files: string[] } = { config: 'config/import-boundaries.v1.json', files: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === '--config') args.config = argv[++index] as string;
-    else args.files.push(arg as string);
+    if (arg === '--config') {
+      const value = argv[++index];
+      if (value === undefined) throw new Error('--config needs a file path');
+      args.config = value;
+    } else if (arg !== undefined) args.files.push(arg);
   }
   return args;
 }
 
 if (import.meta.main) {
   const args = parseArgs(process.argv.slice(2));
-  const config = JSON.parse(fs.readFileSync(args.config, 'utf8'));
+  const config: unknown = JSON.parse(fs.readFileSync(args.config, 'utf8'));
+  if (!Value.Check(ImportConfig, config)) throw new Error(`${args.config} does not hold valid import rules`);
   const violations = checkImportBoundaries({
     config,
     files: args.files.length ? args.files.map(normalizePath) : undefined

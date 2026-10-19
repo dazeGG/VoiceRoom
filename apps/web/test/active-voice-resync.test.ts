@@ -1,4 +1,5 @@
 import { test, vi } from 'vitest';
+import { lobbyRoom } from './fixtures/answers.ts';
 import assert from 'node:assert/strict';
 
 async function loadRoomRealtime() {
@@ -65,8 +66,8 @@ test('a delayed retryable error cannot cancel a newer successful voice resync at
     assert.equal(
       realtime.acknowledgeActiveVoiceResync({
         type: 'error',
-        payload: { code: 'reconnect_finalize_failed', id: firstRequestId }
-      } as never),
+        payload: { code: 'reconnect_finalize_failed', message: '', id: firstRequestId }
+      }),
       true
     );
     assert.equal(failures.length, 0);
@@ -76,8 +77,15 @@ test('a delayed retryable error cannot cancel a newer successful voice resync at
       realtime.acknowledgeActiveVoiceResync({
         type: 'room.snapshot',
         id: secondRequestId,
-        payload: { mode: 'active', roomId: 'room-resync' }
-      } as never),
+        payload: {
+          mode: 'active',
+          roomId: 'room-resync',
+          room: lobbyRoom({ roomId: 'room-resync' }),
+          peers: [],
+          recentMessages: [],
+          voiceActiveSince: null
+        }
+      }),
       true
     );
     assert.equal(failures.length, 0);

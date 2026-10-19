@@ -66,9 +66,9 @@ test('page CSP supports runtime LiveKit origins while production Caddy narrows t
   const compose = readRepo('docker-compose.yml');
   const dockerfile = readRepo('Dockerfile');
 
-  const connect = directives['connect-src'] ?? [];
+  const connect: readonly string[] = directives['connect-src'] ?? [];
   for (const source of ['self', 'http:', 'https:', 'ws:', 'wss:', 'ws://localhost:*', 'ws://127.0.0.1:*']) {
-    assert.ok(connect.includes(source as never), `missing runtime connect source ${source}`);
+    assert.ok(connect.includes(source), `missing runtime connect source ${source}`);
   }
   assert.deepEqual(directives['style-src'], ['self', 'unsafe-inline']);
   // Caddy imports the full policy generated from this build (see
@@ -88,9 +88,9 @@ test('a build that knows its LiveKit origin adds it to the page connect-src', as
     LIVEKIT_DOMAIN: 'media.example.com',
     DOMAIN: 'example.org'
   });
-  const connect = directives['connect-src'] ?? [];
+  const connect: readonly string[] = directives['connect-src'] ?? [];
   for (const origin of ['wss://lk.example.com', 'wss://media.example.com', 'wss://livekit.example.org']) {
-    assert.ok(connect.includes(origin as never), `missing ${origin}`);
+    assert.ok(connect.includes(origin), `missing ${origin}`);
   }
-  assert.ok(!connect.includes('not a url' as never));
+  assert.ok(!connect.includes('not a url'));
 });

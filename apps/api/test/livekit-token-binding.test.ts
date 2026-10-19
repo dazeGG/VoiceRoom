@@ -18,6 +18,7 @@ import {
 import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate.service.ts';
 import type { GateClaims } from '../src/domains/admission/gate-credential-signer.ts';
 import { recordingLogger } from './fakes/index.ts';
+import { mistyped } from './helpers/mistyped.ts';
 
 const NOW = Date.now();
 const CLAIMS: GateClaims = {
@@ -123,7 +124,7 @@ test('ambiguous token sources are refused instead of guessing', () => {
   );
   assert.equal(codeOf(extractAccessToken('/rtc', { authorization: 'Basic abc' })), 'malformed_authorization');
   assert.equal(
-    codeOf(extractAccessToken('/rtc', { authorization: ['Bearer a', 'Bearer b'] as never })),
+    codeOf(extractAccessToken('/rtc', { authorization: mistyped<string>(['Bearer a', 'Bearer b']) })),
     'malformed_authorization'
   );
   assert.deepEqual(extractAccessToken(`/rtc?access_token=${good}`, { authorization: `Bearer ${good}` }), {

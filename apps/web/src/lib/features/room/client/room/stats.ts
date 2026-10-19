@@ -1,7 +1,7 @@
 import { PEER_LATENCY_INTERVAL_MS } from '../core/config';
 import { state } from '../core/state.svelte';
 import { findFirstLocalPublication, findLocalMicrophonePublication } from '../services/livekit-service';
-import { readRtcStats, type RtcStat } from '../media/rtc-stats';
+import { readRtcStats, type RtcStat, type RtcStatsSource } from '../media/rtc-stats';
 import { recordNetworkSample } from './call-quality';
 
 import { createLogger, errorContext } from '$lib/shared/log';
@@ -117,7 +117,7 @@ function isActiveCandidatePair(report: RtcStat): boolean {
  * and the transport of the selected candidate pair: a relay or TCP candidate
  * means UDP was blocked and latency/jitter will be worse.
  */
-export function getOutboundNetworkFromStats(report: RTCStatsReport | undefined): {
+export function getOutboundNetworkFromStats(report: RtcStatsSource | undefined): {
   lossPct: number | null;
   transport: 'udp' | 'tcp' | 'relay' | null;
 } {

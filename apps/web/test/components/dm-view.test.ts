@@ -8,6 +8,8 @@ import { LobbyStore } from '../../src/lib/features/home/model/lobby.svelte.ts';
 import type { DirectMessage } from '../../src/lib/api/dm.ts';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { authUser } from '../fixtures/users.ts';
+import { instanceOf, parse } from '../helpers/assert.ts';
+import { SendDirectMessageBody } from '@voice-room/shared/contracts/messages';
 
 const self = authUser({ id: 'me', login: 'me', displayName: 'Я' });
 const ada = authUser({ id: 'ada', login: 'ada', displayName: 'Ада' });
@@ -99,7 +101,7 @@ test('only the author is offered edit and delete in the message menu', async () 
   renderDm(ada, [message('m1', 'ada', 'от Ады'), message('m2', 'me', 'от меня')]);
 
   const menuItems = async (text: string): Promise<string[]> => {
-    const row = screen.getByText(text).closest<HTMLElement>('[data-message-id]')!;
+    const row = instanceOf(screen.getByText(text).closest('[data-message-id]'), HTMLElement, 'message row');
     await userEvent.pointer({ keys: '[MouseRight]', target: row });
     const menu = await screen.findByRole('menu');
     const labels = within(menu)
@@ -125,11 +127,11 @@ test('an invitation is answered from the card by the invited side only', () => {
     message('i2', 'me', '', { invite: { ...invite, roomName: 'Мой созвон' } })
   ]);
 
-  const incoming = screen.getByText('Планёрка').closest('article')!;
+  const incoming = instanceOf(screen.getByText('Планёрка').closest('article'), HTMLElement, 'incoming invite');
   expect(within(incoming).getByText('Приглашение в комнату')).toBeTruthy();
   expect(within(incoming).getByRole('button', { name: 'Войти' })).toBeTruthy();
 
-  const sent = screen.getByText('Мой созвон').closest('article')!;
+  const sent = instanceOf(screen.getByText('Мой созвон').closest('article'), HTMLElement, 'sent invite');
   expect(within(sent).getByText('Приглашение отправлено')).toBeTruthy();
   expect(within(sent).queryByRole('button')).toBeNull();
 });
@@ -162,7 +164,7 @@ test('a reader at the newest message stays on it when loading artwork grows the 
     }
   );
   renderDm(ada, [message('m1', 'ada', 'картинка'), message('m2', 'me', 'ответ')]);
-  const scroll = document.querySelector<HTMLElement>('.lobby-dm-scroll')!;
+  const scroll = instanceOf(document.querySelector('.lobby-dm-scroll'), HTMLElement, 'conversation scroll');
   let height = 1000;
   Object.defineProperty(scroll, 'scrollHeight', { configurable: true, get: () => height });
   Object.defineProperty(scroll, 'clientHeight', { configurable: true, get: () => 400 });
@@ -223,7 +225,7 @@ test('a sent message empties the field at once, shows dimmed, and a failed one w
   await vi.waitFor(() => expect(document.querySelector('.outgoing-message')).toBeNull());
   const keys = calls
     .filter((call) => call.method === 'POST' && call.url === '/api/dm/ada')
-    .map((call) => (call.body as { idempotencyKey: string }).idempotencyKey);
+    .map((call) => parse(SendDirectMessageBody, call.body).idempotencyKey);
   expect(keys).toHaveLength(2);
   expect(keys[0]).toBe(keys[1]);
 });

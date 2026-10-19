@@ -6,6 +6,7 @@ import {
   normalizeAttachment,
   normalizeAttachments
 } from '../src/attachments.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 const attachment = (overrides = {}) => ({
   id: 'a',
@@ -22,8 +23,11 @@ const attachment = (overrides = {}) => ({
 });
 
 test('G72-A01 room/DM attachments validate owner, order, dimensions, bytes and safe unknown state', () => {
-  assert.equal(normalizeAttachment(attachment())!.state, 'ready');
-  assert.equal(normalizeAttachment(attachment({ context: 'dm', state: 'future' }))!.state, 'unavailable');
+  assert.equal(defined(normalizeAttachment(attachment()), 'the attachment').state, 'ready');
+  assert.equal(
+    defined(normalizeAttachment(attachment({ context: 'dm', state: 'future' })), 'the attachment').state,
+    'unavailable'
+  );
   for (const invalid of [
     { ownerId: '' },
     { context: 'other' },
@@ -34,13 +38,13 @@ test('G72-A01 room/DM attachments validate owner, order, dimensions, bytes and s
     { mimeType: 'image/gif' }
   ])
     assert.equal(normalizeAttachment(attachment(invalid)), null);
-  assert.equal(normalizeAttachment(attachment({ state: 'failed' }))!.url, null);
+  assert.equal(defined(normalizeAttachment(attachment({ state: 'failed' })), 'the attachment').url, null);
 });
 
 test('G72-A02 max four attachments and image-only legacy fallback are deterministic', () => {
   assert.deepEqual(normalizeAttachments([]), []);
   const four = Array.from({ length: 4 }, (_, order) => attachment({ id: `a-${order}`, order }));
-  assert.equal(normalizeAttachments(four)!.length, 4);
+  assert.equal(defined(normalizeAttachments(four), 'the attachments').length, 4);
   assert.equal(normalizeAttachments([...four, attachment({ id: 'fifth' })]), null);
   assert.equal(normalizeAttachments([attachment(), attachment({ id: 'duplicate-order' })]), null);
   assert.equal(attachmentTextFallback(four, ''), '[Изображения: 4]');

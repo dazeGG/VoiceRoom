@@ -141,7 +141,7 @@ test('G15-A02 lock loss aborts and leaves a dirty rollout fence', async () => {
       clientFactory: () => client,
       migrationRunner: async () => {
         client.loseLock = true;
-        return ['fixture'] as never;
+        return [{ path: 'fixture', name: 'fixture', timestamp: 0 }];
       },
       logger: { log() {}, warn() {}, error() {}, info() {} }
     }),
@@ -217,6 +217,9 @@ test('G15-A02 production rejects unfenced and down migration commands before dat
   }
 });
 
+type MigrationRunner = Extract<Parameters<typeof runMigrations>[0], { migrationRunner?: unknown }>['migrationRunner'];
+type RunnerOptions = Parameters<NonNullable<MigrationRunner>>[0];
+
 test(
   'G15-A01 concurrent PostgreSQL runners serialize behind one advisory fence',
   {
@@ -225,9 +228,10 @@ test(
   async () => {
     const databaseUrl = process.env.TEST_DATABASE_URL ?? '';
     const order: string[] = [];
-    const migrationRunner = async ({ dbClient }: Record<string, unknown>) => {
-      const { rows } = await (dbClient as Client).query<{ backend: number }>('SELECT pg_backend_pid() AS backend');
-      const backend = rows[0]?.backend;
+    const migrationRunner = async (options: RunnerOptions) => {
+      assert.ok('dbClient' in options, 'the runner gets the fenced client');
+      const { rows } = await options.dbClient.query('SELECT pg_backend_pid() AS backend');
+      const backend = String(rows[0]?.backend);
       order.push(`start:${backend}`);
       await new Promise((resolve) => setTimeout(resolve, 75));
       order.push(`end:${backend}`);

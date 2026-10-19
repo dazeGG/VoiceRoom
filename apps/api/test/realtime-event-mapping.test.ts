@@ -2,16 +2,31 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { ServerEvents, ServerEventType } from '@voice-room/shared/contracts/realtime';
+import {
+  ServerEventFrames,
+  type ServerEventOf,
+  type ServerEvents,
+  type ServerEventType
+} from '@voice-room/shared/contracts/realtime';
+import { Value } from 'typebox/value';
 import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import { toWsAccountEvent } from '../src/realtime/account-events.ts';
 import { legacyPeerMessageToWs } from '../src/realtime/legacy-events.ts';
 import { notificationPreferences, storedDirectMessage } from './fakes/index.ts';
 
+/** Whether the frame is the event of this type, as its schema describes it. */
+function isEventOf<Type extends ServerEventType>(
+  envelope: ServerEnvelope,
+  type: Type
+): envelope is ServerEnvelope & ServerEventOf<Type> {
+  return envelope.type === type && Value.Check(ServerEventFrames[type], envelope);
+}
+
 /** The payload of an event, after checking it is the event expected. */
 function payloadOf<Type extends ServerEventType>(envelope: ServerEnvelope, type: Type): ServerEvents[Type] {
   assert.equal(envelope.type, type);
-  return (envelope as { payload: unknown }).payload as ServerEvents[Type];
+  assert.ok(isEventOf(envelope, type), `the ${type} event matches its schema`);
+  return envelope.payload;
 }
 
 test('account realtime maps DM delete events to the public websocket contract', () => {

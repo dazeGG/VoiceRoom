@@ -4,12 +4,32 @@
 // blob. Undone with vi.unstubAllGlobals / vi.restoreAllMocks.
 
 import { vi } from 'vitest';
+import type * as Canvas2DModule from '../../src/lib/shared/ui/AvatarCropDialog/canvas-2d.ts';
+
+function newContext(): Canvas2DModule.Canvas2D {
+  return {
+    clearRect: vi.fn(),
+    drawImage: vi.fn(),
+    getImageData: (_x, _y, width, height) => ({ data: new Uint8ClampedArray(width * height * 4).fill(128) })
+  };
+}
+
+// Each stubCanvasAndImages call starts a fresh context, so call counts never leak between tests.
+let fakeContext = newContext();
+
+/**
+ * Stands in for the crop dialog's canvas module. jsdom's own canvas has no 2D
+ * context, so a test that renders the dialog must mock the module with it:
+ * `vi.mock('…/AvatarCropDialog/canvas-2d.ts', () => fakeCanvas2d)`.
+ */
+export const fakeCanvas2d: typeof Canvas2DModule = { context2d: () => fakeContext };
 
 export type CanvasExport = { width: number; height: number; type: string };
 
 export function stubCanvasAndImages(options: { imageSize?: [number, number]; failExport?: boolean } = {}) {
   const [naturalWidth, naturalHeight] = options.imageSize ?? [800, 600];
   const exports: CanvasExport[] = [];
+  fakeContext = newContext();
 
   class LoadedImage {
     naturalWidth = naturalWidth;
@@ -27,16 +47,6 @@ export function stubCanvasAndImages(options: { imageSize?: [number, number]; fai
   }
   vi.stubGlobal('Image', LoadedImage);
 
-  const context = {
-    clearRect: vi.fn(),
-    drawImage: vi.fn(),
-    getImageData: (_x: number, _y: number, width: number, height: number) => ({
-      data: new Uint8ClampedArray(width * height * 4).fill(128)
-    })
-  };
-  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
-    () => context as unknown as CanvasRenderingContext2D
-  );
   vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/webp;base64,AA==');
   vi.spyOn(HTMLCanvasElement.prototype, 'toBlob').mockImplementation(function (
     this: HTMLCanvasElement,
@@ -47,5 +57,5 @@ export function stubCanvasAndImages(options: { imageSize?: [number, number]; fai
     callback(options.failExport ? null : new Blob(['avatar'], { type: type ?? 'image/png' }));
   });
 
-  return { context, exports };
+  return { context: fakeContext, exports };
 }

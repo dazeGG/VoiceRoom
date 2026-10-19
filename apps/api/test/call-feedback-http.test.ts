@@ -4,11 +4,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
-import type { Me, SignedIn } from '@voice-room/shared/contracts/account';
-import type { AdminCallFeedbackPage, CallFeedbackBody } from '@voice-room/shared/contracts/feedback';
-import type { Failure } from '@voice-room/shared/contracts/http';
+import { Me, SignedIn } from '@voice-room/shared/contracts/account';
+import { AdminCallFeedbackPage, type CallFeedbackBody } from '@voice-room/shared/contracts/feedback';
+import { Failure } from '@voice-room/shared/contracts/http';
+import { Type } from 'typebox';
 import { hashPassword } from '../src/lib/password.ts';
 import { cookieFrom, registerAccount, request, startApiServer } from './fakes/server-process.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 const ADMIN_ID = '00000000-0000-4000-8000-0000000000ad';
 const DAY = 24 * 60 * 60 * 1000;
@@ -40,21 +42,32 @@ test('accounts and guests answer, and only the administrator reads the answers',
     ADMIN_ID,
     await hashPassword('password123')
   ]);
-  const signedIn = await request<SignedIn>(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/login',
-    body: { login: 'root', password: 'password123' }
-  });
+  const signedIn = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/auth/login',
+      body: { login: 'root', password: 'password123' }
+    },
+    SignedIn
+  );
   const admin = cookieFrom(signedIn.setCookie);
   const alice = await registerAccount(socketPath, 'alice');
-  const aliceId = (await request<Me>(socketPath, { pathname: '/api/auth/me', cookie: alice })).body.user!.id;
+  const aliceId = defined(
+    (await request(socketPath, { pathname: '/api/auth/me', cookie: alice }, Me)).body.user,
+    'alice'
+  ).id;
   await pool.query(
     `INSERT INTO rooms (id, creator_ip, is_static, owner_id, name) VALUES ('kitchen', '', true, $1, 'Кухня')`,
     [aliceId]
   );
 
   const answer = (cookie: string | undefined, body: object) =>
-    request<Pick<Failure, 'code'>>(socketPath, { method: 'POST', pathname: '/api/feedback/calls', cookie, body });
+    request(
+      socketPath,
+      { method: 'POST', pathname: '/api/feedback/calls', cookie, body },
+      Type.Partial(Type.Pick(Failure, ['code']))
+    );
 
   // A thumbs up keeps only the tags of a good call, each once.
   const good = await answer(alice, {
@@ -91,15 +104,19 @@ test('accounts and guests answer, and only the administrator reads the answers',
   );
 
   assert.equal((await request(socketPath, { pathname: '/api/admin/feedback' })).status, 401);
-  const forbidden = await request<Failure>(socketPath, { pathname: '/api/admin/feedback', cookie: alice });
+  const forbidden = await request(socketPath, { pathname: '/api/admin/feedback', cookie: alice }, Failure);
   assert.equal(forbidden.status, 403);
   assert.equal(forbidden.body.code, 'platform_admin_required');
 
   const read = async (query = '') => {
-    const page = await request<AdminCallFeedbackPage>(socketPath, {
-      pathname: `/api/admin/feedback${query}`,
-      cookie: admin
-    });
+    const page = await request(
+      socketPath,
+      {
+        pathname: `/api/admin/feedback${query}`,
+        cookie: admin
+      },
+      AdminCallFeedbackPage
+    );
     assert.equal(page.status, 200);
     return page.body;
   };
@@ -121,19 +138,20 @@ test('accounts and guests answer, and only the administrator reads the answers',
     ['bad', 'good'],
     'newest first'
   );
-  const [guestEntry, aliceEntry] = recent.entries;
-  assert.equal(guestEntry!.author, null);
-  assert.equal(guestEntry!.roomName, null, 'a room that is gone has no name');
-  assert.equal(guestEntry!.platform, 'mobile');
-  assert.equal(guestEntry!.quality, null);
-  assert.equal(guestEntry!.comment, 'эхо\nи шум');
-  assert.deepEqual(aliceEntry!.author, { userId: aliceId, login: 'alice', displayName: 'alice' });
-  assert.deepEqual(aliceEntry!.tags, ['sound', 'easy']);
-  assert.equal(aliceEntry!.comment, 'всё супер');
-  assert.equal(aliceEntry!.roomName, 'Кухня');
-  assert.equal(aliceEntry!.durationS, 1260);
-  assert.equal(aliceEntry!.peers, 3);
-  assert.deepEqual(aliceEntry!.quality, call.quality);
+  const guestEntry = defined(recent.entries[0], 'the guest answer');
+  const aliceEntry = defined(recent.entries[1], 'the answer of alice');
+  assert.equal(guestEntry.author, null);
+  assert.equal(guestEntry.roomName, null, 'a room that is gone has no name');
+  assert.equal(guestEntry.platform, 'mobile');
+  assert.equal(guestEntry.quality, null);
+  assert.equal(guestEntry.comment, 'эхо\nи шум');
+  assert.deepEqual(aliceEntry.author, { userId: aliceId, login: 'alice', displayName: 'alice' });
+  assert.deepEqual(aliceEntry.tags, ['sound', 'easy']);
+  assert.equal(aliceEntry.comment, 'всё супер');
+  assert.equal(aliceEntry.roomName, 'Кухня');
+  assert.equal(aliceEntry.durationS, 1260);
+  assert.equal(aliceEntry.peers, 3);
+  assert.deepEqual(aliceEntry.quality, call.quality);
 
   const year = await read('?days=365&rating=bad');
   assert.equal(year.summary.bad, 2, 'the summary counts every answer of the period');

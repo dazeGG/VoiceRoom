@@ -21,9 +21,15 @@ export interface PeerInfo {
   isLocal?: boolean;
 }
 
+/** What the speaking rings read from a voice: its waveform, sample by sample. */
+export type MeterAnalyser = {
+  readonly frequencyBinCount: number;
+  getByteTimeDomainData(array: Uint8Array<ArrayBuffer>): void;
+};
+
 export interface Participant {
   accountUserId: string;
-  analyser: AnalyserNode | null;
+  analyser: MeterAnalyser | null;
   audioElements: Map<string, HTMLAudioElement>;
   avatarAccent: string;
   avatarColorKey: string;

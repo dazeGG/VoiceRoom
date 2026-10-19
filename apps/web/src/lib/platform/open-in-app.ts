@@ -81,7 +81,11 @@ export function readOpenInAppSignals(): OpenInAppSignals {
  */
 export function launchAppLink(
   url: string,
-  target: { document: Document; location: Location; navigator: Navigator } = window
+  target: {
+    document: Pick<Document, 'createElement' | 'body'>;
+    location: Pick<Location, 'href'>;
+    navigator: Pick<Navigator, 'userAgent'>;
+  } = window
 ): void {
   if (/Firefox\//.test(target.navigator.userAgent)) {
     const frame = target.document.createElement('iframe');

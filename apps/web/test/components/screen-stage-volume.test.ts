@@ -8,6 +8,7 @@ import ScreenStage from '../../src/lib/features/room/components/ScreenStage.svel
 import { state } from '../../src/lib/features/room/client/core/state.svelte';
 import { bumpScreenUiRevision, screenUi } from '../../src/lib/features/room/screen-ui.svelte';
 import { bindScreenStageIdleUi } from '../../src/lib/features/room/client/ui/screen-stage-controls';
+import { instanceOf } from '../helpers/assert.ts';
 
 const idleAbort = new AbortController();
 
@@ -40,8 +41,8 @@ test('the controls do not idle out while the pointer rests on them', async () =>
   render(ScreenStage);
   screenUi.stageVisible = true;
   bindScreenStageIdleUi(idleAbort.signal);
-  const stage = document.getElementById('screenStage') as HTMLElement;
-  const controls = document.getElementById('screenViewControls') as HTMLElement;
+  const stage = instanceOf(document.getElementById('screenStage'), HTMLElement, 'screen stage');
+  const controls = instanceOf(document.getElementById('screenViewControls'), HTMLElement, 'stage controls');
 
   let pointerOnControls = true;
   vi.spyOn(controls, 'matches').mockImplementation((selector) => selector === ':hover' && pointerOnControls);

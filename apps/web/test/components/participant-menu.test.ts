@@ -4,6 +4,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { authUser } from '../fixtures/users.ts';
 import type { Relationship } from '../../src/lib/api/friends.ts';
 import type { RoomSocial } from '../../src/lib/features/room/social.ts';
+import type { PeerInfo } from '../../src/lib/features/room/client/core/types.ts';
+import { defined } from '../helpers/assert.ts';
 
 const relationships = new Map<string, Relationship>();
 const social = {
@@ -61,9 +63,9 @@ afterEach(() => {
   clearSession();
 });
 
-function openFor(peer: Record<string, unknown>, variant: 'tile' | 'list' = 'tile') {
+function openFor(peer: PeerInfo, variant: 'tile' | 'list' = 'tile') {
   createParticipant({ id: 'me', name: 'Я' });
-  createParticipant(peer as never);
+  createParticipant(peer);
   openParticipantContextMenu(String(peer.id), 20, 20, variant);
   render(ParticipantContextMenu, { context: roomSocialContext(social) });
   return screen.getByRole('dialog', { name: `Действия для ${String(peer.name)}` });
@@ -155,9 +157,12 @@ test('only the owner can moderate, after the audio controls', async () => {
   expect(banIndex).toBeGreaterThan(kickIndex);
 
   await userEvent.click(
-    within(menu)
-      .getAllByRole('button')
-      .find((button) => button.textContent?.includes('Исключить'))!
+    defined(
+      within(menu)
+        .getAllByRole('button')
+        .find((button) => button.textContent?.includes('Исключить')),
+      'kick button'
+    )
   );
   expect(roomsApi.kickRoomPeer).toHaveBeenCalledWith('room-a', 'anna');
   await waitFor(() => expect(showToast).toHaveBeenCalledWith('Анна исключён из комнаты'));

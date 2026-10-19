@@ -9,6 +9,9 @@ import { createUserStore } from '../src/app/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { fake, fakeDb } from './fakes/index.ts';
+import { Type } from 'typebox';
+import { defined } from './helpers/assert-defined.ts';
+import { queryRows } from './helpers/checked.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 async function fixture(t: TestContext) {
   const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
@@ -72,12 +75,14 @@ test('G61-A03 explicit all replaces legacy mute and concurrent updates retain on
       store.setRoomLevel({ ...f, level: ['all', 'mentions', 'none'][index % 3] })
     )
   );
-  const rows = await pool.query('SELECT level FROM notification_room_mutes WHERE user_id = $1 AND room_id = $2', [
-    f.userId,
-    f.roomId
-  ]);
-  assert.equal(rows.rowCount, 1);
-  assert.ok(['all', 'mentions', 'none'].includes(rows.rows[0].level));
+  const rows = await queryRows(
+    pool,
+    Type.Object({ level: Type.String() }),
+    'SELECT level FROM notification_room_mutes WHERE user_id = $1 AND room_id = $2',
+    [f.userId, f.roomId]
+  );
+  assert.equal(rows.length, 1);
+  assert.ok(['all', 'mentions', 'none'].includes(defined(rows[0], 'the room mute').level));
   await store.setRoomLevel({ ...f, level: 'all' });
   assert.equal(await store.getRoomLevel(f), 'all');
 });

@@ -5,56 +5,99 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
+import { Type, type Static, type TProperties, type TSchema } from 'typebox';
+import { Compile, type Validator } from 'typebox/compile';
+import { firstMismatch } from '../../packages/shared/src/contracts/http.ts';
+import { isArray } from '../../packages/shared/src/guards.ts';
 
 const DEFAULT_THRESHOLDS = 'config/coverage/release-250-thresholds.json';
 const BUSINESS_EXTENSIONS = /\.(?:js|mjs|cjs|ts|svelte)$/;
 const BRANCH_METRIC = 'node-v8-branch';
 
-type Percentage = number | { pct?: number } | undefined;
+// The shapes of the JSON files this gate reads, checked once when they are read.
+const Percentage = Type.Union([Type.Number(), Type.Object({ pct: Type.Optional(Type.Number()) })]);
+type Percentage = Static<typeof Percentage> | undefined;
 
-type StrictBranchGroup = {
-  name: string;
-  enforcement: string;
-  paths?: string[];
-  pathPatterns?: string[];
-};
+const Paths = Type.Array(Type.String());
 
-export type CoverageThresholds = {
-  schemaVersion: number;
-  release: string;
-  branchMetric: string;
-  businessPathPatterns: string[];
-  ignoredPathPatterns: string[];
-  strictBranchPaths?: string[];
-  strictBranchGroups: StrictBranchGroup[];
-  strictBranchMinimum: number;
-  changedBusinessCode: { line: number; branch: number };
-  baseline: { artifact: string; measuredAt: string; total?: { lines?: Percentage; branches?: Percentage } };
-  baselinePolicy?: { mode?: string; initialAdoption?: { baseConfigAbsent?: boolean; reason?: unknown } };
-};
+const StrictBranchGroup = Type.Object({
+  name: Type.String(),
+  enforcement: Type.String(),
+  paths: Type.Optional(Paths),
+  pathPatterns: Type.Optional(Paths)
+});
+type StrictBranchGroup = Static<typeof StrictBranchGroup>;
+
+const CoverageThresholds = Type.Object({
+  schemaVersion: Type.Number(),
+  release: Type.String(),
+  branchMetric: Type.String(),
+  businessPathPatterns: Paths,
+  ignoredPathPatterns: Paths,
+  strictBranchPaths: Type.Optional(Paths),
+  strictBranchGroups: Type.Array(StrictBranchGroup),
+  strictBranchMinimum: Type.Number(),
+  changedBusinessCode: Type.Object({ line: Type.Number(), branch: Type.Number() }),
+  baseline: Type.Object({
+    artifact: Type.String(),
+    measuredAt: Type.String(),
+    total: Type.Optional(Type.Object({ lines: Type.Optional(Percentage), branches: Type.Optional(Percentage) }))
+  }),
+  baselinePolicy: Type.Optional(
+    Type.Object({
+      mode: Type.Optional(Type.String()),
+      initialAdoption: Type.Optional(
+        Type.Object({ baseConfigAbsent: Type.Optional(Type.Boolean()), reason: Type.Optional(Type.Unknown()) })
+      )
+    })
+  )
+});
+export type CoverageThresholds = Static<typeof CoverageThresholds>;
 
 type Metric = { total: number; covered: number; skipped: number; pct: number };
 
-type CoverageDetails = {
-  lines: Array<{ line: number; covered: boolean }>;
-  branches: Array<{ startLine: number; endLine: number; covered: boolean }>;
-};
+const CoverageDetails = Type.Object({
+  lines: Type.Array(Type.Object({ line: Type.Number(), covered: Type.Boolean() })),
+  branches: Type.Array(Type.Object({ startLine: Type.Number(), endLine: Type.Number(), covered: Type.Boolean() }))
+});
+type CoverageDetails = Static<typeof CoverageDetails>;
 
-type FileCoverageEntry = { lines: Percentage; branches: Percentage; details?: CoverageDetails };
-
-export type CoverageSummary = {
-  schemaVersion?: number;
-  release?: string;
-  meta?: { measured?: boolean; engine?: string; branchMetric?: string } & Record<string, unknown>;
-  total?: { lines: Percentage; branches: Percentage };
-  files?: Record<string, FileCoverageEntry>;
-};
+const CoverageSummary = Type.Object({
+  schemaVersion: Type.Optional(Type.Number()),
+  release: Type.Optional(Type.String()),
+  meta: Type.Optional(
+    Type.Object({
+      measured: Type.Optional(Type.Boolean()),
+      engine: Type.Optional(Type.String()),
+      branchMetric: Type.Optional(Type.String())
+    })
+  ),
+  total: Type.Optional(Type.Object({ lines: Type.Optional(Percentage), branches: Type.Optional(Percentage) })),
+  files: Type.Record(
+    Type.String(),
+    Type.Object({
+      lines: Type.Optional(Percentage),
+      branches: Type.Optional(Percentage),
+      details: Type.Optional(CoverageDetails)
+    })
+  )
+});
+export type CoverageSummary = Static<typeof CoverageSummary>;
 
 type FileCoverage = { lines: number; branches: number; details: CoverageDetails | undefined };
 
-type V8Range = { startOffset: number; endOffset: number; count: number };
-type V8Function = { functionName?: string; ranges?: V8Range[] };
-type V8Script = { url?: unknown; functions?: V8Function[] };
+const V8Range = Type.Object({ startOffset: Type.Number(), endOffset: Type.Number(), count: Type.Number() });
+const V8Script = Type.Object({
+  url: Type.Optional(Type.Unknown()),
+  functions: Type.Optional(
+    Type.Array(Type.Object({ functionName: Type.Optional(Type.String()), ranges: Type.Optional(Type.Array(V8Range)) }))
+  )
+});
+type V8Script = Static<typeof V8Script>;
+// Compiled: a coverage run reads a few hundred megabytes of V8 JSON.
+const V8Coverage = Compile(Type.Object({ result: Type.Optional(Type.Array(V8Script)) }));
+const ThresholdsFile = Compile(CoverageThresholds);
+const SummaryFile = Compile(CoverageSummary);
 
 type AccumulatedRange = { startOffset: number; endOffset: number; isFunctionRoot: boolean; covered: boolean };
 type Accumulator = {
@@ -74,14 +117,18 @@ type RatchetOptions = {
   fileExists?: FileExists;
 };
 
-function readJson<T>(filePath: string, label: string): T {
+function readJson<T>(filePath: string, label: string, validator: Validator<TProperties, TSchema, T>): T {
+  let value: unknown;
   try {
-    return JSON.parse(fs.readFileSync(filePath, 'utf8')) as T;
+    value = JSON.parse(fs.readFileSync(filePath, 'utf8'));
   } catch (error) {
     throw new Error(
-      `Unable to read ${label} JSON at ${filePath}: ${error instanceof Error ? error.message : String(error)}`
+      `Unable to read ${label} JSON at ${filePath}: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error }
     );
   }
+  if (validator.Check(value)) return value;
+  throw new Error(`Unexpected ${label} JSON at ${filePath}: ${firstMismatch(validator.Type(), value)}`);
 }
 
 function writeJson(filePath: string, value: unknown) {
@@ -159,7 +206,7 @@ function metric(covered: number, total: number): Metric {
 }
 
 function assertStringArray(value: unknown, label: string) {
-  assert.ok(Array.isArray(value), `${label} must be an array`);
+  assert.ok(isArray(value), `${label} must be an array`);
   for (const item of value) assert.equal(typeof item, 'string', `${label} entries must be strings`);
 }
 
@@ -221,7 +268,7 @@ function listBusinessSourceFiles(root: string, thresholds: CoverageThresholds) {
 
 function normalizeFileCoverage(summary: CoverageSummary) {
   const files = new Map<string, FileCoverage>();
-  for (const [filePath, coverage] of Object.entries((summary.files ?? summary) as Record<string, FileCoverageEntry>)) {
+  for (const [filePath, coverage] of Object.entries(summary.files)) {
     if (filePath === 'total' || filePath === 'meta') continue;
     files.set(normalizePath(filePath), {
       lines: pct(coverage.lines, `${filePath}.lines`),
@@ -575,7 +622,7 @@ export function collectV8Coverage({
     .readdirSync(v8Dir)
     .filter((name) => name.endsWith('.json'))
     .sort()) {
-    const payload = readJson<{ result?: V8Script[] }>(path.join(v8Dir, entry), 'V8 coverage');
+    const payload = readJson(path.join(v8Dir, entry), 'V8 coverage', V8Coverage);
     for (const script of payload.result ?? []) {
       // Most scripts arrive as file:// URLs; a TypeScript module that CommonJS
       // require() loads is reported by its plain filesystem path instead.
@@ -710,7 +757,7 @@ export function checkCoverage({
 if (import.meta.main) {
   try {
     const args = parseArgs(process.argv.slice(2));
-    const thresholds = readJson<CoverageThresholds>(args.thresholds, 'thresholds');
+    const thresholds = readJson(args.thresholds, 'thresholds', ThresholdsFile);
     let coverageSummary: CoverageSummary;
     let coveragePath = args.coverage;
     if (args.v8Dir) {
@@ -722,7 +769,7 @@ if (import.meta.main) {
         process.exit(0);
       }
     } else {
-      coverageSummary = readJson<CoverageSummary>(args.coverage, 'coverage summary');
+      coverageSummary = readJson(args.coverage, 'coverage summary', SummaryFile);
     }
     const result = checkCoverage({
       coverageSummary,
@@ -731,7 +778,7 @@ if (import.meta.main) {
       changedLineMap: readChangedLineMap(args.changedDiff),
       coveragePath,
       baseThresholds: args.baseThresholds
-        ? readJson<CoverageThresholds>(args.baseThresholds, 'protected base thresholds')
+        ? readJson(args.baseThresholds, 'protected base thresholds', ThresholdsFile)
         : undefined,
       baseThresholdsAbsent: args.baseThresholdsAbsent
     });

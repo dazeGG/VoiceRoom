@@ -8,6 +8,7 @@ import {
   SIGNAL_RESUME_WINDOW_MS,
   createSignalReconnectPolicy
 } from '../../src/lib/features/room/client/services/livekit/reconnect-policy.ts';
+import { defined } from '../helpers/assert.ts';
 import { loadLiveKitHarness } from '../helpers/livekit-harness.ts';
 
 const atRandom = (value: number) => () => value;
@@ -48,11 +49,15 @@ test('every LiveKit room of the call is created with this policy', async () => {
     peerId: 'peer-1',
     sessionToken: 'session-1',
     localStream: null,
-    livekitRoom: { disconnect: async () => {}, removeAllListeners: () => {}, remoteParticipants: new Map() }
+    livekitRoom: {
+      disconnect: async () => {},
+      removeAllListeners: () => {},
+      remoteParticipants: new Map<string, unknown>()
+    }
   });
 
   await lk.service.attemptFreshLiveKitReplacement({ epoch: 1, attempt: 1 });
 
-  const policy = lk.rooms[0]?.roomOptions.reconnectPolicy as ReturnType<typeof createSignalReconnectPolicy>;
+  const policy = defined(lk.rooms[0]?.roomOptions.reconnectPolicy, 'reconnect policy');
   expect(policy.nextRetryDelayInMs({ retryCount: 40, elapsedMs: 120_000 })).not.toBeNull();
 });

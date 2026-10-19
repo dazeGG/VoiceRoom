@@ -33,6 +33,29 @@ import { createRoomRealtimeRuntime, type RuntimeRoomStore } from '../../apps/api
 import { createConnectionRegistry } from '../../apps/api/src/realtime/registry.ts';
 import type { PresenceRoom } from '../../apps/api/src/realtime/runtime-types.ts';
 import { isRecord } from '@voice-room/shared/guards';
+import type {
+  AccountSession,
+  AppPromptSeen,
+  DeletionPreview,
+  DeletionRoom,
+  DeletionScheduled,
+  LoginAlert,
+  LoginAlertResolved,
+  LoginAlerts,
+  Me,
+  Recovered,
+  RecoveryCodesGenerated,
+  RecoveryCodesStatus,
+  ReminderSnoozed,
+  Security,
+  SelfUser,
+  Sessions,
+  SessionsRevoked,
+  SignedIn,
+  WhatsNewAnswer
+} from '@voice-room/shared/contracts/account';
+import type { Done } from '@voice-room/shared/contracts/http';
+import type { LobbyRoom, RoomCard, RoomList, RoomUnbookmarked } from '@voice-room/shared/contracts/rooms';
 
 const require = createRequire(import.meta.url);
 const SILENT_LOGGER = { log() {}, info() {}, warn() {}, error() {} };
@@ -56,19 +79,24 @@ const WEB_ROOM_COVERAGE_SCRIPT = String.raw`
     },
     load(url, context, nextLoad) {
       if (url === targetUrl) {
-        const source = originalSource + "\nexport { formatJoinError as __g08FormatJoinError };\n";
+        const source = originalSource + "\nexport { formatJoinError as __g08FormatJoinError, LiveKitTransportError as __g08LiveKitTransportError, ApiError as __g08ApiError };\n";
         return { format: "module", source: stripTypeScriptTypes(source, { mode: "strip" }), shortCircuit: true };
       }
       if (url.startsWith("g08-stub:")) {
         const names = importNames.get(decodeURIComponent(url.slice("g08-stub:".length))) ?? [];
-        return { format: "module", source: names.map((name) => "export const " + name + " = new Proxy((value) => value, { get: () => undefined });").join("\n"), shortCircuit: true };
+        // Each stub is callable and constructible; its own prototype makes instanceof
+        // tell the error classes formatJoinError tells apart.
+        return { format: "module", source: names.map((name) => "export const " + name + " = new Proxy(function (value) { return value; }, { get: (target, key) => (key === 'prototype' ? target.prototype : undefined) });").join("\n"), shortCircuit: true };
       }
       return nextLoad(url, context);
     }
   });
   const room = await import(targetUrl);
-  if (!/LIVEKIT_GATE_PUBLIC_URL/.test(room.__g08FormatJoinError("signal connection failed"))) process.exitCode = 1;
-  if (room.__g08FormatJoinError("plain failure") !== "plain failure") process.exitCode = 1;
+  if (!/LIVEKIT_GATE_PUBLIC_URL/.test(room.__g08FormatJoinError(new room.__g08LiveKitTransportError()))) process.exitCode = 1;
+  const apiError = new room.__g08ApiError();
+  apiError.message = "server refused";
+  if (room.__g08FormatJoinError(apiError) !== "server refused") process.exitCode = 1;
+  if (room.__g08FormatJoinError(new Error("plain failure")) !== "Не удалось подключиться") process.exitCode = 1;
 `;
 const ADMISSION_INTERNAL_COVERAGE_SCRIPT = String.raw`
   const fs = require("node:fs");
@@ -618,8 +646,9 @@ test('G08 web TypeScript producer measures actual auth and media decision files'
     presenceStatus: 'online',
     hasUsedDesktopApp: false,
     appPromptSeen: true
-  };
-  const recoveryCodes = { remaining: 3, generatedAt: 10 };
+  } satisfies SelfUser;
+  const recoveryCodes = { remaining: 3, generatedAt: 10 } satisfies RecoveryCodesStatus;
+  // Every success body is the route's contract body: the client refuses anything else.
   const response = ({ ok = true, payload = {} }: { ok?: boolean; payload?: object } = {}) =>
     new Response(JSON.stringify(ok ? { ok: true, ...payload } : { ok: false, ...payload }), {
       status: ok ? 200 : 400
@@ -632,7 +661,7 @@ test('G08 web TypeScript producer measures actual auth and media decision files'
     globalThis.fetch = async () => response({ ok: false, payload });
   };
 
-  answer({ user });
+  answer({ ok: true, user } satisfies SignedIn);
   assert.equal((await auth.register({ login: 'user', password: 'password' })).id, 'u1');
   assert.equal((await auth.login({ login: 'user', password: 'password' })).id, 'u1');
   assert.equal((await auth.updateDisplayName('User')).id, 'u1');
@@ -640,23 +669,35 @@ test('G08 web TypeScript producer measures actual auth and media decision files'
   assert.equal((await auth.uploadUserAvatar(new Blob(['avatar']))).id, 'u1');
   assert.equal((await auth.deleteUserAvatar()).id, 'u1');
   assert.equal((await auth.fetchMe())?.id, 'u1');
-  answer({});
+  answer({ ok: true } satisfies Done);
   await auth.changePassword('old-password', 'new-password');
   await auth.logout();
-  answer({ user: null });
+  answer({ ok: true, user: null } satisfies Me);
   assert.equal(await auth.fetchMe(), null);
 
-  answer({ room: { roomId: 'room' } });
+  const room = {
+    avatarUrl: null,
+    createdAt: 1,
+    isStatic: false,
+    name: 'Комната',
+    peers: 0,
+    relationship: 'bookmarked',
+    roomId: 'room'
+  } satisfies LobbyRoom;
+  answer({ ok: true, room } satisfies RoomCard);
   assert.equal((await auth.addRoomByCode('room')).roomId, 'room');
-  answer({ removed: true });
+  // A body outside the contract is refused as a whole, never half-read.
+  answer({ ok: true, room: { roomId: 'room' } });
+  await assert.rejects(() => auth.addRoomByCode('room'), { name: 'ApiError', code: 'invalid_response' });
+  answer({ ok: true, removed: true } satisfies RoomUnbookmarked);
   assert.equal(await auth.removeRoomFromList('room'), true);
-  answer({ removed: false });
+  answer({ ok: true, removed: false } satisfies RoomUnbookmarked);
   assert.equal(await auth.removeRoomFromList('room'), false);
   refuse({ error: 'нет доступа' });
   await assert.rejects(() => auth.removeRoomFromList('room'), /нет доступа/);
   globalThis.fetch = async () => notJson();
   await assert.rejects(() => auth.removeRoomFromList('room'), /удалить комнату из списка/i);
-  answer({ rooms: [] });
+  answer({ ok: true, rooms: [] } satisfies RoomList);
   assert.deepEqual(await auth.fetchOwnedRooms(), []);
 
   refuse({ error: 'denied', code: 'account_deletion_pending' });
@@ -668,16 +709,17 @@ test('G08 web TypeScript producer measures actual auth and media decision files'
   await assert.rejects(() => auth.login({ login: 'user', password: 'bad' }), /сервер недоступен/i);
 
   // Account security: every call reads its contract.
-  answer({ recoveryCodes, recoveryCodesReminder: { snoozedUntil: 20 } });
+  answer({ ok: true, recoveryCodes, recoveryCodesReminder: { snoozedUntil: 20 } } satisfies Security);
   assert.deepEqual(await auth.fetchAccountSecurity(), { recoveryCodes, recoveryCodesReminder: { snoozedUntil: 20 } });
-  answer({ recoveryCodesReminder: { snoozedUntil: 42 } });
+  answer({ ok: true, recoveryCodesReminder: { snoozedUntil: 42 } } satisfies ReminderSnoozed);
   assert.deepEqual(await auth.snoozeRecoveryCodesReminder(), { snoozedUntil: 42 });
-  answer({ whatsNew: { current: '2.6.0', lastSeen: 'not-a-version' } });
+  answer({ ok: true, whatsNew: { current: '2.6.0', lastSeen: 'not-a-version' } } satisfies WhatsNewAnswer);
   assert.deepEqual(await auth.fetchWhatsNew(), { current: '2.6.0', lastSeen: null });
   await auth.markWhatsNewSeen();
-  answer({ appPromptSeen: true });
+  answer({ ok: true, appPromptSeen: true } satisfies AppPromptSeen);
   await auth.markAppPromptSeen();
-  // An alert or device without a valid id or time is dropped, not shown half-empty.
+  // An alert or device the contract lets through but without a valid id is
+  // dropped, not shown half-empty.
   const alert = {
     id: '11111111-1111-4111-8111-111111111111',
     kind: 'login',
@@ -685,31 +727,36 @@ test('G08 web TypeScript producer measures actual auth and media decision files'
     os: 'Linux',
     location: '',
     createdAt: 5
-  };
-  answer({ alerts: [alert, { ...alert, id: 'nonsense' }] });
+  } satisfies LoginAlert;
+  answer({ ok: true, alerts: [alert, { ...alert, id: 'nonsense' }] } satisfies LoginAlerts);
   assert.deepEqual(await auth.fetchLoginAlerts(), [alert]);
-  const session = { id: alert.id, current: true, client: '', os: '', location: '', lastSeenAt: 5 };
-  answer({ sessions: [session, { ...session, id: 'nonsense' }] });
+  const session = {
+    id: alert.id,
+    current: true,
+    client: '',
+    os: '',
+    location: '',
+    lastSeenAt: 5
+  } satisfies AccountSession;
+  answer({ ok: true, sessions: [session, { ...session, id: 'nonsense' }] } satisfies Sessions);
   assert.deepEqual(await auth.fetchAccountSessions(), [session]);
-  answer({ graceDays: 3, rooms: [{ roomId: 'room', name: 'Комната', heir: null }] });
-  assert.deepEqual(await auth.fetchAccountDeletionPreview(), {
-    graceDays: 3,
-    rooms: [{ roomId: 'room', name: 'Комната', heir: null }]
-  });
-  answer({ deletionScheduledFor: 5 });
+  const deletionRooms = [{ roomId: 'room', name: 'Комната', heir: null }] satisfies DeletionRoom[];
+  answer({ ok: true, graceDays: 3, rooms: deletionRooms } satisfies DeletionPreview);
+  assert.deepEqual(await auth.fetchAccountDeletionPreview(), { graceDays: 3, rooms: deletionRooms });
+  answer({ ok: true, deletionScheduledFor: 5 } satisfies DeletionScheduled);
   assert.deepEqual(await auth.requestAccountDeletion('password'), { deletionScheduledFor: 5 });
-  answer({ resolution: 'confirmed' });
+  answer({ ok: true, resolution: 'confirmed' } satisfies LoginAlertResolved);
   await auth.confirmLoginAlert('alert id');
   await assert.rejects(() => auth.denyLoginAlert('alert id'));
-  answer({ resolution: 'denied', sessionEnded: true, recoveryCodes });
+  answer({ ok: true, resolution: 'denied', sessionEnded: true, recoveryCodes } satisfies LoginAlertResolved);
   assert.deepEqual(await auth.denyLoginAlert('alert id'), { sessionEnded: true, recoveryCodes });
-  answer({});
+  answer({ ok: true } satisfies Done);
   await auth.revokeAccountSession('session id');
-  answer({ revoked: 2 });
+  answer({ ok: true, revoked: 2 } satisfies SessionsRevoked);
   assert.equal(await auth.revokeOtherAccountSessions(), 2);
-  answer({ codes: ['AAAA-BBBB'], recoveryCodes });
+  answer({ ok: true, codes: ['AAAA-BBBB'], recoveryCodes } satisfies RecoveryCodesGenerated);
   assert.deepEqual(await auth.generateRecoveryCodes('password'), { codes: ['AAAA-BBBB'], recoveryCodes });
-  answer({ user, recoveryCodes: { remaining: 9 } });
+  answer({ ok: true, user, recoveryCodes: { remaining: 9 } } satisfies Recovered);
   assert.deepEqual(await auth.recoverAccount({ login: 'user', code: 'code', newPassword: 'password' }), {
     user,
     remaining: 9

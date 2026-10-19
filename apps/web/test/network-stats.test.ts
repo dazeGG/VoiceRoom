@@ -1,6 +1,7 @@
 import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { freshImport } from './helpers/fresh-module.ts';
+import type { RtcStatsSource } from '../src/lib/features/room/client/media/rtc-stats.ts';
 
 async function load<Module>(importModule: () => Promise<Module>): Promise<Module> {
   vi.stubGlobal('window', { location: { hash: '', pathname: '/', search: '' } });
@@ -10,8 +11,8 @@ async function load<Module>(importModule: () => Promise<Module>): Promise<Module
 
 function report(entries: Array<{ id: string } & Record<string, unknown>>) {
   const map = new Map(entries.map((entry) => [entry.id, entry]));
-  const stats = { forEach: (callback: (value: unknown) => void) => map.forEach((value) => callback(value)) };
-  return stats as unknown as RTCStatsReport;
+  const stats: RtcStatsSource = { forEach: (callback) => map.forEach((value) => callback(value)) };
+  return stats;
 }
 
 test('upstream loss and a UDP transport come from the publisher stats', async () => {

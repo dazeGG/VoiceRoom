@@ -64,13 +64,13 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
     if (conversation.type === 'room') {
       const roomId = conversation.id;
       // The outbox carries the stored message; the runtime makes it public.
-      if (!isStoredChatMessage(message)) return;
+      if (!isStoredChatMessage(message)) return reportMalformedMessage('room', message);
       deps.broadcastChatMessage(roomId, await deps.projection.project('room', message, { roomId }));
       return;
     }
     if (conversation.type === 'dm') {
       // The outbox carries the stored message as the store wrote it.
-      if (!isStoredDirectMessage(message)) return;
+      if (!isStoredDirectMessage(message)) return reportMalformedMessage('dm', message);
       const peerId = message.senderId === conversation.id ? message.recipientId : conversation.id;
       const projected = await deps.projection.project('dm', message, { userId: message.senderId, peerId });
       deps.notifyUser(message.senderId, { type: 'dm-message', message: projected });
@@ -94,6 +94,18 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
       .error(
         { evt: LOG_EVENTS.MESSAGE_EVENT_DISPATCH_FAILED, err: error },
         'failed to dispatch a durable message event'
+      );
+  }
+
+  // A stored message that no longer fits its contract (a row written by
+  // another version) is dropped from realtime delivery, but never silently.
+  function reportMalformedMessage(conversation: 'room' | 'dm', message: unknown): void {
+    const messageId = isRecord(message) && typeof message.id === 'string' ? message.id : null;
+    deps
+      .logger()
+      .error(
+        { evt: LOG_EVENTS.MESSAGE_EVENT_DISPATCH_FAILED, conversation, messageId },
+        'a durable message event carried a malformed message'
       );
   }
 

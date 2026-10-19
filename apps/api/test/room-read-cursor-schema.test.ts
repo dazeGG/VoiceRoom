@@ -44,7 +44,8 @@ test(
       userId: 'me',
       tuple: { id: 'r1', createdAtMicros: micros }
     });
-    assert.equal((room as { last_read_message_id: string }).last_read_message_id, 'r1');
+    assert.ok(room && 'last_read_message_id' in room, 'the read moved');
+    assert.equal(room.last_read_message_id, 'r1');
     const stored = await pool.query<{ last_read_message_id: string }>(
       `SELECT last_read_message_id FROM room_chat_reads WHERE room_id = 'room' AND user_id = 'me'`
     );
@@ -55,7 +56,8 @@ test(
     );
 
     const dm = await reads.advanceDm({ peerId: 'peer', userId: 'me', tuple: { id: 'd1', createdAtMicros: micros } });
-    assert.equal((dm as { last_read_message_id: string }).last_read_message_id, 'd1');
+    assert.ok(dm && 'last_read_message_id' in dm, 'the read moved');
+    assert.equal(dm.last_read_message_id, 'd1');
     const message = await pool.query<{ read_at: Date | null }>(`SELECT read_at FROM direct_messages WHERE id = 'd1'`);
     assert.ok(message.rows[0]?.read_at, 'the newest message itself is marked read');
 

@@ -14,6 +14,7 @@ import { adminLocationFromPath, adminPath } from '../../src/lib/features/admin/t
 import { blockedMessage } from '../../src/lib/features/auth/account';
 import { AccountBadge } from '../../src/lib/shared/ui';
 import { badgeOf, setAccountBadges } from '../../src/lib/shared/badges.svelte';
+import { parseJson } from '../helpers/assert.ts';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -84,7 +85,7 @@ function stubApi(routes: Record<string, Reply | ((call: Call) => Reply)>) {
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input instanceof Request ? input.url : input), 'http://localhost');
       const method = (init?.method ?? 'GET').toUpperCase();
-      const call = { method, url, body: typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : null };
+      const call = { method, url, body: typeof init?.body === 'string' ? parseJson(init.body) : null };
       calls.push(call);
       const route = routes[`${method} ${url.pathname}`];
       const reply = typeof route === 'function' ? route(call) : (route ?? { status: 500, body: { ok: false } });

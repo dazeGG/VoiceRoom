@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { openWs, sendWs, joinVoiceRoom, waitForWsType } from './ws-harness.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { RoomCreated } from '@voice-room/shared/contracts/rooms';
 import { request, socketDir, startServer, waitForHealthz, type ServerLogs } from './fakes/server-process.ts';
 
 const PEER_A = 'peer-dup-a1';
@@ -32,7 +33,7 @@ test('room.peer.update fans out exactly one room.peer.updated per other peer', a
   try {
     await waitForHealthz(socketPath);
 
-    const created = await request<{ roomId: string }>(socketPath, { method: 'POST', pathname: '/api/rooms', body: {} });
+    const created = await request(socketPath, { method: 'POST', pathname: '/api/rooms', body: {} }, RoomCreated);
     assert.equal(created.status, 201);
     const { roomId } = created.body;
 

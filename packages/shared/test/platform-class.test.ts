@@ -5,6 +5,8 @@ import test from 'node:test';
 
 import packageJson from '../package.json' with { type: 'json' };
 import * as direct from '../src/platform-class.ts';
+import { isRecord } from '../src/guards.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 test('platform-class classifies the same through its package export and its source', async () => {
   const esm = await import('@voice-room/shared/platform-class');
@@ -36,10 +38,12 @@ test('browser-facing shared modules expose named ESM exports', async () => {
     'runtime-config': ['DEFAULT_RUNTIME_CONFIG', 'parseRuntimeConfig', 'resolveLiveKitConnectUrls']
   };
 
+  const exportTargets = new Map(Object.entries(packageJson.exports));
   for (const [subpath, names] of Object.entries(expectedExports)) {
-    const target = (packageJson.exports as Record<string, string>)[`./${subpath}`];
-    assert.match(target!, /^\.\/src\/(?:contracts\/)?[a-z-]+\.ts$/);
-    const esm = await import(`@voice-room/shared/${subpath}`);
+    const target = defined(exportTargets.get(`./${subpath}`), `the ./${subpath} export`);
+    assert.match(target, /^\.\/src\/(?:contracts\/)?[a-z-]+\.ts$/);
+    const esm: unknown = await import(`@voice-room/shared/${subpath}`);
+    assert.ok(isRecord(esm), `${subpath} must be a module`);
     for (const name of names) assert.ok(name in esm, `${subpath} must export ${name}`);
   }
 });
