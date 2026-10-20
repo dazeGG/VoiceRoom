@@ -71,6 +71,8 @@
     shouldOfferOpenInApp
   } from '$lib/platform/open-in-app';
   import { openChat, roomUi } from '$lib/features/room/room-ui.svelte';
+  import { screenUi } from '$lib/features/room/screen-ui.svelte';
+  import { syncEmbeddedRoomDocument } from './model/embedded-room-document';
   import { state as roomClientState } from '$lib/features/room/client/core/state.svelte';
   import '$lib/shared/styles/typography.css';
   import '$lib/shared/styles/dialog.css';
@@ -337,20 +339,11 @@
       delete document.body.dataset.lobbyEmbedded;
       return;
     }
-    if (embeddedRoomVisible) {
-      document.body.dataset.screen = 'room';
-      document.body.dataset.lobbyEmbedded = 'true';
-      // Re-show clears data-chat-open below on hide, but RoomChat's own effect
-      // won't re-fire (chatOpen didn't change), so the stage/dock wouldn't shift
-      // back for an already-open chat. Sync it from the shared state here.
-      document.body.dataset.chatOpen = roomUi.chatOpen ? 'true' : 'false';
-      return;
-    }
-    document.body.dataset.screen = 'start';
-    delete document.body.dataset.chatOpen;
-    delete document.body.dataset.lobbyEmbedded;
-    delete document.body.dataset.screenView;
-    delete document.body.dataset.stripCollapsed;
+    syncEmbeddedRoomDocument(document.body, {
+      visible: embeddedRoomVisible,
+      chatOpen: roomUi.chatOpen,
+      streamOnStage: screenUi.stageVisible
+    });
   });
 
   syncLobbyWithDesktop({

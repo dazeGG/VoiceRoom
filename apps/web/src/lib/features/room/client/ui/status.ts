@@ -84,14 +84,13 @@ export function getConnectionStatusView(): ConnectionStatusView {
   }
 
   if (state.voiceConnection === 'connected') {
-    const quality = getPeerLatencyQuality(state.localPingMs, state.localConnectionQuality);
     const ping = formatLocalPing();
-    const lossy = hasNoticeableLoss();
-    const unstable = quality === 'poor' || lossy;
-    const label = `${unstable ? 'Голос нестабилен' : 'Голос подключен'}${ping ? ` · ${ping}` : ''}`;
+    const causes = getInstabilityCauses();
+    const head = causes.length > 0 ? ['Голос нестабилен', ...causes] : ['Голос подключен'];
+    const label = [...head, ...(ping ? [ping] : [])].join(' · ');
     return {
       label,
-      stateName: unstable ? 'warning' : 'connected',
+      stateName: causes.length > 0 ? 'warning' : 'connected',
       title: formatNetworkDetails(ping)
     };
   }
@@ -129,10 +128,20 @@ export function getConnectionStatusView(): ConnectionStatusView {
 
 // Opus with RED conceals a few percent of loss; beyond this listeners hear it.
 const NOTICEABLE_LOSS_PCT = 5;
+// The receive jitter buffer absorbs a few tens of ms; past this speech stutters.
+const NOTICEABLE_JITTER_MS = 30;
 
-function hasNoticeableLoss(): boolean {
-  const { inboundLossPct, outboundLossPct } = state.localNetwork;
-  return (inboundLossPct ?? 0) >= NOTICEABLE_LOSS_PCT || (outboundLossPct ?? 0) >= NOTICEABLE_LOSS_PCT;
+// What makes the voice unstable, in the words the warning shows. A warning
+// that only says "unstable" next to a 2 ms ping leaves the user guessing.
+function getInstabilityCauses(): string[] {
+  const { inboundLossPct, jitterMs, outboundLossPct } = state.localNetwork;
+  const causes: string[] = [];
+  const quality = getPeerLatencyQuality(state.localPingMs, state.localConnectionQuality);
+  if (quality === 'poor') causes.push(Number.isFinite(state.localPingMs) ? 'высокий пинг' : 'плохая связь');
+  if ((outboundLossPct ?? 0) >= NOTICEABLE_LOSS_PCT) causes.push(`потери от вас ${outboundLossPct}%`);
+  if ((inboundLossPct ?? 0) >= NOTICEABLE_LOSS_PCT) causes.push(`потери к вам ${inboundLossPct}%`);
+  if ((jitterMs ?? 0) >= NOTICEABLE_JITTER_MS) causes.push(`джиттер ${jitterMs} мс`);
+  return causes;
 }
 
 export function formatNetworkDetails(ping: string): string {

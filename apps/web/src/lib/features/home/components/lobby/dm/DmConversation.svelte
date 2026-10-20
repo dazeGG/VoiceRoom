@@ -26,6 +26,8 @@
   import type { PresenceStatus } from '$lib/shared/presence';
   import { AccountBadge, Avatar } from '$lib/shared/ui';
   import { copyText } from '$lib/shared/utils/clipboard';
+  import type { Attachment } from '@voice-room/shared/contracts/messages';
+  import { attachmentAt, copyAttachmentImage, downloadAttachment } from '$lib/shared/chat/attachment-actions';
   import { openProfileCardFor } from '../../../../../entities/profile-card/profile-card-ui.svelte';
   import { formatDayLabel, formatTime, friendName, isSameDay } from '../../../model/lobby-format';
   import { pushToast } from '../../../model/toasts.svelte';
@@ -62,7 +64,14 @@
   let threadPinnedToBottom = true;
   let editingMessageId = $state('');
   let replyTarget = $state<DirectMessage | null>(null);
-  let menu = $state<{ message: DirectMessage; fromMe: boolean; x: number; y: number } | null>(null);
+  // `image` is the picture the menu was opened on, when it was opened on one.
+  let menu = $state<{
+    message: DirectMessage;
+    fromMe: boolean;
+    image: Attachment | null;
+    x: number;
+    y: number;
+  } | null>(null);
   let reportedMessageId = $state<string | null>(null);
   let inviteResponding = $state('');
 
@@ -271,13 +280,28 @@
   function openMessageMenu(message: DirectMessage, fromMe: boolean, event: MouseEvent): void {
     if (message.invite || editingMessageId === message.id) return;
     event.preventDefault();
-    menu = { message, fromMe, x: event.clientX, y: event.clientY };
+    menu = {
+      message,
+      fromMe,
+      image: attachmentAt(event.target, message.attachments),
+      x: event.clientX,
+      y: event.clientY
+    };
   }
 
   // The picker lives in each bubble's hover toolbar; the menu entry drives it
   // rather than mounting a second popover.
   function openReactionPickerFor(messageId: string): void {
     queueMicrotask(() => messageRow(messageId)?.querySelector<HTMLButtonElement>('.reaction-picker-trigger')?.click());
+  }
+
+  async function copyImage(image: Attachment): Promise<void> {
+    try {
+      await copyAttachmentImage(image);
+      pushToast('Изображение скопировано');
+    } catch {
+      pushToast('Не удалось скопировать');
+    }
   }
 
   async function copyMessageText(message: DirectMessage): Promise<void> {
@@ -447,6 +471,7 @@
 
 {#if menu}
   {@const target = menu.message}
+  {@const image = menu.image}
   <MessageContextMenu
     open
     x={menu.x}
@@ -466,6 +491,8 @@
     onOpenReactionPicker={() => openReactionPickerFor(target.id)}
     onReply={() => replyTo(target)}
     onCopy={() => void copyMessageText(target)}
+    onCopyImage={image ? () => void copyImage(image) : undefined}
+    onDownloadImage={image ? () => downloadAttachment(image) : undefined}
     onEdit={() => (editingMessageId = target.id)}
     onDelete={() => void deleteMessage(target.id)}
     onReport={menu.fromMe ? undefined : () => (reportedMessageId = target.id)}

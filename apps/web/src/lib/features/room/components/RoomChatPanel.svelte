@@ -16,6 +16,8 @@
   import { session } from '$lib/features/auth/session.svelte';
   import { subscribeRoomPreview } from '$lib/entities/room/room-realtime';
   import { copyText } from '$lib/shared/utils/clipboard';
+  import type { Attachment as MessageAttachment } from '@voice-room/shared/contracts/messages';
+  import { attachmentAt, copyAttachmentImage, downloadAttachment } from '$lib/shared/chat/attachment-actions';
   import { playRoomChatMessageCue } from '../client/media/cues';
   import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '../client/room/lifecycle';
   import { openProfileCardFor } from '$lib/entities/profile-card/profile-card-ui.svelte';
@@ -128,6 +130,8 @@
   const media = $derived<AttachmentComposeStore | null>(roomId ? getAttachmentComposeStore('room', roomId) : null);
   let replyTarget = $state<ChatMessage | null>(null);
   let menuMessage = $state<ChatMessage | null>(null);
+  // The picture the menu was opened on, when it was opened on one.
+  let menuImage = $state<MessageAttachment | null>(null);
   let reportedMessageId = $state<string | null>(null);
   let menuX = $state(0);
   let menuY = $state(0);
@@ -307,6 +311,7 @@
     if (editingMessageId === message.id) return;
     event.preventDefault();
     menuMessage = message;
+    menuImage = attachmentAt(event.target, message.attachments);
     menuX = event.clientX;
     menuY = event.clientY;
   }
@@ -564,6 +569,15 @@
     onAuthorContextMenu(group.peerId, event);
   }
 
+  async function copyImage(image: MessageAttachment): Promise<void> {
+    try {
+      await copyAttachmentImage(image);
+      toast('Изображение скопировано');
+    } catch {
+      toast('Не удалось скопировать', { variant: 'error' });
+    }
+  }
+
   async function copyMessageText(message: ChatMessage): Promise<void> {
     try {
       await copyText(message.text);
@@ -689,6 +703,7 @@
 
 {#if menuMessage}
   {@const target = menuMessage}
+  {@const image = menuImage}
   <MessageContextMenu
     open={Boolean(menuMessage)}
     x={menuX}
@@ -710,6 +725,8 @@
     onOpenReactionPicker={() => openReactionPickerFor(target.id)}
     onReply={() => replyTo(target)}
     onCopy={() => void copyMessageText(target)}
+    onCopyImage={image ? () => void copyImage(image) : undefined}
+    onDownloadImage={image ? () => downloadAttachment(image) : undefined}
     onTogglePin={() => void togglePinned(target.id)}
     onEdit={() => {
       editingMessageId = target.id;

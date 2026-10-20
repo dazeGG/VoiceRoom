@@ -159,6 +159,19 @@ test('the list of who is in voice refreshes every few seconds', async () => {
   expect(await screen.findByText('Сейчас никто не в звонке.')).toBeTruthy();
 });
 
+test('an unnamed temporary room that is still there goes by its code and is not marked deleted', async () => {
+  stubApi({
+    'GET /api/admin/rooms': () => live([]),
+    'GET /api/admin/rooms/history': () =>
+      history([stay('s-tmp', { roomId: '8vjx8udrdu', roomName: '', isStatic: false })])
+  });
+  render(AdminPanel, { props: { tab: 'rooms' } });
+
+  const table = await screen.findByRole('table');
+  expect(within(table).getByRole('button', { name: '8vjx8udrdu' })).toBeTruthy();
+  expect(within(table).queryByText('удалена')).toBeNull();
+});
+
 test('the history loads a page at a time and narrows to one room', async () => {
   const pageOne = Array.from({ length: 3 }, (_, index) => stay(`s-${index}`));
   const urls = stubApi({

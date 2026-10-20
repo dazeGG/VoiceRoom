@@ -403,7 +403,7 @@ export type RoomHistoryQuery = Static<typeof RoomHistoryQuery>;
 export const RoomStay = Type.Object({
   id: Type.String(),
   roomId: Type.String(),
-  /** Null when the room is gone: temporary rooms are removed once empty. */
+  /** Null when the room is gone: temporary rooms are removed once empty. Empty for an unnamed temporary room. */
   roomName: Nullable(Type.String()),
   isStatic: Nullable(Type.Boolean()),
   /** Null for a guest; a guest's name is not kept. */
