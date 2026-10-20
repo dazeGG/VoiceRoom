@@ -172,6 +172,9 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   cannot_moderate_admin: 'Аккаунт администратора нельзя заблокировать или удалить',
   confirmation_mismatch: 'Логин не совпадает с этим аккаунтом',
   deletion_not_by_admin: 'Удаление попросил сам пользователь, отменить его может только он',
+  staff_session_required: 'Сеанс админки истёк, обновите страницу',
+  staff_role_fixed: 'Этот суперадминистратор задан в настройках сервера',
+  staff_role_self: 'Свою роль изменить нельзя',
 
   desktop_release_unavailable: 'Не удалось получить данные о релизе'
 };

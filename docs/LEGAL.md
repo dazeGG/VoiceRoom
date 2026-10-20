@@ -14,7 +14,7 @@ is an engineering summary, not legal advice.
 | Attribution required by CC BY 4.0 (Twemoji, DB-IP, Font Awesome) and other licences | `/licenses` — `Licenses.svelte` |
 | Acceptance at sign-up | the notice above «Создать аккаунт» in `AuthDialog.svelte` |
 | Legal pages reachable from everywhere, phones included | landing footer, settings sidebar, `lib/platform/mobile-routes.ts` |
-| Reports to the operator and removal of any message (art. 1253.1, 149-FZ art. 15.1 takedowns) | `POST /api/reports`, `/admin/reports`, `apps/api/src/domains/reports` |
+| Reports to the operator and removal of any message (art. 1253.1, 149-FZ art. 15.1 takedowns) | `POST /api/reports`, the admin app's reports section (`apps/admin`), `apps/api/src/domains/reports` |
 | Backups no older than 30 days | `scripts/cd/prune-backups.sh`, run by `remote-deploy.sh` after each rollout |
 
 Facts the pages state (operator, contact address, retention periods) live in
@@ -33,7 +33,7 @@ retention period, change it there too.
 3. **Platform administrator.** Put your account id into
    `PLATFORM_ADMIN_USER_IDS` in the host `.env` (find it with
    `SELECT id FROM users WHERE login = '<login>'`), then
-   `docker compose up -d api`. Reports are reviewed at `/admin/reports`.
+   `docker compose up -d api`. That account is a superadmin of the admin app at `https://admin.<DOMAIN>` (it needs a DNS record), where reports are reviewed and staff roles are given.
 4. **Notice to Roskomnadzor** (152-FZ art. 22), filed online at
    pd.rkn.gov.ru before processing starts. Values for the form:
    - operator: Ефремов Владимир Владимирович, физическое лицо (самозанятый), ИНН and address as in your documents;

@@ -10,6 +10,7 @@ import type { Failure } from '@voice-room/shared/contracts/http';
 import type { AdminReportPage, ReportFiled, ReportResolved } from '@voice-room/shared/contracts/reports';
 import { hashPassword } from '../src/lib/password.ts';
 import { cookieFrom, registerAccount, request, startApiServer } from './fakes/server-process.ts';
+import { staffCookie } from './staff-session.ts';
 
 const ADMIN_ID = '00000000-0000-4000-8000-0000000000ad';
 
@@ -31,7 +32,7 @@ test('a report reaches the platform administrator, who removes the message or di
     body: { login: 'root', password: 'password123' }
   });
   assert.equal(signedIn.status, 200);
-  const admin = cookieFrom(signedIn.setCookie);
+  const admin = await staffCookie(socketPath, cookieFrom(signedIn.setCookie));
 
   const alice = await registerAccount(socketPath, 'alice');
   const bob = await registerAccount(socketPath, 'bob');

@@ -80,6 +80,17 @@ export function normalizeSessionToken(value: unknown): string {
   return /^[A-Za-z0-9_-]{32,128}$/.test(token) ? token : '';
 }
 
+/**
+ * A guest's browser keeps one random id across visits, so the admin panel can
+ * tell one guest's stays apart from another's behind the same address. Only a
+ * UUID is taken; anything else is no id at all.
+ */
+export function normalizeGuestId(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const guestId = value.trim().toLowerCase();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(guestId) ? guestId : '';
+}
+
 export function cleanName(value: unknown): string {
   if (typeof value !== 'string') return 'Guest';
   const compact = value.replace(/\s+/g, ' ').trim();

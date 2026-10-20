@@ -5,12 +5,14 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/web/package.json ./apps/web/package.json
+COPY apps/admin/package.json ./apps/admin/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 RUN npm ci
 
 FROM deps AS web-build
 
 COPY apps/web ./apps/web
+COPY apps/admin ./apps/admin
 COPY packages ./packages
 RUN npm run build \
   && node apps/web/scripts/emit-caddy-csp.ts apps/web/dist/index.html > /app/csp.caddy
@@ -23,6 +25,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/web/package.json ./apps/web/package.json
+COPY apps/admin/package.json ./apps/admin/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 RUN npm ci --omit=dev
 
@@ -56,6 +59,9 @@ COPY config/caddy/turn.options config/caddy/turn.site /etc/caddy/turn-available/
 COPY --chmod=0755 config/caddy/entrypoint.sh /usr/local/bin/voiceroom-caddy
 COPY --chmod=0755 config/caddy/archive-assets.sh /usr/local/bin/voiceroom-archive-assets
 COPY --from=web-build /app/csp.caddy /etc/caddy/csp.caddy
+COPY config/caddy/admin-csp.caddy /etc/caddy/admin-csp.caddy
 COPY --from=web-build /app/apps/web/dist /srv/web
+# The admin app, served only on ADMIN_DOMAIN behind the staff gate (Caddyfile).
+COPY --from=web-build /app/apps/admin/dist /srv/admin
 
 CMD ["voiceroom-caddy"]

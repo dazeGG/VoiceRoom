@@ -49,6 +49,13 @@ import /etc/caddy/turn.d/*.site
     respond 404
   }
 
+  # The admin API and the admin app's session answer only on ADMIN_DOMAIN; here
+  # the main site only says who is staff and hands the session over.
+  @admin_only path /api/admin/* /api/staff/check /api/staff/callback /api/staff/denied /api/staff/me /api/staff/logout /api/staff/members /api/staff/role
+  handle @admin_only {
+    respond 404
+  }
+
   handle /api/* {
     reverse_proxy api:3000 {
       flush_interval -1
@@ -67,6 +74,81 @@ import /etc/caddy/turn.d/*.site
     root * /srv/web
     try_files {path} /index.html
     file_server
+  }
+}
+
+# The admin app. Nothing here is served to someone who is not staff: Caddy asks
+# the API (forward_auth) before every file, and a browser without an admin
+# session is sent through the handoff on the main site, coming back signed in
+# or to a 404. The API checks the same session again on every request.
+{$ADMIN_DOMAIN} {
+  encode zstd gzip
+
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    import /etc/caddy/admin-csp.caddy
+    Cross-Origin-Opener-Policy "same-origin"
+    X-Frame-Options "DENY"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "same-origin"
+    X-Robots-Tag "noindex, nofollow"
+    Permissions-Policy "microphone=(), camera=(), display-capture=(), geolocation=(), payment=()"
+  }
+
+  # The session and the staff list; the API decides on each. Handing a session
+  # over belongs to the main site.
+  @site_only path /api/staff/access /api/staff/handoff
+  handle @site_only {
+    respond 404
+  }
+
+  handle /api/staff/* {
+    reverse_proxy api:3000
+  }
+
+  handle /api/admin/* {
+    reverse_proxy api:3000
+  }
+
+  # What the panel shows of accounts: their marks and avatars.
+  @admin_reads path /api/badges /api/avatars/*
+  handle @admin_reads {
+    reverse_proxy api:3000
+  }
+
+  handle /api/* {
+    respond 404
+  }
+
+  # `route` keeps the written order: the staff check sees the address as asked
+  # (so a deep link survives the handoff), before try_files rewrites it, and
+  # the cache headers go only on what the check let through.
+  # Hashed bundles stay; a missing one is a 404, never the page as a script.
+  handle /assets/* {
+    route {
+      forward_auth api:3000 {
+        uri /api/staff/check
+      }
+      header {
+        Cache-Control "private, max-age=31536000, immutable"
+        match status 200
+      }
+      root * /srv/admin
+      file_server
+    }
+  }
+
+  # The page itself is asked for every time.
+  handle {
+    route {
+      forward_auth api:3000 {
+        uri /api/staff/check
+      }
+      header Cache-Control "no-cache"
+      root * /srv/admin
+      try_files {path} /index.html
+      file_server
+    }
   }
 }
 

@@ -12,7 +12,7 @@ import { relative, resolve } from 'node:path';
 
 const repoRoot = resolve(import.meta.dirname, '..');
 const BASELINE_PATH = resolve(repoRoot, 'config/test-source-reads.json');
-const TREES = ['apps/api/test', 'apps/web/test', 'packages/shared/test', 'scripts/test'];
+const TREES = ['apps/api/test', 'apps/admin/test', 'apps/web/test', 'packages/shared/test', 'scripts/test'];
 
 const CODE_PATH = /(['"`])([^'"`\n]*\.(?:ts|mts|cts|svelte|js|mjs|cjs)|src|[^'"`\n]*\bsrc\/[^'"`\n]*)\1/g;
 const CODE_EXTENSION = /\.(?:ts|mts|cts|svelte|js|mjs|cjs)$/;

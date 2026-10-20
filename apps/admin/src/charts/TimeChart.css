@@ -1,0 +1,118 @@
+.chart {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--vr-line);
+  border-radius: 14px;
+  background: var(--vr-surface);
+}
+
+.chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.chart-title {
+  color: var(--vr-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--vr-text-2);
+  font-size: 12px;
+}
+
+.chart-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.chart-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.chart-plot {
+  position: relative;
+  min-width: 0;
+}
+
+.chart-plot svg {
+  display: block;
+  overflow: visible;
+  touch-action: pan-y;
+}
+
+.chart-grid {
+  stroke: var(--vr-line);
+  stroke-width: 1;
+}
+
+.chart-axis {
+  fill: var(--vr-text-3);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.chart-cursor {
+  stroke: var(--vr-line-strong);
+  stroke-dasharray: 3 3;
+}
+
+.chart-tip {
+  position: absolute;
+  top: 0;
+  display: grid;
+  gap: 2px;
+  min-width: 140px;
+  padding: 8px 10px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  background: var(--vr-surface-3);
+  box-shadow: var(--vr-shadow-popover);
+  color: var(--vr-text);
+  font-size: 12px;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.chart-tip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--vr-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-empty,
+.chart-note {
+  margin: 0;
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}
+
+.chart-empty {
+  display: grid;
+  height: 100%;
+  place-items: center;
+}

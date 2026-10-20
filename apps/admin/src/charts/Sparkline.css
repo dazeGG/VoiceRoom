@@ -1,0 +1,21 @@
+.spark {
+  display: block;
+  width: 100%;
+  overflow: visible;
+}
+
+.spark-area {
+  opacity: 0.14;
+}
+
+.spark-line {
+  fill: none;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.spark--empty {
+  border-bottom: 1px dashed var(--vr-line);
+}

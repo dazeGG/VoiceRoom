@@ -1,0 +1,57 @@
+.account-dialog {
+  display: grid;
+  gap: 14px;
+}
+
+.account-dialog-text,
+.account-dialog-error {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.account-dialog-text {
+  color: var(--vr-text-2);
+}
+
+.account-dialog-error {
+  color: var(--vr-danger);
+}
+
+.account-dialog-label {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--vr-text-2);
+  font-size: 12.5px;
+}
+
+.account-dialog-input {
+  width: 100%;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  background: var(--vr-surface);
+  color: var(--vr-text);
+  font: inherit;
+  font-size: 13.5px;
+}
+
+.account-dialog-input:focus-visible {
+  border-color: var(--vr-accent-line);
+  outline: none;
+}
+
+textarea.account-dialog-input {
+  min-height: 56px;
+  resize: vertical;
+}
+
+textarea.account-dialog-input[rows='3'] {
+  min-height: 76px;
+}
+
+.account-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

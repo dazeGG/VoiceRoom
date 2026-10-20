@@ -1,8 +1,9 @@
-// The admin panel's accounts: the list and one account's card, and what the
-// platform administrator may do to an account — block it for a while or for
-// good, sign it out everywhere, delete it (blocked at once, gone after the
-// grace period, called off within it), and give or take its mark. Nobody acts
-// on an administrator's account this way, their own included; every action
+// The admin panel's accounts: the list and one account's card, and what staff
+// may do to an account — block it for a while or for good, sign it out
+// everywhere, delete it (blocked at once, gone after the grace period, called
+// off within it), and give or take its mark. A moderator blocks for a while and
+// signs out; a block for good, deletion and marks take an administrator. Nobody
+// acts on a staff member's account this way, their own included; every action
 // lands in the log with the reason.
 
 import {
@@ -21,7 +22,7 @@ import type { AccountStandingRepository } from '../account/account-standing.repo
 import type { AccountDeletionRepository } from '../account/account-deletion.repository.ts';
 import type { AdminAccountsRepository, StoredAccountRow } from './admin-accounts.repository.ts';
 import type { AdminActionInput, AdminActionRepository } from './admin-action.repository.ts';
-import { isPlatformAdmin } from './admin.policy.ts';
+import type { StaffPermission } from '@voice-room/shared/contracts/staff';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const BLOCK_SPANS: Record<BlockDuration, number | null> = {
@@ -46,7 +47,11 @@ export type AccountAction =
     };
 
 export interface AdminAccountsDeps {
-  adminUserIds: readonly string[];
+  staff: {
+    can(userId: string, permission: StaffPermission): Promise<boolean>;
+    /** Every staff account right now. */
+    memberIds(): Promise<string[]>;
+  };
   accounts(): Pick<AdminAccountsRepository, 'list' | 'detail'>;
   standing(): Pick<AccountStandingRepository, 'block' | 'unblock' | 'endAllSessions' | 'setBadge' | 'listBadges'>;
   deletions(): Pick<AccountDeletionRepository, 'requestDeletionByOperator' | 'cancelOperatorDeletion'> | null;
@@ -63,21 +68,21 @@ export interface AdminAccountsDeps {
 
 export function createAdminAccountsService(deps: AdminAccountsDeps) {
   const now = deps.now ?? Date.now;
-  const admin = (userId: string | null | undefined) => isPlatformAdmin(deps.adminUserIds, userId);
 
-  function row(account: StoredAccountRow, online: Set<string>): AccountRow {
+  function row(account: StoredAccountRow, online: Set<string>, staffIds: Set<string>): AccountRow {
     const { blocked, deletion, ...rest } = account;
     return {
       ...rest,
       online: online.has(account.id),
-      admin: admin(account.id),
+      admin: staffIds.has(account.id),
       status: deletion ? 'deleting' : blocked ? 'blocked' : 'active'
     };
   }
 
   async function list(adminId: string, query: AccountsQuery = {}): Promise<Payload<AccountsPage> | null> {
-    if (!admin(adminId)) return null;
+    if (!(await deps.staff.can(adminId, 'accounts.view'))) return null;
     const onlineIds = deps.onlineUserIds();
+    const staffIds = new Set(await deps.staff.memberIds());
     const page = Number(query.page) || 1;
     const result = await deps.accounts().list({
       q: (query.q ?? '').trim(),
@@ -89,7 +94,7 @@ export function createAdminAccountsService(deps: AdminAccountsDeps) {
     });
     const online = new Set(onlineIds);
     return {
-      accounts: result.accounts.map((account) => row(account, online)),
+      accounts: result.accounts.map((account) => row(account, online, staffIds)),
       total: result.total,
       page,
       pageSize: ACCOUNTS_PAGE_SIZE
@@ -97,12 +102,16 @@ export function createAdminAccountsService(deps: AdminAccountsDeps) {
   }
 
   async function load(userId: string): Promise<Payload<AccountDetail> | null> {
-    const [found, actions] = await Promise.all([deps.accounts().detail(userId, now()), deps.actions().listFor(userId)]);
+    const [found, actions, staffIds] = await Promise.all([
+      deps.accounts().detail(userId, now()),
+      deps.actions().listFor(userId),
+      deps.staff.memberIds()
+    ]);
     if (!found) return null;
     const { account, ...rest } = found;
     return {
       ...rest,
-      account: row(account, new Set(deps.onlineUserIds())),
+      account: row(account, new Set(deps.onlineUserIds()), new Set(staffIds)),
       block: account.blocked,
       deletion: account.deletion,
       actions
@@ -110,7 +119,7 @@ export function createAdminAccountsService(deps: AdminAccountsDeps) {
   }
 
   async function detail(adminId: string, userId: string): Promise<AccountAction> {
-    if (!admin(adminId)) return { status: 'forbidden' };
+    if (!(await deps.staff.can(adminId, 'accounts.view'))) return { status: 'forbidden' };
     const found = await load(userId);
     return found ? { status: 'done', detail: found } : { status: 'not_found' };
   }
@@ -132,16 +141,18 @@ export function createAdminAccountsService(deps: AdminAccountsDeps) {
     }
   }
 
-  // The checks every action shares: an administrator acts, never on an
-  // administrator's account, and gives a reason where one is asked for.
+  // The checks every action shares: staff with the permission acts, never on a
+  // staff member's account, and gives a reason where one is asked for.
   async function act(
     adminId: string,
     userId: string,
     action: AdminActionKind,
+    permission: StaffPermission,
     run: () => Promise<AccountAction | AdminActionInput | null>
   ): Promise<AccountAction> {
-    if (!admin(adminId)) return { status: 'forbidden' };
-    if (action !== 'badge' && admin(userId)) return { status: 'cannot_moderate_admin' };
+    if (!(await deps.staff.can(adminId, permission))) return { status: 'forbidden' };
+    if (action !== 'badge' && (await deps.staff.memberIds()).includes(userId))
+      return { status: 'cannot_moderate_admin' };
     const outcome = await run();
     if (!outcome) return { status: 'not_found' };
     if ('status' in outcome) return outcome;
@@ -159,7 +170,8 @@ export function createAdminAccountsService(deps: AdminAccountsDeps) {
     userId: string,
     input: { duration: BlockDuration; reason: string }
   ): Promise<AccountAction> {
-    return act(adminId, userId, 'block', async () => {
+    const permission = BLOCK_SPANS[input.duration] === null ? 'accounts.manage' : 'accounts.moderate';
+    return act(adminId, userId, 'block', permission, async () => {
       const reason = cleanReason(input.reason);
       if (!reason) return { status: 'invalid_reason' };
       const span = BLOCK_SPANS[input.duration];
@@ -171,14 +183,17 @@ export function createAdminAccountsService(deps: AdminAccountsDeps) {
   }
 
   async function unblock(adminId: string, userId: string): Promise<AccountAction> {
-    return act(adminId, userId, 'unblock', async () => {
+    // A block for good is lifted by those who may give one.
+    const blocked = (await deps.accounts().detail(userId, now()))?.account.blocked;
+    const permission = blocked && blocked.until === null ? 'accounts.manage' : 'accounts.moderate';
+    return act(adminId, userId, 'unblock', permission, async () => {
       if (!(await deps.standing().unblock({ userId, now: now() }))) return null;
       return { adminUserId: adminId, targetUserId: userId, action: 'unblock' };
     });
   }
 
   async function signOutEverywhere(adminId: string, userId: string): Promise<AccountAction> {
-    return act(adminId, userId, 'logout', async () => {
+    return act(adminId, userId, 'logout', 'accounts.moderate', async () => {
       const found = await deps.accounts().detail(userId, now());
       if (!found) return null;
       await deps.standing().endAllSessions(userId);
@@ -192,7 +207,7 @@ export function createAdminAccountsService(deps: AdminAccountsDeps) {
     userId: string,
     input: { login: string; reason: string }
   ): Promise<AccountAction> {
-    return act(adminId, userId, 'delete', async () => {
+    return act(adminId, userId, 'delete', 'accounts.manage', async () => {
       const repository = deps.deletions();
       if (!repository) return { status: 'unavailable' };
       const reason = cleanReason(input.reason);
@@ -213,7 +228,7 @@ export function createAdminAccountsService(deps: AdminAccountsDeps) {
   }
 
   async function cancelDeletion(adminId: string, userId: string): Promise<AccountAction> {
-    return act(adminId, userId, 'cancel_deletion', async () => {
+    return act(adminId, userId, 'cancel_deletion', 'accounts.manage', async () => {
       const repository = deps.deletions();
       if (!repository) return { status: 'unavailable' };
       const result = await repository.cancelOperatorDeletion({ userId, now: now() });
@@ -225,7 +240,7 @@ export function createAdminAccountsService(deps: AdminAccountsDeps) {
   }
 
   async function setBadge(adminId: string, userId: string, badge: AccountBadge | null): Promise<AccountAction> {
-    return act(adminId, userId, 'badge', async () => {
+    return act(adminId, userId, 'badge', 'accounts.manage', async () => {
       if (!(await deps.standing().setBadge({ userId, badge, now: now() }))) return null;
       return { adminUserId: adminId, targetUserId: userId, action: 'badge', badge };
     });

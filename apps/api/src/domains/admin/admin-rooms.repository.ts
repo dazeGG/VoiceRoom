@@ -3,6 +3,7 @@
 // that still carry their room. Read only; never a message or an address.
 
 import type pg from 'pg';
+import type { ClientKind } from '@voice-room/shared/account-security';
 import { ROOM_HISTORY_PAGE_SIZE, type RoomAccount } from '@voice-room/shared/contracts/admin';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 
@@ -20,8 +21,20 @@ export interface StoredStay {
   roomName: string | null;
   isStatic: boolean | null;
   account: RoomAccount | null;
+  guestName: string | null;
+  guestId: string | null;
+  client: ClientKind | null;
+  os: string | null;
+  browser: string | null;
+  ipKey: string | null;
+  location: string | null;
   joinedAt: number;
   leftAt: number;
+}
+
+// The column only ever holds these three (voice_sessions_client_check).
+function clientOf(value: string | null): ClientKind | null {
+  return value === 'desktop_app' || value === 'mobile' || value === 'browser' ? value : null;
 }
 
 const avatarUrl = (key: string | null) => (key ? `/api/avatars/${encodeURIComponent(key)}` : null);
@@ -106,6 +119,13 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
         's.room_id',
         's.joined_at',
         's.left_at',
+        's.guest_name',
+        's.guest_id',
+        's.client',
+        's.os',
+        's.browser',
+        's.ip_key',
+        's.location',
         'r.name as room_name',
         'r.deleted_at as room_deleted_at',
         'r.is_static',
@@ -139,6 +159,13 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
         roomName: row.room_deleted_at === null ? row.room_name : null,
         isStatic: row.is_static,
         account: account(row),
+        guestName: row.guest_name,
+        guestId: row.guest_id,
+        client: clientOf(row.client),
+        os: row.os,
+        browser: row.browser,
+        ipKey: row.ip_key,
+        location: row.location,
         joinedAt: new Date(row.joined_at).getTime(),
         leftAt: new Date(row.left_at).getTime()
       })),
