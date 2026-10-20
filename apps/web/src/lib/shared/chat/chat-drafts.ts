@@ -99,12 +99,11 @@ export function saveChatDraft(
   const text = draft.text.slice(0, MAX_DRAFT_LENGTH);
   if (text.trim()) {
     drafts[key] = { text, mentions: normalizeMentions(draft.mentions ?? [], text), updatedAt: now };
+    writeDrafts(userId, normalizeChatDrafts(drafts, now));
   } else if (key in drafts) {
-    delete drafts[key];
-  } else {
-    return;
+    const { [key]: _cleared, ...rest } = drafts;
+    writeDrafts(userId, normalizeChatDrafts(rest, now));
   }
-  writeDrafts(userId, normalizeChatDrafts(drafts, now));
 }
 
 export function clearChatDrafts(): void {

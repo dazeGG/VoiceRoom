@@ -11,7 +11,7 @@ export type Revocation = { status: string; epoch?: number | null; revoked?: numb
 // three issuing/verifying calls is optional: older stores lack the revocations.
 export interface GateRoomStore {
   normalizeGatePrincipal?(input: {
-    roomId?: string;
+    roomId?: string | undefined;
     accountUserId?: string | null;
     guestPrincipalId?: string;
   }): GatePrincipal | null;
@@ -42,7 +42,7 @@ export interface GateRoomStore {
   }): Promise<StoreStatus>;
   revokeLiveKitGatePrincipal?(input: { principal: GatePrincipal; roomId: string; now: number }): Promise<Revocation>;
   revokeLiveKitGatePeer?(input: {
-    roomId?: string;
+    roomId?: string | undefined;
     accountUserId?: string | null;
     guestPrincipalId?: string;
     now: number;
@@ -67,7 +67,7 @@ function createCredentialBoundaryService({
   now = Date.now,
   credentialTtlMs = DEFAULT_CREDENTIAL_TTL_MS
 }: {
-  roomStore?: GateRoomStore;
+  roomStore?: GateRoomStore | undefined;
   secret?: unknown;
   signer?: GateCredentialSigner;
   now?: () => number;
@@ -83,7 +83,7 @@ function createCredentialBoundaryService({
     accountUserId = null,
     guestPrincipalId = ''
   }: {
-    roomId?: string;
+    roomId?: string | undefined;
     accountUserId?: string | null;
     guestPrincipalId?: string;
   } = {}): GatePrincipal | null {
@@ -162,7 +162,7 @@ function createCredentialBoundaryService({
   async function revokePrincipal({
     roomId,
     principal
-  }: { roomId?: string; principal?: GatePrincipal | null } = {}): Promise<Revocation> {
+  }: { roomId?: string | undefined; principal?: GatePrincipal | null } = {}): Promise<Revocation> {
     if (!roomId || !principal) return { status: 'invalid', epoch: null };
     if (typeof store.revokeLiveKitGatePrincipal === 'function') {
       return store.revokeLiveKitGatePrincipal({ principal, roomId, now: clock() });
@@ -187,8 +187,8 @@ function createCredentialBoundaryService({
     roomId,
     principal
   }: {
-    credentialId?: string;
-    roomId?: string;
+    credentialId?: string | undefined;
+    roomId?: string | undefined;
     principal?: GatePrincipal | null;
   } = {}): Promise<Revocation> {
     if (!credentialId || !roomId || !principal) return { status: 'invalid' };
@@ -201,7 +201,7 @@ function createCredentialBoundaryService({
     accountUserId = null,
     guestPrincipalId = ''
   }: {
-    roomId?: string;
+    roomId?: string | undefined;
     accountUserId?: string | null;
     guestPrincipalId?: string;
   } = {}): Promise<Revocation> {

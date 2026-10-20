@@ -1,6 +1,6 @@
 <script lang="ts">
   import { resolve } from '$app/paths';
-  import { Home } from '@lucide/svelte';
+  import { House } from '@lucide/svelte';
   import { iconMd } from '$lib/shared/ui/icons';
   import { MascotIcon } from '$lib/shared/ui';
   import { state } from '../client/core/state.svelte';
@@ -26,7 +26,7 @@
     </p>
     <div class="not-found-actions">
       <a class="not-found-home" href={resolve('/')} data-sveltekit-reload>
-        <Home {...iconMd} aria-hidden="true" />
+        <House {...iconMd} aria-hidden="true" />
         На стартовый экран
       </a>
     </div>

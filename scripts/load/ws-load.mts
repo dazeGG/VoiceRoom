@@ -24,7 +24,7 @@ const screenRequests = Number(process.env.SCREEN_REQUESTS || 0);
 const screenProfile = process.env.SCREEN_PROFILE || 'high-60';
 const cameraRequests = Number(process.env.CAMERA_REQUESTS || 0);
 
-type Frame = { id?: string; type: string; payload?: Record<string, unknown> };
+type Frame = { id?: string | undefined; type: string; payload?: Record<string, unknown> | undefined };
 // This file is copied to the load generator on its own, so it carries its own guard.
 const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
 

@@ -8,7 +8,7 @@ import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { fieldOf } from '../record.ts';
 
 export function requestRouteLabel(request: {
-  routeOptions?: { url?: string };
+  routeOptions?: { url?: string | undefined };
   routerPath?: string;
   url?: string;
 }): string {

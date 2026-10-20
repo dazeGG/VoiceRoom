@@ -13,11 +13,11 @@ export function dismissToastUi(id: string): void {
 export function showToastUi(
   message: string,
   options: {
-    action?: () => void | Promise<void>;
-    actionLabel?: string;
-    description?: string;
-    duration?: number;
-    variant?: 'info' | 'error';
+    action?: (() => void | Promise<void>) | undefined;
+    actionLabel?: string | undefined;
+    description?: string | undefined;
+    duration?: number | undefined;
+    variant?: 'info' | 'error' | undefined;
   } = {}
 ): void {
   const { action = null, actionLabel = '', description, duration = 3200, variant = 'info' } = options;

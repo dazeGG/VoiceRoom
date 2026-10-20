@@ -7,7 +7,7 @@ import type { DirectMessages, Json, RoomMessages } from '../../platform/db/schem
 import { projectReplyPreview, projectReplyTombstone, type ReplyPreview } from './reply-projector.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
-type Override = { client?: QueryClient | null };
+type Override = { client?: QueryClient | null | undefined };
 type Metadata = { kind?: unknown; [key: string]: unknown } | null;
 
 // The quoted message as stored, with its author's current name when the query joined it.
@@ -183,7 +183,7 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     messageId,
     client: override,
     now
-  }: { roomId?: string; messageId: string; now?: number } & Override): Promise<ReplyPreview | null> {
+  }: { roomId?: string | undefined; messageId: string; now?: number } & Override): Promise<ReplyPreview | null> {
     const row = await roomTarget(on(override), roomId, messageId).executeTakeFirst();
     const target = mapRoomTarget(row);
     return target ? projectReplyPreview(target, { now }) : projectReplyTombstone(messageId);
@@ -196,8 +196,8 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     client: override,
     now
   }: {
-    userId?: string;
-    peerId?: string;
+    userId?: string | undefined;
+    peerId?: string | undefined;
     messageId: string;
     now?: number;
   } & Override): Promise<ReplyPreview | null> {
@@ -212,7 +212,9 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     messageIds,
     client: override,
     now
-  }: { roomId?: string; messageIds: string[]; now?: number } & Override): Promise<Map<string, ReplyPreview | null>> {
+  }: { roomId?: string | undefined; messageIds: string[]; now?: number } & Override): Promise<
+    Map<string, ReplyPreview | null>
+  > {
     const ids = [...new Set(messageIds)];
     if (ids.length === 0) return new Map();
     const rows = await roomTarget(on(override), roomId, ids).execute();
@@ -227,8 +229,8 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     client: override,
     now
   }: {
-    userId?: string;
-    peerId?: string;
+    userId?: string | undefined;
+    peerId?: string | undefined;
     messageIds: string[];
     now?: number;
   } & Override): Promise<Map<string, ReplyPreview | null>> {

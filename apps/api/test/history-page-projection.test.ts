@@ -61,9 +61,9 @@ async function setup(t: TestContext) {
   // Counts every query the page makes; without idleCount it is not taken for a pool.
   let queries = 0;
   const counted = mistyped<pg.Pool>({
-    query: (...args: Parameters<pg.Pool['query']>) => {
+    query: (text: string, values?: unknown[]) => {
       queries += 1;
-      return pool.query(...args);
+      return pool.query(text, values);
     }
   });
   const attachments = createAttachmentRepository({ pool: counted });

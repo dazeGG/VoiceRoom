@@ -59,7 +59,7 @@ test('chat messages schedule personalized unread summaries for room recipients',
           isStatic: value.isStatic,
           name: value.name,
           relationship: value.relationship || 'owner',
-          unreadCount: value.unreadCount
+          ...(value.unreadCount === undefined ? {} : { unreadCount: value.unreadCount })
         }),
       avatarColorForPeerId: () => 'blurple'
     })

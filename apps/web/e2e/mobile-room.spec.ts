@@ -10,7 +10,7 @@ const PIXEL_UA =
 
 async function phone(browser: Browser, baseURL: string | undefined): Promise<BrowserContext> {
   const context = await browser.newContext({
-    baseURL,
+    ...(baseURL ? { baseURL } : {}),
     userAgent: PIXEL_UA,
     viewport: { width: 412, height: 915 },
     hasTouch: true,

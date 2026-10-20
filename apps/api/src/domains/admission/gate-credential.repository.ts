@@ -22,7 +22,7 @@ export function normalizeGatePrincipal({
   accountUserId,
   guestPrincipalId,
   roomId
-}: { accountUserId?: unknown; guestPrincipalId?: unknown; roomId?: string } = {}): GatePrincipal | null {
+}: { accountUserId?: unknown; guestPrincipalId?: unknown; roomId?: string | undefined } = {}): GatePrincipal | null {
   if (typeof accountUserId === 'string' || typeof accountUserId === 'number') {
     if (accountUserId) return { principalType: 'account', principalId: String(accountUserId) };
   }
@@ -106,7 +106,7 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
     expiresAt?: unknown;
     peerId?: string;
     principal?: GatePrincipal | null;
-    principalEpoch?: number | null;
+    principalEpoch?: number | null | undefined;
     roomId?: string;
     now?: number;
   } = {}) {
@@ -149,7 +149,7 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
     principal,
     roomId,
     now = Date.now()
-  }: { principal?: GatePrincipal | null; roomId?: string; now?: number } = {}): Promise<PrincipalEpoch> {
+  }: { principal?: GatePrincipal | null; roomId?: string | undefined; now?: number } = {}): Promise<PrincipalEpoch> {
     if (!roomId || !principal?.principalType || !principal?.principalId) return { status: 'invalid', epoch: null };
     return db.transaction().execute(async (trx): Promise<PrincipalEpoch> => {
       await lockPrincipal(trx, roomId, principal);
@@ -203,7 +203,7 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
     principal,
     roomId,
     now = Date.now()
-  }: { principal?: GatePrincipal | null; roomId?: string; now?: number } = {}) {
+  }: { principal?: GatePrincipal | null; roomId?: string | undefined; now?: number } = {}) {
     if (!roomId || !principal?.principalType || !principal?.principalId) return { status: 'invalid', epoch: null };
     const validPrincipal = principal;
     return db
@@ -216,7 +216,12 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
     principal,
     roomId,
     now = Date.now()
-  }: { credentialId?: string; principal?: GatePrincipal | null; roomId?: string; now?: number } = {}) {
+  }: {
+    credentialId?: string | undefined;
+    principal?: GatePrincipal | null;
+    roomId?: string | undefined;
+    now?: number;
+  } = {}) {
     if (!credentialId || !roomId || !isGatePrincipal(principal)) return { status: 'invalid' };
     return db.transaction().execute(async (trx) => {
       await lockPrincipal(trx, roomId, principal);
@@ -265,7 +270,7 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
     guestPrincipalId = '',
     now = Date.now()
   }: {
-    roomId?: string;
+    roomId?: string | undefined;
     /** Accepted for callers that name it; the whole principal is revoked. */
     peerId?: string;
     accountUserId?: string | null;

@@ -265,7 +265,7 @@ type FinalizeResult = { finalized?: boolean; message?: string; ownershipFinalize
 
 function evictionHarness({
   store = {},
-  ownedPeer = undefined,
+  ownedPeer,
   ownershipFinalized = false,
   removeFails = false,
   extraPeerIds = []
@@ -421,13 +421,13 @@ function moderationHarness({
   finalize?: ((options: FinalizeOptions<unknown>) => Promise<unknown>) | null;
 } = {}) {
   const calls: {
-    evicted: Array<{ peers: string[]; type: string; gateAlreadyRevoked?: boolean }>;
+    evicted: Array<{ peers: string[]; type: string; gateAlreadyRevoked?: boolean | undefined }>;
     disconnected: unknown[];
     revoked: string[];
     sfu: unknown[];
     announced: string[];
     notified: unknown[];
-    muteRow?: { mutedBy?: string | null };
+    muteRow?: { mutedBy?: string | null | undefined };
     unmuteRow?: unknown;
     ban?: unknown;
     strictBan?: { principals: unknown[] };
@@ -689,7 +689,7 @@ type RouteOptions = {
   list?: StoredRoom[];
   added?: Awaited<ReturnType<RoomListStore['addRoomBookmarkForUser']>> | null;
   removedBookmark?: Awaited<ReturnType<RoomListStore['removeRoomBookmarkForUser']>> | null;
-  rate?: { allowed: boolean; retryAfterSeconds?: number };
+  rate?: { allowed: boolean; retryAfterSeconds: number };
   proof?: PowVerdict;
   moderation?: Moderation;
 };
@@ -707,7 +707,7 @@ function routeApp(
     list = [],
     added = null,
     removedBookmark = null,
-    rate = { allowed: true },
+    rate = { allowed: true, retryAfterSeconds: 0 },
     proof = { ok: true },
     moderation = {}
   }: RouteOptions = {}

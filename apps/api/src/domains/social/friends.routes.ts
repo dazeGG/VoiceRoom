@@ -22,6 +22,7 @@ import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import { cleanUuid } from '../messaging/message-input.ts';
 import type { FriendsService } from './friends.service.ts';
 import type { SocialUser } from './social-views.ts';
+import type { RateCheck } from '../../lib/rate-limit.ts';
 
 const answers = <Success>(success: Success) => ({ 200: success, '4xx': Failure });
 const REQUEST_NOT_FOUND = failure('Заявка не найдена', { code: 'friend_request_not_found' });
@@ -30,7 +31,7 @@ const CANNOT_BLOCK = failure('Нельзя заблокировать этого
 
 export interface FriendsRoutesDeps {
   friends: FriendsService;
-  requestLimiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
+  requestLimiter: RateCheck;
 }
 
 export function registerFriendsRoutes(

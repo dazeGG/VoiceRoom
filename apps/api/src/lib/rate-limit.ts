@@ -1,6 +1,8 @@
 import type { IncomingMessage } from 'node:http';
 
 export type RateDecision = { allowed: boolean; retryAfterSeconds: number };
+/** What a route or service needs from a limiter: one decision per key. */
+export type RateCheck = { check(key: string): RateDecision };
 type Entry = { count: number; startedAt: number };
 
 // Resolves the client IP. When trustProxy is enabled the last hop of

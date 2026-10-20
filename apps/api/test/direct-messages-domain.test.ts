@@ -52,7 +52,7 @@ type HarnessOptions = {
   noPeer?: boolean;
   deleted?: boolean;
   roomExists?: boolean;
-  rate?: { allowed: boolean; retryAfterSeconds?: number };
+  rate?: { allowed: boolean; retryAfterSeconds: number };
   media?: null;
   directEmit?: boolean;
 };
@@ -187,7 +187,7 @@ function harness(options: HarnessOptions = {}) {
     expireRoomInvitations: async (senderId, roomId) => {
       calls.expired.push([senderId, roomId]);
     },
-    limiter: { check: () => options.rate || { allowed: true } },
+    limiter: { check: () => options.rate || { allowed: true, retryAfterSeconds: 0 } },
     media: () =>
       options.media === null
         ? null
@@ -274,7 +274,7 @@ test('send refuses in the legacy order', async () => {
       JSON.stringify(input)
     );
   }
-  const limited = await harness({ rate: { allowed: false } }).service.send(ME, PEER, sendBase);
+  const limited = await harness({ rate: { allowed: false, retryAfterSeconds: 0 } }).service.send(ME, PEER, sendBase);
   assert.ok('retryAfterSeconds' in limited);
   assert.equal(limited.retryAfterSeconds, 0);
 });

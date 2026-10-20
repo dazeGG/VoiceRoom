@@ -235,7 +235,9 @@ test('the product tab loads the last 30 days, a ready-made span reloads it, and 
 
   await userEvent.click(screen.getByRole('button', { name: 'Период: Всё время' }));
   const dialog = await screen.findByRole('dialog', { name: 'Период' });
-  const [from, to] = within(dialog).getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
+  const dates = within(dialog).getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
+  const from = defined(dates[0], 'start date');
+  const to = defined(dates[1], 'end date');
   await fireEvent.input(from, { target: { value: '2026-10-20' } });
   await fireEvent.input(to, { target: { value: '2026-10-01' } });
   await userEvent.click(within(dialog).getByRole('button', { name: 'Показать' }));
@@ -260,7 +262,7 @@ test('the server tab draws the minutes over the chosen span and says when there 
   expect(await screen.findByRole('img', { name: 'Процессор' })).toBeTruthy();
   expect(screen.getByText(/Сейчас: процессор 12,5%/)).toBeTruthy();
   expect(screen.getByText(/Точка — 5 мин/)).toBeTruthy();
-  const first = calls[0];
+  const first = defined(calls[0], 'first system request');
   expect(Number(first.searchParams.get('to')) - Number(first.searchParams.get('from'))).toBe(DAY);
 
   empty = true;

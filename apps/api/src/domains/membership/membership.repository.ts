@@ -79,7 +79,7 @@ function mapDirectoryMember(row: DirectoryRow): DirectoryMember {
   };
 }
 
-function createMembershipRepository({ pool }: { pool?: QueryClient | null } = {}) {
+function createMembershipRepository({ pool }: { pool?: QueryClient | null | undefined } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new TypeError('A PostgreSQL pool is required');
   const base = pool;
   const on = (client: Client): Database => kyselyOn(client && typeof client.query === 'function' ? client : base);
@@ -171,7 +171,7 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null } = {}
     roomId: string;
     query?: unknown;
     limit?: unknown;
-    after?: Partial<DirectoryCursorTuple> | null;
+    after?: Partial<DirectoryCursorTuple> | null | undefined;
     client?: Client;
   }): Promise<{ members: DirectoryMember[]; hasMore: boolean }> {
     const pageSize = Math.min(100, Math.max(1, Number(limit) || 50));

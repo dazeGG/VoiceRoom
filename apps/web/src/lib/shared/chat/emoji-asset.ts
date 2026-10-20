@@ -11,7 +11,7 @@
 
 /** Every code point of the sequence, upper-case hex, joined by `-`. */
 export function emojiAssetName(emoji: string): string {
-  return [...emoji]
+  return Array.from(emoji)
     .map((character) => character.codePointAt(0)?.toString(16).toUpperCase().padStart(4, '0') ?? '')
     .join('-');
 }

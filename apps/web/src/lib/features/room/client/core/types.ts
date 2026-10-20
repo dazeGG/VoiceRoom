@@ -81,12 +81,12 @@ export interface ScreenSourceSelection extends DesktopPickerSelection {
 export interface ScreenStatsSnapshot {
   availableOutgoingBitrate: number;
   bitrate: number;
-  captureDropsBackpressure?: number;
-  captureDropsBackpressureDelta?: number;
-  captureFramesReceived?: number;
-  captureFramesWritten?: number;
-  capturePixelFormat?: 'NV12' | 'BGRX';
-  captureRelayRestarts?: number;
+  captureDropsBackpressure?: number | undefined;
+  captureDropsBackpressureDelta?: number | undefined;
+  captureFramesReceived?: number | undefined;
+  captureFramesWritten?: number | undefined;
+  capturePixelFormat?: 'NV12' | 'BGRX' | undefined;
+  captureRelayRestarts?: number | undefined;
   codec: string;
   encoderImplementation: string;
   firCount: number;

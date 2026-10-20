@@ -216,6 +216,7 @@ function setScreenFullscreenState(fullscreen: boolean): void {
 }
 
 export function bindScreenStageIdleUi(signal?: AbortSignal): void {
+  const bound: AddEventListenerOptions = signal ? { signal } : {};
   if (screenUiHoverBound) return;
   screenUiHoverBound = true;
   signal?.addEventListener('abort', resetScreenStageIdleUi, { once: true });
@@ -234,7 +235,7 @@ export function bindScreenStageIdleUi(signal?: AbortSignal): void {
       screenStagePointerInside = true;
       activateScreenStageUi();
     },
-    { signal }
+    bound
   );
   stage.addEventListener(
     'pointerleave',
@@ -242,18 +243,18 @@ export function bindScreenStageIdleUi(signal?: AbortSignal): void {
       screenStagePointerInside = false;
       deactivateScreenStageUi();
     },
-    { signal }
+    bound
   );
-  stage.addEventListener('pointermove', wakeScreenStageUi, { signal });
-  stage.addEventListener('mousedown', wakeScreenStageUi, { signal });
-  stage.addEventListener('wheel', wakeScreenStageUi, { passive: true, signal });
+  stage.addEventListener('pointermove', wakeScreenStageUi, bound);
+  stage.addEventListener('mousedown', wakeScreenStageUi, bound);
+  stage.addEventListener('wheel', wakeScreenStageUi, { ...bound, passive: true });
   stage.addEventListener(
     'touchstart',
     () => {
       screenStagePointerInside = true;
       activateScreenStageUi();
     },
-    { passive: true, signal }
+    { ...bound, passive: true }
   );
   document.addEventListener(
     'touchstart',
@@ -268,7 +269,7 @@ export function bindScreenStageIdleUi(signal?: AbortSignal): void {
       screenStagePointerInside = false;
       deactivateScreenStageUi();
     },
-    { passive: true, signal }
+    { ...bound, passive: true }
   );
 }
 

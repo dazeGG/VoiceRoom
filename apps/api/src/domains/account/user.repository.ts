@@ -218,7 +218,7 @@ export function createUserRepository({ pool }: { pool: pg.Pool }) {
       .selectFrom('users')
       .select([
         sql<string | null>`metadata->>'whatsNewSeen'`.as('whats_new_seen'),
-        sql<unknown>`metadata->'recoveryCodesReminderSnoozedUntil'`.as('reminder_snoozed_until')
+        sql`metadata->'recoveryCodesReminderSnoozedUntil'`.as('reminder_snoozed_until')
       ])
       .where('id', '=', userId)
       .executeTakeFirst();
@@ -258,7 +258,7 @@ export function createUserRepository({ pool }: { pool: pg.Pool }) {
         END`
       })
       .where('id', '=', userId)
-      .returning(sql<unknown>`metadata->'appPromptSeenAt'`.as('seen_at'))
+      .returning(sql`metadata->'appPromptSeenAt'`.as('seen_at'))
       .execute();
     const seenAt = Number(rows[0]?.seen_at);
     return rows.length === 1

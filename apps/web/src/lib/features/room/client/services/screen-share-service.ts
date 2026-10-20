@@ -142,7 +142,6 @@ async function startScreenShare(profileId: string = getSelectedScreenProfileId()
       screenProfileId: profile.id,
       screenStreamId: stream.id
     });
-    refreshScreenControls();
     openLocalStreamPreview();
     await postState();
 
@@ -168,7 +167,6 @@ async function startScreenShare(profileId: string = getSelectedScreenProfileId()
     );
   } finally {
     state.screenStarting = false;
-    refreshScreenControls();
   }
 }
 
@@ -198,7 +196,6 @@ async function stopScreenShare(
       screenProfileId: '',
       screenStreamId: ''
     });
-    refreshScreenControls();
     refreshScreenStage();
     if (notify) await postState();
     if (!quiet) {
@@ -215,12 +212,8 @@ async function stopScreenShare(
     }
   } finally {
     state.screenStopping = false;
-    refreshScreenControls();
   }
 }
-
-/** @deprecated Screen dock button is reactive in RoomDock.svelte. */
-export function refreshScreenControls(): void {}
 
 function hasScreenAudio(): boolean {
   return Boolean(state.localScreenStream?.getAudioTracks().some((track) => track.readyState !== 'ended'));
@@ -334,7 +327,7 @@ function readNativeCaptureStats(previous: ScreenStatsPrevious | null): {
   captureDropsBackpressureDelta?: number;
   captureFramesReceived?: number;
   captureFramesWritten?: number;
-  capturePixelFormat?: 'NV12' | 'BGRX';
+  capturePixelFormat?: 'NV12' | 'BGRX' | undefined;
   captureRelayRestarts?: number;
   previous: Partial<ScreenStatsPrevious>;
 } {
@@ -492,6 +485,7 @@ async function applyScreenSenderEncoding(sender: RTCRtpSender, profile: ScreenPr
   if (!parameters.encodings?.length) parameters.encodings = [{}];
 
   const primaryEncoding = getPrimaryScreenEncoding(parameters.encodings);
+  if (!primaryEncoding) return;
   primaryEncoding.maxBitrate = profile.videoBitrate;
   primaryEncoding.maxFramerate = profile.frameRate;
   parameters.degradationPreference = SCREEN_DEGRADATION_PREFERENCE;
@@ -499,12 +493,11 @@ async function applyScreenSenderEncoding(sender: RTCRtpSender, profile: ScreenPr
   await sender.setParameters(parameters);
 }
 
-function getPrimaryScreenEncoding(encodings: RTCRtpEncodingParameters[]): RTCRtpEncodingParameters {
-  return encodings.reduce((primary, encoding) => {
-    const primaryBitrate = Number(primary.maxBitrate || 0);
-    const encodingBitrate = Number(encoding.maxBitrate || 0);
-    if (encodingBitrate > primaryBitrate) return encoding;
-    if (!primaryBitrate && !primary.rid) return primary;
-    return primary;
-  }, encodings[0]);
+/** The encoding with the highest bitrate; the first one when none has a bitrate. */
+function getPrimaryScreenEncoding(encodings: RTCRtpEncodingParameters[]): RTCRtpEncodingParameters | undefined {
+  let primary = encodings[0];
+  for (const encoding of encodings) {
+    if (Number(encoding.maxBitrate || 0) > Number(primary?.maxBitrate || 0)) primary = encoding;
+  }
+  return primary;
 }

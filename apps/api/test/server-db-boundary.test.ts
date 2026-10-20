@@ -21,7 +21,7 @@ const { openWs, joinVoiceRoom, sendWs, waitForWsType } = await import('./ws-harn
 // A logger that records the structured fields, so a test can assert the API
 // observed a failure instead of swallowing it: Fastify's own logger is silent
 // under the test environment.
-type LogRecord = Record<string, unknown> & { level: string; msg?: string };
+type LogRecord = Record<string, unknown> & { level: string; msg?: string | undefined };
 
 function createCapturingLogger(records: LogRecord[]): FastifyBaseLogger {
   const record = (level: string) => (fields: object, msg?: string) => {
@@ -150,8 +150,7 @@ async function request<const Schema extends TSchema>(
 ) {
   const response = await fetch(`http://127.0.0.1:${port}${path}`, {
     method,
-    headers: body ? { 'content-type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined
+    ...(body ? { headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {})
   });
   return { response, json: checked(schema, await response.json(), `${method} ${path}`) };
 }

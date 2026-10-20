@@ -4,6 +4,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import VoiceHome from '../../src/lib/features/home/components/lobby/VoiceHome.svelte';
 import { LobbyStore } from '../../src/lib/features/home/model/lobby.svelte.ts';
 import { lobbyContext } from '../../src/lib/features/home/model/lobby-context.ts';
+import { defined } from '../helpers/assert.ts';
 
 afterEach(cleanup);
 
@@ -56,7 +57,7 @@ test('rooms are listed busiest first and open on click', async () => {
     expect.stringContaining('Шумная'),
     expect.stringContaining('Тихая')
   ]);
-  await userEvent.click(cards[1]);
+  await userEvent.click(defined(cards[1], 'cards[1]'));
   expect(props.onOpenRoom).toHaveBeenCalledWith('quiet');
 });
 
@@ -81,7 +82,7 @@ test('a room with muted notifications shows a bell-off mark next to its name', a
   renderHome([room('abc123', 'Планёрка'), room('other', 'Другая')]);
   const muted = screen.getAllByRole('img', { name: 'Уведомления отключены' });
   expect(muted).toHaveLength(1);
-  expect(screen.getByRole('button', { name: /Планёрка/ }).contains(muted[0])).toBe(true);
+  expect(screen.getByRole('button', { name: /Планёрка/ }).contains(defined(muted[0], 'muted[0]'))).toBe(true);
   notificationPreferences.mutedRoomIds = [];
 });
 

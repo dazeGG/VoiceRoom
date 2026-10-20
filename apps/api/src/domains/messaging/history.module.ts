@@ -21,7 +21,7 @@ export interface HistoryModuleDeps {
   canReadRoom: (roomId: string, userId: string) => Promise<boolean>;
 }
 
-function replyIds(messages: Array<{ replyTo?: { messageId?: string } | null }>): string[] {
+function replyIds(messages: Array<{ replyTo?: { messageId?: string } | null | undefined }>): string[] {
   return messages.flatMap((message) => (message.replyTo?.messageId ? [message.replyTo.messageId] : []));
 }
 

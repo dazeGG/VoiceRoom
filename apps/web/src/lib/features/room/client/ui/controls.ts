@@ -251,7 +251,7 @@ export function beginPushToTalk(): boolean {
   return true;
 }
 
-export function endPushToTalk(options: { immediate?: boolean } = {}): void {
+export function endPushToTalk(options: { immediate?: boolean | undefined } = {}): void {
   if (!state.pushToTalkActive) return;
   window.clearTimeout(pushToTalkReleaseTimer);
 
@@ -339,6 +339,3 @@ export function toggleOutputMute(options: { unmuteMicrophone?: boolean } = {}): 
   postState().catch(() => {});
   if (!state.outputMuted) unlockAudio().catch(() => {});
 }
-
-/** @deprecated Reactive views replace imperative DOM refresh. */
-export function refreshCallControls(): void {}

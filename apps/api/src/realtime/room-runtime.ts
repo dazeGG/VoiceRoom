@@ -74,15 +74,15 @@ export type RoomRuntimeDeps = {
   tokensMatch: (expected: string | null | undefined, actual: string | null | undefined) => boolean;
   sessionAvatarColorKey: (user: SessionUser) => string;
   queueRoomOccupancyTransition?: (roomId: string) => Promise<unknown>;
-  findRoomBan?: (roomId: string, userId: string | null | undefined, ip: string) => Promise<unknown>;
-  credentialBoundary?: RuntimeCredentialBoundary | null;
-  removeLiveKitParticipant?: (roomId: string, peerId: string) => Promise<unknown>;
-  now?: () => number;
+  findRoomBan?: ((roomId: string, userId: string | null | undefined, ip: string) => Promise<unknown>) | undefined;
+  credentialBoundary?: RuntimeCredentialBoundary | null | undefined;
+  removeLiveKitParticipant?: ((roomId: string, peerId: string) => Promise<unknown>) | undefined;
+  now?: (() => number) | undefined;
   // Methods, so a test's timer may hand out its own handle type.
   setTimeout?(this: void, callback: () => void, ms: number): ReturnType<typeof globalThis.setTimeout> | number;
   clearTimeout?(this: void, timer: ReturnType<typeof globalThis.setTimeout> | number): void;
-  reconnectLeaseMs?: number;
-  logger?: RuntimeLogger;
+  reconnectLeaseMs?: number | undefined;
+  logger?: RuntimeLogger | undefined;
 };
 
 function resolveViewedScreenPeerId(

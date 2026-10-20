@@ -31,7 +31,7 @@ export type StoredPin = {
   createdAt: number | null;
 };
 
-type Override = { client?: QueryClient | null };
+type Override = { client?: QueryClient | null | undefined };
 
 function mapPin(row: PinRow): StoredPin {
   return {

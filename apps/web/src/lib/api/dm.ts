@@ -22,15 +22,20 @@ import { api } from './client';
 export type { DirectMessageInvite };
 
 /** A direct message as the thread UI holds it, with the history cursors when it came from a page. */
-export type DirectMessage = Omit<DirectMessageView, 'createdAt' | 'invite' | 'replyTo' | 'replyPreview'> & {
+export type DirectMessage = Omit<
+  DirectMessageView,
+  'createdAt' | 'invite' | 'attachments' | 'linkPreview' | 'replyTo' | 'replyPreview'
+> & {
   createdAt: number;
-  invite?: DirectMessageInvite | null;
-  cursor?: string;
-  readCursor?: string;
-  replyTo?: ReplyPointer;
-  replyPreview?: ReplyTarget;
+  attachments?: DirectMessageView['attachments'] | undefined;
+  linkPreview?: DirectMessageView['linkPreview'] | undefined;
+  invite?: DirectMessageInvite | null | undefined;
+  cursor?: string | undefined;
+  readCursor?: string | undefined;
+  replyTo?: ReplyPointer | undefined;
+  replyPreview?: ReplyTarget | undefined;
   /** The reactions a history page carried; realtime keeps the reaction store current after that. */
-  reactions?: ReactionSummary[];
+  reactions?: ReactionSummary[] | undefined;
 };
 
 export function directMessageFromView(message: DirectMessageView): DirectMessage {
@@ -98,7 +103,12 @@ export async function sendDirectMessage(
   replyTo?: { messageId: string },
   idempotencyKey?: string
 ): Promise<DirectMessage> {
-  const body: SendDirectMessageBody = { text, attachmentIds, replyTo, idempotencyKey };
+  const body: SendDirectMessageBody = {
+    text,
+    attachmentIds,
+    ...(replyTo === undefined ? {} : { replyTo }),
+    ...(idempotencyKey === undefined ? {} : { idempotencyKey })
+  };
   const payload = await api.post(`/api/dm/${encodeURIComponent(userId)}`, DirectMessageAnswer, body);
   return directMessageFromView(payload.message);
 }

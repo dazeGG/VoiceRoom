@@ -28,7 +28,7 @@ type TestRoom = NonNullable<Parameters<typeof resolveViewedScreenPeerId>[0]>;
 type RosterPeer = TestRoom['peers'] extends Map<string, infer Peer> ? Peer : never;
 // Every peer a test builds has a live transport.
 type TestPeer = RosterPeer & { transport: NonNullable<RosterPeer['transport']> & { id: string } };
-type LogRecord = { level: string; msg?: string } & Record<string, unknown>;
+type LogRecord = { level: string; msg?: string | undefined } & Record<string, unknown>;
 type Broadcast = { type?: string; peer: { id: string; screen?: unknown; viewedScreenPeerId?: unknown } };
 // Settles a promise the test holds open.
 type Settle = (value?: unknown) => void;
@@ -147,8 +147,8 @@ function createRuntime(room: TestRoom, broadcasts: unknown[], overrides: Runtime
     credentialBoundary: overrides.credentialBoundary,
     removeLiveKitParticipant: overrides.removeLiveKitParticipant,
     now: overrides.now,
-    setTimeout: overrides.setTimeout,
-    clearTimeout: overrides.clearTimeout,
+    ...(overrides.setTimeout === undefined ? {} : { setTimeout: overrides.setTimeout }),
+    ...(overrides.clearTimeout === undefined ? {} : { clearTimeout: overrides.clearTimeout }),
     reconnectLeaseMs: overrides.reconnectLeaseMs
   });
 }

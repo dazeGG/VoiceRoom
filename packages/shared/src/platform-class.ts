@@ -6,11 +6,11 @@ import { isOneOf } from './guards.ts';
 export type PlatformClass = 'desktop' | 'mobile' | 'unknown';
 
 export interface PlatformSignals {
-  desktopBridge?: boolean;
-  userAgentDataMobile?: boolean;
-  userAgent?: string;
-  platform?: string;
-  maxTouchPoints?: number;
+  desktopBridge?: boolean | undefined;
+  userAgentDataMobile?: boolean | undefined;
+  userAgent?: string | undefined;
+  platform?: string | undefined;
+  maxTouchPoints?: number | undefined;
 }
 
 export interface PlatformPolicy {

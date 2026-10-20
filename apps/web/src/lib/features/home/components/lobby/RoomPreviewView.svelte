@@ -37,14 +37,14 @@
      * Panel to show when this room is first previewed. A mention link opens the
      * chat straight away, without joining voice.
      */
-    initialPanel?: 'chat' | 'participants' | null;
+    initialPanel?: 'chat' | 'participants' | null | undefined;
     /** Scroll the chat to this message once it opens. */
-    aroundMessageId?: string;
+    aroundMessageId?: string | undefined;
     onEnter: () => void;
     onBack: () => void;
-    onOpenSettings?: () => void;
-    onRoomsChanged?: () => void;
-    onToast?: (message: string) => void;
+    onOpenSettings?: (() => void) | undefined;
+    onRoomsChanged?: (() => void) | undefined;
+    onToast?: ((message: string) => void) | undefined;
   }>();
 
   let peers = $state<RoomPeer[]>([]);

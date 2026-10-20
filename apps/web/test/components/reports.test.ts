@@ -9,6 +9,7 @@ import MessageContextMenu from '../../src/lib/shared/chat/MessageContextMenu.sve
 import ReportMessageDialog from '../../src/lib/shared/chat/ReportMessageDialog.svelte';
 import ReportsReview from '../../src/lib/features/admin/ReportsReview.svelte';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { defined } from '../helpers/assert.ts';
 
 afterEach(cleanup);
 
@@ -111,7 +112,12 @@ test('the review removes a reported message and drops every report of it', async
 
   expect((await screen.findAllByText('текст m1')).length).toBe(2);
   expect(screen.getAllByText(/Комната «Кухня»/).length).toBe(3);
-  await userEvent.click(screen.getAllByRole('button', { name: 'Удалить сообщение' })[0]);
+  await userEvent.click(
+    defined(
+      screen.getAllByRole('button', { name: 'Удалить сообщение' })[0],
+      "screen.getAllByRole('button', { name: 'Удалить сообщение' })[0]"
+    )
+  );
 
   await vi.waitFor(() => expect(screen.queryByText('текст m1')).toBeNull());
   expect(screen.getByText('текст m2')).toBeTruthy();

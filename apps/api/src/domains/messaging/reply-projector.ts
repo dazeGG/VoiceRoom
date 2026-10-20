@@ -77,7 +77,10 @@ function projectReplyTombstone(pointer: unknown): ReplyPreview {
   });
 }
 
-function projectReplyPreview(message: unknown, { now = Date.now() }: { now?: number } = {}): ReplyPreview | null {
+function projectReplyPreview(
+  message: unknown,
+  { now = Date.now() }: { now?: number | undefined } = {}
+): ReplyPreview | null {
   const id = messageId(message);
   if (!id || !isRecord(message)) return null;
   if (isUnavailable(message, now)) return projectReplyTombstone(id);

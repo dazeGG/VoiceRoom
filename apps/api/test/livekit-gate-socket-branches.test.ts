@@ -70,7 +70,7 @@ const ACCESS_TOKEN = [
   'signature'
 ].join('.');
 
-type GateError = { evt?: string; msg?: string };
+type GateError = { evt?: string; msg?: string | undefined };
 
 function createGate({ errors = new Array<GateError>() } = {}) {
   const boundary = fake<CredentialBoundaryService>({

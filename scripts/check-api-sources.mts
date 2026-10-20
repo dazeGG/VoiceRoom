@@ -101,7 +101,13 @@ function crossDomainTablesFor(filePath: string, crossDomainWriters: Record<strin
   return null;
 }
 
-export function checkApiSources({ config, files }: { config: SourceConfig; files?: string[] }): Violation[] {
+export function checkApiSources({
+  config,
+  files
+}: {
+  config: SourceConfig;
+  files?: string[] | undefined;
+}): Violation[] {
   const violations: Violation[] = [];
   const fileSet = files || repoFiles('apps/api/src');
   const ownerPrefixes = config.writeRules?.ownerPathPrefixes || [];

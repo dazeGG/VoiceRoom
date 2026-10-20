@@ -43,7 +43,7 @@
     const mine = ++request;
     try {
       const loaded = await fetchAccounts({
-        q: q.trim() || undefined,
+        ...(q.trim() ? { q: q.trim() } : {}),
         filter,
         sort,
         order,

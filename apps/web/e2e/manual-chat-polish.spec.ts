@@ -62,7 +62,7 @@ test('manual polish renders direct messages with the shared flat chat row and ar
   const firstLogin = uniqueLogin('dmflatone');
   const secondLogin = uniqueLogin('dmflattwo');
   await registerViaUi(page, firstLogin);
-  const secondContext = await browser.newContext({ baseURL });
+  const secondContext = await browser.newContext(baseURL ? { baseURL } : {});
   const second = await secondContext.newPage();
   try {
     await registerViaUi(second, secondLogin);
@@ -327,7 +327,7 @@ test('room members panel releases navigation, switches to chat, collapses, and k
   const friendLogin = uniqueLogin('roomnavfriend');
   await registerViaUi(page, ownerLogin);
 
-  const friendContext = await browser.newContext({ baseURL });
+  const friendContext = await browser.newContext(baseURL ? { baseURL } : {});
   const friendPage = await friendContext.newPage();
   try {
     await registerViaUi(friendPage, friendLogin);

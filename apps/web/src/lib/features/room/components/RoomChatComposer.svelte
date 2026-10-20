@@ -135,7 +135,8 @@
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
         event.preventDefault();
-        chooseMention(mentions.candidates[mentions.activeIndex]);
+        const member = mentions.candidates[mentions.activeIndex];
+        if (member) chooseMention(member);
         return;
       }
       if (event.key === 'Escape') {

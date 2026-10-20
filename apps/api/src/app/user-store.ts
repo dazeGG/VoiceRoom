@@ -14,9 +14,9 @@ function createUserStore({
   pool,
   sessionTtlMs
 }: {
-  logger?: UserStoreLogger;
+  logger?: UserStoreLogger | undefined;
   pool: pg.Pool;
-  sessionTtlMs?: number;
+  sessionTtlMs?: number | undefined;
 }) {
   return {
     ...createUserRepository({ pool }),

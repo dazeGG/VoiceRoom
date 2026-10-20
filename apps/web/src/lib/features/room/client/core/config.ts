@@ -1,4 +1,4 @@
-import { SCREEN_BITRATE_BY_QUALITY } from '@voice-room/shared/media-budget';
+import { SCREEN_BITRATE_BY_QUALITY, type ScreenFpsId } from '@voice-room/shared/media-budget';
 
 export const DEFAULT_NOISE_MODE = 'rnnoise';
 export const DEFAULT_GATE_THRESHOLD_DB = -100;
@@ -87,7 +87,7 @@ export const NOISE_MODES: Record<NoiseMode, NoiseModeOption> = {
 
 export const RNNOISE_ASSET_BASE = '/rnnoise/';
 export const DEFAULT_SCREEN_QUALITY_ID = 'balanced';
-export const DEFAULT_SCREEN_FPS_ID = '30';
+export const DEFAULT_SCREEN_FPS_ID: ScreenFpsId = '30';
 export const DEFAULT_SCREEN_PROFILE_ID = `${DEFAULT_SCREEN_QUALITY_ID}-${DEFAULT_SCREEN_FPS_ID}`;
 export const DEFAULT_SCREEN_STREAM_MODE = 'games';
 export const SCREEN_STREAM_MODE_PROFILES = {
@@ -105,7 +105,7 @@ export const SCREEN_VIDEO_BACKUP_CODEC: 'vp8' | 'h264' = 'vp8';
 export const PEER_SESSION_STORAGE_PREFIX = 'voice-room:peer-session:';
 
 export interface ScreenQualityOption {
-  bitrateByFps: Readonly<Record<string, number>>;
+  bitrateByFps: Readonly<Record<ScreenFpsId, number>>;
   height: number;
   id: string;
   label: string;
@@ -113,14 +113,17 @@ export interface ScreenQualityOption {
   width: number;
 }
 
+/** 720p, what an unknown quality id falls back to. */
+export const DEFAULT_SCREEN_QUALITY: ScreenQualityOption = {
+  bitrateByFps: SCREEN_BITRATE_BY_QUALITY.balanced,
+  height: 720,
+  id: DEFAULT_SCREEN_QUALITY_ID,
+  label: '720p',
+  width: 1280
+};
+
 export const SCREEN_QUALITY_OPTIONS: Record<string, ScreenQualityOption> = {
-  balanced: {
-    bitrateByFps: SCREEN_BITRATE_BY_QUALITY.balanced,
-    height: 720,
-    id: 'balanced',
-    label: '720p',
-    width: 1280
-  },
+  balanced: DEFAULT_SCREEN_QUALITY,
   high: {
     bitrateByFps: SCREEN_BITRATE_BY_QUALITY.high,
     height: 1080,
@@ -155,9 +158,17 @@ export const SCREEN_SIMULCAST_LAYER = {
 export interface ScreenFpsOption {
   contentHint: string;
   frameRate: number;
-  id: string;
+  id: ScreenFpsId;
   label: string;
 }
+
+/** 30 FPS, what an unknown frame rate id falls back to. */
+export const DEFAULT_SCREEN_FPS: ScreenFpsOption = {
+  contentHint: 'motion',
+  frameRate: 30,
+  id: DEFAULT_SCREEN_FPS_ID,
+  label: '30 FPS'
+};
 
 export const SCREEN_FPS_OPTIONS: Record<string, ScreenFpsOption> = {
   5: {
@@ -172,12 +183,7 @@ export const SCREEN_FPS_OPTIONS: Record<string, ScreenFpsOption> = {
     id: '15',
     label: '15 FPS'
   },
-  30: {
-    contentHint: 'motion',
-    frameRate: 30,
-    id: '30',
-    label: '30 FPS'
-  },
+  30: DEFAULT_SCREEN_FPS,
   60: {
     contentHint: 'motion',
     frameRate: 60,

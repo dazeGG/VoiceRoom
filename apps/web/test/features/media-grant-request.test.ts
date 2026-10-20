@@ -3,12 +3,13 @@
 
 import { afterEach, expect, test, vi } from 'vitest';
 import type { RealtimeEvent } from '../../src/lib/api/realtime';
+import { defined } from '../helpers/assert.ts';
 
 const TARGET = { roomId: 'room-1', peerId: 'peer-self1', sessionToken: 's'.repeat(32) };
 
 async function loadRoomRealtime() {
   vi.resetModules();
-  const sent: Array<{ type: string; payload: unknown; id?: string }> = [];
+  const sent: Array<{ type: string; payload: unknown; id?: string | undefined }> = [];
   const handlers = new Set<(event: RealtimeEvent) => void>();
   const connection = {
     send(type: string, payload: unknown, id?: string) {
@@ -34,7 +35,7 @@ test('the grant answering this request resolves it; answers to other requests do
   const { realtime, sent, handlers, emit } = await loadRoomRealtime();
 
   const pending = realtime.requestMediaGrant({ ...TARGET, kind: 'screen', profileId: 'high-60' });
-  const { id } = sent[0];
+  const id = defined(defined(sent[0], 'sent request').id, 'request id');
   expect(sent[0]).toMatchObject({
     type: 'room.media.request',
     payload: { ...TARGET, kind: 'screen', profileId: 'high-60' }
@@ -55,9 +56,10 @@ test('an error frame for the request resolves it with no answer', async () => {
   const { realtime, sent, emit } = await loadRoomRealtime();
 
   const pending = realtime.requestMediaGrant({ ...TARGET, kind: 'camera' });
-  expect(realtime.isMediaRequestError(sent[0].id)).toBe(true);
+  const id = defined(defined(sent[0], 'sent request').id, 'request id');
+  expect(realtime.isMediaRequestError(id)).toBe(true);
   expect(realtime.isMediaRequestError('room-join-1')).toBe(false);
-  emit({ type: 'error', payload: { code: 'unknown_type', message: 'Unknown', id: sent[0].id } });
+  emit({ type: 'error', payload: { code: 'unknown_type', message: 'Unknown', id } });
 
   await expect(pending).resolves.toBeNull();
 });

@@ -60,7 +60,10 @@ function active(at: TimeInput) {
     eb.and([eb('revoked_at', 'is', null), eb.or([eb('expires_at', 'is', null), eb('expires_at', '>', toDate(at))])]);
 }
 
-function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClient | null; now?: () => number } = {}) {
+function createActiveBanRepository({
+  pool,
+  now = Date.now
+}: { pool?: QueryClient | null | undefined; now?: () => number } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new TypeError('A PostgreSQL pool is required');
   const base = pool;
   const on = (client: Client): Database => kyselyOn(client && typeof client.query === 'function' ? client : base);
@@ -74,7 +77,7 @@ function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClien
     at = now(),
     client
   }: {
-    roomId?: string;
+    roomId?: string | undefined;
     userId?: unknown;
     ip?: unknown;
     at?: TimeInput;

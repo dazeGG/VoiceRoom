@@ -6,6 +6,7 @@ import StructuredMessageContent from '../../src/lib/shared/chat/StructuredMessag
 import type { MembershipRole } from '@voice-room/shared/contracts/membership';
 import type { RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
 import { member } from '../fixtures/answers.ts';
+import { defined } from '../helpers/assert.ts';
 
 afterEach(cleanup);
 
@@ -74,6 +75,6 @@ test('mention suggestions show face, name and login, mark the active one and pic
     'А Анна @anna2'
   ]);
   expect(options[1]?.getAttribute('aria-selected')).toBe('true');
-  await userEvent.click(options[0]);
+  await userEvent.click(defined(options[0], 'options[0]'));
   expect(onselect).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u1' }));
 });

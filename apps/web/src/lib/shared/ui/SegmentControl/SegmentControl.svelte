@@ -23,7 +23,7 @@
     for (let offset = 1; offset <= options.length; offset += 1) {
       const nextIndex = (index + step * offset + options.length * offset) % options.length;
       const next = options[nextIndex];
-      if (next.disabled) continue;
+      if (!next || next.disabled) continue;
       onChange(next.value);
       queueMicrotask(() => buttons?.[nextIndex]?.focus());
       return;

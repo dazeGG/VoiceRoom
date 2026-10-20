@@ -54,16 +54,16 @@ export function publicChatMessage(message: RoomChatMessage): RoomMessage {
       message.avatarUrl || (message.avatarKey ? `/api/avatars/${encodeURIComponent(message.avatarKey)}` : null),
     createdAt: message.createdAt,
     editedAt: message.editedAt || null,
-    expiresAt: message.expiresAt,
+    ...(message.expiresAt === undefined ? {} : { expiresAt: message.expiresAt }),
     id: message.id,
     name: message.name,
     peerId: message.peerId,
     roomId: message.roomId,
     text: message.text,
-    content: message.content,
+    ...(message.content === undefined ? {} : { content: message.content }),
     attachments: Array.isArray(message.attachments) ? message.attachments : [],
-    linkPreview: message.linkPreview || undefined,
-    replyTo: message.replyTo,
-    replyPreview: message.replyPreview
+    ...(message.linkPreview ? { linkPreview: message.linkPreview } : {}),
+    ...(message.replyTo === undefined ? {} : { replyTo: message.replyTo }),
+    ...(message.replyPreview === undefined ? {} : { replyPreview: message.replyPreview })
   };
 }

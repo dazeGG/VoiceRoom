@@ -14,6 +14,7 @@ import type {
 import type { PublicUser } from '@voice-room/shared/contracts/users';
 import type { PushPayload } from '../notifications/notification-dispatch.ts';
 import { notificationActor, isActiveAccount, type SocialUser } from './social-views.ts';
+import type { RateCheck } from '../../lib/rate-limit.ts';
 
 type Status<T extends string> = T extends string ? { status: T } : never;
 
@@ -78,7 +79,7 @@ export interface FriendsDeps {
   isOnline(userId: string): boolean;
   notifyUser(userId: string, event: AccountMessage): void;
   queuePush(userId: string, payload: PushPayload, context?: Record<string, unknown>): Promise<unknown>;
-  ringLimiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
+  ringLimiter: RateCheck;
   ringTtlMs: number;
   now?: () => number;
 }
@@ -258,7 +259,7 @@ export function createFriendsService(deps: FriendsDeps) {
     if (await deps.friends().isBlockedBetween(caller.id, targetUserId)) return { status: 'blocked' };
     if (!isActiveAccount(await deps.findUser(targetUserId))) return { status: 'account_deleted' };
     const rate = deps.ringLimiter.check(`${caller.id}:${targetUserId}`);
-    if (!rate.allowed) return { status: 'rate_limited', retryAfterSeconds: rate.retryAfterSeconds ?? 0 };
+    if (!rate.allowed) return { status: 'rate_limited', retryAfterSeconds: rate.retryAfterSeconds };
     const room = await deps.findRoom(roomId);
     if (!room) return { status: 'room_not_found' };
 

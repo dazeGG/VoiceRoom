@@ -2,7 +2,7 @@
 // cards a reply may not target, and the delivery event the outbox emits.
 // The reply pointer and quote are contracts/messages.ts.
 
-import { isOneOf, isRecord } from './guards.ts';
+import { isOneOf, isRecord, trimmedText } from './guards.ts';
 
 export const SEND_CONTRACT_VERSION = 1 as const;
 export const REPLY_PREVIEW_TEXT_MAX_LENGTH = 280 as const;
@@ -19,22 +19,16 @@ export type MessageDeliveryEvent = {
   type: 'message.created' | 'message.updated' | 'message.deleted';
   conversation: ConversationRef;
   messageId: string;
-  cursor?: string;
-  message?: Record<string, unknown>;
+  cursor?: string | undefined;
+  message?: Record<string, unknown> | undefined;
 };
 
 type Loose = Record<string, unknown>;
 
-function cleanString(value: unknown, max: number): string {
-  if (typeof value !== 'string') return '';
-  const trimmed = value.trim();
-  return trimmed && trimmed.length <= max ? trimmed : '';
-}
-
 export function normalizeConversation(value: unknown): ConversationRef | null {
   if (!isRecord(value)) return null;
   const type = value.type === 'dm' ? 'dm' : value.type === 'room' ? 'room' : '';
-  const id = cleanString(value.id ?? value.roomId ?? value.userId ?? value.conversationId, 160);
+  const id = trimmedText(value.id ?? value.roomId ?? value.userId ?? value.conversationId, 160);
   return type && id ? { type, id } : null;
 }
 
@@ -48,8 +42,8 @@ export function isSystemCard(value: unknown): boolean {
 }
 
 export function buildMessageDeliveryEvent(value: Loose = {}): MessageDeliveryEvent | null {
-  const eventId = cleanString(value.eventId ?? value.id, 160);
-  const messageId = cleanString(value.messageId, 160);
+  const eventId = trimmedText(value.eventId ?? value.id, 160);
+  const messageId = trimmedText(value.messageId, 160);
   const conversation = normalizeConversation(value.conversation);
   const type = isOneOf(DELIVERY_EVENT_TYPES, value.type) ? value.type : '';
   if (!eventId || !messageId || !conversation || !type) return null;

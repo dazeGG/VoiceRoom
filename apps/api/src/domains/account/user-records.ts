@@ -129,7 +129,7 @@ export function hashSessionToken(token: unknown): string {
 export function createRecoveryCode(): string {
   let code = '';
   for (let index = 0; index < RECOVERY_CODE_LENGTH; index += 1) {
-    code += RECOVERY_CODE_ALPHABET[crypto.randomInt(RECOVERY_CODE_ALPHABET.length)];
+    code += RECOVERY_CODE_ALPHABET.charAt(crypto.randomInt(RECOVERY_CODE_ALPHABET.length));
   }
   return code;
 }

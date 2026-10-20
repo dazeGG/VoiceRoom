@@ -51,8 +51,8 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(
     (async () => {
-      // The DOM types a notification's data as any; it is whatever the push put there.
-      const { data }: { data: unknown } = event.notification;
+      // The DOM types a notification's data as any; read it as unknown and let parsePushPayload check it.
+      const data: unknown = Reflect.get(event.notification, 'data');
       const target = new URL(parsePushPayload(data).url || '/', self.location.origin);
       if (target.origin !== self.location.origin) target.href = new URL('/', self.location.origin).href;
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });

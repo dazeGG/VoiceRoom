@@ -53,7 +53,7 @@ test('a ban reports who and for how long, with an undo that lifts it', async () 
     { userId: 'u-anna', guestIp: null, duration: '1d', reason: '' },
     expect.any(String)
   );
-  const [message, options] = notify.mock.calls[0];
+  const [message, options] = defined(notify.mock.calls[0], 'moderation notice');
   expect(message).toBe('Анна заблокирован на 1 день');
   const undo = defined(options?.undo, 'undo action');
   expect(undo.label).toBe('Отменить');

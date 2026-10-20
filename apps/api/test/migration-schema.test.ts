@@ -30,7 +30,7 @@ type Call = {
   name: string;
   table: string;
   text: string;
-  columns?: Record<string, Column> & string[];
+  columns?: (Record<string, Column> & string[]) | undefined;
   options: { name?: string; unique?: boolean; check?: string; where?: string };
 };
 

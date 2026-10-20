@@ -151,8 +151,8 @@ test('turning the camera on captures 720p and publishes it with lighter layers; 
   // A computer asks for no facing: it would prefer the built-in camera over the default one.
   expect(facingOf(requests[0])).toBeUndefined();
   expect(published).toHaveLength(1);
-  expect(published[0].options).toMatchObject({ source: 'camera', simulcast: true });
-  expect(published[0].options.videoSimulcastLayers).toHaveLength(2);
+  expect(defined(published[0], 'published[0]').options).toMatchObject({ source: 'camera', simulcast: true });
+  expect(defined(published[0], 'published[0]').options.videoSimulcastLayers).toHaveLength(2);
   const self = lk.state.self;
   expect(self).toMatchObject({ camera: true, cameraStream: capture.stream });
 
@@ -215,10 +215,13 @@ test('flipping turns a phone to its back camera and back, releasing one camera b
   expect(facingOf(requests[1])).toEqual({ exact: 'environment' });
   expect(lk.state.cameraFacing).toBe('environment');
   expect(lk.state.cameraDeviceId).toBe('');
-  expect(unpublished).toEqual([captures[0].track]);
-  expect(published.map((entry) => entry.track)).toEqual([captures[0].track, captures[1].track]);
-  expect(lk.state.localCameraStream).toBe(captures[1].stream);
-  expect(lk.state.self?.cameraStream).toBe(captures[1].stream);
+  expect(unpublished).toEqual([defined(captures[0], 'captures[0]').track]);
+  expect(published.map((entry) => entry.track)).toEqual([
+    defined(captures[0], 'captures[0]').track,
+    defined(captures[1], 'captures[1]').track
+  ]);
+  expect(lk.state.localCameraStream).toBe(defined(captures[1], 'captures[1]').stream);
+  expect(lk.state.self?.cameraStream).toBe(defined(captures[1], 'captures[1]').stream);
 
   await camera.flipCamera();
   expect(facingOf(requests[2])).toEqual({ exact: 'user' });
@@ -252,9 +255,9 @@ test('a phone with one camera stays on it when flipped and says so', async () =>
   // Reopened by the device it was on, not by a facing it never reported.
   expect(videoOf(requests.at(-1)).deviceId).toEqual({ exact: 'only-cam' });
   expect(lk.state.cameraFacing).toBe('user');
-  expect(captures[0].track.stopped).toBe(true);
-  expect(lk.state.localCameraStream).toBe(captures[1].stream);
-  expect(published.at(-1)?.track).toBe(captures[1].track);
+  expect(defined(captures[0], 'captures[0]').track.stopped).toBe(true);
+  expect(lk.state.localCameraStream).toBe(defined(captures[1], 'captures[1]').stream);
+  expect(published.at(-1)?.track).toBe(defined(captures[1], 'captures[1]').track);
   expect(lk.state.cameraStarting).toBe(false);
 });
 

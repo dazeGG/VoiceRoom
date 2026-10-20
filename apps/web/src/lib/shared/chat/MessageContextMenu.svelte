@@ -37,24 +37,24 @@
     onDownloadImage?: (() => void) | undefined;
     x: number;
     y: number;
-    quickReactions?: readonly string[];
-    activeReactions?: Set<string>;
-    canReact?: boolean;
-    canPin?: boolean;
-    pinned?: boolean;
-    canEdit?: boolean;
-    canDelete?: boolean;
-    busy?: boolean;
+    quickReactions?: readonly string[] | undefined;
+    activeReactions?: Set<string> | undefined;
+    canReact?: boolean | undefined;
+    canPin?: boolean | undefined;
+    pinned?: boolean | undefined;
+    canEdit?: boolean | undefined;
+    canDelete?: boolean | undefined;
+    busy?: boolean | undefined;
     onClose: () => void;
-    onReact?: (emoji: string) => void;
-    onOpenReactionPicker?: (anchor: EventTarget | null) => void;
-    onReply?: () => void;
-    onCopy?: () => void;
-    onTogglePin?: () => void;
-    onEdit?: () => void;
-    onDelete?: () => void;
+    onReact?: ((emoji: string) => void) | undefined;
+    onOpenReactionPicker?: ((anchor: EventTarget | null) => void) | undefined;
+    onReply?: (() => void) | undefined;
+    onCopy?: (() => void) | undefined;
+    onTogglePin?: (() => void) | undefined;
+    onEdit?: (() => void) | undefined;
+    onDelete?: (() => void) | undefined;
     /** Reporting to the service operator; the row appears only when given. */
-    onReport?: () => void;
+    onReport?: (() => void) | undefined;
   } = $props();
 
   function pick(action: (() => void) | undefined, close: () => void): void {

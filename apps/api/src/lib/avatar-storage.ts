@@ -21,7 +21,9 @@ function validateAvatarKey(key: unknown): string {
   return key;
 }
 
-function createAvatarStorage({ uploadsDir = readUploadsDir() }: { uploadsDir?: string } = {}): AvatarStorage {
+function createAvatarStorage({
+  uploadsDir = readUploadsDir()
+}: { uploadsDir?: string | undefined } = {}): AvatarStorage {
   const root = path.resolve(uploadsDir);
 
   function filePath(key: string): string {

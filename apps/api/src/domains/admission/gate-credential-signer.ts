@@ -22,9 +22,9 @@ export type GateVerification =
   | { ok: false; code: 'invalid_claims' | 'issued_in_future' | 'expired'; claims: Record<string, unknown> };
 
 export type GateSignInput = {
-  credentialId?: string;
+  credentialId?: string | undefined;
   expiresAt?: number;
-  issuedAt?: number;
+  issuedAt?: number | undefined;
   peerId?: string;
   principalEpoch?: number;
   principalId?: string;

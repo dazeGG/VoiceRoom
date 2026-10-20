@@ -7,7 +7,7 @@ async function registerFriend(
   prefix: string
 ): Promise<{ login: string; context: BrowserContext }> {
   const login = uniqueLogin(prefix);
-  const context = await browser.newContext({ baseURL });
+  const context = await browser.newContext(baseURL ? { baseURL } : {});
   await registerViaUi(await context.newPage(), login);
   return { login, context };
 }

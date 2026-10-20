@@ -18,16 +18,16 @@
     activeTab: 'chat' | 'participants';
     unread: number;
     /** People in the room, shown beside «Участники». */
-    participantCount?: number;
+    participantCount?: number | undefined;
     /** On a phone the panel is the whole screen, so it closes instead of collapsing. */
     mobile: boolean;
-    chatTabId?: string;
-    participantsTabId?: string;
-    chatPanelId?: string;
-    participantsPanelId?: string;
-    onSelectChat?: () => void;
-    onSelectParticipants?: () => void;
-    onCollapse?: () => void;
+    chatTabId?: string | undefined;
+    participantsTabId?: string | undefined;
+    chatPanelId?: string | undefined;
+    participantsPanelId?: string | undefined;
+    onSelectChat?: (() => void) | undefined;
+    onSelectParticipants?: (() => void) | undefined;
+    onCollapse?: (() => void) | undefined;
   } = $props();
 </script>
 

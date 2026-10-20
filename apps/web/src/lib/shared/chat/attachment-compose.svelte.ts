@@ -78,16 +78,19 @@ export class AttachmentComposeStore {
         progress: 0,
         error: null
       });
-      draft = this.drafts[this.drafts.length - 1];
+      // The reactive proxy of the pushed draft, which the UI watches.
+      const added = this.drafts.at(-1);
+      if (!added) return;
+      draft = added;
       this.persist();
       Object.assign(
-        draft,
+        added,
         await uploadAttachmentContent(slot.id, file, (progress) => {
-          if (draft) draft.progress = progress;
+          added.progress = progress;
         }),
         { progress: 1 }
       );
-      await this.waitUntilTerminal(draft);
+      await this.waitUntilTerminal(added);
     } catch (error) {
       if (draft && draft.state !== 'ready') {
         this.lastError = error instanceof Error ? error.message : 'Ошибка загрузки';
@@ -130,6 +133,7 @@ export class AttachmentComposeStore {
   move(from: number, to: number): void {
     if (from === to || from < 0 || to < 0 || from >= this.drafts.length || to >= this.drafts.length) return;
     const [draft] = this.drafts.splice(from, 1);
+    if (!draft) return;
     this.drafts.splice(to, 0, draft);
     this.persist();
   }

@@ -61,8 +61,7 @@ test('media routes reject invalid attachment ids before services see them', asyn
     const response = await app.inject({
       method,
       url,
-      headers: method === 'PUT' ? { 'content-type': 'application/octet-stream' } : undefined,
-      payload: method === 'PUT' ? 'body' : undefined
+      ...(method === 'PUT' ? { headers: { 'content-type': 'application/octet-stream' }, payload: 'body' } : {})
     });
     assert.equal(response.statusCode, 400, `${method} ${url}`);
     assert.equal(response.json<Failure>().code, 'media_attachment_id_invalid');

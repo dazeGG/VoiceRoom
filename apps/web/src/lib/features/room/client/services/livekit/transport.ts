@@ -64,8 +64,7 @@ export async function connectLiveKitWithFallback(
   if (!isCurrent()) return null;
   const configuredUrls = credentials.urls?.length ? credentials.urls : [credentials.url];
   const urls = [...new Set(configuredUrls.flatMap(getLiveKitConnectUrls))];
-  for (let candidateIndex = 0; candidateIndex < urls.length; candidateIndex += 1) {
-    const url = urls[candidateIndex];
+  for (const [candidateIndex, url] of urls.entries()) {
     if (!isCurrent()) return null;
     const room = new Room({
       adaptiveStream: false,

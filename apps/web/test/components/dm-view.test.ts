@@ -7,8 +7,9 @@ import { lobbyContext } from '../../src/lib/features/home/model/lobby-context.ts
 import { LobbyStore } from '../../src/lib/features/home/model/lobby.svelte.ts';
 import type { DirectMessage } from '../../src/lib/api/dm.ts';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';
-import { instanceOf, parse } from '../helpers/assert.ts';
+import { instanceOf, parse, defined } from '../helpers/assert.ts';
 import { SendDirectMessageBody } from '@voice-room/shared/contracts/messages';
 
 const self = authUser({ id: 'me', login: 'me', displayName: 'Я' });
@@ -22,6 +23,8 @@ function message(id: string, senderId: string, body: string, extra: Partial<Dire
 
 beforeEach(() => {
   stubFetch({});
+  // The lobby opens its realtime socket; a real one would reach whatever listens on localhost.
+  installFakeWebSocket();
   localStorage.clear();
 });
 
@@ -173,13 +176,13 @@ test('a reader at the newest message stays on it when loading artwork grows the 
   scroll.scrollTop = 600;
   scroll.dispatchEvent(new Event('scroll'));
   height = 1300;
-  observers[0]();
+  defined(observers[0], 'observers[0]')();
   expect(scroll.scrollTop).toBe(1300);
 
   scroll.scrollTop = 100;
   scroll.dispatchEvent(new Event('scroll'));
   height = 1600;
-  observers[0]();
+  defined(observers[0], 'observers[0]')();
   expect(scroll.scrollTop).toBe(100);
 });
 

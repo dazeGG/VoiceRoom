@@ -81,8 +81,8 @@ export function getMobileCallScene(): MobileCallScene {
   // the grid like on the room stage. A swap or a grown picture belongs to the
   // person it was made with; someone new in their place starts from the plain layout.
   const withCamera = (participant: Participant): boolean => participant.camera || Boolean(participant.cameraStream);
-  if (self && others.length === 1 && (withCamera(self) || withCamera(others[0]))) {
-    const [other] = others;
+  const [other] = others;
+  if (self && other && others.length === 1 && (withCamera(self) || withCamera(other))) {
     const swapped = mobileCallUi.duoSwappedWith === other.id;
     return swapped
       ? { kind: 'duo', big: self, pip: other, pipExpanded: false }

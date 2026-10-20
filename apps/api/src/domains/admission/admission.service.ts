@@ -56,7 +56,7 @@ export interface AdmissionStore {
     guestPrincipalId: string;
     roomId: string;
   }): GatePrincipal | null;
-  isRoomServerMuted?(input: { roomId: string; principal: GatePrincipal }): Promise<boolean>;
+  isRoomServerMuted?: ((input: { roomId: string; principal: GatePrincipal }) => Promise<boolean>) | undefined;
 }
 
 export interface MembershipServices {

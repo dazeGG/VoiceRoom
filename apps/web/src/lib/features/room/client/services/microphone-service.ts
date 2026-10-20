@@ -98,7 +98,7 @@ async function openMicrophone(mode: NoiseMode = state.noiseMode): Promise<MediaS
     audio: {
       autoGainControl: true,
       channelCount: 1,
-      deviceId: exactDeviceId ? { exact: exactDeviceId } : undefined,
+      ...(exactDeviceId ? { deviceId: { exact: exactDeviceId } } : {}),
       echoCancellation: true,
       noiseSuppression: noiseMode.nativeNoiseSuppression
     },

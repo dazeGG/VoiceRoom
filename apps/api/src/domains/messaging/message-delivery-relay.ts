@@ -21,10 +21,16 @@ const RETRY_BASE_MS = 1_000;
 const RETRY_MAX_MS = 30_000;
 
 interface ListenClient {
-  on(event: 'notification', listener: (notification: { channel: string; payload?: string }) => void): unknown;
+  on(
+    event: 'notification',
+    listener: (notification: { channel: string; payload?: string | undefined }) => void
+  ): unknown;
   on(event: 'error', listener: (error: unknown) => void): unknown;
   on(event: 'end', listener: () => void): unknown;
-  off(event: 'notification', listener: (notification: { channel: string; payload?: string }) => void): unknown;
+  off(
+    event: 'notification',
+    listener: (notification: { channel: string; payload?: string | undefined }) => void
+  ): unknown;
   query(sql: string): Promise<unknown>;
   /** An error destroys the connection instead of returning it to the pool. */
   release(error?: Error): void;
@@ -53,7 +59,7 @@ export interface MessageDeliveryRelayDeps {
 export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
   let listener: {
     client: ListenClient;
-    onNotification: (notification: { channel: string; payload?: string }) => void;
+    onNotification: (notification: { channel: string; payload?: string | undefined }) => void;
   } | null = null;
 
   // The outbox stores the event its writer enqueued; dispatch checks its fields.
@@ -64,13 +70,19 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
     if (conversation.type === 'room') {
       const roomId = conversation.id;
       // The outbox carries the stored message; the runtime makes it public.
-      if (!isStoredChatMessage(message)) return reportMalformedMessage('room', message);
+      if (!isStoredChatMessage(message)) {
+        reportMalformedMessage('room', message);
+        return;
+      }
       deps.broadcastChatMessage(roomId, await deps.projection.project('room', message, { roomId }));
       return;
     }
     if (conversation.type === 'dm') {
       // The outbox carries the stored message as the store wrote it.
-      if (!isStoredDirectMessage(message)) return reportMalformedMessage('dm', message);
+      if (!isStoredDirectMessage(message)) {
+        reportMalformedMessage('dm', message);
+        return;
+      }
       const peerId = message.senderId === conversation.id ? message.recipientId : conversation.id;
       const projected = await deps.projection.project('dm', message, { userId: message.senderId, peerId });
       deps.notifyUser(message.senderId, { type: 'dm-message', message: projected });
@@ -158,7 +170,7 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
     try {
       client = await pool.connect();
       const connected = client;
-      const onNotification = (notification: { channel: string; payload?: string }) => {
+      const onNotification = (notification: { channel: string; payload?: string | undefined }) => {
         if (notification.channel !== CHANNEL) return;
         void (async () => {
           const parsed: unknown = JSON.parse(notification.payload || '{}');

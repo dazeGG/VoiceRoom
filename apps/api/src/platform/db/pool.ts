@@ -15,7 +15,7 @@ function createDbPool({
   max = 10
 }: {
   databaseUrl: string;
-  logger?: PoolLogger;
+  logger?: PoolLogger | undefined;
   max?: number;
 }): pg.Pool {
   const pool = new pg.Pool({

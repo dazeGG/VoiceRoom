@@ -28,7 +28,7 @@ export interface ReconnectRuntime {
     reason: EvictionType;
     finalizePeer(input: {
       peerId: string;
-      peer?: PresencePeer | null;
+      peer?: PresencePeer | null | undefined;
       ownershipFinalized: boolean;
     }): Promise<{ finalized: boolean }>;
   }): Promise<unknown>;

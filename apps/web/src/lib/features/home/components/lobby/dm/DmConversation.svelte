@@ -87,7 +87,7 @@
     key: string;
     fromMe: boolean;
     dayLabel: string | null;
-    bubbles: DirectMessage[];
+    bubbles: [DirectMessage, ...DirectMessage[]];
   }
 
   // Group consecutive messages by sender, inserting a day separator when the
@@ -98,9 +98,9 @@
     for (const message of lobby.thread.messages) {
       const fromMe = message.senderId === selfId;
       const newDay = !prev || !isSameDay(prev.createdAt, message.createdAt);
-      const sameGroup = prev && !newDay && prev.senderId === message.senderId && result.length > 0;
-      if (sameGroup) {
-        result[result.length - 1].bubbles.push(message);
+      const lastGroup = result.at(-1);
+      if (lastGroup && prev && !newDay && prev.senderId === message.senderId) {
+        lastGroup.bubbles.push(message);
       } else {
         result.push({
           key: message.id,

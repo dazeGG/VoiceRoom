@@ -24,7 +24,7 @@ export interface DesktopReleaseServiceOptions {
   repo: string;
   cacheMs: number;
   timeoutMs: number;
-  githubToken?: string;
+  githubToken?: string | undefined;
   logger: Pick<Logger, 'warn'>;
   fetch?: typeof fetch;
   now?: () => number;

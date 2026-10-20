@@ -87,6 +87,7 @@ export function mapMessage(row: Selectable<DirectMessages> | null | undefined): 
 export function mapMessage(row: Selectable<DirectMessages> | null | undefined): DirectMessage | null {
   if (!row) return null;
   const metadata = isRecord(row.metadata) ? row.metadata : null;
+  const linkPreview = normalizeLinkPreview(metadata?.linkPreview);
   return {
     id: row.id,
     senderId: row.sender_id,
@@ -96,8 +97,8 @@ export function mapMessage(row: Selectable<DirectMessages> | null | undefined): 
     editedAt: epochMillis(row.edited_at),
     readAt: epochMillis(row.read_at),
     invite: mapInvite(metadata),
-    linkPreview: normalizeLinkPreview(metadata?.linkPreview) || undefined,
-    replyTo: row.reply_to_message_id ? { messageId: row.reply_to_message_id } : undefined,
+    ...(linkPreview ? { linkPreview } : {}),
+    ...(row.reply_to_message_id ? { replyTo: { messageId: row.reply_to_message_id } } : {}),
     // deletedAt kept internal; callers filter before map
     deletedAt: row.deleted_at ? epochMillis(row.deleted_at) : null
   };

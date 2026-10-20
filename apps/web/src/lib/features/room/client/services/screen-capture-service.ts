@@ -117,10 +117,11 @@ function createBrowserDisplayMediaConstraints(
   const { audio = true, includeAudioHints = true, suppressLocalAudioPlayback = false } = options;
   const video = createScreenVideoConstraints(profile);
 
+  const withVideo = video === undefined ? {} : { video };
   if (!audio) {
     return {
       audio: false,
-      video
+      ...withVideo
     };
   }
 
@@ -131,7 +132,7 @@ function createBrowserDisplayMediaConstraints(
       noiseSuppression: false,
       suppressLocalAudioPlayback
     },
-    video,
+    ...withVideo,
     ...(includeAudioHints
       ? {
           selfBrowserSurface: 'exclude',

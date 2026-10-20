@@ -41,7 +41,7 @@ test('a burst of one author shares a header until five quiet minutes or another 
     notOwn
   );
   expect(days).toHaveLength(1);
-  expect(days[0].groups.map((group) => group.messages.map((item) => item.id))).toEqual([
+  expect(defined(days[0], 'days[0]').groups.map((group) => group.messages.map((item) => item.id))).toEqual([
     ['a1', 'a2'],
     ['b1'],
     ['a3'],
@@ -63,9 +63,12 @@ test('a new calendar day opens its own section, even inside a burst', () => {
 });
 
 test('own messages are marked and a nameless guest is shown as «Гость»', () => {
-  const [day] = buildChatDays(
-    [message('mine', 'me', DAY_ONE), message('guest', 'g1', DAY_ONE + MINUTE, { name: '' })],
-    (item) => item.peerId === 'me'
+  const day = defined(
+    buildChatDays(
+      [message('mine', 'me', DAY_ONE), message('guest', 'g1', DAY_ONE + MINUTE, { name: '' })],
+      (item) => item.peerId === 'me'
+    )[0],
+    'chat day'
   );
   expect(day.groups.map((group) => [group.self, group.name])).toEqual([
     [true, 'ME'],

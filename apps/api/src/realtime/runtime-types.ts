@@ -15,7 +15,12 @@ export type Peer = RosterPeer;
 /** A room's in-memory roster. */
 export type PresenceRoom = RosterRoom;
 export type Timer = ReturnType<typeof globalThis.setTimeout> | number;
-export type VoiceTarget = { roomId: string; peerId: string; sessionToken?: string; transportId?: string };
+export type VoiceTarget = {
+  roomId: string;
+  peerId: string;
+  sessionToken?: string | undefined;
+  transportId?: string | undefined;
+};
 /** Why a lease ends: how the peer left, or the moderation that evicted it. */
 export type LeaseReason = PeerLeaveReason | 'room.kicked' | 'room.banned';
 /** How a peer whose lease ended left its seat, as room.peer.left tells the room. */

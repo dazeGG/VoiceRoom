@@ -23,7 +23,7 @@ const REQUEST = fake<IncomingMessage>();
 // What the handler did to the one connection it opened, and the runtime saw.
 type Observed = {
   connection: WsConnection | null;
-  lastJoinRequestId?: string;
+  lastJoinRequestId?: string | undefined;
   lastLeavePayload?: { sessionToken: string };
 };
 

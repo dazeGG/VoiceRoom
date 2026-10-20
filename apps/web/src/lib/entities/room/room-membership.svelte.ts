@@ -8,7 +8,7 @@ interface RoomMembershipEntry {
   cachedMembers: MembershipMember[];
   members: MembershipMember[];
   query: string;
-  nextCursor?: string;
+  nextCursor?: string | undefined;
   hasMore: boolean;
   presenceRevision: number;
   loaded: boolean;

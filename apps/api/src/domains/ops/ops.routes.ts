@@ -11,10 +11,7 @@ import { failure } from '../../platform/http/http-kit.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { CLIENT_LOG_LIMITS, normalizeClientLogBatch } from '../../lib/client-log-intake.ts';
 import type { DesktopReleaseService } from './desktop-release.service.ts';
-
-interface RateLimiter {
-  check(key: string): { allowed: boolean; retryAfterSeconds: number };
-}
+import type { RateCheck } from '../../lib/rate-limit.ts';
 
 export interface OpsRouteDeps {
   livekitEnabled(): boolean;
@@ -23,7 +20,7 @@ export interface OpsRouteDeps {
   pow: { prune(): void; createChallenge(ip: string, now: number): string | null };
   powDifficulty: number;
   powTtlMs: number;
-  clientLogs: { enabled: boolean; limiter: RateLimiter };
+  clientLogs: { enabled: boolean; limiter: RateCheck };
   desktopRelease: DesktopReleaseService;
 }
 

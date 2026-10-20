@@ -16,8 +16,8 @@ const isTab = (value: string): value is AdminTab => isOneOf(ADMIN_TABS, value);
 
 /** /admin is the dashboard, and so is an unknown tab; /admin/accounts/<id> is a card. Null outside /admin. */
 export function adminLocationFromPath(pathname: string): AdminLocation | null {
-  const card = /^\/admin\/accounts\/([^/]+)\/?$/.exec(pathname);
-  if (card) return { tab: 'accounts', accountId: decodeURIComponent(card[1]) };
+  const accountId = /^\/admin\/accounts\/([^/]+)\/?$/.exec(pathname)?.[1];
+  if (accountId) return { tab: 'accounts', accountId: decodeURIComponent(accountId) };
   const match = /^\/admin(?:\/([^/]*))?\/?$/.exec(pathname);
   if (!match) return null;
   const tab = match[1] ?? '';

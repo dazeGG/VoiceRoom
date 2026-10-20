@@ -81,7 +81,7 @@ function mapModerationBan(row: ModerationBanRow | null | undefined): Ban | null 
 function createModerationRepository({
   cursorCodec,
   pool
-}: { cursorCodec?: ModerationCursorCodec; pool?: QueryClient | null } = {}) {
+}: { cursorCodec?: ModerationCursorCodec | undefined; pool?: QueryClient | null | undefined } = {}) {
   if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
   if (!cursorCodec?.encode || !cursorCodec?.decode) throw new TypeError('Cursor codec is required');
   const base = pool;
@@ -204,7 +204,7 @@ function createModerationRepository({
     roomId: string;
     userId?: string | null;
     guestIp?: string | null;
-    expiresAt?: TimeInput | null;
+    expiresAt?: TimeInput | null | undefined;
     reason?: string;
     idempotencyKey: string;
     at?: TimeInput;
@@ -270,7 +270,7 @@ function createModerationRepository({
     client
   }: {
     roomId: string;
-    cursor?: string | null;
+    cursor?: string | null | undefined;
     limit?: number;
     at?: TimeInput;
     client?: Client;

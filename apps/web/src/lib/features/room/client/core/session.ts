@@ -3,8 +3,7 @@ import type { PeerSession } from './types';
 import { isRecord } from '@voice-room/shared/guards';
 
 export function getRoomIdFromPath(): string {
-  const match = window.location.pathname.match(/^\/r\/([A-Za-z0-9_-]{3,48})\/?$/);
-  return match ? match[1] : '';
+  return window.location.pathname.match(/^\/r\/([A-Za-z0-9_-]{3,48})\/?$/)?.[1] ?? '';
 }
 
 function createPeerId(): string {
@@ -55,23 +54,4 @@ export function rotateStoredPeerSession(roomId: string): PeerSession {
     }
   }
   return next;
-}
-
-export function extractRoomId(value: string): string {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-
-  try {
-    const url = new URL(raw, window.location.origin);
-    const match = url.pathname.match(/^\/r\/([A-Za-z0-9_-]{3,48})\/?$/);
-    if (match) return match[1];
-  } catch {
-    // Plain room codes are handled below.
-  }
-
-  const routeMatch = raw.match(/(?:^|\/)r\/([A-Za-z0-9_-]{3,48})\/?$/);
-  if (routeMatch) return routeMatch[1];
-
-  const compact = raw.replace(/^#/, '').trim();
-  return /^[A-Za-z0-9_-]{3,48}$/.test(compact) ? compact : '';
 }

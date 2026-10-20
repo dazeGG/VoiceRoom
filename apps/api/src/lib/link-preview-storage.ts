@@ -23,7 +23,9 @@ function validateLinkPreviewImageKey(key: unknown): string {
   return key;
 }
 
-function createLinkPreviewStorage({ uploadsDir = readUploadsDir() }: { uploadsDir?: string } = {}): LinkPreviewStorage {
+function createLinkPreviewStorage({
+  uploadsDir = readUploadsDir()
+}: { uploadsDir?: string | undefined } = {}): LinkPreviewStorage {
   const root = path.join(path.resolve(uploadsDir), 'link-previews');
 
   function filePath(key: string): string {

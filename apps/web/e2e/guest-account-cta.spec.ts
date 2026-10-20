@@ -5,7 +5,7 @@ import { parse } from '../test/helpers/assert';
 import { PASSWORD, createPermanentRoom, registerViaUi, uniqueLogin } from './helpers';
 
 async function joinAsGuest(browser: Browser, baseURL: string | undefined, roomId: string): Promise<Page> {
-  const context = await browser.newContext({ baseURL });
+  const context = await browser.newContext(baseURL ? { baseURL } : {});
   const page = await context.newPage();
   await page.goto(`/r/${roomId}`);
   // A fresh browser has no saved name, so the room always asks for one first.

@@ -27,7 +27,7 @@ function createClock() {
 
 function setup(options: Partial<Parameters<typeof createTypingThrottle<string>>[0]> = {}) {
   const clock = createClock();
-  const throttle = createTypingThrottle<string>({
+  const throttle = createTypingThrottle({
     minIntervalMs: 1000,
     now: clock.now,
     setTimer: clock.setTimer,

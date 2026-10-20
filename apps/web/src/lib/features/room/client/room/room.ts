@@ -24,8 +24,8 @@ import {
 import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
 import { getDisplayName, updateNameStatuses } from '../ui/names';
 import { resetConnectionStatus, setServerConnectionStatus, setVoiceConnectionStatus } from '../ui/status';
-import { refreshCallControls, resetPushToTalkState } from '../ui/controls';
-import { refreshScreenControls, stopLocalScreenStream } from '../services/screen-share-service';
+import { resetPushToTalkState } from '../ui/controls';
+import { stopLocalScreenStream } from '../services/screen-share-service';
 import { stopLocalCamera } from '../services/camera-service';
 import { closeScreenView, refreshScreenStage } from '../ui/screen-view';
 import { createParticipant, removeAudioElements, updatePeerStatus } from './participants';
@@ -148,8 +148,6 @@ function showRoomScreen(): void {
   resetConnectionStatus();
 
   updateNameStatuses();
-  refreshCallControls();
-  refreshScreenControls();
   refreshScreenStage();
 }
 
@@ -215,7 +213,6 @@ async function performJoinRoom(generation: number): Promise<void> {
   resetConnectionStatus();
   setServerConnectionStatus('connecting');
   setVoiceConnectionStatus('idle');
-  refreshCallControls();
 
   try {
     const exists = await checkRoomExists(state.roomId);
@@ -304,8 +301,6 @@ async function performJoinRoom(generation: number): Promise<void> {
     setVoiceSessionTiming({ joinedAt: state.self?.joinedAt ?? Date.now() });
     setVoiceControlsState({ muted: isMicrophoneShownMuted(), deafened: state.outputMuted });
     if (isMicrophoneShownMuted() || state.outputMuted) postState().catch(() => {});
-    refreshCallControls();
-    refreshScreenControls();
     startMeters();
     startPeerLatencyStats();
     // Remote video pauses while the app cannot be seen (tray, minimized, background tab).
@@ -349,8 +344,6 @@ async function performJoinRoom(generation: number): Promise<void> {
     if (banned) showRoomModerationScreen('banned');
   } finally {
     if (isCurrent()) state.connecting = false;
-    refreshCallControls();
-    refreshScreenControls();
   }
 }
 
@@ -438,8 +431,6 @@ export function leaveRoom(): void {
   resetPushToTalkState();
   clearAllPeerJoinCues();
   clearStreamViewerCues();
-  refreshCallControls();
-  refreshScreenControls();
   closeDevicePopover();
   closeOutputPopover();
   closeCameraPopover();

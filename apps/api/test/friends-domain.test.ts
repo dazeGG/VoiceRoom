@@ -37,7 +37,7 @@ type HarnessOptions = {
   deletedTarget?: boolean;
   noRoom?: boolean;
   roomName?: string;
-  rate?: { allowed: boolean; retryAfterSeconds?: number };
+  rate?: { allowed: boolean; retryAfterSeconds: number };
 };
 
 function harness(store: Partial<FriendStore> = {}, options: HarnessOptions = {}) {
@@ -120,7 +120,7 @@ function harness(store: Partial<FriendStore> = {}, options: HarnessOptions = {})
     queuePush: async (userId, payload, context) => {
       calls.pushes.push([userId, payload.type, payload.title, context]);
     },
-    ringLimiter: { check: () => options.rate || { allowed: true } },
+    ringLimiter: { check: () => options.rate || { allowed: true, retryAfterSeconds: 0 } },
     ringTtlMs: 1000,
     now: () => 50
   });
@@ -322,10 +322,13 @@ test('ringing refuses strangers, blocks, deleted accounts, cooldowns and missing
     await harness({}, { rate: { allowed: false, retryAfterSeconds: 9 } }).service.ring(ME, 'room-1', 'f1'),
     { status: 'rate_limited', retryAfterSeconds: 9 }
   );
-  assert.deepEqual(await harness({}, { rate: { allowed: false } }).service.ring(ME, 'room-1', 'f1'), {
-    status: 'rate_limited',
-    retryAfterSeconds: 0
-  });
+  assert.deepEqual(
+    await harness({}, { rate: { allowed: false, retryAfterSeconds: 0 } }).service.ring(ME, 'room-1', 'f1'),
+    {
+      status: 'rate_limited',
+      retryAfterSeconds: 0
+    }
+  );
   assert.equal((await harness({}, { noRoom: true }).service.ring(ME, 'room-1', 'f1')).status, 'room_not_found');
 });
 
@@ -381,7 +384,9 @@ function routeApp(
     },
     {
       friends: service,
-      requestLimiter: { check: () => (limited ? { allowed: false, retryAfterSeconds: 6 } : { allowed: true }) }
+      requestLimiter: {
+        check: () => (limited ? { allowed: false, retryAfterSeconds: 6 } : { allowed: true, retryAfterSeconds: 0 })
+      }
     }
   );
   t.after(() => app.close());

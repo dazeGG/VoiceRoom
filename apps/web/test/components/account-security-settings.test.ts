@@ -8,7 +8,7 @@ import AccountSecuritySettings from '../../src/lib/features/home/components/Acco
 import { session } from '../../src/lib/features/auth/session.svelte';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { authUser } from '../fixtures/users.ts';
-import { instanceOf } from '../helpers/assert.ts';
+import { instanceOf, defined } from '../helpers/assert.ts';
 
 afterEach(cleanup);
 
@@ -60,7 +60,12 @@ test('other sessions can be ended one by one or all at once; this device cannot'
   expect(within(here).queryByRole('button', { name: 'Завершить' })).toBeNull();
   expect(screen.getAllByRole('button', { name: 'Завершить' })).toHaveLength(2);
 
-  await userEvent.click(screen.getAllByRole('button', { name: 'Завершить' })[0]);
+  await userEvent.click(
+    defined(
+      screen.getAllByRole('button', { name: 'Завершить' })[0],
+      "screen.getAllByRole('button', { name: 'Завершить' })[0]"
+    )
+  );
   await vi.waitFor(() => expect(onToast).toHaveBeenCalledWith('Сеанс завершён'));
   expect(calls.some((call) => call.method === 'DELETE' && call.url.endsWith(PHONE))).toBe(true);
   expect(screen.getAllByRole('button', { name: 'Завершить' })).toHaveLength(1);

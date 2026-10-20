@@ -27,17 +27,17 @@
   } = $props<{
     roomId: string;
     name: string;
-    avatarUrl?: string | null;
-    relationship?: RoomRelationship;
-    friends?: Friend[];
-    presentUserIds?: Set<string>;
+    avatarUrl?: string | null | undefined;
+    relationship?: RoomRelationship | undefined;
+    friends?: Friend[] | undefined;
+    presentUserIds?: Set<string> | undefined;
     close: (restoreFocus?: boolean) => void;
-    canClose?: (roomId: string) => boolean;
-    onOpenSettings?: () => void;
-    inviteContent?: Snippet<[close: () => void]>;
-    onRoomsChanged?: () => void;
-    onToast?: (message: string) => void;
-    showNotificationControls?: boolean;
+    canClose?: ((roomId: string) => boolean) | undefined;
+    onOpenSettings?: (() => void) | undefined;
+    inviteContent?: Snippet<[close: () => void]> | undefined;
+    onRoomsChanged?: (() => void) | undefined;
+    onToast?: ((message: string) => void) | undefined;
+    showNotificationControls?: boolean | undefined;
   }>();
 
   const roomMuted = $derived(isRoomNotificationsMuted(roomId));

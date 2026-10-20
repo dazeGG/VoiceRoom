@@ -51,23 +51,23 @@
     onOpenPeople: () => void;
     onOpenSettings: () => void;
     /** Given to a platform administrator only. */
-    onOpenAdmin?: () => void;
-    adminOpen?: boolean;
+    onOpenAdmin?: (() => void) | undefined;
+    adminOpen?: boolean | undefined;
     /** Open reports, shown on the admin entry. */
-    adminBadge?: number;
-    notificationsOpen?: boolean;
-    notificationUnreadCount?: number;
-    onOpenNotifications?: () => void;
+    adminBadge?: number | undefined;
+    notificationsOpen?: boolean | undefined;
+    notificationUnreadCount?: number | undefined;
+    onOpenNotifications?: (() => void) | undefined;
     onToast: (message: string) => void;
-    activeVoiceRoomId?: string | null;
-    activeVoiceRoomName?: string;
-    activeVoiceRoomAvatarUrl?: string | null;
-    activeVoiceMuted?: boolean;
-    activeVoiceDeafened?: boolean;
-    onOpenVoiceRoom?: () => void;
-    onLeaveVoiceRoom?: () => void;
-    onToggleVoiceMic?: () => void;
-    onToggleVoiceDeafen?: () => void;
+    activeVoiceRoomId?: string | null | undefined;
+    activeVoiceRoomName?: string | undefined;
+    activeVoiceRoomAvatarUrl?: string | null | undefined;
+    activeVoiceMuted?: boolean | undefined;
+    activeVoiceDeafened?: boolean | undefined;
+    onOpenVoiceRoom?: (() => void) | undefined;
+    onLeaveVoiceRoom?: (() => void) | undefined;
+    onToggleVoiceMic?: (() => void) | undefined;
+    onToggleVoiceDeafen?: (() => void) | undefined;
   }>();
 
   const sortedFriends = $derived(
@@ -86,7 +86,7 @@
     ReadonlyArray<{
       value: PresenceStatus;
       label: string;
-      note?: string;
+      note?: string | undefined;
     }>
   >([
     { value: 'online', label: 'В сети' },

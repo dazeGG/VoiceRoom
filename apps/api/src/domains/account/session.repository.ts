@@ -30,8 +30,8 @@ export function createSessionRepository({
   logger = createLogger({ name: 'api' })
 }: {
   pool: pg.Pool;
-  sessionTtlMs?: number;
-  logger?: UserStoreLogger;
+  sessionTtlMs?: number | undefined;
+  logger?: UserStoreLogger | undefined;
 }) {
   const db = kyselyOn(pool);
 
@@ -129,8 +129,8 @@ export function createSessionRepository({
   }: {
     tokenHash: string;
     now: number;
-    userAgent?: string;
-    resolveLocation?: () => unknown;
+    userAgent?: string | undefined;
+    resolveLocation?: (() => unknown) | undefined;
   }): Promise<void> {
     let locationLabel = '';
     if (typeof resolveLocation === 'function') {

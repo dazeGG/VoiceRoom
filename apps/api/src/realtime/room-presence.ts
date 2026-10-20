@@ -13,7 +13,7 @@ import { clearViewedScreenPeerReferences } from './room-runtime.ts';
 
 /** How the server reaches a peer's socket; closing it is the socket owner's business. */
 export interface PeerTransport {
-  id?: string;
+  id?: string | undefined;
   send(message: RoomPeerMessage): boolean;
   close?(): void;
 }
@@ -49,8 +49,8 @@ export interface RoomPresenceDeps {
   occupancyRetry: { baseMs: number; maxMs: number };
   roster: { waitMs: number; pollMs: number };
   /** Where finished stays in voice go; null while no database is installed. */
-  sessions?(): Pick<VoiceSessionRepository, 'recordSessions'> | null;
-  now?: () => number;
+  sessions?: (() => Pick<VoiceSessionRepository, 'recordSessions'> | null) | undefined;
+  now?: (() => number) | undefined;
 }
 
 export function createRoomPresence(deps: RoomPresenceDeps) {

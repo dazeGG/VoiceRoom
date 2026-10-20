@@ -9,7 +9,7 @@ test('a friend sees typing and emoji browsing under the message field, until the
   const readerLogin = uniqueLogin('typingreader');
   const writerLogin = uniqueLogin('typingwriter');
   await registerViaUi(page, readerLogin);
-  const writerContext = await browser.newContext({ baseURL });
+  const writerContext = await browser.newContext(baseURL ? { baseURL } : {});
   const writer = await writerContext.newPage();
   try {
     await registerViaUi(writer, writerLogin);
@@ -70,7 +70,7 @@ test('the room chat shows who is typing from the call to someone reading it in t
   await page.getByRole('button', { name: 'Чат', exact: true }).first().click();
   await expect(page.getByPlaceholder('Написать в комнату…')).toBeVisible({ timeout: 20_000 });
 
-  const callerContext = await browser.newContext({ baseURL });
+  const callerContext = await browser.newContext(baseURL ? { baseURL } : {});
   const caller = await callerContext.newPage();
   try {
     await registerViaUi(caller, guestLogin);

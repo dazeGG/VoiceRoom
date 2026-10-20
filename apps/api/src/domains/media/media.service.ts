@@ -200,7 +200,7 @@ function createMediaService({
   }: {
     id: string;
     ownerId: string;
-    stream?: UploadStream | null;
+    stream?: UploadStream | null | undefined;
     mimeType?: string;
   }): Promise<PublicAttachment | null> {
     await pressureService?.assertAcceptingUploads?.();

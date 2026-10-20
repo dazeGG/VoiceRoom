@@ -129,7 +129,7 @@ export type RequestOptions = {
   body?: unknown;
   /** Sent as is instead of a JSON body; `headers` names its content type. */
   rawBody?: Buffer;
-  cookie?: string;
+  cookie?: string | undefined;
   headers?: Record<string, string>;
 };
 

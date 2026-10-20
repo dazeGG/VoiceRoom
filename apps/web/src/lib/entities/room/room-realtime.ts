@@ -270,7 +270,7 @@ export function initLobbyRoomRealtime(
                 ...room,
                 peers: summary.peers,
                 name: summary.name || room.name,
-                unreadCount: summary.unreadCount ?? room.unreadCount
+                ...(summary.unreadCount === undefined ? {} : { unreadCount: summary.unreadCount })
               }
             : room
         )

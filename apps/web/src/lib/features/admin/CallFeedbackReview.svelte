@@ -40,7 +40,7 @@
   async function load(): Promise<void> {
     const id = ++latestLoad;
     loading = true;
-    const query: AdminCallFeedbackQuery = { days: period, rating: rating === 'all' ? undefined : rating };
+    const query: AdminCallFeedbackQuery = { days: period, ...(rating === 'all' ? {} : { rating }) };
     try {
       const next = await fetchCallFeedback(query);
       if (id !== latestLoad) return;

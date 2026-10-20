@@ -28,6 +28,7 @@ import {
   type CleanupJobs,
   type RevocableAttachments
 } from '../media/attachment-revocation.service.ts';
+import type { RateCheck } from '../../lib/rate-limit.ts';
 
 type DbClient = Pick<pg.PoolClient, 'query'> | null | undefined;
 
@@ -94,7 +95,7 @@ export interface RoomChatDeps {
   findRoomBan(roomId: string, userId: string | null | undefined, ip: string): Promise<unknown>;
   prepareContent(input: { content: unknown; text: string }): { content: unknown; text: string };
   mentionUserIds(content: unknown, options: { creatorUserId: string }): MentionNormalization;
-  limiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
+  limiter: RateCheck;
   findUser(userId: string): Promise<ChatAuthor | null>;
   media(): {
     attachments: RevocableAttachments & {
@@ -174,7 +175,7 @@ export interface PostInput extends Caller, PeerClaim {
 export function createRoomChatService(deps: RoomChatDeps) {
   function rateLimited(clientIp: string, roomId: string): ChatRefusal | null {
     const rate = deps.limiter.check(`${clientIp}:${roomId}`);
-    return rate.allowed ? null : { status: 'rate_limited', retryAfterSeconds: rate.retryAfterSeconds ?? 0 };
+    return rate.allowed ? null : { status: 'rate_limited', retryAfterSeconds: rate.retryAfterSeconds };
   }
 
   function isLivePeer(peer: PresencePeer | undefined, sessionToken: string): peer is PresencePeer {

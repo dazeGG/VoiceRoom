@@ -33,6 +33,7 @@ import {
 } from './room-views.ts';
 import type { OwnerCheck, RoomsService } from './rooms.service.ts';
 import type { PowVerdict } from '../../lib/pow.ts';
+import type { RateCheck } from '../../lib/rate-limit.ts';
 
 const answers = <Success>(success: Success) => ({ 200: success, '4xx': RoomFailure });
 
@@ -51,10 +52,6 @@ const ROOM_NOT_FOUND = failure('Комната не найдена', { code: 'ro
 const STATIC_ROOM_NEEDS_LOGIN = failure('Требуется вход для создания постоянной комнаты', {
   code: 'static_room_requires_login'
 });
-
-interface RateLimiter {
-  check(key: string): { allowed: boolean; retryAfterSeconds?: number };
-}
 
 interface RoomListStore {
   listVisibleRoomsForUser(userId: string): Promise<StoredRoom[]>;
@@ -78,7 +75,7 @@ export interface RoomRoutesDeps {
   findAuthorizedPeer(roomId: string, peerId: string, sessionToken: string): PresencePeer | null;
   lobbyRoom(room: StoredRoom): LobbyRoom;
   invalidateRecipientCache(roomId: string): void;
-  createLimiter: RateLimiter;
+  createLimiter: RateCheck;
   pow: { verify(ip: string, proof: unknown): PowVerdict };
   maxRooms: number;
   maxRoomPeers: number;
@@ -230,7 +227,7 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
         avatarUrl: roomAvatarUrl(room.avatarKey),
         createdAt: room.createdAt,
         exists: true as const,
-        emptySince: room.emptySince,
+        ...(room.emptySince === undefined ? {} : { emptySince: room.emptySince }),
         isStatic: room.isStatic,
         maxRoomPeers: deps.maxRoomPeers,
         name: room.name,

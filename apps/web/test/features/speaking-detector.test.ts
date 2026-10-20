@@ -180,7 +180,7 @@ test('the microphone level is reported only while the popover asks for it', asyn
 
 test('a new track replaces the meter, and the old detector is silenced and disconnected', async () => {
   const { participant, detector: first } = await attached('peer-a');
-  const firstSource = defined(context.value, 'audio context').sources[0];
+  const firstSource = defined(defined(context.value, 'audio context').sources[0], 'first meter source');
   attachMeter(participant, new MediaStream());
   await flush();
   const second = defined(FakeDetector.instances.at(-1), 'speaking detector');

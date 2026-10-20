@@ -52,11 +52,11 @@ function containsPath(parent: string, candidate: string) {
 }
 
 type SnapshotOptions = {
-  databaseDump?: string;
-  uploads?: string;
-  catalog?: string;
-  output?: string;
-  namespace?: string;
+  databaseDump?: string | undefined;
+  uploads?: string | undefined;
+  catalog?: string | undefined;
+  output?: string | undefined;
+  namespace?: string | undefined;
 };
 
 export function createCoordinatedSnapshot({ databaseDump, uploads, catalog, output, namespace }: SnapshotOptions) {

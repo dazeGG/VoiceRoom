@@ -49,7 +49,10 @@
   function handlePointerMove(event: PointerEvent): void {
     if (!start) return;
     // A mouse let go outside the box never sent its pointerup here.
-    if (event.pointerType === 'mouse' && event.buttons === 0) return handlePointerCancel();
+    if (event.pointerType === 'mouse' && event.buttons === 0) {
+      handlePointerCancel();
+      return;
+    }
     const x = event.clientX - start.x;
     const y = event.clientY - start.y;
     if (!dragging && Math.hypot(x, y) <= DRAG_THRESHOLD_PX) return;

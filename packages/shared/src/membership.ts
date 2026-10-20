@@ -3,7 +3,7 @@
 // presence and voice state.
 
 import type { MemberPage, MemberPresenceStatus, MembershipMember, MembershipRole } from './contracts/membership.ts';
-import { isOneOf, isRecord } from './guards.ts';
+import { isOneOf, isRecord, pageInfoOf, trimmedText } from './guards.ts';
 
 export const MEMBERSHIP_CONTRACT_VERSION = 1 as const;
 export const MEMBERSHIP_DEFAULT_LIMIT = 50 as const;
@@ -14,12 +14,6 @@ type Loose = Record<string, unknown>;
 
 const MEMBER_PRESENCE_STATUSES: readonly MemberPresenceStatus[] = ['online', 'afk', 'dnd', 'offline'];
 
-function cleanString(value: unknown, max = 256): string {
-  if (typeof value !== 'string') return '';
-  const normalized = value.trim();
-  return normalized.length <= max ? normalized : '';
-}
-
 export function normalizeMembershipLimit(value: unknown, fallback: number = MEMBERSHIP_DEFAULT_LIMIT): number {
   const numeric = Number(value);
   if (!Number.isInteger(numeric) || numeric < 1) return fallback;
@@ -28,12 +22,12 @@ export function normalizeMembershipLimit(value: unknown, fallback: number = MEMB
 
 export function normalizeMembershipRequest(value: Loose = {}): {
   contractVersion: 1;
-  cursor?: string;
+  cursor?: string | undefined;
   limit: number;
-  query?: string;
+  query?: string | undefined;
 } {
-  const cursor = cleanString(value.cursor, 4096);
-  const query = cleanString(value.query ?? value.q, 80);
+  const cursor = trimmedText(value.cursor, 4096);
+  const query = trimmedText(value.query ?? value.q, 80);
   return {
     contractVersion: MEMBERSHIP_CONTRACT_VERSION,
     cursor: cursor || undefined,
@@ -44,17 +38,17 @@ export function normalizeMembershipRequest(value: Loose = {}): {
 
 export function normalizeMembershipMember(value: unknown): MembershipMember | null {
   if (!isRecord(value)) return null;
-  const userId = cleanString(value.userId ?? value.id, 36);
+  const userId = trimmedText(value.userId ?? value.id, 36);
   if (!userId) return null;
   const role = isOneOf(MEMBERSHIP_ROLES, value.role) ? value.role : 'member';
   const presenceStatus = isOneOf(MEMBER_PRESENCE_STATUSES, value.presenceStatus) ? value.presenceStatus : 'offline';
   return {
     userId,
-    displayName: cleanString(value.displayName, 120),
-    login: cleanString(value.login, 120),
-    avatarColorKey: cleanString(value.avatarColorKey, 40),
-    avatarUrl: cleanString(value.avatarUrl, 1024) || null,
-    avatarAccent: cleanString(value.avatarAccent, 40) || null,
+    displayName: trimmedText(value.displayName, 120),
+    login: trimmedText(value.login, 120),
+    avatarColorKey: trimmedText(value.avatarColorKey, 40),
+    avatarUrl: trimmedText(value.avatarUrl, 1024) || null,
+    avatarAccent: trimmedText(value.avatarAccent, 40) || null,
     role,
     joinedAt: value.joinedAt != null && Number.isFinite(Number(value.joinedAt)) ? Number(value.joinedAt) : null,
     inVoice: Boolean(value.inVoice),
@@ -77,14 +71,11 @@ export function buildMembershipEnvelope({
 } = {}): MemberPage {
   return {
     contractVersion: MEMBERSHIP_CONTRACT_VERSION,
-    roomId: cleanString(roomId, 48),
+    roomId: trimmedText(roomId, 48),
     members: Array.isArray(members)
       ? members.map(normalizeMembershipMember).filter((member): member is MembershipMember => Boolean(member))
       : [],
-    pageInfo: {
-      nextCursor: cleanString(nextCursor, 4096) || undefined,
-      hasMore: Boolean(hasMore)
-    },
+    pageInfo: pageInfoOf(nextCursor, hasMore),
     presenceRevision: Math.max(0, Number.isSafeInteger(Number(presenceRevision)) ? Number(presenceRevision) : 0)
   };
 }

@@ -34,14 +34,19 @@ test('push subscriptions are cleaned and bounded', () => {
 
 type HarnessOptions = {
   enabled?: boolean;
-  rate?: { allowed: boolean; retryAfterSeconds?: number };
+  rate?: { allowed: boolean; retryAfterSeconds: number };
   upserted?: boolean | null;
   result?: MutationResult | null;
 };
 
 const AWAY = notificationPreferences({ presenceStatus: 'away' });
 
-function harness({ enabled = true, rate = { allowed: true }, upserted = true, result = null }: HarnessOptions = {}) {
+function harness({
+  enabled = true,
+  rate = { allowed: true, retryAfterSeconds: 0 },
+  upserted = true,
+  result = null
+}: HarnessOptions = {}) {
   const calls: {
     presence: unknown[];
     events: Array<{ type?: string }>;
@@ -137,10 +142,13 @@ test('push subscribe and unsubscribe', async () => {
     await harness({ rate: { allowed: false, retryAfterSeconds: 7 } }).service.subscribe('u', SUBSCRIPTION, 'UA'),
     { status: 'rate_limited', retryAfterSeconds: 7 }
   );
-  assert.deepEqual(await harness({ rate: { allowed: false } }).service.unsubscribe('u', SUBSCRIPTION.endpoint), {
-    status: 'rate_limited',
-    retryAfterSeconds: 0
-  });
+  assert.deepEqual(
+    await harness({ rate: { allowed: false, retryAfterSeconds: 0 } }).service.unsubscribe('u', SUBSCRIPTION.endpoint),
+    {
+      status: 'rate_limited',
+      retryAfterSeconds: 0
+    }
+  );
   assert.equal((await harness({ upserted: null }).service.subscribe('u', SUBSCRIPTION, 'UA')).status, 'conflict');
   const { calls, service } = harness();
   assert.equal((await service.subscribe('u', SUBSCRIPTION, 'x'.repeat(600))).status, 'subscribed');

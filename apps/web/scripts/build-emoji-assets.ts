@@ -43,7 +43,7 @@ const { version } = artworkManifest;
 
 /** Our canonical asset name: every code point of the sequence, upper-case hex. */
 export function assetName(sequence: string) {
-  return [...sequence]
+  return Array.from(sequence)
     .map((character) => (character.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, '0'))
     .join('-');
 }

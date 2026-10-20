@@ -23,21 +23,21 @@ export type StoredRoomMessage = {
   roomId: string;
   createdAt: unknown;
   createdAtMicros: unknown;
-  authorUserId?: string | null;
-  peerId?: string;
-  name?: string;
-  avatarColorKey?: string | null;
-  avatarKey?: string | null;
-  avatarAccent?: string | null;
-  content?: MessageContent | null;
-  text?: string;
+  authorUserId?: string | null | undefined;
+  peerId?: string | undefined;
+  name?: string | undefined;
+  avatarColorKey?: string | null | undefined;
+  avatarKey?: string | null | undefined;
+  avatarAccent?: string | null | undefined;
+  content?: MessageContent | null | undefined;
+  text?: string | undefined;
   editedAt?: unknown;
   expiresAt?: unknown;
-  attachments?: Attachment[];
-  linkPreview?: LinkPreview | null;
-  replyTo?: ReplyPointer | null;
-  replyPreview?: ReplyPreview | null;
-  reactions?: ReactionSummary[];
+  attachments?: Attachment[] | undefined;
+  linkPreview?: LinkPreview | null | undefined;
+  replyTo?: ReplyPointer | null | undefined;
+  replyPreview?: ReplyPreview | null | undefined;
+  reactions?: ReactionSummary[] | undefined;
 };
 
 type HistoryPage = { messages: StoredRoomMessage[]; hasMoreBefore: boolean; hasMoreAfter: boolean };
@@ -149,11 +149,11 @@ function createRoomHistoryService({
       content: message.content || { type: 'text', text: message.text ?? '' },
       editedAt: epochMillis(message.editedAt),
       expiresAt: epochMillis(message.expiresAt),
-      attachments: message.attachments,
-      linkPreview: message.linkPreview ?? undefined,
-      replyTo: message.replyTo,
-      replyPreview: message.replyPreview,
-      reactions: message.reactions,
+      ...(message.attachments === undefined ? {} : { attachments: message.attachments }),
+      ...(message.linkPreview == null ? {} : { linkPreview: message.linkPreview }),
+      ...(message.replyTo === undefined ? {} : { replyTo: message.replyTo }),
+      ...(message.replyPreview === undefined ? {} : { replyPreview: message.replyPreview }),
+      ...(message.reactions === undefined ? {} : { reactions: message.reactions }),
       cursor: encodeTuple(roomId, tuple),
       readCursor: encodeTuple(roomId, tuple, 'room-read')
     };
@@ -202,15 +202,17 @@ function createRoomHistoryService({
         ? await projectMessages({ messages: visible, roomId: normalizedRoomId, access })
         : visible;
     const messages = projected.map((message) => toDto(normalizedRoomId, message));
+    const first = messages[0];
+    const last = messages.at(-1);
 
     return {
       contractVersion: 1,
       mode,
       messages,
       pageInfo: {
-        before: messages[0]?.cursor,
-        after: messages.at(-1)?.cursor,
-        around: mode === 'around' ? cursor : undefined,
+        ...(first === undefined ? {} : { before: first.cursor }),
+        ...(last === undefined ? {} : { after: last.cursor }),
+        ...(mode === 'around' && cursor !== undefined ? { around: cursor } : {}),
         hasMoreBefore: page.hasMoreBefore,
         hasMoreAfter: page.hasMoreAfter
       }

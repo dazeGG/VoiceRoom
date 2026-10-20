@@ -22,3 +22,16 @@ export function textOf(value: unknown): string {
   if (typeof value === 'string') return value;
   return typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint' ? String(value) : '';
 }
+
+/** The text trimmed; '' when it is not a string or is longer than `max` once trimmed. */
+export function trimmedText(value: unknown, max: number): string {
+  if (typeof value !== 'string') return '';
+  const text = value.trim();
+  return text.length <= max ? text : '';
+}
+
+/** A page's cursor info from a stored page: the next cursor only when there is one. */
+export function pageInfoOf(nextCursor: unknown, hasMore: unknown): { nextCursor?: string; hasMore: boolean } {
+  const cursor = trimmedText(nextCursor, 4096);
+  return cursor ? { nextCursor: cursor, hasMore: Boolean(hasMore) } : { hasMore: Boolean(hasMore) };
+}

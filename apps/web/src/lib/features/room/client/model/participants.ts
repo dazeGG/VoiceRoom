@@ -16,7 +16,7 @@ export interface PeerInfo {
   screenAudio?: boolean;
   screenProfileId?: string;
   screenStreamId?: string;
-  viewedScreenPeerId?: string;
+  viewedScreenPeerId?: string | undefined;
   joinedAt?: number;
   isLocal?: boolean;
 }

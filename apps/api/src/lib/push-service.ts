@@ -74,12 +74,12 @@ function createPushService({
   logger = createLogger({ name: 'api' }),
   now = Date.now
 }: {
-  store?: PushSubscriptionStore;
-  env?: Env;
+  store?: PushSubscriptionStore | undefined;
+  env?: Env | undefined;
   /** The VAPID settings; read from env when not given. */
-  config?: PushConfig;
-  client?: WebPushClient;
-  logger?: PushLogger;
+  config?: PushConfig | undefined;
+  client?: WebPushClient | undefined;
+  logger?: PushLogger | undefined;
   now?: () => number;
 } = {}) {
   if (config.enabled) client.setVapidDetails(config.subject, config.vapidPublicKey, config.privateKey);

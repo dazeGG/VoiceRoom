@@ -4,6 +4,7 @@
 import { beforeEach, expect, test, vi, type Mock } from 'vitest';
 import { buildProviderPayload } from '@voice-room/shared/notifications';
 import { freshImport } from '../helpers/fresh-module.ts';
+import { defined } from '../helpers/assert.ts';
 
 type Handler = (event: Record<string, unknown>) => void;
 type FakeWindow = {
@@ -50,7 +51,7 @@ beforeEach(async () => {
 
 async function fire(type: string, event: Record<string, unknown>): Promise<void> {
   let done: Promise<unknown> = Promise.resolve();
-  handlers[type]({ ...event, waitUntil: (promise: Promise<unknown>) => (done = promise) });
+  defined(handlers[type], 'handlers[type]')({ ...event, waitUntil: (promise: Promise<unknown>) => (done = promise) });
   await done;
 }
 
@@ -62,7 +63,7 @@ const push = (payload: unknown) => fire('push', { data: { json: () => payload, t
 test('a push is shown while no window is in front, and suppressed for a focused visible one', async () => {
   windows = [fakeWindow({ visibilityState: 'visible', focused: false })];
   await push({ title: 'Ада', body: 'привет', url: '/?dm=ada', tag: 'dm:ada' });
-  const [title, options] = showNotification.mock.calls[0];
+  const [title, options] = defined(showNotification.mock.calls[0], 'shown notification');
   const data = dataOf(options);
   expect([title, options.body, options.tag]).toEqual(['Ада', 'привет', 'dm:ada']);
   expect(data).toHaveProperty('url', '/?dm=ada');

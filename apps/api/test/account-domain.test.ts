@@ -177,7 +177,7 @@ function harness(
           ? { allowed: false, retryAfterSeconds: 30 }
           : key === 'locked-nowait'
             ? { allowed: false }
-            : { allowed: true },
+            : { allowed: true, retryAfterSeconds: 0 },
       reset: (key) => calls.reset.push(key)
     },
     endSessionConnections: async (input) => {
@@ -444,7 +444,7 @@ function routeApp(
         check: (key) =>
           limited.some((prefix) => key.startsWith(prefix))
             ? { allowed: false, retryAfterSeconds: 11 }
-            : { allowed: true }
+            : { allowed: true, retryAfterSeconds: 0 }
       },
       sessionCookie: (token) => `vr_session=${token}`,
       clearedSessionCookie: () => 'vr_session=',

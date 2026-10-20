@@ -18,7 +18,7 @@ import { fake, recordingLogger } from './fakes/index.ts';
 
 /** A roster seat with just an id (and a transport when a test sends to it). */
 function seat(id: string, transportOf?: RosterPeer['transport']): RosterPeer {
-  return fake<RosterPeer>({ id, transport: transportOf });
+  return fake<RosterPeer>({ id, ...(transportOf === undefined ? {} : { transport: transportOf }) });
 }
 
 function transport(id: string, { fails = false } = {}) {

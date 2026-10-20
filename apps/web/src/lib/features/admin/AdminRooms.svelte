@@ -66,9 +66,10 @@
     // An answer for a room or page already left behind is dropped.
     const mine = ++historyRequest;
     try {
+      const after = index > 0 ? pageCursors[index] : undefined;
       const page: RoomHistory = await fetchRoomHistory({
-        roomId: historyRoom?.id,
-        after: index > 0 ? pageCursors[index] : undefined
+        ...(historyRoom ? { roomId: historyRoom.id } : {}),
+        ...(after === undefined ? {} : { after })
       });
       if (mine !== historyRequest) return;
       stays = page.stays;

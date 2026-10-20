@@ -33,9 +33,9 @@
 
   const area = $derived.by(() => {
     const known = points.filter((point): point is { x: number; y: number } => point !== null);
-    if (known.length < 2) return '';
     const first = known[0];
-    const last = known[known.length - 1];
+    const last = known.at(-1);
+    if (known.length < 2 || !first || !last) return '';
     const top = known.map((point) => `L${point.x.toFixed(2)},${point.y.toFixed(2)}`).join('');
     return `M${first.x.toFixed(2)},${height}${top}L${last.x.toFixed(2)},${height}Z`;
   });

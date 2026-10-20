@@ -26,9 +26,9 @@
     user: AuthUser;
     onEnter: () => void;
     onBack: () => void;
-    onOpenSettings?: () => void;
-    onRoomsChanged?: () => void;
-    onToast?: (message: string) => void;
+    onOpenSettings?: (() => void) | undefined;
+    onRoomsChanged?: (() => void) | undefined;
+    onToast?: ((message: string) => void) | undefined;
   }>();
 
   const name = $derived(roomDisplayName(room));

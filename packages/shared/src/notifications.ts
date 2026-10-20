@@ -3,7 +3,7 @@
 // you, and the payload a push provider sends.
 
 import type { InboxItem, InboxPage, NotificationLevel, NotificationReason } from './contracts/notifications.ts';
-import { isArray, isOneOf, isRecord } from './guards.ts';
+import { isArray, isOneOf, isRecord, pageInfoOf, trimmedText } from './guards.ts';
 
 export const NOTIFICATION_CONTRACT_VERSION = 1 as const;
 export const NOTIFICATION_DEFAULT_LIMIT = 50 as const;
@@ -13,28 +13,22 @@ export const NOTIFICATION_REASONS: readonly NotificationReason[] = Object.freeze
 
 /** What a Web Push carries: every API push sends it, the service worker reads it. */
 export type PushPayload = {
-  title?: string;
-  body?: string;
-  tag?: string;
+  title?: string | undefined;
+  body?: string | undefined;
+  tag?: string | undefined;
   /** The same-site path a click on the notification opens. */
-  url?: string;
-  dedupeKey?: string;
-  notificationId?: string;
-  revision?: number;
-  type?: string;
+  url?: string | undefined;
+  dedupeKey?: string | undefined;
+  notificationId?: string | undefined;
+  revision?: number | undefined;
+  type?: string | undefined;
   /** Epoch milliseconds; the service worker drops the push after it. */
-  expiresAt?: number;
+  expiresAt?: number | undefined;
 };
 /** The mention/reply push the notification outbox queues. */
 export type ProviderPayload = Required<
   Pick<PushPayload, 'notificationId' | 'revision' | 'dedupeKey' | 'title' | 'body' | 'url'>
 > & { contractVersion: 1 };
-
-function cleanString(value: unknown, max = 256): string {
-  if (typeof value !== 'string') return '';
-  const text = value.trim();
-  return text && text.length <= max ? text : '';
-}
 
 // Rows carry what the database driver returns (a Date, an ISO string or a number).
 function epochMillis(value: unknown): number | null {
@@ -60,14 +54,15 @@ export function normalizeNotificationLimit(value: unknown, fallback: number = NO
 export function normalizeNotificationItem(input: unknown): InboxItem | null {
   if (!isRecord(input)) return null;
   const value = input;
-  const id = cleanString(value.id ?? value.notificationId, 160);
-  const roomId = cleanString(value.roomId, 48);
-  const sourceMessageId = cleanString(value.sourceMessageId ?? value.messageId, 160);
-  const actorUserId = cleanString(value.actorUserId, 36);
+  const id = trimmedText(value.id ?? value.notificationId, 160);
+  const roomId = trimmedText(value.roomId, 48);
+  const sourceMessageId = trimmedText(value.sourceMessageId ?? value.messageId, 160);
+  const actorUserId = trimmedText(value.actorUserId, 36);
   const reasons = isArray(value.reasons)
     ? [...new Set(value.reasons.filter((reason) => isOneOf(NOTIFICATION_REASONS, reason)))]
     : [];
   if (!id || !roomId || !sourceMessageId || !actorUserId || reasons.length === 0) return null;
+  const cursor = trimmedText(value.cursor, 4096);
   return {
     id,
     roomId,
@@ -79,8 +74,8 @@ export function normalizeNotificationItem(input: unknown): InboxItem | null {
     updatedAt: epochMillis(value.updatedAt),
     readAt: epochMillis(value.readAt),
     retractedAt: epochMillis(value.retractedAt),
-    body: value.retractedAt ? '' : cleanString(value.body, 512),
-    cursor: cleanString(value.cursor, 4096) || undefined
+    body: value.retractedAt ? '' : trimmedText(value.body, 512),
+    ...(cursor ? { cursor } : {})
   };
 }
 
@@ -104,7 +99,7 @@ export function buildNotificationEnvelope({
     notifications: isArray(notifications)
       ? notifications.map(normalizeNotificationItem).filter((item): item is InboxItem => Boolean(item))
       : [],
-    pageInfo: { nextCursor: cleanString(nextCursor, 4096) || undefined, hasMore: Boolean(hasMore) },
+    pageInfo: pageInfoOf(nextCursor, hasMore),
     unreadCount: Math.max(0, Number.isSafeInteger(Number(unreadCount)) ? Number(unreadCount) : 0),
     revision: Math.max(0, Number.isSafeInteger(Number(revision)) ? Number(revision) : 0),
     firstUnread: normalizeNotificationItem(firstUnread)

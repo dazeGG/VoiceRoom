@@ -9,9 +9,9 @@ export type {
 } from '@voice-room/shared/contracts/membership';
 
 export interface FetchMembershipsOptions {
-  cursor?: string;
-  limit?: number;
-  query?: string;
+  cursor?: string | undefined;
+  limit?: number | undefined;
+  query?: string | undefined;
 }
 
 export async function fetchRoomMemberships(

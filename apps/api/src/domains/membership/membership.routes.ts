@@ -23,9 +23,9 @@ export interface MembershipRoutesDeps {
     list(input: {
       roomId: string;
       viewerUserId: string;
-      cursor?: string;
-      limit?: string;
-      query?: string;
+      cursor?: string | undefined;
+      limit?: string | undefined;
+      query?: string | undefined;
     }): Promise<DirectoryListing>;
   };
   memberships: {
@@ -54,23 +54,17 @@ export function registerMembershipRoutes(root: FastifyInstance, ctx: ApiContext,
       const userId = await member(request, reply);
       if (!userId) return reply;
       const { cursor, limit, q, query } = request.query;
-      try {
-        const result = await deps.directory.list({
-          roomId: request.params.roomId,
-          viewerUserId: userId,
-          cursor,
-          limit,
-          query: q ?? query
+      const result = await deps.directory
+        .list({ roomId: request.params.roomId, viewerUserId: userId, cursor, limit, query: q ?? query })
+        .catch((error: unknown) => {
+          if (codeOf(error) === 'invalid_cursor') return null;
+          throw error;
         });
-        if (result.status === 'forbidden')
-          return reply.code(403).send(failure('Membership required', { code: 'membership_required' }));
-        if (result.status !== 'ok') return reply.code(401).send(SIGN_IN_REQUIRED);
-        return result.envelope;
-      } catch (error) {
-        if (codeOf(error) === 'invalid_cursor')
-          return reply.code(400).send(failure('Invalid cursor', { code: 'invalid_cursor' }));
-        throw error;
-      }
+      if (!result) return reply.code(400).send(failure('Invalid cursor', { code: 'invalid_cursor' }));
+      if (result.status === 'forbidden')
+        return reply.code(403).send(failure('Membership required', { code: 'membership_required' }));
+      if (result.status !== 'ok') return reply.code(401).send(SIGN_IN_REQUIRED);
+      return result.envelope;
     }
   );
 

@@ -52,7 +52,7 @@ function isServerEventType(type: string): type is ServerEventType {
 }
 
 /** A frame as it arrived: a type and an object payload, not yet checked against its command. */
-type RawEnvelope = { id?: string; type: string; payload: Record<string, unknown> };
+type RawEnvelope = { id?: string | undefined; type: string; payload: Record<string, unknown> };
 
 export function parseClientEnvelope(
   raw: unknown
@@ -143,7 +143,7 @@ export function toRoomPeerSummary(
 ): RoomPeerSummary {
   return {
     id: peer.id,
-    accountUserId: peer.accountUserId || undefined,
+    ...(peer.accountUserId ? { accountUserId: peer.accountUserId } : {}),
     avatarAccent: peer.avatarAccent ?? null,
     avatarColorKey: peer.avatarColorKey || resolveAvatarColorKey?.(peer.id) || 'blurple',
     avatarUrl: peer.avatarUrl ?? null,
@@ -172,7 +172,7 @@ export function buildRoomRealtimeSummary(
     visiblePeers,
     hiddenPeerCount: Math.max(0, peerCount - visiblePeers.length),
     lastMessageAt: room.lastMessageAt ?? null,
-    unreadCount: room.unreadCount
+    ...(room.unreadCount === undefined ? {} : { unreadCount: room.unreadCount })
   };
 }
 

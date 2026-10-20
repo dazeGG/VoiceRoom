@@ -171,7 +171,9 @@ test('a new report reaches the administrator as a notice that stays until closed
     within(screen.getByRole('button', { name: 'Открыть админку' })).getByLabelText('открытых жалоб: 1')
   ).toBeTruthy();
 
-  defined(options.actions, 'notice actions')[0].onClick('toast-1');
+  defined(defined(options.actions, 'notice actions')[0], "defined(options.actions, 'notice actions')[0]").onClick(
+    'toast-1'
+  );
   expect((await screen.findByRole('tab', { name: /Жалобы/ })).getAttribute('aria-selected')).toBe('true');
   expect(vi.mocked(pushState)).toHaveBeenCalledWith('/admin/reports', {});
 

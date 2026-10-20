@@ -20,7 +20,7 @@ export interface RoomFanoutDeps {
   presenceRooms: Map<string, PresenceRoom>;
   wsRegistry: Pick<ConnectionRegistry, 'roomDetailSubscribers' | 'sendToConnection' | 'broadcastAccountEvent'>;
   getRoomStore: () => RuntimeRoomStore;
-  getUserStore?: (() => Pick<UserRepository, 'getUserById'>) | null;
+  getUserStore?: (() => Pick<UserRepository, 'getUserById'>) | null | undefined;
   publicChatMessage: (message: RoomChatMessage) => RoomMessage;
   scheduleSummary: (roomId: string) => void;
   now: () => number;

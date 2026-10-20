@@ -198,7 +198,7 @@ export function createServerMuteRepository({ db }: { db: Database }) {
     roomId,
     principal,
     mutedBy
-  }: { roomId?: string; principal?: GatePrincipal | null; mutedBy?: string | null } = {}) {
+  }: { roomId?: string; principal?: GatePrincipal | null; mutedBy?: string | null | undefined } = {}) {
     // muted_by is NOT NULL: only a room with an owner has someone to mute on its behalf.
     if (!roomId || !mutedBy || !isGatePrincipal(principal)) return { status: 'invalid' };
     const result = await db

@@ -68,7 +68,7 @@ function createNotificationService({
     limit
   }: {
     userId: string;
-    cursor?: string;
+    cursor?: string | undefined;
     limit?: unknown;
   }): Promise<InboxPage> {
     const pageSize = normalizeNotificationLimit(limit);

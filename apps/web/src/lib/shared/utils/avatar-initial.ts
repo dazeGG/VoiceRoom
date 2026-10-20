@@ -16,5 +16,5 @@ export function avatarInitial(name: string | null | undefined): string {
   const parts = graphemes((name ?? '').trim());
   if (parts.length === 0) return '?';
   const letter = parts.find((part) => LETTER_OR_DIGIT.test(part));
-  return letter ? letter.toUpperCase() : parts[0];
+  return letter ? letter.toUpperCase() : (parts[0] ?? '?');
 }

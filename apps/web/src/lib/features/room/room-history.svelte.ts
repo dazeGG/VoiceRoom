@@ -5,7 +5,7 @@ import { keysOf, mergeById } from '$lib/shared/utils/collections';
 export interface AnchoredHistoryPage<T> {
   messages: T[];
   pageInfo: {
-    before?: string;
+    before?: string | undefined;
     hasMoreBefore: boolean;
   };
 }

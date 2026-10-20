@@ -105,7 +105,7 @@ export function verifyAccessTokenBinding({
   roomPrefix = normalizeLiveKitRoomPrefix()
 }: {
   claims?: GateClaims | null;
-  requestUrl?: string;
+  requestUrl?: string | undefined;
   headers?: IncomingHttpHeaders;
   roomPrefix?: string;
 } = {}): BindingResult {

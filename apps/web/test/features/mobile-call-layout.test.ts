@@ -9,6 +9,7 @@ import {
   nearestCorner,
   nextActiveSpeaker
 } from '../../src/lib/features/room/mobile-call-layout.ts';
+import { defined } from '../helpers/assert.ts';
 
 const others = (count: number) => Array.from({ length: count }, (_, index) => `p${index + 1}`);
 
@@ -34,7 +35,7 @@ test('I am the last tile of the first page, and the tenth person on goes to the 
 
   const pages = gridPages('me', others(11));
   expect(pages).toHaveLength(2);
-  expect(pages[0].flat()).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'me']);
+  expect(defined(pages[0], 'pages[0]').flat()).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'me']);
   expect(pages[0]).toHaveLength(3);
   expect(pages[1]).toEqual([['p9'], ['p10', 'p11']]);
 

@@ -139,7 +139,11 @@ function createGateAwareStore() {
     accountUserId,
     guestPrincipalId,
     roomId
-  }: { accountUserId?: string | null; guestPrincipalId?: string; roomId?: string } = {}): GatePrincipal | null {
+  }: {
+    accountUserId?: string | null | undefined;
+    guestPrincipalId?: string | undefined;
+    roomId?: string;
+  } = {}): GatePrincipal | null {
     if (accountUserId) return { principalType: 'account', principalId: accountUserId };
     const guest = (guestPrincipalId || '').trim();
     if (!roomId || !guest) return null;

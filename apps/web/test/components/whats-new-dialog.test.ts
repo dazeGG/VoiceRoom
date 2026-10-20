@@ -34,7 +34,7 @@ test('slides turn on their own and hold while the pointer is over the card', asy
   expect(title()).toBe(WHATS_NEW_SLIDES[0].title);
 
   await fireEvent.animationEnd(defined(runningFill(), 'running fill'));
-  expect(title()).toBe(WHATS_NEW_SLIDES[1].title);
+  expect(title()).toBe(defined(WHATS_NEW_SLIDES[1], 'WHATS_NEW_SLIDES[1]').title);
 
   await fireEvent.pointerEnter(screen.getByRole('dialog'), { pointerType: 'mouse' });
   expect(runningFill()?.classList.contains('stories-fill--paused')).toBe(true);

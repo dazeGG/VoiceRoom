@@ -9,7 +9,7 @@ import { stubFetch } from '../fixtures/fetch.ts';
 
 const PEER = '22222222-2222-4222-8222-222222222222';
 
-function historyMessage(id: string, metadata: DirectHistoryMessage['metadata']) {
+function historyMessage(id: string, metadata: NonNullable<DirectHistoryMessage['metadata']>) {
   return directHistoryMessage({ id, author: { userId: PEER }, createdAt: 1000, metadata });
 }
 

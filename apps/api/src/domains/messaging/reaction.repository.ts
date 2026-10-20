@@ -22,7 +22,7 @@ const CONTEXT_TABLES = Object.freeze({
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type ReactionPool = QueryClient & { connect?: () => Promise<pg.PoolClient> };
-type Override = { client?: QueryClient | null };
+type Override = { client?: QueryClient | null | undefined };
 type SummaryRow = {
   emoji: string;
   revision: string | number | null;

@@ -142,6 +142,11 @@ async function createDesktopSafeAudioTrack({
   });
 
   const [track] = destination.stream.getAudioTracks();
+  if (!track) {
+    removeDataListener();
+    audioContext.close().catch(() => {});
+    throw new Error('desktop audio destination has no track');
+  }
   track.contentHint = 'music';
 
   const capture: DesktopAudioCapture = {

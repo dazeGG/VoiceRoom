@@ -8,6 +8,7 @@ import { AdminCallFeedbackPage, AdminCallFeedbackQuery, CallFeedbackBody } from 
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import type { CallFeedbackService } from './call-feedback.service.ts';
+import type { RateCheck } from '../../lib/rate-limit.ts';
 
 const SIGN_IN_REQUIRED = failure('Authentication required', { code: 'authentication_required' });
 const ADMIN_REQUIRED = failure('Platform administrator access required', { code: 'platform_admin_required' });
@@ -15,7 +16,7 @@ const TOO_MANY_ANSWERS = failure('Too many answers', { code: 'rate_limited' });
 
 export interface CallFeedbackRoutesDeps {
   feedback: Pick<CallFeedbackService, 'submit' | 'list'>;
-  limiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
+  limiter: RateCheck;
 }
 
 export function registerCallFeedbackRoutes(root: FastifyInstance, ctx: ApiContext, deps: CallFeedbackRoutesDeps): void {

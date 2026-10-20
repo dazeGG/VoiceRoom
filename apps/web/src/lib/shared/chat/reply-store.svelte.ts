@@ -1,15 +1,15 @@
 export type ReplyConversation = { type: 'room' | 'dm'; id: string };
 
 export interface ReplyAuthor {
-  id?: string;
-  name?: string;
+  id?: string | undefined;
+  name?: string | undefined;
 }
 
 export interface ReplyTarget {
   messageId: string;
   deleted: boolean;
-  author?: ReplyAuthor;
-  text?: string;
+  author?: ReplyAuthor | undefined;
+  text?: string | undefined;
 }
 
 export interface ReplySendInput {

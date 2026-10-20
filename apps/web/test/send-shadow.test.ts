@@ -1,5 +1,6 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
+import { defined } from './helpers/assert.ts';
 
 test('G39-A01 retry and reordered realtime converge to one canonical row', async () => {
   const { createSendShadowStore } = await import('../src/lib/shared/chat/send-shadow.svelte.ts');
@@ -10,7 +11,7 @@ test('G39-A01 retry and reordered realtime converge to one canonical row', async
   store.reconcileRealtime({ id: 'canonical', body: 'hello' }, first.draftKey);
   store.confirm(first.draftKey, { id: 'canonical', body: 'hello' });
   assert.equal(store.items.length, 1);
-  assert.equal(store.items[0].canonicalId, 'canonical');
+  assert.equal(defined(store.items[0], 'store.items[0]').canonicalId, 'canonical');
 });
 
 test('G39-A02 fingerprint changes create a new bounded shadow identity', async () => {

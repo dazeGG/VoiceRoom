@@ -52,10 +52,10 @@ function resolveSnapshotFile(root: string, relative: unknown, label: string) {
 }
 
 type RestoreOptions = {
-  snapshot?: string;
-  target?: string;
-  allowedRoot?: string;
-  namespace?: string;
+  snapshot?: string | undefined;
+  target?: string | undefined;
+  allowedRoot?: string | undefined;
+  namespace?: string | undefined;
 };
 
 export function restoreCoordinatedSnapshot({ snapshot, target, allowedRoot, namespace }: RestoreOptions) {

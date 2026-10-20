@@ -22,6 +22,7 @@ import {
   type CleanupJobs,
   type RevocableAttachments
 } from '../media/attachment-revocation.service.ts';
+import type { RateCheck } from '../../lib/rate-limit.ts';
 
 type DbClient = Pick<pg.PoolClient, 'query'> | null | undefined;
 type Status<T extends string> = T extends string ? { status: T } : never;
@@ -87,7 +88,7 @@ export interface DirectMessagesDeps {
   isDmMuted(userId: string, peerUserId: string): Promise<boolean>;
   roomExists(roomId: string): Promise<boolean>;
   expireRoomInvitations(senderId: string, roomId: string): Promise<unknown>;
-  limiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
+  limiter: RateCheck;
   media(): {
     attachments: RevocableAttachments & {
       bindReady(input: Record<string, unknown>, client: DbClient): Promise<unknown>;
@@ -134,7 +135,7 @@ export interface SendInput {
 export function createDirectMessagesService(deps: DirectMessagesDeps) {
   function rateLimited(userId: string): RateLimited | null {
     const rate = deps.limiter.check(userId);
-    return rate.allowed ? null : { status: 'rate_limited', retryAfterSeconds: rate.retryAfterSeconds ?? 0 };
+    return rate.allowed ? null : { status: 'rate_limited', retryAfterSeconds: rate.retryAfterSeconds };
   }
 
   // Opening the thread clears the unread badge and lets the peer see the read.

@@ -7,7 +7,7 @@ export interface ClientLogRecord {
   level: LogLevel;
   ns: string;
   msg: string;
-  ctx?: LogContext;
+  ctx?: LogContext | undefined;
 }
 
 export interface Logger {

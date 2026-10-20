@@ -22,16 +22,16 @@ export type StoredDirectMessage = {
   id: string;
   senderId: string;
   recipientId: string;
-  body?: string;
+  body?: string | undefined;
   createdAt: unknown;
   createdAtMicros: unknown;
   editedAt?: unknown;
   readAt?: unknown;
-  metadata?: Loose | null;
-  attachments?: Attachment[];
-  replyTo?: ReplyPointer | null;
-  replyPreview?: ReplyPreview | null;
-  reactions?: ReactionSummary[];
+  metadata?: Loose | null | undefined;
+  attachments?: Attachment[] | undefined;
+  replyTo?: ReplyPointer | null | undefined;
+  replyPreview?: ReplyPreview | null | undefined;
+  reactions?: ReactionSummary[] | undefined;
 };
 
 function text(value: unknown): string | undefined {
@@ -42,15 +42,19 @@ const INVITE_STATUSES: readonly InviteStatus[] = ['pending', 'accepted', 'declin
 
 // Only what a client may read from the metadata: the room invitation and the
 // link preview. Everything else in it stays server-side.
-function publicMetadata(metadata: Loose | null | undefined): DirectHistoryMessage['metadata'] {
+function publicMetadata(metadata: Loose | null | undefined): Exclude<DirectHistoryMessage['metadata'], undefined> {
   if (!metadata) return null;
+  const roomId = text(metadata.roomId);
+  const roomName = text(metadata.roomName);
+  const status = INVITE_STATUSES.find((value) => value === metadata.status);
+  const linkPreview = normalizeLinkPreview(metadata.linkPreview);
   return {
-    kind: metadata.kind === 'room-invite' ? 'room-invite' : undefined,
-    roomId: text(metadata.roomId),
-    roomName: text(metadata.roomName),
-    status: INVITE_STATUSES.find((status) => status === metadata.status),
-    expiresAt: metadata.expiresAt === undefined ? undefined : epochMillis(metadata.expiresAt),
-    linkPreview: normalizeLinkPreview(metadata.linkPreview) || undefined
+    ...(metadata.kind === 'room-invite' ? { kind: 'room-invite' as const } : {}),
+    ...(roomId === undefined ? {} : { roomId }),
+    ...(roomName === undefined ? {} : { roomName }),
+    ...(status === undefined ? {} : { status }),
+    ...(metadata.expiresAt === undefined ? {} : { expiresAt: epochMillis(metadata.expiresAt) }),
+    ...(linkPreview ? { linkPreview } : {})
   };
 }
 
@@ -142,6 +146,7 @@ function createDmHistoryService({
 
   function toDto(userId: string, peerId: string, message: StoredDirectMessage): DirectHistoryMessage {
     const tuple = { createdAtMicros: message.createdAtMicros, id: message.id };
+    const linkPreview = normalizeLinkPreview(message.metadata?.linkPreview);
     return {
       id: message.id,
       kind: 'dm',
@@ -152,11 +157,11 @@ function createDmHistoryService({
       editedAt: epochMillis(message.editedAt),
       readAt: epochMillis(message.readAt),
       metadata: publicMetadata(message.metadata),
-      attachments: message.attachments,
-      linkPreview: normalizeLinkPreview(message.metadata?.linkPreview) || undefined,
-      replyTo: message.replyTo,
-      replyPreview: message.replyPreview,
-      reactions: message.reactions,
+      ...(message.attachments === undefined ? {} : { attachments: message.attachments }),
+      ...(linkPreview ? { linkPreview } : {}),
+      ...(message.replyTo === undefined ? {} : { replyTo: message.replyTo }),
+      ...(message.replyPreview === undefined ? {} : { replyPreview: message.replyPreview }),
+      ...(message.reactions === undefined ? {} : { reactions: message.reactions }),
       cursor: encodeTuple(userId, peerId, tuple),
       readCursor: encodeTuple(userId, peerId, tuple, 'dm-read')
     };
@@ -202,15 +207,17 @@ function createDmHistoryService({
         ? await projectMessages({ messages: visible, userId: viewer, peerId: peer })
         : visible;
     const messages = projected.map((message) => toDto(viewer, peer, message));
+    const first = messages[0];
+    const last = messages.at(-1);
 
     return {
       contractVersion: 1,
       mode,
       messages,
       pageInfo: {
-        before: messages[0]?.cursor,
-        after: messages.at(-1)?.cursor,
-        around: mode === 'around' ? cursor : undefined,
+        ...(first === undefined ? {} : { before: first.cursor }),
+        ...(last === undefined ? {} : { after: last.cursor }),
+        ...(mode === 'around' && cursor !== undefined ? { around: cursor } : {}),
         hasMoreBefore: page.hasMoreBefore,
         hasMoreAfter: page.hasMoreAfter
       }

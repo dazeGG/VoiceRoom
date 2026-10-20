@@ -206,14 +206,14 @@ test('two people: my picture-in-picture takes the shape my camera sends, with no
   const videos = box.querySelectorAll('video');
   expect(videos).toHaveLength(1);
 
-  await sendFrames(videos[0], 1280, 720);
+  await sendFrames(defined(videos[0], 'videos[0]'), 1280, 720);
   expect(Number(box.style.getPropertyValue('--pip-ratio'))).toBeCloseTo(16 / 9);
   // The box has the camera's shape, so the picture fills it outright.
-  expect(videos[0].style.objectFit).toBe('fill');
+  expect(defined(videos[0], 'videos[0]').style.objectFit).toBe('fill');
   // Safari on iPhone is made to lay the new size out again: a pixel wider, then back.
-  expect(videos[0].style.width).toBe('calc(100% + 1px)');
-  await vi.waitFor(() => expect(videos[0].style.width).toBe(''));
-  await sendFrames(videos[0], 720, 1080);
+  expect(defined(videos[0], 'videos[0]').style.width).toBe('calc(100% + 1px)');
+  await vi.waitFor(() => expect(defined(videos[0], 'videos[0]').style.width).toBe(''));
+  await sendFrames(defined(videos[0], 'videos[0]'), 720, 1080);
   expect(Number(box.style.getPropertyValue('--pip-ratio'))).toBeCloseTo(2 / 3);
 
   // The shape stays when the picture grows to show the camera switch.
@@ -413,7 +413,7 @@ test('alone in the call, my camera can still be turned from my own tile', async 
 
 test('the room name shares the invite link through the phone', async () => {
   const share = vi.fn().mockResolvedValue(undefined);
-  vi.stubGlobal('navigator', { ...navigator, share });
+  vi.stubGlobal('navigator', { share });
   enterRoom(3);
   state.roomId = 'wedding';
   state.roomName = 'Свадьба';

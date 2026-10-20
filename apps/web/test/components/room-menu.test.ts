@@ -36,7 +36,7 @@ test('a saved room can be removed from the list, and the list refreshes', async 
 
 test('copying the code or link reports success, and a missing clipboard is reported instead of thrown', async () => {
   const writeText = vi.fn(async () => {});
-  vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+  vi.stubGlobal('navigator', { clipboard: { writeText } });
   const menu = renderMenu();
 
   await userEvent.click(screen.getByRole('menuitem', { name: 'Скопировать код' }));
@@ -47,7 +47,7 @@ test('copying the code or link reports success, and a missing clipboard is repor
   await waitFor(() => expect(menu.onToast).toHaveBeenCalledWith('Ссылка скопирована'));
   expect(writeText).toHaveBeenLastCalledWith(`${window.location.origin}/r/abc123`);
 
-  vi.stubGlobal('navigator', { ...navigator, clipboard: undefined });
+  vi.stubGlobal('navigator', { clipboard: undefined });
   await userEvent.click(screen.getByRole('menuitem', { name: 'Скопировать код' }));
   await waitFor(() => expect(menu.onToast).toHaveBeenCalledWith('Не удалось скопировать'));
 });
@@ -55,7 +55,6 @@ test('copying the code or link reports success, and a missing clipboard is repor
 test('a copy that finishes after the menu moved to another room says nothing', async () => {
   let finish: () => void = () => {};
   vi.stubGlobal('navigator', {
-    ...navigator,
     clipboard: {
       writeText: () =>
         new Promise<void>((resolve) => {

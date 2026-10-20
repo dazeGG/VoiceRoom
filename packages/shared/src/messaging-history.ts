@@ -13,7 +13,7 @@ export type HistoryRequest = {
   contractVersion: 1;
   mode: HistoryMode;
   limit: number;
-  cursor?: string;
+  cursor?: string | undefined;
 };
 
 type Loose = Record<string, unknown>;

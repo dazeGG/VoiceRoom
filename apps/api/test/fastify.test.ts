@@ -858,7 +858,7 @@ test('presence status route requires auth, validates canonical values, and syncs
     [{ status: null }, 'status must be one of: online, away, dnd, offline'],
     [{ status: 'away', automatic: 'yes' }, 'automatic must be a boolean'],
     [{ status: 'dnd', automatic: true }, 'automatic presence can only transition between online and away']
-  ]) {
+  ] satisfies Array<[object, string]>) {
     const response = await app.inject({
       method: 'POST',
       url: '/api/presence/status',

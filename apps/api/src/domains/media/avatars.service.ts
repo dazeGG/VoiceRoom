@@ -33,13 +33,13 @@ export interface AvatarsDeps {
       userId: string;
       avatarKey?: string;
       avatarAccent?: string | null;
-    }): Promise<{ user?: AvatarUser | null; previousAvatarKey?: string | null }>;
+    }): Promise<{ user?: AvatarUser | null; previousAvatarKey?: string | null | undefined }>;
   };
   rooms(): {
     swapRoomAvatar(
       roomId: string,
       avatarKey: string | null
-    ): Promise<{ room?: StoredRoom | null; previousAvatarKey?: string | null }>;
+    ): Promise<{ room?: StoredRoom | null; previousAvatarKey?: string | null | undefined }>;
   };
   /** Refreshes the user's live room peers after a profile change. */
   refreshActiveProfile(user: AvatarUser): void;

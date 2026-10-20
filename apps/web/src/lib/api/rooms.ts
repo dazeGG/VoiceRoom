@@ -69,16 +69,20 @@ export const deleteRoomAvatar = (roomId: string): Promise<RoomSummary> => roomAv
  * A room message as the chat UI holds it: the contract's RoomMessage with the
  * expiry always set and the history cursors when the message came from a page.
  */
-export type ChatMessage = Omit<RoomMessage, 'expiresAt' | 'content' | 'attachments' | 'replyTo' | 'replyPreview'> & {
+export type ChatMessage = Omit<
+  RoomMessage,
+  'expiresAt' | 'content' | 'attachments' | 'linkPreview' | 'replyTo' | 'replyPreview'
+> & {
   expiresAt: number;
-  content?: MessageContent;
-  cursor?: string;
-  readCursor?: string;
-  attachments?: Attachment[];
-  replyTo?: ReplyPointer;
-  replyPreview?: ReplyTarget;
+  linkPreview?: RoomMessage['linkPreview'] | undefined;
+  content?: MessageContent | undefined;
+  cursor?: string | undefined;
+  readCursor?: string | undefined;
+  attachments?: Attachment[] | undefined;
+  replyTo?: ReplyPointer | undefined;
+  replyPreview?: ReplyTarget | undefined;
   /** The reactions a history page carried; realtime keeps the reaction store current after that. */
-  reactions?: ReactionSummary[];
+  reactions?: ReactionSummary[] | undefined;
 };
 
 /** A message that never expires shows no countdown. */
@@ -213,13 +217,13 @@ export async function postRoomChat(
   roomId: string,
   body: {
     name: string;
-    peerId?: string;
-    sessionToken?: string;
+    peerId?: string | undefined;
+    sessionToken?: string | undefined;
     text: string;
-    content?: RoomMessageContentV1;
-    attachmentIds?: string[];
-    replyTo?: { messageId: string };
-    idempotencyKey?: string;
+    content?: RoomMessageContentV1 | undefined;
+    attachmentIds?: string[] | undefined;
+    replyTo?: { messageId: string } | undefined;
+    idempotencyKey?: string | undefined;
   }
 ): Promise<ChatMessage> {
   const payload = await api.post(`/api/rooms/${encodeURIComponent(roomId)}/chat`, RoomMessageAnswer, body);

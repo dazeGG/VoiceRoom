@@ -9,7 +9,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { LiveRoom, LiveRooms, RoomHistory, RoomStay } from '@voice-room/shared/contracts/admin';
 import AdminPanel from '../../src/lib/features/admin/AdminPanel.svelte';
 import { adminLocationFromPath, adminPath } from '../../src/lib/features/admin/tabs';
-import { instanceOf } from '../helpers/assert.ts';
+import { instanceOf, defined } from '../helpers/assert.ts';
 
 const MINUTE = 60_000;
 
@@ -127,19 +127,19 @@ test('the tab shows who is in voice now, accounts by login and guests by name, a
   );
   const people = within(card).getAllByRole('listitem');
   expect(people).toHaveLength(2);
-  expect(within(people[0]).getByText('@alice')).toBeTruthy();
-  expect(within(people[0]).getByLabelText('Микрофон выключен')).toBeTruthy();
-  expect(within(people[1]).getByText('Петя')).toBeTruthy();
-  expect(within(people[1]).getByText('гость')).toBeTruthy();
-  expect(within(people[1]).getByLabelText('Показывает экран')).toBeTruthy();
+  expect(within(defined(people[0], 'people[0]')).getByText('@alice')).toBeTruthy();
+  expect(within(defined(people[0], 'people[0]')).getByLabelText('Микрофон выключен')).toBeTruthy();
+  expect(within(defined(people[1], 'people[1]')).getByText('Петя')).toBeTruthy();
+  expect(within(defined(people[1], 'people[1]')).getByText('гость')).toBeTruthy();
+  expect(within(defined(people[1], 'people[1]')).getByLabelText('Показывает экран')).toBeTruthy();
   // Where each one sits: the desktop app, a phone or a browser.
-  expect(within(people[0]).getByText('приложение')).toBeTruthy();
-  expect(within(people[1]).getByText('телефон')).toBeTruthy();
+  expect(within(defined(people[0], 'people[0]')).getByText('приложение')).toBeTruthy();
+  expect(within(defined(people[1], 'people[1]')).getByText('телефон')).toBeTruthy();
   expect(within(card).getByText('постоянная')).toBeTruthy();
   expect(screen.getByText(/комнат: 1, людей: 2/)).toBeTruthy();
   expect(await screen.findByText('Завершённых звонков пока нет.')).toBeTruthy();
 
-  await userEvent.click(within(people[0]).getByRole('button', { name: /Алиса/ }));
+  await userEvent.click(within(defined(people[0], 'people[0]')).getByRole('button', { name: /Алиса/ }));
   await waitFor(() => expect(urls.some((url) => url.pathname === '/api/admin/accounts/u-alice')).toBe(true));
   expect(screen.getByRole('tab', { name: 'Аккаунты' }).getAttribute('aria-selected')).toBe('true');
 });
@@ -235,7 +235,9 @@ test('a stay shows when it ended next to when it began, and its length in hours 
   });
   render(AdminPanel, { props: { tab: 'rooms' } });
 
-  const [, long, night] = within(await screen.findByRole('table')).getAllByRole('row');
+  const rows = within(await screen.findByRole('table')).getAllByRole('row');
+  const long = defined(rows[1], 'long stay row');
+  const night = defined(rows[2], 'night stay row');
   expect(within(long).getByText('15 окт., 14:30 – 15:55')).toBeTruthy();
   expect(within(long).getByText('1 ч 25 мин')).toBeTruthy();
   // Past midnight the end carries its own date.

@@ -92,7 +92,7 @@ export function checkImportBoundaries({
   files
 }: {
   config: { importRules?: ImportRule[] };
-  files?: string[];
+  files?: string[] | undefined;
 }): Violation[] {
   const violations: Violation[] = [];
   const fileSet = files || repoFiles('.');

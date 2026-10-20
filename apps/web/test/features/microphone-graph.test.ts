@@ -10,6 +10,7 @@ import {
   setMicrophoneVolume
 } from '../../src/lib/features/room/client/services/microphone-service.ts';
 import type { MicrophoneCapture } from '../../src/lib/features/room/client/core/types.ts';
+import { defined } from '../helpers/assert.ts';
 
 vi.mock('/rnnoise/rnnoise.mjs', () => ({
   RNNoiseNode: class {
@@ -47,7 +48,7 @@ class FakeContext {
       },
       disconnect() {
         for (let index = edges.length - 1; index >= 0; index -= 1) {
-          if (edges[index].startsWith(`${name} →`)) edges.splice(index, 1);
+          if (edges[index]?.startsWith(`${name} →`)) edges.splice(index, 1);
         }
       },
       ...extra
@@ -81,7 +82,7 @@ class FakeContext {
 
 // Every context the service built; the graph under test is in the newest one.
 const contexts: FakeContext[] = [];
-const latest = () => contexts[contexts.length - 1];
+const latest = () => defined(contexts.at(-1), 'audio context');
 
 beforeEach(() => {
   Object.assign(state, createInitialRoomState());
@@ -113,7 +114,6 @@ beforeEach(() => {
     }
   );
   vi.stubGlobal('navigator', {
-    ...navigator,
     mediaDevices: {
       getUserMedia: async () => ({ getAudioTracks: () => [{ enabled: true, stop() {} }], getTracks: () => [] })
     }

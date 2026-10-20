@@ -39,7 +39,7 @@ describe('fitTileGrid', () => {
   });
 
   test('from one to twenty-five people, on any stage, tiles are the largest that fit or else readable', () => {
-    const stages = [
+    const stages: Array<[width: number, height: number]> = [
       [1240, 480],
       [880, 480],
       [1880, 900],

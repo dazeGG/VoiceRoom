@@ -112,7 +112,7 @@ test('bookmarked room menu can remove the room from the list but cannot open own
   const roomName = `Shared ${ownerLogin}`;
   const roomId = await createPermanentRoom(page, roomName);
 
-  const memberContext = await browser.newContext({ baseURL });
+  const memberContext = await browser.newContext(baseURL ? { baseURL } : {});
   const member = await memberContext.newPage();
   try {
     await registerViaUi(member, memberLogin);

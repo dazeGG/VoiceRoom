@@ -273,7 +273,9 @@ function routeApp(
           return room.ownerId === userId ? { status: 'owner', room: live } : { status: 'forbidden' };
         }
       }),
-      uploadLimiter: { check: () => (limited ? { allowed: false, retryAfterSeconds: 8 } : { allowed: true }) }
+      uploadLimiter: {
+        check: () => (limited ? { allowed: false, retryAfterSeconds: 8 } : { allowed: true, retryAfterSeconds: 0 })
+      }
     }
   );
   t.after(() => app.close());

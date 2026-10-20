@@ -20,11 +20,11 @@ export function createMentionComposer() {
   function update(text: string, caret: number): string {
     if (composing) return '';
     const before = text.slice(0, caret);
-    const match = before.match(/(?:^|\s)@([^\s@]{0,80})$/u);
-    anchorStart = match ? caret - match[1].length - 1 : -1;
-    query = match?.[1] ?? '';
+    const typed = before.match(/(?:^|\s)@([^\s@]{0,80})$/u)?.[1];
+    anchorStart = typed === undefined ? -1 : caret - typed.length - 1;
+    query = typed ?? '';
     activeIndex = 0;
-    if (!match) candidates = [];
+    if (typed === undefined) candidates = [];
     return query;
   }
 
@@ -59,19 +59,19 @@ export function createMentionComposer() {
     while (offset < text.length) {
       let nextIndex = -1;
       let next = -1;
-      for (let index = 0; index < pending.length; index += 1) {
-        const found = text.indexOf(pending[index].token, offset);
+      for (const [index, mention] of pending.entries()) {
+        const found = text.indexOf(mention.token, offset);
         if (found >= 0 && (nextIndex < 0 || found < nextIndex)) {
           nextIndex = found;
           next = index;
         }
       }
-      if (next < 0) {
+      const [match] = next < 0 ? [] : pending.splice(next, 1);
+      if (!match) {
         segments.push({ type: 'text', text: text.slice(offset) });
         break;
       }
       if (nextIndex > offset) segments.push({ type: 'text', text: text.slice(offset, nextIndex) });
-      const match = pending.splice(next, 1)[0];
       segments.push({ type: 'mention', userId: match.member.userId, label: match.token });
       offset = nextIndex + match.token.length;
     }

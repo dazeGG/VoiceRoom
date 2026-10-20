@@ -15,7 +15,7 @@
     oncancel
   }: {
     target: ReplyTarget;
-    onjump?: (messageId: string) => void;
+    onjump?: ((messageId: string) => void) | undefined;
     oncancel: () => void;
   } = $props();
 </script>

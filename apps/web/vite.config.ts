@@ -35,7 +35,7 @@ export default defineConfig({
     // vi.stubGlobal() is undone after every test.
     unstubGlobals: true
   },
-  resolve: process.env.VITEST ? { conditions: ['browser'] } : undefined,
+  ...(process.env.VITEST ? { resolve: { conditions: ['browser'] } } : {}),
   preview: {
     host: DEV_HOST,
     port: DEV_PORT,

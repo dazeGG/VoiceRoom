@@ -94,8 +94,8 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
    * at a time: `after` is the end and id of the last stay already shown.
    */
   async function history(query: {
-    roomId?: string;
-    after?: { leftAt: number; id: string };
+    roomId?: string | undefined;
+    after?: { leftAt: number; id: string } | undefined;
   }): Promise<{ stays: StoredStay[]; more: boolean }> {
     let select = db
       .selectFrom('voice_sessions as s')

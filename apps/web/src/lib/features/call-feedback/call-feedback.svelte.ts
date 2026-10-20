@@ -152,7 +152,9 @@ export async function answerCallFeedback(answer: {
   const history = readHistory();
   if (history) writeHistory({ ...history, skipped: 0 });
   try {
-    await submitCallFeedback({ ...answer, comment: answer.comment.trim() || undefined, call });
+    const { comment, ...rest } = answer;
+    const note = comment.trim();
+    await submitCallFeedback({ ...rest, ...(note ? { comment: note } : {}), call });
   } catch (error) {
     log.warn('call feedback not sent', errorContext(error));
   }

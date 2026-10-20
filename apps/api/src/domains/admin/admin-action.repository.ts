@@ -57,8 +57,8 @@ export function createAdminActionRepository({ pool }: { pool: pg.Pool }) {
         'a.action',
         'a.reason',
         'a.created_at',
-        sql<unknown>`a.details->'until'`.as('until'),
-        sql<unknown>`a.details->>'badge'`.as('badge'),
+        sql`a.details->'until'`.as('until'),
+        sql`a.details->>'badge'`.as('badge'),
         sql<string>`coalesce(nullif(u.display_name, ''), u.login, 'администратор')`.as('admin_name')
       ])
       .where('a.target_user_id', '=', targetUserId)

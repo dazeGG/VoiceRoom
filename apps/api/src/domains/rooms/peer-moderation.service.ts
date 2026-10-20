@@ -24,13 +24,15 @@ export interface PeerModerationStore {
   }): Promise<{ status: string }>;
   clearRoomServerMute(input: { roomId: string; principal: GatePrincipal }): Promise<{ status: string }>;
   createRoomBan(input: { roomId: string; userId: string | null; ip: string; maxBans: number }): Promise<BanResult>;
-  createRoomBanWithLiveKitGateRevocations?(input: {
-    roomId: string;
-    userId: string | null;
-    ip: string;
-    maxBans: number;
-    principals: GatePrincipal[];
-  }): Promise<BanResult>;
+  createRoomBanWithLiveKitGateRevocations?:
+    | ((input: {
+        roomId: string;
+        userId: string | null;
+        ip: string;
+        maxBans: number;
+        principals: GatePrincipal[];
+      }) => Promise<BanResult>)
+    | undefined;
   deleteRoomBan(input: { roomId: string; banId: string }): Promise<{ status: string }>;
 }
 

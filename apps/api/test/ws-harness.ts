@@ -29,7 +29,11 @@ export interface WsSession {
 /** Opens a socket on a TCP port or a Unix socket path; `ready` resolves on the server's ready frame. */
 function openWs(
   target: number | string,
-  { cookie, headers = {}, path = '/api/ws' }: { cookie?: string; headers?: Record<string, string>; path?: string } = {}
+  {
+    cookie,
+    headers = {},
+    path = '/api/ws'
+  }: { cookie?: string | undefined; headers?: Record<string, string>; path?: string } = {}
 ): WsSession {
   const frames: ServerFrame[] = [];
   const requestHeaders = { ...headers, ...(cookie ? { Cookie: cookie } : {}) };

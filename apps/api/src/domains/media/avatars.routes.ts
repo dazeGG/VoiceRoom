@@ -18,6 +18,7 @@ import { fieldOf } from '../../platform/record.ts';
 import { ownerRefusal } from '../rooms/rooms.routes.ts';
 import type { RoomsService } from '../rooms/rooms.service.ts';
 import type { AvatarsService, AvatarUser } from './avatars.service.ts';
+import type { RateCheck } from '../../lib/rate-limit.ts';
 
 const UserAnswers = { 200: SignedIn, '4xx': Failure };
 const RoomAnswers = { 200: RoomCard, '4xx': RoomFailure };
@@ -57,7 +58,7 @@ export async function readAvatarUpload(request: FastifyRequest): Promise<Buffer>
 export interface AvatarRoutesDeps {
   avatars: AvatarsService;
   rooms: RoomsService;
-  uploadLimiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
+  uploadLimiter: RateCheck;
 }
 
 export function registerAvatarRoutes(

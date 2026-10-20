@@ -212,8 +212,6 @@ export function storedDirectMessage(id: string, overrides: Partial<StoredDirectM
     editedAt: null,
     readAt: null,
     invite: null,
-    linkPreview: undefined,
-    replyTo: undefined,
     deletedAt: null,
     ...overrides
   };
@@ -339,7 +337,7 @@ export function outboxEvent(overrides: Partial<NotificationOutboxEvent> = {}): N
  * so it can stand in wherever code takes one; only the level methods work.
  */
 export function recordingLogger() {
-  const records: Array<{ level: string; msg?: string } & Record<string, unknown>> = [];
+  const records: Array<{ level: string; msg?: string | undefined } & Record<string, unknown>> = [];
   const at =
     (level: string) =>
     (fields: Record<string, unknown> | string = {}, msg?: string) => {

@@ -59,11 +59,11 @@ export function failureBody<Schema extends TSchema>(error: ApiError, schema: Sch
 export type RequestOptions = {
   /** JSON-encoded unless it is FormData. */
   body?: unknown;
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
   /** Extra request headers, such as an Idempotency-Key. */
-  headers?: Record<string, string>;
+  headers?: Record<string, string> | undefined;
   /** The message when the server gives none. */
-  fallback?: string;
+  fallback?: string | undefined;
 };
 
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -118,7 +118,7 @@ export async function request<Schema extends TSchema>(
 ): Promise<Static<Schema>> {
   const { body, signal, fallback = UNAVAILABLE } = options;
   const headers: Record<string, string> = { Accept: 'application/json', ...options.headers };
-  const init: RequestInit = { method, headers, signal, credentials: 'same-origin' };
+  const init: RequestInit = { method, headers, signal: signal ?? null, credentials: 'same-origin' };
   if (body instanceof FormData) init.body = body;
   else if (body !== undefined) {
     headers['Content-Type'] = 'application/json';

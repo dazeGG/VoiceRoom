@@ -3,7 +3,7 @@
 // the banned account's profile when it is known.
 
 import type { Ban, BanPage, BanProfile } from './contracts/moderation.ts';
-import { isOneOf, isRecord } from './guards.ts';
+import { isOneOf, isRecord, pageInfoOf, trimmedText } from './guards.ts';
 
 export type ModerationDuration = '1h' | '1d' | '7d' | 'permanent';
 export interface BanMutation {
@@ -32,12 +32,6 @@ export const MODERATION_DURATION_MS: Readonly<Record<ModerationDuration, number 
   permanent: null
 });
 
-function cleanString(value: unknown, maxLength: number): string {
-  if (typeof value !== 'string') return '';
-  const text = value.trim();
-  return text && text.length <= maxLength ? text : '';
-}
-
 export function normalizeModerationLimit(value: unknown, fallback: number = MODERATION_DEFAULT_LIMIT): number {
   const numeric = Number(value);
   if (!Number.isInteger(numeric) || numeric < 1) return fallback;
@@ -57,8 +51,8 @@ export function durationToExpiresAt(duration: unknown, now: number = Date.now())
 
 export function normalizeBanMutation(value: unknown = {}): BanMutation | null {
   if (!isRecord(value)) return null;
-  const userId = cleanString(value.userId, 36);
-  const guestIp = userId ? '' : cleanString(value.guestIp, 256);
+  const userId = trimmedText(value.userId, 36);
+  const guestIp = userId ? '' : trimmedText(value.guestIp, 256);
   const duration = normalizeBanDuration(value.duration);
   const reason = typeof value.reason === 'string' ? value.reason.trim() : '';
   if ((!userId && !guestIp) || !duration || reason.length > MODERATION_REASON_MAX_LENGTH) return null;
@@ -66,12 +60,12 @@ export function normalizeBanMutation(value: unknown = {}): BanMutation | null {
 }
 
 export function normalizeIdempotencyKey(value: unknown): string | null {
-  return cleanString(value, 128) || null;
+  return trimmedText(value, 128) || null;
 }
 
-export function normalizeModerationPageRequest(value: Loose = {}): { cursor?: string; limit: number } {
+export function normalizeModerationPageRequest(value: Loose = {}): { cursor?: string | undefined; limit: number } {
   return {
-    cursor: cleanString(value.cursor, 4096) || undefined,
+    cursor: trimmedText(value.cursor, 4096) || undefined,
     limit: normalizeModerationLimit(value.limit)
   };
 }
@@ -81,24 +75,24 @@ export function normalizeModerationPageRequest(value: Loose = {}): { cursor?: st
 // carry none.
 function normalizeBanProfile(value: unknown): BanProfile | null {
   if (!isRecord(value)) return null;
-  const login = cleanString(value.login, 64);
+  const login = trimmedText(value.login, 64);
   if (!login) return null;
-  const avatarUrl = cleanString(value.avatarUrl, 512);
+  const avatarUrl = trimmedText(value.avatarUrl, 512);
   return {
-    displayName: cleanString(value.displayName, 100),
+    displayName: trimmedText(value.displayName, 100),
     login,
     avatarUrl: avatarUrl.startsWith('/api/avatars/') ? avatarUrl : null,
-    avatarColorKey: cleanString(value.avatarColorKey, 64),
-    avatarAccent: cleanString(value.avatarAccent, 64) || null
+    avatarColorKey: trimmedText(value.avatarColorKey, 64),
+    avatarAccent: trimmedText(value.avatarAccent, 64) || null
   };
 }
 
 export function normalizeActiveBan(value: unknown): Ban | null {
   if (!isRecord(value)) return null;
   const subject = isRecord(value.subject) ? value.subject : undefined;
-  const id = cleanString(value.id, 36);
-  const roomId = cleanString(value.roomId, 48);
-  const userId = cleanString(subject?.userId ?? value.userId, 36) || null;
+  const id = trimmedText(value.id, 36);
+  const roomId = trimmedText(value.roomId, 48);
+  const userId = trimmedText(subject?.userId ?? value.userId, 36) || null;
   const kind = userId ? 'account' : 'guest';
   const profile = userId ? normalizeBanProfile(subject?.profile) : null;
   const createdAt = Number(value.createdAt);
@@ -130,11 +124,8 @@ export function buildModerationPage({
 } = {}): BanPage {
   return {
     contractVersion: MODERATION_CONTRACT_VERSION,
-    roomId: cleanString(roomId, 48),
+    roomId: trimmedText(roomId, 48),
     bans: Array.isArray(bans) ? bans.map(normalizeActiveBan).filter((ban): ban is Ban => Boolean(ban)) : [],
-    pageInfo: {
-      nextCursor: cleanString(nextCursor, 4096) || undefined,
-      hasMore: Boolean(hasMore)
-    }
+    pageInfo: pageInfoOf(nextCursor, hasMore)
   };
 }

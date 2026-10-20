@@ -20,7 +20,7 @@ type MigrationRunnerOptions = {
   dir: string;
   direction: 'up' | 'down';
   migrationsTable: string;
-  count: number | undefined;
+  count?: number;
   singleTransaction: boolean;
   checkOrder: boolean;
   logger: Required<MigrationLogSink>;
@@ -262,7 +262,7 @@ async function runMigrations({
       dir,
       direction,
       migrationsTable: DEFAULT_MIGRATIONS_TABLE,
-      count: direction === 'down' ? 1 : undefined,
+      ...(direction === 'down' ? { count: 1 } : {}),
       singleTransaction: true,
       checkOrder: true,
       logger: migrationLogger(logger),
@@ -303,7 +303,7 @@ async function runMigrations({
       dir,
       direction,
       migrationsTable: DEFAULT_MIGRATIONS_TABLE,
-      count: direction === 'down' ? 1 : undefined,
+      ...(direction === 'down' ? { count: 1 } : {}),
       singleTransaction: true,
       checkOrder: true,
       logger: migrationLogger(logger),

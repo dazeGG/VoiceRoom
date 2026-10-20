@@ -16,7 +16,7 @@ function roomModerationUrl(roomId: string): string {
 
 export async function fetchActiveBans(
   roomId: string,
-  { cursor, limit = MODERATION_DEFAULT_LIMIT }: { cursor?: string; limit?: number } = {}
+  { cursor, limit = MODERATION_DEFAULT_LIMIT }: { cursor?: string | undefined; limit?: number } = {}
 ): Promise<BanPage> {
   const boundedLimit = Math.min(MODERATION_MAX_LIMIT, Math.max(1, Math.trunc(limit)));
   const query = new URLSearchParams({ limit: String(boundedLimit) });

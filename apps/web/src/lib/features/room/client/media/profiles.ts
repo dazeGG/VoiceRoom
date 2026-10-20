@@ -1,6 +1,8 @@
 import type { ScreenShareCaptureOptions, ScreenSharePresets, TrackPublishOptions, VideoPreset } from 'livekit-client';
 import {
+  DEFAULT_SCREEN_FPS,
   DEFAULT_SCREEN_FPS_ID,
+  DEFAULT_SCREEN_QUALITY,
   DEFAULT_SCREEN_PROFILE_ID,
   DEFAULT_SCREEN_QUALITY_ID,
   SCREEN_STREAM_MODE_PROFILES,
@@ -17,9 +19,9 @@ import { loadLiveKitClient } from './livekit-runtime';
 
 export function getScreenProfile(profileId: string): ScreenProfile {
   const { qualityId, fpsId } = parseScreenProfileId(profileId);
-  const quality = SCREEN_QUALITY_OPTIONS[qualityId] || SCREEN_QUALITY_OPTIONS[DEFAULT_SCREEN_QUALITY_ID];
-  const fps = SCREEN_FPS_OPTIONS[fpsId] || SCREEN_FPS_OPTIONS[DEFAULT_SCREEN_FPS_ID];
-  const videoBitrate = quality.bitrateByFps[fps.id] || quality.bitrateByFps[DEFAULT_SCREEN_FPS_ID];
+  const quality = SCREEN_QUALITY_OPTIONS[qualityId] ?? DEFAULT_SCREEN_QUALITY;
+  const fps = SCREEN_FPS_OPTIONS[fpsId] ?? DEFAULT_SCREEN_FPS;
+  const videoBitrate = quality.bitrateByFps[fps.id];
 
   return {
     contentHint: fps.contentHint,
@@ -75,7 +77,7 @@ function parseScreenProfileId(profileId: string): { qualityId: string; fpsId: st
     return { qualityId: normalizeScreenQualityId(normalized), fpsId: DEFAULT_SCREEN_FPS_ID };
   }
 
-  const [rawQualityId, rawFpsId] = normalized.split('-');
+  const [rawQualityId = '', rawFpsId = ''] = normalized.split('-');
   return {
     fpsId: normalizeScreenFpsId(rawFpsId),
     qualityId: normalizeScreenQualityId(rawQualityId)

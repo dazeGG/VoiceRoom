@@ -25,8 +25,12 @@ export interface MessageProjectionDeps {
     listForMessages(context: Context, messageIds: string[]): Promise<Map<string, StoredAttachment[]>>;
   } | null;
   replies(): {
-    getRoomPreview(input: { roomId?: string; messageId: string }): Promise<ReplyPreview | null>;
-    getDirectPreview(input: { userId?: string; peerId?: string; messageId: string }): Promise<ReplyPreview | null>;
+    getRoomPreview(input: { roomId?: string | undefined; messageId: string }): Promise<ReplyPreview | null>;
+    getDirectPreview(input: {
+      userId?: string | undefined;
+      peerId?: string | undefined;
+      messageId: string;
+    }): Promise<ReplyPreview | null>;
   } | null;
 }
 
@@ -74,10 +78,14 @@ export function createMessageProjection(deps: MessageProjectionDeps) {
     }));
   }
 
-  async function projectReply<T extends { replyTo?: { messageId?: string } | null }>(
+  async function projectReply<T extends { replyTo?: { messageId?: string } | null | undefined }>(
     context: Context,
     message: T,
-    { roomId, userId, peerId }: { roomId?: string; userId?: string; peerId?: string } = {}
+    {
+      roomId,
+      userId,
+      peerId
+    }: { roomId?: string | undefined; userId?: string | undefined; peerId?: string | undefined } = {}
   ): Promise<T | (T & { replyPreview: ReplyPreview | null })> {
     const messageId = message?.replyTo?.messageId;
     if (!messageId) return message;
@@ -91,10 +99,10 @@ export function createMessageProjection(deps: MessageProjectionDeps) {
   }
 
   /** Attachments first, then the reply quote: the shape every copy of a message has. */
-  async function project<T extends { id?: string; replyTo?: { messageId?: string } | null }>(
+  async function project<T extends { id?: string; replyTo?: { messageId?: string } | null | undefined }>(
     context: Context,
     message: T,
-    options: { roomId?: string; userId?: string; peerId?: string } = {}
+    options: { roomId?: string | undefined; userId?: string | undefined; peerId?: string | undefined } = {}
   ) {
     return projectReply(context, await projectMedia(context, message), options);
   }

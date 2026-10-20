@@ -162,7 +162,7 @@ type HarnessOptions = {
   readError?: Error;
   readService?: ReturnType<RoomChatDeps['readService']>;
   ban?: (userId: string | null | undefined, ip: string) => boolean;
-  rate?: { allowed: boolean; retryAfterSeconds?: number };
+  rate?: { allowed: boolean; retryAfterSeconds: number };
   findUserFails?: boolean;
   media?: null;
   directEmit?: boolean;
@@ -232,7 +232,7 @@ function harness(options: HarnessOptions = {}) {
         text: input.text,
         createdAt: input.createdAt,
         authorUserId: input.authorUserId,
-        replyTo: input.replyToMessageId ? { messageId: input.replyToMessageId } : undefined
+        ...(input.replyToMessageId ? { replyTo: { messageId: input.replyToMessageId } } : {})
       };
       if (input.unitOfWork) await input.unitOfWork(transactionMarker('insert'), inserted);
       return inserted;
@@ -262,18 +262,19 @@ function harness(options: HarnessOptions = {}) {
             async createAddressedForMessage(input) {
               calls.addressed.push(input);
             },
-            ...(options.retireFails
-              ? {
-                  async markRoomRead() {
-                    throw new Error('inbox down');
+            ...(options.noMarkRoomRead
+              ? {}
+              : options.retireFails
+                ? {
+                    async markRoomRead() {
+                      throw new Error('inbox down');
+                    }
                   }
-                }
-              : {
-                  async markRoomRead(input) {
-                    calls.retired.push(input);
-                  }
-                }),
-            ...(options.noMarkRoomRead ? { markRoomRead: undefined } : {})
+                : {
+                    async markRoomRead(input) {
+                      calls.retired.push(input);
+                    }
+                  })
           }
         };
   const delivery: ReturnType<RoomChatDeps['delivery']> =
@@ -330,7 +331,7 @@ function harness(options: HarnessOptions = {}) {
       content === 'bad-mention'
         ? { ok: false, code: 'invalid_mention_target' }
         : { ok: true, userIds: content === 'mention' ? ['user-2'] : [] },
-    limiter: { check: () => options.rate || { allowed: true } },
+    limiter: { check: () => options.rate || { allowed: true, retryAfterSeconds: 0 } },
     findUser: async (userId) => {
       if (options.findUserFails) throw new Error('users down');
       return { id: userId, displayName: 'Stored', avatarKey: null };
@@ -459,7 +460,7 @@ test('send refuses in the legacy order', async () => {
   assert.equal(mention.status === 'invalid_mention' && mention.code, 'invalid_mention_target');
   const limited = await harness({ rate: { allowed: false, retryAfterSeconds: 3 } }).service.post(postBase);
   assert.equal(limited.status === 'rate_limited' && limited.retryAfterSeconds, 3);
-  const unspecified = await harness({ rate: { allowed: false } }).service.post(postBase);
+  const unspecified = await harness({ rate: { allowed: false, retryAfterSeconds: 0 } }).service.post(postBase);
   assert.equal(unspecified.status === 'rate_limited' && unspecified.retryAfterSeconds, 0);
 });
 
