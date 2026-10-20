@@ -219,10 +219,8 @@ export function createDomainServices(deps: DomainServiceDeps) {
       const repository = services.getReportRepository();
       if (!repository) return;
       const openReports = await repository.countOpen();
-      for (const staffId of await staff.memberIds()) {
-        if (await staff.can(staffId, 'reports.review')) {
-          hub.broadcastToUser(staffId, { type: 'admin.reports', openReports, filed });
-        }
+      for (const staffId of await staff.memberIds('reports.review')) {
+        hub.broadcastToUser(staffId, { type: 'admin.reports', openReports, filed });
       }
     } catch (error) {
       deps

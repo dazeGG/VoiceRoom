@@ -68,8 +68,14 @@ export function createStaffRepository({ pool }: { pool: pg.Pool }) {
     return row ? accountOf(row) : null;
   }
 
+  /** By login, blocked or not: a blocked account's role can still be taken away. */
   async function accountByLogin(login: string): Promise<StaffAccountRow | null> {
-    const row = await activeAccounts().select(ACCOUNT_COLUMNS).where('u.login', '=', login).executeTakeFirst();
+    const row = await db
+      .selectFrom('users as u')
+      .select(ACCOUNT_COLUMNS)
+      .where('u.deleted_at', 'is', null)
+      .where('u.login', '=', login)
+      .executeTakeFirst();
     return row ? accountOf(row) : null;
   }
 
@@ -96,16 +102,24 @@ export function createStaffRepository({ pool }: { pool: pg.Pool }) {
     userId: string;
     mainSessionId: string;
     expiresAt: Date;
-  }): Promise<void> {
-    await db
+  }): Promise<boolean> {
+    // Only while the main-site session lives: one signed out since the handoff opens nothing.
+    const inserted = await db
       .insertInto('staff_sessions')
-      .values({
-        id: input.id,
-        user_id: input.userId,
-        main_session_id: input.mainSessionId,
-        expires_at: input.expiresAt
-      })
-      .execute();
+      .columns(['id', 'user_id', 'main_session_id', 'expires_at'])
+      .expression((eb) =>
+        eb
+          .selectFrom('sessions')
+          .select([
+            eb.val(input.id).as('id'),
+            eb.val(input.userId).as('user_id'),
+            'sessions.id as main_session_id',
+            eb.val(input.expiresAt).as('expires_at')
+          ])
+          .where('sessions.id', '=', input.mainSessionId)
+      )
+      .executeTakeFirst();
+    return Number(inserted.numInsertedOrUpdatedRows ?? 0) > 0;
   }
 
   /** The account behind a live admin-app session whose main-site session lives too. */

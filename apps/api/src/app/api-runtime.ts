@@ -247,7 +247,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
       securityHeaders: baseHeaders,
       logRequest: logHttpRequest,
       // The admin app's cookie authenticates too, so its writes are origin-checked the same way.
-      hasSessionCookie: (req) => Boolean(getSessionToken(req) || staffToken(req))
+      hasSessionCookie: (req) => Boolean(getSessionToken(req) || staffToken(req, config.SESSION_COOKIE_SECURE))
     });
     const appLogger = logger || app.log;
     setProcessLogger(appLogger);

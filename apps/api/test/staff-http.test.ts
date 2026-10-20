@@ -21,6 +21,21 @@ const ADMIN_ORIGIN = 'https://admin.example.test';
 const SITE_ORIGIN = 'https://example.test';
 /** What a browser on the admin app sends with a write. */
 const FROM_ADMIN_APP = { Origin: ADMIN_ORIGIN, Host: new URL(ADMIN_ORIGIN).host };
+const STATE = '11111111-2222-4333-8444-555555555555';
+const OTHER_STATE = '66666666-7777-4888-9999-aaaaaaaaaaaa';
+
+/** A handed-over code for the account behind `cookie`, with the state its check gave. */
+async function handOver(socketPath: string, cookie: string, state: string): Promise<string> {
+  const handed = await request(socketPath, { pathname: `/api/staff/handoff?state=${state}`, cookie });
+  return new URL(handed.headers.location ?? '').searchParams.get('code') ?? '';
+}
+
+function callback(socketPath: string, code: string, state: string, cookie: string) {
+  return request(socketPath, {
+    pathname: `/api/staff/callback?${new URLSearchParams({ code, state }).toString()}`,
+    cookie
+  });
+}
 
 async function userId(socketPath: string, cookie: string): Promise<string> {
   const { body } = await request(socketPath, { pathname: '/api/auth/me', cookie });
@@ -63,27 +78,25 @@ test('the admin app takes a staff session only through a one-time handoff', { sk
   assert.equal((await request(socketPath, { pathname: '/api/staff/denied' })).status, 404);
 
   // Staff: a code for the admin app, traded once, and only with the state the app set.
-  const handed = await request(socketPath, { pathname: '/api/staff/handoff?state=abc', cookie: rootSite });
+  const handed = await request(socketPath, { pathname: `/api/staff/handoff?state=${STATE}`, cookie: rootSite });
   const back = new URL(handed.headers.location ?? '');
   assert.equal(back.origin, ADMIN_ORIGIN);
-  assert.equal(back.searchParams.get('state'), 'abc');
+  assert.equal(back.searchParams.get('state'), STATE);
   const code = back.searchParams.get('code') ?? '';
-  const wrongState = await request(socketPath, {
-    pathname: `/api/staff/callback?code=${code}&state=abc`,
-    cookie: 'vr_staff_state=other%7C%2F'
-  });
+  const wrongState = await callback(socketPath, code, STATE, `vr_staff_state_${OTHER_STATE}=%2F`);
   assert.equal(wrongState.headers.location, '/api/staff/denied', 'a callback without the matching state is refused');
-  const traded = await request(socketPath, {
-    pathname: `/api/staff/callback?code=${code}&state=abc`,
-    cookie: 'vr_staff_state=abc%7C%2Freports'
-  });
+  const traded = await callback(socketPath, code, STATE, `vr_staff_state_${STATE}=%2Freports`);
   assert.equal(traded.headers.location, '/reports', 'back to the page the visit began on');
-  assert.ok(traded.setCookie.some((line) => line.startsWith('vr_staff=') && line.includes('SameSite=Strict')));
-  const reused = await request(socketPath, {
-    pathname: `/api/staff/callback?code=${code}&state=abc`,
-    cookie: 'vr_staff_state=abc%7C%2Freports'
-  });
+  // Lax: a link from a messenger or a mail still arrives signed in.
+  assert.ok(traded.setCookie.some((line) => line.startsWith('vr_staff=') && line.includes('SameSite=Lax')));
+  const reused = await callback(socketPath, code, STATE, `vr_staff_state_${STATE}=%2Freports`);
   assert.equal(reused.headers.location, '/api/staff/denied', 'a code is traded once');
+
+  // Two admin tabs reopened together each keep their own state and both come back signed in.
+  const both = `vr_staff_state_${STATE}=%2Frooms; vr_staff_state_${OTHER_STATE}=%2Freports`;
+  const firstTab = await callback(socketPath, await handOver(socketPath, rootSite, STATE), STATE, both);
+  const secondTab = await callback(socketPath, await handOver(socketPath, rootSite, OTHER_STATE), OTHER_STATE, both);
+  assert.deepEqual([firstTab.headers.location, secondTab.headers.location], ['/rooms', '/reports']);
 
   const admin = await staffCookie(socketPath, rootSite);
   assert.match(admin, /^vr_staff=/);
@@ -100,11 +113,30 @@ test('the admin app takes a staff session only through a one-time handoff', { sk
   });
   assert.equal(visit.status, 302);
   assert.ok(visit.headers.location?.startsWith(`${SITE_ORIGIN}/api/staff/handoff?state=`));
-  assert.ok(visit.setCookie.some((line) => line.startsWith('vr_staff_state=') && line.includes('%7C%2Frooms')));
+  assert.ok(visit.setCookie.some((line) => line.startsWith('vr_staff_state_') && line.includes('=%2Frooms;')));
   assert.equal((await request(socketPath, { pathname: '/api/staff/check' })).status, 404);
+  // A browser without Fetch Metadata is sent through the handoff on a page load too.
+  const oldBrowser = await request(socketPath, { pathname: '/api/staff/check', headers: { Accept: 'text/html' } });
+  assert.equal(oldBrowser.status, 302);
+  // A browser reads "/\host" as "//host": such a visit comes back to the start instead.
+  for (const uri of ['/\\evil.test', '/rooms\\x', '/a\tb']) {
+    const odd = await request(socketPath, {
+      pathname: '/api/staff/check',
+      headers: { 'Sec-Fetch-Mode': 'navigate', 'X-Forwarded-Uri': uri }
+    });
+    assert.ok(
+      odd.setCookie.some((line) => line.startsWith('vr_staff_state_') && line.includes('=%2F;')),
+      JSON.stringify(uri)
+    );
+  }
 
-  // The main-site session alone opens nothing in the admin API; the admin cookie does.
-  assert.equal((await request(socketPath, { pathname: '/api/admin/overview', cookie: rootSite })).status, 401);
+  // The main-site session alone opens nothing in the admin API; the admin cookie does. Without
+  // one the admin app is told to go through the handoff again.
+  for (const cookie of [rootSite, '', 'vr_staff=gone']) {
+    const refused = await request(socketPath, { pathname: '/api/admin/overview', cookie });
+    assert.equal(refused.status, 401);
+    assert.equal(refused.body.code, 'staff_session_required');
+  }
   assert.equal((await request(socketPath, { pathname: '/api/admin/overview', cookie: admin })).status, 200);
 
   // A write from another origin with the admin cookie is refused.
@@ -117,9 +149,14 @@ test('the admin app takes a staff session only through a one-time handoff', { sk
   assert.equal(crossOrigin.status, 403);
   assert.equal(crossOrigin.body.code, 'cross_origin_rejected');
 
-  // Signing out of the main site ends the admin session that was handed over from it.
+  // Signing out of the main site ends the admin session that was handed over from it, and a
+  // code handed over just before is worth nothing.
+  const late = await handOver(socketPath, rootSite, STATE);
   await request(socketPath, { method: 'POST', pathname: '/api/auth/logout', cookie: rootSite });
   assert.equal((await request(socketPath, { pathname: '/api/staff/me', cookie: admin })).status, 401);
+  const lateTrade = await callback(socketPath, late, STATE, `vr_staff_state_${STATE}=%2F`);
+  assert.equal(lateTrade.status, 302);
+  assert.equal(lateTrade.headers.location, '/api/staff/denied');
 });
 
 test('a moderator reviews and blocks for a while; numbers, address keys and roles take more', { skip }, async (t) => {
@@ -166,6 +203,11 @@ test('a moderator reviews and blocks for a while; numbers, address keys and role
   assert.equal((await putRole(root, 'mod', 'moderator')).status, 200);
   assert.equal((await putRole(root, 'root', 'moderator')).status, 409, 'nobody changes their own role');
   assert.equal((await putRole(root, 'nobody-here', 'admin')).status, 404);
+  // A blocked staff member's role can still be taken away.
+  assert.equal((await putRole(root, 'bob', 'moderator')).status, 200);
+  await pool.query(`UPDATE users SET blocked_at = now(), blocked_until = NULL WHERE id = $1`, [bobId]);
+  assert.equal((await putRole(root, 'bob', null)).status, 200);
+  await pool.query(`UPDATE users SET blocked_at = NULL WHERE id = $1`, [bobId]);
   const members = (await request(socketPath, { pathname: '/api/staff/members', cookie: root })).body;
   if (!Value.Check(StaffList, members)) throw new Error('no staff list');
   assert.deepEqual(
@@ -175,10 +217,10 @@ test('a moderator reviews and blocks for a while; numbers, address keys and role
       ['root', 'superadmin', true]
     ]
   );
-  const logged = await pool.query<{ action: string; role: string }>(
-    `SELECT action, details->>'role' AS role FROM admin_actions WHERE action = 'staff_role'`
+  const logged = await pool.query<{ role: string | null }>(
+    `SELECT details->>'role' AS role FROM admin_actions WHERE action = 'staff_role'`
   );
-  assert.deepEqual(logged.rows, [{ action: 'staff_role', role: 'moderator' }]);
+  assert.deepEqual(logged.rows.map((row) => String(row.role)).sort(), ['moderator', 'moderator', 'null']);
 
   const moderator = await staffCookie(socketPath, moderatorSite);
   assert.notEqual(moderator, '');
@@ -232,4 +274,51 @@ test('a moderator reviews and blocks for a while; numbers, address keys and role
     if (left > 0) await new Promise((resolve) => setTimeout(resolve, 100));
   }
   assert.equal(left, 0);
+});
+
+test('over HTTPS the admin cookies are kept to the admin host (__Host-)', { skip }, async (t) => {
+  const { socketPath, databaseUrl, beforeCleanup } = await startApiServer(t, {
+    prefix: 'voice-room-staff-secure-',
+    env: {
+      AUTH_RATE_LIMIT: '0',
+      PLATFORM_ADMIN_USER_IDS: ROOT_ID,
+      SITE_ORIGIN,
+      ADMIN_ORIGIN,
+      SESSION_COOKIE_SECURE: 'true'
+    }
+  });
+  const pool = new Pool({ connectionString: databaseUrl });
+  beforeCleanup(() => pool.end());
+  await pool.query(`INSERT INTO users (id, login, display_name, password_hash) VALUES ($1, 'root', 'Root', $2)`, [
+    ROOT_ID,
+    await hashPassword('password123')
+  ]);
+  const rootSite = cookieFrom(
+    (
+      await request(socketPath, {
+        method: 'POST',
+        pathname: '/api/auth/login',
+        body: { login: 'root', password: 'password123' }
+      })
+    ).setCookie
+  );
+
+  const visit = await request(socketPath, { pathname: '/api/staff/check', headers: { 'Sec-Fetch-Mode': 'navigate' } });
+  assert.ok(visit.setCookie.some((line) => line.startsWith('__Host-vr_staff_state_') && line.includes('Secure')));
+
+  const traded = await callback(
+    socketPath,
+    await handOver(socketPath, rootSite, STATE),
+    STATE,
+    `__Host-vr_staff_state_${STATE}=%2F`
+  );
+  const line = traded.setCookie.find((value) => value.startsWith('__Host-vr_staff=')) ?? '';
+  assert.ok(line.includes('Secure') && line.includes('Path=/') && !/Domain=/i.test(line), line);
+  const token = line.split(';')[0]?.split('=')[1] ?? '';
+  assert.equal(
+    (await request(socketPath, { pathname: '/api/staff/me', cookie: `__Host-vr_staff=${token}` })).status,
+    200
+  );
+  // The same token under the bare name, as a sibling subdomain could set it, is not taken.
+  assert.equal((await request(socketPath, { pathname: '/api/staff/me', cookie: `vr_staff=${token}` })).status, 401);
 });

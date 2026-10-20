@@ -17,9 +17,15 @@ import { failure } from '../../platform/http/http-kit.ts';
 import type { StaffActor, StaffService } from './staff.service.ts';
 import type { StaffAccountRow } from './staff.repository.ts';
 
-export const STAFF_COOKIE = 'vr_staff';
-const STATE_COOKIE = 'vr_staff_state';
+// Over HTTPS the names carry __Host-, which a browser keeps to this exact host:
+// no sibling subdomain can plant one of its own.
+const STAFF_COOKIE = 'vr_staff';
+// One per handoff, so admin tabs reopened together each come back signed in.
+const STATE_COOKIE = 'vr_staff_state_';
 const STATE_TTL_SECONDS = 300;
+const STATE_PATTERN = /^[0-9a-f-]{36}$/;
+
+export const staffCookieName = (secure: boolean) => (secure ? `__Host-${STAFF_COOKIE}` : STAFF_COOKIE);
 
 const SIGN_IN_REQUIRED = failure('Authentication required', { code: 'authentication_required' });
 const STAFF_SESSION_REQUIRED = failure('Admin app session required', { code: 'staff_session_required' });
@@ -47,35 +53,51 @@ export interface StaffRoutesDeps {
   openReports(): Promise<number>;
 }
 
-function cookie(name: string, value: string, maxAgeSeconds: number, secure: boolean, sameSite: 'Strict' | 'Lax') {
-  const parts = [`${name}=${encodeURIComponent(value)}`, 'Path=/', 'HttpOnly', `SameSite=${sameSite}`];
+// Lax, not Strict: a link to the admin app from another site (a messenger, a
+// mail) must arrive signed in, and Strict would withhold the cookie for the
+// whole redirect chain. Writes are origin-checked (hasSessionCookie) anyway.
+function cookie(name: string, value: string, maxAgeSeconds: number, secure: boolean) {
+  const parts = [`${name}=${encodeURIComponent(value)}`, 'Path=/', 'HttpOnly', 'SameSite=Lax'];
   parts.push(`Max-Age=${Math.max(0, Math.floor(maxAgeSeconds))}`);
   if (secure) parts.push('Secure');
   return parts.join('; ');
 }
 
+// The admin app's own addresses use only these; browsers read a backslash as a
+// slash ("/\host" is "//host"), so anything else sends the browser to the start.
+const PLAIN_PATH = /^\/(?![/\\])[\w\-./~%?=&+]*$/;
+
 /** A path on the admin app to come back to: only a plain local path is taken. */
 function returnPath(value: unknown): string {
-  return typeof value === 'string' && value.startsWith('/') && !value.startsWith('//') && !value.startsWith('/api/')
-    ? value.slice(0, 512)
-    : '/';
+  return typeof value === 'string' && PLAIN_PATH.test(value) && !value.startsWith('/api/') ? value.slice(0, 512) : '/';
 }
 
 /** The admin-app session behind a request, as the staff service reads it. */
-export function staffToken(req: Parameters<typeof parseCookies>[0]): string {
-  return parseCookies(req)[STAFF_COOKIE] || '';
+export function staffToken(req: Parameters<typeof parseCookies>[0], secure: boolean): string {
+  return parseCookies(req)[staffCookieName(secure)] || '';
+}
+
+/** A page load, as opposed to a script, a style or an image the page asks for. */
+function isPageLoad(headers: FastifyRequest['headers']): boolean {
+  const mode = headers['sec-fetch-mode'];
+  // Browsers without Fetch Metadata (older Safari, some webviews) still say they want HTML.
+  return mode ? mode === 'navigate' : (headers.accept ?? '').includes('text/html');
 }
 
 export function registerStaffRoutes(root: FastifyInstance, ctx: ApiContext, deps: StaffRoutesDeps): void {
   const app = root.withTypeProvider<TypeBoxTypeProvider>();
-  const stateCookie = (value: string, maxAge: number) => cookie(STATE_COOKIE, value, maxAge, deps.secureCookies, 'Lax');
+  const prefix = deps.secureCookies ? '__Host-' : '';
+  const staffCookie = staffCookieName(deps.secureCookies);
+  const stateCookie = (state: string, value: string, maxAge: number) =>
+    cookie(`${prefix}${STATE_COOKIE}${state}`, value, maxAge, deps.secureCookies);
+  const tokenOf = (request: FastifyRequest) => staffToken(request.raw, deps.secureCookies);
 
-  const refuse = createStaffActorResolver(ctx, deps.staff);
+  const refuse = createStaffActorResolver(ctx, deps.staff, deps.secureCookies);
   async function staffActor(
     request: FastifyRequest,
     reply: FastifyReply
   ): Promise<(StaffActor & { account: StaffAccountRow }) | null> {
-    const actor = await deps.staff.actor(staffToken(request.raw));
+    const actor = await deps.staff.actor(tokenOf(request));
     if (!actor) await refuse(request, reply);
     return actor;
   }
@@ -111,14 +133,14 @@ export function registerStaffRoutes(root: FastifyInstance, ctx: ApiContext, deps
   // Admin app, asked by Caddy (forward_auth) before anything on the subdomain is served.
   app.get('/api/staff/check', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
-    const actor = await deps.staff.actor(staffToken(request.raw));
+    const actor = await deps.staff.actor(tokenOf(request));
     if (actor) return reply.code(204).header('X-Staff-Role', actor.role).send();
     // Only a page load goes to the main site; a script or an image just gets the 404.
-    if (request.headers['sec-fetch-mode'] !== 'navigate') return reply.code(404).type('text/html').send(NOT_FOUND_PAGE);
+    if (!isPageLoad(request.headers)) return reply.code(404).type('text/html').send(NOT_FOUND_PAGE);
     const state = crypto.randomUUID();
     const back = returnPath(request.headers['x-forwarded-uri']);
     return reply
-      .header('Set-Cookie', stateCookie(`${state}|${back}`, STATE_TTL_SECONDS))
+      .header('Set-Cookie', stateCookie(state, back, STATE_TTL_SECONDS))
       .redirect(`${deps.siteOrigin}/api/staff/handoff?${new URLSearchParams({ state }).toString()}`, 302);
   });
 
@@ -135,15 +157,16 @@ export function registerStaffRoutes(root: FastifyInstance, ctx: ApiContext, deps
     },
     async (request, reply) => {
       reply.header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer');
-      const [expected = '', back = '/'] = (parseCookies(request.raw)[STATE_COOKIE] || '').split('|');
-      const state = request.query.state ?? '';
-      const session = expected && state === expected ? await deps.staff.exchange(request.query.code ?? '') : null;
-      const clearState = stateCookie('', 0);
+      const state = STATE_PATTERN.test(request.query.state ?? '') ? (request.query.state ?? '') : '';
+      // The state this browser was given at the check holds the page it was on.
+      const back = state ? parseCookies(request.raw)[`${prefix}${STATE_COOKIE}${state}`] : undefined;
+      const session = back === undefined ? null : await deps.staff.exchange(request.query.code ?? '');
+      const clearState = stateCookie(state || 'none', '', 0);
       if (!session) return reply.header('Set-Cookie', clearState).redirect('/api/staff/denied', 302);
       return reply
         .header('Set-Cookie', [
           clearState,
-          cookie(STAFF_COOKIE, session.token, session.maxAgeSeconds, deps.secureCookies, 'Strict')
+          cookie(staffCookie, session.token, session.maxAgeSeconds, deps.secureCookies)
         ])
         .redirect(returnPath(back), 302);
     }
@@ -160,10 +183,8 @@ export function registerStaffRoutes(root: FastifyInstance, ctx: ApiContext, deps
   });
 
   app.post('/api/staff/logout', async (request, reply) => {
-    await deps.staff.signOut(staffToken(request.raw));
-    return reply
-      .header('Set-Cookie', cookie(STAFF_COOKIE, '', 0, deps.secureCookies, 'Strict'))
-      .send({ ok: true as const });
+    await deps.staff.signOut(tokenOf(request));
+    return reply.header('Set-Cookie', cookie(staffCookie, '', 0, deps.secureCookies)).send({ ok: true as const });
   });
 
   app.get(
@@ -196,16 +217,22 @@ export function registerStaffRoutes(root: FastifyInstance, ctx: ApiContext, deps
 
 /**
  * For admin endpoints: the staff member behind the admin-app session. Without
- * one the answer says why: 403 for a signed-in account that is not staff, 401
- * otherwise (signed out, or staff that has not come through the handoff).
+ * one, a signed-in account that is not staff gets 403, and anyone else 401
+ * staff_session_required, which sends the admin app through the handoff. The
+ * main-site cookie never reaches the admin subdomain, so there an expired or
+ * signed-out admin session always gets the 401.
  */
-export function createStaffActorResolver(ctx: ApiContext, staff: Pick<StaffService, 'actor' | 'role'>) {
+export function createStaffActorResolver(
+  ctx: ApiContext,
+  staff: Pick<StaffService, 'actor' | 'role'>,
+  secureCookies: boolean
+) {
   return async function staffUserId(request: FastifyRequest, reply: FastifyReply): Promise<string | null> {
-    const actor = await staff.actor(staffToken(request.raw));
+    const actor = await staff.actor(staffToken(request.raw, secureCookies));
     if (actor) return actor.userId;
     const userId = (await ctx.resolveSession(request.raw))?.user?.id;
     if (userId && !(await staff.role(userId))) reply.code(403).send(STAFF_REQUIRED);
-    else reply.code(401).send(userId ? STAFF_SESSION_REQUIRED : SIGN_IN_REQUIRED);
+    else reply.code(401).send(STAFF_SESSION_REQUIRED);
     return null;
   };
 }

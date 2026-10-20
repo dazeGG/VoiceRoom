@@ -183,7 +183,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
   }
 
   // Admin endpoints answer the admin app's own session (domains/staff), never the main-site one.
-  const staffUserId = createStaffActorResolver(ctx, deps.domain.staff);
+  const staffUserId = createStaffActorResolver(ctx, deps.domain.staff, deps.config.SESSION_COOKIE_SECURE);
   if (deps.services.getStaffRepository()) {
     registerStaffRoutes(app, ctx, {
       staff: deps.domain.staff,

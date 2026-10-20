@@ -86,13 +86,13 @@ export function createStaffService(deps: StaffServiceDeps) {
     codes.delete(key);
     if (!entry || entry.expiresAt <= now() || !(await role(entry.userId))) return null;
     const token = randomToken();
-    await deps.repository().openSession({
+    const opened = await deps.repository().openSession({
       id: sha256(token),
       userId: entry.userId,
       mainSessionId: entry.mainSessionId,
       expiresAt: new Date(now() + STAFF_SESSION_TTL_MS)
     });
-    return { token, maxAgeSeconds: STAFF_SESSION_TTL_MS / 1000 };
+    return opened ? { token, maxAgeSeconds: STAFF_SESSION_TTL_MS / 1000 } : null;
   }
 
   /** Who is behind an admin-app session token, with the role they have now. */
@@ -112,10 +112,12 @@ export function createStaffService(deps: StaffServiceDeps) {
     return { user, role: actor.role, permissions: [...ROLE_PERMISSIONS[actor.role]], siteUrl: deps.siteOrigin };
   }
 
-  /** The ids of every staff account right now. */
-  async function memberIds(): Promise<string[]> {
+  /** The ids of every staff account right now, or of those whose role allows `permission`. */
+  async function memberIds(permission?: StaffPermission): Promise<string[]> {
     const accounts = await deps.repository().members(deps.namedSuperadminIds);
-    return accounts.filter((account) => roleOf(account)).map((account) => account.id);
+    return accounts
+      .filter((account) => (permission ? roleAllows(roleOf(account), permission) : roleOf(account)))
+      .map((account) => account.id);
   }
 
   async function list(actor: StaffActor): Promise<Omit<StaffList, 'ok'> | null> {

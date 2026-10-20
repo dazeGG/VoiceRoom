@@ -98,8 +98,8 @@ export function readApiConfig(env: Env = process.env) {
     // The main site and the admin app as origins; compose derives both from
     // DOMAIN. The admin app signs in by a handoff from one to the other. The
     // defaults are the local dev servers.
-    SITE_ORIGIN: cleanOrigin(env.SITE_ORIGIN) || 'http://localhost:5180',
-    ADMIN_ORIGIN: cleanOrigin(env.ADMIN_ORIGIN) || 'http://localhost:5181',
+    SITE_ORIGIN: cleanOrigin(env.SITE_ORIGIN) || 'http://127.0.0.1:5180',
+    ADMIN_ORIGIN: cleanOrigin(env.ADMIN_ORIGIN) || 'http://127.0.0.1:5181',
     REPORT_RATE_LIMIT: int('REPORT_RATE_LIMIT', 10, 0),
     REPORT_RATE_WINDOW_MS: int('REPORT_RATE_WINDOW_MS', 60000, 1000),
     CALL_FEEDBACK_RATE_LIMIT: int('CALL_FEEDBACK_RATE_LIMIT', 5, 0),
