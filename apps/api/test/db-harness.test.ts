@@ -5,6 +5,7 @@ import pg from 'pg';
 import { assertMigrationReady, runMigrations } from '../src/lib/migrate.ts';
 import { readDatabaseConfig } from '../src/lib/config.ts';
 import { createTestDatabase, lostTemplateRace } from './db-harness.ts';
+import { settleAll } from './helpers/settle.ts';
 
 // A pool resolves end() once its clients are out of the pool, before their
 // sockets have closed. On a loaded runner the goodbye leaves a moment later, so
@@ -103,11 +104,11 @@ test(
           created.push(scratch);
         }
         created.push(target);
-        const renames = await Promise.allSettled([
+        const renames = await settleAll([
           first.query(`ALTER DATABASE "${one}" RENAME TO "${target}"`),
           second.query(`ALTER DATABASE "${two}" RENAME TO "${target}"`)
         ]);
-        const losers = renames.flatMap((result): unknown[] => (result.status === 'rejected' ? [result.reason] : []));
+        const losers = renames.flatMap((result) => (result.ok ? [] : [result.error]));
         assert.equal(losers.length, 1, 'exactly one rename wins');
         assert.ok(lostTemplateRace(losers[0]), `the loser's error ${String(losers[0])} counts as a lost race`);
       }
