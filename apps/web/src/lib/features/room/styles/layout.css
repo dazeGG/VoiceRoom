@@ -207,7 +207,7 @@ body[data-lobby-embedded='true'] .room-embedded-shell .topbar {
 }
 
 .status-pill[data-state='connected'] .status-dot {
-  background: var(--vr-online);
+  background: var(--vr-success);
 }
 
 .status-pill[data-state='error'] .status-dot {
