@@ -332,7 +332,7 @@ test('a right-click on a picture offers to copy and save it; on the text it does
     height: 30,
     state: 'ready',
     url: null
-  };
+  } as const;
   const withPicture = roomMessage('m4', 'ada', 'смотри', { attachments: [picture] });
   const { fetchMock } = stubFetch({
     'GET /api/rooms/room/chat': { body: { ok: true, roomId: 'room', messages: [...history, withPicture] } },
@@ -340,7 +340,8 @@ test('a right-click on a picture offers to copy and save it; on the text it does
     'POST /api/rooms/room/read': { body: { ok: true } }
   });
   // The picture itself comes as a PNG, which goes to the clipboard as it is.
-  const answerJson = fetchMock.getMockImplementation()!;
+  const answerJson = fetchMock.getMockImplementation();
+  if (!answerJson) throw new Error('the fetch stub has no implementation');
   fetchMock.mockImplementation(async (input, init) =>
     input === '/api/media/attachments/att-1/processed'
       ? new Response(new Uint8Array([137, 80, 78, 71]), { headers: { 'content-type': 'image/png' } })
@@ -366,7 +367,8 @@ test('a right-click on a picture offers to copy and save it; on the text it does
   expect(onText).not.toContain('Скопировать изображение');
   expect(onText).not.toContain('Скачать изображение');
 
-  const image = document.querySelector<HTMLElement>('[data-attachment-id="att-1"] img')!;
+  const image = document.querySelector('[data-attachment-id="att-1"] img');
+  if (!image) throw new Error('the picture is not in the chat');
   await userEvent.pointer({ keys: '[MouseRight]', target: image });
   await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: /Скачать изображение/ }));
   expect(clicked.at(-1)?.getAttribute('href')).toBe('/api/media/attachments/att-1/processed?download=1');
