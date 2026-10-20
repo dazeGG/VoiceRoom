@@ -83,9 +83,17 @@
   // Rooms shown inside the lobby see the account's friends through this.
   provideRoomSocial(lobby.roomSocial);
 
-  let { user, loggingOut, onLogout, onToast } = $props<{
+  let {
+    user,
+    loggingOut,
+    createRoomOnOpen = false,
+    onLogout,
+    onToast
+  } = $props<{
     user: AuthUser | null;
     loggingOut: boolean;
+    /** The account was just made for a permanent room: open the new-room dialog. */
+    createRoomOnOpen?: boolean;
     onLogout: () => void;
     onToast: (message: string, options?: ToastOptions) => void;
   }>();
@@ -132,6 +140,7 @@
   const prompts = new AccountPrompts({
     user: () => user,
     voiceActive: () => Boolean(connectedVoiceRoomId || roomNavigation.joinIntentRoomId),
+    lobbyDialogOpen: () => createDialogOpen,
     onToast: (message, options) => onToast(message, options)
   });
 
@@ -195,6 +204,7 @@
 
   onMount(() => {
     void rooms.refresh();
+    if (createRoomOnOpen) createDialogOpen = true;
     prompts.start();
     const teardownNotifications = notifications.start();
     const teardownFriends = user ? lobby.init(user.id, user.doNotDisturb, user.presenceStatus) : () => {};

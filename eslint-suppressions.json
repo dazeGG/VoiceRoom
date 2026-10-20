@@ -683,11 +683,8 @@
     }
   },
   "apps/web/src/lib/features/home/HomePage.svelte": {
-    "@typescript-eslint/no-redundant-type-constituents": {
-      "count": 2
-    },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 1
@@ -859,11 +856,8 @@
     }
   },
   "apps/web/src/lib/features/room/components/LeaveScreen.svelte": {
-    "@typescript-eslint/no-redundant-type-constituents": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 1
@@ -880,11 +874,8 @@
     }
   },
   "apps/web/src/lib/features/room/components/RoomCtaSlot.svelte": {
-    "@typescript-eslint/no-redundant-type-constituents": {
-      "count": 1
-    },
     "@typescript-eslint/no-unsafe-assignment": {
-      "count": 2
+      "count": 1
     },
     "@typescript-eslint/no-unsafe-return": {
       "count": 1

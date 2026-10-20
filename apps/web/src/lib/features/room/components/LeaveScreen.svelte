@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import AuthDialog, { type AuthMode } from '$lib/features/auth/AuthDialog.svelte';
+  import AuthDialog from '$lib/features/auth/AuthDialog.svelte';
+  import type { AuthMode } from '$lib/features/auth/auth-mode';
   import { addRoomByCode } from '$lib/api/auth';
   import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
   import { Button } from '$lib/shared/ui';

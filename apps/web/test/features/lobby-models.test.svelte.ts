@@ -44,11 +44,13 @@ test('the app prompt waits for the other dialogs and a quiet call, and opens onc
   vi.spyOn(window.navigator, 'userAgent', 'get').mockReturnValue('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
   stubFetch({});
   let voiceActive = true;
+  let lobbyDialogOpen = false;
   let prompts!: AccountPrompts;
   const stop = $effect.root(() => {
     prompts = new AccountPrompts({
       user: () => authUser({ hasUsedDesktopApp: false, appPromptSeen: false }),
       voiceActive: () => voiceActive,
+      lobbyDialogOpen: () => lobbyDialogOpen,
       onToast: vi.fn()
     });
   });
@@ -63,9 +65,17 @@ test('the app prompt waits for the other dialogs and a quiet call, and opens onc
     expect(prompts.appPromptOpen).toBe(false);
 
     voiceActive = false;
+    lobbyDialogOpen = true;
     prompts.whatsNewOpen = true;
     flushSync();
     prompts.whatsNewOpen = false;
+    flushSync();
+    expect(prompts.appPromptOpen).toBe(false);
+
+    lobbyDialogOpen = false;
+    prompts.loginAlertOpen = true;
+    flushSync();
+    prompts.loginAlertOpen = false;
     flushSync();
     expect(prompts.appPromptOpen).toBe(true);
 
@@ -81,7 +91,12 @@ test('settings open on a tab, and security opens with what to highlight', () => 
   stubFetch({});
   let prompts!: AccountPrompts;
   const stop = $effect.root(() => {
-    prompts = new AccountPrompts({ user: () => null, voiceActive: () => false, onToast: vi.fn() });
+    prompts = new AccountPrompts({
+      user: () => null,
+      voiceActive: () => false,
+      lobbyDialogOpen: () => false,
+      onToast: vi.fn()
+    });
   });
   try {
     prompts.openSecuritySettings('recovery-codes');
