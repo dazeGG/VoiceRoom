@@ -1,0 +1,256 @@
+.rooms-section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.rooms-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.rooms-head h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.rooms-quiet {
+  margin: 0;
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}
+
+.rooms-error {
+  margin: 0;
+  color: var(--vr-danger);
+}
+
+.rooms-live,
+.rooms-peers {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rooms-live {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  align-items: start;
+  gap: 12px;
+}
+
+.rooms-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--vr-line);
+  border-radius: 14px;
+  background: var(--vr-surface);
+}
+
+.rooms-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rooms-card-name {
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: var(--vr-text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.rooms-card-name:hover {
+  color: var(--vr-accent);
+}
+
+.rooms-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--vr-line);
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}
+
+.rooms-card-owner {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.rooms-client {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.rooms-code {
+  font-family: var(--font-mono);
+  font-weight: 400;
+}
+
+.rooms-origin {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.rooms-chip {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--vr-surface-3);
+  color: var(--vr-text-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.rooms-table .rooms-chip {
+  margin-left: 8px;
+}
+
+.rooms-peers {
+  gap: 2px;
+}
+
+.rooms-peer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-height: 36px;
+  padding: 2px 0;
+}
+
+.rooms-peer-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  color: var(--vr-danger);
+}
+
+.rooms-peer-state [data-tone='accent'] {
+  color: var(--vr-accent);
+}
+
+.rooms-guest {
+  color: var(--vr-text);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.rooms-account,
+.rooms-room {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--vr-text);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.rooms-account:hover,
+.rooms-room:hover {
+  text-decoration: underline;
+}
+
+.rooms-login {
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.rooms-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--vr-accent-line);
+  border-radius: 999px;
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rooms-pager {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rooms-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--vr-line);
+  border-radius: 14px;
+  background: var(--vr-surface);
+}
+
+.rooms-table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.rooms-table th,
+.rooms-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--vr-line);
+  color: var(--vr-text-2);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.rooms-table th {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  color: var(--vr-text-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rooms-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.rooms-table .is-number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}

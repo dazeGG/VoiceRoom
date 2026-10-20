@@ -1,0 +1,258 @@
+.card-top {
+  margin: -6px 0 -10px -10px;
+}
+
+.card-quiet {
+  margin: 0;
+  color: var(--vr-text-3);
+  font-size: 13px;
+}
+
+.card-error {
+  margin: 0;
+  color: var(--vr-danger);
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.card-avatar {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.card-dot {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  width: 14px;
+  height: 14px;
+  border: 3px solid var(--vr-bg);
+  border-radius: 50%;
+  background: var(--vr-success);
+}
+
+.card-identity {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.card-identity h2 {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+
+.card-login {
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.card-chip {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.card-chip[data-tone='accent'] {
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+}
+
+.card-chip[data-tone='danger'] {
+  background: var(--vr-danger-soft);
+  color: var(--vr-danger);
+}
+
+.card-chip[data-tone='success'] {
+  background: var(--vr-surface-2);
+  color: var(--vr-success);
+}
+
+.card-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--vr-danger-soft);
+  color: var(--vr-text);
+  font-size: 13.5px;
+  overflow-wrap: anywhere;
+}
+
+.card-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 125px), 1fr));
+  gap: 10px;
+}
+
+.card-tile {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--vr-line);
+  border-radius: 14px;
+  background: var(--vr-surface);
+}
+
+.card-tile-label {
+  color: var(--vr-text-2);
+  font-size: 12.5px;
+}
+
+.card-tile-value {
+  color: var(--vr-text);
+  font-size: 18px;
+  white-space: nowrap;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.card-tile-value[data-alert='true'] {
+  color: var(--vr-danger);
+}
+
+.card-tile-hint {
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.card-charts,
+.card-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: 12px;
+}
+
+.card-box {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--vr-line);
+  border-radius: 14px;
+  background: var(--vr-surface);
+}
+
+.card-box h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.card-list,
+.card-log {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13.5px;
+}
+
+.card-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--vr-text);
+}
+
+.card-list li span {
+  flex: none;
+  color: var(--vr-text-3);
+}
+
+.card-official {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--vr-accent);
+}
+
+.card-official span {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  color: var(--vr-text);
+  font-size: 13.5px;
+}
+
+.card-official small {
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}
+
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ui-button.card-danger {
+  color: var(--vr-danger);
+}
+
+.card-log li {
+  display: grid;
+  gap: 1px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--vr-line);
+}
+
+.card-log li:last-child {
+  border-bottom: 0;
+}
+
+.card-log-what {
+  color: var(--vr-text);
+  font-weight: 600;
+}
+
+.card-log-reason {
+  color: var(--vr-text-2);
+  overflow-wrap: anywhere;
+}
+
+.card-log-meta {
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.card-confirm {
+  display: grid;
+  gap: 14px;
+}
+
+.card-confirm p {
+  margin: 0;
+  color: var(--vr-text-2);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.card-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
