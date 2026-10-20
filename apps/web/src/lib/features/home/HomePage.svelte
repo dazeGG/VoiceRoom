@@ -54,6 +54,12 @@
     void syncPushNotificationState(user?.id ?? null);
   });
 
+  // The new-room dialog greets only the sign-in made from the offer; after a
+  // sign-out the page stays, and a later plain sign-in opens the bare lobby.
+  $effect(() => {
+    if (!user) createRoomInLobby = false;
+  });
+
   onMount(() => {
     document.body.dataset.screen = 'start';
     void loadSession().catch(() => {

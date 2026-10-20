@@ -6,7 +6,7 @@ import { cleanup, render, screen } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import HomePage from '../../src/lib/features/home/HomePage.svelte';
-import { session } from '../../src/lib/features/auth/session.svelte';
+import { session, setUser } from '../../src/lib/features/auth/session.svelte';
 import {
   GUEST_ROOM_CREATED_KEY,
   PERMANENT_ROOM_OFFER_DISMISSED_KEY
@@ -118,4 +118,11 @@ test('an account made from the offer lands on the new-room dialog, permanent by 
   expect(screen.getByRole('tab', { name: /Постоянная/ }).getAttribute('aria-selected')).toBe('true');
   expect(calls.find((call) => call.url === '/api/auth/register')?.body).toMatchObject({ login: 'ada' });
   expect(roomCalls(calls)).toEqual([]);
+
+  // Signed out and back in without the offer: the lobby opens bare.
+  setUser(null);
+  expect(await screen.findByRole('button', { name: /Создать комнату/ })).toBeTruthy();
+  setUser(user);
+  await screen.findByRole('button', { name: 'Создать комнату' }, { timeout: 5000 });
+  expect(screen.queryByRole('dialog', { name: 'Новая комната' })).toBeNull();
 });
