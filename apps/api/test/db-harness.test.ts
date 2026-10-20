@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import crypto from 'node:crypto';
 import pg from 'pg';
 import { assertMigrationReady, runMigrations } from '../src/lib/migrate.ts';
-import { createTestDatabase } from './db-harness.ts';
+import { readDatabaseConfig } from '../src/lib/config.ts';
+import { createTestDatabase, lostTemplateRace } from './db-harness.ts';
 
 // A pool resolves end() once its clients are out of the pool, before their
 // sockets have closed. On a loaded runner the goodbye leaves a moment later, so
@@ -76,5 +78,48 @@ test(
     await first.pool.query(`INSERT INTO rooms (id, creator_ip) VALUES ('harness-room', '')`);
     const { rowCount } = await second.pool.query(`SELECT id FROM rooms WHERE id = 'harness-room'`);
     assert.equal(rowCount, 0);
+  }
+);
+
+// Test processes build the migrated template at the same time and keep the
+// first one renamed into place. Two renames that run at once fail on the
+// catalog's unique index (23505) rather than with duplicate_database (42P04);
+// the loser must recognise either as a lost race, or its test fails.
+test(
+  'a template rename that loses to a concurrent one is recognised as a lost race',
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    const { url } = readDatabaseConfig({ DATABASE_URL: process.env.TEST_DATABASE_URL });
+    const name = () => `voice_room_race_${crypto.randomBytes(6).toString('hex')}`;
+    const first = new pg.Pool({ connectionString: url, max: 1 });
+    const second = new pg.Pool({ connectionString: url, max: 1 });
+    const created: string[] = [];
+    try {
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const target = name();
+        const [one, two] = [name(), name()];
+        for (const scratch of [one, two]) {
+          await first.query(`CREATE DATABASE "${scratch}"`);
+          created.push(scratch);
+        }
+        created.push(target);
+        const renames = await Promise.allSettled([
+          first.query(`ALTER DATABASE "${one}" RENAME TO "${target}"`),
+          second.query(`ALTER DATABASE "${two}" RENAME TO "${target}"`)
+        ]);
+        const losers = renames.flatMap((result): unknown[] => (result.status === 'rejected' ? [result.reason] : []));
+        assert.equal(losers.length, 1, 'exactly one rename wins');
+        assert.ok(lostTemplateRace(losers[0]), `the loser's error ${String(losers[0])} counts as a lost race`);
+      }
+      // What a CI runner got when both renames ran at once (CI run 39473397319).
+      const catalogRace = Object.assign(
+        new Error('duplicate key value violates unique constraint "pg_database_datname_index"'),
+        { code: '23505' }
+      );
+      assert.ok(lostTemplateRace(catalogRace));
+    } finally {
+      for (const db of created) await first.query(`DROP DATABASE IF EXISTS "${db}"`).catch(() => {});
+      await Promise.all([first.end(), second.end()]);
+    }
   }
 );
