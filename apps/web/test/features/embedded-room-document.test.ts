@@ -5,7 +5,7 @@ import { afterEach, expect, test } from 'vitest';
 import { syncEmbeddedRoomDocument } from '../../src/lib/features/home/model/embedded-room-document.ts';
 
 afterEach(() => {
-  for (const key of Object.keys(document.body.dataset)) delete document.body.dataset[key];
+  for (const name of document.body.getAttributeNames()) document.body.removeAttribute(name);
 });
 
 test('coming back to a room with a stream on its stage brings the stream layout back', () => {
