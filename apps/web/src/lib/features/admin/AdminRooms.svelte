@@ -29,6 +29,7 @@
   import AdminNotice from './AdminNotice.svelte';
   import { formatCount, formatDuration, formatSince, formatTimeSpan } from './format';
   import { loadFailure, type LoadFailure } from './load-state';
+  import { deviceLabel, shortGuestId, shortIpKey } from './origin';
 
   let { onOpenAccount }: { onOpenAccount: (accountId: string) => void } = $props();
 
@@ -126,6 +127,21 @@
   </button>
 {/snippet}
 
+<!-- The device and the place, never the address: equal ip· keys are the same address. -->
+{#snippet origin(seat: Pick<RoomStay, 'client' | 'os' | 'browser' | 'guestId' | 'ipKey' | 'location'>)}
+  {@const device = deviceLabel(seat)}
+  {#if device || seat.location || seat.ipKey || seat.guestId}
+    <span class="rooms-origin">
+      {#if device}<span>{device}</span>{/if}
+      {#if seat.location}<span>{seat.location}</span>{/if}
+      {#if seat.ipKey}<span class="rooms-code" title={`Ключ адреса ${seat.ipKey}`}>{shortIpKey(seat.ipKey)}</span>{/if}
+      {#if seat.guestId}<span class="rooms-code" title={`Браузер гостя ${seat.guestId}`}
+          >{shortGuestId(seat.guestId)}</span
+        >{/if}
+    </span>
+  {/if}
+{/snippet}
+
 <section class="rooms-section" aria-labelledby="rooms-live-title">
   <header class="rooms-head">
     <h2 id="rooms-live-title">Сейчас в звонках</h2>
@@ -187,6 +203,7 @@
                   {@const client = CLIENTS[peer.client]}
                   <span class="rooms-client"><client.icon size={13} aria-hidden="true" />{client.label}</span>
                 {/if}
+                {@render origin(peer)}
                 <span class="rooms-peer-state">
                   {#if peer.muted}<span title="Микрофон выключен" aria-label="Микрофон выключен"
                       ><MicOff size={14} aria-hidden="true" /></span
@@ -237,6 +254,7 @@
             <th scope="col" class="is-number">Сколько</th>
             <th scope="col">Комната</th>
             <th scope="col">Кто</th>
+            <th scope="col">Откуда</th>
           </tr>
         </thead>
         <tbody>
@@ -258,8 +276,12 @@
                 {#if stay.roomName === null}<span class="rooms-chip">удалена</span>{/if}
               </td>
               <td>
-                {#if stay.account}{@render accountLink(stay.account)}{:else}<span class="rooms-quiet">гость</span>{/if}
+                {#if stay.account}{@render accountLink(stay.account)}{:else if stay.guestName}<span class="rooms-guest"
+                    ><EmojiText text={stay.guestName} /></span
+                  >
+                  <span class="rooms-chip">гость</span>{:else}<span class="rooms-quiet">гость</span>{/if}
               </td>
+              <td>{@render origin(stay)}</td>
             </tr>
           {/each}
         </tbody>
@@ -403,6 +425,15 @@
   .rooms-code {
     font-family: var(--font-mono);
     font-weight: 400;
+  }
+
+  .rooms-origin {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 2px 8px;
+    color: var(--vr-text-3);
+    font-size: 12px;
   }
 
   .rooms-chip {

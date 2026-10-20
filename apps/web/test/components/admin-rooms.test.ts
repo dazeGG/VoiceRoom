@@ -55,7 +55,12 @@ function kitchen(): LiveRoom {
         muted: true,
         deafened: false,
         screen: false,
-        client: 'desktop_app'
+        client: 'desktop_app',
+        os: 'Windows',
+        browser: 'VoiceRoom Desktop',
+        guestId: null,
+        ipKey: '0123456789abcdef',
+        location: 'Москва, Россия'
       },
       {
         peerId: 'p-guest',
@@ -66,7 +71,12 @@ function kitchen(): LiveRoom {
         muted: false,
         deafened: false,
         screen: true,
-        client: 'mobile'
+        client: 'mobile',
+        os: 'iOS',
+        browser: 'Safari',
+        guestId: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b',
+        ipKey: 'fedcba9876543210',
+        location: null
       }
     ]
   };
@@ -79,6 +89,13 @@ function stay(id: string, overrides: Partial<RoomStay> = {}): RoomStay {
     roomName: 'Кухня',
     isStatic: true,
     account: null,
+    guestName: null,
+    guestId: null,
+    client: null,
+    os: null,
+    browser: null,
+    ipKey: null,
+    location: null,
     joinedAt: Date.now() - 2 * 60 * MINUTE,
     leftAt: Date.now() - 60 * MINUTE,
     ...overrides
@@ -237,4 +254,45 @@ test('a stay shows when it ended next to when it began, and its length in hours 
 test('the rooms tab has its own address', () => {
   expect(adminPath('rooms')).toBe('/admin/rooms');
   expect(adminLocationFromPath('/admin/rooms')).toEqual({ tab: 'rooms', accountId: null });
+});
+
+test('each seat says its device and where from, by place and address key, never the address', async () => {
+  stubApi({
+    'GET /api/admin/rooms': () => live([kitchen()]),
+    'GET /api/admin/rooms/history': () =>
+      history([
+        stay('s-guest', {
+          guestName: 'Петя',
+          guestId: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b',
+          client: 'browser',
+          os: 'Windows',
+          browser: 'Chrome',
+          ipKey: 'fedcba9876543210',
+          location: 'Казань, Россия'
+        })
+      ])
+  });
+  render(AdminPanel, { props: { tab: 'rooms' } });
+
+  // The live card comes first; the history row names the room too.
+  const [cardTitle] = await screen.findAllByRole('button', { name: 'Кухня' });
+  const card = cardTitle?.closest('li');
+  if (!(card instanceof HTMLElement)) throw new Error('no room card');
+  const [alicePeer, guestPeer] = within(card).getAllByRole('listitem');
+  if (!alicePeer || !guestPeer) throw new Error('two people expected');
+  // The desktop app names only its system; a browser names system and browser.
+  expect(within(alicePeer).getByText('Windows')).toBeTruthy();
+  expect(within(alicePeer).getByText('Москва, Россия')).toBeTruthy();
+  expect(within(alicePeer).getByText('ip·012345')).toBeTruthy();
+  expect(within(guestPeer).getByText('iOS · Safari')).toBeTruthy();
+  expect(within(guestPeer).getByText('#6f1c2a')).toBeTruthy();
+
+  const table = await screen.findByRole('table');
+  const row = within(table).getAllByRole('row')[1];
+  if (!row) throw new Error('no history row');
+  expect(within(row).getByText('Петя')).toBeTruthy();
+  expect(within(row).getByText('Windows · Chrome')).toBeTruthy();
+  expect(within(row).getByText('Казань, Россия')).toBeTruthy();
+  // The same address key live and in the history: the guest came from the same address.
+  expect(within(row).getByText('ip·fedcba')).toBeTruthy();
 });
