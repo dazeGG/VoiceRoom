@@ -1,6 +1,7 @@
-// What the "how was the call?" tags say, in the question and in the admin panel.
+// What the "how was the call?" tags say, in the question after a call on the
+// main site and in the admin app's feedback section.
 
-import type { CallFeedbackTag } from '$lib/api/feedback';
+import type { CallFeedbackTag } from './contracts/feedback.ts';
 
 export const CALL_FEEDBACK_TAG_LABELS: Record<CallFeedbackTag, string> = {
   sound: 'Чистый звук',

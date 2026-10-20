@@ -43,7 +43,8 @@
     "./contracts/feedback": "./src/contracts/feedback.ts",
     "./contracts/admin": "./src/contracts/admin.ts",
     "./contracts/staff": "./src/contracts/staff.ts",
-    "./report-labels": "./src/report-labels.ts"
+    "./report-labels": "./src/report-labels.ts",
+    "./feedback-labels": "./src/feedback-labels.ts"
   },
   "scripts": {
     "check": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
