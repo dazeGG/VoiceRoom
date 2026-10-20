@@ -32,6 +32,9 @@
     onReport
   }: {
     open: boolean;
+    /** The picture the menu was opened on; its rows appear only when given. */
+    onCopyImage?: (() => void) | undefined;
+    onDownloadImage?: (() => void) | undefined;
     x: number;
     y: number;
     quickReactions?: readonly string[];
@@ -47,9 +50,6 @@
     onOpenReactionPicker?: (anchor: EventTarget | null) => void;
     onReply?: () => void;
     onCopy?: () => void;
-    /** The picture the menu was opened on; its rows appear only when given. */
-    onCopyImage?: () => void;
-    onDownloadImage?: () => void;
     onTogglePin?: () => void;
     onEdit?: () => void;
     onDelete?: () => void;
