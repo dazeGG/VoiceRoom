@@ -158,6 +158,23 @@ test('an administrator sees who is in voice now and the stays before, a page at 
   const malformed = await request(socketPath, { pathname: '/api/admin/rooms/history?after=yesterday', cookie: admin });
   assert.equal(malformed.status, 400);
 
+  // A temporary room has no name but is not gone; a deleted room is gone though its row still has a name.
+  await pool.query(
+    `INSERT INTO rooms (id, creator_ip, is_static, name, deleted_at)
+     VALUES ('unnamed-tmp', '', false, '', NULL), ('closed-room', '', true, 'Закрытая', now())`
+  );
+  await pool.query(
+    `INSERT INTO voice_sessions (room_id, user_id, joined_at, left_at)
+     VALUES ('unnamed-tmp', NULL, now() - interval '3 hours', now() - interval '2 hours'),
+            ('closed-room', NULL, now() - interval '3 hours', now() - interval '2 hours')`
+  );
+  const roomNameOf = async (roomId: string) =>
+    (
+      await request<RoomHistory>(socketPath, { pathname: `/api/admin/rooms/history?roomId=${roomId}`, cookie: admin })
+    ).body.stays.map((stay) => stay.roomName);
+  assert.deepEqual(await roomNameOf('unnamed-tmp'), ['']);
+  assert.deepEqual(await roomNameOf('closed-room'), [null]);
+
   aliceWs.ws.close();
   guestWs.ws.close();
 });

@@ -107,6 +107,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
         's.joined_at',
         's.left_at',
         'r.name as room_name',
+        'r.deleted_at as room_deleted_at',
         'r.is_static',
         'u.id',
         'u.login',
@@ -134,7 +135,8 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
       stays: rows.slice(0, ROOM_HISTORY_PAGE_SIZE).map((row) => ({
         id: row.stay_id,
         roomId: row.room_id ?? '',
-        roomName: row.room_name,
+        // A temporary room has no name, so only a missing or deleted row means the room is gone.
+        roomName: row.room_deleted_at === null ? row.room_name : null,
         isStatic: row.is_static,
         account: account(row),
         joinedAt: new Date(row.joined_at).getTime(),
