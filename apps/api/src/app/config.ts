@@ -117,6 +117,17 @@ export function readApiConfig(env: Env = process.env) {
 
 export type ApiConfig = ReturnType<typeof readApiConfig>;
 
+// The secret behind the keys stored instead of IP addresses (lib/ip-key.ts).
+// It is drawn from the cursor keys, which production always has, under a label
+// of its own: no extra setting, and the same keys across restarts and deploys.
+export function resolveIpKeySecret({
+  env = process.env,
+  fallbackGateSecret = ''
+}: { env?: NodeJS.ProcessEnv; fallbackGateSecret?: string } = {}): string {
+  const cursorKeys = resolveCursorHmacKeys({ context: 'ip-key', env, fallbackGateSecret });
+  return crypto.createHash('sha256').update(`voice-room-ip-key:${cursorKeys}`).digest('hex');
+}
+
 // The keys that sign history and membership cursors: configured in
 // production, derived from the gate secret or a development seed elsewhere.
 export function resolveCursorHmacKeys({

@@ -12,6 +12,7 @@ import {
   type RoomHistoryQuery
 } from '@voice-room/shared/contracts/admin';
 import type { PresencePeer } from '../rooms/room-views.ts';
+import type { DescribeAddress } from '../rooms/voice-session.repository.ts';
 import { avatarColorForPeerId } from '../rooms/avatar-color.ts';
 import type { AdminRoomsRepository } from './admin-rooms.repository.ts';
 import { isPlatformAdmin } from './admin.policy.ts';
@@ -21,6 +22,8 @@ export interface AdminRoomsServiceDeps {
   /** The live presence roster: every room the API holds, empty ones too. */
   presenceRooms(): Iterable<{ id: string; peers: Map<string, PresencePeer> }>;
   repository(): Pick<AdminRoomsRepository, 'rooms' | 'accounts' | 'history'>;
+  /** Where a peer came from without its address: the keyed hash and the city. */
+  describeAddress: DescribeAddress;
 }
 
 type Payload<T> = Omit<T, 'ok'>;
@@ -48,6 +51,14 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
     const roomById = new Map(rows.map((row) => [row.id, row]));
     const accountById = new Map<string, RoomAccount>(accounts.map((account) => [account.id, account]));
 
+    const origins = new Map(
+      await Promise.all(
+        occupied.flatMap((room) =>
+          [...room.peers.values()].map(async (peer) => [peer, await deps.describeAddress(peer.ip ?? '')] as const)
+        )
+      )
+    );
+
     const rooms = occupied.map((room): LiveRoom => {
       const peers = [...room.peers.values()]
         .map((peer): LiveRoomPeer => ({
@@ -59,7 +70,12 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
           muted: Boolean(peer.muted),
           deafened: Boolean(peer.deafened),
           screen: Boolean(peer.screen),
-          client: peer.client ?? null
+          client: peer.client ?? null,
+          os: peer.os ?? '',
+          browser: peer.browser ?? '',
+          guestId: (!peer.accountUserId && peer.guestId) || null,
+          ipKey: origins.get(peer)?.ipKey ?? null,
+          location: origins.get(peer)?.location || null
         }))
         .sort((a, b) => (a.joinedAt ?? Infinity) - (b.joinedAt ?? Infinity));
       const row = roomById.get(room.id);

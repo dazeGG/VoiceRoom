@@ -353,6 +353,25 @@ export const RoomAccount = Type.Object({
 export type RoomAccount = Static<typeof RoomAccount>;
 
 /** Someone in a room's voice now: an account, or a guest known only by the name given to the room. */
+/** The desktop app, a phone or a browser on a computer. */
+const ClientKindSchema = Type.Union([Type.Literal('desktop_app'), Type.Literal('mobile'), Type.Literal('browser')]);
+
+/**
+ * Where someone came from, without their address: `ipKey` is a keyed hash of the
+ * IP (the same address always gives the same key, and the key never gives the
+ * address back), `location` the city and country of that address.
+ */
+const NetworkOrigin = {
+  ipKey: Nullable(Type.String()),
+  location: Nullable(Type.String())
+};
+
+/** The device a socket said it was, from its user agent; empty when it did not say. */
+const DeviceInfo = {
+  os: Type.String(),
+  browser: Type.String()
+};
+
 export const LiveRoomPeer = Type.Object({
   peerId: Type.String(),
   name: Type.String(),
@@ -364,7 +383,11 @@ export const LiveRoomPeer = Type.Object({
   deafened: Type.Boolean(),
   screen: Type.Boolean(),
   /** The desktop app, a phone or a browser; null when the socket sent no user agent. */
-  client: Nullable(Type.Union([Type.Literal('desktop_app'), Type.Literal('mobile'), Type.Literal('browser')]))
+  client: Nullable(ClientKindSchema),
+  ...DeviceInfo,
+  /** The lasting id of a guest's browser; null for an account or a guest that sent none. */
+  guestId: Nullable(Type.String()),
+  ...NetworkOrigin
 });
 export type LiveRoomPeer = Static<typeof LiveRoomPeer>;
 
@@ -403,8 +426,20 @@ export const RoomStay = Type.Object({
   /** Null when the room is gone: temporary rooms are removed once empty. Empty for an unnamed temporary room. */
   roomName: Nullable(Type.String()),
   isStatic: Nullable(Type.Boolean()),
-  /** Null for a guest; a guest's name is not kept. */
+  /** Null for a guest. */
   account: Nullable(RoomAccount),
+  /** The name a guest gave; null for an account and for stays recorded before guests' names were kept. */
+  guestName: Nullable(Type.String()),
+  guestId: Nullable(Type.String()),
+  /**
+   * The client, device and origin of the socket that held the seat. Null for stays
+   * recorded before they were kept; the guest fields and the origin are cleared
+   * together with the room after VOICE_HISTORY_KEEP_DAYS.
+   */
+  client: Nullable(ClientKindSchema),
+  os: Nullable(Type.String()),
+  browser: Nullable(Type.String()),
+  ...NetworkOrigin,
   joinedAt: Type.Number(),
   leftAt: Type.Number()
 });

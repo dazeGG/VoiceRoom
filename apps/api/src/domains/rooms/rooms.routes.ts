@@ -73,6 +73,8 @@ export interface RoomRoutesDeps {
   invalidateRecipientCache(roomId: string): void;
   createLimiter: RateLimiter;
   pow: { verify(ip: string, proof: unknown): PowVerdict };
+  /** The keyed hash a room keeps of its creator's address (lib/ip-key.ts), never the address. */
+  ipKeyOf(ip: string): string | null;
   maxRooms: number;
   maxRoomPeers: number;
 }
@@ -128,7 +130,7 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
       if (isStatic && !ownerId) return reply.code(401).send(STATIC_ROOM_NEEDS_LOGIN);
 
       const created = await deps.rooms.createRoom({
-        creatorIp: clientIp,
+        creatorIp: deps.ipKeyOf(clientIp) ?? '',
         isStatic,
         ownerId,
         name: cleanRoomName(request.body.name)

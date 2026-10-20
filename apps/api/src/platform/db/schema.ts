@@ -576,9 +576,16 @@ export interface VoiceroomMigrationGuard {
 }
 
 export interface VoiceSessions {
+  browser: string | null;
+  client: string | null;
+  guest_id: string | null;
+  guest_name: string | null;
   id: Generated<string>;
+  ip_key: string | null;
   joined_at: Timestamp;
   left_at: Timestamp;
+  location: string | null;
+  os: string | null;
   room_id: string | null;
   user_id: string | null;
 }

@@ -35,7 +35,8 @@ import { createMessageVisibilityService } from '../domains/messaging/message-vis
 import { createRoomMessageRepository } from '../domains/messaging/room-message.repository.ts';
 import { createActiveBanService } from '../domains/moderation/active-ban.service.ts';
 import { createCursorCodec } from '../platform/cursor-codec.ts';
-import { resolveCursorHmacKeys } from './config.ts';
+import { resolveCursorHmacKeys, resolveIpKeySecret } from './config.ts';
+import { createIpKey } from '../lib/ip-key.ts';
 import type { StoreOverrides } from './store-overrides.ts';
 export type { Fake, StoreOverrides } from './store-overrides.ts';
 import { createHistoryModule } from '../domains/messaging/history.module.ts';
@@ -45,7 +46,7 @@ import { createNotificationsModule } from '../domains/notifications/notification
 import { createModerationModule } from '../domains/moderation/moderation.module.ts';
 import { createCallFeedbackRepository } from '../domains/feedback/call-feedback.repository.ts';
 import { createReportRepository } from '../domains/reports/report.repository.ts';
-import { createVoiceSessionRepository } from '../domains/rooms/voice-session.repository.ts';
+import { createVoiceSessionRepository, type DescribeAddress } from '../domains/rooms/voice-session.repository.ts';
 import { createActivityRepository } from '../domains/account/activity.repository.ts';
 import { createProductSnapshotRepository } from '../domains/ops/product-snapshot.repository.ts';
 import { createSystemSnapshotRepository } from '../domains/ops/system-snapshot.repository.ts';
@@ -213,6 +214,18 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   );
   const pushService = lazy(() => createPushService({ store: pushSubscriptions.get() }));
   const geoLocator = lazy(() => createGeoLocator({ databasePath: GEOIP_DB_PATH }));
+  // Built on first use: the secret comes from the configured cursor keys.
+  let ipKey: ((ip: string) => string | null) | null = null;
+  const ipKeyOf = (ip: string): string | null =>
+    (ipKey ??= createIpKey(resolveIpKeySecret({ fallbackGateSecret: LIVEKIT_GATE_SECRET })))(ip);
+  // An address becomes its keyed hash and its city; the address itself is never kept.
+  const describeAddress: DescribeAddress = async (ip) => ({
+    ipKey: ipKeyOf(ip),
+    location: await geoLocator
+      .get()
+      .locate(ip)
+      .catch(() => '')
+  });
   const avatarStorage = lazy(() => createAvatarStorage());
   const linkPreviewStorage = lazy(() => createLinkPreviewStorage());
 
@@ -249,7 +262,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   const accountDeletions = pooled((pool) => createAccountDeletionRepository({ pool }));
   const reportRepository = pooled((pool) => createReportRepository({ pool }));
   const callFeedback = pooled((pool) => createCallFeedbackRepository({ pool }));
-  const voiceSessions = pooled((pool) => createVoiceSessionRepository({ pool }));
+  const voiceSessions = pooled((pool) => createVoiceSessionRepository({ pool, describeAddress }));
   const activity = pooled((pool) => createActivityRepository({ pool }));
   const productSnapshots = pooled((pool) => createProductSnapshotRepository({ pool }));
   const systemSnapshots = pooled((pool) => createSystemSnapshotRepository({ pool }));
@@ -413,6 +426,8 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     getRoomStore: () => roomStore.get(),
     getUserStore: () => userStore.get(),
     getGeoLocator: () => geoLocator.get(),
+    describeAddress,
+    ipKeyOf,
     getFriendStore: () => friendStore.get(),
     getNotificationPreferences: () => notificationPreferences.get(),
     getPushSubscriptions: () => pushSubscriptions.get(),

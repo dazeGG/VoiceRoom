@@ -146,7 +146,19 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
 
   function finishedSession(roomId: string, peer: RosterPeer, leftAt: number): FinishedVoiceSession | null {
     if (!peer.joinedAt) return null;
-    return { roomId, userId: peer.accountUserId || null, joinedAt: peer.joinedAt, leftAt };
+    const userId = peer.accountUserId || null;
+    return {
+      roomId,
+      userId,
+      guestName: userId ? null : peer.name || null,
+      guestId: userId ? null : peer.guestId || null,
+      client: peer.client ?? null,
+      os: peer.os ?? '',
+      browser: peer.browser ?? '',
+      ip: peer.ip ?? '',
+      joinedAt: peer.joinedAt,
+      leftAt
+    };
   }
 
   // A lost write costs one usage row, so it is logged rather than retried.

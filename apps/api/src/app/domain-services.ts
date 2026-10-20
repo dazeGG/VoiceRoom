@@ -296,7 +296,8 @@ export function createDomainServices(deps: DomainServiceDeps) {
   const adminRooms = createAdminRoomsService({
     adminUserIds: config.PLATFORM_ADMIN_USER_IDS,
     presenceRooms: () => hub.presenceRooms.values(),
-    repository: () => required(services.getAdminRoomsRepository())
+    repository: () => required(services.getAdminRoomsRepository()),
+    describeAddress: services.describeAddress
   });
 
   const desktopReleaseService = createDesktopReleaseService({

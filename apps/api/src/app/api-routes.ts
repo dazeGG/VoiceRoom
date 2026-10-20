@@ -91,6 +91,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
     invalidateRecipientCache: (roomId) => deps.roomRuntime.invalidateRecipientCache(roomId),
     createLimiter: deps.limits.roomCreate,
     pow: deps.limits.pow,
+    ipKeyOf: deps.services.ipKeyOf,
     maxRooms: deps.config.MAX_ROOMS,
     maxRoomPeers: deps.config.MAX_ROOM_PEERS
   });
