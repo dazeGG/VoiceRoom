@@ -3,7 +3,7 @@
 // session start from nothing.
 
 import { afterEach, expect, test } from 'vitest';
-import { createAnchoredHistory, type AnchoredHistoryPage } from '../../src/lib/features/room/room-history.svelte';
+import { createAnchoredHistory, type AnchoredHistoryPage } from '../../src/lib/shared/chat/anchored-history.svelte';
 import { clearHistoryCache, createHistoryCache } from '../../src/lib/shared/chat/history-cache';
 import { defined } from '../helpers/assert.ts';
 

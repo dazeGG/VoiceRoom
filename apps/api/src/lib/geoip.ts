@@ -4,12 +4,12 @@ import { LOG_EVENTS } from './log-events.ts';
 import { createLogger } from './logger.ts';
 import { isRecord } from '@voice-room/shared/guards';
 import { fieldOf } from '../platform/record.ts';
+import type { Logger } from '../platform/types.ts';
 
 const LOCATION_LABEL_MAX_LENGTH = 120;
 
 type Names = Record<string, unknown>;
 type GeoReader = { get(address: string): unknown };
-type GeoLogger = { warn(...args: unknown[]): void; error(...args: unknown[]): void };
 
 export type GeoLocator = Readonly<{ enabled: boolean; locate(ip: unknown): Promise<string>; warm(): Promise<boolean> }>;
 
@@ -53,7 +53,7 @@ function createGeoLocator({
   openReader
 }: {
   databasePath?: string;
-  logger?: GeoLogger;
+  logger?: Pick<Logger, 'warn' | 'error'>;
   openReader?: (path: string) => Promise<GeoReader>;
 } = {}): GeoLocator {
   let readerPromise: Promise<GeoReader | null> | null = null;

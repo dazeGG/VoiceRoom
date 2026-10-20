@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  isUuid,
   normalizeRoomId,
   normalizePeerId,
   normalizeSessionToken,
@@ -189,4 +190,12 @@ test('cleanGuestName turns a guest posing as the service into Guest', () => {
   assert.equal(cleanGuestName('  Voice   Room '), 'Guest');
   assert.equal(cleanGuestName('Маша'), 'Маша');
   assert.equal(cleanGuestName(''), 'Guest');
+});
+
+test('isUuid accepts the canonical form in either case and nothing else', () => {
+  assert.equal(isUuid('123e4567-e89b-12d3-a456-426614174000'), true);
+  assert.equal(isUuid('123E4567-E89B-12D3-A456-426614174000'), true);
+  assert.equal(isUuid('123e4567e89b12d3a456426614174000'), false);
+  assert.equal(isUuid(' 123e4567-e89b-12d3-a456-426614174000'), false);
+  assert.equal(isUuid(42), false);
 });

@@ -1,5 +1,4 @@
 import type { InboxItem, InboxItemRead, InboxPage, InboxReadAll } from '@voice-room/shared/contracts/notifications';
-import { notificationRoute as sharedNotificationRoute } from '@voice-room/shared/notifications';
 import { uniqueBy } from '$lib/shared/utils/collections';
 
 /** The inbox routes; their answers are checked against the contract by the API client. */
@@ -8,11 +7,6 @@ export type NotificationInboxTransport = {
   read(id: string): Promise<InboxItemRead>;
   readAll(): Promise<InboxReadAll>;
 };
-
-/** One route for the panel and for push alike — see the shared builder for why it avoids /r/. */
-export function notificationRoute(item: Pick<InboxItem, 'roomId' | 'sourceMessageId'>): string {
-  return sharedNotificationRoute(item);
-}
 
 export function createNotificationInbox(transport: NotificationInboxTransport) {
   let items = $state<InboxItem[]>([]);

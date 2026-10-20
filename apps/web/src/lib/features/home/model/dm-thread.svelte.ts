@@ -5,7 +5,7 @@
 
 import { fetchThreadPage, type DirectMessage } from '$lib/api/dm';
 import type { PublicUser } from '$lib/api/friends';
-import { createAnchoredHistory } from '$lib/features/room/room-history.svelte';
+import { createAnchoredHistory } from '$lib/shared/chat/anchored-history.svelte';
 import { createHistoryCache } from '$lib/shared/chat/history-cache';
 
 /** Conversations kept between visits, by peer id. */

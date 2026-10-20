@@ -117,3 +117,10 @@ function toRtcStat(value: unknown): RtcStat | null {
     type: string('type') ?? ''
   };
 }
+
+/** The candidate pair in use: Chrome flags it `nominated`, Firefox `selected`. */
+export function isActiveCandidatePair(report: RtcStat): boolean {
+  return (
+    report.type === 'candidate-pair' && report.state === 'succeeded' && Boolean(report.nominated || report.selected)
+  );
+}

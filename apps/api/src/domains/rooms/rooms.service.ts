@@ -1,18 +1,12 @@
 // Creating, renaming and deleting rooms, and the owner check every room
 // mutation starts with. Quotas are enforced by the store inside the insert.
 
-import crypto from 'node:crypto';
 import type { Logger } from 'pino';
 import type { LiveRoom, LobbyRoom, StoredRoom } from './room-views.ts';
+import { createRoomId } from '../../platform/db/ids.ts';
 import { isRoomOwner } from './room.policy.ts';
 
 type RequestLog = { log?: Pick<Logger, 'warn' | 'error'> } | null;
-
-const ROOM_ID_ALPHABET = 'abcdefghijkmnpqrstuvwxyz23456789';
-
-export function createRoomId(): string {
-  return Array.from(crypto.randomBytes(10), (byte) => ROOM_ID_ALPHABET[byte % ROOM_ID_ALPHABET.length]).join('');
-}
 
 export type CreateRoomResult =
   { status: 'created'; room: StoredRoom } | { status: 'auth_required' | 'quota_exceeded' | 'capacity_exceeded' };

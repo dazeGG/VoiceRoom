@@ -1,5 +1,6 @@
 <script lang="ts">
   import EmojiText from './EmojiText.svelte';
+  import { displayNameOf } from '$lib/shared/utils/display-name';
   // Picking who to mention is picking a person, so the row carries the face
   // alongside both names: two people can share a display name, and the login is
   // what actually goes into the message.
@@ -12,7 +13,7 @@
     onselect
   }: { candidates: MembershipMember[]; activeIndex?: number; onselect: (member: MembershipMember) => void } = $props();
   function label(member: MembershipMember): string {
-    return member.displayName || member.login;
+    return displayNameOf(member);
   }
 </script>
 

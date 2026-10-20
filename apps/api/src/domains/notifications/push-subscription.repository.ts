@@ -1,8 +1,8 @@
-import crypto from 'node:crypto';
 import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
 import { isOneOf, isRecord } from '@voice-room/shared/guards';
 import { kyselyOn } from '../../platform/db/kysely.ts';
+import { createRowId } from '../../platform/db/ids.ts';
 import type { PushSubscriptions } from '../../platform/db/schema.ts';
 import { classifyPlatform, PLATFORM_CLASSES } from '@voice-room/shared/platform-class';
 import type { PlatformClass } from '@voice-room/shared/platform-class';
@@ -18,10 +18,6 @@ export type PushSubscriptionRecord = {
   platformClass: PlatformClass;
   metadata: Metadata;
 };
-
-function createRowId(): string {
-  return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
-}
 
 function mapSubscription(row: Selectable<PushSubscriptions>): PushSubscriptionRecord {
   return {

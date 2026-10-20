@@ -29,7 +29,7 @@ let inboxLoads = () => 0;
 
 beforeAll(() => {
   installFakeWebSocket();
-  realtime.connectRealtime(() => {});
+  realtime.getAppRealtime().subscribe(() => {});
   socket = FakeWebSocket.latest();
   socket.open();
 });

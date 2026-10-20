@@ -1,7 +1,6 @@
 /** Application-wide notification preferences shared by lobby and active-room UI. */
 import {
   fetchNotificationPreferences,
-  setDoNotDisturb,
   setDmNotificationsMuted,
   setRoomNotificationsMuted,
   setPresenceStatus,
@@ -15,10 +14,7 @@ import {
   requestNotificationPermissionFromUserAction,
   type NotificationPermissionState
 } from '$lib/shared/notifications/router';
-import {
-  isDoNotDisturbPlaybackSuppressed,
-  setDoNotDisturbPlaybackSuppressed
-} from '$lib/shared/audio/playback-policy.svelte';
+import { setDoNotDisturbPlaybackSuppressed } from '$lib/shared/audio/playback-policy.svelte';
 
 export const notificationPreferences = $state<{
   loaded: boolean;
@@ -208,13 +204,6 @@ export async function updatePrivateNotifications(privateNotifications: boolean):
   applyMutationPreferences(payload.preferences, accountUserId, generation);
 }
 
-export async function updateDoNotDisturb(doNotDisturb: boolean): Promise<void> {
-  const accountUserId = activeUserId;
-  const generation = preferenceGeneration;
-  const payload = await setDoNotDisturb(doNotDisturb);
-  applyMutationPreferences(payload.preferences, accountUserId, generation);
-}
-
 export async function updatePresenceStatus(status: PresenceStatus): Promise<void> {
   const accountUserId = activeUserId;
   const generation = preferenceGeneration;
@@ -227,10 +216,6 @@ export async function updateAutomaticPresenceStatus(status: 'online' | 'away'): 
   const generation = preferenceGeneration;
   const payload = await setPresenceStatus(status, true);
   applyMutationPreferences(payload.preferences, accountUserId, generation);
-}
-
-export function isDoNotDisturbEnabled(): boolean {
-  return isDoNotDisturbPlaybackSuppressed();
 }
 
 export async function requestNotificationsFromUiAction(): Promise<NotificationPermissionState> {

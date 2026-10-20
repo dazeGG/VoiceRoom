@@ -1,4 +1,5 @@
-type CursorTuple = unknown;
+import type { CursorTuple } from '../../platform/cursor-codec.ts';
+
 type ReadState = { unchanged?: boolean; last_read_message_created_at?: unknown } | null | undefined;
 
 export interface CursorCodec {

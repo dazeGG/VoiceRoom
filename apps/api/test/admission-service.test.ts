@@ -13,9 +13,9 @@ import {
   type AdmissionResult,
   type CredentialBoundary,
   type CredentialProvider,
-  type GatePrincipal,
   type RefusalReason
 } from '../src/domains/admission/admission.service.ts';
+import type { GatePrincipal } from '../src/domains/admission/gate-principal.ts';
 import {
   createLiveKitAdmin,
   type LiveKitAdminClient,

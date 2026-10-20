@@ -15,7 +15,6 @@ export type NotificationDmMessageEvent = EventOf<'notification.dm.message'>;
 export type NotificationRoomMessageEvent = EventOf<'notification.room.message'>;
 export type NotificationFriendRequestEvent = EventOf<'notification.friend.request'>;
 export type NotificationFriendAcceptedEvent = EventOf<'notification.friend.accepted'>;
-export type NotificationEventType = NotificationRealtimeEvent['type'];
 
 export type NotificationRealtimeEvent =
   | NotificationDmMessageEvent
@@ -31,12 +30,19 @@ export type NotificationActiveTarget =
   | { kind: 'room-preview'; roomId: string }
   | { kind: 'room-chat'; roomId: string };
 
+/** What a shown notification carries about its event; `route` is where a tap leads. */
+export type NotificationData =
+  | { kind: 'dm'; peerId: string; messageId: string; route: string }
+  | { kind: 'room'; roomId: string; senderId: string; messageId: string; route: string }
+  | { kind: 'friend-request'; requesterId: string; requestId: string }
+  | { kind: 'friend-accepted'; userId: string };
+
 export type BrowserNotificationPayload = {
   title: string;
   body: string;
   tag: string;
   dedupeKey: string;
-  data?: Record<string, unknown>;
+  data?: NotificationData;
 };
 
 export type DesktopNotificationPayload = {
@@ -214,12 +220,6 @@ export async function requestNotificationPermissionFromUserAction(): Promise<Not
   return await globalThis.Notification.requestPermission();
 }
 
-export function resetNotificationDedupeForTests(): void {
-  memoryDedupe.clear();
-  if (dedupeChannel) dedupeChannel.close();
-  dedupeChannel = undefined;
-}
-
 export function markNotificationDedupeKeySeen(
   key: string,
   { now = Date.now(), ttlMs = DEFAULT_DEDUPE_TTL_MS }: { now?: number; ttlMs?: number } = {}
@@ -342,13 +342,6 @@ export function buildNotificationPayload(
   };
 }
 
-export function shouldNotify(
-  event: RealtimeEvent | NotificationRealtimeEvent,
-  options: NotificationRouteOptions = {}
-): boolean {
-  return routeNotificationEvent(event, options).notify;
-}
-
 export function routeNotificationEvent(
   event: RealtimeEvent | NotificationRealtimeEvent,
   options: NotificationRouteOptions = {}
@@ -380,13 +373,14 @@ export function routeNotificationEvent(
 // Page notifications keep per-message tags: Chromium would replace them silently.
 function desktopNotificationTag(payload: BrowserNotificationPayload): string {
   const data = payload.data;
-  if (data?.kind === 'dm' && typeof data.peerId === 'string') return `dm:${data.peerId}`;
-  if (data?.kind === 'room' && typeof data.roomId === 'string') return `room:${data.roomId}`;
+  if (data?.kind === 'dm') return `dm:${data.peerId}`;
+  if (data?.kind === 'room') return `room:${data.roomId}`;
   return payload.tag;
 }
 
 function toDesktopNotificationPayload(payload: BrowserNotificationPayload): DesktopNotificationPayload {
-  const route = typeof payload.data?.route === 'string' ? payload.data.route : undefined;
+  const data = payload.data;
+  const route = data?.kind === 'dm' || data?.kind === 'room' ? data.route : undefined;
   return {
     title: payload.title,
     body: payload.body,

@@ -26,7 +26,7 @@ import {
   removePeer,
   updatePeerStatus
 } from '../../room/participants';
-import { refreshScreenAction, refreshScreenStage, refreshScreenTiles } from '../../ui/screen-view';
+import { refreshScreenStage, refreshScreenTiles } from '../../ui/screen-view';
 import type { Participant } from '../../core/types';
 import { subscribeRoomRecoveryTransitions } from '../../recovery/room-recovery';
 import { ScreenRecoveryGraceController } from '../../recovery/screen-recovery-grace';
@@ -136,7 +136,6 @@ export function updateLiveKitPublicationState(peer: Participant, publication: Re
     peer.screen = true;
     applyRemoteScreenCue(peer, hadScreen, true);
     updatePeerStatus(peer);
-    refreshScreenAction(peer);
     if (!hadScreen) refreshScreenTiles();
   }
   if (isScreenAudioPublication(publication)) {
@@ -510,7 +509,6 @@ export function handleLiveKitTrackUnpublished(
     if (audioTrackId) detachRemoteScreenAudioTrack(peer, audioTrackId);
     applyRemoteScreenCue(peer, hadScreen, peer.screen);
     if (!peer.screen) detachRemoteScreen(peer);
-    refreshScreenAction(peer);
     refreshScreenTiles();
     refreshScreenStage();
     return;
@@ -531,7 +529,6 @@ export function handleLiveKitTrackUnpublished(
     const videoTrackId = publication.track?.mediaStreamTrack?.id;
     if (videoTrackId) detachRemoteScreenVideoTrack(peer, videoTrackId);
     if (!screenPresence.hasVideo) detachRemoteScreenVideoTracks(peer);
-    refreshScreenAction(peer);
     refreshScreenTiles();
     refreshScreenStage();
     return;
@@ -564,7 +561,6 @@ function finalizeRemoteScreenLoss(peerId: string): void {
   peer.screenAudio = false;
   detachRemoteScreen(peer);
   applyRemoteScreenCue(peer, hadScreen, false);
-  refreshScreenAction(peer);
   refreshScreenTiles();
   refreshScreenStage();
 }

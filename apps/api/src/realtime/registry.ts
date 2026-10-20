@@ -7,8 +7,11 @@ import type { createTypingThrottle } from './typing-throttle.ts';
 import type { ServerEvents } from '@voice-room/shared/contracts/realtime';
 import { buildServerEnvelope, sendWsEnvelope } from './envelope.ts';
 import { toWsAccountEvent } from './account-events.ts';
+import type { BoundedMap } from '../lib/bounded-map.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
+import type { RateLimiter } from '../lib/rate-limit.ts';
+import type { Logger } from '../platform/types.ts';
 
 export type RealtimeSocket = {
   readyState: number;
@@ -41,8 +44,8 @@ export type WsConnection = {
   roomTypingThrottle?: TypingThrottle;
   dmTypingThrottle?: TypingThrottle;
   /** DM typing may check friendships only so often per window. */
-  dmTypingLookups?: { windowAt: number; spent: number };
-  dmTypingPermission?: Map<string, { allowed: boolean; checkedAt: number }>;
+  dmTypingLookups?: RateLimiter;
+  dmTypingPermission?: BoundedMap<string, { allowed: boolean; checkedAt: number }>;
 };
 type RoomTypist = { peerId: string; userId: string | null; name: string };
 type TypingThrottle = ReturnType<typeof createTypingThrottle<TypingActivity>>;
@@ -54,7 +57,6 @@ type PresenceRegistry = {
 };
 type PresenceRoom =
   { updatedAt?: unknown; peers?: { values?: () => Iterable<{ accountUserId?: string | null }> } } | null | undefined;
-type RegistryLogger = { error(fields: object, message: string): void };
 
 function createConnectionId(prefix: string): string {
   return `${prefix}:${Date.now()}:${crypto.randomBytes(4).toString('hex')}`;
@@ -104,7 +106,7 @@ function createConnectionRegistry({
   onPresenceChange?: ((friendId: string, userId: string, online: boolean) => void) | null;
   onConnectionClose?: ((connection: WsConnection) => void) | null;
   getFriendIds: (userId: string) => Promise<string[]>;
-  logger?: RegistryLogger;
+  logger?: Pick<Logger, 'error'>;
 }) {
   const userConnections = new Map<string, Set<WsConnection>>();
   const userPresenceStatuses = new Map<string, PresenceStatus>();

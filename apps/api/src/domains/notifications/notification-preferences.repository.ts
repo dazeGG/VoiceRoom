@@ -1,9 +1,9 @@
-import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { cleanPresenceStatus } from '@voice-room/shared/validation';
 import type { NotificationLevel, NotificationPreferences } from '@voice-room/shared/contracts/notifications';
 import { kyselyOn, type Database, type Queryable } from '../../platform/db/kysely.ts';
+import { createRowId } from '../../platform/db/ids.ts';
 export type RoomNotificationLevel = NotificationLevel;
 export type { NotificationPreferences };
 type PreferencesInput = {
@@ -21,10 +21,6 @@ const DEFAULT_AUTOMATIC_PRESENCE_LEASE_MS = 3 * 60 * 1000;
 
 function isRoomLevel(value: unknown): value is RoomNotificationLevel {
   return value === 'all' || value === 'mentions' || value === 'none';
-}
-
-function createRowId(): string {
-  return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
 }
 
 function mapPreferences({

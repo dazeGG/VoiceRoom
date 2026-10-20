@@ -1,7 +1,7 @@
 import { PEER_LATENCY_INTERVAL_MS } from '../core/config';
 import { state } from '../core/state.svelte';
 import { findFirstLocalPublication, findLocalMicrophonePublication } from '../services/livekit-service';
-import { readRtcStats, type RtcStat, type RtcStatsSource } from '../media/rtc-stats';
+import { isActiveCandidatePair, readRtcStats, type RtcStat, type RtcStatsSource } from '../media/rtc-stats';
 import { recordNetworkSample } from './call-quality';
 
 import { createLogger, errorContext } from '$lib/shared/log';
@@ -104,12 +104,6 @@ function getRoundTripTimeFromStats(stats: Map<string, RtcStat>): number | null {
   }
 
   return candidatePairRttMs ?? remoteInboundRttMs;
-}
-
-function isActiveCandidatePair(report: RtcStat): boolean {
-  return (
-    report.type === 'candidate-pair' && report.state === 'succeeded' && Boolean(report.nominated || report.selected)
-  );
 }
 
 /**

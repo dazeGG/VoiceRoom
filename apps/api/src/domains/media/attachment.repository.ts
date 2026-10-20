@@ -22,7 +22,7 @@ export type Attachment = Readonly<{
   internalState: AttachmentState;
   clientRequestId: string | null;
   reservedBytes: number | null;
-  reservationExpiresAt: unknown;
+  reservationExpiresAt: Date | null;
   mimeType: string | null;
   originalBytes: number | null;
   processedBytes: number | null;
@@ -35,13 +35,13 @@ export type Attachment = Readonly<{
   order: number;
   failureCode: string | null;
   metadata: Record<string, unknown>;
-  createdAt: unknown;
+  createdAt: Date;
   updatedAt: Date | string;
-  uploadedAt: unknown;
-  readyAt: unknown;
-  failedAt: unknown;
-  boundAt: unknown;
-  deletedAt: unknown;
+  uploadedAt: Date | null;
+  readyAt: Date | null;
+  failedAt: Date | null;
+  boundAt: Date | null;
+  deletedAt: Date | null;
 }>;
 
 export type AttachmentDraft = {

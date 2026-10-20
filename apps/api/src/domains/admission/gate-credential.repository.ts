@@ -5,8 +5,9 @@
 
 import { sql } from 'kysely';
 import type { Database } from '../../platform/db/kysely.ts';
-import { createRowId, toDate } from '../rooms/room.repository.ts';
-import type { GatePrincipal } from './admission.service.ts';
+import { createRowId } from '../../platform/db/ids.ts';
+import { toDate } from '../rooms/room.repository.ts';
+import type { GatePrincipal } from './gate-principal.ts';
 import { isGatePrincipal } from './gate-principal.ts';
 
 export type PrincipalEpoch = { status: 'ready'; epoch: number } | { status: 'invalid'; epoch: null };

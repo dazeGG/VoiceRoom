@@ -5,6 +5,7 @@
 import type pg from 'pg';
 import { ROOM_HISTORY_PAGE_SIZE, type RoomAccount } from '@voice-room/shared/contracts/admin';
 import { kyselyOn } from '../../platform/db/kysely.ts';
+import { avatarUrl } from '../../lib/avatar-url.ts';
 
 export interface AdminRoomRow {
   id: string;
@@ -24,8 +25,6 @@ export interface StoredStay {
   leftAt: number;
 }
 
-const avatarUrl = (key: string | null) => (key ? `/api/avatars/${encodeURIComponent(key)}` : null);
-
 type AccountColumns = {
   id: string | null;
   login: string | null;
@@ -42,7 +41,7 @@ function account(row: AccountColumns): RoomAccount | null {
     login: row.login,
     displayName: row.display_name || row.login,
     avatarUrl: avatarUrl(row.avatar_key),
-    avatarColorKey: row.avatar_color_key || 'blue',
+    avatarColorKey: row.avatar_color_key || 'blurple',
     avatarAccent: row.avatar_accent
   };
 }

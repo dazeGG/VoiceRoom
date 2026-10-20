@@ -15,9 +15,9 @@ export type AccountMessage =
   | Tagged<'ring.incoming', ServerEvents['ring.incoming']>
   | Tagged<'user-updated', ServerEvents['friend.updated']>
   | Tagged<'notification-settings-updated', ServerEvents['notification.settings.updated']>
-  | Tagged<'dm-message' | 'dm.message.edited' | 'dm-message-edited', ServerEvents['dm.message']>
+  | Tagged<'dm-message' | 'dm.message.edited', ServerEvents['dm.message']>
   | Tagged<'dm-read', ServerEvents['dm.read']>
-  | Tagged<'dm.message.deleted' | 'dm-message-deleted', ServerEvents['dm.message.deleted']>
+  | Tagged<'dm.message.deleted', ServerEvents['dm.message.deleted']>
   | Tagged<'notification.dm.message', ServerEvents['notification.dm.message']>
   | Tagged<'notification.room.message', ServerEvents['notification.room.message']>
   | Tagged<'notification.friend.request', ServerEvents['notification.friend.request']>
@@ -82,13 +82,11 @@ function toWsAccountEvent(message: AccountMessage): ServerEnvelope {
     case 'dm-read':
       return buildServerEnvelope('dm.read', { userId: message.userId });
     case 'dm.message.deleted':
-    case 'dm-message-deleted':
       return buildServerEnvelope('dm.message.deleted', {
         messageId: message.messageId,
         ...(message.peerUserId === undefined ? {} : { peerUserId: message.peerUserId })
       });
     case 'dm.message.edited':
-    case 'dm-message-edited':
       return buildServerEnvelope('dm.message.edited', {
         message: message.message
       });

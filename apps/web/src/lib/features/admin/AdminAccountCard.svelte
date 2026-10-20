@@ -3,6 +3,7 @@
   // devices, what was reported about it, and what an administrator can do —
   // block, sign out everywhere, delete, give the official mark — with the log
   // of what administrators already did.
+  import { displayNameOf } from '$lib/shared/utils/display-name';
   import { onMount } from 'svelte';
   import { ArrowLeft, BadgeCheck } from '@lucide/svelte';
   import {
@@ -90,7 +91,7 @@
   }
 
   const account = $derived(detail?.account ?? null);
-  const name = $derived(account ? account.displayName || account.login : '');
+  const name = $derived(account ? displayNameOf(account) : '');
   const days = $derived(detail?.days ?? []);
   const labels = $derived(days.map((day) => formatDay(day.day)));
   const activeInSpan = $derived(days.filter((day) => day.active).length);

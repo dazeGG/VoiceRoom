@@ -5,6 +5,7 @@
 
 import type { AdminReportsEvent } from '@voice-room/shared/contracts/admin';
 import { REPORT_COMMENT_MAX_LENGTH, type AdminReport, type ReportBody } from '@voice-room/shared/contracts/reports';
+import { isUuid } from '@voice-room/shared/validation';
 import { isPlatformAdmin } from '../admin/admin.policy.ts';
 import { canReportDirectMessage } from './report.policy.ts';
 import type { ReportRepository } from './report.repository.ts';
@@ -27,8 +28,6 @@ export type FileReportOutcome = { status: 'filed' | 'already_filed' | 'target_no
 
 export type ResolveOutcome =
   { status: 'resolved'; resolved: number } | { status: 'forbidden' } | { status: 'not_found' };
-
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function createReportService(deps: ReportServiceDeps) {
   const now = deps.now ?? Date.now;
@@ -80,7 +79,7 @@ export function createReportService(deps: ReportServiceDeps) {
     action: 'remove_message' | 'dismiss'
   ): Promise<ResolveOutcome> {
     if (!isPlatformAdmin(deps.adminUserIds, actorUserId)) return { status: 'forbidden' };
-    if (!UUID.test(reportId)) return { status: 'not_found' };
+    if (!isUuid(reportId)) return { status: 'not_found' };
     const repository = deps.repository();
     const report = await repository.findOpenReport(reportId);
     if (!report) return { status: 'not_found' };

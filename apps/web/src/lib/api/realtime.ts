@@ -23,11 +23,6 @@ export type { RoomRealtimeSummary, RoomSnapshot };
 /** Sends one command; the payload must be the one its type carries. */
 type Send = <Type extends ClientCommandType>(type: Type, payload: ClientCommands[Type], id?: string) => void;
 
-export interface RealtimeHandle {
-  close: () => void;
-  send: Send;
-}
-
 const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 8000;
 const HEARTBEAT_MS = 15000;
@@ -342,13 +337,4 @@ class AppRealtimeConnection {
 export function getAppRealtime(): AppRealtimeConnection {
   if (!shared) shared = new AppRealtimeConnection();
   return shared;
-}
-
-export function connectRealtime(onEvent: (event: RealtimeEvent) => void): RealtimeHandle {
-  const conn = getAppRealtime();
-  const unsubscribe = conn.subscribe(onEvent);
-  return {
-    close: unsubscribe,
-    send: (type, payload) => conn.send(type, payload)
-  };
 }

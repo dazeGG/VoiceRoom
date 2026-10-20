@@ -22,7 +22,7 @@ test('a session names its browser and system, or says the browser is unknown', (
 test('last activity is only as precise as the hourly server refresh', () => {
   expect(formatLastSeen(NOW - 10 * 60_000, NOW)).toBe('Активен в течение часа');
   expect(formatLastSeen(NOW - 5 * HOUR, NOW)).toBe('Заходил 5 ч назад');
-  expect(formatLastSeen(NOW - 3 * 24 * HOUR, NOW)).toBe('Заходил 3 дн. назад');
+  expect(formatLastSeen(NOW - 3 * 24 * HOUR, NOW)).toBe('Заходил 3 дн назад');
   expect(formatLastSeen(NOW - 30 * 24 * HOUR, NOW)).toMatch(/^Заходил \d+ [а-я]+$/);
 });
 

@@ -30,10 +30,6 @@ export function setPrivateNotifications(privateNotifications: boolean): Promise<
   return api.put('/api/notifications/privacy', Preferences, { privateNotifications });
 }
 
-export function setDoNotDisturb(dnd: boolean): Promise<Preferences> {
-  return api.post('/api/notifications/settings', Preferences, { dnd });
-}
-
 export function setPresenceStatus(status: PresenceStatus, automatic = false): Promise<Preferences> {
   return api.post('/api/presence/status', Preferences, { automatic, status });
 }

@@ -5,7 +5,7 @@
 
 import type { RoomPeerMessage } from '../../realtime/legacy-events.ts';
 import type { Logger } from 'pino';
-import type { GatePrincipal } from '../admission/admission.service.ts';
+import type { GatePrincipal } from '../admission/gate-principal.ts';
 import { isGatePrincipal } from '../admission/gate-principal.ts';
 import type { ServerMuteResult } from '../admission/livekit-admin.ts';
 import type { LiveKitConfig } from '../admission/livekit-config.ts';

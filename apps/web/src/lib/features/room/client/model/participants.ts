@@ -1,25 +1,14 @@
 import type { RemoteParticipant } from 'livekit-client';
+import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
 import type { VoiceMeter } from '../media/meters';
 
-export interface PeerInfo {
-  accountUserId?: string;
-  avatarAccent?: string | null;
-  avatarColorKey?: string;
-  avatarUrl?: string | null;
-  id: string;
-  name?: string;
-  deafened?: boolean;
-  muted?: boolean;
-  screen?: boolean;
-  serverMuted?: boolean;
-  screenAuthoritative?: boolean;
-  screenAudio?: boolean;
-  screenProfileId?: string;
-  screenStreamId?: string;
-  viewedScreenPeerId?: string | undefined;
-  joinedAt?: number;
-  isLocal?: boolean;
-}
+/** A peer as the server sends it, any field but `id` possibly left out, plus client-only flags. */
+export type PeerInfo = Pick<PublicPeer, 'id'> &
+  Partial<Omit<PublicPeer, 'id' | 'viewedScreenPeerId'>> & {
+    viewedScreenPeerId?: string | undefined;
+    screenAuthoritative?: boolean;
+    isLocal?: boolean;
+  };
 
 /** What the speaking rings read from a voice: its waveform, sample by sample. */
 export type MeterAnalyser = {
@@ -66,10 +55,4 @@ export interface Participant {
   stream: MediaStream | null;
   viewedScreenPeerId: string;
   voiceIssue: string;
-}
-
-export interface ParticipantViewRefs {
-  node: HTMLElement;
-  screenAction: HTMLButtonElement;
-  status: HTMLParagraphElement;
 }

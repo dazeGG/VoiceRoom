@@ -9,7 +9,7 @@ import { createGateCredentialSigner } from '../../apps/api/src/domains/admission
 import { createDbPool } from '../../apps/api/src/platform/db/pool.ts';
 import { runMigrations } from '../../apps/api/src/lib/migrate.ts';
 import { createRoomStore } from '../../apps/api/src/app/room-store.ts';
-import type { GatePrincipal } from '../../apps/api/src/domains/admission/admission.service.ts';
+import type { GatePrincipal } from '../../apps/api/src/domains/admission/gate-principal.ts';
 import { isRecord } from '../../packages/shared/src/guards.ts';
 
 type ReplayCase = { detail: unknown; id: string; passed: boolean };

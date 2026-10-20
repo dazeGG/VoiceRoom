@@ -11,7 +11,7 @@
   import { AccountBadge, Avatar } from '$lib/shared/ui';
   import { iconMd } from '$lib/shared/ui/icons';
   import { useLobby } from '$lib/features/home/model/lobby-context';
-  import { friendName } from '../../model/lobby-format';
+  import { displayNameOf } from '$lib/shared/utils/display-name';
   import { pushToast } from '../../model/toasts.svelte';
   import DmConversation from './dm/DmConversation.svelte';
   import DmProfilePanel from './dm/DmProfilePanel.svelte';
@@ -56,7 +56,7 @@
     {#if peer}
       <button class="lobby-dm-head" type="button" onclick={lobby.toggleProfile}>
         <Avatar
-          name={friendName(peer)}
+          name={displayNameOf(peer)}
           src={peer.avatarUrl}
           colorKey={peer.avatarColorKey}
           background={peer.avatarAccent || undefined}
@@ -68,7 +68,9 @@
           ring="var(--vr-bg)"
         />
         <div class="lobby-dm-head-text">
-          <div class="lobby-dm-head-name"><EmojiText text={friendName(peer)} /><AccountBadge userId={peer.id} /></div>
+          <div class="lobby-dm-head-name">
+            <EmojiText text={displayNameOf(peer)} /><AccountBadge userId={peer.id} />
+          </div>
           <div class="lobby-dm-head-status" data-presence={presence}>{presenceStatusLabel(presence).toLowerCase()}</div>
         </div>
         <span class="lobby-dm-head-icon">

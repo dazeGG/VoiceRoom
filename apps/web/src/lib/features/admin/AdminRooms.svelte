@@ -3,6 +3,7 @@
   // few seconds, and the finished stays before, the latest first. Names,
   // accounts, times and the kind of client only: nothing said in a room. An
   // account opens its card; a room's name narrows the history to it.
+  import { displayNameOf } from '$lib/shared/utils/display-name';
   import { onMount } from 'svelte';
   import {
     AppWindow,
@@ -114,7 +115,6 @@
   });
 
   const peopleInVoice = $derived((rooms ?? []).reduce((count, room) => count + room.peers.length, 0));
-  const nameOf = (account: RoomAccount) => account.displayName || account.login;
   // Under a minute reads as just now, not as "0 мин".
   const fresh = (at: number) => now - at < 60_000;
   const hasNextPage = $derived(pageCursors.length > pageIndex + 1);
@@ -122,7 +122,7 @@
 
 {#snippet accountLink(account: RoomAccount)}
   <button type="button" class="rooms-account" onclick={() => onOpenAccount(account.id)}>
-    <EmojiText text={nameOf(account)} /><AccountBadge userId={account.id} />
+    <EmojiText text={displayNameOf(account)} /><AccountBadge userId={account.id} />
     <span class="rooms-login">@{account.login}</span>
   </button>
 {/snippet}

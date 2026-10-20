@@ -8,6 +8,7 @@ import type { SelfUser as SelfProfile } from '@voice-room/shared/contracts/accou
 import type { AccountBadge, PublicUser as PublicProfile } from '@voice-room/shared/contracts/users';
 import { AVATAR_COLOR_KEYS, cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
 import { epochMillis } from '../../platform/epoch-millis.ts';
+import { avatarUrl } from '../../lib/avatar-url.ts';
 import { RECOVERY_CODE_ALPHABET, RECOVERY_CODE_LENGTH } from '@voice-room/shared/account-security';
 
 export type UserStoreLogger = { warn(...args: unknown[]): void };
@@ -19,7 +20,6 @@ export const SESSION_TOUCH_INTERVAL_MS = 60 * 60 * 1000;
 const USER_AGENT_MAX_LENGTH = 512;
 const LOCATION_LABEL_MAX_LENGTH = 120;
 export const UNIQUE_VIOLATION = '23505';
-export const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 // Longer than the familiarity window, so a device keeps vouching for itself
 // for the whole window after its last sign-in.
 export const LOGIN_EVENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
@@ -94,7 +94,7 @@ export function publicUser(user: ProfileSource | null | undefined): PublicProfil
     avatarAccent: user.avatarAccent || null,
     createdAt: user.createdAt ?? null,
     avatarColorKey: user.avatarColorKey || 'blurple',
-    avatarUrl: user.avatarKey ? `/api/avatars/${encodeURIComponent(user.avatarKey)}` : null,
+    avatarUrl: avatarUrl(user.avatarKey),
     displayName: user.displayName || '',
     dnd: presenceStatus === 'dnd',
     doNotDisturb: presenceStatus === 'dnd',

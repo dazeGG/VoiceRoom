@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { createRoomStore } from '../src/app/room-store.ts';
 import { createUserStore } from '../src/app/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
-import { mapRoom } from '../src/domains/rooms/room.repository.ts';
+import { mapRoom, toMillis } from '../src/domains/rooms/room.repository.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { AnyRow, queryRows } from './helpers/checked.ts';
 
@@ -32,6 +32,31 @@ async function setup(t: TestContext) {
   }
   return { pool, store, user, room };
 }
+
+test('mapRoom reads an unreadable stored time as 0, not as now', () => {
+  const room = mapRoom({
+    avatar_key: null,
+    id: 'abc123',
+    creator_ip: '',
+    is_static: false,
+    created_at: new Date(Number.NaN),
+    updated_at: new Date(Number.NaN),
+    empty_since: null,
+    deleted_at: null,
+    emoji: '',
+    metadata: {},
+    name: '',
+    owner_id: null,
+    room_color_key: '',
+    room_icon_key: ''
+  });
+  assert.equal(room.createdAt, 0);
+  assert.equal(room.updatedAt, 0);
+});
+
+test('toMillis reads an unparsable stored string as 0', () => {
+  assert.equal(toMillis('garbage'), 0);
+});
 
 test('mapRoom turns a room row into the API room shape', () => {
   const room = mapRoom({

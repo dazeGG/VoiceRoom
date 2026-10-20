@@ -5,7 +5,8 @@ import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database, type Queryable } from '../../platform/db/kysely.ts';
-import { escapeLike, friendOf, mapPublicUser, now, orderedPair } from './social-records.ts';
+import { escapeLike } from '../../platform/db/like.ts';
+import { friendOf, mapPublicUser, now, orderedPair } from './social-records.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { unreadCountsFor } from '../messaging/dm-thread.repository.ts';
 

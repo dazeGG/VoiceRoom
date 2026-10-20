@@ -2,6 +2,7 @@
   // The platform administrator's review of open reports, a tab of the admin
   // panel: each shows the message as it stands now, and one decision closes
   // every report of that message.
+  import { dateTime } from '$lib/shared/utils/date-format';
   import { onMount } from 'svelte';
   import { resolve } from '$app/paths';
   import { ApiError } from '$lib/api/client';
@@ -14,10 +15,7 @@
   let error = $state('');
   let busyId = $state<string | null>(null);
 
-  const formatDate = (value: number | null) =>
-    value
-      ? new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(value)
-      : 'время неизвестно';
+  const formatDate = (value: number | null) => (value ? dateTime(value) : 'время неизвестно');
 
   async function load(): Promise<void> {
     status = 'loading';

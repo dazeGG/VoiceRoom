@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { displayNameOf } from '$lib/shared/utils/display-name';
   import { Ban, Ellipsis, User, UserX } from '@lucide/svelte';
   import Avatar from '$lib/shared/ui/Avatar/Avatar.svelte';
   import { AccountBadge, Popover, PopoverDivider, PopoverMenuItem, PopoverSubmenu } from '$lib/shared/ui';
@@ -46,7 +47,7 @@
   });
 
   function nameFor(member: MembershipMember): string {
-    return member.displayName || member.login;
+    return displayNameOf(member);
   }
 
   function canModerateMember(member: MembershipMember): boolean {

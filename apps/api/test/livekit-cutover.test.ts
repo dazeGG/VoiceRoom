@@ -13,10 +13,10 @@ import { checked } from './helpers/checked.ts';
 import type { CredentialProvider } from '../src/domains/admission/admission.service.ts';
 import type {
   CredentialIssue,
-  GatePrincipal,
   GateRoomStore,
   IssuedCredential
 } from '../src/domains/admission/credential-boundary.service.ts';
+import type { GatePrincipal } from '../src/domains/admission/gate-principal.ts';
 const { createApiApp } = await import('../src/server.ts');
 const { withRosterPeer } = await import('./roster-harness.ts');
 const { renderPrometheus, resetMetricsForTest } = await import('../src/lib/metrics.ts');

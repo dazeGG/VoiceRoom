@@ -1,9 +1,9 @@
 import crypto from 'node:crypto';
+import type { GatePrincipal } from './gate-principal.ts';
 import { createGateCredentialSigner, type GateClaims, type GateCredentialSigner } from './gate-credential-signer.ts';
 
 const DEFAULT_CREDENTIAL_TTL_MS = 6 * 60 * 60 * 1000;
 
-export type GatePrincipal = { principalType: 'account' | 'guest'; principalId: string; [key: string]: unknown };
 type StoreStatus = { status?: string; [key: string]: unknown } | null | undefined;
 export type Revocation = { status: string; epoch?: number | null; revoked?: number | null };
 

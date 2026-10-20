@@ -24,13 +24,13 @@ import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody, type Failure } from '../../platform/http/http-kit.ts';
 import {
   publicPeer,
-  roomAvatarUrl,
   roomBanned,
   type LiveRoom,
   type LobbyRoom,
   type PresencePeer,
   type StoredRoom
 } from './room-views.ts';
+import { avatarUrl } from '../../lib/avatar-url.ts';
 import type { OwnerCheck, RoomsService } from './rooms.service.ts';
 import type { PowVerdict } from '../../lib/pow.ts';
 import type { RateCheck } from '../../lib/rate-limit.ts';
@@ -224,7 +224,7 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
       if (!room) return reply.code(404).send({ ...notFound, roomId });
       return {
         ok: true as const,
-        avatarUrl: roomAvatarUrl(room.avatarKey),
+        avatarUrl: avatarUrl(room.avatarKey),
         createdAt: room.createdAt,
         exists: true as const,
         ...(room.emptySince === undefined ? {} : { emptySince: room.emptySince }),

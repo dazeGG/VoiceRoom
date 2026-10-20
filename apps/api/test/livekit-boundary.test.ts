@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import type { GatePrincipal } from '../src/domains/admission/credential-boundary.service.ts';
+import type { GatePrincipal } from '../src/domains/admission/gate-principal.ts';
 import type { GateClaims } from '../src/domains/admission/gate-credential-signer.ts';
 import type { Fakes } from './fakes/index.ts';
 import { isRecord } from '@voice-room/shared/guards';

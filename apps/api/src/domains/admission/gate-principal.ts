@@ -1,7 +1,10 @@
 // The identity a LiveKit gate credential is issued to: the account for a
 // signed-in peer, the room-scoped guest identity otherwise.
 
-import type { GatePrincipal } from './admission.service.ts';
+export type GatePrincipal = {
+  principalType: 'account' | 'guest';
+  principalId: string;
+};
 
 export interface GatePrincipalPeer {
   accountUserId?: string | null;

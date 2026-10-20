@@ -2,8 +2,7 @@ import pg from 'pg';
 import { recordPgPoolError } from '../../lib/metrics.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { createLogger } from '../../lib/logger.ts';
-
-type PoolLogger = { error(...args: unknown[]): void };
+import type { Logger } from '../types.ts';
 
 /**
  * A PostgreSQL pool. Each process opens one, at its entrypoint, and hands it to
@@ -15,7 +14,7 @@ function createDbPool({
   max = 10
 }: {
   databaseUrl: string;
-  logger?: PoolLogger | undefined;
+  logger?: Pick<Logger, 'error'> | undefined;
   max?: number;
 }): pg.Pool {
   const pool = new pg.Pool({

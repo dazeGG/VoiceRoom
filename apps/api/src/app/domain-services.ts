@@ -118,12 +118,13 @@ export function createDomainServices(deps: DomainServiceDeps) {
     maxBans: config.MAX_ROOM_BANS,
     logger: () => deps.logger()
   });
+  const content = createContentRepository();
   const roomChat = createRoomChatService({
     messages: services.getMessageService,
     readService: () => services.getHistoryServices().read,
     getRoom: hub.getRoom,
     findRoomBan: hub.findRoomBan,
-    prepareContent: (input) => createContentRepository().prepareWrite(input),
+    prepareContent: content.prepareWrite,
     mentionUserIds: mentionUserIdsFromContent,
     limiter: limits.roomChat,
     findUser: (userId) => services.getUserStore().getUserById(userId),

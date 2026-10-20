@@ -1,6 +1,7 @@
 import {
   DEFAULT_GATE_THRESHOLD_DB,
   GATE_CAPTURE_SWITCH_DEBOUNCE_MS,
+  GATE_ON_DEFAULT_DB,
   GATE_THRESHOLD_DB_STORAGE_KEY,
   GATE_THRESHOLD_MIN_DB,
   MICROPHONE_DEVICE_STORAGE_KEY,
@@ -44,12 +45,9 @@ let microphoneTasks: Promise<unknown> = Promise.resolve();
 let deviceChangeTimer = 0;
 let preferredOutputPresent = true;
 const DEVICE_CHANGE_SETTLE_MS = 400;
-// Same on-default as SettingsModal's GATE_DEFAULT_DB, used when there's no prior
-// threshold to restore (gate has never been turned on in this session).
-const GATE_TOGGLE_DEFAULT_DB = -40;
 // Remembers the last non-off threshold so toggling the gate back on restores it,
 // mirroring SettingsModal's local gateDb/gateOn split.
-let lastGateThresholdDb = GATE_TOGGLE_DEFAULT_DB;
+let lastGateThresholdDb = GATE_ON_DEFAULT_DB;
 
 export interface GateControlView {
   levelScale: number;

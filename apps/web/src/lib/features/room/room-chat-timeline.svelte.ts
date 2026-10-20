@@ -7,7 +7,7 @@ import { ApiError } from '$lib/api/client';
 import { fetchRoomChat, fetchRoomChatPage, type ChatMessage } from '$lib/api/rooms';
 import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
 import { createHistoryCache } from '$lib/shared/chat/history-cache';
-import { createAnchoredHistory } from './room-history.svelte';
+import { createAnchoredHistory } from '$lib/shared/chat/anchored-history.svelte';
 import { mergeLatestWindow, restampAuthor } from './room-chat-view';
 
 const MAX_EARLY_EDITS = 50;

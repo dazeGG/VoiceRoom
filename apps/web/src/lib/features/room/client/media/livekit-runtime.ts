@@ -1,3 +1,4 @@
+import type { Track } from 'livekit-client';
 import type * as LiveKitClientModule from './livekit-client';
 
 export const TRACK_SOURCE = {
@@ -5,7 +6,7 @@ export const TRACK_SOURCE = {
   Microphone: 'microphone',
   ScreenShare: 'screen_share',
   ScreenShareAudio: 'screen_share_audio'
-} as const;
+} as const satisfies Record<string, `${Track.Source}`>;
 
 let livekitClientPromise: Promise<typeof LiveKitClientModule> | null = null;
 

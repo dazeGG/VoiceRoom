@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
+import { fromMicros, microsOf } from '../../platform/db/micros.ts';
+import type { CursorTuple } from '../../platform/cursor-codec.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Client = QueryClient | null | undefined;
@@ -19,10 +21,8 @@ type NotificationRow = {
   retracted_at: unknown;
   created_at: Date | string;
   updated_at: unknown;
-  created_at_micros?: string | number | null;
+  created_at_micros: string | number;
 };
-
-export type CursorTuple = { createdAtMicros: string; id: string };
 
 export type InboxNotification = {
   id: string;
@@ -42,9 +42,7 @@ export type InboxNotification = {
 
 export type ReadAllResult = { updated: number | null; revision: number | null };
 
-const createdAtMicros = sql<string>`floor(extract(epoch FROM created_at) * 1000000)::numeric(20,0)`.as(
-  'created_at_micros'
-);
+const createdAtMicros = microsOf('created_at').as('created_at_micros');
 const now = sql<Date>`current_timestamp`;
 
 // The read point that bounds which notifications a read retires. Callers hand
@@ -81,7 +79,7 @@ function mapRow(row: NotificationRow | null | undefined): InboxNotification | nu
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         cursorTuple: {
-          createdAtMicros: String(row.created_at_micros || Math.trunc(new Date(row.created_at).getTime() * 1000)),
+          createdAtMicros: String(row.created_at_micros),
           id: row.id
         }
       }
@@ -164,6 +162,7 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
           }))
         )
         .returningAll()
+        .returning(createdAtMicros)
         .executeTakeFirst();
       return mapRow(row);
     });
@@ -188,7 +187,7 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
       .where('recipient_user_id', '=', recipientUserId);
     if (before?.createdAtMicros) {
       query = query.where(
-        sql<boolean>`(created_at, id) < (to_timestamp(${before.createdAtMicros}::numeric / 1000000.0), ${before.id || ''}::varchar)`
+        sql<boolean>`(created_at, id) < (${fromMicros(before.createdAtMicros)}, ${before.id || ''}::varchar)`
       );
     }
     return rows(
@@ -254,6 +253,7 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
         .where('id', '=', notificationId)
         .where('recipient_user_id', '=', recipientUserId)
         .returningAll()
+        .returning(createdAtMicros)
         .executeTakeFirst();
       return mapRow(row);
     });
@@ -319,6 +319,7 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
             .where('recipient_user_id', '=', recipientUserId)
             .where('retracted_at', 'is', null)
             .returningAll()
+            .returning(createdAtMicros)
             .execute())
         );
       }

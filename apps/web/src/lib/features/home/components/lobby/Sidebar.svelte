@@ -15,7 +15,7 @@
   } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
   import { effectivePresenceStatus, normalizePresenceStatus, type PresenceStatus } from '$lib/shared/presence';
-  import { friendName } from '../../model/lobby-format';
+  import { displayNameOf } from '$lib/shared/utils/display-name';
   import { useLobby } from '$lib/features/home/model/lobby-context';
   import { notificationPreferences, updatePresenceStatus } from '$lib/shared/notifications/preferences.svelte';
   import BetaMark from '$lib/shared/components/BetaMark.svelte';
@@ -74,7 +74,7 @@
     [...lobby.friends].sort((a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0))
   );
 
-  const selfName = $derived(user.displayName?.trim() || user.login);
+  const selfName = $derived(displayNameOf(user));
   const activeVoiceLabel = $derived(activeVoiceRoomName?.trim() || activeVoiceRoomId || '');
   const selfPresence = $derived(
     normalizePresenceStatus(
@@ -295,7 +295,7 @@
           onclick={() => lobby.openDm(entry.user.id)}
         >
           <Avatar
-            name={friendName(entry.user)}
+            name={displayNameOf(entry.user)}
             src={entry.user.avatarUrl}
             colorKey={entry.user.avatarColorKey}
             background={entry.user.avatarAccent || undefined}
@@ -309,7 +309,7 @@
           <div class="lv-row-body">
             <div class="lv-notification-title">
               <div class="lv-row-name">
-                <EmojiText text={friendName(entry.user)} /><AccountBadge userId={entry.user.id} />
+                <EmojiText text={displayNameOf(entry.user)} /><AccountBadge userId={entry.user.id} />
               </div>
               {#if friendNotificationsMuted}
                 <span

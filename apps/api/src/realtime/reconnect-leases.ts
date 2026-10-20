@@ -15,9 +15,9 @@ import type {
   LeaseRecord,
   Peer,
   PresenceRoom,
-  Timer,
   VoiceTarget
 } from './runtime-types.ts';
+import type { Timer } from '../platform/types.ts';
 
 export interface ReconnectLeaseDeps {
   presenceRooms: Map<string, PresenceRoom>;

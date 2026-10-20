@@ -42,7 +42,7 @@
   // spotlights are mutually exclusive, so entering one leaves the other.
   function activateParticipant(): void {
     if (roomState.viewedScreenPeerId) {
-      void leaveScreenView({ quiet: true, keepPreview: true }).catch((error: unknown) =>
+      void leaveScreenView({ keepPreview: true }).catch((error: unknown) =>
         log.error('screen view action failed', errorContext(error))
       );
     }

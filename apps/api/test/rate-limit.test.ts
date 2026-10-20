@@ -69,3 +69,13 @@ test('rate limiter is disabled when limit <= 0', () => {
     assert.equal(limiter.check('ip', 1000).allowed, true);
   }
 });
+
+test('rate limiter keys are client-chosen, so it remembers only so many and forgets the oldest first', () => {
+  const limiter = createRateLimiter({ limit: 1, windowMs: 60000, maxEntries: 50 });
+  assert.equal(limiter.check('first', 1000).allowed, true);
+  assert.equal(limiter.check('first', 1000).allowed, false);
+  for (let i = 0; i < 500; i += 1) limiter.check(`random-${i}`, 1000);
+  assert.ok(limiter.entries.size <= 50, `map grew to ${limiter.entries.size}`);
+  assert.equal(limiter.check('first', 1000).allowed, true, 'the oldest key was dropped and starts afresh');
+  assert.equal(limiter.check('random-499', 1000).allowed, false, 'a recent key keeps its window');
+});

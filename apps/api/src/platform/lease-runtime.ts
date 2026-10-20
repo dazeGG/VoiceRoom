@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
 import { fieldOf } from './record.ts';
+import type { Logger } from './types.ts';
 
 const DEFAULT_LEASE_MS = 30_000;
 const DEFAULT_RENEW_MS = 10_000;
@@ -20,13 +21,9 @@ export type FenceGuard = Readonly<{
 
 type LeaseRequest = { identity: string; leaseMs: number; ownerId: string; signal: AbortSignal };
 type LeaseReference = { fencingToken: number; identity: string; ownerId: string };
-type AcquireResult =
-  | { acquired?: boolean; fencingToken?: unknown; fencing_token?: unknown; expiresAt?: unknown; expires_at?: unknown }
-  | null
-  | undefined;
+type AcquireResult = { acquired: false } | { acquired: true; fencingToken: number; expiresAt?: unknown };
 type Heartbeat = { identity: string; ownerId: string; fencingToken: number; ready: boolean };
 type Sleep = (ms: number, signal?: AbortSignal) => Promise<void>;
-type RuntimeLogger = { warn(...args: unknown[]): void; error(...args: unknown[]): void };
 
 class LeaseLostError extends Error {
   declare code: string;
@@ -97,8 +94,8 @@ function createFenceGuard({ lease, signal }: { lease: Lease; signal: AbortSignal
 }
 
 function normalizeLease(value: AcquireResult, identity: string, ownerId: string): Lease | null {
-  if (!value || value.acquired === false) return null;
-  const fencingToken = Number(value.fencingToken ?? value.fencing_token);
+  if (!value.acquired) return null;
+  const { fencingToken } = value;
   if (!Number.isSafeInteger(fencingToken) || fencingToken < 1) {
     throw new TypeError('Lease adapter must return a positive integer fencingToken');
   }
@@ -106,7 +103,7 @@ function normalizeLease(value: AcquireResult, identity: string, ownerId: string)
     identity,
     ownerId,
     fencingToken,
-    expiresAt: value.expiresAt ?? value.expires_at ?? null
+    expiresAt: value.expiresAt ?? null
   });
 }
 
@@ -131,7 +128,7 @@ function createLeaseRuntime({
   idleMs?: number;
   jitter?: unknown;
   leaseMs?: number;
-  logger?: RuntimeLogger;
+  logger?: Pick<Logger, 'warn' | 'error'>;
   maxBackoffMs?: number;
   onHeartbeat?: (heartbeat: Heartbeat) => void;
   ownerId?: string;

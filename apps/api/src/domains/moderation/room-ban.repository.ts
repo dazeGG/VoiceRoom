@@ -9,10 +9,11 @@ import { isOneOf } from '@voice-room/shared/guards';
 import { transaction } from '../../platform/db/pool.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { RoomBans } from '../../platform/db/schema.ts';
-import type { GatePrincipal } from '../admission/admission.service.ts';
+import type { GatePrincipal } from '../admission/gate-principal.ts';
 import { revokePrincipalInTransaction, type PrincipalRevocation } from '../admission/gate-credential.repository.ts';
 import { isGatePrincipal } from '../admission/gate-principal.ts';
-import { createRowId, normalizePositiveInt, toDate, toMillis } from '../rooms/room.repository.ts';
+import { createRowId } from '../../platform/db/ids.ts';
+import { normalizePositiveInt, toDate, toMillis } from '../rooms/room.repository.ts';
 import type { ActiveBanService } from './active-ban.service.ts';
 
 type BanLookups = Pick<ActiveBanService, 'getActiveBan' | 'repository'>;

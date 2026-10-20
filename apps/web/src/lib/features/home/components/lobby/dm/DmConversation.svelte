@@ -29,7 +29,9 @@
   import type { Attachment } from '@voice-room/shared/contracts/messages';
   import { attachmentAt, copyAttachmentImage, downloadAttachment } from '$lib/shared/chat/attachment-actions';
   import { openProfileCardFor } from '../../../../../entities/profile-card/profile-card-ui.svelte';
-  import { formatDayLabel, formatTime, friendName, isSameDay } from '../../../model/lobby-format';
+  import { formatTime } from '../../../model/lobby-format';
+  import { displayNameOf } from '$lib/shared/utils/display-name';
+  import { formatChatDayLabel, isSameDay } from '$lib/shared/utils/chat-date';
   import { pushToast } from '../../../model/toasts.svelte';
   import DmComposer from './DmComposer.svelte';
   import DmInviteCard from './DmInviteCard.svelte';
@@ -56,8 +58,8 @@
   // The view is mounted per peer, like the reaction store below.
   const outbox = lobby.outboxFor(untrack(() => peerId));
   const selfId = $derived(self.id);
-  const selfName = $derived(self.displayName?.trim() || self.login);
-  const peerName = $derived(peer ? friendName(peer) : '');
+  const selfName = $derived(displayNameOf(self));
+  const peerName = $derived(peer ? displayNameOf(peer) : '');
 
   let scrollEl = $state<HTMLDivElement | null>(null);
   let composer = $state<{ focus(): void } | null>(null);
@@ -105,7 +107,7 @@
         result.push({
           key: message.id,
           fromMe,
-          dayLabel: newDay ? formatDayLabel(message.createdAt) : null,
+          dayLabel: newDay ? formatChatDayLabel(message.createdAt) : null,
           bubbles: [message]
         });
       }

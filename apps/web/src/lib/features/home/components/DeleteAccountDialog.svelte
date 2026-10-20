@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { dayMonth } from '$lib/shared/utils/date-format';
+  import { displayNameOf } from '$lib/shared/utils/display-name';
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { fetchAccountDeletionPreview, requestAccountDeletion, type AccountDeletionPreview } from '$lib/api/auth';
   import { clearSession, expectSessionEnd } from '$lib/features/auth/session.svelte';
@@ -41,10 +43,6 @@
     };
   });
 
-  function formatDate(value: number): string {
-    return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(value);
-  }
-
   async function confirmDeletion(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     if (deleting || !understood || !password) return;
@@ -56,7 +54,7 @@
       const { deletionScheduledFor } = await requestAccountDeletion(password);
       password = '';
       clearSession();
-      onToast(`Аккаунт будет удалён ${formatDate(deletionScheduledFor)}. Передумали — просто войдите снова`);
+      onToast(`Аккаунт будет удалён ${dayMonth(deletionScheduledFor)}. Передумали — просто войдите снова`);
     } catch (cause) {
       expectSessionEnd(false);
       error = cause instanceof Error && cause.message ? cause.message : 'Не удалось удалить аккаунт';
@@ -71,7 +69,7 @@
   <Dialog {open} title="Удалить аккаунт" {onClose} width={500} initialFocus="#deleteAccountPassword">
     <form class="delete-account" onsubmit={confirmDeletion}>
       <p class="delete-account-text">
-        Аккаунт сразу скроется, а все сеансы завершатся. До {formatDate(Date.now() + graceDays * DAY_MS)} его можно восстановить,
+        Аккаунт сразу скроется, а все сеансы завершатся. До {dayMonth(Date.now() + graceDays * DAY_MS)} его можно восстановить,
         просто войдя с паролем. После этого удаление окончательное:
       </p>
       <ul class="delete-account-list">
@@ -89,7 +87,7 @@
               <small>
                 <EmojiText
                   text={room.heir
-                    ? `перейдёт к ${room.heir.displayName || room.heir.login} — самому давнему участнику`
+                    ? `перейдёт к ${displayNameOf(room.heir)} — самому давнему участнику`
                     : 'удалится: других участников нет'}
                 />
               </small>

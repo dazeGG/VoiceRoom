@@ -6,11 +6,9 @@ import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { createReplyRepository } from '../src/domains/messaging/reply.repository.ts';
-import { createContentRepository } from '../src/domains/messaging/content.repository.ts';
 import { transaction } from '../src/platform/db/pool.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
-import { fieldOf } from '../src/platform/record.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const skip = !process.env.TEST_DATABASE_URL;
@@ -108,22 +106,5 @@ test('a direct reply target is only found between its two users', { skip }, asyn
   await assert.rejects(
     () => createReplyRepository().getRoomPreview({ roomId: 'room-1', messageId: 'x' }),
     /query client/
-  );
-});
-
-test('editing structured content rewrites the text and marks the message edited', { skip }, async (t) => {
-  const { pool } = await setup(t);
-  const content = createContentRepository();
-  const updated = await transaction(pool, (client) =>
-    content.update({ client, messageId: 'from-ada', text: 'новый текст' })
-  );
-  assert.equal(updated?.text, 'новый текст');
-  assert.ok(updated?.edited_at);
-  assert.deepEqual(fieldOf(updated?.content, 'version'), 1);
-  await pool.query(`UPDATE room_messages SET deleted_at = now() WHERE id = 'from-guest'`);
-  assert.equal(
-    await transaction(pool, (client) => content.update({ client, messageId: 'from-guest', text: 'x' })),
-    null,
-    'a deleted message is not edited'
   );
 });

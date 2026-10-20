@@ -2,9 +2,9 @@ import type { LocalTrackPublication, Room } from 'livekit-client';
 import type { SvelteMap } from 'svelte/reactivity';
 import type { HotkeyBinding } from '$lib/shared/ui/HotkeyRecorder/types';
 import type { MicrophoneMode, NoiseMode } from './config';
-import type { Participant, PeerInfo } from '../model/participants';
+import type { Participant } from '../model/participants';
 import type { LobbyRoom } from '@voice-room/shared/contracts/rooms';
-export type { Participant, ParticipantViewRefs, PeerInfo } from '../model/participants';
+export type { Participant, PeerInfo } from '../model/participants';
 
 export type ScreenStreamMode = 'games' | 'text';
 
@@ -40,7 +40,6 @@ export type MicProcessor =
   | (MicStageBase & { type: 'input-gain'; nodes: AudioNode[]; setGain: (gain: number) => void });
 
 export interface MicrophoneCapture {
-  kind?: string;
   mode?: NoiseMode;
   processor: MicProcessor[] | null;
   rawStream: MediaStream | null;
@@ -247,17 +246,6 @@ export interface AppState
 
 /** The lobby card the rename answer and the room.updated broadcast carry. */
 export type RoomLifecycleSummary = LobbyRoom;
-
-export type ServerMessage =
-  | { type: 'hello'; peer: PeerInfo; peers: PeerInfo[]; roomId: string }
-  | { type: 'ping'; at: number }
-  | { type: 'room-not-found'; roomId: string }
-  | { type: 'peer-joined'; peer: PeerInfo }
-  | { type: 'peer-left'; peerId: string; reason: string }
-  | { type: 'peer-updated'; peer: PeerInfo }
-  | { type: 'room-full'; maxRoomPeers: number }
-  | { type: 'room-updated'; room: RoomLifecycleSummary }
-  | { type: 'room-deleted'; roomId: string };
 
 // Events from the desktop app's stream-audio helper. Desktop 1.4.4+ restarts a
 // crashed helper under the same session ('restarting') and sends 'exit' only when

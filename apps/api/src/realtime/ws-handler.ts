@@ -12,8 +12,11 @@ import type {
 import { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } from './envelope.ts';
 import { createTypingThrottle } from './typing-throttle.ts';
 import type { ConnectionRegistry, RealtimeSocket, WsConnection } from './registry.ts';
+import { BoundedMap } from '../lib/bounded-map.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger, hashIp } from '../lib/logger.ts';
+import { createRateLimiter } from '../lib/rate-limit.ts';
+import type { Logger } from '../platform/types.ts';
 
 // Validated commands always carry a payload object.
 type InboundEnvelope = ClientCommand;
@@ -41,7 +44,6 @@ export interface WsRoomRuntime {
   broadcastRoomTyping(connection: WsConnection, roomId: string, activity: TypingActivity): unknown;
   sendAccountSummaries(connection: WsConnection, userId: string): Promise<unknown>;
 }
-type WsLogger = { info(...args: unknown[]): void; warn(...args: unknown[]): void; error(...args: unknown[]): void };
 type WsSocket = RealtimeSocket & {
   on(event: 'message', listener: (raw: unknown) => void): unknown;
   on(event: 'close', listener: (code: number, reason: unknown) => void): unknown;
@@ -77,7 +79,7 @@ function createWsHandler({
   canTypeToUser?: (userId: string, peerId: string) => Promise<unknown>;
   getClientIp?: (req: IncomingMessage) => string;
   now?: () => number;
-  logger?: WsLogger;
+  logger?: Pick<Logger, 'info' | 'warn' | 'error'>;
 }) {
   // Every realtime failure is attributed to the connection and the message type
   // that caused it. Without both, a report of "the call keeps dropping" leaves
@@ -107,18 +109,6 @@ function createWsHandler({
   const DM_TYPING_LOOKUP_BUDGET = 20;
   const DM_TYPING_LOOKUP_WINDOW_MS = 30_000;
 
-  function spendTypingLookup(connection: WsConnection): boolean {
-    const at = now();
-    const budget = connection.dmTypingLookups;
-    if (!budget || at - budget.windowAt >= DM_TYPING_LOOKUP_WINDOW_MS) {
-      connection.dmTypingLookups = { windowAt: at, spent: 1 };
-      return true;
-    }
-    if (budget.spent >= DM_TYPING_LOOKUP_BUDGET) return false;
-    budget.spent += 1;
-    return true;
-  }
-
   function forwardDirectTyping(connection: WsConnection, peerId: string, activity: TypingActivity = 'typing'): void {
     const { userId } = connection;
     if (!userId || peerId === userId) return;
@@ -136,17 +126,15 @@ function createWsHandler({
     peerId: string,
     activity: TypingActivity
   ): Promise<void> {
-    const cache = (connection.dmTypingPermission ??= new Map<string, { allowed: boolean; checkedAt: number }>());
+    const cache = (connection.dmTypingPermission ??= new BoundedMap(DM_TYPING_THREAD_LIMIT));
     const entry = cache.get(peerId) || { allowed: false, checkedAt: -Infinity };
-    cache.delete(peerId);
     cache.set(peerId, entry);
-    while (cache.size > DM_TYPING_THREAD_LIMIT) {
-      const oldest = cache.keys().next();
-      if (oldest.done) break;
-      cache.delete(oldest.value);
-    }
     if (now() - entry.checkedAt >= DM_TYPING_PERMISSION_TTL_MS) {
-      if (!spendTypingLookup(connection)) return;
+      const lookups = (connection.dmTypingLookups ??= createRateLimiter({
+        limit: DM_TYPING_LOOKUP_BUDGET,
+        windowMs: DM_TYPING_LOOKUP_WINDOW_MS
+      }));
+      if (!lookups.check(userId, now()).allowed) return;
       entry.allowed = Boolean(await canTypeToUser(userId, peerId));
       entry.checkedAt = now();
     }
@@ -154,13 +142,13 @@ function createWsHandler({
     registry.sendToUser(peerId, buildServerEnvelope('dm.typing', { userId, activity }));
   }
 
-  function enqueueMessage(connection: WsConnection, task: () => Promise<unknown>): void {
+  function enqueueMessage(connection: WsConnection, type: string, task: () => Promise<unknown>): void {
     connection.inboundMessageQueue = connection.inboundMessageQueue
       .then(() => {
         if (connection.closed) return;
         return task();
       })
-      .catch((error: unknown) => reportMessageError(error, connection));
+      .catch((error: unknown) => reportMessageError(error, connection, type));
   }
 
   async function handleMessage(
@@ -467,7 +455,9 @@ function createWsHandler({
     }
     if (parsed.envelope.type === 'hello' || parsed.envelope.type === 'ping') {
       // Heartbeats do not mutate room intent and must not wait behind storage.
-      void handleMessage(connection, parsed.envelope, req).catch(reportMessageError);
+      void handleMessage(connection, parsed.envelope, req).catch((error: unknown) =>
+        reportMessageError(error, connection, parsed.envelope.type)
+      );
       return;
     }
 
@@ -475,7 +465,7 @@ function createWsHandler({
     // or storage. Without this queue, JOIN→LEAVE and JOIN1→JOIN2 can execute
     // in reverse before the room runtime registers their intent.
     const envelope = parsed.envelope;
-    enqueueMessage(connection, () => handleMessage(connection, envelope, req));
+    enqueueMessage(connection, envelope.type, () => handleMessage(connection, envelope, req));
   }
 
   return {

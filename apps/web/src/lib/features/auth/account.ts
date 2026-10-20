@@ -1,5 +1,4 @@
 import type { AccountFailure } from '@voice-room/shared/contracts/account';
-import type { AuthUser } from '$lib/api/auth';
 
 export const PASSWORD_MIN_LENGTH = 8;
 export const LOGIN_HINT = '3–32 символа: латиница, цифры, точка, дефис, подчёркивание';
@@ -15,12 +14,6 @@ export function normalizeLogin(value: string): string {
 
 export function isValidPassword(value: string): boolean {
   return typeof value === 'string' && value.length >= PASSWORD_MIN_LENGTH && value.length <= 200;
-}
-
-// The name a logged-in account carries into a voice room: their display name if
-// set, otherwise their login.
-export function roomNameFor(user: AuthUser): string {
-  return user.displayName?.trim() || user.login;
 }
 
 const blockedUntilFormat = new Intl.DateTimeFormat('ru-RU', { dateStyle: 'long', timeStyle: 'short' });

@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { createMembershipRepository } from '../src/domains/membership/membership.repository.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { fakeDb } from './fakes/index.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const skip = !process.env.TEST_DATABASE_URL;
@@ -102,4 +103,34 @@ test('the directory pages in joining order and searches by name or login prefix'
     ['bea']
   );
   assert.deepEqual(await memberships.listDirectoryPage({ roomId: 'gone' }), { members: [], hasMore: false });
+});
+
+test('a search term is matched literally: % and _ are not wildcards', { skip }, async (t) => {
+  const { memberships } = await setup(t);
+  for (const userId of ['ada', 'bob', 'bea']) await memberships.upsertActive({ roomId: 'room', userId });
+
+  for (const query of ['%', '_', 'b_b', 'b%']) {
+    const found = await memberships.listDirectoryPage({ roomId: 'room', query });
+    assert.deepEqual(found.members, [], `"${query}" matches no one`);
+  }
+  assert.deepEqual(
+    (await memberships.listDirectoryPage({ roomId: 'room', query: 'bo' })).members.map((member) => member.userId),
+    ['bob']
+  );
+});
+
+test('a member row with no stored colour is listed with the default colour', () => {
+  const { mapDirectoryMember } = createMembershipRepository({ pool: fakeDb() });
+  const member = mapDirectoryMember({
+    user_id: 'ada',
+    role: 'member',
+    created_at: new Date(0),
+    created_at_micros: '0',
+    login: 'ada',
+    display_name: 'Ada',
+    avatar_color_key: null,
+    avatar_key: null,
+    avatar_accent: null
+  });
+  assert.equal(member.avatarColorKey, 'blurple');
 });

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { ArrowRight } from '@lucide/svelte';
   import { Button } from '$lib/shared/ui';
-  import { START_FEATURES } from '$lib/features/shared-content/start-features';
+  import { START_FEATURES } from '$lib/shared/start-features';
   import { iconMd } from '$lib/shared/ui/icons';
   import LandingFeatureGrid from './LandingFeatureGrid.svelte';
 

@@ -1,9 +1,9 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
-import type { AnchoredHistoryPage } from '../src/lib/features/room/room-history.svelte.ts';
+import type { AnchoredHistoryPage } from '../src/lib/shared/chat/anchored-history.svelte.ts';
 
 test('G28-A01 older loads are single-flight, deduplicated and preserve the scroll anchor', async () => {
-  const { createAnchoredHistory } = await import('../src/lib/features/room/room-history.svelte.ts');
+  const { createAnchoredHistory } = await import('../src/lib/shared/chat/anchored-history.svelte.ts');
   let olderCalls = 0;
   const history = createAnchoredHistory<{ id: string; createdAt: number }>({
     compare: (left, right) => left.createdAt - right.createdAt,
@@ -34,7 +34,7 @@ test('G28-A01 older loads are single-flight, deduplicated and preserve the scrol
 });
 
 test('G28-A02 switching room cancels stale history results', async () => {
-  const { createAnchoredHistory } = await import('../src/lib/features/room/room-history.svelte.ts');
+  const { createAnchoredHistory } = await import('../src/lib/shared/chat/anchored-history.svelte.ts');
   let resolveOld: ((page: AnchoredHistoryPage<{ id: string }>) => void) | undefined;
   const oldPage = new Promise<AnchoredHistoryPage<{ id: string }>>((resolve) => {
     resolveOld = resolve;

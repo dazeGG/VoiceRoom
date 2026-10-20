@@ -2,7 +2,7 @@ import { fetchMe, type AuthUser } from '$lib/api/auth';
 import { clearChatDrafts, resumeChatDrafts } from '$lib/shared/chat/chat-drafts';
 import { clearAttachmentComposeStores } from '$lib/shared/chat/attachment-compose-stores';
 import { clearHistoryCache } from '$lib/shared/chat/history-cache';
-import { roomNameFor } from './account';
+import { displayNameOf } from '$lib/shared/utils/display-name';
 
 // App-wide auth state. `loaded` flips true once the first /auth/me resolves so
 // the UI can avoid flashing the logged-out state before we know.
@@ -35,7 +35,7 @@ function syncRoomName(user: AuthUser | null): void {
   if (typeof localStorage === 'undefined') return;
   try {
     if (user) {
-      localStorage.setItem('voice-room:name', roomNameFor(user));
+      localStorage.setItem('voice-room:name', displayNameOf(user));
     } else {
       localStorage.removeItem('voice-room:name');
     }

@@ -14,6 +14,7 @@ import {
   RoomMessage
 } from '@voice-room/shared/contracts/messages';
 import { avatarColorForPeerId } from '../rooms/avatar-color.ts';
+import { avatarUrl } from '../../lib/avatar-url.ts';
 
 const Absent = <Schema extends TSchema>(schema: Schema) => Type.Optional(Nullable(schema));
 
@@ -50,8 +51,7 @@ export function publicChatMessage(message: RoomChatMessage): RoomMessage {
     authorUserId: message.authorUserId || null,
     avatarAccent: message.avatarAccent || null,
     avatarColorKey: message.avatarColorKey || avatarColorForPeerId(message.peerId),
-    avatarUrl:
-      message.avatarUrl || (message.avatarKey ? `/api/avatars/${encodeURIComponent(message.avatarKey)}` : null),
+    avatarUrl: message.avatarUrl || avatarUrl(message.avatarKey),
     createdAt: message.createdAt,
     editedAt: message.editedAt || null,
     ...(message.expiresAt === undefined ? {} : { expiresAt: message.expiresAt }),

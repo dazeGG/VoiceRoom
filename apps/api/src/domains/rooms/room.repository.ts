@@ -1,10 +1,10 @@
 // The rooms table: creation under quota, rename, avatar, the empty/idle
 // lifecycle and the purge of what was deleted long enough ago.
 
-import crypto from 'node:crypto';
 import { sql, type Selectable } from 'kysely';
 import type { Database } from '../../platform/db/kysely.ts';
 import type { Rooms } from '../../platform/db/schema.ts';
+import { createRoomId, createRowId } from '../../platform/db/ids.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 
 export type RoomRelationship = 'owner' | 'bookmarked' | 'member' | '';
@@ -15,16 +15,6 @@ export type RoomCreation =
   | { room: StoredRoom; status: 'created' }
   | { room: null; status: 'auth_required' | 'quota_exceeded' | 'capacity_exceeded' };
 
-export function createRowId(): string {
-  return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
-}
-
-function createRoomId(): string {
-  const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789';
-  const bytes = crypto.randomBytes(10);
-  return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
-}
-
 export function normalizePositiveInt(value: unknown, fallback: number): number {
   const next = Number(value);
   return Number.isFinite(next) && next >= 0 ? next : fallback;
@@ -34,10 +24,9 @@ export function toDate(ms: unknown): Date {
   return new Date(normalizePositiveInt(ms, Date.now()));
 }
 
-/** A stored time as epoch milliseconds; now when it does not parse. */
+/** A stored time as epoch milliseconds; 0 when it does not parse. */
 export function toMillis(value: Date | string): number {
-  if (value instanceof Date) return value.getTime();
-  return epochMillis(value) ?? Date.now();
+  return epochMillis(value) ?? 0;
 }
 
 export function mapRoom(row: RoomRow) {

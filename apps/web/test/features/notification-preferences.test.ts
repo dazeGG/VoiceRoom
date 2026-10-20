@@ -54,15 +54,15 @@ test('muting a room or a person goes to the server and shows its answer', async 
 test('do-not-disturb silences cues and shows as the dnd status', async () => {
   stubFetch({
     '/api/notifications/preferences': { body: { ok: true, preferences: prefs() } },
-    'POST /api/notifications/settings': {
+    'POST /api/presence/status': {
       body: { ok: true, preferences: prefs({ doNotDisturb: true, presenceStatus: 'dnd' }) }
     }
   });
   const n = await load();
   await n.loadNotificationPreferences('user-1');
   expect(n.isDoNotDisturbPlaybackSuppressed()).toBe(false);
-  await n.updateDoNotDisturb(true);
-  expect(n.isDoNotDisturbEnabled()).toBe(true);
+  await n.updatePresenceStatus('dnd');
+  expect(n.isDoNotDisturbPlaybackSuppressed()).toBe(true);
   expect(n.notificationPreferences.presenceStatus).toBe('dnd');
 });
 

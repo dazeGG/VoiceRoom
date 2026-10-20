@@ -35,7 +35,6 @@ async function loadParticipantScreenLifecycle() {
   vi.doMock('../src/lib/features/room/client/ui/screen-view', () => ({
     disconnectScreen: () => {},
     hideScreenStage: () => {},
-    refreshAllScreenActions: () => {},
     refreshScreenStage: () => {
       testState.stageRefreshes += 1;
     },

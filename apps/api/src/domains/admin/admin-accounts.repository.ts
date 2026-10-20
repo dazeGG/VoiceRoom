@@ -17,6 +17,8 @@ import type { AccountBadge } from '@voice-room/shared/contracts/users';
 import { ACCOUNT_DELETION_GRACE_MS, describeUserAgent } from '@voice-room/shared/account-security';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
+import { avatarUrl } from '../../lib/avatar-url.ts';
+import { escapeLike } from '../../platform/db/like.ts';
 
 const MSK = sql.lit('Europe/Moscow');
 const TODAY = sql`(now() AT TIME ZONE ${MSK})::date`;
@@ -61,6 +63,35 @@ export interface StoredAccountDetail {
 }
 
 const n = (value: unknown): number => Number(value) || 0;
+
+/** A row of the `accounts` CTE; counts arrive as numbers or as bigint text. */
+type AccountSqlRow = {
+  id: string;
+  login: string;
+  display_name: string | null;
+  avatar_key: string | null;
+  avatar_color_key: string | null;
+  avatar_accent: string | null;
+  created_at: Date;
+  badge: string | null;
+  blocked_at: Date | null;
+  blocked_until: Date | null;
+  block_reason: string | null;
+  deletion_requested_at: Date | null;
+  deletion_by_admin: boolean;
+  active_days: number | string;
+  desktop_app: boolean;
+  browser: boolean;
+  mobile: boolean;
+  last_seen: Date | null;
+  voice_minutes: number | string;
+  messages: number | string;
+  owned_rooms: number | string;
+  reports_against: number | string;
+};
+
+type DayRow = { day: string; active: boolean; messages: number | string; voice_minutes: number | string };
+type ReportCountRow = { against: number | string; against_open: number | string; filed: number | string };
 
 const SORT_COLUMNS: Record<AccountsSort, RawBuilder<unknown>> = {
   created: sql`created_at`,
@@ -157,27 +188,26 @@ function filterClause(filter: AccountsFilter, onlineIds: string[]): RawBuilder<u
 
 function searchClause(q: string): RawBuilder<unknown> {
   if (!q) return sql`true`;
-  const pattern = `%${q.replace(/[\\%_]/g, (char) => `\\${char}`)}%`;
+  const pattern = `%${escapeLike(q)}%`;
   return sql`(login ILIKE ${pattern} OR display_name ILIKE ${pattern} OR id = ${q})`;
 }
 
-function mapRow(row: Record<string, unknown>, now: number): StoredAccountRow {
-  const avatarKey = typeof row.avatar_key === 'string' && row.avatar_key ? row.avatar_key : null;
+function mapRow(row: AccountSqlRow, now: number): StoredAccountRow {
   const blockedAt = epochMillis(row.blocked_at);
   const blockedUntil = epochMillis(row.blocked_until);
   const deletionAt = epochMillis(row.deletion_requested_at);
   const badge = row.badge === 'official' || row.badge === 'verified' ? row.badge : null;
   return {
-    id: String(row.id),
-    login: String(row.login),
-    displayName: typeof row.display_name === 'string' ? row.display_name : '',
-    avatarUrl: avatarKey ? `/api/avatars/${encodeURIComponent(avatarKey)}` : null,
-    avatarColorKey: typeof row.avatar_color_key === 'string' ? row.avatar_color_key : 'blurple',
-    avatarAccent: typeof row.avatar_accent === 'string' && row.avatar_accent ? row.avatar_accent : null,
+    id: row.id,
+    login: row.login,
+    displayName: row.display_name ?? '',
+    avatarUrl: avatarUrl(row.avatar_key),
+    avatarColorKey: row.avatar_color_key ?? 'blurple',
+    avatarAccent: row.avatar_accent || null,
     createdAt: epochMillis(row.created_at) ?? 0,
     lastSeenAt: epochMillis(row.last_seen) ?? epochMillis(row.created_at) ?? 0,
     activeDays: n(row.active_days),
-    clients: { desktopApp: row.desktop_app === true, browser: row.browser === true, mobile: row.mobile === true },
+    clients: { desktopApp: row.desktop_app, browser: row.browser, mobile: row.mobile },
     voiceMinutes: Math.round(n(row.voice_minutes)),
     messages: n(row.messages),
     ownedRooms: n(row.owned_rooms),
@@ -185,11 +215,11 @@ function mapRow(row: Record<string, unknown>, now: number): StoredAccountRow {
     badge,
     blocked:
       blockedAt !== null && (blockedUntil === null || blockedUntil > now)
-        ? { at: blockedAt, until: blockedUntil, reason: typeof row.block_reason === 'string' ? row.block_reason : '' }
+        ? { at: blockedAt, until: blockedUntil, reason: row.block_reason ?? '' }
         : null,
     deletion:
       deletionAt !== null
-        ? { scheduledFor: deletionAt + ACCOUNT_DELETION_GRACE_MS, byAdmin: row.deletion_by_admin === true }
+        ? { scheduledFor: deletionAt + ACCOUNT_DELETION_GRACE_MS, byAdmin: row.deletion_by_admin }
         : null
   };
 }
@@ -202,7 +232,7 @@ export function createAdminAccountsRepository({ pool }: { pool: pg.Pool }) {
     const order = query.order === 'asc' ? sql`ASC` : sql`DESC`;
     const offset = (query.page - 1) * ACCOUNTS_PAGE_SIZE;
     const [rows, count] = await Promise.all([
-      sql<Record<string, unknown>>`${accountsWith(where)}
+      sql<AccountSqlRow>`${accountsWith(where)}
         ORDER BY ${SORT_COLUMNS[query.sort]} ${order} NULLS LAST, id ASC
         LIMIT ${ACCOUNTS_PAGE_SIZE} OFFSET ${offset}`.execute(db),
       sql<{ total: unknown }>`SELECT count(*) AS total FROM (${accountsWith(where)}) AS listed`.execute(db)
@@ -211,12 +241,12 @@ export function createAdminAccountsRepository({ pool }: { pool: pg.Pool }) {
   }
 
   async function detail(userId: string, now: number = Date.now()): Promise<StoredAccountDetail | null> {
-    const found = await sql<Record<string, unknown>>`${accountsWith(sql`id = ${userId}`)}`.execute(db);
+    const found = await sql<AccountSqlRow>`${accountsWith(sql`id = ${userId}`)}`.execute(db);
     const row = found.rows[0];
     if (!row) return null;
     const since = sql`${TODAY} - ${sql.lit(ACCOUNT_DAYS - 1)}`;
     const [days, rooms, memberOf, devices, reports] = await Promise.all([
-      sql<Record<string, unknown>>`
+      sql<DayRow>`
         WITH span AS (SELECT generate_series(${since}, ${TODAY}, interval '1 day')::date AS day),
         sent AS (
           SELECT (created_at AT TIME ZONE ${MSK})::date AS day, count(*) AS n FROM room_messages
@@ -264,7 +294,7 @@ export function createAdminAccountsRepository({ pool }: { pool: pg.Pool }) {
         .where('expires_at', '>', new Date(now))
         .orderBy('last_seen_at', 'desc')
         .execute(),
-      sql<Record<string, unknown>>`
+      sql<ReportCountRow>`
         SELECT
           count(*) FILTER (WHERE coalesce(m.author_user_id, d.sender_id) = ${userId}) AS against,
           count(*) FILTER (WHERE coalesce(m.author_user_id, d.sender_id) = ${userId} AND c.status = 'open') AS against_open,
@@ -273,12 +303,12 @@ export function createAdminAccountsRepository({ pool }: { pool: pg.Pool }) {
         LEFT JOIN room_messages m ON c.target_kind = 'room_message' AND m.id = c.message_id
         LEFT JOIN direct_messages d ON c.target_kind = 'direct_message' AND d.id = c.message_id`.execute(db)
     ]);
-    const counted = reports.rows[0] ?? {};
+    const counted = reports.rows[0];
     return {
       account: mapRow(row, now),
       days: days.rows.map((day) => ({
-        day: String(day.day),
-        active: day.active === true,
+        day: day.day,
+        active: day.active,
         messages: n(day.messages),
         voiceMinutes: Math.round(n(day.voice_minutes))
       })),
@@ -293,7 +323,7 @@ export function createAdminAccountsRepository({ pool }: { pool: pg.Pool }) {
           lastSeenAt: epochMillis(session.last_seen_at) ?? 0
         };
       }),
-      reports: { against: n(counted.against), againstOpen: n(counted.against_open), filed: n(counted.filed) }
+      reports: { against: n(counted?.against), againstOpen: n(counted?.against_open), filed: n(counted?.filed) }
     };
   }
 

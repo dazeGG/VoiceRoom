@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 
 import {
   createCredentialBoundaryService,
-  type GatePrincipal,
   type GateRoomStore
 } from '../src/domains/admission/credential-boundary.service.ts';
+import type { GatePrincipal } from '../src/domains/admission/gate-principal.ts';
 import type {
   GateClaims,
   GateCredentialSigner,

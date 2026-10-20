@@ -5,7 +5,9 @@
 // person is doing by then, so the other side never keeps showing "выбирает
 // эмодзи" after they went back to typing, and alternating activities still
 // cannot get past the budget.
-import { type Timer, unrefTimer } from './runtime-types.ts';
+import { BoundedMap } from '../lib/bounded-map.ts';
+import type { Timer } from '../platform/types.ts';
+import { unrefTimer } from './runtime-types.ts';
 
 type Forward<Activity> = (activity: Activity) => void;
 type Entry<Activity> = {
@@ -34,19 +36,9 @@ function createTypingThrottle<Activity = string>({
   clearTimer?: (timer: Timer) => void;
   maxTargets?: number;
 } = {}) {
-  const targets = new Map<string, Entry<Activity>>();
-
-  function remember(key: string, entry: Entry<Activity>): void {
-    targets.delete(key);
-    targets.set(key, entry);
-    while (targets.size > maxTargets) {
-      const next = targets.entries().next();
-      if (next.done) break;
-      const [oldestKey, oldest] = next.value;
-      if (oldest.timer) clearTimer(oldest.timer);
-      targets.delete(oldestKey);
-    }
-  }
+  const targets = new BoundedMap<string, Entry<Activity>>(maxTargets, (oldest) => {
+    if (oldest.timer) clearTimer(oldest.timer);
+  });
 
   function send(entry: Entry<Activity>, activity: Activity, forward: Forward<Activity>): void {
     entry.at = now();
@@ -57,7 +49,7 @@ function createTypingThrottle<Activity = string>({
   // Returns whether the notice went out right away.
   function offer(key: string, activity: Activity, forward: Forward<Activity>): boolean {
     const entry: Entry<Activity> = targets.get(key) || { at: -Infinity, activity: null, pending: null, timer: null };
-    remember(key, entry);
+    targets.set(key, entry);
     const wait = entry.at + minIntervalMs - now();
     if (wait <= 0 && !entry.timer) {
       send(entry, activity, forward);

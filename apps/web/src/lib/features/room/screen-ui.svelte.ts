@@ -8,9 +8,8 @@ import type { Participant } from './client/core/types';
 interface ScreenUiState {
   revision: number;
   stageVisible: boolean;
-  hasStream: boolean;
-  showControls: boolean;
-  showPlaceholder: boolean;
+  readonly showControls: boolean;
+  readonly showPlaceholder: boolean;
   showMeta: boolean;
   uiActive: boolean;
   activeStream: MediaStream | null;
@@ -23,9 +22,12 @@ export const screenUi = $state<ScreenUiState>({
   // which Svelte cannot see; the screen view bumps this after such a change.
   revision: 0,
   stageVisible: false,
-  hasStream: false,
-  showControls: false,
-  showPlaceholder: true,
+  get showControls() {
+    return Boolean(this.activeStream);
+  },
+  get showPlaceholder() {
+    return !this.activeStream;
+  },
   showMeta: false,
   uiActive: false,
   activeStream: null,
@@ -137,8 +139,6 @@ export interface FullscreenView {
 
 export function getStreamVolumeView(): StreamVolumeView {
   void screenUi.revision;
-  void state.screenMuted;
-  void state.screenVolume;
   const peer = getActiveScreenPeer();
   const hideVolume = Boolean(peer?.isLocal);
   const muted = state.screenMuted || state.screenVolume <= 0;
@@ -154,7 +154,6 @@ export function getStreamVolumeView(): StreamVolumeView {
 
 export function getFullscreenView(): FullscreenView {
   void screenUi.revision;
-  void state.screenFullscreen;
   const fullscreen = state.screenFullscreen;
   return {
     fullscreen,

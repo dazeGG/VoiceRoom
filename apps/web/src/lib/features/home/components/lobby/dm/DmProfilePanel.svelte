@@ -7,7 +7,7 @@
   import type { PresenceStatus } from '$lib/shared/presence';
   import { Avatar } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
-  import { friendName } from '../../../model/lobby-format';
+  import { displayNameOf } from '$lib/shared/utils/display-name';
 
   let {
     peer,
@@ -39,7 +39,7 @@
   </div>
   <div class="lobby-profile-body">
     <Avatar
-      name={friendName(peer)}
+      name={displayNameOf(peer)}
       src={peer.avatarUrl}
       colorKey={peer.avatarColorKey}
       background={peer.avatarAccent || undefined}
@@ -50,7 +50,7 @@
       showDot
       ring="var(--vr-bg)"
     />
-    <div class="lobby-profile-panel-name"><EmojiText text={friendName(peer)} /></div>
+    <div class="lobby-profile-panel-name"><EmojiText text={displayNameOf(peer)} /></div>
     <div class="lobby-profile-panel-handle">@{peer.login}</div>
 
     <div class="lobby-profile-stats">

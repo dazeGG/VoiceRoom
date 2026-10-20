@@ -8,7 +8,8 @@ import { cleanAvatarColorKey } from '@voice-room/shared/validation';
 import type { Database } from '../../platform/db/kysely.ts';
 import type { RoomPeerIdentities } from '../../platform/db/schema.ts';
 import { avatarColorForPeerId } from './avatar-color.ts';
-import { createRowId, toDate, toMillis } from './room.repository.ts';
+import { createRowId } from '../../platform/db/ids.ts';
+import { toDate, toMillis } from './room.repository.ts';
 
 export type PeerIdentity = ReturnType<typeof mapPeerIdentity>;
 export type PeerIdentityClaim =

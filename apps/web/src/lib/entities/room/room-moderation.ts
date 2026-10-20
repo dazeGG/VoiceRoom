@@ -1,5 +1,7 @@
 import { putBan, unban, type Ban, type ModerationDuration } from '$lib/api/moderation';
 import { kickRoomPeer } from '$lib/api/rooms';
+import { dateTime } from '$lib/shared/utils/date-format';
+import { displayNameOf } from '$lib/shared/utils/display-name';
 
 // Room owners moderate from two settings dialogs (in the room and in the lobby)
 // that each show toasts through their own stack, so moderation reports through
@@ -31,13 +33,13 @@ function errorMessage(cause: unknown, fallback: string): string {
 
 export function banSubjectName(ban: Ban): string {
   const profile = ban.subject.profile;
-  if (profile) return profile.displayName || profile.login;
+  if (profile) return displayNameOf(profile);
   return ban.subject.kind === 'guest' ? 'Гость' : 'Участник';
 }
 
 export function banExpiryLabel(ban: Ban): string {
   if (ban.expiresAt == null) return 'Навсегда';
-  return `До ${new Intl.DateTimeFormat('ru', { dateStyle: 'medium', timeStyle: 'short' }).format(ban.expiresAt)}`;
+  return `До ${dateTime(ban.expiresAt)}`;
 }
 
 /** Takes a person out of the live call; they can come back by the link. */

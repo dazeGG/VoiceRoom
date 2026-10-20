@@ -94,8 +94,13 @@ test('routes notification payloads with visible non-private bodies and title for
   );
   assert.equal(room.title, 'Bob — Daily');
   assert.equal(room.body, 'standup starts now');
-  assert.equal(room.data?.roomId, 'daily');
-  assert.equal(room.data?.route, '/?room=daily&message=msg-2');
+  assert.deepEqual(room.data, {
+    kind: 'room',
+    roomId: 'daily',
+    senderId: 'bob-id',
+    messageId: 'msg-2',
+    route: '/?room=daily&message=msg-2'
+  });
   assert.equal(room.tag, 'room:daily:message:msg-2');
 
   const request = built(router.buildNotificationPayload(friendRequestEvent(), { privateNotifications: false }));
@@ -142,7 +147,10 @@ test('suppresses active exact DM and room targets, mutes, self, denied, and unav
   const router = await loadRouter();
 
   assert.equal(reasonOf(router.routeNotificationEvent({ type: 'pong', payload: { at: 1 } })), 'not-notification-event');
-  assert.equal(router.shouldNotify(dmEvent(), { permission: 'granted', notificationsAvailable: true }), true);
+  assert.equal(
+    router.routeNotificationEvent(dmEvent(), { permission: 'granted', notificationsAvailable: true }).notify,
+    true
+  );
   assert.equal(
     reasonOf(router.routeNotificationEvent(dmEvent(), { notificationsAvailable: false })),
     'notifications-unavailable'
@@ -228,7 +236,6 @@ test('browser helpers dedupe by tag/key and never request permission outside exp
   });
 
   const router = await loadRouter();
-  router.resetNotificationDedupeForTests();
   const payload = built(
     router.buildNotificationPayload(dmEvent({ dedupeKey: 'dm:dedupe' }), {
       privateNotifications: false
@@ -287,7 +294,6 @@ test('desktop bridge is preferred over page Notification and does not request pe
   });
 
   const router = await loadRouter();
-  router.resetNotificationDedupeForTests();
   const payload = built(
     router.buildNotificationPayload(dmEvent({ dedupeKey: 'dm:desktop' }), {
       privateNotifications: false
@@ -352,7 +358,6 @@ test('desktop bridge unsupported result falls back to browser Notification', asy
   });
 
   const router = await loadRouter();
-  router.resetNotificationDedupeForTests();
   const payload = built(
     router.buildNotificationPayload(roomEvent({ dedupeKey: 'room:desktop-fallback' }), {
       privateNotifications: false
@@ -393,7 +398,6 @@ test('showBrowserNotification serializes dedupe through the Web Locks API', asyn
   });
 
   const router = await loadRouter();
-  router.resetNotificationDedupeForTests();
   const payload = { title: 'locked', body: 'body', tag: 'lock-key', dedupeKey: 'lock-key' };
   const [first, second] = await Promise.all([
     router.showBrowserNotification(payload),
@@ -406,7 +410,6 @@ test('showBrowserNotification serializes dedupe through the Web Locks API', asyn
 
 test('showBrowserNotification no-ops when denied or unavailable', async () => {
   const router = await loadRouter();
-  router.resetNotificationDedupeForTests();
 
   assert.equal(router.getNotificationPermission(), 'unsupported');
   assert.equal(router.canUseNotifications(), false);

@@ -1,6 +1,6 @@
 <script lang="ts">
   import FeatureList from '$lib/shared/components/FeatureList.svelte';
-  import { START_FEATURES } from '$lib/features/shared-content/start-features';
+  import { START_FEATURES } from '$lib/shared/start-features';
   import { state } from '../client/core/state.svelte';
   import { createRoomFromStart, joinRoomByCode, handleRoomCodeKeydown } from '../client/room/room-start';
   import { saveStartName, updateNameStatuses } from '../client/ui/names';

@@ -20,17 +20,12 @@ import { applyScreenCaptureProfile, openScreenShare } from './screen-capture-ser
 import { askForMedia, describeMediaRefusal } from './media-grant';
 import { screenProfileBitrate } from '@voice-room/shared/media-budget';
 import { onDesktopScreenAudioLost, stopLocalScreenAudioCapture } from './desktop-screen-audio';
-import { readRtcStats, type RtcStat } from '../media/rtc-stats';
+import { isActiveCandidatePair, readRtcStats, type RtcStat } from '../media/rtc-stats';
 import { isScreenVideoPublication } from './livekit/publication-kinds';
 import { updateParticipant } from '../room/participants';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
-import {
-  getActiveScreenPeer,
-  hideScreenStage,
-  openLocalStreamPreview,
-  refreshScreenMeta,
-  refreshScreenStage
-} from '../ui/screen-view';
+import { hideScreenStage, openLocalStreamPreview, refreshScreenMeta, refreshScreenStage } from '../ui/screen-view';
+import { getActiveScreenPeer } from '../../screen-ui.svelte';
 import type { ParsedScreenStats, ScreenProfile, ScreenStatsPrevious, ScreenStreamMode } from '../core/types';
 
 import { createLogger, errorContext } from '$lib/shared/log';
@@ -372,7 +367,7 @@ function parseLocalScreenStats(
   let remoteInbound: RtcStat | null = null;
 
   for (const stat of stats.values()) {
-    if (stat.type === 'candidate-pair' && stat.state === 'succeeded' && stat.nominated) {
+    if (isActiveCandidatePair(stat)) {
       candidatePair = stat;
       continue;
     }

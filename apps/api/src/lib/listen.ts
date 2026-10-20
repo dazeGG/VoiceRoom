@@ -4,8 +4,8 @@ import type { AddressInfo } from 'node:net';
 import { LOG_EVENTS } from './log-events.ts';
 import { createLogger } from './logger.ts';
 import { codeOf } from '../platform/error-code.ts';
+import type { Logger } from '../platform/types.ts';
 
-type ListenLogger = { info(...args: unknown[]): void; warn(...args: unknown[]): void; fatal(...args: unknown[]): void };
 type ListenableServer = {
   listen(...args: unknown[]): unknown;
   once(event: 'error', listener: (error: NodeJS.ErrnoException) => void): unknown;
@@ -23,7 +23,7 @@ function startApiListener({
 }: {
   exit?: (code: number) => void;
   host?: string;
-  logger?: ListenLogger;
+  logger?: Pick<Logger, 'info' | 'warn' | 'fatal'>;
   port?: number;
   server?: ListenableServer;
   socketPath?: string;

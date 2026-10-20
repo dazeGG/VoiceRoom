@@ -254,7 +254,6 @@ export async function loadLiveKitHarness(
     updatePeerStatus: () => {}
   }));
   vi.doMock(`${P}/ui/screen-view`, () => ({
-    refreshScreenAction: () => {},
     refreshScreenStage: () => {},
     refreshScreenTiles: () => {}
   }));

@@ -3,8 +3,11 @@ import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { RoomMemberships } from '../../platform/db/schema.ts';
+import { fromMicros, microsOf } from '../../platform/db/micros.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { isRecord } from '../../platform/record.ts';
+import { avatarUrl } from '../../lib/avatar-url.ts';
+import { escapeLike } from '../../platform/db/like.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Client = QueryClient | null | undefined;
@@ -67,8 +70,8 @@ function mapDirectoryMember(row: DirectoryRow): DirectoryMember {
     userId: row.user_id,
     displayName: row.display_name || '',
     login: row.login || '',
-    avatarColorKey: row.avatar_color_key || '',
-    avatarUrl: row.avatar_key ? `/api/avatars/${encodeURIComponent(row.avatar_key)}` : null,
+    avatarColorKey: row.avatar_color_key || 'blurple',
+    avatarUrl: avatarUrl(row.avatar_key),
     avatarAccent: row.avatar_accent || null,
     role: row.role === 'owner' ? 'owner' : 'member',
     joinedAt: epochMillis(row.created_at),
@@ -128,13 +131,13 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null | unde
     at = Date.now(),
     client
   }: {
-    roomId?: string;
-    userId?: string;
+    roomId: string;
+    userId: string;
     role?: string;
     metadata?: unknown;
     at?: unknown;
     client?: Client;
-  } = {}): Promise<Membership | null> {
+  }): Promise<Membership | null> {
     if (!roomId || !userId) return null;
     const date = new Date(Number.isFinite(Number(at)) ? Number(at) : Date.now());
     const row = await on(client)
@@ -175,7 +178,7 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null | unde
     client?: Client;
   }): Promise<{ members: DirectoryMember[]; hasMore: boolean }> {
     const pageSize = Math.min(100, Math.max(1, Number(limit) || 50));
-    const normalizedQuery = typeof query === 'string' ? query.trim().slice(0, 80) : '';
+    const normalizedQuery = typeof query === 'string' ? escapeLike(query.trim().slice(0, 80)) : '';
     let page = on(client)
       .selectFrom('room_memberships as rm')
       .innerJoin('users as u', 'u.id', 'rm.user_id')
@@ -184,7 +187,7 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null | unde
         'rm.user_id',
         'rm.role',
         'rm.created_at',
-        sql<string>`floor(extract(epoch FROM rm.created_at) * 1000000)::numeric(20, 0)`.as('created_at_micros'),
+        microsOf('rm.created_at').as('created_at_micros'),
         'u.login',
         'u.display_name',
         'u.avatar_color_key',
@@ -201,7 +204,7 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null | unde
     }
     if (after?.createdAtMicros && after.createdAtMicros !== '0') {
       page = page.where(
-        sql<boolean>`(rm.created_at, rm.user_id) > (to_timestamp(${after.createdAtMicros}::numeric / 1000000.0), ${after.id || ''}::varchar(36))`
+        sql<boolean>`(rm.created_at, rm.user_id) > (${fromMicros(after.createdAtMicros)}, ${after.id || ''}::varchar(36))`
       );
     }
     const found: DirectoryRow[] = await page

@@ -39,10 +39,6 @@ function hideScreenStageSoon(): void {
   void import('../ui/screen-view').then((module) => module.hideScreenStage());
 }
 
-function refreshAllScreenActionsSoon(): void {
-  void import('../ui/screen-view').then((module) => module.refreshAllScreenActions());
-}
-
 function refreshScreenStageSoon(): void {
   void import('../ui/screen-view').then((module) => module.refreshScreenStage());
 }
@@ -173,7 +169,6 @@ export function createParticipant(peerInfo: PeerInfo): Participant {
     recordPeerCount(state.peers.size);
   }
 
-  refreshAllScreenActionsSoon();
   if (!participant.isLocal && participant.screen) {
     applyRemoteScreenCue(participant, false, true);
   }
@@ -243,7 +238,6 @@ export function updateParticipant(peerInfo: PeerInfo): void {
   if (!participant.isLocal && participant.accountUserId !== hadAccountUserId) {
     applyRemoteParticipantAudioPreferences(participant);
   }
-  refreshAllScreenActionsSoon();
 
   if (shouldRefreshScreenTiles(peerInfo, hadScreen, hadScreenAudio, hadScreenStreamId, hadName)) {
     refreshScreenTilesSoon();
@@ -383,7 +377,6 @@ export function attachRemoteScreenStream(peer: Participant, stream: MediaStream)
 
   if (hasVideo) state.screenRequesting = false;
   if (hasVideo) {
-    refreshAllScreenActionsSoon();
     refreshScreenStageSoon();
     refreshScreenTilesSoon();
   } else if (state.viewedScreenPeerId === peer.id) {
@@ -459,7 +452,6 @@ export function detachRemoteScreen(peer: Participant): void {
   if (state.sharedScreenPeerId === peer.id) hideScreenStageSoon();
   refreshScreenStageSoon();
   updatePeerStatus(peer);
-  refreshAllScreenActionsSoon();
 }
 
 export function ensureRemoteAudioElement(
@@ -482,12 +474,7 @@ export function ensureRemoteAudioElement(
     return;
   }
 
-  if (audio) {
-    audio.pause();
-    audio.srcObject = null;
-    releaseRemoteAudioElement(audio);
-    audio.remove();
-  }
+  if (audio) disposeAudioElement(audio);
 
   attachRemoteAudioTrack(peer, track, receiver);
 }
@@ -513,8 +500,7 @@ function attachRemoteAudioTrack(
   track.addEventListener(
     'ended',
     () => {
-      releaseRemoteAudioElement(audio);
-      audio.remove();
+      disposeAudioElement(audio);
       peer.audioElements.delete(track.id);
       if (peer.micReceiver === receiver) peer.micReceiver = null;
       setParticipantSpeaking(peer, false);
@@ -527,19 +513,20 @@ export function detachRemoteAudioTrack(peer: Participant, trackId: string): void
   const audio = peer.audioElements.get(trackId);
   if (!audio) return;
 
-  audio.pause();
-  audio.srcObject = null;
-  releaseRemoteAudioElement(audio);
-  audio.remove();
+  disposeAudioElement(audio);
   peer.audioElements.delete(trackId);
 }
 
 export function removeAudioElements(peer: Participant): void {
-  for (const audio of peer.audioElements.values()) {
-    releaseRemoteAudioElement(audio);
-    audio.remove();
-  }
+  for (const audio of peer.audioElements.values()) disposeAudioElement(audio);
   peer.audioElements.clear();
+}
+
+function disposeAudioElement(audio: HTMLAudioElement): void {
+  audio.pause();
+  audio.srcObject = null;
+  releaseRemoteAudioElement(audio);
+  audio.remove();
 }
 
 export function setParticipantSpeaking(participant: Participant | null, speaking: boolean): void {

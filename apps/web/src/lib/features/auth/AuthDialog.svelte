@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dayMonth } from '$lib/shared/utils/date-format';
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -70,9 +71,6 @@
   // Set when the account signing in is waiting to be deleted: the dialog offers
   // to restore it instead of an error.
   let pendingDeletionAt = $state<number | null>(null);
-
-  const formatDeletionDate = (value: number): string =>
-    new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(value);
 
   const isLogin = $derived(mode === 'login');
   const isRegister = $derived(mode === 'register');
@@ -215,7 +213,7 @@
       {#if isLogin && pendingDeletionAt !== null}
         <div class="auth-restore" role="status">
           <p>
-            Этот аккаунт ожидает удаления — оно произойдёт {formatDeletionDate(pendingDeletionAt)}. Восстановить его?
+            Этот аккаунт ожидает удаления — оно произойдёт {dayMonth(pendingDeletionAt)}. Восстановить его?
           </p>
           <button class="auth-submit" type="button" disabled={submitting} onclick={() => void restorePendingAccount()}>
             Восстановить аккаунт

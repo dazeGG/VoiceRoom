@@ -1,8 +1,7 @@
 // The dependencies every route module receives explicitly, instead of reaching
 // for server.ts's module-level singletons (docs/ARCHITECTURE.md, section 3).
 // It holds only what is shared across route groups; services that belong to
-// one group are passed to that group's register function next to it, and the
-// context grows as groups move out of server.ts.
+// one group are passed to that group's register function next to it.
 
 import type { IncomingMessage } from 'node:http';
 import type { FastifyBaseLogger } from 'fastify';

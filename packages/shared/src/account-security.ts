@@ -2,6 +2,7 @@
 // the "what's new" announcement, and account deletion.
 
 import { isOneOf, isRecord } from './guards.ts';
+import { isUuid } from './validation.ts';
 
 export interface UserAgentDescription {
   client: string;
@@ -86,7 +87,6 @@ export const DELETED_ACCOUNT_NAME: string = 'Удалённый аккаунт';
 // Finished deletions free their row's login under this prefix, so no new
 // account may take it.
 export const DELETED_LOGIN_PREFIX: string = 'deleted-';
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const RELEASE_VERSION_PATTERN = /^(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})$/;
 
 // Order matters: Chromium-based browsers also carry "Chrome/" and "Safari/",
@@ -176,7 +176,7 @@ export function isDeletedAccountLogin(value: unknown): boolean {
 export function normalizeLoginAlert(input: unknown): LoginAlert | null {
   if (!isRecord(input)) return null;
   const value = input;
-  const id = typeof value.id === 'string' && UUID_PATTERN.test(value.id) ? value.id.toLowerCase() : '';
+  const id = isUuid(value.id) ? value.id.toLowerCase() : '';
   const kind = isOneOf(LOGIN_ALERT_KINDS, value.kind) ? value.kind : '';
   const createdAt = Number(value.createdAt);
   if (!id || !kind || !Number.isSafeInteger(createdAt) || createdAt < 0) return null;
@@ -234,10 +234,7 @@ function boundedText(value: unknown, max: number): string {
 export function normalizeAccountSession(input: unknown): AccountSession | null {
   if (!isRecord(input)) return null;
   const value = input;
-  const id =
-    typeof value.id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value.id)
-      ? value.id.toLowerCase()
-      : '';
+  const id = isUuid(value.id) ? value.id.toLowerCase() : '';
   const lastSeenAt = Number(value.lastSeenAt);
   if (!id || !Number.isSafeInteger(lastSeenAt) || lastSeenAt < 0) return null;
   return {

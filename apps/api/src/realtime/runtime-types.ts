@@ -5,6 +5,7 @@ import type { ServerMuteRepository } from '../domains/moderation/room-ban.reposi
 import type { PeerIdentityRepository } from '../domains/rooms/peer-identity.repository.ts';
 import type { RoomAccessRepository } from '../domains/rooms/room-access.repository.ts';
 import type { RoomRepository } from '../domains/rooms/room.repository.ts';
+import type { Logger, Timer } from '../platform/types.ts';
 import type { PresenceRoom as RosterRoom, RosterPeer } from './room-presence.ts';
 
 // The in-memory records the room runtime and its reconnect leases share:
@@ -14,7 +15,6 @@ import type { PresenceRoom as RosterRoom, RosterPeer } from './room-presence.ts'
 export type Peer = RosterPeer;
 /** A room's in-memory roster. */
 export type PresenceRoom = RosterRoom;
-export type Timer = ReturnType<typeof globalThis.setTimeout> | number;
 export type VoiceTarget = {
   roomId: string;
   peerId: string;
@@ -98,11 +98,7 @@ export type RuntimeRoomStore = Pick<
     >
   >;
 
-export type RuntimeLogger = {
-  info(...args: unknown[]): void;
-  warn(...args: unknown[]): void;
-  error(...args: unknown[]): void;
-};
+export type RuntimeLogger = Pick<Logger, 'info' | 'warn' | 'error'>;
 
 /** Lets the process exit while only this timer is pending. */
 export function unrefTimer(timer: Timer | null): void {

@@ -6,6 +6,8 @@ export const GATE_THRESHOLD_DB_STORAGE_KEY = 'voice-room:gate-threshold-db';
 export const PREVIOUS_GATE_THRESHOLD_STORAGE_KEY = 'voice-room:gate-threshold';
 export const GATE_THRESHOLD_MAX_DB = 0;
 export const GATE_THRESHOLD_MIN_DB = -100;
+// The threshold a gate switched on from "off" starts at.
+export const GATE_ON_DEFAULT_DB = -40;
 export const PREVIOUS_GATE_MAX_AMPLITUDE = 0.18;
 export const PREVIOUS_GATE_MIN_AMPLITUDE = 0.006;
 export const AUDIO_GATE_WORKLET_URL = '/audio-gate.worklet.js';

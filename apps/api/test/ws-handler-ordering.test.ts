@@ -282,3 +282,56 @@ test('one rejected handler does not poison the following queue tail', async (t) 
   assert.deepEqual(events, [`join:${PEER_B}`]);
   assert.equal(opened(registry).activeVoice?.peerId, PEER_B);
 });
+
+test('a failing heartbeat is logged with its connection and message type', async () => {
+  const observed: Observed = { connection: null };
+  const registry = createRegistry(observed);
+  const errors: Record<string, unknown>[] = [];
+  const handler = createWsHandler({
+    registry,
+    roomRuntime: fake<WsRoomRuntime>(),
+    resolveSessionUser: async () => null,
+    getFriendIds: async () => [],
+    isUserOnline: () => false,
+    logger: { info() {}, warn() {}, error: (fields: Record<string, unknown>) => errors.push(fields) }
+  });
+  const socket = new FakeSocket();
+  await handler.handleConnection(socket, REQUEST);
+  opened(observed).id = 'conn-1';
+  registry.touch = () => {
+    throw new Error('synthetic heartbeat failure');
+  };
+
+  socket.emit('message', clientFrame('ping', { at: 1 }));
+  await waitFor(() => errors.length > 0);
+
+  assert.equal(errors[0]?.['connId'], 'conn-1');
+  assert.equal(errors[0]?.['type'], 'ping');
+});
+
+test('a failing queued message is logged with its connection and message type', async () => {
+  const observed: Observed = { connection: null };
+  const registry = createRegistry(observed);
+  const errors: Record<string, unknown>[] = [];
+  const handler = createWsHandler({
+    registry,
+    roomRuntime: fake<WsRoomRuntime>({
+      subscribePreview: async () => {
+        throw new Error('synthetic preview failure');
+      }
+    }),
+    resolveSessionUser: async () => null,
+    getFriendIds: async () => [],
+    isUserOnline: () => false,
+    logger: { info() {}, warn() {}, error: (fields: Record<string, unknown>) => errors.push(fields) }
+  });
+  const socket = new FakeSocket();
+  await handler.handleConnection(socket, REQUEST);
+  opened(observed).id = 'conn-2';
+
+  socket.emit('message', clientFrame('room.preview.subscribe', { roomId: ROOM_ID }));
+  await waitFor(() => errors.length > 0);
+
+  assert.equal(errors[0]?.['connId'], 'conn-2');
+  assert.equal(errors[0]?.['type'], 'room.preview.subscribe');
+});

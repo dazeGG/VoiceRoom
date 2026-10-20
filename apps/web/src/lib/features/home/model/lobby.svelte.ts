@@ -29,7 +29,7 @@ import {
   sendDirectMessage,
   type DirectMessage
 } from '$lib/api/dm';
-import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
+import { getAppRealtime, type RealtimeEvent } from '$lib/api/realtime';
 import { createTypingTracker, typingActivityOf } from '$lib/shared/chat/typing.svelte';
 import type { PresenceStatus } from '$lib/shared/presence';
 import {
@@ -88,7 +88,7 @@ export class LobbyStore {
   /** Friends currently typing to this account, keyed by their user id. */
   readonly dmTyping = createTypingTracker();
 
-  private realtime: RealtimeHandle | null = null;
+  private stopRealtime: (() => void) | null = null;
   private selfId = '';
   private readonly onEnterRoom: (roomId: string) => void;
 
@@ -162,7 +162,7 @@ export class LobbyStore {
     this.incomingRequestCount = this.requests.incoming.length;
   };
 
-  // Start the lobby: load the friend list and open the this.realtime stream. Returns a
+  // Start the lobby: load the friend list and subscribe to the realtime stream. Returns a
   // teardown function for onMount cleanup.
   init = (currentUserId: string, initialDoNotDisturb = false, initialPresenceStatus?: PresenceStatus): (() => void) => {
     this.selfId = currentUserId;
@@ -171,7 +171,7 @@ export class LobbyStore {
     if (!areNotificationPreferencesLoadedFor(currentUserId)) {
       prepareNotificationPreferences(currentUserId, initialDoNotDisturb, initialPresenceStatus);
     }
-    this.realtime = connectRealtime(this.handleRealtimeEvent);
+    this.stopRealtime = getAppRealtime().subscribe(this.handleRealtimeEvent);
     void Promise.all([this.refreshFriends(), this.refreshRequests()]).catch(() => {
       this.loaded = true;
     });
@@ -190,8 +190,8 @@ export class LobbyStore {
     });
     return () => {
       stopPresenceIdleTracking();
-      this.realtime?.close();
-      this.realtime = null;
+      this.stopRealtime?.();
+      this.stopRealtime = null;
       this.presence.reset();
       this.browserNotifications.stop();
       this.thread.close();

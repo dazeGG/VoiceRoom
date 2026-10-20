@@ -14,7 +14,7 @@ import {
   revokePrincipalInTransaction
 } from '../domains/admission/gate-credential.repository.ts';
 import { createRoomBanRepository, createServerMuteRepository } from '../domains/moderation/room-ban.repository.ts';
-import type { GatePrincipal } from '../domains/admission/admission.service.ts';
+import type { GatePrincipal } from '../domains/admission/gate-principal.ts';
 
 function createRoomStore({ pool, roomIdleTtlMs = 15 * 60 * 1000 }: { pool: pg.Pool; roomIdleTtlMs?: number }) {
   const db = kyselyOn(pool);

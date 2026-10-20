@@ -2,9 +2,10 @@
   // Every account of the service: found by name or login, narrowed by a
   // filter, sorted by any column, a page at a time. A row opens the account's
   // card; the list keeps its search, filter and page meanwhile.
+  import { displayNameOf } from '$lib/shared/utils/display-name';
   import { onMount } from 'svelte';
   import { ArrowDown, ArrowUp, Globe, Monitor, Search, Smartphone } from '@lucide/svelte';
-  import { fetchAccounts, type AccountRow, type AccountsPage, type AccountsSort } from '$lib/api/admin';
+  import { fetchAccounts, type AccountsPage, type AccountsSort } from '$lib/api/admin';
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { AccountBadge, Avatar, Button, Select } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
@@ -108,7 +109,6 @@
   const shownFrom = $derived(page && page.total ? (page.page - 1) * page.pageSize + 1 : 0);
   const shownTo = $derived(page ? Math.min(page.total, page.page * page.pageSize) : 0);
 
-  const nameOf = (account: AccountRow) => account.displayName || account.login;
   const sortLabel = (column: (typeof SORT_COLUMNS)[number]) =>
     sort === column.sort ? `${column.label}, ${order === 'asc' ? 'по возрастанию' : 'по убыванию'}` : column.label;
 </script>
@@ -185,7 +185,7 @@
                   }}
                 >
                   <Avatar
-                    name={nameOf(account)}
+                    name={displayNameOf(account)}
                     src={account.avatarUrl}
                     colorKey={account.avatarColorKey}
                     background={account.avatarAccent}
@@ -195,7 +195,7 @@
                   />
                   <span class="acc-person-text">
                     <span class="acc-person-name"
-                      ><EmojiText text={nameOf(account)} /><AccountBadge userId={account.id} /></span
+                      ><EmojiText text={displayNameOf(account)} /><AccountBadge userId={account.id} /></span
                     >
                     <span class="acc-person-login">@{account.login}</span>
                   </span>

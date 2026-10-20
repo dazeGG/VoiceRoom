@@ -50,14 +50,14 @@ test('on a phone the realtime socket opens only while a room page is mounted', a
   useDevice(IPHONE, 5);
   const { boundary, realtime } = await load();
   expect(boundary.isRealtimeBlocked()).toBe(true);
-  const blocked = realtime.connectRealtime(() => {});
+  const unsubscribeBlocked = realtime.getAppRealtime().subscribe(() => {});
   expect(FakeWebSocket.instances).toHaveLength(0);
-  blocked.close();
+  unsubscribeBlocked();
 
   boundary.setRoomRouteActive(true);
   expect(boundary.isRealtimeBlocked()).toBe(false);
-  const handle = realtime.connectRealtime(() => {});
+  const unsubscribe = realtime.getAppRealtime().subscribe(() => {});
   expect(FakeWebSocket.instances).toHaveLength(1);
-  handle.close();
+  unsubscribe();
   boundary.setRoomRouteActive(false);
 });

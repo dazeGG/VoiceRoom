@@ -7,8 +7,8 @@ import { isOneOf } from '@voice-room/shared/guards';
 import { transaction } from '../../platform/db/pool.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { ActiveBanService } from '../moderation/active-ban.service.ts';
+import { createRowId } from '../../platform/db/ids.ts';
 import {
-  createRowId,
   mapRoom,
   mapRoomOrNull,
   normalizePositiveInt,

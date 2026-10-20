@@ -6,12 +6,8 @@
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { tokensMatch } from '../../platform/crypto/tokens-match.ts';
+import type { GatePrincipal } from './gate-principal.ts';
 import type { LiveKitConfig } from './livekit-config.ts';
-
-export type GatePrincipal = {
-  principalType: 'account' | 'guest';
-  principalId: string;
-};
 
 export interface Admission {
   gateCredentialId: string;

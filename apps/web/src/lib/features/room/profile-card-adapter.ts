@@ -8,6 +8,7 @@ import type { PresenceStatus } from '$lib/shared/presence';
 import type { Participant } from './client/model/participants';
 import type { ChatMessage } from '$lib/api/rooms';
 import type { MembershipMember } from '@voice-room/shared/contracts/membership';
+import { displayNameOf } from '$lib/shared/utils/display-name';
 
 function presenceFor(social: RoomSocial, accountUserId: string): PresenceStatus {
   if (!accountUserId) return 'online';
@@ -63,7 +64,7 @@ export function mentionProfilePerson(
   if (member) {
     return {
       userId,
-      name: member.displayName || member.login,
+      name: displayNameOf(member),
       login: member.login,
       avatarUrl: member.avatarUrl,
       avatarColorKey: member.avatarColorKey || '',

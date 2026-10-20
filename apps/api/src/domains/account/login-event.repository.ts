@@ -3,13 +3,14 @@
 
 import { sql } from 'kysely';
 import type pg from 'pg';
+import { isUuid } from '@voice-room/shared/validation';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import {
   LOGIN_ALERT_TTL_MS,
   LOGIN_FAMILIARITY_WINDOW_MS,
   describeUserAgent
 } from '@voice-room/shared/account-security';
-import { LOGIN_EVENT_RETENTION_MS, UUID_PATTERN, cleanLocationLabel, mapLoginAlert, toDate } from './user-records.ts';
+import { LOGIN_EVENT_RETENTION_MS, cleanLocationLabel, mapLoginAlert, toDate } from './user-records.ts';
 
 export function createLoginEventRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
@@ -137,7 +138,7 @@ export function createLoginEventRepository({ pool }: { pool: pg.Pool }) {
     currentSessionPublicId?: string | null;
     now?: number;
   }) {
-    if (typeof alertId !== 'string' || !UUID_PATTERN.test(alertId)) {
+    if (typeof alertId !== 'string' || !isUuid(alertId)) {
       return { status: 'not_found' as const, revokedTokenHash: null };
     }
     if (resolution !== 'confirmed' && resolution !== 'denied') {

@@ -9,10 +9,12 @@ type Handler = (event: { type: string; payload: Record<string, unknown> }) => vo
 let emit: Handler = () => {};
 vi.mock('../../src/lib/api/realtime', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  connectRealtime: (onEvent: Handler) => {
-    emit = onEvent;
-    return { close: vi.fn(), send: vi.fn() };
-  }
+  getAppRealtime: () => ({
+    subscribe: (onEvent: Handler) => {
+      emit = onEvent;
+      return vi.fn();
+    }
+  })
 }));
 
 vi.mock('../../src/lib/features/room/client/media/cues', () => ({

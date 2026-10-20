@@ -4,6 +4,8 @@ import { canConnect } from '../../platform/db/connectable.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { RoomMessageReactionRevisions, RoomMessageReactions } from '../../platform/db/schema.ts';
 import { transaction as runInTransaction } from '../../platform/db/pool.ts';
+import { fromMicros, microsOf } from '../../platform/db/micros.ts';
+import { avatarUrl } from '../../lib/avatar-url.ts';
 
 // Room and DM reactions live in tables with the same columns.
 type ReactionTable = 'room_message_reactions' | 'direct_message_reactions';
@@ -81,7 +83,7 @@ function mapReactor(row: ReactorRow): StoredReactor {
   return {
     userId: row.user_id,
     displayName: row.display_name,
-    avatarUrl: row.avatar_key ? `/api/avatars/${encodeURIComponent(row.avatar_key)}` : null,
+    avatarUrl: avatarUrl(row.avatar_key),
     cursorTuple: {
       createdAtMicros: String(row.created_at_micros),
       id: row.user_id
@@ -283,13 +285,13 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
         'r.user_id',
         sql<string>`COALESCE(NULLIF(u.display_name, ''), u.login, 'Пользователь')`.as('display_name'),
         'u.avatar_key',
-        sql<string>`FLOOR(EXTRACT(EPOCH FROM r.created_at) * 1000000)::bigint`.as('created_at_micros')
+        microsOf('r.created_at').as('created_at_micros')
       ])
       .where('r.message_id', '=', messageId)
       .where('r.emoji', '=', emoji);
     if (after) {
       query = query.where(
-        sql<boolean>`(r.created_at, r.user_id) > (to_timestamp(${after.createdAtMicros}::numeric / 1000000), ${after.id})`
+        sql<boolean>`(r.created_at, r.user_id) > (${fromMicros(after.createdAtMicros)}, ${after.id})`
       );
     }
     const rows = await query.orderBy('r.created_at', 'asc').orderBy('r.user_id', 'asc').limit(limit).execute();

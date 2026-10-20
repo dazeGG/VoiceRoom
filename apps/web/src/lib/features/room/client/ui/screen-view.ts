@@ -3,7 +3,7 @@ import { state } from '../core/state.svelte';
 import { postState } from '../room/presence';
 import { clearScreenAttendance, setScreenAttendance } from '../model/screen-attendance';
 
-import { bumpScreenUiRevision, screenUi } from '../../screen-ui.svelte';
+import { bumpScreenUiRevision, getActiveScreenPeer, screenUi } from '../../screen-ui.svelte';
 import { clearParticipantFocus } from '../../participants-ui.svelte';
 import { detachRemoteScreen, getAllParticipants, getParticipantById, hasRemoteScreenVideo } from '../room/participants';
 import type { Participant } from '../core/types';
@@ -47,7 +47,7 @@ export function openLocalStreamPreview(): void {
   if (!peerId || !state.localScreenStream) return;
 
   if (state.viewedScreenPeerId === peerId) {
-    void leaveScreenView({ quiet: true, keepPreview: true });
+    void leaveScreenView({ keepPreview: true });
     return;
   }
 
@@ -64,14 +64,13 @@ export async function enterScreenView(peerId: string): Promise<void> {
   }
   if (!peer?.screen) {
     showToast('Демонстрация уже завершена');
-    refreshAllScreenActions();
     refreshScreenTiles();
     return;
   }
 
   if (state.viewedScreenPeerId === peerId) return;
   if (state.viewedScreenPeerId) {
-    await leaveScreenView({ quiet: true, keepPreview: true });
+    await leaveScreenView({ keepPreview: true });
   }
 
   // The screen spotlight replaces a focused participant tile: both render into
@@ -82,7 +81,6 @@ export async function enterScreenView(peerId: string): Promise<void> {
   state.screenSubscribedPeerIds.add(peerId);
   if (!peer.isLocal) setScreenAttendance(state.self, peerId);
   state.screenRequesting = !peer.isLocal && !hasRemoteScreenVideo(peer);
-  refreshAllScreenActions();
   refreshScreenTiles();
   refreshScreenStage();
 
@@ -94,8 +92,8 @@ export async function enterScreenView(peerId: string): Promise<void> {
   postState().catch(() => {});
 }
 
-export async function leaveScreenView(options: { quiet?: boolean; keepPreview?: boolean } = {}): Promise<void> {
-  const { quiet = false, keepPreview = false } = options;
+export async function leaveScreenView(options: { keepPreview?: boolean } = {}): Promise<void> {
+  const { keepPreview = false } = options;
   const peerId = state.viewedScreenPeerId;
   if (!peerId) return;
 
@@ -116,7 +114,6 @@ export async function leaveScreenView(options: { quiet?: boolean; keepPreview?: 
   }
 
   if (peer && !peer.isLocal) syncLiveKitScreenSubscriptionsSoon(peer);
-  if (!quiet) refreshAllScreenActions();
   refreshScreenTiles();
   postState().catch(() => {});
 }
@@ -127,7 +124,7 @@ export function disconnectScreen(peerId: string): void {
   clearScreenAttendance(state.self, peerId);
 
   if (state.viewedScreenPeerId === peerId) {
-    void leaveScreenView({ quiet: true, keepPreview: false });
+    void leaveScreenView({ keepPreview: false });
     return;
   }
 
@@ -137,7 +134,6 @@ export function disconnectScreen(peerId: string): void {
     syncLiveKitScreenSubscriptionsSoon(peer);
   }
 
-  refreshAllScreenActions();
   refreshScreenTiles();
   postState().catch(() => {});
 }
@@ -160,7 +156,6 @@ export function closeScreenView(): string {
     syncLiveKitScreenSubscriptionsSoon(peer);
   }
 
-  refreshAllScreenActions();
   refreshScreenTiles();
   if (attendanceCleared) postState().catch(() => {});
   return peerId;
@@ -171,10 +166,6 @@ export function isScreenSubscribed(peerId: string): boolean {
   if (state.viewedScreenPeerId === peerId) return true;
   return state.screenSubscribedPeerIds.has(peerId);
 }
-
-export function refreshScreenAction(_participant: Participant | null): void {}
-
-export function refreshAllScreenActions(): void {}
 
 function isParticipantStreaming(participant: Participant | null): boolean {
   if (!participant) return false;
@@ -201,9 +192,6 @@ function showScreenStage({ peer, stream }: { peer: Participant; stream: MediaStr
   state.sharedScreenPeerId = peer.id;
   document.body.dataset.screenView = 'true';
   screenUi.stageVisible = true;
-  screenUi.hasStream = Boolean(stream);
-  screenUi.showControls = Boolean(stream);
-  screenUi.showPlaceholder = !stream;
   screenUi.activeStream = stream;
   screenUi.hideLeaveButton = true;
   screenUi.showScreenExit = true;
@@ -232,9 +220,7 @@ export function hideScreenStage(): void {
   delete document.body.dataset.screenView;
   stopScreenStageIdleUi();
   screenUi.stageVisible = false;
-  screenUi.showControls = false;
   screenUi.showMeta = false;
-  screenUi.showPlaceholder = true;
   screenUi.activeStream = null;
   screenUi.hideLeaveButton = false;
   screenUi.showScreenExit = false;
@@ -262,10 +248,6 @@ export function hideScreenStage(): void {
 
 function getScreenStage() {
   return document.getElementById('screenStage');
-}
-
-export function getActiveScreenPeer(): Participant | null {
-  return getParticipantById(state.viewedScreenPeerId);
 }
 
 export function getScreenParticipants(): Participant[] {

@@ -12,6 +12,7 @@ import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import type { DB, DirectMessages, Users } from '../../platform/db/schema.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
+import { avatarUrl } from '../../lib/avatar-url.ts';
 
 export type Metadata = Record<string, unknown>;
 export type UserRow = Pick<
@@ -54,7 +55,7 @@ export function mapPublicUser(row: UserRow) {
   return {
     avatarAccent: row.avatar_accent || null,
     avatarColorKey: cleanAvatarColorKey(row.avatar_color_key) || 'blurple',
-    avatarUrl: row.avatar_key ? `/api/avatars/${encodeURIComponent(row.avatar_key)}` : null,
+    avatarUrl: avatarUrl(row.avatar_key),
     createdAt: epochMillis(row.created_at),
     displayName: row.display_name || '',
     doNotDisturb: presenceStatus === 'dnd',
@@ -112,11 +113,6 @@ export function orderedPair(a: string, b: string): [string, string] {
 export async function lockUserPair(q: Database, a: string, b: string): Promise<void> {
   const [low, high] = orderedPair(a, b);
   await sql`SELECT pg_advisory_xact_lock(hashtext(${`voice-room:user-pair:${low}:${high}`}))`.execute(q);
-}
-
-// Escape LIKE wildcards in user-supplied search terms (we use ESCAPE '\').
-export function escapeLike(term: string): string {
-  return term.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }
 
 export const now = sql<Date>`current_timestamp`;

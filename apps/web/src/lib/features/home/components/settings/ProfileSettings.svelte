@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { displayNameOf } from '$lib/shared/utils/display-name';
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { Pencil, X } from '@lucide/svelte';
   import type { AuthUser } from '$lib/api/auth';
@@ -22,7 +23,7 @@
 
   let avatarInput = $state<HTMLInputElement>();
 
-  const label = $derived(user?.displayName?.trim() || user?.login || '');
+  const label = $derived(user ? displayNameOf(user) : '');
   const avatarSrc = $derived(draft.shownAvatar(user));
   const avatarAction = $derived(user?.avatarUrl ? 'Изменить аватар' : 'Загрузить аватар');
 

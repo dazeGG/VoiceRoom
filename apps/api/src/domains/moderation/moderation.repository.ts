@@ -4,13 +4,14 @@ import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { fromMicros, microsOf } from '../../platform/db/micros.ts';
 import { CursorCodecError } from '../../platform/cursor-codec.ts';
+import type { CursorTuple } from '../../platform/cursor-codec.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
+import { avatarUrl } from '../../lib/avatar-url.ts';
 import type { Ban, BanProfile } from '@voice-room/shared/contracts/moderation';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Client = QueryClient | null | undefined;
 type TimeInput = Date | number | string;
-type CursorTuple = { createdAtMicros: string; id: string };
 
 export interface ModerationCursorCodec {
   encode(input: { purpose: string; context: string; tuple: CursorTuple }): string;
@@ -52,8 +53,8 @@ function mapBanProfile(row: ModerationBanRow): BanProfile | null {
   return {
     displayName: row.display_name || '',
     login: row.login,
-    avatarUrl: row.avatar_key ? `/api/avatars/${encodeURIComponent(row.avatar_key)}` : null,
-    avatarColorKey: row.avatar_color_key || '',
+    avatarUrl: avatarUrl(row.avatar_key),
+    avatarColorKey: row.avatar_color_key || 'blurple',
     avatarAccent: row.avatar_accent || null
   };
 }

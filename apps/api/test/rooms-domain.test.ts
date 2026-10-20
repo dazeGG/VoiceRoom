@@ -31,15 +31,15 @@ import { registerPeerModerationRoutes } from '../src/domains/rooms/peer-moderati
 import {
   publicLobbyRoom,
   publicPeer,
-  roomAvatarUrl,
   roomBanned,
   type LiveRoom,
   type PresencePeer,
   type StoredRoom
 } from '../src/domains/rooms/room-views.ts';
 import { ownerRefusal, registerRoomRoutes, type RoomRoutesDeps } from '../src/domains/rooms/rooms.routes.ts';
+import { createRoomId } from '../src/platform/db/ids.ts';
+import { avatarUrl } from '../src/lib/avatar-url.ts';
 import {
-  createRoomId,
   createRoomsService,
   type CreateRoomResult,
   type RoomsService,
@@ -83,8 +83,8 @@ function liveRoom(overrides: Partial<LiveRoom> = {}, peers: PresencePeer[] = [])
 // --- views and principals ----------------------------------------------------
 
 test('room views keep the shapes the web client mirrors', () => {
-  assert.equal(roomAvatarUrl(null), null);
-  assert.equal(roomAvatarUrl('room/a b.webp'), '/api/avatars/room%2Fa%20b.webp');
+  assert.equal(avatarUrl(null), null);
+  assert.equal(avatarUrl('room/a b.webp'), '/api/avatars/room%2Fa%20b.webp');
   const peer = publicPeer({
     id: 'peer0001',
     name: 'A',

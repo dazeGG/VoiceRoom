@@ -12,12 +12,11 @@ import {
   AttachmentVariantQuery,
   CreateAttachmentBody
 } from '@voice-room/shared/contracts/media';
+import { isUuid } from '@voice-room/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import type { MediaService, PublicAttachment } from './media.service.ts';
 import type { OpenedMedia } from './media-visibility.service.ts';
-
-const ATTACHMENT_ID_PATTERN = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 export interface MediaRoutesDeps {
   media: MediaService;
@@ -29,7 +28,7 @@ export interface MediaRoutesDeps {
 
 function cleanAttachmentId(value: unknown): string {
   const id = typeof value === 'string' ? value.trim() : '';
-  return ATTACHMENT_ID_PATTERN.test(id) ? id : '';
+  return isUuid(id) ? id : '';
 }
 
 const answers = { 200: AttachmentAnswer, '4xx': Failure, '5xx': Failure };

@@ -8,7 +8,8 @@ import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import type { RoomPresence, RosterPeer } from '../../realtime/room-presence.ts';
-import { publicLobbyRoom, publicPeer, roomAvatarUrl, type StoredRoom } from './room-views.ts';
+import { avatarUrl } from '../../lib/avatar-url.ts';
+import { publicLobbyRoom, publicPeer, type StoredRoom } from './room-views.ts';
 import { markOwnershipFinalized } from './peer-eviction.ts';
 
 interface RoomRuntime {
@@ -71,14 +72,14 @@ export function createRoomLifecycle(deps: RoomLifecycleDeps) {
   // Every seat the account holds, in any room, shows the new name and avatar.
   function refreshActiveProfile(user: ProfileUser | null | undefined): void {
     if (!user?.id) return;
-    const avatarUrl = roomAvatarUrl(user.avatarKey);
+    const url = avatarUrl(user.avatarKey);
     for (const [roomId, room] of presence.rooms) {
       for (const peer of room.peers.values()) {
         if (peer.accountUserId !== user.id) continue;
         peer.name = deps.displayName(user);
         peer.avatarAccent = user.avatarAccent || null;
         peer.avatarColorKey = user.avatarColorKey || peer.avatarColorKey;
-        peer.avatarUrl = avatarUrl;
+        peer.avatarUrl = url;
         const message: RoomPeerMessage = { type: 'peer-updated', peer: publicPeer(peer) };
         presence.broadcast(room, message);
         deps.runtime()?.mirrorLegacyRoomEvent(roomId, message);

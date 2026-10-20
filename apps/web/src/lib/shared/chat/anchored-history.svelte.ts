@@ -1,5 +1,5 @@
 import { tick } from 'svelte';
-import type { HistoryCache } from '$lib/shared/chat/history-cache';
+import type { HistoryCache } from './history-cache';
 import { keysOf, mergeById } from '$lib/shared/utils/collections';
 
 export interface AnchoredHistoryPage<T> {

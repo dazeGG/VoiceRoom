@@ -28,12 +28,23 @@ function fakeStream() {
   };
 }
 
-async function loadScreenShare(grant: MediaGrant | null, whileAsking: (state: { joined: boolean }) => void = () => {}) {
+function noStats(): { availableOutgoingBitrate: number } | null {
+  return null;
+}
+
+async function loadScreenShare(
+  grant: MediaGrant | null,
+  whileAsking: (state: { joined: boolean }) => void = () => {},
+  statsEntries: unknown[] = []
+) {
   vi.resetModules();
   const state = {
     joined: true,
     connecting: false,
     localScreenStream: null,
+    localScreenStats: noStats(),
+    localScreenStatsPrevious: null,
+    localScreenStatsTimer: 0,
     localScreenPublications: new Map<string, unknown>(),
     localScreenMode: 'games',
     localScreenProfileId: 'balanced-30',
@@ -43,7 +54,15 @@ async function loadScreenShare(grant: MediaGrant | null, whileAsking: (state: { 
   };
   const stream = fakeStream();
   const showToast = vi.fn();
-  const publishLocalScreenTracks = vi.fn(async () => {});
+  // The published screen track answers the stats the monitor asks for.
+  const publishLocalScreenTracks = vi.fn(async () => {
+    state.localScreenPublications.set('screen', {
+      source: 'screen_share',
+      track: {
+        getRTCStatsReport: async () => ({ forEach: (visit: (entry: unknown) => void) => statsEntries.forEach(visit) })
+      }
+    });
+  });
   const applyScreenCaptureProfile = vi.fn(async () => {});
   const askForMedia = vi.fn(async () => {
     whileAsking(state);
@@ -79,8 +98,8 @@ async function loadScreenShare(grant: MediaGrant | null, whileAsking: (state: { 
   }));
   vi.doMock(`${P}/room/participants`, () => ({ updateParticipant: () => {} }));
   vi.doMock(`${P}/core/microphone-mute`, () => ({ isMicrophoneShownMuted: () => false }));
+  vi.doMock(`${P}/../screen-ui.svelte`, () => ({ getActiveScreenPeer: () => null }));
   vi.doMock(`${P}/ui/screen-view`, () => ({
-    getActiveScreenPeer: () => null,
     hideScreenStage: () => {},
     openLocalStreamPreview: () => {},
     refreshScreenMeta: () => {},
@@ -175,4 +194,22 @@ test('leaving the room while the server answers stops the capture instead of pub
 
   expect(publishLocalScreenTracks).not.toHaveBeenCalled();
   expect(stream.track.stopped).toBe(true);
+});
+
+test('the stream stats read the candidate pair a browser marks as selected, not only nominated', async () => {
+  // Firefox flags the pair in use as 'selected' and leaves 'nominated' out.
+  vi.stubGlobal('RTCRtpSender', {});
+  const { service, state } = await loadScreenShare(
+    { roomId: 'room-1', kind: 'screen', granted: true, profileId: 'high-60' },
+    () => {},
+    [
+      { id: 'pair', type: 'candidate-pair', state: 'succeeded', selected: true, availableOutgoingBitrate: 4_000_000 },
+      { id: 'out', type: 'outbound-rtp', kind: 'video', bytesSent: 100 }
+    ]
+  );
+
+  await service.handleScreenButtonClick();
+
+  await vi.waitFor(() => expect(state.localScreenStats?.availableOutgoingBitrate).toBe(4_000_000));
+  window.clearInterval(state.localScreenStatsTimer);
 });

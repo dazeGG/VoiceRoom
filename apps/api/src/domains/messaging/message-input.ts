@@ -3,14 +3,13 @@
 
 import crypto from 'node:crypto';
 import { isArray, textOf } from '@voice-room/shared/guards';
-
-const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+import { isUuid } from '@voice-room/shared/validation';
 
 const MAX_MESSAGE_ATTACHMENTS = 4;
 
 export function cleanUuid(value: unknown): string {
   const id = textOf(value).trim();
-  return UUID.test(id) ? id : '';
+  return isUuid(id) ? id : '';
 }
 
 /** `[]` when absent, `null` when malformed, duplicated or too many. */

@@ -3,6 +3,7 @@
 
 import { sql } from 'kysely';
 import type pg from 'pg';
+import { isUuid } from '@voice-room/shared/validation';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
@@ -11,7 +12,6 @@ import { describeUserAgent, isDesktopAppUserAgent } from '@voice-room/shared/acc
 import {
   DEFAULT_SESSION_TTL_MS,
   SESSION_TOUCH_INTERVAL_MS,
-  UUID_PATTERN,
   type UserStoreLogger,
   activeBlock,
   cleanLocationLabel,
@@ -212,8 +212,7 @@ export function createSessionRepository({
   // Returns the token hash so the caller can close whatever that session still
   // holds open (sockets, voice); the hash itself never reaches a client.
   async function revokeSession({ userId, publicId }: { userId: string; publicId: unknown }) {
-    if (typeof publicId !== 'string' || !UUID_PATTERN.test(publicId))
-      return { status: 'not_found' as const, tokenHash: null };
+    if (typeof publicId !== 'string' || !isUuid(publicId)) return { status: 'not_found' as const, tokenHash: null };
     const rows = await db
       .deleteFrom('sessions')
       .where('user_id', '=', userId)

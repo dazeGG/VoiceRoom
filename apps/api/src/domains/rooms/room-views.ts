@@ -5,6 +5,7 @@
 import type { RoomPeerMessage } from '../../realtime/legacy-events.ts';
 import type { LobbyRoom, PublicPeer, RoomRelationship } from '@voice-room/shared/contracts/rooms';
 import type { ClientKind } from '@voice-room/shared/account-security';
+import { avatarUrl } from '../../lib/avatar-url.ts';
 import { avatarColorForPeerId } from './avatar-color.ts';
 import { failure, type Failure } from '../../platform/http/http-kit.ts';
 
@@ -58,10 +59,6 @@ export interface LiveRoom extends StoredRoom {
   updatedAt: number;
 }
 
-export function roomAvatarUrl(avatarKey: string | null | undefined): string | null {
-  return avatarKey ? `/api/avatars/${encodeURIComponent(avatarKey)}` : null;
-}
-
 export function publicPeer(peer: PresencePeer): PublicPeer {
   const result: PublicPeer = {
     accountUserId: peer.accountUserId || '',
@@ -88,7 +85,7 @@ export type { LobbyRoom, PublicPeer };
 /** The lobby card: the PUT response, the room list and the room.updated event. */
 export function publicLobbyRoom(room: StoredRoom, peerCount: number): LobbyRoom {
   const result: LobbyRoom = {
-    avatarUrl: roomAvatarUrl(room.avatarKey),
+    avatarUrl: avatarUrl(room.avatarKey),
     createdAt: room.createdAt,
     isStatic: room.isStatic,
     name: room.name,

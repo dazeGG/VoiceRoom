@@ -9,7 +9,8 @@ import {
   normalizeNotificationItem,
   normalizeNotificationLimit
 } from '@voice-room/shared/notifications';
-import type { CursorTuple, InboxNotification, InboxRepository } from './inbox.repository.ts';
+import type { CursorTuple } from '../../platform/cursor-codec.ts';
+import type { InboxNotification, InboxRepository } from './inbox.repository.ts';
 import type { MentionEligibilityService } from './mention-eligibility.service.ts';
 import type { MentionRepository } from './mention.repository.ts';
 import type { NotificationOutboxRepository } from './notification-outbox.repository.ts';

@@ -144,7 +144,6 @@ function releaseDetailDispatch(): void {
   }
 }
 
-let lobbyHooked = false;
 let activeVoiceJoin: {
   roomId: string;
   peerId: string;
@@ -293,9 +292,7 @@ export function initLobbyRoomRealtime(
     }
   });
 
-  lobbyHooked = true;
   return () => {
-    lobbyHooked = false;
     offRestore?.();
     unsubscribe();
   };
@@ -428,10 +425,6 @@ export function requestMediaGrant(payload: ClientCommands['room.media.request'])
 
 export function ensureAppRealtimeConnected(): void {
   getAppRealtime().ensureConnected();
-}
-
-export function isLobbyRoomRealtimeHooked(): boolean {
-  return lobbyHooked;
 }
 
 export type { RoomSnapshot };

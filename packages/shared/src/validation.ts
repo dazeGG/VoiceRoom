@@ -32,6 +32,12 @@ export const SCREEN_PROFILE_IDS: ReadonlySet<string> = new Set([
 
 export const PRESENCE_STATUSES: readonly PresenceStatus[] = Object.freeze(['online', 'away', 'dnd', 'offline']);
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && UUID_PATTERN.test(value);
+}
+
 export function normalizeRoomId(value: unknown): string {
   if (typeof value !== 'string') return '';
   const roomId = value.trim();

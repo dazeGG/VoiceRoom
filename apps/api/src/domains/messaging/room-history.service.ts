@@ -12,6 +12,7 @@ import type {
 import { textOf } from '@voice-room/shared/guards';
 import { normalizeHistoryRequest } from '@voice-room/shared/messaging-history';
 import { epochMillis } from '../../platform/epoch-millis.ts';
+import { avatarUrl } from '../../lib/avatar-url.ts';
 
 type Tuple = { createdAtMicros: unknown; id: string };
 type Loose = Record<string, unknown>;
@@ -143,7 +144,7 @@ function createRoomHistoryService({
         peerId: message.peerId ?? '',
         name: message.name ?? '',
         avatarColorKey: message.avatarColorKey ?? null,
-        avatarUrl: message.avatarKey ? `/api/avatars/${encodeURIComponent(message.avatarKey)}` : null,
+        avatarUrl: avatarUrl(message.avatarKey),
         avatarAccent: message.avatarAccent ?? null
       },
       content: message.content || { type: 'text', text: message.text ?? '' },

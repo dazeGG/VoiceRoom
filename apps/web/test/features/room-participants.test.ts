@@ -15,6 +15,7 @@ import { METER_INTERVAL_MS, startMeters, stopMeters } from '../../src/lib/featur
 import type { Participant } from '../../src/lib/features/room/client/core/types.ts';
 import type { MeterAnalyser } from '../../src/lib/features/room/client/model/participants.ts';
 import { defined } from '../helpers/assert.ts';
+import { FakeMediaStream, FakeMediaStreamTrack } from '../helpers/fake-media.ts';
 
 beforeEach(() => {
   Object.assign(state, createInitialRoomState());
@@ -48,6 +49,22 @@ function withAnalyser(participant: Participant, amplitude: number): Participant 
 function runFrame(): void {
   vi.advanceTimersByTime(METER_INTERVAL_MS);
 }
+
+test('a peer that leaves LiveKit stops its voice element and lets go of the stream', () => {
+  const peer = createParticipant({ id: 'peer-a', name: 'A' });
+  const audio = document.createElement('audio');
+  audio.srcObject = new FakeMediaStream([new FakeMediaStreamTrack('voice', 'audio')]);
+  const pause = vi.spyOn(audio, 'pause').mockImplementation(() => {});
+  document.body.append(audio);
+  peer.audioElements.set('voice', audio);
+
+  detachLiveKitParticipant(peer);
+
+  expect(pause).toHaveBeenCalled();
+  expect(audio.srcObject).toBeNull();
+  expect(audio.isConnected).toBe(false);
+  expect(peer.audioElements.size).toBe(0);
+});
 
 test('the local participant is the self tile, even when a copy of it was listed as a peer', () => {
   const self = createParticipant({ id: 'me', name: 'Анна' });
