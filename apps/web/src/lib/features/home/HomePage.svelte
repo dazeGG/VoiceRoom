@@ -4,7 +4,8 @@
   import { goto } from '$app/navigation';
   import { page } from '$app/state';
   import { createRoom } from '$lib/api/rooms';
-  import { loadSession, session } from '$lib/features/auth/session.svelte';
+  import type { AuthUser } from '$lib/api/auth';
+  import { loadSession, session, setUser } from '$lib/features/auth/session.svelte';
   import { signOut } from './model/sign-out';
   import Topbar from '$lib/shared/components/Topbar.svelte';
   import '$lib/shared/styles/typography.css';
@@ -16,8 +17,15 @@
   import DesktopAppCard from './components/DesktopAppCard.svelte';
   import LandingHero from './components/LandingHero.svelte';
   import LegalLinks from '$lib/shared/components/LegalLinks.svelte';
-  import AuthDialog, { type AuthMode } from '$lib/features/auth/AuthDialog.svelte';
+  import AuthDialog from '$lib/features/auth/AuthDialog.svelte';
+  import type { AuthMode } from '$lib/features/auth/auth-mode';
   import LobbyPage from './LobbyPage.svelte';
+  import PermanentRoomOfferDialog from './components/PermanentRoomOfferDialog.svelte';
+  import {
+    dismissPermanentRoomOffer,
+    rememberGuestRoomCreated,
+    shouldOfferPermanentRoom
+  } from './model/returning-guest';
   import { dismissToast, pushToast, toastState, type ToastOptions } from './model/toasts.svelte';
   import { syncPushNotificationState } from './model/push-notifications.svelte';
 
@@ -28,6 +36,11 @@
   let joining = $state(false);
   let loggingOut = $state(false);
   let authLoadError = $state(false);
+  let permanentRoomOfferOpen = $state(false);
+  // The sign-in dialog opened from the offer; it is not the one in the URL,
+  // because it ends in the lobby's new-room dialog, not on the bare lobby.
+  let offerAuthMode = $state<AuthMode | null>(null);
+  let createRoomInLobby = $state(false);
 
   const user = $derived(session.user);
   const showLobby = $derived(session.loaded && Boolean(user));
@@ -39,6 +52,12 @@
 
   $effect(() => {
     void syncPushNotificationState(user?.id ?? null);
+  });
+
+  // The new-room dialog greets only the sign-in made from the offer; after a
+  // sign-out the page stays, and a later plain sign-in opens the bare lobby.
+  $effect(() => {
+    if (!user) createRoomInLobby = false;
   });
 
   onMount(() => {
@@ -60,11 +79,40 @@
     });
   }
 
-  async function handleCreateTemp(): Promise<void> {
+  function handleCreateTemp(): void {
+    if (creatingTemp) return;
+    if (shouldOfferPermanentRoom()) {
+      permanentRoomOfferOpen = true;
+      return;
+    }
+    void createTempRoom();
+  }
+
+  function continueAsGuest(): void {
+    permanentRoomOfferOpen = false;
+    dismissPermanentRoomOffer();
+    void createTempRoom();
+  }
+
+  function registerFromOffer(): void {
+    permanentRoomOfferOpen = false;
+    offerAuthMode = 'register';
+  }
+
+  // The account came for a room whose link stays, so the lobby opens with the
+  // new-room dialog, permanent by default.
+  function afterOfferAuthenticated(account: AuthUser): void {
+    offerAuthMode = null;
+    createRoomInLobby = true;
+    setUser(account);
+  }
+
+  async function createTempRoom(): Promise<void> {
     if (creatingTemp) return;
     creatingTemp = true;
     try {
       const roomId = await createRoom({ isStatic: false });
+      rememberGuestRoomCreated();
       openRoom(roomId);
     } catch (error) {
       creatingTemp = false;
@@ -150,7 +198,7 @@
     </main>
   </div>
 {:else if showLobby}
-  <LobbyPage {user} {loggingOut} onLogout={handleLogout} onToast={showToast} />
+  <LobbyPage {user} {loggingOut} createRoomOnOpen={createRoomInLobby} onLogout={handleLogout} onToast={showToast} />
 {:else}
   <div class="app-shell">
     <div class="landing-container">
@@ -181,6 +229,24 @@
 {#if session.loaded && !user && authMode}
   {#key authMode}
     <AuthDialog mode={authMode} onClose={closeAuthDialog} onModeChange={switchAuthMode} />
+  {/key}
+{/if}
+
+<PermanentRoomOfferDialog
+  open={permanentRoomOfferOpen && !user}
+  onRegister={registerFromOffer}
+  onContinue={continueAsGuest}
+  onClose={() => (permanentRoomOfferOpen = false)}
+/>
+
+{#if offerAuthMode && !user}
+  {#key offerAuthMode}
+    <AuthDialog
+      mode={offerAuthMode}
+      onClose={() => (offerAuthMode = null)}
+      onModeChange={(mode) => (offerAuthMode = mode)}
+      onAuthenticated={afterOfferAuthenticated}
+    />
   {/key}
 {/if}
 

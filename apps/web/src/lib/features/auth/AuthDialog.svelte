@@ -1,7 +1,3 @@
-<script module lang="ts">
-  export type AuthMode = 'login' | 'register' | 'recover';
-</script>
-
 <script lang="ts">
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
@@ -9,6 +5,7 @@
   import { CircleAlert, X } from '@lucide/svelte';
   import { normalizeRecoveryCode } from '@voice-room/shared/account-security';
   import { login, recoverAccount, register, restoreAccount, type AuthUser } from '$lib/api/auth';
+  import type { AuthMode } from './auth-mode';
   import { ApiError } from '$lib/api/client';
   import { iconMd } from '$lib/shared/ui/icons';
   import { LOGIN_HINT, PASSWORD_MIN_LENGTH, blockedMessage, isValidPassword, normalizeLogin } from './account';
