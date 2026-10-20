@@ -24,6 +24,7 @@
         <button
           type="button"
           class="attachment-tile"
+          data-attachment-id={attachment.id}
           onclick={() => {
             selected = ready.findIndex((item) => item.id === attachment.id);
           }}

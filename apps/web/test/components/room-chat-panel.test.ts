@@ -320,3 +320,66 @@ test('a reader at the newest message stays on it when loading artwork grows the 
   onResize();
   expect(body.scrollTop).toBe(100);
 });
+
+test('a right-click on a picture offers to copy and save it; on the text it does not', async () => {
+  const picture = {
+    id: 'att-1',
+    context: 'room',
+    order: 0,
+    mimeType: 'image/webp',
+    bytes: 1000,
+    width: 40,
+    height: 30,
+    state: 'ready',
+    url: null
+  };
+  const withPicture = roomMessage('m4', 'ada', 'смотри', { attachments: [picture] });
+  const { fetchMock } = stubFetch({
+    'GET /api/rooms/room/chat': { body: { ok: true, roomId: 'room', messages: [...history, withPicture] } },
+    'GET /api/rooms/room/pins': { body: { ok: true, pins: [], count: 0 } },
+    'POST /api/rooms/room/read': { body: { ok: true } }
+  });
+  // The picture itself comes as a PNG, which goes to the clipboard as it is.
+  const answerJson = fetchMock.getMockImplementation()!;
+  fetchMock.mockImplementation(async (input, init) =>
+    input === '/api/media/attachments/att-1/processed'
+      ? new Response(new Uint8Array([137, 80, 78, 71]), { headers: { 'content-type': 'image/png' } })
+      : answerJson(input, init)
+  );
+  class FakeClipboardItem {
+    constructor(readonly items: Record<string, Promise<Blob>>) {}
+  }
+  vi.stubGlobal('ClipboardItem', FakeClipboardItem);
+  const copied: Blob[] = [];
+  const write = vi.fn(async (items: FakeClipboardItem[]) => {
+    for (const item of items) copied.push(...(await Promise.all(Object.values(item.items))));
+  });
+  Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { write } });
+  const clicked: HTMLAnchorElement[] = [];
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+    clicked.push(this);
+  });
+  renderPanel();
+  await screen.findByText('смотри');
+
+  const onText = await menuLabels('смотри');
+  expect(onText).not.toContain('Скопировать изображение');
+  expect(onText).not.toContain('Скачать изображение');
+
+  const image = document.querySelector<HTMLElement>('[data-attachment-id="att-1"] img')!;
+  await userEvent.pointer({ keys: '[MouseRight]', target: image });
+  await userEvent.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: /Скачать изображение/ }));
+  expect(clicked.at(-1)?.getAttribute('href')).toBe('/api/media/attachments/att-1/processed?download=1');
+  expect(clicked.at(-1)?.hasAttribute('download')).toBe(true);
+
+  await userEvent.pointer({ keys: '[MouseRight]', target: image });
+  await userEvent.click(
+    within(await screen.findByRole('menu')).getByRole('menuitem', { name: /Скопировать изображение/ })
+  );
+  await vi.waitFor(() => expect(write).toHaveBeenCalledTimes(1));
+  await vi.waitFor(() => expect(copied.map((blob) => blob.type)).toEqual(['image/png']));
+
+  click.mockRestore();
+  vi.unstubAllGlobals();
+  Reflect.deleteProperty(navigator, 'clipboard');
+});

@@ -2,7 +2,7 @@
   // Right-click menu shared by the room chat and DMs. Quick reactions sit at the
   // top so the most common action needs no submenu; everything else is a normal
   // menu row. Which rows appear is decided by the caller through the flags.
-  import { Copy, Flag, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2 } from '@lucide/svelte';
+  import { Copy, Download, Flag, ImageIcon, Pencil, Pin, PinOff, Reply, SmilePlus, Trash2 } from '@lucide/svelte';
   import { ContextMenu, PopoverDivider, PopoverMenuItem, type ContextMenuContentState } from '$lib/shared/ui';
   import { iconMd } from '$lib/shared/ui/icons';
   import Emoji from './Emoji.svelte';
@@ -24,6 +24,8 @@
     onOpenReactionPicker,
     onReply,
     onCopy,
+    onCopyImage,
+    onDownloadImage,
     onTogglePin,
     onEdit,
     onDelete,
@@ -45,6 +47,9 @@
     onOpenReactionPicker?: (anchor: EventTarget | null) => void;
     onReply?: () => void;
     onCopy?: () => void;
+    /** The picture the menu was opened on; its rows appear only when given. */
+    onCopyImage?: () => void;
+    onDownloadImage?: () => void;
     onTogglePin?: () => void;
     onEdit?: () => void;
     onDelete?: () => void;
@@ -131,6 +136,18 @@
       <PopoverMenuItem label="Скопировать текст" disabled={busy} onclick={() => pick(onCopy, close)}>
         {#snippet icon()}<Copy {...iconMd} aria-hidden="true" />{/snippet}
       </PopoverMenuItem>
+
+      {#if onCopyImage}
+        <PopoverMenuItem label="Скопировать изображение" disabled={busy} onclick={() => pick(onCopyImage, close)}>
+          {#snippet icon()}<ImageIcon {...iconMd} aria-hidden="true" />{/snippet}
+        </PopoverMenuItem>
+      {/if}
+
+      {#if onDownloadImage}
+        <PopoverMenuItem label="Скачать изображение" disabled={busy} onclick={() => pick(onDownloadImage, close)}>
+          {#snippet icon()}<Download {...iconMd} aria-hidden="true" />{/snippet}
+        </PopoverMenuItem>
+      {/if}
 
       {#if canPin || canEdit}
         <PopoverDivider />
