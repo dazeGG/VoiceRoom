@@ -210,7 +210,9 @@ export function mountRoomClient(
   document.addEventListener('keydown', handleAudioUnlockGesture, { signal: listenerSignal });
   document.addEventListener('fullscreenchange', updateScreenFullscreenState, { signal: listenerSignal });
   navigator.mediaDevices?.addEventListener?.('devicechange', handleDeviceChange, { signal: listenerSignal });
-  window.addEventListener('beforeunload', leaveRoom, { signal: listenerSignal });
+  // pagehide, not beforeunload: a click on a file download (the desktop app's
+  // installer) fires beforeunload too, yet the page stays and so must the call.
+  window.addEventListener('pagehide', leaveRoom, { signal: listenerSignal });
   syncOutputDeviceUiState();
   refreshStageStripControls();
 

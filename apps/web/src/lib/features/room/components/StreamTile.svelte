@@ -26,11 +26,14 @@
   } = $props();
 
   let videoEl = $state<HTMLVideoElement>();
+  // A new avatar gets a fresh attempt: only the URL that failed stays hidden.
+  let failedAvatarUrl = $state<string | null>(null);
 
   const isIdle = $derived(!hasPreview);
   const isActive = $derived(hasPreview || isSubscribed);
   const profileMeta = $derived(getProfileMeta());
   const streamerAvatar = $derived(getAvatarPresentation(participant));
+  const avatarImageFailed = $derived(failedAvatarUrl !== null && failedAvatarUrl === streamerAvatar.src);
   const ariaLabel = $derived(
     hasPreview
       ? `Развернуть стрим ${participant.name}`
@@ -65,7 +68,12 @@
       class="stream-tile-mini-avatar"
       style:background={streamerAvatar.background}
       style:color={streamerAvatar.foreground}
-      aria-hidden="true">{streamerAvatar.initials}</span
+      aria-hidden="true"
+      >{#if streamerAvatar.src && !avatarImageFailed}<img
+          src={streamerAvatar.src}
+          alt=""
+          onerror={() => (failedAvatarUrl = streamerAvatar.src)}
+        />{:else}{streamerAvatar.initials}{/if}</span
     >Стрим
   </span>
 {/snippet}

@@ -63,6 +63,25 @@ test('a connected voice shows the ping and turns to a warning on noticeable loss
   expect(lossy.title).toContain('потери к вам 7%');
 });
 
+test('an unstable voice names what is wrong next to the ping', () => {
+  state.serverConnection = 'connected';
+  state.voiceConnection = 'connected';
+  state.localPingMs = 2;
+  state.localNetwork = { inboundLossPct: 7, jitterMs: 4, outboundLossPct: 0, transport: 'udp' };
+  expect(getConnectionStatusView().label).toBe('Голос нестабилен · потери к вам 7% · 2 мс');
+
+  state.localNetwork = { inboundLossPct: 0, jitterMs: 45, outboundLossPct: 12, transport: 'udp' };
+  expect(getConnectionStatusView().label).toBe('Голос нестабилен · потери от вас 12% · джиттер 45 мс · 2 мс');
+
+  state.localPingMs = 420;
+  state.localNetwork = { inboundLossPct: 0, jitterMs: 4, outboundLossPct: 0, transport: 'udp' };
+  expect(getConnectionStatusView().label).toBe('Голос нестабилен · высокий пинг · 420 мс');
+
+  state.localPingMs = null;
+  state.localConnectionQuality = 'poor';
+  expect(getConnectionStatusView()).toMatchObject({ stateName: 'warning', label: 'Голос нестабилен · плохая связь' });
+});
+
 test('voice failures are errors and a lost quality overrides a connected voice', () => {
   state.voiceConnection = 'connected';
   state.localConnectionQuality = 'lost';

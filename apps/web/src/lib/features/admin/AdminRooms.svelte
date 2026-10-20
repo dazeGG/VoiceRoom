@@ -248,14 +248,14 @@
                 <button
                   type="button"
                   class="rooms-room"
-                  onclick={() => showRoomHistory({ id: stay.roomId, name: stay.roomName })}
+                  onclick={() => showRoomHistory({ id: stay.roomId, name: stay.roomName || null })}
                 >
-                  <!-- A temporary room is gone once empty; its code is what it was called. -->
+                  <!-- An unnamed temporary room goes by its code, and so does one that is gone. -->
                   {#if stay.roomName}<EmojiText text={stay.roomName} />{:else}<span class="rooms-code"
                       >{stay.roomId}</span
                     >{/if}
                 </button>
-                {#if !stay.roomName}<span class="rooms-chip">удалена</span>{/if}
+                {#if stay.roomName === null}<span class="rooms-chip">удалена</span>{/if}
               </td>
               <td>
                 {#if stay.account}{@render accountLink(stay.account)}{:else}<span class="rooms-quiet">гость</span>{/if}

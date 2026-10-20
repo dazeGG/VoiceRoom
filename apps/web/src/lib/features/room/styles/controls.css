@@ -342,7 +342,7 @@ button:focus-visible {
 }
 
 .dock-connection[data-state='connected'] .dock-bar {
-  background: var(--vr-accent);
+  background: var(--vr-success);
 }
 
 .dock-connection[data-state='connecting'] .dock-bar {
@@ -382,7 +382,7 @@ button:focus-visible {
   height: 7px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: var(--vr-accent);
+  background: var(--vr-success);
 }
 
 .dock-connection[data-state='connecting'] + .dock-connection-popover .dock-connection-dot {

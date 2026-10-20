@@ -86,3 +86,10 @@ test('G45-A02 non-members cannot enumerate and empty presence is offline', async
   assert.deepEqual(await service.list({ roomId: 'room', viewerUserId: 'outsider' }), { status: 'forbidden' });
   assert.deepEqual(presenceForUser(null, 'u'), { inVoice: false, presenceStatus: 'offline' });
 });
+
+test('a connected account set to away is listed as afk, the way friends see it, not offline', () => {
+  const snapshot = { byUserId: new Map([['u', [{ inVoice: false, roomId: null, presenceStatus: 'away' }]]]) };
+  assert.deepEqual(presenceForUser(snapshot, 'u'), { inVoice: false, presenceStatus: 'afk' });
+  const invisible = { byUserId: new Map([['u', [{ inVoice: false, roomId: null, presenceStatus: 'offline' }]]]) };
+  assert.deepEqual(presenceForUser(invisible, 'u'), { inVoice: false, presenceStatus: 'offline' });
+});

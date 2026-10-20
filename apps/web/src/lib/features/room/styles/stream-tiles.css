@@ -137,9 +137,16 @@
   height: 18px;
   flex: none;
   place-items: center;
+  overflow: hidden;
   border-radius: 50%;
   font-size: 10px;
   font-weight: 700;
+}
+
+.stream-tile-mini-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .stream-tile-actions {
