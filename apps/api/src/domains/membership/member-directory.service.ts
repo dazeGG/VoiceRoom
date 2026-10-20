@@ -39,11 +39,12 @@ function presenceForUser(
   const connections = Array.isArray(raw) ? raw : [raw];
   const inVoice = connections.some((entry) => entry?.inVoice === true || entry?.voice === true || entry?.roomId);
   const statuses = connections.map((entry) => entry?.presenceStatus || entry?.status);
+  // An account set to away (by hand or when idle) says "away" on its connection; the roster calls it afk.
   const presenceStatus = statuses.includes('dnd')
     ? 'dnd'
     : statuses.includes('online')
       ? 'online'
-      : statuses.includes('afk')
+      : statuses.includes('away') || statuses.includes('afk')
         ? 'afk'
         : 'offline';
   return { inVoice: Boolean(inVoice), presenceStatus };
