@@ -31,6 +31,7 @@ import { registerCallFeedbackRoutes } from '../domains/feedback/call-feedback.ro
 import { registerReportRoutes } from '../domains/reports/reports.routes.ts';
 import { registerAdminRoutes } from '../domains/admin/admin.routes.ts';
 import { registerRoomRoutes } from '../domains/rooms/rooms.routes.ts';
+import { createStaffActorResolver, registerStaffRoutes } from '../domains/staff/staff.routes.ts';
 import { registerFriendsRoutes } from '../domains/social/friends.routes.ts';
 
 type RoomRouteDeps = Parameters<typeof registerRoomRoutes>[2];
@@ -44,6 +45,9 @@ export interface ApiRouteDeps {
     | 'ROOM_CREATE_POW_DIFFICULTY'
     | 'ROOM_CREATE_POW_TTL_MS'
     | 'CLIENT_LOG_INTAKE_ENABLED'
+    | 'SITE_ORIGIN'
+    | 'ADMIN_ORIGIN'
+    | 'SESSION_COOKIE_SECURE'
   >;
   services: ReturnType<typeof createServiceRegistry>;
   domain: {
@@ -61,6 +65,7 @@ export interface ApiRouteDeps {
     admin: Parameters<typeof registerAdminRoutes>[2]['admin'];
     adminAccounts: Parameters<typeof registerAdminRoutes>[2]['accounts'];
     adminRooms: Parameters<typeof registerAdminRoutes>[2]['rooms'];
+    staff: Parameters<typeof registerStaffRoutes>[2]['staff'];
     desktopRelease: OpsRouteDeps['desktopRelease'];
   };
   limits: RateLimits;
@@ -177,19 +182,36 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
     });
   }
 
+  // Admin endpoints answer the admin app's own session (domains/staff), never the main-site one.
+  const staffUserId = createStaffActorResolver(ctx, deps.domain.staff);
+  if (deps.services.getStaffRepository()) {
+    registerStaffRoutes(app, ctx, {
+      staff: deps.domain.staff,
+      siteOrigin: deps.config.SITE_ORIGIN,
+      adminOrigin: deps.config.ADMIN_ORIGIN,
+      secureCookies: deps.config.SESSION_COOKIE_SECURE,
+      openReports: async () => (await deps.services.getReportRepository()?.countOpen()) ?? 0
+    });
+  }
+
   if (deps.services.getReportRepository()) {
-    registerReportRoutes(app, ctx, { reports: deps.domain.reports, limiter: deps.limits.reports });
+    registerReportRoutes(app, ctx, { reports: deps.domain.reports, limiter: deps.limits.reports, staffUserId });
   }
 
   if (deps.services.getCallFeedbackRepository()) {
-    registerCallFeedbackRoutes(app, ctx, { feedback: deps.domain.callFeedback, limiter: deps.limits.callFeedback });
+    registerCallFeedbackRoutes(app, ctx, {
+      feedback: deps.domain.callFeedback,
+      limiter: deps.limits.callFeedback,
+      staffUserId
+    });
   }
 
   if (deps.services.getAdminStatsRepository()) {
     registerAdminRoutes(app, ctx, {
       admin: deps.domain.admin,
       accounts: deps.domain.adminAccounts,
-      rooms: deps.domain.adminRooms
+      rooms: deps.domain.adminRooms,
+      staffUserId
     });
   }
 

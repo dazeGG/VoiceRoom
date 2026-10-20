@@ -41,7 +41,9 @@
     "./contracts/realtime": "./src/contracts/realtime.ts",
     "./contracts/reports": "./src/contracts/reports.ts",
     "./contracts/feedback": "./src/contracts/feedback.ts",
-    "./contracts/admin": "./src/contracts/admin.ts"
+    "./contracts/admin": "./src/contracts/admin.ts",
+    "./contracts/staff": "./src/contracts/staff.ts",
+    "./report-labels": "./src/report-labels.ts"
   },
   "scripts": {
     "check": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",

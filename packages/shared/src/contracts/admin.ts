@@ -5,10 +5,8 @@
 
 import { Type, type Static } from 'typebox';
 import { Nullable, Ok } from './http.ts';
+import { StaffRoleSchema } from './staff.ts';
 import { AccountBadge } from './users.ts';
-
-/** Whether the panel is this account's, and for an administrator how many reports wait. */
-export const AdminAccess = Ok({ admin: Type.Boolean(), openReports: Type.Number() });
 
 /** What the realtime layer tells administrators when the open reports change. */
 export interface AdminReportsEvent {
@@ -20,7 +18,6 @@ export interface AdminReportsEvent {
     roomName: string | null;
   };
 }
-export type AdminAccess = Static<typeof AdminAccess>;
 
 /** The numbers the running API holds in memory right now. */
 export const LiveNumbers = Type.Object({
@@ -260,7 +257,8 @@ export const AdminActionKind = Type.Union([
   Type.Literal('logout'),
   Type.Literal('delete'),
   Type.Literal('cancel_deletion'),
-  Type.Literal('badge')
+  Type.Literal('badge'),
+  Type.Literal('staff_role')
 ]);
 export type AdminActionKind = Static<typeof AdminActionKind>;
 
@@ -274,7 +272,9 @@ export const AdminActionEntry = Type.Object({
   /** A block's end (null: for good); null for other actions. */
   until: Nullable(Type.Number()),
   /** The mark a badge action set (null: taken away). */
-  badge: Nullable(AccountBadge)
+  badge: Nullable(AccountBadge),
+  /** The role a staff_role action gave (null: taken away, or another action). */
+  role: Nullable(StaffRoleSchema)
 });
 export type AdminActionEntry = Static<typeof AdminActionEntry>;
 

@@ -11,12 +11,12 @@ import {
   type CallFeedbackRating,
   type CallFeedbackTag
 } from '@voice-room/shared/contracts/feedback';
-import { isPlatformAdmin } from '../admin/admin.policy.ts';
+import type { StaffCheck } from '../staff/staff-check.ts';
 import type { CallFeedbackRepository } from './call-feedback.repository.ts';
 
 export interface CallFeedbackServiceDeps {
   repository: () => Pick<CallFeedbackRepository, 'insert' | 'summarize' | 'listRecent'>;
-  adminUserIds: readonly string[];
+  staff: StaffCheck;
   now?: () => number;
 }
 
@@ -51,12 +51,12 @@ export function createCallFeedbackService(deps: CallFeedbackServiceDeps) {
     });
   }
 
-  /** Null when the actor is not a platform administrator. */
+  /** Null when the actor may not see the numbers. */
   async function list(
     actorUserId: string,
     query: AdminCallFeedbackQuery
   ): Promise<Omit<AdminCallFeedbackPage, 'ok'> | null> {
-    if (!isPlatformAdmin(deps.adminUserIds, actorUserId)) return null;
+    if (!(await deps.staff.can(actorUserId, 'stats.view'))) return null;
     const days = query.days ? Number(query.days) : ADMIN_CALL_FEEDBACK_DEFAULT_DAYS;
     const since = new Date(now() - days * DAY_MS);
     const repository = deps.repository();

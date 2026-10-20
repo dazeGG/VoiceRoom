@@ -1,5 +1,8 @@
-import type { AdminReportsEvent } from '@voice-room/shared/contracts/admin';
-import type { ReportReason } from '@voice-room/shared/contracts/reports';
+// How a report's reason and place read, for the main site's notice of a new
+// report and for the admin app's list.
+
+import type { AdminReportsEvent } from './contracts/admin.ts';
+import type { ReportReason } from './contracts/reports.ts';
 
 export const REPORT_REASON_LABELS: Record<ReportReason, string> = {
   spam: 'Спам или реклама',

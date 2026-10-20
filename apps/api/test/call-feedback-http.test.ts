@@ -9,6 +9,7 @@ import type { AdminCallFeedbackPage, CallFeedbackBody } from '@voice-room/shared
 import type { Failure } from '@voice-room/shared/contracts/http';
 import { hashPassword } from '../src/lib/password.ts';
 import { cookieFrom, registerAccount, request, startApiServer } from './fakes/server-process.ts';
+import { staffCookie } from './staff-session.ts';
 
 const ADMIN_ID = '00000000-0000-4000-8000-0000000000ad';
 const DAY = 24 * 60 * 60 * 1000;
@@ -45,7 +46,7 @@ test('accounts and guests answer, and only the administrator reads the answers',
     pathname: '/api/auth/login',
     body: { login: 'root', password: 'password123' }
   });
-  const admin = cookieFrom(signedIn.setCookie);
+  const admin = await staffCookie(socketPath, cookieFrom(signedIn.setCookie));
   const alice = await registerAccount(socketPath, 'alice');
   const aliceId = (await request<Me>(socketPath, { pathname: '/api/auth/me', cookie: alice })).body.user!.id;
   await pool.query(

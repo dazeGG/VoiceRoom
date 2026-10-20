@@ -10,6 +10,7 @@ import { Value } from 'typebox/value';
 import { LiveRooms, RoomHistory } from '@voice-room/shared/contracts/admin';
 import { hashPassword } from '../src/lib/password.ts';
 import { cookieFrom, request, startApiServer } from './fakes/server-process.ts';
+import { staffCookie } from './staff-session.ts';
 import { joinVoiceRoom, openWs, sendWs } from './ws-harness.ts';
 
 const skip = !process.env.TEST_DATABASE_URL;
@@ -45,7 +46,7 @@ test('a guest stay keeps its name, browser id, device and keyed address, never t
     pathname: '/api/auth/login',
     body: { login: 'root', password: 'password123' }
   });
-  const admin = cookieFrom(signedIn.setCookie);
+  const admin = await staffCookie(socketPath, cookieFrom(signedIn.setCookie));
   await pool.query(`INSERT INTO rooms (id, creator_ip, is_static, name) VALUES ('porch', '', false, 'Крыльцо')`);
 
   const guest = openWs(socketPath, { headers: { 'User-Agent': WINDOWS_CHROME, 'X-Forwarded-For': GUEST_IP } });

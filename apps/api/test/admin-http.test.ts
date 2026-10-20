@@ -1,5 +1,5 @@
-// The admin panel over HTTP: any account learns whether it is an
-// administrator, only an administrator reads the numbers, and the numbers are
+// The admin panel over HTTP: any account learns whether it is staff, only an
+// administrator signed in to the admin app reads the numbers, and the numbers are
 // what the tables hold — today's activity, the day series of a range, the
 // registration cohorts and the server's own minutes — over the span asked
 // for, and a new report reaches the administrators online at once.
@@ -9,10 +9,12 @@ import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import type { Me, SignedIn } from '@voice-room/shared/contracts/account';
 import type { Failure } from '@voice-room/shared/contracts/http';
-import type { AdminAccess, AdminOverview, ProductStats, SystemStats } from '@voice-room/shared/contracts/admin';
+import type { AdminOverview, ProductStats, SystemStats } from '@voice-room/shared/contracts/admin';
+import type { StaffAccess } from '@voice-room/shared/contracts/staff';
 import type { AdminReportPage } from '@voice-room/shared/contracts/reports';
 import { hashPassword } from '../src/lib/password.ts';
 import { cookieFrom, registerAccount, request, startApiServer, wait } from './fakes/server-process.ts';
+import { staffCookie } from './staff-session.ts';
 import { openWs, waitForWsType } from './ws-harness.ts';
 
 const skip = !process.env.TEST_DATABASE_URL;
@@ -46,7 +48,9 @@ test('only a platform administrator reads the panel, and its numbers come from t
     body: { login: 'root', password: 'password123' }
   });
   assert.equal(signedIn.status, 200);
-  const admin = cookieFrom(signedIn.setCookie);
+  // The operator's main-site session hears of reports; the admin app has its own.
+  const adminSite = cookieFrom(signedIn.setCookie);
+  const admin = await staffCookie(socketPath, adminSite);
   const alice = await registerAccount(socketPath, 'alice');
   const aliceId = (await request<Me>(socketPath, { pathname: '/api/auth/me', cookie: alice })).body.user!.id;
 
@@ -86,7 +90,7 @@ test('only a platform administrator reads the panel, and its numbers come from t
      -- The running API's own tick may have written this quarter hour already (with zeros).
      ON CONFLICT (at) DO UPDATE SET online_accounts = 3, guest_connections = 2, voice_peers = 4, voice_rooms = 2`
   );
-  const adminSocket = openWs(socketPath, { cookie: admin });
+  const adminSocket = openWs(socketPath, { cookie: adminSite });
   const aliceSocket = openWs(socketPath, { cookie: alice });
   await Promise.all([adminSocket.ready, aliceSocket.ready]);
   const reported = await request(socketPath, {
@@ -104,12 +108,12 @@ test('only a platform administrator reads the panel, and its numbers come from t
   await wait(100);
   assert.ok(!aliceSocket.frames.some((frame) => frame.type === 'admin.reports'), 'only administrators hear of reports');
 
-  // Whether the entry shows: anyone signed in may ask, only the operator's account is told yes.
-  assert.equal((await request(socketPath, { pathname: '/api/admin/access' })).status, 401);
-  const asAlice = await request<AdminAccess>(socketPath, { pathname: '/api/admin/access', cookie: alice });
-  assert.deepEqual(asAlice.body, { ok: true, admin: false, openReports: 0 });
-  const asAdmin = await request<AdminAccess>(socketPath, { pathname: '/api/admin/access', cookie: admin });
-  assert.deepEqual(asAdmin.body, { ok: true, admin: true, openReports: 1 });
+  // Whether the link to the admin app shows: anyone signed in may ask, only staff is told yes.
+  assert.equal((await request(socketPath, { pathname: '/api/staff/access' })).status, 401);
+  const asAlice = await request<StaffAccess>(socketPath, { pathname: '/api/staff/access', cookie: alice });
+  assert.equal(asAlice.body.staff, false);
+  const asAdmin = await request<StaffAccess>(socketPath, { pathname: '/api/staff/access', cookie: adminSite });
+  assert.equal(asAdmin.body.staff, true);
 
   for (const pathname of ['/api/admin/overview', '/api/admin/product', '/api/admin/system']) {
     assert.equal((await request(socketPath, { pathname })).status, 401, pathname);

@@ -496,6 +496,14 @@ export interface Sessions {
   user_id: string;
 }
 
+export interface StaffSessions {
+  created_at: Generated<Timestamp>;
+  expires_at: Timestamp;
+  id: string;
+  main_session_id: string;
+  user_id: string;
+}
+
 export interface SystemSnapshots {
   api_rss_bytes: Generated<Int8>;
   at: Timestamp;
@@ -565,6 +573,7 @@ export interface Users {
   presence_active_until: Timestamp | null;
   presence_status: Generated<string>;
   presence_status_automatic: Generated<boolean>;
+  staff_role: string | null;
   updated_at: Generated<Timestamp>;
 }
 
@@ -632,6 +641,7 @@ export interface DB {
   room_server_mutes: RoomServerMutes;
   rooms: Rooms;
   sessions: Sessions;
+  staff_sessions: StaffSessions;
   system_snapshots: SystemSnapshots;
   user_activity_days: UserActivityDays;
   user_blocks: UserBlocks;

@@ -5,7 +5,7 @@
 
 import type { AdminReportsEvent } from '@voice-room/shared/contracts/admin';
 import { REPORT_COMMENT_MAX_LENGTH, type AdminReport, type ReportBody } from '@voice-room/shared/contracts/reports';
-import { isPlatformAdmin } from '../admin/admin.policy.ts';
+import type { StaffCheck } from '../staff/staff-check.ts';
 import { canReportDirectMessage } from './report.policy.ts';
 import type { ReportRepository } from './report.repository.ts';
 
@@ -14,7 +14,7 @@ export interface ReportServiceDeps {
     ReportRepository,
     'findRoomMessage' | 'findDirectMessage' | 'fileReport' | 'findOpenReport' | 'resolveTarget' | 'listOpen'
   >;
-  adminUserIds: readonly string[];
+  staff: StaffCheck;
   canReadRoom(roomId: string, userId: string): Promise<boolean>;
   removeRoomMessage(input: { roomId: string; messageId: string }): Promise<unknown>;
   removeDirectMessage(input: { senderId: string; recipientId: string; messageId: string }): Promise<unknown>;
@@ -70,7 +70,7 @@ export function createReportService(deps: ReportServiceDeps) {
   }
 
   async function listOpen(actorUserId: string): Promise<AdminReport[] | null> {
-    if (!isPlatformAdmin(deps.adminUserIds, actorUserId)) return null;
+    if (!(await deps.staff.can(actorUserId, 'reports.review'))) return null;
     return deps.repository().listOpen();
   }
 
@@ -79,7 +79,7 @@ export function createReportService(deps: ReportServiceDeps) {
     reportId: string,
     action: 'remove_message' | 'dismiss'
   ): Promise<ResolveOutcome> {
-    if (!isPlatformAdmin(deps.adminUserIds, actorUserId)) return { status: 'forbidden' };
+    if (!(await deps.staff.can(actorUserId, 'reports.review'))) return { status: 'forbidden' };
     if (!UUID.test(reportId)) return { status: 'not_found' };
     const repository = deps.repository();
     const report = await repository.findOpenReport(reportId);

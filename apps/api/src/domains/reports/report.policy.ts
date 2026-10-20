@@ -1,4 +1,4 @@
-// What an account may report. Who reviews reports is admin.policy.ts.
+// What an account may report. Who reviews reports is a staff permission (domains/staff).
 
 /**
  * A direct message can be reported by its recipient only: the sender can

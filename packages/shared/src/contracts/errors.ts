@@ -179,6 +179,11 @@ export const ERROR_CODES = [
   'confirmation_mismatch',
   'deletion_not_by_admin',
 
+  // Staff roles and the admin app
+  'staff_session_required',
+  'staff_role_fixed',
+  'staff_role_self',
+
   // Desktop app
   'desktop_release_unavailable'
 ] as const;

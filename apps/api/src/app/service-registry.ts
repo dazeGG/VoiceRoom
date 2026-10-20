@@ -37,6 +37,7 @@ import { createActiveBanService } from '../domains/moderation/active-ban.service
 import { createCursorCodec } from '../platform/cursor-codec.ts';
 import { resolveCursorHmacKeys, resolveIpKeySecret } from './config.ts';
 import { createIpKey } from '../lib/ip-key.ts';
+import { createStaffRepository } from '../domains/staff/staff.repository.ts';
 import type { StoreOverrides } from './store-overrides.ts';
 export type { Fake, StoreOverrides } from './store-overrides.ts';
 import { createHistoryModule } from '../domains/messaging/history.module.ts';
@@ -270,6 +271,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   const adminAccounts = pooled((pool) => createAdminAccountsRepository({ pool }));
   const adminRooms = pooled((pool) => createAdminRoomsRepository({ pool }));
   const adminActions = pooled((pool) => createAdminActionRepository({ pool }));
+  const staffRepository = pooled((pool) => createStaffRepository({ pool }));
   const accountStanding = pooled((pool) => createAccountStandingRepository({ pool }));
   const activeBans = pooled((pool) => createActiveBanService({ pool }));
   const delivery = pooled((pool) => ({
@@ -448,6 +450,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     getAdminAccountsRepository: () => adminAccounts.get(),
     getAdminRoomsRepository: () => adminRooms.get(),
     getAdminActionRepository: () => adminActions.get(),
+    getStaffRepository: () => staffRepository.get(),
     getAccountStandingRepository: () => accountStanding.get(),
     getReactionServices: () => reactions.get(),
     getPinServices: () => pins.get(),
