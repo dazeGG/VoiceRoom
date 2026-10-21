@@ -84,7 +84,10 @@ import /etc/caddy/turn.d/*.site
 {$ADMIN_DOMAIN} {
   encode zstd gzip
 
+  # Deferred so they replace what the API sends: its main-site policy would
+  # otherwise stand next to this one and block the admin pages' inline styles.
   header {
+    defer
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
     import /etc/caddy/admin-csp.caddy
     Cross-Origin-Opener-Policy "same-origin"
