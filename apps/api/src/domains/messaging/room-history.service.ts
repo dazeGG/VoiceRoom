@@ -13,6 +13,8 @@ import { textOf } from '@voice-room/shared/guards';
 import { normalizeHistoryRequest } from '@voice-room/shared/messaging-history';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { avatarUrl } from '../../lib/avatar-url.ts';
+import { roomCursorScopes } from './cursor-scopes.ts';
+import { pageHistory } from './history-pager.ts';
 
 type Tuple = { createdAtMicros: unknown; id: string };
 type Loose = Record<string, unknown>;
@@ -100,16 +102,8 @@ function createRoomHistoryService({
   const history = repository;
   const codec = cursorCodec;
 
-  function contextFor(roomId: string): string {
-    return `room:${roomId}`;
-  }
-
-  function encodeTuple(roomId: string, tuple: Tuple, purpose = 'room-history'): string {
-    return codec.encode({ purpose, context: contextFor(roomId), tuple });
-  }
-
-  function decodeTuple(roomId: string, cursor: string | undefined): Tuple {
-    return codec.decode(cursor, { purpose: 'room-history', context: contextFor(roomId) });
+  function encodeTuple(roomId: string, tuple: Tuple, scope: 'history' | 'read' = 'history'): string {
+    return codec.encode({ ...roomCursorScopes(roomId)[scope], tuple });
   }
 
   function canView(message: StoredRoomMessage, access: Access): boolean | Promise<boolean> {
@@ -156,7 +150,7 @@ function createRoomHistoryService({
       ...(message.replyPreview === undefined ? {} : { replyPreview: message.replyPreview }),
       ...(message.reactions === undefined ? {} : { reactions: message.reactions }),
       cursor: encodeTuple(roomId, tuple),
-      readCursor: encodeTuple(roomId, tuple, 'room-read')
+      readCursor: encodeTuple(roomId, tuple, 'read')
     };
   }
 
@@ -181,43 +175,25 @@ function createRoomHistoryService({
     }
 
     const { mode, limit, cursor } = parsed.request;
-    let page: HistoryPage;
-    if (mode === 'latest') {
-      page = await history.listLatest({ roomId: normalizedRoomId, anchor: undefined, limit, now: now() });
-    } else {
-      let anchor: Tuple;
-      try {
-        anchor = decodeTuple(normalizedRoomId, cursor);
-      } catch {
-        throw new RoomHistoryError('invalid_cursor', 400, 'Invalid history cursor');
-      }
-      const method = ({ before: 'listBefore', after: 'listAfter', around: 'listAround' } as const)[mode];
-      page = await history[method]({ roomId: normalizedRoomId, anchor, limit, now: now() });
-    }
-    const visible: StoredRoomMessage[] = [];
-    for (const message of page.messages) {
-      if (await canView(message, access)) visible.push(message);
-    }
-    const projected =
-      typeof projectMessages === 'function' && visible.length > 0
-        ? await projectMessages({ messages: visible, roomId: normalizedRoomId, access })
-        : visible;
-    const messages = projected.map((message) => toDto(normalizedRoomId, message));
-    const first = messages[0];
-    const last = messages.at(-1);
-
-    return {
-      contractVersion: 1,
+    const base = { roomId: normalizedRoomId, limit, now: now() };
+    return pageHistory({
       mode,
-      messages,
-      pageInfo: {
-        ...(first === undefined ? {} : { before: first.cursor }),
-        ...(last === undefined ? {} : { after: last.cursor }),
-        ...(mode === 'around' && cursor !== undefined ? { around: cursor } : {}),
-        hasMoreBefore: page.hasMoreBefore,
-        hasMoreAfter: page.hasMoreAfter
-      }
-    };
+      cursor,
+      listLatest: () => history.listLatest({ ...base, anchor: undefined }),
+      listAnchored: (anchoredMode, anchor) =>
+        history[({ before: 'listBefore', after: 'listAfter', around: 'listAround' } as const)[anchoredMode]]({
+          ...base,
+          anchor
+        }),
+      decodeAnchor: (value) => codec.decode(value, roomCursorScopes(normalizedRoomId).history),
+      invalidCursor: () => new RoomHistoryError('invalid_cursor', 400, 'Invalid history cursor'),
+      canView: (message) => canView(message, access),
+      project: (visible) =>
+        typeof projectMessages === 'function'
+          ? projectMessages({ messages: visible, roomId: normalizedRoomId, access })
+          : visible,
+      toDto: (message) => toDto(normalizedRoomId, message)
+    });
   }
 
   return { getPage };

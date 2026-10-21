@@ -4,8 +4,8 @@ import {
   type CleanupJobs,
   type RevocableAttachments
 } from '../media/attachment-revocation.service.ts';
-import { kyselyOn } from '../../platform/db/kysely.ts';
 import { transaction } from '../../platform/db/pool.ts';
+import { lockRoomMessage, tombstoneRoomMessage } from './message-moderation.repository.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 
@@ -77,26 +77,9 @@ function createMessageModerationService({
       if (!(await authorize(client))) {
         return { status: 'forbidden', deletion: null };
       }
-      const trx = kyselyOn(client);
-      const message = await trx
-        .selectFrom('room_messages')
-        .select(['id', 'room_id', 'deleted_at'])
-        .where('room_id', '=', roomId)
-        .where('id', '=', messageId)
-        .limit(1)
-        .forUpdate()
-        .executeTakeFirst();
+      const message = await lockRoomMessage(client, roomId, messageId);
       if (!message) return { status: 'not_found', deletion: null };
-
-      if (!message.deleted_at) {
-        await trx
-          .updateTable('room_messages')
-          .set({ deleted_at: timestamp })
-          .where('room_id', '=', roomId)
-          .where('id', '=', messageId)
-          .where('deleted_at', 'is', null)
-          .execute();
-      }
+      if (!message.deleted_at) await tombstoneRoomMessage(client, roomId, messageId, timestamp);
       await revokeMessageAttachments({
         attachments: attachmentRepository,
         jobs: mediaJobRepository,

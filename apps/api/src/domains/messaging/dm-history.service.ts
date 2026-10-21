@@ -12,7 +12,9 @@ import { textOf } from '@voice-room/shared/guards';
 import { normalizeHistoryRequest } from '@voice-room/shared/messaging-history';
 import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
 import { epochMillis } from '../../platform/epoch-millis.ts';
+import { canonicalParticipants, dmCursorScopes } from './cursor-scopes.ts';
 import { isDirectParticipant } from './direct-message.policy.ts';
+import { pageHistory } from './history-pager.ts';
 
 type Tuple = { createdAtMicros: unknown; id: string };
 type Loose = Record<string, unknown>;
@@ -93,10 +95,6 @@ class DmHistoryError extends Error {
   }
 }
 
-function canonicalParticipants(userId: string, peerId: string): [string, string] {
-  return userId < peerId ? [userId, peerId] : [peerId, userId];
-}
-
 function createDmHistoryService({
   repository,
   cursorCodec,
@@ -118,16 +116,8 @@ function createDmHistoryService({
   const history = repository;
   const codec = cursorCodec;
 
-  function contextFor(userId: string, peerId: string): string {
-    return `dm:${canonicalParticipants(userId, peerId).join(':')}`;
-  }
-
-  function encodeTuple(userId: string, peerId: string, tuple: Tuple, purpose = 'dm-history'): string {
-    return codec.encode({ purpose, context: contextFor(userId, peerId), tuple });
-  }
-
-  function decodeTuple(userId: string, peerId: string, cursor: string | undefined): Tuple {
-    return codec.decode(cursor, { purpose: 'dm-history', context: contextFor(userId, peerId) });
+  function encodeTuple(userId: string, peerId: string, tuple: Tuple, scope: 'history' | 'read' = 'history'): string {
+    return codec.encode({ ...dmCursorScopes(userId, peerId)[scope], tuple });
   }
 
   function canView(message: StoredDirectMessage, userId: string): boolean | Promise<boolean> {
@@ -163,7 +153,7 @@ function createDmHistoryService({
       ...(message.replyPreview === undefined ? {} : { replyPreview: message.replyPreview }),
       ...(message.reactions === undefined ? {} : { reactions: message.reactions }),
       cursor: encodeTuple(userId, peerId, tuple),
-      readCursor: encodeTuple(userId, peerId, tuple, 'dm-read')
+      readCursor: encodeTuple(userId, peerId, tuple, 'read')
     };
   }
 
@@ -185,43 +175,24 @@ function createDmHistoryService({
 
     const { mode, limit, cursor } = parsed.request;
     const base = { userId: viewer, peerId: peer, limit };
-    let page: HistoryPage;
-    if (mode === 'latest') {
-      page = await history.listLatest({ ...base, anchor: undefined });
-    } else {
-      let anchor: Tuple;
-      try {
-        anchor = decodeTuple(viewer, peer, cursor);
-      } catch {
-        throw new DmHistoryError('invalid_cursor', 400, 'Invalid history cursor');
-      }
-      const method = ({ before: 'listBefore', after: 'listAfter', around: 'listAround' } as const)[mode];
-      page = await history[method]({ ...base, anchor });
-    }
-    const visible: StoredDirectMessage[] = [];
-    for (const message of page.messages) {
-      if (await canView(message, viewer)) visible.push(message);
-    }
-    const projected =
-      typeof projectMessages === 'function' && visible.length > 0
-        ? await projectMessages({ messages: visible, userId: viewer, peerId: peer })
-        : visible;
-    const messages = projected.map((message) => toDto(viewer, peer, message));
-    const first = messages[0];
-    const last = messages.at(-1);
-
-    return {
-      contractVersion: 1,
+    return pageHistory({
       mode,
-      messages,
-      pageInfo: {
-        ...(first === undefined ? {} : { before: first.cursor }),
-        ...(last === undefined ? {} : { after: last.cursor }),
-        ...(mode === 'around' && cursor !== undefined ? { around: cursor } : {}),
-        hasMoreBefore: page.hasMoreBefore,
-        hasMoreAfter: page.hasMoreAfter
-      }
-    };
+      cursor,
+      listLatest: () => history.listLatest({ ...base, anchor: undefined }),
+      listAnchored: (anchoredMode, anchor) =>
+        history[({ before: 'listBefore', after: 'listAfter', around: 'listAround' } as const)[anchoredMode]]({
+          ...base,
+          anchor
+        }),
+      decodeAnchor: (value) => codec.decode(value, dmCursorScopes(viewer, peer).history),
+      invalidCursor: () => new DmHistoryError('invalid_cursor', 400, 'Invalid history cursor'),
+      canView: (message) => canView(message, viewer),
+      project: (visible) =>
+        typeof projectMessages === 'function'
+          ? projectMessages({ messages: visible, userId: viewer, peerId: peer })
+          : visible,
+      toDto: (message) => toDto(viewer, peer, message)
+    });
   }
 
   return { getPage };

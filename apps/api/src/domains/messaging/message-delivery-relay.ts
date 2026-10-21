@@ -12,6 +12,13 @@ import { isStoredDirectMessage } from '../social/social-records.ts';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
+import {
+  dropListener,
+  startListening,
+  stopListener,
+  type ListenClient,
+  type Listener
+} from '../../platform/db/listen.ts';
 import type { MessageProjection } from './message-projection.ts';
 import type { StoredUser } from '../account/user-records.ts';
 import { isStoredChatMessage, type RoomChatMessage } from './room-chat-views.ts';
@@ -19,22 +26,6 @@ import { isStoredChatMessage, type RoomChatMessage } from './room-chat-views.ts'
 const CHANNEL = 'voice_room_message_delivery';
 const RETRY_BASE_MS = 1_000;
 const RETRY_MAX_MS = 30_000;
-
-interface ListenClient {
-  on(
-    event: 'notification',
-    listener: (notification: { channel: string; payload?: string | undefined }) => void
-  ): unknown;
-  on(event: 'error', listener: (error: unknown) => void): unknown;
-  on(event: 'end', listener: () => void): unknown;
-  off(
-    event: 'notification',
-    listener: (notification: { channel: string; payload?: string | undefined }) => void
-  ): unknown;
-  query(sql: string): Promise<unknown>;
-  /** An error destroys the connection instead of returning it to the pool. */
-  release(error?: Error): void;
-}
 
 export interface MessageDeliveryRelayDeps {
   enabled: boolean;
@@ -57,10 +48,7 @@ export interface MessageDeliveryRelayDeps {
 }
 
 export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
-  let listener: {
-    client: ListenClient;
-    onNotification: (notification: { channel: string; payload?: string | undefined }) => void;
-  } | null = null;
+  let listener: Listener | null = null;
 
   // The outbox stores the event its writer enqueued; dispatch checks its fields.
   async function dispatchMessageDeliveryEvent(event: unknown): Promise<void> {
@@ -132,14 +120,12 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
     retryTimer.unref?.();
   }
 
-  function lose(client: ListenClient, error?: unknown): void {
-    const current = listener;
-    if (!current || current.client !== client) return;
+  function lose(lost: Listener, error?: unknown): void {
+    if (listener !== lost) return;
     listener = null;
     lostAt ??= new Date();
     deps.logger().error({ evt: LOG_EVENTS.MESSAGE_LISTENER_FAILED, err: error }, 'message delivery listener failed');
-    client.off('notification', current.onNotification);
-    client.release(error instanceof Error ? error : new Error('message delivery listener lost'));
+    dropListener(lost, error);
     scheduleRetry();
   }
 
@@ -166,27 +152,18 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
     const outbox = deps.outbox();
     if (!pool || !outbox) return;
     connecting = true;
-    let client: ListenClient | null = null;
     try {
-      client = await pool.connect();
-      const connected = client;
-      const onNotification = (notification: { channel: string; payload?: string | undefined }) => {
-        if (notification.channel !== CHANNEL) return;
-        void (async () => {
-          const parsed: unknown = JSON.parse(notification.payload || '{}');
-          const eventId = isRecord(parsed) && typeof parsed.eventId === 'string' ? parsed.eventId : '';
-          const row = eventId ? await outbox.getEvent(eventId) : null;
-          if (row?.payload) await dispatchMessageDeliveryEvent(row.payload);
-        })().catch(reportDispatchFailure);
-      };
-      client.on('notification', onNotification);
-      client.on('error', (error) => lose(connected, error));
-      client.on('end', () => lose(connected));
-      await client.query(`LISTEN ${CHANNEL}`);
-      listener = { client, onNotification };
-    } catch (error) {
-      client?.release(error instanceof Error ? error : new Error('LISTEN failed'));
-      throw error;
+      listener = await startListening(pool, CHANNEL, {
+        onPayload: (payload) => {
+          void (async () => {
+            const parsed: unknown = JSON.parse(payload || '{}');
+            const eventId = isRecord(parsed) && typeof parsed.eventId === 'string' ? parsed.eventId : '';
+            const row = eventId ? await outbox.getEvent(eventId) : null;
+            if (row?.payload) await dispatchMessageDeliveryEvent(row.payload);
+          })().catch(reportDispatchFailure);
+        },
+        onLost: lose
+      });
     } finally {
       connecting = false;
     }
@@ -213,9 +190,7 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
     const current = listener;
     listener = null;
     if (!current) return;
-    current.client.off('notification', current.onNotification);
-    await current.client.query(`UNLISTEN ${CHANNEL}`).catch(() => {});
-    current.client.release();
+    await stopListener(current);
   }
 
   return {

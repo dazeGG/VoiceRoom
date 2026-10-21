@@ -34,7 +34,7 @@
       "room_messages": [
         "apps/api/src/domains/messaging/content.repository.ts",
         "apps/api/src/domains/messaging/reply.repository.ts",
-        "apps/api/src/domains/moderation/message-moderation.service.ts",
+        "apps/api/src/domains/moderation/message-moderation.repository.ts",
         "apps/api/src/domains/link-previews/link-preview.repository.ts",
         "apps/api/src/domains/messaging/room-chat.repository.ts",
         "apps/api/src/domains/rooms/room.repository.ts"

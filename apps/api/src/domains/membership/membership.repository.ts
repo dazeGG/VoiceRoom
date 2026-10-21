@@ -122,6 +122,16 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null | unde
     return mapMembership(row);
   }
 
+  async function roomExists(roomId: string, { client }: { client?: Client } = {}): Promise<boolean> {
+    const row = await on(client)
+      .selectFrom('rooms')
+      .select('id')
+      .where('id', '=', roomId)
+      .where('deleted_at', 'is', null)
+      .executeTakeFirst();
+    return Boolean(row);
+  }
+
   // Joining again keeps an owner an owner and merges the metadata.
   async function upsertActive({
     roomId,
@@ -217,7 +227,16 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null | unde
     return { members: rows.map(mapDirectoryMember), hasMore };
   }
 
-  return { deleteActive, getActive, isActive, listDirectoryPage, mapDirectoryMember, mapMembership, upsertActive };
+  return {
+    deleteActive,
+    getActive,
+    isActive,
+    listDirectoryPage,
+    mapDirectoryMember,
+    mapMembership,
+    roomExists,
+    upsertActive
+  };
 }
 
 export type MembershipRepository = ReturnType<typeof createMembershipRepository>;
