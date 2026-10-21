@@ -319,3 +319,61 @@ test('over HTTPS the admin cookies are kept to the admin host (__Host-)', { skip
   // The same token under the bare name, as a sibling subdomain could set it, is not taken.
   assert.equal((await request(socketPath, { pathname: '/api/staff/me', cookie: `vr_staff=${token}` })).status, 401);
 });
+
+test('the desktop app opens the admin app in the system browser with a one-time link', { skip }, async (t) => {
+  const { socketPath, databaseUrl, beforeCleanup } = await startApiServer(t, {
+    prefix: 'voice-room-staff-browser-',
+    env: { AUTH_RATE_LIMIT: '0', PLATFORM_ADMIN_USER_IDS: ROOT_ID, SITE_ORIGIN, ADMIN_ORIGIN }
+  });
+  const pool = new Pool({ connectionString: databaseUrl });
+  beforeCleanup(() => pool.end());
+  await pool.query(`INSERT INTO users (id, login, display_name, password_hash) VALUES ($1, 'root', 'Root', $2)`, [
+    ROOT_ID,
+    await hashPassword('password123')
+  ]);
+  const rootSite = cookieFrom(
+    (
+      await request(socketPath, {
+        method: 'POST',
+        pathname: '/api/auth/login',
+        body: { login: 'root', password: 'password123' }
+      })
+    ).setCookie
+  );
+  const alice = await registerAccount(socketPath, 'alice');
+
+  assert.equal((await request(socketPath, { pathname: '/api/staff/browser-entry?next=/reports' })).status, 401);
+  const stranger = await request(socketPath, { pathname: '/api/staff/browser-entry?next=/reports', cookie: alice });
+  assert.equal(stranger.body.url, null, 'someone who is not staff gets no link');
+
+  // A code from the in-browser redirect is refused without its state cookie and still works afterwards.
+  const redirectCode = await handOver(socketPath, rootSite, STATE);
+  const bare = await request(socketPath, { pathname: `/api/staff/callback?code=${encodeURIComponent(redirectCode)}` });
+  assert.equal(bare.headers.location, '/api/staff/denied');
+  const retried = await callback(socketPath, redirectCode, STATE, `vr_staff_state_${STATE}=%2Frooms`);
+  assert.equal(retried.headers.location, '/rooms');
+
+  const entry = await request(socketPath, { pathname: '/api/staff/browser-entry?next=/reports', cookie: rootSite });
+  assert.equal(typeof entry.body.url, 'string');
+  const link = new URL(String(entry.body.url));
+  assert.equal(link.origin, ADMIN_ORIGIN);
+  assert.equal(link.pathname, '/api/staff/callback');
+  assert.equal(link.searchParams.has('state'), false);
+  const code = link.searchParams.get('code') ?? '';
+  const traded = await request(socketPath, { pathname: `/api/staff/callback?code=${encodeURIComponent(code)}` });
+  assert.equal(traded.headers.location, '/reports');
+  assert.ok(traded.setCookie.some((line) => line.startsWith('vr_staff=') && line.includes('SameSite=Lax')));
+  const reused = await request(socketPath, { pathname: `/api/staff/callback?code=${encodeURIComponent(code)}` });
+  assert.equal(reused.headers.location, '/api/staff/denied', 'a browser link is traded once');
+
+  const stray = await request(socketPath, {
+    pathname: `/api/staff/browser-entry?next=${encodeURIComponent('https://evil.example/x')}`,
+    cookie: rootSite
+  });
+  assert.equal(typeof stray.body.url, 'string');
+  const strayCode = new URL(String(stray.body.url)).searchParams.get('code') ?? '';
+  const landed = await request(socketPath, {
+    pathname: `/api/staff/callback?code=${encodeURIComponent(strayCode)}`
+  });
+  assert.equal(landed.headers.location, '/', 'a next path that leaves the admin app is dropped');
+});

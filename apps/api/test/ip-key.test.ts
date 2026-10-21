@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { createIpKey } from '../src/lib/ip-key.ts';
+import { createIpKey, storedIpKey } from '../src/lib/ip-key.ts';
 
 const ipKey = createIpKey('a-server-secret-of-some-length');
 
@@ -34,4 +34,12 @@ test('an IPv6 address is keyed by its /64 network, however it is written', () =>
 
 test('anything that is not an address has no key', () => {
   for (const value of ['', 'unknown', '999.1.1.1', '2001:db8::zz']) assert.equal(ipKey(value), null, value);
+});
+
+test('the stored form keys an address once, keeps a key and drops anything else', () => {
+  const key = ipKey('203.0.113.7') ?? '';
+  assert.equal(storedIpKey(ipKey, '203.0.113.7'), key);
+  assert.equal(storedIpKey(ipKey, key), key, 'keying a key changes nothing');
+  assert.equal(storedIpKey(ipKey, '2001:db8:85a3:42::1'), ipKey('2001:db8:85a3:42::9'));
+  for (const value of ['', 'unknown', 'ABCDEF0123456789', null, 42]) assert.equal(storedIpKey(ipKey, value), '');
 });

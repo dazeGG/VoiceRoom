@@ -2,7 +2,7 @@
 // them): idle rooms, product and system snapshots, sessions, sign-in history, finished
 // account deletions, expired link previews, deleted-message retention, the
 // rooms of old stays in voice, the authors of old call feedback and expired
-// admin-app sessions.
+// admin-app sessions, and the guest bans still stored by address.
 
 import { VOICE_HISTORY_KEEP_DAYS } from '@voice-room/shared/contracts/admin';
 import type { MaintenanceTask } from '../platform/maintenance.ts';
@@ -20,6 +20,7 @@ export interface ApiMaintenanceDeps {
   voiceSessions(): { forgetRoomsBefore(cutoff: Date): Promise<unknown> } | null;
   callFeedback(): { forgetAuthorsBefore(cutoff: Date): Promise<unknown> } | null;
   staffSessions?: (() => { pruneSessions(now: Date): Promise<unknown> } | null) | undefined;
+  roomBans(): { keyStoredAddresses(): Promise<unknown> } | null;
   now?: () => number;
   retention: { intervalMs: number; keepDeletedMs: number };
 }
@@ -99,6 +100,15 @@ export function apiMaintenanceTasks(deps: ApiMaintenanceDeps): MaintenanceTask[]
       failureMessage: 'staff session prune timer failed',
       enabled: () => Boolean(deps.staffSessions?.()),
       run: async () => deps.staffSessions?.()?.pruneSessions(new Date(now()))
+    },
+    {
+      // Bans written before 2.10.4, or by an older replica during a deploy,
+      // hold a guest's address; this keys them. With none left it finds none.
+      name: 'room_ban_ip_key',
+      label: 'room-ban-ip-key',
+      failureMessage: 'room ban address keying timer failed',
+      enabled: () => Boolean(deps.roomBans()),
+      run: async () => deps.roomBans()?.keyStoredAddresses()
     }
   ];
 }

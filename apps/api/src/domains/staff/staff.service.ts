@@ -47,7 +47,12 @@ export type RoleChange = { status: 'done' } | { status: 'forbidden' | 'not_found
 export function createStaffService(deps: StaffServiceDeps) {
   const now = deps.now ?? Date.now;
   // One process serves the API, so the codes waiting to be traded live here.
-  const codes = new Map<string, { userId: string; mainSessionId: string; expiresAt: number }>();
+  // returnTo is set only for a link opened in another browser. A redirect inside
+  // one browser keeps null and still needs the state cookie from the check.
+  const codes = new Map<
+    string,
+    { userId: string; mainSessionId: string; expiresAt: number; returnTo: string | null }
+  >();
 
   function roleOf(account: StaffAccountRow | null): StaffRole | null {
     if (!account) return null;
@@ -71,20 +76,23 @@ export function createStaffService(deps: StaffServiceDeps) {
   }
 
   /** On the main site: a one-time code for this staff member's main session, or null when they are not staff. */
-  async function handoff(userId: string, mainSessionId: string): Promise<string | null> {
+  async function handoff(
+    userId: string,
+    mainSessionId: string,
+    returnTo: string | null = null
+  ): Promise<string | null> {
     if (!mainSessionId || !(await role(userId))) return null;
     dropExpiredCodes();
     const code = randomToken();
-    codes.set(sha256(code), { userId, mainSessionId, expiresAt: now() + HANDOFF_CODE_TTL_MS });
+    codes.set(sha256(code), { userId, mainSessionId, expiresAt: now() + HANDOFF_CODE_TTL_MS, returnTo });
     return code;
   }
 
-  /** On the admin app: the code traded for a session token, once. Null when it is unknown, used or late. */
-  async function exchange(code: string): Promise<{ token: string; maxAgeSeconds: number } | null> {
-    const key = sha256(code);
-    const entry = codes.get(key);
-    codes.delete(key);
-    if (!entry || entry.expiresAt <= now() || !(await role(entry.userId))) return null;
+  async function openSession(entry: { userId: string; mainSessionId: string }): Promise<{
+    token: string;
+    maxAgeSeconds: number;
+  } | null> {
+    if (!(await role(entry.userId))) return null;
     const token = randomToken();
     const opened = await deps.repository().openSession({
       id: sha256(token),
@@ -93,6 +101,42 @@ export function createStaffService(deps: StaffServiceDeps) {
       expiresAt: new Date(now() + STAFF_SESSION_TTL_MS)
     });
     return opened ? { token, maxAgeSeconds: STAFF_SESSION_TTL_MS / 1000 } : null;
+  }
+
+  function takeCode(
+    code: string,
+    browser: boolean
+  ): { userId: string; mainSessionId: string; returnTo: string | null } | null {
+    const key = sha256(code);
+    const entry = codes.get(key);
+    if (!entry || entry.expiresAt <= now()) {
+      if (entry) codes.delete(key);
+      return null;
+    }
+    // A link for another browser must not be spent by the in-browser redirect, and the reverse.
+    if ((entry.returnTo !== null) !== browser) return null;
+    codes.delete(key);
+    return entry;
+  }
+
+  /** On the admin app: the code traded for a session token, once. Null when it is unknown, used or late. */
+  async function exchange(code: string): Promise<{ token: string; maxAgeSeconds: number } | null> {
+    const entry = takeCode(code, false);
+    return entry ? openSession(entry) : null;
+  }
+
+  /**
+   * The same trade for a link the desktop app opens in the system browser.
+   * The page to land on was chosen when the code was issued. A redirect-flow
+   * code is left untouched.
+   */
+  async function exchangeBrowserEntry(
+    code: string
+  ): Promise<{ token: string; maxAgeSeconds: number; returnTo: string } | null> {
+    const entry = takeCode(code, true);
+    if (!entry?.returnTo) return null;
+    const opened = await openSession(entry);
+    return opened ? { ...opened, returnTo: entry.returnTo } : null;
   }
 
   /** Who is behind an admin-app session token, with the role they have now. */
@@ -149,7 +193,19 @@ export function createStaffService(deps: StaffServiceDeps) {
     return { status: 'done' };
   }
 
-  return Object.freeze({ role, can, memberIds, handoff, exchange, actor, signOut, me, list, setRole });
+  return Object.freeze({
+    role,
+    can,
+    memberIds,
+    handoff,
+    exchange,
+    exchangeBrowserEntry,
+    actor,
+    signOut,
+    me,
+    list,
+    setRole
+  });
 }
 
 export type StaffService = ReturnType<typeof createStaffService>;

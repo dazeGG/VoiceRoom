@@ -13,6 +13,7 @@ import { createModerationModule } from '../src/domains/moderation/moderation.mod
 import { createServiceRegistry, type ServiceRegistryDeps } from '../src/app/service-registry.ts';
 import type { LiveRoom, PresencePeer } from '../src/domains/rooms/room-views.ts';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
+import { createIpKey } from '../src/lib/ip-key.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { fake, fakeDb, storedRoom } from './fakes/index.ts';
@@ -111,6 +112,7 @@ test(
       pool,
       cursorCodec,
       maxActiveBans: 10,
+      ipKeyOf: createIpKey('wiring-test-ip-key-secret'),
       revokeGatePrincipal: async (client, { principal }) => {
         const inTransaction = client !== pool;
         events.push(

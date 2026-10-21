@@ -11,6 +11,7 @@ import {
 import { sql } from 'kysely';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { transaction } from '../../platform/db/pool.ts';
+import type { IpKeyOf } from '../../lib/ip-key.ts';
 import {
   createModerationRepository,
   type ModerationCursorCodec,
@@ -33,7 +34,8 @@ type PutBanInput = { roomId: string; actorUserId: string; input?: unknown; idemp
 function createModerationService({
   pool,
   cursorCodec,
-  repository = createModerationRepository({ cursorCodec, pool }),
+  ipKeyOf,
+  repository = createModerationRepository({ cursorCodec, pool, ipKeyOf }),
   now = Date.now,
   maxActiveBans = 100,
   resolvePrincipals,
@@ -42,6 +44,7 @@ function createModerationService({
 }: {
   pool?: pg.Pool | null;
   cursorCodec?: ModerationCursorCodec;
+  ipKeyOf: IpKeyOf;
   repository?: ModerationRepository;
   now?: () => number;
   maxActiveBans?: number;
@@ -55,7 +58,7 @@ function createModerationService({
   afterBanCommitted?: (
     input: { roomId: string; principals: CredentialPrincipal[]; result: BanOutcome } & BanMutation
   ) => unknown;
-} = {}) {
+}) {
   async function authorizeOwner(
     roomId: string,
     actorUserId: string,
@@ -86,6 +89,8 @@ function createModerationService({
     const mutation = normalizeBanMutation(input);
     const key = normalizeIdempotencyKey(idempotencyKey);
     if (!mutation || !key || mutation.userId === actorUserId) return { status: 'invalid', ban: null };
+    // A guest is banned by the key of an address; something that is not one bans nobody.
+    if (!mutation.userId && !repository.guestKey(mutation.guestIp)) return { status: 'invalid', ban: null };
     // Reject non-owners before resolving account or network principals. The
     // transaction repeats this check to close ownership-change races.
     if (!(await authorizeOwner(roomId, actorUserId))) return { status: 'forbidden', ban: null };
