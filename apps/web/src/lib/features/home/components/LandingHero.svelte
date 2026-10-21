@@ -65,7 +65,7 @@
     </form>
   </div>
 
-  <p class="landing-disclaimer">Без имени и регистрации · комната живёт, пока в ней есть люди, и ещё сутки после</p>
+  <p class="landing-disclaimer">Без имени и регистрации · комната живёт, пока в ней есть люди</p>
 
   <LandingFeatureGrid items={START_FEATURES} />
 </section>

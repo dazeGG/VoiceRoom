@@ -1,0 +1,92 @@
+// The charts draw what they are given: stacked bars, lines broken at gaps,
+// round gridlines, the values under the pointer, and a sparkline's trend.
+
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { Sparkline } from '../src/charts/Sparkline.tsx';
+import { TimeChart } from '../src/charts/TimeChart.tsx';
+import { stubChartBox, PLOT_WIDTH } from './helpers/chart-box.ts';
+import { must } from './helpers/stats-fixtures.ts';
+
+let restoreChartBox = () => {};
+beforeEach(() => {
+  restoreChartBox = stubChartBox();
+});
+afterEach(() => {
+  cleanup();
+  restoreChartBox();
+});
+
+test('a chart stacks bars, breaks lines at gaps, and shows the values under the pointer', () => {
+  const bars = render(
+    <TimeChart
+      title="Сообщения"
+      kind="bar"
+      labels={['15.10', '16.10']}
+      series={[
+        { name: 'В комнатах', values: [3, 0], color: 'red' },
+        { name: 'В личке', values: [1, 2], color: 'blue' }
+      ]}
+    />
+  );
+  // Zero draws nothing: three bars for three non-zero values.
+  expect(bars.container.querySelectorAll('rect')).toHaveLength(3);
+  bars.unmount();
+
+  render(
+    <TimeChart
+      title="Процессор"
+      labels={['10:00', '10:05', '10:10', '10:15']}
+      series={[{ name: 'Загрузка', values: [10, null, 30, 40], color: 'red' }]}
+      format={(value) => `${value}%`}
+      note="Весь сервер."
+    />
+  );
+  const path = must(document.querySelector('path.chart-line'), 'the line').getAttribute('d') ?? '';
+  expect(path.match(/M/g)).toHaveLength(2);
+  expect(screen.getByText('Весь сервер.')).toBeTruthy();
+
+  const svg = screen.getByRole('img', { name: 'Процессор' });
+  vi.spyOn(svg, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, PLOT_WIDTH, 180));
+  // The plot starts 44px in; the last point sits at its right edge.
+  fireEvent.pointerMove(svg, { clientX: PLOT_WIDTH - 12 });
+  const tip = screen.getByRole('status');
+  expect(tip.textContent).toContain('10:15');
+  expect(tip.textContent).toContain('40%');
+  fireEvent.pointerMove(svg, { clientX: 44 + (PLOT_WIDTH - 56) / 3 });
+  expect(screen.getByRole('status').textContent).toContain('—');
+  fireEvent.pointerLeave(svg);
+  expect(screen.queryByRole('status')).toBeNull();
+});
+
+test('a chart with nothing to draw says so', () => {
+  render(<TimeChart title="Пусто" labels={[]} series={[]} />);
+  expect(screen.getByText('Пока нет данных')).toBeTruthy();
+});
+
+test('counts get whole-number gridlines, fractions keep round ones', () => {
+  const axis = (container: HTMLElement) =>
+    [...container.querySelectorAll('text.chart-axis[text-anchor="end"]')].map((node) => node.textContent?.trim());
+  const chart = (title: string, values: number[]) => (
+    <TimeChart title={title} labels={['15.10', '16.10']} series={[{ name: 'Всего', values, color: 'red' }]} />
+  );
+
+  const counts = render(chart('Аккаунты', [0, 1]));
+  expect(axis(counts.container)).toEqual(['0', '1', '2', '3', '4']);
+  counts.unmount();
+  const many = render(chart('Сообщения', [3, 37]));
+  expect(axis(many.container)).toEqual(['0', '10', '20', '30', '40']);
+  many.unmount();
+  const hours = render(chart('Часы', [0.5, 1]));
+  expect(axis(hours.container)).toEqual(['0', '0,25', '0,5', '0,75', '1']);
+});
+
+test('a sparkline draws a trend from two points and leaves a gap where a value is missing', () => {
+  const drawn = render(<Sparkline values={[1, null, 3, 4]} label="Тренд" />);
+  const line = must(drawn.container.querySelector('path.spark-line'), 'the line').getAttribute('d') ?? '';
+  expect(line.match(/M/g)).toHaveLength(2);
+  expect(drawn.container.querySelector('path.spark-area')?.getAttribute('d')).toMatch(/Z$/);
+  drawn.unmount();
+  const flat = render(<Sparkline values={[5]} label="Одна точка" />);
+  expect(flat.container.querySelector('svg')).toBeNull();
+});

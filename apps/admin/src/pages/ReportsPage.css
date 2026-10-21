@@ -1,0 +1,77 @@
+.reports {
+  display: grid;
+  gap: 14px;
+}
+
+.reports-note {
+  color: var(--vr-text-2);
+}
+
+.reports-error {
+  color: var(--vr-danger);
+}
+
+.reports-list {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.report-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px 18px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 16px;
+  background: var(--vr-surface);
+}
+
+.report-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  color: var(--vr-text-2);
+  font-size: 13px;
+}
+
+.report-meta strong {
+  color: var(--vr-text);
+}
+
+.report-message {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 14px;
+  border-left: 3px solid var(--vr-line-strong);
+  border-radius: 8px;
+  background: var(--vr-surface-2);
+}
+
+.report-message.is-deleted {
+  opacity: 0.6;
+}
+
+.report-author {
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}
+
+.report-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.report-comment {
+  margin: 0;
+  color: var(--vr-text-2);
+  font-size: 14px;
+}
+
+.report-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}

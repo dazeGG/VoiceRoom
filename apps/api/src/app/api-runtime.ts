@@ -40,6 +40,7 @@ import { createAdmissionService } from '../domains/admission/admission.service.t
 import { createActivityTracker } from '../domains/account/activity.service.ts';
 import { createProductSampler } from '../domains/ops/product-snapshot.service.ts';
 import { createSystemSampler } from '../domains/ops/system-snapshot.service.ts';
+import { staffToken } from '../domains/staff/staff.routes.ts';
 import { MAX_UPLOAD_BYTES } from '../domains/media/media.service.ts';
 
 type Logger = ReturnType<typeof createLogger>;
@@ -186,6 +187,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
         rooms: services.getRoomStore,
         voiceSessions: services.getVoiceSessionRepository,
         callFeedback: services.getCallFeedbackRepository,
+        staffSessions: services.getStaffRepository,
         retention: { intervalMs: config.RETENTION_PURGE_INTERVAL_MS, keepDeletedMs: config.RETENTION_KEEP_DELETED_MS }
       })
     });
@@ -244,7 +246,8 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
       wsMaxPayloadBytes: config.WS_MAX_PAYLOAD_BYTES,
       securityHeaders: baseHeaders,
       logRequest: logHttpRequest,
-      hasSessionCookie: (req) => Boolean(getSessionToken(req))
+      // The admin app's cookie authenticates too, so its writes are origin-checked the same way.
+      hasSessionCookie: (req) => Boolean(getSessionToken(req) || staffToken(req, config.SESSION_COOKIE_SECURE))
     });
     const appLogger = logger || app.log;
     setProcessLogger(appLogger);

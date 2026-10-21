@@ -101,6 +101,9 @@ services:
       MAX_ROOM_BANS: ${MAX_ROOM_BANS:-100}
       # Comma-separated account ids that review reports at /admin/reports.
       PLATFORM_ADMIN_USER_IDS: ${PLATFORM_ADMIN_USER_IDS:-}
+      # The main site and the admin app, for the admin app's sign-in handoff.
+      SITE_ORIGIN: https://${DOMAIN}
+      ADMIN_ORIGIN: https://${ADMIN_DOMAIN:-admin.${DOMAIN}}
       REPORT_RATE_LIMIT: ${REPORT_RATE_LIMIT:-10}
       REPORT_RATE_WINDOW_MS: ${REPORT_RATE_WINDOW_MS:-60000}
       CALL_FEEDBACK_RATE_LIMIT: ${CALL_FEEDBACK_RATE_LIMIT:-5}
@@ -252,6 +255,8 @@ services:
         condition: service_started
     environment:
       DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+      # The admin app; needs a DNS record pointing at this host (docs/SELF_HOSTING.md).
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:-admin.${DOMAIN}}
       LIVEKIT_DOMAIN: ${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}
       LIVEKIT_GATE_PUBLIC_URL: ${LIVEKIT_GATE_PUBLIC_URL:-wss://${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}}
       API_METRICS_ALLOWED_REMOTE: ${API_METRICS_ALLOWED_REMOTE:-127.0.0.1}

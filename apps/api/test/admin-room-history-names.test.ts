@@ -9,6 +9,7 @@ import { Value } from 'typebox/value';
 import { RoomHistory } from '@voice-room/shared/contracts/admin';
 import { hashPassword } from '../src/lib/password.ts';
 import { cookieFrom, request, startApiServer } from './fakes/server-process.ts';
+import { staffCookie } from './staff-session.ts';
 
 const skip = !process.env.TEST_DATABASE_URL;
 const ADMIN_ID = '00000000-0000-4000-8000-0000000000ad';
@@ -30,7 +31,7 @@ test('an unnamed open room keeps its stays; a deleted room is marked gone', { sk
     pathname: '/api/auth/login',
     body: { login: 'root', password: 'password123' }
   });
-  const admin = cookieFrom(signedIn.setCookie);
+  const admin = await staffCookie(socketPath, cookieFrom(signedIn.setCookie));
 
   await pool.query(
     `INSERT INTO rooms (id, creator_ip, is_static, name, deleted_at)

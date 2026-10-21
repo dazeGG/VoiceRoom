@@ -101,6 +101,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm --workspace @voice-room/web run test
+      - run: npm --workspace @voice-room/admin run test
 
   voice-join:
     name: Voice room join smoke

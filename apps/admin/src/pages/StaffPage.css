@@ -1,0 +1,74 @@
+.staff-section {
+  display: grid;
+  gap: 14px;
+}
+
+.staff-section h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.staff-grant {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+}
+
+.staff-field {
+  display: grid;
+  gap: 4px;
+  color: var(--vr-text-2);
+  font-size: 12.5px;
+}
+
+.staff-field input {
+  min-height: 36px;
+  width: 220px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-sm);
+  padding: 0 10px;
+  background: var(--vr-surface);
+  color: var(--vr-text);
+  font: inherit;
+  font-size: 13.5px;
+}
+
+.staff-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.staff-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--vr-line);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  background: var(--vr-surface);
+}
+
+.staff-name {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+}
+
+.staff-name small {
+  color: var(--vr-text-3);
+}
+
+.staff-role {
+  color: var(--vr-text-2);
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.staff-quiet {
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}

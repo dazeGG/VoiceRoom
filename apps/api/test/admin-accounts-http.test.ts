@@ -16,6 +16,7 @@ import type { BadgeList } from '@voice-room/shared/contracts/users';
 import { hashPassword } from '../src/lib/password.ts';
 import { hashSessionToken } from '../src/domains/account/user-records.ts';
 import { cookieFrom, registerAccount, request, startApiServer } from './fakes/server-process.ts';
+import { staffCookie } from './staff-session.ts';
 import { openWs } from './ws-harness.ts';
 
 const skip = !process.env.TEST_DATABASE_URL;
@@ -33,14 +34,17 @@ async function setup(t: test.TestContext) {
     ADMIN_ID,
     await hashPassword('password123')
   ]);
-  const admin = cookieFrom(
-    (
-      await request<SignedIn>(socketPath, {
-        method: 'POST',
-        pathname: '/api/auth/login',
-        body: { login: 'root', password: 'password123' }
-      })
-    ).setCookie
+  const admin = await staffCookie(
+    socketPath,
+    cookieFrom(
+      (
+        await request<SignedIn>(socketPath, {
+          method: 'POST',
+          pathname: '/api/auth/login',
+          body: { login: 'root', password: 'password123' }
+        })
+      ).setCookie
+    )
   );
   const signIn = (login: string) =>
     request<AccountFailure>(socketPath, {

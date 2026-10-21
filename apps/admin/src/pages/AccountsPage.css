@@ -1,0 +1,202 @@
+.acc-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+.acc-search {
+  display: flex;
+  flex: 1 1 240px;
+  align-items: center;
+  gap: 8px;
+  max-width: 360px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  background: var(--vr-surface);
+  color: var(--vr-text-3);
+}
+
+.acc-search:focus-within {
+  border-color: var(--vr-accent-line);
+}
+
+.acc-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--vr-text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.acc-filter {
+  min-width: 200px;
+}
+
+.acc-quiet {
+  margin: 0;
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}
+
+.acc-error {
+  margin: 0;
+  color: var(--vr-danger);
+}
+
+.acc-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--vr-line);
+  border-radius: 14px;
+  background: var(--vr-surface);
+}
+
+.acc-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.acc-table th,
+.acc-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--vr-line);
+  color: var(--vr-text-2);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.acc-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.acc-table tbody tr {
+  cursor: pointer;
+}
+
+.acc-table tbody tr:hover td {
+  background: var(--vr-hover);
+}
+
+.acc-table th {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  color: var(--vr-text-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.acc-table .is-number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.acc-table th.is-number .acc-sort {
+  margin-left: auto;
+}
+
+.acc-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.acc-sort:hover {
+  color: var(--vr-text);
+}
+
+.acc-person {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.acc-avatar {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+}
+
+.acc-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--vr-surface);
+  border-radius: 50%;
+  background: var(--vr-success);
+}
+
+.acc-person-text {
+  display: grid;
+  min-width: 0;
+}
+
+.acc-person-name {
+  max-width: 240px;
+  overflow: hidden;
+  color: var(--vr-text);
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+.acc-person-login {
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.acc-chip {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.acc-chip[data-tone='accent'] {
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+}
+
+.acc-chip[data-tone='danger'] {
+  background: var(--vr-danger-soft);
+  color: var(--vr-danger);
+}
+
+.acc-table td.has-reports {
+  color: var(--vr-danger);
+  font-weight: 600;
+}
+
+.acc-clients {
+  display: inline-flex;
+  gap: 6px;
+  color: var(--vr-text-3);
+}
+
+.acc-pages {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}

@@ -12,10 +12,10 @@ import { relative, resolve } from 'node:path';
 
 const repoRoot = resolve(import.meta.dirname, '..');
 const BASELINE_PATH = resolve(repoRoot, 'config/test-source-reads.json');
-const TREES = ['apps/api/test', 'apps/web/test', 'packages/shared/test', 'scripts/test'];
+const TREES = ['apps/api/test', 'apps/admin/test', 'apps/web/test', 'packages/shared/test', 'scripts/test'];
 
-const CODE_PATH = /(['"`])([^'"`\n]*\.(?:ts|mts|cts|svelte|js|mjs|cjs)|src|[^'"`\n]*\bsrc\/[^'"`\n]*)\1/g;
-const CODE_EXTENSION = /\.(?:ts|mts|cts|svelte|js|mjs|cjs)$/;
+const CODE_PATH = /(['"`])([^'"`\n]*\.(?:ts|tsx|mts|cts|svelte|js|mjs|cjs)|src|[^'"`\n]*\bsrc\/[^'"`\n]*)\1/g;
+const CODE_EXTENSION = /\.(?:ts|tsx|mts|cts|svelte|js|mjs|cjs)$/;
 const ALLOWED = [
   /\/migrations\//,
   /platform\/db\/schema\.ts$/,
@@ -30,7 +30,7 @@ function testFiles(path: string): string[] {
   for (const entry of readdirSync(path)) {
     const absolute = resolve(path, entry);
     if (statSync(absolute).isDirectory()) files.push(...testFiles(absolute));
-    else if (/\.(?:ts|mts|js|mjs)$/.test(entry)) files.push(absolute);
+    else if (/\.(?:ts|tsx|mts|js|mjs)$/.test(entry)) files.push(absolute);
   }
   return files;
 }

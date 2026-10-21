@@ -20,8 +20,7 @@
     onGoHome,
     onOpenPeople,
     onOpenSettings,
-    onOpenAdmin,
-    adminOpen = false,
+    adminUrl = null,
     adminBadge = 0,
     notificationsOpen = false,
     notificationUnreadCount = 0,
@@ -41,9 +40,8 @@
     onGoHome: () => void;
     onOpenPeople: () => void;
     onOpenSettings: () => void;
-    /** Given to a platform administrator only. */
-    onOpenAdmin?: () => void;
-    adminOpen?: boolean;
+    /** The admin app, for staff only; it opens in a tab of its own. */
+    adminUrl?: string | null | undefined;
     /** Open reports, shown on the admin entry. */
     adminBadge?: number;
     notificationsOpen?: boolean;
@@ -227,15 +225,13 @@
       <span class="lv-brand-name">VoiceRoom</span>
       <BetaMark />
     </button>
-    {#if onOpenAdmin}
+    {#if adminUrl}
       <button
         class="lobby-gear lv-admin-button"
-        class:is-open={adminOpen}
         type="button"
         title="Админка"
         aria-label="Открыть админку"
-        aria-pressed={adminOpen}
-        onclick={onOpenAdmin}
+        onclick={() => window.open(adminUrl ?? '', '_blank', 'noopener')}
       >
         <LayoutDashboard {...iconSm} aria-hidden="true" />
         {#if adminBadge > 0}
@@ -533,8 +529,7 @@
   .lv-admin-button {
     position: relative;
   }
-  .lv-notification-button.is-open,
-  .lv-admin-button.is-open {
+  .lv-notification-button.is-open {
     background: var(--vr-surface-3);
     color: var(--vr-text);
   }

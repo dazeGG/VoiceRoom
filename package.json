@@ -1,6 +1,6 @@
 {
   "name": "voice-room",
-  "version": "2.10.2",
+  "version": "2.10.3",
   "private": true,
   "description": "Simple link-based LiveKit voice chat with screen sharing.",
   "workspaces": [
@@ -21,14 +21,15 @@
     "dev:livekit": "docker compose -f docker-compose.dev.yml up --build livekit-gate",
     "dev:host:api": "npm --workspace @voice-room/api run dev",
     "dev:host:web": "npm --workspace @voice-room/web run dev",
+    "dev:host:admin": "npm --workspace @voice-room/admin run dev",
     "dev:host:livekit": "docker run --rm -e LIVEKIT_KEYS=\"devkey: devsecret\" -p 7880:7880 -p 7881:7881 -p 7882:7882/udp livekit/livekit-server:v1.13.2 --dev --bind 0.0.0.0",
-    "build": "npm --workspace @voice-room/web run build",
-    "check": "npm --workspace @voice-room/shared run check && npm --workspace @voice-room/api run check && npm --workspace @voice-room/web run check && tsc -p scripts/tsconfig.json && node scripts/check-web-palette.mts && node scripts/check-test-source-reads.mts && npm run lint && npm run format:check",
+    "build": "npm --workspace @voice-room/web run build && npm --workspace @voice-room/admin run build",
+    "check": "npm --workspace @voice-room/shared run check && npm --workspace @voice-room/api run check && npm --workspace @voice-room/web run check && npm --workspace @voice-room/admin run check && tsc -p scripts/tsconfig.json && node scripts/check-web-palette.mts && node scripts/check-test-source-reads.mts && npm run lint && npm run format:check",
     "lint": "eslint . --cache --cache-location node_modules/.cache/eslint/",
     "format": "prettier --write .",
     "format:check": "prettier --check . --log-level warn",
     "lint:baseline": "eslint . --suppress-all",
-    "test": "npm --workspace @voice-room/shared run test && npm --workspace @voice-room/api run test && npm --workspace @voice-room/web run test",
+    "test": "npm --workspace @voice-room/shared run test && npm --workspace @voice-room/api run test && npm --workspace @voice-room/web run test && npm --workspace @voice-room/admin run test",
     "e2e": "npm --workspace @voice-room/web run e2e",
     "coverage:g08": "node scripts/coverage/run-g08.mts"
   },
@@ -41,6 +42,7 @@
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.11.0",
+    "eslint-plugin-react-hooks": "7.1.1",
     "eslint-plugin-svelte": "^3.23.0",
     "globals": "^17.12.0",
     "prettier": "^3.9.9",

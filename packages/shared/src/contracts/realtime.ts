@@ -75,7 +75,8 @@ export type ClientCommands = {
   ping: { at: number };
   'room.preview.subscribe': { roomId: string };
   'room.preview.unsubscribe': { roomId: string };
-  'room.join': VoiceTarget & { name: string };
+  /** `guestId` is the browser's lasting guest id (see normalizeGuestId); the API keeps it only for guests. */
+  'room.join': VoiceTarget & { name: string; guestId?: string | undefined };
   'room.leave': VoiceTarget;
   'room.peer.update': VoiceTarget & { patch: PeerPatch };
   /** Asked before a screen share or a camera starts; answered with room.media.grant. */

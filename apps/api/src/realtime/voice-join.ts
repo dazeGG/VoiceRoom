@@ -9,6 +9,7 @@ import {
   cleanGuestName,
   cleanName,
   isReservedPeerId,
+  normalizeGuestId,
   normalizePeerId,
   normalizeRoomId,
   normalizeSessionToken
@@ -386,6 +387,9 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         id: peerId,
         gateGuestPrincipalId: identityResult.identity?.id || '',
         client: connection.client,
+        os: connection.device?.os ?? '',
+        browser: connection.device?.browser ?? '',
+        guestId: sessionUser ? '' : normalizeGuestId(payload.guestId),
         ip: clientIp || '',
         joinedAt: previous?.joinedAt ?? Date.now(),
         muted: Boolean(previous?.muted || persistedServerMuted),

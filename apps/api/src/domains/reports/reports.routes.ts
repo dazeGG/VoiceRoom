@@ -26,6 +26,8 @@ const TOO_MANY_REPORTS = failure('Too many reports', { code: 'rate_limited' });
 export interface ReportRoutesDeps {
   reports: Pick<ReportService, 'fileReport' | 'listOpen' | 'resolve'>;
   limiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
+  /** The staff member behind the admin-app session, or null with the 401 sent. */
+  staffUserId(request: FastifyRequest, reply: FastifyReply): Promise<string | null>;
 }
 
 export function registerReportRoutes(root: FastifyInstance, ctx: ApiContext, deps: ReportRoutesDeps): void {
@@ -64,7 +66,7 @@ export function registerReportRoutes(root: FastifyInstance, ctx: ApiContext, dep
     '/api/admin/reports',
     { schema: { response: { 200: AdminReportPage, '4xx': Failure } } },
     async (request, reply) => {
-      const userId = await actor(request, reply);
+      const userId = await deps.staffUserId(request, reply);
       if (!userId) return reply;
       const reports = await deps.reports.listOpen(userId);
       if (!reports) return reply.code(403).send(ADMIN_REQUIRED);
@@ -78,7 +80,7 @@ export function registerReportRoutes(root: FastifyInstance, ctx: ApiContext, dep
       schema: { params: ReportIdParams, body: ReportResolveBody, response: { 200: ReportResolved, '4xx': Failure } }
     },
     async (request, reply) => {
-      const userId = await actor(request, reply);
+      const userId = await deps.staffUserId(request, reply);
       if (!userId) return reply;
       const result = await deps.reports.resolve(userId, request.params.reportId, request.body.action);
       if (result.status === 'forbidden') return reply.code(403).send(ADMIN_REQUIRED);

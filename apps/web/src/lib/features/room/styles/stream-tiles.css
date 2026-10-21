@@ -16,6 +16,9 @@
   padding-inline: var(--tile-gutter, 0px);
   overflow: hidden auto;
   scrollbar-width: thin;
+  /* The scrollbar's room is kept whether it shows or not, so its coming and
+     going never changes the width the tiles are fitted to. */
+  scrollbar-gutter: stable both-edges;
 }
 
 .tile-grid[data-scroll='true'] {

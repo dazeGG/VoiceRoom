@@ -1,7 +1,8 @@
 // The periodic sweeps a running API performs (platform/maintenance.ts runs
 // them): idle rooms, product and system snapshots, sessions, sign-in history, finished
 // account deletions, expired link previews, deleted-message retention, the
-// rooms of old stays in voice and the authors of old call feedback.
+// rooms of old stays in voice, the authors of old call feedback and expired
+// admin-app sessions.
 
 import { VOICE_HISTORY_KEEP_DAYS } from '@voice-room/shared/contracts/admin';
 import type { MaintenanceTask } from '../platform/maintenance.ts';
@@ -18,6 +19,7 @@ export interface ApiMaintenanceDeps {
   rooms(): { purgeDeleted?: (options: { olderThanMs: number }) => Promise<unknown> };
   voiceSessions(): { forgetRoomsBefore(cutoff: Date): Promise<unknown> } | null;
   callFeedback(): { forgetAuthorsBefore(cutoff: Date): Promise<unknown> } | null;
+  staffSessions?: (() => { pruneSessions(now: Date): Promise<unknown> } | null) | undefined;
   now?: () => number;
   retention: { intervalMs: number; keepDeletedMs: number };
 }
@@ -90,6 +92,13 @@ export function apiMaintenanceTasks(deps: ApiMaintenanceDeps): MaintenanceTask[]
       failureMessage: 'call feedback forget timer failed',
       enabled: () => Boolean(deps.callFeedback()),
       run: async () => deps.callFeedback()?.forgetAuthorsBefore(new Date(now() - VOICE_HISTORY_KEEP_DAYS * DAY_MS))
+    },
+    {
+      name: 'staff_session_prune',
+      label: 'staff-session-prune',
+      failureMessage: 'staff session prune timer failed',
+      enabled: () => Boolean(deps.staffSessions?.()),
+      run: async () => deps.staffSessions?.()?.pruneSessions(new Date(now()))
     }
   ];
 }

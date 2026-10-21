@@ -25,6 +25,8 @@ export type WsConnection = {
   clientIp: string;
   /** Which client the socket came from, by its user agent; null when it sent none. */
   client: ClientKind | null;
+  /** The system and browser the user agent named; empty strings for what it did not name. */
+  device?: { os: string; browser: string } | undefined;
   guestIp: string | null;
   socket: RealtimeSocket;
   presenceStatus: PresenceStatus;

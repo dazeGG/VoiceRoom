@@ -15,7 +15,7 @@ import {
 } from '@voice-room/shared/contracts/admin';
 import type { AdminStatsRepository } from './admin-stats.repository.ts';
 import type { SystemSnapshotRepository } from '../ops/system-snapshot.repository.ts';
-import { isPlatformAdmin } from './admin.policy.ts';
+import type { StaffCheck } from '../staff/staff-check.ts';
 
 /** Activity days, voice stays and peaks are recorded from this Moscow day on (release 2.8.8). */
 export const TRACKING_SINCE = '2026-10-15';
@@ -93,7 +93,7 @@ export function systemSpan(query: SystemQuery, now: number): { from: number; to:
 type Payload<T> = Omit<T, 'ok'>;
 
 export interface AdminServiceDeps {
-  adminUserIds: readonly string[];
+  staff: StaffCheck;
   stats(): Pick<AdminStatsRepository, 'overview' | 'productDays' | 'retention' | 'openReports' | 'firstAccountDay'>;
   systemSnapshots(): Pick<SystemSnapshotRepository, 'latest' | 'buckets'>;
   live(): LiveNumbers;
@@ -105,15 +105,10 @@ export interface AdminServiceDeps {
 
 export function createAdminService(deps: AdminServiceDeps) {
   const now = deps.now ?? Date.now;
-  const admin = (userId: string) => isPlatformAdmin(deps.adminUserIds, userId);
-
-  async function access(userId: string): Promise<{ admin: boolean; openReports: number }> {
-    if (!admin(userId)) return { admin: false, openReports: 0 };
-    return { admin: true, openReports: await deps.stats().openReports() };
-  }
+  const allowed = (userId: string) => deps.staff.can(userId, 'stats.view');
 
   async function overview(userId: string): Promise<Payload<AdminOverview> | null> {
-    if (!admin(userId)) return null;
+    if (!(await allowed(userId))) return null;
     const [counts, system] = await Promise.all([deps.stats().overview(), deps.systemSnapshots().latest()]);
     return {
       live: deps.live(),
@@ -142,7 +137,7 @@ export function createAdminService(deps: AdminServiceDeps) {
   }
 
   async function product(userId: string, query: ProductQuery = {}): Promise<Payload<ProductStats> | null> {
-    if (!admin(userId)) return null;
+    if (!(await allowed(userId))) return null;
     const stats = deps.stats();
     const { from, to } = productSpan(query, moscowDay(now()), await stats.firstAccountDay());
     const [{ days, accountsBefore }, retention] = await Promise.all([
@@ -153,13 +148,13 @@ export function createAdminService(deps: AdminServiceDeps) {
   }
 
   async function system(userId: string, query: SystemQuery = {}): Promise<Payload<SystemStats> | null> {
-    if (!admin(userId)) return null;
+    if (!(await allowed(userId))) return null;
     const { from, to, bucketSeconds } = systemSpan(query, now());
     const samples = await deps.systemSnapshots().buckets(new Date(from), new Date(to), bucketSeconds);
     return { from, to, bucketSeconds, samples };
   }
 
-  return Object.freeze({ isAdmin: admin, access, overview, product, system });
+  return Object.freeze({ overview, product, system });
 }
 
 export type AdminService = ReturnType<typeof createAdminService>;
