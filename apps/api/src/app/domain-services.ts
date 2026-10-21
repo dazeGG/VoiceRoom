@@ -170,10 +170,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     readService: () => services.getHistoryServices().read,
     friends: services.getFriendStore,
     findUser: (userId) => services.getUserStore().getUserById(userId),
-    isDmMuted: async (userId, peerUserId) => {
-      const notifications = services.getNotificationPreferences();
-      return typeof notifications.isDmMuted === 'function' ? notifications.isDmMuted({ userId, peerUserId }) : false;
-    },
+    isDmMuted: (userId, peerUserId) => services.getNotificationPreferences().isDmMuted({ userId, peerUserId }),
     roomExists: async (roomId) => Boolean(await hub.getRoom(roomId)),
     expireRoomInvitations: (senderId, roomId) => hub.roomLifecycle.expireRoomInvitations(senderId, roomId),
     limiter: limits.dm,

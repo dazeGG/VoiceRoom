@@ -172,9 +172,6 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
     peer: { accountUserId?: string; gateGuestPrincipalId?: string }
   ): Promise<boolean> {
     const store = getRoomStore();
-    if (typeof store?.isRoomServerMuted !== 'function' || typeof store?.normalizeGatePrincipal !== 'function') {
-      throw Object.assign(new Error('Server mute authority is unavailable'), { code: 'server_mute_unavailable' });
-    }
     const principal = store.normalizeGatePrincipal({
       accountUserId: peer.accountUserId || null,
       guestPrincipalId: peer.gateGuestPrincipalId || '',
