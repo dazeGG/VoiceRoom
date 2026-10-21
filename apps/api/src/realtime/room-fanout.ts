@@ -148,8 +148,7 @@ export function createRoomFanout(deps: RoomFanoutDeps) {
 
     let recipients: string[];
     try {
-      const listNotificationRecipients = getRoomStore().listNotificationRecipientUserIds;
-      recipients = typeof listNotificationRecipients === 'function' ? await listNotificationRecipients(roomId) : [];
+      recipients = await getRoomStore().listNotificationRecipientUserIds(roomId);
     } catch (error) {
       logger.error(
         { evt: LOG_EVENTS.NOTIFICATION_BROADCAST_FAILED, roomId, stage: 'recipients', err: error },

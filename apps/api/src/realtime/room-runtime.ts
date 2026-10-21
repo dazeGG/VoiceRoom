@@ -197,7 +197,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
         guestPrincipalId: peer.gateGuestPrincipalId || ''
       });
     } else {
-      await getRoomStore().revokeLiveKitGatePeer?.({
+      await getRoomStore().revokeLiveKitGatePeer({
         roomId: record.roomId,
         peerId: record.peerId,
         accountUserId: peer.accountUserId || null,
