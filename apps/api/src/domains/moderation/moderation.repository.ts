@@ -4,6 +4,7 @@ import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { fromMicros, microsOf } from '../../platform/db/micros.ts';
 import type { ActiveBan, ActiveBanProfile } from '@voice-room/shared/moderation';
+import { storedIpKey, type IpKeyOf } from '../../lib/ip-key.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Client = QueryClient | null | undefined;
@@ -79,14 +80,23 @@ function mapModerationBan(row: ModerationBanRow | null | undefined): ModerationB
   };
 }
 
+// A guest ban holds the key of the guest's address (lib/ip-key.ts), never the
+// address: the owner's `guestIp` is keyed before it reaches SQL.
 function createModerationRepository({
   cursorCodec,
-  pool
-}: { cursorCodec?: ModerationCursorCodec; pool?: QueryClient | null } = {}) {
+  pool,
+  ipKeyOf
+}: {
+  cursorCodec?: ModerationCursorCodec | undefined;
+  pool?: QueryClient | null | undefined;
+  ipKeyOf: IpKeyOf;
+}) {
   if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
   if (!cursorCodec?.encode || !cursorCodec?.decode) throw new TypeError('Cursor codec is required');
   const base = pool;
   const codec = cursorCodec;
+  /** The stored form of a guest's address; '' when it is not one. */
+  const guestKey = (guestIp: string | null | undefined): string => storedIpKey(ipKeyOf, guestIp);
   const on = (client: Client): Database => kyselyOn(client?.query ? client : base);
   const bans = (row: unknown) => mapModerationBan(row as ModerationBanRow | undefined);
 
@@ -182,7 +192,9 @@ function createModerationRepository({
     const row = await activeBans(on(client), roomId, at)
       .selectAll('rb')
       .where((eb) =>
-        userId ? eb('rb.user_id', '=', userId) : eb.and([eb('rb.user_id', 'is', null), eb('rb.ip', '=', guestIp || '')])
+        userId
+          ? eb('rb.user_id', '=', userId)
+          : eb.and([eb('rb.user_id', 'is', null), eb('rb.ip', '=', guestKey(guestIp))])
       )
       .orderBy('rb.created_at', 'desc')
       .orderBy('rb.id', 'desc')
@@ -218,8 +230,8 @@ function createModerationRepository({
         id: crypto.randomUUID(),
         room_id: roomId,
         user_id: userId,
-        // A guest ban needs the address; without one the NOT NULL column refuses it.
-        ip: userId ? '' : (guestIp as string),
+        // The service refuses a guest ban whose address has no key.
+        ip: userId ? '' : guestKey(guestIp),
         created_at: timestamp,
         expires_at: expiresAt == null ? null : asDate(expiresAt),
         metadata: '{}',
@@ -346,6 +358,7 @@ function createModerationRepository({
     decodeCursor,
     findActivePrincipal,
     findByIdempotencyKey,
+    guestKey,
     isRoomOwner,
     listActive,
     mapModerationBan,

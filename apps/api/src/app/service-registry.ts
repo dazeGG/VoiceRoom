@@ -36,7 +36,7 @@ import { createRoomMessageRepository } from '../domains/messaging/room-message.r
 import { createActiveBanService } from '../domains/moderation/active-ban.service.ts';
 import { createCursorCodec } from '../platform/cursor-codec.ts';
 import { resolveCursorHmacKeys, resolveIpKeySecret } from './config.ts';
-import { createIpKey } from '../lib/ip-key.ts';
+import { createIpKey, type IpKeyOf } from '../lib/ip-key.ts';
 import { createStaffRepository } from '../domains/staff/staff.repository.ts';
 import type { StoreOverrides } from './store-overrides.ts';
 export type { Fake, StoreOverrides } from './store-overrides.ts';
@@ -206,7 +206,13 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     };
   }
 
-  const roomStore = lazy(() => createRoomStore({ pool: requirePool(), roomIdleTtlMs: ROOM_IDLE_TTL_MS }));
+  // Built on first use: the secret comes from the configured cursor keys. Stays
+  // in voice, room creators and guest bans all keep this key, never the address.
+  let ipKey: IpKeyOf | null = null;
+  const ipKeyOf: IpKeyOf = (ip) =>
+    (ipKey ??= createIpKey(resolveIpKeySecret({ fallbackGateSecret: LIVEKIT_GATE_SECRET })))(ip);
+
+  const roomStore = lazy(() => createRoomStore({ pool: requirePool(), roomIdleTtlMs: ROOM_IDLE_TTL_MS, ipKeyOf }));
   const userStore = lazy(() => createUserStore({ pool: requirePool(), sessionTtlMs: SESSION_TTL_MS }));
   const friendStore = lazy(() => createFriendStore({ pool: requirePool() }));
   const notificationPreferences = lazy(() => createNotificationPreferencesRepository({ pool: requirePool() }));
@@ -215,10 +221,6 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   );
   const pushService = lazy(() => createPushService({ store: pushSubscriptions.get() }));
   const geoLocator = lazy(() => createGeoLocator({ databasePath: GEOIP_DB_PATH }));
-  // Built on first use: the secret comes from the configured cursor keys.
-  let ipKey: ((ip: string) => string | null) | null = null;
-  const ipKeyOf = (ip: string): string | null =>
-    (ipKey ??= createIpKey(resolveIpKeySecret({ fallbackGateSecret: LIVEKIT_GATE_SECRET })))(ip);
   // An address becomes its keyed hash and its city; the address itself is never kept.
   const describeAddress: DescribeAddress = async (ip) => ({
     ipKey: ipKeyOf(ip),
@@ -273,7 +275,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   const adminActions = pooled((pool) => createAdminActionRepository({ pool }));
   const staffRepository = pooled((pool) => createStaffRepository({ pool }));
   const accountStanding = pooled((pool) => createAccountStandingRepository({ pool }));
-  const activeBans = pooled((pool) => createActiveBanService({ pool }));
+  const activeBans = pooled((pool) => createActiveBanService({ pool, ipKeyOf }));
   const delivery = pooled((pool) => ({
     idempotency: createMessageIdempotencyRepository(),
     outbox: createMessageOutboxRepository({ pool })
@@ -309,6 +311,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       pool,
       cursorCodec: history.get().cursorCodec,
       maxActiveBans: MAX_ROOM_BANS,
+      ipKeyOf,
       revokeGatePrincipal: (client, input) => revokePrincipalInTransaction(kyselyOn(client), input),
       getRoom,
       gatePrincipalForPeer: deps.liveKitGatePrincipalForPeer,

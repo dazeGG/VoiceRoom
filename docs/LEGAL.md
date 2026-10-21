@@ -15,6 +15,7 @@ is an engineering summary, not legal advice.
 | Acceptance at sign-up | the notice above «Создать аккаунт» in `AuthDialog.svelte` |
 | Legal pages reachable from everywhere, phones included | landing footer, settings sidebar, `lib/platform/mobile-routes.ts` |
 | Reports to the operator and removal of any message (art. 1253.1, 149-FZ art. 15.1 takedowns) | `POST /api/reports`, the admin app's reports section (`apps/admin`), `apps/api/src/domains/reports` |
+| No IP address kept in the database: stays in voice, room creators and guest room bans keep a keyed hash of it (an IPv6 address by its /64) | `apps/api/src/lib/ip-key.ts`; old guest bans are keyed by the API's `room_ban_ip_key` maintenance task |
 | Backups no older than 30 days | `scripts/cd/prune-backups.sh`, run by `remote-deploy.sh` after each rollout |
 
 Facts the pages state (operator, contact address, retention periods) live in

@@ -11,6 +11,7 @@ import { createMediaJobRepository } from '../media/media-job.repository.ts';
 import type { EvictionType } from '../rooms/peer-eviction.ts';
 import type { LiveRoom, PresencePeer } from '../rooms/room-views.ts';
 import type { Queryable } from '../../platform/db/kysely.ts';
+import type { IpKeyOf } from '../../lib/ip-key.ts';
 import { normalizeGatePrincipal, type PrincipalRevocation } from '../admission/gate-credential.repository.ts';
 import type { GatePrincipal } from '../admission/admission.service.ts';
 import { createMessageModerationService } from './message-moderation.service.ts';
@@ -21,6 +22,8 @@ export interface ModerationModuleDeps {
   pool: pg.Pool;
   cursorCodec: CursorCodec;
   maxActiveBans: number;
+  /** Keys a guest's address for the ban that stores it (lib/ip-key.ts). */
+  ipKeyOf: IpKeyOf;
   /** Revokes a principal's LiveKit credentials on the ban's own connection. */
   revokeGatePrincipal: (
     client: Queryable,
@@ -39,9 +42,10 @@ export interface ModerationModuleDeps {
 
 export function createModerationModule(deps: ModerationModuleDeps) {
   const { pool } = deps;
-  const repository = createModerationRepository({ cursorCodec: deps.cursorCodec, pool });
+  const repository = createModerationRepository({ cursorCodec: deps.cursorCodec, pool, ipKeyOf: deps.ipKeyOf });
   const service = createModerationService({
     pool,
+    ipKeyOf: deps.ipKeyOf,
     repository,
     maxActiveBans: deps.maxActiveBans,
     resolvePrincipals: async ({ roomId, userId, guestIp }) => {

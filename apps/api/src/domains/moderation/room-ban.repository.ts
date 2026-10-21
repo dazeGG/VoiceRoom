@@ -1,7 +1,8 @@
 // Room bans as the owner sets them, and server mutes. A ban is either an
 // account ban or an address ban, never both: persisting both would turn an
 // account moderation action into a shared-network ban. Bans in one room are
-// serialized by an advisory lock, so the cap holds under concurrent bans.
+// serialized by an advisory lock, so the cap holds under concurrent bans. An
+// address ban stores the address's key, as the active-ban repository makes it.
 
 import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
@@ -26,12 +27,6 @@ function mapRoomBan(row: Selectable<RoomBans>) {
     roomId: row.room_id,
     userId: row.user_id || null
   };
-}
-
-function banTarget(userId: unknown, ip: unknown) {
-  const normalizedUserId = typeof userId === 'string' && userId ? userId : null;
-  const normalizedIp = normalizedUserId ? '' : typeof ip === 'string' ? ip : '';
-  return { userId: normalizedUserId, ip: normalizedIp };
 }
 
 async function lockRoomBans(db: Database, roomId: string): Promise<void> {
@@ -95,7 +90,7 @@ export function createRoomBanRepository({ pool, bans }: { pool: pg.Pool; bans: (
     metadata?: unknown;
     now?: number;
   } = {}) {
-    const target = banTarget(userId, ip);
+    const target = bans().repository.normalizePrincipal({ userId, ip });
     if (!roomId || (!target.userId && !target.ip)) return { ban: null, status: 'invalid' };
 
     return transaction(pool, async (client) => {
@@ -134,7 +129,7 @@ export function createRoomBanRepository({ pool, bans }: { pool: pg.Pool; bans: (
     principals?: GatePrincipal[];
     now?: number;
   } = {}) {
-    const target = banTarget(userId, ip);
+    const target = bans().repository.normalizePrincipal({ userId, ip });
     if (!roomId || (!target.userId && !target.ip)) return { ban: null, revocations: [], status: 'invalid' };
     if (!Array.isArray(principals) || principals.length === 0 || !principals.every(isGatePrincipal)) {
       return { ban: null, revocations: [], status: 'invalid' };
