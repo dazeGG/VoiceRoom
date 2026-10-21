@@ -109,7 +109,7 @@ export function Avatar({
 }) {
   const [failed, setFailed] = useState<string | null>(null);
   const palette = avatarPalette(colorKey);
-  const letter = [...name.trim()][0]?.toUpperCase() ?? '?';
+  const letter = Array.from(name.trim())[0]?.toUpperCase() ?? '?';
   return (
     <span
       className="ui-avatar"

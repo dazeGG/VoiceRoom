@@ -2,7 +2,7 @@
 // login, and a role taken away. Only a superadmin opens this section; the
 // superadmins named in the server's settings cannot be changed here.
 
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type SubmitEvent } from 'react';
 import { STAFF_ROLE_LABELS, STAFF_ROLES, type StaffMember, type StaffRole } from '@voice-room/shared/contracts/staff';
 import { fetchStaff, setStaffRole } from '../api/staff.ts';
 import { loadFailure, type LoadFailure } from '../load-state.ts';
@@ -53,7 +53,7 @@ export function StaffPage() {
     }
   }
 
-  async function grant(event: FormEvent): Promise<void> {
+  async function grant(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     const target = login.trim().replace(/^@/, '');
     if (target && (await change(target, role))) setLogin('');

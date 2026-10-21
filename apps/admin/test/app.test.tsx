@@ -2,7 +2,7 @@
 // them when the address names another, and counts the open reports on the
 // reports tab for those who review them.
 
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { AdminReport } from '@voice-room/shared/contracts/reports';
 import type { StaffRole } from '@voice-room/shared/contracts/staff';
@@ -57,7 +57,7 @@ test('a moderator sees accounts, rooms and reports, and no numbers or staff', as
   render(<App />);
   expect((await tabs()).map((tab) => tab.textContent)).toEqual(['Аккаунты', 'Комнаты', 'Жалобы']);
   // "/" is the overview, which a moderator may not open: the first allowed section opens instead.
-  expect(window.location.pathname).toBe('/accounts');
+  await waitFor(() => expect(window.location.pathname).toBe('/accounts'));
   expect(screen.getByText(/Модератор/)).toBeTruthy();
 });
 

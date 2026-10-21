@@ -2,7 +2,7 @@
 // deleted by a slip, and a reason. The account is blocked at once and gone
 // after the grace period; until then the deletion can be called off.
 
-import { useState, type FormEvent } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { ADMIN_REASON_MAX_LENGTH } from '@voice-room/shared/contracts/admin';
 import { Button, Dialog } from '../ui/index.tsx';
 import './AccountDialogs.css';
@@ -23,7 +23,7 @@ function DeleteForm({ login, onClose, onConfirm }: Omit<Props, 'open'>) {
   const [error, setError] = useState('');
   const matches = typed.trim().toLowerCase() === login;
 
-  async function submit(event: FormEvent): Promise<void> {
+  async function submit(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     if (busy || !matches || !reason.trim()) return;
     setBusy(true);

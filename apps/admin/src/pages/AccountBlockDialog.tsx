@@ -2,7 +2,7 @@
 // reads when it tries to sign in. A moderator may block for a day, a week or a
 // month; a block without an end needs the admin's permission.
 
-import { useState, type FormEvent } from 'react';
+import { useState, type SubmitEvent } from 'react';
 import { ADMIN_REASON_MAX_LENGTH, type BlockDuration } from '@voice-room/shared/contracts/admin';
 import { BLOCK_DURATIONS } from '../accounts.ts';
 import { useCan } from '../staff.tsx';
@@ -25,7 +25,7 @@ function BlockForm({ onClose, onConfirm }: Pick<Props, 'onClose' | 'onConfirm'>)
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
 
-  async function submit(event: FormEvent): Promise<void> {
+  async function submit(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     if (busy || !reason.trim()) return;
     setBusy(true);
