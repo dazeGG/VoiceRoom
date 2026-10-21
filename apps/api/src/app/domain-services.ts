@@ -34,7 +34,7 @@ import type { readApiConfig } from './config.ts';
 import type { LiveKit } from './livekit.ts';
 import type { RateLimits } from './rate-limits.ts';
 import type { RealtimeHub } from './realtime-hub.ts';
-import type { createServiceRegistry } from './service-registry.ts';
+import { databaseUnavailable, type createServiceRegistry } from './service-registry.ts';
 import { sessionAvatarColorKey, sessionChatPeerId, sessionDisplayName } from './session.ts';
 
 export interface DomainServiceDeps {
@@ -223,69 +223,44 @@ export function createDomainServices(deps: DomainServiceDeps) {
     }
   }
 
+  // Without a database (an app on fakes) these services fail as database_unavailable.
+  const required = <T>(repository: T | null | undefined): T => {
+    if (!repository) throw databaseUnavailable();
+    return repository;
+  };
+
   const staff = createStaffService({
     namedSuperadminIds: config.PLATFORM_ADMIN_USER_IDS,
-    repository: () => {
-      const repository = services.getStaffRepository();
-      if (!repository) throw new Error('Staff roles require the database');
-      return repository;
-    },
-    actions: () => {
-      const repository = services.getAdminActionRepository();
-      if (!repository) throw new Error('Staff roles require the database');
-      return repository;
-    },
+    repository: () => required(services.getStaffRepository()),
+    actions: () => required(services.getAdminActionRepository()),
     siteOrigin: config.SITE_ORIGIN
   });
 
   const reports = createReportService({
-    repository: () => {
-      const repository = services.getReportRepository();
-      if (!repository) throw new Error('Reports require the database');
-      return repository;
-    },
+    repository: () => required(services.getReportRepository()),
     staff,
     canReadRoom: (roomId, userId) => services.getRoomStore().canUserReadRoomChat(roomId, userId),
-    removeRoomMessage: async (input) => {
-      const moderation = services.getModerationServices();
-      if (!moderation) throw new Error('Message removal requires the database');
-      return moderation.messageService.removeRoomMessageAsOperator(input);
-    },
+    removeRoomMessage: async (input) =>
+      required(services.getModerationServices()).messageService.removeRoomMessageAsOperator(input),
     removeDirectMessage: (input) => directMessages.removeAsOperator(input),
     reportsChanged: (filed) => void announceReports(filed)
   });
 
   const callFeedback = createCallFeedbackService({
-    repository: () => {
-      const repository = services.getCallFeedbackRepository();
-      if (!repository) throw new Error('Call feedback requires the database');
-      return repository;
-    },
+    repository: () => required(services.getCallFeedbackRepository()),
     staff
   });
 
   const admin = createAdminService({
     staff,
-    stats: () => {
-      const repository = services.getAdminStatsRepository();
-      if (!repository) throw new Error('Admin statistics require the database');
-      return repository;
-    },
-    systemSnapshots: () => {
-      const repository = services.getSystemSnapshotRepository();
-      if (!repository) throw new Error('Admin statistics require the database');
-      return repository;
-    },
+    stats: () => required(services.getAdminStatsRepository()),
+    systemSnapshots: () => required(services.getSystemSnapshotRepository()),
     live: deps.liveNumbers,
     livekitEnabled: () => deps.liveKit.config().enabled,
     version: packageJson.version,
     startedAt: Date.now()
   });
 
-  const required = <T>(repository: T | null | undefined): T => {
-    if (!repository) throw new Error('The admin panel requires the database');
-    return repository;
-  };
   const adminAccounts = createAdminAccountsService({
     staff,
     accounts: () => required(services.getAdminAccountsRepository()),

@@ -23,15 +23,19 @@ import { resolveIpKeySecret } from './config.ts';
 function createRoomStore({
   pool,
   roomIdleTtlMs = 15 * 60 * 1000,
-  ipKeyOf
+  ipKeyOf,
+  bans: injectedBans
 }: {
   pool: pg.Pool;
   roomIdleTtlMs?: number;
   ipKeyOf?: IpKeyOf | undefined;
+  /** The app's one ban service. A store built alone makes its own. */
+  bans?: (() => ActiveBanService) | undefined;
 }) {
   const db = kyselyOn(pool);
   let activeBanService: ActiveBanService | null = null;
   const bans = (): ActiveBanService =>
+    injectedBans?.() ??
     (activeBanService ??= createActiveBanService({ pool, ipKeyOf: ipKeyOf ?? createIpKey(resolveIpKeySecret()) }));
 
   const gate = createGateCredentialRepository({ db });

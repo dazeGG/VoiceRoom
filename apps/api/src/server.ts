@@ -1,17 +1,14 @@
-// The API process entry: bootstrap() prepares the database and storage and
-// starts listening. The composition itself is app/api-runtime.ts.
+// The API process entry: bootstrap() migrates, opens the database, runs the
+// startup tasks (app/startup-tasks.ts) and starts listening. The composition
+// itself is app/api-runtime.ts.
 
 import { createApiRuntime, type ApiServer } from './app/api-runtime.ts';
 import { installGracefulShutdown } from './app/graceful-shutdown.ts';
 import { readBootstrapConfig } from './app/config.ts';
+import { runStartupTasks } from './app/startup-tasks.ts';
 import { readDatabaseConfig } from './lib/config.ts';
 import { LOG_EVENTS } from './lib/log-events.ts';
 import { createLogger } from './lib/logger.ts';
-import { reconcileAvatarStorage } from './lib/avatar-reconciliation.ts';
-import { createAvatarStorage } from './lib/avatar-storage.ts';
-import { createLinkPreviewStorage, reconcileLinkPreviewImages } from './lib/link-preview-storage.ts';
-import { createLinkPreviewRepository } from './domains/link-previews/link-preview.repository.ts';
-import { createPushService } from './lib/push-service.ts';
 import { startApiListener } from './lib/listen.ts';
 import { assertMigrationReady, runMigrations } from './lib/migrate.ts';
 
@@ -49,64 +46,9 @@ async function bootstrap({
       await assertMigrationReady({ databaseUrl: database.url });
     }
     const runtime = createApiRuntime({ env });
-    const { services } = runtime;
-    services.connect({ databaseUrl: database.url, logger });
-    const roomStore = services.getRoomStore();
-    await roomStore.markActiveTemporaryRoomsEmpty();
-    await roomStore.pruneRooms();
-    const userStore = services.getUserStore();
-    const pushSubscriptions = services.getPushSubscriptions();
-    const pushService = createPushService({ store: pushSubscriptions, config: runtime.config.PUSH, logger });
-    const avatarStorage = createAvatarStorage({ uploadsDir: runtime.config.UPLOADS_DIR });
-    const reconciliation = await reconcileAvatarStorage({
-      storage: avatarStorage,
-      userStore,
-      roomStore
-    });
-    if (reconciliation.removed > 0) {
-      logger.info(
-        { evt: LOG_EVENTS.MAINTENANCE_TASK_COMPLETED, task: 'avatar-reconciliation', removed: reconciliation.removed },
-        'removed orphaned avatar files'
-      );
-    }
-    const linkPreviewStorage = createLinkPreviewStorage({ uploadsDir: runtime.config.UPLOADS_DIR });
-    services.install({
-      pushService,
-      avatarStorage,
-      linkPreviewStorage
-    });
-    try {
-      const previewPool = services.getPool();
-      if (previewPool) {
-        const removedPreviewImages = await reconcileLinkPreviewImages({
-          storage: linkPreviewStorage,
-          repository: createLinkPreviewRepository({ pool: previewPool })
-        });
-        if (removedPreviewImages > 0)
-          logger.info(
-            {
-              evt: LOG_EVENTS.MAINTENANCE_TASK_COMPLETED,
-              task: 'link-preview-reconciliation',
-              removed: removedPreviewImages
-            },
-            'removed unused link preview images'
-          );
-      }
-    } catch (error) {
-      logger.warn(
-        { evt: LOG_EVENTS.LINK_PREVIEW_RECONCILE_FAILED, err: error },
-        'link preview image reconciliation failed'
-      );
-    }
-    const server = runtime.createServer({
-      store: roomStore,
-      users: userStore,
-      friends: services.getFriendStore(),
-      notifications: services.getNotificationPreferences(),
-      pushes: pushSubscriptions,
-      push: pushService,
-      avatars: avatarStorage
-    });
+    runtime.services.connect({ databaseUrl: database.url, logger });
+    await runStartupTasks(runtime.services, logger);
+    const server = runtime.createServer();
     await server.app.ready();
     runtime.startPruneTimer(server, logger);
     startApiListener({
