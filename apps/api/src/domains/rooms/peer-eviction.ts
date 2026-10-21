@@ -5,7 +5,7 @@
 // not hand the seat back.
 
 import type { PeerLeaveReason } from '@voice-room/shared/contracts/realtime';
-import type { RoomPeerMessage } from '../../realtime/legacy-events.ts';
+import { buildServerEnvelope, type ServerEnvelope } from '@voice-room/shared/realtime';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { LiveRoom, PresencePeer } from './room-views.ts';
 
@@ -38,7 +38,7 @@ export interface PeerEvictionDeps {
   store(): EvictionStore;
   /** Null until createApiApp builds the realtime runtime. */
   runtime(): ReconnectRuntime | null;
-  notifyPeer(peer: PresencePeer, event: RoomPeerMessage): void;
+  notifyPeer(peer: PresencePeer, event: ServerEnvelope): void;
   notifyUser(userId: string, event: AccountMessage): void;
   /** Drops the voice seat any socket of this peer still holds in the room. */
   detachVoiceConnections(roomId: string, peerId: string): void;
@@ -83,9 +83,8 @@ export function createPeerEviction(deps: PeerEvictionDeps) {
         failure = error;
       }
     }
-    const event = { type, roomId: room.id, peerId: peer.id } as const;
-    deps.notifyPeer(peer, event);
-    if (peer.accountUserId) deps.notifyUser(peer.accountUserId, event);
+    deps.notifyPeer(peer, buildServerEnvelope(type, { roomId: room.id, peerId: peer.id }));
+    if (peer.accountUserId) deps.notifyUser(peer.accountUserId, { type, roomId: room.id, peerId: peer.id });
     deps.detachVoiceConnections(room.id, peer.id);
     if (!ownershipFinalized) {
       deps.closePeer(room.id, peer.id, peer.transport?.id, type === 'room.banned' ? 'banned' : 'kicked');

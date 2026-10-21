@@ -6,7 +6,6 @@
 // them, so a request that fails two checks still gets the same answer.
 
 import type { MentionNormalization, MentionRefusal } from '@voice-room/shared/mentions';
-import type pg from 'pg';
 import crypto from 'node:crypto';
 import type { Logger } from 'pino';
 import { isReservedPeerId } from '@voice-room/shared/validation';
@@ -17,10 +16,11 @@ import { avatarColorForPeerId } from '../rooms/avatar-color.ts';
 import { tokensMatch } from '../../platform/crypto/tokens-match.ts';
 import type { LiveRoom, PresencePeer } from '../rooms/room-views.ts';
 import { cleanChatText, messageFingerprint, normalizeAttachmentIds } from './message-input.ts';
-import { replayedMessage, type SendReservation } from './message-idempotency.repository.ts';
-import { requireReplyTarget } from './reply-projector.ts';
+import { sendUnitOfWork, type DbClient, type SendDelivery } from './message-send.ts';
+import type { RoomReplyTarget } from './reply.repository.ts';
+import type { AttachmentRepository } from '../media/attachment.repository.ts';
+import type { NotificationService } from '../notifications/notification.service.ts';
 import { isStoredChatMessage, publicChatMessage, type RoomChatMessage } from './room-chat-views.ts';
-import type { ReplyPreview } from '@voice-room/shared/contracts/messages';
 import { mayModerateRoomMessage, roomMessageAuthorship } from './room-message.policy.ts';
 import {
   revokeAttachmentsOnDelete,
@@ -29,8 +29,6 @@ import {
   type RevocableAttachments
 } from '../media/attachment-revocation.service.ts';
 import type { RateCheck } from '../../lib/rate-limit.ts';
-
-type DbClient = Pick<pg.PoolClient, 'query'> | null | undefined;
 
 interface ChatAuthor {
   id: string;
@@ -68,18 +66,6 @@ export interface RoomMessages {
   markRoomChatRead(roomId: string, userId: string): Promise<number | null | undefined>;
 }
 
-interface Delivery {
-  idempotency: {
-    reserve(client: DbClient, input: Record<string, unknown>): Promise<SendReservation>;
-    complete(
-      client: DbClient,
-      key: string,
-      result: { body: unknown; messageId: string; statusCode: number }
-    ): Promise<unknown>;
-  };
-  outbox: { enqueue(client: DbClient, event: Record<string, unknown>): Promise<unknown> };
-}
-
 type Projection = (context: 'room', message: RoomChatMessage, options?: { roomId: string }) => Promise<RoomChatMessage>;
 
 export interface RoomChatDeps {
@@ -99,24 +85,22 @@ export interface RoomChatDeps {
   findUser(userId: string): Promise<ChatAuthor | null>;
   media(): {
     attachments: RevocableAttachments & {
-      bindReady(input: Record<string, unknown>, client: DbClient): Promise<unknown>;
+      bindReady(input: Parameters<AttachmentRepository['bindReady']>[0], client: DbClient): Promise<unknown>;
     };
     jobs: CleanupJobs;
   } | null;
   replies(): {
-    lockRoomTarget(input: {
-      roomId: string;
-      messageId: string;
-      client: DbClient;
-    }): Promise<{ authorUserId?: string | null } | null>;
+    lockRoomTarget(input: { roomId: string; messageId: string; client: DbClient }): Promise<RoomReplyTarget | null>;
   };
   notifications(): {
     service: {
-      createAddressedForMessage(input: Record<string, unknown>): Promise<unknown>;
+      createAddressedForMessage(
+        input: Parameters<NotificationService['createAddressedForMessage']>[0]
+      ): Promise<unknown>;
       markRoomRead?(input: { userId: string; roomId: string; through: unknown }): Promise<unknown>;
     };
   } | null;
-  delivery(): Delivery | null;
+  delivery(): SendDelivery | null;
   projectMedia: Projection;
   projectReply: Projection;
   identity: {
@@ -273,10 +257,49 @@ export function createRoomChatService(deps: RoomChatDeps) {
     if (attachmentIds.length > 0 && (!authorUserId || !media)) return { status: 'media_unavailable' };
     const replies = replyToMessageId ? deps.replies() : null;
     const notifications = deps.notifications();
-    const delivery = deps.delivery();
-    let idempotencyLedgerKey = '';
-    let replyPreview: ReplyPreview | null = null;
-    let replyTargetUserId: string | null = null;
+    const addressed = Boolean(authorUserId && notifications && (mentionUserIds.length > 0 || replyToMessageId));
+    const send = sendUnitOfWork({
+      delivery: deps.delivery(),
+      idempotencyKey,
+      actor: authorUserId ? { type: 'account', id: authorUserId } : { type: 'guest', id: peerId },
+      conversation: { type: 'room', id: roomId },
+      fingerprint: messageFingerprint({ text, content, attachmentIds, replyToMessageId }),
+      isStored: isStoredChatMessage,
+      replayMissing: 'The idempotent replay holds no chat message',
+      lockReply: replies ? (client) => replies.lockRoomTarget({ roomId, messageId: replyToMessageId, client }) : null,
+      bindAttachments:
+        media && authorUserId
+          ? (client, inserted) =>
+              media.attachments.bindReady(
+                { ownerId: authorUserId, context: 'room', messageId: inserted.id, attachmentIds },
+                client
+              )
+          : null,
+      afterInsert:
+        addressed && authorUserId && notifications
+          ? async (client, inserted, replyTarget) => {
+              const replyTargetUserId = replyTarget?.authorUserId || null;
+              if (mentionUserIds.length === 0 && !replyTargetUserId) return null;
+              return notifications.service.createAddressedForMessage({
+                roomId,
+                messageId: inserted.id,
+                creatorUserId: authorUserId,
+                targetUserIds: mentionUserIds,
+                replyTargetUserId,
+                body: text,
+                client: client ?? null
+              });
+            }
+          : null,
+      outboxMessage: (inserted) => ({
+        ...inserted,
+        name,
+        avatarAccent,
+        avatarColorKey,
+        avatarKey: authorUser?.avatarKey || null,
+        avatarUrl
+      })
+    });
 
     const message = await deps.messages().room.appendMessage(roomId, {
       createdAt: Date.now(),
@@ -288,82 +311,15 @@ export function createRoomChatService(deps: RoomChatDeps) {
       content,
       authorUserId,
       replyToMessageId: replyToMessageId || null,
-      beforeUnitOfWork:
-        idempotencyKey && delivery
-          ? async (client) => {
-              const reservation = await delivery.idempotency.reserve(client, {
-                actorType: authorUserId ? 'account' : 'guest',
-                actorId: authorUserId || peerId,
-                conversation: { type: 'room', id: roomId },
-                key: idempotencyKey,
-                fingerprint: messageFingerprint({ text, content, attachmentIds, replyToMessageId })
-              });
-              if (reservation.kind === 'replay') {
-                const message = replayedMessage(reservation);
-                if (!isStoredChatMessage(message)) throw new Error('The idempotent replay holds no chat message');
-                return { replay: true as const, message };
-              }
-              idempotencyLedgerKey = reservation.ledgerKey;
-              return null;
-            }
-          : null,
-      unitOfWork:
-        attachmentIds.length > 0 || replyToMessageId || mentionUserIds.length > 0 || delivery
-          ? async (client, inserted) => {
-              if (replies) {
-                const target = await replies.lockRoomTarget({ roomId, messageId: replyToMessageId, client });
-                replyPreview = await requireReplyTarget({ message: target, visibility: true });
-                replyTargetUserId = target?.authorUserId || null;
-              }
-              if (media) {
-                await media.attachments.bindReady(
-                  { ownerId: authorUserId, context: 'room', messageId: inserted.id, attachmentIds },
-                  client
-                );
-              }
-              if (authorUserId && notifications && (mentionUserIds.length > 0 || replyTargetUserId)) {
-                await notifications.service.createAddressedForMessage({
-                  roomId,
-                  messageId: inserted.id,
-                  creatorUserId: authorUserId,
-                  targetUserIds: mentionUserIds,
-                  replyTargetUserId,
-                  body: text,
-                  client
-                });
-              }
-              if (delivery) {
-                await delivery.outbox.enqueue(client, {
-                  eventId: crypto.randomUUID(),
-                  type: 'message.created',
-                  conversation: { type: 'room', id: roomId },
-                  messageId: inserted.id,
-                  message: {
-                    ...inserted,
-                    name,
-                    avatarAccent,
-                    avatarColorKey,
-                    avatarKey: authorUser?.avatarKey || null,
-                    avatarUrl
-                  }
-                });
-                if (idempotencyLedgerKey) {
-                  await delivery.idempotency.complete(client, idempotencyLedgerKey, {
-                    body: { message: inserted },
-                    messageId: inserted.id,
-                    statusCode: 201
-                  });
-                }
-              }
-            }
-          : null
+      beforeUnitOfWork: send.beforeUnitOfWork,
+      unitOfWork: send.unitOfWork
     });
     if (!message) return { status: 'empty' };
 
     const projectedBase = await deps.projectMedia('room', message);
     const projected = message.idempotencyReplay
       ? await deps.projectReply('room', projectedBase, { roomId })
-      : { ...projectedBase, replyPreview };
+      : { ...projectedBase, replyPreview: send.replyPreview() };
     const published: RoomChatMessage = { ...projected, name, avatarAccent, avatarColorKey, avatarUrl };
     if (!message.idempotencyReplay) {
       if (deps.directEmit) deps.broadcastChatMessage(roomId, published);

@@ -7,7 +7,7 @@ import { fake } from './fakes/index.ts';
 import { defined } from './helpers/assert-defined.ts';
 import { runtimeDeps } from './fakes/room-runtime.ts';
 
-type TestRoom = Parameters<RoomRuntimeDeps['broadcast']>[0];
+type TestRoom = NonNullable<Awaited<ReturnType<RoomRuntimeDeps['getRoom']>>>;
 type Runtime = ReturnType<typeof createRoomRealtimeRuntime>;
 
 function connection() {

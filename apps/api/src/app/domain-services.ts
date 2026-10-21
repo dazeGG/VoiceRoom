@@ -4,7 +4,6 @@
 // desktop release feed.
 
 import type { FastifyBaseLogger } from 'fastify';
-import type { RoomPeerMessage } from '../realtime/legacy-events.ts';
 import { buildServerEnvelope } from '../realtime/envelope.ts';
 import { mentionUserIdsFromContent } from '@voice-room/shared/mentions';
 import { LOG_EVENTS } from '../lib/log-events.ts';
@@ -90,16 +89,9 @@ export function createDomainServices(deps: DomainServiceDeps) {
   const peerEviction = createPeerEviction({
     store: services.getRoomStore,
     runtime: () => hub.runtime(),
-    notifyPeer: (peer, event) => hub.presence.sendEvent(peer, event),
+    notifyPeer: (peer, event) => hub.presence.sendToPeer(peer, event),
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
-    detachVoiceConnections: (roomId, peerId) => {
-      for (const connection of hub.registry.connections.values()) {
-        if (connection.activeVoice?.roomId !== roomId || connection.activeVoice?.peerId !== peerId) continue;
-        connection.activeVoice = null;
-        connection.previewRoomIds.delete(roomId);
-        hub.registry.unregisterConnectionForRoom(connection, roomId);
-      }
-    },
+    detachVoiceConnections: (roomId, peerId) => hub.registry.detachVoicePeer(roomId, peerId),
     closePeer: (roomId, peerId, transportId, reason) => hub.presence.closePeer(roomId, peerId, transportId, reason),
     removeParticipant: (roomId, peerId) => liveKit.removeParticipant(roomId, peerId)
   });
@@ -110,12 +102,11 @@ export function createDomainServices(deps: DomainServiceDeps) {
     livekitConfig: () => liveKit.config(),
     revokeForServerMute: (input) => deps.admission.revokeForServerMute(input),
     setParticipantMuted: (roomId, peerId, muted) => liveKit.setParticipantMuted(roomId, peerId, muted),
-    announcePeerUpdated: (room, peer) => {
-      const event: RoomPeerMessage = { type: 'peer-updated', peer: publicPeer(peer) };
-      hub.presence.broadcast(room, event);
-      hub.runtime().mirrorLegacyRoomEvent(room.id, event);
-    },
-    notifyPeer: (peer, event) => hub.presence.sendEvent(peer, event),
+    announcePeerUpdated: (room, peer) =>
+      hub.presence.publish(
+        room.id,
+        buildServerEnvelope('room.peer.updated', { roomId: room.id, peer: publicPeer(peer) })
+      ),
     maxBans: config.MAX_ROOM_BANS,
     logger: () => deps.logger()
   });

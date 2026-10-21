@@ -61,7 +61,7 @@ import { createMembershipModule, type MembershipModule } from '../domains/member
 import type { EvictionType } from '../domains/rooms/peer-eviction.ts';
 import type { LiveRoom, PresencePeer } from '../domains/rooms/room-views.ts';
 import type { GatePrincipalPeer } from '../domains/admission/gate-principal.ts';
-import type { buildRoomMembershipPresenceSnapshot } from '../realtime/registry.ts';
+import type { ConnectionRegistry } from '../realtime/registry.ts';
 import type { createMessageProjection } from '../domains/messaging/message-projection.ts';
 
 type Logger = { error(...args: unknown[]): void };
@@ -104,7 +104,7 @@ export type ServiceRegistryDeps = {
   ) => Promise<unknown>;
   liveKitGatePrincipalForPeer: (roomId: string, peer: GatePrincipalPeer) => unknown;
   getLiveKitConfig: () => LiveKitConfig;
-  roomMembershipPresenceSnapshot: (roomId: string) => ReturnType<typeof buildRoomMembershipPresenceSnapshot>;
+  roomMembershipPresenceSnapshot: (roomId: string) => ReturnType<ConnectionRegistry['presenceSnapshot']>;
   broadcastRoomLinkPreview: (input: { roomId: string; messageId: string }) => Promise<unknown>;
   broadcastDirectLinkPreview: (input: { messageId: string; senderId: string; recipientId: string }) => Promise<unknown>;
   roomRuntime: () => { broadcastRoomDetail(roomId: string, envelope: ServerEnvelope): void } | null | undefined;

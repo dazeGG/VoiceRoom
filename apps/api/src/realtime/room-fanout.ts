@@ -1,17 +1,17 @@
 // What one room says to the sockets watching it: the room detail stream
-// (chat, edits, peer events for preview watchers), typing notices, and the
+// (chat, edits, reactions), typing notices, and the
 // bell notification a new message raises for the room's other members.
 
 import type { RoomMessage } from '@voice-room/shared/contracts/messages';
 import type { TypingActivity, ServerEnvelope } from '@voice-room/shared/realtime';
 import { cleanName } from '@voice-room/shared/validation';
+import { avatarUrl } from '../lib/avatar-url.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import type { StoredUser } from '../domains/account/user-records.ts';
 import type { UserRepository } from '../domains/account/user.repository.ts';
 import type { RoomChatMessage } from '../domains/messaging/room-chat-views.ts';
 import type { AccountMessage } from './account-events.ts';
 import { buildServerEnvelope } from './envelope.ts';
-import { legacyPeerMessageToWs, type RoomPeerMessage } from './legacy-events.ts';
 import type { ConnectionRegistry, WsConnection } from './registry.ts';
 import { createTypingThrottle } from './typing-throttle.ts';
 import type { PresenceRoom, RuntimeLogger, RuntimeRoomStore } from './runtime-types.ts';
@@ -37,25 +37,12 @@ export function createRoomFanout(deps: RoomFanoutDeps) {
   function broadcastRoomDetail(
     roomId: string,
     envelope: ServerEnvelope,
-    { previewOnly = false, except = null }: { previewOnly?: boolean; except?: WsConnection | null } = {}
+    { except = null }: { except?: WsConnection | null } = {}
   ): void {
     for (const connection of wsRegistry.roomDetailSubscribers(roomId)) {
-      if (connection === except) continue;
-      const isActivePeer = connection.activeVoice?.roomId === roomId;
-      if (previewOnly) {
-        // Active peers already receive this over their voice transport via
-        // broadcast(); only reach preview-only subscribers here.
-        if (isActivePeer || !connection.previewRoomIds.has(roomId)) continue;
-      } else if (!connectionWantsRoomDetail(connection, roomId)) {
-        continue;
-      }
+      if (connection === except || !connectionWantsRoomDetail(connection, roomId)) continue;
       wsRegistry.sendToConnection(connection, envelope);
     }
-  }
-
-  function mirrorLegacyRoomEvent(roomId: string, message: RoomPeerMessage): void {
-    const envelope = legacyPeerMessageToWs(message, roomId);
-    broadcastRoomDetail(roomId, envelope, { previewOnly: true });
   }
 
   function broadcastChatMessage(roomId: string, message: RoomChatMessage): void {
@@ -116,7 +103,7 @@ export function createRoomFanout(deps: RoomFanoutDeps) {
 
   function roomNotificationContext(room: { avatarKey?: string | null; id: string; name?: string }) {
     return {
-      avatarUrl: room.avatarKey ? `/api/avatars/${encodeURIComponent(room.avatarKey)}` : null,
+      avatarUrl: avatarUrl(room.avatarKey),
       roomId: room.id,
       name: room.name || ''
     };
@@ -130,7 +117,7 @@ export function createRoomFanout(deps: RoomFanoutDeps) {
         login: user.login || '',
         avatarAccent: user.avatarAccent || null,
         avatarColorKey: user.avatarColorKey || message.avatarColorKey || '',
-        avatarUrl: user.avatarKey ? `/api/avatars/${encodeURIComponent(user.avatarKey)}` : null
+        avatarUrl: avatarUrl(user.avatarKey)
       };
     }
     return {
@@ -209,5 +196,5 @@ export function createRoomFanout(deps: RoomFanoutDeps) {
     }
   }
 
-  return { broadcastRoomDetail, mirrorLegacyRoomEvent, broadcastChatMessage, broadcastRoomTyping };
+  return { broadcastRoomDetail, broadcastChatMessage, broadcastRoomTyping };
 }

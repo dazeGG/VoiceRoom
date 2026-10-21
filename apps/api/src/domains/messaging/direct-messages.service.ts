@@ -4,17 +4,15 @@
 // order the legacy handlers ran them.
 
 import type { AccountMessage } from '../../realtime/account-events.ts';
-import type pg from 'pg';
-import type { DirectMessage as DirectMessageView, ReplyPreview } from '@voice-room/shared/contracts/messages';
+import type { DirectMessage as DirectMessageView } from '@voice-room/shared/contracts/messages';
 import type { PublicUser } from '@voice-room/shared/contracts/users';
-import crypto from 'node:crypto';
 import { publicUser } from '../account/user-records.ts';
 import { isStoredDirectMessage } from '../social/social-records.ts';
 import { isActiveAccount, type SocialUser } from '../social/social-views.ts';
-import { textOf } from '@voice-room/shared/guards';
-import { messageFingerprint, normalizeAttachmentIds } from './message-input.ts';
-import { replayedMessage, type SendReservation } from './message-idempotency.repository.ts';
-import { requireReplyTarget } from './reply-projector.ts';
+import { cleanMessageText, messageFingerprint, normalizeAttachmentIds } from './message-input.ts';
+import { sendUnitOfWork, type DbClient, type SendDelivery } from './message-send.ts';
+import type { DirectReplyTarget } from './reply.repository.ts';
+import type { AttachmentRepository } from '../media/attachment.repository.ts';
 import { isDirectSender } from './direct-message.policy.ts';
 import {
   revokeAttachmentsOnDelete,
@@ -24,7 +22,6 @@ import {
 } from '../media/attachment-revocation.service.ts';
 import type { RateCheck } from '../../lib/rate-limit.ts';
 
-type DbClient = Pick<pg.PoolClient, 'query'> | null | undefined;
 type Status<T extends string> = T extends string ? { status: T } : never;
 type RateLimited = { status: 'rate_limited'; retryAfterSeconds: number };
 
@@ -57,18 +54,6 @@ export interface DirectMessageStore {
   }): Promise<DirectMessage | null>;
 }
 
-interface Delivery {
-  idempotency: {
-    reserve(client: DbClient, input: Record<string, unknown>): Promise<SendReservation>;
-    complete(
-      client: DbClient,
-      key: string,
-      result: { body: unknown; messageId: string; statusCode: number }
-    ): Promise<unknown>;
-  };
-  outbox: { enqueue(client: DbClient, event: Record<string, unknown>): Promise<unknown> };
-}
-
 type Projection = (
   context: 'dm',
   message: DirectMessage,
@@ -91,14 +76,19 @@ export interface DirectMessagesDeps {
   limiter: RateCheck;
   media(): {
     attachments: RevocableAttachments & {
-      bindReady(input: Record<string, unknown>, client: DbClient): Promise<unknown>;
+      bindReady(input: Parameters<AttachmentRepository['bindReady']>[0], client: DbClient): Promise<unknown>;
     };
     jobs: CleanupJobs;
   } | null;
   replies(): {
-    lockDirectTarget(input: { userId: string; peerId: string; messageId: string; client: DbClient }): Promise<unknown>;
+    lockDirectTarget(input: {
+      userId: string;
+      peerId: string;
+      messageId: string;
+      client: DbClient;
+    }): Promise<DirectReplyTarget | null>;
   };
-  delivery(): Delivery | null;
+  delivery(): SendDelivery | null;
   projectMedia: Projection;
   projectReply: Projection;
   directEmit: boolean;
@@ -116,12 +106,12 @@ export interface DirectMessagesDeps {
 
 // Multiline like room chat, but up to 2000 characters and no line cap.
 export function cleanDmText(value: unknown): string {
-  return textOf(value)
-    .replace(/[^\S\n]+/g, ' ')
-    .replace(/ *\n */g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-    .slice(0, 2000);
+  return cleanMessageText(value, { maxChars: 2000 });
+}
+
+// The stored shape is stricter than the service's, so a message that passes it is one.
+function isReplayedMessage(value: unknown): value is DirectMessage {
+  return isStoredDirectMessage(value);
 }
 
 export interface SendInput {
@@ -193,75 +183,41 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     const media = attachmentIds.length > 0 ? deps.media() : null;
     if (attachmentIds.length > 0 && !media) return { status: 'media_unavailable' };
     const replies = replyToMessageId ? deps.replies() : null;
-    const delivery = deps.delivery();
-    let idempotencyLedgerKey = '';
-    let replyPreview: ReplyPreview | null = null;
+    const send = sendUnitOfWork({
+      delivery: deps.delivery(),
+      idempotencyKey,
+      actor: { type: 'account', id: sender.id },
+      conversation: { type: 'dm', id: recipientId },
+      fingerprint: messageFingerprint({ text, attachmentIds, replyToMessageId }),
+      isStored: isReplayedMessage,
+      replayMissing: 'The idempotent replay holds no direct message',
+      lockReply: replies
+        ? (client) =>
+            replies.lockDirectTarget({ userId: sender.id, peerId: recipientId, messageId: replyToMessageId, client })
+        : null,
+      bindAttachments: media
+        ? (client, inserted) =>
+            media.attachments.bindReady(
+              { ownerId: sender.id, context: 'dm', messageId: inserted.id, attachmentIds },
+              client
+            )
+        : null,
+      afterInsert: null,
+      outboxMessage: (inserted) => inserted
+    });
 
     const stored = await deps.messages().direct.sendMessage({
       senderId: sender.id,
       recipientId,
       body: text,
       replyToMessageId: replyToMessageId || null,
-      beforeUnitOfWork:
-        idempotencyKey && delivery
-          ? async (client) => {
-              const reservation = await delivery.idempotency.reserve(client, {
-                actorType: 'account',
-                actorId: sender.id,
-                conversation: { type: 'dm', id: recipientId },
-                key: idempotencyKey,
-                fingerprint: messageFingerprint({ text, attachmentIds, replyToMessageId })
-              });
-              if (reservation.kind === 'replay') {
-                const message = replayedMessage(reservation);
-                if (!isStoredDirectMessage(message)) throw new Error('The idempotent replay holds no direct message');
-                return { replay: true as const, message };
-              }
-              idempotencyLedgerKey = reservation.ledgerKey;
-              return null;
-            }
-          : null,
-      unitOfWork:
-        attachmentIds.length > 0 || replyToMessageId || delivery
-          ? async (client, inserted) => {
-              if (replies) {
-                const target = await replies.lockDirectTarget({
-                  userId: sender.id,
-                  peerId: recipientId,
-                  messageId: replyToMessageId,
-                  client
-                });
-                replyPreview = await requireReplyTarget({ message: target, visibility: true });
-              }
-              if (media) {
-                await media.attachments.bindReady(
-                  { ownerId: sender.id, context: 'dm', messageId: inserted.id, attachmentIds },
-                  client
-                );
-              }
-              if (delivery) {
-                await delivery.outbox.enqueue(client, {
-                  eventId: crypto.randomUUID(),
-                  type: 'message.created',
-                  conversation: { type: 'dm', id: recipientId },
-                  messageId: inserted.id,
-                  message: inserted
-                });
-                if (idempotencyLedgerKey) {
-                  await delivery.idempotency.complete(client, idempotencyLedgerKey, {
-                    body: { message: inserted },
-                    messageId: inserted.id,
-                    statusCode: 201
-                  });
-                }
-              }
-            }
-          : null
+      beforeUnitOfWork: send.beforeUnitOfWork,
+      unitOfWork: send.unitOfWork
     });
     const projectedBase = await deps.projectMedia('dm', stored);
     const message = stored.idempotencyReplay
       ? await deps.projectReply('dm', projectedBase, { userId: sender.id, peerId: recipientId })
-      : { ...projectedBase, replyPreview };
+      : { ...projectedBase, replyPreview: send.replyPreview() };
     if (!stored.idempotencyReplay) {
       // To the recipient and the sender's other tabs; clients dedupe by id.
       if (deps.directEmit) {

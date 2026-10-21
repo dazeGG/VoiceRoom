@@ -1036,7 +1036,7 @@ test('G08 realtime join retains and revokes the exact gate principal', async () 
     publicPeer,
     publicLobbyRoom: (value) => publicLobbyRoom(value, 0),
     publicChatMessage,
-    broadcast() {},
+    publishRoomEvent() {},
     closePeer() {},
     avatarColorForPeerId: () => 'blue',
     MAX_ROOM_PEERS: 10,

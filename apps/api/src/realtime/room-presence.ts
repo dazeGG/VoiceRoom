@@ -1,27 +1,21 @@
-// The in-memory voice roster of every room: who is in it, delivering legacy
-// room events to them, taking a peer out, keeping the durable active/empty
-// marker of each room in step with the roster, and recording each finished
-// stay in voice.
+// The in-memory voice roster of every room: who is in it, delivering room
+// events to them and to the sockets previewing the room, taking a peer out,
+// keeping the durable active/empty marker of each room in step with the
+// roster, and recording each finished stay in voice.
 
 import type { PeerLeaveReason } from '@voice-room/shared/contracts/realtime';
-import type { RoomPeerMessage } from './legacy-events.ts';
+import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { publicPeer, type PresencePeer } from '../domains/rooms/room-views.ts';
 import type { FinishedVoiceSession, VoiceSessionRepository } from '../domains/rooms/voice-session.repository.ts';
+import { buildServerEnvelope } from './envelope.ts';
+import type { ConnectionRegistry } from './registry.ts';
 import { clearViewedScreenPeerReferences } from './room-runtime.ts';
-
-/** How the server reaches a peer's socket; closing it is the socket owner's business. */
-export interface PeerTransport {
-  id?: string | undefined;
-  send(message: RoomPeerMessage): boolean;
-  close?(): void;
-}
 
 export interface RosterPeer extends PresencePeer {
   closed?: boolean;
   replaced?: boolean;
-  transport?: PeerTransport | null;
 }
 
 export interface PresenceRoom {
@@ -40,11 +34,10 @@ export interface OccupancyStore {
 
 export interface RoomPresenceDeps {
   store(): OccupancyStore;
-  /** The realtime runtime once createApiApp built it; preview watchers and summaries go through it. */
-  runtime(): {
-    scheduleSummaryBroadcast(roomId: string): void;
-    mirrorLegacyRoomEvent(roomId: string, message: RoomPeerMessage): void;
-  } | null;
+  /** The sockets that preview a room: its events reach them besides its peers. */
+  sockets: Pick<ConnectionRegistry, 'roomDetailSubscribers' | 'sendToConnection'>;
+  /** The realtime runtime once createApiApp built it; summaries go through it. */
+  runtime(): { scheduleSummaryBroadcast(roomId: string): void } | null;
   logger(): Pick<Logger, 'error'>;
   occupancyRetry: { baseMs: number; maxMs: number };
   roster: { waitMs: number; pollMs: number };
@@ -198,29 +191,39 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
     await Promise.all([...sessionWrites]);
   }
 
-  function sendEvent(peer: RosterPeer | null | undefined, message: RoomPeerMessage): boolean {
-    const sent = peer?.transport?.send(message) ?? false;
+  // A seat whose socket closed reaches nobody until its reconnect lease ends;
+  // that counts as sent, so the seat is kept for the rejoin.
+  function sendToPeer(peer: RosterPeer | null | undefined, envelope: ServerEnvelope): boolean {
+    const transport = peer?.transport;
+    const sent = transport
+      ? transport.connection === null || deps.sockets.sendToConnection(transport.connection, envelope)
+      : false;
     if (!sent && peer) peer.closed = true;
     return sent;
   }
 
-  // Delivers a legacy room event to active peers over their own transports.
-  // Preview-only subscribers are reached through mirrorLegacyRoomEvent at
-  // each call site, so nothing is delivered twice.
-  function broadcast(target: PresenceRoom, message: RoomPeerMessage, exceptPeerId = ''): void {
-    const failedPeers: RosterPeer[] = [];
-    for (const peer of target.peers.values()) {
-      if (peer.id !== exceptPeerId && !sendEvent(peer, message)) failedPeers.push(peer);
+  // One room event to everyone who follows the room: each peer over its own
+  // socket (a peer whose socket fails leaves as lost), then each socket that
+  // previews the room without being in its call.
+  function publish(roomId: string, envelope: ServerEnvelope, exceptPeerId = ''): void {
+    const target = rooms.get(roomId);
+    if (target) {
+      const failedPeers: RosterPeer[] = [];
+      for (const peer of target.peers.values()) {
+        if (peer.id !== exceptPeerId && !sendToPeer(peer, envelope)) failedPeers.push(peer);
+      }
+      for (const peer of failedPeers) closePeer(roomId, peer.id, peer.transport?.id, 'lost');
+      if (failedPeers.length > 0) deps.runtime()?.scheduleSummaryBroadcast(roomId);
     }
-    for (const peer of failedPeers) closePeer(target.id, peer.id, peer.transport?.id, 'lost');
-    if (failedPeers.length > 0) deps.runtime()?.scheduleSummaryBroadcast(target.id);
+    for (const connection of deps.sockets.roomDetailSubscribers(roomId)) {
+      if (connection.activeVoice?.roomId === roomId || !connection.previewRoomIds.has(roomId)) continue;
+      deps.sockets.sendToConnection(connection, envelope);
+    }
   }
 
   function publishClearedScreenViewers(target: PresenceRoom, ownerPeerId: string): void {
     for (const viewer of clearViewedScreenPeerReferences(target, ownerPeerId)) {
-      const message: RoomPeerMessage = { type: 'peer-updated', peer: publicPeer(viewer) };
-      broadcast(target, message);
-      deps.runtime()?.mirrorLegacyRoomEvent(target.id, message);
+      publish(target.id, buildServerEnvelope('room.peer.updated', { roomId: target.id, peer: publicPeer(viewer) }));
     }
   }
 
@@ -244,8 +247,7 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
       const session = sessionsClosed ? null : finishedSession(roomId, current, now());
       if (session) recordSessions([session]);
       publishClearedScreenViewers(target, peerId);
-      broadcast(target, { type: 'peer-left', peerId, reason });
-      deps.runtime()?.mirrorLegacyRoomEvent(roomId, { type: 'peer-left', peerId, reason });
+      publish(roomId, buildServerEnvelope('room.peer.left', { roomId, peerId, reason }));
       deps.runtime()?.scheduleSummaryBroadcast(roomId);
     }
     if (target.peers.size === 0) {
@@ -310,8 +312,8 @@ export function createRoomPresence(deps: RoomPresenceDeps) {
     rooms,
     room,
     attach,
-    sendEvent,
-    broadcast,
+    sendToPeer,
+    publish,
     publishClearedScreenViewers,
     closePeer,
     queueOccupancy,

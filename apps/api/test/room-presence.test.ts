@@ -3,10 +3,11 @@
 // own transport, the serialized occupancy writes with retry, the roster wait,
 // the idle-room sweep and the record of each finished stay in voice.
 
-import type { RoomPeerMessage } from '../src/realtime/legacy-events.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { buildServerEnvelope, parseServerFrame } from '@voice-room/shared/realtime';
+import { createConnectionRegistry } from '../src/realtime/registry.ts';
 import {
   createRoomPresence,
   type OccupancyStore,
@@ -16,22 +17,42 @@ import {
 import type { FinishedVoiceSession } from '../src/domains/rooms/voice-session.repository.ts';
 import { fake, recordingLogger } from './fakes/index.ts';
 
+const sockets = createConnectionRegistry({
+  maxConnectionsPerUser: 10,
+  keepaliveMs: 15000,
+  getFriendIds: async () => []
+});
+
 /** A roster seat with just an id (and a transport when a test sends to it). */
 function seat(id: string, transportOf?: RosterPeer['transport']): RosterPeer {
   return fake<RosterPeer>({ id, ...(transportOf === undefined ? {} : { transport: transportOf }) });
 }
 
+/** A socket that keeps the type of every frame it gets; a failing one is already closed. */
+function socket({ fails = false } = {}) {
+  const sent: string[] = [];
+  const connection = sockets.addGuestConnection({
+    readyState: fails ? 3 : 1,
+    send(data: string) {
+      const parsed = parseServerFrame(JSON.parse(data));
+      sent.push(parsed.ok ? parsed.frame.type : 'invalid');
+    },
+    close() {}
+  });
+  return { connection, sent };
+}
+
+/** A seat's transport over its own socket. */
 function transport(id: string, { fails = false } = {}) {
-  const sent: unknown[] = [];
-  return {
-    id,
-    sent,
-    send(message: RoomPeerMessage) {
-      if (fails) return false;
-      sent.push(message.type);
-      return true;
-    }
-  };
+  return { id, ...socket({ fails }) };
+}
+
+/** A socket that previews the room without being in its call. */
+function previewer(roomId: string) {
+  const watcher = socket();
+  watcher.connection.previewRoomIds.add(roomId);
+  sockets.registerConnectionForRoom(watcher.connection, roomId);
+  return watcher;
 }
 
 type HarnessOptions = {
@@ -56,7 +77,6 @@ function harness({
     active: new Array<unknown>(),
     empty: new Array<unknown>(),
     summaries: new Array<unknown>(),
-    mirrored: new Array<unknown>(),
     get errors() {
       return logger.records.filter((record) => record.level === 'error').map((record) => record.evt);
     }
@@ -75,13 +95,8 @@ function harness({
       },
       ...store
     }),
-    runtime: () =>
-      runtime
-        ? {
-            scheduleSummaryBroadcast: (roomId) => calls.summaries.push(roomId),
-            mirrorLegacyRoomEvent: (_roomId, message) => calls.mirrored.push(message.type)
-          }
-        : null,
+    sockets,
+    runtime: () => (runtime ? { scheduleSummaryBroadcast: (roomId) => calls.summaries.push(roomId) } : null),
     logger: () => logger,
     occupancyRetry: retry,
     roster,
@@ -136,15 +151,26 @@ test('broadcast skips the sender, closes peers whose transport failed and refres
   const dead = seat('b', transport('tb', { fails: true }));
   const sender = seat('c', senderTransport);
   for (const peer of [ok, dead, sender]) room.peers.set(peer.id, peer);
-  presence.broadcast(room, { type: 'room-deleted', roomId: 'r1' }, 'c');
-  assert.deepEqual(okTransport.sent, ['room-deleted', 'peer-left']);
-  assert.deepEqual(senderTransport.sent, ['peer-left']);
+  // A seat's socket that also previews the room hears each event once, over its seat.
+  okTransport.connection.activeVoice = { roomId: 'r1', peerId: 'a', sessionToken: '', transportId: 'ta' };
+  okTransport.connection.previewRoomIds.add('r1');
+  sockets.registerConnectionForRoom(okTransport.connection, 'r1');
+  const watcher = previewer('r1');
+  presence.publish('r1', buildServerEnvelope('room.deleted', { roomId: 'r1' }), 'c');
+  assert.deepEqual(okTransport.sent, ['room.deleted', 'room.peer.left']);
+  assert.deepEqual(senderTransport.sent, ['room.peer.left']);
+  // The lost peer's leave goes out before the preview watchers get the event itself.
+  assert.deepEqual(watcher.sent, ['room.peer.left', 'room.deleted']);
   assert.equal(dead.closed, true);
   assert.equal(room.peers.has('b'), false);
   assert.ok(calls.summaries.includes('r1'));
-  const ping = { type: 'ping', at: 1 } as const;
-  assert.equal(presence.sendEvent(null, ping), false);
-  assert.equal(presence.sendEvent({ id: 'x' }, ping), false);
+  const pong = buildServerEnvelope('pong', { at: 1 });
+  assert.equal(presence.sendToPeer(null, pong), false);
+  assert.equal(presence.sendToPeer({ id: 'x' }, pong), false);
+  // A seat whose socket closed is kept for its reconnect lease.
+  const held = seat('y', { id: 'ty', connection: null });
+  assert.equal(presence.sendToPeer(held, pong), true);
+  assert.equal(held.closed, undefined);
 });
 
 test('a seat closes only from its own transport; the last one out marks the room empty', async () => {
@@ -154,6 +180,7 @@ test('a seat closes only from its own transport; the last one out marks the room
   const owner = { id: 'owner', transport: transport('to') };
   room.peers.set('v', viewer);
   room.peers.set('owner', owner);
+  const watcher = previewer('r1');
   presence.closePeer('missing-room', 'owner', 'to');
   presence.closePeer('r1', 'nobody', 'to');
   presence.closePeer('r1', 'owner', 'stale-transport');
@@ -162,8 +189,8 @@ test('a seat closes only from its own transport; the last one out marks the room
 
   presence.closePeer('r1', 'owner', 'to', 'kicked');
   assert.equal(viewer.viewedScreenPeerId, '');
-  assert.deepEqual(viewer.transport.sent, ['peer-updated', 'peer-left']);
-  assert.deepEqual(calls.mirrored, ['peer-updated', 'peer-left']);
+  assert.deepEqual(viewer.transport.sent, ['room.peer.updated', 'room.peer.left']);
+  assert.deepEqual(watcher.sent, ['room.peer.updated', 'room.peer.left']);
 
   const replaced = { id: 'v', replaced: true, transport: transport('tv') };
   room.peers.set('v', replaced);

@@ -19,7 +19,7 @@ test('G32-A01 reply projection is non-recursive and terminal states tombstone', 
   assert.deepEqual(projectReplyTombstone('gone'), { messageId: 'gone', deleted: true, text: 'Сообщение недоступно' });
   await assert.rejects(
     requireReplyTarget({ message: { id: 'invite', metadata: { kind: 'room-invite' } }, visibility: true }),
-    { code: 'reply_target_unavailable', statusCode: 409 }
+    { code: 'reply_unavailable', statusCode: 409 }
   );
 });
 

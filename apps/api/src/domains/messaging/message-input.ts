@@ -34,15 +34,24 @@ export function messageFingerprint(value: unknown): string {
   return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
-// Multiline since 2.4.0: horizontal whitespace runs collapse, blank lines are
-// capped at one, at most 20 lines and 500 characters survive.
-export function cleanChatText(value: unknown): string {
+// Multiline since 2.4.0: horizontal whitespace runs collapse and blank lines
+// are capped at one; at most maxLines lines and maxChars characters survive.
+export function cleanMessageText(
+  value: unknown,
+  { maxChars, maxLines }: { maxChars: number; maxLines?: number }
+): string {
   let text = textOf(value)
     .replace(/[^\S\n]+/g, ' ')
     .replace(/ *\n */g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  const lines = text.split('\n');
-  if (lines.length > 20) text = lines.slice(0, 20).join('\n');
-  return text.slice(0, 500);
+  if (maxLines !== undefined) {
+    const lines = text.split('\n');
+    if (lines.length > maxLines) text = lines.slice(0, maxLines).join('\n');
+  }
+  return text.slice(0, maxChars);
+}
+
+export function cleanChatText(value: unknown): string {
+  return cleanMessageText(value, { maxChars: 500, maxLines: 20 });
 }

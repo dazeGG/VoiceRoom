@@ -110,6 +110,8 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   too_many_mentions: 'Слишком много упоминаний в одном сообщении',
   invalid_attachments: 'Вложения недоступны, прикрепите их заново',
   reply_unavailable: 'Сообщение, на которое вы отвечаете, недоступно',
+  idempotency_conflict: 'Это сообщение уже отправлялось с другим текстом, попробуйте ещё раз',
+  idempotency_quota_exceeded: 'Слишком много сообщений, попробуйте позже',
   message_rate_limited: 'Слишком много сообщений, попробуйте позже',
   message_edit_forbidden: 'Можно редактировать только свои сообщения',
   message_delete_forbidden: 'Можно удалять только свои сообщения',

@@ -19,7 +19,6 @@ import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import type { MessageModerationService } from './message-moderation.service.ts';
 import type { ModerationService } from './moderation.service.ts';
-import { codeOf } from '../../platform/error-code.ts';
 
 const SIGN_IN_REQUIRED = failure('Authentication required', { code: 'authentication_required' });
 const OWNER_REQUIRED = failure('Owner access required', { code: 'owner_required' });
@@ -45,13 +44,11 @@ export function registerModerationRoutes(root: FastifyInstance, ctx: ApiContext,
     async (request, reply) => {
       const actorUserId = await actor(request, reply);
       if (!actorUserId) return reply;
-      const result = await deps.moderation
-        .listActive({ roomId: request.params.roomId, actorUserId, query: request.query })
-        .catch((error: unknown) => {
-          if (codeOf(error) === 'invalid_cursor') return null;
-          throw error;
-        });
-      if (!result) return reply.code(400).send(failure('Invalid cursor', { code: 'invalid_cursor' }));
+      const result = await deps.moderation.listActive({
+        roomId: request.params.roomId,
+        actorUserId,
+        query: request.query
+      });
       if (result.status === 'forbidden') return reply.code(403).send(OWNER_REQUIRED);
       return result.envelope;
     }

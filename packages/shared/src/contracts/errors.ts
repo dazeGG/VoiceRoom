@@ -111,6 +111,8 @@ export const ERROR_CODES = [
   'too_many_mentions',
   'invalid_attachments',
   'reply_unavailable',
+  'idempotency_conflict',
+  'idempotency_quota_exceeded',
   'message_rate_limited',
   'message_edit_forbidden',
   'message_delete_forbidden',

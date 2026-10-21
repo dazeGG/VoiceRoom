@@ -2,12 +2,12 @@
 // call) sent to every account that lists the room, coalesced per room.
 
 import type { LobbyRoom, PublicPeer } from '@voice-room/shared/contracts/rooms';
-import { SUMMARY_COALESCE_MS } from '@voice-room/shared/realtime';
+import { buildRoomRealtimeSummary, SUMMARY_COALESCE_MS } from '@voice-room/shared/realtime';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import type { StoredRoom } from '../domains/rooms/room-views.ts';
 import { buildServerEnvelope } from './envelope.ts';
 import type { ConnectionRegistry } from './registry.ts';
-import { buildRoomRealtimeSummaryFromLobbyRoom, createSummaryCoalescer } from './summary.ts';
+import { createSummaryCoalescer } from './summary.ts';
 import type { Peer, PresenceRoom, RuntimeLogger, RuntimeRoomStore } from './runtime-types.ts';
 
 export interface RoomSummaryDeps {
@@ -82,11 +82,7 @@ export function createRoomSummaries(deps: RoomSummaryDeps) {
     const presence = presenceRooms.get(roomId);
     const peers = roomPeers || (presence ? Array.from(presence.peers.values()).map(publicPeer) : []);
     const unreadCount = await resolveRoomUnreadCount(roomId, userId);
-    const summary = buildRoomRealtimeSummaryFromLobbyRoom(
-      publicLobbyRoom({ ...dbRoom, unreadCount }),
-      peers,
-      avatarColorForPeerId
-    );
+    const summary = buildRoomRealtimeSummary(publicLobbyRoom({ ...dbRoom, unreadCount }), peers, avatarColorForPeerId);
     wsRegistry.sendToUser(userId, buildServerEnvelope('room.summary', { room: summary }));
     return true;
   }

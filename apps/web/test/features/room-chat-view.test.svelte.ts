@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { ChatMessage } from '../../src/lib/api/rooms.ts';
 import { buildChatDays, mentionsUser, restampAuthor } from '../../src/lib/features/room/room-chat-view.ts';
-import { RoomChatDraft } from '../../src/lib/features/room/room-chat-draft.svelte.ts';
+import { ChatDraft } from '../../src/lib/shared/chat/chat-draft.svelte.ts';
 import { loadChatDraft, saveChatDraft } from '../../src/lib/shared/chat/chat-drafts.ts';
 import { defined } from '../helpers/assert.ts';
 
@@ -122,7 +122,7 @@ test('a room draft comes back for its account, is saved after a pause and cleare
   vi.useFakeTimers();
   saveChatDraft('ada', { type: 'room', id: 'room' }, { text: 'сохранённое' });
 
-  const draft = new RoomChatDraft('room');
+  const draft = new ChatDraft({ type: 'room', id: 'room' });
   draft.restore('ada');
   expect(draft.text).toBe('сохранённое');
 
@@ -138,7 +138,7 @@ test('a room draft comes back for its account, is saved after a pause and cleare
 });
 
 test('a guest draft is never stored, and a restore does not overwrite what is already typed', () => {
-  const guest = new RoomChatDraft('room');
+  const guest = new ChatDraft({ type: 'room', id: 'room' });
   guest.text = 'гость';
   guest.persist();
   expect(localStorage.length).toBe(0);

@@ -1,23 +1,17 @@
 import { isRecord, textOf } from '@voice-room/shared/guards';
 import { REPLY_PREVIEW_TEXT_MAX_LENGTH, isSystemCard } from '@voice-room/shared/messaging-send';
+import type { ReplyPreview } from '@voice-room/shared/contracts/messages';
 import { epochMillis } from '../../platform/epoch-millis.ts';
+import { DomainError } from '../../platform/http/domain-error.ts';
 
 const REPLY_TOMBSTONE_TEXT = 'Сообщение недоступно';
 
 type Loose = Record<string, unknown>;
-type ReplyAuthor = { id?: string; name?: string };
+type ReplyAuthor = NonNullable<ReplyPreview['author']>;
 
-export type ReplyPreview = Readonly<{ messageId: string; deleted: boolean; author?: ReplyAuthor; text?: string }>;
-
-class ReplyTargetUnavailableError extends Error {
-  declare code: string;
-  declare statusCode: number;
-
+class ReplyTargetUnavailableError extends DomainError {
   constructor() {
-    super('Reply target is unavailable');
-    this.name = 'ReplyTargetUnavailableError';
-    this.code = 'reply_target_unavailable';
-    this.statusCode = 409;
+    super('reply_unavailable', 409, 'Reply target is unavailable');
   }
 }
 
@@ -87,7 +81,7 @@ function projectReplyPreview(
   if (!isReplyTargetKindAllowed(message)) return null;
 
   // Intentionally omit replyTo/replyPreview: previews are exactly one level.
-  const preview: { messageId: string; deleted: boolean; author?: ReplyAuthor; text?: string } = {
+  const preview: ReplyPreview = {
     messageId: id,
     deleted: false
   };
@@ -98,24 +92,21 @@ function projectReplyPreview(
   return Object.freeze(preview);
 }
 
+// `visibility` is the caller's verdict that the sender may read the target.
 async function requireReplyTarget({
   message,
   visibility,
-  visibilityContext,
   now = Date.now()
 }: {
   message?: unknown;
-  visibility?: boolean | ((context: Loose) => unknown);
-  visibilityContext?: Loose;
+  visibility?: boolean;
   now?: number;
 } = {}): Promise<ReplyPreview> {
   if (!isReplyTargetKindAllowed(message) || isUnavailable(message, now)) {
     throw new ReplyTargetUnavailableError();
   }
 
-  const visible =
-    typeof visibility === 'function' ? await visibility({ ...visibilityContext, message }) : visibility === true;
-  if (visible !== true) throw new ReplyTargetUnavailableError();
+  if (visibility !== true) throw new ReplyTargetUnavailableError();
 
   const preview = projectReplyPreview(message, { now });
   if (!preview) throw new ReplyTargetUnavailableError();

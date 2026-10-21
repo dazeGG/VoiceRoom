@@ -11,6 +11,7 @@ import {
 } from '../src/realtime/room-runtime.ts';
 import type { ConnectionRegistry, WsConnection } from '../src/realtime/registry.ts';
 import type { JoinResult } from '../src/realtime/voice-join.ts';
+import type { ActiveBanRecord } from '../src/domains/moderation/active-ban.repository.ts';
 import { dbRoom, fake } from './fakes/index.ts';
 import { defined } from './helpers/assert-defined.ts';
 
@@ -29,7 +30,7 @@ type RosterPeer = TestRoom['peers'] extends Map<string, infer Peer> ? Peer : nev
 // Every peer a test builds has a live transport.
 type TestPeer = RosterPeer & { transport: NonNullable<RosterPeer['transport']> & { id: string } };
 type LogRecord = { level: string; msg?: string | undefined } & Record<string, unknown>;
-type Broadcast = { type?: string; peer: { id: string; screen?: unknown; viewedScreenPeerId?: unknown } };
+type Broadcast = { type: string; payload: { peer: { id: string; screen?: unknown; viewedScreenPeerId?: unknown } } };
 // Settles a promise the test holds open.
 type Settle = (value?: unknown) => void;
 // Resolves a promise the test holds open with what the real dependency answers.
@@ -62,7 +63,7 @@ function createPeer(id: string, overrides: Record<string, unknown> = {}): TestPe
     name: id,
     screen: false,
     sessionToken: id === OWNER_ID ? OWNER_TOKEN : VIEWER_TOKEN,
-    transport: { id: `transport-${id}`, send: () => true },
+    transport: { id: `transport-${id}`, connection: null },
     viewedScreenPeerId: '',
     ...overrides
   };
@@ -113,6 +114,7 @@ function createRuntime(room: TestRoom, broadcasts: unknown[], overrides: Runtime
     ...overrides.store
   });
   const wsRegistry = fake<ConnectionRegistry>({
+    detachVoicePeer() {},
     registerConnectionForRoom() {},
     roomDetailSubscribers() {
       return new Set();
@@ -136,7 +138,7 @@ function createRuntime(room: TestRoom, broadcasts: unknown[], overrides: Runtime
     publicPeer,
     publicLobbyRoom: (value: StoredRoom) => publicLobbyRoom(value, 0),
     publicChatMessage,
-    broadcast: (_room, message) => broadcasts.push(structuredClone(message)),
+    publishRoomEvent: (_roomId, envelope) => broadcasts.push(structuredClone(envelope)),
     closePeer: overrides.closePeer || (() => {}),
     avatarColorForPeerId: () => 'blue',
     MAX_ROOM_PEERS: 16,
@@ -387,7 +389,11 @@ test('screen stop publishes viewer leave and rejects a stale re-entry', async ()
   assert.equal(stopped.ok, true);
   assert.equal(viewer.viewedScreenPeerId, '');
   assert.deepEqual(
-    broadcasts.map((message) => [message.peer.id, message.peer.screen, message.peer.viewedScreenPeerId]),
+    broadcasts.map((message) => [
+      message.payload.peer.id,
+      message.payload.peer.screen,
+      message.payload.peer.viewedScreenPeerId
+    ]),
     [
       [VIEWER_ID, false, ''],
       [OWNER_ID, false, '']
@@ -409,7 +415,7 @@ test('screen stop publishes viewer leave and rejects a stale re-entry', async ()
 
   assert.equal(staleEntry.ok, true);
   assert.equal(viewer.viewedScreenPeerId, '');
-  assert.equal(broadcasts.at(-1)?.peer.viewedScreenPeerId, '');
+  assert.equal(broadcasts.at(-1)?.payload.peer.viewedScreenPeerId, '');
 });
 
 test('superseded transport cannot stop the replacement peer stream', async () => {
@@ -544,7 +550,7 @@ test('initial join is announced even when a reconnect replaces it during occupan
   assert.equal(codeOf(firstResult), 'superseded_join');
   assert.deepEqual(
     broadcasts.map((message) => message.type),
-    ['peer-joined']
+    ['room.peer.joined']
   );
 });
 
@@ -762,7 +768,7 @@ test('same connection cannot leave an orphan when it changes peer id in one room
 test('closed connection cannot subscribe after a delayed ban lookup', async () => {
   const room: TestRoom = { id: ROOM_ID, peers: new Map() };
   const subscribers = new Set();
-  let releaseBanLookup: Settle | undefined;
+  let releaseBanLookup: Resolve<ActiveBanRecord | null> | undefined;
   const runtime = createRuntime(room, [], {
     findRoomBan: async () =>
       new Promise((resolve) => {
@@ -841,7 +847,7 @@ test('unexpected disconnect preserves presence and a same-session replacement cl
   const scheduler = createManualScheduler();
   const revoked: unknown[] = [];
   const closed: Closed[] = [];
-  const oldTransport = { id: 'transport-old', close() {} };
+  const oldTransport = { id: 'transport-old', connection: null };
   const owner = createPeer(OWNER_ID, { transport: oldTransport, muted: true, screen: true });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({ room, scheduler, revoked, closed });
@@ -888,7 +894,7 @@ test('lease expiry finalizes the exact disconnected transport once', async () =>
   const revoked: unknown[] = [];
   const closed: Closed[] = [];
   const removeCalls: unknown[] = [];
-  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-expiring', close() {} } });
+  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-expiring', connection: null } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({ room, scheduler, revoked, closed, removeCalls });
   const connection = createVoiceConnection({
@@ -928,7 +934,7 @@ test('retryable failure after replacement claim restores only the original remai
   const scheduler = createManualScheduler();
   const revoked: unknown[] = [];
   const closed: Closed[] = [];
-  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-retry', close() {} } });
+  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-retry', connection: null } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   let rejectLookup = true;
   const runtime = createLeaseRuntime({
@@ -979,7 +985,7 @@ test('explicit leave terminal-claims a pending lease and stale expiry cannot fin
   const scheduler = createManualScheduler();
   const revoked: unknown[] = [];
   const closed: Closed[] = [];
-  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-left', close() {} } });
+  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-left', connection: null } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({ room, scheduler, revoked, closed });
   const connection = createVoiceConnection({
@@ -1007,7 +1013,7 @@ test('leave replayed on a fresh socket finalizes only the matching disconnected 
   const scheduler = createManualScheduler();
   const revoked: unknown[] = [];
   const closed: Closed[] = [];
-  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-replayed-leave', close() {} } });
+  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-replayed-leave', connection: null } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({ room, scheduler, revoked, closed });
   runtime.cleanupConnection(
@@ -1039,7 +1045,7 @@ test('terminal ownership invalidates an in-flight claimed replacement without re
   const identity = new Promise<PeerIdentityClaim>((resolve) => {
     resolveIdentity = resolve;
   });
-  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-claimed', close() {} } });
+  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-claimed', connection: null } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({
     room,
@@ -1092,7 +1098,7 @@ test('replacement waits when expiry wins CAS before credential finalization', as
   const revokeGate = new Promise((resolve) => {
     resolveRevoke = resolve;
   });
-  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-finalizing', close() {} } });
+  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-finalizing', connection: null } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   let roomLookups = 0;
   const runtime = createLeaseRuntime({
@@ -1154,7 +1160,7 @@ test('membership removal terminal-claims leases before one principal revoke and 
   let removedBeforeRevoke = -1;
   const owner = createPeer(OWNER_ID, {
     accountUserId: 'account-owner',
-    transport: { id: 'transport-membership', close() {} }
+    transport: { id: 'transport-membership', connection: null }
   });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({
@@ -1216,7 +1222,7 @@ test('stale superseded connection leave cannot evict the authoritative replaceme
   const scheduler = createManualScheduler();
   const revoked: unknown[] = [];
   const closed: Closed[] = [];
-  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-stale-leave', close() {} } });
+  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-stale-leave', connection: null } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({ room, scheduler, revoked, closed });
   const staleConnection = createVoiceConnection({
@@ -1254,7 +1260,7 @@ test('only one replacement may claim a pending reconnect lease', async () => {
   const identity = new Promise<PeerIdentityClaim>((resolve) => {
     resolveIdentity = resolve;
   });
-  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-single-claim', close() {} } });
+  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-single-claim', connection: null } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({
     room,
@@ -1305,7 +1311,7 @@ test('failed expiry finalizer blocks admission until credential revoke retry suc
   const revoked: unknown[] = [];
   const closed: Closed[] = [];
   let attempts = 0;
-  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-revoke-retry', close() {} } });
+  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-revoke-retry', connection: null } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({
     room,
@@ -1376,7 +1382,7 @@ test('terminal prerequisite keeps ownership when the claimed transport disconnec
   const terminalPrerequisite = new Promise((resolve) => {
     releaseTerminal = resolve;
   });
-  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-terminal-prerequisite', close() {} } });
+  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-terminal-prerequisite', connection: null } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({
     room,
@@ -1432,7 +1438,7 @@ test('terminal scope retries a failed expiry finalizer and runs its queued callb
   const revoked: unknown[] = [];
   const closed: Closed[] = [];
   let callbacks = 0;
-  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-failed-adoption', close() {} } });
+  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-failed-adoption', connection: null } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({
     room,
@@ -1474,7 +1480,7 @@ test('explicit leave only terminates the old generation and allows immediate sam
   const scheduler = createManualScheduler();
   const revoked: unknown[] = [];
   const closed: Closed[] = [];
-  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-explicit-rejoin', close() {} } });
+  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-explicit-rejoin', connection: null } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({ room, scheduler, revoked, closed });
   const connection = createVoiceConnection({
@@ -1506,7 +1512,7 @@ test('kick terminal ownership rejects same-session resurrection', async () => {
     const scheduler = createManualScheduler();
     const revoked: unknown[] = [];
     const closed: Closed[] = [];
-    const owner = createPeer(OWNER_ID, { transport: { id: `transport-${reason}`, close() {} } });
+    const owner = createPeer(OWNER_ID, { transport: { id: `transport-${reason}`, connection: null } });
     const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
     const runtime = createLeaseRuntime({ room, scheduler, revoked, closed });
 
@@ -1534,7 +1540,7 @@ test('membership finalizer failure does not close the peer or report successful 
   const removeCalls: unknown[] = [];
   const owner = createPeer(OWNER_ID, {
     accountUserId: 'account-owner',
-    transport: { id: 'transport-membership-failed', close() {} }
+    transport: { id: 'transport-membership-failed', connection: null }
   });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({
@@ -1574,8 +1580,8 @@ test('room terminal API claims every lease before custom delete finalizers run o
   const scheduler = createManualScheduler();
   const revoked: unknown[] = [];
   const closed: Closed[] = [];
-  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-delete-owner', close() {} } });
-  const viewer = createPeer(VIEWER_ID, { transport: { id: 'transport-delete-viewer', close() {} } });
+  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-delete-owner', connection: null } });
+  const viewer = createPeer(VIEWER_ID, { transport: { id: 'transport-delete-viewer', connection: null } });
   const room: TestRoom = {
     id: ROOM_ID,
     peers: new Map([
@@ -1635,7 +1641,7 @@ test('claimed replacements are superseded by delete, kick, and membership termin
     });
     const owner = createPeer(OWNER_ID, {
       accountUserId: 'account-owner',
-      transport: { id: `transport-claimed-${scope}`, close() {} }
+      transport: { id: `transport-claimed-${scope}`, connection: null }
     });
     const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
     const runtime = createLeaseRuntime({
@@ -1692,7 +1698,7 @@ test('terminal scope finalizes the current authoritative transport instead of an
   const identity = new Promise<PeerIdentityClaim>((resolve) => {
     resolveIdentity = resolve;
   });
-  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-obsolete', close() {} } });
+  const owner = createPeer(OWNER_ID, { transport: { id: 'transport-obsolete', connection: null } });
   const room = { id: ROOM_ID, peers: new Map([[owner.id, owner]]) };
   const runtime = createLeaseRuntime({
     room,
@@ -1724,7 +1730,7 @@ test('terminal scope finalizes the current authoritative transport instead of an
   room.peers.set(
     OWNER_ID,
     createPeer(OWNER_ID, {
-      transport: { id: 'transport-authoritative', close() {} }
+      transport: { id: 'transport-authoritative', connection: null }
     })
   );
   await runtime.cancelRoomReconnectLeases({ roomId: ROOM_ID, reason: 'deleted' });

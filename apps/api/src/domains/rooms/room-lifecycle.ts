@@ -2,7 +2,7 @@
 // and room.updated event, peers picking up a new profile, invitations that
 // die with the room, and tearing a deleted room down.
 
-import type { RoomPeerMessage } from '../../realtime/legacy-events.ts';
+import { buildServerEnvelope } from '@voice-room/shared/realtime';
 import type { DirectMessage as StoredDirectMessage } from '../social/social-records.ts';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
@@ -13,7 +13,6 @@ import { publicLobbyRoom, publicPeer, type StoredRoom } from './room-views.ts';
 import { markOwnershipFinalized } from './peer-eviction.ts';
 
 interface RoomRuntime {
-  mirrorLegacyRoomEvent(roomId: string, message: RoomPeerMessage): void;
   invalidateRecipientCache(roomId: string): void;
   scheduleSummaryBroadcast(roomId: string): void;
   cancelRoomReconnectLeases(input: {
@@ -61,9 +60,7 @@ export function createRoomLifecycle(deps: RoomLifecycleDeps) {
   /** Tells the room, its preview watchers and the lobby; returns the card it sent. */
   function announceRoomUpdate(roomId: string, room: StoredRoom) {
     const payload = lobbyRoom(room);
-    const live = presence.rooms.get(roomId);
-    if (live) presence.broadcast(live, { type: 'room-updated', room: payload });
-    deps.runtime()?.mirrorLegacyRoomEvent(roomId, { type: 'room-updated', room: payload });
+    presence.publish(roomId, buildServerEnvelope('room.updated', { room: payload }));
     deps.runtime()?.invalidateRecipientCache(roomId);
     deps.runtime()?.scheduleSummaryBroadcast(roomId);
     return payload;
@@ -80,9 +77,7 @@ export function createRoomLifecycle(deps: RoomLifecycleDeps) {
         peer.avatarAccent = user.avatarAccent || null;
         peer.avatarColorKey = user.avatarColorKey || peer.avatarColorKey;
         peer.avatarUrl = url;
-        const message: RoomPeerMessage = { type: 'peer-updated', peer: publicPeer(peer) };
-        presence.broadcast(room, message);
-        deps.runtime()?.mirrorLegacyRoomEvent(roomId, message);
+        presence.publish(roomId, buildServerEnvelope('room.peer.updated', { roomId, peer: publicPeer(peer) }));
         deps.runtime()?.scheduleSummaryBroadcast(roomId);
       }
     }
@@ -114,9 +109,7 @@ export function createRoomLifecycle(deps: RoomLifecycleDeps) {
     }: { avatarKey?: string | null; request?: { log?: Pick<Logger, 'warn' | 'error'> } | null } = {}
   ): Promise<void> {
     // Broadcast before presence teardown so the writes do not race socket close.
-    const live = presence.rooms.get(roomId);
-    if (live) presence.broadcast(live, { type: 'room-deleted', roomId });
-    deps.runtime()?.mirrorLegacyRoomEvent(roomId, { type: 'room-deleted', roomId });
+    presence.publish(roomId, buildServerEnvelope('room.deleted', { roomId }));
     deps.runtime()?.invalidateRecipientCache(roomId);
     // Invitations outlive the inviter's session, so the deleted room is the
     // only thing left that can invalidate them.

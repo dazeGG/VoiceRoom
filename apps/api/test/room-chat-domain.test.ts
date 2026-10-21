@@ -166,6 +166,8 @@ type HarnessOptions = {
   findUserFails?: boolean;
   media?: null;
   directEmit?: boolean;
+  replyTargetGone?: boolean;
+  replyTargetGuest?: boolean;
 };
 
 function harness(options: HarnessOptions = {}) {
@@ -286,7 +288,10 @@ function harness(options: HarnessOptions = {}) {
               return options.replay
                 ? {
                     kind: 'replay' as const,
+                    ledgerKey: 'ledger-1',
                     response: {
+                      messageId: 'old',
+                      statusCode: 201,
                       body: {
                         message: {
                           id: 'old',
@@ -361,7 +366,20 @@ function harness(options: HarnessOptions = {}) {
     replies: () => ({
       async lockRoomTarget(input) {
         calls.lockedIn = transactionNames.get(input.client) ?? '';
-        return { id: UUID_A, text: 'target', authorUserId: 'user-3', createdAt: Date.now() };
+        if (options.replyTargetGone) return null;
+        return {
+          id: UUID_A,
+          roomId: 'room-1',
+          peerId: 'peer0003',
+          authorUserId: options.replyTargetGuest ? null : 'user-3',
+          name: 'Carol',
+          text: 'target',
+          createdAt: Date.now(),
+          expiresAt: null,
+          deletedAt: null,
+          metadata: null,
+          replyTo: undefined
+        };
       }
     }),
     notifications: () => notifications,
@@ -569,6 +587,18 @@ test('mentions are not addressed without engagement or an inbox', async () => {
   const plain = harness({ delivery: false });
   await plain.service.post({ ...postBase, user: ACCOUNT, idempotencyKey: 'idem-key-1' });
   assert.equal(plain.calls.appended[0]?.beforeUnitOfWork, null);
+});
+
+test('a reply to a guest-authored message without mentions is not addressed', async () => {
+  const { calls, service } = harness({ replyTargetGuest: true });
+  const sent = await service.post({
+    ...postBase,
+    user: ACCOUNT,
+    replyTo: { messageId: UUID_B },
+    replyToMessageId: UUID_B
+  });
+  assert.equal(sent.status, 'created');
+  assert.deepEqual(calls.addressed, []);
 });
 
 test('an idempotent replay answers the stored message without broadcasting again', async () => {
@@ -1053,5 +1083,28 @@ test('a failing read store answers 500 without its text; a bad cursor still answ
   assert.deepEqual(
     [bad.status, bad.body],
     [400, { ok: false, error: 'Invalid read cursor', code: 'invalid_read_cursor' }]
+  );
+});
+
+test('a reply target that vanishes during the send answers 409 reply_unavailable', async (t) => {
+  const app = fastify();
+  registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
+  const { service } = harness({ replyTargetGone: true });
+  registerRoomChatRoutes(
+    app,
+    {
+      logger: fake<ApiContext['logger']>(),
+      clientIp: () => '203.0.113.1',
+      resolveSession: async () => ({ user: storedUser(ACCOUNT) }),
+      hashIp: (ip: string) => ip
+    },
+    service
+  );
+  t.after(() => app.close());
+
+  const vanished = await call(app, 'POST', '/api/rooms/room-1/chat', { text: 'hi', replyTo: { messageId: UUID_A } });
+  assert.deepEqual(
+    [vanished.status, vanished.body],
+    [409, { ok: false, error: 'Reply target is unavailable', code: 'reply_unavailable' }]
   );
 });

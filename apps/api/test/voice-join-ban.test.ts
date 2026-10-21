@@ -2,10 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createRoomRealtimeRuntime, type RoomRuntimeDeps } from '../src/realtime/room-runtime.ts';
 import type { WsConnection } from '../src/realtime/registry.ts';
+import type { ActiveBanRecord } from '../src/domains/moderation/active-ban.repository.ts';
 import { fake } from './fakes/index.ts';
 import { runtimeDeps } from './fakes/room-runtime.ts';
 
-type TestRoom = Parameters<RoomRuntimeDeps['broadcast']>[0];
+type TestRoom = NonNullable<Awaited<ReturnType<RoomRuntimeDeps['getRoom']>>>;
 
 const BANNED_USER = { id: 'user-banned', displayName: 'Banned' };
 const JOIN = { roomId: 'room-a', peerId: 'peer-banned', sessionToken: 's'.repeat(32), name: 'Banned' };
@@ -14,7 +15,7 @@ const JOIN = { roomId: 'room-a', peerId: 'peer-banned', sessionToken: 's'.repeat
 // the seat (here: while the peer identity is loaded). The ban's eviction
 // (afterBanCommitted) reads the roster once, right after the commit, so it
 // cannot see a peer that takes its seat later.
-function joinRacingABan(findRoomBan: (banCommitted: boolean) => Promise<unknown>) {
+function joinRacingABan(findRoomBan: (banCommitted: boolean) => Promise<ActiveBanRecord | null>) {
   const room: TestRoom = { id: JOIN.roomId, peers: new Map() };
   const rooms = new Map([[room.id, room]]);
   let banCommitted = false;
@@ -74,7 +75,7 @@ function joinRacingABan(findRoomBan: (banCommitted: boolean) => Promise<unknown>
 
 test('a ban committed while a voice join is in flight does not leave the peer in the room', async () => {
   const { connection, evicted, left, room, join } = joinRacingABan(async (banCommitted) =>
-    banCommitted ? { id: 'ban-1' } : null
+    banCommitted ? fake<ActiveBanRecord>({ id: 'ban-1' }) : null
   );
 
   const result = await join();

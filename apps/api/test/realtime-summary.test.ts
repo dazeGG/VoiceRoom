@@ -2,11 +2,11 @@ import test from 'node:test';
 import type { StoredRoom } from '../src/domains/rooms/room-views.ts';
 import { dbRoom, lobbyRoom } from './fakes/index.ts';
 import assert from 'node:assert/strict';
-import { buildRoomRealtimeSummaryFromLobbyRoom } from '../src/realtime/summary.ts';
+import { buildRoomRealtimeSummary } from '@voice-room/shared/realtime';
 import { createRoomRealtimeRuntime } from '../src/realtime/room-runtime.ts';
 import { runtimeDeps } from './fakes/room-runtime.ts';
 
-test('buildRoomRealtimeSummaryFromLobbyRoom mirrors shared summary rules', () => {
+test('buildRoomRealtimeSummary mirrors shared summary rules', () => {
   const peers = Array.from({ length: 6 }, (_, index) => ({
     id: `peer-${index}`.padEnd(8, '0'),
     name: `User ${index}`,
@@ -14,7 +14,7 @@ test('buildRoomRealtimeSummaryFromLobbyRoom mirrors shared summary rules', () =>
     avatarColorKey: 'blue'
   }));
 
-  const summary = buildRoomRealtimeSummaryFromLobbyRoom(
+  const summary = buildRoomRealtimeSummary(
     {
       id: 'room1',
       name: 'Test room',

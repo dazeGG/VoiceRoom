@@ -7,6 +7,8 @@ import type { Membership } from '../src/domains/membership/membership.repository
 import { registerMembershipRoutes } from '../src/domains/membership/membership.routes.ts';
 import type { ApiContext } from '../src/app/context.ts';
 import type { LeaveOutcome } from '../src/domains/membership/membership.service.ts';
+import { DomainError } from '../src/platform/http/domain-error.ts';
+import { registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { fake, storedUser } from './fakes/index.ts';
 
 type LeaveStatus = 'invalid' | 'not_active' | 'owner_required' | 'left';
@@ -109,6 +111,7 @@ test('the member directory answers its page, and refuses outsiders and bad curso
   }: { answer?: 'ok' | 'forbidden' | 'unauthorized' | 'bad-cursor'; signedIn?: boolean } = {}) {
     const app = fastify();
     t.after(() => app.close());
+    registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
     registerMembershipRoutes(
       app,
       fake<ApiContext>({ resolveSession: async () => (signedIn ? { user: storedUser() } : null) }),
@@ -116,7 +119,7 @@ test('the member directory answers its page, and refuses outsiders and bad curso
         directory: {
           async list(input) {
             seen.push(input);
-            if (answer === 'bad-cursor') throw Object.assign(new Error('bad cursor'), { code: 'invalid_cursor' });
+            if (answer === 'bad-cursor') throw new DomainError('invalid_cursor', 400, 'Invalid cursor');
             return answer === 'ok' ? { status: 'ok', envelope: page } : { status: answer };
           }
         },

@@ -55,6 +55,7 @@ type HarnessOptions = {
   rate?: { allowed: boolean; retryAfterSeconds: number };
   media?: null;
   directEmit?: boolean;
+  replyTargetGone?: boolean;
 };
 
 // The stores hand the unit-of-work callbacks a transaction marker, not a client.
@@ -135,7 +136,10 @@ function harness(options: HarnessOptions = {}) {
               return options.replay
                 ? {
                     kind: 'replay',
+                    ledgerKey: 'ledger-1',
                     response: {
+                      messageId: 'old',
+                      statusCode: 201,
                       body: {
                         message:
                           options.replayed ??
@@ -213,7 +217,19 @@ function harness(options: HarnessOptions = {}) {
     replies: () => ({
       async lockDirectTarget(input) {
         calls.lockedIn = transactions.get(input.client) ?? '';
-        return { id: 'm1', text: 'target', createdAt: Date.now() };
+        if (options.replyTargetGone) return null;
+        return {
+          id: 'm1',
+          senderId: 'user-2',
+          recipientId: 'user-1',
+          name: 'Bob',
+          body: 'target',
+          createdAt: Date.now(),
+          deletedAt: null,
+          metadata: null,
+          invite: null,
+          replyTo: undefined
+        };
       }
     }),
     delivery: () => delivery,
@@ -309,6 +325,14 @@ test('a send binds attachments, locks the reply and records delivery in one unit
   const relayed = harness({ directEmit: false });
   await relayed.service.send(ME, PEER, sendBase);
   assert.deepEqual([relayed.calls.events, relayed.calls.recipients, relayed.calls.previews], [[], [], [false]]);
+});
+
+test('a reply target that vanishes during the send is refused as reply_unavailable', async () => {
+  const { service } = harness({ replyTargetGone: true });
+  await assert.rejects(
+    service.send(ME, PEER, { ...sendBase, replyTo: { messageId: UUID_A }, replyToMessageId: UUID_A }),
+    { code: 'reply_unavailable', statusCode: 409 }
+  );
 });
 
 test('an idempotent replay answers the stored message without delivering again', async () => {

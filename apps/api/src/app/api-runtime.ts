@@ -29,6 +29,7 @@ import {
 import { createHostProbe } from '../platform/host-probe.ts';
 import { createFastifyApp } from '../platform/http/fastify-app.ts';
 import { asHttpServer, type ApiServer } from '../platform/http/http-server.ts';
+import type { Timer } from '../platform/types.ts';
 export type { ApiServer };
 
 import { createAdmissionService } from '../domains/admission/admission.service.ts';
@@ -40,7 +41,6 @@ import { MAX_UPLOAD_BYTES } from '../domains/media/media.service.ts';
 
 // The process logger is pino until an app hands over its Fastify logger.
 type Logger = FastifyBaseLogger;
-type Timer = ReturnType<typeof globalThis.setTimeout> | number;
 
 export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEnv } = {}) {
   const config = readApiConfig(env);
@@ -70,16 +70,12 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
 
   /** The accounts with an open realtime socket, once per socket. */
   function liveAccountIds(): string[] {
-    const accountIds: string[] = [];
-    for (const connection of hub.registry.connections.values()) {
-      if (connection.userId) accountIds.push(connection.userId);
-    }
-    return accountIds;
+    return hub.registry.stats().accountIds;
   }
 
   function liveVoice() {
     return {
-      guestConnections: hub.activeGuestConnections(),
+      guestConnections: hub.registry.stats().guests,
       voicePeers: hub.presence.peerCount(),
       voiceRooms: [...hub.presenceRooms.values()].filter((room) => room.peers.size > 0).length
     };
@@ -170,7 +166,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     http: httpTotals,
     live: () => ({
       ...liveVoice(),
-      wsConnections: hub.registry.connections.size
+      wsConnections: hub.registry.stats().sockets
     }),
     snapshots: services.getSystemSnapshotRepository
   });
@@ -279,8 +275,8 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
 
     const renderMetrics = () =>
       renderPrometheus({
-        activeWs: hub.registry.connections.size,
-        activeGuestWs: hub.activeGuestConnections(),
+        activeWs: hub.registry.stats().sockets,
+        activeGuestWs: hub.registry.stats().guests,
         presenceRooms: hub.presenceRooms.size,
         presencePeers: hub.presence.peerCount()
       });
@@ -325,7 +321,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     pruneRooms: hub.presence.prune,
     resolveCursorHmacKeys,
     startPruneTimer,
-    sockets: () => hub.registry.connections.values(),
+    sockets: () => hub.registry.allConnections(),
     config
   };
 }

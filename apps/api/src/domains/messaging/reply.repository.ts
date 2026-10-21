@@ -4,7 +4,8 @@ import type pg from 'pg';
 import { isRecord } from '@voice-room/shared/guards';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { DirectMessages, Json, RoomMessages } from '../../platform/db/schema.ts';
-import { projectReplyPreview, projectReplyTombstone, type ReplyPreview } from './reply-projector.ts';
+import type { ReplyPreview } from '@voice-room/shared/contracts/messages';
+import { projectReplyPreview, projectReplyTombstone } from './reply-projector.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Override = { client?: QueryClient | null | undefined };

@@ -318,7 +318,7 @@ test('eviction revokes, notifies, closes, invalidates and removes in order', asy
   const { eviction, log } = evictionHarness({ store });
   await eviction.disconnect(
     { id: 'room-1' },
-    { id: 'p1', accountUserId: 'u1', transport: { id: 't1', send: () => true } },
+    { id: 'p1', accountUserId: 'u1', transport: { id: 't1', connection: null } },
     'room.kicked'
   );
   assert.deepEqual(revoked, [{ roomId: 'room-1', peerId: 'p1', accountUserId: 'u1', guestPrincipalId: '' }]);
@@ -426,13 +426,12 @@ function moderationHarness({
     revoked: string[];
     sfu: unknown[];
     announced: string[];
-    notified: unknown[];
     muteRow?: { mutedBy?: string | null | undefined };
     unmuteRow?: unknown;
     ban?: unknown;
     strictBan?: { principals: unknown[] };
     undo?: unknown;
-  } = { evicted: [], disconnected: [], revoked: [], sfu: [], announced: [], notified: [] };
+  } = { evicted: [], disconnected: [], revoked: [], sfu: [], announced: [] };
   const eviction = fake<PeerEviction>({
     // The service ignores what finalize resolves to; a scripted finalize
     // stands for the eviction's work and the fake resolves to null after it.
@@ -488,7 +487,6 @@ function moderationHarness({
       return { status: 'applied' };
     },
     announcePeerUpdated: (room, peer) => calls.announced.push(peer.id),
-    notifyPeer: (peer, event) => calls.notified.push(event),
     maxBans: 5,
     logger: () => recordingLogger()
   });
@@ -533,7 +531,6 @@ test('server mute persists, revokes old credentials, narrows the SFU and tells e
   assert.deepEqual(calls.revoked, [peer.id]);
   assert.deepEqual(calls.sfu, [[peer.id, true]]);
   assert.deepEqual(calls.announced, [peer.id]);
-  assert.deepEqual(calls.notified, []);
 
   // Lifting it leaves the participant's own mute alone and revokes nothing.
   assert.deepEqual(await service.setServerMute(room, peer.id, false), { status: 'applied', muted: false });

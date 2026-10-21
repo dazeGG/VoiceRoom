@@ -1,8 +1,5 @@
 // Regression: a single room.peer.update must fan out exactly one
-// room.peer.updated to each other active peer. Today broadcast() delivers
-// once per peer transport AND once via mirrorLegacyRoomEvent to every
-// detail subscriber (active peers are both), and updatePeerState mirrors a
-// second time on top of broadcast — so the event is delivered 3x.
+// room.peer.updated to each other active peer (it once came three times).
 
 import test from 'node:test';
 import assert from 'node:assert/strict';

@@ -1,3 +1,4 @@
+import { DomainError } from '../../platform/http/domain-error.ts';
 import {
   contentFromPlainText,
   normalizeRoomMessageContent,
@@ -16,7 +17,7 @@ function createContentRepository(): ContentRepository {
   } {
     const normalized = content == null ? contentFromPlainText(text) : normalizeRoomMessageContent(content);
     if (!normalized) {
-      throw Object.assign(new TypeError('Invalid room message content'), { code: 'INVALID_MESSAGE_CONTENT' });
+      throw new DomainError('invalid_message_content', 400, 'Invalid room message content');
     }
     return { content: normalized, text: projectRoomMessageContent(normalized, text) };
   }

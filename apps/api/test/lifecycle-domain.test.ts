@@ -12,7 +12,8 @@ import { createRoomLifecycle } from '../src/domains/rooms/room-lifecycle.ts';
 import { createAccountLifecycle } from '../src/domains/account/account-lifecycle.ts';
 import type { StoredRoom } from '../src/domains/rooms/room-views.ts';
 import { createRoomPresence, type RosterPeer } from '../src/realtime/room-presence.ts';
-import type { WsConnection } from '../src/realtime/registry.ts';
+import { createConnectionRegistry, type WsConnection } from '../src/realtime/registry.ts';
+import { parseServerFrame } from '@voice-room/shared/realtime';
 import { startMaintenanceTimers } from '../src/platform/maintenance.ts';
 import { fake, recordingLogger, storedUser, storedDirectMessage } from './fakes/index.ts';
 
@@ -23,16 +24,37 @@ function logged(logger: RecordingLogger, level: string, field: string) {
   return logger.records.filter((record) => record.level === level).map((record) => record[field]);
 }
 
+const sockets = createConnectionRegistry({
+  maxConnectionsPerUser: 10,
+  keepaliveMs: 15000,
+  getFriendIds: async () => []
+});
+
+/** A socket that keeps the type of every frame it gets. */
+function socket() {
+  const sent: string[] = [];
+  const connection = sockets.addGuestConnection({
+    readyState: 1,
+    send(data: string) {
+      const parsed = parseServerFrame(JSON.parse(data));
+      sent.push(parsed.ok ? parsed.frame.type : 'invalid');
+    },
+    close() {}
+  });
+  return { connection, sent };
+}
+
+/** A seat's transport over its own socket. */
 function transport(id: string) {
-  const sent: unknown[] = [];
-  return {
-    id,
-    sent,
-    send(message: unknown) {
-      sent.push(isRecord(message) ? message.type : undefined);
-      return true;
-    }
-  };
+  return { id, ...socket() };
+}
+
+/** A socket that previews the room without being in its call. */
+function previewer(roomId: string) {
+  const watcher = socket();
+  watcher.connection.previewRoomIds.add(roomId);
+  sockets.registerConnectionForRoom(watcher.connection, roomId);
+  return watcher;
 }
 
 function presence() {
@@ -45,6 +67,7 @@ function presence() {
         return null;
       }
     }),
+    sockets,
     runtime: () => null,
     logger: () => recordingLogger(),
     occupancyRetry: { baseMs: 1000, maxMs: 1000 },
@@ -79,7 +102,6 @@ function roomHarness({
   removeFails?: boolean;
 } = {}) {
   const calls = {
-    mirrored: new Array<unknown>(),
     invalidated: new Array<string>(),
     summaries: new Array<string>(),
     notified: new Array<unknown[]>(),
@@ -94,8 +116,6 @@ function roomHarness({
     runtime: () =>
       runtime
         ? {
-            mirrorLegacyRoomEvent: (_roomId, message) =>
-              calls.mirrored.push(isRecord(message) ? message.type : undefined),
             invalidateRecipientCache: (roomId) => calls.invalidated.push(roomId),
             scheduleSummaryBroadcast: (roomId) => calls.summaries.push(roomId),
             async cancelRoomReconnectLeases(lease) {
@@ -147,10 +167,11 @@ test('the lobby card counts live peers and an update reaches room, watchers and 
   assert.equal(lifecycle.lobbyRoom(room).peers, 0);
   const peer = { id: 'p1', transport: transport('t1') };
   roster.room('r1').peers.set('p1', peer);
+  const watcher = previewer('r1');
   const card = lifecycle.announceRoomUpdate('r1', room);
   assert.equal(card.peers, 1);
-  assert.deepEqual(peer.transport.sent, ['room-updated']);
-  assert.deepEqual([calls.mirrored, calls.invalidated, calls.summaries], [['room-updated'], ['r1'], ['r1']]);
+  assert.deepEqual(peer.transport.sent, ['room.updated']);
+  assert.deepEqual([watcher.sent, calls.invalidated, calls.summaries], [['room.updated'], ['r1'], ['r1']]);
   lifecycle.announceRoomUpdate('empty', { ...room, id: 'empty' });
   roomHarness({ runtime: false }).lifecycle.announceRoomUpdate('r1', room);
 });
@@ -195,7 +216,7 @@ test('deleting a room tells everyone, frees every seat and removes the avatar', 
   roster.room('r1').peers.set('p1', peer);
   roster.room('r1').peers.set('p2', guest);
   await lifecycle.finishRoomDeletion('r1', { avatarKey: 'room.webp' });
-  assert.ok(peer.transport.sent.includes('room-deleted'));
+  assert.ok(peer.transport.sent.includes('room.deleted'));
   assert.deepEqual(calls.revoked, [
     { roomId: 'r1', accountUserId: 'u1', guestPrincipalId: '' },
     { roomId: 'r1', accountUserId: null, guestPrincipalId: 'g' }

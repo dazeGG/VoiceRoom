@@ -6,17 +6,18 @@ import type { RoomMessage } from '@voice-room/shared/contracts/messages';
 import type { LobbyRoom, PublicPeer } from '@voice-room/shared/contracts/rooms';
 import { normalizePeerId, cleanGuestName, cleanStreamId, cleanScreenProfileId } from '@voice-room/shared/validation';
 import { buildServerEnvelope } from './envelope.ts';
-import { buildRoomRealtimeSummaryFromLobbyRoom } from './summary.ts';
+import { buildRoomRealtimeSummary, type ServerEnvelope } from '@voice-room/shared/realtime';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
-import { type RoomPeerMessage } from './legacy-events.ts';
 import type { RoomSnapshot } from '@voice-room/shared/contracts/realtime';
 import type { UserRepository } from '../domains/account/user.repository.ts';
+import type { ActiveBanRecord } from '../domains/moderation/active-ban.repository.ts';
+import type { GatePrincipal } from '../domains/admission/gate-principal.ts';
 import type { ConnectionRegistry, WsConnection } from './registry.ts';
 import { createReconnectLeases } from './reconnect-leases.ts';
 import { createRoomSummaries } from './room-summaries.ts';
 import { createRoomFanout } from './room-fanout.ts';
-import { createVoiceJoin } from './voice-join.ts';
+import { createVoiceJoin, type SessionUser } from './voice-join.ts';
 import { claimMedia, decideMediaRequest, MEDIA_MIN_VIEWERS } from './media-budget.ts';
 import { leaveReasonOf } from './runtime-types.ts';
 import { isRecord } from '@voice-room/shared/guards';
@@ -31,18 +32,6 @@ import type {
 } from './runtime-types.ts';
 export type { RuntimeRoomStore } from './runtime-types.ts';
 
-type SessionUser =
-  | {
-      id: string;
-      displayName?: string;
-      login?: string;
-      avatarAccent?: string | null;
-      avatarKey?: string | null;
-      [key: string]: unknown;
-    }
-  | null
-  | undefined;
-type GatePrincipal = { principalType: 'account' | 'guest'; principalId: string };
 type RuntimeCredentialBoundary = {
   revokePeer?: (input: { roomId: string; accountUserId: string | null; guestPrincipalId: string }) => Promise<unknown>;
   resolvePrincipal?: (input: { roomId: string; accountUserId: string }) => GatePrincipal | null;
@@ -60,7 +49,8 @@ export type RoomRuntimeDeps = {
   publicLobbyRoom: (room: StoredRoom) => LobbyRoom;
   publicChatMessage: (message: RoomChatMessage) => RoomMessage;
   getUserStore?: (() => Pick<UserRepository, 'getUserById'>) | null;
-  broadcast: (room: PresenceRoom, message: RoomPeerMessage, exceptPeerId?: string) => void;
+  /** Sends a room event to its peers and to the sockets previewing it. */
+  publishRoomEvent: (roomId: string, envelope: ServerEnvelope, exceptPeerId?: string) => void;
   closePeer: (roomId: string, peerId: string, transportId: string | undefined, reason: PeerLeaveReason) => void;
   avatarColorForPeerId: (peerId: unknown) => string;
   MAX_ROOM_PEERS: number;
@@ -74,7 +64,8 @@ export type RoomRuntimeDeps = {
   tokensMatch: (expected: string | null | undefined, actual: string | null | undefined) => boolean;
   sessionAvatarColorKey: (user: SessionUser) => string;
   queueRoomOccupancyTransition?: (roomId: string) => Promise<unknown>;
-  findRoomBan?: ((roomId: string, userId: string | null | undefined, ip: string) => Promise<unknown>) | undefined;
+  findRoomBan?:
+    ((roomId: string, userId: string | null | undefined, ip: string) => Promise<ActiveBanRecord | null>) | undefined;
   credentialBoundary?: RuntimeCredentialBoundary | null | undefined;
   removeLiveKitParticipant?: ((roomId: string, peerId: string) => Promise<unknown>) | undefined;
   now?: (() => number) | undefined;
@@ -116,7 +107,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     publicLobbyRoom,
     publicChatMessage,
     getUserStore,
-    broadcast,
+    publishRoomEvent,
     closePeer,
     avatarColorForPeerId,
     MAX_ROOM_PEERS,
@@ -156,7 +147,6 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     now,
     logger
   });
-  const scheduleSummaryBroadcast = summaries.schedule;
   const leases = createReconnectLeases({
     presenceRooms,
     tokensMatch,
@@ -174,7 +164,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     getRoomStore,
     getRoom,
     publicPeer,
-    broadcast,
+    publishRoomEvent,
     closePeer,
     avatarColorForPeerId,
     MAX_ROOM_PEERS,
@@ -186,7 +176,6 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     logger,
     leases,
     summaries,
-    fanout,
     buildRoomSnapshot: (roomId, mode) => buildRoomSnapshot(roomId, mode),
     leaveVoiceRoom: (connection, payload, options) => leaveVoiceRoom(connection, payload, options)
   });
@@ -225,7 +214,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
       if (isRecord(error)) Object.assign(error, { ownershipFinalized: true });
       throw error;
     }
-    scheduleSummaryBroadcast(record.roomId);
+    summaries.schedule(record.roomId);
     return { finalized: true };
   }
 
@@ -324,7 +313,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
       if (!connection.previewRoomIds.has(payload.roomId))
         wsRegistry.unregisterConnectionForRoom(connection, payload.roomId);
     }
-    scheduleSummaryBroadcast(payload.roomId);
+    summaries.schedule(payload.roomId);
   }
 
   async function disconnectAccountFromRoom({
@@ -378,14 +367,9 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
 
     for (const peer of peers) {
       wsRegistry.sendToUser(userId, buildServerEnvelope('room.left', { roomId, peerId: peer.id, reason }));
-      for (const connection of wsRegistry.connections?.values?.() || []) {
-        if (connection.activeVoice?.roomId !== roomId || connection.activeVoice?.peerId !== peer.id) continue;
-        connection.activeVoice = null;
-        connection.previewRoomIds.delete(roomId);
-        wsRegistry.unregisterConnectionForRoom(connection, roomId);
-      }
+      wsRegistry.detachVoicePeer(roomId, peer.id);
     }
-    scheduleSummaryBroadcast(roomId);
+    summaries.schedule(roomId);
     return { ok: true, disconnected: peers.length };
   }
 
@@ -442,14 +426,12 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
 
     if (stoppedScreen) {
       for (const viewer of clearViewedScreenPeerReferences(room, peer.id)) {
-        broadcast(room, { type: 'peer-updated', peer: publicPeer(viewer) });
-        fanout.mirrorLegacyRoomEvent(roomId, { type: 'peer-updated', peer: publicPeer(viewer) });
+        publishRoomEvent(roomId, buildServerEnvelope('room.peer.updated', { roomId, peer: publicPeer(viewer) }));
       }
     }
 
-    broadcast(room, { type: 'peer-updated', peer: publicPeer(peer) });
-    fanout.mirrorLegacyRoomEvent(roomId, { type: 'peer-updated', peer: publicPeer(peer) });
-    scheduleSummaryBroadcast(roomId);
+    publishRoomEvent(roomId, buildServerEnvelope('room.peer.updated', { roomId, peer: publicPeer(peer) }));
+    summaries.schedule(roomId);
     return { ok: true as const, peer: publicPeer(peer) };
   }
 
@@ -499,7 +481,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
       const unreadCount = Number.isFinite(dbRoom.unreadCount)
         ? dbRoom.unreadCount
         : await summaries.unreadCount(dbRoom.id, userId);
-      const summary = buildRoomRealtimeSummaryFromLobbyRoom(
+      const summary = buildRoomRealtimeSummary(
         publicLobbyRoom({ ...dbRoom, unreadCount }),
         peers,
         avatarColorForPeerId
@@ -517,14 +499,9 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
         lease.disconnected = true;
         const peer = leases.currentPeer(lease);
         if (peer) {
-          // The socket is gone: keep the seat's transport id for the lease and
-          // swallow what the room still sends to it.
-          const capturedTransport = peer.transport;
-          peer.transport = {
-            id: capturedTransport?.id,
-            send: () => true,
-            close: () => capturedTransport?.close?.()
-          };
+          // The socket is gone: the seat keeps its transport id for the lease
+          // and reaches nobody until the rejoin.
+          peer.transport = { id: peer.transport?.id ?? activeVoice.transportId, connection: null };
           lease.peer = peer;
         }
       }
@@ -550,9 +527,8 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     invalidateRecipientCache: summaries.invalidateRecipients,
     joinVoiceRoom,
     leaveVoiceRoom,
-    mirrorLegacyRoomEvent: fanout.mirrorLegacyRoomEvent,
     requestMedia,
-    scheduleSummaryBroadcast,
+    scheduleSummaryBroadcast: summaries.schedule,
     sendRoomSummaryToUser: summaries.sendToUser,
     sendAccountSummaries,
     subscribePreview,

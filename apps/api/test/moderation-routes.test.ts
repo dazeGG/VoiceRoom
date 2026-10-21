@@ -10,6 +10,7 @@ import type { ApiContext } from '../src/app/context.ts';
 import type { MessageModerationService } from '../src/domains/moderation/message-moderation.service.ts';
 import type { ModerationService } from '../src/domains/moderation/moderation.service.ts';
 import { registerModerationRoutes } from '../src/domains/moderation/moderation.routes.ts';
+import { DomainError } from '../src/platform/http/domain-error.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { fake, storedUser } from './fakes/index.ts';
 import { defined } from './helpers/assert-defined.ts';
@@ -49,7 +50,7 @@ function moderationApp(t: TestContext, outcomes: Outcomes = {}, { signedIn = tru
       moderation: {
         async listActive(input) {
           seen.list = input;
-          if (outcomes.list === 'bad-cursor') throw Object.assign(new Error('bad'), { code: 'invalid_cursor' });
+          if (outcomes.list === 'bad-cursor') throw new DomainError('invalid_cursor', 400, 'Invalid cursor');
           return outcomes.list ?? { status: 'ok', envelope: PAGE };
         },
         async putBan(input) {

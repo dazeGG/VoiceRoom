@@ -1,14 +1,3 @@
-import { buildRoomRealtimeSummary } from '@voice-room/shared/realtime';
-import type { AvatarColorResolver, RoomRealtimeSummary } from '@voice-room/shared/realtime';
-
-function buildRoomRealtimeSummaryFromLobbyRoom(
-  room: Parameters<typeof buildRoomRealtimeSummary>[0],
-  peers: Parameters<typeof buildRoomRealtimeSummary>[1],
-  resolveAvatarColorKey?: AvatarColorResolver
-): RoomRealtimeSummary {
-  return buildRoomRealtimeSummary(room, peers, resolveAvatarColorKey);
-}
-
 function createSummaryCoalescer({ delayMs, flush }: { delayMs: number; flush: (roomId: string) => void }) {
   const pending = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -37,4 +26,4 @@ function createSummaryCoalescer({ delayMs, flush }: { delayMs: number; flush: (r
   return { schedule, cancel, clear };
 }
 
-export { buildRoomRealtimeSummaryFromLobbyRoom, createSummaryCoalescer };
+export { createSummaryCoalescer };

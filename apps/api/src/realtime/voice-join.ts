@@ -3,29 +3,26 @@
 // capacity checks, reclaiming a reconnect lease, attaching the socket as the
 // peer's transport, and the snapshot and roster events that follow.
 
+import crypto from 'node:crypto';
 import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
 import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import type { ClientCommands, PeerLeaveReason, RoomSnapshot } from '@voice-room/shared/contracts/realtime';
+import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import { cleanGuestName, cleanName, isReservedPeerId, normalizeGuestId } from '@voice-room/shared/validation';
+import { avatarUrl } from '../lib/avatar-url.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
+import type { StoredUser } from '../domains/account/user-records.ts';
+import type { ActiveBanRecord } from '../domains/moderation/active-ban.repository.ts';
 import { buildServerEnvelope } from './envelope.ts';
-import { legacyPeerMessageToWs, type RoomPeerMessage } from './legacy-events.ts';
-import { createWsTransport } from './peer-transport.ts';
 import type { ReconnectLeases } from './reconnect-leases.ts';
 import type { ConnectionRegistry, WsConnection } from './registry.ts';
-import type { createRoomFanout } from './room-fanout.ts';
 import type { createRoomSummaries } from './room-summaries.ts';
 import type { Peer, PresenceRoom, RuntimeLogger, RuntimeRoomStore } from './runtime-types.ts';
 
-type SessionUser =
-  | {
-      id: string;
-      displayName?: string;
-      login?: string;
-      avatarAccent?: string | null;
-      avatarKey?: string | null;
-      [key: string]: unknown;
-    }
+/** What a join reads of the signed-in account taking the seat; null for a guest. */
+export type SessionUser =
+  | (Pick<StoredUser, 'id'> &
+      Partial<Pick<StoredUser, 'displayName' | 'login' | 'avatarAccent' | 'avatarColorKey' | 'avatarKey'>>)
   | null
   | undefined;
 /** How a room.join ended; a refusal with a message also goes to the client as an error frame. */
@@ -38,7 +35,7 @@ export interface VoiceJoinDeps {
   getRoomStore: () => RuntimeRoomStore;
   getRoom: (roomId: string) => Promise<PresenceRoom | null>;
   publicPeer: (peer: Peer) => PublicPeer;
-  broadcast: (room: PresenceRoom, message: RoomPeerMessage, exceptPeerId?: string) => void;
+  publishRoomEvent: (roomId: string, envelope: ServerEnvelope, exceptPeerId?: string) => void;
   closePeer: (roomId: string, peerId: string, transportId: string | undefined, reason: PeerLeaveReason) => void;
   avatarColorForPeerId: (peerId: unknown) => string;
   MAX_ROOM_PEERS: number;
@@ -47,11 +44,10 @@ export interface VoiceJoinDeps {
   tokensMatch: (expected: string | null | undefined, actual: string | null | undefined) => boolean;
   sessionAvatarColorKey: (user: SessionUser) => string;
   queueRoomOccupancyTransition: (roomId: string) => Promise<unknown>;
-  findRoomBan: (roomId: string, userId: string | null | undefined, ip: string) => Promise<unknown>;
+  findRoomBan: (roomId: string, userId: string | null | undefined, ip: string) => Promise<ActiveBanRecord | null>;
   logger: RuntimeLogger;
   leases: ReconnectLeases;
   summaries: ReturnType<typeof createRoomSummaries>;
-  fanout: ReturnType<typeof createRoomFanout>;
   buildRoomSnapshot: (roomId: string, mode: RoomSnapshot['mode']) => Promise<RoomSnapshot | null>;
   leaveVoiceRoom: (
     connection: WsConnection,
@@ -67,7 +63,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
     getRoomStore,
     getRoom,
     publicPeer,
-    broadcast,
+    publishRoomEvent,
     closePeer,
     avatarColorForPeerId,
     MAX_ROOM_PEERS,
@@ -79,7 +75,6 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
     logger,
     leases,
     summaries,
-    fanout,
     buildRoomSnapshot,
     leaveVoiceRoom
   } = deps;
@@ -89,15 +84,11 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
     for (const room of presenceRooms.values()) total += room.peers.size;
     return total;
   }
-  const scheduleSummaryBroadcast = summaries.schedule;
   const voiceJoinStates = new Map<string, { latestAuthorized: number; pending: number }>();
   let joinRequestSequenceCounter = 0;
 
   function attachVoiceTransport(connection: WsConnection, roomId: string, peerId: string, sessionToken: string) {
-    const transport = createWsTransport((message) => {
-      const envelope = legacyPeerMessageToWs(message, roomId);
-      return wsRegistry.sendToConnection(connection, envelope);
-    });
+    const transport = { id: crypto.randomBytes(16).toString('hex'), connection };
     connection.activeVoice = { roomId, peerId, sessionToken, transportId: transport.id };
     wsRegistry.registerConnectionForRoom(connection, roomId);
     return transport;
@@ -370,7 +361,6 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
       if (previous) {
         previous.closed = true;
         previous.replaced = true;
-        previous.transport?.close?.();
       }
 
       const transport = attachVoiceTransport(connection, roomId, peerId, sessionToken);
@@ -381,7 +371,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         accountUserId: sessionUser?.id || '',
         avatarAccent: sessionUser?.avatarAccent || null,
         avatarColorKey,
-        avatarUrl: sessionUser?.avatarKey ? `/api/avatars/${encodeURIComponent(sessionUser.avatarKey)}` : null,
+        avatarUrl: avatarUrl(sessionUser?.avatarKey),
         id: peerId,
         gateGuestPrincipalId: identityResult.identity?.id || '',
         client: connection.client,
@@ -428,14 +418,12 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         // this transport while occupancy persistence is pending; deferring the
         // announcement until afterward could leave a real peer undiscoverable.
         summaries.invalidateRecipients(roomId);
-        broadcast(room, { type: 'peer-joined', peer: publicPeer(peer) }, peerId);
-        fanout.mirrorLegacyRoomEvent(roomId, { type: 'peer-joined', peer: publicPeer(peer) });
-        scheduleSummaryBroadcast(roomId);
+        publishRoomEvent(roomId, buildServerEnvelope('room.peer.joined', { roomId, peer: publicPeer(peer) }), peerId);
+        summaries.schedule(roomId);
       } else if (reconnectProfileChanged) {
         summaries.invalidateRecipients(roomId);
-        broadcast(room, { type: 'peer-updated', peer: publicPeer(peer) });
-        fanout.mirrorLegacyRoomEvent(roomId, { type: 'peer-updated', peer: publicPeer(peer) });
-        scheduleSummaryBroadcast(roomId);
+        publishRoomEvent(roomId, buildServerEnvelope('room.peer.updated', { roomId, peer: publicPeer(peer) }));
+        summaries.schedule(roomId);
       }
 
       try {
@@ -460,7 +448,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
       // A ban evicts the peers its post-commit roster read finds, so one that
       // committed after the check above, before this seat was taken, missed it.
       // Check again with the seat taken: a ban committed later finds the peer.
-      let lateBan: unknown;
+      let lateBan: ActiveBanRecord | null;
       try {
         lateBan = await findRoomBan(roomId, sessionUser?.id, clientIp);
       } catch (error) {

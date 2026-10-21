@@ -7,7 +7,6 @@ import { MemberPage, MembersQuery, MembershipLeft } from '@voice-room/shared/con
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import type { DirectoryListing } from './member-directory.service.ts';
-import { codeOf } from '../../platform/error-code.ts';
 import type { Membership } from './membership.repository.ts';
 import type { LeaveOutcome } from './membership.service.ts';
 import { mayLeaveRoom } from './membership.policy.ts';
@@ -54,13 +53,13 @@ export function registerMembershipRoutes(root: FastifyInstance, ctx: ApiContext,
       const userId = await member(request, reply);
       if (!userId) return reply;
       const { cursor, limit, q, query } = request.query;
-      const result = await deps.directory
-        .list({ roomId: request.params.roomId, viewerUserId: userId, cursor, limit, query: q ?? query })
-        .catch((error: unknown) => {
-          if (codeOf(error) === 'invalid_cursor') return null;
-          throw error;
-        });
-      if (!result) return reply.code(400).send(failure('Invalid cursor', { code: 'invalid_cursor' }));
+      const result = await deps.directory.list({
+        roomId: request.params.roomId,
+        viewerUserId: userId,
+        cursor,
+        limit,
+        query: q ?? query
+      });
       if (result.status === 'forbidden')
         return reply.code(403).send(failure('Membership required', { code: 'membership_required' }));
       if (result.status !== 'ok') return reply.code(401).send(SIGN_IN_REQUIRED);
