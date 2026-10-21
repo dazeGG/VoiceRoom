@@ -7,6 +7,7 @@ import {
   type ModerationRepository
 } from '../src/domains/moderation/moderation.repository.ts';
 import { createModerationService } from '../src/domains/moderation/moderation.service.ts';
+import { createIpKey } from '../src/lib/ip-key.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { fake, fakeDb } from './fakes/index.ts';
@@ -39,6 +40,7 @@ async function bannedRoom(t: TestContext) {
   return { pool };
 }
 
+const ipKeyOf = createIpKey('temporary-ban-test-secret');
 const unusedCodec: ModerationCursorCodec = {
   encode: () => 'cursor',
   decode: () => {
@@ -59,6 +61,7 @@ test('G86-A01 unauthorized ban requests do not resolve target principals', async
   };
   const service = createModerationService({
     pool,
+    ipKeyOf,
     repository,
     async resolvePrincipals() {
       resolutions += 1;
@@ -92,7 +95,7 @@ test(
         return tuple;
       }
     };
-    const repository = createModerationRepository({ cursorCodec, pool });
+    const repository = createModerationRepository({ cursorCodec, pool, ipKeyOf });
     const first = await repository.listActive({ roomId: 'room', limit: 1 });
     assert.equal(first.nextCursor, 'cursor-1');
     assert.equal(encoded[0]?.tuple.createdAtMicros, String(Date.parse('2026-08-01T12:00:00Z') * 1000 + 2));
@@ -108,7 +111,7 @@ test(
 );
 
 test('G86-A03 public ban projection never exposes guest IP', () => {
-  const repository = createModerationRepository({ cursorCodec: unusedCodec, pool: fakeDb() });
+  const repository = createModerationRepository({ cursorCodec: unusedCodec, pool: fakeDb(), ipKeyOf });
   // A stored guest ban carries the IP; the projection must drop it.
   const stored = { ...banRow(), ip: '203.0.113.9' };
   const projected = repository.mapModerationBan(stored);
@@ -121,7 +124,7 @@ test(
   { skip: !process.env.TEST_DATABASE_URL },
   async (t) => {
     const { pool } = await bannedRoom(t);
-    const repository = createModerationRepository({ cursorCodec: unusedCodec, pool });
+    const repository = createModerationRepository({ cursorCodec: unusedCodec, pool, ipKeyOf });
     const { bans } = await repository.listActive({ roomId: 'room', limit: 10 });
     assert.deepEqual(bans[0]?.subject, {
       kind: 'account',
@@ -140,3 +143,36 @@ test(
     assert.equal(mutation && 'profile' in mutation.subject, false);
   }
 );
+
+test(
+  'G86-A05 an owner ban of a guest address stores and matches its key, never the address',
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (t) => {
+    const { pool } = await bannedRoom(t);
+    const repository = createModerationRepository({ cursorCodec: unusedCodec, pool, ipKeyOf });
+    const ban = await repository.create({ roomId: 'room', guestIp: '2001:db8:9:9::1', idempotencyKey: 'guest-v6' });
+    const stored = await pool.query<{ ip: string }>(`SELECT ip FROM room_bans WHERE id = $1`, [ban?.id]);
+    assert.equal(stored.rows[0]?.ip, ipKeyOf('2001:db8:9:9::1'));
+    const found = await repository.findActivePrincipal({ roomId: 'room', guestIp: '2001:db8:9:9:ffff::2' });
+    assert.equal(found?.id, ban?.id, 'another address in the same /64 is the same guest');
+  }
+);
+
+test('G86-A06 a guest ban of something that is not an address is refused', async () => {
+  const pool = fakeDb();
+  pool.connect = () => {
+    throw new Error('transaction must not start');
+  };
+  const service = createModerationService({
+    pool,
+    ipKeyOf,
+    repository: createModerationRepository({ cursorCodec: unusedCodec, pool, ipKeyOf })
+  });
+  const result = await service.putBan({
+    roomId: 'room',
+    actorUserId: 'owner',
+    idempotencyKey: 'request-1',
+    input: { guestIp: 'not-an-address', duration: '1h' }
+  });
+  assert.deepEqual(result, { status: 'invalid', ban: null });
+});

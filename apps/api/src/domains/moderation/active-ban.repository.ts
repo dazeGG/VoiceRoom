@@ -3,6 +3,7 @@ import { sql, type ExpressionBuilder } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { DB } from '../../platform/db/schema.ts';
+import { storedIpKey, type IpKeyOf } from '../../lib/ip-key.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Client = QueryClient | null | undefined;
@@ -22,6 +23,7 @@ export type ActiveBanRecord = {
   id: string;
   roomId: string;
   userId: string | null;
+  /** The key of the banned guest's address (lib/ip-key.ts), never the address; '' for an account ban. */
   ip: string;
   createdAt: number | null;
   expiresAt: number | null;
@@ -55,24 +57,31 @@ function mapActiveBan(row: BanRow | null | undefined): ActiveBanRecord | null {
   };
 }
 
-function normalizePrincipal({ userId = null, ip = '' }: { userId?: unknown; ip?: unknown } = {}): BanPrincipal {
-  const accountId = typeof userId === 'string' && userId.trim() ? userId.trim() : null;
-  return {
-    userId: accountId,
-    ip: accountId ? '' : typeof ip === 'string' ? ip.trim() : ''
-  };
-}
-
 // A ban counts until it is revoked or runs out.
 function active(at: TimeInput) {
   return (eb: ExpressionBuilder<DB, 'room_bans'>) =>
     eb.and([eb('revoked_at', 'is', null), eb.or([eb('expires_at', 'is', null), eb('expires_at', '>', toDate(at))])]);
 }
 
-function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClient | null; now?: () => number } = {}) {
+// A guest is banned by the key of their address (lib/ip-key.ts), the same key
+// their stays in voice keep: the address itself never reaches the table.
+function createActiveBanRepository({
+  pool,
+  ipKeyOf,
+  now = Date.now
+}: {
+  pool?: QueryClient | null;
+  ipKeyOf: IpKeyOf;
+  now?: () => number;
+}) {
   if (!pool || typeof pool.query !== 'function') throw new TypeError('A PostgreSQL pool is required');
   const base = pool;
   const on = (client: Client): Database => kyselyOn(client && typeof client.query === 'function' ? client : base);
+
+  function normalizePrincipal({ userId = null, ip = '' }: { userId?: unknown; ip?: unknown } = {}): BanPrincipal {
+    const accountId = typeof userId === 'string' && userId.trim() ? userId.trim() : null;
+    return { userId: accountId, ip: accountId ? '' : storedIpKey(ipKeyOf, ip) };
+  }
 
   // The ban that stops this account, or this address for a guest; an account
   // ban wins over an address ban, the newest over older ones.
@@ -90,7 +99,7 @@ function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClien
     client?: Client;
   } = {}): Promise<ActiveBanRecord | null> {
     const normalizedUserId = typeof userId === 'string' && userId.trim() ? userId.trim() : null;
-    const normalizedIp = typeof ip === 'string' ? ip.trim() : '';
+    const normalizedIp = storedIpKey(ipKeyOf, ip);
     if (!roomId || (!normalizedUserId && !normalizedIp)) return null;
     const row = await on(client)
       .selectFrom('room_bans')
@@ -190,9 +199,43 @@ function createActiveBanRepository({ pool, now = Date.now }: { pool?: QueryClien
     return mapActiveBan(row as BanRow | undefined);
   }
 
-  return { countActive, filterActiveUserIds, findActive, insert, mapActiveBan, normalizePrincipal };
+  // Bans written before 2.10.4 hold the address itself. SQL cannot compute the
+  // key, so the API rewrites such rows, a batch at a time. A key holds neither
+  // '.' nor ':', so every pass finds only what is left: running it again, or on
+  // two replicas at once, changes nothing already done. Returns the rows keyed.
+  async function keyStoredAddresses({ batchSize = 500 }: { batchSize?: number } = {}): Promise<number> {
+    const db = on(null);
+    let keyed = 0;
+    for (;;) {
+      const rows = await db
+        .selectFrom('room_bans')
+        .select(['id', 'ip'])
+        .where((eb) => eb.or([eb('ip', 'like', '%.%'), eb('ip', 'like', '%:%')]))
+        .orderBy('id')
+        .limit(batchSize)
+        .execute();
+      if (rows.length === 0) return keyed;
+      const result = await sql`
+        UPDATE room_bans AS b SET ip = v.key
+        FROM unnest(${rows.map((row) => row.id)}::text[], ${rows.map((row) => row.ip)}::text[],
+                    ${rows.map((row) => storedIpKey(ipKeyOf, row.ip))}::text[]) AS v(id, raw, key)
+        WHERE b.id = v.id AND b.ip = v.raw`.execute(db);
+      keyed += Number(result.numAffectedRows ?? 0n);
+      if (rows.length < batchSize) return keyed;
+    }
+  }
+
+  return {
+    countActive,
+    filterActiveUserIds,
+    findActive,
+    insert,
+    keyStoredAddresses,
+    mapActiveBan,
+    normalizePrincipal
+  };
 }
 
 export type ActiveBanRepository = ReturnType<typeof createActiveBanRepository>;
 
-export { createActiveBanRepository, normalizePrincipal };
+export { createActiveBanRepository };

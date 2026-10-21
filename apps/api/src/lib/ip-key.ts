@@ -9,6 +9,10 @@ import crypto from 'node:crypto';
 import net from 'node:net';
 
 const KEY_HEX_LENGTH = 16;
+const STORED_KEY = /^[0-9a-f]{16}$/;
+
+/** Turns an address into its key; null for anything that is not an IP address. */
+export type IpKeyOf = (ip: string) => string | null;
 
 /** The eight 16-bit blocks of a valid IPv6 address, as numbers. */
 function ipv6Blocks(address: string): number[] {
@@ -40,10 +44,22 @@ function networkOf(value: string): string {
 }
 
 /** Keys addresses with `secret`; null for anything that is not an IP address. */
-export function createIpKey(secret: string): (ip: string) => string | null {
+export function createIpKey(secret: string): IpKeyOf {
   return (ip) => {
     const network = networkOf(ip);
     if (!network) return null;
     return crypto.createHmac('sha256', secret).update(network).digest('hex').slice(0, KEY_HEX_LENGTH);
   };
+}
+
+/**
+ * What a column that once held addresses stores for `value`: an address
+ * becomes its key, a key stays as it is (keying twice changes nothing), and
+ * anything else is '' (no address).
+ */
+export function storedIpKey(ipKeyOf: IpKeyOf, value: unknown): string {
+  if (typeof value !== 'string') return '';
+  const text = value.trim();
+  if (STORED_KEY.test(text)) return text;
+  return ipKeyOf(text) ?? '';
 }
