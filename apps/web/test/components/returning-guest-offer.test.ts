@@ -21,9 +21,23 @@ vi.mock('$app/navigation', () => ({ pushState: vi.fn(), replaceState: vi.fn(), g
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
+// What the API answers, in full: the client checks every answer against its contract.
 const createRoute = {
-  '/api/pow-challenge': { body: { required: false } },
-  'POST /api/rooms': { status: 201, body: { ok: true, roomId: 'tmp123' } }
+  '/api/pow-challenge': { body: { ok: true, required: false } },
+  'POST /api/rooms': {
+    status: 201,
+    body: {
+      ok: true,
+      roomId: 'tmp123',
+      name: '',
+      avatarUrl: null,
+      createdAt: 1,
+      isStatic: false,
+      maxRooms: 10,
+      maxRoomPeers: 25,
+      owned: false
+    }
+  }
 };
 
 let location: { href: string };
