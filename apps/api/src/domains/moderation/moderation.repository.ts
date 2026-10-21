@@ -8,6 +8,7 @@ import type { CursorTuple } from '../../platform/cursor-codec.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { avatarUrl } from '../../lib/avatar-url.ts';
 import type { Ban, BanProfile } from '@voice-room/shared/contracts/moderation';
+import { storedIpKey, type IpKeyOf } from '../../lib/ip-key.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Client = QueryClient | null | undefined;
@@ -33,12 +34,6 @@ export type ModerationBanRow = {
   avatar_color_key?: string | null;
   avatar_accent?: string | null;
 };
-
-// A guest ban needs the address; the column is NOT NULL.
-function requireGuestIp(guestIp: string | null): string {
-  if (guestIp === null) throw new TypeError('A guest ban needs an address');
-  return guestIp;
-}
 
 function asDate(value: unknown): Date {
   if (value instanceof Date) return value;
@@ -79,14 +74,23 @@ function mapModerationBan(row: ModerationBanRow | null | undefined): Ban | null 
   };
 }
 
+// A guest ban holds the key of the guest's address (lib/ip-key.ts), never the
+// address: the owner's `guestIp` is keyed before it reaches SQL.
 function createModerationRepository({
   cursorCodec,
-  pool
-}: { cursorCodec?: ModerationCursorCodec | undefined; pool?: QueryClient | null | undefined } = {}) {
+  pool,
+  ipKeyOf
+}: {
+  cursorCodec?: ModerationCursorCodec | undefined;
+  pool?: QueryClient | null | undefined;
+  ipKeyOf: IpKeyOf;
+}) {
   if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
   if (!cursorCodec?.encode || !cursorCodec?.decode) throw new TypeError('Cursor codec is required');
   const base = pool;
   const codec = cursorCodec;
+  /** The stored form of a guest's address; '' when it is not one. */
+  const guestKey = (guestIp: string | null | undefined): string => storedIpKey(ipKeyOf, guestIp);
   const on = (client: Client): Database => kyselyOn(client?.query ? client : base);
   const bans = (row: ModerationBanRow | undefined) => mapModerationBan(row);
 
@@ -182,7 +186,9 @@ function createModerationRepository({
     const row = await activeBans(on(client), roomId, at)
       .selectAll('rb')
       .where((eb) =>
-        userId ? eb('rb.user_id', '=', userId) : eb.and([eb('rb.user_id', 'is', null), eb('rb.ip', '=', guestIp || '')])
+        userId
+          ? eb('rb.user_id', '=', userId)
+          : eb.and([eb('rb.user_id', 'is', null), eb('rb.ip', '=', guestKey(guestIp))])
       )
       .orderBy('rb.created_at', 'desc')
       .orderBy('rb.id', 'desc')
@@ -218,7 +224,8 @@ function createModerationRepository({
         id: crypto.randomUUID(),
         room_id: roomId,
         user_id: userId,
-        ip: userId ? '' : requireGuestIp(guestIp),
+        // The service refuses a guest ban whose address has no key.
+        ip: userId ? '' : guestKey(guestIp),
         created_at: timestamp,
         expires_at: expiresAt == null ? null : asDate(expiresAt),
         metadata: '{}',
@@ -343,6 +350,7 @@ function createModerationRepository({
     decodeCursor,
     findActivePrincipal,
     findByIdempotencyKey,
+    guestKey,
     isRoomOwner,
     listActive,
     mapModerationBan,

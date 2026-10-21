@@ -15,11 +15,24 @@ import {
 } from '../domains/admission/gate-credential.repository.ts';
 import { createRoomBanRepository, createServerMuteRepository } from '../domains/moderation/room-ban.repository.ts';
 import type { GatePrincipal } from '../domains/admission/gate-principal.ts';
+import { createIpKey, type IpKeyOf } from '../lib/ip-key.ts';
+import { resolveIpKeySecret } from './config.ts';
 
-function createRoomStore({ pool, roomIdleTtlMs = 15 * 60 * 1000 }: { pool: pg.Pool; roomIdleTtlMs?: number }) {
+// The registry passes its own address keyer; a store built with only a pool
+// keys addresses with the same configured secret.
+function createRoomStore({
+  pool,
+  roomIdleTtlMs = 15 * 60 * 1000,
+  ipKeyOf
+}: {
+  pool: pg.Pool;
+  roomIdleTtlMs?: number;
+  ipKeyOf?: IpKeyOf | undefined;
+}) {
   const db = kyselyOn(pool);
   let activeBanService: ActiveBanService | null = null;
-  const bans = (): ActiveBanService => (activeBanService ??= createActiveBanService({ pool }));
+  const bans = (): ActiveBanService =>
+    (activeBanService ??= createActiveBanService({ pool, ipKeyOf: ipKeyOf ?? createIpKey(resolveIpKeySecret()) }));
 
   const gate = createGateCredentialRepository({ db });
 

@@ -23,6 +23,8 @@ const dockerAvailable =
 
 const FAKE_API = `
 :3000 {
+  # Like the real API, every answer carries the main site's own policy.
+  header Content-Security-Policy "default-src 'self'; style-src 'self'"
   route /api/staff/check {
     @staff header Cookie *vr_staff=ok*
     respond @staff 204
@@ -169,6 +171,14 @@ test('the admin app is served only through the staff check', { skip: !dockerAvai
     const body = await refused.text();
     assert.doesNotMatch(body, /admin app|console\.log/, pathname);
     assert.equal(refused.headers.get('cache-control'), null, pathname);
+  }
+
+  // Whatever the API answers on the admin host carries the admin policy alone, so
+  // its own 404 page keeps its inline style.
+  for (const pathname of ['/', '/api/staff/me']) {
+    const policy = (await fetch(`${edge.admin}${pathname}`)).headers.get('content-security-policy') ?? '';
+    assert.equal(policy.match(/default-src/g)?.length, 1, `${pathname}: ${policy}`);
+    assert.match(policy, /style-src 'self' 'unsafe-inline'/, pathname);
   }
 
   // Each host answers only its own part of the API.
