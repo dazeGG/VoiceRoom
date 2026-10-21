@@ -244,7 +244,7 @@
     <AuthDialog
       mode={offerAuthMode}
       onClose={() => (offerAuthMode = null)}
-      onModeChange={(mode) => (offerAuthMode = mode)}
+      onModeChange={(mode: AuthMode) => (offerAuthMode = mode)}
       onAuthenticated={afterOfferAuthenticated}
     />
   {/key}
