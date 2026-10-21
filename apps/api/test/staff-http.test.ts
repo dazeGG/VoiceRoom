@@ -344,17 +344,9 @@ test('the desktop app opens the admin app in the system browser with a one-time 
     ).setCookie
   );
   const alice = await registerAccount(socketPath, 'alice');
-  const BrowserEntry = Type.Object({
-    ok: Type.Literal(true),
-    url: Type.Union([Type.String(), Type.Null()])
-  });
 
   assert.equal((await request(socketPath, { pathname: '/api/staff/browser-entry?next=/reports' })).status, 401);
-  const stranger = await request(
-    socketPath,
-    { pathname: '/api/staff/browser-entry?next=/reports', cookie: alice },
-    BrowserEntry
-  );
+  const stranger = await request(socketPath, { pathname: '/api/staff/browser-entry?next=/reports', cookie: alice });
   assert.equal(stranger.body.url, null, 'someone who is not staff gets no link');
 
   // A code from the in-browser redirect is refused without its state cookie and still works afterwards.
@@ -364,12 +356,9 @@ test('the desktop app opens the admin app in the system browser with a one-time 
   const retried = await callback(socketPath, redirectCode, STATE, `vr_staff_state_${STATE}=%2Frooms`);
   assert.equal(retried.headers.location, '/rooms');
 
-  const entry = await request(
-    socketPath,
-    { pathname: '/api/staff/browser-entry?next=/reports', cookie: rootSite },
-    BrowserEntry
-  );
-  const link = new URL(entry.body.url ?? '');
+  const entry = await request(socketPath, { pathname: '/api/staff/browser-entry?next=/reports', cookie: rootSite });
+  assert.equal(typeof entry.body.url, 'string');
+  const link = new URL(String(entry.body.url));
   assert.equal(link.origin, ADMIN_ORIGIN);
   assert.equal(link.pathname, '/api/staff/callback');
   assert.equal(link.searchParams.has('state'), false);
@@ -380,12 +369,12 @@ test('the desktop app opens the admin app in the system browser with a one-time 
   const reused = await request(socketPath, { pathname: `/api/staff/callback?code=${encodeURIComponent(code)}` });
   assert.equal(reused.headers.location, '/api/staff/denied', 'a browser link is traded once');
 
-  const stray = await request(
-    socketPath,
-    { pathname: `/api/staff/browser-entry?next=${encodeURIComponent('https://evil.example/x')}`, cookie: rootSite },
-    BrowserEntry
-  );
-  const strayCode = new URL(stray.body.url ?? '').searchParams.get('code') ?? '';
+  const stray = await request(socketPath, {
+    pathname: `/api/staff/browser-entry?next=${encodeURIComponent('https://evil.example/x')}`,
+    cookie: rootSite
+  });
+  assert.equal(typeof stray.body.url, 'string');
+  const strayCode = new URL(String(stray.body.url)).searchParams.get('code') ?? '';
   const landed = await request(socketPath, {
     pathname: `/api/staff/callback?code=${encodeURIComponent(strayCode)}`
   });
