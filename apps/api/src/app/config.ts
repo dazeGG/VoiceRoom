@@ -8,6 +8,15 @@ import { readEnvBool, readEnvInt, readMessageDeliveryMode, readUploadsDir } from
 
 type Env = Record<string, string | undefined>;
 
+/** The origin of a URL ("https://voiceroom.ru"), or an empty string for anything that is not one. */
+function cleanOrigin(value: string | undefined): string {
+  try {
+    return value ? new URL(value).origin : '';
+  } catch {
+    return '';
+  }
+}
+
 export const DEFAULT_REALTIME_RECONNECT_LEASE_MS = 30000;
 
 export function resolveRealtimeReconnectLeaseMs(env: Env = process.env): number {
@@ -138,6 +147,11 @@ export function readApiConfig(env: Env = process.env) {
         .map((id) => id.trim())
         .filter(Boolean)
     ),
+    // The main site and the admin app as origins; compose derives both from
+    // DOMAIN. The admin app signs in by a handoff from one to the other. The
+    // defaults are the local dev servers.
+    SITE_ORIGIN: cleanOrigin(env.SITE_ORIGIN) || 'http://127.0.0.1:5180',
+    ADMIN_ORIGIN: cleanOrigin(env.ADMIN_ORIGIN) || 'http://127.0.0.1:5181',
     REPORT_RATE_LIMIT: int('REPORT_RATE_LIMIT', 10, 0),
     REPORT_RATE_WINDOW_MS: int('REPORT_RATE_WINDOW_MS', 60000, 1000),
     CALL_FEEDBACK_RATE_LIMIT: int('CALL_FEEDBACK_RATE_LIMIT', 5, 0),
@@ -212,6 +226,17 @@ export function readNotificationDeliveryWorkerConfig(env: Env = process.env) {
 }
 
 export type ApiConfig = ReturnType<typeof readApiConfig>;
+
+// The secret behind the keys stored instead of IP addresses (lib/ip-key.ts).
+// It is drawn from the cursor keys, which production always has, under a label
+// of its own: no extra setting, and the same keys across restarts and deploys.
+export function resolveIpKeySecret({
+  env = process.env,
+  fallbackGateSecret = ''
+}: { env?: NodeJS.ProcessEnv; fallbackGateSecret?: string } = {}): string {
+  const cursorKeys = resolveCursorHmacKeys({ context: 'ip-key', env, fallbackGateSecret });
+  return crypto.createHash('sha256').update(`voice-room-ip-key:${cursorKeys}`).digest('hex');
+}
 
 // The keys that sign history and membership cursors: configured in
 // production, derived from the gate secret or a development seed elsewhere.

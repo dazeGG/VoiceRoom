@@ -7,6 +7,7 @@ import type {
 } from '@voice-room/shared/contracts/realtime';
 import { getAppRealtime, type RealtimeEvent, type RoomSnapshot } from '$lib/api/realtime';
 import { applyRoomSummary } from './room-presence.svelte';
+import { guestBrowserId } from './guest-id';
 import type { OwnedRoom } from '$lib/api/auth';
 
 type RoomDetailHandler = (event: RealtimeEvent) => void;
@@ -144,12 +145,7 @@ function releaseDetailDispatch(): void {
   }
 }
 
-let activeVoiceJoin: {
-  roomId: string;
-  peerId: string;
-  sessionToken: string;
-  name: string;
-} | null = null;
+let activeVoiceJoin: ClientCommands['room.join'] | null = null;
 let restoreHooked = false;
 let lastRestoreEpoch = 0;
 let lastActiveResyncKey = '';
@@ -347,8 +343,10 @@ export function subscribeRoomVoice(roomId: string, handler: RoomDetailHandler): 
 
 export function joinVoiceRoom(payload: { roomId: string; peerId: string; sessionToken: string; name: string }): void {
   ensureReconnectRestore();
-  activeVoiceJoin = payload;
-  getAppRealtime().send('room.join', payload);
+  const guestId = guestBrowserId();
+  const join = guestId ? { ...payload, guestId } : payload;
+  activeVoiceJoin = join;
+  getAppRealtime().send('room.join', join);
 }
 
 export function leaveVoiceRoom(payload: { roomId: string; peerId: string; sessionToken: string }): void {

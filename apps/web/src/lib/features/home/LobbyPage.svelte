@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from 'svelte';
+  import { onMount } from 'svelte';
   import { getAppRealtime } from '$lib/api/realtime';
   import { pushState, replaceState } from '$app/navigation';
   import { resolve } from '$app/paths';
@@ -19,10 +19,9 @@
   import VoiceHome from './components/lobby/VoiceHome.svelte';
   import DmView from './components/lobby/DmView.svelte';
   import PeopleView from './components/lobby/PeopleView.svelte';
-  import AdminPanel from '$lib/features/admin/AdminPanel.svelte';
-  import { fetchAdminAccess, type AdminReportsEvent } from '$lib/api/admin';
-  import { describeFiledReport } from '$lib/features/admin/report-reasons';
-  import { adminLocationFromPath, adminPath, type AdminTab } from '$lib/features/admin/tabs';
+  import type { AdminReportsEvent } from '@voice-room/shared/contracts/admin';
+  import { describeFiledReport } from '@voice-room/shared/report-labels';
+  import { fetchStaffAccess } from '$lib/api/staff';
   import RoomBrowseView from './components/lobby/RoomBrowseView.svelte';
   import RoomPreviewView from './components/lobby/RoomPreviewView.svelte';
   import LobbyRoomSettingsDialog from './components/lobby/LobbyRoomSettingsDialog.svelte';
@@ -82,17 +81,22 @@
   import './styles/lobby-v2.css';
 
   const lobby = new LobbyStore({ onEnterRoom: (roomId) => requestEnterRoom(roomId) });
-  // /admin/<tab> opens the panel at once, before anything rewrites the address.
-  const initialAdmin = adminLocationFromPath(window.location.pathname);
-  if (initialAdmin) lobby.showAdmin(initialAdmin.tab, initialAdmin.accountId);
   provideLobby(lobby);
 
   // Rooms shown inside the lobby see the account's friends through this.
   provideRoomSocial(lobby.roomSocial);
 
-  let { user, loggingOut, onLogout, onToast } = $props<{
+  let {
+    user,
+    loggingOut,
+    createRoomOnOpen = false,
+    onLogout,
+    onToast
+  } = $props<{
     user: AuthUser | null;
     loggingOut: boolean;
+    /** The account was just made for a permanent room: open the new-room dialog. */
+    createRoomOnOpen?: boolean;
     onLogout: () => void;
     onToast: (message: string, options?: ToastOptions) => void;
   }>();
@@ -103,49 +107,12 @@
     roomLeft: (roomId) => closeLeftRoom(roomId),
     roomsChanged: () => void rooms.refresh()
   });
-  // The admin panel's entry shows only to the accounts the server names.
-  let isAdmin = $state(false);
+  // The admin app is a site of its own (apps/admin); staff get a link to it.
+  let adminUrl = $state<string | null>(null);
   let openReports = $state(0);
-  // Bumped on every change to the open reports, so an open list reloads.
-  let reportsVersion = $state(0);
-  const adminOpen = $derived(lobby.mode === 'friends' && lobby.view === 'admin');
-
-  const adminHref = (tab: AdminTab, accountId: string | null = null) =>
-    tab === 'accounts' && accountId
-      ? resolve('/admin/accounts/[id]', { id: accountId })
-      : resolve('/admin/[[tab]]', { tab: tab === 'overview' ? undefined : tab });
-
-  function openAdmin(tab: AdminTab = lobby.adminTab): void {
-    lobby.showAdmin(tab);
-    if (window.location.pathname !== adminPath(tab)) pushState(adminHref(tab), {});
-  }
-
-  function selectAdminTab(tab: AdminTab): void {
-    lobby.adminTab = tab;
-    lobby.adminAccountId = null;
-    if (window.location.pathname !== adminPath(tab)) replaceState(adminHref(tab), {});
-  }
-
-  // An account's card gets its own address, so Back returns to the list.
-  function selectAdminAccount(accountId: string | null): void {
-    lobby.adminAccountId = accountId;
-    const path = adminPath('accounts', accountId);
-    if (window.location.pathname === path) return;
-    if (accountId) pushState(adminHref('accounts', accountId), {});
-    else replaceState(adminHref('accounts'), {});
-  }
-
-  // Leaving the panel any way (home, a room, a chat) gives the address back.
-  $effect(() => {
-    if (adminOpen) return;
-    untrack(() => {
-      if (adminLocationFromPath(window.location.pathname)) replaceUrlWithActiveVoiceRoom();
-    });
-  });
 
   function reportsChanged(event: AdminReportsEvent): void {
     openReports = event.openReports;
-    reportsVersion += 1;
     const filed = event.filed;
     if (!filed) return;
     // It stays until closed: a report must not slip by while the admin is away.
@@ -158,7 +125,7 @@
           label: 'Посмотреть',
           onClick: (toastId: string) => {
             dismissToast(toastId);
-            openAdmin('reports');
+            if (adminUrl) window.open(new URL('reports', adminUrl).href, '_blank', 'noopener');
           }
         }
       ]
@@ -181,6 +148,7 @@
   const prompts = new AccountPrompts({
     user: () => user,
     voiceActive: () => Boolean(connectedVoiceRoomId || roomNavigation.joinIntentRoomId),
+    lobbyDialogOpen: () => createDialogOpen,
     onToast: (message, options) => onToast(message, options)
   });
 
@@ -252,17 +220,18 @@
 
   onMount(() => {
     void rooms.refresh();
+    if (createRoomOnOpen) createDialogOpen = true;
     prompts.start();
     const teardownNotifications = notifications.start();
     const teardownFriends = user ? lobby.init(user.id, user.doNotDisturb, user.presenceStatus) : () => {};
     const teardownRooms = user ? rooms.follow() : () => {};
     if (user) {
-      fetchAdminAccess().then(
+      fetchStaffAccess().then(
         (access) => {
-          isAdmin = access.admin;
+          adminUrl = access.adminUrl;
           openReports = access.openReports;
         },
-        // Without an answer the entry stays hidden; /admin still works.
+        // Without an answer the link stays hidden; the admin app still opens by its address.
         () => {}
       );
     }
@@ -272,12 +241,6 @@
     });
 
     function onPopState(): void {
-      const poppedAdmin = adminLocationFromPath(window.location.pathname);
-      if (poppedAdmin) {
-        lobby.showAdmin(poppedAdmin.tab, poppedAdmin.accountId);
-        return;
-      }
-      if (lobby.view === 'admin') lobby.showHome();
       const roomId = extractRoomId(window.location.pathname);
       if (roomId) {
         setViewedRoomFromRoute(roomId);
@@ -539,8 +502,7 @@
       onGoHome={goHome}
       onOpenPeople={openPeople}
       onOpenSettings={prompts.openSettings}
-      onOpenAdmin={isAdmin ? () => openAdmin() : undefined}
-      {adminOpen}
+      {adminUrl}
       adminBadge={openReports}
       notificationsOpen={notifications.open}
       notificationUnreadCount={notifications.inbox.unreadCount}
@@ -609,15 +571,6 @@
         <DmView self={user} />
       {:else if lobby.mode === 'friends' && lobby.view === 'people'}
         <PeopleView {user} {onToast} onHome={goHome} />
-      {:else if adminOpen}
-        <AdminPanel
-          tab={lobby.adminTab}
-          onTabChange={selectAdminTab}
-          accountId={lobby.adminAccountId}
-          onAccountChange={selectAdminAccount}
-          {openReports}
-          {reportsVersion}
-        />
       {:else if lobby.mode === 'friends'}
         {@render voiceHome()}
       {/if}

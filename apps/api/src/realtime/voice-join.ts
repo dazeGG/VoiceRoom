@@ -6,7 +6,7 @@
 import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
 import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import type { ClientCommands, PeerLeaveReason, RoomSnapshot } from '@voice-room/shared/contracts/realtime';
-import { cleanGuestName, cleanName, isReservedPeerId } from '@voice-room/shared/validation';
+import { cleanGuestName, cleanName, isReservedPeerId, normalizeGuestId } from '@voice-room/shared/validation';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { buildServerEnvelope } from './envelope.ts';
 import { legacyPeerMessageToWs, type RoomPeerMessage } from './legacy-events.ts';
@@ -385,6 +385,9 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         id: peerId,
         gateGuestPrincipalId: identityResult.identity?.id || '',
         client: connection.client,
+        os: connection.device?.os ?? '',
+        browser: connection.device?.browser ?? '',
+        guestId: sessionUser ? '' : normalizeGuestId(payload.guestId),
         ip: clientIp || '',
         joinedAt: previous?.joinedAt ?? Date.now(),
         muted: Boolean(previous?.muted || persistedServerMuted),

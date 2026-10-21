@@ -1,0 +1,3 @@
+# The admin app's policy: its own bundle only, nothing inline but styles
+# (React sets style attributes), no framing. Imported in the ADMIN_DOMAIN block.
+Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"

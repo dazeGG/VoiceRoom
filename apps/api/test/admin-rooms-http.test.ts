@@ -13,6 +13,7 @@ import { ROOM_HISTORY_PAGE_SIZE, LiveRooms, RoomHistory } from '@voice-room/shar
 import { hashPassword } from '../src/lib/password.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { cookieFrom, registerAccount, request, startApiServer } from './fakes/server-process.ts';
+import { staffCookie } from './staff-session.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { rollBackThrough } from './migration-steps.ts';
 import { joinVoiceRoom, openWs, sendWs } from './ws-harness.ts';
@@ -56,7 +57,7 @@ test('an administrator sees who is in voice now and the stays before, a page at 
     },
     SignedIn
   );
-  const admin = cookieFrom(signedIn.setCookie);
+  const admin = await staffCookie(socketPath, cookieFrom(signedIn.setCookie));
   const alice = await registerAccount(socketPath, 'alice');
   const aliceId = defined(
     (await request(socketPath, { pathname: '/api/auth/me', cookie: alice }, Me)).body.user,

@@ -1,6 +1,6 @@
 import type { JoinResult } from './voice-join.ts';
 import type { IncomingMessage } from 'node:http';
-import { clientKind } from '@voice-room/shared/account-security';
+import { clientKind, describeUserAgent } from '@voice-room/shared/account-security';
 import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import type {
   ClientCommand,
@@ -404,6 +404,8 @@ function createWsHandler({
       : registry.addGuestConnection(socket, guestIp);
     connection = opened;
     opened.client = clientKind(req.headers?.['user-agent']);
+    const described = describeUserAgent(req.headers?.['user-agent']);
+    opened.device = { os: described.os, browser: described.client };
 
     logger.info(
       {

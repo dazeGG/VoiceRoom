@@ -32,6 +32,10 @@ const AREAS: ReadonlyArray<{ folder: string; project: string; ignore?: readonly 
     project: 'tsconfig.test.json',
     ignore: ['src/**', 'test/**', 'e2e/**', 'scripts/**', '*.js']
   },
+  // The admin app (React): its source, its tests and its vite config.
+  { folder: 'apps/admin/src', project: '../tsconfig.json' },
+  { folder: 'apps/admin/test', project: '../tsconfig.json' },
+  { folder: 'apps/admin', project: 'tsconfig.json', ignore: ['src/**', 'test/**'] },
   // The emoji corpus is byte-pinned (G07) and stays as it is.
   { folder: 'packages/shared/src', project: '../tsconfig.test.json', ignore: ['emoji.ts'] },
   { folder: 'packages/shared/test', project: '../tsconfig.test.json' },
@@ -68,7 +72,7 @@ async function measure({ folder, project, ignore = [] }: Area): Promise<{ ok: bo
 
 // An ignore comment would be a cast nobody reviews, like an inline eslint-disable.
 async function optOuts(): Promise<{ ok: boolean; report: string }> {
-  const { code, output } = await run('git', ['grep', '-n', OPT_OUT, '--', '*.ts', '*.mts', '*.svelte'], root);
+  const { code, output } = await run('git', ['grep', '-n', OPT_OUT, '--', '*.ts', '*.mts', '*.tsx', '*.svelte'], root);
   const lines = output
     .split('\n')
     .filter((line) => line.trim() && !line.startsWith('scripts/check-type-coverage.mts:'));

@@ -25,6 +25,7 @@ import { createNotificationSettingsService } from '../domains/notifications/noti
 import { createDesktopReleaseService } from '../domains/ops/desktop-release.service.ts';
 import { createCallFeedbackService } from '../domains/feedback/call-feedback.service.ts';
 import { createReportService } from '../domains/reports/report.service.ts';
+import { createStaffService } from '../domains/staff/staff.service.ts';
 import { createPeerEviction } from '../domains/rooms/peer-eviction.ts';
 import { createPeerModerationService } from '../domains/rooms/peer-moderation.service.ts';
 import { publicPeer } from '../domains/rooms/room-views.ts';
@@ -221,8 +222,8 @@ export function createDomainServices(deps: DomainServiceDeps) {
       const repository = services.getReportRepository();
       if (!repository) return;
       const openReports = await repository.countOpen();
-      for (const adminId of config.PLATFORM_ADMIN_USER_IDS) {
-        hub.broadcastToUser(adminId, { type: 'admin.reports', openReports, filed });
+      for (const staffId of await staff.memberIds('reports.review')) {
+        hub.broadcastToUser(staffId, { type: 'admin.reports', openReports, filed });
       }
     } catch (error) {
       deps
@@ -231,13 +232,28 @@ export function createDomainServices(deps: DomainServiceDeps) {
     }
   }
 
+  const staff = createStaffService({
+    namedSuperadminIds: config.PLATFORM_ADMIN_USER_IDS,
+    repository: () => {
+      const repository = services.getStaffRepository();
+      if (!repository) throw new Error('Staff roles require the database');
+      return repository;
+    },
+    actions: () => {
+      const repository = services.getAdminActionRepository();
+      if (!repository) throw new Error('Staff roles require the database');
+      return repository;
+    },
+    siteOrigin: config.SITE_ORIGIN
+  });
+
   const reports = createReportService({
     repository: () => {
       const repository = services.getReportRepository();
       if (!repository) throw new Error('Reports require the database');
       return repository;
     },
-    adminUserIds: config.PLATFORM_ADMIN_USER_IDS,
+    staff,
     canReadRoom: (roomId, userId) => services.getRoomStore().canUserReadRoomChat(roomId, userId),
     removeRoomMessage: async (input) => {
       const moderation = services.getModerationServices();
@@ -254,11 +270,11 @@ export function createDomainServices(deps: DomainServiceDeps) {
       if (!repository) throw new Error('Call feedback requires the database');
       return repository;
     },
-    adminUserIds: config.PLATFORM_ADMIN_USER_IDS
+    staff
   });
 
   const admin = createAdminService({
-    adminUserIds: config.PLATFORM_ADMIN_USER_IDS,
+    staff,
     stats: () => {
       const repository = services.getAdminStatsRepository();
       if (!repository) throw new Error('Admin statistics require the database');
@@ -280,7 +296,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     return repository;
   };
   const adminAccounts = createAdminAccountsService({
-    adminUserIds: config.PLATFORM_ADMIN_USER_IDS,
+    staff,
     accounts: () => required(services.getAdminAccountsRepository()),
     standing: () => required(services.getAccountStandingRepository()),
     deletions: services.getAccountDeletionRepository,
@@ -297,9 +313,10 @@ export function createDomainServices(deps: DomainServiceDeps) {
   });
 
   const adminRooms = createAdminRoomsService({
-    adminUserIds: config.PLATFORM_ADMIN_USER_IDS,
+    staff,
     presenceRooms: () => hub.presenceRooms.values(),
-    repository: () => required(services.getAdminRoomsRepository())
+    repository: () => required(services.getAdminRoomsRepository()),
+    describeAddress: services.describeAddress
   });
 
   const desktopReleaseService = createDesktopReleaseService({
@@ -332,6 +349,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     admin,
     adminAccounts,
     adminRooms,
+    staff,
     desktopRelease: desktopReleaseService
   };
 }

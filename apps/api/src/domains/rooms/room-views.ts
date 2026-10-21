@@ -19,6 +19,11 @@ export interface PresencePeer {
   camera?: boolean;
   /** The desktop app, a phone or a browser, from the socket that took the seat. */
   client?: ClientKind | null;
+  /** The system and browser of that socket; see WsConnection.device. */
+  os?: string | undefined;
+  browser?: string | undefined;
+  /** A guest's lasting browser id (normalizeGuestId); empty for an account. */
+  guestId?: string | undefined;
   deafened?: boolean;
   gateGuestPrincipalId?: string | null;
   ip?: string | undefined;

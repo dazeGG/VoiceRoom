@@ -16,6 +16,7 @@ import { hashPassword } from '../src/lib/password.ts';
 import { hashSessionToken } from '../src/domains/account/user-records.ts';
 import type { TSchema } from 'typebox';
 import { cookieFrom, registerAccount, request, startApiServer } from './fakes/server-process.ts';
+import { staffCookie } from './staff-session.ts';
 import { openWs } from './ws-harness.ts';
 import { defined } from './helpers/assert-defined.ts';
 
@@ -34,18 +35,21 @@ async function setup(t: test.TestContext) {
     ADMIN_ID,
     await hashPassword('password123')
   ]);
-  const admin = cookieFrom(
-    (
-      await request(
-        socketPath,
-        {
-          method: 'POST',
-          pathname: '/api/auth/login',
-          body: { login: 'root', password: 'password123' }
-        },
-        SignedIn
-      )
-    ).setCookie
+  const admin = await staffCookie(
+    socketPath,
+    cookieFrom(
+      (
+        await request(
+          socketPath,
+          {
+            method: 'POST',
+            pathname: '/api/auth/login',
+            body: { login: 'root', password: 'password123' }
+          },
+          SignedIn
+        )
+      ).setCookie
+    )
   );
   const signInOptions = (login: string) => ({
     method: 'POST',

@@ -79,6 +79,8 @@ async function startCaddyEdge(wsUrl: string) {
       '-e',
       'LIVEKIT_DOMAIN=:81',
       '-e',
+      'ADMIN_DOMAIN=:82',
+      '-e',
       `LIVEKIT_GATE_PUBLIC_URL=${wsUrl}`,
       '-p',
       '127.0.0.1::80',
@@ -86,6 +88,8 @@ async function startCaddyEdge(wsUrl: string) {
       `${caddyfile}:/etc/caddy/Caddyfile:ro`,
       '-v',
       `${cspSnippet}:/etc/caddy/csp.caddy:ro`,
+      '-v',
+      `${path.join(repositoryRoot, 'config/caddy/admin-csp.caddy')}:/etc/caddy/admin-csp.caddy:ro`,
       caddyImage
     ],
     { encoding: 'utf8' }

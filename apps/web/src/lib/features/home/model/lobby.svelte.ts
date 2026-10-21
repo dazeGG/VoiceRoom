@@ -56,10 +56,9 @@ import { Outbox } from '$lib/shared/chat/outbox.svelte';
 import { FriendPresence } from './friend-presence.svelte';
 import { BrowserNotificationRouting } from './browser-notification-routing';
 import type { RoomSocial } from '$lib/features/room/social';
-import type { AdminTab } from '$lib/features/admin/tabs';
 
 export type LobbyMode = 'friends' | 'rooms';
-export type LobbyView = 'home' | 'dm' | 'people' | 'admin';
+export type LobbyView = 'home' | 'dm' | 'people';
 
 // Invitations used to be mirrored per device in localStorage; they now live in
 // the DM thread itself, so stale local copies are just cleaned up.
@@ -80,9 +79,6 @@ export class LobbyStore {
   requests = $state<{ incoming: IncomingRequest[]; outgoing: OutgoingRequest[] }>({ incoming: [], outgoing: [] });
   mode = $state<LobbyMode>('friends');
   view = $state<LobbyView>('home');
-  adminTab = $state<AdminTab>('overview');
-  /** The account whose card the accounts tab shows; null is the list. */
-  adminAccountId = $state<string | null>(null);
   selectedFriendId = $state<string | null>(null);
   readonly thread = new DmThread((peerId) => this.view === 'dm' && this.selectedFriendId === peerId);
   /** Friends currently typing to this account, keyed by their user id. */
@@ -212,14 +208,6 @@ export class LobbyStore {
   showPeople = (): void => {
     this.view = 'people';
     void this.refreshRequests().catch(() => {});
-  };
-
-  /** The admin panel, beside the friends list like the people view; a call keeps going. */
-  showAdmin = (tab: AdminTab = this.adminTab, accountId: string | null = null): void => {
-    this.mode = 'friends';
-    this.view = 'admin';
-    this.adminTab = tab;
-    this.adminAccountId = tab === 'accounts' ? accountId : null;
   };
 
   openDm = async (userId: string): Promise<void> => {

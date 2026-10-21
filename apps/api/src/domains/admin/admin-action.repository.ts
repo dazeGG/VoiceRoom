@@ -5,6 +5,7 @@ import type pg from 'pg';
 import { sql } from 'kysely';
 import type { AdminActionEntry, AdminActionKind } from '@voice-room/shared/contracts/admin';
 import type { AccountBadge } from '@voice-room/shared/contracts/users';
+import { isStaffRole, type StaffRole } from '@voice-room/shared/contracts/staff';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 
 const ACTIONS = new Set<string>([
@@ -13,7 +14,8 @@ const ACTIONS = new Set<string>([
   'logout',
   'delete',
   'cancel_deletion',
-  'badge'
+  'badge',
+  'staff_role'
 ] satisfies AdminActionKind[]);
 const isAction = (value: string): value is AdminActionKind => ACTIONS.has(value);
 
@@ -25,6 +27,8 @@ export interface AdminActionInput {
   /** A block's end (null: for good). */
   until?: number | null;
   badge?: AccountBadge | null;
+  /** The role a staff_role action gave (null: taken away). */
+  role?: StaffRole | null | undefined;
 }
 
 export function createAdminActionRepository({ pool }: { pool: pg.Pool }) {
@@ -34,6 +38,7 @@ export function createAdminActionRepository({ pool }: { pool: pg.Pool }) {
     const details: Record<string, unknown> = {};
     if (input.until !== undefined) details.until = input.until;
     if (input.badge !== undefined) details.badge = input.badge;
+    if (input.role !== undefined) details.role = input.role;
     await db
       .insertInto('admin_actions')
       .values({
@@ -59,6 +64,7 @@ export function createAdminActionRepository({ pool }: { pool: pg.Pool }) {
         'a.created_at',
         sql`a.details->'until'`.as('until'),
         sql`a.details->>'badge'`.as('badge'),
+        sql`a.details->>'role'`.as('role'),
         sql<string>`coalesce(nullif(u.display_name, ''), u.login, 'администратор')`.as('admin_name')
       ])
       .where('a.target_user_id', '=', targetUserId)
@@ -78,7 +84,8 @@ export function createAdminActionRepository({ pool }: { pool: pg.Pool }) {
           reason: row.reason,
           adminName: row.admin_name,
           until: row.until !== null && Number.isFinite(until) ? until : null,
-          badge: row.badge === 'official' || row.badge === 'verified' ? row.badge : null
+          badge: row.badge === 'official' || row.badge === 'verified' ? row.badge : null,
+          role: isStaffRole(row.role) ? row.role : null
         }
       ];
     });

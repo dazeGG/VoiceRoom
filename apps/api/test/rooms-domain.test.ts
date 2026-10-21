@@ -771,6 +771,7 @@ function routeApp(
     invalidateRecipientCache: (roomId) => calls.invalidated.push(roomId),
     createLimiter: { check: () => rate },
     pow: { verify: () => proof },
+    ipKeyOf: (ip) => `key:${ip}`,
     maxRooms: 100,
     maxRoomPeers: 12
   });
@@ -859,6 +860,8 @@ test('POST /api/rooms creates temporary and persistent rooms', async (t) => {
     calls.created.map((input) => input.ownerId),
     [null, OWNER]
   );
+  // A room keeps the keyed hash of its creator's address, never the address.
+  assert.ok(calls.created.every((input) => 'creatorIp' in input && input.creatorIp === 'key:203.0.113.1'));
 });
 
 test('room mutations answer the owner check first', async (t) => {

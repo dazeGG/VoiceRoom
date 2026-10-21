@@ -31,6 +31,7 @@ import {
   sendFriendRequest,
   startApiServer
 } from './fakes/server-process.ts';
+import { staffCookie } from './staff-session.ts';
 
 const skip = !process.env.TEST_DATABASE_URL;
 const ADMIN_ID = '00000000-0000-4000-8000-0000000000ad';
@@ -174,7 +175,8 @@ test('the operator removing a reported direct message deletes its attachment', {
     SignedIn
   );
   assert.equal(signedIn.status, 200);
-  const admin = cookieFrom(signedIn.setCookie);
+  // Admin endpoints answer only the admin app's own session.
+  const admin = await staffCookie(socketPath, cookieFrom(signedIn.setCookie));
   const open = await request(socketPath, { pathname: '/api/admin/reports', cookie: admin }, AdminReportPage);
   const report = open.body.reports[0];
   assert.ok(report);

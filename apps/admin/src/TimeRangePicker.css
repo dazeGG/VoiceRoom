@@ -1,0 +1,118 @@
+/* The shared popover opens to the right edge of its trigger; the picker opens from the left. */
+.ui-popover-panel:has(.time-range-panel) {
+  right: auto;
+  left: 0;
+  max-width: calc(100vw - 32px);
+}
+
+.time-range-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  background: var(--vr-surface);
+  color: var(--vr-text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.time-range-trigger:hover,
+.time-range-trigger[aria-expanded='true'] {
+  background: var(--vr-surface-2);
+}
+
+.time-range-panel {
+  display: grid;
+  grid-template-columns: minmax(170px, auto) minmax(220px, 1fr);
+  gap: 14px;
+  padding: 10px;
+}
+
+.time-range-presets {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding-right: 12px;
+  border-right: 1px solid var(--vr-line);
+}
+
+.time-range-preset {
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--vr-text-2);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.time-range-preset:hover {
+  background: var(--vr-hover);
+  color: var(--vr-text);
+}
+
+.time-range-preset.is-selected {
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+  font-weight: 600;
+}
+
+.time-range-custom {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+}
+
+.time-range-title {
+  color: var(--vr-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.time-range-custom label {
+  display: grid;
+  gap: 4px;
+  color: var(--vr-text-2);
+  font-size: 12px;
+}
+
+.time-range-custom input {
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
+  font: inherit;
+  font-size: 13px;
+  color-scheme: dark light;
+}
+
+.time-range-custom input[aria-invalid='true'] {
+  border-color: var(--vr-danger);
+}
+
+.time-range-error {
+  margin: 0;
+  color: var(--vr-danger);
+  font-size: 12px;
+}
+
+@media (max-width: 560px) {
+  .time-range-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .time-range-presets {
+    padding-right: 0;
+    padding-bottom: 10px;
+    border-right: 0;
+    border-bottom: 1px solid var(--vr-line);
+  }
+}

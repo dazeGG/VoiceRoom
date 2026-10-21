@@ -12,6 +12,7 @@ import { Type } from 'typebox';
 import { hashPassword } from '../src/lib/password.ts';
 import { cookieFrom, registerAccount, request, startApiServer } from './fakes/server-process.ts';
 import { defined } from './helpers/assert-defined.ts';
+import { staffCookie } from './staff-session.ts';
 
 const ADMIN_ID = '00000000-0000-4000-8000-0000000000ad';
 
@@ -37,7 +38,7 @@ test('a report reaches the platform administrator, who removes the message or di
     SignedIn
   );
   assert.equal(signedIn.status, 200);
-  const admin = cookieFrom(signedIn.setCookie);
+  const admin = await staffCookie(socketPath, cookieFrom(signedIn.setCookie));
 
   const alice = await registerAccount(socketPath, 'alice');
   const bob = await registerAccount(socketPath, 'bob');

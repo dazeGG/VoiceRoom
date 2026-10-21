@@ -5,7 +5,6 @@
 
 import { cleanup, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
-import { pushState, replaceState } from '$app/navigation';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import LobbyPage from '../../src/lib/features/home/LobbyPage.svelte';
 import { expectSessionEnd, session, setUser } from '../../src/lib/features/auth/session.svelte';
@@ -113,46 +112,37 @@ test('the call card names a room the list does not have, such as a temporary one
   expect(await screen.findByRole('button', { name: 'Открыть комнату Созвон' })).toBeTruthy();
 });
 
-const asAdmin = (openReports = 0) => ({
-  'GET /api/admin/access': { body: { ok: true, admin: true, openReports } }
+const asStaff = (openReports = 0) => ({
+  'GET /api/staff/access': { body: { ok: true, staff: true, adminUrl: 'https://admin.example.test/', openReports } }
 });
 
-test('an administrator gets the panel beside the logo, with the open reports on it', async () => {
-  stubLobby(asAdmin(2));
+test('staff get an entry to the admin app beside the logo, with the open reports on it', async () => {
+  stubLobby(asStaff(2));
   renderLobby();
   const entry = await screen.findByRole('button', { name: 'Открыть админку' });
   expect(within(entry).getByLabelText('открытых жалоб: 2')).toBeTruthy();
+  const opened = vi.spyOn(window, 'open').mockReturnValue(null);
   await userEvent.click(entry);
-  expect(await screen.findByRole('heading', { name: 'Админка' })).toBeTruthy();
-  expect(vi.mocked(pushState)).toHaveBeenCalledWith('/admin', {});
-
-  await userEvent.click(screen.getByRole('tab', { name: 'Сервер' }));
-  expect(vi.mocked(replaceState)).toHaveBeenCalledWith('/admin/system', {});
+  expect(opened).toHaveBeenCalledWith('https://admin.example.test/', '_blank', 'noopener');
+  opened.mockRestore();
 });
 
-test('an account the server does not name gets no entry', async () => {
-  stubLobby({ 'GET /api/admin/access': { body: { ok: true, admin: false, openReports: 0 } } });
+test('an account that is not staff gets no link', async () => {
+  stubLobby({
+    'GET /api/staff/access': { body: { ok: true, staff: false, adminUrl: null, openReports: 0 } }
+  });
   renderLobby();
   await vi.waitFor(() => expect(screen.getByRole('button', { name: 'Открыть настройки' })).toBeTruthy());
   await new Promise((resolve) => setTimeout(resolve, 20));
   expect(screen.queryByRole('button', { name: 'Открыть админку' })).toBeNull();
 });
 
-test('/admin/<tab> opens the panel on that tab, and leaving it gives the address back', async () => {
-  window.history.replaceState(null, '', '/admin/system');
-  stubLobby(asAdmin());
-  renderLobby();
-  expect((await screen.findByRole('tab', { name: 'Сервер' })).getAttribute('aria-selected')).toBe('true');
-
-  await userEvent.click(screen.getByTitle('Главная'));
-  await vi.waitFor(() => expect(vi.mocked(replaceState)).toHaveBeenCalledWith('/', {}));
-});
-
-test('a new report reaches the administrator as a notice that stays until closed and leads to the reports', async () => {
-  stubLobby(asAdmin(0));
+test('a new report reaches staff as a notice that stays until closed and opens the reports in the admin app', async () => {
+  stubLobby(asStaff(0));
   const onToast = renderLobby();
   const current = await socket();
   await screen.findByRole('button', { name: 'Открыть админку' });
+  const opened = vi.spyOn(window, 'open').mockReturnValue(null);
 
   current.receive({
     type: 'admin.reports',
@@ -171,11 +161,9 @@ test('a new report reaches the administrator as a notice that stays until closed
     within(screen.getByRole('button', { name: 'Открыть админку' })).getByLabelText('открытых жалоб: 1')
   ).toBeTruthy();
 
-  defined(defined(options.actions, 'notice actions')[0], "defined(options.actions, 'notice actions')[0]").onClick(
-    'toast-1'
-  );
-  expect((await screen.findByRole('tab', { name: /Жалобы/ })).getAttribute('aria-selected')).toBe('true');
-  expect(vi.mocked(pushState)).toHaveBeenCalledWith('/admin/reports', {});
+  defined(defined(options.actions, 'notice actions')[0], 'the notice action').onClick('toast-1');
+  expect(opened).toHaveBeenCalledWith('https://admin.example.test/reports', '_blank', 'noopener');
+  opened.mockRestore();
 
   // A resolved report only moves the count.
   onToast.mockClear();

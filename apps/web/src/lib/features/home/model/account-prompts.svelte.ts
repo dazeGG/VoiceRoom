@@ -33,6 +33,8 @@ export class AccountPrompts {
     user: () => AuthUser | null;
     /** A call is joining or live: the app prompt must not cover it. */
     voiceActive: () => boolean;
+    /** A lobby dialog of its own (the new room) is open: the app prompt waits for it. */
+    lobbyDialogOpen: () => boolean;
     onToast: (message: string, options?: { variant?: 'error' }) => void;
   }) {
     this.#onToast = options.onToast;
@@ -43,7 +45,7 @@ export class AccountPrompts {
         appAvailable: this.#appPromptAvailable,
         hasUsedDesktopApp: user.hasUsedDesktopApp,
         appPromptSeen: user.appPromptSeen,
-        otherDialogOpen: this.loginAlertOpen || this.whatsNewOpen,
+        otherDialogOpen: this.loginAlertOpen || this.whatsNewOpen || options.lobbyDialogOpen(),
         voiceActive: options.voiceActive()
       });
       if (open) this.appPromptOpen = true;

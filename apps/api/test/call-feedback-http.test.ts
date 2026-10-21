@@ -11,6 +11,7 @@ import { Type } from 'typebox';
 import { hashPassword } from '../src/lib/password.ts';
 import { cookieFrom, registerAccount, request, startApiServer } from './fakes/server-process.ts';
 import { defined } from './helpers/assert-defined.ts';
+import { staffCookie } from './staff-session.ts';
 
 const ADMIN_ID = '00000000-0000-4000-8000-0000000000ad';
 const DAY = 24 * 60 * 60 * 1000;
@@ -51,7 +52,7 @@ test('accounts and guests answer, and only the administrator reads the answers',
     },
     SignedIn
   );
-  const admin = cookieFrom(signedIn.setCookie);
+  const admin = await staffCookie(socketPath, cookieFrom(signedIn.setCookie));
   const alice = await registerAccount(socketPath, 'alice');
   const aliceId = defined(
     (await request(socketPath, { pathname: '/api/auth/me', cookie: alice }, Me)).body.user,

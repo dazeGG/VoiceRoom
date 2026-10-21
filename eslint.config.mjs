@@ -5,6 +5,7 @@
 // `npm run lint -- --prune-suppressions` to shrink the list.
 
 import js from '@eslint/js';
+import reactHooks from 'eslint-plugin-react-hooks';
 import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
@@ -49,6 +50,7 @@ export default tseslint.config(
         // which the plain tsconfig.json files do not include.
         project: [
           './apps/api/tsconfig.json',
+          './apps/admin/tsconfig.json',
           './apps/web/tsconfig.test.json',
           './packages/shared/tsconfig.test.json',
           './scripts/tsconfig.json'
@@ -141,6 +143,13 @@ export default tseslint.config(
       '@typescript-eslint/no-useless-default-assignment': 'off',
       '@typescript-eslint/no-unnecessary-type-arguments': 'off'
     }
+  },
+  {
+    // The admin app (React): hooks are called the same way every render and
+    // effects name what they read.
+    files: ['apps/admin/**/*.{ts,tsx}'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: { ...reactHooks.configs.recommended.rules }
   },
   {
     // Browser code logs through $lib/shared/log so records reach the failure

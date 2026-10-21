@@ -123,7 +123,11 @@ export const ClientCommandFrames = {
   ping: Frame('ping', Type.Object({ at: Type.Number() })),
   'room.preview.subscribe': Frame('room.preview.subscribe', Type.Object({ roomId: RoomId })),
   'room.preview.unsubscribe': Frame('room.preview.unsubscribe', Type.Object({ roomId: RoomId })),
-  'room.join': Frame('room.join', Type.Object({ ...VoiceTarget.properties, name: Type.String() })),
+  /** `guestId` is the browser's lasting guest id (see normalizeGuestId); the API keeps it only for guests. */
+  'room.join': Frame(
+    'room.join',
+    Type.Object({ ...VoiceTarget.properties, name: Type.String(), guestId: Type.Optional(Type.String()) })
+  ),
   'room.leave': Frame('room.leave', VoiceTarget),
   'room.peer.update': Frame('room.peer.update', Type.Object({ ...VoiceTarget.properties, patch: PeerPatch })),
   /** Asked before a screen share or a camera starts; answered with room.media.grant. */

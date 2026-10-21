@@ -57,11 +57,12 @@ VoiceRoom — голосовые комнаты по ссылке: голос, �
 apps/
   api/        Fastify API, WebSocket realtime, воркеры доставки и медиа, auth-gate LiveKit
   web/        SvelteKit-клиент (статическая сборка)
+  admin/      админка на React, отдельный сайт на admin.<домен>
 packages/
   shared/     общие контракты HTTP и realtime для API и веба
 ```
 
-В production Caddy раздаёт статическую сборку веба и проксирует `/api/*` в API. Данные хранятся в PostgreSQL, голос и видео идут через LiveKit SFU. Подробнее об архитектуре — в [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
+В production Caddy раздаёт статическую сборку веба и проксирует `/api/*` в API; админку он отдаёт на своём домене только сотрудникам. Данные хранятся в PostgreSQL, голос и видео идут через LiveKit SFU. Подробнее об архитектуре — в [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
 
 ## Локальный запуск
 

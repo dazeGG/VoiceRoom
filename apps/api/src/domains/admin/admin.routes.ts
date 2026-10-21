@@ -1,6 +1,6 @@
-// The admin panel over HTTP: any signed-in account learns whether it is an
-// administrator; the numbers, the accounts and the rooms answer an
-// administrator only.
+// The admin panel over HTTP: the numbers, the accounts and the rooms, for a
+// staff member signed in to the admin app (its own session cookie, see
+// domains/staff), each behind the permission it needs.
 // Which accounts carry a mark is public: every client shows it by the name.
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
@@ -11,7 +11,6 @@ import {
   AccountDetail,
   AccountsPage,
   AccountsQuery,
-  AdminAccess,
   AdminOverview,
   BadgeBody,
   BlockBody,
@@ -30,7 +29,6 @@ import type { AccountAction, AdminAccountsService } from './admin-accounts.servi
 import type { AdminRoomsService } from './admin-rooms.service.ts';
 import type { AdminService } from './admin.service.ts';
 
-const SIGN_IN_REQUIRED = failure('Authentication required', { code: 'authentication_required' });
 const ADMIN_REQUIRED = failure('Platform administrator access required', { code: 'platform_admin_required' });
 const REFUSALS: Record<Exclude<AccountAction['status'], 'done'>, [number, ReturnType<typeof failure>]> = {
   forbidden: [403, ADMIN_REQUIRED],
@@ -49,33 +47,20 @@ const REFUSALS: Record<Exclude<AccountAction['status'], 'done'>, [number, Return
 };
 
 export interface AdminRoutesDeps {
-  admin: Pick<AdminService, 'access' | 'overview' | 'product' | 'system'>;
+  admin: Pick<AdminService, 'overview' | 'product' | 'system'>;
   accounts: Pick<
     AdminAccountsService,
     'list' | 'detail' | 'block' | 'unblock' | 'signOutEverywhere' | 'remove' | 'cancelDeletion' | 'setBadge' | 'badges'
   >;
   rooms: Pick<AdminRoomsService, 'live' | 'history'>;
+  /** The staff member behind the admin-app session, or null with the 401 sent. */
+  staffUserId(request: FastifyRequest, reply: FastifyReply): Promise<string | null>;
 }
 
 export function registerAdminRoutes(root: FastifyInstance, ctx: ApiContext, deps: AdminRoutesDeps): void {
   const app = root.withTypeProvider<TypeBoxTypeProvider>();
 
-  async function actor(request: FastifyRequest, reply: FastifyReply): Promise<string | null> {
-    const userId = (await ctx.resolveSession(request.raw))?.user?.id;
-    if (userId) return userId;
-    reply.code(401).send(SIGN_IN_REQUIRED);
-    return null;
-  }
-
-  app.get(
-    '/api/admin/access',
-    { schema: { response: { 200: AdminAccess, '4xx': Failure } } },
-    async (request, reply) => {
-      const userId = await actor(request, reply);
-      if (!userId) return reply;
-      return { ok: true as const, ...(await deps.admin.access(userId)) };
-    }
-  );
+  const actor = (request: FastifyRequest, reply: FastifyReply) => deps.staffUserId(request, reply);
 
   app.get(
     '/api/admin/overview',

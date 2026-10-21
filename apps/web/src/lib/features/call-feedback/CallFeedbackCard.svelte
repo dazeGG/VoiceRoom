@@ -13,7 +13,7 @@
   import { Button } from '$lib/shared/ui';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { answerCallFeedback, dropCallFeedback, skipCallFeedback } from './call-feedback.svelte';
-  import { CALL_FEEDBACK_TAG_LABELS } from './tags';
+  import { CALL_FEEDBACK_TAG_LABELS } from '@voice-room/shared/feedback-labels';
 
   let {
     call,

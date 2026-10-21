@@ -1,10 +1,10 @@
-// "How was the call?": when the app asks after a call, the card that asks,
-// and the admin panel tab that reads the answers.
+// "How was the call?": when the app asks after a call, and the card that asks.
+// The answers are read in the admin app (apps/admin).
 
 import { cleanup, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import type { AdminCallFeedbackPage, CallFeedbackCall } from '@voice-room/shared/contracts/feedback';
+import type { CallFeedbackCall } from '@voice-room/shared/contracts/feedback';
 import {
   FEEDBACK_ASK_INTERVAL_MS,
   FEEDBACK_MAX_INTERVAL_MS,
@@ -18,7 +18,6 @@ import {
   skipCallFeedback
 } from '../../src/lib/features/call-feedback/call-feedback.svelte.ts';
 import CallFeedbackPrompt from '../../src/lib/features/call-feedback/CallFeedbackPrompt.svelte';
-import CallFeedbackReview from '../../src/lib/features/admin/CallFeedbackReview.svelte';
 import LeaveScreen from '../../src/lib/features/room/components/LeaveScreen.svelte';
 import { leaveScreenUi, openLeaveScreen } from '../../src/lib/features/room/leave-screen.svelte.ts';
 import {
@@ -28,7 +27,6 @@ import {
   startCallQuality
 } from '../../src/lib/features/room/client/room/call-quality.ts';
 import { stubFetch } from '../fixtures/fetch.ts';
-import { defined } from '../helpers/assert.ts';
 
 const DAY = 24 * 60 * 60 * 1000;
 const T0 = Date.UTC(2026, 9, 17, 12);
@@ -308,108 +306,4 @@ test('Escape closes the question, and the next question starts with nothing chos
   screen.getByRole('button', { name: 'Хорошо' }).focus();
   await userEvent.keyboard('{Escape}');
   expect(callFeedback.call).toBeNull();
-});
-
-const page: AdminCallFeedbackPage = {
-  ok: true,
-  days: 30,
-  summary: {
-    good: 3,
-    bad: 1,
-    tags: [
-      { tag: 'sound', count: 2 },
-      { tag: 'echo_noise', count: 1 }
-    ]
-  },
-  entries: [
-    {
-      id: 'f1',
-      rating: 'bad',
-      tags: ['echo_noise'],
-      comment: 'эхо у Пети',
-      createdAt: T0,
-      author: null,
-      roomId: 'gone',
-      roomName: null,
-      durationS: 600,
-      peers: 2,
-      platform: 'mobile',
-      quality: {
-        rttAvgMs: 180,
-        inboundLossAvgPct: 6,
-        outboundLossAvgPct: 1,
-        jitterAvgMs: 30,
-        reconnects: 2,
-        transport: 'relay'
-      }
-    },
-    {
-      id: 'f2',
-      rating: 'good',
-      tags: ['sound'],
-      comment: '',
-      createdAt: T0 - DAY,
-      author: { userId: 'u1', login: 'alice', displayName: 'Алиса' },
-      roomId: 'kitchen',
-      roomName: 'Кухня',
-      durationS: 3600,
-      peers: 4,
-      platform: 'desktop_app',
-      quality: null
-    }
-  ]
-};
-
-test('the admin tab shows how many calls went well, why, and each answer with its call', async () => {
-  const { calls } = stubFetch({
-    'GET /api/admin/feedback?days=30': { body: page },
-    'GET /api/admin/feedback?days=30&rating=bad': { body: { ...page, entries: [page.entries[0]] } }
-  });
-  render(CallFeedbackReview);
-
-  expect(await screen.findByText('75%')).toBeTruthy();
-  expect(screen.getByText('из 4 ответов')).toBeTruthy();
-  const answers = screen.getByRole('list', { name: 'Ответы' });
-  expect(answers.textContent).toContain('Гость');
-  expect(answers.textContent).toContain('временная комната');
-  expect(answers.textContent).toContain('эхо у Пети');
-  expect(answers.textContent).toContain('потери 6%');
-  expect(answers.textContent).toContain('переподключений 2');
-  expect(answers.textContent).toContain('RELAY');
-  expect(answers.textContent).toContain('Алиса (@alice)');
-  expect(answers.textContent).toContain('«Кухня»');
-
-  await userEvent.click(screen.getByRole('radio', { name: 'Плохие' }));
-  await vi.waitFor(() => expect(screen.queryByText('Алиса (@alice)', { exact: false })).toBeNull());
-  expect(calls.map((item) => item.url)).toEqual([
-    '/api/admin/feedback?days=30',
-    '/api/admin/feedback?days=30&rating=bad'
-  ]);
-});
-
-test('a slow reply for an earlier choice does not replace the latest one', async () => {
-  const replies = new Map<string, (body: AdminCallFeedbackPage) => void>();
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(
-      (url: string) =>
-        new Promise<Response>((resolve) => {
-          replies.set(url, (body) => resolve(new Response(JSON.stringify(body), { status: 200 })));
-        })
-    )
-  );
-  render(CallFeedbackReview);
-  await vi.waitFor(() => expect(replies.has('/api/admin/feedback?days=30')).toBe(true));
-  defined(replies.get('/api/admin/feedback?days=30'), 'month reply')(page);
-  expect(await screen.findByText('75%')).toBeTruthy();
-
-  await userEvent.click(screen.getByRole('radio', { name: 'Год' }));
-  await userEvent.click(screen.getByRole('radio', { name: '7 дней' }));
-  const week = { ...page, days: 7, summary: { good: 1, bad: 1, tags: [] }, entries: [] };
-  defined(replies.get('/api/admin/feedback?days=7'), 'week reply')(week);
-  expect(await screen.findByText('50%')).toBeTruthy();
-  defined(replies.get('/api/admin/feedback?days=365'), 'year reply')(page);
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  expect(screen.getByText('50%')).toBeTruthy();
-  expect(screen.queryByText('75%')).toBeNull();
 });
