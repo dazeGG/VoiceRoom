@@ -130,6 +130,32 @@ export function registerStaffRoutes(root: FastifyInstance, ctx: ApiContext, deps
     }
   );
 
+  // Main site: a link the desktop app opens in the system browser. That browser
+  // has no site cookie, so the redirect through /api/staff/handoff would 404.
+  // The code itself carries the page to open, and only a staff session gets one.
+  app.get(
+    '/api/staff/browser-entry',
+    {
+      schema: {
+        querystring: Type.Object({ next: Type.Optional(Type.String({ maxLength: 512 })) }),
+        response: {
+          200: Type.Object({ ok: Type.Literal(true), url: Type.Union([Type.String(), Type.Null()]) }),
+          '4xx': Failure
+        }
+      }
+    },
+    async (request, reply) => {
+      const resolved = await ctx.resolveSession(request.raw);
+      const userId = resolved?.user?.id;
+      reply.header('Cache-Control', 'no-store').header('Referrer-Policy', 'no-referrer');
+      if (!userId) return reply.code(401).send(SIGN_IN_REQUIRED);
+      const code = await deps.staff.handoff(userId, resolved.session?.tokenHash ?? '', returnPath(request.query.next));
+      if (!code) return { ok: true as const, url: null };
+      const query = new URLSearchParams({ code });
+      return { ok: true as const, url: `${deps.adminOrigin}/api/staff/callback?${query.toString()}` };
+    }
+  );
+
   // Admin app, asked by Caddy (forward_auth) before anything on the subdomain is served.
   app.get('/api/staff/check', async (request, reply) => {
     reply.header('Cache-Control', 'no-store');
@@ -160,15 +186,20 @@ export function registerStaffRoutes(root: FastifyInstance, ctx: ApiContext, deps
       const state = STATE_PATTERN.test(request.query.state ?? '') ? (request.query.state ?? '') : '';
       // The state this browser was given at the check holds the page it was on.
       const back = state ? parseCookies(request.raw)[`${prefix}${STATE_COOKIE}${state}`] : undefined;
-      const session = back === undefined ? null : await deps.staff.exchange(request.query.code ?? '');
+      const code = request.query.code ?? '';
       const clearState = stateCookie(state || 'none', '', 0);
+      const redirected = back !== undefined ? await deps.staff.exchange(code) : null;
+      // A link minted for the system browser carries its own page and needs no state cookie.
+      // A redirect code is not spent by that path, so a missing state cookie can be retried.
+      const entered = redirected ? null : await deps.staff.exchangeBrowserEntry(code);
+      const session = redirected ? { ...redirected, returnTo: back ?? '/' } : entered;
       if (!session) return reply.header('Set-Cookie', clearState).redirect('/api/staff/denied', 302);
       return reply
         .header('Set-Cookie', [
           clearState,
           cookie(staffCookie, session.token, session.maxAgeSeconds, deps.secureCookies)
         ])
-        .redirect(returnPath(back), 302);
+        .redirect(returnPath(session.returnTo), 302);
     }
   );
 
