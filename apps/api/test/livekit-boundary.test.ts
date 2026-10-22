@@ -169,6 +169,9 @@ function createGateAwareStore() {
       return { status: 'created', identity: { id: `guest-id-${peerId}`, avatarColorKey: 'blurple', peerId } };
     },
     normalizeGatePrincipal: normalizePrincipal,
+    async findActiveRoomBan() {
+      return null;
+    },
     async isRoomServerMuted() {
       return false;
     },

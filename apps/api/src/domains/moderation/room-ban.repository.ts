@@ -4,17 +4,18 @@
 // serialized by an advisory lock, so the cap holds under concurrent bans. An
 // address ban stores the address's key, as the active-ban repository makes it.
 
-import { sql, type Selectable } from 'kysely';
+import { type Selectable } from 'kysely';
 import type pg from 'pg';
 import { isOneOf } from '@voice-room/shared/guards';
+import { lockKeys, lockXact } from '../../platform/db/locks.ts';
 import { transaction } from '../../platform/db/pool.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { RoomBans } from '../../platform/db/schema.ts';
 import type { GatePrincipal } from '../admission/gate-principal.ts';
 import { revokePrincipalInTransaction, type PrincipalRevocation } from '../admission/gate-credential.repository.ts';
 import { isGatePrincipal } from '../admission/gate-principal.ts';
-import { createRowId } from '../../platform/db/ids.ts';
-import { normalizePositiveInt, toDate, toMillis } from '../rooms/room.repository.ts';
+import { normalizePositiveInt, toMillis } from '../rooms/room.repository.ts';
+import { insertRoomBan } from './active-ban.repository.ts';
 import type { ActiveBanService } from './active-ban.service.ts';
 
 type BanLookups = Pick<ActiveBanService, 'getActiveBan' | 'repository'>;
@@ -31,10 +32,6 @@ function mapRoomBan(row: Selectable<RoomBans>) {
   };
 }
 
-async function lockRoomBans(db: Database, roomId: string): Promise<void> {
-  await sql`SELECT pg_advisory_xact_lock(hashtext(${`voice-room:room-bans:${roomId}`}))`.execute(db);
-}
-
 async function liveRoomExists(db: Database, roomId: string): Promise<boolean> {
   const row = await db
     .selectFrom('rooms')
@@ -45,7 +42,7 @@ async function liveRoomExists(db: Database, roomId: string): Promise<boolean> {
   return Boolean(row);
 }
 
-function insertBan(
+async function insertBan(
   db: Database,
   {
     roomId,
@@ -53,20 +50,11 @@ function insertBan(
     ip,
     metadata,
     now
-  }: { roomId: string; userId: string | null; ip: string; metadata: object; now: number }
+  }: { roomId: string; userId: string | null; ip: string; metadata: unknown; now: number }
 ) {
-  return db
-    .insertInto('room_bans')
-    .values({
-      id: createRowId(),
-      room_id: roomId,
-      user_id: userId,
-      ip,
-      created_at: toDate(now),
-      metadata: JSON.stringify(metadata)
-    })
-    .returningAll()
-    .executeTakeFirstOrThrow();
+  const row = await insertRoomBan(db, { roomId, userId, ip, metadata, at: now });
+  if (!row) throw new Error('A ban needs an account or an address');
+  return row;
 }
 
 export function createRoomBanRepository({ pool, bans }: { pool: pg.Pool; bans: () => BanLookups }) {
@@ -97,7 +85,8 @@ export function createRoomBanRepository({ pool, bans }: { pool: pg.Pool; bans: (
 
     return transaction(pool, async (client) => {
       const trx = kyselyOn(client);
-      await lockRoomBans(trx, roomId);
+      await lockXact(trx, lockKeys.admission(roomId));
+      await lockXact(trx, lockKeys.roomBans(roomId));
       if (!(await liveRoomExists(trx, roomId))) return { ban: null, status: 'not_found' };
       if (await atCapacity(client, roomId, normalizePositiveInt(maxBans, 100), now)) {
         return { ban: null, status: 'cap_exceeded' };
@@ -105,7 +94,7 @@ export function createRoomBanRepository({ pool, bans }: { pool: pg.Pool; bans: (
       const inserted = await insertBan(trx, {
         roomId,
         ...target,
-        metadata: metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {},
+        metadata,
         now
       });
       return { ban: mapRoomBan(inserted), status: 'created' };
@@ -139,14 +128,15 @@ export function createRoomBanRepository({ pool, bans }: { pool: pg.Pool; bans: (
 
     return transaction(pool, async (client) => {
       const trx = kyselyOn(client);
-      await lockRoomBans(trx, roomId);
+      await lockXact(trx, lockKeys.admission(roomId));
+      await lockXact(trx, lockKeys.roomBans(roomId));
       if (!(await liveRoomExists(trx, roomId))) return { ban: null, revocations: [], status: 'not_found' };
       if (await atCapacity(client, roomId, maxBans, now)) return { ban: null, revocations: [], status: 'cap_exceeded' };
 
       const inserted = await insertBan(trx, {
         roomId,
         ...target,
-        metadata: metadata && typeof metadata === 'object' ? metadata : {},
+        metadata,
         now
       });
       const revocations: PrincipalRevocation[] = [];

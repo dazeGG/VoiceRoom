@@ -1009,6 +1009,12 @@ test('G08 realtime join retains and revokes the exact gate principal', async () 
     async listSummaryRecipientUserIds() {
       return [];
     },
+    async listNotificationRecipientUserIds() {
+      return [];
+    },
+    async getRoomUnreadCount() {
+      return 0;
+    },
     async listVisibleRoomsForUser() {
       return [];
     },

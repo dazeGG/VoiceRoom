@@ -67,6 +67,9 @@ function createFakeStore(seed: Seed = {}) {
         ? { principalId: accountUserId, principalType: 'account' as const }
         : { principalId: guestPrincipalId || 'test-guest', principalType: 'guest' as const };
     },
+    async findActiveRoomBan() {
+      return null;
+    },
     async isRoomServerMuted() {
       return false;
     },

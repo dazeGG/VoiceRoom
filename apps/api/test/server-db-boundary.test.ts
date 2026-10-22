@@ -111,6 +111,12 @@ function createFakeStore() {
         ? { principalId: accountUserId, principalType: 'account' as const }
         : { principalId: guestPrincipalId || 'test-guest', principalType: 'guest' as const };
     },
+    async findActiveRoomBan() {
+      return null;
+    },
+    async revokeLiveKitGatePeer() {
+      return { status: 'revoked', epoch: 1 };
+    },
     async isRoomServerMuted() {
       return false;
     },

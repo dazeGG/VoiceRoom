@@ -122,7 +122,35 @@ function createMentionRepository({ pool }: { pool?: QueryClient | null } = {}) {
     return rows.map((row) => mapMention(row));
   }
 
-  return { listActive, replaceForMessage, retractForMessage };
+  // A member of a live room.
+  async function isLiveRoomMember(roomId: string, userId: string, { client }: { client?: Client } = {}) {
+    const row = await on(client)
+      .selectFrom('room_memberships as rm')
+      .innerJoin('rooms as r', 'r.id', 'rm.room_id')
+      .select('rm.id')
+      .where('rm.room_id', '=', roomId)
+      .where('rm.user_id', '=', userId)
+      .where('r.deleted_at', 'is', null)
+      .executeTakeFirst();
+    return Boolean(row);
+  }
+
+  // Which of these accounts are members of the room.
+  async function memberUserIds(
+    roomId: string,
+    userIds: string[],
+    { client }: { client?: Client } = {}
+  ): Promise<string[]> {
+    const rows = await on(client)
+      .selectFrom('room_memberships')
+      .select('user_id')
+      .where('room_id', '=', roomId)
+      .where('user_id', 'in', userIds)
+      .execute();
+    return rows.map((row) => row.user_id);
+  }
+
+  return { isLiveRoomMember, listActive, memberUserIds, replaceForMessage, retractForMessage };
 }
 
 export type MentionRepository = ReturnType<typeof createMentionRepository>;

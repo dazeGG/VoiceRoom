@@ -189,8 +189,7 @@ test('identity, principal and moderation state must all be available', async () 
         })
       },
       'server_mute_unavailable'
-    ],
-    [{ store: () => ({ ...store, isRoomServerMuted: undefined }) }, 'server_mute_unavailable']
+    ]
   ];
   for (const [overrides, reason] of cases) {
     const { service } = setup(overrides);

@@ -104,6 +104,15 @@ function createRuntime(room: TestRoom, broadcasts: unknown[], overrides: Runtime
     async listSummaryRecipientUserIds() {
       return [];
     },
+    async listNotificationRecipientUserIds() {
+      return [];
+    },
+    async getRoomUnreadCount() {
+      return 0;
+    },
+    async revokeLiveKitGatePeer() {
+      return { status: 'revoked', epoch: 1 };
+    },
     normalizeGatePrincipal(input) {
       const accountUserId = input?.accountUserId;
       const guestPrincipalId = input?.guestPrincipalId;
@@ -229,6 +238,10 @@ function createLeaseRuntime({
     credentialBoundary: credentialBoundary || {
       async revokePeer(value) {
         revoked.push(value);
+        return { status: 'revoked' };
+      },
+      resolvePrincipal: () => null,
+      async revokePrincipal() {
         return { status: 'revoked' };
       }
     },
@@ -1115,6 +1128,10 @@ test('replacement waits when expiry wins CAS before credential finalization', as
         revoked.push(value);
         await revokeGate;
         return { status: 'revoked' };
+      },
+      resolvePrincipal: () => null,
+      async revokePrincipal() {
+        return { status: 'revoked' };
       }
     }
   });
@@ -1170,6 +1187,9 @@ test('membership removal terminal-claims leases before one principal revoke and 
     closed,
     removeCalls,
     credentialBoundary: {
+      async revokePeer() {
+        return { status: 'revoked' };
+      },
       resolvePrincipal: () => ({ principalType: 'account', principalId: 'account-owner' }),
       async revokePrincipal(value) {
         principalRevokes.push(value);
@@ -1326,6 +1346,10 @@ test('failed expiry finalizer blocks admission until credential revoke retry suc
           throw Object.assign(new Error('credential unavailable'), { code: 'credential_unavailable' });
         }
         return { status: 'revoked' };
+      },
+      resolvePrincipal: () => null,
+      async revokePrincipal() {
+        return { status: 'revoked' };
       }
     }
   });
@@ -1448,6 +1472,10 @@ test('terminal scope retries a failed expiry finalizer and runs its queued callb
     credentialBoundary: {
       async revokePeer() {
         throw new Error('expiry revoke failed');
+      },
+      resolvePrincipal: () => null,
+      async revokePrincipal() {
+        return { status: 'revoked' };
       }
     }
   });
@@ -1550,6 +1578,9 @@ test('membership finalizer failure does not close the peer or report successful 
     closed,
     removeCalls,
     credentialBoundary: {
+      async revokePeer() {
+        return { status: 'revoked' };
+      },
       resolvePrincipal: () => ({ principalType: 'account', principalId: 'account-owner' }),
       async revokePrincipal() {
         return { status: 'unavailable' };

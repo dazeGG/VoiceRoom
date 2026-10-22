@@ -86,17 +86,12 @@ export type RuntimeRoomStore = Pick<
   | 'listVisibleRoomsForUser'
   | 'listSummaryRecipientUserIds'
   | 'markRoomActive'
-> &
-  Partial<
-    Pick<
-      RoomRepositories,
-      | 'revokeLiveKitGatePeer'
-      | 'getRoomUnreadCount'
-      | 'listNotificationRecipientUserIds'
-      | 'isRoomServerMuted'
-      | 'normalizeGatePrincipal'
-    >
-  >;
+  | 'revokeLiveKitGatePeer'
+  | 'getRoomUnreadCount'
+  | 'listNotificationRecipientUserIds'
+  | 'isRoomServerMuted'
+  | 'normalizeGatePrincipal'
+>;
 
 export type RuntimeLogger = Pick<Logger, 'info' | 'warn' | 'error'>;
 

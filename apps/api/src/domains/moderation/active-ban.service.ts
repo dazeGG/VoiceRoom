@@ -1,7 +1,7 @@
 import type pg from 'pg';
 import { isArray } from '@voice-room/shared/guards';
-import { sql } from 'kysely';
 import { kyselyOn } from '../../platform/db/kysely.ts';
+import { lockKeys, lockXact } from '../../platform/db/locks.ts';
 import { transaction } from '../../platform/db/pool.ts';
 import type { IpKeyOf } from '../../lib/ip-key.ts';
 import { createActiveBanRepository, type ActiveBanRecord, type ActiveBanRepository } from './active-ban.repository.ts';
@@ -77,8 +77,8 @@ function createActiveBanService({
     return transaction(pool, async (client: pg.PoolClient): Promise<BanCreation> => {
       const trx = kyselyOn(client);
       // Admission and bans in this room wait for each other.
-      await sql`SELECT pg_advisory_xact_lock(hashtext(${`voice-room:admission:${roomId}`}))`.execute(trx);
-      await sql`SELECT pg_advisory_xact_lock(hashtext(${`voice-room:room-bans:${roomId}`}))`.execute(trx);
+      await lockXact(trx, lockKeys.admission(roomId));
+      await lockXact(trx, lockKeys.roomBans(roomId));
       const room = await trx
         .selectFrom('rooms')
         .select('id')

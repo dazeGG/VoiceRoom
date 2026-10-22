@@ -1,8 +1,8 @@
-import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { fromMicros, microsOf } from '../../platform/db/micros.ts';
+import { insertRoomBan } from './active-ban.repository.ts';
 import { CursorCodecError } from '../../platform/cursor-codec.ts';
 import type { CursorTuple } from '../../platform/cursor-codec.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
@@ -217,24 +217,15 @@ function createModerationRepository({
     at?: TimeInput;
     client?: Client;
   }): Promise<Ban | null> {
-    const timestamp = asDate(at);
-    const row = await on(client)
-      .insertInto('room_bans')
-      .values({
-        id: crypto.randomUUID(),
-        room_id: roomId,
-        user_id: userId,
-        // The service refuses a guest ban whose address has no key.
-        ip: userId ? '' : guestKey(guestIp),
-        created_at: timestamp,
-        expires_at: expiresAt == null ? null : asDate(expiresAt),
-        metadata: '{}',
-        reason,
-        idempotency_key: idempotencyKey,
-        updated_at: timestamp
-      })
-      .returningAll()
-      .executeTakeFirst();
+    const row = await insertRoomBan(on(client), {
+      roomId,
+      userId,
+      ip: userId ? '' : guestKey(guestIp),
+      expiresAt,
+      reason,
+      idempotencyKey,
+      at
+    });
     return bans(row);
   }
 

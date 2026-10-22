@@ -79,6 +79,9 @@ function createFakeStore(): RoomStoreFake {
         ? { principalId: accountUserId, principalType: 'account' }
         : { principalId: guestPrincipalId, principalType: 'guest' };
     },
+    async findActiveRoomBan() {
+      return null;
+    },
     async isRoomServerMuted() {
       return false;
     },

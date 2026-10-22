@@ -1,9 +1,9 @@
-import crypto from 'node:crypto';
 import { sql, type ExpressionBuilder, type Selectable } from 'kysely';
 import type pg from 'pg';
 import { isArray, isRecord } from '@voice-room/shared/guards';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { DB, RoomBans } from '../../platform/db/schema.ts';
+import { createRowId } from '../../platform/db/ids.ts';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { storedIpKey, type IpKeyOf } from '../../lib/ip-key.ts';
 
@@ -54,8 +54,53 @@ function active(at: TimeInput) {
     eb.and([eb('revoked_at', 'is', null), eb.or([eb('expires_at', 'is', null), eb('expires_at', '>', toDate(at))])]);
 }
 
-// A guest is banned by the key of their address (lib/ip-key.ts), the same key
-// their stays in voice keep: the address itself never reaches the table.
+// The one writer of room_bans. The caller passes the stored principal: an
+// account ban has no address, a guest ban has the address key (lib/ip-key.ts).
+// updated_at is the moment of the ban, and metadata is always an object.
+async function insertRoomBan(
+  db: Database,
+  {
+    roomId,
+    userId = null,
+    ip = '',
+    expiresAt = null,
+    metadata = {},
+    reason = '',
+    idempotencyKey = null,
+    at
+  }: {
+    roomId?: string | undefined;
+    userId?: string | null;
+    ip?: string;
+    expiresAt?: TimeInput | null | undefined;
+    metadata?: unknown;
+    reason?: string;
+    idempotencyKey?: string | null;
+    at: TimeInput;
+  }
+): Promise<Selectable<RoomBans> | undefined> {
+  const accountId = typeof userId === 'string' && userId.trim() ? userId.trim() : null;
+  const storedIp = accountId ? '' : ip;
+  if (!roomId || (!accountId && !storedIp)) return undefined;
+  const createdAt = toDate(at);
+  return db
+    .insertInto('room_bans')
+    .values({
+      id: createRowId(),
+      room_id: roomId,
+      user_id: accountId,
+      ip: storedIp,
+      created_at: createdAt,
+      updated_at: createdAt,
+      expires_at: expiresAt == null ? null : toDate(expiresAt),
+      metadata: JSON.stringify(isRecord(metadata) ? metadata : {}),
+      reason,
+      idempotency_key: idempotencyKey
+    })
+    .returningAll()
+    .executeTakeFirst();
+}
+
 function createActiveBanRepository({
   pool,
   ipKeyOf,
@@ -173,20 +218,7 @@ function createActiveBanRepository({
     client?: Client;
   } = {}): Promise<ActiveBanRecord | null> {
     const principal = normalizePrincipal({ userId, ip });
-    if (!roomId || (!principal.userId && !principal.ip)) return null;
-    const row = await on(client)
-      .insertInto('room_bans')
-      .values({
-        id: crypto.randomUUID(),
-        room_id: roomId,
-        user_id: principal.userId,
-        ip: principal.ip,
-        created_at: toDate(at),
-        expires_at: expiresAt == null ? null : toDate(expiresAt),
-        metadata: JSON.stringify(metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {})
-      })
-      .returningAll()
-      .executeTakeFirst();
+    const row = await insertRoomBan(on(client), { roomId, ...principal, expiresAt, metadata, at });
     return mapActiveBan(row);
   }
 
@@ -229,4 +261,4 @@ function createActiveBanRepository({
 
 export type ActiveBanRepository = ReturnType<typeof createActiveBanRepository>;
 
-export { createActiveBanRepository };
+export { createActiveBanRepository, insertRoomBan };

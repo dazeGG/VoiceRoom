@@ -33,12 +33,9 @@ import type {
 export type { RuntimeRoomStore } from './runtime-types.ts';
 
 type RuntimeCredentialBoundary = {
-  revokePeer?: (input: { roomId: string; accountUserId: string | null; guestPrincipalId: string }) => Promise<unknown>;
-  resolvePrincipal?: (input: { roomId: string; accountUserId: string }) => GatePrincipal | null;
-  revokePrincipal?: (input: {
-    roomId: string;
-    principal: GatePrincipal;
-  }) => Promise<{ status?: string } | null | undefined>;
+  revokePeer(input: { roomId: string; accountUserId: string | null; guestPrincipalId: string }): Promise<unknown>;
+  resolvePrincipal(input: { roomId: string; accountUserId: string }): GatePrincipal | null;
+  revokePrincipal(input: { roomId: string; principal: GatePrincipal }): Promise<{ status?: string } | null | undefined>;
 };
 export type RoomRuntimeDeps = {
   presenceRooms: Map<string, PresenceRoom>;
@@ -190,14 +187,14 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     peer: Peer;
     reason: LeaseReason;
   }): Promise<{ finalized: true }> {
-    if (credentialBoundary?.revokePeer) {
+    if (credentialBoundary) {
       await credentialBoundary.revokePeer({
         roomId: record.roomId,
         accountUserId: peer.accountUserId || null,
         guestPrincipalId: peer.gateGuestPrincipalId || ''
       });
     } else {
-      await getRoomStore().revokeLiveKitGatePeer?.({
+      await getRoomStore().revokeLiveKitGatePeer({
         roomId: record.roomId,
         peerId: record.peerId,
         accountUserId: peer.accountUserId || null,
@@ -323,18 +320,17 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
   }: { roomId?: string; userId?: string; reason?: PeerLeaveReason } = {}): Promise<
     { ok: true; disconnected: number } | { ok: false; code: ErrorCode; disconnected: 0 }
   > {
-    const resolvePrincipal = credentialBoundary?.resolvePrincipal;
-    const revokePrincipal = credentialBoundary?.revokePrincipal;
-    if (!roomId || !userId || !resolvePrincipal || !revokePrincipal) {
+    if (!roomId || !userId || !credentialBoundary) {
       return { ok: false, code: 'credential_boundary_unavailable', disconnected: 0 };
     }
-    const principal = resolvePrincipal({ roomId, accountUserId: userId });
+    const boundary = credentialBoundary;
+    const principal = boundary.resolvePrincipal({ roomId, accountUserId: userId });
     if (!principal) return { ok: false, code: 'principal_unavailable', disconnected: 0 };
     const room = presenceRooms.get(roomId);
     const peers = [...(room?.peers?.values?.() || [])].filter((peer) => peer.accountUserId === userId);
-    let principalRevocationPromise: ReturnType<typeof revokePrincipal> | null = null;
+    let principalRevocationPromise: ReturnType<RuntimeCredentialBoundary['revokePrincipal']> | null = null;
     const revokePrincipalOnce = () => {
-      principalRevocationPromise ||= revokePrincipal({ roomId, principal });
+      principalRevocationPromise ||= boundary.revokePrincipal({ roomId, principal });
       return principalRevocationPromise;
     };
     let revokeFailed = false;

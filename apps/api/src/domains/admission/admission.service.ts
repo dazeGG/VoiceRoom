@@ -52,7 +52,7 @@ export interface AdmissionStore {
     guestPrincipalId: string;
     roomId: string;
   }): GatePrincipal | null;
-  isRoomServerMuted?: ((input: { roomId: string; principal: GatePrincipal }) => Promise<boolean>) | undefined;
+  isRoomServerMuted(input: { roomId: string; principal: GatePrincipal }): Promise<boolean>;
 }
 
 export interface MembershipServices {
@@ -232,10 +232,7 @@ export function createAdmissionService(deps: AdmissionDeps) {
       return refuse('livekit_gate_principal_unavailable');
     }
 
-    const serverMuteLookup = async (): Promise<boolean> => {
-      if (typeof store.isRoomServerMuted !== 'function') throw new Error('Server mute authority is unavailable');
-      return store.isRoomServerMuted({ roomId, principal });
-    };
+    const serverMuteLookup = (): Promise<boolean> => store.isRoomServerMuted({ roomId, principal });
     let serverMuted: boolean;
     try {
       serverMuted = await serverMuteLookup();

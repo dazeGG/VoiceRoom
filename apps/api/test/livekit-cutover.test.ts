@@ -350,6 +350,9 @@ test('G48-A03 issued credential fails closed when membership persistence and rev
         ? { principalType: 'account', principalId: accountUserId }
         : { principalType: 'guest', principalId: `${roomId}:${guestPrincipalId}` };
     },
+    async findActiveRoomBan() {
+      return null;
+    },
     async isRoomServerMuted() {
       return false;
     },

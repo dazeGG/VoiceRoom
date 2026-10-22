@@ -55,10 +55,8 @@ export function createRoomSummaries(deps: RoomSummaryDeps) {
     if (roomId) recipientCache.delete(roomId);
   }
 
-  async function resolveRoomUnreadCount(roomId: string, userId: string, fallback = 0): Promise<number> {
-    const getUnreadCount = getRoomStore().getRoomUnreadCount;
-    if (typeof getUnreadCount !== 'function') return fallback;
-    return getUnreadCount.call(getRoomStore(), roomId, userId);
+  async function resolveRoomUnreadCount(roomId: string, userId: string): Promise<number> {
+    return getRoomStore().getRoomUnreadCount(roomId, userId);
   }
 
   async function flushSummary(roomId: string): Promise<void> {

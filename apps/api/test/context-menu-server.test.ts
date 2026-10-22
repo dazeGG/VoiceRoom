@@ -36,6 +36,9 @@ function createStore({
     async countRooms() {
       return rooms.size;
     },
+    async findActiveRoomBan() {
+      return null;
+    },
     async getRoom(roomId: string) {
       return rooms.get(roomId) || null;
     },

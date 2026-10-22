@@ -189,7 +189,6 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     if (!roomId) return null;
     const service = services.getActiveBanService();
     if (service) return service.getActiveBan({ roomId, userId: userId || null, ip: ip || '' });
-    if (typeof services.getRoomStore().findActiveRoomBan !== 'function') return null;
     return services.getRoomStore().findActiveRoomBan({ roomId, userId: userId || null, ip: ip || '' });
   }
 

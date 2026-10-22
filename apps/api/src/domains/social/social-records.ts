@@ -3,6 +3,7 @@
 
 import { sql, type ExpressionBuilder, type Selectable } from 'kysely';
 import { type Database } from '../../platform/db/kysely.ts';
+import { lockKeys, lockXact } from '../../platform/db/locks.ts';
 import { cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
 import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
 import { isRecord } from '@voice-room/shared/guards';
@@ -112,7 +113,7 @@ export function orderedPair(a: string, b: string): [string, string] {
 
 export async function lockUserPair(q: Database, a: string, b: string): Promise<void> {
   const [low, high] = orderedPair(a, b);
-  await sql`SELECT pg_advisory_xact_lock(hashtext(${`voice-room:user-pair:${low}:${high}`}))`.execute(q);
+  await lockXact(q, lockKeys.userPair(low, high));
 }
 
 export const now = sql<Date>`current_timestamp`;
