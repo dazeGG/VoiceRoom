@@ -3,7 +3,7 @@
 // Refreshes itself every half minute while it is on screen.
 
 import { ArrowDownRight, ArrowUpRight, Flag } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { AdminOverview, ProductDay, ProductStats, SystemStats } from '@voice-room/shared/contracts/admin';
 import { fetchOverview, fetchProductStats, fetchSystemStats } from '../api/admin.ts';
 import { Sparkline } from '../charts/Sparkline.tsx';
@@ -17,6 +17,7 @@ import {
   formatSampleTime,
   formatSince
 } from '../format.ts';
+import { useRefreshStatus } from '../frame.tsx';
 import { loadFailure, type LoadFailure } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { useCan } from '../staff.tsx';
@@ -99,6 +100,10 @@ export function OverviewPage({ onOpenReports }: { onOpenReports: () => void }) {
   const [now, setNow] = useState(Date.now);
 
   const [attempt, setAttempt] = useState(0);
+  const [loadedAt, setLoadedAt] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const reload = useCallback(() => setAttempt((count) => count + 1), []);
+  useRefreshStatus({ at: loadedAt, everyMs: REFRESH_MS, busy, reload });
 
   useEffect(() => {
     let current = true;
@@ -107,6 +112,7 @@ export function OverviewPage({ onOpenReports }: { onOpenReports: () => void }) {
       // A slow answer is waited for, not piled on: one round at a time keeps answers in order.
       if (inFlight) return;
       inFlight = true;
+      setBusy(true);
       const at = Date.now();
       Promise.all([
         fetchOverview(),
@@ -121,6 +127,7 @@ export function OverviewPage({ onOpenReports }: { onOpenReports: () => void }) {
             setSystem(nextSystem);
             setFailure(null);
             setNow(Date.now());
+            setLoadedAt(Date.now());
           },
           (cause: unknown) => {
             if (!current) return;
@@ -130,6 +137,7 @@ export function OverviewPage({ onOpenReports }: { onOpenReports: () => void }) {
         )
         .finally(() => {
           inFlight = false;
+          if (current) setBusy(false);
         });
     };
     load();
@@ -140,7 +148,7 @@ export function OverviewPage({ onOpenReports }: { onOpenReports: () => void }) {
     };
   }, [attempt]);
 
-  if (failure && !overview) return <Notice failure={failure} onRetry={() => setAttempt((count) => count + 1)} />;
+  if (failure && !overview) return <Notice failure={failure} onRetry={reload} />;
   if (!overview) {
     return (
       <p className="dash-quiet" aria-busy="true">

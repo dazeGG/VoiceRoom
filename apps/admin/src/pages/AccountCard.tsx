@@ -20,6 +20,7 @@ import {
 import { forgetBadges } from '../badges.ts';
 import { TimeChart } from '../charts/TimeChart.tsx';
 import { formatAgo, formatCount, formatDateTime, formatDay, formatMinutes, formatNumericDate } from '../format.ts';
+import { usePageTitle } from '../frame.tsx';
 import { loadFailure, type LoadFailure } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { useCan } from '../staff.tsx';
@@ -58,6 +59,8 @@ export function AccountCard({ userId, onBack }: { userId: string; onBack: () => 
   }, [userId, attempt]);
 
   const closeDialog = useCallback(() => setDialog(null), []);
+  // The top bar names the account once it is known.
+  usePageTitle(detail ? detail.account.displayName || detail.account.login : null);
 
   /** Runs one action; the answer is the card as it is now. */
   async function run(action: () => Promise<AccountDetail>, fallback: string): Promise<string | null> {

@@ -25,6 +25,7 @@ import type {
 } from '@voice-room/shared/contracts/admin';
 import { fetchLiveRooms, fetchRoomHistory } from '../api/admin.ts';
 import { formatCount, formatDuration, formatSince, formatTimeSpan } from '../format.ts';
+import { useRefreshStatus } from '../frame.tsx';
 import { loadFailure, type LoadFailure } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { deviceLabel, shortGuestId, shortIpKey } from '../origin.ts';
@@ -158,21 +159,26 @@ export function RoomsPage({ onOpenAccount }: { onOpenAccount: (accountId: string
   const historySection = useRef<HTMLElement>(null);
 
   const liveInFlight = useRef(false);
+  const [liveAt, setLiveAt] = useState<number | null>(null);
+  const [liveBusy, setLiveBusy] = useState(false);
 
   const loadLive = useCallback(() => {
     // A slow answer is waited for, not piled on: one request at a time keeps answers in order.
     if (liveInFlight.current) return;
     liveInFlight.current = true;
+    setLiveBusy(true);
     fetchLiveRooms()
       .then(
         (loaded) => {
           setRooms(loaded.rooms);
           setLiveFailure(null);
+          setLiveAt(Date.now());
         },
         (cause: unknown) => setLiveFailure(loadFailure(cause, 'Не удалось загрузить комнаты'))
       )
       .finally(() => {
         liveInFlight.current = false;
+        setLiveBusy(false);
         setNow(Date.now());
       });
   }, []);
@@ -217,6 +223,8 @@ export function RoomsPage({ onOpenAccount }: { onOpenAccount: (accountId: string
     showHistoryPage(room, [undefined], 0);
     if (scroll) historySection.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }
+
+  useRefreshStatus({ at: liveAt, everyMs: REFRESH_MS, busy: liveBusy, reload: loadLive });
 
   useEffect(() => {
     loadLive();

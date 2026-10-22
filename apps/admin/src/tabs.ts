@@ -1,19 +1,39 @@
-// The admin app's sections, their addresses and who may open each. An
-// account's card has its own address under the accounts section.
+// The admin app's sections, their addresses, the menu groups they sit in and
+// who may open each. An account's card has its own address under the accounts
+// section.
 
 import type { StaffPermission } from '@voice-room/shared/contracts/staff';
 
 export const ADMIN_TABS = [
   'overview',
   'product',
+  'feedback',
   'system',
   'accounts',
   'rooms',
   'reports',
-  'feedback',
   'staff'
 ] as const;
 export type AdminTab = (typeof ADMIN_TABS)[number];
+
+/** The menu's groups; their sections follow the order of ADMIN_TABS. */
+export const TAB_GROUPS: readonly { label: string; tabs: readonly AdminTab[] }[] = [
+  { label: 'Аналитика', tabs: ['overview', 'product', 'feedback', 'system'] },
+  { label: 'Модерация', tabs: ['accounts', 'rooms', 'reports'] },
+  { label: 'Команда', tabs: ['staff'] }
+];
+
+/** The top bar's title where it says more than the menu: the menu's "Отзывы" are of calls. */
+export const TAB_TITLES: Record<AdminTab, string> = {
+  overview: 'Обзор',
+  product: 'Продукт',
+  feedback: 'Отзывы о звонках',
+  system: 'Сервер',
+  accounts: 'Аккаунты',
+  rooms: 'Комнаты',
+  reports: 'Жалобы',
+  staff: 'Сотрудники'
+};
 
 export const TAB_LABELS: Record<AdminTab, string> = {
   overview: 'Обзор',
