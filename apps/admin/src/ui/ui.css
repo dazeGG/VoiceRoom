@@ -1,3 +1,6 @@
+/* The shared controls and the pieces every section is built of: cards,
+   pills, avatars, tables, strips of numbers, placeholders. */
+
 .ui-button {
   display: inline-flex;
   min-height: 36px;
@@ -5,27 +8,38 @@
   justify-content: center;
   gap: 6px;
   border: 1px solid transparent;
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
   padding: 0 14px;
   background: transparent;
   color: var(--vr-text);
   font: inherit;
   font-size: 13.5px;
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
   transition:
     background 140ms var(--ease-out),
-    border-color 140ms var(--ease-out);
+    border-color 140ms var(--ease-out),
+    color 140ms var(--ease-out);
+}
+
+.ui-button:focus-visible,
+.ui-segment-option:focus-visible,
+.ui-dialog-close:focus-visible,
+.ui-row-link:focus-visible {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: -2px;
 }
 
 .ui-button:disabled {
   cursor: default;
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
 .ui-button--primary {
   background: var(--vr-accent);
   color: var(--vr-accent-ink);
+  font-weight: 700;
 }
 
 .ui-button--primary:hover:not(:disabled) {
@@ -36,14 +50,28 @@
   border-color: var(--vr-line-strong);
 }
 
+.ui-button--ghost {
+  color: var(--vr-text-2);
+}
+
 .ui-button--outline:hover:not(:disabled),
 .ui-button--ghost:hover:not(:disabled) {
   background: var(--vr-hover);
+  color: var(--vr-text);
 }
 
 .ui-button--danger {
   background: var(--vr-danger);
   color: var(--vr-on-danger);
+}
+
+.ui-button--danger-outline {
+  border-color: color-mix(in oklch, var(--vr-danger) 30%, transparent);
+  color: var(--vr-danger);
+}
+
+.ui-button--danger-outline:hover:not(:disabled) {
+  background: var(--vr-danger-hover);
 }
 
 .ui-segment {
@@ -60,14 +88,16 @@
   display: inline-flex;
   min-height: 32px;
   align-items: center;
+  gap: 6px;
   border: 0;
   border-radius: 9px;
   padding: 0 12px;
   background: transparent;
   color: var(--vr-text-2);
   font: inherit;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -79,6 +109,162 @@
   background: var(--vr-surface-3);
   color: var(--vr-text);
 }
+
+/* --- cards and headings --------------------------------------------------- */
+
+.ui-panel {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 14px;
+  border: 1px solid var(--vr-line);
+  border-radius: 16px;
+  padding: 16px 18px;
+  background: var(--vr-surface);
+}
+
+.ui-panel[data-flush='true'] {
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.ui-panel[data-flush='true'] > .ui-panel-head {
+  padding: 16px 18px 12px;
+}
+
+.ui-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+}
+
+.ui-panel-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ui-panel-aside {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+/* A section's heading: its title, a pill and a quiet note on the right. */
+.ui-section-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.ui-section-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ui-section-note {
+  margin-left: auto;
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}
+
+/* A row of controls over a section. */
+.ui-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+}
+
+.ui-toolbar-note {
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}
+
+/* Grids of cards that wrap by themselves: --grid-min is a card's narrowest width. */
+.ui-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--grid-min, 480px)), 1fr));
+  gap: 14px;
+}
+
+.ui-footnote {
+  margin: 0;
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.ui-mono {
+  font-family: var(--font-mono);
+}
+
+.ui-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- pills ---------------------------------------------------------------- */
+
+.ui-pill {
+  --tone: var(--vr-text-2);
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: color-mix(in oklch, var(--tone) 12%, transparent);
+  color: var(--tone);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.ui-pill[data-compact='true'] {
+  padding: 1px 7px;
+  font-size: 11px;
+}
+
+.ui-pill[data-tone='neutral'] {
+  background: var(--vr-surface-3);
+}
+
+.ui-pill[data-tone='accent'] {
+  --tone: var(--vr-accent);
+}
+
+.ui-pill[data-tone='success'] {
+  --tone: var(--vr-success);
+}
+
+.ui-pill[data-tone='warning'] {
+  --tone: var(--vr-warning);
+}
+
+.ui-pill[data-tone='danger'] {
+  --tone: var(--vr-danger);
+}
+
+.ui-pill[data-tone='info'] {
+  --tone: var(--vr-info);
+}
+
+.ui-pill-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tone);
+}
+
+/* --- avatars -------------------------------------------------------------- */
 
 .ui-avatar {
   display: inline-grid;
@@ -96,6 +282,22 @@
   object-fit: cover;
 }
 
+.ui-avatar--room {
+  background: var(--vr-surface-3);
+  color: var(--vr-text-2);
+}
+
+.ui-avatar-stack {
+  display: inline-flex;
+  flex: none;
+  padding-left: 6px;
+}
+
+.ui-avatar-stack .ui-avatar {
+  margin-left: -6px;
+  box-shadow: 0 0 0 2px var(--stack-ring, var(--vr-surface));
+}
+
 .ui-account-badge {
   display: inline-grid;
   margin-left: 4px;
@@ -104,32 +306,211 @@
   vertical-align: -2px;
 }
 
+/* --- tables --------------------------------------------------------------- */
+
+/* A table of rows laid out on one grid: --cols sets the columns, --table-min
+   the width under which the card scrolls sideways. */
+.ui-table-scroll {
+  overflow-x: auto;
+}
+
+.ui-table {
+  min-width: var(--table-min, 0);
+}
+
+.ui-tr {
+  display: grid;
+  grid-template-columns: var(--cols);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px;
+}
+
+.ui-tr + .ui-tr {
+  border-top: 1px solid oklch(100% 0 0 / 0.05);
+}
+
+.ui-thead {
+  padding-top: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--vr-line);
+  color: var(--vr-text-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ui-thead + .ui-tr {
+  border-top: 0;
+}
+
+.ui-row-link {
+  cursor: pointer;
+}
+
+.ui-row-link:hover {
+  background: var(--vr-hover);
+}
+
+.ui-cell-end {
+  justify-self: end;
+  text-align: right;
+}
+
+/* --- strips of numbers ---------------------------------------------------- */
+
+.ui-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--stat-min, 150px)), 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--vr-line);
+  border-radius: 16px;
+  background: var(--vr-line);
+}
+
+.ui-stat {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  background: var(--vr-surface);
+}
+
+.ui-stat-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--vr-text-2);
+  font-size: 12.5px;
+}
+
+.ui-stat-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--vr-text-3);
+}
+
+.ui-stat-dot[data-tone='success'] {
+  background: var(--vr-success);
+}
+
+.ui-stat-dot[data-tone='warning'] {
+  background: var(--vr-warning);
+}
+
+.ui-stat-dot[data-tone='danger'] {
+  background: var(--vr-danger);
+}
+
+.ui-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+.ui-stat-value[data-tone='danger'] {
+  color: var(--vr-danger);
+}
+
+.ui-stat-value[data-tone='success'] {
+  color: var(--vr-success);
+}
+
+.ui-stat-note {
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+/* --- placeholders --------------------------------------------------------- */
+
+.ui-empty {
+  margin: 0;
+  padding: 32px 16px;
+  color: var(--vr-text-3);
+  font-size: 13px;
+  text-align: center;
+}
+
+.ui-skeleton {
+  display: inline-block;
+  max-width: 100%;
+  border-radius: 6px;
+  background: var(--vr-surface-2);
+}
+
+/* --- dialog --------------------------------------------------------------- */
+
 .ui-dialog-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: 50;
   display: grid;
   place-items: center;
-  padding: 16px;
+  padding: 24px;
   background: var(--vr-backdrop);
 }
 
 .ui-dialog {
-  display: grid;
+  position: relative;
+  display: flex;
+  flex-direction: column;
   gap: 14px;
   width: min(440px, 100%);
-  max-height: calc(100dvh - 32px);
+  max-height: calc(100dvh - 48px);
   overflow-y: auto;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 18px;
+  border: 1px solid oklch(100% 0 0 / 0.1);
+  border-radius: 20px;
   padding: 20px;
-  background: var(--vr-surface-2);
-  box-shadow: var(--vr-shadow-modal);
+  background: var(--vr-surface);
+  box-shadow: var(--vr-shadow-popover);
+}
+
+.ui-dialog[data-wide='true'] {
+  width: min(920px, 100%);
+  overflow: hidden;
+  padding: 0;
+}
+
+.ui-dialog[data-wide='true'] .ui-dialog-head {
+  padding: 20px 64px 0 24px;
+}
+
+.ui-dialog[data-wide='true'] .ui-dialog-body {
+  min-height: 0;
+  overflow: auto;
+}
+
+.ui-dialog[data-wide='true'] .ui-dialog-footer {
+  justify-content: flex-start;
+  border-top: 1px solid var(--vr-line);
+  padding: 14px 24px;
+}
+
+.ui-dialog-head {
+  display: grid;
+  gap: 4px;
+  padding-right: 36px;
 }
 
 .ui-dialog-title {
   margin: 0;
   font-size: 17px;
+  font-weight: 700;
+}
+
+.ui-dialog[data-wide='true'] .ui-dialog-title {
+  font-size: 19px;
+}
+
+.ui-dialog-description {
+  margin: 0;
+  color: var(--vr-text-2);
+  font-size: 13px;
 }
 
 .ui-dialog-body {
@@ -141,9 +522,33 @@
 
 .ui-dialog-footer {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: flex-end;
   gap: 8px;
 }
+
+.ui-dialog-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--vr-text-3);
+  cursor: pointer;
+}
+
+.ui-dialog-close:hover {
+  background: var(--vr-hover);
+  color: var(--vr-text);
+}
+
+/* --- switch, select, popover ---------------------------------------------- */
 
 .ui-switch {
   position: relative;
@@ -180,7 +585,7 @@
 .ui-select {
   min-height: 36px;
   border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-sm);
+  border-radius: 10px;
   padding: 0 10px;
   background: var(--vr-surface);
   color: var(--vr-text);
