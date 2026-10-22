@@ -147,6 +147,23 @@ test('credential boundary fails closed for invalid, unavailable, and denied deci
   assert.throws(() => createCredentialBoundaryService({ signer: createSigner() }), /roomStore is required/);
 });
 
+test('a credential that is not a string is malformed and never reaches the signer', async () => {
+  let verified = 0;
+  const signer: GateCredentialSigner = {
+    ...createSigner(),
+    verify: () => {
+      verified += 1;
+      return { ok: true, claims: CLAIMS };
+    }
+  };
+  const boundary = createCredentialBoundaryService({ roomStore: store({}), signer });
+
+  for (const value of [undefined, null, 42, { token: 'credential' }]) {
+    assert.deepEqual(await boundary.authorizeCredential(value), { ok: false, code: 'malformed' });
+  }
+  assert.equal(verified, 0);
+});
+
 test('credential boundary preserves store refusal when credential persistence fails', async () => {
   let storedResult: { status: string } | undefined = { status: 'revoked' };
   const roomStore = store({
