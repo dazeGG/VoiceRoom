@@ -1,7 +1,7 @@
 // The server section: the minutes over the chosen span, the note when there
 // are none, and the notice on a failure.
 
-import { cleanup, screen } from '@testing-library/react';
+import { cleanup, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { SystemPage } from '../src/pages/SystemPage.tsx';
@@ -30,18 +30,25 @@ test('the server section draws the minutes over the chosen span and says when th
 
   expect(await screen.findByRole('img', { name: 'Процессор' })).toBeTruthy();
   expect(screen.getByRole('img', { name: 'Запросы' })).toBeTruthy();
-  expect(screen.getByText(/Сейчас: процессор 12,5%/)).toBeTruthy();
-  expect(screen.getByText(/память 1,5 ГБ из 4 ГБ/)).toBeTruthy();
+  // The latest minute, cell by cell.
+  const now = within(screen.getByRole('list', { name: 'Сейчас' }));
+  const cell = (label: string) => now.getByText(label).closest('[role="listitem"]')?.textContent ?? '';
+  expect(cell('Процессор')).toContain('12,5%');
+  expect(cell('Память')).toContain('1,5 ГБ из 4 ГБ');
   expect(screen.getByText(/Точка — 5 мин/)).toBeTruthy();
   expect(span(must(calls[0], 'the first request').url)).toBe(DAY);
 
   empty = true;
-  await userEvent.click(screen.getByRole('button', { name: 'Период: Последние сутки' }));
-  await userEvent.click(await screen.findByRole('option', { name: 'Последний час' }));
+  const spans = screen.getByRole('radiogroup', { name: 'Период' });
+  await userEvent.click(within(spans).getByRole('radio', { name: '1 ч' }));
   expect(await screen.findByText(/Замеров за этот период нет/)).toBeTruthy();
   expect(span(must(calls.at(-1), 'the last request').url)).toBe(HOUR);
   // The picker stays so a longer span can be chosen.
-  expect(screen.getByRole('button', { name: 'Период: Последний час' })).toBeTruthy();
+  expect(
+    within(screen.getByRole('radiogroup', { name: 'Период' }))
+      .getByRole('radio', { name: '1 ч' })
+      .getAttribute('aria-checked')
+  ).toBe('true');
 });
 
 test('a span of more than a day names the date with the time', async () => {

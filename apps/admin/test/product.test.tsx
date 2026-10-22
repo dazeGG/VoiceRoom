@@ -29,12 +29,13 @@ test('the product section loads the last 30 days, a ready-made span reloads it, 
   expect(screen.getAllByText(/Учёт идёт с 15\.10\.2026\./).length).toBeGreaterThan(0);
   const last = () => must(calls.at(-1), 'a request').url.searchParams;
 
-  await userEvent.click(screen.getByRole('button', { name: 'Период: Последние 30 дней' }));
-  await userEvent.click(await screen.findByRole('option', { name: 'Всё время' }));
+  const spans = screen.getByRole('radiogroup', { name: 'Период' });
+  expect(within(spans).getByRole('radio', { name: '30 дней' }).getAttribute('aria-checked')).toBe('true');
+  await userEvent.click(within(spans).getByRole('radio', { name: 'Всё время' }));
   await waitFor(() => expect(last().get('from')).toBe('2000-01-01'));
-  expect(screen.getByRole('button', { name: 'Период: Всё время' })).toBeTruthy();
+  expect(within(spans).getByRole('radio', { name: 'Всё время' }).getAttribute('aria-checked')).toBe('true');
 
-  await userEvent.click(screen.getByRole('button', { name: 'Период: Всё время' }));
+  await userEvent.click(screen.getByRole('button', { name: 'Свой период' }));
   const dialog = await screen.findByRole('dialog', { name: 'Период' });
   const [from, to] = within(dialog).getAllByDisplayValue(/\d{4}-\d{2}-\d{2}/);
   fireEvent.change(must(from, 'the from field'), { target: { value: '2026-10-20' } });
@@ -48,7 +49,9 @@ test('the product section loads the last 30 days, a ready-made span reloads it, 
   await userEvent.click(within(dialog).getByRole('button', { name: 'Показать' }));
   await waitFor(() => expect(last().get('to')).toBe('2026-10-10'));
   expect(last().get('from')).toBe('2026-10-01');
-  expect(screen.getByRole('button', { name: 'Период: 01.10.2026 — 10.10.2026' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'Свой период: 01.10.2026 — 10.10.2026' })).toBeTruthy();
+  // No ready-made span is chosen while one's own is.
+  expect(within(spans).queryByRole('radio', { checked: true })).toBeNull();
 });
 
 test('the cohort table says so when there are no accounts yet', async () => {

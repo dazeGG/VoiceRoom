@@ -1,7 +1,7 @@
 // The feedback section: how many calls went well, why, and each answer with
 // the numbers of its call; the period and rating narrow the list.
 
-import { cleanup, screen, waitFor } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { AdminCallFeedbackPage } from '@voice-room/shared/contracts/feedback';
@@ -76,18 +76,19 @@ test('the section shows how many calls went well, why, and each answer with its 
 
   expect(await screen.findByText('75%')).toBeTruthy();
   expect(screen.getByText('из 4 ответов')).toBeTruthy();
-  const answers = screen.getByRole('list', { name: 'Ответы' });
+  const answers = screen.getByRole('table', { name: 'Ответы' });
   expect(answers.textContent).toContain('Гость');
   expect(answers.textContent).toContain('временная комната');
   expect(answers.textContent).toContain('эхо у Пети');
-  expect(answers.textContent).toContain('потери 6%');
-  expect(answers.textContent).toContain('переподключений 2');
-  expect(answers.textContent).toContain('RELAY');
-  expect(answers.textContent).toContain('Алиса (@alice)');
+  expect(answers.textContent).toContain('Алиса · @alice');
   expect(answers.textContent).toContain('«Кухня»');
+  // The call's numbers, the bad ones marked: losses of 6%, two reconnects, through the relay.
+  for (const bad of ['потери 6%', 'переподкл. 2', 'TURN']) {
+    expect(within(answers).getByText(bad).getAttribute('data-bad')).toBe('true');
+  }
 
   await userEvent.click(screen.getByRole('radio', { name: 'Плохие' }));
-  await waitFor(() => expect(screen.queryByText('Алиса (@alice)', { exact: false })).toBeNull());
+  await waitFor(() => expect(screen.queryByText('@alice')).toBeNull());
   expect(calls.map((call) => call.url.search)).toEqual(['?days=30', '?days=30&rating=bad']);
 });
 

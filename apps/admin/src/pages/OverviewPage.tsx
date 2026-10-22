@@ -22,6 +22,7 @@ import { loadFailure, type LoadFailure } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { useCan } from '../staff.tsx';
 import { PRODUCT_PRESETS, productQuery } from '../time-range.ts';
+import { Button, Pill } from '../ui/index.tsx';
 import './OverviewPage.css';
 
 const REFRESH_MS = 30_000;
@@ -86,7 +87,9 @@ function Kpi({
         {change ? <Delta {...change} /> : null}
         {hint ? <span className="kpi-hint">{hint}</span> : null}
       </span>
-      <Sparkline values={trend} color={color} label={`${label}: как менялось`} />
+      <span className="kpi-spark">
+        <Sparkline values={trend} color={color} height={44} label={`${label}: как менялось`} />
+      </span>
     </div>
   );
 }
@@ -191,9 +194,9 @@ export function OverviewPage({ onOpenReports }: { onOpenReports: () => void }) {
           <span>
             Открытых жалоб: <strong>{overview.openReports}</strong>
           </span>
-          <button type="button" className="dash-link" onClick={onOpenReports}>
-            Посмотреть
-          </button>
+          <Button variant="danger" className="dash-reports-go" onClick={onOpenReports}>
+            Разобрать
+          </Button>
         </div>
       ) : null}
 
@@ -250,9 +253,10 @@ export function OverviewPage({ onOpenReports }: { onOpenReports: () => void }) {
         />
       </section>
 
-      <div className="dash-charts">
+      <div className="ui-grid" style={{ '--grid-min': '520px' }}>
         <TimeChart
           title="Активность за 14 дней"
+          height={220}
           labels={dayLabels}
           series={[
             { name: 'Активные аккаунты', values: days.map((day) => day.activeAccounts), color: 'var(--vr-accent)' },
@@ -262,6 +266,7 @@ export function OverviewPage({ onOpenReports }: { onOpenReports: () => void }) {
         />
         <TimeChart
           title="Онлайн за сутки"
+          height={220}
           labels={sampleLabels}
           series={[
             {
@@ -275,19 +280,19 @@ export function OverviewPage({ onOpenReports }: { onOpenReports: () => void }) {
         />
       </div>
 
-      <section className="dash-server" aria-label="Сервер">
-        <div className="dash-server-head">
-          <h2>Сервер</h2>
-          <span className="dash-chip" data-state={overview.livekit ? 'ok' : 'bad'}>
-            {`LiveKit ${overview.livekit ? 'работает' : 'выключен'}`}
-          </span>
-          <span className="dash-quiet">
+      <div className="dash-row">
+        <section className="ui-panel dash-server" aria-label="Сервер">
+          <div className="dash-server-head">
+            <h3 className="ui-panel-title">Сервер</h3>
+            <Pill tone={overview.livekit ? 'success' : 'danger'} dot>
+              {`LiveKit ${overview.livekit ? 'работает' : 'выключен'}`}
+            </Pill>
+          </div>
+          <p className="dash-quiet">
             {`Версия ${overview.version} · работает ${formatSince(overview.startedAt, now)} ${
               latest ? `· замер ${formatSince(latest.at, now)} назад` : '· замеров ещё нет'
             }`}
-          </span>
-        </div>
-        <div className="dash-server-body">
+          </p>
           <div className="gauges">
             {gauges.map((gauge) => (
               <div key={gauge.label} className="gauge" data-level={level(gauge.value)}>
@@ -301,20 +306,22 @@ export function OverviewPage({ onOpenReports }: { onOpenReports: () => void }) {
                 <span className="gauge-detail">{gauge.detail}</span>
               </div>
             ))}
-            <div className="gauge-facts">
-              <span>
-                База <strong>{formatBytes(latest?.dbBytes ?? null)}</strong>
-              </span>
-              <span>
-                Память API <strong>{formatBytes(latest?.apiRssBytes ?? null)}</strong>
-              </span>
-            </div>
           </div>
+          <div className="gauge-facts">
+            <span>
+              База <strong>{formatBytes(latest?.dbBytes ?? null)}</strong>
+            </span>
+            <span>
+              Память API <strong>{formatBytes(latest?.apiRssBytes ?? null)}</strong>
+            </span>
+          </div>
+        </section>
+        <div className="dash-load">
           <TimeChart
             title="Нагрузка за сутки"
             labels={sampleLabels}
             format={wholePercent}
-            height={150}
+            height={190}
             series={[
               { name: 'Процессор', values: samples.map((sample) => sample.cpuPct), color: 'var(--vr-accent)' },
               {
@@ -325,7 +332,7 @@ export function OverviewPage({ onOpenReports }: { onOpenReports: () => void }) {
             ]}
           />
         </div>
-      </section>
+      </div>
     </>
   );
 }

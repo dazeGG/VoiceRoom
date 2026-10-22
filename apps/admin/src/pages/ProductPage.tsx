@@ -10,9 +10,38 @@ import { loadFailure, type LoadFailure } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { PRODUCT_PRESETS, productQuery, type TimeRange } from '../time-range.ts';
 import { TimeRangePicker } from '../TimeRangePicker.tsx';
+import { Empty, Panel } from '../ui/index.tsx';
 import './ProductPage.css';
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The spans after registration the cohort table counts returns in, by the first day each starts on. */
+const RETENTION_SPANS: readonly {
+  key: 'returnedWeek1Pct' | 'returnedWeek2Pct' | 'returnedMonth1Pct';
+  firstDay: number;
+}[] = [
+  { key: 'returnedWeek1Pct', firstDay: 1 },
+  { key: 'returnedWeek2Pct', firstDay: 8 },
+  { key: 'returnedMonth1Pct', firstDay: 15 }
+];
+
+/** Whether a span has begun for the week's first accounts: before that its 0% means nothing yet. */
+const reached = (week: string, firstDay: number, now: number) =>
+  Date.parse(`${week}T00:00:00+03:00`) + firstDay * DAY_MS <= now;
+
+/** A share as a warm cell: the more came back, the stronger the accent behind it. */
+function RetentionCell({ value, reached: begun }: { value: number; reached: boolean }) {
+  if (!begun) return <span className="retention-cell retention-cell--none">—</span>;
+  const strength = 6 + Math.min(1, value / 55) * 50;
+  return (
+    <span className="retention-cell" style={{ '--heat': `${String(strength)}%` }}>
+      {value}%
+    </span>
+  );
+}
+
 export function ProductPage() {
+  const [now] = useState(() => Date.now());
   const [range, setRange] = useState<TimeRange>({ kind: 'preset', id: '30d' });
   const [stats, setStats] = useState<ProductStats | null>(null);
   const [failure, setFailure] = useState<LoadFailure | null>(null);
@@ -53,7 +82,7 @@ export function ProductPage() {
   const resolved = stats ? { from: Date.parse(`${stats.from}T12:00`), to: Date.parse(`${stats.to}T12:00`) } : null;
 
   const toolbar = (
-    <div className="product-toolbar">
+    <div className="ui-toolbar">
       <TimeRangePicker value={range} presets={PRODUCT_PRESETS} withTime={false} onChange={change} resolved={resolved} />
       {loading && stats ? <span className="product-quiet">Обновляем…</span> : null}
     </div>
@@ -90,7 +119,7 @@ export function ProductPage() {
   return (
     <>
       {toolbar}
-      <div className="product-charts">
+      <div className="ui-grid" style={{ '--grid-min': '480px' }}>
         <TimeChart
           title="Активные аккаунты"
           labels={labels}
@@ -164,12 +193,11 @@ export function ProductPage() {
         />
       </div>
 
-      <section className="product-retention" aria-label="Возвращаемость">
-        <h2>Возвращаемость по неделе регистрации</h2>
+      <Panel title="Возвращаемость по неделе регистрации" flush>
         {stats.retention.length === 0 ? (
-          <p className="product-quiet">Пока нет аккаунтов.</p>
+          <Empty>Пока нет аккаунтов.</Empty>
         ) : (
-          <div className="product-table-wrap">
+          <div className="ui-table-scroll">
             <table className="product-table">
               <thead>
                 <tr>
@@ -184,21 +212,23 @@ export function ProductPage() {
                 {stats.retention.map((week) => (
                   <tr key={week.week}>
                     <td>с {formatDay(week.week)}</td>
-                    <td>{week.accounts}</td>
-                    <td>{week.returnedWeek1Pct}%</td>
-                    <td>{week.returnedWeek2Pct}%</td>
-                    <td>{week.returnedMonth1Pct}%</td>
+                    <td className="ui-num">{week.accounts}</td>
+                    {RETENTION_SPANS.map((span) => (
+                      <td key={span.firstDay}>
+                        <RetentionCell value={week[span.key]} reached={reached(week.week, span.firstDay, now)} />
+                      </td>
+                    ))}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-        <p className="product-quiet">
-          Доля аккаунтов недели, которые снова заходили в этот промежуток после регистрации. {trackingNote} У более
-          ранних недель проценты занижены.
+        <p className="ui-footnote product-footnote">
+          Доля аккаунтов недели, которые снова заходили в этот промежуток после регистрации; «—» — промежуток ещё не
+          наступил. {trackingNote} У более ранних недель проценты занижены.
         </p>
-      </section>
+      </Panel>
     </>
   );
 }
