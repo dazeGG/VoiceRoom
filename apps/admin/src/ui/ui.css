@@ -361,20 +361,23 @@
 .ui-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--stat-min, 150px)), 1fr));
-  gap: 1px;
   overflow: hidden;
   border: 1px solid var(--vr-line);
   border-radius: 16px;
-  background: var(--vr-line);
+  background: var(--vr-surface);
 }
 
+/* Each cell draws its right and bottom hairline; the card clips those on its edges,
+   and a short last row leaves plain card, not a block of lines. */
 .ui-stat {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 4px;
+  margin: 0 -1px -1px 0;
+  border-right: 1px solid var(--vr-line);
+  border-bottom: 1px solid var(--vr-line);
   padding: 14px 16px;
-  background: var(--vr-surface);
 }
 
 .ui-stat-label {

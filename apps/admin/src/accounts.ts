@@ -16,9 +16,6 @@ export const ACCOUNT_FILTERS: { value: AccountsFilter; label: string }[] = [
   { value: 'badged', label: 'С отметкой' }
 ];
 
-export const isAccountsFilter = (value: string): value is AccountsFilter =>
-  ACCOUNT_FILTERS.some((option) => option.value === value);
-
 /** The list's columns that sort, and the order each starts in when picked. */
 export const SORT_COLUMNS: { sort: AccountsSort; label: string; first: 'asc' | 'desc' }[] = [
   { sort: 'name', label: 'Аккаунт', first: 'asc' },
