@@ -7,13 +7,13 @@ import {
   AdminOverview,
   LiveRooms,
   ProductStats,
-  RoomHistory,
+  RoomCalls,
   SystemStats,
   type AccountsQuery,
   type BlockBody,
   type DeleteAccountBody,
   type ProductQuery,
-  type RoomHistoryQuery,
+  type RoomCallsQuery,
   type SystemQuery
 } from '@voice-room/shared/contracts/admin';
 import { AdminCallFeedbackPage, type AdminCallFeedbackQuery } from '@voice-room/shared/contracts/feedback';
@@ -31,8 +31,8 @@ export const fetchSystemStats = (query: SystemQuery = {}) =>
 
 export const fetchLiveRooms = () => api.get('/api/admin/rooms', LiveRooms, 'Не удалось загрузить комнаты');
 
-export const fetchRoomHistory = (query: RoomHistoryQuery = {}) =>
-  api.get(`/api/admin/rooms/history${search(query)}`, RoomHistory, 'Не удалось загрузить историю');
+export const fetchRoomCalls = (query: RoomCallsQuery = {}) =>
+  api.get(`/api/admin/rooms/calls${search(query)}`, RoomCalls, 'Не удалось загрузить историю');
 
 export const fetchAccounts = (query: AccountsQuery = {}) =>
   api.get(`/api/admin/accounts${search(query)}`, AccountsPage, 'Не удалось загрузить аккаунты');

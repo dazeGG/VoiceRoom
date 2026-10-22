@@ -236,7 +236,7 @@ test('the top bar says how fresh the rooms are and asks again on a click', async
       asked += 1;
       return { body: { ok: true, rooms: [] } };
     },
-    'GET /api/admin/rooms/history': { body: { ok: true, stays: [], next: null, keepDays: 90 } }
+    'GET /api/admin/rooms/calls': { body: { ok: true, calls: [], next: null, keepDays: 90 } }
   });
   render(<App />);
   expect(await screen.findByText(/Обновлено/)).toBeTruthy();
@@ -262,7 +262,7 @@ test('the search finds accounts and rooms in voice, and Enter opens the first', 
     },
     'GET /api/admin/accounts/u-alice': { status: 404, body: { ok: false, error: 'нет', code: 'not_found' } },
     'GET /api/admin/rooms': { body: { ok: true, rooms: [kitchen] } },
-    'GET /api/admin/rooms/history': { body: { ok: true, stays: [], next: null, keepDays: 90 } }
+    'GET /api/admin/rooms/calls': { body: { ok: true, calls: [], next: null, keepDays: 90 } }
   });
   render(<App />);
   const search = await screen.findByRole('combobox', { name: 'Поиск по аккаунтам и комнатам' });
@@ -283,17 +283,20 @@ test('the search finds accounts and rooms in voice, and Enter opens the first', 
   expect(window.location.pathname).toBe('/accounts/u-alice');
 });
 
-test('a room found by the search opens the rooms section', async () => {
+test('a room found by the search opens the rooms section with its call history', async () => {
   window.history.replaceState(null, '', '/accounts');
-  signedInAs('moderator', 0, {
+  const calls = signedInAs('moderator', 0, {
     'GET /api/admin/accounts': { body: { ok: true, accounts: [], total: 0, page: 1, pageSize: 50 } },
     'GET /api/admin/rooms': { body: { ok: true, rooms: [kitchen] } },
-    'GET /api/admin/rooms/history': { body: { ok: true, stays: [], next: null, keepDays: 90 } }
+    'GET /api/admin/rooms/calls': { body: { ok: true, calls: [], next: null, keepDays: 90 } }
   });
   render(<App />);
   await userEvent.type(await screen.findByRole('combobox', { name: 'Поиск по аккаунтам и комнатам' }), 'kitchen');
   await userEvent.click(await screen.findByRole('option', { name: /Кухня/ }));
   expect(window.location.pathname).toBe('/rooms');
+  expect(await screen.findByRole('button', { name: /Показать все комнаты/ })).toBeTruthy();
+  const asked = calls.filter((call) => call.url.pathname === '/api/admin/rooms/calls');
+  expect(asked.at(-1)?.url.searchParams.get('roomId')).toBe('kitchen');
 });
 
 test('nothing found is said so', async () => {

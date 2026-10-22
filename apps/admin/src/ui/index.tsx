@@ -31,6 +31,7 @@ export function Button({
 export interface SegmentOption<Value extends string> {
   value: Value;
   label: string;
+  icon?: ReactNode;
   suffix?: ReactNode;
 }
 
@@ -61,6 +62,7 @@ export function Segment<Value extends string>({
           data-active={option.value === value}
           onClick={() => onChange(option.value)}
         >
+          {option.icon}
           {option.label}
           {option.suffix}
         </button>

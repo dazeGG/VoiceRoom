@@ -33,7 +33,7 @@ export function GlobalSearch({
   onOpenRoom
 }: {
   onOpenAccount: (accountId: string) => void;
-  onOpenRoom: (roomId: string) => void;
+  onOpenRoom: (room: { id: string; name: string | null }) => void;
 }) {
   const canAccounts = useCan('accounts.view');
   const canRooms = useCan('rooms.view');
@@ -106,7 +106,7 @@ export function GlobalSearch({
     setTyped('');
     input.current?.blur();
     if (hit.kind === 'account') onOpenAccount(hit.account.id);
-    else onOpenRoom(hit.room.roomId);
+    else onOpenRoom({ id: hit.room.roomId, name: hit.room.name });
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLInputElement>): void {

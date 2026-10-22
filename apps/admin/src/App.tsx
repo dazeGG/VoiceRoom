@@ -12,7 +12,7 @@ import { FeedbackPage } from './pages/FeedbackPage.tsx';
 import { OverviewPage } from './pages/OverviewPage.tsx';
 import { ProductPage } from './pages/ProductPage.tsx';
 import { ReportsPage } from './pages/ReportsPage.tsx';
-import { RoomsPage } from './pages/RoomsPage.tsx';
+import { RoomsPage, type HistoryRoom } from './pages/RoomsPage.tsx';
 import { StaffPage } from './pages/StaffPage.tsx';
 import { SystemPage } from './pages/SystemPage.tsx';
 import { GlobalSearch } from './shell/GlobalSearch.tsx';
@@ -60,6 +60,8 @@ export function App() {
   const [pageTitle, setPageTitle] = useState<string | null>(null);
   const [refresh, setRefresh] = useState<RefreshStatus | null>(null);
   const [frame] = useState<Frame>(() => ({ setTitle: setPageTitle, setRefresh }));
+  // A room picked in the search: the rooms section narrows its history to it.
+  const [roomFocus, setRoomFocus] = useState<HistoryRoom | null>(null);
   const main = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -126,7 +128,11 @@ export function App() {
             tabs={tabs}
             current={tab}
             openReports={openReports}
-            onSelect={selectTab}
+            onSelect={(next) => {
+              // The menu opens a section as it is, not narrowed to the last room searched for.
+              setRoomFocus(null);
+              selectTab(next);
+            }}
             onSignOut={() => void signOut().finally(() => window.location.assign(staff.siteUrl))}
           />
           <div className="frame-column">
@@ -134,7 +140,15 @@ export function App() {
               crumb={onCard ? TAB_LABELS.accounts : groupOf(tab)}
               title={onCard ? (pageTitle ?? 'Аккаунт') : TAB_TITLES[tab]}
               refresh={refresh}
-              search={<GlobalSearch onOpenAccount={openAccount} onOpenRoom={() => selectTab('rooms')} />}
+              search={
+                <GlobalSearch
+                  onOpenAccount={openAccount}
+                  onOpenRoom={(room) => {
+                    setRoomFocus(room);
+                    selectTab('rooms');
+                  }}
+                />
+              }
             />
             <main className="frame-main" ref={main}>
               <div className="frame-content">
@@ -144,7 +158,7 @@ export function App() {
                 {tab === 'accounts' ? (
                   <AccountsPage accountId={location.accountId} onOpenAccount={openAccount} />
                 ) : null}
-                {tab === 'rooms' ? <RoomsPage onOpenAccount={openAccount} /> : null}
+                {tab === 'rooms' ? <RoomsPage onOpenAccount={openAccount} focusRoom={roomFocus} /> : null}
                 {tab === 'reports' ? <ReportsPage onResolved={setOpenReports} /> : null}
                 {tab === 'feedback' ? <FeedbackPage /> : null}
                 {tab === 'staff' ? <StaffPage /> : null}
