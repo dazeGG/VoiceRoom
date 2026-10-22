@@ -11,6 +11,7 @@ import { createAttachmentRepository, mapAttachment } from '../src/domains/media/
 import { transaction } from '../src/platform/db/pool.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { AnyRow, queryRow } from './helpers/checked.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const skip = !process.env.TEST_DATABASE_URL;
@@ -209,6 +210,15 @@ test('a draft moves through upload, processing, failure and deletion', { skip },
       }),
     /Invalid processed storage key/
   );
+});
+
+test('a draft sent with null metadata stores an empty record', { skip }, async (t) => {
+  const { pool, repository, ownerId } = await setup(t);
+  const draft = await repository.createDraft({ ownerId, context: 'room', metadata: null });
+  assert.ok(draft);
+  assert.deepEqual(draft.metadata, {});
+  const stored = await queryRow(pool, AnyRow, 'SELECT metadata FROM message_attachments WHERE id = $1', [draft.id]);
+  assert.deepEqual(stored.metadata, {}, 'the column holds {}, not JSON null');
 });
 
 test('ready attachments bind to one message in order, all or none', { skip }, async (t) => {

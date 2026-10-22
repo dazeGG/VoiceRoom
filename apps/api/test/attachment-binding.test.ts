@@ -101,3 +101,21 @@ test(
     );
   }
 );
+
+test(
+  'a binding names one to four distinct string ids and a known context, or nothing is bound',
+  { skip: !process.env.TEST_DATABASE_URL, timeout: 120000 },
+  async (t) => {
+    const { pool, repository } = await setup(t);
+    const id = await ready(pool);
+    const bind = (attachmentIds: unknown, context = 'room') =>
+      repository.bindReady({ ownerId: 'owner', context, messageId: 'room-message', attachmentIds });
+
+    await assert.rejects(bind([]), /Between one and four/);
+    await assert.rejects(bind([id, id]), /must be unique/);
+    await assert.rejects(bind([id, 7]), /must be strings/);
+    await assert.rejects(bind([id], 'forum'), /Invalid attachment context/);
+    // None of the refusals bound the ready draft.
+    assert.equal((await repository.listForMessage('room', 'room-message')).length, 0);
+  }
+);
