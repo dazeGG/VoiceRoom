@@ -1,74 +1,271 @@
-.staff-section {
-  display: grid;
-  gap: 14px;
-}
+/* The staff section: the list of staff on the left; giving a role and who
+   may do what on the right; the table of rights in a wide dialog. */
 
-.staff-section h2 {
-  margin: 0;
-  font-size: 17px;
-}
-
-.staff-grant {
+.staff-layout {
   display: flex;
   flex-wrap: wrap;
-  align-items: end;
-  gap: 10px;
+  align-items: flex-start;
+  gap: 20px;
 }
 
-.staff-field {
-  display: grid;
-  gap: 4px;
-  color: var(--vr-text-2);
-  font-size: 12.5px;
+.staff-main {
+  flex: 2 1 560px;
 }
 
-.staff-field input {
-  min-height: 36px;
-  width: 220px;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: var(--radius-sm);
-  padding: 0 10px;
-  background: var(--vr-surface);
-  color: var(--vr-text);
-  font: inherit;
-  font-size: 13.5px;
+.staff-side {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 320px;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .staff-list {
-  display: grid;
-  gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .staff-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 170px minmax(110px, auto);
   align-items: center;
   gap: 12px;
-  border: 1px solid var(--vr-line);
-  border-radius: var(--radius-md);
-  padding: 10px 12px;
-  background: var(--vr-surface);
+  padding: 10px 18px;
+}
+
+.staff-row + .staff-row {
+  border-top: 1px solid oklch(100% 0 0 / 0.05);
 }
 
 .staff-name {
-  display: grid;
+  display: flex;
   min-width: 0;
-  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.staff-name strong {
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .staff-name small {
   color: var(--vr-text-3);
+  font-size: 12px;
 }
 
-.staff-role {
-  color: var(--vr-text-2);
-  font-size: 13.5px;
-  font-weight: 600;
+.staff-act {
+  justify-self: end;
 }
 
 .staff-quiet {
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}
+
+.ui-button--ghost.staff-revoke:hover:not(:disabled) {
+  background: var(--vr-danger-hover);
+  color: var(--vr-danger);
+}
+
+/* --- giving a role ---------------------------------------------------------- */
+
+.staff-grant {
+  display: grid;
+  gap: 12px;
+}
+
+.staff-field {
+  display: grid;
+  gap: 6px;
+  color: var(--vr-text-2);
+  font-size: 12.5px;
+}
+
+.staff-login {
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  padding: 0 12px;
+  background: var(--vr-surface);
+  color: var(--vr-text-3);
+}
+
+.staff-login:focus-within {
+  border-color: var(--vr-accent-line);
+}
+
+.staff-login input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--vr-text);
+  font-size: 13.5px;
+}
+
+.staff-grant .ui-select {
+  min-height: 40px;
+}
+
+.staff-grant .ui-button--primary {
+  min-height: 40px;
+}
+
+/* --- who may do what -------------------------------------------------------- */
+
+.staff-summary {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.staff-summary li {
+  display: grid;
+  gap: 7px;
+}
+
+.staff-summary-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+}
+
+.staff-summary-line strong {
+  font-weight: 600;
+}
+
+.staff-summary-line span {
+  color: var(--vr-text-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.staff-pips {
+  display: flex;
+  gap: 3px;
+}
+
+.staff-pips span {
+  height: 6px;
+  flex: 1;
+  border-radius: 999px;
+  background: var(--vr-surface-3);
+}
+
+.staff-side .ui-panel > .ui-button {
+  justify-self: start;
+  align-self: flex-start;
+}
+
+/* --- the table of rights ---------------------------------------------------- */
+
+.rights {
+  min-width: 640px;
+}
+
+.rights-row {
+  display: grid;
+  grid-template-columns: var(--cols);
+  align-items: center;
+  gap: 12px;
+  padding: 10px 24px;
+}
+
+.rights-row + .rights-row {
+  border-top: 1px solid oklch(100% 0 0 / 0.05);
+}
+
+.rights-head {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  border-bottom: 1px solid var(--vr-line);
+  background: var(--vr-surface);
+  color: var(--vr-text-3);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.rights-role {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+}
+
+.rights-role small {
+  color: var(--vr-text-3);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+
+.rights-group {
+  padding: 16px 24px 6px;
+  color: var(--vr-text-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.rights-title {
+  display: grid;
+  gap: 2px;
+  color: var(--vr-text);
+  font-size: 13.5px;
+}
+
+.rights-title small {
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.rights-cell {
+  display: grid;
+  justify-items: center;
+  color: var(--vr-text-2);
+  font-size: 12px;
+  text-align: center;
+}
+
+.rights-yes {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--vr-accent) 14%, transparent);
+  color: var(--vr-accent);
+}
+
+.rights-no {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  color: var(--vr-surface-3-hover);
+}
+
+.rights-sections {
+  border-top: 1px solid var(--vr-line);
+  background: oklch(100% 0 0 / 0.02);
+}
+
+.staff-fixed-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   color: var(--vr-text-3);
   font-size: 12.5px;
 }

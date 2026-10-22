@@ -70,7 +70,7 @@ test('a reviewer is shown the open reports with a way to open them', async () =>
 
   const card = await screen.findByRole('status');
   expect(card.textContent).toContain('Открытых жалоб: 2');
-  await userEvent.click(within(card).getByRole('button', { name: 'Посмотреть' }));
+  await userEvent.click(within(card).getByRole('button', { name: 'Разобрать' }));
   expect(onOpenReports).toHaveBeenCalledOnce();
 });
 

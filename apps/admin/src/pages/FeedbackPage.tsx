@@ -1,6 +1,6 @@
 // Answers to "how was the call?": how many calls went well over the period,
-// what people liked and what got in the way, and the newest answers with the
-// call's own numbers next to each.
+// what people liked and what got in the way, and the newest answers in a
+// table with the call's own numbers next to each, the bad ones in red.
 
 import { ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -19,7 +19,7 @@ import { fetchCallFeedback } from '../api/admin.ts';
 import { formatCount, formatDateTime, formatMinutes, formatMs, formatPercent } from '../format.ts';
 import { loadFailure, type LoadFailure } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
-import { Segment } from '../ui/index.tsx';
+import { Empty, Panel, Pill, Segment } from '../ui/index.tsx';
 import './FeedbackPage.css';
 
 type Period = (typeof ADMIN_CALL_FEEDBACK_PERIODS)[number];
@@ -37,16 +37,34 @@ const PLATFORM_LABELS: Record<AdminCallFeedbackEntry['platform'], string> = {
   mobile: 'телефон'
 };
 
-function qualityLine(entry: AdminCallFeedbackEntry): string {
-  const quality = entry.quality;
-  if (!quality) return '';
-  const parts = [`пинг ${formatMs(quality.rttAvgMs)}`];
+/**
+ * Where a call's numbers turn red: a ping a person hears, losses that break
+ * words up, a shaky jitter, any reconnect, and a call that had to go through
+ * the TURN relay.
+ */
+const BAD = { rttMs: 250, lossPct: 5, jitterMs: 30 } as const;
+
+function Quality({ quality }: { quality: NonNullable<AdminCallFeedbackEntry['quality']> }) {
   const loss = Math.max(quality.inboundLossAvgPct ?? 0, quality.outboundLossAvgPct ?? 0);
-  parts.push(`потери ${formatPercent(loss)}`);
-  if (quality.jitterAvgMs !== null) parts.push(`джиттер ${formatMs(quality.jitterAvgMs)}`);
-  if (quality.reconnects) parts.push(`переподключений ${quality.reconnects}`);
-  if (quality.transport && quality.transport !== 'udp') parts.push(quality.transport.toUpperCase());
-  return parts.join(' · ');
+  const parts: { text: string; bad: boolean }[] = [
+    { text: `пинг ${formatMs(quality.rttAvgMs)}`, bad: (quality.rttAvgMs ?? 0) >= BAD.rttMs },
+    { text: `потери ${formatPercent(loss)}`, bad: loss >= BAD.lossPct }
+  ];
+  if (quality.jitterAvgMs !== null) {
+    parts.push({ text: `джиттер ${formatMs(quality.jitterAvgMs)}`, bad: quality.jitterAvgMs >= BAD.jitterMs });
+  }
+  if (quality.reconnects) parts.push({ text: `переподкл. ${quality.reconnects}`, bad: true });
+  if (quality.transport === 'relay') parts.push({ text: 'TURN', bad: true });
+  if (quality.transport === 'tcp') parts.push({ text: 'TCP', bad: false });
+  return (
+    <span className="feedback-quality ui-mono">
+      {parts.map((part) => (
+        <span key={part.text} data-bad={part.bad}>
+          {part.text}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 function TagList({
@@ -59,7 +77,7 @@ function TagList({
   title: string;
   tags: readonly CallFeedbackTag[];
   of: number;
-  tone: string;
+  tone: 'danger' | 'success';
   summary: AdminCallFeedbackPage['summary'];
 }) {
   const count = (tag: CallFeedbackTag) => summary.tags.find((item) => item.tag === tag)?.count ?? 0;
@@ -67,20 +85,23 @@ function TagList({
     .map((tag) => ({ tag, count: count(tag), share: of ? (count(tag) / of) * 100 : 0 }))
     .sort((a, b) => b.count - a.count);
   return (
-    <section className="feedback-tags" aria-label={title}>
-      <h2>{title}</h2>
-      <ul>
+    <Panel title={title}>
+      <ul className="feedback-tags" data-tone={tone}>
         {rows.map((row) => (
           <li key={row.tag}>
-            <span className="feedback-tag-label">{CALL_FEEDBACK_TAG_LABELS[row.tag]}</span>
-            <span className="feedback-tag-count">{formatCount(row.count)}</span>
+            <span className="feedback-tag-line">
+              <span className="feedback-tag-label">{CALL_FEEDBACK_TAG_LABELS[row.tag]}</span>
+              <span className="feedback-tag-count">
+                {formatCount(row.count)} <small>{formatPercent(row.share)}</small>
+              </span>
+            </span>
             <span className="feedback-tag-bar" aria-hidden="true">
-              <span style={{ width: `${row.share}%`, background: tone }} />
+              <span style={{ width: `${String(row.share)}%` }} />
             </span>
           </li>
         ))}
       </ul>
-    </section>
+    </Panel>
   );
 }
 
@@ -130,8 +151,8 @@ export function FeedbackPage() {
   const goodShare = summary && total ? (summary.good / total) * 100 : null;
 
   return (
-    <div className="feedback">
-      <div className="feedback-controls">
+    <>
+      <div className="ui-toolbar">
         <Segment
           options={ADMIN_CALL_FEEDBACK_PERIODS.map((value) => ({ value, label: PERIOD_LABELS[value] }))}
           value={period}
@@ -144,98 +165,136 @@ export function FeedbackPage() {
       {failure && !page ? (
         <Notice failure={failure} onRetry={() => choose(period, rating)} />
       ) : !page || !summary ? (
-        <p className="feedback-quiet" aria-busy="true">
+        <p className="ui-empty" aria-busy="true">
           Загружаем…
         </p>
       ) : (
         <>
           {failure ? (
-            <p className="feedback-error" role="alert">
+            <p className="admin-error" role="alert">
               {failure.message}
             </p>
           ) : null}
-          <section className="feedback-kpis" aria-label="Итог за период" aria-busy={loading}>
-            <div className="feedback-kpi">
-              <span className="feedback-kpi-label">Довольны звонком</span>
-              <span className="feedback-kpi-value">{formatPercent(goodShare)}</span>
-              <span className="feedback-kpi-hint">из {formatCount(total)} ответов</span>
-            </div>
-            <div className="feedback-kpi">
-              <span className="feedback-kpi-label">Хорошо</span>
-              <span className="feedback-kpi-value is-good">{formatCount(summary.good)}</span>
-            </div>
-            <div className="feedback-kpi">
-              <span className="feedback-kpi-label">Плохо</span>
-              <span className="feedback-kpi-value is-bad">{formatCount(summary.bad)}</span>
-            </div>
-          </section>
-
-          <div className="feedback-tag-columns">
+          <div className="ui-grid feedback-cards" style={{ '--grid-min': '320px' }} aria-busy={loading}>
+            <Panel title="Довольны звонком">
+              <div className="feedback-score">
+                <span className="feedback-score-value">{formatPercent(goodShare)}</span>
+                <span className="feedback-score-of">из {formatCount(total)} ответов</span>
+              </div>
+              <span className="feedback-split" aria-hidden="true">
+                <span style={{ width: `${String(goodShare ?? 0)}%` }} />
+              </span>
+              <div className="feedback-counts">
+                <span className="feedback-count" data-rating="good">
+                  <ThumbsUp size={16} aria-hidden="true" />
+                  Хорошо <strong>{formatCount(summary.good)}</strong>
+                </span>
+                <span className="feedback-count" data-rating="bad">
+                  <ThumbsDown size={16} aria-hidden="true" />
+                  Плохо <strong>{formatCount(summary.bad)}</strong>
+                </span>
+              </div>
+            </Panel>
             <TagList
               title="Что мешало"
               tags={CALL_FEEDBACK_BAD_TAGS}
               of={summary.bad}
-              tone="var(--vr-danger)"
+              tone="danger"
               summary={summary}
             />
             <TagList
               title="Что понравилось"
               tags={CALL_FEEDBACK_GOOD_TAGS}
               of={summary.good}
-              tone="var(--vr-success)"
+              tone="success"
               summary={summary}
             />
           </div>
 
-          {page.entries.length === 0 ? (
-            <p className="feedback-quiet">За этот период ответов нет.</p>
-          ) : (
-            <>
-              <ul className="feedback-list" aria-label="Ответы">
-                {page.entries.map((entry) => (
-                  <li key={entry.id} className="feedback-entry">
-                    <div className="feedback-entry-head">
-                      <span className="feedback-rating" data-rating={entry.rating}>
-                        {entry.rating === 'good' ? (
-                          <>
-                            <ThumbsUp size={14} aria-hidden="true" /> Хорошо
-                          </>
-                        ) : (
-                          <>
-                            <ThumbsDown size={14} aria-hidden="true" /> Плохо
-                          </>
-                        )}
-                      </span>
-                      <span>{entry.author ? `${entry.author.displayName} (@${entry.author.login})` : 'Гость'}</span>
-                      <span>{formatDateTime(entry.createdAt)}</span>
-                    </div>
-                    <div className="feedback-entry-call">
-                      {`${entry.roomName ? `«${entry.roomName}»` : 'временная комната'} · ${formatMinutes(entry.durationS / 60)} · собеседников ${entry.peers} · ${PLATFORM_LABELS[entry.platform]}`}
-                      {entry.quality ? (
-                        <>
-                          <br />
-                          <span className="feedback-entry-quality">{qualityLine(entry)}</span>
-                        </>
-                      ) : null}
-                    </div>
-                    {entry.tags.length ? (
-                      <ul className="feedback-entry-tags">
-                        {entry.tags.map((tag) => (
-                          <li key={tag}>{CALL_FEEDBACK_TAG_LABELS[tag]}</li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    {entry.comment ? <p className="feedback-entry-comment">{entry.comment}</p> : null}
-                  </li>
-                ))}
-              </ul>
-              {page.entries.length >= ADMIN_CALL_FEEDBACK_LIMIT ? (
-                <p className="feedback-quiet">Показаны последние {ADMIN_CALL_FEEDBACK_LIMIT} ответов за период.</p>
-              ) : null}
-            </>
-          )}
+          <Panel title="Ответы" flush>
+            {page.entries.length === 0 ? (
+              <Empty>За этот период ответов нет</Empty>
+            ) : (
+              <div className="ui-table-scroll">
+                <table className="feedback-table" aria-label="Ответы">
+                  <thead>
+                    <tr>
+                      <th scope="col">Оценка</th>
+                      <th scope="col">Кто</th>
+                      <th scope="col">Звонок</th>
+                      <th scope="col">Связь</th>
+                      <th scope="col">Отзыв</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {page.entries.map((entry) => (
+                      <tr key={entry.id}>
+                        <td>
+                          {entry.rating === 'good' ? (
+                            <Pill tone="success" compact>
+                              <ThumbsUp size={12} aria-hidden="true" /> Хорошо
+                            </Pill>
+                          ) : (
+                            <Pill tone="danger" compact>
+                              <ThumbsDown size={12} aria-hidden="true" /> Плохо
+                            </Pill>
+                          )}
+                        </td>
+                        <td>
+                          <span className="feedback-who">
+                            {entry.author ? (
+                              <span>
+                                {entry.author.displayName} · <span className="ui-mono">@{entry.author.login}</span>
+                              </span>
+                            ) : (
+                              <span>Гость</span>
+                            )}
+                            <small>{formatDateTime(entry.createdAt)}</small>
+                          </span>
+                        </td>
+                        <td>
+                          <span className="feedback-who">
+                            <span>{entry.roomName ? `«${entry.roomName}»` : 'временная комната'}</span>
+                            <small>
+                              {`${formatMinutes(entry.durationS / 60)} · собеседников ${entry.peers} · ${PLATFORM_LABELS[entry.platform]}`}
+                            </small>
+                          </span>
+                        </td>
+                        <td>
+                          {entry.quality ? (
+                            <Quality quality={entry.quality} />
+                          ) : (
+                            <span className="feedback-none">—</span>
+                          )}
+                        </td>
+                        <td>
+                          <span className="feedback-review">
+                            {entry.tags.length ? (
+                              <span className="feedback-review-tags">
+                                {entry.tags.map((tag) => (
+                                  <Pill key={tag} compact>
+                                    {CALL_FEEDBACK_TAG_LABELS[tag]}
+                                  </Pill>
+                                ))}
+                              </span>
+                            ) : null}
+                            {entry.comment ? <span className="feedback-comment">{entry.comment}</span> : null}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {page.entries.length >= ADMIN_CALL_FEEDBACK_LIMIT ? (
+              <p className="ui-footnote feedback-footnote">
+                Показаны последние {ADMIN_CALL_FEEDBACK_LIMIT} ответов за период.
+              </p>
+            ) : null}
+          </Panel>
         </>
       )}
-    </div>
+    </>
   );
 }

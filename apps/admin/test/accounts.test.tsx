@@ -95,7 +95,9 @@ test('the list asks for what is searched, filtered and sorted, and a row opens t
   await userEvent.type(screen.getByRole('searchbox', { name: 'Поиск аккаунта' }), 'ali');
   await waitFor(() => expect(lastParam(calls, 'q')).toBe('ali'));
 
-  await userEvent.selectOptions(screen.getByRole('combobox', { name: 'Показать' }), 'blocked');
+  await userEvent.click(
+    within(screen.getByRole('radiogroup', { name: 'Показать' })).getByRole('radio', { name: 'Заблокированные' })
+  );
   await waitFor(() => expect(lastParam(calls, 'filter')).toBe('blocked'));
 
   await userEvent.click(screen.getByRole('button', { name: 'Сообщений' }));

@@ -1,23 +1,36 @@
 // The admin app: who is signed in, the sections their role opens, and the
 // address that keeps the section (and an account's card) across reloads.
+// The frame around the sections is the menu on the left and the top bar.
 
-import { LogOut } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
-import { STAFF_ROLE_LABELS } from '@voice-room/shared/contracts/staff';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from './api/client.ts';
 import { fetchOpenReports } from './api/admin.ts';
 import { fetchMe, signOut } from './api/staff.ts';
+import { FrameContext, type Frame, type RefreshStatus } from './frame.tsx';
 import { AccountsPage } from './pages/AccountsPage.tsx';
 import { FeedbackPage } from './pages/FeedbackPage.tsx';
 import { OverviewPage } from './pages/OverviewPage.tsx';
 import { ProductPage } from './pages/ProductPage.tsx';
 import { ReportsPage } from './pages/ReportsPage.tsx';
-import { RoomsPage } from './pages/RoomsPage.tsx';
+import { RoomsPage, type HistoryRoom } from './pages/RoomsPage.tsx';
 import { StaffPage } from './pages/StaffPage.tsx';
 import { SystemPage } from './pages/SystemPage.tsx';
+import { GlobalSearch } from './shell/GlobalSearch.tsx';
+import { Sidebar } from './shell/Sidebar.tsx';
+import { Topbar } from './shell/Topbar.tsx';
+import './shell/shell.css';
 import { StaffContext, type Staff } from './staff.tsx';
-import { TAB_LABELS, allowedTabs, locationFromPath, pathOf, type AdminLocation, type AdminTab } from './tabs.ts';
-import { Avatar, Button, Segment } from './ui/index.tsx';
+import {
+  TAB_GROUPS,
+  TAB_LABELS,
+  TAB_TITLES,
+  allowedTabs,
+  locationFromPath,
+  pathOf,
+  type AdminLocation,
+  type AdminTab
+} from './tabs.ts';
+import { Button } from './ui/index.tsx';
 
 function useLocation(): [AdminLocation, (next: AdminLocation, replace?: boolean) => void] {
   const [location, setLocation] = useState(() => locationFromPath(window.location.pathname));
@@ -37,11 +50,19 @@ function useLocation(): [AdminLocation, (next: AdminLocation, replace?: boolean)
   return [location, go];
 }
 
+const groupOf = (tab: AdminTab) => TAB_GROUPS.find((group) => group.tabs.includes(tab))?.label ?? '';
+
 export function App() {
   const [staff, setStaff] = useState<Staff | null>(null);
   const [failed, setFailed] = useState('');
   const [location, go] = useLocation();
   const [openReports, setOpenReports] = useState(0);
+  const [pageTitle, setPageTitle] = useState<string | null>(null);
+  const [refresh, setRefresh] = useState<RefreshStatus | null>(null);
+  const [frame] = useState<Frame>(() => ({ setTitle: setPageTitle, setRefresh }));
+  // A room picked in the search: the rooms section narrows its history to it.
+  const [roomFocus, setRoomFocus] = useState<HistoryRoom | null>(null);
+  const main = useRef<HTMLElement>(null);
 
   useEffect(() => {
     fetchMe().then(
@@ -77,9 +98,14 @@ export function App() {
     if (tab && tab !== location.tab) go({ tab, accountId: null }, true);
   }, [tab, location.tab, go]);
 
+  // Another section (or another account) starts at its top.
+  useEffect(() => {
+    main.current?.scrollTo?.({ top: 0 });
+  }, [tab, location.accountId]);
+
   if (failed) {
     return (
-      <main className="admin-shell">
+      <main className="admin-failed">
         <p className="admin-error" role="alert">
           {failed}
         </p>
@@ -91,58 +117,56 @@ export function App() {
 
   const selectTab = (next: AdminTab) => go({ tab: next, accountId: null });
   const openAccount = (accountId: string | null) => go({ tab: 'accounts', accountId });
+  const onCard = tab === 'accounts' && location.accountId !== null;
 
   return (
     <StaffContext.Provider value={staff}>
-      <main className="admin-shell">
-        <header className="admin-head">
-          <h1>Админка</h1>
-          <Segment
-            kind="tabs"
-            ariaLabel="Разделы"
-            value={tab}
-            onChange={selectTab}
-            options={tabs.map((value) => ({
-              value,
-              label: TAB_LABELS[value],
-              suffix:
-                value === 'reports' && openReports > 0 ? (
-                  <span className="admin-tab-count" aria-label={`открытых: ${openReports}`}>
-                    {openReports}
-                  </span>
-                ) : undefined
-            }))}
+      <FrameContext.Provider value={frame}>
+        <div className="frame">
+          <Sidebar
+            staff={staff}
+            tabs={tabs}
+            current={tab}
+            openReports={openReports}
+            onSelect={(next) => {
+              // The menu opens a section as it is, not narrowed to the last room searched for.
+              setRoomFocus(null);
+              selectTab(next);
+            }}
+            onSignOut={() => void signOut().finally(() => window.location.assign(staff.siteUrl))}
           />
-          <span className="admin-who">
-            <Avatar
-              name={staff.user.displayName}
-              src={staff.user.avatarUrl}
-              colorKey={staff.user.avatarColorKey}
-              background={staff.user.avatarAccent}
-              size={24}
+          <div className="frame-column">
+            <Topbar
+              crumb={onCard ? TAB_LABELS.accounts : groupOf(tab)}
+              title={onCard ? (pageTitle ?? 'Аккаунт') : TAB_TITLES[tab]}
+              refresh={refresh}
+              search={
+                <GlobalSearch
+                  onOpenAccount={openAccount}
+                  onOpenRoom={(room) => {
+                    setRoomFocus(room);
+                    selectTab('rooms');
+                  }}
+                />
+              }
             />
-            {staff.user.displayName} · {STAFF_ROLE_LABELS[staff.role]}
-            <Button
-              variant="ghost"
-              aria-label="Выйти из админки"
-              title="Выйти из админки"
-              onClick={() => void signOut().finally(() => window.location.assign(staff.siteUrl))}
-            >
-              <LogOut size={16} aria-hidden="true" />
-            </Button>
-          </span>
-        </header>
-        <div className="admin-body" role="tabpanel">
-          {tab === 'overview' ? <OverviewPage onOpenReports={() => selectTab('reports')} /> : null}
-          {tab === 'product' ? <ProductPage /> : null}
-          {tab === 'system' ? <SystemPage /> : null}
-          {tab === 'accounts' ? <AccountsPage accountId={location.accountId} onOpenAccount={openAccount} /> : null}
-          {tab === 'rooms' ? <RoomsPage onOpenAccount={openAccount} /> : null}
-          {tab === 'reports' ? <ReportsPage onResolved={setOpenReports} /> : null}
-          {tab === 'feedback' ? <FeedbackPage /> : null}
-          {tab === 'staff' ? <StaffPage /> : null}
+            <main className="frame-main" ref={main}>
+              <div className="frame-content">
+                {tab === 'overview' ? <OverviewPage onOpenReports={() => selectTab('reports')} /> : null}
+                {tab === 'product' ? <ProductPage /> : null}
+                {tab === 'system' ? <SystemPage /> : null}
+                {tab === 'accounts' ? (
+                  <AccountsPage accountId={location.accountId} onOpenAccount={openAccount} />
+                ) : null}
+                {tab === 'rooms' ? <RoomsPage onOpenAccount={openAccount} focusRoom={roomFocus} /> : null}
+                {tab === 'reports' ? <ReportsPage onResolved={setOpenReports} onOpenAccount={openAccount} /> : null}
+                {tab === 'feedback' ? <FeedbackPage /> : null}
+                {tab === 'staff' ? <StaffPage /> : null}
+              </div>
+            </main>
+          </div>
         </div>
-      </main>
+      </FrameContext.Provider>
     </StaffContext.Provider>
   );
 }

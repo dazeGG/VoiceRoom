@@ -1,6 +1,6 @@
 // The admin panel's rooms section: who is in which room's voice right now,
 // read from the live presence roster, and the finished stays the database
-// still ties to a room. Names, accounts and times only; nothing said in a
+// still ties to a room, one by one or gathered into calls. Names, accounts and times only; nothing said in a
 // room. A non-admin gets null from every read, which the route answers with 403.
 
 import {
@@ -8,8 +8,11 @@ import {
   type LiveRoom,
   type LiveRoomPeer,
   type RoomAccount,
+  type RoomCalls,
+  type RoomCallsQuery,
   type RoomHistory,
-  type RoomHistoryQuery
+  type RoomHistoryQuery,
+  type RoomStay
 } from '@voice-room/shared/contracts/admin';
 import type { PresencePeer } from '../rooms/room-views.ts';
 import type { DescribeAddress } from '../rooms/voice-session.repository.ts';
@@ -21,12 +24,15 @@ export interface AdminRoomsServiceDeps {
   staff: StaffCheck;
   /** The live presence roster: every room the API holds, empty ones too. */
   presenceRooms(): Iterable<{ id: string; peers: Map<string, PresencePeer> }>;
-  repository(): Pick<AdminRoomsRepository, 'rooms' | 'accounts' | 'history'>;
+  repository(): Pick<AdminRoomsRepository, 'rooms' | 'accounts' | 'history' | 'calls'>;
   /** Where a peer came from without its address: the keyed hash and the city. */
   describeAddress: DescribeAddress;
 }
 
 type Payload<T> = Omit<T, 'ok'>;
+
+// Where a stay came from is for those who may see it; the rest see who and when.
+const withoutOrigin = (stay: RoomStay): RoomStay => ({ ...stay, guestId: null, ipKey: null, location: null });
 
 function parseCursor(cursor: string | undefined): { leftAt: number; id: string } | undefined {
   if (!cursor) return undefined;
@@ -108,14 +114,44 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
     });
     const last = stays[stays.length - 1];
     return {
-      // Where a stay came from is for those who may see it; the rest see who and when.
-      stays: origin ? stays : stays.map((stay) => ({ ...stay, guestId: null, ipKey: null, location: null })),
+      stays: origin ? stays : stays.map(withoutOrigin),
       next: more && last ? `${last.leftAt}_${last.id}` : null,
       keepDays: VOICE_HISTORY_KEEP_DAYS
     };
   }
 
-  return Object.freeze({ live, history });
+  /**
+   * The finished calls. A call someone is still in (its room's voice has had
+   * people since before it ended) is left to the live rooms; the page goes on
+   * from the last call read, shown or not.
+   */
+  async function calls(userId: string, query: RoomCallsQuery): Promise<Payload<RoomCalls> | null> {
+    if (!(await allowed(userId))) return null;
+    const origin = await seesOrigin(userId);
+    const liveSince = new Map<string, number>();
+    for (const room of deps.presenceRooms()) {
+      const joined = [...room.peers.values()].map((peer) => peer.joinedAt).filter((at) => typeof at === 'number');
+      if (joined.length) liveSince.set(room.id, Math.min(...joined));
+    }
+    const { calls: page, more } = await deps.repository().calls({
+      roomId: query.roomId,
+      after: parseCursor(query.after),
+      from: query.from === undefined ? undefined : Number(query.from),
+      to: query.to === undefined ? undefined : Number(query.to)
+    });
+    const last = page.at(-1);
+    const finished = page.filter((call) => {
+      const since = liveSince.get(call.roomId);
+      return since === undefined || since > call.endedAt;
+    });
+    return {
+      calls: origin ? finished : finished.map((call) => ({ ...call, stays: call.stays.map(withoutOrigin) })),
+      next: more && last ? `${last.endedAt}_${last.id}` : null,
+      keepDays: VOICE_HISTORY_KEEP_DAYS
+    };
+  }
+
+  return Object.freeze({ live, history, calls });
 }
 
 export type AdminRoomsService = ReturnType<typeof createAdminRoomsService>;
