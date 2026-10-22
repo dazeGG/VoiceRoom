@@ -16,6 +16,8 @@ import {
   BlockBody,
   DeleteAccountBody,
   LiveRooms,
+  RoomCalls,
+  RoomCallsQuery,
   RoomHistory,
   RoomHistoryQuery,
   ProductQuery,
@@ -52,7 +54,7 @@ export interface AdminRoutesDeps {
     AdminAccountsService,
     'list' | 'detail' | 'block' | 'unblock' | 'signOutEverywhere' | 'remove' | 'cancelDeletion' | 'setBadge' | 'badges'
   >;
-  rooms: Pick<AdminRoomsService, 'live' | 'history'>;
+  rooms: Pick<AdminRoomsService, 'live' | 'history' | 'calls'>;
   /** The staff member behind the admin-app session, or null with the 401 sent. */
   staffUserId(request: FastifyRequest, reply: FastifyReply): Promise<string | null>;
 }
@@ -117,6 +119,18 @@ export function registerAdminRoutes(root: FastifyInstance, ctx: ApiContext, deps
       const history = await deps.rooms.history(userId, request.query);
       if (!history) return reply.code(403).send(ADMIN_REQUIRED);
       return { ok: true as const, ...history };
+    }
+  );
+
+  app.get(
+    '/api/admin/rooms/calls',
+    { schema: { querystring: RoomCallsQuery, response: { 200: RoomCalls, '4xx': Failure } } },
+    async (request, reply) => {
+      const userId = await actor(request, reply);
+      if (!userId) return reply;
+      const calls = await deps.rooms.calls(userId, request.query);
+      if (!calls) return reply.code(403).send(ADMIN_REQUIRED);
+      return { ok: true as const, ...calls };
     }
   );
 

@@ -455,3 +455,45 @@ export const RoomHistory = Ok({
   keepDays: Type.Number()
 });
 export type RoomHistory = Static<typeof RoomHistory>;
+
+/** Calls on one page of the call history. */
+export const ROOM_CALLS_PAGE_SIZE = 20;
+
+/**
+ * Finished calls, the latest end first, of one room or of all; `from` and `to`
+ * (milliseconds) keep the calls that overlap that span, as a day's timeline
+ * asks. `after` is where the previous page stopped.
+ */
+export const RoomCallsQuery = Type.Object({
+  roomId: Type.Optional(Type.String({ minLength: 1, maxLength: 64 })),
+  after: Type.Optional(HistoryCursor),
+  from: Type.Optional(MillisString),
+  to: Type.Optional(MillisString)
+});
+export type RoomCallsQuery = Static<typeof RoomCallsQuery>;
+
+/**
+ * One call: everyone in a room's voice from the first coming in until the
+ * last left, with no moment the voice stood empty. Its id is its first stay's;
+ * its stays come in the order people joined. A call someone is still in is
+ * not history yet: it shows among the live rooms.
+ */
+export const RoomCall = Type.Object({
+  id: Type.String(),
+  roomId: Type.String(),
+  /** As on a stay: null once the room is gone, empty for an unnamed temporary room. */
+  roomName: Nullable(Type.String()),
+  isStatic: Nullable(Type.Boolean()),
+  startedAt: Type.Number(),
+  endedAt: Type.Number(),
+  stays: Type.Array(RoomStay)
+});
+export type RoomCall = Static<typeof RoomCall>;
+
+export const RoomCalls = Ok({
+  calls: Type.Array(RoomCall),
+  /** Null on the last page. */
+  next: Nullable(HistoryCursor),
+  keepDays: Type.Number()
+});
+export type RoomCalls = Static<typeof RoomCalls>;
