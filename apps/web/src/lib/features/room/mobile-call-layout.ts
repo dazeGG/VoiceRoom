@@ -83,5 +83,5 @@ export function nearestCorner(
   centre: { x: number; y: number },
   viewport: { width: number; height: number }
 ): PipCorner {
-  return `${centre.y < viewport.height / 2 ? 't' : 'b'}${centre.x < viewport.width / 2 ? 'l' : 'r'}` as PipCorner;
+  return `${centre.y < viewport.height / 2 ? 't' : 'b'}${centre.x < viewport.width / 2 ? 'l' : 'r'}`;
 }

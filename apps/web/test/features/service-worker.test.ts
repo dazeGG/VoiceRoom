@@ -1,8 +1,10 @@
 // The service worker shows a push only when no window is being looked at, and
 // a click opens its target on this site only, reusing an open window.
 
-import { beforeEach, expect, test, vi } from 'vitest';
+import { beforeEach, expect, test, vi, type Mock } from 'vitest';
+import { buildProviderPayload } from '@voice-room/shared/notifications';
 import { freshImport } from '../helpers/fresh-module.ts';
+import { defined } from '../helpers/assert.ts';
 
 type Handler = (event: Record<string, unknown>) => void;
 type FakeWindow = {
@@ -16,7 +18,7 @@ type FakeWindow = {
 const ORIGIN = 'https://voiceroom.ru';
 let handlers: Record<string, Handler>;
 let windows: FakeWindow[];
-let showNotification: ReturnType<typeof vi.fn>;
+let showNotification: Mock<(title: string, options: NotificationOptions) => Promise<void>>;
 let openWindow: ReturnType<typeof vi.fn>;
 
 function fakeWindow(extra: Partial<FakeWindow> = {}): FakeWindow {
@@ -33,7 +35,7 @@ function fakeWindow(extra: Partial<FakeWindow> = {}): FakeWindow {
 beforeEach(async () => {
   handlers = {};
   windows = [];
-  showNotification = vi.fn(async () => {});
+  showNotification = vi.fn<(title: string, options: NotificationOptions) => Promise<void>>(async () => {});
   openWindow = vi.fn(async () => null);
   vi.stubGlobal('self', {
     navigator: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)', platform: 'Win32', maxTouchPoints: 0 },
@@ -44,25 +46,27 @@ beforeEach(async () => {
     clients: { matchAll: async () => windows, openWindow },
     registration: { showNotification }
   });
-  await freshImport('/src/service-worker.ts');
+  await freshImport(() => import('../../src/service-worker.ts'));
 });
 
 async function fire(type: string, event: Record<string, unknown>): Promise<void> {
   let done: Promise<unknown> = Promise.resolve();
-  handlers[type]({ ...event, waitUntil: (promise: Promise<unknown>) => (done = promise) });
+  defined(handlers[type], 'handlers[type]')({ ...event, waitUntil: (promise: Promise<unknown>) => (done = promise) });
   await done;
 }
+
+// NotificationOptions types its data as any; read it as unknown.
+const dataOf = (options: { data?: unknown }): unknown => options.data;
 
 const push = (payload: unknown) => fire('push', { data: { json: () => payload, text: () => '' } });
 
 test('a push is shown while no window is in front, and suppressed for a focused visible one', async () => {
   windows = [fakeWindow({ visibilityState: 'visible', focused: false })];
   await push({ title: 'Ада', body: 'привет', url: '/?dm=ada', tag: 'dm:ada' });
-  const [title, options] = showNotification.mock.calls[0] as [
-    string,
-    Omit<NotificationOptions, 'data'> & { data: { url: string } }
-  ];
-  expect([title, options.body, options.tag, options.data.url]).toEqual(['Ада', 'привет', 'dm:ada', '/?dm=ada']);
+  const [title, options] = defined(showNotification.mock.calls[0], 'shown notification');
+  const data = dataOf(options);
+  expect([title, options.body, options.tag]).toEqual(['Ада', 'привет', 'dm:ada']);
+  expect(data).toHaveProperty('url', '/?dm=ada');
 
   showNotification.mockClear();
   windows = [fakeWindow({ visibilityState: 'visible', focused: true })];
@@ -87,4 +91,24 @@ test('a click opens a same-site target in an open window, and never another site
   windows = [];
   await fire('notificationclick', { notification: { close, data: { url: 'https://evil.example/phish' } } });
   expect(openWindow).toHaveBeenCalledWith(`${ORIGIN}/`);
+});
+
+test('a mention push from the API opens its room and message when clicked', async () => {
+  const payload = buildProviderPayload({
+    id: 'n1',
+    roomId: 'r1',
+    sourceMessageId: 'm1',
+    actorUserId: 'u1',
+    reasons: ['mention'],
+    revision: 2,
+    body: '@ada hi'
+  });
+  await push(JSON.parse(JSON.stringify(payload)));
+  const shownOptions: { data?: unknown } | undefined = showNotification.mock.lastCall?.[1];
+  const shown = shownOptions?.data;
+
+  const open = fakeWindow();
+  windows = [open];
+  await fire('notificationclick', { notification: { close: vi.fn(), data: shown } });
+  expect(open.navigate).toHaveBeenCalledWith(`${ORIGIN}/?room=r1&message=m1`);
 });

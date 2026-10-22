@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { registerViaUi, uniqueLogin } from './helpers';
+import { boxOf, registerViaUi, uniqueLogin } from './helpers';
 
 const PNG_BASE64 =
   'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAAPoAAAD6AG1e1JrAAAARUlEQVRYhe3XsREAMAhC0YzIOIzoVmaLpHmFvXcifE4z+3OOBeoEIcLxhsuIyoojjEYcLyApJAsoHVi+iklVsyin81wHF4vcPJcf4sTZAAAAAElFTkSuQmCC';
@@ -25,11 +25,9 @@ test('image attachments support picker, removal, drag-and-drop, paste, and sendi
   const composeField = page.locator('.attachment-compose-field');
   await expect(composeField).toBeVisible();
   await expect(composeField.locator('.attachment-compose-controls')).toBeVisible();
-  const [fieldBox, addBox] = await Promise.all([composeField.boundingBox(), addButton.boundingBox()]);
-  expect(fieldBox).not.toBeNull();
-  expect(addBox).not.toBeNull();
-  expect(addBox!.x).toBeGreaterThanOrEqual(fieldBox!.x);
-  expect(addBox!.x + addBox!.width).toBeLessThanOrEqual(fieldBox!.x + fieldBox!.width);
+  const [fieldBox, addBox] = await Promise.all([boxOf(composeField), boxOf(addButton)]);
+  expect(addBox.x).toBeGreaterThanOrEqual(fieldBox.x);
+  expect(addBox.x + addBox.width).toBeLessThanOrEqual(fieldBox.x + fieldBox.width);
 
   await input.focus();
   await expect
@@ -57,14 +55,9 @@ test('image attachments support picker, removal, drag-and-drop, paste, and sendi
   });
   await expect(page.locator('.attachment-draft img')).toBeVisible();
   await expect(composeField.locator('.attachment-draft')).toBeVisible();
-  const [thumbnailBox, composeBox] = await Promise.all([
-    page.locator('.attachment-draft').boundingBox(),
-    composeField.boundingBox()
-  ]);
-  expect(thumbnailBox).not.toBeNull();
-  expect(composeBox).not.toBeNull();
-  expect(thumbnailBox!.x - composeBox!.x).toBeGreaterThanOrEqual(8);
-  expect(thumbnailBox!.x - composeBox!.x).toBeLessThanOrEqual(20);
+  const [thumbnailBox, composeBox] = await Promise.all([boxOf(page.locator('.attachment-draft')), boxOf(composeField)]);
+  expect(thumbnailBox.x - composeBox.x).toBeGreaterThanOrEqual(8);
+  expect(thumbnailBox.x - composeBox.x).toBeLessThanOrEqual(20);
   await expect(page.locator('.attachment-draft-loading')).toBeVisible();
   expect((await pickerUpload).ok()).toBe(true);
   await expect(page.locator('.attachment-draft')).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
@@ -84,10 +77,8 @@ test('image attachments support picker, removal, drag-and-drop, paste, and sendi
 
   await input.fill('Первая строка\nВторая строка\nТретья строка');
   await input.dispatchEvent('input');
-  const [multilineInputBox, multilineAddBox] = await Promise.all([input.boundingBox(), addButton.boundingBox()]);
-  expect(multilineInputBox).not.toBeNull();
-  expect(multilineAddBox).not.toBeNull();
-  expect(multilineAddBox!.y).toBeLessThan(multilineInputBox!.y + multilineInputBox!.height / 2);
+  const [multilineInputBox, multilineAddBox] = await Promise.all([boxOf(input), boxOf(addButton)]);
+  expect(multilineAddBox.y).toBeLessThan(multilineInputBox.y + multilineInputBox.height / 2);
   await input.fill('');
   await input.dispatchEvent('input');
 
@@ -100,11 +91,13 @@ test('image attachments support picker, removal, drag-and-drop, paste, and sendi
   );
 
   const chat = page.getByRole('complementary', { name: 'Панель комнаты' });
-  await chat.evaluate((element, encoded) => {
+  const droppedTransfer = await page.evaluateHandle((encoded) => {
     const bytes = Uint8Array.from(atob(encoded), (character) => character.charCodeAt(0));
     const transfer = new DataTransfer();
     transfer.items.add(new File([bytes], 'dropped.png', { type: 'image/png' }));
-    (window as typeof window & { __attachmentTestTransfer?: DataTransfer }).__attachmentTestTransfer = transfer;
+    return transfer;
+  }, PNG_BASE64);
+  await chat.evaluate((element, transfer) => {
     element.dispatchEvent(
       new DragEvent('dragenter', {
         bubbles: true,
@@ -112,10 +105,9 @@ test('image attachments support picker, removal, drag-and-drop, paste, and sendi
         dataTransfer: transfer
       })
     );
-  }, PNG_BASE64);
+  }, droppedTransfer);
   await expect(page.getByText('Перетащите фото сюда')).toBeVisible();
-  await chat.evaluate((element) => {
-    const transfer = (window as typeof window & { __attachmentTestTransfer?: DataTransfer }).__attachmentTestTransfer;
+  await chat.evaluate((element, transfer) => {
     element.dispatchEvent(
       new DragEvent('drop', {
         bubbles: true,
@@ -123,7 +115,7 @@ test('image attachments support picker, removal, drag-and-drop, paste, and sendi
         dataTransfer: transfer
       })
     );
-  });
+  }, droppedTransfer);
   await expect(page.getByText('Перетащите фото сюда')).toHaveCount(0);
 
   const slot = await slotResponse;

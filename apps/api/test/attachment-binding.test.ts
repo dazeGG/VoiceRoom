@@ -5,6 +5,8 @@ import test, { type TestContext } from 'node:test';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createAttachmentRepository } from '../src/domains/media/attachment.repository.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { Type } from 'typebox';
+import { CountRow, queryRow } from './helpers/checked.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
 async function setup(t: TestContext) {
@@ -84,12 +86,36 @@ test(
       client.release();
     }
     assert.equal(
-      (await pool.query(`SELECT count(*)::int count FROM room_messages WHERE id='rolled-back'`)).rows[0].count,
+      (await queryRow(pool, CountRow, `SELECT count(*)::int count FROM room_messages WHERE id='rolled-back'`)).count,
       0
     );
     assert.equal(
-      (await pool.query(`SELECT text FROM room_messages WHERE id='room-message'`)).rows[0].text,
+      (
+        await queryRow(
+          pool,
+          Type.Object({ text: Type.String() }),
+          `SELECT text FROM room_messages WHERE id='room-message'`
+        )
+      ).text,
       '[Изображения: 2]'
     );
+  }
+);
+
+test(
+  'a binding names one to four distinct string ids and a known context, or nothing is bound',
+  { skip: !process.env.TEST_DATABASE_URL, timeout: 120000 },
+  async (t) => {
+    const { pool, repository } = await setup(t);
+    const id = await ready(pool);
+    const bind = (attachmentIds: unknown, context = 'room') =>
+      repository.bindReady({ ownerId: 'owner', context, messageId: 'room-message', attachmentIds });
+
+    await assert.rejects(bind([]), /Between one and four/);
+    await assert.rejects(bind([id, id]), /must be unique/);
+    await assert.rejects(bind([id, 7]), /must be strings/);
+    await assert.rejects(bind([id], 'forum'), /Invalid attachment context/);
+    // None of the refusals bound the ready draft.
+    assert.equal((await repository.listForMessage('room', 'room-message')).length, 0);
   }
 );

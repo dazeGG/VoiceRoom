@@ -8,6 +8,7 @@ import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
 import { checkRoomExists, requestLiveKitToken } from '../../src/lib/features/room/client/net/api.ts';
 import { resetRuntimeConfig } from '../../src/lib/platform/runtime-config.ts';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { instanceOf } from '../helpers/assert.ts';
 
 const JOIN = { name: 'Аня', peerId: 'peer0001', roomId: 'room-a', sessionToken: 'token' };
 const ADMISSION = {
@@ -44,7 +45,7 @@ test('a refused token request carries the text for its code, the room and the HT
   );
   expect(error).toBeInstanceOf(ApiError);
   expect(error).toMatchObject({ message: 'Вы заблокированы в этой комнате', code: 'room_banned', status: 403 });
-  expect((error as ApiError).details.roomId).toBe('room-a');
+  expect(instanceOf(error, ApiError, 'refusal').details.roomId).toBe('room-a');
 });
 
 test('a failure without a JSON body still says the server is unavailable', async () => {

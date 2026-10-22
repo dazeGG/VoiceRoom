@@ -19,7 +19,8 @@ export interface GracefulShutdownOptions {
   timeoutMs?: number;
   /** How long sockets and requests get to finish before they are cut. */
   socketGraceMs?: number;
-  signals?: Pick<NodeJS.Process, 'once'>;
+  /** Where the stop signals come from: the process, or a test's emitter. */
+  signals?: { once(signal: NodeJS.Signals, listener: () => void): unknown };
 }
 
 type ClosableServer = { close(callback: () => void): unknown; closeAllConnections?(): void };
@@ -28,7 +29,13 @@ export function installGracefulShutdown(
   server: ClosableServer,
   options: GracefulShutdownOptions
 ): (signal: string) => Promise<void> {
-  const { logger, exit = process.exit, timeoutMs = 8000, socketGraceMs = 1000, signals = process } = options;
+  const {
+    logger,
+    exit = (code: number) => process.exit(code),
+    timeoutMs = 8000,
+    socketGraceMs = 1000,
+    signals = process
+  } = options;
   let shuttingDown = false;
 
   async function shutdown(signal: string): Promise<void> {

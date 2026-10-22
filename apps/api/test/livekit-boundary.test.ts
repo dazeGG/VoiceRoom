@@ -12,9 +12,18 @@ import fs from 'node:fs';
 import net from 'node:net';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import type { GatePrincipal } from '../src/domains/admission/credential-boundary.service.ts';
+import type { GatePrincipal } from '../src/domains/admission/gate-principal.ts';
 import type { GateClaims } from '../src/domains/admission/gate-credential-signer.ts';
 import type { Fakes } from './fakes/index.ts';
+import { isRecord } from '@voice-room/shared/guards';
+import { Type } from 'typebox';
+import { checked } from './helpers/checked.ts';
+
+const GateConfig = Type.Object({
+  publicSignaling: Type.Object({ fallbackAllowed: Type.Boolean() }),
+  internalLiveKit: Type.Object({ productionHostBindAllowed: Type.Boolean() })
+});
+const PackageScripts = Type.Object({ scripts: Type.Record(Type.String(), Type.String()) });
 
 const { createApiApp } = await import('../src/server.ts');
 const { createGateCredentialSigner } = await import('../src/domains/admission/gate-credential-signer.ts');
@@ -55,11 +64,11 @@ type CredentialRow = {
 };
 
 function isPrincipal(value: unknown): value is GatePrincipal {
-  const principal = value as Partial<GatePrincipal> | null;
   return (
-    (principal?.principalType === 'account' || principal?.principalType === 'guest') &&
-    typeof principal.principalId === 'string' &&
-    principal.principalId.trim().length > 0
+    isRecord(value) &&
+    (value.principalType === 'account' || value.principalType === 'guest') &&
+    typeof value.principalId === 'string' &&
+    value.principalId.trim().length > 0
   );
 }
 
@@ -130,7 +139,11 @@ function createGateAwareStore() {
     accountUserId,
     guestPrincipalId,
     roomId
-  }: { accountUserId?: string | null; guestPrincipalId?: string; roomId?: string } = {}): GatePrincipal | null {
+  }: {
+    accountUserId?: string | null | undefined;
+    guestPrincipalId?: string | undefined;
+    roomId?: string;
+  } = {}): GatePrincipal | null {
     if (accountUserId) return { principalType: 'account', principalId: accountUserId };
     const guest = (guestPrincipalId || '').trim();
     if (!roomId || !guest) return null;
@@ -156,6 +169,9 @@ function createGateAwareStore() {
       return { status: 'created', identity: { id: `guest-id-${peerId}`, avatarColorKey: 'blurple', peerId } };
     },
     normalizeGatePrincipal: normalizePrincipal,
+    async findActiveRoomBan() {
+      return null;
+    },
     async isRoomServerMuted() {
       return false;
     },
@@ -379,10 +395,14 @@ test('G05-A01 same gate credential is denied after epoch revoke', async () => {
 
 test('G05-A02 topology exposes only the gate as public signaling boundary', () => {
   const compose = fs.readFileSync(path.join(ROOT, 'docker-compose.yml'), 'utf8');
-  const apiService = compose.match(/\n  api:\n[\s\S]*?(?=\n  [a-z][\w-]*:\n)/)?.[0] || '';
+  const apiService = compose.match(/\n {2}api:\n[\s\S]*?(?=\n {2}[a-z][\w-]*:\n)/)?.[0] || '';
   const lkv = fs.readFileSync(path.join(ROOT, 'docker-compose.lkv.yml'), 'utf8');
   const caddy = fs.readFileSync(path.join(ROOT, 'Caddyfile'), 'utf8');
-  const config = JSON.parse(fs.readFileSync(path.join(ROOT, 'config/livekit/external-auth-gate.v1.json'), 'utf8'));
+  const config = checked(
+    GateConfig,
+    JSON.parse(fs.readFileSync(path.join(ROOT, 'config/livekit/external-auth-gate.v1.json'), 'utf8')),
+    'external-auth-gate.v1.json'
+  );
 
   assert.equal(config.publicSignaling.fallbackAllowed, false);
   assert.equal(config.internalLiveKit.productionHostBindAllowed, false);
@@ -412,10 +432,14 @@ test('G05-A02 topology exposes only the gate as public signaling boundary', () =
 
 test('development topology routes public signaling through the auth gate', () => {
   const compose = fs.readFileSync(path.join(ROOT, 'docker-compose.dev.yml'), 'utf8');
-  const packageJson = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-  const apiService = compose.match(/\n  api:\n[\s\S]*?(?=\n  [a-z][\w-]*:\n)/)?.[0] || '';
-  const livekitService = compose.match(/\n  livekit:\n[\s\S]*?(?=\n  [a-z][\w-]*:\n)/)?.[0] || '';
-  const gateService = compose.match(/\n  livekit-gate:\n[\s\S]*?(?=\n  [a-z][\w-]*:\n|\nvolumes:)/)?.[0] || '';
+  const packageJson = checked(
+    PackageScripts,
+    JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')),
+    'package.json'
+  );
+  const apiService = compose.match(/\n {2}api:\n[\s\S]*?(?=\n {2}[a-z][\w-]*:\n)/)?.[0] || '';
+  const livekitService = compose.match(/\n {2}livekit:\n[\s\S]*?(?=\n {2}[a-z][\w-]*:\n)/)?.[0] || '';
+  const gateService = compose.match(/\n {2}livekit-gate:\n[\s\S]*?(?=\n {2}[a-z][\w-]*:\n|\nvolumes:)/)?.[0] || '';
 
   assert.match(apiService, /LIVEKIT_INTERNAL_URL:\s*ws:\/\/livekit:7880/);
   assert.match(apiService, /LIVEKIT_GATE_PUBLIC_URL:\s*\$\{LIVEKIT_PUBLIC_URL:-ws:\/\/localhost:7880\}/);
@@ -441,14 +465,25 @@ test('G05-A03..A06 amended strict proof is green and fail-on-blocked exits zero'
     }
   );
   assert.equal(result.status, 0, result.stderr);
-  const proof = JSON.parse(result.stdout) as {
-    status: string;
-    selectedMechanism: string;
-    greenF11Allowed: boolean;
-    successorStartAllowed: boolean;
-    cases: Array<{ id: string; denied?: boolean; allowed?: boolean; sharedNatAllowed?: boolean }>;
-    topology: { internalLiveKitDefaultOk: boolean; productionGateCommandOk: boolean };
-  };
+  const proof = checked(
+    Type.Object({
+      status: Type.String(),
+      selectedMechanism: Type.String(),
+      greenF11Allowed: Type.Boolean(),
+      successorStartAllowed: Type.Boolean(),
+      cases: Type.Array(
+        Type.Object({
+          id: Type.String(),
+          denied: Type.Optional(Type.Boolean()),
+          allowed: Type.Optional(Type.Boolean()),
+          sharedNatAllowed: Type.Optional(Type.Boolean())
+        })
+      ),
+      topology: Type.Object({ internalLiveKitDefaultOk: Type.Boolean(), productionGateCommandOk: Type.Boolean() })
+    }),
+    JSON.parse(result.stdout),
+    'boundary proof'
+  );
   assert.equal(proof.status, 'STRICT_BOUNDARY_PROVEN');
   assert.equal(proof.selectedMechanism, 'external-auth-gate');
   assert.equal(proof.greenF11Allowed, true);

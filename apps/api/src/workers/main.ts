@@ -1,5 +1,6 @@
 import type pg from 'pg';
 import { readDatabaseConfig } from '../lib/config.ts';
+import { readWorkerConfig } from '../app/config.ts';
 import { createDbPool } from '../platform/db/pool.ts';
 import { startWorkerMetricsServer } from '../lib/worker-metrics-server.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
@@ -22,15 +23,16 @@ async function main(
   env: NodeJS.ProcessEnv = process.env,
   { stopSignal = stopSignalFromProcess() }: { stopSignal?: AbortSignal } = {}
 ): Promise<void> {
-  const workerName = String(env.VOICE_ROOM_WORKER || '').trim();
+  const config = readWorkerConfig(env);
+  const workerName = config.WORKER_NAME;
   const run = workers[workerName];
   if (!run) {
     throw new Error(`VOICE_ROOM_WORKER must be one of: ${Object.keys(workers).join(', ')}`);
   }
   const log = createLogger({ env, name: `worker.${workerName}` });
   const metrics = await startWorkerMetricsServer({
-    host: env.WORKER_METRICS_HOST || '0.0.0.0',
-    port: Number(env.WORKER_METRICS_PORT || 9464)
+    host: config.WORKER_METRICS_HOST,
+    port: config.WORKER_METRICS_PORT
   });
   // The one pool of this process.
   const pool = createDbPool({ databaseUrl: readDatabaseConfig(env).url, logger: log });
@@ -70,8 +72,8 @@ function untilAborted(signal: AbortSignal): Promise<void> {
 }
 
 if (import.meta.main) {
-  main().catch((error) => {
-    process.stderr.write(`${(error as Error | null)?.stack || error}\n`);
+  main().catch((error: unknown) => {
+    process.stderr.write(`${error instanceof Error && error.stack ? error.stack : String(error)}\n`);
     process.exitCode = 1;
   });
 }

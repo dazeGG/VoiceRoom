@@ -1,5 +1,6 @@
-/* The page around the panel: spacing, radii and the shell. Each section
-   brings its own styles next to its component. */
+/* The page around the panel: spacing, radii and the admin app's own tokens.
+   The frame is styled in shell/shell.css; each section brings its own styles
+   next to its component. */
 
 :root {
   color-scheme: dark;
@@ -11,6 +12,8 @@
   --space-md: 16px;
   --space-lg: 24px;
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  /* The menu sits a shade darker than the page. */
+  --vr-sidebar: oklch(13% 0.005 260);
 }
 
 * {
@@ -36,57 +39,11 @@ a {
   color: inherit;
 }
 
-.admin-shell {
+.admin-failed {
   display: grid;
-  align-content: start;
-  gap: 18px;
-  width: 100%;
-  max-width: 1180px;
-  min-height: 100dvh;
-  margin: 0 auto;
-  padding: 20px 24px 48px;
-}
-
-.admin-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 12px 20px;
-}
-
-.admin-head h1 {
-  margin: 0;
-  font-size: 22px;
-}
-
-.admin-who {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-  color: var(--vr-text-2);
-  font-size: 13.5px;
-}
-
-.admin-body {
-  display: grid;
-  gap: 22px;
-  min-width: 0;
-}
-
-.admin-tab-count {
-  display: inline-grid;
-  min-width: 18px;
-  height: 18px;
-  margin-left: 6px;
-  padding: 0 5px;
-  place-items: center;
-  border-radius: 999px;
-  background: var(--vr-danger);
-  color: var(--vr-on-danger);
-  font-size: 11px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+  justify-items: start;
+  gap: 12px;
+  padding: 24px 28px;
 }
 
 .admin-note {

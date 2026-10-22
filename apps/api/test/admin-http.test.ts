@@ -7,15 +7,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
-import type { Me, SignedIn } from '@voice-room/shared/contracts/account';
-import type { Failure } from '@voice-room/shared/contracts/http';
-import type { AdminOverview, ProductStats, SystemStats } from '@voice-room/shared/contracts/admin';
-import type { StaffAccess } from '@voice-room/shared/contracts/staff';
-import type { AdminReportPage } from '@voice-room/shared/contracts/reports';
+import { Me, SignedIn } from '@voice-room/shared/contracts/account';
+import { Failure } from '@voice-room/shared/contracts/http';
+import { AdminOverview, ProductStats, SystemStats } from '@voice-room/shared/contracts/admin';
+import { StaffAccess } from '@voice-room/shared/contracts/staff';
+import { AdminReportPage } from '@voice-room/shared/contracts/reports';
 import { hashPassword } from '../src/lib/password.ts';
 import { cookieFrom, registerAccount, request, startApiServer, wait } from './fakes/server-process.ts';
 import { staffCookie } from './staff-session.ts';
 import { openWs, waitForWsType } from './ws-harness.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 const skip = !process.env.TEST_DATABASE_URL;
 const ADMIN_ID = '00000000-0000-4000-8000-0000000000ad';
@@ -42,17 +43,24 @@ test('only a platform administrator reads the panel, and its numbers come from t
     ADMIN_ID,
     await hashPassword('password123')
   ]);
-  const signedIn = await request<SignedIn>(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/login',
-    body: { login: 'root', password: 'password123' }
-  });
+  const signedIn = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/auth/login',
+      body: { login: 'root', password: 'password123' }
+    },
+    SignedIn
+  );
   assert.equal(signedIn.status, 200);
   // The operator's main-site session hears of reports; the admin app has its own.
   const adminSite = cookieFrom(signedIn.setCookie);
   const admin = await staffCookie(socketPath, adminSite);
   const alice = await registerAccount(socketPath, 'alice');
-  const aliceId = (await request<Me>(socketPath, { pathname: '/api/auth/me', cookie: alice })).body.user!.id;
+  const aliceId = defined(
+    (await request(socketPath, { pathname: '/api/auth/me', cookie: alice }, Me)).body.user,
+    'alice'
+  ).id;
 
   // Bob signed up 20 days ago and came back on his third day.
   await pool.query(
@@ -110,21 +118,21 @@ test('only a platform administrator reads the panel, and its numbers come from t
 
   // Whether the link to the admin app shows: anyone signed in may ask, only staff is told yes.
   assert.equal((await request(socketPath, { pathname: '/api/staff/access' })).status, 401);
-  const asAlice = await request<StaffAccess>(socketPath, { pathname: '/api/staff/access', cookie: alice });
+  const asAlice = await request(socketPath, { pathname: '/api/staff/access', cookie: alice }, StaffAccess);
   assert.equal(asAlice.body.staff, false);
-  const asAdmin = await request<StaffAccess>(socketPath, { pathname: '/api/staff/access', cookie: adminSite });
+  const asAdmin = await request(socketPath, { pathname: '/api/staff/access', cookie: adminSite }, StaffAccess);
   assert.equal(asAdmin.body.staff, true);
 
   for (const pathname of ['/api/admin/overview', '/api/admin/product', '/api/admin/system']) {
     assert.equal((await request(socketPath, { pathname })).status, 401, pathname);
-    const denied = await request<Failure>(socketPath, { pathname, cookie: alice });
+    const denied = await request(socketPath, { pathname, cookie: alice }, Failure);
     assert.equal(denied.status, 403, pathname);
     assert.equal(denied.body.code, 'platform_admin_required');
   }
 
   // The signed-in requests above mark admin and alice active today; the mark is written in the background.
   const overview = await waitFor(
-    async () => (await request<AdminOverview>(socketPath, { pathname: '/api/admin/overview', cookie: admin })).body,
+    async () => (await request(socketPath, { pathname: '/api/admin/overview', cookie: admin }, AdminOverview)).body,
     (body) => body.today?.activeAccounts === 2 && body.system !== null
   );
   assert.equal(overview.ok, true);
@@ -147,33 +155,42 @@ test('only a platform administrator reads the panel, and its numbers come from t
   assert.equal(typeof overview.livekit, 'boolean');
   assert.match(overview.version, /^\d+\.\d+\.\d+/);
   assert.ok(overview.startedAt <= Date.now());
-  assert.ok(overview.system!.memTotalBytes > 0);
-  assert.ok(overview.system!.apiRssBytes > 0);
-  assert.ok(overview.system!.dbBytes! > 0);
+  const machine = defined(overview.system, 'the system figures');
+  assert.ok(machine.memTotalBytes > 0);
+  assert.ok(machine.apiRssBytes > 0);
+  assert.ok(defined(machine.dbBytes, 'the database size') > 0);
 
   const todayDay = overview.today.day;
   const weekAgo = new Date(Date.parse(`${todayDay}T00:00:00Z`) - 6 * 86_400_000).toISOString().slice(0, 10);
   for (const query of ['from=yesterday', 'to=2026-1-5']) {
-    const bogus = await request<Failure>(socketPath, { pathname: `/api/admin/product?${query}`, cookie: admin });
+    const bogus = await request(socketPath, { pathname: `/api/admin/product?${query}`, cookie: admin }, Failure);
     assert.equal(bogus.status, 400, query);
   }
 
-  const product = await request<ProductStats>(socketPath, {
-    pathname: `/api/admin/product?from=${weekAgo}&to=${todayDay}`,
-    cookie: admin
-  });
+  const product = await request(
+    socketPath,
+    {
+      pathname: `/api/admin/product?from=${weekAgo}&to=${todayDay}`,
+      cookie: admin
+    },
+    ProductStats
+  );
   assert.equal(product.status, 200);
   assert.deepEqual([product.body.from, product.body.to], [weekAgo, todayDay]);
   assert.equal(product.body.trackingSince, '2026-10-15');
   assert.equal(product.body.days.length, 7);
   assert.equal(product.body.accountsBefore, 1, 'bob signed up before the week');
   // Reversed ends are swapped, and a day past today is today.
-  const reversed = await request<ProductStats>(socketPath, {
-    pathname: `/api/admin/product?from=2999-01-01&to=${weekAgo}`,
-    cookie: admin
-  });
+  const reversed = await request(
+    socketPath,
+    {
+      pathname: `/api/admin/product?from=2999-01-01&to=${weekAgo}`,
+      cookie: admin
+    },
+    ProductStats
+  );
   assert.deepEqual([reversed.body.from, reversed.body.to], [weekAgo, todayDay]);
-  const today = product.body.days.at(-1)!;
+  const today = defined(product.body.days.at(-1), 'today');
   assert.equal(today.day, overview.today.day);
   assert.deepEqual(
     {
@@ -211,7 +228,7 @@ test('only a platform administrator reads the panel, and its numbers come from t
       peakVoiceRooms: 2
     }
   );
-  const quiet = product.body.days[0]!;
+  const quiet = defined(product.body.days[0], 'the first day');
   assert.equal(quiet.activeAccounts + quiet.newAccounts + quiet.roomMessages + quiet.voiceJoins, 0);
   assert.deepEqual(
     product.body.retention.map(({ accounts, returnedWeek1Pct, returnedWeek2Pct, returnedMonth1Pct }) => ({
@@ -226,32 +243,36 @@ test('only a platform administrator reads the panel, and its numbers come from t
     ]
   );
   // Without a span, the last 30 days, but never before the first account (bob, 20 days ago).
-  const month = await request<ProductStats>(socketPath, { pathname: '/api/admin/product', cookie: admin });
+  const month = await request(socketPath, { pathname: '/api/admin/product', cookie: admin }, ProductStats);
   assert.equal(month.body.days.length, 21);
-  assert.equal(month.body.days[0]!.newAccounts, 1);
+  assert.equal(defined(month.body.days[0], 'the first day').newAccounts, 1);
   assert.equal(month.body.accountsBefore, 0);
 
   assert.equal((await request(socketPath, { pathname: '/api/admin/system?from=soon', cookie: admin })).status, 400);
   const to = Date.now();
-  const system = await request<SystemStats>(socketPath, {
-    pathname: `/api/admin/system?from=${to - 6 * 3_600_000}&to=${to}`,
-    cookie: admin
-  });
+  const system = await request(
+    socketPath,
+    {
+      pathname: `/api/admin/system?from=${to - 6 * 3_600_000}&to=${to}`,
+      cookie: admin
+    },
+    SystemStats
+  );
   assert.equal(system.status, 200);
   assert.deepEqual([system.body.from, system.body.to], [to - 6 * 3_600_000, to]);
   assert.equal(system.body.bucketSeconds, 60);
   assert.ok(system.body.samples.length >= 1);
   assert.ok(system.body.samples.every((sample) => sample.memTotalBytes > 0));
-  const day = await request<SystemStats>(socketPath, { pathname: '/api/admin/system', cookie: admin });
+  const day = await request(socketPath, { pathname: '/api/admin/system', cookie: admin }, SystemStats);
   assert.equal(day.body.to - day.body.from, 24 * 3_600_000);
   assert.equal(day.body.bucketSeconds, 300);
 
   // Deciding a report tells the administrators the new count, with nothing filed.
-  const open = await request<AdminReportPage>(socketPath, { pathname: '/api/admin/reports', cookie: admin });
+  const open = await request(socketPath, { pathname: '/api/admin/reports', cookie: admin }, AdminReportPage);
   const seen = adminSocket.frames.length;
   const dismissed = await request(socketPath, {
     method: 'POST',
-    pathname: `/api/admin/reports/${open.body.reports[0]!.id}/resolve`,
+    pathname: `/api/admin/reports/${defined(open.body.reports[0], 'the open report').id}/resolve`,
     cookie: admin,
     body: { action: 'dismiss' }
   });

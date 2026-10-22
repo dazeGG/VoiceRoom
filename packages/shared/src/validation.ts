@@ -2,27 +2,12 @@
 // avatar colours, presence and screen-share profiles. Each returns the clean
 // value or an empty string, never throws.
 
-import visualIdentity from './visual-identity.ts';
+import { Value } from 'typebox/value';
+import { PresenceStatus } from './contracts/users.ts';
+import visualIdentity, { isAvatarColorKey, type AvatarColorKey } from './visual-identity.ts';
 
-export type AvatarColorKey =
-  | 'blurple'
-  | 'violet'
-  | 'orchid'
-  | 'magenta'
-  | 'rose'
-  | 'coral'
-  | 'rust'
-  | 'amber'
-  | 'olive'
-  | 'green'
-  | 'teal'
-  | 'cyan'
-  | 'sky'
-  | 'blue'
-  | 'indigo'
-  | 'slate';
-
-export type PresenceStatus = 'online' | 'away' | 'dnd' | 'offline';
+export type { AvatarColorKey };
+export { isAvatarColorKey };
 
 export const SCREEN_PROFILE_IDS: ReadonlySet<string> = new Set([
   'balanced',
@@ -46,7 +31,12 @@ export const SCREEN_PROFILE_IDS: ReadonlySet<string> = new Set([
 ]);
 
 export const PRESENCE_STATUSES: readonly PresenceStatus[] = Object.freeze(['online', 'away', 'dnd', 'offline']);
-const PRESENCE_STATUS_SET = new Set<unknown>(PRESENCE_STATUSES);
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && UUID_PATTERN.test(value);
+}
 
 export function normalizeRoomId(value: unknown): string {
   if (typeof value !== 'string') return '';
@@ -175,17 +165,21 @@ export function cleanRoomName(value: unknown): string {
   return value.replace(/\s+/g, ' ').trim().slice(0, 60);
 }
 
-// The avatar colour vocabulary lives in JSON so the API and the web read the
-// same list; the web owns the rendering values.
+// The avatar colour order lives in visual-identity.json and the names in
+// visual-identity.ts, so the API and the web read the same list; the web owns
+// the rendering values.
 export const AVATAR_COLOR_KEYS: readonly AvatarColorKey[] = visualIdentity.AVATAR_COLOR_KEYS;
-const AVATAR_COLOR_KEY_SET = new Set<unknown>(AVATAR_COLOR_KEYS);
 
 export function cleanAvatarColorKey(value: unknown): AvatarColorKey | '' {
-  return typeof value === 'string' && AVATAR_COLOR_KEY_SET.has(value) ? (value as AvatarColorKey) : '';
+  return isAvatarColorKey(value) ? value : '';
+}
+
+export function isPresenceStatus(value: unknown): value is PresenceStatus {
+  return Value.Check(PresenceStatus, value);
 }
 
 export function cleanPresenceStatus(value: unknown): PresenceStatus | '' {
-  return typeof value === 'string' && PRESENCE_STATUS_SET.has(value) ? (value as PresenceStatus) : '';
+  return isPresenceStatus(value) ? value : '';
 }
 
 export function cleanStreamId(value: unknown): string {

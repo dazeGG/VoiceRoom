@@ -3,11 +3,19 @@
 // store only ever replaces its snapshot — there is no incremental merge to get
 // wrong.
 
-import { fetchRoomPins, pinRoomMessage, pinSnapshot, unpinRoomMessage, type PinnedMessage } from '$lib/api/pins';
+import { fetchRoomPins, pinRoomMessage, unpinRoomMessage, type PinnedMessage } from '$lib/api/pins';
 
-export const roomPins = $state({
+interface RoomPinsState {
+  roomId: string;
+  pins: PinnedMessage[];
+  loaded: boolean;
+  /** Whether the strip above the chat lists the pins or only counts them. */
+  expanded: boolean;
+}
+
+export const roomPins = $state<RoomPinsState>({
   roomId: '',
-  pins: [] as PinnedMessage[],
+  pins: [],
   loaded: false,
   /** Whether the strip above the chat lists the pins or only counts them. */
   expanded: false
@@ -35,9 +43,9 @@ export function resetRoomPins(): void {
 }
 
 /** Applies a `room.pins` realtime payload. Ignores events for another room. */
-export function applyRoomPinsEvent(roomId: string, payload: { pins?: unknown; count?: unknown }): void {
+export function applyRoomPinsEvent(roomId: string, payload: { pins: PinnedMessage[] }): void {
   if (!roomId || roomId !== roomPins.roomId) return;
-  setPins(pinSnapshot(payload).pins);
+  setPins(payload.pins);
   roomPins.loaded = true;
 }
 

@@ -7,11 +7,11 @@ import type { readApiConfig } from './config.ts';
 
 type ApiConfig = ReturnType<typeof readApiConfig>;
 
-export function createRateLimits(config: ApiConfig, env: NodeJS.ProcessEnv) {
+export function createRateLimits(config: ApiConfig) {
   const limiter = (limit: number, windowMs: number) => createRateLimiter({ limit, windowMs });
   return {
     pow: createProofOfWork({
-      secret: env.POW_SECRET || crypto.randomBytes(32),
+      secret: config.POW_SECRET || crypto.randomBytes(32),
       difficulty: config.ROOM_CREATE_POW_DIFFICULTY,
       ttlMs: config.ROOM_CREATE_POW_TTL_MS
     }),

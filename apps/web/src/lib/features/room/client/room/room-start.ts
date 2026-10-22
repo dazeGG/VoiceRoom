@@ -5,7 +5,7 @@ import { createRoom } from '$lib/api/rooms';
 import { markInAppRoomNavigation } from '$lib/platform/open-in-app';
 import { createLogger, errorContext } from '$lib/shared/log';
 import { startUi } from '../../start-ui.svelte';
-import { extractRoomId } from '../core/session';
+import { extractRoomId } from '$lib/shared/utils/room';
 import { errorMessage } from '../core/utils';
 import { requireSavedName } from '../ui/names';
 import { showToast } from '../ui/toast';

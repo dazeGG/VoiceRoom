@@ -7,7 +7,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type pg from 'pg';
 
 import { createReactionsModule, type ReactionsModuleDeps } from '../src/domains/messaging/reactions.module.ts';
 import { createModerationModule } from '../src/domains/moderation/moderation.module.ts';
@@ -17,7 +16,8 @@ import { createCursorCodec } from '../src/platform/cursor-codec.ts';
 import { createIpKey } from '../src/lib/ip-key.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
-import { fake, fakeDb } from './fakes/index.ts';
+import { fake, fakeDb, storedRoom } from './fakes/index.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const cursorCodec = createCursorCodec({ keys: 'wiring-test-cursor-key-0123456789abcdef' });
@@ -99,13 +99,14 @@ test(
     const events: string[] = [];
     const peer: PresencePeer = { id: 'peer-1', accountUserId: 'target' };
     const bystander: PresencePeer = { id: 'peer-2', accountUserId: 'owner' };
-    const room = {
-      id: 'room',
+    const room: LiveRoom = {
+      ...storedRoom({ id: 'room', ownerId: 'owner' }),
       peers: new Map([
         [peer.id, peer],
         [bystander.id, bystander]
-      ])
-    } as unknown as LiveRoom;
+      ]),
+      updatedAt: 1
+    };
 
     const moderation = createModerationModule({
       pool,
@@ -163,8 +164,8 @@ test('media uploads pause while the storage has less free space than configured'
       },
       fake<ServiceRegistryDeps>({})
     );
-    registry.applyOverrides({ pool: fakeDb() as unknown as pg.Pool });
-    return registry.getMediaServices()!.pressure;
+    registry.applyOverrides({ pool: fakeDb() });
+    return defined(registry.getMediaServices(), 'the media services').pressure;
   };
 
   const full = pressureWithFloor(Number.MAX_SAFE_INTEGER);

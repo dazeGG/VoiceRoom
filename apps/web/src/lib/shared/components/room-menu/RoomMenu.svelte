@@ -1,11 +1,12 @@
 <script lang="ts">
   import { BellOff, ChevronDown } from '@lucide/svelte';
-  import type { RoomRelationship } from '$lib/api/auth';
+  import type { RoomRelationship } from '@voice-room/shared/contracts/rooms';
   import type { Friend } from '$lib/api/friends';
   import { Avatar, Ellipsis, Popover } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
   import { isRoomNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
-  import type { PopoverPlacement } from '$lib/shared/ui';
+  import type { PopoverContentState, PopoverPlacement, PopoverTriggerState } from '$lib/shared/ui';
+  import type { Snippet } from 'svelte';
   import RoomMenuContent from './RoomMenuContent.svelte';
 
   let {
@@ -31,23 +32,23 @@
   } = $props<{
     roomId: string;
     name: string;
-    avatarUrl?: string | null;
-    avatarSize?: number;
-    triggerClass?: string;
-    titleClass?: string;
-    chevronClass?: string;
-    heading?: boolean;
-    headingClass?: string;
-    placement?: PopoverPlacement;
-    keepContentMounted?: boolean;
-    relationship?: RoomRelationship;
-    friends?: Friend[];
-    presentUserIds?: Set<string>;
-    onOpenSettings?: () => void;
-    inviteContent?: import('svelte').Snippet<[close: () => void]>;
-    onRoomsChanged?: () => void;
-    onToast?: (message: string) => void;
-    showNotificationControls?: boolean;
+    avatarUrl?: string | null | undefined;
+    avatarSize?: number | undefined;
+    triggerClass?: string | undefined;
+    titleClass?: string | undefined;
+    chevronClass?: string | undefined;
+    heading?: boolean | undefined;
+    headingClass?: string | undefined;
+    placement?: PopoverPlacement | undefined;
+    keepContentMounted?: boolean | undefined;
+    relationship?: RoomRelationship | undefined;
+    friends?: Friend[] | undefined;
+    presentUserIds?: Set<string> | undefined;
+    onOpenSettings?: (() => void) | undefined;
+    inviteContent?: Snippet<[close: () => void]> | undefined;
+    onRoomsChanged?: (() => void) | undefined;
+    onToast?: ((message: string) => void) | undefined;
+    showNotificationControls?: boolean | undefined;
   }>();
 
   const roomMuted = $derived(showNotificationControls && isRoomNotificationsMuted(roomId));
@@ -81,7 +82,7 @@
 {/snippet}
 
 <Popover {placement} role="menu" ariaLabel="Меню комнаты" panelClass="room-menu-popover" {keepContentMounted}>
-  {#snippet trigger({ open, toggle, panelId })}
+  {#snippet trigger({ open, toggle, panelId }: PopoverTriggerState)}
     {#if heading}
       <div class={headingClass} role="heading" aria-level="1">{@render menuButton(open, toggle, panelId)}</div>
     {:else}
@@ -89,7 +90,7 @@
     {/if}
   {/snippet}
 
-  {#snippet content({ close })}
+  {#snippet content({ close }: PopoverContentState)}
     <RoomMenuContent
       {roomId}
       {name}

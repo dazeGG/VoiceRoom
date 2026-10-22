@@ -4,7 +4,8 @@
 // failure is rethrown marked `ownershipFinalized` so the reconnect lease does
 // not hand the seat back.
 
-import type { RoomPeerMessage } from '../../realtime/legacy-events.ts';
+import type { PeerLeaveReason } from '@voice-room/shared/contracts/realtime';
+import { buildServerEnvelope, type ServerEnvelope } from '@voice-room/shared/realtime';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { LiveRoom, PresencePeer } from './room-views.ts';
 
@@ -24,10 +25,10 @@ export interface ReconnectRuntime {
   finalizeReconnectPeers(input: {
     roomId: string;
     peerIds: string[];
-    reason: string;
+    reason: EvictionType;
     finalizePeer(input: {
       peerId: string;
-      peer?: PresencePeer | null;
+      peer?: PresencePeer | null | undefined;
       ownershipFinalized: boolean;
     }): Promise<{ finalized: boolean }>;
   }): Promise<unknown>;
@@ -37,11 +38,11 @@ export interface PeerEvictionDeps {
   store(): EvictionStore;
   /** Null until createApiApp builds the realtime runtime. */
   runtime(): ReconnectRuntime | null;
-  notifyPeer(peer: PresencePeer, event: RoomPeerMessage): void;
+  notifyPeer(peer: PresencePeer, event: ServerEnvelope): void;
   notifyUser(userId: string, event: AccountMessage): void;
   /** Drops the voice seat any socket of this peer still holds in the room. */
   detachVoiceConnections(roomId: string, peerId: string): void;
-  closePeer(roomId: string, peerId: string, transportId: string | undefined, reason: string): void;
+  closePeer(roomId: string, peerId: string, transportId: string | undefined, reason: PeerLeaveReason): void;
   removeParticipant(roomId: string, peerId: string): Promise<void>;
 }
 
@@ -55,7 +56,11 @@ export interface FinalizeOptions<T> {
   beforeFinalize?: (() => Promise<T>) | null;
 }
 
-type OwnershipError = Error & { ownershipFinalized?: boolean };
+/** The cleanup failure, marked so the reconnect lease does not hand the seat back. */
+export function markOwnershipFinalized(failure: unknown): Error & { ownershipFinalized: true } {
+  const error = failure instanceof Error ? failure : new Error('Peer cleanup failed', { cause: failure });
+  return Object.assign(error, { ownershipFinalized: true as const });
+}
 
 export function createPeerEviction(deps: PeerEvictionDeps) {
   async function evictPeer(
@@ -78,9 +83,8 @@ export function createPeerEviction(deps: PeerEvictionDeps) {
         failure = error;
       }
     }
-    const event = { type, roomId: room.id, peerId: peer.id } as const;
-    deps.notifyPeer(peer, event);
-    if (peer.accountUserId) deps.notifyUser(peer.accountUserId, event);
+    deps.notifyPeer(peer, buildServerEnvelope(type, { roomId: room.id, peerId: peer.id }));
+    if (peer.accountUserId) deps.notifyUser(peer.accountUserId, { type, roomId: room.id, peerId: peer.id });
     deps.detachVoiceConnections(room.id, peer.id);
     if (!ownershipFinalized) {
       deps.closePeer(room.id, peer.id, peer.transport?.id, type === 'room.banned' ? 'banned' : 'kicked');
@@ -99,10 +103,7 @@ export function createPeerEviction(deps: PeerEvictionDeps) {
         failure ||= error;
       }
     }
-    if (failure) {
-      (failure as OwnershipError).ownershipFinalized = true;
-      throw failure;
-    }
+    if (failure) throw markOwnershipFinalized(failure);
     return { finalized: true };
   }
 
@@ -120,7 +121,9 @@ export function createPeerEviction(deps: PeerEvictionDeps) {
       prerequisite ||= Promise.resolve().then(beforeFinalize);
       prerequisiteResult = await prerequisite;
     };
-    await deps.runtime()!.finalizeReconnectPeers({
+    const runtime = deps.runtime();
+    if (!runtime) throw new Error('The realtime runtime is not running');
+    await runtime.finalizeReconnectPeers({
       roomId: room.id,
       peerIds: peers.map((peer) => peer.id),
       reason: type,

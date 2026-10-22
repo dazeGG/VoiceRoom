@@ -1,17 +1,14 @@
-// The API process entry: bootstrap() prepares the database and storage and
-// starts listening. The composition itself is app/api-runtime.ts.
+// The API process entry: bootstrap() migrates, opens the database, runs the
+// startup tasks (app/startup-tasks.ts) and starts listening. The composition
+// itself is app/api-runtime.ts.
 
 import { createApiRuntime, type ApiServer } from './app/api-runtime.ts';
 import { installGracefulShutdown } from './app/graceful-shutdown.ts';
-import { resolveRealtimeReconnectLeaseMs } from './app/config.ts';
-import { readEnvBool, readDatabaseConfig, readUploadsDir } from './lib/config.ts';
+import { readBootstrapConfig } from './app/config.ts';
+import { runStartupTasks } from './app/startup-tasks.ts';
+import { readDatabaseConfig } from './lib/config.ts';
 import { LOG_EVENTS } from './lib/log-events.ts';
 import { createLogger } from './lib/logger.ts';
-import { reconcileAvatarStorage } from './lib/avatar-reconciliation.ts';
-import { createAvatarStorage } from './lib/avatar-storage.ts';
-import { createLinkPreviewStorage, reconcileLinkPreviewImages } from './lib/link-preview-storage.ts';
-import { createLinkPreviewRepository } from './domains/link-previews/link-preview.repository.ts';
-import { createPushService } from './lib/push-service.ts';
 import { startApiListener } from './lib/listen.ts';
 import { assertMigrationReady, runMigrations } from './lib/migrate.ts';
 
@@ -31,80 +28,27 @@ function createApiServer(options: AppOptions = {}): ApiServer {
 async function bootstrap({
   env = process.env,
   logger = createLogger({ env, name: 'api' }),
-  exit = process.exit
+  exit
 }: {
   env?: NodeJS.ProcessEnv;
   logger?: Logger;
   exit?: (code?: number) => void;
 } = {}): Promise<ApiServer | null> {
+  // Without an injected exit the process itself ends.
+  const stop = exit ?? ((code?: number) => process.exit(code));
   try {
     const database = readDatabaseConfig(env);
-    if (readEnvBool('MIGRATE_ON_START', env.NODE_ENV !== 'production', env)) {
+    const startup = readBootstrapConfig(env);
+    if (startup.MIGRATE_ON_START) {
       await runMigrations({ databaseUrl: database.url, logger });
     }
-    if (env.NODE_ENV === 'production') {
+    if (startup.PRODUCTION) {
       await assertMigrationReady({ databaseUrl: database.url });
     }
     const runtime = createApiRuntime({ env });
-    const { services } = runtime;
-    services.connect({ databaseUrl: database.url, logger });
-    const roomStore = services.getRoomStore();
-    await roomStore.markActiveTemporaryRoomsEmpty();
-    await roomStore.pruneRooms();
-    const userStore = services.getUserStore();
-    const pushSubscriptions = services.getPushSubscriptions();
-    const pushService = createPushService({ store: pushSubscriptions, env, logger });
-    const avatarStorage = createAvatarStorage({ uploadsDir: readUploadsDir(env) });
-    const reconciliation = await reconcileAvatarStorage({
-      storage: avatarStorage,
-      userStore,
-      roomStore
-    });
-    if (reconciliation.removed > 0) {
-      logger.info(
-        { evt: LOG_EVENTS.MAINTENANCE_TASK_COMPLETED, task: 'avatar-reconciliation', removed: reconciliation.removed },
-        'removed orphaned avatar files'
-      );
-    }
-    const linkPreviewStorage = createLinkPreviewStorage({ uploadsDir: readUploadsDir(env) });
-    services.install({
-      pushService,
-      avatarStorage,
-      linkPreviewStorage
-    });
-    try {
-      const previewPool = services.getPool();
-      if (previewPool) {
-        const removedPreviewImages = await reconcileLinkPreviewImages({
-          storage: linkPreviewStorage,
-          repository: createLinkPreviewRepository({ pool: previewPool })
-        });
-        if (removedPreviewImages > 0)
-          logger.info(
-            {
-              evt: LOG_EVENTS.MAINTENANCE_TASK_COMPLETED,
-              task: 'link-preview-reconciliation',
-              removed: removedPreviewImages
-            },
-            'removed unused link preview images'
-          );
-      }
-    } catch (error) {
-      logger.warn(
-        { evt: LOG_EVENTS.LINK_PREVIEW_RECONCILE_FAILED, err: error },
-        'link preview image reconciliation failed'
-      );
-    }
-    const server = runtime.createServer({
-      store: roomStore,
-      users: userStore,
-      friends: services.getFriendStore(),
-      notifications: services.getNotificationPreferences(),
-      pushes: pushSubscriptions,
-      push: pushService,
-      avatars: avatarStorage,
-      realtimeReconnectLeaseMs: resolveRealtimeReconnectLeaseMs(env)
-    });
+    runtime.services.connect({ databaseUrl: database.url, logger });
+    await runStartupTasks(runtime.services, logger);
+    const server = runtime.createServer();
     await server.app.ready();
     runtime.startPruneTimer(server, logger);
     startApiListener({
@@ -113,7 +57,7 @@ async function bootstrap({
       server,
       socketPath: runtime.config.SOCKET_PATH,
       logger,
-      exit
+      exit: stop
     });
     const closable = {
       // Closing the Fastify app, not just its http.Server, runs the onClose
@@ -124,17 +68,15 @@ async function bootstrap({
     };
     installGracefulShutdown(closable, {
       logger,
-      exit,
+      exit: stop,
       sockets: runtime.sockets,
       closeStores: runtime.closeStores
     });
     return server;
   } catch (error) {
     logger.fatal({ evt: LOG_EVENTS.BOOTSTRAP_FAILED, err: error }, 'VoiceRoom API failed to bootstrap');
-    if (exit === process.exit && typeof process !== 'undefined') {
-      process.exitCode = 1;
-    }
-    exit(1);
+    if (!exit) process.exitCode = 1;
+    stop(1);
     return null;
   }
 }

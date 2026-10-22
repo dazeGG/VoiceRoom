@@ -1,20 +1,15 @@
-.acc-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 12px;
-}
+/* The accounts list: a search, the filters, and the table of accounts in a
+   card that scrolls sideways under its width. */
 
 .acc-search {
   display: flex;
-  flex: 1 1 240px;
-  align-items: center;
-  gap: 8px;
-  max-width: 360px;
+  width: min(340px, 100%);
   height: 38px;
-  padding: 0 12px;
-  border: 1px solid var(--vr-line-strong);
+  align-items: center;
+  gap: 10px;
+  border: 1px solid oklch(100% 0 0 / 0.09);
   border-radius: 10px;
+  padding: 0 12px;
   background: var(--vr-surface);
   color: var(--vr-text-3);
 }
@@ -24,106 +19,109 @@
 }
 
 .acc-search input {
-  flex: 1;
   min-width: 0;
+  flex: 1;
   border: 0;
   outline: none;
   background: transparent;
   color: var(--vr-text);
   font: inherit;
-  font-size: 14px;
+  font-size: 13.5px;
 }
 
-.acc-filter {
-  min-width: 200px;
-}
-
-.acc-quiet {
-  margin: 0;
-  color: var(--vr-text-3);
-  font-size: 12.5px;
-}
-
-.acc-error {
-  margin: 0;
-  color: var(--vr-danger);
-}
-
-.acc-table-wrap {
-  overflow-x: auto;
-  border: 1px solid var(--vr-line);
-  border-radius: 14px;
-  background: var(--vr-surface);
+.acc-count {
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .acc-table {
   width: 100%;
-  min-width: 860px;
+  min-width: 1060px;
   border-collapse: collapse;
+  table-layout: fixed;
   font-size: 13.5px;
 }
 
-.acc-table th,
-.acc-table td {
-  padding: 8px 12px;
+.acc-table th {
   border-bottom: 1px solid var(--vr-line);
-  color: var(--vr-text-2);
+  padding: 10px 18px;
+  color: var(--vr-text-3);
+  font-size: 12px;
+  font-weight: 600;
   text-align: left;
+}
+
+.acc-table td {
+  overflow: hidden;
+  padding: 10px 18px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.acc-table tbody tr:last-child td {
-  border-bottom: 0;
+.acc-table th:not(:first-child),
+.acc-table td:not(:first-child) {
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 .acc-table tbody tr {
   cursor: pointer;
 }
 
-.acc-table tbody tr:hover td {
+.acc-table tbody tr + tr td {
+  border-top: 1px solid oklch(100% 0 0 / 0.05);
+}
+
+.acc-table tbody tr:hover {
   background: var(--vr-hover);
 }
 
-.acc-table th {
-  padding-top: 10px;
-  padding-bottom: 10px;
-  color: var(--vr-text-3);
-  font-size: 12px;
-  font-weight: 600;
-}
-
 .acc-table .is-number {
-  text-align: right;
   font-variant-numeric: tabular-nums;
-}
-
-.acc-table th.is-number .acc-sort {
-  margin-left: auto;
+  text-align: right;
 }
 
 .acc-sort {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 0;
+  gap: 4px;
   border: 0;
-  background: none;
+  padding: 0;
+  background: transparent;
   color: inherit;
   font: inherit;
   cursor: pointer;
 }
 
-.acc-sort:hover {
+.acc-sort:hover,
+th[aria-sort='ascending'] .acc-sort,
+th[aria-sort='descending'] .acc-sort {
   color: var(--vr-text);
+}
+
+.acc-sort:focus-visible,
+.acc-person:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid var(--vr-accent);
+  outline-offset: 2px;
+}
+
+.acc-person-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
 }
 
 .acc-person {
   display: flex;
+  min-width: 0;
   align-items: center;
-  gap: 10px;
-  padding: 0;
+  gap: 12px;
+  margin-right: 6px;
   border: 0;
-  background: none;
+  padding: 0;
+  background: transparent;
   color: inherit;
   font: inherit;
   text-align: left;
@@ -140,63 +138,78 @@
   position: absolute;
   right: -1px;
   bottom: -1px;
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
   border: 2px solid var(--vr-surface);
   border-radius: 50%;
   background: var(--vr-success);
 }
 
 .acc-person-text {
-  display: grid;
+  display: flex;
   min-width: 0;
+  flex-direction: column;
+  gap: 1px;
 }
 
 .acc-person-name {
-  max-width: 240px;
   overflow: hidden;
-  color: var(--vr-text);
   font-weight: 600;
   text-overflow: ellipsis;
 }
 
 .acc-person-login {
   color: var(--vr-text-3);
-  font-family: var(--font-mono);
   font-size: 12px;
 }
 
-.acc-chip {
-  padding: 1px 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
+.acc-dim {
+  color: var(--vr-text-2);
 }
 
-.acc-chip[data-tone='accent'] {
-  background: var(--vr-accent-soft);
-  color: var(--vr-accent);
+.acc-online {
+  color: var(--vr-success);
 }
 
-.acc-chip[data-tone='danger'] {
-  background: var(--vr-danger-soft);
-  color: var(--vr-danger);
+.acc-none {
+  color: var(--vr-text-3);
 }
 
-.acc-table td.has-reports {
+.acc-table .has-reports {
   color: var(--vr-danger);
   font-weight: 600;
 }
 
 .acc-clients {
   display: inline-flex;
-  gap: 6px;
+  gap: 8px;
   color: var(--vr-text-3);
+}
+
+.acc-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--vr-line);
+  padding: 12px 18px;
+}
+
+.acc-foot-note {
+  min-width: 240px;
+  flex: 1;
+  color: var(--vr-text-3);
+  font-size: 12px;
 }
 
 .acc-pages {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 12px;
+}
+
+.acc-page {
+  color: var(--vr-text-2);
+  font-size: 12.5px;
+  white-space: nowrap;
 }

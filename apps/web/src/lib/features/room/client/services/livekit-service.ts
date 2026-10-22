@@ -13,9 +13,9 @@ import {
   notifyLiveKitDisconnected,
   notifyLiveKitReconciled,
   notifyLiveKitReconnecting,
-  setRoomRecoveryLiveKitAdapter,
-  type RecoveryAttemptOutcome
+  setRoomRecoveryLiveKitAdapter
 } from '../recovery/room-recovery';
+import type { ReplacementOutcome } from '../recovery/realtime-recovery';
 import { LiveKitReconcileGeneration } from '../recovery/livekit-reconcile-generation';
 import { recordReconnect } from '../room/call-quality';
 
@@ -145,7 +145,7 @@ export async function attemptFreshLiveKitReplacement({
 }: {
   epoch: number;
   attempt: number;
-}): Promise<RecoveryAttemptOutcome> {
+}): Promise<ReplacementOutcome> {
   const oldRoom = state.livekitRoom;
   const microphoneStream = state.localStream;
   const screenStream = state.localScreenStream;
@@ -368,7 +368,9 @@ async function bindLiveKitRoomEvents(room: Room, isCurrent: () => boolean): Prom
       state.localConnectionQuality = quality || 'unknown';
       return;
     }
-    const peer = createLiveKitParticipant(participant);
+    // The event types it as any participant; the room holds the remote one.
+    const remote = room.remoteParticipants.get(participant.identity);
+    const peer = remote ? createLiveKitParticipant(remote) : null;
     if (!peer) return;
     peer.connectionQuality = quality || 'unknown';
   });

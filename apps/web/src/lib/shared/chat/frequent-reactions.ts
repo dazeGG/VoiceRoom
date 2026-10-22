@@ -1,3 +1,5 @@
+import { isArray, isRecord } from '@voice-room/shared/guards';
+
 export interface FrequentReaction {
   emoji: string;
   count: number;
@@ -50,10 +52,10 @@ function seededEntries(): FrequentReaction[] {
 }
 
 function normalizeEntries(value: unknown): FrequentReaction[] {
-  if (!Array.isArray(value)) return seededEntries();
+  if (!isArray(value)) return seededEntries();
   const entries = value.flatMap((entry): FrequentReaction[] => {
-    if (!entry || typeof entry !== 'object') return [];
-    const candidate = entry as Partial<FrequentReaction>;
+    if (!isRecord(entry)) return [];
+    const candidate = entry;
     if (typeof candidate.emoji !== 'string') return [];
     return [
       {
@@ -112,8 +114,14 @@ async function readIndexedDb(key: string): Promise<FrequentReaction[] | null> {
   const database = await openDatabase();
   try {
     return await new Promise((resolve, reject) => {
-      const request = database.transaction(STORE_NAME, 'readonly').objectStore(STORE_NAME).get(key);
-      request.onsuccess = () => resolve(request.result ? normalizeEntries(request.result) : null);
+      const request: IDBRequest<unknown> = database
+        .transaction(STORE_NAME, 'readonly')
+        .objectStore(STORE_NAME)
+        .get(key);
+      request.onsuccess = () => {
+        const stored: unknown = request.result;
+        resolve(stored ? normalizeEntries(stored) : null);
+      };
       request.onerror = () => reject(request.error ?? new Error('Could not read frequent reactions'));
     });
   } finally {
@@ -140,7 +148,7 @@ export async function loadFrequentReactions(namespace: string, userId: string): 
   const cached = memory.get(key);
   if (cached) return rankFrequentReactions(cached).map((entry) => entry.emoji);
 
-  let entries: FrequentReaction[] | null = null;
+  let entries: FrequentReaction[] | null;
   try {
     entries = await readIndexedDb(key);
   } catch {

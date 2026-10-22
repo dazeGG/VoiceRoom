@@ -27,7 +27,7 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((error) => {
-  console.error('PostgreSQL migration failed:', (error as Error).message);
+main().catch((error: unknown) => {
+  console.error('PostgreSQL migration failed:', error instanceof Error ? error.message : error);
   process.exitCode = 1;
 });

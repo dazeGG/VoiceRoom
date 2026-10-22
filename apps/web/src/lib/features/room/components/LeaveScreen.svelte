@@ -99,7 +99,7 @@
   <AuthDialog
     mode={authMode}
     onClose={() => (authMode = null)}
-    onModeChange={(mode) => (authMode = mode)}
+    onModeChange={(mode: AuthMode) => (authMode = mode)}
     onAuthenticated={afterAccountCreated}
   />
 {/if}

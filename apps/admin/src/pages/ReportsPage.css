@@ -1,77 +1,235 @@
+/* The reports section: the open reports on the left, the chosen one on the
+   right; the two stack on a narrow screen. */
+
 .reports {
-  display: grid;
-  gap: 14px;
-}
-
-.reports-note {
-  color: var(--vr-text-2);
-}
-
-.reports-error {
-  color: var(--vr-danger);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 20px;
 }
 
 .reports-list {
-  display: grid;
-  gap: 14px;
+  display: flex;
+  min-width: 300px;
+  flex: 0 1 420px;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.reports-list-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.reports-list-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.reports-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .report-card {
-  display: grid;
-  gap: 12px;
-  padding: 16px 18px;
-  border: 1px solid var(--vr-line-strong);
-  border-radius: 16px;
-  background: var(--vr-surface);
-}
-
-.report-meta {
   display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  color: var(--vr-text-2);
-  font-size: 13px;
-}
-
-.report-meta strong {
+  width: 100%;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--vr-line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  background: var(--vr-surface);
   color: var(--vr-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.report-message {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding: 10px 14px;
-  border-left: 3px solid var(--vr-line-strong);
-  border-radius: 8px;
+.report-card:hover {
   background: var(--vr-surface-2);
 }
 
-.report-message.is-deleted {
-  opacity: 0.6;
+.report-card[aria-pressed='true'] {
+  border-color: color-mix(in oklch, var(--vr-accent) 35%, transparent);
+  background: var(--vr-surface-2);
 }
 
-.report-author {
+.report-card:focus-visible {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: 2px;
+}
+
+.report-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.report-card-many {
+  color: var(--vr-danger);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.report-card-when {
+  margin-left: auto;
+  color: var(--vr-text-3);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.report-card-text {
+  overflow: hidden;
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.report-card-text[data-deleted='true'] {
+  color: var(--vr-text-3);
+}
+
+.report-card-place {
+  overflow: hidden;
+  color: var(--vr-text-3);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- the chosen one --------------------------------------------------------- */
+
+.report-detail {
+  min-width: 0;
+  flex: 1 1 520px;
+  gap: 18px;
+  padding: 20px 22px;
+}
+
+.report-detail-head {
+  display: grid;
+  gap: 6px;
+}
+
+.report-detail-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.report-detail-title h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.report-detail-meta {
+  margin: 0;
   color: var(--vr-text-3);
   font-size: 12.5px;
 }
 
-.report-text {
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+.report-message {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
 }
 
-.report-comment {
+.report-message-body {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 6px;
+}
+
+.report-message-author {
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}
+
+.report-message-author strong {
+  color: var(--vr-text);
+  font-weight: 600;
+}
+
+.report-gone {
+  color: var(--vr-danger);
+}
+
+.report-bubble {
+  justify-self: start;
+  max-width: 100%;
   margin: 0;
-  color: var(--vr-text-2);
+  border-radius: 4px 14px 14px;
+  padding: 10px 14px;
+  background: var(--vr-surface-2);
+  font-size: 15px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.report-bubble[data-deleted='true'] {
+  color: var(--vr-text-3);
+}
+
+.report-comments {
+  display: grid;
+  gap: 8px;
+}
+
+.report-comments-label {
+  color: var(--vr-text-3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.report-comments ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.report-comments li {
+  display: grid;
+  gap: 3px;
+  border-left: 2px solid var(--vr-line-strong);
+  padding-left: 12px;
+}
+
+.report-comments-who {
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.report-comments-text {
   font-size: 14px;
 }
 
 .report-actions {
   display: flex;
-  justify-content: flex-end;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 10px;
+  border-top: 1px solid var(--vr-line);
+  padding-top: 16px;
+}
+
+.report-actions-note {
+  min-width: 160px;
+  flex: 1;
+  color: var(--vr-text-3);
+  font-size: 12px;
 }

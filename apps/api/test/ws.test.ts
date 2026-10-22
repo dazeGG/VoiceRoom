@@ -4,11 +4,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import sharp from 'sharp';
-import type { Me, SignedIn } from '@voice-room/shared/contracts/account';
-import type { DirectMessageAnswer, DirectThread, RoomMessageAnswer } from '@voice-room/shared/contracts/messages';
-import type { Preferences } from '@voice-room/shared/contracts/notifications';
-import type { RoomCreated, RoomPeers } from '@voice-room/shared/contracts/rooms';
-import type { FriendList } from '@voice-room/shared/contracts/social';
+import { Failure } from '@voice-room/shared/contracts/http';
+import { Me, SignedIn } from '@voice-room/shared/contracts/account';
+import { DirectMessageAnswer, DirectThread, RoomMessageAnswer } from '@voice-room/shared/contracts/messages';
+import { Preferences } from '@voice-room/shared/contracts/notifications';
+import { RoomCreated, RoomPeers } from '@voice-room/shared/contracts/rooms';
+import { FriendList } from '@voice-room/shared/contracts/social';
 import { joinVoiceRoom, openWs as openHarnessWs, subscribeRoomPreview, waitForWsType } from './ws-harness.ts';
 import {
   acceptFirstFriendRequest as acceptFirstRequest,
@@ -42,12 +43,16 @@ test('DND settings update is broadcast to every open tab of the account', async 
 
   const firstBefore = firstTab.frames.length;
   const secondBefore = secondTab.frames.length;
-  const response = await request<Preferences>(socketPath, {
-    method: 'POST',
-    pathname: '/api/notifications/settings',
-    cookie,
-    body: { dnd: true }
-  });
+  const response = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/notifications/settings',
+      cookie,
+      body: { dnd: true }
+    },
+    Preferences
+  );
   assert.equal(response.status, 200);
 
   const firstUpdate = await waitForWsType(
@@ -75,12 +80,16 @@ test('ws pushes room summaries to authenticated users right after ready', async 
   const { socketPath } = await startApiServer(t, { env: { AUTH_RATE_LIMIT: '0' } });
 
   const ownerCookie = await register(socketPath, 'roomowner');
-  const created = await request<RoomCreated>(socketPath, {
-    method: 'POST',
-    pathname: '/api/rooms',
-    cookie: ownerCookie,
-    body: { isStatic: true, name: 'Летучка' }
-  });
+  const created = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/rooms',
+      cookie: ownerCookie,
+      body: { isStatic: true, name: 'Летучка' }
+    },
+    RoomCreated
+  );
   assert.equal(created.status, 201);
   const roomId = created.body.roomId;
 
@@ -113,7 +122,7 @@ test('ws ready and friend.presence work for authenticated users', async (t) => {
   await befriend(socketPath, aliceCookie, 'bob');
   await acceptFirstRequest(socketPath, bobCookie);
 
-  const bobFriends = await request<FriendList>(socketPath, { pathname: '/api/friends', cookie: bobCookie });
+  const bobFriends = await request(socketPath, { pathname: '/api/friends', cookie: bobCookie }, FriendList);
   const aliceId = bobFriends.body.friends.find((entry) => entry.user.login === 'alice')?.user.id;
   assert.ok(aliceId);
 
@@ -169,18 +178,22 @@ test('ws sends additive account notification envelopes without regressing legacy
   const notificationAccepted = await waitForWsType(alice.frames, 'notification.friend.accepted');
   assert.equal(notificationAccepted.payload.user.login, 'bob-notify');
   assert.match(notificationAccepted.payload.dedupeKey, /^friend-accepted:/);
-  const bobFriends = await request<FriendList>(socketPath, { pathname: '/api/friends', cookie: bobCookie });
+  const bobFriends = await request(socketPath, { pathname: '/api/friends', cookie: bobCookie }, FriendList);
   assert.equal(bobFriends.status, 200);
   const aliceId = bobFriends.body.friends.find((entry) => entry.user.login === 'alice-notify')?.user.id;
   assert.ok(aliceId);
 
   const aliceBeforeDm = alice.frames.length;
-  const sent = await request<DirectMessageAnswer>(socketPath, {
-    method: 'POST',
-    pathname: `/api/dm/${encodeURIComponent(legacyAccepted.payload.userId)}`,
-    cookie: aliceCookie,
-    body: { text: 'hello bob' }
-  });
+  const sent = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: `/api/dm/${encodeURIComponent(legacyAccepted.payload.userId)}`,
+      cookie: aliceCookie,
+      body: { text: 'hello bob' }
+    },
+    DirectMessageAnswer
+  );
   assert.equal(sent.status, 201);
 
   const legacyDm = await waitForWsType(bob.frames, 'dm.message', (frame) => frame.payload.message.body === 'hello bob');
@@ -212,19 +225,27 @@ test('ws sends additive account notification envelopes without regressing legacy
     body: { muted: true }
   });
   assert.equal(muted.status, 200);
-  const mutedThread = await request<DirectThread>(socketPath, {
-    pathname: `/api/dm/${encodeURIComponent(aliceId)}`,
-    cookie: bobCookie
-  });
+  const mutedThread = await request(
+    socketPath,
+    {
+      pathname: `/api/dm/${encodeURIComponent(aliceId)}`,
+      cookie: bobCookie
+    },
+    DirectThread
+  );
   assert.equal(mutedThread.status, 200);
   assert.equal(mutedThread.body.muted, true);
   const bobBeforeMutedDm = bob.frames.length;
-  const mutedSent = await request<DirectMessageAnswer>(socketPath, {
-    method: 'POST',
-    pathname: `/api/dm/${encodeURIComponent(legacyAccepted.payload.userId)}`,
-    cookie: aliceCookie,
-    body: { text: 'muted but delivered' }
-  });
+  const mutedSent = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: `/api/dm/${encodeURIComponent(legacyAccepted.payload.userId)}`,
+      cookie: aliceCookie,
+      body: { text: 'muted but delivered' }
+    },
+    DirectMessageAnswer
+  );
   assert.equal(mutedSent.status, 201);
   await waitForWsType(
     bob.frames,
@@ -253,18 +274,22 @@ test('ring works from the lobby for an active friend and delivers one invitation
   await befriend(socketPath, aliceCookie, 'bob-ring');
   await acceptFirstRequest(socketPath, bobCookie);
 
-  const aliceFriends = await request<FriendList>(socketPath, { pathname: '/api/friends', cookie: aliceCookie });
+  const aliceFriends = await request(socketPath, { pathname: '/api/friends', cookie: aliceCookie }, FriendList);
   const bobId = aliceFriends.body.friends.find((entry) => entry.user.login === 'bob-ring')?.user.id;
   assert.ok(bobId);
-  const caraSession = await request<Me>(socketPath, { pathname: '/api/auth/me', cookie: caraCookie });
+  const caraSession = await request(socketPath, { pathname: '/api/auth/me', cookie: caraCookie }, Me);
   const caraId = caraSession.body.user?.id;
 
-  const created = await request<RoomCreated>(socketPath, {
-    method: 'POST',
-    pathname: '/api/rooms',
-    cookie: aliceCookie,
-    body: { isStatic: true, name: 'Ring Room' }
-  });
+  const created = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/rooms',
+      cookie: aliceCookie,
+      body: { isStatic: true, name: 'Ring Room' }
+    },
+    RoomCreated
+  );
   assert.equal(created.status, 201);
   const roomId = created.body.roomId;
 
@@ -325,21 +350,29 @@ test('ring works from the lobby for an active friend and delivers one invitation
   assert.match(inviteMessage.body, /Ring Room/);
 
   // Only the invited recipient may respond; the sender gets a 403.
-  const bySender = await request<DirectMessageAnswer>(socketPath, {
-    method: 'POST',
-    pathname: `/api/dm/${encodeURIComponent(bobId)}/invites/${encodeURIComponent(inviteMessage.id)}/respond`,
-    cookie: aliceCookie,
-    body: { action: 'accept' }
-  });
+  const bySender = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: `/api/dm/${encodeURIComponent(bobId)}/invites/${encodeURIComponent(inviteMessage.id)}/respond`,
+      cookie: aliceCookie,
+      body: { action: 'accept' }
+    },
+    Failure
+  );
   assert.equal(bySender.status, 403);
 
   // Bob accepts: both sides converge through a dm.message.edited fan-out.
-  const responded = await request<DirectMessageAnswer>(socketPath, {
-    method: 'POST',
-    pathname: `/api/dm/${encodeURIComponent(inviteMessage.senderId)}/invites/${encodeURIComponent(inviteMessage.id)}/respond`,
-    cookie: bobCookie,
-    body: { action: 'accept' }
-  });
+  const responded = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: `/api/dm/${encodeURIComponent(inviteMessage.senderId)}/invites/${encodeURIComponent(inviteMessage.id)}/respond`,
+      cookie: bobCookie,
+      body: { action: 'accept' }
+    },
+    DirectMessageAnswer
+  );
   assert.equal(responded.status, 200);
   assert.equal(responded.body.message.invite?.status, 'accepted');
 
@@ -348,12 +381,16 @@ test('ring works from the lobby for an active friend and delivers one invitation
   assert.equal(edited.payload.message.invite?.status, 'accepted');
 
   // Responding twice is a conflict: the invite is no longer pending.
-  const again = await request<DirectMessageAnswer>(socketPath, {
-    method: 'POST',
-    pathname: `/api/dm/${encodeURIComponent(inviteMessage.senderId)}/invites/${encodeURIComponent(inviteMessage.id)}/respond`,
-    cookie: bobCookie,
-    body: { action: 'decline' }
-  });
+  const again = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: `/api/dm/${encodeURIComponent(inviteMessage.senderId)}/invites/${encodeURIComponent(inviteMessage.id)}/respond`,
+      cookie: bobCookie,
+      body: { action: 'decline' }
+    },
+    Failure
+  );
   assert.equal(again.status, 409);
 
   const repeated = await request(socketPath, {
@@ -390,18 +427,26 @@ test('ring works from the lobby for an active friend and delivers one invitation
     })
   );
   await delay(250);
-  const peersAfterLeave = await request<RoomPeers>(socketPath, {
-    pathname: `/api/rooms/${encodeURIComponent(roomId)}/peers`,
-    cookie: bobCookie
-  });
+  const peersAfterLeave = await request(
+    socketPath,
+    {
+      pathname: `/api/rooms/${encodeURIComponent(roomId)}/peers`,
+      cookie: bobCookie
+    },
+    RoomPeers
+  );
   assert.equal(
     peersAfterLeave.body.peers.some((peer) => peer.accountUserId === inviteMessage.senderId),
     false
   );
-  const threadAfterLeave = await request<DirectThread>(socketPath, {
-    pathname: `/api/dm/${encodeURIComponent(inviteMessage.senderId)}`,
-    cookie: bobCookie
-  });
+  const threadAfterLeave = await request(
+    socketPath,
+    {
+      pathname: `/api/dm/${encodeURIComponent(inviteMessage.senderId)}`,
+      cookie: bobCookie
+    },
+    DirectThread
+  );
   assert.equal(
     threadAfterLeave.body.messages.find((message) => message.id === secondInvite.payload.message.id)?.invite?.status,
     'pending'
@@ -440,12 +485,16 @@ test('ws sends saved-room message notifications with sender exclusion', async (t
 
   const ownerCookie = await register(socketPath, 'room-owner-notify');
   const posterCookie = await register(socketPath, 'room-poster-notify');
-  const created = await request<RoomCreated>(socketPath, {
-    method: 'POST',
-    pathname: '/api/rooms',
-    cookie: ownerCookie,
-    body: { isStatic: true, name: 'Daily Room', emoji: '☕' }
-  });
+  const created = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/rooms',
+      cookie: ownerCookie,
+      body: { isStatic: true, name: 'Daily Room', emoji: '☕' }
+    },
+    RoomCreated
+  );
   assert.equal(created.status, 201);
   const roomId = created.body.roomId;
 
@@ -464,15 +513,19 @@ test('ws sends saved-room message notifications with sender exclusion', async (t
   });
   await waitForWsType(owner.frames, 'room.snapshot', (frame) => frame.payload.roomId === roomId, 5000, beforeOwnerJoin);
   const ownerVoiceBefore = owner.frames.length;
-  const ownerVoicePost = await request<RoomMessageAnswer>(socketPath, {
-    method: 'POST',
-    pathname: `/api/rooms/${encodeURIComponent(roomId)}/chat`,
-    body: {
-      peerId: 'owner-notify-peer',
-      sessionToken: 'o'.repeat(32),
-      text: 'owner voice post'
-    }
-  });
+  const ownerVoicePost = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: `/api/rooms/${encodeURIComponent(roomId)}/chat`,
+      body: {
+        peerId: 'owner-notify-peer',
+        sessionToken: 'o'.repeat(32),
+        text: 'owner voice post'
+      }
+    },
+    RoomMessageAnswer
+  );
   assert.equal(ownerVoicePost.status, 201);
   await waitForWsType(
     owner.frames,
@@ -489,12 +542,16 @@ test('ws sends saved-room message notifications with sender exclusion', async (t
 
   const ownerBefore = owner.frames.length;
   const posterBefore = poster.frames.length;
-  const posted = await request<RoomMessageAnswer>(socketPath, {
-    method: 'POST',
-    pathname: `/api/rooms/${encodeURIComponent(roomId)}/chat`,
-    cookie: posterCookie,
-    body: { text: 'standup starts' }
-  });
+  const posted = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: `/api/rooms/${encodeURIComponent(roomId)}/chat`,
+      cookie: posterCookie,
+      body: { text: 'standup starts' }
+    },
+    RoomMessageAnswer
+  );
   assert.equal(posted.status, 201);
 
   await waitForWsType(
@@ -550,13 +607,17 @@ test('ws pushes friend.updated to friends after avatar upload and delete', async
     png,
     Buffer.from(`\r\n--${boundary}--\r\n`)
   ]);
-  const uploaded = await request<SignedIn>(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/avatar',
-    cookie: anyaCookie,
-    headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
-    rawBody: payload
-  });
+  const uploaded = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/auth/avatar',
+      cookie: anyaCookie,
+      headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
+      rawBody: payload
+    },
+    SignedIn
+  );
   assert.equal(uploaded.status, 200);
   assert.ok(uploaded.body.user.avatarUrl);
 

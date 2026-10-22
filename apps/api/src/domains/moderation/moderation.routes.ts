@@ -44,19 +44,13 @@ export function registerModerationRoutes(root: FastifyInstance, ctx: ApiContext,
     async (request, reply) => {
       const actorUserId = await actor(request, reply);
       if (!actorUserId) return reply;
-      try {
-        const result = await deps.moderation.listActive({
-          roomId: request.params.roomId,
-          actorUserId,
-          query: request.query
-        });
-        if (result.status === 'forbidden') return reply.code(403).send(OWNER_REQUIRED);
-        return result.envelope;
-      } catch (error) {
-        if ((error as { code?: unknown } | null)?.code === 'invalid_cursor')
-          return reply.code(400).send(failure('Invalid cursor', { code: 'invalid_cursor' }));
-        throw error;
-      }
+      const result = await deps.moderation.listActive({
+        roomId: request.params.roomId,
+        actorUserId,
+        query: request.query
+      });
+      if (result.status === 'forbidden') return reply.code(403).send(OWNER_REQUIRED);
+      return result.envelope;
     }
   );
 

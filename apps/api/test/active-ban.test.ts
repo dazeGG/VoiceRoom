@@ -174,14 +174,15 @@ test(
     );
     const service = createActiveBanService({ pool, ipKeyOf, now: () => now });
     assert.equal(await service.getActiveBan({ roomId: 'g41-room', userId: 'g41-user' }), null);
-    const created = await service.createBan({
+    assert.equal(await service.repository.countActive('g41-room', { at: now }), 0);
+    const created = await service.repository.insert({
       roomId: 'g41-room',
       userId: 'g41-user',
       expiresAt: now + 1_000,
-      maxActiveBans: 1
+      at: now
     });
-    assert.equal(created.status, 'created');
-    assert.equal((await service.getActiveBan({ roomId: 'g41-room', userId: 'g41-user' }))?.id, created.ban?.id);
+    assert.equal(await service.repository.countActive('g41-room', { at: now }), 1);
+    assert.equal((await service.getActiveBan({ roomId: 'g41-room', userId: 'g41-user' }))?.id, created?.id);
 
     assert.equal(await service.getActiveBan({ roomId: 'g41-room', userId: 'g41-user', at: now + 1_000 }), null);
   }

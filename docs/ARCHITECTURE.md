@@ -6,13 +6,15 @@ differ. Import rules live in `config/import-boundaries.v1.json`. The history of 
 
 ## 1. Repository shape: one monorepo
 
-API, web and `packages/shared` stay in one repository.
+API, web, admin and `packages/shared` stay in one repository. `apps/admin` is
+the React staff console (admin.voiceroom.ru), signed in by handoff from the
+main site; it talks to the API's admin routes.
 
 - `packages/shared` is a live contract (validators, realtime envelopes, screen
   profile ids, reserved peer ids). One change updates the contract and both
   consumers atomically.
-- Versions move in lockstep (2.6.x everywhere), and CI boots the whole stack
-  for the voice-join smoke test.
+- Versions move in lockstep (the root and every workspace share one version),
+  and CI boots the whole stack for the voice-join smoke test.
 - Deployables are already separate: the `api`, `worker` and `web` images are
   built and rolled out independently.
 - The desktop shell is its own repository (own release cadence and signing).
@@ -30,6 +32,28 @@ public API with third-party clients.
   `scripts/geoip/fetch-dbip-city-lite.mjs` (host crontabs run it by path), the
   AudioWorklet modules in `apps/web/static` (served unbundled) and
   `apps/web/svelte.config.js`.
+- Types are proved, not asserted, and `npm run check` enforces it:
+  - No `as` (except `as const`), no non-null `!`, no `any`
+    (`consistent-type-assertions: never`, `no-non-null-assertion`,
+    `no-explicit-any`). Narrow with a guard or a contract check.
+  - ESLint runs `strictTypeChecked` with four rules off (reasons in
+    `eslint.config.mjs`): `no-unnecessary-condition` and two siblings trust a
+    type over the runtime value, and lib.dom, LiveKit and the desktop bridge
+    type optional features as always present; `no-invalid-void-type` is off
+    for its own reason.
+  - An overload set over an `unknown`-returning implementation is a cast and is
+    banned everywhere. The only trust points are
+    `apps/api/src/app/store-overrides.ts` (`standIn`) and test doubles under
+    `**/test/helpers/**` and `**/test/fakes/**`. Do not add one.
+  - Every tsconfig sets `strict`, `noUncheckedIndexedAccess`,
+    `noImplicitOverride`, `noFallthroughCasesInSwitch` and
+    `exactOptionalPropertyTypes`. A hand-written optional field that accepts
+    `undefined` is `?: T | undefined`; contract, DOM and library inputs omit
+    the key instead.
+  - `scripts/check-type-coverage.mts` holds `type-coverage --strict` at 100% per
+    area (api, web, admin, shared, scripts, tests) and rejects
+    `type-coverage:ignore`. The byte-pinned `packages/shared/src/emoji.ts` and
+    `.cjs` migrations are excluded.
 - Line endings are LF everywhere (`.gitattributes`).
 
 ## 3. API layering
@@ -87,11 +111,43 @@ Rules:
   `db.transaction()`; a service that passes one connection between
   repositories opens it with `transaction(pool, …)` from `platform/db/pool.ts`,
   and the repositories run on it through `kyselyOn(client)`.
+- New advisory lock keys go in `lockKeys` (`platform/db/locks.ts`). Every
+  writer that adds a ban takes the room admission lock, then the room-bans
+  lock; revoking a ban takes the room-bans lock only. Never take them in the
+  other order. LISTEN goes through `platform/db/listen.ts`.
+- A service fails with a catalogued code by throwing
+  `DomainError(code, status, message)` (`platform/http/domain-error.ts`); do
+  not add another `*Error` class for that.
 
 ## 4. Current state versus these rules
 
-No known gaps. When code falls behind a rule above, list it here as
-`| Gap | Where | Rule for new code |` so nobody copies the old pattern.
+Old patterns still in the code. Do not copy them. When code falls behind a rule
+above, list it here so nobody copies the old pattern.
+
+| Gap | Where | Rule for new code |
+| --- | --- | --- |
+| Config read and defaulted outside `app/config.ts` | `lib/config.ts`, `lib/logger.ts`, `lib/push-service.ts`, `domains/admission/livekit-config.ts`, `workers/main.ts` (`process.env` default), `scripts/*.ts`, `app/api-runtime.ts` (`process.env` default) | Add the key, default and bound to `app/config.ts`; take the typed config, not `env` or `process.env` |
+| LiveKit gate process entry lives in a domain and reads `process.env` | `domains/admission/livekit-auth-gate.service.ts` (`LIVEKIT_GATE_*`, `DATABASE_URL`, opens its own pool) | Process entries sit beside `server.ts` and `workers/main.ts`, read config once and hand the pool in |
+| Routes copy the sign-in guard and the 429 reply | `signedIn` helpers and inline `code(401)` in 14 `domains/*/*.routes.ts` files; `Retry-After` replies written per route | Do not write another copy; add one shared guard or reply helper (`app/context.ts`, `platform/http/http-kit.ts`) and use it |
+| Routes call the store and each other | `domains/rooms/rooms.routes.ts` (`deps.store()` for list and bookmarks); `ownerRefusal` imported from `rooms.routes.ts` by `media/avatars.routes.ts` and `rooms/peer-moderation.routes.ts`; `messaging/room-chat.service.ts` writes a live peer's `avatarColorKey` | A route calls a service; a service reaches another domain through a port; a helper two modules share is not exported from a routes file |
+| The voice runtime is large and forwards a wide deps bag | `realtime/room-runtime.ts`, `realtime/voice-join.ts` | New realtime code depends on a `Pick` of the port it uses and imports pure functions directly; do not add fields to `RoomRuntimeDeps` |
+| Two outbox implementations with different lease semantics | `domains/messaging/message-outbox.repository.ts`, `domains/notifications/notification-outbox.repository.ts` (a third claim variant in `domains/media/media-job.repository.ts`) | Do not write another copy; share the lease and claim code before changing either |
+| Test seam `standIn` hands a fake over as the store, unchecked | `app/store-overrides.ts`, used in `app/service-registry.ts` | Tests use typed ports or `fake<T>()`; never add a trust point |
+| `app/room-store.ts` builds a fallback `ActiveBanService` when no `bans` is injected | `app/room-store.ts` | For tests and scripts only; the app passes its one ban service |
+| Advisory lock keys written inline | `account/login-event.repository.ts`, `admission/gate-credential.repository.ts`, `media/attachment.repository.ts`, `messaging/message-idempotency.repository.ts`, `messaging/pin.repository.ts`, `notifications/inbox.repository.ts`, `rooms/room.repository.ts` (all under `domains/`) | Add the key to `lockKeys` and call `lockXact` |
+| A ban delete and the address re-keying take no lock | `domains/moderation/room-ban.repository.ts` (`deleteRoomBan`), `domains/moderation/active-ban.repository.ts` (`keyStoredAddresses`) | A new `room_bans` writer takes the room-bans lock |
+| Without a database, routes answer 503 `internal_error` | `app/service-registry.ts`, `app/domain-services.ts` (no catalogued code; `http-kit.ts` masks status >= 500) | Add a catalogued code before surfacing a new 503 |
+| Device state has two sources of truth | `features/room/room-device-ui.svelte.ts` against `features/room/client/core/types.ts`, copied by hand in `client/ui/devices.ts` and `client/services/microphone-service.ts` | One owner per value; the UI reads it and the action writes it; type `noiseMode` as `NoiseMode` |
+| Reconnect jitter is written three times | `api/realtime.ts`, `features/room/client/recovery/realtime-recovery.ts`, `features/room/client/services/livekit/reconnect-policy.ts` | Do not add a fourth `Math.random()` backoff; share one jitter helper |
+| Listbox keyboard handling is copied | `features/home/components/lobby/Sidebar.svelte` (own typeahead) against `shared/ui/Select/Select.svelte` | Use `Select`; do not write another typeahead |
+| Screen profile ids are free strings in the room client | `features/room/client/core/types.ts`, `client/media/profiles.ts` | Narrow ids in the client; keep the wire field `PublicPeer.screenProfileId` a plain string |
+| Large components | `features/room/components/RoomOverlays.svelte` (795 lines), `shared/chat/EmojiPickerPanel.svelte` (747) | Split by concern before adding to them |
+| `LobbyStore` is large | `features/home/model/lobby.svelte.ts` (518 lines) | New lobby state goes in its own class, not in `LobbyStore` |
+| Module-level `$state` singletons | `entities/{profile-card/profile-card-ui,room/room-membership,room/room-presence}.svelte.ts`, `features/auth/session.svelte.ts`, `features/call-feedback/call-feedback.svelte.ts`, `features/home/model/{push-notifications,room-navigation,toasts}.svelte.ts`, `features/room/{guest-name-ui,leave-screen,mobile-call-ui,participant-context-ui,participants-ui,pins,room-device-ui,room-settings,room-ui,screen-source-ui,screen-ui,start-ui,toast-ui,voice-session}.svelte.ts`, `features/room/client/core/state.svelte.ts`, `shared/{call-activity,audio/playback-policy,notifications/preferences,theme/theme}.svelte.ts` | State with actions goes in a class handed down through context, not a new module-level `$state` |
+| Two recorded ESLint suppressions | `eslint-suppressions.json`: `features/home/HomePage.svelte` (`/?auth=` links, `svelte/no-navigation-without-resolve`), `shared/chat/EmojiComposer.svelte` (`svelte/no-dom-manipulating`, false positive) | Do not add to the file; fix the code |
+
+Paths in the web rows are under `apps/web/src/lib/`, the rest under
+`apps/api/src/`.
 
 Every release-2.5 feature is on everywhere; `/api/capabilities` answers all of
 them true only for clients built before that. Ship new features without a
@@ -118,9 +174,11 @@ lib/platform/            desktop bridge, device boundary
 - `$effect` synchronises with the outside world (DOM, listeners, timers).
   Values computed from state are `$derived`; reactions to a user action belong
   in the action function, not in an effect watching the state it changed.
-- State with actions lives in classes in `model/*.svelte.ts` (`LobbyStore`,
-  `DmThread`, `ProfileDraft`, `RoomChatDraft`, `LobbyNotifications`), handed
-  down through context (`provideLobby`/`useLobby`) rather than module
+- State with actions lives in classes in `*.svelte.ts` (`LobbyStore`,
+  `DmThread`, `ProfileDraft`, `LobbyNotifications` in `home/model`; `ChatDraft`
+  and `ChatScroll` in `shared/chat`, shared by room chat and DMs;
+  `RoomChatSession` in `features/room`), handed down through context
+  (`provideLobby`/`useLobby`) or owned by the component, rather than module
   singletons. Collections that change in place are `SvelteSet`/`SvelteMap`,
   not revision counters.
 - A view that should start fresh for a new subject is mounted per subject

@@ -3,6 +3,8 @@ import { PLATFORM_CLASSES } from '@voice-room/shared/platform-class';
 import { cleanPushEndpoint, describePushEndpoint } from './push-endpoint.ts';
 import { LOG_EVENTS } from './log-events.ts';
 import { createLogger } from './logger.ts';
+import { readPushConfig, type PushConfig } from '../app/config.ts';
+import { fieldOf } from '../platform/record.ts';
 
 type Env = NodeJS.ProcessEnv;
 type PushLogger = { warn(...args: unknown[]): void };
@@ -23,29 +25,21 @@ export interface WebPushClient {
   ): Promise<unknown>;
 }
 
-export type PushConfig = { enabled: boolean; vapidPublicKey: string; privateKey: string; subject: string };
 export type PushContext = { expiresAt?: unknown; ttl?: unknown; strictFailures?: boolean; [key: string]: unknown };
 export type PushPreferences =
   { doNotDisturb?: boolean; mutedPeerIds?: string[]; mutedRoomIds?: string[] } | null | undefined;
 
-function describePushError(input: unknown): { errorName: string; errorCode: string; statusCode: number | undefined } {
-  const error = input as { name?: unknown; code?: unknown; statusCode?: unknown } | null | undefined;
-  return {
-    errorName: String(error?.name || 'Error').slice(0, 80),
-    errorCode: String(error?.code || '').slice(0, 80),
-    statusCode: Number.isInteger(error?.statusCode) ? (error?.statusCode as number) : undefined
-  };
+// A name or code is logged as text; anything that is not a string or a number is left out.
+function errorText(value: unknown, fallback: string): string {
+  return (typeof value === 'string' || typeof value === 'number') && value ? String(value) : fallback;
 }
 
-function readPushConfig(env: Env = process.env): PushConfig {
-  const vapidPublicKey = String(env.VAPID_PUBLIC_KEY || '').trim();
-  const privateKey = String(env.VAPID_PRIVATE_KEY || '').trim();
-  const subject = String(env.VAPID_SUBJECT || '').trim();
+function describePushError(error: unknown): { errorName: string; errorCode: string; statusCode: number | undefined } {
+  const statusCode = fieldOf(error, 'statusCode');
   return {
-    enabled: Boolean(vapidPublicKey && privateKey && subject),
-    vapidPublicKey,
-    privateKey,
-    subject
+    errorName: errorText(fieldOf(error, 'name'), 'Error').slice(0, 80),
+    errorCode: errorText(fieldOf(error, 'code'), '').slice(0, 80),
+    statusCode: typeof statusCode === 'number' && Number.isInteger(statusCode) ? statusCode : undefined
   };
 }
 
@@ -63,9 +57,9 @@ function resolvePushTtl(
   { expiresAt, ttl }: { expiresAt?: unknown; ttl?: unknown } = {},
   now: number = Date.now()
 ): number | null | undefined {
-  let resolvedTtl = Number.isFinite(ttl) ? Math.max(0, Math.floor(ttl as number)) : undefined;
-  if (Number.isFinite(expiresAt)) {
-    const remainingTtl = Math.ceil(((expiresAt as number) - now) / 1000);
+  let resolvedTtl = typeof ttl === 'number' && Number.isFinite(ttl) ? Math.max(0, Math.floor(ttl)) : undefined;
+  if (typeof expiresAt === 'number' && Number.isFinite(expiresAt)) {
+    const remainingTtl = Math.ceil((expiresAt - now) / 1000);
     if (remainingTtl <= 0) return null;
     resolvedTtl = resolvedTtl === undefined ? remainingTtl : Math.min(resolvedTtl, remainingTtl);
   }
@@ -75,17 +69,19 @@ function resolvePushTtl(
 function createPushService({
   store,
   env = process.env,
+  config = readPushConfig(env),
   client = webPush,
   logger = createLogger({ name: 'api' }),
   now = Date.now
 }: {
-  store?: PushSubscriptionStore;
-  env?: Env;
-  client?: WebPushClient;
-  logger?: PushLogger;
+  store?: PushSubscriptionStore | undefined;
+  env?: Env | undefined;
+  /** The VAPID settings; read from env when not given. */
+  config?: PushConfig | undefined;
+  client?: WebPushClient | undefined;
+  logger?: PushLogger | undefined;
   now?: () => number;
 } = {}) {
-  const config = readPushConfig(env);
   if (config.enabled) client.setVapidDetails(config.subject, config.vapidPublicKey, config.privateKey);
 
   async function sendToUser(
@@ -96,10 +92,10 @@ function createPushService({
     if (!config.enabled || !userId) return { enabled: config.enabled, sent: 0, removed: 0 };
     const ttl = resolvePushTtl(context, now());
     if (ttl === null) return { enabled: true, sent: 0, removed: 0 };
-    const subscriptionStore = store as PushSubscriptionStore;
     let subscriptions: StoredSubscription[];
     try {
-      subscriptions = await subscriptionStore.listByUserId(userId);
+      if (!store) throw new Error('No push subscription store is installed');
+      subscriptions = await store.listByUserId(userId);
     } catch (error) {
       logger.warn(
         { evt: LOG_EVENTS.PUSH_SUBSCRIPTION_LOAD_FAILED, err: error, userId },
@@ -117,7 +113,7 @@ function createPushService({
         const endpoint = cleanPushEndpoint(subscription.endpoint);
         if (!endpoint) {
           try {
-            await subscriptionStore.removeByEndpoint(subscription.endpoint);
+            await store.removeByEndpoint(subscription.endpoint);
             removed += 1;
           } catch (cleanupError) {
             logger.warn(
@@ -136,15 +132,15 @@ function createPushService({
           await client.sendNotification(
             { endpoint, keys: subscription.keys },
             JSON.stringify(payload),
-            Number.isFinite(ttl) ? { TTL: Math.max(0, Math.floor(ttl as number)) } : undefined
+            typeof ttl === 'number' && Number.isFinite(ttl) ? { TTL: Math.max(0, Math.floor(ttl)) } : undefined
           );
           sent += 1;
-          await subscriptionStore.markSuccess(endpoint);
+          await store.markSuccess(endpoint);
         } catch (error) {
-          const statusCode = (error as { statusCode?: unknown } | null | undefined)?.statusCode;
+          const statusCode = fieldOf(error, 'statusCode');
           if (statusCode === 404 || statusCode === 410) {
             try {
-              await subscriptionStore.removeByEndpoint(endpoint);
+              await store.removeByEndpoint(endpoint);
               removed += 1;
             } catch (cleanupError) {
               logger.warn(
@@ -180,5 +176,6 @@ function createPushService({
 }
 
 export type PushService = ReturnType<typeof createPushService>;
+export type { PushConfig };
 
 export { createPushService, readPushConfig, resolvePushTtl, shouldDeliverPush };

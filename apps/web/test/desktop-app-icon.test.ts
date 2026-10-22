@@ -8,7 +8,7 @@ function installBridge(bridge: unknown) {
 }
 
 afterEach(() => {
-  delete (window as { voiceRoomDesktopAppIcon?: unknown }).voiceRoomDesktopAppIcon;
+  Reflect.deleteProperty(window, 'voiceRoomDesktopAppIcon');
   setTheme('graphite-volt');
   localStorage.clear();
   delete document.documentElement.dataset.theme;

@@ -1,4 +1,10 @@
-import type { ClientCommands, MediaGrant } from '@voice-room/shared/contracts/realtime';
+import type {
+  ClientCommands,
+  MediaGrant,
+  ServerEventOf,
+  ServerEvents,
+  ServerEventType
+} from '@voice-room/shared/contracts/realtime';
 import { getAppRealtime, type RealtimeEvent, type RoomSnapshot } from '$lib/api/realtime';
 import { applyRoomSummary } from './room-presence.svelte';
 import { guestBrowserId } from './guest-id';
@@ -48,13 +54,58 @@ function acknowledgePreview(event: RealtimeEvent): void {
   clearPreviewAck(event.payload.roomId);
 }
 
+// The room each server event belongs to; null for events no room handler sees.
+// Exhaustive: a new event type does not compile until it is given its room.
+const ROOM_OF: { [Type in ServerEventType]: ((payload: ServerEvents[Type]) => string | undefined) | null } = {
+  ready: null,
+  pong: null,
+  'friend.presence': null,
+  'friend.request': null,
+  'friend.accepted': null,
+  'friend.removed': null,
+  'friend.updated': null,
+  'ring.incoming': null,
+  'notification.settings.updated': null,
+  'account.login.new': null,
+  'account.login.resolved': null,
+  'admin.reports': null,
+  'dm.message': null,
+  'dm.message.edited': null,
+  'dm.message.deleted': null,
+  'dm.read': null,
+  'dm.typing': null,
+  'notification.dm.message': null,
+  'notification.room.message': (payload) => payload.room.roomId,
+  'notification.friend.request': null,
+  'notification.friend.accepted': null,
+  'room.summary': (payload) => payload.room.roomId,
+  'room.snapshot': (payload) => payload.roomId,
+  'room.updated': (payload) => payload.room.roomId,
+  'room.deleted': (payload) => payload.roomId,
+  'room.not_found': (payload) => payload.roomId,
+  'room.full': (payload) => payload.roomId,
+  'server.full': (payload) => payload.roomId,
+  'room.media.grant': (payload) => payload.roomId,
+  'room.kicked': (payload) => payload.roomId,
+  'room.banned': (payload) => payload.roomId,
+  'room.left': (payload) => payload.roomId,
+  'room.peer.joined': (payload) => payload.roomId,
+  'room.peer.left': (payload) => payload.roomId,
+  'room.peer.updated': (payload) => payload.roomId,
+  'room.chat.message': (payload) => payload.roomId,
+  'room.chat.edited': (payload) => payload.roomId,
+  'room.chat.deleted': (payload) => payload.roomId,
+  'room.chat.typing': (payload) => payload.roomId,
+  'room.pins': (payload) => payload.roomId,
+  'reaction.updated': (payload) => payload.roomId
+};
+
+function roomOf<Type extends ServerEventType>(event: ServerEventOf<Type>): string | undefined {
+  return ROOM_OF[event.type]?.(event.payload);
+}
+
 function roomDetailEventTargetsRoom(event: RealtimeEvent, roomId: string): boolean {
-  if (event.type === 'room.snapshot') return event.payload.roomId === roomId;
-  const payload: unknown = 'payload' in event ? event.payload : null;
-  if (!payload || typeof payload !== 'object') return false;
-  if ('roomId' in payload && payload.roomId === roomId) return true;
-  const room = 'room' in payload ? payload.room : null;
-  return !!room && typeof room === 'object' && 'roomId' in room && room.roomId === roomId;
+  return event.type !== 'error' && roomOf(event) === roomId;
 }
 
 function dispatchRoomDetail(roomId: string, event: RealtimeEvent): void {
@@ -94,7 +145,6 @@ function releaseDetailDispatch(): void {
   }
 }
 
-let lobbyHooked = false;
 let activeVoiceJoin: ClientCommands['room.join'] | null = null;
 let restoreHooked = false;
 let lastRestoreEpoch = 0;
@@ -215,7 +265,7 @@ export function initLobbyRoomRealtime(
                 ...room,
                 peers: summary.peers,
                 name: summary.name || room.name,
-                unreadCount: summary.unreadCount ?? room.unreadCount
+                ...(summary.unreadCount === undefined ? {} : { unreadCount: summary.unreadCount })
               }
             : room
         )
@@ -238,9 +288,7 @@ export function initLobbyRoomRealtime(
     }
   });
 
-  lobbyHooked = true;
   return () => {
-    lobbyHooked = false;
     offRestore?.();
     unsubscribe();
   };
@@ -375,10 +423,6 @@ export function requestMediaGrant(payload: ClientCommands['room.media.request'])
 
 export function ensureAppRealtimeConnected(): void {
   getAppRealtime().ensureConnected();
-}
-
-export function isLobbyRoomRealtimeHooked(): boolean {
-  return lobbyHooked;
 }
 
 export type { RoomSnapshot };

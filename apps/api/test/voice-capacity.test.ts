@@ -6,7 +6,7 @@ import type { WsConnection } from '../src/realtime/registry.ts';
 import { fake } from './fakes/index.ts';
 import { runtimeDeps } from './fakes/room-runtime.ts';
 
-type TestRoom = Parameters<RoomRuntimeDeps['broadcast']>[0];
+type TestRoom = NonNullable<Awaited<ReturnType<RoomRuntimeDeps['getRoom']>>>;
 
 function connection() {
   return fake<WsConnection>({ activeVoice: null, closed: false, pendingVoiceJoin: null, previewRoomIds: new Set() });

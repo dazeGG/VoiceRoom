@@ -3,6 +3,7 @@
 // raised and reported, ordinary transitions stay quiet.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import type { ReplacementOutcome } from '../../src/lib/features/room/client/recovery/realtime-recovery.ts';
 
 vi.mock('../../src/lib/entities/room/room-realtime', () => ({
   requestActiveVoiceResync: vi.fn(() => true),
@@ -22,7 +23,7 @@ afterEach(() => {
   recovery.setRoomRecoveryLiveKitAdapter(null);
 });
 
-async function loseLiveKitWithSnapshot(outcome: { ok?: boolean; retryable?: boolean; code?: string }) {
+async function loseLiveKitWithSnapshot(outcome: ReplacementOutcome) {
   const attemptFreshReplacement = vi.fn(async () => outcome);
   recovery.setRoomRecoveryLiveKitAdapter({ attemptFreshReplacement });
   const phases: string[] = [];

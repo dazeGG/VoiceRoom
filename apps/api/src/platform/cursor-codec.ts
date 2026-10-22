@@ -1,5 +1,6 @@
 import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import crypto from 'node:crypto';
+import { isRecord } from '@voice-room/shared/guards';
 
 const CURSOR_CODEC_VERSION = 1;
 const DEFAULT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -67,17 +68,17 @@ function normalizeMicrosecond(value: unknown): string {
 }
 
 function normalizeTuple(input: unknown): CursorTuple {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) throw new CursorCodecError();
-  const tuple = input as Record<string, unknown>;
+  if (!isRecord(input)) throw new CursorCodecError();
+  const tuple = input;
   const createdAtMicros = normalizeMicrosecond(tuple.createdAtMicros ?? tuple.micros ?? tuple.ts);
   const id = normalizeString(tuple.id ?? tuple.messageId, 'id', 160);
   return { createdAtMicros, id };
 }
 
-function normalizeKeys(keys: unknown): CursorKey[] {
-  const rawKeys: unknown[] = Array.isArray(keys) ? keys : typeof keys === 'string' ? keys.split(',') : [];
+function normalizeKeys(keys: string | readonly string[]): CursorKey[] {
+  const rawKeys = typeof keys === 'string' ? keys.split(',') : keys;
 
-  const normalized = rawKeys.map((value) => (typeof value === 'string' ? value.trim() : '')).filter(Boolean);
+  const normalized = rawKeys.map((value) => value.trim()).filter(Boolean);
 
   if (normalized.length === 0) throw new Error('At least one cursor HMAC key is required');
 
@@ -90,10 +91,6 @@ function normalizeKeys(keys: unknown): CursorKey[] {
       secret
     };
   });
-}
-
-function readCursorKeysFromEnv(env: NodeJS.ProcessEnv = process.env): string {
-  return env.VOICE_ROOM_CURSOR_HMAC_KEYS || env.CURSOR_HMAC_KEYS || env.CURSOR_HMAC_KEY || '';
 }
 
 function makePayload({
@@ -121,15 +118,20 @@ function makePayload({
   };
 }
 
-function createCursorCodec(
-  options: { keys?: unknown; env?: NodeJS.ProcessEnv; ttlMs?: unknown; now?: unknown } = {}
-): CursorCodec {
-  const keys = normalizeKeys(options.keys ?? readCursorKeysFromEnv(options.env));
+/** `keys` are the HMAC secrets (a list, or one comma-separated string); the first signs. */
+function createCursorCodec(options: {
+  keys: string | readonly string[];
+  ttlMs?: number;
+  now?: () => number;
+}): CursorCodec {
+  const keys = normalizeKeys(options.keys);
+  const signingSecret = keys[0]?.secret ?? '';
+  if (!signingSecret) throw new Error('At least one cursor HMAC key is required');
   const ttlMs =
-    Number.isFinite(options.ttlMs) && (options.ttlMs as number) > 0
-      ? Math.trunc(options.ttlMs as number)
+    options.ttlMs !== undefined && Number.isFinite(options.ttlMs) && options.ttlMs > 0
+      ? Math.trunc(options.ttlMs)
       : DEFAULT_TTL_MS;
-  const now: () => number = typeof options.now === 'function' ? (options.now as () => number) : Date.now;
+  const now = options.now ?? Date.now;
 
   function encode(
     input: { purpose?: unknown; context?: unknown; tuple?: unknown; [key: string]: unknown } = {}
@@ -139,8 +141,7 @@ function createCursorCodec(
     const tuple = normalizeTuple(input.tuple ?? input);
     const payload = makePayload({ purpose, context, tuple, ttlMs, nowMs: now() });
     const body = base64urlEncode(JSON.stringify(payload));
-    const key = keys[0]!;
-    const signature = hmac(key.secret, body);
+    const signature = hmac(signingSecret, body);
     return `${body}.${signature}`;
   }
 
@@ -156,10 +157,13 @@ function createCursorCodec(
       const verified = keys.some((key) => timingSafeEqualString(hmac(key.secret, body), signature));
       if (!verified) throw new CursorCodecError();
 
-      const payload = JSON.parse(base64urlDecode(body)) as Partial<CursorPayload> | null;
-      if (!payload || payload.v !== CURSOR_CODEC_VERSION) throw new CursorCodecError();
+      const payload: unknown = JSON.parse(base64urlDecode(body));
+      if (!isRecord(payload) || payload.v !== CURSOR_CODEC_VERSION) throw new CursorCodecError();
       if (payload.p !== purpose || payload.c !== sha256(context)) throw new CursorCodecError();
-      if (!Number.isFinite(payload.exp) || Math.trunc(now()) > (payload.exp as number)) throw new CursorCodecError();
+      const expiresAt = payload.exp;
+      if (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt) || Math.trunc(now()) > expiresAt) {
+        throw new CursorCodecError();
+      }
 
       return normalizeTuple(payload.t);
     } catch (error) {

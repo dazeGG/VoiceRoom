@@ -3,14 +3,15 @@
 
 import { sql } from 'kysely';
 import type pg from 'pg';
+import { isUuid } from '@voice-room/shared/validation';
 import { kyselyOn } from '../../platform/db/kysely.ts';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { createLogger } from '../../lib/logger.ts';
 import { describeUserAgent, isDesktopAppUserAgent } from '@voice-room/shared/account-security';
 import {
   DEFAULT_SESSION_TTL_MS,
   SESSION_TOUCH_INTERVAL_MS,
-  UUID_PATTERN,
   type UserStoreLogger,
   activeBlock,
   cleanLocationLabel,
@@ -19,9 +20,8 @@ import {
   desktopAppSeen,
   hasMetadataKey,
   hashSessionToken,
-  mapUser,
-  toDate,
-  toMillis
+  storedUser,
+  toDate
 } from './user-records.ts';
 
 export function createSessionRepository({
@@ -30,8 +30,8 @@ export function createSessionRepository({
   logger = createLogger({ name: 'api' })
 }: {
   pool: pg.Pool;
-  sessionTtlMs?: number;
-  logger?: UserStoreLogger;
+  sessionTtlMs?: number | undefined;
+  logger?: UserStoreLogger | undefined;
 }) {
   const db = kyselyOn(pool);
 
@@ -96,12 +96,12 @@ export function createSessionRepository({
       .where('s.expires_at', '>', toDate(now))
       .executeTakeFirst();
     if (!row) return null;
-    const user = mapUser(row)!;
+    const user = storedUser(row);
     // A block ends the account's sessions at once; this keeps one that
     // slipped through (opened in the same instant) from working either.
     if (activeBlock(user, now)) return null;
 
-    if (toMillis(row.session_last_seen_at) <= now - SESSION_TOUCH_INTERVAL_MS) {
+    if ((epochMillis(row.session_last_seen_at) ?? Date.now()) <= now - SESSION_TOUCH_INTERVAL_MS) {
       void touchSession({ tokenHash, now, userAgent, resolveLocation }).catch((error: unknown) =>
         logger.warn({ evt: LOG_EVENTS.SESSION_TOUCH_FAILED, err: error }, 'failed to touch a session')
       );
@@ -109,7 +109,7 @@ export function createSessionRepository({
 
     return {
       session: {
-        expiresAt: toMillis(row.session_expires_at),
+        expiresAt: epochMillis(row.session_expires_at) ?? Date.now(),
         publicId: row.session_public_id,
         token,
         tokenHash
@@ -129,8 +129,8 @@ export function createSessionRepository({
   }: {
     tokenHash: string;
     now: number;
-    userAgent?: string;
-    resolveLocation?: () => unknown;
+    userAgent?: string | undefined;
+    resolveLocation?: (() => unknown) | undefined;
   }): Promise<void> {
     let locationLabel = '';
     if (typeof resolveLocation === 'function') {
@@ -205,14 +205,14 @@ export function createSessionRepository({
       current: Boolean(currentTokenHash) && row.id === currentTokenHash,
       ...describeUserAgent(row.user_agent),
       location: row.location_label || '',
-      lastSeenAt: toMillis(row.last_seen_at)
+      lastSeenAt: epochMillis(row.last_seen_at) ?? Date.now()
     }));
   }
 
   // Returns the token hash so the caller can close whatever that session still
   // holds open (sockets, voice); the hash itself never reaches a client.
   async function revokeSession({ userId, publicId }: { userId: string; publicId: unknown }) {
-    if (typeof publicId !== 'string' || !UUID_PATTERN.test(publicId)) return { status: 'not_found', tokenHash: null };
+    if (typeof publicId !== 'string' || !isUuid(publicId)) return { status: 'not_found' as const, tokenHash: null };
     const rows = await db
       .deleteFrom('sessions')
       .where('user_id', '=', userId)
@@ -220,8 +220,8 @@ export function createSessionRepository({
       .returning('id')
       .execute();
     return rows.length === 1 && rows[0]
-      ? { status: 'revoked', tokenHash: rows[0].id }
-      : { status: 'not_found', tokenHash: null };
+      ? { status: 'revoked' as const, tokenHash: rows[0].id }
+      : { status: 'not_found' as const, tokenHash: null };
   }
 
   async function revokeOtherSessions({

@@ -28,6 +28,7 @@ import {
   clampGateThresholdDb,
   getDbMeterPosition,
   getNoiseMode,
+  isNoiseMode,
   getStoredMasterVolume,
   getStoredGateThresholdDb,
   getStoredMicrophoneMode,
@@ -54,10 +55,12 @@ export interface NoiseOption {
   label: string;
 }
 
-export const NOISE_OPTIONS: NoiseOption[] = (Object.keys(NOISE_MODES) as NoiseMode[]).map((value) => ({
-  label: NOISE_MODES[value].label,
-  value
-}));
+export const NOISE_OPTIONS: NoiseOption[] = Object.keys(NOISE_MODES)
+  .filter(isNoiseMode)
+  .map((value) => ({
+    label: NOISE_MODES[value].label,
+    value
+  }));
 
 export interface SoundSettings {
   microphoneDeviceId: string;

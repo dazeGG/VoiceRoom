@@ -7,8 +7,9 @@ import assert from 'node:assert/strict';
 import { createRoomStore } from '../src/app/room-store.ts';
 import { createUserStore } from '../src/app/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
-import { mapRoom } from '../src/domains/rooms/room.repository.ts';
+import { mapRoom, toMillis } from '../src/domains/rooms/room.repository.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { AnyRow, queryRows } from './helpers/checked.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const skip = !process.env.TEST_DATABASE_URL;
@@ -31,6 +32,31 @@ async function setup(t: TestContext) {
   }
   return { pool, store, user, room };
 }
+
+test('mapRoom reads an unreadable stored time as 0, not as now', () => {
+  const room = mapRoom({
+    avatar_key: null,
+    id: 'abc123',
+    creator_ip: '',
+    is_static: false,
+    created_at: new Date(Number.NaN),
+    updated_at: new Date(Number.NaN),
+    empty_since: null,
+    deleted_at: null,
+    emoji: '',
+    metadata: {},
+    name: '',
+    owner_id: null,
+    room_color_key: '',
+    room_icon_key: ''
+  });
+  assert.equal(room.createdAt, 0);
+  assert.equal(room.updatedAt, 0);
+});
+
+test('toMillis reads an unparsable stored string as 0', () => {
+  assert.equal(toMillis('garbage'), 0);
+});
 
 test('mapRoom turns a room row into the API room shape', () => {
   const room = mapRoom({
@@ -113,11 +139,13 @@ test('room creation checks the owner, the per-owner and per-address quotas and t
     assert.equal(created.status, 'created');
     assert.equal(created.room?.ownerId, owner.id);
   }
-  const memberships = await pool.query(
+  const memberships = await queryRows(
+    pool,
+    AnyRow,
     'SELECT room_id, role FROM room_memberships WHERE user_id = $1 ORDER BY room_id',
     [owner.id]
   );
-  assert.deepEqual(memberships.rows, [
+  assert.deepEqual(memberships, [
     { room_id: 's1', role: 'owner' },
     { room_id: 's2', role: 'owner' }
   ]);
@@ -187,11 +215,9 @@ test('a message never expires, shows its author as they are now, and edits in pl
 
   assert.equal(await store.appendMessage('missing', { text: 'hi' }), null, 'no message in a missing room');
 
-  const guest = await store.appendMessage(
-    'room1',
-    { id: 'm1', peerId: 'peer1', name: 'Гость', text: 'hello', createdAt: 1000, expiresAt: 2000 } as never,
-    1000
-  );
+  // A field the store does not take: a stored message never expires.
+  const withExpiry = { id: 'm1', peerId: 'peer1', name: 'Гость', text: 'hello', createdAt: 1000, expiresAt: 2000 };
+  const guest = await store.appendMessage('room1', withExpiry, 1000);
   assert.equal(guest?.expiresAt, null, 'a requested expiry is ignored');
   assert.equal(guest?.name, 'Гость');
 
@@ -261,7 +287,7 @@ test('appendMessage runs the unit of work in its transaction and rolls back with
       id: 'doomed',
       text: 'x',
       async unitOfWork(client, message) {
-        const seen = await client.query('SELECT id FROM room_messages WHERE id = $1', [message.id]);
+        const seen = await client.query<{ id: string }>('SELECT id FROM room_messages WHERE id = $1', [message.id]);
         assert.equal(seen.rowCount, 1, 'the unit of work sees the message on the same connection');
         throw new Error('outbox failed');
       }

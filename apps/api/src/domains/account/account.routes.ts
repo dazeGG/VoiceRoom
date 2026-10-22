@@ -36,6 +36,7 @@ import type { ApiContext, ResolvedSession, SessionRecord, SessionUser } from '..
 import { selfUser } from './user-records.ts';
 import { failure, optionalJsonBody } from '../../platform/http/http-kit.ts';
 import type { AccountService, Blocked, Device, OpenedSession } from './account.service.ts';
+import type { RateCheck } from '../../lib/rate-limit.ts';
 
 const answers = <Success>(success: Success) => ({ 200: success, '4xx': AccountFailure, 503: AccountFailure });
 
@@ -50,7 +51,7 @@ const DELETION_UNAVAILABLE = failure('Удаление аккаунта сейч
 
 export interface AccountRoutesDeps {
   account: AccountService;
-  limiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
+  limiter: RateCheck;
   /** The session cookie that signs a browser in for the session's lifetime. */
   sessionCookie(token: string): string;
   clearedSessionCookie(): string;

@@ -16,18 +16,18 @@ import { fileURLToPath } from 'node:url';
 
 const CONNECT_SRC = "'self' wss://{$LIVEKIT_DOMAIN} https://{$LIVEKIT_DOMAIN} stun: turn: turns:";
 
-export function readMetaPolicy(html: string) {
-  const match = /<meta\s+http-equiv="content-security-policy"\s+content="([^"]+)"/i.exec(String(html || ''));
-  if (!match) throw new Error('dist/index.html has no content-security-policy meta tag');
-  return match[1];
+export function readMetaPolicy(html: string): string {
+  const policy = /<meta\s+http-equiv="content-security-policy"\s+content="([^"]+)"/i.exec(String(html || ''))?.[1];
+  if (!policy) throw new Error('dist/index.html has no content-security-policy meta tag');
+  return policy;
 }
 
 export function buildHeaderPolicy(metaPolicy: string) {
-  const directives = new Map();
+  const directives = new Map<string, string>();
   for (const part of String(metaPolicy).split(';')) {
     const trimmed = part.trim();
     if (!trimmed) continue;
-    const [name, ...values] = trimmed.split(/\s+/);
+    const [name = '', ...values] = trimmed.split(/\s+/);
     directives.set(name.toLowerCase(), values.join(' '));
   }
   if (!/'sha256-[A-Za-z0-9+/=]+'/.test(directives.get('script-src') || '')) {

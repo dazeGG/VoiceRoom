@@ -1,6 +1,7 @@
 process.env.ROOM_CREATE_POW_DIFFICULTY = '0';
 
 import test, { type TestContext } from 'node:test';
+import type { PresencePeer } from '../src/domains/rooms/room-views.ts';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import http from 'node:http';
@@ -12,6 +13,11 @@ import type { ClientCommands } from '@voice-room/shared/contracts/realtime';
 import type { StoredUser } from '../src/domains/account/user-records.ts';
 import { dbRoom, userSession, type DbRoom, type Fakes } from './fakes/index.ts';
 import { socketDir } from './fakes/server-process.ts';
+import { Done, Failure } from '@voice-room/shared/contracts/http';
+import { RoomRead } from '@voice-room/shared/contracts/messages';
+import { RoomCard, RoomFailure, RoomList } from '@voice-room/shared/contracts/rooms';
+import { checked } from './helpers/checked.ts';
+import { defined } from './helpers/assert-defined.ts';
 import type { FrameOf, WsSession } from './ws-harness.ts';
 
 const isSnapshot = (frame: { type: string }): frame is FrameOf<'room.snapshot'> => frame.type === 'room.snapshot';
@@ -48,7 +54,7 @@ function createFakeStore(seed: Seed = {}) {
     async getRoom(roomId) {
       const room = rooms.get(roomId);
       if (!room || room.deletedAt) return null;
-      return { ...room, peers: new Map() };
+      return { ...room, peers: new Map<string, unknown>() };
     },
     async getOrCreatePeerIdentity({ peerId } = { roomId: '', peerId: '', sessionToken: '' }) {
       return { identity: { avatarColorKey: 'blurple', peerId }, status: 'created' };
@@ -61,6 +67,9 @@ function createFakeStore(seed: Seed = {}) {
         ? { principalId: accountUserId, principalType: 'account' as const }
         : { principalId: guestPrincipalId || 'test-guest', principalType: 'guest' as const };
     },
+    async findActiveRoomBan() {
+      return null;
+    },
     async isRoomServerMuted() {
       return false;
     },
@@ -68,13 +77,13 @@ function createFakeStore(seed: Seed = {}) {
       const room = rooms.get(roomId);
       if (!room || room.deletedAt) return null;
       Object.assign(room, patch, { updatedAt: Date.now() });
-      return { ...room, peers: new Map() };
+      return { ...room, peers: new Map<string, unknown>() };
     },
     async deleteRoom(roomId, now = Date.now()) {
       const room = rooms.get(roomId);
       if (!room || room.deletedAt) return null;
       room.deletedAt = now;
-      return { ...room, peers: new Map() };
+      return { ...room, peers: new Map<string, unknown>() };
     },
     async markRoomActive() {
       return null;
@@ -91,7 +100,12 @@ function createFakeStore(seed: Seed = {}) {
     async listVisibleRoomsForUser() {
       return [...rooms.values()]
         .filter((room) => !room.deletedAt && room.isStatic)
-        .map((room) => ({ ...room, peers: new Map(), relationship: 'owner', unreadCount: room.unreadCount || 0 }));
+        .map((room) => ({
+          ...room,
+          peers: new Map<string, PresencePeer>(),
+          relationship: 'owner',
+          unreadCount: room.unreadCount || 0
+        }));
     },
     async getRoomUnreadCount(roomId: string) {
       return rooms.get(roomId)?.unreadCount || 0;
@@ -148,7 +162,7 @@ test('PUT /api/rooms/:roomId lets the owner rename the room', async (t) => {
   });
 
   assert.equal(response.statusCode, 200);
-  const body = response.json();
+  const body = checked(RoomCard, response.json());
   assert.equal(body.ok, true);
   assert.equal(body.room.name, 'Renamed');
   assert.equal(body.room.roomId, 'room1');
@@ -166,7 +180,7 @@ test('room unread count is returned by auth rooms and cleared by the read endpoi
     headers: { cookie: `vr_session=${OWNER_TOKEN}` }
   });
   assert.equal(listed.statusCode, 200);
-  assert.equal(listed.json().rooms[0].unreadCount, 3);
+  assert.equal(defined(checked(RoomList, listed.json()).rooms[0], 'the listed room').unreadCount, 3);
 
   const read = await app.inject({
     method: 'POST',
@@ -174,7 +188,7 @@ test('room unread count is returned by auth rooms and cleared by the read endpoi
     headers: { cookie: `vr_session=${OWNER_TOKEN}` }
   });
   assert.equal(read.statusCode, 200);
-  assert.equal(read.json().unreadCount, 0);
+  assert.equal(checked(RoomRead, read.json()).unreadCount, 0);
   assert.equal(store.rooms.get('room1')?.unreadCount, 0);
 });
 
@@ -262,7 +276,7 @@ test('PUT rejects an empty name for static rooms', async (t) => {
   });
 
   assert.equal(response.statusCode, 400);
-  assert.equal(response.json().error, 'Дайте комнате название');
+  assert.equal(checked(Failure, response.json()).error, 'Дайте комнате название');
   assert.equal(store.rooms.get('room1')?.name, 'Original');
 });
 
@@ -277,12 +291,12 @@ test('DELETE soft-deletes the room for the owner', async (t) => {
   });
 
   assert.equal(response.statusCode, 200);
-  assert.equal(response.json().ok, true);
+  assert.equal(checked(Done, response.json()).ok, true);
   assert.ok(store.rooms.get('room1')?.deletedAt);
 
   // Subsequent GET is a not-found.
   const status = await app.inject({ method: 'GET', url: '/api/rooms/room1' });
-  assert.equal(status.json().ok, false);
+  assert.equal(checked(RoomFailure, status.json()).ok, false);
 });
 
 test('DELETE rejects a non-owner with 403', async (t) => {
@@ -320,7 +334,7 @@ test('cookie-authenticated PUT/DELETE reject cross-origin browser requests (CSRF
     payload: { name: 'Hijacked' }
   });
   assert.equal(put.statusCode, 403);
-  assert.equal(put.json().error, 'Cross-origin request rejected');
+  assert.equal(checked(Failure, put.json()).error, 'Cross-origin request rejected');
   assert.equal(store.rooms.get('room1')?.name, 'Original');
 
   const del = await app.inject({

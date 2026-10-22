@@ -1,48 +1,42 @@
 // Direct (one-to-one) messages. Mirrors the /api/dm/:userId routes.
 
-import type {
-  Attachment,
-  DirectHistoryMessage,
+import {
   DirectHistoryPage,
-  DirectMessage as DirectMessageView,
   DirectMessageAnswer,
   DirectRead,
-  LinkPreview,
-  MessageDeleted
+  MessageDeleted,
+  type DirectHistoryMessage,
+  type DirectMessage as DirectMessageView,
+  type DirectMessageInvite,
+  type ReactionSummary,
+  type ReplyPointer,
+  type SendDirectMessageBody
 } from '@voice-room/shared/contracts/messages';
 import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
 import type { ReplyTarget } from '$lib/shared/chat/reply-store.svelte';
-import type { ReactionSummary } from '@voice-room/shared/reactions';
+import type { HistoryPageRequest } from './rooms';
 import { api } from './client';
 
 // A room invitation embedded in a message: rendered as an actionable card in
 // the thread instead of a text bubble. Status changes arrive as message edits.
-export interface DirectMessageInvite {
-  roomId: string;
-  roomName: string;
-  status: 'pending' | 'accepted' | 'declined' | 'expired';
-  expiresAt: number | null;
-}
+export type { DirectMessageInvite };
 
 /** A direct message as the thread UI holds it, with the history cursors when it came from a page. */
-export interface DirectMessage {
-  id: string;
-  senderId: string;
-  recipientId: string;
-  body: string;
+export type DirectMessage = Omit<
+  DirectMessageView,
+  'createdAt' | 'invite' | 'attachments' | 'linkPreview' | 'replyTo' | 'replyPreview'
+> & {
   createdAt: number;
-  editedAt: number | null;
-  readAt: number | null;
-  invite?: DirectMessageInvite | null;
-  cursor?: string;
-  readCursor?: string;
-  attachments?: Attachment[];
-  linkPreview?: LinkPreview;
-  replyTo?: { messageId: string };
-  replyPreview?: ReplyTarget;
+  attachments?: DirectMessageView['attachments'] | undefined;
+  linkPreview?: DirectMessageView['linkPreview'] | undefined;
+  invite?: DirectMessageInvite | null | undefined;
+  cursor?: string | undefined;
+  readCursor?: string | undefined;
+  replyTo?: ReplyPointer | undefined;
+  replyPreview?: ReplyTarget | undefined;
   /** The reactions a history page carried; realtime keeps the reaction store current after that. */
-  reactions?: ReactionSummary[];
-}
+  reactions?: ReactionSummary[] | undefined;
+};
 
 export function directMessageFromView(message: DirectMessageView): DirectMessage {
   return {
@@ -53,42 +47,24 @@ export function directMessageFromView(message: DirectMessageView): DirectMessage
   };
 }
 
-export interface DirectMessageHistoryPage {
-  contractVersion: 1;
-  mode: 'latest' | 'before' | 'after' | 'around';
-  messages: DirectMessage[];
-  pageInfo: {
-    before?: string;
-    after?: string;
-    around?: string;
-    hasMoreBefore: boolean;
-    hasMoreAfter: boolean;
-  };
-}
+export type DirectMessageHistoryPage = Omit<DirectHistoryPage, 'messages'> & { messages: DirectMessage[] };
 
 // Opening a thread also clears its unread badge server-side.
 export async function fetchThreadPage(
   userId: string,
-  request: {
-    mode?: 'latest' | 'before' | 'after' | 'around';
-    cursor?: string;
-    limit?: number;
-    signal?: AbortSignal;
-  } = {}
+  request: Omit<HistoryPageRequest, 'messageId'> = {}
 ): Promise<DirectMessageHistoryPage> {
   const params = new URLSearchParams({
     mode: request.mode ?? 'latest',
     limit: String(request.limit ?? 50)
   });
   if (request.cursor) params.set('cursor', request.cursor);
-  const page = await api.get<DirectHistoryPage>(`/api/dm/${encodeURIComponent(userId)}/history?${params}`, {
+  const page = await api.get(`/api/dm/${encodeURIComponent(userId)}/history?${params}`, DirectHistoryPage, {
     signal: request.signal,
     fallback: 'Не удалось загрузить переписку'
   });
   return { ...page, messages: page.messages.map(directMessageFromHistory) };
 }
-
-const INVITE_STATUSES: readonly string[] = ['accepted', 'declined', 'expired'];
 
 function directMessageFromHistory(message: DirectHistoryMessage): DirectMessage {
   const metadata = message.metadata ?? {};
@@ -97,9 +73,7 @@ function directMessageFromHistory(message: DirectHistoryMessage): DirectMessage 
       ? {
           roomId: metadata.roomId ?? '',
           roomName: metadata.roomName ?? '',
-          status: INVITE_STATUSES.includes(metadata.status ?? '')
-            ? (metadata.status as DirectMessageInvite['status'])
-            : 'pending',
+          status: metadata.status ?? 'pending',
           expiresAt: metadata.expiresAt ?? null
         }
       : null;
@@ -129,27 +103,29 @@ export async function sendDirectMessage(
   replyTo?: { messageId: string },
   idempotencyKey?: string
 ): Promise<DirectMessage> {
-  const payload = await api.post<DirectMessageAnswer>(`/api/dm/${encodeURIComponent(userId)}`, {
+  const body: SendDirectMessageBody = {
     text,
     attachmentIds,
-    replyTo,
-    idempotencyKey
-  });
+    ...(replyTo === undefined ? {} : { replyTo }),
+    ...(idempotencyKey === undefined ? {} : { idempotencyKey })
+  };
+  const payload = await api.post(`/api/dm/${encodeURIComponent(userId)}`, DirectMessageAnswer, body);
   return directMessageFromView(payload.message);
 }
 
 export async function markThreadRead(userId: string, cursor?: string): Promise<number> {
-  const payload = await api.post<DirectRead>(`/api/dm/${encodeURIComponent(userId)}/read`, cursor ? { cursor } : {});
+  const payload = await api.post(`/api/dm/${encodeURIComponent(userId)}/read`, DirectRead, cursor ? { cursor } : {});
   return payload.count ?? 0;
 }
 
 export async function deleteDirectMessage(userId: string, messageId: string): Promise<MessageDeleted> {
-  return api.delete<MessageDeleted>(`/api/dm/${encodeURIComponent(userId)}/messages/${encodeURIComponent(messageId)}`);
+  return api.delete(`/api/dm/${encodeURIComponent(userId)}/messages/${encodeURIComponent(messageId)}`, MessageDeleted);
 }
 
 export async function editDirectMessage(userId: string, messageId: string, text: string): Promise<DirectMessage> {
-  const payload = await api.patch<DirectMessageAnswer>(
+  const payload = await api.patch(
     `/api/dm/${encodeURIComponent(userId)}/messages/${encodeURIComponent(messageId)}`,
+    DirectMessageAnswer,
     { text }
   );
   return directMessageFromView(payload.message);
@@ -160,8 +136,9 @@ export async function respondRoomInvite(
   messageId: string,
   action: 'accept' | 'decline'
 ): Promise<DirectMessage> {
-  const payload = await api.post<DirectMessageAnswer>(
+  const payload = await api.post(
     `/api/dm/${encodeURIComponent(userId)}/invites/${encodeURIComponent(messageId)}/respond`,
+    DirectMessageAnswer,
     { action }
   );
   return directMessageFromView(payload.message);

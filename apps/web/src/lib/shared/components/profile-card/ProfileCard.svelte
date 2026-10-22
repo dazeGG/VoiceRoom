@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { dayMonthYear } from '$lib/shared/utils/date-format';
   import { Check, MessageSquare, UserMinus, UserPlus } from '@lucide/svelte';
   import { AccountBadge, Avatar, Button, Ellipsis } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
@@ -22,11 +23,7 @@
   const accent = $derived(person.avatarAccent || getAvatarColor(person.avatarColorKey).background);
   const friendsSinceLabel = $derived.by(() => {
     if (relationship !== 'friend' || !friendsSince) return '';
-    return new Date(friendsSince).toLocaleDateString('ru-RU', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric'
-    });
+    return dayMonthYear(friendsSince);
   });
 </script>
 

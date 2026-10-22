@@ -7,8 +7,7 @@ import { LOG_EVENTS } from '../../lib/log-events.ts';
 import type { LiveKitConfig } from './livekit-config.ts';
 
 interface ParticipantPermissionLike {
-  canPublishSources?: number[];
-  [key: string]: unknown;
+  canPublishSources?: TrackSource[];
 }
 
 export interface LiveKitAdminClient {
@@ -17,7 +16,8 @@ export interface LiveKitAdminClient {
     room: string,
     identity: string
   ): Promise<
-    { permission?: ParticipantPermissionLike; tracks?: { source?: number; muted?: boolean; sid: string }[] } | undefined
+    | { permission?: ParticipantPermissionLike; tracks?: { source?: TrackSource; muted?: boolean; sid: string }[] }
+    | undefined
   >;
   updateParticipant(
     room: string,
@@ -36,20 +36,30 @@ export type ServerMuteResult = { status: 'applied' } | { status: 'offline' } | {
 // Not Found, so matching on the message alone never recognised it and every
 // normal leave logged an error.
 export function isLiveKitParticipantAlreadyGone(error: unknown): boolean {
-  const value = (error ?? {}) as { status?: unknown; code?: unknown; name?: unknown; message?: unknown };
-  if (Number(value.status) === 404) return true;
-  if (String(value.code || '').toLowerCase() === 'not_found') return true;
-  const text = `${value.name || ''} ${value.message || ''}`;
+  if (typeof error !== 'object' || error === null) return false;
+  if ('status' in error && Number(error.status) === 404) return true;
+  if ('code' in error && typeof error.code === 'string' && error.code.toLowerCase() === 'not_found') return true;
+  const name = 'name' in error && typeof error.name === 'string' ? error.name : '';
+  const message = 'message' in error && typeof error.message === 'string' ? error.message : '';
+  const text = `${name} ${message}`;
   return /not.?found/i.test(text) || /does not exist/i.test(text);
 }
 
 // Server mute is enforced at the SFU, not just in the client: microphone is
 // removed from the participant's allowed sources while the camera, screen sharing
 // and data remain intact, and the live microphone track is muted immediately.
-export function resolveServerMutePermission<T extends ParticipantPermissionLike>(
-  currentPermission: T = {} as T,
+export function resolveServerMutePermission(
+  currentPermission: undefined,
   muted: boolean
-): T & { canPublishSources: number[] } {
+): ParticipantPermissionLike & { canPublishSources: TrackSource[] };
+export function resolveServerMutePermission<T extends ParticipantPermissionLike>(
+  currentPermission: T,
+  muted: boolean
+): T & { canPublishSources: TrackSource[] };
+export function resolveServerMutePermission(
+  currentPermission: ParticipantPermissionLike = {},
+  muted: boolean
+): ParticipantPermissionLike & { canPublishSources: TrackSource[] } {
   const declaredSources = Array.isArray(currentPermission.canPublishSources) ? currentPermission.canPublishSources : [];
   const currentSources =
     declaredSources.length > 0
@@ -65,8 +75,7 @@ export function createLiveKitAdmin({
   config,
   roomName,
   logger,
-  clientFactory = (livekit) =>
-    new RoomServiceClient(livekit.adminUrl, livekit.apiKey, livekit.apiSecret) as unknown as LiveKitAdminClient
+  clientFactory = (livekit) => new RoomServiceClient(livekit.adminUrl, livekit.apiKey, livekit.apiSecret)
 }: {
   config: () => LiveKitConfig;
   roomName: (roomId: string) => string;
@@ -119,14 +128,17 @@ export function createLiveKitAdmin({
         'failed to apply a LiveKit server mute'
       );
       if (!muted) throw error;
+      let disconnectError: unknown;
       try {
         await service.removeParticipant(room, peerId);
         return { status: 'disconnected' };
-      } catch (disconnectError) {
-        throw new AggregateError([error, disconnectError], 'LiveKit server mute and disconnect both failed', {
-          cause: error
-        });
+      } catch (caught) {
+        disconnectError = caught;
       }
+      // The mute failure stays the cause: the disconnect was only the fallback for it.
+      throw new AggregateError([error, disconnectError], 'LiveKit server mute and disconnect both failed', {
+        cause: error
+      });
     }
     return { status: 'applied' };
   }

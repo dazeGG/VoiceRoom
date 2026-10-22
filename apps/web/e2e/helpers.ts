@@ -1,4 +1,35 @@
-import { expect, type Page } from '@playwright/test';
+import { expect, type Locator, type Page } from '@playwright/test';
+import { Value } from 'typebox/value';
+import { Failure } from '@voice-room/shared/contracts/http';
+import { Capabilities } from '@voice-room/shared/contracts/ops';
+import { RoomCreated } from '@voice-room/shared/contracts/rooms';
+import { FriendRequests } from '@voice-room/shared/contracts/social';
+import { defined, parse } from '../test/helpers/assert';
+
+/** The element's box; fails when the locator's element is not rendered. */
+export async function boxOf(locator: Locator) {
+  return defined(await locator.boundingBox(), 'bounding box');
+}
+
+/** Turns the named features on in the capabilities the page reads. */
+export async function enableCapabilities(page: Page, enabled: string[]): Promise<void> {
+  await page.route('**/api/capabilities', async (route) => {
+    const response = await route.fetch();
+    const body = parse(Capabilities, await response.json());
+    const json: Capabilities = {
+      ...body,
+      features: { ...body.features, ...Object.fromEntries(enabled.map((key) => [key, true])) }
+    };
+    await route.fulfill({ response, json });
+  });
+}
+
+/** Ids of the friend requests the page's account has received. */
+export async function incomingFriendRequestIds(page: Page): Promise<string[]> {
+  const response = await page.context().request.get('/api/friends/requests');
+  expect(response.ok()).toBe(true);
+  return parse(FriendRequests, await response.json()).incoming.map((request) => request.id);
+}
 
 export async function waitForHttpReady(
   url: string,
@@ -83,15 +114,17 @@ export async function createPermanentRoom(page: Page, name: string): Promise<str
     page.waitForResponse((response) => response.url().endsWith('/api/rooms') && response.request().method() === 'POST'),
     dialog.getByRole('button', { name: 'Создать комнату' }).click()
   ]);
-  const created = (await createdResponse.json()) as { roomId?: string; error?: string };
-  expect(createdResponse.ok(), created.error || `Room creation failed with ${createdResponse.status()}`).toBe(true);
+  const answer: unknown = await createdResponse.json();
+  const failure = Value.Check(Failure, answer) ? answer.error : '';
+  expect(createdResponse.ok(), failure || `Room creation failed with ${createdResponse.status()}`).toBe(true);
+  const created = parse(RoomCreated, answer);
   await expect(dialog).toBeHidden({ timeout: 15_000 });
 
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Создать комнату' })).toBeVisible({ timeout: 15_000 });
   const card = page.locator('.lv-card', { hasText: name }).first();
   await expect(card).toBeVisible({ timeout: 15_000 });
-  const roomId = created.roomId?.trim() || '';
+  const roomId = created.roomId.trim();
   expect(roomId).toMatch(/^[a-z0-9]+$/i);
   return roomId;
 }

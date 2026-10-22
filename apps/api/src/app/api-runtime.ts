@@ -14,13 +14,8 @@ import { createSessionResolver } from './session.ts';
 import { createServiceRegistry, type StoreOverrides } from './service-registry.ts';
 import { createRequestLog } from '../platform/http/request-log.ts';
 import { liveKitConnectSources, securityHeaders } from '../platform/http/security-headers.ts';
-import {
-  readApiConfig,
-  resolveCursorHmacKeys as resolveCursorHmacKeysFor,
-  resolveRealtimeReconnectLeaseMs
-} from './config.ts';
+import { readApiConfig, resolveCursorHmacKeys as resolveCursorHmacKeysFor } from './config.ts';
 import { registerApiRoutes } from './api-routes.ts';
-import { cleanLiveKitUrl } from '@voice-room/shared/validation';
 import { createLogger, hashIp } from '../lib/logger.ts';
 import { getClientIp } from '../lib/rate-limit.ts';
 import { createRateLimits } from './rate-limits.ts';
@@ -34,6 +29,7 @@ import {
 import { createHostProbe } from '../platform/host-probe.ts';
 import { createFastifyApp } from '../platform/http/fastify-app.ts';
 import { asHttpServer, type ApiServer } from '../platform/http/http-server.ts';
+import type { Timer } from '../platform/types.ts';
 export type { ApiServer };
 
 import { createAdmissionService } from '../domains/admission/admission.service.ts';
@@ -43,8 +39,8 @@ import { createSystemSampler } from '../domains/ops/system-snapshot.service.ts';
 import { staffToken } from '../domains/staff/staff.routes.ts';
 import { MAX_UPLOAD_BYTES } from '../domains/media/media.service.ts';
 
-type Logger = ReturnType<typeof createLogger>;
-type Timer = ReturnType<typeof globalThis.setTimeout> | number;
+// The process logger is pino until an app hands over its Fastify logger.
+type Logger = FastifyBaseLogger;
 
 export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEnv } = {}) {
   const config = readApiConfig(env);
@@ -53,7 +49,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     roomRuntime: () => hub.runtime(),
     getRoom: (roomId) => hub.getRoom(roomId),
     findRoomBan: (roomId, userId, ip) => hub.findRoomBan(roomId, userId, ip),
-    sendToUser: (userId, envelope) => hub.registry()?.sendToUser(userId, envelope) ?? 0,
+    sendToUser: (userId, envelope) => hub.registry.sendToUser(userId, envelope),
     attachMediaProjectionMany: (context, messages) => hub.projection.projectMediaMany(context, messages),
     disconnectModeratedPeer: (room, peer, type, options) => domain.peerEviction.disconnect(room, peer, type, options),
     liveKitGatePrincipalForPeer: (roomId, peer) => hub.liveKitGatePrincipalForPeer(roomId, peer),
@@ -74,16 +70,12 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
 
   /** The accounts with an open realtime socket, once per socket. */
   function liveAccountIds(): string[] {
-    const accountIds: string[] = [];
-    for (const connection of hub.registry()?.connections?.values?.() || []) {
-      if (connection.userId) accountIds.push(connection.userId);
-    }
-    return accountIds;
+    return hub.registry.stats().accountIds;
   }
 
   function liveVoice() {
     return {
-      guestConnections: hub.activeGuestConnections(),
+      guestConnections: hub.registry.stats().guests,
       voicePeers: hub.presence.peerCount(),
       voiceRooms: [...hub.presenceRooms.values()].filter((room) => room.peers.size > 0).length
     };
@@ -101,40 +93,49 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
   // still has to be searchable next to the requests it was triggered by, so it
   // logs through one process logger with the same base fields and redaction
   // instead of falling back to console.
-  let processLogger: Logger | FastifyBaseLogger | null = null;
+  let processLogger: Logger | null = null;
 
   function getProcessLogger(): Logger {
-    return (processLogger ||= createLogger({ name: 'api' })) as Logger;
+    return (processLogger ||= createLogger({ name: 'api' }));
   }
 
   // createApp builds a fresh Fastify logger per app; background work adopts it
   // so a test harness and the real process agree on the destination.
-  function setProcessLogger(logger: Logger | FastifyBaseLogger | null): void {
+  function setProcessLogger(logger: Logger | null): void {
     processLogger = logger || null;
   }
 
-  const limits = createRateLimits(config, env);
-  let admissionService: ReturnType<typeof createAdmissionService> | null = null;
+  const limits = createRateLimits(config);
+  const admissionService = createAdmissionService({
+    livekitConfig: liveKit.config,
+    credentialProvider: services.getLiveKitCredentialProvider,
+    credentialBoundary: services.getCredentialBoundary,
+    store: services.getRoomStore,
+    roomExists: async (roomId) => Boolean(await hub.getRoom(roomId)),
+    findRoomBan: hub.findRoomBan,
+    waitForRosterPeer: hub.presence.waitForRosterPeer,
+    memberships: services.getMembershipServices,
+    roomName: liveKit.roomName,
+    recordRevokeFailure: recordCredentialRevokeCleanupFailure
+  });
   const domain = createDomainServices({
     config,
-    env,
     services,
     hub,
     liveKit,
     limits,
     logger: () => getProcessLogger(),
-    admission: () => admissionService,
+    admission: admissionService,
     liveNumbers,
     liveAccountIds: () => [...new Set(liveAccountIds())]
   });
   const { sessionCookies } = domain;
 
-  // The CSP admits the LiveKit gate the browser connects to, read per request
-  // so a changed LIVEKIT_URL in tests takes effect.
+  // The CSP admits the LiveKit gate the browser connects to.
   function baseHeaders() {
     return securityHeaders({
-      connectSources: liveKitConnectSources(cleanLiveKitUrl(config.LIVEKIT_GATE_PUBLIC_URL || env.LIVEKIT_URL || '')),
-      production: env.NODE_ENV === 'production'
+      connectSources: liveKitConnectSources(config.LIVEKIT_CSP_URL),
+      production: config.PRODUCTION
     });
   }
 
@@ -165,7 +166,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     http: httpTotals,
     live: () => ({
       ...liveVoice(),
-      wsConnections: hub.registry()?.connections?.size || 0
+      wsConnections: hub.registry.stats().sockets
     }),
     snapshots: services.getSystemSnapshotRepository
   });
@@ -174,7 +175,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     return startMaintenanceTimers(server, {
       keepaliveMs: config.KEEPALIVE_MS,
       intervalMs: config.ROOM_PRUNE_INTERVAL_MS,
-      pruneSockets: () => hub.registry()?.pruneStale(),
+      pruneSockets: () => hub.registry.pruneStale(),
       observe: observeMaintenance,
       logger,
       tasks: apiMaintenanceTasks({
@@ -204,7 +205,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     avatars = null,
     liveKitCredentials = null,
     membershipServicesOverride = null,
-    realtimeReconnectLeaseMs = resolveRealtimeReconnectLeaseMs(env),
+    realtimeReconnectLeaseMs = config.REALTIME_RECONNECT_LEASE_MS,
     realtimeNow = Date.now,
     realtimeSetTimeout = globalThis.setTimeout,
     realtimeClearTimeout = globalThis.clearTimeout,
@@ -225,7 +226,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     realtimeNow?: () => number;
     realtimeSetTimeout?(this: void, callback: () => void, ms: number): Timer;
     realtimeClearTimeout?(this: void, timer: Timer): void;
-    logger?: Logger | FastifyBaseLogger | null;
+    logger?: Logger | null;
   } = {}) {
     const { roomStoreChanged } = services.applyOverrides({
       store,
@@ -253,18 +254,6 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     const appLogger = logger || app.log;
     setProcessLogger(appLogger);
 
-    admissionService = createAdmissionService({
-      livekitConfig: liveKit.config,
-      credentialProvider: services.getLiveKitCredentialProvider,
-      credentialBoundary: services.getCredentialBoundary,
-      store: services.getRoomStore,
-      roomExists: async (roomId) => Boolean(await hub.getRoom(roomId)),
-      findRoomBan: hub.findRoomBan,
-      waitForRosterPeer: hub.presence.waitForRosterPeer,
-      memberships: services.getMembershipServices,
-      roomName: liveKit.roomName,
-      recordRevokeFailure: recordCredentialRevokeCleanupFailure
-    });
     const apiContext = {
       logger: appLogger,
       clientIp: (req: http.IncomingMessage) => getClientIp(req, config.TRUST_PROXY),
@@ -287,8 +276,8 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
 
     const renderMetrics = () =>
       renderPrometheus({
-        activeWs: hub.registry()?.connections?.size || 0,
-        activeGuestWs: hub.activeGuestConnections(),
+        activeWs: hub.registry.stats().sockets,
+        activeGuestWs: hub.registry.stats().guests,
         presenceRooms: hub.presenceRooms.size,
         presencePeers: hub.presence.peerCount()
       });
@@ -333,7 +322,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     pruneRooms: hub.presence.prune,
     resolveCursorHmacKeys,
     startPruneTimer,
-    sockets: () => hub.registry()?.connections?.values?.() || [],
+    sockets: () => hub.registry.allConnections(),
     config
   };
 }

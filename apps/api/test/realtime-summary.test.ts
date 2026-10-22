@@ -1,12 +1,12 @@
 import test from 'node:test';
 import type { StoredRoom } from '../src/domains/rooms/room-views.ts';
-import { lobbyRoom } from './fakes/index.ts';
+import { dbRoom, lobbyRoom } from './fakes/index.ts';
 import assert from 'node:assert/strict';
-import { buildRoomRealtimeSummaryFromLobbyRoom } from '../src/realtime/summary.ts';
+import { buildRoomRealtimeSummary } from '@voice-room/shared/realtime';
 import { createRoomRealtimeRuntime } from '../src/realtime/room-runtime.ts';
 import { runtimeDeps } from './fakes/room-runtime.ts';
 
-test('buildRoomRealtimeSummaryFromLobbyRoom mirrors shared summary rules', () => {
+test('buildRoomRealtimeSummary mirrors shared summary rules', () => {
   const peers = Array.from({ length: 6 }, (_, index) => ({
     id: `peer-${index}`.padEnd(8, '0'),
     name: `User ${index}`,
@@ -14,7 +14,7 @@ test('buildRoomRealtimeSummaryFromLobbyRoom mirrors shared summary rules', () =>
     avatarColorKey: 'blue'
   }));
 
-  const summary = buildRoomRealtimeSummaryFromLobbyRoom(
+  const summary = buildRoomRealtimeSummary(
     {
       id: 'room1',
       name: 'Test room',
@@ -34,11 +34,10 @@ test('buildRoomRealtimeSummaryFromLobbyRoom mirrors shared summary rules', () =>
 
 test('chat messages schedule personalized unread summaries for room recipients', async () => {
   const sent: Array<{ userId: string; unreadCount: unknown }> = [];
-  const room: StoredRoom = { id: 'room1', createdAt: 0, isStatic: true, name: 'Test room', relationship: 'owner' };
   const runtime = createRoomRealtimeRuntime(
     runtimeDeps({
       store: {
-        getRoom: async () => room as never,
+        getRoom: async () => dbRoom('room1', { createdAt: 0, name: 'Test room' }),
         async getRoomUnreadCount(_roomId, userId) {
           return userId === 'owner' ? 2 : 5;
         },
@@ -59,8 +58,8 @@ test('chat messages schedule personalized unread summaries for room recipients',
         lobbyRoom(value.id, {
           isStatic: value.isStatic,
           name: value.name,
-          relationship: value.relationship,
-          unreadCount: value.unreadCount
+          relationship: value.relationship || 'owner',
+          ...(value.unreadCount === undefined ? {} : { unreadCount: value.unreadCount })
         }),
       avatarColorForPeerId: () => 'blurple'
     })

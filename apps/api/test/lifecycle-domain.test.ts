@@ -2,6 +2,7 @@
 // maintenance timers (domains/rooms/room-lifecycle.ts,
 // domains/account/account-lifecycle.ts, platform/maintenance.ts).
 
+import { isRecord } from '@voice-room/shared/guards';
 import type { AccountMessage } from '../src/realtime/account-events.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -11,7 +12,8 @@ import { createRoomLifecycle } from '../src/domains/rooms/room-lifecycle.ts';
 import { createAccountLifecycle } from '../src/domains/account/account-lifecycle.ts';
 import type { StoredRoom } from '../src/domains/rooms/room-views.ts';
 import { createRoomPresence, type RosterPeer } from '../src/realtime/room-presence.ts';
-import type { WsConnection } from '../src/realtime/registry.ts';
+import { createConnectionRegistry, type WsConnection } from '../src/realtime/registry.ts';
+import { parseServerFrame } from '@voice-room/shared/realtime';
 import { startMaintenanceTimers } from '../src/platform/maintenance.ts';
 import { fake, recordingLogger, storedUser, storedDirectMessage } from './fakes/index.ts';
 
@@ -22,16 +24,37 @@ function logged(logger: RecordingLogger, level: string, field: string) {
   return logger.records.filter((record) => record.level === level).map((record) => record[field]);
 }
 
+const sockets = createConnectionRegistry({
+  maxConnectionsPerUser: 10,
+  keepaliveMs: 15000,
+  getFriendIds: async () => []
+});
+
+/** A socket that keeps the type of every frame it gets. */
+function socket() {
+  const sent: string[] = [];
+  const connection = sockets.addGuestConnection({
+    readyState: 1,
+    send(data: string) {
+      const parsed = parseServerFrame(JSON.parse(data));
+      sent.push(parsed.ok ? parsed.frame.type : 'invalid');
+    },
+    close() {}
+  });
+  return { connection, sent };
+}
+
+/** A seat's transport over its own socket. */
 function transport(id: string) {
-  const sent: unknown[] = [];
-  return {
-    id,
-    sent,
-    send(message: unknown) {
-      sent.push((message as { type?: string }).type);
-      return true;
-    }
-  };
+  return { id, ...socket() };
+}
+
+/** A socket that previews the room without being in its call. */
+function previewer(roomId: string) {
+  const watcher = socket();
+  watcher.connection.previewRoomIds.add(roomId);
+  sockets.registerConnectionForRoom(watcher.connection, roomId);
+  return watcher;
 }
 
 function presence() {
@@ -44,6 +67,7 @@ function presence() {
         return null;
       }
     }),
+    sockets,
     runtime: () => null,
     logger: () => recordingLogger(),
     occupancyRetry: { baseMs: 1000, maxMs: 1000 },
@@ -53,6 +77,16 @@ function presence() {
 
 // What a finalizePeer call answered, or the error it failed with.
 type LeaseResult = { finalized?: boolean; ownershipFinalized?: boolean; message?: string };
+
+// A finalizer that threw, read as the result the test looks at.
+function leaseFailure(error: unknown): LeaseResult {
+  return {
+    ...(isRecord(error) && typeof error.ownershipFinalized === 'boolean'
+      ? { ownershipFinalized: error.ownershipFinalized }
+      : {}),
+    ...(error instanceof Error ? { message: error.message } : {})
+  };
+}
 
 function roomHarness({
   runtime = true,
@@ -68,14 +102,13 @@ function roomHarness({
   removeFails?: boolean;
 } = {}) {
   const calls = {
-    mirrored: [] as unknown[],
-    invalidated: [] as string[],
-    summaries: [] as string[],
-    notified: [] as unknown[][],
-    revoked: [] as unknown[],
-    removed: [] as string[],
-    avatars: [] as Array<string | null | undefined>,
-    leaseResults: [] as LeaseResult[]
+    invalidated: new Array<string>(),
+    summaries: new Array<string>(),
+    notified: new Array<unknown[]>(),
+    revoked: new Array<unknown>(),
+    removed: new Array<string>(),
+    avatars: new Array<string | null | undefined>(),
+    leaseResults: new Array<LeaseResult>()
   };
   const roster = presence();
   const lifecycle = createRoomLifecycle({
@@ -83,10 +116,9 @@ function roomHarness({
     runtime: () =>
       runtime
         ? {
-            mirrorLegacyRoomEvent: (_roomId, message) => calls.mirrored.push((message as { type?: string }).type),
             invalidateRecipientCache: (roomId) => calls.invalidated.push(roomId),
             scheduleSummaryBroadcast: (roomId) => calls.summaries.push(roomId),
-            async cancelRoomReconnectLeases({ finalizePeer }) {
+            async cancelRoomReconnectLeases(lease) {
               const results: LeaseResult[] = [];
               const peers: Array<[RosterPeer | null, boolean]> = [
                 [null, false],
@@ -94,9 +126,7 @@ function roomHarness({
                 ...[...(roster.rooms.get('r1')?.peers.values() || [])].map((p): [RosterPeer, boolean] => [p, false])
               ];
               for (const [peer, ownershipFinalized] of peers) {
-                results.push(
-                  await finalizePeer({ peer, ownershipFinalized }).catch((error: unknown) => error as LeaseResult)
-                );
+                results.push(await lease.finalizePeer({ peer, ownershipFinalized }).catch(leaseFailure));
               }
               calls.leaseResults = results;
               if (leaseError) throw new Error('lease');
@@ -137,10 +167,11 @@ test('the lobby card counts live peers and an update reaches room, watchers and 
   assert.equal(lifecycle.lobbyRoom(room).peers, 0);
   const peer = { id: 'p1', transport: transport('t1') };
   roster.room('r1').peers.set('p1', peer);
+  const watcher = previewer('r1');
   const card = lifecycle.announceRoomUpdate('r1', room);
   assert.equal(card.peers, 1);
-  assert.deepEqual(peer.transport.sent, ['room-updated']);
-  assert.deepEqual([calls.mirrored, calls.invalidated, calls.summaries], [['room-updated'], ['r1'], ['r1']]);
+  assert.deepEqual(peer.transport.sent, ['room.updated']);
+  assert.deepEqual([watcher.sent, calls.invalidated, calls.summaries], [['room.updated'], ['r1'], ['r1']]);
   lifecycle.announceRoomUpdate('empty', { ...room, id: 'empty' });
   roomHarness({ runtime: false }).lifecycle.announceRoomUpdate('r1', room);
 });
@@ -185,7 +216,7 @@ test('deleting a room tells everyone, frees every seat and removes the avatar', 
   roster.room('r1').peers.set('p1', peer);
   roster.room('r1').peers.set('p2', guest);
   await lifecycle.finishRoomDeletion('r1', { avatarKey: 'room.webp' });
-  assert.ok(peer.transport.sent.includes('room-deleted'));
+  assert.ok(peer.transport.sent.includes('room.deleted'));
   assert.deepEqual(calls.revoked, [
     { roomId: 'r1', accountUserId: 'u1', guestPrincipalId: '' },
     { roomId: 'r1', accountUserId: null, guestPrincipalId: 'g' }
@@ -255,17 +286,17 @@ function accountHarness({
   voiceFails?: boolean;
 } = {}) {
   const logger = recordingLogger();
+  const lastSeen: { closed: unknown[] | null; lookup: unknown } = { closed: null, lookup: null };
   const calls = {
-    notified: [] as unknown[][],
-    payloads: [] as AccountMessage[],
-    revoked: [] as string[],
-    left: [] as unknown[],
-    removed: [] as string[],
-    closed: null as unknown[] | null,
-    lookup: null as unknown,
-    announced: [] as string[],
-    finished: [] as unknown[][],
-    avatars: [] as Array<string | null | undefined>,
+    notified: new Array<unknown[]>(),
+    payloads: new Array<AccountMessage>(),
+    revoked: new Array<string>(),
+    left: new Array<unknown>(),
+    removed: new Array<string>(),
+    ...lastSeen,
+    announced: new Array<string>(),
+    finished: new Array<unknown[]>(),
+    avatars: new Array<string | null | undefined>(),
     get errors() {
       return logged(logger, 'error', 'evt');
     }
@@ -402,7 +433,7 @@ test('maintenance runs enabled tasks on its interval, logs failures and stops on
   t.mock.timers.enable({ apis: ['setInterval'] });
   const server = new EventEmitter();
   const logger = recordingLogger();
-  const calls = { pruned: 0, ran: [] as string[], observed: [] as string[] };
+  const calls = { pruned: 0, ran: new Array<string>(), observed: new Array<string>() };
   const timer = startMaintenanceTimers(server, {
     keepaliveMs: 10,
     intervalMs: 100,

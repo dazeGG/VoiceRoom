@@ -9,6 +9,8 @@ import {
   type WebPushClient
 } from '../src/lib/push-service.ts';
 import { fake } from './fakes/index.ts';
+import { Type } from 'typebox';
+import { checked } from './helpers/checked.ts';
 
 // What a logger received, one entry per call.
 type LogCall = unknown[];
@@ -71,7 +73,11 @@ test('push service delivers to all subscriptions and records successes', async (
   const client: WebPushClient = {
     setVapidDetails() {},
     async sendNotification(subscription, payload, options) {
-      deliveries.push({ subscription, payload: JSON.parse(payload) as { type: string }, options });
+      deliveries.push({
+        subscription,
+        payload: checked(Type.Object({ type: Type.String() }), JSON.parse(payload)),
+        options
+      });
     }
   };
   const service = createPushService({ store, env: ENABLED_ENV, client });
@@ -206,7 +212,7 @@ test('push delivery failures log only a safe host and endpoint hash', async () =
   const service = createPushService({ store, env: ENABLED_ENV, client, logger });
 
   await service.sendToUser('user-1', { type: 'ring' });
-  const fields = logs[0]?.[0] as { pushHost: string; pushEndpointHash: string };
+  const fields = checked(Type.Object({ pushHost: Type.String(), pushEndpointHash: Type.String() }), logs[0]?.[0]);
   assert.equal(fields.pushHost, 'fcm.googleapis.com');
   assert.match(fields.pushEndpointHash, /^[a-f0-9]{16}$/);
   assert.doesNotMatch(JSON.stringify(logs), /secret-capability-token/);

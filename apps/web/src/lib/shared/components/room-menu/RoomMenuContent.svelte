@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Bell, BellOff, Copy, Link, Settings, Trash2, UserRoundPlus } from '@lucide/svelte';
-  import type { RoomRelationship } from '$lib/api/auth';
+  import type { RoomRelationship } from '@voice-room/shared/contracts/rooms';
   import type { Friend } from '$lib/api/friends';
   import { removeRoomFromList } from '$lib/api/auth';
   import { Avatar, Ellipsis, PopoverDivider, PopoverMenuItem, PopoverMenuLabel, PopoverSubmenu } from '$lib/shared/ui';
@@ -8,6 +8,7 @@
   import { copyText } from '$lib/shared/utils/clipboard';
   import { isRoomNotificationsMuted, updateRoomNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
   import RoomInviteFriendList from './RoomInviteFriendList.svelte';
+  import type { Snippet } from 'svelte';
 
   let {
     roomId,
@@ -26,17 +27,17 @@
   } = $props<{
     roomId: string;
     name: string;
-    avatarUrl?: string | null;
-    relationship?: RoomRelationship;
-    friends?: Friend[];
-    presentUserIds?: Set<string>;
+    avatarUrl?: string | null | undefined;
+    relationship?: RoomRelationship | undefined;
+    friends?: Friend[] | undefined;
+    presentUserIds?: Set<string> | undefined;
     close: (restoreFocus?: boolean) => void;
-    canClose?: (roomId: string) => boolean;
-    onOpenSettings?: () => void;
-    inviteContent?: import('svelte').Snippet<[close: () => void]>;
-    onRoomsChanged?: () => void;
-    onToast?: (message: string) => void;
-    showNotificationControls?: boolean;
+    canClose?: ((roomId: string) => boolean) | undefined;
+    onOpenSettings?: (() => void) | undefined;
+    inviteContent?: Snippet<[close: () => void]> | undefined;
+    onRoomsChanged?: (() => void) | undefined;
+    onToast?: ((message: string) => void) | undefined;
+    showNotificationControls?: boolean | undefined;
   }>();
 
   const roomMuted = $derived(isRoomNotificationsMuted(roomId));
@@ -122,7 +123,7 @@
   {:else if friends}
     <PopoverSubmenu label="Пригласить" ariaLabel={`Позвать друга в ${name}`}>
       {#snippet icon()}<UserRoundPlus {...iconMd} aria-hidden="true" />{/snippet}
-      {#snippet content({ close: closeSubmenu })}
+      {#snippet content({ close: closeSubmenu }: { close: () => void })}
         <RoomInviteFriendList
           {friends}
           {roomId}

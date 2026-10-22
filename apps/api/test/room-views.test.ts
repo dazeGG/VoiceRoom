@@ -22,7 +22,7 @@ test('a sharing peer keeps its screen metadata; session token, IP and gate princ
     sessionToken: 'secret-token',
     ip: '203.0.113.7',
     gateGuestPrincipalId: 'guest-principal',
-    transport: { id: 't1', send: () => true }
+    transport: { id: 't1', connection: null }
   };
 
   const shown = publicPeer(peer);

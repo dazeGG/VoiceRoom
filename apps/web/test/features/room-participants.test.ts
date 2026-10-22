@@ -13,6 +13,9 @@ import {
 } from '../../src/lib/features/room/client/room/participants.ts';
 import { METER_INTERVAL_MS, startMeters, stopMeters } from '../../src/lib/features/room/client/media/meters.ts';
 import type { Participant } from '../../src/lib/features/room/client/core/types.ts';
+import type { MeterAnalyser } from '../../src/lib/features/room/client/model/participants.ts';
+import { defined } from '../helpers/assert.ts';
+import { FakeMediaStream, FakeMediaStreamTrack } from '../helpers/fake-media.ts';
 
 beforeEach(() => {
   Object.assign(state, createInitialRoomState());
@@ -26,15 +29,15 @@ afterEach(() => {
 });
 
 /** An analyser whose samples swing by `amplitude` around silence (0..127). */
-function analyser(amplitude: number) {
+function analyser(amplitude: number): MeterAnalyser {
   return {
     frequencyBinCount: 64,
-    getByteTimeDomainData(data: Uint8Array) {
+    getByteTimeDomainData(data) {
       data.forEach((_, index) => {
         data[index] = 128 + (index % 2 === 0 ? amplitude : -amplitude);
       });
     }
-  } as unknown as AnalyserNode;
+  };
 }
 
 function withAnalyser(participant: Participant, amplitude: number): Participant {
@@ -46,6 +49,22 @@ function withAnalyser(participant: Participant, amplitude: number): Participant 
 function runFrame(): void {
   vi.advanceTimersByTime(METER_INTERVAL_MS);
 }
+
+test('a peer that leaves LiveKit stops its voice element and lets go of the stream', () => {
+  const peer = createParticipant({ id: 'peer-a', name: 'A' });
+  const audio = document.createElement('audio');
+  audio.srcObject = new FakeMediaStream([new FakeMediaStreamTrack('voice', 'audio')]);
+  const pause = vi.spyOn(audio, 'pause').mockImplementation(() => {});
+  document.body.append(audio);
+  peer.audioElements.set('voice', audio);
+
+  detachLiveKitParticipant(peer);
+
+  expect(pause).toHaveBeenCalled();
+  expect(audio.srcObject).toBeNull();
+  expect(audio.isConnected).toBe(false);
+  expect(peer.audioElements.size).toBe(0);
+});
 
 test('the local participant is the self tile, even when a copy of it was listed as a peer', () => {
   const self = createParticipant({ id: 'me', name: 'Анна' });
@@ -84,14 +103,13 @@ test('a remote voice above the speaking level lights its ring, silence and a mut
 test('the rings are read on a fixed timer, not every display frame', () => {
   withAnalyser(createParticipant({ id: 'loud', name: 'Громкий' }), 60);
   let readings = 0;
-  const peer = state.peers.get('loud')!;
-  const original = peer.analyser!;
+  const peer = defined(state.peers.get('loud'), 'the loud peer');
+  const original = defined(peer.analyser, "the loud peer's analyser");
   peer.analyser = {
-    ...original,
     frequencyBinCount: original.frequencyBinCount,
-    getByteTimeDomainData(data: Uint8Array) {
+    getByteTimeDomainData(data) {
       readings += 1;
-      original.getByteTimeDomainData(data as Uint8Array<ArrayBuffer>);
+      original.getByteTimeDomainData(data);
     }
   };
 

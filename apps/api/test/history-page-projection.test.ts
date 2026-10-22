@@ -14,6 +14,7 @@ import { createReactionRepository } from '../src/domains/messaging/reaction.repo
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { mistyped } from './helpers/mistyped.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const skip = !process.env.TEST_DATABASE_URL;
@@ -59,12 +60,12 @@ async function setup(t: TestContext) {
 
   // Counts every query the page makes; without idleCount it is not taken for a pool.
   let queries = 0;
-  const counted = {
-    query: (...args: Parameters<pg.Pool['query']>) => {
+  const counted = mistyped<pg.Pool>({
+    query: (text: string, values?: unknown[]) => {
       queries += 1;
-      return (pool.query as (...input: unknown[]) => unknown)(...args);
+      return pool.query(text, values);
     }
-  } as unknown as pg.Pool;
+  });
   const attachments = createAttachmentRepository({ pool: counted });
   const projection = createMessageProjection({ attachments: () => attachments, replies: () => null });
   const history = createHistoryModule({

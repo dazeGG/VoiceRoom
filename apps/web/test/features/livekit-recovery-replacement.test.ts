@@ -10,11 +10,12 @@ const micStream = { id: 'mic-stream', getAudioTracks: () => [micTrack], getTrack
 async function inCall(options: Parameters<typeof loadLiveKitHarness>[0] = {}) {
   const lk = await loadLiveKitHarness({ autoResolveClient: true, ...options });
   const oldRoom = {
+    closed: false,
     disconnect: async () => {
-      (oldRoom as { closed?: boolean }).closed = true;
+      oldRoom.closed = true;
     },
     removeAllListeners: () => {},
-    remoteParticipants: new Map()
+    remoteParticipants: new Map<string, unknown>()
   };
   Object.assign(lk.state, {
     joined: true,
@@ -23,7 +24,7 @@ async function inCall(options: Parameters<typeof loadLiveKitHarness>[0] = {}) {
     sessionToken: 'session-1',
     localStream: micStream,
     localScreenStream: null,
-    localScreenPublications: new Map(),
+    localScreenPublications: new Map<string, unknown>(),
     livekitRoom: oldRoom,
     self: { name: 'Анна' }
   });
@@ -38,7 +39,7 @@ test('a replacement connects, publishes the kept microphone and only then takes 
   const [candidate] = lk.rooms;
   expect(lk.state.livekitRoom).toBe(candidate);
   expect(candidate?.published.map((entry) => entry.track)).toEqual([micTrack]);
-  expect((oldRoom as { closed?: boolean }).closed).toBe(true);
+  expect(oldRoom.closed).toBe(true);
 });
 
 test('when the first LiveKit address fails, the next one is tried', async () => {
@@ -106,10 +107,10 @@ test('a replacement abandoned mid-way (the recovery epoch moved on) never replac
 
 test('recovery logs name candidates by index only, never by URL or raw error', async () => {
   const logged: unknown[] = [];
-  const warn = vi.spyOn(console, 'warn').mockImplementation((...args) => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation((...args: unknown[]) => {
     logged.push(args);
   });
-  const info = vi.spyOn(console, 'info').mockImplementation((...args) => {
+  const info = vi.spyOn(console, 'info').mockImplementation((...args: unknown[]) => {
     logged.push(args);
   });
   const { lk } = await inCall({

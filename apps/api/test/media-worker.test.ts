@@ -102,9 +102,9 @@ test('G77-A03 a claimed upload is turned upright into a WebP image and a preview
         return { key: 'att/original', bytes: original.length, stream: Readable.from([original]) };
       },
       async save(id, variant, bytes) {
-        const buffer = bytes as Buffer;
-        saved[String(variant)] = buffer;
-        return { key: `${String(id)}/${String(variant)}`, bytes: buffer.length };
+        assert.ok(Buffer.isBuffer(bytes), 'the worker saves each variant as one buffer');
+        saved[String(variant)] = bytes;
+        return { key: `${String(id)}/${String(variant)}`, bytes: bytes.length };
       }
     }),
     jobRepository: fake<MediaJobRepository>({

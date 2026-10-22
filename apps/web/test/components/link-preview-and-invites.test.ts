@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 import LinkPreviewCard from '../../src/lib/shared/chat/LinkPreviewCard.svelte';
 import RoomInviteFriendList from '../../src/lib/shared/components/room-menu/RoomInviteFriendList.svelte';
+import { friend as friendAnswer, publicUser } from '../fixtures/answers.ts';
 import { stubFetch } from '../fixtures/fetch.ts';
 
 afterEach(cleanup);
@@ -18,13 +19,13 @@ test('a link preview opens the link in a new tab without sharing this page, and 
         title: 'Игра',
         description: 'Описание',
         image: { key: KEY, width: 320, height: 180 }
-      } as never
+      }
     }
   });
   const link = screen.getByRole('link');
   expect(link.getAttribute('href')).toBe('https://store.example/game');
   expect(link.getAttribute('target')).toBe('_blank');
-  expect(link.getAttribute('rel')).toBe('noopener noreferrer nofollow');
+  expect(link.getAttribute('rel')).toBe('noopener noreferrer nofollow external');
   expect(link.querySelector('img')?.getAttribute('src')).toBe(`/api/link-previews/${KEY}`);
   expect(link.textContent).toContain('Игра');
 });
@@ -38,32 +39,23 @@ test('an image key that is not a stored preview copy is not shown', () => {
         title: '',
         description: '',
         image: { key: 'https://evil.example/a.png', width: 1, height: 1 }
-      } as never
+      }
     }
   });
   expect(screen.getByRole('link').querySelector('img')).toBeNull();
 });
 
 function friend(id: string, name: string, online: boolean) {
-  return {
-    user: {
-      id,
-      login: id,
-      displayName: name,
-      avatarUrl: null,
-      avatarAccent: null,
-      avatarColorKey: 'blue',
-      presenceStatus: 'online',
-      doNotDisturb: false
-    },
+  return friendAnswer({
+    user: publicUser({ id, login: id, displayName: name, avatarColorKey: 'blue', presenceStatus: 'online' }),
     online
-  };
+  });
 }
 
 test('the invite list puts online friends first, alphabetically, and disables those already in the room', () => {
   render(RoomInviteFriendList, {
     props: {
-      friends: [friend('u-b', 'Борис', false), friend('u-v', 'Вера', true), friend('u-a', 'Анна', true)] as never,
+      friends: [friend('u-b', 'Борис', false), friend('u-v', 'Вера', true), friend('u-a', 'Анна', true)],
       roomId: 'room-a',
       presentUserIds: new Set(['u-a']),
       close: vi.fn()
@@ -84,7 +76,7 @@ test('inviting rings the friend into the room and closes the menu; a failure is 
   const close = vi.fn();
   const onToast = vi.fn();
   render(RoomInviteFriendList, {
-    props: { friends: [friend('u-v', 'Вера', true)] as never, roomId: 'room-a', close, onToast }
+    props: { friends: [friend('u-v', 'Вера', true)], roomId: 'room-a', close, onToast }
   });
   await userEvent.click(screen.getByRole('menuitem'));
   expect(calls[0]).toMatchObject({ method: 'POST', url: '/api/rooms/room-a/ring', body: { userId: 'u-v' } });
@@ -94,7 +86,7 @@ test('inviting rings the friend into the room and closes the menu; a failure is 
   cleanup();
   stubFetch({ 'POST /api/rooms/room-a/ring': { status: 429, body: { ok: false, error: 'Слишком часто' } } });
   render(RoomInviteFriendList, {
-    props: { friends: [friend('u-v', 'Вера', true)] as never, roomId: 'room-a', close: vi.fn(), onToast }
+    props: { friends: [friend('u-v', 'Вера', true)], roomId: 'room-a', close: vi.fn(), onToast }
   });
   await userEvent.click(screen.getByRole('menuitem'));
   expect(onToast).toHaveBeenLastCalledWith('Слишком часто');

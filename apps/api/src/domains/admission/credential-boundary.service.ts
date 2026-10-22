@@ -1,9 +1,9 @@
 import crypto from 'node:crypto';
+import type { GatePrincipal } from './gate-principal.ts';
 import { createGateCredentialSigner, type GateClaims, type GateCredentialSigner } from './gate-credential-signer.ts';
 
 const DEFAULT_CREDENTIAL_TTL_MS = 6 * 60 * 60 * 1000;
 
-export type GatePrincipal = { principalType: 'account' | 'guest'; principalId: string; [key: string]: unknown };
 type StoreStatus = { status?: string; [key: string]: unknown } | null | undefined;
 export type Revocation = { status: string; epoch?: number | null; revoked?: number | null };
 
@@ -11,7 +11,7 @@ export type Revocation = { status: string; epoch?: number | null; revoked?: numb
 // three issuing/verifying calls is optional: older stores lack the revocations.
 export interface GateRoomStore {
   normalizeGatePrincipal?(input: {
-    roomId?: string;
+    roomId?: string | undefined;
     accountUserId?: string | null;
     guestPrincipalId?: string;
   }): GatePrincipal | null;
@@ -42,7 +42,7 @@ export interface GateRoomStore {
   }): Promise<StoreStatus>;
   revokeLiveKitGatePrincipal?(input: { principal: GatePrincipal; roomId: string; now: number }): Promise<Revocation>;
   revokeLiveKitGatePeer?(input: {
-    roomId?: string;
+    roomId?: string | undefined;
     accountUserId?: string | null;
     guestPrincipalId?: string;
     now: number;
@@ -67,15 +67,15 @@ function createCredentialBoundaryService({
   now = Date.now,
   credentialTtlMs = DEFAULT_CREDENTIAL_TTL_MS
 }: {
-  roomStore?: GateRoomStore;
+  roomStore?: GateRoomStore | undefined;
   secret?: unknown;
   signer?: GateCredentialSigner;
-  now?: unknown;
+  now?: () => number;
   credentialTtlMs?: unknown;
 } = {}) {
   if (!roomStore) throw new TypeError('roomStore is required');
   const store = roomStore;
-  const clock: () => number = typeof now === 'function' ? (now as () => number) : Date.now;
+  const clock = now;
   const ttlMs = Math.max(60_000, Number(credentialTtlMs) || DEFAULT_CREDENTIAL_TTL_MS);
 
   function resolvePrincipal({
@@ -83,7 +83,7 @@ function createCredentialBoundaryService({
     accountUserId = null,
     guestPrincipalId = ''
   }: {
-    roomId?: string;
+    roomId?: string | undefined;
     accountUserId?: string | null;
     guestPrincipalId?: string;
   } = {}): GatePrincipal | null {
@@ -143,6 +143,7 @@ function createCredentialBoundaryService({
   }
 
   async function authorizeCredential(value: unknown): Promise<CredentialAuthorization> {
+    if (typeof value !== 'string') return { ok: false, code: 'malformed' };
     const verified = signer.verify(value);
     if (!verified.ok) return { ok: false, code: verified.code };
     const claims = verified.claims;
@@ -161,7 +162,7 @@ function createCredentialBoundaryService({
   async function revokePrincipal({
     roomId,
     principal
-  }: { roomId?: string; principal?: GatePrincipal | null } = {}): Promise<Revocation> {
+  }: { roomId?: string | undefined; principal?: GatePrincipal | null } = {}): Promise<Revocation> {
     if (!roomId || !principal) return { status: 'invalid', epoch: null };
     if (typeof store.revokeLiveKitGatePrincipal === 'function') {
       return store.revokeLiveKitGatePrincipal({ principal, roomId, now: clock() });
@@ -186,8 +187,8 @@ function createCredentialBoundaryService({
     roomId,
     principal
   }: {
-    credentialId?: string;
-    roomId?: string;
+    credentialId?: string | undefined;
+    roomId?: string | undefined;
     principal?: GatePrincipal | null;
   } = {}): Promise<Revocation> {
     if (!credentialId || !roomId || !principal) return { status: 'invalid' };
@@ -200,7 +201,7 @@ function createCredentialBoundaryService({
     accountUserId = null,
     guestPrincipalId = ''
   }: {
-    roomId?: string;
+    roomId?: string | undefined;
     accountUserId?: string | null;
     guestPrincipalId?: string;
   } = {}): Promise<Revocation> {

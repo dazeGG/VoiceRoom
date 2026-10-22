@@ -6,11 +6,8 @@ export function wait(ms: number): Promise<void> {
   });
 }
 
-export function cleanDisplayName(value: unknown): string {
-  return String(value || '')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .slice(0, 40);
+export function cleanDisplayName(value: string | null | undefined): string {
+  return (value || '').trim().replace(/\s+/g, ' ').slice(0, 40);
 }
 
 export function getInitials(name: string): string {
@@ -36,9 +33,19 @@ function errorName(error: unknown): string {
   return error instanceof Error ? error.name : '';
 }
 
+/** A failure whose message is written for the user and can go straight into a toast. */
+export class UserFacingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'UserFacingError';
+  }
+}
+
 export function errorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
-  return String(error || '');
+  if (typeof error === 'string' || typeof error === 'number' || typeof error === 'boolean') return String(error || '');
+  // A thrown non-Error object has no message worth showing; the caller's fallback reads better.
+  return '';
 }
 
 export function stopStream(stream: MediaStream): void {

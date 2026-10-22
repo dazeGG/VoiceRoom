@@ -9,12 +9,10 @@
 // for the lobby is a full page load, so the question waits for it in
 // sessionStorage and the next page picks it up (restorePendingCallFeedback).
 
-import {
-  submitCallFeedback,
-  type CallFeedbackCall,
-  type CallFeedbackRating,
-  type CallFeedbackTag
-} from '$lib/api/feedback';
+import { Type } from 'typebox';
+import { Value } from 'typebox/value';
+import { CallFeedbackCall } from '@voice-room/shared/contracts/feedback';
+import { submitCallFeedback, type CallFeedbackRating, type CallFeedbackTag } from '$lib/api/feedback';
 import { createLogger, errorContext } from '$lib/shared/log';
 
 const log = createLogger('call-feedback');
@@ -37,6 +35,12 @@ export interface AskHistory {
   skipped: number;
 }
 
+/** What localStorage holds; a skip count that does not read as a number counts as none. */
+const StoredAskHistory = Type.Object({ lastAskedAt: Type.Number(), skipped: Type.Optional(Type.Unknown()) });
+
+/** The question a leave left waiting for the next page. */
+const PendingQuestion = Type.Object({ call: CallFeedbackCall, at: Type.Number() });
+
 /** When the next question may come: three days after the last, doubling with every one skipped, at most a month. */
 export function nextAskAt(history: AskHistory | null): number {
   if (!history) return 0;
@@ -47,10 +51,10 @@ export function worthAsking(call: CallFeedbackCall, history: AskHistory | null, 
   return call.durationS >= FEEDBACK_MIN_CALL_S && call.peers > 0 && now >= nextAskAt(history);
 }
 
-function readJson<Value>(storage: () => Storage, key: string): Value | null {
+function readJson(storage: () => Storage, key: string): unknown {
   try {
     const raw = storage().getItem(key);
-    return raw ? (JSON.parse(raw) as Value) : null;
+    return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
   }
@@ -78,13 +82,13 @@ function readHistory(): AskHistory | null {
   } catch {
     return historyInMemory;
   }
-  let history: Partial<AskHistory> | null;
+  let history: unknown;
   try {
-    history = raw ? (JSON.parse(raw) as Partial<AskHistory>) : null;
+    history = raw ? JSON.parse(raw) : null;
   } catch {
     history = null;
   }
-  if (typeof history?.lastAskedAt !== 'number') return null;
+  if (!Value.Check(StoredAskHistory, history)) return null;
   return { lastAskedAt: history.lastAskedAt, skipped: Number(history.skipped) || 0 };
 }
 
@@ -123,9 +127,9 @@ export function offerCallFeedback(now = Date.now()): void {
 
 /** On a page load: the question a leave on the previous page left waiting. */
 export function restorePendingCallFeedback(now = Date.now()): void {
-  const pending = readJson<{ call: CallFeedbackCall; at: number }>(session, PENDING_KEY);
+  const pending = readJson(session, PENDING_KEY);
   writeJson(session, PENDING_KEY, null);
-  if (pending?.call && typeof pending.at === 'number' && now - pending.at <= PENDING_TTL_MS) {
+  if (Value.Check(PendingQuestion, pending) && now - pending.at <= PENDING_TTL_MS) {
     callFeedback.call = pending.call;
   }
 }
@@ -148,7 +152,9 @@ export async function answerCallFeedback(answer: {
   const history = readHistory();
   if (history) writeHistory({ ...history, skipped: 0 });
   try {
-    await submitCallFeedback({ ...answer, comment: answer.comment.trim() || undefined, call });
+    const { comment, ...rest } = answer;
+    const note = comment.trim();
+    await submitCallFeedback({ ...rest, ...(note ? { comment: note } : {}), call });
   } catch (error) {
     log.warn('call feedback not sent', errorContext(error));
   }

@@ -29,18 +29,17 @@ function fakeClock() {
       return timerId;
     },
     clearTimeout: (timerId: unknown) => {
-      timers.delete(timerId as number);
+      if (typeof timerId === 'number') timers.delete(timerId);
     },
     advance(ms: number) {
       now += ms;
-      let ready;
-      do {
-        ready = [...timers.entries()].filter(([, timer]) => timer.at <= now).sort((a, b) => a[1].at - b[1].at);
+      const due = () => [...timers.entries()].filter(([, timer]) => timer.at <= now).sort((a, b) => a[1].at - b[1].at);
+      for (let ready = due(); ready.length > 0; ready = due()) {
         for (const [timerId, timer] of ready) {
           timers.delete(timerId);
           timer.callback();
         }
-      } while (ready.length > 0);
+      }
     },
     pending: () => timers.size
   };
@@ -175,12 +174,12 @@ test('snapshot timeout enters cooldown and probes again without a network edge',
 });
 
 test('recovery timers invoke injected schedulers without rebinding their receiver', () => {
-  let receiver = null;
+  const receivers: unknown[] = [];
   const controller = new RealtimeRecoveryController({
     attemptReplacement: async () => ({ ok: true }),
     requestAppSnapshot: () => true,
     setTimeout(callback) {
-      receiver = this;
+      receivers.push(this);
       return { callback };
     },
     clearTimeout() {}
@@ -188,7 +187,8 @@ test('recovery timers invoke injected schedulers without rebinding their receive
   controller.activate({ appEpoch: 1, appConnected: true });
   controller.livekitDisconnected();
   controller.appSnapshotRequestFailed({ code: 'transport_error' });
-  assert.equal(receiver, undefined);
+  assert.notEqual(receivers.length, 0);
+  assert.equal(receivers.at(-1), undefined);
 });
 
 test('a later transport regression invalidates an in-place reconcile completion', async () => {

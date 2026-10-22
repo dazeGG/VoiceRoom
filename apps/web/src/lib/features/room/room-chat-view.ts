@@ -20,7 +20,8 @@ export interface ChatGroup {
   avatarForeground: string;
   avatarUrl: string | null;
   createdAt: number;
-  messages: ChatMessage[];
+  /** Never empty: a group starts with its first message. */
+  messages: [ChatMessage, ...ChatMessage[]];
 }
 
 export interface ChatDay {

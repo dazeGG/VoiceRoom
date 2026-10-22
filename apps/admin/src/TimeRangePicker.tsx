@@ -1,10 +1,11 @@
-// Choosing what span a chart shows, the way Grafana does: a list of
-// ready-made "last …" spans, or one's own from and to.
+// Choosing what span a chart shows: a row of ready-made "last …" spans, or
+// one's own from and to behind "Свой период", with the span the last answer
+// covered written beside them.
 
-import { CalendarRange, ChevronDown } from 'lucide-react';
+import { Calendar } from 'lucide-react';
 import { useState } from 'react';
 import { fromInputValue, rangeLabel, toInputValue, type RangePreset, type TimeRange } from './time-range.ts';
-import { Button, Popover } from './ui/index.tsx';
+import { Button, Popover, Segment } from './ui/index.tsx';
 import './TimeRangePicker.css';
 
 function lastDay(): { from: number; to: number } {
@@ -24,15 +25,16 @@ export function TimeRangePicker({
   /** Moments with hours and minutes (server), or whole days (product). */
   withTime: boolean;
   onChange: (range: TimeRange) => void;
-  /** The span the last answer actually covered, offered as the start of a custom one. */
+  /** The span the last answer actually covered, written beside the choices and offered as the start of a custom one. */
   resolved?: { from: number; to: number } | null | undefined;
 }) {
   const [fromText, setFromText] = useState('');
   const [toText, setToText] = useState('');
   const [invalid, setInvalid] = useState(false);
 
-  const label = rangeLabel(value, presets, withTime);
+  const custom = value.kind === 'custom';
   const inputType = withTime ? 'datetime-local' : 'date';
+  const covered = resolved ? rangeLabel({ kind: 'custom', ...resolved }, presets, withTime) : '';
 
   function prefill(): void {
     const span = value.kind === 'custom' ? { from: value.from, to: value.to } : (resolved ?? lastDay());
@@ -53,48 +55,34 @@ export function TimeRangePicker({
   }
 
   return (
-    <Popover
-      label="Период"
-      trigger={({ open, toggle }) => (
-        <button
-          className="time-range-trigger"
-          type="button"
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          aria-label={`Период: ${label}`}
-          onClick={() => {
-            if (!open) prefill();
-            toggle();
-          }}
-        >
-          <CalendarRange size={16} aria-hidden="true" />
-          <span>{label}</span>
-          <ChevronDown size={16} aria-hidden="true" />
-        </button>
-      )}
-    >
-      {(close) => (
-        <div className="time-range-panel">
-          <div className="time-range-presets" role="listbox" aria-label="Готовые периоды">
-            {presets.map((preset) => {
-              const selected = value.kind === 'preset' && value.id === preset.id;
-              return (
-                <button
-                  key={preset.id}
-                  className={selected ? 'time-range-preset is-selected' : 'time-range-preset'}
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  onClick={() => {
-                    onChange({ kind: 'preset', id: preset.id });
-                    close();
-                  }}
-                >
-                  {preset.label}
-                </button>
-              );
-            })}
-          </div>
+    <div className="time-range">
+      <Segment
+        ariaLabel="Период"
+        value={value.kind === 'preset' ? value.id : ''}
+        onChange={(id) => onChange({ kind: 'preset', id })}
+        options={presets.map((preset) => ({ value: preset.id, label: preset.short }))}
+      />
+      <Popover
+        label="Период"
+        trigger={({ open, toggle }) => (
+          <button
+            className="time-range-trigger"
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={open}
+            data-active={custom}
+            aria-label={custom ? `Свой период: ${rangeLabel(value, presets, withTime)}` : 'Свой период'}
+            onClick={() => {
+              if (!open) prefill();
+              toggle();
+            }}
+          >
+            <Calendar size={15} aria-hidden="true" />
+            <span>{custom ? rangeLabel(value, presets, withTime) : 'Свой период'}</span>
+          </button>
+        )}
+      >
+        {(close) => (
           <form
             className="time-range-custom"
             onSubmit={(event) => {
@@ -136,8 +124,9 @@ export function TimeRangePicker({
               Показать
             </Button>
           </form>
-        </div>
-      )}
-    </Popover>
+        )}
+      </Popover>
+      {covered && !custom ? <span className="time-range-covered">{covered}</span> : null}
+    </div>
   );
 }

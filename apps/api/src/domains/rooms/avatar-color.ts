@@ -7,5 +7,5 @@ export function avatarColorForPeerId(peerId: unknown): string {
     .createHash('sha256')
     .update(typeof peerId === 'string' ? peerId : '')
     .digest();
-  return AVATAR_COLOR_KEYS[(digest[0] as number) % AVATAR_COLOR_KEYS.length] as string;
+  return AVATAR_COLOR_KEYS[digest.readUInt8(0) % AVATAR_COLOR_KEYS.length] ?? '';
 }

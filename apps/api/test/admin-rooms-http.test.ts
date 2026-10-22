@@ -7,9 +7,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
-import type { Me, SignedIn } from '@voice-room/shared/contracts/account';
-import type { Failure } from '@voice-room/shared/contracts/http';
-import { ROOM_HISTORY_PAGE_SIZE, type LiveRooms, type RoomHistory } from '@voice-room/shared/contracts/admin';
+import { Me, SignedIn } from '@voice-room/shared/contracts/account';
+import { Failure } from '@voice-room/shared/contracts/http';
+import { ROOM_HISTORY_PAGE_SIZE, LiveRooms, RoomHistory } from '@voice-room/shared/contracts/admin';
 import { hashPassword } from '../src/lib/password.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { cookieFrom, registerAccount, request, startApiServer } from './fakes/server-process.ts';
@@ -17,6 +17,7 @@ import { staffCookie } from './staff-session.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { rollBackThrough } from './migration-steps.ts';
 import { joinVoiceRoom, openWs, sendWs } from './ws-harness.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const skip = !process.env.TEST_DATABASE_URL;
@@ -47,14 +48,21 @@ test('an administrator sees who is in voice now and the stays before, a page at 
     ADMIN_ID,
     await hashPassword('password123')
   ]);
-  const signedIn = await request<SignedIn>(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/login',
-    body: { login: 'root', password: 'password123' }
-  });
+  const signedIn = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/auth/login',
+      body: { login: 'root', password: 'password123' }
+    },
+    SignedIn
+  );
   const admin = await staffCookie(socketPath, cookieFrom(signedIn.setCookie));
   const alice = await registerAccount(socketPath, 'alice');
-  const aliceId = (await request<Me>(socketPath, { pathname: '/api/auth/me', cookie: alice })).body.user!.id;
+  const aliceId = defined(
+    (await request(socketPath, { pathname: '/api/auth/me', cookie: alice }, Me)).body.user,
+    'alice'
+  ).id;
   await pool.query(
     `INSERT INTO rooms (id, creator_ip, is_static, owner_id, name) VALUES ('kitchen', '', true, $1, 'Кухня')`,
     [aliceId]
@@ -70,44 +78,45 @@ test('an administrator sees who is in voice now and the stays before, a page at 
 
   for (const pathname of ['/api/admin/rooms', '/api/admin/rooms/history']) {
     assert.equal((await request(socketPath, { pathname })).status, 401, pathname);
-    const denied = await request<Failure>(socketPath, { pathname, cookie: alice });
+    const denied = await request(socketPath, { pathname, cookie: alice }, Failure);
     assert.equal(denied.status, 403, pathname);
     assert.equal(denied.body.code, 'platform_admin_required');
   }
 
-  const live = await request<LiveRooms>(socketPath, { pathname: '/api/admin/rooms', cookie: admin });
+  const live = await request(socketPath, { pathname: '/api/admin/rooms', cookie: admin }, LiveRooms);
   assert.equal(live.status, 200);
   assert.equal(live.body.rooms.length, 1);
-  const [kitchen] = live.body.rooms;
-  assert.equal(kitchen!.roomId, 'kitchen');
-  assert.equal(kitchen!.name, 'Кухня');
-  assert.equal(kitchen!.isStatic, true);
-  assert.equal(kitchen!.owner?.login, 'alice');
+  const kitchen = defined(live.body.rooms[0], 'the live kitchen');
+  assert.equal(kitchen.roomId, 'kitchen');
+  assert.equal(kitchen.name, 'Кухня');
+  assert.equal(kitchen.isStatic, true);
+  assert.equal(kitchen.owner?.login, 'alice');
   // An account goes by its profile name whatever it typed on joining; a guest by what it typed.
   assert.deepEqual(
-    kitchen!.peers.map((peer) => [peer.name, peer.account?.id ?? null, peer.account?.login ?? null]),
+    kitchen.peers.map((peer) => [peer.name, peer.account?.id ?? null, peer.account?.login ?? null]),
     [
       ['alice', aliceId, 'alice'],
       ['Петя', null, null]
     ]
   );
-  assert.equal(kitchen!.since, kitchen!.peers[0]!.joinedAt);
+  assert.equal(kitchen.since, defined(kitchen.peers[0], 'the first peer').joinedAt);
   assert.deepEqual(
-    kitchen!.peers.map((peer) => peer.client),
+    kitchen.peers.map((peer) => peer.client),
     ['desktop_app', 'mobile']
   );
 
   // Alice leaves: her stay is the history's latest, and the guest stays in the room.
   sendWs(aliceWs.ws, 'room.leave', aliceVoice);
   const history = () =>
-    request<RoomHistory>(socketPath, { pathname: '/api/admin/rooms/history', cookie: admin }).then((r) => r.body);
+    request(socketPath, { pathname: '/api/admin/rooms/history', cookie: admin }, RoomHistory).then((r) => r.body);
   const afterLeave = await waitFor(history, (body) => body.stays.length === 1);
-  assert.equal(afterLeave.stays[0]!.roomName, 'Кухня');
-  assert.equal(afterLeave.stays[0]!.account?.login, 'alice');
+  const left = defined(afterLeave.stays[0], 'the stay of alice');
+  assert.equal(left.roomName, 'Кухня');
+  assert.equal(left.account?.login, 'alice');
   assert.equal(afterLeave.keepDays, 90);
-  const stillIn = await request<LiveRooms>(socketPath, { pathname: '/api/admin/rooms', cookie: admin });
+  const stillIn = await request(socketPath, { pathname: '/api/admin/rooms', cookie: admin }, LiveRooms);
   assert.deepEqual(
-    stillIn.body.rooms[0]!.peers.map((peer) => peer.name),
+    defined(stillIn.body.rooms[0], 'the live kitchen').peers.map((peer) => peer.name),
     ['Петя']
   );
 
@@ -134,24 +143,33 @@ test('an administrator sees who is in voice now and the stays before, a page at 
 
   const first = await history();
   assert.equal(first.stays.length, ROOM_HISTORY_PAGE_SIZE);
-  assert.equal(first.stays[0]!.account?.login, 'alice', 'the latest end comes first');
-  assert.equal(first.stays[1]!.roomId, 'gone-room');
-  assert.equal(first.stays[1]!.roomName, null);
+  assert.equal(defined(first.stays[0], 'the latest stay').account?.login, 'alice', 'the latest end comes first');
+  const goneStay = defined(first.stays[1], 'the stay in the gone room');
+  assert.equal(goneStay.roomId, 'gone-room');
+  assert.equal(goneStay.roomName, null);
   assert.ok(first.next);
-  const second = await request<RoomHistory>(socketPath, {
-    pathname: `/api/admin/rooms/history?after=${encodeURIComponent(first.next)}`,
-    cookie: admin
-  });
+  const second = await request(
+    socketPath,
+    {
+      pathname: `/api/admin/rooms/history?after=${encodeURIComponent(first.next)}`,
+      cookie: admin
+    },
+    RoomHistory
+  );
   assert.equal(second.status, 200);
   assert.equal(second.body.stays.length, 2);
   assert.equal(second.body.next, null);
   const ids = [...first.stays, ...second.body.stays].map((stay) => stay.id);
   assert.equal(new Set(ids).size, ROOM_HISTORY_PAGE_SIZE + 2, 'no stay on two pages, the forgotten one on none');
 
-  const gone = await request<RoomHistory>(socketPath, {
-    pathname: '/api/admin/rooms/history?roomId=gone-room',
-    cookie: admin
-  });
+  const gone = await request(
+    socketPath,
+    {
+      pathname: '/api/admin/rooms/history?roomId=gone-room',
+      cookie: admin
+    },
+    RoomHistory
+  );
   assert.deepEqual(
     gone.body.stays.map((stay) => stay.roomId),
     ['gone-room']

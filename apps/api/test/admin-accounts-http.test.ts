@@ -7,17 +7,18 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { once } from 'node:events';
 import { Pool } from 'pg';
-import type { AccountFailure, Me, SignedIn } from '@voice-room/shared/contracts/account';
-import type { AccountDetail, AccountsPage } from '@voice-room/shared/contracts/admin';
-import type { Failure } from '@voice-room/shared/contracts/http';
-import type { BadgeList } from '@voice-room/shared/contracts/users';
+import { AccountFailure, Me, SignedIn } from '@voice-room/shared/contracts/account';
+import { AccountDetail, AccountsPage } from '@voice-room/shared/contracts/admin';
+import { Failure } from '@voice-room/shared/contracts/http';
+import { BadgeList } from '@voice-room/shared/contracts/users';
 import { hashPassword } from '../src/lib/password.ts';
 import { hashSessionToken } from '../src/domains/account/user-records.ts';
+import type { TSchema } from 'typebox';
 import { cookieFrom, registerAccount, request, startApiServer } from './fakes/server-process.ts';
 import { staffCookie } from './staff-session.ts';
 import { openWs } from './ws-harness.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 const skip = !process.env.TEST_DATABASE_URL;
 const ADMIN_ID = '00000000-0000-4000-8000-0000000000ad';
@@ -38,38 +39,55 @@ async function setup(t: test.TestContext) {
     socketPath,
     cookieFrom(
       (
-        await request<SignedIn>(socketPath, {
-          method: 'POST',
-          pathname: '/api/auth/login',
-          body: { login: 'root', password: 'password123' }
-        })
+        await request(
+          socketPath,
+          {
+            method: 'POST',
+            pathname: '/api/auth/login',
+            body: { login: 'root', password: 'password123' }
+          },
+          SignedIn
+        )
       ).setCookie
     )
   );
-  const signIn = (login: string) =>
-    request<AccountFailure>(socketPath, {
-      method: 'POST',
-      pathname: '/api/auth/login',
-      body: { login, password: 'password123' }
-    });
+  const signInOptions = (login: string) => ({
+    method: 'POST',
+    pathname: '/api/auth/login',
+    body: { login, password: 'password123' }
+  });
+  /** A sign-in whose answer only its status and cookie matter for. */
+  const signIn = (login: string) => request(socketPath, signInOptions(login));
+  /** A sign-in that must be refused, read as the refusal. */
+  const refusedSignIn = (login: string) => request(socketPath, signInOptions(login), AccountFailure);
   const idOf = async (cookie: string) =>
-    (await request<Me>(socketPath, { pathname: '/api/auth/me', cookie })).body.user!.id;
-  const act = <Body = AccountDetail>(userId: string, action: string, body: unknown = {}, cookie = admin) =>
-    request<Body>(socketPath, {
-      method: 'POST',
-      pathname: `/api/admin/accounts/${userId}/${action}`,
-      body,
-      cookie
-    });
+    defined((await request(socketPath, { pathname: '/api/auth/me', cookie }, Me)).body.user, 'the signed-in user').id;
+  const actionOptions = (userId: string, action: string, body: unknown, cookie: string) => ({
+    method: 'POST',
+    pathname: `/api/admin/accounts/${userId}/${action}`,
+    body,
+    cookie
+  });
+  /** An action whose answer only its status matters for. */
+  const act = (userId: string, action: string, body: unknown = {}, cookie = admin) =>
+    request(socketPath, actionOptions(userId, action, body, cookie));
+  /** An action whose answer is read, checked against `schema`. */
+  const actAs = <const Schema extends TSchema>(
+    schema: Schema,
+    userId: string,
+    action: string,
+    body: unknown = {},
+    cookie = admin
+  ) => request(socketPath, actionOptions(userId, action, body, cookie), schema);
   const card = (userId: string) =>
-    request<AccountDetail>(socketPath, { pathname: `/api/admin/accounts/${userId}`, cookie: admin });
+    request(socketPath, { pathname: `/api/admin/accounts/${userId}`, cookie: admin }, AccountDetail);
   const list = (query = '') =>
-    request<AccountsPage>(socketPath, { pathname: `/api/admin/accounts${query}`, cookie: admin });
-  return { socketPath, pool, admin, signIn, idOf, act, card, list };
+    request(socketPath, { pathname: `/api/admin/accounts${query}`, cookie: admin }, AccountsPage);
+  return { socketPath, pool, admin, signIn, refusedSignIn, idOf, act, actAs, card, list };
 }
 
 test('the account list counts what each account did and finds it by name, filter and sort', { skip }, async (t) => {
-  const { socketPath, pool, list, card, idOf } = await setup(t);
+  const { socketPath, pool, admin, list, card, idOf } = await setup(t);
   const alice = await registerAccount(socketPath, 'alice');
   const aliceId = await idOf(alice);
   const bobId = '00000000-0000-4000-8000-000000000b0b';
@@ -107,7 +125,7 @@ test('the account list counts what each account did and finds it by name, filter
   );
 
   assert.equal((await request(socketPath, { pathname: '/api/admin/accounts' })).status, 401);
-  const denied = await request<Failure>(socketPath, { pathname: '/api/admin/accounts', cookie: alice });
+  const denied = await request(socketPath, { pathname: '/api/admin/accounts', cookie: alice }, Failure);
   assert.equal(denied.status, 403);
   assert.equal(denied.body.code, 'platform_admin_required');
   assert.equal((await request(socketPath, { pathname: `/api/admin/accounts/${bobId}`, cookie: alice })).status, 403);
@@ -116,7 +134,10 @@ test('the account list counts what each account did and finds it by name, filter
   assert.equal(all.total, 3);
   // Newest first by default; bob registered 40 days ago.
   assert.equal(all.accounts.at(-1)?.login, 'bob');
-  const aliceRow = all.accounts.find((row) => row.login === 'alice')!;
+  const aliceRow = defined(
+    all.accounts.find((row) => row.login === 'alice'),
+    'alice in the account list'
+  );
   assert.deepEqual(
     {
       messages: aliceRow.messages,
@@ -154,7 +175,10 @@ test('the account list counts what each account did and finds it by name, filter
     ['alice', 'bob', 'root']
   );
   assert.equal((await list('?page=2')).body.accounts.length, 0);
-  assert.equal((await list('?filter=bogus')).status, 400);
+  assert.equal(
+    (await request(socketPath, { pathname: '/api/admin/accounts?filter=bogus', cookie: admin })).status,
+    400
+  );
 
   const aliceSocket = openWs(socketPath, { cookie: alice });
   await aliceSocket.ready;
@@ -176,38 +200,42 @@ test('the account list counts what each account did and finds it by name, filter
   assert.equal(detail.devices.length, 1);
   assert.equal(detail.block, null);
   assert.equal(detail.deletion, null);
-  assert.equal((await card('nobody')).status, 404);
+  assert.equal((await request(socketPath, { pathname: '/api/admin/accounts/nobody', cookie: admin })).status, 404);
 });
 
 test('a block ends the sessions, tells the account why at sign-in, and lifts itself when over', { skip }, async (t) => {
-  const { socketPath, pool, admin, signIn, idOf, act, card } = await setup(t);
+  const { socketPath, pool, admin, signIn, refusedSignIn, idOf, act, actAs, card } = await setup(t);
   const alice = await registerAccount(socketPath, 'alice');
   const aliceId = await idOf(alice);
   const socket = openWs(socketPath, { cookie: alice });
   await socket.ready;
-  const closed = once(socket.ws, 'close');
+  const closed = new Promise<void>((resolve) => socket.ws.once('close', () => resolve()));
 
   assert.equal((await act(aliceId, 'block', { duration: 'week', reason: '   ' })).status, 400);
   assert.equal((await act(aliceId, 'block', { duration: 'year', reason: 'спам' })).status, 400);
-  const blocked = await act(aliceId, 'block', { duration: 'week', reason: 'Спам  в чатах' });
+  const blocked = await actAs(AccountDetail, aliceId, 'block', { duration: 'week', reason: 'Спам  в чатах' });
   assert.equal(blocked.status, 200);
   assert.equal(blocked.body.account.status, 'blocked');
   assert.equal(blocked.body.block?.reason, 'Спам в чатах');
-  const until = blocked.body.block.until as number;
+  const until = defined(defined(blocked.body.block, 'the block').until, 'the block end');
   assert.ok(Math.abs(until - (Date.now() + 7 * DAY_MS)) < 60_000);
   await closed;
-  assert.equal((await request<Me>(socketPath, { pathname: '/api/auth/me', cookie: alice })).body.user, null);
+  assert.equal((await request(socketPath, { pathname: '/api/auth/me', cookie: alice }, Me)).body.user, null);
 
-  const refused = await signIn('alice');
+  const refused = await refusedSignIn('alice');
   assert.equal(refused.status, 403);
   assert.equal(refused.body.code, 'account_blocked');
   assert.equal(refused.body.blockedUntil, until);
   assert.equal(refused.body.blockReason, 'Спам в чатах');
-  const wrongPassword = await request<Failure>(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/login',
-    body: { login: 'alice', password: 'wrong-password' }
-  });
+  const wrongPassword = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/auth/login',
+      body: { login: 'alice', password: 'wrong-password' }
+    },
+    Failure
+  );
   assert.equal(wrongPassword.body.code, 'invalid_credentials', 'the block is told only with the right password');
 
   // A session opened anyway (say, in the same instant) does not work either.
@@ -217,9 +245,9 @@ test('a block ends the sessions, tells the account why at sign-in, and lifts its
     aliceId
   ]);
   const slipped = `${alice.split('=')[0]}=${token}`;
-  assert.equal((await request<Me>(socketPath, { pathname: '/api/auth/me', cookie: slipped })).body.user, null);
+  assert.equal((await request(socketPath, { pathname: '/api/auth/me', cookie: slipped }, Me)).body.user, null);
   const listed = (
-    await request<AccountsPage>(socketPath, { pathname: '/api/admin/accounts?filter=blocked', cookie: admin })
+    await request(socketPath, { pathname: '/api/admin/accounts?filter=blocked', cookie: admin }, AccountsPage)
   ).body;
   assert.deepEqual(
     listed.accounts.map((row) => row.login),
@@ -232,9 +260,9 @@ test('a block ends the sessions, tells the account why at sign-in, and lifts its
   assert.equal((await card(aliceId)).body.account.status, 'active');
 
   await act(aliceId, 'block', { duration: 'forever', reason: 'Мошенничество' });
-  const forever = await signIn('alice');
+  const forever = await refusedSignIn('alice');
   assert.equal(forever.body.blockedUntil, null);
-  const lifted = await act(aliceId, 'unblock');
+  const lifted = await actAs(AccountDetail, aliceId, 'unblock');
   assert.equal(lifted.body.block, null);
   assert.equal((await signIn('alice')).status, 200);
 
@@ -251,15 +279,15 @@ test('a block ends the sessions, tells the account why at sign-in, and lifts its
 });
 
 test('signing out everywhere ends every session but keeps the account usable', { skip }, async (t) => {
-  const { socketPath, signIn, idOf, act } = await setup(t);
+  const { socketPath, signIn, idOf, actAs } = await setup(t);
   const alice = await registerAccount(socketPath, 'alice');
   const second = cookieFrom((await signIn('alice')).setCookie);
   const aliceId = await idOf(alice);
-  const result = await act(aliceId, 'sign-out');
+  const result = await actAs(AccountDetail, aliceId, 'sign-out');
   assert.equal(result.status, 200);
   assert.deepEqual(result.body.devices, []);
   for (const cookie of [alice, second]) {
-    assert.equal((await request<Me>(socketPath, { pathname: '/api/auth/me', cookie })).body.user, null);
+    assert.equal((await request(socketPath, { pathname: '/api/auth/me', cookie }, Me)).body.user, null);
   }
   assert.equal((await signIn('alice')).status, 200);
   assert.equal(result.body.actions[0]?.action, 'logout');
@@ -269,34 +297,38 @@ test(
   'an administrator deletion blocks at once, offers no restore, and an administrator calls it off',
   { skip },
   async (t) => {
-    const { socketPath, signIn, idOf, act, card } = await setup(t);
+    const { socketPath, signIn, refusedSignIn, idOf, actAs, card } = await setup(t);
     const alice = await registerAccount(socketPath, 'alice');
     const aliceId = await idOf(alice);
 
-    const mismatch = await act<Failure>(aliceId, 'delete', { login: 'alicia', reason: 'Спам-бот' });
+    const mismatch = await actAs(Failure, aliceId, 'delete', { login: 'alicia', reason: 'Спам-бот' });
     assert.equal(mismatch.status, 400);
     assert.equal(mismatch.body.code, 'confirmation_mismatch');
 
-    const deleted = await act(aliceId, 'delete', { login: ' Alice ', reason: 'Спам-бот' });
+    const deleted = await actAs(AccountDetail, aliceId, 'delete', { login: ' Alice ', reason: 'Спам-бот' });
     assert.equal(deleted.status, 200);
     assert.equal(deleted.body.account.status, 'deleting');
     assert.equal(deleted.body.account.displayName, 'Удалённый аккаунт');
     assert.equal(deleted.body.deletion?.byAdmin, true);
     assert.equal(deleted.body.block?.until, null);
-    assert.equal((await request<Me>(socketPath, { pathname: '/api/auth/me', cookie: alice })).body.user, null);
+    assert.equal((await request(socketPath, { pathname: '/api/auth/me', cookie: alice }, Me)).body.user, null);
 
-    const refused = await signIn('alice');
+    const refused = await refusedSignIn('alice');
     assert.equal(refused.body.code, 'account_blocked', 'blocked, not offered a restore');
     assert.equal(refused.body.blockReason, 'Спам-бот');
-    const restore = await request<AccountFailure>(socketPath, {
-      method: 'POST',
-      pathname: '/api/auth/account/restore',
-      body: { login: 'alice', password: 'password123' }
-    });
+    const restore = await request(
+      socketPath,
+      {
+        method: 'POST',
+        pathname: '/api/auth/account/restore',
+        body: { login: 'alice', password: 'password123' }
+      },
+      AccountFailure
+    );
     assert.equal(restore.status, 403);
     assert.equal(restore.body.code, 'account_blocked');
 
-    const cancelled = await act(aliceId, 'cancel-deletion');
+    const cancelled = await actAs(AccountDetail, aliceId, 'cancel-deletion');
     assert.equal(cancelled.status, 200);
     assert.equal(cancelled.body.account.status, 'active');
     assert.equal(cancelled.body.account.displayName, 'alice');
@@ -313,14 +345,14 @@ test(
       cookie: bob
     });
     assert.equal((await card(bobId)).body.deletion?.byAdmin, false);
-    const notOurs = await act<Failure>(bobId, 'cancel-deletion');
+    const notOurs = await actAs(Failure, bobId, 'cancel-deletion');
     assert.equal(notOurs.status, 409);
     assert.equal(notOurs.body.code, 'deletion_not_by_admin');
   }
 );
 
 test('nobody blocks or deletes an administrator, and only an administrator acts', { skip }, async (t) => {
-  const { socketPath, admin, idOf, act } = await setup(t);
+  const { socketPath, admin, idOf, act, actAs } = await setup(t);
   const alice = await registerAccount(socketPath, 'alice');
   const aliceId = await idOf(alice);
   for (const [action, body] of [
@@ -329,7 +361,7 @@ test('nobody blocks or deletes an administrator, and only an administrator acts'
     ['delete', { login: 'root', reason: 'x' }],
     ['unblock', {}]
   ] as const) {
-    const refused = await act<Failure>(ADMIN_ID, action, body, admin);
+    const refused = await actAs(Failure, ADMIN_ID, action, body, admin);
     assert.equal(refused.status, 403, action);
     assert.equal(refused.body.code, 'cannot_moderate_admin', action);
     assert.equal((await act(aliceId, action, body, alice)).status, 403, `${action} by a non-admin`);
@@ -339,7 +371,7 @@ test('nobody blocks or deletes an administrator, and only an administrator acts'
 });
 
 test('the mark is public, and only the official account may carry the service name', { skip }, async (t) => {
-  const { socketPath, idOf, act } = await setup(t);
+  const { socketPath, idOf, act, actAs } = await setup(t);
   const alice = await registerAccount(socketPath, 'alice');
   const aliceId = await idOf(alice);
 
@@ -349,16 +381,20 @@ test('the mark is public, and only the official account may carry the service na
     { login: 'ada', displayName: 'VoiceRoom' },
     { login: 'ada', displayName: 'Войс Рум' }
   ]) {
-    const refused = await request<Failure>(socketPath, {
-      method: 'POST',
-      pathname: '/api/auth/register',
-      body: { ...body, password: 'password123', passwordConfirm: 'password123' }
-    });
+    const refused = await request(
+      socketPath,
+      {
+        method: 'POST',
+        pathname: '/api/auth/register',
+        body: { ...body, password: 'password123', passwordConfirm: 'password123' }
+      },
+      Failure
+    );
     assert.equal(refused.status, 400, JSON.stringify(body));
     assert.equal(refused.body.code, 'reserved_name');
   }
   const rename = (cookie: string) =>
-    request<Failure>(socketPath, {
+    request(socketPath, {
       method: 'POST',
       pathname: '/api/auth/profile',
       body: { displayName: 'VoiceRoom' },
@@ -366,17 +402,17 @@ test('the mark is public, and only the official account may carry the service na
     });
   assert.equal((await rename(alice)).body.code, 'reserved_name');
 
-  assert.deepEqual((await request<BadgeList>(socketPath, { pathname: '/api/badges' })).body.badges, []);
-  const marked = await act(aliceId, 'badge', { badge: 'official' });
+  assert.deepEqual((await request(socketPath, { pathname: '/api/badges' }, BadgeList)).body.badges, []);
+  const marked = await actAs(AccountDetail, aliceId, 'badge', { badge: 'official' });
   assert.equal(marked.body.account.badge, 'official');
   assert.deepEqual(
-    (await request<BadgeList>(socketPath, { pathname: '/api/badges' })).body.badges,
+    (await request(socketPath, { pathname: '/api/badges' }, BadgeList)).body.badges,
     [{ userId: aliceId, badge: 'official' }],
     'guests read it too'
   );
   assert.equal((await rename(alice)).status, 200, 'the official account may carry the name');
 
-  const unmarked = await act(aliceId, 'badge', { badge: null });
+  const unmarked = await actAs(AccountDetail, aliceId, 'badge', { badge: null });
   assert.equal(unmarked.body.account.badge, null);
   assert.deepEqual(
     unmarked.body.actions.map((entry) => [entry.action, entry.badge]),

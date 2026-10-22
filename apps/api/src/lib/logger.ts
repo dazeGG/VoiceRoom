@@ -3,6 +3,8 @@ import pino from 'pino';
 import type { DestinationStream, Logger, LoggerOptions } from 'pino';
 
 import packageJson from '../../package.json' with { type: 'json' };
+import { readLogConfig } from '../app/config.ts';
+import { isArray } from '@voice-room/shared/guards';
 const SERVICE_VERSION: string = packageJson.version;
 
 type Env = NodeJS.ProcessEnv;
@@ -35,9 +37,7 @@ const REDACTED_PATHS: readonly string[] = Object.freeze([
 const DISABLED_LEVELS: readonly string[] = Object.freeze(['false', 'off', 'none', 'silent']);
 
 function getLogLevel(env: Env = process.env): string {
-  const configured = (env.LOG_LEVEL || '').trim();
-  if (configured) return configured;
-  return env.NODE_ENV === 'production' ? 'info' : 'silent';
+  return readLogConfig(env).level;
 }
 
 function isLoggingDisabled(env: Env = process.env): boolean {
@@ -48,7 +48,7 @@ function baseFields(env: Env = process.env, name = 'api'): { service: string; ve
   return {
     service: name,
     version: SERVICE_VERSION,
-    env: env.NODE_ENV || 'development'
+    env: readLogConfig(env).environment
   };
 }
 
@@ -103,8 +103,8 @@ function createLogger({
 const IP_SALT = crypto.randomBytes(16);
 
 function hashIp(ip: unknown): string {
-  if (!ip) return 'unknown';
-  return crypto.createHash('sha256').update(IP_SALT).update(String(ip)).digest('hex').slice(0, 12);
+  if (typeof ip !== 'string' || !ip) return 'unknown';
+  return crypto.createHash('sha256').update(IP_SALT).update(ip).digest('hex').slice(0, 12);
 }
 
 // Request ids arrive from the edge and are therefore untrusted input: cap the
@@ -113,8 +113,8 @@ function hashIp(ip: unknown): string {
 const REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 
 function normalizeRequestId(value: unknown): string {
-  const candidate = Array.isArray(value) ? value[0] : value;
-  const trimmed = String(candidate || '').trim();
+  const candidate = isArray(value) ? value[0] : value;
+  const trimmed = typeof candidate === 'string' ? candidate.trim() : '';
   return REQUEST_ID_PATTERN.test(trimmed) ? trimmed : '';
 }
 

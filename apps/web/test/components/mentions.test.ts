@@ -3,10 +3,14 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 import MentionAutocomplete from '../../src/lib/shared/chat/MentionAutocomplete.svelte';
 import StructuredMessageContent from '../../src/lib/shared/chat/StructuredMessageContent.svelte';
+import type { MembershipRole } from '@voice-room/shared/contracts/membership';
+import type { RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
+import { member } from '../fixtures/answers.ts';
+import { defined } from '../helpers/assert.ts';
 
 afterEach(cleanup);
 
-const content = {
+const content: RoomMessageContentV1 = {
   version: 1,
   segments: [
     { type: 'text', text: 'привет ' },
@@ -14,7 +18,7 @@ const content = {
     { type: 'text', text: ', смотри ' },
     { type: 'link', href: 'https://example.com/a', label: 'example.com/a' }
   ]
-} as never;
+};
 
 test('a mention in a message opens that person when a handler is given', async () => {
   const onmention = vi.fn();
@@ -22,7 +26,7 @@ test('a mention in a message opens that person when a handler is given', async (
   await userEvent.click(screen.getByRole('button', { name: 'Открыть профиль @anna' }));
   expect(onmention).toHaveBeenCalledWith('u-anna', 'anna', expect.any(MouseEvent));
   const link = screen.getByRole('link', { name: 'example.com/a' });
-  expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+  expect(link.getAttribute('rel')).toBe('noopener noreferrer external');
   expect(link.getAttribute('target')).toBe('_blank');
 });
 
@@ -56,21 +60,11 @@ test('a link typed in a message is a link, as in plain text', () => {
 
 test('mention suggestions show face, name and login, mark the active one and pick on click', async () => {
   const onselect = vi.fn();
-  const member = (userId: string, displayName: string, login: string, role = 'member') => ({
-    userId,
-    displayName,
-    login,
-    role,
-    avatarColorKey: 'blue',
-    avatarUrl: null,
-    avatarAccent: null,
-    joinedAt: null,
-    inVoice: false,
-    presenceStatus: 'online'
-  });
+  const candidate = (userId: string, displayName: string, login: string, role: MembershipRole = 'member') =>
+    member({ userId, displayName, login, role, joinedAt: null });
   render(MentionAutocomplete, {
     props: {
-      candidates: [member('u1', 'Анна', 'anna', 'owner'), member('u2', 'Анна', 'anna2')] as never,
+      candidates: [candidate('u1', 'Анна', 'anna', 'owner'), candidate('u2', 'Анна', 'anna2')],
       activeIndex: 1,
       onselect
     }
@@ -81,6 +75,6 @@ test('mention suggestions show face, name and login, mark the active one and pic
     'А Анна @anna2'
   ]);
   expect(options[1]?.getAttribute('aria-selected')).toBe('true');
-  await userEvent.click(options[0]);
+  await userEvent.click(defined(options[0], 'options[0]'));
   expect(onselect).toHaveBeenCalledWith(expect.objectContaining({ userId: 'u1' }));
 });

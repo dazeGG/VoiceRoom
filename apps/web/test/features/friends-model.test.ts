@@ -1,6 +1,7 @@
 // The lobby's friends model: loading, live presence and relationships.
 
 import { afterEach, expect, test, vi } from 'vitest';
+import { friend, incomingRequest, outgoingRequest, publicUser } from '../fixtures/answers.ts';
 import { stubFetch, type Reply } from '../fixtures/fetch.ts';
 import { notificationPreferences } from '../fixtures/users.ts';
 
@@ -8,10 +9,12 @@ type Handler = (event: { type: string; payload: Record<string, unknown> }) => vo
 let emit: Handler = () => {};
 vi.mock('../../src/lib/api/realtime', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  connectRealtime: (onEvent: Handler) => {
-    emit = onEvent;
-    return { close: vi.fn(), send: vi.fn() };
-  }
+  getAppRealtime: () => ({
+    subscribe: (onEvent: Handler) => {
+      emit = onEvent;
+      return vi.fn();
+    }
+  })
 }));
 
 vi.mock('../../src/lib/features/room/client/media/cues', () => ({
@@ -21,7 +24,7 @@ vi.mock('../../src/lib/features/room/client/media/cues', () => ({
   playRingCue: vi.fn()
 }));
 
-const user = (id: string, login = id) => ({ id, login, displayName: login, avatarColorKey: 'blue', avatarUrl: null });
+const user = (id: string, login = id) => publicUser({ id, login, displayName: login });
 
 let stop: (() => void) | null = null;
 afterEach(() => {
@@ -31,10 +34,8 @@ afterEach(() => {
 
 const friendList = {
   body: {
-    friends: [
-      { user: user('anna'), online: true },
-      { user: user('boris'), online: false }
-    ],
+    ok: true,
+    friends: [friend({ user: user('anna'), online: true }), friend({ user: user('boris'), online: false })],
     incomingRequestCount: 1
   }
 };
@@ -42,8 +43,14 @@ const friendList = {
 async function startLobby(friends: Reply = friendList) {
   stubFetch({
     '/api/friends': friends,
-    '/api/friends/requests': { body: { incoming: [{ user: user('vera') }], outgoing: [{ user: user('gleb') }] } },
-    '/api/notifications/preferences': { body: { preferences: notificationPreferences() } }
+    '/api/friends/requests': {
+      body: {
+        ok: true,
+        incoming: [incomingRequest({ user: user('vera') })],
+        outgoing: [outgoingRequest({ user: user('gleb') })]
+      }
+    },
+    '/api/notifications/preferences': { body: { ok: true, preferences: notificationPreferences() } }
   });
   vi.resetModules();
   const { LobbyStore } = await import('../../src/lib/features/home/model/lobby.svelte.ts');
@@ -98,7 +105,8 @@ test('a reconnect picks up direct messages that arrived while the socket was dow
   let unread = 0;
   const lobby = await startLobby(() => ({
     body: {
-      friends: [{ user: user('anna'), online: true, unreadCount: unread, lastMessage: null }],
+      ok: true,
+      friends: [friend({ user: user('anna'), online: true, unreadCount: unread })],
       incomingRequestCount: 0
     }
   }));

@@ -50,7 +50,7 @@ test('every collapsible base offers all five tones, and they are real corpus ent
       assert.equal(skinTones.skinToneBase(sequence), base);
       assert.equal(skinTones.applySkinTone(base, index), sequence);
       // Tone-uniform only: one swatch cannot mean two different hands.
-      const applied = [...sequence].filter((character) => skinTones.SKIN_TONES.includes(character));
+      const applied = Array.from(sequence).filter((character) => skinTones.SKIN_TONES.includes(character));
       assert.ok(applied.length > 0);
       assert.ok(applied.every((tone) => tone === skinTones.SKIN_TONES[index]));
     });

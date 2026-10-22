@@ -7,7 +7,8 @@ import type { RoomSocial } from './social';
 import type { PresenceStatus } from '$lib/shared/presence';
 import type { Participant } from './client/model/participants';
 import type { ChatMessage } from '$lib/api/rooms';
-import type { MembershipMember } from '@voice-room/shared/membership';
+import type { MembershipMember } from '@voice-room/shared/contracts/membership';
+import { displayNameOf } from '$lib/shared/utils/display-name';
 
 function presenceFor(social: RoomSocial, accountUserId: string): PresenceStatus {
   if (!accountUserId) return 'online';
@@ -17,7 +18,7 @@ function presenceFor(social: RoomSocial, accountUserId: string): PresenceStatus 
   if (!friend) return 'online';
   if (!friend.online) return 'offline';
   if (friend.user.doNotDisturb) return 'dnd';
-  return (friend.user.presenceStatus as PresenceStatus) || 'online';
+  return friend.user.presenceStatus || 'online';
 }
 
 export function participantProfilePerson(social: RoomSocial, participant: Participant): ProfileCardPerson {
@@ -63,7 +64,7 @@ export function mentionProfilePerson(
   if (member) {
     return {
       userId,
-      name: member.displayName || member.login,
+      name: displayNameOf(member),
       login: member.login,
       avatarUrl: member.avatarUrl,
       avatarColorKey: member.avatarColorKey || '',

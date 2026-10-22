@@ -3,10 +3,10 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type pg from 'pg';
 import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import { createServiceRegistry, type ServiceRegistryDeps } from '../src/app/service-registry.ts';
 import { fake, fakeDb } from './fakes/index.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 const CONFIG = {
   ROOM_IDLE_TTL_MS: 60_000,
@@ -22,7 +22,7 @@ const CONFIG = {
 
 function registryOnFakes(deps: Partial<ServiceRegistryDeps> = {}) {
   const registry = createServiceRegistry(CONFIG, fake<ServiceRegistryDeps>(deps));
-  registry.applyOverrides({ pool: fakeDb() as unknown as pg.Pool });
+  registry.applyOverrides({ pool: fakeDb() });
   return registry;
 }
 
@@ -37,7 +37,7 @@ test('a DM reaction reaches both accounts as a reaction.updated event', async ()
     }
   });
   const summary = { emoji: '👍', count: 1, reactedByMe: true, revision: '1' };
-  const published = await registry.getReactionServices()!.realtime.publish({
+  const published = await defined(registry.getReactionServices(), 'reaction services').realtime.publish({
     actorUserId: 'ada',
     conversation: { type: 'dm', id: 'bob' },
     messageId: 'm1',
@@ -51,13 +51,15 @@ test('a DM reaction reaches both accounts as a reaction.updated event', async ()
       ['bob', 'reaction.updated']
     ]
   );
-  assert.deepEqual((sent[1]?.[1] as { payload?: unknown } | undefined)?.payload, {
+  const [, bobEnvelope] = defined(sent[1], "Bob's envelope");
+  assert.ok('payload' in bobEnvelope, 'an event, not an error frame');
+  assert.deepEqual(bobEnvelope.payload, {
     conversation: { type: 'dm', id: 'bob' },
     messageId: 'm1',
     summary
   });
 
-  const toOffline = await registry.getReactionServices()!.realtime.publish({
+  const toOffline = await defined(registry.getReactionServices(), 'reaction services').realtime.publish({
     actorUserId: 'ada',
     conversation: { type: 'dm', id: 'offline' },
     messageId: 'm1',

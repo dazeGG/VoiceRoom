@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
+import { Type } from 'typebox';
 import test, { type TestContext } from 'node:test';
 import { transaction } from '../src/platform/db/pool.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
@@ -11,6 +12,7 @@ import { createMentionRepository } from '../src/domains/notifications/mention.re
 import { createInboxRepository } from '../src/domains/notifications/inbox.repository.ts';
 import { createNotificationOutboxRepository } from '../src/domains/notifications/notification-outbox.repository.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { checked, CountRow, queryRow } from './helpers/checked.ts';
 async function fixture(t: TestContext) {
   const db = await createTestDatabase(t);
   await runMigrations({
@@ -36,7 +38,7 @@ function service(pool: Pool, outbox: NotificationOutboxRepository) {
     outbox,
     eligibility: fake<MentionEligibilityService>({
       async validate({ targetUserIds }) {
-        return targetUserIds as string[];
+        return checked(Type.Array(Type.String()), targetUserIds, 'the target user ids');
       }
     }),
     cursorCodec: fake<InboxCursorCodec>()
@@ -72,7 +74,7 @@ test(
       /injected/
     );
     for (const table of ['room_messages', 'room_message_mentions', 'user_notifications', 'notification_outbox'])
-      assert.equal(Number((await pool.query(`SELECT count(*) count FROM ${table}`)).rows[0].count), 0);
+      assert.equal((await queryRow(pool, CountRow, `SELECT count(*)::int count FROM ${table}`)).count, 0);
   }
 );
 test(
@@ -90,8 +92,12 @@ test(
       replyTargetUserId: 'target',
       body: 'hello'
     });
-    const n = await pool.query(`SELECT reasons FROM user_notifications`);
-    assert.deepEqual(n.rows[0].reasons, ['mention', 'reply']);
-    assert.equal(Number((await pool.query(`SELECT count(*) count FROM notification_outbox`)).rows[0].count), 1);
+    const n = await queryRow(
+      pool,
+      Type.Object({ reasons: Type.Array(Type.String()) }),
+      `SELECT reasons FROM user_notifications`
+    );
+    assert.deepEqual(n.reasons, ['mention', 'reply']);
+    assert.equal((await queryRow(pool, CountRow, `SELECT count(*)::int count FROM notification_outbox`)).count, 1);
   }
 );

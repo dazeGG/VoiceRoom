@@ -1,9 +1,11 @@
 import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
+import type { Selectable } from 'kysely';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
-import type { Json } from '../../platform/db/schema.ts';
+import type { Json, JsonObject, Users } from '../../platform/db/schema.ts';
 import { verifyPassword } from '../../lib/password.ts';
+import { lockUser } from './user.repository.ts';
 import {
   ACCOUNT_DELETION_GRACE_MS,
   DELETED_ACCOUNT_NAME,
@@ -13,34 +15,12 @@ import {
 
 const UNUSABLE_PASSWORD_HASH = '!';
 
-type DeletedProfile = { displayName?: unknown; avatarKey?: string | null; avatarAccent?: string | null };
-
-type UserRow = {
-  id: string;
-  login: string;
-  display_name: string | null;
-  password_hash: string;
-  avatar_key: string | null;
-  avatar_accent: string | null;
-  metadata: { deletedProfile?: DeletedProfile; deletionByAdmin?: string } | null;
-  deletion_requested_at: Date | string | null;
-  deleted_at: Date | string | null;
-  blocked_at: Date | string | null;
-  blocked_until: Date | string | null;
-  block_reason: string;
-};
-
-type OwnedRoomRow = {
-  id: string;
-  name: string | null;
-  avatar_key: string | null;
-  heir_user_id: string | null;
-  heir_display_name: string | null;
-  heir_login: string;
-};
+type UserRow = Selectable<Users>;
 
 export type DeletionRequest =
-  { status: 'not_found' | 'invalid_password' } | { status: 'already_requested' | 'requested'; scheduledFor: number };
+  | { status: 'not_found' }
+  | { status: 'invalid_password' }
+  | { status: 'already_requested' | 'requested'; scheduledFor: number };
 
 export type AccountRestore =
   | { status: 'invalid' | 'expired'; userId: null }
@@ -65,21 +45,23 @@ function toDate(ms: number): Date {
   return new Date(ms);
 }
 
-function toMillis(value: unknown): number | null {
-  if (value instanceof Date) return value.getTime();
-  const parsed = Date.parse(value as string);
-  return Number.isFinite(parsed) ? parsed : null;
+function jsonObject(value: Json | undefined): JsonObject {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
 }
 
-function hashLogin(login: unknown): string {
-  return crypto
-    .createHash('sha256')
-    .update(
-      String(login || '')
-        .trim()
-        .toLowerCase()
-    )
-    .digest('hex');
+function stringOrNull(value: Json | undefined): string | null {
+  return typeof value === 'string' && value ? value : null;
+}
+
+// What a waiting account keeps in `users.metadata`: the profile set aside for
+// a restore, and the administrator who asked for the deletion, if one did.
+function deletionMetadata(user: UserRow) {
+  const metadata = jsonObject(user.metadata);
+  return { deletedProfile: jsonObject(metadata.deletedProfile), deletionByAdmin: metadata.deletionByAdmin };
+}
+
+function hashLogin(login: string): string {
+  return crypto.createHash('sha256').update(login.trim().toLowerCase()).digest('hex');
 }
 
 // Static rooms the account owns, each with the member who would inherit it:
@@ -130,7 +112,7 @@ function ownedRoomsWithHeirs(db: Database, userId: string, now: number) {
     .where('r.deleted_at', 'is', null)
     .orderBy('r.created_at', 'asc')
     .orderBy('r.id', 'asc')
-    .execute() as Promise<OwnedRoomRow[]>;
+    .execute();
 }
 
 // Everything personal the finished deletion removes. Messages, reactions, pins
@@ -199,21 +181,15 @@ async function hideForDeletion(trx: Database, user: UserRow, now: number, adminU
 
 // The profile a waiting account kept aside, back in place.
 function restoredProfile(user: UserRow, now: number) {
-  const profile: DeletedProfile = user.metadata?.deletedProfile || {};
+  const profile = deletionMetadata(user).deletedProfile;
   return {
     deletion_requested_at: null,
     display_name: typeof profile.displayName === 'string' ? profile.displayName : '',
-    avatar_key: profile.avatarKey || null,
-    avatar_accent: profile.avatarAccent || null,
+    avatar_key: stringOrNull(profile.avatarKey),
+    avatar_accent: stringOrNull(profile.avatarAccent),
     metadata: sql<Json>`metadata - 'deletedProfile' - 'deletionByAdmin'`,
     updated_at: toDate(now)
   };
-}
-
-function lockUser(trx: Database, column: 'id' | 'login', value: string) {
-  return trx.selectFrom('users').selectAll().where(column, '=', value).forUpdate().executeTakeFirst() as Promise<
-    UserRow | undefined
-  >;
 }
 
 // Owns the account deletion lifecycle, which spans tables owned by several
@@ -240,7 +216,7 @@ function createAccountDeletionRepository({
       rooms: rooms.map((row) => ({
         roomId: row.id,
         name: row.name || '',
-        heir: row.heir_user_id ? { displayName: row.heir_display_name || '', login: row.heir_login } : null
+        heir: row.heir_user_id ? { displayName: row.heir_display_name || '', login: row.heir_login ?? '' } : null
       }))
     };
   }
@@ -260,7 +236,7 @@ function createAccountDeletionRepository({
       if (user.deletion_requested_at) {
         return {
           status: 'already_requested',
-          scheduledFor: (toMillis(user.deletion_requested_at) as number) + ACCOUNT_DELETION_GRACE_MS
+          scheduledFor: user.deletion_requested_at.getTime() + ACCOUNT_DELETION_GRACE_MS
         };
       }
       if (!(await verifyPassword(currentPassword, user.password_hash))) return { status: 'invalid_password' };
@@ -289,7 +265,7 @@ function createAccountDeletionRepository({
       if (user.deletion_requested_at) {
         return {
           status: 'already_requested',
-          scheduledFor: (toMillis(user.deletion_requested_at) as number) + ACCOUNT_DELETION_GRACE_MS
+          scheduledFor: user.deletion_requested_at.getTime() + ACCOUNT_DELETION_GRACE_MS
         };
       }
       await hideForDeletion(trx, user, now, adminUserId);
@@ -314,7 +290,7 @@ function createAccountDeletionRepository({
     return db.transaction().execute(async (trx): Promise<DeletionCancel> => {
       const user = await lockUser(trx, 'id', userId);
       if (!user || user.deleted_at || !user.deletion_requested_at) return { status: 'not_found' };
-      if (!user.metadata?.deletionByAdmin) return { status: 'not_by_admin' };
+      if (!deletionMetadata(user).deletionByAdmin) return { status: 'not_by_admin' };
       await trx
         .updateTable('users')
         .set({ ...restoredProfile(user, now), blocked_at: null, blocked_until: null, block_reason: '' })
@@ -340,9 +316,8 @@ function createAccountDeletionRepository({
       const pending = user && !user.deleted_at && user.deletion_requested_at;
       const passwordMatches = await verifyPassword(password, pending ? user.password_hash : UNUSABLE_PASSWORD_HASH);
       if (!pending || !passwordMatches) return { status: 'invalid', userId: null };
-      if ((toMillis(user.deletion_requested_at) as number) + ACCOUNT_DELETION_GRACE_MS <= now)
-        return { status: 'expired', userId: null };
-      const blockedUntil = user.blocked_until ? (toMillis(user.blocked_until) as number) : null;
+      if (pending.getTime() + ACCOUNT_DELETION_GRACE_MS <= now) return { status: 'expired', userId: null };
+      const blockedUntil = user.blocked_until ? user.blocked_until.getTime() : null;
       if (user.blocked_at && (blockedUntil === null || blockedUntil > now))
         return { status: 'blocked', userId: null, blockedUntil, blockReason: user.block_reason || '' };
 
@@ -381,7 +356,7 @@ function createAccountDeletionRepository({
         !user ||
         user.deleted_at ||
         !user.deletion_requested_at ||
-        (toMillis(user.deletion_requested_at) as number) + ACCOUNT_DELETION_GRACE_MS > now
+        user.deletion_requested_at.getTime() + ACCOUNT_DELETION_GRACE_MS > now
       ) {
         return { status: 'not_due' };
       }
@@ -420,7 +395,7 @@ function createAccountDeletionRepository({
         .values({ login_hash: hashLogin(user.login), reserved_at: at })
         .onConflict((oc) => oc.column('login_hash').doNothing())
         .execute();
-      const avatarKey = user.metadata?.deletedProfile?.avatarKey || user.avatar_key || null;
+      const avatarKey = stringOrNull(deletionMetadata(user).deletedProfile.avatarKey) || user.avatar_key || null;
       await trx
         .updateTable('users')
         .set({
@@ -440,7 +415,7 @@ function createAccountDeletionRepository({
     });
   }
 
-  async function isLoginReserved(login: unknown): Promise<boolean> {
+  async function isLoginReserved(login: string): Promise<boolean> {
     const row = await db
       .selectFrom('reserved_logins')
       .select('login_hash')

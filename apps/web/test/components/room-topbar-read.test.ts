@@ -9,6 +9,7 @@ import RoomTopbar from '../../src/lib/features/room/components/RoomTopbar.svelte
 import { state as roomClientState } from '../../src/lib/features/room/client/core/state.svelte';
 import { closeChat } from '../../src/lib/features/room/room-ui.svelte';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { participant } from '../fixtures/participant.ts';
 
 afterEach(() => {
   cleanup();
@@ -26,7 +27,7 @@ async function openChatIn(room: { isStatic: boolean }) {
   roomClientState.roomId = 'abc123';
   roomClientState.screen = 'room';
   roomClientState.roomIsStatic = room.isStatic;
-  roomClientState.self = { id: 'p1', name: 'Аня', accountUserId: 'u1' } as typeof roomClientState.self;
+  roomClientState.self = participant({ id: 'p1', name: 'Аня', accountUserId: 'u1' });
   render(RoomTopbar);
   await userEvent.click(screen.getByRole('button', { name: 'Чат' }));
   await new Promise((resolve) => setTimeout(resolve, 0));

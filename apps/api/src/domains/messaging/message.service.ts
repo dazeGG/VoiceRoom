@@ -26,20 +26,22 @@ function createMessageService<Direct, Room>({
     throw new TypeError('Message service requires room and direct message repositories');
   }
 
+  const direct = directMessages;
+  const room = roomMessages;
   const visibilityPolicy = visibility || createMessageVisibilityService();
 
   async function withUnitOfWork<T>(operation: (unit: MessagingUnitOfWork<Direct, Room>) => T | Promise<T>): Promise<T> {
     if (typeof operation !== 'function') throw new TypeError('Messaging unit of work must be a function');
     return operation({
-      directMessages: directMessages as Direct,
-      roomMessages: roomMessages as Room,
+      directMessages: direct,
+      roomMessages: room,
       visibility: visibilityPolicy
     });
   }
 
   return Object.freeze({
-    direct: directMessages,
-    room: roomMessages,
+    direct,
+    room,
     visibility: visibilityPolicy,
     withUnitOfWork
   });

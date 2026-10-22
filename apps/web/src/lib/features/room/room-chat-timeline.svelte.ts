@@ -6,10 +6,14 @@
 import { ApiError } from '$lib/api/client';
 import { fetchRoomChat, fetchRoomChatPage, type ChatMessage } from '$lib/api/rooms';
 import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
-import { createAnchoredHistory } from './room-history.svelte';
+import { createHistoryCache } from '$lib/shared/chat/history-cache';
+import { createAnchoredHistory } from '$lib/shared/chat/anchored-history.svelte';
 import { mergeLatestWindow, restampAuthor } from './room-chat-view';
 
 const MAX_EARLY_EDITS = 50;
+
+/** Room chats kept between visits, by room id. */
+const roomHistoryCache = createHistoryCache<ChatMessage>((messages) => $state.snapshot(messages));
 
 export class RoomChatTimeline {
   messages = $state<ChatMessage[]>([]);
@@ -34,7 +38,7 @@ export class RoomChatTimeline {
       }
     },
     compare: (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
-    cacheKey: (roomId) => `room:${roomId}`,
+    cache: roomHistoryCache,
     onChange: (state) => {
       this.messages = state.messages;
       this.loading = state.loading;
@@ -87,8 +91,9 @@ export class RoomChatTimeline {
   /** Adds a new message; answers false when it is already there. */
   add(message: ChatMessage): boolean {
     if (!message.id || this.has(message.id)) return false;
-    const current = this.#earlyEdits[message.id] ?? message;
-    delete this.#earlyEdits[message.id];
+    const { [message.id]: early, ...stillEarly } = this.#earlyEdits;
+    this.#earlyEdits = stillEarly;
+    const current = early ?? message;
     if (this.paged) this.#history.upsert(current);
     else this.messages = [...this.messages, current];
     return true;
@@ -103,9 +108,9 @@ export class RoomChatTimeline {
   /** Replaces a message the list has (an edit); one not there yet waits for it. */
   replace(message: ChatMessage): void {
     if (!this.has(message.id)) {
-      this.#earlyEdits[message.id] = message;
-      const waiting = Object.keys(this.#earlyEdits);
-      if (waiting.length > MAX_EARLY_EDITS) delete this.#earlyEdits[waiting[0]];
+      const waiting = Object.entries({ ...this.#earlyEdits, [message.id]: message });
+      // The oldest edit gives way once too many wait.
+      this.#earlyEdits = Object.fromEntries(waiting.slice(-MAX_EARLY_EDITS));
       return;
     }
     if (this.paged) this.#history.upsert(message);
@@ -141,7 +146,8 @@ export class RoomChatTimeline {
   /** The newest read cursor among the shown messages. */
   latestReadCursor(): string | undefined {
     for (let index = this.messages.length - 1; index >= 0; index -= 1) {
-      if (this.messages[index].readCursor) return this.messages[index].readCursor;
+      const cursor = this.messages[index]?.readCursor;
+      if (cursor) return cursor;
     }
     return undefined;
   }

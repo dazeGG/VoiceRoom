@@ -3,16 +3,14 @@ import http from 'node:http';
 import https from 'node:https';
 import net from 'node:net';
 import type { IncomingMessage } from 'node:http';
+import type { LookupFunction } from 'node:net';
 
 type LookupAddress = { address: string; family: number };
-type LookupCallback = (
-  error: NodeJS.ErrnoException | null,
-  addresses?: LookupAddress[] | string,
-  family?: number
-) => void;
+// What the vetted lookup asks the resolver for: every address, in its order.
+type LookupRequest = Omit<dns.LookupOptions, 'all' | 'verbatim'> & { all: true; verbatim: true };
 type Lookup = (
   hostname: string,
-  options: Record<string, unknown>,
+  options: LookupRequest,
   callback: (error: NodeJS.ErrnoException | null, addresses: LookupAddress[]) => void
 ) => void;
 export type FetchErrorCode =
@@ -37,7 +35,7 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
 const BLOCKED_SUBNETS = new net.BlockList();
-for (const [address, prefix] of [
+const BLOCKED_IPV4_SUBNETS: readonly (readonly [string, number])[] = [
   ['0.0.0.0', 8],
   ['10.0.0.0', 8],
   ['100.64.0.0', 10],
@@ -53,12 +51,13 @@ for (const [address, prefix] of [
   ['203.0.113.0', 24],
   ['224.0.0.0', 4],
   ['240.0.0.0', 4]
-] as [string, number][]) {
+];
+for (const [address, prefix] of BLOCKED_IPV4_SUBNETS) {
   BLOCKED_SUBNETS.addSubnet(address, prefix, 'ipv4');
 }
 // IPv4-mapped IPv6 (::ffff:0:0/96) is not listed here: BlockList also applies
 // such a rule to every plain IPv4 address. Mapped addresses are refused below.
-for (const [address, prefix] of [
+const BLOCKED_IPV6_SUBNETS: readonly (readonly [string, number])[] = [
   ['::', 128],
   ['::1', 128],
   ['64:ff9b::', 96],
@@ -71,12 +70,13 @@ for (const [address, prefix] of [
   ['fe80::', 10],
   ['fec0::', 10],
   ['ff00::', 8]
-] as [string, number][]) {
+];
+for (const [address, prefix] of BLOCKED_IPV6_SUBNETS) {
   BLOCKED_SUBNETS.addSubnet(address, prefix, 'ipv6');
 }
 
 function isPublicAddress(address: unknown): boolean {
-  const value = String(address || '');
+  const value = typeof address === 'string' ? address : '';
   const family = net.isIP(value);
   if (!family) return false;
   try {
@@ -93,14 +93,21 @@ function isPublicAddress(address: unknown): boolean {
   }
 }
 
-function fetchError(code: FetchErrorCode, message: string): Error & { code: FetchErrorCode } {
-  const error = new Error(message) as Error & { code: FetchErrorCode };
-  error.code = code;
-  return error;
+class FetchError extends Error {
+  readonly code: FetchErrorCode;
+
+  constructor(code: FetchErrorCode, message: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
+function fetchError(code: FetchErrorCode, message: string): FetchError {
+  return new FetchError(code, message);
 }
 
 function createLinkPreviewFetcher({
-  lookup = dns.lookup as unknown as Lookup,
+  lookup = dns.lookup,
   isAllowedAddress = isPublicAddress,
   isAllowedPort = (port: number) => port === 80 || port === 443,
   timeoutMs = 5000,
@@ -132,24 +139,24 @@ function createLinkPreviewFetcher({
     return url;
   }
 
-  function safeLookup(hostname: string, options: unknown, callback: LookupCallback): void {
-    const requested = (options && typeof options === 'object' ? options : {}) as { all?: boolean };
+  const safeLookup: LookupFunction = (hostname, requested, callback) => {
     lookup(hostname, { ...requested, all: true, verbatim: true }, (error, addresses) => {
       if (error) {
-        callback(error);
+        callback(error, []);
         return;
       }
       const list = Array.isArray(addresses) ? addresses : [];
+      const [first] = list;
       // One internal answer taints the whole name: never pick the public one
       // and hope the next resolution agrees.
-      if (list.length === 0 || list.some((entry) => !isAllowedAddress(entry.address))) {
-        callback(fetchError('blocked_address', 'The link resolves to a private address'));
+      if (!first || list.some((entry) => !isAllowedAddress(entry.address))) {
+        callback(fetchError('blocked_address', 'The link resolves to a private address'), []);
         return;
       }
       if (requested.all) callback(null, list);
-      else callback(null, (list[0] as LookupAddress).address, (list[0] as LookupAddress).family);
+      else callback(null, first.address, first.family);
     });
-  }
+  };
 
   function requestOnce(url: URL, accept: string, signal: AbortSignal): Promise<IncomingMessage> {
     return new Promise((resolve, reject) => {
@@ -159,7 +166,7 @@ function createLinkPreviewFetcher({
         {
           method: 'GET',
           agent: false,
-          lookup: safeLookup as never,
+          lookup: safeLookup,
           signal,
           headers: { Accept: accept, 'Accept-Language': 'ru,en;q=0.8', 'User-Agent': userAgent }
         },
@@ -178,7 +185,10 @@ function createLinkPreviewFetcher({
     }
     const chunks: Buffer[] = [];
     let size = 0;
-    for await (const chunk of response as AsyncIterable<Buffer>) {
+    // A response without an encoding set yields Buffers.
+    const stream: AsyncIterable<unknown, unknown, unknown> = response;
+    for await (const chunk of stream) {
+      if (!Buffer.isBuffer(chunk)) throw new TypeError('The response yielded text instead of bytes');
       const remaining = maxBytes - size;
       if (chunk.length > remaining) {
         if (!truncate) throw fetchError('too_large', 'The response is too large');

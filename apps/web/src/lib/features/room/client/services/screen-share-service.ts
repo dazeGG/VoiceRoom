@@ -20,16 +20,12 @@ import { applyScreenCaptureProfile, openScreenShare } from './screen-capture-ser
 import { askForMedia, describeMediaRefusal } from './media-grant';
 import { screenProfileBitrate } from '@voice-room/shared/media-budget';
 import { onDesktopScreenAudioLost, stopLocalScreenAudioCapture } from './desktop-screen-audio';
-import { TRACK_SOURCE } from '../media/livekit-runtime';
+import { isActiveCandidatePair, readRtcStats, type RtcStat } from '../media/rtc-stats';
+import { isScreenVideoPublication } from './livekit/publication-kinds';
 import { updateParticipant } from '../room/participants';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
-import {
-  getActiveScreenPeer,
-  hideScreenStage,
-  openLocalStreamPreview,
-  refreshScreenMeta,
-  refreshScreenStage
-} from '../ui/screen-view';
+import { hideScreenStage, openLocalStreamPreview, refreshScreenMeta, refreshScreenStage } from '../ui/screen-view';
+import { getActiveScreenPeer } from '../../screen-ui.svelte';
 import type { ParsedScreenStats, ScreenProfile, ScreenStatsPrevious, ScreenStreamMode } from '../core/types';
 
 import { createLogger, errorContext } from '$lib/shared/log';
@@ -124,7 +120,9 @@ async function startScreenShare(profileId: string = getSelectedScreenProfileId()
     // 'ended' never fires for our own stop(): the OS, the browser's sharing bar,
     // a closed window or a capture helper that gave up ended the share.
     videoTrack.addEventListener('ended', () => {
-      stopScreenShare({ offerRestart: true }).catch((error) => log.error('screen share failed', errorContext(error)));
+      stopScreenShare({ offerRestart: true }).catch((error: unknown) =>
+        log.error('screen share failed', errorContext(error))
+      );
     });
     await publishLocalScreenTracks();
     await applyLocalScreenEncodingProfile(profile);
@@ -139,7 +137,6 @@ async function startScreenShare(profileId: string = getSelectedScreenProfileId()
       screenProfileId: profile.id,
       screenStreamId: stream.id
     });
-    refreshScreenControls();
     openLocalStreamPreview();
     await postState();
 
@@ -153,7 +150,7 @@ async function startScreenShare(profileId: string = getSelectedScreenProfileId()
     const cancelled = isCaptureCancelled(error);
     if (!cancelled) log.error('screen share failed', errorContext(error));
     if (state.localScreenStream) {
-      await stopScreenShare({ notify: false, quiet: true }).catch((cleanupError) =>
+      await stopScreenShare({ notify: false, quiet: true }).catch((cleanupError: unknown) =>
         log.error('screen share failed', errorContext(cleanupError))
       );
     } else {
@@ -165,7 +162,6 @@ async function startScreenShare(profileId: string = getSelectedScreenProfileId()
     );
   } finally {
     state.screenStarting = false;
-    refreshScreenControls();
   }
 }
 
@@ -195,7 +191,6 @@ async function stopScreenShare(
       screenProfileId: '',
       screenStreamId: ''
     });
-    refreshScreenControls();
     refreshScreenStage();
     if (notify) await postState();
     if (!quiet) {
@@ -212,12 +207,8 @@ async function stopScreenShare(
     }
   } finally {
     state.screenStopping = false;
-    refreshScreenControls();
   }
 }
-
-/** @deprecated Screen dock button is reactive in RoomDock.svelte. */
-export function refreshScreenControls(): void {}
 
 function hasScreenAudio(): boolean {
   return Boolean(state.localScreenStream?.getAudioTracks().some((track) => track.readyState !== 'ended'));
@@ -251,9 +242,9 @@ export function stopLocalScreenStream(): void {
 
 function startLocalScreenStatsMonitor(): void {
   stopLocalScreenStatsMonitor({ refresh: false });
-  updateLocalScreenStats().catch((error) => log.warn('screen stats unavailable', errorContext(error)));
+  updateLocalScreenStats().catch((error: unknown) => log.warn('screen stats unavailable', errorContext(error)));
   state.localScreenStatsTimer = window.setInterval(() => {
-    updateLocalScreenStats().catch((error) => log.warn('screen stats unavailable', errorContext(error)));
+    updateLocalScreenStats().catch((error: unknown) => log.warn('screen stats unavailable', errorContext(error)));
   }, SCREEN_STATS_INTERVAL_MS);
 }
 
@@ -289,7 +280,7 @@ async function updateLocalScreenStats(): Promise<void> {
     captureFramesWritten: captureStats.captureFramesWritten,
     capturePixelFormat: captureStats.capturePixelFormat,
     captureRelayRestarts: captureStats.captureRelayRestarts,
-    codec: parsed.codec || (track as { codec?: string } | undefined)?.codec || getPreferredScreenVideoCodec(),
+    codec: parsed.codec || track?.codec || getPreferredScreenVideoCodec(),
     encoderImplementation: parsed.encoderImplementation || '',
     firCount: parsed.firCount ?? 0,
     firDelta: parsed.firDelta ?? 0,
@@ -318,9 +309,10 @@ async function updateLocalScreenStats(): Promise<void> {
 
 function findLocalScreenVideoPublication(): LocalTrackPublication | null {
   for (const publication of state.localScreenPublications.values()) {
-    if (publication?.source === TRACK_SOURCE.ScreenShare) return publication;
+    if (isScreenVideoPublication(publication)) return publication;
     const track = publication?.track;
-    if (track?.kind === 'video' || track?.mediaStreamTrack?.kind === 'video') return publication;
+    const kind: string | undefined = track?.kind;
+    if (kind === 'video' || track?.mediaStreamTrack?.kind === 'video') return publication;
   }
   return null;
 }
@@ -330,7 +322,7 @@ function readNativeCaptureStats(previous: ScreenStatsPrevious | null): {
   captureDropsBackpressureDelta?: number;
   captureFramesReceived?: number;
   captureFramesWritten?: number;
-  capturePixelFormat?: 'NV12' | 'BGRX';
+  capturePixelFormat?: 'NV12' | 'BGRX' | undefined;
   captureRelayRestarts?: number;
   previous: Partial<ScreenStatsPrevious>;
 } {
@@ -366,64 +358,60 @@ function readNativeCaptureStats(previous: ScreenStatsPrevious | null): {
 }
 
 function parseLocalScreenStats(
-  stats: RTCStatsReport | undefined,
+  report: RTCStatsReport | undefined,
   previous: ScreenStatsPrevious | null
 ): ParsedScreenStats {
-  if (!stats?.forEach) return { previous: null };
+  const stats = readRtcStats(report);
+  let candidatePair: RtcStat | null = null;
+  let outbound: RtcStat | null = null;
+  let remoteInbound: RtcStat | null = null;
 
-  const codecs = new Map<string, any>();
-  let candidatePair: any = null;
-  let outbound: any = null;
-  let remoteInbound: any = null;
-
-  stats.forEach((report) => {
-    if (report.type === 'codec') {
-      codecs.set(report.id, report);
-      return;
+  for (const stat of stats.values()) {
+    if (isActiveCandidatePair(stat)) {
+      candidatePair = stat;
+      continue;
     }
 
-    if (report.type === 'candidate-pair' && report.state === 'succeeded' && report.nominated) {
-      candidatePair = report;
-      return;
+    if (stat.type === 'remote-inbound-rtp' && isVideoStatsReport(stat)) {
+      remoteInbound = stat;
+      continue;
     }
 
-    if (report.type === 'remote-inbound-rtp' && isVideoStatsReport(report)) {
-      remoteInbound = report;
-      return;
+    if (stat.type !== 'outbound-rtp' || stat.isRemote || !isVideoStatsReport(stat)) continue;
+    if (!outbound || (stat.bytesSent || 0) > (outbound.bytesSent || 0)) {
+      outbound = stat;
     }
-
-    if (report.type !== 'outbound-rtp' || report.isRemote || !isVideoStatsReport(report)) return;
-    if (!outbound || Number(report.bytesSent || 0) > Number(outbound.bytesSent || 0)) {
-      outbound = report;
-    }
-  });
+  }
 
   if (!outbound) return { previous: null };
 
-  const bytesSent = Number(outbound.bytesSent || 0);
-  const framesEncoded = Number(outbound.framesEncoded || 0);
-  const timestamp = Number(outbound.timestamp || Date.now());
+  const bytesSent = outbound.bytesSent || 0;
+  const framesEncoded = outbound.framesEncoded || 0;
+  const timestamp = outbound.timestamp || Date.now();
   const elapsedMs = previous?.timestamp ? timestamp - previous.timestamp : 0;
   const bitrate =
-    elapsedMs > 0 && bytesSent >= previous!.bytesSent ? ((bytesSent - previous!.bytesSent) * 8 * 1000) / elapsedMs : 0;
+    previous && elapsedMs > 0 && bytesSent >= previous.bytesSent
+      ? ((bytesSent - previous.bytesSent) * 8 * 1000) / elapsedMs
+      : 0;
   const fps =
-    Number(outbound.framesPerSecond || 0) ||
-    (elapsedMs > 0 && framesEncoded >= (previous?.framesEncoded ?? Number.POSITIVE_INFINITY)
-      ? ((framesEncoded - previous!.framesEncoded) * 1000) / elapsedMs
+    outbound.framesPerSecond ||
+    0 ||
+    (previous && elapsedMs > 0 && framesEncoded >= previous.framesEncoded
+      ? ((framesEncoded - previous.framesEncoded) * 1000) / elapsedMs
       : 0);
-  const codec = getCodecNameFromStats(outbound, codecs);
-  const encoderImplementation = String(outbound.encoderImplementation || '');
-  const lossPct = Number.isFinite(remoteInbound?.fractionLost) ? remoteInbound.fractionLost * 100 : null;
-  const rttMs = Number.isFinite(remoteInbound?.roundTripTime) ? remoteInbound.roundTripTime * 1000 : null;
-  const availableOutgoingBitrate = Number(
-    candidatePair?.availableOutgoingBitrate || candidatePair?.availableOutgoingBitrate === 0
-      ? candidatePair.availableOutgoingBitrate
-      : candidatePair?.estimatedOutgoingBitrate || 0
-  );
-  const framesDropped = Number(outbound.framesDropped || 0);
-  const firCount = Number(outbound.firCount || 0);
-  const nackCount = Number(outbound.nackCount || 0);
-  const pliCount = Number(outbound.pliCount || 0);
+  const codec = getCodecNameFromStats(outbound, stats);
+  const encoderImplementation = outbound.encoderImplementation || '';
+  const fractionLost = remoteInbound?.fractionLost;
+  const lossPct = fractionLost !== undefined && Number.isFinite(fractionLost) ? fractionLost * 100 : null;
+  const roundTripTime = remoteInbound?.roundTripTime;
+  const rttMs = roundTripTime !== undefined && Number.isFinite(roundTripTime) ? roundTripTime * 1000 : null;
+  const available = candidatePair?.availableOutgoingBitrate;
+  const availableOutgoingBitrate =
+    available || available === 0 ? available : candidatePair?.estimatedOutgoingBitrate || 0;
+  const framesDropped = outbound.framesDropped || 0;
+  const firCount = outbound.firCount || 0;
+  const nackCount = outbound.nackCount || 0;
+  const pliCount = outbound.pliCount || 0;
 
   return {
     availableOutgoingBitrate,
@@ -436,9 +424,9 @@ function parseLocalScreenStats(
     framesDropped,
     framesDroppedDelta: previous ? Math.max(0, framesDropped - Number(previous.framesDropped || 0)) : 0,
     framesEncoded,
-    framesSent: Number(outbound.framesSent || 0),
-    height: Number(outbound.frameHeight || 0),
-    keyFramesEncoded: Number(outbound.keyFramesEncoded || 0),
+    framesSent: outbound.framesSent || 0,
+    height: outbound.frameHeight || 0,
+    keyFramesEncoded: outbound.keyFramesEncoded || 0,
     lossPct,
     nackCount,
     nackDelta: previous ? Math.max(0, nackCount - Number(previous.nackCount || 0)) : 0,
@@ -455,18 +443,19 @@ function parseLocalScreenStats(
       timestamp
     },
     qualityLimitationReason: outbound.qualityLimitationReason || '',
-    qpSum: Number(outbound.qpSum || 0),
+    qpSum: outbound.qpSum || 0,
     rttMs,
-    width: Number(outbound.frameWidth || 0)
+    width: outbound.frameWidth || 0
   };
 }
 
-function isVideoStatsReport(report: { kind?: string; mediaType?: string }): boolean {
+function isVideoStatsReport(report: RtcStat): boolean {
   return report.kind === 'video' || report.mediaType === 'video';
 }
 
-function getCodecNameFromStats(report: { codecId?: string }, codecs: Map<string, any>): string {
-  const codec = report.codecId ? codecs.get(report.codecId) : undefined;
+function getCodecNameFromStats(report: RtcStat, stats: Map<string, RtcStat>): string {
+  const entry = report.codecId ? stats.get(report.codecId) : undefined;
+  const codec = entry?.type === 'codec' ? entry : undefined;
   const mimeType = codec?.mimeType || codec?.mime || '';
   return mimeType.replace(/^video\//i, '').toUpperCase();
 }
@@ -476,8 +465,8 @@ async function applyLocalScreenEncodingProfile(profile: ScreenProfile): Promise<
 
   for (const publication of state.localScreenPublications.values()) {
     const track = publication?.track;
-    if (publication?.source !== TRACK_SOURCE.ScreenShare && track?.mediaStreamTrack?.kind !== 'video') continue;
-    const sender = (track as { sender?: RTCRtpSender } | undefined)?.sender;
+    if (!isScreenVideoPublication(publication) && track?.mediaStreamTrack?.kind !== 'video') continue;
+    const sender = track?.sender;
     if (sender) tasks.push(applyScreenSenderEncoding(sender, profile));
   }
 
@@ -491,6 +480,7 @@ async function applyScreenSenderEncoding(sender: RTCRtpSender, profile: ScreenPr
   if (!parameters.encodings?.length) parameters.encodings = [{}];
 
   const primaryEncoding = getPrimaryScreenEncoding(parameters.encodings);
+  if (!primaryEncoding) return;
   primaryEncoding.maxBitrate = profile.videoBitrate;
   primaryEncoding.maxFramerate = profile.frameRate;
   parameters.degradationPreference = SCREEN_DEGRADATION_PREFERENCE;
@@ -498,12 +488,11 @@ async function applyScreenSenderEncoding(sender: RTCRtpSender, profile: ScreenPr
   await sender.setParameters(parameters);
 }
 
-function getPrimaryScreenEncoding(encodings: RTCRtpEncodingParameters[]): RTCRtpEncodingParameters {
-  return encodings.reduce((primary, encoding) => {
-    const primaryBitrate = Number(primary.maxBitrate || 0);
-    const encodingBitrate = Number(encoding.maxBitrate || 0);
-    if (encodingBitrate > primaryBitrate) return encoding;
-    if (!primaryBitrate && !primary.rid) return primary;
-    return primary;
-  }, encodings[0]);
+/** The encoding with the highest bitrate; the first one when none has a bitrate. */
+function getPrimaryScreenEncoding(encodings: RTCRtpEncodingParameters[]): RTCRtpEncodingParameters | undefined {
+  let primary = encodings[0];
+  for (const encoding of encodings) {
+    if (Number(encoding.maxBitrate || 0) > Number(primary?.maxBitrate || 0)) primary = encoding;
+  }
+  return primary;
 }

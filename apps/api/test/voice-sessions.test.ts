@@ -5,12 +5,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import type http from 'node:http';
-import type { AddressInfo } from 'node:net';
 import { Pool } from 'pg';
 
 import { createApiRuntime } from '../src/app/api-runtime.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { defined } from './helpers/assert-defined.ts';
+import { listeningPort } from './helpers/listening-port.ts';
 import { rollBackThrough } from './migration-steps.ts';
 import { joinVoiceRoom, openWs, sendWs } from './ws-harness.ts';
 
@@ -21,7 +22,7 @@ type SessionRow = { room_id: string; user_id: string | null; joined_at: Date; le
 
 function listen(server: http.Server) {
   return new Promise<number>((resolve) => {
-    server.listen(0, '127.0.0.1', () => resolve((server.address() as AddressInfo).port));
+    server.listen(0, '127.0.0.1', () => resolve(listeningPort(server)));
   });
 }
 
@@ -76,7 +77,7 @@ test('a stay in voice is recorded when the peer leaves and when the API stops', 
   sendWs(guest.ws, 'room.leave', guestSeat);
   const afterGuestLeft = await waitFor(rows, (found) => found.length === 1);
   assert.equal(afterGuestLeft.length, 1);
-  const guestRow = afterGuestLeft[0]!;
+  const guestRow = defined(afterGuestLeft[0], 'the guest voice session row');
   assert.equal(guestRow.room_id, roomId);
   assert.equal(guestRow.user_id, null, 'a guest has no account');
   assert.ok(guestRow.joined_at.getTime() >= beforeJoin - 1000);
@@ -98,7 +99,7 @@ test('a stay in voice is recorded when the peer leaves and when the API stops', 
   await runtime.closeStores();
   const afterStop = await rows();
   assert.equal(afterStop.length, 2);
-  const adaRow = afterStop[1]!;
+  const adaRow = defined(afterStop[1], "Ada's voice session row");
   assert.equal(adaRow.user_id, user.id);
   assert.equal(adaRow.room_id, roomId);
   assert.ok(adaRow.left_at.getTime() >= beforeStop - 1000);

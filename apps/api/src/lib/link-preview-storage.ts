@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { LINK_PREVIEW_IMAGE_KEY_PATTERN } from '@voice-room/shared/link-preview';
 import { readUploadsDir } from './config.ts';
+import { codeOf } from '../platform/error-code.ts';
 
 // Preview images live next to avatars, in their own folder so neither kind of
 // reconciliation ever sees the other's files. A key is the content hash of the
@@ -15,10 +16,6 @@ export type LinkPreviewStorage = {
   listKeys(): Promise<string[]>;
 };
 
-function errorCode(error: unknown): unknown {
-  return (error as { code?: unknown } | null | undefined)?.code;
-}
-
 function validateLinkPreviewImageKey(key: unknown): string {
   if (typeof key !== 'string' || !LINK_PREVIEW_IMAGE_KEY_PATTERN.test(key)) {
     throw new TypeError('Invalid link preview image key');
@@ -26,7 +23,9 @@ function validateLinkPreviewImageKey(key: unknown): string {
   return key;
 }
 
-function createLinkPreviewStorage({ uploadsDir = readUploadsDir() }: { uploadsDir?: string } = {}): LinkPreviewStorage {
+function createLinkPreviewStorage({
+  uploadsDir = readUploadsDir()
+}: { uploadsDir?: string | undefined } = {}): LinkPreviewStorage {
   const root = path.join(path.resolve(uploadsDir), 'link-previews');
 
   function filePath(key: string): string {
@@ -46,7 +45,7 @@ function createLinkPreviewStorage({ uploadsDir = readUploadsDir() }: { uploadsDi
     try {
       await fs.promises.unlink(filePath(key));
     } catch (error) {
-      if (errorCode(error) !== 'ENOENT') throw error;
+      if (codeOf(error) !== 'ENOENT') throw error;
     }
   }
 
@@ -59,7 +58,7 @@ function createLinkPreviewStorage({ uploadsDir = readUploadsDir() }: { uploadsDi
     try {
       entries = await fs.promises.readdir(root, { withFileTypes: true });
     } catch (error) {
-      if (errorCode(error) === 'ENOENT') return [];
+      if (codeOf(error) === 'ENOENT') return [];
       throw error;
     }
     return entries

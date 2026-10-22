@@ -9,7 +9,7 @@
 
 {#each segments as seg, i (i)}
   {#if seg.kind === 'link' && seg.href}
-    <a href={seg.href} target="_blank" rel="noopener noreferrer nofollow">{seg.text}</a>
+    <a href={seg.href} target="_blank" rel="noopener noreferrer nofollow external">{seg.text}</a>
   {:else}
     <EmojiText text={seg.text} />
   {/if}

@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { createPermanentRoom, enterRoom, registerViaUi, uniqueLogin } from './helpers';
+import { createPermanentRoom, enterRoom, incomingFriendRequestIds, registerViaUi, uniqueLogin } from './helpers';
 
 test('a friend sees typing and emoji browsing under the message field, until the message arrives', async ({
   browser,
@@ -9,14 +9,13 @@ test('a friend sees typing and emoji browsing under the message field, until the
   const readerLogin = uniqueLogin('typingreader');
   const writerLogin = uniqueLogin('typingwriter');
   await registerViaUi(page, readerLogin);
-  const writerContext = await browser.newContext({ baseURL });
+  const writerContext = await browser.newContext(baseURL ? { baseURL } : {});
   const writer = await writerContext.newPage();
   try {
     await registerViaUi(writer, writerLogin);
     const request = await writerContext.request.post('/api/friends/requests', { data: { login: readerLogin } });
     expect(request.ok()).toBe(true);
-    const incoming = await page.context().request.get('/api/friends/requests');
-    const requestId = ((await incoming.json()) as { incoming?: Array<{ id: string }> }).incoming?.[0]?.id;
+    const [requestId] = await incomingFriendRequestIds(page);
     expect(requestId).toBeTruthy();
     expect((await page.context().request.post(`/api/friends/requests/${requestId}/accept`, { data: {} })).ok()).toBe(
       true
@@ -71,13 +70,13 @@ test('the room chat shows who is typing from the call to someone reading it in t
   await page.getByRole('button', { name: 'Чат', exact: true }).first().click();
   await expect(page.getByPlaceholder('Написать в комнату…')).toBeVisible({ timeout: 20_000 });
 
-  const callerContext = await browser.newContext({ baseURL });
+  const callerContext = await browser.newContext(baseURL ? { baseURL } : {});
   const caller = await callerContext.newPage();
   try {
     await registerViaUi(caller, guestLogin);
     await enterRoom(caller, roomId);
     const rail = caller.locator('.room-chat-rail').first();
-    if (await rail.evaluate((element) => (element as HTMLElement).hidden)) {
+    if (await rail.evaluate((element) => element instanceof HTMLElement && element.hidden)) {
       await caller.locator('button[title="Чат"]').first().click();
     }
     const composer = caller.locator('.room-chat-rail').getByPlaceholder('Написать в комнату…');

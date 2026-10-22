@@ -23,9 +23,10 @@ import fs from 'node:fs';
 const { createApiServer } = await import('../src/server.ts');
 const { openWs, joinVoiceRoom, sendWs, waitForWsType } = await import('./ws-harness.ts');
 import type { WsSession } from './ws-harness.ts';
-import type { RoomMessageAnswer } from '@voice-room/shared/contracts/messages';
+import { RoomMessageAnswer } from '@voice-room/shared/contracts/messages';
 import { dbRoom, storedUser, userSession, type Fakes } from './fakes/index.ts';
-import { request as requestRaw, socketDir, type ApiBody } from './fakes/server-process.ts';
+import type { Static, TSchema } from 'typebox';
+import { request as requestRaw, socketDir, type JsonResponse } from './fakes/server-process.ts';
 
 const OWNER_ID = '11111111-1111-4111-8111-111111111111';
 const VICTIM_ID = '22222222-2222-4222-8222-222222222222';
@@ -149,7 +150,7 @@ function createStore() {
       return { status: 'revoked', epoch: revokedPrincipals.length };
     },
     async getRoom(roomId) {
-      return roomId === ROOM_ID ? { ...room, peers: new Map() } : null;
+      return roomId === ROOM_ID ? { ...room, peers: new Map<string, unknown>() } : null;
     },
     async invalidatePeerIdentity() {
       return true;
@@ -192,24 +193,35 @@ function createUsers(): Fakes['users'] {
   };
 }
 
-function request<Body = ApiBody>(
-  socketPath: string,
-  method: string,
-  pathname: string,
-  {
-    body,
-    cookie = '',
-    ip = '',
-    headers = {}
-  }: { body?: unknown; cookie?: string; ip?: string; headers?: Record<string, string> } = {}
-) {
-  return requestRaw<Body>(socketPath, {
+type AuditRequest = { body?: unknown; cookie?: string; ip?: string; headers?: Record<string, string> };
+
+function requestOptions(method: string, pathname: string, { body, cookie = '', ip = '', headers = {} }: AuditRequest) {
+  return {
     method,
     pathname,
     body,
     cookie: cookie || undefined,
     headers: { Host: 'localhost', ...(ip ? { 'X-Forwarded-For': ip } : {}), ...headers }
-  });
+  };
+}
+
+function request(socketPath: string, method: string, pathname: string, options?: AuditRequest): Promise<JsonResponse>;
+function request<const Schema extends TSchema>(
+  socketPath: string,
+  method: string,
+  pathname: string,
+  options: AuditRequest,
+  schema: Schema
+): Promise<JsonResponse<Static<Schema>>>;
+function request(
+  socketPath: string,
+  method: string,
+  pathname: string,
+  options: AuditRequest = {},
+  schema?: TSchema
+): Promise<JsonResponse<unknown>> {
+  const sent = requestOptions(method, pathname, options);
+  return schema ? requestRaw(socketPath, sent, schema) : requestRaw(socketPath, sent);
 }
 
 async function startServer(t: TestContext) {
@@ -277,11 +289,17 @@ test('a guest cannot claim an account peer id or rewrite an account-authored mes
 
   // The victim writes from the lobby preview, which files the message under
   // their account peer id.
-  const posted = await request<RoomMessageAnswer>(fixture.socketPath, 'POST', `/api/rooms/${ROOM_ID}/chat`, {
-    body: { peerId: accountPeerId, text: 'original' },
-    cookie: VICTIM_COOKIE,
-    ip: VICTIM_IP
-  });
+  const posted = await request(
+    fixture.socketPath,
+    'POST',
+    `/api/rooms/${ROOM_ID}/chat`,
+    {
+      body: { peerId: accountPeerId, text: 'original' },
+      cookie: VICTIM_COOKIE,
+      ip: VICTIM_IP
+    },
+    RoomMessageAnswer
+  );
   assert.equal(posted.status, 201, JSON.stringify(posted.body));
   const messageId = posted.body.message.id;
   assert.equal(fixture.store.messages[0]?.peerId, accountPeerId);

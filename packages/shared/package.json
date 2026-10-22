@@ -1,10 +1,11 @@
 {
   "name": "@voice-room/shared",
-  "version": "2.10.4",
+  "version": "2.10.5",
   "private": true,
   "type": "module",
   "exports": {
     "./validation": "./src/validation.ts",
+    "./guards": "./src/guards.ts",
     "./messaging-history": "./src/messaging-history.ts",
     "./messaging-send": "./src/messaging-send.ts",
     "./membership": "./src/membership.ts",

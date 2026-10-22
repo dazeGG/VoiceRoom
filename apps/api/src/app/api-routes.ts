@@ -134,18 +134,17 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
 
   registerCapabilityRoutes(app);
 
-  const memberships = deps.services.getMembershipServices();
-  if (memberships) {
-    registerMembershipRoutes(app, ctx, {
-      directory: memberships.directory,
-      memberships: memberships.service,
-      prepareLeave: ({ roomId, userId }) => deps.roomRuntime.disconnectAccountFromRoom({ roomId, userId }),
-      onLeft: async ({ roomId, userId }) => {
-        await deps.services.getRoomStore().removeRoomBookmarkForUser(userId, roomId);
-        deps.roomRuntime.invalidateRecipientCache(roomId);
-      }
-    });
-  }
+  // Registered with or without a database: without one they answer 503 internal_error.
+  const database = deps.services.routeServices();
+  registerMembershipRoutes(app, ctx, {
+    directory: database.memberships.directory,
+    memberships: database.memberships.service,
+    prepareLeave: ({ roomId, userId }) => deps.roomRuntime.disconnectAccountFromRoom({ roomId, userId }),
+    onLeft: async ({ roomId, userId }) => {
+      await deps.services.getRoomStore().removeRoomBookmarkForUser(userId, roomId);
+      deps.roomRuntime.invalidateRecipientCache(roomId);
+    }
+  });
 
   registerHistoryRoutes(app, ctx, {
     rooms: deps.services.getHistoryServices().room,
@@ -153,75 +152,43 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
     canReadRoom: (roomId, userId) => deps.services.getRoomStore().canUserReadRoomChat(roomId, userId)
   });
 
-  const reactions = deps.services.getReactionServices();
-  if (reactions) {
-    registerReactionRoutes(app, ctx, { reactions: reactions.service });
-  }
-
-  const pins = deps.services.getPinServices();
-  if (pins) {
-    registerPinRoutes(app, ctx, {
-      pins: pins.service,
-      canRead: (roomId, userId) => deps.services.getRoomStore().canUserReadRoomChat(roomId, userId),
-      canWrite: (roomId, userId) => deps.services.getRoomStore().canUserReactInRoom(roomId, userId)
-    });
-  }
-
-  const notificationDomain = deps.services.getNotificationServices();
-  if (notificationDomain) {
-    registerNotificationRoutes(app, ctx, {
-      notifications: notificationDomain.service
-    });
-  }
-
-  const moderation = deps.services.getModerationServices();
-  if (moderation) {
-    registerModerationRoutes(app, ctx, {
-      moderation: moderation.service,
-      messages: moderation.messageService
-    });
-  }
+  registerReactionRoutes(app, ctx, { reactions: database.reactions.service });
+  registerPinRoutes(app, ctx, {
+    pins: database.pins.service,
+    canRead: (roomId, userId) => deps.services.getRoomStore().canUserReadRoomChat(roomId, userId),
+    canWrite: (roomId, userId) => deps.services.getRoomStore().canUserReactInRoom(roomId, userId)
+  });
+  registerNotificationRoutes(app, ctx, { notifications: database.notifications.service });
+  registerModerationRoutes(app, ctx, {
+    moderation: database.moderation.service,
+    messages: database.moderation.messageService
+  });
 
   // Admin endpoints answer the admin app's own session (domains/staff), never the main-site one.
   const staffUserId = createStaffActorResolver(ctx, deps.domain.staff, deps.config.SESSION_COOKIE_SECURE);
-  if (deps.services.getStaffRepository()) {
-    registerStaffRoutes(app, ctx, {
-      staff: deps.domain.staff,
-      siteOrigin: deps.config.SITE_ORIGIN,
-      adminOrigin: deps.config.ADMIN_ORIGIN,
-      secureCookies: deps.config.SESSION_COOKIE_SECURE,
-      openReports: async () => (await deps.services.getReportRepository()?.countOpen()) ?? 0
-    });
-  }
-
-  if (deps.services.getReportRepository()) {
-    registerReportRoutes(app, ctx, { reports: deps.domain.reports, limiter: deps.limits.reports, staffUserId });
-  }
-
-  if (deps.services.getCallFeedbackRepository()) {
-    registerCallFeedbackRoutes(app, ctx, {
-      feedback: deps.domain.callFeedback,
-      limiter: deps.limits.callFeedback,
-      staffUserId
-    });
-  }
-
-  if (deps.services.getAdminStatsRepository()) {
-    registerAdminRoutes(app, ctx, {
-      admin: deps.domain.admin,
-      accounts: deps.domain.adminAccounts,
-      rooms: deps.domain.adminRooms,
-      staffUserId
-    });
-  }
-
-  const media = deps.services.getMediaServices();
-  if (media) {
-    registerMediaRoutes(app, ctx, {
-      media: media.service,
-      visibility: media.visibility
-    });
-  }
+  registerStaffRoutes(app, ctx, {
+    staff: deps.domain.staff,
+    siteOrigin: deps.config.SITE_ORIGIN,
+    adminOrigin: deps.config.ADMIN_ORIGIN,
+    secureCookies: deps.config.SESSION_COOKIE_SECURE,
+    openReports: async () => (await deps.services.getReportRepository()?.countOpen()) ?? 0
+  });
+  registerReportRoutes(app, ctx, { reports: deps.domain.reports, limiter: deps.limits.reports, staffUserId });
+  registerCallFeedbackRoutes(app, ctx, {
+    feedback: deps.domain.callFeedback,
+    limiter: deps.limits.callFeedback,
+    staffUserId
+  });
+  registerAdminRoutes(app, ctx, {
+    admin: deps.domain.admin,
+    accounts: deps.domain.adminAccounts,
+    rooms: deps.domain.adminRooms,
+    staffUserId
+  });
+  registerMediaRoutes(app, ctx, {
+    media: database.media.service,
+    visibility: database.media.visibility
+  });
 
   // Register after plugins finish loading so @fastify/websocket can wrap the handler.
   app.after(() => {

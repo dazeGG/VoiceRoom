@@ -3,6 +3,8 @@
   import '$lib/shared/styles/settings.css';
   import { iconMd, iconSm } from '$lib/shared/ui/icons';
   import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
+  import { Value } from 'typebox/value';
+  import { NotificationLevel } from '@voice-room/shared/contracts/notifications';
   import { deleteRoom, updateRoom } from '$lib/api/rooms';
   import RoomAvatarField from '$lib/entities/room/components/RoomAvatarField.svelte';
   import { saveRoomAvatarChange, type RoomAvatarChange } from '$lib/entities/room/room-avatar-change';
@@ -10,6 +12,7 @@
   import { applyRoomUpdated } from '../client/room/lifecycle';
   import { showToast } from '../client/ui/toast';
   import { roomSettingsUi, closeRoomSettings } from '../room-settings.svelte';
+  import { useRoomShell } from '../shell';
   import ModerationCenter from '$lib/entities/room/components/ModerationCenter.svelte';
   import RoomMemberList from '$lib/entities/room/components/RoomMemberList.svelte';
   import { BAN_UNDO_DURATION_MS, type ModerationNoticeOptions } from '$lib/entities/room/room-moderation';
@@ -20,6 +23,8 @@
   } from '$lib/api/notifications';
 
   type Section = 'general' | 'members' | 'bans';
+
+  const shell = useRoomShell();
 
   let name = $state('');
   let error = $state('');
@@ -68,7 +73,7 @@
       let room = await updateRoom(roomClientState.roomId, { name: trimmed });
       room = (await saveRoomAvatarChange(roomClientState.roomId, avatarChange)) ?? room;
       applyRoomUpdated(room);
-      window.dispatchEvent(new CustomEvent('voice-room:rooms-changed', { detail: { roomId: room.roomId } }));
+      shell.roomsChanged(room.roomId);
       closeRoomSettings();
       showToast('Комната обновлена');
     } catch (err) {
@@ -93,7 +98,9 @@
   }
 
   async function saveNotificationLevel(event: Event): Promise<void> {
-    notificationLevel = (event.currentTarget as HTMLSelectElement).value as RoomNotificationLevel;
+    const select = event.currentTarget;
+    if (!(select instanceof HTMLSelectElement) || !Value.Check(NotificationLevel, select.value)) return;
+    notificationLevel = select.value;
     notificationSaving = true;
     try {
       await setRoomNotificationLevel(roomClientState.roomId, notificationLevel);

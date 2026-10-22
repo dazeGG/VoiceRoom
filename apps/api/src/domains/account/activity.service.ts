@@ -72,7 +72,7 @@ export function createActivityTracker(deps: ActivityTrackerDeps) {
   }
 
   /** Accounts with a socket open right now. */
-  function sawConnected(userIds: Iterable<string>): void {
+  function sawConnected(userIds: Iterable<string, unknown, unknown>): void {
     const current = today();
     const marks: ActivityMark[] = [];
     for (const userId of new Set(userIds)) {

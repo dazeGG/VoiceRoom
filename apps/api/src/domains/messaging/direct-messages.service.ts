@@ -4,19 +4,24 @@
 // order the legacy handlers ran them.
 
 import type { AccountMessage } from '../../realtime/account-events.ts';
-import type { ErrorCode } from '@voice-room/shared/contracts/errors';
-import { errorCode } from '../../platform/http/http-kit.ts';
-import type pg from 'pg';
-import type { DirectMessage as DirectMessageView, ReplyPreview } from '@voice-room/shared/contracts/messages';
+import type { DirectMessage as DirectMessageView } from '@voice-room/shared/contracts/messages';
 import type { PublicUser } from '@voice-room/shared/contracts/users';
-import crypto from 'node:crypto';
 import { publicUser } from '../account/user-records.ts';
+import { isStoredDirectMessage } from '../social/social-records.ts';
 import { isActiveAccount, type SocialUser } from '../social/social-views.ts';
-import { messageFingerprint, normalizeAttachmentIds } from './message-input.ts';
-import { requireReplyTarget } from './reply-projector.ts';
+import { cleanMessageText, messageFingerprint, normalizeAttachmentIds } from './message-input.ts';
+import { sendUnitOfWork, type DbClient, type SendDelivery } from './message-send.ts';
+import type { DirectReplyTarget } from './reply.repository.ts';
+import type { AttachmentRepository } from '../media/attachment.repository.ts';
 import { isDirectSender } from './direct-message.policy.ts';
+import {
+  revokeAttachmentsOnDelete,
+  type DeleteUnitOfWork,
+  type CleanupJobs,
+  type RevocableAttachments
+} from '../media/attachment-revocation.service.ts';
+import type { RateCheck } from '../../lib/rate-limit.ts';
 
-type DbClient = Pick<pg.PoolClient, 'query'> | null | undefined;
 type Status<T extends string> = T extends string ? { status: T } : never;
 type RateLimited = { status: 'rate_limited'; retryAfterSeconds: number };
 
@@ -40,28 +45,13 @@ export interface DirectMessageStore {
     recipientId: string;
     status: 'accepted' | 'declined';
   }): Promise<DirectMessage | null>;
-  softDeleteMessage(messageId: string): Promise<unknown>;
+  softDeleteMessage(messageId: string, options?: { unitOfWork?: DeleteUnitOfWork | null }): Promise<unknown>;
   editMessage(input: {
     messageId: string;
     senderId: string;
     recipientId: string;
     body: string;
   }): Promise<DirectMessage | null>;
-}
-
-interface Delivery {
-  idempotency: {
-    reserve(
-      client: DbClient,
-      input: Record<string, unknown>
-    ): Promise<{ kind: string; ledgerKey?: string; response?: { body?: unknown } }>;
-    complete(
-      client: DbClient,
-      key: string,
-      result: { body: unknown; messageId: string; statusCode: number }
-    ): Promise<unknown>;
-  };
-  outbox: { enqueue(client: DbClient, event: Record<string, unknown>): Promise<unknown> };
 }
 
 type Projection = (
@@ -83,12 +73,22 @@ export interface DirectMessagesDeps {
   isDmMuted(userId: string, peerUserId: string): Promise<boolean>;
   roomExists(roomId: string): Promise<boolean>;
   expireRoomInvitations(senderId: string, roomId: string): Promise<unknown>;
-  limiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
-  media(): { attachments: { bindReady(input: Record<string, unknown>, client: DbClient): Promise<unknown> } } | null;
+  limiter: RateCheck;
+  media(): {
+    attachments: RevocableAttachments & {
+      bindReady(input: Parameters<AttachmentRepository['bindReady']>[0], client: DbClient): Promise<unknown>;
+    };
+    jobs: CleanupJobs;
+  } | null;
   replies(): {
-    lockDirectTarget(input: { userId: string; peerId: string; messageId: string; client: DbClient }): Promise<unknown>;
+    lockDirectTarget(input: {
+      userId: string;
+      peerId: string;
+      messageId: string;
+      client: DbClient;
+    }): Promise<DirectReplyTarget | null>;
   };
-  delivery(): Delivery | null;
+  delivery(): SendDelivery | null;
   projectMedia: Projection;
   projectReply: Projection;
   directEmit: boolean;
@@ -106,12 +106,12 @@ export interface DirectMessagesDeps {
 
 // Multiline like room chat, but up to 2000 characters and no line cap.
 export function cleanDmText(value: unknown): string {
-  return String(value || '')
-    .replace(/[^\S\n]+/g, ' ')
-    .replace(/ *\n */g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-    .slice(0, 2000);
+  return cleanMessageText(value, { maxChars: 2000 });
+}
+
+// The stored shape is stricter than the service's, so a message that passes it is one.
+function isReplayedMessage(value: unknown): value is DirectMessage {
+  return isStoredDirectMessage(value);
 }
 
 export interface SendInput {
@@ -125,7 +125,7 @@ export interface SendInput {
 export function createDirectMessagesService(deps: DirectMessagesDeps) {
   function rateLimited(userId: string): RateLimited | null {
     const rate = deps.limiter.check(userId);
-    return rate.allowed ? null : { status: 'rate_limited', retryAfterSeconds: rate.retryAfterSeconds ?? 0 };
+    return rate.allowed ? null : { status: 'rate_limited', retryAfterSeconds: rate.retryAfterSeconds };
   }
 
   // Opening the thread clears the unread badge and lets the peer see the read.
@@ -183,76 +183,41 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     const media = attachmentIds.length > 0 ? deps.media() : null;
     if (attachmentIds.length > 0 && !media) return { status: 'media_unavailable' };
     const replies = replyToMessageId ? deps.replies() : null;
-    const delivery = deps.delivery();
-    let idempotencyLedgerKey = '';
-    let replyPreview: ReplyPreview | null = null;
+    const send = sendUnitOfWork({
+      delivery: deps.delivery(),
+      idempotencyKey,
+      actor: { type: 'account', id: sender.id },
+      conversation: { type: 'dm', id: recipientId },
+      fingerprint: messageFingerprint({ text, attachmentIds, replyToMessageId }),
+      isStored: isReplayedMessage,
+      replayMissing: 'The idempotent replay holds no direct message',
+      lockReply: replies
+        ? (client) =>
+            replies.lockDirectTarget({ userId: sender.id, peerId: recipientId, messageId: replyToMessageId, client })
+        : null,
+      bindAttachments: media
+        ? (client, inserted) =>
+            media.attachments.bindReady(
+              { ownerId: sender.id, context: 'dm', messageId: inserted.id, attachmentIds },
+              client
+            )
+        : null,
+      afterInsert: null,
+      outboxMessage: (inserted) => inserted
+    });
 
     const stored = await deps.messages().direct.sendMessage({
       senderId: sender.id,
       recipientId,
       body: text,
       replyToMessageId: replyToMessageId || null,
-      beforeUnitOfWork:
-        idempotencyKey && delivery
-          ? async (client) => {
-              const reservation = await delivery.idempotency.reserve(client, {
-                actorType: 'account',
-                actorId: sender.id,
-                conversation: { type: 'dm', id: recipientId },
-                key: idempotencyKey,
-                fingerprint: messageFingerprint({ text, attachmentIds, replyToMessageId })
-              });
-              if (reservation.kind === 'replay')
-                return {
-                  replay: true as const,
-                  message: (reservation.response?.body as { message?: DirectMessage } | undefined)
-                    ?.message as DirectMessage
-                };
-              idempotencyLedgerKey = reservation.ledgerKey as string;
-              return null;
-            }
-          : null,
-      unitOfWork:
-        attachmentIds.length > 0 || replyToMessageId || delivery
-          ? async (client, inserted) => {
-              if (replies) {
-                const target = await replies.lockDirectTarget({
-                  userId: sender.id,
-                  peerId: recipientId,
-                  messageId: replyToMessageId,
-                  client
-                });
-                replyPreview = await requireReplyTarget({ message: target, visibility: true });
-              }
-              if (media) {
-                await media.attachments.bindReady(
-                  { ownerId: sender.id, context: 'dm', messageId: inserted.id, attachmentIds },
-                  client
-                );
-              }
-              if (delivery) {
-                await delivery.outbox.enqueue(client, {
-                  eventId: crypto.randomUUID(),
-                  type: 'message.created',
-                  conversation: { type: 'dm', id: recipientId },
-                  messageId: inserted.id,
-                  message: inserted
-                });
-                if (idempotencyLedgerKey) {
-                  await delivery.idempotency.complete(client, idempotencyLedgerKey, {
-                    body: { message: inserted },
-                    messageId: inserted.id,
-                    statusCode: 201
-                  });
-                }
-              }
-            }
-          : null
+      beforeUnitOfWork: send.beforeUnitOfWork,
+      unitOfWork: send.unitOfWork
     });
     const projectedBase = await deps.projectMedia('dm', stored);
     const message = stored.idempotencyReplay
       ? await deps.projectReply('dm', projectedBase, { userId: sender.id, peerId: recipientId })
-      : { ...projectedBase, replyPreview };
+      : { ...projectedBase, replyPreview: send.replyPreview() };
     if (!stored.idempotencyReplay) {
       // To the recipient and the sender's other tabs; clients dedupe by id.
       if (deps.directEmit) {
@@ -292,34 +257,30 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
   }
 
   // A cursor advances the durable read point; without one everything up to
-  // now is read.
+  // now is read. A refused cursor throws a MessageReadError that carries its
+  // own status and code; any other failure is a server error. Both reach the
+  // central error handler unchanged.
   async function markRead(
     userId: string,
     peerId: string,
     cursor: unknown
-  ): Promise<
-    | { status: 'read'; result: Record<string, unknown> }
-    | { status: 'invalid_cursor'; statusCode: number; code: ErrorCode; error: string }
-  > {
+  ): Promise<{ status: 'read'; result: Record<string, unknown> }> {
     if (typeof cursor === 'string' && cursor) {
-      try {
-        const result = await deps.readService().advanceDm({ cursor, peerId, userId });
-        deps.notifyUser(peerId, { type: 'dm-read', userId });
-        return { status: 'read', result };
-      } catch (error) {
-        const failure = error as { statusCode?: number; message?: string };
-        const code = errorCode(failure, 'invalid_read_cursor');
-        return {
-          status: 'invalid_cursor',
-          statusCode: failure.statusCode || 400,
-          code,
-          error: failure.message || code
-        };
-      }
+      const result = await deps.readService().advanceDm({ cursor, peerId, userId });
+      deps.notifyUser(peerId, { type: 'dm-read', userId });
+      return { status: 'read', result };
     }
     const result = await deps.messages().direct.markRead({ userId, peerId });
     if (result.count > 0) deps.notifyUser(peerId, { type: 'dm-read', userId });
     return { status: 'read', result: { count: result.count } };
+  }
+
+  // A deleted message takes its attachments with it, so their files are
+  // cleaned up and stop counting toward the sender's quota.
+  function softDelete(messageId: string): Promise<unknown> {
+    return deps.messages().direct.softDeleteMessage(messageId, {
+      unitOfWork: revokeAttachmentsOnDelete(deps.media(), 'dm', messageId)
+    });
   }
 
   // Only the sender deletes, and it is gone for both sides. Each side indexes
@@ -332,7 +293,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
     const current = await deps.messages().direct.getMessage(userId, peerId, messageId);
     if (!current) return { status: 'not_found' };
     if (!isDirectSender(current, userId)) return { status: 'not_sender' };
-    if (!(await deps.messages().direct.softDeleteMessage(messageId))) return { status: 'not_found' };
+    if (!(await softDelete(messageId))) return { status: 'not_found' };
     deps.notifyUser(peerId, { type: 'dm.message.deleted', messageId, peerUserId: userId });
     deps.notifyUser(userId, { type: 'dm.message.deleted', messageId, peerUserId: peerId });
     return { status: 'deleted' };
@@ -352,7 +313,7 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
   }): Promise<Status<'deleted' | 'not_found'>> {
     const current = await deps.messages().direct.getMessage(senderId, recipientId, messageId);
     if (!current || !isDirectSender(current, senderId)) return { status: 'not_found' };
-    if (!(await deps.messages().direct.softDeleteMessage(messageId))) return { status: 'not_found' };
+    if (!(await softDelete(messageId))) return { status: 'not_found' };
     deps.notifyUser(recipientId, { type: 'dm.message.deleted', messageId, peerUserId: senderId });
     deps.notifyUser(senderId, { type: 'dm.message.deleted', messageId, peerUserId: recipientId });
     return { status: 'deleted' };

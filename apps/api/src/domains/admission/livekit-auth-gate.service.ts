@@ -25,13 +25,13 @@ type GateSocket = Duplex & { writable?: boolean; writableEnded?: boolean };
 type GateDecision =
   { ok: true; claims: unknown; strippedPath: string } | { ok: false; code: string; strippedPath: string };
 
-function normalizeGatePath(value: unknown): string {
-  const path = String(value || DEFAULT_GATE_PATH).trim();
+function normalizeGatePath(value: string): string {
+  const path = (value || DEFAULT_GATE_PATH).trim();
   return path.startsWith('/') ? path : `/${path}`;
 }
 
-function cleanUpstreamUrl(value: unknown): URL {
-  const parsed = new URL(String(value || 'ws://127.0.0.1:7880'));
+function cleanUpstreamUrl(value: string): URL {
+  const parsed = new URL(value || 'ws://127.0.0.1:7880');
   if (parsed.protocol !== 'ws:')
     throw new Error('LIVEKIT_INTERNAL_URL must be ws:// because the auth gate uses a raw TCP upstream');
   return parsed;
@@ -45,7 +45,7 @@ function extractCredential(requestUrl?: string): { credential: string; strippedP
 }
 
 function isSocketWritable(socket: GateSocket | null | undefined): boolean {
-  return Boolean(socket) && !socket!.destroyed && socket!.writable !== false && !socket!.writableEnded;
+  return !!socket && !socket.destroyed && socket.writable !== false && !socket.writableEnded;
 }
 
 function destroySocket(socket: Duplex | null | undefined): void {
@@ -61,7 +61,7 @@ function deny(socket: GateSocket, code = 403, reason = 'Forbidden'): void {
   try {
     if (typeof socket.end === 'function') socket.end(response);
     else {
-      (socket as Duplex).write(response);
+      socket.write(response);
       destroySocket(socket);
     }
   } catch {
@@ -75,6 +75,16 @@ function deny(socket: GateSocket, code = 403, reason = 'Forbidden'): void {
 function isValidatePath(requestUrl: string | undefined, gatePath: string): boolean {
   const { pathname } = new URL(requestUrl || '/', 'ws://gate.local');
   return pathname === `${gatePath}/validate` || pathname === `${gatePath}/v1/validate`;
+}
+
+// Older room stores and test doubles may lack the gate calls; only a store
+// that has them can back a credential boundary.
+function isGateRoomStore(value: GateRoomStore | Record<string, unknown>): value is GateRoomStore {
+  return (
+    typeof value.getLiveKitGatePrincipalEpoch === 'function' &&
+    typeof value.createLiveKitGateCredential === 'function' &&
+    typeof value.verifyLiveKitGateCredential === 'function'
+  );
 }
 
 function buildUpstreamUpgradeRequest({
@@ -115,7 +125,7 @@ function createLiveKitAuthGateService({
   boundary?: Pick<CredentialBoundaryService, 'authorizeCredential' | 'assertReady'>;
   gatePath?: string;
   logger?: GateLogger;
-  pool?: pg.Pool | Record<string, unknown> | null;
+  pool?: pg.Pool | null;
   roomPrefix?: string;
   roomStore?: GateRoomStore | Record<string, unknown>;
   secret?: unknown;
@@ -124,8 +134,13 @@ function createLiveKitAuthGateService({
   const path = normalizeGatePath(gatePath);
   const upstream = cleanUpstreamUrl(upstreamUrl);
   if (!roomStore && !pool) throw new Error('The LiveKit auth gate needs a room store or a pool');
-  // Tests hand in a fake pool, so the option type stays wider than the store's.
-  const store = (roomStore || createGateCredentialRepository({ db: kyselyOn(pool as pg.Pool) })) as GateRoomStore;
+  // Tests that hand in their own boundary pass an empty room store.
+  const store =
+    roomStore && isGateRoomStore(roomStore)
+      ? roomStore
+      : pool
+        ? createGateCredentialRepository({ db: kyselyOn(pool) })
+        : undefined;
   const credentialBoundary =
     boundary ||
     createCredentialBoundaryService({
@@ -175,7 +190,7 @@ function createLiveKitAuthGateService({
       // Client cancellations are normal during navigation/reconnect. Without an
       // error listener, a late write can terminate the whole gate process.
       socket.on('error', () => {});
-      if (!String(request.url || '').startsWith(path)) {
+      if (!(request.url || '').startsWith(path)) {
         deny(socket, 404, 'Not Found');
         return;
       }
@@ -314,7 +329,7 @@ function installGateShutdown(
     closePool: () => Promise<void>;
     exit?: (code: number) => void;
     timeoutMs?: number;
-    signals?: Pick<NodeJS.Process, 'once'>;
+    signals?: { once(signal: NodeJS.Signals, listener: () => void): unknown };
   }
 ): (signal: string) => Promise<void> {
   const {
@@ -372,6 +387,8 @@ function installGateShutdown(
 
 export { DEFAULT_GATE_PATH, createLiveKitAuthGateService, extractCredential, installGateShutdown };
 
+// Phase 4 moves this entry out of the domain: it reads process.env and opens
+// a pool here, which only src/app should do.
 if (import.meta.main) {
   const logger = createLogger({ name: 'livekit-auth-gate' });
   try {
@@ -400,7 +417,7 @@ if (import.meta.main) {
     );
     // The logger is silent unless LOG_LEVEL is set, and a process that refuses
     // to start must still tell the operator why.
-    process.stderr.write(`LiveKit auth gate failed to start: ${(error as Error | null)?.stack || error}
+    process.stderr.write(`LiveKit auth gate failed to start: ${(error instanceof Error && error.stack) || String(error)}
 `);
     process.exitCode = 1;
   }

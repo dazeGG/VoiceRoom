@@ -4,6 +4,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { createMessageService } from '../src/domains/messaging/message.service.ts';
 import { createMessageVisibilityService } from '../src/domains/messaging/message-visibility.service.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 test('G23-A01 message UoW exposes unchanged repositories and exactly one visibility policy', async () => {
   const room = {};
@@ -21,11 +22,14 @@ test('G23-A01 message UoW exposes unchanged repositories and exactly one visibil
 
 test('G23-A02 repository contains one canonical visibility service implementation', () => {
   const root = path.resolve(import.meta.dirname, '../src');
-  const candidates = [];
+  const candidates: string[] = [];
   for (const dir of ['domains/messaging', 'domains/notifications', 'domains/media']) {
     for (const name of fs.readdirSync(path.join(root, dir)))
       if (/message-visibility\.service\.(?:js|ts)$/.test(name)) candidates.push(path.join(dir, name));
   }
   assert.equal(candidates.length, 1);
-  assert.match(candidates[0]!, /domains[\\/]messaging[\\/]message-visibility\.service\.ts$/);
+  assert.match(
+    defined(candidates[0], 'the visibility service'),
+    /domains[\\/]messaging[\\/]message-visibility\.service\.ts$/
+  );
 });

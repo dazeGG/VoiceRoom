@@ -3,8 +3,7 @@
 // accounts, friends, direct messages, notification settings, avatars and the
 // desktop release feed.
 
-import type { Logger } from 'pino';
-import type { RoomPeerMessage } from '../realtime/legacy-events.ts';
+import type { FastifyBaseLogger } from 'fastify';
 import { buildServerEnvelope } from '../realtime/envelope.ts';
 import { mentionUserIdsFromContent } from '@voice-room/shared/mentions';
 import { LOG_EVENTS } from '../lib/log-events.ts';
@@ -15,7 +14,7 @@ import { createAdminService } from '../domains/admin/admin.service.ts';
 import { createAdminAccountsService } from '../domains/admin/admin-accounts.service.ts';
 import { createAdminRoomsService } from '../domains/admin/admin-rooms.service.ts';
 import { createSessionCookies } from '../domains/account/session-cookie.ts';
-import type { createAdmissionService } from '../domains/admission/admission.service.ts';
+import type { AdmissionService } from '../domains/admission/admission.service.ts';
 import { createAvatarsService } from '../domains/media/avatars.service.ts';
 import { createContentRepository } from '../domains/messaging/content.repository.ts';
 import { createDirectMessagesService } from '../domains/messaging/direct-messages.service.ts';
@@ -35,19 +34,17 @@ import type { readApiConfig } from './config.ts';
 import type { LiveKit } from './livekit.ts';
 import type { RateLimits } from './rate-limits.ts';
 import type { RealtimeHub } from './realtime-hub.ts';
-import type { createServiceRegistry } from './service-registry.ts';
+import { databaseUnavailable, type createServiceRegistry } from './service-registry.ts';
 import { sessionAvatarColorKey, sessionChatPeerId, sessionDisplayName } from './session.ts';
 
 export interface DomainServiceDeps {
   config: ReturnType<typeof readApiConfig>;
-  env: NodeJS.ProcessEnv;
   services: ReturnType<typeof createServiceRegistry>;
   hub: RealtimeHub;
   liveKit: LiveKit;
   limits: RateLimits;
-  logger: () => Logger;
-  /** The admission service, built with the app (it needs the roster wait). */
-  admission: () => ReturnType<typeof createAdmissionService> | null;
+  logger: () => FastifyBaseLogger;
+  admission: Pick<AdmissionService, 'revokeForServerMute'>;
   /** What the realtime layer holds right now: the admin panel shows it. */
   liveNumbers: () => LiveNumbers;
   /** The accounts with a socket open right now. */
@@ -57,7 +54,11 @@ export interface DomainServiceDeps {
 export function createDomainServices(deps: DomainServiceDeps) {
   const { config, services, hub, liveKit, limits } = deps;
 
-  async function refreshPinsAfterMessageMutation(roomId: string, action: string, messageId: string): Promise<void> {
+  async function refreshPinsAfterMessageMutation(
+    roomId: string,
+    action: 'message-deleted' | 'message-edited',
+    messageId: string
+  ): Promise<void> {
     const service = services.getPinServices()?.service;
     if (!service?.refresh) return;
     try {
@@ -88,16 +89,9 @@ export function createDomainServices(deps: DomainServiceDeps) {
   const peerEviction = createPeerEviction({
     store: services.getRoomStore,
     runtime: () => hub.runtime(),
-    notifyPeer: (peer, event) => hub.presence.sendEvent(peer, event),
+    notifyPeer: (peer, event) => hub.presence.sendToPeer(peer, event),
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
-    detachVoiceConnections: (roomId, peerId) => {
-      for (const connection of hub.registry()?.connections.values() || []) {
-        if (connection.activeVoice?.roomId !== roomId || connection.activeVoice?.peerId !== peerId) continue;
-        connection.activeVoice = null;
-        connection.previewRoomIds.delete(roomId);
-        hub.registry()!.unregisterConnectionForRoom(connection, roomId);
-      }
-    },
+    detachVoiceConnections: (roomId, peerId) => hub.registry.detachVoicePeer(roomId, peerId),
     closePeer: (roomId, peerId, transportId, reason) => hub.presence.closePeer(roomId, peerId, transportId, reason),
     removeParticipant: (roomId, peerId) => liveKit.removeParticipant(roomId, peerId)
   });
@@ -106,23 +100,23 @@ export function createDomainServices(deps: DomainServiceDeps) {
     eviction: peerEviction,
     gatePrincipalForPeer: (roomId, peer) => hub.liveKitGatePrincipalForPeer(roomId, peer),
     livekitConfig: () => liveKit.config(),
-    revokeForServerMute: (input) => deps.admission()!.revokeForServerMute(input),
+    revokeForServerMute: (input) => deps.admission.revokeForServerMute(input),
     setParticipantMuted: (roomId, peerId, muted) => liveKit.setParticipantMuted(roomId, peerId, muted),
-    announcePeerUpdated: (room, peer) => {
-      const event: RoomPeerMessage = { type: 'peer-updated', peer: publicPeer(peer) };
-      hub.presence.broadcast(room, event);
-      hub.runtime()?.mirrorLegacyRoomEvent(room.id, event);
-    },
-    notifyPeer: (peer, event) => hub.presence.sendEvent(peer, event),
+    announcePeerUpdated: (room, peer) =>
+      hub.presence.publish(
+        room.id,
+        buildServerEnvelope('room.peer.updated', { roomId: room.id, peer: publicPeer(peer) })
+      ),
     maxBans: config.MAX_ROOM_BANS,
     logger: () => deps.logger()
   });
+  const content = createContentRepository();
   const roomChat = createRoomChatService({
     messages: services.getMessageService,
     readService: () => services.getHistoryServices().read,
     getRoom: hub.getRoom,
     findRoomBan: hub.findRoomBan,
-    prepareContent: (input) => createContentRepository().prepareWrite(input),
+    prepareContent: content.prepareWrite,
     mentionUserIds: mentionUserIdsFromContent,
     limiter: limits.roomChat,
     findUser: (userId) => services.getUserStore().getUserById(userId),
@@ -134,13 +128,13 @@ export function createDomainServices(deps: DomainServiceDeps) {
     projectReply: hub.projection.projectReply,
     identity: { chatPeerId: sessionChatPeerId, avatarColorKey: sessionAvatarColorKey, displayName: sessionDisplayName },
     directEmit: config.MESSAGE_DIRECT_EMIT_ENABLED,
-    broadcastChatMessage: (roomId, message) => hub.runtime()?.broadcastChatMessage(roomId, message),
-    broadcastRoomDetail: (roomId, event) => hub.runtime()?.broadcastRoomDetail?.(roomId, event),
+    broadcastChatMessage: (roomId, message) => hub.runtime().broadcastChatMessage(roomId, message),
+    broadcastRoomDetail: (roomId, event) => hub.runtime().broadcastRoomDetail(roomId, event),
     roomDetailEvent: buildServerEnvelope,
     scheduleLinkPreview: hub.linkPreviews.scheduleRoomLinkPreview,
     refreshPins: refreshPinsAfterMessageMutation,
     sendRoomSummaryToUser: async (roomId, userId) => {
-      await hub.runtime()?.sendRoomSummaryToUser(roomId, userId);
+      await hub.runtime().sendRoomSummaryToUser(roomId, userId);
     },
     logger: () => deps.logger()
   });
@@ -176,10 +170,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     readService: () => services.getHistoryServices().read,
     friends: services.getFriendStore,
     findUser: (userId) => services.getUserStore().getUserById(userId),
-    isDmMuted: async (userId, peerUserId) => {
-      const notifications = services.getNotificationPreferences();
-      return typeof notifications.isDmMuted === 'function' ? notifications.isDmMuted({ userId, peerUserId }) : false;
-    },
+    isDmMuted: (userId, peerUserId) => services.getNotificationPreferences().isDmMuted({ userId, peerUserId }),
     roomExists: async (roomId) => Boolean(await hub.getRoom(roomId)),
     expireRoomInvitations: (senderId, roomId) => hub.roomLifecycle.expireRoomInvitations(senderId, roomId),
     limiter: limits.dm,
@@ -199,7 +190,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     pushes: services.getPushSubscriptions,
     pushConfig: () => services.getPushService().config,
     pushLimiter: limits.pushSubscriptions,
-    setPresence: (userId, presenceStatus) => hub.registry()?.setUserPresenceStatus(userId, presenceStatus),
+    setPresence: (userId, presenceStatus) => hub.registry.setUserPresenceStatus(userId, presenceStatus),
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
     broadcastProfileToFriends: (user, log) => hub.broadcastUserProfileToFriends(user, { log })
   });
@@ -229,69 +220,44 @@ export function createDomainServices(deps: DomainServiceDeps) {
     }
   }
 
+  // Without a database (an app on fakes) these services fail with 503 internal_error.
+  const required = <T>(repository: T | null | undefined): T => {
+    if (!repository) throw databaseUnavailable();
+    return repository;
+  };
+
   const staff = createStaffService({
     namedSuperadminIds: config.PLATFORM_ADMIN_USER_IDS,
-    repository: () => {
-      const repository = services.getStaffRepository();
-      if (!repository) throw new Error('Staff roles require the database');
-      return repository;
-    },
-    actions: () => {
-      const repository = services.getAdminActionRepository();
-      if (!repository) throw new Error('Staff roles require the database');
-      return repository;
-    },
+    repository: () => required(services.getStaffRepository()),
+    actions: () => required(services.getAdminActionRepository()),
     siteOrigin: config.SITE_ORIGIN
   });
 
   const reports = createReportService({
-    repository: () => {
-      const repository = services.getReportRepository();
-      if (!repository) throw new Error('Reports require the database');
-      return repository;
-    },
+    repository: () => required(services.getReportRepository()),
     staff,
     canReadRoom: (roomId, userId) => services.getRoomStore().canUserReadRoomChat(roomId, userId),
-    removeRoomMessage: async (input) => {
-      const moderation = services.getModerationServices();
-      if (!moderation) throw new Error('Message removal requires the database');
-      return moderation.messageService.removeRoomMessageAsOperator(input);
-    },
+    removeRoomMessage: async (input) =>
+      required(services.getModerationServices()).messageService.removeRoomMessageAsOperator(input),
     removeDirectMessage: (input) => directMessages.removeAsOperator(input),
     reportsChanged: (filed) => void announceReports(filed)
   });
 
   const callFeedback = createCallFeedbackService({
-    repository: () => {
-      const repository = services.getCallFeedbackRepository();
-      if (!repository) throw new Error('Call feedback requires the database');
-      return repository;
-    },
+    repository: () => required(services.getCallFeedbackRepository()),
     staff
   });
 
   const admin = createAdminService({
     staff,
-    stats: () => {
-      const repository = services.getAdminStatsRepository();
-      if (!repository) throw new Error('Admin statistics require the database');
-      return repository;
-    },
-    systemSnapshots: () => {
-      const repository = services.getSystemSnapshotRepository();
-      if (!repository) throw new Error('Admin statistics require the database');
-      return repository;
-    },
+    stats: () => required(services.getAdminStatsRepository()),
+    systemSnapshots: () => required(services.getSystemSnapshotRepository()),
     live: deps.liveNumbers,
     livekitEnabled: () => deps.liveKit.config().enabled,
     version: packageJson.version,
     startedAt: Date.now()
   });
 
-  const required = <T>(repository: T | null | undefined): T => {
-    if (!repository) throw new Error('The admin panel requires the database');
-    return repository;
-  };
   const adminAccounts = createAdminAccountsService({
     staff,
     accounts: () => required(services.getAdminAccountsRepository()),
@@ -320,8 +286,14 @@ export function createDomainServices(deps: DomainServiceDeps) {
     repo: config.DESKTOP_RELEASE_REPO,
     cacheMs: config.DESKTOP_RELEASE_CACHE_MS,
     timeoutMs: config.DESKTOP_RELEASE_TIMEOUT_MS,
-    githubToken: (deps.env.GITHUB_TOKEN || '').trim() || undefined,
-    logger: { warn: (...args: unknown[]) => deps.logger().warn(...(args as [unknown])) }
+    githubToken: config.GITHUB_TOKEN || undefined,
+    // The process logger of the moment: the app's, once it started.
+    logger: {
+      get warn() {
+        const logger = deps.logger();
+        return logger.warn.bind(logger);
+      }
+    }
   });
 
   return {

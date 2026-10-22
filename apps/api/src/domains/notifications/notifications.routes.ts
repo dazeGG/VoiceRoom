@@ -47,13 +47,7 @@ export function registerNotificationRoutes(root: FastifyInstance, ctx: ApiContex
     async (request, reply) => {
       const userId = await signedIn(request, reply);
       if (!userId) return reply;
-      try {
-        return await notifications.list({ userId, cursor: request.query.cursor, limit: request.query.limit });
-      } catch (error) {
-        if ((error as { code?: unknown } | null)?.code === 'invalid_cursor')
-          return reply.code(400).send(failure('Invalid cursor', { code: 'invalid_cursor' }));
-        throw error;
-      }
+      return notifications.list({ userId, cursor: request.query.cursor, limit: request.query.limit });
     }
   );
 

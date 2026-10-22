@@ -6,6 +6,7 @@ process.env.LIVEKIT_API_KEY = 'test-key';
 process.env.LIVEKIT_API_SECRET = 'test-secret';
 
 import test from 'node:test';
+import type { PresencePeer } from '../src/domains/rooms/room-views.ts';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -14,9 +15,10 @@ import type http from 'node:http';
 const { createApiServer } = await import('../src/server.ts');
 const { openWs, joinVoiceRoom, sendWs, waitForWsType } = await import('./ws-harness.ts');
 import type { WsSession } from './ws-harness.ts';
-import type { PeerBanned } from '@voice-room/shared/contracts/rooms';
+import { PeerBanned } from '@voice-room/shared/contracts/rooms';
 import { dbRoom, storedUser, userSession, type Fakes } from './fakes/index.ts';
-import { request, socketDir, type ApiBody } from './fakes/server-process.ts';
+import type { Static, TSchema } from 'typebox';
+import { request, socketDir, type JsonResponse } from './fakes/server-process.ts';
 
 const OWNER_ID = '11111111-1111-4111-8111-111111111111';
 const TARGET_ID = '22222222-2222-4222-8222-222222222222';
@@ -111,7 +113,7 @@ function createModerationStore() {
       return false;
     },
     async getRoom(roomId) {
-      return roomId === ROOM_ID ? { ...room, peers: new Map() } : null;
+      return roomId === ROOM_ID ? { ...room, peers: new Map<string, PresencePeer>() } : null;
     },
     async invalidatePeerIdentity({ roomId, peerId } = {}) {
       const identity = identities.get(`${roomId}:${peerId}`);
@@ -157,19 +159,31 @@ function createUsers(): Fakes['users'] {
   };
 }
 
-function requestJson<Body = ApiBody>(
+type JsonRequest = { body?: unknown; cookie?: string; ip?: string };
+
+function requestJson(
   socketPath: string,
   method: string,
   pathname: string,
-  { body, cookie = '', ip = '' }: { body?: unknown; cookie?: string; ip?: string } = {}
-) {
-  return request<Body>(socketPath, {
-    method,
-    pathname,
-    body,
-    cookie: cookie || undefined,
-    headers: ip ? { 'X-Forwarded-For': ip } : {}
-  });
+  options?: JsonRequest
+): Promise<JsonResponse>;
+function requestJson<const Schema extends TSchema>(
+  socketPath: string,
+  method: string,
+  pathname: string,
+  options: JsonRequest,
+  schema: Schema
+): Promise<JsonResponse<Static<Schema>>>;
+function requestJson(
+  socketPath: string,
+  method: string,
+  pathname: string,
+  { body, cookie = '', ip = '' }: JsonRequest = {},
+  schema?: TSchema
+): Promise<JsonResponse<unknown>> {
+  const headers: Record<string, string> = ip ? { 'X-Forwarded-For': ip } : {};
+  const sent = { method, pathname, body, cookie: cookie || undefined, headers };
+  return schema ? request(socketPath, sent, schema) : request(socketPath, sent);
 }
 
 async function startServer() {
@@ -287,11 +301,13 @@ test('kick and ban lifecycle enforces join, token, chat, preview, and undo', asy
 
   const banStart = target.frames.length;
   const ownerFramesBeforeBan = owner.frames.length;
-  const ban = await requestJson<PeerBanned>(fixture.socketPath, 'POST', `/api/rooms/${ROOM_ID}/ban`, {
-    body: { peerId: freshPeerId },
-    cookie: OWNER_COOKIE,
-    ip: OWNER_IP
-  });
+  const ban = await requestJson(
+    fixture.socketPath,
+    'POST',
+    `/api/rooms/${ROOM_ID}/ban`,
+    { body: { peerId: freshPeerId }, cookie: OWNER_COOKIE, ip: OWNER_IP },
+    PeerBanned
+  );
   assert.equal(ban.status, 201);
   assert.match(ban.body.banId, /^[0-9a-f-]{36}$/i);
   const storedAccountBan = fixture.store.bans.get(ban.body.banId);
@@ -426,11 +442,13 @@ test('kick and ban lifecycle enforces join, token, chat, preview, and undo', asy
     name: 'Guest'
   });
 
-  const guestBan = await requestJson<PeerBanned>(fixture.socketPath, 'POST', `/api/rooms/${ROOM_ID}/ban`, {
-    body: { peerId: guestPeerId },
-    cookie: OWNER_COOKIE,
-    ip: OWNER_IP
-  });
+  const guestBan = await requestJson(
+    fixture.socketPath,
+    'POST',
+    `/api/rooms/${ROOM_ID}/ban`,
+    { body: { peerId: guestPeerId }, cookie: OWNER_COOKIE, ip: OWNER_IP },
+    PeerBanned
+  );
   assert.equal(guestBan.status, 201);
   const storedGuestBan = fixture.store.bans.get(guestBan.body.banId);
   assert.equal(storedGuestBan?.userId, null);

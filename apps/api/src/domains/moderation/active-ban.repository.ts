@@ -1,23 +1,20 @@
-import crypto from 'node:crypto';
-import { sql, type ExpressionBuilder } from 'kysely';
+import { sql, type ExpressionBuilder, type Selectable } from 'kysely';
 import type pg from 'pg';
+import { isArray, isRecord } from '@voice-room/shared/guards';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
-import type { DB } from '../../platform/db/schema.ts';
+import type { DB, RoomBans } from '../../platform/db/schema.ts';
+import { createRowId } from '../../platform/db/ids.ts';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 import { storedIpKey, type IpKeyOf } from '../../lib/ip-key.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Client = QueryClient | null | undefined;
 type TimeInput = Date | number | string;
 
-type BanRow = {
-  id: string;
-  room_id: string;
-  user_id: string | null;
-  ip: string | null;
-  created_at: Date | string;
-  expires_at: Date | string | null;
-  metadata: Record<string, unknown> | null;
-};
+type BanRow = Pick<
+  Selectable<RoomBans>,
+  'id' | 'room_id' | 'user_id' | 'ip' | 'created_at' | 'expires_at' | 'metadata'
+>;
 
 export type ActiveBanRecord = {
   id: string;
@@ -38,12 +35,6 @@ function toDate(value: unknown): Date {
   return new Date(Number.isFinite(numeric) ? numeric : Date.now());
 }
 
-function toMillis(value: unknown): number | null {
-  if (value instanceof Date) return value.getTime();
-  const parsed = Date.parse(value as string);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 function mapActiveBan(row: BanRow | null | undefined): ActiveBanRecord | null {
   if (!row) return null;
   return {
@@ -51,9 +42,9 @@ function mapActiveBan(row: BanRow | null | undefined): ActiveBanRecord | null {
     roomId: row.room_id,
     userId: row.user_id || null,
     ip: row.ip || '',
-    createdAt: toMillis(row.created_at),
-    expiresAt: row.expires_at ? toMillis(row.expires_at) : null,
-    metadata: row.metadata || {}
+    createdAt: epochMillis(row.created_at),
+    expiresAt: row.expires_at ? epochMillis(row.expires_at) : null,
+    metadata: isRecord(row.metadata) ? row.metadata : {}
   };
 }
 
@@ -63,14 +54,59 @@ function active(at: TimeInput) {
     eb.and([eb('revoked_at', 'is', null), eb.or([eb('expires_at', 'is', null), eb('expires_at', '>', toDate(at))])]);
 }
 
-// A guest is banned by the key of their address (lib/ip-key.ts), the same key
-// their stays in voice keep: the address itself never reaches the table.
+// The one writer of room_bans. The caller passes the stored principal: an
+// account ban has no address, a guest ban has the address key (lib/ip-key.ts).
+// updated_at is the moment of the ban, and metadata is always an object.
+async function insertRoomBan(
+  db: Database,
+  {
+    roomId,
+    userId = null,
+    ip = '',
+    expiresAt = null,
+    metadata = {},
+    reason = '',
+    idempotencyKey = null,
+    at
+  }: {
+    roomId?: string | undefined;
+    userId?: string | null;
+    ip?: string;
+    expiresAt?: TimeInput | null | undefined;
+    metadata?: unknown;
+    reason?: string;
+    idempotencyKey?: string | null;
+    at: TimeInput;
+  }
+): Promise<Selectable<RoomBans> | undefined> {
+  const accountId = typeof userId === 'string' && userId.trim() ? userId.trim() : null;
+  const storedIp = accountId ? '' : ip;
+  if (!roomId || (!accountId && !storedIp)) return undefined;
+  const createdAt = toDate(at);
+  return db
+    .insertInto('room_bans')
+    .values({
+      id: createRowId(),
+      room_id: roomId,
+      user_id: accountId,
+      ip: storedIp,
+      created_at: createdAt,
+      updated_at: createdAt,
+      expires_at: expiresAt == null ? null : toDate(expiresAt),
+      metadata: JSON.stringify(isRecord(metadata) ? metadata : {}),
+      reason,
+      idempotency_key: idempotencyKey
+    })
+    .returningAll()
+    .executeTakeFirst();
+}
+
 function createActiveBanRepository({
   pool,
   ipKeyOf,
   now = Date.now
 }: {
-  pool?: QueryClient | null;
+  pool?: QueryClient | null | undefined;
   ipKeyOf: IpKeyOf;
   now?: () => number;
 }) {
@@ -92,7 +128,7 @@ function createActiveBanRepository({
     at = now(),
     client
   }: {
-    roomId?: string;
+    roomId?: string | undefined;
     userId?: unknown;
     ip?: unknown;
     at?: TimeInput;
@@ -106,18 +142,18 @@ function createActiveBanRepository({
       .selectAll()
       .where('room_id', '=', roomId)
       .where(active(at))
-      .where((eb) => {
-        const matches = [];
-        if (normalizedUserId) matches.push(eb('user_id', '=', normalizedUserId));
-        if (normalizedIp) matches.push(eb.and([eb('user_id', 'is', null), eb('ip', '=', normalizedIp)]));
-        return eb.or(matches);
-      })
+      .where((eb) =>
+        eb.or([
+          ...(normalizedUserId ? [eb('user_id', '=', normalizedUserId)] : []),
+          ...(normalizedIp ? [eb.and([eb('user_id', 'is', null), eb('ip', '=', normalizedIp)])] : [])
+        ])
+      )
       .orderBy(sql`CASE WHEN user_id IS NOT NULL THEN 0 ELSE 1 END`)
       .orderBy('created_at', 'desc')
       .orderBy('id', 'desc')
       .limit(1)
       .executeTakeFirst();
-    return mapActiveBan(row as BanRow | undefined);
+    return mapActiveBan(row);
   }
 
   async function countActive(
@@ -147,7 +183,7 @@ function createActiveBanRepository({
   } = {}): Promise<string[]> {
     const normalizedUserIds = Array.from(
       new Set(
-        (Array.isArray(userIds) ? userIds : [])
+        (isArray(userIds) ? userIds : [])
           .filter((userId): userId is string => typeof userId === 'string' && Boolean(userId.trim()))
           .map((userId) => userId.trim())
       )
@@ -182,21 +218,8 @@ function createActiveBanRepository({
     client?: Client;
   } = {}): Promise<ActiveBanRecord | null> {
     const principal = normalizePrincipal({ userId, ip });
-    if (!roomId || (!principal.userId && !principal.ip)) return null;
-    const row = await on(client)
-      .insertInto('room_bans')
-      .values({
-        id: crypto.randomUUID(),
-        room_id: roomId,
-        user_id: principal.userId,
-        ip: principal.ip,
-        created_at: toDate(at),
-        expires_at: expiresAt == null ? null : toDate(expiresAt),
-        metadata: JSON.stringify(metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata : {})
-      })
-      .returningAll()
-      .executeTakeFirst();
-    return mapActiveBan(row as BanRow | undefined);
+    const row = await insertRoomBan(on(client), { roomId, ...principal, expiresAt, metadata, at });
+    return mapActiveBan(row);
   }
 
   // Bans written before 2.10.4 hold the address itself. SQL cannot compute the
@@ -238,4 +261,4 @@ function createActiveBanRepository({
 
 export type ActiveBanRepository = ReturnType<typeof createActiveBanRepository>;
 
-export { createActiveBanRepository };
+export { createActiveBanRepository, insertRoomBan };

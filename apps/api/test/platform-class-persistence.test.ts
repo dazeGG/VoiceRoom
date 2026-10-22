@@ -7,7 +7,9 @@ import { runner } from 'node-pg-migrate';
 import { test } from 'node:test';
 import { classifyPlatform } from '@voice-room/shared/platform-class';
 import { createPushSubscriptionRepository } from '../src/domains/notifications/push-subscription.repository.ts';
+import { Type } from 'typebox';
 import { createTestDatabase } from './db-harness.ts';
+import { AnyRow, queryRow, queryRows } from './helpers/checked.ts';
 
 const MIGRATIONS_DIR = path.resolve(import.meta.dirname, '../src/migrations');
 const BASE_TIMESTAMP = 20260711130000;
@@ -57,21 +59,25 @@ test(
     t.after(cleanup);
 
     const applied = await migrate(databaseUrl, PLATFORM_TIMESTAMP);
-    assert.ok(applied.some((migration) => String(migration?.name || migration).startsWith(String(PLATFORM_TIMESTAMP))));
+    assert.ok(applied.some((migration) => migration.name.startsWith(String(PLATFORM_TIMESTAMP))));
     assert.deepEqual(await migrate(databaseUrl, PLATFORM_TIMESTAMP), []);
 
     await withClient(databaseUrl, async (client) => {
-      const type = await client.query(
+      const type = await queryRows(
+        client,
+        Type.Object({ enumlabel: Type.String() }),
         `SELECT enumlabel FROM pg_enum JOIN pg_type ON pg_type.oid = enumtypid WHERE typname = 'push_subscription_platform_class' ORDER BY enumsortorder`
       );
       assert.deepEqual(
-        type.rows.map(({ enumlabel }: { enumlabel: string }) => enumlabel),
+        type.map(({ enumlabel }) => enumlabel),
         ['desktop', 'mobile', 'unknown']
       );
-      const columns = await client.query(
+      const columns = await queryRows(
+        client,
+        Type.Object({ column_name: Type.String() }),
         `SELECT column_name FROM information_schema.columns WHERE table_name = 'push_subscriptions'`
       );
-      assert.ok(columns.rows.some(({ column_name }: { column_name: string }) => column_name === 'platform_class'));
+      assert.ok(columns.some(({ column_name }) => column_name === 'platform_class'));
       await client.query(
         `SELECT id, user_id, endpoint, p256dh, auth, created_at, last_success_at, metadata FROM push_subscriptions`
       );
@@ -79,9 +85,9 @@ test(
 
     await migrate(databaseUrl, 1, 'down');
     await withClient(databaseUrl, async (client) => {
-      const {
-        rows: [{ column_exists }]
-      } = await client.query(
+      const { column_exists } = await queryRow(
+        client,
+        Type.Object({ column_exists: Type.Boolean() }),
         `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'push_subscriptions' AND column_name = 'platform_class') AS column_exists`
       );
       assert.equal(column_exists, false);
@@ -132,21 +138,24 @@ test(
     assert.ok(durationMs <= 5000, `10k migration took ${durationMs.toFixed(1)}ms`);
 
     await withClient(databaseUrl, async (client) => {
-      const {
-        rows: [counts]
-      } = await client.query(
+      const counts = await queryRow(
+        client,
+        AnyRow,
         `SELECT count(*)::int AS total, count(*) FILTER (WHERE platform_class = 'mobile')::int AS mobile, count(*) FILTER (WHERE platform_class = 'desktop')::int AS desktop, count(*) FILTER (WHERE platform_class = 'unknown')::int AS unknown FROM push_subscriptions`
       );
       assert.deepEqual(counts, { total: 10000, mobile: 4286, desktop: 4286, unknown: 1428 });
-      const {
-        rows: [{ raw_count }]
-      } = await client.query(`SELECT count(*)::int AS raw_count FROM push_subscriptions WHERE metadata ?| $1::text[]`, [
-        SIGNAL_KEYS
-      ]);
+      const { raw_count } = await queryRow(
+        client,
+        Type.Object({ raw_count: Type.Integer() }),
+        `SELECT count(*)::int AS raw_count FROM push_subscriptions WHERE metadata ?| $1::text[]`,
+        [SIGNAL_KEYS]
+      );
       assert.equal(raw_count, 0);
-      const {
-        rows: [{ retained }]
-      } = await client.query(`SELECT metadata->>'retained' AS retained FROM push_subscriptions WHERE id = 'g17-3'`);
+      const { retained } = await queryRow(
+        client,
+        Type.Object({ retained: Type.String() }),
+        `SELECT metadata->>'retained' AS retained FROM push_subscriptions WHERE id = 'g17-3'`
+      );
       assert.equal(retained, 'ch-desktop');
     });
   }
@@ -224,21 +233,21 @@ test(
     await blocker.end();
 
     await withClient(databaseUrl, async (client) => {
-      const {
-        rows: [{ column_exists }]
-      } = await client.query(
+      const { column_exists } = await queryRow(
+        client,
+        Type.Object({ column_exists: Type.Boolean() }),
         `SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'push_subscriptions' AND column_name = 'platform_class') AS column_exists`
       );
-      const {
-        rows: [{ type_exists }]
-      } = await client.query(
+      const { type_exists } = await queryRow(
+        client,
+        Type.Object({ type_exists: Type.Boolean() }),
         `SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'push_subscription_platform_class') AS type_exists`
       );
       assert.equal(column_exists, true);
       assert.equal(type_exists, true);
-      const {
-        rows: [{ has_signal }]
-      } = await client.query(
+      const { has_signal } = await queryRow(
+        client,
+        Type.Object({ has_signal: Type.Boolean() }),
         `SELECT metadata ? 'desktopBridge' AS has_signal FROM push_subscriptions WHERE id='locked-sub'`
       );
       assert.equal(has_signal, true);

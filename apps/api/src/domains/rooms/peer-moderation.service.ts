@@ -3,16 +3,17 @@
 // that the room exists and the actor owns it; this returns what happened and
 // leaves the HTTP answer to the route.
 
-import type { RoomPeerMessage } from '../../realtime/legacy-events.ts';
 import type { Logger } from 'pino';
-import type { GatePrincipal } from '../admission/admission.service.ts';
+import type { GatePrincipal } from '../admission/gate-principal.ts';
 import { isGatePrincipal } from '../admission/gate-principal.ts';
 import type { ServerMuteResult } from '../admission/livekit-admin.ts';
 import type { LiveKitConfig } from '../admission/livekit-config.ts';
 import type { PeerEviction } from './peer-eviction.ts';
 import type { LiveRoom, PresencePeer } from './room-views.ts';
+import { codeOf } from '../../platform/error-code.ts';
 
-type BanResult = { status: 'created' | 'cap_exceeded' | string; ban?: { id: string } | null; revocations?: unknown[] };
+// 'created', 'cap_exceeded' or another refusal.
+type BanResult = { status: string; ban?: { id: string } | null; revocations?: unknown[] };
 
 export interface PeerModerationStore {
   setRoomServerMute(input: {
@@ -22,13 +23,15 @@ export interface PeerModerationStore {
   }): Promise<{ status: string }>;
   clearRoomServerMute(input: { roomId: string; principal: GatePrincipal }): Promise<{ status: string }>;
   createRoomBan(input: { roomId: string; userId: string | null; ip: string; maxBans: number }): Promise<BanResult>;
-  createRoomBanWithLiveKitGateRevocations?(input: {
-    roomId: string;
-    userId: string | null;
-    ip: string;
-    maxBans: number;
-    principals: GatePrincipal[];
-  }): Promise<BanResult>;
+  createRoomBanWithLiveKitGateRevocations?:
+    | ((input: {
+        roomId: string;
+        userId: string | null;
+        ip: string;
+        maxBans: number;
+        principals: GatePrincipal[];
+      }) => Promise<BanResult>)
+    | undefined;
   deleteRoomBan(input: { roomId: string; banId: string }): Promise<{ status: string }>;
 }
 
@@ -46,7 +49,6 @@ export interface PeerModerationDeps {
   setParticipantMuted(roomId: string, peerId: string, muted: boolean): Promise<ServerMuteResult>;
   /** Tells the room (and its preview watchers) that a peer changed. */
   announcePeerUpdated(room: LiveRoom, peer: PresencePeer): void;
-  notifyPeer(peer: PresencePeer, event: RoomPeerMessage): void;
   maxBans: number;
   logger(): Pick<Logger, 'error'>;
 }
@@ -62,10 +64,14 @@ export type BanOutcome =
       status: TargetRefusal | 'ban_limit' | 'ban_rejected' | 'ban_failed' | 'principal_missing' | 'revoke_unavailable';
     };
 
-type BanError = Error & { code?: string; rollbackTerminal?: boolean };
-
-function banError(code: 'room_ban_limit' | 'room_ban_failed'): BanError {
+function banError(code: 'room_ban_limit' | 'room_ban_failed'): Error {
   return Object.assign(new Error(code), { code, rollbackTerminal: true });
+}
+
+/** A failed ban write, marked so the reconnect lease is not rolled back over it. */
+function markRollbackTerminal(failure: unknown): Error {
+  const error = failure instanceof Error ? failure : new Error('Room ban failed', { cause: failure });
+  return Object.assign(error, { rollbackTerminal: true });
 }
 
 export function createPeerModerationService(deps: PeerModerationDeps) {
@@ -144,11 +150,10 @@ export function createPeerModerationService(deps: PeerModerationDeps) {
         if (!isGatePrincipal(principal)) return { status: 'principal_missing' };
         principals.push(principal);
       }
-      const createWithRevocations = store.createRoomBanWithLiveKitGateRevocations;
-      if (principals.length === 0 || typeof createWithRevocations !== 'function')
-        return { status: 'revoke_unavailable' };
+      const createWithRevocations = store.createRoomBanWithLiveKitGateRevocations?.bind(store);
+      if (principals.length === 0 || !createWithRevocations) return { status: 'revoke_unavailable' };
       persist = () =>
-        createWithRevocations.call(store, {
+        createWithRevocations({
           roomId,
           userId: bannedUserId,
           ip: bannedIp,
@@ -159,17 +164,16 @@ export function createPeerModerationService(deps: PeerModerationDeps) {
       persist = () => store.createRoomBan({ roomId, userId: bannedUserId, ip: bannedIp, maxBans: deps.maxBans });
     }
 
-    let result: BanResult | null = null;
+    // Set by the ban write that runs inside finalize.
+    const written: { result: BanResult | null } = { result: null };
     try {
       await deps.eviction.finalize(room, matchingPeers, 'room.banned', {
         gateAlreadyRevoked: strictGate,
         beforeFinalize: async () => {
-          try {
-            result = await persist();
-          } catch (error) {
-            (error as BanError).rollbackTerminal = true;
-            throw error;
-          }
+          const result = await persist().catch((error: unknown) => {
+            throw markRollbackTerminal(error);
+          });
+          written.result = result;
           if (result.status === 'cap_exceeded') throw banError('room_ban_limit');
           const revoked = !strictGate || (Array.isArray(result.revocations) && result.revocations.length > 0);
           if (!result.ban || !revoked) throw banError('room_ban_failed');
@@ -177,16 +181,16 @@ export function createPeerModerationService(deps: PeerModerationDeps) {
         }
       });
     } catch (error) {
-      const code = (error as BanError | null)?.code;
+      const code = codeOf(error);
       if (code === 'room_ban_limit') return { status: 'ban_limit' };
       if (code === 'room_ban_failed') return { status: 'ban_rejected' };
-      const persisted = result as BanResult | null;
+      const persisted = written.result;
       if (!persisted?.ban) return { status: 'ban_failed' };
       // The ban is durable and peer teardown is terminal even when a step of
       // it failed; the route only reports it.
       return { status: 'banned', banId: persisted.ban.id, cleanupFailed: true };
     }
-    const persisted = result as BanResult | null;
+    const persisted = written.result;
     if (!persisted?.ban) return { status: 'ban_failed' };
     return { status: 'banned', banId: persisted.ban.id, cleanupFailed: false };
   }

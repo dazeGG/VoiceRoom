@@ -1,7 +1,8 @@
-import crypto from 'node:crypto';
 import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
+import { isOneOf, isRecord } from '@voice-room/shared/guards';
 import { kyselyOn } from '../../platform/db/kysely.ts';
+import { createRowId } from '../../platform/db/ids.ts';
 import type { PushSubscriptions } from '../../platform/db/schema.ts';
 import { classifyPlatform, PLATFORM_CLASSES } from '@voice-room/shared/platform-class';
 import type { PlatformClass } from '@voice-room/shared/platform-class';
@@ -18,10 +19,6 @@ export type PushSubscriptionRecord = {
   metadata: Metadata;
 };
 
-function createRowId(): string {
-  return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
-}
-
 function mapSubscription(row: Selectable<PushSubscriptions>): PushSubscriptionRecord {
   return {
     id: row.id,
@@ -31,7 +28,7 @@ function mapSubscription(row: Selectable<PushSubscriptions>): PushSubscriptionRe
     createdAt: row.created_at.getTime(),
     lastSuccessAt: row.last_success_at?.getTime() ?? null,
     platformClass: row.platform_class || PLATFORM_CLASSES.unknown,
-    metadata: (row.metadata as Metadata | null) || {}
+    metadata: isRecord(row.metadata) ? row.metadata : {}
   };
 }
 
@@ -50,7 +47,7 @@ const PLATFORM_SIGNAL_METADATA_KEYS = new Set([
 ]);
 
 function sanitizeMetadata(metadata: unknown): Metadata {
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return {};
+  if (!isRecord(metadata)) return {};
 
   const sanitized: Metadata = {};
   for (const [key, value] of Object.entries(metadata)) {
@@ -63,21 +60,20 @@ function sanitizeMetadata(metadata: unknown): Metadata {
 }
 
 function normalizePlatformClass(value: unknown): PlatformClass {
-  return (Object.values(PLATFORM_CLASSES) as unknown[]).includes(value)
-    ? (value as PlatformClass)
-    : PLATFORM_CLASSES.unknown;
+  return isOneOf(Object.values(PLATFORM_CLASSES), value) ? value : PLATFORM_CLASSES.unknown;
 }
 
 function resolvePlatformClass(metadata: Metadata | null | undefined): PlatformClass {
   const explicit = normalizePlatformClass(metadata?.platformClass);
   if (explicit !== PLATFORM_CLASSES.unknown || metadata?.platformClass === PLATFORM_CLASSES.unknown) return explicit;
+  const touchPoints = metadata?.maxTouchPoints;
 
   return classifyPlatform({
     desktopBridge: metadata?.desktopBridge === true,
     userAgentDataMobile: typeof metadata?.userAgentDataMobile === 'boolean' ? metadata.userAgentDataMobile : undefined,
     userAgent: typeof metadata?.userAgent === 'string' ? metadata.userAgent : '',
     platform: typeof metadata?.platform === 'string' ? metadata.platform : '',
-    maxTouchPoints: Number.isFinite(metadata?.maxTouchPoints as number) ? Number(metadata!.maxTouchPoints) : 0
+    maxTouchPoints: typeof touchPoints === 'number' && Number.isFinite(touchPoints) ? touchPoints : 0
   });
 }
 

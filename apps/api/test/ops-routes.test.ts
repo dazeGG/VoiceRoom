@@ -7,6 +7,9 @@ import test, { type TestContext } from 'node:test';
 import type { LightMyRequestResponse } from 'fastify';
 import assert from 'node:assert/strict';
 import type { StoreOverrides } from '../src/app/service-registry.ts';
+import { Failure } from '@voice-room/shared/contracts/http';
+import { Health, PowChallenge } from '@voice-room/shared/contracts/ops';
+import { checked } from './helpers/checked.ts';
 
 const { createApiApp } = await import('../src/server.ts');
 const { createDesktopReleaseService, isDesktopReleaseDownloadUrl, normalizeRelease } =
@@ -59,11 +62,11 @@ test('health keeps its public shape, headers and request id', async (t) => {
   const app = createApp(t);
   const response = await app.inject({ method: 'GET', url: '/api/healthz' });
   assert.equal(response.statusCode, 200);
-  const body = response.json();
+  const body = checked(Health, response.json());
   assert.equal(body.ok, true);
   assert.equal(typeof body.livekit, 'boolean');
   assert.deepEqual(Object.keys(body).sort(), ['livekit', 'ok']);
-  assert.equal(body.livekitUrl, undefined, 'the internal LiveKit address is not public');
+  assert.equal('livekitUrl' in body, false, 'the internal LiveKit address is not public');
   assertSecurityHeaders(response);
 });
 
@@ -71,7 +74,7 @@ test('the proof-of-work challenge carries what the client solves', async (t) => 
   const app = createApp(t);
   const response = await app.inject({ method: 'GET', url: '/api/pow-challenge' });
   assert.equal(response.statusCode, 200);
-  const body = response.json();
+  const body = checked(PowChallenge, response.json());
   if (body.required) {
     assert.equal(body.algorithm, 'sha256');
     assert.equal(typeof body.challenge, 'string');
@@ -100,7 +103,7 @@ test('a malformed JSON body fails with the shared failure shape', async (t) => {
     payload: '{"events":'
   });
   assert.equal(response.statusCode, 400);
-  const body = response.json();
+  const body = checked(Failure, response.json());
   assert.equal(body.ok, false);
   assert.equal(typeof body.error, 'string');
 });

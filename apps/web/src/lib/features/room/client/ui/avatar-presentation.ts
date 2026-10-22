@@ -3,8 +3,10 @@ import { getInitials } from '../core/utils';
 import type { Participant } from '../core/types';
 
 export function getAvatarPresentation(
-  participant: Pick<Participant, 'avatarColorKey' | 'name' | 'isLocal'> &
-    Partial<Pick<Participant, 'avatarAccent' | 'avatarUrl'>>
+  participant: Pick<Participant, 'avatarColorKey' | 'name' | 'isLocal'> & {
+    avatarAccent?: Participant['avatarAccent'] | undefined;
+    avatarUrl?: Participant['avatarUrl'] | undefined;
+  }
 ): {
   background: string;
   foreground: string;

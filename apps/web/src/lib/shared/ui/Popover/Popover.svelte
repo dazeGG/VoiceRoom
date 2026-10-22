@@ -1,7 +1,3 @@
-<script lang="ts" module>
-  let popoverPanelCounter = 0;
-</script>
-
 <script lang="ts">
   import { tick } from 'svelte';
   import { parsePlacement, resolvePopoverPlacement, viewportSpaceAroundTrigger } from './popover-placement';
@@ -32,7 +28,8 @@
     content
   }: PopoverProps = $props();
 
-  const panelId = `popover-panel-${++popoverPanelCounter}`;
+  const uid = $props.id();
+  const panelId = `popover-panel-${uid}`;
   let root = $state<HTMLElement | null>(null);
   let panel = $state<HTMLElement | null>(null);
   let resolvedPlacement = $state<PopoverPlacement>('bottom-end');

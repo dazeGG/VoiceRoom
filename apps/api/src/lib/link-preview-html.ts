@@ -35,19 +35,19 @@ function decodeEntities(text: string): string {
       const valid = Number.isInteger(code) && code > 0 && code <= 0x10ffff && (code < 0xd800 || code > 0xdfff);
       return valid ? String.fromCodePoint(code) : '';
     }
-    return Object.hasOwn(NAMED_ENTITIES, body.toLowerCase()) ? (NAMED_ENTITIES[body.toLowerCase()] as string) : entity;
+    return (Object.hasOwn(NAMED_ENTITIES, body.toLowerCase()) && NAMED_ENTITIES[body.toLowerCase()]) || entity;
   });
 }
 
-function clean(value: unknown): string {
-  return decodeEntities(String(value)).replace(/\s+/g, ' ').trim();
+function clean(value: string): string {
+  return decodeEntities(value).replace(/\s+/g, ' ').trim();
 }
 
 function parseAttributes(tag: string): Map<string, string> {
   const attributes = new Map<string, string>();
   const inner = tag.replace(/^<\s*[a-z]+/i, '').replace(/\/?\s*>$/, '');
   for (const match of inner.matchAll(/([^\s"'<>/=]+)(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g)) {
-    const name = (match[1] as string).toLowerCase();
+    const name = (match[1] ?? '').toLowerCase();
     if (!attributes.has(name)) attributes.set(name, match[2] ?? match[3] ?? match[4] ?? '');
   }
   return attributes;
@@ -63,8 +63,7 @@ function resolveHttpUrl(value: string, base: string | URL | undefined): string |
   }
 }
 
-function extractLinkPreviewMetadata(html: unknown, pageUrl?: string | URL): LinkPreviewMetadata {
-  const source = String(html || '');
+function extractLinkPreviewMetadata(source: string, pageUrl?: string | URL): LinkPreviewMetadata {
   const headEnd = source.search(/<\/head\s*>/i);
   const head = source.slice(0, headEnd >= 0 ? headEnd : HEAD_SCAN_LIMIT).slice(0, HEAD_SCAN_LIMIT);
   const meta = new Map<string, string>();
@@ -78,7 +77,7 @@ function extractLinkPreviewMetadata(html: unknown, pageUrl?: string | URL): Link
   const pick = (...keys: string[]): string => keys.map((key) => meta.get(key)).find(Boolean) || '';
   const titleTag = /<title\b[^>]*>([\s\S]*?)<\/title\s*>/i.exec(head);
   return {
-    title: pick('og:title', 'twitter:title') || (titleTag ? clean(titleTag[1]) : ''),
+    title: pick('og:title', 'twitter:title') || (titleTag ? clean(titleTag[1] ?? '') : ''),
     description: pick('og:description', 'twitter:description', 'description'),
     siteName: pick('og:site_name', 'application-name'),
     imageUrl: resolveHttpUrl(
@@ -90,12 +89,12 @@ function extractLinkPreviewMetadata(html: unknown, pageUrl?: string | URL): Link
 
 // Many Russian sites still serve windows-1251, declared either in the
 // Content-Type header or in a <meta> tag near the top of the page.
-function decodeHtmlBody(buffer: Buffer, contentType: unknown): string {
-  const declared = /charset\s*=\s*"?([\w.:-]+)"?/i.exec(String(contentType || ''));
-  let charset = declared ? (declared[1] as string) : '';
+function decodeHtmlBody(buffer: Buffer, contentType: string): string {
+  const declared = /charset\s*=\s*"?([\w.:-]+)"?/i.exec(contentType);
+  let charset = declared?.[1] ?? '';
   if (!charset) {
     const meta = /<meta[^>]+charset\s*=\s*["']?([\w.:-]+)/i.exec(buffer.subarray(0, 4096).toString('latin1'));
-    charset = meta ? (meta[1] as string) : 'utf-8';
+    charset = meta?.[1] ?? 'utf-8';
   }
   try {
     return new TextDecoder(charset.toLowerCase()).decode(buffer);

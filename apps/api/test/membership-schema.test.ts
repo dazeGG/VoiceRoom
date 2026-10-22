@@ -1,10 +1,11 @@
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import { test } from 'node:test';
 import { runMigrations } from '../src/lib/migrate.ts';
+import { Type } from 'typebox';
 import { createTestDatabase } from './db-harness.ts';
+import { queryRows } from './helpers/checked.ts';
+import * as membershipMigration from '../src/migrations/20260615140000_create_room_memberships_and_bookmarks.cjs';
 
 test(
   'G43-A01 room_memberships is an active-only unique room/user relation',
@@ -18,23 +19,30 @@ test(
       await cleanup();
     });
 
-    const columns = await pool.query(`
+    const columns = await queryRows(
+      pool,
+      Type.Object({ column_name: Type.String() }),
+      `
     SELECT column_name FROM information_schema.columns
     WHERE table_schema = 'public' AND table_name = 'room_memberships'
-  `);
-    const names = new Set(columns.rows.map((row) => row.column_name));
+  `
+    );
+    const names = new Set(columns.map((row) => row.column_name));
     assert.equal(names.has('deleted_at'), false);
     assert.equal(names.has('left_at'), false);
-    const unique = await pool.query(`
+    const unique = await queryRows(
+      pool,
+      Type.Object({ indexdef: Type.String() }),
+      `
     SELECT indexdef FROM pg_indexes
     WHERE schemaname = 'public' AND tablename = 'room_memberships'
-  `);
-    assert.ok(unique.rows.some((row) => /UNIQUE.*\(room_id, user_id\)/i.test(row.indexdef)));
+  `
+    );
+    assert.ok(unique.some((row) => /UNIQUE.*\(room_id, user_id\)/i.test(row.indexdef)));
   }
 );
 
 test('G43-A02 no later membership-history migration exists', () => {
-  const migration = require('../src/migrations/20260615140000_create_room_memberships_and_bookmarks.cjs');
-  assert.equal(typeof migration.up, 'function');
-  assert.equal(typeof migration.down, 'function');
+  assert.equal(typeof membershipMigration.up, 'function');
+  assert.equal(typeof membershipMigration.down, 'function');
 });

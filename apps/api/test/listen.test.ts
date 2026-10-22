@@ -1,3 +1,4 @@
+import { codeOf } from '../src/platform/error-code.ts';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -8,7 +9,7 @@ import type { AddressInfo } from 'node:net';
 import { startApiListener } from '../src/lib/listen.ts';
 
 type ErrorHandler = (error: NodeJS.ErrnoException) => void;
-type TcpAddress = { address: string; port: number };
+type TcpAddress = AddressInfo;
 
 class FakeServer {
   calls: unknown[][];
@@ -19,7 +20,7 @@ class FakeServer {
 
   constructor({
     socketError = null,
-    tcpAddress = { address: '127.0.0.1', port: 4321 }
+    tcpAddress = { address: '127.0.0.1', family: 'IPv4', port: 4321 }
   }: { socketError?: NodeJS.ErrnoException | null; tcpAddress?: TcpAddress } = {}) {
     this.calls = [];
     this.listeners = new Map();
@@ -39,6 +40,7 @@ class FakeServer {
   }
 
   listen(...args: unknown[]) {
+    const isCallback = (value: unknown): value is () => void => typeof value === 'function';
     this.calls.push(args);
     if (typeof args[0] === 'string') {
       this.currentAddress = args[0];
@@ -48,17 +50,17 @@ class FakeServer {
         return;
       }
       const callback = args[1];
-      if (typeof callback === 'function') callback();
+      if (isCallback(callback)) callback();
       return;
     }
 
     const [, , callback] = args;
     this.currentAddress = this.tcpAddress;
-    if (typeof callback === 'function') callback();
+    if (isCallback(callback)) callback();
   }
 
   address() {
-    return (this.currentAddress === null ? this.tcpAddress : this.currentAddress) as AddressInfo | string;
+    return this.currentAddress ?? this.tcpAddress;
   }
 }
 
@@ -81,7 +83,7 @@ function createLogger() {
 test('startApiListener falls back from unix socket to tcp and logs the actual tcp address', () => {
   const server = new FakeServer({
     socketError: Object.assign(new Error('EPERM'), { code: 'EPERM' }),
-    tcpAddress: { address: '127.0.0.1', port: 4321 }
+    tcpAddress: { address: '127.0.0.1', family: 'IPv4', port: 4321 }
   });
   const logger = createLogger();
   let exitCode: number | null = null;
@@ -116,7 +118,7 @@ test('startApiListener falls back from unix socket to tcp and logs the actual tc
   assert.equal(fallback.socketPath, '/tmp/voice-room.sock');
   assert.equal(fallback.host, '0.0.0.0');
   assert.equal(fallback.port, 3000);
-  assert.equal((fallback.err as { code?: string }).code, 'EPERM');
+  assert.equal(codeOf(fallback.err), 'EPERM');
   assert.equal(listening.evt, 'boot.listening');
   assert.equal(listening.transport, 'tcp');
   assert.equal(listening.host, '127.0.0.1');
@@ -124,7 +126,7 @@ test('startApiListener falls back from unix socket to tcp and logs the actual tc
 });
 
 test('startApiListener reports a direct tcp listen with the actual server address', () => {
-  const server = new FakeServer({ tcpAddress: { address: '127.0.0.1', port: 3000 } });
+  const server = new FakeServer({ tcpAddress: { address: '127.0.0.1', family: 'IPv4', port: 3000 } });
   const logger = createLogger();
 
   startApiListener({

@@ -23,16 +23,18 @@ const SOURCE_BUDGET_FLOOR = Math.round((1_800_000 * (2560 * 1440)) / (1920 * 108
 /** Each camera viewer is counted at the 360p simulcast layer a grid tile asks for. */
 export const CAMERA_VIEWER_BITRATE = 450_000;
 
+const SCREEN_QUALITIES: readonly ScreenQualityId[] = ['balanced', 'high', 'source'];
 const SCREEN_FPS_STEPS: readonly ScreenFpsId[] = ['60', '30', '15', '5'];
 const DEFAULT_SCREEN_PROFILE: { quality: ScreenQualityId; fps: ScreenFpsId } = { quality: 'balanced', fps: '30' };
 
 function parseScreenProfile(profileId: string): { quality: ScreenQualityId; fps: ScreenFpsId } {
   const [rawQuality = '', rawFps = DEFAULT_SCREEN_PROFILE.fps] = String(profileId || '').split('-');
   // 'low' is the old name of 720p.
-  const quality = rawQuality === 'low' ? 'balanced' : rawQuality;
-  if (!Object.hasOwn(SCREEN_BITRATE_BY_QUALITY, quality)) return DEFAULT_SCREEN_PROFILE;
+  const name = rawQuality === 'low' ? 'balanced' : rawQuality;
+  const quality = SCREEN_QUALITIES.find((step) => step === name);
+  if (!quality) return DEFAULT_SCREEN_PROFILE;
   const fps = SCREEN_FPS_STEPS.find((step) => step === rawFps) ?? DEFAULT_SCREEN_PROFILE.fps;
-  return { quality: quality as ScreenQualityId, fps };
+  return { quality, fps };
 }
 
 /** What one viewer of a screen share with this profile receives, in bit/s. Unknown ids count as 720p 30 FPS. */

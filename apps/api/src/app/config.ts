@@ -4,7 +4,7 @@
 
 import crypto from 'node:crypto';
 import { cleanLiveKitUrl } from '@voice-room/shared/validation';
-import { readEnvBool, readEnvInt, readMessageDeliveryMode } from '../lib/config.ts';
+import { readEnvBool, readEnvInt, readMessageDeliveryMode, readUploadsDir } from '../lib/config.ts';
 
 type Env = Record<string, string | undefined>;
 
@@ -24,9 +24,56 @@ export function resolveRealtimeReconnectLeaseMs(env: Env = process.env): number 
   return Number.isInteger(value) && value >= 1000 && value <= 120000 ? value : DEFAULT_REALTIME_RECONNECT_LEASE_MS;
 }
 
+/** The deployment the process runs in (NODE_ENV), empty when unset. */
+export function readNodeEnv(env: Env = process.env): string {
+  return env.NODE_ENV || '';
+}
+
+/** What every logger of the process is built with. */
+export function readLogConfig(env: Env = process.env): { level: string; environment: string } {
+  const configured = (env.LOG_LEVEL || '').trim();
+  return {
+    level: configured || (env.NODE_ENV === 'production' ? 'info' : 'silent'),
+    environment: env.NODE_ENV || 'development'
+  };
+}
+
+/** Web push: on only with the full VAPID key pair and a subject. */
+export type PushConfig = { enabled: boolean; vapidPublicKey: string; privateKey: string; subject: string };
+
+export function readPushConfig(env: Env = process.env): PushConfig {
+  const vapidPublicKey = String(env.VAPID_PUBLIC_KEY || '').trim();
+  const privateKey = String(env.VAPID_PRIVATE_KEY || '').trim();
+  const subject = String(env.VAPID_SUBJECT || '').trim();
+  return {
+    enabled: Boolean(vapidPublicKey && privateKey && subject),
+    vapidPublicKey,
+    privateKey,
+    subject
+  };
+}
+
+/** What the process entry decides before it builds the app. */
+export function readBootstrapConfig(env: Env = process.env) {
+  return Object.freeze({
+    PRODUCTION: env.NODE_ENV === 'production',
+    // Production migrates in its own step before the rollout.
+    MIGRATE_ON_START: readEnvBool('MIGRATE_ON_START', env.NODE_ENV !== 'production', env)
+  });
+}
+
+/** Where uploaded chat media lives unless MEDIA_STORAGE_DIR says otherwise. */
+export const DEFAULT_MEDIA_STORAGE_DIR = '/data/media';
+
+// The same directory for the API and the media workers.
+function readMediaStorageDir(env: Env): string {
+  return String(env.MEDIA_STORAGE_DIR || DEFAULT_MEDIA_STORAGE_DIR).trim();
+}
+
 export function readApiConfig(env: Env = process.env) {
   const int = (name: string, fallback: number, min: number): number => readEnvInt(name, fallback, min, env);
   const messageDeliveryMode = readMessageDeliveryMode(env);
+  const gatePublicUrl = cleanLiveKitUrl(env.LIVEKIT_GATE_PUBLIC_URL || env.LIVEKIT_URL || '');
 
   return Object.freeze({
     API_PREFIX: '/api',
@@ -42,7 +89,8 @@ export function readApiConfig(env: Env = process.env) {
     MAX_ROOMS: int('MAX_ROOMS', 100, 1),
     KEEPALIVE_MS: int('SSE_KEEPALIVE_MS', 15000, 1000),
     BODY_LIMIT_BYTES: int('BODY_LIMIT_BYTES', 65536, 1024),
-    TRUST_PROXY: readEnvBool('TRUST_PROXY', false, env) as boolean,
+    TRUST_PROXY: readEnvBool('TRUST_PROXY', false, env),
+    PRODUCTION: env.NODE_ENV === 'production',
     // The LiveKit JWT only has to survive the join: LiveKit refreshes it for a
     // connected participant, so a short TTL bounds how long a leaked token is
     // useful. The gate credential is revocable server-side and keeps the long
@@ -51,7 +99,9 @@ export function readApiConfig(env: Env = process.env) {
     LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS: int('LIVEKIT_GATE_CREDENTIAL_TTL_SECONDS', 21600, 60),
     LIVEKIT_ROSTER_WAIT_MS: int('LIVEKIT_ROSTER_WAIT_MS', 5000, 0),
     ROSTER_POLL_INTERVAL_MS: 50,
-    LIVEKIT_GATE_PUBLIC_URL: cleanLiveKitUrl(env.LIVEKIT_GATE_PUBLIC_URL || env.LIVEKIT_URL || '') as string,
+    LIVEKIT_GATE_PUBLIC_URL: gatePublicUrl,
+    // The LiveKit URL the CSP admits: the public gate, else the SFU itself.
+    LIVEKIT_CSP_URL: cleanLiveKitUrl(gatePublicUrl || env.LIVEKIT_URL || ''),
     LIVEKIT_GATE_SECRET: (env.LIVEKIT_GATE_SECRET || '').trim(),
     ROOM_IDLE_TTL_MS: int('ROOM_IDLE_TTL_MS', 900000, 1000),
     ROOM_PRUNE_INTERVAL_MS: int('ROOM_PRUNE_INTERVAL_MS', 60000, 0),
@@ -64,9 +114,11 @@ export function readApiConfig(env: Env = process.env) {
     MAX_ROOM_BANS: int('MAX_ROOM_BANS', 100, 1),
     ROOM_CREATE_POW_DIFFICULTY: Math.min(int('ROOM_CREATE_POW_DIFFICULTY', 14, 0), 32),
     ROOM_CREATE_POW_TTL_MS: int('ROOM_CREATE_POW_TTL_MS', 120000, 10000),
+    // Signs room-creation challenges; empty means a random key per process.
+    POW_SECRET: env.POW_SECRET || '',
     SESSION_TTL_MS: int('SESSION_TTL_MS', 30 * 24 * 60 * 60 * 1000, 60000),
     SESSION_COOKIE_NAME: 'vr_session',
-    SESSION_COOKIE_SECURE: readEnvBool('SESSION_COOKIE_SECURE', env.NODE_ENV === 'production', env) as boolean,
+    SESSION_COOKIE_SECURE: readEnvBool('SESSION_COOKIE_SECURE', env.NODE_ENV === 'production', env),
     AUTH_RATE_LIMIT: int('AUTH_RATE_LIMIT', 30, 0),
     AUTH_RATE_WINDOW_MS: int('AUTH_RATE_WINDOW_MS', 60000, 1000),
     LOGIN_FAILURE_LIMIT: int('LOGIN_FAILURE_LIMIT', 10, 0),
@@ -106,7 +158,7 @@ export function readApiConfig(env: Env = process.env) {
     CALL_FEEDBACK_RATE_WINDOW_MS: int('CALL_FEEDBACK_RATE_WINDOW_MS', 600000, 1000),
     // Browser log intake is a public write path into the log stream, so it
     // stays off unless an operator turns it on per environment.
-    CLIENT_LOG_INTAKE_ENABLED: readEnvBool('CLIENT_LOG_INTAKE_ENABLED', false, env) as boolean,
+    CLIENT_LOG_INTAKE_ENABLED: readEnvBool('CLIENT_LOG_INTAKE_ENABLED', false, env),
     CLIENT_LOG_RATE_LIMIT: int('CLIENT_LOG_RATE_LIMIT', 6, 0),
     CLIENT_LOG_RATE_WINDOW_MS: int('CLIENT_LOG_RATE_WINDOW_MS', 60000, 1000),
     // One account cannot pin an unbounded number of keep-alive sockets.
@@ -116,16 +168,60 @@ export function readApiConfig(env: Env = process.env) {
     RETENTION_PURGE_INTERVAL_MS: int('RETENTION_PURGE_INTERVAL_MS', 60 * 60 * 1000, 0),
     RETENTION_KEEP_DELETED_MS: int('RETENTION_KEEP_DELETED_MS', 30 * 24 * 60 * 60 * 1000, 60000),
     // A link preview makes the API open a URL a user posted, so it is opt-in.
-    LINK_PREVIEWS_ENABLED: readEnvBool('LINK_PREVIEWS_ENABLED', false, env) as boolean,
-    MEDIA_STORAGE_DIR: String(env.MEDIA_STORAGE_DIR || '/data/media').trim(),
+    LINK_PREVIEWS_ENABLED: readEnvBool('LINK_PREVIEWS_ENABLED', false, env),
+    UPLOADS_DIR: readUploadsDir(env),
+    MEDIA_STORAGE_DIR: readMediaStorageDir(env),
     MEDIA_MIN_FREE_BYTES: int('MEDIA_MIN_FREE_BYTES', 2 * 1024 * 1024 * 1024, 1),
-    MESSAGE_DIRECT_EMIT_ENABLED: messageDeliveryMode.directEmitEnabled as boolean,
-    MESSAGE_DELIVERY_LISTEN_ENABLED: readEnvBool('MESSAGE_DELIVERY_LISTEN_ENABLED', true, env) as boolean,
+    MESSAGE_DIRECT_EMIT_ENABLED: messageDeliveryMode.directEmitEnabled,
+    MESSAGE_DELIVERY_LISTEN_ENABLED: readEnvBool('MESSAGE_DELIVERY_LISTEN_ENABLED', true, env),
+    REALTIME_RECONNECT_LEASE_MS: resolveRealtimeReconnectLeaseMs(env),
+    PUSH: readPushConfig(env),
     // Desktop downloads come from the latest GitHub release; the metadata is
     // cached so visitors never hit GitHub's per-IP rate limit.
     DESKTOP_RELEASE_REPO: (env.DESKTOP_RELEASE_REPO || 'dazeGG/VoiceRoomDesktop').trim(),
     DESKTOP_RELEASE_CACHE_MS: int('DESKTOP_RELEASE_CACHE_MS', 600000, 1000),
-    DESKTOP_RELEASE_TIMEOUT_MS: int('DESKTOP_RELEASE_TIMEOUT_MS', 6000, 1000)
+    DESKTOP_RELEASE_TIMEOUT_MS: int('DESKTOP_RELEASE_TIMEOUT_MS', 6000, 1000),
+    // Lifts the GitHub API rate limit for the release lookup when set.
+    GITHUB_TOKEN: (env.GITHUB_TOKEN || '').trim()
+  });
+}
+
+/** What a worker process reads: which worker, its metrics endpoint and the media claims. */
+export function readWorkerConfig(env: Env = process.env) {
+  return Object.freeze({
+    WORKER_NAME: String(env.VOICE_ROOM_WORKER || '').trim(),
+    WORKER_METRICS_HOST: env.WORKER_METRICS_HOST || '0.0.0.0',
+    WORKER_METRICS_PORT: Number(env.WORKER_METRICS_PORT || 9464),
+    MEDIA_STORAGE_DIR: readMediaStorageDir(env),
+    MEDIA_MAINTENANCE_CLAIM_ENABLED: readEnvBool('MEDIA_MAINTENANCE_CLAIM_ENABLED', false, env),
+    MEDIA_PROCESSING_CLAIM_ENABLED: readEnvBool('MEDIA_PROCESSING_CLAIM_ENABLED', false, env),
+    MEDIA_RECONCILIATION_CLAIM_ENABLED: readEnvBool('MEDIA_RECONCILIATION_CLAIM_ENABLED', false, env)
+  });
+}
+
+/** The message delivery worker: off unless claims are on (and direct emit off). */
+export function readMessageDeliveryWorkerConfig(env: Env = process.env) {
+  const int = (name: string, fallback: number, min: number): number => readEnvInt(name, fallback, min, env);
+  return Object.freeze({
+    CLAIM_ENABLED: readMessageDeliveryMode(env).claimEnabled,
+    BATCH_SIZE: int('MESSAGE_DELIVERY_BATCH_SIZE', 100, 1),
+    IDLE_MS: int('MESSAGE_DELIVERY_IDLE_MS', 250, 10),
+    LEASE_MS: int('MESSAGE_DELIVERY_LEASE_MS', 30_000, 1_000),
+    MAX_ATTEMPTS: int('MESSAGE_DELIVERY_MAX_ATTEMPTS', 12, 1),
+    RENEW_MS: int('MESSAGE_DELIVERY_RENEW_MS', 10_000, 100),
+    STALE_CLAIM_MS: int('MESSAGE_DELIVERY_STALE_CLAIM_MS', 60_000, 1_000)
+  });
+}
+
+/** The notification delivery worker: off unless its claims are on. */
+export function readNotificationDeliveryWorkerConfig(env: Env = process.env) {
+  const int = (name: string, fallback: number, min: number): number => readEnvInt(name, fallback, min, env);
+  return Object.freeze({
+    CLAIM_ENABLED: readEnvBool('NOTIFICATION_DELIVERY_CLAIM_ENABLED', false, env),
+    BATCH_SIZE: int('NOTIFICATION_DELIVERY_BATCH_SIZE', 50, 1),
+    LEASE_MS: int('NOTIFICATION_DELIVERY_LEASE_MS', 120000, 1000),
+    RENEW_MS: int('NOTIFICATION_DELIVERY_RENEW_MS', 30000, 100),
+    MAX_ATTEMPTS: int('NOTIFICATION_DELIVERY_MAX_ATTEMPTS', 8, 1)
   });
 }
 

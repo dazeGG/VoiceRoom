@@ -1,14 +1,10 @@
 import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
+import { instanceOf } from './helpers/assert.ts';
+import { FakeMediaStream, FakeMediaStreamTrack } from './helpers/fake-media.ts';
 
 // Loads the real audio bus through Vite with just enough of the browser
 // stubbed to watch which path a remote voice takes.
-
-class FakeMediaStream {
-  getAudioTracks() {
-    return [{ readyState: 'live' }];
-  }
-}
 
 type FakeGain = {
   value: number;
@@ -80,8 +76,12 @@ async function loadBus(storage = {}) {
   return { bus, state };
 }
 
-const voiceElement = () =>
-  ({ muted: false, srcObject: new FakeMediaStream(), volume: 1 }) as unknown as HTMLMediaElement;
+// A real (jsdom) audio element playing a live voice stream.
+function voiceElement(): HTMLMediaElement {
+  const element = document.createElement('audio');
+  element.srcObject = new FakeMediaStream([new FakeMediaStreamTrack('voice', 'audio')]);
+  return element;
+}
 
 test('a voice at or below 100% plays on its own element, outside the Web Audio mix', async () => {
   const { bus, state } = await loadBus();
@@ -97,7 +97,7 @@ test('a boost above 100% moves the voice into the mix and silences the element',
   const element = voiceElement();
   assert.equal(bus.playVoiceElement(element, { muted: false, volume: 1.5 }), 'mixed');
   assert.equal(element.muted, true, 'the element must not be a second audible path');
-  assert.equal((state.audioContext as unknown as FakeAudioContext).sources, 1);
+  assert.equal(instanceOf(state.audioContext, FakeAudioContext, 'the bus context').sources, 1);
 
   // Back under 100% it returns to direct playback.
   assert.equal(bus.playVoiceElement(element, { muted: false, volume: 0.9 }), 'direct');
@@ -127,24 +127,28 @@ test('master volume and output mute re-decide every voice', async () => {
 
 test('muting the output lets the confirmation cue finish before the master bus goes silent', async () => {
   const { bus, state } = await loadBus();
-  const graph = bus.getAudioBusGraph() as unknown as Record<'master', FakeNode>;
+  const master = instanceOf(bus.getAudioBusGraph().master, FakeNode, 'the master bus');
   state.outputMuted = true;
   bus.syncAudioBusSettings({ muteDelayMs: 220 });
-  assert.deepEqual(graph.master.gain.scheduled, [
+  assert.deepEqual(master.gain.scheduled, [
     [1, 0],
     [0, 0.22]
   ]);
 
   state.outputMuted = false;
   bus.syncAudioBusSettings({ muteDelayMs: 220 });
-  assert.deepEqual(graph.master.gain.scheduled, [[1, 0]], 'unmuting is immediate');
+  assert.deepEqual(master.gain.scheduled, [[1, 0]], 'unmuting is immediate');
 });
 
 test('interface sounds go through their own bus input at the stored notification volume', async () => {
   const { bus } = await loadBus({ 'voice-room:notification-volume': '50' });
-  const graph = bus.getAudioBusGraph() as unknown as Record<'sfx' | 'master', FakeNode>;
+  const graph = bus.getAudioBusGraph();
+  const sfx = instanceOf(graph.sfx, FakeNode, 'the sounds bus');
   bus.syncAudioBusSettings();
   assert.equal(bus.getAudioBusInput('sfx'), graph.sfx);
-  assert.equal(graph.sfx.gain.value, 0.5);
-  assert.ok(graph.sfx.connected.includes(graph.master), 'sounds are mixed under the master volume');
+  assert.equal(sfx.gain.value, 0.5);
+  assert.ok(
+    sfx.connected.includes(instanceOf(graph.master, FakeNode, 'the master bus')),
+    'sounds are mixed under the master volume'
+  );
 });

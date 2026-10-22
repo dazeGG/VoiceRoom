@@ -8,7 +8,16 @@ import type { AccountBadge } from '@voice-room/shared/contracts/users';
 import { isStaffRole, type StaffRole } from '@voice-room/shared/contracts/staff';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 
-const ACTIONS = new Set<string>(['block', 'unblock', 'logout', 'delete', 'cancel_deletion', 'badge', 'staff_role']);
+const ACTIONS = new Set<string>([
+  'block',
+  'unblock',
+  'logout',
+  'delete',
+  'cancel_deletion',
+  'badge',
+  'staff_role'
+] satisfies AdminActionKind[]);
+const isAction = (value: string): value is AdminActionKind => ACTIONS.has(value);
 
 export interface AdminActionInput {
   adminUserId: string;
@@ -21,8 +30,6 @@ export interface AdminActionInput {
   /** The role a staff_role action gave (null: taken away). */
   role?: StaffRole | null | undefined;
 }
-
-const millis = (value: unknown): number => (value instanceof Date ? value.getTime() : Date.parse(String(value)));
 
 export function createAdminActionRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
@@ -55,9 +62,9 @@ export function createAdminActionRepository({ pool }: { pool: pg.Pool }) {
         'a.action',
         'a.reason',
         'a.created_at',
-        sql<unknown>`a.details->'until'`.as('until'),
-        sql<unknown>`a.details->>'badge'`.as('badge'),
-        sql<unknown>`a.details->>'role'`.as('role'),
+        sql`a.details->'until'`.as('until'),
+        sql`a.details->>'badge'`.as('badge'),
+        sql`a.details->>'role'`.as('role'),
         sql<string>`coalesce(nullif(u.display_name, ''), u.login, 'администратор')`.as('admin_name')
       ])
       .where('a.target_user_id', '=', targetUserId)
@@ -66,13 +73,14 @@ export function createAdminActionRepository({ pool }: { pool: pg.Pool }) {
       .limit(limit)
       .execute();
     return rows.flatMap((row) => {
-      if (!ACTIONS.has(row.action)) return [];
+      const { action } = row;
+      if (!isAction(action)) return [];
       const until = Number(row.until);
       return [
         {
           id: row.id,
-          at: millis(row.created_at),
-          action: row.action as AdminActionKind,
+          at: row.created_at.getTime(),
+          action,
           reason: row.reason,
           adminName: row.admin_name,
           until: row.until !== null && Number.isFinite(until) ? until : null,

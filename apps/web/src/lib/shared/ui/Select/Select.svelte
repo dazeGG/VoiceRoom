@@ -3,7 +3,7 @@
   import { tick } from 'svelte';
   import { iconSm } from '$lib/shared/ui/icons';
   import { Ellipsis } from '../Ellipsis';
-  import { Popover } from '../Popover';
+  import { Popover, type PopoverContentState, type PopoverTriggerState } from '../Popover';
   import type { SelectOption, SelectProps } from './types';
 
   let {
@@ -27,7 +27,7 @@
 
   let open = $state(false);
   let activeIndex = $state(0);
-  let optionRefs: HTMLButtonElement[] = [];
+  let optionRefs: (HTMLButtonElement | undefined)[] = [];
   let typeahead = '';
   let typeaheadTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -49,12 +49,12 @@
     optionRefs[index] = node;
     return {
       update(nextIndex: number) {
-        delete optionRefs[index];
+        optionRefs[index] = undefined;
         index = nextIndex;
         optionRefs[index] = node;
       },
       destroy() {
-        delete optionRefs[index];
+        optionRefs[index] = undefined;
       }
     };
   }
@@ -131,7 +131,7 @@
 
 <div class="select-root">
   <Popover bind:open {placement} {flip} role="listbox" ariaLabel={label} panelClass="select-panel">
-    {#snippet trigger({ open, toggle, panelId })}
+    {#snippet trigger({ open, toggle, panelId }: PopoverTriggerState)}
       <button
         class="select-trigger select-trigger--{variant}"
         type="button"
@@ -152,7 +152,7 @@
       </button>
     {/snippet}
 
-    {#snippet content({ close })}
+    {#snippet content({ close }: PopoverContentState)}
       {#each options as option, index (option.value)}
         <button
           use:registerOption={index}

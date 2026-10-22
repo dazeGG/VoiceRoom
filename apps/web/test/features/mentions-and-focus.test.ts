@@ -9,6 +9,7 @@ import {
   participantsUi,
   toggleParticipantFocus
 } from '../../src/lib/features/room/participants-ui.svelte.ts';
+import { participant } from '../fixtures/participant.ts';
 
 const member = (userId: string, login: string) =>
   ({
@@ -62,14 +63,14 @@ beforeEach(() => {
 });
 
 test('you come first in the grid, then peers in the order they joined', () => {
-  state.self = { id: 'me', joinedAt: 5 } as never;
-  state.peers.set('late', { id: 'late', joinedAt: 30 } as never);
-  state.peers.set('early', { id: 'early', joinedAt: 10 } as never);
+  state.self = participant({ id: 'me', joinedAt: 5 });
+  state.peers.set('late', participant({ id: 'late', joinedAt: 30 }));
+  state.peers.set('early', participant({ id: 'early', joinedAt: 10 }));
   expect(getSortedParticipants().map((participant) => participant.id)).toEqual(['me', 'early', 'late']);
 });
 
 test('clicking a tile focuses it, clicking again unfocuses, and a departed peer is no longer focused', () => {
-  state.peers.set('anna', { id: 'anna', joinedAt: 1 } as never);
+  state.peers.set('anna', participant({ id: 'anna', joinedAt: 1 }));
   toggleParticipantFocus('anna');
   expect(getFocusedParticipant()?.id).toBe('anna');
   toggleParticipantFocus('anna');

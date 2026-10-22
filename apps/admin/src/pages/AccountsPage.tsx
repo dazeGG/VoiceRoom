@@ -10,18 +10,21 @@ import type {
   AccountsPage as AccountsPageData,
   AccountsSort
 } from '@voice-room/shared/contracts/admin';
-import { ACCOUNT_FILTERS, SORT_COLUMNS, isAccountsFilter } from '../accounts.ts';
+import { ACCOUNT_FILTERS, SORT_COLUMNS } from '../accounts.ts';
 import { fetchAccounts } from '../api/admin.ts';
-import { formatAgo, formatCount, formatDate, formatMinutes } from '../format.ts';
+import { formatAgo, formatCount, formatMinutes, formatNumericDate } from '../format.ts';
 import { loadFailure, type LoadFailure } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
-import { AccountBadge, Avatar, Button, Select } from '../ui/index.tsx';
+import { AccountBadge, Avatar, Button, Empty, Pill, Segment } from '../ui/index.tsx';
 import { AccountCard } from './AccountCard.tsx';
 import './AccountsPage.css';
 
 const SEARCH_DELAY_MS = 250;
 
 const nameOf = (account: AccountRow) => account.displayName || account.login;
+
+/** Columns that hold numbers line up on the right. */
+const NUMERIC: ReadonlySet<AccountsSort> = new Set(['activeDays', 'voice', 'messages', 'reports']);
 
 export function AccountsPage({
   accountId,
@@ -77,8 +80,7 @@ export function AccountsPage({
     };
   }, [requestKey, search, filter, sort, order, pageNumber]);
 
-  function changeFilter(value: string): void {
-    if (!isAccountsFilter(value)) return;
+  function changeFilter(value: AccountsFilter): void {
     setFilter(value);
     setPageNumber(1);
   }
@@ -109,7 +111,7 @@ export function AccountsPage({
 
   return (
     <>
-      <div className="acc-toolbar">
+      <div className="ui-toolbar">
         <label className="acc-search">
           <Search size={16} aria-hidden="true" />
           <input
@@ -121,17 +123,9 @@ export function AccountsPage({
             onChange={(event) => setTyped(event.target.value)}
           />
         </label>
-        <div className="acc-filter">
-          <Select value={filter} aria-label="Показать" onChange={(event) => changeFilter(event.target.value)}>
-            {ACCOUNT_FILTERS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </Select>
-        </div>
+        <Segment ariaLabel="Показать" value={filter} onChange={changeFilter} options={ACCOUNT_FILTERS} />
         {page ? (
-          <span className="acc-quiet">
+          <span className="ui-toolbar-note acc-count">
             {page.total ? `${formatCount(shownFrom)}–${formatCount(shownTo)} из ${formatCount(page.total)}` : 'Никого'}
             {loading ? ' · обновляем…' : ''}
           </span>
@@ -140,149 +134,165 @@ export function AccountsPage({
 
       {failure && !page ? (
         <Notice failure={failure} onRetry={() => setReload((value) => value + 1)} />
-      ) : !page ? (
-        <p className="acc-quiet" aria-busy="true">
-          Загружаем…
-        </p>
-      ) : accounts.length === 0 ? (
-        <p className="acc-quiet">Под этот поиск никто не подходит.</p>
       ) : (
         <>
           {failure ? (
-            <p className="acc-error" role="alert">
+            <p className="admin-error" role="alert">
               {failure.message}
             </p>
           ) : null}
-          <div className="acc-table-wrap">
-            <table className="acc-table">
-              <thead>
-                <tr>
-                  {SORT_COLUMNS.map((column) => (
-                    <th
-                      key={column.sort}
-                      scope="col"
-                      className={
-                        column.sort !== 'name' && column.sort !== 'created' && column.sort !== 'lastSeen'
-                          ? 'is-number'
-                          : undefined
-                      }
-                      aria-sort={sort === column.sort ? (order === 'asc' ? 'ascending' : 'descending') : 'none'}
-                    >
-                      <button
-                        type="button"
-                        className="acc-sort"
-                        aria-label={sortLabel(column)}
-                        onClick={() => sortBy(column)}
-                      >
-                        {column.label}
-                        {sort === column.sort ? (
-                          order === 'asc' ? (
-                            <ArrowUp size={13} aria-hidden="true" />
-                          ) : (
-                            <ArrowDown size={13} aria-hidden="true" />
-                          )
-                        ) : null}
-                      </button>
-                    </th>
-                  ))}
-                  <th scope="col">Откуда</th>
-                </tr>
-              </thead>
-              <tbody>
-                {accounts.map((account) => (
-                  // The whole row opens the card for the mouse; its first cell's button is the keyboard's way.
-                  <tr key={account.id} onClick={() => onOpenAccount(account.id)}>
-                    <td>
-                      <button
-                        type="button"
-                        className="acc-person"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          onOpenAccount(account.id);
-                        }}
-                      >
-                        <span className="acc-avatar">
-                          <Avatar
-                            name={nameOf(account)}
-                            src={account.avatarUrl}
-                            colorKey={account.avatarColorKey}
-                            background={account.avatarAccent}
-                            size={32}
-                          />
-                          {account.online ? <span className="acc-dot" aria-hidden="true" /> : null}
-                        </span>
-                        <span className="acc-person-text">
-                          <span className="acc-person-name">
-                            {nameOf(account)}
-                            <AccountBadge userId={account.id} />
+          <section className="ui-panel" data-flush="true" aria-label="Аккаунты">
+            {!page ? (
+              <p className="ui-empty" aria-busy="true">
+                Загружаем…
+              </p>
+            ) : accounts.length === 0 ? (
+              <Empty>Под этот поиск никто не подходит</Empty>
+            ) : (
+              <div className="ui-table-scroll">
+                <table className="acc-table">
+                  <colgroup>
+                    <col />
+                    <col style={{ width: 110 }} />
+                    <col style={{ width: 120 }} />
+                    <col style={{ width: 70 }} />
+                    <col style={{ width: 80 }} />
+                    <col style={{ width: 100 }} />
+                    <col style={{ width: 70 }} />
+                    <col style={{ width: 90 }} />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      {SORT_COLUMNS.map((column) => (
+                        <th
+                          key={column.sort}
+                          scope="col"
+                          className={NUMERIC.has(column.sort) ? 'is-number' : undefined}
+                          aria-sort={sort === column.sort ? (order === 'asc' ? 'ascending' : 'descending') : 'none'}
+                        >
+                          <button
+                            type="button"
+                            className="acc-sort"
+                            aria-label={sortLabel(column)}
+                            onClick={() => sortBy(column)}
+                          >
+                            {column.label}
+                            {sort === column.sort ? (
+                              order === 'asc' ? (
+                                <ArrowUp size={13} aria-hidden="true" />
+                              ) : (
+                                <ArrowDown size={13} aria-hidden="true" />
+                              )
+                            ) : null}
+                          </button>
+                        </th>
+                      ))}
+                      <th scope="col">Откуда</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {accounts.map((account) => (
+                      // The whole row opens the card for the mouse; its first cell's button is the keyboard's way.
+                      <tr key={account.id} onClick={() => onOpenAccount(account.id)}>
+                        <td>
+                          <span className="acc-person-cell">
+                            <button
+                              type="button"
+                              className="acc-person"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                onOpenAccount(account.id);
+                              }}
+                            >
+                              <span className="acc-avatar">
+                                <Avatar
+                                  name={nameOf(account)}
+                                  src={account.avatarUrl}
+                                  colorKey={account.avatarColorKey}
+                                  background={account.avatarAccent}
+                                  size={34}
+                                />
+                                {account.online ? <span className="acc-dot" aria-hidden="true" /> : null}
+                              </span>
+                              <span className="acc-person-text">
+                                <span className="acc-person-name">
+                                  {nameOf(account)}
+                                  <AccountBadge userId={account.id} />
+                                </span>
+                                <span className="acc-person-login ui-mono">@{account.login}</span>
+                              </span>
+                            </button>
+                            {account.admin ? (
+                              <Pill tone="accent" compact>
+                                сотрудник
+                              </Pill>
+                            ) : null}
+                            {account.status === 'blocked' ? (
+                              <Pill tone="danger" compact>
+                                заблокирован
+                              </Pill>
+                            ) : null}
+                            {account.status === 'deleting' ? (
+                              <Pill tone="danger" compact>
+                                удаляется
+                              </Pill>
+                            ) : null}
                           </span>
-                          <span className="acc-person-login">@{account.login}</span>
-                        </span>
-                        {account.admin ? (
-                          <span className="acc-chip" data-tone="accent">
-                            сотрудник
+                        </td>
+                        <td className="acc-dim ui-num">{formatNumericDate(account.createdAt)}</td>
+                        <td className={account.online ? 'acc-online' : 'acc-dim'}>
+                          {account.online ? 'в сети' : formatAgo(account.lastSeenAt, now)}
+                        </td>
+                        <td className="is-number">{formatCount(account.activeDays)}</td>
+                        <td className="is-number">{formatMinutes(account.voiceMinutes)}</td>
+                        <td className="is-number">{formatCount(account.messages)}</td>
+                        <td className={account.reportsAgainst > 0 ? 'is-number has-reports' : 'is-number acc-none'}>
+                          {account.reportsAgainst ? formatCount(account.reportsAgainst) : '—'}
+                        </td>
+                        <td>
+                          <span className="acc-clients">
+                            {account.clients.desktopApp ? (
+                              <span title="Приложение" aria-label="Приложение">
+                                <Monitor size={15} aria-hidden="true" />
+                              </span>
+                            ) : null}
+                            {account.clients.browser ? (
+                              <span title="Браузер" aria-label="Браузер">
+                                <Globe size={15} aria-hidden="true" />
+                              </span>
+                            ) : null}
+                            {account.clients.mobile ? (
+                              <span title="Телефон" aria-label="Телефон">
+                                <Smartphone size={15} aria-hidden="true" />
+                              </span>
+                            ) : null}
                           </span>
-                        ) : null}
-                        {account.status === 'blocked' ? (
-                          <span className="acc-chip" data-tone="danger">
-                            заблокирован
-                          </span>
-                        ) : null}
-                        {account.status === 'deleting' ? (
-                          <span className="acc-chip" data-tone="danger">
-                            удаляется
-                          </span>
-                        ) : null}
-                      </button>
-                    </td>
-                    <td>{formatDate(account.createdAt)}</td>
-                    <td>{account.online ? 'в сети' : formatAgo(account.lastSeenAt, now)}</td>
-                    <td className="is-number">{formatCount(account.activeDays)}</td>
-                    <td className="is-number">{formatMinutes(account.voiceMinutes)}</td>
-                    <td className="is-number">{formatCount(account.messages)}</td>
-                    <td className={account.reportsAgainst > 0 ? 'is-number has-reports' : 'is-number'}>
-                      {account.reportsAgainst ? formatCount(account.reportsAgainst) : '—'}
-                    </td>
-                    <td>
-                      <span className="acc-clients">
-                        {account.clients.desktopApp ? (
-                          <span title="Приложение" aria-label="Приложение">
-                            <Monitor size={14} aria-hidden="true" />
-                          </span>
-                        ) : null}
-                        {account.clients.browser ? (
-                          <span title="Браузер" aria-label="Браузер">
-                            <Globe size={14} aria-hidden="true" />
-                          </span>
-                        ) : null}
-                        {account.clients.mobile ? (
-                          <span title="Телефон" aria-label="Телефон">
-                            <Smartphone size={14} aria-hidden="true" />
-                          </span>
-                        ) : null}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {lastPage > 1 ? (
-            <nav className="acc-pages" aria-label="Страницы">
-              <Button disabled={pageNumber <= 1 || loading} onClick={() => setPageNumber(pageNumber - 1)}>
-                Назад
-              </Button>
-              <span className="acc-quiet">
-                Страница {pageNumber} из {lastPage}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <footer className="acc-foot">
+              <span className="acc-foot-note">
+                «Откуда» — клиенты за последние 30 дней. Активные дни считаются с 15 октября 2026.
               </span>
-              <Button disabled={pageNumber >= lastPage || loading} onClick={() => setPageNumber(pageNumber + 1)}>
-                Дальше
-              </Button>
-            </nav>
-          ) : null}
-          <p className="acc-quiet">
-            «Откуда» — клиенты за последние 30 дней. Активные дни считаются с 15 октября 2026.
-          </p>
+              {lastPage > 1 ? (
+                <nav className="acc-pages" aria-label="Страницы">
+                  <Button disabled={pageNumber <= 1 || loading} onClick={() => setPageNumber(pageNumber - 1)}>
+                    Назад
+                  </Button>
+                  <span className="acc-page">
+                    Страница {formatCount(pageNumber)} из {formatCount(lastPage)}
+                  </span>
+                  <Button disabled={pageNumber >= lastPage || loading} onClick={() => setPageNumber(pageNumber + 1)}>
+                    Дальше
+                  </Button>
+                </nav>
+              ) : null}
+            </footer>
+          </section>
         </>
       )}
     </>

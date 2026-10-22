@@ -101,6 +101,6 @@ export class AccountPrompts {
   closeAppPrompt = (): void => {
     this.appPromptOpen = false;
     this.#appPromptDone = true;
-    void markAppPromptSeen().catch((error) => log.warn('app prompt was not recorded', errorContext(error)));
+    void markAppPromptSeen().catch((error: unknown) => log.warn('app prompt was not recorded', errorContext(error)));
   };
 }

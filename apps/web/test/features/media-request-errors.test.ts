@@ -32,5 +32,5 @@ test('other errors are still shown', async () => {
 
   await handle({ type: 'error', payload: { code: 'update_failed', message: 'Peer update rejected', id: 'other' } });
 
-  expect(showToast).toHaveBeenCalledWith('Peer update rejected');
+  expect(showToast).toHaveBeenCalledWith('Не удалось обновить состояние в комнате');
 });

@@ -26,6 +26,8 @@ import {
 } from '../../src/lib/features/room/client/services/microphone-service.ts';
 import { clearLogBuffer, readLogBuffer } from '../../src/lib/shared/log.ts';
 import type { MicProcessor } from '../../src/lib/features/room/client/core/types.ts';
+import { defined, instanceOf } from '../helpers/assert.ts';
+import { FakeMediaStream } from '../helpers/fake-media.ts';
 
 const reopenMicrophone = vi.hoisted(() => vi.fn(async () => true));
 vi.mock('../../src/lib/features/room/client/ui/devices', () => ({ reopenMicrophone }));
@@ -46,7 +48,7 @@ afterEach(() => {
 function fakePressureObserver() {
   let callback: ((records: Array<{ state: string }>) => void) | null = null;
   let disconnected = false;
-  const Observer = class {
+  const Observer: PressureObserverConstructor = class {
     constructor(next: (records: Array<{ state: string }>) => void) {
       callback = next;
     }
@@ -56,7 +58,7 @@ function fakePressureObserver() {
     disconnect() {
       disconnected = true;
     }
-  } as unknown as PressureObserverConstructor;
+  };
   return {
     Observer,
     report: (pressure: string) => callback?.([{ state: pressure }]),
@@ -122,7 +124,7 @@ test('a good call is logged and nothing is reported', () => {
     cpuPressureMax: 'nominal'
   });
   expect(readLogBuffer().at(-1)).toMatchObject({ level: 'info', ns: 'room:quality', msg: 'call quality' });
-  expect(Object.keys(summary!.context).length).toBeLessThanOrEqual(12);
+  expect(Object.keys(defined(summary, 'the call quality summary').context).length).toBeLessThanOrEqual(12);
 });
 
 test('loss, reconnects or critical CPU mark a call as degraded, short calls never', () => {
@@ -171,19 +173,37 @@ class FakeAudioContext {
   resume = vi.fn(async () => {
     this.state = 'running';
   });
+  createGain() {
+    return {};
+  }
+  createMediaStreamDestination() {
+    return {};
+  }
+  createMediaStreamSource() {
+    return {};
+  }
 }
 
-function fakeContext() {
-  return new FakeAudioContext();
-}
-
-function useCapture(context: FakeAudioContext) {
-  state.micProcessor = [{ context, type: 'input-gain' } as unknown as MicProcessor];
+// A microphone captured through a stand-in AudioContext (the code under test
+// reads only the context); returns that context to watch suspend and resume.
+function useCapture(): FakeAudioContext {
+  vi.stubGlobal('AudioContext', FakeAudioContext);
+  const context = new AudioContext();
+  const processor: MicProcessor = {
+    type: 'input-gain',
+    context,
+    source: context.createMediaStreamSource(new FakeMediaStream()),
+    node: context.createGain(),
+    destination: context.createMediaStreamDestination(),
+    nodes: [],
+    setGain: () => {}
+  };
+  state.micProcessor = [processor];
+  return instanceOf(context, FakeAudioContext, 'the capture context');
 }
 
 test('a muted microphone stops processing after a few seconds and resumes on unmute', async () => {
-  const context = fakeContext();
-  useCapture(context);
+  const context = useCapture();
   state.microphoneMode = 'open';
   state.muted = true;
 
@@ -204,8 +224,7 @@ test('a muted microphone stops processing after a few seconds and resumes on unm
 });
 
 test('a quick unmute cancels the pause, and push-to-talk with the key up never pauses', () => {
-  const context = fakeContext();
-  useCapture(context);
+  const context = useCapture();
   state.microphoneMode = 'open';
   state.muted = true;
   syncMicrophoneProcessing();
@@ -230,21 +249,18 @@ test('a quick unmute cancels the pause, and push-to-talk with the key up never p
 });
 
 test('a replaced capture is never paused by the old timer', () => {
-  const first = fakeContext();
-  useCapture(first);
+  const first = useCapture();
   state.microphoneMode = 'open';
   state.muted = true;
   syncMicrophoneProcessing();
-  const second = fakeContext();
-  useCapture(second);
+  const second = useCapture();
   vi.advanceTimersByTime(PROCESSING_SUSPEND_DELAY_MS);
   expect(first.suspend).not.toHaveBeenCalled();
   expect(second.suspend).not.toHaveBeenCalled();
 });
 
 test('a context that does not come back gets a fresh capture', async () => {
-  const context = fakeContext();
-  useCapture(context);
+  const context = useCapture();
   state.microphoneMode = 'open';
   state.muted = true;
   syncMicrophoneProcessing();

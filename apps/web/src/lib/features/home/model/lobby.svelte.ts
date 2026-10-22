@@ -29,7 +29,7 @@ import {
   sendDirectMessage,
   type DirectMessage
 } from '$lib/api/dm';
-import { connectRealtime, type RealtimeEvent, type RealtimeHandle } from '$lib/api/realtime';
+import { getAppRealtime, type RealtimeEvent } from '$lib/api/realtime';
 import { createTypingTracker, typingActivityOf } from '$lib/shared/chat/typing.svelte';
 import type { PresenceStatus } from '$lib/shared/presence';
 import {
@@ -60,9 +60,6 @@ import type { RoomSocial } from '$lib/features/room/social';
 export type LobbyMode = 'friends' | 'rooms';
 export type LobbyView = 'home' | 'dm' | 'people';
 
-// The lobby enters voice for this event through its usual confirmation flow.
-export const ENTER_ROOM_EVENT = 'voice-room:enter-room';
-
 // Invitations used to be mirrored per device in localStorage; they now live in
 // the DM thread itself, so stale local copies are just cleaned up.
 const RESOLVED_ROOM_INVITATIONS_KEY = 'voice-room:resolved-invitations';
@@ -87,8 +84,14 @@ export class LobbyStore {
   /** Friends currently typing to this account, keyed by their user id. */
   readonly dmTyping = createTypingTracker();
 
-  private realtime: RealtimeHandle | null = null;
+  private stopRealtime: (() => void) | null = null;
   private selfId = '';
+  private readonly onEnterRoom: (roomId: string) => void;
+
+  /** `onEnterRoom` enters voice in a room through the page's usual confirmation flow. */
+  constructor({ onEnterRoom = () => {} }: { onEnterRoom?: (roomId: string) => void } = {}) {
+    this.onEnterRoom = onEnterRoom;
+  }
   private readonly presence = new FriendPresence();
   private readonly browserNotifications = new BrowserNotificationRouting(() => this.getActiveNotificationTarget());
 
@@ -155,7 +158,7 @@ export class LobbyStore {
     this.incomingRequestCount = this.requests.incoming.length;
   };
 
-  // Start the lobby: load the friend list and open the this.realtime stream. Returns a
+  // Start the lobby: load the friend list and subscribe to the realtime stream. Returns a
   // teardown function for onMount cleanup.
   init = (currentUserId: string, initialDoNotDisturb = false, initialPresenceStatus?: PresenceStatus): (() => void) => {
     this.selfId = currentUserId;
@@ -164,7 +167,7 @@ export class LobbyStore {
     if (!areNotificationPreferencesLoadedFor(currentUserId)) {
       prepareNotificationPreferences(currentUserId, initialDoNotDisturb, initialPresenceStatus);
     }
-    this.realtime = connectRealtime(this.handleRealtimeEvent);
+    this.stopRealtime = getAppRealtime().subscribe(this.handleRealtimeEvent);
     void Promise.all([this.refreshFriends(), this.refreshRequests()]).catch(() => {
       this.loaded = true;
     });
@@ -183,8 +186,8 @@ export class LobbyStore {
     });
     return () => {
       stopPresenceIdleTracking();
-      this.realtime?.close();
-      this.realtime = null;
+      this.stopRealtime?.();
+      this.stopRealtime = null;
       this.presence.reset();
       this.browserNotifications.stop();
       this.thread.close();
@@ -229,8 +232,6 @@ export class LobbyStore {
 
   closeProfile = (): void => this.thread.closeProfile();
 
-  // The lobby enters voice for this event through its usual confirmation flow.
-
   // Accept or decline a room invitation carried by a DM. The server flips the
   // invite status and fans the edited message out to both participants, so the
   // local update here is just the immediate echo.
@@ -239,10 +240,7 @@ export class LobbyStore {
     const peerId = message.senderId === this.selfId ? message.recipientId : message.senderId;
     const updated = await respondRoomInvite(peerId, message.id, action);
     this.applyEditedMessage(updated);
-    if (action === 'accept') {
-      const roomId = updated.invite?.roomId || message.invite.roomId;
-      window.setTimeout(() => window.dispatchEvent(new CustomEvent(ENTER_ROOM_EVENT, { detail: { roomId } })), 120);
-    }
+    if (action === 'accept') this.onEnterRoom(updated.invite?.roomId || message.invite.roomId);
   };
 
   // --- DM -----------------------------------------------------------------

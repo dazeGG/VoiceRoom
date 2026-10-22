@@ -1,7 +1,3 @@
-<script lang="ts" module>
-  let submenuCounter = 0;
-</script>
-
 <script lang="ts">
   import { onDestroy, tick } from 'svelte';
   import PopoverMenuItem from './PopoverMenuItem.svelte';
@@ -20,7 +16,8 @@
   let panelLeft = $state(8);
   let panelTop = $state(8);
   let timer: ReturnType<typeof setTimeout> | null = null;
-  const panelId = `popover-submenu-${++submenuCounter}`;
+  const uid = $props.id();
+  const panelId = `popover-submenu-${uid}`;
 
   function portal(node: HTMLElement) {
     const owner = row?.closest<HTMLElement>('[data-overlay-id]')?.dataset.overlayId;
@@ -97,8 +94,8 @@
 
   function handlePanelKeydown(event: KeyboardEvent): void {
     const items = Array.from(panel?.querySelectorAll<HTMLElement>('[role="menuitem"]:not([disabled])') ?? []);
-    const current = items.indexOf(document.activeElement as HTMLElement);
-    let next = current;
+    const current = items.findIndex((item) => item === document.activeElement);
+    let next: number;
     if (event.key === 'ArrowLeft') {
       event.preventDefault();
       event.stopPropagation();

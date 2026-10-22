@@ -30,9 +30,14 @@ import {
   type MicrophoneMode,
   type NoiseMode
 } from './config';
+import { isRecord } from '@voice-room/shared/guards';
+
+export function isNoiseMode(mode: unknown): mode is NoiseMode {
+  return typeof mode === 'string' && Object.hasOwn(NOISE_MODES, mode);
+}
 
 export function getNoiseMode(mode: unknown): NoiseMode {
-  return typeof mode === 'string' && Object.hasOwn(NOISE_MODES, mode) ? (mode as NoiseMode) : DEFAULT_NOISE_MODE;
+  return isNoiseMode(mode) ? mode : DEFAULT_NOISE_MODE;
 }
 
 export function getStoredNoiseMode(): NoiseMode {
@@ -173,16 +178,16 @@ const DEFAULT_PARTICIPANT_AUDIO_PREFERENCE: ParticipantAudioPreference = {
   volume: DEFAULT_PARTICIPANT_VOLUME
 };
 
-function readParticipantAudioPreferences(): Record<string, Partial<ParticipantAudioPreference>> {
+function readParticipantAudioPreferences(): Record<string, unknown> {
   try {
-    const parsed = JSON.parse(localStorage.getItem(PARTICIPANT_AUDIO_PREFERENCES_STORAGE_KEY) || '{}');
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    const parsed: unknown = JSON.parse(localStorage.getItem(PARTICIPANT_AUDIO_PREFERENCES_STORAGE_KEY) || '{}');
+    return isRecord(parsed) ? parsed : {};
   } catch {
     return {};
   }
 }
 
-function writeParticipantAudioPreferences(preferences: Record<string, Partial<ParticipantAudioPreference>>): void {
+function writeParticipantAudioPreferences(preferences: Record<string, unknown>): void {
   localStorage.setItem(PARTICIPANT_AUDIO_PREFERENCES_STORAGE_KEY, JSON.stringify(preferences));
 }
 
@@ -193,7 +198,8 @@ export function getParticipantAudioPreferenceKey(accountUserId: string, peerId: 
 }
 
 export function getParticipantAudioPreference(key: string): ParticipantAudioPreference {
-  const stored = readParticipantAudioPreferences()[key] || {};
+  const entry = readParticipantAudioPreferences()[key];
+  const stored = isRecord(entry) ? entry : {};
   return {
     muted: Object.hasOwn(stored, 'muted') ? Boolean(stored.muted) : DEFAULT_PARTICIPANT_AUDIO_PREFERENCE.muted,
     volume: Object.hasOwn(stored, 'volume')

@@ -1,34 +1,18 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { Attachment } from 'svelte/attachments';
   import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
-  import { onMount, tick, untrack } from 'svelte';
-  import {
-    deleteRoomChatMessage,
-    editRoomChatMessage,
-    fetchRoomChatPage,
-    markRoomChatRead,
-    postRoomChat,
-    chatMessageFromRoomMessage,
-    type ChatMessage
-  } from '$lib/api/rooms';
-  import { beginRoomChatReadSession, setRoomUnreadCount } from '$lib/entities/room/room-presence.svelte';
+  import { onMount, untrack } from 'svelte';
+  import type { ChatMessage } from '$lib/api/rooms';
   import { session } from '$lib/features/auth/session.svelte';
-  import { subscribeRoomPreview } from '$lib/entities/room/room-realtime';
-  import { copyText } from '$lib/shared/utils/clipboard';
   import type { Attachment as MessageAttachment } from '@voice-room/shared/contracts/messages';
-  import { attachmentAt, copyAttachmentImage, downloadAttachment } from '$lib/shared/chat/attachment-actions';
-  import { playRoomChatMessageCue } from '../client/media/cues';
+  import { attachmentAt, downloadAttachment } from '$lib/shared/chat/attachment-actions';
+  import { copyMessageImage, copyMessageText } from '$lib/shared/chat/chat-scroll.svelte';
   import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '../client/room/lifecycle';
   import { openProfileCardFor } from '$lib/entities/profile-card/profile-card-ui.svelte';
   import { getParticipantById } from '../client/room/participants';
   import { state as roomState } from '../client/core/state.svelte';
   import { mentionProfilePerson, participantProfilePerson, roomMessageProfilePerson } from '../profile-card-adapter';
   import { useRoomSocial } from '../social';
-  import { isRoomNotificationsMuted } from '$lib/shared/notifications/preferences.svelte';
-  import { RoomChatTimeline } from '../room-chat-timeline.svelte';
-  import { createReadReconciliation } from '$lib/shared/chat/read-reconciliation.svelte';
-  import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
   import MessageContextMenu from '$lib/shared/chat/MessageContextMenu.svelte';
   import ReportMessageDialog from '$lib/shared/chat/ReportMessageDialog.svelte';
   import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions } from '$lib/shared/chat/frequent-reactions';
@@ -37,20 +21,17 @@
   import RoomPanelHeader from './RoomPanelHeader.svelte';
   import RoomChatMessageGroup from './RoomChatMessageGroup.svelte';
   import { buildChatDays, type ChatGroup } from '../room-chat-view';
-  import { RoomChatDraft, type OutgoingRoomMessage } from '../room-chat-draft.svelte';
-  import { applyRoomPinsEvent, isMessagePinned, loadRoomPins, resetRoomPins, togglePin } from '../pins.svelte';
-  import { getAttachmentComposeStore, type AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
+  import { ChatDraft } from '$lib/shared/chat/chat-draft.svelte';
+  import { RoomChatSession, type OutgoingRoomMessage } from '../room-chat-session.svelte';
+  import { isMessagePinned } from '../pins.svelte';
+  import type { AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
+  import { getAttachmentComposeStore } from '$lib/shared/chat/attachment-compose-stores';
   import { AttachmentDrop } from '$lib/shared/chat/attachment-drop.svelte';
-  import { Outbox } from '$lib/shared/chat/outbox.svelte';
   import OutgoingMessages from '$lib/shared/chat/OutgoingMessages.svelte';
   import AttachmentDropOverlay from '$lib/shared/chat/AttachmentDropOverlay.svelte';
-  import { createTypingTracker, formatTypingLabel, typingActivityOf } from '$lib/shared/chat/typing.svelte';
   import { getRoomMembership } from '$lib/entities/room/room-membership.svelte';
-  import { createLogger, errorContext } from '$lib/shared/log';
 
   const social = useRoomSocial();
-
-  const log = createLogger('room:chat');
 
   // The one room chat. The in-room rail and the lobby preview differ only in how
   // the viewer is identified and in who owns the surrounding panel chrome, so
@@ -115,17 +96,31 @@
     participants?: Snippet;
   } = $props();
 
-  const timeline = new RoomChatTimeline();
+  const chatVisible = $derived(visible && activeTab === 'chat');
+
+  function toast(message: string, options?: { variant?: 'error' }): void {
+    onToast?.(message, options);
+  }
+
+  const chat = new RoomChatSession({
+    roomId: () => roomId,
+    peerId: () => peerId,
+    sessionToken: () => sessionToken,
+    displayName: () => resolveDisplayName(),
+    visible: () => chatVisible,
+    aroundMessageId: () => aroundMessageId || new URL(window.location.href).searchParams.get('around') || undefined,
+    onRead: () => onRead?.(),
+    onUnreadMessage: () => onUnreadMessage?.(),
+    toast,
+    lifecycle: { updated: applyRoomUpdated, notFound: applyRoomNotFound, deleted: applyRoomDeleted }
+  });
+  const { timeline, scroll, reactions, outbox, isOwnMessage } = chat;
+
   let editingMessageId = $state('');
-  let chatBody = $state<HTMLDivElement | null>(null);
   let composer = $state<{ focus(): void } | null>(null);
-  let chatPinnedToBottom = true;
-  let composerAttachmentCount = 0;
   // On a phone the panel is the whole screen rather than a rail beside the
   // stage, so it closes with a cross instead of collapsing to the right.
   let mobile = $state(false);
-  let readReconciliation: ReturnType<typeof createReadReconciliation> | null = null;
-  const reactions = createReactionStore();
   const media = $derived<AttachmentComposeStore | null>(roomId ? getAttachmentComposeStore('room', roomId) : null);
   let replyTarget = $state<ChatMessage | null>(null);
   let menuMessage = $state<ChatMessage | null>(null);
@@ -135,39 +130,44 @@
   let menuX = $state(0);
   let menuY = $state(0);
   let quickReactions = $state<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
-  const chatVisible = $derived(visible && activeTab === 'chat');
-
-  function toast(message: string, options?: { variant?: 'error' }): void {
-    onToast?.(message, options);
-  }
-  const draft = new RoomChatDraft(untrack(() => roomId));
+  const draft = new ChatDraft({ type: 'room', id: untrack(() => roomId) });
   $effect(() => draft.restore(session.user?.id ?? ''));
 
-  $effect(() => {
-    const attachmentCount = media?.drafts.length ?? 0;
-    if (attachmentCount === composerAttachmentCount) return;
-    composerAttachmentCount = attachmentCount;
-    if (chatPinnedToBottom) void tick().then(scrollToBottom);
-  });
+  $effect(() => scroll.followComposer(media?.drafts.length ?? 0));
 
   const drop = new AttachmentDrop({
     media: () => media,
     onError: (message) => toast(message, { variant: 'error' })
   });
 
-  // Who else is typing in this room. Notices name the person the server saw,
-  // keyed like message authors (account id, or the guest's peer id) so their
-  // message clears them.
-  const roomTyping = createTypingTracker();
-  const typingLabel = $derived(formatTypingLabel(roomTyping.people));
+  const days = $derived(buildChatDays(timeline.messages, isOwnMessage));
 
-  function typingKey(person: { userId?: string | null; authorUserId?: string | null; peerId?: string }): string {
-    return person.userId || person.authorUserId || person.peerId || '';
-  }
+  $effect(() => {
+    for (const message of timeline.messages) reactions.show(message);
+  });
+
+  // Showing the chat marks it read and parks the view on the newest message.
+  $effect(() => {
+    if (!chatVisible || !roomId) return;
+    return chat.show();
+  });
+
+  onMount(() => {
+    mobile = !getDesktopBoundaryPolicy().desktopAllowed;
+    const stop = chat.start();
+
+    if (roomId && session.user?.id) {
+      void loadFrequentReactions('chat', session.user.id).then((emoji) => {
+        if (emoji.length > 0) quickReactions = emoji;
+      });
+    }
+
+    return stop;
+  });
 
   function editLastOwnMessage(): boolean {
     if (editingMessageId) return false;
-    const lastOwn = timeline.messages.findLast(isOwnMessage);
+    const lastOwn = chat.lastOwnMessage();
     if (!lastOwn) return false;
     editingMessageId = lastOwn.id;
     timeline.error = '';
@@ -178,131 +178,6 @@
     replyTarget = message;
     composer?.focus();
   }
-
-  const days = $derived(buildChatDays(timeline.messages, isOwnMessage));
-
-  $effect(() => {
-    for (const message of timeline.messages) reactions.show(message);
-  });
-
-  function isOwnMessage(message: ChatMessage): boolean {
-    const accountUserId = session.user?.id;
-    return Boolean((accountUserId && message.authorUserId === accountUserId) || (peerId && message.peerId === peerId));
-  }
-
-  // Showing the chat marks it read and parks the view on the newest message.
-  $effect(() => {
-    if (!chatVisible || !roomId) return;
-    onRead?.();
-    const endReadSession = beginRoomChatReadSession(roomId);
-    void settleAtBottom().then(() => markLatestRenderedRead());
-    return endReadSession;
-  });
-
-  onMount(() => {
-    mobile = !getDesktopBoundaryPolicy().desktopAllowed;
-    if (!roomId) {
-      timeline.loading = false;
-      timeline.error = 'Комната не найдена';
-      return;
-    }
-
-    reactions.setConversation({ type: 'room', id: roomId });
-
-    const controller = new AbortController();
-    void initializeHistory(controller.signal);
-    // Server-side preview subscription: without it the API only routes room
-    // events (chat included) to active voice peers, so a user who opened the
-    // room page but had not joined voice never received realtime messages.
-    // It also re-subscribes after a WS reconnect and backfills missed
-    // messages from the fresh room.snapshot.
-    const unsubscribe = subscribeRoomPreview(roomId, (event) => {
-      if (event.type === 'room.not_found') {
-        applyRoomNotFound(event.payload.roomId);
-        timeline.error = 'Комната не найдена';
-        return;
-      }
-      if (event.type === 'room.updated') {
-        applyRoomUpdated(event.payload.room);
-        return;
-      }
-      if (event.type === 'room.deleted') {
-        applyRoomDeleted(event.payload.roomId);
-        return;
-      }
-      if (event.type === 'room.snapshot') {
-        if (Array.isArray(event.payload.recentMessages)) {
-          mergeMessages(event.payload.recentMessages.map(chatMessageFromRoomMessage));
-          timeline.loading = false;
-        }
-        return;
-      }
-      if (event.type === 'room.chat.deleted') {
-        const mid = event.payload?.messageId;
-        if (mid) {
-          timeline.remove(mid);
-          reactions.markDeleted(mid);
-        }
-        return;
-      }
-      if (event.type === 'reaction.updated') {
-        reactions.applyServer(event.payload.messageId, event.payload.summary);
-        return;
-      }
-      if (event.type === 'room.pins') {
-        applyRoomPinsEvent(event.payload.roomId, event.payload);
-        return;
-      }
-      if (event.type === 'room.chat.edited') {
-        const edited = chatMessageFromRoomMessage(event.payload.message);
-        if (edited?.id) timeline.replace(edited);
-        return;
-      }
-      // Account-backed messages render the current profile. Keep the open rail
-      // in sync immediately when the room broadcasts a refreshed peer.
-      if (event.type === 'room.peer.updated') {
-        const peer = event.payload.peer;
-        if (peer?.id) timeline.restamp(peer);
-        return;
-      }
-      if (event.type === 'room.chat.typing') {
-        const typist = event.payload.typist;
-        if (!typist || typist.peerId === peerId || (typist.userId && typist.userId === session.user?.id)) return;
-        roomTyping.note(typingKey(typist), typist.name, typingActivityOf(event.payload.activity));
-        return;
-      }
-      if (event.type !== 'room.chat.message') return;
-      const message = chatMessageFromRoomMessage(event.payload.message);
-      if (message) roomTyping.clear(typingKey(message));
-      if (!message || !timeline.add(message)) return;
-      timeline.error = '';
-      if (message.peerId !== peerId && !isRoomNotificationsMuted(roomId)) playRoomChatMessageCue(message.id);
-      if (chatVisible) {
-        onRead?.();
-        setRoomUnreadCount(roomId, 0);
-        void tick().then(() => {
-          if (chatPinnedToBottom) scrollToBottom();
-          void markRealtimeRenderedRead(message);
-        });
-      } else {
-        onUnreadMessage?.();
-      }
-    });
-
-    if (session.user?.id) {
-      void loadFrequentReactions('chat', session.user.id).then((emoji) => {
-        if (emoji.length > 0) quickReactions = emoji;
-      });
-    }
-
-    return () => {
-      controller.abort();
-      timeline.close();
-      readReconciliation?.dispose();
-      resetRoomPins();
-      unsubscribe();
-    };
-  });
 
   // --- message context menu ---------------------------------------------
 
@@ -321,212 +196,6 @@
 
   function reactFromMenu(messageId: string, emoji: string): void {
     void reactions.toggle(messageId, emoji);
-  }
-
-  // The emoji picker is owned by each message's hover toolbar, so the menu entry
-  // drives that trigger rather than duplicating the popover.
-  function openReactionPickerFor(messageId: string): void {
-    queueMicrotask(() => {
-      const row = chatBody?.querySelector(`[data-message-id="${CSS.escape(messageId)}"]`);
-      row?.querySelector<HTMLButtonElement>('.reaction-picker-trigger')?.click();
-    });
-  }
-
-  function jumpToMessage(messageId: string): void {
-    const row = chatBody?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`);
-    if (!row) {
-      toast('Сообщение не загружено — прокрутите историю выше');
-      return;
-    }
-    flashMessage(row);
-  }
-
-  /** Centre a message and flash it, so the eye lands on the one that was meant. */
-  function flashMessage(row: HTMLElement): void {
-    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    row.classList.add('is-highlighted');
-    setTimeout(() => row.classList.remove('is-highlighted'), 1600);
-  }
-
-  async function togglePinned(messageId: string): Promise<void> {
-    try {
-      await togglePin(roomId, messageId);
-    } catch (err) {
-      toast(err instanceof Error && err.message ? err.message : 'Не удалось закрепить сообщение', { variant: 'error' });
-    }
-  }
-
-  // The server's recent messages after a (re)subscribe: edits missed while
-  // disconnected appear, and the view stays on the newest message.
-  function mergeMessages(recent: ChatMessage[]): void {
-    timeline.reconcileLatest(recent);
-    if (timeline.paged) {
-      if (chatVisible) void tick().then(() => markLatestRenderedRead());
-      return;
-    }
-    if (chatVisible) {
-      onRead?.();
-      void settleAtBottom();
-    }
-  }
-
-  async function initializeHistory(signal: AbortSignal): Promise<void> {
-    // Paged history is account-only: GET /chat/history answers a guest with 401
-    // «Room is not available», which surfaced as a chat error in a room a guest
-    // can otherwise read and write. Guests keep the recent-window endpoint.
-    const paged = Boolean(session.user?.id);
-    readReconciliation?.dispose();
-    readReconciliation = session.user?.id
-      ? createReadReconciliation({
-          scope: `room:${roomId}`,
-          commit: (cursor) => markRoomChatRead(roomId, cursor)
-        })
-      : null;
-    const anchorMessageId = aroundMessageId || new URL(window.location.href).searchParams.get('around') || undefined;
-    if (paged) {
-      const opening = timeline.open(roomId, anchorMessageId);
-      // A room visited before shows its kept messages at once: park on the newest.
-      if (!anchorMessageId && chatVisible && timeline.messages.length > 0) void settleAtBottom();
-      await opening;
-    } else await refreshMessages(signal);
-    // Pins, like paged history, are for a room the account keeps: a guest and
-    // an account that was just refused that history would only be refused again.
-    if (timeline.paged && !signal.aborted) void loadRoomPins(roomId);
-    if (anchorMessageId && !signal.aborted) {
-      await tick();
-      chatPinnedToBottom = false;
-      // Arriving from a notification lands the way jumping to a reply does:
-      // centred and flashed. Mentions are already tinted, so with several on
-      // screen the flash is what says which one this link was for.
-      const target = chatBody?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(anchorMessageId)}"]`);
-      if (target) flashMessage(target);
-    } else if (!signal.aborted && chatVisible) {
-      // The first page must land on the newest message: the body was empty when
-      // the visibility effect ran, so its scroll then was a no-op.
-      await settleAtBottom();
-    }
-    if (!signal.aborted && chatVisible) await tick().then(() => markLatestRenderedRead());
-  }
-
-  async function markLatestRenderedRead(cursor = timeline.latestReadCursor()): Promise<void> {
-    if (!chatVisible || !session.user?.id || !roomId || !readReconciliation) return;
-    await readReconciliation.advanceAfterRender(cursor);
-  }
-
-  async function markRealtimeRenderedRead(message: ChatMessage): Promise<void> {
-    // Read cursors and paged history are account-only; a guest has neither.
-    if (!timeline.paged || !readReconciliation) return;
-    if (message.readCursor) {
-      await markLatestRenderedRead(message.readCursor);
-      return;
-    }
-    try {
-      const targetRoomId = roomId;
-      const page = await fetchRoomChatPage(targetRoomId, { mode: 'latest' });
-      if (!timeline.paged || roomId !== targetRoomId || !page.messages.some((item) => item.id === message.id)) return;
-      timeline.reconcileLatest(page.messages);
-      await tick();
-      await markLatestRenderedRead();
-    } catch (cause) {
-      log.error('failed to reconcile realtime room read cursor', errorContext(cause));
-    }
-  }
-
-  function onHistoryScroll(): void {
-    if (!chatBody) return;
-    chatPinnedToBottom = chatBody.scrollHeight - chatBody.scrollTop - chatBody.clientHeight <= 48;
-    if (!timeline.paged || chatBody.scrollTop > 32) return;
-    void timeline.loadOlder(chatBody);
-  }
-
-  async function refreshMessages(signal?: AbortSignal): Promise<void> {
-    if (!roomId) return;
-    if ((await timeline.loadRecent(roomId, signal)) && chatVisible) {
-      onRead?.();
-      void settleAtBottom();
-    }
-  }
-
-  // Messages on their way: shown at the foot of the chat until the server has
-  // them, then they join it like any other.
-  const outbox = new Outbox<OutgoingRoomMessage, ChatMessage>({
-    // Resolved per send: the room rail reads a guest name that the name dialog
-    // can persist after this component mounted.
-    deliver: (outgoing, idempotencyKey) =>
-      postRoomChat(roomId, { name: resolveDisplayName(), ...peerCredentials(), ...outgoing, idempotencyKey }),
-    onSent: (message) => {
-      if (timeline.add(message) && chatVisible) onRead?.();
-    }
-  });
-
-  function send(outgoing: OutgoingRoomMessage): void {
-    outbox.enqueue(outgoing);
-    if (chatVisible) void settleAtBottom();
-  }
-
-  function scrollToBottom(): void {
-    if (!chatBody) return;
-    chatBody.scrollTop = chatBody.scrollHeight;
-  }
-
-  // Images, link previews and emoji that finish loading (or a resized window)
-  // change the height after a message rendered: a reader at the newest message
-  // stays on it. The observer runs after layout and before paint, so the
-  // correction never shows as a jump. It watches the chat body and every day
-  // section, since the sections sit straight in the scrolling body.
-  const heightObserver =
-    typeof ResizeObserver === 'undefined'
-      ? null
-      : new ResizeObserver(() => {
-          if (chatPinnedToBottom) scrollToBottom();
-        });
-  const keepsNewestInView: Attachment<HTMLElement> = (element) => {
-    heightObserver?.observe(element);
-    return () => heightObserver?.unobserve(element);
-  };
-
-  // Attachments and emoji fonts resize rows after the first paint, so a single
-  // scroll lands short of the newest message. Re-pin across the next frames
-  // until the height stops moving.
-  async function settleAtBottom(): Promise<void> {
-    await tick();
-    scrollToBottom();
-    chatPinnedToBottom = true;
-    let lastHeight = chatBody?.scrollHeight ?? 0;
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)));
-      if (!chatBody || !chatPinnedToBottom) return;
-      if (chatBody.scrollHeight === lastHeight) continue;
-      lastHeight = chatBody.scrollHeight;
-      scrollToBottom();
-    }
-  }
-
-  // Peer credentials exist only for a viewer who joined the room; the lobby
-  // preview posts as the signed-in account instead.
-  function peerCredentials(): { peerId?: string; sessionToken?: string } {
-    return sessionToken ? { peerId, sessionToken } : {};
-  }
-
-  async function deleteMessage(messageId: string): Promise<void> {
-    if (!roomId) return;
-    try {
-      await deleteRoomChatMessage(roomId, messageId, peerCredentials());
-      timeline.remove(messageId);
-    } catch {
-      timeline.error = 'Не удалось удалить сообщение';
-      setTimeout(() => (timeline.error = ''), 1600);
-    }
-  }
-
-  async function saveEdit(messageId: string, text: string): Promise<void> {
-    timeline.error = '';
-    try {
-      timeline.replace(await editRoomChatMessage(roomId, messageId, { ...peerCredentials(), text }));
-    } catch (err) {
-      timeline.error = err instanceof Error ? err.message : 'Не удалось изменить сообщение';
-      throw err;
-    }
   }
 
   // Left click on another author (avatar or name) shows their profile card.
@@ -567,24 +236,6 @@
     event.stopPropagation();
     onAuthorContextMenu(group.peerId, event);
   }
-
-  async function copyImage(image: MessageAttachment): Promise<void> {
-    try {
-      await copyAttachmentImage(image);
-      toast('Изображение скопировано');
-    } catch {
-      toast('Не удалось скопировать', { variant: 'error' });
-    }
-  }
-
-  async function copyMessageText(message: ChatMessage): Promise<void> {
-    try {
-      await copyText(message.text);
-      toast('Сообщение скопировано');
-    } catch {
-      toast('Не удалось скопировать', { variant: 'error' });
-    }
-  }
 </script>
 
 <aside
@@ -614,8 +265,8 @@
 
   {#if activeTab === 'chat'}
     <PinnedMessagesBar
-      onJump={jumpToMessage}
-      onUnpin={(messageId: string) => void togglePinned(messageId)}
+      onJump={chat.jumpTo}
+      onUnpin={(messageId: string) => void chat.togglePinned(messageId)}
       canUnpin={Boolean(session.user?.id)}
     />
     <div
@@ -623,9 +274,8 @@
       id={chatPanelId}
       role="tabpanel"
       aria-labelledby={chatTabId}
-      bind:this={chatBody}
-      {@attach keepsNewestInView}
-      onscroll={onHistoryScroll}
+      {@attach scroll.body}
+      onscroll={() => scroll.onScroll(chat.loadOlder)}
     >
       {#if timeline.loading}
         <p class="chat-rail-note">Загружаем сообщения…</p>
@@ -635,13 +285,13 @@
             class="chat-rail-note"
             type="button"
             disabled={timeline.loadingOlder}
-            onclick={() => void timeline.loadOlder(chatBody)}
+            onclick={() => chat.loadOlder(scroll.element)}
           >
             {timeline.loadingOlder ? 'Загружаем…' : 'Показать предыдущие'}
           </button>
         {/if}
         {#each days as day (day.key)}
-          <section class="chat-day-section" aria-label={day.label} {@attach keepsNewestInView}>
+          <section class="chat-day-section" aria-label={day.label} {@attach scroll.keepsNewestInView}>
             <div class="chat-day-divider" role="separator" aria-label={day.label}>
               <span>{day.label}</span>
             </div>
@@ -655,12 +305,12 @@
                 onOpenProfile={(event: MouseEvent) => openUserProfile(group, event)}
                 onAuthorMenu={(event: MouseEvent) => openUserMenu(group, event)}
                 onMessageMenu={openMessageMenu}
-                onSaveEdit={saveEdit}
+                onSaveEdit={(messageId: string, text: string) => chat.saveEdit(messageId, text)}
                 onCloseEdit={() => (editingMessageId = '')}
-                onJump={jumpToMessage}
+                onJump={chat.jumpTo}
                 onMention={openMentionProfile}
                 onReply={replyTo}
-                onCopy={(message: ChatMessage) => void copyMessageText(message)}
+                onCopy={(message: ChatMessage) => void copyMessageText(message.text, toast)}
               />
             {/each}
           </section>
@@ -687,10 +337,10 @@
       {roomId}
       {draft}
       {media}
-      {typingLabel}
-      {send}
+      typingLabel={chat.typingLabel}
+      send={(message: OutgoingRoomMessage) => chat.send(message)}
       onEditLast={editLastOwnMessage}
-      onJump={jumpToMessage}
+      onJump={chat.jumpTo}
       onToast={toast}
     />
   {:else if participants}
@@ -721,17 +371,17 @@
     canDelete={isOwnMessage(target) || canModerate}
     onClose={closeMessageMenu}
     onReact={(emoji: string) => reactFromMenu(target.id, emoji)}
-    onOpenReactionPicker={() => openReactionPickerFor(target.id)}
+    onOpenReactionPicker={() => scroll.openReactionPicker(target.id)}
     onReply={() => replyTo(target)}
-    onCopy={() => void copyMessageText(target)}
-    onCopyImage={image ? () => void copyImage(image) : undefined}
+    onCopy={() => void copyMessageText(target.text, toast)}
+    onCopyImage={image ? () => void copyMessageImage(image, toast) : undefined}
     onDownloadImage={image ? () => downloadAttachment(image) : undefined}
-    onTogglePin={() => void togglePinned(target.id)}
+    onTogglePin={() => void chat.togglePinned(target.id)}
     onEdit={() => {
       editingMessageId = target.id;
       timeline.error = '';
     }}
-    onDelete={() => void deleteMessage(target.id)}
+    onDelete={() => void chat.deleteMessage(target.id)}
     onReport={session.user?.id && !isOwnMessage(target) ? () => (reportedMessageId = target.id) : undefined}
   />
 {/if}

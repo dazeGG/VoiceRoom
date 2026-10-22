@@ -1,17 +1,31 @@
-// In-process account and room messages become the public WebSocket events.
+// In-process account messages become the public WebSocket events.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { ServerEvents, ServerEventType } from '@voice-room/shared/contracts/realtime';
+import {
+  ServerEventFrames,
+  type ServerEventOf,
+  type ServerEvents,
+  type ServerEventType
+} from '@voice-room/shared/contracts/realtime';
+import { Value } from 'typebox/value';
 import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import { toWsAccountEvent } from '../src/realtime/account-events.ts';
-import { legacyPeerMessageToWs } from '../src/realtime/legacy-events.ts';
 import { notificationPreferences, storedDirectMessage } from './fakes/index.ts';
+
+/** Whether the frame is the event of this type, as its schema describes it. */
+function isEventOf<Type extends ServerEventType>(
+  envelope: ServerEnvelope,
+  type: Type
+): envelope is ServerEnvelope & ServerEventOf<Type> {
+  return envelope.type === type && Value.Check(ServerEventFrames[type], envelope);
+}
 
 /** The payload of an event, after checking it is the event expected. */
 function payloadOf<Type extends ServerEventType>(envelope: ServerEnvelope, type: Type): ServerEvents[Type] {
   assert.equal(envelope.type, type);
-  return (envelope as { payload: unknown }).payload as ServerEvents[Type];
+  assert.ok(isEventOf(envelope, type), `the ${type} event matches its schema`);
+  return envelope.payload;
 }
 
 test('account realtime maps DM delete events to the public websocket contract', () => {
@@ -79,29 +93,9 @@ test('account realtime maps notification settings updates for same-account tabs'
   assert.deepEqual(payloadOf(event, 'notification.settings.updated').preferences, preferences);
 });
 
-test('reaction updates map onto preview room subscriptions without losing the authoritative revision', () => {
-  const summary = { emoji: '👍', count: 2, reactedByMe: false, revision: '7' };
-  const event = legacyPeerMessageToWs(
-    {
-      type: 'reaction.updated',
-      payload: { conversation: { type: 'room', id: 'room-1' }, roomId: 'room-1', messageId: 'msg-1', summary }
-    },
-    'room-1'
-  );
-  assert.deepEqual(payloadOf(event, 'reaction.updated'), {
-    conversation: { type: 'room', id: 'room-1' },
-    roomId: 'room-1',
-    messageId: 'msg-1',
-    summary
-  });
-});
-
-test('moderation terminal events map on both account and active room transports', () => {
+test('moderation terminal events map onto the account sockets', () => {
   for (const type of ['room.kicked', 'room.banned'] as const) {
     const account = toWsAccountEvent({ type, roomId: 'room-1', peerId: 'peer-1' });
     assert.deepEqual(payloadOf(account, type), { roomId: 'room-1', peerId: 'peer-1' });
-
-    const active = legacyPeerMessageToWs({ type, roomId: 'room-1', peerId: 'peer-1' }, 'room-1');
-    assert.deepEqual(payloadOf(active, type), { roomId: 'room-1', peerId: 'peer-1' });
   }
 });

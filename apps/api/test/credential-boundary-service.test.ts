@@ -3,15 +3,16 @@ import assert from 'node:assert/strict';
 
 import {
   createCredentialBoundaryService,
-  type GatePrincipal,
   type GateRoomStore
 } from '../src/domains/admission/credential-boundary.service.ts';
+import type { GatePrincipal } from '../src/domains/admission/gate-principal.ts';
 import type {
   GateClaims,
   GateCredentialSigner,
   GateVerification
 } from '../src/domains/admission/gate-credential-signer.ts';
 import { fake } from './fakes/index.ts';
+import { mistyped } from './helpers/mistyped.ts';
 
 const PRINCIPAL: GatePrincipal = { principalId: 'room-1:guest-1', principalType: 'guest' };
 const CLAIMS: GateClaims = {
@@ -121,7 +122,8 @@ test('credential boundary fails closed for invalid, unavailable, and denied deci
       return { status: 'revoked' };
     },
     async getLiveKitGatePrincipalEpoch() {
-      return { status: 'unavailable' } as never;
+      // A status the port does not know fails closed like a refusal.
+      return mistyped({ status: 'unavailable' });
     },
     async verifyLiveKitGateCredential() {
       return undefined;
@@ -143,6 +145,23 @@ test('credential boundary fails closed for invalid, unavailable, and denied deci
   assert.deepEqual(await invalidBoundary.authorizeCredential('credential'), { ok: false, code: 'expired' });
   assert.equal(invalidBoundary.resolvePrincipal({ roomId: 'room-1' }), null);
   assert.throws(() => createCredentialBoundaryService({ signer: createSigner() }), /roomStore is required/);
+});
+
+test('a credential that is not a string is malformed and never reaches the signer', async () => {
+  let verified = 0;
+  const signer: GateCredentialSigner = {
+    ...createSigner(),
+    verify: () => {
+      verified += 1;
+      return { ok: true, claims: CLAIMS };
+    }
+  };
+  const boundary = createCredentialBoundaryService({ roomStore: store({}), signer });
+
+  for (const value of [undefined, null, 42, { token: 'credential' }]) {
+    assert.deepEqual(await boundary.authorizeCredential(value), { ok: false, code: 'malformed' });
+  }
+  assert.equal(verified, 0);
 });
 
 test('credential boundary preserves store refusal when credential persistence fails', async () => {

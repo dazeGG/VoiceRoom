@@ -84,10 +84,9 @@ function createMediaVisibilityService({
     viewerId: string;
   }): Promise<OpenedMedia> {
     if (variant !== 'preview' && variant !== 'processed') throw new MediaVisibilityError();
-    const attachment = await attachments.findById(attachmentId);
-    await requireVisible(attachment, viewerId);
-    // requireVisible throws for a missing attachment.
-    const visible = attachment as Attachment;
+    const visible = await attachments.findById(attachmentId);
+    if (!visible) throw new MediaVisibilityError();
+    await requireVisible(visible, viewerId);
     const opened = await files.openRead(visible.id, variant).catch(() => {
       onAuthorizationInvariantFailure();
       throw new MediaVisibilityError();

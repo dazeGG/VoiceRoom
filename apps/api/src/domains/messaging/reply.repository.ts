@@ -1,39 +1,19 @@
 import crypto from 'node:crypto';
-import { sql } from 'kysely';
+import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
+import { isRecord } from '@voice-room/shared/guards';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
-import { projectReplyPreview, projectReplyTombstone, type ReplyPreview } from './reply-projector.ts';
+import type { DirectMessages, Json, RoomMessages } from '../../platform/db/schema.ts';
+import type { ReplyPreview } from '@voice-room/shared/contracts/messages';
+import { projectReplyPreview, projectReplyTombstone } from './reply-projector.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
-type Override = { client?: QueryClient | null };
+type Override = { client?: QueryClient | null | undefined };
 type Metadata = { kind?: unknown; [key: string]: unknown } | null;
 
-type RoomTargetRow = {
-  id: string;
-  room_id: string;
-  peer_id: string;
-  author_user_id: string | null;
-  author_name?: string | null;
-  name: string;
-  text: string;
-  created_at: unknown;
-  expires_at: unknown;
-  deleted_at: unknown;
-  metadata: Metadata;
-  reply_to_message_id: string | null;
-};
-
-type DirectTargetRow = {
-  id: string;
-  sender_id: string;
-  recipient_id: string;
-  author_name?: string | null;
-  body: string;
-  created_at: unknown;
-  deleted_at: unknown;
-  metadata: Metadata;
-  reply_to_message_id: string | null;
-};
+// The quoted message as stored, with its author's current name when the query joined it.
+type RoomTargetRow = Selectable<RoomMessages> & { author_name?: string | null };
+type DirectTargetRow = Selectable<DirectMessages> & { author_name?: string | null };
 
 export type RoomReplyTarget = {
   id: string;
@@ -82,7 +62,11 @@ function requireQuery(client: QueryClient | null | undefined): QueryClient {
   return client;
 }
 
-function mapRoomTarget(row: RoomTargetRow | null): RoomReplyTarget | null {
+function metadataOf(value: Json): Metadata {
+  return isRecord(value) ? value : null;
+}
+
+function mapRoomTarget(row: RoomTargetRow | undefined): RoomReplyTarget | null {
   if (!row) return null;
   return {
     id: row.id,
@@ -94,13 +78,14 @@ function mapRoomTarget(row: RoomTargetRow | null): RoomReplyTarget | null {
     createdAt: row.created_at,
     expiresAt: row.expires_at,
     deletedAt: row.deleted_at,
-    metadata: row.metadata,
+    metadata: metadataOf(row.metadata),
     replyTo: row.reply_to_message_id ? { messageId: row.reply_to_message_id } : undefined
   };
 }
 
-function mapDirectTarget(row: DirectTargetRow | null): DirectReplyTarget | null {
+function mapDirectTarget(row: DirectTargetRow | undefined): DirectReplyTarget | null {
   if (!row) return null;
+  const metadata = metadataOf(row.metadata);
   return {
     id: row.id,
     senderId: row.sender_id,
@@ -109,8 +94,8 @@ function mapDirectTarget(row: DirectTargetRow | null): DirectReplyTarget | null 
     body: row.body,
     createdAt: row.created_at,
     deletedAt: row.deleted_at,
-    metadata: row.metadata,
-    invite: row.metadata?.kind === 'room-invite' ? row.metadata : null,
+    metadata,
+    invite: metadata?.kind === 'room-invite' ? metadata : null,
     replyTo: row.reply_to_message_id ? { messageId: row.reply_to_message_id } : undefined
   };
 }
@@ -140,32 +125,36 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     return kyselyOn(requireQuery(override || defaultClient));
   }
 
-  // One message id, or several for a page of quotes.
-  function roomTarget(db: Database, roomId: string | undefined, messageId: string | string[] | undefined) {
+  // One message id, or several for a page of quotes. A missing room or user
+  // matches no row, so the quote shows as a tombstone.
+  function roomTarget(db: Database, roomId: string | undefined, messageId: string | string[]) {
     const query = db
       .selectFrom('room_messages as m')
       .leftJoin('users as u', 'u.id', 'm.author_user_id')
       .selectAll('m')
       .select(roomAuthorName)
-      .where('m.room_id', '=', roomId as string);
-    return Array.isArray(messageId)
-      ? query.where('m.id', 'in', messageId)
-      : query.where('m.id', '=', messageId as string);
+      .where('m.room_id', '=', roomId ?? '');
+    return Array.isArray(messageId) ? query.where('m.id', 'in', messageId) : query.where('m.id', '=', messageId);
   }
 
-  function directTarget(db: Database, userId?: string, peerId?: string, messageId?: string | string[]) {
+  function directTarget(
+    db: Database,
+    userId: string | undefined,
+    peerId: string | undefined,
+    messageId: string | string[]
+  ) {
     const query = db
       .selectFrom('direct_messages as m')
       .leftJoin('users as u', 'u.id', 'm.sender_id')
       .selectAll('m')
       .select(directAuthorName);
     return (
-      (Array.isArray(messageId) ? query.where('m.id', 'in', messageId) : query.where('m.id', '=', messageId as string))
+      (Array.isArray(messageId) ? query.where('m.id', 'in', messageId) : query.where('m.id', '=', messageId))
         // Between these two users, either direction.
         .where((eb) =>
           eb.or([
-            eb.and([eb('m.sender_id', '=', userId as string), eb('m.recipient_id', '=', peerId as string)]),
-            eb.and([eb('m.sender_id', '=', peerId as string), eb('m.recipient_id', '=', userId as string)])
+            eb.and([eb('m.sender_id', '=', userId ?? ''), eb('m.recipient_id', '=', peerId ?? '')]),
+            eb.and([eb('m.sender_id', '=', peerId ?? ''), eb('m.recipient_id', '=', userId ?? '')])
           ])
         )
     );
@@ -175,9 +164,9 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     roomId,
     messageId,
     client: override
-  }: { roomId?: string; messageId?: string } & Override = {}): Promise<RoomReplyTarget | null> {
+  }: { roomId: string; messageId: string } & Override): Promise<RoomReplyTarget | null> {
     const row = await roomTarget(on(override), roomId, messageId).forUpdate('m').executeTakeFirst();
-    return mapRoomTarget((row as RoomTargetRow | undefined) || null);
+    return mapRoomTarget(row);
   }
 
   async function lockDirectTarget({
@@ -185,9 +174,9 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     peerId,
     messageId,
     client: override
-  }: { userId?: string; peerId?: string; messageId?: string } & Override = {}): Promise<DirectReplyTarget | null> {
+  }: { userId: string; peerId: string; messageId: string } & Override): Promise<DirectReplyTarget | null> {
     const row = await directTarget(on(override), userId, peerId, messageId).forUpdate('m').executeTakeFirst();
-    return mapDirectTarget((row as DirectTargetRow | undefined) || null);
+    return mapDirectTarget(row);
   }
 
   async function getRoomPreview({
@@ -195,9 +184,9 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     messageId,
     client: override,
     now
-  }: { roomId?: string; messageId?: string; now?: number } & Override = {}): Promise<ReplyPreview | null> {
+  }: { roomId?: string | undefined; messageId: string; now?: number } & Override): Promise<ReplyPreview | null> {
     const row = await roomTarget(on(override), roomId, messageId).executeTakeFirst();
-    const target = mapRoomTarget((row as RoomTargetRow | undefined) || null);
+    const target = mapRoomTarget(row);
     return target ? projectReplyPreview(target, { now }) : projectReplyTombstone(messageId);
   }
 
@@ -208,13 +197,13 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     client: override,
     now
   }: {
-    userId?: string;
-    peerId?: string;
-    messageId?: string;
+    userId?: string | undefined;
+    peerId?: string | undefined;
+    messageId: string;
     now?: number;
-  } & Override = {}): Promise<ReplyPreview | null> {
+  } & Override): Promise<ReplyPreview | null> {
     const row = await directTarget(on(override), userId, peerId, messageId).executeTakeFirst();
-    const target = mapDirectTarget((row as DirectTargetRow | undefined) || null);
+    const target = mapDirectTarget(row);
     return target ? projectReplyPreview(target, { now }) : projectReplyTombstone(messageId);
   }
 
@@ -224,10 +213,12 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     messageIds,
     client: override,
     now
-  }: { roomId?: string; messageIds: string[]; now?: number } & Override): Promise<Map<string, ReplyPreview | null>> {
+  }: { roomId?: string | undefined; messageIds: string[]; now?: number } & Override): Promise<
+    Map<string, ReplyPreview | null>
+  > {
     const ids = [...new Set(messageIds)];
     if (ids.length === 0) return new Map();
-    const rows = (await roomTarget(on(override), roomId, ids).execute()) as RoomTargetRow[];
+    const rows = await roomTarget(on(override), roomId, ids).execute();
     return previewsById(ids, new Map(rows.map((row) => [row.id, mapRoomTarget(row)])), now);
   }
 
@@ -239,14 +230,14 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     client: override,
     now
   }: {
-    userId?: string;
-    peerId?: string;
+    userId?: string | undefined;
+    peerId?: string | undefined;
     messageIds: string[];
     now?: number;
   } & Override): Promise<Map<string, ReplyPreview | null>> {
     const ids = [...new Set(messageIds)];
     if (ids.length === 0) return new Map();
-    const rows = (await directTarget(on(override), userId, peerId, ids).execute()) as DirectTargetRow[];
+    const rows = await directTarget(on(override), userId, peerId, ids).execute();
     return previewsById(ids, new Map(rows.map((row) => [row.id, mapDirectTarget(row)])), now);
   }
 
@@ -256,26 +247,26 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     message,
     client: override
   }: {
-    roomId?: string;
-    targetMessageId?: string;
+    roomId: string;
+    targetMessageId: string;
     message?: RoomReplyMessage;
-  } & Override = {}): Promise<RoomReplyTarget | null> {
+  } & Override): Promise<RoomReplyTarget | null> {
     const row = await on(override)
       .insertInto('room_messages')
       .values({
         id: message?.id || crypto.randomUUID(),
-        room_id: roomId as string,
+        room_id: roomId,
         peer_id: message?.peerId || '',
         name: message?.authorUserId ? '' : message?.name || '',
         text: message?.text || '',
         created_at: message?.createdAt ? new Date(message.createdAt) : sql<Date>`current_timestamp`,
         expires_at: message?.expiresAt ? new Date(message.expiresAt) : null,
         author_user_id: message?.authorUserId || null,
-        reply_to_message_id: targetMessageId as string
+        reply_to_message_id: targetMessageId
       })
       .returningAll()
       .executeTakeFirst();
-    return mapRoomTarget((row as RoomTargetRow | undefined) || null);
+    return mapRoomTarget(row);
   }
 
   async function insertDirectReply({
@@ -286,26 +277,26 @@ function createReplyRepository({ client }: { client?: QueryClient | null } = {})
     id,
     client: override
   }: {
-    senderId?: string;
-    recipientId?: string;
-    targetMessageId?: string;
-    body?: string;
+    senderId: string;
+    recipientId: string;
+    targetMessageId: string;
+    body: string;
     id?: string;
-  } & Override = {}): Promise<DirectReplyTarget | null> {
+  } & Override): Promise<DirectReplyTarget | null> {
     const row = await on(override)
       .insertInto('direct_messages')
       .values({
         id: id || crypto.randomUUID(),
-        sender_id: senderId as string,
-        recipient_id: recipientId as string,
-        body: body as string,
+        sender_id: senderId,
+        recipient_id: recipientId,
+        body,
         created_at: sql<Date>`current_timestamp`,
         metadata: '{}',
-        reply_to_message_id: targetMessageId as string
+        reply_to_message_id: targetMessageId
       })
       .returningAll()
       .executeTakeFirst();
-    return mapDirectTarget((row as DirectTargetRow | undefined) || null);
+    return mapDirectTarget(row);
   }
 
   return Object.freeze({

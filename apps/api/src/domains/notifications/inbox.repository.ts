@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
+import { fromMicros, microsOf } from '../../platform/db/micros.ts';
+import type { CursorTuple } from '../../platform/cursor-codec.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Client = QueryClient | null | undefined;
@@ -19,10 +21,8 @@ type NotificationRow = {
   retracted_at: unknown;
   created_at: Date | string;
   updated_at: unknown;
-  created_at_micros?: string | number | null;
+  created_at_micros: string | number;
 };
-
-export type CursorTuple = { createdAtMicros: string; id: string };
 
 export type InboxNotification = {
   id: string;
@@ -42,9 +42,7 @@ export type InboxNotification = {
 
 export type ReadAllResult = { updated: number | null; revision: number | null };
 
-const createdAtMicros = sql<string>`floor(extract(epoch FROM created_at) * 1000000)::numeric(20,0)`.as(
-  'created_at_micros'
-);
+const createdAtMicros = microsOf('created_at').as('created_at_micros');
 const now = sql<Date>`current_timestamp`;
 
 // The read point that bounds which notifications a read retires. Callers hand
@@ -54,10 +52,17 @@ const now = sql<Date>`current_timestamp`;
 // Returns null for "no bound" and undefined for a value that is not a time.
 function readBound(through: unknown): Date | null | undefined {
   if (through == null) return null;
-  const bound = through instanceof Date ? through : new Date(through as string | number);
-  return Number.isNaN(bound.getTime()) ? undefined : bound;
+  const bound =
+    through instanceof Date
+      ? through
+      : typeof through === 'string' || typeof through === 'number'
+        ? new Date(through)
+        : null;
+  return !bound || Number.isNaN(bound.getTime()) ? undefined : bound;
 }
 
+function mapRow(row: NotificationRow): InboxNotification;
+function mapRow(row: NotificationRow | null | undefined): InboxNotification | null;
 function mapRow(row: NotificationRow | null | undefined): InboxNotification | null {
   return row
     ? {
@@ -74,7 +79,7 @@ function mapRow(row: NotificationRow | null | undefined): InboxNotification | nu
         createdAt: row.created_at,
         updatedAt: row.updated_at,
         cursorTuple: {
-          createdAtMicros: String(row.created_at_micros || Math.trunc(new Date(row.created_at).getTime() * 1000)),
+          createdAtMicros: String(row.created_at_micros),
           id: row.id
         }
       }
@@ -85,7 +90,7 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
   if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
   const db = kyselyOn(pool);
   const on = (client: Client): Database => (client?.query ? kyselyOn(client) : db);
-  const rows = (found: unknown[]) => found.map((row) => mapRow(row as NotificationRow) as InboxNotification);
+  const rows = (found: NotificationRow[]) => found.map((row) => mapRow(row));
 
   // Writes join the caller's transaction, or run in their own.
   function mutate<T>(client: Client, callback: (db: Database) => Promise<T>): Promise<T> {
@@ -157,6 +162,7 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
           }))
         )
         .returningAll()
+        .returning(createdAtMicros)
         .executeTakeFirst();
       return mapRow(row);
     });
@@ -181,7 +187,7 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
       .where('recipient_user_id', '=', recipientUserId);
     if (before?.createdAtMicros) {
       query = query.where(
-        sql<boolean>`(created_at, id) < (to_timestamp(${before.createdAtMicros}::numeric / 1000000.0), ${before.id || ''}::varchar)`
+        sql<boolean>`(created_at, id) < (${fromMicros(before.createdAtMicros)}, ${before.id || ''}::varchar)`
       );
     }
     return rows(
@@ -247,6 +253,7 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
         .where('id', '=', notificationId)
         .where('recipient_user_id', '=', recipientUserId)
         .returningAll()
+        .returning(createdAtMicros)
         .executeTakeFirst();
       return mapRow(row);
     });
@@ -301,7 +308,7 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
         .where('retracted_at', 'is', null)
         .orderBy('recipient_user_id')
         .execute();
-      const retracted: unknown[] = [];
+      const retracted: NotificationRow[] = [];
       for (const { recipient_user_id: recipientUserId } of recipients) {
         const revision = await allocateRevision(tx, recipientUserId);
         retracted.push(
@@ -312,6 +319,7 @@ function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
             .where('recipient_user_id', '=', recipientUserId)
             .where('retracted_at', 'is', null)
             .returningAll()
+            .returning(createdAtMicros)
             .execute())
         );
       }

@@ -3,6 +3,8 @@ import { test, vi } from 'vitest';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { Type } from 'typebox';
+import { parse } from './helpers/assert.ts';
 
 const webRoot = resolve(import.meta.dirname, '..');
 const read = (path: string) => readFileSync(resolve(webRoot, path), 'utf8');
@@ -56,7 +58,10 @@ test('a missing presentation selector still reads as the emoji, but a lone text 
 
 test('what the artwork does not draw is left as text, never offered as an image', async () => {
   const { splitEmoji, hasEmoji } = await loadEmojiText();
-  const catalogue = JSON.parse(read('src/lib/shared/chat/emoji-coverage.json')) as { emojis: string[] };
+  const catalogue = parse(
+    Type.Object({ emojis: Type.Array(Type.String()) }),
+    JSON.parse(read('src/lib/shared/chat/emoji-coverage.json'))
+  );
   const offered = new Set(catalogue.emojis);
 
   // A standalone skin tone swatch is a component, not an emoji of its own.
@@ -67,6 +72,8 @@ test('what the artwork does not draw is left as text, never offered as an image'
   for (const emoji of catalogue.emojis) {
     const parts = splitEmoji(emoji);
     assert.equal(parts.length, 1, `${emoji} is one part`);
-    assert.equal((parts[0] as { emoji?: string } | undefined)?.emoji, emoji);
+    const [part] = parts;
+    assert.ok(part && 'emoji' in part, `${emoji} is an emoji part`);
+    assert.equal(part.emoji, emoji);
   }
 });

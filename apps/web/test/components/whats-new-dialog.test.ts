@@ -10,6 +10,7 @@ import { WHATS_NEW_SLIDES } from '../../src/lib/features/home/model/whats-new';
 import { WHATS_NEW_VERSION } from '@voice-room/shared/account-security';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { stubMatchMedia } from '../helpers/match-media.ts';
+import { defined } from '../helpers/assert.ts';
 
 beforeEach(() => stubMatchMedia());
 afterEach(cleanup);
@@ -32,8 +33,8 @@ test('slides turn on their own and hold while the pointer is over the card', asy
   await screen.findByRole('dialog');
   expect(title()).toBe(WHATS_NEW_SLIDES[0].title);
 
-  await fireEvent.animationEnd(runningFill()!);
-  expect(title()).toBe(WHATS_NEW_SLIDES[1].title);
+  await fireEvent.animationEnd(defined(runningFill(), 'running fill'));
+  expect(title()).toBe(defined(WHATS_NEW_SLIDES[1], 'WHATS_NEW_SLIDES[1]').title);
 
   await fireEvent.pointerEnter(screen.getByRole('dialog'), { pointerType: 'mouse' });
   expect(runningFill()?.classList.contains('stories-fill--paused')).toBe(true);

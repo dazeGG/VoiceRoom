@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { finished } from 'node:stream/promises';
 import test from 'node:test';
 import { createMediaStorage, createStorageKey, parseStorageKey } from '../src/domains/media/storage.ts';
+import { codeOf } from '../src/platform/error-code.ts';
 const ID = '123e4567-e89b-42d3-a456-426614174000';
 
 test('G74-A01 private storage atomically streams variants and removes idempotently', async (t) => {
@@ -14,7 +16,7 @@ test('G74-A01 private storage atomically streams variants and removes idempotent
   assert.deepEqual(saved, { key: `${ID}/original`, bytes: 6 });
   const opened = await storage.openRead(ID, 'original');
   assert.equal(opened.bytes, 6);
-  for await (const ignored of opened.stream) void ignored;
+  await finished(opened.stream.resume());
   assert.deepEqual(await storage.listKeys(), [`${ID}/original`]);
   assert.ok((await storage.freeSpace()).availableBytes > 0n);
   assert.equal(await storage.remove(ID, 'original'), true);
@@ -41,7 +43,7 @@ test('G74-A02 traversal, encoded paths, symlinks, foreign objects and interrupte
     await fs.promises.symlink(target, path.join(root, symlinkId), 'junction');
     await assert.rejects(storage.save(symlinkId, 'preview', Buffer.from('x')), /symbolic link|escaped/);
   } catch (error) {
-    if ((error as NodeJS.ErrnoException | null)?.code !== 'EPERM') throw error;
+    if (codeOf(error) !== 'EPERM') throw error;
   }
   await fs.promises.writeFile(path.join(root, 'foreign'), 'x');
   await assert.rejects(storage.listKeys(), /foreign object|invalid attachment directory/);

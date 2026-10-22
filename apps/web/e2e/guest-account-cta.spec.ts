@@ -1,8 +1,11 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
+import { Me } from '@voice-room/shared/contracts/account';
+import { RoomList } from '@voice-room/shared/contracts/rooms';
+import { parse } from '../test/helpers/assert';
 import { PASSWORD, createPermanentRoom, registerViaUi, uniqueLogin } from './helpers';
 
 async function joinAsGuest(browser: Browser, baseURL: string | undefined, roomId: string): Promise<Page> {
-  const context = await browser.newContext({ baseURL });
+  const context = await browser.newContext(baseURL ? { baseURL } : {});
   const page = await context.newPage();
   await page.goto(`/r/${roomId}`);
   // A fresh browser has no saved name, so the room always asks for one first.
@@ -50,12 +53,10 @@ test('a guest creates an account from the room and is back in the same call as t
     await expect(guest.getByRole('button', { name: 'Открыть снова' })).toHaveCount(0);
     await expect(guest.getByRole('complementary', { name: 'Создать аккаунт' })).toHaveCount(0);
 
-    const me = (await (await guest.context().request.get('/api/auth/me')).json()) as { user: { login: string } | null };
+    const me = parse(Me, await (await guest.context().request.get('/api/auth/me')).json());
     expect(me.user?.login).toBe(login);
-    const rooms = (await (await guest.context().request.get('/api/auth/rooms')).json()) as {
-      rooms?: Array<{ roomId: string }>;
-    };
-    expect(rooms.rooms?.some((room) => room.roomId === roomId)).toBe(true);
+    const rooms = parse(RoomList, await (await guest.context().request.get('/api/auth/rooms')).json());
+    expect(rooms.rooms.some((room) => room.roomId === roomId)).toBe(true);
   } finally {
     await guest.context().close();
   }

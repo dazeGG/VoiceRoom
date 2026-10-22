@@ -33,7 +33,8 @@
     sending = true;
     error = '';
     try {
-      const status = await fileReport({ target, reason, comment: comment.trim() || undefined });
+      const note = comment.trim();
+      const status = await fileReport({ target, reason, ...(note ? { comment: note } : {}) });
       onReported(status === 'filed' ? 'Жалоба отправлена, спасибо' : 'Вы уже пожаловались на это сообщение');
       onClose();
     } catch (cause) {

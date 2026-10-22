@@ -1,14 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import path from 'node:path';
-import { pathToFileURL } from 'node:url';
 import * as preview from '../src/link-preview.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 const KEY = `lp_${'a1'.repeat(16)}.webp`;
 
 test('the first http(s) link without credentials is the one previewed', () => {
   assert.equal(preview.firstPreviewableUrl('смотри https://example.com/a?b=1#part.'), 'https://example.com/a?b=1');
-  assert.match(preview.firstPreviewableUrl('это www.Example.com/путь!')!, /^https:\/\/www\.example\.com\//);
+  assert.match(
+    defined(preview.firstPreviewableUrl('это www.Example.com/путь!'), 'the www link'),
+    /^https:\/\/www\.example\.com\//
+  );
   assert.equal(
     preview.firstPreviewableUrl(
       'ftp://files.example javascript:alert(1) https://user:pw@example.com http://ok.example'
@@ -21,14 +23,17 @@ test('the first http(s) link without credentials is the one previewed', () => {
 });
 
 test('a stored preview keeps only clean, bounded fields', () => {
-  const normalized = preview.normalizeLinkPreview({
-    url: 'https://www.example.com/post#top',
-    title: '  Заголовок\u202e  статьи  ',
-    description: 'д'.repeat(400),
-    siteName: '',
-    image: { key: KEY, width: 640, height: 360 },
-    extra: 'dropped'
-  })!;
+  const normalized = defined(
+    preview.normalizeLinkPreview({
+      url: 'https://www.example.com/post#top',
+      title: '  Заголовок\u202e  статьи  ',
+      description: 'д'.repeat(400),
+      siteName: '',
+      image: { key: KEY, width: 640, height: 360 },
+      extra: 'dropped'
+    }),
+    'the preview'
+  );
   assert.deepEqual(Object.keys(normalized), ['url', 'title', 'description', 'siteName', 'image']);
   assert.equal(normalized.url, 'https://www.example.com/post');
   assert.equal(normalized.title, 'Заголовок статьи');
@@ -50,13 +55,16 @@ test('previews without text, with a foreign scheme or with a forged image key ar
     { key: KEY, width: 5000, height: 10 },
     { key: KEY, width: 1.5, height: 10 }
   ]) {
-    assert.equal(preview.normalizeLinkPreview({ url: 'https://example.com', title: 'x', image })!.image, null);
+    assert.equal(
+      defined(preview.normalizeLinkPreview({ url: 'https://example.com', title: 'x', image }), 'the preview').image,
+      null
+    );
   }
   assert.equal(preview.linkPreviewImageUrl('lp_../../x.webp'), null);
 });
 
 test('the browser module behaves exactly like the server module', async () => {
-  const esm = await import(pathToFileURL(path.join(import.meta.dirname, '../src/link-preview.ts')).href);
+  const esm = await import('../src/link-preview.ts');
   const texts = ['https://example.com/a#b', 'www.example.com', 'нет', 'ftp://x https://y.example/z.'];
   for (const text of texts) assert.equal(esm.firstPreviewableUrl(text), preview.firstPreviewableUrl(text));
   const input = {

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import * as accountSecurity from '../src/account-security.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 const USER_AGENTS = Object.freeze([
   {
@@ -61,7 +62,7 @@ test('isDesktopAppUserAgent agrees with the described client', async () => {
     assert.equal(accountSecurity.isDesktopAppUserAgent(fixture.value), expected, fixture.name);
   }
   // Repeated calls must not carry regex state between user agents.
-  const shell = USER_AGENTS[0]!.value;
+  const shell = defined(USER_AGENTS[0], 'the first user agent').value;
   assert.equal(accountSecurity.isDesktopAppUserAgent(shell), true);
   assert.equal(accountSecurity.isDesktopAppUserAgent(shell), true);
 });
@@ -151,17 +152,18 @@ test('the recovery codes reminder is due only without codes and outside its snoo
   const later = now + accountSecurity.RECOVERY_CODES_REMINDER_SNOOZE_MS;
   assert.equal(accountSecurity.RECOVERY_CODES_REMINDER_SNOOZE_MS, 3 * 24 * 60 * 60 * 1000);
 
-  for (const [status, reminder, expected] of [
+  const cases: [
+    Parameters<typeof accountSecurity.isRecoveryCodesReminderDue>[0],
+    Parameters<typeof accountSecurity.isRecoveryCodesReminderDue>[1],
+    boolean
+  ][] = [
     [{ remaining: 0 }, { snoozedUntil: null }, true],
     [{ remaining: 0 }, { snoozedUntil: now - 1 }, true],
     [{ remaining: 0 }, { snoozedUntil: later }, false],
     [{ remaining: 3 }, { snoozedUntil: null }, false],
     [null, { snoozedUntil: null }, false]
-  ] as [
-    Parameters<typeof accountSecurity.isRecoveryCodesReminderDue>[0],
-    Parameters<typeof accountSecurity.isRecoveryCodesReminderDue>[1],
-    boolean
-  ][]) {
+  ];
+  for (const [status, reminder, expected] of cases) {
     assert.equal(
       accountSecurity.isRecoveryCodesReminderDue(status, reminder, now),
       expected,
@@ -192,7 +194,10 @@ test('session rows are validated at the boundary', async () => {
   assert.equal('ip' in normalized, false);
   assert.equal(accountSecurity.normalizeAccountSession({ ...row, id: 'not-a-uuid' }), null);
   assert.equal(accountSecurity.normalizeAccountSession({ ...row, lastSeenAt: 'yesterday' }), null);
-  assert.equal(accountSecurity.normalizeAccountSession({ ...row, current: 'yes' })!.current, false);
+  assert.equal(
+    defined(accountSecurity.normalizeAccountSession({ ...row, current: 'yes' }), 'the session').current,
+    false
+  );
 });
 
 test('deleted accounts use a reserved login prefix and a fixed name', async () => {

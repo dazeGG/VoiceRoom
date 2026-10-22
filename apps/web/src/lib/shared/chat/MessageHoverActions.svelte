@@ -5,11 +5,11 @@
   import type { ReactionStore } from './reaction-store.svelte';
 
   let { reactionStore, messageId, userId, onReply, onCopy, onMore } = $props<{
-    reactionStore?: ReactionStore;
+    reactionStore?: ReactionStore | undefined;
     messageId: string;
-    userId?: string;
+    userId?: string | undefined;
     /** Offers «Ответить» when given. */
-    onReply?: () => void;
+    onReply?: (() => void) | undefined;
     onCopy: () => void;
     onMore: (event: MouseEvent) => void;
   }>();

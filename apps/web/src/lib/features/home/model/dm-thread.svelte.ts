@@ -3,9 +3,15 @@
 // resync that converges the newest page after missed events. The lobby decides
 // which peer is open; the thread keeps that peer's messages right.
 
-import { fetchThreadPage, type DirectMessage } from '$lib/api/dm';
+import { tick } from 'svelte';
+import { fetchThreadPage, markThreadRead, type DirectMessage } from '$lib/api/dm';
 import type { PublicUser } from '$lib/api/friends';
-import { createAnchoredHistory } from '$lib/features/room/room-history.svelte';
+import { createAnchoredHistory } from '$lib/shared/chat/anchored-history.svelte';
+import { createHistoryCache } from '$lib/shared/chat/history-cache';
+import { createReadReconciliation } from '$lib/shared/chat/read-reconciliation';
+
+/** Conversations kept between visits, by peer id. */
+const dmHistoryCache = createHistoryCache<DirectMessage>((messages) => $state.snapshot(messages));
 
 export class DmThread {
   peer = $state<PublicUser | null>(null);
@@ -13,18 +19,18 @@ export class DmThread {
   loading = $state(false);
   loadingOlder = $state(false);
   hasMoreBefore = $state(false);
-  /** The read cursor to commit once the newest message rendered. */
-  readCandidate = $state<string | null>(null);
-  readRevision = $state(0);
   historyError = $state('');
   profileOpen = $state(false);
 
   #isOpen: (peerId: string) => boolean;
+  // Read receipts: what has been on screen is reported once it has rendered.
+  // Only a mounted conversation has one; a hidden thread reports nothing.
+  #readReconciliation: ReturnType<typeof createReadReconciliation> | null = null;
 
   #history = createAnchoredHistory<DirectMessage>({
     loadPage: async (peerId, request) => fetchThreadPage(peerId, request),
     compare: (left, right) => left.createdAt - right.createdAt || left.id.localeCompare(right.id),
-    cacheKey: (peerId) => `dm:${peerId}`,
+    cache: dmHistoryCache,
     onChange: (state) => {
       this.messages = state.messages;
       this.loading = state.loading;
@@ -41,10 +47,25 @@ export class DmThread {
 
   /** Shows `peerId`'s thread, starting from the friend's known profile. */
   async open(peerId: string, peer: PublicUser | null): Promise<void> {
-    this.readCandidate = null;
     if (peer) this.peer = peer;
     await this.#history.open(peerId);
     if (this.#isOpen(peerId)) this.noteLatestRendered();
+  }
+
+  /** Starts reporting what the conversation on screen shows; the returned function stops it. */
+  attachReader(peerId: string): () => void {
+    const reconciliation = createReadReconciliation({
+      scope: `dm:${peerId}`,
+      commit: async (cursor) => {
+        await markThreadRead(peerId, cursor);
+      }
+    });
+    this.#readReconciliation = reconciliation;
+    if (!this.loading) this.noteLatestRendered();
+    return () => {
+      reconciliation.dispose();
+      if (this.#readReconciliation === reconciliation) this.#readReconciliation = null;
+    };
   }
 
   /** Converges the newest page with the server after events may have been missed. */
@@ -88,9 +109,12 @@ export class DmThread {
     );
   }
 
+  /** Reports the newest cursor once the DOM has rendered the messages. */
   noteLatestRendered(cursor?: string): void {
-    this.readCandidate = cursor || this.messages.findLast((message) => message.readCursor)?.readCursor || null;
-    this.readRevision += 1;
+    const candidate = cursor || this.messages.findLast((message) => message.readCursor)?.readCursor;
+    if (!candidate) return;
+    const reconciliation = this.#readReconciliation;
+    void tick().then(() => reconciliation?.advanceAfterRender(candidate));
   }
 
   /** A live message rendered; without its cursor, the thread resyncs to learn it. */
@@ -113,6 +137,8 @@ export class DmThread {
 
   /** Stops loading the thread that was open (another one opens, or the lobby closes). */
   close(): void {
+    this.#readReconciliation?.dispose();
+    this.#readReconciliation = null;
     this.#history.close();
   }
 }

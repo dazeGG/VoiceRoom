@@ -2,20 +2,20 @@
 // reply target ids and the idempotency key. Shared by room chat and DMs.
 
 import crypto from 'node:crypto';
-
-const UUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+import { isArray, textOf } from '@voice-room/shared/guards';
+import { isUuid } from '@voice-room/shared/validation';
 
 const MAX_MESSAGE_ATTACHMENTS = 4;
 
 export function cleanUuid(value: unknown): string {
-  const id = String(value || '').trim();
-  return UUID.test(id) ? id : '';
+  const id = textOf(value).trim();
+  return isUuid(id) ? id : '';
 }
 
 /** `[]` when absent, `null` when malformed, duplicated or too many. */
 export function normalizeAttachmentIds(value: unknown): string[] | null {
   if (value === undefined) return [];
-  if (!Array.isArray(value) || value.length > MAX_MESSAGE_ATTACHMENTS) return null;
+  if (!isArray(value) || value.length > MAX_MESSAGE_ATTACHMENTS) return null;
   const ids = value.map((id) => cleanUuid(id));
   return ids.every(Boolean) && new Set(ids).size === ids.length ? ids : null;
 }
@@ -34,15 +34,24 @@ export function messageFingerprint(value: unknown): string {
   return crypto.createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
-// Multiline since 2.4.0: horizontal whitespace runs collapse, blank lines are
-// capped at one, at most 20 lines and 500 characters survive.
-export function cleanChatText(value: unknown): string {
-  let text = String(value || '')
+// Multiline since 2.4.0: horizontal whitespace runs collapse and blank lines
+// are capped at one; at most maxLines lines and maxChars characters survive.
+export function cleanMessageText(
+  value: unknown,
+  { maxChars, maxLines }: { maxChars: number; maxLines?: number }
+): string {
+  let text = textOf(value)
     .replace(/[^\S\n]+/g, ' ')
     .replace(/ *\n */g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-  const lines = text.split('\n');
-  if (lines.length > 20) text = lines.slice(0, 20).join('\n');
-  return text.slice(0, 500);
+  if (maxLines !== undefined) {
+    const lines = text.split('\n');
+    if (lines.length > maxLines) text = lines.slice(0, maxLines).join('\n');
+  }
+  return text.slice(0, maxChars);
+}
+
+export function cleanChatText(value: unknown): string {
+  return cleanMessageText(value, { maxChars: 500, maxLines: 20 });
 }

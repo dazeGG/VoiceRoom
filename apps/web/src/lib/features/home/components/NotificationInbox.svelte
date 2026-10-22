@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { timeAgo } from '$lib/shared/utils/date-format';
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   // The panel you reach from the bell. It answers two questions — what happened
   // and how long ago — and offers exactly one bulk action. "К первому
@@ -6,7 +7,7 @@
   // the two buttons together overflowed the header into a horizontal scrollbar.
   import { Bell, Check, CircleAlert, X } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
-  import type { NotificationItem, NotificationReason } from '@voice-room/shared/notifications';
+  import type { InboxItem, NotificationReason } from '@voice-room/shared/contracts/notifications';
   import type { createNotificationInbox } from '$lib/shared/notifications/inbox.svelte';
 
   type Inbox = ReturnType<typeof createNotificationInbox>;
@@ -18,7 +19,7 @@
     roomLabel
   }: {
     inbox: Inbox;
-    onopen: (item: NotificationItem) => void;
+    onopen: (item: InboxItem) => void;
     onclose?: () => void;
     /** Name of the room a notification came from. */
     roomLabel?: (roomId: string) => string;
@@ -33,23 +34,11 @@
     return reasons.map((reason) => REASON_LABELS[reason] ?? reason).join(' · ');
   }
 
-  const MINUTE = 60_000;
-  const HOUR = 60 * MINUTE;
-  const DAY = 24 * HOUR;
-
-  /** Coarse on purpose: the exact second of a mention has never mattered. */
-  function timeAgo(value: unknown): string {
-    const at = typeof value === 'number' ? value : Date.parse(String(value ?? ''));
-    if (!Number.isFinite(at)) return '';
-    const elapsed = Date.now() - at;
-    if (elapsed < MINUTE) return 'только что';
-    if (elapsed < HOUR) return `${Math.floor(elapsed / MINUTE)} мин назад`;
-    if (elapsed < DAY) return `${Math.floor(elapsed / HOUR)} ч назад`;
-    if (elapsed < 7 * DAY) return `${Math.floor(elapsed / DAY)} дн назад`;
-    return new Date(at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+  function agoLabel(at: number | null): string {
+    return at === null || !Number.isFinite(at) ? '' : timeAgo(at, Date.now());
   }
 
-  function open(item: NotificationItem): void {
+  function open(item: InboxItem): void {
     void inbox.markRead(item.id);
     onopen(item);
   }
@@ -140,9 +129,9 @@
                 <small>
                   <span class="notification-inbox-reason">{reasonLabel(item.reasons)}</span>
                   {#if where}<span class="notification-inbox-room">{where}</span>{/if}
-                  {#if timeAgo(item.createdAt)}
+                  {#if agoLabel(item.createdAt)}
                     <span aria-hidden="true">·</span>
-                    <span class="notification-inbox-time">{timeAgo(item.createdAt)}</span>
+                    <span class="notification-inbox-time">{agoLabel(item.createdAt)}</span>
                   {/if}
                 </small>
               </span>

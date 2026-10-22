@@ -33,7 +33,7 @@
         >
         {#if toast.actions?.length}
           <div class="ui-toast-actions">
-            {#each toast.actions as action}
+            {#each toast.actions as action, i (i)}
               <button class="ui-toast-action" type="button" onclick={() => action.onClick(toast.id)}
                 >{action.label}</button
               >

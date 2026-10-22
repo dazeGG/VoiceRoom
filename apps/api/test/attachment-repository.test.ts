@@ -11,6 +11,7 @@ import { createAttachmentRepository, mapAttachment } from '../src/domains/media/
 import { transaction } from '../src/platform/db/pool.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { AnyRow, queryRow } from './helpers/checked.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const skip = !process.env.TEST_DATABASE_URL;
@@ -189,13 +190,35 @@ test('a draft moves through upload, processing, failure and deletion', { skip },
     /Invalid client request id/
   );
   await assert.rejects(
-    () => repository.markUploaded(draft.id, { mimeType: 'text/plain' } as never),
+    () =>
+      repository.markUploaded(draft.id, {
+        mimeType: 'text/plain',
+        bytes: 1,
+        width: 1,
+        height: 1,
+        originalStorageKey: 'original'
+      }),
     /Invalid attachment MIME type/
   );
   await assert.rejects(
-    () => repository.markReady(draft.id, { processedStorageKey: '', previewStorageKey: 'preview' } as never),
+    () =>
+      repository.markReady(draft.id, {
+        processedStorageKey: '',
+        previewStorageKey: 'preview',
+        processedBytes: 1,
+        previewBytes: 1
+      }),
     /Invalid processed storage key/
   );
+});
+
+test('a draft sent with null metadata stores an empty record', { skip }, async (t) => {
+  const { pool, repository, ownerId } = await setup(t);
+  const draft = await repository.createDraft({ ownerId, context: 'room', metadata: null });
+  assert.ok(draft);
+  assert.deepEqual(draft.metadata, {});
+  const stored = await queryRow(pool, AnyRow, 'SELECT metadata FROM message_attachments WHERE id = $1', [draft.id]);
+  assert.deepEqual(stored.metadata, {}, 'the column holds {}, not JSON null');
 });
 
 test('ready attachments bind to one message in order, all or none', { skip }, async (t) => {

@@ -1,3 +1,6 @@
+/* The overview: the open reports strip, the headline tiles with a trend
+   along each one's foot, two charts, and the server beside its day of load. */
+
 .dash-quiet {
   margin: 0;
   color: var(--vr-text-3);
@@ -6,40 +9,43 @@
 
 .dash-reports {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border: 1px solid var(--vr-danger-soft);
-  border-radius: 12px;
-  background: var(--vr-danger-soft);
+  gap: 12px;
+  border: 1px solid color-mix(in oklch, var(--vr-danger) 22%, transparent);
+  border-radius: 14px;
+  padding: 11px 12px 11px 16px;
+  background: color-mix(in oklch, var(--vr-danger) 10%, transparent);
   color: var(--vr-text);
-  font-size: 13.5px;
+  font-size: 14px;
 }
 
-.dash-link {
+.dash-reports > svg {
+  color: var(--vr-danger);
+}
+
+.ui-button.dash-reports-go {
+  min-height: 32px;
   margin-left: auto;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--vr-accent);
-  font: inherit;
-  font-weight: 600;
-  cursor: pointer;
+  border-radius: 8px;
+  font-size: 13px;
 }
 
 .kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 165px), 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 170px), 1fr));
+  gap: 14px;
 }
 
 .kpi {
-  display: grid;
-  gap: 4px;
+  display: flex;
   min-width: 0;
-  padding: 14px 16px 12px;
+  flex-direction: column;
+  gap: 6px;
+  overflow: hidden;
   border: 1px solid var(--vr-line);
-  border-radius: 14px;
+  border-radius: 16px;
+  padding: 16px 18px 0;
   background: var(--vr-surface);
 }
 
@@ -52,16 +58,18 @@
   color: var(--vr-text);
   font-size: 30px;
   font-weight: 700;
-  line-height: 1.1;
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
 }
 
 .kpi-foot {
   display: flex;
+  min-height: 34px;
   flex-wrap: wrap;
+  align-content: flex-start;
   align-items: center;
-  gap: 4px 8px;
-  min-height: 18px;
+  gap: 3px 8px;
   font-size: 12px;
 }
 
@@ -90,61 +98,38 @@
   font-weight: 500;
 }
 
-.dash-charts {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
-  gap: 12px;
+/* The trend runs edge to edge along the tile's foot. */
+.kpi-spark {
+  display: block;
+  margin: 2px -18px 0;
+}
+
+.kpi-spark .spark-area {
+  opacity: 0.12;
+}
+
+.dash-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 14px;
 }
 
 .dash-server {
+  flex: 1 1 300px;
+}
+
+.dash-load {
   display: grid;
-  gap: 12px;
-  padding: 14px 16px;
-  border: 1px solid var(--vr-line);
-  border-radius: 14px;
-  background: var(--vr-surface);
+  min-width: 0;
+  flex: 2 1 520px;
 }
 
 .dash-server-head {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 12px;
-}
-
-.dash-server-head h2 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.dash-chip {
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-size: 11.5px;
-  font-weight: 600;
-}
-
-.dash-chip[data-state='ok'] {
-  background: color-mix(in srgb, var(--vr-success) 18%, transparent);
-  color: var(--vr-success);
-}
-
-.dash-chip[data-state='bad'] {
-  background: var(--vr-danger-soft);
-  color: var(--vr-danger);
-}
-
-.dash-server-body {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) minmax(0, 2fr);
-  gap: 16px;
-  align-items: start;
-}
-
-.dash-server-body .chart {
-  padding: 0;
-  border: 0;
+  gap: 6px 10px;
 }
 
 .gauges {
@@ -205,16 +190,13 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px 14px;
+  margin-top: auto;
+  border-top: 1px solid var(--vr-line);
+  padding-top: 12px;
   color: var(--vr-text-2);
   font-size: 12.5px;
 }
 
 .gauge-facts strong {
   color: var(--vr-text);
-}
-
-@media (max-width: 760px) {
-  .dash-server-body {
-    grid-template-columns: 1fr;
-  }
 }

@@ -37,7 +37,7 @@ export function dialogFocusTrap(root: HTMLElement, options: FocusTrapOptions = {
     initialFocus: options.initialFocus ?? '[data-dialog-initial-focus]',
     restoreFocus: options.restoreFocus ?? true
   };
-  let opener: HTMLElement | null = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  const opener: HTMLElement | null = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   let active = false;
   let hasActivated = false;
 
@@ -67,13 +67,13 @@ export function dialogFocusTrap(root: HTMLElement, options: FocusTrapOptions = {
   function onKeydown(event: KeyboardEvent): void {
     if (!currentOptions.enabled || event.key !== 'Tab') return;
     const focusable = getFocusableElements(root);
-    if (focusable.length === 0) {
+    const first = focusable[0];
+    if (!first) {
       event.preventDefault();
       root.focus({ preventScroll: true });
       return;
     }
 
-    const first = focusable[0];
     const last = focusable.at(-1) ?? first;
     const activeElement = document.activeElement;
     if (!(activeElement instanceof Node) || !root.contains(activeElement)) {

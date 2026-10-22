@@ -14,7 +14,7 @@ import {
   type RecoveryCodesStatus,
   type WhatsNewState
 } from '@voice-room/shared/account-security';
-import type {
+import {
   AppPromptSeen,
   DeletionPreview,
   DeletionScheduled,
@@ -25,21 +25,19 @@ import type {
   RecoveryCodesGenerated,
   ReminderSnoozed,
   Security,
-  SelfUser,
   Sessions,
   SessionsRevoked,
   SignedIn,
-  WhatsNewAnswer
+  WhatsNewAnswer,
+  type SelfUser
 } from '@voice-room/shared/contracts/account';
-import type { Done } from '@voice-room/shared/contracts/http';
-import type { LobbyRoom, RoomCard, RoomList, RoomUnbookmarked } from '@voice-room/shared/contracts/rooms';
+import { Done } from '@voice-room/shared/contracts/http';
+import { RoomCard, RoomList, RoomUnbookmarked, type LobbyRoom } from '@voice-room/shared/contracts/rooms';
 // Explicit extensions: the release coverage gate (scripts/test/g08-*) loads
 // this module in plain Node, without Vite's resolver.
 import { api } from './client.ts';
 
 export type AuthUser = SelfUser;
-
-export type RoomRelationship = 'owner' | 'bookmarked';
 
 /** A room on the account's list: the lobby card. */
 export type OwnedRoom = LobbyRoom;
@@ -53,8 +51,8 @@ async function avatarRequest(method: 'POST' | 'DELETE', file?: Blob): Promise<Au
   const fallback = 'Не удалось обновить аватар';
   const answer =
     method === 'POST'
-      ? await api.post<SignedIn>('/api/auth/avatar', body, { fallback })
-      : await api.delete<SignedIn>('/api/auth/avatar', undefined, { fallback });
+      ? await api.post('/api/auth/avatar', SignedIn, body, { fallback })
+      : await api.delete('/api/auth/avatar', SignedIn, undefined, { fallback });
   return answer.user;
 }
 
@@ -72,42 +70,42 @@ export interface RegisterInput extends Credentials {
 }
 
 export async function register(input: RegisterInput): Promise<AuthUser> {
-  return (await api.post<SignedIn>('/api/auth/register', input)).user;
+  return (await api.post('/api/auth/register', SignedIn, input)).user;
 }
 
 export async function login(input: Credentials): Promise<AuthUser> {
-  return (await api.post<SignedIn>('/api/auth/login', input)).user;
+  return (await api.post('/api/auth/login', SignedIn, input)).user;
 }
 
 export async function logout(): Promise<void> {
-  await api.post<Done>('/api/auth/logout');
+  await api.post('/api/auth/logout', Done);
 }
 
 export async function updateDisplayName(displayName: string): Promise<AuthUser> {
-  return (await api.post<SignedIn>('/api/auth/profile', { displayName })).user;
+  return (await api.post('/api/auth/profile', SignedIn, { displayName })).user;
 }
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
-  await api.post<Done>('/api/auth/password', { currentPassword, newPassword });
+  await api.post('/api/auth/password', Done, { currentPassword, newPassword });
 }
 
 export async function fetchMe(): Promise<AuthUser | null> {
-  return (await api.get<Me>('/api/auth/me', { fallback: 'Не удалось проверить сессию' })).user;
+  return (await api.get('/api/auth/me', Me, { fallback: 'Не удалось проверить сессию' })).user;
 }
 
 export async function addRoomByCode(code: string): Promise<OwnedRoom> {
-  return (await api.post<RoomCard>('/api/auth/rooms', { code })).room;
+  return (await api.post('/api/auth/rooms', RoomCard, { code })).room;
 }
 
 export async function removeRoomFromList(roomId: string): Promise<boolean> {
-  const answer = await api.delete<RoomUnbookmarked>(`/api/auth/rooms/${encodeURIComponent(roomId)}`, undefined, {
+  const answer = await api.delete(`/api/auth/rooms/${encodeURIComponent(roomId)}`, RoomUnbookmarked, undefined, {
     fallback: 'Не удалось удалить комнату из списка'
   });
   return answer.removed;
 }
 
 export async function fetchOwnedRooms(): Promise<OwnedRoom[]> {
-  return (await api.get<RoomList>('/api/auth/rooms', { fallback: 'Не удалось загрузить комнаты' })).rooms;
+  return (await api.get('/api/auth/rooms', RoomList, { fallback: 'Не удалось загрузить комнаты' })).rooms;
 }
 
 export type {
@@ -131,14 +129,14 @@ export interface RecoverInput {
 }
 
 export async function fetchAccountSecurity(): Promise<AccountSecurity> {
-  const { recoveryCodes, recoveryCodesReminder } = await api.get<Security>('/api/auth/security', {
+  const { recoveryCodes, recoveryCodesReminder } = await api.get('/api/auth/security', Security, {
     fallback: 'Не удалось загрузить настройки безопасности'
   });
   return { recoveryCodes, recoveryCodesReminder };
 }
 
 export async function snoozeRecoveryCodesReminder(): Promise<RecoveryCodesReminder> {
-  return (await api.post<ReminderSnoozed>('/api/auth/recovery-codes/reminder/snooze')).recoveryCodesReminder;
+  return (await api.post('/api/auth/recovery-codes/reminder/snooze', ReminderSnoozed)).recoveryCodesReminder;
 }
 
 // Only a well-formed release number is shown or compared.
@@ -151,80 +149,80 @@ function readWhatsNew({ whatsNew }: WhatsNewAnswer): WhatsNewState {
 
 export async function fetchWhatsNew(): Promise<WhatsNewState> {
   return readWhatsNew(
-    await api.get<WhatsNewAnswer>('/api/auth/whats-new', { fallback: 'Не удалось загрузить новости' })
+    await api.get('/api/auth/whats-new', WhatsNewAnswer, { fallback: 'Не удалось загрузить новости' })
   );
 }
 
 export async function markWhatsNewSeen(): Promise<void> {
-  await api.post<WhatsNewAnswer>('/api/auth/whats-new/seen');
+  await api.post('/api/auth/whats-new/seen', WhatsNewAnswer);
 }
 
 export async function markAppPromptSeen(): Promise<void> {
-  await api.post<AppPromptSeen>('/api/auth/app-prompt/seen');
+  await api.post('/api/auth/app-prompt/seen', AppPromptSeen);
 }
 
 // Alerts and sessions go through the shared normalizers: an entry without a
 // valid id or time is dropped rather than shown half-empty.
 export async function fetchLoginAlerts(): Promise<LoginAlert[]> {
-  const { alerts } = await api.get<LoginAlerts>('/api/auth/login-alerts', {
+  const { alerts } = await api.get('/api/auth/login-alerts', LoginAlerts, {
     fallback: 'Не удалось проверить входы в аккаунт'
   });
   return alerts.map(normalizeLoginAlert).filter((alert): alert is LoginAlert => alert !== null);
 }
 
 export async function fetchAccountDeletionPreview(): Promise<AccountDeletionPreview> {
-  const { graceDays, rooms } = await api.get<DeletionPreview>('/api/auth/account/deletion', {
+  const { graceDays, rooms } = await api.get('/api/auth/account/deletion', DeletionPreview, {
     fallback: 'Не удалось подготовить удаление аккаунта'
   });
   return { graceDays, rooms };
 }
 
 export async function requestAccountDeletion(currentPassword: string): Promise<{ deletionScheduledFor: number }> {
-  const { deletionScheduledFor } = await api.post<DeletionScheduled>('/api/auth/account/deletion', { currentPassword });
+  const { deletionScheduledFor } = await api.post('/api/auth/account/deletion', DeletionScheduled, { currentPassword });
   return { deletionScheduledFor };
 }
 
 export async function restoreAccount(input: Credentials): Promise<AuthUser> {
-  return (await api.post<SignedIn>('/api/auth/account/restore', input)).user;
+  return (await api.post('/api/auth/account/restore', SignedIn, input)).user;
 }
 
 export async function confirmLoginAlert(alertId: string): Promise<void> {
-  await api.post<LoginAlertResolved>(`/api/auth/login-alerts/${encodeURIComponent(alertId)}/confirm`);
+  await api.post(`/api/auth/login-alerts/${encodeURIComponent(alertId)}/confirm`, LoginAlertResolved);
 }
 
 export async function denyLoginAlert(
   alertId: string
 ): Promise<{ sessionEnded: boolean; recoveryCodes: RecoveryCodesStatus }> {
-  const answer = await api.post<LoginAlertResolved>(`/api/auth/login-alerts/${encodeURIComponent(alertId)}/deny`);
+  const answer = await api.post(`/api/auth/login-alerts/${encodeURIComponent(alertId)}/deny`, LoginAlertResolved);
   if (answer.resolution !== 'denied') throw new Error('Не удалось ответить на вход');
   return { sessionEnded: answer.sessionEnded, recoveryCodes: answer.recoveryCodes };
 }
 
 export async function fetchAccountSessions(): Promise<AccountSession[]> {
-  const { sessions } = await api.get<Sessions>('/api/auth/sessions', { fallback: 'Не удалось загрузить устройства' });
+  const { sessions } = await api.get('/api/auth/sessions', Sessions, { fallback: 'Не удалось загрузить устройства' });
   return sessions.map(normalizeAccountSession).filter((session): session is AccountSession => session !== null);
 }
 
 export async function revokeAccountSession(sessionId: string): Promise<void> {
-  await api.delete<Done>(`/api/auth/sessions/${encodeURIComponent(sessionId)}`, undefined, {
+  await api.delete(`/api/auth/sessions/${encodeURIComponent(sessionId)}`, Done, undefined, {
     fallback: 'Не удалось завершить сеанс'
   });
 }
 
 export async function revokeOtherAccountSessions(): Promise<number> {
-  return (await api.post<SessionsRevoked>('/api/auth/sessions/revoke-others')).revoked;
+  return (await api.post('/api/auth/sessions/revoke-others', SessionsRevoked)).revoked;
 }
 
 export async function generateRecoveryCodes(
   currentPassword: string
 ): Promise<{ codes: string[]; recoveryCodes: RecoveryCodesStatus }> {
-  const { codes, recoveryCodes } = await api.post<RecoveryCodesGenerated>('/api/auth/recovery-codes', {
+  const { codes, recoveryCodes } = await api.post('/api/auth/recovery-codes', RecoveryCodesGenerated, {
     currentPassword
   });
   return { codes, recoveryCodes };
 }
 
 export async function recoverAccount(input: RecoverInput): Promise<{ user: AuthUser; remaining: number }> {
-  const { user, recoveryCodes } = await api.post<Recovered>('/api/auth/recover', input);
+  const { user, recoveryCodes } = await api.post('/api/auth/recover', Recovered, input);
   return { user, remaining: recoveryCodes.remaining };
 }

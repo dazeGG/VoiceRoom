@@ -1,18 +1,22 @@
 // A real WebSocket client for tests against a listening API: every frame the
-// server sends is kept, typed by the realtime contract, and tests wait for
-// the one they expect.
+// server sends is checked against the realtime contract and kept, and tests
+// wait for the one they expect. A frame the contract refuses (the web would
+// drop it) fails the test that received it.
 
 import net from 'node:net';
-import type { IncomingMessage } from 'node:http';
 import type { FastifyInstance } from 'fastify';
 import WebSocket from 'ws';
 import type { ClientCommands, ClientCommandType, ServerFrame } from '@voice-room/shared/contracts/realtime';
+import { parseServerFrame } from '@voice-room/shared/realtime';
 
 export type FrameType = ServerFrame['type'];
 
 function parseFrame(raw: WebSocket.RawData): ServerFrame {
   const bytes = Array.isArray(raw) ? Buffer.concat(raw) : Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
-  return JSON.parse(bytes.toString('utf8')) as ServerFrame;
+  const text = bytes.toString('utf8');
+  const parsed = parseServerFrame(JSON.parse(text));
+  if (!parsed.ok) throw new Error(`The server sent a ${parsed.type || 'typeless'} frame outside the contract: ${text}`);
+  return parsed.frame;
 }
 export type FrameOf<Type extends FrameType> = Extract<ServerFrame, { type: Type }>;
 
@@ -25,7 +29,11 @@ export interface WsSession {
 /** Opens a socket on a TCP port or a Unix socket path; `ready` resolves on the server's ready frame. */
 function openWs(
   target: number | string,
-  { cookie, headers = {}, path = '/api/ws' }: { cookie?: string; headers?: Record<string, string>; path?: string } = {}
+  {
+    cookie,
+    headers = {},
+    path = '/api/ws'
+  }: { cookie?: string | undefined; headers?: Record<string, string>; path?: string } = {}
 ): WsSession {
   const frames: ServerFrame[] = [];
   const requestHeaders = { ...headers, ...(cookie ? { Cookie: cookie } : {}) };
@@ -66,9 +74,8 @@ function waitForWsType<Type extends FrameType>(
   const started = Date.now();
   return new Promise((resolve, reject) => {
     const check = () => {
-      const found = frames
-        .slice(sinceIndex)
-        .find((frame): frame is FrameOf<Type> => frame.type === type && predicate(frame as FrameOf<Type>));
+      const ofType = (frame: ServerFrame): frame is FrameOf<Type> => frame.type === type;
+      const found = frames.slice(sinceIndex).filter(ofType).find(predicate);
       if (found) {
         resolve(found);
         return;
@@ -129,6 +136,13 @@ function subscribeRoomPreview(
  * A socket to an in-process app (Fastify injectWS, no listening server),
  * signed in with `cookie`; resolves once the server's ready frame arrived.
  */
+// A socket that only answers its address, the one field injectWS reads.
+function socketFrom(remoteAddress: string): net.Socket {
+  const socket = new net.Socket();
+  Object.defineProperty(socket, 'remoteAddress', { value: remoteAddress });
+  return socket;
+}
+
 async function injectWs(
   app: FastifyInstance,
   { cookie, remoteAddress = '127.0.0.1' }: { cookie?: string; remoteAddress?: string } = {}
@@ -137,7 +151,7 @@ async function injectWs(
   const ws = await app.injectWS(
     '/api/ws',
     // injectWS reads only the address from the socket it is handed.
-    { headers: cookie ? { cookie } : {}, socket: { remoteAddress } as IncomingMessage['socket'] },
+    { headers: cookie ? { cookie } : {}, socket: socketFrom(remoteAddress) },
     {
       onInit(socket: WebSocket) {
         socket.on('message', (raw: WebSocket.RawData) => frames.push(parseFrame(raw)));

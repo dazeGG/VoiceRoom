@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type { ReactionSummary, ReactorList } from '../src/contracts/messages.ts';
 import * as reactionContract from '../src/reactions.ts';
 
 test('G67-A01 canonical RGI desired-state and bigint summary contracts', async () => {
@@ -56,13 +57,13 @@ test('G67-A02 reactor envelopes enforce default50/max100, opaque cursors and typ
   });
   assert.equal(reactionContract.normalizeReactorPage({ reactors: [...reactors, reactors[0]], nextCursor: null }), null);
   const mutation: reactionContract.ReactionMutation = { messageId: 'm', emoji: '😀', active: true };
-  const summary: reactionContract.ReactionSummary = {
+  const summary: ReactionSummary = {
     emoji: '😀',
     count: 1,
     reactedByMe: true,
     revision: '9007199254740993'
   };
-  const page: reactionContract.ReactorPage = { reactors: [], nextCursor: null };
+  const page: ReactorList = { reactors: [], nextCursor: null };
   assert.deepEqual(reactionContract.normalizeReactionMutation(mutation), mutation);
   assert.deepEqual(reactionContract.normalizeReactionSummary(summary), summary);
   assert.deepEqual(reactionContract.normalizeReactorPage(page), page);

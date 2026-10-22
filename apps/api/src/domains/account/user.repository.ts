@@ -5,6 +5,7 @@ import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
+import { codeOf } from '../../platform/error-code.ts';
 import { hashPassword, verifyPassword } from '../../lib/password.ts';
 import { cleanAvatarColorKey } from '@voice-room/shared/validation';
 import {
@@ -12,7 +13,7 @@ import {
   WHATS_NEW_VERSION,
   normalizeReleaseVersion
 } from '@voice-room/shared/account-security';
-import { UNIQUE_VIOLATION, mapUser, randomAvatarColorKey, toDate } from './user-records.ts';
+import { UNIQUE_VIOLATION, mapUser, randomAvatarColorKey, storedUser, toDate } from './user-records.ts';
 
 // Every way of replacing a password ends the same: the old credential stops
 // working everywhere, so all sessions and push subscriptions go with it.
@@ -72,10 +73,10 @@ export function createUserRepository({ pool }: { pool: pg.Pool }) {
         })
         .returningAll()
         .executeTakeFirstOrThrow();
-      return { status: 'created', user: mapUser(row)! };
+      return { status: 'created' as const, user: storedUser(row) };
     } catch (error) {
-      if (error && (error as { code?: unknown }).code === UNIQUE_VIOLATION) {
-        return { status: 'login_taken', user: null };
+      if (codeOf(error) === UNIQUE_VIOLATION) {
+        return { status: 'login_taken' as const, user: null };
       }
       throw error;
     }
@@ -186,13 +187,13 @@ export function createUserRepository({ pool }: { pool: pg.Pool }) {
   }) {
     return db.transaction().execute(async (trx) => {
       const user = mapUser(await lockUser(trx, 'id', userId));
-      if (!user) return { status: 'not_found' };
+      if (!user) return { status: 'not_found' as const };
 
       const ok = await verifyPassword(currentPassword, user.passwordHash);
-      if (!ok) return { status: 'invalid_password' };
+      if (!ok) return { status: 'invalid_password' as const };
 
       await replacePassword(trx, { userId, newPassword, now });
-      return { status: 'updated' };
+      return { status: 'updated' as const };
     });
   }
 
@@ -217,7 +218,7 @@ export function createUserRepository({ pool }: { pool: pg.Pool }) {
       .selectFrom('users')
       .select([
         sql<string | null>`metadata->>'whatsNewSeen'`.as('whats_new_seen'),
-        sql<unknown>`metadata->'recoveryCodesReminderSnoozedUntil'`.as('reminder_snoozed_until')
+        sql`metadata->'recoveryCodesReminderSnoozedUntil'`.as('reminder_snoozed_until')
       ])
       .where('id', '=', userId)
       .executeTakeFirst();
@@ -240,8 +241,8 @@ export function createUserRepository({ pool }: { pool: pg.Pool }) {
       .where('id', '=', userId)
       .executeTakeFirst();
     return result.numUpdatedRows === 1n
-      ? { status: 'seen', whatsNewSeen: WHATS_NEW_VERSION }
-      : { status: 'not_found', whatsNewSeen: null };
+      ? { status: 'seen' as const, whatsNewSeen: WHATS_NEW_VERSION }
+      : { status: 'not_found' as const, whatsNewSeen: null };
   }
 
   // The one-time post-registration app prompt: the first time it is shown or
@@ -257,12 +258,12 @@ export function createUserRepository({ pool }: { pool: pg.Pool }) {
         END`
       })
       .where('id', '=', userId)
-      .returning(sql<unknown>`metadata->'appPromptSeenAt'`.as('seen_at'))
+      .returning(sql`metadata->'appPromptSeenAt'`.as('seen_at'))
       .execute();
     const seenAt = Number(rows[0]?.seen_at);
     return rows.length === 1
-      ? { status: 'seen', appPromptSeenAt: Number.isSafeInteger(seenAt) ? seenAt : null }
-      : { status: 'not_found', appPromptSeenAt: null };
+      ? { status: 'seen' as const, appPromptSeenAt: Number.isSafeInteger(seenAt) ? seenAt : null }
+      : { status: 'not_found' as const, appPromptSeenAt: null };
   }
 
   async function snoozeRecoveryCodesReminder({ userId, now = Date.now() }: { userId: string; now?: number }) {
@@ -276,8 +277,8 @@ export function createUserRepository({ pool }: { pool: pg.Pool }) {
       .where('id', '=', userId)
       .executeTakeFirst();
     return result.numUpdatedRows === 1n
-      ? { status: 'snoozed', snoozedUntil }
-      : { status: 'not_found', snoozedUntil: null };
+      ? { status: 'snoozed' as const, snoozedUntil }
+      : { status: 'not_found' as const, snoozedUntil: null };
   }
 
   return {

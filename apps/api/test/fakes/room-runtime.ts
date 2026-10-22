@@ -29,6 +29,7 @@ export function runtimeDeps({ store = {}, wsRegistry = {}, ...overrides }: Runti
   return {
     presenceRooms: new Map(),
     wsRegistry: fake<ConnectionRegistry>({
+      detachVoicePeer() {},
       registerConnectionForRoom() {},
       roomDetailSubscribers() {
         return new Set();
@@ -48,7 +49,7 @@ export function runtimeDeps({ store = {}, wsRegistry = {}, ...overrides }: Runti
     publicPeer,
     publicLobbyRoom: (room: StoredRoom) => publicLobbyRoom(room, 0),
     publicChatMessage,
-    broadcast() {},
+    publishRoomEvent() {},
     closePeer() {},
     avatarColorForPeerId: () => 'blue',
     MAX_ROOM_PEERS: 16,

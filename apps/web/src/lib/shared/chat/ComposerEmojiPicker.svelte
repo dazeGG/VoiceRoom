@@ -2,7 +2,7 @@
   import { Smile } from '@lucide/svelte';
   import { untrack } from 'svelte';
   import { iconSm } from '$lib/shared/ui/icons';
-  import { Popover } from '$lib/shared/ui';
+  import { Popover, type PopoverContentState, type PopoverTriggerState } from '$lib/shared/ui';
   import EmojiPickerPanel from './EmojiPickerPanel.svelte';
   import { DEFAULT_FREQUENT_REACTIONS, loadFrequentReactions, recordFrequentReaction } from './frequent-reactions';
   import { TYPING_NOTICE_INTERVAL_MS } from './typing.svelte';
@@ -73,7 +73,7 @@
   rootClass="composer-emoji-root"
   panelClass="reaction-picker-panel"
 >
-  {#snippet trigger({ toggle, panelId })}
+  {#snippet trigger({ toggle, panelId }: PopoverTriggerState)}
     <button
       class="composer-emoji-trigger"
       type="button"
@@ -87,15 +87,15 @@
     >
   {/snippet}
 
-  {#snippet content({ close })}
+  {#snippet content({ close }: PopoverContentState)}
     <EmojiPickerPanel
       {frequentEmoji}
       searchLabel="Поиск эмодзи"
       sectionsLabel="Разделы эмодзи"
       gridLabel="Эмодзи"
-      optionLabel={(emoji) => `Эмодзи ${emoji}`}
+      optionLabel={(emoji: string) => `Эмодзи ${emoji}`}
       toneStripLabel="Цвет кожи для этого эмодзи"
-      onpick={(emoji) => choose(emoji, close)}
+      onpick={(emoji: string) => choose(emoji, close)}
     />
   {/snippet}
 </Popover>

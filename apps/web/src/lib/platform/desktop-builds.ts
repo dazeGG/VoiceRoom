@@ -43,9 +43,3 @@ export function formatDesktopReleaseMeta(
   const version = release ? `v${release.version}` : '';
   return [build.ext, size, build.req, version].filter(Boolean).join(' · ');
 }
-
-export function desktopDownloadLabel(state: 'idle' | 'loading' | 'done'): string {
-  if (state === 'loading') return 'Загрузка…';
-  if (state === 'done') return 'Загрузка началась';
-  return 'Скачать приложение';
-}

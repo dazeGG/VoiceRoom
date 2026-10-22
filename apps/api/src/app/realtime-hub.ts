@@ -1,13 +1,11 @@
-// The realtime side of one API app: the socket registry and room runtime
+// The realtime side of one API app: the socket registry, the room runtime
 // (built when the app starts), the in-memory presence roster, and the event
 // fan-out that domain services call (account events, room broadcasts, link
 // previews, delivery relay, room and account lifecycles).
 
-import type { Logger } from 'pino';
 import type { FastifyBaseLogger } from 'fastify';
 import type { IncomingMessage } from 'node:http';
-import { buildRoomMembershipPresenceSnapshot, createConnectionRegistry } from '../realtime/registry.ts';
-import type { ConnectionRegistry } from '../realtime/registry.ts';
+import { createConnectionRegistry } from '../realtime/registry.ts';
 import type { AccountMessage } from '../realtime/account-events.ts';
 import { createWsHandler } from '../realtime/ws-handler.ts';
 import { createRoomRealtimeRuntime } from '../realtime/room-runtime.ts';
@@ -22,30 +20,30 @@ import { publicChatMessage } from '../domains/messaging/room-chat-views.ts';
 import { createNotificationDispatch } from '../domains/notifications/notification-dispatch.ts';
 import { createAccountLifecycle } from '../domains/account/account-lifecycle.ts';
 import { gatePrincipalForPeer, type GatePrincipalPeer } from '../domains/admission/gate-principal.ts';
+import type { ActiveBanRecord } from '../domains/moderation/active-ban.repository.ts';
 import { avatarColorForPeerId } from '../domains/rooms/avatar-color.ts';
 import { createRoomLifecycle } from '../domains/rooms/room-lifecycle.ts';
 import { publicPeer } from '../domains/rooms/room-views.ts';
 import { tokensMatch } from '../platform/crypto/tokens-match.ts';
+import type { Timer } from '../platform/types.ts';
 import type { ResolvedSession } from './context.ts';
 import type { readApiConfig } from './config.ts';
 import type { LiveKit } from './livekit.ts';
 import type { createServiceRegistry } from './service-registry.ts';
 import { sessionAvatarColorKey, sessionDisplayName } from './session.ts';
 
-type Timer = ReturnType<typeof globalThis.setTimeout> | number;
-
 export interface RealtimeHubDeps {
   config: ReturnType<typeof readApiConfig>;
   services: ReturnType<typeof createServiceRegistry>;
   liveKit: Pick<LiveKit, 'removeParticipant'>;
-  logger(): Logger;
+  logger(): FastifyBaseLogger;
   /** Removes a stored avatar file (the avatars service, built after the hub). */
-  removeAvatar(key: string | null | undefined, log: Pick<Logger, 'error'> | undefined): Promise<void>;
+  removeAvatar(key: string | null | undefined, log: Pick<FastifyBaseLogger, 'error'> | undefined): Promise<void>;
 }
 
 /** What starting the realtime layer for an app needs from it. */
 export interface RealtimeStartOptions {
-  logger: Logger | FastifyBaseLogger;
+  logger: FastifyBaseLogger;
   reconnectLeaseMs: number;
   now: () => number;
   setTimeout(this: void, callback: () => void, ms: number): Timer;
@@ -56,10 +54,30 @@ export interface RealtimeStartOptions {
 
 export function createRealtimeHub(deps: RealtimeHubDeps) {
   const { config, services } = deps;
-  let wsRegistry: ConnectionRegistry | null = null;
+  // The room runtime takes the clock and timers of the app it starts with.
   let roomRuntime: RoomRealtimeRuntime | null = null;
+  /** The room runtime; the app starts it before it serves anything that reaches here. */
+  function runtime(): RoomRealtimeRuntime {
+    if (!roomRuntime) throw new Error('The realtime room runtime starts with the app');
+    return roomRuntime;
+  }
+  const wsRegistry = createConnectionRegistry({
+    maxConnectionsPerUser: config.MAX_REALTIME_STREAMS_PER_USER,
+    maxGuestConnectionsPerIp: config.MAX_GUEST_STREAMS_PER_IP,
+    keepaliveMs: config.KEEPALIVE_MS,
+    onPresenceChange: (friendId, userId, online) => {
+      broadcastToUser(friendId, { type: 'presence', userId, online });
+    },
+    getFriendIds: (userId) => services.getFriendStore().getFriendIds(userId),
+    onConnectionClose: (connection) => {
+      roomRuntime?.cleanupConnection(connection);
+    },
+    // The app logger, once the app adopted it as the process logger.
+    logger: { error: (fields, message) => deps.logger().error(fields, message) }
+  });
   const roomPresence = createRoomPresence({
     store: () => services.getRoomStore(),
+    sockets: wsRegistry,
     runtime: () => roomRuntime,
     logger: () => deps.logger(),
     occupancyRetry: { baseMs: 1000, maxMs: 30000 },
@@ -67,7 +85,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     sessions: () => services.getVoiceSessionRepository()
   });
   const presenceRooms = roomPresence.rooms;
-  const { attach: attachPresence, broadcast, closePeer, queueOccupancy: queueRoomOccupancyTransition } = roomPresence;
+  const { attach: attachPresence, publish, closePeer, queueOccupancy: queueRoomOccupancyTransition } = roomPresence;
   const messageProjection = createMessageProjection({
     attachments: () => services.getMediaServices()?.attachments ?? null,
     replies: () => {
@@ -89,7 +107,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     projection: messageProjection,
     publicChatMessage,
     broadcastRoomEdit: (roomId, message) =>
-      roomRuntime?.broadcastRoomDetail?.(roomId, buildServerEnvelope('room.chat.edited', { roomId, message })),
+      runtime().broadcastRoomDetail(roomId, buildServerEnvelope('room.chat.edited', { roomId, message })),
     notifyUser: (userId, event) => broadcastToUser(userId, event)
   });
   const messageDeliveryRelay = createMessageDeliveryRelay({
@@ -97,7 +115,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     pool: () => services.getPool(),
     outbox: () => services.getMessageDeliveryServices()?.outbox ?? null,
     projection: messageProjection,
-    broadcastChatMessage: (roomId, message) => roomRuntime?.broadcastChatMessage(roomId, message),
+    broadcastChatMessage: (roomId, message) => runtime().broadcastChatMessage(roomId, message),
     notifyUser: (userId, event) => broadcastToUser(userId, event),
     findUser: (userId) => services.getUserStore().getUserById(userId),
     broadcastDmNotification: (recipientId, sender, message) =>
@@ -124,7 +142,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
       return peer ? liveKitGatePrincipalForPeer(roomId, peer) : null;
     },
     revokeSeatCredentials: (input) => services.getRoomStore().revokeLiveKitGateCredentialsForPeer(input),
-    leaveVoice: (connection, activeVoice) => roomRuntime?.leaveVoiceRoom(connection, activeVoice),
+    leaveVoice: (connection, activeVoice) => runtime().leaveVoiceRoom(connection, activeVoice),
     removeParticipant: (roomId, peerId) => deps.liveKit.removeParticipant(roomId, peerId),
     sessionRevokedCloseCode: config.SESSION_REVOKED_CLOSE_CODE,
     deletions: () => services.getAccountDeletionRepository(),
@@ -141,16 +159,14 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     accountLifecycle.broadcastProfileToFriends(user, request?.log);
 
   function roomMembershipPresenceSnapshot(roomId: string) {
-    const room = presenceRooms.get(roomId);
-    return buildRoomMembershipPresenceSnapshot(roomId, room, wsRegistry);
+    return wsRegistry.presenceSnapshot(roomId, presenceRooms.get(roomId));
   }
 
   function isUserOnline(userId: string): boolean {
-    return Boolean(wsRegistry?.isUserOnline(userId));
+    return wsRegistry.isUserOnline(userId);
   }
 
   function broadcastToUser(userId: string, message: AccountMessage): number {
-    if (!wsRegistry) return 0;
     return wsRegistry.broadcastAccountEvent(userId, message);
   }
 
@@ -164,40 +180,21 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     return attachPresence(room);
   }
 
-  async function findRoomBan(roomId: string, userId?: string | null, ip?: string | null) {
+  // The ban service needs the database; without one, a store that knows bans answers.
+  async function findRoomBan(
+    roomId: string,
+    userId?: string | null,
+    ip?: string | null
+  ): Promise<ActiveBanRecord | null> {
     if (!roomId) return null;
     const service = services.getActiveBanService();
     if (service) return service.getActiveBan({ roomId, userId: userId || null, ip: ip || '' });
-    if (typeof services.getRoomStore().findActiveRoomBan !== 'function') return null;
     return services.getRoomStore().findActiveRoomBan({ roomId, userId: userId || null, ip: ip || '' });
   }
 
-  function getActiveGuestWsCount() {
-    if (!wsRegistry?.connections) return 0;
-    let count = 0;
-    for (const connection of wsRegistry.connections.values()) {
-      if (connection.guest) count += 1;
-    }
-    return count;
-  }
-
-  /** Builds the socket registry, the room runtime and the WebSocket handler. */
+  /** Builds the room runtime and the WebSocket handler. */
   function start(options: RealtimeStartOptions) {
-    wsRegistry = createConnectionRegistry({
-      maxConnectionsPerUser: config.MAX_REALTIME_STREAMS_PER_USER,
-      maxGuestConnectionsPerIp: config.MAX_GUEST_STREAMS_PER_IP,
-      keepaliveMs: config.KEEPALIVE_MS,
-      onPresenceChange: (friendId, userId, online) => {
-        broadcastToUser(friendId, { type: 'presence', userId, online });
-      },
-      getFriendIds: (userId) => services.getFriendStore().getFriendIds(userId),
-      onConnectionClose: (connection) => {
-        roomRuntime?.cleanupConnection(connection);
-      },
-      logger: options.logger
-    });
-
-    roomRuntime = createRoomRealtimeRuntime({
+    const startedRuntime = createRoomRealtimeRuntime({
       presenceRooms,
       wsRegistry,
       getRoomStore: services.getRoomStore,
@@ -206,7 +203,7 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
       publicLobbyRoom,
       publicChatMessage,
       getUserStore: services.getUserStore,
-      broadcast,
+      publishRoomEvent: publish,
       closePeer,
       avatarColorForPeerId,
       MAX_ROOM_PEERS: config.MAX_ROOM_PEERS,
@@ -226,10 +223,11 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
       clearTimeout: options.clearTimeout,
       logger: options.logger
     });
+    roomRuntime = startedRuntime;
 
     const wsHandler = createWsHandler({
       registry: wsRegistry,
-      roomRuntime,
+      roomRuntime: startedRuntime,
       resolveSessionUser: options.resolveSession,
       getFriendIds: (userId) => services.getFriendStore().getFriendIds(userId),
       isUserOnline,
@@ -240,13 +238,13 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
       getClientIp: options.clientIp,
       logger: options.logger
     });
-    return { roomRuntime, wsHandler };
+    return { roomRuntime: startedRuntime, wsHandler };
   }
 
   return {
     start,
-    registry: () => wsRegistry,
-    runtime: () => roomRuntime,
+    registry: wsRegistry,
+    runtime,
     presence: roomPresence,
     presenceRooms,
     getRoom,
@@ -255,7 +253,6 @@ export function createRealtimeHub(deps: RealtimeHubDeps) {
     isUserOnline,
     roomMembershipPresenceSnapshot,
     liveKitGatePrincipalForPeer,
-    activeGuestConnections: getActiveGuestWsCount,
     projection: messageProjection,
     notifications: notificationDispatch,
     linkPreviews: linkPreviewEvents,

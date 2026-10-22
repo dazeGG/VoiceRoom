@@ -11,6 +11,7 @@ import * as microphone from '../../src/lib/features/room/client/services/microph
 import * as livekit from '../../src/lib/features/room/client/services/livekit-service.ts';
 import * as playback from '../../src/lib/features/room/client/services/media-playback-service.ts';
 import { roomDeviceUi } from '../../src/lib/features/room/room-device-ui.svelte.ts';
+import { defined } from '../helpers/assert.ts';
 
 vi.mock('../../src/lib/features/room/client/services/livekit-service', () => ({
   publishLocalMicrophone: vi.fn(async () => {}),
@@ -38,12 +39,12 @@ vi.mock('../../src/lib/features/room/client/ui/controls', () => ({
 vi.mock('../../src/lib/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
 
 // A class instance, like a real MediaStream, so the room state keeps it as is
-// instead of wrapping it in a reactive proxy.
-class FakeStream {
-  constructor(private readonly tracks: unknown[]) {}
-  getAudioTracks() {
-    return this.tracks;
-  }
+// instead of wrapping it in a reactive proxy. Registered as the global
+// MediaStream (jsdom has none), so `new MediaStream()` builds one.
+class FakeStream {}
+
+function stream(tracks: object[]): MediaStream {
+  return Object.assign(new MediaStream(), { getAudioTracks: () => tracks });
 }
 
 function fakeCapture(deviceId: string, groupId = deviceId) {
@@ -56,12 +57,12 @@ function fakeCapture(deviceId: string, groupId = deviceId) {
     addEventListener: (_event: string, listener: () => void) => endedListeners.push(listener)
   };
   const published = { kind: 'audio', enabled: true };
-  const capture = {
+  const capture: MicrophoneCapture = {
     mode: 'browser',
     processor: null,
-    rawStream: new FakeStream([raw]),
-    stream: new FakeStream([published])
-  } as unknown as MicrophoneCapture;
+    rawStream: stream([raw]),
+    stream: stream([published])
+  };
   return {
     capture,
     published,
@@ -73,7 +74,7 @@ function fakeCapture(deviceId: string, groupId = deviceId) {
 }
 
 function device(kind: MediaDeviceKind, deviceId: string, groupId = deviceId) {
-  return { kind, deviceId, groupId, label: deviceId } as MediaDeviceInfo;
+  return Object.assign(new MediaDeviceInfo(), { kind, deviceId, groupId, label: deviceId });
 }
 
 let listed: MediaDeviceInfo[] = [];
@@ -103,8 +104,10 @@ async function load() {
 beforeEach(() => {
   localStorage.clear();
   listed = [];
+  vi.stubGlobal('MediaStream', FakeStream);
+  // jsdom has no MediaDeviceInfo: a plain class stands in for it.
+  vi.stubGlobal('MediaDeviceInfo', class {});
   vi.stubGlobal('navigator', {
-    ...navigator,
     mediaDevices: { enumerateDevices: async () => listed }
   });
 });
@@ -177,8 +180,10 @@ test('overlapping microphone switches run one after another and leave no capture
   const captures = [fakeCapture('mic-b'), fakeCapture('mic-c')];
   let releaseFirstOpen = () => {};
   open
-    .mockImplementationOnce(() => new Promise((resolve) => (releaseFirstOpen = () => resolve(captures[0].capture))))
-    .mockResolvedValueOnce(captures[1].capture);
+    .mockImplementationOnce(
+      () => new Promise((resolve) => (releaseFirstOpen = () => resolve(defined(captures[0], 'captures[0]').capture)))
+    )
+    .mockResolvedValueOnce(defined(captures[1], 'captures[1]').capture);
   joinWith(first);
 
   const one = devices.switchMicrophone();
@@ -189,9 +194,9 @@ test('overlapping microphone switches run one after another and leave no capture
   await Promise.all([one, two]);
 
   expect(open).toHaveBeenCalledTimes(2);
-  expect(state.localStream).toBe(captures[1].capture.stream);
+  expect(state.localStream).toBe(defined(captures[1], 'captures[1]').capture.stream);
   const stopped = stop.mock.calls.map(([capture]) => capture.stream);
-  expect(stopped).toEqual([first.capture.stream, captures[0].capture.stream]);
+  expect(stopped).toEqual([first.capture.stream, defined(captures[0], 'captures[0]').capture.stream]);
 });
 
 test('plugging the saved microphone back in moves the call onto it', async () => {

@@ -1,79 +1,23 @@
 import type pg from 'pg';
-import { kyselyOn } from '../../platform/db/kysely.ts';
+import {
+  revokeMessageAttachments,
+  type CleanupJobs,
+  type RevocableAttachments
+} from '../media/attachment-revocation.service.ts';
 import { transaction } from '../../platform/db/pool.ts';
+import { lockRoomMessage, tombstoneRoomMessage } from './message-moderation.repository.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
-type Loose = Record<string, unknown>;
-type RevokedAttachment = { id?: string } | null | undefined;
 
-type RevokeInput = { roomId: string; messageId: string; at: Date; client: QueryClient };
-type CleanupInput = RevokeInput & { attachments: RevokedAttachment[] };
-type Revoker = (input: RevokeInput) => Promise<RevokedAttachment[] | null | undefined>;
-type CleanupEnqueuer = (input: CleanupInput) => Promise<unknown>;
+/** What deleting a message needs from the media domain's attachment store. */
+export type ModerationAttachments = RevocableAttachments;
+/** What deleting a message needs from the media job queue. */
+export type ModerationMediaJobs = CleanupJobs;
 
 export type MessageDeletion = { roomId: string; messageId: string; deletedAt: number };
 export type MessageDeletionOutcome =
   | { status: 'invalid' | 'forbidden' | 'not_found'; deletion: null }
   | { status: 'deleted' | 'already_deleted'; deletion: MessageDeletion };
-
-function requireOperation<T>(target: Loose | null | undefined, names: string[], label: string): T {
-  for (const name of names) {
-    if (typeof target?.[name] === 'function')
-      return (target[name] as (...args: unknown[]) => unknown).bind(target) as T;
-  }
-  throw new TypeError(`${label} is required`);
-}
-
-function attachmentRevoker(input: unknown): Revoker {
-  const repository = input as Loose | null | undefined;
-  if (repository?.revokeForRoomMessage || repository?.revokeForMessage) {
-    return requireOperation<Revoker>(
-      repository,
-      ['revokeForRoomMessage', 'revokeForMessage'],
-      'An attachment revocation operation'
-    );
-  }
-  if (repository?.listForMessage && repository?.markDeleted) {
-    const attachments = repository as {
-      listForMessage(context: 'room', messageId: string, options: { client: QueryClient }): Promise<{ id: string }[]>;
-      markDeleted(id: string, client: QueryClient): Promise<RevokedAttachment>;
-    };
-    return async ({ messageId, client }) => {
-      const listed = await attachments.listForMessage('room', messageId, { client });
-      const revoked: RevokedAttachment[] = [];
-      for (const attachment of listed) {
-        revoked.push(await attachments.markDeleted(attachment.id, client));
-      }
-      return revoked;
-    };
-  }
-  throw new TypeError('An attachment revocation operation is required');
-}
-
-function cleanupEnqueuer(input: unknown): CleanupEnqueuer {
-  const repository = input as Loose | null | undefined;
-  if (repository?.enqueueCleanupForRoomMessage || repository?.enqueueCleanupForAttachments) {
-    return requireOperation<CleanupEnqueuer>(
-      repository,
-      ['enqueueCleanupForRoomMessage', 'enqueueCleanupForAttachments'],
-      'A media cleanup enqueue operation'
-    );
-  }
-  if (repository?.enqueue) {
-    const jobs = repository as {
-      enqueue(id: string, options: { kind: 'cleanup'; availableAt: Date; client: QueryClient }): Promise<unknown>;
-    };
-    return async ({ attachments, at, client }) => {
-      const queued: unknown[] = [];
-      for (const attachment of attachments) {
-        if (attachment?.id)
-          queued.push(await jobs.enqueue(attachment.id, { kind: 'cleanup', availableAt: at, client }));
-      }
-      return queued;
-    };
-  }
-  throw new TypeError('A media cleanup enqueue operation is required');
-}
 
 function createMessageModerationService({
   pool,
@@ -87,17 +31,15 @@ function createMessageModerationService({
   moderationService?: {
     authorizeOwner(roomId: string, actorUserId: string, options: { client: QueryClient }): Promise<boolean>;
   };
-  attachmentRepository?: unknown;
-  mediaJobRepository?: unknown;
+  attachmentRepository: ModerationAttachments;
+  mediaJobRepository: ModerationMediaJobs;
   publishMessageDeleted?: (deletion: MessageDeletion) => unknown;
   now?: () => number;
-} = {}) {
+}) {
   if (!pool?.connect || !moderationService?.authorizeOwner) {
     throw new TypeError('Message moderation requires a pool and moderation service');
   }
   const owners = moderationService;
-  const revokeAttachments = attachmentRevoker(attachmentRepository);
-  const enqueueCleanup = cleanupEnqueuer(mediaJobRepository);
 
   async function deleteRoomMessage({
     roomId,
@@ -135,28 +77,17 @@ function createMessageModerationService({
       if (!(await authorize(client))) {
         return { status: 'forbidden', deletion: null };
       }
-      const trx = kyselyOn(client);
-      const message = await trx
-        .selectFrom('room_messages')
-        .select(['id', 'room_id', 'deleted_at'])
-        .where('room_id', '=', roomId)
-        .where('id', '=', messageId)
-        .limit(1)
-        .forUpdate()
-        .executeTakeFirst();
+      const message = await lockRoomMessage(client, roomId, messageId);
       if (!message) return { status: 'not_found', deletion: null };
-
-      if (!message.deleted_at) {
-        await trx
-          .updateTable('room_messages')
-          .set({ deleted_at: timestamp })
-          .where('room_id', '=', roomId)
-          .where('id', '=', messageId)
-          .where('deleted_at', 'is', null)
-          .execute();
-      }
-      const attachments = await revokeAttachments({ roomId, messageId, at: timestamp, client });
-      await enqueueCleanup({ roomId, messageId, attachments: attachments || [], at: timestamp, client });
+      if (!message.deleted_at) await tombstoneRoomMessage(client, roomId, messageId, timestamp);
+      await revokeMessageAttachments({
+        attachments: attachmentRepository,
+        jobs: mediaJobRepository,
+        context: 'room',
+        messageId,
+        client,
+        at: timestamp
+      });
       return {
         status: message.deleted_at ? 'already_deleted' : 'deleted',
         deletion: { roomId, messageId, deletedAt: timestamp.getTime() }

@@ -1,7 +1,9 @@
 import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
+import { isRecord } from '@voice-room/shared/guards';
 import { kyselyOn } from '../../platform/db/kysely.ts';
+import { DomainError } from '../../platform/http/domain-error.ts';
 
 const DEFAULT_RETENTION_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_ACTOR_QUOTA = 1_000;
@@ -31,6 +33,12 @@ export type Reservation =
   | { kind: 'pending'; ledgerKey: string }
   | { kind: 'reserved'; ledgerKey: string };
 
+/** The `message` of the answer a replay repeats, still to be checked by the caller. */
+export function replayedMessage(reservation: { response?: { body?: unknown } }): unknown {
+  const body = reservation.response?.body;
+  return isRecord(body) ? body.message : undefined;
+}
+
 export type IdempotencyInput = {
   actorType?: unknown;
   actorId?: unknown;
@@ -39,32 +47,20 @@ export type IdempotencyInput = {
   fingerprint?: unknown;
 };
 
-class IdempotencyConflictError extends Error {
-  declare code: string;
-  declare statusCode: number;
-
+class IdempotencyConflictError extends DomainError {
   constructor(message = 'Idempotency key was already used with a different request') {
-    super(message);
-    this.name = 'IdempotencyConflictError';
-    this.code = 'IDEMPOTENCY_CONFLICT';
-    this.statusCode = 409;
+    super('idempotency_conflict', 409, message);
   }
 }
 
-class IdempotencyQuotaError extends Error {
-  declare code: string;
-  declare statusCode: number;
-
+class IdempotencyQuotaError extends DomainError {
   constructor(message = 'Idempotency key quota exceeded') {
-    super(message);
-    this.name = 'IdempotencyQuotaError';
-    this.code = 'IDEMPOTENCY_QUOTA_EXCEEDED';
-    this.statusCode = 429;
+    super('idempotency_quota_exceeded', 429, message);
   }
 }
 
 function requireQuery(client: unknown): asserts client is QueryClient {
-  if (!client || typeof (client as QueryClient).query !== 'function') {
+  if (!isRecord(client) || typeof client.query !== 'function') {
     throw new TypeError('An active PostgreSQL transaction client is required');
   }
 }
@@ -222,9 +218,12 @@ function createMessageIdempotencyRepository({
     return rowToReplay(row);
   }
 
-  async function pruneExpired(client: unknown, { limit = 500 }: { limit?: unknown } = {}): Promise<number | null> {
+  async function pruneExpired(
+    client: unknown,
+    { limit = 500 }: { limit?: number | string } = {}
+  ): Promise<number | null> {
     requireQuery(client);
-    const boundedLimit = Math.max(1, Math.min(5_000, Number.parseInt(limit as string, 10) || 500));
+    const boundedLimit = Math.max(1, Math.min(5_000, Number.parseInt(String(limit), 10) || 500));
     const result = await kyselyOn(client)
       .deleteFrom('message_send_idempotency')
       .where('ledger_key', 'in', (eb) =>

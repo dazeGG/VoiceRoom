@@ -15,6 +15,7 @@ import {
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import type { ReportService } from './report.service.ts';
+import type { RateCheck } from '../../lib/rate-limit.ts';
 
 const SIGN_IN_REQUIRED = failure('Authentication required', { code: 'authentication_required' });
 const ADMIN_REQUIRED = failure('Platform administrator access required', { code: 'platform_admin_required' });
@@ -25,7 +26,7 @@ const TOO_MANY_REPORTS = failure('Too many reports', { code: 'rate_limited' });
 
 export interface ReportRoutesDeps {
   reports: Pick<ReportService, 'fileReport' | 'listOpen' | 'resolve'>;
-  limiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
+  limiter: RateCheck;
   /** The staff member behind the admin-app session, or null with the 401 sent. */
   staffUserId(request: FastifyRequest, reply: FastifyReply): Promise<string | null>;
 }

@@ -3,11 +3,12 @@ import type pg from 'pg';
 import sharp from 'sharp';
 import type { AttachmentDraft } from '@voice-room/shared/contracts/media';
 import { epochMillis } from '../../platform/epoch-millis.ts';
+import { codeOf } from '../../platform/error-code.ts';
 import type { Attachment, AttachmentRepository } from './attachment.repository.ts';
 import type { MediaJobRepository } from './media-job.repository.ts';
 import type { MediaPressureService } from './media-pressure.service.ts';
 import type { MediaQuotaService } from './media-quota.service.ts';
-import type { MediaStorage } from './storage.ts';
+import { chunkBuffer, type ByteChunks, type MediaStorage } from './storage.ts';
 import { ownsAttachment } from './attachment.policy.ts';
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
@@ -22,7 +23,7 @@ const PNG_END = Buffer.from('0000000049454e44ae426082', 'hex');
 type Client = Pick<pg.PoolClient, 'query'> | null | undefined;
 type ImageMetadata = Awaited<ReturnType<ReturnType<typeof sharp>['metadata']>>;
 type AttachmentLock = <T>(id: string, operation: (client: Client) => Promise<T>) => Promise<T>;
-type UploadStream = AsyncIterable<unknown> & { resume?: () => unknown };
+type UploadStream = ByteChunks & { resume?: () => unknown };
 
 export type PublicAttachment = Readonly<AttachmentDraft>;
 
@@ -55,11 +56,11 @@ function publicAttachment(attachment: Attachment | null | undefined): PublicAtta
   });
 }
 
-async function readBounded(stream: AsyncIterable<unknown>, maxBytes: number): Promise<Buffer> {
+async function readBounded(stream: ByteChunks, maxBytes: number): Promise<Buffer> {
   const chunks: Buffer[] = [];
   let bytes = 0;
   for await (const chunk of stream) {
-    const value = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as Uint8Array);
+    const value = chunkBuffer(chunk);
     bytes += value.length;
     if (bytes > maxBytes) throw new MediaServiceError('media_too_large', 'Image exceeds 10 MiB', 413);
     chunks.push(value);
@@ -177,7 +178,7 @@ function createMediaService({
     } catch (cause) {
       throw new MediaServiceError('media_invalid_image', 'Invalid or unsafe image', 400, { cause });
     }
-    const mimeType = FORMAT_MIME[metadata.format as string];
+    const mimeType = metadata.format ? FORMAT_MIME[metadata.format] : undefined;
     if (!mimeType || metadata.format !== container)
       throw new MediaServiceError('media_type_unsupported', 'Only JPEG, PNG, and WebP images are supported', 415);
     if (claimedMimeType && claimedMimeType !== 'application/octet-stream' && claimedMimeType !== mimeType) {
@@ -199,7 +200,7 @@ function createMediaService({
   }: {
     id: string;
     ownerId: string;
-    stream?: UploadStream | null;
+    stream?: UploadStream | null | undefined;
     mimeType?: string;
   }): Promise<PublicAttachment | null> {
     await pressureService?.assertAcceptingUploads?.();
@@ -237,7 +238,7 @@ function createMediaService({
         await jobRepository?.enqueue?.(id, { client });
         return publicAttachment(updated);
       } catch (error) {
-        const code = (error as { code?: unknown } | null | undefined)?.code;
+        const code = codeOf(error);
         await files.removeAttachment(id).catch(() => {});
         if (code === 'MEDIA_TOO_LARGE') {
           await attachments.markFailed(id, 'media_too_large', client).catch(() => {});

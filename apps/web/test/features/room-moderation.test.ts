@@ -1,4 +1,7 @@
 import { beforeEach, expect, test, vi } from 'vitest';
+import type { Ban } from '@voice-room/shared/contracts/moderation';
+import type { ModerationNotice } from '../../src/lib/entities/room/room-moderation.ts';
+import { defined } from '../helpers/assert.ts';
 
 vi.mock('../../src/lib/api/moderation', () => ({
   putBan: vi.fn(),
@@ -18,13 +21,20 @@ const {
   liftRoomBan
 } = await import('../../src/lib/entities/room/room-moderation.ts');
 
-const ban = (overrides: Record<string, unknown> = {}) =>
-  ({
-    id: 'ban-1',
-    expiresAt: null,
-    subject: { kind: 'account', profile: { displayName: 'Анна', login: 'anna' } },
-    ...overrides
-  }) as never;
+const ban = (overrides: Partial<Ban> = {}): Ban => ({
+  id: 'ban-1',
+  roomId: 'room-a',
+  subject: {
+    kind: 'account',
+    userId: 'u-anna',
+    profile: { displayName: 'Анна', login: 'anna', avatarUrl: null, avatarColorKey: 'blue', avatarAccent: null }
+  },
+  reason: '',
+  createdAt: null,
+  updatedAt: null,
+  expiresAt: null,
+  ...overrides
+});
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -34,8 +44,8 @@ test('owners choose a ban of an hour, a day, a week or forever', () => {
 
 test('a ban reports who and for how long, with an undo that lifts it', async () => {
   vi.mocked(api.putBan).mockResolvedValue(ban());
-  vi.mocked(api.unban).mockResolvedValue(ban());
-  const notify = vi.fn();
+  vi.mocked(api.unban).mockResolvedValue();
+  const notify = vi.fn<ModerationNotice>();
 
   await banRoomMember('room-a', { userId: 'u-anna', name: 'Анна' }, '1d', notify);
   expect(api.putBan).toHaveBeenCalledWith(
@@ -43,11 +53,12 @@ test('a ban reports who and for how long, with an undo that lifts it', async () 
     { userId: 'u-anna', guestIp: null, duration: '1d', reason: '' },
     expect.any(String)
   );
-  const [message, options] = notify.mock.calls[0] as [string, { undo: { label: string; run: () => void } }];
+  const [message, options] = defined(notify.mock.calls[0], 'moderation notice');
   expect(message).toBe('Анна заблокирован на 1 день');
-  expect(options.undo.label).toBe('Отменить');
+  const undo = defined(options?.undo, 'undo action');
+  expect(undo.label).toBe('Отменить');
 
-  options.undo.run();
+  undo.run();
   await vi.waitFor(() => expect(notify).toHaveBeenLastCalledWith('Блокировка отменена'));
   expect(api.unban).toHaveBeenCalledWith('room-a', 'ban-1');
 });
@@ -65,8 +76,8 @@ test('failures are reported as errors with the server message or a fallback', as
 
 test('the bans list names people instead of showing raw ids', () => {
   expect(banSubjectName(ban())).toBe('Анна');
-  expect(banSubjectName(ban({ subject: { kind: 'guest', profile: null } }))).toBe('Гость');
-  expect(banSubjectName(ban({ subject: { kind: 'account', profile: null } }))).toBe('Участник');
+  expect(banSubjectName(ban({ subject: { kind: 'guest', userId: null } }))).toBe('Гость');
+  expect(banSubjectName(ban({ subject: { kind: 'account', userId: 'u-anna' } }))).toBe('Участник');
   expect(banExpiryLabel(ban())).toBe('Навсегда');
   expect(banExpiryLabel(ban({ expiresAt: Date.UTC(2026, 9, 1) }))).toMatch(/^До /);
 });

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths';
   import type { Snippet } from 'svelte';
   import BetaMark from './BetaMark.svelte';
   import './topbar.css';
@@ -11,7 +12,7 @@
 </script>
 
 <header class="topbar">
-  <a class="brand" href="/" aria-label={label} data-sveltekit-reload={reload ? '' : undefined}>
+  <a class="brand" href={resolve('/')} aria-label={label} data-sveltekit-reload={reload ? '' : undefined}>
     <span class="brand-mark" aria-hidden="true"></span>
     <span>VoiceRoom</span>
     <BetaMark />

@@ -1,6 +1,6 @@
 // Our own tracks on the LiveKit room: the microphone, the camera and the shared screen.
 
-import type { LocalTrackPublication, Room, Track } from 'livekit-client';
+import type { LocalTrackPublication, Room } from 'livekit-client';
 import {
   CAMERA_CAPTURE,
   CAMERA_VIDEO_BITRATE,
@@ -9,8 +9,9 @@ import {
 } from '../../core/config';
 import { state } from '../../core/state.svelte';
 import { getScreenProfile, getScreenPublishVideoOptions } from '../../media/profiles';
-import { loadLiveKitClient, TRACK_SOURCE } from '../../media/livekit-runtime';
+import { loadLiveKitClient } from '../../media/livekit-runtime';
 import { isMicrophoneShownMuted } from '../../core/microphone-mute';
+import { UserFacingError } from '../../core/utils';
 
 import { isCameraPublication, isMicrophonePublication } from './publication-kinds';
 
@@ -29,14 +30,15 @@ export async function publishLocalMicrophoneForRoom(
 ): Promise<LocalTrackPublication | null> {
   if (!stream || !isCurrent()) return null;
   const [track] = stream.getAudioTracks();
-  if (!track) throw new Error('Браузер не отдал аудио-трек');
+  if (!track) throw new UserFacingError('Браузер не отдал аудио-трек');
+  const { Track } = await loadLiveKitClient();
 
   const publication = await room.localParticipant.publishTrack(track, {
     audioPreset: { maxBitrate: MICROPHONE_AUDIO_BITRATE },
     dtx: true,
     name: 'microphone',
     red: true,
-    source: TRACK_SOURCE.Microphone as Track.Source
+    source: Track.Source.Microphone
   });
   if (!isCurrent()) {
     await room.localParticipant.unpublishTrack(publication.track ?? track, false).catch(() => {});
@@ -111,14 +113,14 @@ export async function publishLocalCameraForRoom(
 ): Promise<LocalTrackPublication | null> {
   const [track] = stream?.getVideoTracks() ?? [];
   if (!track || track.readyState === 'ended' || !isCurrent()) return null;
-  const { VideoPresets } = await loadLiveKitClient();
+  const { Track, VideoPresets } = await loadLiveKitClient();
   if (!isCurrent()) return null;
 
   // Simulcast: a grid tile asks for a small layer, the spotlight for the top one.
   const publication = await room.localParticipant.publishTrack(track, {
     name: 'camera',
     simulcast: true,
-    source: TRACK_SOURCE.Camera as Track.Source,
+    source: Track.Source.Camera,
     videoEncoding: { maxBitrate: CAMERA_VIDEO_BITRATE, maxFramerate: CAMERA_CAPTURE.frameRate },
     videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360]
   });
@@ -178,18 +180,20 @@ export async function publishLocalScreenTracksForRoom(
   const created = new Map<string, LocalTrackPublication>();
   if (!stream || !isCurrent()) return publications;
   const profile = getScreenProfile(state.localScreenProfileId);
+  const { Track } = await loadLiveKitClient();
   for (const track of stream.getTracks().filter((candidate) => candidate.readyState !== 'ended')) {
     if (publications.has(track.id)) continue;
     const videoOptions = track.kind === 'video' ? await getScreenPublishVideoOptions(profile) : null;
     if (!isCurrent()) break;
     const publication = await room.localParticipant.publishTrack(track, {
-      audioPreset: track.kind === 'audio' ? { maxBitrate: SCREEN_AUDIO_BITRATE } : undefined,
       // Shared audio is music and game sound: keep it stereo and continuous,
       // and skip RED, which would double a 192 kbps stream for little gain.
-      ...(track.kind === 'audio' ? { dtx: false, forceStereo: true, red: false } : {}),
+      ...(track.kind === 'audio'
+        ? { audioPreset: { maxBitrate: SCREEN_AUDIO_BITRATE }, dtx: false, forceStereo: true, red: false }
+        : {}),
       name: track.kind === 'video' ? 'screen' : 'screen-audio',
-      ...(videoOptions ?? {}),
-      source: track.kind === 'video' ? videoOptions!.source : (TRACK_SOURCE.ScreenShareAudio as Track.Source),
+      // The video options name their own source.
+      ...(videoOptions ?? { source: Track.Source.ScreenShareAudio }),
       stream: stream.id
     });
     if (!isCurrent()) {

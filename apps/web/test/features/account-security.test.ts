@@ -9,6 +9,7 @@ import {
 import { loginAlertHeadline, loginAlertWhen, queueLoginAlert } from '../../src/lib/features/home/model/login-alerts.ts';
 import { WHATS_NEW_SLIDES, shouldShowWhatsNew } from '../../src/lib/features/home/model/whats-new.ts';
 import { WHATS_NEW_VERSION } from '@voice-room/shared/account-security';
+import type { AccountSecurity, LoginAlert } from '../../src/lib/api/auth.ts';
 
 const HOUR = 60 * 60 * 1000;
 const NOW = Date.UTC(2026, 8, 24, 12);
@@ -21,7 +22,7 @@ test('a session names its browser and system, or says the browser is unknown', (
 test('last activity is only as precise as the hourly server refresh', () => {
   expect(formatLastSeen(NOW - 10 * 60_000, NOW)).toBe('Активен в течение часа');
   expect(formatLastSeen(NOW - 5 * HOUR, NOW)).toBe('Заходил 5 ч назад');
-  expect(formatLastSeen(NOW - 3 * 24 * HOUR, NOW)).toBe('Заходил 3 дн. назад');
+  expect(formatLastSeen(NOW - 3 * 24 * HOUR, NOW)).toBe('Заходил 3 дн назад');
   expect(formatLastSeen(NOW - 30 * 24 * HOUR, NOW)).toMatch(/^Заходил \d+ [а-я]+$/);
 });
 
@@ -40,17 +41,13 @@ test('the downloaded codes file names the account and lists every code', () => {
 });
 
 test('the reminder to create codes shows only without codes and not while snoozed', () => {
-  const noCodes = { recoveryCodes: { remaining: 0 }, recoveryCodesReminder: null } as never;
-  expect(shouldShowRecoveryCodesReminder(noCodes, NOW)).toBe(true);
-  expect(
-    shouldShowRecoveryCodesReminder({ recoveryCodes: { remaining: 3 }, recoveryCodesReminder: null } as never, NOW)
-  ).toBe(false);
-  expect(
-    shouldShowRecoveryCodesReminder(
-      { recoveryCodes: { remaining: 0 }, recoveryCodesReminder: { snoozedUntil: NOW + HOUR } } as never,
-      NOW
-    )
-  ).toBe(false);
+  const security = (remaining: number, snoozedUntil: number | null = null): AccountSecurity => ({
+    recoveryCodes: { remaining, generatedAt: null },
+    recoveryCodesReminder: { snoozedUntil }
+  });
+  expect(shouldShowRecoveryCodesReminder(security(0), NOW)).toBe(true);
+  expect(shouldShowRecoveryCodesReminder(security(3), NOW)).toBe(false);
+  expect(shouldShowRecoveryCodesReminder(security(0, NOW + HOUR), NOW)).toBe(false);
 });
 
 test('sign-in alerts say how the account was entered, when and where, oldest first without repeats', () => {
@@ -59,9 +56,17 @@ test('sign-in alerts say how the account was entered, when and where, oldest fir
   expect(loginAlertWhen({ createdAt: NOW - 30_000, location: 'Москва' }, NOW)).toBe('Москва · только что');
   expect(loginAlertWhen({ createdAt: NOW - 5 * 60_000, location: '' }, NOW)).toBe('5 мин назад');
 
-  const a = { id: 'a', createdAt: 2 } as never;
-  const b = { id: 'b', createdAt: 1 } as never;
-  expect(queueLoginAlert(queueLoginAlert([], a), b).map((alert: { id: string }) => alert.id)).toEqual(['b', 'a']);
+  const alert = (id: string, createdAt: number): LoginAlert => ({
+    id,
+    kind: 'login',
+    client: '',
+    os: '',
+    location: '',
+    createdAt
+  });
+  const a = alert('a', 2);
+  const b = alert('b', 1);
+  expect(queueLoginAlert(queueLoginAlert([], a), b).map((queued) => queued.id)).toEqual(['b', 'a']);
   expect(queueLoginAlert([a], a)).toHaveLength(1);
 });
 

@@ -10,6 +10,10 @@ import { runMigrations } from '../src/lib/migrate.ts';
 import { createAttachmentRepository } from '../src/domains/media/attachment.repository.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { rollbackCountThrough } from './migration-steps.ts';
+import { Type } from 'typebox';
+import { Nullable } from '@voice-room/shared/contracts/http';
+import { defined } from './helpers/assert-defined.ts';
+import { AnyRow, CountRow, queryRow, queryRows } from './helpers/checked.ts';
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 // Rolling back to just before the attachment byte limit also undoes every later migration.
 const BYTE_LIMIT_ROLLBACK_COUNT = rollbackCountThrough('20260720162000_limit_message_attachment_bytes');
@@ -30,11 +34,11 @@ test(
         .createHash('sha256')
         .update(
           JSON.stringify(
-            (
-              await pool.query(
-                `SELECT table_name,column_name,data_type,is_nullable FROM information_schema.columns WHERE table_name IN ('message_attachments','media_processing_jobs') ORDER BY 1,ordinal_position`
-              )
-            ).rows
+            await queryRows(
+              pool,
+              AnyRow,
+              `SELECT table_name,column_name,data_type,is_nullable FROM information_schema.columns WHERE table_name IN ('message_attachments','media_processing_jobs') ORDER BY 1,ordinal_position`
+            )
           )
         )
         .digest('hex');
@@ -42,15 +46,17 @@ test(
     await runMigrations({ databaseUrl: db.databaseUrl, logger: SILENT, noLock: true });
     assert.equal(await digest(), before);
     const indexes = (
-      await pool.query(
+      await queryRows(
+        pool,
+        Type.Object({ indexdef: Type.String() }),
         `SELECT indexdef FROM pg_indexes WHERE tablename IN ('message_attachments','media_processing_jobs')`
       )
-    ).rows
+    )
       .map((row) => row.indexdef)
       .join('\n');
     assert.match(indexes, /message_attachments_cleanup_idx/);
     assert.match(indexes, /media_processing_jobs_claim_idx/);
-    assert.equal((await pool.query('SELECT count(*)::int count FROM room_messages')).rows[0].count, 0);
+    assert.equal((await queryRow(pool, CountRow, 'SELECT count(*)::int count FROM room_messages')).count, 0);
     const migration = fs.readFileSync(
       fileURLToPath(new URL('../src/migrations/20260720162000_limit_message_attachment_bytes.cjs', import.meta.url)),
       'utf8'
@@ -113,12 +119,23 @@ test(
       logger: SILENT,
       noLock: true
     });
-    const remediated = (
-      await pool.query(
-        `SELECT id,state,reserved_bytes,original_bytes,failure_code,deleted_at,metadata,original_storage_key FROM message_attachments WHERE id=ANY($1::uuid[]) ORDER BY id`,
-        [[uploadingId, processingId, readyId]]
-      )
-    ).rows;
+    const remediated = await queryRows(
+      pool,
+      Type.Object({
+        id: Type.String(),
+        state: Type.String(),
+        reserved_bytes: Type.Unknown(),
+        original_bytes: Type.Unknown(),
+        failure_code: Nullable(Type.String()),
+        deleted_at: Type.Unknown(),
+        metadata: Type.Object({
+          migrationRemediation: Type.Object({ reason: Type.String(), migration: Type.String() })
+        }),
+        original_storage_key: Nullable(Type.String())
+      }),
+      `SELECT id,state,reserved_bytes,original_bytes,failure_code,deleted_at,metadata,original_storage_key FROM message_attachments WHERE id=ANY($1::uuid[]) ORDER BY id`,
+      [[uploadingId, processingId, readyId]]
+    );
     assert.equal(remediated.length, 3);
     for (const row of remediated) {
       assert.equal(row.state, 'deleted');
@@ -129,14 +146,24 @@ test(
       assert.equal(row.metadata.migrationRemediation.reason, 'attachment_exceeds_10mib');
       assert.equal(row.metadata.migrationRemediation.migration, '20260720162000_limit_message_attachment_bytes');
     }
-    assert.ok(remediated.find((row) => row.id === processingId).original_storage_key.endsWith('/original'));
+    assert.ok(
+      defined(
+        remediated.find((row) => row.id === processingId),
+        'the processing row'
+      ).original_storage_key?.endsWith('/original')
+    );
     assert.deepEqual(
-      (await pool.query(`SELECT DISTINCT state,last_error FROM media_processing_jobs ORDER BY state`)).rows,
+      await queryRows(pool, AnyRow, `SELECT DISTINCT state,last_error FROM media_processing_jobs ORDER BY state`),
       [{ state: 'dead', last_error: 'attachment remediated: media_oversize_10mib' }]
     );
     assert.equal(
-      (await pool.query(`SELECT convalidated FROM pg_constraint WHERE conname='message_attachments_bytes_check'`))
-        .rows[0].convalidated,
+      (
+        await queryRow(
+          pool,
+          Type.Object({ convalidated: Type.Boolean() }),
+          `SELECT convalidated FROM pg_constraint WHERE conname='message_attachments_bytes_check'`
+        )
+      ).convalidated,
       true
     );
     const repository = createAttachmentRepository({ pool });
@@ -155,12 +182,12 @@ test(
     await runMigrations({ databaseUrl: db.databaseUrl, logger: SILENT, noLock: true });
     assert.equal(
       JSON.stringify(
-        (
-          await pool.query(
-            `SELECT id,state,reserved_bytes,original_bytes,failure_code,deleted_at,metadata,original_storage_key FROM message_attachments WHERE id=ANY($1::uuid[]) ORDER BY id`,
-            [[uploadingId, processingId, readyId]]
-          )
-        ).rows
+        await queryRows(
+          pool,
+          AnyRow,
+          `SELECT id,state,reserved_bytes,original_bytes,failure_code,deleted_at,metadata,original_storage_key FROM message_attachments WHERE id=ANY($1::uuid[]) ORDER BY id`,
+          [[uploadingId, processingId, readyId]]
+        )
       ),
       snapshot
     );
@@ -217,6 +244,6 @@ test(
     } finally {
       client.release();
     }
-    assert.equal((await pool.query(`SELECT count(*)::int count FROM message_attachments`)).rows[0].count, 1);
+    assert.equal((await queryRow(pool, CountRow, `SELECT count(*)::int count FROM message_attachments`)).count, 1);
   }
 );

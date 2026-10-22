@@ -3,6 +3,7 @@
 
 import { afterEach, expect, test, vi } from 'vitest';
 import type { MediaGrant } from '@voice-room/shared/contracts/realtime';
+import { defined, instanceOf } from '../helpers/assert.ts';
 import { fakeParticipant, fakePublication, flushMicrotasks, loadLiveKitHarness } from '../helpers/livekit-harness.ts';
 
 const LOW = 0;
@@ -22,31 +23,36 @@ afterEach(() => {
 
 async function loadRemoteCamera(peerId = 'peer-a') {
   vi.stubGlobal('MediaStream', TestMediaStream);
-  const lk = await loadLiveKitHarness({ autoResolveClient: true });
+  const lk = await loadLiveKitHarness({
+    autoResolveClient: true,
+    requestToken: async () => ({ token: 't', url: 'wss://lk.example' })
+  });
   const { participantsUi } = await import('../../src/lib/features/room/participants-ui.svelte');
-  const { handleLiveKitTrackUnpublished, syncRemoteCameraDemand } =
+  const { syncRemoteCameraDemand } =
     await import('../../src/lib/features/room/client/services/livekit/remote-participants.ts');
   const track = { mediaStreamTrack: { kind: 'video', readyState: 'live', id: 'camera-track' } };
   const camera = fakePublication('camera', { isSubscribed: true, track });
   const participant = fakeParticipant(peerId, [camera.publication]);
   lk.state.serverPeerIds.add(peerId);
-  return { lk, participantsUi, handleLiveKitTrackUnpublished, syncRemoteCameraDemand, camera, participant, track };
+  return { lk, participantsUi, syncRemoteCameraDemand, camera, participant, track };
 }
 
 test('a remote camera is received at once and its picture reaches the tile', async () => {
   const { lk, camera, participant, track } = await loadRemoteCamera();
-  lk.service.syncLiveKitParticipant(participant as never);
+  lk.syncParticipant(participant);
   await flushMicrotasks();
 
   expect(camera.calls.subscribed).toEqual([true]);
-  const peer = lk.state.peers.get('peer-a')!;
+  const peer = defined(lk.state.peers.get('peer-a'), 'peer-a');
   expect(peer.camera).toBe(true);
-  expect((peer.cameraStream as TestMediaStream).getVideoTracks()).toEqual([track.mediaStreamTrack]);
+  expect(instanceOf(peer.cameraStream, TestMediaStream, 'camera stream').getVideoTracks()).toEqual([
+    track.mediaStreamTrack
+  ]);
 });
 
 test('the camera layer follows the tile: roomy grid, spotlight, crowded call', async () => {
   const { lk, participantsUi, syncRemoteCameraDemand, camera, participant } = await loadRemoteCamera();
-  lk.service.syncLiveKitParticipant(participant as never);
+  lk.syncParticipant(participant);
   await flushMicrotasks();
   expect(camera.calls.quality.at(-1)).toBe(MEDIUM);
 
@@ -63,13 +69,14 @@ test('the camera layer follows the tile: roomy grid, spotlight, crowded call', a
 });
 
 test('a camera that is turned off leaves the tile', async () => {
-  const { lk, handleLiveKitTrackUnpublished, camera, participant } = await loadRemoteCamera();
-  lk.service.syncLiveKitParticipant(participant as never);
+  const { lk, camera, participant } = await loadRemoteCamera();
+  await lk.service.connectLiveKitRoom('room-1');
+  lk.syncParticipant(participant);
   await flushMicrotasks();
 
   participant.trackPublications.delete(camera.publication.trackSid);
-  handleLiveKitTrackUnpublished(camera.publication as never, participant as never);
-  const peer = lk.state.peers.get('peer-a')!;
+  defined(lk.rooms[0], 'LiveKit room').emit('TrackUnpublished', camera.publication, participant);
+  const peer = defined(lk.state.peers.get('peer-a'), 'peer-a');
   expect(peer.camera).toBe(false);
   expect(peer.cameraStream).toBeNull();
 });
@@ -108,7 +115,7 @@ async function loadLocalCamera(
   const unpublished: unknown[] = [];
   const room = {
     localParticipant: {
-      trackPublications: new Map(),
+      trackPublications: new Map<string, unknown>(),
       publishTrack: async (track: unknown, options: Record<string, unknown>) => {
         published.push({ track, options });
         return { track, trackSid: 'camera-sid', source: options.source };
@@ -144,9 +151,9 @@ test('turning the camera on captures 720p and publishes it with lighter layers; 
   // A computer asks for no facing: it would prefer the built-in camera over the default one.
   expect(facingOf(requests[0])).toBeUndefined();
   expect(published).toHaveLength(1);
-  expect(published[0].options).toMatchObject({ source: 'camera', simulcast: true });
-  expect(published[0].options.videoSimulcastLayers).toHaveLength(2);
-  const self = lk.state.self as { camera: boolean; cameraStream: unknown };
+  expect(defined(published[0], 'published[0]').options).toMatchObject({ source: 'camera', simulcast: true });
+  expect(defined(published[0], 'published[0]').options.videoSimulcastLayers).toHaveLength(2);
+  const self = lk.state.self;
   expect(self).toMatchObject({ camera: true, cameraStream: capture.stream });
 
   await camera.toggleCamera();
@@ -180,8 +187,14 @@ test('a refused camera stays off and nothing is published', async () => {
   expect(camera.describeCameraError({ name: 'NotReadableError' })).toMatch(/занята/);
 });
 
-function facingOf(constraints: MediaStreamConstraints): unknown {
-  return (constraints.video as { facingMode?: unknown }).facingMode;
+function videoOf(constraints: MediaStreamConstraints | undefined): MediaTrackConstraints {
+  const video = constraints?.video;
+  if (typeof video !== 'object') throw new Error('the request asks for no camera settings');
+  return video;
+}
+
+function facingOf(constraints: MediaStreamConstraints | undefined): ConstrainDOMString | undefined {
+  return videoOf(constraints).facingMode;
 }
 
 test('flipping turns a phone to its back camera and back, releasing one camera before opening the other', async () => {
@@ -202,10 +215,13 @@ test('flipping turns a phone to its back camera and back, releasing one camera b
   expect(facingOf(requests[1])).toEqual({ exact: 'environment' });
   expect(lk.state.cameraFacing).toBe('environment');
   expect(lk.state.cameraDeviceId).toBe('');
-  expect(unpublished).toEqual([captures[0].track]);
-  expect(published.map((entry) => entry.track)).toEqual([captures[0].track, captures[1].track]);
-  expect(lk.state.localCameraStream).toBe(captures[1].stream);
-  expect((lk.state.self as { cameraStream: unknown }).cameraStream).toBe(captures[1].stream);
+  expect(unpublished).toEqual([defined(captures[0], 'captures[0]').track]);
+  expect(published.map((entry) => entry.track)).toEqual([
+    defined(captures[0], 'captures[0]').track,
+    defined(captures[1], 'captures[1]').track
+  ]);
+  expect(lk.state.localCameraStream).toBe(defined(captures[1], 'captures[1]').stream);
+  expect(lk.state.self?.cameraStream).toBe(defined(captures[1], 'captures[1]').stream);
 
   await camera.flipCamera();
   expect(facingOf(requests[2])).toEqual({ exact: 'user' });
@@ -215,7 +231,7 @@ test('flipping turns a phone to its back camera and back, releasing one camera b
   await camera.flipCamera();
   await camera.toggleCamera();
   await camera.toggleCamera();
-  expect(facingOf(requests.at(-1)!)).toEqual({ ideal: 'environment' });
+  expect(facingOf(requests.at(-1))).toEqual({ ideal: 'environment' });
 });
 
 test('a phone with one camera stays on it when flipped and says so', async () => {
@@ -223,7 +239,8 @@ test('a phone with one camera stays on it when flipped and says so', async () =>
   const requests: MediaStreamConstraints[] = [];
   const { lk, camera, published, showToast } = await loadLocalCamera(async (constraints) => {
     requests.push(constraints);
-    if ((facingOf(constraints) as { exact?: string } | undefined)?.exact === 'environment') {
+    const facing = facingOf(constraints);
+    if (typeof facing === 'object' && !Array.isArray(facing) && facing.exact === 'environment') {
       throw Object.assign(new Error('no back camera'), { name: 'OverconstrainedError' });
     }
     // Its one camera reports a device but no facing.
@@ -236,11 +253,11 @@ test('a phone with one camera stays on it when flipped and says so', async () =>
   await camera.flipCamera();
   expect(showToast).toHaveBeenCalledWith('Другой камеры нет');
   // Reopened by the device it was on, not by a facing it never reported.
-  expect((requests.at(-1)!.video as { deviceId?: unknown }).deviceId).toEqual({ exact: 'only-cam' });
+  expect(videoOf(requests.at(-1)).deviceId).toEqual({ exact: 'only-cam' });
   expect(lk.state.cameraFacing).toBe('user');
-  expect(captures[0].track.stopped).toBe(true);
-  expect(lk.state.localCameraStream).toBe(captures[1].stream);
-  expect(published.at(-1)?.track).toBe(captures[1].track);
+  expect(defined(captures[0], 'captures[0]').track.stopped).toBe(true);
+  expect(lk.state.localCameraStream).toBe(defined(captures[1], 'captures[1]').stream);
+  expect(published.at(-1)?.track).toBe(defined(captures[1], 'captures[1]').track);
   expect(lk.state.cameraStarting).toBe(false);
 });
 
@@ -249,7 +266,7 @@ test('a remembered camera that is gone falls back to the system one and is forgo
   const requests: MediaStreamConstraints[] = [];
   const { lk, camera } = await loadLocalCamera(async (constraints) => {
     requests.push(constraints);
-    if ((constraints.video as { deviceId?: unknown }).deviceId) {
+    if (videoOf(constraints).deviceId) {
       throw Object.assign(new Error('gone'), { name: 'OverconstrainedError' });
     }
     return capture.stream;
@@ -258,7 +275,7 @@ test('a remembered camera that is gone falls back to the system one and is forgo
 
   await camera.toggleCamera();
   expect(requests).toHaveLength(2);
-  expect((requests[1].video as { deviceId?: unknown }).deviceId).toBeUndefined();
+  expect(videoOf(requests[1]).deviceId).toBeUndefined();
   expect(lk.state.cameraDeviceId).toBe('');
   expect(lk.state.localCameraStream).toBe(capture.stream);
 });
@@ -284,7 +301,7 @@ test('on a phone the camera layer follows its own big picture, whatever the desk
   const { mobileCallUi, PORTRAIT_PHONE_QUERY, resetMobileCall } =
     await import('../../src/lib/features/room/mobile-call-ui.svelte');
   stubMatchMedia([PORTRAIT_PHONE_QUERY]);
-  lk.service.syncLiveKitParticipant(participant as never);
+  lk.syncParticipant(participant);
   await flushMicrotasks();
   Object.assign(lk.state, { screen: 'room', self: { id: 'self', isLocal: true, joinedAt: 0 } });
   mobileCallUi.enabled = true;

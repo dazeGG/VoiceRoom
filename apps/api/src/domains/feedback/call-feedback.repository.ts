@@ -3,14 +3,19 @@
 
 import { sql } from 'kysely';
 import type pg from 'pg';
+import { Value } from 'typebox/value';
 import { kyselyOn } from '../../platform/db/kysely.ts';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 import {
   ADMIN_CALL_FEEDBACK_LIMIT,
+  CALL_FEEDBACK_PLATFORMS,
+  CALL_FEEDBACK_RATINGS,
+  CALL_FEEDBACK_TAGS,
+  CallFeedbackQuality,
   type AdminCallFeedbackEntry,
   type AdminCallFeedbackPage,
   type CallFeedbackCall,
   type CallFeedbackPlatform,
-  type CallFeedbackQuality,
   type CallFeedbackRating,
   type CallFeedbackTag
 } from '@voice-room/shared/contracts/feedback';
@@ -23,10 +28,14 @@ export type NewCallFeedback = {
   call: CallFeedbackCall;
 };
 
-function toMillis(value: Date | string): number {
-  const time = value instanceof Date ? value.getTime() : Date.parse(value);
-  return Number.isFinite(time) ? time : 0;
-}
+// The table's CHECK constraints keep these columns to the contract's values;
+// the guards only tell the compiler so.
+const RATINGS: ReadonlySet<string> = new Set(CALL_FEEDBACK_RATINGS);
+const TAGS: ReadonlySet<string> = new Set(CALL_FEEDBACK_TAGS);
+const PLATFORMS: ReadonlySet<string> = new Set(CALL_FEEDBACK_PLATFORMS);
+const isRating = (value: string): value is CallFeedbackRating => RATINGS.has(value);
+const isTag = (value: string): value is CallFeedbackTag => TAGS.has(value);
+const isPlatform = (value: string): value is CallFeedbackPlatform => PLATFORMS.has(value);
 
 export function createCallFeedbackRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
@@ -67,7 +76,7 @@ export function createCallFeedbackRepository({ pool }: { pool: pg.Pool }) {
     return {
       good: count('good'),
       bad: count('bad'),
-      tags: tags.rows.map((row) => ({ tag: row.tag as CallFeedbackTag, count: Number(row.count) }))
+      tags: tags.rows.flatMap((row) => (isTag(row.tag) ? [{ tag: row.tag, count: Number(row.count) }] : []))
     };
   }
 
@@ -100,27 +109,34 @@ export function createCallFeedbackRepository({ pool }: { pool: pg.Pool }) {
       .orderBy('f.id', 'desc')
       .limit(ADMIN_CALL_FEEDBACK_LIMIT)
       .execute();
-    return rows.map((row) => ({
-      id: row.id,
-      rating: row.rating as CallFeedbackRating,
-      tags: row.tags as CallFeedbackTag[],
-      comment: row.comment,
-      createdAt: toMillis(row.created_at),
-      author:
-        row.author_id && row.author_login
-          ? {
-              userId: row.author_id,
-              login: row.author_login,
-              displayName: row.author_display_name || row.author_login
-            }
-          : null,
-      roomId: row.room_id,
-      roomName: row.room_name ?? null,
-      durationS: row.duration_s,
-      peers: row.peers,
-      platform: row.platform as CallFeedbackPlatform,
-      quality: (row.quality as CallFeedbackQuality | null) ?? null
-    }));
+    return rows.flatMap((row) => {
+      const { platform, quality } = row;
+      const answer = row.rating;
+      if (!isRating(answer) || !isPlatform(platform)) return [];
+      return [
+        {
+          id: row.id,
+          rating: answer,
+          tags: row.tags.filter(isTag),
+          comment: row.comment,
+          createdAt: epochMillis(row.created_at) ?? 0,
+          author:
+            row.author_id && row.author_login
+              ? {
+                  userId: row.author_id,
+                  login: row.author_login,
+                  displayName: row.author_display_name || row.author_login
+                }
+              : null,
+          roomId: row.room_id,
+          roomName: row.room_name ?? null,
+          durationS: row.duration_s,
+          peers: row.peers,
+          platform,
+          quality: Value.Check(CallFeedbackQuality, quality) ? quality : null
+        }
+      ];
+    });
   }
 
   /** Answers older than `cutoff` stop saying whose they were; returns how many changed. */

@@ -4,7 +4,9 @@ import type {
   NotificationRoomContext,
   ServerEvent
 } from '@voice-room/shared/contracts/realtime';
+import { isRecord } from '@voice-room/shared/guards';
 import type { RealtimeEvent } from '../../api/realtime';
+import { getDesktopNotificationBridge } from '../../platform/desktop-notification-bridge';
 
 export type { NotificationActor, NotificationMessageBrief, NotificationRoomContext };
 
@@ -13,7 +15,6 @@ export type NotificationDmMessageEvent = EventOf<'notification.dm.message'>;
 export type NotificationRoomMessageEvent = EventOf<'notification.room.message'>;
 export type NotificationFriendRequestEvent = EventOf<'notification.friend.request'>;
 export type NotificationFriendAcceptedEvent = EventOf<'notification.friend.accepted'>;
-export type NotificationEventType = NotificationRealtimeEvent['type'];
 
 export type NotificationRealtimeEvent =
   | NotificationDmMessageEvent
@@ -29,12 +30,19 @@ export type NotificationActiveTarget =
   | { kind: 'room-preview'; roomId: string }
   | { kind: 'room-chat'; roomId: string };
 
+/** What a shown notification carries about its event; `route` is where a tap leads. */
+export type NotificationData =
+  | { kind: 'dm'; peerId: string; messageId: string; route: string }
+  | { kind: 'room'; roomId: string; senderId: string; messageId: string; route: string }
+  | { kind: 'friend-request'; requesterId: string; requestId: string }
+  | { kind: 'friend-accepted'; userId: string };
+
 export type BrowserNotificationPayload = {
   title: string;
   body: string;
   tag: string;
   dedupeKey: string;
-  data?: Record<string, unknown>;
+  data?: NotificationData;
 };
 
 export type DesktopNotificationPayload = {
@@ -43,14 +51,6 @@ export type DesktopNotificationPayload = {
   tag: string;
   dedupeKey: string;
   route?: string;
-};
-
-export type DesktopNotificationBridgeResult = { ok?: boolean; reason?: string } | null | undefined | void;
-
-export type DesktopNotificationBridge = {
-  show: (
-    payload: DesktopNotificationPayload
-  ) => DesktopNotificationBridgeResult | Promise<DesktopNotificationBridgeResult>;
 };
 
 export type NotificationRouteOptions = {
@@ -78,14 +78,6 @@ const DEDUPE_CHANNEL = 'voice-room:notification-dedupe';
 
 const memoryDedupe = new Map<string, number>();
 let dedupeChannel: BroadcastChannel | null | undefined;
-
-function getDesktopNotificationBridge(): DesktopNotificationBridge | null {
-  const candidate = (globalThis as typeof globalThis & { voiceRoomDesktopNotifications?: unknown })
-    .voiceRoomDesktopNotifications;
-  if (!candidate || typeof candidate !== 'object') return null;
-  const bridge = candidate as Partial<DesktopNotificationBridge>;
-  return typeof bridge.show === 'function' ? (bridge as DesktopNotificationBridge) : null;
-}
 
 function hasId(
   collection: readonly string[] | Set<string> | null | undefined,
@@ -181,15 +173,20 @@ function getDedupeChannel(): BroadcastChannel | null {
   }
   try {
     dedupeChannel = new globalThis.BroadcastChannel(DEDUPE_CHANNEL);
-    dedupeChannel.onmessage = (event) => {
-      const key = typeof event.data?.key === 'string' ? event.data.key : '';
-      const expiresAt = typeof event.data?.expiresAt === 'number' ? event.data.expiresAt : 0;
-      if (key && expiresAt > Date.now()) memoryDedupe.set(key, expiresAt);
+    dedupeChannel.onmessage = (event: MessageEvent<unknown>) => {
+      const seen = parseDedupeMessage(event.data);
+      if (seen && seen.expiresAt > Date.now()) memoryDedupe.set(seen.key, seen.expiresAt);
     };
   } catch {
     dedupeChannel = null;
   }
   return dedupeChannel;
+}
+
+/** What another tab posts on the dedupe channel when it shows a notification. */
+function parseDedupeMessage(data: unknown): { key: string; expiresAt: number } | null {
+  if (!isRecord(data) || typeof data.key !== 'string' || !data.key) return null;
+  return { key: data.key, expiresAt: typeof data.expiresAt === 'number' ? data.expiresAt : 0 };
 }
 
 export function truncateNotificationBody(body: string | null | undefined, maxLength = MAX_BODY_LENGTH): string {
@@ -204,7 +201,7 @@ export function truncateNotificationBody(body: string | null | undefined, maxLen
 
 export function getNotificationPermission(): NotificationPermissionState {
   if (typeof globalThis.Notification === 'undefined') return 'unsupported';
-  return globalThis.Notification.permission as NotificationPermissionState;
+  return globalThis.Notification.permission;
 }
 
 export function getNotificationDeliveryPermission(): NotificationPermissionState {
@@ -220,13 +217,7 @@ export async function requestNotificationPermissionFromUserAction(): Promise<Not
   if (typeof globalThis.Notification?.requestPermission !== 'function') {
     return getDesktopNotificationBridge() ? 'granted' : 'unsupported';
   }
-  return (await globalThis.Notification.requestPermission()) as NotificationPermissionState;
-}
-
-export function resetNotificationDedupeForTests(): void {
-  memoryDedupe.clear();
-  if (dedupeChannel) dedupeChannel.close();
-  dedupeChannel = undefined;
+  return await globalThis.Notification.requestPermission();
 }
 
 export function markNotificationDedupeKeySeen(
@@ -351,13 +342,6 @@ export function buildNotificationPayload(
   };
 }
 
-export function shouldNotify(
-  event: RealtimeEvent | NotificationRealtimeEvent,
-  options: NotificationRouteOptions = {}
-): boolean {
-  return routeNotificationEvent(event, options).notify;
-}
-
 export function routeNotificationEvent(
   event: RealtimeEvent | NotificationRealtimeEvent,
   options: NotificationRouteOptions = {}
@@ -389,13 +373,14 @@ export function routeNotificationEvent(
 // Page notifications keep per-message tags: Chromium would replace them silently.
 function desktopNotificationTag(payload: BrowserNotificationPayload): string {
   const data = payload.data;
-  if (data?.kind === 'dm' && typeof data.peerId === 'string') return `dm:${data.peerId}`;
-  if (data?.kind === 'room' && typeof data.roomId === 'string') return `room:${data.roomId}`;
+  if (data?.kind === 'dm') return `dm:${data.peerId}`;
+  if (data?.kind === 'room') return `room:${data.roomId}`;
   return payload.tag;
 }
 
 function toDesktopNotificationPayload(payload: BrowserNotificationPayload): DesktopNotificationPayload {
-  const route = typeof payload.data?.route === 'string' ? payload.data.route : undefined;
+  const data = payload.data;
+  const route = data?.kind === 'dm' || data?.kind === 'room' ? data.route : undefined;
   return {
     title: payload.title,
     body: payload.body,
@@ -416,12 +401,12 @@ function showPageNotification(payload: BrowserNotificationPayload): Notification
   });
 }
 
-function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
-  return Boolean(value && typeof (value as PromiseLike<T>).then === 'function');
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return isRecord(value) && typeof value.then === 'function';
 }
 
-function shouldFallbackToBrowserNotification(result: DesktopNotificationBridgeResult): boolean {
-  return Boolean(result && typeof result === 'object' && result.ok === false);
+function shouldFallbackToBrowserNotification(result: unknown): boolean {
+  return isRecord(result) && result.ok === false;
 }
 
 function deliverBrowserNotification(
@@ -434,7 +419,7 @@ function deliverBrowserNotification(
 
   try {
     const result = bridge.show(toDesktopNotificationPayload(payload));
-    if (isPromiseLike<DesktopNotificationBridgeResult>(result)) {
+    if (isPromiseLike(result)) {
       return Promise.resolve(result)
         .then((resolved) => (shouldFallbackToBrowserNotification(resolved) ? showPageNotification(payload) : null))
         .catch(() => showPageNotification(payload));
@@ -450,10 +435,19 @@ export function showBrowserNotification(
 ): Notification | Promise<Notification | null> | null {
   const locks = globalThis.navigator?.locks;
   if (!locks) return deliverBrowserNotification(payload);
-  const key = payload.dedupeKey || payload.tag;
-  return (
-    locks.request(`voice-room-notification:${key}`, () =>
-      Promise.resolve(deliverBrowserNotification(payload))
-    ) as unknown as Promise<Notification | null>
-  ).catch(() => null);
+  return deliverUnderLock(locks, payload.dedupeKey || payload.tag, payload);
+}
+
+// One tab at a time checks and marks a dedupe key. The lock is held until the
+// delivery settles; request() resolves with what the delivery resolved to.
+async function deliverUnderLock(
+  locks: LockManager,
+  key: string,
+  payload: BrowserNotificationPayload
+): Promise<Notification | null> {
+  try {
+    return await locks.request(`voice-room-notification:${key}`, () => deliverBrowserNotification(payload));
+  } catch {
+    return null;
+  }
 }

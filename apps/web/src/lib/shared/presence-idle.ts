@@ -32,7 +32,7 @@ type IdleDetectionScope = {
   IdleDetector?: BrowserIdleDetectorConstructor;
   navigator?: {
     permissions?: {
-      query: (descriptor: { name: string }) => Promise<{ state: PermissionState }>;
+      query(descriptor: { name: string }): Promise<{ state: PermissionState }>;
     };
   };
 };
@@ -44,6 +44,11 @@ interface DesktopIdleBridge {
 type DesktopIdleScope = {
   voiceRoomDesktopIdle?: DesktopIdleBridge;
 };
+
+/** The page's window, which carries both the desktop bridge and the Idle Detection API; none under Node. */
+function browserScope(): DesktopIdleScope & IdleDetectionScope {
+  return typeof window === 'undefined' ? {} : window;
+}
 
 export function getAutomaticPresenceTransition({
   idleSeconds,
@@ -69,7 +74,7 @@ export function createPresenceIdleController({
   let evaluateAgain = false;
 
   async function runEvaluation(): Promise<number | null> {
-    let lastIdleSeconds: number | null = null;
+    let lastIdleSeconds: number | null;
     do {
       evaluateAgain = false;
       const idleSeconds = await getIdleSeconds();
@@ -140,7 +145,7 @@ export function getNextPresenceIdleCheckDelayMs({
 }
 
 export function getDesktopIdleSecondsReader(
-  scope: DesktopIdleScope = globalThis as DesktopIdleScope
+  scope: DesktopIdleScope = browserScope()
 ): (() => Promise<number | null>) | null {
   const reader = scope.voiceRoomDesktopIdle?.getSystemIdleTime;
   if (typeof reader !== 'function') return null;
@@ -154,9 +159,7 @@ export function getDesktopIdleSecondsReader(
   };
 }
 
-export async function hasGrantedBrowserIdlePermission(
-  scope: IdleDetectionScope = globalThis as IdleDetectionScope
-): Promise<boolean> {
+export async function hasGrantedBrowserIdlePermission(scope: IdleDetectionScope = browserScope()): Promise<boolean> {
   if (typeof scope.IdleDetector !== 'function' || typeof scope.navigator?.permissions?.query !== 'function') {
     return false;
   }
@@ -172,7 +175,7 @@ export async function startGrantedBrowserPresenceIdleTracking({
   getPresence,
   updatePresence,
   signal,
-  scope = globalThis as IdleDetectionScope
+  scope = browserScope()
 }: {
   getPresence: () => PresenceIdleSnapshot;
   updatePresence: (status: 'online' | 'away') => Promise<void>;

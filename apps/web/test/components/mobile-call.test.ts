@@ -4,6 +4,8 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/svelte';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { Participant } from '../../src/lib/features/room/client/core/types';
+import { participant } from '../fixtures/participant';
+import { defined, instanceOf } from '../helpers/assert';
 
 const platform = vi.hoisted(() => ({ platformClass: 'mobile' }));
 const camera = vi.hoisted(() => ({ flipCamera: vi.fn(), toggleCamera: vi.fn() }));
@@ -31,27 +33,23 @@ function turnPhone(upright: boolean): void {
 }
 
 // A class instance, like a real MediaStream: $state does not proxy it.
+// Registered as the global MediaStream, so `new MediaStream()` builds one.
 class FakeStream {}
 
 function person(id: string, extra: Partial<Participant> = {}): Participant {
-  return reactiveParticipant({
-    accountUserId: '',
-    avatarAccent: '',
-    avatarColorKey: 'blue',
-    avatarUrl: '',
-    camera: false,
-    cameraStream: null,
-    deafened: false,
-    id,
-    isLocal: false,
-    joinedAt: Number(id.replace(/\D/g, '')) || 0,
-    muted: false,
-    name: id,
-    screen: false,
-    speaking: false,
-    statusLabel: '',
-    ...extra
-  } as Participant);
+  return reactiveParticipant(
+    participant({
+      avatarColorKey: 'blue',
+      id,
+      joinedAt: Number(id.replace(/\D/g, '')) || 0,
+      name: id,
+      ...extra
+    })
+  );
+}
+
+function peer(id: string): Participant {
+  return defined(state.peers.get(id), `peer ${id}`);
 }
 
 function enterRoom(peerCount: number, self: Partial<Participant> = {}): void {
@@ -62,16 +60,21 @@ function enterRoom(peerCount: number, self: Partial<Participant> = {}): void {
 }
 
 function tile(id: string): HTMLElement {
-  return document.querySelector<HTMLElement>(`.mc-tile[data-peer-id="${id}"]`)!;
+  return instanceOf(document.querySelector(`.mc-tile[data-peer-id="${id}"]`), HTMLElement, `tile ${id}`);
 }
 
 // The tile is a picture with one button over it; that button takes the tap.
 async function tap(id: string): Promise<void> {
-  await fireEvent.click(tile(id).querySelector('.mc-tile-hit')!);
+  await fireEvent.click(defined(tile(id).querySelector('.mc-tile-hit'), 'tile button'));
 }
 
-function call(): HTMLElement {
-  return document.querySelector<HTMLElement>('.mobile-call')!;
+function call(): HTMLElement | null {
+  const element = document.querySelector('.mobile-call');
+  return element instanceof HTMLElement ? element : null;
+}
+
+function pip(): HTMLElement {
+  return instanceOf(document.querySelector('.mc-pip'), HTMLElement, 'picture-in-picture');
 }
 
 beforeEach(() => {
@@ -86,6 +89,7 @@ beforeEach(() => {
     removeEventListener: (_type: string, listener: (event: Event) => void) => portrait.listeners.delete(listener)
   }));
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+  vi.stubGlobal('MediaStream', FakeStream);
 });
 
 afterEach(() => {
@@ -129,17 +133,17 @@ test('two people with no camera sit in two 16:9 tiles; a camera turns it into a 
   expect(document.querySelector('.mc-pip')).toBeNull();
 
   // Their camera, not a screen share, makes it a video call.
-  state.peers.get('p1')!.screen = true;
+  peer('p1').screen = true;
   await vi.waitFor(() => expect(tile('p1').dataset.variant).toBe('grid'));
-  state.peers.get('p1')!.camera = true;
+  peer('p1').camera = true;
   await vi.waitFor(() => expect(tile('p1').dataset.variant).toBe('bleed'));
   expect(tile('me').dataset.variant).toBe('pip');
 
-  state.peers.get('p1')!.camera = false;
+  peer('p1').camera = false;
   await vi.waitFor(() => expect(tile('p1').dataset.variant).toBe('grid'));
 
   // My own camera does it too.
-  state.self!.camera = true;
+  defined(state.self, 'self').camera = true;
   await vi.waitFor(() => expect(tile('me').dataset.variant).toBe('pip'));
 });
 
@@ -147,16 +151,15 @@ test('in a grid with a camera on the tiles fill the screen; with voices only the
   enterRoom(3);
   render(MobileCallStage);
   expect(document.querySelector('.mc-grid')?.getAttribute('data-voice-only')).toBe('true');
-  state.peers.get('p2')!.camera = true;
+  peer('p2').camera = true;
   await vi.waitFor(() => expect(document.querySelector('.mc-grid')?.hasAttribute('data-voice-only')).toBe(false));
 });
 
 test('two people: my picture grows with the camera switch, then swaps me full screen; the other swaps back', async () => {
-  const stream = new FakeStream() as MediaStream;
+  const stream = new MediaStream();
   enterRoom(1, { camera: true, cameraStream: stream });
   state.localCameraStream = stream;
   render(MobileCallStage);
-  const pip = () => document.querySelector<HTMLElement>('.mc-pip')!;
 
   await tap('me');
   expect(pip().dataset.expanded).toBe('true');
@@ -193,36 +196,36 @@ test('two people: my picture-in-picture takes the shape my camera sends, with no
     isLocal: true,
     name: 'Кирилл',
     camera: true,
-    cameraStream: new FakeStream() as MediaStream
+    cameraStream: new MediaStream()
   });
   enterRoom(1);
   state.self = self;
   render(MobileCallStage);
-  const pip = document.querySelector<HTMLElement>('.mc-pip')!;
+  const box = pip();
   // One picture only: no blurred copy to fill bars that are not there.
-  const videos = pip.querySelectorAll('video');
+  const videos = box.querySelectorAll('video');
   expect(videos).toHaveLength(1);
 
-  await sendFrames(videos[0], 1280, 720);
-  expect(Number(pip.style.getPropertyValue('--pip-ratio'))).toBeCloseTo(16 / 9);
+  await sendFrames(defined(videos[0], 'videos[0]'), 1280, 720);
+  expect(Number(box.style.getPropertyValue('--pip-ratio'))).toBeCloseTo(16 / 9);
   // The box has the camera's shape, so the picture fills it outright.
-  expect(videos[0].style.objectFit).toBe('fill');
+  expect(defined(videos[0], 'videos[0]').style.objectFit).toBe('fill');
   // Safari on iPhone is made to lay the new size out again: a pixel wider, then back.
-  expect(videos[0].style.width).toBe('calc(100% + 1px)');
-  await vi.waitFor(() => expect(videos[0].style.width).toBe(''));
-  await sendFrames(videos[0], 720, 1080);
-  expect(Number(pip.style.getPropertyValue('--pip-ratio'))).toBeCloseTo(2 / 3);
+  expect(defined(videos[0], 'videos[0]').style.width).toBe('calc(100% + 1px)');
+  await vi.waitFor(() => expect(defined(videos[0], 'videos[0]').style.width).toBe(''));
+  await sendFrames(defined(videos[0], 'videos[0]'), 720, 1080);
+  expect(Number(box.style.getPropertyValue('--pip-ratio'))).toBeCloseTo(2 / 3);
 
   // The shape stays when the picture grows to show the camera switch.
   await tap('me');
-  expect(pip.dataset.expanded).toBe('true');
-  expect(Number(pip.style.getPropertyValue('--pip-ratio'))).toBeCloseTo(2 / 3);
+  expect(box.dataset.expanded).toBe('true');
+  expect(Number(box.style.getPropertyValue('--pip-ratio'))).toBeCloseTo(2 / 3);
 
   // Without my camera (theirs still on) my bubble is an upright phone frame again.
-  state.peers.get('p1')!.camera = true;
+  peer('p1').camera = true;
   self.camera = false;
   self.cameraStream = null;
-  await vi.waitFor(() => expect(Number(pip.style.getPropertyValue('--pip-ratio'))).toBeCloseTo(100 / 178));
+  await vi.waitFor(() => expect(Number(box.style.getPropertyValue('--pip-ratio'))).toBeCloseTo(100 / 178));
 });
 
 test('two people: a tap beside my grown picture shrinks it back instead of hiding the controls', async () => {
@@ -233,7 +236,7 @@ test('two people: a tap beside my grown picture shrinks it back instead of hidin
 
   await tap('p1');
   expect(document.querySelector('.mc-pip')?.hasAttribute('data-expanded')).toBe(false);
-  expect(call().dataset.chrome).toBe('visible');
+  expect(call()?.dataset.chrome).toBe('visible');
   // Without a camera there is nothing to turn.
   await tap('me');
   expect(screen.queryByRole('button', { name: /^На (основную|фронтальную)/ })).toBeNull();
@@ -243,7 +246,7 @@ test('four people fill the screen in two rows with me last', () => {
   enterRoom(3, { camera: true });
   render(MobileCallStage);
   const cells = [...document.querySelectorAll<HTMLElement>('.mc-grid-cell')].map((cell) => [
-    cell.querySelector<HTMLElement>('.mc-tile')!.dataset.peerId,
+    instanceOf(cell.querySelector('.mc-tile'), HTMLElement, 'tile').dataset.peerId,
     cell.style.gridColumn
   ]);
   // Two rows of two: each tile spans half of the six columns.
@@ -265,9 +268,9 @@ test('ten people page the grid, with dots to move between pages', () => {
 });
 
 test('tapping my tile pins me in focus with the camera switch; unpinning follows the speaker again', async () => {
-  const stream = new FakeStream() as MediaStream;
+  const stream = new MediaStream();
   enterRoom(3, { camera: true, cameraStream: stream });
-  state.peers.get('p2')!.speaking = true;
+  peer('p2').speaking = true;
   render(MobileCallStage);
 
   await tap('me');
@@ -293,23 +296,23 @@ test('the controls hide after five quiet seconds, stay while the chat is open, a
   enterRoom(3);
   render(MobileCallStage);
 
-  await fireEvent.pointerDown(call());
+  await fireEvent.pointerDown(defined(call(), 'call'));
   await vi.advanceTimersByTimeAsync(4_999);
-  expect(call().dataset.chrome).toBe('visible');
+  expect(call()?.dataset.chrome).toBe('visible');
   await vi.advanceTimersByTimeAsync(1);
-  expect(call().dataset.chrome).toBe('hidden');
+  expect(call()?.dataset.chrome).toBe('hidden');
 
   await fireEvent.click(screen.getByRole('button', { name: 'Показать управление' }));
-  expect(call().dataset.chrome).toBe('visible');
+  expect(call()?.dataset.chrome).toBe('visible');
 
   roomUi.chatOpen = true;
-  await fireEvent.pointerDown(call());
+  await fireEvent.pointerDown(defined(call(), 'call'));
   await vi.advanceTimersByTimeAsync(10_000);
-  expect(call().dataset.chrome).toBe('visible');
+  expect(call()?.dataset.chrome).toBe('visible');
 
   // A tap on someone else's tile hides them at once.
   await tap('p1');
-  expect(call().dataset.chrome).toBe('hidden');
+  expect(call()?.dataset.chrome).toBe('hidden');
 });
 
 test('opening someone’s screen hands the page back to the room stage', async () => {
@@ -323,32 +326,26 @@ test('opening someone’s screen hands the page back to the room stage', async (
 test('two people: dragging my picture drops it in the nearest corner and is not taken for a tap', async () => {
   enterRoom(1, { camera: true });
   render(MobileCallStage);
-  const pip = document.querySelector<HTMLElement>('.mc-pip')!;
+  const box = pip();
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
     const rect = this.classList.contains('mc-pip')
       ? { left: 20, top: 30, width: 100, height: 178 }
       : { left: 0, top: 0, width: 390, height: 500 };
-    return {
-      ...rect,
-      x: rect.left,
-      y: rect.top,
-      right: rect.left + rect.width,
-      bottom: rect.top + rect.height
-    } as DOMRect;
+    return new DOMRect(rect.left, rect.top, rect.width, rect.height);
   });
 
   await fireEvent.pointerDown(tile('me'), { button: 0, clientX: 330, clientY: 400, pointerId: 1 });
   await fireEvent.pointerMove(tile('me'), { clientX: 60, clientY: 90, pointerId: 1 });
-  expect(pip.dataset.dragging).toBe('true');
+  expect(box.dataset.dragging).toBe('true');
   await fireEvent.pointerUp(tile('me'), { clientX: 60, clientY: 90, pointerId: 1 });
   await tap('me');
 
-  expect(pip.dataset.corner).toBe('tl');
-  expect(pip.dataset.dragging).toBeUndefined();
-  expect(pip.dataset.expanded).toBeUndefined();
+  expect(box.dataset.corner).toBe('tl');
+  expect(box.dataset.dragging).toBeUndefined();
+  expect(box.dataset.expanded).toBeUndefined();
   // The next plain tap counts again.
   await tap('me');
-  expect(pip.dataset.expanded).toBe('true');
+  expect(box.dataset.expanded).toBe('true');
 });
 
 test('a phone turned on its side, or a tablet, keeps the room stage', async () => {
@@ -390,33 +387,33 @@ test('the controls hide on their own once the call opens, and leave the tab orde
   render(MobileCallStage);
   const dock = () => screen.queryByRole('group', { name: 'Управление звонком' });
   expect(dock()).not.toBeNull();
-  const bubble = () => document.querySelector('.mc-bubble')!;
+  const bubble = () => document.querySelector('.mc-bubble');
   // jsdom has no inert, so Svelte leaves it as the element's property.
-  const inert = (element: Element | null) => Boolean((element as (HTMLElement & { inert?: boolean }) | null)?.inert);
+  const inert = (element: Element | null) => element instanceof HTMLElement && element.inert === true;
   expect(inert(bubble())).toBe(true);
   expect(inert(document.querySelector('.mc-chrome'))).toBe(false);
 
   await vi.advanceTimersByTimeAsync(5_000);
-  expect(call().dataset.chrome).toBe('hidden');
+  expect(call()?.dataset.chrome).toBe('hidden');
   expect(inert(document.querySelector('.mc-chrome'))).toBe(true);
   expect(inert(bubble())).toBe(false);
 });
 
 test('alone in the call, my camera can still be turned from my own tile', async () => {
-  const stream = new FakeStream() as MediaStream;
+  const stream = new MediaStream();
   enterRoom(0, { camera: true, cameraStream: stream });
   render(MobileCallStage);
   await fireEvent.click(screen.getByRole('button', { name: 'На основную камеру' }));
   expect(camera.flipCamera).toHaveBeenCalledTimes(1);
   // A tap on myself only shows or hides the controls: there is no one to focus between.
   await tap('me');
-  expect(call().dataset.chrome).toBe('hidden');
+  expect(call()?.dataset.chrome).toBe('hidden');
   expect(tile('me').dataset.variant).toBe('grid');
 });
 
 test('the room name shares the invite link through the phone', async () => {
   const share = vi.fn().mockResolvedValue(undefined);
-  vi.stubGlobal('navigator', { ...navigator, share });
+  vi.stubGlobal('navigator', { share });
   enterRoom(3);
   state.roomId = 'wedding';
   state.roomName = 'Свадьба';

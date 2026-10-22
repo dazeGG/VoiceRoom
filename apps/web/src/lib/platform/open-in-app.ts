@@ -34,10 +34,10 @@ const ROOM_ID_PATTERN = /^[A-Za-z0-9_-]{3,48}$/;
 
 export interface OpenInAppSignals {
   desktopBridge: boolean;
-  automated?: boolean;
-  userAgent?: string;
-  mobile?: boolean;
-  maxTouchPoints?: number;
+  automated?: boolean | undefined;
+  userAgent?: string | undefined;
+  mobile?: boolean | undefined;
+  maxTouchPoints?: number | undefined;
 }
 
 /** Production pages open the released app; every other host targets dev builds. */
@@ -64,7 +64,7 @@ export function shouldOfferOpenInApp(signals: OpenInAppSignals): boolean {
 
 export function readOpenInAppSignals(): OpenInAppSignals {
   if (typeof window === 'undefined') return { desktopBridge: false };
-  const nav = window.navigator as Navigator & { userAgentData?: { mobile?: boolean } };
+  const nav = window.navigator;
   return {
     automated: nav.webdriver === true,
     desktopBridge: Boolean(window.voiceRoomRuntime?.isDesktop),
@@ -81,7 +81,11 @@ export function readOpenInAppSignals(): OpenInAppSignals {
  */
 export function launchAppLink(
   url: string,
-  target: { document: Document; location: Location; navigator: Navigator } = window
+  target: {
+    document: Pick<Document, 'createElement' | 'body'>;
+    location: Pick<Location, 'href'>;
+    navigator: Pick<Navigator, 'userAgent'>;
+  } = window
 ): void {
   if (/Firefox\//.test(target.navigator.userAgent)) {
     const frame = target.document.createElement('iframe');

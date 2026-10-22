@@ -1,4 +1,5 @@
 import test, { type TestContext } from 'node:test';
+import { settleAll } from './helpers/settle.ts';
 import assert from 'node:assert/strict';
 import Fastify from 'fastify';
 import { Pool } from 'pg';
@@ -12,6 +13,7 @@ import { createRoomStore } from '../src/app/room-store.ts';
 import { createUserStore } from '../src/app/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { codeOf } from '../src/platform/error-code.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
@@ -47,7 +49,7 @@ test('51 concurrent distinct pins preserve the 50-pin room cap', async (t) => {
     Array.from({ length: 51 }, (_, index) => append(fixture, `peer-${index}`, `message-${index}`))
   );
 
-  const results = await Promise.allSettled(
+  const results = await settleAll(
     messages.map((message) =>
       service.pin({
         roomId: fixture.room.id,
@@ -57,9 +59,10 @@ test('51 concurrent distinct pins preserve the 50-pin room cap', async (t) => {
     )
   );
 
-  assert.equal(results.filter((result) => result.status === 'fulfilled').length, 50);
-  const rejection = results.find((result) => result.status === 'rejected');
-  assert.equal((rejection?.reason as { code?: string } | undefined)?.code, 'pin_limit_reached');
+  assert.equal(results.filter((result) => result.ok).length, 50);
+  const rejection = results.find((result) => !result.ok);
+  assert.ok(rejection && !rejection.ok);
+  assert.equal(codeOf(rejection.error), 'pin_limit_reached');
   assert.equal((await service.list({ roomId: fixture.room.id })).count, 50);
 });
 

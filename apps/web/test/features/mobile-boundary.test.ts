@@ -4,7 +4,6 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { installFakeWebSocket, FakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { freshImport } from '../helpers/fresh-module.ts';
-import type * as BoundaryModule from '../../src/lib/platform/desktop-boundary.ts';
 
 const IPHONE =
   'Mozilla/5.0 (iPhone; CPU iPhone OS 19_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/19.0 Mobile/15E148 Safari/604.1';
@@ -18,7 +17,7 @@ function useDevice(userAgent: string, maxTouchPoints = 0) {
 
 async function load() {
   installFakeWebSocket();
-  const boundary = await freshImport<typeof BoundaryModule>('/src/lib/platform/desktop-boundary.ts');
+  const boundary = await freshImport(() => import('../../src/lib/platform/desktop-boundary.ts'));
   const realtime = await import('../../src/lib/api/realtime.ts');
   return { boundary, realtime };
 }
@@ -51,14 +50,14 @@ test('on a phone the realtime socket opens only while a room page is mounted', a
   useDevice(IPHONE, 5);
   const { boundary, realtime } = await load();
   expect(boundary.isRealtimeBlocked()).toBe(true);
-  const blocked = realtime.connectRealtime(() => {});
+  const unsubscribeBlocked = realtime.getAppRealtime().subscribe(() => {});
   expect(FakeWebSocket.instances).toHaveLength(0);
-  blocked.close();
+  unsubscribeBlocked();
 
   boundary.setRoomRouteActive(true);
   expect(boundary.isRealtimeBlocked()).toBe(false);
-  const handle = realtime.connectRealtime(() => {});
+  const unsubscribe = realtime.getAppRealtime().subscribe(() => {});
   expect(FakeWebSocket.instances).toHaveLength(1);
-  handle.close();
+  unsubscribe();
   boundary.setRoomRouteActive(false);
 });

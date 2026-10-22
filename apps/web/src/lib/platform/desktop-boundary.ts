@@ -1,12 +1,6 @@
 import { browser } from '$app/environment';
 import { classifyPlatformPolicy, type PlatformPolicy, type PlatformSignals } from '@voice-room/shared/platform-class';
 
-type NavigatorWithUserAgentData = Navigator & {
-  userAgentData?: {
-    mobile?: boolean;
-  };
-};
-
 const DOCUMENT_BOUNDARY_KEY = 'desktopBoundary';
 const DOCUMENT_PLATFORM_KEY = 'platformClass';
 
@@ -25,7 +19,7 @@ function hasDesktopBridge(): boolean {
 function readPlatformSignals(): PlatformSignals {
   if (!browser) return {};
 
-  const nav = window.navigator as NavigatorWithUserAgentData;
+  const nav = window.navigator;
   return {
     desktopBridge: hasDesktopBridge(),
     userAgentDataMobile: typeof nav.userAgentData?.mobile === 'boolean' ? nav.userAgentData.mobile : undefined,

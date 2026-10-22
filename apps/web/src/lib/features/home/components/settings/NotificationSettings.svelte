@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { displayNameOf } from '$lib/shared/utils/display-name';
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { BellOff } from '@lucide/svelte';
   import { onMount } from 'svelte';
@@ -220,7 +221,7 @@
           <div class="settings-notification-list">
             {#each users as peer (peer.id)}
               {@const peerMuted = notificationPreferences.mutedPeerIds.includes(peer.id)}
-              {@const peerName = peer.displayName?.trim() || peer.login}
+              {@const peerName = displayNameOf(peer)}
               <div class="settings-notification-row">
                 <Avatar
                   name={peerName}
@@ -325,7 +326,7 @@
     {:else if blockedUsers.length > 0}
       <div class="settings-notification-list">
         {#each blockedUsers as blocked (blocked.id)}
-          {@const blockedName = blocked.displayName?.trim() || blocked.login}
+          {@const blockedName = displayNameOf(blocked)}
           <div class="settings-notification-row">
             <Avatar
               name={blockedName}

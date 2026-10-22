@@ -58,14 +58,23 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
     return mapMessage(row);
   }
 
-  async function softDeleteMessage(messageId: string): Promise<boolean> {
-    const result = await db
-      .updateTable('direct_messages')
-      .set({ deleted_at: sql<Date>`now()` })
-      .where('id', '=', messageId)
-      .where('deleted_at', 'is', null)
-      .executeTakeFirst();
-    return result.numUpdatedRows > 0n;
+  // The unit of work runs on the deletion's connection, once the message is
+  // gone, so whatever it removes with the message commits with it.
+  async function softDeleteMessage(
+    messageId: string,
+    { unitOfWork = null }: { unitOfWork?: ((client: pg.PoolClient) => Promise<void>) | null } = {}
+  ): Promise<boolean> {
+    return transaction(pool, async (client) => {
+      const result = await kyselyOn(client)
+        .updateTable('direct_messages')
+        .set({ deleted_at: sql<Date>`now()` })
+        .where('id', '=', messageId)
+        .where('deleted_at', 'is', null)
+        .executeTakeFirst();
+      if (result.numUpdatedRows === 0n) return false;
+      if (unitOfWork) await unitOfWork(client);
+      return true;
+    });
   }
 
   async function editMessage({
@@ -91,7 +100,8 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
     return mapMessage(row);
   }
 
-  async function sendMessage({
+  // A replay answers with the message the caller stored on the first send.
+  async function sendMessage<Replayed extends object = DirectMessage>({
     senderId,
     recipientId,
     body,
@@ -106,7 +116,7 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
     metadata?: Metadata | null;
     replyToMessageId?: string | null;
     beforeUnitOfWork?:
-      ((client: pg.PoolClient) => Promise<{ replay?: boolean; message?: unknown } | null | undefined>) | null;
+      ((client: pg.PoolClient) => Promise<{ replay: true; message: Replayed } | null | undefined>) | null;
     unitOfWork?: ((client: pg.PoolClient, message: DirectMessage) => Promise<unknown>) | null;
   }) {
     const id = crypto.randomUUID();
@@ -114,7 +124,7 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
     return transaction(pool, async (client) => {
       if (typeof beforeUnitOfWork === 'function') {
         const prepared = await beforeUnitOfWork(client);
-        if (prepared?.replay) return { ...(prepared.message as DirectMessage), idempotencyReplay: true };
+        if (prepared?.replay) return { ...prepared.message, idempotencyReplay: true };
       }
       const row = await kyselyOn(client)
         .insertInto('direct_messages')

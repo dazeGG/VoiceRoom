@@ -2,9 +2,9 @@ import type { LocalTrackPublication, Room } from 'livekit-client';
 import type { SvelteMap } from 'svelte/reactivity';
 import type { HotkeyBinding } from '$lib/shared/ui/HotkeyRecorder/types';
 import type { MicrophoneMode, NoiseMode } from './config';
-import type { Participant, PeerInfo } from '../model/participants';
+import type { Participant } from '../model/participants';
 import type { LobbyRoom } from '@voice-room/shared/contracts/rooms';
-export type { Participant, ParticipantViewRefs, PeerInfo } from '../model/participants';
+export type { Participant, PeerInfo } from '../model/participants';
 
 export type ScreenStreamMode = 'games' | 'text';
 
@@ -26,21 +26,22 @@ export interface PeerSession {
   sessionToken: string;
 }
 
-export interface MicProcessor {
+interface MicStageBase {
   context: AudioContext;
   destination: MediaStreamAudioDestinationNode;
   node: AudioNode;
-  nodes?: AudioNode[];
-  setGain?: (gain: number) => void;
   source: MediaStreamAudioSourceNode;
-  setThreshold?: (threshold: number) => void;
-  type?: 'gate' | 'input-gain' | 'rnnoise' | 'silence-floor';
 }
 
+/** One stage of the microphone chain: a gate always takes a threshold, the input gain a gain. */
+export type MicProcessor =
+  | (MicStageBase & { type: 'rnnoise' | 'silence-floor' })
+  | (MicStageBase & { type: 'gate'; setThreshold: (threshold: number) => void })
+  | (MicStageBase & { type: 'input-gain'; nodes: AudioNode[]; setGain: (gain: number) => void });
+
 export interface MicrophoneCapture {
-  kind?: string;
   mode?: NoiseMode;
-  processor: MicProcessor | MicProcessor[] | null;
+  processor: MicProcessor[] | null;
   rawStream: MediaStream | null;
   stream: MediaStream | null;
 }
@@ -79,12 +80,12 @@ export interface ScreenSourceSelection extends DesktopPickerSelection {
 export interface ScreenStatsSnapshot {
   availableOutgoingBitrate: number;
   bitrate: number;
-  captureDropsBackpressure?: number;
-  captureDropsBackpressureDelta?: number;
-  captureFramesReceived?: number;
-  captureFramesWritten?: number;
-  capturePixelFormat?: 'NV12' | 'BGRX';
-  captureRelayRestarts?: number;
+  captureDropsBackpressure?: number | undefined;
+  captureDropsBackpressureDelta?: number | undefined;
+  captureFramesReceived?: number | undefined;
+  captureFramesWritten?: number | undefined;
+  capturePixelFormat?: 'NV12' | 'BGRX' | undefined;
+  captureRelayRestarts?: number | undefined;
   codec: string;
   encoderImplementation: string;
   firCount: number;
@@ -189,7 +190,7 @@ export interface RoomAudioState {
   microphoneMode: MicrophoneMode;
   microphoneVolume: number;
   micMutedBeforeOutputMute: boolean;
-  micProcessor: MicProcessor | MicProcessor[] | null;
+  micProcessor: MicProcessor[] | null;
   muted: boolean;
   noiseMode: NoiseMode;
   outputDeviceId: string;
@@ -245,17 +246,6 @@ export interface AppState
 
 /** The lobby card the rename answer and the room.updated broadcast carry. */
 export type RoomLifecycleSummary = LobbyRoom;
-
-export type ServerMessage =
-  | { type: 'hello'; peer: PeerInfo; peers: PeerInfo[]; roomId: string }
-  | { type: 'ping'; at: number }
-  | { type: 'room-not-found'; roomId: string }
-  | { type: 'peer-joined'; peer: PeerInfo }
-  | { type: 'peer-left'; peerId: string; reason: string }
-  | { type: 'peer-updated'; peer: PeerInfo }
-  | { type: 'room-full'; maxRoomPeers: number }
-  | { type: 'room-updated'; room: RoomLifecycleSummary }
-  | { type: 'room-deleted'; roomId: string };
 
 // Events from the desktop app's stream-audio helper. Desktop 1.4.4+ restarts a
 // crashed helper under the same session ('restarting') and sends 'exit' only when

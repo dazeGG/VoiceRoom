@@ -33,10 +33,10 @@ test('deletion waits for the password and the acknowledgement, and names what ha
   expect(await screen.findByText(/перейдёт к Боб/)).toBeTruthy();
   expect(screen.getByText('удалится: других участников нет')).toBeTruthy();
   const submit = screen.getByRole('button', { name: 'Удалить аккаунт' });
-  expect((submit as HTMLButtonElement).disabled).toBe(true);
+  expect(submit).toHaveProperty('disabled', true);
 
   await userEvent.type(screen.getByLabelText('Текущий пароль'), 'secret-pass');
-  expect((submit as HTMLButtonElement).disabled).toBe(true);
+  expect(submit).toHaveProperty('disabled', true);
   await userEvent.click(screen.getByRole('checkbox'));
   await userEvent.click(submit);
 

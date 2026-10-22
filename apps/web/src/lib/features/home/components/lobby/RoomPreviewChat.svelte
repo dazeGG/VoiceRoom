@@ -4,7 +4,7 @@
   // account instead of through a room peer session.
   import type { AuthUser } from '$lib/api/auth';
   import RoomChatPanel from '$lib/features/room/components/RoomChatPanel.svelte';
-  import { friendName } from '../../model/lobby-format';
+  import { displayNameOf } from '$lib/shared/utils/display-name';
 
   let {
     roomId,
@@ -29,7 +29,7 @@
   }>();
 
   function resolveDisplayName(): string {
-    return friendName(user);
+    return displayNameOf(user);
   }
 </script>
 
@@ -44,5 +44,5 @@
   {participantCount}
   onSelectParticipants={() => onSelectParticipants?.()}
   onCollapse={() => onClose?.()}
-  onToast={(message) => onToast?.(message)}
+  onToast={(message: string) => onToast?.(message)}
 />

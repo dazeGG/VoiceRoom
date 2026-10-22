@@ -38,8 +38,26 @@ test('route values are encoded, so an id cannot inject another parameter', () =>
   assert.equal(url.searchParams.get('join'), null);
 });
 
-test('push payloads carry the same route the in-app panel uses', async () => {
-  const payload = notifications.buildProviderPayload(ITEM);
+test('push payloads carry the same route the in-app panel uses, under the url the service worker reads', async () => {
+  const sent: unknown = JSON.parse(JSON.stringify(notifications.buildProviderPayload(ITEM)));
 
-  assert.equal(payload!.route, notifications.notificationRoute(ITEM));
+  assert.equal(notifications.parsePushPayload(sent).url, notifications.notificationRoute(ITEM));
+});
+
+test('a mention push queued before 2.10.2 still opens its message', () => {
+  const queued = { title: 'VoiceRoom', body: 'hi', route: '/?room=r1&message=m1' };
+
+  assert.equal(notifications.parsePushPayload(queued).url, '/?room=r1&message=m1');
+});
+
+test('a received push keeps only fields of the expected type', () => {
+  assert.deepEqual(notifications.parsePushPayload(null), {});
+  assert.deepEqual(notifications.parsePushPayload('text'), {});
+  const parsed = notifications.parsePushPayload({ title: 7, url: '/x', revision: '2', expiresAt: Infinity, extra: 1 });
+
+  assert.equal(parsed.title, undefined);
+  assert.equal(parsed.url, '/x');
+  assert.equal(parsed.revision, undefined);
+  assert.equal(parsed.expiresAt, undefined);
+  assert.equal('extra' in parsed, false);
 });

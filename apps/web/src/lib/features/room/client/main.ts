@@ -221,7 +221,7 @@ export function mountRoomClient(
       .then((ready) => {
         if (ready && options.autoJoin) return joinRoom();
       })
-      .catch((error) => {
+      .catch((error: unknown) => {
         log.error('room client failed', errorContext(error));
         // The user is now looking at a failure screen; send what led to it
         // while the buffer still holds the device and connection records.

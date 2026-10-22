@@ -18,3 +18,12 @@ test('a server at its voice cap tells the guest to come back later and leaves th
   expect(showToast).toHaveBeenCalledWith('Сервер сейчас заполнен. Попробуйте зайти через пару минут');
   expect(room.leaveRoom).toHaveBeenCalledTimes(1);
 });
+
+test('a refused join shows the text for its code, not the server wording, and leaves the room', async () => {
+  const { room, handle } = handler();
+
+  await handle({ type: 'error', payload: { code: 'room_full', message: 'Room is full' } });
+
+  expect(showToast).toHaveBeenLastCalledWith('Комната заполнена');
+  expect(room.leaveRoom).toHaveBeenCalled();
+});

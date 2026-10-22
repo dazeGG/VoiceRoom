@@ -3,42 +3,23 @@ import type { RoomChatRepository } from './room-chat.repository.ts';
 
 type RoomMessageSource = RoomChatRepository & Pick<RoomAccessRepository, 'markRoomChatRead'>;
 
-type StoreMethod = (...args: unknown[]) => unknown;
-type Store = Record<string, unknown>;
+export type RoomMessageRepository = Readonly<
+  Pick<
+    RoomMessageSource,
+    'appendMessage' | 'editMessage' | 'getMessage' | 'listMessages' | 'markRoomChatRead' | 'softDeleteMessage'
+  >
+>;
 
-const METHODS = [
-  'appendMessage',
-  'editMessage',
-  'getMessage',
-  'listMessages',
-  'markRoomChatRead',
-  'softDeleteMessage'
-] as const;
-
-export type RoomMessageRepository = Readonly<Pick<RoomMessageSource, (typeof METHODS)[number]>>;
-
-function requireMethod(store: Store | null | undefined, name: string): StoreMethod {
-  if (!store || typeof store[name] !== 'function') {
-    throw new TypeError(`Room message store must implement ${name}()`);
-  }
-  return (store[name] as StoreMethod).bind(store);
-}
-
-function createRoomMessageRepository({
-  store
-}: { store?: Store | RoomMessageSource | null } = {}): RoomMessageRepository {
-  if (!store) throw new TypeError('Room message repository requires a store');
-  // Each method forwards to the store's, checked when first called.
-  const delegate = <Name extends keyof RoomMessageRepository>(name: Name): RoomMessageRepository[Name] =>
-    ((...args: unknown[]) => requireMethod(store as Store, name)(...args)) as RoomMessageRepository[Name];
-
+function createRoomMessageRepository({ store }: { store: RoomMessageRepository }): RoomMessageRepository {
+  // Each method forwards to the store's when called, so a test store that
+  // lacks one fails only where the test reaches it.
   return Object.freeze({
-    appendMessage: delegate('appendMessage'),
-    editMessage: delegate('editMessage'),
-    getMessage: delegate('getMessage'),
-    listMessages: delegate('listMessages'),
-    markRoomChatRead: delegate('markRoomChatRead'),
-    softDeleteMessage: delegate('softDeleteMessage')
+    appendMessage: (...args) => store.appendMessage(...args),
+    editMessage: (...args) => store.editMessage(...args),
+    getMessage: (...args) => store.getMessage(...args),
+    listMessages: (...args) => store.listMessages(...args),
+    markRoomChatRead: (...args) => store.markRoomChatRead(...args),
+    softDeleteMessage: (...args) => store.softDeleteMessage(...args)
   });
 }
 

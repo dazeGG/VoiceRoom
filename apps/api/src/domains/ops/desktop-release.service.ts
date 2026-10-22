@@ -3,6 +3,7 @@
 // of the configured repository is ever passed through.
 
 import type { Logger } from 'pino';
+import { isArray, isRecord, textOf } from '@voice-room/shared/guards';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 
 export interface DesktopAsset {
@@ -19,23 +20,11 @@ export interface DesktopRelease {
 export type DesktopReleaseResult =
   { status: 'ok'; release: DesktopRelease; cacheControl: string } | { status: 'unavailable' };
 
-interface GitHubAsset {
-  name?: unknown;
-  browser_download_url?: unknown;
-  size?: unknown;
-}
-
-interface GitHubRelease {
-  tag_name?: unknown;
-  html_url?: unknown;
-  assets?: unknown;
-}
-
 export interface DesktopReleaseServiceOptions {
   repo: string;
   cacheMs: number;
   timeoutMs: number;
-  githubToken?: string;
+  githubToken?: string | undefined;
   logger: Pick<Logger, 'warn'>;
   fetch?: typeof fetch;
   now?: () => number;
@@ -43,7 +32,7 @@ export interface DesktopReleaseServiceOptions {
 
 export function isDesktopReleaseDownloadUrl(value: unknown, repo: string): value is string {
   try {
-    const url = new URL(String(value || ''));
+    const url = new URL(textOf(value));
     return (
       url.protocol === 'https:' &&
       url.hostname === 'github.com' &&
@@ -54,9 +43,10 @@ export function isDesktopReleaseDownloadUrl(value: unknown, repo: string): value
   }
 }
 
-function pickReleaseAsset(assets: GitHubAsset[], patterns: RegExp[], repo: string): DesktopAsset | null {
+// GitHub's release JSON, read field by field.
+function pickReleaseAsset(assets: Record<string, unknown>[], patterns: RegExp[], repo: string): DesktopAsset | null {
   for (const pattern of patterns) {
-    const found = assets.find((asset) => pattern.test(String(asset.name || '')));
+    const found = assets.find((asset) => pattern.test(textOf(asset.name)));
     if (found && isDesktopReleaseDownloadUrl(found.browser_download_url, repo)) {
       return { url: found.browser_download_url, size: Number(found.size) || 0 };
     }
@@ -64,10 +54,11 @@ function pickReleaseAsset(assets: GitHubAsset[], patterns: RegExp[], repo: strin
   return null;
 }
 
-export function normalizeRelease(release: GitHubRelease, repo: string): DesktopRelease {
-  const assets = Array.isArray(release.assets) ? (release.assets as GitHubAsset[]) : [];
+export function normalizeRelease(json: unknown, repo: string): DesktopRelease {
+  const release = isRecord(json) ? json : {};
+  const assets = isArray(release.assets) ? release.assets.filter(isRecord) : [];
   return {
-    version: String(release.tag_name || '').replace(/^v/, ''),
+    version: textOf(release.tag_name).replace(/^v/, ''),
     htmlUrl: typeof release.html_url === 'string' ? release.html_url : '',
     assets: {
       'mac-arm64': pickReleaseAsset(assets, [/-mac-arm64\.dmg$/i], repo),
@@ -99,7 +90,8 @@ export function createDesktopReleaseService(options: DesktopReleaseServiceOption
         signal: controller.signal
       });
       if (!response.ok) throw new Error(`GitHub responded ${response.status}`);
-      return normalizeRelease((await response.json()) as GitHubRelease, options.repo);
+      const json: unknown = await response.json();
+      return normalizeRelease(json, options.repo);
     } finally {
       clearTimeout(timeout);
     }

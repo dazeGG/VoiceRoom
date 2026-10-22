@@ -6,6 +6,7 @@ import { Pool } from 'pg';
 import { readDatabaseConfig } from '../src/lib/config.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createDbPool } from '../src/platform/db/pool.ts';
+import { codeOf } from '../src/platform/error-code.ts';
 
 const MIGRATIONS_DIR = path.resolve(import.meta.dirname, '../src/migrations');
 const TEMPLATE_PREFIX = 'voice_room_test_template_';
@@ -72,15 +73,25 @@ function templateName() {
 }
 
 async function databaseExists(admin: Pool, name: string) {
-  const { rows } = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [name]);
-  return rows.length > 0;
+  const { rowCount } = await admin.query('SELECT 1 FROM pg_database WHERE datname = $1', [name]);
+  return (rowCount ?? 0) > 0;
 }
 
 let template: Promise<string> | undefined;
 
+/**
+ * A rename that lost to another process renaming to the same name. PostgreSQL
+ * reports it as duplicate_database, or, when both renames run at once, as a
+ * unique violation on its catalog index.
+ */
+function lostTemplateRace(error: unknown): boolean {
+  const code = codeOf(error);
+  return code === '42P04' || code === '23505';
+}
+
 // Built under a scratch name and renamed only once fully migrated, so another
 // process never copies a half-built template. If two processes race, the
-// loser's rename fails with duplicate_database and it keeps the winner's.
+// loser's rename fails (see lostTemplateRace) and it keeps the winner's.
 async function buildTemplate(admin: Pool, baseUrl: string) {
   const name = templateName();
   if (await databaseExists(admin, name)) return name;
@@ -92,7 +103,7 @@ async function buildTemplate(admin: Pool, baseUrl: string) {
     await admin.query(`ALTER DATABASE ${quoteIdent(scratch)} RENAME TO ${quoteIdent(name)}`);
   } catch (error) {
     await admin.query(`DROP DATABASE IF EXISTS ${quoteIdent(scratch)}`);
-    if ((error as { code?: string }).code !== '42P04') throw error;
+    if (!lostTemplateRace(error)) throw error;
     return name;
   }
   // Templates of older migration sets are of no further use.
@@ -143,4 +154,4 @@ async function createTestDatabase(_t?: TestContext, { empty = false }: { empty?:
   return { cleanup, databaseUrl, databaseName: name, pool };
 }
 
-export { createTestDatabase };
+export { createTestDatabase, lostTemplateRace };

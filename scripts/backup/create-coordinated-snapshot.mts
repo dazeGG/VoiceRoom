@@ -2,6 +2,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+// By path, not package name: the script runs from a checkout without node_modules.
+import { isArray, isRecord } from '../../packages/shared/src/guards.ts';
 
 function args(argv: string[]) {
   const values: Record<string, string | undefined> = {};
@@ -36,7 +38,7 @@ function resolvedProspectivePath(value: string) {
       if (fs.lstatSync(current).isSymbolicLink())
         throw new Error(`Snapshot output path contains a symlink: ${current}`);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      if (!(error instanceof Error && 'code' in error && error.code === 'ENOENT')) throw error;
     }
   }
   let ancestor = absolute;
@@ -50,11 +52,11 @@ function containsPath(parent: string, candidate: string) {
 }
 
 type SnapshotOptions = {
-  databaseDump?: string;
-  uploads?: string;
-  catalog?: string;
-  output?: string;
-  namespace?: string;
+  databaseDump?: string | undefined;
+  uploads?: string | undefined;
+  catalog?: string | undefined;
+  output?: string | undefined;
+  namespace?: string | undefined;
 };
 
 export function createCoordinatedSnapshot({ databaseDump, uploads, catalog, output, namespace }: SnapshotOptions) {
@@ -65,8 +67,8 @@ export function createCoordinatedSnapshot({ databaseDump, uploads, catalog, outp
   const catalogFile = fs.realpathSync(catalog);
   if (!fs.statSync(db).isFile() || !fs.statSync(media).isDirectory() || !fs.statSync(catalogFile).isFile())
     throw new Error('Snapshot sources must include database dump, uploads directory and catalog file');
-  const catalogValue = JSON.parse(fs.readFileSync(catalogFile, 'utf8'));
-  if (!Array.isArray(catalogValue.attachments) || !Array.isArray(catalogValue.leases))
+  const catalogValue: unknown = JSON.parse(fs.readFileSync(catalogFile, 'utf8'));
+  if (!isRecord(catalogValue) || !isArray(catalogValue.attachments) || !isArray(catalogValue.leases))
     throw new Error('Snapshot catalog must contain attachments and leases');
   const destination = resolvedProspectivePath(output);
   const destinationParent = path.dirname(destination);

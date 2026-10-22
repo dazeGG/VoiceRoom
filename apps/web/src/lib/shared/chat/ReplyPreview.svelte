@@ -8,8 +8,8 @@
     onjump
   }: {
     preview: ReplyTarget;
-    interactive?: boolean;
-    onjump?: (messageId: string) => void;
+    interactive?: boolean | undefined;
+    onjump?: ((messageId: string) => void) | undefined;
   } = $props();
 
   const author = $derived(preview.author?.name || (preview.deleted ? '' : 'Сообщение'));

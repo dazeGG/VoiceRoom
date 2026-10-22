@@ -1,7 +1,17 @@
-export const startUi = $state({
+interface StartUiState {
+  nameInput: string;
+  savedNameStatus: string;
+  savedNameState: 'empty' | 'saved' | 'dirty';
+  createRoomLoading: boolean;
+  roomCode: string;
+  missingRoomCode: string;
+  soundButtonVisible: boolean;
+}
+
+export const startUi = $state<StartUiState>({
   nameInput: '',
   savedNameStatus: 'Имя не сохранено',
-  savedNameState: 'empty' as 'empty' | 'saved' | 'dirty',
+  savedNameState: 'empty',
   createRoomLoading: false,
   roomCode: '',
   missingRoomCode: 'room',

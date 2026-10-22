@@ -9,8 +9,12 @@ import type {
   RoomHistoryMessage,
   RoomHistoryPage
 } from '@voice-room/shared/contracts/messages';
+import { textOf } from '@voice-room/shared/guards';
 import { normalizeHistoryRequest } from '@voice-room/shared/messaging-history';
 import { epochMillis } from '../../platform/epoch-millis.ts';
+import { avatarUrl } from '../../lib/avatar-url.ts';
+import { roomCursorScopes } from './cursor-scopes.ts';
+import { pageHistory } from './history-pager.ts';
 
 type Tuple = { createdAtMicros: unknown; id: string };
 type Loose = Record<string, unknown>;
@@ -22,21 +26,21 @@ export type StoredRoomMessage = {
   roomId: string;
   createdAt: unknown;
   createdAtMicros: unknown;
-  authorUserId?: string | null;
-  peerId?: string;
-  name?: string;
-  avatarColorKey?: string | null;
-  avatarKey?: string | null;
-  avatarAccent?: string | null;
-  content?: MessageContent | null;
-  text?: string;
+  authorUserId?: string | null | undefined;
+  peerId?: string | undefined;
+  name?: string | undefined;
+  avatarColorKey?: string | null | undefined;
+  avatarKey?: string | null | undefined;
+  avatarAccent?: string | null | undefined;
+  content?: MessageContent | null | undefined;
+  text?: string | undefined;
   editedAt?: unknown;
   expiresAt?: unknown;
-  attachments?: Attachment[];
-  linkPreview?: LinkPreview | null;
-  replyTo?: ReplyPointer | null;
-  replyPreview?: ReplyPreview | null;
-  reactions?: ReactionSummary[];
+  attachments?: Attachment[] | undefined;
+  linkPreview?: LinkPreview | null | undefined;
+  replyTo?: ReplyPointer | null | undefined;
+  replyPreview?: ReplyPreview | null | undefined;
+  reactions?: ReactionSummary[] | undefined;
 };
 
 type HistoryPage = { messages: StoredRoomMessage[]; hasMoreBefore: boolean; hasMoreAfter: boolean };
@@ -98,16 +102,8 @@ function createRoomHistoryService({
   const history = repository;
   const codec = cursorCodec;
 
-  function contextFor(roomId: string): string {
-    return `room:${roomId}`;
-  }
-
-  function encodeTuple(roomId: string, tuple: Tuple, purpose = 'room-history'): string {
-    return codec.encode({ purpose, context: contextFor(roomId), tuple });
-  }
-
-  function decodeTuple(roomId: string, cursor: string | undefined): Tuple {
-    return codec.decode(cursor, { purpose: 'room-history', context: contextFor(roomId) });
+  function encodeTuple(roomId: string, tuple: Tuple, scope: 'history' | 'read' = 'history'): string {
+    return codec.encode({ ...roomCursorScopes(roomId)[scope], tuple });
   }
 
   function canView(message: StoredRoomMessage, access: Access): boolean | Promise<boolean> {
@@ -142,19 +138,19 @@ function createRoomHistoryService({
         peerId: message.peerId ?? '',
         name: message.name ?? '',
         avatarColorKey: message.avatarColorKey ?? null,
-        avatarUrl: message.avatarKey ? `/api/avatars/${encodeURIComponent(message.avatarKey)}` : null,
+        avatarUrl: avatarUrl(message.avatarKey),
         avatarAccent: message.avatarAccent ?? null
       },
       content: message.content || { type: 'text', text: message.text ?? '' },
       editedAt: epochMillis(message.editedAt),
       expiresAt: epochMillis(message.expiresAt),
-      attachments: message.attachments,
-      linkPreview: message.linkPreview ?? undefined,
-      replyTo: message.replyTo,
-      replyPreview: message.replyPreview,
-      reactions: message.reactions,
+      ...(message.attachments === undefined ? {} : { attachments: message.attachments }),
+      ...(message.linkPreview == null ? {} : { linkPreview: message.linkPreview }),
+      ...(message.replyTo === undefined ? {} : { replyTo: message.replyTo }),
+      ...(message.replyPreview === undefined ? {} : { replyPreview: message.replyPreview }),
+      ...(message.reactions === undefined ? {} : { reactions: message.reactions }),
       cursor: encodeTuple(roomId, tuple),
-      readCursor: encodeTuple(roomId, tuple, 'room-read')
+      readCursor: encodeTuple(roomId, tuple, 'read')
     };
   }
 
@@ -163,7 +159,7 @@ function createRoomHistoryService({
     query = {},
     access = { authorized: true }
   }: { roomId?: unknown; query?: Loose; access?: Access } = {}): Promise<RoomHistoryPage> {
-    const normalizedRoomId = String(roomId || '').trim();
+    const normalizedRoomId = textOf(roomId).trim();
     if (!normalizedRoomId) throw new RoomHistoryError('room_not_found', 404, 'Room not found');
 
     let normalizedQuery = query;
@@ -179,51 +175,25 @@ function createRoomHistoryService({
     }
 
     const { mode, limit, cursor } = parsed.request;
-    let anchor: Tuple | undefined;
-    if (mode !== 'latest') {
-      try {
-        anchor = decodeTuple(normalizedRoomId, cursor);
-      } catch {
-        throw new RoomHistoryError('invalid_cursor', 400, 'Invalid history cursor');
-      }
-    }
-
-    const method = (
-      {
-        latest: 'listLatest',
-        before: 'listBefore',
-        after: 'listAfter',
-        around: 'listAround'
-      } as const
-    )[mode];
-    const page = await (history[method] as (input: ListInput) => Promise<HistoryPage>)({
-      roomId: normalizedRoomId,
-      anchor,
-      limit,
-      now: now()
-    });
-    const visible: StoredRoomMessage[] = [];
-    for (const message of page.messages) {
-      if (await canView(message, access)) visible.push(message);
-    }
-    const projected =
-      typeof projectMessages === 'function' && visible.length > 0
-        ? await projectMessages({ messages: visible, roomId: normalizedRoomId, access })
-        : visible;
-    const messages = projected.map((message) => toDto(normalizedRoomId, message));
-
-    return {
-      contractVersion: 1,
+    const base = { roomId: normalizedRoomId, limit, now: now() };
+    return pageHistory({
       mode,
-      messages,
-      pageInfo: {
-        before: messages[0]?.cursor,
-        after: messages.at(-1)?.cursor,
-        around: mode === 'around' ? cursor : undefined,
-        hasMoreBefore: page.hasMoreBefore,
-        hasMoreAfter: page.hasMoreAfter
-      }
-    };
+      cursor,
+      listLatest: () => history.listLatest({ ...base, anchor: undefined }),
+      listAnchored: (anchoredMode, anchor) =>
+        history[({ before: 'listBefore', after: 'listAfter', around: 'listAround' } as const)[anchoredMode]]({
+          ...base,
+          anchor
+        }),
+      decodeAnchor: (value) => codec.decode(value, roomCursorScopes(normalizedRoomId).history),
+      invalidCursor: () => new RoomHistoryError('invalid_cursor', 400, 'Invalid history cursor'),
+      canView: (message) => canView(message, access),
+      project: (visible) =>
+        typeof projectMessages === 'function'
+          ? projectMessages({ messages: visible, roomId: normalizedRoomId, access })
+          : visible,
+      toDto: (message) => toDto(normalizedRoomId, message)
+    });
   }
 
   return { getPage };

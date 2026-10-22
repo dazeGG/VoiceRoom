@@ -6,12 +6,8 @@
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { tokensMatch } from '../../platform/crypto/tokens-match.ts';
+import type { GatePrincipal } from './gate-principal.ts';
 import type { LiveKitConfig } from './livekit-config.ts';
-
-export type GatePrincipal = {
-  principalType: 'account' | 'guest';
-  principalId: string;
-};
 
 export interface Admission {
   gateCredentialId: string;
@@ -56,7 +52,7 @@ export interface AdmissionStore {
     guestPrincipalId: string;
     roomId: string;
   }): GatePrincipal | null;
-  isRoomServerMuted?(input: { roomId: string; principal: GatePrincipal }): Promise<boolean>;
+  isRoomServerMuted(input: { roomId: string; principal: GatePrincipal }): Promise<boolean>;
 }
 
 export interface MembershipServices {
@@ -151,6 +147,7 @@ export async function revokeIssuedAdmission({
   log: Pick<Logger, 'error'> | undefined;
   roomId: string;
 }): Promise<void> {
+  let cleanupFailure: { error: unknown } | null = null;
   try {
     const revoked = await boundary?.revokeCredential({ credentialId, roomId, principal });
     if (revoked?.status !== 'revoked') {
@@ -170,12 +167,19 @@ export async function revokeIssuedAdmission({
       },
       'issued admission credential cleanup failed'
     );
-    if (cause)
-      throw new AggregateError([cause, cleanupError], 'Admission persistence and credential cleanup both failed', {
-        cause
-      });
-    throw cleanupError;
+    cleanupFailure = { error: cleanupError };
   }
+  if (!cleanupFailure) return;
+  // The original failure stays the cause: the cleanup only ran because of it.
+  if (cause)
+    throw new AggregateError(
+      [cause, cleanupFailure.error],
+      'Admission persistence and credential cleanup both failed',
+      {
+        cause
+      }
+    );
+  throw cleanupFailure.error;
 }
 
 export function createAdmissionService(deps: AdmissionDeps) {
@@ -208,14 +212,15 @@ export function createAdmissionService(deps: AdmissionDeps) {
     }
 
     const store = deps.store();
-    // Null only if the identity row vanished mid-transaction.
-    const identity = (await store.getOrCreatePeerIdentity({
+    const identity = await store.getOrCreatePeerIdentity({
       roomId,
       peerId,
       sessionToken,
       displayName: name,
       avatarColorKey: user?.avatarColorKey || ''
-    }))!;
+    });
+    // Null only if the identity row vanished mid-transaction.
+    if (!identity) throw new Error('the peer identity vanished while it was being created');
     if (identity.status === 'token_mismatch') return refuse('invalid_session');
     const principal = store.normalizeGatePrincipal({
       accountUserId: user?.id || null,
@@ -227,10 +232,7 @@ export function createAdmissionService(deps: AdmissionDeps) {
       return refuse('livekit_gate_principal_unavailable');
     }
 
-    const serverMuteLookup = async (): Promise<boolean> => {
-      if (typeof store.isRoomServerMuted !== 'function') throw new Error('Server mute authority is unavailable');
-      return store.isRoomServerMuted({ roomId, principal });
-    };
+    const serverMuteLookup = (): Promise<boolean> => store.isRoomServerMuted({ roomId, principal });
     let serverMuted: boolean;
     try {
       serverMuted = await serverMuteLookup();
@@ -262,7 +264,7 @@ export function createAdmissionService(deps: AdmissionDeps) {
         cause,
         credentialId,
         principal,
-        recordFailure: deps.recordRevokeFailure,
+        recordFailure: () => deps.recordRevokeFailure(),
         log,
         roomId
       });

@@ -1,20 +1,18 @@
 import crypto from 'node:crypto';
-import { sql } from 'kysely';
+import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
+import type { RoomMemberships } from '../../platform/db/schema.ts';
+import { fromMicros, microsOf } from '../../platform/db/micros.ts';
+import { epochMillis } from '../../platform/epoch-millis.ts';
+import { isRecord } from '../../platform/record.ts';
+import { avatarUrl } from '../../lib/avatar-url.ts';
+import { escapeLike } from '../../platform/db/like.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Client = QueryClient | null | undefined;
 
-type MembershipRow = {
-  id: string;
-  room_id: string;
-  user_id: string;
-  role: string;
-  created_at: Date | string;
-  updated_at: Date | string;
-  metadata: Record<string, unknown> | null;
-};
+type MembershipRow = Selectable<RoomMemberships>;
 
 type DirectoryRow = {
   user_id: string;
@@ -54,12 +52,6 @@ export type DirectoryMember = {
   cursorTuple: DirectoryCursorTuple;
 };
 
-function toMillis(value: unknown): number | null {
-  if (value instanceof Date) return value.getTime();
-  const parsed = Date.parse(value as string);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 function mapMembership(row: MembershipRow | null | undefined): Membership | null {
   if (!row) return null;
   return {
@@ -67,23 +59,22 @@ function mapMembership(row: MembershipRow | null | undefined): Membership | null
     roomId: row.room_id,
     userId: row.user_id,
     role: row.role === 'owner' ? 'owner' : 'member',
-    createdAt: toMillis(row.created_at),
-    updatedAt: toMillis(row.updated_at),
-    metadata: row.metadata || {}
+    createdAt: epochMillis(row.created_at),
+    updatedAt: epochMillis(row.updated_at),
+    metadata: isRecord(row.metadata) ? row.metadata : {}
   };
 }
 
-function mapDirectoryMember(row: DirectoryRow | null | undefined): DirectoryMember | null {
-  if (!row) return null;
+function mapDirectoryMember(row: DirectoryRow): DirectoryMember {
   return {
     userId: row.user_id,
     displayName: row.display_name || '',
     login: row.login || '',
-    avatarColorKey: row.avatar_color_key || '',
-    avatarUrl: row.avatar_key ? `/api/avatars/${encodeURIComponent(row.avatar_key)}` : null,
+    avatarColorKey: row.avatar_color_key || 'blurple',
+    avatarUrl: avatarUrl(row.avatar_key),
     avatarAccent: row.avatar_accent || null,
     role: row.role === 'owner' ? 'owner' : 'member',
-    joinedAt: toMillis(row.created_at),
+    joinedAt: epochMillis(row.created_at),
     cursorTuple: {
       createdAtMicros: String(row.created_at_micros),
       id: row.user_id
@@ -91,7 +82,7 @@ function mapDirectoryMember(row: DirectoryRow | null | undefined): DirectoryMemb
   };
 }
 
-function createMembershipRepository({ pool }: { pool?: QueryClient | null } = {}) {
+function createMembershipRepository({ pool }: { pool?: QueryClient | null | undefined } = {}) {
   if (!pool || typeof pool.query !== 'function') throw new TypeError('A PostgreSQL pool is required');
   const base = pool;
   const on = (client: Client): Database => kyselyOn(client && typeof client.query === 'function' ? client : base);
@@ -109,7 +100,7 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null } = {}
       .where('user_id', '=', userId)
       .limit(1)
       .executeTakeFirst();
-    return mapMembership(row as MembershipRow | undefined);
+    return mapMembership(row);
   }
 
   async function isActive(roomId: string, userId: string, options?: { client?: Client }): Promise<boolean> {
@@ -128,7 +119,17 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null } = {}
       .where('user_id', '=', userId)
       .returningAll()
       .executeTakeFirst();
-    return mapMembership(row as MembershipRow | undefined);
+    return mapMembership(row);
+  }
+
+  async function roomExists(roomId: string, { client }: { client?: Client } = {}): Promise<boolean> {
+    const row = await on(client)
+      .selectFrom('rooms')
+      .select('id')
+      .where('id', '=', roomId)
+      .where('deleted_at', 'is', null)
+      .executeTakeFirst();
+    return Boolean(row);
   }
 
   // Joining again keeps an owner an owner and merges the metadata.
@@ -140,13 +141,13 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null } = {}
     at = Date.now(),
     client
   }: {
-    roomId?: string;
-    userId?: string;
+    roomId: string;
+    userId: string;
     role?: string;
     metadata?: unknown;
     at?: unknown;
     client?: Client;
-  } = {}): Promise<Membership | null> {
+  }): Promise<Membership | null> {
     if (!roomId || !userId) return null;
     const date = new Date(Number.isFinite(Number(at)) ? Number(at) : Date.now());
     const row = await on(client)
@@ -169,7 +170,7 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null } = {}
       )
       .returningAll()
       .executeTakeFirst();
-    return mapMembership(row as MembershipRow | undefined);
+    return mapMembership(row);
   }
 
   // Members in joining order, optionally by name or login prefix.
@@ -180,14 +181,14 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null } = {}
     after = null,
     client
   }: {
-    roomId?: string;
+    roomId: string;
     query?: unknown;
     limit?: unknown;
-    after?: Partial<DirectoryCursorTuple> | null;
+    after?: Partial<DirectoryCursorTuple> | null | undefined;
     client?: Client;
-  } = {}): Promise<{ members: DirectoryMember[]; hasMore: boolean }> {
+  }): Promise<{ members: DirectoryMember[]; hasMore: boolean }> {
     const pageSize = Math.min(100, Math.max(1, Number(limit) || 50));
-    const normalizedQuery = typeof query === 'string' ? query.trim().slice(0, 80) : '';
+    const normalizedQuery = typeof query === 'string' ? escapeLike(query.trim().slice(0, 80)) : '';
     let page = on(client)
       .selectFrom('room_memberships as rm')
       .innerJoin('users as u', 'u.id', 'rm.user_id')
@@ -196,14 +197,14 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null } = {}
         'rm.user_id',
         'rm.role',
         'rm.created_at',
-        sql<string>`floor(extract(epoch FROM rm.created_at) * 1000000)::numeric(20, 0)`.as('created_at_micros'),
+        microsOf('rm.created_at').as('created_at_micros'),
         'u.login',
         'u.display_name',
         'u.avatar_color_key',
         'u.avatar_key',
         'u.avatar_accent'
       ])
-      .where('rm.room_id', '=', roomId as string)
+      .where('rm.room_id', '=', roomId)
       .where('r.deleted_at', 'is', null);
     if (normalizedQuery) {
       page = page.where(
@@ -213,20 +214,29 @@ function createMembershipRepository({ pool }: { pool?: QueryClient | null } = {}
     }
     if (after?.createdAtMicros && after.createdAtMicros !== '0') {
       page = page.where(
-        sql<boolean>`(rm.created_at, rm.user_id) > (to_timestamp(${after.createdAtMicros}::numeric / 1000000.0), ${after.id || ''}::varchar(36))`
+        sql<boolean>`(rm.created_at, rm.user_id) > (${fromMicros(after.createdAtMicros)}, ${after.id || ''}::varchar(36))`
       );
     }
-    const found = (await page
+    const found: DirectoryRow[] = await page
       .orderBy('rm.created_at', 'asc')
       .orderBy('rm.user_id', 'asc')
       .limit(pageSize + 1)
-      .execute()) as DirectoryRow[];
+      .execute();
     const hasMore = found.length > pageSize;
     const rows = hasMore ? found.slice(0, pageSize) : found;
-    return { members: rows.map((row) => mapDirectoryMember(row) as DirectoryMember), hasMore };
+    return { members: rows.map(mapDirectoryMember), hasMore };
   }
 
-  return { deleteActive, getActive, isActive, listDirectoryPage, mapDirectoryMember, mapMembership, upsertActive };
+  return {
+    deleteActive,
+    getActive,
+    isActive,
+    listDirectoryPage,
+    mapDirectoryMember,
+    mapMembership,
+    roomExists,
+    upsertActive
+  };
 }
 
 export type MembershipRepository = ReturnType<typeof createMembershipRepository>;

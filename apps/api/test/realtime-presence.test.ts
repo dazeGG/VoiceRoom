@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import type { Preferences } from '@voice-room/shared/contracts/notifications';
-import type { FriendList } from '@voice-room/shared/contracts/social';
+import { Preferences } from '@voice-room/shared/contracts/notifications';
+import { FriendList } from '@voice-room/shared/contracts/social';
 import type { PresenceStatus } from '@voice-room/shared/contracts/users';
 import {
   acceptFirstFriendRequest,
@@ -26,8 +26,8 @@ test('realtime ready reports online friends and fans out presence', async (t) =>
   await sendFriendRequest(socketPath, aliceCookie, 'bob');
   await acceptFirstFriendRequest(socketPath, bobCookie);
 
-  const bobFriends = await request<FriendList>(socketPath, { pathname: '/api/friends', cookie: bobCookie });
-  const aliceFriends = await request<FriendList>(socketPath, { pathname: '/api/friends', cookie: aliceCookie });
+  const bobFriends = await request(socketPath, { pathname: '/api/friends', cookie: bobCookie }, FriendList);
+  const aliceFriends = await request(socketPath, { pathname: '/api/friends', cookie: aliceCookie }, FriendList);
   const aliceId = bobFriends.body.friends.find((entry) => entry.user.login === 'alice')?.user.id;
   const bobId = aliceFriends.body.friends.find((entry) => entry.user.login === 'bob')?.user.id;
   assert.ok(aliceId);
@@ -49,7 +49,7 @@ test('realtime ready reports online friends and fans out presence', async (t) =>
   );
   assert.equal(bobPresence.payload.online, true);
 
-  const friendsForBob = await request<FriendList>(socketPath, { pathname: '/api/friends', cookie: bobCookie });
+  const friendsForBob = await request(socketPath, { pathname: '/api/friends', cookie: bobCookie }, FriendList);
   assert.equal(friendsForBob.status, 200);
   const aliceEntry = friendsForBob.body.friends.find((entry) => entry.user.login === 'alice');
   assert.ok(aliceEntry);
@@ -64,7 +64,7 @@ test('manual presence status updates own tabs, friend profiles, and effective on
   await sendFriendRequest(socketPath, aliceCookie, 'bob-status');
   await acceptFirstFriendRequest(socketPath, bobCookie);
 
-  const bobFriends = await request<FriendList>(socketPath, { pathname: '/api/friends', cookie: bobCookie });
+  const bobFriends = await request(socketPath, { pathname: '/api/friends', cookie: bobCookie }, FriendList);
   const aliceId = bobFriends.body.friends.find((entry) => entry.user.login === 'alice-status')?.user.id;
   assert.ok(aliceId);
 
@@ -94,12 +94,16 @@ test('manual presence status updates own tabs, friend profiles, and effective on
     const firstTabBefore = aliceFirstTab.frames.length;
     const secondTabBefore = aliceSecondTab.frames.length;
     const bobBefore = bobStream.frames.length;
-    const response = await request<Preferences>(socketPath, {
-      method: 'POST',
-      pathname: '/api/presence/status',
-      cookie: aliceCookie,
-      body: { status }
-    });
+    const response = await request(
+      socketPath,
+      {
+        method: 'POST',
+        pathname: '/api/presence/status',
+        cookie: aliceCookie,
+        body: { status }
+      },
+      Preferences
+    );
     assert.equal(response.status, 200);
     assert.equal(response.body.preferences.presenceStatus, status);
     assert.equal(response.body.preferences.doNotDisturb, doNotDisturb);
@@ -139,7 +143,7 @@ test('manual presence status updates own tabs, friend profiles, and effective on
     );
     assert.equal(profile.payload.user.doNotDisturb, doNotDisturb);
 
-    const friends = await request<FriendList>(socketPath, { pathname: '/api/friends', cookie: bobCookie });
+    const friends = await request(socketPath, { pathname: '/api/friends', cookie: bobCookie }, FriendList);
     assert.equal(friends.status, 200);
     const alice = friends.body.friends.find((entry) => entry.user.id === aliceId);
     assert.equal(alice?.online, online);

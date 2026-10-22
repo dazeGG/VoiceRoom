@@ -3,6 +3,8 @@
 // server downloaded and keeps itself, so readers never load anything from the
 // linked site.
 
+import { isRecord } from './guards.ts';
+
 export type LinkPreviewImage = { key: string; width: number; height: number };
 
 export type LinkPreview = {
@@ -24,8 +26,8 @@ const URL_PATTERN = /\b(?:https?:\/\/|www\.)[^\s<>"'`(){}[\]]+/gi;
 const TRAILING_PUNCTUATION = /[.,;:!?]+$/;
 // Control characters and the invisible direction marks that could make a
 // title render as something other than what it says.
-// eslint-disable-next-line no-control-regex
-const HIDDEN_CHARACTERS = /[\u0000-\u001f\u007f-\u009f​-‏‪-‮⁦-⁩﻿]/g;
+// \p{Cc} is U+0000-U+001F and U+007F-U+009F.
+const HIDDEN_CHARACTERS = /[\p{Cc}\u200B-\u200F\u202A-\u202E\u2066-\u2069\uFEFF]/gu;
 
 function toPreviewUrl(raw: string): string | null {
   const candidate = /^www\./i.test(raw) ? `https://${raw}` : raw;
@@ -64,19 +66,19 @@ function cleanText(value: unknown, max: number): string {
 }
 
 function normalizeImage(value: unknown): LinkPreviewImage | null {
-  if (!value || typeof value !== 'object') return null;
-  const { key, width, height } = value as { key?: unknown; width?: unknown; height?: unknown };
+  if (!isRecord(value)) return null;
+  const { key, width, height } = value;
   if (typeof key !== 'string' || !LINK_PREVIEW_IMAGE_KEY_PATTERN.test(key)) return null;
+  if (typeof width !== 'number' || typeof height !== 'number') return null;
   if (!Number.isInteger(width) || !Number.isInteger(height)) return null;
-  const w = width as number;
-  const h = height as number;
-  if (w < 1 || h < 1 || w > MAX_LINK_PREVIEW_IMAGE_SIDE || h > MAX_LINK_PREVIEW_IMAGE_SIDE) return null;
-  return { key, width: w, height: h };
+  if (width < 1 || height < 1 || width > MAX_LINK_PREVIEW_IMAGE_SIDE || height > MAX_LINK_PREVIEW_IMAGE_SIDE)
+    return null;
+  return { key, width, height };
 }
 
 export function normalizeLinkPreview(value: unknown): LinkPreview | null {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const input = value as Record<string, unknown>;
+  if (!isRecord(value)) return null;
+  const input = value;
   const url = typeof input.url === 'string' ? toPreviewUrl(input.url) : null;
   if (!url) return null;
   const title = cleanText(input.title, MAX_LINK_PREVIEW_TITLE);

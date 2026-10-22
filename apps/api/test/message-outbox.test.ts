@@ -13,6 +13,7 @@ import {
 import { transaction } from '../src/platform/db/pool.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 const skip = !process.env.TEST_DATABASE_URL;
@@ -173,7 +174,7 @@ test('a replica that lost its listener reads what was delivered since, oldest fi
   await outbox.markDelivered('event-after-1', held);
   await outbox.markDelivered('event-after-2', held);
 
-  const missed = await outbox.listDeliveredSince(rows[0]!.now);
+  const missed = await outbox.listDeliveredSince(defined(rows[0], 'the database clock').now);
   assert.deepEqual(
     missed.map((event) => event.messageId),
     ['after-1', 'after-2']

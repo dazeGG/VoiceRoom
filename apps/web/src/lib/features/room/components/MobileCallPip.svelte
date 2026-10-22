@@ -49,7 +49,10 @@
   function handlePointerMove(event: PointerEvent): void {
     if (!start) return;
     // A mouse let go outside the box never sent its pointerup here.
-    if (event.pointerType === 'mouse' && event.buttons === 0) return handlePointerCancel();
+    if (event.pointerType === 'mouse' && event.buttons === 0) {
+      handlePointerCancel();
+      return;
+    }
     const x = event.clientX - start.x;
     const y = event.clientY - start.y;
     if (!dragging && Math.hypot(x, y) <= DRAG_THRESHOLD_PX) return;
@@ -89,16 +92,15 @@
 
   // Dragging is for fingers; the tile inside stays a button for everyone.
   function followDrag(node: HTMLElement): () => void {
-    const listeners = {
-      pointerdown: handlePointerDown,
-      pointermove: handlePointerMove,
-      pointerup: handlePointerUp,
-      pointercancel: handlePointerCancel
-    } as const;
-    for (const [type, listener] of Object.entries(listeners)) node.addEventListener(type, listener as EventListener);
+    node.addEventListener('pointerdown', handlePointerDown);
+    node.addEventListener('pointermove', handlePointerMove);
+    node.addEventListener('pointerup', handlePointerUp);
+    node.addEventListener('pointercancel', handlePointerCancel);
     return () => {
-      for (const [type, listener] of Object.entries(listeners))
-        node.removeEventListener(type, listener as EventListener);
+      node.removeEventListener('pointerdown', handlePointerDown);
+      node.removeEventListener('pointermove', handlePointerMove);
+      node.removeEventListener('pointerup', handlePointerUp);
+      node.removeEventListener('pointercancel', handlePointerCancel);
     };
   }
 

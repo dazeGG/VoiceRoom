@@ -6,4 +6,6 @@ export interface ChartSeries {
   values: readonly (number | null)[];
   /** A colour token, e.g. 'var(--vr-accent)'. */
   color: string;
+  /** A dashed line: a limit (the whole capacity) rather than a measurement. */
+  dashed?: boolean | undefined;
 }

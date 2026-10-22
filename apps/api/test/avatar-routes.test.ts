@@ -10,6 +10,10 @@ import { createAvatarStorage } from '../src/lib/avatar-storage.ts';
 import type { StoreOverrides } from '../src/app/service-registry.ts';
 import { dbRoom, storedUser, userSession } from './fakes/index.ts';
 import type { StoredUser } from '../src/domains/account/user-records.ts';
+import { SignedIn } from '@voice-room/shared/contracts/account';
+import { RoomCard } from '@voice-room/shared/contracts/rooms';
+import { checked } from './helpers/checked.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 const OWNER_ID = '123e4567-e89b-12d3-a456-426614174000';
 const OTHER_ID = '123e4567-e89b-12d3-a456-426614174001';
@@ -171,12 +175,13 @@ test('avatar routes authorize, normalize, replace, serve, and delete user and ro
     ...multipart(redPng)
   });
   assert.equal(first.statusCode, 200, first.body);
-  const firstBody = first.json();
-  assert.match(firstBody.user.avatarUrl, /^\/api\/avatars\/av_/);
-  assert.match(firstBody.user.avatarAccent, /^#[0-9a-f]{6}$/i);
-  const firstKey = path.basename(firstBody.user.avatarUrl);
+  const firstUser = checked(SignedIn, first.json(), 'the first upload answer').user;
+  const firstUrl = defined(firstUser.avatarUrl, 'the avatar url');
+  assert.match(firstUrl, /^\/api\/avatars\/av_/);
+  assert.match(defined(firstUser.avatarAccent, 'the avatar accent'), /^#[0-9a-f]{6}$/i);
+  const firstKey = path.basename(firstUrl);
 
-  const served = await app.inject({ method: 'GET', url: firstBody.user.avatarUrl });
+  const served = await app.inject({ method: 'GET', url: firstUrl });
   assert.equal(served.statusCode, 200);
   assert.equal(served.headers['content-type'], 'image/webp');
   assert.equal(served.headers['cache-control'], 'public, max-age=31536000, immutable');
@@ -198,13 +203,15 @@ test('avatar routes authorize, normalize, replace, serve, and delete user and ro
     ...multipart(bluePng)
   });
   assert.equal(replacement.statusCode, 200, replacement.body);
-  assert.notEqual(path.basename(replacement.json().user.avatarUrl), firstKey);
+  const replacedUrl = checked(SignedIn, replacement.json(), 'the replacement answer').user.avatarUrl;
+  assert.notEqual(path.basename(defined(replacedUrl, 'the replaced avatar url')), firstKey);
   await assert.rejects(fs.promises.access(path.join(uploadsDir, firstKey)), { code: 'ENOENT' });
 
   const removed = await app.inject({ method: 'DELETE', url: '/api/auth/avatar', ...cookie('owner-token') });
   assert.equal(removed.statusCode, 200);
-  assert.equal(removed.json().user.avatarUrl, null);
-  assert.equal(removed.json().user.avatarAccent, null);
+  const removedUser = checked(SignedIn, removed.json(), 'the removal answer').user;
+  assert.equal(removedUser.avatarUrl, null);
+  assert.equal(removedUser.avatarAccent, null);
   assert.equal(users.get(OWNER_ID)?.avatarKey, null);
 
   const notOwner = await app.inject({
@@ -222,7 +229,8 @@ test('avatar routes authorize, normalize, replace, serve, and delete user and ro
     ...multipart(redPng)
   });
   assert.equal(roomUpload.statusCode, 200, roomUpload.body);
-  assert.match(roomUpload.json().room.avatarUrl, /^\/api\/avatars\/room_/);
+  const roomUrl = checked(RoomCard, roomUpload.json(), 'the room upload answer').room.avatarUrl;
+  assert.match(defined(roomUrl, 'the room avatar url'), /^\/api\/avatars\/room_/);
   assert.ok(room.avatarKey);
   const firstRoomKey = room.avatarKey;
 
@@ -236,7 +244,10 @@ test('avatar routes authorize, normalize, replace, serve, and delete user and ro
   assert.notEqual(room.avatarKey, firstRoomKey);
   await assert.rejects(fs.promises.access(path.join(uploadsDir, firstRoomKey)), { code: 'ENOENT' });
 
-  const currentRoomUrl = roomReplacement.json().room.avatarUrl;
+  const currentRoomUrl = defined(
+    checked(RoomCard, roomReplacement.json(), 'the room replacement answer').room.avatarUrl,
+    'the replaced room avatar url'
+  );
   const currentRoomKey = path.basename(currentRoomUrl);
   const roomDelete = await app.inject({
     method: 'DELETE',

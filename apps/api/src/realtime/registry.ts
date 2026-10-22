@@ -1,14 +1,17 @@
 import crypto from 'node:crypto';
 import { cleanPresenceStatus } from '@voice-room/shared/validation';
-import type { PresenceStatus } from '@voice-room/shared/validation';
+import type { PresenceStatus } from '@voice-room/shared/contracts/users';
 import type { ClientKind } from '@voice-room/shared/account-security';
 import type { ServerEnvelope, TypingActivity } from '@voice-room/shared/realtime';
 import type { createTypingThrottle } from './typing-throttle.ts';
 import type { ServerEvents } from '@voice-room/shared/contracts/realtime';
 import { buildServerEnvelope, sendWsEnvelope } from './envelope.ts';
 import { toWsAccountEvent } from './account-events.ts';
+import type { BoundedMap } from '../lib/bounded-map.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
+import type { RateLimiter } from '../lib/rate-limit.ts';
+import type { Logger } from '../platform/types.ts';
 
 export type RealtimeSocket = {
   readyState: number;
@@ -43,43 +46,42 @@ export type WsConnection = {
   roomTypingThrottle?: TypingThrottle;
   dmTypingThrottle?: TypingThrottle;
   /** DM typing may check friendships only so often per window. */
-  dmTypingLookups?: { windowAt: number; spent: number };
-  dmTypingPermission?: Map<string, { allowed: boolean; checkedAt: number }>;
+  dmTypingLookups?: RateLimiter;
+  dmTypingPermission?: BoundedMap<string, { allowed: boolean; checkedAt: number }>;
 };
 type RoomTypist = { peerId: string; userId: string | null; name: string };
 type TypingThrottle = ReturnType<typeof createTypingThrottle<TypingActivity>>;
 type PresenceEntry = { inVoice: boolean; roomId: string | null; presenceStatus: string };
-type PresenceRegistry = {
-  userConnections?: Map<string, Set<WsConnection>>;
-  userPresenceStatuses: Map<string, string>;
-  getPresenceRevision?: () => number;
-};
-type PresenceRoom =
-  { updatedAt?: unknown; peers?: { values?: () => Iterable<{ accountUserId?: string | null }> } } | null | undefined;
-type RegistryLogger = { error(...args: unknown[]): void };
+/** The live roster of a room, as far as membership presence reads it. */
+type PresenceRoster = { updatedAt?: number | undefined; peers: Map<string, { accountUserId?: string | null }> };
 
 function createConnectionId(prefix: string): string {
   return `${prefix}:${Date.now()}:${crypto.randomBytes(4).toString('hex')}`;
 }
 
+/** Where each account with an open socket is (in this room's call or elsewhere), plus the room's own roster. */
 function buildRoomMembershipPresenceSnapshot(
   roomId: string,
-  room: PresenceRoom,
-  registry: PresenceRegistry | null | undefined
+  room: PresenceRoster | undefined,
+  sockets: {
+    userConnections: Map<string, Set<WsConnection>>;
+    userPresenceStatuses: Map<string, string>;
+    presenceRevision: number;
+  }
 ) {
   const byUserId = new Map<string, PresenceEntry[]>();
-  for (const [userId, userConnections] of registry?.userConnections || []) {
+  for (const [userId, userConnections] of sockets.userConnections) {
     const entries: PresenceEntry[] = [];
     for (const connection of userConnections) {
       entries.push({
         inVoice: connection.activeVoice?.roomId === roomId,
         roomId: connection.activeVoice?.roomId || null,
-        presenceStatus: connection.presenceStatus || registry!.userPresenceStatuses.get(userId) || 'online'
+        presenceStatus: connection.presenceStatus || sockets.userPresenceStatuses.get(userId) || 'online'
       });
     }
     if (entries.length) byUserId.set(userId, entries);
   }
-  for (const peer of room?.peers?.values?.() || []) {
+  for (const peer of room?.peers.values() || []) {
     if (!peer.accountUserId) continue;
     const entries = byUserId.get(peer.accountUserId) || [];
     entries.push({ inVoice: true, roomId, presenceStatus: 'online' });
@@ -87,7 +89,7 @@ function buildRoomMembershipPresenceSnapshot(
   }
   return {
     byUserId,
-    revision: Math.max(Number(room?.updatedAt) || 0, registry?.getPresenceRevision?.() || 0)
+    revision: Math.max(room?.updatedAt || 0, sockets.presenceRevision)
   };
 }
 
@@ -106,7 +108,7 @@ function createConnectionRegistry({
   onPresenceChange?: ((friendId: string, userId: string, online: boolean) => void) | null;
   onConnectionClose?: ((connection: WsConnection) => void) | null;
   getFriendIds: (userId: string) => Promise<string[]>;
-  logger?: RegistryLogger;
+  logger?: Pick<Logger, 'error'>;
 }) {
   const userConnections = new Map<string, Set<WsConnection>>();
   const userPresenceStatuses = new Map<string, PresenceStatus>();
@@ -140,7 +142,7 @@ function createConnectionRegistry({
       id: createConnectionId(userId || 'guest'),
       userId: userId || null,
       guest: !userId,
-      authSessionHash: userId ? String(authSessionHash || '') : '',
+      authSessionHash: userId && typeof authSessionHash === 'string' ? authSessionHash : '',
       clientIp: clientIp || '',
       client: null,
       guestIp: null,
@@ -200,7 +202,7 @@ function createConnectionRegistry({
 
   async function notifyFriendsPresence(userId: string, online: boolean): Promise<void> {
     if (!onPresenceChange || !userId) return;
-    let friendIds: string[] = [];
+    let friendIds: string[];
     try {
       friendIds = await getFriendIds(userId);
     } catch (error) {
@@ -211,7 +213,7 @@ function createConnectionRegistry({
       return;
     }
     for (const friendId of friendIds) {
-      onPresenceChange!(friendId, userId, online);
+      onPresenceChange(friendId, userId, online);
     }
   }
 
@@ -342,6 +344,36 @@ function createConnectionRegistry({
     return roomDetailConnections.get(roomId) || new Set<WsConnection>();
   }
 
+  // A voice seat that ended without its socket: every socket still holding it
+  // leaves the room's call and stops following the room.
+  function detachVoicePeer(roomId: string, peerId: string): void {
+    for (const connection of connections.values()) {
+      if (connection.activeVoice?.roomId !== roomId || connection.activeVoice.peerId !== peerId) continue;
+      connection.activeVoice = null;
+      connection.previewRoomIds.delete(roomId);
+      unregisterConnectionForRoom(connection, roomId);
+    }
+  }
+
+  /** The open sockets, the guests among them, and the account behind each signed-in one. */
+  function stats(): { sockets: number; guests: number; accountIds: string[] } {
+    let guests = 0;
+    const accountIds: string[] = [];
+    for (const connection of connections.values()) {
+      if (connection.guest) guests += 1;
+      if (connection.userId) accountIds.push(connection.userId);
+    }
+    return { sockets: connections.size, guests, accountIds };
+  }
+
+  function presenceSnapshot(roomId: string, room: PresenceRoster | undefined) {
+    return buildRoomMembershipPresenceSnapshot(roomId, room, {
+      userConnections,
+      userPresenceStatuses,
+      presenceRevision
+    });
+  }
+
   function touch(connection: WsConnection): void {
     connection.lastHeartbeatAt = Date.now();
   }
@@ -361,7 +393,11 @@ function createConnectionRegistry({
     );
   }
 
-  function closeConnections(targets: Iterable<WsConnection>, code = 4401, reason = 'Session revoked'): void {
+  function closeConnections(
+    targets: Iterable<WsConnection, unknown, unknown>,
+    code = 4401,
+    reason = 'Session revoked'
+  ): void {
     for (const connection of targets) {
       try {
         connection.socket.close(code, reason);
@@ -392,13 +428,15 @@ function createConnectionRegistry({
   return {
     addConnection,
     addGuestConnection,
+    /** Every open socket, for shutdown. */
+    allConnections: () => connections.values(),
     broadcastAccountEvent,
     closeConnections,
     connectionCount,
-    connections,
+    detachVoicePeer,
     findAccountConnections,
-    getPresenceRevision: () => presenceRevision,
     isUserOnline,
+    presenceSnapshot,
     removeConnection,
     registerConnectionForRoom,
     rejectGuestOverLimit,
@@ -408,15 +446,14 @@ function createConnectionRegistry({
     sendToConnection,
     sendToUser,
     setUserPresenceStatus,
+    stats,
     touch,
     pruneStale,
     unregisterConnectionForRoom,
-    unregisterConnectionFromAllRooms,
-    userConnections,
-    userPresenceStatuses
+    unregisterConnectionFromAllRooms
   };
 }
 
 export type ConnectionRegistry = ReturnType<typeof createConnectionRegistry>;
 
-export { buildRoomMembershipPresenceSnapshot, createConnectionRegistry };
+export { createConnectionRegistry };

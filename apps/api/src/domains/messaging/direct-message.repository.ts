@@ -1,45 +1,31 @@
 import type { DmThreadRepository } from './dm-thread.repository.ts';
 
-type StoreMethod = (...args: unknown[]) => unknown;
-type Store = Record<string, unknown>;
+export type DirectMessageRepository = Readonly<
+  Pick<
+    DmThreadRepository,
+    | 'editMessage'
+    | 'expirePendingInvites'
+    | 'getMessage'
+    | 'listThread'
+    | 'markRead'
+    | 'respondInvite'
+    | 'sendMessage'
+    | 'softDeleteMessage'
+  >
+>;
 
-const METHODS = [
-  'editMessage',
-  'expirePendingInvites',
-  'getMessage',
-  'listThread',
-  'markRead',
-  'respondInvite',
-  'sendMessage',
-  'softDeleteMessage'
-] as const;
-
-export type DirectMessageRepository = Readonly<Pick<DmThreadRepository, (typeof METHODS)[number]>>;
-
-function requireMethod(store: Store | null | undefined, name: string): StoreMethod {
-  if (!store || typeof store[name] !== 'function') {
-    throw new TypeError(`Direct message store must implement ${name}()`);
-  }
-  return (store[name] as StoreMethod).bind(store);
-}
-
-function createDirectMessageRepository({
-  store
-}: { store?: Store | DmThreadRepository | null } = {}): DirectMessageRepository {
-  if (!store) throw new TypeError('Direct message repository requires a store');
-  // Each method forwards to the store's, checked when first called.
-  const delegate = <Name extends keyof DirectMessageRepository>(name: Name): DirectMessageRepository[Name] =>
-    ((...args: unknown[]) => requireMethod(store as Store, name)(...args)) as DirectMessageRepository[Name];
-
+function createDirectMessageRepository({ store }: { store: DirectMessageRepository }): DirectMessageRepository {
+  // Each method forwards to the store's when called, so a test store that
+  // lacks one fails only where the test reaches it.
   return Object.freeze({
-    editMessage: delegate('editMessage'),
-    expirePendingInvites: delegate('expirePendingInvites'),
-    getMessage: delegate('getMessage'),
-    listThread: delegate('listThread'),
-    markRead: delegate('markRead'),
-    respondInvite: delegate('respondInvite'),
-    sendMessage: delegate('sendMessage'),
-    softDeleteMessage: delegate('softDeleteMessage')
+    editMessage: (...args) => store.editMessage(...args),
+    expirePendingInvites: (...args) => store.expirePendingInvites(...args),
+    getMessage: (...args) => store.getMessage(...args),
+    listThread: (...args) => store.listThread(...args),
+    markRead: (...args) => store.markRead(...args),
+    respondInvite: (...args) => store.respondInvite(...args),
+    sendMessage: (...args) => store.sendMessage(...args),
+    softDeleteMessage: (...args) => store.softDeleteMessage(...args)
   });
 }
 

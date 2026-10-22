@@ -9,8 +9,21 @@ afterEach(cleanup);
 
 test('a phone starts a temporary guest room and opens it', async () => {
   const { calls } = stubFetch({
-    '/api/pow-challenge': { body: { required: false } },
-    'POST /api/rooms': { status: 201, body: { ok: true, roomId: 'tmp123' } }
+    '/api/pow-challenge': { body: { ok: true, required: false } },
+    'POST /api/rooms': {
+      status: 201,
+      body: {
+        ok: true,
+        roomId: 'tmp123',
+        name: '',
+        avatarUrl: null,
+        createdAt: 1,
+        isStatic: false,
+        maxRooms: 10,
+        maxRoomPeers: 25,
+        owned: false
+      }
+    }
   });
   const location = { href: 'https://voiceroom.ru/' };
   stubWindow({ location });
@@ -22,7 +35,7 @@ test('a phone starts a temporary guest room and opens it', async () => {
 
 test('a failed create is reported and the button works again', async () => {
   stubFetch({
-    '/api/pow-challenge': { body: { required: false } },
+    '/api/pow-challenge': { body: { ok: true, required: false } },
     'POST /api/rooms': { status: 503, body: { ok: false, error: 'Room capacity is temporarily full' } }
   });
   const onToast = vi.fn();

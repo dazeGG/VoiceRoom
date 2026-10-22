@@ -5,7 +5,7 @@
   import { Avatar, Button } from '$lib/shared/ui';
   import { iconMd, iconSm, iconXs } from '$lib/shared/ui/icons';
   import { copyText } from '$lib/shared/utils/clipboard';
-  import { friendName } from '../../model/lobby-format';
+  import { displayNameOf } from '$lib/shared/utils/display-name';
   import { useLobby } from '$lib/features/home/model/lobby-context';
 
   const lobby = useLobby();
@@ -142,14 +142,14 @@
         {#each incoming as request (request.id)}
           <div class="lr-req-card lr-req-card--incoming">
             <Avatar
-              name={friendName(request.user)}
+              name={displayNameOf(request.user)}
               src={request.user.avatarUrl}
               colorKey={request.user.avatarColorKey}
               background={request.user.avatarAccent || undefined}
               size={44}
             />
             <div class="people-request-copy">
-              <div class="lr-req-name people-truncate"><EmojiText text={friendName(request.user)} /></div>
+              <div class="lr-req-name people-truncate"><EmojiText text={displayNameOf(request.user)} /></div>
               <div class="lr-req-handle people-truncate">@{request.user.login}</div>
               <div class="lr-req-meta people-truncate">{mutualLabel(request.mutualFriends)}</div>
             </div>
@@ -188,14 +188,14 @@
         {#each outgoing as request (request.id)}
           <div class="lr-req-card">
             <Avatar
-              name={friendName(request.user)}
+              name={displayNameOf(request.user)}
               src={request.user.avatarUrl}
               colorKey={request.user.avatarColorKey}
               background={request.user.avatarAccent || undefined}
               size={44}
             />
             <div class="people-request-copy">
-              <div class="lr-req-name people-truncate"><EmojiText text={friendName(request.user)} /></div>
+              <div class="lr-req-name people-truncate"><EmojiText text={displayNameOf(request.user)} /></div>
               <div class="lr-req-handle people-truncate">@{request.user.login}</div>
               <div class="lr-req-pending"><span class="lr-req-pending-dot"></span>заявка отправлена · ждём ответа</div>
             </div>

@@ -1,6 +1,8 @@
 // A controllable WebSocket for tests of the realtime client.
 
 import { vi } from 'vitest';
+import { Type } from 'typebox';
+import { parse } from '../helpers/assert.ts';
 
 export class FakeWebSocket {
   static CONNECTING = 0;
@@ -21,7 +23,7 @@ export class FakeWebSocket {
   }
 
   send(frame: string): void {
-    this.sent.push(JSON.parse(frame) as { type: string; payload: unknown });
+    this.sent.push(parse(Type.Object({ type: Type.String(), payload: Type.Unknown() }), JSON.parse(frame)));
   }
 
   /** A connection whose network is gone: closing it never completes. */

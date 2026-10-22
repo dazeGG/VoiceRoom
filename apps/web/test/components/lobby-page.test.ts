@@ -12,6 +12,7 @@ import { stubFetch } from '../fixtures/fetch.ts';
 import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';
 import { stubMatchMedia } from '../helpers/match-media.ts';
+import { defined } from '../helpers/assert.ts';
 import { state as roomClientState } from '../../src/lib/features/room/client/core/state.svelte';
 import { voiceSession } from '../../src/lib/features/room/voice-session.svelte';
 import type { ToastOptions } from '../../src/lib/features/home/model/toasts.svelte';
@@ -148,13 +149,19 @@ test('a new report reaches staff as a notice that stays until closed and opens t
     payload: { openReports: 1, filed: { reason: 'spam', targetKind: 'room_message', roomName: 'Кухня' } }
   });
   await vi.waitFor(() => expect(onToast).toHaveBeenCalledWith('Новая жалоба', expect.anything()));
-  const options = onToast.mock.calls.find(([message]) => message === 'Новая жалоба')?.[1];
+  const options = defined(
+    defined(
+      onToast.mock.calls.find(([message]) => message === 'Новая жалоба'),
+      'report notice'
+    )[1],
+    'notice options'
+  );
   expect(options).toMatchObject({ duration: 0, description: 'Спам или реклама · комната «Кухня»' });
   expect(
     within(screen.getByRole('button', { name: 'Открыть админку' })).getByLabelText('открытых жалоб: 1')
   ).toBeTruthy();
 
-  options?.actions?.[0]?.onClick('toast-1');
+  defined(defined(options.actions, 'notice actions')[0], 'the notice action').onClick('toast-1');
   expect(opened).toHaveBeenCalledWith('https://admin.example.test/reports', '_blank', 'noopener');
   opened.mockRestore();
 

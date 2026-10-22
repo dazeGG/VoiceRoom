@@ -23,6 +23,8 @@ import { copyFile, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promi
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Type } from 'typebox';
+import { Value } from 'typebox/value';
 
 import { listReactionEmojis } from '@voice-room/shared/emoji';
 
@@ -33,12 +35,16 @@ const defaultCatalogueFile = join(webRoot, 'src', 'lib', 'shared', 'chat', 'emoj
 const ARTWORK_PACKAGE = '@discordapp/twemoji';
 const packageRoot = join(dirname(require.resolve(`${ARTWORK_PACKAGE}/package.json`)), 'dist', 'svg');
 const graphicsLicenceFile = join(dirname(fileURLToPath(import.meta.url)), 'emoji-artwork-LICENSE.txt');
-const { version } = require(`${ARTWORK_PACKAGE}/package.json`) as { version: string };
+const artworkManifest: unknown = require(`${ARTWORK_PACKAGE}/package.json`);
+if (!Value.Check(Type.Object({ version: Type.String() }), artworkManifest)) {
+  throw new Error(`${ARTWORK_PACKAGE}/package.json has no version`);
+}
+const { version } = artworkManifest;
 
 /** Our canonical asset name: every code point of the sequence, upper-case hex. */
 export function assetName(sequence: string) {
-  return [...sequence]
-    .map((character) => character.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0'))
+  return Array.from(sequence)
+    .map((character) => (character.codePointAt(0) ?? 0).toString(16).toUpperCase().padStart(4, '0'))
     .join('-');
 }
 
@@ -60,8 +66,8 @@ export async function planEmojiAssets() {
       ])
   );
 
-  const missing = [];
-  const copies = [];
+  const missing: string[] = [];
+  const copies: Array<{ emoji: string; source: string; name: string }> = [];
   for (const emoji of corpus) {
     const name = assetName(emoji);
     // Twemoji usually drops the emoji-presentation selector from its filenames;

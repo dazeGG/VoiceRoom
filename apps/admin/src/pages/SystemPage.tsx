@@ -1,5 +1,6 @@
 // The server minute by minute, as the API recorded it: processor, memory,
-// disk, database, the API process, live connections and requests.
+// disk, database, the API process, live connections and requests; the latest
+// minute as a strip of numbers over the charts.
 
 import { useEffect, useState } from 'react';
 import type { SystemSample, SystemStats } from '@voice-room/shared/contracts/admin';
@@ -10,6 +11,7 @@ import { loadFailure, type LoadFailure } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { SYSTEM_PRESETS, systemQuery, type TimeRange } from '../time-range.ts';
 import { TimeRangePicker } from '../TimeRangePicker.tsx';
+import { Stat, Stats, type Tone } from '../ui/index.tsx';
 import './SystemPage.css';
 
 const GB = 1024 ** 3;
@@ -19,6 +21,16 @@ const DAY = 24 * 60 * 60 * 1000;
 const gb = (value: number) => `${value.toFixed(1)} ГБ`;
 const mb = (value: number) => `${Math.round(value)} МБ`;
 const wholePercent = (value: number) => `${Math.round(value)}%`;
+
+function share(used: number | null, total: number | null): number | null {
+  return used !== null && total ? (used / total) * 100 : null;
+}
+
+/** A share's status: green under 70%, amber under 90%, red above; grey when not measured. */
+function toneOf(value: number | null): Tone {
+  if (value === null) return 'neutral';
+  return value < 70 ? 'success' : value < 90 ? 'warning' : 'danger';
+}
 
 export function SystemPage() {
   const [range, setRange] = useState<TimeRange>({ kind: 'preset', id: '24h' });
@@ -60,12 +72,13 @@ export function SystemPage() {
 
   const resolved = stats ? { from: stats.from, to: stats.to } : null;
 
-  const toolbar = (
-    <div className="system-toolbar">
+  const picker = (
+    <>
       <TimeRangePicker value={range} presets={SYSTEM_PRESETS} withTime onChange={change} resolved={resolved} />
       {loading && stats ? <span className="system-quiet">Обновляем…</span> : null}
-    </div>
+    </>
   );
+  const toolbar = <div className="ui-toolbar">{picker}</div>;
 
   if (failure && !stats) {
     return (
@@ -110,13 +123,41 @@ export function SystemPage() {
 
   return (
     <>
-      {toolbar}
+      <div className="ui-toolbar">
+        {picker}
+        <span className="ui-toolbar-note">{bucketNote}</span>
+      </div>
       {latest ? (
-        <p className="system-quiet">
-          {`Сейчас: процессор ${formatPercent(latest.cpuPct)}, память ${formatBytes(latest.memUsedBytes)} из ${formatBytes(latest.memTotalBytes)}, диск ${formatBytes(latest.diskUsedBytes)} из ${formatBytes(latest.diskTotalBytes)}, база ${formatBytes(latest.dbBytes)}. ${bucketNote}`}
-        </p>
+        <Stats label="Сейчас" min={160}>
+          <Stat
+            label="Процессор"
+            value={formatPercent(latest.cpuPct)}
+            dot={toneOf(latest.cpuPct)}
+            note={`нагрузка ${latest.load1.toFixed(2)}`}
+          />
+          <Stat
+            label="Память"
+            value={formatPercent(share(latest.memUsedBytes, latest.memTotalBytes))}
+            dot={toneOf(share(latest.memUsedBytes, latest.memTotalBytes))}
+            note={`${formatBytes(latest.memUsedBytes)} из ${formatBytes(latest.memTotalBytes)}`}
+          />
+          <Stat
+            label="Диск"
+            value={formatPercent(share(latest.diskUsedBytes, latest.diskTotalBytes))}
+            dot={toneOf(share(latest.diskUsedBytes, latest.diskTotalBytes))}
+            note={`${formatBytes(latest.diskUsedBytes)} из ${formatBytes(latest.diskTotalBytes)}`}
+          />
+          <Stat label="База" value={formatBytes(latest.dbBytes)} dot="neutral" note="размер на диске" />
+          <Stat label="Процесс API" value={formatBytes(latest.apiRssBytes)} dot="neutral" note="память процесса" />
+          <Stat
+            label="Средний ответ"
+            value={formatMs(latest.httpAvgMs)}
+            dot="neutral"
+            note={`задержка цикла ${formatMs(latest.eventLoopP99Ms)}`}
+          />
+        </Stats>
       ) : null}
-      <div className="system-charts">
+      <div className="ui-grid" style={{ '--grid-min': '480px' }}>
         <TimeChart
           title="Процессор"
           labels={labels}
@@ -130,7 +171,12 @@ export function SystemPage() {
           format={gb}
           series={[
             { name: 'Занято', values: scaled((sample) => sample.memUsedBytes, GB), color: 'var(--vr-accent)' },
-            { name: 'Всего', values: scaled((sample) => sample.memTotalBytes, GB), color: 'var(--vr-text-3)' }
+            {
+              name: 'Всего',
+              values: scaled((sample) => sample.memTotalBytes, GB),
+              color: 'var(--vr-text-3)',
+              dashed: true
+            }
           ]}
         />
         <TimeChart
@@ -139,7 +185,12 @@ export function SystemPage() {
           format={gb}
           series={[
             { name: 'Занято', values: scaled((sample) => sample.diskUsedBytes, GB), color: 'var(--vr-warning)' },
-            { name: 'Всего', values: scaled((sample) => sample.diskTotalBytes, GB), color: 'var(--vr-text-3)' }
+            {
+              name: 'Всего',
+              values: scaled((sample) => sample.diskTotalBytes, GB),
+              color: 'var(--vr-text-3)',
+              dashed: true
+            }
           ]}
         />
         <TimeChart

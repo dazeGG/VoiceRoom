@@ -1,15 +1,18 @@
-import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { fromMicros, microsOf } from '../../platform/db/micros.ts';
-import type { ActiveBan, ActiveBanProfile } from '@voice-room/shared/moderation';
+import { insertRoomBan } from './active-ban.repository.ts';
+import { CursorCodecError } from '../../platform/cursor-codec.ts';
+import type { CursorTuple } from '../../platform/cursor-codec.ts';
+import { epochMillis } from '../../platform/epoch-millis.ts';
+import { avatarUrl } from '../../lib/avatar-url.ts';
+import type { Ban, BanProfile } from '@voice-room/shared/contracts/moderation';
 import { storedIpKey, type IpKeyOf } from '../../lib/ip-key.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 type Client = QueryClient | null | undefined;
 type TimeInput = Date | number | string;
-type CursorTuple = { createdAtMicros: string; id: string };
 
 export interface ModerationCursorCodec {
   encode(input: { purpose: string; context: string; tuple: CursorTuple }): string;
@@ -32,37 +35,28 @@ export type ModerationBanRow = {
   avatar_accent?: string | null;
 };
 
-export type ModerationBan = Omit<ActiveBan, 'createdAt' | 'updatedAt'> & {
-  createdAt: number | null;
-  updatedAt: number | null;
-};
-
 function asDate(value: unknown): Date {
   if (value instanceof Date) return value;
   const number = Number(value);
   return new Date(Number.isFinite(number) ? number : Date.now());
 }
 
-function toMillis(value: unknown): number | null {
-  if (value instanceof Date) return value.getTime();
-  const parsed = Date.parse(value as string);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
 // Only the active list joins users, so rows from mutations carry no login and
 // project no profile.
-function mapBanProfile(row: ModerationBanRow): ActiveBanProfile | null {
+function mapBanProfile(row: ModerationBanRow): BanProfile | null {
   if (!row.user_id || !row.login) return null;
   return {
     displayName: row.display_name || '',
     login: row.login,
-    avatarUrl: row.avatar_key ? `/api/avatars/${encodeURIComponent(row.avatar_key)}` : null,
-    avatarColorKey: row.avatar_color_key || '',
+    avatarUrl: avatarUrl(row.avatar_key),
+    avatarColorKey: row.avatar_color_key || 'blurple',
     avatarAccent: row.avatar_accent || null
   };
 }
 
-function mapModerationBan(row: ModerationBanRow | null | undefined): ModerationBan | null {
+function mapModerationBan(row: ModerationBanRow): Ban;
+function mapModerationBan(row: ModerationBanRow | null | undefined): Ban | null;
+function mapModerationBan(row: ModerationBanRow | null | undefined): Ban | null {
   if (!row) return null;
   const profile = mapBanProfile(row);
   return {
@@ -74,9 +68,9 @@ function mapModerationBan(row: ModerationBanRow | null | undefined): ModerationB
       ...(profile ? { profile } : {})
     },
     reason: row.reason || '',
-    createdAt: toMillis(row.created_at),
-    updatedAt: toMillis(row.updated_at || row.created_at),
-    expiresAt: row.expires_at ? toMillis(row.expires_at) : null
+    createdAt: epochMillis(row.created_at),
+    updatedAt: epochMillis(row.updated_at || row.created_at),
+    expiresAt: row.expires_at ? epochMillis(row.expires_at) : null
   };
 }
 
@@ -98,7 +92,7 @@ function createModerationRepository({
   /** The stored form of a guest's address; '' when it is not one. */
   const guestKey = (guestIp: string | null | undefined): string => storedIpKey(ipKeyOf, guestIp);
   const on = (client: Client): Database => kyselyOn(client?.query ? client : base);
-  const bans = (row: unknown) => mapModerationBan(row as ModerationBanRow | undefined);
+  const bans = (row: ModerationBanRow | undefined) => mapModerationBan(row);
 
   function encodeCursor(roomId: string, row: ModerationBanRow | undefined): string | undefined {
     if (!row?.created_at || !row?.id) return undefined;
@@ -162,7 +156,7 @@ function createModerationRepository({
     roomId: string,
     idempotencyKey: string,
     { client }: { client?: Client } = {}
-  ): Promise<ModerationBan | null> {
+  ): Promise<Ban | null> {
     if (!roomId || !idempotencyKey) return null;
     const row = await on(client)
       .selectFrom('room_bans')
@@ -201,7 +195,7 @@ function createModerationRepository({
       .limit(1)
       .forUpdate()
       .executeTakeFirst();
-    return (row as ModerationBanRow | undefined) || null;
+    return row || null;
   }
 
   async function create({
@@ -217,30 +211,21 @@ function createModerationRepository({
     roomId: string;
     userId?: string | null;
     guestIp?: string | null;
-    expiresAt?: TimeInput | null;
+    expiresAt?: TimeInput | null | undefined;
     reason?: string;
     idempotencyKey: string;
     at?: TimeInput;
     client?: Client;
-  }): Promise<ModerationBan | null> {
-    const timestamp = asDate(at);
-    const row = await on(client)
-      .insertInto('room_bans')
-      .values({
-        id: crypto.randomUUID(),
-        room_id: roomId,
-        user_id: userId,
-        // The service refuses a guest ban whose address has no key.
-        ip: userId ? '' : guestKey(guestIp),
-        created_at: timestamp,
-        expires_at: expiresAt == null ? null : asDate(expiresAt),
-        metadata: '{}',
-        reason,
-        idempotency_key: idempotencyKey,
-        updated_at: timestamp
-      })
-      .returningAll()
-      .executeTakeFirst();
+  }): Promise<Ban | null> {
+    const row = await insertRoomBan(on(client), {
+      roomId,
+      userId,
+      ip: userId ? '' : guestKey(guestIp),
+      expiresAt,
+      reason,
+      idempotencyKey,
+      at
+    });
     return bans(row);
   }
 
@@ -258,7 +243,7 @@ function createModerationRepository({
     idempotencyKey: string;
     at?: TimeInput;
     client?: Client;
-  }): Promise<ModerationBan | null> {
+  }): Promise<Ban | null> {
     const row = await on(client)
       .updateTable('room_bans')
       .set({
@@ -284,16 +269,14 @@ function createModerationRepository({
     client
   }: {
     roomId: string;
-    cursor?: string | null;
+    cursor?: string | null | undefined;
     limit?: number;
     at?: TimeInput;
     client?: Client;
-  }): Promise<{ bans: ModerationBan[]; hasMore: boolean; nextCursor: string | undefined }> {
+  }): Promise<{ bans: Ban[]; hasMore: boolean; nextCursor: string | undefined }> {
     const after = cursor ? decodeCursor(roomId, cursor) : null;
     if (cursor && !after) {
-      const error = new Error('Invalid moderation cursor') as Error & { code?: string };
-      error.code = 'invalid_cursor';
-      throw error;
+      throw new CursorCodecError('Invalid moderation cursor');
     }
     let query = activeBans(on(client), roomId, at)
       .leftJoin('users as u', 'u.id', 'rb.user_id')
@@ -311,15 +294,15 @@ function createModerationRepository({
         sql<boolean>`(rb.created_at, rb.id) < (${fromMicros(after.createdAtMicros)}, ${after.id}::varchar(36))`
       );
     }
-    const found = (await query
+    const found = await query
       .orderBy('rb.created_at', 'desc')
       .orderBy('rb.id', 'desc')
       .limit(limit + 1)
-      .execute()) as ModerationBanRow[];
+      .execute();
     const hasMore = found.length > limit;
     const rows = hasMore ? found.slice(0, limit) : found;
     return {
-      bans: rows.map((row) => bans(row) as ModerationBan),
+      bans: rows.map((row) => mapModerationBan(row)),
       hasMore,
       nextCursor: hasMore ? encodeCursor(roomId, rows.at(-1)) : undefined
     };
@@ -336,7 +319,7 @@ function createModerationRepository({
     banId: string;
     at?: TimeInput;
     client?: Client;
-  }): Promise<{ ban: ModerationBan | null; found: boolean }> {
+  }): Promise<{ ban: Ban | null; found: boolean }> {
     const timestamp = asDate(at);
     const row = await on(client)
       .updateTable('room_bans')

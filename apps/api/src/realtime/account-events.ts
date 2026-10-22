@@ -10,14 +10,14 @@ type Tagged<Type extends string, Fields> = { type: Type } & Fields;
 
 export type AccountMessage =
   | Tagged<'presence', ServerEvents['friend.presence']>
-  | Tagged<'friend-request', Record<never, never>>
+  | { type: 'friend-request' }
   | Tagged<'friend-accepted' | 'friend-removed', { userId: string }>
   | Tagged<'ring.incoming', ServerEvents['ring.incoming']>
   | Tagged<'user-updated', ServerEvents['friend.updated']>
   | Tagged<'notification-settings-updated', ServerEvents['notification.settings.updated']>
-  | Tagged<'dm-message' | 'dm.message.edited' | 'dm-message-edited', ServerEvents['dm.message']>
+  | Tagged<'dm-message' | 'dm.message.edited', ServerEvents['dm.message']>
   | Tagged<'dm-read', ServerEvents['dm.read']>
-  | Tagged<'dm.message.deleted' | 'dm-message-deleted', ServerEvents['dm.message.deleted']>
+  | Tagged<'dm.message.deleted', ServerEvents['dm.message.deleted']>
   | Tagged<'notification.dm.message', ServerEvents['notification.dm.message']>
   | Tagged<'notification.room.message', ServerEvents['notification.room.message']>
   | Tagged<'notification.friend.request', ServerEvents['notification.friend.request']>
@@ -77,24 +77,25 @@ function toWsAccountEvent(message: AccountMessage): ServerEnvelope {
       return buildServerEnvelope('notification.friend.accepted', {
         dedupeKey: message.dedupeKey,
         user: message.user,
-        context: message.context
+        ...(message.context === undefined ? {} : { context: message.context })
       });
     case 'dm-read':
       return buildServerEnvelope('dm.read', { userId: message.userId });
     case 'dm.message.deleted':
-    case 'dm-message-deleted':
       return buildServerEnvelope('dm.message.deleted', {
         messageId: message.messageId,
-        peerUserId: message.peerUserId
+        ...(message.peerUserId === undefined ? {} : { peerUserId: message.peerUserId })
       });
     case 'dm.message.edited':
-    case 'dm-message-edited':
       return buildServerEnvelope('dm.message.edited', {
         message: message.message
       });
     case 'room.kicked':
     case 'room.banned':
-      return buildServerEnvelope(message.type, { roomId: message.roomId, peerId: message.peerId });
+      return buildServerEnvelope(message.type, {
+        roomId: message.roomId,
+        ...(message.peerId === undefined ? {} : { peerId: message.peerId })
+      });
     case 'account.login.new':
       return buildServerEnvelope('account.login.new', { alert: message.alert });
     case 'account.login.resolved':

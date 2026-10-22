@@ -1,12 +1,15 @@
 import crypto from 'node:crypto';
-import { promisify } from 'node:util';
 
-const scrypt = promisify(crypto.scrypt) as (
+function scrypt(
   password: crypto.BinaryLike,
   salt: crypto.BinaryLike,
   keylen: number,
   options: crypto.ScryptOptions
-) => Promise<Buffer>;
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    crypto.scrypt(password, salt, keylen, options, (error, derived) => (error ? reject(error) : resolve(derived)));
+  });
+}
 
 // scrypt cost parameters. N must be a power of two; 2^14 keeps per-hash memory
 // (≈ 128 * N * r bytes ≈ 16 MiB) under Node's default 32 MiB scrypt budget.
@@ -36,11 +39,12 @@ async function verifyPassword(password: unknown, stored: unknown): Promise<boole
   if (typeof password !== 'string' || typeof stored !== 'string') return false;
 
   const parts = stored.split('$');
-  if (parts.length !== 6 || parts[0] !== ALGORITHM) return false;
+  const [algorithm, costText = '', blockSizeText = '', parallelizationText = '', saltText = '', hashText = ''] = parts;
+  if (parts.length !== 6 || algorithm !== ALGORITHM) return false;
 
-  const cost = Number.parseInt(parts[1] as string, 10);
-  const blockSize = Number.parseInt(parts[2] as string, 10);
-  const parallelization = Number.parseInt(parts[3] as string, 10);
+  const cost = Number.parseInt(costText, 10);
+  const blockSize = Number.parseInt(blockSizeText, 10);
+  const parallelization = Number.parseInt(parallelizationText, 10);
   if (!Number.isFinite(cost) || !Number.isFinite(blockSize) || !Number.isFinite(parallelization)) {
     return false;
   }
@@ -48,8 +52,8 @@ async function verifyPassword(password: unknown, stored: unknown): Promise<boole
   let salt: Buffer;
   let expected: Buffer;
   try {
-    salt = Buffer.from(parts[4] as string, 'base64');
-    expected = Buffer.from(parts[5] as string, 'base64');
+    salt = Buffer.from(saltText, 'base64');
+    expected = Buffer.from(hashText, 'base64');
   } catch {
     return false;
   }

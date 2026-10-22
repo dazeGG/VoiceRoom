@@ -2,18 +2,19 @@
 // @voice-room/shared/contracts/rooms, which the HTTP routes register and the
 // realtime runtime sends over the socket.
 
-import type { RoomPeerMessage } from '../../realtime/legacy-events.ts';
-import type { LobbyRoom, PublicPeer } from '@voice-room/shared/contracts/rooms';
+import type { LobbyRoom, PublicPeer, RoomRelationship } from '@voice-room/shared/contracts/rooms';
 import type { ClientKind } from '@voice-room/shared/account-security';
+import { avatarUrl } from '../../lib/avatar-url.ts';
 import { avatarColorForPeerId } from './avatar-color.ts';
 import { failure, type Failure } from '../../platform/http/http-kit.ts';
+import type { WsConnection } from '../../realtime/registry.ts';
 
 /** A peer as the in-memory presence roster holds it. */
 export interface PresencePeer {
   id: string;
   accountUserId?: string | null;
   avatarAccent?: string | null;
-  avatarColorKey?: string | null;
+  avatarColorKey?: string | null | undefined;
   avatarUrl?: string | null;
   camera?: boolean;
   /** The desktop app, a phone or a browser, from the socket that took the seat. */
@@ -25,10 +26,10 @@ export interface PresencePeer {
   guestId?: string | undefined;
   deafened?: boolean;
   gateGuestPrincipalId?: string | null;
-  ip?: string;
+  ip?: string | undefined;
   joinedAt?: number;
   /** Granted media that has not shown up in presence yet; see realtime/media-budget.ts. */
-  mediaClaims?: { screen?: { profileId: string; expiresAt: number }; camera?: { expiresAt: number } };
+  mediaClaims?: { screen?: { profileId: string; expiresAt: number }; camera?: { expiresAt: number } } | undefined;
   muted?: boolean;
   name?: string;
   screen?: boolean;
@@ -37,7 +38,11 @@ export interface PresencePeer {
   screenStreamId?: string;
   serverMuted?: boolean;
   sessionToken?: string;
-  transport?: { id?: string; send(message: RoomPeerMessage): boolean } | null;
+  /**
+   * The join that holds the seat (only it may close the seat) and the socket
+   * the seat reaches; the socket is null while a reconnect lease holds the seat.
+   */
+  transport?: { id: string; connection: WsConnection | null } | null;
   viewedScreenPeerId?: string;
 }
 
@@ -48,11 +53,12 @@ export interface StoredRoom {
   createdAt: number;
   emptySince?: number | null;
   isStatic: boolean;
-  lastMessageAt?: number | null;
+  lastMessageAt?: number | null | undefined;
   name: string;
   ownerId?: string | null;
-  relationship?: string;
-  unreadCount?: number;
+  /** '' when the listing did not say. */
+  relationship?: RoomRelationship | '';
+  unreadCount?: number | undefined;
 }
 
 /** A stored room joined with its live presence roster. */
@@ -62,28 +68,25 @@ export interface LiveRoom extends StoredRoom {
   updatedAt: number;
 }
 
-export function roomAvatarUrl(avatarKey: string | null | undefined): string | null {
-  return avatarKey ? `/api/avatars/${encodeURIComponent(avatarKey)}` : null;
-}
-
 export function publicPeer(peer: PresencePeer): PublicPeer {
-  return {
+  const result: PublicPeer = {
     accountUserId: peer.accountUserId || '',
     avatarAccent: peer.avatarAccent || null,
-    avatarColorKey: peer.avatarColorKey || (avatarColorForPeerId(peer.id) as string),
+    avatarColorKey: peer.avatarColorKey || avatarColorForPeerId(peer.id),
     avatarUrl: peer.avatarUrl || null,
-    deafened: peer.deafened,
     id: peer.id,
-    joinedAt: peer.joinedAt,
-    muted: peer.muted,
-    name: peer.name,
-    screen: peer.screen,
-    serverMuted: Boolean(peer.serverMuted),
-    screenAudio: peer.screenAudio,
-    screenProfileId: peer.screenProfileId,
-    screenStreamId: peer.screenStreamId,
-    viewedScreenPeerId: peer.viewedScreenPeerId
+    serverMuted: Boolean(peer.serverMuted)
   };
+  if (peer.deafened !== undefined) result.deafened = peer.deafened;
+  if (peer.joinedAt !== undefined) result.joinedAt = peer.joinedAt;
+  if (peer.muted !== undefined) result.muted = peer.muted;
+  if (peer.name !== undefined) result.name = peer.name;
+  if (peer.screen !== undefined) result.screen = peer.screen;
+  if (peer.screenAudio !== undefined) result.screenAudio = peer.screenAudio;
+  if (peer.screenProfileId !== undefined) result.screenProfileId = peer.screenProfileId;
+  if (peer.screenStreamId !== undefined) result.screenStreamId = peer.screenStreamId;
+  if (peer.viewedScreenPeerId !== undefined) result.viewedScreenPeerId = peer.viewedScreenPeerId;
+  return result;
 }
 
 export type { LobbyRoom, PublicPeer };
@@ -91,17 +94,18 @@ export type { LobbyRoom, PublicPeer };
 /** The lobby card: the PUT response, the room list and the room.updated event. */
 export function publicLobbyRoom(room: StoredRoom, peerCount: number): LobbyRoom {
   const result: LobbyRoom = {
-    avatarUrl: roomAvatarUrl(room.avatarKey),
+    avatarUrl: avatarUrl(room.avatarKey),
     createdAt: room.createdAt,
-    emptySince: room.emptySince,
     isStatic: room.isStatic,
     name: room.name,
     peers: peerCount,
     relationship: room.relationship || 'owner',
     roomId: room.id
   };
+  if (room.emptySince !== undefined) result.emptySince = room.emptySince;
   if (room.lastMessageAt !== undefined) result.lastMessageAt = room.lastMessageAt;
-  if (Number.isFinite(room.unreadCount)) result.unreadCount = Math.max(0, room.unreadCount as number);
+  const unread = room.unreadCount;
+  if (typeof unread === 'number' && Number.isFinite(unread)) result.unreadCount = Math.max(0, unread);
   return result;
 }
 

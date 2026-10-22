@@ -29,7 +29,7 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 function normalizeChannel(value: unknown): number {
-  return Number.isFinite(value) ? clamp(value as number, 0, 255) / 255 : 0;
+  return typeof value === 'number' && Number.isFinite(value) ? clamp(value, 0, 255) / 255 : 0;
 }
 
 function srgbToLinear(value: number): number {
@@ -135,10 +135,11 @@ export function dominantAvatarColor(
     for (let x = Math.floor(stride / 2); x < width; x += stride) {
       if ((x + 0.5 - centerX) ** 2 + (y + 0.5 - centerY) ** 2 > radiusSquared) continue;
       const index = (y * width + x) * 4;
-      if ((pixels[index + 3] as number) < 200) continue;
-      const r = pixels[index] as number;
-      const g = pixels[index + 1] as number;
-      const b = pixels[index + 2] as number;
+      const r = pixels[index] ?? 0;
+      const g = pixels[index + 1] ?? 0;
+      const b = pixels[index + 2] ?? 0;
+      const alpha = pixels[index + 3] ?? 0;
+      if (alpha < 200) continue;
       const key = ((r >> 5) << 6) | ((g >> 5) << 3) | (b >> 5);
       const bucket = buckets.get(key) ?? { count: 0, r: 0, g: 0, b: 0 };
       bucket.count += 1;

@@ -2,7 +2,10 @@
 // @voice-room/shared/contracts/messages): the HTTP answers, the realtime
 // events and the legacy list all send this shape.
 
-import type {
+import { Type, type Static, type TSchema } from 'typebox';
+import { Value } from 'typebox/value';
+import { Nullable } from '@voice-room/shared/contracts/http';
+import {
   Attachment,
   LinkPreview,
   MessageContent,
@@ -11,48 +14,56 @@ import type {
   RoomMessage
 } from '@voice-room/shared/contracts/messages';
 import { avatarColorForPeerId } from '../rooms/avatar-color.ts';
+import { avatarUrl } from '../../lib/avatar-url.ts';
 
-export interface RoomChatMessage {
-  id: string;
-  roomId: string;
-  peerId: string;
-  name: string;
-  text: string;
-  createdAt: number;
-  expiresAt?: number | null;
-  editedAt?: number | null;
-  authorUserId?: string | null;
-  avatarAccent?: string | null;
-  avatarColorKey?: string | null;
-  avatarKey?: string | null;
-  avatarUrl?: string | null;
-  content?: MessageContent | null;
-  attachments?: Attachment[];
-  linkPreview?: LinkPreview | null;
-  replyTo?: ReplyPointer | null;
-  replyPreview?: ReplyPreview | null;
-  idempotencyReplay?: boolean;
+const Absent = <Schema extends TSchema>(schema: Schema) => Type.Optional(Nullable(schema));
+
+/**
+ * A room chat message as the API stores and passes it: the contract
+ * RoomMessage with the fields its public view fills in left optional, plus
+ * the server-side avatar key and replay flag.
+ */
+export const StoredChatMessage = Type.Object({
+  ...RoomMessage.properties,
+  expiresAt: Absent(Type.Number()),
+  editedAt: Absent(Type.Number()),
+  authorUserId: Absent(Type.String()),
+  avatarAccent: Absent(Type.String()),
+  avatarColorKey: Absent(Type.String()),
+  avatarKey: Absent(Type.String()),
+  avatarUrl: Absent(Type.String()),
+  content: Absent(MessageContent),
+  attachments: Type.Optional(Type.Array(Attachment)),
+  linkPreview: Absent(LinkPreview),
+  replyTo: Absent(ReplyPointer),
+  replyPreview: Absent(ReplyPreview),
+  idempotencyReplay: Type.Optional(Type.Boolean())
+});
+export type RoomChatMessage = Static<typeof StoredChatMessage>;
+
+/** A chat message read back from JSON this API wrote (an outbox event, an idempotent replay). */
+export function isStoredChatMessage(value: unknown): value is RoomChatMessage {
+  return Value.Check(StoredChatMessage, value);
 }
 
 export function publicChatMessage(message: RoomChatMessage): RoomMessage {
   return {
     authorUserId: message.authorUserId || null,
     avatarAccent: message.avatarAccent || null,
-    avatarColorKey: message.avatarColorKey || (avatarColorForPeerId(message.peerId) as string),
-    avatarUrl:
-      message.avatarUrl || (message.avatarKey ? `/api/avatars/${encodeURIComponent(message.avatarKey)}` : null),
+    avatarColorKey: message.avatarColorKey || avatarColorForPeerId(message.peerId),
+    avatarUrl: message.avatarUrl || avatarUrl(message.avatarKey),
     createdAt: message.createdAt,
     editedAt: message.editedAt || null,
-    expiresAt: message.expiresAt,
+    ...(message.expiresAt === undefined ? {} : { expiresAt: message.expiresAt }),
     id: message.id,
     name: message.name,
     peerId: message.peerId,
     roomId: message.roomId,
     text: message.text,
-    content: message.content,
+    ...(message.content === undefined ? {} : { content: message.content }),
     attachments: Array.isArray(message.attachments) ? message.attachments : [],
-    linkPreview: message.linkPreview || undefined,
-    replyTo: message.replyTo,
-    replyPreview: message.replyPreview
+    ...(message.linkPreview ? { linkPreview: message.linkPreview } : {}),
+    ...(message.replyTo === undefined ? {} : { replyTo: message.replyTo }),
+    ...(message.replyPreview === undefined ? {} : { replyPreview: message.replyPreview })
   };
 }

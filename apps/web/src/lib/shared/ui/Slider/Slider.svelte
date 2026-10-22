@@ -29,7 +29,8 @@
   }
 
   function handleInput(event: Event): void {
-    const input = event.currentTarget as HTMLInputElement;
+    const input = event.currentTarget;
+    if (!(input instanceof HTMLInputElement)) return;
     let next = Number.parseFloat(input.value);
     if (!Number.isFinite(next)) next = defaultValue;
     if (snap && pointerActive && snapThreshold > 0 && Math.abs(next - defaultValue) <= snapThreshold) {

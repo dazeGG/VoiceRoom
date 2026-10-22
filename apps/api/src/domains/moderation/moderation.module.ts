@@ -13,7 +13,7 @@ import type { LiveRoom, PresencePeer } from '../rooms/room-views.ts';
 import type { Queryable } from '../../platform/db/kysely.ts';
 import type { IpKeyOf } from '../../lib/ip-key.ts';
 import { normalizeGatePrincipal, type PrincipalRevocation } from '../admission/gate-credential.repository.ts';
-import type { GatePrincipal } from '../admission/admission.service.ts';
+import type { GatePrincipal } from '../admission/gate-principal.ts';
 import { createMessageModerationService } from './message-moderation.service.ts';
 import { createModerationRepository } from './moderation.repository.ts';
 import { createModerationService } from './moderation.service.ts';

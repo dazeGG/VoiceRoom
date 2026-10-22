@@ -1,18 +1,20 @@
 // App-level WebSocket at /api/ws: account events, room summaries, preview/detail, voice.
 
+import { isErrorCode, type ErrorCode } from '@voice-room/shared/contracts/errors';
 import type {
   ClientCommands,
   ClientCommandType,
   RoomRealtimeSummary,
   RoomSnapshot,
-  ServerEvent,
-  ServerFrame
+  ServerEvent
 } from '@voice-room/shared/contracts/realtime';
+import { parseServerFrame } from '@voice-room/shared/realtime';
 import { isRealtimeBlocked } from '$lib/platform/desktop-boundary';
+import { reportContractViolation } from './contract-violations';
 import { RealtimeHeartbeatWatchdog } from './realtime-heartbeat';
 
 /** A refusal from the server, as handlers see it. */
-export type RealtimeErrorEvent = { type: 'error'; payload: { code: string; message: string; id?: string } };
+export type RealtimeErrorEvent = { type: 'error'; payload: { code: ErrorCode | ''; message: string; id?: string } };
 
 /** Every event handlers receive: the server's events plus refusals. */
 export type RealtimeEvent = ServerEvent | RealtimeErrorEvent;
@@ -20,11 +22,6 @@ export type { RoomRealtimeSummary, RoomSnapshot };
 
 /** Sends one command; the payload must be the one its type carries. */
 type Send = <Type extends ClientCommandType>(type: Type, payload: ClientCommands[Type], id?: string) => void;
-
-export interface RealtimeHandle {
-  close: () => void;
-  send: Send;
-}
 
 const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 8000;
@@ -45,21 +42,21 @@ function wsUrl(): string {
 }
 
 /**
- * The one place a server frame is trusted to match the realtime contract. A
- * frame without a type is dropped; an error frame becomes an `error` event.
+ * The one place a server frame becomes an event: it must match its event's
+ * schema in the realtime contract, or it is logged and dropped. An error frame
+ * becomes an `error` event.
  */
 function parseRealtimeEvent(frame: unknown): RealtimeEvent | null {
-  const envelope = frame as Partial<ServerFrame> | null;
-  if (!envelope || typeof envelope.type !== 'string') return null;
-  if (envelope.type === 'error') {
-    const error = (envelope as { error?: { code?: string; message?: string } }).error;
-    return {
-      type: 'error',
-      payload: { code: error?.code || 'unknown_error', message: error?.message || 'WebSocket error', id: envelope.id }
-    };
+  const parsed = parseServerFrame(frame);
+  if (!parsed.ok) {
+    reportContractViolation('realtime', { type: parsed.type, reason: parsed.reason });
+    return null;
   }
-  const event = envelope as ServerEvent;
-  return { ...event, payload: event.payload ?? {} } as ServerEvent;
+  const event = parsed.frame;
+  if (event.type !== 'error') return event;
+  // A code newer than this build still refuses the command, with the generic text.
+  const code = isErrorCode(event.error.code) ? event.error.code : '';
+  return { type: 'error', payload: { code, message: event.error.message, ...(event.id ? { id: event.id } : {}) } };
 }
 
 class AppRealtimeConnection {
@@ -240,7 +237,7 @@ class AppRealtimeConnection {
       this.startHeartbeat();
       this.emitState(true);
     };
-    socket.onmessage = (event) => {
+    socket.onmessage = (event: MessageEvent<unknown>) => {
       if (this.socket !== socket || generation !== this.openGeneration) return;
       let frame: unknown;
       try {
@@ -249,11 +246,12 @@ class AppRealtimeConnection {
         return;
       }
       const parsed = parseRealtimeEvent(frame);
-      if (parsed?.type === 'pong') {
+      if (!parsed) return;
+      if (parsed.type === 'pong') {
         this.lastPongAt = Date.now();
         this.heartbeatWatchdog.recordPong();
       }
-      if (parsed) this.emit(parsed);
+      this.emit(parsed);
     };
     socket.onclose = (event?: CloseEvent) => {
       if (this.socket !== socket || generation !== this.openGeneration) return;
@@ -339,13 +337,4 @@ class AppRealtimeConnection {
 export function getAppRealtime(): AppRealtimeConnection {
   if (!shared) shared = new AppRealtimeConnection();
   return shared;
-}
-
-export function connectRealtime(onEvent: (event: RealtimeEvent) => void): RealtimeHandle {
-  const conn = getAppRealtime();
-  const unsubscribe = conn.subscribe(onEvent);
-  return {
-    close: unsubscribe,
-    send: (type, payload) => conn.send(type, payload)
-  };
 }

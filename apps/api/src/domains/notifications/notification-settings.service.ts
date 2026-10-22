@@ -6,8 +6,10 @@ import type { StoredUser } from '../account/user-records.ts';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
 import { cleanPresenceStatus } from '@voice-room/shared/validation';
+import { isRecord, textOf } from '@voice-room/shared/guards';
 import type { NotificationPreferences, PushConfig } from '@voice-room/shared/contracts/notifications';
 import { cleanPushEndpoint } from '../../lib/push-endpoint.ts';
+import type { RateCheck } from '../../lib/rate-limit.ts';
 
 export interface MutationResult {
   status: string;
@@ -39,7 +41,7 @@ export interface NotificationSettingsDeps {
     remove(input: { userId: string; endpoint: string }): Promise<unknown>;
   };
   pushConfig(): PushConfig;
-  pushLimiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
+  pushLimiter: RateCheck;
   /** Tells the account's sockets which presence to report to friends. */
   setPresence(userId: string, presenceStatus: string): void;
   notifyUser(userId: string, event: AccountMessage): void;
@@ -49,10 +51,11 @@ export interface NotificationSettingsDeps {
 type RateLimited = { status: 'rate_limited'; retryAfterSeconds: number };
 
 export function cleanPushSubscription(value: unknown): PushSubscription | null {
-  const raw = value as { endpoint?: unknown; keys?: { p256dh?: unknown; auth?: unknown } } | null | undefined;
-  const endpoint = cleanPushEndpoint(raw?.endpoint) || '';
-  const p256dh = String(raw?.keys?.p256dh || '').trim();
-  const auth = String(raw?.keys?.auth || '').trim();
+  const raw = isRecord(value) ? value : {};
+  const keys = isRecord(raw.keys) ? raw.keys : {};
+  const endpoint = cleanPushEndpoint(raw.endpoint) || '';
+  const p256dh = textOf(keys.p256dh).trim();
+  const auth = textOf(keys.auth).trim();
   if (!endpoint || endpoint.length > 4096 || !p256dh || p256dh.length > 1024 || !auth || auth.length > 1024)
     return null;
   return { endpoint, keys: { p256dh, auth } };
@@ -61,7 +64,7 @@ export function cleanPushSubscription(value: unknown): PushSubscription | null {
 export function createNotificationSettingsService(deps: NotificationSettingsDeps) {
   function rateLimited(userId: string): RateLimited | null {
     const rate = deps.pushLimiter.check(`push-subscription:${userId}`);
-    return rate.allowed ? null : { status: 'rate_limited', retryAfterSeconds: rate.retryAfterSeconds ?? 0 };
+    return rate.allowed ? null : { status: 'rate_limited', retryAfterSeconds: rate.retryAfterSeconds };
   }
 
   // Do-not-disturb and presence are one status: DND is presence 'dnd'. After

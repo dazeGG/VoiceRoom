@@ -7,7 +7,12 @@ import { lobbyContext } from '../../src/lib/features/home/model/lobby-context.ts
 import { LobbyStore } from '../../src/lib/features/home/model/lobby.svelte.ts';
 import type { DirectMessage } from '../../src/lib/api/dm.ts';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { FakeWebSocket, installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';
+import { instanceOf, parse, defined } from '../helpers/assert.ts';
+import { SendDirectMessageBody } from '@voice-room/shared/contracts/messages';
+import { toastState } from '../../src/lib/features/home/model/toasts.svelte.ts';
+import { loadChatDraft } from '../../src/lib/shared/chat/chat-drafts.ts';
 
 const self = authUser({ id: 'me', login: 'me', displayName: 'Я' });
 const ada = authUser({ id: 'ada', login: 'ada', displayName: 'Ада' });
@@ -15,11 +20,13 @@ const bob = authUser({ id: 'bob', login: 'bob', displayName: 'Боб' });
 
 function message(id: string, senderId: string, body: string, extra: Partial<DirectMessage> = {}): DirectMessage {
   const recipientId = senderId === 'me' ? 'ada' : 'me';
-  return { id, senderId, recipientId, body, createdAt: 1_000, editedAt: null, readAt: null, ...extra };
+  return { id, senderId, recipientId, body, createdAt: 1_000, editedAt: null, readAt: null, invite: null, ...extra };
 }
 
 beforeEach(() => {
   stubFetch({});
+  // The lobby opens its realtime socket; a real one would reach whatever listens on localhost.
+  installFakeWebSocket();
   localStorage.clear();
 });
 
@@ -99,7 +106,7 @@ test('only the author is offered edit and delete in the message menu', async () 
   renderDm(ada, [message('m1', 'ada', 'от Ады'), message('m2', 'me', 'от меня')]);
 
   const menuItems = async (text: string): Promise<string[]> => {
-    const row = screen.getByText(text).closest<HTMLElement>('[data-message-id]')!;
+    const row = instanceOf(screen.getByText(text).closest('[data-message-id]'), HTMLElement, 'message row');
     await userEvent.pointer({ keys: '[MouseRight]', target: row });
     const menu = await screen.findByRole('menu');
     const labels = within(menu)
@@ -125,11 +132,11 @@ test('an invitation is answered from the card by the invited side only', () => {
     message('i2', 'me', '', { invite: { ...invite, roomName: 'Мой созвон' } })
   ]);
 
-  const incoming = screen.getByText('Планёрка').closest('article')!;
+  const incoming = instanceOf(screen.getByText('Планёрка').closest('article'), HTMLElement, 'incoming invite');
   expect(within(incoming).getByText('Приглашение в комнату')).toBeTruthy();
   expect(within(incoming).getByRole('button', { name: 'Войти' })).toBeTruthy();
 
-  const sent = screen.getByText('Мой созвон').closest('article')!;
+  const sent = instanceOf(screen.getByText('Мой созвон').closest('article'), HTMLElement, 'sent invite');
   expect(within(sent).getByText('Приглашение отправлено')).toBeTruthy();
   expect(within(sent).queryByRole('button')).toBeNull();
 });
@@ -158,11 +165,12 @@ test('a reader at the newest message stays on it when loading artwork grows the 
         observers.push(callback);
       }
       observe() {}
+      unobserve() {}
       disconnect() {}
     }
   );
   renderDm(ada, [message('m1', 'ada', 'картинка'), message('m2', 'me', 'ответ')]);
-  const scroll = document.querySelector<HTMLElement>('.lobby-dm-scroll')!;
+  const scroll = instanceOf(document.querySelector('.lobby-dm-scroll'), HTMLElement, 'conversation scroll');
   let height = 1000;
   Object.defineProperty(scroll, 'scrollHeight', { configurable: true, get: () => height });
   Object.defineProperty(scroll, 'clientHeight', { configurable: true, get: () => 400 });
@@ -171,13 +179,13 @@ test('a reader at the newest message stays on it when loading artwork grows the 
   scroll.scrollTop = 600;
   scroll.dispatchEvent(new Event('scroll'));
   height = 1300;
-  observers[0]();
+  defined(observers[0], 'observers[0]')();
   expect(scroll.scrollTop).toBe(1300);
 
   scroll.scrollTop = 100;
   scroll.dispatchEvent(new Event('scroll'));
   height = 1600;
-  observers[0]();
+  defined(observers[0], 'observers[0]')();
   expect(scroll.scrollTop).toBe(100);
 });
 
@@ -223,7 +231,112 @@ test('a sent message empties the field at once, shows dimmed, and a failed one w
   await vi.waitFor(() => expect(document.querySelector('.outgoing-message')).toBeNull());
   const keys = calls
     .filter((call) => call.method === 'POST' && call.url === '/api/dm/ada')
-    .map((call) => (call.body as { idempotencyKey: string }).idempotencyKey);
+    .map((call) => parse(SendDirectMessageBody, call.body).idempotencyKey);
   expect(keys).toHaveLength(2);
   expect(keys[0]).toBe(keys[1]);
+});
+
+test('a new message settles the thread at the newest message while its height keeps growing', async () => {
+  const lobby = renderDm(ada, [message('m1', 'ada', 'раньше')]);
+  const scroll = instanceOf(document.querySelector('.lobby-dm-scroll'), HTMLElement, 'conversation scroll');
+  let height = 1000;
+  Object.defineProperty(scroll, 'scrollHeight', { configurable: true, get: () => height });
+  Object.defineProperty(scroll, 'clientHeight', { configurable: true, get: () => 400 });
+
+  // Artwork and emoji fonts resize the rows on a later frame, after the first scroll.
+  requestAnimationFrame(() => {
+    height = 1300;
+  });
+  lobby.thread.messages = [...lobby.thread.messages, message('m2', 'ada', 'новое')];
+  flushSync();
+
+  await vi.waitFor(() => expect(scroll.scrollTop).toBe(1300));
+});
+
+test('a message that cannot be copied says so as an error, like the room chat does', async () => {
+  vi.stubGlobal(
+    'navigator',
+    Object.create(navigator, { clipboard: { value: { writeText: () => Promise.reject(new Error('denied')) } } })
+  );
+  toastState.items = [];
+  renderDm(ada, [message('m1', 'ada', 'скопируй')]);
+
+  await userEvent.click(screen.getByRole('button', { name: 'Копировать текст' }));
+
+  await vi.waitFor(() => expect(toastState.items.at(-1)?.message).toBe('Не удалось скопировать'));
+  expect(toastState.items.at(-1)?.variant).toBe('error');
+});
+
+test('an unsent text is stored after a pause in typing, not at every key, and at once when the page hides', async () => {
+  vi.useFakeTimers();
+  const user = userEvent.setup({ delay: null, advanceTimers: vi.advanceTimersByTime });
+  renderDm(ada);
+  const saved = () => loadChatDraft('me', { type: 'dm', id: 'ada' })?.text;
+  await user.click(composer());
+  await user.keyboard('чер');
+  expect(saved()).toBeUndefined();
+
+  await vi.advanceTimersByTimeAsync(399);
+  await user.keyboard('нов');
+  await vi.advanceTimersByTimeAsync(399);
+  expect(saved()).toBeUndefined();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(saved()).toBe('чернов');
+
+  await user.keyboard('ик');
+  window.dispatchEvent(new Event('pagehide'));
+  expect(saved()).toBe('черновик');
+});
+
+function historyMessage(id: string, readCursor: string) {
+  return {
+    kind: 'dm' as const,
+    id,
+    createdAt: 1_000,
+    content: { type: 'text' as const, text: id },
+    cursor: readCursor,
+    readCursor,
+    author: { userId: 'ada' },
+    recipientId: 'me'
+  };
+}
+
+test('a hidden conversation reports nothing as read, and a shown one does again', async () => {
+  let newest = historyMessage('m1', 'c1');
+  const { calls } = stubFetch({
+    'GET /api/dm/ada/history?mode=latest&limit=50': () => ({
+      body: {
+        ok: true,
+        contractVersion: 1,
+        mode: 'latest',
+        messages: [newest],
+        pageInfo: { hasMoreBefore: false, hasMoreAfter: false }
+      }
+    }),
+    'POST /api/dm/ada/read': { body: { ok: true } }
+  });
+  const reads = () => calls.filter((call) => call.method === 'POST' && call.url === '/api/dm/ada/read').length;
+  const lobby = new LobbyStore();
+  const stop = lobby.init('me');
+  const socket = FakeWebSocket.latest();
+  socket.open();
+  const arrive = (id: string): void =>
+    socket.receive({ type: 'dm.message', payload: { message: message(id, 'ada', id) } });
+
+  const shown = render(DmView, { props: { self }, context: lobbyContext(lobby) });
+  await lobby.openDm('ada');
+  await vi.waitFor(() => expect(reads()).toBe(1));
+
+  // The rooms side is showing: the DM view is not mounted, though the thread stays selected.
+  shown.unmount();
+  newest = historyMessage('m2', 'c2');
+  arrive('m2');
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  expect(reads()).toBe(1);
+
+  render(DmView, { props: { self }, context: lobbyContext(lobby) });
+  newest = historyMessage('m3', 'c3');
+  arrive('m3');
+  await vi.waitFor(() => expect(reads()).toBeGreaterThan(1));
+  stop();
 });

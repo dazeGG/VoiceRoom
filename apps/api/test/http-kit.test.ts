@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import fastify from 'fastify';
 import { Type } from '@fastify/type-provider-typebox';
 import { AJV_OPTIONS, registerHttpKit } from '../src/platform/http/http-kit.ts';
+import { fieldOf } from '../src/platform/record.ts';
 
 function kitApp(t: test.TestContext, failures: unknown[] = []) {
   const app = fastify({ ajv: AJV_OPTIONS });
@@ -18,7 +19,7 @@ function kitApp(t: test.TestContext, failures: unknown[] = []) {
   });
   app.post('/typed', { schema: { body: Type.Object({ muted: Type.Boolean() }) } }, async () => ({ ok: true }));
   app.get('/thrown/:kind', async (request) => {
-    const { kind } = request.params as { kind: string };
+    const kind = fieldOf(request.params, 'kind');
     if (kind === 'coded') throw Object.assign(new Error('Too big'), { statusCode: 413, code: 'avatar_too_large' });
     if (kind === 'foreign') throw Object.assign(new Error('Nope'), { statusCode: 429, code: 'FST_SOMETHING' });
     throw new Error('database password is hunter2');

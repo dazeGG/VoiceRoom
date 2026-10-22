@@ -1,6 +1,7 @@
 import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import type pg from 'pg';
 import type { PinnedMessage } from '@voice-room/shared/contracts/messages';
+import type { PinAction } from '@voice-room/shared/contracts/realtime';
 // Any room participant may pin, so the only guard against a room turning into
 // an unbounded pin list is this cap. Discord uses 50; matching it keeps the
 // pinned bar scrollable rather than endless.
@@ -16,16 +17,21 @@ export interface PinRepository {
   unpin(input: { roomId: string; messageId: string; client: Client }): Promise<{ changed: boolean }>;
   countPins(input: { roomId: string; client: Client }): Promise<number>;
   findVisibleMessage(input: { roomId: string; messageId: string; client: Client }): Promise<boolean>;
-  lockRoom?(input: { roomId: string; client: Client }): Promise<void>;
-  transaction?<T>(callback: (client: Client) => Promise<T>): Promise<T>;
+  lockRoom(input: { roomId: string; client: Client }): Promise<void>;
+  transaction<T>(callback: (client: Client) => Promise<T>): Promise<T>;
 }
 
-export type PinEvent = PinSnapshot & { roomId: string; action: string; messageId: string; actorUserId: string | null };
+export type PinEvent = PinSnapshot & {
+  roomId: string;
+  action: PinAction;
+  messageId: string;
+  actorUserId: string | null;
+};
 
 export type PinService = Readonly<{
   list(input?: { roomId?: unknown }): Promise<PinSnapshot>;
   pin(input?: { roomId?: unknown; messageId?: unknown; viewer?: Viewer }): Promise<PinSnapshot>;
-  refresh(input?: { roomId?: unknown; action?: string; messageId?: string }): Promise<PinSnapshot>;
+  refresh(input?: { roomId?: unknown; action?: PinAction; messageId?: string }): Promise<PinSnapshot>;
   unpin(input?: { roomId?: unknown; messageId?: unknown; viewer?: Viewer }): Promise<PinSnapshot>;
 }>;
 
@@ -61,7 +67,7 @@ function requireAccount(viewer: Viewer): { id: string } {
   if (!viewer?.id || viewer.guest === true || viewer.isGuest === true) {
     throw new PinServiceError('Account required', 'account_required', 403);
   }
-  return viewer as { id: string };
+  return { id: viewer.id };
 }
 
 function createPinService({
@@ -78,10 +84,6 @@ function createPinService({
   }
   const pins = repository;
   const publisher = typeof publish === 'function' ? publish : () => false;
-  const transact =
-    typeof pins.transaction === 'function'
-      ? <T>(callback: (client: Client) => Promise<T>) => pins.transaction!(callback)
-      : <T>(callback: (client: Client) => Promise<T>) => callback(null);
 
   async function snapshot(roomId: string, client: Client = null): Promise<PinSnapshot> {
     const listed = await pins.listPins({ roomId, limit: maxPins, client });
@@ -102,8 +104,8 @@ function createPinService({
     const messageId = normalizeMessageId(rawMessageId);
     const account = requireAccount(viewer);
 
-    const mutation = await transact(async (client) => {
-      await pins.lockRoom?.({ roomId, client });
+    const mutation = await pins.transaction(async (client) => {
+      await pins.lockRoom({ roomId, client });
       const visible = await pins.findVisibleMessage({ roomId, messageId, client });
       if (!visible) throw new PinServiceError('Message is not available', 'message_not_found', 404);
 
@@ -135,8 +137,8 @@ function createPinService({
     const messageId = normalizeMessageId(rawMessageId);
     const account = requireAccount(viewer);
 
-    const mutation = await transact(async (client) => {
-      await pins.lockRoom?.({ roomId, client });
+    const mutation = await pins.transaction(async (client) => {
+      await pins.lockRoom({ roomId, client });
       const result = await pins.unpin({ roomId, messageId, client });
       return { changed: result.changed, snapshot: await snapshot(roomId, client) };
     });
@@ -150,7 +152,7 @@ function createPinService({
     roomId: rawRoomId,
     action = 'refreshed',
     messageId = ''
-  }: { roomId?: unknown; action?: string; messageId?: string } = {}): Promise<PinSnapshot> {
+  }: { roomId?: unknown; action?: PinAction; messageId?: string } = {}): Promise<PinSnapshot> {
     const roomId = normalizeRoomId(rawRoomId);
     const current = await snapshot(roomId);
     await publisher({ roomId, action, messageId, actorUserId: null, ...current });

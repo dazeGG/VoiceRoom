@@ -81,11 +81,10 @@ test('compose passes every feature flag the API leaves disabled by default', () 
   const apiBlock = compose.slice(compose.indexOf('\n  api:'), compose.indexOf('\n  message-delivery:'));
   const passed = new Set(Array.from(apiBlock.matchAll(/^ {6}([A-Z0-9_]+):/gm), (m) => m[1]));
   // A default-off flag: false with no env, true once its variable is set.
-  const base = readApiConfig({ NODE_ENV: 'production' }) as Record<string, unknown>;
-  const defaultOff = Object.keys(base).filter(
-    (name) =>
-      base[name] === false &&
-      (readApiConfig({ NODE_ENV: 'production', [name]: 'true' }) as Record<string, unknown>)[name] === true
+  const settings = (env: Record<string, string>) => new Map<string, unknown>(Object.entries(readApiConfig(env)));
+  const base = settings({ NODE_ENV: 'production' });
+  const defaultOff = [...base.keys()].filter(
+    (name) => base.get(name) === false && settings({ NODE_ENV: 'production', [name]: 'true' }).get(name) === true
   );
 
   assert.ok(defaultOff.length > 0, 'expected the API to declare default-off flags');

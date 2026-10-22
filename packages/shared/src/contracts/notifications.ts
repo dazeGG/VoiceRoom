@@ -54,12 +54,15 @@ export const UnsubscribeBody = Type.Object({ endpoint: Type.Optional(Type.String
 
 // --- the inbox ----------------------------------------------------------------------
 
+export const NotificationReason = Type.Union([Type.Literal('mention'), Type.Literal('reply')]);
+export type NotificationReason = Static<typeof NotificationReason>;
+
 export const InboxItem = Type.Object({
   id: Type.String(),
   roomId: Type.String(),
   sourceMessageId: Type.String(),
   actorUserId: Type.String(),
-  reasons: Type.Array(Type.Union([Type.Literal('mention'), Type.Literal('reply')])),
+  reasons: Type.Array(NotificationReason),
   revision: Type.Number(),
   createdAt: Nullable(Type.Number()),
   updatedAt: Nullable(Type.Number()),

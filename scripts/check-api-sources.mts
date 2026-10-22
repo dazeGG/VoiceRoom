@@ -2,6 +2,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { Type, type Static } from 'typebox';
+import { Value } from 'typebox/value';
 
 // Paths in the config are relative to the repository root, not the caller's cwd.
 const REPO_ROOT = path.resolve(import.meta.dirname, '..');
@@ -15,14 +17,18 @@ function readSource(filePath: string): string | null {
   return fs.existsSync(resolved) ? fs.readFileSync(resolved, 'utf8') : null;
 }
 
-type SourceConfig = {
-  writeRules?: {
-    ownerPathPrefixes?: string[];
-    allowedOwners?: Record<string, string[]>;
-    crossDomainWriters?: Record<string, string[]>;
-  };
-  timerRules?: { forbiddenSources?: string[] };
-};
+const Paths = Type.Array(Type.String());
+const SourceConfig = Type.Object({
+  writeRules: Type.Optional(
+    Type.Object({
+      ownerPathPrefixes: Type.Optional(Paths),
+      allowedOwners: Type.Optional(Type.Record(Type.String(), Paths)),
+      crossDomainWriters: Type.Optional(Type.Record(Type.String(), Paths))
+    })
+  ),
+  timerRules: Type.Optional(Type.Object({ forbiddenSources: Type.Optional(Paths) }))
+});
+type SourceConfig = Static<typeof SourceConfig>;
 type Violation = Record<string, unknown> & { ruleId: string; filePath: string };
 
 function normalizePath(value: string): string {
@@ -47,7 +53,7 @@ function globToRegExp(glob: string): RegExp {
   const value = normalizePath(glob);
   let pattern = '';
   for (let index = 0; index < value.length; index += 1) {
-    const char = value[index] as string;
+    const char = value.charAt(index);
     if (char === '*' && value[index + 1] === '*') {
       pattern += '.*';
       index += 1;
@@ -71,17 +77,17 @@ function isOwner(filePath: string, owners: string[], prefixes: string[]): boolea
 function findSqlWrites(source: string): string[] {
   const writes: string[] = [];
   const pattern = /\b(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+([a-z_][a-z0-9_]*)/gi;
-  for (const match of source.matchAll(pattern)) writes.push((match[1] as string).toLowerCase());
+  for (const [, table] of source.matchAll(pattern)) if (table) writes.push(table.toLowerCase());
   // Kysely writes name their table as the first string argument.
   const builder = /\.(?:insertInto|updateTable|deleteFrom|replaceInto|mergeInto)\(\s*['"`]([a-z_][a-z0-9_]*)/gi;
-  for (const match of source.matchAll(builder)) writes.push((match[1] as string).toLowerCase());
+  for (const [, table] of source.matchAll(builder)) if (table) writes.push(table.toLowerCase());
   return writes;
 }
 
 function findTimers(source: string): string[] {
   const timers: string[] = [];
   const pattern = /\b(setInterval|setTimeout)\s*\(/g;
-  for (const match of source.matchAll(pattern)) timers.push(match[1] as string);
+  for (const [, timer] of source.matchAll(pattern)) if (timer) timers.push(timer);
   return timers;
 }
 
@@ -95,7 +101,13 @@ function crossDomainTablesFor(filePath: string, crossDomainWriters: Record<strin
   return null;
 }
 
-export function checkApiSources({ config, files }: { config: SourceConfig; files?: string[] }): Violation[] {
+export function checkApiSources({
+  config,
+  files
+}: {
+  config: SourceConfig;
+  files?: string[] | undefined;
+}): Violation[] {
   const violations: Violation[] = [];
   const fileSet = files || repoFiles('apps/api/src');
   const ownerPrefixes = config.writeRules?.ownerPathPrefixes || [];
@@ -127,15 +139,19 @@ function parseArgs(argv: string[]): { config: string; files: string[] } {
   const args: { config: string; files: string[] } = { config: 'config/import-boundaries.v1.json', files: [] };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
-    if (arg === '--config') args.config = argv[++index] as string;
-    else args.files.push(arg as string);
+    if (arg === '--config') {
+      const value = argv[++index];
+      if (value === undefined) throw new Error('--config needs a file path');
+      args.config = value;
+    } else if (arg !== undefined) args.files.push(arg);
   }
   return args;
 }
 
 if (import.meta.main) {
   const args = parseArgs(process.argv.slice(2));
-  const config = JSON.parse(fs.readFileSync(args.config, 'utf8'));
+  const config: unknown = JSON.parse(fs.readFileSync(args.config, 'utf8'));
+  if (!Value.Check(SourceConfig, config)) throw new Error(`${args.config} does not hold valid write and timer rules`);
   const violations = checkApiSources({ config, files: args.files.length ? args.files.map(normalizePath) : undefined });
   if (violations.length) {
     console.error(JSON.stringify({ ok: false, violations }, null, 2));

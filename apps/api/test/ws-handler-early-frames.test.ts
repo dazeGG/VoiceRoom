@@ -8,15 +8,18 @@ import { EventEmitter } from 'node:events';
 import type { IncomingMessage } from 'node:http';
 import { createWsHandler, type WsRoomRuntime } from '../src/realtime/ws-handler.ts';
 import { createConnectionRegistry } from '../src/realtime/registry.ts';
+import { Type, type Static } from 'typebox';
 import { fake } from './fakes/index.ts';
+import { checked } from './helpers/checked.ts';
 
-type Sent = { type: string; payload?: Record<string, unknown> };
+const Sent = Type.Object({ type: Type.String(), payload: Type.Optional(Type.Record(Type.String(), Type.Unknown())) });
+type Sent = Static<typeof Sent>;
 
 class FakeSocket extends EventEmitter {
   readyState = 1;
   sent: Sent[] = [];
   send(data: string) {
-    this.sent.push(JSON.parse(data) as Sent);
+    this.sent.push(checked(Sent, JSON.parse(data), 'sent frame'));
   }
   close() {
     this.readyState = 3;

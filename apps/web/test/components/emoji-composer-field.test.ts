@@ -2,12 +2,23 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import { flushSync } from 'svelte';
 import { afterEach, expect, test } from 'vitest';
 import ComposerHarness from './harness/ComposerHarness.svelte';
+import type { ComposerApi } from './harness/composer-api.ts';
+import { defined } from '../helpers/assert.ts';
 
 afterEach(cleanup);
 
-type Harness = { insert(text: string, caret?: number): boolean; setValue(next: string): void };
-const renderHarness = (props: { initial?: string; maxlength?: number }) =>
-  render(ComposerHarness, { props }).component as unknown as Harness;
+function renderHarness(props: { initial?: string; maxlength?: number }): ComposerApi {
+  const handed: { api?: ComposerApi } = {};
+  render(ComposerHarness, {
+    props: {
+      ...props,
+      onApi: (api: ComposerApi) => {
+        handed.api = api;
+      }
+    }
+  });
+  return defined(handed.api, 'the composer harness API');
+}
 
 const field = () => screen.getByRole('textbox', { name: 'Сообщение' });
 const value = () => screen.getByTestId('value').textContent;

@@ -1,64 +1,36 @@
-// Mention and reply notifications: the per-room level, the inbox envelope,
-// where a notification takes you, and the payload a push provider sends.
+// Mention and reply notifications: the per-room level, building the inbox
+// page (its shape is contracts/notifications.ts), where a notification takes
+// you, and the payload a push provider sends.
+
+import type { InboxItem, InboxPage, NotificationLevel, NotificationReason } from './contracts/notifications.ts';
+import { isArray, isOneOf, isRecord, pageInfoOf, trimmedText } from './guards.ts';
 
 export const NOTIFICATION_CONTRACT_VERSION = 1 as const;
 export const NOTIFICATION_DEFAULT_LIMIT = 50 as const;
 export const NOTIFICATION_MAX_LIMIT = 100 as const;
-export const NOTIFICATION_LEVELS: readonly ['all', 'mentions', 'none'] = Object.freeze([
-  'all',
-  'mentions',
-  'none'
-] as const);
-export const NOTIFICATION_REASONS: readonly ['mention', 'reply'] = Object.freeze(['mention', 'reply'] as const);
+export const NOTIFICATION_LEVELS: readonly NotificationLevel[] = Object.freeze(['all', 'mentions', 'none'] as const);
+export const NOTIFICATION_REASONS: readonly NotificationReason[] = Object.freeze(['mention', 'reply'] as const);
 
-export type NotificationLevel = 'all' | 'mentions' | 'none';
-export type NotificationReason = 'mention' | 'reply';
-export interface NotificationItem {
-  id: string;
-  roomId: string;
-  sourceMessageId: string;
-  actorUserId: string;
-  reasons: NotificationReason[];
-  revision: number;
-  /** Epoch milliseconds, like every time the API sends. */
-  createdAt: number | null;
-  updatedAt: number | null;
-  readAt: number | null;
-  retractedAt: number | null;
-  body: string;
-  cursor?: string;
-}
-export interface NotificationEnvelope {
-  contractVersion: 1;
-  notifications: NotificationItem[];
-  pageInfo: { nextCursor?: string; hasMore: boolean };
-  unreadCount: number;
-  revision: number;
-  firstUnread: NotificationItem | null;
-}
-export type ProviderPayload = {
-  contractVersion: 1;
-  notificationId: string;
-  revision: number;
-  dedupeKey: string;
-  title: string;
-  body: string;
-  route: string;
+/** What a Web Push carries: every API push sends it, the service worker reads it. */
+export type PushPayload = {
+  title?: string | undefined;
+  body?: string | undefined;
+  tag?: string | undefined;
+  /** The same-site path a click on the notification opens. */
+  url?: string | undefined;
+  dedupeKey?: string | undefined;
+  notificationId?: string | undefined;
+  revision?: number | undefined;
+  type?: string | undefined;
+  /** Epoch milliseconds; the service worker drops the push after it. */
+  expiresAt?: number | undefined;
 };
+/** The mention/reply push the notification outbox queues. */
+export type ProviderPayload = Required<
+  Pick<PushPayload, 'notificationId' | 'revision' | 'dedupeKey' | 'title' | 'body' | 'url'>
+> & { contractVersion: 1 };
 
-type Loose = Record<string, unknown>;
-
-const NOTIFICATION_LEVEL_SET = new Set<unknown>(NOTIFICATION_LEVELS);
-const NOTIFICATION_REASON_SET = new Set<unknown>(NOTIFICATION_REASONS);
-
-function cleanString(value: unknown, max = 256): string {
-  if (typeof value !== 'string') return '';
-  const text = value.trim();
-  return text && text.length <= max ? text : '';
-}
-
-// Rows carry what the database driver returns (a Date or an ISO string);
-// an envelope read back on the web already carries numbers.
+// Rows carry what the database driver returns (a Date, an ISO string or a number).
 function epochMillis(value: unknown): number | null {
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value.getTime();
   if (typeof value === 'number') return Number.isFinite(value) ? value : null;
@@ -71,7 +43,7 @@ export function normalizeNotificationLevel(
   value: unknown,
   fallback: NotificationLevel = 'mentions'
 ): NotificationLevel {
-  return NOTIFICATION_LEVEL_SET.has(value) ? (value as NotificationLevel) : fallback;
+  return isOneOf(NOTIFICATION_LEVELS, value) ? value : fallback;
 }
 
 export function normalizeNotificationLimit(value: unknown, fallback: number = NOTIFICATION_DEFAULT_LIMIT): number {
@@ -79,17 +51,18 @@ export function normalizeNotificationLimit(value: unknown, fallback: number = NO
   return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, NOTIFICATION_MAX_LIMIT) : fallback;
 }
 
-export function normalizeNotificationItem(input: unknown): NotificationItem | null {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
-  const value = input as Loose;
-  const id = cleanString(value.id ?? value.notificationId, 160);
-  const roomId = cleanString(value.roomId, 48);
-  const sourceMessageId = cleanString(value.sourceMessageId ?? value.messageId, 160);
-  const actorUserId = cleanString(value.actorUserId, 36);
-  const reasons = Array.isArray(value.reasons)
-    ? [...new Set(value.reasons.filter((reason): reason is NotificationReason => NOTIFICATION_REASON_SET.has(reason)))]
+export function normalizeNotificationItem(input: unknown): InboxItem | null {
+  if (!isRecord(input)) return null;
+  const value = input;
+  const id = trimmedText(value.id ?? value.notificationId, 160);
+  const roomId = trimmedText(value.roomId, 48);
+  const sourceMessageId = trimmedText(value.sourceMessageId ?? value.messageId, 160);
+  const actorUserId = trimmedText(value.actorUserId, 36);
+  const reasons = isArray(value.reasons)
+    ? [...new Set(value.reasons.filter((reason) => isOneOf(NOTIFICATION_REASONS, reason)))]
     : [];
   if (!id || !roomId || !sourceMessageId || !actorUserId || reasons.length === 0) return null;
+  const cursor = trimmedText(value.cursor, 4096);
   return {
     id,
     roomId,
@@ -101,8 +74,8 @@ export function normalizeNotificationItem(input: unknown): NotificationItem | nu
     updatedAt: epochMillis(value.updatedAt),
     readAt: epochMillis(value.readAt),
     retractedAt: epochMillis(value.retractedAt),
-    body: value.retractedAt ? '' : cleanString(value.body, 512),
-    cursor: cleanString(value.cursor, 4096) || undefined
+    body: value.retractedAt ? '' : trimmedText(value.body, 512),
+    ...(cursor ? { cursor } : {})
   };
 }
 
@@ -120,37 +93,16 @@ export function buildNotificationEnvelope({
   unreadCount?: unknown;
   revision?: unknown;
   firstUnread?: unknown;
-} = {}): NotificationEnvelope {
+} = {}): InboxPage {
   return {
     contractVersion: NOTIFICATION_CONTRACT_VERSION,
-    notifications: Array.isArray(notifications)
-      ? notifications.map(normalizeNotificationItem).filter((item): item is NotificationItem => Boolean(item))
+    notifications: isArray(notifications)
+      ? notifications.map(normalizeNotificationItem).filter((item): item is InboxItem => Boolean(item))
       : [],
-    pageInfo: { nextCursor: cleanString(nextCursor, 4096) || undefined, hasMore: Boolean(hasMore) },
+    pageInfo: pageInfoOf(nextCursor, hasMore),
     unreadCount: Math.max(0, Number.isSafeInteger(Number(unreadCount)) ? Number(unreadCount) : 0),
     revision: Math.max(0, Number.isSafeInteger(Number(revision)) ? Number(revision) : 0),
     firstUnread: normalizeNotificationItem(firstUnread)
-  };
-}
-
-export function normalizeNotificationEnvelope(
-  input: unknown
-): { ok: true; envelope: NotificationEnvelope } | { ok: false; code: string } {
-  const value = input as Loose | null;
-  if (!value || typeof value !== 'object' || value.contractVersion !== NOTIFICATION_CONTRACT_VERSION) {
-    return { ok: false, code: 'invalid_notification_envelope' };
-  }
-  const pageInfo = value.pageInfo as Loose | null | undefined;
-  return {
-    ok: true,
-    envelope: buildNotificationEnvelope({
-      notifications: value.notifications,
-      nextCursor: pageInfo?.nextCursor,
-      hasMore: pageInfo?.hasMore,
-      unreadCount: value.unreadCount,
-      revision: value.revision,
-      firstUnread: value.firstUnread
-    })
   };
 }
 
@@ -160,7 +112,7 @@ export function normalizeNotificationEnvelope(
  * back inside this room" and joins voice on load, which a mention must never do.
  */
 export function notificationRoute(
-  item: Partial<Pick<NotificationItem, 'roomId' | 'sourceMessageId'>> | null | undefined
+  item: Partial<Pick<InboxItem, 'roomId' | 'sourceMessageId'>> | null | undefined
 ): string {
   const roomId = encodeURIComponent(String(item?.roomId || ''));
   const messageId = encodeURIComponent(String(item?.sourceMessageId || ''));
@@ -182,6 +134,32 @@ export function buildProviderPayload(
     body: privateNotifications
       ? 'Откройте VoiceRoom, чтобы посмотреть уведомление.'
       : notification.body || 'У вас новое уведомление',
-    route: notificationRoute(notification)
+    url: notificationRoute(notification)
+  };
+}
+
+/** Reads a received push, keeping only the fields of `PushPayload` that have its types. */
+export function parsePushPayload(input: unknown): PushPayload {
+  if (!input || typeof input !== 'object') return {};
+  const fields = new Map<string, unknown>(Object.entries(input));
+  const text = (key: string): string | undefined => {
+    const value = fields.get(key);
+    return typeof value === 'string' ? value : undefined;
+  };
+  const finite = (key: string): number | undefined => {
+    const value = fields.get(key);
+    return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  };
+  return {
+    title: text('title'),
+    body: text('body'),
+    tag: text('tag'),
+    // Mention/reply pushes queued in the outbox before 2.10.2 name it `route`.
+    url: text('url') ?? text('route'),
+    dedupeKey: text('dedupeKey'),
+    notificationId: text('notificationId'),
+    revision: finite('revision'),
+    type: text('type'),
+    expiresAt: finite('expiresAt')
   };
 }

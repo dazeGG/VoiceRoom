@@ -4,6 +4,7 @@
 
 import { beforeEach, expect, test, vi } from 'vitest';
 import { stubFetch, type Reply } from '../fixtures/fetch.ts';
+import { lobbyRoom, roomStatus } from '../fixtures/answers.ts';
 import { authUser } from '../fixtures/users.ts';
 
 vi.mock('../../src/lib/features/room/client/ui/devices', async (importOriginal) => ({
@@ -15,17 +16,20 @@ vi.mock('../../src/lib/features/room/client/ui/toast', () => ({ showToast: vi.fn
 async function load(routes: Record<string, Reply>) {
   vi.resetModules();
   const fetchStub = stubFetch(routes);
+  const shell = { roomLeft: vi.fn<(roomId: string) => void>(), roomsChanged: vi.fn<(roomId: string) => void>() };
+  const { setRoomShell } = await import('../../src/lib/features/room/client/core/embed.ts');
+  setRoomShell(shell);
   const room = await import('../../src/lib/features/room/client/room/room.ts');
   const { state } = await import('../../src/lib/features/room/client/core/state.svelte.ts');
   const names = await import('../../src/lib/features/room/client/ui/names.ts');
   const { guestNameUi } = await import('../../src/lib/features/room/guest-name-ui.svelte.ts');
   const { showToast } = await import('../../src/lib/features/room/client/ui/toast');
   state.roomId = 'abc123';
-  return { ...room, ...names, state, guestNameUi, fetchStub, showToast: vi.mocked(showToast) };
+  return { ...room, ...names, state, guestNameUi, fetchStub, shell, showToast: vi.mocked(showToast) };
 }
 
 const roomExists = {
-  '/api/rooms/abc123': { body: { ok: true, exists: true, name: 'Планёрка', isStatic: true, avatarUrl: null } }
+  '/api/rooms/abc123': { body: roomStatus({ name: 'Планёрка', isStatic: true }) }
 };
 
 beforeEach(() => {
@@ -41,13 +45,11 @@ test('a missing room shows the not-found screen without checking the account', a
 });
 
 test('a signed-in account enters under its name, saves the room to its list and learns ownership', async () => {
-  const changed = vi.fn();
-  window.addEventListener('voice-room:rooms-changed', changed);
   const app = await load({
     ...roomExists,
-    '/api/auth/me': { body: { user: authUser({ displayName: 'Аня' }) } },
-    'POST /api/auth/rooms': { body: { room: { roomId: 'abc123' } } },
-    '/api/auth/rooms': { body: { rooms: [{ roomId: 'abc123', relationship: 'owner' }] } }
+    '/api/auth/me': { body: { ok: true, user: authUser({ displayName: 'Аня' }) } },
+    'POST /api/auth/rooms': { body: { ok: true, room: lobbyRoom() } },
+    '/api/auth/rooms': { body: { ok: true, rooms: [lobbyRoom({ relationship: 'owner' })] } }
   });
 
   await expect(app.showRoomRoute()).resolves.toBe(true);
@@ -55,17 +57,16 @@ test('a signed-in account enters under its name, saves the room to its list and 
   expect(document.body.dataset.screen).toBe('room');
   expect(app.state.roomName).toBe('Планёрка');
   expect(localStorage.getItem('voice-room:name')).toBe('Аня');
-  await vi.waitFor(() => expect(changed).toHaveBeenCalledTimes(1));
+  await vi.waitFor(() => expect(app.shell.roomsChanged).toHaveBeenCalledWith('abc123'));
   const { roomSettingsUi } = await import('../../src/lib/features/room/room-settings.svelte.ts');
   expect(roomSettingsUi.isOwner).toBe(true);
-  window.removeEventListener('voice-room:rooms-changed', changed);
 });
 
 test('a temporary room is not offered to the account list: only permanent rooms can be kept', async () => {
   const app = await load({
-    '/api/rooms/abc123': { body: { ok: true, exists: true, name: 'Созвон', isStatic: false, avatarUrl: null } },
-    '/api/auth/me': { body: { user: authUser({ displayName: 'Аня' }) } },
-    '/api/auth/rooms': { body: { rooms: [] } }
+    '/api/rooms/abc123': { body: roomStatus({ name: 'Созвон', isStatic: false }) },
+    '/api/auth/me': { body: { ok: true, user: authUser({ displayName: 'Аня' }) } },
+    '/api/auth/rooms': { body: { ok: true, rooms: [] } }
   });
 
   await expect(app.showRoomRoute()).resolves.toBe(true);
@@ -82,7 +83,7 @@ test('a failed account check stops entry instead of treating the visitor as a gu
 });
 
 test('a guest is asked for a name; an empty name is refused and a real one enters', async () => {
-  const app = await load({ ...roomExists, '/api/auth/me': { body: { user: null } } });
+  const app = await load({ ...roomExists, '/api/auth/me': { body: { ok: true, user: null } } });
   const entering = app.showRoomRoute();
   await vi.waitFor(() => expect(app.guestNameUi.open).toBe(true));
 
@@ -99,7 +100,7 @@ test('a guest is asked for a name; an empty name is refused and a real one enter
 });
 
 test('leaving the guest name prompt cancels entry', async () => {
-  const app = await load({ ...roomExists, '/api/auth/me': { body: { user: null } } });
+  const app = await load({ ...roomExists, '/api/auth/me': { body: { ok: true, user: null } } });
   const entering = app.showRoomRoute();
   await vi.waitFor(() => expect(app.guestNameUi.open).toBe(true));
   app.resetGuestNameDialog();

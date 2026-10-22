@@ -13,6 +13,9 @@ import { createProductSnapshotRepository } from '../src/domains/ops/product-snap
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { rollBackThrough } from './migration-steps.ts';
+import { AnyRow, queryRows } from './helpers/checked.ts';
+import { defined } from './helpers/assert-defined.ts';
+import { Me } from '@voice-room/shared/contracts/account';
 import { registerAccount, request, startApiServer } from './fakes/server-process.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
@@ -38,13 +41,13 @@ test('a signed-in request marks the day and the running API writes the live peak
   beforeCleanup(() => db.end());
 
   const cookie = await registerAccount(socketPath, 'ada');
-  const me = await request<{ user: { id: string } }>(socketPath, {
-    pathname: '/api/auth/me',
-    cookie,
-    headers: { 'User-Agent': DESKTOP_APP }
-  });
+  const me = await request(
+    socketPath,
+    { pathname: '/api/auth/me', cookie, headers: { 'User-Agent': DESKTOP_APP } },
+    Me
+  );
   assert.equal(me.status, 200);
-  const userId = me.body.user.id;
+  const userId = defined(me.body.user, 'the signed-in user').id;
 
   const days = await waitFor(
     () =>
@@ -54,8 +57,9 @@ test('a signed-in request marks the day and the running API writes the live peak
     (rows) => rows.some((row) => row.desktop_app)
   );
   assert.equal(days.length, 1);
-  assert.equal(days[0]!.user_id, userId);
-  assert.equal(days[0]!.desktop_app, true);
+  const day = defined(days[0], 'the activity day');
+  assert.equal(day.user_id, userId);
+  assert.equal(day.desktop_app, true);
 
   const snapshots = await waitFor(
     () => db.query<{ at: Date }>('SELECT at FROM product_snapshots').then((result) => result.rows),
@@ -83,10 +87,12 @@ test(
       { userId: 'u1', day: '2026-10-15', client: 'mobile' },
       { userId: 'u1', day: '2026-10-16', client: null }
     ]);
-    const days = await pool.query(
+    const days = await queryRows(
+      pool,
+      AnyRow,
       `SELECT to_char(day, 'YYYY-MM-DD') AS day, desktop_app, mobile, browser FROM user_activity_days ORDER BY day`
     );
-    assert.deepEqual(days.rows, [
+    assert.deepEqual(days, [
       { day: '2026-10-15', desktop_app: false, mobile: true, browser: true },
       { day: '2026-10-16', desktop_app: false, mobile: false, browser: false }
     ]);
@@ -102,10 +108,12 @@ test(
     await rollBackThrough(databaseUrl, '20261018120000_drop_analytics_schema');
     assert.equal(await schema(), 'analytics');
 
-    const peaks = await pool.query(
+    const peaks = await queryRows(
+      pool,
+      AnyRow,
       'SELECT online_accounts, guest_connections, voice_peers, voice_rooms FROM analytics.snapshots'
     );
-    assert.deepEqual(peaks.rows, [{ online_accounts: 3, guest_connections: 4, voice_peers: 2, voice_rooms: 2 }]);
+    assert.deepEqual(peaks, [{ online_accounts: 3, guest_connections: 4, voice_peers: 2, voice_rooms: 2 }]);
 
     await pool.query(
       `INSERT INTO rooms (id, creator_ip, is_static, created_at, updated_at) VALUES ('join-code', '', false, now(), now())`
@@ -137,11 +145,13 @@ test(
     };
     assert.equal(await exists(), true);
     await rollBackThrough(databaseUrl, '20261015140000_create_product_analytics');
-    const after = await pool.query(
+    const after = await queryRows(
+      pool,
+      AnyRow,
       `SELECT to_regclass('public.user_activity_days') AS a, to_regclass('public.product_snapshots') AS b,
             to_regnamespace('analytics') AS c`
     );
-    assert.deepEqual(after.rows, [{ a: null, b: null, c: null }]);
+    assert.deepEqual(after, [{ a: null, b: null, c: null }]);
     await runMigrations({ databaseUrl, logger: SILENT });
     assert.equal(await exists(), true);
     assert.equal(await schema(), null);

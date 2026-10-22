@@ -4,7 +4,7 @@
   import { onDestroy, onMount, tick } from 'svelte';
   import { ArrowUp } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
-  import type { MembershipMember } from '@voice-room/shared/membership';
+  import type { MembershipMember } from '@voice-room/shared/contracts/membership';
   import { contentFromPlainText } from '@voice-room/shared/room-message-content';
   import type { ChatMessage } from '$lib/api/rooms';
   import { getAppRealtime } from '$lib/api/realtime';
@@ -12,7 +12,9 @@
   import { session } from '$lib/features/auth/session.svelte';
   import AttachmentComposer from '$lib/shared/chat/AttachmentComposer.svelte';
   import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
-  import { imageFilesFromClipboard, type AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
+  import type { AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
+  import type { ChatDraft } from '$lib/shared/chat/chat-draft.svelte';
+  import { pasteImages, sendOrEditLast } from '$lib/shared/chat/composer-input';
   import type { ComposerHandle } from '$lib/shared/chat/composer-handle';
   import ComposerEmojiPicker from '$lib/shared/chat/ComposerEmojiPicker.svelte';
   import EmojiComposer from '$lib/shared/chat/EmojiComposer.svelte';
@@ -20,7 +22,7 @@
   import ReplyTargetBar from '$lib/shared/chat/ReplyTargetBar.svelte';
   import TypingIndicator from '$lib/shared/chat/TypingIndicator.svelte';
   import { createTypingNotifier } from '$lib/shared/chat/typing.svelte';
-  import type { OutgoingRoomMessage, RoomChatDraft } from '../room-chat-draft.svelte';
+  import type { OutgoingRoomMessage } from '../room-chat-session.svelte';
 
   let {
     roomId,
@@ -34,7 +36,7 @@
     onToast
   }: {
     roomId: string;
-    draft: RoomChatDraft;
+    draft: ChatDraft;
     media: AttachmentComposeStore | null;
     /** Mentions are offered and sent as structured content. */
     typingLabel: string;
@@ -135,7 +137,8 @@
       }
       if (event.key === 'Enter' || event.key === 'Tab') {
         event.preventDefault();
-        chooseMention(mentions.candidates[mentions.activeIndex]);
+        const member = mentions.candidates[mentions.activeIndex];
+        if (member) chooseMention(member);
         return;
       }
       if (event.key === 'Escape') {
@@ -144,26 +147,11 @@
         return;
       }
     }
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      void submit();
-      return;
-    }
-    // ArrowUp in an empty composer edits the last own message, like Discord.
-    if (event.key === 'ArrowUp' && !draft.text.trim() && onEditLast()) event.preventDefault();
+    sendOrEditLast(event, { empty: !draft.text.trim(), send: () => void submit(), editLast: onEditLast });
   }
 
-  async function onPaste(event: ClipboardEvent): Promise<void> {
-    if (!media) return;
-    const files = imageFilesFromClipboard(event);
-    if (!files.length) return;
-    event.preventDefault();
-    try {
-      await media.addFiles(files);
-    } catch (cause) {
-      onToast(cause instanceof Error ? cause.message : 'Не удалось вставить изображение', { variant: 'error' });
-    }
-  }
+  const onPaste = (event: ClipboardEvent): Promise<void> =>
+    pasteImages(media, event, (message) => onToast(message, { variant: 'error' }));
 </script>
 
 <form class="chat-rail-compose" onsubmit={submit} onpaste={onPaste}>

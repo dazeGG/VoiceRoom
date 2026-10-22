@@ -41,10 +41,8 @@ function buildGroups(): readonly ReactionEmojiGroup[] {
     return index;
   });
 
-  for (let i = 1; i < starts.length; i += 1) {
-    if (starts[i]! <= starts[i - 1]!) {
-      throw new Error('Emoji corpus is no longer in Unicode group order');
-    }
+  if (starts.some((start, i) => i > 0 && start <= (starts[i - 1] ?? -1))) {
+    throw new Error('Emoji corpus is no longer in Unicode group order');
   }
   if (starts[0] !== 0) {
     throw new Error('Emoji corpus does not start at the first Unicode group');

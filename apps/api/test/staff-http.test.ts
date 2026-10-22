@@ -8,7 +8,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
-import { Value } from 'typebox/value';
+import { Type } from 'typebox';
 import { RoomHistory } from '@voice-room/shared/contracts/admin';
 import { StaffList, StaffMe } from '@voice-room/shared/contracts/staff';
 import { hashPassword } from '../src/lib/password.ts';
@@ -75,7 +75,7 @@ test('the admin app takes a staff session only through a one-time handoff', { sk
     assert.equal(refused.headers.location, `${ADMIN_ORIGIN}/api/staff/denied`);
   }
   assert.equal(await staffCookie(socketPath, alice), '');
-  assert.equal((await request(socketPath, { pathname: '/api/staff/denied' })).status, 404);
+  assert.equal((await request(socketPath, { pathname: '/api/staff/denied' }, Type.String())).status, 404);
 
   // Staff: a code for the admin app, traded once, and only with the state the app set.
   const handed = await request(socketPath, { pathname: `/api/staff/handoff?state=${STATE}`, cookie: rootSite });
@@ -100,8 +100,7 @@ test('the admin app takes a staff session only through a one-time handoff', { sk
 
   const admin = await staffCookie(socketPath, rootSite);
   assert.match(admin, /^vr_staff=/);
-  const me = (await request(socketPath, { pathname: '/api/staff/me', cookie: admin })).body;
-  if (!Value.Check(StaffMe, me)) throw new Error('no staff answer');
+  const me = (await request(socketPath, { pathname: '/api/staff/me', cookie: admin }, StaffMe)).body;
   assert.equal(me.role, 'superadmin', 'an account named in the settings is a superadmin');
   assert.equal(me.siteUrl, SITE_ORIGIN);
 
@@ -114,7 +113,7 @@ test('the admin app takes a staff session only through a one-time handoff', { sk
   assert.equal(visit.status, 302);
   assert.ok(visit.headers.location?.startsWith(`${SITE_ORIGIN}/api/staff/handoff?state=`));
   assert.ok(visit.setCookie.some((line) => line.startsWith('vr_staff_state_') && line.includes('=%2Frooms;')));
-  assert.equal((await request(socketPath, { pathname: '/api/staff/check' })).status, 404);
+  assert.equal((await request(socketPath, { pathname: '/api/staff/check' }, Type.String())).status, 404);
   // A browser without Fetch Metadata is sent through the handoff on a page load too.
   const oldBrowser = await request(socketPath, { pathname: '/api/staff/check', headers: { Accept: 'text/html' } });
   assert.equal(oldBrowser.status, 302);
@@ -208,8 +207,7 @@ test('a moderator reviews and blocks for a while; numbers, address keys and role
   await pool.query(`UPDATE users SET blocked_at = now(), blocked_until = NULL WHERE id = $1`, [bobId]);
   assert.equal((await putRole(root, 'bob', null)).status, 200);
   await pool.query(`UPDATE users SET blocked_at = NULL WHERE id = $1`, [bobId]);
-  const members = (await request(socketPath, { pathname: '/api/staff/members', cookie: root })).body;
-  if (!Value.Check(StaffList, members)) throw new Error('no staff list');
+  const members = (await request(socketPath, { pathname: '/api/staff/members', cookie: root }, StaffList)).body;
   assert.deepEqual(
     members.staff.map((member) => [member.user.login, member.role, member.fixed]),
     [
@@ -241,8 +239,7 @@ test('a moderator reviews and blocks for a while; numbers, address keys and role
      VALUES ('porch', NULL, 'Петя', '0123456789abcdef', 'Казань, Россия', now() - interval '2 hours', now() - interval '1 hour')`
   );
   const history = async (cookie: string) => {
-    const { body } = await request(socketPath, { pathname: '/api/admin/rooms/history', cookie });
-    if (!Value.Check(RoomHistory, body)) throw new Error('no history');
+    const { body } = await request(socketPath, { pathname: '/api/admin/rooms/history', cookie }, RoomHistory);
     return body.stays.map((stay) => [stay.guestName, stay.ipKey, stay.location]);
   };
   assert.deepEqual(await history(moderator), [['Петя', null, null]]);

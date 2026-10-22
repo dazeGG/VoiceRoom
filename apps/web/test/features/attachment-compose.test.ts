@@ -86,18 +86,22 @@ test('discarding the composer deletes every uploaded image', async () => {
 });
 
 test('drag and drop recognises image files only', () => {
-  const data = {
+  // jsdom has no DataTransfer: a plain class stands in for it.
+  vi.stubGlobal('DataTransfer', class {});
+  const data = Object.assign(new DataTransfer(), {
     files: [image('a.png'), image('b.txt', 'text/plain')],
     items: [{ kind: 'file', type: 'image/png' }],
     types: ['Files']
-  } as unknown as DataTransfer;
+  });
   expect(imageFilesFromDataTransfer(data).map((file) => file.name)).toEqual(['a.png']);
   expect(dataTransferHasImages(data)).toBe(true);
   expect(
-    dataTransferHasImages({
-      files: [],
-      items: [{ kind: 'string', type: 'text/plain' }],
-      types: ['text/plain']
-    } as unknown as DataTransfer)
+    dataTransferHasImages(
+      Object.assign(new DataTransfer(), {
+        files: [],
+        items: [{ kind: 'string', type: 'text/plain' }],
+        types: ['text/plain']
+      })
+    )
   ).toBe(false);
 });

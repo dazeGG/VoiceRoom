@@ -3,7 +3,9 @@
 
 import type pg from 'pg';
 import { kyselyOn } from '../../platform/db/kysely.ts';
-import type { AdminReport, ReportReason } from '@voice-room/shared/contracts/reports';
+import { REPORT_REASONS, type AdminReport, type ReportReason } from '@voice-room/shared/contracts/reports';
+import { isOneOf } from '@voice-room/shared/guards';
+import { epochMillis } from '../../platform/epoch-millis.ts';
 
 export type ReportTargetKind = 'room_message' | 'direct_message';
 
@@ -19,12 +21,6 @@ export type ReportedDirectMessage = { senderId: string; recipientId: string; del
 export type OpenReport = { id: string; targetKind: ReportTargetKind; roomId: string | null; messageId: string };
 
 const OPEN_REPORTS_LIMIT = 200;
-
-function toMillis(value: Date | string | null | undefined): number | null {
-  if (!value) return null;
-  const time = value instanceof Date ? value.getTime() : Date.parse(value);
-  return Number.isFinite(time) ? time : null;
-}
 
 export function createReportRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
@@ -99,7 +95,13 @@ export function createReportRepository({ pool }: { pool: pg.Pool }) {
       .where('status', '=', 'open')
       .executeTakeFirst();
     return row
-      ? { id: row.id, targetKind: row.target_kind as ReportTargetKind, roomId: row.room_id, messageId: row.message_id }
+      ? {
+          id: row.id,
+          // The table's check allows only the two kinds.
+          targetKind: row.target_kind === 'room_message' ? 'room_message' : 'direct_message',
+          roomId: row.room_id,
+          messageId: row.message_id
+        }
       : null;
   }
 
@@ -181,9 +183,10 @@ export function createReportRepository({ pool }: { pool: pg.Pool }) {
       const accountName = row.author_display_name || row.author_login || '';
       return {
         id: row.id,
-        reason: row.reason as ReportReason,
+        // The table's check allows only these reasons.
+        reason: isOneOf(REPORT_REASONS, row.reason) ? row.reason : 'other',
         comment: row.comment,
-        createdAt: toMillis(row.created_at) ?? 0,
+        createdAt: epochMillis(row.created_at) ?? 0,
         reporter: {
           userId: row.reporter_id,
           login: row.reporter_login,
@@ -197,7 +200,7 @@ export function createReportRepository({ pool }: { pool: pg.Pool }) {
           authorUserId: row.author_id || null,
           authorName: (isRoom ? row.room_author_name || accountName : accountName) || '',
           text: (isRoom ? row.room_text : row.dm_body) || '',
-          sentAt: toMillis(isRoom ? row.room_sent_at : row.dm_sent_at),
+          sentAt: epochMillis(isRoom ? row.room_sent_at : row.dm_sent_at),
           deleted: !found || Boolean(isRoom ? row.room_deleted_at : row.dm_deleted_at)
         }
       };

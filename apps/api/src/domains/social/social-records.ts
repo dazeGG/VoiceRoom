@@ -3,9 +3,17 @@
 
 import { sql, type ExpressionBuilder, type Selectable } from 'kysely';
 import { type Database } from '../../platform/db/kysely.ts';
+import { lockKeys, lockXact } from '../../platform/db/locks.ts';
 import { cleanAvatarColorKey, cleanPresenceStatus } from '@voice-room/shared/validation';
-import { normalizeLinkPreview, type LinkPreview } from '@voice-room/shared/link-preview';
+import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
+import { isRecord } from '@voice-room/shared/guards';
+import { Nullable } from '@voice-room/shared/contracts/http';
+import { DirectMessage as DirectMessageView, ReplyPointer } from '@voice-room/shared/contracts/messages';
+import { Type, type Static } from 'typebox';
+import { Value } from 'typebox/value';
 import type { DB, DirectMessages, Users } from '../../platform/db/schema.ts';
+import { epochMillis } from '../../platform/epoch-millis.ts';
+import { avatarUrl } from '../../lib/avatar-url.ts';
 
 export type Metadata = Record<string, unknown>;
 export type UserRow = Pick<
@@ -29,27 +37,17 @@ export type DirectMessageInvite = {
   expiresAt: number | null;
 };
 
-/** A direct message as stored; deletedAt stays internal, callers filter on it. */
-export interface DirectMessage {
-  id: string;
-  senderId: string;
-  recipientId: string;
-  body: string;
-  createdAt: number | null;
-  editedAt: number | null;
-  readAt: number | null;
-  invite: DirectMessageInvite | null;
-  linkPreview: LinkPreview | undefined;
-  replyTo: { messageId: string } | undefined;
-  deletedAt: number | null;
-}
-
-export function toMillis(value: unknown): number | null {
-  if (value == null) return null;
-  if (value instanceof Date) return value.getTime();
-  const parsed = Date.parse(value as string);
-  return Number.isFinite(parsed) ? parsed : null;
-}
+/**
+ * A direct message as stored: the contract DirectMessage without the parts
+ * its public view adds (attachments, reply preview). deletedAt stays
+ * internal, callers filter on it.
+ */
+const StoredDirectMessage = Type.Object({
+  ...Type.Omit(DirectMessageView, ['attachments', 'replyPreview', 'replyTo']).properties,
+  replyTo: Type.Optional(ReplyPointer),
+  deletedAt: Nullable(Type.Number())
+});
+export type DirectMessage = Static<typeof StoredDirectMessage>;
 
 // Public shape for a user row joined from the `users` table (snake_case). Never
 // leaks the password hash; mirrors user-store's publicUser fields.
@@ -58,8 +56,8 @@ export function mapPublicUser(row: UserRow) {
   return {
     avatarAccent: row.avatar_accent || null,
     avatarColorKey: cleanAvatarColorKey(row.avatar_color_key) || 'blurple',
-    avatarUrl: row.avatar_key ? `/api/avatars/${encodeURIComponent(row.avatar_key)}` : null,
-    createdAt: toMillis(row.created_at),
+    avatarUrl: avatarUrl(row.avatar_key),
+    createdAt: epochMillis(row.created_at),
     displayName: row.display_name || '',
     doNotDisturb: presenceStatus === 'dnd',
     id: row.id,
@@ -81,24 +79,30 @@ function mapInvite(metadata: Metadata | null | undefined): DirectMessageInvite |
   };
 }
 
+/** A direct message read back from JSON this API wrote (an outbox event, an idempotent replay). */
+export function isStoredDirectMessage(value: unknown): value is DirectMessage {
+  return Value.Check(StoredDirectMessage, value);
+}
+
 export function mapMessage(row: Selectable<DirectMessages>): DirectMessage;
 export function mapMessage(row: Selectable<DirectMessages> | null | undefined): DirectMessage | null;
 export function mapMessage(row: Selectable<DirectMessages> | null | undefined): DirectMessage | null {
   if (!row) return null;
-  const metadata = row.metadata as Metadata | null;
+  const metadata = isRecord(row.metadata) ? row.metadata : null;
+  const linkPreview = normalizeLinkPreview(metadata?.linkPreview);
   return {
     id: row.id,
     senderId: row.sender_id,
     recipientId: row.recipient_id,
     body: row.body,
-    createdAt: toMillis(row.created_at),
-    editedAt: toMillis(row.edited_at),
-    readAt: toMillis(row.read_at),
+    createdAt: epochMillis(row.created_at),
+    editedAt: epochMillis(row.edited_at),
+    readAt: epochMillis(row.read_at),
     invite: mapInvite(metadata),
-    linkPreview: normalizeLinkPreview(metadata?.linkPreview) || undefined,
-    replyTo: row.reply_to_message_id ? { messageId: row.reply_to_message_id } : undefined,
+    ...(linkPreview ? { linkPreview } : {}),
+    ...(row.reply_to_message_id ? { replyTo: { messageId: row.reply_to_message_id } } : {}),
     // deletedAt kept internal; callers filter before map
-    deletedAt: row.deleted_at ? toMillis(row.deleted_at) : null
+    deletedAt: row.deleted_at ? epochMillis(row.deleted_at) : null
   };
 }
 
@@ -109,12 +113,7 @@ export function orderedPair(a: string, b: string): [string, string] {
 
 export async function lockUserPair(q: Database, a: string, b: string): Promise<void> {
   const [low, high] = orderedPair(a, b);
-  await sql`SELECT pg_advisory_xact_lock(hashtext(${`voice-room:user-pair:${low}:${high}`}))`.execute(q);
-}
-
-// Escape LIKE wildcards in user-supplied search terms (we use ESCAPE '\').
-export function escapeLike(term: string): string {
-  return term.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+  await lockXact(q, lockKeys.userPair(low, high));
 }
 
 export const now = sql<Date>`current_timestamp`;

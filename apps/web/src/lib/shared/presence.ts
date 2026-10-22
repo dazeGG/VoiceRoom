@@ -1,12 +1,7 @@
-import type { PresenceStatus } from '@voice-room/shared/validation';
+import type { PresenceStatus } from '@voice-room/shared/contracts/users';
+import { isPresenceStatus } from '@voice-room/shared/validation';
 
 export type { PresenceStatus };
-
-const PRESENCE_STATUSES = new Set<PresenceStatus>(['online', 'away', 'dnd', 'offline']);
-
-function isPresenceStatus(value: unknown): value is PresenceStatus {
-  return typeof value === 'string' && PRESENCE_STATUSES.has(value as PresenceStatus);
-}
 
 export function normalizePresenceStatus(value: unknown, fallback: PresenceStatus = 'online'): PresenceStatus {
   return isPresenceStatus(value) ? value : fallback;

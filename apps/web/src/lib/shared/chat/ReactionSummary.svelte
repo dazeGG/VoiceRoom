@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Popover } from '$lib/shared/ui';
+  import { Popover, type PopoverContentState, type PopoverTriggerState } from '$lib/shared/ui';
   import ReactorList from './ReactorList.svelte';
   import Emoji from './Emoji.svelte';
   import type { ReactionStore } from './reaction-store.svelte';
@@ -35,7 +35,7 @@
           <span class="reaction-toggle" aria-hidden="true"><Emoji emoji={summary.emoji} size={18} decorative /></span>
         {/if}
         <Popover placement="top-start" flip role="dialog" ariaLabel={`Пользователи с реакцией ${summary.emoji}`}>
-          {#snippet trigger({ open, toggle, panelId })}
+          {#snippet trigger({ open, toggle, panelId }: PopoverTriggerState)}
             <button
               class="reaction-count"
               type="button"
@@ -46,7 +46,7 @@
               onclick={toggle}>{summary.count}</button
             >
           {/snippet}
-          {#snippet content({ close })}
+          {#snippet content({ close }: PopoverContentState)}
             <ReactorList {store} {messageId} emoji={summary.emoji} onclose={() => close()} />
           {/snippet}
         </Popover>

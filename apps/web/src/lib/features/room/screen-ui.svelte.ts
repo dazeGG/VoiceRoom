@@ -5,17 +5,32 @@ import { getScreenProfileLabels } from './client/media/profiles';
 import { getAllParticipants, getParticipantById } from './client/room/participants';
 import type { Participant } from './client/core/types';
 
-export const screenUi = $state({
+interface ScreenUiState {
+  revision: number;
+  stageVisible: boolean;
+  readonly showControls: boolean;
+  readonly showPlaceholder: boolean;
+  showMeta: boolean;
+  uiActive: boolean;
+  activeStream: MediaStream | null;
+  hideLeaveButton: boolean;
+  showScreenExit: boolean;
+}
+
+export const screenUi = $state<ScreenUiState>({
   // Screen streams change in place (tracks come and go on the same MediaStream),
   // which Svelte cannot see; the screen view bumps this after such a change.
   revision: 0,
   stageVisible: false,
-  hasStream: false,
-  showControls: false,
-  showPlaceholder: true,
+  get showControls() {
+    return Boolean(this.activeStream);
+  },
+  get showPlaceholder() {
+    return !this.activeStream;
+  },
   showMeta: false,
   uiActive: false,
-  activeStream: null as MediaStream | null,
+  activeStream: null,
   hideLeaveButton: false,
   showScreenExit: false
 });
@@ -124,8 +139,6 @@ export interface FullscreenView {
 
 export function getStreamVolumeView(): StreamVolumeView {
   void screenUi.revision;
-  void state.screenMuted;
-  void state.screenVolume;
   const peer = getActiveScreenPeer();
   const hideVolume = Boolean(peer?.isLocal);
   const muted = state.screenMuted || state.screenVolume <= 0;
@@ -141,7 +154,6 @@ export function getStreamVolumeView(): StreamVolumeView {
 
 export function getFullscreenView(): FullscreenView {
   void screenUi.revision;
-  void state.screenFullscreen;
   const fullscreen = state.screenFullscreen;
   return {
     fullscreen,

@@ -55,7 +55,7 @@ test('desktop hotkey sync buffers early events, prefers the latest status, and d
   };
   const actionListeners = new Set<(event: unknown) => void>();
   const statusListeners = new Set<(status: unknown) => void>();
-  const windowTarget = new EventTarget() as EventTarget & { voiceRoomDesktopHotkeys?: unknown };
+  const windowTarget: EventTarget & { voiceRoomDesktopHotkeys?: unknown } = new EventTarget();
   const storage = new MemoryStorage();
   const originalWarn = console.warn;
   let unbind = () => {};

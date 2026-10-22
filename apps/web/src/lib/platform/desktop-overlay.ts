@@ -1,3 +1,4 @@
+import { isArray, isOneOf, isRecord } from '@voice-room/shared/guards';
 import { createLogger, errorContext } from '$lib/shared/log';
 
 const log = createLogger('desktop:overlay');
@@ -53,23 +54,23 @@ function getBridge(): Window['voiceRoomDesktopOverlay'] | undefined {
   return window.voiceRoomDesktopOverlay;
 }
 
-function isAnchor(value: unknown): value is OverlayAnchor {
-  return typeof value === 'string' && (OVERLAY_ANCHORS as readonly string[]).includes(value);
+export function isOverlayAnchor(value: unknown): value is OverlayAnchor {
+  return isOneOf(OVERLAY_ANCHORS, value);
 }
 
-function isAvatarSize(value: unknown): value is OverlayAvatarSize {
-  return typeof value === 'string' && (OVERLAY_AVATAR_SIZES as readonly string[]).includes(value);
+export function isOverlayAvatarSize(value: unknown): value is OverlayAvatarSize {
+  return isOneOf(OVERLAY_AVATAR_SIZES, value);
 }
 
 export function normalizeOverlaySettings(value: unknown): DesktopOverlaySettings | null {
-  if (!value || typeof value !== 'object') return null;
-  const source = value as Record<string, unknown>;
+  if (!isRecord(value)) return null;
+  const source = value;
   return {
-    anchor: isAnchor(source.anchor) ? source.anchor : DEFAULT_SETTINGS.anchor,
-    avatarSize: isAvatarSize(source.avatarSize) ? source.avatarSize : DEFAULT_SETTINGS.avatarSize,
+    anchor: isOverlayAnchor(source.anchor) ? source.anchor : DEFAULT_SETTINGS.anchor,
+    avatarSize: isOverlayAvatarSize(source.avatarSize) ? source.avatarSize : DEFAULT_SETTINGS.avatarSize,
     enabled: source.enabled !== false,
     showNames: source.showNames !== false,
-    allowedExecutables: Array.isArray(source.allowedExecutables)
+    allowedExecutables: isArray(source.allowedExecutables)
       ? source.allowedExecutables.filter((item): item is string => typeof item === 'string' && Boolean(item))
       : []
   };
@@ -96,8 +97,8 @@ export async function updateDesktopOverlaySettings(patch: DesktopOverlayPatch): 
   if (!bridge?.setSettings) return null;
   const payload: DesktopOverlayPatch = {};
   if (typeof patch.enabled === 'boolean') payload.enabled = patch.enabled;
-  if (isAnchor(patch.anchor)) payload.anchor = patch.anchor;
-  if (isAvatarSize(patch.avatarSize)) payload.avatarSize = patch.avatarSize;
+  if (isOverlayAnchor(patch.anchor)) payload.anchor = patch.anchor;
+  if (isOverlayAvatarSize(patch.avatarSize)) payload.avatarSize = patch.avatarSize;
   if (typeof patch.showNames === 'boolean') payload.showNames = patch.showNames;
   if (Array.isArray(patch.allowedExecutables)) payload.allowedExecutables = patch.allowedExecutables;
   try {
@@ -109,8 +110,8 @@ export async function updateDesktopOverlaySettings(patch: DesktopOverlayPatch): 
 }
 
 function normalizeForeground(value: unknown): DesktopOverlayForeground | null {
-  if (!value || typeof value !== 'object') return null;
-  const source = value as Record<string, unknown>;
+  if (!isRecord(value)) return null;
+  const source = value;
   return {
     exe: typeof source.exe === 'string' ? source.exe : '',
     game: source.game === true,
@@ -164,7 +165,7 @@ export function syncDesktopOverlaySnapshot(participants: DesktopOverlayParticipa
   lastSnapshotKey = key;
   void Promise.resolve()
     .then(() => bridge.setSnapshot(payload))
-    .catch((error) => {
+    .catch((error: unknown) => {
       if (lastSnapshotKey === key) lastSnapshotKey = '';
       log.warn('desktop overlay snapshot sync failed', errorContext(error));
     });

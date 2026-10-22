@@ -2,11 +2,12 @@
 // devices, what was reported about it, and what the signed-in staff member may
 // do — a moderator blocks for a time and signs out everywhere; an admin also
 // blocks for good, deletes and gives the official mark — with the log of what
-// staff already did.
+// staff already did. The account and its story on the left, what can be done
+// with it on the right.
 
-import { ArrowLeft, BadgeCheck } from 'lucide-react';
+import { AppWindow, ArrowLeft, BadgeCheck, Ban, Globe, Lock, LogOut, Smartphone, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import type { AccountDetail, BlockDuration } from '@voice-room/shared/contracts/admin';
+import type { AccountDetail, AdminActionEntry, BlockDuration } from '@voice-room/shared/contracts/admin';
 import { blockTerm, describeAction } from '../accounts.ts';
 import {
   blockAccount,
@@ -19,14 +20,56 @@ import {
 } from '../api/admin.ts';
 import { forgetBadges } from '../badges.ts';
 import { TimeChart } from '../charts/TimeChart.tsx';
-import { formatAgo, formatCount, formatDateTime, formatDay, formatMinutes, formatNumericDate } from '../format.ts';
+import {
+  formatAgo,
+  formatCount,
+  formatDateTime,
+  formatDay,
+  formatHours,
+  formatMinutes,
+  formatNumericDate,
+  plural
+} from '../format.ts';
+import { usePageTitle } from '../frame.tsx';
 import { loadFailure, type LoadFailure } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { useCan } from '../staff.tsx';
-import { AccountBadge, Avatar, Button, Dialog, Switch } from '../ui/index.tsx';
+import {
+  AccountBadge,
+  Avatar,
+  Button,
+  Dialog,
+  Empty,
+  Panel,
+  Pill,
+  RoomAvatar,
+  Skeleton,
+  Stat,
+  Stats,
+  Switch,
+  type Tone
+} from '../ui/index.tsx';
 import { AccountBlockDialog } from './AccountBlockDialog.tsx';
 import { AccountDeleteDialog } from './AccountDeleteDialog.tsx';
 import './AccountCard.css';
+
+/** A log entry's dot: a block is red, a deletion amber, a block or deletion lifted green. */
+const LOG_TONES: Record<AdminActionEntry['action'], Tone> = {
+  block: 'danger',
+  delete: 'warning',
+  unblock: 'success',
+  cancel_deletion: 'success',
+  logout: 'neutral',
+  badge: 'accent',
+  staff_role: 'info'
+};
+
+/** A device's icon by the client it names: the desktop app, a phone, or a browser. */
+function deviceIcon(client: string) {
+  if (/voiceroom|desktop|electron/i.test(client)) return AppWindow;
+  if (/iphone|android|mobile|ios/i.test(client)) return Smartphone;
+  return Globe;
+}
 
 export function AccountCard({ userId, onBack }: { userId: string; onBack: () => void }) {
   const canModerate = useCan('accounts.moderate');
@@ -58,6 +101,8 @@ export function AccountCard({ userId, onBack }: { userId: string; onBack: () => 
   }, [userId, attempt]);
 
   const closeDialog = useCallback(() => setDialog(null), []);
+  // The top bar names the account once it is known.
+  usePageTitle(detail ? detail.account.displayName || detail.account.login : null);
 
   /** Runs one action; the answer is the card as it is now. */
   async function run(action: () => Promise<AccountDetail>, fallback: string): Promise<string | null> {
@@ -120,9 +165,11 @@ export function AccountCard({ userId, onBack }: { userId: string; onBack: () => 
     return (
       <>
         {back}
-        <p className="card-quiet" aria-busy="true">
-          Загружаем…
-        </p>
+        <div className="card-loading" aria-busy="true" aria-label="Загружаем аккаунт">
+          <Skeleton height={104} />
+          <Skeleton height={86} />
+          <Skeleton height={220} />
+        </div>
       </>
     );
   }
@@ -143,237 +190,239 @@ export function AccountCard({ userId, onBack }: { userId: string; onBack: () => 
   return (
     <>
       {back}
-      <header className="card-head">
-        <span className="card-avatar">
-          <Avatar
-            name={name}
-            src={account.avatarUrl}
-            colorKey={account.avatarColorKey}
-            background={account.avatarAccent}
-            size={64}
-          />
-          {account.online ? <span className="card-dot" aria-hidden="true" /> : null}
-        </span>
-        <div className="card-identity">
-          <h2>
-            {name}
-            <AccountBadge key={account.badge ?? 'none'} userId={account.id} />
-          </h2>
-          <span className="card-login">@{account.login}</span>
-          <span className="card-chips">
-            {account.online ? (
-              <span className="card-chip" data-tone="success">
-                в сети
+      <div className="card-layout">
+        <div className="card-main">
+          <section className="card-head" aria-label="Аккаунт">
+            <div className="card-identity">
+              <span className="card-avatar">
+                <Avatar
+                  name={name}
+                  src={account.avatarUrl}
+                  colorKey={account.avatarColorKey}
+                  background={account.avatarAccent}
+                  size={64}
+                />
+                {account.online ? <span className="card-dot" aria-hidden="true" /> : null}
               </span>
+              <div className="card-names">
+                <div className="card-name-line">
+                  <h2>
+                    {name}
+                    <AccountBadge key={account.badge ?? 'none'} userId={account.id} />
+                  </h2>
+                  {account.online ? <Pill tone="success">в сети</Pill> : null}
+                  {account.admin ? <Pill tone="accent">сотрудник</Pill> : null}
+                  {account.badge === 'official' ? <Pill tone="accent">официальный аккаунт</Pill> : null}
+                  {account.status === 'blocked' ? <Pill tone="danger">заблокирован</Pill> : null}
+                  {account.status === 'deleting' ? <Pill tone="danger">удаляется</Pill> : null}
+                </div>
+                <div className="card-meta">
+                  <span className="card-login ui-mono">@{account.login}</span>
+                  <span className="ui-mono" title="id аккаунта">
+                    id {account.id}
+                  </span>
+                  <span>{account.online ? 'в сети сейчас' : `был(а) ${formatAgo(account.lastSeenAt, now)}`}</span>
+                </div>
+              </div>
+            </div>
+            {detail.deletion ? (
+              <div className="card-banner" data-tone="warning" role="status">
+                <Trash2 size={16} aria-hidden="true" />
+                <span className="card-banner-text">
+                  Удалится {formatDateTime(detail.deletion.scheduledFor)} —{' '}
+                  {detail.deletion.byAdmin ? 'по решению администратора' : 'по просьбе владельца'}.
+                </span>
+                {detail.deletion.byAdmin && canManage ? (
+                  <Button
+                    disabled={busy}
+                    onClick={() => void runInline(() => cancelAccountDeletion(userId), 'Не удалось отменить удаление')}
+                  >
+                    Отменить удаление
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
-            {account.admin ? (
-              <span className="card-chip" data-tone="accent">
-                сотрудник
-              </span>
+            {detail.block && !detail.deletion?.byAdmin ? (
+              <div className="card-banner" data-tone="danger" role="status">
+                <Ban size={16} aria-hidden="true" />
+                <span className="card-banner-text">
+                  Заблокирован {blockTerm(detail.block.until)}. Причина: {detail.block.reason}
+                </span>
+                {canUnblock ? (
+                  <Button
+                    disabled={busy}
+                    onClick={() => void runInline(() => unblockAccount(userId), 'Не удалось разблокировать')}
+                  >
+                    Разблокировать
+                  </Button>
+                ) : null}
+              </div>
             ) : null}
-            {account.badge === 'official' ? (
-              <span className="card-chip" data-tone="accent">
-                официальный аккаунт
-              </span>
-            ) : null}
-            {account.status === 'blocked' ? (
-              <span className="card-chip" data-tone="danger">
-                заблокирован
-              </span>
-            ) : null}
-            {account.status === 'deleting' ? (
-              <span className="card-chip" data-tone="danger">
-                удаляется
-              </span>
-            ) : null}
-          </span>
-        </div>
-      </header>
-
-      {detail.deletion ? (
-        <div className="card-banner" role="status">
-          <span>
-            Удалится {formatDateTime(detail.deletion.scheduledFor)} —{' '}
-            {detail.deletion.byAdmin ? 'по решению администратора' : 'по просьбе владельца'}.
-          </span>
-          {detail.deletion.byAdmin && canManage ? (
-            <Button
-              disabled={busy}
-              onClick={() => void runInline(() => cancelAccountDeletion(userId), 'Не удалось отменить удаление')}
-            >
-              Отменить удаление
-            </Button>
+          </section>
+          {actionError ? (
+            <p className="admin-error" role="alert">
+              {actionError}
+            </p>
           ) : null}
-        </div>
-      ) : null}
-      {detail.block && !detail.deletion?.byAdmin ? (
-        <div className="card-banner" role="status">
-          <span>
-            Заблокирован {blockTerm(detail.block.until)}. Причина: {detail.block.reason}
-          </span>
-          {canUnblock ? (
-            <Button
-              disabled={busy}
-              onClick={() => void runInline(() => unblockAccount(userId), 'Не удалось разблокировать')}
-            >
-              Разблокировать
-            </Button>
-          ) : null}
-        </div>
-      ) : null}
-      {actionError ? (
-        <p className="card-error" role="alert">
-          {actionError}
-        </p>
-      ) : null}
 
-      <section className="card-tiles" aria-label="Цифры">
-        <div className="card-tile">
-          <span className="card-tile-label">Регистрация</span>
-          <span className="card-tile-value">{formatNumericDate(account.createdAt)}</span>
-        </div>
-        <div className="card-tile">
-          <span className="card-tile-label">Последний визит</span>
-          <span className="card-tile-value">{account.online ? 'сейчас' : formatAgo(account.lastSeenAt, now)}</span>
-        </div>
-        <div className="card-tile">
-          <span className="card-tile-label">Активных дней</span>
-          <span className="card-tile-value">{formatCount(account.activeDays)}</span>
-          <span className="card-tile-hint">{clients.length ? clients.join(', ') : 'нет данных о клиентах'}</span>
-        </div>
-        <div className="card-tile">
-          <span className="card-tile-label">В войсе</span>
-          <span className="card-tile-value">{formatMinutes(account.voiceMinutes)}</span>
-        </div>
-        <div className="card-tile">
-          <span className="card-tile-label">Сообщений</span>
-          <span className="card-tile-value">{formatCount(account.messages)}</span>
-        </div>
-        <div className="card-tile">
-          <span className="card-tile-label">Комнаты</span>
-          <span className="card-tile-value">{formatCount(account.ownedRooms)}</span>
-          <span className="card-tile-hint">своих · участник в {formatCount(detail.memberOf)}</span>
-        </div>
-        <div className="card-tile">
-          <span className="card-tile-label">Жалобы на аккаунт</span>
-          <span className="card-tile-value" data-alert={detail.reports.againstOpen > 0}>
-            {formatCount(detail.reports.against)}
-          </span>
-          <span className="card-tile-hint">
-            {detail.reports.againstOpen ? `открытых: ${detail.reports.againstOpen}` : 'открытых нет'} · от аккаунта:{' '}
-            {formatCount(detail.reports.filed)}
-          </span>
-        </div>
-      </section>
+          <Stats label="Цифры" min={150}>
+            <Stat label="Регистрация" value={formatNumericDate(account.createdAt)} />
+            <Stat label="Последний визит" value={account.online ? 'сейчас' : formatAgo(account.lastSeenAt, now)} />
+            <Stat
+              label="Активных дней"
+              value={formatCount(account.activeDays)}
+              note={clients.length ? clients.join(', ') : 'нет данных о клиентах'}
+            />
+            <Stat label="В войсе" value={formatMinutes(account.voiceMinutes)} />
+            <Stat label="Сообщений" value={formatCount(account.messages)} />
+            <Stat
+              label="Комнаты"
+              value={formatCount(account.ownedRooms)}
+              note={`своих · участник в ${formatCount(detail.memberOf)}`}
+            />
+            <Stat
+              label="Жалобы на аккаунт"
+              value={formatCount(detail.reports.against)}
+              tone={detail.reports.against > 0 ? 'danger' : undefined}
+              note={`${detail.reports.againstOpen ? `открытых: ${detail.reports.againstOpen}` : 'открытых нет'} · от аккаунта: ${formatCount(detail.reports.filed)}`}
+            />
+          </Stats>
 
-      <div className="card-charts">
-        <TimeChart
-          title="Сообщения за 90 дней"
-          kind="bar"
-          labels={labels}
-          series={[{ name: 'Сообщения', values: days.map((day) => day.messages), color: 'var(--vr-accent)' }]}
-          note={`Активных дней: ${activeInSpan} из ${days.length}.`}
-        />
-        <TimeChart
-          title="Войс за 90 дней"
-          kind="bar"
-          labels={labels}
-          format={formatMinutes}
-          series={[{ name: 'В войсе', values: days.map((day) => day.voiceMinutes), color: 'var(--vr-success)' }]}
-        />
-      </div>
-
-      <div className="card-columns">
-        <section className="card-box" aria-label="Комнаты">
-          <h3>Свои постоянные комнаты</h3>
-          {detail.ownedRooms.length === 0 ? (
-            <p className="card-quiet">Нет.</p>
-          ) : (
-            <ul className="card-list">
-              {detail.ownedRooms.map((room) => (
-                <li key={room.id}>
-                  {room.name || 'Без названия'}
-                  <span>{formatCount(room.members)} участн.</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-        <section className="card-box" aria-label="Устройства">
-          <h3>Устройства со входом</h3>
-          {detail.devices.length === 0 ? (
-            <p className="card-quiet">Ни одного открытого сеанса.</p>
-          ) : (
-            <ul className="card-list">
-              {detail.devices.map((device, index) => (
-                <li key={index}>
-                  {[device.client || 'Неизвестный клиент', device.os].filter(Boolean).join(' · ')}
-                  <span>{formatAgo(device.lastSeenAt, now)}</span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-      </div>
-
-      <section className="card-box" aria-label="Действия">
-        <h3>Действия</h3>
-        {canManage ? (
-          <div className="card-official">
-            <BadgeCheck size={16} aria-hidden="true" />
-            <span>
-              <strong>Официальный аккаунт VoiceRoom</strong>
-              <small>Галочка у имени везде; только ему можно называться VoiceRoom.</small>
-            </span>
-            <Switch
-              checked={account.badge === 'official'}
-              disabled={busy}
-              label="Официальный аккаунт"
-              onChange={toggleOfficial}
+          <div className="ui-grid" style={{ '--grid-min': '380px' }}>
+            <TimeChart
+              title="Сообщения за 90 дней"
+              kind="bar"
+              height={150}
+              labels={labels}
+              series={[{ name: 'Сообщения', values: days.map((day) => day.messages), color: 'var(--vr-accent)' }]}
+              note={`Активных дней: ${activeInSpan} из ${days.length}.`}
+            />
+            <TimeChart
+              title="Войс за 90 дней"
+              kind="bar"
+              height={150}
+              labels={labels}
+              // In hours, so the axis marks round hours rather than odd minutes.
+              format={formatHours}
+              series={[
+                { name: 'В войсе', values: days.map((day) => day.voiceMinutes / 60), color: 'var(--vr-success)' }
+              ]}
             />
           </div>
-        ) : null}
-        {account.admin ? (
-          <p className="card-quiet">Это аккаунт сотрудника: заблокировать, разлогинить или удалить его нельзя.</p>
-        ) : (
-          <div className="card-actions">
-            {canModerate && account.status === 'active' ? (
-              <Button disabled={busy} onClick={() => setDialog('block')}>
-                Заблокировать…
-              </Button>
-            ) : null}
-            {canModerate ? (
-              <Button disabled={busy || detail.devices.length === 0} onClick={() => setDialog('sign-out')}>
-                Разлогинить везде
-              </Button>
-            ) : null}
-            {canManage && !detail.deletion ? (
-              <Button className="card-danger" disabled={busy} onClick={() => setDialog('delete')}>
-                Удалить аккаунт…
-              </Button>
-            ) : null}
-          </div>
-        )}
-      </section>
 
-      <section className="card-box" aria-label="История действий">
-        <h3>История действий администраторов</h3>
-        {detail.actions.length === 0 ? (
-          <p className="card-quiet">Пока ничего.</p>
-        ) : (
-          <ol className="card-log">
-            {detail.actions.map((entry) => (
-              <li key={entry.id}>
-                <span className="card-log-what">{describeAction(entry)}</span>
-                {entry.reason ? <span className="card-log-reason">«{entry.reason}»</span> : null}
-                <span className="card-log-meta">
-                  {formatDateTime(entry.at)} · {entry.adminName}
+          <Panel title="История действий администраторов">
+            {detail.actions.length === 0 ? (
+              <Empty>Пока ничего</Empty>
+            ) : (
+              <ol className="card-log">
+                {detail.actions.map((entry) => (
+                  <li key={entry.id}>
+                    <span className="card-log-rail" aria-hidden="true">
+                      <span className="card-log-dot" data-tone={LOG_TONES[entry.action]} />
+                      <span className="card-log-line" />
+                    </span>
+                    <span className="card-log-body">
+                      <span className="card-log-what">{describeAction(entry)}</span>
+                      {entry.reason ? <span className="card-log-reason">«{entry.reason}»</span> : null}
+                      <span className="card-log-meta">
+                        {formatDateTime(entry.at)} · {entry.adminName}
+                      </span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </Panel>
+        </div>
+
+        <div className="card-side">
+          <Panel title="Действия">
+            {canManage ? (
+              <div className="card-official">
+                <BadgeCheck size={18} aria-hidden="true" />
+                <span>
+                  <strong>Официальный аккаунт</strong>
+                  <small>Галочка у имени везде; только ему можно называться VoiceRoom.</small>
                 </span>
-              </li>
-            ))}
-          </ol>
-        )}
-      </section>
+                <Switch
+                  checked={account.badge === 'official'}
+                  disabled={busy}
+                  label="Официальный аккаунт"
+                  onChange={toggleOfficial}
+                />
+              </div>
+            ) : null}
+            {account.admin ? (
+              <p className="card-quiet">
+                <Lock size={14} aria-hidden="true" /> Это аккаунт сотрудника: заблокировать, разлогинить или удалить его
+                нельзя.
+              </p>
+            ) : (
+              <div className="card-actions">
+                {canModerate && account.status === 'active' ? (
+                  <Button disabled={busy} onClick={() => setDialog('block')}>
+                    <Ban size={16} aria-hidden="true" />
+                    Заблокировать…
+                  </Button>
+                ) : null}
+                {canModerate ? (
+                  <Button disabled={busy || detail.devices.length === 0} onClick={() => setDialog('sign-out')}>
+                    <LogOut size={16} aria-hidden="true" />
+                    Разлогинить везде
+                  </Button>
+                ) : null}
+                {canManage && !detail.deletion ? (
+                  <Button variant="danger-outline" disabled={busy} onClick={() => setDialog('delete')}>
+                    <Trash2 size={16} aria-hidden="true" />
+                    Удалить аккаунт…
+                  </Button>
+                ) : null}
+              </div>
+            )}
+          </Panel>
+
+          <Panel title="Устройства со входом">
+            {detail.devices.length === 0 ? (
+              <Empty>Ни одного открытого сеанса</Empty>
+            ) : (
+              <ul className="card-list">
+                {detail.devices.map((device, index) => {
+                  const Icon = deviceIcon(device.client);
+                  return (
+                    <li key={index}>
+                      <span className="card-list-icon" aria-hidden="true">
+                        <Icon size={16} />
+                      </span>
+                      <span className="card-list-name">
+                        {[device.client || 'Неизвестный клиент', device.os].filter(Boolean).join(' · ')}
+                      </span>
+                      <span className="card-list-note">{formatAgo(device.lastSeenAt, now)}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Panel>
+
+          <Panel title="Свои постоянные комнаты">
+            {detail.ownedRooms.length === 0 ? (
+              <Empty>Нет</Empty>
+            ) : (
+              <ul className="card-list">
+                {detail.ownedRooms.map((room) => (
+                  <li key={room.id}>
+                    <RoomAvatar roomId={room.id} name={room.name || null} size={32} />
+                    <span className="card-list-name">{room.name || 'Без названия'}</span>
+                    <span className="card-list-note">
+                      {formatCount(room.members)} {plural(room.members, ['участник', 'участника', 'участников'])}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Panel>
+        </div>
+      </div>
 
       <AccountBlockDialog open={dialog === 'block'} name={name} onClose={closeDialog} onConfirm={confirmBlock} />
       <AccountDeleteDialog
@@ -382,13 +431,12 @@ export function AccountCard({ userId, onBack }: { userId: string; onBack: () => 
         onClose={closeDialog}
         onConfirm={confirmDelete}
       />
-      <Dialog open={dialog === 'sign-out'} title="Разлогинить везде" onClose={closeDialog}>
-        <div className="card-confirm">
-          <p>
-            Все сеансы <strong>{name}</strong> завершатся, звонок прервётся. Войти снова можно будет с паролем — это не
-            блокировка.
-          </p>
-          <div className="card-confirm-actions">
+      <Dialog
+        open={dialog === 'sign-out'}
+        title="Разлогинить везде"
+        onClose={closeDialog}
+        footer={
+          <>
             <Button variant="ghost" onClick={closeDialog}>
               Отмена
             </Button>
@@ -399,8 +447,13 @@ export function AccountCard({ userId, onBack }: { userId: string; onBack: () => 
             >
               Разлогинить
             </Button>
-          </div>
-        </div>
+          </>
+        }
+      >
+        <p className="card-confirm">
+          Все сеансы <strong>{name}</strong> завершатся, звонок прервётся. Войти снова можно будет с паролем — это не
+          блокировка.
+        </p>
       </Dialog>
     </>
   );

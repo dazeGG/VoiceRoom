@@ -41,7 +41,8 @@ export function createScreenSubscriptionRetryController(scheduler: ScreenSubscri
     }
 
     const retry = retries.get(target.key) || { attempts: 0, timer: 0 };
-    if (retry.timer || retry.attempts >= delays.length) return;
+    const delay = delays[retry.attempts];
+    if (retry.timer || delay === undefined) return;
 
     retry.timer = setTimer(() => {
       retry.timer = 0;
@@ -71,7 +72,7 @@ export function createScreenSubscriptionRetryController(scheduler: ScreenSubscri
       // are normally asynchronous, but a synchronous failure callback must not
       // create a second delay timer for the same SID and exceed the epoch cap.
       target.retry();
-    }, delays[retry.attempts]);
+    }, delay);
     retries.set(target.key, retry);
   };
 

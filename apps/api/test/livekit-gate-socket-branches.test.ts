@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import net from 'node:net';
-import test from 'node:test';
+import test, { mock } from 'node:test';
 
 import type { CredentialBoundaryService } from '../src/domains/admission/credential-boundary.service.ts';
 import type { GateClaims } from '../src/domains/admission/gate-credential-signer.ts';
@@ -52,7 +52,16 @@ class FakeSocket extends EventEmitter {
 
 // A credential and a LiveKit JWT that belong to the same admission, so the
 // token-binding check passes and the socket branches below are what is tested.
-const CLAIMS = { cid: 'cid-1', iat: Date.now(), peer: 'peer-1', room: 'room-1' };
+const CLAIMS = {
+  cid: 'cid-1',
+  exp: Date.now() + 60_000,
+  iat: Date.now(),
+  peer: 'peer-1',
+  pEpoch: 1,
+  pId: 'guest-1',
+  pType: 'guest',
+  room: 'room-1'
+} satisfies GateClaims;
 const ACCESS_TOKEN = [
   Buffer.from('{"alg":"HS256"}').toString('base64url'),
   Buffer.from(
@@ -61,11 +70,11 @@ const ACCESS_TOKEN = [
   'signature'
 ].join('.');
 
-type GateError = { evt?: string; msg?: string };
+type GateError = { evt?: string; msg?: string | undefined };
 
-function createGate({ errors = [] as GateError[] } = {}) {
+function createGate({ errors = new Array<GateError>() } = {}) {
   const boundary = fake<CredentialBoundaryService>({
-    authorizeCredential: async () => ({ ok: true as const, claims: CLAIMS as GateClaims }),
+    authorizeCredential: async () => ({ ok: true as const, claims: CLAIMS }),
     assertReady: async () => true as const
   });
   const service = createLiveKitAuthGateService({
@@ -87,11 +96,10 @@ const upgradeRequest = (url = `/rtc?access_token=${ACCESS_TOKEN}&vr_gate_credent
 });
 
 function withConnect(factory: () => unknown, run: () => unknown) {
-  const original = net.connect;
   // The gate opens its upstream with net.connect; the test swaps in a fake socket.
-  net.connect = factory as typeof net.connect;
+  const connect = mock.method(net, 'connect', factory);
   return Promise.resolve(run()).finally(() => {
-    net.connect = original;
+    connect.mock.restore();
   });
 }
 

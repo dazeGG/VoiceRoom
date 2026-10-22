@@ -1,6 +1,6 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
-import type { LoginAlerts, Me } from '@voice-room/shared/contracts/account';
+import { LoginAlerts, Me } from '@voice-room/shared/contracts/account';
 import { cookieFrom, request, startApiServer } from './fakes/server-process.ts';
 import { openWs, waitForClose, waitForWsType } from './ws-harness.ts';
 
@@ -28,7 +28,7 @@ async function signIn(socketPath: string, userAgent: string, { register = false 
 }
 
 async function me(socketPath: string, cookie: string) {
-  return (await request<Me>(socketPath, { pathname: '/api/auth/me', cookie })).body.user;
+  return (await request(socketPath, { pathname: '/api/auth/me', cookie }, Me)).body.user;
 }
 
 test('a sign-in from a new device asks the open devices live, and "Это не я" ends it everywhere', async (t) => {
@@ -46,13 +46,13 @@ test('a sign-in from a new device asks the open devices live, and "Это не �
   assert.equal(announced.payload.alert.kind, 'login');
   assert.equal('sessionPublicId' in announced.payload.alert, false);
 
-  const pending = await request<LoginAlerts>(socketPath, { pathname: '/api/auth/login-alerts', cookie: laptop });
+  const pending = await request(socketPath, { pathname: '/api/auth/login-alerts', cookie: laptop }, LoginAlerts);
   assert.equal(pending.status, 200);
   assert.deepEqual(
     pending.body.alerts.map((alert) => alert.id),
     [announced.payload.alert.id]
   );
-  const ownView = await request<LoginAlerts>(socketPath, { pathname: '/api/auth/login-alerts', cookie: stranger });
+  const ownView = await request(socketPath, { pathname: '/api/auth/login-alerts', cookie: stranger }, LoginAlerts);
   assert.deepEqual(ownView.body.alerts, [], 'the new device is not asked about itself');
 
   const strangerSocket = openWs(socketPath, { cookie: stranger });
@@ -94,7 +94,7 @@ test('a sign-in from a new device asks the open devices live, and "Это не �
 
   // A denied device asks again; confirming it makes the next sign-in quiet.
   const strangerBack = await signIn(socketPath, FIREFOX_LINUX);
-  const [secondAlert] = (await request<LoginAlerts>(socketPath, { pathname: '/api/auth/login-alerts', cookie: laptop }))
+  const [secondAlert] = (await request(socketPath, { pathname: '/api/auth/login-alerts', cookie: laptop }, LoginAlerts))
     .body.alerts;
   assert.ok(secondAlert);
   const confirmed = await request(socketPath, {
@@ -108,7 +108,7 @@ test('a sign-in from a new device asks the open devices live, and "Это не �
 
   await signIn(socketPath, FIREFOX_LINUX);
   assert.deepEqual(
-    (await request<LoginAlerts>(socketPath, { pathname: '/api/auth/login-alerts', cookie: laptop })).body.alerts,
+    (await request(socketPath, { pathname: '/api/auth/login-alerts', cookie: laptop }, LoginAlerts)).body.alerts,
     []
   );
   laptopSocket.ws.close();

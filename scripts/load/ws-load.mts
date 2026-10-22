@@ -24,7 +24,21 @@ const screenRequests = Number(process.env.SCREEN_REQUESTS || 0);
 const screenProfile = process.env.SCREEN_PROFILE || 'high-60';
 const cameraRequests = Number(process.env.CAMERA_REQUESTS || 0);
 
-type Frame = { id?: string; type: string; payload?: Record<string, unknown> };
+type Frame = { id?: string | undefined; type: string; payload?: Record<string, unknown> | undefined };
+// This file is copied to the load generator on its own, so it carries its own guard.
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+
+/** A server frame; null for a message that is not one. */
+function readFrame(raw: Buffer): Frame | null {
+  const value: unknown = JSON.parse(raw.toString('utf8'));
+  if (!isObject(value) || typeof value.type !== 'string') return null;
+  return {
+    type: value.type,
+    id: typeof value.id === 'string' ? value.id : undefined,
+    payload: isObject(value.payload) ? value.payload : undefined
+  };
+}
+
 type Peer = { ws: WebSocket; roomId: string; peerId: string; sessionToken: string; name: string; ip: string };
 
 const counts: Record<string, number> = {};
@@ -56,7 +70,8 @@ async function post(
     headers: { 'content-type': 'application/json', 'x-forwarded-for': ip },
     body: JSON.stringify(body)
   });
-  return { status: response.status, json: (await response.json().catch(() => ({}))) as Record<string, unknown> };
+  const json: unknown = await response.json().catch(() => ({}));
+  return { status: response.status, json: isObject(json) ? json : {} };
 }
 
 async function createRoom(index: number): Promise<string | null> {
@@ -71,7 +86,8 @@ function openSocket(ip: string, onFrame: (frame: Frame) => void): Promise<WebSoc
     const ws = new WebSocket(wsUrl, { headers: { 'x-forwarded-for': ip } });
     const timer = setTimeout(() => reject(new Error('no ready frame')), 10_000);
     ws.on('message', (raw: Buffer) => {
-      const frame = JSON.parse(raw.toString('utf8')) as Frame;
+      const frame = readFrame(raw);
+      if (!frame) return;
       if (frame.type === 'ready') {
         clearTimeout(timer);
         resolve(ws);
@@ -98,8 +114,8 @@ async function joinPeer(roomId: string, index: number): Promise<Peer | null> {
     if (['room.full', 'server.full', 'room.not_found', 'error'].includes(frame.type)) refused?.(frame.type);
     if (frame.type === 'room.media.grant' && frame.id) pendingGrants.get(frame.id)?.(payload);
     if (frame.type === 'room.chat.message') {
-      const message = payload.message as { text?: unknown } | undefined;
-      const text = typeof message?.text === 'string' ? message.text : '';
+      const message = payload.message;
+      const text = isObject(message) && typeof message.text === 'string' ? message.text : '';
       const sent = sentAt.get(text);
       if (sent !== undefined && !text.includes(peer.peerId)) {
         fanoutMs.push(Date.now() - sent);

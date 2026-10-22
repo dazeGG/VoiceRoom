@@ -3,11 +3,8 @@
 // the SFU, while voices and screen audio keep flowing.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
-import { createInitialRoomState } from '../../src/lib/features/room/client/model/room-state.ts';
-import { createParticipant } from '../../src/lib/features/room/client/room/participants.ts';
-import { syncRemoteVideoVisibility } from '../../src/lib/features/room/client/services/livekit/remote-participants.ts';
-import { isAppVisible, onAppVisibilityChange, setDesktopWindowVisible } from '../../src/lib/platform/app-visibility.ts';
+import { onAppVisibilityChange, setDesktopWindowVisible } from '../../src/lib/platform/app-visibility.ts';
+import { fakeParticipant, loadLiveKitHarness } from '../helpers/livekit-harness.ts';
 
 class FakePublication {
   enabledCalls: boolean[] = [];
@@ -31,24 +28,9 @@ function setDocumentVisibility(value: DocumentVisibilityState) {
   document.dispatchEvent(new Event('visibilitychange'));
 }
 
-let publications: Record<string, FakePublication>;
-
 beforeEach(() => {
-  Object.assign(state, createInitialRoomState());
-  state.peerId = 'me';
   setDocumentVisibility('visible');
   setDesktopWindowVisible(true);
-  publications = {
-    camera: new FakePublication('camera', 'TR_cam'),
-    microphone: new FakePublication('microphone', 'TR_mic'),
-    screen: new FakePublication('screen_share', 'TR_screen'),
-    screenAudio: new FakePublication('screen_share_audio', 'TR_screen_audio'),
-    unsubscribed: new FakePublication('screen_share', 'TR_other', false)
-  };
-  const peer = createParticipant({ id: 'peer-a', name: 'A' });
-  peer.livekitParticipant = {
-    trackPublications: new Map(Object.values(publications).map((publication) => [publication.trackSid, publication]))
-  } as never;
 });
 
 afterEach(() => {
@@ -56,13 +38,26 @@ afterEach(() => {
   setDocumentVisibility('visible');
 });
 
-test('hiding the desktop window pauses remote cameras and screens only, showing it resumes them', () => {
-  syncRemoteVideoVisibility();
+test('hiding the desktop window pauses remote cameras and screens only, showing it resumes them', async () => {
+  const lk = await loadLiveKitHarness();
+  // The service was loaded fresh: it reads the visibility of its own module instance.
+  const visibility = await import('../../src/lib/platform/app-visibility.ts');
+  // The sources as the harness names them, see TRACK_SOURCE in livekit-harness.ts.
+  const publications = {
+    camera: new FakePublication('camera', 'TR_cam'),
+    microphone: new FakePublication('microphone', 'TR_mic'),
+    screen: new FakePublication('screen-video', 'TR_screen'),
+    screenAudio: new FakePublication('screen-audio', 'TR_screen_audio'),
+    unsubscribed: new FakePublication('screen-video', 'TR_other', false)
+  };
+  lk.syncParticipant(fakeParticipant('peer-a', Object.values(publications)));
+
+  lk.service.syncRemoteVideoVisibility();
   expect(publications.camera.enabledCalls).toEqual([]);
 
-  setDesktopWindowVisible(false);
-  expect(isAppVisible()).toBe(false);
-  syncRemoteVideoVisibility();
+  visibility.setDesktopWindowVisible(false);
+  expect(visibility.isAppVisible()).toBe(false);
+  lk.service.syncRemoteVideoVisibility();
   expect(publications.camera.enabledCalls).toEqual([false]);
   expect(publications.screen.enabledCalls).toEqual([false]);
   expect(publications.microphone.enabledCalls).toEqual([]);
@@ -71,11 +66,11 @@ test('hiding the desktop window pauses remote cameras and screens only, showing 
   expect(publications.unsubscribed.enabledCalls).toEqual([]);
 
   // No repeated requests.
-  syncRemoteVideoVisibility();
+  lk.service.syncRemoteVideoVisibility();
   expect(publications.camera.enabledCalls).toEqual([false]);
 
-  setDesktopWindowVisible(true);
-  syncRemoteVideoVisibility();
+  visibility.setDesktopWindowVisible(true);
+  lk.service.syncRemoteVideoVisibility();
   expect(publications.camera.enabledCalls).toEqual([false, true]);
   expect(publications.screen.enabledCalls).toEqual([false, true]);
 });

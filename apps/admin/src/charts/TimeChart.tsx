@@ -1,5 +1,7 @@
 // A small chart of numbers over time, drawn in SVG at the width it is given:
-// lines, or bars stacked per label. Hovering shows the values of one label.
+// lines (the first one over a faint fill), or bars stacked per label. The axis
+// has three marks (0, half and the top) and five dates under it; the legend
+// gives each series' latest value. Hovering shows the values of one label.
 
 import { useLayoutEffect, useRef, useState, type PointerEvent } from 'react';
 import type { ChartSeries } from './chart-series.ts';
@@ -19,9 +21,25 @@ function niceStep(value: number): number {
   return 10 * power;
 }
 
-/** Counts get whole-number gridlines: four equal steps of a round size. */
+/** Counts get whole-number gridlines: two equal steps of a round size. */
 function countMax(value: number): number {
-  return 4 * Math.max(1, niceStep(value / 4));
+  return 2 * Math.max(1, niceStep(value / 2));
+}
+
+const X_LABELS = 5;
+
+/** Up to five labels spread evenly from the first to the last. */
+function labelIndexes(count: number): Set<number> {
+  if (count <= X_LABELS) return new Set(Array.from({ length: count }, (_, index) => index));
+  return new Set(Array.from({ length: X_LABELS }, (_, k) => Math.round((k * (count - 1)) / (X_LABELS - 1))));
+}
+
+function lastValue(values: readonly (number | null)[]): number | null {
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    const value = values[index];
+    if (value !== null && value !== undefined) return value;
+  }
+  return null;
 }
 
 /** A round top for the axis: 1, 2, 2.5 or 5 times a power of ten. */
@@ -85,22 +103,48 @@ export function TimeChart({
     PAD.left + (kind === 'bar' ? step * (index + 0.5) : count > 1 ? step * index : plotWidth / 2);
   const y = (value: number) => PAD.top + plotHeight - (value / top) * plotHeight;
 
+  /** Each unbroken run of a series as its points; a gap starts a new run. */
+  const runsOf = (values: readonly (number | null)[]) => {
+    const runs: { x: number; y: number }[][] = [];
+    let run: { x: number; y: number }[] | null = null;
+    values.forEach((value, index) => {
+      if (value === null) {
+        run = null;
+        return;
+      }
+      if (!run) {
+        run = [];
+        runs.push(run);
+      }
+      run.push({ x: x(index), y: y(value) });
+    });
+    return runs;
+  };
+  const point = (at: { x: number; y: number }) => `${at.x.toFixed(1)},${at.y.toFixed(1)}`;
+
   const paths =
     kind === 'line'
-      ? series.map((line) => {
-          let path = '';
-          let open = false;
-          line.values.forEach((value, index) => {
-            if (value === null) {
-              open = false;
-              return;
-            }
-            path += `${open ? 'L' : 'M'}${x(index).toFixed(1)},${y(value).toFixed(1)}`;
-            open = true;
-          });
-          return path;
-        })
+      ? series.map((line) =>
+          runsOf(line.values)
+            .map((run) => run.map((at, index) => `${index ? 'L' : 'M'}${point(at)}`).join(''))
+            .join('')
+        )
       : [];
+  // The first series sits over a faint fill down to the axis.
+  const firstSeries = series[0];
+  const area =
+    kind === 'line' && firstSeries
+      ? runsOf(firstSeries.values)
+          .filter((run) => run.length > 1)
+          .map((run) => {
+            const first = run[0];
+            const last = run.at(-1);
+            if (!first || !last) return '';
+            const base = y(0).toFixed(1);
+            return `M${first.x.toFixed(1)},${base}${run.map((at) => `L${point(at)}`).join('')}L${last.x.toFixed(1)},${base}Z`;
+          })
+          .join('')
+      : '';
 
   const bars: { x: number; y: number; width: number; height: number; color: string }[] = [];
   if (kind === 'bar') {
@@ -118,8 +162,8 @@ export function TimeChart({
     }
   }
 
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((share) => share * top);
-  const labelEvery = Math.max(1, Math.ceil(count / Math.max(1, Math.floor(plotWidth / 70))));
+  const ticks = [0, 0.5, 1].map((share) => share * top);
+  const shownLabels = labelIndexes(count);
 
   function onPointerMove(event: PointerEvent<SVGSVGElement>): void {
     if (count === 0 || plotWidth <= 0) return;
@@ -140,12 +184,16 @@ export function TimeChart({
       <figcaption className="chart-head">
         <span className="chart-title">{title}</span>
         <span className="chart-legend">
-          {series.map((line) => (
-            <span key={line.name} className="chart-key">
-              <span className="chart-dot" style={{ background: line.color }} />
-              {line.name}
-            </span>
-          ))}
+          {series.map((line) => {
+            const latest = lastValue(line.values);
+            return (
+              <span key={line.name} className="chart-key">
+                <span className="chart-swatch" style={{ background: line.color }} />
+                <span>{line.name}</span>
+                {latest !== null ? <span className="chart-key-value">{format(latest)}</span> : null}
+              </span>
+            );
+          })}
         </span>
       </figcaption>
       <div className="chart-plot" ref={plot} style={{ height }}>
@@ -170,7 +218,7 @@ export function TimeChart({
                 </g>
               ))}
               {labels.map((label, index) =>
-                index % labelEvery === 0 ? (
+                shownLabels.has(index) ? (
                   <text key={index} className="chart-axis" x={x(index)} y={height - 6} textAnchor="middle">
                     {label}
                   </text>
@@ -188,9 +236,20 @@ export function TimeChart({
                       style={{ fill: bar.color }}
                     />
                   ))
-                : paths.map((path, index) => (
-                    <path key={index} className="chart-line" d={path} style={{ stroke: series[index]?.color }} />
-                  ))}
+                : [
+                    area && firstSeries ? (
+                      <path key="area" className="chart-area" d={area} style={{ fill: firstSeries.color }} />
+                    ) : null,
+                    ...paths.map((path, index) => (
+                      <path
+                        key={index}
+                        className="chart-line"
+                        data-dashed={series[index]?.dashed === true}
+                        d={path}
+                        style={{ stroke: series[index]?.color }}
+                      />
+                    ))
+                  ]}
               {hover !== null ? (
                 <>
                   <line className="chart-cursor" x1={x(hover)} x2={x(hover)} y1={PAD.top} y2={PAD.top + plotHeight} />

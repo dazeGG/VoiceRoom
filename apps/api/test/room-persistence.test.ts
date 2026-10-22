@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import type { RoomCreated, RoomStatus } from '@voice-room/shared/contracts/rooms';
+import { SignedIn } from '@voice-room/shared/contracts/account';
+import { Failure } from '@voice-room/shared/contracts/http';
+import { RoomCreated, RoomStatus } from '@voice-room/shared/contracts/rooms';
 import { createTestDatabase } from './db-harness.ts';
 import {
   cookieFrom,
@@ -29,26 +31,27 @@ test('room registry survives restart and preserves the static flag', async (t) =
   try {
     await waitForHealthz(socketPath);
 
-    const dynamicRoom = await postJson<RoomCreated>(socketPath, '/api/rooms', {});
+    const dynamicRoom = await postJson(socketPath, '/api/rooms', RoomCreated, {});
     assert.equal(dynamicRoom.status, 201);
     assert.equal(dynamicRoom.body.isStatic, false);
 
-    const registered = await postJson(socketPath, '/api/auth/register', {
+    const registered = await postJson(socketPath, '/api/auth/register', SignedIn, {
       login: 'persist-owner',
       password: 'password123'
     });
     assert.equal(registered.status, 201);
 
-    const staticRoom = await postJson<RoomCreated>(
+    const staticRoom = await postJson(
       socketPath,
       '/api/rooms',
+      RoomCreated,
       { isStatic: true },
       cookieFrom(registered.setCookie)
     );
     assert.equal(staticRoom.status, 201);
     assert.equal(staticRoom.body.isStatic, true);
 
-    const dynamicBeforeRestart = await getJson<RoomStatus>(socketPath, `/api/rooms/${dynamicRoom.body.roomId}`);
+    const dynamicBeforeRestart = await getJson(socketPath, `/api/rooms/${dynamicRoom.body.roomId}`, RoomStatus);
     assert.equal(dynamicBeforeRestart.status, 200);
     assert.equal(dynamicBeforeRestart.body.exists, true);
     assert.equal(dynamicBeforeRestart.body.isStatic, false);
@@ -69,13 +72,13 @@ test('room registry survives restart and preserves the static flag', async (t) =
     try {
       await waitForHealthz(socketPath);
 
-      const dynamicAfterRestart = await getJson<RoomStatus>(socketPath, `/api/rooms/${dynamicRoom.body.roomId}`);
+      const dynamicAfterRestart = await getJson(socketPath, `/api/rooms/${dynamicRoom.body.roomId}`, RoomStatus);
       assert.equal(dynamicAfterRestart.status, 200);
       assert.equal(dynamicAfterRestart.body.exists, true);
       assert.equal(dynamicAfterRestart.body.isStatic, false);
       assert.equal(dynamicAfterRestart.body.createdAt, createdAt);
 
-      const staticAfterRestart = await getJson<RoomStatus>(socketPath, `/api/rooms/${staticRoom.body.roomId}`);
+      const staticAfterRestart = await getJson(socketPath, `/api/rooms/${staticRoom.body.roomId}`, RoomStatus);
       assert.equal(staticAfterRestart.status, 200);
       assert.equal(staticAfterRestart.body.exists, true);
       assert.equal(staticAfterRestart.body.isStatic, true);
@@ -103,11 +106,11 @@ test('temporary empty rooms count toward per-IP room quota', async (t) => {
   try {
     await waitForHealthz(socketPath);
 
-    const tempRoom = await postJson<RoomCreated>(socketPath, '/api/rooms', { isStatic: false });
+    const tempRoom = await postJson(socketPath, '/api/rooms', RoomCreated, { isStatic: false });
     assert.equal(tempRoom.status, 201);
     assert.equal(tempRoom.body.isStatic, false);
 
-    const blocked = await postJson<RoomCreated>(socketPath, '/api/rooms', { isStatic: false });
+    const blocked = await postJson(socketPath, '/api/rooms', Failure, { isStatic: false });
     assert.equal(blocked.status, 429);
     assert.equal(blocked.body.error, 'Too many temporary rooms waiting from this IP, reuse one or try later');
   } catch (error) {
@@ -130,7 +133,7 @@ test('active temporary rooms stay counted toward per-IP room creation quota', as
   try {
     await waitForHealthz(socketPath);
 
-    const tempRoom = await postJson<RoomCreated>(socketPath, '/api/rooms', { isStatic: false });
+    const tempRoom = await postJson(socketPath, '/api/rooms', RoomCreated, { isStatic: false });
     assert.equal(tempRoom.status, 201);
     assert.equal(tempRoom.body.isStatic, false);
 
@@ -144,7 +147,7 @@ test('active temporary rooms stay counted toward per-IP room creation quota', as
       name: 'Alice'
     });
 
-    const blocked = await postJson<RoomCreated>(socketPath, '/api/rooms', { isStatic: false });
+    const blocked = await postJson(socketPath, '/api/rooms', Failure, { isStatic: false });
     assert.equal(blocked.status, 429);
     assert.equal(blocked.body.error, 'Too many temporary rooms waiting from this IP, reuse one or try later');
   } catch (error) {

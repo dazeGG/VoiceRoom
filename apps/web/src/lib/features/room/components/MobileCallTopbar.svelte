@@ -9,6 +9,7 @@
   import RoomCallTimer from './RoomCallTimer.svelte';
   import { copyText } from '$lib/shared/utils/clipboard';
   import { showToast } from '../client/ui/toast';
+  import { isRecord } from '@voice-room/shared/guards';
 
   let { duo }: { duo: boolean } = $props();
 
@@ -26,7 +27,7 @@
         return;
       } catch (error) {
         // Closing the sheet is a choice, not a failure.
-        if ((error as { name?: string } | null)?.name === 'AbortError') return;
+        if (isRecord(error) && error.name === 'AbortError') return;
       }
     }
     try {

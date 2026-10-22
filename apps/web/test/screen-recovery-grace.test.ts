@@ -15,18 +15,17 @@ function clock() {
       return id;
     },
     clearTimeout: (id: unknown) => {
-      timers.delete(id as number);
+      if (typeof id === 'number') timers.delete(id);
     },
     advance(ms: number) {
       now += ms;
-      let ready;
-      do {
-        ready = [...timers.entries()].filter(([, timer]) => timer.at <= now);
+      const due = () => [...timers.entries()].filter(([, timer]) => timer.at <= now);
+      for (let ready = due(); ready.length > 0; ready = due()) {
         for (const [id, timer] of ready) {
           timers.delete(id);
           timer.callback();
         }
-      } while (ready.length);
+      }
     },
     pending: () => timers.size
   };
@@ -126,15 +125,16 @@ test('global hard deadline is absolute across recovery epoch churn', () => {
 });
 
 test('screen grace timers invoke injected schedulers without rebinding their receiver', () => {
-  let receiver = null;
+  const receivers: unknown[] = [];
   const grace = new ScreenRecoveryGraceController({
     setTimeout(callback) {
-      receiver = this;
+      receivers.push(this);
       return { callback };
     },
     clearTimeout() {}
   });
 
   grace.beginGlobal(1);
-  assert.equal(receiver, undefined);
+  assert.notEqual(receivers.length, 0);
+  assert.equal(receivers.at(-1), undefined);
 });

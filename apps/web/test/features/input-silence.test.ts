@@ -28,28 +28,30 @@ function stubAudio({ samples, state = 'running' }: { samples: number[]; state?: 
       constructor(readonly tracks: unknown[]) {}
     }
   );
+  vi.stubGlobal('MediaStreamTrack', class {});
   return closed;
 }
 
-const liveTrack = { readyState: 'live' } as MediaStreamTrack;
+/** A microphone track in `readyState`; call it after stubAudio, which registers the stand-in class. */
+const track = (readyState: MediaStreamTrackState) => Object.assign(new MediaStreamTrack(), { readyState });
 
 test('exact zeros for the whole sample mean the microphone delivers nothing', async () => {
   const closed = stubAudio({ samples: [0, 0, 0] });
-  await expect(isMicrophoneInputSilent(liveTrack, 50)).resolves.toBe(true);
+  await expect(isMicrophoneInputSilent(track('live'), 50)).resolves.toBe(true);
   expect(closed).toEqual([true]);
 });
 
 test('the faintest room noise means the microphone works', async () => {
   stubAudio({ samples: [0, 0.00001, 0] });
-  await expect(isMicrophoneInputSilent(liveTrack, 50)).resolves.toBe(false);
+  await expect(isMicrophoneInputSilent(track('live'), 50)).resolves.toBe(false);
 });
 
 test('a context the page cannot start yet proves nothing', async () => {
   stubAudio({ samples: [0, 0, 0], state: 'suspended' });
-  await expect(isMicrophoneInputSilent(liveTrack, 50)).resolves.toBe(false);
+  await expect(isMicrophoneInputSilent(track('live'), 50)).resolves.toBe(false);
 });
 
 test('an ended track is not reported', async () => {
   stubAudio({ samples: [0, 0, 0] });
-  await expect(isMicrophoneInputSilent({ readyState: 'ended' } as MediaStreamTrack, 50)).resolves.toBe(false);
+  await expect(isMicrophoneInputSilent(track('ended'), 50)).resolves.toBe(false);
 });

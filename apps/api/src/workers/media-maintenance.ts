@@ -1,4 +1,6 @@
 import type pg from 'pg';
+import { readWorkerConfig } from '../app/config.ts';
+
 function createMediaMaintenanceWorker({
   maintenanceService,
   intervalMs = 60_000
@@ -22,7 +24,7 @@ function createMediaMaintenanceWorker({
   }
   return Object.freeze({
     run,
-    runOnce: service.cleanupOnce,
+    runOnce: () => service.cleanupOnce(),
     stop: () => {
       stopping = true;
     }
@@ -30,12 +32,13 @@ function createMediaMaintenanceWorker({
 }
 
 async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
-  if (String(env.MEDIA_MAINTENANCE_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
+  const config = readWorkerConfig(env);
+  if (!config.MEDIA_MAINTENANCE_CLAIM_ENABLED) return;
   const { createAttachmentRepository } = await import('../domains/media/attachment.repository.ts');
   const { createMediaJobRepository } = await import('../domains/media/media-job.repository.ts');
   const { createMediaMaintenanceService } = await import('../domains/media/media-maintenance.service.ts');
   const { createMediaStorage } = await import('../domains/media/storage.ts');
-  const storage = createMediaStorage({ rootDir: env.MEDIA_STORAGE_DIR || '/data/media' });
+  const storage = createMediaStorage({ rootDir: config.MEDIA_STORAGE_DIR });
   const worker = createMediaMaintenanceWorker({
     maintenanceService: createMediaMaintenanceService({
       attachmentRepository: createAttachmentRepository({ pool }),

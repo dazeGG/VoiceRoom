@@ -1,7 +1,7 @@
-import type { RemoteTrack } from 'livekit-client';
 import { PEER_LATENCY_INTERVAL_MS } from '../core/config';
 import { state } from '../core/state.svelte';
 import { findFirstLocalPublication, findLocalMicrophonePublication } from '../services/livekit-service';
+import { isActiveCandidatePair, readRtcStats, type RtcStat, type RtcStatsSource } from '../media/rtc-stats';
 import { recordNetworkSample } from './call-quality';
 
 import { createLogger, errorContext } from '$lib/shared/log';
@@ -13,9 +13,9 @@ let peerLatencyTimer = 0;
 export function startPeerLatencyStats(): void {
   if (peerLatencyTimer) return;
 
-  updatePeerLatencyStats().catch((error) => log.warn('peer latency unavailable', errorContext(error)));
+  updatePeerLatencyStats().catch((error: unknown) => log.warn('peer latency unavailable', errorContext(error)));
   peerLatencyTimer = window.setInterval(() => {
-    updatePeerLatencyStats().catch((error) => log.warn('peer latency unavailable', errorContext(error)));
+    updatePeerLatencyStats().catch((error: unknown) => log.warn('peer latency unavailable', errorContext(error)));
   }, PEER_LATENCY_INTERVAL_MS);
 }
 
@@ -45,23 +45,23 @@ async function updateInboundAudioStats(): Promise<void> {
   let jitterCount = 0;
   for (const peer of state.peers.values()) {
     for (const publication of peer.livekitParticipant?.audioTrackPublications?.values() || []) {
-      const track = publication.track as RemoteTrack | undefined;
-      const stats = await track?.getRTCStatsReport?.().catch(() => undefined);
-      stats?.forEach((report: any) => {
-        if (report.type !== 'inbound-rtp' || report.kind !== 'audio') return;
+      const track = publication.track;
+      const stats = readRtcStats(await track?.getRTCStatsReport?.().catch(() => undefined));
+      for (const report of stats.values()) {
+        if (report.type !== 'inbound-rtp' || report.kind !== 'audio') continue;
         const totals = {
-          lost: Math.max(0, Number(report.packetsLost) || 0),
-          received: Number(report.packetsReceived) || 0
+          lost: Math.max(0, report.packetsLost || 0),
+          received: report.packetsReceived || 0
         };
         const before = previousInbound.get(report.id) || { lost: 0, received: 0 };
         current.set(report.id, totals);
         lost += Math.max(0, totals.lost - before.lost);
         received += Math.max(0, totals.received - before.received);
-        if (typeof report.jitter === 'number') {
+        if (report.jitter !== undefined) {
           jitterSum += report.jitter * 1000;
           jitterCount += 1;
         }
-      });
+      }
     }
   }
   previousInbound = current;
@@ -76,12 +76,12 @@ function roundPct(value: number): number {
 async function updateLocalLiveKitLatency(): Promise<void> {
   try {
     const publication = state.localMicPublication || findLocalMicrophonePublication() || findFirstLocalPublication();
-    const stats = await publication?.track?.getRTCStatsReport?.();
+    const stats = readRtcStats(await publication?.track?.getRTCStatsReport?.());
     const rttMs = getRoundTripTimeFromStats(stats);
     if (rttMs !== null) {
       state.localPingMs = Math.max(0, Math.round(rttMs));
     }
-    const outbound = getOutboundNetworkFromStats(stats);
+    const outbound = outboundNetwork(stats);
     state.localNetwork.outboundLossPct = outbound.lossPct;
     state.localNetwork.transport = outbound.transport;
   } catch (error) {
@@ -89,30 +89,19 @@ async function updateLocalLiveKitLatency(): Promise<void> {
   }
 }
 
-function getRoundTripTimeFromStats(stats: RTCStatsReport | undefined): number | null {
-  if (!stats?.forEach) return null;
-
+function getRoundTripTimeFromStats(stats: Map<string, RtcStat>): number | null {
   let candidatePairRttMs: number | null = null;
   let remoteInboundRttMs: number | null = null;
-  stats.forEach((report) => {
-    if (
-      report.type === 'candidate-pair' &&
-      report.state === 'succeeded' &&
-      (report.nominated || report.selected) &&
-      typeof report.currentRoundTripTime === 'number'
-    ) {
+  for (const report of stats.values()) {
+    if (isActiveCandidatePair(report) && report.currentRoundTripTime !== undefined) {
       candidatePairRttMs = report.currentRoundTripTime * 1000;
-      return;
+      continue;
     }
 
-    if (
-      remoteInboundRttMs === null &&
-      report.type === 'remote-inbound-rtp' &&
-      typeof report.roundTripTime === 'number'
-    ) {
+    if (remoteInboundRttMs === null && report.type === 'remote-inbound-rtp' && report.roundTripTime !== undefined) {
       remoteInboundRttMs = report.roundTripTime * 1000;
     }
-  });
+  }
 
   return candidatePairRttMs ?? remoteInboundRttMs;
 }
@@ -122,23 +111,27 @@ function getRoundTripTimeFromStats(stats: RTCStatsReport | undefined): number | 
  * and the transport of the selected candidate pair: a relay or TCP candidate
  * means UDP was blocked and latency/jitter will be worse.
  */
-export function getOutboundNetworkFromStats(stats: RTCStatsReport | undefined): {
+export function getOutboundNetworkFromStats(report: RtcStatsSource | undefined): {
   lossPct: number | null;
   transport: 'udp' | 'tcp' | 'relay' | null;
 } {
-  if (!stats?.forEach) return { lossPct: null, transport: null };
-  const reports = new Map<string, any>();
-  stats.forEach((report) => reports.set(report.id, report));
+  return outboundNetwork(readRtcStats(report));
+}
+
+function outboundNetwork(stats: Map<string, RtcStat>): {
+  lossPct: number | null;
+  transport: 'udp' | 'tcp' | 'relay' | null;
+} {
   let lossPct: number | null = null;
   let transport: 'udp' | 'tcp' | 'relay' | null = null;
-  for (const report of reports.values()) {
-    if (report.type === 'remote-inbound-rtp' && typeof report.fractionLost === 'number' && lossPct === null) {
+  for (const report of stats.values()) {
+    if (report.type === 'remote-inbound-rtp' && report.fractionLost !== undefined && lossPct === null) {
       lossPct = roundPct(Math.max(0, report.fractionLost) * 100);
     }
-    if (report.type === 'candidate-pair' && report.state === 'succeeded' && (report.nominated || report.selected)) {
-      const local = reports.get(report.localCandidateId);
+    if (isActiveCandidatePair(report)) {
+      const local = report.localCandidateId === undefined ? undefined : stats.get(report.localCandidateId);
       if (local?.candidateType === 'relay') transport = 'relay';
-      else if (local) transport = String(local.protocol).toLowerCase() === 'tcp' ? 'tcp' : 'udp';
+      else if (local) transport = local.protocol?.toLowerCase() === 'tcp' ? 'tcp' : 'udp';
     }
   }
   return { lossPct, transport };

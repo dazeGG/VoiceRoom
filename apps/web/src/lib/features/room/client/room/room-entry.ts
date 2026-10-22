@@ -2,10 +2,11 @@
 // the room to it), and otherwise asks a guest for a name.
 
 import { addRoomByCode, fetchMe, fetchOwnedRooms } from '$lib/api/auth';
-import { roomNameFor } from '$lib/features/auth/account';
+import { displayNameOf } from '$lib/shared/utils/display-name';
 import { setUser } from '$lib/features/auth/session.svelte';
 import { createLogger, errorContext } from '$lib/shared/log';
 import { roomSettingsUi } from '../../room-settings.svelte';
+import { getRoomShell } from '../core/embed';
 import { state } from '../core/state.svelte';
 import { persistName, requestGuestNameForRoom } from '../ui/names';
 import { showToast } from '../ui/toast';
@@ -19,7 +20,7 @@ async function autoSaveRoomForAuthenticatedUser(roomId: string): Promise<void> {
   if (!roomId || !state.roomIsStatic) return;
   try {
     await addRoomByCode(roomId);
-    window.dispatchEvent(new CustomEvent('voice-room:rooms-changed', { detail: { roomId } }));
+    getRoomShell().roomsChanged(roomId);
   } catch (error) {
     // Auto-save is a convenience side effect: already-pruned rooms and
     // transient bookmark failures must never block or noisy-toast the room
@@ -37,7 +38,7 @@ export async function resolveRoomEntryName(): Promise<RoomEntryGateResult> {
     const user = await fetchMe();
     if (user) {
       setUser(user);
-      persistName(roomNameFor(user));
+      persistName(displayNameOf(user));
       void autoSaveRoomForAuthenticatedUser(state.roomId);
       // Settings/delete UI is owner-only; the lobby's room list is the only
       // place "owner" is known client-side, so cross-check it here.

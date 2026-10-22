@@ -1,6 +1,8 @@
 import crypto from 'node:crypto';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger } from '../lib/logger.ts';
+import { fieldOf } from './record.ts';
+import type { Logger } from './types.ts';
 
 const DEFAULT_LEASE_MS = 30_000;
 const DEFAULT_RENEW_MS = 10_000;
@@ -19,13 +21,9 @@ export type FenceGuard = Readonly<{
 
 type LeaseRequest = { identity: string; leaseMs: number; ownerId: string; signal: AbortSignal };
 type LeaseReference = { fencingToken: number; identity: string; ownerId: string };
-type AcquireResult =
-  | { acquired?: boolean; fencingToken?: unknown; fencing_token?: unknown; expiresAt?: unknown; expires_at?: unknown }
-  | null
-  | undefined;
+type AcquireResult = { acquired: false } | { acquired: true; fencingToken: number; expiresAt?: unknown };
 type Heartbeat = { identity: string; ownerId: string; fencingToken: number; ready: boolean };
 type Sleep = (ms: number, signal?: AbortSignal) => Promise<void>;
-type RuntimeLogger = { warn(...args: unknown[]): void; error(...args: unknown[]): void };
 
 class LeaseLostError extends Error {
   declare code: string;
@@ -38,13 +36,12 @@ class LeaseLostError extends Error {
 }
 
 function abortError(signal: AbortSignal | undefined): Error {
-  if (signal?.reason instanceof Error) return signal.reason;
-  const error = new Error('Lease runtime stopped') as Error & { code?: string };
-  error.name = 'AbortError';
-  error.code = 'ABORT_ERR';
-  return error;
+  const reason = fieldOf(signal, 'reason');
+  if (reason instanceof Error) return reason;
+  return Object.assign(new Error('Lease runtime stopped'), { name: 'AbortError', code: 'ABORT_ERR' });
 }
 
+/** Waits `ms`; an abort rejects at once with the signal's reason (or an AbortError). */
 function delay(ms: number, signal?: AbortSignal): Promise<void> {
   if (signal?.aborted) return Promise.reject(abortError(signal));
   return new Promise((resolve, reject) => {
@@ -97,8 +94,8 @@ function createFenceGuard({ lease, signal }: { lease: Lease; signal: AbortSignal
 }
 
 function normalizeLease(value: AcquireResult, identity: string, ownerId: string): Lease | null {
-  if (!value || value.acquired === false) return null;
-  const fencingToken = Number(value.fencingToken ?? value.fencing_token);
+  if (!value.acquired) return null;
+  const { fencingToken } = value;
   if (!Number.isSafeInteger(fencingToken) || fencingToken < 1) {
     throw new TypeError('Lease adapter must return a positive integer fencingToken');
   }
@@ -106,7 +103,7 @@ function normalizeLease(value: AcquireResult, identity: string, ownerId: string)
     identity,
     ownerId,
     fencingToken,
-    expiresAt: value.expiresAt ?? value.expires_at ?? null
+    expiresAt: value.expiresAt ?? null
   });
 }
 
@@ -131,7 +128,7 @@ function createLeaseRuntime({
   idleMs?: number;
   jitter?: unknown;
   leaseMs?: number;
-  logger?: RuntimeLogger;
+  logger?: Pick<Logger, 'warn' | 'error'>;
   maxBackoffMs?: number;
   onHeartbeat?: (heartbeat: Heartbeat) => void;
   ownerId?: string;
@@ -140,7 +137,7 @@ function createLeaseRuntime({
     request: LeaseReference & { leaseMs: number; signal: AbortSignal }
   ) => Promise<{ renewed?: boolean } | null | undefined> | { renewed?: boolean } | null | undefined;
   renewMs?: number;
-  run?: (guard: FenceGuard) => Promise<unknown> | unknown;
+  run?: (guard: FenceGuard) => unknown;
   sleep?: Sleep;
 } = {}) {
   if (!identity || typeof identity !== 'string') throw new TypeError('Lease identity is required');
@@ -272,4 +269,4 @@ function createLeaseRuntime({
 
 export type LeaseRuntime = ReturnType<typeof createLeaseRuntime>;
 
-export { LeaseLostError, boundedBackoff, createLeaseRuntime };
+export { LeaseLostError, boundedBackoff, createLeaseRuntime, delay };

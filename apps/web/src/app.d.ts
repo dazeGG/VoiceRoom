@@ -6,6 +6,17 @@ declare module '*?raw' {
 declare global {
   namespace App {}
 
+  /** Chromium's User-Agent Client Hints; other browsers have none. */
+  interface NavigatorUAData {
+    mobile?: boolean;
+  }
+  interface Navigator {
+    userAgentData?: NavigatorUAData;
+  }
+  interface WorkerNavigator {
+    userAgentData?: NavigatorUAData;
+  }
+
   interface Window {
     voiceRoomDesktopAppIcon?: {
       getTheme: () => Promise<unknown>;
@@ -40,6 +51,10 @@ declare global {
     };
     voiceRoomDesktopLinks?: {
       onOpen: (handler: (payload: unknown) => void) => () => void;
+    };
+    voiceRoomDesktopNotifications?: {
+      /** Answers `{ ok: false }` when the page should show the notification itself. */
+      show: (payload: { title: string; body: string; tag: string; dedupeKey: string; route?: string }) => unknown;
     };
     voiceRoomDesktopOverlay?: {
       addGame: (exe?: string) => Promise<unknown>;

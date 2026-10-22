@@ -2,6 +2,7 @@
 // clients in src/lib/api.
 
 import { vi } from 'vitest';
+import { parseJson } from '../helpers/assert.ts';
 
 export type Reply =
   { status?: number; body?: unknown } | ((init: RequestInit | undefined) => { status?: number; body?: unknown });
@@ -11,7 +12,7 @@ export function stubFetch(routes: Record<string, Reply>) {
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : input instanceof URL ? input.href : input;
     const method = (init?.method ?? 'GET').toUpperCase();
-    calls.push({ method, url, body: typeof init?.body === 'string' ? (JSON.parse(init.body) as unknown) : init?.body });
+    calls.push({ method, url, body: typeof init?.body === 'string' ? parseJson(init.body) : init?.body });
     const route = routes[`${method} ${url}`] ?? routes[url];
     if (!route)
       return new Response(JSON.stringify({ ok: false, error: `no stub for ${method} ${url}` }), { status: 500 });

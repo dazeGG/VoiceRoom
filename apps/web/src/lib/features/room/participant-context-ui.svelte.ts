@@ -6,12 +6,22 @@
  */
 export type ParticipantMenuVariant = 'list' | 'tile';
 
-export const participantContextMenu = $state({
+interface ParticipantContextMenuState {
+  open: boolean;
+  peerId: string;
+  restoreFocusPeerId: string;
+  restoreFocus: HTMLElement | null;
+  variant: ParticipantMenuVariant;
+  x: number;
+  y: number;
+}
+
+export const participantContextMenu = $state<ParticipantContextMenuState>({
   open: false,
   peerId: '',
   restoreFocusPeerId: '',
-  restoreFocus: null as HTMLElement | null,
-  variant: 'tile' as ParticipantMenuVariant,
+  restoreFocus: null,
+  variant: 'tile',
   x: 0,
   y: 0
 });

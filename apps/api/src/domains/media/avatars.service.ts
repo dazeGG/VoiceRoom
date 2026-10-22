@@ -6,6 +6,7 @@ import type { Readable } from 'node:stream';
 import type { Logger } from 'pino';
 import { createAvatarKey, processAvatar } from '../../lib/avatar-processing.ts';
 import { validateAvatarKey } from '../../lib/avatar-storage.ts';
+import { codeOf } from '../../platform/error-code.ts';
 import { selfUser, type StoredUser } from '../account/user-records.ts';
 import type { SelfUser } from '@voice-room/shared/contracts/account';
 import type { LobbyRoom } from '@voice-room/shared/contracts/rooms';
@@ -32,13 +33,13 @@ export interface AvatarsDeps {
       userId: string;
       avatarKey?: string;
       avatarAccent?: string | null;
-    }): Promise<{ user?: AvatarUser | null; previousAvatarKey?: string | null }>;
+    }): Promise<{ user?: AvatarUser | null; previousAvatarKey?: string | null | undefined }>;
   };
   rooms(): {
     swapRoomAvatar(
       roomId: string,
       avatarKey: string | null
-    ): Promise<{ room?: StoredRoom | null; previousAvatarKey?: string | null }>;
+    ): Promise<{ room?: StoredRoom | null; previousAvatarKey?: string | null | undefined }>;
   };
   /** Refreshes the user's live room peers after a profile change. */
   refreshActiveProfile(user: AvatarUser): void;
@@ -60,7 +61,7 @@ async function openFile(storage: FileStorage, key: string): Promise<Readable | n
       stream.once('error', reject);
     });
   } catch (error) {
-    if (error instanceof TypeError || (error as { code?: string })?.code === 'ENOENT') return null;
+    if (error instanceof TypeError || codeOf(error) === 'ENOENT') return null;
     throw error;
   }
   return stream;

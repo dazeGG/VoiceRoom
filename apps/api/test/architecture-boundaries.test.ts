@@ -4,6 +4,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { Type } from 'typebox';
+import { checked } from './helpers/checked.ts';
 
 async function loadScanners() {
   const [imports, sources] = await Promise.all([
@@ -13,9 +15,22 @@ async function loadScanners() {
   return { checkImportBoundaries: imports.checkImportBoundaries, checkApiSources: sources.checkApiSources };
 }
 
+const Paths = Type.Array(Type.String());
+const BoundaryConfig = Type.Object({
+  importRules: Type.Array(Type.Object({ id: Type.String(), sources: Paths, forbidden: Paths, message: Type.String() })),
+  writeRules: Type.Object({
+    ownerPathPrefixes: Paths,
+    allowedOwners: Type.Record(Type.String(), Paths),
+    crossDomainWriters: Type.Record(Type.String(), Paths)
+  }),
+  timerRules: Type.Object({ forbiddenSources: Paths, allowedCurrentSources: Paths })
+});
+
 function config() {
-  return JSON.parse(
-    fs.readFileSync(path.join(import.meta.dirname, '../../../config/import-boundaries.v1.json'), 'utf8')
+  return checked(
+    BoundaryConfig,
+    JSON.parse(fs.readFileSync(path.join(import.meta.dirname, '../../../config/import-boundaries.v1.json'), 'utf8')),
+    'config/import-boundaries.v1.json'
   );
 }
 
@@ -40,10 +55,7 @@ test('G10-A01 current API composition graph stays inside import, write and timer
 test('G10-A03 a declared cross-domain writer may touch only its declared tables', async () => {
   const { checkApiSources } = await loadScanners();
   const rules = config();
-  const [writer, declared] = Object.entries(rules.writeRules.crossDomainWriters as Record<string, string[]>)[0] ?? [
-    '',
-    []
-  ];
+  const [writer, declared] = Object.entries(rules.writeRules.crossDomainWriters)[0] ?? ['', []];
 
   assert.ok(declared.length > 0, 'a cross-domain writer declares the tables it erases');
   const allowed = fixtureFile(

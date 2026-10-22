@@ -72,7 +72,8 @@ test('joining a room establishes voice through the public LiveKit gate', async (
         `status-pills:${JSON.stringify(status)}`,
         `toast:${toast || ''}`,
         ...diagnostics.slice(-30)
-      ].join('\n')
+      ].join('\n'),
+      { cause: error }
     );
   }
   // The toast stack only exists while a toast is up, so check for the text itself.

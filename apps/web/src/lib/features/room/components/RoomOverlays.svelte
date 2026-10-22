@@ -319,7 +319,7 @@
   id="soundButton"
   type="button"
   hidden={!startUi.soundButtonVisible}
-  onclick={() => unlockAudio().catch((error) => log.warn('audio unlock failed', errorContext(error)))}
+  onclick={() => unlockAudio().catch((error: unknown) => log.warn('audio unlock failed', errorContext(error)))}
   >Разрешить звук</button
 >
 

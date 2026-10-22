@@ -46,23 +46,23 @@ export type PopoverMenuItemVariant = 'default' | 'accent' | 'friendly' | 'danger
 
 export type PopoverMenuItemProps = {
   label: string;
-  onclick?: (event: MouseEvent) => void;
-  disabled?: boolean;
-  variant?: PopoverMenuItemVariant;
+  onclick?: ((event: MouseEvent) => void) | undefined;
+  disabled?: boolean | undefined;
+  variant?: PopoverMenuItemVariant | undefined;
   /** Renders as the current choice: tinted row plus a check mark. */
-  selected?: boolean;
-  showChevron?: boolean;
+  selected?: boolean | undefined;
+  showChevron?: boolean | undefined;
   /** Chevron turns accent-coloured while the submenu it opens is showing. */
-  chevronActive?: boolean;
+  chevronActive?: boolean | undefined;
   /** Keyboard shortcut shown right-aligned, e.g. "E" or "⌫". */
-  hint?: string;
-  icon?: Snippet;
-  role?: 'menuitem' | 'option' | 'button';
-  ariaHaspopup?: 'menu';
-  ariaExpanded?: boolean;
-  ariaControls?: string;
-  onpointerenter?: (event: PointerEvent) => void;
-  onfocus?: (event: FocusEvent) => void;
+  hint?: string | undefined;
+  icon?: Snippet | undefined;
+  role?: 'menuitem' | 'option' | 'button' | undefined;
+  ariaHaspopup?: 'menu' | undefined;
+  ariaExpanded?: boolean | undefined;
+  ariaControls?: string | undefined;
+  onpointerenter?: ((event: PointerEvent) => void) | undefined;
+  onfocus?: ((event: FocusEvent) => void) | undefined;
 };
 
 export type PopoverMenuLabelProps = {

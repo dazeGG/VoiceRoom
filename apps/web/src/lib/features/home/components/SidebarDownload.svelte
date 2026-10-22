@@ -3,7 +3,7 @@
   import Fa from 'svelte-fa';
   import { faApple, faWindows } from '@fortawesome/free-brands-svg-icons';
   import { fetchDesktopRelease, type DesktopRelease } from '$lib/api/desktop';
-  import { Popover, PopoverMenuItem } from '$lib/shared/ui';
+  import { Popover, PopoverMenuItem, type PopoverContentState, type PopoverTriggerState } from '$lib/shared/ui';
   import { iconSm } from '$lib/shared/ui/icons';
   import { DESKTOP_BUILDS, type DesktopBuildId } from '../../../platform/desktop-builds';
   import { startDesktopBuildDownload } from '../../../platform/desktop-download';
@@ -52,7 +52,7 @@
   rootClass="sidebar-download"
   panelClass="sidebar-download-popover"
 >
-  {#snippet trigger({ open: isOpen, toggle, panelId })}
+  {#snippet trigger({ open: isOpen, toggle, panelId }: PopoverTriggerState)}
     <button
       class="lobby-gear sidebar-download-trigger"
       class:is-open={isOpen}
@@ -68,7 +68,7 @@
     </button>
   {/snippet}
 
-  {#snippet content({ close })}
+  {#snippet content({ close }: PopoverContentState)}
     <div class="sidebar-download-head">Скачать приложение</div>
     {#each DESKTOP_BUILDS as build (build.id)}
       <PopoverMenuItem

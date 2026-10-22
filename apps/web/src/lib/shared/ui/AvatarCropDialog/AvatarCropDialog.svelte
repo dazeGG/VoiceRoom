@@ -5,6 +5,7 @@
   import { dialogFocusTrap } from '$lib/shared/ui/focus-trap';
   import Avatar from '../Avatar/Avatar.svelte';
   import type { AvatarCropDialogProps } from './types';
+  import { context2d, type Canvas2D } from './canvas-2d';
 
   const DEFAULT_ACCENT = {
     background: 'var(--vr-surface-3)',
@@ -88,7 +89,7 @@
   function draw(): void {
     if (!canvas || !image) return;
     clampOffsets(canvas, image);
-    const context = canvas.getContext('2d', { willReadFrequently: true });
+    const context = context2d(canvas, { willReadFrequently: true });
     if (!context) return;
     const scale = Math.max(canvas.width / image.naturalWidth, canvas.height / image.naturalHeight) * zoom;
     const width = image.naturalWidth * scale;
@@ -105,7 +106,7 @@
     accent = deriveCanvasAccent(context, canvas.width, canvas.height);
   }
 
-  function deriveCanvasAccent(context: CanvasRenderingContext2D, width: number, height: number) {
+  function deriveCanvasAccent(context: Canvas2D, width: number, height: number) {
     const pixels = context.getImageData(0, 0, width, height).data;
     const dominant = dominantAvatarColor(pixels, width, height);
     return dominant ? deriveAvatarAccent(dominant) : accent;
@@ -151,7 +152,7 @@
       const output = document.createElement('canvas');
       output.width = 256;
       output.height = 256;
-      const context = output.getContext('2d');
+      const context = context2d(output);
       if (!context) {
         reject(new Error('Canvas недоступен'));
         return;

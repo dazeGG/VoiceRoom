@@ -1,45 +1,49 @@
-import type { JoinPayload } from './voice-join.ts';
-import type { MediaRequestPayload, PeerUpdatePayload } from './room-runtime.ts';
-import { normalizePeerId, normalizeRoomId, normalizeSessionToken } from '@voice-room/shared/validation';
-import { normalizeTypingActivity } from '@voice-room/shared/realtime';
+import type { JoinResult } from './voice-join.ts';
 import type { IncomingMessage } from 'node:http';
 import { clientKind, describeUserAgent } from '@voice-room/shared/account-security';
-import type { TypingActivity } from '@voice-room/shared/realtime';
-import type { ClientCommand, MediaGrant } from '@voice-room/shared/contracts/realtime';
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';
+import type {
+  ClientCommand,
+  ClientCommands,
+  MediaGrant,
+  TypingActivity,
+  VoiceTarget
+} from '@voice-room/shared/contracts/realtime';
 import { buildServerEnvelope, buildServerErrorEnvelope, parseInboundMessage } from './envelope.ts';
 import { createTypingThrottle } from './typing-throttle.ts';
 import type { ConnectionRegistry, RealtimeSocket, WsConnection } from './registry.ts';
+import { BoundedMap } from '../lib/bounded-map.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger, hashIp } from '../lib/logger.ts';
+import { createRateLimiter } from '../lib/rate-limit.ts';
+import type { Logger } from '../platform/types.ts';
 
 // Validated commands always carry a payload object.
 type InboundEnvelope = ClientCommand;
 type SessionUser = { id: string; presenceStatus?: unknown; [key: string]: unknown };
 type ResolvedSession = { user?: SessionUser | null; session?: { tokenHash?: string } | null } | null | undefined;
-type JoinResult = { ok: boolean; code?: string; message?: string };
 export interface WsRoomRuntime {
   subscribePreview(connection: WsConnection, roomId: string): Promise<unknown>;
   unsubscribePreview(connection: WsConnection, roomId: string): unknown;
   joinVoiceRoom(
     connection: WsConnection,
-    payload: JoinPayload,
+    payload: ClientCommands['room.join'],
     user: SessionUser | null,
     clientIp: string,
     requestId?: string
   ): Promise<JoinResult>;
-  leaveVoiceRoom(
+  leaveVoiceRoom(connection: WsConnection, target: VoiceTarget): Promise<unknown>;
+  updatePeerState(
     connection: WsConnection,
-    target: { roomId: string; peerId: string; sessionToken: string }
-  ): Promise<unknown>;
-  updatePeerState(connection: WsConnection, payload: PeerUpdatePayload): Promise<{ ok: boolean; code?: string }>;
+    payload: ClientCommands['room.peer.update']
+  ): Promise<{ ok: true } | { ok: false; code: ErrorCode }>;
   requestMedia(
     connection: WsConnection,
-    payload: MediaRequestPayload
-  ): { ok: true; grant: MediaGrant } | { ok: false; code: string };
+    payload: ClientCommands['room.media.request']
+  ): { ok: true; grant: MediaGrant } | { ok: false; code: ErrorCode };
   broadcastRoomTyping(connection: WsConnection, roomId: string, activity: TypingActivity): unknown;
   sendAccountSummaries(connection: WsConnection, userId: string): Promise<unknown>;
 }
-type WsLogger = { info(...args: unknown[]): void; warn(...args: unknown[]): void; error(...args: unknown[]): void };
 type WsSocket = RealtimeSocket & {
   on(event: 'message', listener: (raw: unknown) => void): unknown;
   on(event: 'close', listener: (code: number, reason: unknown) => void): unknown;
@@ -49,6 +53,12 @@ type WsSocket = RealtimeSocket & {
 // A client opens with hello, its restored subscriptions and whatever it queued
 // offline; more than this before the session resolves is not a client.
 const MAX_EARLY_FRAMES = 64;
+
+// ws hands the close reason over as a Buffer; tests and fakes may pass text.
+function closeReasonText(reason: unknown): string {
+  if (typeof reason === 'string') return reason;
+  return Buffer.isBuffer(reason) ? reason.toString() : '';
+}
 
 function createWsHandler({
   registry,
@@ -69,7 +79,7 @@ function createWsHandler({
   canTypeToUser?: (userId: string, peerId: string) => Promise<unknown>;
   getClientIp?: (req: IncomingMessage) => string;
   now?: () => number;
-  logger?: WsLogger;
+  logger?: Pick<Logger, 'info' | 'warn' | 'error'>;
 }) {
   // Every realtime failure is attributed to the connection and the message type
   // that caused it. Without both, a report of "the call keeps dropping" leaves
@@ -99,54 +109,46 @@ function createWsHandler({
   const DM_TYPING_LOOKUP_BUDGET = 20;
   const DM_TYPING_LOOKUP_WINDOW_MS = 30_000;
 
-  function spendTypingLookup(connection: WsConnection): boolean {
-    const at = now();
-    const budget = connection.dmTypingLookups;
-    if (!budget || at - budget.windowAt >= DM_TYPING_LOOKUP_WINDOW_MS) {
-      connection.dmTypingLookups = { windowAt: at, spent: 1 };
-      return true;
-    }
-    if (budget.spent >= DM_TYPING_LOOKUP_BUDGET) return false;
-    budget.spent += 1;
-    return true;
-  }
-
   function forwardDirectTyping(connection: WsConnection, peerId: string, activity: TypingActivity = 'typing'): void {
     const { userId } = connection;
     if (!userId || peerId === userId) return;
-    const sender = connection as WsConnection & { userId: string };
     connection.dmTypingThrottle ??= createTypingThrottle<TypingActivity>({ now });
     connection.dmTypingThrottle.offer(peerId, activity, (value: TypingActivity) => {
-      sendDirectTyping(sender, peerId, value).catch((error) => reportMessageError(error, connection, 'dm.typing'));
+      sendDirectTyping(connection, userId, peerId, value).catch((error: unknown) =>
+        reportMessageError(error, connection, 'dm.typing')
+      );
     });
   }
 
   async function sendDirectTyping(
-    connection: WsConnection & { userId: string },
+    connection: WsConnection,
+    userId: string,
     peerId: string,
     activity: TypingActivity
   ): Promise<void> {
-    const cache: Map<string, { allowed: boolean; checkedAt: number }> = (connection.dmTypingPermission ??= new Map());
+    const cache = (connection.dmTypingPermission ??= new BoundedMap(DM_TYPING_THREAD_LIMIT));
     const entry = cache.get(peerId) || { allowed: false, checkedAt: -Infinity };
-    cache.delete(peerId);
     cache.set(peerId, entry);
-    while (cache.size > DM_TYPING_THREAD_LIMIT) cache.delete(cache.keys().next().value as string);
     if (now() - entry.checkedAt >= DM_TYPING_PERMISSION_TTL_MS) {
-      if (!spendTypingLookup(connection)) return;
-      entry.allowed = Boolean(await canTypeToUser(connection.userId, peerId));
+      const lookups = (connection.dmTypingLookups ??= createRateLimiter({
+        limit: DM_TYPING_LOOKUP_BUDGET,
+        windowMs: DM_TYPING_LOOKUP_WINDOW_MS
+      }));
+      if (!lookups.check(userId, now()).allowed) return;
+      entry.allowed = Boolean(await canTypeToUser(userId, peerId));
       entry.checkedAt = now();
     }
     if (!entry.allowed || connection.closed) return;
-    registry.sendToUser(peerId, buildServerEnvelope('dm.typing', { userId: connection.userId, activity }));
+    registry.sendToUser(peerId, buildServerEnvelope('dm.typing', { userId, activity }));
   }
 
-  function enqueueMessage(connection: WsConnection, task: () => Promise<unknown>): void {
-    connection.inboundMessageQueue = (connection.inboundMessageQueue || Promise.resolve())
+  function enqueueMessage(connection: WsConnection, type: string, task: () => Promise<unknown>): void {
+    connection.inboundMessageQueue = connection.inboundMessageQueue
       .then(() => {
         if (connection.closed) return;
         return task();
       })
-      .catch((error) => reportMessageError(error, connection));
+      .catch((error: unknown) => reportMessageError(error, connection, type));
   }
 
   async function handleMessage(
@@ -167,21 +169,12 @@ function createWsHandler({
       }
 
       case 'room.preview.subscribe': {
-        const roomId = normalizeRoomId(envelope.payload.roomId);
-        if (!roomId) {
-          registry.sendToConnection(
-            connection,
-            buildServerErrorEnvelope('invalid_room_id', 'Invalid room id', envelope.id)
-          );
-          return;
-        }
-        await roomRuntime.subscribePreview(connection, roomId);
+        await roomRuntime.subscribePreview(connection, envelope.payload.roomId);
         return;
       }
 
       case 'room.preview.unsubscribe': {
-        const roomId = normalizeRoomId(envelope.payload.roomId);
-        if (roomId) roomRuntime.unsubscribePreview(connection, roomId);
+        roomRuntime.unsubscribePreview(connection, envelope.payload.roomId);
         return;
       }
 
@@ -198,7 +191,7 @@ function createWsHandler({
           getClientIp(req),
           envelope.id
         );
-        const joinRoomId = normalizeRoomId(envelope.payload.roomId);
+        const joinRoomId = envelope.payload.roomId;
         if (result.ok) {
           logger.info(
             {
@@ -217,7 +210,7 @@ function createWsHandler({
               connId: connection.id,
               userId: connection.userId || undefined,
               roomId: joinRoomId,
-              code: result.code || 'join_failed'
+              code: result.code
             },
             'room join rejected'
           );
@@ -226,19 +219,10 @@ function createWsHandler({
         if (!result.ok && result.code === 'room_banned') {
           registry.sendToConnection(
             connection,
-            buildServerEnvelope(
-              'room.banned',
-              {
-                roomId: envelope.payload.roomId
-              },
-              envelope.id
-            )
+            buildServerEnvelope('room.banned', { roomId: envelope.payload.roomId }, envelope.id)
           );
         } else if (!result.ok && result.message) {
-          registry.sendToConnection(
-            connection,
-            buildServerErrorEnvelope(result.code || 'join_failed', result.message, envelope.id)
-          );
+          registry.sendToConnection(connection, buildServerErrorEnvelope(result.code, result.message, envelope.id));
         }
         return;
       }
@@ -249,15 +233,11 @@ function createWsHandler({
             evt: LOG_EVENTS.ROOM_LEFT,
             connId: connection.id,
             userId: connection.userId || undefined,
-            roomId: normalizeRoomId(envelope.payload.roomId)
+            roomId: envelope.payload.roomId
           },
           'room left'
         );
-        await roomRuntime.leaveVoiceRoom(connection, {
-          roomId: normalizeRoomId(envelope.payload.roomId),
-          peerId: normalizePeerId(envelope.payload.peerId),
-          sessionToken: normalizeSessionToken(envelope.payload.sessionToken)
-        });
+        await roomRuntime.leaveVoiceRoom(connection, envelope.payload);
         return;
       }
 
@@ -266,7 +246,7 @@ function createWsHandler({
         if (!result.ok) {
           registry.sendToConnection(
             connection,
-            buildServerErrorEnvelope(result.code || 'update_failed', 'Peer update rejected', envelope.id)
+            buildServerErrorEnvelope(result.code, 'Peer update rejected', envelope.id)
           );
         }
         return;
@@ -300,18 +280,14 @@ function createWsHandler({
       case 'room.chat.typing': {
         await roomRuntime.broadcastRoomTyping(
           connection,
-          normalizeRoomId(envelope.payload.roomId),
-          normalizeTypingActivity(envelope.payload.activity) || 'typing'
+          envelope.payload.roomId,
+          envelope.payload.activity ?? 'typing'
         );
         return;
       }
 
       case 'dm.typing': {
-        await forwardDirectTyping(
-          connection,
-          envelope.payload.userId,
-          normalizeTypingActivity(envelope.payload.activity) || 'typing'
-        );
+        forwardDirectTyping(connection, envelope.payload.userId, envelope.payload.activity ?? 'typing');
         return;
       }
     }
@@ -360,7 +336,7 @@ function createWsHandler({
           connId: connection.id,
           userId: connection.userId || undefined,
           code: Number(code) || 0,
-          reason: String(reason || '').slice(0, 120) || undefined,
+          reason: closeReasonText(reason).slice(0, 120) || undefined,
           durationMs: now() - connection.openedAt,
           err: error || undefined
         },
@@ -481,7 +457,9 @@ function createWsHandler({
     }
     if (parsed.envelope.type === 'hello' || parsed.envelope.type === 'ping') {
       // Heartbeats do not mutate room intent and must not wait behind storage.
-      void handleMessage(connection, parsed.envelope, req).catch(reportMessageError);
+      void handleMessage(connection, parsed.envelope, req).catch((error: unknown) =>
+        reportMessageError(error, connection, parsed.envelope.type)
+      );
       return;
     }
 
@@ -489,7 +467,7 @@ function createWsHandler({
     // or storage. Without this queue, JOIN→LEAVE and JOIN1→JOIN2 can execute
     // in reverse before the room runtime registers their intent.
     const envelope = parsed.envelope;
-    enqueueMessage(connection, () => handleMessage(connection, envelope, req));
+    enqueueMessage(connection, envelope.type, () => handleMessage(connection, envelope, req));
   }
 
   return {

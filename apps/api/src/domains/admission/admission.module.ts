@@ -7,7 +7,7 @@ import { createCredentialBoundaryService } from './credential-boundary.service.t
 import { createLiveKitCredentialProvider } from './livekit-credential-provider.ts';
 type LiveKitConfig = { enabled: boolean; apiKey: string; apiSecret: string; gateUrl: string };
 
-/** The boundary, or null without a 32-byte gate secret or a store that can hold gate credentials. */
+/** The boundary, or null without a 32-byte gate secret. */
 export function createGateCredentialBoundary({
   store,
   secret,
@@ -18,14 +18,6 @@ export function createGateCredentialBoundary({
   credentialTtlSeconds: number;
 }) {
   if (secret.length < 32) return null;
-  if (
-    typeof store.getLiveKitGatePrincipalEpoch !== 'function' ||
-    typeof store.createLiveKitGateCredential !== 'function' ||
-    typeof store.verifyLiveKitGateCredential !== 'function' ||
-    (typeof store.revokeLiveKitGatePrincipal !== 'function' && typeof store.revokeLiveKitGatePeer !== 'function')
-  ) {
-    return null;
-  }
   return createCredentialBoundaryService({ roomStore: store, secret, credentialTtlMs: credentialTtlSeconds * 1000 });
 }
 

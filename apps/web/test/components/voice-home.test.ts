@@ -4,6 +4,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import VoiceHome from '../../src/lib/features/home/components/lobby/VoiceHome.svelte';
 import { LobbyStore } from '../../src/lib/features/home/model/lobby.svelte.ts';
 import { lobbyContext } from '../../src/lib/features/home/model/lobby-context.ts';
+import { defined } from '../helpers/assert.ts';
 
 afterEach(cleanup);
 
@@ -39,7 +40,7 @@ test('joining by code is one field that takes a code or a link and explains auto
 
   await userEvent.type(field, 'abc123{Enter}');
   expect(props.onJoinCode).toHaveBeenCalledWith('abc123');
-  expect((field as HTMLInputElement).value).toBe('');
+  expect(field).toHaveProperty('value', '');
 });
 
 test('an empty or blank code is not submitted', async () => {
@@ -56,7 +57,7 @@ test('rooms are listed busiest first and open on click', async () => {
     expect.stringContaining('Шумная'),
     expect.stringContaining('Тихая')
   ]);
-  await userEvent.click(cards[1]);
+  await userEvent.click(defined(cards[1], 'cards[1]'));
   expect(props.onOpenRoom).toHaveBeenCalledWith('quiet');
 });
 
@@ -81,7 +82,7 @@ test('a room with muted notifications shows a bell-off mark next to its name', a
   renderHome([room('abc123', 'Планёрка'), room('other', 'Другая')]);
   const muted = screen.getAllByRole('img', { name: 'Уведомления отключены' });
   expect(muted).toHaveLength(1);
-  expect(screen.getByRole('button', { name: /Планёрка/ }).contains(muted[0])).toBe(true);
+  expect(screen.getByRole('button', { name: /Планёрка/ }).contains(defined(muted[0], 'muted[0]'))).toBe(true);
   notificationPreferences.mutedRoomIds = [];
 });
 

@@ -8,7 +8,7 @@
 // down; `kyselyOn(client)` runs the typed queries on the same connection, so
 // they join the caller's transaction.
 
-import { Kysely, PostgresDialect, type Transaction } from 'kysely';
+import { Kysely, PostgresDialect, type PostgresPool, type Transaction } from 'kysely';
 import type pg from 'pg';
 import type { DB } from './schema.ts';
 
@@ -24,9 +24,9 @@ export function createKysely(pool: pg.Pool): Database {
 
 // Kysely asks its "pool" for a connection per query; this one always hands out
 // the caller's connection and never releases it, since the caller owns it.
-function singleConnectionPool(client: Queryable): pg.Pool {
+function singleConnectionPool(client: Queryable): PostgresPool {
   const connection = { query: client.query.bind(client), release() {} };
-  return { connect: async () => connection, end: async () => {} } as unknown as pg.Pool;
+  return { connect: async () => connection, end: async () => {}, options: {} };
 }
 
 function isPool(client: Queryable): client is pg.Pool {

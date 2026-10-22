@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { Pool } from 'pg';
+import { Type } from 'typebox';
 
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createRoomStore } from '../src/app/room-store.ts';
@@ -17,6 +18,7 @@ import {
 } from '../src/domains/link-previews/link-preview.service.ts';
 import { createLinkPreviewStorage, reconcileLinkPreviewImages } from '../src/lib/link-preview-storage.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { AnyRow, queryRow, queryRows } from './helpers/checked.ts';
 import { rollBackThrough } from './migration-steps.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
@@ -140,13 +142,16 @@ test('a site that cannot be previewed is remembered for a while', async (t) => {
   assert.equal(fetches.pages, 1);
   assert.equal((await rooms.getMessage('lp-room', 'lp-fail'))?.linkPreview, undefined);
   assert.equal(published.room.length, 0);
-  const cached = await pool.query('SELECT status, preview, failure_code FROM link_previews');
-  assert.deepEqual(cached.rows, [{ status: 'failed', preview: null, failure_code: 'blocked_address' }]);
+  const cached = await queryRows(pool, AnyRow, 'SELECT status, preview, failure_code FROM link_previews');
+  assert.deepEqual(cached, [{ status: 'failed', preview: null, failure_code: 'blocked_address' }]);
 
   clock.now += FAILED_TTL_MS;
   await service.previewRoomMessage({ roomId: 'lp-room', messageId: 'lp-fail', text });
   assert.equal(fetches.pages, 2);
 });
+
+const MetadataRow = Type.Object({ metadata: Type.Object({ linkPreview: Type.Optional(Type.Unknown()) }) });
+const RegclassRow = Type.Object({ name: Type.Union([Type.String(), Type.Null()]) });
 
 test('direct messages get previews too, and only images nobody uses are swept', async (t) => {
   const { ada, clock, grace, pool, published, repository, service, storage } = await setup(t);
@@ -160,8 +165,8 @@ test('direct messages get previews too, and only images nobody uses are swept', 
   await service.previewDirectMessage({ messageId, senderId: grace.id, recipientId: ada.id, text });
   assert.equal(published.direct.length, 0, "only the sender's own message is previewed");
   await service.previewDirectMessage({ messageId, senderId: ada.id, recipientId: grace.id, text });
-  const stored = await pool.query('SELECT metadata FROM direct_messages WHERE id = $1', [messageId]);
-  assert.deepEqual(stored.rows[0].metadata.linkPreview, EXPECTED_PREVIEW);
+  const stored = await queryRow(pool, MetadataRow, 'SELECT metadata FROM direct_messages WHERE id = $1', [messageId]);
+  assert.deepEqual(stored.metadata.linkPreview, EXPECTED_PREVIEW);
   assert.deepEqual(published.direct, [{ messageId, senderId: ada.id, recipientId: grace.id }]);
 
   await storage.save(OTHER_KEY, Buffer.from('unused'));
@@ -184,7 +189,7 @@ test('the link preview migration applies and rolls back cleanly', async (t) => {
     await cleanup();
   });
   const tableExists = async () =>
-    (await pool.query(`SELECT to_regclass('public.link_previews') AS name`)).rows[0].name !== null;
+    (await queryRow(pool, RegclassRow, `SELECT to_regclass('public.link_previews')::text AS name`)).name !== null;
 
   await runMigrations({ databaseUrl, logger: SILENT });
   assert.equal(await tableExists(), true);

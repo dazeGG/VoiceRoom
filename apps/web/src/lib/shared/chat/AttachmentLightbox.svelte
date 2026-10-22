@@ -11,10 +11,10 @@
 
   export interface LightboxItem {
     src: string;
-    downloadHref?: string;
-    width?: number;
-    height?: number;
-    alt?: string;
+    downloadHref?: string | undefined;
+    width?: number | undefined;
+    height?: number | undefined;
+    alt?: string | undefined;
   }
 
   let {
@@ -78,7 +78,7 @@
     dragging = true;
     dragStartX = event.clientX - offsetX;
     dragStartY = event.clientY - offsetY;
-    (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+    if (event.currentTarget instanceof Element) event.currentTarget.setPointerCapture(event.pointerId);
   }
 
   function onPointerMove(event: PointerEvent): void {
@@ -90,7 +90,7 @@
   function onPointerUp(event: PointerEvent): void {
     if (!dragging) return;
     dragging = false;
-    (event.currentTarget as HTMLElement).releasePointerCapture?.(event.pointerId);
+    if (event.currentTarget instanceof Element) event.currentTarget.releasePointerCapture?.(event.pointerId);
   }
 
   function keydown(event: KeyboardEvent): void {
@@ -114,9 +114,9 @@
       reset();
     } else if (event.key === 'Tab') {
       const controls = Array.from(dialog.querySelectorAll<HTMLElement>('button:not(:disabled),a[href]'));
-      if (!controls.length) return;
       const first = controls[0];
-      const last = controls.at(-1)!;
+      const last = controls.at(-1);
+      if (!first || !last) return;
       if (event.shiftKey && document.activeElement === first) {
         event.preventDefault();
         last.focus();
@@ -164,8 +164,10 @@
         <button type="button" onclick={reset} disabled={!zoomed && !offsetX && !offsetY} aria-label="Исходный размер">
           <RotateCcw {...iconSm} aria-hidden="true" />
         </button>
-        {#if item.downloadHref}
-          <a href={item.downloadHref} download aria-label="Скачать"><Download {...iconSm} aria-hidden="true" /></a>
+        {#if item?.downloadHref}
+          <a href={item.downloadHref} download rel="external" aria-label="Скачать"
+            ><Download {...iconSm} aria-hidden="true" /></a
+          >
         {/if}
         <button type="button" onclick={onclose} aria-label="Закрыть просмотр">
           <X {...iconSm} aria-hidden="true" />
@@ -173,29 +175,30 @@
       </div>
     </header>
 
-    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <div
-      class="attachment-lightbox-stage"
-      class:is-zoomed={zoomed}
-      class:is-dragging={dragging}
-      role="img"
-      aria-label={item.alt || 'Изображение'}
-      onwheel={onWheel}
-      onpointerdown={onPointerDown}
-      onpointermove={onPointerMove}
-      onpointerup={onPointerUp}
-      onpointercancel={onPointerUp}
-      ondblclick={() => (zoomed ? reset() : zoomTo(2))}
-    >
-      <img
-        src={item.src}
-        alt={item.alt || ''}
-        width={item.width}
-        height={item.height}
-        draggable="false"
-        style:transform={`translate(${offsetX}px, ${offsetY}px) scale(${scale})`}
-      />
-    </div>
+    {#if item}
+      <div
+        class="attachment-lightbox-stage"
+        class:is-zoomed={zoomed}
+        class:is-dragging={dragging}
+        role="img"
+        aria-label={item.alt || 'Изображение'}
+        onwheel={onWheel}
+        onpointerdown={onPointerDown}
+        onpointermove={onPointerMove}
+        onpointerup={onPointerUp}
+        onpointercancel={onPointerUp}
+        ondblclick={() => (zoomed ? reset() : zoomTo(2))}
+      >
+        <img
+          src={item.src}
+          alt={item.alt || ''}
+          width={item.width}
+          height={item.height}
+          draggable="false"
+          style:transform={`translate(${offsetX}px, ${offsetY}px) scale(${scale})`}
+        />
+      </div>
+    {/if}
 
     {#if items.length > 1}
       <button class="attachment-previous" type="button" onclick={() => move(-1)} aria-label="Предыдущее изображение"

@@ -13,13 +13,16 @@ import {
 
 type BridgeEvent = { sessionId: string; event: Record<string, unknown> };
 
-function installDesktopAudioBridge() {
+function installDesktopAudioBridge({ withTrack = true }: { withTrack?: boolean } = {}) {
+  const released = { dataListener: false, context: false };
   const eventListeners = new Set<(payload: BridgeEvent) => void>();
   const emit = (event: Record<string, unknown>) => {
     for (const listener of [...eventListeners]) listener({ event, sessionId: '7' });
   };
   const bridge = {
-    onData: () => () => {},
+    onData: () => () => {
+      released.dataListener = true;
+    },
     onEvent: (listener: (payload: BridgeEvent) => void) => {
       eventListeners.add(listener);
       return () => eventListeners.delete(listener);
@@ -35,9 +38,11 @@ function installDesktopAudioBridge() {
   const track = { addEventListener() {}, contentHint: '', removeEventListener() {} };
   class FakeAudioContext {
     audioWorklet = { addModule: async () => {} };
-    close = async () => {};
+    close = async () => {
+      released.context = true;
+    };
     createMediaStreamDestination() {
-      return { disconnect() {}, stream: { getAudioTracks: () => [track] } };
+      return { disconnect() {}, stream: { getAudioTracks: () => (withTrack ? [track] : []) } };
     }
   }
   class FakeAudioWorkletNode {
@@ -47,7 +52,7 @@ function installDesktopAudioBridge() {
   }
   vi.stubGlobal('AudioContext', FakeAudioContext);
   vi.stubGlobal('AudioWorkletNode', FakeAudioWorkletNode);
-  return { bridge, emit, eventListeners };
+  return { bridge, emit, eventListeners, released };
 }
 
 afterEach(() => {
@@ -85,6 +90,15 @@ test('a clean exit or an exit after the share stopped is not a loss', async () =
   emit({ code: 3, event: 'exit', signal: null });
   expect(lost).not.toHaveBeenCalled();
   unsubscribe();
+});
+
+test('a destination without a track fails the capture and releases what it opened', async () => {
+  const { bridge, eventListeners, released } = installDesktopAudioBridge({ withTrack: false });
+
+  await expect(startDesktopSafeScreenAudioCapture()).rejects.toThrow('desktop audio destination has no track');
+  expect(released).toEqual({ dataListener: true, context: true });
+  expect(eventListeners.size).toBe(0);
+  expect(bridge.stop).toHaveBeenCalled();
 });
 
 test('whole float samples are read, a partial tail and empty chunks give nothing extra', () => {

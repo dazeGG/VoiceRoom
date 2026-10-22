@@ -32,7 +32,7 @@
   let hiddenTab = $state(false);
   let reducedMotion = $state(false);
 
-  const slide = $derived(WHATS_NEW_SLIDES[index]);
+  const slide = $derived(WHATS_NEW_SLIDES[index] ?? WHATS_NEW_SLIDES[0]);
   const last = $derived(index === WHATS_NEW_SLIDES.length - 1);
   // Slides turn by themselves like stories, but hold still while pointed at,
   // pressed or in a background tab. With reduced motion they only turn by hand:

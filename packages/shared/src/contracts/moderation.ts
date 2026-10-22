@@ -12,6 +12,7 @@ export const BanProfile = Type.Object({
   avatarColorKey: Type.String(),
   avatarAccent: Nullable(Type.String())
 });
+export type BanProfile = Static<typeof BanProfile>;
 
 export const Ban = Type.Object({
   id: Type.String(),

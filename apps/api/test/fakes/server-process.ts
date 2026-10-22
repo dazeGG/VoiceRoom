@@ -10,8 +10,11 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import type { TestContext } from 'node:test';
-import type { SignedIn } from '@voice-room/shared/contracts/account';
-import type { FriendRequests } from '@voice-room/shared/contracts/social';
+import { SignedIn } from '@voice-room/shared/contracts/account';
+import { FriendRequests } from '@voice-room/shared/contracts/social';
+import { isRecord } from '@voice-room/shared/guards';
+import { Type, type Static, type TSchema } from 'typebox';
+import { checked } from '../helpers/checked.ts';
 import { createTestDatabase } from '../db-harness.ts';
 import { socketPathForDirectory } from '../ipc-harness.ts';
 
@@ -84,15 +87,39 @@ export function startServer(
 }
 
 /**
- * The envelope every API response shares. A test that reads more names the
- * shape it expects: `request<{ user: { id: string } }>(...)`.
+ * The envelope every API response shares. A test that reads more passes the
+ * route's contract schema: `request(socketPath, options, SignedIn)` checks the
+ * body against it and types it.
  */
 export type ApiBody = { ok?: boolean; code?: string; error?: string; [key: string]: unknown };
+
+/** The envelope as a schema, for a call that reads only `ok`, `code` or `error`. */
+export const AnswerEnvelope = Type.Object({
+  ok: Type.Optional(Type.Boolean()),
+  code: Type.Optional(Type.String()),
+  error: Type.Optional(Type.String())
+});
+
+function isApiBody(value: unknown): value is ApiBody {
+  return (
+    isRecord(value) &&
+    (value.ok === undefined || typeof value.ok === 'boolean') &&
+    (value.code === undefined || typeof value.code === 'string') &&
+    (value.error === undefined || typeof value.error === 'string')
+  );
+}
+
+// A schema-less call reads the envelope; any other body fails the test instead of reading as empty.
+function apiBody(value: unknown, what: string): ApiBody {
+  if (value === null) return {};
+  if (!isApiBody(value)) throw new Error(`${what}: the body is not an API envelope; pass its schema`);
+  return value;
+}
 
 export type JsonResponse<Body = ApiBody> = {
   status: number;
   headers: http.IncomingHttpHeaders;
-  body: Body & ApiBody;
+  body: Body;
   setCookie: string[];
 };
 
@@ -102,14 +129,21 @@ export type RequestOptions = {
   body?: unknown;
   /** Sent as is instead of a JSON body; `headers` names its content type. */
   rawBody?: Buffer;
-  cookie?: string;
+  cookie?: string | undefined;
   headers?: Record<string, string>;
 };
 
-export function request<Body = ApiBody>(
+export function request(socketPath: string, options: RequestOptions): Promise<JsonResponse>;
+export function request<const Schema extends TSchema>(
   socketPath: string,
-  { method = 'GET', pathname, body, rawBody, cookie, headers: extra = {} }: RequestOptions
-): Promise<JsonResponse<Body>> {
+  options: RequestOptions,
+  schema: Schema
+): Promise<JsonResponse<Static<Schema>>>;
+export function request(
+  socketPath: string,
+  { method = 'GET', pathname, body, rawBody, cookie, headers: extra = {} }: RequestOptions,
+  schema?: TSchema
+): Promise<JsonResponse<unknown>> {
   const payload = rawBody ?? (body === undefined ? null : JSON.stringify(body));
   const headers: Record<string, string | number> = { Accept: 'application/json', ...extra };
   if (payload) {
@@ -131,10 +165,12 @@ export function request<Body = ApiBody>(
         } catch {
           parsed = data;
         }
+        const status = res.statusCode ?? 0;
+        const what = `${method} ${pathname} (${status})`;
         resolve({
-          status: res.statusCode ?? 0,
+          status,
           headers: res.headers,
-          body: parsed as Body & ApiBody,
+          body: schema ? checked(schema, parsed, what) : apiBody(parsed, what),
           setCookie: res.headers['set-cookie'] ?? []
         });
       });
@@ -152,17 +188,23 @@ export function cookieFrom(setCookie: string | string[] | undefined): string {
   return String(header || '').split(';')[0] ?? '';
 }
 
-export function postJson<Body = ApiBody>(
+export function postJson<const Schema extends TSchema>(
   socketPath: string,
   pathname: string,
+  schema: Schema,
   body: unknown = {},
   cookie?: string
-): Promise<JsonResponse<Body>> {
-  return request<Body>(socketPath, { method: 'POST', pathname, body, cookie });
+): Promise<JsonResponse<Static<Schema>>> {
+  return request(socketPath, { method: 'POST', pathname, body, cookie }, schema);
 }
 
-export function getJson<Body = ApiBody>(socketPath: string, pathname: string, cookie?: string) {
-  return request<Body>(socketPath, { pathname, cookie });
+export function getJson<const Schema extends TSchema>(
+  socketPath: string,
+  pathname: string,
+  schema: Schema,
+  cookie?: string
+): Promise<JsonResponse<Static<Schema>>> {
+  return request(socketPath, { pathname, cookie }, schema);
 }
 
 /** Prints what the server wrote, for a test that is about to fail. */
@@ -204,11 +246,15 @@ export async function startApiServer(
 
 /** Registers `login` (password 'password123') and returns its session cookie. */
 export async function registerAccount(socketPath: string, login: string): Promise<string> {
-  const response = await request<SignedIn>(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/register',
-    body: { login, displayName: login, password: 'password123', passwordConfirm: 'password123' }
-  });
+  const response = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/auth/register',
+      body: { login, displayName: login, password: 'password123', passwordConfirm: 'password123' }
+    },
+    SignedIn
+  );
   assert.equal(response.status, 201);
   return cookieFrom(response.setCookie);
 }
@@ -227,7 +273,7 @@ export async function sendFriendRequest(socketPath: string, requesterCookie: str
 
 /** Accepts the oldest incoming friend request of the account behind `cookie`. */
 export async function acceptFirstFriendRequest(socketPath: string, cookie: string): Promise<void> {
-  const list = await request<FriendRequests>(socketPath, { pathname: '/api/friends/requests', cookie });
+  const list = await request(socketPath, { pathname: '/api/friends/requests', cookie }, FriendRequests);
   assert.equal(list.status, 200);
   const requestId = list.body.incoming[0]?.id;
   assert.ok(requestId);

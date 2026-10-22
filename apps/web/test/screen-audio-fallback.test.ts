@@ -2,6 +2,9 @@
 // through a separate hidden audio element.
 
 import { afterEach, expect, test, vi } from 'vitest';
+import { participant } from './fixtures/participant.ts';
+import { instanceOf } from './helpers/assert.ts';
+import { FakeMediaStream, FakeMediaStreamTrack } from './helpers/fake-media.ts';
 
 const applied: Array<{ element: HTMLMediaElement; options: { boostAllowed?: boolean } }> = [];
 const released: HTMLMediaElement[] = [];
@@ -26,13 +29,6 @@ vi.mock('../src/lib/features/room/screen-ui.svelte', () => ({
 
 const { syncScreenAudioFallback } = await import('../src/lib/features/room/client/ui/screen-stage-controls.ts');
 
-class TestMediaStream {
-  constructor(readonly tracks: Array<{ kind: string }>) {}
-  getAudioTracks() {
-    return this.tracks.filter((track) => track.kind === 'audio');
-  }
-}
-
 afterEach(() => {
   applied.length = 0;
   released.length = 0;
@@ -40,24 +36,16 @@ afterEach(() => {
 });
 
 test('screen audio keeps a routed fallback sink during a video republish gap', () => {
-  vi.stubGlobal('MediaStream', TestMediaStream);
+  vi.stubGlobal('MediaStream', FakeMediaStream);
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
-  const endedListeners: Array<() => void> = [];
-  const audioTrack = {
-    addEventListener: (_event: string, listener: () => void) => {
-      endedListeners.push(listener);
-    },
-    id: 'screen-audio',
-    kind: 'audio',
-    readyState: 'live'
-  };
-  const peer = { isLocal: false, screenStream: new TestMediaStream([audioTrack]) } as never;
+  const audioTrack = new FakeMediaStreamTrack('screen-audio', 'audio');
+  const peer = participant({ id: 'sharer', screenStream: new FakeMediaStream([audioTrack]) });
   const sinks = () => [...document.body.querySelectorAll('audio')];
 
   syncScreenAudioFallback(peer, false);
   expect(sinks()).toHaveLength(1);
-  expect((sinks()[0]?.srcObject as unknown as TestMediaStream).getAudioTracks()[0]).toBe(audioTrack);
+  expect(instanceOf(sinks()[0]?.srcObject, FakeMediaStream, 'the sink stream').getAudioTracks()[0]).toBe(audioTrack);
   expect(applied.at(-1)?.element).toBe(sinks()[0]);
   expect(applied.at(-1)?.options.boostAllowed).toBe(true);
 
@@ -71,6 +59,6 @@ test('screen audio keeps a routed fallback sink during a video republish gap', (
 
   syncScreenAudioFallback(peer, false);
   expect(sinks()).toHaveLength(1);
-  endedListeners.at(-1)?.();
+  audioTrack.dispatchEvent(new Event('ended'));
   expect(sinks()).toHaveLength(0);
 });

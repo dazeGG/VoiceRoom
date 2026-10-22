@@ -5,7 +5,7 @@ export interface ScreenPublicationPresence {
 }
 
 export function getScreenPublicationPresence<T>(
-  publications: Iterable<T>,
+  publications: Iterable<T, unknown, unknown>,
   isVideo: (publication: T) => boolean,
   isAudio: (publication: T) => boolean
 ): ScreenPublicationPresence {

@@ -57,14 +57,6 @@ export function beginRoomChatReadSession(roomId: string): () => void {
   };
 }
 
-export function setRoomPresence(roomId: string, peers: RoomPeerSummary[], hiddenPeerCount = 0): void {
-  roomPresence.peersByRoomId = { ...roomPresence.peersByRoomId, [roomId]: peers };
-  roomPresence.hiddenPeerCountByRoomId = {
-    ...roomPresence.hiddenPeerCountByRoomId,
-    [roomId]: hiddenPeerCount
-  };
-}
-
 export function clearRoomPresence(roomId: string): void {
   const { [roomId]: _peers, ...peersByRoomId } = roomPresence.peersByRoomId;
   const { [roomId]: _hidden, ...hiddenPeerCountByRoomId } = roomPresence.hiddenPeerCountByRoomId;

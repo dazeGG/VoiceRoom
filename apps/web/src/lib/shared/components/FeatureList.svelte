@@ -5,7 +5,7 @@
 </script>
 
 <ul class="feature-list">
-  {#each items as item, i}
+  {#each items as item, i (i)}
     <li class="feature">
       <span class="feature-num">{String(i + 1).padStart(2, '0')}</span>
       <div class="feature-body">

@@ -10,29 +10,31 @@ export type TimeRange = { kind: 'preset'; id: string } | { kind: 'custom'; from:
 export interface RangePreset {
   id: string;
   label: string;
+  /** The label on the row of choices, where room is short. */
+  short: string;
   /** How far back from now; null is "from the very beginning". */
   spanMs: number | null;
 }
 
 export const PRODUCT_PRESETS: readonly RangePreset[] = [
-  { id: '7d', label: 'Последние 7 дней', spanMs: 7 * DAY },
-  { id: '14d', label: 'Последние 14 дней', spanMs: 14 * DAY },
-  { id: '30d', label: 'Последние 30 дней', spanMs: 30 * DAY },
-  { id: '90d', label: 'Последние 90 дней', spanMs: 90 * DAY },
-  { id: '180d', label: 'Последние полгода', spanMs: 180 * DAY },
-  { id: '365d', label: 'Последний год', spanMs: 365 * DAY },
-  { id: 'all', label: 'Всё время', spanMs: null }
+  { id: '7d', label: 'Последние 7 дней', short: '7 дней', spanMs: 7 * DAY },
+  { id: '14d', label: 'Последние 14 дней', short: '14 дней', spanMs: 14 * DAY },
+  { id: '30d', label: 'Последние 30 дней', short: '30 дней', spanMs: 30 * DAY },
+  { id: '90d', label: 'Последние 90 дней', short: '90 дней', spanMs: 90 * DAY },
+  { id: '180d', label: 'Последние полгода', short: 'Полгода', spanMs: 180 * DAY },
+  { id: '365d', label: 'Последний год', short: 'Год', spanMs: 365 * DAY },
+  { id: 'all', label: 'Всё время', short: 'Всё время', spanMs: null }
 ];
 
 export const SYSTEM_PRESETS: readonly RangePreset[] = [
-  { id: '1h', label: 'Последний час', spanMs: HOUR },
-  { id: '3h', label: 'Последние 3 часа', spanMs: 3 * HOUR },
-  { id: '6h', label: 'Последние 6 часов', spanMs: 6 * HOUR },
-  { id: '12h', label: 'Последние 12 часов', spanMs: 12 * HOUR },
-  { id: '24h', label: 'Последние сутки', spanMs: DAY },
-  { id: '2d', label: 'Последние 2 дня', spanMs: 2 * DAY },
-  { id: '7d', label: 'Последние 7 дней', spanMs: 7 * DAY },
-  { id: '30d', label: 'Последние 30 дней', spanMs: 30 * DAY }
+  { id: '1h', label: 'Последний час', short: '1 ч', spanMs: HOUR },
+  { id: '3h', label: 'Последние 3 часа', short: '3 ч', spanMs: 3 * HOUR },
+  { id: '6h', label: 'Последние 6 часов', short: '6 ч', spanMs: 6 * HOUR },
+  { id: '12h', label: 'Последние 12 часов', short: '12 ч', spanMs: 12 * HOUR },
+  { id: '24h', label: 'Последние сутки', short: 'Сутки', spanMs: DAY },
+  { id: '2d', label: 'Последние 2 дня', short: '2 дня', spanMs: 2 * DAY },
+  { id: '7d', label: 'Последние 7 дней', short: '7 дней', spanMs: 7 * DAY },
+  { id: '30d', label: 'Последние 30 дней', short: '30 дней', spanMs: 30 * DAY }
 ];
 
 const moscowDate = new Intl.DateTimeFormat('en-CA', {

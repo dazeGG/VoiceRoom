@@ -9,7 +9,7 @@ function isAllowedPushHost(hostname: string): boolean {
 }
 
 function cleanPushEndpoint(value: unknown): string | null {
-  const endpoint = String(value || '').trim();
+  const endpoint = typeof value === 'string' ? value.trim() : '';
   if (!endpoint || endpoint.length > 4096) return null;
 
   try {
@@ -32,7 +32,7 @@ function cleanPushEndpoint(value: unknown): string | null {
 }
 
 function describePushEndpoint(value: unknown): { pushHost: string; pushEndpointHash: string } {
-  const endpoint = String(value || '');
+  const endpoint = typeof value === 'string' ? value : '';
   let pushHost = 'invalid';
   try {
     const hostname = new URL(endpoint).hostname.toLowerCase();

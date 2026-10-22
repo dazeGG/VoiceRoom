@@ -24,15 +24,16 @@ import type { ApiContext } from '../../app/context.ts';
 import { failure, optionalJsonBody, type Failure } from '../../platform/http/http-kit.ts';
 import {
   publicPeer,
-  roomAvatarUrl,
   roomBanned,
   type LiveRoom,
   type LobbyRoom,
   type PresencePeer,
   type StoredRoom
 } from './room-views.ts';
+import { avatarUrl } from '../../lib/avatar-url.ts';
 import type { OwnerCheck, RoomsService } from './rooms.service.ts';
 import type { PowVerdict } from '../../lib/pow.ts';
+import type { RateCheck } from '../../lib/rate-limit.ts';
 
 const answers = <Success>(success: Success) => ({ 200: success, '4xx': RoomFailure });
 
@@ -52,13 +53,16 @@ const STATIC_ROOM_NEEDS_LOGIN = failure('Требуется вход для со
   code: 'static_room_requires_login'
 });
 
-interface RateLimiter {
-  check(key: string): { allowed: boolean; retryAfterSeconds?: number };
-}
-
 interface RoomListStore {
   listVisibleRoomsForUser(userId: string): Promise<StoredRoom[]>;
-  addRoomBookmarkForUser(userId: string, roomId: string): Promise<{ status: string; room?: StoredRoom | null }>;
+  addRoomBookmarkForUser(
+    userId: string,
+    roomId: string
+  ): Promise<
+    | { status: 'bookmarked'; room: StoredRoom }
+    | { status: 'not_found'; room: null }
+    | { status: 'temporary_room'; room: null }
+  >;
   removeRoomBookmarkForUser(userId: string, roomId: string): Promise<{ status: string; removed?: boolean }>;
 }
 
@@ -71,7 +75,7 @@ export interface RoomRoutesDeps {
   findAuthorizedPeer(roomId: string, peerId: string, sessionToken: string): PresencePeer | null;
   lobbyRoom(room: StoredRoom): LobbyRoom;
   invalidateRecipientCache(roomId: string): void;
-  createLimiter: RateLimiter;
+  createLimiter: RateCheck;
   pow: { verify(ip: string, proof: unknown): PowVerdict };
   /** The keyed hash a room keeps of its creator's address (lib/ip-key.ts), never the address. */
   ipKeyOf(ip: string): string | null;
@@ -222,10 +226,10 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
       if (!room) return reply.code(404).send({ ...notFound, roomId });
       return {
         ok: true as const,
-        avatarUrl: roomAvatarUrl(room.avatarKey),
+        avatarUrl: avatarUrl(room.avatarKey),
         createdAt: room.createdAt,
         exists: true as const,
-        emptySince: room.emptySince,
+        ...(room.emptySince === undefined ? {} : { emptySince: room.emptySince }),
         isStatic: room.isStatic,
         maxRoomPeers: deps.maxRoomPeers,
         name: room.name,
@@ -266,7 +270,7 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
       }
     },
     async (request, reply) => {
-      const body = request.body as Record<string, unknown>;
+      const { body } = request;
       const roomId: string = normalizeRoomId(body.roomId);
       const peerId: string = normalizePeerId(body.peerId);
       const sessionToken: string = normalizeSessionToken(body.sessionToken);
@@ -304,7 +308,7 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
       const userId = await sessionUserId(request.raw);
       if (!userId) return reply.code(401).send(failure('Требуется вход', { code: 'authentication_required' }));
       const rooms = await deps.store().listVisibleRoomsForUser(userId);
-      return { ok: true as const, rooms: rooms.map(deps.lobbyRoom) };
+      return { ok: true as const, rooms: rooms.map((room) => deps.lobbyRoom(room)) };
     }
   );
 
@@ -331,7 +335,7 @@ export function registerRoomRoutes(root: FastifyInstance, ctx: ApiContext, deps:
           .code(400)
           .send(failure('В список можно добавить только постоянную комнату', { code: 'room_not_static' }));
       deps.invalidateRecipientCache(roomId);
-      return { ok: true as const, room: deps.lobbyRoom(added.room as StoredRoom) };
+      return { ok: true as const, room: deps.lobbyRoom(added.room) };
     }
   );
 

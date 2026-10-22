@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { isRecord } from '../../platform/record.ts';
 
 const CREDENTIAL_PREFIX = 'vrg1';
 
@@ -21,18 +22,18 @@ export type GateVerification =
   | { ok: false; code: 'invalid_claims' | 'issued_in_future' | 'expired'; claims: Record<string, unknown> };
 
 export type GateSignInput = {
-  credentialId?: unknown;
-  expiresAt?: unknown;
-  issuedAt?: unknown;
-  peerId?: unknown;
-  principalEpoch?: unknown;
-  principalId?: unknown;
-  principalType?: unknown;
-  roomId?: unknown;
+  credentialId?: string | undefined;
+  expiresAt?: number;
+  issuedAt?: number | undefined;
+  peerId?: string;
+  principalEpoch?: number;
+  principalId?: string;
+  principalType?: string;
+  roomId?: string;
 };
 
 export type GateCredentialSigner = {
-  hash(credential: unknown): string;
+  hash(credential: string): string;
   sign(input?: GateSignInput): string;
   verify(credential: unknown): GateVerification;
 };
@@ -41,26 +42,25 @@ function base64urlJson(value: unknown): string {
   return Buffer.from(JSON.stringify(value)).toString('base64url');
 }
 
-function parseBase64urlJson(value: unknown): Record<string, unknown> {
-  return JSON.parse(Buffer.from(String(value || ''), 'base64url').toString('utf8'));
+function parseBase64urlJson(value: string): unknown {
+  const parsed: unknown = JSON.parse(Buffer.from(value, 'base64url').toString('utf8'));
+  return parsed;
 }
 
-function hashGateCredential(credential: unknown): string {
-  return crypto
-    .createHash('sha256')
-    .update(String(credential || ''))
-    .digest('hex');
+function isPrincipalType(value: unknown): value is GatePrincipalType {
+  return value === 'account' || value === 'guest';
+}
+
+function hashGateCredential(credential: string): string {
+  return crypto.createHash('sha256').update(credential).digest('hex');
 }
 
 function signPayload(payload: string, secret: string): string {
-  return crypto
-    .createHmac('sha256', String(secret || ''))
-    .update(payload)
-    .digest('base64url');
+  return crypto.createHmac('sha256', secret).update(payload).digest('base64url');
 }
 
 function normalizeGateSecret(secret: unknown): string {
-  const value = String(secret || '').trim();
+  const value = typeof secret === 'string' ? secret.trim() : '';
   if (value.length < 32) {
     throw new Error('LIVEKIT_GATE_SECRET must be at least 32 characters');
   }
@@ -73,11 +73,11 @@ function createGateCredentialSigner({
   maxFutureSkewMs = 30_000
 }: {
   secret?: unknown;
-  now?: unknown;
-  maxFutureSkewMs?: unknown;
+  now?: () => number;
+  maxFutureSkewMs?: number;
 } = {}): GateCredentialSigner {
   const signingSecret = normalizeGateSecret(secret);
-  const nowMs: () => number = typeof now === 'function' ? (now as () => number) : () => Date.now();
+  const nowMs = now;
 
   function sign({
     credentialId = crypto.randomUUID(),
@@ -90,14 +90,14 @@ function createGateCredentialSigner({
     roomId
   }: GateSignInput = {}): string {
     const body = {
-      cid: String(credentialId || ''),
+      cid: credentialId || '',
       exp: Number(expiresAt),
       iat: Number(issuedAt),
-      peer: String(peerId || ''),
+      peer: peerId || '',
       pEpoch: Number(principalEpoch),
-      pId: String(principalId || ''),
-      pType: String(principalType || ''),
-      room: String(roomId || '')
+      pId: principalId || '',
+      pType: principalType || '',
+      room: roomId || ''
     };
     if (!body.cid || !body.room || !body.peer || !body.pId || !['account', 'guest'].includes(body.pType)) {
       throw new Error('Invalid gate credential payload');
@@ -117,9 +117,10 @@ function createGateCredentialSigner({
   }
 
   function verify(credential: unknown): GateVerification {
-    const parts = String(credential || '').split('.');
-    if (parts.length !== 3 || parts[0] !== CREDENTIAL_PREFIX) return { ok: false, code: 'malformed' };
-    const [, payload, signature] = parts as [string, string, string];
+    const parts = (typeof credential === 'string' ? credential : '').split('.');
+    const [prefix, payload, signature] = parts;
+    if (parts.length !== 3 || prefix !== CREDENTIAL_PREFIX || payload === undefined || signature === undefined)
+      return { ok: false, code: 'malformed' };
     const expected = signPayload(payload, signingSecret);
     if (
       signature.length !== expected.length ||
@@ -127,35 +128,41 @@ function createGateCredentialSigner({
     ) {
       return { ok: false, code: 'bad_signature' };
     }
-    let claims: Record<string, unknown>;
+    let claims: unknown;
     try {
       claims = parseBase64urlJson(payload);
     } catch {
       return { ok: false, code: 'malformed_payload' };
     }
+    // Only this signer writes payloads, so a signed one is always an object.
+    if (!isRecord(claims)) return { ok: false, code: 'malformed_payload' };
+    const { cid, room, peer, pId, pType, iat, exp } = claims;
+    const pEpoch = Number(claims.pEpoch);
     if (
-      typeof claims.cid !== 'string' ||
-      !claims.cid ||
-      typeof claims.room !== 'string' ||
-      !claims.room ||
-      typeof claims.peer !== 'string' ||
-      !claims.peer ||
-      typeof claims.pId !== 'string' ||
-      !claims.pId ||
-      !['account', 'guest'].includes(claims.pType as string) ||
-      !Number.isFinite(claims.iat) ||
-      !Number.isFinite(claims.exp) ||
-      !Number.isSafeInteger(Number(claims.pEpoch)) ||
-      Number(claims.pEpoch) < 0 ||
-      (claims.exp as number) <= (claims.iat as number)
+      typeof cid !== 'string' ||
+      !cid ||
+      typeof room !== 'string' ||
+      !room ||
+      typeof peer !== 'string' ||
+      !peer ||
+      typeof pId !== 'string' ||
+      !pId ||
+      !isPrincipalType(pType) ||
+      typeof iat !== 'number' ||
+      !Number.isFinite(iat) ||
+      typeof exp !== 'number' ||
+      !Number.isFinite(exp) ||
+      !Number.isSafeInteger(pEpoch) ||
+      pEpoch < 0 ||
+      exp <= iat
     ) {
       return { ok: false, code: 'invalid_claims', claims };
     }
-    if ((claims.iat as number) > nowMs() + Math.max(0, Number(maxFutureSkewMs) || 0)) {
+    if (iat > nowMs() + Math.max(0, maxFutureSkewMs || 0)) {
       return { ok: false, code: 'issued_in_future', claims };
     }
-    if ((claims.exp as number) <= nowMs()) return { ok: false, code: 'expired', claims };
-    return { ok: true, claims: claims as GateClaims };
+    if (exp <= nowMs()) return { ok: false, code: 'expired', claims };
+    return { ok: true, claims: { cid, exp, iat, peer, pEpoch, pId, pType, room } };
   }
 
   return {

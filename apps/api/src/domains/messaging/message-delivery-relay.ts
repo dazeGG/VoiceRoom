@@ -7,33 +7,25 @@
 // was down are replayed: otherwise live chat would stop until a restart while
 // the outbox and the health check both looked fine.
 
-import type { DirectMessage as StoredDirectMessage } from '../social/social-records.ts';
+import { isRecord } from '@voice-room/shared/guards';
+import { isStoredDirectMessage } from '../social/social-records.ts';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
+import {
+  dropListener,
+  startListening,
+  stopListener,
+  type ListenClient,
+  type Listener
+} from '../../platform/db/listen.ts';
 import type { MessageProjection } from './message-projection.ts';
 import type { StoredUser } from '../account/user-records.ts';
-import type { RoomChatMessage } from './room-chat-views.ts';
+import { isStoredChatMessage, type RoomChatMessage } from './room-chat-views.ts';
 
 const CHANNEL = 'voice_room_message_delivery';
 const RETRY_BASE_MS = 1_000;
 const RETRY_MAX_MS = 30_000;
-
-interface DeliveryEvent {
-  type?: string;
-  conversation?: { type?: string; id?: string };
-  message?: { senderId?: string; recipientId?: string; [key: string]: unknown };
-}
-
-interface ListenClient {
-  on(event: 'notification', listener: (notification: { channel: string; payload?: string }) => void): unknown;
-  on(event: 'error', listener: (error: unknown) => void): unknown;
-  on(event: 'end', listener: () => void): unknown;
-  off(event: 'notification', listener: (notification: { channel: string; payload?: string }) => void): unknown;
-  query(sql: string): Promise<unknown>;
-  /** An error destroys the connection instead of returning it to the pool. */
-  release(error?: Error): void;
-}
 
 export interface MessageDeliveryRelayDeps {
   enabled: boolean;
@@ -56,24 +48,30 @@ export interface MessageDeliveryRelayDeps {
 }
 
 export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
-  let listener: {
-    client: ListenClient;
-    onNotification: (notification: { channel: string; payload?: string }) => void;
-  } | null = null;
+  let listener: Listener | null = null;
 
-  async function dispatchMessageDeliveryEvent(event: DeliveryEvent | null | undefined): Promise<void> {
-    if (!event || event.type !== 'message.created' || !event.message) return;
-    if (event.conversation?.type === 'room') {
-      const roomId = event.conversation.id as string;
+  // The outbox stores the event its writer enqueued; dispatch checks its fields.
+  async function dispatchMessageDeliveryEvent(event: unknown): Promise<void> {
+    if (!isRecord(event) || event.type !== 'message.created') return;
+    const { conversation, message } = event;
+    if (!isRecord(conversation) || typeof conversation.id !== 'string') return;
+    if (conversation.type === 'room') {
+      const roomId = conversation.id;
       // The outbox carries the stored message; the runtime makes it public.
-      const message = event.message as unknown as RoomChatMessage;
+      if (!isStoredChatMessage(message)) {
+        reportMalformedMessage('room', message);
+        return;
+      }
       deps.broadcastChatMessage(roomId, await deps.projection.project('room', message, { roomId }));
       return;
     }
-    if (event.conversation?.type === 'dm') {
+    if (conversation.type === 'dm') {
       // The outbox carries the stored message as the store wrote it.
-      const message = event.message as unknown as StoredDirectMessage;
-      const peerId = message.senderId === event.conversation.id ? message.recipientId : event.conversation.id;
+      if (!isStoredDirectMessage(message)) {
+        reportMalformedMessage('dm', message);
+        return;
+      }
+      const peerId = message.senderId === conversation.id ? message.recipientId : conversation.id;
       const projected = await deps.projection.project('dm', message, { userId: message.senderId, peerId });
       deps.notifyUser(message.senderId, { type: 'dm-message', message: projected });
       deps.notifyUser(message.recipientId, { type: 'dm-message', message: projected });
@@ -99,6 +97,18 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
       );
   }
 
+  // A stored message that no longer fits its contract (a row written by
+  // another version) is dropped from realtime delivery, but never silently.
+  function reportMalformedMessage(conversation: 'room' | 'dm', message: unknown): void {
+    const messageId = isRecord(message) && typeof message.id === 'string' ? message.id : null;
+    deps
+      .logger()
+      .error(
+        { evt: LOG_EVENTS.MESSAGE_EVENT_DISPATCH_FAILED, conversation, messageId },
+        'a durable message event carried a malformed message'
+      );
+  }
+
   function scheduleRetry(): void {
     if (stopped || retryTimer) return;
     const delay = Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** retryAttempt);
@@ -110,14 +120,12 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
     retryTimer.unref?.();
   }
 
-  function lose(client: ListenClient, error?: unknown): void {
-    const current = listener;
-    if (!current || current.client !== client) return;
+  function lose(lost: Listener, error?: unknown): void {
+    if (listener !== lost) return;
     listener = null;
     lostAt ??= new Date();
     deps.logger().error({ evt: LOG_EVENTS.MESSAGE_LISTENER_FAILED, err: error }, 'message delivery listener failed');
-    client.off('notification', current.onNotification);
-    client.release(error instanceof Error ? error : new Error('message delivery listener lost'));
+    dropListener(lost, error);
     scheduleRetry();
   }
 
@@ -128,7 +136,7 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
     lostAt = null;
     const events = await outbox.listDeliveredSince(since);
     for (const event of events) {
-      await dispatchMessageDeliveryEvent(event.payload as DeliveryEvent).catch(reportDispatchFailure);
+      await dispatchMessageDeliveryEvent(event.payload).catch(reportDispatchFailure);
     }
     deps
       .logger()
@@ -144,27 +152,18 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
     const outbox = deps.outbox();
     if (!pool || !outbox) return;
     connecting = true;
-    let client: ListenClient | null = null;
     try {
-      client = await pool.connect();
-      const connected = client;
-      const onNotification = (notification: { channel: string; payload?: string }) => {
-        if (notification.channel !== CHANNEL) return;
-        void (async () => {
-          const parsed = JSON.parse(notification.payload || '{}') as { eventId?: string };
-          const row = parsed.eventId ? await outbox.getEvent(parsed.eventId) : null;
-          // The outbox stores the event its writer enqueued; dispatch checks its fields.
-          if (row?.payload) await dispatchMessageDeliveryEvent(row.payload as DeliveryEvent);
-        })().catch(reportDispatchFailure);
-      };
-      client.on('notification', onNotification);
-      client.on('error', (error) => lose(connected, error));
-      client.on('end', () => lose(connected));
-      await client.query(`LISTEN ${CHANNEL}`);
-      listener = { client, onNotification };
-    } catch (error) {
-      client?.release(error instanceof Error ? error : new Error('LISTEN failed'));
-      throw error;
+      listener = await startListening(pool, CHANNEL, {
+        onPayload: (payload) => {
+          void (async () => {
+            const parsed: unknown = JSON.parse(payload || '{}');
+            const eventId = isRecord(parsed) && typeof parsed.eventId === 'string' ? parsed.eventId : '';
+            const row = eventId ? await outbox.getEvent(eventId) : null;
+            if (row?.payload) await dispatchMessageDeliveryEvent(row.payload);
+          })().catch(reportDispatchFailure);
+        },
+        onLost: lose
+      });
     } finally {
       connecting = false;
     }
@@ -191,9 +190,7 @@ export function createMessageDeliveryRelay(deps: MessageDeliveryRelayDeps) {
     const current = listener;
     listener = null;
     if (!current) return;
-    current.client.off('notification', current.onNotification);
-    await current.client.query(`UNLISTEN ${CHANNEL}`).catch(() => {});
-    current.client.release();
+    await stopListener(current);
   }
 
   return {

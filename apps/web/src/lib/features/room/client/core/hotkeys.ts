@@ -1,5 +1,6 @@
 import { hotkeyMatchesEvent } from '$lib/shared/ui/HotkeyRecorder/hotkey';
 import type { HotkeyBinding } from '$lib/shared/ui/HotkeyRecorder/types';
+import { isRecord } from '@voice-room/shared/guards';
 
 export type HotkeyAction = 'mic-mute' | 'output-mute' | 'push-to-talk';
 
@@ -49,8 +50,8 @@ export function writeHotkeyBinding(action: HotkeyAction, binding: HotkeyBinding 
 
 function parseHotkeyBinding(serialized: string): HotkeyBinding | null {
   try {
-    const value = JSON.parse(serialized) as Partial<HotkeyBinding> | null;
-    if (!value || typeof value !== 'object' || typeof value.code !== 'string' || !value.code) return null;
+    const value: unknown = JSON.parse(serialized);
+    if (!isRecord(value) || typeof value.code !== 'string' || !value.code) return null;
     return {
       altKey: value.altKey === true,
       code: value.code,

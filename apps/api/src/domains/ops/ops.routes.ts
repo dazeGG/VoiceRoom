@@ -11,10 +11,7 @@ import { failure } from '../../platform/http/http-kit.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { CLIENT_LOG_LIMITS, normalizeClientLogBatch } from '../../lib/client-log-intake.ts';
 import type { DesktopReleaseService } from './desktop-release.service.ts';
-
-interface RateLimiter {
-  check(key: string): { allowed: boolean; retryAfterSeconds: number };
-}
+import type { RateCheck } from '../../lib/rate-limit.ts';
 
 export interface OpsRouteDeps {
   livekitEnabled(): boolean;
@@ -23,7 +20,7 @@ export interface OpsRouteDeps {
   pow: { prune(): void; createChallenge(ip: string, now: number): string | null };
   powDifficulty: number;
   powTtlMs: number;
-  clientLogs: { enabled: boolean; limiter: RateLimiter };
+  clientLogs: { enabled: boolean; limiter: RateCheck };
   desktopRelease: DesktopReleaseService;
 }
 
@@ -44,13 +41,14 @@ export function registerOpsRoutes(root: FastifyInstance, ctx: ApiContext, deps: 
 
   app.get('/api/pow-challenge', { schema: { response: { 200: PowChallenge } } }, async (request) => {
     deps.pow.prune();
-    if (deps.powDifficulty <= 0) return { ok: true as const, required: false as const };
     const now = Date.now();
+    // Null only without a difficulty.
+    const challenge = deps.powDifficulty > 0 ? deps.pow.createChallenge(ctx.clientIp(request.raw), now) : null;
+    if (!challenge) return { ok: true as const, required: false as const };
     return {
       ok: true as const,
       algorithm: 'sha256' as const,
-      // Null only without a difficulty, which returned above.
-      challenge: deps.pow.createChallenge(ctx.clientIp(request.raw), now)!,
+      challenge,
       difficulty: deps.powDifficulty,
       expiresAt: now + deps.powTtlMs,
       required: true as const
@@ -108,7 +106,7 @@ export function registerOpsRoutes(root: FastifyInstance, ctx: ApiContext, deps: 
         ipHash: ctx.hashIp(clientIp)
       };
       for (const event of batch.events) {
-        const level = event.level as 'debug' | 'info' | 'warn' | 'error';
+        const level = event.level;
         request.log[level](
           {
             evt: LOG_EVENTS.CLIENT_REPORT,

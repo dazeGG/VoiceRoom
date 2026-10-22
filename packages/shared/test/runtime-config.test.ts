@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {
   inheritLiveKitGateCredential,
   normalizeLiveKitServerUrl,
-  resolveLiveKitConnectUrls
+  resolveLiveKitConnectUrls,
+  type RuntimeConfigV1
 } from '../src/runtime-config.ts';
 
 test('removes a legacy rtc path before LiveKit appends its signaling path', () => {
@@ -39,14 +40,16 @@ test('leaves configured endpoints unchanged when the API issued no gate credenti
 });
 
 test('never places an uncredentialed runtime endpoint before the API admission URL', () => {
-  // Only the LiveKit section matters here.
+  const runtimeConfig: RuntimeConfigV1 = {
+    contractVersion: 'voice-room.runtime-config/v1',
+    schemaVersion: 1,
+    livekit: {
+      wsUrl: 'wss://livekit.dev.voiceroom.ru/rtc',
+      connectFallbacks: ['wss://livekit-fallback.dev.voiceroom.ru/rtc']
+    }
+  };
   const urls = resolveLiveKitConnectUrls(
-    {
-      livekit: {
-        wsUrl: 'wss://livekit.dev.voiceroom.ru/rtc',
-        connectFallbacks: ['wss://livekit-fallback.dev.voiceroom.ru/rtc']
-      }
-    } as Parameters<typeof resolveLiveKitConnectUrls>[0],
+    runtimeConfig,
     'wss://livekit.dev.voiceroom.ru/rtc?vr_gate_credential=signed-value'
   );
 

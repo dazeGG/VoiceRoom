@@ -1,9 +1,11 @@
 import { test, vi } from 'vitest';
+import { lobbyRoom } from './fixtures/answers.ts';
 import assert from 'node:assert/strict';
+import { defined } from './helpers/assert.ts';
 
 async function loadRoomRealtime() {
   vi.resetModules();
-  const sent: Array<{ type: string; payload: unknown; id?: string }> = [];
+  const sent: Array<{ type: string; payload: unknown; id?: string | undefined }> = [];
   const connection = {
     epoch: 7,
     connected: true,
@@ -53,20 +55,20 @@ test('a delayed retryable error cannot cancel a newer successful voice resync at
     });
 
     assert.equal(realtime.requestActiveVoiceResync(1, 7), true);
-    const firstRequestId = sent.at(-1)?.id;
+    const firstRequestId = defined(sent.at(-1)?.id, 'first resync request id');
     const firstEntry = timers.entries().next().value;
     assert.ok(firstEntry);
     const [firstTimerId, firstTimer] = firstEntry;
     timers.delete(firstTimerId);
     firstTimer();
-    const secondRequestId = sent.at(-1)?.id;
+    const secondRequestId = defined(sent.at(-1)?.id, 'second resync request id');
 
     assert.notEqual(firstRequestId, secondRequestId);
     assert.equal(
       realtime.acknowledgeActiveVoiceResync({
         type: 'error',
-        payload: { code: 'reconnect_finalize_failed', id: firstRequestId }
-      } as never),
+        payload: { code: 'reconnect_finalize_failed', message: '', id: firstRequestId }
+      }),
       true
     );
     assert.equal(failures.length, 0);
@@ -76,8 +78,15 @@ test('a delayed retryable error cannot cancel a newer successful voice resync at
       realtime.acknowledgeActiveVoiceResync({
         type: 'room.snapshot',
         id: secondRequestId,
-        payload: { mode: 'active', roomId: 'room-resync' }
-      } as never),
+        payload: {
+          mode: 'active',
+          roomId: 'room-resync',
+          room: lobbyRoom({ roomId: 'room-resync' }),
+          peers: [],
+          recentMessages: [],
+          voiceActiveSince: null
+        }
+      }),
       true
     );
     assert.equal(failures.length, 0);

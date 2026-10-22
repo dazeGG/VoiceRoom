@@ -1,7 +1,9 @@
-// Every code an HTTP failure can carry. The API picks one for each refusal;
-// the web shows the user a text it chooses for the code (apps/web
-// src/lib/api/error-texts.ts), so wording lives on the client and a code the
-// web does not know is a type error there.
+// Every code an HTTP failure or a realtime `error` frame can carry. The API
+// picks one for each refusal; the web shows the user a text it chooses for the
+// code (apps/web src/lib/api/error-texts.ts), so wording lives on the client
+// and a code the web does not know is a type error there.
+
+import { Type } from 'typebox';
 
 export const ERROR_CODES = [
   // Any route
@@ -109,6 +111,8 @@ export const ERROR_CODES = [
   'too_many_mentions',
   'invalid_attachments',
   'reply_unavailable',
+  'idempotency_conflict',
+  'idempotency_quota_exceeded',
   'message_rate_limited',
   'message_edit_forbidden',
   'message_delete_forbidden',
@@ -185,10 +189,66 @@ export const ERROR_CODES = [
   'staff_role_self',
 
   // Desktop app
-  'desktop_release_unavailable'
+  'desktop_release_unavailable',
+
+  // Set by the web, never sent: a success body that does not match the route's contract
+  'invalid_response',
+
+  // Realtime frames the server cannot read
+  'invalid_json',
+  'invalid_envelope',
+  'invalid_payload',
+  'unknown_type',
+  'invalid_ping',
+  'invalid_room_id',
+  'invalid_peer_id',
+  'invalid_session_token',
+  'invalid_name',
+  'invalid_media_kind',
+  'invalid_user_id',
+  'invalid_typing_activity',
+
+  // Realtime voice: taking, changing and giving up a seat
+  'invalid_join',
+  'superseded_join',
+  'reconnect_finalize_failed',
+  'join_failed',
+  'not_active_peer',
+  'update_failed',
+  'server_full',
+  'credential_boundary_unavailable',
+  'principal_unavailable',
+  'revoke_failed'
 ] as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[number];
+/** The schema of a code, for frames checked at runtime (the realtime `error` frame). */
+export const ErrorCode = Type.Enum(ERROR_CODES);
+
+/** Voice join and admission failures a retry cannot fix: the client stops and shows them. */
+export const TERMINAL_JOIN_CODES: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
+  'authentication_required',
+  'invalid_join',
+  'invalid_session',
+  'room_banned',
+  'room_full',
+  'room_not_found'
+]);
+
+/** Voice join and admission failures that clear up by themselves: the client tries again. */
+export const RETRYABLE_JOIN_CODES: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
+  'livekit_gate_credential_unavailable',
+  'livekit_gate_principal_unavailable',
+  'livekit_gate_unavailable',
+  'membership_persist_failed',
+  'membership_unavailable',
+  // The server only admits peers its roster knows; the realtime join that
+  // puts the peer there can still be on its way.
+  'not_in_room',
+  // The previous seat is still being released, or a newer join replaced this one.
+  'reconnect_finalize_failed',
+  'superseded_join'
+]);
 
 const KNOWN = new Set<string>(ERROR_CODES);
 

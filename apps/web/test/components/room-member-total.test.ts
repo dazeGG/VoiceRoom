@@ -1,3 +1,4 @@
+import type { MemberPresenceStatus } from '@voice-room/shared/contracts/membership';
 import { expect, test, vi } from 'vitest';
 import { stubFetch } from '../fixtures/fetch.ts';
 import {
@@ -6,13 +7,16 @@ import {
   roomMembershipState
 } from '../../src/lib/entities/room/room-membership.svelte';
 
-function member(userId: string, presenceStatus: string) {
+function member(userId: string, presenceStatus: MemberPresenceStatus) {
   return {
     userId,
     displayName: userId,
     login: userId,
     avatarColorKey: 'blue',
+    avatarUrl: null,
+    avatarAccent: null,
     role: 'member',
+    joinedAt: null,
     presenceStatus,
     inVoice: false
   };

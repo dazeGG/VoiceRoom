@@ -57,7 +57,7 @@
   aria-label="Закрыть просмотр экрана"
   onclick={handleScreenStageClick}
   onkeydown={(event) => {
-    if (event.key === 'Enter' || event.key === ' ') handleScreenStageClick(event as unknown as MouseEvent);
+    if (event.key === 'Enter' || event.key === ' ') handleScreenStageClick(event);
   }}
   onpointerenter={() => {
     screenUi.uiActive = true;

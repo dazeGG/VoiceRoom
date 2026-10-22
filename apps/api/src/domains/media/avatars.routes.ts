@@ -12,10 +12,13 @@ import { RoomCard, RoomFailure } from '@voice-room/shared/contracts/rooms';
 import { normalizeRoomId } from '@voice-room/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { MAX_AVATAR_BYTES } from '../../lib/avatar-processing.ts';
+import { codeOf } from '../../platform/error-code.ts';
 import { failure } from '../../platform/http/http-kit.ts';
+import { fieldOf } from '../../platform/record.ts';
 import { ownerRefusal } from '../rooms/rooms.routes.ts';
 import type { RoomsService } from '../rooms/rooms.service.ts';
 import type { AvatarsService, AvatarUser } from './avatars.service.ts';
+import type { RateCheck } from '../../lib/rate-limit.ts';
 
 const UserAnswers = { 200: SignedIn, '4xx': Failure };
 const RoomAnswers = { 200: RoomCard, '4xx': RoomFailure };
@@ -26,13 +29,12 @@ function httpError(statusCode: number, code: ErrorCode, message: string): Error 
 }
 
 function isTooLarge(error: unknown): boolean {
-  const cause = error as { code?: string; statusCode?: number } | null;
-  return cause?.code === 'FST_REQ_FILE_TOO_LARGE' || cause?.statusCode === 413;
+  return codeOf(error) === 'FST_REQ_FILE_TOO_LARGE' || fieldOf(error, 'statusCode') === 413;
 }
 
 // Multipart errors surface as the failure answer with their own status.
 export async function readAvatarUpload(request: FastifyRequest): Promise<Buffer> {
-  let part;
+  let part: Awaited<ReturnType<FastifyRequest['file']>>;
   try {
     part = await request.file({ limits: { fileSize: MAX_AVATAR_BYTES, files: 1 } });
   } catch (cause) {
@@ -56,7 +58,7 @@ export async function readAvatarUpload(request: FastifyRequest): Promise<Buffer>
 export interface AvatarRoutesDeps {
   avatars: AvatarsService;
   rooms: RoomsService;
-  uploadLimiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
+  uploadLimiter: RateCheck;
 }
 
 export function registerAvatarRoutes(
@@ -68,7 +70,7 @@ export function registerAvatarRoutes(
 
   async function signedIn(request: FastifyRequest, reply: FastifyReply): Promise<AvatarUser | null> {
     const user = (await ctx.resolveSession(request.raw))?.user;
-    if (user) return user as AvatarUser;
+    if (user) return user;
     reply.code(401).send(failure('Требуется вход', { code: 'authentication_required' }));
     return null;
   }
@@ -117,7 +119,7 @@ export function registerAvatarRoutes(
     { schema: { params: RoomIdParams, response: RoomAnswers } },
     async (request, reply) => {
       const room = await ownedRoom(request.params.roomId, request, reply);
-      if (!room || !withinUploadLimit(reply, room.ownerId as string)) return reply;
+      if (!room || !withinUploadLimit(reply, room.ownerId ?? '')) return reply;
       const result = await avatars.setRoomAvatar(room, await readAvatarUpload(request), request.log);
       if (result.status === 'not_found')
         return reply.code(404).send(failure('Комната не найдена', { code: 'room_not_found' }));

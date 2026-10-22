@@ -11,9 +11,9 @@ import { showToast } from '../ui/toast';
 import { ApiError } from '$lib/api/client';
 import { checkRoomExists } from '../net/api';
 import { postState } from './presence';
-import { errorMessage, wait } from '../core/utils';
+import { UserFacingError, wait } from '../core/utils';
 import { rotateStoredPeerSession } from '../core/session';
-import { isRoomEmbedded } from '../core/embed';
+import { getRoomShell, isRoomEmbedded } from '../core/embed';
 import { openLeaveScreen } from '../../leave-screen.svelte';
 import { CALL_FEEDBACK_MAX_DURATION_S } from '@voice-room/shared/contracts/feedback';
 import {
@@ -24,12 +24,13 @@ import {
 import { getDesktopBoundaryPolicy } from '$lib/platform/desktop-boundary';
 import { getDisplayName, updateNameStatuses } from '../ui/names';
 import { resetConnectionStatus, setServerConnectionStatus, setVoiceConnectionStatus } from '../ui/status';
-import { refreshCallControls, resetPushToTalkState } from '../ui/controls';
-import { refreshScreenControls, stopLocalScreenStream } from '../services/screen-share-service';
+import { resetPushToTalkState } from '../ui/controls';
+import { stopLocalScreenStream } from '../services/screen-share-service';
 import { stopLocalCamera } from '../services/camera-service';
 import { closeScreenView, refreshScreenStage } from '../ui/screen-view';
 import { createParticipant, removeAudioElements, updatePeerStatus } from './participants';
 import { connectLiveKitRoom, disconnectLiveKitRoom, syncRemoteVideoVisibility } from '../services/livekit-service';
+import { LiveKitTransportError } from '../services/livekit/transport';
 import { onAppVisibilityChange } from '$lib/platform/app-visibility';
 import {
   describeMicrophoneError,
@@ -147,8 +148,6 @@ function showRoomScreen(): void {
   resetConnectionStatus();
 
   updateNameStatuses();
-  refreshCallControls();
-  refreshScreenControls();
   refreshScreenStage();
 }
 
@@ -214,7 +213,6 @@ async function performJoinRoom(generation: number): Promise<void> {
   resetConnectionStatus();
   setServerConnectionStatus('connecting');
   setVoiceConnectionStatus('idle');
-  refreshCallControls();
 
   try {
     const exists = await checkRoomExists(state.roomId);
@@ -262,7 +260,7 @@ async function performJoinRoom(generation: number): Promise<void> {
     ensureAppRealtimeConnected();
     state.voiceRealtimeTeardown?.();
     const detachVoiceEvents = subscribeRoomVoice(state.roomId, (event) => {
-      handleVoiceEvent(event).catch((err) => {
+      handleVoiceEvent(event).catch((err: unknown) => {
         log.error('voice realtime handler failed', errorContext(err));
       });
     });
@@ -303,8 +301,6 @@ async function performJoinRoom(generation: number): Promise<void> {
     setVoiceSessionTiming({ joinedAt: state.self?.joinedAt ?? Date.now() });
     setVoiceControlsState({ muted: isMicrophoneShownMuted(), deafened: state.outputMuted });
     if (isMicrophoneShownMuted() || state.outputMuted) postState().catch(() => {});
-    refreshCallControls();
-    refreshScreenControls();
     startMeters();
     startPeerLatencyStats();
     // Remote video pauses while the app cannot be seen (tray, minimized, background tab).
@@ -333,7 +329,7 @@ async function performJoinRoom(generation: number): Promise<void> {
     log.error('room action failed', errorContext(error));
     const banned = error instanceof ApiError && error.code === 'room_banned';
     if (!banned) showToast(formatJoinError(error));
-    setVoiceConnectionStatus(isVoiceRouteError(error) ? 'no-route' : 'error');
+    setVoiceConnectionStatus(error instanceof LiveKitTransportError ? 'no-route' : 'error');
     if (voiceJoinSent && state.roomId && state.peerId && state.sessionToken) {
       sendVoiceLeave({ roomId: state.roomId, peerId: state.peerId, sessionToken: state.sessionToken });
       voiceJoinSent = false;
@@ -348,8 +344,6 @@ async function performJoinRoom(generation: number): Promise<void> {
     if (banned) showRoomModerationScreen('banned');
   } finally {
     if (isCurrent()) state.connecting = false;
-    refreshCallControls();
-    refreshScreenControls();
   }
 }
 
@@ -368,16 +362,11 @@ async function openJoinMicrophone(): Promise<MicrophoneCapture | null> {
 }
 
 function formatJoinError(error: unknown): string {
-  const message = errorMessage(error);
-  if (/signal connection|failed to fetch/i.test(message)) {
+  if (error instanceof LiveKitTransportError) {
     return 'LiveKit недоступен: проверьте LIVEKIT_GATE_PUBLIC_URL и перезапустите VoiceRoom';
   }
-  return message || 'Не удалось подключиться';
-}
-
-function isVoiceRouteError(error: unknown): boolean {
-  const message = errorMessage(error);
-  return /ice|no route|signal connection|failed to fetch|timeout|websocket/i.test(message);
+  if (error instanceof ApiError || error instanceof UserFacingError) return error.message;
+  return 'Не удалось подключиться';
 }
 
 export function leaveRoom(): void {
@@ -414,7 +403,7 @@ export function leaveRoom(): void {
   state.voiceRealtimeTeardown = null;
   state.serverPeerIds.clear();
   state.serverPeerSyncReady = false;
-  disconnectLiveKitRoom().catch((error) => log.warn('liveKit disconnect failed', errorContext(error)));
+  disconnectLiveKitRoom().catch((error: unknown) => log.warn('liveKit disconnect failed', errorContext(error)));
   if (state.screenSourceRequest) cancelScreenSourcePicker();
   closeScreenView();
   closeParticipantContextMenu();
@@ -442,8 +431,6 @@ export function leaveRoom(): void {
   resetPushToTalkState();
   clearAllPeerJoinCues();
   clearStreamViewerCues();
-  refreshCallControls();
-  refreshScreenControls();
   closeDevicePopover();
   closeOutputPopover();
   closeCameraPopover();
@@ -497,7 +484,7 @@ export async function handleLeaveButtonClick(): Promise<void> {
   }
 
   if (isRoomEmbedded()) {
-    window.dispatchEvent(new CustomEvent('voice-room:embedded-leave', { detail: { roomId } }));
+    getRoomShell().roomLeft(roomId);
     return;
   }
 

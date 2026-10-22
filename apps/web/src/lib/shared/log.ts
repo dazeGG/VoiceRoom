@@ -7,7 +7,7 @@ export interface ClientLogRecord {
   level: LogLevel;
   ns: string;
   msg: string;
-  ctx?: LogContext;
+  ctx?: LogContext | undefined;
 }
 
 export interface Logger {
@@ -26,7 +26,10 @@ const browser = typeof window !== 'undefined' && typeof document !== 'undefined'
 // `import.meta.env` is injected by Vite and absent under a plain Node import.
 const isDev = ((): boolean => {
   try {
-    return Boolean((import.meta as { env?: { DEV?: boolean } }).env?.DEV);
+    // Narrowed by hand: the scripts project imports this file without Vite's types.
+    const meta: object = import.meta;
+    const env = 'env' in meta ? meta.env : undefined;
+    return typeof env === 'object' && env !== null && 'DEV' in env && env.DEV === true;
   } catch {
     return false;
   }
@@ -166,7 +169,8 @@ export function installGlobalErrorCapture(): void {
     });
   });
 
-  window.addEventListener('unhandledrejection', (event) => {
+  // The DOM types the reason as any; it is whatever the promise rejected with.
+  window.addEventListener('unhandledrejection', (event: { reason: unknown }) => {
     log.error('unhandled rejection', errorContext(event.reason));
   });
 }

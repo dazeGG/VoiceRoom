@@ -27,7 +27,8 @@ const DEFAULT_SYSTEM_MS = DAY_MS;
 const MIN_SYSTEM_MS = 5 * 60 * 1000;
 /** About this many points on a server chart, whatever the span. */
 const SYSTEM_POINTS = 360;
-const BUCKET_SECONDS = [60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200, 86400];
+const LARGEST_BUCKET_SECONDS = 86400;
+const BUCKET_SECONDS = [60, 120, 300, 600, 900, 1800, 3600, 7200, 10800, 21600, 43200, LARGEST_BUCKET_SECONDS];
 
 const moscowDate = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'Europe/Moscow',
@@ -56,7 +57,8 @@ const dayString = (number: number) => new Date(number * DAY_MS).toISOString().sl
  * than the first account (or ending on it when the whole span is before it).
  */
 export function productSpan(query: ProductQuery, today: string, firstDay: string | null): { from: string; to: string } {
-  const last = dayNumber(today)!;
+  const last = dayNumber(today);
+  if (last === null) throw new RangeError(`not a day: ${today}`);
   let to = dayNumber(query.to) ?? last;
   let from = dayNumber(query.from) ?? Math.min(to, last) - (DEFAULT_PRODUCT_DAYS - 1);
   if (from > to) [from, to] = [to, from];
@@ -85,8 +87,7 @@ export function systemSpan(query: SystemQuery, now: number): { from: number; to:
   to = Math.max(to, from);
   if (to - from < MIN_SYSTEM_MS) from = to - MIN_SYSTEM_MS;
   const seconds = (to - from) / 1000;
-  const bucketSeconds =
-    BUCKET_SECONDS.find((bucket) => seconds / bucket <= SYSTEM_POINTS) ?? BUCKET_SECONDS[BUCKET_SECONDS.length - 1]!;
+  const bucketSeconds = BUCKET_SECONDS.find((bucket) => seconds / bucket <= SYSTEM_POINTS) ?? LARGEST_BUCKET_SECONDS;
   return { from, to, bucketSeconds };
 }
 

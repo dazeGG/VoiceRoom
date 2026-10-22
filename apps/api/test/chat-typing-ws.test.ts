@@ -1,9 +1,9 @@
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import type { SignedIn } from '@voice-room/shared/contracts/account';
-import type { FriendRequests } from '@voice-room/shared/contracts/social';
-import type { RoomCreated } from '@voice-room/shared/contracts/rooms';
+import { SignedIn } from '@voice-room/shared/contracts/account';
+import { FriendRequests } from '@voice-room/shared/contracts/social';
+import { RoomCreated } from '@voice-room/shared/contracts/rooms';
 import { createTestDatabase } from './db-harness.ts';
 import {
   cookieFrom,
@@ -44,11 +44,15 @@ async function startServer(t: TestContext) {
 
   return {
     async register(login: string) {
-      const response = await request<SignedIn>(socketPath, {
-        method: 'POST',
-        pathname: '/api/auth/register',
-        body: { login, displayName: login, password: 'password123', passwordConfirm: 'password123' }
-      });
+      const response = await request(
+        socketPath,
+        {
+          method: 'POST',
+          pathname: '/api/auth/register',
+          body: { login, displayName: login, password: 'password123', passwordConfirm: 'password123' }
+        },
+        SignedIn
+      );
       assert.equal(response.status, 201);
       return { cookie: cookieFrom(response.setCookie), id: response.body.user.id };
     },
@@ -60,10 +64,14 @@ async function startServer(t: TestContext) {
         body: { login: addresseeLogin }
       });
       assert.ok(sent.status === 200 || sent.status === 201);
-      const list = await request<FriendRequests>(socketPath, {
-        pathname: '/api/friends/requests',
-        cookie: addressee.cookie
-      });
+      const list = await request(
+        socketPath,
+        {
+          pathname: '/api/friends/requests',
+          cookie: addressee.cookie
+        },
+        FriendRequests
+      );
       const requestId = list.body.incoming[0]?.id;
       assert.ok(requestId);
       const accepted = await request(socketPath, {
@@ -75,12 +83,16 @@ async function startServer(t: TestContext) {
       assert.equal(accepted.status, 200);
     },
     async createRoom(owner: Account) {
-      const created = await request<RoomCreated>(socketPath, {
-        method: 'POST',
-        pathname: '/api/rooms',
-        cookie: owner.cookie,
-        body: { isStatic: true, name: 'Печатают' }
-      });
+      const created = await request(
+        socketPath,
+        {
+          method: 'POST',
+          pathname: '/api/rooms',
+          cookie: owner.cookie,
+          body: { isStatic: true, name: 'Печатают' }
+        },
+        RoomCreated
+      );
       assert.equal(created.status, 201);
       return created.body.roomId;
     },

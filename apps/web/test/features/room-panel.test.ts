@@ -1,8 +1,7 @@
 import { expect, test } from 'vitest';
 import { freshImport } from '../helpers/fresh-module.ts';
-import type * as RoomUiModule from '../../src/lib/features/room/room-ui.svelte.ts';
 
-const load = () => freshImport<typeof RoomUiModule>('/src/lib/features/room/room-ui.svelte.ts');
+const load = () => freshImport(() => import('../../src/lib/features/room/room-ui.svelte.ts'));
 
 test('messages that arrive while the chat is closed are counted as unread', async () => {
   const ui = await load();

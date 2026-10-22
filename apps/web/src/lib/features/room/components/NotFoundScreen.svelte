@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Home } from '@lucide/svelte';
+  import { resolve } from '$app/paths';
+  import { House } from '@lucide/svelte';
   import { iconMd } from '$lib/shared/ui/icons';
   import { MascotIcon } from '$lib/shared/ui';
   import { state } from '../client/core/state.svelte';
@@ -24,8 +25,8 @@
       > не привязан к активной комнате. Возможно, она уже завершилась, или в коде опечатка.
     </p>
     <div class="not-found-actions">
-      <a class="not-found-home" href="/" data-sveltekit-reload>
-        <Home {...iconMd} aria-hidden="true" />
+      <a class="not-found-home" href={resolve('/')} data-sveltekit-reload>
+        <House {...iconMd} aria-hidden="true" />
         На стартовый экран
       </a>
     </div>

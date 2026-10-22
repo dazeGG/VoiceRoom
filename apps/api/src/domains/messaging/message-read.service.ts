@@ -1,4 +1,6 @@
-type CursorTuple = unknown;
+import type { CursorTuple } from '../../platform/cursor-codec.ts';
+import { dmCursorScopes, roomCursorScopes, type CursorScope } from './cursor-scopes.ts';
+
 type ReadState = { unchanged?: boolean; last_read_message_created_at?: unknown } | null | undefined;
 
 export interface CursorCodec {
@@ -45,9 +47,9 @@ function createMessageReadService({
   const codec = cursorCodec;
   const reads = repository;
 
-  function decode(cursor: string, purpose: string, context: string): CursorTuple {
+  function decode(cursor: string, scope: CursorScope): CursorTuple {
     try {
-      return codec.decode(cursor, { purpose, context });
+      return codec.decode(cursor, scope);
     } catch {
       throw new MessageReadError();
     }
@@ -57,7 +59,7 @@ function createMessageReadService({
     if (typeof authorizeRoomRead !== 'function' || (await authorizeRoomRead({ roomId, userId })) !== true) {
       throw new MessageReadError('room_forbidden', 403);
     }
-    const tuple = decode(cursor, 'room-read', `room:${roomId}`);
+    const tuple = decode(cursor, roomCursorScopes(roomId).read);
     const state = await reads.advanceRoom({ roomId, userId, tuple });
     if (!state) throw new MessageReadError('message_not_visible', 409);
     // The caller retires this room's notifications up to here, so it needs to
@@ -70,8 +72,7 @@ function createMessageReadService({
   }
 
   async function advanceDm({ cursor, peerId, userId }: { cursor: string; peerId: string; userId: string }) {
-    const participants = userId < peerId ? [userId, peerId] : [peerId, userId];
-    const tuple = decode(cursor, 'dm-read', `dm:${participants.join(':')}`);
+    const tuple = decode(cursor, dmCursorScopes(userId, peerId).read);
     const state = await reads.advanceDm({ peerId, userId, tuple });
     if (!state) throw new MessageReadError('message_not_visible', 409);
     return { advanced: !state.unchanged, cursor };

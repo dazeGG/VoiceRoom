@@ -1,6 +1,10 @@
-type TimerHandle = unknown;
-type ScheduleTimer = (callback: () => void, delay: number) => TimerHandle;
-type CancelTimer = (timer: TimerHandle) => void;
+import {
+  cancelGlobalTimer,
+  scheduleGlobalTimer,
+  type CancelTimer,
+  type ScheduleTimer,
+  type TimerHandle
+} from '../core/timers';
 
 interface GraceEntry {
   startedAt: number;
@@ -32,8 +36,8 @@ export class ScreenRecoveryGraceController {
     localGraceMs = 8_000,
     globalHardCapMs = 35_000,
     now = Date.now,
-    setTimeout: scheduleTimer = (callback, delay) => globalThis.setTimeout(callback, delay),
-    clearTimeout: cancelTimer = (timer) => globalThis.clearTimeout(timer as ReturnType<typeof globalThis.setTimeout>)
+    setTimeout: scheduleTimer = scheduleGlobalTimer,
+    clearTimeout: cancelTimer = cancelGlobalTimer
   }: ScreenRecoveryGraceOptions = {}) {
     this.localGraceMs = localGraceMs;
     this.globalHardCapMs = globalHardCapMs;

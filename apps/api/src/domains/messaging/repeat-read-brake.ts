@@ -5,6 +5,8 @@
 // holding the repeats is what slows it down: a refusal sent at once would only
 // be asked for again.
 
+import { BoundedMap } from '../../lib/bounded-map.ts';
+
 export interface RepeatReadBrakeOptions {
   /** Reads of one key that pass before the brake holds the next ones. */
   allowed?: number;
@@ -34,7 +36,7 @@ export function createRepeatReadBrake({
   now = Date.now,
   sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 }: RepeatReadBrakeOptions = {}): RepeatReadBrake {
-  const seen = new Map<string, { count: number; last: number }>();
+  const seen = new BoundedMap<string, { count: number; last: number }>(maxKeys);
   let held = 0;
 
   async function admit(key: string): Promise<boolean> {
@@ -43,10 +45,7 @@ export function createRepeatReadBrake({
     const entry = known && at - known.last < quietMs ? known : { count: 0, last: at };
     entry.count += 1;
     entry.last = at;
-    // Re-inserting keeps the map ordered by last use, so the oldest key is first.
-    seen.delete(key);
     seen.set(key, entry);
-    if (seen.size > maxKeys) seen.delete(seen.keys().next().value as string);
     if (entry.count <= allowed) return true;
 
     if (held < maxHeld) {

@@ -52,7 +52,7 @@ function getBridge(): Window['voiceRoomDesktopHotkeys'] | undefined {
 }
 
 function isGlobalAction(value: unknown): value is DesktopGlobalHotkeyAction {
-  return typeof value === 'string' && GLOBAL_ACTIONS.includes(value as DesktopGlobalHotkeyAction);
+  return GLOBAL_ACTIONS.some((action) => action === value);
 }
 
 function getBindings(): Partial<Record<DesktopGlobalHotkeyAction, HotkeyBinding | null>> {

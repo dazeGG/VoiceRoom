@@ -1,11 +1,11 @@
 .chart {
   display: grid;
-  gap: 8px;
+  gap: 12px;
   min-width: 0;
   margin: 0;
-  padding: 14px 16px;
+  padding: 16px 18px;
   border: 1px solid var(--vr-line);
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--vr-surface);
 }
 
@@ -37,6 +37,20 @@
   gap: 5px;
 }
 
+.chart-key-value {
+  color: var(--vr-text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.chart-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  flex: none;
+  border-radius: 2px;
+}
+
 .chart-dot {
   display: inline-block;
   width: 8px;
@@ -57,21 +71,30 @@
 }
 
 .chart-grid {
-  stroke: var(--vr-line);
+  stroke: oklch(100% 0 0 / 0.05);
   stroke-width: 1;
 }
 
 .chart-axis {
   fill: var(--vr-text-3);
-  font-size: 10.5px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
+}
+
+.chart-area {
+  fill-opacity: 0.1;
+  stroke: none;
 }
 
 .chart-line {
   fill: none;
-  stroke-width: 2;
+  stroke-width: 1.75;
   stroke-linejoin: round;
   stroke-linecap: round;
+}
+
+.chart-line[data-dashed='true'] {
+  stroke-dasharray: 4 4;
 }
 
 .chart-cursor {
@@ -108,7 +131,7 @@
 .chart-note {
   margin: 0;
   color: var(--vr-text-3);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .chart-empty {

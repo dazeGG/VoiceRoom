@@ -3,9 +3,9 @@
   // per peer, so opening another thread starts from a clean slate — no editing,
   // reply or menu carried over, the thread's own draft and reactions loaded.
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
-  import { onMount, tick, untrack } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import type { AuthUser } from '$lib/api/auth';
-  import { markThreadRead, type DirectMessage } from '$lib/api/dm';
+  import type { DirectMessage } from '$lib/api/dm';
   import type { PublicUser } from '$lib/api/friends';
   import { getAppRealtime } from '$lib/api/realtime';
   import { useLobby } from '$lib/features/home/model/lobby-context';
@@ -18,18 +18,19 @@
   import MessageHoverActions from '$lib/shared/chat/MessageHoverActions.svelte';
   import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
   import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
-  import { createReadReconciliation } from '$lib/shared/chat/read-reconciliation.svelte';
   import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
   import { formatTypingLabel } from '$lib/shared/chat/typing.svelte';
   import ChatText from '$lib/shared/components/ChatText.svelte';
   import type { ProfileCardPerson } from '$lib/shared/components/profile-card';
   import type { PresenceStatus } from '$lib/shared/presence';
   import { AccountBadge, Avatar } from '$lib/shared/ui';
-  import { copyText } from '$lib/shared/utils/clipboard';
   import type { Attachment } from '@voice-room/shared/contracts/messages';
-  import { attachmentAt, copyAttachmentImage, downloadAttachment } from '$lib/shared/chat/attachment-actions';
+  import { attachmentAt, downloadAttachment } from '$lib/shared/chat/attachment-actions';
+  import { ChatScroll, copyMessageImage, copyMessageText } from '$lib/shared/chat/chat-scroll.svelte';
   import { openProfileCardFor } from '../../../../../entities/profile-card/profile-card-ui.svelte';
-  import { formatDayLabel, formatTime, friendName, isSameDay } from '../../../model/lobby-format';
+  import { formatTime } from '../../../model/lobby-format';
+  import { displayNameOf } from '$lib/shared/utils/display-name';
+  import { formatChatDayLabel, isSameDay } from '$lib/shared/utils/chat-date';
   import { pushToast } from '../../../model/toasts.svelte';
   import DmComposer from './DmComposer.svelte';
   import DmInviteCard from './DmInviteCard.svelte';
@@ -56,12 +57,11 @@
   // The view is mounted per peer, like the reaction store below.
   const outbox = lobby.outboxFor(untrack(() => peerId));
   const selfId = $derived(self.id);
-  const selfName = $derived(self.displayName?.trim() || self.login);
-  const peerName = $derived(peer ? friendName(peer) : '');
+  const selfName = $derived(displayNameOf(self));
+  const peerName = $derived(peer ? displayNameOf(peer) : '');
 
-  let scrollEl = $state<HTMLDivElement | null>(null);
+  const scroll = new ChatScroll();
   let composer = $state<{ focus(): void } | null>(null);
-  let threadPinnedToBottom = true;
   let editingMessageId = $state('');
   let replyTarget = $state<DirectMessage | null>(null);
   // `image` is the picture the menu was opened on, when it was opened on one.
@@ -87,7 +87,7 @@
     key: string;
     fromMe: boolean;
     dayLabel: string | null;
-    bubbles: DirectMessage[];
+    bubbles: [DirectMessage, ...DirectMessage[]];
   }
 
   // Group consecutive messages by sender, inserting a day separator when the
@@ -98,14 +98,14 @@
     for (const message of lobby.thread.messages) {
       const fromMe = message.senderId === selfId;
       const newDay = !prev || !isSameDay(prev.createdAt, message.createdAt);
-      const sameGroup = prev && !newDay && prev.senderId === message.senderId && result.length > 0;
-      if (sameGroup) {
-        result[result.length - 1].bubbles.push(message);
+      const lastGroup = result.at(-1);
+      if (lastGroup && prev && !newDay && prev.senderId === message.senderId) {
+        lastGroup.bubbles.push(message);
       } else {
         result.push({
           key: message.id,
           fromMe,
-          dayLabel: newDay ? formatDayLabel(message.createdAt) : null,
+          dayLabel: newDay ? formatChatDayLabel(message.createdAt) : null,
           bubbles: [message]
         });
       }
@@ -122,41 +122,20 @@
     })
   );
 
+  // Read receipts follow the conversation on screen: unmounting stops them.
+  $effect(() => {
+    const id = peerId;
+    return untrack(() => lobby.thread.attachReader(id));
+  });
+
   $effect(() => {
     for (const message of lobby.thread.messages) {
       if (!message.invite) reactions.show(message);
     }
   });
 
-  function scrollToBottom(): void {
-    if (scrollEl) scrollEl.scrollTop = scrollEl.scrollHeight;
-  }
-
   // A new attachment grows the composer; a reader at the bottom stays there.
-  let composerAttachmentCount = 0;
-  $effect(() => {
-    const attachmentCount = media?.drafts.length ?? 0;
-    if (attachmentCount === composerAttachmentCount) return;
-    composerAttachmentCount = attachmentCount;
-    if (threadPinnedToBottom) void tick().then(scrollToBottom);
-  });
-
-  // The thread shows as soon as its messages arrive; images and emoji keep
-  // loading after that. Attachments, link previews and emoji hold their size
-  // before they load, and anything that still changes the height (a font, an
-  // image without known dimensions, the window) is caught here: a reader at
-  // the newest message stays on it. The observer runs after layout and before
-  // paint, so the correction never shows as a jump.
-  let threadEl = $state<HTMLDivElement | null>(null);
-  $effect(() => {
-    if (!scrollEl || !threadEl || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(() => {
-      if (threadPinnedToBottom) scrollToBottom();
-    });
-    observer.observe(threadEl);
-    observer.observe(scrollEl);
-    return () => observer.disconnect();
-  });
+  $effect(() => scroll.followComposer(media?.drafts.length ?? 0));
 
   // Prepending older history keeps the same newest id, so it must not trigger
   // this latest-message autoscroll and disturb the preserved anchor.
@@ -167,8 +146,7 @@
     const grew = count > outgoingCount;
     outgoingCount = count;
     if (!grew) return;
-    threadPinnedToBottom = true;
-    void tick().then(scrollToBottom);
+    void scroll.settle();
   });
 
   let lastAutoScrolledMessage: string | null = null;
@@ -176,52 +154,13 @@
     const newestId = lobby.thread.messages.at(-1)?.id ?? '';
     if (newestId === lastAutoScrolledMessage) return;
     lastAutoScrolledMessage = newestId;
-    void tick().then(scrollToBottom);
+    void scroll.settle();
   });
 
-  // Read receipts: what has been on screen is reported once it has rendered.
-  let readReconciliation: ReturnType<typeof createReadReconciliation> | null = null;
-  $effect(() => {
-    const reconciliation = createReadReconciliation({
-      scope: `dm:${peerId}`,
-      commit: async (cursor) => {
-        await markThreadRead(peerId, cursor);
-      }
-    });
-    readReconciliation = reconciliation;
-    return () => {
-      reconciliation.dispose();
-      if (readReconciliation === reconciliation) readReconciliation = null;
-    };
-  });
-
-  $effect(() => {
-    const revision = lobby.thread.readRevision;
-    const candidate = lobby.thread.readCandidate;
-    if (!revision || !candidate) return;
-    void tick().then(() => readReconciliation?.advanceAfterRender(candidate));
-  });
-
-  function onThreadScroll(): void {
-    if (!scrollEl) return;
-    threadPinnedToBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight <= 48;
-    if (scrollEl.scrollTop > 32) return;
-    void lobby.loadOlderThread(scrollEl);
-  }
-
-  function messageRow(messageId: string): HTMLElement | null {
-    return scrollEl?.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`) ?? null;
-  }
+  const loadOlder = (element: HTMLElement): void => void lobby.loadOlderThread(element);
 
   function jumpToMessage(messageId: string): void {
-    const row = messageRow(messageId);
-    if (!row) {
-      pushToast('Сообщение не загружено — прокрутите историю выше');
-      return;
-    }
-    row.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    row.classList.add('is-highlighted');
-    setTimeout(() => row.classList.remove('is-highlighted'), 1600);
+    scroll.jumpTo(messageId, () => pushToast('Сообщение не загружено — прокрутите историю выше'));
   }
 
   function openProfile(event: MouseEvent, fromMe: boolean): void {
@@ -289,30 +228,6 @@
     };
   }
 
-  // The picker lives in each bubble's hover toolbar; the menu entry drives it
-  // rather than mounting a second popover.
-  function openReactionPickerFor(messageId: string): void {
-    queueMicrotask(() => messageRow(messageId)?.querySelector<HTMLButtonElement>('.reaction-picker-trigger')?.click());
-  }
-
-  async function copyImage(image: Attachment): Promise<void> {
-    try {
-      await copyAttachmentImage(image);
-      pushToast('Изображение скопировано');
-    } catch {
-      pushToast('Не удалось скопировать');
-    }
-  }
-
-  async function copyMessageText(message: DirectMessage): Promise<void> {
-    try {
-      await copyText(message.body);
-      pushToast('Сообщение скопировано');
-    } catch {
-      pushToast('Не удалось скопировать');
-    }
-  }
-
   async function respondToInvite(message: DirectMessage, action: 'accept' | 'decline'): Promise<void> {
     if (inviteResponding) return;
     inviteResponding = message.id;
@@ -345,7 +260,7 @@
   </button>
 {/snippet}
 
-<div class="lobby-dm-scroll lobby-scroll" bind:this={scrollEl} onscroll={onThreadScroll}>
+<div class="lobby-dm-scroll lobby-scroll" {@attach scroll.body} onscroll={() => scroll.onScroll(loadOlder)}>
   {#if lobby.thread.loading}
     <div class="lobby-dm-loading" role="status">Загружаем переписку…</div>
   {/if}
@@ -354,7 +269,7 @@
   {:else if groups.length === 0 && !lobby.thread.loading && !outbox.items.length}
     <div class="lobby-dm-empty">Здесь пока пусто. Напишите первым!</div>
   {:else}
-    <div class="lobby-dm-thread" bind:this={threadEl}>
+    <div class="lobby-dm-thread" {@attach scroll.keepsNewestInView}>
       {#if lobby.thread.historyError}
         <div class="lobby-dm-empty">{lobby.thread.historyError}</div>
       {/if}
@@ -363,7 +278,7 @@
           type="button"
           class="lobby-dm-empty"
           disabled={lobby.thread.loadingOlder}
-          onclick={() => void lobby.loadOlderThread(scrollEl)}
+          onclick={() => void lobby.loadOlderThread(scroll.element)}
         >
           {lobby.thread.loadingOlder ? 'Загружаем…' : 'Показать предыдущие'}
         </button>
@@ -437,7 +352,7 @@
                     messageId={bubble.id}
                     userId={selfId}
                     onReply={() => replyTo(bubble)}
-                    onCopy={() => void copyMessageText(bubble)}
+                    onCopy={() => void copyMessageText(bubble.body, pushToast)}
                     onMore={(event: MouseEvent) => openMessageMenu(bubble, group.fromMe, event)}
                   />
                 {/if}
@@ -488,10 +403,10 @@
     canDelete={menu.fromMe}
     onClose={() => (menu = null)}
     onReact={(emoji: string) => void reactions.toggle(target.id, emoji)}
-    onOpenReactionPicker={() => openReactionPickerFor(target.id)}
+    onOpenReactionPicker={() => scroll.openReactionPicker(target.id)}
     onReply={() => replyTo(target)}
-    onCopy={() => void copyMessageText(target)}
-    onCopyImage={image ? () => void copyImage(image) : undefined}
+    onCopy={() => void copyMessageText(target.body, pushToast)}
+    onCopyImage={image ? () => void copyMessageImage(image, pushToast) : undefined}
     onDownloadImage={image ? () => downloadAttachment(image) : undefined}
     onEdit={() => (editingMessageId = target.id)}
     onDelete={() => void deleteMessage(target.id)}

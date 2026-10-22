@@ -10,6 +10,17 @@ import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
+// A cast written as overloads: public signatures promise a type, and the
+// implementation behind them answers unknown (or leaves its answer unstated).
+// Only the declared trust points at the end of this file may do that.
+const OVERLOAD_CAST = [
+  'ExportNamedDeclaration:has(> TSDeclareFunction) + ExportNamedDeclaration > FunctionDeclaration',
+  'TSDeclareFunction + FunctionDeclaration'
+].map((overloaded) => ({
+  selector: `${overloaded}:matches([returnType.typeAnnotation.type='TSUnknownKeyword'], :not([returnType]))`,
+  message: 'Overloads over an unknown-returning implementation are a cast; prove the type with a guard instead.'
+}));
+
 export default tseslint.config(
   {
     ignores: [
@@ -19,12 +30,9 @@ export default tseslint.config(
       'coverage/**',
       '.omc/**',
       '.graphify/**',
-      'apps/api/src/migrations/**',
       'apps/api/src/platform/db/schema.ts',
       'apps/web/static/**',
       'apps/web/svelte.config.js',
-      // SvelteKit keeps the service worker out of the app tsconfig (webworker lib).
-      'apps/web/src/service-worker.ts',
       'packages/shared/src/emoji.ts',
       'scripts/geoip/**',
       '**/*.cjs',
@@ -32,7 +40,7 @@ export default tseslint.config(
     ]
   },
   js.configs.recommended,
-  ...tseslint.configs.recommendedTypeChecked,
+  ...tseslint.configs.strictTypeChecked,
   ...svelte.configs.recommended,
   {
     languageOptions: {
@@ -82,12 +90,58 @@ export default tseslint.config(
       '@typescript-eslint/no-misused-promises': ['error', { checksVoidReturn: { attributes: false } }],
       '@typescript-eslint/switch-exhaustiveness-check': ['error', { considerDefaultExhaustiveForUnions: true }],
       '@typescript-eslint/no-explicit-any': 'error',
+      // strictTypeChecked, except the rules that trust a type over the value
+      // at runtime. lib.dom, LiveKit and the desktop bridge type optional
+      // features and flags as always there (navigator.mediaDevices,
+      // crypto.randomUUID, publication.isDesired), and narrowing ignores state
+      // that changes across an await or a callback; obeying these rules would
+      // delete the very guards that keep calls working in real browsers.
+      '@typescript-eslint/no-unnecessary-condition': 'off',
+      '@typescript-eslint/no-unnecessary-boolean-literal-compare': 'off',
+      '@typescript-eslint/no-unnecessary-type-conversion': 'off',
+      // `() => boolean | void` callbacks and Promise.withResolvers<void>() are deliberate.
+      '@typescript-eslint/no-invalid-void-type': 'off',
+      '@typescript-eslint/no-confusing-void-expression': ['error', { ignoreArrowShorthand: true }],
+      '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true, allowBoolean: true }],
+      // Test doubles stand in for browser classes: empty or static-only on purpose.
+      '@typescript-eslint/no-extraneous-class': ['error', { allowEmpty: true, allowStaticOnly: true }],
+      '@typescript-eslint/no-deprecated': [
+        'error',
+        {
+          allow: [
+            // The platform tells macOS (hotkey labels, the download) and iPadOS, which
+            // reports a desktop user agent, apart.
+            { from: 'lib', name: 'platform' },
+            // The microphone noise gate falls back to a ScriptProcessor without AudioWorklet.
+            { from: 'lib', name: ['createScriptProcessor', 'onaudioprocess', 'inputBuffer', 'outputBuffer'] }
+          ]
+        }
+      ],
+      // A type is proved by a guard or a contract check, never asserted; `as const` stays allowed.
+      '@typescript-eslint/consistent-type-assertions': ['error', { assertionStyle: 'never' }],
+      '@typescript-eslint/no-non-null-assertion': 'error',
       '@typescript-eslint/consistent-type-imports': ['error', { fixStyle: 'inline-type-imports' }],
       '@typescript-eslint/no-unused-vars': [
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', caughtErrors: 'none' }
       ],
-      'svelte/no-at-html-tags': 'error'
+      'svelte/no-at-html-tags': 'error',
+      'no-restricted-syntax': ['error', ...OVERLOAD_CAST]
+    }
+  },
+  {
+    // `void x;` is how a Svelte $effect subscribes to a value it does not read.
+    files: ['**/*.svelte', '**/*.svelte.ts'],
+    rules: { '@typescript-eslint/no-meaningless-void-operator': 'off' }
+  },
+  {
+    // svelte-eslint-parser reads `{@render snippet()}` as a void expression,
+    // `$bindable()` as a useless default and generics="T" as their constraint.
+    files: ['**/*.svelte'],
+    rules: {
+      '@typescript-eslint/no-confusing-void-expression': 'off',
+      '@typescript-eslint/no-useless-default-assignment': 'off',
+      '@typescript-eslint/no-unnecessary-type-arguments': 'off'
     }
   },
   {
@@ -149,8 +203,19 @@ export default tseslint.config(
         {
           selector: "Property[key.name='reqId'][value.type=/MemberExpression|ChainExpression/]",
           message: 'request.log already carries reqId; do not add it again.'
-        }
+        },
+        ...OVERLOAD_CAST
       ]
+    }
+  },
+  {
+    // The declared trust points hand a value over as the type the caller names;
+    // that is their one job. Test doubles (fake, mistyped, recordingService) and
+    // the app's store seam (standIn), which phase 4 is to replace with narrow ports.
+    files: ['**/test/helpers/**', '**/test/fakes/**', 'apps/api/src/app/store-overrides.ts'],
+    rules: {
+      '@typescript-eslint/no-unnecessary-type-parameters': 'off',
+      'no-restricted-syntax': 'off'
     }
   }
 );

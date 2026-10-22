@@ -8,6 +8,7 @@ import AccountSecuritySettings from '../../src/lib/features/home/components/Acco
 import { session } from '../../src/lib/features/auth/session.svelte';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { authUser } from '../fixtures/users.ts';
+import { instanceOf, defined } from '../helpers/assert.ts';
 
 afterEach(cleanup);
 
@@ -51,11 +52,20 @@ test('other sessions can be ended one by one or all at once; this device cannot'
   });
   const onToast = renderTab();
 
-  const here = (await screen.findByText('Это устройство')).closest('.account-security-row') as HTMLElement;
+  const here = instanceOf(
+    (await screen.findByText('Это устройство')).closest('.account-security-row'),
+    HTMLElement,
+    'this device row'
+  );
   expect(within(here).queryByRole('button', { name: 'Завершить' })).toBeNull();
   expect(screen.getAllByRole('button', { name: 'Завершить' })).toHaveLength(2);
 
-  await userEvent.click(screen.getAllByRole('button', { name: 'Завершить' })[0]);
+  await userEvent.click(
+    defined(
+      screen.getAllByRole('button', { name: 'Завершить' })[0],
+      "screen.getAllByRole('button', { name: 'Завершить' })[0]"
+    )
+  );
   await vi.waitFor(() => expect(onToast).toHaveBeenCalledWith('Сеанс завершён'));
   expect(calls.some((call) => call.method === 'DELETE' && call.url.endsWith(PHONE))).toBe(true);
   expect(screen.getAllByRole('button', { name: 'Завершить' })).toHaveLength(1);
@@ -72,7 +82,7 @@ test('a password change ends this session too and signs out', async () => {
   const onToast = renderTab();
 
   const change = await screen.findByRole('button', { name: 'Сменить пароль' });
-  expect((change as HTMLButtonElement).disabled).toBe(true);
+  expect(change).toHaveProperty('disabled', true);
   await userEvent.type(screen.getByLabelText('Текущий пароль'), 'old-password');
   await userEvent.type(screen.getByLabelText('Новый пароль'), 'new-password-1');
   await userEvent.click(change);

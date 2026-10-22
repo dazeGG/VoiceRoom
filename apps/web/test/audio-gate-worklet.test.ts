@@ -1,4 +1,5 @@
 import { test } from 'vitest';
+import { isRecord } from '@voice-room/shared/guards';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
@@ -119,8 +120,9 @@ test('the silence floor never touches audible sound, including its very first bl
 
 const speakingMessages = (posted: unknown[]) =>
   posted
-    .filter((message) => (message as { type?: string }).type === 'speaking')
-    .map((message) => (message as { speaking: boolean }).speaking);
+    .filter(isRecord)
+    .filter((message) => message.type === 'speaking')
+    .map((message) => message.speaking);
 
 test('the speaking detector reports only when voice starts and stops, after its hold', () => {
   const detector = loadProcessor({ thresholdDb: -50, holdMs: 180 }, 'voice-room-speaking-detector');
@@ -148,12 +150,13 @@ test('the speaking detector follows a new threshold and reports the level only o
   detector.runOutput(QUIET_SPEECH, 0.05, { tone: true });
   assert.deepEqual(speakingMessages(detector.posted), [true]);
 
-  const levels = () => detector.posted.filter((message) => (message as { type?: string }).type === 'level');
+  const levels = () => detector.posted.filter(isRecord).filter((message) => message.type === 'level');
   assert.equal(levels().length, 0);
   detector.post({ type: 'report-level', enabled: true });
   detector.runOutput(QUIET_SPEECH, 0.5, { tone: true });
   assert.ok(levels().length >= 9 && levels().length <= 11, 'about every 50 ms');
-  const db = (levels().at(-1) as { db: number }).db;
+  const db = levels().at(-1)?.db;
+  assert.ok(typeof db === 'number', 'a level carries its dB');
   assert.ok(db < -50 && db > -56, `level near the signal (${db})`);
   detector.post({ type: 'report-level', enabled: false });
   const count = levels().length;

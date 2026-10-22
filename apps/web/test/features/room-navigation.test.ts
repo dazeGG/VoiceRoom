@@ -5,12 +5,8 @@
 import { expect, test } from 'vitest';
 import { freshImport } from '../helpers/fresh-module.ts';
 
-import type * as NavigationModule from '../../src/lib/features/home/model/room-navigation.svelte.ts';
-
 async function load() {
-  const navigation = await freshImport<typeof NavigationModule>(
-    '/src/lib/features/home/model/room-navigation.svelte.ts'
-  );
+  const navigation = await freshImport(() => import('../../src/lib/features/home/model/room-navigation.svelte.ts'));
   const voice = await import('../../src/lib/features/room/voice-session.svelte.ts');
   voice.clearConnectedVoiceRoom();
   return { ...navigation, ...voice };

@@ -6,6 +6,8 @@ import { createAttachmentRepository } from '../src/domains/media/attachment.repo
 import { runMigrations } from '../src/lib/migrate.ts';
 import { createUserStore } from '../src/app/user-store.ts';
 import { createTestDatabase } from './db-harness.ts';
+import { Type } from 'typebox';
+import { DateColumn, queryRow } from './helpers/checked.ts';
 
 const SILENT = { log() {}, info() {}, warn() {}, error() {} };
 
@@ -29,7 +31,7 @@ test('markCleanupDeleted executes the stale-upload predicate against PostgreSQL'
   await pool.query(
     `INSERT INTO message_attachments (id, owner_id, context, state, updated_at)
      VALUES ($1, $2, 'room', 'uploading', current_timestamp - interval '2 hours')`,
-    [attachmentId, created.user!.id]
+    [attachmentId, created.user.id]
   );
 
   const repository = createAttachmentRepository({ pool });
@@ -39,9 +41,14 @@ test('markCleanupDeleted executes the stale-upload predicate against PostgreSQL'
   assert.equal(deleted?.internalState, 'deleted');
   assert.ok(deleted?.deletedAt);
 
-  const persisted = await pool.query('SELECT state, deleted_at FROM message_attachments WHERE id = $1', [attachmentId]);
-  assert.equal(persisted.rows[0].state, 'deleted');
-  assert.ok(persisted.rows[0].deleted_at);
+  const persisted = await queryRow(
+    pool,
+    Type.Object({ state: Type.String(), deleted_at: Type.Union([DateColumn, Type.Null()]) }),
+    'SELECT state, deleted_at FROM message_attachments WHERE id = $1',
+    [attachmentId]
+  );
+  assert.equal(persisted.state, 'deleted');
+  assert.ok(persisted.deleted_at);
 });
 
 // Retention: failed and abandoned uploads go after an hour, a ready image

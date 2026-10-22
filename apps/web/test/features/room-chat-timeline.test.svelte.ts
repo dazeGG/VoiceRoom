@@ -6,6 +6,7 @@ import type { RoomMessage } from '@voice-room/shared/contracts/messages';
 import { chatMessageFromRoomMessage } from '../../src/lib/api/rooms';
 import { RoomChatTimeline } from '../../src/lib/features/room/room-chat-timeline.svelte';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { defined } from '../helpers/assert.ts';
 
 function roomMessage(id: string, createdAt: number, text = id): RoomMessage {
   return {
@@ -43,7 +44,7 @@ test('a guest window adds new messages once, applies edits and removals', async 
   expect(ids(timeline)).toEqual(['m1', 'm2']);
 
   timeline.replace(chatMessageFromRoomMessage(roomMessage('m2', 2, 'правка')));
-  expect(timeline.messages[1].text).toBe('правка');
+  expect(defined(timeline.messages[1], 'timeline.messages[1]').text).toBe('правка');
 
   timeline.remove('m1');
   expect(ids(timeline)).toEqual(['m2']);
@@ -61,7 +62,7 @@ test('reconciling the latest messages keeps local ones and replaces known ones',
   timeline.reconcileLatest([roomMessage('m1', 1, 'изменено'), roomMessage('m3', 3)].map(chatMessageFromRoomMessage));
 
   expect(ids(timeline)).toEqual(['m1', 'm3', 'local']);
-  expect(timeline.messages[0].text).toBe('изменено');
+  expect(defined(timeline.messages[0], 'timeline.messages[0]').text).toBe('изменено');
 });
 
 test('a failed recent-window load reports the error and stops loading', async () => {

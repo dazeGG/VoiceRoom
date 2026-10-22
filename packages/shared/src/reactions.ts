@@ -1,14 +1,12 @@
-// Emoji reactions on a message: the toggle a client sends, the per-emoji
-// summary it receives and the paginated list of who reacted.
+// Emoji reactions on a message: the toggle a client sends, and the checks on
+// the per-emoji summary and the paginated list of who reacted (their shapes
+// are contracts/messages.ts).
 
+import type { Reactor, ReactorList, ReactionSummary } from './contracts/messages.ts';
 import { cleanReactionEmoji } from './emoji.ts';
+import { isArray, isRecord } from './guards.ts';
 
 export type ReactionMutation = { messageId: string; emoji: string; active: boolean };
-export type ReactionSummary = { emoji: string; count: number; reactedByMe: boolean; revision: string };
-export type Reactor = { userId: string; displayName: string; avatarUrl: string | null };
-export type ReactorPage = { reactors: Reactor[]; nextCursor: string | null };
-
-type Loose = Record<string, unknown>;
 
 export const DEFAULT_REACTOR_LIMIT = 50;
 export const MAX_REACTOR_LIMIT = 100;
@@ -24,8 +22,8 @@ function cleanCursor(value: unknown): string {
 }
 
 export function normalizeReactionMutation(value: unknown): ReactionMutation | null {
-  if (!value || typeof value !== 'object') return null;
-  const input = value as Loose;
+  if (!isRecord(value)) return null;
+  const input = value;
   const messageId = cleanId(input.messageId);
   const emoji: string = cleanReactionEmoji(input.emoji);
   if (!messageId || !emoji || typeof input.active !== 'boolean') return null;
@@ -33,8 +31,16 @@ export function normalizeReactionMutation(value: unknown): ReactionMutation | nu
 }
 
 export function normalizeReactionRevision(value: unknown): string | null {
+  if (
+    typeof value !== 'string' &&
+    typeof value !== 'number' &&
+    typeof value !== 'bigint' &&
+    typeof value !== 'boolean'
+  ) {
+    return null;
+  }
   try {
-    const revision = BigInt(value as string | number | bigint | boolean);
+    const revision = BigInt(value);
     return revision >= 0n ? revision.toString() : null;
   } catch {
     return null;
@@ -42,8 +48,8 @@ export function normalizeReactionRevision(value: unknown): string | null {
 }
 
 export function normalizeReactionSummary(value: unknown): ReactionSummary | null {
-  if (!value || typeof value !== 'object') return null;
-  const input = value as Loose;
+  if (!isRecord(value)) return null;
+  const input = value;
   const emoji: string = cleanReactionEmoji(input.emoji);
   const count = Number(input.count);
   const revision = normalizeReactionRevision(input.revision);
@@ -53,7 +59,7 @@ export function normalizeReactionSummary(value: unknown): ReactionSummary | null
 }
 
 export function normalizeReactorQuery(value: unknown = {}): { cursor: string | null; limit: number } | null {
-  const input = value as Loose;
+  const input = isRecord(value) ? value : {};
   const limit = input.limit == null ? DEFAULT_REACTOR_LIMIT : Number(input.limit);
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_REACTOR_LIMIT) return null;
   const cursor = input.cursor == null ? null : cleanCursor(input.cursor);
@@ -61,16 +67,29 @@ export function normalizeReactorQuery(value: unknown = {}): { cursor: string | n
   return { cursor, limit };
 }
 
-export function normalizeReactorPage(value: unknown): ReactorPage | null {
-  if (!value || typeof value !== 'object' || !Array.isArray((value as Loose).reactors)) return null;
-  const input = value as Loose;
-  const reactors = (input.reactors as (Loose | null)[]).map((reactor) => {
-    const userId = cleanId(reactor?.userId);
-    const displayName = typeof reactor?.displayName === 'string' ? reactor.displayName.slice(0, 256) : '';
-    return userId && displayName ? { userId, displayName, avatarUrl: (reactor?.avatarUrl as string) || null } : null;
-  });
-  if (reactors.some((reactor) => !reactor) || reactors.length > MAX_REACTOR_LIMIT) return null;
+export function normalizeReactorPage(value: unknown): ReactorList | null {
+  if (!isRecord(value) || !isArray(value.reactors)) return null;
+  const input = value;
+  if (value.reactors.length > MAX_REACTOR_LIMIT) return null;
+  const reactors: Reactor[] = [];
+  for (const reactor of value.reactors) {
+    const entry = normalizeReactor(reactor);
+    if (!entry) return null;
+    reactors.push(entry);
+  }
   const nextCursor = input.nextCursor == null ? null : cleanCursor(input.nextCursor);
   if (input.nextCursor != null && !nextCursor) return null;
-  return { reactors: reactors as Reactor[], nextCursor };
+  return { reactors, nextCursor };
+}
+
+function normalizeReactor(value: unknown): Reactor | null {
+  if (!isRecord(value)) return null;
+  const userId = cleanId(value.userId);
+  const displayName = typeof value.displayName === 'string' ? value.displayName.slice(0, 256) : '';
+  if (!userId || !displayName) return null;
+  return {
+    userId,
+    displayName,
+    avatarUrl: typeof value.avatarUrl === 'string' && value.avatarUrl ? value.avatarUrl : null
+  };
 }

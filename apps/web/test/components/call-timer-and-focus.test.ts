@@ -4,6 +4,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import RoomCallTimer from '../../src/lib/features/room/components/RoomCallTimer.svelte';
 import { clearConnectedVoiceRoom, setVoiceSessionTiming } from '../../src/lib/features/room/voice-session.svelte.ts';
 import { dialogFocusTrap } from '../../src/lib/shared/ui/focus-trap.ts';
+import { defined } from '../helpers/assert.ts';
 
 afterEach(() => {
   cleanup();
@@ -41,7 +42,7 @@ test('a dialog focus trap focuses the marked element, keeps Tab inside and retur
   await Promise.resolve();
   expect(document.activeElement?.getAttribute('aria-label')).toBe('Имя');
 
-  (dialog.querySelectorAll('button')[1] as HTMLElement).focus();
+  defined(dialog.querySelectorAll('button')[1], 'second button').focus();
   await userEvent.tab();
   expect(document.activeElement?.textContent).toBe('Первая');
   await userEvent.tab({ shift: true });

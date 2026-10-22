@@ -1,6 +1,8 @@
 import { test, onTestFinished, vi } from 'vitest';
 import assert from 'node:assert/strict';
 
+import { mistyped } from './helpers/mistyped.ts';
+
 async function loadService(bridge: unknown) {
   Object.defineProperty(globalThis, 'window', {
     configurable: true,
@@ -50,13 +52,9 @@ test('desktop overlay service normalizes settings and sends a typed patch', asyn
     allowedExecutables: ['mygame.exe']
   });
   assert.deepEqual(
-    await service.updateDesktopOverlaySettings({
-      anchor: 'top-left',
-      avatarSize: 'huge',
-      enabled: false,
-      opacity: 0.2,
-      showNames: false
-    } as never),
+    await service.updateDesktopOverlaySettings(
+      mistyped({ anchor: 'top-left', avatarSize: 'huge', enabled: false, opacity: 0.2, showNames: false })
+    ),
     {
       anchor: 'top-left',
       avatarSize: 'medium',

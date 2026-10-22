@@ -66,7 +66,7 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    if ((event.target as HTMLElement | null)?.closest?.('[data-hotkey-recorder-recording="true"]')) return;
+    if (event.target instanceof Element && event.target.closest('[data-hotkey-recorder-recording="true"]')) return;
     if (!nestedDialogOpen && event.key === 'Escape') onClose();
   }
 </script>

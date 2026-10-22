@@ -1,4 +1,6 @@
 import type pg from 'pg';
+import { readWorkerConfig } from '../app/config.ts';
+
 function createMediaReconciliationWorker({
   reconciliationService,
   intervalMs = 15 * 60 * 1000
@@ -22,7 +24,7 @@ function createMediaReconciliationWorker({
   }
   return Object.freeze({
     run,
-    runOnce: service.reconcile,
+    runOnce: () => service.reconcile(),
     stop: () => {
       stopping = true;
     }
@@ -30,7 +32,8 @@ function createMediaReconciliationWorker({
 }
 
 async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
-  if (String(env.MEDIA_RECONCILIATION_CLAIM_ENABLED || '').toLowerCase() !== 'true') return;
+  const config = readWorkerConfig(env);
+  if (!config.MEDIA_RECONCILIATION_CLAIM_ENABLED) return;
   const { createAttachmentRepository } = await import('../domains/media/attachment.repository.ts');
   const { createMediaJobRepository } = await import('../domains/media/media-job.repository.ts');
   const { createMediaReconciliationService } = await import('../domains/media/media-reconciliation.service.ts');
@@ -40,7 +43,7 @@ async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
     reconciliationService: createMediaReconciliationService({
       attachmentRepository: attachments,
       jobRepository: createMediaJobRepository({ pool }),
-      storage: createMediaStorage({ rootDir: env.MEDIA_STORAGE_DIR || '/data/media' })
+      storage: createMediaStorage({ rootDir: config.MEDIA_STORAGE_DIR })
     })
   });
   const controller = new AbortController();

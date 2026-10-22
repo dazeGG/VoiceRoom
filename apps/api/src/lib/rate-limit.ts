@@ -1,6 +1,9 @@
 import type { IncomingMessage } from 'node:http';
+import { BoundedMap } from './bounded-map.ts';
 
 export type RateDecision = { allowed: boolean; retryAfterSeconds: number };
+/** What a route or service needs from a limiter: one decision per key. */
+export type RateCheck = { check(key: string): RateDecision };
 type Entry = { count: number; startedAt: number };
 
 // Resolves the client IP. When trustProxy is enabled the last hop of
@@ -22,8 +25,17 @@ function getClientIp(req: Pick<IncomingMessage, 'socket' | 'headers'>, trustProx
 }
 
 // Fixed-window per-key rate limiter. A limit or window of <= 0 disables it.
-function createRateLimiter({ limit, windowMs }: { limit: number; windowMs: number }) {
-  const entries = new Map<string, Entry>();
+// Keys come from clients, so past `maxEntries` the oldest is forgotten.
+function createRateLimiter({
+  limit,
+  windowMs,
+  maxEntries = 100_000
+}: {
+  limit: number;
+  windowMs: number;
+  maxEntries?: number;
+}) {
+  const entries = new BoundedMap<string, Entry>(maxEntries);
   let lastPruneAt = 0;
 
   function check(key: string, now: number = Date.now()): RateDecision {
@@ -65,7 +77,7 @@ function createFailureLimiter({
   windowMs: number;
   maxEntries?: number;
 }) {
-  const entries = new Map<string, Entry>();
+  const entries = new BoundedMap<string, Entry>(maxEntries);
   let lastSweepAt = 0;
 
   // Keys are attacker-chosen (any submitted login), so expired entries are
@@ -76,7 +88,6 @@ function createFailureLimiter({
     for (const [key, entry] of entries) {
       if (now - entry.startedAt >= windowMs) entries.delete(key);
     }
-    while (entries.size >= maxEntries) entries.delete(entries.keys().next().value as string);
   }
 
   function current(key: string, now: number): Entry | null {

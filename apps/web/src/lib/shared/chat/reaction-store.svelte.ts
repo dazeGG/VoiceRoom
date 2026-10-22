@@ -1,5 +1,5 @@
 import { untrack } from 'svelte';
-import type { ReactionSummary, Reactor } from '@voice-room/shared/reactions';
+import type { ReactionSummary, Reactor } from '@voice-room/shared/contracts/messages';
 import {
   fetchReactionSummaries,
   fetchReactors,
@@ -8,6 +8,7 @@ import {
 } from '$lib/api/reactions';
 import { replaceReactionSnapshot } from './reaction-reconciliation';
 import { createLogger, errorContext } from '$lib/shared/log';
+import { uniqueBy } from '$lib/shared/utils/collections';
 
 const log = createLogger('chat:reactions');
 
@@ -60,9 +61,11 @@ export class ReactionStore {
   }
 
   private invalidateReactors(messageId?: string): void {
-    for (const key of Object.keys(this.reactorRequests)) {
-      if (!messageId || key.startsWith(`${messageId}\u0000`)) delete this.reactorRequests[key];
-    }
+    this.reactorRequests = messageId
+      ? Object.fromEntries(
+          Object.entries(this.reactorRequests).filter(([key]) => !key.startsWith(`${messageId}\u0000`))
+        )
+      : {};
   }
 
   setConversation(conversation: ReactionConversation): void {
@@ -87,14 +90,11 @@ export class ReactionStore {
 
   markDeleted(messageId: string): void {
     this.deletedMessages = { ...this.deletedMessages, [messageId]: true };
-    const next = { ...this.summaries };
-    delete next[messageId];
-    this.summaries = next;
-    const reactorEntries = { ...this.reactors };
-    for (const key of Object.keys(reactorEntries)) {
-      if (key.startsWith(`${messageId}\u0000`)) delete reactorEntries[key];
-    }
-    this.reactors = reactorEntries;
+    const { [messageId]: _deleted, ...summaries } = this.summaries;
+    this.summaries = summaries;
+    this.reactors = Object.fromEntries(
+      Object.entries(this.reactors).filter(([key]) => !key.startsWith(`${messageId}\u0000`))
+    );
     this.invalidateReactors(messageId);
   }
 
@@ -127,7 +127,7 @@ export class ReactionStore {
    * Shows a message's reactions: those its history page carried, or fetched
    * once when it came without them (a live message, a guest's recent window).
    */
-  show(message: { id: string; reactions?: ReactionSummary[] }): void {
+  show(message: { id: string; reactions?: ReactionSummary[] | undefined }): void {
     if (!message.reactions) {
       void this.load(message.id);
       return;
@@ -155,12 +155,12 @@ export class ReactionStore {
       this.replace(messageId, await fetchReactionSummaries(conversation, messageId));
     } catch (error) {
       // Asked again the next time the message is shown.
-      delete this.requested[messageId];
+      const { [messageId]: _retry, ...stillRequested } = this.requested;
+      this.requested = stillRequested;
       log.warn('reactions did not load', errorContext(error));
     } finally {
-      const next = { ...this.loadingMessages };
-      delete next[messageId];
-      this.loadingMessages = next;
+      const { [messageId]: _loaded, ...stillLoading } = this.loadingMessages;
+      this.loadingMessages = stillLoading;
     }
   }
 
@@ -190,7 +190,8 @@ export class ReactionStore {
         return false;
       const latest = [...this.forMessage(messageId)];
       const latestIndex = latest.findIndex((item) => item.emoji === emoji);
-      if (latestIndex >= 0) latest[latestIndex] = { ...latest[latestIndex], pending: false };
+      const settled = latest[latestIndex];
+      if (settled) latest[latestIndex] = { ...settled, pending: false };
       this.summaries = { ...this.summaries, [messageId]: latest };
       this.applyServer(messageId, authoritative);
       return true;
@@ -248,7 +249,7 @@ export class ReactionStore {
       )
         return;
       const candidates = append ? [...current.reactors, ...page.reactors] : page.reactors;
-      const reactors = [...new Map(candidates.map((reactor) => [reactor.userId, reactor])).values()];
+      const reactors = uniqueBy(candidates, (reactor) => reactor.userId);
       this.reactors = {
         ...this.reactors,
         [key]: { reactors, nextCursor: page.nextCursor, loading: false, error: '' }

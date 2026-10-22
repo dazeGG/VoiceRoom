@@ -81,10 +81,10 @@ function build(): { byBase: Map<string, ToneFamily>; collapsed: Set<string>; vis
       const [first] = tones;
       if (first !== undefined && tones.every((tone) => tone === first)) uniform.set(first, sequence);
     }
-    if (uniform.size !== SKIN_TONES.length) continue;
+    const tones = SKIN_TONES.flatMap((tone) => uniform.get(tone) ?? []);
+    if (tones.length !== SKIN_TONES.length) continue;
 
-    const tones = Object.freeze(SKIN_TONES.map((tone) => uniform.get(tone)!));
-    byBase.set(base, Object.freeze({ base, tones }));
+    byBase.set(base, Object.freeze({ base, tones: Object.freeze(tones) }));
   }
 
   const visible = Object.freeze(corpus.filter((emoji) => !collapsed.has(emoji)));

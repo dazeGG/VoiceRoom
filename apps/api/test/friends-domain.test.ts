@@ -12,6 +12,7 @@ import { isActiveAccount, notificationActor } from '../src/domains/social/social
 import type { ApiContext } from '../src/app/context.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { fake, publicUser, storedUser, storedDirectMessage } from './fakes/index.ts';
+import { recordingService, type Answers } from './helpers/recording-service.ts';
 
 const ME = storedUser({ id: 'user-1', login: 'alice', displayName: 'Alice' });
 const FRIEND_ID = '22222222-2222-4222-8222-222222222222';
@@ -36,14 +37,14 @@ type HarnessOptions = {
   deletedTarget?: boolean;
   noRoom?: boolean;
   roomName?: string;
-  rate?: { allowed: boolean; retryAfterSeconds?: number };
+  rate?: { allowed: boolean; retryAfterSeconds: number };
 };
 
 function harness(store: Partial<FriendStore> = {}, options: HarnessOptions = {}) {
   const calls = {
-    events: [] as unknown[][],
-    pushes: [] as unknown[][],
-    dms: [] as Array<{ body: string; metadata: Record<string, unknown> }>
+    events: new Array<unknown[]>(),
+    pushes: new Array<unknown[]>(),
+    dms: new Array<{ body: string; metadata: Record<string, unknown> }>()
   };
   const friends: FriendStore = {
     async listFriends() {
@@ -119,7 +120,7 @@ function harness(store: Partial<FriendStore> = {}, options: HarnessOptions = {})
     queuePush: async (userId, payload, context) => {
       calls.pushes.push([userId, payload.type, payload.title, context]);
     },
-    ringLimiter: { check: () => options.rate || { allowed: true } },
+    ringLimiter: { check: () => options.rate || { allowed: true, retryAfterSeconds: 0 } },
     ringTtlMs: 1000,
     now: () => 50
   });
@@ -321,10 +322,13 @@ test('ringing refuses strangers, blocks, deleted accounts, cooldowns and missing
     await harness({}, { rate: { allowed: false, retryAfterSeconds: 9 } }).service.ring(ME, 'room-1', 'f1'),
     { status: 'rate_limited', retryAfterSeconds: 9 }
   );
-  assert.deepEqual(await harness({}, { rate: { allowed: false } }).service.ring(ME, 'room-1', 'f1'), {
-    status: 'rate_limited',
-    retryAfterSeconds: 0
-  });
+  assert.deepEqual(
+    await harness({}, { rate: { allowed: false, retryAfterSeconds: 0 } }).service.ring(ME, 'room-1', 'f1'),
+    {
+      status: 'rate_limited',
+      retryAfterSeconds: 0
+    }
+  );
   assert.equal((await harness({}, { noRoom: true }).service.ring(ME, 'room-1', 'f1')).status, 'room_not_found');
 });
 
@@ -351,18 +355,25 @@ test('a ring notifies, files a room invitation DM for both sides and pushes unti
 
 function routeApp(
   t: TestContext,
-  outcomes: Record<string, unknown> = {},
+  outcomes: Answers<FriendsService> = {},
   { signedIn = true, limited = false }: { signedIn?: boolean; limited?: boolean } = {}
 ) {
   const app = fastify();
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
-  const seen: Record<string, unknown[]> = {};
-  const record =
-    (name: string, value: unknown) =>
-    async (...args: unknown[]) => {
-      seen[name] = args;
-      return outcomes[name] ?? value;
-    };
+  const { service, seen } = recordingService<FriendsService>({
+    list: { friends: [], incomingRequestCount: 0 },
+    search: [],
+    requests: { incoming: [], outgoing: [] },
+    sendRequest: { status: 'sent', user: publicUser('u2') },
+    respond: { status: 'accepted', user: publicUser('u2') },
+    cancel: { status: 'cancelled' },
+    remove: { status: 'removed' },
+    blocked: { blocked: [], users: [] },
+    block: { status: 'applied', result: 'blocked' },
+    unblock: { status: 'unblocked' },
+    ring: { status: 'rung' },
+    ...outcomes
+  });
   registerFriendsRoutes(
     app,
     {
@@ -372,20 +383,10 @@ function routeApp(
       hashIp: (ip: string) => ip
     },
     {
-      friends: fake<FriendsService>({
-        list: record('list', { friends: [], incomingRequestCount: 0 }),
-        search: record('search', []),
-        requests: record('requests', { incoming: [], outgoing: [] }),
-        sendRequest: record('sendRequest', { status: 'sent', user: publicUser('u2') }),
-        respond: record('respond', { status: 'accepted', user: publicUser('u2') }),
-        cancel: record('cancel', { status: 'cancelled' }),
-        remove: record('remove', { status: 'removed' }),
-        blocked: record('blocked', { blocked: [], users: [] }),
-        block: record('block', { status: 'applied', result: 'blocked' }),
-        unblock: record('unblock', { status: 'unblocked' }),
-        ring: record('ring', { status: 'rung' })
-      } as Partial<Record<keyof FriendsService, unknown>> as Partial<FriendsService>),
-      requestLimiter: { check: () => (limited ? { allowed: false, retryAfterSeconds: 6 } : { allowed: true }) }
+      friends: service,
+      requestLimiter: {
+        check: () => (limited ? { allowed: false, retryAfterSeconds: 6 } : { allowed: true, retryAfterSeconds: 0 })
+      }
     }
   );
   t.after(() => app.close());
@@ -394,16 +395,18 @@ function routeApp(
 
 type Body = { ok?: boolean; error?: string } & Record<string, unknown>;
 
-async function call(app: FastifyInstance, method: string, url: string, payload?: object) {
+type Method = 'GET' | 'PUT' | 'POST' | 'DELETE';
+
+async function call(app: FastifyInstance, method: Method, url: string, payload?: object) {
   const response = await app.inject({
-    method: method as 'GET' | 'PUT' | 'POST' | 'DELETE',
+    method,
     url,
     ...(payload === undefined ? {} : { payload })
   });
   return { status: response.statusCode, body: response.json<Body>(), retryAfter: response.headers['retry-after'] };
 }
 
-const ROUTES: Array<[string, string, object?]> = [
+const ROUTES: Array<[Method, string, object?]> = [
   ['GET', '/api/friends'],
   ['GET', '/api/friends/search?q=bo'],
   ['GET', '/api/friends/requests'],
@@ -440,7 +443,7 @@ test('every social route needs a session and answers it', async (t) => {
 });
 
 test('social refusals keep their texts and codes', async (t) => {
-  const cases: Array<[string, string, object | undefined, Record<string, unknown>, number, string]> = [
+  const cases: Array<[Method, string, object | undefined, Answers<FriendsService>, number, string]> = [
     ['POST', '/api/friends/requests', {}, {}, 400, 'Неверный пользователь'],
     [
       'POST',

@@ -2,11 +2,20 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import test, { type TestContext } from 'node:test';
+import { Type } from 'typebox';
+import { Value } from 'typebox/value';
 import { createCoordinatedSnapshot } from '../backup/create-coordinated-snapshot.mts';
 import { restoreCoordinatedSnapshot } from '../restore/restore-coordinated-snapshot.mts';
 
-function fixture(t: import('node:test').TestContext) {
+// The parts of the written files these tests read or rewrite.
+const Catalog = Type.Object({ attachments: Type.Array(Type.Unknown()), leases: Type.Array(Type.Unknown()) });
+const Manifest = Type.Object({
+  database: Type.Object({ path: Type.String() }),
+  uploads: Type.Array(Type.Object({ path: Type.String() }))
+});
+
+function fixture(t: TestContext) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-g89-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const uploads = path.join(root, 'source-uploads');
@@ -36,7 +45,8 @@ test('G89-A01 restores a verified DB/uploads pair into one isolated target', (t)
   assert.equal(fs.readFileSync(path.join(target, 'database.dump'), 'utf8'), 'database');
   assert.equal(fs.readFileSync(path.join(target, 'uploads', 'objects', 'asset.bin'), 'utf8'), 'media');
   assert.equal(report.leasesRecovered, 1);
-  const catalog = JSON.parse(fs.readFileSync(path.join(target, 'media-catalog.json'), 'utf8'));
+  const catalog: unknown = JSON.parse(fs.readFileSync(path.join(target, 'media-catalog.json'), 'utf8'));
+  assert.ok(Value.Check(Catalog, catalog), 'the restored media catalog lists attachments and leases');
   assert.deepEqual(catalog.attachments[0], {
     id: 'attachment',
     state: 'ready',
@@ -118,9 +128,10 @@ test('G89-A03 snapshot creation rejects symlinked uploads where supported', (t) 
 });
 
 test('G89-A04 restore rejects manifest escapes and symlinks in every source component', (t) => {
-  const { allowedRoot, root, snapshot } = fixture(t);
+  const { allowedRoot, snapshot } = fixture(t);
   const manifestFile = path.join(snapshot, 'manifest.json');
-  const manifest = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  const manifest: unknown = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+  assert.ok(Value.Check(Manifest, manifest), 'the manifest names the database dump and the uploads');
   manifest.database.path = '../source.dump';
   fs.writeFileSync(manifestFile, JSON.stringify(manifest));
   assert.throws(
@@ -145,7 +156,9 @@ test('G89-A04 restore rejects manifest escapes and symlinks in every source comp
     t.skip('symlink creation is unavailable');
     return;
   }
-  manifest.uploads[0].path = 'linked-objects/asset.bin';
+  const [upload] = manifest.uploads;
+  assert.ok(upload, 'the manifest lists the uploaded asset');
+  upload.path = 'linked-objects/asset.bin';
   fs.writeFileSync(manifestFile, JSON.stringify(manifest));
   assert.throws(
     () =>
@@ -184,7 +197,9 @@ test('G89-A05 snapshot output cannot overlap or pollute uploads and a safe sibli
   try {
     fs.symlinkSync(uploads, linkedParent, 'junction');
     linked = true;
-  } catch {}
+  } catch {
+    // Without symlink support only the safe sibling below is checked.
+  }
   if (linked) {
     assert.throws(
       () => createCoordinatedSnapshot({ ...input, output: path.join(linkedParent, 'snapshot') }),

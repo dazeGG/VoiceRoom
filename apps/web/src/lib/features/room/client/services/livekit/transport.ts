@@ -3,6 +3,7 @@
 
 import type { Room } from 'livekit-client';
 import { state } from '../../core/state.svelte';
+import { isErrorCode, RETRYABLE_JOIN_CODES, TERMINAL_JOIN_CODES } from '@voice-room/shared/contracts/errors';
 import { ApiError } from '$lib/api/client';
 import { requestLiveKitToken, type LiveKitCredentials } from '../../net/api';
 import { loadLiveKitClient } from '../../media/livekit-runtime';
@@ -39,47 +40,18 @@ export async function requestLiveKitCredentials(name: string, isCurrent: () => b
 }
 
 export function isRetryableLiveKitApiFailure(error: ApiError): boolean {
-  if (
-    [
-      'authentication_required',
-      'invalid_join',
-      'invalid_session',
-      'room_banned',
-      'room_full',
-      'room_not_found'
-    ].includes(error.code)
-  )
-    return false;
+  if (error.code && TERMINAL_JOIN_CODES.has(error.code)) return false;
   return (
     [408, 425, 429].includes(error.status) ||
     error.status >= 500 ||
-    [
-      'livekit_gate_credential_unavailable',
-      'livekit_gate_principal_unavailable',
-      'livekit_gate_unavailable',
-      'membership_persist_failed',
-      'membership_unavailable',
-      'not_in_room'
-    ].includes(error.code)
+    (error.code !== '' && RETRYABLE_JOIN_CODES.has(error.code))
   );
 }
 
+/** A code safe to log: a known join failure, a transport failure, or unknown_error. */
 export function safeLiveKitCode(code: string): string {
-  return [
-    'authentication_required',
-    'invalid_join',
-    'invalid_session',
-    'room_banned',
-    'room_full',
-    'room_not_found',
-    'livekit_gate_credential_unavailable',
-    'livekit_gate_principal_unavailable',
-    'livekit_gate_unavailable',
-    'membership_persist_failed',
-    'membership_unavailable',
-    'not_in_room',
-    'transport_error'
-  ].includes(code)
+  if (code === 'transport_error') return code;
+  return isErrorCode(code) && (TERMINAL_JOIN_CODES.has(code) || RETRYABLE_JOIN_CODES.has(code))
     ? code
     : 'unknown_error';
 }
@@ -92,8 +64,7 @@ export async function connectLiveKitWithFallback(
   if (!isCurrent()) return null;
   const configuredUrls = credentials.urls?.length ? credentials.urls : [credentials.url];
   const urls = [...new Set(configuredUrls.flatMap(getLiveKitConnectUrls))];
-  for (let candidateIndex = 0; candidateIndex < urls.length; candidateIndex += 1) {
-    const url = urls[candidateIndex];
+  for (const [candidateIndex, url] of urls.entries()) {
     if (!isCurrent()) return null;
     const room = new Room({
       adaptiveStream: false,
@@ -104,7 +75,7 @@ export async function connectLiveKitWithFallback(
     try {
       await room.connect(url, credentials.token, {
         autoSubscribe: false,
-        ...(isForcedRelayDiagnostic() ? { rtcConfig: { iceTransportPolicy: 'relay' as RTCIceTransportPolicy } } : {})
+        ...(isForcedRelayDiagnostic() ? { rtcConfig: { iceTransportPolicy: 'relay' as const } } : {})
       });
       if (!isCurrent()) {
         // Never bound or committed, so there is no room state to unwind.

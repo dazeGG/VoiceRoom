@@ -17,7 +17,7 @@
     onclose?: () => void;
   } = $props();
 
-  let heading: HTMLHeadingElement | null = $state(null);
+  let heading = $state<HTMLHeadingElement | null>(null);
   const listState = $derived(store.reactorState(messageId, emoji));
 
   onMount(() => {

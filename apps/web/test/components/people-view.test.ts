@@ -37,7 +37,7 @@ test('Enter sends a request for the typed login, @ or not, and empties the field
 
   await vi.waitFor(() => expect(onToast).toHaveBeenCalledWith('Заявка отправлена'));
   expect(calls.find((call) => call.method === 'POST')?.body).toEqual({ login: 'bob' });
-  expect((field as HTMLInputElement).value).toBe('');
+  expect(field).toHaveProperty('value', '');
 });
 
 test('a refused request keeps the login and shows the reason', async () => {
@@ -49,7 +49,7 @@ test('a refused request keeps the login and shows the reason', async () => {
   const field = screen.getByRole('textbox', { name: 'Логин друга' });
   await userEvent.type(field, 'nobody{Enter}');
   await vi.waitFor(() => expect(onToast).toHaveBeenCalledOnce());
-  expect((field as HTMLInputElement).value).toBe('nobody');
+  expect(field).toHaveProperty('value', 'nobody');
 });
 
 test('an incoming request is accepted from its card', async () => {

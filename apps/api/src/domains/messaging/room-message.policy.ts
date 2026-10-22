@@ -6,7 +6,7 @@
 import { isRoomOwner } from '../rooms/room.policy.ts';
 
 type Message = { authorUserId?: string | null; peerId: string };
-type Caller = { userId?: string | null; peerId?: string | null };
+type Caller = { userId?: string | null | undefined; peerId?: string | null | undefined };
 
 /** How the caller wrote the message: as its account, as its guest peer, or not at all. */
 export function roomMessageAuthorship(message: Message, caller: Caller): 'account' | 'peer' | null {

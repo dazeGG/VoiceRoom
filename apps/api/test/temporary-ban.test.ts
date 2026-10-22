@@ -119,6 +119,14 @@ test('G86-A03 public ban projection never exposes guest IP', () => {
   assert.equal(JSON.stringify(projected).includes('203.0.113.9'), false);
 });
 
+test('a banned account with no stored colour is listed with the default colour', () => {
+  const repository = createModerationRepository({ cursorCodec: unusedCodec, pool: fakeDb(), ipKeyOf });
+  const projected = repository.mapModerationBan(
+    banRow({ user_id: 'ada', login: 'ada', display_name: 'Ada', avatar_color_key: null })
+  );
+  assert.equal(projected?.subject.profile?.avatarColorKey, 'blurple');
+});
+
 test(
   'G86-A04 active list names banned accounts and never profiles guests',
   { skip: !process.env.TEST_DATABASE_URL },

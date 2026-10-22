@@ -13,7 +13,7 @@ export interface WhatsNewSlide {
 // in the release notes. The pictures are screenshots of the real app (544×408
 // at 2x) kept in static/whats-new/<version>/. For the next release, bump
 // WHATS_NEW_VERSION in the shared contract together with these slides.
-export const WHATS_NEW_SLIDES: readonly WhatsNewSlide[] = [
+export const WHATS_NEW_SLIDES: readonly [WhatsNewSlide, ...WhatsNewSlide[]] = [
   {
     image: '/whats-new/2.8.0/look.webp',
     alt: 'Лобби VoiceRoom в новом графитовом оформлении: друзья слева, комната в эфире и список комнат',

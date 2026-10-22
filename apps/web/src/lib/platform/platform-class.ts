@@ -5,15 +5,8 @@ import {
   type PlatformSignals
 } from '@voice-room/shared/platform-class';
 
-type RuntimeWindow = Window & {
-  voiceRoomRuntime?: {
-    isDesktop?: boolean;
-    platform?: string;
-  };
-};
-
-function runtimeWindow(): RuntimeWindow | null {
-  return typeof window === 'undefined' ? null : (window as RuntimeWindow);
+function runtimeWindow(): Window | null {
+  return typeof window === 'undefined' ? null : window;
 }
 
 function browserNavigator(): Navigator | null {
@@ -23,10 +16,7 @@ function browserNavigator(): Navigator | null {
 function collectPlatformSignals(): PlatformSignals {
   const runtime = runtimeWindow()?.voiceRoomRuntime;
   const nav = browserNavigator();
-  const userAgentData =
-    'userAgentData' in (nav || {})
-      ? (nav as Navigator & { userAgentData?: { mobile?: boolean } }).userAgentData
-      : undefined;
+  const userAgentData = nav?.userAgentData;
 
   return {
     desktopBridge: runtime?.isDesktop === true,

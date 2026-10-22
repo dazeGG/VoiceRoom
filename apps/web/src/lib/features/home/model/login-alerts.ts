@@ -1,4 +1,5 @@
 import type { LoginAlert } from '$lib/api/auth';
+import { timeAgo } from '$lib/shared/utils/date-format';
 import { sessionDeviceLabel } from './account-security';
 
 export type SecureAccountTarget = 'password' | 'recovery-codes';
@@ -14,18 +15,15 @@ export function loginAlertDevice(alert: Pick<LoginAlert, 'client' | 'os'>): stri
 }
 
 export function loginAlertWhen(alert: Pick<LoginAlert, 'createdAt' | 'location'>, now = Date.now()): string {
-  const minutes = Math.floor(Math.max(0, now - alert.createdAt) / 60_000);
   const when =
-    minutes < 1
-      ? 'только что'
-      : minutes < 60
-        ? `${minutes} мин назад`
-        : new Intl.DateTimeFormat('ru-RU', {
-            day: 'numeric',
-            month: 'long',
-            hour: '2-digit',
-            minute: '2-digit'
-          }).format(alert.createdAt);
+    now - alert.createdAt < 60 * 60_000
+      ? timeAgo(alert.createdAt, now)
+      : new Intl.DateTimeFormat('ru-RU', {
+          day: 'numeric',
+          month: 'long',
+          hour: '2-digit',
+          minute: '2-digit'
+        }).format(alert.createdAt);
   return alert.location ? `${alert.location} · ${when}` : when;
 }
 

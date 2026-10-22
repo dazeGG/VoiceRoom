@@ -9,8 +9,9 @@
   import { useLobby } from '$lib/features/home/model/lobby-context';
   import AttachmentComposer from '$lib/shared/chat/AttachmentComposer.svelte';
   import AttachmentUploadControl from '$lib/shared/chat/AttachmentUploadControl.svelte';
-  import { imageFilesFromClipboard, type AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
-  import { loadChatDraft, saveChatDraft } from '$lib/shared/chat/chat-drafts';
+  import type { AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
+  import { ChatDraft } from '$lib/shared/chat/chat-draft.svelte';
+  import { pasteImages, sendOrEditLast } from '$lib/shared/chat/composer-input';
   import ComposerEmojiPicker from '$lib/shared/chat/ComposerEmojiPicker.svelte';
   import type { ComposerHandle } from '$lib/shared/chat/composer-handle';
   import EmojiComposer from '$lib/shared/chat/EmojiComposer.svelte';
@@ -42,13 +43,12 @@
   } = $props();
 
   const lobby = useLobby();
-  const DRAFT_SAVE_DELAY_MS = 400;
 
   let input = $state<ComposerHandle | null>(null);
   // The thread is fixed for this component's life.
   const conversation = { type: 'dm' as const, id: untrack(() => peerId) };
-  let draft = $state(untrack(() => loadChatDraft(selfId, conversation)?.text ?? ''));
-  let draftSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  const draft = new ChatDraft(conversation);
+  untrack(() => draft.restore(selfId));
 
   const typingNotifier = createTypingNotifier((activity) => {
     getAppRealtime().send('dm.typing', { userId: conversation.id, activity });
@@ -58,29 +58,20 @@
     input?.focus();
   }
 
-  function persistDraft(): void {
-    if (draftSaveTimer) {
-      clearTimeout(draftSaveTimer);
-      draftSaveTimer = null;
-    }
-    saveChatDraft(selfId, conversation, { text: draft });
-  }
-
   // Typing and picked emoji both arrive as input, so this is every edit.
   function onInput(): void {
-    if (draft.trim()) typingNotifier.notify();
-    if (draftSaveTimer) clearTimeout(draftSaveTimer);
-    draftSaveTimer = setTimeout(persistDraft, DRAFT_SAVE_DELAY_MS);
+    if (draft.text.trim()) typingNotifier.notify();
+    draft.schedule();
   }
 
   onMount(() => {
     void tick().then(focus);
-    window.addEventListener('pagehide', persistDraft);
-    return () => window.removeEventListener('pagehide', persistDraft);
+    window.addEventListener('pagehide', draft.persist);
+    return () => window.removeEventListener('pagehide', draft.persist);
   });
 
   onDestroy(() => {
-    persistDraft();
+    draft.persist();
     typingNotifier.reset();
   });
 
@@ -88,7 +79,7 @@
   // thread's outbox, which shows it until the server has it, so the next one
   // can be written and sent while the previous is still on its way.
   async function submit(): Promise<void> {
-    const text = draft.trim();
+    const text = draft.text.trim();
     if (!text && !media?.canSend) return;
     // Images still uploading would be left behind.
     if (media?.drafts.length && !media.canSend) return;
@@ -98,8 +89,7 @@
       replyTo: replyTarget ? { messageId: replyTarget.id } : undefined
     });
     typingNotifier.reset();
-    draft = '';
-    persistDraft();
+    draft.clear();
     // The uploaded images now belong to the message; the field starts afresh.
     media?.clearBound();
     replyTarget = null;
@@ -108,27 +98,11 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    if (event.isComposing) return;
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      void submit();
-      return;
-    }
-    // ArrowUp in an empty composer edits the last own message, like Discord.
-    if (event.key === 'ArrowUp' && !draft.trim() && onEditLast()) event.preventDefault();
+    sendOrEditLast(event, { empty: !draft.text.trim(), send: () => void submit(), editLast: onEditLast });
   }
 
-  async function onPaste(event: ClipboardEvent): Promise<void> {
-    if (!media) return;
-    const files = imageFilesFromClipboard(event);
-    if (!files.length) return;
-    event.preventDefault();
-    try {
-      await media.addFiles(files);
-    } catch (cause) {
-      pushToast(cause instanceof Error ? cause.message : 'Не удалось вставить изображение', { variant: 'error' });
-    }
-  }
+  const onPaste = (event: ClipboardEvent): Promise<void> =>
+    pasteImages(media, event, (message) => pushToast(message, { variant: 'error' }));
 
   // The field remembers its caret while the picker has focus, so the emoji
   // lands where the person was writing, and the field takes focus back and
@@ -163,7 +137,7 @@
         class="lobby-dm-input lobby-dm-textarea"
         placeholder="Написать сообщение…"
         bind:this={input}
-        bind:value={draft}
+        bind:value={draft.text}
         onkeydown={onKeydown}
         oninput={onInput}
       />
@@ -173,7 +147,7 @@
         type="submit"
         aria-label="Отправить"
         title="Отправить"
-        disabled={!(draft.trim() || media?.canSend)}
+        disabled={!(draft.text.trim() || media?.canSend)}
         onclick={() => void submit()}
       >
         <ArrowUp {...iconSm} aria-hidden="true" />

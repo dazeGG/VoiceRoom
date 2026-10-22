@@ -8,13 +8,14 @@ import { AdminCallFeedbackPage, AdminCallFeedbackQuery, CallFeedbackBody } from 
 import type { ApiContext } from '../../app/context.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import type { CallFeedbackService } from './call-feedback.service.ts';
+import type { RateCheck } from '../../lib/rate-limit.ts';
 
 const ADMIN_REQUIRED = failure('Platform administrator access required', { code: 'platform_admin_required' });
 const TOO_MANY_ANSWERS = failure('Too many answers', { code: 'rate_limited' });
 
 export interface CallFeedbackRoutesDeps {
   feedback: Pick<CallFeedbackService, 'submit' | 'list'>;
-  limiter: { check(key: string): { allowed: boolean; retryAfterSeconds?: number } };
+  limiter: RateCheck;
   /** The staff member behind the admin-app session, or null with the 401 sent. */
   staffUserId(request: FastifyRequest, reply: FastifyReply): Promise<string | null>;
 }

@@ -114,3 +114,35 @@ const numericDate = new Intl.DateTimeFormat('ru-RU', { day: '2-digit', month: '2
 export function formatNumericDate(at: number): string {
   return numericDate.format(at);
 }
+
+/** The Russian word for a count: plural(2, ['звонок', 'звонка', 'звонков']) is 'звонка'. */
+export function plural(count: number, [one, few, many]: readonly [string, string, string]): string {
+  const tens = Math.abs(count) % 100;
+  const units = tens % 10;
+  if (tens >= 11 && tens <= 14) return many;
+  if (units === 1) return one;
+  if (units >= 2 && units <= 4) return few;
+  return many;
+}
+
+/** '4 человека', '1 человек', '12 человек'. */
+export function formatPeople(count: number): string {
+  return `${formatCount(count)} ${plural(count, ['человек', 'человека', 'человек'])}`;
+}
+
+/** '14:30' */
+export function formatClock(at: number): string {
+  return clock.format(at);
+}
+
+const dayMonth = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' });
+
+/** A day's heading: 'Сегодня, 22 октября', 'Вчера, 21 октября', or '20 октября'. */
+export function formatDayHeading(at: number, now: number): string {
+  const startOfDay = (time: number) => new Date(time).setHours(0, 0, 0, 0);
+  const days = Math.round((startOfDay(now) - startOfDay(at)) / (24 * 60 * 60 * 1000));
+  const date = dayMonth.format(at);
+  if (days === 0) return `Сегодня, ${date}`;
+  if (days === 1) return `Вчера, ${date}`;
+  return date;
+}

@@ -1,7 +1,3 @@
-<script lang="ts" module>
-  let contextMenuCounter = 0;
-</script>
-
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import type { ContextMenuProps } from './types';
@@ -21,7 +17,8 @@
   }: ContextMenuProps = $props();
 
   let panel = $state<HTMLDivElement | null>(null);
-  const overlayId = `context-menu-${++contextMenuCounter}`;
+  const uid = $props.id();
+  const overlayId = `context-menu-${uid}`;
   let left = $state(EDGE_GAP);
   let top = $state(EDGE_GAP);
   let positionGeneration = 0;
@@ -65,7 +62,7 @@
   function handleKeydown(event: KeyboardEvent): void {
     if (!open) return;
     const items = menuItems();
-    const currentIndex = items.indexOf(document.activeElement as HTMLElement);
+    const currentIndex = items.findIndex((item) => item === document.activeElement);
     const active = document.activeElement;
     const activeElement = active instanceof HTMLElement ? active : null;
     const ownsNavigation = Boolean(

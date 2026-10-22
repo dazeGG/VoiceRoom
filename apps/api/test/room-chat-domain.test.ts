@@ -3,6 +3,7 @@
 // order, editing, deleting, marking read, and the HTTP answer each outcome
 // becomes. Everything runs on fakes; the integration suites cover the store.
 
+import type { Attachment } from '@voice-room/shared/contracts/messages';
 import { buildServerEnvelope } from '@voice-room/shared/realtime';
 import test, { type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
@@ -27,13 +28,16 @@ import {
   type RoomChatService,
   type RoomMessages
 } from '../src/domains/messaging/room-chat.service.ts';
+import { createMessageReadService, type MessageReadRepository } from '../src/domains/messaging/message-read.service.ts';
+import { createCursorCodec } from '../src/platform/cursor-codec.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
-import { fake, recordingLogger, storedUser } from './fakes/index.ts';
+import { fake, fakeDb, recordingLogger, storedUser } from './fakes/index.ts';
+import { defined } from './helpers/assert-defined.ts';
 
 const UUID_A = '11111111-1111-4111-8111-111111111111';
 const UUID_B = '22222222-2222-4222-8222-222222222222';
 const TOKEN = 't'.repeat(32);
-const PICTURE = {
+const PICTURE: Attachment = {
   id: 'a1',
   context: 'room',
   order: 0,
@@ -65,13 +69,14 @@ function room(peers: PresencePeer[] = [], overrides: Partial<LiveRoom> = {}) {
   });
 }
 
-// A field of an outcome union, read without narrowing it to one member first.
-function fieldOf(outcome: object, key: string) {
-  return (outcome as Record<string, unknown>)[key];
+// The stores hand the unit-of-work callbacks a client standing for a named
+// transaction; a test asks which transaction a client it was given belongs to.
+const transactionNames = new Map<unknown, string>();
+function transactionMarker(name: string) {
+  const client = fakeDb();
+  transactionNames.set(client, name);
+  return client;
 }
-
-// The stores hand the unit-of-work callbacks a transaction marker, not a client.
-const transactionMarker = (name: string) => ({ transaction: name }) as never;
 
 // --- input normalisation ---------------------------------------------------------
 
@@ -132,7 +137,10 @@ test('a public chat message fills avatar and defaults', () => {
   assert.equal(full.avatarUrl, '/x');
   assert.equal(full.avatarColorKey, 'blue');
   assert.deepEqual(full.attachments, [PICTURE]);
-  assert.equal(publicChatMessage({ id: 'm', peerId: 'p' } as RoomChatMessage).avatarUrl, null);
+  assert.equal(
+    publicChatMessage({ id: 'm', roomId: 'r', peerId: 'p', name: 'A', text: 't', createdAt: 1 }).avatarUrl,
+    null
+  );
 });
 
 // --- service ---------------------------------------------------------------------
@@ -152,32 +160,52 @@ type HarnessOptions = {
   delivery?: false;
   replay?: boolean;
   readError?: Error;
+  readService?: ReturnType<RoomChatDeps['readService']>;
   ban?: (userId: string | null | undefined, ip: string) => boolean;
-  rate?: { allowed: boolean; retryAfterSeconds?: number };
+  rate?: { allowed: boolean; retryAfterSeconds: number };
   findUserFails?: boolean;
   media?: null;
   directEmit?: boolean;
+  replyTargetGone?: boolean;
+  replyTargetGuest?: boolean;
 };
 
 function harness(options: HarnessOptions = {}) {
   const logger = recordingLogger();
   const logged = (level: string) =>
     logger.records.filter((record) => record.level === level).map((record) => record.evt);
-  const calls = {
+  const calls: {
+    lockedIn: string;
+    appended: Parameters<RoomMessages['appendMessage']>[1][];
+    edited: string[];
+    deleted: string[];
+    detail: Array<{ type?: string }>;
+    pins: string[];
+    previews: unknown[];
+    emitted: string[];
+    summaries: string[];
+    retired: Array<{ through?: unknown }>;
+    addressed: Array<Record<string, unknown>>;
+    outbox: Array<{ type?: string; message?: RoomChatMessage }>;
+    bound: Array<{ attachmentIds?: unknown }>;
+    completed: unknown[];
+    readonly warnings: unknown[];
+    readonly errors: unknown[];
+  } = {
     lockedIn: '',
-    appended: [] as Parameters<RoomMessages['appendMessage']>[1][],
-    edited: [] as string[],
-    deleted: [] as string[],
-    detail: [] as Array<{ type?: string }>,
-    pins: [] as string[],
-    previews: [] as unknown[],
-    emitted: [] as string[],
-    summaries: [] as string[],
-    retired: [] as Array<{ through?: unknown }>,
-    addressed: [] as Array<Record<string, unknown>>,
-    outbox: [] as Array<{ type?: string; message?: RoomChatMessage }>,
-    bound: [] as Array<{ attachmentIds?: unknown }>,
-    completed: [] as unknown[],
+    appended: [],
+    edited: [],
+    deleted: [],
+    detail: [],
+    pins: [],
+    previews: [],
+    emitted: [],
+    summaries: [],
+    retired: [],
+    addressed: [],
+    outbox: [],
+    bound: [],
+    completed: [],
     get warnings() {
       return logged('warn');
     },
@@ -206,7 +234,7 @@ function harness(options: HarnessOptions = {}) {
         text: input.text,
         createdAt: input.createdAt,
         authorUserId: input.authorUserId,
-        replyTo: input.replyToMessageId ? { messageId: input.replyToMessageId } : undefined
+        ...(input.replyToMessageId ? { replyTo: { messageId: input.replyToMessageId } } : {})
       };
       if (input.unitOfWork) await input.unitOfWork(transactionMarker('insert'), inserted);
       return inserted;
@@ -222,7 +250,7 @@ function harness(options: HarnessOptions = {}) {
       calls.edited.push(text);
       return options.editResult === null
         ? null
-        : { ...((options.messages || {})[messageId] as RoomChatMessage), text, editedAt: 9 };
+        : { ...defined(options.messages?.[messageId], 'the edited message'), text, editedAt: 9 };
     },
     async markRoomChatRead() {
       return options.lastReadAt === undefined ? 5 : options.lastReadAt;
@@ -236,18 +264,19 @@ function harness(options: HarnessOptions = {}) {
             async createAddressedForMessage(input) {
               calls.addressed.push(input);
             },
-            ...(options.retireFails
-              ? {
-                  async markRoomRead() {
-                    throw new Error('inbox down');
+            ...(options.noMarkRoomRead
+              ? {}
+              : options.retireFails
+                ? {
+                    async markRoomRead() {
+                      throw new Error('inbox down');
+                    }
                   }
-                }
-              : {
-                  async markRoomRead(input) {
-                    calls.retired.push(input);
-                  }
-                }),
-            ...(options.noMarkRoomRead ? { markRoomRead: undefined } : {})
+                : {
+                    async markRoomRead(input) {
+                      calls.retired.push(input);
+                    }
+                  })
           }
         };
   const delivery: ReturnType<RoomChatDeps['delivery']> =
@@ -259,7 +288,10 @@ function harness(options: HarnessOptions = {}) {
               return options.replay
                 ? {
                     kind: 'replay' as const,
+                    ledgerKey: 'ledger-1',
                     response: {
+                      messageId: 'old',
+                      statusCode: 201,
                       body: {
                         message: {
                           id: 'old',
@@ -287,12 +319,13 @@ function harness(options: HarnessOptions = {}) {
         };
   const service = createRoomChatService({
     messages: () => ({ room: messages }),
-    readService: () => ({
-      async advanceRoom(input) {
-        if (options.readError) throw options.readError;
-        return { readThrough: 77, cursor: input.cursor };
-      }
-    }),
+    readService: () =>
+      options.readService ?? {
+        async advanceRoom(input) {
+          if (options.readError) throw options.readError;
+          return { readThrough: 77, cursor: input.cursor };
+        }
+      },
     getRoom: async () => currentRoom,
     findRoomBan: async (_roomId, userId, ip) => (options.ban ? options.ban(userId, ip) : false),
     prepareContent: ({ content, text }) => {
@@ -303,7 +336,7 @@ function harness(options: HarnessOptions = {}) {
       content === 'bad-mention'
         ? { ok: false, code: 'invalid_mention_target' }
         : { ok: true, userIds: content === 'mention' ? ['user-2'] : [] },
-    limiter: { check: () => options.rate || { allowed: true } },
+    limiter: { check: () => options.rate || { allowed: true, retryAfterSeconds: 0 } },
     findUser: async (userId) => {
       if (options.findUserFails) throw new Error('users down');
       return { id: userId, displayName: 'Stored', avatarKey: null };
@@ -315,13 +348,38 @@ function harness(options: HarnessOptions = {}) {
             attachments: {
               async bindReady(input) {
                 calls.bound.push(input);
+              },
+              // Deleting runs on the real store; the DB suite covers it.
+              async listForMessage() {
+                return [];
+              },
+              async markDeleted() {
+                return null;
+              }
+            },
+            jobs: {
+              async enqueue() {
+                return null;
               }
             }
           },
     replies: () => ({
       async lockRoomTarget(input) {
-        calls.lockedIn = (input.client as unknown as { transaction: string }).transaction;
-        return { id: UUID_A, text: 'target', authorUserId: 'user-3', createdAt: Date.now() };
+        calls.lockedIn = transactionNames.get(input.client) ?? '';
+        if (options.replyTargetGone) return null;
+        return {
+          id: UUID_A,
+          roomId: 'room-1',
+          peerId: 'peer0003',
+          authorUserId: options.replyTargetGuest ? null : 'user-3',
+          name: 'Carol',
+          text: 'target',
+          createdAt: Date.now(),
+          expiresAt: null,
+          deletedAt: null,
+          metadata: null,
+          replyTo: undefined
+        };
       }
     }),
     notifications: () => notifications,
@@ -376,7 +434,10 @@ test('the list refuses missing rooms and banned viewers and projects media and r
     'room_banned'
   );
   const listed = await harness({
-    stored: [{ id: 'a' }, { id: 'b', replyTo: { messageId: UUID_A } }] as RoomChatMessage[]
+    stored: [
+      { id: 'a', roomId: 'room-1', peerId: 'p', name: 'A', text: 'a', createdAt: 1 },
+      { id: 'b', roomId: 'room-1', peerId: 'p', name: 'A', text: 'b', createdAt: 2, replyTo: { messageId: UUID_A } }
+    ]
   }).service.list('room-1', { user: null, clientIp: 'ip' });
   assert.equal(listed.status, 'listed');
   assert.deepEqual(
@@ -414,10 +475,11 @@ test('send refuses in the legacy order', async () => {
     assert.equal(result.status, status, JSON.stringify(input));
   }
   const mention = await harness().service.post({ ...postBase, content: 'bad-mention' });
-  assert.equal(fieldOf(mention, 'code'), 'invalid_mention_target');
+  assert.equal(mention.status === 'invalid_mention' && mention.code, 'invalid_mention_target');
   const limited = await harness({ rate: { allowed: false, retryAfterSeconds: 3 } }).service.post(postBase);
-  assert.equal(fieldOf(limited, 'retryAfterSeconds'), 3);
-  assert.equal(fieldOf(await harness({ rate: { allowed: false } }).service.post(postBase), 'retryAfterSeconds'), 0);
+  assert.equal(limited.status === 'rate_limited' && limited.retryAfterSeconds, 3);
+  const unspecified = await harness({ rate: { allowed: false, retryAfterSeconds: 0 } }).service.post(postBase);
+  assert.equal(unspecified.status === 'rate_limited' && unspecified.retryAfterSeconds, 0);
 });
 
 test('a guest peer sends under its live identity and a reserved peer id falls back to the account', async () => {
@@ -525,6 +587,18 @@ test('mentions are not addressed without engagement or an inbox', async () => {
   const plain = harness({ delivery: false });
   await plain.service.post({ ...postBase, user: ACCOUNT, idempotencyKey: 'idem-key-1' });
   assert.equal(plain.calls.appended[0]?.beforeUnitOfWork, null);
+});
+
+test('a reply to a guest-authored message without mentions is not addressed', async () => {
+  const { calls, service } = harness({ replyTargetGuest: true });
+  const sent = await service.post({
+    ...postBase,
+    user: ACCOUNT,
+    replyTo: { messageId: UUID_B },
+    replyToMessageId: UUID_B
+  });
+  assert.equal(sent.status, 'created');
+  assert.deepEqual(calls.addressed, []);
 });
 
 test('an idempotent replay answers the stored message without broadcasting again', async () => {
@@ -696,16 +770,13 @@ test('marking read advances the cursor or the wall clock and retires notificatio
     'room_not_found'
   );
 
-  const bad = await harness({
-    readError: Object.assign(new Error('Stale cursor'), { statusCode: 409, code: 'invalid_cursor' })
-  }).service.markRead('room-1', 'user-1', 'c');
-  assert.deepEqual(bad, { status: 'invalid_cursor', statusCode: 409, code: 'invalid_cursor', error: 'Stale cursor' });
-  assert.deepEqual(await harness({ readError: new Error() }).service.markRead('room-1', 'user-1', 'c'), {
-    status: 'invalid_cursor',
-    statusCode: 400,
-    code: 'invalid_read_cursor',
-    error: 'invalid_read_cursor'
-  });
+  // A failed cursor read is not turned into an outcome: the error reaches the
+  // central handler, which knows a refused cursor from a server failure.
+  const stale = Object.assign(new Error('Stale cursor'), { statusCode: 409, code: 'invalid_cursor' });
+  const refused = harness({ readError: stale });
+  await assert.rejects(refused.service.markRead('room-1', 'user-1', 'c'), stale);
+  assert.deepEqual(refused.calls.retired, []);
+  assert.deepEqual(refused.calls.summaries, []);
 
   // Retiring is best effort and a missing inbox is a quiet no-op.
   const failing = harness({ retireFails: true });
@@ -717,9 +788,12 @@ test('marking read advances the cursor or the wall clock and retires notificatio
 
 // --- routes ------------------------------------------------------------------------
 
+/** What each service method resolves to. */
+type Outcomes = { [Method in keyof RoomChatService]: Awaited<ReturnType<RoomChatService[Method]>> };
+
 function routeApp(
   t: TestContext,
-  outcomes: Record<string, unknown> = {},
+  outcomes: Partial<Outcomes> = {},
   { user = null }: { user?: typeof ACCOUNT | null } = {}
 ) {
   const app = fastify();
@@ -732,7 +806,7 @@ function routeApp(
     read?: unknown;
   } = {};
   const chat = fake<RoomChatService>({
-    async list(roomId: string, caller: { user?: { id: string } | null }) {
+    async list(roomId: string, caller: { user?: { id: string } | null }): Promise<Outcomes['list']> {
       seen.list = caller;
       return (
         outcomes.list || {
@@ -741,7 +815,7 @@ function routeApp(
         }
       );
     },
-    async post(input: PostInput) {
+    async post(input: PostInput): Promise<Outcomes['post']> {
       seen.post = input;
       return (
         outcomes.post || {
@@ -750,7 +824,7 @@ function routeApp(
         }
       );
     },
-    async edit(input: { messageId: string }) {
+    async edit(input: { messageId: string }): Promise<Outcomes['edit']> {
       seen.edit = input;
       return (
         outcomes.edit || {
@@ -759,15 +833,15 @@ function routeApp(
         }
       );
     },
-    async remove(input: unknown) {
+    async remove(input: unknown): Promise<Outcomes['remove']> {
       seen.remove = input;
       return outcomes.remove || { status: 'deleted' };
     },
-    async markRead(roomId: string, userId: string, cursor: unknown) {
+    async markRead(roomId: string, userId: string, cursor: unknown): Promise<Outcomes['markRead']> {
       seen.read = { roomId, userId, cursor };
-      return outcomes.read || { status: 'read', result: { lastReadAt: 5, unreadCount: 0 } };
+      return outcomes.markRead || { status: 'read', result: { lastReadAt: 5, unreadCount: 0 } };
     }
-  } as Partial<Record<keyof RoomChatService, unknown>> as Partial<RoomChatService>);
+  });
   registerRoomChatRoutes(
     app,
     {
@@ -789,21 +863,17 @@ type Body = {
   messages?: Array<{ avatarUrl?: string | null }>;
 } & Record<string, unknown>;
 
-type Route = [string, string, object?];
+type Method = 'GET' | 'POST' | 'PATCH' | 'DELETE';
+type Route = [Method, string, object?];
 
 async function call(
   app: FastifyInstance,
-  method: string,
+  method: Method,
   url: string,
   payload?: object,
   headers: Record<string, string> = {}
 ) {
-  const response = await app.inject({
-    method: method as 'GET' | 'POST' | 'PATCH' | 'DELETE',
-    url,
-    headers,
-    ...(payload === undefined ? {} : { payload })
-  });
+  const response = await app.inject({ method, url, headers, ...(payload === undefined ? {} : { payload }) });
   return { status: response.statusCode, body: response.json<Body>(), headers: response.headers };
 }
 
@@ -828,12 +898,13 @@ test('chat routes pass normalised input and answer each outcome', async (t) => {
   await call(app, 'POST', '/api/rooms/room-1/chat', { text: 'hi', replyTo: null });
   assert.equal(seen.post?.replyToMessageId, '');
 
+  // As sent over the wire: the fields left undefined are not in the JSON.
+  const editedOnTheWire: unknown = JSON.parse(
+    JSON.stringify(publicChatMessage({ id: 'm', roomId: 'room-1', peerId: 'p', name: 'A', text: 'e', createdAt: 1 }))
+  );
   assert.deepEqual((await call(app, 'PATCH', `/api/rooms/room-1/chat/${UUID_A}`, { text: 'e' })).body, {
     ok: true,
-    // As sent over the wire: the fields left undefined are not in the JSON.
-    message: JSON.parse(
-      JSON.stringify(publicChatMessage({ id: 'm', roomId: 'room-1', peerId: 'p', name: 'A', text: 'e', createdAt: 1 }))
-    ) as unknown
+    message: editedOnTheWire
   });
   assert.equal(seen.edit?.messageId, UUID_A);
   assert.deepEqual((await call(app, 'DELETE', `/api/rooms/room-1/chat/${UUID_A}`)).body, { ok: true, deleted: true });
@@ -846,73 +917,78 @@ test('chat routes pass normalised input and answer each outcome', async (t) => {
 });
 
 test('chat refusals keep their texts, codes and headers', async (t) => {
-  const cases: Array<[string, { status: string; code?: string }, number, object | null]> = [
+  const cases: Array<[string, Partial<Outcomes>, number, object | null]> = [
     [
       'post',
-      { status: 'room_not_found' },
+      { post: { status: 'room_not_found' } },
       404,
       { ok: false, error: 'Room not found', code: 'room_not_found', roomId: 'room-1' }
     ],
     [
       'post',
-      { status: 'room_banned' },
+      { post: { status: 'room_banned' } },
       403,
       { ok: false, error: 'Вы заблокированы в этой комнате', code: 'room_banned', roomId: 'room-1' }
     ],
-    ['post', { status: 'invalid_session' }, 403, { ok: false, error: 'Invalid peer session', code: 'invalid_session' }],
-    ['post', { status: 'empty' }, 400, { ok: false, error: 'Invalid chat message', code: 'invalid_message' }],
     [
       'post',
-      { status: 'invalid_mention', code: 'self_mention' },
+      { post: { status: 'invalid_session' } },
+      403,
+      { ok: false, error: 'Invalid peer session', code: 'invalid_session' }
+    ],
+    ['post', { post: { status: 'empty' } }, 400, { ok: false, error: 'Invalid chat message', code: 'invalid_message' }],
+    [
+      'post',
+      { post: { status: 'invalid_mention', code: 'self_mention' } },
       422,
       { ok: false, error: 'Invalid mention target', code: 'self_mention' }
     ],
     [
       'post',
-      { status: 'invalid_content' },
+      { post: { status: 'invalid_content' } },
       400,
       { ok: false, error: 'Invalid message content', code: 'invalid_message_content' }
     ],
     [
       'post',
-      { status: 'invalid_attachments' },
+      { post: { status: 'invalid_attachments' } },
       400,
       { ok: false, error: 'Invalid attachments', code: 'invalid_attachments' }
     ],
     [
       'post',
-      { status: 'reply_unavailable' },
+      { post: { status: 'reply_unavailable' } },
       409,
       { ok: false, error: 'Reply target is unavailable', code: 'reply_unavailable' }
     ],
     [
       'post',
-      { status: 'presence_required' },
+      { post: { status: 'presence_required' } },
       403,
       { ok: false, error: 'Active room presence or login required', code: 'presence_or_login_required' }
     ],
     [
       'post',
-      { status: 'media_unavailable' },
+      { post: { status: 'media_unavailable' } },
       503,
       { ok: false, error: 'Media uploads are unavailable', code: 'media_uploads_disabled' }
     ],
-    ['list', { status: 'room_banned' }, 403, null],
+    ['list', { list: { status: 'room_banned' } }, 403, null],
     [
       'edit',
-      { status: 'message_not_found' },
+      { edit: { status: 'message_not_found' } },
       404,
       { ok: false, error: 'Message not found', code: 'message_not_found' }
     ],
     [
       'edit',
-      { status: 'not_author' },
+      { edit: { status: 'not_author' } },
       403,
       { ok: false, error: 'Not allowed to edit this message', code: 'message_edit_forbidden' }
     ],
     [
       'remove',
-      { status: 'not_allowed' },
+      { remove: { status: 'not_allowed' } },
       403,
       { ok: false, error: 'Not allowed to delete this message', code: 'message_delete_forbidden' }
     ]
@@ -923,12 +999,12 @@ test('chat refusals keep their texts, codes and headers', async (t) => {
     edit: ['PATCH', '/api/rooms/room-1/chat/m1', { text: 'x' }],
     remove: ['DELETE', '/api/rooms/room-1/chat/m1']
   };
-  for (const [action, outcome, status, body] of cases) {
-    const { app } = routeApp(t, { [action]: outcome });
+  for (const [action, outcomes, status, body] of cases) {
+    const { app } = routeApp(t, outcomes);
     const route = routes[action];
     assert.ok(route);
     const response = await call(app, ...route);
-    assert.equal(response.status, status, `${action} ${outcome.status}`);
+    assert.equal(response.status, status, `${action} ${JSON.stringify(outcomes)}`);
     if (body) assert.deepEqual(response.body, body);
   }
 
@@ -944,22 +1020,91 @@ test('chat refusals keep their texts, codes and headers', async (t) => {
   });
 });
 
-test('marking read needs a session, a room and a usable cursor', async (t) => {
+test('marking read needs a session and a room', async (t) => {
   assert.deepEqual(
     await call(routeApp(t).app, 'POST', '/api/rooms/room-1/read', {}).then((r) => [r.status, r.body.error]),
     [401, 'Требуется вход']
   );
   const signedIn = routeApp(t, {}, { user: ACCOUNT });
   assert.equal((await call(signedIn.app, 'POST', '/api/rooms/%20/read')).status, 404);
-  const gone = routeApp(t, { read: { status: 'room_not_found' } }, { user: ACCOUNT });
+  const gone = routeApp(t, { markRead: { status: 'room_not_found' } }, { user: ACCOUNT });
   assert.equal((await call(gone.app, 'POST', '/api/rooms/room-1/read', {})).status, 404);
-  const stale = routeApp(
-    t,
-    { read: { status: 'invalid_cursor', statusCode: 409, code: 'invalid_cursor', error: 'Stale cursor' } },
-    { user: ACCOUNT }
+});
+
+test('a failing read store answers 500 without its text; a bad cursor still answers 400', async (t) => {
+  const codec = createCursorCodec({ keys: ['m'.repeat(32)] });
+  const cursor = codec.encode({
+    purpose: 'room-read',
+    context: 'room:room-1',
+    tuple: { createdAtMicros: '9', id: 'm9' }
+  });
+  // What pg throws when the read table is unreachable: no statusCode, and a
+  // message that names the schema.
+  const storeDown = Object.assign(new Error('relation "room_read_states" does not exist'), { code: '42P01' });
+  const failures: unknown[] = [];
+  const app = fastify();
+  registerHttpKit(app, {
+    securityHeaders: () => ({}),
+    recordRequest() {},
+    logRequest() {},
+    logHandlerFailure: (_request, _route, error) => failures.push(error)
+  });
+  const { service } = harness({
+    readService: createMessageReadService({
+      authorizeRoomRead: async () => true,
+      cursorCodec: codec,
+      repository: fake<MessageReadRepository>({
+        async advanceRoom() {
+          throw storeDown;
+        }
+      })
+    })
+  });
+  registerRoomChatRoutes(
+    app,
+    {
+      logger: fake<ApiContext['logger']>(),
+      clientIp: () => '203.0.113.1',
+      resolveSession: async () => ({ user: storedUser(ACCOUNT) }),
+      hashIp: (ip: string) => ip
+    },
+    service
   );
+  t.after(() => app.close());
+
+  const down = await call(app, 'POST', '/api/rooms/room-1/read', { cursor });
   assert.deepEqual(
-    await call(stale.app, 'POST', '/api/rooms/room-1/read', { cursor: 'c' }).then((r) => [r.status, r.body]),
-    [409, { ok: false, error: 'Stale cursor', code: 'invalid_cursor' }]
+    [down.status, down.body],
+    [500, { ok: false, error: 'Internal server error', code: 'internal_error' }]
+  );
+  assert.deepEqual(failures, [storeDown], 'the central handler logs the store failure');
+
+  const bad = await call(app, 'POST', '/api/rooms/room-1/read', { cursor: 'not-a-cursor' });
+  assert.deepEqual(
+    [bad.status, bad.body],
+    [400, { ok: false, error: 'Invalid read cursor', code: 'invalid_read_cursor' }]
+  );
+});
+
+test('a reply target that vanishes during the send answers 409 reply_unavailable', async (t) => {
+  const app = fastify();
+  registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
+  const { service } = harness({ replyTargetGone: true });
+  registerRoomChatRoutes(
+    app,
+    {
+      logger: fake<ApiContext['logger']>(),
+      clientIp: () => '203.0.113.1',
+      resolveSession: async () => ({ user: storedUser(ACCOUNT) }),
+      hashIp: (ip: string) => ip
+    },
+    service
+  );
+  t.after(() => app.close());
+
+  const vanished = await call(app, 'POST', '/api/rooms/room-1/chat', { text: 'hi', replyTo: { messageId: UUID_A } });
+  assert.deepEqual(
+    [vanished.status, vanished.body],
+    [409, { ok: false, error: 'Reply target is unavailable', code: 'reply_unavailable' }]
   );
 });

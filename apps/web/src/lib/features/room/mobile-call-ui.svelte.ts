@@ -81,15 +81,15 @@ export function getMobileCallScene(): MobileCallScene {
   // the grid like on the room stage. A swap or a grown picture belongs to the
   // person it was made with; someone new in their place starts from the plain layout.
   const withCamera = (participant: Participant): boolean => participant.camera || Boolean(participant.cameraStream);
-  if (self && others.length === 1 && (withCamera(self) || withCamera(others[0]))) {
-    const [other] = others;
+  const [other] = others;
+  if (self && other && others.length === 1 && (withCamera(self) || withCamera(other))) {
     const swapped = mobileCallUi.duoSwappedWith === other.id;
     return swapped
       ? { kind: 'duo', big: self, pip: other, pipExpanded: false }
       : { kind: 'duo', big: other, pip: self, pipExpanded: mobileCallUi.pipExpandedWith === other.id };
   }
 
-  const byId = (id: string) => everyone.find((participant) => participant.id === id)!;
+  const byId = (id: string) => everyone.find((participant) => participant.id === id);
   const otherIds = others.map((participant) => participant.id);
   if (mobileCallUi.view === 'focus' && everyone.length > 1) {
     const bigId = focusSpotlight({
@@ -99,17 +99,19 @@ export function getMobileCallScene(): MobileCallScene {
       activeSpeakerId
     });
     const big = byId(bigId);
-    return {
-      kind: 'focus',
-      big,
-      self: big.isLocal ? null : self,
-      strip: others.filter((participant) => participant.id !== bigId)
-    };
+    if (big) {
+      return {
+        kind: 'focus',
+        big,
+        self: big.isLocal ? null : self,
+        strip: others.filter((participant) => participant.id !== bigId)
+      };
+    }
   }
 
   return {
     kind: 'grid',
-    pages: gridPages(self?.id ?? '', otherIds).map((rows) => rows.map((row) => row.map(byId))),
+    pages: gridPages(self?.id ?? '', otherIds).map((rows) => rows.map((row) => row.flatMap((id) => byId(id) ?? []))),
     voiceOnly: !everyone.some(withCamera)
   };
 }

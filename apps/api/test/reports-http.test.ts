@@ -5,11 +5,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
-import type { Me, SignedIn } from '@voice-room/shared/contracts/account';
-import type { Failure } from '@voice-room/shared/contracts/http';
-import type { AdminReportPage, ReportFiled, ReportResolved } from '@voice-room/shared/contracts/reports';
+import { Me, SignedIn } from '@voice-room/shared/contracts/account';
+import { Failure } from '@voice-room/shared/contracts/http';
+import { AdminReportPage, ReportFiled, ReportResolved } from '@voice-room/shared/contracts/reports';
+import { Type } from 'typebox';
 import { hashPassword } from '../src/lib/password.ts';
 import { cookieFrom, registerAccount, request, startApiServer } from './fakes/server-process.ts';
+import { defined } from './helpers/assert-defined.ts';
 import { staffCookie } from './staff-session.ts';
 
 const ADMIN_ID = '00000000-0000-4000-8000-0000000000ad';
@@ -26,11 +28,15 @@ test('a report reaches the platform administrator, who removes the message or di
     ADMIN_ID,
     await hashPassword('password123')
   ]);
-  const signedIn = await request<SignedIn>(socketPath, {
-    method: 'POST',
-    pathname: '/api/auth/login',
-    body: { login: 'root', password: 'password123' }
-  });
+  const signedIn = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/auth/login',
+      body: { login: 'root', password: 'password123' }
+    },
+    SignedIn
+  );
   assert.equal(signedIn.status, 200);
   const admin = await staffCookie(socketPath, cookieFrom(signedIn.setCookie));
 
@@ -38,7 +44,7 @@ test('a report reaches the platform administrator, who removes the message or di
   const bob = await registerAccount(socketPath, 'bob');
   const eve = await registerAccount(socketPath, 'eve');
   const idOf = async (cookie: string) =>
-    (await request<Me>(socketPath, { pathname: '/api/auth/me', cookie })).body.user!.id;
+    defined((await request(socketPath, { pathname: '/api/auth/me', cookie }, Me)).body.user, 'the signed-in user').id;
   const [aliceId, bobId] = [await idOf(alice), await idOf(bob)];
 
   await pool.query(
@@ -67,12 +73,16 @@ test('a report reaches the platform administrator, who removes the message or di
   );
 
   const report = (cookie: string | undefined, target: object, reason = 'spam') =>
-    request<Pick<ReportFiled, 'status'> | Pick<Failure, 'code'>>(socketPath, {
-      method: 'POST',
-      pathname: '/api/reports',
-      cookie,
-      body: { target, reason, comment: '  проверьте, пожалуйста  ' }
-    });
+    request(
+      socketPath,
+      {
+        method: 'POST',
+        pathname: '/api/reports',
+        cookie,
+        body: { target, reason, comment: '  проверьте, пожалуйста  ' }
+      },
+      Type.Partial(Type.Object({ status: ReportFiled.properties.status, code: Failure.properties.code }))
+    );
   const roomMessage = { kind: 'room_message', roomId: 'kitchen', messageId: 'rm-1' };
 
   assert.equal((await report(undefined, roomMessage)).status, 401);
@@ -100,53 +110,60 @@ test('a report reaches the platform administrator, who removes the message or di
   assert.equal((await report(bob, { kind: 'direct_message', messageId: 'dm-1' })).body.code, 'report_own_message');
   assert.equal((await report(eve, { kind: 'direct_message', messageId: 'dm-1' })).status, 404);
 
-  const forbidden = await request<Failure>(socketPath, { pathname: '/api/admin/reports', cookie: alice });
+  const forbidden = await request(socketPath, { pathname: '/api/admin/reports', cookie: alice }, Failure);
   assert.equal(forbidden.status, 403);
   assert.equal(forbidden.body.code, 'platform_admin_required');
   assert.equal((await request(socketPath, { pathname: '/api/admin/reports' })).status, 401);
 
   const list = async () => {
-    const page = await request<AdminReportPage>(socketPath, { pathname: '/api/admin/reports', cookie: admin });
+    const page = await request(socketPath, { pathname: '/api/admin/reports', cookie: admin }, AdminReportPage);
     assert.equal(page.status, 200);
     return page.body.reports;
   };
   const open = await list();
   assert.equal(open.length, 4);
-  const [tempReport, roomReport, dmReport, threatReport] = open;
-  assert.equal(tempReport!.target.roomName, 'Временная');
-  assert.equal(roomReport!.comment, 'проверьте, пожалуйста');
-  assert.deepEqual(roomReport!.reporter, { userId: aliceId, login: 'alice', displayName: 'alice' });
-  assert.equal(roomReport!.target.roomName, 'Кухня');
-  assert.equal(roomReport!.target.text, 'купите подписку');
-  assert.equal(roomReport!.target.authorUserId, bobId);
-  assert.equal(roomReport!.target.deleted, false);
-  assert.equal(dmReport!.target.kind, 'direct_message');
-  assert.equal(dmReport!.target.text, 'грубость');
-  assert.equal(dmReport!.target.authorName, 'bob');
-  assert.equal(threatReport!.reason, 'illegal');
+  const tempReport = defined(open[0], 'the temporary room report');
+  const roomReport = defined(open[1], 'the room report');
+  const dmReport = defined(open[2], 'the direct message report');
+  const threatReport = defined(open[3], 'the threat report');
+  assert.equal(tempReport.target.roomName, 'Временная');
+  assert.equal(roomReport.comment, 'проверьте, пожалуйста');
+  assert.deepEqual(roomReport.reporter, { userId: aliceId, login: 'alice', displayName: 'alice' });
+  assert.equal(roomReport.target.roomName, 'Кухня');
+  assert.equal(roomReport.target.text, 'купите подписку');
+  assert.equal(roomReport.target.authorUserId, bobId);
+  assert.equal(roomReport.target.deleted, false);
+  assert.equal(dmReport.target.kind, 'direct_message');
+  assert.equal(dmReport.target.text, 'грубость');
+  assert.equal(dmReport.target.authorName, 'bob');
+  assert.equal(threatReport.reason, 'illegal');
 
   const resolve = (cookie: string, reportId: string, action: string) =>
-    request<Pick<ReportResolved, 'resolved'> | Pick<Failure, 'code'>>(socketPath, {
-      method: 'POST',
-      pathname: `/api/admin/reports/${reportId}/resolve`,
-      cookie,
-      body: { action }
-    });
-  assert.equal((await resolve(alice, roomReport!.id, 'remove_message')).status, 403);
+    request(
+      socketPath,
+      {
+        method: 'POST',
+        pathname: `/api/admin/reports/${reportId}/resolve`,
+        cookie,
+        body: { action }
+      },
+      Type.Partial(Type.Object({ resolved: ReportResolved.properties.resolved, code: Failure.properties.code }))
+    );
+  assert.equal((await resolve(alice, roomReport.id, 'remove_message')).status, 403);
   assert.equal((await resolve(admin, 'not-a-uuid', 'dismiss')).body.code, 'report_not_found');
 
-  const removed = await resolve(admin, roomReport!.id, 'remove_message');
+  const removed = await resolve(admin, roomReport.id, 'remove_message');
   assert.equal(removed.status, 200);
   assert.equal(removed.body.resolved, 1);
   const roomRow = await pool.query<{ deleted_at: Date | null }>(
     `SELECT deleted_at FROM room_messages WHERE id = 'rm-1'`
   );
   assert.ok(roomRow.rows[0]?.deleted_at, 'the room message is gone for everyone');
-  assert.equal((await resolve(admin, roomReport!.id, 'remove_message')).status, 404, 'a resolved report is closed');
+  assert.equal((await resolve(admin, roomReport.id, 'remove_message')).status, 404, 'a resolved report is closed');
 
-  assert.equal((await resolve(admin, dmReport!.id, 'dismiss')).body.resolved, 1);
-  assert.equal((await resolve(admin, threatReport!.id, 'remove_message')).body.resolved, 1);
-  assert.equal((await resolve(admin, tempReport!.id, 'dismiss')).body.resolved, 1);
+  assert.equal((await resolve(admin, dmReport.id, 'dismiss')).body.resolved, 1);
+  assert.equal((await resolve(admin, threatReport.id, 'remove_message')).body.resolved, 1);
+  assert.equal((await resolve(admin, tempReport.id, 'dismiss')).body.resolved, 1);
   const dms = await pool.query<{ id: string; deleted_at: Date | null }>(
     `SELECT id, deleted_at FROM direct_messages ORDER BY id`
   );
@@ -181,12 +198,16 @@ test('reports are rate limited per account', async (t) => {
   beforeCleanup(() => pool.end());
   const alice = await registerAccount(socketPath, 'alice');
   const send = () =>
-    request<Failure>(socketPath, {
-      method: 'POST',
-      pathname: '/api/reports',
-      cookie: alice,
-      body: { target: { kind: 'direct_message', messageId: 'missing' }, reason: 'spam' }
-    });
+    request(
+      socketPath,
+      {
+        method: 'POST',
+        pathname: '/api/reports',
+        cookie: alice,
+        body: { target: { kind: 'direct_message', messageId: 'missing' }, reason: 'spam' }
+      },
+      Failure
+    );
   assert.equal((await send()).status, 404);
   assert.equal((await send()).status, 404);
   const limited = await send();

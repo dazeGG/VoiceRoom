@@ -1,6 +1,8 @@
 // Image attachments on a message: at most four, each a processed JPEG, PNG
 // or WebP with a stable order; the URL is only public once it is ready.
 
+import { isArray, isOneOf, isRecord, textOf } from './guards.ts';
+
 export type AttachmentContext = 'room' | 'dm';
 export type AttachmentState = 'pending' | 'processing' | 'ready' | 'failed' | 'deleted' | 'unavailable';
 export type MessageAttachment = {
@@ -18,8 +20,8 @@ export type MessageAttachment = {
 
 export const MAX_ATTACHMENTS = 4;
 export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
-const MIME_TYPES = new Set<unknown>(['image/jpeg', 'image/png', 'image/webp']);
-const STATES = new Set<unknown>(['pending', 'processing', 'ready', 'failed', 'deleted']);
+const MIME_TYPES: readonly MessageAttachment['mimeType'][] = ['image/jpeg', 'image/png', 'image/webp'];
+const STATES: readonly AttachmentState[] = ['pending', 'processing', 'ready', 'failed', 'deleted'];
 
 function text(value: unknown, max = 128): string {
   const normalized = typeof value === 'string' ? value.trim() : '';
@@ -27,13 +29,13 @@ function text(value: unknown, max = 128): string {
 }
 
 export function normalizeAttachment(value: unknown): MessageAttachment | null {
-  if (!value || typeof value !== 'object') return null;
-  const input = value as Record<string, unknown>;
+  if (!isRecord(value)) return null;
+  const input = value;
   const id = text(input.id);
   const context = input.context === 'room' || input.context === 'dm' ? input.context : '';
   const ownerId = text(input.ownerId);
-  const mimeType = MIME_TYPES.has(input.mimeType) ? (input.mimeType as MessageAttachment['mimeType']) : '';
-  const state = STATES.has(input.state) ? (input.state as AttachmentState) : 'unavailable';
+  const mimeType = isOneOf(MIME_TYPES, input.mimeType) ? input.mimeType : '';
+  const state = isOneOf(STATES, input.state) ? input.state : 'unavailable';
   const order = Number(input.order);
   const bytes = Number(input.bytes);
   const width = Number(input.width);
@@ -58,16 +60,19 @@ export function normalizeAttachment(value: unknown): MessageAttachment | null {
 }
 
 export function normalizeAttachments(values: unknown): MessageAttachment[] | null {
-  if (!Array.isArray(values) || values.length > MAX_ATTACHMENTS) return null;
-  const attachments = values.map(normalizeAttachment);
-  if (attachments.some((attachment) => !attachment)) return null;
-  const valid = attachments as MessageAttachment[];
+  if (!isArray(values) || values.length > MAX_ATTACHMENTS) return null;
+  const valid: MessageAttachment[] = [];
+  for (const value of values) {
+    const attachment = normalizeAttachment(value);
+    if (!attachment) return null;
+    valid.push(attachment);
+  }
   const orders = new Set(valid.map((attachment) => attachment.order));
   return orders.size === valid.length ? valid : null;
 }
 
 export function attachmentTextFallback(values: unknown, fallback: unknown = ''): string {
   const attachments = normalizeAttachments(values);
-  if (!attachments?.length) return String(fallback || '');
-  return String(fallback || '').trim() || `[Изображения: ${attachments.length}]`;
+  if (!attachments?.length) return textOf(fallback);
+  return textOf(fallback).trim() || `[Изображения: ${attachments.length}]`;
 }

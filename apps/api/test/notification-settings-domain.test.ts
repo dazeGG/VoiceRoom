@@ -16,6 +16,8 @@ import { fake, notificationPreferences, storedUser } from './fakes/index.ts';
 import { registerNotificationSettingsRoutes } from '../src/domains/notifications/notification-settings.routes.ts';
 import { AJV_OPTIONS, registerHttpKit } from '../src/platform/http/http-kit.ts';
 import type { ApiContext } from '../src/app/context.ts';
+import { Failure } from '@voice-room/shared/contracts/http';
+import { checked } from './helpers/checked.ts';
 
 const ME = storedUser({ id: 'user-1', login: 'alice' });
 const PEER = '22222222-2222-4222-8222-222222222222';
@@ -32,21 +34,26 @@ test('push subscriptions are cleaned and bounded', () => {
 
 type HarnessOptions = {
   enabled?: boolean;
-  rate?: { allowed: boolean; retryAfterSeconds?: number };
+  rate?: { allowed: boolean; retryAfterSeconds: number };
   upserted?: boolean | null;
   result?: MutationResult | null;
 };
 
 const AWAY = notificationPreferences({ presenceStatus: 'away' });
 
-function harness({ enabled = true, rate = { allowed: true }, upserted = true, result = null }: HarnessOptions = {}) {
-  const calls = {
-    presence: [] as unknown[],
-    events: [] as Array<{ type?: string }>,
-    friends: [] as unknown[],
-    removed: [] as unknown[],
-    upserts: [] as Array<{ metadata: { userAgent: string } }>
-  };
+function harness({
+  enabled = true,
+  rate = { allowed: true, retryAfterSeconds: 0 },
+  upserted = true,
+  result = null
+}: HarnessOptions = {}) {
+  const calls: {
+    presence: unknown[];
+    events: Array<{ type?: string }>;
+    friends: unknown[];
+    removed: unknown[];
+    upserts: Array<{ metadata: { userAgent: string } }>;
+  } = { presence: [], events: [], friends: [], removed: [], upserts: [] };
   const updated = result || { status: 'updated', preferences: AWAY };
   const store: NotificationPreferenceStore = {
     async getPreferences() {
@@ -100,11 +107,12 @@ test('presence changes normalise the status and reach devices and friends', asyn
   assert.deepEqual([calls.presence, calls.friends], [['away'], ['away']]);
   assert.equal(calls.events[0]?.type, 'notification-settings-updated');
 
-  // A stored do-not-disturb flag without its status still reads as 'dnd'.
+  // A stored do-not-disturb flag without its status still reads as 'dnd'. The
+  // store's type promises a status; a row without one is what this guards.
   const dnd = harness({
     result: {
       status: 'updated',
-      preferences: notificationPreferences({ doNotDisturb: true, presenceStatus: '' as 'online' })
+      preferences: Object.assign(notificationPreferences({ doNotDisturb: true }), { presenceStatus: '' })
     }
   });
   assert.deepEqual(
@@ -134,10 +142,13 @@ test('push subscribe and unsubscribe', async () => {
     await harness({ rate: { allowed: false, retryAfterSeconds: 7 } }).service.subscribe('u', SUBSCRIPTION, 'UA'),
     { status: 'rate_limited', retryAfterSeconds: 7 }
   );
-  assert.deepEqual(await harness({ rate: { allowed: false } }).service.unsubscribe('u', SUBSCRIPTION.endpoint), {
-    status: 'rate_limited',
-    retryAfterSeconds: 0
-  });
+  assert.deepEqual(
+    await harness({ rate: { allowed: false, retryAfterSeconds: 0 } }).service.unsubscribe('u', SUBSCRIPTION.endpoint),
+    {
+      status: 'rate_limited',
+      retryAfterSeconds: 0
+    }
+  );
   assert.equal((await harness({ upserted: null }).service.subscribe('u', SUBSCRIPTION, 'UA')).status, 'conflict');
   const { calls, service } = harness();
   assert.equal((await service.subscribe('u', SUBSCRIPTION, 'x'.repeat(600))).status, 'subscribed');
@@ -151,18 +162,25 @@ test('push subscribe and unsubscribe', async () => {
 
 const PRIVATE = notificationPreferences({ privateNotifications: true });
 
+/** What each service method the routes call resolves to. */
+type Outcomes = {
+  [Method in Exclude<keyof NotificationSettingsService, 'pushConfig'>]: Awaited<
+    ReturnType<NotificationSettingsService[Method]>
+  >;
+};
+
 function routeApp(
   t: TestContext,
-  outcomes: Record<string, unknown> = {},
+  outcomes: Partial<Outcomes> = {},
   { signedIn = true, user = ME }: { signedIn?: boolean; user?: { id: string; login?: string } } = {}
 ) {
   const app = fastify({ ajv: AJV_OPTIONS });
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
   const seen: Record<string, unknown[]> = {};
-  const updated = { status: 'updated', preferences: PRIVATE };
+  const updated: MutationResult = { status: 'updated', preferences: PRIVATE };
   const record =
-    (name: string, value: unknown) =>
-    async (...args: unknown[]) => {
+    <Name extends keyof Outcomes>(name: Name, value: Outcomes[Name]) =>
+    async (...args: unknown[]): Promise<Outcomes[Name]> => {
       seen[name] = args;
       return outcomes[name] ?? value;
     };
@@ -184,22 +202,21 @@ function routeApp(
       pushConfig: () => ({ enabled: true, vapidPublicKey: 'vapid' }),
       subscribe: record('subscribe', { status: 'subscribed' }),
       unsubscribe: record('unsubscribe', { status: 'removed' })
-    } as Partial<Record<keyof NotificationSettingsService, unknown>> as Partial<NotificationSettingsService>)
+    })
   );
   t.after(() => app.close());
   return { app, seen };
 }
 
-async function call(app: FastifyInstance, method: string, url: string, payload?: object) {
-  const response = await app.inject({
-    method: method as 'GET' | 'PUT' | 'POST' | 'DELETE',
-    url,
-    ...(payload === undefined ? {} : { payload })
-  });
-  return { status: response.statusCode, body: response.json(), retryAfter: response.headers['retry-after'] };
+type Method = 'GET' | 'PUT' | 'POST' | 'DELETE';
+
+async function call(app: FastifyInstance, method: Method, url: string, payload?: object) {
+  const response = await app.inject({ method, url, ...(payload === undefined ? {} : { payload }) });
+  const body: unknown = response.json();
+  return { status: response.statusCode, body, retryAfter: response.headers['retry-after'] };
 }
 
-const ROUTES: Array<[string, string, object?]> = [
+const ROUTES: Array<[Method, string, object?]> = [
   ['GET', '/api/notifications/preferences'],
   ['PUT', `/api/notifications/dm/${PEER}/mute`, { muted: true }],
   ['PUT', '/api/notifications/room/room-1/mute', { muted: false }],
@@ -233,7 +250,7 @@ test('every settings route needs a session and answers it', async (t) => {
 
 test('settings refusals keep their texts', async (t) => {
   const { app } = routeApp(t);
-  const cases: Array<[string, string, object, number, string]> = [
+  const cases: Array<[Method, string, object, number, string]> = [
     ['PUT', '/api/notifications/dm/bad/mute', { muted: true }, 404, 'Invalid notification target'],
     ['PUT', '/api/notifications/dm/user-1/mute', { muted: true }, 404, 'Invalid notification target'],
     ['PUT', `/api/notifications/dm/${PEER}/mute`, { muted: 'yes' }, 400, 'muted must be a boolean'],
@@ -253,47 +270,51 @@ test('settings refusals keep their texts', async (t) => {
   ];
   for (const [method, url, payload, status, error] of cases) {
     const response = await call(app, method, url, payload);
-    assert.deepEqual(
-      [response.status, response.body.error],
-      [status, error],
-      `${method} ${url} ${JSON.stringify(payload)}`
-    );
+    const what = `${method} ${url} ${JSON.stringify(payload)}`;
+    assert.deepEqual([response.status, checked(Failure, response.body, what).error], [status, error], what);
   }
   const self = await call(routeApp(t, {}, { user: { id: PEER } }).app, 'PUT', `/api/notifications/dm/${PEER}/mute`, {
     muted: true
   });
-  assert.deepEqual([self.status, self.body.error], [400, 'Invalid notification target']);
-  for (const [status, code, error] of [
+  assert.deepEqual([self.status, checked(Failure, self.body).error], [400, 'Invalid notification target']);
+  const muteRefusals: Array<[string, number, string]> = [
     ['not_found', 404, 'Not found'],
     ['self', 400, 'Invalid notification target'],
     ['temporary_room', 403, 'Only saved rooms can be muted'],
     ['not_saved_room', 403, 'Room is not saved']
-  ] as Array<[string, number, string]>) {
+  ];
+  for (const [status, code, error] of muteRefusals) {
     const response = await call(
-      routeApp(t, { setRoomMute: { status } }).app,
+      routeApp(t, { setRoomMute: { status, preferences: PRIVATE } }).app,
       'PUT',
       '/api/notifications/room/room-1/mute',
       { muted: true }
     );
-    assert.deepEqual([response.status, response.body.error], [code, error]);
+    assert.deepEqual([response.status, checked(Failure, response.body, status).error], [code, error]);
   }
-  const pushCases: Array<[string, { status: string; retryAfterSeconds?: number }, string, number, string]> = [
-    ['subscribe', { status: 'disabled' }, 'POST', 503, 'Push notifications are disabled'],
-    ['subscribe', { status: 'invalid' }, 'POST', 400, 'Invalid push subscription'],
-    ['subscribe', { status: 'conflict' }, 'POST', 409, 'Push endpoint belongs to another subscription'],
-    ['subscribe', { status: 'rate_limited', retryAfterSeconds: 3 }, 'POST', 429, 'Too many push subscription changes'],
-    ['unsubscribe', { status: 'invalid' }, 'DELETE', 400, 'Invalid push endpoint'],
+  const pushCases: Array<[Partial<Outcomes>, Method, number, string]> = [
+    [{ subscribe: { status: 'disabled' } }, 'POST', 503, 'Push notifications are disabled'],
+    [{ subscribe: { status: 'invalid' } }, 'POST', 400, 'Invalid push subscription'],
+    [{ subscribe: { status: 'conflict' } }, 'POST', 409, 'Push endpoint belongs to another subscription'],
     [
-      'unsubscribe',
-      { status: 'rate_limited', retryAfterSeconds: 3 },
+      { subscribe: { status: 'rate_limited', retryAfterSeconds: 3 } },
+      'POST',
+      429,
+      'Too many push subscription changes'
+    ],
+    [{ unsubscribe: { status: 'invalid' } }, 'DELETE', 400, 'Invalid push endpoint'],
+    [
+      { unsubscribe: { status: 'rate_limited', retryAfterSeconds: 3 } },
       'DELETE',
       429,
       'Too many push subscription changes'
     ]
   ];
-  for (const [name, outcome, method, status, error] of pushCases) {
-    const response = await call(routeApp(t, { [name]: outcome }).app, method, '/api/push/subscriptions', {});
-    assert.deepEqual([response.status, response.body.error], [status, error], `${name} ${outcome.status}`);
-    if (status === 429) assert.deepEqual([response.retryAfter, response.body.retryAfterSeconds], ['3', 3]);
+  for (const [outcomes, method, status, error] of pushCases) {
+    const response = await call(routeApp(t, outcomes).app, method, '/api/push/subscriptions', {});
+    const what = JSON.stringify(outcomes);
+    const body = checked(Failure, response.body, what);
+    assert.deepEqual([response.status, body.error], [status, error], what);
+    if (status === 429) assert.deepEqual([response.retryAfter, body.retryAfterSeconds], ['3', 3]);
   }
 });

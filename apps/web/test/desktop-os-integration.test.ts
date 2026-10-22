@@ -1,27 +1,22 @@
 import { onTestFinished, test, vi } from 'vitest';
 import assert from 'node:assert/strict';
+import { instanceOf } from './helpers/assert.ts';
 import { freshImport, muteWarnings, stubWindow } from './helpers/fresh-module.ts';
-import type * as RoomSwitchConfirmation from '../src/lib/features/home/model/room-switch-confirmation.ts';
-import type * as DesktopDownload from '../src/lib/platform/desktop-download.ts';
-import type * as DesktopCall from '../src/lib/platform/desktop-call.ts';
-import type * as DesktopDiagnostics from '../src/lib/platform/desktop-diagnostics.ts';
-import type * as DesktopLinks from '../src/lib/platform/desktop-links.ts';
-import type * as OpenInApp from '../src/lib/platform/open-in-app.ts';
 
 // Every load gets fresh module instances, so module-level state (sync
 // de-duplication, the in-app navigation mark) never leaks between tests.
-async function loadModule<Module>(modulePath: string, windowValue: Record<string, unknown> = {}) {
+async function loadModule<Module>(load: () => Promise<Module>, windowValue: Record<string, unknown> = {}) {
   stubWindow(windowValue);
   muteWarnings();
-  return freshImport<Module>(modulePath);
+  return freshImport(load);
 }
 
 const flush = () => new Promise((resolveFlush) => setImmediate(resolveFlush));
 
 test('desktop links normalize shell payloads and ignore anything unexpected', async () => {
-  let handler = null as ((payload: unknown) => void) | null;
+  let handler: ((payload: unknown) => void) | undefined;
   let unsubscribed = false;
-  const service = await loadModule<typeof DesktopLinks>('/src/lib/platform/desktop-links.ts', {
+  const service = await loadModule(() => import('../src/lib/platform/desktop-links.ts'), {
     voiceRoomDesktopLinks: {
       onOpen: (next: (payload: unknown) => void) => {
         handler = next;
@@ -64,14 +59,14 @@ test('desktop links normalize shell payloads and ignore anything unexpected', as
 });
 
 test('desktop links are a no-op without the shell bridge', async () => {
-  const service = await loadModule<typeof DesktopLinks>('/src/lib/platform/desktop-links.ts', {});
+  const service = await loadModule(() => import('../src/lib/platform/desktop-links.ts'), {});
   assert.equal(typeof service.bindDesktopLinks(() => {}), 'function');
 });
 
 test('desktop call state is sent once per change and actions are filtered', async () => {
   const sent: unknown[] = [];
-  let actionHandler = null as ((payload: unknown) => void) | null;
-  const service = await loadModule<typeof DesktopCall>('/src/lib/platform/desktop-call.ts', {
+  let actionHandler: ((payload: unknown) => void) | undefined;
+  const service = await loadModule(() => import('../src/lib/platform/desktop-call.ts'), {
     voiceRoomDesktopCall: {
       onAction: (handler: (payload: unknown) => void) => {
         actionHandler = handler;
@@ -106,7 +101,7 @@ test('desktop call state is sent once per change and actions are filtered', asyn
 test('desktop call state retries after a failed send', async () => {
   let fail = true;
   const sent: unknown[] = [];
-  const service = await loadModule<typeof DesktopCall>('/src/lib/platform/desktop-call.ts', {
+  const service = await loadModule(() => import('../src/lib/platform/desktop-call.ts'), {
     voiceRoomDesktopCall: {
       onAction: () => () => {},
       setState: async (state: unknown) => {
@@ -126,7 +121,7 @@ test('desktop call state retries after a failed send', async () => {
 
 test('desktop diagnostics copy, open logs and share the web context', async () => {
   const contexts: unknown[] = [];
-  const service = await loadModule<typeof DesktopDiagnostics>('/src/lib/platform/desktop-diagnostics.ts', {
+  const service = await loadModule(() => import('../src/lib/platform/desktop-diagnostics.ts'), {
     voiceRoomDesktopDiagnostics: {
       copyInfo: async () => ({ ok: true }),
       getInfo: async () => ({ text: 'x' }),
@@ -150,7 +145,7 @@ test('desktop diagnostics copy, open logs and share the web context', async () =
 });
 
 test('desktop diagnostics fail closed on bridge errors and without the bridge', async () => {
-  const service = await loadModule<typeof DesktopDiagnostics>('/src/lib/platform/desktop-diagnostics.ts', {
+  const service = await loadModule(() => import('../src/lib/platform/desktop-diagnostics.ts'), {
     voiceRoomDesktopDiagnostics: {
       copyInfo: async () => {
         throw new Error('untrusted');
@@ -166,13 +161,13 @@ test('desktop diagnostics fail closed on bridge errors and without the bridge', 
   assert.equal(await service.copyDesktopDiagnostics(), false);
   assert.equal(await service.openDesktopLogsFolder(), false);
 
-  const bare = await loadModule<typeof DesktopDiagnostics>('/src/lib/platform/desktop-diagnostics.ts', {});
+  const bare = await loadModule(() => import('../src/lib/platform/desktop-diagnostics.ts'), {});
   assert.equal(bare.desktopDiagnosticsAvailable(), false);
   assert.equal(await bare.copyDesktopDiagnostics(), false);
 });
 
 test('open in app targets desktop browsers only with the right scheme', async () => {
-  const service = await loadModule<typeof OpenInApp>('/src/lib/platform/open-in-app.ts', {});
+  const service = await loadModule(() => import('../src/lib/platform/open-in-app.ts'), {});
   const windowsChrome =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0 Safari/537.36';
   const macSafari =
@@ -208,25 +203,26 @@ test('open in app targets desktop browsers only with the right scheme', async ()
 });
 
 test('open in app navigates Chromium and uses a hidden frame in Firefox', async () => {
-  const service = await loadModule<typeof OpenInApp>('/src/lib/platform/open-in-app.ts', {});
+  const service = await loadModule(() => import('../src/lib/platform/open-in-app.ts'), {});
   const chromium = {
-    document: {},
+    document,
     location: { href: 'https://voiceroom.ru/r/abc123' },
     navigator: { userAgent: 'Chrome/146' }
   };
-  service.launchAppLink('voiceroom://r/abc123', chromium as never);
+  service.launchAppLink('voiceroom://r/abc123', chromium);
   assert.equal(chromium.location.href, 'voiceroom://r/abc123');
+  assert.equal(document.querySelector('iframe'), null, 'Chromium navigates, no frame');
 
-  const appended: unknown[] = [];
-  const frame = { hidden: false, remove() {}, src: '' };
   const firefox = {
-    document: { body: { appendChild: (node: unknown) => appended.push(node) }, createElement: () => frame },
+    document,
     location: { href: 'https://voiceroom.ru/r/abc123' },
     navigator: { userAgent: 'Mozilla/5.0 Firefox/150.0' }
   };
-  service.launchAppLink('voiceroom://r/abc123', firefox as never);
+  service.launchAppLink('voiceroom://r/abc123', firefox);
   assert.equal(firefox.location.href, 'https://voiceroom.ru/r/abc123');
-  assert.deepEqual(appended, [frame]);
+  const frame = document.querySelector('iframe');
+  assert.ok(frame, 'Firefox opens the link in a frame');
+  onTestFinished(() => frame.remove());
   assert.equal(frame.hidden, true);
   assert.equal(frame.src, 'voiceroom://r/abc123');
 });
@@ -235,27 +231,24 @@ test('in-app room reloads skip the open-in-app offer exactly for the next page',
   sessionStorage.clear();
   onTestFinished(() => sessionStorage.clear());
 
-  const marked = await loadModule<typeof OpenInApp>('/src/lib/platform/open-in-app.ts', {});
+  const marked = await loadModule(() => import('../src/lib/platform/open-in-app.ts'), {});
   marked.markInAppRoomNavigation();
   assert.equal(sessionStorage.length, 1);
 
   // A fresh module instance stands in for the reloaded page.
-  const reloaded = await loadModule<typeof OpenInApp>('/src/lib/platform/open-in-app.ts', {});
+  const reloaded = await loadModule(() => import('../src/lib/platform/open-in-app.ts'), {});
   assert.equal(reloaded.consumeInAppRoomNavigation(), true);
   assert.equal(reloaded.consumeInAppRoomNavigation(), true, 'stable for every caller on the page');
   assert.equal(sessionStorage.length, 0, 'the mark is gone for later loads');
 
-  const nextLoad = await loadModule<typeof OpenInApp>('/src/lib/platform/open-in-app.ts', {});
+  const nextLoad = await loadModule(() => import('../src/lib/platform/open-in-app.ts'), {});
   assert.equal(nextLoad.consumeInAppRoomNavigation(), false);
 });
 
 test('room switch confirmation asks only when leaving another live call', async () => {
   localStorage.clear();
   onTestFinished(() => localStorage.clear());
-  const model = await loadModule<typeof RoomSwitchConfirmation>(
-    '/src/lib/features/home/model/room-switch-confirmation.ts',
-    {}
-  );
+  const model = await loadModule(() => import('../src/lib/features/home/model/room-switch-confirmation.ts'), {});
 
   assert.equal(
     model.shouldConfirmRoomSwitch({ confirmEnabled: true, connectedRoomId: 'room-a', targetRoomId: 'room-b' }),
@@ -291,19 +284,19 @@ test('room switch confirmation asks only when leaving another live call', async 
 test('desktop build download uses the release asset and falls back to the releases page', async () => {
   const opened: unknown[] = [];
   const clicked: unknown[] = [];
-  const appended: Array<{ rel?: string }> = [];
+  const appended: Node[] = [];
   const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
     clicked.push(this.href);
   });
   const append = vi.spyOn(document.body, 'appendChild').mockImplementation((node) => {
-    appended.push(node as { rel?: string });
+    appended.push(node);
     return node;
   });
   onTestFinished(() => {
     click.mockRestore();
     append.mockRestore();
   });
-  const downloads = await loadModule<typeof DesktopDownload>('/src/lib/platform/desktop-download.ts', {
+  const downloads = await loadModule(() => import('../src/lib/platform/desktop-download.ts'), {
     open: (...args: unknown[]) => opened.push(args)
   });
   const { RELEASES_URL } = await import('../src/lib/platform/desktop-builds.ts');
@@ -320,7 +313,7 @@ test('desktop build download uses the release asset and falls back to the releas
 
   downloads.startDesktopBuildDownload(release, 'win-x64');
   assert.deepEqual(clicked, ['https://github.com/dazeGG/VoiceRoomDesktop/releases/download/v1.2.3/VoiceRoom.exe']);
-  assert.equal(appended[0]?.rel, 'noopener');
+  assert.equal(instanceOf(appended[0], HTMLAnchorElement, 'download link').rel, 'noopener');
   assert.deepEqual(opened, []);
 
   downloads.startDesktopBuildDownload(release, 'mac-x64');

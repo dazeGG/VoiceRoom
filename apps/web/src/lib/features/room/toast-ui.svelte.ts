@@ -1,4 +1,4 @@
-import type { ToastItem } from '$lib/shared/ui';
+import type { ToastItem } from '$lib/shared/ui/ToastStack/types';
 
 // The in-room toasts, shown by the same ToastStack as the lobby's: several can
 // be up at once, each closing on its own timer.
@@ -13,11 +13,11 @@ export function dismissToastUi(id: string): void {
 export function showToastUi(
   message: string,
   options: {
-    action?: () => void | Promise<void>;
-    actionLabel?: string;
-    description?: string;
-    duration?: number;
-    variant?: 'info' | 'error';
+    action?: (() => void | Promise<void>) | undefined;
+    actionLabel?: string | undefined;
+    description?: string | undefined;
+    duration?: number | undefined;
+    variant?: 'info' | 'error' | undefined;
   } = {}
 ): void {
   const { action = null, actionLabel = '', description, duration = 3200, variant = 'info' } = options;

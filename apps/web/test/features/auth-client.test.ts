@@ -5,7 +5,6 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { authUser } from '../fixtures/users.ts';
 import { freshImport } from '../helpers/fresh-module.ts';
-import type * as SignOutModule from '../../src/lib/features/home/model/sign-out.ts';
 
 vi.mock('../../src/lib/features/home/model/push-notifications.svelte', () => ({
   detachPushSubscription: vi.fn(async () => {})
@@ -26,7 +25,7 @@ test('an empty room list is an empty list', async () => {
 });
 
 async function signedIn() {
-  const signOutModule = await freshImport<typeof SignOutModule>('/src/lib/features/home/model/sign-out.ts');
+  const signOutModule = await freshImport(() => import('../../src/lib/features/home/model/sign-out.ts'));
   const session = await import('../../src/lib/features/auth/session.svelte.ts');
   session.setUser(authUser());
   return { ...signOutModule, ...session };

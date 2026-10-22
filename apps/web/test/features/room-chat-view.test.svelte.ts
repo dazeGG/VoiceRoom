@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { ChatMessage } from '../../src/lib/api/rooms.ts';
 import { buildChatDays, mentionsUser, restampAuthor } from '../../src/lib/features/room/room-chat-view.ts';
-import { RoomChatDraft } from '../../src/lib/features/room/room-chat-draft.svelte.ts';
+import { ChatDraft } from '../../src/lib/shared/chat/chat-draft.svelte.ts';
 import { loadChatDraft, saveChatDraft } from '../../src/lib/shared/chat/chat-drafts.ts';
+import { defined } from '../helpers/assert.ts';
 
 const MINUTE = 60_000;
 const DAY_ONE = new Date(2026, 6, 1, 12, 0).getTime();
@@ -40,7 +41,7 @@ test('a burst of one author shares a header until five quiet minutes or another 
     notOwn
   );
   expect(days).toHaveLength(1);
-  expect(days[0].groups.map((group) => group.messages.map((item) => item.id))).toEqual([
+  expect(defined(days[0], 'days[0]').groups.map((group) => group.messages.map((item) => item.id))).toEqual([
     ['a1', 'a2'],
     ['b1'],
     ['a3'],
@@ -62,9 +63,12 @@ test('a new calendar day opens its own section, even inside a burst', () => {
 });
 
 test('own messages are marked and a nameless guest is shown as «Гость»', () => {
-  const [day] = buildChatDays(
-    [message('mine', 'me', DAY_ONE), message('guest', 'g1', DAY_ONE + MINUTE, { name: '' })],
-    (item) => item.peerId === 'me'
+  const day = defined(
+    buildChatDays(
+      [message('mine', 'me', DAY_ONE), message('guest', 'g1', DAY_ONE + MINUTE, { name: '' })],
+      (item) => item.peerId === 'me'
+    )[0],
+    'chat day'
   );
   expect(day.groups.map((group) => [group.self, group.name])).toEqual([
     [true, 'ME'],
@@ -93,7 +97,7 @@ test('a peer update re-stamps what that peer, or the same account elsewhere, wro
     ['m2', 'Ада', '/a.webp', 'green'],
     ['m3', 'Боб', null, 'blue']
   ]);
-  expect(restampAuthor(restamped!, peer), 'nothing left to update').toBeNull();
+  expect(restampAuthor(defined(restamped, 'restamped messages'), peer), 'nothing left to update').toBeNull();
 });
 
 test('a message mentions the reader only through a structured mention of their account', () => {
@@ -118,7 +122,7 @@ test('a room draft comes back for its account, is saved after a pause and cleare
   vi.useFakeTimers();
   saveChatDraft('ada', { type: 'room', id: 'room' }, { text: 'сохранённое' });
 
-  const draft = new RoomChatDraft('room');
+  const draft = new ChatDraft({ type: 'room', id: 'room' });
   draft.restore('ada');
   expect(draft.text).toBe('сохранённое');
 
@@ -134,7 +138,7 @@ test('a room draft comes back for its account, is saved after a pause and cleare
 });
 
 test('a guest draft is never stored, and a restore does not overwrite what is already typed', () => {
-  const guest = new RoomChatDraft('room');
+  const guest = new ChatDraft({ type: 'room', id: 'room' });
   guest.text = 'гость';
   guest.persist();
   expect(localStorage.length).toBe(0);

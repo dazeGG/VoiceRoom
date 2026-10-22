@@ -9,7 +9,7 @@
     playStreamCue
   } from '$lib/features/room/client/media/cues';
   import { state as roomClientState } from '$lib/features/room/client/core/state.svelte';
-  import type { MicrophoneMode } from '$lib/features/room/client/core/config';
+  import { GATE_ON_DEFAULT_DB, type MicrophoneMode } from '$lib/features/room/client/core/config';
   import { syncAudioBusOutput, syncAudioBusSettings } from '$lib/features/room/client/services/audio-bus';
   import { setMicrophoneVolume } from '$lib/features/room/client/services/microphone-service';
   import { setMicrophoneMode } from '$lib/features/room/client/ui/controls';
@@ -46,8 +46,6 @@
     onToast: (message: string, options?: ToastOptions) => void;
   } = $props();
 
-  // Default speaking-level threshold used when the gate is switched on from "off".
-  const GATE_DEFAULT_DB = -40;
   const PREVIEW_CUE_GAP_MS = 620;
 
   const saved = readSoundSettings();
@@ -59,7 +57,7 @@
   let speakerId = $state(saved.outputDeviceId);
   let noiseMode = $state(saved.noiseMode);
   let gateOn = $state(savedGateOn);
-  let gateDb = $state(savedGateOn ? saved.gateThresholdDb : GATE_DEFAULT_DB);
+  let gateDb = $state(savedGateOn ? saved.gateThresholdDb : GATE_ON_DEFAULT_DB);
   let micLevelDb = $state(GATE_THRESHOLD_MIN_DB);
   let micVolume = $state(saved.microphoneVolume);
   let microphoneMode = $state<MicrophoneMode>(saved.microphoneMode);
@@ -299,7 +297,7 @@
               min={GATE_THRESHOLD_MIN_DB}
               max={GATE_THRESHOLD_MAX_DB}
               step={1}
-              defaultValue={GATE_DEFAULT_DB}
+              defaultValue={GATE_ON_DEFAULT_DB}
               disabled={!gateOn}
               showFill={false}
               ariaLabel="Порог гейта в децибелах"

@@ -26,14 +26,56 @@ export type OverviewCounts = {
 };
 
 const n = (value: unknown): number => Number(value) || 0;
-const text = (value: unknown): string => (typeof value === 'string' ? value : '');
+
+/** A count as the driver returns it: a number, bigint text, or null where a LEFT JOIN found nothing. */
+type Count = number | string | null;
+
+type OverviewRow = {
+  day: string;
+  active_today: Count;
+  new_today: Count;
+  messages_today: Count;
+  voice_joins_today: Count;
+  voice_minutes_today: Count;
+  accounts: Count;
+  static_rooms: Count;
+  temporary_rooms: Count;
+  messages: Count;
+  weekly_active: Count;
+  monthly_active: Count;
+  open_reports: Count;
+};
+
+type ProductDayRow = {
+  day: string;
+  active_accounts: Count;
+  desktop_app: Count;
+  browser: Count;
+  mobile: Count;
+  new_accounts: Count;
+  room_messages: Count;
+  direct_messages: Count;
+  message_authors: Count;
+  static_rooms: Count;
+  temporary_rooms: Count;
+  account_hours: Count;
+  guest_hours: Count;
+  joins: Count;
+  voice_accounts: Count;
+  online: Count;
+  guests: Count;
+  voice_peers: Count;
+  voice_rooms: Count;
+};
+
+type RetentionRow = { week: string; accounts: Count; w1: Count; w2: Count; m1: Count };
 
 export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
 
   async function overview(): Promise<OverviewCounts> {
     const today = sql`(now() AT TIME ZONE ${MSK})::date`;
-    const result = await sql<Record<string, unknown>>`
+    const result = await sql<OverviewRow>`
       SELECT
         to_char(${today}, 'YYYY-MM-DD') AS day,
         (SELECT count(*) FROM user_activity_days WHERE day = ${today}) AS active_today,
@@ -51,21 +93,21 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
         (SELECT count(DISTINCT user_id) FROM user_activity_days WHERE day > ${today} - 30) AS monthly_active,
         (SELECT count(*) FROM content_reports WHERE status = 'open') AS open_reports
     `.execute(db);
-    const row = result.rows[0] ?? {};
+    const row = result.rows[0];
     return {
-      day: text(row.day),
-      activeToday: n(row.active_today),
-      newToday: n(row.new_today),
-      messagesToday: n(row.messages_today),
-      voiceJoinsToday: n(row.voice_joins_today),
-      voiceMinutesToday: Math.round(n(row.voice_minutes_today)),
-      accounts: n(row.accounts),
-      staticRooms: n(row.static_rooms),
-      temporaryRooms: n(row.temporary_rooms),
-      messages: n(row.messages),
-      weeklyActive: n(row.weekly_active),
-      monthlyActive: n(row.monthly_active),
-      openReports: n(row.open_reports)
+      day: row?.day ?? '',
+      activeToday: n(row?.active_today),
+      newToday: n(row?.new_today),
+      messagesToday: n(row?.messages_today),
+      voiceJoinsToday: n(row?.voice_joins_today),
+      voiceMinutesToday: Math.round(n(row?.voice_minutes_today)),
+      accounts: n(row?.accounts),
+      staticRooms: n(row?.static_rooms),
+      temporaryRooms: n(row?.temporary_rooms),
+      messages: n(row?.messages),
+      weeklyActive: n(row?.weekly_active),
+      monthlyActive: n(row?.monthly_active),
+      openReports: n(row?.open_reports)
     };
   }
 
@@ -75,7 +117,7 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
     const last = sql`${to}::date`;
     const since = sql`(${first})::timestamp AT TIME ZONE ${MSK}`;
     const until = sql`(${last} + 1)::timestamp AT TIME ZONE ${MSK}`;
-    const result = await sql<Record<string, unknown>>`
+    const result = await sql<ProductDayRow>`
       WITH span AS (
         SELECT generate_series(${first}, ${last}, interval '1 day')::date AS day
       ),
@@ -144,7 +186,7 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
     return {
       accountsBefore: n(before.rows[0]?.count),
       days: result.rows.map((row) => ({
-        day: text(row.day),
+        day: row.day,
         activeAccounts: n(row.active_accounts),
         desktopApp: n(row.desktop_app),
         browser: n(row.browser),
@@ -172,7 +214,7 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
    * and the share that was active again 1–7, 8–14 and 15–30 days after signing up.
    */
   async function retention(weeks: number): Promise<RetentionWeek[]> {
-    const result = await sql<Record<string, unknown>>`
+    const result = await sql<RetentionRow>`
       WITH cohort AS (
         SELECT id AS user_id,
                date_trunc('week', created_at AT TIME ZONE ${MSK})::date AS week,
@@ -197,7 +239,7 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
       LIMIT ${weeks}
     `.execute(db);
     return result.rows.map((row) => ({
-      week: text(row.week),
+      week: row.week,
       accounts: n(row.accounts),
       returnedWeek1Pct: n(row.w1),
       returnedWeek2Pct: n(row.w2),

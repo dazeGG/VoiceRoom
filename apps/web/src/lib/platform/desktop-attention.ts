@@ -49,7 +49,7 @@ export function syncDesktopBadgeCount(count: number): void {
   lastSentCount = next;
   void Promise.resolve()
     .then(() => bridge.setBadgeCount(next))
-    .catch((error) => {
+    .catch((error: unknown) => {
       if (lastSentCount === next) lastSentCount = null;
       log.warn('desktop badge sync failed', errorContext(error));
     });

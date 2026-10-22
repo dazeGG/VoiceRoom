@@ -42,8 +42,9 @@ function createMediaReconciliationService({
     for (;;) {
       const page = await attachments.listStorageKeys({ afterId, limit: 500 });
       for (const row of page) for (const key of row.keys) databaseKeys.set(key, row.id);
-      if (page.length < 500) break;
-      afterId = page.at(-1)!.id;
+      const last = page.at(-1);
+      if (page.length < 500 || !last) break;
+      afterId = last.id;
     }
     const fileKeys = new Set(await files.listKeys());
     const missingAttachmentIds = new Set<string>();

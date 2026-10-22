@@ -1,3 +1,4 @@
+import { isArray, isRecord } from '@voice-room/shared/guards';
 import { MAX_MENTIONS_PER_MESSAGE } from '@voice-room/shared/mentions';
 import type { SelectedMention } from './mention-composer.svelte';
 
@@ -30,12 +31,12 @@ export function chatDraftScopeKey(scope: ChatDraftScope): string {
 }
 
 function normalizeMentions(value: unknown, text: string): SelectedMention[] {
-  if (!Array.isArray(value)) return [];
+  if (!isArray(value)) return [];
   const seen = new Set<string>();
   const mentions: SelectedMention[] = [];
   for (const entry of value) {
-    if (!entry || typeof entry !== 'object') continue;
-    const { userId, login, displayName } = entry as Partial<SelectedMention>;
+    if (!isRecord(entry)) continue;
+    const { userId, login, displayName } = entry;
     if (typeof userId !== 'string' || !userId || typeof login !== 'string' || !login) continue;
     // A mention whose @login was edited out of the text would otherwise be
     // sent as a notification the text no longer shows.
@@ -48,11 +49,10 @@ function normalizeMentions(value: unknown, text: string): SelectedMention[] {
 }
 
 export function normalizeChatDrafts(value: unknown, now = Date.now()): Record<string, ChatDraft> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  if (!isRecord(value)) return {};
   const entries: Array<[string, ChatDraft]> = [];
-  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
-    if (!/^(dm|room):./.test(key) || !raw || typeof raw !== 'object') continue;
-    const candidate = raw as Partial<ChatDraft>;
+  for (const [key, candidate] of Object.entries(value)) {
+    if (!/^(dm|room):./.test(key) || !isRecord(candidate)) continue;
     const text = typeof candidate.text === 'string' ? candidate.text.slice(0, MAX_DRAFT_LENGTH) : '';
     const updatedAt = Number(candidate.updatedAt);
     if (!text.trim() || !Number.isFinite(updatedAt) || now - updatedAt > CHAT_DRAFT_MAX_AGE_MS) continue;
@@ -99,12 +99,11 @@ export function saveChatDraft(
   const text = draft.text.slice(0, MAX_DRAFT_LENGTH);
   if (text.trim()) {
     drafts[key] = { text, mentions: normalizeMentions(draft.mentions ?? [], text), updatedAt: now };
+    writeDrafts(userId, normalizeChatDrafts(drafts, now));
   } else if (key in drafts) {
-    delete drafts[key];
-  } else {
-    return;
+    const { [key]: _cleared, ...rest } = drafts;
+    writeDrafts(userId, normalizeChatDrafts(rest, now));
   }
-  writeDrafts(userId, normalizeChatDrafts(drafts, now));
 }
 
 export function clearChatDrafts(): void {

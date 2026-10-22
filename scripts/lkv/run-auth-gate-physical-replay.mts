@@ -9,7 +9,8 @@ import { createGateCredentialSigner } from '../../apps/api/src/domains/admission
 import { createDbPool } from '../../apps/api/src/platform/db/pool.ts';
 import { runMigrations } from '../../apps/api/src/lib/migrate.ts';
 import { createRoomStore } from '../../apps/api/src/app/room-store.ts';
-import type { GatePrincipal } from '../../apps/api/src/domains/admission/admission.service.ts';
+import type { GatePrincipal } from '../../apps/api/src/domains/admission/gate-principal.ts';
+import { isRecord } from '../../packages/shared/src/guards.ts';
 
 type ReplayCase = { detail: unknown; id: string; passed: boolean };
 type SocketOutcome = {
@@ -194,7 +195,9 @@ function openWebSocket(url: string, { timeoutMs = 8000 } = {}) {
       settled = true;
       try {
         ws.close();
-      } catch {}
+      } catch {
+        // A socket that cannot close any more is already gone.
+      }
       resolve({ elapsedMs: Date.now() - startedAt, error: 'timeout', outcome: 'timeout' });
     }, timeoutMs);
     ws.addEventListener('open', () => {
@@ -206,8 +209,10 @@ function openWebSocket(url: string, { timeoutMs = 8000 } = {}) {
       resolve({ elapsedMs: Date.now() - startedAt, outcome: 'opened' });
     });
     ws.addEventListener('error', (event) => {
-      const detail = event as Event & { error?: { message?: string }; message?: string };
-      errorMessage = detail.error?.message || detail.message || 'websocket error';
+      const cause = 'error' in event && isRecord(event.error) ? event.error.message : undefined;
+      const message = 'message' in event ? event.message : undefined;
+      errorMessage =
+        (typeof cause === 'string' && cause) || (typeof message === 'string' && message) || 'websocket error';
     });
     ws.addEventListener('close', (event) => {
       if (settled) return;

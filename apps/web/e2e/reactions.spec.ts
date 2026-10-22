@@ -1,7 +1,13 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
-import { createPermanentRoom, enterRoom, registerViaUi, uniqueLogin } from './helpers';
+import {
+  ReactionBody,
+  type ReactionSet,
+  type ReactionSummaries,
+  type ReactorPage
+} from '@voice-room/shared/contracts/messages';
+import { parse } from '../test/helpers/assert';
+import { createPermanentRoom, enableCapabilities, enterRoom, registerViaUi, uniqueLogin } from './helpers';
 
 const store = readFileSync(new URL('../src/lib/shared/chat/reaction-store.svelte.ts', import.meta.url), 'utf8');
 const summary = readFileSync(new URL('../src/lib/shared/chat/ReactionSummary.svelte', import.meta.url), 'utf8');
@@ -11,6 +17,8 @@ const picker =
 const reactors = readFileSync(new URL('../src/lib/shared/chat/ReactorList.svelte', import.meta.url), 'utf8');
 const room = readFileSync(new URL('../src/lib/features/room/components/RoomChat.svelte', import.meta.url), 'utf8');
 const dm = readFileSync(new URL('../src/lib/features/home/components/lobby/DmView.svelte', import.meta.url), 'utf8');
+
+const enableReactions = (target: Page) => enableCapabilities(target, ['reactions']);
 
 test('G70 supplemental source contracts cover reconciliation branches', async () => {
   expect(store).toContain('Math.max(0');
@@ -47,32 +55,32 @@ test('G70 supplemental mocked keyboard and pagination rendering remains determin
     displayName: `Reactor ${index}`,
     avatarUrl: null
   }));
-  await page.route('**/api/capabilities', async (route) => {
-    const response = await route.fetch();
-    const body = await response.json();
-    await route.fulfill({ response, json: { ...body, features: { ...body.features, reactions: true } } });
-  });
+  await enableReactions(page);
   await page.route('**/api/reactions/**', async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname.endsWith('/reactors')) {
       const offset = Number(url.searchParams.get('cursor') || 0);
       const reactors = allReactors.slice(offset, offset + 50);
-      return route.fulfill({
-        json: {
-          ok: true,
-          reactors,
-          nextCursor: offset + reactors.length < allReactors.length ? String(offset + reactors.length) : null
-        }
-      });
+      const json: ReactorPage = {
+        ok: true,
+        reactors,
+        nextCursor: offset + reactors.length < allReactors.length ? String(offset + reactors.length) : null
+      };
+      return route.fulfill({ json });
     }
-    if (route.request().method() === 'GET')
-      return route.fulfill({
-        json: { ok: true, summaries: [{ emoji: '👍', count: 120, reactedByMe: false, revision: '1' }] }
-      });
-    const requested = route.request().postDataJSON() as { emoji?: string };
-    return route.fulfill({
-      json: { ok: true, summary: { emoji: requested.emoji || '👍', count: 120, reactedByMe: true, revision: '1' } }
-    });
+    if (route.request().method() === 'GET') {
+      const json: ReactionSummaries = {
+        ok: true,
+        summaries: [{ emoji: '👍', count: 120, reactedByMe: false, revision: '1' }]
+      };
+      return route.fulfill({ json });
+    }
+    const requested = parse(ReactionBody, route.request().postDataJSON());
+    const json: ReactionSet = {
+      ok: true,
+      summary: { emoji: requested.emoji || '👍', count: 120, reactedByMe: true, revision: '1' }
+    };
+    return route.fulfill({ json });
   });
   const login = uniqueLogin('reactionkbd');
   await registerViaUi(page, login);
@@ -117,19 +125,16 @@ test('G70 supplemental mocked keyboard and pagination rendering remains determin
 });
 
 test('G70-A03 late reaction response cannot revive a deleted message', async ({ page }) => {
-  let releaseMutation!: () => void;
-  const mutationBlocked = new Promise<void>((resolve) => {
-    releaseMutation = resolve;
-  });
-  await page.route('**/api/capabilities', async (route) => {
-    const response = await route.fetch();
-    const body = await response.json();
-    await route.fulfill({ response, json: { ...body, features: { ...body.features, reactions: true } } });
-  });
+  const { promise: mutationBlocked, resolve: releaseMutation } = Promise.withResolvers<void>();
+  await enableReactions(page);
   await page.route('**/api/reactions/**', async (route) => {
-    if (route.request().method() === 'GET') return route.fulfill({ json: { ok: true, summaries: [] } });
+    if (route.request().method() === 'GET') {
+      const json: ReactionSummaries = { ok: true, summaries: [] };
+      return route.fulfill({ json });
+    }
     await mutationBlocked;
-    return route.fulfill({ json: { ok: true, summary: { emoji: '👍', count: 1, reactedByMe: true, revision: '1' } } });
+    const json: ReactionSet = { ok: true, summary: { emoji: '👍', count: 1, reactedByMe: true, revision: '1' } };
+    return route.fulfill({ json });
   });
   const login = uniqueLogin('reaction');
   await registerViaUi(page, login);
@@ -163,12 +168,6 @@ test('G70-A04 two accounts and a guest enforce the real mutation boundary across
     process.env.E2E_REAL_REACTIONS !== 'true',
     'E2E_REAL_REACTIONS requires the release-test capability overlay'
   );
-  const enableReactions = async (target: typeof page) =>
-    target.route('**/api/capabilities', async (route) => {
-      const response = await route.fetch();
-      const body = await response.json();
-      await route.fulfill({ response, json: { ...body, features: { ...body.features, reactions: true } } });
-    });
   await enableReactions(page);
   const ownerLogin = uniqueLogin('reactionowner');
   await registerViaUi(page, ownerLogin);
@@ -236,11 +235,7 @@ test('G70-A04 two accounts and a guest enforce the real mutation boundary across
 
 test('G70-A02 real storage paginates 120 reactors through the production API', async ({ page }) => {
   test.skip(!process.env.E2E_DATABASE_URL, 'E2E_DATABASE_URL is required for the real 120-reactor storage scenario');
-  await page.route('**/api/capabilities', async (route) => {
-    const response = await route.fetch();
-    const body = await response.json();
-    await route.fulfill({ response, json: { ...body, features: { ...body.features, reactions: true } } });
-  });
+  await enableReactions(page);
   const login = uniqueLogin('reactionreal');
   await registerViaUi(page, login);
   const roomId = await createPermanentRoom(page, `Reaction real ${login}`);
@@ -253,8 +248,8 @@ test('G70-A02 real storage paginates 120 reactors through the production API', a
   await expect(message).toBeVisible();
   const messageId = await message.getAttribute('data-message-id');
   expect(messageId).toBeTruthy();
-  const { Client } = createRequire(import.meta.url)('pg');
-  const client = new Client({ connectionString: process.env.E2E_DATABASE_URL });
+  const { default: pg } = await import('pg');
+  const client = new pg.Client({ connectionString: process.env.E2E_DATABASE_URL });
   await client.connect();
   try {
     await client.query('BEGIN');

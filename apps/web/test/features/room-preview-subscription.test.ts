@@ -11,6 +11,19 @@ async function load() {
   return import('../../src/lib/entities/room/room-realtime.ts');
 }
 
+/** The preview snapshot the server answers a subscription with. */
+const snapshot = (roomId: string) => ({
+  type: 'room.snapshot',
+  payload: {
+    roomId,
+    room: { avatarUrl: null, createdAt: 0, isStatic: false, name: 'Room', peers: 0, relationship: 'owner', roomId },
+    peers: [],
+    recentMessages: [],
+    voiceActiveSince: null,
+    mode: 'preview'
+  }
+});
+
 const subscribes = (socket: FakeWebSocket) =>
   socket.sent.filter((frame) => frame.type === 'room.preview.subscribe').length;
 
@@ -27,7 +40,7 @@ test('a subscription the server never answers is sent again until it is', async 
   await vi.advanceTimersByTimeAsync(4_500);
   expect(subscribes(socket)).toBe(2);
 
-  socket.receive({ type: 'room.snapshot', payload: { roomId: 'room-a', peers: [], recentMessages: [] } });
+  socket.receive(snapshot('room-a'));
   await vi.advanceTimersByTimeAsync(30_000);
   expect(subscribes(socket)).toBe(2);
   unsubscribe();
@@ -70,10 +83,7 @@ test('a reconnect restores the subscription and waits for its answer again', asy
   const realtime = await load();
   const unsubscribe = realtime.subscribeRoomPreview('room-a', () => {});
   FakeWebSocket.latest().open();
-  FakeWebSocket.latest().receive({
-    type: 'room.snapshot',
-    payload: { roomId: 'room-a', peers: [], recentMessages: [] }
-  });
+  FakeWebSocket.latest().receive(snapshot('room-a'));
 
   FakeWebSocket.latest().serverClose(1006);
   await vi.advanceTimersByTimeAsync(1_000);

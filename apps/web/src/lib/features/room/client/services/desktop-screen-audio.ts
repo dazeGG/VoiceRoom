@@ -51,11 +51,14 @@ export function hasNativeDesktopSafeAudio(): boolean {
 
 export async function startDesktopSafeScreenAudioCapture(): Promise<DesktopAudioCapture> {
   stopLocalScreenAudioCapture();
+  const bridge = window.voiceRoomDesktopAudio;
+  if (!bridge) throw new Error('Native audio helper is unavailable.');
 
   let sessionId = '';
   let formatEvent: { channels?: number; sampleRate?: number } | null = null;
-  let resolveFormat!: (event: { channels?: number; sampleRate?: number }) => void;
-  let rejectFormat!: (error: Error) => void;
+  // Both are replaced at once: the Promise executor runs synchronously.
+  let resolveFormat: (event: { channels?: number; sampleRate?: number }) => void = () => {};
+  let rejectFormat: (error: Error) => void = () => {};
   const formatPromise = new Promise<{ channels?: number; sampleRate?: number }>((resolve, reject) => {
     resolveFormat = resolve;
     rejectFormat = reject;
@@ -64,7 +67,7 @@ export async function startDesktopSafeScreenAudioCapture(): Promise<DesktopAudio
     rejectFormat(new Error('Native audio helper did not report audio format.'));
   }, 3000);
 
-  const removeEventListener = window.voiceRoomDesktopAudio!.onEvent(({ sessionId: payloadSessionId, event }) => {
+  const removeEventListener = bridge.onEvent(({ sessionId: payloadSessionId, event }) => {
     if (sessionId && payloadSessionId !== sessionId) return;
     if (formatEvent && event) {
       handleLiveSessionEvent(payloadSessionId, event);
@@ -81,13 +84,14 @@ export async function startDesktopSafeScreenAudioCapture(): Promise<DesktopAudio
   });
 
   try {
-    const audioSession = await window.voiceRoomDesktopAudio!.startSafeSystem({
+    const audioSession = await bridge.startSafeSystem({
       mode: 'safe-system'
     });
     sessionId = audioSession.sessionId;
     const format = formatEvent || (await formatPromise);
     window.clearTimeout(formatTimer);
     return await createDesktopSafeAudioTrack({
+      bridge,
       format,
       removeEventListener,
       sessionId
@@ -101,10 +105,12 @@ export async function startDesktopSafeScreenAudioCapture(): Promise<DesktopAudio
 }
 
 async function createDesktopSafeAudioTrack({
+  bridge,
   format,
   removeEventListener,
   sessionId
 }: {
+  bridge: NonNullable<Window['voiceRoomDesktopAudio']>;
   format: { channels?: number; sampleRate?: number };
   removeEventListener: () => void;
   sessionId: string;
@@ -128,7 +134,7 @@ async function createDesktopSafeAudioTrack({
   const destination = audioContext.createMediaStreamDestination();
   source.connect(destination);
 
-  const removeDataListener = window.voiceRoomDesktopAudio!.onData((payload) => {
+  const removeDataListener = bridge.onData((payload) => {
     if (payload.sessionId !== sessionId) return;
     const samples = getDesktopPcmSamples(payload.chunk);
     if (!samples.length) return;
@@ -136,6 +142,11 @@ async function createDesktopSafeAudioTrack({
   });
 
   const [track] = destination.stream.getAudioTracks();
+  if (!track) {
+    removeDataListener();
+    audioContext.close().catch(() => {});
+    throw new Error('desktop audio destination has no track');
+  }
   track.contentHint = 'music';
 
   const capture: DesktopAudioCapture = {
@@ -168,7 +179,9 @@ export function getDesktopPcmSamples(chunk: Uint8Array | ArrayBuffer | null | un
   const byteLength = bytes.byteLength - (bytes.byteLength % Float32Array.BYTES_PER_ELEMENT);
   if (byteLength <= 0) return new Float32Array();
 
-  return new Float32Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + byteLength) as ArrayBuffer);
+  const copy = new Uint8Array(byteLength);
+  copy.set(bytes.subarray(0, byteLength));
+  return new Float32Array(copy.buffer);
 }
 
 export function stopLocalScreenAudioCapture(): void {
@@ -186,7 +199,7 @@ function stopDesktopSafeAudioCapture(capture: DesktopAudioCapture | null): void 
   disconnectAudioNode(capture.source);
   disconnectAudioNode(capture.destination);
   capture.audioContext?.close?.().catch(() => {});
-  stopDesktopAudioSession(capture.sessionId).catch((error) => {
+  stopDesktopAudioSession(capture.sessionId).catch((error: unknown) => {
     log.warn('native desktop audio stop failed', errorContext(error));
   });
 }

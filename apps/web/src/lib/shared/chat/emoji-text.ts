@@ -50,7 +50,7 @@ function buildTrie(emojis: readonly string[]): TrieNode {
     // A sequence or a pictograph without it is still unmistakably an emoji; a
     // lone text-default character such as ❤ or © stays text, as it was typed.
     const bare = points.filter((point) => point !== VS16);
-    if (bare.length !== points.length && (bare.length > 1 || bare[0] >= FIRST_PICTOGRAPH)) add(bare, emoji);
+    if (bare.length !== points.length && (bare.length > 1 || (bare[0] ?? 0) >= FIRST_PICTOGRAPH)) add(bare, emoji);
   }
   return root;
 }

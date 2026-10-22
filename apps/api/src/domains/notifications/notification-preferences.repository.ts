@@ -1,9 +1,9 @@
-import crypto from 'node:crypto';
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { cleanPresenceStatus } from '@voice-room/shared/validation';
 import type { NotificationLevel, NotificationPreferences } from '@voice-room/shared/contracts/notifications';
 import { kyselyOn, type Database, type Queryable } from '../../platform/db/kysely.ts';
+import { createRowId } from '../../platform/db/ids.ts';
 export type RoomNotificationLevel = NotificationLevel;
 export type { NotificationPreferences };
 type PreferencesInput = {
@@ -21,10 +21,6 @@ const DEFAULT_AUTOMATIC_PRESENCE_LEASE_MS = 3 * 60 * 1000;
 
 function isRoomLevel(value: unknown): value is RoomNotificationLevel {
   return value === 'all' || value === 'mentions' || value === 'none';
-}
-
-function createRowId(): string {
-  return crypto.randomUUID?.() || crypto.randomBytes(16).toString('hex');
 }
 
 function mapPreferences({
@@ -90,9 +86,7 @@ function createNotificationPreferencesRepository({
       privateNotifications: preferences?.private_notifications || false,
       mutedPeerIds: dmMutes.map((row) => row.peer_user_id),
       mutedRoomIds: roomMutes.filter((row) => row.level === 'none').map((row) => row.room_id),
-      roomLevels: Object.fromEntries(
-        roomMutes.map((row) => [row.room_id, (row.level || 'none') as RoomNotificationLevel])
-      )
+      roomLevels: Object.fromEntries(roomMutes.map((row) => [row.room_id, isRoomLevel(row.level) ? row.level : 'none']))
     });
   }
 
@@ -387,7 +381,8 @@ function createNotificationPreferencesRepository({
       .where('user_id', '=', userId)
       .where('room_id', '=', roomId)
       .executeTakeFirst();
-    return (row?.level || 'mentions') as RoomNotificationLevel;
+    const level = row?.level;
+    return isRoomLevel(level) ? level : 'mentions';
   }
 
   async function isRoomMuted({ userId, roomId }: { userId: string; roomId: string }): Promise<boolean> {

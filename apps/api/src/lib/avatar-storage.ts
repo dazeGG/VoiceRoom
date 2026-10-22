@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { readUploadsDir } from './config.ts';
+import { codeOf } from '../platform/error-code.ts';
 
 const USER_ID_PATTERN = '[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
 const ROOM_ID_PATTERN = '[abcdefghijkmnpqrstuvwxyz23456789]{10}';
@@ -20,7 +21,9 @@ function validateAvatarKey(key: unknown): string {
   return key;
 }
 
-function createAvatarStorage({ uploadsDir = readUploadsDir() }: { uploadsDir?: string } = {}): AvatarStorage {
+function createAvatarStorage({
+  uploadsDir = readUploadsDir()
+}: { uploadsDir?: string | undefined } = {}): AvatarStorage {
   const root = path.resolve(uploadsDir);
 
   function filePath(key: string): string {
@@ -40,7 +43,7 @@ function createAvatarStorage({ uploadsDir = readUploadsDir() }: { uploadsDir?: s
     try {
       await fs.promises.unlink(filePath(key));
     } catch (error) {
-      if ((error as { code?: unknown } | null | undefined)?.code !== 'ENOENT') throw error;
+      if (codeOf(error) !== 'ENOENT') throw error;
     }
   }
 
@@ -53,7 +56,7 @@ function createAvatarStorage({ uploadsDir = readUploadsDir() }: { uploadsDir?: s
     try {
       entries = await fs.promises.readdir(root, { withFileTypes: true });
     } catch (error) {
-      if ((error as { code?: unknown } | null | undefined)?.code === 'ENOENT') return [];
+      if (codeOf(error) === 'ENOENT') return [];
       throw error;
     }
     return entries.filter((entry) => entry.isFile() && AVATAR_KEY_PATTERN.test(entry.name)).map((entry) => entry.name);

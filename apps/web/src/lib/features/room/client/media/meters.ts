@@ -8,6 +8,7 @@ import {
 } from '../core/config';
 import { state } from '../core/state.svelte';
 import { amplitudeToDb } from '../core/settings';
+import { isRecord } from '@voice-room/shared/guards';
 import { getSharedAudioContext } from '../services/media-playback-service';
 import { isGateDisabled } from '../services/microphone-service';
 import type { Participant } from '../core/types';
@@ -113,12 +114,12 @@ export function attachMeter(participant: Participant | null, stream: MediaStream
         numberOfOutputs: 0,
         processorOptions: { holdMs: SPEAKING_RELEASE_HOLD_MS, thresholdDb: speakingThresholdDb(participant) }
       });
-      detector.port.onmessage = (event: MessageEvent) => handleDetectorMessage(participant, meter, event.data);
+      detector.port.onmessage = (event: MessageEvent<unknown>) => handleDetectorMessage(participant, meter, event.data);
       meter.source.connect(detector);
       meter.detector = detector;
       if (participant.isLocal && levelReporting) detector.port.postMessage({ type: 'report-level', enabled: true });
     })
-    .catch((error) => {
+    .catch((error: unknown) => {
       log.warn('speaking detector unavailable, polling the level instead', errorContext(error));
       if (!meter.disposed) attachAnalyser(participant, meter, context);
     });
@@ -147,8 +148,8 @@ function attachAnalyser(participant: Participant, meter: VoiceMeter, context: Au
 }
 
 function handleDetectorMessage(participant: Participant, meter: VoiceMeter, data: unknown): void {
-  if (meter.disposed || participant.meter !== meter || !data || typeof data !== 'object') return;
-  const message = data as { type?: unknown; speaking?: unknown; db?: unknown };
+  if (meter.disposed || participant.meter !== meter || !isRecord(data)) return;
+  const message = data;
   if (message.type === 'speaking') {
     participant.voiceDetected = message.speaking === true;
     refreshSpeaking(participant);

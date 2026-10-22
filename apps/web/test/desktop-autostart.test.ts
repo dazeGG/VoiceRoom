@@ -2,6 +2,7 @@ import { test, onTestFinished } from 'vitest';
 import assert from 'node:assert/strict';
 
 import * as service from '../src/lib/platform/desktop-autostart.ts';
+import { mistyped } from './helpers/mistyped.ts';
 
 // The service has no module state and reads `window` on every call, so one
 // native import covers every bridge shape. Loading it through an in-process
@@ -24,7 +25,10 @@ test('desktop autostart service is unavailable without the shell bridge', async 
 
   assert.equal(service.desktopAutostartAvailable(), false);
   assert.equal(await service.readDesktopAutostartSettings(), null);
-  assert.equal(await service.updateDesktopAutostartSettings({ openAtLogin: true }), null);
+  assert.equal(
+    await service.updateDesktopAutostartSettings(mistyped({ openAtLogin: true, startMinimized: 'yes' })),
+    null
+  );
 });
 
 test('desktop autostart service normalizes shell results and sends only boolean fields', async () => {
@@ -43,15 +47,12 @@ test('desktop autostart service normalizes shell results and sends only boolean 
     startMinimized: true,
     supported: true
   });
-  assert.deepEqual(
-    await service.updateDesktopAutostartSettings({ openAtLogin: true, startMinimized: 'yes' as never }),
-    {
-      openAtLogin: true,
-      reason: 'write-failed',
-      startMinimized: false,
-      supported: true
-    }
-  );
+  assert.deepEqual(await service.updateDesktopAutostartSettings({ openAtLogin: true }), {
+    openAtLogin: true,
+    reason: 'write-failed',
+    startMinimized: false,
+    supported: true
+  });
   assert.deepEqual(calls, [{ openAtLogin: true }]);
 });
 

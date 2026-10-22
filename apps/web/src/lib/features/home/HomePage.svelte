@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { ArrowRight } from '@lucide/svelte';
   import { goto } from '$app/navigation';
+  import { resolve } from '$app/paths';
   import { page } from '$app/state';
   import { createRoom } from '$lib/api/rooms';
   import type { AuthUser } from '$lib/api/auth';
@@ -160,7 +161,7 @@
   }
 
   function closeAuthDialog(): void {
-    void goto('/', { replaceState: true, noScroll: true });
+    void goto(resolve('/'), { replaceState: true, noScroll: true });
   }
 
   function switchAuthMode(mode: AuthMode): void {

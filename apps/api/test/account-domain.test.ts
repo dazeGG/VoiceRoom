@@ -12,11 +12,14 @@ import {
   type AccountService,
   type AccountUserStore
 } from '../src/domains/account/account.service.ts';
+import type { AccountRestore, DeletionRequest } from '../src/domains/account/account-deletion.repository.ts';
 import { registerAccountRoutes } from '../src/domains/account/account.routes.ts';
 import { createSessionCookies, parseCookies } from '../src/domains/account/session-cookie.ts';
 import type { ApiContext } from '../src/app/context.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { fake, recordingLogger, storedUser, publicUser, loginAlert } from './fakes/index.ts';
+import { defined } from './helpers/assert-defined.ts';
+import { recordingService, type Answers } from './helpers/recording-service.ts';
 
 const DEVICE = { userAgent: 'UA', locationLabel: 'Berlin' };
 const device = async () => DEVICE;
@@ -49,13 +52,13 @@ function harness(
 ) {
   const logger = recordingLogger();
   const calls = {
-    ended: [] as Array<{ userId?: string | null; tokenHashes?: string[] | null }>,
-    notified: [] as unknown[],
-    pushes: [] as string[],
-    refreshed: [] as string[],
-    broadcast: [] as string[],
-    sessions: [] as unknown[],
-    reset: [] as string[],
+    ended: new Array<{ userId?: string | null; tokenHashes?: string[] | null }>(),
+    notified: new Array<unknown>(),
+    pushes: new Array<string>(),
+    refreshed: new Array<string>(),
+    broadcast: new Array<string>(),
+    sessions: new Array<unknown>(),
+    reset: new Array<string>(),
     get errors() {
       return logger.records.filter((record) => record.level === 'error').map((record) => record.evt);
     }
@@ -141,12 +144,12 @@ function harness(
     },
     ...overrides
   };
-  const requests: Record<string, { status: string; scheduledFor?: number }> = {
+  const requests: Record<string, DeletionRequest> = {
     'right-password': { status: 'requested', scheduledFor: 99 },
     again: { status: 'already_requested', scheduledFor: 88 },
     missing: { status: 'not_found' }
   };
-  const restores: Record<string, { status: string; userId: string | null }> = {
+  const restores: Record<string, AccountRestore> = {
     ok: { status: 'restored', userId: 'user-1' },
     old: { status: 'expired', userId: null }
   };
@@ -174,7 +177,7 @@ function harness(
           ? { allowed: false, retryAfterSeconds: 30 }
           : key === 'locked-nowait'
             ? { allowed: false }
-            : { allowed: true },
+            : { allowed: true, retryAfterSeconds: 0 },
       reset: (key) => calls.reset.push(key)
     },
     endSessionConnections: async (input) => {
@@ -385,7 +388,7 @@ type Session = Awaited<ReturnType<ApiContext['resolveSession']>>;
 
 function routeApp(
   t: TestContext,
-  outcomes: Record<string, unknown> = {},
+  outcomes: Answers<AccountService> = {},
   {
     session = null,
     limited = [],
@@ -394,45 +397,39 @@ function routeApp(
 ) {
   const app = fastify();
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
-  const seen: Record<string, unknown[]> = {};
   const me = { ...publicUser('user-1'), hasUsedDesktopApp: false, appPromptSeen: true };
-  const opened = { status: 'signed_in', token: 'tok', user: me };
-  const record =
-    (name: string, value: unknown) =>
-    async (...args: unknown[]) => {
-      seen[name] = args;
-      return outcomes[name] ?? value;
-    };
-  const account = fake<AccountService>({
-    register: record('register', opened),
-    login: record('login', opened),
-    logout: record('logout', undefined),
-    recover: record('recover', { ...opened, remaining: 2 }),
-    restore: record('restore', opened),
-    updateProfile: record('updateProfile', { status: 'updated', user: me }),
-    changePassword: record('changePassword', { status: 'changed' }),
-    security: record('security', {
+  const opened = { status: 'signed_in', token: 'tok', user: me } as const;
+  const { service, seen } = recordingService<AccountService>({
+    register: opened,
+    login: opened,
+    logout: undefined,
+    recover: { ...opened, remaining: 2 },
+    restore: opened,
+    updateProfile: { status: 'updated', user: me },
+    changePassword: { status: 'changed' },
+    security: {
       recoveryCodes: { remaining: 0, generatedAt: null },
       recoveryCodesReminder: { snoozedUntil: null }
-    }),
-    generateRecoveryCodes: record('generateRecoveryCodes', {
+    },
+    generateRecoveryCodes: {
       status: 'generated',
       codes: ['c'],
       recoveryCodes: { remaining: 1, generatedAt: 1 }
-    }),
-    snoozeRecoveryCodesReminder: record('snoozeRecoveryCodesReminder', { status: 'snoozed', snoozedUntil: 3 }),
-    listSessions: record('listSessions', []),
-    revokeOtherSessions: record('revokeOtherSessions', 2),
-    revokeSession: record('revokeSession', { status: 'revoked' }),
-    whatsNew: record('whatsNew', { current: '1', lastSeen: null }),
-    markWhatsNewSeen: record('markWhatsNewSeen', { status: 'seen', whatsNew: { current: '1', lastSeen: '1' } }),
-    markAppPromptSeen: record('markAppPromptSeen', { status: 'seen' }),
-    loginAlerts: record('loginAlerts', []),
-    resolveLoginAlert: record('resolveLoginAlert', { status: 'resolved', resolution: 'confirmed' }),
-    deletionPreview: record('deletionPreview', { status: 'preview', preview: { graceDays: 7, rooms: [] } }),
-    requestDeletion: record('requestDeletion', { status: 'scheduled', deletionScheduledFor: 5 }),
-    deletionAvailable: () => deletionAvailable
-  } as Partial<Record<keyof AccountService, unknown>> as Partial<AccountService>);
+    },
+    snoozeRecoveryCodesReminder: { status: 'snoozed', snoozedUntil: 3 },
+    listSessions: [],
+    revokeOtherSessions: 2,
+    revokeSession: { status: 'revoked' },
+    whatsNew: { current: '1', lastSeen: null },
+    markWhatsNewSeen: { status: 'seen', whatsNew: { current: '1', lastSeen: '1' } },
+    markAppPromptSeen: { status: 'seen' },
+    loginAlerts: [],
+    resolveLoginAlert: { status: 'resolved', resolution: 'confirmed' },
+    deletionPreview: { status: 'preview', preview: { graceDays: 7, rooms: [] } },
+    requestDeletion: { status: 'scheduled', deletionScheduledFor: 5 },
+    ...outcomes
+  });
+  const account = fake<AccountService>({ ...service, deletionAvailable: () => deletionAvailable });
   registerAccountRoutes(
     app,
     {
@@ -447,7 +444,7 @@ function routeApp(
         check: (key) =>
           limited.some((prefix) => key.startsWith(prefix))
             ? { allowed: false, retryAfterSeconds: 11 }
-            : { allowed: true }
+            : { allowed: true, retryAfterSeconds: 0 }
       },
       sessionCookie: (token) => `vr_session=${token}`,
       clearedSessionCookie: () => 'vr_session=',
@@ -463,9 +460,11 @@ const SIGNED_IN = { user: storedUser(), session: { publicId: 'pub-1', tokenHash:
 
 type Body = { ok?: boolean; error?: string; user?: { id: string } } & Record<string, unknown>;
 
-async function call(app: FastifyInstance, method: string, url: string, payload?: object) {
+type Method = 'GET' | 'POST' | 'DELETE';
+
+async function call(app: FastifyInstance, method: Method, url: string, payload?: object) {
   const response = await app.inject({
-    method: method as 'GET' | 'POST' | 'DELETE',
+    method,
     url,
     ...(payload === undefined ? {} : { payload })
   });
@@ -485,12 +484,12 @@ test('entry routes set the cookie and map every refusal', async (t) => {
     password: 'pw'
   });
   assert.deepEqual([registered.status, registered.cookie, registered.body.user?.id], [201, 'vr_session=tok', 'user-1']);
-  const registration = seen.register?.[0] as { login: string; passwordConfirm: string; device: () => Promise<unknown> };
+  const [registration] = defined(seen.register, 'the register call');
   assert.equal(registration.login, 'alice');
   assert.equal(registration.passwordConfirm, 'pw');
   assert.deepEqual(await registration.device(), DEVICE);
   assert.equal((await call(app, 'POST', '/api/auth/login', { login: 'a', password: 'p' })).cookie, 'vr_session=tok');
-  assert.equal((seen.login?.[0] as { password: string }).password, 'p');
+  assert.equal(defined(seen.login, 'the login call')[0].password, 'p');
   const out = await call(app, 'POST', '/api/auth/logout');
   assert.deepEqual([out.body, out.cookie], [{ ok: true }, 'vr_session=']);
   assert.deepEqual(seen.logout, ['raw-token']);
@@ -501,33 +500,41 @@ test('entry routes set the cookie and map every refusal', async (t) => {
     'vr_session=tok'
   );
 
-  const cases: Array<[string, { status: string; retryAfterSeconds?: number }, string, number, string]> = [
-    ['register', { status: 'invalid_login' }, '/api/auth/register', 400, 'Логин: 3–32 символа, латиница, цифры, . _ -'],
-    ['register', { status: 'invalid_password' }, '/api/auth/register', 400, 'Пароль должен быть не короче 8 символов'],
-    ['register', { status: 'password_mismatch' }, '/api/auth/register', 400, 'Пароли не совпадают'],
-    ['register', { status: 'login_taken' }, '/api/auth/register', 409, 'Этот логин уже занят'],
-    ['login', { status: 'invalid_credentials' }, '/api/auth/login', 401, 'Неверный логин или пароль'],
+  const cases: Array<[Answers<AccountService>, string, number, string]> = [
     [
-      'login',
-      { status: 'throttled', retryAfterSeconds: 4 },
+      { register: { status: 'invalid_login' } },
+      '/api/auth/register',
+      400,
+      'Логин: 3–32 символа, латиница, цифры, . _ -'
+    ],
+    [
+      { register: { status: 'invalid_password' } },
+      '/api/auth/register',
+      400,
+      'Пароль должен быть не короче 8 символов'
+    ],
+    [{ register: { status: 'password_mismatch' } }, '/api/auth/register', 400, 'Пароли не совпадают'],
+    [{ register: { status: 'login_taken' } }, '/api/auth/register', 409, 'Этот логин уже занят'],
+    [{ login: { status: 'invalid_credentials' } }, '/api/auth/login', 401, 'Неверный логин или пароль'],
+    [
+      { login: { status: 'throttled', retryAfterSeconds: 4 } },
       '/api/auth/login',
       429,
       'Слишком много попыток, попробуйте позже'
     ],
     [
-      'recover',
-      { status: 'invalid_new_password' },
+      { recover: { status: 'invalid_new_password' } },
       '/api/auth/recover',
       400,
       'Пароль должен быть не короче 8 символов'
     ],
-    ['recover', { status: 'invalid_code' }, '/api/auth/recover', 401, 'Неверный логин или код восстановления'],
-    ['restore', { status: 'expired' }, '/api/auth/account/restore', 410, 'Аккаунт уже удалён'],
-    ['restore', { status: 'invalid_credentials' }, '/api/auth/account/restore', 401, 'Неверный логин или пароль']
+    [{ recover: { status: 'invalid_code' } }, '/api/auth/recover', 401, 'Неверный логин или код восстановления'],
+    [{ restore: { status: 'expired' } }, '/api/auth/account/restore', 410, 'Аккаунт уже удалён'],
+    [{ restore: { status: 'invalid_credentials' } }, '/api/auth/account/restore', 401, 'Неверный логин или пароль']
   ];
-  for (const [name, outcome, url, status, error] of cases) {
-    const response = await call(routeApp(t, { [name]: outcome }).app, 'POST', url, {});
-    assert.deepEqual([response.status, response.body.error], [status, error], `${name} ${outcome.status}`);
+  for (const [outcome, url, status, error] of cases) {
+    const response = await call(routeApp(t, outcome).app, 'POST', url, {});
+    assert.deepEqual([response.status, response.body.error], [status, error], JSON.stringify(outcome));
   }
   const pending = await call(
     routeApp(t, { login: { status: 'deletion_pending', deletionScheduledFor: 77 } }).app,
@@ -570,7 +577,7 @@ test('me answers null without a session', async (t) => {
   assert.equal(me.body.user?.id, 'user-1');
 });
 
-const ACCOUNT_ROUTES: Array<[string, string, object?]> = [
+const ACCOUNT_ROUTES: Array<[Method, string, object?]> = [
   ['POST', '/api/auth/profile', {}],
   ['POST', '/api/auth/password', {}],
   ['GET', '/api/auth/security'],
@@ -623,81 +630,74 @@ test('every account route needs a session and answers it', async (t) => {
 });
 
 test('account refusals keep their texts', async (t) => {
-  const cases: Array<[string, { status: string }, string, string, number, string]> = [
-    ['updateProfile', { status: 'not_found' }, 'POST', '/api/auth/profile', 404, 'Аккаунт не найден'],
+  const cases: Array<[Answers<AccountService>, Method, string, number, string]> = [
+    [{ updateProfile: { status: 'not_found' } }, 'POST', '/api/auth/profile', 404, 'Аккаунт не найден'],
     [
-      'changePassword',
-      { status: 'invalid_new_password' },
+      { changePassword: { status: 'invalid_new_password' } },
       'POST',
       '/api/auth/password',
       400,
       'Пароль должен быть не короче 8 символов'
     ],
-    ['changePassword', { status: 'not_found' }, 'POST', '/api/auth/password', 404, 'Аккаунт не найден'],
-    ['changePassword', { status: 'invalid_password' }, 'POST', '/api/auth/password', 400, 'Неверный текущий пароль'],
-    ['generateRecoveryCodes', { status: 'not_found' }, 'POST', '/api/auth/recovery-codes', 404, 'Аккаунт не найден'],
+    [{ changePassword: { status: 'not_found' } }, 'POST', '/api/auth/password', 404, 'Аккаунт не найден'],
+    [{ changePassword: { status: 'invalid_password' } }, 'POST', '/api/auth/password', 400, 'Неверный текущий пароль'],
+    [{ generateRecoveryCodes: { status: 'not_found' } }, 'POST', '/api/auth/recovery-codes', 404, 'Аккаунт не найден'],
     [
-      'generateRecoveryCodes',
-      { status: 'invalid_password' },
+      { generateRecoveryCodes: { status: 'invalid_password' } },
       'POST',
       '/api/auth/recovery-codes',
       400,
       'Неверный пароль'
     ],
     [
-      'snoozeRecoveryCodesReminder',
-      { status: 'not_found' },
+      { snoozeRecoveryCodesReminder: { status: 'not_found' } },
       'POST',
       '/api/auth/recovery-codes/reminder/snooze',
       404,
       'Аккаунт не найден'
     ],
     [
-      'revokeSession',
-      { status: 'current_session' },
+      { revokeSession: { status: 'current_session' } },
       'DELETE',
       '/api/auth/sessions/pub-1',
       400,
       'Чтобы завершить этот сеанс, выйдите из аккаунта'
     ],
-    ['revokeSession', { status: 'not_found' }, 'DELETE', '/api/auth/sessions/x', 404, 'Сеанс не найден'],
-    ['markWhatsNewSeen', { status: 'not_found' }, 'POST', '/api/auth/whats-new/seen', 404, 'Аккаунт не найден'],
-    ['markAppPromptSeen', { status: 'not_found' }, 'POST', '/api/auth/app-prompt/seen', 404, 'Аккаунт не найден'],
+    [{ revokeSession: { status: 'not_found' } }, 'DELETE', '/api/auth/sessions/x', 404, 'Сеанс не найден'],
+    [{ markWhatsNewSeen: { status: 'not_found' } }, 'POST', '/api/auth/whats-new/seen', 404, 'Аккаунт не найден'],
+    [{ markAppPromptSeen: { status: 'not_found' } }, 'POST', '/api/auth/app-prompt/seen', 404, 'Аккаунт не найден'],
     [
-      'resolveLoginAlert',
-      { status: 'not_found' },
+      { resolveLoginAlert: { status: 'not_found' } },
       'POST',
       '/api/auth/login-alerts/x/deny',
       404,
       'Вход не найден или на него уже ответили'
     ],
     [
-      'deletionPreview',
-      { status: 'unavailable' },
+      { deletionPreview: { status: 'unavailable' } },
       'GET',
       '/api/auth/account/deletion',
       503,
       'Удаление аккаунта сейчас недоступно'
     ],
     [
-      'requestDeletion',
-      { status: 'unavailable' },
+      { requestDeletion: { status: 'unavailable' } },
       'POST',
       '/api/auth/account/deletion',
       503,
       'Удаление аккаунта сейчас недоступно'
     ],
-    ['requestDeletion', { status: 'invalid_password' }, 'POST', '/api/auth/account/deletion', 400, 'Неверный пароль'],
-    ['requestDeletion', { status: 'not_found' }, 'POST', '/api/auth/account/deletion', 404, 'Аккаунт не найден']
+    [{ requestDeletion: { status: 'invalid_password' } }, 'POST', '/api/auth/account/deletion', 400, 'Неверный пароль'],
+    [{ requestDeletion: { status: 'not_found' } }, 'POST', '/api/auth/account/deletion', 404, 'Аккаунт не найден']
   ];
-  for (const [name, outcome, method, url, status, error] of cases) {
+  for (const [outcome, method, url, status, error] of cases) {
     const response = await call(
-      routeApp(t, { [name]: outcome }, { session: SIGNED_IN }).app,
+      routeApp(t, outcome, { session: SIGNED_IN }).app,
       method,
       url,
       method === 'POST' ? {} : undefined
     );
-    assert.deepEqual([response.status, response.body.error], [status, error], `${name} ${outcome.status}`);
+    assert.deepEqual([response.status, response.body.error], [status, error], JSON.stringify(outcome));
   }
   const again = await call(
     routeApp(t, { requestDeletion: { status: 'already_requested', deletionScheduledFor: 8 } }, { session: SIGNED_IN })

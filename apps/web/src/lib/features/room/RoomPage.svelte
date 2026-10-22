@@ -16,7 +16,8 @@
   import RoomTopbar from './components/RoomTopbar.svelte';
   import StartRoomScreen from './components/StartRoomScreen.svelte';
   import { applyDesktopBoundaryToDocument, setRoomRouteActive } from '$lib/platform/desktop-boundary';
-  import { setRoomEmbedded } from './client/core/embed';
+  import { setRoomEmbedded, setRoomShell } from './client/core/embed';
+  import { STANDALONE_ROOM_SHELL, useRoomShell } from './shell';
 
   let {
     embeddedRoomId = '',
@@ -30,6 +31,7 @@
 
   let roomRoot = $state<HTMLElement>();
   const embedded = $derived(Boolean(embeddedRoomId));
+  const shell = useRoomShell();
 
   onMount(() => {
     let cleanup: (() => void) | undefined;
@@ -40,6 +42,7 @@
     // while this page is marked active.
     setRoomRouteActive(true);
     setRoomEmbedded(Boolean(embeddedRoomId));
+    setRoomShell(shell);
 
     void import('./client/main').then(({ mountRoomClient }) => {
       if (!roomRoot) return;
@@ -49,6 +52,7 @@
     return () => {
       cleanup?.();
       setRoomEmbedded(false);
+      setRoomShell(STANDALONE_ROOM_SHELL);
       setRoomRouteActive(false);
     };
   });
