@@ -159,7 +159,7 @@ export function App() {
                   <AccountsPage accountId={location.accountId} onOpenAccount={openAccount} />
                 ) : null}
                 {tab === 'rooms' ? <RoomsPage onOpenAccount={openAccount} focusRoom={roomFocus} /> : null}
-                {tab === 'reports' ? <ReportsPage onResolved={setOpenReports} /> : null}
+                {tab === 'reports' ? <ReportsPage onResolved={setOpenReports} onOpenAccount={openAccount} /> : null}
                 {tab === 'feedback' ? <FeedbackPage /> : null}
                 {tab === 'staff' ? <StaffPage /> : null}
               </div>
