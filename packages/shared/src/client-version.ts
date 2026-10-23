@@ -34,8 +34,18 @@ export function isVersionBelow(version: string | null | undefined, minVersion: s
   return order === null || order < 0;
 }
 
+/**
+ * The app's version when the user agent is the Android app below
+ * `minVersion` (an empty string for a malformed one); null for everyone else
+ * and whenever no minimum is set. The user agent is parsed at most once.
+ */
+export function outdatedAndroidVersion(userAgent: string | null | undefined, minVersion: string): string | null {
+  if (!minVersion) return null;
+  const version = parseAndroidAppVersion(userAgent);
+  return version !== null && isVersionBelow(version, minVersion) ? version : null;
+}
+
 /** Only the Android app is ever outdated; a browser, the desktop app or no user agent never is. */
 export function isClientOutdated(userAgent: string | null | undefined, minVersion: string): boolean {
-  const version = parseAndroidAppVersion(userAgent);
-  return version !== null && isVersionBelow(version, minVersion);
+  return outdatedAndroidVersion(userAgent, minVersion) !== null;
 }

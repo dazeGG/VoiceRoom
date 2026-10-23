@@ -12,6 +12,13 @@ export type DevicePushProvider = Static<typeof DevicePushProvider>;
 /** Far above a RuStore token's length, and small enough to leave room for the rest of a 4096-byte push. */
 export const DEVICE_TOKEN_MAX_LENGTH = 1024;
 
+/**
+ * A push SDK's token is one word of printable ASCII, so its 1024 characters
+ * are 1024 bytes: within the database index's row limit and a push's 4096
+ * bytes. The API refuses any other token as `invalid_device_token`.
+ */
+export const DEVICE_TOKEN_PATTERN = /^[\x21-\x7E]{1,1024}$/;
+
 /** The body of both POST (register) and DELETE (remove) /api/push/devices. */
 export const DeviceTokenBody = Type.Object({
   provider: DevicePushProvider,

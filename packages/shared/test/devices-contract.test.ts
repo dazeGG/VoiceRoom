@@ -6,7 +6,12 @@ import test from 'node:test';
 import { Value } from 'typebox/value';
 
 import { ClientPolicy } from '../src/contracts/client.ts';
-import { DEVICE_PUSH_PROVIDERS, DEVICE_TOKEN_MAX_LENGTH, DeviceTokenBody } from '../src/contracts/devices.ts';
+import {
+  DEVICE_PUSH_PROVIDERS,
+  DEVICE_TOKEN_MAX_LENGTH,
+  DEVICE_TOKEN_PATTERN,
+  DeviceTokenBody
+} from '../src/contracts/devices.ts';
 
 test('a device token is a non-empty, bounded token from a known provider', () => {
   assert.deepEqual(DEVICE_PUSH_PROVIDERS, ['rustore']);
@@ -18,6 +23,15 @@ test('a device token is a non-empty, bounded token from a known provider', () =>
   assert.equal(Value.Check(DeviceTokenBody, { provider: 'rustore', token: 'x'.repeat(1025) }), false);
   assert.equal(Value.Check(DeviceTokenBody, { provider: 'fcm', token: 'x' }), false);
   assert.equal(Value.Check(DeviceTokenBody, { provider: 'rustore' }), false);
+});
+
+test('a well-formed device token is one word of printable ASCII, 1024 bytes at most', () => {
+  for (const token of ['x', 'aB0-_:.~!/', '!'.repeat(1024), '~'.repeat(1024)]) {
+    assert.equal(DEVICE_TOKEN_PATTERN.test(token), true, token);
+  }
+  for (const token of ['', 'x'.repeat(1025), 'two words', 'tab\there', 'nul\u0000', 'del\u007f', 'токен', 'émoji🙂']) {
+    assert.equal(DEVICE_TOKEN_PATTERN.test(token), false, JSON.stringify(token));
+  }
 });
 
 test('the client policy names the minimum Android version, or null for none', () => {

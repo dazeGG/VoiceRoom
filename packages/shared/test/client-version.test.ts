@@ -7,6 +7,7 @@ import {
   isAndroidAppUserAgent,
   isClientOutdated,
   isVersionBelow,
+  outdatedAndroidVersion,
   parseAndroidAppVersion
 } from '../src/client-version.ts';
 
@@ -76,6 +77,22 @@ test('isClientOutdated refuses only an Android app below the minimum or without 
   assert.equal(isClientOutdated(CHROME_ANDROID, '1.2.0'), false);
   assert.equal(isClientOutdated(DESKTOP_APP, '1.2.0'), false);
   assert.equal(isClientOutdated(undefined, '1.2.0'), false);
+});
+
+test('outdatedAndroidVersion names the refused version, empty for a malformed one, and null otherwise', () => {
+  assert.equal(outdatedAndroidVersion('VoiceRoom-Android/1.1.9', '1.2.0'), '1.1.9');
+  assert.equal(outdatedAndroidVersion('VoiceRoom-Android/1.1.9 (Linux; Android 12)', '1.2.0'), '1.1.9');
+  assert.equal(outdatedAndroidVersion('VoiceRoom-Android/1.2', '1.2.0'), '');
+  assert.equal(outdatedAndroidVersion('VoiceRoom-Android/1.2.3-beta', '1.2.0'), '');
+
+  assert.equal(outdatedAndroidVersion('VoiceRoom-Android/1.2.0', '1.2.0'), null);
+  assert.equal(outdatedAndroidVersion('VoiceRoom-Android/1.1.9', ''), null);
+  assert.equal(outdatedAndroidVersion('VoiceRoom-Android/1.1.9', '1.2'), null);
+  assert.equal(outdatedAndroidVersion(CHROME_ANDROID, '1.2.0'), null);
+  assert.equal(outdatedAndroidVersion(undefined, '1.2.0'), null);
+  for (const userAgent of USER_AGENTS) {
+    assert.equal(isClientOutdated(userAgent, '1.2.0'), outdatedAndroidVersion(userAgent, '1.2.0') !== null, userAgent);
+  }
 });
 
 test('isVersionBelow counts an unknown version as below a set minimum', () => {
