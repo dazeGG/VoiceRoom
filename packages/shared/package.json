@@ -15,6 +15,7 @@
     "./attachments": "./src/attachments.ts",
     "./mentions": "./src/mentions.ts",
     "./notifications": "./src/notifications.ts",
+    "./native-push": "./src/native-push.ts",
     "./moderation": "./src/moderation.ts",
     "./realtime": "./src/realtime.ts",
     "./media-budget": "./src/media-budget.ts",
@@ -45,6 +46,8 @@
     "./contracts/feedback": "./src/contracts/feedback.ts",
     "./contracts/admin": "./src/contracts/admin.ts",
     "./contracts/staff": "./src/contracts/staff.ts",
+    "./contracts/devices": "./src/contracts/devices.ts",
+    "./contracts/client": "./src/contracts/client.ts",
     "./report-labels": "./src/report-labels.ts",
     "./feedback-labels": "./src/feedback-labels.ts"
   },

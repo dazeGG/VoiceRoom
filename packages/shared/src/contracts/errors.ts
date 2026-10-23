@@ -15,6 +15,7 @@ export const ERROR_CODES = [
   'internal_error',
   'cross_origin_rejected',
   'not_supported',
+  'client_outdated',
 
   // Account
   'account_not_found',
@@ -144,6 +145,7 @@ export const ERROR_CODES = [
   'invalid_push_endpoint',
   'push_endpoint_conflict',
   'push_rate_limited',
+  'invalid_device_token',
 
   // Attachments and avatars
   'media_error',
