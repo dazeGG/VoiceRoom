@@ -4,7 +4,7 @@
 import { beforeEach, expect, test } from 'vitest';
 import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
 import { createInitialRoomState } from '../../src/lib/features/room/client/model/room-state.ts';
-import { getAvatarPresentation } from '../../src/lib/features/room/client/ui/avatar-presentation.ts';
+import { getAvatarPresentation } from '../../src/lib/shared/ui/avatar-presentation.ts';
 import { getConnectionStatusView } from '../../src/lib/features/room/client/ui/status.ts';
 
 beforeEach(() => {

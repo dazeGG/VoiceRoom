@@ -6,6 +6,8 @@
 // mirror the dock's gate control (a single slider over a live meter — the floor
 // threshold means «off», there is no separate toggle).
 import {
+  amplitudeToDb,
+  clampGateThresholdDb,
   DEFAULT_GATE_THRESHOLD_DB,
   DEFAULT_MASTER_VOLUME,
   DEFAULT_MICROPHONE_MODE,
@@ -15,33 +17,29 @@ import {
   GATE_THRESHOLD_DB_STORAGE_KEY,
   GATE_THRESHOLD_MAX_DB,
   GATE_THRESHOLD_MIN_DB,
+  getDbMeterPosition,
+  getNoiseMode,
+  getStoredGateThresholdDb,
+  getStoredMasterVolume,
+  getStoredMicrophoneMode,
+  getStoredMicrophoneVolume,
+  getStoredNoiseMode,
+  getStoredNotificationVolume,
+  isNoiseMode,
   MICROPHONE_DEVICE_STORAGE_KEY,
   NOISE_MODES,
   NOISE_MODE_STORAGE_KEY,
   OUTPUT_DEVICE_STORAGE_KEY,
   type MicrophoneMode,
   type NoiseMode
-} from '$lib/features/room/client/core/config';
+} from '$lib/features/room/client';
 import { listPhysicalDevices } from '$lib/shared/audio/device-list';
-import {
-  amplitudeToDb,
-  clampGateThresholdDb,
-  getDbMeterPosition,
-  getNoiseMode,
-  isNoiseMode,
-  getStoredMasterVolume,
-  getStoredGateThresholdDb,
-  getStoredMicrophoneMode,
-  getStoredMicrophoneVolume,
-  getStoredNoiseMode,
-  getStoredNotificationVolume
-} from '$lib/features/room/client/core/settings';
 
 export {
   getNotificationVolumeMultiplier,
   persistMasterVolume,
   persistNotificationVolume
-} from '$lib/features/room/client/core/settings';
+} from '$lib/features/room/client';
 
 export { GATE_THRESHOLD_MAX_DB, GATE_THRESHOLD_MIN_DB };
 

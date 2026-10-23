@@ -2,7 +2,7 @@
 
 import { fetchNotificationInbox, markAllNotificationsRead, markNotificationRead } from '$lib/api/notifications';
 import { getAppRealtime } from '$lib/api/realtime';
-import { playRoomChatMessageCue } from '$lib/features/room/client/media/cues';
+import { playRoomChatMessageCue } from '$lib/features/room/client';
 import { createNotificationInbox } from '$lib/shared/notifications/inbox.svelte';
 import { notificationPreferences } from '$lib/shared/notifications/preferences.svelte';
 

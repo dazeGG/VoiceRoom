@@ -5,7 +5,7 @@
 import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
 import type { ChatMessage } from '$lib/api/rooms';
 import { formatChatDayLabel, isSameDay } from '$lib/shared/utils/chat-date';
-import { getAvatarPresentation } from './client/ui/avatar-presentation';
+import { getAvatarPresentation } from '$lib/shared/ui/avatar-presentation';
 
 const BURST_GAP_MS = 5 * 60 * 1000;
 

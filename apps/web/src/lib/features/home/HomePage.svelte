@@ -44,7 +44,6 @@
   let createRoomInLobby = $state(false);
 
   const user = $derived(session.user);
-  const showLobby = $derived(session.loaded && Boolean(user));
   const authMode = $derived.by<AuthMode | null>(() => {
     const requestedMode = page.url.searchParams.get('auth');
     if (requestedMode === 'login' || requestedMode === 'register' || requestedMode === 'recover') return requestedMode;
@@ -198,7 +197,7 @@
       </div>
     </main>
   </div>
-{:else if showLobby}
+{:else if session.loaded && user}
   <LobbyPage {user} {loggingOut} createRoomOnOpen={createRoomInLobby} onLogout={handleLogout} onToast={showToast} />
 {:else}
   <div class="app-shell">

@@ -8,7 +8,7 @@
   import { getFocusedParticipant, getParticipantCount, getSortedParticipants } from '../participants-ui.svelte';
   import { screenUi } from '../screen-ui.svelte';
   import { state as roomState } from '../client/core/state.svelte';
-  import { fitTiles } from '../client/ui/tile-grid';
+  import { fitTiles } from '$lib/shared/ui/tile-grid';
 
   const participantCount = $derived(getParticipantCount());
   const streamCount = $derived.by(() => {

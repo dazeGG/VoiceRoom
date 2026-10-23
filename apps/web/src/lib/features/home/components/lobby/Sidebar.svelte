@@ -17,6 +17,7 @@
   import { effectivePresenceStatus, normalizePresenceStatus, type PresenceStatus } from '$lib/shared/presence';
   import { displayNameOf } from '$lib/shared/utils/display-name';
   import { useLobby } from '$lib/features/home/model/lobby-context';
+  import type { ActiveVoice } from '$lib/features/home/model/active-voice';
   import { notificationPreferences, updatePresenceStatus } from '$lib/shared/notifications/preferences.svelte';
   import BetaMark from '$lib/shared/components/BetaMark.svelte';
   import SidebarDownload from '../SidebarDownload.svelte';
@@ -35,15 +36,7 @@
     notificationUnreadCount = 0,
     onOpenNotifications,
     onToast,
-    activeVoiceRoomId = null,
-    activeVoiceRoomName = '',
-    activeVoiceRoomAvatarUrl = null,
-    activeVoiceMuted = false,
-    activeVoiceDeafened = false,
-    onOpenVoiceRoom,
-    onLeaveVoiceRoom,
-    onToggleVoiceMic,
-    onToggleVoiceDeafen
+    activeVoice = null
   } = $props<{
     user: AuthUser;
     onGoHome: () => void;
@@ -57,15 +50,8 @@
     notificationUnreadCount?: number | undefined;
     onOpenNotifications?: (() => void) | undefined;
     onToast: (message: string) => void;
-    activeVoiceRoomId?: string | null | undefined;
-    activeVoiceRoomName?: string | undefined;
-    activeVoiceRoomAvatarUrl?: string | null | undefined;
-    activeVoiceMuted?: boolean | undefined;
-    activeVoiceDeafened?: boolean | undefined;
-    onOpenVoiceRoom?: (() => void) | undefined;
-    onLeaveVoiceRoom?: (() => void) | undefined;
-    onToggleVoiceMic?: (() => void) | undefined;
-    onToggleVoiceDeafen?: (() => void) | undefined;
+    /** The call this device is in; the call card shows only while there is one. */
+    activeVoice?: ActiveVoice | null | undefined;
   }>();
 
   const sortedFriends = $derived(
@@ -73,7 +59,6 @@
   );
 
   const selfName = $derived(displayNameOf(user));
-  const activeVoiceLabel = $derived(activeVoiceRoomName?.trim() || activeVoiceRoomId || '');
   const selfPresence = $derived(
     normalizePresenceStatus(
       notificationPreferences.presenceStatus,
@@ -327,17 +312,8 @@
     {/if}
   </div>
 
-  {#if activeVoiceRoomId}
-    <VoiceCallWidget
-      roomName={activeVoiceLabel}
-      avatarUrl={activeVoiceRoomAvatarUrl}
-      muted={activeVoiceMuted}
-      deafened={activeVoiceDeafened}
-      onOpen={onOpenVoiceRoom}
-      onToggleMic={onToggleVoiceMic}
-      onToggleDeafen={onToggleVoiceDeafen}
-      onLeave={onLeaveVoiceRoom}
-    />
+  {#if activeVoice}
+    <VoiceCallWidget voice={activeVoice} />
   {/if}
 
   <div class="lv-profile">

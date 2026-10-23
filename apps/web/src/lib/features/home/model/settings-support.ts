@@ -1,7 +1,7 @@
 // What this runtime lets the settings offer. Read once when the settings open:
 // none of it changes while they are up.
 
-import { desktopGlobalHotkeysAvailable } from '$lib/features/room/client/services/desktop-hotkey-service';
+import { desktopGlobalHotkeysAvailable } from '$lib/features/room/client';
 import { desktopAutostartAvailable } from '$lib/platform/desktop-autostart';
 import { desktopDiagnosticsAvailable } from '$lib/platform/desktop-diagnostics';
 import { desktopOverlayAvailable } from '$lib/platform/desktop-overlay';

@@ -1,4 +1,4 @@
-/* Rows of 16:9 tiles of one width, which fitTiles (client/ui/tile-grid.ts)
+/* Rows of 16:9 tiles of one width, which fitTiles (lib/shared/ui/tile-grid.ts)
    picks from the grid's own size: the block is centred in the stage and a
    short last row is centred under the others. Too many to fit scroll down. */
 .tile-grid {

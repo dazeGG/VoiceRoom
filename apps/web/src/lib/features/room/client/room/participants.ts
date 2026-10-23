@@ -565,3 +565,15 @@ export function getParticipantById(peerId: string): Participant | null {
 export function getAllParticipants(): Participant[] {
   return [...(state.self ? [state.self] : []), ...state.peers.values()];
 }
+
+/** The local tile shows an avatar changed in the lobby's settings without a rejoin. */
+export function syncLocalProfile(profile: {
+  avatarAccent?: string | null | undefined;
+  avatarColorKey?: string | null | undefined;
+  avatarUrl?: string | null | undefined;
+}): void {
+  if (!state.self?.isLocal) return;
+  state.self.avatarAccent = profile.avatarAccent || '';
+  state.self.avatarColorKey = profile.avatarColorKey || '';
+  state.self.avatarUrl = profile.avatarUrl || '';
+}

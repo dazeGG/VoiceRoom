@@ -196,6 +196,12 @@ export function syncAudioBusOutput(requestedId = state.outputDeviceId || ''): Pr
   return queueAudioOutputTransition(applyRequestedOutput);
 }
 
+/** Chooses the room's output device from outside the room; resolves whether the device took it. */
+export function setOutputDevice(deviceId: string): Promise<boolean> {
+  state.outputDeviceId = deviceId;
+  return syncAudioBusOutput(deviceId);
+}
+
 function outputGain(): number {
   if (state.outputMuted || state.localAppAudioSuppressed) return 0;
   return getStoredMasterVolume() / 100;

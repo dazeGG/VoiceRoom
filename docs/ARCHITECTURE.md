@@ -156,11 +156,9 @@ above, list it here so nobody copies the old pattern.
 | Nullable pool refused at run time | `domains/messaging/reaction.repository.ts`, `domains/messaging/reply.repository.ts` (`requireQuery` refuses a missing client; `reply-repository.test` asserts the refusal message) | Kept on purpose. Do not add another `requireQuery`; take a non-null client |
 | `status: string` taken from the DB column or a metrics label | `domains/notifications/notification-outbox.repository.ts`, `lib/metrics.ts` (`HttpRequestStat`) | Kept on purpose. Narrow a status to a union where the code branches on it |
 | Internal error classes that are not a `DomainError` | `MediaError` in `domains/media/storage.ts` (storage codes), `FetchError` in `lib/link-preview-fetcher.ts` (no HTTP status), `MessageDeliveryFenceError` in `domains/messaging/` | An error that reaches a route is a `DomainError` with a catalogued code; add the code first. Keep the internal classes internal |
-| Run-time fail-safe on a typed result | `domains/moderation/moderation.service.ts` (`revoked?.status !== 'revoked'`, port typed `{ status?: string }`) | Kept on purpose. Type a new port result as a union |
+| Run-time fail-safe on a typed result | `domains/moderation/moderation.service.ts` (`revoked?.status !== 'revoked'` on a typed `PrincipalRevocation` result) | Kept on purpose. Type a new port result as a union |
 | Optional `credentialBoundary` | `realtime/room-runtime.ts` (`RuntimeCredentialBoundary \| null`; null without a 32-byte gate secret, then leases revoke through the room store) | Kept on purpose. Do not add another nullable collaborator to `RoomRuntimeDeps` |
-| Still open: `LobbyPage.svelte` is large | `features/home/LobbyPage.svelte` (683 lines) | Split by concern before adding to it |
-| Still open: room chat and DMs each own a message bubble and its menu state | `features/room/components/chat/*`, `features/home/components/lobby/dm/*` | Do not copy a third bubble or menu; wait for the shared one |
-| Still open: web code imports room-client internals directly | 14 files outside `features/room/client` import from `client/*`; the client has no public index | Import only what a file needs from its module for now; do not widen the set |
+| Large lobby components | `features/home/components/lobby/Sidebar.svelte` (715 lines), `features/home/LobbyPage.svelte` (427 lines after the routing and staff-access split) | Extract a model class or a child component before adding to either |
 
 Paths in the web rows are under `apps/web/src/lib/`, the rest under
 `apps/api/src/`.

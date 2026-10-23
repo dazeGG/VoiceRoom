@@ -195,6 +195,24 @@ export default tseslint.config(
     }
   },
   {
+    // The lobby reaches the room client only through its public index
+    // (features/room/client/index.ts), never a module inside it.
+    files: ['apps/web/src/lib/features/home/**/*.{ts,svelte}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['$lib/features/room/client/**', '**/room/client/**'],
+              message: 'Import the room client from $lib/features/room/client, its public index.'
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
     // A request's logger already binds reqId; repeating it writes the field twice.
     files: ['apps/api/src/**/*.ts'],
     rules: {

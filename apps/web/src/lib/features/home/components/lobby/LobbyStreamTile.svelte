@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
+  import { getAvatarPresentation } from '$lib/shared/ui/avatar-presentation';
   import type { RoomPeer } from '$lib/api/rooms';
 
   let { peer, onEnter }: { peer: RoomPeer; onEnter: () => void } = $props();

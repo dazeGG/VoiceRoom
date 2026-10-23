@@ -9,23 +9,18 @@
   import type { PublicUser } from '$lib/api/friends';
   import { getAppRealtime } from '$lib/api/realtime';
   import { useLobby } from '$lib/features/home/model/lobby-context';
-  import AttachmentMosaic from '$lib/shared/chat/AttachmentMosaic.svelte';
   import type { AttachmentComposeStore } from '$lib/shared/chat/attachment-compose.svelte';
-  import LinkPreviewCard from '$lib/shared/chat/LinkPreviewCard.svelte';
-  import MessageEditor from '$lib/shared/chat/MessageEditor.svelte';
+  import MessageBubble from '$lib/shared/chat/MessageBubble.svelte';
   import MessageContextMenu from '$lib/shared/chat/MessageContextMenu.svelte';
+  import { MessageMenuState } from '$lib/shared/chat/message-menu-state.svelte';
   import ReportMessageDialog from '$lib/shared/chat/ReportMessageDialog.svelte';
-  import MessageHoverActions from '$lib/shared/chat/MessageHoverActions.svelte';
-  import ReactionSummary from '$lib/shared/chat/ReactionSummary.svelte';
   import { createReactionStore } from '$lib/shared/chat/reaction-store.svelte';
-  import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
   import { formatTypingLabel } from '$lib/shared/chat/typing.svelte';
   import ChatText from '$lib/shared/components/ChatText.svelte';
   import type { ProfileCardPerson } from '$lib/shared/components/profile-card';
   import type { PresenceStatus } from '$lib/shared/presence';
   import { AccountBadge, Avatar } from '$lib/shared/ui';
-  import type { Attachment } from '@voice-room/shared/contracts/messages';
-  import { attachmentAt, downloadAttachment } from '$lib/shared/chat/attachment-actions';
+  import { downloadAttachment } from '$lib/shared/chat/attachment-actions';
   import { ChatScroll, copyMessageImage, copyMessageText } from '$lib/shared/chat/chat-scroll.svelte';
   import { openProfileCardFor } from '../../../../../entities/profile-card/profile-card-ui.svelte';
   import { clockTime } from '$lib/shared/utils/date-format';
@@ -61,18 +56,6 @@
   const peerName = $derived(peer ? displayNameOf(peer) : '');
 
   const scroll = new ChatScroll();
-  let composer = $state<{ focus(): void } | null>(null);
-  let editingMessageId = $state('');
-  let replyTarget = $state<DirectMessage | null>(null);
-  // `image` is the picture the menu was opened on, when it was opened on one.
-  let menu = $state<{
-    message: DirectMessage;
-    fromMe: boolean;
-    image: Attachment | null;
-    x: number;
-    y: number;
-  } | null>(null);
-  let reportedMessageId = $state<string | null>(null);
   let inviteResponding = $state('');
 
   const reactions = createReactionStore();
@@ -128,10 +111,10 @@
     return untrack(() => lobby.thread.attachReader(id));
   });
 
-  $effect(() => {
-    for (const message of lobby.thread.messages) {
-      if (!message.invite) reactions.show(message);
-    }
+  // Invitations carry no reactions.
+  const menu = new MessageMenuState<DirectMessage>({
+    reactions,
+    messages: () => lobby.thread.messages.filter((message) => !message.invite)
   });
 
   // A new attachment grows the composer; a reader at the bottom stays there.
@@ -190,16 +173,7 @@
   }
 
   function editLastOwnMessage(): boolean {
-    if (editingMessageId) return false;
-    const lastOwn = lobby.thread.messages.findLast((message) => message.senderId === selfId && !message.invite);
-    if (!lastOwn) return false;
-    editingMessageId = lastOwn.id;
-    return true;
-  }
-
-  function replyTo(message: DirectMessage): void {
-    replyTarget = message;
-    composer?.focus();
+    return menu.editLast(lobby.thread.messages.findLast((message) => message.senderId === selfId && !message.invite));
   }
 
   async function deleteMessage(messageId: string): Promise<void> {
@@ -216,16 +190,8 @@
 
   // Invitations are interactive cards with their own buttons; a context menu on
   // top of them would offer actions that do not apply.
-  function openMessageMenu(message: DirectMessage, fromMe: boolean, event: MouseEvent): void {
-    if (message.invite || editingMessageId === message.id) return;
-    event.preventDefault();
-    menu = {
-      message,
-      fromMe,
-      image: attachmentAt(event.target, message.attachments),
-      x: event.clientX,
-      y: event.clientY
-    };
+  function openMessageMenu(message: DirectMessage, event: MouseEvent): void {
+    if (!message.invite) menu.open(message, event);
   }
 
   async function respondToInvite(message: DirectMessage, action: 'accept' | 'decline'): Promise<void> {
@@ -306,14 +272,7 @@
               >
             </div>
             {#each group.bubbles as bubble (bubble.id)}
-              <!-- svelte-ignore a11y_no_static_element_interactions -->
-              <div
-                class="chat-msg-text dm-chat-message"
-                class:is-context={menu?.message.id === bubble.id}
-                data-message-id={bubble.id}
-                data-group-first={bubble.id === group.bubbles[0].id}
-                oncontextmenu={(event) => openMessageMenu(bubble, group.fromMe, event)}
-              >
+              {#snippet inviteCard()}
                 {#if bubble.invite}
                   <DmInviteCard
                     invite={bubble.invite}
@@ -321,42 +280,35 @@
                     busy={inviteResponding === bubble.id}
                     onRespond={(action: 'accept' | 'decline') => void respondToInvite(bubble, action)}
                   />
-                {:else if editingMessageId === bubble.id}
-                  <MessageEditor
-                    text={bubble.body}
-                    variant="dm-msg"
-                    maxlength={2000}
-                    onSave={async (text: string) => {
-                      await lobby.editMessage(bubble.id, text);
-                    }}
-                    onClose={() => (editingMessageId = '')}
-                  />
-                {:else}
-                  <div class="dm-chat-content">
-                    {#if bubble.replyPreview}<ReplyPreview
-                        preview={bubble.replyPreview}
-                        interactive
-                        onjump={jumpToMessage}
-                      />{/if}
-                    {#if bubble.attachments?.length}<AttachmentMosaic attachments={bubble.attachments} />{/if}
-                    {#if bubble.body.trim()}<span class="chat-msg-content dm-msg-content"
-                        ><ChatText text={bubble.body} />{#if bubble.editedAt}<span class="dm-msg-edited"
-                            >(изменено)</span
-                          >{/if}</span
-                      >{/if}
-                    {#if bubble.linkPreview}<LinkPreviewCard preview={bubble.linkPreview} />{/if}
-                    <ReactionSummary store={reactions} messageId={bubble.id} />
-                  </div>
-                  <MessageHoverActions
-                    reactionStore={reactions}
-                    messageId={bubble.id}
-                    userId={selfId}
-                    onReply={() => replyTo(bubble)}
-                    onCopy={() => void copyMessageText(bubble.body, pushToast)}
-                    onMore={(event: MouseEvent) => openMessageMenu(bubble, group.fromMe, event)}
-                  />
                 {/if}
-              </div>
+              {/snippet}
+              <MessageBubble
+                message={bubble}
+                text={bubble.body}
+                variant="dm-msg"
+                maxlength={2000}
+                first={bubble.id === group.bubbles[0].id}
+                editing={menu.editingId === bubble.id}
+                menuOpen={menu.opened?.message.id === bubble.id}
+                {reactions}
+                userId={selfId}
+                card={bubble.invite ? inviteCard : undefined}
+                onMenu={(event: MouseEvent) => openMessageMenu(bubble, event)}
+                onJump={jumpToMessage}
+                onReply={() => menu.replyTo(bubble)}
+                onCopy={() => void copyMessageText(bubble.body, pushToast)}
+                onSaveEdit={async (text: string) => {
+                  await lobby.editMessage(bubble.id, text);
+                }}
+                onCloseEdit={() => menu.stopEditing()}
+              >
+                {#snippet content()}
+                  {#if bubble.body.trim()}<span class="chat-msg-content dm-msg-content"
+                      ><ChatText text={bubble.body} />{#if bubble.editedAt}<span class="dm-msg-edited">(изменено)</span
+                        >{/if}</span
+                    >{/if}
+                {/snippet}
+              </MessageBubble>
             {/each}
           </div>
         </div>
@@ -373,8 +325,8 @@
 </div>
 
 <DmComposer
-  bind:this={composer}
-  bind:replyTarget
+  bind:this={menu.composer}
+  bind:replyTarget={menu.replyTarget}
   {peerId}
   {selfId}
   {peerName}
@@ -384,40 +336,36 @@
   onJump={jumpToMessage}
 />
 
-{#if menu}
-  {@const target = menu.message}
-  {@const image = menu.image}
+{#if menu.opened}
+  {@const target = menu.opened.message}
+  {@const image = menu.opened.image}
+  {@const fromMe = target.senderId === selfId}
   <MessageContextMenu
     open
-    x={menu.x}
-    y={menu.y}
+    x={menu.opened.x}
+    y={menu.opened.y}
     {quickReactions}
-    activeReactions={new Set(
-      reactions
-        .forMessage(target.id)
-        .filter((summary) => summary.reactedByMe)
-        .map((summary) => summary.emoji)
-    )}
+    activeReactions={menu.activeReactions}
     canReact={Boolean(selfId)}
-    canEdit={menu.fromMe}
-    canDelete={menu.fromMe}
-    onClose={() => (menu = null)}
+    canEdit={fromMe}
+    canDelete={fromMe}
+    onClose={() => menu.close()}
     onReact={(emoji: string) => void reactions.toggle(target.id, emoji)}
     onOpenReactionPicker={() => scroll.openReactionPicker(target.id)}
-    onReply={() => replyTo(target)}
+    onReply={() => menu.replyTo(target)}
     onCopy={() => void copyMessageText(target.body, pushToast)}
     onCopyImage={image ? () => void copyMessageImage(image, pushToast) : undefined}
     onDownloadImage={image ? () => downloadAttachment(image) : undefined}
-    onEdit={() => (editingMessageId = target.id)}
+    onEdit={() => menu.edit(target.id)}
     onDelete={() => void deleteMessage(target.id)}
-    onReport={menu.fromMe ? undefined : () => (reportedMessageId = target.id)}
+    onReport={fromMe ? undefined : () => menu.report(target.id)}
   />
 {/if}
 
-{#if reportedMessageId}
+{#if menu.reportedId}
   <ReportMessageDialog
-    target={{ kind: 'direct_message', messageId: reportedMessageId }}
-    onClose={() => (reportedMessageId = null)}
+    target={{ kind: 'direct_message', messageId: menu.reportedId }}
+    onClose={() => menu.closeReport()}
     onReported={(message: string) => pushToast(message)}
   />
 {/if}
