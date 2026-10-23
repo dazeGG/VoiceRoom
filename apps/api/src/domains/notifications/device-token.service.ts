@@ -3,7 +3,7 @@
 // pushes off). Registering is refused while the server has no RuStore project.
 
 import { parseAndroidAppVersion } from '@voice-room/shared/client-version';
-import type { DevicePushProvider } from '@voice-room/shared/contracts/devices';
+import { DEVICE_TOKEN_PATTERN, type DevicePushProvider } from '@voice-room/shared/contracts/devices';
 import type { RateCheck } from '../../lib/rate-limit.ts';
 import { DomainError } from '../../platform/http/domain-error.ts';
 import type { DeviceTokenRepository } from './device-token.repository.ts';
@@ -17,10 +17,6 @@ export interface DeviceTokenServiceDeps {
 }
 
 type RateLimited = { status: 'rate_limited'; retryAfterSeconds: number };
-
-// A push SDK's token is one opaque word; anything with a space or a control
-// character in it was mangled on the way.
-const MALFORMED_TOKEN = /[\s\p{Cc}]/u;
 
 export function createDeviceTokenService(deps: DeviceTokenServiceDeps) {
   function rateLimited(userId: string): RateLimited | null {
@@ -43,7 +39,9 @@ export function createDeviceTokenService(deps: DeviceTokenServiceDeps) {
       userAgent: string;
     }): Promise<{ status: 'disabled' } | RateLimited | { status: 'registered' }> {
       if (!deps.enabled()) return { status: 'disabled' };
-      if (MALFORMED_TOKEN.test(token)) throw new DomainError('invalid_device_token', 400, 'Invalid device token');
+      // A push SDK's token is one word of printable ASCII; anything else was
+      // mangled on the way, and could outgrow the index or the push.
+      if (!DEVICE_TOKEN_PATTERN.test(token)) throw new DomainError('invalid_device_token', 400, 'Invalid device token');
       const limited = rateLimited(userId);
       if (limited) return limited;
       const appVersion = parseAndroidAppVersion(userAgent) || null;

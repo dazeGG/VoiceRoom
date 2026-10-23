@@ -13,6 +13,7 @@ import { resolvePushTtl, type PushContext } from '../../lib/push-service.ts';
 import { buildRuStoreMessage, type RuStorePushClient, type RuStoreSendResult } from '../../lib/rustore-push.ts';
 import type { RuStorePushConfig } from '../../app/config.ts';
 import type { DeviceTokenRepository } from './device-token.repository.ts';
+import { localPushFailure } from './push-fanout.ts';
 
 type SendResult = { enabled: boolean; sent: number; removed: number };
 type NativePushLogger = {
@@ -82,7 +83,8 @@ export function createNativePushService({
         { evt: LOG_EVENTS.PUSH_SUBSCRIPTION_LOAD_FAILED, provider: PROVIDER, err: error, userId },
         'failed to load device tokens'
       );
-      if (context.strictFailures) throw error;
+      // A database fault is not a RuStore outage; the worker counts it as any failure.
+      if (context.strictFailures) throw localPushFailure(error);
       return { enabled: true, sent: 0, removed: 0 };
     }
     // An outdated app cannot join the room a ring leads to; every other push
@@ -154,7 +156,8 @@ export function createNativePushService({
         'native push unauthorized'
       );
     }
-    if (context.strictFailures && failures.length > 0) {
+    // A push one phone already got is not retried for the others: a retry would repeat it.
+    if (context.strictFailures && sent === 0 && failures.length > 0) {
       throw new AggregateError(failures, 'RuStore push delivery failed');
     }
     return { enabled: true, sent, removed };

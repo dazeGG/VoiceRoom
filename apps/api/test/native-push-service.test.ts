@@ -114,10 +114,22 @@ test('a bad service key is logged once per send, not once per token', async () =
   assert.equal(logger.records[0]?.tokens, 3);
 });
 
-test('a retryable answer throws only under strictFailures', async () => {
-  const strict = harness({ targets: [target('busy'), target('ok')], outcomes: { busy: 'retryable' } });
+test('a retryable answer throws only under strictFailures, and only when no phone got the push', async () => {
+  const strict = harness({
+    targets: [target('busy'), target('down')],
+    outcomes: { busy: 'retryable', down: 'retryable' }
+  });
   await assert.rejects(strict.service.sendToUser('ada', DM, { strictFailures: true }), AggregateError);
-  assert.deepEqual(strict.events('warn'), ['push.native_send_failed']);
+  assert.deepEqual(strict.events('warn'), ['push.native_send_failed', 'push.native_send_failed']);
+
+  // A retry would repeat the push on the phone that already got it.
+  const partly = harness({ targets: [target('busy'), target('ok')], outcomes: { busy: 'retryable' } });
+  assert.deepEqual(await partly.service.sendToUser('ada', DM, { strictFailures: true }), {
+    enabled: true,
+    sent: 1,
+    removed: 0
+  });
+  assert.deepEqual(partly.events('warn'), ['push.native_send_failed']);
 
   const lenient = harness({ outcomes: { phone: 'retryable' } });
   assert.deepEqual(await lenient.service.sendToUser('ada', DM), { enabled: true, sent: 0, removed: 0 });
@@ -203,7 +215,12 @@ test('a token store failure is logged, and thrown only under strictFailures', as
   assert.deepEqual(lenient.events('warn'), ['push.subscription_load_failed']);
 
   const strict = harness({ loadFails: true });
-  await assert.rejects(strict.service.sendToUser('ada', DM, { strictFailures: true }), /db/);
+  await assert.rejects(strict.service.sendToUser('ada', DM, { strictFailures: true }), (error: unknown) => {
+    assert.ok(error instanceof Error);
+    assert.ok(error.cause instanceof Error);
+    assert.equal(error.cause.message, 'db');
+    return true;
+  });
 });
 
 test('only string extra data and string payload fields reach the push', async () => {

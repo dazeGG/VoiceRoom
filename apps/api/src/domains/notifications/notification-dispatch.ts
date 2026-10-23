@@ -45,6 +45,14 @@ export interface NotificationDispatchDeps {
   logger(): Pick<Logger, 'warn' | 'error'>;
 }
 
+// Private notification text hides the room a ring leads into, as its Web
+// Push body does; the caller's name stays, as in the Web Push title.
+const ROOM_NAME_KEYS: ReadonlySet<string> = new Set(['roomName', 'roomEmoji']);
+
+function withoutRoomNames(nativeData: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(Object.entries(nativeData).filter(([key]) => !ROOM_NAME_KEYS.has(key)));
+}
+
 export function createNotificationDispatch(deps: NotificationDispatchDeps) {
   // A failed push is logged, never thrown: it is a side effect of something
   // that already succeeded.
@@ -53,11 +61,14 @@ export function createNotificationDispatch(deps: NotificationDispatchDeps) {
       if (!deps.push().config.enabled) return;
       const preferences = await deps.preferences(userId);
       if (!context.ignorePreferences && !shouldDeliverPush(preferences, context)) return;
-      const body = preferences.privateNotifications && payload.privateBody ? payload.privateBody : payload.body;
+      const hideText = Boolean(preferences.privateNotifications && payload.privateBody);
+      const body = hideText ? payload.privateBody : payload.body;
       const { privateBody: _privateBody, ...publicPayload } = payload;
       const ttl = resolvePushTtl(context);
       if (ttl === null) return;
-      const deliveryContext = ttl === undefined ? context : { ...context, ttl };
+      const visibleContext =
+        hideText && context.nativeData ? { ...context, nativeData: withoutRoomNames(context.nativeData) } : context;
+      const deliveryContext = ttl === undefined ? visibleContext : { ...visibleContext, ttl };
       await deps.push().sendToUser(userId, { ...publicPayload, body }, deliveryContext);
     } catch (error) {
       deps

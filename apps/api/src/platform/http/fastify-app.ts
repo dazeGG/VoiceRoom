@@ -27,6 +27,9 @@ export interface FastifyAppOptions {
   outdatedClientVersion(req: http.IncomingMessage): string | null;
 }
 
+// What an outdated Android app may still do besides reading the client policy.
+const OUTDATED_APP_ROUTES: ReadonlySet<string> = new Set(['POST /api/auth/logout', 'DELETE /api/push/devices']);
+
 export function createFastifyApp(options: FastifyAppOptions): FastifyInstance {
   const app = fastify({
     bodyLimit: options.bodyLimit,
@@ -72,16 +75,15 @@ export function createFastifyApp(options: FastifyAppOptions): FastifyInstance {
   });
 
   // An Android app below the minimum version gets 426 on every API path but
-  // the policy route that tells it why. A WebSocket upgrade passes: React
-  // Native reports a refused upgrade as a bare error without the status, so
-  // /api/ws closes the opened socket with 4426 instead (app/api-routes.ts).
+  // the policy route that tells it why, signing out and dropping its push
+  // token. The WebSocket upgrade passes: React Native reports a refused
+  // upgrade as a bare error without the status, so /api/ws closes the opened
+  // socket with 4426 instead (app/api-routes.ts).
   app.addHook('onRequest', (request, reply, done) => {
     const path = request.url.split('?')[0] ?? '';
-    const upgrade = String(request.headers.upgrade || '').toLowerCase() === 'websocket';
-    const version =
-      path.startsWith('/api/') && path !== CLIENT_POLICY_PATH && !upgrade
-        ? options.outdatedClientVersion(request.raw)
-        : null;
+    const upgrade = path === '/api/ws' && String(request.headers.upgrade || '').toLowerCase() === 'websocket';
+    const exempt = path === CLIENT_POLICY_PATH || OUTDATED_APP_ROUTES.has(`${request.method} ${path}`) || upgrade;
+    const version = path.startsWith('/api/') && !exempt ? options.outdatedClientVersion(request.raw) : null;
     if (version === null) {
       done();
       return;

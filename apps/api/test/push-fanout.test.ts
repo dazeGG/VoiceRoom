@@ -3,7 +3,12 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createPushFanout, failedPushProviders, type PushSender } from '../src/domains/notifications/push-fanout.ts';
+import {
+  createPushFanout,
+  failedPushProviders,
+  localPushFailure,
+  type PushSender
+} from '../src/domains/notifications/push-fanout.ts';
 
 type Behaviour = { enabled?: boolean; sent?: number; removed?: number; fails?: boolean };
 
@@ -78,6 +83,29 @@ test('nobody delivered and a provider failed: an AggregateError naming the faile
     );
     assert.ok(error instanceof AggregateError);
     assert.equal(error.message, 'Push delivery failed');
+    assert.deepEqual(failedPushProviders(error), failed);
+  }
+});
+
+test("a sender's own failure, before its provider, is thrown but names no provider", async () => {
+  const web = sender('web', { fails: true });
+  const local: PushSender = {
+    name: 'rustore',
+    config: { enabled: true },
+    async sendToUser() {
+      throw localPushFailure(new Error('db'));
+    }
+  };
+  for (const [providers, failed] of [
+    [[local], []],
+    [[web.provider, local], ['web']]
+  ] as const) {
+    const push = createPushFanout(() => providers);
+    const error = await push.sendToUser('u', {}, STRICT).then(
+      () => assert.fail('expected the fan-out to throw'),
+      (thrown: unknown) => thrown
+    );
+    assert.ok(error instanceof AggregateError);
     assert.deepEqual(failedPushProviders(error), failed);
   }
 });

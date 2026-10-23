@@ -2,6 +2,7 @@
 // shared context and the services each group needs.
 
 import type { FastifyInstance } from 'fastify';
+import { outdatedAndroidVersion } from '@voice-room/shared/client-version';
 import type { ApiContext } from './context.ts';
 import type { RateLimits } from './rate-limits.ts';
 import type { createServiceRegistry } from './service-registry.ts';
@@ -9,7 +10,7 @@ import type { readApiConfig } from './config.ts';
 import type { RoomRealtimeRuntime } from '../realtime/room-runtime.ts';
 import type { createWsHandler } from '../realtime/ws-handler.ts';
 import { registerCapabilityRoutes } from '../platform/capability-routes.ts';
-import { outdatedAndroidVersion, registerClientPolicyRoutes } from '../platform/client-policy-routes.ts';
+import { registerClientPolicyRoutes } from '../platform/client-policy-routes.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
 import { tokensMatch } from '../platform/crypto/tokens-match.ts';
 import type { PresencePeer } from '../domains/rooms/room-views.ts';

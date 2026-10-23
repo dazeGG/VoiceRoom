@@ -66,6 +66,44 @@ test('an outdated Android app gets 426 client_outdated on an API path, with or w
   assert.equal((await get(app, '/api/rooms', 'VoiceRoom-Android/1.2')).statusCode, 426);
 });
 
+test('an outdated app can still sign out and drop its push token, and nothing more', async (t) => {
+  const app = createApp(t, '1.2.0');
+  const send = (method: 'GET' | 'POST' | 'DELETE', url: string, payload?: object) =>
+    app.inject(
+      payload === undefined
+        ? { method, url, headers: { 'user-agent': OUTDATED } }
+        : {
+            method,
+            url,
+            headers: { 'user-agent': OUTDATED, 'content-type': 'application/json' },
+            payload: JSON.stringify(payload)
+          }
+    );
+  const device = { provider: 'rustore', token: 'phone-token' };
+
+  const logout = await send('POST', '/api/auth/logout');
+  assert.equal(logout.statusCode, 200);
+  // Past the gate, the route itself asks for a session.
+  const drop = await send('DELETE', '/api/push/devices', device);
+  assert.equal(drop.statusCode, 401);
+  assert.equal(checked(Failure, drop.json()).code, 'authentication_required');
+
+  assert.equal((await send('POST', '/api/push/devices', device)).statusCode, 426);
+  assert.equal((await send('GET', '/api/push/devices')).statusCode, 426);
+  assert.equal((await send('GET', '/api/auth/logout')).statusCode, 426);
+});
+
+test('an Upgrade header lets an outdated app past the 426 only on /api/ws', async (t) => {
+  const app = createApp(t, '1.2.0');
+  const response = await app.inject({
+    method: 'GET',
+    url: '/api/rooms',
+    headers: { 'user-agent': OUTDATED, connection: 'Upgrade', upgrade: 'websocket' }
+  });
+  assert.equal(response.statusCode, 426);
+  assert.equal(checked(Failure, response.json()).code, 'client_outdated');
+});
+
 test('the current app, a browser and a request without a user agent pass', async (t) => {
   const app = createApp(t, '1.2.0');
   for (const userAgent of [CURRENT, 'VoiceRoom-Android/1.10.0', CHROME, undefined]) {

@@ -16,6 +16,7 @@ import {
 import { readNotificationDeliveryWorkerConfig } from '../src/app/config.ts';
 import { createDeviceTokenRepository } from '../src/domains/notifications/device-token.repository.ts';
 import { createPushFanout, type PushSender } from '../src/domains/notifications/push-fanout.ts';
+import { createNativePushService } from '../src/domains/notifications/native-push.service.ts';
 test(
   'G63-A01 only one worker owns the fenced lease and takeover increments the fence',
   { skip: !process.env.TEST_DATABASE_URL },
@@ -188,6 +189,28 @@ test('RuStore-only failures retry at most 4 times and never stop the worker', as
 
 test('Web Push failures still count toward the failure threshold', async () => {
   const { rescheduled, disabledReason } = await runBatch(fanoutProvider(FAILS, NOTHING_SENT), 10);
+  assert.equal(disabledReason, 'provider_failure_threshold');
+  assert.equal(rescheduled.length, 10);
+  assert.ok(rescheduled.every((call) => call.maxAttempts === 8));
+});
+
+test('a failed device-token store counts toward the failure threshold, as any other fault', async () => {
+  const native = createNativePushService({
+    config: { enabled: true, projectId: 'p', serviceToken: 's' },
+    tokens: () => ({
+      async listByUserId() {
+        throw new Error('database unavailable');
+      },
+      async removeToken() {}
+    }),
+    client: {
+      async send() {
+        return assert.fail('no token was loaded, so nothing is sent');
+      }
+    },
+    logger: { warn() {}, error() {} }
+  });
+  const { rescheduled, disabledReason } = await runBatch(fanoutProvider(NOTHING_SENT, native.sendToUser), 10);
   assert.equal(disabledReason, 'provider_failure_threshold');
   assert.equal(rescheduled.length, 10);
   assert.ok(rescheduled.every((call) => call.maxAttempts === 8));

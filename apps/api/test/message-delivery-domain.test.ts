@@ -422,6 +422,28 @@ test('push respects the switch, preferences, private text and expiry', async () 
   assert.deepEqual(failing.calls.warnings, ['push.send_failed']);
 });
 
+test('private notification text keeps the room out of the ring data and the caller in it', async () => {
+  const expiresAt = Date.now() + 60_000;
+  const ring = {
+    type: 'ring',
+    title: 'Ада зовёт вас',
+    body: 'Комната «Кухня»',
+    privateBody: 'Вас зовут в голосовую комнату.'
+  };
+  const nativeData = { fromUserId: 'ada', fromName: 'Ада', roomId: 'r1', roomName: 'Кухня', roomEmoji: '🍳' };
+
+  const privacy = dispatchHarness({ preferences: { privateNotifications: true } });
+  await privacy.dispatch.queuePush('u', ring, { expiresAt, nativeData });
+  assert.equal(privacy.calls.sent[0]?.payload.title, 'Ада зовёт вас');
+  assert.equal(privacy.calls.sent[0]?.payload.body, 'Вас зовут в голосовую комнату.');
+  assert.deepEqual(privacy.calls.sent[0]?.context.nativeData, { fromUserId: 'ada', fromName: 'Ада', roomId: 'r1' });
+
+  const open = dispatchHarness();
+  await open.dispatch.queuePush('u', ring, { expiresAt, nativeData });
+  assert.equal(open.calls.sent[0]?.payload.body, 'Комната «Кухня»');
+  assert.deepEqual(open.calls.sent[0]?.context.nativeData, nativeData);
+});
+
 test('a DM notification skips self, muted senders and failures', async () => {
   const sender = storedUser({ id: 's1', login: 'sam' });
   const message = { id: 'm1', body: 'hi', createdAt: 1 };

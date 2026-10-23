@@ -5,21 +5,9 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance } from 'fastify';
-import { isVersionBelow, parseAndroidAppVersion } from '@voice-room/shared/client-version';
 import { ClientPolicy } from '@voice-room/shared/contracts/client';
 
 export const CLIENT_POLICY_PATH = '/api/client/policy';
-
-/**
- * The app's version when the user agent is the Android app below
- * `minVersion` (an empty string for a malformed one); null for everyone else
- * and whenever no minimum is set. The user agent is parsed at most once.
- */
-export function outdatedAndroidVersion(userAgent: string | undefined, minVersion: string): string | null {
-  if (!minVersion) return null;
-  const version = parseAndroidAppVersion(userAgent);
-  return version !== null && isVersionBelow(version, minVersion) ? version : null;
-}
 
 export function registerClientPolicyRoutes(
   root: FastifyInstance,

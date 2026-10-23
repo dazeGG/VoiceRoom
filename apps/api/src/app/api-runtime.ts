@@ -28,7 +28,7 @@ import {
 } from '../lib/metrics.ts';
 import { createHostProbe } from '../platform/host-probe.ts';
 import { createFastifyApp } from '../platform/http/fastify-app.ts';
-import { outdatedAndroidVersion } from '../platform/client-policy-routes.ts';
+import { outdatedAndroidVersion } from '@voice-room/shared/client-version';
 import { asHttpServer, type ApiServer } from '../platform/http/http-server.ts';
 import type { Timer } from '../platform/types.ts';
 export type { ApiServer };

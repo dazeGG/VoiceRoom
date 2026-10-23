@@ -8,6 +8,19 @@ import { fieldOf } from '../../platform/record.ts';
 
 type SendResult = { enabled: boolean; sent: number; removed: number };
 
+const LOCAL_FAILURE = 'localPushFailure';
+
+/**
+ * A sender's own failure before it reached its provider, such as its token
+ * store failing. The fan-out still throws it, but names no provider for it,
+ * so the worker counts it like any other failure, not as a provider outage.
+ */
+export function localPushFailure(cause: unknown): Error {
+  return Object.assign(new Error('Push sender failed before reaching its provider', { cause }), {
+    [LOCAL_FAILURE]: true
+  });
+}
+
 /** A push provider, named so a failure can say which one failed. */
 export interface PushSender {
   name: string;
@@ -18,7 +31,8 @@ export interface PushSender {
 /**
  * On while any provider is on; `sent` and `removed` are summed. Under
  * `strictFailures` it throws only when no provider sent anything and at least
- * one threw: an AggregateError of their errors, tagged with `failedProviders`.
+ * one threw: an AggregateError of their errors, tagged with `failedProviders`,
+ * the providers that threw anything but a `localPushFailure`.
  * A provider that still delivered means the recipient got the push, and a
  * retry would repeat it.
  */
@@ -43,7 +57,7 @@ export function createPushFanout(providers: () => readonly PushSender[]) {
         removed += result.removed;
       } else {
         errors.push(error);
-        failedProviders.push(name);
+        if (fieldOf(error, LOCAL_FAILURE) !== true) failedProviders.push(name);
       }
     }
     if (context.strictFailures && sent === 0 && errors.length > 0) {

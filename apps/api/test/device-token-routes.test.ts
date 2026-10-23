@@ -161,9 +161,11 @@ test('an unknown provider, an empty token or one over 1024 characters is an inva
   assert.equal(stored.size, 0);
 });
 
-test('a token with whitespace or a control character is an invalid device token', async (t) => {
+test('a token with whitespace, a control character or anything beyond ASCII is an invalid device token', async (t) => {
   const { stored, refusal, call } = harness(t);
-  for (const token of ['two words', 'tab\there', 'line\nbreak', 'nul\u0000byte', 'bell\u0007', ' padded']) {
+  const malformed = ['two words', 'tab\there', 'line\nbreak', 'nul\u0000byte', 'bell\u0007', ' padded', 'del\u007f'];
+  // 1024 characters of Cyrillic are 2048 bytes: past what the index and the push leave room for.
+  for (const token of [...malformed, 'токен', 'émoji🙂', 'я'.repeat(1024)]) {
     assert.deepEqual(
       await refusal('POST', { provider: 'rustore', token }),
       { status: 400, code: 'invalid_device_token' },
