@@ -110,7 +110,7 @@ function harness(store: Partial<FriendStore> = {}, options: HarnessOptions = {})
   const service = createFriendsService({
     friends: () => friends,
     findUser: async (userId) => storedUser({ id: userId, deletedAt: options.deletedTarget ? 1 : null }),
-    findRoom: async (roomId) => (options.noRoom ? null : { id: roomId, name: options.roomName ?? 'Team' }),
+    findRoom: async (roomId) => (options.noRoom ? null : { id: roomId, name: options.roomName ?? 'Team', emoji: '🎧' }),
     sendDirectMessage: async (input) => {
       calls.dms.push(input);
       return storedDirectMessage('dm-1');
@@ -343,7 +343,10 @@ test('a ring notifies, files a room invitation DM for both sides and pushes unti
   assert.equal(calls.dms[0]?.body, 'Приглашение в комнату «Team»');
   assert.equal(calls.dms[0].metadata.kind, 'room-invite');
   assert.deepEqual(calls.pushes[0]?.slice(0, 3), ['f1', 'ring', 'Alice зовёт вас']);
-  assert.deepEqual(calls.pushes[0][3], { expiresAt: 1050 });
+  assert.deepEqual(calls.pushes[0][3], {
+    expiresAt: 1050,
+    nativeData: { fromUserId: 'user-1', fromName: 'Alice', roomId: 'room-1', roomName: 'Team', roomEmoji: '🎧' }
+  });
 
   const unnamed = harness({}, { roomName: '' });
   await unnamed.service.ring(storedUser({ login: '' }), 'room-1', 'f1');
