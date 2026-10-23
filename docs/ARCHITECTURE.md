@@ -118,6 +118,12 @@ Rules:
 - A service fails with a catalogued code by throwing
   `DomainError(code, status, message)` (`platform/http/domain-error.ts`); do
   not add another `*Error` class for that.
+- The Android app updates slowly. API and realtime changes stay backward
+  compatible for every app version at or above `ANDROID_MIN_VERSION`; raise
+  the threshold (and ship a matching app) before removing anything an older
+  app uses. The app sends `VoiceRoom-Android/<x.y.z>`; an older one gets HTTP
+  426 `client_outdated` and WebSocket close 4426
+  (`packages/shared/src/client-version.ts`).
 
 ## 4. Current state versus these rules
 

@@ -25,6 +25,7 @@ const LOG_EVENTS = Object.freeze({
   // HTTP edge.
   HTTP_REQUEST: 'http.request',
   HTTP_HANDLER_FAILED: 'http.handler_failed',
+  HTTP_CLIENT_OUTDATED: 'http.client_outdated',
 
   // Accounts and sessions.
   AUTH_SIGN_IN_RECORD_FAILED: 'auth.sign_in_record_failed',

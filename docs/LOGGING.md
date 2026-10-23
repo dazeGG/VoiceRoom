@@ -87,7 +87,7 @@ Message bodies, room chat content and attachment contents are never logged.
 | Area | Codes |
 | --- | --- |
 | Process | `boot.*`, `worker.*` |
-| HTTP | `http.request`, `http.handler_failed` |
+| HTTP | `http.request`, `http.handler_failed`, `http.client_outdated` |
 | Realtime | `ws.connected`, `ws.closed` (with close code and duration), `ws.rejected_over_limit`, `ws.message_failed`, `ws.message_rejected` |
 | Voice rooms | `room.joined`, `room.join_rejected`, `room.left`, `room.occupancy_*` |
 | LiveKit | `livekit.admission_denied`, `livekit.admission_revoked`, `livekit.mute_failed`, `livekit.gate_*` |

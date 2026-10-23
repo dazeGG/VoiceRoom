@@ -97,6 +97,8 @@ export type ServiceRegistryConfig = {
   PUSH?: PushConfig;
   /** Push to the Android app through RuStore; off when absent. */
   RUSTORE_PUSH?: RuStorePushConfig;
+  /** The oldest Android app a ring push still reaches; no bound when absent or empty. */
+  ANDROID_MIN_VERSION?: string;
   /** Where uploaded chat media lives; defaults to /data/media. */
   MEDIA_STORAGE_DIR?: string;
   /** Uploads pause below this much free space; defaults to 2 GiB. */
@@ -260,7 +262,8 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       config: RUSTORE_PUSH,
       tokens: () => deviceTokens.get(),
       client: createRuStorePushClient(RUSTORE_PUSH),
-      logger: poolLogger
+      logger: poolLogger,
+      minVersion: config.ANDROID_MIN_VERSION ?? ''
     })
   );
   // Web Push and the Android app: what the dispatch sends a push through.

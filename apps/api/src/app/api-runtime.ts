@@ -28,6 +28,7 @@ import {
 } from '../lib/metrics.ts';
 import { createHostProbe } from '../platform/host-probe.ts';
 import { createFastifyApp } from '../platform/http/fastify-app.ts';
+import { outdatedAndroidVersion } from '../platform/client-policy-routes.ts';
 import { asHttpServer, type ApiServer } from '../platform/http/http-server.ts';
 import type { Timer } from '../platform/types.ts';
 export type { ApiServer };
@@ -249,7 +250,8 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
       securityHeaders: baseHeaders,
       logRequest: logHttpRequest,
       // The admin app's cookie authenticates too, so its writes are origin-checked the same way.
-      hasSessionCookie: (req) => Boolean(getSessionToken(req) || staffToken(req, config.SESSION_COOKIE_SECURE))
+      hasSessionCookie: (req) => Boolean(getSessionToken(req) || staffToken(req, config.SESSION_COOKIE_SECURE)),
+      outdatedClientVersion: (req) => outdatedAndroidVersion(req.headers['user-agent'], config.ANDROID_MIN_VERSION)
     });
     const appLogger = logger || app.log;
     setProcessLogger(appLogger);

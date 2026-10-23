@@ -61,6 +61,20 @@ test('RuStore push is on only with both the project id and the service token, fo
   assert.deepEqual(readNotificationDeliveryWorkerConfig(both).RUSTORE_PUSH, on);
 });
 
+test('the minimum Android app version is empty by default, and a malformed one stops the API and the worker', () => {
+  assert.equal(readApiConfig({}).ANDROID_MIN_VERSION, '');
+  assert.equal(readNotificationDeliveryWorkerConfig({}).ANDROID_MIN_VERSION, '');
+  assert.equal(readApiConfig({ ANDROID_MIN_VERSION: ' 1.2.0 ' }).ANDROID_MIN_VERSION, '1.2.0');
+  assert.equal(readNotificationDeliveryWorkerConfig({ ANDROID_MIN_VERSION: '1.2.0' }).ANDROID_MIN_VERSION, '1.2.0');
+  for (const value of ['1.2', '1.2.0-beta', 'v1.2.0']) {
+    assert.throws(() => readApiConfig({ ANDROID_MIN_VERSION: value }), /ANDROID_MIN_VERSION must be a version/);
+    assert.throws(
+      () => readNotificationDeliveryWorkerConfig({ ANDROID_MIN_VERSION: value }),
+      /ANDROID_MIN_VERSION must be a version/
+    );
+  }
+});
+
 test('the reconnect lease', () => {
   assert.equal(resolveRealtimeReconnectLeaseMs({}), DEFAULT_REALTIME_RECONNECT_LEASE_MS);
   assert.equal(resolveRealtimeReconnectLeaseMs({ REALTIME_RECONNECT_LEASE_MS: '5000' }), 5000);

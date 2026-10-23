@@ -198,7 +198,8 @@ function createNotificationDeliveryProvider({
   const native = createNativePushService({
     config: config.RUSTORE_PUSH,
     tokens: () => deviceTokens,
-    client: createRuStorePushClient({ ...config.RUSTORE_PUSH, fetch })
+    client: createRuStorePushClient({ ...config.RUSTORE_PUSH, fetch }),
+    minVersion: config.ANDROID_MIN_VERSION
   });
   return createNotificationPushProvider({ pushService: createPushFanout(() => [{ name: 'web', ...web }, native]) });
 }

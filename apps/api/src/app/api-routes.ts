@@ -9,6 +9,8 @@ import type { readApiConfig } from './config.ts';
 import type { RoomRealtimeRuntime } from '../realtime/room-runtime.ts';
 import type { createWsHandler } from '../realtime/ws-handler.ts';
 import { registerCapabilityRoutes } from '../platform/capability-routes.ts';
+import { outdatedAndroidVersion, registerClientPolicyRoutes } from '../platform/client-policy-routes.ts';
+import { LOG_EVENTS } from '../lib/log-events.ts';
 import { tokensMatch } from '../platform/crypto/tokens-match.ts';
 import type { PresencePeer } from '../domains/rooms/room-views.ts';
 import type { createSessionCookies } from '../domains/account/session-cookie.ts';
@@ -49,6 +51,7 @@ export interface ApiRouteDeps {
     | 'SITE_ORIGIN'
     | 'ADMIN_ORIGIN'
     | 'SESSION_COOKIE_SECURE'
+    | 'ANDROID_MIN_VERSION'
   >;
   services: ReturnType<typeof createServiceRegistry>;
   domain: {
@@ -136,6 +139,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
   });
 
   registerCapabilityRoutes(app);
+  registerClientPolicyRoutes(app, { androidMinVersion: deps.config.ANDROID_MIN_VERSION });
 
   // Registered with or without a database: without one they answer 503 internal_error.
   const database = deps.services.routeServices();
@@ -196,6 +200,13 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
   // Register after plugins finish loading so @fastify/websocket can wrap the handler.
   app.after(() => {
     app.get('/api/ws', { websocket: true }, (socket, request) => {
+      // An outdated Android app is closed before the handshake, so it never gets `ready`.
+      const version = outdatedAndroidVersion(request.headers['user-agent'], deps.config.ANDROID_MIN_VERSION);
+      if (version !== null) {
+        request.log.info({ evt: LOG_EVENTS.HTTP_CLIENT_OUTDATED, transport: 'ws', version }, 'outdated app refused');
+        socket.close(4426, 'Client outdated');
+        return;
+      }
       void deps.wsHandler.handleConnection(socket, request.raw);
     });
   });
