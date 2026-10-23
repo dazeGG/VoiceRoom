@@ -1,5 +1,6 @@
-// Delivering a notification outside the app: web push with the account's
-// preferences applied, and the live + push notice for a new direct message.
+// Delivering a notification outside the app: a push (Web Push and the Android
+// app) with the account's preferences applied, and the live + push notice for
+// a new direct message.
 
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
@@ -27,6 +28,10 @@ export interface PushContext {
   expiresAt?: number;
   peerUserId?: string;
   roomId?: string;
+  /** Extra string keys for the Android app's push data; Web Push payloads never carry them. */
+  nativeData?: Record<string, string>;
+  /** Web Push only: another push already tells the Android app. */
+  skipNative?: boolean;
   [key: string]: unknown;
 }
 
@@ -65,7 +70,7 @@ export function createNotificationDispatch(deps: NotificationDispatchDeps) {
   async function broadcastDmNotification(
     recipientUserId: string,
     sender: SocialUser | null | undefined,
-    message: { id: string; body: string; createdAt: number | null }
+    message: { id: string; body: string; createdAt: number | null; invite?: unknown }
   ): Promise<number> {
     if (!recipientUserId || !sender || recipientUserId === sender.id) return 0;
     try {
@@ -90,7 +95,10 @@ export function createNotificationDispatch(deps: NotificationDispatchDeps) {
           dedupeKey,
           url: `/?dm=${encodeURIComponent(sender.id)}`
         },
-        { peerUserId: sender.id }
+        // A room invitation comes with a ring, whose push already reaches the app.
+        message.invite != null
+          ? { peerUserId: sender.id, skipNative: true }
+          : { peerUserId: sender.id, nativeData: { peerUserId: sender.id, messageId: message.id } }
       );
       return broadcastCount;
     } catch (error) {

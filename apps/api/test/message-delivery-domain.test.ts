@@ -433,7 +433,10 @@ test('a DM notification skips self, muted senders and failures', async () => {
   assert.deepEqual(calls.events, [['r1', 'notification.dm.message']]);
   await new Promise((resolve) => setTimeout(resolve, 5));
   assert.equal(calls.sent[0]?.payload.title, 'sam');
-  assert.deepEqual(calls.sent[0]?.context, { peerUserId: 's1' });
+  assert.deepEqual(calls.sent[0]?.context, {
+    peerUserId: 's1',
+    nativeData: { peerUserId: 's1', messageId: 'm1' }
+  });
   await dispatch.broadcastDmNotification('r1', storedUser({ id: 's1', displayName: 'Sam' }), message);
   await dispatch.broadcastDmNotification('r1', storedUser({ id: 's1' }), message);
 
@@ -442,6 +445,57 @@ test('a DM notification skips self, muted senders and failures', async () => {
   const broken = dispatchHarness({ preferencesFail: true });
   assert.equal(await broken.dispatch.broadcastDmNotification('r1', sender, message), 0);
   assert.deepEqual(broken.calls.errors, ['notify.broadcast_failed']);
+});
+
+const INVITE = { roomId: 'r1', roomName: 'Кухня', status: 'pending' as const, expiresAt: null };
+
+test('a room invitation DM gets Web Push only; the ring already reaches the app', async () => {
+  const sender = storedUser({ id: 's1', login: 'sam' });
+  const { calls, dispatch } = dispatchHarness();
+  await dispatch.broadcastDmNotification('r1', sender, { id: 'm1', body: 'Приглашение', createdAt: 1, invite: INVITE });
+  await dispatch.broadcastDmNotification('r1', sender, { id: 'm2', body: 'hi', createdAt: 1, invite: null });
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.deepEqual(
+    calls.sent.map((sent) => sent.context),
+    [
+      { peerUserId: 's1', skipNative: true },
+      { peerUserId: 's1', nativeData: { peerUserId: 's1', messageId: 'm2' } }
+    ]
+  );
+});
+
+test('a relayed room invitation DM gets Web Push only, as a directly sent one does', async () => {
+  const { calls, dispatch } = dispatchHarness();
+  const relay = createMessageDeliveryRelay({
+    enabled: true,
+    pool: () => null,
+    outbox: () => null,
+    projection: projection().projection,
+    broadcastChatMessage: () => {},
+    notifyUser: () => {},
+    findUser: async (userId) => storedUser({ id: userId }),
+    broadcastDmNotification: (recipientId, sender, message) =>
+      dispatch.broadcastDmNotification(recipientId, sender, message),
+    logger: () => recordingLogger()
+  });
+  for (const [id, invite] of [
+    ['m1', INVITE],
+    ['m2', null]
+  ] as const) {
+    await relay.dispatch({
+      type: 'message.created',
+      conversation: { type: 'dm', id: 'u2' },
+      message: storedDirectMessage(id, { senderId: 'u1', recipientId: 'u2', invite })
+    });
+  }
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  assert.deepEqual(
+    calls.sent.map((sent) => [sent.userId, sent.context]),
+    [
+      ['u2', { peerUserId: 'u1', skipNative: true }],
+      ['u2', { peerUserId: 'u1', nativeData: { peerUserId: 'u1', messageId: 'm2' } }]
+    ]
+  );
 });
 
 // --- link preview events --------------------------------------------------------------

@@ -20,6 +20,9 @@ import { createNotificationPreferencesRepository } from '../domains/notification
 import { createPushSubscriptionRepository } from '../domains/notifications/push-subscription.repository.ts';
 import { createDeviceTokenRepository } from '../domains/notifications/device-token.repository.ts';
 import { createPushService } from '../lib/push-service.ts';
+import { createRuStorePushClient } from '../lib/rustore-push.ts';
+import { createNativePushService } from '../domains/notifications/native-push.service.ts';
+import { createPushFanout } from '../domains/notifications/push-fanout.ts';
 import { createAvatarStorage } from '../lib/avatar-storage.ts';
 import { createLinkPreviewFetcher } from '../lib/link-preview-fetcher.ts';
 import { processLinkPreviewImage } from '../lib/link-preview-image.ts';
@@ -37,7 +40,14 @@ import { createRoomMessageRepository } from '../domains/messaging/room-message.r
 import { createActiveBanService } from '../domains/moderation/active-ban.service.ts';
 import type { ActiveBanRecord } from '../domains/moderation/active-ban.repository.ts';
 import { createCursorCodec } from '../platform/cursor-codec.ts';
-import { DEFAULT_MEDIA_STORAGE_DIR, resolveCursorHmacKeys, resolveIpKeySecret, type PushConfig } from './config.ts';
+import {
+  DEFAULT_MEDIA_STORAGE_DIR,
+  readRuStorePushConfig,
+  resolveCursorHmacKeys,
+  resolveIpKeySecret,
+  type PushConfig,
+  type RuStorePushConfig
+} from './config.ts';
 import { createIpKey, type IpKeyOf } from '../lib/ip-key.ts';
 import { createStaffRepository } from '../domains/staff/staff.repository.ts';
 import { standIn, type StoreOverrides } from './store-overrides.ts';
@@ -85,6 +95,8 @@ export type ServiceRegistryConfig = {
   UPLOADS_DIR?: string;
   /** VAPID settings for web push; read from the process environment when absent. */
   PUSH?: PushConfig;
+  /** Push to the Android app through RuStore; off when absent. */
+  RUSTORE_PUSH?: RuStorePushConfig;
   /** Where uploaded chat media lives; defaults to /data/media. */
   MEDIA_STORAGE_DIR?: string;
   /** Uploads pause below this much free space; defaults to 2 GiB. */
@@ -138,6 +150,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     LINK_PREVIEWS_ENABLED,
     UPLOADS_DIR,
     PUSH,
+    RUSTORE_PUSH = readRuStorePushConfig({}),
     MEDIA_STORAGE_DIR = DEFAULT_MEDIA_STORAGE_DIR,
     MEDIA_MIN_FREE_BYTES = 2 * 1024 * 1024 * 1024
   } = config;
@@ -242,6 +255,16 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   const pushService = cached(() =>
     createPushService({ store: pushSubscriptions.get(), config: PUSH, logger: poolLogger })
   );
+  const nativePush = cached(() =>
+    createNativePushService({
+      config: RUSTORE_PUSH,
+      tokens: () => deviceTokens.get(),
+      client: createRuStorePushClient(RUSTORE_PUSH),
+      logger: poolLogger
+    })
+  );
+  // Web Push and the Android app: what the dispatch sends a push through.
+  const pushDelivery = cached(() => createPushFanout(() => [{ name: 'web', ...pushService.get() }, nativePush.get()]));
   // Not on the pool: the reader of the GeoIP file is opened once.
   let geoLocator: ReturnType<typeof createGeoLocator> | null = null;
   const getGeoLocator = () => (geoLocator ??= createGeoLocator({ databasePath: GEOIP_DB_PATH }));
@@ -448,6 +471,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     getPushSubscriptions: () => pushSubscriptions.get(),
     getPushService: () => pushService.get(),
     getDeviceTokens: () => deviceTokens.get(),
+    getPushDelivery: () => pushDelivery.get(),
     getAvatarStorage: () => avatarStorage.get(),
     getLinkPreviewStorage: () => linkPreviewStorage.get(),
     getMessageService: () => messageService.get(),
