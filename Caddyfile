@@ -36,6 +36,22 @@ import /etc/caddy/turn.d/*.site
     respond `{"contractVersion":"voice-room.runtime-config/v1","schemaVersion":1,"livekit":{"wsUrl":"{$LIVEKIT_GATE_PUBLIC_URL}","connectFallbacks":[]}}` 200
   }
 
+  # Android App Links for the RuStore app (package voiceroom.app). Only a
+  # well-formed signing key fingerprint is published; otherwise the file is a
+  # 404, never the web page. Both matchers are named so they keep this order.
+  @assetlinks {
+    path /.well-known/assetlinks.json
+    expression `'{$ANDROID_RELEASE_CERT_SHA256}'.matches('^([0-9A-F]{2}:){31}[0-9A-F]{2}$')`
+  }
+  handle @assetlinks {
+    header Content-Type "application/json"
+    respond `[{"relation":["delegate_permission/common.handle_all_urls"],"target":{"namespace":"android_app","package_name":"voiceroom.app","sha256_cert_fingerprints":["{$ANDROID_RELEASE_CERT_SHA256}"]}}]` 200
+  }
+  @assetlinks_missing path /.well-known/assetlinks.json
+  handle @assetlinks_missing {
+    respond 404
+  }
+
   @api_metrics_allowed {
     path /api/metrics
     remote_ip {$API_METRICS_ALLOWED_REMOTE:127.0.0.1}
