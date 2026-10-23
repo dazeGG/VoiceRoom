@@ -7,9 +7,10 @@
 
 import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { useState } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { LiveRoom, LiveRooms, RoomCall, RoomCalls, RoomStay } from '@voice-room/shared/contracts/admin';
-import { RoomsPage } from '../src/pages/RoomsPage.tsx';
+import { RoomsPage, type HistoryRoom } from '../src/pages/RoomsPage.tsx';
 import { stubApi, renderAs, type Call, type Reply } from './helpers/harness.tsx';
 
 const MINUTE = 60_000;
@@ -436,6 +437,29 @@ test('a failed history load is told even when no calls are shown', async () => {
   expect(screen.queryByRole('button', { name: /Показать все комнаты/ })).toBeNull();
 });
 
+test('a view switch that fails shows only why and a retry, not the other view as empty', async () => {
+  let failing = true;
+  stubApi({
+    'GET /api/admin/rooms': live([kitchen()]),
+    'GET /api/admin/rooms/calls': (url) =>
+      url.searchParams.has('from') && failing
+        ? { status: 500, body: { ok: false, error: 'boom', code: 'internal_error' } }
+        : history([call('c-before', [stay('s-before', { guestName: 'Раньше' })])])
+  });
+  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+  await screen.findByRole('button', { name: /^Кто был в звонке/ });
+
+  await userEvent.click(screen.getByRole('radio', { name: 'Лента дня' }));
+  expect(await screen.findByRole('alert')).toBeTruthy();
+  expect(screen.queryByText('Сегодня звонков не было')).toBeNull();
+  expect(screen.queryByRole('button', { name: /^Кто был в звонке/ })).toBeNull();
+
+  failing = false;
+  await userEvent.click(screen.getByRole('button', { name: 'Повторить' }));
+  expect(await screen.findByRole('list', { name: 'Звонки за день' })).toBeTruthy();
+  expect(screen.queryByRole('alert')).toBeNull();
+});
+
 test("the day's timeline asks for today's calls, and a call's bar shows who was in it", async () => {
   const morning = new Date().setHours(0, 30, 0, 0);
   const calls = stubApi({
@@ -476,4 +500,42 @@ test('a room picked elsewhere narrows the history to it', async () => {
   renderAs(<RoomsPage onOpenAccount={vi.fn()} focusRoom={{ id: 'kitchen', name: 'Кухня' }} />);
   expect(await screen.findByRole('button', { name: /Кухня/ })).toBeTruthy();
   expect(callRequests(calls).at(-1)?.url.searchParams.get('roomId')).toBe('kitchen');
+});
+
+test("a room picked elsewhere while the day's timeline is on screen narrows the timeline", async () => {
+  const morning = new Date().setHours(0, 30, 0, 0);
+  const calls = stubApi({
+    'GET /api/admin/rooms': live([]),
+    'GET /api/admin/rooms/calls': (url) =>
+      url.searchParams.has('from')
+        ? history([
+            call('c-morning', [stay('s-m', { guestName: 'Утром', joinedAt: morning, leftAt: morning + 45 * MINUTE })])
+          ])
+        : history([])
+  });
+  function Search() {
+    const [room, setRoom] = useState<HistoryRoom | null>(null);
+    return (
+      <>
+        <button type="button" onClick={() => setRoom({ id: 'kitchen', name: 'Кухня' })}>
+          Найти Кухню
+        </button>
+        <RoomsPage onOpenAccount={vi.fn()} focusRoom={room} />
+      </>
+    );
+  }
+  renderAs(<Search />);
+  await screen.findByText('Завершённых звонков пока нет');
+  await userEvent.click(screen.getByRole('radio', { name: 'Лента дня' }));
+  const timeline = await screen.findByRole('list', { name: 'Звонки за день' });
+  await userEvent.click(within(timeline).getByRole('button', { name: 'Звонок 00:30–01:15, 1 человек' }));
+  expect(screen.getByRole('region', { name: 'Кухня · 00:30–01:15' })).toBeTruthy();
+
+  await userEvent.click(screen.getByRole('button', { name: 'Найти Кухню' }));
+  await waitFor(() => expect(callRequests(calls).at(-1)?.url.searchParams.get('roomId')).toBe('kitchen'));
+  expect(callRequests(calls).at(-1)?.url.searchParams.has('from')).toBe(true);
+  expect(screen.getByRole('radio', { name: 'Лента дня' }).getAttribute('aria-checked')).toBe('true');
+  // The pick starts afresh, like any other narrowing: the call picked before closes.
+  await screen.findByRole('list', { name: 'Звонки за день' });
+  expect(screen.queryByRole('region', { name: 'Кухня · 00:30–01:15' })).toBeNull();
 });

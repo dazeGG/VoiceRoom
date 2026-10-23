@@ -59,12 +59,6 @@ class IdempotencyQuotaError extends DomainError {
   }
 }
 
-function requireQuery(client: unknown): asserts client is QueryClient {
-  if (!isRecord(client) || typeof client.query !== 'function') {
-    throw new TypeError('An active PostgreSQL transaction client is required');
-  }
-}
-
 function boundedString(value: unknown, name: string, max: number): string {
   if (typeof value !== 'string' || !value || value.length > max) {
     throw new TypeError(`${name} must be a non-empty string no longer than ${max} characters`);
@@ -128,8 +122,7 @@ function createMessageIdempotencyRepository({
 
   // Serialized per actor: expired keys are swept, a known key replays (or
   // conflicts on another request), a new one is reserved within the quota.
-  async function reserve(client: unknown, input: IdempotencyInput): Promise<Reservation> {
-    requireQuery(client);
+  async function reserve(client: QueryClient, input: IdempotencyInput): Promise<Reservation> {
     const db = kyselyOn(client);
     const identity = normalizeIdentity(input);
     const key = ledgerKey(identity);
@@ -181,7 +174,7 @@ function createMessageIdempotencyRepository({
   }
 
   async function complete(
-    client: unknown,
+    client: QueryClient,
     key: unknown,
     {
       body,
@@ -193,7 +186,6 @@ function createMessageIdempotencyRepository({
       statusCode?: number;
     } = {}
   ): Promise<IdempotentReplay> {
-    requireQuery(client);
     const ledger = boundedString(key, 'ledgerKey', 64);
     if (!Number.isInteger(statusCode) || statusCode < 100 || statusCode > 599) {
       throw new TypeError('statusCode must be a valid HTTP status');
@@ -219,10 +211,9 @@ function createMessageIdempotencyRepository({
   }
 
   async function pruneExpired(
-    client: unknown,
+    client: QueryClient,
     { limit = 500 }: { limit?: number | string } = {}
   ): Promise<number | null> {
-    requireQuery(client);
     const boundedLimit = Math.max(1, Math.min(5_000, Number.parseInt(String(limit), 10) || 500));
     const result = await kyselyOn(client)
       .deleteFrom('message_send_idempotency')

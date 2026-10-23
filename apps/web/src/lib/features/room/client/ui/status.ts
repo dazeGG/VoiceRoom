@@ -1,8 +1,9 @@
 import { PEER_LATENCY_FAIR_MS, PEER_LATENCY_GOOD_MS } from '../core/config';
 import { state } from '../core/state.svelte';
+import type { LocalConnectionQuality, ServerConnection, VoiceConnection } from '../core/types';
 
 export interface ConnectionStatusView {
-  stateName: string;
+  stateName: 'idle' | 'connecting' | 'connected' | 'warning' | 'error';
   label: string;
   title: string;
 }
@@ -12,11 +13,11 @@ export function resetConnectionStatus(): void {
   state.voiceConnection = 'idle';
 }
 
-export function setServerConnectionStatus(connection: string): void {
+export function setServerConnectionStatus(connection: ServerConnection): void {
   state.serverConnection = connection;
 }
 
-export function setVoiceConnectionStatus(connection: string): void {
+export function setVoiceConnectionStatus(connection: VoiceConnection): void {
   state.voiceConnection = connection;
 }
 
@@ -75,7 +76,7 @@ export function getConnectionStatusView(): ConnectionStatusView {
     };
   }
 
-  if (state.serverConnection === 'reconnecting' || state.serverConnection === 'lost') {
+  if (state.serverConnection === 'reconnecting') {
     return {
       label: 'Сервер переподключается',
       stateName: 'connecting',
@@ -159,7 +160,10 @@ function formatLocalPing(): string {
   return Number.isFinite(state.localPingMs) ? `${state.localPingMs} мс` : '';
 }
 
-export function getPeerLatencyQuality(pingMs: number | null, connectionQuality = 'unknown'): string {
+export function getPeerLatencyQuality(
+  pingMs: number | null,
+  connectionQuality: LocalConnectionQuality = 'unknown'
+): 'good' | 'fair' | 'poor' | 'lost' | 'unknown' {
   if (pingMs !== null && Number.isFinite(pingMs)) {
     if (pingMs <= PEER_LATENCY_GOOD_MS) return 'good';
     if (pingMs <= PEER_LATENCY_FAIR_MS) return 'fair';

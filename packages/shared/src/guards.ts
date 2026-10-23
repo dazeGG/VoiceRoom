@@ -35,3 +35,10 @@ export function pageInfoOf(nextCursor: unknown, hasMore: unknown): { nextCursor?
   const cursor = trimmedText(nextCursor, 4096);
   return cursor ? { nextCursor: cursor, hasMore: Boolean(hasMore) } : { hasMore: Boolean(hasMore) };
 }
+
+/** A requested page size: a whole number of at least 1, capped at `max`; `fallback` otherwise. */
+export function pageLimitOf(value: unknown, fallback: number, max: number): number {
+  const numeric = Number(value);
+  if (!Number.isInteger(numeric) || numeric < 1) return fallback;
+  return Math.min(numeric, max);
+}

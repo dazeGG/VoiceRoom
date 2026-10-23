@@ -44,7 +44,7 @@ async function append(fixture: Awaited<ReturnType<typeof createPinFixture>>, pee
 
 test('51 concurrent distinct pins preserve the 50-pin room cap', async (t) => {
   const fixture = await createPinFixture(t);
-  const service = createPinService({ repository: fixture.repository });
+  const service = createPinService({ repository: fixture.repository, publish: () => false });
   const messages = await Promise.all(
     Array.from({ length: 51 }, (_, index) => append(fixture, `peer-${index}`, `message-${index}`))
   );
@@ -82,7 +82,7 @@ test('pin refresh publishes edited message text', async (t) => {
 
 test('pin refresh removes soft-deleted messages from the snapshot', async (t) => {
   const fixture = await createPinFixture(t);
-  const service = createPinService({ repository: fixture.repository });
+  const service = createPinService({ repository: fixture.repository, publish: () => false });
   const message = await append(fixture, 'peer-delete', 'delete me');
   await service.pin({ roomId: fixture.room.id, messageId: message.id, viewer: fixture.user });
 

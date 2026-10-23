@@ -19,10 +19,12 @@ export function getAttachmentComposeStore(context: AttachmentContext, contextId:
 export function clearAttachmentComposeStores(): void {
   for (const store of stores.values()) store.discard();
   stores.clear();
-  if (typeof localStorage !== 'undefined') {
+  try {
     for (let index = localStorage.length - 1; index >= 0; index -= 1) {
       const key = localStorage.key(index);
       if (key?.startsWith('voice-room:attachment-drafts:')) localStorage.removeItem(key);
     }
+  } catch {
+    // Storage is unavailable (blocked, or no browser): no drafts were saved there.
   }
 }

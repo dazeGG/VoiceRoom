@@ -1,4 +1,9 @@
-import { AttachmentAnswer, type AttachmentContext, type AttachmentDraft } from '@voice-room/shared/contracts/media';
+import {
+  AttachmentAnswer,
+  CreateAttachmentBody,
+  type AttachmentContext,
+  type AttachmentDraft
+} from '@voice-room/shared/contracts/media';
 import { api, ApiError, checkedAnswer, failureMessage, isJsonObject } from './client';
 
 export type { AttachmentContext, AttachmentDraft };
@@ -11,7 +16,12 @@ export async function createAttachmentSlot(input: {
   clientRequestId: string;
   bytes: number;
 }): Promise<AttachmentDraft> {
-  return (await api.post('/api/media/attachments', AttachmentAnswer, input, { fallback: UPLOAD_FAILED })).attachment;
+  return (
+    await api.post('/api/media/attachments', AttachmentAnswer, input, {
+      bodySchema: CreateAttachmentBody,
+      fallback: UPLOAD_FAILED
+    })
+  ).attachment;
 }
 
 function parseAnswer(text: string): Record<string, unknown> | null {

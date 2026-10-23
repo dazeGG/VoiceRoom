@@ -1,6 +1,8 @@
 import type pg from 'pg';
 import { createMentionRepository } from './mention.repository.ts';
+import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import { normalizeMentionUserIds } from '@voice-room/shared/mentions';
+import { DomainError } from '../../platform/http/domain-error.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 
@@ -8,15 +10,9 @@ export interface ActiveBanFilter {
   filterEligibleUserIds(input: { roomId: string; userIds: string[]; client: QueryClient }): Promise<string[]>;
 }
 
-class MentionEligibilityError extends Error {
-  declare code: string;
-  declare statusCode: number;
-
-  constructor(code = 'mention_not_eligible') {
-    super('One or more mention targets are not eligible');
-    this.name = 'MentionEligibilityError';
-    this.code = code;
-    this.statusCode = 422;
+class MentionEligibilityError extends DomainError {
+  constructor(code: ErrorCode = 'mention_not_eligible') {
+    super(code, 422, 'One or more mention targets are not eligible');
   }
 }
 
@@ -24,15 +20,12 @@ function createMentionEligibilityService({
   activeBanService,
   pool
 }: {
-  activeBanService?: ActiveBanFilter;
-  pool?: QueryClient | null;
-} = {}) {
-  if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
-  if (!activeBanService?.filterEligibleUserIds) throw new TypeError('Active ban service is required');
+  activeBanService: ActiveBanFilter;
+  pool: QueryClient;
+}) {
   const defaultDb = pool;
   const mentions = createMentionRepository({ pool });
 
-  // An arrow function keeps the activeBanService narrowing from the check above.
   const validate = async ({
     roomId,
     creatorUserId,

@@ -11,12 +11,7 @@ export type ReportReason = (typeof REPORT_REASONS)[number];
 
 export const REPORT_COMMENT_MAX_LENGTH = 500;
 
-export const ReportReasonSchema = Type.Union([
-  Type.Literal('spam'),
-  Type.Literal('abuse'),
-  Type.Literal('illegal'),
-  Type.Literal('other')
-]);
+export const ReportReasonSchema = Type.Enum(REPORT_REASONS);
 
 export const ReportTarget = Type.Union([
   Type.Object({ kind: Type.Literal('room_message'), roomId: Type.String(), messageId: Type.String() }),

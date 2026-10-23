@@ -8,7 +8,6 @@ import fastify, { type FastifyInstance } from 'fastify';
 import {
   cleanPushSubscription,
   createNotificationSettingsService,
-  type MutationResult,
   type NotificationPreferenceStore,
   type NotificationSettingsService
 } from '../src/domains/notifications/notification-settings.service.ts';
@@ -18,6 +17,7 @@ import { AJV_OPTIONS, registerHttpKit } from '../src/platform/http/http-kit.ts';
 import type { ApiContext } from '../src/app/context.ts';
 import { Failure } from '@voice-room/shared/contracts/http';
 import { checked } from './helpers/checked.ts';
+import { mistyped } from './helpers/mistyped.ts';
 
 const ME = storedUser({ id: 'user-1', login: 'alice' });
 const PEER = '22222222-2222-4222-8222-222222222222';
@@ -36,7 +36,7 @@ type HarnessOptions = {
   enabled?: boolean;
   rate?: { allowed: boolean; retryAfterSeconds: number };
   upserted?: boolean | null;
-  result?: MutationResult | null;
+  result?: Awaited<ReturnType<NotificationPreferenceStore['setDoNotDisturb']>> | null;
 };
 
 const AWAY = notificationPreferences({ presenceStatus: 'away' });
@@ -69,7 +69,10 @@ function harness({
       };
     },
     async setPrivateNotifications(input) {
-      return { status: 'updated', preferences: notificationPreferences(input) };
+      return {
+        status: 'updated',
+        preferences: notificationPreferences({ privateNotifications: input.privateNotifications === true })
+      };
     },
     async setDoNotDisturb() {
       return updated;
@@ -177,7 +180,8 @@ function routeApp(
   const app = fastify({ ajv: AJV_OPTIONS });
   registerHttpKit(app, { securityHeaders: () => ({}), recordRequest() {}, logRequest() {}, logHandlerFailure() {} });
   const seen: Record<string, unknown[]> = {};
-  const updated: MutationResult = { status: 'updated', preferences: PRIVATE };
+  const updated = { status: 'updated' as const, preferences: PRIVATE };
+  const muted = { status: 'muted' as const, preferences: PRIVATE };
   const record =
     <Name extends keyof Outcomes>(name: Name, value: Outcomes[Name]) =>
     async (...args: unknown[]): Promise<Outcomes[Name]> => {
@@ -194,8 +198,8 @@ function routeApp(
     },
     fake<NotificationSettingsService>({
       preferences: record('preferences', notificationPreferences()),
-      setDmMute: record('setDmMute', updated),
-      setRoomMute: record('setRoomMute', updated),
+      setDmMute: record('setDmMute', muted),
+      setRoomMute: record('setRoomMute', muted),
       setPrivateNotifications: record('setPrivateNotifications', updated),
       setDoNotDisturb: record('setDoNotDisturb', updated),
       setPresenceStatus: record('setPresenceStatus', updated),
@@ -285,7 +289,8 @@ test('settings refusals keep their texts', async (t) => {
   ];
   for (const [status, code, error] of muteRefusals) {
     const response = await call(
-      routeApp(t, { setRoomMute: { status, preferences: PRIVATE } }).app,
+      // 'self' comes from the DM mute; the routes share one refusal table.
+      routeApp(t, { setRoomMute: mistyped({ status, preferences: PRIVATE }) }).app,
       'PUT',
       '/api/notifications/room/room-1/mute',
       { muted: true }

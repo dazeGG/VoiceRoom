@@ -18,7 +18,7 @@ function createActiveBanService({
   repository = createActiveBanRepository({ pool, ipKeyOf }),
   now = Date.now
 }: {
-  pool?: pg.Pool | null;
+  pool: pg.Pool;
   ipKeyOf: IpKeyOf;
   repository?: ActiveBanRepository;
   now?: () => number;

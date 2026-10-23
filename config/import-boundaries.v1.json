@@ -11,7 +11,7 @@
     {
       "id": "api-routes-do-not-import-db",
       "sources": ["apps/api/src/server.ts", "apps/api/src/app/api-runtime.ts"],
-      "forbidden": ["./lib/db", "./platform/db/", "apps/api/src/platform/db/"],
+      "forbidden": ["./platform/db/", "apps/api/src/platform/db/"],
       "message": "The composition reaches the database through the service registry, never the pool or query builder."
     }
   ],
@@ -116,7 +116,7 @@
     "ownerPathPrefixes": ["apps/api/src/migrations/"]
   },
   "timerRules": {
-    "forbiddenSources": ["apps/api/src/app.js"],
-    "allowedCurrentSources": ["apps/api/src/server.ts", "apps/api/src/lib/listen.ts"]
+    "forbiddenSources": ["apps/api/src/*.{js,ts}", "apps/api/src/**/*routes.ts"],
+    "allowedCurrentSources": []
   }
 }

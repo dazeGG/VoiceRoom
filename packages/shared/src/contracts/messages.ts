@@ -20,6 +20,9 @@ export const MessageContent = Type.Object({
 });
 export type MessageContent = Static<typeof MessageContent>;
 
+/** The most images one message carries. */
+export const MAX_ATTACHMENTS = 4;
+
 /** An image on a message: public fields only; `url` is set once it is ready. */
 export const Attachment = Type.Object({
   id: Type.String(),
@@ -106,7 +109,7 @@ export const PostRoomMessageBody = Type.Object({
   name: Type.Optional(Type.String()),
   text: Type.Optional(Type.String()),
   content: Type.Optional(ContentInput),
-  attachmentIds: Type.Optional(Type.Array(Type.String())),
+  attachmentIds: Type.Optional(Type.Array(Type.String(), { maxItems: MAX_ATTACHMENTS })),
   replyTo: Type.Optional(Nullable(ReplyPointer)),
   idempotencyKey: Type.Optional(Type.String())
 });
@@ -178,7 +181,7 @@ export type DirectThread = Static<typeof DirectThread>;
 
 export const SendDirectMessageBody = Type.Object({
   text: Type.Optional(Type.String()),
-  attachmentIds: Type.Optional(Type.Array(Type.String())),
+  attachmentIds: Type.Optional(Type.Array(Type.String(), { maxItems: MAX_ATTACHMENTS })),
   replyTo: Type.Optional(Nullable(ReplyPointer)),
   idempotencyKey: Type.Optional(Type.String())
 });

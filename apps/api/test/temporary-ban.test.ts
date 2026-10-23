@@ -61,12 +61,15 @@ test('G86-A01 unauthorized ban requests do not resolve target principals', async
   };
   const service = createModerationService({
     pool,
-    ipKeyOf,
     repository,
     async resolvePrincipals() {
       resolutions += 1;
       return [];
-    }
+    },
+    revokePrincipalInTransaction: async () => {
+      throw new Error('no credential to revoke in this test');
+    },
+    afterBanCommitted: () => undefined
   });
   const result = await service.putBan({
     roomId: 'room',
@@ -173,8 +176,12 @@ test('G86-A06 a guest ban of something that is not an address is refused', async
   };
   const service = createModerationService({
     pool,
-    ipKeyOf,
-    repository: createModerationRepository({ cursorCodec: unusedCodec, pool, ipKeyOf })
+    repository: createModerationRepository({ cursorCodec: unusedCodec, pool, ipKeyOf }),
+    resolvePrincipals: async () => [],
+    revokePrincipalInTransaction: async () => {
+      throw new Error('no credential to revoke in this test');
+    },
+    afterBanCommitted: () => undefined
   });
   const result = await service.putBan({
     roomId: 'room',

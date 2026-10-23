@@ -13,12 +13,21 @@ test('readEnvInt falls back when missing', () => {
   assert.equal(readEnvInt('PORT', 3000, 1, {}), 3000);
 });
 
-test('readEnvInt falls back when below min', () => {
-  assert.equal(readEnvInt('PORT', 3000, 1024, { PORT: '80' }), 3000);
+test('readEnvInt falls back when empty', () => {
+  assert.equal(readEnvInt('PORT', 3000, 1, { PORT: '' }), 3000);
+  assert.equal(readEnvInt('PORT', 3000, 1, { PORT: '  ' }), 3000);
 });
 
-test('readEnvInt falls back on non-numeric value', () => {
-  assert.equal(readEnvInt('PORT', 3000, 1, { PORT: 'abc' }), 3000);
+// A typo in a limit must stop the start, not quietly run with the default:
+// MAX_VOICE_PEERS=6OO used to leave the server uncapped.
+test('readEnvInt refuses a value below min', () => {
+  assert.throws(() => readEnvInt('PORT', 3000, 1024, { PORT: '80' }), /PORT must be an integer of at least 1024/);
+});
+
+test('readEnvInt refuses a value that is not a whole number', () => {
+  for (const value of ['abc', '6OO', '15000.5', '1e3', '12 rooms']) {
+    assert.throws(() => readEnvInt('MAX_VOICE_PEERS', 0, 0, { MAX_VOICE_PEERS: value }), /MAX_VOICE_PEERS/, value);
+  }
 });
 
 test('readEnvBool reads truthy strings', () => {

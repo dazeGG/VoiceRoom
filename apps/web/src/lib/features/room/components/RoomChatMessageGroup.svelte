@@ -15,6 +15,7 @@
   import ReplyPreview from '$lib/shared/chat/ReplyPreview.svelte';
   import LinkPreviewCard from '$lib/shared/chat/LinkPreviewCard.svelte';
   import StructuredMessageContent from '$lib/shared/chat/StructuredMessageContent.svelte';
+  import { clockTime } from '$lib/shared/utils/date-format';
   import { mentionsUser, type ChatGroup } from '../room-chat-view';
 
   let {
@@ -50,10 +51,6 @@
   } = $props();
 
   const profileLabel = $derived(group.self ? 'Ваш профиль' : `Профиль ${group.name}`);
-
-  function formatTime(createdAt: number): string {
-    return new Date(createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  }
 </script>
 
 <div class="chat-msg" data-self={group.self}>
@@ -102,7 +99,7 @@
         <span class="chat-msg-author"><EmojiText text={group.name} /><AccountBadge userId={group.authorUserId} /></span>
       {/if}
       <time class="chat-msg-time" datetime={new Date(group.messages[0].createdAt).toISOString()}
-        >{formatTime(group.createdAt)}</time
+        >{clockTime(group.createdAt)}</time
       >
     </div>
     {#each group.messages as message (message.id)}

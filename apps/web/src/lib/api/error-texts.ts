@@ -109,6 +109,8 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   invalid_mention_target: 'Этого участника нельзя отметить',
   self_mention: 'Нельзя отметить себя',
   too_many_mentions: 'Слишком много упоминаний в одном сообщении',
+  mention_not_eligible: 'Этого участника нельзя упомянуть',
+  creator_not_eligible: 'Вы не можете упоминать в этой комнате',
   invalid_attachments: 'Вложения недоступны, прикрепите их заново',
   reply_unavailable: 'Сообщение, на которое вы отвечаете, недоступно',
   idempotency_conflict: 'Это сообщение уже отправлялось с другим текстом, попробуйте ещё раз',
@@ -184,6 +186,7 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   desktop_release_unavailable: 'Не удалось получить данные о релизе',
 
   invalid_response: 'Сервер прислал непонятный ответ, обновите страницу',
+  unavailable: 'Сервер недоступен',
 
   invalid_json: REALTIME_REJECTED,
   invalid_envelope: REALTIME_REJECTED,

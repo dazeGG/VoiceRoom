@@ -4,7 +4,16 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { isStaffRole, roleAllows, roleRank, STAFF_PERMISSIONS } from '../src/contracts/staff.ts';
+import { Value } from 'typebox/value';
+import {
+  isStaffRole,
+  roleAllows,
+  roleRank,
+  STAFF_PERMISSIONS,
+  STAFF_ROLES,
+  StaffPermissionSchema,
+  StaffRoleSchema
+} from '../src/contracts/staff.ts';
 
 test('each role may do what its rank brings, and more rank never takes anything away', () => {
   assert.equal(roleAllows('moderator', 'reports.review'), true);
@@ -25,4 +34,11 @@ test('each role may do what its rank brings, and more rank never takes anything 
 test('only the three roles are roles', () => {
   for (const role of ['moderator', 'admin', 'superadmin']) assert.equal(isStaffRole(role), true);
   for (const value of ['owner', '', null, 1]) assert.equal(isStaffRole(value), false);
+});
+
+test('the role and permission schemas accept exactly the listed values', () => {
+  for (const role of STAFF_ROLES) assert.equal(Value.Check(StaffRoleSchema, role), true, role);
+  for (const permission of STAFF_PERMISSIONS) assert.equal(Value.Check(StaffPermissionSchema, permission), true);
+  assert.equal(Value.Check(StaffRoleSchema, 'owner'), false);
+  assert.equal(Value.Check(StaffPermissionSchema, 'rooms.manage'), false);
 });

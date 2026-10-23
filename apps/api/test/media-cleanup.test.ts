@@ -51,7 +51,7 @@ test('G78-A02 worker shutdown interrupts its wait', async () => {
     maintenanceService: {
       async cleanupOnce() {
         runs += 1;
-        return {};
+        return { inspected: 0, jobsRemoved: 0, removed: 0, temporaryFilesRemoved: 0 };
       }
     },
     intervalMs: 60000

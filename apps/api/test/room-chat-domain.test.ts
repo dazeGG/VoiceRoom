@@ -156,7 +156,6 @@ type HarnessOptions = {
   lastReadAt?: number | null;
   notifications?: null;
   retireFails?: boolean;
-  noMarkRoomRead?: boolean;
   delivery?: false;
   replay?: boolean;
   readError?: Error;
@@ -264,19 +263,17 @@ function harness(options: HarnessOptions = {}) {
             async createAddressedForMessage(input) {
               calls.addressed.push(input);
             },
-            ...(options.noMarkRoomRead
-              ? {}
-              : options.retireFails
-                ? {
-                    async markRoomRead() {
-                      throw new Error('inbox down');
-                    }
+            ...(options.retireFails
+              ? {
+                  async markRoomRead() {
+                    throw new Error('inbox down');
                   }
-                : {
-                    async markRoomRead(input) {
-                      calls.retired.push(input);
-                    }
-                  })
+                }
+              : {
+                  async markRoomRead(input) {
+                    calls.retired.push(input);
+                  }
+                })
           }
         };
   const delivery: ReturnType<RoomChatDeps['delivery']> =
@@ -783,7 +780,6 @@ test('marking read advances the cursor or the wall clock and retires notificatio
   assert.equal((await failing.service.markRead('room-1', 'user-1', '')).status, 'read');
   assert.equal(failing.calls.errors.length, 1);
   assert.equal((await harness({ notifications: null }).service.markRead('room-1', 'user-1', '')).status, 'read');
-  assert.equal((await harness({ noMarkRoomRead: true }).service.markRead('room-1', 'user-1', '')).status, 'read');
 });
 
 // --- routes ------------------------------------------------------------------------

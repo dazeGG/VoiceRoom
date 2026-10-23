@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import sharp from 'sharp';
 import { MediaJobFenceError } from '../domains/media/media-job.repository.ts';
 import type { MediaJob, MediaJobRepository } from '../domains/media/media-job.repository.ts';
+import type { MediaPressureService } from '../domains/media/media-pressure.service.ts';
 import type { AttachmentRepository } from '../domains/media/attachment.repository.ts';
 import type { MediaStorage } from '../domains/media/storage.ts';
 import { recordMediaOldestPending } from '../lib/metrics.ts';
@@ -95,7 +96,7 @@ function createMediaProcessingWorker({
 }: {
   attachmentRepository: AttachmentRepository;
   jobRepository: MediaJobRepository;
-  pressureService?: { canClaimWork(): Promise<boolean> } | null;
+  pressureService: Pick<MediaPressureService, 'canClaimWork'>;
   storage: MediaStorage;
   workerId?: string;
   batchSize?: number;
@@ -106,8 +107,6 @@ function createMediaProcessingWorker({
   observeOldestPending?: (ageMs: unknown) => void;
   logger?: WorkerLogger;
 }) {
-  if (!attachmentRepository || !jobRepository || !storage)
-    throw new TypeError('Media processing dependencies are required');
   let stopping = false;
 
   async function processJob(job: MediaJob): Promise<void> {
@@ -183,7 +182,7 @@ function createMediaProcessingWorker({
 
   async function runOnce(): Promise<number> {
     observeOldestPending(await jobRepository.oldestPendingAgeMs());
-    if (stopping || (pressureService && !(await pressureService.canClaimWork()))) return 0;
+    if (stopping || !(await pressureService.canClaimWork())) return 0;
     const jobs = await jobRepository.claimBatch({ workerId, limit: batchSize, leaseMs });
     for (let offset = 0; offset < jobs.length; offset += concurrency) {
       await Promise.all(jobs.slice(offset, offset + concurrency).map(processJob));

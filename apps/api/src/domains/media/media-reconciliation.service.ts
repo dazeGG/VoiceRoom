@@ -12,30 +12,26 @@ export type ReconciliationResult = Readonly<{
 }>;
 
 function createMediaReconciliationService({
-  attachmentRepository,
+  attachmentRepository: attachments,
   jobRepository,
-  storage,
+  storage: files,
   assertLeaseOwned = async () => true
 }: {
-  attachmentRepository?: Pick<AttachmentRepository, 'listStorageKeys' | 'findById' | 'markUnavailable'> &
-    Partial<Pick<AttachmentRepository, 'listProcessingWithoutActiveJob'>>;
-  jobRepository?: Partial<Pick<MediaJobRepository, 'enqueue'>> | null;
-  storage?: Pick<MediaStorage, 'listKeys' | 'parseStorageKey' | 'remove'>;
+  attachmentRepository: Pick<
+    AttachmentRepository,
+    'listStorageKeys' | 'findById' | 'markUnavailable' | 'listProcessingWithoutActiveJob'
+  >;
+  jobRepository: Pick<MediaJobRepository, 'enqueue'>;
+  storage: Pick<MediaStorage, 'listKeys' | 'parseStorageKey' | 'remove'>;
   assertLeaseOwned?: () => Promise<unknown>;
-} = {}) {
-  if (!attachmentRepository || !storage) throw new TypeError('Media reconciliation dependencies are required');
-  const attachments = attachmentRepository;
-  const files = storage;
-
+}) {
   async function reconcile(): Promise<ReconciliationResult> {
     let processingJobsRecovered = 0;
-    if (jobRepository?.enqueue && attachments.listProcessingWithoutActiveJob) {
-      const recoverable = await attachments.listProcessingWithoutActiveJob({ limit: 500 });
-      for (const attachment of recoverable) {
-        await assertLeaseOwned();
-        await jobRepository.enqueue(attachment.id);
-        processingJobsRecovered += 1;
-      }
+    const recoverable = await attachments.listProcessingWithoutActiveJob({ limit: 500 });
+    for (const attachment of recoverable) {
+      await assertLeaseOwned();
+      await jobRepository.enqueue(attachment.id);
+      processingJobsRecovered += 1;
     }
     const databaseKeys = new Map<string, string>();
     let afterId: string | null = null;
@@ -77,5 +73,7 @@ function createMediaReconciliationService({
 
   return Object.freeze({ reconcile });
 }
+
+export type MediaReconciliationService = ReturnType<typeof createMediaReconciliationService>;
 
 export { createMediaReconciliationService };

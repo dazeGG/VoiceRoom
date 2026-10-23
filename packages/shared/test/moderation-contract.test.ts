@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { Value } from 'typebox/value';
+import { BanBody } from '../src/contracts/moderation.ts';
 import * as moderation from '../src/moderation.ts';
 import { defined } from './helpers/assert-defined.ts';
 
@@ -65,4 +67,12 @@ test('G88-C02 guests and profiles without a login stay profile-free', async () =
       userId: 'user-2'
     });
   }
+});
+
+test('a ban body takes only the known durations', () => {
+  for (const duration of moderation.MODERATION_DURATIONS) {
+    assert.equal(Value.Check(BanBody, { userId: 'user-1', duration }), true, duration);
+  }
+  assert.equal(Value.Check(BanBody, { userId: 'user-1' }), true);
+  assert.equal(Value.Check(BanBody, { userId: 'user-1', duration: '30d' }), false);
 });

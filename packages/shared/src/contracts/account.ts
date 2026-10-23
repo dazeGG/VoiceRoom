@@ -57,7 +57,7 @@ export const AccountSession = Type.Object({
   client: Type.String(),
   os: Type.String(),
   location: Type.String(),
-  lastSeenAt: Nullable(Type.Number())
+  lastSeenAt: Type.Number()
 });
 export type AccountSession = Static<typeof AccountSession>;
 
@@ -82,7 +82,7 @@ export const LoginAlert = Type.Object({
   client: Type.String(),
   os: Type.String(),
   location: Type.String(),
-  createdAt: Nullable(Type.Number())
+  createdAt: Type.Number()
 });
 export type LoginAlert = Static<typeof LoginAlert>;
 
@@ -104,7 +104,10 @@ export const DeletionRoom = Type.Object({
 });
 export type DeletionRoom = Static<typeof DeletionRoom>;
 
-export const DeletionPreview = Ok({ graceDays: Type.Number(), rooms: Type.Array(DeletionRoom) });
+export const AccountDeletionPreview = Type.Object({ graceDays: Type.Number(), rooms: Type.Array(DeletionRoom) });
+export type AccountDeletionPreview = Static<typeof AccountDeletionPreview>;
+
+export const DeletionPreview = Ok(AccountDeletionPreview.properties);
 export type DeletionPreview = Static<typeof DeletionPreview>;
 
 export const DeletionScheduled = Ok({ deletionScheduledFor: Type.Number() });

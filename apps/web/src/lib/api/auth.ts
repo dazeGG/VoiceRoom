@@ -3,17 +3,8 @@
 // which is how a signed-in user's persistent rooms get an owner). Shapes come
 // from @voice-room/shared/contracts/account.
 
-import {
-  normalizeAccountSession,
-  normalizeLoginAlert,
-  normalizeReleaseVersion,
-  type AccountDeletionPreview,
-  type AccountSession,
-  type LoginAlert,
-  type RecoveryCodesReminder,
-  type RecoveryCodesStatus,
-  type WhatsNewState
-} from '@voice-room/shared/account-security';
+import { normalizeReleaseVersion } from '@voice-room/shared/account-security';
+import { isUuid } from '@voice-room/shared/validation';
 import {
   AppPromptSeen,
   DeletionPreview,
@@ -29,10 +20,28 @@ import {
   SessionsRevoked,
   SignedIn,
   WhatsNewAnswer,
-  type SelfUser
+  CredentialsBody,
+  CurrentPasswordBody,
+  PasswordBody,
+  ProfileBody,
+  RecoverBody,
+  RegisterBody,
+  type AccountDeletionPreview,
+  type AccountSession,
+  type LoginAlert,
+  type RecoveryCodesReminder,
+  type RecoveryCodesStatus,
+  type SelfUser,
+  type WhatsNew
 } from '@voice-room/shared/contracts/account';
 import { Done } from '@voice-room/shared/contracts/http';
-import { RoomCard, RoomList, RoomUnbookmarked, type LobbyRoom } from '@voice-room/shared/contracts/rooms';
+import {
+  BookmarkRoomBody,
+  RoomCard,
+  RoomList,
+  RoomUnbookmarked,
+  type LobbyRoom
+} from '@voice-room/shared/contracts/rooms';
 // Explicit extensions: the release coverage gate (scripts/test/g08-*) loads
 // this module in plain Node, without Vite's resolver.
 import { api } from './client.ts';
@@ -59,22 +68,12 @@ async function avatarRequest(method: 'POST' | 'DELETE', file?: Blob): Promise<Au
 export const uploadUserAvatar = (file: Blob): Promise<AuthUser> => avatarRequest('POST', file);
 export const deleteUserAvatar = (): Promise<AuthUser> => avatarRequest('DELETE');
 
-export interface Credentials {
-  login: string;
-  password: string;
+export async function register(input: RegisterBody): Promise<AuthUser> {
+  return (await api.post('/api/auth/register', SignedIn, input, { bodySchema: RegisterBody })).user;
 }
 
-export interface RegisterInput extends Credentials {
-  displayName?: string;
-  passwordConfirm?: string;
-}
-
-export async function register(input: RegisterInput): Promise<AuthUser> {
-  return (await api.post('/api/auth/register', SignedIn, input)).user;
-}
-
-export async function login(input: Credentials): Promise<AuthUser> {
-  return (await api.post('/api/auth/login', SignedIn, input)).user;
+export async function login(input: CredentialsBody): Promise<AuthUser> {
+  return (await api.post('/api/auth/login', SignedIn, input, { bodySchema: CredentialsBody })).user;
 }
 
 export async function logout(): Promise<void> {
@@ -82,11 +81,11 @@ export async function logout(): Promise<void> {
 }
 
 export async function updateDisplayName(displayName: string): Promise<AuthUser> {
-  return (await api.post('/api/auth/profile', SignedIn, { displayName })).user;
+  return (await api.post('/api/auth/profile', SignedIn, { displayName }, { bodySchema: ProfileBody })).user;
 }
 
 export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
-  await api.post('/api/auth/password', Done, { currentPassword, newPassword });
+  await api.post('/api/auth/password', Done, { currentPassword, newPassword }, { bodySchema: PasswordBody });
 }
 
 export async function fetchMe(): Promise<AuthUser | null> {
@@ -94,7 +93,7 @@ export async function fetchMe(): Promise<AuthUser | null> {
 }
 
 export async function addRoomByCode(code: string): Promise<OwnedRoom> {
-  return (await api.post('/api/auth/rooms', RoomCard, { code })).room;
+  return (await api.post('/api/auth/rooms', RoomCard, { code }, { bodySchema: BookmarkRoomBody })).room;
 }
 
 export async function removeRoomFromList(roomId: string): Promise<boolean> {
@@ -114,18 +113,12 @@ export type {
   LoginAlert,
   RecoveryCodesReminder,
   RecoveryCodesStatus,
-  WhatsNewState
+  WhatsNew
 };
 
 export interface AccountSecurity {
   recoveryCodes: RecoveryCodesStatus;
   recoveryCodesReminder: RecoveryCodesReminder;
-}
-
-export interface RecoverInput {
-  login: string;
-  code: string;
-  newPassword: string;
 }
 
 export async function fetchAccountSecurity(): Promise<AccountSecurity> {
@@ -140,14 +133,14 @@ export async function snoozeRecoveryCodesReminder(): Promise<RecoveryCodesRemind
 }
 
 // Only a well-formed release number is shown or compared.
-function readWhatsNew({ whatsNew }: WhatsNewAnswer): WhatsNewState {
+function readWhatsNew({ whatsNew }: WhatsNewAnswer): WhatsNew {
   return {
     current: normalizeReleaseVersion(whatsNew.current),
     lastSeen: normalizeReleaseVersion(whatsNew.lastSeen) || null
   };
 }
 
-export async function fetchWhatsNew(): Promise<WhatsNewState> {
+export async function fetchWhatsNew(): Promise<WhatsNew> {
   return readWhatsNew(
     await api.get('/api/auth/whats-new', WhatsNewAnswer, { fallback: 'Не удалось загрузить новости' })
   );
@@ -161,13 +154,21 @@ export async function markAppPromptSeen(): Promise<void> {
   await api.post('/api/auth/app-prompt/seen', AppPromptSeen);
 }
 
-// Alerts and sessions go through the shared normalizers: an entry without a
-// valid id or time is dropped rather than shown half-empty.
+// The contract lets any string id and any number through; an alert or device
+// without a valid id or time is dropped rather than shown half-empty.
+function hasValidTime(time: number): boolean {
+  return Number.isSafeInteger(time) && time >= 0;
+}
+
+export function isShowableLoginAlert(alert: LoginAlert): boolean {
+  return isUuid(alert.id) && hasValidTime(alert.createdAt);
+}
+
 export async function fetchLoginAlerts(): Promise<LoginAlert[]> {
   const { alerts } = await api.get('/api/auth/login-alerts', LoginAlerts, {
     fallback: 'Не удалось проверить входы в аккаунт'
   });
-  return alerts.map(normalizeLoginAlert).filter((alert): alert is LoginAlert => alert !== null);
+  return alerts.filter(isShowableLoginAlert);
 }
 
 export async function fetchAccountDeletionPreview(): Promise<AccountDeletionPreview> {
@@ -178,12 +179,17 @@ export async function fetchAccountDeletionPreview(): Promise<AccountDeletionPrev
 }
 
 export async function requestAccountDeletion(currentPassword: string): Promise<{ deletionScheduledFor: number }> {
-  const { deletionScheduledFor } = await api.post('/api/auth/account/deletion', DeletionScheduled, { currentPassword });
+  const { deletionScheduledFor } = await api.post(
+    '/api/auth/account/deletion',
+    DeletionScheduled,
+    { currentPassword },
+    { bodySchema: CurrentPasswordBody }
+  );
   return { deletionScheduledFor };
 }
 
-export async function restoreAccount(input: Credentials): Promise<AuthUser> {
-  return (await api.post('/api/auth/account/restore', SignedIn, input)).user;
+export async function restoreAccount(input: CredentialsBody): Promise<AuthUser> {
+  return (await api.post('/api/auth/account/restore', SignedIn, input, { bodySchema: CredentialsBody })).user;
 }
 
 export async function confirmLoginAlert(alertId: string): Promise<void> {
@@ -200,7 +206,7 @@ export async function denyLoginAlert(
 
 export async function fetchAccountSessions(): Promise<AccountSession[]> {
   const { sessions } = await api.get('/api/auth/sessions', Sessions, { fallback: 'Не удалось загрузить устройства' });
-  return sessions.map(normalizeAccountSession).filter((session): session is AccountSession => session !== null);
+  return sessions.filter((session) => isUuid(session.id) && hasValidTime(session.lastSeenAt));
 }
 
 export async function revokeAccountSession(sessionId: string): Promise<void> {
@@ -216,13 +222,16 @@ export async function revokeOtherAccountSessions(): Promise<number> {
 export async function generateRecoveryCodes(
   currentPassword: string
 ): Promise<{ codes: string[]; recoveryCodes: RecoveryCodesStatus }> {
-  const { codes, recoveryCodes } = await api.post('/api/auth/recovery-codes', RecoveryCodesGenerated, {
-    currentPassword
-  });
+  const { codes, recoveryCodes } = await api.post(
+    '/api/auth/recovery-codes',
+    RecoveryCodesGenerated,
+    { currentPassword },
+    { bodySchema: CurrentPasswordBody }
+  );
   return { codes, recoveryCodes };
 }
 
-export async function recoverAccount(input: RecoverInput): Promise<{ user: AuthUser; remaining: number }> {
-  const { user, recoveryCodes } = await api.post('/api/auth/recover', Recovered, input);
+export async function recoverAccount(input: RecoverBody): Promise<{ user: AuthUser; remaining: number }> {
+  const { user, recoveryCodes } = await api.post('/api/auth/recover', Recovered, input, { bodySchema: RecoverBody });
   return { user, remaining: recoveryCodes.remaining };
 }

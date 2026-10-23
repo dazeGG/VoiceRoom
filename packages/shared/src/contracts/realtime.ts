@@ -15,6 +15,13 @@ import { NotificationPreferences } from './notifications.ts';
 import { LobbyRoom, PublicPeer, RoomRelationship } from './rooms.ts';
 import { PublicUser } from './users.ts';
 
+/** The room or direct conversation a message belongs to. */
+export const ConversationRef = Type.Object({
+  type: Type.Union([Type.Literal('room'), Type.Literal('dm')]),
+  id: Type.String()
+});
+export type ConversationRef = Static<typeof ConversationRef>;
+
 /** A frame of one type: its optional request id, its type and its payload. */
 function Frame<const Type extends string, Payload extends TSchema>(type: Type, payload: Payload) {
   return Type.Object({ id: Type.Optional(Type.String()), type: Type.Literal(type), payload });
@@ -341,7 +348,7 @@ export const ServerEventFrames = {
   'reaction.updated': Frame(
     'reaction.updated',
     Type.Object({
-      conversation: Type.Object({ type: Type.Union([Type.Literal('room'), Type.Literal('dm')]), id: Type.String() }),
+      conversation: ConversationRef,
       roomId: Type.Optional(Type.String()),
       messageId: Type.String(),
       summary: ReactionSummary

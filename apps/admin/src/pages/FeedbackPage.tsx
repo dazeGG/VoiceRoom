@@ -3,7 +3,7 @@
 // table with the call's own numbers next to each, the bad ones in red.
 
 import { ThumbsDown, ThumbsUp } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import {
   ADMIN_CALL_FEEDBACK_LIMIT,
   ADMIN_CALL_FEEDBACK_PERIODS,
@@ -17,7 +17,7 @@ import {
 import { CALL_FEEDBACK_TAG_LABELS } from '@voice-room/shared/feedback-labels';
 import { fetchCallFeedback } from '../api/admin.ts';
 import { formatCount, formatDateTime, formatMinutes, formatMs, formatPercent } from '../format.ts';
-import { loadFailure, type LoadFailure } from '../load-state.ts';
+import { useAdminResource } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { Empty, Panel, Pill, Segment } from '../ui/index.tsx';
 import './FeedbackPage.css';
@@ -108,43 +108,21 @@ function TagList({
 export function FeedbackPage() {
   const [period, setPeriod] = useState<Period>('30');
   const [rating, setRating] = useState<RatingFilter>('all');
-  const [page, setPage] = useState<AdminCallFeedbackPage | null>(null);
-  const [failure, setFailure] = useState<LoadFailure | null>(null);
-  const [loading, setLoading] = useState(false);
-  // Only the reply to the latest choice is shown: an earlier, slower one is dropped.
-  const latestLoad = useRef(0);
-
-  const load = useCallback((days: Period, filter: RatingFilter) => {
-    latestLoad.current += 1;
-    const id = latestLoad.current;
-    const query: AdminCallFeedbackQuery = { days, ...(filter === 'all' ? {} : { rating: filter }) };
-    fetchCallFeedback(query)
-      .then(
-        (next) => {
-          if (id !== latestLoad.current) return;
-          setPage(next);
-          setFailure(null);
-        },
-        (cause: unknown) => {
-          if (id === latestLoad.current) setFailure(loadFailure(cause, 'Не удалось загрузить отзывы'));
-        }
-      )
-      .finally(() => {
-        if (id === latestLoad.current) setLoading(false);
-      });
-  }, []);
-
-  useEffect(() => {
-    load('30', 'all');
-  }, [load]);
-
-  // A choice by the person: the numbers are marked busy until its answer.
-  function choose(nextPeriod: Period, nextRating: RatingFilter): void {
-    setPeriod(nextPeriod);
-    setRating(nextRating);
-    setLoading(true);
-    load(nextPeriod, nextRating);
-  }
+  // Only the reply to the latest choice is shown: an earlier, slower one is dropped. A choice
+  // marks the numbers busy until its answer.
+  const {
+    data: page,
+    failure,
+    busy: loading,
+    reload
+  } = useAdminResource(
+    () => {
+      const query: AdminCallFeedbackQuery = { days: period, ...(rating === 'all' ? {} : { rating }) };
+      return fetchCallFeedback(query);
+    },
+    [period, rating],
+    { failureText: 'Не удалось загрузить отзывы' }
+  );
 
   const summary = page?.summary ?? null;
   const total = summary ? summary.good + summary.bad : 0;
@@ -156,14 +134,14 @@ export function FeedbackPage() {
         <Segment
           options={ADMIN_CALL_FEEDBACK_PERIODS.map((value) => ({ value, label: PERIOD_LABELS[value] }))}
           value={period}
-          onChange={(next) => choose(next, rating)}
+          onChange={setPeriod}
           ariaLabel="Период"
         />
-        <Segment options={RATING_OPTIONS} value={rating} onChange={(next) => choose(period, next)} ariaLabel="Оценка" />
+        <Segment options={RATING_OPTIONS} value={rating} onChange={setRating} ariaLabel="Оценка" />
       </div>
 
       {failure && !page ? (
-        <Notice failure={failure} onRetry={() => choose(period, rating)} />
+        <Notice failure={failure} onRetry={reload} />
       ) : !page || !summary ? (
         <p className="ui-empty" aria-busy="true">
           Загружаем…

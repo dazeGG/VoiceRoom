@@ -110,6 +110,8 @@ export const ERROR_CODES = [
   'invalid_mention_target',
   'self_mention',
   'too_many_mentions',
+  'mention_not_eligible',
+  'creator_not_eligible',
   'invalid_attachments',
   'reply_unavailable',
   'idempotency_conflict',
@@ -195,6 +197,8 @@ export const ERROR_CODES = [
 
   // Set by the web, never sent: a success body that does not match the route's contract
   'invalid_response',
+  // Set by the web, never sent: a request that got no answer (offline, DNS, refused connection)
+  'unavailable',
 
   // Realtime frames the server cannot read
   'invalid_json',

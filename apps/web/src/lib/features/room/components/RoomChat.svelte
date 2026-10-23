@@ -12,6 +12,7 @@
   import { getParticipantCount } from '../participants-ui.svelte';
   import { roomMemberTotal, ensureRoomMembership } from '$lib/entities/room/room-membership.svelte';
   import { session } from '$lib/features/auth/session.svelte';
+  import { DISPLAY_NAME_STORAGE_KEY, readStorage } from '$lib/shared/storage';
   import RoomChatPanel from './RoomChatPanel.svelte';
   import RoomMemberList from '$lib/entities/room/components/RoomMemberList.svelte';
 
@@ -44,7 +45,7 @@
   // Read at send time: the guest name dialog can persist a name long after this
   // component mounted.
   function resolveDisplayName(): string {
-    return cleanDisplayName(localStorage.getItem('voice-room:name')) || 'Гость';
+    return cleanDisplayName(readStorage(DISPLAY_NAME_STORAGE_KEY)) || 'Гость';
   }
 
   function openAuthorMenu(authorPeerId: string, event: MouseEvent): void {

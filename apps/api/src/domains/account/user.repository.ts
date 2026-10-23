@@ -13,7 +13,8 @@ import {
   WHATS_NEW_VERSION,
   normalizeReleaseVersion
 } from '@voice-room/shared/account-security';
-import { UNIQUE_VIOLATION, mapUser, randomAvatarColorKey, storedUser, toDate } from './user-records.ts';
+import { toDate } from '../../platform/epoch-millis.ts';
+import { UNIQUE_VIOLATION, mapUser, randomAvatarColorKey, storedUser } from './user-records.ts';
 
 // Every way of replacing a password ends the same: the old credential stops
 // working everywhere, so all sessions and push subscriptions go with it.

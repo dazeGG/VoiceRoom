@@ -33,11 +33,6 @@ export function Ok<const Properties extends TProperties>(properties: Properties)
 export const Done = Ok({});
 export type Done = Static<typeof Done>;
 
-/** Responses for a route that answers 200 with `success` or a 4xx failure. */
-export function Responses<Success extends ReturnType<typeof Ok>>(success: Success) {
-  return { 200: success, '4xx': Failure } as const;
-}
-
 export const Nullable = <Schema extends TSchema>(schema: Schema) => Type.Union([schema, Type.Null()]);
 
 export const IdParams = Type.Object({ id: Type.String() });

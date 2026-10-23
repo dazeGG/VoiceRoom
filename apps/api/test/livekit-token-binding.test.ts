@@ -17,7 +17,8 @@ import {
 } from '../src/domains/admission/livekit-token-binding.mts';
 import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate.service.ts';
 import type { GateClaims } from '../src/domains/admission/gate-credential-signer.ts';
-import { recordingLogger } from './fakes/index.ts';
+import { fake, recordingLogger } from './fakes/index.ts';
+import type { GateRoomStore } from '../src/domains/admission/credential-boundary.service.ts';
 import { mistyped } from './helpers/mistyped.ts';
 
 const NOW = Date.now();
@@ -170,7 +171,7 @@ test('the gate answers 403 and never dials LiveKit for a foreign JWT', async (t)
     boundary: BOUNDARY,
     logger,
     roomPrefix: 'voice-room-',
-    roomStore: {},
+    roomStore: fake<GateRoomStore>(),
     upstreamUrl: 'ws://livekit:7880'
   });
   let dialed = false;
@@ -200,7 +201,7 @@ test('the gate answers 403 and never dials LiveKit for a foreign JWT', async (t)
 test('credential-only authorize calls keep checking just the credential', async () => {
   const gate = createLiveKitAuthGateService({
     boundary: BOUNDARY,
-    roomStore: {},
+    roomStore: fake<GateRoomStore>(),
     upstreamUrl: 'ws://livekit:7880'
   });
   assert.equal((await gate.authorize('/rtc?vr_gate_credential=x')).ok, true);
@@ -220,7 +221,7 @@ test('the validate probe is admitted like the upgrade and proxied without the ga
     boundary: BOUNDARY,
     logger: recordingLogger(),
     roomPrefix: 'voice-room-',
-    roomStore: {},
+    roomStore: fake<GateRoomStore>(),
     upstreamUrl: `ws://127.0.0.1:${portOf(upstream)}`
   }).createServer();
   await new Promise<void>((resolve) => gate.listen(0, '127.0.0.1', resolve));

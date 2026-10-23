@@ -5,9 +5,8 @@ import { sql, type Selectable } from 'kysely';
 import type { Database } from '../../platform/db/kysely.ts';
 import type { Rooms } from '../../platform/db/schema.ts';
 import { createRoomId, createRowId } from '../../platform/db/ids.ts';
-import { epochMillis } from '../../platform/epoch-millis.ts';
+import { toDate, toMillis } from '../../platform/epoch-millis.ts';
 
-export type RoomRelationship = 'owner' | 'bookmarked' | 'member' | '';
 /** A room row, plus the per-user columns some listings add. */
 export type RoomRow = Selectable<Rooms> & { last_message_at?: Date | null; unread_count?: number };
 export type StoredRoom = ReturnType<typeof mapRoom>;
@@ -18,15 +17,6 @@ export type RoomCreation =
 export function normalizePositiveInt(value: unknown, fallback: number): number {
   const next = Number(value);
   return Number.isFinite(next) && next >= 0 ? next : fallback;
-}
-
-export function toDate(ms: unknown): Date {
-  return new Date(normalizePositiveInt(ms, Date.now()));
-}
-
-/** A stored time as epoch milliseconds; 0 when it does not parse. */
-export function toMillis(value: Date | string): number {
-  return epochMillis(value) ?? 0;
 }
 
 export function mapRoom(row: RoomRow) {

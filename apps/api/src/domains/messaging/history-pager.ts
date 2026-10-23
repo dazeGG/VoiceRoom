@@ -2,8 +2,15 @@
 // may not see, project the rest in one go, and point the cursors at both ends.
 
 import type { HistoryMode } from '@voice-room/shared/contracts/messages';
+import type { CursorTuple } from '../../platform/cursor-codec.ts';
 
-export type HistoryTuple = { createdAtMicros: unknown; id: string };
+/** What a history request may carry, as the query string hands it over. */
+export type HistoryQueryInput = Readonly<{
+  mode?: string | undefined;
+  limit?: string | undefined;
+  cursor?: string | undefined;
+  messageId?: string | undefined;
+}>;
 type RawPage<M> = { messages: M[]; hasMoreBefore: boolean; hasMoreAfter: boolean };
 type AnchoredMode = Exclude<HistoryMode, 'latest'>;
 
@@ -21,8 +28,8 @@ export async function pageHistory<M, D extends { cursor: string }>({
   mode: HistoryMode;
   cursor: string | undefined;
   listLatest: () => Promise<RawPage<M>>;
-  listAnchored: (mode: AnchoredMode, anchor: HistoryTuple) => Promise<RawPage<M>>;
-  decodeAnchor: (cursor: string | undefined) => HistoryTuple;
+  listAnchored: (mode: AnchoredMode, anchor: CursorTuple) => Promise<RawPage<M>>;
+  decodeAnchor: (cursor: string | undefined) => CursorTuple;
   invalidCursor: () => Error;
   canView: (message: M) => boolean | Promise<boolean>;
   project: (visible: M[]) => Promise<M[]> | M[];
@@ -32,7 +39,7 @@ export async function pageHistory<M, D extends { cursor: string }>({
   if (mode === 'latest') {
     page = await listLatest();
   } else {
-    let anchor: HistoryTuple;
+    let anchor: CursorTuple;
     try {
       anchor = decodeAnchor(cursor);
     } catch {

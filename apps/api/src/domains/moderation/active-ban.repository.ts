@@ -4,7 +4,7 @@ import { isArray, isRecord } from '@voice-room/shared/guards';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { DB, RoomBans } from '../../platform/db/schema.ts';
 import { createRowId } from '../../platform/db/ids.ts';
-import { epochMillis } from '../../platform/epoch-millis.ts';
+import { epochMillis, toDate, toMillis } from '../../platform/epoch-millis.ts';
 import { storedIpKey, type IpKeyOf } from '../../lib/ip-key.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
@@ -29,10 +29,8 @@ export type ActiveBanRecord = {
 
 export type BanPrincipal = { userId: string | null; ip: string };
 
-function toDate(value: unknown): Date {
-  if (value instanceof Date) return value;
-  const numeric = Number(value);
-  return new Date(Number.isFinite(numeric) ? numeric : Date.now());
+function timeOf(value: TimeInput): Date {
+  return value instanceof Date ? value : toDate(toMillis(value));
 }
 
 function mapActiveBan(row: BanRow | null | undefined): ActiveBanRecord | null {
@@ -51,7 +49,7 @@ function mapActiveBan(row: BanRow | null | undefined): ActiveBanRecord | null {
 // A ban counts until it is revoked or runs out.
 function active(at: TimeInput) {
   return (eb: ExpressionBuilder<DB, 'room_bans'>) =>
-    eb.and([eb('revoked_at', 'is', null), eb.or([eb('expires_at', 'is', null), eb('expires_at', '>', toDate(at))])]);
+    eb.and([eb('revoked_at', 'is', null), eb.or([eb('expires_at', 'is', null), eb('expires_at', '>', timeOf(at))])]);
 }
 
 // The one writer of room_bans. The caller passes the stored principal: an
@@ -82,7 +80,7 @@ async function insertRoomBan(
   const accountId = typeof userId === 'string' && userId.trim() ? userId.trim() : null;
   const storedIp = accountId ? '' : ip;
   if (!roomId || (!accountId && !storedIp)) return undefined;
-  const createdAt = toDate(at);
+  const createdAt = timeOf(at);
   return db
     .insertInto('room_bans')
     .values({
@@ -92,7 +90,7 @@ async function insertRoomBan(
       ip: storedIp,
       created_at: createdAt,
       updated_at: createdAt,
-      expires_at: expiresAt == null ? null : toDate(expiresAt),
+      expires_at: expiresAt == null ? null : timeOf(expiresAt),
       metadata: JSON.stringify(isRecord(metadata) ? metadata : {}),
       reason,
       idempotency_key: idempotencyKey
@@ -106,13 +104,11 @@ function createActiveBanRepository({
   ipKeyOf,
   now = Date.now
 }: {
-  pool?: QueryClient | null | undefined;
+  pool: QueryClient;
   ipKeyOf: IpKeyOf;
   now?: () => number;
 }) {
-  if (!pool || typeof pool.query !== 'function') throw new TypeError('A PostgreSQL pool is required');
-  const base = pool;
-  const on = (client: Client): Database => kyselyOn(client && typeof client.query === 'function' ? client : base);
+  const on = (client: Client): Database => kyselyOn(client ?? pool);
 
   function normalizePrincipal({ userId = null, ip = '' }: { userId?: unknown; ip?: unknown } = {}): BanPrincipal {
     const accountId = typeof userId === 'string' && userId.trim() ? userId.trim() : null;

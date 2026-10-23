@@ -6,8 +6,8 @@
 import type { LoginAlert } from '@voice-room/shared/contracts/account';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { PushPayload } from '../notifications/notification-dispatch.ts';
-import type { AccountDeletionPreview } from '@voice-room/shared/account-security';
 import type {
+  AccountDeletionPreview,
   AccountSession,
   LoginAlert as LoginAlertView,
   RecoveryCodesStatus,
@@ -23,7 +23,11 @@ import {
 import { isReservedName, isValidPassword } from '@voice-room/shared/validation';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { activeBlock, hashSessionToken, selfUser, type StoredUser } from './user-records.ts';
-import type { AccountRestore, DeletionRequest } from './account-deletion.repository.ts';
+import type { AccountDeletionRepository as DeletionRepository, AccountRestore } from './account-deletion.repository.ts';
+import type { LoginEventRepository } from './login-event.repository.ts';
+import type { RecoveryCodeRepository } from './recovery-code.repository.ts';
+import type { SessionRepository } from './session.repository.ts';
+import type { UserRepository } from './user.repository.ts';
 
 export type AccountUser = StoredUser;
 
@@ -36,65 +40,29 @@ export interface Device {
 type Status<T extends string> = T extends string ? { status: T } : never;
 type NotFound = Status<'not_found'>;
 
-export interface AccountUserStore {
-  createUser(input: {
-    login: string;
-    displayName: string;
-    password: string;
-  }): Promise<{ status: 'created'; user: AccountUser } | { status: 'login_taken'; user?: null }>;
-  createSession(input: { userId: string } & Device): Promise<{ token: string; publicId: string }>;
-  getUserById(userId: string): Promise<AccountUser | null>;
-  verifyCredentials(login: string, password: string): Promise<AccountUser | null>;
-  deleteSession(token: string): Promise<unknown>;
-  updateDisplayName(input: { userId: string; displayName: string }): Promise<AccountUser | null>;
-  changePassword(input: { userId: string; currentPassword: string; newPassword: string }): Promise<{ status: string }>;
-  getRecoveryCodesStatus(userId: string): Promise<RecoveryCodesStatus>;
-  getAccountNotices(
-    userId: string
-  ): Promise<{ recoveryCodesReminderSnoozedUntil: number | null; whatsNewSeen: string | null }>;
-  snoozeRecoveryCodesReminder(input: { userId: string }): Promise<{ status: string; snoozedUntil: number | null }>;
-  markWhatsNewSeen(input: { userId: string }): Promise<{ status: string; whatsNewSeen: string | null }>;
-  markAppPromptSeen(input: { userId: string }): Promise<{ status: string }>;
-  listPendingLoginAlerts(input: { userId: string; excludeSessionPublicId: string }): Promise<LoginAlertView[]>;
-  resolveLoginAlert(input: {
-    userId: string;
-    alertId: string;
-    resolution: 'confirmed' | 'denied';
-    currentSessionPublicId: string;
-  }): Promise<{ status: string; revokedTokenHash?: string | null }>;
-  listSessions(input: { userId: string; currentTokenHash: string }): Promise<AccountSession[]>;
-  revokeSession(input: {
-    userId: string;
-    publicId: string;
-  }): Promise<{ status: 'revoked'; tokenHash: string } | { status: 'not_found'; tokenHash?: null }>;
-  revokeOtherSessions(input: { userId: string; keepTokenHash: string }): Promise<{ tokenHashes: string[] }>;
-  generateRecoveryCodes(input: {
-    userId: string;
-    currentPassword: string;
-  }): Promise<{ status: string; codes: string[]; generatedAt?: number }>;
-  recoverWithCode(input: {
-    login: string;
-    code: unknown;
-    newPassword: string;
-  }): Promise<
-    | { status: 'recovered'; user: AccountUser; remaining?: number }
-    | { status: 'invalid'; user?: null; remaining?: number }
-  >;
-  recordLogin(input: {
-    userId: string;
-    sessionPublicId: string;
-    kind: LoginKind;
-    userAgent: string;
-    locationLabel: unknown;
-  }): Promise<{ alert?: LoginAlert | null }>;
-}
+export type AccountUserStore = Pick<
+  UserRepository,
+  | 'createUser'
+  | 'getUserById'
+  | 'verifyCredentials'
+  | 'updateDisplayName'
+  | 'changePassword'
+  | 'getAccountNotices'
+  | 'snoozeRecoveryCodesReminder'
+  | 'markWhatsNewSeen'
+  | 'markAppPromptSeen'
+> &
+  Pick<
+    SessionRepository,
+    'createSession' | 'deleteSession' | 'listSessions' | 'revokeSession' | 'revokeOtherSessions'
+  > &
+  Pick<RecoveryCodeRepository, 'getRecoveryCodesStatus' | 'generateRecoveryCodes' | 'recoverWithCode'> &
+  Pick<LoginEventRepository, 'listPendingLoginAlerts' | 'resolveLoginAlert' | 'recordLogin'>;
 
-export interface AccountDeletionRepository {
-  isLoginReserved(login: string): Promise<boolean>;
-  previewDeletion(input: { userId: string }): Promise<AccountDeletionPreview>;
-  requestDeletion(input: { userId: string; currentPassword: string }): Promise<DeletionRequest>;
-  restoreAccount(input: { login: string; password: string }): Promise<AccountRestore>;
-}
+export type AccountDeletionRepository = Pick<
+  DeletionRepository,
+  'isLoginReserved' | 'previewDeletion' | 'requestDeletion' | 'restoreAccount'
+>;
 
 export type LoginKind = 'register' | 'login' | 'recovery';
 

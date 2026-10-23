@@ -56,7 +56,7 @@ type RoomReplyMessage =
   | undefined;
 
 function requireQuery(client: QueryClient | null | undefined): QueryClient {
-  if (!client || typeof client.query !== 'function') {
+  if (!client) {
     throw new TypeError('Reply repository requires a PostgreSQL query client');
   }
   return client;

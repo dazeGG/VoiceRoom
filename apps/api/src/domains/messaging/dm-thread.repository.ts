@@ -122,7 +122,7 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
     const id = crypto.randomUUID();
     // A raw pg transaction: the hooks run their own SQL on the same client.
     return transaction(pool, async (client) => {
-      if (typeof beforeUnitOfWork === 'function') {
+      if (beforeUnitOfWork) {
         const prepared = await beforeUnitOfWork(client);
         if (prepared?.replay) return { ...prepared.message, idempotencyReplay: true };
       }
@@ -140,7 +140,7 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
         .returningAll()
         .executeTakeFirstOrThrow();
       const message = mapMessage(row);
-      if (typeof unitOfWork === 'function') await unitOfWork(client, message);
+      if (unitOfWork) await unitOfWork(client, message);
       return message;
     });
   }
@@ -154,7 +154,7 @@ export function createDmThreadRepository({ pool }: { pool: pg.Pool }) {
   }: {
     messageId: string;
     recipientId: string;
-    status: string;
+    status: 'accepted' | 'declined';
   }) {
     const row = await db
       .updateTable('direct_messages')

@@ -7,23 +7,20 @@ import type { AccountMessage } from '../../realtime/account-events.ts';
 import type { Logger } from 'pino';
 import { cleanPresenceStatus } from '@voice-room/shared/validation';
 import { isRecord, textOf } from '@voice-room/shared/guards';
-import type { NotificationPreferences, PushConfig } from '@voice-room/shared/contracts/notifications';
+import type { PushConfig } from '@voice-room/shared/contracts/notifications';
 import { cleanPushEndpoint } from '../../lib/push-endpoint.ts';
 import type { RateCheck } from '../../lib/rate-limit.ts';
+import type { NotificationPreferencesRepository, PreferencesResult } from './notification-preferences.repository.ts';
 
-export interface MutationResult {
-  status: string;
-  preferences: NotificationPreferences;
-}
+export type NotificationPreferenceStore = Pick<
+  NotificationPreferencesRepository,
+  'getPreferences' | 'setDmMute' | 'setRoomMute' | 'setPrivateNotifications' | 'setDoNotDisturb' | 'setPresenceStatus'
+>;
 
-export interface NotificationPreferenceStore {
-  getPreferences(userId: string): Promise<NotificationPreferences>;
-  setDmMute(input: { userId: string; peerUserId: string; muted: boolean }): Promise<MutationResult>;
-  setRoomMute(input: { userId: string; roomId: string; muted: boolean }): Promise<MutationResult>;
-  setPrivateNotifications(input: { userId: string; privateNotifications: boolean }): Promise<MutationResult>;
-  setDoNotDisturb(input: { userId: string; doNotDisturb: boolean }): Promise<MutationResult>;
-  setPresenceStatus(input: { automatic: boolean; userId: string; presenceStatus: string }): Promise<MutationResult>;
-}
+/** What any preference change answers: its status and the preferences after it. */
+export type MutationResult = Awaited<
+  ReturnType<NotificationPreferenceStore[Exclude<keyof NotificationPreferenceStore, 'getPreferences'>]>
+>;
 
 export interface PushSubscription {
   endpoint: string;
@@ -70,11 +67,11 @@ export function createNotificationSettingsService(deps: NotificationSettingsDeps
   // Do-not-disturb and presence are one status: DND is presence 'dnd'. After
   // either changes, the account's devices get the new preferences and its
   // friends the new status.
-  async function publishPresence(
+  async function publishPresence<Result extends PreferencesResult<string>>(
     user: StoredUser,
-    result: MutationResult,
+    result: Result,
     log?: Pick<Logger, 'error'>
-  ): Promise<MutationResult> {
+  ): Promise<Result> {
     if (result.status !== 'updated') return result;
     const presenceStatus =
       cleanPresenceStatus(result.preferences.presenceStatus) || (result.preferences.doNotDisturb ? 'dnd' : 'online');

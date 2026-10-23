@@ -92,8 +92,7 @@ async function age(pool: pg.Pool, id: string, interval: string) {
   ]);
 }
 
-test('attachment repository validates its pool and maps database rows', () => {
-  assert.throws(() => createAttachmentRepository(), /PostgreSQL pool is required/);
+test('attachment repository maps database rows', () => {
   assert.equal(mapAttachment(null), null);
 
   const mapped = mapAttachment(ROW);
@@ -320,7 +319,6 @@ test('cleanup, processing inventory, storage keys and quota read the live rows',
   assert.deepEqual(await repository.quotaUsage(ownerId), { pendingCount: 1, recentCount: 5, usedBytes: 7 + 20 * 3 });
   assert.deepEqual(await repository.quotaUsage(crypto.randomUUID()), { pendingCount: 0, recentCount: 0, usedBytes: 0 });
 
-  await assert.rejects(() => repository.lockOwner(ownerId, null), /transaction client is required/);
   await transaction(pool, (client) => repository.lockOwner(ownerId, client));
 });
 
@@ -363,10 +361,40 @@ test('the upload lock serializes work on one attachment and always lets go', { s
     'a failed operation still unlocks'
   );
   assert.equal(pool.totalCount - pool.idleCount, 0, 'every connection went back to the pool');
+});
 
-  const noConnect = createAttachmentRepository({ pool: { query: pool.query.bind(pool) } });
-  await assert.rejects(
-    () => noConnect.withAttachmentLock('attachment-1', async () => {}),
-    /cannot acquire attachment locks/
+test('a connection whose unlock fails is destroyed, not returned to the pool with the lock', { skip }, async (t) => {
+  const { pool } = await setup(t);
+  const released: Array<Error | boolean | undefined> = [];
+  const repository = createAttachmentRepository({
+    pool: {
+      query: pool.query.bind(pool),
+      async connect() {
+        const client = await pool.connect();
+        const release = client.release.bind(client);
+        client.release = (error) => {
+          released.push(error);
+          release(error);
+        };
+        return client;
+      }
+    }
+  });
+
+  // An aborted transaction makes every later query on the connection fail,
+  // the unlock included, while the session lock stays held.
+  const result = await repository.withAttachmentLock('attachment-3', async (client) => {
+    await client.query('BEGIN');
+    await assert.rejects(() => client.query('SELECT 1/0'), /division by zero/);
+    return 'done';
+  });
+  assert.equal(result, 'done');
+  assert.equal(released.length, 1);
+  assert.ok(released[0] instanceof Error, 'the client is released with the unlock error');
+  assert.equal(pool.totalCount, 0, 'the connection holding the lock left the pool');
+  assert.equal(
+    await repository.withAttachmentLock('attachment-3', async () => 'free again'),
+    'free again',
+    'the lock went away with the connection'
   );
 });

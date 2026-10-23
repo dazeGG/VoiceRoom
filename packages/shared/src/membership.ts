@@ -3,9 +3,9 @@
 // presence and voice state.
 
 import type { MemberPage, MemberPresenceStatus, MembershipMember, MembershipRole } from './contracts/membership.ts';
-import { isOneOf, isRecord, pageInfoOf, trimmedText } from './guards.ts';
+import { isOneOf, isRecord, pageInfoOf, pageLimitOf, trimmedText } from './guards.ts';
 
-export const MEMBERSHIP_CONTRACT_VERSION = 1 as const;
+const MEMBERSHIP_CONTRACT_VERSION = 1 as const;
 export const MEMBERSHIP_DEFAULT_LIMIT = 50 as const;
 export const MEMBERSHIP_MAX_LIMIT = 100 as const;
 export const MEMBERSHIP_ROLES: readonly MembershipRole[] = Object.freeze(['owner', 'member'] as const);
@@ -13,12 +13,6 @@ export const MEMBERSHIP_ROLES: readonly MembershipRole[] = Object.freeze(['owner
 type Loose = Record<string, unknown>;
 
 const MEMBER_PRESENCE_STATUSES: readonly MemberPresenceStatus[] = ['online', 'afk', 'dnd', 'offline'];
-
-export function normalizeMembershipLimit(value: unknown, fallback: number = MEMBERSHIP_DEFAULT_LIMIT): number {
-  const numeric = Number(value);
-  if (!Number.isInteger(numeric) || numeric < 1) return fallback;
-  return Math.min(numeric, MEMBERSHIP_MAX_LIMIT);
-}
 
 export function normalizeMembershipRequest(value: Loose = {}): {
   contractVersion: 1;
@@ -31,7 +25,7 @@ export function normalizeMembershipRequest(value: Loose = {}): {
   return {
     contractVersion: MEMBERSHIP_CONTRACT_VERSION,
     cursor: cursor || undefined,
-    limit: normalizeMembershipLimit(value.limit),
+    limit: pageLimitOf(value.limit, MEMBERSHIP_DEFAULT_LIMIT, MEMBERSHIP_MAX_LIMIT),
     query: query || undefined
   };
 }
@@ -63,19 +57,17 @@ export function buildMembershipEnvelope({
   hasMore = false,
   presenceRevision = 0
 }: {
-  roomId?: unknown;
-  members?: unknown[];
-  nextCursor?: unknown;
-  hasMore?: unknown;
-  presenceRevision?: unknown;
-} = {}): MemberPage {
+  roomId: string;
+  members?: readonly MembershipMember[];
+  nextCursor?: string | undefined;
+  hasMore?: boolean;
+  presenceRevision?: number;
+}): MemberPage {
   return {
     contractVersion: MEMBERSHIP_CONTRACT_VERSION,
     roomId: trimmedText(roomId, 48),
-    members: Array.isArray(members)
-      ? members.map(normalizeMembershipMember).filter((member): member is MembershipMember => Boolean(member))
-      : [],
+    members: members.map(normalizeMembershipMember).filter((member): member is MembershipMember => Boolean(member)),
     pageInfo: pageInfoOf(nextCursor, hasMore),
-    presenceRevision: Math.max(0, Number.isSafeInteger(Number(presenceRevision)) ? Number(presenceRevision) : 0)
+    presenceRevision: Number.isSafeInteger(presenceRevision) ? Math.max(0, presenceRevision) : 0
   };
 }

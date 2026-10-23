@@ -112,6 +112,9 @@ function createModerationStore() {
     async isRoomServerMuted() {
       return false;
     },
+    async revokeLiveKitGatePeer() {
+      return { status: 'revoked', epoch: 1 };
+    },
     async getRoom(roomId) {
       return roomId === ROOM_ID ? { ...room, peers: new Map<string, PresencePeer>() } : null;
     },

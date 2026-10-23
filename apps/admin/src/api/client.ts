@@ -6,7 +6,7 @@
 
 import type { Static, TSchema } from 'typebox';
 import { Value } from 'typebox/value';
-import { ERROR_TEXTS, type ErrorCode } from './error-texts.ts';
+import { ERROR_TEXTS, type KnownErrorCode } from './error-texts.ts';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -27,8 +27,8 @@ function failureOf(body: unknown): { code: string; error: string } {
   return { code, error };
 }
 
-function isErrorCode(code: string): code is ErrorCode {
-  return code in ERROR_TEXTS;
+function isKnownErrorCode(code: string): code is KnownErrorCode {
+  return Object.hasOwn(ERROR_TEXTS, code);
 }
 
 function parseJson(text: string): unknown {
@@ -69,7 +69,7 @@ async function send<Schema extends TSchema>(
   if (!response.ok) {
     const { code } = failureOf(parsed);
     if (response.status === 401 && code === 'staff_session_required') signInAgain();
-    throw new ApiError(isErrorCode(code) ? ERROR_TEXTS[code] : fallback, response.status, code);
+    throw new ApiError(isKnownErrorCode(code) ? ERROR_TEXTS[code] : fallback, response.status, code);
   }
   if (!Value.Check(schema, parsed)) {
     const first = Value.Errors(schema, parsed).at(0);

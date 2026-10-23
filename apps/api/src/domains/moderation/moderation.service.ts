@@ -11,12 +11,8 @@ import {
 import { kyselyOn } from '../../platform/db/kysely.ts';
 import { lockKeys, lockXact } from '../../platform/db/locks.ts';
 import { transaction } from '../../platform/db/pool.ts';
-import type { IpKeyOf } from '../../lib/ip-key.ts';
-import {
-  createModerationRepository,
-  type ModerationCursorCodec,
-  type ModerationRepository
-} from './moderation.repository.ts';
+import type { PrincipalRevocation } from '../admission/gate-credential.repository.ts';
+import type { ModerationRepository } from './moderation.repository.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
 
@@ -33,29 +29,25 @@ type PutBanInput = { roomId: string; actorUserId: string; input?: unknown; idemp
 
 function createModerationService({
   pool,
-  cursorCodec,
-  ipKeyOf,
-  repository = createModerationRepository({ cursorCodec, pool, ipKeyOf }),
+  repository,
   now = Date.now,
   maxActiveBans = 100,
   resolvePrincipals,
   revokePrincipalInTransaction,
   afterBanCommitted
 }: {
-  pool?: pg.Pool | null;
-  cursorCodec?: ModerationCursorCodec;
-  ipKeyOf: IpKeyOf;
-  repository?: ModerationRepository;
+  pool: pg.Pool;
+  repository: ModerationRepository;
   now?: () => number;
   maxActiveBans?: number;
-  resolvePrincipals?: (input: { roomId: string } & BanMutation) => Promise<CredentialPrincipal[]>;
-  revokePrincipalInTransaction?: (input: {
+  resolvePrincipals: (input: { roomId: string } & BanMutation) => Promise<CredentialPrincipal[]>;
+  revokePrincipalInTransaction: (input: {
     client: QueryClient;
     principal: CredentialPrincipal;
     roomId: string;
     now: number;
-  }) => Promise<{ status?: string } | null | undefined>;
-  afterBanCommitted?: (
+  }) => Promise<PrincipalRevocation>;
+  afterBanCommitted: (
     input: { roomId: string; principals: CredentialPrincipal[]; result: BanOutcome } & BanMutation
   ) => unknown;
 }) {
@@ -94,7 +86,7 @@ function createModerationService({
     // Reject non-owners before resolving account or network principals. The
     // transaction repeats this check to close ownership-change races.
     if (!(await authorizeOwner(roomId, actorUserId))) return { status: 'forbidden', ban: null };
-    const principals = typeof resolvePrincipals === 'function' ? await resolvePrincipals({ roomId, ...mutation }) : [];
+    const principals = await resolvePrincipals({ roomId, ...mutation });
     if (mutation.userId && principals.length === 0) return { status: 'revocation_unavailable', ban: null };
 
     const result = await transaction(pool, async (client: pg.PoolClient): Promise<BanOutcome> => {
@@ -135,7 +127,7 @@ function createModerationService({
       await revokeAll(client, roomId, principals, at);
       return { status: 'created', ban };
     });
-    if (result.ban && typeof afterBanCommitted === 'function') {
+    if (result.ban) {
       await afterBanCommitted({ roomId, ...mutation, principals, result });
     }
     return result;
@@ -148,7 +140,6 @@ function createModerationService({
     at: number
   ): Promise<void> {
     if (principals.length === 0) return;
-    if (typeof revokePrincipalInTransaction !== 'function') throw new Error('Credential revocation is unavailable');
     const seen = new Set<string>();
     for (const principal of principals) {
       const key = `${principal.principalType}:${principal.principalId}`;

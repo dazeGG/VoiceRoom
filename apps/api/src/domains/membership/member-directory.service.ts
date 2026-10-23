@@ -53,14 +53,11 @@ function createMemberDirectoryService({
   cursorCodec,
   getPresenceSnapshot = () => null
 }: {
-  membershipService?: { canAccessDirectory(roomId: string, userId: string): Promise<boolean> };
-  repository?: Pick<MembershipRepository, 'listDirectoryPage'>;
-  cursorCodec?: DirectoryCursorCodec;
+  membershipService: { canAccessDirectory(roomId: string, userId: string): Promise<boolean> };
+  repository: Pick<MembershipRepository, 'listDirectoryPage'>;
+  cursorCodec: DirectoryCursorCodec;
   getPresenceSnapshot?: (roomId: string) => PresenceSnapshot | Promise<PresenceSnapshot>;
-} = {}) {
-  if (!membershipService || !repository || !cursorCodec) {
-    throw new TypeError('membershipService, repository and cursorCodec are required');
-  }
+}) {
   const memberships = membershipService;
   const directory = repository;
   const codec = cursorCodec;

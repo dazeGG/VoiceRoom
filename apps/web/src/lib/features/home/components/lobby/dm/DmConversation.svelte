@@ -28,7 +28,7 @@
   import { attachmentAt, downloadAttachment } from '$lib/shared/chat/attachment-actions';
   import { ChatScroll, copyMessageImage, copyMessageText } from '$lib/shared/chat/chat-scroll.svelte';
   import { openProfileCardFor } from '../../../../../entities/profile-card/profile-card-ui.svelte';
-  import { formatTime } from '../../../model/lobby-format';
+  import { clockTime } from '$lib/shared/utils/date-format';
   import { displayNameOf } from '$lib/shared/utils/display-name';
   import { formatChatDayLabel, isSameDay } from '$lib/shared/utils/chat-date';
   import { pushToast } from '../../../model/toasts.svelte';
@@ -302,7 +302,7 @@
                 /></button
               >
               <time class="chat-msg-time" datetime={new Date(group.bubbles[0].createdAt).toISOString()}
-                >{formatTime(group.bubbles[0].createdAt)}</time
+                >{clockTime(group.bubbles[0].createdAt)}</time
               >
             </div>
             {#each group.bubbles as bubble (bubble.id)}

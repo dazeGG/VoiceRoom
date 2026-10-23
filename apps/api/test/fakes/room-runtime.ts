@@ -55,6 +55,8 @@ export function runtimeDeps({ store = {}, wsRegistry = {}, ...overrides }: Runti
     MAX_ROOM_PEERS: 16,
     tokensMatch: (expected, actual) => expected === actual,
     sessionAvatarColorKey: () => 'blue',
+    findRoomBan: async () => null,
+    credentialBoundary: null,
     ...overrides
   };
 }

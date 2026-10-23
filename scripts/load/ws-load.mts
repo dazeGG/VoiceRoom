@@ -10,19 +10,30 @@
 //   API=http://127.0.0.1:3000 ROOMS=50 PEERS=9 LOBBY=500 DURATION=120 node ws-load.mts
 
 import { randomBytes } from 'node:crypto';
+// A type-only import: type stripping erases it, so the file still runs alone on the generator.
+import type { ClientCommand } from '@voice-room/shared/contracts/realtime';
 import WebSocket from 'ws';
 
+/** A numeric setting; a typo stops the run instead of loading with NaN. */
+function numberFromEnv(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0) throw new Error(`${name} must be a non-negative number, got "${raw}"`);
+  return value;
+}
+
 const api = process.env.API || 'http://127.0.0.1:3000';
-const rooms = Number(process.env.ROOMS || 10);
-const peersPerRoom = Number(process.env.PEERS || 9);
-const lobbySockets = Number(process.env.LOBBY || 0);
-const durationMs = Number(process.env.DURATION || 60) * 1000;
-const joinsPerSecond = Number(process.env.JOINS_PER_SECOND || 50);
-const chatPerMinute = Number(process.env.CHAT_PER_MIN || 2);
-const mutePerMinute = Number(process.env.MUTE_PER_MIN || 2);
-const screenRequests = Number(process.env.SCREEN_REQUESTS || 0);
+const rooms = numberFromEnv('ROOMS', 10);
+const peersPerRoom = numberFromEnv('PEERS', 9);
+const lobbySockets = numberFromEnv('LOBBY', 0);
+const durationMs = numberFromEnv('DURATION', 60) * 1000;
+const joinsPerSecond = numberFromEnv('JOINS_PER_SECOND', 50);
+const chatPerMinute = numberFromEnv('CHAT_PER_MIN', 2);
+const mutePerMinute = numberFromEnv('MUTE_PER_MIN', 2);
+const screenRequests = numberFromEnv('SCREEN_REQUESTS', 0);
 const screenProfile = process.env.SCREEN_PROFILE || 'high-60';
-const cameraRequests = Number(process.env.CAMERA_REQUESTS || 0);
+const cameraRequests = numberFromEnv('CAMERA_REQUESTS', 0);
 
 type Frame = { id?: string | undefined; type: string; payload?: Record<string, unknown> | undefined };
 // This file is copied to the load generator on its own, so it carries its own guard.
@@ -105,7 +116,8 @@ function openSocket(ip: string, onFrame: (frame: Frame) => void): Promise<WebSoc
 
 async function joinPeer(roomId: string, index: number): Promise<Peer | null> {
   const ip = ipFor(100_000 + index);
-  const peer = { roomId, peerId: `lt-${token(9)}`, sessionToken: token(32), name: `Load ${index}`, ip };
+  const identity = { roomId, peerId: `lt-${token(9)}`, sessionToken: token(32), name: `Load ${index}` };
+  const peer = { ...identity, ip };
   let joined: (() => void) | null = null;
   let refused: ((reason: string) => void) | null = null;
   const onFrame = (frame: Frame) => {
@@ -130,7 +142,7 @@ async function joinPeer(roomId: string, index: number): Promise<Peer | null> {
       joined = () => resolve('joined');
       refused = (reason) => resolve(reason);
       setTimeout(() => resolve('timeout'), 10_000);
-      ws.send(JSON.stringify({ type: 'room.join', payload: { ...peer, ip: undefined } }));
+      ws.send(JSON.stringify({ type: 'room.join', payload: identity } satisfies ClientCommand));
     });
     bump(`join_${outcome}`);
     if (outcome !== 'joined') {
@@ -149,7 +161,8 @@ async function openLobbySocket(index: number, roomIds: string[]): Promise<WebSoc
   try {
     const ws = await openSocket(ipFor(200_000 + index), () => {});
     const roomId = roomIds[index % Math.max(1, roomIds.length)];
-    if (roomId) ws.send(JSON.stringify({ type: 'room.preview.subscribe', payload: { roomId } }));
+    if (roomId)
+      ws.send(JSON.stringify({ type: 'room.preview.subscribe', payload: { roomId } } satisfies ClientCommand));
     bump('lobby_open');
     return ws;
   } catch {
@@ -182,15 +195,30 @@ async function requestMedia(peer: Peer, kind: 'screen' | 'camera') {
     setTimeout(() => resolve(null), 10_000);
     const profile = kind === 'screen' ? { profileId: screenProfile } : {};
     peer.ws.send(
-      JSON.stringify({ id, type: 'room.media.request', payload: { roomId, peerId, sessionToken, kind, ...profile } })
+      JSON.stringify({
+        id,
+        type: 'room.media.request',
+        payload: { roomId, peerId, sessionToken, kind, ...profile }
+      } satisfies ClientCommand)
     );
   });
   pendingGrants.delete(id);
   if (!grant) return bump(`${kind}_no_answer`);
   if (!grant.granted) return bump(`${kind}_refused_${String(grant.reason)}`);
   bump(kind === 'screen' ? `screen_granted_${String(grant.profileId)}` : 'camera_granted');
-  const patch = kind === 'screen' ? { screen: true, screenProfileId: grant.profileId } : { camera: true };
-  peer.ws.send(JSON.stringify({ type: 'room.peer.update', payload: { roomId, peerId, sessionToken, patch } }));
+  const { profileId } = grant;
+  const patch =
+    kind === 'camera'
+      ? { camera: true }
+      : typeof profileId === 'string'
+        ? { screen: true, screenProfileId: profileId }
+        : { screen: true };
+  peer.ws.send(
+    JSON.stringify({
+      type: 'room.peer.update',
+      payload: { roomId, peerId, sessionToken, patch }
+    } satisfies ClientCommand)
+  );
 }
 
 function startActivity(peer: Peer, roomSize: () => number, until: number) {
@@ -200,14 +228,19 @@ function startActivity(peer: Peer, roomSize: () => number, until: number) {
     while (Date.now() < until) {
       await sleep(1000 + Math.random() * 1000);
       if (Math.random() * 40 < chatPerMinute) {
-        peer.ws.send(JSON.stringify({ type: 'room.chat.typing', payload: { roomId: peer.roomId } }));
+        peer.ws.send(
+          JSON.stringify({ type: 'room.chat.typing', payload: { roomId: peer.roomId } } satisfies ClientCommand)
+        );
         await chat(peer, roomSize() - 1).catch(() => bump('chat_post_failed'));
       }
       if (Math.random() * 40 < mutePerMinute) {
         muted = !muted;
         const { roomId, peerId, sessionToken } = peer;
         peer.ws.send(
-          JSON.stringify({ type: 'room.peer.update', payload: { roomId, peerId, sessionToken, patch: { muted } } })
+          JSON.stringify({
+            type: 'room.peer.update',
+            payload: { roomId, peerId, sessionToken, patch: { muted } }
+          } satisfies ClientCommand)
         );
         bump('mute_toggle');
       }

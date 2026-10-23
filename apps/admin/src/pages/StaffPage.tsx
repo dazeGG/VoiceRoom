@@ -5,7 +5,7 @@
 // be changed here.
 
 import { Check, Lock, Minus, Table2 } from 'lucide-react';
-import { useCallback, useEffect, useState, type SubmitEvent } from 'react';
+import { useCallback, useState, type SubmitEvent } from 'react';
 import {
   ROLE_PERMISSIONS,
   STAFF_PERMISSIONS,
@@ -16,7 +16,7 @@ import {
 } from '@voice-room/shared/contracts/staff';
 import { fetchStaff, setStaffRole } from '../api/staff.ts';
 import { formatPeople } from '../format.ts';
-import { loadFailure, type LoadFailure } from '../load-state.ts';
+import { useAdminResource } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { useStaff } from '../staff.tsx';
 import { permissionGroups, rolesAreNested, sectionsOf } from '../staff-permissions.ts';
@@ -98,30 +98,19 @@ function RightsTable({ staff }: { staff: readonly StaffMember[] | null }) {
 
 export function StaffPage() {
   const me = useStaff();
-  const [staff, setStaff] = useState<StaffMember[] | null>(null);
-  const [failure, setFailure] = useState<LoadFailure | null>(null);
+  // Loaded again after a change, or a retry.
+  const {
+    data: staff,
+    failure,
+    busy: loading,
+    reload
+  } = useAdminResource(fetchStaff, [], { failureText: 'Не удалось загрузить сотрудников' });
   const [login, setLogin] = useState('');
   const [role, setRole] = useState<StaffRole>('moderator');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
   const [rightsOpen, setRightsOpen] = useState(false);
 
-  // Bumped to load the list again: after a change, or a retry.
-  const [version, setVersion] = useState(0);
-  const reload = useCallback(() => {
-    setFailure(null);
-    setVersion((value) => value + 1);
-  }, []);
-  useEffect(() => {
-    let alive = true;
-    fetchStaff().then(
-      (list) => alive && setStaff(list),
-      (error: unknown) => alive && setFailure(loadFailure(error, 'Не удалось загрузить сотрудников'))
-    );
-    return () => {
-      alive = false;
-    };
-  }, [version]);
   const closeRights = useCallback(() => setRightsOpen(false), []);
 
   async function change(target: string, next: StaffRole | null): Promise<boolean> {
@@ -146,7 +135,8 @@ export function StaffPage() {
     if (target && (await change(target, role))) setLogin('');
   }
 
-  if (failure) return <Notice failure={failure} onRetry={reload} />;
+  // A failed load says so until the next request; the list shows again while that one is out.
+  if (failure && !loading) return <Notice failure={failure} onRetry={reload} />;
 
   const total = STAFF_PERMISSIONS.length;
   return (

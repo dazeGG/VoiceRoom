@@ -36,12 +36,11 @@
   import { dismissToast, type ToastOptions } from './model/toasts.svelte';
   import {
     getActiveVoiceRoomId,
-    clearDisconnectedHiddenEmbed,
     clearEmbeddedRoom as clearEmbeddedRoomState,
     clearViewedRoom,
-    connectedRoomIsViewed,
     embeddedRoomIsVisible,
     leaveViewedConnectedRoom as resolveLeaveViewedConnectedRoom,
+    mountedRoomId,
     openActiveVoiceRoom,
     roomNavigation,
     routeToHome,
@@ -141,7 +140,7 @@
   let openInAppRoomId = $state('');
   const notifications = new LobbyNotifications();
   const selectedRoomId = $derived(roomNavigation.viewedRoomId);
-  const embeddedRoomId = $derived(roomNavigation.embeddedRoomId);
+  const embeddedRoomId = $derived(mountedRoomId());
   const autoJoinRoomId = $derived(roomNavigation.joinIntentRoomId);
   const connectedVoiceRoomId = $derived(getActiveVoiceRoomId());
 
@@ -167,7 +166,6 @@
       .sort((a, b) => (b.lastMessage?.createdAt ?? 0) - (a.lastMessage?.createdAt ?? 0))
       .map((entry) => entry.user)
   );
-  const connectedRoomVisible = $derived(connectedRoomIsViewed(lobby.mode));
   const embeddedRoomVisible = $derived(embeddedRoomIsVisible(lobby.mode));
 
   function restoreLobbyDocumentState(): void {
@@ -273,7 +271,7 @@
     const initialDmId = initialParams.get('dm');
     if (!initialRoomId && initialDmId) {
       replaceState(resolve('/'), {});
-      void lobby.openDm(initialDmId).catch(() => onToast('Не удалось открыть диалог'));
+      void lobby.openDm(initialDmId);
     }
     // A mention link — from the bell or from a push — lands here rather than on
     // /r/:roomId, so it previews the room and never joins voice.
@@ -328,13 +326,6 @@
     onDisconnect: () => void leaveConnectedVoiceRoom()
   });
 
-  $effect(() => {
-    void connectedRoomVisible;
-    if (!connectedVoiceRoomId && embeddedRoomId && selectedRoomId !== embeddedRoomId) {
-      clearDisconnectedHiddenEmbed();
-    }
-  });
-
   // Explicit voice enter/switch path. Browsing a room uses previewRoom(); this
   // path may remount the room client because the user chose to enter voice here.
   function enterRoom(roomId: string): void {
@@ -384,7 +375,7 @@
   function openDesktopLink(link: DesktopLink): void {
     if (link.kind === 'room') requestEnterRoom(link.roomId);
     else if (link.kind === 'mention') openRoomMessage(link.roomId, link.messageId);
-    else if (link.kind === 'dm') void lobby.openDm(link.dmId).catch(() => onToast('Не удалось открыть диалог'));
+    else if (link.kind === 'dm') void lobby.openDm(link.dmId);
   }
 
   function previewRoom(roomId: string): void {

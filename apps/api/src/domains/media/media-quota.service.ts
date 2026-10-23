@@ -1,4 +1,4 @@
-import type { ErrorCode } from '@voice-room/shared/contracts/errors';
+import { DomainError } from '../../platform/http/domain-error.ts';
 import type { Attachment, AttachmentRepository } from './attachment.repository.ts';
 import type { MediaQuotaRepository } from './media-quota.repository.ts';
 
@@ -14,39 +14,21 @@ export type QuotaReservation = {
   metadata?: unknown;
 };
 
-class MediaQuotaError extends Error {
-  declare code: ErrorCode;
-  declare statusCode: number;
-
-  constructor(code: ErrorCode, message: string) {
-    super(message);
-    this.name = 'MediaQuotaError';
-    this.code = code;
-    this.statusCode = 413;
-  }
-}
-
 function createMediaQuotaService({
-  attachmentRepository,
-  quotaRepository,
+  attachmentRepository: attachments,
+  quotaRepository: quotas,
   maxPending = DEFAULT_MAX_PENDING,
   maxFilesPerWindow = DEFAULT_MAX_FILES_PER_WINDOW,
   maxBytes = DEFAULT_MAX_BYTES,
   reservationTtlMs = 60 * 60 * 1000
 }: {
-  attachmentRepository?: Pick<AttachmentRepository, 'createDraft' | 'findByClientRequest'>;
-  quotaRepository?: MediaQuotaRepository;
+  attachmentRepository: Pick<AttachmentRepository, 'createDraft' | 'findByClientRequest'>;
+  quotaRepository: Pick<MediaQuotaRepository, 'withOwnerReservation'>;
   maxPending?: number;
   maxFilesPerWindow?: number;
   maxBytes?: number;
   reservationTtlMs?: number;
-} = {}) {
-  if (!attachmentRepository?.createDraft || !quotaRepository?.withOwnerReservation) {
-    throw new TypeError('Media quota repositories are required');
-  }
-  const attachments = attachmentRepository;
-  const quotas = quotaRepository;
-
+}) {
   async function reserve({
     ownerId,
     context,
@@ -56,7 +38,7 @@ function createMediaQuotaService({
   }: QuotaReservation): Promise<Attachment | null> {
     const requestedBytes = Number(bytes);
     if (!Number.isSafeInteger(requestedBytes) || requestedBytes < 1) {
-      throw new MediaQuotaError('media_size_invalid', 'A positive upload size is required');
+      throw new DomainError('media_size_invalid', 413, 'A positive upload size is required');
     }
     return quotas.withOwnerReservation(ownerId, async ({ client, usage }) => {
       const existing = clientRequestId
@@ -64,11 +46,11 @@ function createMediaQuotaService({
         : null;
       if (existing) return existing;
       if (usage.pendingCount >= maxPending)
-        throw new MediaQuotaError('media_pending_limit', 'Too many pending uploads');
+        throw new DomainError('media_pending_limit', 413, 'Too many pending uploads');
       if (usage.recentCount >= maxFilesPerWindow)
-        throw new MediaQuotaError('media_rate_limit', 'Upload rate limit exceeded');
+        throw new DomainError('media_rate_limit', 413, 'Upload rate limit exceeded');
       if (usage.usedBytes + requestedBytes > maxBytes)
-        throw new MediaQuotaError('media_byte_quota', 'Media storage quota exceeded');
+        throw new DomainError('media_byte_quota', 413, 'Media storage quota exceeded');
       return attachments.createDraft(
         {
           ownerId,

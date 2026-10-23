@@ -1,12 +1,13 @@
 import crypto from 'node:crypto';
 import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
+import type { Connectable } from '../../platform/db/connectable.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { MessageAttachments } from '../../platform/db/schema.ts';
 import { isArray, isRecord } from '@voice-room/shared/guards';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
-type AttachmentPool = QueryClient & { connect?: () => Promise<pg.PoolClient> };
+type AttachmentPool = QueryClient & Connectable;
 type Client = QueryClient | null | undefined;
 
 export type AttachmentContext = 'room' | 'dm';
@@ -114,9 +115,7 @@ function attachmentFromRow(row: AttachmentRow): Attachment {
   });
 }
 
-function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } = {}) {
-  if (!pool || typeof pool.query !== 'function') throw new TypeError('A PostgreSQL pool is required');
-  const base = pool;
+function createAttachmentRepository({ pool: base }: { pool: AttachmentPool }) {
   const on = (client: Client): Database => kyselyOn(client && typeof client.query === 'function' ? client : base);
   const rows = (query: Promise<AttachmentRow[]>) => query.then((found) => found.map(attachmentFromRow));
   const row = (query: Promise<AttachmentRow | undefined>) => query.then(mapAttachment);
@@ -560,23 +559,26 @@ function createAttachmentRepository({ pool }: { pool?: AttachmentPool | null } =
     });
   }
 
-  async function lockOwner(ownerId: string, client: Client): Promise<void> {
-    if (!client) throw new TypeError('A transaction client is required');
+  async function lockOwner(ownerId: string, client: QueryClient): Promise<void> {
     await sql`SELECT pg_advisory_xact_lock(hashtext(${`media-quota:${ownerId}`}))`.execute(kyselyOn(client));
   }
 
   // A session-level lock held on one connection for the whole operation, so
   // two uploads of one attachment never write its files at the same time.
   async function withAttachmentLock<T>(id: string, operation: (client: pg.PoolClient) => Promise<T>): Promise<T> {
-    if (!base.connect) throw new TypeError('The PostgreSQL pool cannot acquire attachment locks');
     const client = await base.connect();
     const key = `media-upload:${id}`;
     try {
       await sql`SELECT pg_advisory_lock(hashtext(${key}))`.execute(kyselyOn(client));
       return await operation(client);
     } finally {
-      await sql`SELECT pg_advisory_unlock(hashtext(${key}))`.execute(kyselyOn(client)).catch(() => {});
-      client.release();
+      // A connection that failed to unlock still holds the session lock, so it
+      // is destroyed instead of going back to the pool.
+      const unlockError = await sql`SELECT pg_advisory_unlock(hashtext(${key}))`.execute(kyselyOn(client)).then(
+        () => undefined,
+        (error: unknown) => (error instanceof Error ? error : new Error('The attachment lock was not released'))
+      );
+      client.release(unlockError);
     }
   }
 

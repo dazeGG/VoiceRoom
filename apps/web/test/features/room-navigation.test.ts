@@ -85,3 +85,32 @@ test('a hidden room client without a call is dropped, the one on screen stays', 
   nav.clearDisconnectedHiddenEmbed();
   expect(nav.roomNavigation.embeddedRoomId).toBeNull();
 });
+
+test('a call that ends while its room is off screen takes the room client with it', async () => {
+  const nav = await load();
+  nav.setConnectedVoiceRoom('call-room');
+  nav.selectRoomForVoiceEntry('call-room');
+  nav.selectRoomPreview('other-room');
+  expect(nav.mountedRoomId()).toBe('call-room');
+
+  // Kicked or dropped: the room client ends the call on its own.
+  nav.clearConnectedVoiceRoom();
+  expect(nav.mountedRoomId()).toBeNull();
+  expect(nav.embeddedRoomIsVisible('rooms')).toBe(false);
+
+  // Coming back to that room shows its preview, not the client that ended.
+  nav.selectRoomPreview('call-room');
+  expect(nav.mountedRoomId()).toBeNull();
+  expect(nav.roomNavigation.embeddedRoomId).toBeNull();
+});
+
+test('browsing away from a room client without a call drops it at once', async () => {
+  const nav = await load();
+  nav.selectRoomForVoiceEntry('room-a');
+  nav.selectRoomPreview('room-b');
+  expect(nav.roomNavigation.embeddedRoomId).toBeNull();
+
+  nav.selectRoomForVoiceEntry('room-a');
+  nav.clearViewedRoom();
+  expect(nav.roomNavigation.embeddedRoomId).toBeNull();
+});

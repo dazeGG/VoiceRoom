@@ -8,11 +8,17 @@ import fastify from 'fastify';
 import type { ApiContext } from '../src/app/context.ts';
 import {
   createDmHistoryService,
-  DmHistoryError,
-  type DmHistoryRepository
+  type DmHistoryRepository,
+  type StoredDirectMessage
 } from '../src/domains/messaging/dm-history.service.ts';
 import { registerHistoryRoutes, type HistoryRoutesDeps } from '../src/domains/messaging/history.routes.ts';
-import { createRoomHistoryService, type RoomHistoryRepository } from '../src/domains/messaging/room-history.service.ts';
+import {
+  createRoomHistoryService,
+  type RoomHistoryRepository,
+  type StoredRoomMessage
+} from '../src/domains/messaging/room-history.service.ts';
+import { createMessageVisibilityService } from '../src/domains/messaging/message-visibility.service.ts';
+import { DomainError } from '../src/platform/http/domain-error.ts';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { fake, storedUser } from './fakes/index.ts';
@@ -22,7 +28,11 @@ import { checked } from './helpers/checked.ts';
 const codec = createCursorCodec({ keys: ['h'.repeat(32)] });
 const PREVIEW = { url: 'https://example.com/', title: 'Example', description: '', siteName: '', image: null };
 
+const visibilityPolicy = createMessageVisibilityService();
+
 const rooms = createRoomHistoryService({
+  visibilityPolicy,
+  projectMessages: ({ messages }: { messages: StoredRoomMessage[] }) => messages,
   cursorCodec: codec,
   repository: fake<RoomHistoryRepository>({
     roomExists: async (roomId) => roomId === 'room-1',
@@ -35,7 +45,7 @@ const rooms = createRoomHistoryService({
           authorUserId: 'user-1',
           name: 'Anna',
           text: 'hello',
-          createdAt: '2026-01-01T00:00:00.000Z',
+          createdAt: Date.parse('2026-01-01T00:00:00.000Z'),
           createdAtMicros: '1',
           editedAt: null,
           expiresAt: null,
@@ -52,6 +62,8 @@ const rooms = createRoomHistoryService({
 });
 
 const directs = createDmHistoryService({
+  visibilityPolicy,
+  projectMessages: ({ messages }: { messages: StoredDirectMessage[] }) => messages,
   cursorCodec: codec,
   repository: fake<DmHistoryRepository>({
     canReadThread: async ({ peerId }) => peerId === 'friend',
@@ -62,7 +74,7 @@ const directs = createDmHistoryService({
           senderId: 'friend',
           recipientId: 'user-1',
           body: 'hi',
-          createdAt: new Date('2026-01-01T00:00:00.000Z'),
+          createdAt: Date.parse('2026-01-01T00:00:00.000Z'),
           createdAtMicros: '2',
           metadata: { kind: 'room-invite', roomId: 'room-1', roomName: 'Room', status: 'pending', secret: 'x' }
         }
@@ -150,7 +162,7 @@ test('history refusals keep their status and code; a server failure stays privat
   const refused = historyApp(t, {
     directs: {
       getPage: async () => {
-        throw new DmHistoryError('thread_not_found', 404, 'Thread not found');
+        throw new DomainError('thread_not_found', 404, 'Thread not found');
       }
     }
   });

@@ -5,7 +5,8 @@
 import type pg from 'pg';
 import type { AccountBadge } from '@voice-room/shared/contracts/users';
 import { kyselyOn } from '../../platform/db/kysely.ts';
-import { cleanBadge, toDate } from './user-records.ts';
+import { toDate } from '../../platform/epoch-millis.ts';
+import { cleanBadge } from './user-records.ts';
 
 export function createAccountStandingRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);

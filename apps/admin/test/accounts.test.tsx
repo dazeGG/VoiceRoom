@@ -230,6 +230,10 @@ test('an account card has its own address under the accounts section', () => {
   expect(pathOf({ tab: 'system', accountId: 'u-1' })).toBe('/system');
 });
 
+test('a card address that does not decode opens the overview', () => {
+  expect(locationFromPath('/accounts/%E0')).toEqual({ tab: 'overview', accountId: null });
+});
+
 test('the log words a role given and taken away', () => {
   const entry = { id: 'a', at: 0, reason: '', adminName: 'Root', until: null, badge: null };
   expect(describeAction({ ...entry, action: 'staff_role', role: 'moderator' })).toBe('Выдана роль: Модератор');

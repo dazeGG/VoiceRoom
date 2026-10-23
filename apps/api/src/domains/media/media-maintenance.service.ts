@@ -11,29 +11,23 @@ export type MediaCleanupResult = Readonly<{
 }>;
 
 function createMediaMaintenanceService({
-  attachmentRepository,
+  attachmentRepository: attachments,
   jobRepository,
-  storage,
+  storage: files,
   batchSize = 500
 }: {
-  attachmentRepository?: Pick<
+  attachmentRepository: Pick<
     AttachmentRepository,
     'listCleanupCandidates' | 'markCleanupDeleted' | 'clearPhysicalData'
   >;
-  jobRepository?: Partial<Pick<MediaJobRepository, 'removeTerminalBefore'>> | null;
-  storage?: Pick<MediaStorage, 'removeAttachment'> & Partial<Pick<MediaStorage, 'removeStaleTemporaryFiles'>>;
+  jobRepository: Pick<MediaJobRepository, 'removeTerminalBefore'>;
+  storage: Pick<MediaStorage, 'removeAttachment' | 'removeStaleTemporaryFiles'>;
   batchSize?: number;
-} = {}) {
-  if (!attachmentRepository || !storage) throw new TypeError('Media maintenance dependencies are required');
-  const attachments = attachmentRepository;
-  const files = storage;
-
+}) {
   async function cleanupOnce(): Promise<MediaCleanupResult> {
-    const temporaryFilesRemoved = files.removeStaleTemporaryFiles
-      ? await files.removeStaleTemporaryFiles(new Date(Date.now() - 60 * 60 * 1000), {
-          limit: Math.min(500, batchSize)
-        })
-      : [];
+    const temporaryFilesRemoved = await files.removeStaleTemporaryFiles(new Date(Date.now() - 60 * 60 * 1000), {
+      limit: Math.min(500, batchSize)
+    });
     const candidates = await attachments.listCleanupCandidates({ limit: Math.min(500, batchSize) });
     let removed = 0;
     for (const candidate of candidates) {
@@ -46,11 +40,9 @@ function createMediaMaintenanceService({
       removed += 1;
       if (removed % 25 === 0) await new Promise((resolve) => setImmediate(resolve));
     }
-    const jobsRemoved = jobRepository?.removeTerminalBefore
-      ? await jobRepository.removeTerminalBefore(new Date(Date.now() - 60 * 60 * 1000), {
-          limit: Math.min(500, batchSize)
-        })
-      : [];
+    const jobsRemoved = await jobRepository.removeTerminalBefore(new Date(Date.now() - 60 * 60 * 1000), {
+      limit: Math.min(500, batchSize)
+    });
     return Object.freeze({
       inspected: candidates.length,
       jobsRemoved: jobsRemoved.length,
@@ -61,5 +53,7 @@ function createMediaMaintenanceService({
 
   return Object.freeze({ cleanupOnce });
 }
+
+export type MediaMaintenanceService = ReturnType<typeof createMediaMaintenanceService>;
 
 export { createMediaMaintenanceService };

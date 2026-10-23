@@ -2,8 +2,9 @@
 // and its opaque cursors. The page itself is contracts/messages.ts.
 
 import type { HistoryMode } from './contracts/messages.ts';
+import { pageLimitOf } from './guards.ts';
 
-export const HISTORY_CONTRACT_VERSION = 1 as const;
+const HISTORY_CONTRACT_VERSION = 1 as const;
 export const HISTORY_DEFAULT_LIMIT = 50 as const;
 export const HISTORY_MAX_LIMIT = 100 as const;
 
@@ -27,17 +28,11 @@ export function isOpaqueCursor(value: unknown): value is string {
   );
 }
 
-export function normalizeLimit(value: unknown, fallback: number = HISTORY_DEFAULT_LIMIT): number {
-  const numeric = Number(value);
-  if (!Number.isInteger(numeric) || numeric < 1) return fallback;
-  return Math.min(numeric, HISTORY_MAX_LIMIT);
-}
-
 export function normalizeHistoryRequest(
   value: Loose = {}
 ): { ok: true; request: HistoryRequest } | { ok: false; code: 'invalid_cursor' } {
   const mode = HISTORY_MODES.find((candidate) => candidate === value.mode) ?? 'latest';
-  const limit = normalizeLimit(value.limit);
+  const limit = pageLimitOf(value.limit, HISTORY_DEFAULT_LIMIT, HISTORY_MAX_LIMIT);
   const cursor = isOpaqueCursor(value.cursor) ? value.cursor : '';
 
   if ((mode === 'before' || mode === 'after' || mode === 'around') && !cursor) {

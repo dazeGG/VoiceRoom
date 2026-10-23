@@ -177,7 +177,15 @@ test('the owner moderation ban waits for a membership admission in the room', as
       throw new Error('no cursor in this test');
     }
   };
-  const service = createModerationService({ pool, ipKeyOf, cursorCodec });
+  const service = createModerationService({
+    pool,
+    repository: createModerationRepository({ cursorCodec, pool, ipKeyOf }),
+    resolvePrincipals: async () => [],
+    revokePrincipalInTransaction: async () => {
+      throw new Error('no credential to revoke in this test');
+    },
+    afterBanCommitted: () => undefined
+  });
   await banWaitsForAdmission(pool, async () => {
     const result = await service.putBan({
       roomId: 'room',

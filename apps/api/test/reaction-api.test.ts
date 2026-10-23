@@ -6,7 +6,7 @@ import { createReactionService, type ReactionRepository } from '../src/domains/m
 import { registerReactionRoutes, type ReactionRoutesDeps } from '../src/domains/messaging/reactions.routes.ts';
 import { createRepeatReadBrake } from '../src/domains/messaging/repeat-read-brake.ts';
 import type { ApiContext } from '../src/app/context.ts';
-import { fake } from './fakes/index.ts';
+import { fake, fakeDb } from './fakes/index.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
 import { createReactionRealtimeAdapter } from '../src/domains/messaging/reaction-realtime-adapter.ts';
 
@@ -25,7 +25,7 @@ function repository(): ReactionRepository {
         cursorTuple: { createdAtMicros: String(index), id: `u-${index}` }
       }));
     },
-    async setDesiredState({ active: desired }) {
+    async setDesiredState({ active: desired = false }) {
       if (active === desired) return { changed: false, revision: String(revision) };
       active = desired;
       revision += 1n;
@@ -40,7 +40,7 @@ function repository(): ReactionRepository {
       };
     },
     async transaction(callback) {
-      return callback(null);
+      return callback(fakeDb());
     }
   };
 }
@@ -54,6 +54,7 @@ function service(overrides: Partial<Parameters<typeof createReactionService>[0]>
       if (conversation.type === 'dm') return viewer?.id === 'account' && conversation.id === 'peer';
       return conversation.id === 'room' && Boolean(viewer?.id);
     },
+    publish: () => false,
     ...overrides
   });
 }
@@ -155,7 +156,9 @@ test('G69-A02 desired PUT is idempotent, bounded, revisioned and publishes only 
     broadcastRoom: () =>
       new Promise((resolve) => {
         release = resolve;
-      })
+      }),
+    broadcastAccount: () => false,
+    resolveDirectRecipients: () => []
   });
   const pending = ordered
     .publish({

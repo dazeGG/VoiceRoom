@@ -7,10 +7,12 @@ import assert from 'node:assert/strict';
 import {
   DEFAULT_REALTIME_RECONNECT_LEASE_MS,
   readApiConfig,
+  readMessageDeliveryWorkerConfig,
   readNotificationDeliveryWorkerConfig,
   readRuStorePushConfig,
   resolveRealtimeReconnectLeaseMs
 } from '../src/app/config.ts';
+import { createLiveKit } from '../src/app/livekit.ts';
 
 test('defaults are safe: opt-in features off, local bind, dev cookies', () => {
   const config = readApiConfig({});
@@ -73,6 +75,25 @@ test('the minimum Android app version is empty by default, and a malformed one s
       /ANDROID_MIN_VERSION must be a version/
     );
   }
+});
+
+test('a limit set to something that is not a valid number stops start-up', () => {
+  assert.throws(() => readApiConfig({ MAX_VOICE_PEERS: '6OO' }), /MAX_VOICE_PEERS/);
+  assert.throws(() => readApiConfig({ MAX_ROOM_PEERS: '0' }), /MAX_ROOM_PEERS/);
+  assert.throws(
+    () => readMessageDeliveryWorkerConfig({ MESSAGE_DELIVERY_BATCH_SIZE: 'lots' }),
+    /MESSAGE_DELIVERY_BATCH_SIZE/
+  );
+  assert.equal(readApiConfig({ MAX_VOICE_PEERS: '' }).MAX_VOICE_PEERS, 0);
+  // Port 0 asks the OS for a free port.
+  assert.equal(readApiConfig({ PORT: '0' }).PORT, 0);
+});
+
+test('the LiveKit room prefix is read once and names rooms for the admin calls', () => {
+  assert.equal(readApiConfig({}).LIVEKIT_ROOM_PREFIX, 'voice-room-');
+  assert.equal(readApiConfig({ LIVEKIT_ROOM_PREFIX: 'a b/c-' }).LIVEKIT_ROOM_PREFIX, 'a-b-c-');
+  const liveKit = createLiveKit(readApiConfig({ LIVEKIT_ROOM_PREFIX: 'vr-' }), {}, () => ({ error() {} }));
+  assert.equal(liveKit.roomName('room-1'), 'vr-room-1');
 });
 
 test('the reconnect lease', () => {

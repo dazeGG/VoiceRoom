@@ -3,11 +3,9 @@
 // or code, and a call's stays folded into the people who made them.
 
 import { AppWindow, Globe, Smartphone, type LucideIcon } from 'lucide-react';
-import type { LiveRoomPeer, RoomAccount, RoomCall, RoomStay } from '@voice-room/shared/contracts/admin';
+import type { ClientKind, RoomAccount, RoomCall, RoomStay } from '@voice-room/shared/contracts/admin';
 import { deviceLabel, shortGuestId, shortIpKey } from '../../origin.ts';
 import { AccountBadge, Pill, RoomAvatar } from '../../ui/index.tsx';
-
-type ClientKind = NonNullable<LiveRoomPeer['client']>;
 
 export const CLIENTS: Record<ClientKind, { label: string; icon: LucideIcon }> = {
   desktop_app: { label: 'приложение', icon: AppWindow },

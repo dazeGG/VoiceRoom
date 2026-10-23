@@ -1,4 +1,4 @@
-import { createMessageVisibilityService, type MessageVisibilityService } from './message-visibility.service.ts';
+import type { MessageVisibilityService } from './message-visibility.service.ts';
 
 export type MessagingUnitOfWork<Direct, Room> = {
   directMessages: Direct;
@@ -18,31 +18,18 @@ function createMessageService<Direct, Room>({
   roomMessages,
   visibility
 }: {
-  directMessages?: Direct;
-  roomMessages?: Room;
-  visibility?: MessageVisibilityService;
-} = {}): MessageService<Direct, Room> {
-  if (!directMessages || !roomMessages) {
-    throw new TypeError('Message service requires room and direct message repositories');
-  }
-
-  const direct = directMessages;
-  const room = roomMessages;
-  const visibilityPolicy = visibility || createMessageVisibilityService();
-
+  directMessages: Direct;
+  roomMessages: Room;
+  visibility: MessageVisibilityService;
+}): MessageService<Direct, Room> {
   async function withUnitOfWork<T>(operation: (unit: MessagingUnitOfWork<Direct, Room>) => T | Promise<T>): Promise<T> {
-    if (typeof operation !== 'function') throw new TypeError('Messaging unit of work must be a function');
-    return operation({
-      directMessages: direct,
-      roomMessages: room,
-      visibility: visibilityPolicy
-    });
+    return operation({ directMessages, roomMessages, visibility });
   }
 
   return Object.freeze({
-    direct,
-    room,
-    visibility: visibilityPolicy,
+    direct: directMessages,
+    room: roomMessages,
+    visibility,
     withUnitOfWork
   });
 }

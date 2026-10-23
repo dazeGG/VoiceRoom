@@ -29,11 +29,11 @@ function createMembershipService({
   activeBanService,
   now = Date.now
 }: {
-  pool?: pg.Pool | null;
+  pool: pg.Pool;
   repository?: MembershipRepository;
   activeBanService?: BanCheck | null;
   now?: () => number;
-} = {}) {
+}) {
   async function getMembership(roomId: string, userId: string): Promise<Membership | null> {
     return repository.getActive(roomId, userId);
   }

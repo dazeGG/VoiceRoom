@@ -1,4 +1,4 @@
-import type { LocalTrackPublication, Room } from 'livekit-client';
+import type { ConnectionQuality, LocalTrackPublication, Room } from 'livekit-client';
 import type { SvelteMap } from 'svelte/reactivity';
 import type { HotkeyBinding } from '$lib/shared/ui/HotkeyRecorder/types';
 import type { MicrophoneMode, NoiseMode } from './config';
@@ -158,17 +158,35 @@ export interface LocalNetworkStats {
   transport: 'udp' | 'tcp' | 'relay' | null;
 }
 
+/** The room event channel as the connection pill reads it. */
+export type ServerConnection = 'idle' | 'connecting' | 'reconnecting' | 'connected';
+
+/** The LiveKit voice link as the connection pill reads it. */
+export type VoiceConnection =
+  | 'idle'
+  | 'connecting'
+  | 'connected'
+  | 'reconnecting'
+  | 'signal-reconnecting'
+  | 'lost'
+  | 'error'
+  | 'no-route'
+  | 'playback-blocked';
+
+/** LiveKit's rating of the local link, by its string values. */
+export type LocalConnectionQuality = `${ConnectionQuality}`;
+
 export interface RoomConnectionState {
   connecting: boolean;
   voiceRealtimeTeardown: (() => void) | null;
-  localConnectionQuality: string;
+  localConnectionQuality: LocalConnectionQuality;
   localPingMs: number | null;
   localNetwork: LocalNetworkStats;
   livekitRoom: Room | null;
-  serverConnection: string;
+  serverConnection: ServerConnection;
   serverPeerIds: Set<string>;
   serverPeerSyncReady: boolean;
-  voiceConnection: string;
+  voiceConnection: VoiceConnection;
 }
 
 export interface RoomParticipantState {

@@ -10,7 +10,7 @@ import type { ReplyPreview } from '@voice-room/shared/contracts/messages';
 import { replayedMessage, type IdempotencyInput, type Reservation } from './message-idempotency.repository.ts';
 import { requireReplyTarget } from './reply-projector.ts';
 
-export type DbClient = Pick<pg.PoolClient, 'query'> | null | undefined;
+export type DbClient = Pick<pg.PoolClient, 'query'>;
 
 /** What a send needs of the idempotency ledger and the delivery outbox. */
 export interface SendDelivery {

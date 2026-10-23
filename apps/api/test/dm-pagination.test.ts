@@ -4,9 +4,16 @@ import { createCursorCodec } from '../src/platform/cursor-codec.ts';
 import {
   canonicalParticipants,
   createDmHistoryService,
-  type DmHistoryRepository
+  type DmHistoryRepository,
+  type StoredDirectMessage
 } from '../src/domains/messaging/dm-history.service.ts';
+import { createMessageVisibilityService } from '../src/domains/messaging/message-visibility.service.ts';
 import { fake } from './fakes/index.ts';
+
+const pageDeps = {
+  visibilityPolicy: createMessageVisibilityService(),
+  projectMessages: ({ messages }: { messages: StoredDirectMessage[] }) => messages
+};
 
 function message(id: string, micros: number) {
   return { id, senderId: 'a', recipientId: 'b', body: id, createdAt: Number(micros), createdAtMicros: String(micros) };
@@ -22,7 +29,11 @@ test('G27-A01 DM cursor context is canonical and GET invokes only read repositor
       return { messages: [message('a', 10), message('b', 10)], hasMoreBefore: false, hasMoreAfter: false };
     }
   });
-  const service = createDmHistoryService({ repository, cursorCodec: createCursorCodec({ keys: ['d'.repeat(32)] }) });
+  const service = createDmHistoryService({
+    repository,
+    cursorCodec: createCursorCodec({ keys: ['d'.repeat(32)] }),
+    ...pageDeps
+  });
   const page = await service.getPage({ userId: 'a', peerId: 'b' });
   assert.deepEqual(
     page.messages.map(({ id }) => id),
@@ -36,7 +47,8 @@ test('G27-A02 unauthorized and cross-thread cursors fail without disclosure', as
   const codec = createCursorCodec({ keys: ['d'.repeat(32)] });
   const denied = createDmHistoryService({
     repository: fake<DmHistoryRepository>({ canReadThread: async () => false }),
-    cursorCodec: codec
+    cursorCodec: codec,
+    ...pageDeps
   });
   await assert.rejects(denied.getPage({ userId: 'a', peerId: 'b' }), { code: 'thread_forbidden', statusCode: 403 });
 });
@@ -48,16 +60,20 @@ test('a DM page sends its times as epoch milliseconds', async () => {
       messages: [
         {
           ...message('a', 1),
-          createdAt: '2026-01-01T00:00:00.000Z',
-          editedAt: new Date('2026-01-01T00:01:00.000Z'),
-          readAt: new Date('2026-01-01T00:02:00.000Z')
+          createdAt: Date.parse('2026-01-01T00:00:00.000Z'),
+          editedAt: Date.parse('2026-01-01T00:01:00.000Z'),
+          readAt: Date.parse('2026-01-01T00:02:00.000Z')
         }
       ],
       hasMoreBefore: false,
       hasMoreAfter: false
     })
   });
-  const service = createDmHistoryService({ repository, cursorCodec: createCursorCodec({ keys: ['d'.repeat(32)] }) });
+  const service = createDmHistoryService({
+    repository,
+    cursorCodec: createCursorCodec({ keys: ['d'.repeat(32)] }),
+    ...pageDeps
+  });
   const [first] = (await service.getPage({ userId: 'a', peerId: 'b' })).messages;
   assert.ok(first);
   assert.equal(first.createdAt, Date.parse('2026-01-01T00:00:00.000Z'));

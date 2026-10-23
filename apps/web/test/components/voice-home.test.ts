@@ -5,6 +5,7 @@ import VoiceHome from '../../src/lib/features/home/components/lobby/VoiceHome.sv
 import { LobbyStore } from '../../src/lib/features/home/model/lobby.svelte.ts';
 import { lobbyContext } from '../../src/lib/features/home/model/lobby-context.ts';
 import { defined } from '../helpers/assert.ts';
+import { authUser } from '../fixtures/users.ts';
 
 afterEach(cleanup);
 
@@ -111,4 +112,46 @@ test('without rooms there is a prompt to create the first one and no room sectio
   renderHome();
   expect(screen.getByText('У вас пока нет комнат — создайте первую кнопкой выше.')).toBeTruthy();
   expect(screen.queryByRole('region', { name: 'Сейчас в эфире' })).toBeNull();
+});
+
+test('a hidden request banner comes back for a new request even when the count did not grow', async () => {
+  const lobby = new LobbyStore();
+  const request = (id: string, login: string) => ({
+    id,
+    createdAt: 1,
+    mutualFriends: 0,
+    user: authUser({ id: `user-${id}`, login })
+  });
+  lobby.requests = { incoming: [request('r1', 'bob'), request('r2', 'eve')], outgoing: [] };
+  lobby.incomingRequestCount = 2;
+  render(VoiceHome, {
+    props: { rooms: [], onOpenRoom: vi.fn(), onCreateRoom: vi.fn(), onJoinCode: vi.fn() },
+    context: lobbyContext(lobby)
+  });
+  expect(screen.getByText(/2\s+новые заявки в друзья/)).toBeTruthy();
+
+  await userEvent.click(screen.getByRole('button', { name: 'Скрыть' }));
+  expect(screen.queryByText(/новые заявки в друзья/)).toBeNull();
+
+  // One request was answered elsewhere and another one arrived: still two.
+  lobby.requests = { incoming: [request('r2', 'eve'), request('r3', 'kim')], outgoing: [] };
+  lobby.incomingRequestCount = 2;
+  expect(await screen.findByText(/2\s+новые заявки в друзья/)).toBeTruthy();
+});
+
+test('the request banner shows from the friends count when the request list did not load, and hides until it changes', async () => {
+  const lobby = new LobbyStore();
+  lobby.requests = { incoming: [], outgoing: [] };
+  lobby.incomingRequestCount = 2;
+  render(VoiceHome, {
+    props: { rooms: [], onOpenRoom: vi.fn(), onCreateRoom: vi.fn(), onJoinCode: vi.fn() },
+    context: lobbyContext(lobby)
+  });
+  expect(screen.getByText(/2\s+новые заявки в друзья/)).toBeTruthy();
+
+  await userEvent.click(screen.getByRole('button', { name: 'Скрыть' }));
+  expect(screen.queryByText(/новые заявки в друзья/)).toBeNull();
+
+  lobby.incomingRequestCount = 3;
+  expect(await screen.findByText(/3\s+новые заявки в друзья/)).toBeTruthy();
 });

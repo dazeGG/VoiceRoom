@@ -19,15 +19,10 @@ function createReactionRealtimeAdapter({
   broadcastAccount,
   resolveDirectRecipients
 }: {
-  broadcastRoom?: Broadcaster;
-  broadcastAccount?: Broadcaster;
-  resolveDirectRecipients?: (input: ReactionPublishInput) => Iterable<string> | Promise<Iterable<string>>;
-} = {}): ReactionRealtimeAdapter {
-  const roomBroadcaster: Broadcaster = typeof broadcastRoom === 'function' ? broadcastRoom : () => false;
-  const accountBroadcaster: Broadcaster = typeof broadcastAccount === 'function' ? broadcastAccount : () => false;
-  const recipientResolver =
-    typeof resolveDirectRecipients === 'function' ? resolveDirectRecipients : async (): Promise<Iterable<string>> => [];
-
+  broadcastRoom: Broadcaster;
+  broadcastAccount: Broadcaster;
+  resolveDirectRecipients: (input: ReactionPublishInput) => Iterable<string> | Promise<Iterable<string>>;
+}): ReactionRealtimeAdapter {
   async function publish(input: ReactionPublishInput = {}): Promise<number> {
     const { conversation, messageId, summary } = input;
     const type = conversation?.type;
@@ -43,13 +38,13 @@ function createReactionRealtimeAdapter({
     };
 
     if (type === 'room') {
-      return (await roomBroadcaster(conversation.id, event)) === false ? 0 : 1;
+      return (await broadcastRoom(conversation.id, event)) === false ? 0 : 1;
     }
 
-    const recipients = new Set(await recipientResolver(input));
+    const recipients = new Set(await resolveDirectRecipients(input));
     let published = 0;
     for (const userId of recipients) {
-      if (userId && (await accountBroadcaster(userId, event)) !== false) published += 1;
+      if (userId && (await broadcastAccount(userId, event)) !== false) published += 1;
     }
     return published;
   }

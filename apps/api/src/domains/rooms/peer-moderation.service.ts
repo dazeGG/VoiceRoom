@@ -7,33 +7,21 @@ import type { Logger } from 'pino';
 import type { GatePrincipal } from '../admission/gate-principal.ts';
 import { isGatePrincipal } from '../admission/gate-principal.ts';
 import type { ServerMuteResult } from '../admission/livekit-admin.ts';
+import type { RoomBanRepository, ServerMuteRepository } from '../moderation/room-ban.repository.ts';
 import type { LiveKitConfig } from '../admission/livekit-config.ts';
 import type { PeerEviction } from './peer-eviction.ts';
 import type { LiveRoom, PresencePeer } from './room-views.ts';
 import { codeOf } from '../../platform/error-code.ts';
 
-// 'created', 'cap_exceeded' or another refusal.
-type BanResult = { status: string; ban?: { id: string } | null; revocations?: unknown[] };
+export type PeerModerationStore = Pick<ServerMuteRepository, 'setRoomServerMute' | 'clearRoomServerMute'> &
+  Pick<RoomBanRepository, 'createRoomBan' | 'deleteRoomBan'> & {
+    /** Absent from a store without the strict-gate writer: a strict ban then answers 'revoke_unavailable'. */
+    createRoomBanWithLiveKitGateRevocations?: RoomBanRepository['createRoomBanWithLiveKitGateRevocations'] | undefined;
+  };
 
-export interface PeerModerationStore {
-  setRoomServerMute(input: {
-    roomId: string;
-    principal: GatePrincipal;
-    mutedBy: string | null | undefined;
-  }): Promise<{ status: string }>;
-  clearRoomServerMute(input: { roomId: string; principal: GatePrincipal }): Promise<{ status: string }>;
-  createRoomBan(input: { roomId: string; userId: string | null; ip: string; maxBans: number }): Promise<BanResult>;
-  createRoomBanWithLiveKitGateRevocations?:
-    | ((input: {
-        roomId: string;
-        userId: string | null;
-        ip: string;
-        maxBans: number;
-        principals: GatePrincipal[];
-      }) => Promise<BanResult>)
-    | undefined;
-  deleteRoomBan(input: { roomId: string; banId: string }): Promise<{ status: string }>;
-}
+type BanResult =
+  | Awaited<ReturnType<RoomBanRepository['createRoomBan']>>
+  | Awaited<ReturnType<RoomBanRepository['createRoomBanWithLiveKitGateRevocations']>>;
 
 export interface PeerModerationDeps {
   store(): PeerModerationStore;
@@ -175,7 +163,7 @@ export function createPeerModerationService(deps: PeerModerationDeps) {
           });
           written.result = result;
           if (result.status === 'cap_exceeded') throw banError('room_ban_limit');
-          const revoked = !strictGate || (Array.isArray(result.revocations) && result.revocations.length > 0);
+          const revoked = !strictGate || ('revocations' in result && result.revocations.length > 0);
           if (!result.ban || !revoked) throw banError('room_ban_failed');
           return result;
         }

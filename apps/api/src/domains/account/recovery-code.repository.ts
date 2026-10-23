@@ -3,10 +3,10 @@
 import { sql } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn } from '../../platform/db/kysely.ts';
-import { epochMillis } from '../../platform/epoch-millis.ts';
+import { epochMillis, toDate } from '../../platform/epoch-millis.ts';
 import { verifyPassword } from '../../lib/password.ts';
 import { RECOVERY_CODE_COUNT, normalizeRecoveryCode } from '@voice-room/shared/account-security';
-import { createRecoveryCode, hashRecoveryCode, mapUser, toDate } from './user-records.ts';
+import { createRecoveryCode, hashRecoveryCode, mapUser } from './user-records.ts';
 import { lockUser, replacePassword } from './user.repository.ts';
 
 export function createRecoveryCodeRepository({ pool }: { pool: pg.Pool }) {
@@ -104,3 +104,5 @@ export function createRecoveryCodeRepository({ pool }: { pool: pg.Pool }) {
     recoverWithCode
   };
 }
+
+export type RecoveryCodeRepository = ReturnType<typeof createRecoveryCodeRepository>;

@@ -19,17 +19,15 @@ function createMediaPressureService({
   recoveryBytes = DEFAULT_RECOVERY_BYTES,
   onSnapshot = () => {},
   statfs = fs.statfs,
-  storagePath
+  storagePath: target
 }: {
   checkIntervalMs?: number;
   minFreeBytes?: number;
   recoveryBytes?: number;
   onSnapshot?: (snapshot: PressureSnapshot) => void;
   statfs?: Statfs;
-  storagePath?: string;
-} = {}) {
-  if (!storagePath) throw new TypeError('Media storage path is required');
-  const target = storagePath;
+  storagePath: string;
+}) {
   let snapshot: PressureSnapshot = Object.freeze({ checkedAt: 0, freeBytes: 0, healthy: false, reason: 'unchecked' });
   let checking: Promise<PressureSnapshot> | null = null;
 

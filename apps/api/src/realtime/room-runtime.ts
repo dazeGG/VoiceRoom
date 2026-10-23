@@ -12,12 +12,12 @@ import { createLogger } from '../lib/logger.ts';
 import type { RoomSnapshot } from '@voice-room/shared/contracts/realtime';
 import type { UserRepository } from '../domains/account/user.repository.ts';
 import type { ActiveBanRecord } from '../domains/moderation/active-ban.repository.ts';
-import type { GatePrincipal } from '../domains/admission/gate-principal.ts';
+import type { CredentialBoundaryService } from '../domains/admission/credential-boundary.service.ts';
 import type { ConnectionRegistry, WsConnection } from './registry.ts';
 import { createReconnectLeases } from './reconnect-leases.ts';
 import { createRoomSummaries } from './room-summaries.ts';
 import { createRoomFanout } from './room-fanout.ts';
-import { createVoiceJoin, type SessionUser } from './voice-join.ts';
+import { createVoiceJoin, type JoinUser } from './voice-join.ts';
 import { claimMedia, decideMediaRequest, MEDIA_MIN_VIEWERS } from './media-budget.ts';
 import { leaveReasonOf } from './runtime-types.ts';
 import { isRecord } from '@voice-room/shared/guards';
@@ -32,11 +32,10 @@ import type {
 } from './runtime-types.ts';
 export type { RuntimeRoomStore } from './runtime-types.ts';
 
-type RuntimeCredentialBoundary = {
-  revokePeer(input: { roomId: string; accountUserId: string | null; guestPrincipalId: string }): Promise<unknown>;
-  resolvePrincipal(input: { roomId: string; accountUserId: string }): GatePrincipal | null;
-  revokePrincipal(input: { roomId: string; principal: GatePrincipal }): Promise<{ status?: string } | null | undefined>;
-};
+export type RuntimeCredentialBoundary = Pick<
+  CredentialBoundaryService,
+  'revokePeer' | 'resolvePrincipal' | 'revokePrincipal'
+>;
 export type RoomRuntimeDeps = {
   presenceRooms: Map<string, PresenceRoom>;
   wsRegistry: ConnectionRegistry;
@@ -59,11 +58,11 @@ export type RoomRuntimeDeps = {
   /** Screen shares one room may run at once; 0 turns it off. */
   MAX_ROOM_SCREENS?: number;
   tokensMatch: (expected: string | null | undefined, actual: string | null | undefined) => boolean;
-  sessionAvatarColorKey: (user: SessionUser) => string;
+  sessionAvatarColorKey: (user: JoinUser) => string;
   queueRoomOccupancyTransition?: (roomId: string) => Promise<unknown>;
-  findRoomBan?:
-    ((roomId: string, userId: string | null | undefined, ip: string) => Promise<ActiveBanRecord | null>) | undefined;
-  credentialBoundary?: RuntimeCredentialBoundary | null | undefined;
+  findRoomBan: (roomId: string, userId: string | null | undefined, ip: string) => Promise<ActiveBanRecord | null>;
+  /** Null without a gate secret: leases then revoke through the room store. */
+  credentialBoundary: RuntimeCredentialBoundary | null;
   removeLiveKitParticipant?: ((roomId: string, peerId: string) => Promise<unknown>) | undefined;
   now?: (() => number) | undefined;
   // Methods, so a test's timer may hand out its own handle type.
@@ -115,8 +114,8 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     tokensMatch,
     sessionAvatarColorKey,
     queueRoomOccupancyTransition = async (roomId: string) => getRoomStore().markRoomActive(roomId),
-    findRoomBan = async () => null,
-    credentialBoundary = null,
+    findRoomBan,
+    credentialBoundary,
     removeLiveKitParticipant = async () => {},
     now = Date.now,
     setTimeout: scheduleTimeout = globalThis.setTimeout,
@@ -342,9 +341,9 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
         finalizePeer: async ({ peer, ownershipFinalized }) => {
           if (!peer) return;
           const revoked = await revokePrincipalOnce();
-          if (revoked?.status !== 'revoked') {
+          if (revoked.status !== 'revoked') {
             revokeFailed = true;
-            const error: FinalizeError = new Error(revoked?.status || 'revoke_failed');
+            const error: FinalizeError = new Error(revoked.status);
             error.code = 'revoke_failed';
             throw error;
           }
@@ -358,7 +357,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
 
     if (peers.length === 0) {
       const revoked = await revokePrincipalOnce();
-      if (revoked?.status !== 'revoked') return { ok: false, code: 'revoke_failed', disconnected: 0 };
+      if (revoked.status !== 'revoked') return { ok: false, code: 'revoke_failed', disconnected: 0 };
     }
 
     for (const peer of peers) {

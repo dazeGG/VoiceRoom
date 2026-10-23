@@ -108,6 +108,8 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `DESKTOP_RELEASE_CACHE_MS` | `600000` | Cache TTL для desktop release metadata. |
 | `GEOIP_DB_PATH` | empty (host) / `/data/geoip/dbip-city-lite.mmdb` (compose) | Локальная база [DB-IP City Lite](https://db-ip.com) (CC BY 4.0) для города и страны в списке устройств. Скачивается командой `node scripts/geoip/fetch-dbip-city-lite.mjs geoip/dbip-city-lite.mmdb` в каталог деплоя; обновлять раз в месяц и перезапускать `api`. Без файла список устройств показывается без города. |
 
+Целочисленные переменные окружения API (лимиты, TTL, интервалы) должны быть целыми числами: если переменная задана, но не является целым числом (или меньше допустимого минимума), API не стартует, а не откатывается к значению по умолчанию. Неустановленная или пустая переменная по-прежнему берёт default из таблиц выше.
+
 ### Переопределение dev-значений (опционально)
 
 Для dev compose `.env` **не требуется** — `docker-compose.dev.yml` задаёт все нужные значения дефолтами (`devkey`/`devsecret` для LiveKit, локальный PostgreSQL, POW и create rate limit выключены). Сервис LiveKit получает `LIVEKIT_KEYS` из тех же переменных, что и API, поэтому ключи всегда совпадают и голос работает из коробки.

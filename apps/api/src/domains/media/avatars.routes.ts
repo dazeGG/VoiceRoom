@@ -4,7 +4,6 @@
 
 import type { TypeBoxTypeProvider } from '@fastify/type-provider-typebox';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import { SignedIn } from '@voice-room/shared/contracts/account';
 import { Failure, RoomIdParams } from '@voice-room/shared/contracts/http';
 import { ImageKeyParams } from '@voice-room/shared/contracts/media';
@@ -13,6 +12,7 @@ import { normalizeRoomId } from '@voice-room/shared/validation';
 import type { ApiContext } from '../../app/context.ts';
 import { MAX_AVATAR_BYTES } from '../../lib/avatar-processing.ts';
 import { codeOf } from '../../platform/error-code.ts';
+import { DomainError } from '../../platform/http/domain-error.ts';
 import { failure } from '../../platform/http/http-kit.ts';
 import { fieldOf } from '../../platform/record.ts';
 import { ownerRefusal } from '../rooms/rooms.routes.ts';
@@ -24,10 +24,6 @@ const UserAnswers = { 200: SignedIn, '4xx': Failure };
 const RoomAnswers = { 200: RoomCard, '4xx': RoomFailure };
 const TOO_LARGE = 'Avatar file must be at most 5 MB';
 
-function httpError(statusCode: number, code: ErrorCode, message: string): Error {
-  return Object.assign(new Error(message), { statusCode, code });
-}
-
 function isTooLarge(error: unknown): boolean {
   return codeOf(error) === 'FST_REQ_FILE_TOO_LARGE' || fieldOf(error, 'statusCode') === 413;
 }
@@ -38,19 +34,19 @@ export async function readAvatarUpload(request: FastifyRequest): Promise<Buffer>
   try {
     part = await request.file({ limits: { fileSize: MAX_AVATAR_BYTES, files: 1 } });
   } catch (cause) {
-    if (isTooLarge(cause)) throw httpError(413, 'avatar_too_large', TOO_LARGE);
+    if (isTooLarge(cause)) throw new DomainError('avatar_too_large', 413, TOO_LARGE);
     throw cause;
   }
   if (!part || part.fieldname !== 'avatar') {
     part?.file?.resume?.();
-    throw httpError(400, 'avatar_field_required', 'Multipart field "avatar" is required');
+    throw new DomainError('avatar_field_required', 400, 'Multipart field "avatar" is required');
   }
   try {
     const buffer = await part.toBuffer();
-    if (part.file?.truncated) throw httpError(413, 'avatar_too_large', TOO_LARGE);
+    if (part.file?.truncated) throw new DomainError('avatar_too_large', 413, TOO_LARGE);
     return buffer;
   } catch (cause) {
-    if (isTooLarge(cause)) throw httpError(413, 'avatar_too_large', TOO_LARGE);
+    if (isTooLarge(cause)) throw new DomainError('avatar_too_large', 413, TOO_LARGE);
     throw cause;
   }
 }

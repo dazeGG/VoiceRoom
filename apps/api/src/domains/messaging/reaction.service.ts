@@ -1,4 +1,3 @@
-import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import type { ReactionSummary, ReactorList } from '@voice-room/shared/contracts/messages';
 import type pg from 'pg';
 import {
@@ -8,44 +7,18 @@ import {
   normalizeReactorQuery
 } from '@voice-room/shared/reactions';
 import { isRecord, textOf } from '@voice-room/shared/guards';
+import type { CursorCodec } from '../../platform/cursor-codec.ts';
+import { DomainError } from '../../platform/http/domain-error.ts';
+import type { createReactionRepository } from './reaction.repository.ts';
 
 type Conversation = { type: 'room' | 'dm'; id: string };
 type Viewer = { id?: string; guest?: boolean; isGuest?: boolean; [key: string]: unknown } | null | undefined;
-type Client = Pick<pg.PoolClient, 'query'> | null | undefined;
-type ReactorTuple = { createdAtMicros: string; id: string };
-type ReactorRow = { userId: string; displayName: string; avatarUrl: string | null; cursorTuple: ReactorTuple };
+type Client = Pick<pg.PoolClient, 'query'>;
 
-export interface ReactionRepository {
-  setDesiredState(input: {
-    type: string;
-    messageId: string;
-    emoji: string;
-    userId: string;
-    active: boolean;
-    client: Client;
-  }): Promise<{ changed: boolean; revision: string }>;
-  getSummary(input: {
-    type: string;
-    messageId: string;
-    emoji: string;
-    userId: string;
-    client: Client;
-  }): Promise<unknown>;
-  listSummaries(input: { type: string; messageId: string; userId: string | null }): Promise<unknown[]>;
-  listReactors(input: {
-    type: string;
-    messageId: string;
-    emoji: string;
-    limit: number;
-    after: ReactorTuple | null;
-  }): Promise<ReactorRow[]>;
-  transaction?<T>(callback: (client: Client) => Promise<T>): Promise<T>;
-}
-
-export interface ReactionCursorCodec {
-  encode(input: { purpose: string; context: string; tuple: ReactorTuple }): string;
-  decode(cursor: string, options: { purpose: string; context: string }): ReactorTuple;
-}
+export type ReactionRepository = Pick<
+  ReturnType<typeof createReactionRepository>,
+  'getSummary' | 'listReactors' | 'listSummaries' | 'setDesiredState' | 'transaction'
+>;
 
 type VisibilityCheck = (input: {
   conversation: Conversation;
@@ -61,24 +34,12 @@ export type ReactionEvent = {
   summary: ReactionSummary;
 };
 
-class ReactionServiceError extends Error {
-  declare code: ErrorCode;
-  declare statusCode: number;
-
-  constructor(message: string, code: ErrorCode, statusCode: number) {
-    super(message);
-    this.name = 'ReactionServiceError';
-    this.code = code;
-    this.statusCode = statusCode;
-  }
-}
-
 function normalizeConversation(input: unknown): Conversation {
   const value = isRecord(input) ? input : {};
   const type = value.type === 'room' || value.type === 'dm' ? value.type : '';
   const id = typeof value.id === 'string' ? value.id.trim() : '';
   if (!type || !id || id.length > 128) {
-    throw new ReactionServiceError('Invalid conversation', 'invalid_conversation', 400);
+    throw new DomainError('invalid_conversation', 400, 'Invalid conversation');
   }
   return { type, id };
 }
@@ -89,22 +50,11 @@ function createReactionService({
   requireVisible,
   publish
 }: {
-  repository?: ReactionRepository;
-  cursorCodec?: ReactionCursorCodec;
-  requireVisible?: VisibilityCheck;
-  publish?: (event: ReactionEvent) => unknown;
-} = {}) {
-  if (!repository?.setDesiredState || !repository?.listReactors) {
-    throw new TypeError('Reaction repository is required');
-  }
-  if (!cursorCodec?.encode || !cursorCodec?.decode) {
-    throw new TypeError('Reaction cursor codec is required');
-  }
-  const reactions = repository;
-  const codec = cursorCodec;
-  const visibility: VisibilityCheck = typeof requireVisible === 'function' ? requireVisible : async () => false;
-  const publisher = typeof publish === 'function' ? publish : () => false;
-
+  repository: ReactionRepository;
+  cursorCodec: Pick<CursorCodec, 'encode' | 'decode'>;
+  requireVisible: VisibilityCheck;
+  publish: (event: ReactionEvent) => unknown;
+}) {
   async function assertVisible({
     conversation,
     messageId,
@@ -116,9 +66,9 @@ function createReactionService({
     viewer: Viewer;
     operation: 'read' | 'write';
   }): Promise<void> {
-    const visible = await visibility({ conversation, messageId, viewer, operation });
+    const visible = await requireVisible({ conversation, messageId, viewer, operation });
     if (visible !== true) {
-      throw new ReactionServiceError('Message is not visible', 'message_not_visible', 404);
+      throw new DomainError('message_not_visible', 404, 'Message is not visible');
     }
   }
 
@@ -133,9 +83,9 @@ function createReactionService({
   } = {}): Promise<ReactionSummary[]> {
     const conversation = normalizeConversation(rawConversation);
     const cleanMessageId = textOf(messageId).trim();
-    if (!cleanMessageId) throw new ReactionServiceError('Invalid message', 'invalid_message', 400);
+    if (!cleanMessageId) throw new DomainError('invalid_message', 400, 'Invalid message');
     await assertVisible({ conversation, messageId: cleanMessageId, viewer, operation: 'read' });
-    const summaries = await reactions.listSummaries({
+    const summaries = await repository.listSummaries({
       type: conversation.type,
       messageId: cleanMessageId,
       userId: viewer?.id || null
@@ -154,15 +104,15 @@ function createReactionService({
   } = {}): Promise<ReactionSummary> {
     const conversation = normalizeConversation(rawConversation);
     const mutation = normalizeReactionMutation(rawMutation);
-    if (!mutation) throw new ReactionServiceError('Invalid reaction', 'invalid_reaction', 400);
+    if (!mutation) throw new DomainError('invalid_reaction', 400, 'Invalid reaction');
     if (!viewer?.id || viewer.guest === true || viewer.isGuest === true) {
-      throw new ReactionServiceError('Account required', 'account_required', 403);
+      throw new DomainError('account_required', 403, 'Account required');
     }
     const userId = viewer.id;
     await assertVisible({ conversation, messageId: mutation.messageId, viewer, operation: 'write' });
 
-    const execute = async (client?: Client) => {
-      const result = await reactions.setDesiredState({
+    const execute = async (client: Client) => {
+      const result = await repository.setDesiredState({
         type: conversation.type,
         messageId: mutation.messageId,
         emoji: mutation.emoji,
@@ -170,7 +120,7 @@ function createReactionService({
         active: mutation.active,
         client
       });
-      const summary = await reactions.getSummary({
+      const summary = await repository.getSummary({
         type: conversation.type,
         messageId: mutation.messageId,
         emoji: mutation.emoji,
@@ -179,11 +129,11 @@ function createReactionService({
       });
       return { changed: result.changed, summary: normalizeReactionSummary(summary) };
     };
-    const result = reactions.transaction ? await reactions.transaction(execute) : await execute();
+    const result = await repository.transaction(execute);
     if (!result.summary) throw new Error('Repository returned an invalid reaction summary');
 
     if (result.changed) {
-      await publisher({
+      await publish({
         conversation,
         messageId: mutation.messageId,
         actorUserId: userId,
@@ -210,15 +160,15 @@ function createReactionService({
     const normalizedMutation = normalizeReactionMutation({ messageId, emoji, active: true });
     const normalizedQuery = normalizeReactorQuery(query);
     if (!normalizedMutation || !normalizedQuery) {
-      throw new ReactionServiceError('Invalid reactor query', 'invalid_reactor_query', 400);
+      throw new DomainError('invalid_reactor_query', 400, 'Invalid reactor query');
     }
     await assertVisible({ conversation, messageId: normalizedMutation.messageId, viewer, operation: 'read' });
 
     const cursorContext = `${conversation.type}:${conversation.id}:${normalizedMutation.messageId}:${normalizedMutation.emoji}`;
     const after = normalizedQuery.cursor
-      ? codec.decode(normalizedQuery.cursor, { purpose: 'reaction-reactors', context: cursorContext })
+      ? cursorCodec.decode(normalizedQuery.cursor, { purpose: 'reaction-reactors', context: cursorContext })
       : null;
-    const rows = await reactions.listReactors({
+    const rows = await repository.listReactors({
       type: conversation.type,
       messageId: normalizedMutation.messageId,
       emoji: normalizedMutation.emoji,
@@ -232,7 +182,7 @@ function createReactionService({
       reactors: pageRows.map(({ cursorTuple: _cursorTuple, ...reactor }) => reactor),
       nextCursor:
         hasMore && last
-          ? codec.encode({
+          ? cursorCodec.encode({
               purpose: 'reaction-reactors',
               context: cursorContext,
               tuple: last.cursorTuple

@@ -12,7 +12,6 @@
     "./link-preview": "./src/link-preview.ts",
     "./room-message-content": "./src/room-message-content.ts",
     "./reactions": "./src/reactions.ts",
-    "./attachments": "./src/attachments.ts",
     "./mentions": "./src/mentions.ts",
     "./notifications": "./src/notifications.ts",
     "./native-push": "./src/native-push.ts",

@@ -18,21 +18,16 @@ function startApiListener({
   host = '127.0.0.1',
   logger = createLogger({ name: 'api' }),
   port = 3000,
-  server,
+  server: listener,
   socketPath = ''
 }: {
   exit?: (code: number) => void;
   host?: string;
   logger?: Pick<Logger, 'info' | 'warn' | 'fatal'>;
   port?: number;
-  server?: ListenableServer;
+  server: ListenableServer;
   socketPath?: string;
-} = {}): void {
-  if (!server || typeof server.listen !== 'function') {
-    throw new TypeError('A server with a listen method is required');
-  }
-  const listener = server;
-
+}): void {
   function logListenAddress(mode: 'tcp' | 'unix', address: AddressInfo | string | null): void {
     if (mode === 'unix') {
       logger.info({ evt: LOG_EVENTS.LISTENING, transport: 'unix', address }, 'VoiceRoom API is listening');

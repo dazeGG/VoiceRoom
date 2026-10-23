@@ -3,7 +3,7 @@
 
 import type pg from 'pg';
 import { sql } from 'kysely';
-import type { ClientKind } from '@voice-room/shared/account-security';
+import type { ClientKind } from '@voice-room/shared/contracts/admin';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 
 export type ActivityMark = {

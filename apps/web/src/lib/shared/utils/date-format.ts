@@ -32,3 +32,9 @@ export function timeAgo(at: number, now: number): string {
   if (elapsed < 7 * DAY) return `${Math.floor(elapsed / DAY)} дн назад`;
   return dayMonth(at);
 }
+
+/** '14:05': the 24-hour clock in the browser's time zone, whatever its locale. */
+export function clockTime(at: number | Date | string): string {
+  const date = new Date(at);
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}

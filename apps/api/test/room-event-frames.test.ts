@@ -426,22 +426,22 @@ const EXPECTED: Record<string, Record<string, string[]>> = {
   },
   'owner renames the room': {
     owner: [
-      'room.updated room={"avatarUrl":null,"createdAt":"<number>","isStatic":true,"name":"Frames renamed","peers":5,"relationship":"owner","roomId":"<room>","emptySince":null}'
+      'room.updated room={"avatarUrl":null,"createdAt":"<number>","isStatic":true,"name":"Frames renamed","peers":5,"relationship":"member","roomId":"<room>","emptySince":null}'
     ],
     guest: [
-      'room.updated room={"avatarUrl":null,"createdAt":"<number>","isStatic":true,"name":"Frames renamed","peers":5,"relationship":"owner","roomId":"<room>","emptySince":null}'
+      'room.updated room={"avatarUrl":null,"createdAt":"<number>","isStatic":true,"name":"Frames renamed","peers":5,"relationship":"member","roomId":"<room>","emptySince":null}'
     ],
     dual: [
-      'room.updated room={"avatarUrl":null,"createdAt":"<number>","isStatic":true,"name":"Frames renamed","peers":5,"relationship":"owner","roomId":"<room>","emptySince":null}'
+      'room.updated room={"avatarUrl":null,"createdAt":"<number>","isStatic":true,"name":"Frames renamed","peers":5,"relationship":"member","roomId":"<room>","emptySince":null}'
     ],
     kicked: [
-      'room.updated room={"avatarUrl":null,"createdAt":"<number>","isStatic":true,"name":"Frames renamed","peers":5,"relationship":"owner","roomId":"<room>","emptySince":null}'
+      'room.updated room={"avatarUrl":null,"createdAt":"<number>","isStatic":true,"name":"Frames renamed","peers":5,"relationship":"member","roomId":"<room>","emptySince":null}'
     ],
     banned: [
-      'room.updated room={"avatarUrl":null,"createdAt":"<number>","isStatic":true,"name":"Frames renamed","peers":5,"relationship":"owner","roomId":"<room>","emptySince":null}'
+      'room.updated room={"avatarUrl":null,"createdAt":"<number>","isStatic":true,"name":"Frames renamed","peers":5,"relationship":"member","roomId":"<room>","emptySince":null}'
     ],
     watcher: [
-      'room.updated room={"avatarUrl":null,"createdAt":"<number>","isStatic":true,"name":"Frames renamed","peers":5,"relationship":"owner","roomId":"<room>","emptySince":null}'
+      'room.updated room={"avatarUrl":null,"createdAt":"<number>","isStatic":true,"name":"Frames renamed","peers":5,"relationship":"member","roomId":"<room>","emptySince":null}'
     ]
   },
   'owner kicks an account': {

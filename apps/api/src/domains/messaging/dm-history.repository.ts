@@ -1,10 +1,11 @@
 import { sql } from 'kysely';
-import { isRecord } from '@voice-room/shared/guards';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { fromMicros, microsOf } from '../../platform/db/micros.ts';
+import type { Json, JsonObject } from '../../platform/db/schema.ts';
+import type { CursorTuple } from '../../platform/cursor-codec.ts';
+import { epochMillis, toMillis } from '../../platform/epoch-millis.ts';
 
-type Anchor = { createdAtMicros: unknown; id: string };
 type Direction = 'before' | 'after' | 'at-or-after';
 
 type DirectMessageRow = {
@@ -12,11 +13,11 @@ type DirectMessageRow = {
   sender_id: string;
   recipient_id: string;
   body: string | null;
-  created_at: Date | string;
+  created_at: Date;
   created_at_micros: string;
-  edited_at: unknown;
-  read_at: unknown;
-  metadata: unknown;
+  edited_at: Date | null;
+  read_at: Date | null;
+  metadata: Json;
   reply_to_message_id: string | null;
 };
 
@@ -25,11 +26,11 @@ export type HistoryDirectMessage = {
   senderId: string;
   recipientId: string;
   body: string;
-  createdAt: string;
+  createdAt: number;
   createdAtMicros: string;
-  editedAt: unknown;
-  readAt: unknown;
-  metadata: Record<string, unknown>;
+  editedAt: number | null;
+  readAt: number | null;
+  metadata: JsonObject;
   replyTo: { messageId: string } | undefined;
 };
 
@@ -56,7 +57,7 @@ async function threadPage(
     peerId: string;
     limit: number;
     order: 'asc' | 'desc';
-    anchor?: { anchor: Anchor; direction: Direction };
+    anchor?: { anchor: CursorTuple; direction: Direction };
   }
 ) {
   const side = (from: string, to: string, alias: 'sent' | 'received') => {
@@ -89,17 +90,22 @@ async function threadPage(
     .execute();
 }
 
+// The column holds an object; anything else reads as no metadata.
+function metadataObject(value: Json): JsonObject {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) ? value : {};
+}
+
 function mapDirectMessage(row: DirectMessageRow): HistoryDirectMessage {
   return {
     id: row.id,
     senderId: row.sender_id,
     recipientId: row.recipient_id,
     body: row.body || '',
-    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    createdAt: toMillis(row.created_at),
     createdAtMicros: row.created_at_micros,
-    editedAt: row.edited_at || null,
-    readAt: row.read_at || null,
-    metadata: isRecord(row.metadata) ? row.metadata : {},
+    editedAt: epochMillis(row.edited_at),
+    readAt: epochMillis(row.read_at),
+    metadata: metadataObject(row.metadata),
     replyTo: row.reply_to_message_id ? { messageId: row.reply_to_message_id } : undefined
   };
 }
@@ -130,7 +136,7 @@ function createDmHistoryRepository({ pool }: { pool: pg.Pool }) {
   }: {
     userId: string;
     peerId: string;
-    anchor: Anchor;
+    anchor: CursorTuple;
     direction: Direction;
     limit: number;
   }): Promise<HistoryDirectMessage[]> {
@@ -163,7 +169,7 @@ function createDmHistoryRepository({ pool }: { pool: pg.Pool }) {
   }: {
     userId: string;
     peerId: string;
-    anchor: Anchor;
+    anchor: CursorTuple;
     limit?: unknown;
   }): Promise<Page> {
     const size = boundedLimit(limit);
@@ -182,7 +188,7 @@ function createDmHistoryRepository({ pool }: { pool: pg.Pool }) {
   }: {
     userId: string;
     peerId: string;
-    anchor: Anchor;
+    anchor: CursorTuple;
     limit?: unknown;
   }): Promise<Page> {
     const size = boundedLimit(limit);
@@ -200,7 +206,7 @@ function createDmHistoryRepository({ pool }: { pool: pg.Pool }) {
   }: {
     userId: string;
     peerId: string;
-    anchor: Anchor;
+    anchor: CursorTuple;
     limit?: unknown;
   }): Promise<Page> {
     const size = boundedLimit(limit);

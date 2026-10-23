@@ -7,8 +7,8 @@ export class DomainError extends Error {
   readonly code: ErrorCode;
   readonly statusCode: number;
 
-  constructor(code: ErrorCode, statusCode: number, message: string) {
-    super(message);
+  constructor(code: ErrorCode, statusCode: number, message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = new.target.name;
     this.code = code;
     this.statusCode = statusCode;

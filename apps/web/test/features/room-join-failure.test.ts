@@ -63,6 +63,6 @@ test('LiveKit being unreachable shows a Russian toast and "no route to voice"', 
   expect(state.joined).toBe(false);
   expect(getConnectionStatusView().label).toBe('Нет маршрута к голосу');
   expect(vi.mocked(showToast).mock.calls.at(-1)?.[0]).toBe(
-    'LiveKit недоступен: проверьте LIVEKIT_GATE_PUBLIC_URL и перезапустите VoiceRoom'
+    'LiveKit недоступен: голосовой сервер не отвечает, попробуйте подключиться позже'
   );
 });
