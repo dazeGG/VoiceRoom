@@ -2,8 +2,18 @@ import { isRecord } from '@voice-room/shared/guards';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createCursorCodec } from '../src/platform/cursor-codec.ts';
-import { createRoomHistoryService, type RoomHistoryRepository } from '../src/domains/messaging/room-history.service.ts';
+import {
+  createRoomHistoryService,
+  type RoomHistoryRepository,
+  type StoredRoomMessage
+} from '../src/domains/messaging/room-history.service.ts';
+import { createMessageVisibilityService } from '../src/domains/messaging/message-visibility.service.ts';
 import { fake } from './fakes/index.ts';
+
+const pageDeps = {
+  visibilityPolicy: createMessageVisibilityService(),
+  projectMessages: ({ messages }: { messages: StoredRoomMessage[] }) => messages
+};
 
 function message(id: string, micros: number) {
   return { id, roomId: 'room-a', createdAt: Number(micros), createdAtMicros: String(micros), text: id };
@@ -23,7 +33,7 @@ test('G26-A01 room pages preserve same-microsecond ids and bind cursors to the r
       return { messages: [message('a', 10)], hasMoreBefore: false, hasMoreAfter: true };
     }
   });
-  const service = createRoomHistoryService({ repository, cursorCodec: codec });
+  const service = createRoomHistoryService({ repository, cursorCodec: codec, ...pageDeps });
   const latest = await service.getPage({ roomId: 'room-a' });
   assert.deepEqual(
     latest.messages.map(({ id }) => id),
@@ -55,6 +65,7 @@ test('G26-A02 visibility filtering cannot create duplicates', async () => {
   const service = createRoomHistoryService({
     repository,
     cursorCodec: codec,
+    projectMessages: pageDeps.projectMessages,
     visibilityPolicy: { canViewRoomMessage: ({ message: item }) => !isRecord(item) || item.id !== 'hidden' }
   });
   assert.deepEqual(
@@ -72,9 +83,9 @@ test('a room page keeps link previews and sends times as epoch milliseconds', as
       messages: [
         {
           ...message('a', 1),
-          createdAt: '2026-01-01T00:00:00.000Z',
-          editedAt: new Date('2026-01-01T00:01:00.000Z'),
-          expiresAt: new Date('2026-01-02T00:00:00.000Z'),
+          createdAt: Date.parse('2026-01-01T00:00:00.000Z'),
+          editedAt: Date.parse('2026-01-01T00:01:00.000Z'),
+          expiresAt: Date.parse('2026-01-02T00:00:00.000Z'),
           linkPreview: preview
         }
       ],
@@ -82,7 +93,7 @@ test('a room page keeps link previews and sends times as epoch milliseconds', as
       hasMoreAfter: false
     })
   });
-  const service = createRoomHistoryService({ repository, cursorCodec: codec });
+  const service = createRoomHistoryService({ repository, cursorCodec: codec, ...pageDeps });
   const [first] = (await service.getPage({ roomId: 'room-a' })).messages;
   assert.ok(first);
   assert.deepEqual(first.linkPreview, preview);

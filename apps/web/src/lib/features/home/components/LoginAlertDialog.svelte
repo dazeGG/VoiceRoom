@@ -1,11 +1,11 @@
 <script lang="ts">
   import { MonitorSmartphone } from '@lucide/svelte';
   import { onMount } from 'svelte';
-  import { normalizeLoginAlert } from '@voice-room/shared/account-security';
   import {
     confirmLoginAlert,
     denyLoginAlert,
     fetchLoginAlerts,
+    isShowableLoginAlert,
     type LoginAlert,
     type RecoveryCodesStatus
   } from '$lib/api/auth';
@@ -65,8 +65,7 @@
     const realtime = getAppRealtime();
     const stopEvents = realtime.subscribe((event) => {
       if (event.type === 'account.login.new') {
-        const alert = normalizeLoginAlert(event.payload.alert);
-        if (alert) addAlert(alert);
+        if (isShowableLoginAlert(event.payload.alert)) addAlert(event.payload.alert);
       } else if (event.type === 'account.login.resolved') {
         removeAlert(event.payload.alertId);
       }

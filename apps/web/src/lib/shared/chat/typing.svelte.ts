@@ -1,11 +1,11 @@
-// Mirrors TYPING_NOTICE_INTERVAL_MS, TYPING_NOTICE_TTL_MS and TYPING_ACTIVITIES
-// in @voice-room/shared/realtime, a CommonJS module the browser bundle does not
-// load; a web test keeps the two in step.
-export const TYPING_NOTICE_INTERVAL_MS = 2500;
-export const TYPING_NOTICE_TTL_MS = 6000;
-export const TYPING_ACTIVITIES = ['typing', 'emoji'] as const;
+import {
+  TYPING_ACTIVITIES,
+  TYPING_NOTICE_INTERVAL_MS,
+  TYPING_NOTICE_TTL_MS,
+  type TypingActivity
+} from '@voice-room/shared/realtime';
 
-export type TypingActivity = (typeof TYPING_ACTIVITIES)[number];
+export { TYPING_ACTIVITIES, TYPING_NOTICE_INTERVAL_MS, TYPING_NOTICE_TTL_MS, type TypingActivity };
 
 export interface TypingPerson {
   name: string;

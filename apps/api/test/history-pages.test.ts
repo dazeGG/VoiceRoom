@@ -100,3 +100,12 @@ test('a DM thread pages around a message across both senders', { skip }, async (
   assert.deepEqual(idsOf(before), ['m2', 'm3', 'm4']);
   assert.equal(before.hasMoreBefore, true);
 });
+
+test('history repositories hand times over as epoch milliseconds', { skip }, async (t) => {
+  const { rooms, dms } = await setup(t);
+  const at = Date.parse('2026-08-01T12:00:00Z');
+  const [room] = (await rooms.listLatest({ roomId: 'room', limit: 1, now: NOW })).messages;
+  assert.deepEqual([room?.createdAt, room?.editedAt, room?.expiresAt], [at, null, null]);
+  const [dm] = (await dms.listLatest({ userId: 'a', peerId: 'b', limit: 1 })).messages;
+  assert.deepEqual([dm?.createdAt, dm?.editedAt, dm?.readAt], [at, null, null]);
+});

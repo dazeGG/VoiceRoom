@@ -3,7 +3,6 @@
 // Refreshes itself every half minute while it is on screen.
 
 import { ArrowDownRight, ArrowUpRight, Flag } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
 import type { AdminOverview, ProductDay, ProductStats, SystemStats } from '@voice-room/shared/contracts/admin';
 import { fetchOverview, fetchProductStats, fetchSystemStats } from '../api/admin.ts';
 import { Sparkline } from '../charts/Sparkline.tsx';
@@ -18,7 +17,7 @@ import {
   formatSince
 } from '../format.ts';
 import { useRefreshStatus } from '../frame.tsx';
-import { loadFailure, type LoadFailure } from '../load-state.ts';
+import { useAdminResource } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { useCan } from '../staff.tsx';
 import { PRODUCT_PRESETS, productQuery } from '../time-range.ts';
@@ -94,65 +93,26 @@ function Kpi({
   );
 }
 
+/** The dashboard's three answers, asked for together so they describe the same moment. */
+function loadDashboard(): Promise<[AdminOverview, ProductStats, SystemStats]> {
+  const at = Date.now();
+  return Promise.all([
+    fetchOverview(),
+    fetchProductStats(productQuery({ kind: 'preset', id: '14d' }, PRODUCT_PRESETS, at)),
+    fetchSystemStats({ from: String(at - DAY), to: String(at) })
+  ]);
+}
+
 export function OverviewPage({ onOpenReports }: { onOpenReports: () => void }) {
   const canReview = useCan('reports.review');
-  const [overview, setOverview] = useState<AdminOverview | null>(null);
-  const [product, setProduct] = useState<ProductStats | null>(null);
-  const [system, setSystem] = useState<SystemStats | null>(null);
-  const [failure, setFailure] = useState<LoadFailure | null>(null);
-  const [now, setNow] = useState(Date.now);
-
-  const [attempt, setAttempt] = useState(0);
-  const [loadedAt, setLoadedAt] = useState<number | null>(null);
-  const [busy, setBusy] = useState(false);
-  const reload = useCallback(() => setAttempt((count) => count + 1), []);
+  const { data, failure, busy, loadedAt, heardAt, reload } = useAdminResource(loadDashboard, [], {
+    failureText: 'Не удалось загрузить обзор',
+    refreshMs: REFRESH_MS
+  });
   useRefreshStatus({ at: loadedAt, everyMs: REFRESH_MS, busy, reload });
 
-  useEffect(() => {
-    let current = true;
-    let inFlight = false;
-    const load = () => {
-      // A slow answer is waited for, not piled on: one round at a time keeps answers in order.
-      if (inFlight) return;
-      inFlight = true;
-      setBusy(true);
-      const at = Date.now();
-      Promise.all([
-        fetchOverview(),
-        fetchProductStats(productQuery({ kind: 'preset', id: '14d' }, PRODUCT_PRESETS, at)),
-        fetchSystemStats({ from: String(at - DAY), to: String(at) })
-      ])
-        .then(
-          ([nextOverview, nextProduct, nextSystem]) => {
-            if (!current) return;
-            setOverview(nextOverview);
-            setProduct(nextProduct);
-            setSystem(nextSystem);
-            setFailure(null);
-            setNow(Date.now());
-            setLoadedAt(Date.now());
-          },
-          (cause: unknown) => {
-            if (!current) return;
-            setFailure(loadFailure(cause, 'Не удалось загрузить обзор'));
-            setNow(Date.now());
-          }
-        )
-        .finally(() => {
-          inFlight = false;
-          if (current) setBusy(false);
-        });
-    };
-    load();
-    const timer = window.setInterval(load, REFRESH_MS);
-    return () => {
-      current = false;
-      window.clearInterval(timer);
-    };
-  }, [attempt]);
-
-  if (failure && !overview) return <Notice failure={failure} onRetry={reload} />;
-  if (!overview) {
+  if (failure && !data) return <Notice failure={failure} onRetry={reload} />;
+  if (!data || heardAt === null) {
     return (
       <p className="dash-quiet" aria-busy="true">
         Загружаем…
@@ -160,8 +120,10 @@ export function OverviewPage({ onOpenReports }: { onOpenReports: () => void }) {
     );
   }
 
-  const days = product?.days ?? [];
-  const samples = system?.samples ?? [];
+  const [overview, product, system] = data;
+  const now = heardAt;
+  const days = product.days;
+  const samples = system.samples;
   const dayLabels = days.map((day) => formatDay(day.day));
   const sampleLabels = samples.map((sample) => formatSampleTime(sample.at, false));
   const today = days.at(-1) ?? null;

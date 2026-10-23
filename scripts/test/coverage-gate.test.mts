@@ -92,7 +92,7 @@ const WEB_ROOM_COVERAGE_SCRIPT = String.raw`
     }
   });
   const room = await import(targetUrl);
-  if (!/LIVEKIT_GATE_PUBLIC_URL/.test(room.__g08FormatJoinError(new room.__g08LiveKitTransportError()))) process.exitCode = 1;
+  if (!/^LiveKit недоступен/.test(room.__g08FormatJoinError(new room.__g08LiveKitTransportError()))) process.exitCode = 1;
   const apiError = new room.__g08ApiError();
   apiError.message = "server refused";
   if (room.__g08FormatJoinError(apiError) !== "server refused") process.exitCode = 1;
@@ -1047,7 +1047,9 @@ test('G08 realtime join retains and revokes the exact gate principal', async () 
     avatarColorForPeerId: () => 'blue',
     MAX_ROOM_PEERS: 10,
     tokensMatch: (left, right) => left === right,
-    sessionAvatarColorKey: () => 'blue'
+    sessionAvatarColorKey: () => 'blue',
+    findRoomBan: async () => null,
+    credentialBoundary: null
   });
   const makeConnection = () => wsRegistry.addGuestConnection({ readyState: 1, send() {}, close() {} }, '127.0.0.1');
   const token = 't'.repeat(32);
@@ -1197,10 +1199,7 @@ class FakeSocket extends EventEmitter {
 
 test('G08 admission gate service exported decisions and server paths are exercised', async (t) => {
   assert.deepEqual(extractCredential(), { credential: '', strippedPath: '/' });
-  assert.throws(
-    () => createLiveKitAuthGateService({ roomStore: {}, secret: SECRET, upstreamUrl: 'http://livekit' }),
-    /must be ws/
-  );
+  assert.throws(() => createLiveKitAuthGateService({ secret: SECRET, upstreamUrl: 'http://livekit' }), /must be ws/);
   const oldInternal = process.env.LIVEKIT_INTERNAL_URL;
   const oldPublic = process.env.LIVEKIT_URL;
   t.after(() => {
@@ -1221,17 +1220,26 @@ test('G08 admission gate service exported decisions and server paths are exercis
     roomId: 'room'
   });
   let ready = true;
-  let decision = 'allowed';
+  let decision: 'allowed' | 'denied' | 'throw' = 'allowed';
   const store: GateRoomStore = {
     assertLiveKitGateReady: async () => {
       if (!ready) throw new Error('not ready');
+      return true;
     },
     getLiveKitGatePrincipalEpoch: async () => ({ status: 'ready', epoch: 0 }),
-    createLiveKitGateCredential: async () => ({ status: 'created' }),
+    createLiveKitGateCredential: async () => ({
+      status: 'created',
+      credential: { id: 'cred', principalEpoch: 0, principalId: 'principal', principalType: 'account' }
+    }),
     verifyLiveKitGateCredential: async () => {
       if (decision === 'throw') throw new Error('db down');
       return { status: decision };
-    }
+    },
+    // The gate never revokes; these only complete the store.
+    normalizeGatePrincipal,
+    revokeLiveKitGateCredential: async () => ({ status: 'invalid' }),
+    revokeLiveKitGatePeer: async () => ({ status: 'invalid', epoch: null }),
+    revokeLiveKitGatePrincipal: async () => ({ status: 'invalid', epoch: null })
   };
   const errors: unknown[][] = [];
   const gate = createLiveKitAuthGateService({

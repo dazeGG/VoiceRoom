@@ -61,7 +61,7 @@ import { createMediaModule } from '../domains/media/media.module.ts';
 import { createMembershipModule, type MembershipModule } from '../domains/membership/membership.module.ts';
 import type { EvictionType } from '../domains/rooms/peer-eviction.ts';
 import type { LiveRoom, PresencePeer } from '../domains/rooms/room-views.ts';
-import type { GatePrincipalPeer } from '../domains/admission/gate-principal.ts';
+import type { GatePrincipal, GatePrincipalPeer } from '../domains/admission/gate-principal.ts';
 import type { ConnectionRegistry } from '../realtime/registry.ts';
 import type { createMessageProjection } from '../domains/messaging/message-projection.ts';
 
@@ -107,7 +107,7 @@ export type ServiceRegistryDeps = {
     type: EvictionType,
     options: { gateAlreadyRevoked?: boolean }
   ) => Promise<unknown>;
-  liveKitGatePrincipalForPeer: (roomId: string, peer: GatePrincipalPeer) => unknown;
+  liveKitGatePrincipalForPeer: (roomId: string, peer: GatePrincipalPeer) => GatePrincipal | null;
   getLiveKitConfig: () => LiveKitConfig;
   roomMembershipPresenceSnapshot: (roomId: string) => ReturnType<ConnectionRegistry['presenceSnapshot']>;
   broadcastRoomLinkPreview: (input: { roomId: string; messageId: string }) => Promise<unknown>;

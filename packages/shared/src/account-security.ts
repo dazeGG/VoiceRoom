@@ -1,65 +1,12 @@
 // Account security: recovery codes, sign-in alerts, session descriptions,
 // the "what's new" announcement, and account deletion.
 
-import { isOneOf, isRecord } from './guards.ts';
-import { isUuid } from './validation.ts';
+import type { RecoveryCodesReminder, RecoveryCodesStatus } from './contracts/account.ts';
+import type { ClientKind } from './contracts/admin.ts';
 
 export interface UserAgentDescription {
   client: string;
   os: string;
-}
-
-export interface AccountSession {
-  id: string;
-  current: boolean;
-  client: string;
-  os: string;
-  location: string;
-  lastSeenAt: number;
-}
-
-export interface RecoveryCodesStatus {
-  remaining: number;
-  generatedAt: number | null;
-}
-
-export interface RecoveryCodesReminder {
-  snoozedUntil: number | null;
-}
-
-export interface WhatsNewState {
-  current: string;
-  lastSeen: string | null;
-}
-
-export type LoginAlertKind = 'login' | 'recovery';
-
-export interface LoginAlert {
-  id: string;
-  kind: LoginAlertKind;
-  client: string;
-  os: string;
-  location: string;
-  createdAt: number;
-}
-
-/** Facts about the signed-in account that only the account itself receives. */
-export interface SelfUserFlags {
-  /** The account has signed in from the desktop app at least once. */
-  hasUsedDesktopApp: boolean;
-  /** The one-time post-registration app prompt was already shown or dismissed. */
-  appPromptSeen: boolean;
-}
-
-export interface AccountDeletionRoom {
-  roomId: string;
-  name: string;
-  heir: { displayName: string; login: string } | null;
-}
-
-export interface AccountDeletionPreview {
-  graceDays: number;
-  rooms: AccountDeletionRoom[];
 }
 
 export const RECOVERY_CODE_COUNT = 10 as const;
@@ -79,7 +26,6 @@ export const RECOVERY_CODES_REMINDER_SNOOZE_MS: number = 3 * 24 * 60 * 60 * 1000
 // the alert TTL.
 export const LOGIN_FAMILIARITY_WINDOW_MS: number = 30 * 24 * 60 * 60 * 1000;
 export const LOGIN_ALERT_TTL_MS: number = 14 * 24 * 60 * 60 * 1000;
-const LOGIN_ALERT_KINDS: readonly LoginAlertKind[] = Object.freeze(['login', 'recovery']);
 // An account asked to be deleted stays restorable this long; then its personal
 // data goes away and what others still see of it reads as a deleted account.
 export const ACCOUNT_DELETION_GRACE_MS: number = 7 * 24 * 60 * 60 * 1000;
@@ -138,7 +84,7 @@ export function normalizeReleaseVersion(value: unknown): string {
 }
 
 // -1, 0 or 1 like a sort comparator; null when either side is not a version.
-export function compareReleaseVersions(left: unknown, right: unknown): -1 | 0 | 1 | null {
+function compareReleaseVersions(left: unknown, right: unknown): -1 | 0 | 1 | null {
   const a = normalizeReleaseVersion(left);
   const b = normalizeReleaseVersion(right);
   if (!a || !b) return null;
@@ -173,23 +119,6 @@ export function isDeletedAccountLogin(value: unknown): boolean {
   return typeof value === 'string' && value.trim().toLowerCase().startsWith(DELETED_LOGIN_PREFIX);
 }
 
-export function normalizeLoginAlert(input: unknown): LoginAlert | null {
-  if (!isRecord(input)) return null;
-  const value = input;
-  const id = isUuid(value.id) ? value.id.toLowerCase() : '';
-  const kind = isOneOf(LOGIN_ALERT_KINDS, value.kind) ? value.kind : '';
-  const createdAt = Number(value.createdAt);
-  if (!id || !kind || !Number.isSafeInteger(createdAt) || createdAt < 0) return null;
-  return {
-    id,
-    kind,
-    client: boundedText(value.client, 64),
-    os: boundedText(value.os, 32),
-    location: boundedText(value.location, 120),
-    createdAt
-  };
-}
-
 export function describeUserAgent(value: unknown): UserAgentDescription {
   const userAgent = typeof value === 'string' ? value.slice(0, 512) : '';
   const match = (rules: readonly (readonly [RegExp, string])[]): string =>
@@ -205,44 +134,10 @@ export function isDesktopAppUserAgent(value: unknown): boolean {
   return DESKTOP_APP_PATTERN.test(userAgent);
 }
 
-/** Which kind of client a user agent is: the desktop app, a phone, or a browser on a computer. */
-export type ClientKind = 'desktop_app' | 'mobile' | 'browser';
-
 /** Null when there is no user agent to tell. */
 export function clientKind(userAgent: string | null | undefined): ClientKind | null {
   if (!userAgent) return null;
   if (isDesktopAppUserAgent(userAgent)) return 'desktop_app';
   const { os } = describeUserAgent(userAgent);
   return os === 'Android' || os === 'iOS' ? 'mobile' : 'browser';
-}
-
-// Facts about the signed-in account that only the account itself receives.
-// An older API sends neither flag: the app banner may then show, but the
-// one-time post-registration prompt never does.
-export function normalizeSelfUserFlags(value: unknown): SelfUserFlags {
-  const source = isRecord(value) ? value : {};
-  return {
-    hasUsedDesktopApp: source.hasUsedDesktopApp === true,
-    appPromptSeen: source.appPromptSeen !== false
-  };
-}
-
-function boundedText(value: unknown, max: number): string {
-  return typeof value === 'string' ? value.trim().slice(0, max) : '';
-}
-
-export function normalizeAccountSession(input: unknown): AccountSession | null {
-  if (!isRecord(input)) return null;
-  const value = input;
-  const id = isUuid(value.id) ? value.id.toLowerCase() : '';
-  const lastSeenAt = Number(value.lastSeenAt);
-  if (!id || !Number.isSafeInteger(lastSeenAt) || lastSeenAt < 0) return null;
-  return {
-    id,
-    current: value.current === true,
-    client: boundedText(value.client, 64),
-    os: boundedText(value.os, 32),
-    location: boundedText(value.location, 120),
-    lastSeenAt
-  };
 }

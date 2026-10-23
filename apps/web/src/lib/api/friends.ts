@@ -9,6 +9,7 @@ import {
   FriendRequestAnswered,
   FriendRequests,
   FriendRequestSent,
+  SendFriendRequestBody,
   type IncomingRequest,
   type OutgoingRequest,
   type SendRequestStatus
@@ -38,7 +39,9 @@ export async function fetchRequests(): Promise<{ incoming: IncomingRequest[]; ou
 }
 
 async function sendRequest(body: { login: string } | { userId: string }) {
-  const { status, user } = await api.post('/api/friends/requests', FriendRequestSent, body);
+  const { status, user } = await api.post('/api/friends/requests', FriendRequestSent, body, {
+    bodySchema: SendFriendRequestBody
+  });
   return { status, user };
 }
 

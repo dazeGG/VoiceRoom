@@ -6,7 +6,7 @@
 import { sql } from 'kysely';
 import type { Database } from '../../platform/db/kysely.ts';
 import { createRowId } from '../../platform/db/ids.ts';
-import { toDate } from '../rooms/room.repository.ts';
+import { toDate } from '../../platform/epoch-millis.ts';
 import type { GatePrincipal } from './gate-principal.ts';
 import { isGatePrincipal } from './gate-principal.ts';
 
@@ -104,7 +104,7 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
   }: {
     credentialHash?: string;
     credentialId?: string;
-    expiresAt?: unknown;
+    expiresAt?: number;
     peerId?: string;
     principal?: GatePrincipal | null;
     principalEpoch?: number | null | undefined;
@@ -112,13 +112,13 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
     now?: number;
   } = {}) {
     if (!roomId || !peerId || !credentialHash || !principal?.principalType || !principal?.principalId) {
-      return { status: 'invalid', credential: null };
+      return { status: 'invalid' as const, credential: null };
     }
     return db.transaction().execute(async (trx) => {
       await lockPrincipal(trx, roomId, principal);
       const storedPrincipalEpoch = await currentEpoch(trx, roomId, principal, now);
       const credentialEpoch = principalEpoch === null ? storedPrincipalEpoch : Number(principalEpoch);
-      if (credentialEpoch !== storedPrincipalEpoch) return { status: 'epoch_mismatch', credential: null };
+      if (credentialEpoch !== storedPrincipalEpoch) return { status: 'epoch_mismatch' as const, credential: null };
       const inserted = await trx
         .insertInto('livekit_gate_credentials')
         .values({
@@ -130,7 +130,7 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
           principal_epoch: credentialEpoch,
           credential_hash: credentialHash,
           created_at: toDate(now),
-          expires_at: toDate(expiresAt)
+          expires_at: toDate(expiresAt ?? Date.now())
         })
         .returning('id')
         .executeTakeFirstOrThrow();
@@ -141,7 +141,7 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
           principalId: principal.principalId,
           principalType: principal.principalType
         },
-        status: 'created'
+        status: 'created' as const
       };
     });
   }
@@ -175,7 +175,7 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
     roomId?: string;
     now?: number;
   } = {}) {
-    if (!roomId || !peerId || !credentialHash || !principalType || !principalId) return { status: 'invalid' };
+    if (!roomId || !peerId || !credentialHash || !principalType || !principalId) return { status: 'invalid' as const };
     const epoch = Number(principalEpoch);
     const row = await db
       .selectFrom('livekit_gate_credentials as c')
@@ -197,7 +197,7 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
       .where('c.expires_at', '>', toDate(now))
       .limit(1)
       .executeTakeFirst();
-    return { status: row ? 'allowed' : 'denied' };
+    return { status: row ? ('allowed' as const) : ('denied' as const) };
   }
 
   async function revokeLiveKitGatePrincipal({
@@ -205,7 +205,8 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
     roomId,
     now = Date.now()
   }: { principal?: GatePrincipal | null; roomId?: string | undefined; now?: number } = {}) {
-    if (!roomId || !principal?.principalType || !principal?.principalId) return { status: 'invalid', epoch: null };
+    if (!roomId || !principal?.principalType || !principal?.principalId)
+      return { status: 'invalid' as const, epoch: null };
     const validPrincipal = principal;
     return db
       .transaction()
@@ -223,7 +224,7 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
     roomId?: string | undefined;
     now?: number;
   } = {}) {
-    if (!credentialId || !roomId || !isGatePrincipal(principal)) return { status: 'invalid' };
+    if (!credentialId || !roomId || !isGatePrincipal(principal)) return { status: 'invalid' as const };
     return db.transaction().execute(async (trx) => {
       await lockPrincipal(trx, roomId, principal);
       const at = toDate(now);
@@ -236,7 +237,7 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
         .where('principal_id', '=', principal.principalId)
         .returning('id')
         .executeTakeFirst();
-      return { status: row ? 'revoked' : 'not_found' };
+      return { status: row ? ('revoked' as const) : ('not_found' as const) };
     });
   }
 
@@ -249,7 +250,7 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
     roomId,
     now = Date.now()
   }: { peerId?: string; principal?: GatePrincipal | null; roomId?: string; now?: number } = {}) {
-    if (!peerId || !roomId || !isGatePrincipal(principal)) return { status: 'invalid', revoked: 0 };
+    if (!peerId || !roomId || !isGatePrincipal(principal)) return { status: 'invalid' as const, revoked: 0 };
     return db.transaction().execute(async (trx) => {
       await lockPrincipal(trx, roomId, principal);
       const result = await trx
@@ -261,7 +262,7 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
         .where('principal_id', '=', principal.principalId)
         .where('revoked_at', 'is', null)
         .executeTakeFirst();
-      return { status: 'revoked', revoked: Number(result.numUpdatedRows) };
+      return { status: 'revoked' as const, revoked: Number(result.numUpdatedRows) };
     });
   }
 
@@ -279,7 +280,7 @@ export function createGateCredentialRepository({ db }: { db: Database }) {
     now?: number;
   } = {}) {
     const principal = normalizeGatePrincipal({ accountUserId, guestPrincipalId, roomId });
-    if (!principal) return { status: 'invalid', epoch: null };
+    if (!principal) return { status: 'invalid' as const, epoch: null };
     return revokeLiveKitGatePrincipal({ principal, roomId, now });
   }
 

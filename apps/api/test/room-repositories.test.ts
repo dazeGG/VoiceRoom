@@ -7,7 +7,8 @@ import assert from 'node:assert/strict';
 import { createRoomStore } from '../src/app/room-store.ts';
 import { createUserStore } from '../src/app/user-store.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
-import { mapRoom, toMillis } from '../src/domains/rooms/room.repository.ts';
+import { mapRoom } from '../src/domains/rooms/room.repository.ts';
+import { toDate, toMillis } from '../src/platform/epoch-millis.ts';
 import { createTestDatabase } from './db-harness.ts';
 import { AnyRow, queryRows } from './helpers/checked.ts';
 
@@ -33,8 +34,8 @@ async function setup(t: TestContext) {
   return { pool, store, user, room };
 }
 
-test('mapRoom reads an unreadable stored time as 0, not as now', () => {
-  const room = mapRoom({
+test('mapRoom rejects an unreadable stored time instead of inventing one', () => {
+  const row = {
     avatar_key: null,
     id: 'abc123',
     creator_ip: '',
@@ -49,13 +50,18 @@ test('mapRoom reads an unreadable stored time as 0, not as now', () => {
     owner_id: null,
     room_color_key: '',
     room_icon_key: ''
-  });
-  assert.equal(room.createdAt, 0);
-  assert.equal(room.updatedAt, 0);
+  };
+  assert.throws(() => mapRoom(row), RangeError);
 });
 
-test('toMillis reads an unparsable stored string as 0', () => {
-  assert.equal(toMillis('garbage'), 0);
+test('toMillis and toDate reject a time that does not parse', () => {
+  assert.throws(() => toMillis('garbage'), RangeError);
+  assert.throws(() => toMillis(Number.NaN), RangeError);
+  assert.throws(() => toDate(Number.NaN), RangeError);
+  assert.throws(() => toDate(-1), RangeError);
+  assert.equal(toMillis(new Date(1500)), 1500);
+  assert.equal(toMillis('1970-01-01T00:00:02.000Z'), 2000);
+  assert.equal(toDate(2500).getTime(), 2500);
 });
 
 test('mapRoom turns a room row into the API room shape', () => {

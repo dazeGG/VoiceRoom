@@ -6,7 +6,7 @@
 // with it on the right.
 
 import { AppWindow, ArrowLeft, BadgeCheck, Ban, Globe, Lock, LogOut, Smartphone, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { AccountDetail, AdminActionEntry, BlockDuration } from '@voice-room/shared/contracts/admin';
 import { blockTerm, describeAction } from '../accounts.ts';
 import {
@@ -31,7 +31,7 @@ import {
   plural
 } from '../format.ts';
 import { usePageTitle } from '../frame.tsx';
-import { loadFailure, type LoadFailure } from '../load-state.ts';
+import { useAdminResource } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { useCan } from '../staff.tsx';
 import {
@@ -74,31 +74,18 @@ function deviceIcon(client: string) {
 export function AccountCard({ userId, onBack }: { userId: string; onBack: () => void }) {
   const canModerate = useCan('accounts.moderate');
   const canManage = useCan('accounts.manage');
-  const [detail, setDetail] = useState<AccountDetail | null>(null);
-  const [failure, setFailure] = useState<LoadFailure | null>(null);
-  const [attempt, setAttempt] = useState(0);
+  const {
+    data: detail,
+    failure,
+    busy: loading,
+    heardAt,
+    reload,
+    update
+  } = useAdminResource(() => fetchAccount(userId), [userId], { failureText: 'Не удалось загрузить аккаунт' });
+  const now = heardAt ?? 0;
   const [actionError, setActionError] = useState('');
   const [busy, setBusy] = useState(false);
   const [dialog, setDialog] = useState<'block' | 'delete' | 'sign-out' | null>(null);
-  const [now, setNow] = useState(() => Date.now());
-
-  useEffect(() => {
-    let alive = true;
-    fetchAccount(userId).then(
-      (loaded) => {
-        if (!alive) return;
-        setDetail(loaded);
-        setFailure(null);
-        setNow(Date.now());
-      },
-      (cause: unknown) => {
-        if (alive) setFailure(loadFailure(cause, 'Не удалось загрузить аккаунт'));
-      }
-    );
-    return () => {
-      alive = false;
-    };
-  }, [userId, attempt]);
 
   const closeDialog = useCallback(() => setDialog(null), []);
   // The top bar names the account once it is known.
@@ -109,8 +96,8 @@ export function AccountCard({ userId, onBack }: { userId: string; onBack: () => 
     setBusy(true);
     setActionError('');
     try {
-      setDetail(await action());
-      setNow(Date.now());
+      const changed = await action();
+      update(() => changed);
       setDialog(null);
       return null;
     } catch (cause) {
@@ -147,17 +134,12 @@ export function AccountCard({ userId, onBack }: { userId: string; onBack: () => 
     </div>
   );
 
-  if (failure && !detail) {
+  // A retry shows the card loading again until its answer.
+  if (failure && !detail && !loading) {
     return (
       <>
         {back}
-        <Notice
-          failure={failure}
-          onRetry={() => {
-            setFailure(null);
-            setAttempt((value) => value + 1);
-          }}
-        />
+        <Notice failure={failure} onRetry={reload} />
       </>
     );
   }

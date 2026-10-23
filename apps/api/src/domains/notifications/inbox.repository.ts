@@ -86,8 +86,7 @@ function mapRow(row: NotificationRow | null | undefined): InboxNotification | nu
     : null;
 }
 
-function createInboxRepository({ pool }: { pool?: pg.Pool | null } = {}) {
-  if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
+function createInboxRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
   const on = (client: Client): Database => (client?.query ? kyselyOn(client) : db);
   const rows = (found: NotificationRow[]) => found.map((row) => mapRow(row));

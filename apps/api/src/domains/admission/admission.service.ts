@@ -6,8 +6,12 @@
 import type { Logger } from 'pino';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { tokensMatch } from '../../platform/crypto/tokens-match.ts';
+import type { PersistedAdmission } from '../membership/membership.service.ts';
+import type { PeerIdentityClaim } from '../rooms/peer-identity.repository.ts';
+import type { GateCredentialRepository } from './gate-credential.repository.ts';
 import type { GatePrincipal } from './gate-principal.ts';
 import type { LiveKitConfig } from './livekit-config.ts';
+import type { AdmissionIssue } from './livekit-credential-provider.ts';
 
 export interface Admission {
   gateCredentialId: string;
@@ -17,7 +21,7 @@ export interface Admission {
   url: string;
 }
 
-type IssueResult = { status: 'issued'; admission: Admission } | { status: string; admission: null };
+type CredentialRevocation = Awaited<ReturnType<GateCredentialRepository['revokeLiveKitGateCredential']>>;
 
 export interface CredentialProvider {
   issueAdmission(input: {
@@ -27,7 +31,7 @@ export interface CredentialProvider {
     peerId: string;
     principal: GatePrincipal;
     roomId: string;
-  }): Promise<IssueResult>;
+  }): Promise<AdmissionIssue>;
 }
 
 export interface CredentialBoundary {
@@ -35,7 +39,7 @@ export interface CredentialBoundary {
     credentialId: string | undefined;
     roomId: string;
     principal: GatePrincipal;
-  }): Promise<{ status?: string } | undefined>;
+  }): Promise<CredentialRevocation>;
   revokePrincipal(input: { roomId: string; principal: GatePrincipal }): Promise<unknown>;
 }
 
@@ -46,7 +50,7 @@ export interface AdmissionStore {
     sessionToken: string;
     displayName: string;
     avatarColorKey: string;
-  }): Promise<{ status: string; identity?: { id?: string } | null } | null>;
+  }): Promise<{ status: PeerIdentityClaim['status']; identity?: { id?: string } | null } | null>;
   normalizeGatePrincipal(input: {
     accountUserId: string | null;
     guestPrincipalId: string;
@@ -62,7 +66,7 @@ export interface MembershipServices {
       userId: string;
       ip: string;
       admissionSucceeded: boolean;
-    }): Promise<{ status: string }>;
+    }): Promise<{ status: PersistedAdmission['status'] }>;
   };
 }
 
@@ -299,7 +303,7 @@ export function createAdmissionService(deps: AdmissionDeps) {
     }
 
     if (user?.id && memberships) {
-      let persisted: { status: string };
+      let persisted: { status: PersistedAdmission['status'] };
       try {
         persisted = await memberships.service.persistSuccessfulAdmission({
           roomId,

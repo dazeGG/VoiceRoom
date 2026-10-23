@@ -17,8 +17,7 @@ import {
   cleanPresenceStatus,
   isValidPassword,
   normalizeLogin,
-  AVATAR_COLOR_KEYS,
-  PRESENCE_STATUSES
+  AVATAR_COLOR_KEYS
 } from '../src/validation.ts';
 import { defined } from './helpers/assert-defined.ts';
 
@@ -155,9 +154,8 @@ test('avatar color keys are curated tokens only', () => {
   assert.equal(cleanAvatarColorKey(null), '');
 });
 
-test('presence statuses expose and accept only the canonical vocabulary', () => {
-  assert.deepEqual(PRESENCE_STATUSES, ['online', 'away', 'dnd', 'offline']);
-  for (const status of PRESENCE_STATUSES) assert.equal(cleanPresenceStatus(status), status);
+test('presence statuses accept only the canonical vocabulary', () => {
+  for (const status of ['online', 'away', 'dnd', 'offline']) assert.equal(cleanPresenceStatus(status), status);
   assert.equal(cleanPresenceStatus(''), '');
   assert.equal(cleanPresenceStatus('Online'), '');
   assert.equal(cleanPresenceStatus(' away '), '');

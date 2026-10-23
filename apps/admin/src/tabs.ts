@@ -66,10 +66,22 @@ function isTab(value: string): value is AdminTab {
   return ADMIN_TABS.some((tab) => tab === value);
 }
 
-/** "/" is the overview, "/accounts/<id>" a card; an unknown address is the overview too. */
+/** The decoded text, or null when it is not valid percent-encoding. */
+function decoded(text: string): string | null {
+  try {
+    return decodeURIComponent(text);
+  } catch {
+    return null;
+  }
+}
+
+/** "/" is the overview, "/accounts/<id>" a card; an unknown or malformed address is the overview too. */
 export function locationFromPath(pathname: string): AdminLocation {
   const card = /^\/accounts\/([^/]+)\/?$/.exec(pathname);
-  if (card?.[1]) return { tab: 'accounts', accountId: decodeURIComponent(card[1]) };
+  if (card?.[1]) {
+    const accountId = decoded(card[1]);
+    return accountId === null ? { tab: 'overview', accountId: null } : { tab: 'accounts', accountId };
+  }
   const name = /^\/([^/]*)\/?$/.exec(pathname)?.[1] ?? '';
   return { tab: isTab(name) ? name : 'overview', accountId: null };
 }

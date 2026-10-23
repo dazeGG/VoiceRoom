@@ -20,20 +20,19 @@ import {
   type ServerFrame,
   type TypingActivity
 } from './contracts/realtime.ts';
-import { RoomRelationship } from './contracts/rooms.ts';
+import type { LobbyRoom, PublicPeer } from './contracts/rooms.ts';
 import { cleanName } from './validation.ts';
 import { isRecord } from './guards.ts';
 import { firstMismatch } from './contracts/http.ts';
 
 export const MAX_VISIBLE_ROOM_PEERS = 5 as const;
 export const SUMMARY_COALESCE_MS = 75 as const;
+/** Close code the API sends when the account session ended; the client must not reconnect on it. */
+export const SESSION_ENDED_CLOSE_CODE = 4401 as const;
 
 export type { RoomPeerSummary, RoomRealtimeSummary, RoomTypist, TypingActivity };
 /** Any frame the server sends. */
 export type ServerEnvelope = ServerFrame;
-
-/** The commands the WS server handles: exactly the contract's command map. */
-export const KNOWN_CLIENT_TYPES: ReadonlySet<string> = new Set(Object.keys(ClientCommandFrames));
 
 // A typing notice is only a hint and is never stored: a client repeats it at
 // most every TYPING_NOTICE_INTERVAL_MS while its composer has text, and a
@@ -107,32 +106,13 @@ export function buildServerErrorEnvelope(code: ErrorCode, message: string, id?: 
   return envelope;
 }
 
-function relationshipOf(value: unknown): RoomRelationship {
-  return Value.Check(RoomRelationship, value) ? value : 'owner';
-}
-
 /** A peer the lobby card shows: a public peer, of which only these fields are read. */
-export type PeerSummarySource = {
-  id: string;
-  accountUserId?: string | null;
-  avatarAccent?: string | null;
-  avatarColorKey?: string | null;
-  avatarUrl?: string | null;
-  muted?: boolean;
-  name?: string;
-};
+export type PeerSummarySource = Pick<PublicPeer, 'id'> &
+  Partial<Pick<PublicPeer, 'accountUserId' | 'avatarAccent' | 'avatarColorKey' | 'avatarUrl' | 'muted' | 'name'>>;
 
-/** A room the lobby card describes: a lobby room (`roomId`) or a stored one (`id`). */
-export type RoomSummarySource = {
-  roomId?: string;
-  id?: string;
-  avatarUrl?: string | null;
-  name?: string;
-  isStatic?: boolean;
-  relationship?: string;
-  lastMessageAt?: number | null;
-  unreadCount?: number;
-};
+/** A room the lobby card describes: a lobby room, of which only these fields are read. */
+export type RoomSummarySource = Pick<LobbyRoom, 'roomId' | 'relationship'> &
+  Partial<Pick<LobbyRoom, 'avatarUrl' | 'name' | 'isStatic' | 'lastMessageAt' | 'unreadCount'>>;
 
 /** Picks a peer's avatar colour when it carries none. */
 export type AvatarColorResolver = (peerId: string) => string;
@@ -163,11 +143,11 @@ export function buildRoomRealtimeSummary(
   const peerCount = peers.length;
 
   return {
-    roomId: room.roomId || room.id || '',
+    roomId: room.roomId,
     avatarUrl: room.avatarUrl ?? null,
     name: room.name || '',
     isStatic: Boolean(room.isStatic),
-    relationship: relationshipOf(room.relationship),
+    relationship: room.relationship,
     peers: peerCount,
     visiblePeers,
     hiddenPeerCount: Math.max(0, peerCount - visiblePeers.length),

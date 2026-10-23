@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { isErrorCode } from '@voice-room/shared/contracts/errors';
 import { normalizeMentionUserIds } from '@voice-room/shared/mentions';
 import { createMentionEligibilityService } from '../src/domains/notifications/mention-eligibility.service.ts';
 import { fakeDb, result } from './fakes/index.ts';
@@ -23,4 +24,25 @@ test('G55-A02 creator and every target pass active membership and ban eligibilit
     'target'
   ]);
   assert.equal(queries.length, 2);
+});
+
+test('a refused mention answers 422 with a catalogued code', async () => {
+  const service = createMentionEligibilityService({
+    pool: fakeDb(() => result()),
+    activeBanService: {
+      async filterEligibleUserIds({ userIds }) {
+        return userIds;
+      }
+    }
+  });
+  await assert.rejects(
+    service.validate({ roomId: 'r', creatorUserId: 'creator', targetUserIds: [] }),
+    (error: unknown) =>
+      error instanceof Error &&
+      'code' in error &&
+      isErrorCode(error.code) &&
+      error.code === 'creator_not_eligible' &&
+      'statusCode' in error &&
+      error.statusCode === 422
+  );
 });

@@ -49,11 +49,19 @@
   let contextX = $state(0);
   let contextY = $state(0);
   let contextTrigger = $state<HTMLElement | null>(null);
-  // The request banner can be hidden until another request arrives.
-  let dismissedRequestCount = $state(0);
+  // The request banner can be hidden until another request arrives. Kept by id:
+  // a count would miss a new request that came in as an old one was answered.
+  let dismissedRequestIds = $state<ReadonlySet<string>>(new Set());
+  // When the request list did not load, the friends answer's count stands in;
+  // hiding then lasts until that count changes.
+  let dismissedRequestCount = $state<number | null>(null);
 
   const requestCount = $derived(lobby.incomingRequestCount);
-  const showRequestBanner = $derived(requestCount > dismissedRequestCount);
+  const showRequestBanner = $derived(
+    lobby.requests.incoming.length > 0
+      ? lobby.requests.incoming.some((request) => !dismissedRequestIds.has(request.id))
+      : requestCount > 0 && requestCount !== dismissedRequestCount
+  );
   const sortedRooms = $derived([...rooms].sort((a: OwnedRoom, b: OwnedRoom) => b.peers - a.peers));
   const liveRooms = $derived(sortedRooms.filter((room: OwnedRoom) => room.peers > 0));
   const quietRooms = $derived(sortedRooms.filter((room: OwnedRoom) => room.peers === 0));
@@ -78,6 +86,7 @@
   }
 
   function dismissRequestBanner(): void {
+    dismissedRequestIds = new Set(lobby.requests.incoming.map((request) => request.id));
     dismissedRequestCount = requestCount;
   }
 

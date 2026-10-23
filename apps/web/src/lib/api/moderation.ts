@@ -1,4 +1,4 @@
-import { BanLifted, BanPage, BanSaved, type Ban } from '@voice-room/shared/contracts/moderation';
+import { BanBody, BanLifted, BanPage, BanSaved, type Ban } from '@voice-room/shared/contracts/moderation';
 import {
   MODERATION_DEFAULT_LIMIT,
   MODERATION_MAX_LIMIT,
@@ -28,6 +28,7 @@ export async function putBan(roomId: string, input: BanMutation, idempotencyKey:
   const normalized = normalizeBanMutation(input);
   if (!normalized || !idempotencyKey.trim()) throw new Error('Заполните данные блокировки');
   const { ban } = await api.put(`${roomModerationUrl(roomId)}/bans`, BanSaved, normalized, {
+    bodySchema: BanBody,
     headers: { 'Idempotency-Key': idempotencyKey }
   });
   // The undo needs the saved ban; an answer without one leaves nothing to undo.

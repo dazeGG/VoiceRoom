@@ -1,4 +1,4 @@
-import type { JoinResult } from './voice-join.ts';
+import type { JoinResult, JoinUser } from './voice-join.ts';
 import type { IncomingMessage } from 'node:http';
 import { clientKind, describeUserAgent } from '@voice-room/shared/account-security';
 import type { ErrorCode } from '@voice-room/shared/contracts/errors';
@@ -17,18 +17,19 @@ import { LOG_EVENTS } from '../lib/log-events.ts';
 import { createLogger, hashIp } from '../lib/logger.ts';
 import { createRateLimiter } from '../lib/rate-limit.ts';
 import type { Logger } from '../platform/types.ts';
+import type { ResolvedSession, SessionUser } from '../app/context.ts';
 
 // Validated commands always carry a payload object.
 type InboundEnvelope = ClientCommand;
-type SessionUser = { id: string; presenceStatus?: unknown; [key: string]: unknown };
-type ResolvedSession = { user?: SessionUser | null; session?: { tokenHash?: string } | null } | null | undefined;
+/** What the socket reads of the signed-in account: what a join reads, and its presence. */
+type WsUser = NonNullable<JoinUser> & Partial<Pick<SessionUser, 'presenceStatus'>>;
 export interface WsRoomRuntime {
   subscribePreview(connection: WsConnection, roomId: string): Promise<unknown>;
   unsubscribePreview(connection: WsConnection, roomId: string): unknown;
   joinVoiceRoom(
     connection: WsConnection,
     payload: ClientCommands['room.join'],
-    user: SessionUser | null,
+    user: WsUser | null,
     clientIp: string,
     requestId?: string
   ): Promise<JoinResult>;
@@ -73,7 +74,7 @@ function createWsHandler({
 }: {
   registry: ConnectionRegistry;
   roomRuntime: WsRoomRuntime;
-  resolveSessionUser: (req: IncomingMessage) => Promise<ResolvedSession>;
+  resolveSessionUser: (req: IncomingMessage) => Promise<ResolvedSession | null>;
   getFriendIds: (userId: string) => Promise<string[]>;
   isUserOnline: (userId: string) => boolean;
   canTypeToUser?: (userId: string, peerId: string) => Promise<unknown>;
@@ -356,96 +357,112 @@ function createWsHandler({
       registry.removeConnection(connection);
     });
 
-    const session = await resolveSessionUser(req);
-    if (endedEarly) return;
-    const sessionUser = session?.user || null;
+    // The route fires this without awaiting it, so nothing past this point may
+    // reject: an unhandled rejection ends the process and every call on it. A
+    // failed session lookup (a pool timeout) costs only this socket.
+    try {
+      const session = await resolveSessionUser(req);
+      if (endedEarly) return;
+      const sessionUser = session?.user || null;
 
-    // Check the limit before registering: adding first and then removing would
-    // count the doomed connection toward the limit (off-by-one) and flap the
-    // user's presence for friends when it was their first connection.
-    if (sessionUser && registry.rejectOverLimit(sessionUser.id)) {
-      logger.warn(
-        {
-          evt: LOG_EVENTS.WS_REJECTED_OVER_LIMIT,
-          userId: sessionUser.id,
-          scope: 'user',
-          code: 4429
-        },
-        'ws connection rejected over the per-user limit'
-      );
-      socket.close(4429, 'Too many connections');
-      return;
-    }
-
-    const guestIp = sessionUser ? '' : getClientIp(req);
-    if (!sessionUser && registry.rejectGuestOverLimit(guestIp)) {
-      logger.warn(
-        {
-          evt: LOG_EVENTS.WS_REJECTED_OVER_LIMIT,
-          ipHash: hashIp(guestIp),
-          scope: 'guest',
-          code: 4429
-        },
-        'ws connection rejected over the per-ip guest limit'
-      );
-      socket.close(4429, 'Too many connections');
-      return;
-    }
-
-    const clientIp = getClientIp(req);
-    const opened = sessionUser
-      ? registry.addConnection(
-          sessionUser.id,
-          socket,
-          clientIp,
-          sessionUser.presenceStatus,
-          session?.session?.tokenHash
-        )
-      : registry.addGuestConnection(socket, guestIp);
-    connection = opened;
-    opened.client = clientKind(req.headers?.['user-agent']);
-    const described = describeUserAgent(req.headers?.['user-agent']);
-    opened.device = { os: described.os, browser: described.client };
-
-    logger.info(
-      {
-        evt: LOG_EVENTS.WS_CONNECTED,
-        connId: opened.id,
-        userId: opened.userId || undefined,
-        guest: opened.guest,
-        ipHash: hashIp(clientIp)
-      },
-      'ws connected'
-    );
-
-    if (sessionUser) {
-      let friendIds: string[] = [];
-      try {
-        friendIds = await getFriendIds(sessionUser.id);
-      } catch (error) {
-        logger.error(
+      // Check the limit before registering: adding first and then removing would
+      // count the doomed connection toward the limit (off-by-one) and flap the
+      // user's presence for friends when it was their first connection.
+      if (sessionUser && registry.rejectOverLimit(sessionUser.id)) {
+        logger.warn(
           {
-            evt: LOG_EVENTS.WS_FRIENDS_LOAD_FAILED,
-            connId: opened.id,
+            evt: LOG_EVENTS.WS_REJECTED_OVER_LIMIT,
             userId: sessionUser.id,
-            err: error
+            scope: 'user',
+            code: 4429
           },
-          'failed to load friends for the ws ready frame'
+          'ws connection rejected over the per-user limit'
         );
+        socket.close(4429, 'Too many connections');
+        return;
       }
-      if (opened.closed) return;
-      registry.sendReady(opened, {
-        userId: sessionUser.id,
-        onlineFriendIds: friendIds.filter((friendId) => isUserOnline(friendId))
-      });
-      void roomRuntime.sendAccountSummaries(opened, sessionUser.id);
-    } else {
-      registry.sendReady(opened, { guest: true });
-    }
 
-    const waiting = early;
-    early = null;
-    for (const raw of waiting) handleRaw(opened, raw, req);
+      const guestIp = sessionUser ? '' : getClientIp(req);
+      if (!sessionUser && registry.rejectGuestOverLimit(guestIp)) {
+        logger.warn(
+          {
+            evt: LOG_EVENTS.WS_REJECTED_OVER_LIMIT,
+            ipHash: hashIp(guestIp),
+            scope: 'guest',
+            code: 4429
+          },
+          'ws connection rejected over the per-ip guest limit'
+        );
+        socket.close(4429, 'Too many connections');
+        return;
+      }
+
+      const clientIp = getClientIp(req);
+      const opened = sessionUser
+        ? registry.addConnection(
+            sessionUser.id,
+            socket,
+            clientIp,
+            sessionUser.presenceStatus,
+            session?.session?.tokenHash
+          )
+        : registry.addGuestConnection(socket, guestIp);
+      connection = opened;
+      opened.client = clientKind(req.headers?.['user-agent']);
+      const described = describeUserAgent(req.headers?.['user-agent']);
+      opened.device = { os: described.os, browser: described.client };
+
+      logger.info(
+        {
+          evt: LOG_EVENTS.WS_CONNECTED,
+          connId: opened.id,
+          userId: opened.userId || undefined,
+          guest: opened.guest,
+          ipHash: hashIp(clientIp)
+        },
+        'ws connected'
+      );
+
+      if (sessionUser) {
+        let friendIds: string[] = [];
+        try {
+          friendIds = await getFriendIds(sessionUser.id);
+        } catch (error) {
+          logger.error(
+            {
+              evt: LOG_EVENTS.WS_FRIENDS_LOAD_FAILED,
+              connId: opened.id,
+              userId: sessionUser.id,
+              err: error
+            },
+            'failed to load friends for the ws ready frame'
+          );
+        }
+        if (opened.closed) return;
+        registry.sendReady(opened, {
+          userId: sessionUser.id,
+          onlineFriendIds: friendIds.filter((friendId) => isUserOnline(friendId))
+        });
+        void roomRuntime.sendAccountSummaries(opened, sessionUser.id);
+      } else {
+        registry.sendReady(opened, { guest: true });
+      }
+
+      const waiting = early;
+      early = null;
+      for (const raw of waiting) handleRaw(opened, raw, req);
+    } catch (error) {
+      logger.error(
+        {
+          evt: LOG_EVENTS.WS_CONNECT_FAILED,
+          connId: connection?.id,
+          userId: connection?.userId || undefined,
+          err: error
+        },
+        'ws connection setup failed'
+      );
+      socket.close(1011, 'Connection setup failed');
+    }
   }
 
   function handleRaw(connection: WsConnection, raw: unknown, req: IncomingMessage): void {

@@ -5,6 +5,8 @@ import { decodeHtmlBody, extractLinkPreviewMetadata } from '../../lib/link-previ
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { codeOf } from '../../platform/error-code.ts';
 import { createLogger } from '../../lib/logger.ts';
+import type { LinkPreviewStorage } from '../../lib/link-preview-storage.ts';
+import type { Logger } from '../../platform/types.ts';
 import type { LinkPreviewRepository } from './link-preview.repository.ts';
 
 const READY_TTL_MS = 24 * 60 * 60 * 1000;
@@ -39,11 +41,11 @@ function createLinkPreviewService({
 }: {
   repository: LinkPreviewRepository;
   fetcher: LinkPreviewFetcher;
-  storage: { save(key: string, buffer: Buffer): Promise<unknown> };
+  storage: Pick<LinkPreviewStorage, 'save'>;
   processImage: (body: Buffer) => Promise<ProcessedImage>;
   onRoomPreview?: (input: { roomId: string; messageId: string }) => Promise<unknown>;
   onDirectPreview?: (input: { messageId: string; senderId: string; recipientId: string }) => Promise<unknown>;
-  logger?: { warn(...args: unknown[]): void };
+  logger?: Pick<Logger, 'warn'>;
   now?: () => number;
 }) {
   const inflight = new Map<string, Promise<LinkPreview | null>>();

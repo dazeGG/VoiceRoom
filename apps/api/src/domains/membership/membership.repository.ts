@@ -82,10 +82,8 @@ function mapDirectoryMember(row: DirectoryRow): DirectoryMember {
   };
 }
 
-function createMembershipRepository({ pool }: { pool?: QueryClient | null | undefined } = {}) {
-  if (!pool || typeof pool.query !== 'function') throw new TypeError('A PostgreSQL pool is required');
-  const base = pool;
-  const on = (client: Client): Database => kyselyOn(client && typeof client.query === 'function' ? client : base);
+function createMembershipRepository({ pool }: { pool: QueryClient }) {
+  const on = (client: Client): Database => kyselyOn(client ?? pool);
 
   async function getActive(
     roomId: string,

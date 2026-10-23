@@ -16,7 +16,7 @@ test('buildRoomRealtimeSummary mirrors shared summary rules', () => {
 
   const summary = buildRoomRealtimeSummary(
     {
-      id: 'room1',
+      roomId: 'room1',
       name: 'Test room',
       isStatic: true,
       relationship: 'owner'

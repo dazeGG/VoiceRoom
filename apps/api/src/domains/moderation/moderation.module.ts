@@ -5,7 +5,6 @@ import type pg from 'pg';
 import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import { buildServerEnvelope } from '../../realtime/envelope.ts';
 import type { CursorCodec } from '../../platform/cursor-codec.ts';
-import { isGatePrincipal } from '../admission/gate-principal.ts';
 import { createAttachmentRepository } from '../media/attachment.repository.ts';
 import { createMediaJobRepository } from '../media/media-job.repository.ts';
 import type { EvictionType } from '../rooms/peer-eviction.ts';
@@ -30,7 +29,7 @@ export interface ModerationModuleDeps {
     input: { principal: GatePrincipal; roomId: string; now?: number }
   ) => Promise<PrincipalRevocation>;
   getRoom: (roomId: string) => Promise<LiveRoom | null>;
-  gatePrincipalForPeer: (roomId: string, peer: PresencePeer) => unknown;
+  gatePrincipalForPeer: (roomId: string, peer: PresencePeer) => GatePrincipal | null;
   disconnectPeer: (
     room: LiveRoom,
     peer: PresencePeer,
@@ -45,20 +44,18 @@ export function createModerationModule(deps: ModerationModuleDeps) {
   const repository = createModerationRepository({ cursorCodec: deps.cursorCodec, pool, ipKeyOf: deps.ipKeyOf });
   const service = createModerationService({
     pool,
-    ipKeyOf: deps.ipKeyOf,
     repository,
     maxActiveBans: deps.maxActiveBans,
     resolvePrincipals: async ({ roomId, userId, guestIp }) => {
       if (userId) {
         const principal = normalizeGatePrincipal({ accountUserId: userId, roomId });
-        return isGatePrincipal(principal) ? [principal] : [];
+        return principal ? [principal] : [];
       }
       const room = await deps.getRoom(roomId);
       if (!room || !guestIp) return [];
       return [...room.peers.values()]
         .filter((peer) => !peer.accountUserId && peer.ip === guestIp)
-        .map((peer) => deps.gatePrincipalForPeer(roomId, peer))
-        .filter(isGatePrincipal);
+        .flatMap((peer) => deps.gatePrincipalForPeer(roomId, peer) ?? []);
     },
     // The ban and the credential revocation commit together.
     revokePrincipalInTransaction: ({ client, principal, roomId, now }) =>

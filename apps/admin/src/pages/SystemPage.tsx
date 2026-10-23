@@ -2,12 +2,12 @@
 // disk, database, the API process, live connections and requests; the latest
 // minute as a strip of numbers over the charts.
 
-import { useEffect, useState } from 'react';
-import type { SystemSample, SystemStats } from '@voice-room/shared/contracts/admin';
+import { useState } from 'react';
+import type { SystemSample } from '@voice-room/shared/contracts/admin';
 import { fetchSystemStats } from '../api/admin.ts';
 import { TimeChart } from '../charts/TimeChart.tsx';
 import { formatBytes, formatMs, formatPercent, formatSampleTime } from '../format.ts';
-import { loadFailure, type LoadFailure } from '../load-state.ts';
+import { useAdminResource } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { SYSTEM_PRESETS, systemQuery, type TimeRange } from '../time-range.ts';
 import { TimeRangePicker } from '../TimeRangePicker.tsx';
@@ -34,47 +34,21 @@ function toneOf(value: number | null): Tone {
 
 export function SystemPage() {
   const [range, setRange] = useState<TimeRange>({ kind: 'preset', id: '24h' });
-  const [stats, setStats] = useState<SystemStats | null>(null);
-  const [failure, setFailure] = useState<LoadFailure | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    // A slower answer for a range already left behind is dropped.
-    let current = true;
-    fetchSystemStats(systemQuery(range, SYSTEM_PRESETS, Date.now())).then(
-      (loaded) => {
-        if (!current) return;
-        setStats(loaded);
-        setFailure(null);
-        setLoading(false);
-      },
-      (cause: unknown) => {
-        if (!current) return;
-        setFailure(loadFailure(cause, 'Не удалось загрузить данные сервера'));
-        setLoading(false);
-      }
-    );
-    return () => {
-      current = false;
-    };
-  }, [range, attempt]);
-
-  function change(next: TimeRange): void {
-    setRange(next);
-    setLoading(true);
-  }
-
-  function retry(): void {
-    setLoading(true);
-    setAttempt((count) => count + 1);
-  }
+  // A slower answer for a range already left behind is dropped.
+  const {
+    data: stats,
+    failure,
+    busy: loading,
+    reload: retry
+  } = useAdminResource(() => fetchSystemStats(systemQuery(range, SYSTEM_PRESETS, Date.now())), [range], {
+    failureText: 'Не удалось загрузить данные сервера'
+  });
 
   const resolved = stats ? { from: stats.from, to: stats.to } : null;
 
   const picker = (
     <>
-      <TimeRangePicker value={range} presets={SYSTEM_PRESETS} withTime onChange={change} resolved={resolved} />
+      <TimeRangePicker value={range} presets={SYSTEM_PRESETS} withTime onChange={setRange} resolved={resolved} />
       {loading && stats ? <span className="system-quiet">Обновляем…</span> : null}
     </>
   );

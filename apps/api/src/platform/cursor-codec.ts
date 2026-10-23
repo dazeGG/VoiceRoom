@@ -1,6 +1,6 @@
-import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import crypto from 'node:crypto';
 import { isRecord } from '@voice-room/shared/guards';
+import { DomainError } from './http/domain-error.ts';
 
 const CURSOR_CODEC_VERSION = 1;
 const DEFAULT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -17,15 +17,9 @@ export type CursorCodec = {
   decode(cursor: unknown, expected?: { purpose?: unknown; context?: unknown }): CursorTuple;
 };
 
-class CursorCodecError extends Error {
-  declare code: ErrorCode;
-  declare statusCode: number;
-
+class CursorCodecError extends DomainError {
   constructor(message = 'Invalid cursor') {
-    super(message);
-    this.name = 'CursorCodecError';
-    this.code = 'invalid_cursor';
-    this.statusCode = 400;
+    super('invalid_cursor', 400, message);
   }
 }
 

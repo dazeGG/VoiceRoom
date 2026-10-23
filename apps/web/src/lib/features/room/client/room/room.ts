@@ -363,7 +363,7 @@ async function openJoinMicrophone(): Promise<MicrophoneCapture | null> {
 
 function formatJoinError(error: unknown): string {
   if (error instanceof LiveKitTransportError) {
-    return 'LiveKit недоступен: проверьте LIVEKIT_GATE_PUBLIC_URL и перезапустите VoiceRoom';
+    return 'LiveKit недоступен: голосовой сервер не отвечает, попробуйте подключиться позже';
   }
   if (error instanceof ApiError || error instanceof UserFacingError) return error.message;
   return 'Не удалось подключиться';

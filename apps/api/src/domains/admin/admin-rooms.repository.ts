@@ -5,9 +5,14 @@
 
 import { sql } from 'kysely';
 import type pg from 'pg';
-import type { ClientKind } from '@voice-room/shared/account-security';
-import { ROOM_CALLS_PAGE_SIZE, ROOM_HISTORY_PAGE_SIZE, type RoomAccount } from '@voice-room/shared/contracts/admin';
+import {
+  ROOM_CALLS_PAGE_SIZE,
+  ROOM_HISTORY_PAGE_SIZE,
+  type ClientKind,
+  type RoomAccount
+} from '@voice-room/shared/contracts/admin';
 import { kyselyOn } from '../../platform/db/kysely.ts';
+import { toMillis } from '../../platform/epoch-millis.ts';
 import { avatarUrl } from '../../lib/avatar-url.ts';
 
 export interface AdminRoomRow {
@@ -171,8 +176,8 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
       browser: row.browser,
       ipKey: row.ip_key,
       location: row.location,
-      joinedAt: new Date(row.joined_at).getTime(),
-      leftAt: new Date(row.left_at).getTime()
+      joinedAt: toMillis(row.joined_at),
+      leftAt: toMillis(row.left_at)
     };
   }
 
@@ -289,8 +294,8 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
       roomId: row.room_id ?? '',
       roomName: roomNameOf(row),
       isStatic: row.is_static,
-      startedAt: new Date(row.started_at).getTime(),
-      endedAt: new Date(row.ended_at).getTime()
+      startedAt: toMillis(row.started_at),
+      endedAt: toMillis(row.ended_at)
     }));
     if (page.length === 0) return { calls: [], more: false };
 

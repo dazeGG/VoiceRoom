@@ -8,7 +8,7 @@ import type {
   RoomSnapshot,
   ServerEvent
 } from '@voice-room/shared/contracts/realtime';
-import { parseServerFrame } from '@voice-room/shared/realtime';
+import { parseServerFrame, SESSION_ENDED_CLOSE_CODE } from '@voice-room/shared/realtime';
 import { isRealtimeBlocked } from '$lib/platform/desktop-boundary';
 import { reportContractViolation } from './contract-violations';
 import { RealtimeHeartbeatWatchdog } from './realtime-heartbeat';
@@ -30,8 +30,8 @@ const HEARTBEAT_TIMEOUT_MS = 30000;
 // After the tab comes back or the network returns, a socket that does not
 // answer a ping this fast is treated as dead rather than waited on.
 const LIVENESS_PROBE_MS = 5000;
-// Mirrors the API close code for sockets whose account session was ended.
-const SESSION_ENDED_CLOSE_CODE = 4401;
+// Typing notices and pings are about now; sent after a reconnect they would be stale.
+const DROPPED_WHILE_DISCONNECTED: ReadonlySet<ClientCommandType> = new Set(['ping', 'dm.typing', 'room.chat.typing']);
 
 let shared: AppRealtimeConnection | null = null;
 
@@ -94,12 +94,16 @@ class AppRealtimeConnection {
   send: Send = (type, payload, id) => {
     if (isRealtimeBlocked()) return;
     const frame = JSON.stringify({ ...(id ? { id } : {}), type, payload });
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
-      this.outboundQueue.push(frame);
-      this.ensureConnected();
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.socket.send(frame);
       return;
     }
-    this.socket.send(frame);
+    // After a client or session-ended close the frame belongs to a socket
+    // that is gone; the next one must not receive it.
+    if (this.closedByClient || DROPPED_WHILE_DISCONNECTED.has(type)) return;
+    this.outboundQueue.push(frame);
+    // The first command may open the socket; after a drop the backoff timer reconnects.
+    if (this.reconnectTimer === null) this.ensureConnected();
   };
 
   private clearTimers(): void {

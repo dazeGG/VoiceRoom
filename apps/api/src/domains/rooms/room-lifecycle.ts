@@ -88,7 +88,7 @@ export function createRoomLifecycle(deps: RoomLifecycleDeps) {
   async function expireRoomInvitations(senderId: string | null, roomId: string) {
     if (!roomId) return [];
     const store = deps.invitations();
-    if (typeof store?.expirePendingInvites !== 'function') return [];
+    if (!store) return [];
     const messages = await store.expirePendingInvites({ senderId: senderId || null, roomId });
     for (const message of messages) {
       const event: AccountMessage = { type: 'dm.message.edited', message };

@@ -9,6 +9,7 @@ import { createMediaService, detectExactContainer, MAX_UPLOAD_BYTES } from '../s
 import { createMediaStorage } from '../src/domains/media/storage.ts';
 import type { Attachment, AttachmentRepository } from '../src/domains/media/attachment.repository.ts';
 import type { MediaJobRepository } from '../src/domains/media/media-job.repository.ts';
+import type { MediaPressureService } from '../src/domains/media/media-pressure.service.ts';
 import type { MediaQuotaService } from '../src/domains/media/media-quota.service.ts';
 import { attachment, fake, fakeDb } from './fakes/index.ts';
 const ID = '123e4567-e89b-42d3-a456-426614174000';
@@ -47,6 +48,7 @@ test('G75-A01 JPEG/PNG/WebP exact containers and upload status survive service r
   const service = createMediaService({
     attachmentRepository: repository,
     jobRepository: fake<MediaJobRepository>({ enqueue: async () => fake() }),
+    pressureService: fake<MediaPressureService>({ assertAcceptingUploads: async () => fake() }),
     quotaService: fake<MediaQuotaService>(),
     storage
   });
@@ -95,6 +97,8 @@ test('G75-A02 corrupt, polyglot, MIME mismatch and >10MiB bodies fail without fi
   });
   const service = createMediaService({
     attachmentRepository: repository,
+    jobRepository: fake<MediaJobRepository>(),
+    pressureService: fake<MediaPressureService>({ assertAcceptingUploads: async () => fake() }),
     quotaService: fake<MediaQuotaService>(),
     storage
   });

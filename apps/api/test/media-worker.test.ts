@@ -46,6 +46,11 @@ test('G77-A02 fencing loss cannot publish ready/failed state and processing owns
   let failed = 0;
   let observedAge = 0;
   const worker = createMediaProcessingWorker({
+    pressureService: {
+      async canClaimWork() {
+        return true;
+      }
+    },
     attachmentRepository: fake<AttachmentRepository>({
       async findById() {
         return attachment({ internalState: 'processing' });
@@ -92,6 +97,11 @@ test('G77-A03 a claimed upload is turned upright into a WebP image and a preview
   const saved: Record<string, Buffer> = {};
   let completed: Record<string, unknown> | null = null;
   const worker = createMediaProcessingWorker({
+    pressureService: {
+      async canClaimWork() {
+        return true;
+      }
+    },
     attachmentRepository: fake<AttachmentRepository>({
       async findById() {
         return attachment({ internalState: 'processing' });

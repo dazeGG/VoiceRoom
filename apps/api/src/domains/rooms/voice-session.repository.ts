@@ -6,7 +6,7 @@
 // yields its keyed hash and its city (see DescribeAddress) and is never stored.
 
 import type pg from 'pg';
-import type { ClientKind } from '@voice-room/shared/account-security';
+import type { ClientKind } from '@voice-room/shared/contracts/admin';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 
 export type FinishedVoiceSession = {

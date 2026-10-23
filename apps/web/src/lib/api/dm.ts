@@ -4,13 +4,16 @@ import {
   DirectHistoryPage,
   DirectMessageAnswer,
   DirectRead,
+  EditDirectMessageBody,
+  InviteAnswerBody,
   MessageDeleted,
+  ReadBody,
+  SendDirectMessageBody,
   type DirectHistoryMessage,
   type DirectMessage as DirectMessageView,
   type DirectMessageInvite,
   type ReactionSummary,
-  type ReplyPointer,
-  type SendDirectMessageBody
+  type ReplyPointer
 } from '@voice-room/shared/contracts/messages';
 import { normalizeLinkPreview } from '@voice-room/shared/link-preview';
 import type { ReplyTarget } from '$lib/shared/chat/reply-store.svelte';
@@ -109,12 +112,16 @@ export async function sendDirectMessage(
     ...(replyTo === undefined ? {} : { replyTo }),
     ...(idempotencyKey === undefined ? {} : { idempotencyKey })
   };
-  const payload = await api.post(`/api/dm/${encodeURIComponent(userId)}`, DirectMessageAnswer, body);
+  const payload = await api.post(`/api/dm/${encodeURIComponent(userId)}`, DirectMessageAnswer, body, {
+    bodySchema: SendDirectMessageBody
+  });
   return directMessageFromView(payload.message);
 }
 
 export async function markThreadRead(userId: string, cursor?: string): Promise<number> {
-  const payload = await api.post(`/api/dm/${encodeURIComponent(userId)}/read`, DirectRead, cursor ? { cursor } : {});
+  const payload = await api.post(`/api/dm/${encodeURIComponent(userId)}/read`, DirectRead, cursor ? { cursor } : {}, {
+    bodySchema: ReadBody
+  });
   return payload.count ?? 0;
 }
 
@@ -126,7 +133,8 @@ export async function editDirectMessage(userId: string, messageId: string, text:
   const payload = await api.patch(
     `/api/dm/${encodeURIComponent(userId)}/messages/${encodeURIComponent(messageId)}`,
     DirectMessageAnswer,
-    { text }
+    { text },
+    { bodySchema: EditDirectMessageBody }
   );
   return directMessageFromView(payload.message);
 }
@@ -139,7 +147,8 @@ export async function respondRoomInvite(
   const payload = await api.post(
     `/api/dm/${encodeURIComponent(userId)}/invites/${encodeURIComponent(messageId)}/respond`,
     DirectMessageAnswer,
-    { action }
+    { action },
+    { bodySchema: InviteAnswerBody }
   );
   return directMessageFromView(payload.message);
 }

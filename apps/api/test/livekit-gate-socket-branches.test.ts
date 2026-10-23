@@ -9,7 +9,7 @@ import { EventEmitter } from 'node:events';
 import net from 'node:net';
 import test, { mock } from 'node:test';
 
-import type { CredentialBoundaryService } from '../src/domains/admission/credential-boundary.service.ts';
+import type { CredentialBoundaryService, GateRoomStore } from '../src/domains/admission/credential-boundary.service.ts';
 import type { GateClaims } from '../src/domains/admission/gate-credential-signer.ts';
 import { createLiveKitAuthGateService } from '../src/domains/admission/livekit-auth-gate.service.ts';
 import { fake } from './fakes/index.ts';
@@ -79,7 +79,7 @@ function createGate({ errors = new Array<GateError>() } = {}) {
   });
   const service = createLiveKitAuthGateService({
     boundary,
-    roomStore: {},
+    roomStore: fake<GateRoomStore>(),
     logger: {
       error: (fields: GateError, msg?: string) => errors.push({ ...fields, msg }),
       warn: () => {}

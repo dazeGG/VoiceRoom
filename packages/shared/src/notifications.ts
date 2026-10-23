@@ -5,7 +5,7 @@
 import type { InboxItem, InboxPage, NotificationLevel, NotificationReason } from './contracts/notifications.ts';
 import { isArray, isOneOf, isRecord, pageInfoOf, trimmedText } from './guards.ts';
 
-export const NOTIFICATION_CONTRACT_VERSION = 1 as const;
+const NOTIFICATION_CONTRACT_VERSION = 1 as const;
 export const NOTIFICATION_DEFAULT_LIMIT = 50 as const;
 export const NOTIFICATION_MAX_LIMIT = 100 as const;
 export const NOTIFICATION_LEVELS: readonly NotificationLevel[] = Object.freeze(['all', 'mentions', 'none'] as const);
@@ -37,13 +37,6 @@ function epochMillis(value: unknown): number | null {
   if (typeof value !== 'string' || !value) return null;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-export function normalizeNotificationLevel(
-  value: unknown,
-  fallback: NotificationLevel = 'mentions'
-): NotificationLevel {
-  return isOneOf(NOTIFICATION_LEVELS, value) ? value : fallback;
 }
 
 export function normalizeNotificationLimit(value: unknown, fallback: number = NOTIFICATION_DEFAULT_LIMIT): number {

@@ -1,21 +1,11 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
-import path from 'node:path';
 import process from 'node:process';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
+import { globToRegExp, normalizePath, readSource, repoFiles } from './lib/glob.mts';
 
-// Paths in the config are relative to the repository root, not the caller's cwd.
-const REPO_ROOT = path.resolve(import.meta.dirname, '..');
-
-function repoFiles(dir: string): string[] {
-  return walkFiles(path.join(REPO_ROOT, dir)).map((file) => normalizePath(path.relative(REPO_ROOT, file)));
-}
-
-function readSource(filePath: string): string | null {
-  const resolved = path.isAbsolute(filePath) ? filePath : path.join(REPO_ROOT, filePath);
-  return fs.existsSync(resolved) ? fs.readFileSync(resolved, 'utf8') : null;
-}
+const isApiSource = (file: string) => /\.(?:js|mts|ts)$/.test(file) && !file.endsWith('.d.ts');
 
 const Paths = Type.Array(Type.String());
 const SourceConfig = Type.Object({
@@ -26,46 +16,12 @@ const SourceConfig = Type.Object({
       crossDomainWriters: Type.Optional(Type.Record(Type.String(), Paths))
     })
   ),
-  timerRules: Type.Optional(Type.Object({ forbiddenSources: Type.Optional(Paths) }))
+  timerRules: Type.Optional(
+    Type.Object({ forbiddenSources: Type.Optional(Paths), allowedCurrentSources: Type.Optional(Paths) })
+  )
 });
 type SourceConfig = Static<typeof SourceConfig>;
 type Violation = Record<string, unknown> & { ruleId: string; filePath: string };
-
-function normalizePath(value: string): string {
-  return value.split(path.sep).join('/');
-}
-
-function walkFiles(root: string, collected: string[] = []): string[] {
-  if (!fs.existsSync(root)) return collected;
-  const stat = fs.statSync(root);
-  if (stat.isFile()) {
-    if (/\.(?:js|mts|ts)$/.test(root) && !root.endsWith('.d.ts')) collected.push(normalizePath(root));
-    return collected;
-  }
-  for (const entry of fs.readdirSync(root)) {
-    if (entry === 'node_modules' || entry === '.git') continue;
-    walkFiles(path.join(root, entry), collected);
-  }
-  return collected;
-}
-
-function globToRegExp(glob: string): RegExp {
-  const value = normalizePath(glob);
-  let pattern = '';
-  for (let index = 0; index < value.length; index += 1) {
-    const char = value.charAt(index);
-    if (char === '*' && value[index + 1] === '*') {
-      pattern += '.*';
-      index += 1;
-    } else if (char === '*') {
-      pattern += '[^/]*';
-    } else {
-      pattern += char.replace(/[.+^${}()|[\]\\]/g, '\\$&');
-    }
-  }
-  pattern = pattern.replace(/\.\*\/\[\^\/\]\*/g, '.*');
-  return new RegExp(`(?:^|.*/)${pattern}$`);
-}
 
 function isOwner(filePath: string, owners: string[], prefixes: string[]): boolean {
   return (
@@ -109,10 +65,13 @@ export function checkApiSources({
   files?: string[] | undefined;
 }): Violation[] {
   const violations: Violation[] = [];
-  const fileSet = files || repoFiles('apps/api/src');
+  const fileSet = files || repoFiles('apps/api/src', isApiSource);
   const ownerPrefixes = config.writeRules?.ownerPathPrefixes || [];
   const allowedOwners = config.writeRules?.allowedOwners || {};
   const crossDomainWriters = config.writeRules?.crossDomainWriters || {};
+  const timerForbidden = (config.timerRules?.forbiddenSources || []).map(globToRegExp);
+  // Timers these files already hold stay; a new loop goes to a worker entry.
+  const timerAllowed = (config.timerRules?.allowedCurrentSources || []).map(globToRegExp);
 
   for (const filePath of fileSet) {
     const source = readSource(filePath);
@@ -125,10 +84,8 @@ export function checkApiSources({
       violations.push({ ruleId: 'direct-foreign-table-write', filePath, table, owners });
     }
 
-    const timerForbidden = (config.timerRules?.forbiddenSources || []).some((glob) =>
-      globToRegExp(glob).test(filePath)
-    );
-    if (timerForbidden) {
+    const matches = (glob: RegExp) => glob.test(filePath);
+    if (timerForbidden.some(matches) && !timerAllowed.some(matches)) {
       for (const timer of findTimers(source)) violations.push({ ruleId: 'api-listener-worker-timer', filePath, timer });
     }
   }

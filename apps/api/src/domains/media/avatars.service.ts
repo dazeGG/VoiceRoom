@@ -126,14 +126,15 @@ export function createAvatarsService(deps: AvatarsDeps) {
       return { status: 'not_found' };
     }
     if (result.previousAvatarKey !== avatarKey) await removeFile(result.previousAvatarKey, log);
-    return { status: 'updated', room: deps.announceRoomUpdate(room.id, result.room) };
+    // The broadcast card is the same for everyone; the answer goes to the owner.
+    return { status: 'updated', room: { ...deps.announceRoomUpdate(room.id, result.room), relationship: 'owner' } };
   }
 
   async function clearRoomAvatar(roomId: string, log: Log): Promise<Updated<{ room: LobbyRoom }> | NotFound> {
     const result = await deps.rooms().swapRoomAvatar(roomId, null);
     if (!result.room) return { status: 'not_found' };
     await removeFile(result.previousAvatarKey, log);
-    return { status: 'updated', room: deps.announceRoomUpdate(roomId, result.room) };
+    return { status: 'updated', room: { ...deps.announceRoomUpdate(roomId, result.room), relationship: 'owner' } };
   }
 
   async function openAvatar(key: string): Promise<Readable | null> {

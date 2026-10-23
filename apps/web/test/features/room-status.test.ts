@@ -95,6 +95,6 @@ test('voice failures are errors and a lost quality overrides a connected voice',
 });
 
 test('a reconnecting event channel is shown while the voice is not connected', () => {
-  state.serverConnection = 'lost';
+  state.serverConnection = 'reconnecting';
   expect(getConnectionStatusView()).toMatchObject({ stateName: 'connecting', label: 'Сервер переподключается' });
 });

@@ -329,6 +329,21 @@ test('room avatar writes are limited to owned static rooms and oversized uploads
   assert.equal(temporary.statusCode, 403);
   room.isStatic = true;
 
+  // The broadcast card says member for everyone; the answer goes to the owner.
+  const upload = await app.inject({
+    method: 'POST',
+    url: `/api/rooms/${ROOM_ID}/avatar`,
+    ...cookie('owner-token'),
+    ...multipart(image)
+  });
+  assert.equal(upload.statusCode, 200, upload.body);
+  assert.equal(checked(RoomCard, upload.json(), 'the room upload answer').room.relationship, 'owner');
+  const cleared = await app.inject({ method: 'DELETE', url: `/api/rooms/${ROOM_ID}/avatar`, ...cookie('owner-token') });
+  assert.equal(cleared.statusCode, 200, cleared.body);
+  const clearedRoom = checked(RoomCard, cleared.json(), 'the room avatar removal answer').room;
+  assert.equal(clearedRoom.avatarUrl, null);
+  assert.equal(clearedRoom.relationship, 'owner');
+
   const oversized = await app.inject({
     method: 'POST',
     url: '/api/auth/avatar',

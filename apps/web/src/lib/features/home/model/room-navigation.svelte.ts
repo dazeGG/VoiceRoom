@@ -29,10 +29,16 @@ export function connectedRoomIsViewed(mode: RoomShellMode): boolean {
   return Boolean(activeRoomId && roomNavigation.viewedRoomId === activeRoomId && mode === 'rooms');
 }
 
+// The room client to keep mounted. One off screen stays only for its call: when
+// that call ends (left, kicked, dropped) the client goes with it, so it never
+// shows over the room on screen.
+export function mountedRoomId(): string | null {
+  const { embeddedRoomId, viewedRoomId } = roomNavigation;
+  return embeddedRoomId && (getActiveVoiceRoomId() || viewedRoomId === embeddedRoomId) ? embeddedRoomId : null;
+}
+
 export function embeddedRoomIsVisible(mode: RoomShellMode): boolean {
-  return Boolean(
-    roomNavigation.embeddedRoomId && mode === 'rooms' && (!getActiveVoiceRoomId() || connectedRoomIsViewed(mode))
-  );
+  return Boolean(mountedRoomId() && mode === 'rooms' && (!getActiveVoiceRoomId() || connectedRoomIsViewed(mode)));
 }
 
 export function setViewedRoomFromRoute(roomId: string): void {
@@ -40,8 +46,12 @@ export function setViewedRoomFromRoute(roomId: string): void {
 }
 
 export function routeToRoom(roomId: string): void {
+  // First drop a client whose call ended off screen, so it cannot come back as this room.
+  clearDisconnectedHiddenEmbed();
   roomNavigation.viewedRoomId = roomId;
   roomNavigation.joinIntentRoomId = null;
+  // Then drop the call-less client the user just browsed away from.
+  clearDisconnectedHiddenEmbed();
 }
 
 export function selectRoomPreview(roomId: string): void {
@@ -65,6 +75,7 @@ export function openActiveVoiceRoom(): string | null {
 
 export function clearViewedRoom(): void {
   roomNavigation.viewedRoomId = null;
+  clearDisconnectedHiddenEmbed();
 }
 
 export function routeToHome(): { closeEmbeddedRoom: boolean } {

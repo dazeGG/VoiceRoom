@@ -27,8 +27,8 @@ function createMessageModerationService({
   publishMessageDeleted = () => {},
   now = Date.now
 }: {
-  pool?: pg.Pool | null;
-  moderationService?: {
+  pool: pg.Pool;
+  moderationService: {
     authorizeOwner(roomId: string, actorUserId: string, options: { client: QueryClient }): Promise<boolean>;
   };
   attachmentRepository: ModerationAttachments;
@@ -36,11 +36,6 @@ function createMessageModerationService({
   publishMessageDeleted?: (deletion: MessageDeletion) => unknown;
   now?: () => number;
 }) {
-  if (!pool?.connect || !moderationService?.authorizeOwner) {
-    throw new TypeError('Message moderation requires a pool and moderation service');
-  }
-  const owners = moderationService;
-
   async function deleteRoomMessage({
     roomId,
     messageId,
@@ -51,7 +46,7 @@ function createMessageModerationService({
     actorUserId?: string;
   } = {}): Promise<MessageDeletionOutcome> {
     if (!roomId || !messageId || !actorUserId) return { status: 'invalid', deletion: null };
-    return remove(roomId, messageId, (client) => owners.authorizeOwner(roomId, actorUserId, { client }));
+    return remove(roomId, messageId, (client) => moderationService.authorizeOwner(roomId, actorUserId, { client }));
   }
 
   // The service operator removes a reported message from any room; the caller

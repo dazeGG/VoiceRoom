@@ -9,11 +9,7 @@ import { Nullable, Ok } from './http.ts';
 
 export const STAFF_ROLES = ['moderator', 'admin', 'superadmin'] as const;
 export type StaffRole = (typeof STAFF_ROLES)[number];
-export const StaffRoleSchema = Type.Union([
-  Type.Literal('moderator'),
-  Type.Literal('admin'),
-  Type.Literal('superadmin')
-]);
+export const StaffRoleSchema = Type.Enum(STAFF_ROLES);
 
 export const STAFF_PERMISSIONS = [
   /** Open reports: read and resolve them. */
@@ -34,16 +30,7 @@ export const STAFF_PERMISSIONS = [
   'staff.manage'
 ] as const;
 export type StaffPermission = (typeof STAFF_PERMISSIONS)[number];
-export const StaffPermissionSchema = Type.Union([
-  Type.Literal('reports.review'),
-  Type.Literal('rooms.view'),
-  Type.Literal('origin.view'),
-  Type.Literal('accounts.view'),
-  Type.Literal('accounts.moderate'),
-  Type.Literal('accounts.manage'),
-  Type.Literal('stats.view'),
-  Type.Literal('staff.manage')
-]);
+export const StaffPermissionSchema = Type.Enum(STAFF_PERMISSIONS);
 
 const MODERATOR: readonly StaffPermission[] = ['reports.review', 'rooms.view', 'accounts.view', 'accounts.moderate'];
 const ADMIN: readonly StaffPermission[] = [...MODERATOR, 'origin.view', 'accounts.manage', 'stats.view'];

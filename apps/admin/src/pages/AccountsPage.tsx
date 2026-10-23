@@ -4,16 +4,11 @@
 
 import { ArrowDown, ArrowUp, Globe, Monitor, Search, Smartphone } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import type {
-  AccountRow,
-  AccountsFilter,
-  AccountsPage as AccountsPageData,
-  AccountsSort
-} from '@voice-room/shared/contracts/admin';
+import type { AccountRow, AccountsFilter, AccountsSort } from '@voice-room/shared/contracts/admin';
 import { ACCOUNT_FILTERS, SORT_COLUMNS } from '../accounts.ts';
 import { fetchAccounts } from '../api/admin.ts';
 import { formatAgo, formatCount, formatMinutes, formatNumericDate } from '../format.ts';
-import { loadFailure, type LoadFailure } from '../load-state.ts';
+import { useAdminResource } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { AccountBadge, Avatar, Button, Empty, Pill, Segment } from '../ui/index.tsx';
 import { AccountCard } from './AccountCard.tsx';
@@ -40,14 +35,19 @@ export function AccountsPage({
   const [sort, setSort] = useState<AccountsSort>('created');
   const [order, setOrder] = useState<'asc' | 'desc'>('desc');
   const [pageNumber, setPageNumber] = useState(1);
-  const [reload, setReload] = useState(0);
-  const [page, setPage] = useState<AccountsPageData | null>(null);
-  const [failure, setFailure] = useState<LoadFailure | null>(null);
-  // The request the list last heard back from; it is loading while that is not the current one.
-  const [settled, setSettled] = useState('');
-  const [now, setNow] = useState(() => Date.now());
-  const requestKey = [search, filter, sort, order, pageNumber, reload].join('|');
-  const loading = settled !== requestKey;
+  // A slower answer for a query already left behind is dropped.
+  const {
+    data: page,
+    failure,
+    busy: loading,
+    loadedAt,
+    reload
+  } = useAdminResource(
+    () => fetchAccounts({ filter, sort, order, page: String(pageNumber), ...(search ? { q: search } : {}) }),
+    [search, filter, sort, order, pageNumber],
+    { failureText: 'Не удалось загрузить аккаунты' }
+  );
+  const now = loadedAt ?? 0;
 
   // The search goes to the server a moment after the last key.
   useEffect(() => {
@@ -57,28 +57,6 @@ export function AccountsPage({
     }, SEARCH_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [typed]);
-
-  useEffect(() => {
-    // A slower answer for a query already left behind is dropped.
-    let current = true;
-    fetchAccounts({ filter, sort, order, page: String(pageNumber), ...(search ? { q: search } : {}) }).then(
-      (loaded) => {
-        if (!current) return;
-        setPage(loaded);
-        setFailure(null);
-        setNow(Date.now());
-        setSettled(requestKey);
-      },
-      (cause: unknown) => {
-        if (!current) return;
-        setFailure(loadFailure(cause, 'Не удалось загрузить аккаунты'));
-        setSettled(requestKey);
-      }
-    );
-    return () => {
-      current = false;
-    };
-  }, [requestKey, search, filter, sort, order, pageNumber]);
 
   function changeFilter(value: AccountsFilter): void {
     setFilter(value);
@@ -97,7 +75,7 @@ export function AccountsPage({
   // Back from a card, the list shows what the card may have changed.
   function closeCard(): void {
     onOpenAccount(null);
-    setReload((value) => value + 1);
+    reload();
   }
 
   if (accountId) return <AccountCard key={accountId} userId={accountId} onBack={closeCard} />;
@@ -133,7 +111,7 @@ export function AccountsPage({
       </div>
 
       {failure && !page ? (
-        <Notice failure={failure} onRetry={() => setReload((value) => value + 1)} />
+        <Notice failure={failure} onRetry={reload} />
       ) : (
         <>
           {failure ? (

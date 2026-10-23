@@ -49,7 +49,7 @@ export type StoredReactor = {
 type Target = { type: string; messageId: string; emoji: string };
 
 function requireQuery<T extends QueryClient>(client: T | null | undefined): T {
-  if (!client || typeof client.query !== 'function') {
+  if (!client) {
     throw new TypeError('Reaction repository requires a PostgreSQL query client');
   }
   return client;
@@ -99,7 +99,6 @@ function createReactionRepository({ client }: { client?: ReactionPool | null } =
   // A raw pg transaction: the reaction service threads the client through
   // every call so the toggle and its summary commit together.
   async function transaction<T>(callback: (client: QueryClient) => Promise<T>): Promise<T> {
-    if (typeof callback !== 'function') throw new TypeError('Transaction callback is required');
     if (!canConnect(defaultClient)) return callback(queryClient());
     return runInTransaction(defaultClient, callback);
   }

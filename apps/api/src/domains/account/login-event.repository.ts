@@ -10,7 +10,8 @@ import {
   LOGIN_FAMILIARITY_WINDOW_MS,
   describeUserAgent
 } from '@voice-room/shared/account-security';
-import { LOGIN_EVENT_RETENTION_MS, cleanLocationLabel, mapLoginAlert, toDate } from './user-records.ts';
+import { toDate } from '../../platform/epoch-millis.ts';
+import { LOGIN_EVENT_RETENTION_MS, cleanLocationLabel, mapLoginAlert } from './user-records.ts';
 
 export function createLoginEventRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
@@ -184,3 +185,5 @@ export function createLoginEventRepository({ pool }: { pool: pg.Pool }) {
     pruneLoginEvents
   };
 }
+
+export type LoginEventRepository = ReturnType<typeof createLoginEventRepository>;

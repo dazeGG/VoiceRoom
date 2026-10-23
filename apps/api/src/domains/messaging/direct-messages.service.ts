@@ -4,7 +4,7 @@
 // order the legacy handlers ran them.
 
 import type { AccountMessage } from '../../realtime/account-events.ts';
-import type { DirectMessage as DirectMessageView } from '@voice-room/shared/contracts/messages';
+import type { DirectMessage as DirectMessageView, DirectRead } from '@voice-room/shared/contracts/messages';
 import type { PublicUser } from '@voice-room/shared/contracts/users';
 import { publicUser } from '../account/user-records.ts';
 import { isStoredDirectMessage } from '../social/social-records.ts';
@@ -24,6 +24,8 @@ import type { RateCheck } from '../../lib/rate-limit.ts';
 
 type Status<T extends string> = T extends string ? { status: T } : never;
 type RateLimited = { status: 'rate_limited'; retryAfterSeconds: number };
+/** What a read answers besides `ok`: how far a cursor got, or how many were marked. */
+type ReadResult = Omit<DirectRead, 'ok'>;
 
 /** A direct message as the store reads it: the contract shape plus what stays server-side. */
 export type DirectMessage = DirectMessageView & { idempotencyReplay?: boolean; deletedAt?: number | null };
@@ -63,7 +65,7 @@ type Projection = (
 export interface DirectMessagesDeps {
   messages(): { direct: DirectMessageStore };
   readService(): {
-    advanceDm(input: { cursor: string; peerId: string; userId: string }): Promise<Record<string, unknown>>;
+    advanceDm(input: { cursor: string; peerId: string; userId: string }): Promise<ReadResult>;
   };
   friends(): {
     areFriends(a: string, b: string): Promise<boolean>;
@@ -257,14 +259,14 @@ export function createDirectMessagesService(deps: DirectMessagesDeps) {
   }
 
   // A cursor advances the durable read point; without one everything up to
-  // now is read. A refused cursor throws a MessageReadError that carries its
+  // now is read. A refused cursor throws a DomainError that carries its
   // own status and code; any other failure is a server error. Both reach the
   // central error handler unchanged.
   async function markRead(
     userId: string,
     peerId: string,
     cursor: unknown
-  ): Promise<{ status: 'read'; result: Record<string, unknown> }> {
+  ): Promise<{ status: 'read'; result: ReadResult }> {
     if (typeof cursor === 'string' && cursor) {
       const result = await deps.readService().advanceDm({ cursor, peerId, userId });
       deps.notifyUser(peerId, { type: 'dm-read', userId });

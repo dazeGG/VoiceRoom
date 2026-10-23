@@ -63,12 +63,9 @@ function contentChunks(source: MediaSource): ByteChunks {
   return Buffer.isBuffer(source) || source instanceof Uint8Array ? [source] : source;
 }
 
-function createMediaStorage({ rootDir, mediaDir }: { rootDir?: string; mediaDir?: string } = {}) {
-  const configuredRoot = rootDir || mediaDir;
-  if (typeof configuredRoot !== 'string' || !configuredRoot.trim()) {
-    throw new TypeError('A private media storage directory is required');
-  }
-  const root = path.resolve(configuredRoot);
+function createMediaStorage({ rootDir }: { rootDir: string }) {
+  if (!rootDir.trim()) throw new TypeError('A private media storage directory is required');
+  const root = path.resolve(rootDir);
   let canonicalRoot: string | null = null;
 
   async function assertDirectory(directory: string, expectedRealPath: string): Promise<void> {

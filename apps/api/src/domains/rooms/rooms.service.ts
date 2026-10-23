@@ -91,7 +91,8 @@ export function createRoomsService(deps: RoomsServiceDeps) {
     const updated = await deps.store().updateRoom(roomId, { name });
     // Lost a race with a concurrent delete (UPDATE matched 0 rows).
     if (!updated) return { status: 'not_found' };
-    return { status: 'renamed', room: deps.announceRoomUpdate(roomId, updated) };
+    // The broadcast card is the same for everyone; the answer goes to the owner.
+    return { status: 'renamed', room: { ...deps.announceRoomUpdate(roomId, updated), relationship: 'owner' } };
   }
 
   async function remove(roomId: string, request: RequestLog): Promise<{ status: 'deleted' | 'not_found' }> {

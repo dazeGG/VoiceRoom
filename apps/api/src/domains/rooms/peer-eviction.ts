@@ -12,13 +12,13 @@ import type { LiveRoom, PresencePeer } from './room-views.ts';
 export type EvictionType = 'room.kicked' | 'room.banned';
 
 export interface EvictionStore {
-  revokeLiveKitGatePeer?(input: {
+  revokeLiveKitGatePeer(input: {
     roomId: string;
     peerId: string;
     accountUserId: string | null;
     guestPrincipalId: string;
   }): Promise<unknown>;
-  invalidatePeerIdentity?(input: { roomId: string; peerId: string }): Promise<unknown>;
+  invalidatePeerIdentity(input: { roomId: string; peerId: string }): Promise<unknown>;
 }
 
 export interface ReconnectRuntime {
@@ -71,7 +71,7 @@ export function createPeerEviction(deps: PeerEvictionDeps) {
   ) {
     const store = deps.store();
     let failure: unknown = null;
-    if (!ownershipFinalized && !gateAlreadyRevoked && typeof store.revokeLiveKitGatePeer === 'function') {
+    if (!ownershipFinalized && !gateAlreadyRevoked) {
       try {
         await store.revokeLiveKitGatePeer({
           roomId: room.id,
@@ -89,12 +89,10 @@ export function createPeerEviction(deps: PeerEvictionDeps) {
     if (!ownershipFinalized) {
       deps.closePeer(room.id, peer.id, peer.transport?.id, type === 'room.banned' ? 'banned' : 'kicked');
     }
-    if (typeof store.invalidatePeerIdentity === 'function') {
-      try {
-        await store.invalidatePeerIdentity({ roomId: room.id, peerId: peer.id });
-      } catch (error) {
-        failure ||= error;
-      }
+    try {
+      await store.invalidatePeerIdentity({ roomId: room.id, peerId: peer.id });
+    } catch (error) {
+      failure ||= error;
     }
     if (!ownershipFinalized) {
       try {

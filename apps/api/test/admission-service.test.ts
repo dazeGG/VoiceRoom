@@ -299,7 +299,7 @@ test('account admissions persist membership and revoke the credential when that 
 
   for (const [status, reason] of [
     ['banned', 'room_banned'],
-    ['conflict', 'membership_persist_failed']
+    ['not_found', 'membership_persist_failed']
   ] as const) {
     const refused = setup({
       memberships: () => ({ service: { persistSuccessfulAdmission: async () => ({ status }) } })

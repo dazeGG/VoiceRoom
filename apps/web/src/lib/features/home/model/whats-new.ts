@@ -1,5 +1,5 @@
 import { WHATS_NEW_VERSION, hasUnseenWhatsNew } from '@voice-room/shared/account-security';
-import type { WhatsNewState } from '$lib/api/auth';
+import type { WhatsNew } from '$lib/api/auth';
 
 export interface WhatsNewSlide {
   image: string;
@@ -38,6 +38,6 @@ export const WHATS_NEW_SLIDES: readonly [WhatsNewSlide, ...WhatsNewSlide[]] = [
 // How long a slide stays up before the next one comes on its own.
 export const WHATS_NEW_SLIDE_MS = 6000;
 
-export function shouldShowWhatsNew(state: WhatsNewState): boolean {
+export function shouldShowWhatsNew(state: WhatsNew): boolean {
   return state.current === WHATS_NEW_VERSION && hasUnseenWhatsNew(state.lastSeen, state.current);
 }

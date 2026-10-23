@@ -8,6 +8,8 @@ import {
   type AttachmentContext,
   type AttachmentDraft
 } from '../../api/attachments';
+import { newId } from '../new-id';
+import { readStorage, removeStorage, writeStorage } from '../storage';
 
 export interface ComposeDraft extends AttachmentDraft {
   file: File | null;
@@ -34,13 +36,11 @@ export class AttachmentComposeStore {
     readonly contextId: string
   ) {
     this.storageKey = `voice-room:attachment-drafts:${context}:${contextId}`;
-    if (typeof localStorage !== 'undefined') {
-      try {
-        const ids: unknown = JSON.parse(localStorage.getItem(this.storageKey) || '[]');
-        if (isArray(ids) && ids.length) void this.resume(ids.filter((id): id is string => typeof id === 'string'));
-      } catch {
-        localStorage.removeItem(this.storageKey);
-      }
+    try {
+      const ids: unknown = JSON.parse(readStorage(this.storageKey) || '[]');
+      if (isArray(ids) && ids.length) void this.resume(ids.filter((id): id is string => typeof id === 'string'));
+    } catch {
+      removeStorage(this.storageKey);
     }
   }
 
@@ -69,7 +69,7 @@ export class AttachmentComposeStore {
       const slot = await createAttachmentSlot({
         context: this.context,
         bytes: file.size,
-        clientRequestId: crypto.randomUUID()
+        clientRequestId: newId()
       });
       this.drafts.push({
         ...slot,
@@ -152,9 +152,8 @@ export class AttachmentComposeStore {
   }
 
   private persist(): void {
-    if (typeof localStorage === 'undefined') return;
-    if (this.drafts.length) localStorage.setItem(this.storageKey, JSON.stringify(this.drafts.map((draft) => draft.id)));
-    else localStorage.removeItem(this.storageKey);
+    if (this.drafts.length) writeStorage(this.storageKey, JSON.stringify(this.drafts.map((draft) => draft.id)));
+    else removeStorage(this.storageKey);
   }
 
   clearBound(): void {

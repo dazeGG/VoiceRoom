@@ -35,8 +35,8 @@ function createNotificationDeliveryWorker({
   logger = createLogger({ name: 'worker.notification-delivery' }),
   observeOldestPending = recordNotificationOldestPending
 }: {
-  outbox?: NotificationOutboxRepository;
-  provider?: Provider;
+  outbox: NotificationOutboxRepository;
+  provider: Provider;
   batchSize?: number;
   leaseMs?: number;
   renewMs?: number;
@@ -44,8 +44,7 @@ function createNotificationDeliveryWorker({
   maxAttempts?: number;
   logger?: WorkerLogger;
   observeOldestPending?: (ageMs: unknown) => void;
-} = {}) {
-  if (!outbox || !provider) throw new TypeError('Notification outbox and provider are required');
+}) {
   const store = outbox;
   const push = provider;
   let disabledReason = '';

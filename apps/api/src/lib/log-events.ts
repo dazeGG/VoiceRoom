@@ -39,6 +39,7 @@ const LOG_EVENTS = Object.freeze({
   // Realtime transport.
   WS_CONNECTED: 'ws.connected',
   WS_CLOSED: 'ws.closed',
+  WS_CONNECT_FAILED: 'ws.connect_failed',
   WS_REJECTED_OVER_LIMIT: 'ws.rejected_over_limit',
   WS_MESSAGE_FAILED: 'ws.message_failed',
   WS_MESSAGE_REJECTED: 'ws.message_rejected',

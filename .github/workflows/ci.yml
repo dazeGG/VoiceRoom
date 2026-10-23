@@ -89,6 +89,7 @@ jobs:
       - run: npm ci
       - run: npm --workspace @voice-room/shared run test
       - run: npm --workspace @voice-room/api run test
+      - run: node --test scripts/test/*.test.mts
 
   test-web:
     name: Web tests

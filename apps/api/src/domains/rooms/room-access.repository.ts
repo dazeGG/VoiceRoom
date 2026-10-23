@@ -3,25 +3,22 @@
 
 import { sql } from 'kysely';
 import type pg from 'pg';
+import { RoomRelationship } from '@voice-room/shared/contracts/rooms';
 import { isOneOf } from '@voice-room/shared/guards';
 import { transaction } from '../../platform/db/pool.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
+import { toDate, toMillis } from '../../platform/epoch-millis.ts';
 import type { ActiveBanService } from '../moderation/active-ban.service.ts';
 import { createRowId } from '../../platform/db/ids.ts';
-import {
-  mapRoom,
-  mapRoomOrNull,
-  normalizePositiveInt,
-  toDate,
-  toMillis,
-  type RoomRelationship,
-  type StoredRoom
-} from './room.repository.ts';
+import { mapRoom, mapRoomOrNull, normalizePositiveInt, type StoredRoom } from './room.repository.ts';
 
 type BanChecks = Pick<ActiveBanService, 'isBanned' | 'filterEligibleUserIds'>;
 
+const RELATIONSHIPS = RoomRelationship.anyOf.map((literal) => literal.const);
+
+// A relationship the listing did not name is the weakest one, never ownership.
 function withRelationship(room: StoredRoom, relationship: unknown): StoredRoom & { relationship: RoomRelationship } {
-  return { ...room, relationship: isOneOf(['owner', 'bookmarked', 'member'], relationship) ? relationship : '' };
+  return { ...room, relationship: isOneOf(RELATIONSHIPS, relationship) ? relationship : 'member' };
 }
 
 // Messages count as unread after the reader's cursor; without a cursor, history
@@ -295,9 +292,9 @@ export function createRoomAccessRepository({ db, pool, bans }: { db: Database; p
   }
 
   async function removeRoomBookmarkForUser(userId: string | null | undefined, roomId: string | null | undefined) {
-    if (!userId || !roomId) return { removed: false, status: 'not_found' };
+    if (!userId || !roomId) return { removed: false, status: 'not_found' as const };
     return db.transaction().execute(async (trx) => {
-      if (await isOwner(trx, roomId, userId)) return { removed: false, status: 'owner' };
+      if (await isOwner(trx, roomId, userId)) return { removed: false, status: 'owner' as const };
       const removed = await trx
         .deleteFrom('room_bookmarks')
         .where('room_id', '=', roomId)
@@ -310,7 +307,7 @@ export function createRoomAccessRepository({ db, pool, bans }: { db: Database; p
         .where('user_id', '=', userId)
         .where('role', '=', 'member')
         .execute();
-      return { removed: removed.numDeletedRows > 0n, status: 'removed' };
+      return { removed: removed.numDeletedRows > 0n, status: 'removed' as const };
     });
   }
 

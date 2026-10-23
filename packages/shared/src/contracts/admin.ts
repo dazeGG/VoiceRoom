@@ -5,6 +5,7 @@
 
 import { Type, type Static } from 'typebox';
 import { Nullable, Ok } from './http.ts';
+import { ReportReasonSchema } from './reports.ts';
 import { StaffRoleSchema } from './staff.ts';
 import { AccountBadge } from './users.ts';
 
@@ -14,7 +15,7 @@ export const AdminReportsEvent = Type.Object({
   /** Set when the change is a new report. */
   filed: Nullable(
     Type.Object({
-      reason: Type.Union([Type.Literal('spam'), Type.Literal('abuse'), Type.Literal('illegal'), Type.Literal('other')]),
+      reason: ReportReasonSchema,
       targetKind: Type.Union([Type.Literal('room_message'), Type.Literal('direct_message')]),
       roomName: Nullable(Type.String())
     })
@@ -355,9 +356,9 @@ export const RoomAccount = Type.Object({
 });
 export type RoomAccount = Static<typeof RoomAccount>;
 
-/** Someone in a room's voice now: an account, or a guest known only by the name given to the room. */
-/** The desktop app, a phone or a browser on a computer. */
-const ClientKindSchema = Type.Union([Type.Literal('desktop_app'), Type.Literal('mobile'), Type.Literal('browser')]);
+/** Which kind of client a user agent is: the desktop app, a phone, or a browser on a computer. */
+export const ClientKind = Type.Union([Type.Literal('desktop_app'), Type.Literal('mobile'), Type.Literal('browser')]);
+export type ClientKind = Static<typeof ClientKind>;
 
 /**
  * Where someone came from, without their address: `ipKey` is a keyed hash of the
@@ -375,6 +376,7 @@ const DeviceInfo = {
   browser: Type.String()
 };
 
+/** Someone in a room's voice now: an account, or a guest known only by the name given to the room. */
 export const LiveRoomPeer = Type.Object({
   peerId: Type.String(),
   name: Type.String(),
@@ -386,7 +388,7 @@ export const LiveRoomPeer = Type.Object({
   deafened: Type.Boolean(),
   screen: Type.Boolean(),
   /** The desktop app, a phone or a browser; null when the socket sent no user agent. */
-  client: Nullable(ClientKindSchema),
+  client: Nullable(ClientKind),
   ...DeviceInfo,
   /** The lasting id of a guest's browser; null for an account or a guest that sent none. */
   guestId: Nullable(Type.String()),
@@ -439,7 +441,7 @@ export const RoomStay = Type.Object({
    * recorded before they were kept; the guest fields and the origin are cleared
    * together with the room after VOICE_HISTORY_KEEP_DAYS.
    */
-  client: Nullable(ClientKindSchema),
+  client: Nullable(ClientKind),
   os: Nullable(Type.String()),
   browser: Nullable(Type.String()),
   ...NetworkOrigin,

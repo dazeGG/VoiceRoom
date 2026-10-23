@@ -2,10 +2,16 @@
 // building the page of active bans (its shape is contracts/moderation.ts) with
 // the banned account's profile when it is known.
 
-import type { Ban, BanPage, BanProfile } from './contracts/moderation.ts';
-import { isOneOf, isRecord, pageInfoOf, trimmedText } from './guards.ts';
+import {
+  MODERATION_DURATIONS,
+  type Ban,
+  type BanPage,
+  type BanProfile,
+  type ModerationDuration
+} from './contracts/moderation.ts';
+import { isOneOf, isRecord, pageInfoOf, pageLimitOf, trimmedText } from './guards.ts';
 
-export type ModerationDuration = '1h' | '1d' | '7d' | 'permanent';
+export { MODERATION_DURATIONS, type ModerationDuration };
 export interface BanMutation {
   userId: string | null;
   guestIp: string | null;
@@ -15,28 +21,16 @@ export interface BanMutation {
 
 type Loose = Record<string, unknown>;
 
-export const MODERATION_CONTRACT_VERSION = 1 as const;
+const MODERATION_CONTRACT_VERSION = 1 as const;
 export const MODERATION_DEFAULT_LIMIT = 50 as const;
 export const MODERATION_MAX_LIMIT = 100 as const;
 export const MODERATION_REASON_MAX_LENGTH = 500 as const;
-export const MODERATION_DURATIONS: readonly ['1h', '1d', '7d', 'permanent'] = Object.freeze([
-  '1h',
-  '1d',
-  '7d',
-  'permanent'
-] as const);
 export const MODERATION_DURATION_MS: Readonly<Record<ModerationDuration, number | null>> = Object.freeze({
   '1h': 60 * 60 * 1000,
   '1d': 24 * 60 * 60 * 1000,
   '7d': 7 * 24 * 60 * 60 * 1000,
   permanent: null
 });
-
-export function normalizeModerationLimit(value: unknown, fallback: number = MODERATION_DEFAULT_LIMIT): number {
-  const numeric = Number(value);
-  if (!Number.isInteger(numeric) || numeric < 1) return fallback;
-  return Math.min(numeric, MODERATION_MAX_LIMIT);
-}
 
 export function normalizeBanDuration(value: unknown): ModerationDuration | null {
   return isOneOf(MODERATION_DURATIONS, value) ? value : null;
@@ -66,7 +60,7 @@ export function normalizeIdempotencyKey(value: unknown): string | null {
 export function normalizeModerationPageRequest(value: Loose = {}): { cursor?: string | undefined; limit: number } {
   return {
     cursor: trimmedText(value.cursor, 4096) || undefined,
-    limit: normalizeModerationLimit(value.limit)
+    limit: pageLimitOf(value.limit, MODERATION_DEFAULT_LIMIT, MODERATION_MAX_LIMIT)
   };
 }
 
@@ -117,15 +111,15 @@ export function buildModerationPage({
   nextCursor,
   hasMore = false
 }: {
-  roomId?: unknown;
-  bans?: unknown[];
-  nextCursor?: unknown;
-  hasMore?: unknown;
-} = {}): BanPage {
+  roomId: string;
+  bans?: readonly Ban[];
+  nextCursor?: string | undefined;
+  hasMore?: boolean;
+}): BanPage {
   return {
     contractVersion: MODERATION_CONTRACT_VERSION,
     roomId: trimmedText(roomId, 48),
-    bans: Array.isArray(bans) ? bans.map(normalizeActiveBan).filter((ban): ban is Ban => Boolean(ban)) : [],
+    bans: bans.map(normalizeActiveBan).filter((ban): ban is Ban => Boolean(ban)),
     pageInfo: pageInfoOf(nextCursor, hasMore)
   };
 }

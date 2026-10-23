@@ -243,16 +243,14 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
     if (record.state === 'finalizer-failed' || record.state === 'terminal-finalizer-failed') {
       return { state: 'failed-finalizer', record };
     }
-    if (record.state === 'terminal') {
-      const permitsNewJoinIntent = record.terminalReason === 'left';
-      if (permitsNewJoinIntent && joinRequestSequence > record.terminalAtJoinSequence) {
-        if (record.timer) cancelTimeout(record.timer);
-        reconnectLeases.delete(record.key);
-        return { state: 'none', record: null };
-      }
-      return { state: 'terminal', record };
+    // Every other state is handled above: the record is terminal.
+    const permitsNewJoinIntent = record.terminalReason === 'left';
+    if (permitsNewJoinIntent && joinRequestSequence > record.terminalAtJoinSequence) {
+      if (record.timer) cancelTimeout(record.timer);
+      reconnectLeases.delete(record.key);
+      return { state: 'none', record: null };
     }
-    return { state: record.state, record };
+    return { state: 'terminal', record };
   }
 
   function restoreClaimedLease(record: LeaseRecord): boolean {
@@ -301,6 +299,12 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
     }
     if (record.state !== 'finalizing-expiry') record.state = 'terminal-finalizing';
     return record;
+  }
+
+  // Ends a lease that a refused join had claimed: terminal, its seat finalized.
+  function terminateLease(record: LeaseRecord, reason: LeaseReason): void {
+    terminalClaimRecord(record, reason, null);
+    startLeaseFinalizer(record, record.terminalReason || reason);
   }
 
   function recordsForPeer(
@@ -465,7 +469,7 @@ export function createReconnectLeases(deps: ReconnectLeaseDeps) {
     claim: claimReconnectLease,
     restoreClaimed: restoreClaimedLease,
     completeClaimed: completeClaimedLease,
-    startFinalizer: startLeaseFinalizer,
+    terminate: terminateLease,
     retryFailedFinalizer: retryFailedLeaseFinalizer,
     finalize: finalizeReconnectLease,
     finalizePending: finalizePendingReconnectLease,

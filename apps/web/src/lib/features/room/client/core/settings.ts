@@ -31,6 +31,7 @@ import {
   type NoiseMode
 } from './config';
 import { isRecord } from '@voice-room/shared/guards';
+import { readStorage, writeStorage } from '$lib/shared/storage';
 
 export function isNoiseMode(mode: unknown): mode is NoiseMode {
   return typeof mode === 'string' && Object.hasOwn(NOISE_MODES, mode);
@@ -41,11 +42,11 @@ export function getNoiseMode(mode: unknown): NoiseMode {
 }
 
 export function getStoredNoiseMode(): NoiseMode {
-  return getNoiseMode(localStorage.getItem(NOISE_MODE_STORAGE_KEY));
+  return getNoiseMode(readStorage(NOISE_MODE_STORAGE_KEY));
 }
 
 export function getStoredNotificationVolume(): number {
-  const parsed = Number.parseInt(localStorage.getItem(NOTIFICATION_VOLUME_STORAGE_KEY) || '', 10);
+  const parsed = Number.parseInt(readStorage(NOTIFICATION_VOLUME_STORAGE_KEY) || '', 10);
   if (!Number.isFinite(parsed)) return DEFAULT_NOTIFICATION_VOLUME;
   return Math.min(MAX_NOTIFICATION_VOLUME, Math.max(0, parsed));
 }
@@ -55,49 +56,47 @@ export function getNotificationVolumeMultiplier(): number {
 }
 
 export function getStoredMasterVolume(): number {
-  const parsed = Number.parseInt(localStorage.getItem(MASTER_VOLUME_STORAGE_KEY) || '', 10);
+  const parsed = Number.parseInt(readStorage(MASTER_VOLUME_STORAGE_KEY) || '', 10);
   if (!Number.isFinite(parsed)) return DEFAULT_MASTER_VOLUME;
   return Math.min(MAX_MASTER_VOLUME, Math.max(0, parsed));
 }
 
 export function getStoredMicrophoneVolume(): number {
-  const parsed = Number.parseInt(localStorage.getItem(MICROPHONE_VOLUME_STORAGE_KEY) || '', 10);
+  const parsed = Number.parseInt(readStorage(MICROPHONE_VOLUME_STORAGE_KEY) || '', 10);
   if (!Number.isFinite(parsed)) return DEFAULT_MICROPHONE_VOLUME;
   return Math.min(MAX_MICROPHONE_VOLUME, Math.max(0, parsed));
 }
 
 export function persistMicrophoneVolume(volume: number): number {
   const value = Math.min(MAX_MICROPHONE_VOLUME, Math.max(0, Math.round(volume)));
-  localStorage.setItem(MICROPHONE_VOLUME_STORAGE_KEY, String(value));
+  writeStorage(MICROPHONE_VOLUME_STORAGE_KEY, String(value));
   return value;
 }
 
 export function getStoredMicrophoneMode(): MicrophoneMode {
   if (!window.voiceRoomRuntime?.isDesktop) return DEFAULT_MICROPHONE_MODE;
-  return localStorage.getItem(MICROPHONE_MODE_STORAGE_KEY) === 'push-to-talk'
-    ? 'push-to-talk'
-    : DEFAULT_MICROPHONE_MODE;
+  return readStorage(MICROPHONE_MODE_STORAGE_KEY) === 'push-to-talk' ? 'push-to-talk' : DEFAULT_MICROPHONE_MODE;
 }
 
 export function persistMicrophoneMode(mode: MicrophoneMode): MicrophoneMode {
   const value = mode === 'push-to-talk' ? mode : DEFAULT_MICROPHONE_MODE;
-  localStorage.setItem(MICROPHONE_MODE_STORAGE_KEY, value);
+  writeStorage(MICROPHONE_MODE_STORAGE_KEY, value);
   return value;
 }
 
 export function persistOutputMuted(muted: boolean): void {
-  localStorage.setItem(OUTPUT_MUTED_STORAGE_KEY, String(Boolean(muted)));
+  writeStorage(OUTPUT_MUTED_STORAGE_KEY, String(Boolean(muted)));
 }
 
 export function persistNotificationVolume(volume: number): number {
   const value = Math.min(MAX_NOTIFICATION_VOLUME, Math.max(0, Math.round(volume)));
-  localStorage.setItem(NOTIFICATION_VOLUME_STORAGE_KEY, String(value));
+  writeStorage(NOTIFICATION_VOLUME_STORAGE_KEY, String(value));
   return value;
 }
 
 export function persistMasterVolume(volume: number): number {
   const value = Math.min(MAX_MASTER_VOLUME, Math.max(0, Math.round(volume)));
-  localStorage.setItem(MASTER_VOLUME_STORAGE_KEY, String(value));
+  writeStorage(MASTER_VOLUME_STORAGE_KEY, String(value));
   return value;
 }
 
@@ -106,32 +105,32 @@ export function getNoiseModeLabel(mode: unknown): string {
 }
 
 export function getStoredGateThresholdDb(): number {
-  const storedValue = Number.parseInt(localStorage.getItem(GATE_THRESHOLD_DB_STORAGE_KEY) || '', 10);
+  const storedValue = Number.parseInt(readStorage(GATE_THRESHOLD_DB_STORAGE_KEY) || '', 10);
   if (Number.isFinite(storedValue)) return clampGateThresholdDb(storedValue);
 
-  const previousValue = Number.parseInt(localStorage.getItem(PREVIOUS_GATE_THRESHOLD_STORAGE_KEY) || '', 10);
+  const previousValue = Number.parseInt(readStorage(PREVIOUS_GATE_THRESHOLD_STORAGE_KEY) || '', 10);
   if (!Number.isFinite(previousValue)) return DEFAULT_GATE_THRESHOLD_DB;
 
   const migratedValue = previousGatePercentToDb(previousValue);
-  localStorage.setItem(GATE_THRESHOLD_DB_STORAGE_KEY, String(migratedValue));
+  writeStorage(GATE_THRESHOLD_DB_STORAGE_KEY, String(migratedValue));
   return migratedValue;
 }
 
 export function getStoredStreamVolume(): number {
-  const storedValue = Number.parseFloat(localStorage.getItem(STREAM_VOLUME_STORAGE_KEY) || '');
+  const storedValue = Number.parseFloat(readStorage(STREAM_VOLUME_STORAGE_KEY) || '');
   return Number.isFinite(storedValue) ? clampStreamVolume(storedValue) : DEFAULT_STREAM_VOLUME;
 }
 
 export function storeStreamVolume(volume: number, maxVolume = MAX_STREAM_VOLUME): number {
   const clampedVolume = clampStreamVolume(volume, maxVolume);
-  localStorage.setItem(STREAM_VOLUME_STORAGE_KEY, String(clampedVolume));
+  writeStorage(STREAM_VOLUME_STORAGE_KEY, String(clampedVolume));
   return clampedVolume;
 }
 
 export function normalizeStoredStreamVolume(volume: number, maxVolume = MAX_STREAM_VOLUME): number {
   const clampedVolume = clampStreamVolume(volume, maxVolume);
   if (volume !== clampedVolume) {
-    localStorage.setItem(STREAM_VOLUME_STORAGE_KEY, String(clampedVolume));
+    writeStorage(STREAM_VOLUME_STORAGE_KEY, String(clampedVolume));
   }
   return clampedVolume;
 }
@@ -180,7 +179,7 @@ const DEFAULT_PARTICIPANT_AUDIO_PREFERENCE: ParticipantAudioPreference = {
 
 function readParticipantAudioPreferences(): Record<string, unknown> {
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(PARTICIPANT_AUDIO_PREFERENCES_STORAGE_KEY) || '{}');
+    const parsed: unknown = JSON.parse(readStorage(PARTICIPANT_AUDIO_PREFERENCES_STORAGE_KEY) || '{}');
     return isRecord(parsed) ? parsed : {};
   } catch {
     return {};
@@ -188,7 +187,7 @@ function readParticipantAudioPreferences(): Record<string, unknown> {
 }
 
 function writeParticipantAudioPreferences(preferences: Record<string, unknown>): void {
-  localStorage.setItem(PARTICIPANT_AUDIO_PREFERENCES_STORAGE_KEY, JSON.stringify(preferences));
+  writeStorage(PARTICIPANT_AUDIO_PREFERENCES_STORAGE_KEY, JSON.stringify(preferences));
 }
 
 export function getParticipantAudioPreferenceKey(accountUserId: string, peerId: string): string {

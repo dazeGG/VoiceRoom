@@ -3,10 +3,11 @@ import { isRecord } from '@voice-room/shared/guards';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import { fromMicros, microsOf } from '../../platform/db/micros.ts';
+import type { CursorTuple } from '../../platform/cursor-codec.ts';
+import { epochMillis, toMillis } from '../../platform/epoch-millis.ts';
 import { normalizeLinkPreview, type LinkPreview } from '@voice-room/shared/link-preview';
 import { normalizeRoomMessageContent, type RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
 
-type Anchor = { createdAtMicros: unknown; id: string };
 type Direction = 'before' | 'after' | 'at-or-after';
 
 type RoomMessageRow = {
@@ -17,10 +18,10 @@ type RoomMessageRow = {
   author_name: string | null;
   text: string | null;
   content: unknown;
-  created_at: Date | string;
+  created_at: Date;
   created_at_micros: string;
-  edited_at: unknown;
-  expires_at: unknown;
+  edited_at: Date | null;
+  expires_at: Date | null;
   avatar_color_key: string | null;
   avatar_key: string | null;
   avatar_accent: string | null;
@@ -36,10 +37,10 @@ export type HistoryRoomMessage = {
   name: string;
   text: string;
   content: RoomMessageContentV1 | undefined;
-  createdAt: string;
+  createdAt: number;
   createdAtMicros: string;
-  editedAt: unknown;
-  expiresAt: unknown;
+  editedAt: number | null;
+  expiresAt: number | null;
   avatarColorKey: string | null;
   avatarKey: string | null;
   avatarAccent: string | null;
@@ -48,7 +49,7 @@ export type HistoryRoomMessage = {
 };
 
 type Page = { messages: HistoryRoomMessage[]; hasMoreBefore: boolean; hasMoreAfter: boolean };
-type SideInput = { roomId: string; anchor: Anchor; limit?: unknown; now: Date };
+type SideInput = { roomId: string; anchor: CursorTuple; limit?: unknown; now: Date };
 
 function boundedLimit(value: unknown): number {
   return Math.max(1, Math.min(100, typeof value === 'number' && Number.isInteger(value) ? value : 50));
@@ -86,10 +87,10 @@ function mapRoomMessage(row: RoomMessageRow): HistoryRoomMessage {
     name: row.author_name || '',
     text: row.text || '',
     content: normalizeRoomMessageContent(row.content) ?? undefined,
-    createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+    createdAt: toMillis(row.created_at),
     createdAtMicros: row.created_at_micros,
-    editedAt: row.edited_at || null,
-    expiresAt: row.expires_at || null,
+    editedAt: epochMillis(row.edited_at),
+    expiresAt: epochMillis(row.expires_at),
     avatarColorKey: row.avatar_color_key || null,
     avatarKey: row.avatar_key || null,
     avatarAccent: row.avatar_accent || null,
@@ -113,7 +114,7 @@ function createRoomHistoryRepository({ pool }: { pool: pg.Pool }) {
     return Boolean(row);
   }
 
-  async function getAnchor({ roomId, messageId }: { roomId: string; messageId: string }): Promise<Anchor | null> {
+  async function getAnchor({ roomId, messageId }: { roomId: string; messageId: string }): Promise<CursorTuple | null> {
     const row = await db
       .selectFrom('room_messages')
       .select(['id', microsOf('created_at').as('created_at_micros')])

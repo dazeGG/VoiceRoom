@@ -47,12 +47,12 @@ interface LiveKitJwtPayload {
   room: unknown;
 }
 
-export function normalizeLiveKitRoomPrefix(value: string | null | undefined = process.env.LIVEKIT_ROOM_PREFIX): string {
+export function normalizeLiveKitRoomPrefix(value: string | null | undefined): string {
   const raw = value === undefined || value === null ? DEFAULT_ROOM_PREFIX : String(value);
   return raw.replace(/[^A-Za-z0-9_.:-]/g, '-');
 }
 
-export function getLiveKitRoomName(roomId: string, prefix: string = normalizeLiveKitRoomPrefix()): string {
+export function getLiveKitRoomName(roomId: string, prefix: string): string {
   return `${prefix}${roomId}`;
 }
 
@@ -102,7 +102,7 @@ export function verifyAccessTokenBinding({
   claims,
   requestUrl,
   headers = {},
-  roomPrefix = normalizeLiveKitRoomPrefix()
+  roomPrefix = DEFAULT_ROOM_PREFIX
 }: {
   claims?: GateClaims | null;
   requestUrl?: string | undefined;

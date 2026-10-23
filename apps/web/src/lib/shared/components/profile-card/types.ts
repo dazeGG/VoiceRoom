@@ -1,3 +1,4 @@
+import type { Relationship } from '@voice-room/shared/contracts/social';
 import type { PresenceStatus } from '$lib/shared/presence';
 
 /**
@@ -14,8 +15,8 @@ export interface ProfileCardPerson {
   presence: PresenceStatus;
 }
 
-/** Mirrors the friends API relationship plus the guest case. */
-export type ProfileCardRelationship = 'self' | 'friend' | 'outgoing' | 'incoming' | 'none' | 'unavailable';
+/** The friends API relationship plus oneself and the guest case. */
+export type ProfileCardRelationship = Relationship | 'self' | 'unavailable';
 
 export interface ProfileCardProps {
   person: ProfileCardPerson;

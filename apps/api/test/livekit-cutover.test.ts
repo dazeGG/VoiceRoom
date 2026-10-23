@@ -10,6 +10,7 @@ import { Pool } from 'pg';
 import { test } from 'node:test';
 import { Type } from 'typebox';
 import { checked } from './helpers/checked.ts';
+import { fake } from './fakes/index.ts';
 import type { CredentialProvider } from '../src/domains/admission/admission.service.ts';
 import type {
   CredentialIssue,
@@ -65,23 +66,34 @@ function upgrade(port: number, requestPath: string) {
 }
 
 test('G48-A04 real credential boundary survives restart, supports multitab, and rejects replay, tamper and ban-during-mint', async () => {
-  const rows = new Map<string, Parameters<GateRoomStore['createLiveKitGateCredential']>[0]>();
+  const rows = new Map<string, { peerId?: string | undefined; principalEpoch?: number | null | undefined }>();
   const epochs = new Map<string, number>();
   let revokeDuringCreate = false;
   const key = (principal: GatePrincipal, roomId: string) =>
     `${roomId}:${principal.principalType}:${principal.principalId}`;
-  const store: GateRoomStore = {
-    async assertLiveKitGateReady() {},
-    async getLiveKitGatePrincipalEpoch({ principal, roomId }) {
+  const store = fake<GateRoomStore>({
+    async assertLiveKitGateReady() {
+      return true;
+    },
+    async getLiveKitGatePrincipalEpoch({ principal, roomId } = {}) {
+      if (!principal || !roomId) return { status: 'invalid', epoch: null };
       return { status: 'ready', epoch: epochs.get(key(principal, roomId)) || 0 };
     },
-    async createLiveKitGateCredential(input) {
-      if (revokeDuringCreate) epochs.set(key(input.principal, input.roomId), (input.principalEpoch ?? 0) + 1);
-      rows.set(input.credentialHash, input);
-      return { status: 'created' };
+    async createLiveKitGateCredential({
+      credentialHash = '',
+      credentialId = '',
+      peerId,
+      principal,
+      principalEpoch,
+      roomId
+    } = {}) {
+      if (!principal || !roomId) return { status: 'invalid', credential: null };
+      if (revokeDuringCreate) epochs.set(key(principal, roomId), (principalEpoch ?? 0) + 1);
+      rows.set(credentialHash, { peerId, principalEpoch });
+      return { status: 'created', credential: { id: credentialId, principalEpoch: principalEpoch ?? 0, ...principal } };
     },
-    async verifyLiveKitGateCredential(input) {
-      const row = rows.get(input.credentialHash);
+    async verifyLiveKitGateCredential(input = {}) {
+      const row = rows.get(input.credentialHash || '');
       const epoch = epochs.get(`${input.roomId}:${input.principalType}:${input.principalId}`) || 0;
       return row &&
         row.peerId === input.peerId &&
@@ -90,12 +102,13 @@ test('G48-A04 real credential boundary survives restart, supports multitab, and 
         ? { status: 'allowed' }
         : { status: 'denied' };
     },
-    async revokeLiveKitGatePrincipal({ principal, roomId }) {
+    async revokeLiveKitGatePrincipal({ principal, roomId } = {}) {
+      if (!principal || !roomId) return { status: 'invalid', epoch: null };
       const next = (epochs.get(key(principal, roomId)) || 0) + 1;
       epochs.set(key(principal, roomId), next);
       return { status: 'revoked', epoch: next };
     }
-  };
+  });
   const principal: GatePrincipal = { principalType: 'account', principalId: 'user-1' };
   const boundary = createCredentialBoundaryService({ roomStore: store, secret: process.env.LIVEKIT_GATE_SECRET });
   const first = credentialOf(await boundary.issueCredential({ roomId: 'room', peerId: 'tab-one', principal }));

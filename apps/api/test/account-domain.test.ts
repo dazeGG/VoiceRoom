@@ -71,7 +71,7 @@ function harness(
     },
     async createSession(input) {
       calls.sessions.push(input);
-      return { token: 'tok', publicId: 'pub-1' };
+      return { token: 'tok', publicId: 'pub-1', tokenHash: 'hash-tok', expiresAt: 1 };
     },
     async getUserById(userId) {
       return storedUser({ id: userId, login: 'reloaded', displayName: 'Reloaded' });
@@ -79,13 +79,17 @@ function harness(
     async verifyCredentials(login, password) {
       return password === 'right-password' ? { ...USER, deletionRequestedAt: login === 'leaving' ? 1000 : null } : null;
     },
-    async deleteSession() {},
+    async deleteSession() {
+      return true;
+    },
     async updateDisplayName({ userId, displayName }) {
-      return userId === 'gone' ? null : storedUser({ id: userId, displayName });
+      return userId === 'gone'
+        ? null
+        : storedUser({ id: userId, ...(displayName === undefined ? {} : { displayName }) });
     },
     async changePassword({ userId, currentPassword }) {
       return {
-        status: userId === 'gone' ? 'not_found' : currentPassword === 'right-password' ? 'changed' : 'invalid_password'
+        status: userId === 'gone' ? 'not_found' : currentPassword === 'right-password' ? 'updated' : 'invalid_password'
       };
     },
     async getRecoveryCodesStatus() {
@@ -103,7 +107,9 @@ function harness(
         : { status: 'seen', whatsNewSeen: '9.9.9' };
     },
     async markAppPromptSeen({ userId }) {
-      return { status: userId === 'gone' ? 'not_found' : 'seen' };
+      return userId === 'gone'
+        ? { status: 'not_found', appPromptSeenAt: null }
+        : { status: 'seen', appPromptSeenAt: 1 };
     },
     async listPendingLoginAlerts() {
       return [ALERT];
@@ -129,7 +135,9 @@ function harness(
         : { status: 'invalid_password', codes: [] };
     },
     async recoverWithCode({ code }) {
-      return code === 'good' ? { status: 'recovered', user: storedUser(), remaining: 4 } : { status: 'invalid' };
+      return code === 'good'
+        ? { status: 'recovered', user: storedUser(), remaining: 4 }
+        : { status: 'invalid', user: null, remaining: 0 };
     },
     async recordLogin({ kind }) {
       if (kind === 'register') throw new Error('audit down');
@@ -161,7 +169,9 @@ function harness(
       return { graceDays: 7, rooms: [] };
     },
     async requestDeletion({ currentPassword }) {
-      return requests[currentPassword] ?? { status: 'invalid_password' };
+      return (
+        (typeof currentPassword === 'string' ? requests[currentPassword] : undefined) ?? { status: 'invalid_password' }
+      );
     },
     async restoreAccount({ login }) {
       return restores[login] ?? { status: 'invalid', userId: null };
@@ -288,7 +298,7 @@ test('profile, password, notices and recovery codes', async () => {
   assert.equal(generated.codes.length, 1);
   const empty = await harness({
     async generateRecoveryCodes() {
-      return { status: 'generated', codes: [] };
+      return { status: 'generated', codes: [], generatedAt: 1 };
     }
   }).service.generateRecoveryCodes('user-1', 'p');
   assert.ok('codes' in empty);
@@ -337,7 +347,7 @@ test('recovery replaces the password, ends other sessions and asks the other dev
   assert.deepEqual(calls.pushes, ['Вход по коду восстановления']);
   const noRemaining = await harness({
     async recoverWithCode() {
-      return { status: 'recovered', user: storedUser({ id: 'u' }) };
+      return { status: 'recovered', user: storedUser({ id: 'u' }), remaining: 0 };
     }
   }).service.recover({ login: 'a', code: 'c', newPassword: 'long-password', device });
   assert.ok('remaining' in noRemaining);

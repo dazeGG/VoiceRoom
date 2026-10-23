@@ -1,12 +1,14 @@
 import type pg from 'pg';
 import { readWorkerConfig } from '../app/config.ts';
+import type { MediaReconciliationService } from '../domains/media/media-reconciliation.service.ts';
 
 function createMediaReconciliationWorker({
-  reconciliationService,
+  reconciliationService: service,
   intervalMs = 15 * 60 * 1000
-}: { reconciliationService?: { reconcile(): Promise<unknown> }; intervalMs?: number } = {}) {
-  if (!reconciliationService?.reconcile) throw new TypeError('Media reconciliation service is required');
-  const service = reconciliationService;
+}: {
+  reconciliationService: Pick<MediaReconciliationService, 'reconcile'>;
+  intervalMs?: number;
+}) {
   let stopping = false;
   async function run({ signal }: { signal?: AbortSignal } = {}): Promise<void> {
     while (!stopping && !signal?.aborted) {

@@ -3,7 +3,9 @@
 // what it is.
 
 import crypto from 'node:crypto';
+import { SESSION_ENDED_CLOSE_CODE } from '@voice-room/shared/realtime';
 import { cleanLiveKitUrl } from '@voice-room/shared/validation';
+import { normalizeLiveKitRoomPrefix } from '../domains/admission/livekit-token-binding.mts';
 import { readEnvBool, readEnvInt, readMessageDeliveryMode, readUploadsDir } from '../lib/config.ts';
 
 type Env = Record<string, string | undefined>;
@@ -78,7 +80,8 @@ export function readApiConfig(env: Env = process.env) {
   return Object.freeze({
     API_PREFIX: '/api',
     HOST: (env.HOST || '127.0.0.1').trim(),
-    PORT: int('PORT', 3000, 1),
+    // 0 asks the OS for a free port.
+    PORT: int('PORT', 3000, 0),
     SOCKET_PATH: (env.SOCKET_PATH || '').trim(),
     MAX_ROOM_PEERS: int('MAX_ROOM_PEERS', 12, 1),
     // People in voice on the whole server; 0 leaves it uncapped.
@@ -103,6 +106,8 @@ export function readApiConfig(env: Env = process.env) {
     // The LiveKit URL the CSP admits: the public gate, else the SFU itself.
     LIVEKIT_CSP_URL: cleanLiveKitUrl(gatePublicUrl || env.LIVEKIT_URL || ''),
     LIVEKIT_GATE_SECRET: (env.LIVEKIT_GATE_SECRET || '').trim(),
+    // Must match the gate's: it compares the JWT room with the credential room.
+    LIVEKIT_ROOM_PREFIX: normalizeLiveKitRoomPrefix(env.LIVEKIT_ROOM_PREFIX),
     ROOM_IDLE_TTL_MS: int('ROOM_IDLE_TTL_MS', 900000, 1000),
     ROOM_PRUNE_INTERVAL_MS: int('ROOM_PRUNE_INTERVAL_MS', 60000, 0),
     ROOM_CHAT_RATE_LIMIT: int('ROOM_CHAT_RATE_LIMIT', 60, 0),
@@ -126,7 +131,7 @@ export function readApiConfig(env: Env = process.env) {
     GEOIP_DB_PATH: String(env.GEOIP_DB_PATH || '').trim(),
     // Close code for sockets whose account session was ended; clients stop
     // reconnecting and return to the sign-in screen instead.
-    SESSION_REVOKED_CLOSE_CODE: 4401,
+    SESSION_REVOKED_CLOSE_CODE: SESSION_ENDED_CLOSE_CODE,
     DM_RATE_LIMIT: int('DM_RATE_LIMIT', 30, 0),
     DM_RATE_WINDOW_MS: int('DM_RATE_WINDOW_MS', 10000, 1000),
     FRIEND_REQUEST_RATE_LIMIT: int('FRIEND_REQUEST_RATE_LIMIT', 20, 0),
