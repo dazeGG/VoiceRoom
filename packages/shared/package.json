@@ -26,6 +26,7 @@
     "./emoji-groups": "./src/emoji-groups.ts",
     "./emoji-skin-tones": "./src/emoji-skin-tones.ts",
     "./account-security": "./src/account-security.ts",
+    "./client-version": "./src/client-version.ts",
     "./contracts/http": "./src/contracts/http.ts",
     "./contracts/users": "./src/contracts/users.ts",
     "./contracts/social": "./src/contracts/social.ts",

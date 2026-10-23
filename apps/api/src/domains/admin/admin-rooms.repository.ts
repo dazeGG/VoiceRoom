@@ -51,9 +51,9 @@ export interface HistoryAfter {
   id: string;
 }
 
-// The column only ever holds these three (voice_sessions_client_check).
+// The column only ever holds these four (voice_sessions_client_check).
 function clientOf(value: string | null): ClientKind | null {
-  return value === 'desktop_app' || value === 'mobile' || value === 'browser' ? value : null;
+  return value === 'desktop_app' || value === 'mobile_app' || value === 'mobile' || value === 'browser' ? value : null;
 }
 
 type AccountColumns = {
