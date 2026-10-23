@@ -164,6 +164,24 @@ test('a live room opens its people: accounts by login, guests by name, and an ac
   expect(screen.queryByRole('list', { name: 'В звонке: Кухня' })).toBeNull();
 });
 
+test('someone in the Android app shows as Android', async () => {
+  const room = kitchen();
+  const [alicePeer] = room.peers;
+  if (!alicePeer) throw new Error('a peer expected');
+  stubApi({
+    'GET /api/admin/rooms': live([
+      { ...room, peers: [{ ...alicePeer, client: 'mobile_app', os: 'Android', browser: 'VoiceRoom Android' }] }
+    ]),
+    'GET /api/admin/rooms/calls': history([])
+  });
+  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+
+  const people = await openLiveRoom('Кухня');
+  const [peer] = within(people).getAllByRole('listitem');
+  if (!peer) throw new Error('one person expected');
+  expect(within(peer).getByLabelText('Android')).toBeTruthy();
+});
+
 test('the list of who is in voice refreshes every few seconds', async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   let rooms: LiveRoom[] = [kitchen()];

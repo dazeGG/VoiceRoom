@@ -84,6 +84,7 @@
       "notification_dm_mutes": ["apps/api/src/domains/notifications/notification-preferences.repository.ts"],
       "notification_room_mutes": ["apps/api/src/domains/notifications/notification-preferences.repository.ts"],
       "push_subscriptions": ["apps/api/src/domains/notifications/push-subscription.repository.ts", "apps/api/src/domains/account/user.repository.ts", "apps/api/src/domains/account/account-standing.repository.ts"],
+      "device_tokens": ["apps/api/src/domains/notifications/device-token.repository.ts"],
       "content_reports": ["apps/api/src/domains/reports/report.repository.ts"],
       "call_feedback": ["apps/api/src/domains/feedback/call-feedback.repository.ts"],
       "voice_sessions": ["apps/api/src/domains/rooms/voice-session.repository.ts"],

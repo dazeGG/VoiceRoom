@@ -21,6 +21,7 @@ import { createDirectMessagesService } from '../domains/messaging/direct-message
 import { createReplyRepository } from '../domains/messaging/reply.repository.ts';
 import { createRoomChatService } from '../domains/messaging/room-chat.service.ts';
 import { createNotificationSettingsService } from '../domains/notifications/notification-settings.service.ts';
+import { createDeviceTokenService } from '../domains/notifications/device-token.service.ts';
 import { createDesktopReleaseService } from '../domains/ops/desktop-release.service.ts';
 import { createCallFeedbackService } from '../domains/feedback/call-feedback.service.ts';
 import { createReportService } from '../domains/reports/report.service.ts';
@@ -194,6 +195,11 @@ export function createDomainServices(deps: DomainServiceDeps) {
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
     broadcastProfileToFriends: (user, log) => hub.broadcastUserProfileToFriends(user, { log })
   });
+  const deviceTokens = createDeviceTokenService({
+    tokens: services.getDeviceTokens,
+    enabled: () => config.RUSTORE_PUSH.enabled,
+    limiter: limits.pushSubscriptions
+  });
   const avatarsService = createAvatarsService({
     storage: services.getAvatarStorage,
     linkPreviewStorage: services.getLinkPreviewStorage,
@@ -306,6 +312,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     friends: friendsService,
     directMessages,
     notificationSettings,
+    deviceTokens,
     avatars: avatarsService,
     reports,
     callFeedback,

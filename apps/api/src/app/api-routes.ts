@@ -2,6 +2,7 @@
 // shared context and the services each group needs.
 
 import type { FastifyInstance } from 'fastify';
+import { outdatedAndroidVersion } from '@voice-room/shared/client-version';
 import type { ApiContext } from './context.ts';
 import type { RateLimits } from './rate-limits.ts';
 import type { createServiceRegistry } from './service-registry.ts';
@@ -9,6 +10,8 @@ import type { readApiConfig } from './config.ts';
 import type { RoomRealtimeRuntime } from '../realtime/room-runtime.ts';
 import type { createWsHandler } from '../realtime/ws-handler.ts';
 import { registerCapabilityRoutes } from '../platform/capability-routes.ts';
+import { registerClientPolicyRoutes } from '../platform/client-policy-routes.ts';
+import { LOG_EVENTS } from '../lib/log-events.ts';
 import { tokensMatch } from '../platform/crypto/tokens-match.ts';
 import type { PresencePeer } from '../domains/rooms/room-views.ts';
 import type { createSessionCookies } from '../domains/account/session-cookie.ts';
@@ -25,6 +28,7 @@ import { registerRoomChatRoutes } from '../domains/messaging/room-chat.routes.ts
 import { registerModerationRoutes } from '../domains/moderation/moderation.routes.ts';
 import { registerNotificationRoutes } from '../domains/notifications/notifications.routes.ts';
 import { registerNotificationSettingsRoutes } from '../domains/notifications/notification-settings.routes.ts';
+import { registerDeviceTokenRoutes } from '../domains/notifications/device-tokens.routes.ts';
 import { registerOpsRoutes } from '../domains/ops/ops.routes.ts';
 import { registerPeerModerationRoutes } from '../domains/rooms/peer-moderation.routes.ts';
 import { registerCallFeedbackRoutes } from '../domains/feedback/call-feedback.routes.ts';
@@ -48,6 +52,7 @@ export interface ApiRouteDeps {
     | 'SITE_ORIGIN'
     | 'ADMIN_ORIGIN'
     | 'SESSION_COOKIE_SECURE'
+    | 'ANDROID_MIN_VERSION'
   >;
   services: ReturnType<typeof createServiceRegistry>;
   domain: {
@@ -58,6 +63,7 @@ export interface ApiRouteDeps {
     friends: Parameters<typeof registerFriendsRoutes>[2]['friends'];
     directMessages: Parameters<typeof registerDirectMessageRoutes>[2];
     notificationSettings: Parameters<typeof registerNotificationSettingsRoutes>[2];
+    deviceTokens: Parameters<typeof registerDeviceTokenRoutes>[2];
     avatars: Parameters<typeof registerAvatarRoutes>[2]['avatars'];
     account: Parameters<typeof registerAccountRoutes>[2]['account'];
     reports: Parameters<typeof registerReportRoutes>[2]['reports'];
@@ -105,6 +111,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
   registerFriendsRoutes(app, ctx, { friends: deps.domain.friends, requestLimiter: deps.limits.friendRequests });
   registerDirectMessageRoutes(app, ctx, deps.domain.directMessages);
   registerNotificationSettingsRoutes(app, ctx, deps.domain.notificationSettings);
+  registerDeviceTokenRoutes(app, ctx, deps.domain.deviceTokens);
   registerAvatarRoutes(app, ctx, {
     avatars: deps.domain.avatars,
     rooms: deps.domain.rooms,
@@ -133,6 +140,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
   });
 
   registerCapabilityRoutes(app);
+  registerClientPolicyRoutes(app, { androidMinVersion: deps.config.ANDROID_MIN_VERSION });
 
   // Registered with or without a database: without one they answer 503 internal_error.
   const database = deps.services.routeServices();
@@ -193,6 +201,13 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
   // Register after plugins finish loading so @fastify/websocket can wrap the handler.
   app.after(() => {
     app.get('/api/ws', { websocket: true }, (socket, request) => {
+      // An outdated Android app is closed before the handshake, so it never gets `ready`.
+      const version = outdatedAndroidVersion(request.headers['user-agent'], deps.config.ANDROID_MIN_VERSION);
+      if (version !== null) {
+        request.log.info({ evt: LOG_EVENTS.HTTP_CLIENT_OUTDATED, transport: 'ws', version }, 'outdated app refused');
+        socket.close(4426, 'Client outdated');
+        return;
+      }
       void deps.wsHandler.handleConnection(socket, request.raw);
     });
   });

@@ -25,6 +25,7 @@ const LOG_EVENTS = Object.freeze({
   // HTTP edge.
   HTTP_REQUEST: 'http.request',
   HTTP_HANDLER_FAILED: 'http.handler_failed',
+  HTTP_CLIENT_OUTDATED: 'http.client_outdated',
 
   // Accounts and sessions.
   AUTH_SIGN_IN_RECORD_FAILED: 'auth.sign_in_record_failed',
@@ -85,6 +86,12 @@ const LOG_EVENTS = Object.freeze({
   PUSH_SEND_FAILED: 'push.send_failed',
   PUSH_SUBSCRIPTION_LOAD_FAILED: 'push.subscription_load_failed',
   PUSH_SUBSCRIPTION_PRUNE_FAILED: 'push.subscription_prune_failed',
+  // Push to the Android app through RuStore.
+  PUSH_NATIVE_SEND_FAILED: 'push.native_send_failed',
+  PUSH_NATIVE_TOKEN_PRUNED: 'push.native_token_pruned',
+  PUSH_NATIVE_REJECTED: 'push.native_rejected',
+  PUSH_NATIVE_UNAUTHORIZED: 'push.native_unauthorized',
+  PUSH_NATIVE_TOO_LARGE: 'push.native_too_large',
 
   // Media and link previews.
   MEDIA_JOB_FAILED: 'media.job_failed',

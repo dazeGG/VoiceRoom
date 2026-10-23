@@ -10,6 +10,7 @@ import { AccountBadge, Pill, RoomAvatar } from '../../ui/index.tsx';
 export const CLIENTS: Record<ClientKind, { label: string; icon: LucideIcon }> = {
   desktop_app: { label: 'приложение', icon: AppWindow },
   browser: { label: 'браузер', icon: Globe },
+  mobile_app: { label: 'Android', icon: Smartphone },
   mobile: { label: 'телефон', icon: Smartphone }
 };
 

@@ -356,8 +356,13 @@ export const RoomAccount = Type.Object({
 });
 export type RoomAccount = Static<typeof RoomAccount>;
 
-/** Which kind of client a user agent is: the desktop app, a phone, or a browser on a computer. */
-export const ClientKind = Type.Union([Type.Literal('desktop_app'), Type.Literal('mobile'), Type.Literal('browser')]);
+/** Which kind of client a user agent is: the desktop app, the Android app, a phone, or a browser on a computer. */
+export const ClientKind = Type.Union([
+  Type.Literal('desktop_app'),
+  Type.Literal('mobile_app'),
+  Type.Literal('mobile'),
+  Type.Literal('browser')
+]);
 export type ClientKind = Static<typeof ClientKind>;
 
 /**
@@ -387,7 +392,7 @@ export const LiveRoomPeer = Type.Object({
   muted: Type.Boolean(),
   deafened: Type.Boolean(),
   screen: Type.Boolean(),
-  /** The desktop app, a phone or a browser; null when the socket sent no user agent. */
+  /** The desktop app, the Android app, a phone or a browser; null when the socket sent no user agent. */
   client: Nullable(ClientKind),
   ...DeviceInfo,
   /** The lasting id of a guest's browser; null for an account or a guest that sent none. */

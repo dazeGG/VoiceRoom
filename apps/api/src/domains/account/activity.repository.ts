@@ -27,7 +27,7 @@ export function createActivityRepository({ pool }: { pool: pg.Pool }) {
           user_id: mark.userId,
           day: mark.day,
           desktop_app: mark.client === 'desktop_app',
-          mobile: mark.client === 'mobile',
+          mobile: mark.client === 'mobile' || mark.client === 'mobile_app',
           browser: mark.client === 'browser'
         }))
       )

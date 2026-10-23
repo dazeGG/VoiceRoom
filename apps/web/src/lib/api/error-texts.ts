@@ -19,6 +19,7 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   internal_error: 'Ошибка сервера, попробуйте позже',
   cross_origin_rejected: 'Запрос отклонён: откройте сайт заново',
   not_supported: 'Не поддерживается',
+  client_outdated: 'Версия приложения устарела, обновите его',
 
   account_not_found: 'Аккаунт не найден',
   account_deleted: 'Аккаунт удалён',
@@ -144,6 +145,7 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   invalid_push_endpoint: 'Не удалось отключить push-уведомления',
   push_endpoint_conflict: 'Это устройство уже подписано другим аккаунтом',
   push_rate_limited: TRY_LATER,
+  invalid_device_token: 'Некорректный токен устройства',
 
   media_error: IMAGE_FAILED,
   media_uploads_disabled: 'Загрузка изображений временно недоступна',

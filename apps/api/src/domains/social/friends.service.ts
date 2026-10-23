@@ -293,7 +293,16 @@ export function createFriendsService(deps: FriendsDeps) {
         url: `/r/${encodeURIComponent(roomId)}`,
         expiresAt
       },
-      { expiresAt }
+      {
+        expiresAt,
+        nativeData: {
+          fromUserId: caller.id,
+          fromName: caller.displayName || caller.login || '',
+          roomId: room.id,
+          roomName: room.name || '',
+          roomEmoji: room.emoji || ''
+        }
+      }
     );
     return { status: 'rung' };
   }

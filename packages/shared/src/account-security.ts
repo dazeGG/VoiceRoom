@@ -34,11 +34,16 @@ export const DELETED_ACCOUNT_NAME: string = 'Удалённый аккаунт';
 // account may take it.
 export const DELETED_LOGIN_PREFIX: string = 'deleted-';
 const RELEASE_VERSION_PATTERN = /^(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})\.(0|[1-9]\d{0,3})$/;
+// The VoiceRoom Android app says "VoiceRoom-Android/<x.y.z>". It is checked before
+// the desktop pattern, which also matches "VoiceRoom". client-version.ts writes
+// the same pattern, and a shared test pins both to the same user agents.
+const MOBILE_APP_PATTERN = /VoiceRoom-Android\//i;
 
 // Order matters: Chromium-based browsers also carry "Chrome/" and "Safari/",
 // and the desktop shell is Electron, which carries both as well.
 const DESKTOP_APP_PATTERN = /VoiceRoom|Electron\//i;
 const CLIENT_RULES: readonly (readonly [RegExp, string])[] = Object.freeze([
+  [MOBILE_APP_PATTERN, 'VoiceRoom Android'],
   [DESKTOP_APP_PATTERN, 'VoiceRoom Desktop'],
   [/YaBrowser\//, 'Яндекс Браузер'],
   [/Edg(?:A|iOS)?\//, 'Edge'],
@@ -84,7 +89,7 @@ export function normalizeReleaseVersion(value: unknown): string {
 }
 
 // -1, 0 or 1 like a sort comparator; null when either side is not a version.
-function compareReleaseVersions(left: unknown, right: unknown): -1 | 0 | 1 | null {
+export function compareReleaseVersions(left: unknown, right: unknown): -1 | 0 | 1 | null {
   const a = normalizeReleaseVersion(left);
   const b = normalizeReleaseVersion(right);
   if (!a || !b) return null;
@@ -131,12 +136,13 @@ export function describeUserAgent(value: unknown): UserAgentDescription {
 // this rule, so they can never disagree about who has used the app.
 export function isDesktopAppUserAgent(value: unknown): boolean {
   const userAgent = typeof value === 'string' ? value.slice(0, 512) : '';
-  return DESKTOP_APP_PATTERN.test(userAgent);
+  return !MOBILE_APP_PATTERN.test(userAgent) && DESKTOP_APP_PATTERN.test(userAgent);
 }
 
 /** Null when there is no user agent to tell. */
 export function clientKind(userAgent: string | null | undefined): ClientKind | null {
   if (!userAgent) return null;
+  if (MOBILE_APP_PATTERN.test(userAgent)) return 'mobile_app';
   if (isDesktopAppUserAgent(userAgent)) return 'desktop_app';
   const { os } = describeUserAgent(userAgent);
   return os === 'Android' || os === 'iOS' ? 'mobile' : 'browser';
