@@ -87,6 +87,17 @@ export interface ContentReports {
   target_kind: string;
 }
 
+export interface DeviceTokens {
+  app_version: string | null;
+  created_at: Generated<Timestamp>;
+  id: string;
+  last_seen_at: Generated<Timestamp>;
+  provider: string;
+  session_id: string;
+  token: string;
+  user_id: string;
+}
+
 export interface DirectMessageReactionRevisions {
   emoji: string;
   message_id: string;
@@ -605,6 +616,7 @@ export interface DB {
   admin_actions: AdminActions;
   call_feedback: CallFeedback;
   content_reports: ContentReports;
+  device_tokens: DeviceTokens;
   direct_message_reaction_revisions: DirectMessageReactionRevisions;
   direct_message_reactions: DirectMessageReactions;
   direct_message_read_cursors: DirectMessageReadCursors;

@@ -7,6 +7,8 @@ import assert from 'node:assert/strict';
 import {
   DEFAULT_REALTIME_RECONNECT_LEASE_MS,
   readApiConfig,
+  readNotificationDeliveryWorkerConfig,
+  readRuStorePushConfig,
   resolveRealtimeReconnectLeaseMs
 } from '../src/app/config.ts';
 
@@ -42,6 +44,21 @@ test('overrides, bounds and derived values', () => {
   assert.equal(config.LIVEKIT_GATE_PUBLIC_URL, 'wss://sfu.example');
   assert.equal(config.LIVEKIT_GATE_SECRET, 'secret');
   assert.throws(() => readApiConfig({ MESSAGE_DELIVERY_CLAIM_ENABLED: 'true' }), /cannot both be enabled/);
+});
+
+test('RuStore push is on only with both the project id and the service token, for the API and the worker', () => {
+  const both = { RUSTORE_PUSH_PROJECT_ID: ' project-1 ', RUSTORE_PUSH_SERVICE_TOKEN: ' secret ' };
+  const on = { enabled: true, projectId: 'project-1', serviceToken: 'secret' };
+  assert.deepEqual(readRuStorePushConfig({}), { enabled: false, projectId: '', serviceToken: '' });
+  assert.equal(readRuStorePushConfig({ RUSTORE_PUSH_PROJECT_ID: 'project-1' }).enabled, false);
+  assert.equal(readRuStorePushConfig({ RUSTORE_PUSH_SERVICE_TOKEN: 'secret' }).enabled, false);
+  assert.equal(readRuStorePushConfig({ ...both, RUSTORE_PUSH_SERVICE_TOKEN: '  ' }).enabled, false);
+  assert.deepEqual(readRuStorePushConfig(both), on);
+
+  assert.equal(readApiConfig({}).RUSTORE_PUSH.enabled, false);
+  assert.deepEqual(readApiConfig(both).RUSTORE_PUSH, on);
+  assert.equal(readNotificationDeliveryWorkerConfig({}).RUSTORE_PUSH.enabled, false);
+  assert.deepEqual(readNotificationDeliveryWorkerConfig(both).RUSTORE_PUSH, on);
 });
 
 test('the reconnect lease', () => {

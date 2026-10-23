@@ -25,6 +25,7 @@ import { registerRoomChatRoutes } from '../domains/messaging/room-chat.routes.ts
 import { registerModerationRoutes } from '../domains/moderation/moderation.routes.ts';
 import { registerNotificationRoutes } from '../domains/notifications/notifications.routes.ts';
 import { registerNotificationSettingsRoutes } from '../domains/notifications/notification-settings.routes.ts';
+import { registerDeviceTokenRoutes } from '../domains/notifications/device-tokens.routes.ts';
 import { registerOpsRoutes } from '../domains/ops/ops.routes.ts';
 import { registerPeerModerationRoutes } from '../domains/rooms/peer-moderation.routes.ts';
 import { registerCallFeedbackRoutes } from '../domains/feedback/call-feedback.routes.ts';
@@ -58,6 +59,7 @@ export interface ApiRouteDeps {
     friends: Parameters<typeof registerFriendsRoutes>[2]['friends'];
     directMessages: Parameters<typeof registerDirectMessageRoutes>[2];
     notificationSettings: Parameters<typeof registerNotificationSettingsRoutes>[2];
+    deviceTokens: Parameters<typeof registerDeviceTokenRoutes>[2];
     avatars: Parameters<typeof registerAvatarRoutes>[2]['avatars'];
     account: Parameters<typeof registerAccountRoutes>[2]['account'];
     reports: Parameters<typeof registerReportRoutes>[2]['reports'];
@@ -105,6 +107,7 @@ export function registerApiRoutes(app: FastifyInstance, ctx: ApiContext, deps: A
   registerFriendsRoutes(app, ctx, { friends: deps.domain.friends, requestLimiter: deps.limits.friendRequests });
   registerDirectMessageRoutes(app, ctx, deps.domain.directMessages);
   registerNotificationSettingsRoutes(app, ctx, deps.domain.notificationSettings);
+  registerDeviceTokenRoutes(app, ctx, deps.domain.deviceTokens);
   registerAvatarRoutes(app, ctx, {
     avatars: deps.domain.avatars,
     rooms: deps.domain.rooms,

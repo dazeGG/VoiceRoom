@@ -53,6 +53,15 @@ export function readPushConfig(env: Env = process.env): PushConfig {
   };
 }
 
+/** Push to the Android app through RuStore: on only with both the project id and its service token. */
+export type RuStorePushConfig = { enabled: boolean; projectId: string; serviceToken: string };
+
+export function readRuStorePushConfig(env: Env = process.env): RuStorePushConfig {
+  const projectId = String(env.RUSTORE_PUSH_PROJECT_ID || '').trim();
+  const serviceToken = String(env.RUSTORE_PUSH_SERVICE_TOKEN || '').trim();
+  return { enabled: Boolean(projectId && serviceToken), projectId, serviceToken };
+}
+
 /** What the process entry decides before it builds the app. */
 export function readBootstrapConfig(env: Env = process.env) {
   return Object.freeze({
@@ -176,6 +185,7 @@ export function readApiConfig(env: Env = process.env) {
     MESSAGE_DELIVERY_LISTEN_ENABLED: readEnvBool('MESSAGE_DELIVERY_LISTEN_ENABLED', true, env),
     REALTIME_RECONNECT_LEASE_MS: resolveRealtimeReconnectLeaseMs(env),
     PUSH: readPushConfig(env),
+    RUSTORE_PUSH: readRuStorePushConfig(env),
     // Desktop downloads come from the latest GitHub release; the metadata is
     // cached so visitors never hit GitHub's per-IP rate limit.
     DESKTOP_RELEASE_REPO: (env.DESKTOP_RELEASE_REPO || 'dazeGG/VoiceRoomDesktop').trim(),
@@ -221,7 +231,8 @@ export function readNotificationDeliveryWorkerConfig(env: Env = process.env) {
     BATCH_SIZE: int('NOTIFICATION_DELIVERY_BATCH_SIZE', 50, 1),
     LEASE_MS: int('NOTIFICATION_DELIVERY_LEASE_MS', 120000, 1000),
     RENEW_MS: int('NOTIFICATION_DELIVERY_RENEW_MS', 30000, 100),
-    MAX_ATTEMPTS: int('NOTIFICATION_DELIVERY_MAX_ATTEMPTS', 8, 1)
+    MAX_ATTEMPTS: int('NOTIFICATION_DELIVERY_MAX_ATTEMPTS', 8, 1),
+    RUSTORE_PUSH: readRuStorePushConfig(env)
   });
 }
 

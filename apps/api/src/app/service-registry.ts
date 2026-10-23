@@ -18,6 +18,7 @@ import { createGeoLocator } from '../lib/geoip.ts';
 import { createFriendStore } from './friend-store.ts';
 import { createNotificationPreferencesRepository } from '../domains/notifications/notification-preferences.repository.ts';
 import { createPushSubscriptionRepository } from '../domains/notifications/push-subscription.repository.ts';
+import { createDeviceTokenRepository } from '../domains/notifications/device-token.repository.ts';
 import { createPushService } from '../lib/push-service.ts';
 import { createAvatarStorage } from '../lib/avatar-storage.ts';
 import { createLinkPreviewFetcher } from '../lib/link-preview-fetcher.ts';
@@ -235,6 +236,9 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
   const pushSubscriptions = cached(() =>
     createPushSubscriptionRepository({ pool: requirePool(), maxSubscriptionsPerUser: MAX_PUSH_SUBSCRIPTIONS_PER_USER })
   );
+  const deviceTokens = cached(() =>
+    createDeviceTokenRepository({ pool: requirePool(), maxTokensPerUser: MAX_PUSH_SUBSCRIPTIONS_PER_USER })
+  );
   const pushService = cached(() =>
     createPushService({ store: pushSubscriptions.get(), config: PUSH, logger: poolLogger })
   );
@@ -443,6 +447,7 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     getNotificationPreferences: () => notificationPreferences.get(),
     getPushSubscriptions: () => pushSubscriptions.get(),
     getPushService: () => pushService.get(),
+    getDeviceTokens: () => deviceTokens.get(),
     getAvatarStorage: () => avatarStorage.get(),
     getLinkPreviewStorage: () => linkPreviewStorage.get(),
     getMessageService: () => messageService.get(),

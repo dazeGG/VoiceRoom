@@ -45,6 +45,17 @@ export function failure(error: string, { code }: { code: ErrorCode }): Failure {
   return { ok: false, error, code };
 }
 
+/** A 429 with `Retry-After` and the same wait in the body. */
+export function sendRateLimited(
+  reply: FastifyReply,
+  { code, message, retryAfterSeconds }: { code: ErrorCode; message: string; retryAfterSeconds: number }
+): FastifyReply {
+  return reply
+    .code(429)
+    .header('Retry-After', String(retryAfterSeconds))
+    .send({ ...failure(message, { code }), retryAfterSeconds });
+}
+
 /** The code an error carries when it is a catalogued one, `fallback` otherwise. */
 export function errorCode(error: unknown, fallback: ErrorCode): ErrorCode {
   const code = codeOf(error);
