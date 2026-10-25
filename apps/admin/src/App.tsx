@@ -4,7 +4,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from './api/client.ts';
-import { fetchOpenReports } from './api/admin.ts';
+import { fetchOpenReports, fetchOpenUserReports } from './api/admin.ts';
 import { fetchMe, signOut } from './api/staff.ts';
 import { FrameContext, type Frame, type RefreshStatus } from './frame.tsx';
 import { AccountsPage } from './pages/AccountsPage.tsx';
@@ -82,8 +82,8 @@ export function App() {
   useEffect(() => {
     if (!canReview) return;
     const load = () =>
-      void fetchOpenReports().then(
-        (reports) => setOpenReports(reports.length),
+      void Promise.all([fetchOpenReports(), fetchOpenUserReports()]).then(
+        ([messages, users]) => setOpenReports(messages.length + users.length),
         () => {}
       );
     load();
