@@ -1,7 +1,6 @@
-// Reports to the service operator: anyone signed in can report a room or
-// direct message they can see, and a platform administrator (an account named
-// in PLATFORM_ADMIN_USER_IDS) reviews the open reports and either removes the
-// message for everyone or dismisses the reports.
+// Signed-in accounts can report visible messages or another existing account.
+// Staff review messages and users through separate response contracts, so
+// older message-review clients never receive a new server-sent target kind.
 
 import { Type, type Static } from 'typebox';
 import { Nullable, Ok } from './http.ts';
@@ -15,7 +14,8 @@ export const ReportReasonSchema = Type.Enum(REPORT_REASONS);
 
 export const ReportTarget = Type.Union([
   Type.Object({ kind: Type.Literal('room_message'), roomId: Type.String(), messageId: Type.String() }),
-  Type.Object({ kind: Type.Literal('direct_message'), messageId: Type.String() })
+  Type.Object({ kind: Type.Literal('direct_message'), messageId: Type.String() }),
+  Type.Object({ kind: Type.Literal('user'), userId: Type.String({ minLength: 1, maxLength: 36 }) })
 ]);
 export type ReportTarget = Static<typeof ReportTarget>;
 
@@ -26,7 +26,7 @@ export const ReportBody = Type.Object({
 });
 export type ReportBody = Static<typeof ReportBody>;
 
-/** A second report of the same message by the same account is not stored twice. */
+/** A second open report of the same target by the same account is not stored twice. */
 export const ReportFiled = Ok({ status: Type.Union([Type.Literal('filed'), Type.Literal('already_filed')]) });
 export type ReportFiled = Static<typeof ReportFiled>;
 
@@ -64,3 +64,27 @@ export type ReportResolveBody = Static<typeof ReportResolveBody>;
 /** Every open report of the same message is closed with the one decision. */
 export const ReportResolved = Ok({ resolved: Type.Number() });
 export type ReportResolved = Static<typeof ReportResolved>;
+
+/** User review has its own response: older message-review clients keep their union unchanged. */
+export const AdminUserReport = Type.Object({
+  id: Type.String(),
+  reason: ReportReasonSchema,
+  comment: Type.String(),
+  createdAt: Type.Number(),
+  reporter: Type.Object({ userId: Type.String(), login: Type.String(), displayName: Type.String() }),
+  target: Type.Object({
+    userId: Type.String(),
+    login: Type.String(),
+    displayName: Type.String(),
+    deleted: Type.Boolean()
+  })
+});
+export type AdminUserReport = Static<typeof AdminUserReport>;
+export const AdminUserReportPage = Ok({ reports: Type.Array(AdminUserReport) });
+export type AdminUserReportPage = Static<typeof AdminUserReportPage>;
+
+/** Reviewing a user never deletes a user or message; account sanctions use the existing staff tools. */
+export const UserReportResolveBody = Type.Object({
+  action: Type.Union([Type.Literal('reviewed'), Type.Literal('dismiss')])
+});
+export type UserReportResolveBody = Static<typeof UserReportResolveBody>;
