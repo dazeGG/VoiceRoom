@@ -4,7 +4,7 @@ import { Pool } from 'pg';
 import { createAccountDeletionRepository } from '../src/domains/account/account-deletion.repository.ts';
 import { ACCOUNT_DELETION_GRACE_MS } from '@voice-room/shared/account-security';
 import { AccountFailure, DeletionPreview, DeletionScheduled, Me, SignedIn } from '@voice-room/shared/contracts/account';
-import { cookieFrom, request, startApiServer } from './fakes/server-process.ts';
+import { cookieFrom, registerAccount, request, startApiServer } from './fakes/server-process.ts';
 
 test('an account can be deleted, restored within the grace period and never re-registered afterwards', async (t) => {
   const { socketPath, databaseUrl, beforeCleanup } = await startApiServer(t, {
@@ -133,4 +133,61 @@ test('an account can be deleted, restored within the grace period and never re-r
     });
     assert.equal(reuse.status, 409, `${login} must stay taken`);
   }
+});
+
+test('Android deletion revokes every old token without a response cookie that can clear a newer sign-in', async (t) => {
+  const { socketPath } = await startApiServer(t, {
+    prefix: 'voice-room-native-deletion-',
+    env: { AUTH_RATE_LIMIT: '0' }
+  });
+  const headers = { 'User-Agent': 'VoiceRoom-Android/0.1.0' };
+  const cookie = await registerAccount(socketPath, 'account-a');
+  const anotherSession = await request(
+    socketPath,
+    { method: 'POST', pathname: '/api/auth/login', body: { login: 'account-a', password: 'password123' } },
+    SignedIn
+  );
+  const anotherCookie = cookieFrom(anotherSession.setCookie);
+
+  const anonymous = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/auth/account/deletion',
+    headers,
+    body: { currentPassword: 'password123' }
+  });
+  assert.equal(anonymous.status, 401, 'a forged native user agent never grants authentication');
+  const wrongPassword = await request(socketPath, {
+    method: 'POST',
+    pathname: '/api/auth/account/deletion',
+    headers,
+    cookie,
+    body: { currentPassword: 'wrong-password' }
+  });
+  assert.equal(wrongPassword.status, 400, 'native requests still require the correct password');
+
+  const scheduled = await request(
+    socketPath,
+    {
+      method: 'POST',
+      pathname: '/api/auth/account/deletion',
+      headers,
+      cookie,
+      body: { currentPassword: 'password123' }
+    },
+    DeletionScheduled
+  );
+  assert.equal(scheduled.status, 200);
+  assert.deepEqual(scheduled.setCookie, [], 'a delayed native success must not mutate the shared CookieJar');
+  for (const oldCookie of [cookie, anotherCookie]) {
+    assert.equal((await request(socketPath, { pathname: '/api/auth/me', cookie: oldCookie }, Me)).body.user, null);
+    assert.equal((await request(socketPath, { pathname: '/api/auth/security', cookie: oldCookie })).status, 401);
+  }
+
+  // Model a different login reaching the jar before this deletion response.
+  // There is no Set-Cookie to apply when the old native response arrives late.
+  const replacementCookie = await registerAccount(socketPath, 'account-b');
+  assert.equal(
+    (await request(socketPath, { pathname: '/api/auth/me', cookie: replacementCookie }, Me)).body.user?.login,
+    'account-b'
+  );
 });

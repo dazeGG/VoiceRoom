@@ -639,6 +639,41 @@ test('every account route needs a session and answers it', async (t) => {
   });
 });
 
+test('deletion cookie delivery changes only for a well-formed native user agent, never authorization', async (t) => {
+  const cases: Array<[string, boolean]> = [
+    ['VoiceRoom-Android/0.1.0', false],
+    ['Mozilla/5.0 (Linux; Android 14) Chrome/140.0', true],
+    ['VoiceRoom-Android/', true],
+    ['VoiceRoom-Android/0.1', true],
+    ['VoiceRoom-Android/0.1.0-beta', true],
+    ['VoiceRoom-Android/not-a-version', true]
+  ];
+  for (const [userAgent, clearsCookie] of cases) {
+    const headers = { 'user-agent': userAgent };
+    const { app, seen } = routeApp(t, {}, { session: SIGNED_IN });
+    const scheduled = await app.inject({
+      method: 'POST',
+      url: '/api/auth/account/deletion',
+      headers,
+      payload: { currentPassword: 'password' }
+    });
+    assert.equal(scheduled.statusCode, 200);
+    assert.equal(scheduled.headers['set-cookie'], clearsCookie ? 'vr_session=' : undefined, userAgent);
+    assert.deepEqual(seen.requestDeletion, ['user-1', 'password', app.log]);
+
+    const anonymous = routeApp(t);
+    const denied = await anonymous.app.inject({
+      method: 'POST',
+      url: '/api/auth/account/deletion',
+      headers,
+      payload: { currentPassword: 'password' }
+    });
+    assert.equal(denied.statusCode, 401, `${userAgent} cannot authenticate`);
+    assert.equal(denied.headers['set-cookie'], undefined);
+    assert.equal(anonymous.seen.requestDeletion, undefined);
+  }
+});
+
 test('account refusals keep their texts', async (t) => {
   const cases: Array<[Answers<AccountService>, Method, string, number, string]> = [
     [{ updateProfile: { status: 'not_found' } }, 'POST', '/api/auth/profile', 404, 'Аккаунт не найден'],
