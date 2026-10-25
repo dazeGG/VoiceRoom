@@ -4,7 +4,13 @@
 // reports changed.
 
 import type { AdminReportsEvent } from '@voice-room/shared/contracts/admin';
-import { REPORT_COMMENT_MAX_LENGTH, type AdminReport, type ReportBody } from '@voice-room/shared/contracts/reports';
+import {
+  REPORT_COMMENT_MAX_LENGTH,
+  type AdminReport,
+  type AdminUserReport,
+  type ReportBody,
+  type UserReportResolveBody
+} from '@voice-room/shared/contracts/reports';
 import { isUuid } from '@voice-room/shared/validation';
 import type { StaffCheck } from '../staff/staff-check.ts';
 import { canReportDirectMessage } from './report.policy.ts';
@@ -13,7 +19,17 @@ import type { ReportRepository } from './report.repository.ts';
 export interface ReportServiceDeps {
   repository: () => Pick<
     ReportRepository,
-    'findRoomMessage' | 'findDirectMessage' | 'fileReport' | 'findOpenReport' | 'resolveTarget' | 'listOpen'
+    | 'findRoomMessage'
+    | 'findDirectMessage'
+    | 'fileReport'
+    | 'findOpenReport'
+    | 'resolveTarget'
+    | 'listOpen'
+    | 'findReportedUser'
+    | 'fileUserReport'
+    | 'findOpenUserReport'
+    | 'resolveUserTarget'
+    | 'listOpenUsers'
   >;
   staff: StaffCheck;
   canReadRoom(roomId: string, userId: string): Promise<boolean>;
@@ -24,7 +40,7 @@ export interface ReportServiceDeps {
   now?: () => number;
 }
 
-export type FileReportOutcome = { status: 'filed' | 'already_filed' | 'target_not_found' | 'own_message' };
+export type FileReportOutcome = { status: 'filed' | 'already_filed' | 'target_not_found' | 'own_message' | 'own_user' };
 
 export type ResolveOutcome =
   { status: 'resolved'; resolved: number } | { status: 'forbidden' } | { status: 'not_found' };
@@ -35,6 +51,19 @@ export function createReportService(deps: ReportServiceDeps) {
   async function fileReport(reporterUserId: string, body: ReportBody): Promise<FileReportOutcome> {
     const repository = deps.repository();
     const { target } = body;
+    if (target.kind === 'user') {
+      if (target.userId === reporterUserId) return { status: 'own_user' };
+      if (!(await repository.findReportedUser(target.userId))) return { status: 'target_not_found' };
+      const filed = await repository.fileUserReport({
+        reporterUserId,
+        targetUserId: target.userId,
+        reason: body.reason,
+        comment: (body.comment ?? '').trim().slice(0, REPORT_COMMENT_MAX_LENGTH)
+      });
+      // Keep the existing event's server-sent target-kind union unchanged.
+      if (filed) deps.reportsChanged?.(null);
+      return { status: filed ? 'filed' : 'already_filed' };
+    }
     let roomId: string | null = null;
     let roomName: string | null = null;
     if (target.kind === 'room_message') {
@@ -73,6 +102,31 @@ export function createReportService(deps: ReportServiceDeps) {
     return deps.repository().listOpen();
   }
 
+  async function listOpenUsers(actorUserId: string): Promise<AdminUserReport[] | null> {
+    if (!(await deps.staff.can(actorUserId, 'reports.review'))) return null;
+    return deps.repository().listOpenUsers();
+  }
+
+  async function resolveUser(
+    actorUserId: string,
+    reportId: string,
+    action: UserReportResolveBody['action']
+  ): Promise<ResolveOutcome> {
+    if (!(await deps.staff.can(actorUserId, 'reports.review'))) return { status: 'forbidden' };
+    if (!isUuid(reportId)) return { status: 'not_found' };
+    const repository = deps.repository();
+    const report = await repository.findOpenUserReport(reportId);
+    if (!report) return { status: 'not_found' };
+    const resolved = await repository.resolveUserTarget({
+      targetUserId: report.target_user_id,
+      status: action === 'reviewed' ? 'actioned' : 'dismissed',
+      resolvedByUserId: actorUserId,
+      at: new Date(now())
+    });
+    deps.reportsChanged?.(null);
+    return { status: 'resolved', resolved };
+  }
+
   async function resolve(
     actorUserId: string,
     reportId: string,
@@ -109,7 +163,7 @@ export function createReportService(deps: ReportServiceDeps) {
     return { status: 'resolved', resolved };
   }
 
-  return Object.freeze({ fileReport, listOpen, resolve });
+  return Object.freeze({ fileReport, listOpen, resolve, listOpenUsers, resolveUser });
 }
 
 export type ReportService = ReturnType<typeof createReportService>;
