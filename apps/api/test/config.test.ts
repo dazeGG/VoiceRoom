@@ -100,3 +100,29 @@ test('compose passes every feature flag the API leaves disabled by default', () 
   const unreachable = defaultOff.filter((name) => !passed.has(name));
   assert.deepEqual(unreachable, [], `compose never passes these flags to api: ${unreachable.join(', ')}`);
 });
+
+// Container logs hold IP keys (API) and shortened addresses (LiveKit); the
+// privacy policy promises they last a bounded time, which only a size cap on
+// every container's log gives.
+test('compose caps the log of every service', () => {
+  const root = path.join(import.meta.dirname, '../../..');
+  const compose = fs.readFileSync(path.join(root, 'docker-compose.yml'), 'utf8');
+  const anchor = compose.slice(compose.indexOf('x-logging: &logging'), compose.indexOf('\nservices:'));
+  assert.match(anchor, /max-size: \d+m/);
+  assert.match(anchor, /max-file: "\d+"/);
+
+  const services = compose.slice(
+    compose.indexOf('\nservices:'),
+    compose.search(/\n[a-z]+:\n(?! )/m) > 0 ? undefined : undefined
+  );
+  const body = services.slice(0, services.search(/\n(?:volumes|networks):\n/));
+  const names = Array.from(body.matchAll(/^ {2}([a-z][a-z0-9-]*):$/gm), (m) => m[1] ?? '');
+  assert.ok(names.includes('api') && names.includes('livekit'), 'expected the compose services');
+  const uncapped = names.filter((name) => {
+    const start = body.indexOf(`\n  ${name}:\n`);
+    const next = body.slice(start + 1).search(/\n {2}[a-z][a-z0-9-]*:\n/);
+    const block = next < 0 ? body.slice(start) : body.slice(start, start + 1 + next);
+    return !block.includes('\n    logging: *logging\n');
+  });
+  assert.deepEqual(uncapped, []);
+});

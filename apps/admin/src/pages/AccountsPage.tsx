@@ -254,7 +254,8 @@ export function AccountsPage({
             )}
             <footer className="acc-foot">
               <span className="acc-foot-note">
-                «Откуда» — клиенты за последние 30 дней. Активные дни считаются с 15 октября 2026.
+                «Откуда» — клиенты за последние 30 дней. Активные дни и время в войсе — за последние 90 дней: дальше
+                хранятся только общие счётчики без привязки к людям.
               </span>
               {lastPage > 1 ? (
                 <nav className="acc-pages" aria-label="Страницы">

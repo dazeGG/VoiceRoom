@@ -345,6 +345,18 @@ export interface Pgmigrations {
   run_on: Timestamp;
 }
 
+export interface ProductDays {
+  active_accounts: Generated<number>;
+  browser: Generated<number>;
+  day: Timestamp;
+  desktop_app: Generated<number>;
+  mobile: Generated<number>;
+  voice_account_hours: Generated<number>;
+  voice_accounts: Generated<number>;
+  voice_guest_hours: Generated<number>;
+  voice_joins: Generated<number>;
+}
+
 export interface ProductSnapshots {
   at: Timestamp;
   guest_connections: Generated<number>;
@@ -368,6 +380,14 @@ export interface PushSubscriptions {
 export interface ReservedLogins {
   login_hash: string;
   reserved_at: Generated<Timestamp>;
+}
+
+export interface RetentionWeeks {
+  accounts: number;
+  month1_pct: number;
+  week: Timestamp;
+  week1_pct: number;
+  week2_pct: number;
 }
 
 export interface RoomBans {
@@ -639,9 +659,11 @@ export interface DB {
   notification_preferences: NotificationPreferences;
   notification_room_mutes: NotificationRoomMutes;
   pgmigrations: Pgmigrations;
+  product_days: ProductDays;
   product_snapshots: ProductSnapshots;
   push_subscriptions: PushSubscriptions;
   reserved_logins: ReservedLogins;
+  retention_weeks: RetentionWeeks;
   room_bans: RoomBans;
   room_bookmarks: RoomBookmarks;
   room_chat_reads: RoomChatReads;

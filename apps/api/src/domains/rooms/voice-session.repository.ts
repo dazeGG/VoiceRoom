@@ -2,9 +2,11 @@
 // still carry their room, the admin panel's room history. The only writer of
 // voice_sessions (the account deletion purge aside).
 //
-// A stay says who and where from without an IP address: the address only
-// yields its keyed hash and its city (see DescribeAddress) and is never stored.
+// A stay says who and where from without an IP address or a city: the address
+// only yields its keyed hash (see DescribeAddress), which tells addresses apart
+// for bans and quotas; the city is shown for people in voice now, never kept.
 
+import { sql } from 'kysely';
 import type pg from 'pg';
 import type { ClientKind } from '@voice-room/shared/contracts/admin';
 import type { NetworkPoint } from '@voice-room/shared/contracts/rooms';
@@ -59,7 +61,6 @@ export function createVoiceSessionRepository({
           os: session.os || null,
           browser: session.browser || null,
           ip_key: origins[index]?.ipKey ?? null,
-          location: origins[index]?.location || null,
           joined_at: new Date(session.joinedAt),
           left_at: new Date(Math.max(session.leftAt, session.joinedAt)),
           network: session.network?.length ? JSON.stringify(session.network) : null
@@ -82,7 +83,29 @@ export function createVoiceSessionRepository({
     return Number(result.numUpdatedRows);
   }
 
-  return Object.freeze({ recordSessions, forgetRoomsBefore });
+  /**
+   * Stays that began before the Moscow midnight of `cutoffDay` (YYYY-MM-DD)
+   * stop saying whose they were and from what device: only the time is left.
+   * Counted first by admin-stats rollUp; answers how many changed.
+   */
+  async function forgetAccountsBefore(cutoffDay: string): Promise<number> {
+    const result = await db
+      .updateTable('voice_sessions')
+      .set({ user_id: null, client: null, os: null, browser: null })
+      .where('joined_at', '<', sql<Date>`(${cutoffDay}::date)::timestamp AT TIME ZONE 'Europe/Moscow'`)
+      .where((eb) =>
+        eb.or([
+          eb('user_id', 'is not', null),
+          eb('client', 'is not', null),
+          eb('os', 'is not', null),
+          eb('browser', 'is not', null)
+        ])
+      )
+      .executeTakeFirst();
+    return Number(result.numUpdatedRows);
+  }
+
+  return Object.freeze({ recordSessions, forgetRoomsBefore, forgetAccountsBefore });
 }
 
 export type VoiceSessionRepository = ReturnType<typeof createVoiceSessionRepository>;

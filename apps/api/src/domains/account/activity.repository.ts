@@ -41,7 +41,16 @@ export function createActivityRepository({ pool }: { pool: pg.Pool }) {
       .execute();
   }
 
-  return Object.freeze({ recordActivity });
+  /** Forgets every mark of a day before `cutoffDay` (YYYY-MM-DD); answers how many went. Counted first by admin-stats rollUp. */
+  async function forgetBefore(cutoffDay: string): Promise<number> {
+    const result = await db
+      .deleteFrom('user_activity_days')
+      .where('day', '<', sql<Date>`${cutoffDay}::date`)
+      .executeTakeFirst();
+    return Number(result.numDeletedRows);
+  }
+
+  return Object.freeze({ recordActivity, forgetBefore });
 }
 
 export type ActivityRepository = ReturnType<typeof createActivityRepository>;
