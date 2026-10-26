@@ -14,7 +14,7 @@ test(
   async (t) => {
     const { cleanup, databaseUrl, pool } = await createTestDatabase(t);
     t.after(cleanup);
-    await rollBackThrough(databaseUrl, '20261026120000_add_device_notification_channels');
+    await rollBackThrough(databaseUrl, '20261026150200_add_device_notification_channels');
     await pool.query("INSERT INTO users (id, login, password_hash) VALUES ('ada', 'ada', 'x')");
     await pool.query("INSERT INTO sessions (id, user_id, expires_at) VALUES ('s1', 'ada', now() + interval '1 day')");
     await pool.query(
@@ -40,7 +40,7 @@ test(
     ]) {
       await assert.rejects(pool.query('UPDATE device_tokens SET notification_channels = ' + value));
     }
-    await rollBackThrough(databaseUrl, '20261026120000_add_device_notification_channels');
+    await rollBackThrough(databaseUrl, '20261026150200_add_device_notification_channels');
     assert.equal(
       (await queryRow(pool, Type.Object({ count: Type.Integer() }), 'SELECT count(*)::int AS count FROM device_tokens'))
         .count,

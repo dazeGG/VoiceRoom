@@ -72,7 +72,7 @@ server revalidation are required, not inferred from fencing alone.
 ## Deployment and rollback
 
 No deployment is authorized by this source slice. Apply migration
-`20261025130000_create_room_rings` before this API, and deploy the reviewed
+`20261026150100_create_room_rings` before this API, and deploy the reviewed
 shared/API ref before enabling the corresponding mobile lifecycle feature.
 RuStore configuration and real certificate/device acceptance remain release gates.
 No extra worker container is required; each API replica owns the embedded poller.

@@ -316,7 +316,7 @@ test(
     assert.equal((await pool.query('SELECT * FROM direct_messages')).rowCount, 1);
     const { rollBackThrough } = await import('./migration-steps.ts');
     const { runMigrations } = await import('../src/lib/migrate.ts');
-    await rollBackThrough(databaseUrl, '20261025130000_create_room_rings');
+    await rollBackThrough(databaseUrl, '20261026150100_create_room_rings');
     assert.equal((await pool.query('SELECT * FROM direct_messages')).rowCount, 1);
     await runMigrations({ databaseUrl, logger: { log() {}, info() {}, warn() {}, error() {} } });
     assert.equal((await pool.query('SELECT * FROM room_rings')).rowCount, 0);

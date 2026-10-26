@@ -27,7 +27,7 @@ An account may be reported again after the previous reports have been closed.
 
 ## Storage and retention
 
-Migration `20261025120000_create_user_reports.ts` adds a separate `user_reports`
+Migration `20261026150000_create_user_reports.ts` adds a separate `user_reports`
 table and partial unique index on reporter/target while open. No existing message
 report table or data is altered. Database constraints reject self-targeting,
 unknown reasons, oversized comments and invalid open/resolved state combinations.

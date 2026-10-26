@@ -30,7 +30,7 @@ test(
     await assert.rejects(db.pool.query(`UPDATE user_reports SET status = 'actioned'`), /user_reports_status_check/);
     await db.pool.query(`UPDATE user_reports SET status = 'dismissed', resolved_at = now()`);
     await file();
-    await rollBackThrough(db.databaseUrl, '20261025120000_create_user_reports');
+    await rollBackThrough(db.databaseUrl, '20261026150000_create_user_reports');
     assert.equal(
       (await db.pool.query<{ name: string | null }>(`SELECT to_regclass('public.user_reports') AS name`)).rows[0]?.name,
       null
