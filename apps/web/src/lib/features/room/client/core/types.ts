@@ -203,6 +203,8 @@ export interface RoomAudioState {
   localStream: MediaStream | null;
   /** In the call without a microphone: none was found or access was refused. */
   microphoneMissing: boolean;
+  /** The computer stayed overloaded: video goes out and comes in lighter for the rest of the call (video-relief.ts). */
+  videoRelieved: boolean;
   localAppAudioSuppressed: boolean;
   microphoneDeviceId: string;
   microphoneMode: MicrophoneMode;

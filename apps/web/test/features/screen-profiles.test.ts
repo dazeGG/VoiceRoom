@@ -4,6 +4,7 @@ import { afterEach, expect, test, vi } from 'vitest';
 import {
   createScreenProfileId,
   createSourceScreenProfile,
+  getPreferredCameraVideoCodec,
   getPreferredScreenVideoCodec,
   getScreenModeForProfile,
   getScreenModeSummary,
@@ -52,6 +53,13 @@ test('text prefers VP9 and motion H.264, with VP8 when neither is available', ()
   expect(getPreferredScreenVideoCodec('motion')).toBe('h264');
   stubCodecs('video/VP8');
   expect(getPreferredScreenVideoCodec('motion')).toBe('vp8');
+});
+
+test('a camera goes out in H.264 where the browser can send it, else VP8', () => {
+  stubCodecs('video/VP8', 'video/H264');
+  expect(getPreferredCameraVideoCodec()).toBe('h264');
+  stubCodecs('video/VP8', 'video/VP9');
+  expect(getPreferredCameraVideoCodec()).toBe('vp8');
 });
 
 test('every mode keeps its resolution, so a stream never starts downscaled', () => {

@@ -67,6 +67,8 @@ export async function loadLiveKitHarness(
     inputSilent?: () => Promise<boolean>;
     /** Whether a recovery epoch is still current. */
     recoveryEpochCurrent?: () => boolean;
+    /** The codec this browser would send a camera in. */
+    cameraCodec?: 'h264' | 'vp8';
   } = {}
 ): Promise<LiveKitHarness> {
   vi.resetModules();
@@ -151,16 +153,13 @@ export async function loadLiveKitHarness(
     VideoQuality: { HIGH: 2, MEDIUM: 1, LOW: 0 },
     VideoPresets: { h180: { resolution: { height: 180 } }, h360: { resolution: { height: 360 } } },
     VideoPreset: class {
-      constructor(readonly encoding: unknown) {}
+      readonly args: unknown[];
+      constructor(...args: unknown[]) {
+        this.args = args;
+      }
     }
   };
 
-  vi.doMock(`${P}/core/config`, () => ({
-    CAMERA_CAPTURE: { width: 1280, height: 720, frameRate: 30 },
-    CAMERA_VIDEO_BITRATE: 1_700_000,
-    MICROPHONE_AUDIO_BITRATE: 64_000,
-    SCREEN_AUDIO_BITRATE: 192_000
-  }));
   vi.doMock('../../src/lib/features/room/start-ui.svelte', () => ({ startUi: {} }));
   vi.doMock(`${P}/core/state.svelte`, () => ({ state }));
   vi.doMock(`${P}/ui/status`, () => ({ setVoiceConnectionStatus: () => {} }));
@@ -182,6 +181,7 @@ export async function loadLiveKitHarness(
   }));
   vi.doMock(`${P}/media/cues`, () => ({ clearPeerJoinCue: () => {} }));
   vi.doMock(`${P}/media/profiles`, () => ({
+    getPreferredCameraVideoCodec: () => options.cameraCodec ?? 'h264',
     getScreenProfile: () => ({ id: 'balanced-30' }),
     getScreenPublishVideoOptions: () => ({})
   }));

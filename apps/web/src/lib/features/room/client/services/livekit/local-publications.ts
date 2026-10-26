@@ -3,12 +3,15 @@
 import type { LocalTrackPublication, Room } from 'livekit-client';
 import {
   CAMERA_CAPTURE,
+  CAMERA_SIMULCAST_LAYERS,
+  CAMERA_VIDEO_BACKUP_CODEC,
   CAMERA_VIDEO_BITRATE,
   MICROPHONE_AUDIO_BITRATE,
   SCREEN_AUDIO_BITRATE
 } from '../../core/config';
 import { state } from '../../core/state.svelte';
-import { getScreenProfile, getScreenPublishVideoOptions } from '../../media/profiles';
+import { getPreferredCameraVideoCodec, getScreenProfile, getScreenPublishVideoOptions } from '../../media/profiles';
+import { applyVideoReliefToCamera, applyVideoReliefToScreen } from '../video-relief';
 import { loadLiveKitClient } from '../../media/livekit-runtime';
 import { isMicrophoneShownMuted } from '../../core/microphone-mute';
 import { UserFacingError } from '../../core/utils';
@@ -113,21 +116,28 @@ export async function publishLocalCameraForRoom(
 ): Promise<LocalTrackPublication | null> {
   const [track] = stream?.getVideoTracks() ?? [];
   if (!track || track.readyState === 'ended' || !isCurrent()) return null;
-  const { Track, VideoPresets } = await loadLiveKitClient();
+  const { Track, VideoPreset } = await loadLiveKitClient();
   if (!isCurrent()) return null;
 
   // Simulcast: a grid tile asks for a small layer, the spotlight for the top one.
+  const videoCodec = getPreferredCameraVideoCodec();
+  const encoding = { maxBitrate: CAMERA_VIDEO_BITRATE, maxFramerate: CAMERA_CAPTURE.frameRate };
   const publication = await room.localParticipant.publishTrack(track, {
     name: 'camera',
     simulcast: true,
     source: Track.Source.Camera,
-    videoEncoding: { maxBitrate: CAMERA_VIDEO_BITRATE, maxFramerate: CAMERA_CAPTURE.frameRate },
-    videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360]
+    videoCodec,
+    backupCodec: videoCodec === CAMERA_VIDEO_BACKUP_CODEC ? false : { codec: CAMERA_VIDEO_BACKUP_CODEC, encoding },
+    videoEncoding: encoding,
+    videoSimulcastLayers: CAMERA_SIMULCAST_LAYERS.map(
+      (layer) => new VideoPreset(layer.width, layer.height, layer.bitrate, CAMERA_CAPTURE.frameRate)
+    )
   });
   if (!isCurrent()) {
     await room.localParticipant.unpublishTrack(publication.track ?? track, false).catch(() => {});
     return null;
   }
+  await applyVideoReliefToCamera(publication);
   return publication;
 }
 
@@ -204,6 +214,7 @@ export async function publishLocalScreenTracksForRoom(
     created.set(track.id, publication);
   }
   if (!isCurrent()) await disposeCandidatePublications(room, created);
+  else await applyVideoReliefToScreen(stream);
   return publications;
 }
 

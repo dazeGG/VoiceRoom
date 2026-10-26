@@ -43,6 +43,7 @@ import {
 import { attachMeter, startMeters, stopMeters } from '../media/meters';
 import { startPeerLatencyStats, stopPeerLatencyStats } from './stats';
 import { resetNetworkLevel } from './network-report';
+import { relieveVideo } from '../services/video-relief';
 import { clearAllPeerJoinCues, clearStreamViewerCues, playPeerCue } from '../media/cues';
 import { cancelScreenSourcePicker } from '../ui/screen-source-picker';
 import { syncDesktopGlobalHotkeys } from '../services/desktop-hotkey-service';
@@ -316,9 +317,11 @@ async function performJoinRoom(generation: number): Promise<void> {
     recordPeerCount(state.peers.size);
     startCpuPressureWatch({
       onCritical: () => {
+        // First the noise suppression, then, silently, the video (video-relief.ts).
         void relieveNoiseSuppression().then((switched) => {
           if (switched) recordCpuRelief();
         });
+        void relieveVideo().then(() => recordCpuRelief());
       },
       onState: recordCpuPressure
     });
@@ -431,6 +434,7 @@ export function leaveRoom(): void {
 
   state.muted = false;
   state.microphoneMissing = false;
+  state.videoRelieved = false;
   resetPushToTalkState();
   clearAllPeerJoinCues();
   clearStreamViewerCues();

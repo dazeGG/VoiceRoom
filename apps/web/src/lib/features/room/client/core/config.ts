@@ -98,11 +98,23 @@ export const SCREEN_STREAM_MODE_PROFILES = {
 export const MICROPHONE_AUDIO_BITRATE = 64_000;
 export const SCREEN_AUDIO_BITRATE = 192_000;
 
-/** Camera capture and its top layer; viewers in the grid get a lighter layer. */
-export const CAMERA_CAPTURE = { width: 1280, height: 720, frameRate: 30 } as const;
-export const CAMERA_VIDEO_BITRATE = 1_700_000;
+/**
+ * Camera capture and its top layer: 540p, and 24 fps for every camera layer, a
+ * face needs no more. Viewers in the grid get a lighter layer.
+ */
+export const CAMERA_CAPTURE = { width: 960, height: 540, frameRate: 24 } as const;
+export const CAMERA_VIDEO_BITRATE = 900_000;
+/** The lighter simulcast layers of a camera, smallest first. */
+export const CAMERA_SIMULCAST_LAYERS = [
+  { width: 320, height: 180, bitrate: 150_000 },
+  { width: 640, height: 360, bitrate: 450_000 }
+] as const;
+/** Past critical CPU pressure the screen share sends at most this many frames a second. */
+export const RELIEVED_SCREEN_FRAME_RATE = 30;
 export const SCREEN_STATS_INTERVAL_MS = 1500;
 export const SCREEN_VIDEO_BACKUP_CODEC: 'vp8' | 'h264' = 'vp8';
+/** What a viewer that cannot decode a camera's H.264 gets instead. */
+export const CAMERA_VIDEO_BACKUP_CODEC = 'vp8' as const;
 export const PEER_SESSION_STORAGE_PREFIX = 'voice-room:peer-session:';
 
 export interface ScreenQualityOption {
