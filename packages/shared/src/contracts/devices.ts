@@ -19,9 +19,17 @@ export const DEVICE_TOKEN_MAX_LENGTH = 1024;
  */
 export const DEVICE_TOKEN_PATTERN = /^[\x21-\x7E]{1,1024}$/;
 
+/** Existing Android channel IDs, reported by native code, not inferred from app version. */
+export const DEVICE_NOTIFICATION_CHANNELS = ['messages', 'mentions', 'calls'] as const;
+export const DeviceNotificationChannel = Type.Enum(DEVICE_NOTIFICATION_CHANNELS);
+export type DeviceNotificationChannel = Static<typeof DeviceNotificationChannel>;
+
 /** The body of both POST (register) and DELETE (remove) /api/push/devices. */
 export const DeviceTokenBody = Type.Object({
   provider: DevicePushProvider,
-  token: Type.String({ minLength: 1, maxLength: DEVICE_TOKEN_MAX_LENGTH })
+  token: Type.String({ minLength: 1, maxLength: DEVICE_TOKEN_MAX_LENGTH }),
+  notificationChannels: Type.Optional(
+    Type.Array(DeviceNotificationChannel, { maxItems: DEVICE_NOTIFICATION_CHANNELS.length, uniqueItems: true })
+  )
 });
 export type DeviceTokenBody = Static<typeof DeviceTokenBody>;

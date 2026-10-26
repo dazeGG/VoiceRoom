@@ -40,3 +40,17 @@ test('the client policy names the minimum Android version, or null for none', ()
   assert.equal(Value.Check(ClientPolicy, { contractVersion: 2, android: { minVersion: null } }), false);
   assert.equal(Value.Check(ClientPolicy, { contractVersion: 1, android: {} }), false);
 });
+
+test('channel capabilities are optional, bounded known IDs', () => {
+  const body = { provider: 'rustore', token: 'x' };
+  for (const notificationChannels of [[], ['messages'], ['messages', 'mentions'], ['calls']])
+    assert.equal(Value.Check(DeviceTokenBody, { ...body, notificationChannels }), true);
+  for (const notificationChannels of [
+    null,
+    'mentions',
+    ['unknown'],
+    ['mentions', 'mentions'],
+    ['messages', 'mentions', 'calls', 'messages']
+  ])
+    assert.equal(Value.Check(DeviceTokenBody, { ...body, notificationChannels }), false);
+});
