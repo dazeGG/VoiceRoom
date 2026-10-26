@@ -48,6 +48,15 @@ async function setup(t: TestContext) {
        $1::text || '/processed', $1::text || '/preview', now(), now(), 'm12', 0)`,
     [attachmentId]
   );
+  const dmAttachmentId = crypto.randomUUID();
+  await pool.query(
+    `INSERT INTO message_attachments (id, owner_id, context, state, mime_type, original_bytes, processed_bytes,
+       preview_bytes, width, height, original_storage_key, processed_storage_key, preview_storage_key, ready_at,
+       bound_at, direct_message_id, attachment_order)
+     VALUES ($1::uuid, 'ada', 'dm', 'ready', 'image/jpeg', 10, 8, 4, 2, 2, $1::text || '/original',
+       $1::text || '/processed', $1::text || '/preview', now(), now(), 'dm-12', 0)`,
+    [dmAttachmentId]
+  );
   const reactions = createReactionRepository({ client: pool });
   const react = (type: string, messageId: string, emoji: string, userId: string) =>
     reactions.transaction((client) =>
@@ -76,6 +85,7 @@ async function setup(t: TestContext) {
   });
   return {
     attachmentId,
+    dmAttachmentId,
     history,
     queriesFor: async (run: () => Promise<unknown>) => {
       queries = 0;
@@ -123,7 +133,7 @@ test('a room page carries attachments, quotes and reactions read once per page',
 });
 
 test('a DM page carries quotes and reactions read once per page', { skip }, async (t) => {
-  const { history, queriesFor } = await setup(t);
+  const { dmAttachmentId, history, queriesFor } = await setup(t);
   const read = (limit: number) => history.dm.getPage({ userId: 'ada', peerId: 'bob', query: { limit: String(limit) } });
 
   const page = await read(12);
@@ -137,4 +147,19 @@ test('a DM page carries quotes and reactions read once per page', { skip }, asyn
   );
 
   assert.equal(await queriesFor(() => read(12)), await queriesFor(() => read(3)));
+  const around = await history.dm.getPage({
+    userId: 'ada',
+    peerId: 'bob',
+    query: { mode: 'around', messageId: 'dm-12', limit: '3' }
+  });
+  const anchored = around.messages.find(({ id }) => id === 'dm-12');
+  assert.deepEqual(
+    anchored,
+    { ...last, cursor: anchored?.cursor, readCursor: anchored?.readCursor },
+    'ID anchors preserve the full media, reply and reaction projection'
+  );
+  assert.deepEqual(
+    anchored?.attachments?.map(({ id }) => id),
+    [dmAttachmentId]
+  );
 });
