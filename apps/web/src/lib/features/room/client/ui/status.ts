@@ -1,4 +1,6 @@
-import { PEER_LATENCY_FAIR_MS, PEER_LATENCY_GOOD_MS } from '../core/config';
+import { NETWORK_THRESHOLDS, networkLevelOfValue, type NetworkMeasure } from '@voice-room/shared/network-quality';
+import { PEER_LATENCY_GOOD_MS } from '../core/config';
+import { readingLevel } from '../room/network-level';
 import { state } from '../core/state.svelte';
 import type { LocalConnectionQuality, ServerConnection, VoiceConnection } from '../core/types';
 
@@ -86,12 +88,18 @@ export function getConnectionStatusView(): ConnectionStatusView {
 
   if (state.voiceConnection === 'connected') {
     const ping = formatLocalPing();
-    const causes = getInstabilityCauses();
-    const head = causes.length > 0 ? ['Голос нестабилен', ...causes] : ['Голос подключен'];
-    const label = [...head, ...(ping ? [ping] : [])].join(' · ');
+    // The level the admin panel's call bars show for this call, by the same thresholds.
+    const level = readingLevel({
+      sample: { ...state.localNetwork, rttMs: state.localPingMs },
+      quality: state.localConnectionQuality,
+      voice: state.voiceConnection
+    });
+    const head = level === 'bad' ? 'Плохая связь' : level === 'unstable' ? 'Голос нестабилен' : 'Голос подключен';
+    const causes = level === 'bad' || level === 'unstable' ? getInstabilityCauses() : [];
+    const label = [head, ...causes, ...(ping ? [ping] : [])].join(' · ');
     return {
       label,
-      stateName: causes.length > 0 ? 'warning' : 'connected',
+      stateName: level === 'bad' ? 'error' : level === 'unstable' ? 'warning' : 'connected',
       title: formatNetworkDetails(ping)
     };
   }
@@ -127,10 +135,10 @@ export function getConnectionStatusView(): ConnectionStatusView {
   };
 }
 
-// Opus with RED conceals a few percent of loss; beyond this listeners hear it.
-const NOTICEABLE_LOSS_PCT = 5;
-// The receive jitter buffer absorbs a few tens of ms; past this speech stutters.
-const NOTICEABLE_JITTER_MS = 30;
+const noticeable = (measure: NetworkMeasure, value: number | null) => {
+  const level = networkLevelOfValue(measure, value);
+  return level === 'unstable' || level === 'bad';
+};
 
 // What makes the voice unstable, in the words the warning shows. A warning
 // that only says "unstable" next to a 2 ms ping leaves the user guessing.
@@ -139,9 +147,9 @@ function getInstabilityCauses(): string[] {
   const causes: string[] = [];
   const quality = getPeerLatencyQuality(state.localPingMs, state.localConnectionQuality);
   if (quality === 'poor') causes.push(Number.isFinite(state.localPingMs) ? 'высокий пинг' : 'плохая связь');
-  if ((outboundLossPct ?? 0) >= NOTICEABLE_LOSS_PCT) causes.push(`потери от вас ${outboundLossPct}%`);
-  if ((inboundLossPct ?? 0) >= NOTICEABLE_LOSS_PCT) causes.push(`потери к вам ${inboundLossPct}%`);
-  if ((jitterMs ?? 0) >= NOTICEABLE_JITTER_MS) causes.push(`джиттер ${jitterMs} мс`);
+  if (noticeable('lossPct', outboundLossPct)) causes.push(`потери от вас ${outboundLossPct}%`);
+  if (noticeable('lossPct', inboundLossPct)) causes.push(`потери к вам ${inboundLossPct}%`);
+  if (noticeable('jitterMs', jitterMs)) causes.push(`джиттер ${jitterMs} мс`);
   return causes;
 }
 
@@ -166,8 +174,8 @@ export function getPeerLatencyQuality(
 ): 'good' | 'fair' | 'poor' | 'lost' | 'unknown' {
   if (pingMs !== null && Number.isFinite(pingMs)) {
     if (pingMs <= PEER_LATENCY_GOOD_MS) return 'good';
-    if (pingMs <= PEER_LATENCY_FAIR_MS) return 'fair';
-    return 'poor';
+    // Past the shared unstable threshold the ping is what makes the voice unstable.
+    return pingMs < NETWORK_THRESHOLDS.unstable.rttMs ? 'fair' : 'poor';
   }
   if (connectionQuality === 'excellent') return 'good';
   if (connectionQuality === 'good') return 'fair';

@@ -53,7 +53,8 @@ function kitchen(): LiveRoom {
         browser: 'VoiceRoom Desktop',
         guestId: null,
         ipKey: '0123456789abcdef',
-        location: 'Москва, Россия'
+        location: 'Москва, Россия',
+        network: 'good'
       },
       {
         peerId: 'p-guest',
@@ -69,7 +70,8 @@ function kitchen(): LiveRoom {
         browser: 'Safari',
         guestId: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b',
         ipKey: 'fedcba9876543210',
-        location: null
+        location: null,
+        network: 'unstable'
       }
     ]
   };
@@ -91,6 +93,7 @@ function stay(id: string, overrides: Partial<RoomStay> = {}): RoomStay {
     location: null,
     joinedAt: Date.now() - 2 * 60 * MINUTE,
     leftAt: Date.now() - 60 * MINUTE,
+    network: [],
     ...overrides
   };
 }
@@ -152,6 +155,9 @@ test('a live room opens its people: accounts by login, guests by name, and an ac
   expect(within(guestPeer).getByText('Петя')).toBeTruthy();
   expect(within(guestPeer).getByText('гость')).toBeTruthy();
   expect(within(guestPeer).getByText('экран')).toBeTruthy();
+  // A shaky network is said; a good one stays quiet.
+  expect(within(guestPeer).getByText('сеть нестабильна')).toBeTruthy();
+  expect(within(alicePeer).queryByText(/сеть/)).toBeNull();
   // Where each one sits: the desktop app, a phone or a browser.
   expect(within(alicePeer).getByLabelText('приложение')).toBeTruthy();
   expect(within(guestPeer).getByLabelText('телефон')).toBeTruthy();
@@ -307,6 +313,46 @@ test('a call shows its span and length, and opens to who was there and when', as
   expect(within(aliceRow).getByText('1 ч')).toBeTruthy();
   expect(within(guestRow).getByText('Петя')).toBeTruthy();
   expect(within(guestRow).getByText('1 ч 15 мин')).toBeTruthy();
+});
+
+test("a stay's bar is coloured by how its network went, and grey where the client never said", async () => {
+  const startedAt = new Date(2026, 9, 15, 14, 30).getTime();
+  stubApi({
+    'GET /api/admin/rooms': live([]),
+    'GET /api/admin/rooms/calls': history([
+      call('c-net', [
+        stay('s-a', {
+          account: alice,
+          joinedAt: startedAt,
+          leftAt: startedAt + 60 * MINUTE,
+          network: [
+            // The first report comes a few seconds in and stands for the start.
+            { at: startedAt + 6_000, level: 'good' },
+            { at: startedAt + 20 * MINUTE, level: 'unstable' },
+            { at: startedAt + 25 * MINUTE, level: 'bad' },
+            { at: startedAt + 30 * MINUTE, level: 'good' }
+          ]
+        }),
+        stay('s-old', { guestName: 'Петя', joinedAt: startedAt + 10 * MINUTE, leftAt: startedAt + 50 * MINUTE })
+      ])
+    ])
+  });
+  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Кто был в звонке 14:30–15:30' }));
+  const table = screen.getByRole('table', { name: 'Участники звонка' });
+  const [, aliceRow, guestRow] = within(table).getAllByRole('row');
+  if (!aliceRow || !guestRow) throw new Error('two people expected');
+  const stretches = (row: HTMLElement) =>
+    [...row.querySelectorAll('.net-stretch')].map((stretch) => stretch.getAttribute('title'));
+  expect(stretches(aliceRow)).toEqual([
+    '14:30–14:50 · сеть в порядке',
+    '14:50–14:55 · сеть нестабильна',
+    '14:55–15:00 · сеть плохая',
+    '15:00–15:30 · сеть в порядке'
+  ]);
+  expect(stretches(guestRow)).toEqual(['14:40–15:20 · нет данных о сети']);
+  expect(within(table).getByText('сеть нестабильна')).toBeTruthy();
 });
 
 test('each seat says its device and where from, by place and address key, never the address', async () => {

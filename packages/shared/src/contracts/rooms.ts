@@ -135,3 +135,19 @@ export type ServerMuted = Static<typeof ServerMuted>;
 export const PeerBanned = Ok({ banId: Type.String() });
 export type PeerBanned = Static<typeof PeerBanned>;
 export const BanParams = Type.Object({ roomId: Type.String(), banId: Type.String() });
+
+/**
+ * How a peer's connection is doing, as its own client judges it from loss,
+ * latency and jitter (room.peer.update `network`). The server keeps each
+ * stay's changes for the admin panel; nobody else in the room sees them.
+ */
+export const NETWORK_LEVELS = ['good', 'unstable', 'bad'] as const;
+export const NetworkLevel = Type.Enum(NETWORK_LEVELS);
+export type NetworkLevel = Static<typeof NetworkLevel>;
+
+/** A stay's network level changed at `at`, the server's time of hearing it. */
+export const NetworkPoint = Type.Object({ at: Type.Number(), level: NetworkLevel });
+export type NetworkPoint = Static<typeof NetworkPoint>;
+
+/** A stay keeps at most this many changes; past it, only a worse level still counts. */
+export const NETWORK_POINTS_MAX = 720;

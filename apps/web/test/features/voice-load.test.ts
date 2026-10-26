@@ -15,6 +15,7 @@ import {
   finishCallQuality,
   QUALITY_MIN_CALL_MS,
   recordCpuPressure,
+  recordMicDrop,
   recordNetworkSample,
   recordReconnect,
   startCallQuality
@@ -125,6 +126,31 @@ test('a good call is logged and nothing is reported', () => {
   });
   expect(readLogBuffer().at(-1)).toMatchObject({ level: 'info', ns: 'room:quality', msg: 'call quality' });
   expect(Object.keys(defined(summary, 'the call quality summary').context).length).toBeLessThanOrEqual(12);
+});
+
+test("the answer to 'how was the call?' carries the worst moments and the microphone drops, the log keeps its twelve", () => {
+  startCallQuality(0);
+  recordNetworkSample({ inboundLossPct: 0, outboundLossPct: 1, jitterMs: 6, rttMs: 30, transport: 'udp' });
+  recordNetworkSample({ inboundLossPct: 13.3, outboundLossPct: 4, jitterMs: 25, rttMs: 1109, transport: 'udp' });
+  recordNetworkSample({ inboundLossPct: null, outboundLossPct: null, jitterMs: null, rttMs: null, transport: null });
+  recordMicDrop();
+  recordMicDrop();
+  recordCpuPressure('critical');
+  const summary = defined(finishCallQuality(QUALITY_MIN_CALL_MS), 'the call quality summary');
+  expect(summary.stats).toMatchObject({
+    rttMaxMs: 1109,
+    inboundLossMaxPct: 13.3,
+    outboundLossMaxPct: 4,
+    jitterMaxMs: 25,
+    cpuPressureMax: 'critical',
+    cpuRelieved: false,
+    micDrops: 2
+  });
+  expect(Object.keys(summary.context)).toHaveLength(12);
+
+  startCallQuality(0);
+  const quiet = defined(finishCallQuality(QUALITY_MIN_CALL_MS), 'the call quality summary');
+  expect(quiet.stats).toMatchObject({ rttMaxMs: null, inboundLossMaxPct: null, jitterMaxMs: null, micDrops: 0 });
 });
 
 test('loss, reconnects or critical CPU mark a call as degraded, short calls never', () => {

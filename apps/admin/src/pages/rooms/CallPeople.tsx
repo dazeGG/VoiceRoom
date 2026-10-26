@@ -1,11 +1,12 @@
 // Who was in one call and when: a row per person with a bar of the call's
-// length, lit from each time they came in to when they left; accounts in the
-// accent colour, guests in the warning one.
+// length, lit from each time they came in to when they left in the colour of
+// how their network went (network-bar.tsx).
 
 import type { RoomCall } from '@voice-room/shared/contracts/admin';
 import { formatClock, formatDuration } from '../../format.ts';
 import { Avatar, Pill } from '../../ui/index.tsx';
 import { AccountName, Origin, peopleOf } from './room-bits.tsx';
+import { NetworkLegend, NetworkSpan } from './network-bar.tsx';
 
 const COLUMNS = 'minmax(130px, 1fr) minmax(100px, 2fr) 70px minmax(110px, 1.1fr)';
 
@@ -18,6 +19,7 @@ export function CallPeople({ call, onOpenAccount }: { call: RoomCall; onOpenAcco
         <span role="columnheader">Кто</span>
         <span role="columnheader" className="call-people-span">
           <span className="ui-mono">{formatClock(call.startedAt)}</span>
+          <NetworkLegend />
           <span className="ui-mono">{formatClock(call.endedAt)}</span>
         </span>
         <span role="columnheader" className="ui-cell-end">
@@ -47,13 +49,14 @@ export function CallPeople({ call, onOpenAccount }: { call: RoomCall; onOpenAcco
           <span
             role="cell"
             className="call-bar"
-            data-guest={!person.account}
             aria-label={person.spans.map((span) => `${formatClock(span.from)}–${formatClock(span.to)}`).join(', ')}
           >
             {person.spans.map((span) => (
-              <span
+              <NetworkSpan
                 key={span.from}
-                className="call-bar-span"
+                from={span.from}
+                to={span.to}
+                points={span.network}
                 style={{
                   left: `${String(share(span.from))}%`,
                   width: `${String(Math.max(1, share(span.to) - share(span.from)))}%`

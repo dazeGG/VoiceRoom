@@ -198,3 +198,24 @@
   border-top: 1px solid var(--vr-line);
   padding: 12px 18px;
 }
+
+.feedback-guest {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.feedback-network {
+  display: grid;
+  gap: 8px;
+}
+
+.feedback-network-bar {
+  position: relative;
+  display: block;
+  height: 8px;
+  max-width: 320px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: oklch(100% 0 0 / 0.05);
+}

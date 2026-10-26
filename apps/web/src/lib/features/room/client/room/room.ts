@@ -13,6 +13,7 @@ import { checkRoomExists } from '../net/api';
 import { postState } from './presence';
 import { UserFacingError, wait } from '../core/utils';
 import { rotateStoredPeerSession } from '../core/session';
+import { guestBrowserId } from '$lib/entities/room/guest-id';
 import { getRoomShell, isRoomEmbedded } from '../core/embed';
 import { openLeaveScreen } from '../../leave-screen.svelte';
 import { CALL_FEEDBACK_MAX_DURATION_S } from '@voice-room/shared/contracts/feedback';
@@ -41,6 +42,7 @@ import {
 } from '../services/microphone-service';
 import { attachMeter, startMeters, stopMeters } from '../media/meters';
 import { startPeerLatencyStats, stopPeerLatencyStats } from './stats';
+import { resetNetworkLevel } from './network-report';
 import { clearAllPeerJoinCues, clearStreamViewerCues, playPeerCue } from '../media/cues';
 import { cancelScreenSourcePicker } from '../ui/screen-source-picker';
 import { syncDesktopGlobalHotkeys } from '../services/desktop-hotkey-service';
@@ -310,6 +312,7 @@ async function performJoinRoom(generation: number): Promise<void> {
     // A question still open about an earlier call would now be about this one.
     dropCallFeedback();
     startCallQuality();
+    resetNetworkLevel();
     recordPeerCount(state.peers.size);
     startCpuPressureWatch({
       onCritical: () => {
@@ -457,8 +460,16 @@ function noteFinishedCall(roomId: string, summary: CallQualitySummary | null): v
       outboundLossAvgPct: stats.outboundLossAvgPct,
       jitterAvgMs: stats.jitterAvgMs,
       reconnects: stats.reconnects,
-      transport: stats.transport
-    }
+      transport: stats.transport,
+      rttMaxMs: stats.rttMaxMs,
+      inboundLossMaxPct: stats.inboundLossMaxPct,
+      outboundLossMaxPct: stats.outboundLossMaxPct,
+      jitterMaxMs: stats.jitterMaxMs,
+      cpuPressureMax: stats.cpuPressureMax,
+      cpuRelieved: stats.cpuRelieved,
+      micDrops: stats.micDrops
+    },
+    ...(session.user ? {} : { guestId: guestBrowserId() })
   });
 }
 

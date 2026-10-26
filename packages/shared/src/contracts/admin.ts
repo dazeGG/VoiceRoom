@@ -6,6 +6,7 @@
 import { Type, type Static } from 'typebox';
 import { Nullable, Ok } from './http.ts';
 import { ReportReasonSchema } from './reports.ts';
+import { NetworkLevel, NetworkPoint } from './rooms.ts';
 import { StaffRoleSchema } from './staff.ts';
 import { AccountBadge } from './users.ts';
 
@@ -397,7 +398,13 @@ export const LiveRoomPeer = Type.Object({
   ...DeviceInfo,
   /** The lasting id of a guest's browser; null for an account or a guest that sent none. */
   guestId: Nullable(Type.String()),
-  ...NetworkOrigin
+  ...NetworkOrigin,
+  /**
+   * The connection as the peer's client last judged it; null until it says.
+   * Optional, like the other network fields: the admin app and the API ship
+   * in different images, so an API a release behind sends none.
+   */
+  network: Type.Optional(Nullable(NetworkLevel))
 });
 export type LiveRoomPeer = Static<typeof LiveRoomPeer>;
 
@@ -409,7 +416,7 @@ export const LiveRoom = Type.Object({
   avatarUrl: Nullable(Type.String()),
   /** Null for a temporary room, which nobody owns. */
   owner: Nullable(RoomAccount),
-  /** When the earliest of those still in voice came in. */
+  /** When the call began: the server's call clock, the one the room screen counts from. */
   since: Nullable(Type.Number()),
   peers: Type.Array(LiveRoomPeer)
 });
@@ -451,7 +458,9 @@ export const RoomStay = Type.Object({
   browser: Nullable(Type.String()),
   ...NetworkOrigin,
   joinedAt: Type.Number(),
-  leftAt: Type.Number()
+  leftAt: Type.Number(),
+  /** How the connection went: each change of its level, the first at or after joinedAt. Empty when the client never said. */
+  network: Type.Optional(Type.Array(NetworkPoint))
 });
 export type RoomStay = Static<typeof RoomStay>;
 

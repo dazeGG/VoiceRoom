@@ -7,6 +7,7 @@
 
 import type pg from 'pg';
 import type { ClientKind } from '@voice-room/shared/contracts/admin';
+import type { NetworkPoint } from '@voice-room/shared/contracts/rooms';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 
 export type FinishedVoiceSession = {
@@ -25,6 +26,8 @@ export type FinishedVoiceSession = {
   ip: string;
   joinedAt: number;
   leftAt: number;
+  /** The changes of its network level the client reported; none when it never did. */
+  network?: readonly NetworkPoint[];
 };
 
 /** What a stay keeps of its address: its keyed hash (lib/ip-key.ts) and its city. */
@@ -58,7 +61,8 @@ export function createVoiceSessionRepository({
           ip_key: origins[index]?.ipKey ?? null,
           location: origins[index]?.location || null,
           joined_at: new Date(session.joinedAt),
-          left_at: new Date(Math.max(session.leftAt, session.joinedAt))
+          left_at: new Date(Math.max(session.leftAt, session.joinedAt)),
+          network: session.network?.length ? JSON.stringify(session.network) : null
         }))
       )
       .execute();
@@ -71,7 +75,7 @@ export function createVoiceSessionRepository({
   async function forgetRoomsBefore(cutoff: Date): Promise<number> {
     const result = await db
       .updateTable('voice_sessions')
-      .set({ room_id: null, guest_name: null, guest_id: null, ip_key: null, location: null })
+      .set({ room_id: null, guest_name: null, guest_id: null, ip_key: null, location: null, network: null })
       .where('room_id', 'is not', null)
       .where('joined_at', '<', cutoff)
       .executeTakeFirst();

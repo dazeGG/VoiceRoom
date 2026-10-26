@@ -22,10 +22,18 @@ import {
 
 export type NewCallFeedback = {
   userId: string | null;
+  /** A guest's lasting browser id; null for an account or a guest that sent none. */
+  guestId: string | null;
   rating: CallFeedbackRating;
   tags: CallFeedbackTag[];
   comment: string;
-  call: CallFeedbackCall;
+  call: Omit<CallFeedbackCall, 'guestId'>;
+};
+
+/** An answer as stored, with whose it was for finding the stay it is about. */
+export type StoredCallFeedback = Omit<AdminCallFeedbackEntry, 'stay'> & {
+  userId: string | null;
+  guestId: string | null;
 };
 
 // The table's CHECK constraints keep these columns to the contract's values;
@@ -45,6 +53,7 @@ export function createCallFeedbackRepository({ pool }: { pool: pg.Pool }) {
       .insertInto('call_feedback')
       .values({
         user_id: input.userId,
+        guest_id: input.userId ? null : input.guestId,
         rating: input.rating,
         tags: input.tags,
         comment: input.comment,
@@ -81,7 +90,7 @@ export function createCallFeedbackRepository({ pool }: { pool: pg.Pool }) {
   }
 
   /** The newest answers since `since`, with who gave them and the room as it stands now. */
-  async function listRecent(since: Date, rating: CallFeedbackRating | null): Promise<AdminCallFeedbackEntry[]> {
+  async function listRecent(since: Date, rating: CallFeedbackRating | null): Promise<StoredCallFeedback[]> {
     let query = db
       .selectFrom('call_feedback as f')
       .leftJoin('users as u', 'u.id', 'f.user_id')
@@ -97,6 +106,8 @@ export function createCallFeedbackRepository({ pool }: { pool: pg.Pool }) {
         'f.peers',
         'f.platform',
         'f.quality',
+        'f.user_id',
+        'f.guest_id',
         'u.id as author_id',
         'u.login as author_login',
         'u.display_name as author_display_name',
@@ -133,7 +144,9 @@ export function createCallFeedbackRepository({ pool }: { pool: pg.Pool }) {
           durationS: row.duration_s,
           peers: row.peers,
           platform,
-          quality: Value.Check(CallFeedbackQuality, quality) ? quality : null
+          quality: Value.Check(CallFeedbackQuality, quality) ? quality : null,
+          userId: row.user_id,
+          guestId: row.guest_id
         }
       ];
     });
@@ -143,8 +156,8 @@ export function createCallFeedbackRepository({ pool }: { pool: pg.Pool }) {
   async function forgetAuthorsBefore(cutoff: Date): Promise<number> {
     const result = await db
       .updateTable('call_feedback')
-      .set({ user_id: null })
-      .where('user_id', 'is not', null)
+      .set({ user_id: null, guest_id: null })
+      .where((eb) => eb.or([eb('user_id', 'is not', null), eb('guest_id', 'is not', null)]))
       .where('created_at', '<', cutoff)
       .executeTakeFirst();
     return Number(result.numUpdatedRows);

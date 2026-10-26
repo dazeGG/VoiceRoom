@@ -1,6 +1,8 @@
 // Answers to "how was the call?": how many calls went well over the period,
 // what people liked and what got in the way, and the newest answers in a
-// table with the call's own numbers next to each, the bad ones in red.
+// table with the call's own numbers next to each, the bad ones in red: who
+// answered (a guest by the name they gave) from what device and where, the
+// averages and the worst moments, and the stay's network on a bar.
 
 import { ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useState } from 'react';
@@ -15,11 +17,14 @@ import {
   type CallFeedbackTag
 } from '@voice-room/shared/contracts/feedback';
 import { CALL_FEEDBACK_TAG_LABELS } from '@voice-room/shared/feedback-labels';
+import { networkLevelOfValue, type NetworkMeasure } from '@voice-room/shared/network-quality';
 import { fetchCallFeedback } from '../api/admin.ts';
 import { formatCount, formatDateTime, formatMinutes, formatMs, formatPercent } from '../format.ts';
 import { useAdminResource } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { Empty, Panel, Pill, Segment } from '../ui/index.tsx';
+import { NetworkSpan, describeNetwork } from './rooms/network-bar.tsx';
+import { Origin } from './rooms/room-bits.tsx';
 import './FeedbackPage.css';
 
 type Period = (typeof ADMIN_CALL_FEEDBACK_PERIODS)[number];
@@ -38,22 +43,49 @@ const PLATFORM_LABELS: Record<AdminCallFeedbackEntry['platform'], string> = {
 };
 
 /**
- * Where a call's numbers turn red: a ping a person hears, losses that break
- * words up, a shaky jitter, any reconnect, and a call that had to go through
- * the TURN relay.
+ * Where a call's numbers turn red, by the thresholds the room's connection pill
+ * uses too: an average past unstable, a worst moment past bad (one spike in a
+ * long call is normal), any reconnect, and a call through the TURN relay.
  */
-const BAD = { rttMs: 250, lossPct: 5, jitterMs: 30 } as const;
+const averageBad = (measure: NetworkMeasure, value: number | null | undefined) => {
+  const level = networkLevelOfValue(measure, value);
+  return level === 'unstable' || level === 'bad';
+};
+const peakBad = (measure: NetworkMeasure, value: number | null | undefined) =>
+  networkLevelOfValue(measure, value) === 'bad';
+
+const worse = (a: number | null | undefined, b: number | null | undefined) =>
+  a == null && b == null ? null : Math.max(a ?? 0, b ?? 0);
 
 function Quality({ quality }: { quality: NonNullable<AdminCallFeedbackEntry['quality']> }) {
   const loss = Math.max(quality.inboundLossAvgPct ?? 0, quality.outboundLossAvgPct ?? 0);
+  const lossPeak = worse(quality.inboundLossMaxPct, quality.outboundLossMaxPct);
+  const rttPeak = quality.rttMaxMs ?? null;
+  const jitterPeak = quality.jitterMaxMs ?? null;
   const parts: { text: string; bad: boolean }[] = [
-    { text: `пинг ${formatMs(quality.rttAvgMs)}`, bad: (quality.rttAvgMs ?? 0) >= BAD.rttMs },
-    { text: `потери ${formatPercent(loss)}`, bad: loss >= BAD.lossPct }
+    {
+      text: `пинг ${formatMs(quality.rttAvgMs)}${rttPeak === null ? '' : ` (до ${formatMs(rttPeak)})`}`,
+      bad: averageBad('rttMs', quality.rttAvgMs) || peakBad('rttMs', rttPeak)
+    },
+    {
+      text: `потери ${formatPercent(loss)}${lossPeak === null ? '' : ` (до ${formatPercent(lossPeak)})`}`,
+      bad: averageBad('lossPct', loss) || peakBad('lossPct', lossPeak)
+    }
   ];
   if (quality.jitterAvgMs !== null) {
-    parts.push({ text: `джиттер ${formatMs(quality.jitterAvgMs)}`, bad: quality.jitterAvgMs >= BAD.jitterMs });
+    parts.push({
+      text: `джиттер ${formatMs(quality.jitterAvgMs)}${jitterPeak === null ? '' : ` (до ${formatMs(jitterPeak)})`}`,
+      bad: averageBad('jitterMs', quality.jitterAvgMs) || peakBad('jitterMs', jitterPeak)
+    });
   }
   if (quality.reconnects) parts.push({ text: `переподкл. ${quality.reconnects}`, bad: true });
+  if (quality.micDrops) parts.push({ text: `микрофон отключался ${quality.micDrops}`, bad: true });
+  if (quality.cpuPressureMax === 'critical' || quality.cpuPressureMax === 'serious') {
+    parts.push({
+      text: quality.cpuRelieved ? 'ПК перегружен · облегчённый шумодав' : 'ПК перегружен',
+      bad: quality.cpuPressureMax === 'critical'
+    });
+  }
   if (quality.transport === 'relay') parts.push({ text: 'TURN', bad: true });
   if (quality.transport === 'tcp') parts.push({ text: 'TCP', bad: false });
   return (
@@ -225,9 +257,13 @@ export function FeedbackPage() {
                                 {entry.author.displayName} · <span className="ui-mono">@{entry.author.login}</span>
                               </span>
                             ) : (
-                              <span>Гость</span>
+                              <span className="feedback-guest">
+                                {entry.stay?.guestName ?? 'Гость'}
+                                <Pill compact>гость</Pill>
+                              </span>
                             )}
                             <small>{formatDateTime(entry.createdAt)}</small>
+                            {entry.stay ? <Origin seat={entry.stay} /> : null}
                           </span>
                         </td>
                         <td>
@@ -239,11 +275,30 @@ export function FeedbackPage() {
                           </span>
                         </td>
                         <td>
-                          {entry.quality ? (
-                            <Quality quality={entry.quality} />
-                          ) : (
-                            <span className="feedback-none">—</span>
-                          )}
+                          <span className="feedback-network">
+                            {entry.quality ? (
+                              <Quality quality={entry.quality} />
+                            ) : (
+                              <span className="feedback-none">—</span>
+                            )}
+                            {entry.stay ? (
+                              <span
+                                className="feedback-network-bar"
+                                role="img"
+                                aria-label={describeNetwork(
+                                  { from: entry.stay.joinedAt, to: entry.stay.leftAt },
+                                  entry.stay.network ?? []
+                                )}
+                              >
+                                <NetworkSpan
+                                  from={entry.stay.joinedAt}
+                                  to={entry.stay.leftAt}
+                                  points={entry.stay.network ?? []}
+                                  style={{ left: 0, right: 0 }}
+                                />
+                              </span>
+                            ) : null}
+                          </span>
                         </td>
                         <td>
                           <span className="feedback-review">

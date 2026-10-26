@@ -63,6 +63,7 @@ export interface CallFeedback {
   comment: Generated<string>;
   created_at: Generated<Timestamp>;
   duration_s: number;
+  guest_id: string | null;
   id: Generated<string>;
   peers: number;
   platform: string;
@@ -605,6 +606,7 @@ export interface VoiceSessions {
   joined_at: Timestamp;
   left_at: Timestamp;
   location: string | null;
+  network: Json | null;
   os: string | null;
   room_id: string | null;
   user_id: string | null;

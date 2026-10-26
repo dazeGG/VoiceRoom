@@ -46,7 +46,6 @@ export const MAX_STREAM_VOLUME = 2;
 export const MAX_PARTICIPANT_VOLUME = 2;
 export const PEER_LATENCY_INTERVAL_MS = 3000;
 export const PEER_LATENCY_GOOD_MS = 150;
-export const PEER_LATENCY_FAIR_MS = 300;
 export const PEER_JOIN_CUE_DEDUPE_MS = 4000;
 export const STREAM_CUE_DEDUPE_MS = 1500;
 export const STREAM_VIEWER_CUE_DEDUPE_MS = 1200;

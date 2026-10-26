@@ -1,5 +1,7 @@
 // "How was the call?": storing an answer, from an account or a guest, and the
-// platform administrator's read of the answers.
+// platform administrator's read of the answers, each beside the stay in voice
+// it is about: who the guest was, from what device and where, and how the
+// network went.
 
 import {
   ADMIN_CALL_FEEDBACK_DEFAULT_DAYS,
@@ -11,12 +13,17 @@ import {
   type CallFeedbackRating,
   type CallFeedbackTag
 } from '@voice-room/shared/contracts/feedback';
+import type { RoomStay } from '@voice-room/shared/contracts/admin';
+import { normalizeGuestId } from '@voice-room/shared/validation';
 import type { StaffCheck } from '../staff/staff-check.ts';
+import type { StayAsk } from '../admin/admin-rooms.repository.ts';
 import type { CallFeedbackRepository } from './call-feedback.repository.ts';
 
 export interface CallFeedbackServiceDeps {
   repository: () => Pick<CallFeedbackRepository, 'insert' | 'summarize' | 'listRecent'>;
   staff: StaffCheck;
+  /** Each answer's stay, in the order asked (admin-rooms.repository lastStays). */
+  stays(asks: readonly StayAsk[]): Promise<(RoomStay | null)[]>;
   now?: () => number;
 }
 
@@ -42,12 +49,14 @@ export function createCallFeedbackService(deps: CallFeedbackServiceDeps) {
   const now = deps.now ?? Date.now;
 
   async function submit(userId: string | null, body: CallFeedbackBody): Promise<void> {
+    const { guestId, ...call } = body.call;
     await deps.repository().insert({
       userId,
+      guestId: userId ? null : normalizeGuestId(guestId) || null,
       rating: body.rating,
       tags: tagsOfRating(body.rating, body.tags),
       comment: cleanText(body.comment ?? '', CALL_FEEDBACK_COMMENT_MAX_LENGTH, true),
-      call: { ...body.call, roomId: cleanText(body.call.roomId, 64, false) }
+      call: { ...call, roomId: cleanText(call.roomId, 64, false) }
     });
   }
 
@@ -60,10 +69,28 @@ export function createCallFeedbackService(deps: CallFeedbackServiceDeps) {
     const days = query.days ? Number(query.days) : ADMIN_CALL_FEEDBACK_DEFAULT_DAYS;
     const since = new Date(now() - days * DAY_MS);
     const repository = deps.repository();
-    const [summary, entries] = await Promise.all([
+    const [summary, answers, rooms, origin] = await Promise.all([
       repository.summarize(since),
-      repository.listRecent(since, query.rating ?? null)
+      repository.listRecent(since, query.rating ?? null),
+      deps.staff.can(actorUserId, 'rooms.view'),
+      deps.staff.can(actorUserId, 'origin.view')
     ]);
+    // Who was in which room is the rooms section's to tell, where from its origin's.
+    const stays = !rooms
+      ? answers.map(() => null)
+      : await deps.stays(
+          answers.map((answer) => ({
+            roomId: answer.roomId,
+            userId: answer.userId,
+            guestId: answer.guestId,
+            at: answer.createdAt
+          }))
+        );
+    const entries = answers.map(({ userId: _userId, guestId: _guestId, ...answer }, index) => {
+      const stay = stays[index] ?? null;
+      // Where a stay came from is for those who may see it, as in the rooms section.
+      return { ...answer, stay: stay && !origin ? { ...stay, guestId: null, ipKey: null, location: null } : stay };
+    });
     return { days, summary, entries };
   }
 
