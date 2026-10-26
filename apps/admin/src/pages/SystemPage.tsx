@@ -1,7 +1,9 @@
 // The server minute by minute, as the API recorded it: processor, memory,
 // disk, database, the API process, the media server (LiveKit's traffic, the
-// packets it lost each way, its CPU and memory), live connections and
-// requests; the latest minute as a strip of numbers over the charts.
+// packets it lost each way, its CPU and memory), the video on it (screens and
+// cameras, the video budget and the starts it lowered or refused), live
+// connections and requests; the latest minute as a strip of numbers over the
+// charts.
 
 import { useState } from 'react';
 import type { SystemSample } from '@voice-room/shared/contracts/admin';
@@ -183,6 +185,22 @@ export function SystemPage() {
             }
           />
           <Stat
+            label="Видео"
+            value={
+              latest.videoMbpsMax === null
+                ? '—'
+                : latest.videoBudgetMbps === null
+                  ? mbit(latest.videoMbpsMax)
+                  : `${oneDecimal.format(latest.videoMbpsMax)} из ${mbit(latest.videoBudgetMbps)}`
+            }
+            dot={toneOf(share(latest.videoMbpsMax, latest.videoBudgetMbps))}
+            note={
+              latest.videoScreensMax === null
+                ? 'нет данных'
+                : `экранов ${latest.videoScreensMax}, камер ${latest.videoCamerasMax ?? 0}`
+            }
+          />
+          <Stat
             label="Потери медиа"
             value={`${lossText(lossIn(latest))} / ${lossText(lossOut(latest))}`}
             dot={lossTone(worse(lossIn(latest), lossOut(latest)))}
@@ -270,6 +288,48 @@ export function SystemPage() {
           labels={labels}
           format={mb}
           series={[{ name: 'Размер', values: scaled((sample) => sample.dbBytes, MB), color: 'var(--vr-info)' }]}
+        />
+        <TimeChart
+          title="Видео"
+          labels={labels}
+          series={[
+            {
+              name: 'Демонстрации экрана',
+              values: samples.map((sample) => sample.videoScreensMax),
+              color: 'var(--vr-accent)'
+            },
+            { name: 'Камеры', values: samples.map((sample) => sample.videoCamerasMax), color: 'var(--vr-success)' }
+          ]}
+          note="Сколько шло одновременно, пик за точку. Только числа, без людей и комнат."
+        />
+        <TimeChart
+          title="Видеотрафик"
+          labels={labels}
+          format={mbit}
+          series={[
+            { name: 'Выдано', values: samples.map((sample) => sample.videoMbpsMax), color: 'var(--vr-accent)' },
+            {
+              name: 'Лимит',
+              values: samples.map((sample) => sample.videoBudgetMbps),
+              color: 'var(--vr-text-3)',
+              dashed: true
+            }
+          ]}
+          note="Сколько видео сервер раздаёт зрителям по своему расчёту, пик за точку; лимит — самый низкий за точку, он меньше, когда в голосе много людей."
+        />
+        <TimeChart
+          title="Ограничения видео"
+          kind="bar"
+          labels={labels}
+          series={[
+            {
+              name: 'Урезано качество',
+              values: samples.map((sample) => sample.mediaLowered),
+              color: 'var(--vr-warning)'
+            },
+            { name: 'Отказано', values: samples.map((sample) => sample.mediaRefused), color: 'var(--vr-danger)' }
+          ]}
+          note="Старты стримов, которые сервер пустил в пониженном качестве или не пустил: занят или в комнате уже предел экранов."
         />
         <TimeChart
           title="Память процессов"

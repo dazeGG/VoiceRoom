@@ -63,7 +63,13 @@ test('the media server shows its traffic, its losses each way with too little tr
     sfuLostOut: null,
     sfuRetransmitOut: null,
     sfuCpuPct: null,
-    sfuRssBytes: null
+    sfuRssBytes: null,
+    videoScreensMax: null,
+    videoCamerasMax: null,
+    videoMbpsMax: null,
+    videoBudgetMbps: null,
+    mediaLowered: null,
+    mediaRefused: null
   };
   let latest: Partial<SystemSample> = {};
   stubApi({
@@ -82,6 +88,11 @@ test('the media server shows its traffic, its losses each way with too little tr
   expect(cell('Медиасервер')).toMatch(/↓ 3 Мбит\/с · ↑ 6 Мбит\/с/);
   expect(cell('Медиасервер')).toContain('процессор 6%, память 80 МБ');
   expect(cell('Потери медиа')).toContain('0,05% / 0,5%');
+  // Video: counts only, against the budget.
+  expect(cell('Видео')).toContain('12 из 550 Мбит/с');
+  expect(cell('Видео')).toContain('экранов 2, камер 1');
+  expect(screen.getByRole('img', { name: 'Видеотрафик' })).toBeTruthy();
+  expect(screen.getByRole('img', { name: 'Ограничения видео' })).toBeTruthy();
   unmount();
 
   latest = quiet;
@@ -94,6 +105,7 @@ test('the media server shows its traffic, its losses each way with too little tr
   renderAs(<SystemPage />);
   await screen.findByRole('img', { name: 'Трафик медиасервера' });
   expect(cell('Медиасервер')).toContain('LiveKit не ответил');
+  expect(cell('Видео')).toContain('нет данных');
 });
 
 test('a span of more than a day names the date with the time', async () => {

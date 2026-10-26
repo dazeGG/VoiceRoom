@@ -193,6 +193,14 @@ test("the sampler takes LiveKit's baseline at once and writes the media minute b
       pruneBefore: async () => 0
     }),
     sfu: async () => sfu.shift() ?? null,
+    media: () => ({
+      screensMax: 2,
+      camerasMax: 1,
+      videoMbpsMax: 12.5,
+      videoBudgetMbps: 550,
+      lowered: 1,
+      refused: 0
+    }),
     now: () => clock
   });
 
@@ -206,6 +214,10 @@ test("the sampler takes LiveKit's baseline at once and writes the media minute b
   assert.equal(first.sfuPacketsIn, 30_000);
   // 12 s of LiveKit over 120 000 ms of the server's CPU time.
   assert.equal(first.sfuCpuPct, 10);
+  // The room runtime's video minute goes beside it.
+  assert.equal(first.videoScreensMax, 2);
+  assert.equal(first.videoMbpsMax, 12.5);
+  assert.equal(first.mediaLowered, 1);
   // LiveKit did not answer the second tick: no media numbers, and no guess.
   assert.equal(defined(recorded[1], 'the second minute').sfuPacketsIn, null);
 });

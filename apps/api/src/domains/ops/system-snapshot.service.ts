@@ -5,6 +5,7 @@
 
 import type { CpuTimes, HostProbe } from '../../platform/host-probe.ts';
 import type { SfuTotals } from '../../platform/livekit-metrics.ts';
+import type { MediaMinute } from '../../realtime/media-minute.ts';
 import type { SystemSnapshot, SystemSnapshotRepository } from './system-snapshot.repository.ts';
 
 export const SYSTEM_SNAPSHOT_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
@@ -26,6 +27,8 @@ export interface SystemSamplerDeps {
   snapshots(): Pick<SystemSnapshotRepository, 'record' | 'pruneBefore'> | null;
   /** LiveKit's totals; when it answers null the minute has no media numbers. */
   sfu(): Promise<SfuTotals | null>;
+  /** The server's video over the minute; null before the room runtime starts. */
+  media(): MediaMinute | null;
   now?: () => number;
   keepMs?: number;
 }
@@ -123,6 +126,7 @@ export function createSystemSampler(deps: SystemSamplerDeps) {
     const memory = deps.host.memory();
     const disk = await deps.host.disk();
     const sfu = await deps.sfu();
+    const media = deps.media();
     const snapshot: SystemSnapshot = {
       at: new Date(at - (at % MINUTE_MS)),
       cpuPct: cpuPercent(previousCpu, cpu),
@@ -137,7 +141,13 @@ export function createSystemSampler(deps: SystemSamplerDeps) {
       httpRequests: requests,
       http5xx: Math.max(0, http.errors5xx - previousHttp.errors5xx),
       httpAvgMs: requests > 0 ? (seconds / requests) * 1000 : null,
-      ...sfuMinute(previousSfu, sfu, previousCpu ? cpu.total - previousCpu.total : null, at - previousSfuAt)
+      ...sfuMinute(previousSfu, sfu, previousCpu ? cpu.total - previousCpu.total : null, at - previousSfuAt),
+      videoScreensMax: media?.screensMax ?? null,
+      videoCamerasMax: media?.camerasMax ?? null,
+      videoMbpsMax: media?.videoMbpsMax ?? null,
+      videoBudgetMbps: media?.videoBudgetMbps ?? null,
+      mediaLowered: media?.lowered ?? null,
+      mediaRefused: media?.refused ?? null
     };
     previousCpu = cpu;
     previousSfu = sfu;

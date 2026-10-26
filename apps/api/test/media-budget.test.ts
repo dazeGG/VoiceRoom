@@ -292,3 +292,54 @@ test('only the connection that holds the voice session may ask', async () => {
     { ok: false, code: 'invalid_session' }
   );
 });
+
+// The server page's video minute (media-minute.ts): counts only, peaks over
+// the minute, and the starts the budget lowered or refused.
+
+test('the minute keeps its video peaks and counts the starts it lowered or refused', async () => {
+  const { runtime } = budgetRuntime({ MEDIA_BUDGET_MBPS: 120 });
+  const [first, second, third] = await seats(runtime, 'room-a', 9);
+  const share = async (who: Seat, patch: { screen: boolean; screenProfileId?: string }) =>
+    assert.equal((await runtime.updatePeerState(who.conn, { ...who.target, patch })).ok, true);
+
+  // 80 Mbit/s granted as asked, then 40 at a lower profile, then nothing left.
+  assert.equal(profileOf(ask(runtime, first, 'screen', 'high-60')), 'high-60');
+  assert.equal(profileOf(ask(runtime, second, 'screen', 'high-60')), 'balanced-30');
+  assert.equal(ask(runtime, defined(third, 'the third seat'), 'camera')?.granted, false);
+  await share(first, { screen: true, screenProfileId: 'high-60' });
+  await share(second, { screen: true, screenProfileId: 'balanced-30' });
+
+  assert.deepEqual(runtime.takeMediaMinute(), {
+    screensMax: 2,
+    camerasMax: 0,
+    videoMbpsMax: 120,
+    videoBudgetMbps: 120,
+    lowered: 1,
+    refused: 1
+  });
+
+  // One share stops: the minute it stopped in still saw both, the next one does not.
+  await share(first, { screen: false });
+  assert.deepEqual(runtime.takeMediaMinute(), {
+    screensMax: 2,
+    camerasMax: 0,
+    videoMbpsMax: 120,
+    videoBudgetMbps: 120,
+    lowered: 0,
+    refused: 0
+  });
+  const quiet = runtime.takeMediaMinute();
+  assert.equal(quiet.screensMax, 1);
+  assert.equal(quiet.videoMbpsMax, 40);
+});
+
+test('a server without a video budget reports no budget, and a camera counts once it shows', async () => {
+  const { runtime } = budgetRuntime({});
+  const [first] = await seats(runtime, 'room-b', 2);
+  assert.equal(ask(runtime, first, 'camera')?.granted, true);
+  assert.equal((await runtime.updatePeerState(first.conn, { ...first.target, patch: { camera: true } })).ok, true);
+  const minute = runtime.takeMediaMinute();
+  assert.equal(minute.camerasMax, 1);
+  assert.equal(minute.videoBudgetMbps, null);
+  assert.equal(minute.lowered + minute.refused, 0);
+});

@@ -577,6 +577,8 @@ export interface SystemSnapshots {
   http_avg_ms: number | null;
   http_requests: Generated<number>;
   load1: Generated<number>;
+  media_lowered: number | null;
+  media_refused: number | null;
   mem_total_bytes: Generated<Int8>;
   mem_used_bytes: Generated<Int8>;
   sfu_bytes_in: Int8 | null;
@@ -588,6 +590,10 @@ export interface SystemSnapshots {
   sfu_packets_out: Int8 | null;
   sfu_retransmit_out: Int8 | null;
   sfu_rss_bytes: Int8 | null;
+  video_budget_mbps: number | null;
+  video_cameras_max: number | null;
+  video_mbps_max: number | null;
+  video_screens_max: number | null;
   voice_peers: Generated<number>;
   voice_rooms: Generated<number>;
   ws_connections: Generated<number>;

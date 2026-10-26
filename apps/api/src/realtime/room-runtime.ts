@@ -18,7 +18,8 @@ import { createReconnectLeases } from './reconnect-leases.ts';
 import { createRoomSummaries } from './room-summaries.ts';
 import { createRoomFanout } from './room-fanout.ts';
 import { createVoiceJoin, type JoinUser } from './voice-join.ts';
-import { claimMedia, decideMediaRequest, MEDIA_MIN_VIEWERS } from './media-budget.ts';
+import { claimMedia, decideMediaRequest, MEDIA_MIN_VIEWERS, type MediaLimits } from './media-budget.ts';
+import { createMediaMinute } from './media-minute.ts';
 import { leaveReasonOf } from './runtime-types.ts';
 import { noteNetworkLevel } from './network-track.ts';
 import { isRecord } from '@voice-room/shared/guards';
@@ -124,6 +125,14 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     reconnectLeaseMs = 30000,
     logger = createLogger({ name: 'api' })
   } = deps;
+
+  const mediaLimits: MediaLimits = {
+    budgetBps: MEDIA_BUDGET_MBPS * 1_000_000,
+    maxRoomScreens: MAX_ROOM_SCREENS,
+    minViewers: Math.min(MEDIA_MIN_VIEWERS, Math.max(0, MAX_ROOM_PEERS - 1)),
+    voicePeersAtZero: MEDIA_BUDGET_VOICE_PEERS
+  };
+  const mediaMinute = createMediaMinute({ rooms: () => presenceRooms.values(), limits: mediaLimits, now });
 
   const summaries = createRoomSummaries({
     presenceRooms,
@@ -416,6 +425,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     if (Object.hasOwn(patch, 'screenAudio')) peer.screenAudio = Boolean(patch.screenAudio);
     if (Object.hasOwn(patch, 'screenProfileId')) peer.screenProfileId = cleanScreenProfileId(patch.screenProfileId);
     if (Object.hasOwn(patch, 'screenStreamId')) peer.screenStreamId = cleanStreamId(patch.screenStreamId);
+    if (patch.screen === true || patch.camera === true) mediaMinute.note();
     if (Object.hasOwn(patch, 'viewedScreenPeerId')) {
       peer.viewedScreenPeerId = resolveViewedScreenPeerId(room, peer.id, patch.viewedScreenPeerId);
     }
@@ -441,21 +451,18 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     const active = activePeer(connection, payload);
     if (!active.ok) return active;
     const at = now();
+    const profileId = cleanScreenProfileId(payload.profileId);
     const grant = decideMediaRequest({
       rooms: presenceRooms.values(),
       room: active.room,
       peer: active.peer,
       kind: payload.kind,
-      profileId: cleanScreenProfileId(payload.profileId),
-      limits: {
-        budgetBps: MEDIA_BUDGET_MBPS * 1_000_000,
-        maxRoomScreens: MAX_ROOM_SCREENS,
-        minViewers: Math.min(MEDIA_MIN_VIEWERS, Math.max(0, MAX_ROOM_PEERS - 1)),
-        voicePeersAtZero: MEDIA_BUDGET_VOICE_PEERS
-      },
+      profileId,
+      limits: mediaLimits,
       now: at
     });
     claimMedia(active.peer, grant, at);
+    mediaMinute.noteDecision(payload.kind, profileId, grant);
     return { ok: true as const, grant };
   }
 
@@ -529,6 +536,8 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     leaveVoiceRoom,
     requestMedia,
     scheduleSummaryBroadcast: summaries.schedule,
+    /** The server's video over the minute so far, for the system sample; starts the next one. */
+    takeMediaMinute: mediaMinute.take,
     sendRoomSummaryToUser: summaries.sendToUser,
     sendAccountSummaries,
     subscribePreview,

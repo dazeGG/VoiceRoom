@@ -46,6 +46,13 @@ export const sample = (at: number, overrides: Partial<SystemSample> = {}): Syste
   sfuRetransmitOut: 120,
   sfuCpuPct: 6,
   sfuRssBytes: 80 * 1024 ** 2,
+  // Two screens and a camera, 12 of 550 Mbit/s; one screen started lower than asked.
+  videoScreensMax: 2,
+  videoCamerasMax: 1,
+  videoMbpsMax: 12,
+  videoBudgetMbps: 550,
+  mediaLowered: 1,
+  mediaRefused: 0,
   ...overrides
 });
 

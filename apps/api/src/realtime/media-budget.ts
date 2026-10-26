@@ -94,7 +94,7 @@ export function decideMediaRequest(input: {
   const candidates = kind === 'screen' ? screenProfileFallbacks(profileId) : [''];
   if (limits.budgetBps <= 0) return grant(roomId, kind, candidates[0] ?? '');
 
-  const available = budgetBps(rooms, limits) - serverMediaBps(rooms, now, { peer, kind });
+  const available = videoBudgetBps(rooms, limits) - serverMediaBps(rooms, now, { peer, kind });
   const viewers = Math.max(viewersIn(room), limits.minViewers);
   for (const candidate of candidates) {
     const bitrate = kind === 'screen' ? screenProfileBitrate(candidate) : CAMERA_VIEWER_BITRATE;
@@ -104,7 +104,10 @@ export function decideMediaRequest(input: {
 }
 
 /** The video budget left once voice has taken its share of the media server. */
-function budgetBps(rooms: PresenceRoom[], limits: MediaLimits): number {
+export function videoBudgetBps(
+  rooms: Iterable<PresenceRoom, unknown, unknown>,
+  limits: Pick<MediaLimits, 'budgetBps' | 'voicePeersAtZero'>
+): number {
   if (limits.voicePeersAtZero <= 0) return limits.budgetBps;
   let voicePeers = 0;
   for (const room of rooms) voicePeers += room.peers.size;

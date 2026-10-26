@@ -173,7 +173,8 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
       wsConnections: hub.registry.stats().sockets
     }),
     snapshots: services.getSystemSnapshotRepository,
-    sfu: () => sfuProbe.read()
+    sfu: () => sfuProbe.read(),
+    media: () => hub.runtime()?.takeMediaMinute() ?? null
   });
 
   function startPruneTimer(server: ApiServer, logger: Logger = getProcessLogger()) {

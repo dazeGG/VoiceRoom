@@ -66,7 +66,19 @@ export const SystemSample = Type.Object({
   sfuLostOut: Nullable(Type.Number()),
   sfuRetransmitOut: Nullable(Type.Number()),
   sfuCpuPct: Nullable(Type.Number()),
-  sfuRssBytes: Nullable(Type.Number())
+  sfuRssBytes: Nullable(Type.Number()),
+  /**
+   * The server's video: screen shares and cameras running at once at most, the
+   * most video the budget counted as sent to viewers (Mbit/s) against the
+   * budget (lowest over the point; null while it is off), and the stream
+   * starts it lowered or refused, summed. Counts only, no people or rooms.
+   */
+  videoScreensMax: Nullable(Type.Number()),
+  videoCamerasMax: Nullable(Type.Number()),
+  videoMbpsMax: Nullable(Type.Number()),
+  videoBudgetMbps: Nullable(Type.Number()),
+  mediaLowered: Nullable(Type.Number()),
+  mediaRefused: Nullable(Type.Number())
 });
 export type SystemSample = Static<typeof SystemSample>;
 
