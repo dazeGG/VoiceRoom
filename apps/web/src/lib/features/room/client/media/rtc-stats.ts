@@ -14,6 +14,7 @@ export interface RtcStat {
   readonly codecId: string | undefined;
   readonly packetsLost: number | undefined;
   readonly packetsReceived: number | undefined;
+  readonly packetsSent: number | undefined;
   readonly jitter: number | undefined;
   readonly fractionLost: number | undefined;
   readonly roundTripTime: number | undefined;
@@ -106,6 +107,7 @@ function toRtcStat(value: unknown): RtcStat | null {
     nominated: boolean('nominated'),
     packetsLost: number('packetsLost'),
     packetsReceived: number('packetsReceived'),
+    packetsSent: number('packetsSent'),
     pliCount: number('pliCount'),
     protocol: string('protocol'),
     qpSum: number('qpSum'),
