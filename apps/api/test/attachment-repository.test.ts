@@ -390,7 +390,7 @@ test('a connection whose unlock fails is destroyed, not returned to the pool wit
   });
   assert.equal(result, 'done');
   assert.equal(released.length, 1);
-  assert.ok(released[0] instanceof Error, 'the client is released with the unlock error');
+  assert.equal(released[0], true, 'the client is released as broken');
   assert.equal(pool.totalCount, 0, 'the connection holding the lock left the pool');
   assert.equal(
     await repository.withAttachmentLock('attachment-3', async () => 'free again'),

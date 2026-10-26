@@ -573,12 +573,12 @@ function createAttachmentRepository({ pool: base }: { pool: AttachmentPool }) {
       return await operation(client);
     } finally {
       // A connection that failed to unlock still holds the session lock, so it
-      // is destroyed instead of going back to the pool.
-      const unlockError = await sql`SELECT pg_advisory_unlock(hashtext(${key}))`.execute(kyselyOn(client)).then(
-        () => undefined,
-        (error: unknown) => (error instanceof Error ? error : new Error('The attachment lock was not released'))
+      // is released as broken (pg then destroys it) instead of going back to the pool.
+      const unlocked = await sql`SELECT pg_advisory_unlock(hashtext(${key}))`.execute(kyselyOn(client)).then(
+        () => true,
+        () => false
       );
-      client.release(unlockError);
+      client.release(!unlocked);
     }
   }
 
