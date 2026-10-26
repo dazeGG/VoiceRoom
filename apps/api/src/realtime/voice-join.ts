@@ -391,6 +391,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         screenStreamId: previous?.screenStreamId ?? '',
         serverMuted: Boolean(previous?.serverMuted || persistedServerMuted),
         viewedScreenPeerId: previous?.viewedScreenPeerId ?? '',
+        network: previous?.network ?? [],
         sessionToken,
         transport
       };

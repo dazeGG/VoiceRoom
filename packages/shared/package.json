@@ -18,6 +18,7 @@
     "./moderation": "./src/moderation.ts",
     "./realtime": "./src/realtime.ts",
     "./media-budget": "./src/media-budget.ts",
+    "./network-quality": "./src/network-quality.ts",
     "./avatar-accent": "./src/avatar-accent.ts",
     "./emoji": "./src/emoji.ts",
     "./runtime-config": "./src/runtime-config.ts",

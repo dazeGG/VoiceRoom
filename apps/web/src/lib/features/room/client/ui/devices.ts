@@ -33,6 +33,7 @@ import {
 import { supportsAudioOutputSelection, syncAudioOutputDevices } from '../services/media-playback-service';
 import { attachMeter, syncSpeakingThresholds } from '../media/meters';
 import { setParticipantSpeaking } from '../room/participants';
+import { recordMicDrop } from '../room/call-quality';
 import type { MicrophoneCapture } from '../core/types';
 
 import { createLogger, errorContext } from '$lib/shared/log';
@@ -414,6 +415,7 @@ export function watchLocalMicrophone(): void {
     () => {
       if (state.localRawStream !== rawStream) return;
       log.warn('microphone track ended');
+      recordMicDrop();
       void restartMicrophone({
         failureMessage: 'Микрофон отключился: вы в комнате без микрофона',
         successMessage: 'Микрофон переподключен'
@@ -429,6 +431,7 @@ export function watchLocalMicrophone(): void {
 
 /** The capture stopped running on its own (see microphone-service): open a fresh one. */
 export function reopenMicrophone(): Promise<boolean> {
+  recordMicDrop();
   return restartMicrophone({
     failureMessage: 'Микрофон перестал работать: выберите его заново',
     refreshDeviceList: false,

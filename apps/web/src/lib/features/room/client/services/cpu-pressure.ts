@@ -3,11 +3,12 @@
 // the way Discord turns Krisp off: RNNoise gives way to the browser's noise
 // suppression for the rest of the call. Without the API nothing changes.
 
+import type { CpuPressureState } from '@voice-room/shared/contracts/feedback';
 import { createLogger } from '$lib/shared/log';
 
-const log = createLogger('room:cpu');
+export type { CpuPressureState };
 
-export type CpuPressureState = 'nominal' | 'fair' | 'serious' | 'critical';
+const log = createLogger('room:cpu');
 
 /** Critical has to last this long: a compile or a game loading is not an overload. */
 export const CPU_CRITICAL_HOLD_MS = 10_000;

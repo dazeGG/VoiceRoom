@@ -20,6 +20,7 @@ import { createRoomFanout } from './room-fanout.ts';
 import { createVoiceJoin, type JoinUser } from './voice-join.ts';
 import { claimMedia, decideMediaRequest, MEDIA_MIN_VIEWERS } from './media-budget.ts';
 import { leaveReasonOf } from './runtime-types.ts';
+import { noteNetworkLevel } from './network-track.ts';
 import { isRecord } from '@voice-room/shared/guards';
 import type {
   FinalizeError,
@@ -418,6 +419,10 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     if (Object.hasOwn(patch, 'viewedScreenPeerId')) {
       peer.viewedScreenPeerId = resolveViewedScreenPeerId(room, peer.id, patch.viewedScreenPeerId);
     }
+    if (patch.network) noteNetworkLevel((peer.network ??= []), patch.network, now());
+    // Nobody in the room sees the network, so a patch of it alone tells them nothing.
+    if (Object.hasOwn(patch, 'network') && Object.keys(patch).length === 1)
+      return { ok: true as const, peer: publicPeer(peer) };
 
     if (stoppedScreen) {
       for (const viewer of clearViewedScreenPeerReferences(room, peer.id)) {

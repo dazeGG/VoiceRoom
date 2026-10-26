@@ -1,5 +1,5 @@
 // A short account of how a call went: loss, jitter and latency from the stats
-// poll, reconnects and how hard the computer was working. It is written to the
+// poll, reconnects, microphone drops and how hard the computer was working. It is written to the
 // client log when the call ends, and a call that clearly went badly sends the
 // log as a report — Discord watches the same signals to catch degradation. A
 // good call sends nothing.
@@ -33,6 +33,7 @@ interface CallQuality {
   cpuRelieved: boolean;
   inboundLoss: Series;
   jitter: Series;
+  micDrops: number;
   outboundLoss: Series;
   peersMax: number;
   reconnects: number;
@@ -54,6 +55,10 @@ function add(series: Series, value: number | null): void {
   series.max = Math.max(series.max, value);
 }
 
+function worst(series: Series): number | null {
+  return series.count > 0 ? series.max : null;
+}
+
 function average(series: Series): number | null {
   return series.count > 0 ? Math.round((series.sum / series.count) * 10) / 10 : null;
 }
@@ -66,6 +71,7 @@ export function startCallQuality(now = Date.now()): void {
     cpuRelieved: false,
     inboundLoss: emptySeries(),
     jitter: emptySeries(),
+    micDrops: 0,
     outboundLoss: emptySeries(),
     peersMax: 0,
     reconnects: 0,
@@ -96,6 +102,11 @@ export function recordReconnect(): void {
   if (current) current.reconnects += 1;
 }
 
+/** The microphone went away mid-call: unplugged, revoked, a headset reconnecting. */
+export function recordMicDrop(): void {
+  if (current) current.micDrops += 1;
+}
+
 export function recordCpuPressure(state: CpuPressureState): void {
   if (current) current.cpu = maxCpuPressure(current.cpu, state);
 }
@@ -114,6 +125,13 @@ export interface CallStats {
   jitterAvgMs: number | null;
   reconnects: number;
   transport: NetworkSample['transport'];
+  rttMaxMs: number | null;
+  inboundLossMaxPct: number | null;
+  outboundLossMaxPct: number | null;
+  jitterMaxMs: number | null;
+  cpuPressureMax: CpuPressureState;
+  cpuRelieved: boolean;
+  micDrops: number;
 }
 
 export interface CallQualitySummary {
@@ -139,14 +157,30 @@ export function finishCallQuality(now = Date.now()): CallQualitySummary | null {
     outboundLossAvgPct: outboundLoss,
     jitterAvgMs: average(quality.jitter),
     reconnects: quality.reconnects,
-    transport: quality.transport
-  };
-  const context: LogContext = {
-    ...stats,
-    inboundLossMaxPct: quality.inboundLoss.count ? quality.inboundLoss.max : null,
-    rttMaxMs: quality.rtt.count ? quality.rtt.max : null,
+    transport: quality.transport,
+    rttMaxMs: worst(quality.rtt),
+    inboundLossMaxPct: worst(quality.inboundLoss),
+    outboundLossMaxPct: worst(quality.outboundLoss),
+    jitterMaxMs: worst(quality.jitter),
     cpuPressureMax: quality.cpu,
-    cpuRelieved: quality.cpuRelieved
+    cpuRelieved: quality.cpuRelieved,
+    micDrops: quality.micDrops
+  };
+  // The intake keeps twelve keys of a log context (client-log-intake.ts); the
+  // rest goes with the answer to "how was the call?" only.
+  const context: LogContext = {
+    durationS: stats.durationS,
+    peersMax: stats.peersMax,
+    rttAvgMs: stats.rttAvgMs,
+    inboundLossAvgPct: stats.inboundLossAvgPct,
+    outboundLossAvgPct: stats.outboundLossAvgPct,
+    jitterAvgMs: stats.jitterAvgMs,
+    reconnects: stats.reconnects,
+    transport: stats.transport,
+    inboundLossMaxPct: stats.inboundLossMaxPct,
+    rttMaxMs: stats.rttMaxMs,
+    cpuPressureMax: stats.cpuPressureMax,
+    cpuRelieved: stats.cpuRelieved
   };
   const degraded =
     durationMs >= QUALITY_MIN_CALL_MS &&

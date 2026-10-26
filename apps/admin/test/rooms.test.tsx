@@ -5,7 +5,7 @@
 // one room; one day's timeline shows the calls on a line; each seat says what
 // its role may know of where it came from.
 
-import { cleanup, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
 import { afterEach, expect, test, vi } from 'vitest';
@@ -53,7 +53,8 @@ function kitchen(): LiveRoom {
         browser: 'VoiceRoom Desktop',
         guestId: null,
         ipKey: '0123456789abcdef',
-        location: 'Москва, Россия'
+        location: 'Москва, Россия',
+        network: 'good'
       },
       {
         peerId: 'p-guest',
@@ -64,12 +65,14 @@ function kitchen(): LiveRoom {
         muted: false,
         deafened: false,
         screen: true,
+        camera: true,
         client: 'mobile',
         os: 'iOS',
         browser: 'Safari',
         guestId: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b',
         ipKey: 'fedcba9876543210',
-        location: null
+        location: null,
+        network: 'unstable'
       }
     ]
   };
@@ -91,6 +94,7 @@ function stay(id: string, overrides: Partial<RoomStay> = {}): RoomStay {
     location: null,
     joinedAt: Date.now() - 2 * 60 * MINUTE,
     leftAt: Date.now() - 60 * MINUTE,
+    network: [],
     ...overrides
   };
 }
@@ -140,6 +144,7 @@ test('a live room opens its people: accounts by login, guests by name, and an ac
   expect(within(row).getByText('@alice')).toBeTruthy();
   expect(within(row).getByLabelText('показывают экран: 1')).toBeTruthy();
   expect(within(row).getByLabelText('без микрофона: 1')).toBeTruthy();
+  expect(within(row).getByLabelText('с камерой: 1')).toBeTruthy();
   expect(screen.getByText('1 комната · 2 человека')).toBeTruthy();
   expect(screen.queryByRole('list', { name: 'В звонке: Кухня' })).toBeNull();
   expect(await screen.findByText('Завершённых звонков пока нет')).toBeTruthy();
@@ -152,6 +157,11 @@ test('a live room opens its people: accounts by login, guests by name, and an ac
   expect(within(guestPeer).getByText('Петя')).toBeTruthy();
   expect(within(guestPeer).getByText('гость')).toBeTruthy();
   expect(within(guestPeer).getByText('экран')).toBeTruthy();
+  expect(within(guestPeer).getByText('камера')).toBeTruthy();
+  expect(within(alicePeer).queryByText('камера')).toBeNull();
+  // A shaky network is said; a good one stays quiet.
+  expect(within(guestPeer).getByText('сеть нестабильна')).toBeTruthy();
+  expect(within(alicePeer).queryByText(/сеть/)).toBeNull();
   // Where each one sits: the desktop app, a phone or a browser.
   expect(within(alicePeer).getByLabelText('приложение')).toBeTruthy();
   expect(within(guestPeer).getByLabelText('телефон')).toBeTruthy();
@@ -307,6 +317,46 @@ test('a call shows its span and length, and opens to who was there and when', as
   expect(within(aliceRow).getByText('1 ч')).toBeTruthy();
   expect(within(guestRow).getByText('Петя')).toBeTruthy();
   expect(within(guestRow).getByText('1 ч 15 мин')).toBeTruthy();
+});
+
+test("a stay's bar is coloured by how its network went, and grey where the client never said", async () => {
+  const startedAt = new Date(2026, 9, 15, 14, 30).getTime();
+  stubApi({
+    'GET /api/admin/rooms': live([]),
+    'GET /api/admin/rooms/calls': history([
+      call('c-net', [
+        stay('s-a', {
+          account: alice,
+          joinedAt: startedAt,
+          leftAt: startedAt + 60 * MINUTE,
+          network: [
+            // The first report comes a few seconds in and stands for the start.
+            { at: startedAt + 6_000, level: 'good' },
+            { at: startedAt + 20 * MINUTE, level: 'unstable' },
+            { at: startedAt + 25 * MINUTE, level: 'bad' },
+            { at: startedAt + 30 * MINUTE, level: 'good' }
+          ]
+        }),
+        stay('s-old', { guestName: 'Петя', joinedAt: startedAt + 10 * MINUTE, leftAt: startedAt + 50 * MINUTE })
+      ])
+    ])
+  });
+  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+
+  await userEvent.click(await screen.findByRole('button', { name: 'Кто был в звонке 14:30–15:30' }));
+  const table = screen.getByRole('table', { name: 'Участники звонка' });
+  const [, aliceRow, guestRow] = within(table).getAllByRole('row');
+  if (!aliceRow || !guestRow) throw new Error('two people expected');
+  const stretches = (row: HTMLElement) =>
+    [...row.querySelectorAll('.net-stretch')].map((stretch) => stretch.getAttribute('title'));
+  expect(stretches(aliceRow)).toEqual([
+    '14:30–14:50 · сеть в порядке',
+    '14:50–14:55 · сеть нестабильна',
+    '14:55–15:00 · сеть плохая',
+    '15:00–15:30 · сеть в порядке'
+  ]);
+  expect(stretches(guestRow)).toEqual(['14:40–15:20 · нет данных о сети']);
+  expect(within(table).getByText('сеть нестабильна')).toBeTruthy();
 });
 
 test('each seat says its device and where from, by place and address key, never the address', async () => {
@@ -490,6 +540,69 @@ test("the day's timeline asks for today's calls, and a call's bar shows who was 
   const card = screen.getByRole('region', { name: 'Кухня · 00:30–01:15' });
   expect(within(card).getByText('Утром')).toBeTruthy();
   expect(within(card).getByText('Тоже')).toBeTruthy();
+});
+
+test("a room's picture shows in the call history and on the day's line", async () => {
+  const today = new Date().setHours(1, 0, 0, 0);
+  const pictured = call('c-pic', [stay('s-pic', { joinedAt: today, leftAt: today + 30 * MINUTE })], {
+    avatarUrl: '/media/avatars/kitchen.webp'
+  });
+  stubApi({
+    'GET /api/admin/rooms': live([]),
+    'GET /api/admin/rooms/calls': history([pictured])
+  });
+  const { container } = renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+  await screen.findByText('01:00–01:30');
+  expect(container.querySelector('.call-room img')?.getAttribute('src')).toBe('/media/avatars/kitchen.webp');
+
+  await userEvent.click(screen.getByRole('radio', { name: 'Лента дня' }));
+  const timeline = await screen.findByRole('list', { name: 'Звонки за день' });
+  expect(timeline.querySelector('img')?.getAttribute('src')).toBe('/media/avatars/kitchen.webp');
+});
+
+test("the day's line goes to another day: a day back, any day on the calendar, and back to today", async () => {
+  const today = new Date().setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const dayBefore = yesterday.getTime();
+  const calls = stubApi({
+    'GET /api/admin/rooms': live([kitchen()]),
+    'GET /api/admin/rooms/calls': (url) => {
+      const from = Number(url.searchParams.get('from'));
+      return from === dayBefore
+        ? history([call('c-old', [stay('s-old', { joinedAt: from + 60 * MINUTE, leftAt: from + 90 * MINUTE })])])
+        : history([]);
+    }
+  });
+  renderAs(<RoomsPage onOpenAccount={vi.fn()} />);
+  await userEvent.click(await screen.findByRole('radio', { name: 'Лента дня' }));
+  const picker = await screen.findByRole('group', { name: 'День ленты' });
+  expect(within(picker).getByRole('button', { name: 'Следующий день' }).hasAttribute('disabled')).toBe(true);
+  expect(within(picker).queryByRole('button', { name: 'Сегодня' })).toBeNull();
+  const lastFrom = () => Number(callRequests(calls).at(-1)?.url.searchParams.get('from'));
+  await waitFor(() => expect(lastFrom()).toBe(today));
+
+  await userEvent.click(within(picker).getByRole('button', { name: 'Предыдущий день' }));
+  await waitFor(() => expect(lastFrom()).toBe(dayBefore));
+  const timeline = await screen.findByRole('list', { name: 'Звонки за день' });
+  expect(within(timeline).getByRole('button', { name: 'Звонок 01:00–01:30, 1 человек' })).toBeTruthy();
+  // What goes on now is not on yesterday's line.
+  expect(within(timeline).queryByRole('button', { name: /^Идёт с / })).toBeNull();
+  expect(within(picker).getByRole('button', { name: 'Следующий день' }).hasAttribute('disabled')).toBe(false);
+
+  // Any day on the calendar; a day with nothing says so.
+  const week = new Date(today);
+  week.setDate(week.getDate() - 7);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  fireEvent.change(within(picker).getByLabelText('День'), {
+    target: { value: `${week.getFullYear()}-${pad(week.getMonth() + 1)}-${pad(week.getDate())}` }
+  });
+  await waitFor(() => expect(lastFrom()).toBe(week.getTime()));
+  expect(await screen.findByText('В этот день звонков не было')).toBeTruthy();
+
+  await userEvent.click(within(picker).getByRole('button', { name: 'Сегодня' }));
+  await waitFor(() => expect(lastFrom()).toBe(today));
+  expect(await screen.findByRole('button', { name: /^Идёт с / })).toBeTruthy();
 });
 
 test('a room picked elsewhere narrows the history to it', async () => {

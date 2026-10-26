@@ -2,6 +2,7 @@
   import { AppWindow, Check, Monitor, Play, Settings, Type, X } from '@lucide/svelte';
   import { iconMd, iconSm, iconXs } from '$lib/shared/ui/icons';
   import { onMount } from 'svelte';
+  import { resolve } from '$app/paths';
   import {
     cancelScreenSourcePicker,
     closeScreenSourceOnBackdrop,
@@ -89,6 +90,13 @@
       </label>
       <p class="guest-name-error" id="guestNameError" role="alert" aria-live="polite">{guestNameUi.error}</p>
       <button class="primary-button" id="guestNameSubmitButton" type="submit">Войти в комнату</button>
+      <!-- Information, not consent: a call needs no consent (152-FZ art. 6 part 1 item 5). -->
+      <p class="guest-name-legal">
+        Входя в комнату, вы принимаете
+        <a href={resolve('/terms')} target="_blank" rel="noopener">Пользовательское соглашение</a>. Какие данные мы
+        храним и сколько — в
+        <a href={resolve('/privacy')} target="_blank" rel="noopener">Политике обработки персональных данных</a>.
+      </p>
     </form>
   </section>
 </div>
@@ -354,6 +362,15 @@
     color: color-mix(in oklch, var(--vr-danger), var(--vr-text) 22%);
     font-size: 13px;
     font-weight: 500;
+  }
+  :global(.guest-name-legal) {
+    margin: 0;
+    color: var(--vr-text-3);
+    font-size: 12.5px;
+    line-height: 1.45;
+  }
+  :global(.guest-name-legal a) {
+    color: var(--vr-text-2);
   }
   :global(.screen-source-close) {
     display: grid;

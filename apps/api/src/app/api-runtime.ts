@@ -192,6 +192,8 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
         callFeedback: services.getCallFeedbackRepository,
         staffSessions: services.getStaffRepository,
         roomBans: () => services.getActiveBanService()?.repository ?? null,
+        productStats: services.getAdminStatsRepository,
+        activity: services.getActivityRepository,
         retention: { intervalMs: config.RETENTION_PURGE_INTERVAL_MS, keepDeletedMs: config.RETENTION_KEEP_DELETED_MS }
       })
     });

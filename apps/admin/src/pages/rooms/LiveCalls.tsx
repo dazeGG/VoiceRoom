@@ -3,11 +3,12 @@
 // microphones and sound off, the kinds of client). A row opens the list of
 // its people; the clock button narrows the call history to the room.
 
-import { ChevronDown, ChevronRight, HeadphoneOff, History, MicOff, MonitorUp } from 'lucide-react';
+import { ChevronDown, ChevronRight, HeadphoneOff, History, MicOff, MonitorUp, Video } from 'lucide-react';
 import type { LiveRoom, LiveRoomPeer } from '@voice-room/shared/contracts/admin';
 import { formatPeople, formatSince } from '../../format.ts';
 import { Avatar, AvatarStack, Pill } from '../../ui/index.tsx';
 import { AccountName, ClientIcon, Origin, RoomTitle } from './room-bits.tsx';
+import { NETWORK_LABELS } from './network-bar.tsx';
 
 const COLUMNS = '28px minmax(220px, 1.6fr) minmax(200px, 1.2fr) 110px minmax(130px, 0.9fr) minmax(170px, 1fr) 36px';
 const PEER_COLUMNS = 'minmax(200px, 1.2fr) minmax(240px, 1.6fr) minmax(150px, 0.9fr) 90px';
@@ -17,6 +18,7 @@ const since = (at: number, now: number) => (now - at < 60_000 ? 'только ч
 
 function Summary({ peers }: { peers: readonly LiveRoomPeer[] }) {
   const screens = peers.filter((peer) => peer.screen).length;
+  const cameras = peers.filter((peer) => peer.camera).length;
   const muted = peers.filter((peer) => peer.muted).length;
   const deafened = peers.filter((peer) => peer.deafened).length;
   const clients = [...new Set(peers.map((peer) => peer.client).filter((client) => client !== null))];
@@ -31,6 +33,12 @@ function Summary({ peers }: { peers: readonly LiveRoomPeer[] }) {
         >
           <MonitorUp size={14} aria-hidden="true" />
           {screens}
+        </span>
+      ) : null}
+      {cameras ? (
+        <span className="live-chip" data-tone="accent" title="С камерой" aria-label={`с камерой: ${cameras}`}>
+          <Video size={14} aria-hidden="true" />
+          {cameras}
         </span>
       ) : null}
       {muted ? (
@@ -93,8 +101,19 @@ function PeerRow({
             экран
           </Pill>
         ) : null}
+        {peer.camera ? (
+          <Pill tone="accent" compact>
+            камера
+          </Pill>
+        ) : null}
         {peer.muted ? <span className="live-word">без микрофона</span> : null}
         {peer.deafened ? <span className="live-word">без звука</span> : null}
+        {peer.network && peer.network !== 'good' ? (
+          <span className="live-word live-network" data-net={peer.network}>
+            <span className="net-dot" data-net={peer.network} aria-hidden="true" />
+            {NETWORK_LABELS[peer.network]}
+          </span>
+        ) : null}
       </span>
       <span className="ui-cell-end ui-num live-peer-time">{peer.joinedAt ? since(peer.joinedAt, now) : ''}</span>
     </li>

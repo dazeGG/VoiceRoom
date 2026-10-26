@@ -17,19 +17,39 @@ import {
 import type { PresencePeer } from '../rooms/room-views.ts';
 import type { DescribeAddress } from '../rooms/voice-session.repository.ts';
 import { avatarColorForPeerId } from '../rooms/avatar-color.ts';
+import { currentNetworkLevel } from '../../realtime/network-track.ts';
 import type { AdminRoomsRepository } from './admin-rooms.repository.ts';
 import type { StaffCheck } from '../staff/staff-check.ts';
 
 export interface AdminRoomsServiceDeps {
   staff: StaffCheck;
   /** The live presence roster: every room the API holds, empty ones too. */
-  presenceRooms(): Iterable<{ id: string; peers: Map<string, PresencePeer> }>;
+  presenceRooms(): Iterable<PresenceRoom>;
   repository(): Pick<AdminRoomsRepository, 'rooms' | 'accounts' | 'history' | 'calls'>;
   /** Where a peer came from without its address: the keyed hash and the city. */
   describeAddress: DescribeAddress;
 }
 
 type Payload<T> = Omit<T, 'ok'>;
+
+interface PresenceRoom {
+  id: string;
+  peers: Map<string, PresencePeer>;
+  /** The call clock the room screen counts from (RoomSnapshot.voiceActiveSince). */
+  voiceActiveSince?: number | null;
+}
+
+/**
+ * When the room's current call began: the call clock, which outlives everyone
+ * who rejoined since. A peer that joined earlier still wins, so a clock missing
+ * or reset never makes the call look younger than its oldest seat.
+ */
+function callSince(room: PresenceRoom): number | null {
+  const starts = [...room.peers.values()].map((peer) => peer.joinedAt);
+  if (room.voiceActiveSince) starts.push(room.voiceActiveSince);
+  const known = starts.filter((at): at is number => typeof at === 'number' && at > 0);
+  return known.length ? Math.min(...known) : null;
+}
 
 // Where a stay came from is for those who may see it; the rest see who and when.
 const withoutOrigin = (stay: RoomStay): RoomStay => ({ ...stay, guestId: null, ipKey: null, location: null });
@@ -81,23 +101,24 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
           muted: Boolean(peer.muted),
           deafened: Boolean(peer.deafened),
           screen: Boolean(peer.screen),
+          camera: Boolean(peer.camera),
           client: peer.client ?? null,
           os: peer.os ?? '',
           browser: peer.browser ?? '',
           guestId: (origin && !peer.accountUserId && peer.guestId) || null,
           ipKey: origins.get(peer)?.ipKey ?? null,
-          location: origins.get(peer)?.location || null
+          location: origins.get(peer)?.location || null,
+          network: currentNetworkLevel(peer.network)
         }))
         .sort((a, b) => (a.joinedAt ?? Infinity) - (b.joinedAt ?? Infinity));
       const row = roomById.get(room.id);
-      const joined = peers.map((peer) => peer.joinedAt).filter((at): at is number => at !== null);
       return {
         roomId: room.id,
         name: row?.name || room.id,
         isStatic: row?.isStatic ?? false,
         avatarUrl: row?.avatarUrl ?? null,
         owner: row?.owner ?? null,
-        since: joined.length ? Math.min(...joined) : null,
+        since: callSince(room),
         peers
       };
     });
@@ -130,8 +151,8 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
     const origin = await seesOrigin(userId);
     const liveSince = new Map<string, number>();
     for (const room of deps.presenceRooms()) {
-      const joined = [...room.peers.values()].map((peer) => peer.joinedAt).filter((at) => typeof at === 'number');
-      if (joined.length) liveSince.set(room.id, Math.min(...joined));
+      const since = room.peers.size > 0 ? callSince(room) : null;
+      if (since !== null) liveSince.set(room.id, since);
     }
     const { calls: page, more } = await deps.repository().calls({
       roomId: query.roomId,

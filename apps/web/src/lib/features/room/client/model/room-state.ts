@@ -57,6 +57,7 @@ export function createInitialRoomState(): AppState {
     localScreenMode: DEFAULT_SCREEN_STREAM_MODE,
     localStream: null,
     microphoneMissing: false,
+    videoRelieved: false,
     localAppAudioSuppressed: false,
     microphoneDeviceId: readStorage(MICROPHONE_DEVICE_STORAGE_KEY) || '',
     microphoneMode: getStoredMicrophoneMode(),

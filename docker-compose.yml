@@ -1,5 +1,15 @@
+# Every container's log is capped (json-file, 3 files of 10 MB), so what the
+# logs hold, IP keys in API records and shortened addresses in LiveKit's,
+# lasts days to a few weeks rather than until the container is recreated.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
 services:
   postgres:
+    logging: *logging
     image: ${POSTGRES_IMAGE:-postgres:16-alpine}
     restart: unless-stopped
     environment:
@@ -16,6 +26,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   migrate:
+    logging: *logging
     image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
     restart: "no"
     depends_on:
@@ -27,6 +38,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
 
   media-init:
+    logging: *logging
     image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
     user: root
     restart: "no"
@@ -35,6 +47,7 @@ services:
       - media:/data/media
 
   api:
+    logging: *logging
     image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
     restart: unless-stopped
     depends_on:
@@ -137,6 +150,7 @@ services:
       start_interval: 1s
 
   message-delivery:
+    logging: *logging
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: unless-stopped
     depends_on:
@@ -159,6 +173,7 @@ services:
       MESSAGE_DELIVERY_LEASE_MS: ${MESSAGE_DELIVERY_LEASE_MS:-120000}
 
   notification-delivery:
+    logging: *logging
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: unless-stopped
     expose: ["9464"]
@@ -185,6 +200,7 @@ services:
       WORKER_METRICS_PORT: 9464
 
   media-processing:
+    logging: *logging
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: unless-stopped
     expose: ["9464"]
@@ -208,6 +224,7 @@ services:
       - media:/data/media
 
   media-maintenance:
+    logging: *logging
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: unless-stopped
     depends_on:
@@ -229,6 +246,7 @@ services:
       - media:/data/media
 
   media-reconciliation:
+    logging: *logging
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: unless-stopped
     depends_on:
@@ -250,6 +268,7 @@ services:
       - media:/data/media
 
   caddy:
+    logging: *logging
     image: ${VOICEROOM_WEB_IMAGE:?set immutable VOICEROOM_WEB_IMAGE digest}
     restart: unless-stopped
     depends_on:
@@ -283,6 +302,7 @@ services:
       - web_archive:/srv/archive
 
   livekit:
+    logging: *logging
     image: ${LIVEKIT_IMAGE:-livekit/livekit-server:v1.13.2}
     restart: unless-stopped
     # LiveKit takes about 2 MB per participant. With no cap, a host without swap
@@ -337,6 +357,7 @@ services:
       - "30000-30099:30000-30099/udp"
 
   livekit-gate:
+    logging: *logging
     image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
     restart: unless-stopped
     command: ["node", "apps/api/src/domains/admission/livekit-auth-gate.service.ts"]

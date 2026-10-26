@@ -260,7 +260,8 @@ export function createDomainServices(deps: DomainServiceDeps) {
 
   const callFeedback = createCallFeedbackService({
     repository: () => required(services.getCallFeedbackRepository()),
-    staff
+    staff,
+    stays: (asks) => required(services.getAdminRoomsRepository()).lastStays(asks)
   });
 
   const admin = createAdminService({

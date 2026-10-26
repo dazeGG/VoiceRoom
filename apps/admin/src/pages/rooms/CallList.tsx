@@ -81,7 +81,13 @@ export function CallList({
                           onFilterRoom(call);
                         }}
                       >
-                        <RoomTitle roomId={call.roomId} name={call.roomName} isStatic={call.isStatic} size={30} />
+                        <RoomTitle
+                          roomId={call.roomId}
+                          name={call.roomName}
+                          isStatic={call.isStatic}
+                          avatarUrl={call.avatarUrl ?? null}
+                          size={30}
+                        />
                       </button>
                       <span className="live-people">
                         <AvatarStack

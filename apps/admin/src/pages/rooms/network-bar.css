@@ -1,0 +1,58 @@
+/* A stay's network on its bar (network-bar.tsx): one coloured stretch per level. */
+
+.net-span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  overflow: hidden;
+  border-radius: 999px;
+}
+
+.net-stretch {
+  flex-basis: 0;
+  min-width: 1px;
+}
+
+[data-net='good'] {
+  --net-tone: var(--vr-success);
+}
+
+[data-net='unstable'] {
+  --net-tone: var(--vr-warning);
+}
+
+[data-net='bad'] {
+  --net-tone: var(--vr-danger);
+}
+
+[data-net='unknown'] {
+  --net-tone: color-mix(in oklch, var(--vr-text-3) 55%, transparent);
+}
+
+.net-stretch,
+.net-dot {
+  background: var(--net-tone);
+}
+
+.net-legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  color: var(--vr-text-3);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+
+.net-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.net-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+}

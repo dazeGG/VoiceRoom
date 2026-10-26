@@ -251,11 +251,11 @@ export function AccountCard({ userId, onBack }: { userId: string; onBack: () => 
             <Stat label="Регистрация" value={formatNumericDate(account.createdAt)} />
             <Stat label="Последний визит" value={account.online ? 'сейчас' : formatAgo(account.lastSeenAt, now)} />
             <Stat
-              label="Активных дней"
+              label="Активных дней за 90 дней"
               value={formatCount(account.activeDays)}
               note={clients.length ? clients.join(', ') : 'нет данных о клиентах'}
             />
-            <Stat label="В войсе" value={formatMinutes(account.voiceMinutes)} />
+            <Stat label="В войсе за 90 дней" value={formatMinutes(account.voiceMinutes)} />
             <Stat label="Сообщений" value={formatCount(account.messages)} />
             <Stat
               label="Комнаты"

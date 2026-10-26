@@ -103,9 +103,22 @@ export function createScreenProfileId(qualityId: string, fpsId: string): string 
  * and lower CPU. Either way the VP8 backup codec covers viewers that cannot
  * decode the primary one.
  */
-export function getPreferredScreenVideoCodec(contentHint = 'motion'): 'h264' | 'vp9' | 'vp8' {
+function supportsVideoCodec(pattern: RegExp): boolean {
   const codecs = RTCRtpSender.getCapabilities?.('video')?.codecs || [];
-  const supports = (pattern: RegExp) => codecs.some((codec) => pattern.test(codec.mimeType));
+  return codecs.some((codec) => pattern.test(codec.mimeType));
+}
+
+/**
+ * A camera goes out in H.264 where the browser can send it: most graphics
+ * cards encode and nearly all decode it in hardware, where VP8 stays on the
+ * CPU. VP8 is the fallback, and the backup codec for viewers without H.264.
+ */
+export function getPreferredCameraVideoCodec(): 'h264' | 'vp8' {
+  return supportsVideoCodec(/video\/h264/i) ? 'h264' : 'vp8';
+}
+
+export function getPreferredScreenVideoCodec(contentHint = 'motion'): 'h264' | 'vp9' | 'vp8' {
+  const supports = supportsVideoCodec;
   const order = contentHint === 'detail' ? (['vp9', 'h264'] as const) : (['h264', 'vp9'] as const);
   for (const codec of order) {
     if (supports(codec === 'vp9' ? /video\/vp9/i : /video\/h264/i)) return codec;

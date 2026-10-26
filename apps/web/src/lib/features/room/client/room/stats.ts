@@ -3,6 +3,7 @@ import { state } from '../core/state.svelte';
 import { findFirstLocalPublication, findLocalMicrophonePublication } from '../services/livekit-service';
 import { isActiveCandidatePair, readRtcStats, type RtcStat, type RtcStatsSource } from '../media/rtc-stats';
 import { recordNetworkSample } from './call-quality';
+import { noteNetworkReading } from './network-report';
 
 import { createLogger, errorContext } from '$lib/shared/log';
 
@@ -30,7 +31,9 @@ async function updatePeerLatencyStats(): Promise<void> {
   await updateLocalLiveKitLatency();
   await updateInboundAudioStats();
   if (!state.joined) return;
-  recordNetworkSample({ ...state.localNetwork, rttMs: state.localPingMs });
+  const sample = { ...state.localNetwork, rttMs: state.localPingMs };
+  recordNetworkSample(sample);
+  noteNetworkReading({ sample, quality: state.localConnectionQuality, voice: state.voiceConnection });
 }
 
 // Cumulative inbound counters from the previous poll, per stats id, so loss is

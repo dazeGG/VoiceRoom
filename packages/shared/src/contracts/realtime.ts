@@ -12,7 +12,7 @@ import { AdminReportsEvent } from './admin.ts';
 import { Nullable } from './http.ts';
 import { DirectMessage, PinnedMessage, ReactionSummary, RoomMessage } from './messages.ts';
 import { NotificationPreferences } from './notifications.ts';
-import { LobbyRoom, PublicPeer, RoomRelationship } from './rooms.ts';
+import { LobbyRoom, NetworkLevel, PublicPeer, RoomRelationship } from './rooms.ts';
 import { PublicUser } from './users.ts';
 
 /** The room or direct conversation a message belongs to. */
@@ -85,7 +85,9 @@ export const PeerPatch = Type.Object({
   screenAudio: Type.Optional(Type.Boolean()),
   screenProfileId: Type.Optional(Type.String()),
   screenStreamId: Type.Optional(Type.String()),
-  viewedScreenPeerId: Type.Optional(Nullable(Type.String()))
+  viewedScreenPeerId: Type.Optional(Nullable(Type.String())),
+  /** The client's own read of its connection; sent alone, and only when it changes. */
+  network: Type.Optional(NetworkLevel)
 });
 export type PeerPatch = Static<typeof PeerPatch>;
 

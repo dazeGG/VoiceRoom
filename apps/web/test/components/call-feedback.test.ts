@@ -136,7 +136,14 @@ test('a call reports its largest company along with its network numbers', () => 
     outboundLossAvgPct: 0,
     jitterAvgMs: 6,
     reconnects: 0,
-    transport: 'udp'
+    transport: 'udp',
+    rttMaxMs: 42,
+    inboundLossMaxPct: 1,
+    outboundLossMaxPct: 0,
+    jitterMaxMs: 6,
+    cpuPressureMax: 'nominal',
+    cpuRelieved: false,
+    micDrops: 0
   });
 });
 

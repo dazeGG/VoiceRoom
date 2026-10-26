@@ -6,6 +6,7 @@
 import { Type, type Static } from 'typebox';
 import { Nullable, Ok } from './http.ts';
 import { ReportReasonSchema } from './reports.ts';
+import { NetworkLevel, NetworkPoint } from './rooms.ts';
 import { StaffRoleSchema } from './staff.ts';
 import { AccountBadge } from './users.ts';
 
@@ -392,12 +393,20 @@ export const LiveRoomPeer = Type.Object({
   muted: Type.Boolean(),
   deafened: Type.Boolean(),
   screen: Type.Boolean(),
+  /** The camera is on. Optional: an API a release behind does not say. */
+  camera: Type.Optional(Type.Boolean()),
   /** The desktop app, the Android app, a phone or a browser; null when the socket sent no user agent. */
   client: Nullable(ClientKind),
   ...DeviceInfo,
   /** The lasting id of a guest's browser; null for an account or a guest that sent none. */
   guestId: Nullable(Type.String()),
-  ...NetworkOrigin
+  ...NetworkOrigin,
+  /**
+   * The connection as the peer's client last judged it; null until it says.
+   * Optional, like the other network fields: the admin app and the API ship
+   * in different images, so an API a release behind sends none.
+   */
+  network: Type.Optional(Nullable(NetworkLevel))
 });
 export type LiveRoomPeer = Static<typeof LiveRoomPeer>;
 
@@ -409,7 +418,7 @@ export const LiveRoom = Type.Object({
   avatarUrl: Nullable(Type.String()),
   /** Null for a temporary room, which nobody owns. */
   owner: Nullable(RoomAccount),
-  /** When the earliest of those still in voice came in. */
+  /** When the call began: the server's call clock, the one the room screen counts from. */
   since: Nullable(Type.Number()),
   peers: Type.Array(LiveRoomPeer)
 });
@@ -451,7 +460,9 @@ export const RoomStay = Type.Object({
   browser: Nullable(Type.String()),
   ...NetworkOrigin,
   joinedAt: Type.Number(),
-  leftAt: Type.Number()
+  leftAt: Type.Number(),
+  /** How the connection went: each change of its level, the first at or after joinedAt. Empty when the client never said. */
+  network: Type.Optional(Type.Array(NetworkPoint))
 });
 export type RoomStay = Static<typeof RoomStay>;
 
@@ -491,6 +502,8 @@ export const RoomCall = Type.Object({
   /** As on a stay: null once the room is gone, empty for an unnamed temporary room. */
   roomName: Nullable(Type.String()),
   isStatic: Nullable(Type.Boolean()),
+  /** The room's picture as it is now; null without one or once the room is gone. Optional for an API a release behind. */
+  avatarUrl: Type.Optional(Nullable(Type.String())),
   startedAt: Type.Number(),
   endedAt: Type.Number(),
   stays: Type.Array(RoomStay)
