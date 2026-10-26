@@ -7,6 +7,7 @@ import type http from 'node:http';
 import type { IncomingMessage } from 'node:http';
 import type { FastifyBaseLogger } from 'fastify';
 import { startMaintenanceTimers } from '../platform/maintenance.ts';
+import { createRingDeliveryRuntime } from '../domains/rings/ring-delivery.ts';
 import { apiMaintenanceTasks } from './maintenance-tasks.ts';
 import { createRealtimeHub } from './realtime-hub.ts';
 import { createLiveKit } from './livekit.ts';
@@ -267,6 +268,13 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
 
     app.addHook('onReady', hub.deliveryRelay.start);
     app.addHook('onClose', hub.deliveryRelay.stop);
+    const ringDelivery = createRingDeliveryRuntime({
+      rings: domain.rings,
+      enabled: () => services.getPool() !== null,
+      onError: (error) => appLogger.warn({ err: error }, 'ring delivery failed')
+    });
+    app.addHook('onReady', async () => ringDelivery.start());
+    app.addHook('onClose', ringDelivery.stop);
 
     const { roomRuntime, wsHandler } = hub.start({
       logger: appLogger,

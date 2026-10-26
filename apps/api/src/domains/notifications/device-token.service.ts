@@ -30,13 +30,15 @@ export function createDeviceTokenService(deps: DeviceTokenServiceDeps) {
       sessionId,
       provider,
       token,
-      userAgent
+      userAgent,
+      notificationChannels = []
     }: {
       userId: string;
       sessionId: string;
       provider: DevicePushProvider;
       token: string;
       userAgent: string;
+      notificationChannels?: readonly string[];
     }): Promise<{ status: 'disabled' } | RateLimited | { status: 'registered' }> {
       if (!deps.enabled()) return { status: 'disabled' };
       // A push SDK's token is one word of printable ASCII; anything else was
@@ -45,7 +47,7 @@ export function createDeviceTokenService(deps: DeviceTokenServiceDeps) {
       const limited = rateLimited(userId);
       if (limited) return limited;
       const appVersion = parseAndroidAppVersion(userAgent) || null;
-      await deps.tokens().upsert({ userId, sessionId, provider, token, appVersion });
+      await deps.tokens().upsert({ userId, sessionId, provider, token, appVersion, notificationChannels });
       return { status: 'registered' };
     },
 

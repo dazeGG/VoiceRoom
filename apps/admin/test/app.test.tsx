@@ -84,6 +84,7 @@ const kitchen: LiveRoom = {
 function signedInAs(role: StaffRole, openReports = 0, more: Record<string, Route> = {}) {
   return stubApi({
     'GET /api/staff/me': { body: { ok: true, ...staffOf(role) } },
+    'GET /api/admin/user-reports': { body: { ok: true, reports: [] } },
     'GET /api/admin/reports': {
       body: { ok: true, reports: Array.from({ length: openReports }, (_, index) => report(`r-${String(index)}`)) }
     },
@@ -156,12 +157,35 @@ test('the reports item counts the open reports', async () => {
   expect(await screen.findByLabelText('открытых: 3')).toBeTruthy();
 });
 
+test('the reports item discovers user reports even before opening the review page', async () => {
+  signedInAs('moderator', 1, {
+    'GET /api/admin/user-reports': {
+      body: {
+        ok: true,
+        reports: [
+          {
+            id: 'user-r1',
+            reason: 'abuse',
+            comment: '',
+            createdAt: 1,
+            reporter: { userId: 'alice', login: 'alice', displayName: 'Alice' },
+            target: { userId: 'bob', login: 'bob', displayName: 'Bob', deleted: false }
+          }
+        ]
+      }
+    }
+  });
+  render(<App />);
+  expect(await screen.findByLabelText('открытых: 2')).toBeTruthy();
+});
+
 test('the reports item keeps the fresh poll count while the reports page stays open', async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   window.history.replaceState(null, '', '/reports');
   let asked = 0;
   stubApi({
     'GET /api/staff/me': { body: { ok: true, ...staffOf('moderator') } },
+    'GET /api/admin/user-reports': { body: { ok: true, reports: [] } },
     // The poll and the page ask once each on opening; the poll a minute later hears of two more.
     'GET /api/admin/reports': () => {
       asked += 1;

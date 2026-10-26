@@ -93,6 +93,7 @@ export interface DeviceTokens {
   created_at: Generated<Timestamp>;
   id: string;
   last_seen_at: Generated<Timestamp>;
+  notification_channels: Generated<string[]>;
   provider: string;
   session_id: string;
   token: string;
@@ -390,6 +391,18 @@ export interface RetentionWeeks {
   week2_pct: number;
 }
 
+export interface RingDeliveryOutbox {
+  attempts: Generated<number>;
+  available_at: Generated<Timestamp>;
+  claim_token: string | null;
+  claimed_until: Timestamp | null;
+  deadline: Timestamp;
+  kind: string;
+  recipient_user_id: string;
+  revision: number;
+  ring_id: string;
+}
+
 export interface RoomBans {
   created_at: Generated<Timestamp>;
   expires_at: Timestamp | null;
@@ -492,6 +505,21 @@ export interface RoomPeerIdentities {
   session_token_hash: string;
 }
 
+export interface RoomRings {
+  caller_user_id: string;
+  client_request_id: string;
+  created_at: Generated<Timestamp>;
+  ended_at: Timestamp | null;
+  expires_at: Timestamp;
+  id: string;
+  invite_message_id: string;
+  reason: string | null;
+  recipient_user_id: string;
+  revision: Generated<number>;
+  room_id: string;
+  state: Generated<string>;
+}
+
 export interface Rooms {
   avatar_key: string | null;
   created_at: Generated<Timestamp>;
@@ -585,6 +613,18 @@ export interface UserNotifications {
   updated_at: Generated<Timestamp>;
 }
 
+export interface UserReports {
+  comment: Generated<string>;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  reason: string;
+  reporter_user_id: string;
+  resolved_at: Timestamp | null;
+  resolved_by_user_id: string | null;
+  status: Generated<string>;
+  target_user_id: string;
+}
+
 export interface Users {
   avatar_accent: string | null;
   avatar_color_key: Generated<string>;
@@ -664,6 +704,7 @@ export interface DB {
   push_subscriptions: PushSubscriptions;
   reserved_logins: ReservedLogins;
   retention_weeks: RetentionWeeks;
+  ring_delivery_outbox: RingDeliveryOutbox;
   room_bans: RoomBans;
   room_bookmarks: RoomBookmarks;
   room_chat_reads: RoomChatReads;
@@ -674,6 +715,7 @@ export interface DB {
   room_message_reactions: RoomMessageReactions;
   room_messages: RoomMessages;
   room_peer_identities: RoomPeerIdentities;
+  room_rings: RoomRings;
   room_server_mutes: RoomServerMutes;
   rooms: Rooms;
   sessions: Sessions;
@@ -682,6 +724,7 @@ export interface DB {
   user_activity_days: UserActivityDays;
   user_blocks: UserBlocks;
   user_notifications: UserNotifications;
+  user_reports: UserReports;
   users: Users;
   voice_sessions: VoiceSessions;
   voiceroom_migration_guard: VoiceroomMigrationGuard;

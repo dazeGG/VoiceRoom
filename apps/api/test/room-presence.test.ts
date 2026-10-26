@@ -268,11 +268,35 @@ test('closing the last seat logs a failed occupancy write', async () => {
   presence.reset();
 });
 
-test('the roster wait returns the peer as soon as it joins, or null at the deadline', async () => {
+test('the roster wait returns the peer as soon as it joins, or null at the deadline', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'], now: 1000 });
   const { presence } = harness();
-  setTimeout(() => presence.room('r1').peers.set('p', { id: 'p' }), 8);
-  assert.equal((await presence.waitForRosterPeer('r1', 'p'))?.id, 'p');
-  assert.equal(await presence.waitForRosterPeer('r1', 'missing', 10), null);
+  const peer = { id: 'p' };
+  setTimeout(() => presence.room('r1').peers.set('p', peer), 8);
+  const joined = presence.waitForRosterPeer('r1', 'p');
+  const joinedResult = t.mock.fn();
+  void joined.then(joinedResult);
+
+  // Let each asynchronous poll schedule its next timer before advancing again.
+  t.mock.timers.tick(5);
+  await Promise.resolve();
+  assert.equal(joinedResult.mock.callCount(), 0, 'waits while the peer is absent');
+  t.mock.timers.tick(3);
+  t.mock.timers.tick(2);
+  assert.equal(await joined, peer, 'returns the peer on the first poll after its join');
+  assert.equal(Date.now(), 1010);
+
+  const missing = presence.waitForRosterPeer('r1', 'missing', 10);
+  const missingResult = t.mock.fn();
+  void missing.then(missingResult);
+  t.mock.timers.tick(5);
+  await Promise.resolve();
+  t.mock.timers.tick(4);
+  await Promise.resolve();
+  assert.equal(missingResult.mock.callCount(), 0, 'does not expire before the deadline');
+  t.mock.timers.tick(1);
+  assert.equal(await missing, null);
+  assert.equal(Date.now(), 1020, 'expires at the requested deadline');
 });
 
 test('the idle sweep reconciles live rooms first and forgets rooms the store dropped', async () => {

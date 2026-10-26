@@ -11,10 +11,15 @@ export const NATIVE_PUSH_DATA_VERSION = '1';
 
 /**
  * The Android notification channels the app creates. A notification push
- * names `messages`; a ring is data-only and the app posts its own call
+ * names `messages`, or `mentions` only if native code confirms that channel.
+ * A ring is data-only and the app posts its own call
  * notification on `calls`.
  */
-export const NATIVE_PUSH_CHANNELS = Object.freeze({ messages: 'messages', calls: 'calls' } as const);
+export const NATIVE_PUSH_CHANNELS = Object.freeze({
+  messages: 'messages',
+  mentions: 'mentions',
+  calls: 'calls'
+} as const);
 export type NativePushChannel = (typeof NATIVE_PUSH_CHANNELS)[keyof typeof NATIVE_PUSH_CHANNELS];
 
 /** The longest title, body and name a push carries, in characters, so a push stays within RuStore's 4096 bytes. */
@@ -32,7 +37,11 @@ const EXTRA_KEYS = [
   'fromName',
   'roomId',
   'roomName',
-  'roomEmoji'
+  'roomEmoji',
+  'ringId',
+  'recipientUserId',
+  'ringRevision',
+  'ringState'
 ] as const;
 const NAME_KEYS: ReadonlySet<string> = new Set(['fromName', 'roomName']);
 const OPTIONAL_KEYS = ['notificationId', 'expiresAt', 'title', 'body', ...EXTRA_KEYS] as const;
@@ -54,8 +63,14 @@ export function clipNativePushText(text: string, limit: number): string {
 }
 
 /** The channel a push is shown on, or null for a data-only push (a ring). */
-export function nativePushChannel(type: string): NativePushChannel | null {
-  return type === RING ? null : NATIVE_PUSH_CHANNELS.messages;
+export function nativePushChannel(
+  type: string,
+  notificationChannels: readonly string[] = []
+): NativePushChannel | null {
+  if (type === RING || type === 'ring.state') return null;
+  return type === 'notification' && notificationChannels.includes(NATIVE_PUSH_CHANNELS.mentions)
+    ? NATIVE_PUSH_CHANNELS.mentions
+    : NATIVE_PUSH_CHANNELS.messages;
 }
 
 function nativePushType(payload: PushPayload): string {

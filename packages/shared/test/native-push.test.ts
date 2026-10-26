@@ -174,3 +174,14 @@ test('the data is a plain string map, as a push service takes it', () => {
   const map: Readonly<Record<string, string>> = data;
   assert.equal(map.messageId, 'm');
 });
+
+test('only native-confirmed mentions capability separates mention/reply notifications', () => {
+  assert.equal(nativePushChannel('notification'), 'messages');
+  assert.equal(nativePushChannel('notification', []), 'messages');
+  assert.equal(nativePushChannel('notification', ['messages']), 'messages');
+  assert.equal(nativePushChannel('notification', ['mentions']), 'mentions');
+  for (const type of ['dm.message', 'friend.request', 'unknown'])
+    assert.equal(nativePushChannel(type, ['mentions']), 'messages');
+  for (const type of ['ring', 'ring.state'])
+    assert.equal(nativePushChannel(type, ['messages', 'mentions', 'calls']), null);
+});

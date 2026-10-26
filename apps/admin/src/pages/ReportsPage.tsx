@@ -14,6 +14,7 @@ import { useAdminResource } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { Avatar, Button, Empty, Pill } from '../ui/index.tsx';
 import './ReportsPage.css';
+import { UserReports } from './UserReports.tsx';
 
 const REFRESH_MS = 60_000;
 
@@ -51,6 +52,26 @@ const formatWhen = (value: number | null) => (value ? formatDateTime(value) : '�
 const reportsWord = (count: number) => `${formatCount(count)} ${plural(count, ['жалоба', 'жалобы', 'жалоб'])}`;
 
 export function ReportsPage({
+  onResolved,
+  onOpenAccount
+}: {
+  onResolved: (openLeft: number) => void;
+  onOpenAccount: (accountId: string) => void;
+}) {
+  const [messageCount, setMessageCount] = useState<number | null>(null);
+  const [userCount, setUserCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (messageCount !== null && userCount !== null) onResolved(messageCount + userCount);
+  }, [messageCount, userCount, onResolved]);
+  return (
+    <>
+      <MessageReports onResolved={setMessageCount} onOpenAccount={onOpenAccount} />
+      <UserReports onResolved={setUserCount} onOpenAccount={onOpenAccount} />
+    </>
+  );
+}
+
+function MessageReports({
   onResolved,
   onOpenAccount
 }: {

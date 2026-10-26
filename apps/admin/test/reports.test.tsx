@@ -8,7 +8,13 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 import type { AdminReport } from '@voice-room/shared/contracts/reports';
 import { ReportsPage } from '../src/pages/ReportsPage.tsx';
-import { renderAs, stubApi } from './helpers/harness.tsx';
+import { renderAs, stubApi as stubRoutes } from './helpers/harness.tsx';
+
+const stubApi = (routes: Parameters<typeof stubRoutes>[0]) =>
+  stubRoutes({
+    'GET /api/admin/user-reports': { body: { ok: true, reports: [] } },
+    ...routes
+  });
 
 afterEach(() => {
   cleanup();
@@ -81,7 +87,7 @@ test('two reports of one message are one card, and removing it drops both', asyn
   expect(calls.find((call) => call.method === 'POST')?.body).toEqual({ action: 'remove_message' });
   // The next message is shown; the panel's count follows: one report is left open.
   expect(within(detail()).getByText('текст m2')).toBeTruthy();
-  expect(onResolved).toHaveBeenLastCalledWith(1);
+  await waitFor(() => expect(onResolved).toHaveBeenLastCalledWith(1));
 });
 
 test('a card picks the report shown, and the author opens their card', async () => {
@@ -152,4 +158,62 @@ test('the review tells a role without it that the section is not for them', asyn
   });
   renderAs(<ReportsPage onResolved={vi.fn()} onOpenAccount={vi.fn()} />, 'moderator');
   expect(await screen.findByText('Этот раздел недоступен вашей роли.')).toBeTruthy();
+});
+
+test('user reports group by account and are reviewed without any delete-message action', async () => {
+  const userReport = (id: string) => ({
+    id,
+    reason: 'abuse',
+    comment: 'навязчивые звонки',
+    createdAt: Date.UTC(2026, 9, 25),
+    reporter: { userId: 'alice', login: 'alice', displayName: 'Алиса' },
+    target: { userId: 'bob', login: 'bob', displayName: 'Боб', deleted: false }
+  });
+  const calls = stubApi({
+    'GET /api/admin/reports': { body: { ok: true, reports: [] } },
+    'GET /api/admin/user-reports': { body: { ok: true, reports: [userReport('r-user-1'), userReport('r-user-2')] } },
+    'POST /api/admin/user-reports/r-user-1/resolve': { body: { ok: true, resolved: 2 } }
+  });
+  const onResolved = vi.fn();
+  const onOpenAccount = vi.fn();
+  renderAs(<ReportsPage onResolved={onResolved} onOpenAccount={onOpenAccount} />, 'moderator');
+  const open = await screen.findByRole('button', { name: 'Открыть аккаунт' });
+  await userEvent.click(open);
+  expect(onOpenAccount).toHaveBeenCalledWith('bob');
+  expect(screen.queryByRole('button', { name: 'Удалить сообщение' })).toBeNull();
+  await waitFor(() => expect(onResolved).toHaveBeenLastCalledWith(2));
+  await userEvent.click(screen.getByRole('button', { name: 'Рассмотрено' }));
+  expect(await screen.findByText('Жалоб на пользователей нет')).toBeTruthy();
+  expect(calls.find((call) => call.method === 'POST')?.body).toEqual({ action: 'reviewed' });
+  await waitFor(() => expect(onResolved).toHaveBeenLastCalledWith(0));
+});
+
+test('a failed user decision preserves the report and explains the failure', async () => {
+  stubApi({
+    'GET /api/admin/reports': { body: { ok: true, reports: [] } },
+    'GET /api/admin/user-reports': {
+      body: {
+        ok: true,
+        reports: [
+          {
+            id: 'user-report',
+            reason: 'spam',
+            comment: 'спам',
+            createdAt: 1,
+            reporter: { userId: 'alice', login: 'alice', displayName: 'Алиса' },
+            target: { userId: 'bob', login: '', displayName: '', deleted: true }
+          }
+        ]
+      }
+    },
+    'POST /api/admin/user-reports/user-report/resolve': {
+      status: 500,
+      body: { ok: false, error: 'retry later', code: 'internal_error' }
+    }
+  });
+  renderAs(<ReportsPage onResolved={vi.fn()} onOpenAccount={vi.fn()} />, 'moderator');
+  await userEvent.click(await screen.findByRole('button', { name: 'Отклонить жалобы' }));
+  expect((await screen.findByRole('alert')).textContent).toContain('Не удалось закрыть жалобу');
+  expect(screen.getByText('Аккаунт уже удалён')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: 'Открыть аккаунт' })).toBeNull();
 });

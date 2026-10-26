@@ -31,6 +31,7 @@ import {
   WhatsNewAnswer
 } from '@voice-room/shared/contracts/account';
 import { Done } from '@voice-room/shared/contracts/http';
+import { parseAndroidAppVersion } from '@voice-room/shared/client-version';
 import { cleanDisplayName, normalizeLogin } from '@voice-room/shared/validation';
 import type { ApiContext, ResolvedSession, SessionRecord, SessionUser } from '../../app/context.ts';
 import { selfUser } from './user-records.ts';
@@ -445,9 +446,14 @@ export function registerAccountRoutes(root: FastifyInstance, ctx: ApiContext, de
             deletionScheduledFor: result.deletionScheduledFor
           });
         case 'scheduled':
-          return reply
-            .header('Set-Cookie', deps.clearedSessionCookie())
-            .send({ ok: true as const, deletionScheduledFor: result.deletionScheduledFor });
+          // Native requests share an OS CookieJar: a delayed clear could erase
+          // a newer sign-in before JavaScript can reject the old response.
+          // The deleted account's tokens are already revoked server-side; the
+          // user agent changes only cookie delivery, never authentication.
+          if (!parseAndroidAppVersion(request.headers['user-agent'])) {
+            reply.header('Set-Cookie', deps.clearedSessionCookie());
+          }
+          return reply.send({ ok: true as const, deletionScheduledFor: result.deletionScheduledFor });
       }
     }
   );

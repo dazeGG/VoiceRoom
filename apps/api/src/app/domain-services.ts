@@ -31,6 +31,7 @@ import { createPeerModerationService } from '../domains/rooms/peer-moderation.se
 import { publicPeer } from '../domains/rooms/room-views.ts';
 import { createRoomsService } from '../domains/rooms/rooms.service.ts';
 import { createFriendsService } from '../domains/social/friends.service.ts';
+import { createRingService } from '../domains/rings/ring.service.ts';
 import type { readApiConfig } from './config.ts';
 import type { LiveKit } from './livekit.ts';
 import type { RateLimits } from './rate-limits.ts';
@@ -155,16 +156,24 @@ export function createDomainServices(deps: DomainServiceDeps) {
     broadcastProfileToFriends: (user, log) => hub.broadcastUserProfileToFriends(user, { log }),
     logger: () => deps.logger()
   });
-  const friendsService = createFriendsService({
-    friends: services.getFriendStore,
+  const rings = createRingService({
+    repository: services.getRingRepository,
     findUser: (userId) => services.getUserStore().getUserById(userId),
     findRoom: (roomId) => services.getRoomStore().getRoom(roomId),
-    sendDirectMessage: (input) => services.getMessageService().direct.sendMessage(input),
+    notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
+    queueWebPush: (userId, payload, context) => hub.notifications.queuePush(userId, payload, context),
+    nativePush: (userId, payload, context) => services.getNativePushService().sendToUser(userId, payload, context),
+    preferences: (userId) => services.getNotificationPreferences().getPreferences(userId),
+    ttlMs: config.RING_TTL_MS,
+    windowMs: config.RING_RATE_WINDOW_MS,
+    maxCount: config.RING_RATE_LIMIT
+  });
+  const friendsService = createFriendsService({
+    friends: services.getFriendStore,
+    ringInvitation: rings.create,
     isOnline: (userId) => hub.isUserOnline(userId),
     notifyUser: (userId, event) => hub.broadcastToUser(userId, event),
-    queuePush: (userId, payload, context) => hub.notifications.queuePush(userId, payload, context),
-    ringLimiter: limits.ring,
-    ringTtlMs: config.RING_TTL_MS
+    queuePush: (userId, payload, context) => hub.notifications.queuePush(userId, payload, context)
   });
   const directMessages = createDirectMessagesService({
     messages: services.getMessageService,
@@ -311,6 +320,7 @@ export function createDomainServices(deps: DomainServiceDeps) {
     sessionCookies,
     account: accountService,
     friends: friendsService,
+    rings,
     directMessages,
     notificationSettings,
     deviceTokens,

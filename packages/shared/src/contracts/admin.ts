@@ -13,7 +13,7 @@ import { AccountBadge } from './users.ts';
 /** What the realtime layer tells administrators when the open reports change. */
 export const AdminReportsEvent = Type.Object({
   openReports: Type.Number(),
-  /** Set when the change is a new report. */
+  /** Set for a new message report; user-report changes use null for compatibility. */
   filed: Nullable(
     Type.Object({
       reason: ReportReasonSchema,

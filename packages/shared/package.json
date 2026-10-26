@@ -31,6 +31,7 @@
     "./contracts/http": "./src/contracts/http.ts",
     "./contracts/users": "./src/contracts/users.ts",
     "./contracts/social": "./src/contracts/social.ts",
+    "./contracts/rings": "./src/contracts/rings.ts",
     "./contracts/account": "./src/contracts/account.ts",
     "./contracts/rooms": "./src/contracts/rooms.ts",
     "./contracts/membership": "./src/contracts/membership.ts",

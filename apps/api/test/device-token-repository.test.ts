@@ -141,10 +141,12 @@ test('a token whose session has expired is not listed', { skip }, async (t) => {
   await pool.query(`UPDATE sessions SET expires_at = $1 WHERE id = 's2'`, [new Date(at)]);
 
   assert.deepEqual(await tokens.listByUserId('ada', at - 1), [
-    { provider: 'rustore', token: 'expired', appVersion: null },
-    { provider: 'rustore', token: 'live', appVersion: '1.2.3' }
+    { provider: 'rustore', token: 'expired', appVersion: null, notificationChannels: [] },
+    { provider: 'rustore', token: 'live', appVersion: '1.2.3', notificationChannels: [] }
   ]);
-  assert.deepEqual(await tokens.listByUserId('ada', at), [{ provider: 'rustore', token: 'live', appVersion: '1.2.3' }]);
+  assert.deepEqual(await tokens.listByUserId('ada', at), [
+    { provider: 'rustore', token: 'live', appVersion: '1.2.3', notificationChannels: [] }
+  ]);
   assert.deepEqual(await tokens.listByUserId('bob'), []);
 });
 
@@ -164,3 +166,44 @@ test("removing takes only the caller's own token; a pruned token goes whoever ow
   await tokens.removeToken({ provider: 'rustore', token: 'bob-phone' });
   assert.deepEqual(await rows(), []);
 });
+
+test(
+  'capabilities persist per token, transfer with ownership and reset for legacy re-registration',
+  { skip },
+  async (t) => {
+    const { tokens, register } = await seeded(t);
+    await register('legacy');
+    await tokens.upsert({
+      userId: 'ada',
+      sessionId: 's1',
+      provider: 'rustore',
+      token: 'new',
+      appVersion: '1.0.0',
+      notificationChannels: ['messages', 'mentions']
+    });
+    assert.deepEqual(
+      (await tokens.listByUserId('ada')).map((one) => [one.token, one.notificationChannels]),
+      [
+        ['new', ['messages', 'mentions']],
+        ['legacy', []]
+      ]
+    );
+    await tokens.upsert({
+      userId: 'bob',
+      sessionId: 's3',
+      provider: 'rustore',
+      token: 'new',
+      appVersion: null,
+      notificationChannels: ['mentions']
+    });
+    assert.deepEqual(
+      (await tokens.listByUserId('bob')).map((one) => one.notificationChannels),
+      [['mentions']]
+    );
+    await register('new', 's3', 'bob');
+    assert.deepEqual(
+      (await tokens.listByUserId('bob')).map((one) => one.notificationChannels),
+      [[]]
+    );
+  }
+);

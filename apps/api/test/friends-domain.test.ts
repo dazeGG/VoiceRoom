@@ -11,7 +11,7 @@ import { registerFriendsRoutes } from '../src/domains/social/friends.routes.ts';
 import { isActiveAccount, notificationActor } from '../src/domains/social/social-views.ts';
 import type { ApiContext } from '../src/app/context.ts';
 import { registerHttpKit } from '../src/platform/http/http-kit.ts';
-import { fake, publicUser, storedUser, storedDirectMessage } from './fakes/index.ts';
+import { fake, publicUser, storedUser } from './fakes/index.ts';
 import { recordingService, type Answers } from './helpers/recording-service.ts';
 
 const ME = storedUser({ id: 'user-1', login: 'alice', displayName: 'Alice' });
@@ -33,14 +33,7 @@ test('social views: the notification actor and active accounts', () => {
   assert.equal(isActiveAccount(storedUser({ id: 'u', deletedAt: 1 })), false);
 });
 
-type HarnessOptions = {
-  deletedTarget?: boolean;
-  noRoom?: boolean;
-  roomName?: string;
-  rate?: { allowed: boolean; retryAfterSeconds: number };
-};
-
-function harness(store: Partial<FriendStore> = {}, options: HarnessOptions = {}) {
+function harness(store: Partial<FriendStore> = {}) {
   const calls = {
     events: new Array<unknown[]>(),
     pushes: new Array<unknown[]>(),
@@ -109,20 +102,12 @@ function harness(store: Partial<FriendStore> = {}, options: HarnessOptions = {})
   };
   const service = createFriendsService({
     friends: () => friends,
-    findUser: async (userId) => storedUser({ id: userId, deletedAt: options.deletedTarget ? 1 : null }),
-    findRoom: async (roomId) => (options.noRoom ? null : { id: roomId, name: options.roomName ?? 'Team', emoji: '🎧' }),
-    sendDirectMessage: async (input) => {
-      calls.dms.push(input);
-      return storedDirectMessage('dm-1');
-    },
+    ringInvitation: async () => ({ status: 'not_friends' as const }),
     isOnline: (userId) => userId === 'f1',
     notifyUser: (userId, event) => calls.events.push([userId, event.type]),
     queuePush: async (userId, payload, context) => {
       calls.pushes.push([userId, payload.type, payload.title, context]);
-    },
-    ringLimiter: { check: () => options.rate || { allowed: true, retryAfterSeconds: 0 } },
-    ringTtlMs: 1000,
-    now: () => 50
+    }
   });
   return { calls, service };
 }
@@ -296,62 +281,9 @@ test('responding, cancelling, removing, blocking and unblocking', async () => {
   );
 });
 
-test('ringing refuses strangers, blocks, deleted accounts, cooldowns and missing rooms', async () => {
-  assert.equal(
-    (
-      await harness({
-        async areFriends() {
-          return false;
-        }
-      }).service.ring(ME, 'room-1', 'f1')
-    ).status,
-    'not_friends'
-  );
-  assert.equal(
-    (
-      await harness({
-        async isBlockedBetween() {
-          return true;
-        }
-      }).service.ring(ME, 'room-1', 'f1')
-    ).status,
-    'blocked'
-  );
-  assert.equal((await harness({}, { deletedTarget: true }).service.ring(ME, 'room-1', 'f1')).status, 'account_deleted');
-  assert.deepEqual(
-    await harness({}, { rate: { allowed: false, retryAfterSeconds: 9 } }).service.ring(ME, 'room-1', 'f1'),
-    { status: 'rate_limited', retryAfterSeconds: 9 }
-  );
-  assert.deepEqual(
-    await harness({}, { rate: { allowed: false, retryAfterSeconds: 0 } }).service.ring(ME, 'room-1', 'f1'),
-    {
-      status: 'rate_limited',
-      retryAfterSeconds: 0
-    }
-  );
-  assert.equal((await harness({}, { noRoom: true }).service.ring(ME, 'room-1', 'f1')).status, 'room_not_found');
-});
-
-test('a ring notifies, files a room invitation DM for both sides and pushes until it expires', async () => {
-  const { calls, service } = harness();
-  assert.equal((await service.ring(ME, 'room-1', 'f1')).status, 'rung');
-  assert.deepEqual(calls.events, [
-    ['f1', 'ring.incoming'],
-    ['f1', 'dm-message'],
-    ['user-1', 'dm-message']
-  ]);
-  assert.equal(calls.dms[0]?.body, 'Приглашение в комнату «Team»');
-  assert.equal(calls.dms[0].metadata.kind, 'room-invite');
-  assert.deepEqual(calls.pushes[0]?.slice(0, 3), ['f1', 'ring', 'Alice зовёт вас']);
-  assert.deepEqual(calls.pushes[0][3], {
-    expiresAt: 1050,
-    nativeData: { fromUserId: 'user-1', fromName: 'Alice', roomId: 'room-1', roomName: 'Team', roomEmoji: '🎧' }
-  });
-
-  const unnamed = harness({}, { roomName: '' });
-  await unnamed.service.ring(storedUser({ login: '' }), 'room-1', 'f1');
-  assert.equal(unnamed.calls.dms[0]?.body, 'Приглашение в комнату');
-  assert.equal(unnamed.calls.pushes[0]?.[2], 'Друг зовёт вас');
+test('legacy friends ring delegates to the persisted invitation operation', async () => {
+  const { service } = harness();
+  assert.deepEqual(await service.ring(ME, 'team', FRIEND_ID), { status: 'not_friends' });
 });
 
 // --- routes ---------------------------------------------------------------------

@@ -231,6 +231,8 @@ export function registerFriendsRoutes(
             });
         case 'room_not_found':
           return reply.code(404).send(failure('Room not found', { code: 'room_not_found' }));
+        case 'request_conflict':
+          return reply.code(409).send(failure('Request key conflict', { code: 'idempotency_conflict' }));
         case 'rung':
           return { ok: true as const };
       }
