@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { Value } from 'typebox/value';
+
 import * as accountSecurity from '../src/account-security.ts';
+import { AccountSession, LoginAlert } from '../src/contracts/account.ts';
+import { ClientKind } from '../src/contracts/admin.ts';
 import { defined } from './helpers/assert-defined.ts';
 
 const USER_AGENTS = Object.freeze([
@@ -67,28 +71,6 @@ test('isDesktopAppUserAgent agrees with the described client', async () => {
   assert.equal(accountSecurity.isDesktopAppUserAgent(shell), true);
 });
 
-test('normalizeSelfUserFlags defaults an older API to banner-on, prompt-off', async () => {
-  const cases = [
-    [
-      { hasUsedDesktopApp: true, appPromptSeen: false },
-      { hasUsedDesktopApp: true, appPromptSeen: false }
-    ],
-    [
-      { hasUsedDesktopApp: false, appPromptSeen: true },
-      { hasUsedDesktopApp: false, appPromptSeen: true }
-    ],
-    [{}, { hasUsedDesktopApp: false, appPromptSeen: true }],
-    [null, { hasUsedDesktopApp: false, appPromptSeen: true }],
-    [
-      { hasUsedDesktopApp: 'yes', appPromptSeen: 0 },
-      { hasUsedDesktopApp: false, appPromptSeen: true }
-    ]
-  ];
-  for (const [input, expected] of cases) {
-    assert.deepEqual(accountSecurity.normalizeSelfUserFlags(input), expected);
-  }
-});
-
 test('normalizeRecoveryCode accepts typed variations and rejects everything else', async () => {
   const canonical = '0123456789ABCDEF'.replace('C', 'H');
   const cases = [
@@ -127,16 +109,17 @@ test('what is new is compared by release version, not by string order', async ()
     accountSecurity.WHATS_NEW_VERSION
   );
 
-  for (const [left, right, expected] of [
-    ['2.6.0', '2.6.0', 0],
-    ['2.5.8', '2.6.0', -1],
-    ['2.10.0', '2.9.9', 1],
-    ['10.0.0', '9.99.99', 1],
-    ['2.6', '2.6.0', null],
-    ['v2.6.0', '2.6.0', null],
-    [null, '2.6.0', null]
-  ]) {
-    assert.equal(accountSecurity.compareReleaseVersions(left, right), expected, `${left} vs ${right}`);
+  // A malformed last-seen version counts as never seen.
+  for (const [lastSeen, current, expected] of [
+    ['2.6.0', '2.6.0', false],
+    ['2.5.8', '2.6.0', true],
+    ['2.10.0', '2.9.9', false],
+    ['2.9.9', '2.10.0', true],
+    ['10.0.0', '9.99.99', false],
+    ['2.6', '2.6.0', true],
+    ['v2.6.0', '2.6.0', true]
+  ] as const) {
+    assert.equal(accountSecurity.hasUnseenWhatsNew(lastSeen, current), expected, `${lastSeen} vs ${current}`);
   }
 
   // Accounts that never recorded an announcement predate every release.
@@ -172,34 +155,6 @@ test('the recovery codes reminder is due only without codes and outside its snoo
   }
 });
 
-test('session rows are validated at the boundary', async () => {
-  const row = {
-    id: '6F9619FF-8B86-D011-B42D-00C04FC964FF',
-    current: true,
-    client: ' Chrome ',
-    os: 'Windows',
-    location: 'Москва, Россия',
-    lastSeenAt: 1_789_000_000_000,
-    ip: '203.0.113.7'
-  };
-  const normalized = accountSecurity.normalizeAccountSession(row);
-  assert.deepEqual(normalized, {
-    id: '6f9619ff-8b86-d011-b42d-00c04fc964ff',
-    current: true,
-    client: 'Chrome',
-    os: 'Windows',
-    location: 'Москва, Россия',
-    lastSeenAt: 1_789_000_000_000
-  });
-  assert.equal('ip' in normalized, false);
-  assert.equal(accountSecurity.normalizeAccountSession({ ...row, id: 'not-a-uuid' }), null);
-  assert.equal(accountSecurity.normalizeAccountSession({ ...row, lastSeenAt: 'yesterday' }), null);
-  assert.equal(
-    defined(accountSecurity.normalizeAccountSession({ ...row, current: 'yes' }), 'the session').current,
-    false
-  );
-});
-
 test('deleted accounts use a reserved login prefix and a fixed name', async () => {
   assert.equal(accountSecurity.ACCOUNT_DELETION_GRACE_MS, 7 * 24 * 60 * 60 * 1000);
   for (const [login, expected] of [
@@ -214,27 +169,23 @@ test('deleted accounts use a reserved login prefix and a fixed name', async () =
   }
 });
 
-test('login alerts are validated at the boundary', async () => {
+test('a login alert expires before the familiarity window ends', () => {
   assert.ok(accountSecurity.LOGIN_ALERT_TTL_MS < accountSecurity.LOGIN_FAMILIARITY_WINDOW_MS);
-  const alert = {
-    id: '6F9619FF-8B86-D011-B42D-00C04FC964FF',
-    kind: 'recovery',
-    client: ' Firefox ',
-    os: 'Linux',
-    location: 'Казань, Россия',
-    createdAt: 1_789_000_000_000,
-    sessionPublicId: 'must-not-leak'
-  };
-  const expected = {
-    id: '6f9619ff-8b86-d011-b42d-00c04fc964ff',
-    kind: 'recovery',
-    client: 'Firefox',
-    os: 'Linux',
-    location: 'Казань, Россия',
-    createdAt: 1_789_000_000_000
-  };
-  assert.deepEqual(accountSecurity.normalizeLoginAlert(alert), expected);
-  assert.equal(accountSecurity.normalizeLoginAlert({ ...alert, kind: 'register' }), null);
-  assert.equal(accountSecurity.normalizeLoginAlert({ ...alert, id: 'nope' }), null);
-  assert.equal(accountSecurity.normalizeLoginAlert({ ...alert, createdAt: 'today' }), null);
+});
+
+test('session and alert times are always numbers, as the API sends them', () => {
+  const session = { id: 's', current: true, client: '', os: '', location: '', lastSeenAt: 1 };
+  assert.equal(Value.Check(AccountSession, session), true);
+  assert.equal(Value.Check(AccountSession, { ...session, lastSeenAt: null }), false);
+  const alert = { id: 'a', kind: 'login', client: '', os: '', location: '', createdAt: 1 };
+  assert.equal(Value.Check(LoginAlert, alert), true);
+  assert.equal(Value.Check(LoginAlert, { ...alert, createdAt: null }), false);
+});
+
+test('clientKind answers only kinds the admin contract accepts', () => {
+  for (const fixture of USER_AGENTS) {
+    const kind = accountSecurity.clientKind(typeof fixture.value === 'string' ? fixture.value : null);
+    if (kind !== null) assert.equal(Value.Check(ClientKind, kind), true, fixture.name);
+  }
+  assert.equal(Value.Check(ClientKind, 'tablet'), false);
 });

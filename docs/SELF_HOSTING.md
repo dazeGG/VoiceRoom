@@ -25,6 +25,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `LIVEKIT_API_SECRET` | API / LiveKit | Секрет LiveKit. Сгенерировать случайным значением. |
 | `LIVEKIT_GATE_SECRET` | API / LiveKit gate | Отдельный случайный секрет длиной не менее 32 символов. Не должен совпадать с `LIVEKIT_API_SECRET`. |
 | `VAPID_PRIVATE_KEY` | API / Web Push | Приватная часть стабильной VAPID-пары. Никогда не публиковать и не хранить в Git. |
+| `RUSTORE_PUSH_SERVICE_TOKEN` | API и notification worker / RuStore Push | Сервисный ключ проекта push-уведомлений из консоли RuStore. Никогда не публиковать и не хранить в Git. |
 | `GITHUB_TOKEN` | API desktop release endpoint, optional | Нужен только если хочется повысить лимит GitHub API. |
 | `POW_SECRET` | API production/staging, optional | Стабильный secret для proof-of-work challenge; если не задан, генерируется на процесс и challenge'и инвалидируются при рестарте. |
 
@@ -36,6 +37,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `LIVEKIT_DOMAIN` | `livekit.${DOMAIN}` | Домен LiveKit. |
 | `LIVEKIT_GATE_PUBLIC_URL` | `wss://livekit.example.com` | Публичный browser-facing URL auth-gate. По умолчанию собирается из `LIVEKIT_DOMAIN`. |
 | `LIVEKIT_INTERNAL_URL` | `ws://livekit:7880` | Внутренний адрес LiveKit SFU для API при запуске без production compose. Production compose фиксирует service URL сам. |
+| `LIVEKIT_METRICS_URL` | `http://livekit:6789/metrics` | Prometheus-метрики LiveKit, которые API раз в минуту записывает для страницы «Система» в админке: трафик, потери пакетов в обе стороны, повторные отправки, процессор и память LiveKit. Production compose задаёт адрес внутри своей сети сам; без него эти графики пустые. |
 | `LIVEKIT_URL` | optional | Legacy fallback для host/dev запуска. В production не используйте его как публичный URL; задавайте `LIVEKIT_GATE_PUBLIC_URL`. |
 | `LIVEKIT_PUBLIC_URL` | optional | Для dev compose, если внешний LiveKit port отличается. |
 | `TRUST_PROXY` | `true` в compose/proxy | Включать только за доверенным reverse proxy. |
@@ -90,7 +92,9 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `REPORT_RATE_LIMIT` / `REPORT_RATE_WINDOW_MS` | `10` / `60000` | Лимит жалоб от одного аккаунта за окно. |
 | `CALL_FEEDBACK_RATE_LIMIT` / `CALL_FEEDBACK_RATE_WINDOW_MS` | `5` / `600000` | Лимит ответов «Как прошёл звонок?» от одного аккаунта (гостя — с одного адреса) за окно. |
 | `VAPID_PUBLIC_KEY` / `VAPID_SUBJECT` | empty | Публичная часть и контакт Web Push; вместе с secret `VAPID_PRIVATE_KEY` образуют полный VAPID-конфиг. Если любое значение отсутствует, push выключается без остановки API. |
-| `MAX_PUSH_SUBSCRIPTIONS_PER_USER` | `10` | Maximum retained Web Push subscriptions per account; older entries are pruned transactionally. |
+| `RUSTORE_PUSH_PROJECT_ID` | empty | ID проекта push-уведомлений RuStore для Android-приложения. Вместе с `RUSTORE_PUSH_SERVICE_TOKEN` включает доставку пушей в приложение; если любое значение пустое, доставка в приложение выключена, Web Push работает как раньше. Отладочная и релизная сборки — разные проекты в консоли. |
+| `ANDROID_MIN_VERSION` | empty | Минимальная поддерживаемая версия Android-приложения (`x.y.z`). Приложение старее получает на любой запрос к API ответ 426 `client_outdated`, его WebSocket закрывается с кодом 4426, а звонки (Ring) ему не приходят; остальные пуши приходят, потому что версия токена обновляется только при запуске приложения. Приложение показывает экран «Обновите приложение». Порог узнаётся через `GET /api/client/policy`. Пусто — ограничения нет. Неверный формат — API и воркер не стартуют. |
+| `MAX_PUSH_SUBSCRIPTIONS_PER_USER` | `10` | Maximum retained Web Push subscriptions per account, and separately the Android app's push tokens; older entries are pruned transactionally. |
 | `PUSH_SUBSCRIPTION_RATE_LIMIT` | `20` | Maximum Web Push subscription create/delete mutations per account per window. |
 | `PUSH_SUBSCRIPTION_RATE_WINDOW_MS` | `60000` | Web Push subscription mutation rate-limit window. |
 | `RING_RATE_LIMIT` / `RING_RATE_WINDOW_MS` | `1` / `30000` | Лимит Ring-приглашений от одного пользователя другому за окно. |
@@ -100,9 +104,12 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `PORT` | `3000` | API port. |
 | `SOCKET_PATH` | empty | Unix socket вместо TCP, если нужен. |
 | `API_METRICS_ALLOWED_REMOTE` | `127.0.0.1` | Caddy allowlist для публичного пути `/api/metrics`; задайте адрес или диапазон, с которого собираются метрики, иначе endpoint закрыт снаружи. Несколько адресов — через пробел. |
+| `ANDROID_RELEASE_CERT_SHA256` | пусто | SHA-256 отпечаток ключа подписи Android-приложения (`AA:BB:…`, 32 байта, верхний регистр, через двоеточие; только шестнадцатеричные цифры и двоеточия, иначе Caddy не загрузит конфиг). Caddy отдаёт по нему `/.well-known/assetlinks.json` для пакета `voiceroom.app`, и ссылки `https://<DOMAIN>/r/<id>` открываются в приложении. Пусто или неверный формат — 404. На dev-стенде указывают отпечаток отладочного ключа: `FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C`. |
 | `DESKTOP_RELEASE_REPO` | `dazeGG/VoiceRoomDesktop` | Repo для latest desktop release. |
 | `DESKTOP_RELEASE_CACHE_MS` | `600000` | Cache TTL для desktop release metadata. |
 | `GEOIP_DB_PATH` | empty (host) / `/data/geoip/dbip-city-lite.mmdb` (compose) | Локальная база [DB-IP City Lite](https://db-ip.com) (CC BY 4.0) для города и страны в списке устройств. Скачивается командой `node scripts/geoip/fetch-dbip-city-lite.mjs geoip/dbip-city-lite.mmdb` в каталог деплоя; обновлять раз в месяц и перезапускать `api`. Без файла список устройств показывается без города. |
+
+Целочисленные переменные окружения API (лимиты, TTL, интервалы) должны быть целыми числами: если переменная задана, но не является целым числом (или меньше допустимого минимума), API не стартует, а не откатывается к значению по умолчанию. Неустановленная или пустая переменная по-прежнему берёт default из таблиц выше.
 
 ### Переопределение dev-значений (опционально)
 
@@ -302,11 +309,15 @@ docker compose restart livekit
 
 ## Продуктовая аналитика
 
-API пишет для дашбордов три вещи, и все они хранятся бессрочно:
+API пишет для дашбордов три вещи:
 
-- `voice_sessions` — одна строка на каждый заход в войс (комната, аккаунт или гость, вход и выход);
+- `voice_sessions` — одна строка на каждый заход в войс: комната, аккаунт или гость, вход и выход, клиент, система и браузер, ключ адреса и как шла сеть по оценке самого клиента (хорошо, нестабильно или плохо; админка красит этим полосы звонка). Город не хранится: его видно только у тех, кто в звонке сейчас;
 - `user_activity_days` — в какие дни аккаунт был активен и с какого клиента (десктоп-приложение, телефон, браузер). День считается по Москве;
 - `product_snapshots` — пики каждой четверти часа: аккаунтов онлайн, гостевых подключений, людей и комнат в войсе.
+
+По людям это хранится 90 дней (`VOICE_HISTORY_KEEP_DAYS`). Раз в сутки API сворачивает более старые дни в счётчики `product_days` и замораживает удержание каждой недели регистраций в `retention_weeks`, затем удаляет отметки активности и стирает у старых заходов в войс аккаунт, устройство, комнату, ключ адреса и данные о сети: остаётся только время. Пики `product_snapshots` обезличены и хранятся бессрочно.
+
+Логи всех контейнеров ограничены: `json-file`, 3 файла по 10 МБ на сервис (`x-logging` в `docker-compose.yml`). Ограничение применяется при пересоздании контейнера. Первый деплой с ним меняет конфигурацию всех сервисов, и `docker compose up -d` пересоздаёт их все, включая `livekit`: идущие звонки на минуту прервутся, поэтому такой релиз лучше выкатывать, когда звонков мало. Следующие деплои снова не трогают `livekit`.
 
 Их показывает админка (`https://ADMIN_DOMAIN`, ссылка рядом с логотипом у сотрудников): разделы «Обзор» и «Продукт», для роли администратора и выше. Отдельного дашборда и доступа к базе снаружи для этого не нужно.
 

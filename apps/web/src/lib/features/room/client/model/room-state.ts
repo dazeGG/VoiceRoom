@@ -18,6 +18,7 @@ import {
   getStoredStreamVolume
 } from '../core/settings';
 import type { AppState } from '../core/types';
+import { readStorage } from '$lib/shared/storage';
 
 export function createInitialRoomState(): AppState {
   const roomId = getRoomIdFromPath();
@@ -40,7 +41,7 @@ export function createInitialRoomState(): AppState {
     localMicPublication: null,
     localCameraPublication: null,
     localCameraStream: null,
-    cameraDeviceId: localStorage.getItem(CAMERA_DEVICE_STORAGE_KEY) || '',
+    cameraDeviceId: readStorage(CAMERA_DEVICE_STORAGE_KEY) || '',
     cameraFacing: 'user',
     cameraStarting: false,
     localScreenPublications: new Map(),
@@ -56,16 +57,17 @@ export function createInitialRoomState(): AppState {
     localScreenMode: DEFAULT_SCREEN_STREAM_MODE,
     localStream: null,
     microphoneMissing: false,
+    videoRelieved: false,
     localAppAudioSuppressed: false,
-    microphoneDeviceId: localStorage.getItem(MICROPHONE_DEVICE_STORAGE_KEY) || '',
+    microphoneDeviceId: readStorage(MICROPHONE_DEVICE_STORAGE_KEY) || '',
     microphoneMode: getStoredMicrophoneMode(),
     microphoneVolume: getStoredMicrophoneVolume(),
     micMutedBeforeOutputMute: false,
     micProcessor: null,
     muted: false,
     noiseMode: getStoredNoiseMode(),
-    outputDeviceId: localStorage.getItem(OUTPUT_DEVICE_STORAGE_KEY) || '',
-    outputMuted: localStorage.getItem(OUTPUT_MUTED_STORAGE_KEY) === 'true',
+    outputDeviceId: readStorage(OUTPUT_DEVICE_STORAGE_KEY) || '',
+    outputMuted: readStorage(OUTPUT_MUTED_STORAGE_KEY) === 'true',
     pushToTalkActive: false,
     peers: new SvelteMap(),
     peerId: peerSession.peerId,

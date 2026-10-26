@@ -3,7 +3,7 @@
 
 import type pg from 'pg';
 import { sql } from 'kysely';
-import type { ClientKind } from '@voice-room/shared/account-security';
+import type { ClientKind } from '@voice-room/shared/contracts/admin';
 import { kyselyOn } from '../../platform/db/kysely.ts';
 
 export type ActivityMark = {
@@ -27,7 +27,7 @@ export function createActivityRepository({ pool }: { pool: pg.Pool }) {
           user_id: mark.userId,
           day: mark.day,
           desktop_app: mark.client === 'desktop_app',
-          mobile: mark.client === 'mobile',
+          mobile: mark.client === 'mobile' || mark.client === 'mobile_app',
           browser: mark.client === 'browser'
         }))
       )
@@ -41,7 +41,16 @@ export function createActivityRepository({ pool }: { pool: pg.Pool }) {
       .execute();
   }
 
-  return Object.freeze({ recordActivity });
+  /** Forgets every mark of a day before `cutoffDay` (YYYY-MM-DD); answers how many went. Counted first by admin-stats rollUp. */
+  async function forgetBefore(cutoffDay: string): Promise<number> {
+    const result = await db
+      .deleteFrom('user_activity_days')
+      .where('day', '<', sql<Date>`${cutoffDay}::date`)
+      .executeTakeFirst();
+    return Number(result.numDeletedRows);
+  }
+
+  return Object.freeze({ recordActivity, forgetBefore });
 }
 
 export type ActivityRepository = ReturnType<typeof createActivityRepository>;

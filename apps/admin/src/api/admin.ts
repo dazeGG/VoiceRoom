@@ -17,7 +17,13 @@ import {
   type SystemQuery
 } from '@voice-room/shared/contracts/admin';
 import { AdminCallFeedbackPage, type AdminCallFeedbackQuery } from '@voice-room/shared/contracts/feedback';
-import { AdminReportPage, ReportResolved, type ReportResolveBody } from '@voice-room/shared/contracts/reports';
+import {
+  AdminReportPage,
+  AdminUserReportPage,
+  ReportResolved,
+  type ReportResolveBody,
+  type UserReportResolveBody
+} from '@voice-room/shared/contracts/reports';
 import type { AccountBadge } from '@voice-room/shared/contracts/users';
 import { api, search } from './client.ts';
 
@@ -62,6 +68,20 @@ export const setAccountBadge = (userId: string, badge: AccountBadge | null) =>
 
 export const fetchOpenReports = async () =>
   (await api.get('/api/admin/reports', AdminReportPage, 'Не удалось загрузить жалобы')).reports;
+
+export const fetchOpenUserReports = async () =>
+  (await api.get('/api/admin/user-reports', AdminUserReportPage, 'Не удалось загрузить жалобы на пользователей'))
+    .reports;
+
+export const resolveUserReport = async (reportId: string, action: UserReportResolveBody['action']) =>
+  (
+    await api.post(
+      `/api/admin/user-reports/${encodeURIComponent(reportId)}/resolve`,
+      ReportResolved,
+      { action },
+      'Не удалось закрыть жалобу'
+    )
+  ).resolved;
 
 export const resolveReport = async (reportId: string, action: ReportResolveBody['action']) =>
   (

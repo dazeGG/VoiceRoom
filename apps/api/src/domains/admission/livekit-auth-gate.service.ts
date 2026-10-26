@@ -15,7 +15,7 @@ import { kyselyOn } from '../../platform/db/kysely.ts';
 import { createGateCredentialRepository } from './gate-credential.repository.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { createLogger } from '../../lib/logger.ts';
-import { normalizeLiveKitRoomPrefix, verifyAccessTokenBinding } from './livekit-token-binding.mts';
+import { DEFAULT_ROOM_PREFIX, normalizeLiveKitRoomPrefix, verifyAccessTokenBinding } from './livekit-token-binding.mts';
 
 const DEFAULT_GATE_PATH = '/rtc';
 const VALIDATE_TIMEOUT_MS = 5_000;
@@ -77,16 +77,6 @@ function isValidatePath(requestUrl: string | undefined, gatePath: string): boole
   return pathname === `${gatePath}/validate` || pathname === `${gatePath}/v1/validate`;
 }
 
-// Older room stores and test doubles may lack the gate calls; only a store
-// that has them can back a credential boundary.
-function isGateRoomStore(value: GateRoomStore | Record<string, unknown>): value is GateRoomStore {
-  return (
-    typeof value.getLiveKitGatePrincipalEpoch === 'function' &&
-    typeof value.createLiveKitGateCredential === 'function' &&
-    typeof value.verifyLiveKitGateCredential === 'function'
-  );
-}
-
 function buildUpstreamUpgradeRequest({
   request,
   strippedPath,
@@ -117,7 +107,7 @@ function createLiveKitAuthGateService({
   gatePath = DEFAULT_GATE_PATH,
   logger = createLogger({ name: 'api' }),
   pool,
-  roomPrefix = normalizeLiveKitRoomPrefix(),
+  roomPrefix = DEFAULT_ROOM_PREFIX,
   roomStore,
   secret,
   upstreamUrl = process.env.LIVEKIT_INTERNAL_URL || process.env.LIVEKIT_URL || 'ws://127.0.0.1:7880'
@@ -127,20 +117,15 @@ function createLiveKitAuthGateService({
   logger?: GateLogger;
   pool?: pg.Pool | null;
   roomPrefix?: string;
-  roomStore?: GateRoomStore | Record<string, unknown>;
+  roomStore?: GateRoomStore | undefined;
   secret?: unknown;
   upstreamUrl?: string;
 } = {}) {
   const path = normalizeGatePath(gatePath);
   const upstream = cleanUpstreamUrl(upstreamUrl);
-  if (!roomStore && !pool) throw new Error('The LiveKit auth gate needs a room store or a pool');
   // Tests that hand in their own boundary pass an empty room store.
-  const store =
-    roomStore && isGateRoomStore(roomStore)
-      ? roomStore
-      : pool
-        ? createGateCredentialRepository({ db: kyselyOn(pool) })
-        : undefined;
+  const store = roomStore || (pool ? createGateCredentialRepository({ db: kyselyOn(pool) }) : null);
+  if (!store) throw new Error('The LiveKit auth gate needs a room store or a pool');
   const credentialBoundary =
     boundary ||
     createCredentialBoundaryService({
@@ -397,6 +382,7 @@ if (import.meta.main) {
       pool,
       gatePath: process.env.LIVEKIT_GATE_PATH || DEFAULT_GATE_PATH,
       logger,
+      roomPrefix: normalizeLiveKitRoomPrefix(process.env.LIVEKIT_ROOM_PREFIX),
       secret: process.env.LIVEKIT_GATE_SECRET,
       upstreamUrl: process.env.LIVEKIT_INTERNAL_URL || 'ws://127.0.0.1:7880'
     });

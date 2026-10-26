@@ -9,6 +9,7 @@ import {
 } from '../core/config';
 import type { SelectOption } from '$lib/shared/ui';
 import { listPhysicalDevices } from '$lib/shared/audio/device-list';
+import { removeStorage, writeStorage } from '$lib/shared/storage';
 import { roomDeviceUi } from '$lib/features/room/room-device-ui.svelte';
 import { state } from '../core/state.svelte';
 import { clampGateThresholdDb, getDbMeterPosition, getNoiseModeLabel } from '../core/settings';
@@ -32,6 +33,7 @@ import {
 import { supportsAudioOutputSelection, syncAudioOutputDevices } from '../services/media-playback-service';
 import { attachMeter, syncSpeakingThresholds } from '../media/meters';
 import { setParticipantSpeaking } from '../room/participants';
+import { recordMicDrop } from '../room/call-quality';
 import type { MicrophoneCapture } from '../core/types';
 
 import { createLogger, errorContext } from '$lib/shared/log';
@@ -92,7 +94,7 @@ export function clearGateSwitchTimer(): void {
 function setGateThresholdDb(value: string | number): void {
   const threshold = Number.parseInt(String(value), 10);
   state.gateThresholdDb = Number.isFinite(threshold) ? clampGateThresholdDb(threshold) : DEFAULT_GATE_THRESHOLD_DB;
-  localStorage.setItem(GATE_THRESHOLD_DB_STORAGE_KEY, String(state.gateThresholdDb));
+  writeStorage(GATE_THRESHOLD_DB_STORAGE_KEY, String(state.gateThresholdDb));
   // The own ring lights at the gate's threshold, so the detector follows it.
   syncSpeakingThresholds();
 }
@@ -104,18 +106,18 @@ export function refreshMicrophoneLevelMeter(db: number): void {
 function persistMicrophoneDeviceId(deviceId: string): void {
   state.microphoneDeviceId = deviceId || '';
   if (state.microphoneDeviceId) {
-    localStorage.setItem(MICROPHONE_DEVICE_STORAGE_KEY, state.microphoneDeviceId);
+    writeStorage(MICROPHONE_DEVICE_STORAGE_KEY, state.microphoneDeviceId);
   } else {
-    localStorage.removeItem(MICROPHONE_DEVICE_STORAGE_KEY);
+    removeStorage(MICROPHONE_DEVICE_STORAGE_KEY);
   }
 }
 
 function persistOutputDeviceId(deviceId: string): void {
   state.outputDeviceId = deviceId || '';
   if (state.outputDeviceId) {
-    localStorage.setItem(OUTPUT_DEVICE_STORAGE_KEY, state.outputDeviceId);
+    writeStorage(OUTPUT_DEVICE_STORAGE_KEY, state.outputDeviceId);
   } else {
-    localStorage.removeItem(OUTPUT_DEVICE_STORAGE_KEY);
+    removeStorage(OUTPUT_DEVICE_STORAGE_KEY);
   }
 }
 
@@ -413,6 +415,7 @@ export function watchLocalMicrophone(): void {
     () => {
       if (state.localRawStream !== rawStream) return;
       log.warn('microphone track ended');
+      recordMicDrop();
       void restartMicrophone({
         failureMessage: 'Микрофон отключился: вы в комнате без микрофона',
         successMessage: 'Микрофон переподключен'
@@ -428,6 +431,7 @@ export function watchLocalMicrophone(): void {
 
 /** The capture stopped running on its own (see microphone-service): open a fresh one. */
 export function reopenMicrophone(): Promise<boolean> {
+  recordMicDrop();
   return restartMicrophone({
     failureMessage: 'Микрофон перестал работать: выберите его заново',
     refreshDeviceList: false,
@@ -436,7 +440,7 @@ export function reopenMicrophone(): Promise<boolean> {
 }
 
 /**
- * The computer is overloaded (see cpu-pressure.ts). Like Discord turning Krisp
+ * The computer is straining the call (see call-strain.ts). Like Discord turning Krisp
  * off, RNNoise gives way to the browser's own noise suppression, which costs
  * next to nothing. Only for this call: the saved choice stays RNNoise, so the
  * next call starts with it again.

@@ -11,7 +11,7 @@ import type { ServerEnvelope } from '@voice-room/shared/realtime';
 import { cleanGuestName, cleanName, isReservedPeerId, normalizeGuestId } from '@voice-room/shared/validation';
 import { avatarUrl } from '../lib/avatar-url.ts';
 import { LOG_EVENTS } from '../lib/log-events.ts';
-import type { StoredUser } from '../domains/account/user-records.ts';
+import type { SessionUser } from '../app/context.ts';
 import type { ActiveBanRecord } from '../domains/moderation/active-ban.repository.ts';
 import { buildServerEnvelope } from './envelope.ts';
 import type { ReconnectLeases } from './reconnect-leases.ts';
@@ -20,13 +20,17 @@ import type { createRoomSummaries } from './room-summaries.ts';
 import type { Peer, PresenceRoom, RuntimeLogger, RuntimeRoomStore } from './runtime-types.ts';
 
 /** What a join reads of the signed-in account taking the seat; null for a guest. */
-export type SessionUser =
-  | (Pick<StoredUser, 'id'> &
-      Partial<Pick<StoredUser, 'displayName' | 'login' | 'avatarAccent' | 'avatarColorKey' | 'avatarKey'>>)
+export type JoinUser =
+  | (Pick<SessionUser, 'id'> &
+      Partial<Pick<SessionUser, 'displayName' | 'login' | 'avatarAccent' | 'avatarColorKey' | 'avatarKey'>>)
   | null
   | undefined;
 /** How a room.join ended; a refusal with a message also goes to the client as an error frame. */
 export type JoinResult = { ok: true; reconnecting: boolean } | { ok: false; code: ErrorCode; message?: string };
+// Refusals a join gives in more than one place.
+const SESSION_TERMINATED = 'Peer session was terminated';
+const INVALID_PEER_SESSION = 'Invalid peer session';
+const CLEANUP_INCOMPLETE = 'Previous transport cleanup is incomplete';
 type LeavePayload = { roomId: string; peerId: string; sessionToken?: string } | null;
 
 export interface VoiceJoinDeps {
@@ -42,7 +46,7 @@ export interface VoiceJoinDeps {
   /** People in voice across every room; 0 leaves the server uncapped. */
   MAX_VOICE_PEERS?: number;
   tokensMatch: (expected: string | null | undefined, actual: string | null | undefined) => boolean;
-  sessionAvatarColorKey: (user: SessionUser) => string;
+  sessionAvatarColorKey: (user: JoinUser) => string;
   queueRoomOccupancyTransition: (roomId: string) => Promise<unknown>;
   findRoomBan: (roomId: string, userId: string | null | undefined, ip: string) => Promise<ActiveBanRecord | null>;
   logger: RuntimeLogger;
@@ -184,7 +188,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
   async function joinVoiceRoom(
     connection: WsConnection,
     payload: ClientCommands['room.join'],
-    sessionUser: SessionUser,
+    sessionUser: JoinUser,
     clientIp = '',
     requestId = ''
   ): Promise<JoinResult> {
@@ -200,7 +204,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
 
     const currentPeer = presenceRooms.get(roomId)?.peers?.get(peerId);
     if (currentPeer && !tokensMatch(currentPeer.sessionToken, sessionToken)) {
-      return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };
+      return { ok: false, code: 'invalid_session', message: INVALID_PEER_SESSION };
     }
     let leaseClaim = leases.claim(roomId, peerId, sessionToken, joinRequestSequence);
     if (leaseClaim.state === 'busy') {
@@ -210,25 +214,25 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
       try {
         await leases.retryFailedFinalizer(leaseClaim.record);
       } catch {
-        return { ok: false, code: 'reconnect_finalize_failed', message: 'Previous transport cleanup is incomplete' };
+        return { ok: false, code: 'reconnect_finalize_failed', message: CLEANUP_INCOMPLETE };
       }
       leaseClaim = leases.claim(roomId, peerId, sessionToken, joinRequestSequence);
     }
     if (leaseClaim.state === 'terminal') {
-      return { ok: false, code: 'superseded_join', message: 'Peer session was terminated' };
+      return { ok: false, code: 'superseded_join', message: SESSION_TERMINATED };
     }
     if (leaseClaim.state === 'finalizing') {
       try {
         await leaseClaim.record.finalizerPromise;
       } catch {
-        return { ok: false, code: 'reconnect_finalize_failed', message: 'Previous transport cleanup is incomplete' };
+        return { ok: false, code: 'reconnect_finalize_failed', message: CLEANUP_INCOMPLETE };
       }
       leaseClaim = leases.claim(roomId, peerId, sessionToken, joinRequestSequence);
       if (leaseClaim.state === 'terminal') {
-        return { ok: false, code: 'superseded_join', message: 'Peer session was terminated' };
+        return { ok: false, code: 'superseded_join', message: SESSION_TERMINATED };
       }
       if (leaseClaim.state !== 'none') {
-        return { ok: false, code: 'reconnect_finalize_failed', message: 'Previous transport cleanup is incomplete' };
+        return { ok: false, code: 'reconnect_finalize_failed', message: CLEANUP_INCOMPLETE };
       }
     }
 
@@ -246,7 +250,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
       // request has already completed and incorrectly replace it.
       const room = await getRoom(roomId);
       if (claimedSessionWasTerminated()) {
-        return { ok: false, code: 'superseded_join', message: 'Peer session was terminated' };
+        return { ok: false, code: 'superseded_join', message: SESSION_TERMINATED };
       }
       if (!isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)) {
         return supersededVoiceJoin(connection, roomId);
@@ -259,7 +263,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
 
       const roomBan = await findRoomBan(roomId, sessionUser?.id, clientIp);
       if (claimedSessionWasTerminated()) {
-        return { ok: false, code: 'superseded_join', message: 'Peer session was terminated' };
+        return { ok: false, code: 'superseded_join', message: SESSION_TERMINATED };
       }
       if (!isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)) {
         return supersededVoiceJoin(connection, roomId);
@@ -272,7 +276,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
       const initialPeer = room.peers.get(peerId);
       if (initialPeer && !tokensMatch(initialPeer.sessionToken, sessionToken)) {
         terminalClaimFailure = true;
-        return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };
+        return { ok: false, code: 'invalid_session', message: INVALID_PEER_SESSION };
       }
 
       const identityResult = await getRoomStore().getOrCreatePeerIdentity({
@@ -283,7 +287,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         avatarColorKey: sessionAvatarColorKey(sessionUser)
       });
       if (claimedSessionWasTerminated()) {
-        return { ok: false, code: 'superseded_join', message: 'Peer session was terminated' };
+        return { ok: false, code: 'superseded_join', message: SESSION_TERMINATED };
       }
       if (!isCurrentConnectionVoiceJoin(connection, connectionJoinIntent)) {
         return supersededVoiceJoin(connection, roomId);
@@ -292,7 +296,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
       if (!identityResult) throw new Error('the peer identity vanished while it was being created');
       if (identityResult.status === 'token_mismatch') {
         terminalClaimFailure = true;
-        return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };
+        return { ok: false, code: 'invalid_session', message: INVALID_PEER_SESSION };
       }
       const avatarColorKey = identityResult.identity?.avatarColorKey || avatarColorForPeerId(peerId);
       let persistedServerMuted: boolean;
@@ -332,7 +336,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
       // the same peer must replace the latest live transport, not a stale snapshot.
       const previous = room.peers.get(peerId);
       if (previous && !tokensMatch(previous.sessionToken, sessionToken)) {
-        return { ok: false, code: 'invalid_session', message: 'Invalid peer session' };
+        return { ok: false, code: 'invalid_session', message: INVALID_PEER_SESSION };
       }
       const reconnecting = Boolean(previous);
 
@@ -387,6 +391,7 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
         screenStreamId: previous?.screenStreamId ?? '',
         serverMuted: Boolean(previous?.serverMuted || persistedServerMuted),
         viewedScreenPeerId: previous?.viewedScreenPeerId ?? '',
+        network: previous?.network ?? [],
         sessionToken,
         transport
       };
@@ -471,14 +476,8 @@ export function createVoiceJoin(deps: VoiceJoinDeps) {
       return { ok: true, reconnecting };
     } finally {
       if (leaseClaim.state === 'claimed' && !claimCompleted) {
-        const claimed = leaseClaim.record;
-        if (terminalClaimFailure) {
-          claimed.terminalReason ||= 'join-rejected';
-          claimed.state = 'terminal-finalizing';
-          leases.startFinalizer(claimed, claimed.terminalReason);
-        } else {
-          leases.restoreClaimed(claimed);
-        }
+        if (terminalClaimFailure) leases.terminate(leaseClaim.record, 'join-rejected');
+        else leases.restoreClaimed(leaseClaim.record);
       }
       finishConnectionVoiceJoin(connection, connectionJoinIntent);
       finishVoiceJoin(joinKey, joinState);

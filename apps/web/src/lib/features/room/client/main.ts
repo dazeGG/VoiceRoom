@@ -42,6 +42,7 @@ import {
 import { closeScreenSourceOnEscape } from './ui/screen-source-picker';
 
 import { createLogger, errorContext, installGlobalErrorCapture, reportClientLogs } from '$lib/shared/log';
+import { DISPLAY_NAME_STORAGE_KEY, readStorage } from '$lib/shared/storage';
 
 const log = createLogger('room');
 
@@ -194,7 +195,7 @@ export function mountRoomClient(
     state.sessionToken = peerSession.sessionToken;
   }
 
-  const savedName = cleanDisplayName(localStorage.getItem('voice-room:name'));
+  const savedName = cleanDisplayName(readStorage(DISPLAY_NAME_STORAGE_KEY));
   state.savedName = savedName;
   startUi.nameInput = savedName;
   updateNameStatuses(savedName);

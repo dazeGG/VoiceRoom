@@ -1,25 +1,30 @@
 // Who is in which room's voice right now, a row per room refreshed every few
-// seconds, and the finished calls before: by day, a page at a time, or one
-// day's timeline. Names, accounts, times and the kind of client only: nothing
+// seconds, and the finished calls before: by day, a page at a time, or the
+// timeline of a day picked on the calendar. Names, accounts, times and the kind of client only: nothing
 // said in a room. An account opens its card; a room narrows the history to it.
 
 import { ChartGantt, ChevronLeft, ChevronRight, List, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { LiveRoom, RoomCall, RoomCallsQuery } from '@voice-room/shared/contracts/admin';
+import {
+  VOICE_HISTORY_KEEP_DAYS,
+  type LiveRoom,
+  type RoomCall,
+  type RoomCallsQuery
+} from '@voice-room/shared/contracts/admin';
 import { fetchLiveRooms, fetchRoomCalls } from '../api/admin.ts';
 import { formatClock, formatCount, formatDuration, formatPeople, plural } from '../format.ts';
 import { useRefreshStatus } from '../frame.tsx';
-import { loadFailure, type LoadFailure } from '../load-state.ts';
+import { useAdminResource } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { Button, Empty, Panel, Pill, Segment } from '../ui/index.tsx';
 import { CallList } from './rooms/CallList.tsx';
 import { CallPeople } from './rooms/CallPeople.tsx';
+import { DayPicker, shiftDay, startOfDay } from './rooms/DayPicker.tsx';
 import { DayTimeline } from './rooms/DayTimeline.tsx';
 import { LiveCalls } from './rooms/LiveCalls.tsx';
 import './RoomsPage.css';
 
 const REFRESH_MS = 5000;
-const DAY = 24 * 60 * 60 * 1000;
 /** A day's timeline follows the pages up to this many; a busier day shows its latest calls. */
 const TIMELINE_PAGES = 10;
 
@@ -30,7 +35,7 @@ export interface HistoryRoom {
 
 type HistoryView = 'calls' | 'timeline';
 
-const startOfToday = () => new Date().setHours(0, 0, 0, 0);
+const startOfToday = () => startOfDay(Date.now());
 
 /** Adds or removes one value of a set, as a new set. */
 function toggled(set: ReadonlySet<string>, value: string): Set<string> {
@@ -38,6 +43,62 @@ function toggled(set: ReadonlySet<string>, value: string): Set<string> {
   if (next.has(value)) next.delete(value);
   else next.add(value);
   return next;
+}
+
+/** What the history asks for: a view, one room or all, and in the list a page. */
+interface HistoryQuery {
+  view: HistoryView;
+  room: HistoryRoom | null;
+  // The cursor each page opens with, the first one's empty; the API pages by
+  // cursor, so a page already passed is only reached again through its own.
+  cursors: (string | undefined)[];
+  index: number;
+  /** The midnight of the day the timeline shows. */
+  dayStart: number;
+}
+
+/** What it answered, under the room it was asked for: the filter changes with its answer, so the chip never stands over another room's calls. */
+type HistoryAnswer =
+  | {
+      view: 'calls';
+      room: HistoryRoom | null;
+      keepDays: number;
+      calls: RoomCall[];
+      cursors: (string | undefined)[];
+      index: number;
+    }
+  | { view: 'timeline'; room: HistoryRoom | null; keepDays: number; calls: RoomCall[]; dayStart: number };
+
+const firstPage = (view: HistoryView, room: HistoryRoom | null, dayStart = startOfToday()): HistoryQuery => ({
+  view,
+  room,
+  cursors: [undefined],
+  index: 0,
+  dayStart
+});
+
+async function fetchHistory({ view, room, cursors, index, dayStart }: HistoryQuery): Promise<HistoryAnswer> {
+  if (view === 'calls') {
+    const after = index > 0 ? cursors[index] : undefined;
+    const query: RoomCallsQuery = { ...(room ? { roomId: room.id } : {}), ...(after ? { after } : {}) };
+    const page = await fetchRoomCalls(query);
+    const next = [...cursors.slice(0, index + 1), ...(page.next ? [page.next] : [])];
+    return { view, room, keepDays: page.keepDays, calls: page.calls, cursors: next, index };
+  }
+  // Every call of the day, following the pages.
+  const from = dayStart;
+  const span = { from: String(from), to: String(shiftDay(from, 1)), ...(room ? { roomId: room.id } : {}) };
+  const calls: RoomCall[] = [];
+  let after: string | null = null;
+  let keepDays = 0;
+  for (let page = 0; page < TIMELINE_PAGES; page += 1) {
+    const answer = await fetchRoomCalls({ ...span, ...(after ? { after } : {}) });
+    calls.push(...answer.calls);
+    keepDays = answer.keepDays;
+    after = answer.next;
+    if (!after) break;
+  }
+  return { view, room, keepDays, calls, dayStart: from };
 }
 
 export function RoomsPage({
@@ -49,173 +110,97 @@ export function RoomsPage({
   focusRoom?: HistoryRoom | null;
 }) {
   // --- who is in voice now ---------------------------------------------------
-  const [rooms, setRooms] = useState<LiveRoom[] | null>(null);
-  const [liveFailure, setLiveFailure] = useState<LoadFailure | null>(null);
-  const [now, setNow] = useState(() => Date.now());
-  const [liveAt, setLiveAt] = useState<number | null>(null);
-  const [liveBusy, setLiveBusy] = useState(false);
+  const live = useAdminResource(fetchLiveRooms, [], {
+    failureText: 'Не удалось загрузить комнаты',
+    refreshMs: REFRESH_MS
+  });
+  const rooms = live.data?.rooms ?? null;
+  const [mountedAt] = useState(() => Date.now());
+  const now = live.heardAt ?? mountedAt;
   const [openLive, setOpenLive] = useState<ReadonlySet<string>>(new Set());
-  const liveInFlight = useRef(false);
   const liveSection = useRef<HTMLElement>(null);
 
   // --- the calls before --------------------------------------------------------
-  const [view, setView] = useState<HistoryView>('calls');
-  const [historyRoom, setHistoryRoom] = useState<HistoryRoom | null>(null);
-  const [calls, setCalls] = useState<RoomCall[]>([]);
-  // The cursor each page opens with, the first one's empty; the API pages by
-  // cursor, so a page already passed is only reached again through its own.
-  const [pageCursors, setPageCursors] = useState<(string | undefined)[]>([undefined]);
-  const [pageIndex, setPageIndex] = useState(0);
-  const [keepDays, setKeepDays] = useState<number | null>(null);
-  const [historyLoaded, setHistoryLoaded] = useState(false);
-  const [historyFailure, setHistoryFailure] = useState<LoadFailure | null>(null);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyQuery, setHistoryQuery] = useState<HistoryQuery>(() => firstPage('calls', null));
+  // An answer for a room or page already left behind is dropped.
+  const history = useAdminResource(() => fetchHistory(historyQuery), [historyQuery], {
+    failureText: 'Не удалось загрузить историю'
+  });
+  const view = historyQuery.view;
+  const shown = history.data;
+  const historyRoom = shown?.room ?? null;
+  const callsPage = shown?.view === 'calls' ? shown : null;
+  const day = shown?.view === 'timeline' ? shown : null;
   const [openCalls, setOpenCalls] = useState<ReadonlySet<string>>(new Set());
-  const [dayCalls, setDayCalls] = useState<RoomCall[] | null>(null);
-  const [dayStart, setDayStart] = useState(startOfToday);
   const [picked, setPicked] = useState<string | null>(null);
-  const historyRequest = useRef(0);
   const historySection = useRef<HTMLElement>(null);
 
-  const loadLive = useCallback(() => {
-    // A slow answer is waited for, not piled on: one request at a time keeps answers in order.
-    if (liveInFlight.current) return;
-    liveInFlight.current = true;
-    setLiveBusy(true);
-    fetchLiveRooms()
-      .then(
-        (loaded) => {
-          setRooms(loaded.rooms);
-          setLiveFailure(null);
-          setLiveAt(Date.now());
-        },
-        (cause: unknown) => setLiveFailure(loadFailure(cause, 'Не удалось загрузить комнаты'))
-      )
-      .finally(() => {
-        liveInFlight.current = false;
-        setLiveBusy(false);
-        setNow(Date.now());
-      });
-  }, []);
-
-  /** One page of calls; an answer for a room or page already left behind is dropped. */
-  const loadCalls = useCallback((room: HistoryRoom | null, cursors: (string | undefined)[], index: number) => {
-    historyRequest.current += 1;
-    const mine = historyRequest.current;
-    const after = index > 0 ? cursors[index] : undefined;
-    const query: RoomCallsQuery = { ...(room ? { roomId: room.id } : {}), ...(after ? { after } : {}) };
-    fetchRoomCalls(query)
-      .then(
-        (page) => {
-          if (mine !== historyRequest.current) return;
-          // The filter changes with its answer, so the chip never stands over another room's calls.
-          setHistoryRoom(room);
-          setCalls(page.calls);
-          setPageIndex(index);
-          setPageCursors([...cursors.slice(0, index + 1), ...(page.next ? [page.next] : [])]);
-          setKeepDays(page.keepDays);
-          setHistoryLoaded(true);
-          setHistoryFailure(null);
-        },
-        (cause: unknown) => {
-          if (mine === historyRequest.current) setHistoryFailure(loadFailure(cause, 'Не удалось загрузить историю'));
-        }
-      )
-      .finally(() => {
-        if (mine === historyRequest.current) setHistoryLoading(false);
-      });
-  }, []);
-
-  /** Every call of today, following the pages. */
-  const loadDay = useCallback((room: HistoryRoom | null) => {
-    historyRequest.current += 1;
-    const mine = historyRequest.current;
-    const from = startOfToday();
-    const span = { from: String(from), to: String(from + DAY), ...(room ? { roomId: room.id } : {}) };
-    const collect = async (): Promise<{ calls: RoomCall[]; keepDays: number }> => {
-      const gathered: RoomCall[] = [];
-      let after: string | null = null;
-      let keep = 0;
-      for (let page = 0; page < TIMELINE_PAGES; page += 1) {
-        const answer = await fetchRoomCalls({ ...span, ...(after ? { after } : {}) });
-        gathered.push(...answer.calls);
-        keep = answer.keepDays;
-        after = answer.next;
-        if (!after) break;
-      }
-      return { calls: gathered, keepDays: keep };
-    };
-    collect()
-      .then(
-        (day) => {
-          if (mine !== historyRequest.current) return;
-          setHistoryRoom(room);
-          setDayStart(from);
-          setDayCalls(day.calls);
-          setKeepDays(day.keepDays);
-          setHistoryLoaded(true);
-          setHistoryFailure(null);
-        },
-        (cause: unknown) => {
-          if (mine === historyRequest.current) setHistoryFailure(loadFailure(cause, 'Не удалось загрузить историю'));
-        }
-      )
-      .finally(() => {
-        if (mine === historyRequest.current) setHistoryLoading(false);
-      });
-  }, []);
-
   // A page asked for by the person: the pager waits for its answer.
-  function showCallsPage(room: HistoryRoom | null, cursors: (string | undefined)[], index: number): void {
-    setHistoryLoading(true);
-    loadCalls(room, cursors, index);
+  function showCallsPage(index: number): void {
+    if (callsPage) {
+      setHistoryQuery({
+        view: 'calls',
+        room: callsPage.room,
+        cursors: callsPage.cursors,
+        index,
+        dayStart: historyQuery.dayStart
+      });
+    }
   }
 
   /** Narrows the history (in the view on screen) to a room, or widens it to all. */
   function showRoomHistory(room: HistoryRoom | null, scroll = false): void {
-    setHistoryLoading(true);
     setPicked(null);
-    if (view === 'timeline') loadDay(room);
-    else loadCalls(room, [undefined], 0);
+    setHistoryQuery(firstPage(view, room, historyQuery.dayStart));
     if (scroll) historySection.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }
 
   function changeView(next: HistoryView): void {
-    setView(next);
-    setHistoryLoading(true);
     setPicked(null);
-    if (next === 'timeline') loadDay(historyRoom);
-    else loadCalls(historyRoom, [undefined], 0);
+    setHistoryQuery(firstPage(next, historyRoom, historyQuery.dayStart));
+  }
+
+  function showDay(dayStart: number): void {
+    setPicked(null);
+    setHistoryQuery(firstPage('timeline', historyRoom, dayStart));
   }
 
   // The top bar's refresh asks for the rooms now and the history on screen again.
+  const { reload: reloadLive } = live;
+  const { reload: reloadHistory } = history;
   const reload = useCallback(() => {
-    loadLive();
-    if (view === 'timeline') loadDay(historyRoom);
-    else loadCalls(historyRoom, pageCursors, pageIndex);
-  }, [loadLive, loadDay, loadCalls, view, historyRoom, pageCursors, pageIndex]);
-  useRefreshStatus({ at: liveAt, everyMs: REFRESH_MS, busy: liveBusy, reload });
+    reloadLive();
+    reloadHistory();
+  }, [reloadLive, reloadHistory]);
+  useRefreshStatus({ at: live.loadedAt, everyMs: REFRESH_MS, busy: live.busy, reload });
 
+  // A room picked in the search narrows the history like any other narrowing: in the view
+  // on screen, the pager waiting and the call picked before closed. Each pick is a new
+  // object; its state and request reset while rendering, the scroll waits until it is on screen.
+  const [seenFocusRoom, setSeenFocusRoom] = useState<HistoryRoom | null>(null);
+  if (focusRoom !== seenFocusRoom) {
+    setSeenFocusRoom(focusRoom);
+    if (focusRoom) {
+      setPicked(null);
+      setHistoryQuery(firstPage(view, focusRoom, historyQuery.dayStart));
+    }
+  }
   useEffect(() => {
-    loadLive();
-    loadCalls(null, [undefined], 0);
-    // A hidden tab does not ask; it catches up the moment it shows again.
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') loadLive();
-    }, REFRESH_MS);
-    return () => window.clearInterval(timer);
-  }, [loadLive, loadCalls]);
-
-  // A room picked in the search narrows the history once it is on screen; each pick is a new object.
-  useEffect(() => {
-    if (!focusRoom) return;
-    loadCalls(focusRoom, [undefined], 0);
-    historySection.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
-  }, [focusRoom, loadCalls]);
+    if (focusRoom) historySection.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  }, [focusRoom]);
 
   const peopleInVoice = (rooms ?? []).reduce((count, room) => count + room.peers.length, 0);
-  const hasNextPage = pageCursors.length > pageIndex + 1;
-  const pickedCall = dayCalls?.find((call) => call.id === picked) ?? null;
+  const pageIndex = callsPage?.index ?? 0;
+  const hasNextPage = callsPage ? callsPage.cursors.length > callsPage.index + 1 : false;
+  const pickedCall = day?.calls.find((call) => call.id === picked) ?? null;
+  const dayIsToday = day ? day.dayStart === startOfDay(now) : true;
+  const loadingHistory = (
+    <Panel>
+      <p className="ui-empty" aria-busy="true">
+        Загружаем…
+      </p>
+    </Panel>
+  );
 
   function openLiveRoom(room: LiveRoom): void {
     setOpenLive((open) => new Set(open).add(room.roomId));
@@ -235,13 +220,13 @@ export function RoomsPage({
           <span className="ui-section-note">обновляется каждые 5 с</span>
         </header>
 
-        {liveFailure && !rooms ? (
-          <Notice failure={liveFailure} onRetry={loadLive} />
+        {live.failure && !rooms ? (
+          <Notice failure={live.failure} onRetry={reloadLive} />
         ) : (
           <>
-            {liveFailure ? (
+            {live.failure ? (
               <p className="admin-error" role="alert">
-                {liveFailure.message}
+                {live.failure.message}
               </p>
             ) : null}
             <Panel flush>
@@ -276,6 +261,14 @@ export function RoomsPage({
             </button>
           ) : null}
           <span className="rooms-view">
+            {view === 'timeline' ? (
+              <DayPicker
+                dayStart={historyQuery.dayStart}
+                today={startOfDay(now)}
+                keepDays={shown?.keepDays || VOICE_HISTORY_KEEP_DAYS}
+                onChange={showDay}
+              />
+            ) : null}
             <Segment
               ariaLabel="Вид истории"
               value={view}
@@ -288,30 +281,29 @@ export function RoomsPage({
           </span>
         </header>
 
-        {historyFailure && !historyLoaded ? (
-          <Notice failure={historyFailure} onRetry={() => showRoomHistory(historyRoom)} />
-        ) : !historyLoaded ? (
-          <Panel>
-            <p className="ui-empty" aria-busy="true">
-              Загружаем…
-            </p>
-          </Panel>
+        {history.failure && !(view === 'calls' ? callsPage : day) ? (
+          <Notice failure={history.failure} onRetry={() => showRoomHistory(historyRoom)} />
+        ) : !shown ? (
+          loadingHistory
         ) : (
           <>
-            {historyFailure ? (
+            {history.failure ? (
               <p className="admin-error" role="alert">
-                {historyFailure.message}
+                {history.failure.message}
               </p>
             ) : null}
             {view === 'calls' ? (
-              calls.length === 0 ? (
+              // A view switched to waits for its own answer.
+              !callsPage && history.busy ? (
+                loadingHistory
+              ) : !callsPage || callsPage.calls.length === 0 ? (
                 <Panel>
                   <Empty>Завершённых звонков пока нет</Empty>
                 </Panel>
               ) : (
                 <>
                   <CallList
-                    calls={calls}
+                    calls={callsPage.calls}
                     now={now}
                     open={openCalls}
                     onToggle={(callId) => setOpenCalls((open) => toggled(open, callId))}
@@ -322,8 +314,8 @@ export function RoomsPage({
                     <nav className="rooms-pager" aria-label="Страницы истории">
                       <Button
                         variant="outline"
-                        disabled={historyLoading || pageIndex === 0}
-                        onClick={() => showCallsPage(historyRoom, pageCursors, pageIndex - 1)}
+                        disabled={history.busy || pageIndex === 0}
+                        onClick={() => showCallsPage(pageIndex - 1)}
                       >
                         <ChevronLeft size={14} aria-hidden="true" />
                         Назад
@@ -333,8 +325,8 @@ export function RoomsPage({
                       </span>
                       <Button
                         variant="outline"
-                        disabled={historyLoading || !hasNextPage}
-                        onClick={() => showCallsPage(historyRoom, pageCursors, pageIndex + 1)}
+                        disabled={history.busy || !hasNextPage}
+                        onClick={() => showCallsPage(pageIndex + 1)}
                       >
                         Дальше
                         <ChevronRight size={14} aria-hidden="true" />
@@ -343,18 +335,25 @@ export function RoomsPage({
                   ) : null}
                 </>
               )
+            ) : !day && history.busy ? (
+              loadingHistory
             ) : (
               <>
                 <Panel flush>
-                  {(dayCalls ?? []).length === 0 && !(rooms ?? []).length ? (
-                    <Empty>Сегодня звонков не было</Empty>
+                  {!day || (day.calls.length === 0 && !(dayIsToday && (rooms ?? []).length)) ? (
+                    <Empty>{dayIsToday ? 'Сегодня звонков не было' : 'В этот день звонков не было'}</Empty>
                   ) : (
                     <DayTimeline
-                      dayStart={dayStart}
+                      dayStart={day.dayStart}
                       now={now}
-                      calls={dayCalls ?? []}
+                      calls={day.calls}
                       live={
-                        historyRoom ? (rooms ?? []).filter((room) => room.roomId === historyRoom.id) : (rooms ?? [])
+                        // The calls going on now belong to today's line only.
+                        !dayIsToday
+                          ? []
+                          : historyRoom
+                            ? (rooms ?? []).filter((room) => room.roomId === historyRoom.id)
+                            : (rooms ?? [])
                       }
                       selectedId={picked}
                       onSelect={(call) => setPicked(call.id === picked ? null : call.id)}
@@ -377,10 +376,10 @@ export function RoomsPage({
             )}
           </>
         )}
-        {keepDays ? (
+        {shown?.keepDays ? (
           <p className="ui-footnote">
-            Комната, имена гостей и откуда заходили хранятся {keepDays} дней, потом у звонка остаётся только время для
-            статистики.
+            Комната, имена гостей и откуда заходили хранятся {shown.keepDays} дней, потом у звонка остаётся только время
+            для статистики.
           </p>
         ) : null}
       </section>

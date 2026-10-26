@@ -1,3 +1,4 @@
+import type { ConversationRef } from '@voice-room/shared/contracts/realtime';
 import { isArray, isRecord } from '@voice-room/shared/guards';
 import { MAX_MENTIONS_PER_MESSAGE } from '@voice-room/shared/mentions';
 import type { SelectedMention } from './mention-composer.svelte';
@@ -5,7 +6,7 @@ import type { SelectedMention } from './mention-composer.svelte';
 // Unsent text is kept per account and per chat on this device only. Nothing is
 // sent to the server, and signing out wipes every draft on the device.
 
-export type ChatDraftScope = { type: 'dm' | 'room'; id: string };
+export type ChatDraftScope = ConversationRef;
 
 export interface ChatDraft {
   text: string;

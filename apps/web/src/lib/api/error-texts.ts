@@ -19,6 +19,7 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   internal_error: 'Ошибка сервера, попробуйте позже',
   cross_origin_rejected: 'Запрос отклонён: откройте сайт заново',
   not_supported: 'Не поддерживается',
+  client_outdated: 'Версия приложения устарела, обновите его',
 
   account_not_found: 'Аккаунт не найден',
   account_deleted: 'Аккаунт удалён',
@@ -108,6 +109,8 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   invalid_mention_target: 'Этого участника нельзя отметить',
   self_mention: 'Нельзя отметить себя',
   too_many_mentions: 'Слишком много упоминаний в одном сообщении',
+  mention_not_eligible: 'Этого участника нельзя упомянуть',
+  creator_not_eligible: 'Вы не можете упоминать в этой комнате',
   invalid_attachments: 'Вложения недоступны, прикрепите их заново',
   reply_unavailable: 'Сообщение, на которое вы отвечаете, недоступно',
   idempotency_conflict: 'Это сообщение уже отправлялось с другим текстом, попробуйте ещё раз',
@@ -142,6 +145,7 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   invalid_push_endpoint: 'Не удалось отключить push-уведомления',
   push_endpoint_conflict: 'Это устройство уже подписано другим аккаунтом',
   push_rate_limited: TRY_LATER,
+  invalid_device_token: 'Некорректный токен устройства',
 
   media_error: IMAGE_FAILED,
   media_uploads_disabled: 'Загрузка изображений временно недоступна',
@@ -182,6 +186,7 @@ export const ERROR_TEXTS: Record<ErrorCode, string> = {
   desktop_release_unavailable: 'Не удалось получить данные о релизе',
 
   invalid_response: 'Сервер прислал непонятный ответ, обновите страницу',
+  unavailable: 'Сервер недоступен',
 
   invalid_json: REALTIME_REJECTED,
   invalid_envelope: REALTIME_REJECTED,

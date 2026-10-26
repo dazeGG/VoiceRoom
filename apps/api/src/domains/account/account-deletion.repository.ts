@@ -3,15 +3,16 @@ import { sql } from 'kysely';
 import type pg from 'pg';
 import type { Selectable } from 'kysely';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
+import { toDate } from '../../platform/epoch-millis.ts';
 import type { Json, JsonObject, Users } from '../../platform/db/schema.ts';
 import { verifyPassword } from '../../lib/password.ts';
 import { lockUser } from './user.repository.ts';
 import {
   ACCOUNT_DELETION_GRACE_MS,
   DELETED_ACCOUNT_NAME,
-  DELETED_LOGIN_PREFIX,
-  type AccountDeletionPreview
+  DELETED_LOGIN_PREFIX
 } from '@voice-room/shared/account-security';
+import type { AccountDeletionPreview } from '@voice-room/shared/contracts/account';
 
 const UNUSABLE_PASSWORD_HASH = '!';
 
@@ -40,10 +41,6 @@ export type DeletionFinish =
       deletedRooms: { roomId: string; avatarKey: string | null }[];
       avatarKey: string | null;
     };
-
-function toDate(ms: number): Date {
-  return new Date(ms);
-}
 
 function jsonObject(value: Json | undefined): JsonObject {
   return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -196,11 +193,7 @@ function restoredProfile(user: UserRow, now: number) {
 // stores: a request hides the account and keeps its profile aside for a restore
 // during the grace period; the finish hands its rooms over, removes its personal
 // data and anonymizes the row others' messages still point at.
-function createAccountDeletionRepository({
-  pool,
-  now: clock = Date.now
-}: { pool?: pg.Pool | null; now?: () => number } = {}) {
-  if (!pool) throw new TypeError('pool is required');
+function createAccountDeletionRepository({ pool, now: clock = Date.now }: { pool: pg.Pool; now?: () => number }) {
   const db = kyselyOn(pool);
 
   async function previewDeletion({

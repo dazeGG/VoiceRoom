@@ -50,11 +50,13 @@ const DEFAULT_MAX_ATTEMPTS = 5;
 const DEFAULT_COOLDOWN_MS = 10_000;
 
 // The server's join failures (contracts/errors), plus the client's own:
-// a request that never got an answer and a transport that broke.
+// a request that never got an answer (network_error, or unavailable from the
+// HTTP client) and a transport that broke.
 const TERMINAL_CODES: ReadonlySet<string> = new Set<string>(TERMINAL_JOIN_CODES);
 const RETRYABLE_CODES: ReadonlySet<string> = new Set<string>([
   ...RETRYABLE_JOIN_CODES,
   'network_error',
+  'unavailable',
   'transport_error'
 ]);
 

@@ -3,7 +3,7 @@
   // whole, and a blurred copy of the same frame fills the rest of the tile.
   import EmojiText from '$lib/shared/chat/EmojiText.svelte';
   import { HeadphoneOff, MicOff, MonitorPlay } from '@lucide/svelte';
-  import { getAvatarPresentation } from '../client/ui/avatar-presentation';
+  import { getAvatarPresentation } from '$lib/shared/ui/avatar-presentation';
   import { state as roomState } from '../client/core/state.svelte';
   import { enterScreenView } from '../client/ui/screen-view';
   import { keepVideoFitted } from '../client/ui/video-fit';

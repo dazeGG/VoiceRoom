@@ -37,7 +37,7 @@ import {
   playFriendAcceptedCue,
   playFriendRequestCue,
   playRingCue
-} from '$lib/features/room/client/media/cues';
+} from '$lib/features/room/client';
 import type { NotificationActiveTarget } from '$lib/shared/notifications/router';
 import { roomNavigation } from './room-navigation.svelte';
 import {

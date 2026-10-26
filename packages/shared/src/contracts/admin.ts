@@ -5,16 +5,18 @@
 
 import { Type, type Static } from 'typebox';
 import { Nullable, Ok } from './http.ts';
+import { ReportReasonSchema } from './reports.ts';
+import { NetworkLevel, NetworkPoint } from './rooms.ts';
 import { StaffRoleSchema } from './staff.ts';
 import { AccountBadge } from './users.ts';
 
 /** What the realtime layer tells administrators when the open reports change. */
 export const AdminReportsEvent = Type.Object({
   openReports: Type.Number(),
-  /** Set when the change is a new report. */
+  /** Set for a new message report; user-report changes use null for compatibility. */
   filed: Nullable(
     Type.Object({
-      reason: Type.Union([Type.Literal('spam'), Type.Literal('abuse'), Type.Literal('illegal'), Type.Literal('other')]),
+      reason: ReportReasonSchema,
       targetKind: Type.Union([Type.Literal('room_message'), Type.Literal('direct_message')]),
       roomName: Nullable(Type.String())
     })
@@ -49,7 +51,34 @@ export const SystemSample = Type.Object({
   voiceRooms: Type.Number(),
   httpRequests: Type.Number(),
   http5xx: Type.Number(),
-  httpAvgMs: Nullable(Type.Number())
+  httpAvgMs: Nullable(Type.Number()),
+  /**
+   * The media server (LiveKit): bytes in and out in the busiest minute of the
+   * point; packets, the lost ones each way and the ones sent again, summed
+   * over it; its CPU share of the whole server and its memory at their highest.
+   * Null where LiveKit's metrics were not read.
+   */
+  sfuBytesIn: Nullable(Type.Number()),
+  sfuBytesOut: Nullable(Type.Number()),
+  sfuPacketsIn: Nullable(Type.Number()),
+  sfuLostIn: Nullable(Type.Number()),
+  sfuPacketsOut: Nullable(Type.Number()),
+  sfuLostOut: Nullable(Type.Number()),
+  sfuRetransmitOut: Nullable(Type.Number()),
+  sfuCpuPct: Nullable(Type.Number()),
+  sfuRssBytes: Nullable(Type.Number()),
+  /**
+   * The server's video: screen shares and cameras running at once at most, the
+   * most video the budget counted as sent to viewers (Mbit/s) against the
+   * budget (lowest over the point; null while it is off), and the stream
+   * starts it lowered or refused, summed. Counts only, no people or rooms.
+   */
+  videoScreensMax: Nullable(Type.Number()),
+  videoCamerasMax: Nullable(Type.Number()),
+  videoMbpsMax: Nullable(Type.Number()),
+  videoBudgetMbps: Nullable(Type.Number()),
+  mediaLowered: Nullable(Type.Number()),
+  mediaRefused: Nullable(Type.Number())
 });
 export type SystemSample = Static<typeof SystemSample>;
 
@@ -355,9 +384,14 @@ export const RoomAccount = Type.Object({
 });
 export type RoomAccount = Static<typeof RoomAccount>;
 
-/** Someone in a room's voice now: an account, or a guest known only by the name given to the room. */
-/** The desktop app, a phone or a browser on a computer. */
-const ClientKindSchema = Type.Union([Type.Literal('desktop_app'), Type.Literal('mobile'), Type.Literal('browser')]);
+/** Which kind of client a user agent is: the desktop app, the Android app, a phone, or a browser on a computer. */
+export const ClientKind = Type.Union([
+  Type.Literal('desktop_app'),
+  Type.Literal('mobile_app'),
+  Type.Literal('mobile'),
+  Type.Literal('browser')
+]);
+export type ClientKind = Static<typeof ClientKind>;
 
 /**
  * Where someone came from, without their address: `ipKey` is a keyed hash of the
@@ -375,6 +409,7 @@ const DeviceInfo = {
   browser: Type.String()
 };
 
+/** Someone in a room's voice now: an account, or a guest known only by the name given to the room. */
 export const LiveRoomPeer = Type.Object({
   peerId: Type.String(),
   name: Type.String(),
@@ -382,15 +417,23 @@ export const LiveRoomPeer = Type.Object({
   account: Nullable(RoomAccount),
   avatarColorKey: Type.String(),
   joinedAt: Nullable(Type.Number()),
-  muted: Type.Boolean(),
-  deafened: Type.Boolean(),
+  // Whether someone's microphone or sound is off is theirs: the panel shows
+  // what loads the server (screens, cameras) and the connection, not that.
   screen: Type.Boolean(),
-  /** The desktop app, a phone or a browser; null when the socket sent no user agent. */
-  client: Nullable(ClientKindSchema),
+  /** The camera is on. Optional: an API a release behind does not say. */
+  camera: Type.Optional(Type.Boolean()),
+  /** The desktop app, the Android app, a phone or a browser; null when the socket sent no user agent. */
+  client: Nullable(ClientKind),
   ...DeviceInfo,
   /** The lasting id of a guest's browser; null for an account or a guest that sent none. */
   guestId: Nullable(Type.String()),
-  ...NetworkOrigin
+  ...NetworkOrigin,
+  /**
+   * The connection as the peer's client last judged it; null until it says.
+   * Optional, like the other network fields: the admin app and the API ship
+   * in different images, so an API a release behind sends none.
+   */
+  network: Type.Optional(Nullable(NetworkLevel))
 });
 export type LiveRoomPeer = Static<typeof LiveRoomPeer>;
 
@@ -402,7 +445,7 @@ export const LiveRoom = Type.Object({
   avatarUrl: Nullable(Type.String()),
   /** Null for a temporary room, which nobody owns. */
   owner: Nullable(RoomAccount),
-  /** When the earliest of those still in voice came in. */
+  /** When the call began: the server's call clock, the one the room screen counts from. */
   since: Nullable(Type.Number()),
   peers: Type.Array(LiveRoomPeer)
 });
@@ -439,12 +482,14 @@ export const RoomStay = Type.Object({
    * recorded before they were kept; the guest fields and the origin are cleared
    * together with the room after VOICE_HISTORY_KEEP_DAYS.
    */
-  client: Nullable(ClientKindSchema),
+  client: Nullable(ClientKind),
   os: Nullable(Type.String()),
   browser: Nullable(Type.String()),
   ...NetworkOrigin,
   joinedAt: Type.Number(),
-  leftAt: Type.Number()
+  leftAt: Type.Number(),
+  /** How the connection went: each change of its level, the first at or after joinedAt. Empty when the client never said. */
+  network: Type.Optional(Type.Array(NetworkPoint))
 });
 export type RoomStay = Static<typeof RoomStay>;
 
@@ -484,6 +529,8 @@ export const RoomCall = Type.Object({
   /** As on a stay: null once the room is gone, empty for an unnamed temporary room. */
   roomName: Nullable(Type.String()),
   isStatic: Nullable(Type.Boolean()),
+  /** The room's picture as it is now; null without one or once the room is gone. Optional for an API a release behind. */
+  avatarUrl: Type.Optional(Nullable(Type.String())),
   startedAt: Type.Number(),
   endedAt: Type.Number(),
   stays: Type.Array(RoomStay)

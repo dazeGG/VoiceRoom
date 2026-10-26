@@ -97,7 +97,7 @@ export interface RoomChatDeps {
       createAddressedForMessage(
         input: Parameters<NotificationService['createAddressedForMessage']>[0]
       ): Promise<unknown>;
-      markRoomRead?(input: { userId: string; roomId: string; through: unknown }): Promise<unknown>;
+      markRoomRead(input: { userId: string; roomId: string; through: unknown }): Promise<unknown>;
     };
   } | null;
   delivery(): SendDelivery | null;
@@ -409,7 +409,7 @@ export function createRoomChatService(deps: RoomChatDeps) {
     try {
       // No release-2.5 pool means no inbox to retire: a quiet no-op.
       const service = deps.notifications()?.service;
-      if (typeof service?.markRoomRead !== 'function') return;
+      if (!service) return;
       await service.markRoomRead({ userId, roomId, through: through ?? null });
     } catch (error) {
       deps
@@ -422,7 +422,7 @@ export function createRoomChatService(deps: RoomChatDeps) {
 
   // A cursor advances the durable read point; without one the legacy
   // wall-clock read marks everything up to now. A refused cursor throws a
-  // MessageReadError that carries its own status and code; any other failure
+  // DomainError that carries its own status and code; any other failure
   // is a server error. Both reach the central error handler unchanged.
   async function markRead(roomId: string, userId: string, cursor: unknown): Promise<ReadOutcome> {
     if (typeof cursor === 'string' && cursor) {

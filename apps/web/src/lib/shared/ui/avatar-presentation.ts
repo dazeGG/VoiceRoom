@@ -1,13 +1,13 @@
 import { getAvatarColor } from '$lib/visual/tokens';
-import { getInitials } from '../core/utils';
-import type { Participant } from '../core/types';
+import { avatarInitial } from '$lib/shared/utils/avatar-initial';
 
-export function getAvatarPresentation(
-  participant: Pick<Participant, 'avatarColorKey' | 'name' | 'isLocal'> & {
-    avatarAccent?: Participant['avatarAccent'] | undefined;
-    avatarUrl?: Participant['avatarUrl'] | undefined;
-  }
-): {
+export function getAvatarPresentation(participant: {
+  avatarColorKey: string;
+  name: string;
+  isLocal: boolean;
+  avatarAccent?: string | undefined;
+  avatarUrl?: string | undefined;
+}): {
   background: string;
   foreground: string;
   shadow: string;
@@ -35,7 +35,7 @@ export function getAvatarPresentation(
     background,
     foreground,
     shadow: 'none',
-    initials: getInitials(participant.name),
+    initials: avatarInitial(participant.name || 'Гость'),
     label: participant.isLocal ? 'вы' : participant.name,
     src: participant.avatarUrl || null
   };

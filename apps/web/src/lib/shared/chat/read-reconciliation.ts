@@ -1,3 +1,5 @@
+import { newId } from '../new-id';
+
 interface ReadReconciliationOptions {
   scope: string;
   commit: (cursor: string) => Promise<string | void>;
@@ -9,7 +11,7 @@ export function createReadReconciliation(options: ReadReconciliationOptions) {
   let active: Promise<void> | null = null;
   let committed = '';
   let sequence = 0;
-  const source = crypto.randomUUID();
+  const source = newId();
   const seen = new Set<string>();
   const sourceSequences = new Map<string, number>();
   const channelName = `voice-room:read:${options.scope}`;

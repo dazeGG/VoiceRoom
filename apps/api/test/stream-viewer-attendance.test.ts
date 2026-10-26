@@ -155,7 +155,7 @@ function createRuntime(room: TestRoom, broadcasts: unknown[], overrides: Runtime
     sessionAvatarColorKey: () => 'blue',
     queueRoomOccupancyTransition: overrides.queueRoomOccupancyTransition || (async () => {}),
     findRoomBan: overrides.findRoomBan || (async () => null),
-    credentialBoundary: overrides.credentialBoundary,
+    credentialBoundary: overrides.credentialBoundary ?? null,
     removeLiveKitParticipant: overrides.removeLiveKitParticipant,
     now: overrides.now,
     ...(overrides.setTimeout === undefined ? {} : { setTimeout: overrides.setTimeout }),
@@ -229,7 +229,7 @@ function createLeaseRuntime({
 }) {
   return createRuntime(room, [], {
     getRoom: getRoom || (async () => room),
-    findRoomBan,
+    findRoomBan: findRoomBan || (async () => null),
     closePeer(roomId, peerId, transportId, reason) {
       closed.push({ roomId, peerId, transportId, reason });
       const current = room.peers.get(peerId);
@@ -238,11 +238,11 @@ function createLeaseRuntime({
     credentialBoundary: credentialBoundary || {
       async revokePeer(value) {
         revoked.push(value);
-        return { status: 'revoked' };
+        return { status: 'revoked', epoch: 1 };
       },
       resolvePrincipal: () => null,
       async revokePrincipal() {
-        return { status: 'revoked' };
+        return { status: 'revoked', epoch: 1 };
       }
     },
     removeLiveKitParticipant: async (...args: unknown[]) => removeCalls.push(args),
@@ -1127,11 +1127,11 @@ test('replacement waits when expiry wins CAS before credential finalization', as
       async revokePeer(value) {
         revoked.push(value);
         await revokeGate;
-        return { status: 'revoked' };
+        return { status: 'revoked', epoch: 1 };
       },
       resolvePrincipal: () => null,
       async revokePrincipal() {
-        return { status: 'revoked' };
+        return { status: 'revoked', epoch: 1 };
       }
     }
   });
@@ -1188,13 +1188,13 @@ test('membership removal terminal-claims leases before one principal revoke and 
     removeCalls,
     credentialBoundary: {
       async revokePeer() {
-        return { status: 'revoked' };
+        return { status: 'revoked', epoch: 1 };
       },
       resolvePrincipal: () => ({ principalType: 'account', principalId: 'account-owner' }),
       async revokePrincipal(value) {
         principalRevokes.push(value);
         removedBeforeRevoke = removeCalls.length;
-        return { status: 'revoked' };
+        return { status: 'revoked', epoch: 1 };
       }
     }
   });
@@ -1345,11 +1345,11 @@ test('failed expiry finalizer blocks admission until credential revoke retry suc
         if (attempts <= 2) {
           throw Object.assign(new Error('credential unavailable'), { code: 'credential_unavailable' });
         }
-        return { status: 'revoked' };
+        return { status: 'revoked', epoch: 1 };
       },
       resolvePrincipal: () => null,
       async revokePrincipal() {
-        return { status: 'revoked' };
+        return { status: 'revoked', epoch: 1 };
       }
     }
   });
@@ -1475,7 +1475,7 @@ test('terminal scope retries a failed expiry finalizer and runs its queued callb
       },
       resolvePrincipal: () => null,
       async revokePrincipal() {
-        return { status: 'revoked' };
+        return { status: 'revoked', epoch: 1 };
       }
     }
   });
@@ -1579,11 +1579,11 @@ test('membership finalizer failure does not close the peer or report successful 
     removeCalls,
     credentialBoundary: {
       async revokePeer() {
-        return { status: 'revoked' };
+        return { status: 'revoked', epoch: 1 };
       },
       resolvePrincipal: () => ({ principalType: 'account', principalId: 'account-owner' }),
       async revokePrincipal() {
-        return { status: 'unavailable' };
+        return { status: 'invalid', epoch: null };
       }
     }
   });

@@ -16,7 +16,20 @@ test('the member list says afk where every other payload says away, and back', (
 test('a built member page matches the contract the web checks it against', () => {
   const page = buildMembershipEnvelope({
     roomId: 'room-a',
-    members: [{ userId: 'u-1', displayName: 'Аня', login: 'anya', role: 'owner', presenceStatus: 'afk', inVoice: true }]
+    members: [
+      {
+        userId: 'u-1',
+        displayName: 'Аня',
+        login: 'anya',
+        avatarColorKey: 'blurple',
+        avatarUrl: null,
+        avatarAccent: null,
+        role: 'owner',
+        joinedAt: null,
+        presenceStatus: 'afk',
+        inVoice: true
+      }
+    ]
   });
   for (const member of page.members) assert.ok(Value.Check(MembershipMember, member));
   assert.equal(page.members[0]?.presenceStatus, 'afk');

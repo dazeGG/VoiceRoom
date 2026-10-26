@@ -6,6 +6,7 @@ import { kyselyOn } from '../../platform/db/kysely.ts';
 import { REPORT_REASONS, type AdminReport, type ReportReason } from '@voice-room/shared/contracts/reports';
 import { isOneOf } from '@voice-room/shared/guards';
 import { epochMillis } from '../../platform/epoch-millis.ts';
+import { createUserReportRepository } from './user-report.repository.ts';
 
 export type ReportTargetKind = 'room_message' | 'direct_message';
 
@@ -24,6 +25,7 @@ const OPEN_REPORTS_LIMIT = 200;
 
 export function createReportRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
+  const userReports = createUserReportRepository({ pool });
 
   async function findRoomMessage(roomId: string, messageId: string): Promise<ReportedRoomMessage | null> {
     const row = await db
@@ -213,10 +215,11 @@ export function createReportRepository({ pool }: { pool: pg.Pool }) {
       .select((eb) => eb.fn.countAll<string>().as('count'))
       .where('status', '=', 'open')
       .executeTakeFirst();
-    return Number(row?.count ?? 0);
+    return Number(row?.count ?? 0) + (await userReports.countOpenUserReports());
   }
 
   return Object.freeze({
+    ...userReports,
     findRoomMessage,
     findDirectMessage,
     fileReport,

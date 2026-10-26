@@ -230,8 +230,10 @@ async function applyRemoteCameraDemand(peer: Participant, publication: RemoteTra
     participantCount: state.peers.size + (state.self ? 1 : 0),
     screenOnStage: Boolean(state.viewedScreenPeerId)
   });
+  // An overloaded computer decodes the smallest layer of every camera it does not show large.
+  const shown = state.videoRelieved && demand !== 'high' ? 'low' : demand;
   publication.setVideoQuality(
-    demand === 'high' ? VideoQuality.HIGH : demand === 'medium' ? VideoQuality.MEDIUM : VideoQuality.LOW
+    shown === 'high' ? VideoQuality.HIGH : shown === 'medium' ? VideoQuality.MEDIUM : VideoQuality.LOW
   );
 }
 

@@ -5,9 +5,17 @@
 
 import { sql } from 'kysely';
 import type pg from 'pg';
-import type { ClientKind } from '@voice-room/shared/account-security';
-import { ROOM_CALLS_PAGE_SIZE, ROOM_HISTORY_PAGE_SIZE, type RoomAccount } from '@voice-room/shared/contracts/admin';
+import { Type } from 'typebox';
+import { Value } from 'typebox/value';
+import {
+  ROOM_CALLS_PAGE_SIZE,
+  ROOM_HISTORY_PAGE_SIZE,
+  type ClientKind,
+  type RoomAccount
+} from '@voice-room/shared/contracts/admin';
+import { NetworkPoint } from '@voice-room/shared/contracts/rooms';
 import { kyselyOn } from '../../platform/db/kysely.ts';
+import { toMillis } from '../../platform/epoch-millis.ts';
 import { avatarUrl } from '../../lib/avatar-url.ts';
 
 export interface AdminRoomRow {
@@ -33,6 +41,7 @@ export interface StoredStay {
   location: string | null;
   joinedAt: number;
   leftAt: number;
+  network: NetworkPoint[];
 }
 
 export interface StoredCall {
@@ -40,10 +49,25 @@ export interface StoredCall {
   roomId: string;
   roomName: string | null;
   isStatic: boolean | null;
+  avatarUrl: string | null;
   startedAt: number;
   endedAt: number;
   stays: StoredStay[];
 }
+
+/** Whose stay in which room to find, ending around `at` (see lastStays). */
+export interface StayAsk {
+  roomId: string;
+  /** The account, or null to look for a guest's browser. */
+  userId: string | null;
+  guestId: string | null;
+  at: number;
+}
+
+// The stay is written when the seat closes, which a dropped socket's reconnect
+// lease holds off past the moment its owner already answered.
+const STAY_ENDS_AFTER_MS = 5 * 60_000;
+const STAY_ENDS_BEFORE_MS = 24 * 60 * 60_000;
 
 /** Where a page of history continues: the end and id of the last stay (or call) already shown. */
 export interface HistoryAfter {
@@ -51,9 +75,9 @@ export interface HistoryAfter {
   id: string;
 }
 
-// The column only ever holds these three (voice_sessions_client_check).
+// The column only ever holds these four (voice_sessions_client_check).
 function clientOf(value: string | null): ClientKind | null {
-  return value === 'desktop_app' || value === 'mobile' || value === 'browser' ? value : null;
+  return value === 'desktop_app' || value === 'mobile_app' || value === 'mobile' || value === 'browser' ? value : null;
 }
 
 type AccountColumns = {
@@ -76,6 +100,11 @@ function account(row: AccountColumns): RoomAccount | null {
     avatarAccent: row.avatar_accent
   };
 }
+
+const NetworkPoints = Type.Array(NetworkPoint);
+
+/** The column holds what voice-session.repository wrote; anything else reads as no changes. */
+const networkOf = (value: unknown): NetworkPoint[] => (Value.Check(NetworkPoints, value) ? value : []);
 
 /** A temporary room has no name, so only a missing or deleted row means the room is gone. */
 const roomNameOf = (row: { room_name: string | null; room_deleted_at: Date | string | null }) =>
@@ -141,6 +170,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
         's.browser',
         's.ip_key',
         's.location',
+        's.network',
         'r.name as room_name',
         'r.deleted_at as room_deleted_at',
         'r.is_static',
@@ -171,8 +201,9 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
       browser: row.browser,
       ipKey: row.ip_key,
       location: row.location,
-      joinedAt: new Date(row.joined_at).getTime(),
-      leftAt: new Date(row.left_at).getTime()
+      joinedAt: toMillis(row.joined_at),
+      leftAt: toMillis(row.left_at),
+      network: networkOf(row.network)
     };
   }
 
@@ -268,7 +299,8 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
         'c.ended_at',
         'r.name as room_name',
         'r.deleted_at as room_deleted_at',
-        'r.is_static'
+        'r.is_static',
+        'r.avatar_key as room_avatar_key'
       ]);
     if (query.from !== undefined) pageQuery = pageQuery.where('c.ended_at', '>', new Date(query.from));
     if (query.to !== undefined) pageQuery = pageQuery.where('c.started_at', '<', new Date(query.to));
@@ -289,8 +321,9 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
       roomId: row.room_id ?? '',
       roomName: roomNameOf(row),
       isStatic: row.is_static,
-      startedAt: new Date(row.started_at).getTime(),
-      endedAt: new Date(row.ended_at).getTime()
+      avatarUrl: row.room_deleted_at === null ? avatarUrl(row.room_avatar_key) : null,
+      startedAt: toMillis(row.started_at),
+      endedAt: toMillis(row.ended_at)
     }));
     if (page.length === 0) return { calls: [], more: false };
 
@@ -325,7 +358,46 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
     };
   }
 
-  return Object.freeze({ rooms, accounts, history, calls });
+  /**
+   * For each ask, the account's (or guest browser's) stay in the room that the
+   * answer is about: the latest one that ended by `at`, else the first that
+   * ended in the few minutes after; none older than a day. Null when none is
+   * kept. One indexed probe per ask, then the stays themselves.
+   */
+  async function lastStays(asks: readonly StayAsk[]): Promise<(StoredStay | null)[]> {
+    const findable = asks.flatMap((ask, n) => (ask.userId || ask.guestId ? [{ ...ask, n }] : []));
+    if (findable.length === 0) return asks.map(() => null);
+    const asked = sql.join(
+      findable.map(
+        (ask) =>
+          sql`(${ask.n}::int, ${ask.roomId}::text, ${ask.userId}::text, ${ask.userId ? null : ask.guestId}::uuid,
+            ${new Date(ask.at)}::timestamptz, ${new Date(ask.at - STAY_ENDS_BEFORE_MS)}::timestamptz,
+            ${new Date(ask.at + STAY_ENDS_AFTER_MS)}::timestamptz)`
+      )
+    );
+    const picked = await sql<{ n: number; stay_id: string }>`
+      SELECT a.n, v.id AS stay_id
+      FROM (VALUES ${asked}) AS a(n, room_id, user_id, guest_id, at, since, until)
+      CROSS JOIN LATERAL (
+        SELECT s.id
+        FROM voice_sessions s
+        WHERE s.room_id = a.room_id
+          AND CASE WHEN a.user_id IS NOT NULL THEN s.user_id = a.user_id
+                   ELSE s.user_id IS NULL AND s.guest_id = a.guest_id END
+          AND s.joined_at <= a.until
+          AND s.left_at BETWEEN a.since AND a.until
+        ORDER BY s.left_at > a.at, abs(extract(epoch FROM s.left_at - a.at)), s.id
+        LIMIT 1
+      ) v
+    `.execute(db);
+    const ids = picked.rows.map((row) => row.stay_id);
+    const rows = ids.length ? await stays().where('s.id', 'in', ids).execute() : [];
+    const byId = new Map(rows.map((row) => [row.stay_id, toStay(row)]));
+    const byAsk = new Map(picked.rows.map((row) => [row.n, byId.get(row.stay_id) ?? null]));
+    return asks.map((_ask, n) => byAsk.get(n) ?? null);
+  }
+
+  return Object.freeze({ rooms, accounts, history, calls, lastStays });
 }
 
 export type AdminRoomsRepository = ReturnType<typeof createAdminRoomsRepository>;

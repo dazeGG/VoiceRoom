@@ -2,7 +2,7 @@
 // change that another person should see reaches them as an account event and,
 // where it matters, a push.
 
-import type { DirectMessage as StoredDirectMessage } from './social-records.ts';
+import type { RingService } from '../rings/ring.service.ts';
 import type { AccountMessage } from '../../realtime/account-events.ts';
 import type {
   FriendLastMessage,
@@ -13,8 +13,7 @@ import type {
 } from '@voice-room/shared/contracts/social';
 import type { PublicUser } from '@voice-room/shared/contracts/users';
 import type { PushPayload } from '../notifications/notification-dispatch.ts';
-import { notificationActor, isActiveAccount, type SocialUser } from './social-views.ts';
-import type { RateCheck } from '../../lib/rate-limit.ts';
+import { notificationActor, type SocialUser } from './social-views.ts';
 
 type Status<T extends string> = T extends string ? { status: T } : never;
 
@@ -68,25 +67,13 @@ export interface FriendStore {
 
 export interface FriendsDeps {
   friends(): FriendStore;
-  findUser(userId: string): Promise<SocialUser | null>;
-  findRoom(roomId: string): Promise<{ id: string; name?: string; emoji?: string } | null>;
-  sendDirectMessage(input: {
-    senderId: string;
-    recipientId: string;
-    body: string;
-    metadata: Record<string, unknown>;
-  }): Promise<StoredDirectMessage>;
+  ringInvitation: RingService['create'];
   isOnline(userId: string): boolean;
   notifyUser(userId: string, event: AccountMessage): void;
   queuePush(userId: string, payload: PushPayload, context?: Record<string, unknown>): Promise<unknown>;
-  ringLimiter: RateCheck;
-  ringTtlMs: number;
-  now?: () => number;
 }
 
 export function createFriendsService(deps: FriendsDeps) {
-  const now = deps.now || Date.now;
-
   function friendPush(
     userId: string,
     type: 'friend.accepted' | 'friend.request',
@@ -244,58 +231,14 @@ export function createFriendsService(deps: FriendsDeps) {
     return { status: result.status === 'not_found' ? 'not_found' : 'unblocked' };
   }
 
-  // Presence is deliberately not required: a friend can be invited from the
-  // lobby before joining the room yourself. The per-pair limit bounds how
-  // often anyone can ring the same person.
-  async function ring(
-    caller: SocialUser,
-    roomId: string,
-    targetUserId: string
-  ): Promise<
-    | Status<'rung' | 'not_friends' | 'blocked' | 'account_deleted' | 'room_not_found'>
-    | { status: 'rate_limited'; retryAfterSeconds: number }
-  > {
-    if (!(await deps.friends().areFriends(caller.id, targetUserId))) return { status: 'not_friends' };
-    if (await deps.friends().isBlockedBetween(caller.id, targetUserId)) return { status: 'blocked' };
-    if (!isActiveAccount(await deps.findUser(targetUserId))) return { status: 'account_deleted' };
-    const rate = deps.ringLimiter.check(`${caller.id}:${targetUserId}`);
-    if (!rate.allowed) return { status: 'rate_limited', retryAfterSeconds: rate.retryAfterSeconds };
-    const room = await deps.findRoom(roomId);
-    if (!room) return { status: 'room_not_found' };
-
-    const expiresAt = now() + deps.ringTtlMs;
-    deps.notifyUser(targetUserId, {
-      type: 'ring.incoming',
-      fromUser: notificationActor(caller),
-      room: { id: room.id, name: room.name || '', emoji: room.emoji || '' },
-      expiresAt
-    });
-    // The invitation is a regular DM so both sides share one timeline entry
-    // with live status. It stays actionable while the room exists; the expiry
-    // only bounds the audible ring and its push.
-    const invite = await deps.sendDirectMessage({
-      senderId: caller.id,
-      recipientId: targetUserId,
-      body: room.name ? `Приглашение в комнату «${room.name}»` : 'Приглашение в комнату',
-      metadata: { kind: 'room-invite', roomId: room.id, roomName: room.name || '', status: 'pending', expiresAt: null }
-    });
-    deps.notifyUser(targetUserId, { type: 'dm-message', message: invite });
-    deps.notifyUser(caller.id, { type: 'dm-message', message: invite });
-    void deps.queuePush(
-      targetUserId,
-      {
-        type: 'ring',
-        title: `${caller.displayName || caller.login || 'Друг'} зовёт вас`,
-        body: room.name ? `Комната «${room.name}»` : 'Присоединиться к комнате',
-        privateBody: 'Вас зовут в голосовую комнату.',
-        tag: `ring:${caller.id}:${roomId}`,
-        dedupeKey: `ring:${caller.id}:${roomId}:${expiresAt}`,
-        url: `/r/${encodeURIComponent(roomId)}`,
-        expiresAt
-      },
-      { expiresAt }
-    );
-    return { status: 'rung' };
+  // The persisted operation is also used by the new HTTP lifecycle routes.
+  async function ring(caller: SocialUser, roomId: string, targetUserId: string) {
+    // Keep the legacy early relationship refusal even on an app using test
+    // stores; the persisted operation repeats the checks under its pair lock.
+    if (!(await deps.friends().areFriends(caller.id, targetUserId))) return { status: 'not_friends' as const };
+    if (await deps.friends().isBlockedBetween(caller.id, targetUserId)) return { status: 'blocked' as const };
+    const result = await deps.ringInvitation(caller, roomId, targetUserId);
+    return result.status === 'rung' ? { status: 'rung' as const } : result;
   }
 
   return { list, search, requests, sendRequest, respond, cancel, remove, blocked, block, unblock, ring };

@@ -4,7 +4,7 @@
 
 import { deleteUserAvatar, updateDisplayName, uploadUserAvatar, type AuthUser } from '$lib/api/auth';
 import { setUser } from '$lib/features/auth/session.svelte';
-import { state as roomClientState } from '$lib/features/room/client/core/state.svelte';
+import { syncLocalProfile } from '$lib/features/room/client';
 
 const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
 
@@ -81,7 +81,8 @@ export class ProfileDraft {
       if (avatar || removeAvatar) {
         const next = avatar ? await uploadUserAvatar(avatar) : await deleteUserAvatar();
         setUser(next);
-        showAvatarInCall(next);
+        // The call tile of the local participant shows the new avatar without a rejoin.
+        syncLocalProfile(next);
       }
       return true;
     } finally {
@@ -93,12 +94,4 @@ export class ProfileDraft {
     if (this.previewUrl) URL.revokeObjectURL(this.previewUrl);
     this.previewUrl = '';
   }
-}
-
-// The call tile of the local participant shows the new avatar without a rejoin.
-function showAvatarInCall(user: AuthUser): void {
-  if (!roomClientState.self?.isLocal) return;
-  roomClientState.self.avatarAccent = user.avatarAccent || '';
-  roomClientState.self.avatarColorKey = user.avatarColorKey || '';
-  roomClientState.self.avatarUrl = user.avatarUrl || '';
 }

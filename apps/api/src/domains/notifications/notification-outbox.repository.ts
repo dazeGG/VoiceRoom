@@ -64,8 +64,7 @@ const now = sql<Date>`current_timestamp`;
 const after = (ms: number) => sql<Date>`current_timestamp + (${ms} * interval '1 millisecond')`;
 const never = sql<Date>`'-infinity'`;
 
-function createNotificationOutboxRepository({ pool }: { pool?: QueryClient | null } = {}) {
-  if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
+function createNotificationOutboxRepository({ pool }: { pool: QueryClient }) {
   const base = kyselyOn(pool);
   const on = (client: Client): Database => (client?.query ? kyselyOn(client) : base);
 

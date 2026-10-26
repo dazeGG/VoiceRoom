@@ -1,12 +1,14 @@
 import type pg from 'pg';
 import { readWorkerConfig } from '../app/config.ts';
+import type { MediaMaintenanceService } from '../domains/media/media-maintenance.service.ts';
 
 function createMediaMaintenanceWorker({
-  maintenanceService,
+  maintenanceService: service,
   intervalMs = 60_000
-}: { maintenanceService?: { cleanupOnce(): Promise<unknown> }; intervalMs?: number } = {}) {
-  if (!maintenanceService?.cleanupOnce) throw new TypeError('Media maintenance service is required');
-  const service = maintenanceService;
+}: {
+  maintenanceService: Pick<MediaMaintenanceService, 'cleanupOnce'>;
+  intervalMs?: number;
+}) {
   let stopping = false;
   async function run({ signal }: { signal?: AbortSignal } = {}): Promise<void> {
     while (!stopping && !signal?.aborted) {

@@ -38,11 +38,10 @@ function createMessageDeliveryWorker({
   leaseMs?: number;
   logger?: WorkerLogger;
   maxAttempts?: number;
-  outbox?: MessageOutbox;
+  outbox: MessageOutbox;
   renewMs?: number;
   staleClaimMs?: number;
-} = {}) {
-  if (!outbox) throw new TypeError('Message delivery outbox repository is required');
+}) {
   const store = outbox;
   // Without an adapter the event id is announced over Postgres NOTIFY.
   const dispatch: Deliver =
@@ -51,7 +50,6 @@ function createMessageDeliveryWorker({
       const eventId = fieldOf(event, 'eventId');
       return store.publishPostgres({ eventId: typeof eventId === 'string' ? eventId : '' });
     });
-  if (typeof dispatch !== 'function') throw new TypeError('Message delivery adapter must be a function');
 
   const leaseAdapter = {
     acquire: (lease: Parameters<MessageOutbox['acquireLease']>[0]) => store.acquireLease(lease),

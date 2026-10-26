@@ -6,6 +6,7 @@
 import type { IncomingMessage } from 'node:http';
 import type { FastifyBaseLogger } from 'fastify';
 import type { StoredUser } from '../domains/account/user-records.ts';
+import { DomainError } from '../platform/http/domain-error.ts';
 
 /** The signed-in account behind a session, as the user store reads it. */
 export type SessionUser = StoredUser;
@@ -29,4 +30,14 @@ export interface ApiContext {
   /** The signed-in user behind the request's session cookie, if any. */
   resolveSession(req: IncomingMessage): Promise<ResolvedSession | null>;
   hashIp(ip: string): string;
+}
+
+/** The signed-in account and its session; a 401 `authentication_required` without both. */
+export async function requireSession(
+  ctx: Pick<ApiContext, 'resolveSession'>,
+  request: { raw: IncomingMessage }
+): Promise<{ user: SessionUser; session: SessionRecord }> {
+  const resolved = await ctx.resolveSession(request.raw);
+  if (resolved?.user && resolved.session) return { user: resolved.user, session: resolved.session };
+  throw new DomainError('authentication_required', 401, 'Требуется вход');
 }

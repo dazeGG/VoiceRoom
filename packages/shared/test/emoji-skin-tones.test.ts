@@ -8,6 +8,13 @@ const WAVE = '\u{1F44B}';
 const WAVE_MEDIUM = '\u{1F44B}\u{1F3FD}';
 const GRINNING = '\u{1F600}';
 const HANDSHAKE_MIXED = '\u{1FAF1}\u{1F3FB}\u{200D}\u{1FAF2}\u{1F3FF}';
+const HANDSHAKE_TONELESS = '\u{1FAF1}\u{200D}\u{1FAF2}';
+
+const carriesTone = (emoji: string) => Array.from(emoji).some((character) => skinTones.SKIN_TONES.includes(character));
+const withoutTones = (emoji: string) =>
+  Array.from(emoji)
+    .filter((character) => !skinTones.SKIN_TONES.includes(character))
+    .join('');
 
 test('collapsing folds every tone variant into a base that stays in the corpus', () => {
   const corpus = listReactionEmojis();
@@ -25,14 +32,10 @@ test('collapsing folds every tone variant into a base that stays in the corpus',
 
   // Nothing browsable carries a tone: the list shows gestures once, and the
   // colour is a separate choice.
-  for (const emoji of collapsed) {
-    assert.equal(skinTones.skinToneBase(emoji), emoji);
-    assert.equal(skinTones.isCollapsedSkinToneVariant(emoji), false);
-  }
+  for (const emoji of collapsed) assert.equal(carriesTone(emoji), false);
   for (const emoji of corpus) {
     if (visible.has(emoji)) continue;
-    assert.ok(skinTones.isCollapsedSkinToneVariant(emoji));
-    assert.notEqual(skinTones.skinToneBase(emoji), emoji);
+    assert.ok(carriesTone(emoji));
   }
 });
 
@@ -47,7 +50,7 @@ test('every collapsible base offers all five tones, and they are real corpus ent
     assert.ok(Object.isFrozen(tones));
     tones.forEach((sequence, index) => {
       assert.ok(corpus.has(sequence));
-      assert.equal(skinTones.skinToneBase(sequence), base);
+      assert.equal(withoutTones(sequence), base);
       assert.equal(skinTones.applySkinTone(base, index), sequence);
       // Tone-uniform only: one swatch cannot mean two different hands.
       const applied = Array.from(sequence).filter((character) => skinTones.SKIN_TONES.includes(character));
@@ -58,17 +61,18 @@ test('every collapsible base offers all five tones, and they are real corpus ent
 });
 
 test('a base without tones, and an out-of-range tone, resolve to the base itself', () => {
+  const visible = new Set(skinTones.listCollapsedReactionEmojis());
   assert.equal(skinTones.hasSkinToneVariants(GRINNING), false);
   assert.deepEqual(skinTones.listSkinToneVariants(GRINNING), []);
   assert.equal(skinTones.applySkinTone(GRINNING, 3), GRINNING);
-  assert.equal(skinTones.skinToneBase(GRINNING), GRINNING);
+  assert.ok(visible.has(GRINNING));
 
   assert.equal(skinTones.applySkinTone(WAVE, -1), WAVE);
   assert.equal(skinTones.applySkinTone(WAVE, 5), WAVE);
   assert.equal(skinTones.applySkinTone(WAVE, 2), WAVE_MEDIUM);
-  assert.equal(skinTones.skinToneBase(WAVE_MEDIUM), WAVE);
-  assert.equal(skinTones.isCollapsedSkinToneVariant(WAVE), false);
-  assert.equal(skinTones.isCollapsedSkinToneVariant(WAVE_MEDIUM), true);
+  assert.ok(skinTones.listSkinToneVariants(WAVE).includes(WAVE_MEDIUM));
+  assert.ok(visible.has(WAVE));
+  assert.equal(visible.has(WAVE_MEDIUM), false);
 });
 
 test('mixed-tone multi-person sequences are hidden rather than shown as extra colours', () => {
@@ -79,8 +83,8 @@ test('mixed-tone multi-person sequences are hidden rather than shown as extra co
   // as the same gesture repeated in colours.
   assert.ok(listReactionEmojis().includes(HANDSHAKE_MIXED));
   assert.equal(visible.has(HANDSHAKE_MIXED), false);
-  assert.equal(skinTones.isCollapsedSkinToneVariant(HANDSHAKE_MIXED), true);
-  assert.equal(skinTones.hasSkinToneVariants(skinTones.skinToneBase(HANDSHAKE_MIXED)), false);
+  assert.equal(withoutTones(HANDSHAKE_MIXED), HANDSHAKE_TONELESS);
+  assert.equal(skinTones.hasSkinToneVariants(HANDSHAKE_TONELESS), false);
 });
 
 test('the collapsed list is built once, so repeated reads cannot drift', () => {

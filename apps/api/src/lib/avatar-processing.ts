@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import sharp from 'sharp';
 import { deriveAvatarAccent, dominantAvatarColor } from '@voice-room/shared/avatar-accent';
+import { DomainError } from '../platform/http/domain-error.ts';
 import { detectImageFormat } from './image-signature.mts';
 
 const AVATAR_SIZE = 256;
@@ -9,15 +10,6 @@ const MAX_INPUT_PIXELS = 40 * 1024 * 1024;
 
 export type ProcessedAvatar = { accent: string; buffer: Buffer; hash: string };
 
-class AvatarError extends Error {
-  readonly statusCode: number;
-
-  constructor(message: string, statusCode: number, options?: ErrorOptions) {
-    super(message, options);
-    this.statusCode = statusCode;
-  }
-}
-
 function detectAvatarFormat(buffer: Buffer): string {
   const format = detectImageFormat(buffer);
   return ['jpeg', 'png', 'webp'].includes(format) ? format : '';
@@ -25,10 +17,10 @@ function detectAvatarFormat(buffer: Buffer): string {
 
 async function processAvatar(buffer: unknown): Promise<ProcessedAvatar> {
   if (!Buffer.isBuffer(buffer) || buffer.length === 0 || buffer.length > MAX_AVATAR_BYTES) {
-    throw new AvatarError('Avatar file must be at most 5 MB', 413);
+    throw new DomainError('invalid_request', 413, 'Avatar file must be at most 5 MB');
   }
   if (!detectAvatarFormat(buffer)) {
-    throw new AvatarError('Only JPEG, PNG, and WebP images are supported', 415);
+    throw new DomainError('invalid_request', 415, 'Only JPEG, PNG, and WebP images are supported');
   }
 
   let output: Buffer;
@@ -43,7 +35,7 @@ async function processAvatar(buffer: unknown): Promise<ProcessedAvatar> {
       .webp({ quality: 86, effort: 4 })
       .toBuffer();
   } catch (cause) {
-    throw new AvatarError('Invalid or unsafe image', 400, { cause });
+    throw new DomainError('invalid_request', 400, 'Invalid or unsafe image', { cause });
   }
 
   const { data, info } = await sharp(output).ensureAlpha().raw().toBuffer({ resolveWithObject: true });

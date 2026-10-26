@@ -12,14 +12,16 @@ import { createLogger } from '../lib/logger.ts';
 import type { RoomSnapshot } from '@voice-room/shared/contracts/realtime';
 import type { UserRepository } from '../domains/account/user.repository.ts';
 import type { ActiveBanRecord } from '../domains/moderation/active-ban.repository.ts';
-import type { GatePrincipal } from '../domains/admission/gate-principal.ts';
+import type { CredentialBoundaryService } from '../domains/admission/credential-boundary.service.ts';
 import type { ConnectionRegistry, WsConnection } from './registry.ts';
 import { createReconnectLeases } from './reconnect-leases.ts';
 import { createRoomSummaries } from './room-summaries.ts';
 import { createRoomFanout } from './room-fanout.ts';
-import { createVoiceJoin, type SessionUser } from './voice-join.ts';
-import { claimMedia, decideMediaRequest, MEDIA_MIN_VIEWERS } from './media-budget.ts';
+import { createVoiceJoin, type JoinUser } from './voice-join.ts';
+import { claimMedia, decideMediaRequest, MEDIA_MIN_VIEWERS, type MediaLimits } from './media-budget.ts';
+import { createMediaMinute } from './media-minute.ts';
 import { leaveReasonOf } from './runtime-types.ts';
+import { noteNetworkLevel } from './network-track.ts';
 import { isRecord } from '@voice-room/shared/guards';
 import type {
   FinalizeError,
@@ -32,11 +34,10 @@ import type {
 } from './runtime-types.ts';
 export type { RuntimeRoomStore } from './runtime-types.ts';
 
-type RuntimeCredentialBoundary = {
-  revokePeer(input: { roomId: string; accountUserId: string | null; guestPrincipalId: string }): Promise<unknown>;
-  resolvePrincipal(input: { roomId: string; accountUserId: string }): GatePrincipal | null;
-  revokePrincipal(input: { roomId: string; principal: GatePrincipal }): Promise<{ status?: string } | null | undefined>;
-};
+export type RuntimeCredentialBoundary = Pick<
+  CredentialBoundaryService,
+  'revokePeer' | 'resolvePrincipal' | 'revokePrincipal'
+>;
 export type RoomRuntimeDeps = {
   presenceRooms: Map<string, PresenceRoom>;
   wsRegistry: ConnectionRegistry;
@@ -59,11 +60,11 @@ export type RoomRuntimeDeps = {
   /** Screen shares one room may run at once; 0 turns it off. */
   MAX_ROOM_SCREENS?: number;
   tokensMatch: (expected: string | null | undefined, actual: string | null | undefined) => boolean;
-  sessionAvatarColorKey: (user: SessionUser) => string;
+  sessionAvatarColorKey: (user: JoinUser) => string;
   queueRoomOccupancyTransition?: (roomId: string) => Promise<unknown>;
-  findRoomBan?:
-    ((roomId: string, userId: string | null | undefined, ip: string) => Promise<ActiveBanRecord | null>) | undefined;
-  credentialBoundary?: RuntimeCredentialBoundary | null | undefined;
+  findRoomBan: (roomId: string, userId: string | null | undefined, ip: string) => Promise<ActiveBanRecord | null>;
+  /** Null without a gate secret: leases then revoke through the room store. */
+  credentialBoundary: RuntimeCredentialBoundary | null;
   removeLiveKitParticipant?: ((roomId: string, peerId: string) => Promise<unknown>) | undefined;
   now?: (() => number) | undefined;
   // Methods, so a test's timer may hand out its own handle type.
@@ -115,8 +116,8 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     tokensMatch,
     sessionAvatarColorKey,
     queueRoomOccupancyTransition = async (roomId: string) => getRoomStore().markRoomActive(roomId),
-    findRoomBan = async () => null,
-    credentialBoundary = null,
+    findRoomBan,
+    credentialBoundary,
     removeLiveKitParticipant = async () => {},
     now = Date.now,
     setTimeout: scheduleTimeout = globalThis.setTimeout,
@@ -124,6 +125,14 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     reconnectLeaseMs = 30000,
     logger = createLogger({ name: 'api' })
   } = deps;
+
+  const mediaLimits: MediaLimits = {
+    budgetBps: MEDIA_BUDGET_MBPS * 1_000_000,
+    maxRoomScreens: MAX_ROOM_SCREENS,
+    minViewers: Math.min(MEDIA_MIN_VIEWERS, Math.max(0, MAX_ROOM_PEERS - 1)),
+    voicePeersAtZero: MEDIA_BUDGET_VOICE_PEERS
+  };
+  const mediaMinute = createMediaMinute({ rooms: () => presenceRooms.values(), limits: mediaLimits, now });
 
   const summaries = createRoomSummaries({
     presenceRooms,
@@ -342,9 +351,9 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
         finalizePeer: async ({ peer, ownershipFinalized }) => {
           if (!peer) return;
           const revoked = await revokePrincipalOnce();
-          if (revoked?.status !== 'revoked') {
+          if (revoked.status !== 'revoked') {
             revokeFailed = true;
-            const error: FinalizeError = new Error(revoked?.status || 'revoke_failed');
+            const error: FinalizeError = new Error(revoked.status);
             error.code = 'revoke_failed';
             throw error;
           }
@@ -358,7 +367,7 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
 
     if (peers.length === 0) {
       const revoked = await revokePrincipalOnce();
-      if (revoked?.status !== 'revoked') return { ok: false, code: 'revoke_failed', disconnected: 0 };
+      if (revoked.status !== 'revoked') return { ok: false, code: 'revoke_failed', disconnected: 0 };
     }
 
     for (const peer of peers) {
@@ -416,9 +425,14 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     if (Object.hasOwn(patch, 'screenAudio')) peer.screenAudio = Boolean(patch.screenAudio);
     if (Object.hasOwn(patch, 'screenProfileId')) peer.screenProfileId = cleanScreenProfileId(patch.screenProfileId);
     if (Object.hasOwn(patch, 'screenStreamId')) peer.screenStreamId = cleanStreamId(patch.screenStreamId);
+    if (patch.screen === true || patch.camera === true) mediaMinute.note();
     if (Object.hasOwn(patch, 'viewedScreenPeerId')) {
       peer.viewedScreenPeerId = resolveViewedScreenPeerId(room, peer.id, patch.viewedScreenPeerId);
     }
+    if (patch.network) noteNetworkLevel((peer.network ??= []), patch.network, now());
+    // Nobody in the room sees the network, so a patch of it alone tells them nothing.
+    if (Object.hasOwn(patch, 'network') && Object.keys(patch).length === 1)
+      return { ok: true as const, peer: publicPeer(peer) };
 
     if (stoppedScreen) {
       for (const viewer of clearViewedScreenPeerReferences(room, peer.id)) {
@@ -437,21 +451,18 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     const active = activePeer(connection, payload);
     if (!active.ok) return active;
     const at = now();
+    const profileId = cleanScreenProfileId(payload.profileId);
     const grant = decideMediaRequest({
       rooms: presenceRooms.values(),
       room: active.room,
       peer: active.peer,
       kind: payload.kind,
-      profileId: cleanScreenProfileId(payload.profileId),
-      limits: {
-        budgetBps: MEDIA_BUDGET_MBPS * 1_000_000,
-        maxRoomScreens: MAX_ROOM_SCREENS,
-        minViewers: Math.min(MEDIA_MIN_VIEWERS, Math.max(0, MAX_ROOM_PEERS - 1)),
-        voicePeersAtZero: MEDIA_BUDGET_VOICE_PEERS
-      },
+      profileId,
+      limits: mediaLimits,
       now: at
     });
     claimMedia(active.peer, grant, at);
+    mediaMinute.noteDecision(payload.kind, profileId, grant);
     return { ok: true as const, grant };
   }
 
@@ -525,6 +536,8 @@ function createRoomRealtimeRuntime(deps: RoomRuntimeDeps) {
     leaveVoiceRoom,
     requestMedia,
     scheduleSummaryBroadcast: summaries.schedule,
+    /** The server's video over the minute so far, for the system sample; starts the next one. */
+    takeMediaMinute: mediaMinute.take,
     sendRoomSummaryToUser: summaries.sendToUser,
     sendAccountSummaries,
     subscribePreview,

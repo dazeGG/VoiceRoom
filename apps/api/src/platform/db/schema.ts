@@ -63,6 +63,7 @@ export interface CallFeedback {
   comment: Generated<string>;
   created_at: Generated<Timestamp>;
   duration_s: number;
+  guest_id: string | null;
   id: Generated<string>;
   peers: number;
   platform: string;
@@ -85,6 +86,18 @@ export interface ContentReports {
   room_id: string | null;
   status: Generated<string>;
   target_kind: string;
+}
+
+export interface DeviceTokens {
+  app_version: string | null;
+  created_at: Generated<Timestamp>;
+  id: string;
+  last_seen_at: Generated<Timestamp>;
+  notification_channels: Generated<string[]>;
+  provider: string;
+  session_id: string;
+  token: string;
+  user_id: string;
 }
 
 export interface DirectMessageReactionRevisions {
@@ -333,6 +346,18 @@ export interface Pgmigrations {
   run_on: Timestamp;
 }
 
+export interface ProductDays {
+  active_accounts: Generated<number>;
+  browser: Generated<number>;
+  day: Timestamp;
+  desktop_app: Generated<number>;
+  mobile: Generated<number>;
+  voice_account_hours: Generated<number>;
+  voice_accounts: Generated<number>;
+  voice_guest_hours: Generated<number>;
+  voice_joins: Generated<number>;
+}
+
 export interface ProductSnapshots {
   at: Timestamp;
   guest_connections: Generated<number>;
@@ -356,6 +381,26 @@ export interface PushSubscriptions {
 export interface ReservedLogins {
   login_hash: string;
   reserved_at: Generated<Timestamp>;
+}
+
+export interface RetentionWeeks {
+  accounts: number;
+  month1_pct: number;
+  week: Timestamp;
+  week1_pct: number;
+  week2_pct: number;
+}
+
+export interface RingDeliveryOutbox {
+  attempts: Generated<number>;
+  available_at: Generated<Timestamp>;
+  claim_token: string | null;
+  claimed_until: Timestamp | null;
+  deadline: Timestamp;
+  kind: string;
+  recipient_user_id: string;
+  revision: number;
+  ring_id: string;
 }
 
 export interface RoomBans {
@@ -460,6 +505,21 @@ export interface RoomPeerIdentities {
   session_token_hash: string;
 }
 
+export interface RoomRings {
+  caller_user_id: string;
+  client_request_id: string;
+  created_at: Generated<Timestamp>;
+  ended_at: Timestamp | null;
+  expires_at: Timestamp;
+  id: string;
+  invite_message_id: string;
+  reason: string | null;
+  recipient_user_id: string;
+  revision: Generated<number>;
+  room_id: string;
+  state: Generated<string>;
+}
+
 export interface Rooms {
   avatar_key: string | null;
   created_at: Generated<Timestamp>;
@@ -517,8 +577,23 @@ export interface SystemSnapshots {
   http_avg_ms: number | null;
   http_requests: Generated<number>;
   load1: Generated<number>;
+  media_lowered: number | null;
+  media_refused: number | null;
   mem_total_bytes: Generated<Int8>;
   mem_used_bytes: Generated<Int8>;
+  sfu_bytes_in: Int8 | null;
+  sfu_bytes_out: Int8 | null;
+  sfu_cpu_pct: number | null;
+  sfu_lost_in: Int8 | null;
+  sfu_lost_out: Int8 | null;
+  sfu_packets_in: Int8 | null;
+  sfu_packets_out: Int8 | null;
+  sfu_retransmit_out: Int8 | null;
+  sfu_rss_bytes: Int8 | null;
+  video_budget_mbps: number | null;
+  video_cameras_max: number | null;
+  video_mbps_max: number | null;
+  video_screens_max: number | null;
   voice_peers: Generated<number>;
   voice_rooms: Generated<number>;
   ws_connections: Generated<number>;
@@ -551,6 +626,18 @@ export interface UserNotifications {
   room_id: string;
   source_message_id: string;
   updated_at: Generated<Timestamp>;
+}
+
+export interface UserReports {
+  comment: Generated<string>;
+  created_at: Generated<Timestamp>;
+  id: Generated<string>;
+  reason: string;
+  reporter_user_id: string;
+  resolved_at: Timestamp | null;
+  resolved_by_user_id: string | null;
+  status: Generated<string>;
+  target_user_id: string;
 }
 
 export interface Users {
@@ -594,6 +681,7 @@ export interface VoiceSessions {
   joined_at: Timestamp;
   left_at: Timestamp;
   location: string | null;
+  network: Json | null;
   os: string | null;
   room_id: string | null;
   user_id: string | null;
@@ -605,6 +693,7 @@ export interface DB {
   admin_actions: AdminActions;
   call_feedback: CallFeedback;
   content_reports: ContentReports;
+  device_tokens: DeviceTokens;
   direct_message_reaction_revisions: DirectMessageReactionRevisions;
   direct_message_reactions: DirectMessageReactions;
   direct_message_read_cursors: DirectMessageReadCursors;
@@ -625,9 +714,12 @@ export interface DB {
   notification_preferences: NotificationPreferences;
   notification_room_mutes: NotificationRoomMutes;
   pgmigrations: Pgmigrations;
+  product_days: ProductDays;
   product_snapshots: ProductSnapshots;
   push_subscriptions: PushSubscriptions;
   reserved_logins: ReservedLogins;
+  retention_weeks: RetentionWeeks;
+  ring_delivery_outbox: RingDeliveryOutbox;
   room_bans: RoomBans;
   room_bookmarks: RoomBookmarks;
   room_chat_reads: RoomChatReads;
@@ -638,6 +730,7 @@ export interface DB {
   room_message_reactions: RoomMessageReactions;
   room_messages: RoomMessages;
   room_peer_identities: RoomPeerIdentities;
+  room_rings: RoomRings;
   room_server_mutes: RoomServerMutes;
   rooms: Rooms;
   sessions: Sessions;
@@ -646,6 +739,7 @@ export interface DB {
   user_activity_days: UserActivityDays;
   user_blocks: UserBlocks;
   user_notifications: UserNotifications;
+  user_reports: UserReports;
   users: Users;
   voice_sessions: VoiceSessions;
   voiceroom_migration_guard: VoiceroomMigrationGuard;

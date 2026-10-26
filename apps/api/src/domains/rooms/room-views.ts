@@ -2,8 +2,8 @@
 // @voice-room/shared/contracts/rooms, which the HTTP routes register and the
 // realtime runtime sends over the socket.
 
-import type { LobbyRoom, PublicPeer, RoomRelationship } from '@voice-room/shared/contracts/rooms';
-import type { ClientKind } from '@voice-room/shared/account-security';
+import type { LobbyRoom, NetworkPoint, PublicPeer, RoomRelationship } from '@voice-room/shared/contracts/rooms';
+import type { ClientKind } from '@voice-room/shared/contracts/admin';
 import { avatarUrl } from '../../lib/avatar-url.ts';
 import { avatarColorForPeerId } from './avatar-color.ts';
 import { failure, type Failure } from '../../platform/http/http-kit.ts';
@@ -44,6 +44,8 @@ export interface PresencePeer {
    */
   transport?: { id: string; connection: WsConnection | null } | null;
   viewedScreenPeerId?: string;
+  /** The stay's network changes as its client reported them (realtime/network-track.ts). */
+  network?: NetworkPoint[];
 }
 
 /** A room row as the store returns it. */
@@ -56,8 +58,8 @@ export interface StoredRoom {
   lastMessageAt?: number | null | undefined;
   name: string;
   ownerId?: string | null;
-  /** '' when the listing did not say. */
-  relationship?: RoomRelationship | '';
+  /** Absent when the listing did not say; the card then shows 'member'. */
+  relationship?: RoomRelationship;
   unreadCount?: number | undefined;
 }
 
@@ -99,7 +101,7 @@ export function publicLobbyRoom(room: StoredRoom, peerCount: number): LobbyRoom 
     isStatic: room.isStatic,
     name: room.name,
     peers: peerCount,
-    relationship: room.relationship || 'owner',
+    relationship: room.relationship ?? 'member',
     roomId: room.id
   };
   if (room.emptySince !== undefined) result.emptySince = room.emptySince;

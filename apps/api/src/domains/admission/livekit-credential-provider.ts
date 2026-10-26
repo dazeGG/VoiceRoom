@@ -12,7 +12,9 @@ export type LiveKitAdmission = {
   url: string;
 };
 
-export type AdmissionIssue = { status: 'issued'; admission: LiveKitAdmission } | { status: string; admission: null };
+export type AdmissionIssue =
+  | { status: 'issued'; admission: LiveKitAdmission }
+  | { status: Exclude<CredentialIssue['status'], 'issued'>; admission: null };
 
 function createLiveKitCredentialProvider({
   apiKey,
@@ -23,14 +25,12 @@ function createLiveKitCredentialProvider({
 }: {
   apiKey?: string;
   apiSecret?: string;
-  boundary?: {
+  boundary: {
     issueCredential(input: { roomId: string; peerId: string; principal: GatePrincipal }): Promise<CredentialIssue>;
   };
   gateUrl?: string;
   tokenTtlSeconds?: unknown;
-} = {}) {
-  if (!boundary || typeof boundary.issueCredential !== 'function')
-    throw new TypeError('credential boundary is required');
+}) {
   const credentials = boundary;
   const ttlSeconds = Math.max(60, Number(tokenTtlSeconds) || 6 * 60 * 60);
 
@@ -53,9 +53,8 @@ function createLiveKitCredentialProvider({
       return { status: 'unavailable', admission: null };
     }
     const gate = await credentials.issueCredential({ roomId, peerId, principal });
-    // An issued answer always carries its credential.
+    if (gate.status !== 'issued') return { status: gate.status, admission: null };
     const { credential } = gate;
-    if (gate.status !== 'issued' || !credential) return { status: gate.status, admission: null };
 
     const token = new AccessToken(apiKey, apiSecret, {
       identity: peerId,

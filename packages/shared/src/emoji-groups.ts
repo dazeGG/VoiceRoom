@@ -66,10 +66,3 @@ export function listReactionEmojiGroups(): readonly ReactionEmojiGroup[] {
   cached = cached || buildGroups();
   return cached;
 }
-
-export function reactionEmojiGroupKey(emoji: string): string {
-  for (const group of listReactionEmojiGroups()) {
-    if (group.emojis.includes(emoji)) return group.key;
-  }
-  return '';
-}

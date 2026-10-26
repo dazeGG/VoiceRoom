@@ -680,6 +680,7 @@ test('a failing DM read store answers 500 without its text; a bad cursor still a
   });
   const { service } = harness({
     readService: createMessageReadService({
+      authorizeRoomRead: async () => false,
       cursorCodec: codec,
       repository: fake<MessageReadRepository>({
         async advanceDm() {

@@ -14,7 +14,8 @@ import { transaction } from '../../platform/db/pool.ts';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
 import type { RoomMessages } from '../../platform/db/schema.ts';
 import { avatarColorForPeerId } from '../rooms/avatar-color.ts';
-import { normalizePositiveInt, toDate, toMillis } from '../rooms/room.repository.ts';
+import { toDate, toMillis } from '../../platform/epoch-millis.ts';
+import { normalizePositiveInt } from '../rooms/room.repository.ts';
 
 type MessageRow = Selectable<RoomMessages> & {
   avatar_color_key?: string | null;
@@ -104,7 +105,7 @@ export function createRoomChatRepository({ db, pool }: { db: Database; pool: pg.
         .executeTakeFirst();
       if (!room) return null;
 
-      if (typeof message?.beforeUnitOfWork === 'function') {
+      if (message?.beforeUnitOfWork) {
         const prepared = await message.beforeUnitOfWork(client);
         if (prepared?.replay) return { ...prepared.message, idempotencyReplay: true };
       }
@@ -126,7 +127,7 @@ export function createRoomChatRepository({ db, pool }: { db: Database; pool: pg.
         .returningAll()
         .executeTakeFirstOrThrow();
 
-      if (typeof message?.unitOfWork === 'function') {
+      if (message?.unitOfWork) {
         await message.unitOfWork(client, mapMessage(inserted));
       }
 

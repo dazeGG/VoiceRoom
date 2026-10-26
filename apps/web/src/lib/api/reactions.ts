@@ -1,4 +1,6 @@
+import type { ConversationRef } from '@voice-room/shared/contracts/realtime';
 import {
+  ReactionBody,
   ReactionSet,
   ReactionSummaries,
   ReactorPage,
@@ -7,7 +9,7 @@ import {
 } from '@voice-room/shared/contracts/messages';
 import { api } from './client';
 
-export type ReactionConversation = { type: 'room' | 'dm'; id: string };
+export type ReactionConversation = ConversationRef;
 
 function reactionUrl(conversation: ReactionConversation, messageId: string): string {
   return `/api/reactions/${conversation.type}/${encodeURIComponent(conversation.id)}/${encodeURIComponent(messageId)}`;
@@ -26,7 +28,9 @@ export async function setReactionDesired(
   emoji: string,
   active: boolean
 ): Promise<ReactionSummary> {
-  return (await api.put(reactionUrl(conversation, messageId), ReactionSet, { emoji, active })).summary;
+  return (
+    await api.put(reactionUrl(conversation, messageId), ReactionSet, { emoji, active }, { bodySchema: ReactionBody })
+  ).summary;
 }
 
 export async function fetchReactors(

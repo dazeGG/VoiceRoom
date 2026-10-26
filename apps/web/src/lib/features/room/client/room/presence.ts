@@ -2,6 +2,7 @@ import { updateVoicePeer } from '$lib/entities/room/room-realtime';
 import { state } from '../core/state.svelte';
 import { getDisplayName } from '../ui/names';
 import { isMicrophoneShownMuted } from '../core/microphone-mute';
+import { currentNetworkLevel } from './network-report';
 
 function hasLocalScreenAudio(): boolean {
   return Boolean(state.localScreenStream?.getAudioTracks().some((track) => track.readyState !== 'ended'));
@@ -9,6 +10,7 @@ function hasLocalScreenAudio(): boolean {
 
 export async function postState(): Promise<void> {
   if (!state.joined) return;
+  const network = currentNetworkLevel();
   updateVoicePeer({
     peerId: state.peerId,
     roomId: state.roomId,
@@ -22,7 +24,9 @@ export async function postState(): Promise<void> {
       screenAudio: hasLocalScreenAudio(),
       screenProfileId: state.localScreenStream ? state.localScreenProfileId : '',
       screenStreamId: state.localScreenStream?.id || '',
-      viewedScreenPeerId: state.self?.viewedScreenPeerId || ''
+      viewedScreenPeerId: state.self?.viewedScreenPeerId || '',
+      // A seat made afresh after a deploy hears the network again with the rest.
+      ...(network ? { network } : {})
     }
   });
 }

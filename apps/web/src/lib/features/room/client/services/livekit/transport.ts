@@ -39,18 +39,20 @@ export async function requestLiveKitCredentials(name: string, isCurrent: () => b
   }
 }
 
+// A request that got no answer (code unavailable, status 0) is a network blip, not a refusal.
 export function isRetryableLiveKitApiFailure(error: ApiError): boolean {
   if (error.code && TERMINAL_JOIN_CODES.has(error.code)) return false;
   return (
+    error.code === 'unavailable' ||
     [408, 425, 429].includes(error.status) ||
     error.status >= 500 ||
     (error.code !== '' && RETRYABLE_JOIN_CODES.has(error.code))
   );
 }
 
-/** A code safe to log: a known join failure, a transport failure, or unknown_error. */
+/** A code safe to log: a known join failure, a transport or network failure, or unknown_error. */
 export function safeLiveKitCode(code: string): string {
-  if (code === 'transport_error') return code;
+  if (code === 'transport_error' || code === 'unavailable') return code;
   return isErrorCode(code) && (TERMINAL_JOIN_CODES.has(code) || RETRYABLE_JOIN_CODES.has(code))
     ? code
     : 'unknown_error';

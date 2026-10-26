@@ -3,6 +3,7 @@ import { Value } from 'typebox/value';
 import { MembershipMember } from '@voice-room/shared/contracts/membership';
 import { browser } from '$app/environment';
 import { fetchRoomMemberships, leaveRoomMembership } from '$lib/api/memberships';
+import { removeStorage } from '$lib/shared/storage';
 
 interface RoomMembershipEntry {
   cachedMembers: MembershipMember[];
@@ -131,7 +132,7 @@ export async function loadRoomMembership(
 function clearRoomMembership(roomId: string): void {
   const { [roomId]: _removed, ...remaining } = roomMembershipState.byRoomId;
   roomMembershipState.byRoomId = remaining;
-  if (browser) localStorage.removeItem(cacheKey(roomId));
+  if (browser) removeStorage(cacheKey(roomId));
 }
 
 export async function leaveActiveRoomMembership(roomId: string): Promise<boolean> {

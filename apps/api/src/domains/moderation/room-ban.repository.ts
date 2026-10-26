@@ -14,7 +14,8 @@ import type { RoomBans } from '../../platform/db/schema.ts';
 import type { GatePrincipal } from '../admission/gate-principal.ts';
 import { revokePrincipalInTransaction, type PrincipalRevocation } from '../admission/gate-credential.repository.ts';
 import { isGatePrincipal } from '../admission/gate-principal.ts';
-import { normalizePositiveInt, toMillis } from '../rooms/room.repository.ts';
+import { toMillis } from '../../platform/epoch-millis.ts';
+import { normalizePositiveInt } from '../rooms/room.repository.ts';
 import { insertRoomBan } from './active-ban.repository.ts';
 import type { ActiveBanService } from './active-ban.service.ts';
 
@@ -81,15 +82,15 @@ export function createRoomBanRepository({ pool, bans }: { pool: pg.Pool; bans: (
     now?: number;
   } = {}) {
     const target = bans().repository.normalizePrincipal({ userId, ip });
-    if (!roomId || (!target.userId && !target.ip)) return { ban: null, status: 'invalid' };
+    if (!roomId || (!target.userId && !target.ip)) return { ban: null, status: 'invalid' as const };
 
     return transaction(pool, async (client) => {
       const trx = kyselyOn(client);
       await lockXact(trx, lockKeys.admission(roomId));
       await lockXact(trx, lockKeys.roomBans(roomId));
-      if (!(await liveRoomExists(trx, roomId))) return { ban: null, status: 'not_found' };
+      if (!(await liveRoomExists(trx, roomId))) return { ban: null, status: 'not_found' as const };
       if (await atCapacity(client, roomId, normalizePositiveInt(maxBans, 100), now)) {
-        return { ban: null, status: 'cap_exceeded' };
+        return { ban: null, status: 'cap_exceeded' as const };
       }
       const inserted = await insertBan(trx, {
         roomId,
@@ -97,7 +98,7 @@ export function createRoomBanRepository({ pool, bans }: { pool: pg.Pool; bans: (
         metadata,
         now
       });
-      return { ban: mapRoomBan(inserted), status: 'created' };
+      return { ban: mapRoomBan(inserted), status: 'created' as const };
     });
   }
 
@@ -121,17 +122,18 @@ export function createRoomBanRepository({ pool, bans }: { pool: pg.Pool; bans: (
     now?: number;
   } = {}) {
     const target = bans().repository.normalizePrincipal({ userId, ip });
-    if (!roomId || (!target.userId && !target.ip)) return { ban: null, revocations: [], status: 'invalid' };
+    if (!roomId || (!target.userId && !target.ip)) return { ban: null, revocations: [], status: 'invalid' as const };
     if (!Array.isArray(principals) || principals.length === 0 || !principals.every(isGatePrincipal)) {
-      return { ban: null, revocations: [], status: 'invalid' };
+      return { ban: null, revocations: [], status: 'invalid' as const };
     }
 
     return transaction(pool, async (client) => {
       const trx = kyselyOn(client);
       await lockXact(trx, lockKeys.admission(roomId));
       await lockXact(trx, lockKeys.roomBans(roomId));
-      if (!(await liveRoomExists(trx, roomId))) return { ban: null, revocations: [], status: 'not_found' };
-      if (await atCapacity(client, roomId, maxBans, now)) return { ban: null, revocations: [], status: 'cap_exceeded' };
+      if (!(await liveRoomExists(trx, roomId))) return { ban: null, revocations: [], status: 'not_found' as const };
+      if (await atCapacity(client, roomId, maxBans, now))
+        return { ban: null, revocations: [], status: 'cap_exceeded' as const };
 
       const inserted = await insertBan(trx, {
         roomId,
@@ -147,12 +149,12 @@ export function createRoomBanRepository({ pool, bans }: { pool: pg.Pool; bans: (
         seen.add(key);
         revocations.push(await revokePrincipalInTransaction(trx, { principal, roomId, now }));
       }
-      return { ban: mapRoomBan(inserted), revocations, status: 'created' };
+      return { ban: mapRoomBan(inserted), revocations, status: 'created' as const };
     });
   }
 
   async function deleteRoomBan({ roomId, banId }: { roomId?: string; banId?: string } = {}) {
-    if (!roomId || !banId) return { ban: null, status: 'not_found' };
+    if (!roomId || !banId) return { ban: null, status: 'not_found' as const };
     const row = await kyselyOn(pool)
       .deleteFrom('room_bans')
       .where('room_id', '=', roomId)
@@ -160,7 +162,7 @@ export function createRoomBanRepository({ pool, bans }: { pool: pg.Pool; bans: (
       .returningAll()
       .executeTakeFirst();
     const ban = row ? mapRoomBan(row) : null;
-    return { ban, status: ban ? 'deleted' : 'not_found' };
+    return { ban, status: ban ? ('deleted' as const) : ('not_found' as const) };
   }
 
   async function findActiveRoomBan({
@@ -174,6 +176,8 @@ export function createRoomBanRepository({ pool, bans }: { pool: pg.Pool; bans: (
   return { createRoomBan, createRoomBanWithLiveKitGateRevocations, deleteRoomBan, findActiveRoomBan };
 }
 
+export type RoomBanRepository = ReturnType<typeof createRoomBanRepository>;
+
 // --- Server mutes -------------------------------------------------------
 //
 // Keyed by gate principal, not peer id, so the mute survives a reconnect:
@@ -186,7 +190,7 @@ export function createServerMuteRepository({ db }: { db: Database }) {
     mutedBy
   }: { roomId?: string; principal?: GatePrincipal | null; mutedBy?: string | null | undefined } = {}) {
     // muted_by is NOT NULL: only a room with an owner has someone to mute on its behalf.
-    if (!roomId || !mutedBy || !isGatePrincipal(principal)) return { status: 'invalid' };
+    if (!roomId || !mutedBy || !isGatePrincipal(principal)) return { status: 'invalid' as const };
     const result = await db
       .insertInto('room_server_mutes')
       .values({
@@ -197,21 +201,23 @@ export function createServerMuteRepository({ db }: { db: Database }) {
       })
       .onConflict((oc) => oc.columns(['room_id', 'principal_type', 'principal_id']).doNothing())
       .executeTakeFirst();
-    return { status: Number(result.numInsertedOrUpdatedRows ?? 0) > 0 ? 'muted' : 'already_muted' };
+    return {
+      status: Number(result.numInsertedOrUpdatedRows ?? 0) > 0 ? ('muted' as const) : ('already_muted' as const)
+    };
   }
 
   async function clearRoomServerMute({
     roomId,
     principal
   }: { roomId?: string; principal?: GatePrincipal | null } = {}) {
-    if (!roomId || !isGatePrincipal(principal)) return { status: 'invalid' };
+    if (!roomId || !isGatePrincipal(principal)) return { status: 'invalid' as const };
     const result = await db
       .deleteFrom('room_server_mutes')
       .where('room_id', '=', roomId)
       .where('principal_type', '=', principal.principalType)
       .where('principal_id', '=', principal.principalId)
       .executeTakeFirst();
-    return { status: result.numDeletedRows > 0n ? 'unmuted' : 'not_found' };
+    return { status: result.numDeletedRows > 0n ? ('unmuted' as const) : ('not_found' as const) };
   }
 
   async function isRoomServerMuted({

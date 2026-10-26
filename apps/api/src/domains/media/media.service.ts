@@ -1,9 +1,9 @@
-import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import type pg from 'pg';
 import sharp from 'sharp';
 import type { AttachmentDraft } from '@voice-room/shared/contracts/media';
 import { epochMillis } from '../../platform/epoch-millis.ts';
 import { codeOf } from '../../platform/error-code.ts';
+import { DomainError } from '../../platform/http/domain-error.ts';
 import type { Attachment, AttachmentRepository } from './attachment.repository.ts';
 import type { MediaJobRepository } from './media-job.repository.ts';
 import type { MediaPressureService } from './media-pressure.service.ts';
@@ -22,23 +22,9 @@ const PNG_END = Buffer.from('0000000049454e44ae426082', 'hex');
 
 type Client = Pick<pg.PoolClient, 'query'> | null | undefined;
 type ImageMetadata = Awaited<ReturnType<ReturnType<typeof sharp>['metadata']>>;
-type AttachmentLock = <T>(id: string, operation: (client: Client) => Promise<T>) => Promise<T>;
 type UploadStream = ByteChunks & { resume?: () => unknown };
 
 export type PublicAttachment = Readonly<AttachmentDraft>;
-
-class MediaServiceError extends Error {
-  declare code: ErrorCode;
-  declare statusCode: number;
-
-  // The options carry the underlying failure as `cause` (sharp's decode error).
-  constructor(code: ErrorCode, message: string, statusCode: number, options?: ErrorOptions) {
-    super(message, options);
-    this.name = 'MediaServiceError';
-    this.code = code;
-    this.statusCode = statusCode;
-  }
-}
 
 function publicAttachment(attachment: Attachment | null | undefined): PublicAttachment | null {
   if (!attachment) return null;
@@ -62,7 +48,7 @@ async function readBounded(stream: ByteChunks, maxBytes: number): Promise<Buffer
   for await (const chunk of stream) {
     const value = chunkBuffer(chunk);
     bytes += value.length;
-    if (bytes > maxBytes) throw new MediaServiceError('media_too_large', 'Image exceeds 10 MiB', 413);
+    if (bytes > maxBytes) throw new DomainError('media_too_large', 413, 'Image exceeds 10 MiB');
     chunks.push(value);
   }
   return Buffer.concat(chunks, bytes);
@@ -95,35 +81,35 @@ function detectExactContainer(buffer: Buffer): '' | 'jpeg' | 'png' | 'webp' {
 }
 
 function createMediaService({
-  attachmentRepository,
+  attachmentRepository: attachments,
   jobRepository,
   pressureService,
-  quotaService,
-  storage,
+  quotaService: quotas,
+  storage: files,
   maxUploadBytes = MAX_UPLOAD_BYTES,
   maxInputPixels = MAX_INPUT_PIXELS
 }: {
-  attachmentRepository?: Pick<
+  attachmentRepository: Pick<
     AttachmentRepository,
-    'findById' | 'markUploaded' | 'markFailed' | 'markDeleted' | 'retryProcessing'
-  > &
-    Partial<Pick<AttachmentRepository, 'withAttachmentLock' | 'clearPhysicalData'>>;
-  jobRepository?: Partial<Pick<MediaJobRepository, 'enqueue'>> | null;
-  pressureService?: Partial<Pick<MediaPressureService, 'assertAcceptingUploads'>> | null;
-  quotaService?: MediaQuotaService;
-  storage?: Pick<MediaStorage, 'openRead' | 'save' | 'removeAttachment'>;
+    | 'findById'
+    | 'markUploaded'
+    | 'markFailed'
+    | 'markDeleted'
+    | 'retryProcessing'
+    | 'withAttachmentLock'
+    | 'clearPhysicalData'
+  >;
+  jobRepository: Pick<MediaJobRepository, 'enqueue'>;
+  pressureService: Pick<MediaPressureService, 'assertAcceptingUploads'>;
+  quotaService: MediaQuotaService;
+  storage: Pick<MediaStorage, 'openRead' | 'save' | 'removeAttachment'>;
   maxUploadBytes?: number;
   maxInputPixels?: number;
-} = {}) {
-  if (!attachmentRepository || !storage || !quotaService) throw new TypeError('Media dependencies are required');
-  const attachments = attachmentRepository;
-  const files = storage;
-  const quotas = quotaService;
-
+}) {
   async function owned(id: string, ownerId: string, client?: Client): Promise<Attachment> {
     const attachment = await attachments.findById(id, { client });
     if (!ownsAttachment(attachment, ownerId) || attachment.deletedAt) {
-      throw new MediaServiceError('media_not_found', 'Attachment not found', 404);
+      throw new DomainError('media_not_found', 404, 'Attachment not found');
     }
     return attachment;
   }
@@ -141,13 +127,13 @@ function createMediaService({
     bytes?: unknown;
     metadata?: unknown;
   }): Promise<PublicAttachment | null> {
-    await pressureService?.assertAcceptingUploads?.();
+    await pressureService.assertAcceptingUploads();
     if (context !== 'room' && context !== 'dm')
-      throw new MediaServiceError('media_context_invalid', 'Invalid attachment context', 400);
+      throw new DomainError('media_context_invalid', 400, 'Invalid attachment context');
     if (typeof clientRequestId !== 'string' || !clientRequestId.trim()) {
-      throw new MediaServiceError('media_request_id_required', 'Client request id is required', 400);
+      throw new DomainError('media_request_id_required', 400, 'Client request id is required');
     }
-    if (Number(bytes) > maxUploadBytes) throw new MediaServiceError('media_too_large', 'Image exceeds 10 MiB', 413);
+    if (Number(bytes) > maxUploadBytes) throw new DomainError('media_too_large', 413, 'Image exceeds 10 MiB');
     const attachment = await quotas.reserve({
       ownerId,
       context,
@@ -165,7 +151,7 @@ function createMediaService({
     const opened = await files.openRead(attachmentId, 'original');
     const buffer = await readBounded(opened.stream, maxUploadBytes);
     const container = detectExactContainer(buffer);
-    if (!container) throw new MediaServiceError('media_invalid_image', 'Invalid or unsafe image container', 400);
+    if (!container) throw new DomainError('media_invalid_image', 400, 'Invalid or unsafe image container');
     let metadata: ImageMetadata;
     try {
       const image = sharp(buffer, {
@@ -176,18 +162,18 @@ function createMediaService({
       metadata = await image.metadata();
       await image.clone().resize(1, 1, { fit: 'inside' }).toBuffer();
     } catch (cause) {
-      throw new MediaServiceError('media_invalid_image', 'Invalid or unsafe image', 400, { cause });
+      throw new DomainError('media_invalid_image', 400, 'Invalid or unsafe image', { cause });
     }
     const mimeType = metadata.format ? FORMAT_MIME[metadata.format] : undefined;
     if (!mimeType || metadata.format !== container)
-      throw new MediaServiceError('media_type_unsupported', 'Only JPEG, PNG, and WebP images are supported', 415);
+      throw new DomainError('media_type_unsupported', 415, 'Only JPEG, PNG, and WebP images are supported');
     if (claimedMimeType && claimedMimeType !== 'application/octet-stream' && claimedMimeType !== mimeType) {
-      throw new MediaServiceError('media_type_mismatch', 'Image content does not match its MIME type', 415);
+      throw new DomainError('media_type_mismatch', 415, 'Image content does not match its MIME type');
     }
     const width = Number(metadata.width);
     const height = Number(metadata.height);
     if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width * height > maxInputPixels) {
-      throw new MediaServiceError('media_pixel_limit', 'Image dimensions exceed the safe limit', 413);
+      throw new DomainError('media_pixel_limit', 413, 'Image dimensions exceed the safe limit');
     }
     return { height, mimeType, width };
   }
@@ -203,11 +189,10 @@ function createMediaService({
     stream?: UploadStream | null | undefined;
     mimeType?: string;
   }): Promise<PublicAttachment | null> {
-    await pressureService?.assertAcceptingUploads?.();
-    if (!stream) throw new MediaServiceError('media_body_required', 'Image body is required', 400);
+    await pressureService.assertAcceptingUploads();
+    if (!stream) throw new DomainError('media_body_required', 400, 'Image body is required');
     const body = stream;
-    const locked: AttachmentLock = attachments.withAttachmentLock || (async (_id, operation) => operation(undefined));
-    return locked(id, async (client: Client) => {
+    return attachments.withAttachmentLock(id, async (client) => {
       const attachment = await owned(id, ownerId, client);
       if (attachment.internalState === 'processing' || attachment.state === 'ready') {
         body.resume?.();
@@ -215,12 +200,12 @@ function createMediaService({
       }
       if (attachment.internalState !== 'uploading') {
         body.resume?.();
-        throw new MediaServiceError('media_state_conflict', 'Attachment cannot be uploaded in its current state', 409);
+        throw new DomainError('media_state_conflict', 409, 'Attachment cannot be uploaded in its current state');
       }
       try {
         const saved = await files.save(id, 'original', body, { maxBytes: maxUploadBytes });
         if (attachment.reservedBytes && saved.bytes > attachment.reservedBytes) {
-          throw new MediaServiceError('media_size_mismatch', 'Image exceeds its reserved size', 413);
+          throw new DomainError('media_size_mismatch', 413, 'Image exceeds its reserved size');
         }
         const image = await inspectOriginal(id, mimeType);
         const updated = await attachments.markUploaded(
@@ -234,15 +219,15 @@ function createMediaService({
           },
           client
         );
-        if (!updated) throw new MediaServiceError('media_state_conflict', 'Attachment upload was superseded', 409);
-        await jobRepository?.enqueue?.(id, { client });
+        if (!updated) throw new DomainError('media_state_conflict', 409, 'Attachment upload was superseded');
+        await jobRepository.enqueue(id, { client });
         return publicAttachment(updated);
       } catch (error) {
         const code = codeOf(error);
         await files.removeAttachment(id).catch(() => {});
         if (code === 'MEDIA_TOO_LARGE') {
           await attachments.markFailed(id, 'media_too_large', client).catch(() => {});
-          throw new MediaServiceError('media_too_large', 'Image exceeds 10 MiB', 413);
+          throw new DomainError('media_too_large', 413, 'Image exceeds 10 MiB');
         }
         await attachments.markFailed(id, code || 'media_invalid_image', client).catch(() => {});
         throw error;
@@ -258,18 +243,18 @@ function createMediaService({
     await owned(id, ownerId);
     const deleted = await attachments.markDeleted(id);
     await files.removeAttachment(id).catch(() => {});
-    await attachments.clearPhysicalData?.(id).catch(() => {});
+    await attachments.clearPhysicalData(id).catch(() => {});
     return publicAttachment(deleted);
   }
 
   async function retry({ id, ownerId }: { id: string; ownerId: string }): Promise<PublicAttachment | null> {
-    await pressureService?.assertAcceptingUploads?.();
+    await pressureService.assertAcceptingUploads();
     const attachment = await owned(id, ownerId);
     if (attachment.internalState !== 'failed' || !attachment.storageKeys.original) {
-      throw new MediaServiceError('media_retry_unavailable', 'Attachment cannot be retried', 409);
+      throw new DomainError('media_retry_unavailable', 409, 'Attachment cannot be retried');
     }
     const updated = await attachments.retryProcessing(id);
-    await jobRepository?.enqueue?.(id);
+    await jobRepository.enqueue(id);
     return publicAttachment(updated);
   }
 

@@ -1,5 +1,6 @@
 import { putBan, unban, type Ban, type ModerationDuration } from '$lib/api/moderation';
 import { kickRoomPeer } from '$lib/api/rooms';
+import { newId } from '$lib/shared/new-id';
 import { dateTime } from '$lib/shared/utils/date-format';
 import { displayNameOf } from '$lib/shared/utils/display-name';
 
@@ -22,10 +23,6 @@ export const BAN_DURATIONS: ReadonlyArray<{ value: ModerationDuration; label: st
 ];
 
 export const BAN_UNDO_DURATION_MS = 6000;
-
-function idempotencyKey(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
 
 function errorMessage(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message ? cause.message : fallback;
@@ -66,7 +63,7 @@ export async function banRoomMember(
 ): Promise<Ban | null> {
   const phrase = BAN_DURATIONS.find((option) => option.value === duration)?.phrase ?? '';
   try {
-    const ban = await putBan(roomId, { userId: member.userId, guestIp: null, duration, reason: '' }, idempotencyKey());
+    const ban = await putBan(roomId, { userId: member.userId, guestIp: null, duration, reason: '' }, newId());
     notify(`${member.name} заблокирован ${phrase}`.trim(), {
       undo: { label: 'Отменить', run: () => void liftRoomBan(roomId, ban, notify, 'Блокировка отменена') }
     });

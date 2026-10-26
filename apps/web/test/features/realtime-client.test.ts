@@ -238,3 +238,73 @@ test('after the last unsubscribe, tab and network events open nothing', async ()
   setVisibility('visible');
   expect(FakeWebSocket.instances).toHaveLength(1);
 });
+
+test('the first command opens the socket when nothing else has', async () => {
+  const realtime = await load();
+  realtime.getAppRealtime().send('room.preview.subscribe', { roomId: 'room-a' });
+  expect(FakeWebSocket.instances).toHaveLength(1);
+  FakeWebSocket.latest().open();
+  expect(FakeWebSocket.latest().sent.map((frame) => frame.type)).toEqual(['hello', 'room.preview.subscribe']);
+});
+
+test('a command sent during the reconnect backoff waits for the scheduled reconnect', async () => {
+  const realtime = await load();
+  const connection = realtime.getAppRealtime();
+  const unsubscribe = connection.subscribe(() => {});
+  FakeWebSocket.latest().open();
+  FakeWebSocket.latest().serverClose(1006);
+  expect(vi.getTimerCount()).toBe(1);
+
+  connection.send('room.preview.subscribe', { roomId: 'room-a' });
+  expect(FakeWebSocket.instances).toHaveLength(1);
+  expect(vi.getTimerCount()).toBe(1);
+
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(FakeWebSocket.instances).toHaveLength(2);
+  FakeWebSocket.latest().open();
+  expect(FakeWebSocket.latest().sent.map((frame) => frame.type)).toEqual(['hello', 'room.preview.subscribe']);
+  unsubscribe();
+});
+
+test('typing and ping frames sent while disconnected are dropped, not sent late', async () => {
+  const realtime = await load();
+  const connection = realtime.getAppRealtime();
+  const unsubscribe = connection.subscribe(() => {});
+  FakeWebSocket.latest().open();
+  FakeWebSocket.latest().serverClose(1006);
+
+  connection.send('dm.typing', { userId: 'anna', activity: 'typing' });
+  connection.send('room.chat.typing', { roomId: 'room-a', activity: 'typing' });
+  connection.send('ping', { at: 1 });
+  await vi.advanceTimersByTimeAsync(10_000);
+  FakeWebSocket.latest().open();
+  expect(FakeWebSocket.latest().sent.map((frame) => frame.type)).toEqual(['hello']);
+  unsubscribe();
+});
+
+test('after the server ends the account session, a command does not reconnect', async () => {
+  const realtime = await load();
+  const connection = realtime.getAppRealtime();
+  const unsubscribe = connection.subscribe(() => {});
+  FakeWebSocket.latest().open();
+  FakeWebSocket.latest().serverClose(4401);
+
+  connection.send('room.preview.subscribe', { roomId: 'room-a' });
+  await vi.advanceTimersByTimeAsync(120_000);
+  expect(FakeWebSocket.instances).toHaveLength(1);
+  unsubscribe();
+});
+
+test('a command sent after the last unsubscribe is dropped, not sent on the next socket', async () => {
+  const realtime = await load();
+  const connection = realtime.getAppRealtime();
+  const unsubscribe = connection.subscribe(() => {});
+  FakeWebSocket.latest().open();
+  unsubscribe();
+
+  connection.send('room.preview.unsubscribe', { roomId: 'room-a' });
+  const resubscribe = connection.subscribe(() => {});
+  FakeWebSocket.latest().open();
+  expect(FakeWebSocket.latest().sent.map((frame) => frame.type)).toEqual(['hello']);
+  resubscribe();
+});

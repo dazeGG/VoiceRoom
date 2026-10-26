@@ -102,9 +102,10 @@ const GRANTED: MediaGrant = { roomId: 'room-1', kind: 'camera', granted: true };
 
 async function loadLocalCamera(
   getUserMedia: (constraints: MediaStreamConstraints) => Promise<unknown>,
-  grant: MediaGrant | null = GRANTED
+  grant: MediaGrant | null = GRANTED,
+  cameraCodec: 'h264' | 'vp8' = 'h264'
 ) {
-  const lk = await loadLiveKitHarness({ autoResolveClient: true });
+  const lk = await loadLiveKitHarness({ autoResolveClient: true, cameraCodec });
   const presence: Array<Record<string, unknown>> = [];
   vi.doMock('../../src/lib/entities/room/room-realtime', () => ({
     requestMediaGrant: async () => grant,
@@ -113,12 +114,13 @@ async function loadLocalCamera(
   vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } });
   const published: Array<{ track: unknown; options: Record<string, unknown> }> = [];
   const unpublished: unknown[] = [];
+  const setPublishingQuality = vi.fn();
   const room = {
     localParticipant: {
       trackPublications: new Map<string, unknown>(),
       publishTrack: async (track: unknown, options: Record<string, unknown>) => {
         published.push({ track, options });
-        return { track, trackSid: 'camera-sid', source: options.source };
+        return { track, trackSid: 'camera-sid', source: options.source, videoTrack: { setPublishingQuality } };
       },
       unpublishTrack: async (track: unknown) => {
         unpublished.push(track);
@@ -135,10 +137,10 @@ async function loadLocalCamera(
   const showToast = vi.fn();
   vi.doMock('../../src/lib/features/room/client/ui/toast', () => ({ showToast }));
   const camera = await import('../../src/lib/features/room/client/services/camera-service.ts');
-  return { lk, camera, published, unpublished, showToast, presence };
+  return { lk, camera, published, unpublished, showToast, presence, setPublishingQuality };
 }
 
-test('turning the camera on captures 720p and publishes it with lighter layers; off stops it', async () => {
+test('turning the camera on captures 540p at 24 fps and publishes it with lighter layers; off stops it', async () => {
   const capture = fakeCapture();
   const requests: MediaStreamConstraints[] = [];
   const { lk, camera, published, unpublished } = await loadLocalCamera(async (constraints) => {
@@ -147,12 +149,30 @@ test('turning the camera on captures 720p and publishes it with lighter layers; 
   });
 
   await camera.toggleCamera();
-  expect(requests[0]).toMatchObject({ audio: false, video: { width: { ideal: 1280 }, height: { ideal: 720 } } });
+  expect(requests[0]).toMatchObject({
+    audio: false,
+    video: { width: { ideal: 960 }, height: { ideal: 540 }, frameRate: { ideal: 24, max: 24 } }
+  });
   // A computer asks for no facing: it would prefer the built-in camera over the default one.
   expect(facingOf(requests[0])).toBeUndefined();
   expect(published).toHaveLength(1);
   expect(defined(published[0], 'published[0]').options).toMatchObject({ source: 'camera', simulcast: true });
-  expect(defined(published[0], 'published[0]').options.videoSimulcastLayers).toHaveLength(2);
+  const options = defined(published[0], 'published[0]').options;
+  // H.264 for the hardware encoders and decoders, VP8 for viewers without it; 24 fps on every layer.
+  expect(options).toMatchObject({
+    videoCodec: 'h264',
+    backupCodec: { codec: 'vp8', encoding: { maxFramerate: 24 } },
+    videoEncoding: { maxFramerate: 24 }
+  });
+  // The fake VideoPreset keeps its constructor arguments: width, height, bitrate, frame rate.
+  const isList = (value: unknown): value is readonly unknown[] => Array.isArray(value);
+  const argsOf = (layer: unknown): readonly unknown[] =>
+    typeof layer === 'object' && layer !== null && 'args' in layer && isList(layer.args) ? layer.args : [];
+  const layers: unknown = options.videoSimulcastLayers;
+  expect(isList(layers) ? layers.map((layer) => [argsOf(layer)[1], argsOf(layer)[3]]) : []).toEqual([
+    [180, 24],
+    [360, 24]
+  ]);
   const self = lk.state.self;
   expect(self).toMatchObject({ camera: true, cameraStream: capture.stream });
 
@@ -363,4 +383,72 @@ test('a busy server keeps the camera off before it is even opened, and says why'
     duration: 12000,
     variant: 'error'
   });
+});
+
+test('a browser without H.264 sends its camera in VP8, with no backup to fall back to', async () => {
+  const capture = fakeCapture();
+  const { camera, published } = await loadLocalCamera(async () => capture.stream, GRANTED, 'vp8');
+  await camera.toggleCamera();
+  expect(defined(published[0], 'published[0]').options).toMatchObject({ videoCodec: 'vp8', backupCodec: false });
+});
+
+test('an overloaded computer lightens video silently: our camera stops at 360p, others come in small unless large', async () => {
+  const { lk, participantsUi, camera, participant } = await loadRemoteCamera();
+  const { relieveVideo } = await import('../../src/lib/features/room/client/services/video-relief.ts');
+  lk.syncParticipant(participant);
+  await flushMicrotasks();
+  expect(camera.calls.quality.at(-1)).toBe(MEDIUM);
+
+  const setPublishingQuality = vi.fn();
+  Object.assign(lk.state, { joined: true, localCameraPublication: { videoTrack: { setPublishingQuality } } });
+  await relieveVideo();
+  await flushMicrotasks();
+  expect(lk.state.videoRelieved).toBe(true);
+  expect(setPublishingQuality).toHaveBeenCalledWith(MEDIUM);
+  expect(camera.calls.quality.at(-1)).toBe(LOW);
+
+  // A camera opened large still comes in full.
+  participantsUi.focusedParticipantId = 'peer-a';
+  const { syncRemoteCameraDemand } =
+    await import('../../src/lib/features/room/client/services/livekit/remote-participants.ts');
+  syncRemoteCameraDemand();
+  await flushMicrotasks();
+  expect(camera.calls.quality.at(-1)).toBe(HIGH);
+});
+
+test('a camera turned on after the call was lightened starts at 360p', async () => {
+  const capture = fakeCapture();
+  const { lk, camera, setPublishingQuality } = await loadLocalCamera(async () => capture.stream);
+  lk.state.videoRelieved = true;
+  await camera.toggleCamera();
+  expect(setPublishingQuality).toHaveBeenCalledWith(MEDIUM);
+});
+
+test('an overloaded computer shares its screen at 30 fps at most; a capture that refuses keeps its rate', async () => {
+  const { lk } = await loadRemoteCamera();
+  const { applyVideoReliefToScreen } = await import('../../src/lib/features/room/client/services/video-relief.ts');
+  const capture = (frameRate: number, refuse = false) => {
+    const applied: MediaTrackConstraints[] = [];
+    const track = {
+      getSettings: () => ({ frameRate }),
+      applyConstraints: (constraints: MediaTrackConstraints) => {
+        applied.push(constraints);
+        return refuse ? Promise.reject(new Error('OverconstrainedError')) : Promise.resolve();
+      }
+    };
+    return { applied, stream: { getVideoTracks: () => [track] } };
+  };
+
+  const fast = capture(60);
+  await applyVideoReliefToScreen(fast.stream);
+  expect(fast.applied, 'nothing changes before the computer is overloaded').toEqual([]);
+
+  lk.state.videoRelieved = true;
+  await applyVideoReliefToScreen(fast.stream);
+  expect(fast.applied).toEqual([{ frameRate: { max: 30 } }]);
+  const calm = capture(30);
+  await applyVideoReliefToScreen(calm.stream);
+  expect(calm.applied).toEqual([]);
+  const stubborn = capture(60, true);
+  await expect(applyVideoReliefToScreen(stubborn.stream)).resolves.toBeUndefined();
 });

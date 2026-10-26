@@ -1,5 +1,9 @@
 // The product numbers of the admin panel, counted from the tables that hold
-// them. Read only; days are Moscow days, the same as the activity marks.
+// them; days are Moscow days, the same as the activity marks. Who was active
+// or in voice is kept per person for VOICE_HISTORY_KEEP_DAYS: rollUp turns
+// older days into counts (product_days) and freezes each signup week's return
+// rates (retention_weeks) before their owners forget the per-person rows, and
+// the reads take the counts where the rows are gone. The only writer of both.
 
 import type pg from 'pg';
 import { sql } from 'kysely';
@@ -70,6 +74,34 @@ type ProductDayRow = {
 
 type RetentionRow = { week: string; accounts: Count; w1: Count; w2: Count; m1: Count };
 
+/** A signup week's return rates are final once its last signup's first month is over. */
+const RETENTION_FINAL_DAYS = 7 + 30;
+
+/** Each signup week's accounts and return rates, counted from the per-person activity still kept. */
+const liveRetention = sql`
+  WITH cohort AS (
+    SELECT id AS user_id,
+           date_trunc('week', created_at AT TIME ZONE ${MSK})::date AS week,
+           ${mskDay('created_at')} AS signup
+    FROM users WHERE deleted_at IS NULL
+  ),
+  returned AS (
+    SELECT c.user_id,
+           bool_or(a.day - c.signup BETWEEN 1 AND 7) AS w1,
+           bool_or(a.day - c.signup BETWEEN 8 AND 14) AS w2,
+           bool_or(a.day - c.signup BETWEEN 15 AND 30) AS m1
+    FROM cohort c JOIN user_activity_days a USING (user_id)
+    GROUP BY c.user_id
+  )
+  SELECT c.week,
+         count(*) AS accounts,
+         round(100.0 * count(*) FILTER (WHERE r.w1) / count(*)) AS w1,
+         round(100.0 * count(*) FILTER (WHERE r.w2) / count(*)) AS w2,
+         round(100.0 * count(*) FILTER (WHERE r.m1) / count(*)) AS m1
+  FROM cohort c LEFT JOIN returned r USING (user_id)
+  GROUP BY c.week
+`;
+
 export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
   const db = kyselyOn(pool);
 
@@ -128,6 +160,9 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
                count(*) FILTER (WHERE browser) AS browser,
                count(*) FILTER (WHERE mobile) AS mobile
         FROM user_activity_days WHERE day BETWEEN ${first} AND ${last} GROUP BY day
+        UNION ALL
+        SELECT day, active_accounts, desktop_app, browser, mobile
+        FROM product_days WHERE day BETWEEN ${first} AND ${last}
       ),
       accounts AS (
         SELECT ${mskDay('created_at')} AS day, count(*) AS new_accounts
@@ -157,7 +192,13 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
                sum(extract(epoch FROM left_at - joined_at)) FILTER (WHERE user_id IS NULL) / 3600.0 AS guest_hours,
                count(*) AS joins,
                count(DISTINCT user_id) AS accounts
-        FROM voice_sessions WHERE joined_at >= ${since} AND joined_at < ${until} GROUP BY 1
+        FROM voice_sessions WHERE joined_at >= ${since} AND joined_at < ${until}
+          -- A rolled-up day's stays no longer say whose they were: its counts stand in.
+          AND ${mskDay('joined_at')} NOT IN (SELECT day FROM product_days)
+        GROUP BY 1
+        UNION ALL
+        SELECT day, voice_account_hours, voice_guest_hours, voice_joins, voice_accounts
+        FROM product_days WHERE day BETWEEN ${first} AND ${last}
       ),
       peaks AS (
         SELECT ${mskDay('at')} AS day,
@@ -215,27 +256,14 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
    */
   async function retention(weeks: number): Promise<RetentionWeek[]> {
     const result = await sql<RetentionRow>`
-      WITH cohort AS (
-        SELECT id AS user_id,
-               date_trunc('week', created_at AT TIME ZONE ${MSK})::date AS week,
-               ${mskDay('created_at')} AS signup
-        FROM users WHERE deleted_at IS NULL
-      ),
-      returned AS (
-        SELECT c.user_id,
-               bool_or(a.day - c.signup BETWEEN 1 AND 7) AS w1,
-               bool_or(a.day - c.signup BETWEEN 8 AND 14) AS w2,
-               bool_or(a.day - c.signup BETWEEN 15 AND 30) AS m1
-        FROM cohort c JOIN user_activity_days a USING (user_id)
-        GROUP BY c.user_id
+      WITH live AS (${liveRetention}),
+      weeks AS (
+        SELECT week, accounts, week1_pct AS w1, week2_pct AS w2, month1_pct AS m1 FROM retention_weeks
+        UNION ALL
+        SELECT week, accounts, w1, w2, m1 FROM live WHERE week NOT IN (SELECT week FROM retention_weeks)
       )
-      SELECT to_char(c.week, 'YYYY-MM-DD') AS week,
-             count(*) AS accounts,
-             round(100.0 * count(*) FILTER (WHERE r.w1) / count(*)) AS w1,
-             round(100.0 * count(*) FILTER (WHERE r.w2) / count(*)) AS w2,
-             round(100.0 * count(*) FILTER (WHERE r.m1) / count(*)) AS m1
-      FROM cohort c LEFT JOIN returned r USING (user_id)
-      GROUP BY c.week ORDER BY c.week DESC
+      SELECT to_char(week, 'YYYY-MM-DD') AS week, accounts, w1, w2, m1
+      FROM weeks ORDER BY week DESC
       LIMIT ${weeks}
     `.execute(db);
     return result.rows.map((row) => ({
@@ -259,7 +287,52 @@ export function createAdminStatsRepository({ pool }: { pool: pg.Pool }) {
     return result.rows[0]?.day ?? null;
   }
 
-  return Object.freeze({ overview, productDays, retention, openReports, firstAccountDay });
+  /**
+   * Writes the counts of every Moscow day before `cutoffDay` to product_days
+   * and freezes the signup weeks whose first month is over by `today` (both
+   * YYYY-MM-DD). Run before the per-person rows of those days go (the activity
+   * and voice-session repositories forget them); a day already counted stays as
+   * it was. Answers how many days it counted.
+   */
+  async function rollUp(cutoffDay: string, today: string): Promise<number> {
+    const cutoff = sql`${cutoffDay}::date`;
+    const cutoffAt = sql`(${cutoff})::timestamp AT TIME ZONE ${MSK}`;
+    return db.transaction().execute(async (trx) => {
+      await sql`
+        INSERT INTO retention_weeks (week, accounts, week1_pct, week2_pct, month1_pct)
+        SELECT week, accounts, w1, w2, m1 FROM (${liveRetention}) live
+        WHERE week + ${sql.lit(RETENTION_FINAL_DAYS)} <= ${today}::date
+        ON CONFLICT (week) DO NOTHING
+      `.execute(trx);
+      const rolled = await sql`
+        WITH activity AS (
+          SELECT day, count(*) AS active_accounts,
+                 count(*) FILTER (WHERE desktop_app) AS desktop_app,
+                 count(*) FILTER (WHERE browser) AS browser,
+                 count(*) FILTER (WHERE mobile) AS mobile
+          FROM user_activity_days WHERE day < ${cutoff} GROUP BY day
+        ),
+        voice AS (
+          SELECT ${mskDay('joined_at')} AS day,
+                 coalesce(sum(extract(epoch FROM left_at - joined_at)) FILTER (WHERE user_id IS NOT NULL), 0) / 3600.0 AS account_hours,
+                 coalesce(sum(extract(epoch FROM left_at - joined_at)) FILTER (WHERE user_id IS NULL), 0) / 3600.0 AS guest_hours,
+                 count(*) AS joins,
+                 count(DISTINCT user_id) AS accounts
+          FROM voice_sessions WHERE joined_at < ${cutoffAt} GROUP BY 1
+        )
+        INSERT INTO product_days (day, active_accounts, desktop_app, browser, mobile,
+                                  voice_account_hours, voice_guest_hours, voice_joins, voice_accounts)
+        SELECT day, coalesce(a.active_accounts, 0), coalesce(a.desktop_app, 0), coalesce(a.browser, 0),
+               coalesce(a.mobile, 0), coalesce(v.account_hours, 0), coalesce(v.guest_hours, 0),
+               coalesce(v.joins, 0), coalesce(v.accounts, 0)
+        FROM activity a FULL JOIN voice v USING (day)
+        ON CONFLICT (day) DO NOTHING
+      `.execute(trx);
+      return Number(rolled.numAffectedRows ?? 0);
+    });
+  }
+
+  return Object.freeze({ overview, productDays, retention, rollUp, openReports, firstAccountDay });
 }
 
 export type AdminStatsRepository = ReturnType<typeof createAdminStatsRepository>;

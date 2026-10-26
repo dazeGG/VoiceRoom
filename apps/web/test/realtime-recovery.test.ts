@@ -301,3 +301,13 @@ test('API failure classification is stable and fails unknown HTTP errors closed'
   assert.equal(classifyRecoveryFailure(new TypeError('fetch failed')).retryable, true);
   assert.equal(sanitizeRecoveryCode('token=secret'), 'unknown_error');
 });
+
+test('a request that got no answer during recovery is retried and logged as unavailable', () => {
+  assert.deepEqual(classifyRecoveryFailure({ status: 0, code: 'unavailable' }), {
+    retryable: true,
+    result: 'retryable',
+    status: 0,
+    code: 'unavailable'
+  });
+  assert.equal(sanitizeRecoveryCode('unavailable'), 'unavailable');
+});

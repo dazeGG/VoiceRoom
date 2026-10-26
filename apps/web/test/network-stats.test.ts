@@ -15,14 +15,31 @@ function report(entries: Array<{ id: string } & Record<string, unknown>>) {
   return stats;
 }
 
-test('upstream loss and a UDP transport come from the publisher stats', async () => {
+test('upstream loss counters and a UDP transport come from the publisher stats, audio only', async () => {
   const { getOutboundNetworkFromStats } = await load(() => import('../src/lib/features/room/client/room/stats.ts'));
   const stats = report([
-    { id: 'r1', type: 'remote-inbound-rtp', fractionLost: 0.034 },
-    { id: 'p1', type: 'candidate-pair', state: 'succeeded', nominated: true, localCandidateId: 'l1' },
+    // The SFU's fraction of one short interval is not trusted: the counters are.
+    { id: 'r1', type: 'remote-inbound-rtp', kind: 'audio', packetsLost: 12, fractionLost: 0.125 },
+    { id: 'o1', type: 'outbound-rtp', kind: 'audio', packetsSent: 3000 },
+    { id: 'o2', type: 'outbound-rtp', kind: 'video', packetsSent: 90000 },
+    {
+      id: 'p1',
+      type: 'candidate-pair',
+      state: 'succeeded',
+      nominated: true,
+      localCandidateId: 'l1',
+      totalRoundTripTime: 0.6,
+      responsesReceived: 20
+    },
     { id: 'l1', type: 'local-candidate', candidateType: 'host', protocol: 'udp' }
   ]);
-  assert.deepEqual(getOutboundNetworkFromStats(stats), { lossPct: 3.4, transport: 'udp' });
+  assert.deepEqual(getOutboundNetworkFromStats(stats), {
+    packetsLost: 12,
+    packetsSent: 3000,
+    rttSeconds: 0.6,
+    rttChecks: 20,
+    transport: 'udp'
+  });
 });
 
 test('a relay or TCP candidate is reported as a degraded transport', async () => {
@@ -36,7 +53,13 @@ test('a relay or TCP candidate is reported as a degraded transport', async () =>
     getOutboundNetworkFromStats(report([pair, { id: 'l1', candidateType: 'host', protocol: 'tcp' }])).transport,
     'tcp'
   );
-  assert.deepEqual(getOutboundNetworkFromStats(undefined), { lossPct: null, transport: null });
+  assert.deepEqual(getOutboundNetworkFromStats(undefined), {
+    packetsLost: null,
+    packetsSent: null,
+    rttSeconds: null,
+    rttChecks: null,
+    transport: null
+  });
 });
 
 test('the status pill explains loss, jitter and a TCP fallback and warns on real loss', async () => {

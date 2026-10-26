@@ -115,8 +115,7 @@ test('past the kept days a stay forgets whose and where from it was', { skip }, 
           guest_id: string | null;
           ip_key: string | null;
           location: string | null;
-          os: string | null;
-        }>(`SELECT room_id, guest_name, guest_id, ip_key, location, os FROM voice_sessions`)
+        }>(`SELECT room_id, guest_name, guest_id, ip_key, location FROM voice_sessions`)
         .then((r) => r.rows[0]),
     (row) => row?.room_id === null
   );
@@ -125,7 +124,7 @@ test('past the kept days a stay forgets whose and where from it was', { skip }, 
     guest_name: null,
     guest_id: null,
     ip_key: null,
-    location: null,
-    os: 'Windows'
+    location: null
   });
+  // The account and the device go with the daily roll-up (activity-rollup.test.ts).
 });

@@ -1,5 +1,5 @@
 import { state } from './client/core/state.svelte';
-import { getAvatarPresentation } from './client/ui/avatar-presentation';
+import { getAvatarPresentation } from '$lib/shared/ui/avatar-presentation';
 import type { AvatarStackItem } from '$lib/shared/ui';
 import { getScreenProfileLabels } from './client/media/profiles';
 import { getAllParticipants, getParticipantById } from './client/room/participants';

@@ -1,6 +1,11 @@
 import { Done } from '@voice-room/shared/contracts/http';
+import type { Static } from 'typebox';
 import {
+  DeleteRoomMessageBody,
+  EditRoomMessageBody,
   MessageDeleted,
+  PostRoomMessageBody,
+  ReadBody,
   RoomChat,
   RoomHistoryPage,
   RoomMessageAnswer,
@@ -14,28 +19,24 @@ import {
   type RoomMessage
 } from '@voice-room/shared/contracts/messages';
 import {
+  CreateRoomBody,
   PeerBanned,
+  PeerTargetBody,
+  RenameRoomBody,
   RoomCard,
   RoomCreated,
   RoomStatus as RoomStatusAnswer,
+  ServerMuteBody,
   ServerMuted,
   type LobbyRoom,
   type PublicPeer
 } from '@voice-room/shared/contracts/rooms';
+import { RingBody } from '@voice-room/shared/contracts/social';
 import { api, orNull } from './client';
 import { createRoomProof } from './pow';
 import type { ReplyTarget } from '$lib/shared/chat/reply-store.svelte';
 import type { RoomMessageContentV1 } from '@voice-room/shared/room-message-content';
 import { projectRoomMessageContent } from '@voice-room/shared/room-message-content';
-
-export interface CreateRoomOptions {
-  isStatic?: boolean;
-  name?: string;
-}
-
-export interface UpdateRoomOptions {
-  name: string;
-}
 
 /** The lobby card: the rename answer, the room list and the room.updated event. */
 export type RoomSummary = LobbyRoom;
@@ -108,20 +109,28 @@ export interface HistoryPageRequest {
   messageId?: string;
 }
 
-export async function createRoom(options: CreateRoomOptions = {}): Promise<string> {
+export async function createRoom(options: Omit<CreateRoomBody, 'proof'> = {}): Promise<string> {
   const proof = await createRoomProof();
-  const room = await api.post('/api/rooms', RoomCreated, {
-    isStatic: Boolean(options.isStatic),
-    name: options.name ?? '',
-    proof
-  });
+  const room = await api.post(
+    '/api/rooms',
+    RoomCreated,
+    {
+      isStatic: Boolean(options.isStatic),
+      name: options.name ?? '',
+      proof
+    },
+    { bodySchema: CreateRoomBody }
+  );
   return room.roomId;
 }
 
-export async function updateRoom(roomId: string, options: UpdateRoomOptions): Promise<RoomSummary> {
-  const payload = await api.put(`/api/rooms/${encodeURIComponent(roomId)}`, RoomCard, {
-    name: options.name
-  });
+export async function updateRoom(roomId: string, options: Required<RenameRoomBody>): Promise<RoomSummary> {
+  const payload = await api.put(
+    `/api/rooms/${encodeURIComponent(roomId)}`,
+    RoomCard,
+    { name: options.name },
+    { bodySchema: RenameRoomBody }
+  );
   return payload.room;
 }
 
@@ -130,19 +139,29 @@ export async function deleteRoom(roomId: string): Promise<void> {
 }
 
 export async function ringRoomFriend(roomId: string, userId: string): Promise<void> {
-  await api.post(`/api/rooms/${encodeURIComponent(roomId)}/ring`, Done, { userId });
+  await api.post(`/api/rooms/${encodeURIComponent(roomId)}/ring`, Done, { userId }, { bodySchema: RingBody });
 }
 
 export async function kickRoomPeer(roomId: string, peerId: string): Promise<void> {
-  await api.post(`/api/rooms/${encodeURIComponent(roomId)}/kick`, Done, { peerId });
+  await api.post(`/api/rooms/${encodeURIComponent(roomId)}/kick`, Done, { peerId }, { bodySchema: PeerTargetBody });
 }
 
 export async function setRoomPeerServerMute(roomId: string, peerId: string, muted: boolean): Promise<void> {
-  await api.post(`/api/rooms/${encodeURIComponent(roomId)}/server-mute`, ServerMuted, { peerId, muted });
+  await api.post(
+    `/api/rooms/${encodeURIComponent(roomId)}/server-mute`,
+    ServerMuted,
+    { peerId, muted },
+    { bodySchema: ServerMuteBody }
+  );
 }
 
 export async function banRoomPeer(roomId: string, peerId: string): Promise<string> {
-  const payload = await api.post(`/api/rooms/${encodeURIComponent(roomId)}/ban`, PeerBanned, { peerId });
+  const payload = await api.post(
+    `/api/rooms/${encodeURIComponent(roomId)}/ban`,
+    PeerBanned,
+    { peerId },
+    { bodySchema: PeerTargetBody }
+  );
   return payload.banId;
 }
 
@@ -210,47 +229,61 @@ function roomMessageFromHistory(roomId: string, message: RoomHistoryMessage): Ch
 }
 
 export async function markRoomChatRead(roomId: string, cursor?: string): Promise<string | undefined> {
-  return (await api.post(`/api/rooms/${encodeURIComponent(roomId)}/read`, RoomRead, cursor ? { cursor } : {})).cursor;
+  return (
+    await api.post(`/api/rooms/${encodeURIComponent(roomId)}/read`, RoomRead, cursor ? { cursor } : {}, {
+      bodySchema: ReadBody
+    })
+  ).cursor;
 }
 
+// The outbox passes an unset content or reply as undefined; neither goes out.
 export async function postRoomChat(
   roomId: string,
-  body: {
-    name: string;
-    peerId?: string | undefined;
-    sessionToken?: string | undefined;
-    text: string;
+  {
+    content,
+    replyTo,
+    ...body
+  }: Omit<PostRoomMessageBody, 'content' | 'replyTo'> & {
     content?: RoomMessageContentV1 | undefined;
-    attachmentIds?: string[] | undefined;
-    replyTo?: { messageId: string } | undefined;
-    idempotencyKey?: string | undefined;
+    replyTo?: ReplyPointer | undefined;
   }
 ): Promise<ChatMessage> {
-  const payload = await api.post(`/api/rooms/${encodeURIComponent(roomId)}/chat`, RoomMessageAnswer, body);
+  const payload = await api.post(
+    `/api/rooms/${encodeURIComponent(roomId)}/chat`,
+    RoomMessageAnswer,
+    {
+      ...body,
+      ...(content === undefined ? {} : { content }),
+      ...(replyTo === undefined ? {} : { replyTo })
+    },
+    { bodySchema: PostRoomMessageBody }
+  );
   return chatMessageFromRoomMessage(payload.message);
 }
 
 export async function deleteRoomChatMessage(
   roomId: string,
   messageId: string,
-  body?: { peerId?: string; sessionToken?: string }
+  body?: Static<typeof DeleteRoomMessageBody>
 ): Promise<MessageDeleted> {
   return api.delete(
     `/api/rooms/${encodeURIComponent(roomId)}/chat/${encodeURIComponent(messageId)}`,
     MessageDeleted,
-    body ?? {}
+    body ?? {},
+    { bodySchema: DeleteRoomMessageBody }
   );
 }
 
 export async function editRoomChatMessage(
   roomId: string,
   messageId: string,
-  body: { text: string; peerId?: string; sessionToken?: string }
+  body: Static<typeof EditRoomMessageBody>
 ): Promise<ChatMessage> {
   const payload = await api.patch(
     `/api/rooms/${encodeURIComponent(roomId)}/chat/${encodeURIComponent(messageId)}`,
     RoomMessageAnswer,
-    body
+    body,
+    { bodySchema: EditRoomMessageBody }
   );
   return chatMessageFromRoomMessage(payload.message);
 }

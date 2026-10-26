@@ -5,7 +5,7 @@ import { sql } from 'kysely';
 import type pg from 'pg';
 import { isUuid } from '@voice-room/shared/validation';
 import { kyselyOn } from '../../platform/db/kysely.ts';
-import { epochMillis } from '../../platform/epoch-millis.ts';
+import { epochMillis, toDate } from '../../platform/epoch-millis.ts';
 import { LOG_EVENTS } from '../../lib/log-events.ts';
 import { createLogger } from '../../lib/logger.ts';
 import { describeUserAgent, isDesktopAppUserAgent } from '@voice-room/shared/account-security';
@@ -20,8 +20,7 @@ import {
   desktopAppSeen,
   hasMetadataKey,
   hashSessionToken,
-  storedUser,
-  toDate
+  storedUser
 } from './user-records.ts';
 
 export function createSessionRepository({
@@ -133,7 +132,7 @@ export function createSessionRepository({
     resolveLocation?: (() => unknown) | undefined;
   }): Promise<void> {
     let locationLabel = '';
-    if (typeof resolveLocation === 'function') {
+    if (resolveLocation) {
       try {
         locationLabel = cleanLocationLabel(await resolveLocation());
       } catch (error) {

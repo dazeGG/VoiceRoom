@@ -109,7 +109,7 @@ test('room views keep the shapes the web client mirrors', () => {
     isStatic: true,
     name: 'Room',
     peers: 2,
-    relationship: 'owner',
+    relationship: 'member',
     roomId: 'room-1'
   });
   const listed = publicLobbyRoom({ ...base, relationship: 'member', lastMessageAt: null, unreadCount: -3 }, 0);
@@ -123,6 +123,12 @@ test('room views keep the shapes the web client mirrors', () => {
     code: 'room_banned',
     roomId: 'room-1'
   });
+});
+
+test('a room card without a known relationship never claims ownership', () => {
+  const room = storedRoom({ id: 'room-1' });
+  assert.equal(room.relationship, undefined);
+  assert.equal(publicLobbyRoom(room, 0).relationship, 'member');
 });
 
 test('gate principals are recognised only with a type and a non-empty id', () => {
@@ -263,8 +269,14 @@ test('rename announces the update; delete finishes the teardown; both report a l
 // What a finalizePeer call answered, or the error it failed with.
 type FinalizeResult = { finalized?: boolean; message?: string; ownershipFinalized?: boolean };
 
+// A store whose revoke and invalidate both succeed; tests override the step they watch.
+const NOOP_EVICTION_STORE: EvictionStore = {
+  async revokeLiveKitGatePeer() {},
+  async invalidatePeerIdentity() {}
+};
+
 function evictionHarness({
-  store = {},
+  store = NOOP_EVICTION_STORE,
   ownedPeer,
   ownershipFinalized = false,
   removeFails = false,
@@ -337,6 +349,7 @@ test('a ban with pre-revoked credentials skips the revoke; a guest gets no accou
   let revokes = 0;
   const { eviction, log } = evictionHarness({
     store: {
+      ...NOOP_EVICTION_STORE,
       async revokeLiveKitGatePeer() {
         revokes += 1;
       }
@@ -372,6 +385,7 @@ test('eviction keeps going after a failed step and rethrows the first failure as
 
   const later = evictionHarness({
     store: {
+      ...NOOP_EVICTION_STORE,
       async invalidatePeerIdentity() {
         throw new Error('invalidate failed');
       }
@@ -406,6 +420,10 @@ test('a peer whose ownership is already final is only notified and invalidated',
 
 // --- peer moderation ----------------------------------------------------------------
 
+function storedBan(id: string) {
+  return { createdAt: 1, expiresAt: null, id, ip: '', metadata: {}, roomId: 'room-1', userId: null };
+}
+
 function moderationHarness({
   livekit = LOOSE,
   store = {},
@@ -426,10 +444,10 @@ function moderationHarness({
     revoked: string[];
     sfu: unknown[];
     announced: string[];
-    muteRow?: { mutedBy?: string | null | undefined };
+    muteRow?: { mutedBy?: string | null | undefined } | undefined;
     unmuteRow?: unknown;
     ban?: unknown;
-    strictBan?: { principals: unknown[] };
+    strictBan?: { principals?: unknown[] } | undefined;
     undo?: unknown;
   } = { evicted: [], disconnected: [], revoked: [], sfu: [], announced: [] };
   const eviction = fake<PeerEviction>({
@@ -460,19 +478,21 @@ function moderationHarness({
       },
       async clearRoomServerMute(input) {
         calls.unmuteRow = input;
-        return { status: 'cleared' };
+        return { status: 'unmuted' };
       },
       async createRoomBan(input) {
         calls.ban = input;
-        return { status: 'created', ban: { id: 'ban-1' } };
+        return { status: 'created', ban: storedBan('ban-1') };
       },
       async createRoomBanWithLiveKitGateRevocations(input) {
         calls.strictBan = input;
-        return { status: 'created', ban: { id: 'ban-2' }, revocations: [{}] };
+        return { status: 'created', ban: storedBan('ban-2'), revocations: [{ status: 'revoked', epoch: 1 }] };
       },
       async deleteRoomBan(input) {
         calls.undo = input;
-        return { status: input.banId === 'ban-1' ? 'deleted' : 'missing' };
+        return input?.banId === 'ban-1'
+          ? { status: 'deleted', ban: storedBan('ban-1') }
+          : { status: 'not_found', ban: null };
       },
       ...store
     }),
@@ -604,7 +624,7 @@ test('ban persistence refusals map to limit, rejected and failed', async () => {
   const limit = moderationHarness({
     store: {
       async createRoomBan() {
-        return { status: 'cap_exceeded' };
+        return { status: 'cap_exceeded', ban: null };
       }
     }
   });
@@ -612,7 +632,7 @@ test('ban persistence refusals map to limit, rejected and failed', async () => {
   const rejected = moderationHarness({
     store: {
       async createRoomBan() {
-        return { status: 'created', ban: null };
+        return { status: 'not_found', ban: null };
       }
     }
   });
@@ -621,7 +641,7 @@ test('ban persistence refusals map to limit, rejected and failed', async () => {
     livekit: STRICT,
     store: {
       async createRoomBanWithLiveKitGateRevocations() {
-        return { status: 'created', ban: { id: 'b' }, revocations: [] };
+        return { status: 'created', ban: storedBan('b'), revocations: [] };
       }
     }
   });
@@ -669,6 +689,25 @@ test('undo ban reports whether the ban existed', async () => {
 // --- routes -------------------------------------------------------------------------
 
 type RoomListStore = ReturnType<RoomRoutesDeps['store']>;
+type ListedRoom = Awaited<ReturnType<RoomListStore['listVisibleRoomsForUser']>>[number];
+
+/** A view room as the access repository lists it: the whole row and a relationship. */
+function listedRoom(room: StoredRoom): ListedRoom {
+  return {
+    avatarKey: room.avatarKey ?? null,
+    createdAt: room.createdAt,
+    creatorIp: '',
+    emptySince: room.emptySince ?? null,
+    id: room.id,
+    isStatic: room.isStatic,
+    lastMessageAt: room.lastMessageAt,
+    name: room.name,
+    ownerId: room.ownerId ?? null,
+    unreadCount: room.unreadCount,
+    updatedAt: room.createdAt,
+    relationship: room.relationship ?? 'member'
+  };
+}
 type Moderation = {
   kick?: KickResult;
   mute?: ServerMuteOutcome;
@@ -748,7 +787,7 @@ function routeApp(
     rooms,
     store: () => ({
       async listVisibleRoomsForUser() {
-        return list;
+        return list.map(listedRoom);
       },
       async addRoomBookmarkForUser() {
         return defined(added, 'a scripted bookmark outcome');
@@ -995,7 +1034,10 @@ test('the account room list, adding and removing a room', async (t) => {
     rooms: [publicLobbyRoom(storedRoom({ id: 'room-1' }), 0), publicLobbyRoom(storedRoom({ id: 'room-2' }), 0)]
   });
 
-  const adding = routeApp(t, { user: OWNER, added: { status: 'bookmarked', room: storedRoom({ id: 'room-1' }) } });
+  const adding = routeApp(t, {
+    user: OWNER,
+    added: { status: 'bookmarked', room: listedRoom(storedRoom({ id: 'room-1' })) }
+  });
   assert.deepEqual(await call(adding.app, 'POST', '/api/auth/rooms', {}).then((r) => [r.status, r.body.error]), [
     400,
     'Неверный код комнаты'
@@ -1018,7 +1060,7 @@ test('the account room list, adding and removing a room', async (t) => {
   const removing = routeApp(t, { user: OWNER, removedBookmark: { status: 'removed', removed: true } });
   assert.deepEqual((await call(removing.app, 'DELETE', '/api/auth/rooms/room-1')).body, { ok: true, removed: true });
   assert.equal((await call(removing.app, 'DELETE', '/api/auth/rooms/%20')).status, 404);
-  const owner = routeApp(t, { user: OWNER, removedBookmark: { status: 'owner' } });
+  const owner = routeApp(t, { user: OWNER, removedBookmark: { status: 'owner', removed: false } });
   assert.deepEqual((await call(owner.app, 'DELETE', '/api/auth/rooms/room-1')).body, {
     ok: false,
     error: 'Владелец управляет комнатой через настройки',

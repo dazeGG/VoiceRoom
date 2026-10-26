@@ -5,6 +5,10 @@
 import { Type, type Static } from 'typebox';
 import { Nullable } from './http.ts';
 
+/** How long a ban lasts. */
+export const MODERATION_DURATIONS = Object.freeze(['1h', '1d', '7d', 'permanent'] as const);
+export type ModerationDuration = (typeof MODERATION_DURATIONS)[number];
+
 export const BanProfile = Type.Object({
   displayName: Type.String(),
   login: Type.String(),
@@ -43,7 +47,7 @@ export type BanPage = Static<typeof BanPage>;
 export const BanBody = Type.Object({
   userId: Type.Optional(Nullable(Type.String())),
   guestIp: Type.Optional(Nullable(Type.String())),
-  duration: Type.Optional(Type.String()),
+  duration: Type.Optional(Type.Enum(MODERATION_DURATIONS)),
   reason: Type.Optional(Type.String())
 });
 export type BanBody = Static<typeof BanBody>;

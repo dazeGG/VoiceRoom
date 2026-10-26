@@ -15,6 +15,7 @@ export const ERROR_CODES = [
   'internal_error',
   'cross_origin_rejected',
   'not_supported',
+  'client_outdated',
 
   // Account
   'account_not_found',
@@ -109,6 +110,8 @@ export const ERROR_CODES = [
   'invalid_mention_target',
   'self_mention',
   'too_many_mentions',
+  'mention_not_eligible',
+  'creator_not_eligible',
   'invalid_attachments',
   'reply_unavailable',
   'idempotency_conflict',
@@ -144,6 +147,7 @@ export const ERROR_CODES = [
   'invalid_push_endpoint',
   'push_endpoint_conflict',
   'push_rate_limited',
+  'invalid_device_token',
 
   // Attachments and avatars
   'media_error',
@@ -193,6 +197,8 @@ export const ERROR_CODES = [
 
   // Set by the web, never sent: a success body that does not match the route's contract
   'invalid_response',
+  // Set by the web, never sent: a request that got no answer (offline, DNS, refused connection)
+  'unavailable',
 
   // Realtime frames the server cannot read
   'invalid_json',

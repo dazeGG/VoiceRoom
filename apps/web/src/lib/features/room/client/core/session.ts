@@ -1,14 +1,10 @@
 import { PEER_SESSION_STORAGE_PREFIX } from './config';
 import type { PeerSession } from './types';
 import { isRecord } from '@voice-room/shared/guards';
+import { newId } from '$lib/shared/new-id';
 
 export function getRoomIdFromPath(): string {
   return window.location.pathname.match(/^\/r\/([A-Za-z0-9_-]{3,48})\/?$/)?.[1] ?? '';
-}
-
-function createPeerId(): string {
-  if (crypto.randomUUID) return crypto.randomUUID();
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
 function createSessionToken(): string {
@@ -19,7 +15,7 @@ function createSessionToken(): string {
 
 export function getStoredPeerSession(roomId: string): PeerSession {
   const fallback = {
-    peerId: createPeerId(),
+    peerId: newId(),
     sessionToken: createSessionToken()
   };
   if (!roomId) return fallback;
@@ -45,7 +41,7 @@ export function getStoredPeerSession(roomId: string): PeerSession {
 }
 
 export function rotateStoredPeerSession(roomId: string): PeerSession {
-  const next = { peerId: createPeerId(), sessionToken: createSessionToken() };
+  const next = { peerId: newId(), sessionToken: createSessionToken() };
   if (roomId) {
     try {
       sessionStorage.setItem(`${PEER_SESSION_STORAGE_PREFIX}${roomId}`, JSON.stringify(next));

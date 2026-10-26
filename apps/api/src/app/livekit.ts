@@ -11,16 +11,17 @@ import type { readApiConfig } from './config.ts';
 type ApiConfig = ReturnType<typeof readApiConfig>;
 
 export function createLiveKit(
-  config: Pick<ApiConfig, 'LIVEKIT_GATE_PUBLIC_URL' | 'LIVEKIT_GATE_SECRET'>,
+  config: Pick<ApiConfig, 'LIVEKIT_GATE_PUBLIC_URL' | 'LIVEKIT_GATE_SECRET' | 'LIVEKIT_ROOM_PREFIX'>,
   env: NodeJS.ProcessEnv,
   logger: () => Pick<Logger, 'error'>
 ) {
   const liveKitConfig = () =>
     readLiveKitConfig(env, { gatePublicUrl: config.LIVEKIT_GATE_PUBLIC_URL, gateSecret: config.LIVEKIT_GATE_SECRET });
-  const admin = createLiveKitAdmin({ config: liveKitConfig, roomName: getLiveKitRoomName, logger });
+  const roomName = (roomId: string): string => getLiveKitRoomName(roomId, config.LIVEKIT_ROOM_PREFIX);
+  const admin = createLiveKitAdmin({ config: liveKitConfig, roomName, logger });
   return {
     config: liveKitConfig,
-    roomName: getLiveKitRoomName,
+    roomName,
     removeParticipant: admin.removeParticipant,
     setParticipantMuted: admin.setParticipantMuted
   };

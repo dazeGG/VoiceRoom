@@ -3,15 +3,15 @@
 // or code, and a call's stays folded into the people who made them.
 
 import { AppWindow, Globe, Smartphone, type LucideIcon } from 'lucide-react';
-import type { LiveRoomPeer, RoomAccount, RoomCall, RoomStay } from '@voice-room/shared/contracts/admin';
+import type { ClientKind, RoomAccount, RoomCall, RoomStay } from '@voice-room/shared/contracts/admin';
+import type { NetworkPoint } from '@voice-room/shared/contracts/rooms';
 import { deviceLabel, shortGuestId, shortIpKey } from '../../origin.ts';
 import { AccountBadge, Pill, RoomAvatar } from '../../ui/index.tsx';
-
-type ClientKind = NonNullable<LiveRoomPeer['client']>;
 
 export const CLIENTS: Record<ClientKind, { label: string; icon: LucideIcon }> = {
   desktop_app: { label: 'приложение', icon: AppWindow },
   browser: { label: 'браузер', icon: Globe },
+  mobile_app: { label: 'Android', icon: Smartphone },
   mobile: { label: 'телефон', icon: Smartphone }
 };
 
@@ -138,7 +138,8 @@ export interface CallPerson {
   guestName: string | null;
   /** The latest stay's seat: where they last came from. */
   seat: Seat;
-  spans: { from: number; to: number }[];
+  /** Each stay with its network changes. */
+  spans: { from: number; to: number; network: NetworkPoint[] }[];
   /** Time in the call, the gaps between their stays left out. */
   total: number;
 }
@@ -155,7 +156,7 @@ export function peopleOf(call: Pick<RoomCall, 'stays'>): CallPerson[] {
   const people = new Map<string, CallPerson>();
   for (const stay of call.stays) {
     const key = personKey(stay);
-    const span = { from: stay.joinedAt, to: stay.leftAt };
+    const span = { from: stay.joinedAt, to: stay.leftAt, network: stay.network ?? [] };
     const known = people.get(key);
     if (known) {
       known.spans.push(span);

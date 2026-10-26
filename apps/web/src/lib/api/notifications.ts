@@ -3,8 +3,13 @@ import {
   InboxPage,
   InboxReadAll,
   Muted,
+  MuteBody,
   Preferences,
+  PresenceBody,
+  PrivacyBody,
+  ReadAllBody,
   RoomLevel,
+  RoomLevelBody,
   type NotificationLevel,
   type NotificationPreferences
 } from '@voice-room/shared/contracts/notifications';
@@ -19,19 +24,29 @@ export async function fetchNotificationPreferences(): Promise<NotificationPrefer
 }
 
 export function setDmNotificationsMuted(userId: string, muted: boolean): Promise<Muted> {
-  return api.put(`/api/notifications/dm/${encodeURIComponent(userId)}/mute`, Muted, { muted });
+  return api.put(
+    `/api/notifications/dm/${encodeURIComponent(userId)}/mute`,
+    Muted,
+    { muted },
+    { bodySchema: MuteBody }
+  );
 }
 
 export function setRoomNotificationsMuted(roomId: string, muted: boolean): Promise<Muted> {
-  return api.put(`/api/notifications/room/${encodeURIComponent(roomId)}/mute`, Muted, { muted });
+  return api.put(
+    `/api/notifications/room/${encodeURIComponent(roomId)}/mute`,
+    Muted,
+    { muted },
+    { bodySchema: MuteBody }
+  );
 }
 
 export function setPrivateNotifications(privateNotifications: boolean): Promise<Preferences> {
-  return api.put('/api/notifications/privacy', Preferences, { privateNotifications });
+  return api.put('/api/notifications/privacy', Preferences, { privateNotifications }, { bodySchema: PrivacyBody });
 }
 
 export function setPresenceStatus(status: PresenceStatus, automatic = false): Promise<Preferences> {
-  return api.post('/api/presence/status', Preferences, { automatic, status });
+  return api.post('/api/presence/status', Preferences, { automatic, status }, { bodySchema: PresenceBody });
 }
 
 export function fetchNotificationInbox(cursor?: string): Promise<InboxPage> {
@@ -40,11 +55,11 @@ export function fetchNotificationInbox(cursor?: string): Promise<InboxPage> {
 }
 
 export function markNotificationRead(notificationId: string): Promise<InboxItemRead> {
-  return api.post(`/api/notifications/inbox/${encodeURIComponent(notificationId)}/read`, InboxItemRead, {});
+  return api.post(`/api/notifications/inbox/${encodeURIComponent(notificationId)}/read`, InboxItemRead);
 }
 
 export function markAllNotificationsRead(): Promise<InboxReadAll> {
-  return api.post('/api/notifications/inbox/read-all', InboxReadAll, {});
+  return api.post('/api/notifications/inbox/read-all', InboxReadAll, {}, { bodySchema: ReadAllBody });
 }
 
 export async function fetchRoomNotificationLevel(roomId: string): Promise<RoomNotificationLevel> {
@@ -52,5 +67,10 @@ export async function fetchRoomNotificationLevel(roomId: string): Promise<RoomNo
 }
 
 export async function setRoomNotificationLevel(roomId: string, level: RoomNotificationLevel): Promise<void> {
-  await api.put(`/api/notifications/room/${encodeURIComponent(roomId)}/level`, RoomLevel, { level });
+  await api.put(
+    `/api/notifications/room/${encodeURIComponent(roomId)}/level`,
+    RoomLevel,
+    { level },
+    { bodySchema: RoomLevelBody }
+  );
 }

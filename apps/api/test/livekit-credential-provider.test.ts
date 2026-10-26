@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { Type } from 'typebox';
+import type { CredentialIssue } from '../src/domains/admission/credential-boundary.service.ts';
 import { createLiveKitCredentialProvider } from '../src/domains/admission/livekit-credential-provider.ts';
 import { checked } from './helpers/checked.ts';
 import { mistyped } from './helpers/mistyped.ts';
@@ -30,7 +31,7 @@ test('livekit credential provider rejects missing admission input without issuin
     boundary: {
       async issueCredential() {
         calls += 1;
-        return { status: 'unavailable', credential: null };
+        return { status: 'unavailable' as const, credential: null };
       }
     },
     gateUrl: 'ws://gate.example/rtc'
@@ -57,18 +58,14 @@ test('livekit credential provider rejects missing admission input without issuin
   assert.equal(calls, 0);
 });
 
-test('livekit credential provider requires an issuing boundary', () => {
-  assert.throws(() => createLiveKitCredentialProvider(), /credential boundary is required/);
-  assert.throws(() => createLiveKitCredentialProvider({ boundary: mistyped({}) }), /credential boundary is required/);
-});
-
 test('livekit credential provider preserves boundary refusal without minting a LiveKit token', async () => {
   const provider = createLiveKitCredentialProvider({
     apiKey: 'key',
     apiSecret: 'secret',
     boundary: {
       async issueCredential() {
-        return { status: 'revoked', credential: null };
+        // A refusal the provider does not interpret: it is passed on as is.
+        return mistyped<CredentialIssue>({ status: 'revoked', credential: null });
       }
     },
     gateUrl: 'ws://gate.example/rtc'

@@ -123,8 +123,8 @@ function createLeaseRuntime({
   run,
   sleep = delay
 }: {
-  acquire?: (request: LeaseRequest) => Promise<AcquireResult> | AcquireResult;
-  identity?: string;
+  acquire: (request: LeaseRequest) => Promise<AcquireResult> | AcquireResult;
+  identity: string;
   idleMs?: number;
   jitter?: unknown;
   leaseMs?: number;
@@ -133,17 +133,13 @@ function createLeaseRuntime({
   onHeartbeat?: (heartbeat: Heartbeat) => void;
   ownerId?: string;
   release?: (lease: LeaseReference) => Promise<unknown>;
-  renew?: (
+  renew: (
     request: LeaseReference & { leaseMs: number; signal: AbortSignal }
   ) => Promise<{ renewed?: boolean } | null | undefined> | { renewed?: boolean } | null | undefined;
   renewMs?: number;
-  run?: (guard: FenceGuard) => unknown;
+  run: (guard: FenceGuard) => unknown;
   sleep?: Sleep;
-} = {}) {
-  if (!identity || typeof identity !== 'string') throw new TypeError('Lease identity is required');
-  if (typeof acquire !== 'function') throw new TypeError('Lease acquire adapter is required');
-  if (typeof renew !== 'function') throw new TypeError('Lease renew adapter is required');
-  if (typeof run !== 'function') throw new TypeError('Lease work callback is required');
+}) {
   if (!(renewMs > 0 && renewMs < leaseMs)) throw new TypeError('renewMs must be positive and less than leaseMs');
   const leaseIdentity = identity;
   const acquireLease = acquire;

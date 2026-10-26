@@ -5,6 +5,11 @@ import { epochMillis } from '../platform/epoch-millis.ts';
 import { createPushSubscriptionRepository } from '../domains/notifications/push-subscription.repository.ts';
 import { createNotificationOutboxRepository } from '../domains/notifications/notification-outbox.repository.ts';
 import { createNotificationPushProvider } from '../domains/notifications/push-provider.ts';
+import { createDeviceTokenRepository } from '../domains/notifications/device-token.repository.ts';
+import { createNativePushService } from '../domains/notifications/native-push.service.ts';
+import { createPushFanout, failedPushProviders } from '../domains/notifications/push-fanout.ts';
+import { createPushService } from '../lib/push-service.ts';
+import { createRuStorePushClient } from '../lib/rustore-push.ts';
 import { boundedBackoff, createLeaseRuntime, delay } from '../platform/lease-runtime.ts';
 import type { FenceGuard } from '../platform/lease-runtime.ts';
 import type { NotificationOutboxRepository } from '../domains/notifications/notification-outbox.repository.ts';
@@ -23,6 +28,9 @@ type Provider = {
 };
 
 const LEASE_IDENTITY = 'notification-delivery.G63';
+// A job only RuStore failed dead-letters after this many attempts, a minute or
+// two of backoff, long before its age would stop the worker.
+const NATIVE_ONLY_MAX_ATTEMPTS = 4;
 
 function createNotificationDeliveryWorker({
   outbox,
@@ -35,8 +43,8 @@ function createNotificationDeliveryWorker({
   logger = createLogger({ name: 'worker.notification-delivery' }),
   observeOldestPending = recordNotificationOldestPending
 }: {
-  outbox?: NotificationOutboxRepository;
-  provider?: Provider;
+  outbox: NotificationOutboxRepository;
+  provider: Provider;
   batchSize?: number;
   leaseMs?: number;
   renewMs?: number;
@@ -44,8 +52,7 @@ function createNotificationDeliveryWorker({
   maxAttempts?: number;
   logger?: WorkerLogger;
   observeOldestPending?: (ageMs: unknown) => void;
-} = {}) {
-  if (!outbox || !provider) throw new TypeError('Notification outbox and provider are required');
+}) {
   const store = outbox;
   const push = provider;
   let disabledReason = '';
@@ -120,18 +127,24 @@ function createNotificationDeliveryWorker({
           observe(true);
         } catch (error) {
           guard.assertOwned();
+          // A recipient with only the Android app fails on every RuStore
+          // outage; that must not stop delivery for everyone.
+          const failed = failedPushProviders(error);
+          const nativeOnly = failed.length > 0 && failed.every((name) => name === 'rustore');
+          const attemptsAllowed = nativeOnly ? Math.min(maxAttempts, NATIVE_ONLY_MAX_ATTEMPTS) : maxAttempts;
           await store.reschedule(job.eventId, lease, {
             delayMs: boundedBackoff(job.attempts, { baseMs: 5000, maxMs: 3600000, jitter: 0.2 }),
             error,
-            maxAttempts
+            maxAttempts: attemptsAllowed
           });
-          observe(false);
+          if (!nativeOnly) observe(false);
           logger.warn(
             {
               evt: LOG_EVENTS.NOTIFICATION_DELIVERY_FAILED,
               eventId: job.eventId,
               attempt: job.attempts,
-              maxAttempts,
+              maxAttempts: attemptsAllowed,
+              providers: failed,
               err: error
             },
             'notification delivery attempt failed'
@@ -167,6 +180,29 @@ function createNotificationDeliveryWorker({
   });
 }
 
+/** The worker's push provider: Web Push and RuStore, each on when configured. */
+function createNotificationDeliveryProvider({
+  pool,
+  env,
+  config,
+  fetch
+}: {
+  pool: pg.Pool;
+  env: NodeJS.ProcessEnv;
+  config: ReturnType<typeof readNotificationDeliveryWorkerConfig>;
+  fetch?: typeof globalThis.fetch | undefined;
+}) {
+  const web = createPushService({ store: createPushSubscriptionRepository({ pool }), env });
+  const deviceTokens = createDeviceTokenRepository({ pool });
+  const native = createNativePushService({
+    config: config.RUSTORE_PUSH,
+    tokens: () => deviceTokens,
+    client: createRuStorePushClient({ ...config.RUSTORE_PUSH, fetch }),
+    minVersion: config.ANDROID_MIN_VERSION
+  });
+  return createNotificationPushProvider({ pushService: createPushFanout(() => [{ name: 'web', ...web }, native]) });
+}
+
 async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
   const config = readNotificationDeliveryWorkerConfig(env);
   if (!config.CLAIM_ENABLED) {
@@ -177,8 +213,7 @@ async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
     return;
   }
   const outbox = createNotificationOutboxRepository({ pool });
-  const store = createPushSubscriptionRepository({ pool });
-  const provider = createNotificationPushProvider({ store, env });
+  const provider = createNotificationDeliveryProvider({ pool, env, config });
   const worker = createNotificationDeliveryWorker({
     outbox,
     provider,
@@ -198,4 +233,4 @@ async function main(env: NodeJS.ProcessEnv, pool: pg.Pool): Promise<void> {
   }
 }
 
-export { LEASE_IDENTITY, createNotificationDeliveryWorker, main };
+export { LEASE_IDENTITY, createNotificationDeliveryProvider, createNotificationDeliveryWorker, main };

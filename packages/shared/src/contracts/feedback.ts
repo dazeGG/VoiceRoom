@@ -5,6 +5,7 @@
 // administrator reads the answers in the admin panel.
 
 import { Type, type Static } from 'typebox';
+import { RoomStay } from './admin.ts';
 import { Nullable, Ok } from './http.ts';
 
 export const CALL_FEEDBACK_RATINGS = ['good', 'bad'] as const;
@@ -41,15 +42,53 @@ export type CallFeedbackPlatform = (typeof CALL_FEEDBACK_PLATFORMS)[number];
 const RatingSchema = Type.Enum(CALL_FEEDBACK_RATINGS);
 const TagSchema = Type.Enum(CALL_FEEDBACK_TAGS);
 const Measure = Nullable(Type.Number({ minimum: 0, maximum: 100_000 }));
+/** A week-long call at 50 audio packets a second from a few dozen people stays well under this. */
+const PacketCount = Type.Integer({ minimum: 0, maximum: 10_000_000_000 });
 
-/** The client's own account of the call (call-quality.ts in the room client). */
+export const CPU_PRESSURE_STATES = ['nominal', 'fair', 'serious', 'critical'] as const;
+export type CpuPressureState = (typeof CPU_PRESSURE_STATES)[number];
+
+/**
+ * The client's own account of the call (call-quality.ts in the room client).
+ * Averages hide a bad minute in a long call, so the worst moments come too;
+ * clients before them send the averages only.
+ */
 export const CallFeedbackQuality = Type.Object({
   rttAvgMs: Measure,
   inboundLossAvgPct: Measure,
   outboundLossAvgPct: Measure,
   jitterAvgMs: Measure,
   reconnects: Type.Integer({ minimum: 0, maximum: 10_000 }),
-  transport: Nullable(Type.Enum(['udp', 'tcp', 'relay'] as const))
+  transport: Nullable(Type.Enum(['udp', 'tcp', 'relay'] as const)),
+  rttMaxMs: Type.Optional(Measure),
+  inboundLossMaxPct: Type.Optional(Measure),
+  outboundLossMaxPct: Type.Optional(Measure),
+  jitterMaxMs: Type.Optional(Measure),
+  /** How hard the computer worked at its worst (the Compute Pressure API); null where the browser cannot tell. */
+  cpuPressureMax: Type.Optional(Nullable(Type.Enum(CPU_PRESSURE_STATES))),
+  /** The overload made the call switch to the lighter noise suppression. */
+  cpuRelieved: Type.Optional(Type.Boolean()),
+  /** Times the microphone went away mid-call (unplugged, a headset reconnecting). */
+  micDrops: Type.Optional(Type.Integer({ minimum: 0, maximum: 10_000 })),
+  /** The packet counts behind the loss averages, so a figure can be checked. */
+  inboundPackets: Type.Optional(PacketCount),
+  inboundLostPackets: Type.Optional(PacketCount),
+  outboundPackets: Type.Optional(PacketCount),
+  outboundLostPackets: Type.Optional(PacketCount),
+  /**
+   * Audible concealment: the share of played sound made up for packets that
+   * came late or not at all, over the call and its worst 15 seconds.
+   */
+  concealedAvgPct: Type.Optional(Measure),
+  concealedMaxPct: Type.Optional(Measure),
+  /**
+   * The desktop app only: VoiceRoom's own share of the whole computer's CPU
+   * time and the whole computer's busy share over the call, and VoiceRoom's
+   * worst 15 seconds; so a game's load is told from the call's.
+   */
+  appCpuAvgPct: Type.Optional(Measure),
+  appCpuMaxPct: Type.Optional(Measure),
+  systemCpuAvgPct: Type.Optional(Measure)
 });
 export type CallFeedbackQuality = Static<typeof CallFeedbackQuality>;
 
@@ -59,7 +98,9 @@ export const CallFeedbackCall = Type.Object({
   /** The most other people in the call at once. */
   peers: Type.Integer({ minimum: 0, maximum: 10_000 }),
   platform: Type.Enum(CALL_FEEDBACK_PLATFORMS),
-  quality: Nullable(CallFeedbackQuality)
+  quality: Nullable(CallFeedbackQuality),
+  /** A guest's lasting browser id (normalizeGuestId), so the admin panel finds the stay the answer is about. */
+  guestId: Type.Optional(Type.String({ maxLength: 64 }))
 });
 export type CallFeedbackCall = Static<typeof CallFeedbackCall>;
 
@@ -96,7 +137,13 @@ export const AdminCallFeedbackEntry = Type.Object({
   durationS: Type.Number(),
   peers: Type.Number(),
   platform: Type.Enum(CALL_FEEDBACK_PLATFORMS),
-  quality: Nullable(CallFeedbackQuality)
+  quality: Nullable(CallFeedbackQuality),
+  /**
+   * The author's stay in the room's voice that the answer is about: their last
+   * one there before answering. Null when none is kept (an older answer, a
+   * guest whose browser sent no id, history past VOICE_HISTORY_KEEP_DAYS).
+   */
+  stay: Type.Optional(Nullable(RoomStay))
 });
 export type AdminCallFeedbackEntry = Static<typeof AdminCallFeedbackEntry>;
 

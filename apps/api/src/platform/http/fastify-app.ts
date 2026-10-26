@@ -12,6 +12,7 @@ import { createFastifyLoggerOptions, newRequestId, normalizeRequestId } from '..
 import { recordHttpRequest } from '../../lib/metrics.ts';
 import { AJV_OPTIONS, failure, registerHttpKit, type HttpKitOptions } from './http-kit.ts';
 import { isCrossOriginCookieWrite, isCrossOriginWebSocket } from './origin-guard.mts';
+import { CLIENT_POLICY_PATH } from '../client-policy-routes.ts';
 
 export interface FastifyAppOptions {
   bodyLimit: number;
@@ -22,7 +23,12 @@ export interface FastifyAppOptions {
   logRequest: HttpKitOptions['logRequest'];
   /** Whether the request carries a session cookie (the origin guard then refuses cross-origin writes). */
   hasSessionCookie(req: http.IncomingMessage): boolean;
+  /** The Android app's version when it is below the minimum the server serves, else null. */
+  outdatedClientVersion(req: http.IncomingMessage): string | null;
 }
+
+// What an outdated Android app may still do besides reading the client policy.
+const OUTDATED_APP_ROUTES: ReadonlySet<string> = new Set(['POST /api/auth/logout', 'DELETE /api/push/devices']);
 
 export function createFastifyApp(options: FastifyAppOptions): FastifyInstance {
   const app = fastify({
@@ -66,6 +72,24 @@ export function createFastifyApp(options: FastifyAppOptions): FastifyInstance {
       return;
     }
     done();
+  });
+
+  // An Android app below the minimum version gets 426 on every API path but
+  // the policy route that tells it why, signing out and dropping its push
+  // token. The WebSocket upgrade passes: React Native reports a refused
+  // upgrade as a bare error without the status, so /api/ws closes the opened
+  // socket with 4426 instead (app/api-routes.ts).
+  app.addHook('onRequest', (request, reply, done) => {
+    const path = request.url.split('?')[0] ?? '';
+    const upgrade = path === '/api/ws' && String(request.headers.upgrade || '').toLowerCase() === 'websocket';
+    const exempt = path === CLIENT_POLICY_PATH || OUTDATED_APP_ROUTES.has(`${request.method} ${path}`) || upgrade;
+    const version = path.startsWith('/api/') && !exempt ? options.outdatedClientVersion(request.raw) : null;
+    if (version === null) {
+      done();
+      return;
+    }
+    request.log.info({ evt: LOG_EVENTS.HTTP_CLIENT_OUTDATED, transport: 'http', version }, 'outdated app refused');
+    reply.code(426).send(failure('Client outdated', { code: 'client_outdated' }));
   });
 
   registerHttpKit(app, {

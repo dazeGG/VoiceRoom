@@ -4,7 +4,7 @@
 
 import { isOneOf, isRecord, trimmedText } from './guards.ts';
 
-export const SEND_CONTRACT_VERSION = 1 as const;
+const SEND_CONTRACT_VERSION = 1 as const;
 export const REPLY_PREVIEW_TEXT_MAX_LENGTH = 280 as const;
 export const DELIVERY_EVENT_TYPES: readonly ['message.created', 'message.updated', 'message.deleted'] = Object.freeze([
   'message.created',

@@ -4,16 +4,17 @@
 // message. The list asks again every minute.
 
 import { Flag, UserRound } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { AdminReport } from '@voice-room/shared/contracts/reports';
 import { REPORT_REASON_LABELS } from '@voice-room/shared/report-labels';
 import { fetchOpenReports, resolveReport } from '../api/admin.ts';
 import { formatCount, formatDateTime, plural } from '../format.ts';
 import { useRefreshStatus } from '../frame.tsx';
-import { loadFailure, type LoadFailure } from '../load-state.ts';
+import { useAdminResource } from '../load-state.ts';
 import { Notice } from '../Notice.tsx';
 import { Avatar, Button, Empty, Pill } from '../ui/index.tsx';
 import './ReportsPage.css';
+import { UserReports } from './UserReports.tsx';
 
 const REFRESH_MS = 60_000;
 
@@ -57,42 +58,37 @@ export function ReportsPage({
   onResolved: (openLeft: number) => void;
   onOpenAccount: (accountId: string) => void;
 }) {
-  const [reports, setReports] = useState<AdminReport[] | null>(null);
-  const [failure, setFailure] = useState<LoadFailure | null>(null);
+  const [messageCount, setMessageCount] = useState<number | null>(null);
+  const [userCount, setUserCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (messageCount !== null && userCount !== null) onResolved(messageCount + userCount);
+  }, [messageCount, userCount, onResolved]);
+  return (
+    <>
+      <MessageReports onResolved={setMessageCount} onOpenAccount={onOpenAccount} />
+      <UserReports onResolved={setUserCount} onOpenAccount={onOpenAccount} />
+    </>
+  );
+}
+
+function MessageReports({
+  onResolved,
+  onOpenAccount
+}: {
+  onResolved: (openLeft: number) => void;
+  onOpenAccount: (accountId: string) => void;
+}) {
+  const {
+    data: reports,
+    failure,
+    busy: loading,
+    loadedAt,
+    reload: load,
+    update: updateReports
+  } = useAdminResource(fetchOpenReports, [], { failureText: 'Не удалось загрузить жалобы', refreshMs: REFRESH_MS });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
-  const [loadedAt, setLoadedAt] = useState<number | null>(null);
-  const [loading, setLoading] = useState(false);
-  const inFlight = useRef(false);
-
-  const load = useCallback(() => {
-    // One request at a time: a slow answer is waited for, not piled on.
-    if (inFlight.current) return;
-    inFlight.current = true;
-    setLoading(true);
-    fetchOpenReports()
-      .then(
-        (loaded) => {
-          setReports(loaded);
-          setFailure(null);
-          setLoadedAt(Date.now());
-        },
-        (cause: unknown) => setFailure(loadFailure(cause, 'Не удалось загрузить жалобы'))
-      )
-      .finally(() => {
-        inFlight.current = false;
-        setLoading(false);
-      });
-  }, []);
-
-  useEffect(() => {
-    load();
-    const timer = window.setInterval(() => {
-      if (document.visibilityState === 'visible') load();
-    }, REFRESH_MS);
-    return () => window.clearInterval(timer);
-  }, [load]);
   useRefreshStatus({ at: loadedAt, everyMs: REFRESH_MS, busy: loading, reload: load });
 
   // The panel's count of open reports follows what is shown.
@@ -107,7 +103,7 @@ export function ReportsPage({
     try {
       await resolveReport(message.latest.id, action);
       // The server closed every open report of the same message.
-      setReports((current) => (current ?? []).filter((other) => keyOf(other) !== message.key));
+      updateReports((current) => (current ?? []).filter((other) => keyOf(other) !== message.key));
     } catch (cause) {
       setError(cause instanceof Error && cause.message ? cause.message : 'Не удалось закрыть жалобу');
     } finally {

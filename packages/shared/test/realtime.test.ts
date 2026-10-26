@@ -107,7 +107,7 @@ test('buildRoomRealtimeSummary caps visible peers and sets hiddenPeerCount', () 
 
   const summary = buildRoomRealtimeSummary(
     {
-      id: 'room1',
+      roomId: 'room1',
       name: 'Lobby',
       isStatic: true,
       relationship: 'owner',
@@ -129,7 +129,7 @@ test('buildRoomRealtimeSummary caps visible peers and sets hiddenPeerCount', () 
 
 test('realtime avatar fields remain nullable for legacy summaries', () => {
   const peer = toRoomPeerSummary({ id: 'peer-1', name: 'Guest', muted: false });
-  const summary = buildRoomRealtimeSummary({ id: 'room1' }, [peer]);
+  const summary = buildRoomRealtimeSummary({ roomId: 'room1', relationship: 'member' }, [peer]);
 
   assert.equal(peer.avatarAccent, null);
   assert.equal(peer.avatarUrl, null);

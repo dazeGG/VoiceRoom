@@ -45,8 +45,7 @@ function mapMention(row: MentionRow | null | undefined): Mention | null {
     : null;
 }
 
-function createMentionRepository({ pool }: { pool?: QueryClient | null } = {}) {
-  if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
+function createMentionRepository({ pool }: { pool: QueryClient }) {
   const base = pool;
   const on = (client: Client): Database => kyselyOn(client?.query ? client : base);
   const retract = sql<string>`revision + 1`;

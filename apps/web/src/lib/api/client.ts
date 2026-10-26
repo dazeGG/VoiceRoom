@@ -4,7 +4,7 @@
 // are same-origin, so the HttpOnly session cookie always rides along.
 
 import { isErrorCode, type ErrorCode } from '@voice-room/shared/contracts/errors';
-import type { Static, TSchema } from 'typebox';
+import type { Static, TSchema, TUnknown } from 'typebox';
 // Value.Check walks the schema. Never typebox/compile: it builds code with eval, which the CSP forbids.
 import { Value } from 'typebox/value';
 import { createLogger } from '../shared/log.ts';
@@ -56,9 +56,11 @@ export function failureBody<Schema extends TSchema>(error: ApiError, schema: Sch
   return Value.Check(schema, error.details) ? error.details : null;
 }
 
-export type RequestOptions = {
+export type RequestOptions<BodySchema extends TSchema = TSchema> = {
   /** JSON-encoded unless it is FormData. */
   body?: unknown;
+  /** The route's body contract from @voice-room/shared/contracts; on the api.* writes it types `body`. */
+  bodySchema?: BodySchema | undefined;
   signal?: AbortSignal | undefined;
   /** Extra request headers, such as an Idempotency-Key. */
   headers?: Record<string, string> | undefined;
@@ -116,7 +118,12 @@ export async function request<Schema extends TSchema>(
   schema: Schema,
   options: RequestOptions = {}
 ): Promise<Static<Schema>> {
-  const { body, signal, fallback = UNAVAILABLE } = options;
+  const { body, bodySchema, signal, fallback = UNAVAILABLE } = options;
+  // The types already hold the body to its contract; this catches a value that
+  // slipped past them. The server still decides, so the request goes out.
+  if (bodySchema && !(body instanceof FormData) && !Value.Check(bodySchema, body)) {
+    log.warn('request body outside the contract', { url, reason: firstMismatch(bodySchema, body) });
+  }
   const headers: Record<string, string> = { Accept: 'application/json', ...options.headers };
   const init: RequestInit = { method, headers, signal: signal ?? null, credentials: 'same-origin' };
   if (body instanceof FormData) init.body = body;
@@ -125,7 +132,15 @@ export async function request<Schema extends TSchema>(
     init.body = JSON.stringify(body);
   }
 
-  const response = await fetch(url, init);
+  let response: Response;
+  try {
+    response = await fetch(url, init);
+  } catch (error) {
+    // An abort is the caller's own doing and stays as it is; anything else
+    // (offline, DNS, a refused connection) never reached the server.
+    if (signal?.aborted || (error instanceof DOMException && error.name === 'AbortError')) throw error;
+    throw new ApiError(ERROR_TEXTS.unavailable, 0, { code: 'unavailable' });
+  }
   const payload = await readBody(response);
   if (!response.ok) {
     logFailure(url, response);
@@ -135,17 +150,32 @@ export async function request<Schema extends TSchema>(
   return checkedAnswer(schema, payload, response.status, url);
 }
 
+type PlainOptions = Omit<RequestOptions, 'body' | 'bodySchema'>;
+
+// What a write takes after the schema: nothing, FormData, or a JSON body whose
+// type comes from `options.bodySchema`, the route's body contract:
+// api.post(url, SignedIn, input, { bodySchema: CredentialsBody }).
+// A JSON body without its contract does not compile. `emptyBody` is what goes out when there is none.
+type WriteArgs<BodySchema extends TSchema> =
+  | [body?: FormData | undefined, options?: PlainOptions]
+  | [body: NoInfer<Static<BodySchema>>, options: Omit<RequestOptions<BodySchema>, 'body'> & { bodySchema: BodySchema }];
+
+const write =
+  (method: Exclude<Method, 'GET'>, emptyBody?: object) =>
+  <Schema extends TSchema, BodySchema extends TSchema = TUnknown>(
+    url: string,
+    schema: Schema,
+    ...[body, options]: WriteArgs<BodySchema>
+  ) =>
+    request(method, url, schema, { ...options, body: body === undefined ? emptyBody : body });
+
 export const api = {
-  get: <Schema extends TSchema>(url: string, schema: Schema, options?: Omit<RequestOptions, 'body'>) =>
+  get: <Schema extends TSchema>(url: string, schema: Schema, options?: Omit<RequestOptions, 'body' | 'bodySchema'>) =>
     request('GET', url, schema, options),
-  post: <Schema extends TSchema>(url: string, schema: Schema, body: unknown = {}, options?: RequestOptions) =>
-    request('POST', url, schema, { ...options, body }),
-  put: <Schema extends TSchema>(url: string, schema: Schema, body: unknown = {}, options?: RequestOptions) =>
-    request('PUT', url, schema, { ...options, body }),
-  patch: <Schema extends TSchema>(url: string, schema: Schema, body: unknown = {}, options?: RequestOptions) =>
-    request('PATCH', url, schema, { ...options, body }),
-  delete: <Schema extends TSchema>(url: string, schema: Schema, body?: unknown, options?: RequestOptions) =>
-    request('DELETE', url, schema, { ...options, body })
+  post: write('POST', {}),
+  put: write('PUT', {}),
+  patch: write('PATCH', {}),
+  delete: write('DELETE')
 };
 
 /** Resolves to null when the API answers 404, for "may not exist" reads. */

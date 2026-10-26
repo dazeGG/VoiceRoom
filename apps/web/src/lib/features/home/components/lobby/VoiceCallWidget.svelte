@@ -4,42 +4,25 @@
   import { Avatar } from '$lib/shared/ui';
   import { iconMd } from '$lib/shared/ui/icons';
   import RoomCallTimer from '$lib/features/room/components/RoomCallTimer.svelte';
+  import type { ActiveVoice } from '../../model/active-voice';
 
-  let {
-    roomName = '',
-    avatarUrl = null,
-    muted = false,
-    deafened = false,
-    onOpen,
-    onToggleMic,
-    onToggleDeafen,
-    onLeave
-  } = $props<{
-    roomName?: string;
-    avatarUrl?: string | null;
-    muted?: boolean;
-    deafened?: boolean;
-    onOpen?: () => void;
-    onToggleMic?: () => void;
-    onToggleDeafen?: () => void;
-    onLeave?: () => void;
-  }>();
+  let { voice }: { voice: ActiveVoice } = $props();
 
-  const openLabel = $derived(`Открыть комнату ${roomName || 'активного голоса'}`);
+  const openLabel = $derived(`Открыть комнату ${voice.roomName || 'активного голоса'}`);
 </script>
 
 <div class="voice-widget" aria-label="Активный голос">
-  <button class="voice-head" type="button" aria-label={openLabel} title={openLabel} onclick={onOpen}>
+  <button class="voice-head" type="button" aria-label={openLabel} title={openLabel} onclick={voice.open}>
     <Avatar
-      name={roomName}
-      src={avatarUrl}
+      name={voice.roomName}
+      src={voice.avatarUrl}
       shape="squircle"
       background="var(--vr-surface-3)"
       foreground="var(--vr-text)"
       size={38}
     />
     <div class="voice-head-body">
-      <div class="voice-room-name" title={roomName}><EmojiText text={roomName} /></div>
+      <div class="voice-room-name" title={voice.roomName}><EmojiText text={voice.roomName} /></div>
       <div class="voice-status">
         <span class="voice-live-dot"></span>
         <span class="voice-live-label">Подключено</span>
@@ -51,14 +34,14 @@
   <div class="voice-actions">
     <button
       class="voice-btn"
-      class:is-off={muted}
+      class:is-off={voice.muted}
       type="button"
-      title={muted ? 'Включить микрофон' : 'Выключить микрофон'}
-      aria-label={muted ? 'Включить микрофон' : 'Выключить микрофон'}
-      aria-pressed={muted}
-      onclick={onToggleMic}
+      title={voice.muted ? 'Включить микрофон' : 'Выключить микрофон'}
+      aria-label={voice.muted ? 'Включить микрофон' : 'Выключить микрофон'}
+      aria-pressed={voice.muted}
+      onclick={voice.toggleMic}
     >
-      {#if muted}
+      {#if voice.muted}
         <MicOff {...iconMd} aria-hidden="true" />
       {:else}
         <Mic {...iconMd} aria-hidden="true" />
@@ -67,14 +50,14 @@
 
     <button
       class="voice-btn"
-      class:is-off={deafened}
+      class:is-off={voice.deafened}
       type="button"
-      title={deafened ? 'Включить звук' : 'Заглушить звук'}
-      aria-label={deafened ? 'Включить звук' : 'Заглушить звук'}
-      aria-pressed={deafened}
-      onclick={onToggleDeafen}
+      title={voice.deafened ? 'Включить звук' : 'Заглушить звук'}
+      aria-label={voice.deafened ? 'Включить звук' : 'Заглушить звук'}
+      aria-pressed={voice.deafened}
+      onclick={voice.toggleDeafen}
     >
-      {#if deafened}
+      {#if voice.deafened}
         <HeadphoneOff {...iconMd} aria-hidden="true" />
       {:else}
         <Headphones {...iconMd} aria-hidden="true" />
@@ -86,7 +69,7 @@
       type="button"
       title="Выйти"
       aria-label="Выйти из голосовой комнаты"
-      onclick={onLeave}
+      onclick={voice.leave}
     >
       <PhoneOff {...iconMd} aria-hidden="true" />
     </button>

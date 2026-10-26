@@ -7,8 +7,8 @@
   import type { RoomPeer } from '$lib/api/rooms';
   import type { RealtimeEvent } from '$lib/api/realtime';
   import { roomDisplayName } from '../../model/rooms';
-  import { getAvatarPresentation } from '$lib/features/room/client/ui/avatar-presentation';
-  import { fitTiles } from '$lib/features/room/client/ui/tile-grid';
+  import { getAvatarPresentation } from '$lib/shared/ui/avatar-presentation';
+  import { fitTiles } from '$lib/shared/ui/tile-grid';
   import '$lib/features/room/styles/room.css';
   import RoomPreviewChat from './RoomPreviewChat.svelte';
   import RoomMemberList from '../../../../entities/room/components/RoomMemberList.svelte';

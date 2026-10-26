@@ -9,7 +9,33 @@
 }
 
 .rooms-view {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   margin-left: auto;
+}
+
+.day-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.day-picker-step {
+  padding-inline: 6px;
+}
+
+.day-picker-date {
+  min-height: 32px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  padding: 0 8px;
+  background: var(--vr-surface);
+  color: var(--vr-text);
+  font: inherit;
+  font-size: 13px;
+  color-scheme: dark light;
 }
 
 .rooms-quiet {
@@ -258,6 +284,13 @@
   white-space: nowrap;
 }
 
+.live-network {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--net-tone);
+}
+
 .live-peer-time {
   color: var(--vr-text-2);
   font-size: 12.5px;
@@ -368,7 +401,9 @@
 
 .call-people-span {
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  gap: 12px;
   font-size: 11px;
   font-weight: 400;
 }
@@ -390,18 +425,6 @@
   overflow: hidden;
   border-radius: 999px;
   background: oklch(100% 0 0 / 0.05);
-}
-
-.call-bar-span {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  border-radius: 999px;
-  background: var(--vr-accent);
-}
-
-.call-bar[data-guest='true'] .call-bar-span {
-  background: var(--vr-warning);
 }
 
 .call-person-total {

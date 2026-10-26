@@ -1,63 +1,28 @@
 import crypto from 'node:crypto';
 import type { GatePrincipal } from './gate-principal.ts';
 import { createGateCredentialSigner, type GateClaims, type GateCredentialSigner } from './gate-credential-signer.ts';
+import type { GateCredentialRepository } from './gate-credential.repository.ts';
 
 const DEFAULT_CREDENTIAL_TTL_MS = 6 * 60 * 60 * 1000;
 
-type StoreStatus = { status?: string; [key: string]: unknown } | null | undefined;
-export type Revocation = { status: string; epoch?: number | null; revoked?: number | null };
-
-// The subset of the room store the boundary works through. Everything but the
-// three issuing/verifying calls is optional: older stores lack the revocations.
-export interface GateRoomStore {
-  normalizeGatePrincipal?(input: {
-    roomId?: string | undefined;
-    accountUserId?: string | null;
-    guestPrincipalId?: string;
-  }): GatePrincipal | null;
-  getLiveKitGatePrincipalEpoch(input: {
-    principal: GatePrincipal;
-    roomId: string;
-    now: number;
-  }): Promise<{ status: 'ready'; epoch: number } | { status: 'invalid'; epoch: null } | null | undefined>;
-  createLiveKitGateCredential(input: {
-    credentialHash: string;
-    credentialId: string;
-    expiresAt: number;
-    metadata: unknown;
-    now: number;
-    peerId: string;
-    principal: GatePrincipal;
-    principalEpoch: number | undefined;
-    roomId: string;
-  }): Promise<StoreStatus>;
-  verifyLiveKitGateCredential(input: {
-    credentialHash: string;
-    now: number;
-    peerId: string;
-    principalEpoch: number;
-    principalId: string;
-    principalType: string;
-    roomId: string;
-  }): Promise<StoreStatus>;
-  revokeLiveKitGatePrincipal?(input: { principal: GatePrincipal; roomId: string; now: number }): Promise<Revocation>;
-  revokeLiveKitGatePeer?(input: {
-    roomId?: string | undefined;
-    accountUserId?: string | null;
-    guestPrincipalId?: string;
-    now: number;
-  }): Promise<Revocation>;
-  revokeLiveKitGateCredential?(input: {
-    credentialId: string;
-    principal: GatePrincipal;
-    roomId: string;
-    now: number;
-  }): Promise<Revocation>;
-  assertLiveKitGateReady(): Promise<unknown>;
-}
+// The gate credential calls of the room store the boundary works through.
+export type GateRoomStore = Pick<
+  GateCredentialRepository,
+  | 'assertLiveKitGateReady'
+  | 'createLiveKitGateCredential'
+  | 'getLiveKitGatePrincipalEpoch'
+  | 'normalizeGatePrincipal'
+  | 'revokeLiveKitGateCredential'
+  | 'revokeLiveKitGatePeer'
+  | 'revokeLiveKitGatePrincipal'
+  | 'verifyLiveKitGateCredential'
+>;
 
 export type IssuedCredential = { expiresAt: number; id: string; principalEpoch: number | undefined; value: string };
-export type CredentialIssue = { status: 'issued'; credential: IssuedCredential } | { status: string; credential: null };
+type StoredCredential = Awaited<ReturnType<GateRoomStore['createLiveKitGateCredential']>>;
+export type CredentialIssue =
+  | { status: 'issued'; credential: IssuedCredential }
+  | { status: Exclude<StoredCredential['status'], 'created'> | 'unavailable'; credential: null };
 export type CredentialAuthorization = { ok: true; claims: GateClaims } | { ok: false; code: string };
 
 function createCredentialBoundaryService({
@@ -67,16 +32,15 @@ function createCredentialBoundaryService({
   now = Date.now,
   credentialTtlMs = DEFAULT_CREDENTIAL_TTL_MS
 }: {
-  roomStore?: GateRoomStore | undefined;
-  secret?: unknown;
+  roomStore: GateRoomStore;
+  secret?: string | undefined;
   signer?: GateCredentialSigner;
   now?: () => number;
-  credentialTtlMs?: unknown;
-} = {}) {
-  if (!roomStore) throw new TypeError('roomStore is required');
+  credentialTtlMs?: number;
+}) {
   const store = roomStore;
   const clock = now;
-  const ttlMs = Math.max(60_000, Number(credentialTtlMs) || DEFAULT_CREDENTIAL_TTL_MS);
+  const ttlMs = Math.max(60_000, credentialTtlMs || DEFAULT_CREDENTIAL_TTL_MS);
 
   function resolvePrincipal({
     roomId,
@@ -87,26 +51,23 @@ function createCredentialBoundaryService({
     accountUserId?: string | null;
     guestPrincipalId?: string;
   } = {}): GatePrincipal | null {
-    if (typeof store.normalizeGatePrincipal !== 'function') return null;
     return store.normalizeGatePrincipal({ roomId, accountUserId, guestPrincipalId });
   }
 
   async function issueCredential({
     roomId,
     peerId,
-    principal,
-    metadata = {}
+    principal
   }: {
     roomId?: string;
     peerId?: string;
     principal?: GatePrincipal | null;
-    metadata?: unknown;
   } = {}): Promise<CredentialIssue> {
     if (!roomId || !peerId || !principal) return { status: 'invalid', credential: null };
     const issuedAt = clock();
     const expiresAt = issuedAt + ttlMs;
     const epoch = await store.getLiveKitGatePrincipalEpoch({ principal, roomId, now: issuedAt });
-    if (epoch?.status !== 'ready') return { status: 'unavailable', credential: null };
+    if (epoch.status !== 'ready') return { status: 'unavailable', credential: null };
 
     const credentialId = crypto.randomUUID();
     const value = signer.sign({
@@ -123,14 +84,13 @@ function createCredentialBoundaryService({
       credentialHash: signer.hash(value),
       credentialId,
       expiresAt,
-      metadata,
       now: issuedAt,
       peerId,
       principal,
       principalEpoch: epoch.epoch,
       roomId
     });
-    if (stored?.status !== 'created') return { status: stored?.status || 'unavailable', credential: null };
+    if (stored.status !== 'created') return { status: stored.status || 'unavailable', credential: null };
     return {
       status: 'issued',
       credential: {
@@ -156,30 +116,15 @@ function createCredentialBoundaryService({
       principalType: claims.pType,
       roomId: claims.room
     });
-    return decision?.status === 'allowed' ? { ok: true, claims } : { ok: false, code: decision?.status || 'denied' };
+    return decision.status === 'allowed' ? { ok: true, claims } : { ok: false, code: decision.status || 'denied' };
   }
 
   async function revokePrincipal({
     roomId,
     principal
-  }: { roomId?: string | undefined; principal?: GatePrincipal | null } = {}): Promise<Revocation> {
-    if (!roomId || !principal) return { status: 'invalid', epoch: null };
-    if (typeof store.revokeLiveKitGatePrincipal === 'function') {
-      return store.revokeLiveKitGatePrincipal({ principal, roomId, now: clock() });
-    }
-    if (typeof store.revokeLiveKitGatePeer === 'function') {
-      const guestPrefix = `${roomId}:`;
-      return store.revokeLiveKitGatePeer({
-        roomId,
-        accountUserId: principal.principalType === 'account' ? principal.principalId : null,
-        guestPrincipalId:
-          principal.principalType === 'guest' && principal.principalId.startsWith(guestPrefix)
-            ? principal.principalId.slice(guestPrefix.length)
-            : principal.principalId,
-        now: clock()
-      });
-    }
-    return { status: 'unavailable', epoch: null };
+  }: { roomId?: string | undefined; principal?: GatePrincipal | null } = {}) {
+    if (!roomId || !principal) return { status: 'invalid' as const, epoch: null };
+    return store.revokeLiveKitGatePrincipal({ principal, roomId, now: clock() });
   }
 
   async function revokeCredential({
@@ -190,9 +135,8 @@ function createCredentialBoundaryService({
     credentialId?: string | undefined;
     roomId?: string | undefined;
     principal?: GatePrincipal | null;
-  } = {}): Promise<Revocation> {
-    if (!credentialId || !roomId || !principal) return { status: 'invalid' };
-    if (typeof store.revokeLiveKitGateCredential !== 'function') return { status: 'unavailable' };
+  } = {}) {
+    if (!credentialId || !roomId || !principal) return { status: 'invalid' as const };
     return store.revokeLiveKitGateCredential({ credentialId, principal, roomId, now: clock() });
   }
 
@@ -204,13 +148,8 @@ function createCredentialBoundaryService({
     roomId?: string | undefined;
     accountUserId?: string | null;
     guestPrincipalId?: string;
-  } = {}): Promise<Revocation> {
-    if (typeof store.revokeLiveKitGatePeer === 'function') {
-      return store.revokeLiveKitGatePeer({ roomId, accountUserId, guestPrincipalId, now: clock() });
-    }
-    const principal = resolvePrincipal({ roomId, accountUserId, guestPrincipalId });
-    if (!principal) return { status: 'invalid', epoch: null };
-    return revokePrincipal({ roomId, principal });
+  } = {}) {
+    return store.revokeLiveKitGatePeer({ roomId, accountUserId, guestPrincipalId, now: clock() });
   }
 
   async function assertReady(): Promise<true> {

@@ -31,6 +31,7 @@ import {
   type StoredRoom
 } from './room-views.ts';
 import { avatarUrl } from '../../lib/avatar-url.ts';
+import type { RoomAccessRepository } from './room-access.repository.ts';
 import type { OwnerCheck, RoomsService } from './rooms.service.ts';
 import type { PowVerdict } from '../../lib/pow.ts';
 import type { RateCheck } from '../../lib/rate-limit.ts';
@@ -53,18 +54,10 @@ const STATIC_ROOM_NEEDS_LOGIN = failure('Требуется вход для со
   code: 'static_room_requires_login'
 });
 
-interface RoomListStore {
-  listVisibleRoomsForUser(userId: string): Promise<StoredRoom[]>;
-  addRoomBookmarkForUser(
-    userId: string,
-    roomId: string
-  ): Promise<
-    | { status: 'bookmarked'; room: StoredRoom }
-    | { status: 'not_found'; room: null }
-    | { status: 'temporary_room'; room: null }
-  >;
-  removeRoomBookmarkForUser(userId: string, roomId: string): Promise<{ status: string; removed?: boolean }>;
-}
+type RoomListStore = Pick<
+  RoomAccessRepository,
+  'listVisibleRoomsForUser' | 'addRoomBookmarkForUser' | 'removeRoomBookmarkForUser'
+>;
 
 export interface RoomRoutesDeps {
   rooms: RoomsService;

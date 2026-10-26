@@ -14,7 +14,9 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import type { GatePrincipal } from '../src/domains/admission/gate-principal.ts';
 import type { GateClaims } from '../src/domains/admission/gate-credential-signer.ts';
-import type { Fakes } from './fakes/index.ts';
+import { fake, type Fakes } from './fakes/index.ts';
+import type { GateRoomStore } from '../src/domains/admission/credential-boundary.service.ts';
+import { normalizeGatePrincipal } from '../src/domains/admission/gate-credential.repository.ts';
 import { isRecord } from '@voice-room/shared/guards';
 import { Type } from 'typebox';
 import { checked } from './helpers/checked.ts';
@@ -135,20 +137,6 @@ function createGateAwareStore() {
   }) {
     return `${roomId}:${principalType}:${principalId}`;
   }
-  function normalizePrincipal({
-    accountUserId,
-    guestPrincipalId,
-    roomId
-  }: {
-    accountUserId?: string | null | undefined;
-    guestPrincipalId?: string | undefined;
-    roomId?: string;
-  } = {}): GatePrincipal | null {
-    if (accountUserId) return { principalType: 'account', principalId: accountUserId };
-    const guest = (guestPrincipalId || '').trim();
-    if (!roomId || !guest) return null;
-    return { principalType: 'guest', principalId: `${roomId}:${guest}` };
-  }
   return {
     revoked,
     async countRooms() {
@@ -168,7 +156,7 @@ function createGateAwareStore() {
       if (sessionToken === 'bad-session') return { status: 'token_mismatch', identity: null };
       return { status: 'created', identity: { id: `guest-id-${peerId}`, avatarColorKey: 'blurple', peerId } };
     },
-    normalizeGatePrincipal: normalizePrincipal,
+    normalizeGatePrincipal,
     async findActiveRoomBan() {
       return null;
     },
@@ -178,8 +166,9 @@ function createGateAwareStore() {
     async getLiveKitGatePrincipalEpoch({ principal, roomId = '' } = {}) {
       assert.ok(principal);
       const key = principalKey({ roomId, ...principal });
-      if (!epochs.has(key)) epochs.set(key, 0);
-      return { status: 'ready', epoch: epochs.get(key) };
+      const epoch = epochs.get(key) || 0;
+      epochs.set(key, epoch);
+      return { status: 'ready' as const, epoch };
     },
     async createLiveKitGateCredential({
       credentialHash = '',
@@ -190,9 +179,10 @@ function createGateAwareStore() {
     } = {}) {
       assert.ok(principal);
       const key = principalKey({ roomId, ...principal });
-      if ((epochs.get(key) || 0) !== principalEpoch) return { status: 'epoch_mismatch', credential: null };
+      const epoch = epochs.get(key) || 0;
+      if (epoch !== principalEpoch) return { status: 'epoch_mismatch' as const, credential: null };
       credentials.set(credentialHash, { peerId, principal, principalEpoch, revoked: false, roomId });
-      return { status: 'created', credential: { id: 'cred-1' } };
+      return { status: 'created' as const, credential: { id: 'cred-1', principalEpoch: epoch, ...principal } };
     },
     async verifyLiveKitGateCredential({
       credentialHash = '',
@@ -214,15 +204,16 @@ function createGateAwareStore() {
           row.principal.principalId === principalId &&
           row.principalEpoch === principalEpoch &&
           epochs.get(key) === principalEpoch
-            ? 'allowed'
-            : 'denied'
+            ? ('allowed' as const)
+            : ('denied' as const)
       };
     },
     async revokeLiveKitGatePeer({ roomId = '', peerId = '', accountUserId, guestPrincipalId } = {}) {
-      const principal = normalizePrincipal({ accountUserId, guestPrincipalId, roomId });
+      const principal = normalizeGatePrincipal({ accountUserId, guestPrincipalId, roomId });
       assert.ok(principal);
       const key = principalKey({ roomId, ...principal });
-      epochs.set(key, (epochs.get(key) || 0) + 1);
+      const epoch = (epochs.get(key) || 0) + 1;
+      epochs.set(key, epoch);
       for (const row of credentials.values()) {
         if (
           row.roomId === roomId &&
@@ -233,7 +224,7 @@ function createGateAwareStore() {
         }
       }
       revoked.push({ roomId, peerId, principal });
-      return { status: 'revoked', epoch: epochs.get(key) };
+      return { status: 'revoked' as const, epoch };
     },
     async createRoomBan() {
       throw new Error('legacy createRoomBan fallback must not be used for LiveKit gate bans');
@@ -279,7 +270,7 @@ function createGateAwareStore() {
       return false;
     },
     async assertLiveKitGateReady() {
-      return true;
+      return true as const;
     }
   } satisfies GateAwareStore;
 }
@@ -383,7 +374,7 @@ test('G05-A01 same gate credential is denied after epoch revoke', async () => {
     roomId: 'room-g05'
   });
   const gate = createLiveKitAuthGateService({
-    roomStore: store,
+    roomStore: fake<GateRoomStore>(store),
     secret: process.env.LIVEKIT_GATE_SECRET,
     upstreamUrl: 'ws://livekit:7880'
   });
@@ -511,7 +502,7 @@ test('G05 gate strips credential before upstream and fails closed on malformed c
 
   const store = createGateAwareStore();
   const gate = createLiveKitAuthGateService({
-    roomStore: store,
+    roomStore: fake<GateRoomStore>(store),
     secret: process.env.LIVEKIT_GATE_SECRET,
     upstreamUrl: 'ws://livekit:7880'
   });
@@ -522,7 +513,7 @@ test('G05 gate rejects wss upstreams because upstream proxying is raw TCP only',
   assert.throws(
     () =>
       createLiveKitAuthGateService({
-        roomStore: createGateAwareStore(),
+        roomStore: fake<GateRoomStore>(createGateAwareStore()),
         secret: process.env.LIVEKIT_GATE_SECRET,
         upstreamUrl: 'wss://livekit.example.test/rtc'
       }),
@@ -575,7 +566,7 @@ test('G05 gate survives a client cancellation followed by an upstream socket err
       assertReady: async () => true as const,
       authorizeCredential: async () => ({ ok: true as const, claims })
     },
-    roomStore: {},
+    roomStore: fake<GateRoomStore>(),
     upstreamUrl: 'ws://livekit:7880'
   });
   const server = gate.createServer();

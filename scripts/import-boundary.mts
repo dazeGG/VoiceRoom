@@ -1,21 +1,11 @@
 #!/usr/bin/env node
 import fs from 'node:fs';
-import path from 'node:path';
 import process from 'node:process';
 import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
+import { globToRegExp, normalizePath, readSource, repoFiles } from './lib/glob.mts';
 
-// Paths in the config are relative to the repository root, not the caller's cwd.
-const REPO_ROOT = path.resolve(import.meta.dirname, '..');
-
-function repoFiles(dir: string): string[] {
-  return walkFiles(path.join(REPO_ROOT, dir)).map((file) => normalizePath(path.relative(REPO_ROOT, file)));
-}
-
-function readSource(filePath: string): string | null {
-  const resolved = path.isAbsolute(filePath) ? filePath : path.join(REPO_ROOT, filePath);
-  return fs.existsSync(resolved) ? fs.readFileSync(resolved, 'utf8') : null;
-}
+const isSource = (file: string) => /\.(?:js|mjs|cjs|ts|mts|cts|svelte)$/.test(file);
 
 const ImportRule = Type.Object({
   id: Type.String(),
@@ -26,53 +16,6 @@ const ImportRule = Type.Object({
 type ImportRule = Static<typeof ImportRule>;
 const ImportConfig = Type.Object({ importRules: Type.Optional(Type.Array(ImportRule)) });
 type Violation = { ruleId: string; filePath: string; imported: string; message: string };
-
-function normalizePath(value: string): string {
-  return value.split(path.sep).join('/');
-}
-
-function walkFiles(root: string, collected: string[] = []): string[] {
-  if (!fs.existsSync(root)) return collected;
-  const stat = fs.statSync(root);
-  if (stat.isFile()) {
-    if (/\.(?:js|mjs|cjs|ts|mts|cts|svelte)$/.test(root)) collected.push(normalizePath(root));
-    return collected;
-  }
-  for (const entry of fs.readdirSync(root)) {
-    if (entry === 'node_modules' || entry === '.git') continue;
-    walkFiles(path.join(root, entry), collected);
-  }
-  return collected;
-}
-
-function globToRegExp(glob: string): RegExp {
-  const value = normalizePath(glob);
-  let pattern = '';
-  for (let index = 0; index < value.length; index += 1) {
-    const char = value.charAt(index);
-    if (char === '*' && value[index + 1] === '*') {
-      pattern += '.*';
-      index += 1;
-    } else if (char === '*') {
-      pattern += '[^/]*';
-    } else if (char === '{') {
-      const end = value.indexOf('}', index);
-      if (end === -1) pattern += '\\{';
-      else {
-        pattern += `(?:${value
-          .slice(index + 1, end)
-          .split(',')
-          .map((part: string) => part.replace(/[.+^${}()|[\]\\]/g, '\\$&'))
-          .join('|')})`;
-        index = end;
-      }
-    } else {
-      pattern += char.replace(/[.+^${}()|[\]\\]/g, '\\$&');
-    }
-  }
-  pattern = pattern.replace(/\.\*\/\[\^\/\]\*/g, '.*');
-  return new RegExp(`(?:^|.*/)${pattern}$`);
-}
 
 function extractImports(source: string): string[] {
   const imports: string[] = [];
@@ -95,7 +38,7 @@ export function checkImportBoundaries({
   files?: string[] | undefined;
 }): Violation[] {
   const violations: Violation[] = [];
-  const fileSet = files || repoFiles('.');
+  const fileSet = files || repoFiles('.', isSource);
   for (const rule of config.importRules || []) {
     const sources = rule.sources.map(globToRegExp);
     for (const filePath of fileSet.filter((candidate) => sources.some((source) => source.test(candidate)))) {

@@ -44,7 +44,8 @@ const page: AdminCallFeedbackPage = {
         jitterAvgMs: 30,
         reconnects: 2,
         transport: 'relay'
-      }
+      },
+      stay: null
     },
     {
       id: 'f2',
@@ -58,6 +59,7 @@ const page: AdminCallFeedbackPage = {
       durationS: 3600,
       peers: 4,
       platform: 'desktop_app',
+      // An API a release behind sends no stay at all.
       quality: null
     }
   ]
@@ -90,6 +92,92 @@ test('the section shows how many calls went well, why, and each answer with its 
   await userEvent.click(screen.getByRole('radio', { name: 'Плохие' }));
   await waitFor(() => expect(screen.queryByText('@alice')).toBeNull());
   expect(calls.map((call) => call.url.search)).toEqual(['?days=30', '?days=30&rating=bad']);
+});
+
+test("a guest's answer names them, says where they came from, the worst moments and how the network went", async () => {
+  const MINUTE = 60_000;
+  const joinedAt = T0 - 60 * MINUTE;
+  const [badAnswer] = page.entries;
+  if (!badAnswer) throw new Error('the bad answer expected');
+  const guestAnswer: AdminCallFeedbackPage = {
+    ...page,
+    entries: [
+      {
+        ...badAnswer,
+        quality: {
+          rttAvgMs: 37.5,
+          inboundLossAvgPct: 0.1,
+          outboundLossAvgPct: 0,
+          jitterAvgMs: 6.4,
+          reconnects: 2,
+          transport: 'udp',
+          rttMaxMs: 1109,
+          inboundLossMaxPct: 13.3,
+          outboundLossMaxPct: 0,
+          jitterMaxMs: 20,
+          cpuPressureMax: 'critical',
+          cpuRelieved: true,
+          micDrops: 3,
+          inboundPackets: 9340,
+          inboundLostPackets: 12,
+          outboundPackets: 8800,
+          outboundLostPackets: 0,
+          concealedAvgPct: 4.2,
+          appCpuAvgPct: 6.5,
+          appCpuMaxPct: 21,
+          systemCpuAvgPct: 88,
+          concealedMaxPct: 11.5
+        },
+        stay: {
+          id: 's1',
+          roomId: 'gone',
+          roomName: null,
+          isStatic: false,
+          account: null,
+          guestName: 'выевыпк',
+          guestId: '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b',
+          client: 'browser',
+          os: 'Windows',
+          browser: 'Chrome',
+          ipKey: '72840b70e58cccb2',
+          location: 'Воронеж, Россия',
+          joinedAt,
+          leftAt: T0,
+          network: [
+            { at: joinedAt + 5_000, level: 'good' },
+            { at: joinedAt + 20 * MINUTE, level: 'bad' },
+            { at: joinedAt + 21 * MINUTE, level: 'good' }
+          ]
+        }
+      }
+    ]
+  };
+  stubApi({ 'GET /api/admin/feedback': { body: guestAnswer } });
+  renderAs(<FeedbackPage />);
+
+  const answers = await screen.findByRole('table', { name: 'Ответы' });
+  expect(within(answers).getByText('выевыпк')).toBeTruthy();
+  expect(answers.textContent).toContain('Воронеж, Россия');
+  expect(answers.textContent).toContain('Chrome');
+  // Fine averages, but the worst moments and the computer give the call away.
+  expect(within(answers).getByText('пинг 37,5 мс (до 1 109 мс)').getAttribute('data-bad')).toBe('true');
+  expect(within(answers).getByText('потери 0,1% (до 13,3%)').getAttribute('data-bad')).toBe('true');
+  expect(within(answers).getByText('джиттер 6,4 мс (до 20 мс)').getAttribute('data-bad')).toBe('false');
+  expect(within(answers).getByText('микрофон отключался 3').getAttribute('data-bad')).toBe('true');
+  // A busy computer alone is not red: a game keeps the whole system busy through calls that sound fine.
+  expect(within(answers).getByText('система загружена · облегчённый шумодав').getAttribute('data-bad')).toBe('false');
+  // The app's own share of the computer beside everything running, grey: a game is not the call's fault.
+  expect(within(answers).getByText('процессор: VoiceRoom 6,5% (до 21%) · всё 88%').getAttribute('data-bad')).toBe(
+    'false'
+  );
+  // What people heard, and the packet counts behind the loss.
+  expect(within(answers).getByText('звук додуман 4,2% (до 11,5%)').getAttribute('data-bad')).toBe('true');
+  // Thousands are grouped with a non-breaking space.
+  expect(within(answers).getByText('потери 0,1% (до 13,3%)').getAttribute('title')).toMatch(
+    /^к вам: потеряно 12 из 9\s340 пакетов\nот вас: потеряно 0 из 8\s800 пакетов$/
+  );
+  const network = within(answers).getByRole('img', { name: /сеть/ });
+  expect(network.getAttribute('aria-label')).toMatch(/сеть в порядке, .*сеть плохая, .*сеть в порядке$/);
 });
 
 test('a slow reply for an earlier choice does not replace the latest one', async () => {

@@ -68,7 +68,7 @@ export type LeaseRecord = {
 };
 export type LeaseClaim =
   | { state: 'none'; record: null }
-  | { state: 'claimed' | 'finalizing' | 'busy' | 'failed-finalizer' | 'terminal' | LeaseState; record: LeaseRecord };
+  | { state: 'claimed' | 'finalizing' | 'busy' | 'failed-finalizer' | 'terminal'; record: LeaseRecord };
 export type FinalizeError = Error & { ownershipFinalized?: boolean; rollbackTerminal?: boolean; code?: string };
 
 type RoomRepositories = RoomRepository &

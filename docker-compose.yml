@@ -1,5 +1,15 @@
+# Every container's log is capped (json-file, 3 files of 10 MB), so what the
+# logs hold, IP keys in API records and shortened addresses in LiveKit's,
+# lasts days to a few weeks rather than until the container is recreated.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
 services:
   postgres:
+    logging: *logging
     image: ${POSTGRES_IMAGE:-postgres:16-alpine}
     restart: unless-stopped
     environment:
@@ -16,6 +26,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   migrate:
+    logging: *logging
     image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
     restart: "no"
     depends_on:
@@ -27,6 +38,7 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
 
   media-init:
+    logging: *logging
     image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
     user: root
     restart: "no"
@@ -35,6 +47,7 @@ services:
       - media:/data/media
 
   api:
+    logging: *logging
     image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
     restart: unless-stopped
     depends_on:
@@ -53,6 +66,8 @@ services:
       DATABASE_URL: ${DATABASE_URL:-postgres://${POSTGRES_USER:-voice_room}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-voice_room}}
       LIVEKIT_URL: ${LIVEKIT_URL:-ws://livekit:7880}
       LIVEKIT_INTERNAL_URL: ws://livekit:7880
+      # Media numbers for the admin panel's server page, inside the compose network.
+      LIVEKIT_METRICS_URL: http://livekit:${LIVEKIT_METRICS_PORT:-6789}/metrics
       LIVEKIT_GATE_PUBLIC_URL: ${LIVEKIT_GATE_PUBLIC_URL:-wss://${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}}
       LIVEKIT_GATE_SECRET: ${LIVEKIT_GATE_SECRET:?set LIVEKIT_GATE_SECRET in .env}
       VOICE_ROOM_CURSOR_HMAC_KEYS: ${VOICE_ROOM_CURSOR_HMAC_KEYS:?set VOICE_ROOM_CURSOR_HMAC_KEYS in .env}
@@ -64,6 +79,9 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      RUSTORE_PUSH_PROJECT_ID: ${RUSTORE_PUSH_PROJECT_ID:-}
+      RUSTORE_PUSH_SERVICE_TOKEN: ${RUSTORE_PUSH_SERVICE_TOKEN:-}
+      ANDROID_MIN_VERSION: ${ANDROID_MIN_VERSION:-}
       MAX_PUSH_SUBSCRIPTIONS_PER_USER: ${MAX_PUSH_SUBSCRIPTIONS_PER_USER:-10}
       PUSH_SUBSCRIPTION_RATE_LIMIT: ${PUSH_SUBSCRIPTION_RATE_LIMIT:-20}
       PUSH_SUBSCRIPTION_RATE_WINDOW_MS: ${PUSH_SUBSCRIPTION_RATE_WINDOW_MS:-60000}
@@ -134,6 +152,7 @@ services:
       start_interval: 1s
 
   message-delivery:
+    logging: *logging
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: unless-stopped
     depends_on:
@@ -156,6 +175,7 @@ services:
       MESSAGE_DELIVERY_LEASE_MS: ${MESSAGE_DELIVERY_LEASE_MS:-120000}
 
   notification-delivery:
+    logging: *logging
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: unless-stopped
     expose: ["9464"]
@@ -176,9 +196,13 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:-}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
       VAPID_SUBJECT: ${VAPID_SUBJECT:-}
+      RUSTORE_PUSH_PROJECT_ID: ${RUSTORE_PUSH_PROJECT_ID:-}
+      RUSTORE_PUSH_SERVICE_TOKEN: ${RUSTORE_PUSH_SERVICE_TOKEN:-}
+      ANDROID_MIN_VERSION: ${ANDROID_MIN_VERSION:-}
       WORKER_METRICS_PORT: 9464
 
   media-processing:
+    logging: *logging
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: unless-stopped
     expose: ["9464"]
@@ -202,6 +226,7 @@ services:
       - media:/data/media
 
   media-maintenance:
+    logging: *logging
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: unless-stopped
     depends_on:
@@ -223,6 +248,7 @@ services:
       - media:/data/media
 
   media-reconciliation:
+    logging: *logging
     image: ${VOICEROOM_WORKER_IMAGE:?set immutable VOICEROOM_WORKER_IMAGE digest}
     restart: unless-stopped
     depends_on:
@@ -244,6 +270,7 @@ services:
       - media:/data/media
 
   caddy:
+    logging: *logging
     image: ${VOICEROOM_WEB_IMAGE:?set immutable VOICEROOM_WEB_IMAGE digest}
     restart: unless-stopped
     depends_on:
@@ -260,6 +287,9 @@ services:
       LIVEKIT_DOMAIN: ${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}
       LIVEKIT_GATE_PUBLIC_URL: ${LIVEKIT_GATE_PUBLIC_URL:-wss://${LIVEKIT_DOMAIN:-livekit.${DOMAIN}}}
       API_METRICS_ALLOWED_REMOTE: ${API_METRICS_ALLOWED_REMOTE:-127.0.0.1}
+      # SHA-256 fingerprint of the Android app's signing key for
+      # /.well-known/assetlinks.json (docs/SELF_HOSTING.md); empty answers 404.
+      ANDROID_RELEASE_CERT_SHA256: ${ANDROID_RELEASE_CERT_SHA256:-}
       # TURN/TLS on :443 for networks that block UDP and non-web ports. Needs a
       # DNS record for TURN_DOMAIN pointing at this host (docs/SELF_HOSTING.md, "TURN").
       TURN_ENABLED: ${TURN_ENABLED:-false}
@@ -274,6 +304,7 @@ services:
       - web_archive:/srv/archive
 
   livekit:
+    logging: *logging
     image: ${LIVEKIT_IMAGE:-livekit/livekit-server:v1.13.2}
     restart: unless-stopped
     # LiveKit takes about 2 MB per participant. With no cap, a host without swap
@@ -328,6 +359,7 @@ services:
       - "30000-30099:30000-30099/udp"
 
   livekit-gate:
+    logging: *logging
     image: ${VOICEROOM_API_IMAGE:?set immutable VOICEROOM_API_IMAGE digest}
     restart: unless-stopped
     command: ["node", "apps/api/src/domains/admission/livekit-auth-gate.service.ts"]

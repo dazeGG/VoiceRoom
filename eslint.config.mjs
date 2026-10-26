@@ -29,7 +29,6 @@ export default tseslint.config(
       '**/.svelte-kit/**',
       'coverage/**',
       '.omc/**',
-      '.graphify/**',
       'apps/api/src/platform/db/schema.ts',
       'apps/web/static/**',
       'apps/web/svelte.config.js',
@@ -188,6 +187,24 @@ export default tseslint.config(
             {
               group: ['$lib/features/home/**', '$lib/features/room/**', '**/features/home/**', '**/features/room/**'],
               message: 'entities, shared, platform and api sit below the features and do not import them.'
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    // The lobby reaches the room client only through its public index
+    // (features/room/client/index.ts), never a module inside it.
+    files: ['apps/web/src/lib/features/home/**/*.{ts,svelte}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['$lib/features/room/client/**', '**/room/client/**'],
+              message: 'Import the room client from $lib/features/room/client, its public index.'
             }
           ]
         }

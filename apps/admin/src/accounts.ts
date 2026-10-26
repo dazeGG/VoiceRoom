@@ -1,20 +1,28 @@
 // How the accounts section words things: the list's filters and columns, the
 // block terms, and each entry of the administrators' log.
 
-import type { AccountsFilter, AccountsSort, AdminActionEntry, BlockDuration } from '@voice-room/shared/contracts/admin';
+import {
+  AccountsFilter,
+  BlockDuration,
+  type AccountsSort,
+  type AdminActionEntry
+} from '@voice-room/shared/contracts/admin';
 import { STAFF_ROLE_LABELS } from '@voice-room/shared/contracts/staff';
 import { formatDateTime } from './format.ts';
 
-export const ACCOUNT_FILTERS: { value: AccountsFilter; label: string }[] = [
-  { value: 'all', label: 'Все' },
-  { value: 'online', label: 'В сети' },
-  { value: 'new', label: 'Новые за неделю' },
-  { value: 'active', label: 'Активные за неделю' },
-  { value: 'gone', label: 'Пропавшие (2+ недели)' },
-  { value: 'blocked', label: 'Заблокированные' },
-  { value: 'deleting', label: 'Удаляются' },
-  { value: 'badged', label: 'С отметкой' }
-];
+const FILTER_LABELS: Record<AccountsFilter, string> = {
+  all: 'Все',
+  online: 'В сети',
+  new: 'Новые за неделю',
+  active: 'Активные за неделю',
+  gone: 'Пропавшие (2+ недели)',
+  blocked: 'Заблокированные',
+  deleting: 'Удаляются',
+  badged: 'С отметкой'
+};
+
+/** The list's filters in the contract's order. */
+export const ACCOUNT_FILTERS = AccountsFilter.anyOf.map(({ const: value }) => ({ value, label: FILTER_LABELS[value] }));
 
 /** The list's columns that sort, and the order each starts in when picked. */
 export const SORT_COLUMNS: { sort: AccountsSort; label: string; first: 'asc' | 'desc' }[] = [
@@ -27,15 +35,32 @@ export const SORT_COLUMNS: { sort: AccountsSort; label: string; first: 'asc' | '
   { sort: 'reports', label: 'Жалоб', first: 'desc' }
 ];
 
-export const BLOCK_DURATIONS: { value: BlockDuration; label: string }[] = [
-  { value: 'day', label: 'Сутки' },
-  { value: 'week', label: 'Неделя' },
-  { value: 'month', label: 'Месяц' },
-  { value: 'forever', label: 'Навсегда' }
-];
+const DURATION_LABELS: Record<BlockDuration, string> = {
+  day: 'Сутки',
+  week: 'Неделя',
+  month: 'Месяц',
+  forever: 'Навсегда'
+};
+
+/** The block terms in the contract's order, the shortest first. */
+export const BLOCK_DURATIONS = BlockDuration.anyOf.map(({ const: value }) => ({
+  value,
+  label: DURATION_LABELS[value]
+}));
 
 export function blockTerm(until: number | null): string {
   return until === null ? 'навсегда' : `до ${formatDateTime(until)}`;
+}
+
+function describeBadge(badge: AdminActionEntry['badge']): string {
+  switch (badge) {
+    case 'official':
+      return 'Отмечен как официальный';
+    case 'verified':
+      return 'Отмечен как подтверждённый';
+    case null:
+      return 'Отметка снята';
+  }
 }
 
 /** One log entry as a line: what was done, with its term, mark or role. */
@@ -52,11 +77,7 @@ export function describeAction(entry: AdminActionEntry): string {
     case 'cancel_deletion':
       return 'Удаление отменено';
     case 'badge':
-      return entry.badge === 'official'
-        ? 'Отмечен как официальный'
-        : entry.badge === 'verified'
-          ? 'Отмечен как подтверждённый'
-          : 'Отметка снята';
+      return describeBadge(entry.badge);
     case 'staff_role':
       return entry.role ? `Выдана роль: ${STAFF_ROLE_LABELS[entry.role]}` : 'Роль снята';
   }

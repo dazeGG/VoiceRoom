@@ -1,6 +1,6 @@
 {
   "name": "voice-room",
-  "version": "2.10.5",
+  "version": "2.11.0",
   "private": true,
   "description": "Simple link-based LiveKit voice chat with screen sharing.",
   "workspaces": [
@@ -29,7 +29,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check . --log-level warn",
     "lint:baseline": "eslint . --suppress-all",
-    "test": "npm --workspace @voice-room/shared run test && npm --workspace @voice-room/api run test && npm --workspace @voice-room/web run test && npm --workspace @voice-room/admin run test",
+    "test": "npm --workspace @voice-room/shared run test && npm --workspace @voice-room/api run test && npm --workspace @voice-room/web run test && npm --workspace @voice-room/admin run test && node --test scripts/test/*.test.mts",
     "e2e": "npm --workspace @voice-room/web run e2e",
     "coverage:g08": "node scripts/coverage/run-g08.mts"
   },

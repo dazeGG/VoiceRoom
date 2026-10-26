@@ -3,7 +3,7 @@
   import { AccountBadge } from '$lib/shared/ui';
   import { HeadphoneOff, MicOff, MonitorPlay } from '@lucide/svelte';
   import { iconSm } from '$lib/shared/ui/icons';
-  import { getAvatarPresentation } from '../client/ui/avatar-presentation';
+  import { getAvatarPresentation } from '$lib/shared/ui/avatar-presentation';
   import { state as roomState } from '../client/core/state.svelte';
   import { enterScreenView, leaveScreenView } from '../client/ui/screen-view';
   import { keepVideoFitted } from '../client/ui/video-fit';

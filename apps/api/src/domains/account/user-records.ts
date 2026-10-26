@@ -24,11 +24,6 @@ export const UNIQUE_VIOLATION = '23505';
 // for the whole window after its last sign-in.
 export const LOGIN_EVENT_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
-export function toDate(ms: unknown): Date {
-  const next = Number(ms);
-  return new Date(Number.isFinite(next) && next >= 0 ? next : Date.now());
-}
-
 // Per-account markers kept in `users.metadata` as epoch milliseconds.
 function metadataMillis(metadata: Json, key: string): number | null {
   const value = Number(metadata && typeof metadata === 'object' && !Array.isArray(metadata) ? metadata[key] : NaN);

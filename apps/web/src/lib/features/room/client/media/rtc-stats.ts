@@ -14,6 +14,15 @@ export interface RtcStat {
   readonly codecId: string | undefined;
   readonly packetsLost: number | undefined;
   readonly packetsReceived: number | undefined;
+  readonly packetsSent: number | undefined;
+  /** inbound-rtp: packets that came too late to be played. */
+  readonly packetsDiscarded: number | undefined;
+  /** outbound-rtp: the source a simulcast layer encodes; its layers share it. */
+  readonly mediaSourceId: string | undefined;
+  // inbound-rtp audio: samples played, those made up for missing packets, and the made-up ones that were silence
+  readonly totalSamplesReceived: number | undefined;
+  readonly concealedSamples: number | undefined;
+  readonly silentConcealedSamples: number | undefined;
   readonly jitter: number | undefined;
   readonly fractionLost: number | undefined;
   readonly roundTripTime: number | undefined;
@@ -33,12 +42,20 @@ export interface RtcStat {
   readonly pliCount: number | undefined;
   readonly qpSum: number | undefined;
   readonly qualityLimitationReason: string | undefined;
+  /** Seconds the encoder has run, summed over qualityLimitationDurations, and those of them held back for CPU. */
+  readonly qualityLimitationSeconds: number | undefined;
+  readonly qualityLimitationCpuSeconds: number | undefined;
+  // inbound-rtp video: frames that arrived (framesDropped above counts those never shown)
+  readonly framesReceived: number | undefined;
   // candidate-pair
   readonly state: string | undefined;
   readonly nominated: boolean | undefined;
   /** Firefox's flag for the pair in use. */
   readonly selected: boolean | undefined;
   readonly currentRoundTripTime: number | undefined;
+  /** Seconds summed over every check of the pair, and how many there were. */
+  readonly totalRoundTripTime: number | undefined;
+  readonly responsesReceived: number | undefined;
   readonly localCandidateId: string | undefined;
   readonly availableOutgoingBitrate: number | undefined;
   readonly estimatedOutgoingBitrate: number | undefined;
@@ -73,6 +90,8 @@ function toRtcStat(value: unknown): RtcStat | null {
     const field = value[key];
     return typeof field === 'string' ? field : undefined;
   };
+  const durations = isRecord(value.qualityLimitationDurations) ? value.qualityLimitationDurations : null;
+  const durationSeconds = (field: unknown): number => (typeof field === 'number' && field > 0 ? field : 0);
   const boolean = (key: string): boolean | undefined => {
     const field = value[key];
     return typeof field === 'boolean' ? field : undefined;
@@ -92,6 +111,7 @@ function toRtcStat(value: unknown): RtcStat | null {
     framesDropped: number('framesDropped'),
     framesEncoded: number('framesEncoded'),
     framesPerSecond: number('framesPerSecond'),
+    framesReceived: number('framesReceived'),
     framesSent: number('framesSent'),
     id: value.id,
     isRemote: boolean('isRemote'),
@@ -99,17 +119,29 @@ function toRtcStat(value: unknown): RtcStat | null {
     keyFramesEncoded: number('keyFramesEncoded'),
     kind: string('kind'),
     localCandidateId: string('localCandidateId'),
+    mediaSourceId: string('mediaSourceId'),
     mediaType: string('mediaType'),
     mime: string('mime'),
     mimeType: string('mimeType'),
     nackCount: number('nackCount'),
     nominated: boolean('nominated'),
+    packetsDiscarded: number('packetsDiscarded'),
     packetsLost: number('packetsLost'),
     packetsReceived: number('packetsReceived'),
+    packetsSent: number('packetsSent'),
+    totalSamplesReceived: number('totalSamplesReceived'),
+    concealedSamples: number('concealedSamples'),
+    silentConcealedSamples: number('silentConcealedSamples'),
+    totalRoundTripTime: number('totalRoundTripTime'),
+    responsesReceived: number('responsesReceived'),
     pliCount: number('pliCount'),
     protocol: string('protocol'),
     qpSum: number('qpSum'),
     qualityLimitationReason: string('qualityLimitationReason'),
+    qualityLimitationSeconds: durations
+      ? Object.values(durations).reduce<number>((sum, field) => sum + durationSeconds(field), 0)
+      : undefined,
+    qualityLimitationCpuSeconds: durations ? durationSeconds(durations.cpu) : undefined,
     roundTripTime: number('roundTripTime'),
     selected: boolean('selected'),
     state: string('state'),

@@ -1,7 +1,8 @@
 // Facts the legal pages state about the operator and how long data is kept.
 // The retention periods mirror the code (sessions, sign-in history, account
-// deletion, the purge of deleted room messages, the rooms of stays in voice,
-// deploy backups); change them here when the code changes.
+// deletion, the purge of deleted room messages, the rooms of stays in voice and
+// the per-person activity rolled up after them, deploy backups, the container
+// log cap); change them here when the code changes.
 
 import { ACCOUNT_DELETION_GRACE_MS } from '@voice-room/shared/account-security';
 import { VOICE_HISTORY_KEEP_DAYS } from '@voice-room/shared/contracts/admin';
@@ -16,13 +17,15 @@ export const LEGAL = Object.freeze({
   email: 'support@voiceroom.ru',
   effectiveDate: '13 октября 2026 г.',
   /** The personal data policy changed on its own since. */
-  privacyEffectiveDate: '21 октября 2026 г.',
+  privacyEffectiveDate: '27 октября 2026 г.',
   minimumAge: 14,
   sessionDays: 30,
   loginHistoryDays: 90,
   deletionGraceDays: Math.round(ACCOUNT_DELETION_GRACE_MS / DAY_MS),
   deletedRoomMessagesDays: 30,
   voiceHistoryDays: VOICE_HISTORY_KEEP_DAYS,
+  /** docker-compose.yml x-logging: each service keeps at most this much log, the oldest overwritten first. */
+  logCapMb: 30,
   backupDays: 30,
   responseWorkingDays: 10
 });

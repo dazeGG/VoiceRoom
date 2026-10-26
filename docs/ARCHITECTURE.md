@@ -118,6 +118,12 @@ Rules:
 - A service fails with a catalogued code by throwing
   `DomainError(code, status, message)` (`platform/http/domain-error.ts`); do
   not add another `*Error` class for that.
+- The Android app updates slowly. API and realtime changes stay backward
+  compatible for every app version at or above `ANDROID_MIN_VERSION`; raise
+  the threshold (and ship a matching app) before removing anything an older
+  app uses. The app sends `VoiceRoom-Android/<x.y.z>`; an older one gets HTTP
+  426 `client_outdated` and WebSocket close 4426
+  (`packages/shared/src/client-version.ts`).
 
 ## 4. Current state versus these rules
 
@@ -145,6 +151,14 @@ above, list it here so nobody copies the old pattern.
 | `LobbyStore` is large | `features/home/model/lobby.svelte.ts` (518 lines) | New lobby state goes in its own class, not in `LobbyStore` |
 | Module-level `$state` singletons | `entities/{profile-card/profile-card-ui,room/room-membership,room/room-presence}.svelte.ts`, `features/auth/session.svelte.ts`, `features/call-feedback/call-feedback.svelte.ts`, `features/home/model/{push-notifications,room-navigation,toasts}.svelte.ts`, `features/room/{guest-name-ui,leave-screen,mobile-call-ui,participant-context-ui,participants-ui,pins,room-device-ui,room-settings,room-ui,screen-source-ui,screen-ui,start-ui,toast-ui,voice-session}.svelte.ts`, `features/room/client/core/state.svelte.ts`, `shared/{call-activity,audio/playback-policy,notifications/preferences,theme/theme}.svelte.ts` | State with actions goes in a class handed down through context, not a new module-level `$state` |
 | Two recorded ESLint suppressions | `eslint-suppressions.json`: `features/home/HomePage.svelte` (`/?auth=` links, `svelte/no-navigation-without-resolve`), `shared/chat/EmojiComposer.svelte` (`svelte/no-dom-manipulating`, false positive) | Do not add to the file; fix the code |
+| `on(client)` query-shape guard: a value that is not a client falls back to the pool | `domains/media/attachment.repository.ts`, `domains/media/media-job.repository.ts` (`media-job-repository.test.ts` pins the fallback) | Kept on purpose. A new repository takes a typed `QueryClient` and does not guess the shape at run time |
+| Optional authorizers with a deny-all default | `domains/media/media-visibility.service.ts` (`authorizeDirectAttachment`, `authorizeRoomAttachment`; production passes both, `release-metrics.test.ts` builds without) | Kept on purpose. A new dependency is required in the factory's type, not optional with a default |
+| Nullable pool refused at run time | `domains/messaging/reaction.repository.ts`, `domains/messaging/reply.repository.ts` (`requireQuery` refuses a missing client; `reply-repository.test` asserts the refusal message) | Kept on purpose. Do not add another `requireQuery`; take a non-null client |
+| `status: string` taken from the DB column or a metrics label | `domains/notifications/notification-outbox.repository.ts`, `lib/metrics.ts` (`HttpRequestStat`) | Kept on purpose. Narrow a status to a union where the code branches on it |
+| Internal error classes that are not a `DomainError` | `MediaError` in `domains/media/storage.ts` (storage codes), `FetchError` in `lib/link-preview-fetcher.ts` (no HTTP status), `MessageDeliveryFenceError` in `domains/messaging/` | An error that reaches a route is a `DomainError` with a catalogued code; add the code first. Keep the internal classes internal |
+| Run-time fail-safe on a typed result | `domains/moderation/moderation.service.ts` (`revoked?.status !== 'revoked'` on a typed `PrincipalRevocation` result) | Kept on purpose. Type a new port result as a union |
+| Optional `credentialBoundary` | `realtime/room-runtime.ts` (`RuntimeCredentialBoundary \| null`; null without a 32-byte gate secret, then leases revoke through the room store) | Kept on purpose. Do not add another nullable collaborator to `RoomRuntimeDeps` |
+| Large lobby components | `features/home/components/lobby/Sidebar.svelte` (715 lines), `features/home/LobbyPage.svelte` (427 lines after the routing and staff-access split) | Extract a model class or a child component before adding to either |
 
 Paths in the web rows are under `apps/web/src/lib/`, the rest under
 `apps/api/src/`.

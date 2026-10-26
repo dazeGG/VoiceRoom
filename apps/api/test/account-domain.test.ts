@@ -71,7 +71,7 @@ function harness(
     },
     async createSession(input) {
       calls.sessions.push(input);
-      return { token: 'tok', publicId: 'pub-1' };
+      return { token: 'tok', publicId: 'pub-1', tokenHash: 'hash-tok', expiresAt: 1 };
     },
     async getUserById(userId) {
       return storedUser({ id: userId, login: 'reloaded', displayName: 'Reloaded' });
@@ -79,13 +79,17 @@ function harness(
     async verifyCredentials(login, password) {
       return password === 'right-password' ? { ...USER, deletionRequestedAt: login === 'leaving' ? 1000 : null } : null;
     },
-    async deleteSession() {},
+    async deleteSession() {
+      return true;
+    },
     async updateDisplayName({ userId, displayName }) {
-      return userId === 'gone' ? null : storedUser({ id: userId, displayName });
+      return userId === 'gone'
+        ? null
+        : storedUser({ id: userId, ...(displayName === undefined ? {} : { displayName }) });
     },
     async changePassword({ userId, currentPassword }) {
       return {
-        status: userId === 'gone' ? 'not_found' : currentPassword === 'right-password' ? 'changed' : 'invalid_password'
+        status: userId === 'gone' ? 'not_found' : currentPassword === 'right-password' ? 'updated' : 'invalid_password'
       };
     },
     async getRecoveryCodesStatus() {
@@ -103,7 +107,9 @@ function harness(
         : { status: 'seen', whatsNewSeen: '9.9.9' };
     },
     async markAppPromptSeen({ userId }) {
-      return { status: userId === 'gone' ? 'not_found' : 'seen' };
+      return userId === 'gone'
+        ? { status: 'not_found', appPromptSeenAt: null }
+        : { status: 'seen', appPromptSeenAt: 1 };
     },
     async listPendingLoginAlerts() {
       return [ALERT];
@@ -129,7 +135,9 @@ function harness(
         : { status: 'invalid_password', codes: [] };
     },
     async recoverWithCode({ code }) {
-      return code === 'good' ? { status: 'recovered', user: storedUser(), remaining: 4 } : { status: 'invalid' };
+      return code === 'good'
+        ? { status: 'recovered', user: storedUser(), remaining: 4 }
+        : { status: 'invalid', user: null, remaining: 0 };
     },
     async recordLogin({ kind }) {
       if (kind === 'register') throw new Error('audit down');
@@ -161,7 +169,9 @@ function harness(
       return { graceDays: 7, rooms: [] };
     },
     async requestDeletion({ currentPassword }) {
-      return requests[currentPassword] ?? { status: 'invalid_password' };
+      return (
+        (typeof currentPassword === 'string' ? requests[currentPassword] : undefined) ?? { status: 'invalid_password' }
+      );
     },
     async restoreAccount({ login }) {
       return restores[login] ?? { status: 'invalid', userId: null };
@@ -288,7 +298,7 @@ test('profile, password, notices and recovery codes', async () => {
   assert.equal(generated.codes.length, 1);
   const empty = await harness({
     async generateRecoveryCodes() {
-      return { status: 'generated', codes: [] };
+      return { status: 'generated', codes: [], generatedAt: 1 };
     }
   }).service.generateRecoveryCodes('user-1', 'p');
   assert.ok('codes' in empty);
@@ -337,7 +347,7 @@ test('recovery replaces the password, ends other sessions and asks the other dev
   assert.deepEqual(calls.pushes, ['Вход по коду восстановления']);
   const noRemaining = await harness({
     async recoverWithCode() {
-      return { status: 'recovered', user: storedUser({ id: 'u' }) };
+      return { status: 'recovered', user: storedUser({ id: 'u' }), remaining: 0 };
     }
   }).service.recover({ login: 'a', code: 'c', newPassword: 'long-password', device });
   assert.ok('remaining' in noRemaining);
@@ -627,6 +637,41 @@ test('every account route needs a session and answers it', async (t) => {
     ok: true,
     resolution: 'confirmed'
   });
+});
+
+test('deletion cookie delivery changes only for a well-formed native user agent, never authorization', async (t) => {
+  const cases: Array<[string, boolean]> = [
+    ['VoiceRoom-Android/0.1.0', false],
+    ['Mozilla/5.0 (Linux; Android 14) Chrome/140.0', true],
+    ['VoiceRoom-Android/', true],
+    ['VoiceRoom-Android/0.1', true],
+    ['VoiceRoom-Android/0.1.0-beta', true],
+    ['VoiceRoom-Android/not-a-version', true]
+  ];
+  for (const [userAgent, clearsCookie] of cases) {
+    const headers = { 'user-agent': userAgent };
+    const { app, seen } = routeApp(t, {}, { session: SIGNED_IN });
+    const scheduled = await app.inject({
+      method: 'POST',
+      url: '/api/auth/account/deletion',
+      headers,
+      payload: { currentPassword: 'password' }
+    });
+    assert.equal(scheduled.statusCode, 200);
+    assert.equal(scheduled.headers['set-cookie'], clearsCookie ? 'vr_session=' : undefined, userAgent);
+    assert.deepEqual(seen.requestDeletion, ['user-1', 'password', app.log]);
+
+    const anonymous = routeApp(t);
+    const denied = await anonymous.app.inject({
+      method: 'POST',
+      url: '/api/auth/account/deletion',
+      headers,
+      payload: { currentPassword: 'password' }
+    });
+    assert.equal(denied.statusCode, 401, `${userAgent} cannot authenticate`);
+    assert.equal(denied.headers['set-cookie'], undefined);
+    assert.equal(anonymous.seen.requestDeletion, undefined);
+  }
 });
 
 test('account refusals keep their texts', async (t) => {

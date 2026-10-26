@@ -3,7 +3,10 @@
 // what it is.
 
 import crypto from 'node:crypto';
+import { normalizeReleaseVersion } from '@voice-room/shared/account-security';
+import { SESSION_ENDED_CLOSE_CODE } from '@voice-room/shared/realtime';
 import { cleanLiveKitUrl } from '@voice-room/shared/validation';
+import { normalizeLiveKitRoomPrefix } from '../domains/admission/livekit-token-binding.mts';
 import { readEnvBool, readEnvInt, readMessageDeliveryMode, readUploadsDir } from '../lib/config.ts';
 
 type Env = Record<string, string | undefined>;
@@ -38,6 +41,17 @@ export function readLogConfig(env: Env = process.env): { level: string; environm
   };
 }
 
+/** LiveKit's Prometheus endpoint for the admin panel's media numbers; empty unless an http(s) URL. */
+export function readLiveKitMetricsUrl(env: Env = process.env): string {
+  const value = (env.LIVEKIT_METRICS_URL || '').trim();
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : '';
+  } catch {
+    return '';
+  }
+}
+
 /** Web push: on only with the full VAPID key pair and a subject. */
 export type PushConfig = { enabled: boolean; vapidPublicKey: string; privateKey: string; subject: string };
 
@@ -51,6 +65,24 @@ export function readPushConfig(env: Env = process.env): PushConfig {
     privateKey,
     subject
   };
+}
+
+/** Push to the Android app through RuStore: on only with both the project id and its service token. */
+export type RuStorePushConfig = { enabled: boolean; projectId: string; serviceToken: string };
+
+export function readRuStorePushConfig(env: Env = process.env): RuStorePushConfig {
+  const projectId = String(env.RUSTORE_PUSH_PROJECT_ID || '').trim();
+  const serviceToken = String(env.RUSTORE_PUSH_SERVICE_TOKEN || '').trim();
+  return { enabled: Boolean(projectId && serviceToken), projectId, serviceToken };
+}
+
+// The oldest Android app version the server still serves (`x.y.z`); empty sets
+// no bound. A malformed value stops the process at start instead of silently
+// refusing nothing.
+function readAndroidMinVersion(env: Env): string {
+  const value = String(env.ANDROID_MIN_VERSION || '').trim();
+  if (value && !normalizeReleaseVersion(value)) throw new Error('ANDROID_MIN_VERSION must be a version like 1.2.0');
+  return value;
 }
 
 /** What the process entry decides before it builds the app. */
@@ -78,7 +110,8 @@ export function readApiConfig(env: Env = process.env) {
   return Object.freeze({
     API_PREFIX: '/api',
     HOST: (env.HOST || '127.0.0.1').trim(),
-    PORT: int('PORT', 3000, 1),
+    // 0 asks the OS for a free port.
+    PORT: int('PORT', 3000, 0),
     SOCKET_PATH: (env.SOCKET_PATH || '').trim(),
     MAX_ROOM_PEERS: int('MAX_ROOM_PEERS', 12, 1),
     // People in voice on the whole server; 0 leaves it uncapped.
@@ -103,6 +136,8 @@ export function readApiConfig(env: Env = process.env) {
     // The LiveKit URL the CSP admits: the public gate, else the SFU itself.
     LIVEKIT_CSP_URL: cleanLiveKitUrl(gatePublicUrl || env.LIVEKIT_URL || ''),
     LIVEKIT_GATE_SECRET: (env.LIVEKIT_GATE_SECRET || '').trim(),
+    // Must match the gate's: it compares the JWT room with the credential room.
+    LIVEKIT_ROOM_PREFIX: normalizeLiveKitRoomPrefix(env.LIVEKIT_ROOM_PREFIX),
     ROOM_IDLE_TTL_MS: int('ROOM_IDLE_TTL_MS', 900000, 1000),
     ROOM_PRUNE_INTERVAL_MS: int('ROOM_PRUNE_INTERVAL_MS', 60000, 0),
     ROOM_CHAT_RATE_LIMIT: int('ROOM_CHAT_RATE_LIMIT', 60, 0),
@@ -126,7 +161,7 @@ export function readApiConfig(env: Env = process.env) {
     GEOIP_DB_PATH: String(env.GEOIP_DB_PATH || '').trim(),
     // Close code for sockets whose account session was ended; clients stop
     // reconnecting and return to the sign-in screen instead.
-    SESSION_REVOKED_CLOSE_CODE: 4401,
+    SESSION_REVOKED_CLOSE_CODE: SESSION_ENDED_CLOSE_CODE,
     DM_RATE_LIMIT: int('DM_RATE_LIMIT', 30, 0),
     DM_RATE_WINDOW_MS: int('DM_RATE_WINDOW_MS', 10000, 1000),
     FRIEND_REQUEST_RATE_LIMIT: int('FRIEND_REQUEST_RATE_LIMIT', 20, 0),
@@ -176,6 +211,9 @@ export function readApiConfig(env: Env = process.env) {
     MESSAGE_DELIVERY_LISTEN_ENABLED: readEnvBool('MESSAGE_DELIVERY_LISTEN_ENABLED', true, env),
     REALTIME_RECONNECT_LEASE_MS: resolveRealtimeReconnectLeaseMs(env),
     PUSH: readPushConfig(env),
+    RUSTORE_PUSH: readRuStorePushConfig(env),
+    ANDROID_MIN_VERSION: readAndroidMinVersion(env),
+    LIVEKIT_METRICS_URL: readLiveKitMetricsUrl(env),
     // Desktop downloads come from the latest GitHub release; the metadata is
     // cached so visitors never hit GitHub's per-IP rate limit.
     DESKTOP_RELEASE_REPO: (env.DESKTOP_RELEASE_REPO || 'dazeGG/VoiceRoomDesktop').trim(),
@@ -221,7 +259,9 @@ export function readNotificationDeliveryWorkerConfig(env: Env = process.env) {
     BATCH_SIZE: int('NOTIFICATION_DELIVERY_BATCH_SIZE', 50, 1),
     LEASE_MS: int('NOTIFICATION_DELIVERY_LEASE_MS', 120000, 1000),
     RENEW_MS: int('NOTIFICATION_DELIVERY_RENEW_MS', 30000, 100),
-    MAX_ATTEMPTS: int('NOTIFICATION_DELIVERY_MAX_ATTEMPTS', 8, 1)
+    MAX_ATTEMPTS: int('NOTIFICATION_DELIVERY_MAX_ATTEMPTS', 8, 1),
+    RUSTORE_PUSH: readRuStorePushConfig(env),
+    ANDROID_MIN_VERSION: readAndroidMinVersion(env)
   });
 }
 

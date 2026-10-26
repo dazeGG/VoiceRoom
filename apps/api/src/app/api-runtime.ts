@@ -7,6 +7,7 @@ import type http from 'node:http';
 import type { IncomingMessage } from 'node:http';
 import type { FastifyBaseLogger } from 'fastify';
 import { startMaintenanceTimers } from '../platform/maintenance.ts';
+import { createRingDeliveryRuntime } from '../domains/rings/ring-delivery.ts';
 import { apiMaintenanceTasks } from './maintenance-tasks.ts';
 import { createRealtimeHub } from './realtime-hub.ts';
 import { createLiveKit } from './livekit.ts';
@@ -27,7 +28,9 @@ import {
   renderPrometheus
 } from '../lib/metrics.ts';
 import { createHostProbe } from '../platform/host-probe.ts';
+import { createSfuProbe } from '../platform/livekit-metrics.ts';
 import { createFastifyApp } from '../platform/http/fastify-app.ts';
+import { outdatedAndroidVersion } from '@voice-room/shared/client-version';
 import { asHttpServer, type ApiServer } from '../platform/http/http-server.ts';
 import type { Timer } from '../platform/types.ts';
 export type { ApiServer };
@@ -161,6 +164,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     snapshots: services.getProductSnapshotRepository,
     activity
   });
+  const sfuProbe = createSfuProbe({ url: config.LIVEKIT_METRICS_URL });
   const systemSampler = createSystemSampler({
     host: createHostProbe(),
     http: httpTotals,
@@ -168,7 +172,9 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
       ...liveVoice(),
       wsConnections: hub.registry.stats().sockets
     }),
-    snapshots: services.getSystemSnapshotRepository
+    snapshots: services.getSystemSnapshotRepository,
+    sfu: () => sfuProbe.read(),
+    media: () => hub.runtime()?.takeMediaMinute() ?? null
   });
 
   function startPruneTimer(server: ApiServer, logger: Logger = getProcessLogger()) {
@@ -190,6 +196,8 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
         callFeedback: services.getCallFeedbackRepository,
         staffSessions: services.getStaffRepository,
         roomBans: () => services.getActiveBanService()?.repository ?? null,
+        productStats: services.getAdminStatsRepository,
+        activity: services.getActivityRepository,
         retention: { intervalMs: config.RETENTION_PURGE_INTERVAL_MS, keepDeletedMs: config.RETENTION_KEEP_DELETED_MS }
       })
     });
@@ -249,7 +257,8 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
       securityHeaders: baseHeaders,
       logRequest: logHttpRequest,
       // The admin app's cookie authenticates too, so its writes are origin-checked the same way.
-      hasSessionCookie: (req) => Boolean(getSessionToken(req) || staffToken(req, config.SESSION_COOKIE_SECURE))
+      hasSessionCookie: (req) => Boolean(getSessionToken(req) || staffToken(req, config.SESSION_COOKIE_SECURE)),
+      outdatedClientVersion: (req) => outdatedAndroidVersion(req.headers['user-agent'], config.ANDROID_MIN_VERSION)
     });
     const appLogger = logger || app.log;
     setProcessLogger(appLogger);
@@ -263,6 +272,13 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
 
     app.addHook('onReady', hub.deliveryRelay.start);
     app.addHook('onClose', hub.deliveryRelay.stop);
+    const ringDelivery = createRingDeliveryRuntime({
+      rings: domain.rings,
+      enabled: () => services.getPool() !== null,
+      onError: (error) => appLogger.warn({ err: error }, 'ring delivery failed')
+    });
+    app.addHook('onReady', async () => ringDelivery.start());
+    app.addHook('onClose', ringDelivery.stop);
 
     const { roomRuntime, wsHandler } = hub.start({
       logger: appLogger,

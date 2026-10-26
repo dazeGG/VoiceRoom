@@ -1,3 +1,5 @@
+import { newId } from '../new-id';
+
 // Messages on their way out of one conversation. The field empties the moment
 // a message is sent, the message shows in the chat until the server has it,
 // and the next one can be written meanwhile. They go out one at a time, in the
@@ -21,10 +23,6 @@ export interface OutboxOptions<Payload, Message> {
   onSent: (message: Message) => void;
 }
 
-function randomKey(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-}
-
 export class Outbox<Payload, Message> {
   items = $state<Outgoing<Payload>[]>([]);
   #options: OutboxOptions<Payload, Message>;
@@ -35,7 +33,7 @@ export class Outbox<Payload, Message> {
   }
 
   enqueue(payload: Payload): void {
-    this.items = [...this.items, { localId: randomKey(), payload, state: 'queued', error: '' }];
+    this.items = [...this.items, { localId: newId(), payload, state: 'queued', error: '' }];
     void this.#drain();
   }
 

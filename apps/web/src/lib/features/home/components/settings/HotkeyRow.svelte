@@ -4,9 +4,9 @@
   import {
     getDefaultHotkeyBinding,
     readHotkeyBinding,
+    setDesktopGlobalHotkeysSuspended,
     type HotkeyAction
-  } from '$lib/features/room/client/core/hotkeys';
-  import { setDesktopGlobalHotkeysSuspended } from '$lib/features/room/client/services/desktop-hotkey-service';
+  } from '$lib/features/room/client';
   import { saveHotkey } from '../../model/hotkey-settings';
 
   let {

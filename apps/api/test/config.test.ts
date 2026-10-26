@@ -13,12 +13,21 @@ test('readEnvInt falls back when missing', () => {
   assert.equal(readEnvInt('PORT', 3000, 1, {}), 3000);
 });
 
-test('readEnvInt falls back when below min', () => {
-  assert.equal(readEnvInt('PORT', 3000, 1024, { PORT: '80' }), 3000);
+test('readEnvInt falls back when empty', () => {
+  assert.equal(readEnvInt('PORT', 3000, 1, { PORT: '' }), 3000);
+  assert.equal(readEnvInt('PORT', 3000, 1, { PORT: '  ' }), 3000);
 });
 
-test('readEnvInt falls back on non-numeric value', () => {
-  assert.equal(readEnvInt('PORT', 3000, 1, { PORT: 'abc' }), 3000);
+// A typo in a limit must stop the start, not quietly run with the default:
+// MAX_VOICE_PEERS=6OO used to leave the server uncapped.
+test('readEnvInt refuses a value below min', () => {
+  assert.throws(() => readEnvInt('PORT', 3000, 1024, { PORT: '80' }), /PORT must be an integer of at least 1024/);
+});
+
+test('readEnvInt refuses a value that is not a whole number', () => {
+  for (const value of ['abc', '6OO', '15000.5', '1e3', '12 rooms']) {
+    assert.throws(() => readEnvInt('MAX_VOICE_PEERS', 0, 0, { MAX_VOICE_PEERS: value }), /MAX_VOICE_PEERS/, value);
+  }
 });
 
 test('readEnvBool reads truthy strings', () => {
@@ -90,4 +99,30 @@ test('compose passes every feature flag the API leaves disabled by default', () 
   assert.ok(defaultOff.length > 0, 'expected the API to declare default-off flags');
   const unreachable = defaultOff.filter((name) => !passed.has(name));
   assert.deepEqual(unreachable, [], `compose never passes these flags to api: ${unreachable.join(', ')}`);
+});
+
+// Container logs hold IP keys (API) and shortened addresses (LiveKit); the
+// privacy policy promises they last a bounded time, which only a size cap on
+// every container's log gives.
+test('compose caps the log of every service', () => {
+  const root = path.join(import.meta.dirname, '../../..');
+  const compose = fs.readFileSync(path.join(root, 'docker-compose.yml'), 'utf8');
+  const anchor = compose.slice(compose.indexOf('x-logging: &logging'), compose.indexOf('\nservices:'));
+  assert.match(anchor, /max-size: \d+m/);
+  assert.match(anchor, /max-file: "\d+"/);
+
+  const services = compose.slice(
+    compose.indexOf('\nservices:'),
+    compose.search(/\n[a-z]+:\n(?! )/m) > 0 ? undefined : undefined
+  );
+  const body = services.slice(0, services.search(/\n(?:volumes|networks):\n/));
+  const names = Array.from(body.matchAll(/^ {2}([a-z][a-z0-9-]*):$/gm), (m) => m[1] ?? '');
+  assert.ok(names.includes('api') && names.includes('livekit'), 'expected the compose services');
+  const uncapped = names.filter((name) => {
+    const start = body.indexOf(`\n  ${name}:\n`);
+    const next = body.slice(start + 1).search(/\n {2}[a-z][a-z0-9-]*:\n/);
+    const block = next < 0 ? body.slice(start) : body.slice(start, start + 1 + next);
+    return !block.includes('\n    logging: *logging\n');
+  });
+  assert.deepEqual(uncapped, []);
 });

@@ -3,6 +3,7 @@ import { getNameStatusView, startUi } from '../../start-ui.svelte';
 import { state } from '../core/state.svelte';
 import { showToast } from './toast';
 import { cleanDisplayName } from '../core/utils';
+import { DISPLAY_NAME_STORAGE_KEY, writeStorage } from '$lib/shared/storage';
 
 let pendingGuestNamePromise: Promise<string> | null = null;
 let resolvePendingGuestName: ((name: string) => void) | null = null;
@@ -145,7 +146,7 @@ export function persistName(name: string): void {
   state.savedName = name;
   // A name saved elsewhere (the guest name dialog) fills an empty start form.
   if (!startUi.nameInput) startUi.nameInput = name;
-  localStorage.setItem('voice-room:name', name);
+  writeStorage(DISPLAY_NAME_STORAGE_KEY, name);
   updateNameStatuses(name);
 }
 

@@ -9,7 +9,7 @@ import type { Database } from '../../platform/db/kysely.ts';
 import type { RoomPeerIdentities } from '../../platform/db/schema.ts';
 import { avatarColorForPeerId } from './avatar-color.ts';
 import { createRowId } from '../../platform/db/ids.ts';
-import { toDate, toMillis } from './room.repository.ts';
+import { toDate, toMillis } from '../../platform/epoch-millis.ts';
 
 export type PeerIdentity = ReturnType<typeof mapPeerIdentity>;
 export type PeerIdentityClaim =

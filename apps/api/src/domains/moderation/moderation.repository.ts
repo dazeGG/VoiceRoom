@@ -81,17 +81,15 @@ function createModerationRepository({
   pool,
   ipKeyOf
 }: {
-  cursorCodec?: ModerationCursorCodec | undefined;
-  pool?: QueryClient | null | undefined;
+  cursorCodec: ModerationCursorCodec;
+  pool: QueryClient;
   ipKeyOf: IpKeyOf;
 }) {
-  if (!pool?.query) throw new TypeError('A PostgreSQL pool is required');
-  if (!cursorCodec?.encode || !cursorCodec?.decode) throw new TypeError('Cursor codec is required');
   const base = pool;
   const codec = cursorCodec;
   /** The stored form of a guest's address; '' when it is not one. */
   const guestKey = (guestIp: string | null | undefined): string => storedIpKey(ipKeyOf, guestIp);
-  const on = (client: Client): Database => kyselyOn(client?.query ? client : base);
+  const on = (client: Client): Database => kyselyOn(client ?? base);
   const bans = (row: ModerationBanRow | undefined) => mapModerationBan(row);
 
   function encodeCursor(roomId: string, row: ModerationBanRow | undefined): string | undefined {

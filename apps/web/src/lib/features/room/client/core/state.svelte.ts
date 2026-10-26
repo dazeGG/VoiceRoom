@@ -24,3 +24,8 @@ export function reactiveParticipant<T extends object>(value: T): T {
   const reactiveValue = $state(value);
   return reactiveValue;
 }
+
+/** The name the room client was given for `roomId` when it is the room it holds, else ''. */
+export function clientRoomName(roomId: string | null): string {
+  return (state.roomId === roomId && state.roomName) || '';
+}

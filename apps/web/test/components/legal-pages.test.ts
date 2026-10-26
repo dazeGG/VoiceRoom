@@ -43,7 +43,11 @@ test('the privacy policy names the operator, the contact and the retention perio
   // What the administration sees of the calls, and how long a stay keeps its room.
   expect(text).toContain('администрация сервиса видит, кто сейчас в звонках комнат');
   expect(text).toContain('Содержимое звонков мы не слушаем и не записываем');
-  expect(text).toMatch(/История участия в звонках связана с комнатой 90 дней/);
+  expect(text).toMatch(/История участия в звонках связана с вами 90 дней/);
+  // After them only counts and the time in calls are left, and the logs are capped.
+  expect(text).toMatch(/в какие дни вы пользовались сервисом, — 90 дней/);
+  expect(text).toMatch(/остаётся только время\s+в звонке/);
+  expect(text).toMatch(/не больше 30 МБ/);
   expect(screen.getAllByRole('link', { name: 'support@voiceroom.ru' })[0]?.getAttribute('href')).toBe(
     'mailto:support@voiceroom.ru'
   );

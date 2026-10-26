@@ -4,8 +4,8 @@
   import { onMount, untrack } from 'svelte';
   import type { ChatMessage } from '$lib/api/rooms';
   import { session } from '$lib/features/auth/session.svelte';
-  import type { Attachment as MessageAttachment } from '@voice-room/shared/contracts/messages';
-  import { attachmentAt, downloadAttachment } from '$lib/shared/chat/attachment-actions';
+  import { downloadAttachment } from '$lib/shared/chat/attachment-actions';
+  import { MessageMenuState } from '$lib/shared/chat/message-menu-state.svelte';
   import { copyMessageImage, copyMessageText } from '$lib/shared/chat/chat-scroll.svelte';
   import { applyRoomDeleted, applyRoomNotFound, applyRoomUpdated } from '../client/room/lifecycle';
   import { openProfileCardFor } from '$lib/entities/profile-card/profile-card-ui.svelte';
@@ -116,19 +116,10 @@
   });
   const { timeline, scroll, reactions, outbox, isOwnMessage } = chat;
 
-  let editingMessageId = $state('');
-  let composer = $state<{ focus(): void } | null>(null);
   // On a phone the panel is the whole screen rather than a rail beside the
   // stage, so it closes with a cross instead of collapsing to the right.
   let mobile = $state(false);
   const media = $derived<AttachmentComposeStore | null>(roomId ? getAttachmentComposeStore('room', roomId) : null);
-  let replyTarget = $state<ChatMessage | null>(null);
-  let menuMessage = $state<ChatMessage | null>(null);
-  // The picture the menu was opened on, when it was opened on one.
-  let menuImage = $state<MessageAttachment | null>(null);
-  let reportedMessageId = $state<string | null>(null);
-  let menuX = $state(0);
-  let menuY = $state(0);
   let quickReactions = $state<string[]>([...DEFAULT_FREQUENT_REACTIONS]);
   const draft = new ChatDraft({ type: 'room', id: untrack(() => roomId) });
   $effect(() => draft.restore(session.user?.id ?? ''));
@@ -142,8 +133,13 @@
 
   const days = $derived(buildChatDays(timeline.messages, isOwnMessage));
 
-  $effect(() => {
-    for (const message of timeline.messages) reactions.show(message);
+  // Starting an edit clears the last send or edit error under the thread.
+  const menu = new MessageMenuState<ChatMessage>({
+    reactions,
+    messages: () => timeline.messages,
+    onEdit: () => {
+      timeline.error = '';
+    }
   });
 
   // Showing the chat marks it read and parks the view on the newest message.
@@ -164,39 +160,6 @@
 
     return stop;
   });
-
-  function editLastOwnMessage(): boolean {
-    if (editingMessageId) return false;
-    const lastOwn = chat.lastOwnMessage();
-    if (!lastOwn) return false;
-    editingMessageId = lastOwn.id;
-    timeline.error = '';
-    return true;
-  }
-
-  function replyTo(message: ChatMessage): void {
-    replyTarget = message;
-    composer?.focus();
-  }
-
-  // --- message context menu ---------------------------------------------
-
-  function openMessageMenu(message: ChatMessage, event: MouseEvent): void {
-    if (editingMessageId === message.id) return;
-    event.preventDefault();
-    menuMessage = message;
-    menuImage = attachmentAt(event.target, message.attachments);
-    menuX = event.clientX;
-    menuY = event.clientY;
-  }
-
-  function closeMessageMenu(): void {
-    menuMessage = null;
-  }
-
-  function reactFromMenu(messageId: string, emoji: string): void {
-    void reactions.toggle(messageId, emoji);
-  }
 
   // Left click on another author (avatar or name) shows their profile card.
   // Realtime participant data enriches it when available; message identity is
@@ -299,17 +262,13 @@
               <RoomChatMessageGroup
                 {group}
                 canOpenProfile={canOpenProfile(group)}
-                {editingMessageId}
-                menuMessageId={menuMessage?.id ?? ''}
+                {menu}
                 {reactions}
                 onOpenProfile={(event: MouseEvent) => openUserProfile(group, event)}
                 onAuthorMenu={(event: MouseEvent) => openUserMenu(group, event)}
-                onMessageMenu={openMessageMenu}
                 onSaveEdit={(messageId: string, text: string) => chat.saveEdit(messageId, text)}
-                onCloseEdit={() => (editingMessageId = '')}
                 onJump={chat.jumpTo}
                 onMention={openMentionProfile}
-                onReply={replyTo}
                 onCopy={(message: ChatMessage) => void copyMessageText(message.text, toast)}
               />
             {/each}
@@ -332,14 +291,14 @@
     {/if}
 
     <RoomChatComposer
-      bind:this={composer}
-      bind:replyTarget
+      bind:this={menu.composer}
+      bind:replyTarget={menu.replyTarget}
       {roomId}
       {draft}
       {media}
       typingLabel={chat.typingLabel}
       send={(message: OutgoingRoomMessage) => chat.send(message)}
-      onEditLast={editLastOwnMessage}
+      onEditLast={() => menu.editLast(chat.lastOwnMessage())}
       onJump={chat.jumpTo}
       onToast={toast}
     />
@@ -350,46 +309,38 @@
   {/if}
 </aside>
 
-{#if menuMessage}
-  {@const target = menuMessage}
-  {@const image = menuImage}
+{#if menu.opened}
+  {@const target = menu.opened.message}
+  {@const image = menu.opened.image}
   <MessageContextMenu
-    open={Boolean(menuMessage)}
-    x={menuX}
-    y={menuY}
+    open
+    x={menu.opened.x}
+    y={menu.opened.y}
     {quickReactions}
-    activeReactions={new Set(
-      reactions
-        .forMessage(target.id)
-        .filter((summary) => summary.reactedByMe)
-        .map((summary) => summary.emoji)
-    )}
+    activeReactions={menu.activeReactions}
     canReact={Boolean(session.user?.id)}
     canPin={Boolean(session.user?.id)}
     pinned={isMessagePinned(target.id)}
     canEdit={isOwnMessage(target)}
     canDelete={isOwnMessage(target) || canModerate}
-    onClose={closeMessageMenu}
-    onReact={(emoji: string) => reactFromMenu(target.id, emoji)}
+    onClose={() => menu.close()}
+    onReact={(emoji: string) => void reactions.toggle(target.id, emoji)}
     onOpenReactionPicker={() => scroll.openReactionPicker(target.id)}
-    onReply={() => replyTo(target)}
+    onReply={() => menu.replyTo(target)}
     onCopy={() => void copyMessageText(target.text, toast)}
     onCopyImage={image ? () => void copyMessageImage(image, toast) : undefined}
     onDownloadImage={image ? () => downloadAttachment(image) : undefined}
     onTogglePin={() => void chat.togglePinned(target.id)}
-    onEdit={() => {
-      editingMessageId = target.id;
-      timeline.error = '';
-    }}
+    onEdit={() => menu.edit(target.id)}
     onDelete={() => void chat.deleteMessage(target.id)}
-    onReport={session.user?.id && !isOwnMessage(target) ? () => (reportedMessageId = target.id) : undefined}
+    onReport={session.user?.id && !isOwnMessage(target) ? () => menu.report(target.id) : undefined}
   />
 {/if}
 
-{#if reportedMessageId && roomId}
+{#if menu.reportedId && roomId}
   <ReportMessageDialog
-    target={{ kind: 'room_message', roomId, messageId: reportedMessageId }}
-    onClose={() => (reportedMessageId = null)}
+    target={{ kind: 'room_message', roomId, messageId: menu.reportedId }}
+    onClose={() => menu.closeReport()}
     onReported={(message: string) => toast(message)}
   />
 {/if}

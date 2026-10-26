@@ -13,7 +13,6 @@ const cachedImageKey = sql<string | null>`preview -> 'image' ->> 'key'`;
 const messageImageKey = sql<string | null>`metadata -> 'linkPreview' -> 'image' ->> 'key'`;
 
 function createLinkPreviewRepository({ pool }: { pool: QueryClient }) {
-  if (!pool) throw new TypeError('A database pool is required');
   const db = kyselyOn(pool);
 
   async function getCached(urlHash: string, now: number): Promise<CachedPreview | null> {

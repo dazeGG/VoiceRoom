@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import test, { type TestContext } from 'node:test';
-import { normalizeNotificationLevel } from '@voice-room/shared/notifications';
 import { createNotificationService, type RoomLevelStore } from '../src/domains/notifications/notification.service.ts';
 import type { InboxRepository } from '../src/domains/notifications/inbox.repository.ts';
 import { createNotificationPreferencesRepository } from '../src/domains/notifications/notification-preferences.repository.ts';
@@ -29,11 +28,19 @@ async function fixture(t: TestContext) {
   });
   return { cleanup, databaseUrl, pool, rooms, users, userId: created.user.id, roomId: 'g61-room' };
 }
-test('G61-A01 only all mentions none validate', () => {
-  assert.equal(normalizeNotificationLevel('all'), 'all');
-  assert.equal(normalizeNotificationLevel('mentions'), 'mentions');
-  assert.equal(normalizeNotificationLevel('none'), 'none');
-  assert.equal(normalizeNotificationLevel('loud'), 'mentions');
+test('G61-A01 only all mentions none validate', async () => {
+  const service = createNotificationService({
+    pool: fakeDb(),
+    inbox: fake<InboxRepository>(),
+    notificationPreferences: { setRoomLevel: async ({ level }) => ({ ok: true, level }) }
+  });
+  for (const level of ['all', 'mentions', 'none'] as const) {
+    assert.deepEqual(await service.setRoomLevel({ userId: 'user', roomId: 'room', level }), { ok: true, level });
+  }
+  assert.deepEqual(await service.setRoomLevel({ userId: 'user', roomId: 'room', level: 'loud' }), {
+    ok: false,
+    code: 'invalid_level'
+  });
 });
 test('G61-A02 PostgreSQL persists explicit levels across restart and keeps missing rows conservative', async (t) => {
   const f = await fixture(t);

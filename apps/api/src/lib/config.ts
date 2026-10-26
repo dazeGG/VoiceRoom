@@ -2,9 +2,17 @@ import path from 'node:path';
 
 type Env = NodeJS.ProcessEnv;
 
+// Unset or empty means the default. Anything else must be a whole number of at
+// least `min`: a typo (MAX_VOICE_PEERS=6OO) stops the start instead of
+// running with the default.
 function readEnvInt(name: string, fallback: number, min: number, env: Env = process.env): number {
-  const value = Number.parseInt(env[name] || String(fallback), 10);
-  return Number.isFinite(value) && value >= min ? value : fallback;
+  const raw = (env[name] || '').trim();
+  if (!raw) return fallback;
+  const value = /^-?\d+$/.test(raw) ? Number(raw) : Number.NaN;
+  if (!Number.isSafeInteger(value) || value < min) {
+    throw new Error(`${name} must be an integer of at least ${min}, got "${raw}"`);
+  }
+  return value;
 }
 
 function readEnvBool(name: string, fallback: boolean, env: Env = process.env): boolean {

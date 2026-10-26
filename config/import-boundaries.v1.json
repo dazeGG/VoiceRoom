@@ -11,7 +11,7 @@
     {
       "id": "api-routes-do-not-import-db",
       "sources": ["apps/api/src/server.ts", "apps/api/src/app/api-runtime.ts"],
-      "forbidden": ["./lib/db", "./platform/db/", "apps/api/src/platform/db/"],
+      "forbidden": ["./platform/db/", "apps/api/src/platform/db/"],
       "message": "The composition reaches the database through the service registry, never the pool or query builder."
     }
   ],
@@ -21,6 +21,8 @@
         "apps/api/src/domains/messaging/room-chat.repository.ts",
         "apps/api/src/domains/rooms/room.repository.ts"
       ],
+      "room_rings": ["apps/api/src/domains/rings/ring.repository.ts"],
+      "ring_delivery_outbox": ["apps/api/src/domains/rings/ring.repository.ts"],
       "room_memberships": [
         "apps/api/src/domains/membership/membership.repository.ts",
         "apps/api/src/domains/rooms/room-access.repository.ts",
@@ -84,6 +86,7 @@
       "notification_dm_mutes": ["apps/api/src/domains/notifications/notification-preferences.repository.ts"],
       "notification_room_mutes": ["apps/api/src/domains/notifications/notification-preferences.repository.ts"],
       "push_subscriptions": ["apps/api/src/domains/notifications/push-subscription.repository.ts", "apps/api/src/domains/account/user.repository.ts", "apps/api/src/domains/account/account-standing.repository.ts"],
+      "device_tokens": ["apps/api/src/domains/notifications/device-token.repository.ts"],
       "content_reports": ["apps/api/src/domains/reports/report.repository.ts"],
       "call_feedback": ["apps/api/src/domains/feedback/call-feedback.repository.ts"],
       "voice_sessions": ["apps/api/src/domains/rooms/voice-session.repository.ts"],
@@ -115,7 +118,7 @@
     "ownerPathPrefixes": ["apps/api/src/migrations/"]
   },
   "timerRules": {
-    "forbiddenSources": ["apps/api/src/app.js"],
-    "allowedCurrentSources": ["apps/api/src/server.ts", "apps/api/src/lib/listen.ts"]
+    "forbiddenSources": ["apps/api/src/*.{js,ts}", "apps/api/src/**/*routes.ts"],
+    "allowedCurrentSources": []
   }
 }

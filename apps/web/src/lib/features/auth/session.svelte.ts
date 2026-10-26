@@ -3,6 +3,7 @@ import { clearChatDrafts, resumeChatDrafts } from '$lib/shared/chat/chat-drafts'
 import { clearAttachmentComposeStores } from '$lib/shared/chat/attachment-compose-stores';
 import { clearHistoryCache } from '$lib/shared/chat/history-cache';
 import { displayNameOf } from '$lib/shared/utils/display-name';
+import { DISPLAY_NAME_STORAGE_KEY } from '$lib/shared/storage';
 
 // App-wide auth state. `loaded` flips true once the first /auth/me resolves so
 // the UI can avoid flashing the logged-out state before we know.
@@ -35,9 +36,9 @@ function syncRoomName(user: AuthUser | null): void {
   if (typeof localStorage === 'undefined') return;
   try {
     if (user) {
-      localStorage.setItem('voice-room:name', displayNameOf(user));
+      localStorage.setItem(DISPLAY_NAME_STORAGE_KEY, displayNameOf(user));
     } else {
-      localStorage.removeItem('voice-room:name');
+      localStorage.removeItem(DISPLAY_NAME_STORAGE_KEY);
     }
   } catch {
     // Ignore storage failures (private mode, quota); the room falls back to a guest name.

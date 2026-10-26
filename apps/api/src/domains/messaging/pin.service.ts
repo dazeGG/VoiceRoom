@@ -1,25 +1,21 @@
-import type { ErrorCode } from '@voice-room/shared/contracts/errors';
 import type pg from 'pg';
 import type { PinnedMessage } from '@voice-room/shared/contracts/messages';
 import type { PinAction } from '@voice-room/shared/contracts/realtime';
+import { DomainError } from '../../platform/http/domain-error.ts';
+import type { createPinRepository } from './pin.repository.ts';
 // Any room participant may pin, so the only guard against a room turning into
 // an unbounded pin list is this cap. Discord uses 50; matching it keeps the
 // pinned bar scrollable rather than endless.
 const MAX_PINS_PER_ROOM = 50;
 
-type Client = Pick<pg.PoolClient, 'query'> | null | undefined;
 type PinSnapshot = { pins: PinnedMessage[]; count: number };
 type Viewer = { id?: string; guest?: boolean; isGuest?: boolean } | null | undefined;
 
-export interface PinRepository {
-  listPins(input: { roomId: string; limit: number; client: Client }): Promise<PinnedMessage[]>;
-  pin(input: { roomId: string; messageId: string; userId: string; client: Client }): Promise<{ changed: boolean }>;
-  unpin(input: { roomId: string; messageId: string; client: Client }): Promise<{ changed: boolean }>;
-  countPins(input: { roomId: string; client: Client }): Promise<number>;
-  findVisibleMessage(input: { roomId: string; messageId: string; client: Client }): Promise<boolean>;
-  lockRoom(input: { roomId: string; client: Client }): Promise<void>;
-  transaction<T>(callback: (client: Client) => Promise<T>): Promise<T>;
-}
+export type PinRepository = Pick<
+  ReturnType<typeof createPinRepository>,
+  'countPins' | 'findVisibleMessage' | 'listPins' | 'lockRoom' | 'pin' | 'transaction' | 'unpin'
+>;
+type Client = Pick<pg.PoolClient, 'query'> | null;
 
 export type PinEvent = PinSnapshot & {
   roomId: string;
@@ -35,22 +31,10 @@ export type PinService = Readonly<{
   unpin(input?: { roomId?: unknown; messageId?: unknown; viewer?: Viewer }): Promise<PinSnapshot>;
 }>;
 
-class PinServiceError extends Error {
-  declare code: ErrorCode;
-  declare statusCode: number;
-
-  constructor(message: string, code: ErrorCode, statusCode: number) {
-    super(message);
-    this.name = 'PinServiceError';
-    this.code = code;
-    this.statusCode = statusCode;
-  }
-}
-
 function normalizeRoomId(value: unknown): string {
   const roomId = typeof value === 'string' ? value.trim() : '';
   if (!roomId || roomId.length > 48) {
-    throw new PinServiceError('Invalid room', 'invalid_room', 400);
+    throw new DomainError('invalid_room', 400, 'Invalid room');
   }
   return roomId;
 }
@@ -58,14 +42,14 @@ function normalizeRoomId(value: unknown): string {
 function normalizeMessageId(value: unknown): string {
   const messageId = typeof value === 'string' ? value.trim() : '';
   if (!messageId || messageId.length > 64) {
-    throw new PinServiceError('Invalid message', 'invalid_message', 400);
+    throw new DomainError('invalid_message', 400, 'Invalid message');
   }
   return messageId;
 }
 
 function requireAccount(viewer: Viewer): { id: string } {
   if (!viewer?.id || viewer.guest === true || viewer.isGuest === true) {
-    throw new PinServiceError('Account required', 'account_required', 403);
+    throw new DomainError('account_required', 403, 'Account required');
   }
   return { id: viewer.id };
 }
@@ -75,18 +59,12 @@ function createPinService({
   publish,
   maxPins = MAX_PINS_PER_ROOM
 }: {
-  repository?: PinRepository;
-  publish?: (event: PinEvent) => unknown;
+  repository: PinRepository;
+  publish: (event: PinEvent) => unknown;
   maxPins?: number;
-} = {}): PinService {
-  if (!repository?.listPins || !repository?.pin || !repository?.unpin) {
-    throw new TypeError('Pin repository is required');
-  }
-  const pins = repository;
-  const publisher = typeof publish === 'function' ? publish : () => false;
-
+}): PinService {
   async function snapshot(roomId: string, client: Client = null): Promise<PinSnapshot> {
-    const listed = await pins.listPins({ roomId, limit: maxPins, client });
+    const listed = await repository.listPins({ roomId, limit: maxPins, client });
     return { pins: listed, count: listed.length };
   }
 
@@ -104,26 +82,26 @@ function createPinService({
     const messageId = normalizeMessageId(rawMessageId);
     const account = requireAccount(viewer);
 
-    const mutation = await pins.transaction(async (client) => {
-      await pins.lockRoom({ roomId, client });
-      const visible = await pins.findVisibleMessage({ roomId, messageId, client });
-      if (!visible) throw new PinServiceError('Message is not available', 'message_not_found', 404);
+    const mutation = await repository.transaction(async (client) => {
+      await repository.lockRoom({ roomId, client });
+      const visible = await repository.findVisibleMessage({ roomId, messageId, client });
+      if (!visible) throw new DomainError('message_not_found', 404, 'Message is not available');
 
       // The room-scoped transaction lock makes count + insert one atomic cap
       // decision even when many users pin different messages concurrently.
-      const count = await pins.countPins({ roomId, client });
+      const count = await repository.countPins({ roomId, client });
       if (count >= maxPins) {
-        const already = await pins.listPins({ roomId, limit: maxPins, client });
+        const already = await repository.listPins({ roomId, limit: maxPins, client });
         if (!already.some((entry) => entry.messageId === messageId)) {
-          throw new PinServiceError(`В комнате уже ${maxPins} закреплённых сообщений`, 'pin_limit_reached', 409);
+          throw new DomainError('pin_limit_reached', 409, `В комнате уже ${maxPins} закреплённых сообщений`);
         }
       }
 
-      const result = await pins.pin({ roomId, messageId, userId: account.id, client });
+      const result = await repository.pin({ roomId, messageId, userId: account.id, client });
       return { changed: result.changed, snapshot: await snapshot(roomId, client) };
     });
     if (mutation.changed) {
-      await publisher({ roomId, action: 'pinned', messageId, actorUserId: account.id, ...mutation.snapshot });
+      await publish({ roomId, action: 'pinned', messageId, actorUserId: account.id, ...mutation.snapshot });
     }
     return mutation.snapshot;
   }
@@ -137,13 +115,13 @@ function createPinService({
     const messageId = normalizeMessageId(rawMessageId);
     const account = requireAccount(viewer);
 
-    const mutation = await pins.transaction(async (client) => {
-      await pins.lockRoom({ roomId, client });
-      const result = await pins.unpin({ roomId, messageId, client });
+    const mutation = await repository.transaction(async (client) => {
+      await repository.lockRoom({ roomId, client });
+      const result = await repository.unpin({ roomId, messageId, client });
       return { changed: result.changed, snapshot: await snapshot(roomId, client) };
     });
     if (mutation.changed) {
-      await publisher({ roomId, action: 'unpinned', messageId, actorUserId: account.id, ...mutation.snapshot });
+      await publish({ roomId, action: 'unpinned', messageId, actorUserId: account.id, ...mutation.snapshot });
     }
     return mutation.snapshot;
   }
@@ -155,7 +133,7 @@ function createPinService({
   }: { roomId?: unknown; action?: PinAction; messageId?: string } = {}): Promise<PinSnapshot> {
     const roomId = normalizeRoomId(rawRoomId);
     const current = await snapshot(roomId);
-    await publisher({ roomId, action, messageId, actorUserId: null, ...current });
+    await publish({ roomId, action, messageId, actorUserId: null, ...current });
     return current;
   }
 

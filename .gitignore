@@ -19,10 +19,6 @@ pnpm-debug.log*
 .vscode/
 
 # Local scratch and generated artifacts
-graphify-out/
-# The knowledge graph is rebuilt locally (graphify update .); it is large and
-# goes stale between commits, so none of it is tracked.
-.graphify/
 work/
 outputs/
 deploy/

@@ -36,6 +36,23 @@ export const sample = (at: number, overrides: Partial<SystemSample> = {}): Syste
   httpRequests: 120,
   http5xx: 1,
   httpAvgMs: 18,
+  // 3 Mbit/s in and 6 out; 0.05 % lost on the way in, 0.5 % on the way out.
+  sfuBytesIn: 22_500_000,
+  sfuBytesOut: 45_000_000,
+  sfuPacketsIn: 30_000,
+  sfuLostIn: 15,
+  sfuPacketsOut: 60_000,
+  sfuLostOut: 300,
+  sfuRetransmitOut: 120,
+  sfuCpuPct: 6,
+  sfuRssBytes: 80 * 1024 ** 2,
+  // Two screens and a camera, 12 of 550 Mbit/s; one screen started lower than asked.
+  videoScreensMax: 2,
+  videoCamerasMax: 1,
+  videoMbpsMax: 12,
+  videoBudgetMbps: 550,
+  mediaLowered: 1,
+  mediaRefused: 0,
   ...overrides
 });
 

@@ -24,11 +24,29 @@ export type SystemSnapshot = {
   httpRequests: number;
   http5xx: number;
   httpAvgMs: number | null;
+  /** The media server's minute (livekit-metrics.ts); null when it could not be read. */
+  sfuBytesIn: number | null;
+  sfuBytesOut: number | null;
+  sfuPacketsIn: number | null;
+  sfuLostIn: number | null;
+  sfuPacketsOut: number | null;
+  sfuLostOut: number | null;
+  sfuRetransmitOut: number | null;
+  sfuCpuPct: number | null;
+  sfuRssBytes: number | null;
+  /** The server's video over the minute (realtime/media-minute.ts); null without the room runtime. */
+  videoScreensMax: number | null;
+  videoCamerasMax: number | null;
+  videoMbpsMax: number | null;
+  videoBudgetMbps: number | null;
+  mediaLowered: number | null;
+  mediaRefused: number | null;
 };
 
 export type StoredSystemSnapshot = Omit<SystemSnapshot, 'at'> & { at: number; dbBytes: number | null };
 
 const number = (value: unknown): number => Number(value) || 0;
+const rounded = (value: number | null): number | null => (value === null ? null : Math.round(value));
 const maybeNumber = (value: unknown): number | null =>
   value === null || value === undefined ? null : Number.isFinite(Number(value)) ? Number(value) : null;
 
@@ -54,7 +72,22 @@ export function createSystemSnapshotRepository({ pool }: { pool: pg.Pool }) {
       voice_rooms: snapshot.voiceRooms,
       http_requests: snapshot.httpRequests,
       http_5xx: snapshot.http5xx,
-      http_avg_ms: snapshot.httpAvgMs
+      http_avg_ms: snapshot.httpAvgMs,
+      sfu_bytes_in: rounded(snapshot.sfuBytesIn),
+      sfu_bytes_out: rounded(snapshot.sfuBytesOut),
+      sfu_packets_in: rounded(snapshot.sfuPacketsIn),
+      sfu_lost_in: rounded(snapshot.sfuLostIn),
+      sfu_packets_out: rounded(snapshot.sfuPacketsOut),
+      sfu_lost_out: rounded(snapshot.sfuLostOut),
+      sfu_retransmit_out: rounded(snapshot.sfuRetransmitOut),
+      sfu_cpu_pct: snapshot.sfuCpuPct,
+      sfu_rss_bytes: rounded(snapshot.sfuRssBytes),
+      video_screens_max: snapshot.videoScreensMax,
+      video_cameras_max: snapshot.videoCamerasMax,
+      video_mbps_max: snapshot.videoMbpsMax,
+      video_budget_mbps: snapshot.videoBudgetMbps,
+      media_lowered: snapshot.mediaLowered,
+      media_refused: snapshot.mediaRefused
     };
     await db
       .insertInto('system_snapshots')
@@ -77,7 +110,36 @@ export function createSystemSnapshotRepository({ pool }: { pool: pg.Pool }) {
           // Two ticks in one minute (a restart) both answered requests.
           http_requests: sql<number>`system_snapshots.http_requests + excluded.http_requests`,
           http_5xx: sql<number>`system_snapshots.http_5xx + excluded.http_5xx`,
-          http_avg_ms: eb.ref('excluded.http_avg_ms')
+          http_avg_ms: eb.ref('excluded.http_avg_ms'),
+          // A restart's first tick only sets LiveKit's baseline: keep what the minute already had.
+          sfu_bytes_in: sql<string | null>`coalesce(excluded.sfu_bytes_in, system_snapshots.sfu_bytes_in)`,
+          sfu_bytes_out: sql<string | null>`coalesce(excluded.sfu_bytes_out, system_snapshots.sfu_bytes_out)`,
+          sfu_packets_in: sql<string | null>`coalesce(excluded.sfu_packets_in, system_snapshots.sfu_packets_in)`,
+          sfu_lost_in: sql<string | null>`coalesce(excluded.sfu_lost_in, system_snapshots.sfu_lost_in)`,
+          sfu_packets_out: sql<string | null>`coalesce(excluded.sfu_packets_out, system_snapshots.sfu_packets_out)`,
+          sfu_lost_out: sql<string | null>`coalesce(excluded.sfu_lost_out, system_snapshots.sfu_lost_out)`,
+          sfu_retransmit_out: sql<
+            string | null
+          >`coalesce(excluded.sfu_retransmit_out, system_snapshots.sfu_retransmit_out)`,
+          sfu_cpu_pct: sql<number | null>`coalesce(excluded.sfu_cpu_pct, system_snapshots.sfu_cpu_pct)`,
+          sfu_rss_bytes: sql<string | null>`coalesce(excluded.sfu_rss_bytes, system_snapshots.sfu_rss_bytes)`,
+          // Two ticks in one minute: the higher peaks, and the starts of both.
+          video_screens_max: sql<
+            number | null
+          >`greatest(excluded.video_screens_max, system_snapshots.video_screens_max)`,
+          video_cameras_max: sql<
+            number | null
+          >`greatest(excluded.video_cameras_max, system_snapshots.video_cameras_max)`,
+          video_mbps_max: sql<number | null>`greatest(excluded.video_mbps_max, system_snapshots.video_mbps_max)`,
+          video_budget_mbps: sql<
+            number | null
+          >`coalesce(excluded.video_budget_mbps, system_snapshots.video_budget_mbps)`,
+          media_lowered: sql<
+            number | null
+          >`coalesce(excluded.media_lowered, 0) + coalesce(system_snapshots.media_lowered, 0)`,
+          media_refused: sql<
+            number | null
+          >`coalesce(excluded.media_refused, 0) + coalesce(system_snapshots.media_refused, 0)`
         }))
       )
       .execute();
@@ -96,7 +158,9 @@ export function createSystemSnapshotRepository({ pool }: { pool: pg.Pool }) {
   /**
    * The minutes from `since` to `until` folded into buckets of `bucketSeconds`: gauges
    * keep the bucket's highest value, requests are summed and their average
-   * time is weighted by count.
+   * time is weighted by count. Media traffic keeps its busiest minute; media
+   * packets and their losses are summed, so a loss share over the bucket is exact.
+   * Video keeps its peaks and the lowest budget; lowered and refused starts are summed.
    */
   async function buckets(since: Date, until: Date, bucketSeconds: number): Promise<StoredSystemSnapshot[]> {
     // A literal, not a parameter: GROUP BY and the select list must be the
@@ -126,7 +190,22 @@ export function createSystemSnapshotRepository({ pool }: { pool: pg.Pool }) {
           number | null
         >`sum(http_avg_ms * http_requests) / nullif(sum(http_requests) FILTER (WHERE http_avg_ms IS NOT NULL), 0)`.as(
           'http_avg_ms'
-        )
+        ),
+        eb.fn.max('sfu_bytes_in').as('sfu_bytes_in'),
+        eb.fn.max('sfu_bytes_out').as('sfu_bytes_out'),
+        eb.fn.sum<string | null>('sfu_packets_in').as('sfu_packets_in'),
+        eb.fn.sum<string | null>('sfu_lost_in').as('sfu_lost_in'),
+        eb.fn.sum<string | null>('sfu_packets_out').as('sfu_packets_out'),
+        eb.fn.sum<string | null>('sfu_lost_out').as('sfu_lost_out'),
+        eb.fn.sum<string | null>('sfu_retransmit_out').as('sfu_retransmit_out'),
+        eb.fn.max('sfu_cpu_pct').as('sfu_cpu_pct'),
+        eb.fn.max('sfu_rss_bytes').as('sfu_rss_bytes'),
+        eb.fn.max('video_screens_max').as('video_screens_max'),
+        eb.fn.max('video_cameras_max').as('video_cameras_max'),
+        eb.fn.max('video_mbps_max').as('video_mbps_max'),
+        eb.fn.min('video_budget_mbps').as('video_budget_mbps'),
+        eb.fn.sum<string | null>('media_lowered').as('media_lowered'),
+        eb.fn.sum<string | null>('media_refused').as('media_refused')
       ])
       .where('at', '>=', since)
       .where('at', '<=', until)
@@ -157,7 +236,22 @@ function fromRow(row: Record<string, unknown>): StoredSystemSnapshot {
     voiceRooms: number(row.voice_rooms),
     httpRequests: number(row.http_requests),
     http5xx: number(row.http_5xx),
-    httpAvgMs: maybeNumber(row.http_avg_ms)
+    httpAvgMs: maybeNumber(row.http_avg_ms),
+    sfuBytesIn: maybeNumber(row.sfu_bytes_in),
+    sfuBytesOut: maybeNumber(row.sfu_bytes_out),
+    sfuPacketsIn: maybeNumber(row.sfu_packets_in),
+    sfuLostIn: maybeNumber(row.sfu_lost_in),
+    sfuPacketsOut: maybeNumber(row.sfu_packets_out),
+    sfuLostOut: maybeNumber(row.sfu_lost_out),
+    sfuRetransmitOut: maybeNumber(row.sfu_retransmit_out),
+    sfuCpuPct: maybeNumber(row.sfu_cpu_pct),
+    sfuRssBytes: maybeNumber(row.sfu_rss_bytes),
+    videoScreensMax: maybeNumber(row.video_screens_max),
+    videoCamerasMax: maybeNumber(row.video_cameras_max),
+    videoMbpsMax: maybeNumber(row.video_mbps_max),
+    videoBudgetMbps: maybeNumber(row.video_budget_mbps),
+    mediaLowered: maybeNumber(row.media_lowered),
+    mediaRefused: maybeNumber(row.media_refused)
   };
 }
 

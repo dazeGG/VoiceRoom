@@ -2,10 +2,9 @@
 // reply target ids and the idempotency key. Shared by room chat and DMs.
 
 import crypto from 'node:crypto';
+import { MAX_ATTACHMENTS } from '@voice-room/shared/contracts/messages';
 import { isArray, textOf } from '@voice-room/shared/guards';
 import { isUuid } from '@voice-room/shared/validation';
-
-const MAX_MESSAGE_ATTACHMENTS = 4;
 
 export function cleanUuid(value: unknown): string {
   const id = textOf(value).trim();
@@ -15,7 +14,7 @@ export function cleanUuid(value: unknown): string {
 /** `[]` when absent, `null` when malformed, duplicated or too many. */
 export function normalizeAttachmentIds(value: unknown): string[] | null {
   if (value === undefined) return [];
-  if (!isArray(value) || value.length > MAX_MESSAGE_ATTACHMENTS) return null;
+  if (!isArray(value) || value.length > MAX_ATTACHMENTS) return null;
   const ids = value.map((id) => cleanUuid(id));
   return ids.every(Boolean) && new Set(ids).size === ids.length ? ids : null;
 }

@@ -13,6 +13,7 @@ import { checkRoomExists } from '../net/api';
 import { postState } from './presence';
 import { UserFacingError, wait } from '../core/utils';
 import { rotateStoredPeerSession } from '../core/session';
+import { guestBrowserId } from '$lib/entities/room/guest-id';
 import { getRoomShell, isRoomEmbedded } from '../core/embed';
 import { openLeaveScreen } from '../../leave-screen.svelte';
 import { CALL_FEEDBACK_MAX_DURATION_S } from '@voice-room/shared/contracts/feedback';
@@ -41,6 +42,8 @@ import {
 } from '../services/microphone-service';
 import { attachMeter, startMeters, stopMeters } from '../media/meters';
 import { startPeerLatencyStats, stopPeerLatencyStats } from './stats';
+import { resetNetworkLevel } from './network-report';
+import { relieveVideo } from '../services/video-relief';
 import { clearAllPeerJoinCues, clearStreamViewerCues, playPeerCue } from '../media/cues';
 import { cancelScreenSourcePicker } from '../ui/screen-source-picker';
 import { syncDesktopGlobalHotkeys } from '../services/desktop-hotkey-service';
@@ -56,6 +59,7 @@ import {
   watchLocalMicrophone
 } from '../ui/devices';
 import { startCpuPressureWatch, stopCpuPressureWatch } from '../services/cpu-pressure';
+import { noteCpuPressure, startCallStrainWatch, stopCallStrainWatch } from './call-strain';
 import {
   finishCallQuality,
   type CallQualitySummary,
@@ -310,14 +314,21 @@ async function performJoinRoom(generation: number): Promise<void> {
     // A question still open about an earlier call would now be about this one.
     dropCallFeedback();
     startCallQuality();
+    resetNetworkLevel();
     recordPeerCount(state.peers.size);
+    // Relief comes from the call showing strain (call-strain.ts), not from a busy system alone.
+    startCallStrainWatch(() => {
+      // The noise suppression and, silently, the video (video-relief.ts).
+      void relieveNoiseSuppression().then((switched) => {
+        if (switched) recordCpuRelief();
+      });
+      void relieveVideo().then(() => recordCpuRelief());
+    });
     startCpuPressureWatch({
-      onCritical: () => {
-        void relieveNoiseSuppression().then((switched) => {
-          if (switched) recordCpuRelief();
-        });
-      },
-      onState: recordCpuPressure
+      onState: (pressure) => {
+        recordCpuPressure(pressure);
+        noteCpuPressure(pressure);
+      }
     });
     playPeerCue('join');
   } catch (error) {
@@ -363,7 +374,7 @@ async function openJoinMicrophone(): Promise<MicrophoneCapture | null> {
 
 function formatJoinError(error: unknown): string {
   if (error instanceof LiveKitTransportError) {
-    return 'LiveKit недоступен: проверьте LIVEKIT_GATE_PUBLIC_URL и перезапустите VoiceRoom';
+    return 'LiveKit недоступен: голосовой сервер не отвечает, попробуйте подключиться позже';
   }
   if (error instanceof ApiError || error instanceof UserFacingError) return error.message;
   return 'Не удалось подключиться';
@@ -424,10 +435,12 @@ export function leaveRoom(): void {
   stopVideoVisibilitySync?.();
   stopVideoVisibilitySync = null;
   stopCpuPressureWatch();
+  stopCallStrainWatch();
   noteFinishedCall(disconnectedRoomId, finishCallQuality());
 
   state.muted = false;
   state.microphoneMissing = false;
+  state.videoRelieved = false;
   resetPushToTalkState();
   clearAllPeerJoinCues();
   clearStreamViewerCues();
@@ -457,8 +470,25 @@ function noteFinishedCall(roomId: string, summary: CallQualitySummary | null): v
       outboundLossAvgPct: stats.outboundLossAvgPct,
       jitterAvgMs: stats.jitterAvgMs,
       reconnects: stats.reconnects,
-      transport: stats.transport
-    }
+      transport: stats.transport,
+      rttMaxMs: stats.rttMaxMs,
+      inboundLossMaxPct: stats.inboundLossMaxPct,
+      outboundLossMaxPct: stats.outboundLossMaxPct,
+      jitterMaxMs: stats.jitterMaxMs,
+      cpuPressureMax: stats.cpuPressureMax,
+      cpuRelieved: stats.cpuRelieved,
+      micDrops: stats.micDrops,
+      inboundPackets: stats.inboundPackets,
+      inboundLostPackets: stats.inboundLostPackets,
+      outboundPackets: stats.outboundPackets,
+      outboundLostPackets: stats.outboundLostPackets,
+      concealedAvgPct: stats.concealedAvgPct,
+      concealedMaxPct: stats.concealedMaxPct,
+      appCpuAvgPct: stats.appCpuAvgPct,
+      appCpuMaxPct: stats.appCpuMaxPct,
+      systemCpuAvgPct: stats.systemCpuAvgPct
+    },
+    ...(session.user ? {} : { guestId: guestBrowserId() })
   });
 }
 

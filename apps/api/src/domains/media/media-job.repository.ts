@@ -2,14 +2,14 @@ import crypto from 'node:crypto';
 import { sql, type Selectable } from 'kysely';
 import type pg from 'pg';
 import { kyselyOn, type Database } from '../../platform/db/kysely.ts';
-import { canConnect } from '../../platform/db/connectable.ts';
+import type { Connectable } from '../../platform/db/connectable.ts';
 import { transaction } from '../../platform/db/pool.ts';
 import { fieldOf } from '../../platform/record.ts';
 import type { MediaProcessingJobs } from '../../platform/db/schema.ts';
 import type { Attachment, AttachmentRepository } from './attachment.repository.ts';
 
 type QueryClient = Pick<pg.PoolClient, 'query'>;
-type JobPool = QueryClient & { connect?: () => Promise<pg.PoolClient> };
+type JobPool = QueryClient & Connectable;
 type Client = QueryClient | null | undefined;
 
 export type MediaJobKind = 'process' | 'cleanup';
@@ -96,9 +96,7 @@ function ownedJob(q: Database, jobId: string, workerId: string, fencingToken: nu
 const now = sql<Date>`current_timestamp`;
 const after = (ms: number) => sql<Date>`current_timestamp + (${ms} * interval '1 millisecond')`;
 
-function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
-  if (!pool || typeof pool.query !== 'function') throw new TypeError('A PostgreSQL pool is required');
-  const base = pool;
+function createMediaJobRepository({ pool: base }: { pool: JobPool }) {
   const on = (client: Client): Database => kyselyOn(client && typeof client.query === 'function' ? client : base);
   const job = mapMediaJob;
   const leased = (row: MediaJobRow | undefined): MediaJob => {
@@ -316,12 +314,10 @@ function createMediaJobRepository({ pool }: { pool?: JobPool | null } = {}) {
     }: {
       workerId: string;
       fencingToken: number;
-      attachmentRepository?: Pick<AttachmentRepository, 'markReady'> | null;
+      attachmentRepository: Pick<AttachmentRepository, 'markReady'>;
       attachmentResult: Parameters<AttachmentRepository['markReady']>[1];
     }
   ): Promise<Attachment> {
-    if (!canConnect(base) || !attachmentRepository?.markReady)
-      throw new TypeError('Processing completion dependencies are required');
     return transaction(base, async (client) => {
       const owned = await kyselyOn(client)
         .selectFrom('media_processing_jobs')

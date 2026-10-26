@@ -1,18 +1,19 @@
 <script lang="ts">
   import { onDestroy, onMount, untrack } from 'svelte';
   import {
-    playPeerCue,
+    GATE_ON_DEFAULT_DB,
     playDirectMessageCue,
     playFriendAcceptedCue,
     playMicCue,
+    playPeerCue,
     playRoomChatMessageCue,
-    playStreamCue
-  } from '$lib/features/room/client/media/cues';
-  import { state as roomClientState } from '$lib/features/room/client/core/state.svelte';
-  import { GATE_ON_DEFAULT_DB, type MicrophoneMode } from '$lib/features/room/client/core/config';
-  import { syncAudioBusOutput, syncAudioBusSettings } from '$lib/features/room/client/services/audio-bus';
-  import { setMicrophoneVolume } from '$lib/features/room/client/services/microphone-service';
-  import { setMicrophoneMode } from '$lib/features/room/client/ui/controls';
+    playStreamCue,
+    setMicrophoneMode,
+    setMicrophoneVolume,
+    setOutputDevice,
+    syncAudioBusSettings,
+    type MicrophoneMode
+  } from '$lib/features/room/client';
   import { SegmentControl, Select, Slider } from '$lib/shared/ui';
   import {
     enumerateMicrophones,
@@ -151,8 +152,7 @@
     const generation = ++speakerChangeGeneration;
     speakerId = value;
     persistSpeaker(speakerId);
-    roomClientState.outputDeviceId = speakerId;
-    const synced = await syncAudioBusOutput(speakerId);
+    const synced = await setOutputDevice(speakerId);
     if (generation !== speakerChangeGeneration) return;
     if (synced) {
       confirmedSpeakerId = speakerId;
@@ -161,8 +161,7 @@
 
     speakerId = confirmedSpeakerId;
     persistSpeaker(confirmedSpeakerId);
-    roomClientState.outputDeviceId = confirmedSpeakerId;
-    await syncAudioBusOutput(confirmedSpeakerId);
+    await setOutputDevice(confirmedSpeakerId);
     onToast('Не удалось переключить динамик');
   }
 

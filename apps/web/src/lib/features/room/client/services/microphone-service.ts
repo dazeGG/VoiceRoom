@@ -24,6 +24,7 @@ import { isMicrophoneShownMuted } from '../core/microphone-mute';
 import type { MicProcessor, MicrophoneCapture } from '../core/types';
 
 import { createLogger, errorContext } from '$lib/shared/log';
+import { writeStorage } from '$lib/shared/storage';
 
 const log = createLogger('room:mic');
 
@@ -84,7 +85,7 @@ export function getGateThresholdAmplitude(): number {
 export function setNoiseMode(mode: unknown): void {
   state.noiseMode = getNoiseMode(mode);
   roomDeviceUi.noiseMode = state.noiseMode;
-  localStorage.setItem(NOISE_MODE_STORAGE_KEY, state.noiseMode);
+  writeStorage(NOISE_MODE_STORAGE_KEY, state.noiseMode);
 }
 
 async function openMicrophone(mode: NoiseMode = state.noiseMode): Promise<MediaStream> {

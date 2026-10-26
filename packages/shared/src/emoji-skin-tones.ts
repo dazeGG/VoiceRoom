@@ -98,11 +98,6 @@ function data(): ReturnType<typeof build> {
   return cached;
 }
 
-/** Whether the picker hides this sequence behind a base. */
-export function isCollapsedSkinToneVariant(emoji: string): boolean {
-  return data().collapsed.has(emoji);
-}
-
 /**
  * The five tone variants of a base, lightest first, or an empty array when the
  * base has no tones or is not collapsible.
@@ -123,11 +118,6 @@ export function applySkinTone(base: string, toneIndex: number): string {
   const variants = data().byBase.get(base);
   if (!variants) return base;
   return variants.tones[toneIndex] ?? base;
-}
-
-/** The toneless base of any sequence; returns the input when it carries none. */
-export function skinToneBase(emoji: string): string {
-  return tonesIn(emoji).length === 0 ? emoji : toneless(emoji);
 }
 
 /** Corpus order, with every collapsible tone variant folded into its base. */

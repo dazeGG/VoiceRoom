@@ -30,8 +30,6 @@ export const SCREEN_PROFILE_IDS: ReadonlySet<string> = new Set([
   'source-60'
 ]);
 
-export const PRESENCE_STATUSES: readonly PresenceStatus[] = Object.freeze(['online', 'away', 'dnd', 'offline']);
-
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function isUuid(value: unknown): value is string {

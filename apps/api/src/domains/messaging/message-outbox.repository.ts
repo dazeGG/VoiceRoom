@@ -41,10 +41,6 @@ class MessageDeliveryFenceError extends Error {
   }
 }
 
-function requireQuery(value: unknown, label = 'PostgreSQL executor'): asserts value is QueryClient {
-  if (!isRecord(value) || typeof value.query !== 'function') throw new TypeError(`${label} is required`);
-}
-
 function encodeParts(parts: string[]): string {
   return parts.map((part) => `${Buffer.byteLength(part, 'utf8')}:${part}`).join('|');
 }
@@ -97,18 +93,16 @@ function mapOutboxRow(row: OutboxRow): OutboxEvent {
   });
 }
 
-function createMessageOutboxRepository({ pool }: { pool?: QueryClient | null } = {}) {
-  requireQuery(pool, 'PostgreSQL pool');
+function createMessageOutboxRepository({ pool }: { pool: QueryClient }) {
   const db = kyselyOn(pool);
 
   // Written in the caller's transaction, next to the message it announces; the
   // same event and revision is queued once.
   async function enqueue(
-    client: unknown,
+    client: QueryClient,
     value: Record<string, unknown>,
     { revision = 1 }: { revision?: unknown } = {}
   ): Promise<OutboxEvent> {
-    requireQuery(client, 'Active PostgreSQL transaction client');
     const normalizedRevision = positiveInteger(revision, 1);
     const event = buildMessageDeliveryEvent(value);
     if (!event) throw new TypeError('A valid message delivery event is required');

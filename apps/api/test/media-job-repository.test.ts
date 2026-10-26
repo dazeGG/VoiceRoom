@@ -78,8 +78,7 @@ async function expireLease(pool: pg.Pool, jobId: string) {
   );
 }
 
-test('media job repository validates dependencies and maps fenced jobs', () => {
-  assert.throws(() => createMediaJobRepository(), /PostgreSQL pool is required/);
+test('media job repository maps fenced jobs', () => {
   assert.equal(mapMediaJob(null), null);
   const mapped = mapMediaJob(JOB);
   assert.ok(mapped);
@@ -246,14 +245,14 @@ test('jobs are found by id, the backlog has an age, and finished jobs are pruned
 });
 
 test('completion marks the attachment ready and the job done together, or neither', { skip }, async (t) => {
-  const { pool, attachments, jobs, processing } = await setup(t);
+  const { attachments, jobs, processing } = await setup(t);
   const attachmentId = await processing();
   await jobs.enqueue(attachmentId);
   const [job] = await jobs.claimBatch({ workerId: 'worker-1' });
   assert.ok(job);
   const lease = { workerId: 'worker-1', fencingToken: job.fencingToken };
-  const complete = (overrides: Partial<Parameters<typeof jobs.completeProcessing>[1]> = {}, repository = jobs) =>
-    repository.completeProcessing(job.id, {
+  const complete = (overrides: Partial<Parameters<typeof jobs.completeProcessing>[1]> = {}) =>
+    jobs.completeProcessing(job.id, {
       ...lease,
       attachmentRepository: attachments,
       attachmentResult: READY_RESULT,
@@ -286,15 +285,6 @@ test('completion marks the attachment ready and the job done together, or neithe
   const ready = await complete();
   assert.equal(ready.state, 'ready');
   assert.equal((await jobs.findById(job.id))?.state, 'completed');
-
-  await assert.rejects(
-    () => complete({}, createMediaJobRepository({ pool: { query: pool.query.bind(pool) } })),
-    /completion dependencies are required/
-  );
-  await assert.rejects(
-    () => complete({ attachmentRepository: fake<AttachmentRepository>() }),
-    /completion dependencies are required/
-  );
 });
 
 test('completion always gives its connection back, even when the transaction plumbing fails', { skip }, async (t) => {

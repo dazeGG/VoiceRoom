@@ -12,7 +12,7 @@
     x,
     y,
     quickReactions = [],
-    activeReactions = new Set<string>(),
+    activeReactions = [],
     canReact = false,
     canPin = false,
     pinned = false,
@@ -38,7 +38,8 @@
     x: number;
     y: number;
     quickReactions?: readonly string[] | undefined;
-    activeReactions?: Set<string> | undefined;
+    /** The emoji the viewer has already put on the message. */
+    activeReactions?: readonly string[] | undefined;
     canReact?: boolean | undefined;
     canPin?: boolean | undefined;
     pinned?: boolean | undefined;
@@ -97,7 +98,7 @@
           {#each quickReactions as emoji (emoji)}
             <button
               class="message-menu-reaction"
-              class:is-active={activeReactions.has(emoji)}
+              class:is-active={activeReactions.includes(emoji)}
               type="button"
               role="menuitem"
               disabled={busy}

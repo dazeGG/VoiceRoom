@@ -2,7 +2,7 @@
   import { Monitor } from '@lucide/svelte';
   import { iconLg } from '$lib/shared/ui/icons';
   import { state as roomState } from '../client/core/state.svelte';
-  import { getAvatarPresentation } from '../client/ui/avatar-presentation';
+  import { getAvatarPresentation } from '$lib/shared/ui/avatar-presentation';
   import { getScreenProfileLabels } from '../client/media/profiles';
   import { playMediaElement } from '../client/services/media-playback-service';
   import { enterScreenView } from '../client/ui/screen-view';

@@ -17,7 +17,6 @@ coverage/
 .svelte-kit/
 apps/web/build/
 apps/web/static/
-.graphify/
 .omc/
 .claude/
 .idea/
