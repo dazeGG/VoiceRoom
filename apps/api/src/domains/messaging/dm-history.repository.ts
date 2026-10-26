@@ -127,6 +127,31 @@ function createDmHistoryRepository({ pool }: { pool: pg.Pool }) {
     return Boolean(row);
   }
 
+  // Keep tombstone tuples addressable, as room history does: the surrounding
+  // page excludes deleted content but can still locate its former position.
+  async function getAnchor({
+    userId,
+    peerId,
+    messageId
+  }: {
+    userId: string;
+    peerId: string;
+    messageId: string;
+  }): Promise<CursorTuple | null> {
+    const row = await db
+      .selectFrom('direct_messages')
+      .select(['id', microsOf('created_at').as('created_at_micros')])
+      .where('id', '=', messageId)
+      .where((eb) =>
+        eb.or([
+          eb.and([eb('sender_id', '=', userId), eb('recipient_id', '=', peerId)]),
+          eb.and([eb('sender_id', '=', peerId), eb('recipient_id', '=', userId)])
+        ])
+      )
+      .executeTakeFirst();
+    return row ? { id: row.id, createdAtMicros: row.created_at_micros } : null;
+  }
+
   async function querySide({
     userId,
     peerId,
@@ -235,7 +260,7 @@ function createDmHistoryRepository({ pool }: { pool: pg.Pool }) {
     return { messages: [...before, ...after], hasMoreBefore, hasMoreAfter };
   }
 
-  return { canReadThread, listAfter, listAround, listBefore, listLatest };
+  return { canReadThread, getAnchor, listAfter, listAround, listBefore, listLatest };
 }
 
 export { createDmHistoryRepository };

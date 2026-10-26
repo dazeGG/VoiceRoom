@@ -66,6 +66,7 @@ type AnchoredInput = ListInput & { anchor: CursorTuple };
 
 export interface DmHistoryRepository {
   canReadThread(input: { userId: string; peerId: string }): Promise<boolean>;
+  getAnchor(input: { userId: string; peerId: string; messageId: string }): Promise<CursorTuple | null>;
   listLatest(input: ListInput): Promise<HistoryPage>;
   listBefore(input: AnchoredInput): Promise<HistoryPage>;
   listAfter(input: AnchoredInput): Promise<HistoryPage>;
@@ -138,11 +139,23 @@ function createDmHistoryService({
     if (!viewer) throw new DomainError('authentication_required', 401, 'Authentication required');
     if (!peer || viewer === peer) throw new DomainError('thread_not_found', 404, 'Thread not found');
 
-    const parsed = normalizeHistoryRequest(query);
-    if (!parsed.ok) throw new DomainError(parsed.code, 400, 'Invalid history cursor');
     if (!(await repository.canReadThread({ userId: viewer, peerId: peer }))) {
       throw new DomainError('thread_forbidden', 403, 'Thread is not available');
     }
+
+    let normalizedQuery = query;
+    if (query.mode === 'around' && !query.cursor && typeof query.messageId === 'string') {
+      const messageId = query.messageId.trim();
+      // Match the cursor tuple's ID bound and reject PostgreSQL's unsupported NUL.
+      if (!messageId || Buffer.byteLength(messageId, 'utf8') > 160 || messageId.includes('\u0000')) {
+        throw new DomainError('invalid_cursor', 400, 'Invalid history cursor');
+      }
+      const tuple = await repository.getAnchor({ userId: viewer, peerId: peer, messageId });
+      if (!tuple) throw new DomainError('message_not_found', 404, 'Message not found');
+      normalizedQuery = { ...query, cursor: encodeTuple(viewer, peer, tuple) };
+    }
+    const parsed = normalizeHistoryRequest(normalizedQuery);
+    if (!parsed.ok) throw new DomainError(parsed.code, 400, 'Invalid history cursor');
 
     const { mode, limit, cursor } = parsed.request;
     const base = { userId: viewer, peerId: peer, limit };
