@@ -116,22 +116,24 @@ function byteLength(message: RuStoreMessage): number {
 
 /**
  * The message for one token. A ring is data-only and expires with its TTL; any
- * other type is a notification on the `messages` channel. Over 4096 bytes the
+ * other type is a notification, with mentions separated only on capable devices. Over 4096 bytes the
  * body is dropped; null when even that does not fit.
  */
 export function buildRuStoreMessage({
   token,
   payload,
   nativeData = {},
-  ttlSeconds
+  ttlSeconds,
+  notificationChannels = []
 }: {
   token: string;
   payload: PushPayload;
   nativeData?: Readonly<Record<string, string>>;
   ttlSeconds?: number | undefined;
+  notificationChannels?: readonly string[];
 }): RuStoreMessage | null {
   const data = buildNativePushData(payload, nativeData);
-  const channel = nativePushChannel(data.type);
+  const channel = nativePushChannel(data.type, notificationChannels);
   const ttl = ttlSeconds === undefined ? undefined : `${Math.max(0, Math.floor(ttlSeconds))}s`;
   const message: RuStoreMessage = { token, data: { ...data } };
   if (channel === null) {

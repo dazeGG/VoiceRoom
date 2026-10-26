@@ -99,8 +99,14 @@ export function createNativePushService({
     const unauthorized: RuStoreSendResult[] = [];
     const failures: Error[] = [];
     await Promise.all(
-      live.map(async ({ token }) => {
-        const message = buildRuStoreMessage({ token, payload: push, nativeData, ttlSeconds: ttl });
+      live.map(async ({ token, notificationChannels }) => {
+        const message = buildRuStoreMessage({
+          token,
+          payload: push,
+          nativeData,
+          ttlSeconds: ttl,
+          notificationChannels: notificationChannels ?? []
+        });
         if (!message) {
           logger.error({ evt: LOG_EVENTS.PUSH_NATIVE_TOO_LARGE, userId, type: push.type }, 'native push too large');
           if (context.strictPartialFailures) failures.push(new Error('Ring payload rejected locally'));

@@ -268,3 +268,33 @@ test('Ring terminal data never asks RuStore to post an ordinary notification', a
   assert.deepEqual(calls.sent[0]?.android, { ttl: '300s' });
   assert.equal(calls.sent[0]?.data.ringState, 'expired');
 });
+
+test('mentions routing is per device, never inferred from version; Rings remain data-only', async () => {
+  const { calls, service } = harness({
+    targets: [
+      target('legacy', '99.0.0'),
+      { ...target('new'), notificationChannels: ['messages', 'mentions'] },
+      { ...target('no-mentions'), notificationChannels: ['messages'] }
+    ]
+  });
+  await service.sendToUser('ada', { notificationId: 'n1', title: 'mention', body: 'reply' });
+  assert.deepEqual(
+    calls.sent.map((message) => message.android?.notification?.channel_id),
+    ['messages', 'mentions', 'messages']
+  );
+  calls.sent.length = 0;
+  await service.sendToUser('ada', DM);
+  assert.deepEqual(
+    calls.sent.map((message) => message.android?.notification?.channel_id),
+    ['messages', 'messages', 'messages']
+  );
+  for (const type of ['ring', 'ring.state']) {
+    calls.sent.length = 0;
+    await service.sendToUser('ada', { type, title: 'Ring', expiresAt: NOW + 10000 });
+    assert.equal(calls.sent.length, 3);
+    assert.equal(
+      calls.sent.every((message) => !message.notification && !message.android?.notification),
+      true
+    );
+  }
+});
