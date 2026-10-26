@@ -45,8 +45,6 @@ function kitchen(): LiveRoom {
         account: alice,
         avatarColorKey: 'blurple',
         joinedAt: Date.now() - 30 * MINUTE,
-        muted: true,
-        deafened: false,
         screen: false,
         client: 'desktop_app',
         os: 'Windows',
@@ -62,8 +60,6 @@ function kitchen(): LiveRoom {
         account: null,
         avatarColorKey: 'green',
         joinedAt: Date.now() - 5 * MINUTE,
-        muted: false,
-        deafened: false,
         screen: true,
         camera: true,
         client: 'mobile',
@@ -143,7 +139,8 @@ test('a live room opens its people: accounts by login, guests by name, and an ac
   expect(within(row).getByText('2 человека')).toBeTruthy();
   expect(within(row).getByText('@alice')).toBeTruthy();
   expect(within(row).getByLabelText('показывают экран: 1')).toBeTruthy();
-  expect(within(row).getByLabelText('без микрофона: 1')).toBeTruthy();
+  // Whose microphone or sound is off is not the panel's business.
+  expect(within(row).queryByLabelText(/без микрофона|без звука/)).toBeNull();
   expect(within(row).getByLabelText('с камерой: 1')).toBeTruthy();
   expect(screen.getByText('1 комната · 2 человека')).toBeTruthy();
   expect(screen.queryByRole('list', { name: 'В звонке: Кухня' })).toBeNull();
@@ -153,7 +150,7 @@ test('a live room opens its people: accounts by login, guests by name, and an ac
   const [alicePeer, guestPeer, ...rest] = within(people).getAllByRole('listitem');
   if (!alicePeer || !guestPeer || rest.length > 0) throw new Error('two people expected');
   expect(within(alicePeer).getByText('@alice')).toBeTruthy();
-  expect(within(alicePeer).getByText('без микрофона')).toBeTruthy();
+  expect(within(alicePeer).queryByText(/без микрофона|без звука/)).toBeNull();
   expect(within(guestPeer).getByText('Петя')).toBeTruthy();
   expect(within(guestPeer).getByText('гость')).toBeTruthy();
   expect(within(guestPeer).getByText('экран')).toBeTruthy();

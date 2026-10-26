@@ -98,8 +98,6 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
           account: (peer.accountUserId && accountById.get(peer.accountUserId)) || null,
           avatarColorKey: peer.avatarColorKey || avatarColorForPeerId(peer.id),
           joinedAt: peer.joinedAt ?? null,
-          muted: Boolean(peer.muted),
-          deafened: Boolean(peer.deafened),
           screen: Boolean(peer.screen),
           camera: Boolean(peer.camera),
           client: peer.client ?? null,

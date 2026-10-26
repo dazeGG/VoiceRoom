@@ -123,14 +123,30 @@ test('the poll asks every refreshMs, skips while a request is out or the tab is 
   expect(result.current.data).toBe(2);
   expect(result.current.loadedAt).toBe(2_000_000);
 
-  // A hidden tab does not ask; the next tick after it shows again does.
+  // A hidden tab does not ask; shown again with numbers older than a round, it asks at once.
   const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
   await tick(REFRESH_MS * 5);
   expect(fetcher).toHaveBeenCalledTimes(2);
   visibility.mockReturnValue('visible');
-  await tick(REFRESH_MS);
+  await act(async () => {
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
   expect(fetcher).toHaveBeenCalledTimes(3);
   await answer(request(2), 3);
+  // The tick right after that request does not ask again.
+  await tick(REFRESH_MS / 4);
+  expect(fetcher).toHaveBeenCalledTimes(3);
+
+  // Hidden and shown again within a round: the numbers are fresh, no request.
+  visibility.mockReturnValue('hidden');
+  await act(async () => {
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  visibility.mockReturnValue('visible');
+  await act(async () => {
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  expect(fetcher).toHaveBeenCalledTimes(3);
 
   unmount();
   expect(vi.getTimerCount()).toBe(0);

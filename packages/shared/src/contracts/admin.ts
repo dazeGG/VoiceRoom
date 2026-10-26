@@ -405,8 +405,8 @@ export const LiveRoomPeer = Type.Object({
   account: Nullable(RoomAccount),
   avatarColorKey: Type.String(),
   joinedAt: Nullable(Type.Number()),
-  muted: Type.Boolean(),
-  deafened: Type.Boolean(),
+  // Whether someone's microphone or sound is off is theirs: the panel shows
+  // what loads the server (screens, cameras) and the connection, not that.
   screen: Type.Boolean(),
   /** The camera is on. Optional: an API a release behind does not say. */
   camera: Type.Optional(Type.Boolean()),

@@ -1,9 +1,9 @@
 // The rooms with someone in voice now, a row each: the room, who is in it,
 // how long it has gone on, its owner and what is going on (screens shown,
-// microphones and sound off, the kinds of client). A row opens the list of
-// its people; the clock button narrows the call history to the room.
+// cameras, the kinds of client). A row opens the list of its people; the
+// clock button narrows the call history to the room.
 
-import { ChevronDown, ChevronRight, HeadphoneOff, History, MicOff, MonitorUp, Video } from 'lucide-react';
+import { ChevronDown, ChevronRight, History, MonitorUp, Video } from 'lucide-react';
 import type { LiveRoom, LiveRoomPeer } from '@voice-room/shared/contracts/admin';
 import { formatPeople, formatSince } from '../../format.ts';
 import { Avatar, AvatarStack, Pill } from '../../ui/index.tsx';
@@ -19,8 +19,6 @@ const since = (at: number, now: number) => (now - at < 60_000 ? 'только ч
 function Summary({ peers }: { peers: readonly LiveRoomPeer[] }) {
   const screens = peers.filter((peer) => peer.screen).length;
   const cameras = peers.filter((peer) => peer.camera).length;
-  const muted = peers.filter((peer) => peer.muted).length;
-  const deafened = peers.filter((peer) => peer.deafened).length;
   const clients = [...new Set(peers.map((peer) => peer.client).filter((client) => client !== null))];
   return (
     <span className="live-summary">
@@ -39,18 +37,6 @@ function Summary({ peers }: { peers: readonly LiveRoomPeer[] }) {
         <span className="live-chip" data-tone="accent" title="С камерой" aria-label={`с камерой: ${cameras}`}>
           <Video size={14} aria-hidden="true" />
           {cameras}
-        </span>
-      ) : null}
-      {muted ? (
-        <span className="live-chip" data-tone="danger" title="Без микрофона" aria-label={`без микрофона: ${muted}`}>
-          <MicOff size={14} aria-hidden="true" />
-          {muted}
-        </span>
-      ) : null}
-      {deafened ? (
-        <span className="live-chip" data-tone="danger" title="Без звука" aria-label={`без звука: ${deafened}`}>
-          <HeadphoneOff size={14} aria-hidden="true" />
-          {deafened}
         </span>
       ) : null}
       {clients.map((client) => (
@@ -106,8 +92,6 @@ function PeerRow({
             камера
           </Pill>
         ) : null}
-        {peer.muted ? <span className="live-word">без микрофона</span> : null}
-        {peer.deafened ? <span className="live-word">без звука</span> : null}
         {peer.network && peer.network !== 'good' ? (
           <span className="live-word live-network" data-net={peer.network}>
             <span className="net-dot" data-net={peer.network} aria-hidden="true" />

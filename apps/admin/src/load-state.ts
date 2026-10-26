@@ -46,7 +46,8 @@ const sameDeps = (a: DependencyList, b: DependencyList) =>
 /**
  * Loads with `fetcher` now and again whenever one of `deps` changes, on `reload`, and every
  * `refreshMs` when given. A newer request drops the answer of an older one; the poll waits for
- * the request out instead of piling on, and a hidden tab does not ask.
+ * the request out instead of piling on, and a hidden tab does not ask: back on it, numbers
+ * older than one round are asked for at once rather than at the next tick.
  */
 export function useAdminResource<T>(
   fetcher: () => Promise<T>,
@@ -67,6 +68,7 @@ export function useAdminResource<T>(
 
   // The last round whose request went out, and the rounds as last rendered, for the poll.
   const started = useRef(-1);
+  const askedAt = useRef(0);
   const rendered = useRef({ round: state.round, answered: state.answered });
   useEffect(() => {
     rendered.current = { round: state.round, answered: state.answered };
@@ -74,6 +76,7 @@ export function useAdminResource<T>(
 
   const load = useEffectEvent((round: number) => {
     started.current = round;
+    askedAt.current = Date.now();
     fetcher().then(
       (data) => {
         const at = Date.now();
@@ -94,7 +97,7 @@ export function useAdminResource<T>(
 
   useEffect(() => {
     if (!refreshMs) return undefined;
-    const timer = window.setInterval(() => {
+    const poll = () => {
       const { round, answered } = rendered.current;
       if (document.visibilityState !== 'visible' || answered !== round) return;
       // The poll's request goes out at once; a newer one asked meanwhile still wins.
@@ -102,8 +105,20 @@ export function useAdminResource<T>(
       rendered.current = { round: next, answered };
       setState((now) => ({ ...now, round: Math.max(now.round, next) }));
       load(next);
-    }, refreshMs);
-    return () => window.clearInterval(timer);
+    };
+    let timer = window.setInterval(poll, refreshMs);
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible' || Date.now() - askedAt.current < refreshMs) return;
+      poll();
+      // The next tick comes a whole round after this request, not just after it.
+      window.clearInterval(timer);
+      timer = window.setInterval(poll, refreshMs);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [refreshMs]);
 
   const reload = useCallback(() => setState((now) => ({ ...now, round: now.round + 1 })), []);
