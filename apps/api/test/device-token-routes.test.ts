@@ -18,7 +18,14 @@ import { checked } from './helpers/checked.ts';
 const ANDROID = 'VoiceRoom-Android/1.2.3 (Linux; Android 12)';
 const TOKEN = 'rustore-token-1';
 
-type Stored = { userId: string; sessionId: string; provider: string; token: string; appVersion: string | null };
+type Stored = {
+  userId: string;
+  sessionId: string;
+  provider: string;
+  token: string;
+  appVersion: string | null;
+  notificationChannels?: readonly string[];
+};
 
 function signedIn(userId: string, tokenHash: string): ResolvedSession {
   return { user: storedUser({ id: userId, login: userId }), session: { publicId: `public-${tokenHash}`, tokenHash } };
@@ -103,7 +110,16 @@ test('a signed-in app registers its token with its session and version', async (
   checked(Done, answer.body, 'answer');
   assert.deepEqual(
     [...stored.values()],
-    [{ userId: 'ada', sessionId: 'session-1', provider: 'rustore', token: TOKEN, appVersion: '1.2.3' }]
+    [
+      {
+        userId: 'ada',
+        sessionId: 'session-1',
+        provider: 'rustore',
+        token: TOKEN,
+        appVersion: '1.2.3',
+        notificationChannels: []
+      }
+    ]
   );
   assert.deepEqual(limiterKeys, ['device-token:ada']);
 });
@@ -213,4 +229,26 @@ test("removing takes only the caller's own token and answers 200 for a missing o
   assert.equal((await call('DELETE', { provider: 'rustore', token: 'bob-phone' })).status, 200);
   assert.deepEqual([...stored.keys()], ['rustore:ada-phone']);
   assert.equal((await call('DELETE', { provider: 'rustore', token: 'never-registered' })).status, 200);
+});
+
+test('native capabilities follow token transfer and absent capabilities reset to legacy', async (t) => {
+  const { stored, call, signIn } = harness(t);
+  assert.equal(
+    (await call('POST', { provider: 'rustore', token: TOKEN, notificationChannels: ['messages', 'mentions'] })).status,
+    201
+  );
+  assert.deepEqual(
+    [...stored.values()].map((one) => one.notificationChannels),
+    [['messages', 'mentions']]
+  );
+  signIn(signedIn('bob', 'session-bob'));
+  assert.equal((await call('POST', { provider: 'rustore', token: TOKEN })).status, 201);
+  assert.deepEqual(
+    [...stored.values()].map((one) => [one.userId, one.notificationChannels]),
+    [['bob', []]]
+  );
+  assert.equal(
+    (await call('POST', { provider: 'rustore', token: TOKEN, notificationChannels: ['unknown'] })).status,
+    400
+  );
 });

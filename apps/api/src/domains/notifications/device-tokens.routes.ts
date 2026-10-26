@@ -24,6 +24,7 @@ export function registerDeviceTokenRoutes(root: FastifyInstance, ctx: ApiContext
         sessionId: session.tokenHash,
         provider: request.body.provider,
         token: request.body.token,
+        notificationChannels: request.body.notificationChannels ?? [],
         userAgent: String(request.headers['user-agent'] || '')
       });
       switch (result.status) {
