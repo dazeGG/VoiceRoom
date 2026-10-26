@@ -247,7 +247,12 @@ test('the calls come by day, a page at a time, and narrow to one room', async ()
     'GET /api/admin/rooms': live([kitchen()]),
     'GET /api/admin/rooms/calls': (url) => {
       if (url.searchParams.get('after') === NEXT_PAGE)
-        return history([call('c-old', [stay('s-old', { account: alice })])]);
+        // Pinned to today like the others: 'two hours ago' is yesterday just after midnight.
+        return history([
+          call('c-old', [
+            stay('s-old', { account: alice, joinedAt: today - 3 * 60 * MINUTE, leftAt: today - 2 * 60 * MINUTE })
+          ])
+        ]);
       if (url.searchParams.get('roomId') === 'gone') return history([gone]);
       if (url.searchParams.get('roomId') === 'kitchen') return history([latest]);
       return history([latest, earlier, gone], NEXT_PAGE);
