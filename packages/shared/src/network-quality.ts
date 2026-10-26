@@ -16,6 +16,15 @@ export const NETWORK_THRESHOLDS = {
 
 export type NetworkMeasure = keyof (typeof NETWORK_THRESHOLDS)['bad'];
 
+/**
+ * Audible concealment: the share of played sound the receiver had to make up
+ * because packets came late or not at all (silence it filled in is not
+ * counted). It is what a listener actually heard, whatever the cause: the
+ * network or a computer too busy to keep up. Microsoft Teams calls a call
+ * poor past 7 %.
+ */
+export const CONCEALMENT_THRESHOLDS = { noticeablePct: 3, badPct: 7 } as const;
+
 /** A connection's numbers; null for one not measured. */
 export interface NetworkNumbers {
   rttMs: number | null;

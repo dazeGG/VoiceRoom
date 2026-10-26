@@ -42,6 +42,8 @@ export type CallFeedbackPlatform = (typeof CALL_FEEDBACK_PLATFORMS)[number];
 const RatingSchema = Type.Enum(CALL_FEEDBACK_RATINGS);
 const TagSchema = Type.Enum(CALL_FEEDBACK_TAGS);
 const Measure = Nullable(Type.Number({ minimum: 0, maximum: 100_000 }));
+/** A week-long call at 50 audio packets a second from a few dozen people stays well under this. */
+const PacketCount = Type.Integer({ minimum: 0, maximum: 10_000_000_000 });
 
 export const CPU_PRESSURE_STATES = ['nominal', 'fair', 'serious', 'critical'] as const;
 export type CpuPressureState = (typeof CPU_PRESSURE_STATES)[number];
@@ -67,7 +69,18 @@ export const CallFeedbackQuality = Type.Object({
   /** The overload made the call switch to the lighter noise suppression. */
   cpuRelieved: Type.Optional(Type.Boolean()),
   /** Times the microphone went away mid-call (unplugged, a headset reconnecting). */
-  micDrops: Type.Optional(Type.Integer({ minimum: 0, maximum: 10_000 }))
+  micDrops: Type.Optional(Type.Integer({ minimum: 0, maximum: 10_000 })),
+  /** The packet counts behind the loss averages, so a figure can be checked. */
+  inboundPackets: Type.Optional(PacketCount),
+  inboundLostPackets: Type.Optional(PacketCount),
+  outboundPackets: Type.Optional(PacketCount),
+  outboundLostPackets: Type.Optional(PacketCount),
+  /**
+   * Audible concealment: the share of played sound made up for packets that
+   * came late or not at all, over the call and its worst 15 seconds.
+   */
+  concealedAvgPct: Type.Optional(Measure),
+  concealedMaxPct: Type.Optional(Measure)
 });
 export type CallFeedbackQuality = Static<typeof CallFeedbackQuality>;
 

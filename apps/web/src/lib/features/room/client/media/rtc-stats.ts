@@ -15,6 +15,10 @@ export interface RtcStat {
   readonly packetsLost: number | undefined;
   readonly packetsReceived: number | undefined;
   readonly packetsSent: number | undefined;
+  // inbound-rtp audio: samples played, those made up for missing packets, and the made-up ones that were silence
+  readonly totalSamplesReceived: number | undefined;
+  readonly concealedSamples: number | undefined;
+  readonly silentConcealedSamples: number | undefined;
   readonly jitter: number | undefined;
   readonly fractionLost: number | undefined;
   readonly roundTripTime: number | undefined;
@@ -40,6 +44,9 @@ export interface RtcStat {
   /** Firefox's flag for the pair in use. */
   readonly selected: boolean | undefined;
   readonly currentRoundTripTime: number | undefined;
+  /** Seconds summed over every check of the pair, and how many there were. */
+  readonly totalRoundTripTime: number | undefined;
+  readonly responsesReceived: number | undefined;
   readonly localCandidateId: string | undefined;
   readonly availableOutgoingBitrate: number | undefined;
   readonly estimatedOutgoingBitrate: number | undefined;
@@ -108,6 +115,11 @@ function toRtcStat(value: unknown): RtcStat | null {
     packetsLost: number('packetsLost'),
     packetsReceived: number('packetsReceived'),
     packetsSent: number('packetsSent'),
+    totalSamplesReceived: number('totalSamplesReceived'),
+    concealedSamples: number('concealedSamples'),
+    silentConcealedSamples: number('silentConcealedSamples'),
+    totalRoundTripTime: number('totalRoundTripTime'),
+    responsesReceived: number('responsesReceived'),
     pliCount: number('pliCount'),
     protocol: string('protocol'),
     qpSum: number('qpSum'),

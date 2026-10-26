@@ -17,7 +17,7 @@ import {
   type CallFeedbackTag
 } from '@voice-room/shared/contracts/feedback';
 import { CALL_FEEDBACK_TAG_LABELS } from '@voice-room/shared/feedback-labels';
-import { networkLevelOfValue, type NetworkMeasure } from '@voice-room/shared/network-quality';
+import { CONCEALMENT_THRESHOLDS, networkLevelOfValue, type NetworkMeasure } from '@voice-room/shared/network-quality';
 import { fetchCallFeedback } from '../api/admin.ts';
 import { formatCount, formatDateTime, formatMinutes, formatMs, formatPercent } from '../format.ts';
 import { useAdminResource } from '../load-state.ts';
@@ -45,7 +45,9 @@ const PLATFORM_LABELS: Record<AdminCallFeedbackEntry['platform'], string> = {
 /**
  * Where a call's numbers turn red, by the thresholds the room's connection pill
  * uses too: an average past unstable, a worst moment past bad (one spike in a
- * long call is normal), any reconnect, and a call through the TURN relay.
+ * long call is normal), audible concealment, any reconnect, and a call through
+ * the TURN relay. A busy computer alone is not red: the pressure reading is the
+ * whole system's, and a game keeps it high through calls that sound fine.
  */
 const averageBad = (measure: NetworkMeasure, value: number | null | undefined) => {
   const level = networkLevelOfValue(measure, value);
@@ -62,16 +64,34 @@ function Quality({ quality }: { quality: NonNullable<AdminCallFeedbackEntry['qua
   const lossPeak = worse(quality.inboundLossMaxPct, quality.outboundLossMaxPct);
   const rttPeak = quality.rttMaxMs ?? null;
   const jitterPeak = quality.jitterMaxMs ?? null;
-  const parts: { text: string; bad: boolean }[] = [
+  const counted = (lost: number | undefined, packets: number | undefined, way: string) =>
+    packets === undefined || lost === undefined
+      ? null
+      : `${way}: потеряно ${formatCount(lost)} из ${formatCount(packets)} пакетов`;
+  const lossCounts = [
+    counted(quality.inboundLostPackets, quality.inboundPackets, 'к вам'),
+    counted(quality.outboundLostPackets, quality.outboundPackets, 'от вас')
+  ].filter((line): line is string => line !== null);
+  const parts: { text: string; bad: boolean; title?: string }[] = [
     {
       text: `пинг ${formatMs(quality.rttAvgMs)}${rttPeak === null ? '' : ` (до ${formatMs(rttPeak)})`}`,
       bad: averageBad('rttMs', quality.rttAvgMs) || peakBad('rttMs', rttPeak)
     },
     {
       text: `потери ${formatPercent(loss)}${lossPeak === null ? '' : ` (до ${formatPercent(lossPeak)})`}`,
-      bad: averageBad('lossPct', loss) || peakBad('lossPct', lossPeak)
+      bad: averageBad('lossPct', loss) || peakBad('lossPct', lossPeak),
+      ...(lossCounts.length ? { title: lossCounts.join('\n') } : {})
     }
   ];
+  const concealed = quality.concealedAvgPct ?? null;
+  if (concealed !== null) {
+    const peak = quality.concealedMaxPct ?? null;
+    parts.push({
+      text: `звук додуман ${formatPercent(concealed)}${peak === null ? '' : ` (до ${formatPercent(peak)})`}`,
+      bad: concealed >= CONCEALMENT_THRESHOLDS.noticeablePct || (peak ?? 0) >= CONCEALMENT_THRESHOLDS.badPct,
+      title: 'Доля звука, которую плееру пришлось достроить: пакеты пришли поздно или не пришли'
+    });
+  }
   if (quality.jitterAvgMs !== null) {
     parts.push({
       text: `джиттер ${formatMs(quality.jitterAvgMs)}${jitterPeak === null ? '' : ` (до ${formatMs(jitterPeak)})`}`,
@@ -82,8 +102,9 @@ function Quality({ quality }: { quality: NonNullable<AdminCallFeedbackEntry['qua
   if (quality.micDrops) parts.push({ text: `микрофон отключался ${quality.micDrops}`, bad: true });
   if (quality.cpuPressureMax === 'critical' || quality.cpuPressureMax === 'serious') {
     parts.push({
-      text: quality.cpuRelieved ? 'ПК перегружен · облегчённый шумодав' : 'ПК перегружен',
-      bad: quality.cpuPressureMax === 'critical'
+      text: quality.cpuRelieved ? 'система загружена · облегчённый шумодав' : 'система загружена',
+      bad: false,
+      title: 'Загрузка всего компьютера, не только звонка: например, шла игра'
     });
   }
   if (quality.transport === 'relay') parts.push({ text: 'TURN', bad: true });
@@ -91,7 +112,7 @@ function Quality({ quality }: { quality: NonNullable<AdminCallFeedbackEntry['qua
   return (
     <span className="feedback-quality ui-mono">
       {parts.map((part) => (
-        <span key={part.text} data-bad={part.bad}>
+        <span key={part.text} data-bad={part.bad} title={part.title}>
           {part.text}
         </span>
       ))}

@@ -17,8 +17,10 @@ import {
   recordCpuPressure,
   recordMicDrop,
   recordNetworkSample,
+  recordPollCounts,
   recordReconnect,
-  startCallQuality
+  startCallQuality,
+  type PollCounts
 } from '../../src/lib/features/room/client/room/call-quality.ts';
 import {
   PROCESSING_RESUME_CHECK_MS,
@@ -108,31 +110,85 @@ test('stopping the watch cancels a pending relief, and no API means no watch', (
   expect(startCpuPressureWatch({ onCritical })).toBe(false);
 });
 
-test('a good call is logged and nothing is reported', () => {
+/** One poll's counters: a second and a half of speech each way unless told otherwise. */
+const poll = (counts: Partial<PollCounts> = {}): PollCounts => ({
+  inboundPackets: 150,
+  inboundLost: 0,
+  outboundPackets: 150,
+  outboundLost: 0,
+  rttSeconds: 0.12,
+  rttChecks: 3,
+  playedSamples: 144_000,
+  concealedSamples: 0,
+  ...counts
+});
+
+test('a good call is logged with its exact averages and nothing is reported', () => {
   startCallQuality(0);
   recordNetworkSample({ inboundLossPct: 0.5, outboundLossPct: 0, jitterMs: 8, rttMs: 40, transport: 'udp' });
   recordNetworkSample({ inboundLossPct: 1.5, outboundLossPct: 0, jitterMs: 12, rttMs: 60, transport: 'udp' });
-  const summary = finishCallQuality(QUALITY_MIN_CALL_MS + 1);
-  expect(summary?.degraded).toBe(false);
-  expect(summary?.context).toMatchObject({
+  // 3 of 300 packets lost is 1 %, whatever the per-poll windows said; 0.24 s over 6 checks is 40 ms.
+  recordPollCounts(poll({ inboundLost: 3 }));
+  recordPollCounts(poll());
+  const summary = defined(finishCallQuality(QUALITY_MIN_CALL_MS + 1), 'the call quality summary');
+  expect(summary.degraded).toBe(false);
+  expect(summary.context).toMatchObject({
     inboundLossAvgPct: 1,
     inboundLossMaxPct: 1.5,
+    inboundPackets: 300,
+    inboundLostPackets: 3,
     jitterAvgMs: 10,
-    rttAvgMs: 50,
+    rttAvgMs: 40,
     rttMaxMs: 60,
     transport: 'udp',
     reconnects: 0,
-    cpuPressureMax: 'nominal'
+    cpuPressureMax: 'nominal',
+    concealedAvgPct: 0
   });
   expect(readLogBuffer().at(-1)).toMatchObject({ level: 'info', ns: 'room:quality', msg: 'call quality' });
-  expect(Object.keys(defined(summary, 'the call quality summary').context).length).toBeLessThanOrEqual(12);
+  // The intake keeps sixteen keys of a context (client-log-intake.ts).
+  expect(Object.keys(summary.context)).toHaveLength(16);
 });
 
-test("the answer to 'how was the call?' carries the worst moments and the microphone drops, the log keeps its twelve", () => {
+test('averages count every packet and sample of the call, so a silent poll weighs what it carried', () => {
+  startCallQuality(0);
+  // A long stretch of speech with no loss, then a silent poll with its one lost packet out of eight.
+  for (let n = 0; n < 10; n += 1) recordPollCounts(poll());
+  recordPollCounts(poll({ inboundPackets: 8, inboundLost: 1 }));
+  const stats = defined(finishCallQuality(QUALITY_MIN_CALL_MS), 'the call quality summary').stats;
+  // 1 of 1508, not the 12.5 % of that poll averaged in.
+  expect(stats.inboundLossAvgPct).toBe(0.1);
+  expect(stats.inboundPackets).toBe(1508);
+
+  // Too few packets to tell anything leaves the average empty, not zero.
+  startCallQuality(0);
+  recordPollCounts(poll({ inboundPackets: 8, inboundLost: 1, outboundPackets: 0, playedSamples: 0 }));
+  expect(defined(finishCallQuality(QUALITY_MIN_CALL_MS), 'the call quality summary').stats).toMatchObject({
+    inboundLossAvgPct: null,
+    outboundLossAvgPct: null,
+    concealedAvgPct: null
+  });
+});
+
+test('audible concealment is counted over the call and its worst 15 seconds', () => {
+  startCallQuality(0);
+  for (let n = 0; n < 5; n += 1) recordPollCounts(poll());
+  // A rough stretch: a fifth of the sound made up over two polls.
+  recordPollCounts(poll({ concealedSamples: 28_800 }));
+  recordPollCounts(poll({ concealedSamples: 28_800 }));
+  for (let n = 0; n < 5; n += 1) recordPollCounts(poll());
+  const stats = defined(finishCallQuality(QUALITY_MIN_CALL_MS), 'the call quality summary').stats;
+  // 57 600 of 1 728 000 samples over the call; 57 600 of 720 000 over the worst five polls.
+  expect(stats.concealedAvgPct).toBe(3.3);
+  expect(stats.concealedMaxPct).toBe(8);
+});
+
+test("the answer to 'how was the call?' carries the worst moments, the counts and the microphone drops", () => {
   startCallQuality(0);
   recordNetworkSample({ inboundLossPct: 0, outboundLossPct: 1, jitterMs: 6, rttMs: 30, transport: 'udp' });
   recordNetworkSample({ inboundLossPct: 13.3, outboundLossPct: 4, jitterMs: 25, rttMs: 1109, transport: 'udp' });
   recordNetworkSample({ inboundLossPct: null, outboundLossPct: null, jitterMs: null, rttMs: null, transport: null });
+  recordPollCounts(poll({ outboundLost: 3 }));
   recordMicDrop();
   recordMicDrop();
   recordCpuPressure('critical');
@@ -144,35 +200,43 @@ test("the answer to 'how was the call?' carries the worst moments and the microp
     jitterMaxMs: 25,
     cpuPressureMax: 'critical',
     cpuRelieved: false,
-    micDrops: 2
+    micDrops: 2,
+    outboundPackets: 150,
+    outboundLostPackets: 3,
+    outboundLossAvgPct: 2
   });
-  expect(Object.keys(summary.context)).toHaveLength(12);
 
   startCallQuality(0);
   const quiet = defined(finishCallQuality(QUALITY_MIN_CALL_MS), 'the call quality summary');
   expect(quiet.stats).toMatchObject({ rttMaxMs: null, inboundLossMaxPct: null, jitterMaxMs: null, micDrops: 0 });
 });
 
-test('loss, reconnects or critical CPU mark a call as degraded, short calls never', () => {
+test('loss, audible concealment or reconnects mark a call as degraded; a busy computer alone or a short call never', () => {
   startCallQuality(0);
   recordNetworkSample({ inboundLossPct: 9, outboundLossPct: null, jitterMs: null, rttMs: null, transport: 'relay' });
-  recordNetworkSample({ inboundLossPct: null, outboundLossPct: null, jitterMs: null, rttMs: null, transport: 'udp' });
+  recordPollCounts(poll({ inboundLost: 15 }));
   const lossy = finishCallQuality(QUALITY_MIN_CALL_MS);
   expect(lossy?.degraded).toBe(true);
   expect(lossy?.context.transport).toBe('relay');
+
+  startCallQuality(0);
+  recordPollCounts(poll({ concealedSamples: 7_200 }));
+  expect(finishCallQuality(QUALITY_MIN_CALL_MS)?.degraded).toBe(true);
 
   startCallQuality(0);
   recordReconnect();
   recordReconnect();
   expect(finishCallQuality(QUALITY_MIN_CALL_MS)?.degraded).toBe(true);
 
+  // A game keeps the CPU critical through a call that sounds fine.
   startCallQuality(0);
   recordCpuPressure('serious');
   recordCpuPressure('critical');
   recordCpuPressure('fair');
-  const cpu = finishCallQuality(QUALITY_MIN_CALL_MS);
-  expect(cpu?.context.cpuPressureMax).toBe('critical');
-  expect(cpu?.degraded).toBe(true);
+  recordPollCounts(poll());
+  const busy = finishCallQuality(QUALITY_MIN_CALL_MS);
+  expect(busy?.context.cpuPressureMax).toBe('critical');
+  expect(busy?.degraded).toBe(false);
 
   startCallQuality(0);
   recordReconnect();

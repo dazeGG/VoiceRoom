@@ -471,7 +471,13 @@ function noteFinishedCall(roomId: string, summary: CallQualitySummary | null): v
       jitterMaxMs: stats.jitterMaxMs,
       cpuPressureMax: stats.cpuPressureMax,
       cpuRelieved: stats.cpuRelieved,
-      micDrops: stats.micDrops
+      micDrops: stats.micDrops,
+      inboundPackets: stats.inboundPackets,
+      inboundLostPackets: stats.inboundLostPackets,
+      outboundPackets: stats.outboundPackets,
+      outboundLostPackets: stats.outboundLostPackets,
+      concealedAvgPct: stats.concealedAvgPct,
+      concealedMaxPct: stats.concealedMaxPct
     },
     ...(session.user ? {} : { guestId: guestBrowserId() })
   });

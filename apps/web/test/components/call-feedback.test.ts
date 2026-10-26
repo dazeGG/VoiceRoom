@@ -24,6 +24,7 @@ import {
   finishCallQuality,
   recordNetworkSample,
   recordPeerCount,
+  recordPollCounts,
   startCallQuality
 } from '../../src/lib/features/room/client/room/call-quality.ts';
 import { stubFetch } from '../fixtures/fetch.ts';
@@ -128,6 +129,16 @@ test('a call reports its largest company along with its network numbers', () => 
   recordPeerCount(3);
   recordPeerCount(2);
   recordNetworkSample({ inboundLossPct: 1, outboundLossPct: 0, jitterMs: 6, rttMs: 42, transport: 'udp' });
+  recordPollCounts({
+    inboundPackets: 200,
+    inboundLost: 2,
+    outboundPackets: 100,
+    outboundLost: 0,
+    rttSeconds: 0.126,
+    rttChecks: 3,
+    playedSamples: 96_000,
+    concealedSamples: 960
+  });
   expect(finishCallQuality(90_000)?.stats).toEqual({
     durationS: 90,
     peersMax: 3,
@@ -143,7 +154,13 @@ test('a call reports its largest company along with its network numbers', () => 
     jitterMaxMs: 6,
     cpuPressureMax: 'nominal',
     cpuRelieved: false,
-    micDrops: 0
+    micDrops: 0,
+    inboundPackets: 200,
+    inboundLostPackets: 2,
+    outboundPackets: 100,
+    outboundLostPackets: 0,
+    concealedAvgPct: 1,
+    concealedMaxPct: 1
   });
 });
 

@@ -117,7 +117,13 @@ test("a guest's answer names them, says where they came from, the worst moments 
           jitterMaxMs: 20,
           cpuPressureMax: 'critical',
           cpuRelieved: true,
-          micDrops: 3
+          micDrops: 3,
+          inboundPackets: 9340,
+          inboundLostPackets: 12,
+          outboundPackets: 8800,
+          outboundLostPackets: 0,
+          concealedAvgPct: 4.2,
+          concealedMaxPct: 11.5
         },
         stay: {
           id: 's1',
@@ -155,7 +161,14 @@ test("a guest's answer names them, says where they came from, the worst moments 
   expect(within(answers).getByText('потери 0,1% (до 13,3%)').getAttribute('data-bad')).toBe('true');
   expect(within(answers).getByText('джиттер 6,4 мс (до 20 мс)').getAttribute('data-bad')).toBe('false');
   expect(within(answers).getByText('микрофон отключался 3').getAttribute('data-bad')).toBe('true');
-  expect(within(answers).getByText('ПК перегружен · облегчённый шумодав').getAttribute('data-bad')).toBe('true');
+  // A busy computer alone is not red: a game keeps the whole system busy through calls that sound fine.
+  expect(within(answers).getByText('система загружена · облегчённый шумодав').getAttribute('data-bad')).toBe('false');
+  // What people heard, and the packet counts behind the loss.
+  expect(within(answers).getByText('звук додуман 4,2% (до 11,5%)').getAttribute('data-bad')).toBe('true');
+  // Thousands are grouped with a non-breaking space.
+  expect(within(answers).getByText('потери 0,1% (до 13,3%)').getAttribute('title')).toMatch(
+    /^к вам: потеряно 12 из 9\s340 пакетов\nот вас: потеряно 0 из 8\s800 пакетов$/
+  );
   const network = within(answers).getByRole('img', { name: /сеть/ });
   expect(network.getAttribute('aria-label')).toMatch(/сеть в порядке, .*сеть плохая, .*сеть в порядке$/);
 });
