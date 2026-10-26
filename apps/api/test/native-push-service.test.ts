@@ -234,3 +234,37 @@ test('only string extra data and string payload fields reach the push', async ()
   await service.sendToUser('ada', 'not a payload', { nativeData: 'not a map' });
   assert.equal(calls.sent[1]?.data.type, 'unknown');
 });
+
+test('Ring strict partial failures retry failed siblings without changing ordinary push policy', async () => {
+  const { service } = harness({ targets: [target('ok'), target('retry')], outcomes: { retry: 'retryable' } });
+  await assert.rejects(
+    service.sendToUser(
+      'ada',
+      { type: 'ring.state', url: '', dedupeKey: 'r:2' },
+      {
+        strictFailures: true,
+        strictPartialFailures: true,
+        ttl: 300,
+        nativeData: { ringId: 'r', ringState: 'cancelled', recipientUserId: 'ada', ringRevision: '2' }
+      }
+    ),
+    /delivery failed/
+  );
+});
+
+test('Ring terminal data never asks RuStore to post an ordinary notification', async () => {
+  const { service, calls } = harness();
+  await service.sendToUser(
+    'ada',
+    { type: 'ring.state', url: '', dedupeKey: 'r:2' },
+    {
+      strictFailures: true,
+      strictPartialFailures: true,
+      ttl: 300,
+      nativeData: { ringId: 'r', ringState: 'expired', recipientUserId: 'ada', ringRevision: '2' }
+    }
+  );
+  assert.equal(calls.sent[0]?.notification, undefined);
+  assert.deepEqual(calls.sent[0]?.android, { ttl: '300s' });
+  assert.equal(calls.sent[0]?.data.ringState, 'expired');
+});

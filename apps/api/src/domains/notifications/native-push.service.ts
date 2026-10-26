@@ -91,7 +91,8 @@ export function createNativePushService({
     // still reaches it, since its version refreshes only when it next starts.
     const live = targets.filter(
       (target) =>
-        target.provider === PROVIDER && (push.type !== 'ring' || !isVersionBelow(target.appVersion, minVersion))
+        target.provider === PROVIDER &&
+        (!['ring', 'ring.state'].includes(push.type ?? '') || !isVersionBelow(target.appVersion, minVersion))
     );
     let sent = 0;
     let removed = 0;
@@ -102,6 +103,7 @@ export function createNativePushService({
         const message = buildRuStoreMessage({ token, payload: push, nativeData, ttlSeconds: ttl });
         if (!message) {
           logger.error({ evt: LOG_EVENTS.PUSH_NATIVE_TOO_LARGE, userId, type: push.type }, 'native push too large');
+          if (context.strictPartialFailures) failures.push(new Error('Ring payload rejected locally'));
           return;
         }
         const result = await client.send(message);
@@ -123,6 +125,7 @@ export function createNativePushService({
             }
             return;
           case 'rejected':
+            if (context.strictPartialFailures) failures.push(new Error('Ring push rejected'));
             logger.error(
               { evt: LOG_EVENTS.PUSH_NATIVE_REJECTED, ...details, message: result.message },
               'native push rejected'
@@ -144,6 +147,7 @@ export function createNativePushService({
     // Every token of the call meets the same bad key: one line, not one per token.
     const [denied] = unauthorized;
     if (denied) {
+      if (context.strictPartialFailures) failures.push(new Error('Ring push unauthorized'));
       logger.error(
         {
           evt: LOG_EVENTS.PUSH_NATIVE_UNAUTHORIZED,
@@ -157,7 +161,7 @@ export function createNativePushService({
       );
     }
     // A push one phone already got is not retried for the others: a retry would repeat it.
-    if (context.strictFailures && sent === 0 && failures.length > 0) {
+    if ((context.strictPartialFailures || (context.strictFailures && sent === 0)) && failures.length > 0) {
       throw new AggregateError(failures, 'RuStore push delivery failed');
     }
     return { enabled: true, sent, removed };
