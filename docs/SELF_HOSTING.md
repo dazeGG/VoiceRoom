@@ -37,6 +37,7 @@ GitHub-аналог GitLab CI/CD variables находится здесь:
 | `LIVEKIT_DOMAIN` | `livekit.${DOMAIN}` | Домен LiveKit. |
 | `LIVEKIT_GATE_PUBLIC_URL` | `wss://livekit.example.com` | Публичный browser-facing URL auth-gate. По умолчанию собирается из `LIVEKIT_DOMAIN`. |
 | `LIVEKIT_INTERNAL_URL` | `ws://livekit:7880` | Внутренний адрес LiveKit SFU для API при запуске без production compose. Production compose фиксирует service URL сам. |
+| `LIVEKIT_METRICS_URL` | `http://livekit:6789/metrics` | Prometheus-метрики LiveKit, которые API раз в минуту записывает для страницы «Система» в админке: трафик, потери пакетов в обе стороны, повторные отправки, процессор и память LiveKit. Production compose задаёт адрес внутри своей сети сам; без него эти графики пустые. |
 | `LIVEKIT_URL` | optional | Legacy fallback для host/dev запуска. В production не используйте его как публичный URL; задавайте `LIVEKIT_GATE_PUBLIC_URL`. |
 | `LIVEKIT_PUBLIC_URL` | optional | Для dev compose, если внешний LiveKit port отличается. |
 | `TRUST_PROXY` | `true` в compose/proxy | Включать только за доверенным reverse proxy. |

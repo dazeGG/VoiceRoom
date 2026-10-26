@@ -13,7 +13,7 @@
 import { CONCEALMENT_THRESHOLDS } from '@voice-room/shared/network-quality';
 import { reportClientLogs, createLogger, type LogContext } from '$lib/shared/log';
 import { maxCpuPressure, type CpuPressureState } from '../services/cpu-pressure';
-import { CONCEALMENT_MIN_SAMPLES, LOSS_MIN_PACKETS, createConcealmentWindow } from './loss-window';
+import { CONCEALMENT_MIN_SAMPLES, LOSS_MIN_PACKETS, createConcealmentWindow, createRatioWindow } from './loss-window';
 
 const log = createLogger('room:quality');
 
@@ -46,6 +46,18 @@ export interface PollCounts {
   concealedSamples: number;
 }
 
+/** One stats poll's share of the desktop app's running CPU totals (stats.ts), in ms; zeros outside the app. */
+export interface LoadCounts {
+  /** CPU time of VoiceRoom's own processes. */
+  appCpuMs: number;
+  /** Every core's busy time, and every core's time. */
+  systemBusyMs: number;
+  systemTotalMs: number;
+}
+
+/** Less core time than this (a few seconds of a few cores) gives no CPU share. */
+export const LOAD_MIN_MS = 10_000;
+
 interface Series {
   count: number;
   max: number;
@@ -56,6 +68,9 @@ interface CallQuality {
   concealment: ReturnType<typeof createConcealmentWindow>;
   concealedMax: number | null;
   counts: PollCounts;
+  load: LoadCounts;
+  appLoad: ReturnType<typeof createRatioWindow>;
+  appCpuMax: number | null;
   cpu: CpuPressureState;
   cpuRelieved: boolean;
   inboundLoss: Series;
@@ -114,6 +129,9 @@ export function startCallQuality(now = Date.now()): void {
     concealment: createConcealmentWindow(),
     concealedMax: null,
     counts: emptyCounts(),
+    load: { appCpuMs: 0, systemBusyMs: 0, systemTotalMs: 0 },
+    appLoad: createRatioWindow(LOAD_MIN_MS),
+    appCpuMax: null,
     cpu: 'nominal',
     cpuRelieved: false,
     inboundLoss: emptySeries(),
@@ -156,6 +174,17 @@ export function recordPollCounts(counts: PollCounts): void {
   total.concealedSamples += more(counts.concealedSamples);
   const concealed = current.concealment.add(counts.concealedSamples, counts.playedSamples);
   if (concealed !== null) current.concealedMax = Math.max(current.concealedMax ?? 0, concealed);
+}
+
+/** One poll's desktop CPU counts: summed for the call's shares, windowed for VoiceRoom's worst 15 seconds. */
+export function recordLoadCounts(counts: LoadCounts): void {
+  if (!current) return;
+  const total = current.load;
+  total.appCpuMs += Math.max(0, counts.appCpuMs);
+  total.systemBusyMs += Math.max(0, counts.systemBusyMs);
+  total.systemTotalMs += Math.max(0, counts.systemTotalMs);
+  const app = current.appLoad.add(counts.appCpuMs, counts.systemTotalMs);
+  if (app !== null) current.appCpuMax = Math.max(current.appCpuMax ?? 0, app);
 }
 
 /** How many other people are in the call now; the call keeps its largest company. */
@@ -205,6 +234,10 @@ export interface CallStats {
   /** Audible concealment over the call, and its worst 15 seconds. */
   concealedAvgPct: number | null;
   concealedMaxPct: number | null;
+  /** The desktop app's own CPU share of the computer, its worst 15 seconds, and the computer's busy share. */
+  appCpuAvgPct: number | null;
+  appCpuMaxPct: number | null;
+  systemCpuAvgPct: number | null;
 }
 
 export interface CallQualitySummary {
@@ -247,9 +280,12 @@ export function finishCallQuality(now = Date.now()): CallQualitySummary | null {
     outboundPackets: counts.outboundPackets,
     outboundLostPackets: counts.outboundLost,
     concealedAvgPct: concealed,
-    concealedMaxPct: quality.concealedMax
+    concealedMaxPct: quality.concealedMax,
+    appCpuAvgPct: share(quality.load.appCpuMs, quality.load.systemTotalMs, LOAD_MIN_MS),
+    appCpuMaxPct: quality.appCpuMax,
+    systemCpuAvgPct: share(quality.load.systemBusyMs, quality.load.systemTotalMs, LOAD_MIN_MS)
   };
-  // The intake keeps sixteen keys of a log context (client-log-intake.ts); the
+  // The intake keeps eighteen keys of a log context (client-log-intake.ts); the
   // rest goes with the answer to "how was the call?" only.
   const context: LogContext = {
     durationS: stats.durationS,
@@ -267,7 +303,9 @@ export function finishCallQuality(now = Date.now()): CallQualitySummary | null {
     concealedAvgPct: stats.concealedAvgPct,
     concealedMaxPct: stats.concealedMaxPct,
     inboundPackets: stats.inboundPackets,
-    inboundLostPackets: stats.inboundLostPackets
+    inboundLostPackets: stats.inboundLostPackets,
+    appCpuAvgPct: stats.appCpuAvgPct,
+    systemCpuAvgPct: stats.systemCpuAvgPct
   };
   // Degraded is what people heard or lost, not how busy the computer was: a
   // game keeps the CPU critical through calls that sound fine.

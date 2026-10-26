@@ -440,7 +440,7 @@ export function reopenMicrophone(): Promise<boolean> {
 }
 
 /**
- * The computer is overloaded (see cpu-pressure.ts). Like Discord turning Krisp
+ * The computer is straining the call (see call-strain.ts). Like Discord turning Krisp
  * off, RNNoise gives way to the browser's own noise suppression, which costs
  * next to nothing. Only for this call: the saved choice stays RNNoise, so the
  * next call starts with it again.

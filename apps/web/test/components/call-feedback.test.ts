@@ -160,7 +160,11 @@ test('a call reports its largest company along with its network numbers', () => 
     outboundPackets: 100,
     outboundLostPackets: 0,
     concealedAvgPct: 1,
-    concealedMaxPct: 1
+    concealedMaxPct: 1,
+    // A browser has no desktop load bridge.
+    appCpuAvgPct: null,
+    appCpuMaxPct: null,
+    systemCpuAvgPct: null
   });
 });
 

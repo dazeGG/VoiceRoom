@@ -80,7 +80,15 @@ export const CallFeedbackQuality = Type.Object({
    * came late or not at all, over the call and its worst 15 seconds.
    */
   concealedAvgPct: Type.Optional(Measure),
-  concealedMaxPct: Type.Optional(Measure)
+  concealedMaxPct: Type.Optional(Measure),
+  /**
+   * The desktop app only: VoiceRoom's own share of the whole computer's CPU
+   * time and the whole computer's busy share over the call, and VoiceRoom's
+   * worst 15 seconds; so a game's load is told from the call's.
+   */
+  appCpuAvgPct: Type.Optional(Measure),
+  appCpuMaxPct: Type.Optional(Measure),
+  systemCpuAvgPct: Type.Optional(Measure)
 });
 export type CallFeedbackQuality = Static<typeof CallFeedbackQuality>;
 

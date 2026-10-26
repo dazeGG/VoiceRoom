@@ -7,7 +7,8 @@ import { afterEach, beforeEach, expect, test } from 'vitest';
 import { SystemPage } from '../src/pages/SystemPage.tsx';
 import { renderAs, stubApi } from './helpers/harness.tsx';
 import { stubChartBox } from './helpers/chart-box.ts';
-import { at, DAY, denied, HOUR, must, system } from './helpers/stats-fixtures.ts';
+import type { SystemSample } from '@voice-room/shared/contracts/admin';
+import { at, DAY, denied, HOUR, must, sample, system } from './helpers/stats-fixtures.ts';
 
 let restoreChartBox = () => {};
 beforeEach(() => {
@@ -49,6 +50,50 @@ test('the server section draws the minutes over the chosen span and says when th
       .getByRole('radio', { name: '1 ч' })
       .getAttribute('aria-checked')
   ).toBe('true');
+});
+
+test('the media server shows its traffic, its losses each way with too little traffic left blank, and when LiveKit was not read', async () => {
+  const quiet = { sfuPacketsIn: 200, sfuLostIn: 1, sfuPacketsOut: 300, sfuLostOut: 3, sfuRetransmitOut: 0 };
+  const unread = {
+    sfuBytesIn: null,
+    sfuBytesOut: null,
+    sfuPacketsIn: null,
+    sfuLostIn: null,
+    sfuPacketsOut: null,
+    sfuLostOut: null,
+    sfuRetransmitOut: null,
+    sfuCpuPct: null,
+    sfuRssBytes: null
+  };
+  let latest: Partial<SystemSample> = {};
+  stubApi({
+    'GET /api/admin/system': () => ({
+      body: { ...system, samples: [...system.samples.slice(0, -1), sample(at, latest)] }
+    })
+  });
+  const { unmount } = renderAs(<SystemPage />);
+  expect(await screen.findByRole('img', { name: 'Трафик медиасервера' })).toBeTruthy();
+  expect(screen.getByRole('img', { name: 'Потери пакетов' })).toBeTruthy();
+  const cell = (label: string) =>
+    within(screen.getByRole('list', { name: 'Сейчас' }))
+      .getByText(label)
+      .closest('[role="listitem"]')?.textContent ?? '';
+  // 22.5 MB in a minute is 3 Mbit/s; 15 of 30 015 packets lost on the way in, 300 of 60 000 on the way out.
+  expect(cell('Медиасервер')).toMatch(/↓ 3 Мбит\/с · ↑ 6 Мбит\/с/);
+  expect(cell('Медиасервер')).toContain('процессор 6%, память 80 МБ');
+  expect(cell('Потери медиа')).toContain('0,05% / 0,5%');
+  unmount();
+
+  latest = quiet;
+  const second = renderAs(<SystemPage />);
+  await screen.findByRole('img', { name: 'Потери пакетов' });
+  expect(cell('Потери медиа')).toContain('— / —');
+  second.unmount();
+
+  latest = unread;
+  renderAs(<SystemPage />);
+  await screen.findByRole('img', { name: 'Трафик медиасервера' });
+  expect(cell('Медиасервер')).toContain('LiveKit не ответил');
 });
 
 test('a span of more than a day names the date with the time', async () => {

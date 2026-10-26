@@ -41,6 +41,17 @@ export function readLogConfig(env: Env = process.env): { level: string; environm
   };
 }
 
+/** LiveKit's Prometheus endpoint for the admin panel's media numbers; empty unless an http(s) URL. */
+export function readLiveKitMetricsUrl(env: Env = process.env): string {
+  const value = (env.LIVEKIT_METRICS_URL || '').trim();
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : '';
+  } catch {
+    return '';
+  }
+}
+
 /** Web push: on only with the full VAPID key pair and a subject. */
 export type PushConfig = { enabled: boolean; vapidPublicKey: string; privateKey: string; subject: string };
 
@@ -202,6 +213,7 @@ export function readApiConfig(env: Env = process.env) {
     PUSH: readPushConfig(env),
     RUSTORE_PUSH: readRuStorePushConfig(env),
     ANDROID_MIN_VERSION: readAndroidMinVersion(env),
+    LIVEKIT_METRICS_URL: readLiveKitMetricsUrl(env),
     // Desktop downloads come from the latest GitHub release; the metadata is
     // cached so visitors never hit GitHub's per-IP rate limit.
     DESKTOP_RELEASE_REPO: (env.DESKTOP_RELEASE_REPO || 'dazeGG/VoiceRoomDesktop').trim(),

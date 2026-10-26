@@ -51,7 +51,22 @@ export const SystemSample = Type.Object({
   voiceRooms: Type.Number(),
   httpRequests: Type.Number(),
   http5xx: Type.Number(),
-  httpAvgMs: Nullable(Type.Number())
+  httpAvgMs: Nullable(Type.Number()),
+  /**
+   * The media server (LiveKit): bytes in and out in the busiest minute of the
+   * point; packets, the lost ones each way and the ones sent again, summed
+   * over it; its CPU share of the whole server and its memory at their highest.
+   * Null where LiveKit's metrics were not read.
+   */
+  sfuBytesIn: Nullable(Type.Number()),
+  sfuBytesOut: Nullable(Type.Number()),
+  sfuPacketsIn: Nullable(Type.Number()),
+  sfuLostIn: Nullable(Type.Number()),
+  sfuPacketsOut: Nullable(Type.Number()),
+  sfuLostOut: Nullable(Type.Number()),
+  sfuRetransmitOut: Nullable(Type.Number()),
+  sfuCpuPct: Nullable(Type.Number()),
+  sfuRssBytes: Nullable(Type.Number())
 });
 export type SystemSample = Static<typeof SystemSample>;
 

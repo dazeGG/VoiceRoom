@@ -8,7 +8,7 @@ const CLIENT_LOG_LIMITS = Object.freeze({
   maxEvents: 100,
   maxMessageChars: 200,
   maxNamespaceChars: 64,
-  maxContextKeys: 16,
+  maxContextKeys: 18,
   maxContextKeyChars: 32,
   maxContextValueChars: 200,
   maxSessionIdChars: 64,

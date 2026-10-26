@@ -49,6 +49,10 @@ declare global {
     voiceRoomDesktopIdle?: {
       getSystemIdleTime: () => Promise<number>;
     };
+    /** Running totals of the app's CPU time and every core's busy and total time, in ms (desktop 1.4.9+). */
+    voiceRoomDesktopLoad?: {
+      read: () => Promise<unknown>;
+    };
     voiceRoomDesktopLinks?: {
       onOpen: (handler: (payload: unknown) => void) => () => void;
     };

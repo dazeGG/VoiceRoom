@@ -1,12 +1,12 @@
-// Keeping a call light on the computer: critical CPU pressure relieves the noise
-// suppression once, the call's quality account flags a call that went badly,
-// and a muted microphone stops processing audio without breaking push-to-talk.
+// Keeping a call light on the computer: the CPU pressure watch only reports
+// the system's state (relief follows the call itself, call-strain.test.ts),
+// the call's quality account flags a call that went badly, and a muted
+// microphone stops processing audio without breaking push-to-talk.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
 import { createInitialRoomState } from '../../src/lib/features/room/client/model/room-state.ts';
 import {
-  CPU_CRITICAL_HOLD_MS,
   startCpuPressureWatch,
   stopCpuPressureWatch,
   type PressureObserverConstructor
@@ -69,45 +69,24 @@ function fakePressureObserver() {
   };
 }
 
-test('critical pressure has to hold before the noise suppression is relieved, and only once a call', () => {
+test('the pressure watch reports every state and relieves nothing itself; no API means no watch', () => {
   const pressure = fakePressureObserver();
-  const onCritical = vi.fn();
   const states: string[] = [];
-  expect(
-    startCpuPressureWatch({ onCritical, onState: (next) => states.push(next), PressureObserver: pressure.Observer })
-  ).toBe(true);
+  expect(startCpuPressureWatch({ onState: (next) => states.push(next), PressureObserver: pressure.Observer })).toBe(
+    true
+  );
 
   pressure.report('critical');
-  vi.advanceTimersByTime(CPU_CRITICAL_HOLD_MS - 1000);
-  pressure.report('serious');
-  vi.advanceTimersByTime(CPU_CRITICAL_HOLD_MS);
-  expect(onCritical).not.toHaveBeenCalled();
-
-  pressure.report('critical');
-  pressure.report('critical');
-  vi.advanceTimersByTime(CPU_CRITICAL_HOLD_MS);
-  expect(onCritical).toHaveBeenCalledTimes(1);
-
-  pressure.report('nominal');
-  pressure.report('critical');
-  vi.advanceTimersByTime(CPU_CRITICAL_HOLD_MS * 2);
-  expect(onCritical).toHaveBeenCalledTimes(1);
-  expect(states).toEqual(['critical', 'serious', 'critical', 'critical', 'nominal', 'critical']);
+  pressure.report('busy');
+  pressure.report('fair');
+  expect(states).toEqual(['critical', 'fair']);
 
   stopCpuPressureWatch();
   expect(pressure.disconnected()).toBe(true);
-});
-
-test('stopping the watch cancels a pending relief, and no API means no watch', () => {
-  const pressure = fakePressureObserver();
-  const onCritical = vi.fn();
-  startCpuPressureWatch({ onCritical, PressureObserver: pressure.Observer });
   pressure.report('critical');
-  stopCpuPressureWatch();
-  vi.advanceTimersByTime(CPU_CRITICAL_HOLD_MS * 2);
-  expect(onCritical).not.toHaveBeenCalled();
+  expect(states).toEqual(['critical', 'fair']);
 
-  expect(startCpuPressureWatch({ onCritical })).toBe(false);
+  expect(startCpuPressureWatch({ onState: () => {} })).toBe(false);
 });
 
 /** One poll's counters: a second and a half of speech each way unless told otherwise. */
@@ -146,8 +125,8 @@ test('a good call is logged with its exact averages and nothing is reported', ()
     concealedAvgPct: 0
   });
   expect(readLogBuffer().at(-1)).toMatchObject({ level: 'info', ns: 'room:quality', msg: 'call quality' });
-  // The intake keeps sixteen keys of a context (client-log-intake.ts).
-  expect(Object.keys(summary.context)).toHaveLength(16);
+  // The intake keeps eighteen keys of a context (client-log-intake.ts).
+  expect(Object.keys(summary.context)).toHaveLength(18);
 });
 
 test('averages count every packet and sample of the call, so a silent poll weighs what it carried', () => {

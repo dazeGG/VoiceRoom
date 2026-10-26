@@ -59,6 +59,7 @@ import {
   watchLocalMicrophone
 } from '../ui/devices';
 import { startCpuPressureWatch, stopCpuPressureWatch } from '../services/cpu-pressure';
+import { noteCpuPressure, startCallStrainWatch, stopCallStrainWatch } from './call-strain';
 import {
   finishCallQuality,
   type CallQualitySummary,
@@ -315,15 +316,19 @@ async function performJoinRoom(generation: number): Promise<void> {
     startCallQuality();
     resetNetworkLevel();
     recordPeerCount(state.peers.size);
+    // Relief comes from the call showing strain (call-strain.ts), not from a busy system alone.
+    startCallStrainWatch(() => {
+      // The noise suppression and, silently, the video (video-relief.ts).
+      void relieveNoiseSuppression().then((switched) => {
+        if (switched) recordCpuRelief();
+      });
+      void relieveVideo().then(() => recordCpuRelief());
+    });
     startCpuPressureWatch({
-      onCritical: () => {
-        // First the noise suppression, then, silently, the video (video-relief.ts).
-        void relieveNoiseSuppression().then((switched) => {
-          if (switched) recordCpuRelief();
-        });
-        void relieveVideo().then(() => recordCpuRelief());
-      },
-      onState: recordCpuPressure
+      onState: (pressure) => {
+        recordCpuPressure(pressure);
+        noteCpuPressure(pressure);
+      }
     });
     playPeerCue('join');
   } catch (error) {
@@ -430,6 +435,7 @@ export function leaveRoom(): void {
   stopVideoVisibilitySync?.();
   stopVideoVisibilitySync = null;
   stopCpuPressureWatch();
+  stopCallStrainWatch();
   noteFinishedCall(disconnectedRoomId, finishCallQuality());
 
   state.muted = false;
@@ -477,7 +483,10 @@ function noteFinishedCall(roomId: string, summary: CallQualitySummary | null): v
       outboundPackets: stats.outboundPackets,
       outboundLostPackets: stats.outboundLostPackets,
       concealedAvgPct: stats.concealedAvgPct,
-      concealedMaxPct: stats.concealedMaxPct
+      concealedMaxPct: stats.concealedMaxPct,
+      appCpuAvgPct: stats.appCpuAvgPct,
+      appCpuMaxPct: stats.appCpuMaxPct,
+      systemCpuAvgPct: stats.systemCpuAvgPct
     },
     ...(session.user ? {} : { guestId: guestBrowserId() })
   });

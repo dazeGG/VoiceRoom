@@ -579,6 +579,15 @@ export interface SystemSnapshots {
   load1: Generated<number>;
   mem_total_bytes: Generated<Int8>;
   mem_used_bytes: Generated<Int8>;
+  sfu_bytes_in: Int8 | null;
+  sfu_bytes_out: Int8 | null;
+  sfu_cpu_pct: number | null;
+  sfu_lost_in: Int8 | null;
+  sfu_lost_out: Int8 | null;
+  sfu_packets_in: Int8 | null;
+  sfu_packets_out: Int8 | null;
+  sfu_retransmit_out: Int8 | null;
+  sfu_rss_bytes: Int8 | null;
   voice_peers: Generated<number>;
   voice_rooms: Generated<number>;
   ws_connections: Generated<number>;

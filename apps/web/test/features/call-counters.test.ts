@@ -101,3 +101,43 @@ test('two polls of growing counters add up to the exact loss, concealment and ro
     concealedAvgPct: 1.7
   });
 });
+
+test("the desktop app's CPU totals give VoiceRoom's share of the computer apart from the whole computer's", async () => {
+  vi.useFakeTimers();
+  vi.doMock('../../src/lib/entities/room/room-realtime', () => ({ updateVoicePeer: () => {} }));
+  const stats = await freshImport(() => import('../../src/lib/features/room/client/room/stats.ts'));
+  const { state } = await import('../../src/lib/features/room/client/core/state.svelte.ts');
+  const quality = await import('../../src/lib/features/room/client/room/call-quality.ts');
+
+  // Eight cores for 3 s are 24 000 ms of core time a poll; a game keeps 80 % of it busy.
+  const readings = [
+    { appCpuMs: 900_000, systemBusyMs: 5_000_000, systemTotalMs: 9_000_000 },
+    { appCpuMs: 901_200, systemBusyMs: 5_019_200, systemTotalMs: 9_024_000 },
+    { appCpuMs: 904_800, systemBusyMs: 5_038_400, systemTotalMs: 9_048_000 },
+    // The app restarted its totals (a new window process tree): no poll, no harm.
+    { appCpuMs: 10, systemBusyMs: 5_057_600, systemTotalMs: 9_072_000 },
+    { appCpuMs: 'broken' }
+  ];
+  let pollNo = 0;
+  Object.assign(window, {
+    voiceRoomDesktopLoad: { read: async () => readings[Math.min(pollNo, readings.length - 1)] }
+  });
+  Object.assign(state, { joined: true, localMicPublication: null, peers: new Map<string, never>() });
+
+  quality.startCallQuality(0);
+  stats.startPeerLatencyStats();
+  await vi.advanceTimersByTimeAsync(0);
+  for (pollNo = 1; pollNo < readings.length; pollNo += 1) await vi.advanceTimersByTimeAsync(3_000);
+  stats.stopPeerLatencyStats();
+  Reflect.deleteProperty(window, 'voiceRoomDesktopLoad');
+
+  const call = defined(quality.finishCallQuality(60_000), 'the call quality summary').stats;
+  expect(call).toMatchObject({
+    // 1 200 + 3 600 ms of VoiceRoom over 48 000 ms of the computer.
+    appCpuAvgPct: 10,
+    // Its worst window holds both polls here: the same 10 %.
+    appCpuMaxPct: 10,
+    // 38 400 busy of 48 000.
+    systemCpuAvgPct: 80
+  });
+});

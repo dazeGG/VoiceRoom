@@ -57,6 +57,7 @@ test('a tick writes the minute from the counters since the last tick and prunes 
     host,
     http: () => defined(http.shift(), 'an http reading'),
     live: () => ({ wsConnections: 5, guestConnections: 1, voicePeers: 3, voiceRooms: 1 }),
+    sfu: async () => null,
     snapshots: () => ({
       record: async (snapshot) => {
         recorded.push(snapshot);
@@ -104,6 +105,7 @@ test('a host without disk figures and an API without a database still sample', a
     host,
     http: () => ({ count: 0, errors5xx: 0, durationSecondsSum: 0 }),
     live: () => ({ wsConnections: 0, guestConnections: 0, voicePeers: 0, voiceRooms: 0 }),
+    sfu: async () => null,
     snapshots: () => ({
       record: async (snapshot) => {
         records.push(snapshot);
@@ -120,6 +122,7 @@ test('a host without disk figures and an API without a database still sample', a
     host,
     http: () => ({ count: 0, errors5xx: 0, durationSecondsSum: 0 }),
     live: () => ({ wsConnections: 0, guestConnections: 0, voicePeers: 0, voiceRooms: 0 }),
+    sfu: async () => null,
     snapshots: () => null
   });
   await assert.doesNotReject(withoutDb.sample());
@@ -177,14 +180,37 @@ test('minutes are kept once, folded into buckets, pruned, and the migration roll
     httpRequests: 10,
     http5xx: 0,
     httpAvgMs: 20,
+    sfuBytesIn: null,
+    sfuBytesOut: null,
+    sfuPacketsIn: null,
+    sfuLostIn: null,
+    sfuPacketsOut: null,
+    sfuLostOut: null,
+    sfuRetransmitOut: null,
+    sfuCpuPct: null,
+    sfuRssBytes: null,
     ...overrides
   });
 
   assert.equal(await repository.latest(), null);
-  await repository.record(minute('2026-10-16T10:00:00Z'));
-  // A restart inside the minute: the requests of both ticks count.
+  const media = (packetsIn: number, lostIn: number, bytesIn: number): Partial<SystemSnapshot> => ({
+    sfuBytesIn: bytesIn,
+    sfuBytesOut: bytesIn * 2,
+    sfuPacketsIn: packetsIn,
+    sfuLostIn: lostIn,
+    sfuPacketsOut: packetsIn * 2,
+    sfuLostOut: lostIn * 10,
+    sfuRetransmitOut: 5,
+    sfuCpuPct: 4,
+    sfuRssBytes: 80_000_000
+  });
+  await repository.record(minute('2026-10-16T10:00:00Z', media(30_000, 15, 22_500_000)));
+  // A restart inside the minute: the requests of both ticks count, and a tick
+  // without LiveKit's numbers (its baseline, or no answer) keeps the minute's.
   await repository.record(minute('2026-10-16T10:00:00Z', { httpRequests: 5, http5xx: 1, cpuPct: 30 }));
-  await repository.record(minute('2026-10-16T10:01:00Z', { cpuPct: 90, httpRequests: 30, httpAvgMs: 40 }));
+  await repository.record(
+    minute('2026-10-16T10:01:00Z', { cpuPct: 90, httpRequests: 30, httpAvgMs: 40, ...media(10_000, 85, 7_500_000) })
+  );
   await repository.record(minute('2026-10-16T10:02:00Z', { cpuPct: null, httpRequests: 0, httpAvgMs: null }));
   await repository.record(minute('2026-10-16T10:07:00Z', { diskUsedBytes: null, diskTotalBytes: null }));
 
@@ -197,6 +223,10 @@ test('minutes are kept once, folded into buckets, pruned, and the migration roll
     `SELECT http_requests, http_5xx, cpu_pct FROM system_snapshots WHERE at = '2026-10-16T10:00:00Z'`
   );
   assert.deepEqual(rows.rows, [{ http_requests: 15, http_5xx: 1, cpu_pct: 30 }]);
+  const mediaRow = await pool.query<{ sfu_packets_in: string; sfu_rss_bytes: string }>(
+    `SELECT sfu_packets_in, sfu_rss_bytes FROM system_snapshots WHERE at = '2026-10-16T10:00:00Z'`
+  );
+  assert.deepEqual(mediaRow.rows, [{ sfu_packets_in: '30000', sfu_rss_bytes: '80000000' }]);
 
   const buckets = await repository.buckets(new Date('2026-10-16T09:00:00Z'), new Date('2026-10-16T12:00:00Z'), 300);
   assert.deepEqual(
@@ -209,6 +239,15 @@ test('minutes are kept once, folded into buckets, pruned, and the migration roll
   assert.equal(busy.http5xx, 1);
   // (15 × 20 + 30 × 40) / 45: weighted by the requests of each minute.
   assert.equal(Math.round(defined(busy.httpAvgMs, 'the average time')), 33);
+  // Media packets and losses are summed, so 100 of 40 000 is the bucket's exact share; traffic keeps its busiest minute.
+  assert.equal(busy.sfuPacketsIn, 40_000);
+  assert.equal(busy.sfuLostIn, 100);
+  assert.equal(busy.sfuLostOut, 1000);
+  assert.equal(busy.sfuBytesIn, 22_500_000);
+  assert.equal(busy.sfuRssBytes, 80_000_000);
+  const quiet = defined(buckets[1], 'the bucket without media numbers');
+  assert.equal(quiet.sfuPacketsIn, null);
+  assert.equal(quiet.sfuCpuPct, null);
   assert.deepEqual(
     await repository.buckets(new Date('2026-10-16T11:00:00Z'), new Date('2026-10-16T12:00:00Z'), 60),
     []
@@ -222,6 +261,19 @@ test('minutes are kept once, folded into buckets, pruned, and the migration roll
 
   assert.equal(await repository.pruneBefore(new Date('2026-10-16T10:05:00Z')), 3);
   assert.equal((await pool.query('SELECT 1 FROM system_snapshots')).rowCount, 1);
+
+  await rollBackThrough(databaseUrl, '20261026160000_add_media_server_to_system_snapshots');
+  const columns = await queryRows(
+    pool,
+    AnyRow,
+    `SELECT column_name FROM information_schema.columns WHERE table_name = 'system_snapshots' AND column_name LIKE 'sfu%'`
+  );
+  assert.deepEqual(columns, []);
+  assert.equal(
+    defined(await repository.latest().catch(() => null), 'a minute kept through the rollback').voicePeers,
+    1
+  );
+  await runMigrations({ databaseUrl, logger: SILENT });
 
   await rollBackThrough(databaseUrl, '20261016120000_create_system_snapshots');
   const gone = await queryRows(pool, AnyRow, `SELECT to_regclass('public.system_snapshots') AS name`);

@@ -28,6 +28,7 @@ import {
   renderPrometheus
 } from '../lib/metrics.ts';
 import { createHostProbe } from '../platform/host-probe.ts';
+import { createSfuProbe } from '../platform/livekit-metrics.ts';
 import { createFastifyApp } from '../platform/http/fastify-app.ts';
 import { outdatedAndroidVersion } from '@voice-room/shared/client-version';
 import { asHttpServer, type ApiServer } from '../platform/http/http-server.ts';
@@ -163,6 +164,7 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
     snapshots: services.getProductSnapshotRepository,
     activity
   });
+  const sfuProbe = createSfuProbe({ url: config.LIVEKIT_METRICS_URL });
   const systemSampler = createSystemSampler({
     host: createHostProbe(),
     http: httpTotals,
@@ -170,7 +172,8 @@ export function createApiRuntime({ env = process.env }: { env?: NodeJS.ProcessEn
       ...liveVoice(),
       wsConnections: hub.registry.stats().sockets
     }),
-    snapshots: services.getSystemSnapshotRepository
+    snapshots: services.getSystemSnapshotRepository,
+    sfu: () => sfuProbe.read()
   });
 
   function startPruneTimer(server: ApiServer, logger: Logger = getProcessLogger()) {

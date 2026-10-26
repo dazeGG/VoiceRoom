@@ -100,6 +100,16 @@ function Quality({ quality }: { quality: NonNullable<AdminCallFeedbackEntry['qua
   }
   if (quality.reconnects) parts.push({ text: `переподкл. ${quality.reconnects}`, bad: true });
   if (quality.micDrops) parts.push({ text: `микрофон отключался ${quality.micDrops}`, bad: true });
+  if (quality.appCpuAvgPct != null) {
+    const peak = quality.appCpuMaxPct;
+    parts.push({
+      text: `процессор: VoiceRoom ${formatPercent(quality.appCpuAvgPct)}${
+        peak == null ? '' : ` (до ${formatPercent(peak)})`
+      } · всё ${formatPercent(quality.systemCpuAvgPct ?? null)}`,
+      bad: false,
+      title: 'Доля всего компьютера за звонок: сам VoiceRoom и всё вместе (с играми). Пик VoiceRoom — худшие 15 секунд.'
+    });
+  }
   if (quality.cpuPressureMax === 'critical' || quality.cpuPressureMax === 'serious') {
     parts.push({
       text: quality.cpuRelieved ? 'система загружена · облегчённый шумодав' : 'система загружена',

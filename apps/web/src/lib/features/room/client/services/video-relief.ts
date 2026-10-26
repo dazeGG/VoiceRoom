@@ -1,5 +1,5 @@
-// The second step when the computer stays overloaded (cpu-pressure.ts), after
-// the lighter noise suppression: video gets lighter for the rest of the call,
+// Relief for a call the computer is straining (call-strain.ts), beside the
+// lighter noise suppression: video gets lighter for the rest of the call,
 // silently. Our camera stops at its 360p layer, other people's cameras come in
 // at the smallest layer unless one is opened large (remote-participants.ts),
 // and our screen share sends at most 30 frames a second.

@@ -123,6 +123,9 @@ test("a guest's answer names them, says where they came from, the worst moments 
           outboundPackets: 8800,
           outboundLostPackets: 0,
           concealedAvgPct: 4.2,
+          appCpuAvgPct: 6.5,
+          appCpuMaxPct: 21,
+          systemCpuAvgPct: 88,
           concealedMaxPct: 11.5
         },
         stay: {
@@ -163,6 +166,10 @@ test("a guest's answer names them, says where they came from, the worst moments 
   expect(within(answers).getByText('микрофон отключался 3').getAttribute('data-bad')).toBe('true');
   // A busy computer alone is not red: a game keeps the whole system busy through calls that sound fine.
   expect(within(answers).getByText('система загружена · облегчённый шумодав').getAttribute('data-bad')).toBe('false');
+  // The app's own share of the computer beside everything running, grey: a game is not the call's fault.
+  expect(within(answers).getByText('процессор: VoiceRoom 6,5% (до 21%) · всё 88%').getAttribute('data-bad')).toBe(
+    'false'
+  );
   // What people heard, and the packet counts behind the loss.
   expect(within(answers).getByText('звук додуман 4,2% (до 11,5%)').getAttribute('data-bad')).toBe('true');
   // Thousands are grouped with a non-breaking space.
