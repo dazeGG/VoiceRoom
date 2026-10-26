@@ -32,7 +32,11 @@ const EXTRA_KEYS = [
   'fromName',
   'roomId',
   'roomName',
-  'roomEmoji'
+  'roomEmoji',
+  'ringId',
+  'recipientUserId',
+  'ringRevision',
+  'ringState'
 ] as const;
 const NAME_KEYS: ReadonlySet<string> = new Set(['fromName', 'roomName']);
 const OPTIONAL_KEYS = ['notificationId', 'expiresAt', 'title', 'body', ...EXTRA_KEYS] as const;
@@ -55,7 +59,7 @@ export function clipNativePushText(text: string, limit: number): string {
 
 /** The channel a push is shown on, or null for a data-only push (a ring). */
 export function nativePushChannel(type: string): NativePushChannel | null {
-  return type === RING ? null : NATIVE_PUSH_CHANNELS.messages;
+  return type === RING || type === 'ring.state' ? null : NATIVE_PUSH_CHANNELS.messages;
 }
 
 function nativePushType(payload: PushPayload): string {
