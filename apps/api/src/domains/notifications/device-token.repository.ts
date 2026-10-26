@@ -9,7 +9,12 @@ import { kyselyOn } from '../../platform/db/kysely.ts';
 import { createRowId } from '../../platform/db/ids.ts';
 
 /** Where a push to one phone goes, and the app version that registered it. */
-export type DeviceTokenTarget = { provider: string; token: string; appVersion: string | null };
+export type DeviceTokenTarget = {
+  provider: string;
+  token: string;
+  appVersion: string | null;
+  notificationChannels?: readonly string[];
+};
 
 function createDeviceTokenRepository({ pool, maxTokensPerUser = 10 }: { pool: pg.Pool; maxTokensPerUser?: number }) {
   const db = kyselyOn(pool);
@@ -22,13 +27,15 @@ function createDeviceTokenRepository({ pool, maxTokensPerUser = 10 }: { pool: pg
     sessionId,
     provider,
     token,
-    appVersion
+    appVersion,
+    notificationChannels = []
   }: {
     userId: string;
     sessionId: string;
     provider: DevicePushProvider;
     token: string;
     appVersion: string | null;
+    notificationChannels?: readonly string[];
   }): Promise<void> {
     await db.transaction().execute(async (trx) => {
       await trx.selectFrom('users').select('id').where('id', '=', userId).forUpdate().execute();
@@ -40,13 +47,15 @@ function createDeviceTokenRepository({ pool, maxTokensPerUser = 10 }: { pool: pg
           session_id: sessionId,
           provider,
           token,
-          app_version: appVersion
+          app_version: appVersion,
+          notification_channels: [...notificationChannels]
         })
         .onConflict((oc) =>
           oc.columns(['provider', 'token']).doUpdateSet((eb) => ({
             user_id: eb.ref('excluded.user_id'),
             session_id: eb.ref('excluded.session_id'),
             app_version: eb.ref('excluded.app_version'),
+            notification_channels: eb.ref('excluded.notification_channels'),
             last_seen_at: sql<Date>`current_timestamp`
           }))
         )
@@ -96,13 +105,23 @@ function createDeviceTokenRepository({ pool, maxTokensPerUser = 10 }: { pool: pg
     const rows = await db
       .selectFrom('device_tokens')
       .innerJoin('sessions', 'sessions.id', 'device_tokens.session_id')
-      .select(['device_tokens.provider', 'device_tokens.token', 'device_tokens.app_version'])
+      .select([
+        'device_tokens.provider',
+        'device_tokens.token',
+        'device_tokens.app_version',
+        'device_tokens.notification_channels'
+      ])
       .where('device_tokens.user_id', '=', userId)
       .where('sessions.expires_at', '>', new Date(now))
       .orderBy('device_tokens.last_seen_at', 'desc')
       .orderBy('device_tokens.id', 'desc')
       .execute();
-    return rows.map((row) => ({ provider: row.provider, token: row.token, appVersion: row.app_version }));
+    return rows.map((row) => ({
+      provider: row.provider,
+      token: row.token,
+      appVersion: row.app_version,
+      notificationChannels: row.notification_channels
+    }));
   }
 
   return { listByUserId, remove, removeToken, upsert };
