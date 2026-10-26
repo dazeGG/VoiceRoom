@@ -3,6 +3,7 @@ import { state } from '../core/state.svelte';
 import { findFirstLocalPublication, findLocalMicrophonePublication } from '../services/livekit-service';
 import { isActiveCandidatePair, readRtcStats, type RtcStat, type RtcStatsSource } from '../media/rtc-stats';
 import { recordNetworkSample } from './call-quality';
+import { createLossWindow } from './loss-window';
 import { noteNetworkReading } from './network-report';
 
 import { createLogger, errorContext } from '$lib/shared/log';
@@ -23,6 +24,10 @@ export function startPeerLatencyStats(): void {
 export function stopPeerLatencyStats(): void {
   if (peerLatencyTimer) window.clearInterval(peerLatencyTimer);
   peerLatencyTimer = 0;
+  previousInbound = new Map();
+  previousOutbound = null;
+  inboundLoss.reset();
+  outboundLoss.reset();
 }
 
 async function updatePeerLatencyStats(): Promise<void> {
@@ -36,9 +41,13 @@ async function updatePeerLatencyStats(): Promise<void> {
   noteNetworkReading({ sample, quality: state.localConnectionQuality, voice: state.voiceConnection });
 }
 
-// Cumulative inbound counters from the previous poll, per stats id, so loss is
-// reported for the last interval instead of since the call started.
+// Cumulative counters from the previous poll (inbound per stats id), so each
+// poll adds only its own packets; the loss windows (loss-window.ts) then count
+// over the last few polls, not since the call started.
 let previousInbound = new Map<string, { lost: number; received: number }>();
+let previousOutbound: { lost: number; sent: number } | null = null;
+const inboundLoss = createLossWindow();
+const outboundLoss = createLossWindow();
 
 async function updateInboundAudioStats(): Promise<void> {
   const current = new Map<string, { lost: number; received: number }>();
@@ -68,12 +77,8 @@ async function updateInboundAudioStats(): Promise<void> {
     }
   }
   previousInbound = current;
-  state.localNetwork.inboundLossPct = lost + received > 0 ? roundPct((lost / (lost + received)) * 100) : null;
+  state.localNetwork.inboundLossPct = inboundLoss.add(lost, lost + received);
   state.localNetwork.jitterMs = jitterCount > 0 ? Math.round(jitterSum / jitterCount) : null;
-}
-
-function roundPct(value: number): number {
-  return Math.round(value * 10) / 10;
 }
 
 async function updateLocalLiveKitLatency(): Promise<void> {
@@ -85,7 +90,7 @@ async function updateLocalLiveKitLatency(): Promise<void> {
       state.localPingMs = Math.max(0, Math.round(rttMs));
     }
     const outbound = outboundNetwork(stats);
-    state.localNetwork.outboundLossPct = outbound.lossPct;
+    state.localNetwork.outboundLossPct = noteOutboundPackets(outbound.packetsLost, outbound.packetsSent);
     state.localNetwork.transport = outbound.transport;
   } catch (error) {
     log.warn('liveKit latency unavailable', errorContext(error));
@@ -109,27 +114,45 @@ function getRoundTripTimeFromStats(stats: Map<string, RtcStat>): number | null {
   return candidatePairRttMs ?? remoteInboundRttMs;
 }
 
-/**
- * Upstream loss as the SFU reports it back (remote-inbound-rtp fractionLost)
- * and the transport of the selected candidate pair: a relay or TCP candidate
- * means UDP was blocked and latency/jitter will be worse.
- */
-export function getOutboundNetworkFromStats(report: RtcStatsSource | undefined): {
-  lossPct: number | null;
+/** The poll's share of upstream loss, from the cumulative counters: the window decides if there is a figure. */
+function noteOutboundPackets(packetsLost: number | null, packetsSent: number | null): number | null {
+  if (packetsLost === null || packetsSent === null) return null;
+  const before = previousOutbound;
+  previousOutbound = { lost: packetsLost, sent: packetsSent };
+  // The first poll, or counters that went back (a republished microphone), only set the baseline.
+  if (!before || packetsSent < before.sent || packetsLost < before.lost) return outboundLoss.add(0, 0);
+  return outboundLoss.add(packetsLost - before.lost, packetsSent - before.sent);
+}
+
+interface OutboundNetwork {
+  /** Our audio packets the SFU says it never got (remote-inbound-rtp), since the stream began. */
+  packetsLost: number | null;
+  /** Our audio packets sent (outbound-rtp), since the stream began. */
+  packetsSent: number | null;
   transport: 'udp' | 'tcp' | 'relay' | null;
-} {
+}
+
+/**
+ * Upstream loss counters as the SFU reports them back, and the transport of
+ * the selected candidate pair: a relay or TCP candidate means UDP was blocked
+ * and latency/jitter will be worse.
+ */
+export function getOutboundNetworkFromStats(report: RtcStatsSource | undefined): OutboundNetwork {
   return outboundNetwork(readRtcStats(report));
 }
 
-function outboundNetwork(stats: Map<string, RtcStat>): {
-  lossPct: number | null;
-  transport: 'udp' | 'tcp' | 'relay' | null;
-} {
-  let lossPct: number | null = null;
+function outboundNetwork(stats: Map<string, RtcStat>): OutboundNetwork {
+  let packetsLost: number | null = null;
+  let packetsSent: number | null = null;
   let transport: 'udp' | 'tcp' | 'relay' | null = null;
   for (const report of stats.values()) {
-    if (report.type === 'remote-inbound-rtp' && report.fractionLost !== undefined && lossPct === null) {
-      lossPct = roundPct(Math.max(0, report.fractionLost) * 100);
+    // Audio only: with no microphone the first publication may be a camera.
+    if (report.kind !== undefined && report.kind !== 'audio') continue;
+    if (report.type === 'remote-inbound-rtp' && report.packetsLost !== undefined) {
+      packetsLost = (packetsLost ?? 0) + Math.max(0, report.packetsLost);
+    }
+    if (report.type === 'outbound-rtp' && report.packetsSent !== undefined) {
+      packetsSent = (packetsSent ?? 0) + report.packetsSent;
     }
     if (isActiveCandidatePair(report)) {
       const local = report.localCandidateId === undefined ? undefined : stats.get(report.localCandidateId);
@@ -137,5 +160,5 @@ function outboundNetwork(stats: Map<string, RtcStat>): {
       else if (local) transport = local.protocol?.toLowerCase() === 'tcp' ? 'tcp' : 'udp';
     }
   }
-  return { lossPct, transport };
+  return { packetsLost, packetsSent, transport };
 }
