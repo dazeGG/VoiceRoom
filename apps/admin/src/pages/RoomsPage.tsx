@@ -1,11 +1,16 @@
 // Who is in which room's voice right now, a row per room refreshed every few
-// seconds, and the finished calls before: by day, a page at a time, or one
-// day's timeline. Names, accounts, times and the kind of client only: nothing
+// seconds, and the finished calls before: by day, a page at a time, or the
+// timeline of a day picked on the calendar. Names, accounts, times and the kind of client only: nothing
 // said in a room. An account opens its card; a room narrows the history to it.
 
 import { ChartGantt, ChevronLeft, ChevronRight, List, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { LiveRoom, RoomCall, RoomCallsQuery } from '@voice-room/shared/contracts/admin';
+import {
+  VOICE_HISTORY_KEEP_DAYS,
+  type LiveRoom,
+  type RoomCall,
+  type RoomCallsQuery
+} from '@voice-room/shared/contracts/admin';
 import { fetchLiveRooms, fetchRoomCalls } from '../api/admin.ts';
 import { formatClock, formatCount, formatDuration, formatPeople, plural } from '../format.ts';
 import { useRefreshStatus } from '../frame.tsx';
@@ -14,12 +19,12 @@ import { Notice } from '../Notice.tsx';
 import { Button, Empty, Panel, Pill, Segment } from '../ui/index.tsx';
 import { CallList } from './rooms/CallList.tsx';
 import { CallPeople } from './rooms/CallPeople.tsx';
+import { DayPicker, shiftDay, startOfDay } from './rooms/DayPicker.tsx';
 import { DayTimeline } from './rooms/DayTimeline.tsx';
 import { LiveCalls } from './rooms/LiveCalls.tsx';
 import './RoomsPage.css';
 
 const REFRESH_MS = 5000;
-const DAY = 24 * 60 * 60 * 1000;
 /** A day's timeline follows the pages up to this many; a busier day shows its latest calls. */
 const TIMELINE_PAGES = 10;
 
@@ -30,7 +35,7 @@ export interface HistoryRoom {
 
 type HistoryView = 'calls' | 'timeline';
 
-const startOfToday = () => new Date().setHours(0, 0, 0, 0);
+const startOfToday = () => startOfDay(Date.now());
 
 /** Adds or removes one value of a set, as a new set. */
 function toggled(set: ReadonlySet<string>, value: string): Set<string> {
@@ -48,6 +53,8 @@ interface HistoryQuery {
   // cursor, so a page already passed is only reached again through its own.
   cursors: (string | undefined)[];
   index: number;
+  /** The midnight of the day the timeline shows. */
+  dayStart: number;
 }
 
 /** What it answered, under the room it was asked for: the filter changes with its answer, so the chip never stands over another room's calls. */
@@ -62,14 +69,15 @@ type HistoryAnswer =
     }
   | { view: 'timeline'; room: HistoryRoom | null; keepDays: number; calls: RoomCall[]; dayStart: number };
 
-const firstPage = (view: HistoryView, room: HistoryRoom | null): HistoryQuery => ({
+const firstPage = (view: HistoryView, room: HistoryRoom | null, dayStart = startOfToday()): HistoryQuery => ({
   view,
   room,
   cursors: [undefined],
-  index: 0
+  index: 0,
+  dayStart
 });
 
-async function fetchHistory({ view, room, cursors, index }: HistoryQuery): Promise<HistoryAnswer> {
+async function fetchHistory({ view, room, cursors, index, dayStart }: HistoryQuery): Promise<HistoryAnswer> {
   if (view === 'calls') {
     const after = index > 0 ? cursors[index] : undefined;
     const query: RoomCallsQuery = { ...(room ? { roomId: room.id } : {}), ...(after ? { after } : {}) };
@@ -77,9 +85,9 @@ async function fetchHistory({ view, room, cursors, index }: HistoryQuery): Promi
     const next = [...cursors.slice(0, index + 1), ...(page.next ? [page.next] : [])];
     return { view, room, keepDays: page.keepDays, calls: page.calls, cursors: next, index };
   }
-  // Every call of today, following the pages.
-  const from = startOfToday();
-  const span = { from: String(from), to: String(from + DAY), ...(room ? { roomId: room.id } : {}) };
+  // Every call of the day, following the pages.
+  const from = dayStart;
+  const span = { from: String(from), to: String(shiftDay(from, 1)), ...(room ? { roomId: room.id } : {}) };
   const calls: RoomCall[] = [];
   let after: string | null = null;
   let keepDays = 0;
@@ -129,19 +137,32 @@ export function RoomsPage({
 
   // A page asked for by the person: the pager waits for its answer.
   function showCallsPage(index: number): void {
-    if (callsPage) setHistoryQuery({ view: 'calls', room: callsPage.room, cursors: callsPage.cursors, index });
+    if (callsPage) {
+      setHistoryQuery({
+        view: 'calls',
+        room: callsPage.room,
+        cursors: callsPage.cursors,
+        index,
+        dayStart: historyQuery.dayStart
+      });
+    }
   }
 
   /** Narrows the history (in the view on screen) to a room, or widens it to all. */
   function showRoomHistory(room: HistoryRoom | null, scroll = false): void {
     setPicked(null);
-    setHistoryQuery(firstPage(view, room));
+    setHistoryQuery(firstPage(view, room, historyQuery.dayStart));
     if (scroll) historySection.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }
 
   function changeView(next: HistoryView): void {
     setPicked(null);
-    setHistoryQuery(firstPage(next, historyRoom));
+    setHistoryQuery(firstPage(next, historyRoom, historyQuery.dayStart));
+  }
+
+  function showDay(dayStart: number): void {
+    setPicked(null);
+    setHistoryQuery(firstPage('timeline', historyRoom, dayStart));
   }
 
   // The top bar's refresh asks for the rooms now and the history on screen again.
@@ -161,7 +182,7 @@ export function RoomsPage({
     setSeenFocusRoom(focusRoom);
     if (focusRoom) {
       setPicked(null);
-      setHistoryQuery(firstPage(view, focusRoom));
+      setHistoryQuery(firstPage(view, focusRoom, historyQuery.dayStart));
     }
   }
   useEffect(() => {
@@ -172,6 +193,7 @@ export function RoomsPage({
   const pageIndex = callsPage?.index ?? 0;
   const hasNextPage = callsPage ? callsPage.cursors.length > callsPage.index + 1 : false;
   const pickedCall = day?.calls.find((call) => call.id === picked) ?? null;
+  const dayIsToday = day ? day.dayStart === startOfDay(now) : true;
   const loadingHistory = (
     <Panel>
       <p className="ui-empty" aria-busy="true">
@@ -239,6 +261,14 @@ export function RoomsPage({
             </button>
           ) : null}
           <span className="rooms-view">
+            {view === 'timeline' ? (
+              <DayPicker
+                dayStart={historyQuery.dayStart}
+                today={startOfDay(now)}
+                keepDays={shown?.keepDays || VOICE_HISTORY_KEEP_DAYS}
+                onChange={showDay}
+              />
+            ) : null}
             <Segment
               ariaLabel="Вид истории"
               value={view}
@@ -310,15 +340,20 @@ export function RoomsPage({
             ) : (
               <>
                 <Panel flush>
-                  {!day || (day.calls.length === 0 && !(rooms ?? []).length) ? (
-                    <Empty>Сегодня звонков не было</Empty>
+                  {!day || (day.calls.length === 0 && !(dayIsToday && (rooms ?? []).length)) ? (
+                    <Empty>{dayIsToday ? 'Сегодня звонков не было' : 'В этот день звонков не было'}</Empty>
                   ) : (
                     <DayTimeline
                       dayStart={day.dayStart}
                       now={now}
                       calls={day.calls}
                       live={
-                        historyRoom ? (rooms ?? []).filter((room) => room.roomId === historyRoom.id) : (rooms ?? [])
+                        // The calls going on now belong to today's line only.
+                        !dayIsToday
+                          ? []
+                          : historyRoom
+                            ? (rooms ?? []).filter((room) => room.roomId === historyRoom.id)
+                            : (rooms ?? [])
                       }
                       selectedId={picked}
                       onSelect={(call) => setPicked(call.id === picked ? null : call.id)}

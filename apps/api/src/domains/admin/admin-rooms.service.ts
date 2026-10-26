@@ -101,6 +101,7 @@ export function createAdminRoomsService(deps: AdminRoomsServiceDeps) {
           muted: Boolean(peer.muted),
           deafened: Boolean(peer.deafened),
           screen: Boolean(peer.screen),
+          camera: Boolean(peer.camera),
           client: peer.client ?? null,
           os: peer.os ?? '',
           browser: peer.browser ?? '',

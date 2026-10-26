@@ -9,7 +9,33 @@
 }
 
 .rooms-view {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
   margin-left: auto;
+}
+
+.day-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.day-picker-step {
+  padding-inline: 6px;
+}
+
+.day-picker-date {
+  min-height: 32px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  padding: 0 8px;
+  background: var(--vr-surface);
+  color: var(--vr-text);
+  font: inherit;
+  font-size: 13px;
+  color-scheme: dark light;
 }
 
 .rooms-quiet {

@@ -3,7 +3,7 @@
 // microphones and sound off, the kinds of client). A row opens the list of
 // its people; the clock button narrows the call history to the room.
 
-import { ChevronDown, ChevronRight, HeadphoneOff, History, MicOff, MonitorUp } from 'lucide-react';
+import { ChevronDown, ChevronRight, HeadphoneOff, History, MicOff, MonitorUp, Video } from 'lucide-react';
 import type { LiveRoom, LiveRoomPeer } from '@voice-room/shared/contracts/admin';
 import { formatPeople, formatSince } from '../../format.ts';
 import { Avatar, AvatarStack, Pill } from '../../ui/index.tsx';
@@ -18,6 +18,7 @@ const since = (at: number, now: number) => (now - at < 60_000 ? 'только ч
 
 function Summary({ peers }: { peers: readonly LiveRoomPeer[] }) {
   const screens = peers.filter((peer) => peer.screen).length;
+  const cameras = peers.filter((peer) => peer.camera).length;
   const muted = peers.filter((peer) => peer.muted).length;
   const deafened = peers.filter((peer) => peer.deafened).length;
   const clients = [...new Set(peers.map((peer) => peer.client).filter((client) => client !== null))];
@@ -32,6 +33,12 @@ function Summary({ peers }: { peers: readonly LiveRoomPeer[] }) {
         >
           <MonitorUp size={14} aria-hidden="true" />
           {screens}
+        </span>
+      ) : null}
+      {cameras ? (
+        <span className="live-chip" data-tone="accent" title="С камерой" aria-label={`с камерой: ${cameras}`}>
+          <Video size={14} aria-hidden="true" />
+          {cameras}
         </span>
       ) : null}
       {muted ? (
@@ -92,6 +99,11 @@ function PeerRow({
         {peer.screen ? (
           <Pill tone="accent" compact>
             экран
+          </Pill>
+        ) : null}
+        {peer.camera ? (
+          <Pill tone="accent" compact>
+            камера
           </Pill>
         ) : null}
         {peer.muted ? <span className="live-word">без микрофона</span> : null}

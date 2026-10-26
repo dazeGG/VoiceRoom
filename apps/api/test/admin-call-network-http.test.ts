@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import { Me, SignedIn } from '@voice-room/shared/contracts/account';
-import { LiveRooms, RoomHistory } from '@voice-room/shared/contracts/admin';
+import { LiveRooms, RoomCalls, RoomHistory } from '@voice-room/shared/contracts/admin';
 import { AdminCallFeedbackPage, type CallFeedbackBody } from '@voice-room/shared/contracts/feedback';
 import { hashPassword } from '../src/lib/password.ts';
 import { runMigrations } from '../src/lib/migrate.ts';
@@ -84,7 +84,8 @@ function reportNetwork(session: WsSession, voice: ReturnType<typeof seat>, netwo
 }
 
 test('a live call counts from its call clock, and a stay keeps how its network went', { skip }, async (t) => {
-  const { socketPath, admin, alice } = await startWithAdmin(t, 'voice-room-call-network-');
+  const { socketPath, pool, admin, alice } = await startWithAdmin(t, 'voice-room-call-network-');
+  await pool.query(`UPDATE rooms SET avatar_key = 'room-kitchen.webp' WHERE id = 'kitchen'`);
   const aliceWs = openWs(socketPath, { cookie: alice });
   const guestWs = openWs(socketPath, { headers: { 'User-Agent': CHROME_UA } });
   await Promise.all([aliceWs.ready, guestWs.ready]);
@@ -144,6 +145,14 @@ test('a live call counts from its call clock, and a stay keeps how its network w
     (count) => count > 0
   );
 
+  // A camera shows among the live room's people.
+  sendWs(guestWs.ws, 'room.peer.update', { ...guestAgain, patch: { camera: true } });
+  const filmed = await waitFor(liveKitchen, (room) => room.peers.some((peer) => peer.camera));
+  assert.deepEqual(
+    filmed.peers.map((peer) => peer.camera),
+    [false, true]
+  );
+
   sendWs(guestWs.ws, 'room.leave', guestAgain);
   const history = () =>
     request(socketPath, { pathname: '/api/admin/rooms/history', cookie: admin }, RoomHistory).then((r) => r.body);
@@ -162,6 +171,14 @@ test('a live call counts from its call clock, and a stay keeps how its network w
     [[], []],
     'stays whose clients never said have no changes'
   );
+
+  // Once everyone left, the finished call carries the room's picture.
+  sendWs(aliceWs.ws, 'room.leave', aliceAgain);
+  const finished = await waitFor(
+    () => request(socketPath, { pathname: '/api/admin/rooms/calls', cookie: admin }, RoomCalls).then((r) => r.body),
+    (body) => body.calls.length === 1
+  );
+  assert.equal(finished.calls[0]?.avatarUrl, '/api/avatars/room-kitchen.webp');
 
   aliceWs.ws.close();
   guestWs.ws.close();

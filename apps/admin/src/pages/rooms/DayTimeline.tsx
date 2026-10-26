@@ -13,6 +13,7 @@ interface Row {
   roomId: string;
   name: string | null;
   isStatic: boolean | null;
+  avatarUrl: string | null;
   calls: RoomCall[];
   live: LiveRoom | null;
 }
@@ -21,7 +22,14 @@ interface Row {
 function rowsOf(calls: readonly RoomCall[], live: readonly LiveRoom[]): Row[] {
   const rows = new Map<string, Row>();
   for (const room of live) {
-    rows.set(room.roomId, { roomId: room.roomId, name: room.name, isStatic: room.isStatic, calls: [], live: room });
+    rows.set(room.roomId, {
+      roomId: room.roomId,
+      name: room.name,
+      isStatic: room.isStatic,
+      avatarUrl: room.avatarUrl,
+      calls: [],
+      live: room
+    });
   }
   for (const call of calls) {
     const row = rows.get(call.roomId);
@@ -31,6 +39,7 @@ function rowsOf(calls: readonly RoomCall[], live: readonly LiveRoom[]): Row[] {
         roomId: call.roomId,
         name: call.roomName,
         isStatic: call.isStatic,
+        avatarUrl: call.avatarUrl ?? null,
         calls: [call],
         live: null
       });
@@ -84,7 +93,7 @@ export function DayTimeline({
           <ul className="timeline-rows" aria-label="Звонки за день">
             {rows.map((row) => (
               <li key={row.roomId} className="timeline-row">
-                <RoomTitle roomId={row.roomId} name={row.name} isStatic={null} size={26} />
+                <RoomTitle roomId={row.roomId} name={row.name} isStatic={null} avatarUrl={row.avatarUrl} size={26} />
                 <span className="timeline-track">
                   {HOURS.map((hour) => (
                     <span key={hour} className="timeline-grid" style={{ left: `${String((hour / 24) * 100)}%` }} />

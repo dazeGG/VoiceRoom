@@ -49,6 +49,7 @@ export interface StoredCall {
   roomId: string;
   roomName: string | null;
   isStatic: boolean | null;
+  avatarUrl: string | null;
   startedAt: number;
   endedAt: number;
   stays: StoredStay[];
@@ -298,7 +299,8 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
         'c.ended_at',
         'r.name as room_name',
         'r.deleted_at as room_deleted_at',
-        'r.is_static'
+        'r.is_static',
+        'r.avatar_key as room_avatar_key'
       ]);
     if (query.from !== undefined) pageQuery = pageQuery.where('c.ended_at', '>', new Date(query.from));
     if (query.to !== undefined) pageQuery = pageQuery.where('c.started_at', '<', new Date(query.to));
@@ -319,6 +321,7 @@ export function createAdminRoomsRepository({ pool }: { pool: pg.Pool }) {
       roomId: row.room_id ?? '',
       roomName: roomNameOf(row),
       isStatic: row.is_static,
+      avatarUrl: row.room_deleted_at === null ? avatarUrl(row.room_avatar_key) : null,
       startedAt: toMillis(row.started_at),
       endedAt: toMillis(row.ended_at)
     }));

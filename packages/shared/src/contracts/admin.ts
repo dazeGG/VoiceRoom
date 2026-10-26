@@ -393,6 +393,8 @@ export const LiveRoomPeer = Type.Object({
   muted: Type.Boolean(),
   deafened: Type.Boolean(),
   screen: Type.Boolean(),
+  /** The camera is on. Optional: an API a release behind does not say. */
+  camera: Type.Optional(Type.Boolean()),
   /** The desktop app, the Android app, a phone or a browser; null when the socket sent no user agent. */
   client: Nullable(ClientKind),
   ...DeviceInfo,
@@ -500,6 +502,8 @@ export const RoomCall = Type.Object({
   /** As on a stay: null once the room is gone, empty for an unnamed temporary room. */
   roomName: Nullable(Type.String()),
   isStatic: Nullable(Type.Boolean()),
+  /** The room's picture as it is now; null without one or once the room is gone. Optional for an API a release behind. */
+  avatarUrl: Type.Optional(Nullable(Type.String())),
   startedAt: Type.Number(),
   endedAt: Type.Number(),
   stays: Type.Array(RoomStay)
