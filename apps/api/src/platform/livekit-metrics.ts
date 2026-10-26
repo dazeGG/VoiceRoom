@@ -52,7 +52,11 @@ export function parsePrometheusText(text: string): Sample[] {
   return samples;
 }
 
-/** LiveKit's totals from its samples; null when the answer carries none of its packet counters. */
+/**
+ * LiveKit's totals from its samples; null when the answer is not LiveKit's.
+ * LiveKit always reports its rooms, but creates its packet counters only with
+ * the first media: an idle server's missing counters are zero, not unknown.
+ */
 export function sfuTotalsOf(samples: Sample[]): SfuTotals | null {
   const sum = (name: string, labels: Record<string, string> = {}) =>
     samples
@@ -60,7 +64,7 @@ export function sfuTotalsOf(samples: Sample[]): SfuTotals | null {
         (sample) => sample.name === name && Object.entries(labels).every(([key, value]) => sample.labels[key] === value)
       )
       .reduce((total, sample) => total + sample.value, 0);
-  if (!samples.some((sample) => sample.name === 'livekit_packet_total')) return null;
+  if (!samples.some((sample) => sample.name === 'livekit_room_total')) return null;
   return {
     bytesIn: sum('livekit_packet_bytes', { direction: 'incoming' }),
     bytesOut: sum('livekit_packet_bytes', { direction: 'outgoing' }),

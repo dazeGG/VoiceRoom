@@ -28,6 +28,7 @@ livekit_packet_loss_total{country="",direction="incoming",${NODE},source="SCREEN
 livekit_packet_loss_total{country="",direction="outgoing",${NODE},source="MICROPHONE",type="AUDIO"} 78940
 livekit_packet_loss_total{country="",direction="outgoing",${NODE},source="SCREEN_SHARE",type="VIDEO"} 227907
 livekit_packet_loss_percent_sum{country="",direction="incoming",${NODE},source="MICROPHONE",type="AUDIO"} 3933.38
+livekit_room_total{${NODE}} 1
 process_cpu_seconds_total 56822.33
 process_resident_memory_bytes 8.6982656e+07
 go_goroutines 410
@@ -44,6 +45,23 @@ test('LiveKit totals come from its Prometheus answer, each direction and transmi
     retransmitOut: 522_838,
     cpuSeconds: 56_822.33,
     rssBytes: 86_982_656
+  });
+  // A LiveKit that has carried no media since it started has no packet counters yet: zero, not unknown.
+  const idle = `livekit_room_total{${NODE}} 0
+livekit_participant_total{${NODE}} 0
+process_cpu_seconds_total 12.5
+process_resident_memory_bytes 5.2e+07
+`;
+  assert.deepEqual(sfuTotalsOf(parsePrometheusText(idle)), {
+    bytesIn: 0,
+    bytesOut: 0,
+    packetsIn: 0,
+    lostIn: 0,
+    packetsOut: 0,
+    lostOut: 0,
+    retransmitOut: 0,
+    cpuSeconds: 12.5,
+    rssBytes: 52_000_000
   });
   // Another exporter on the port, or an error page, is not LiveKit.
   assert.equal(sfuTotalsOf(parsePrometheusText('go_goroutines 410\n')), null);
