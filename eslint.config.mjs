@@ -29,7 +29,6 @@ export default tseslint.config(
       '**/.svelte-kit/**',
       'coverage/**',
       '.omc/**',
-      '.graphify/**',
       'apps/api/src/platform/db/schema.ts',
       'apps/web/static/**',
       'apps/web/svelte.config.js',
