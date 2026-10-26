@@ -22,6 +22,7 @@ import { createDeviceTokenRepository } from '../domains/notifications/device-tok
 import { createPushService } from '../lib/push-service.ts';
 import { createRuStorePushClient } from '../lib/rustore-push.ts';
 import { createNativePushService } from '../domains/notifications/native-push.service.ts';
+import { createRingRepository } from '../domains/rings/ring.repository.ts';
 import { createPushFanout } from '../domains/notifications/push-fanout.ts';
 import { createAvatarStorage } from '../lib/avatar-storage.ts';
 import { createLinkPreviewFetcher } from '../lib/link-preview-fetcher.ts';
@@ -266,6 +267,12 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
       minVersion: config.ANDROID_MIN_VERSION ?? ''
     })
   );
+  const rings = pooled((pool) =>
+    createRingRepository({
+      pool,
+      isBanned: (input) => activeBans.require().isBanned(input)
+    })
+  );
   // Web Push and the Android app: what the dispatch sends a push through.
   const pushDelivery = cached(() => createPushFanout(() => [{ name: 'web', ...pushService.get() }, nativePush.get()]));
   // Not on the pool: the reader of the GeoIP file is opened once.
@@ -475,6 +482,8 @@ export function createServiceRegistry(config: ServiceRegistryConfig, deps: Servi
     getPushService: () => pushService.get(),
     getDeviceTokens: () => deviceTokens.get(),
     getPushDelivery: () => pushDelivery.get(),
+    getNativePushService: () => nativePush.get(),
+    getRingRepository: () => rings.require(),
     getAvatarStorage: () => avatarStorage.get(),
     getLinkPreviewStorage: () => linkPreviewStorage.get(),
     getMessageService: () => messageService.get(),
