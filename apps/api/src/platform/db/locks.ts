@@ -13,7 +13,9 @@ export const lockKeys = {
   // One account's membership in one room.
   membership: (roomId: string, userId: string) => `voice-room:membership:${roomId}:${userId}`,
   // Two accounts' friendship and invite state; the ids come ordered.
-  userPair: (low: string, high: string) => `voice-room:user-pair:${low}:${high}`
+  userPair: (low: string, high: string) => `voice-room:user-pair:${low}:${high}`,
+  // Ring creation takes request identity before userPair, even for different recipients.
+  ringRequest: (caller: string, requestId: string) => `voice-room:ring-request:${caller}:${requestId.toLowerCase()}`
 };
 
 /** Holds until the caller's transaction ends. */

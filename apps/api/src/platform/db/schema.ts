@@ -369,6 +369,18 @@ export interface ReservedLogins {
   reserved_at: Generated<Timestamp>;
 }
 
+export interface RingDeliveryOutbox {
+  attempts: Generated<number>;
+  available_at: Generated<Timestamp>;
+  claim_token: string | null;
+  claimed_until: Timestamp | null;
+  deadline: Timestamp;
+  kind: string;
+  recipient_user_id: string;
+  revision: number;
+  ring_id: string;
+}
+
 export interface RoomBans {
   created_at: Generated<Timestamp>;
   expires_at: Timestamp | null;
@@ -469,6 +481,21 @@ export interface RoomPeerIdentities {
   peer_id: string;
   room_id: string;
   session_token_hash: string;
+}
+
+export interface RoomRings {
+  caller_user_id: string;
+  client_request_id: string;
+  created_at: Generated<Timestamp>;
+  ended_at: Timestamp | null;
+  expires_at: Timestamp;
+  id: string;
+  invite_message_id: string;
+  reason: string | null;
+  recipient_user_id: string;
+  revision: Generated<number>;
+  room_id: string;
+  state: Generated<string>;
 }
 
 export interface Rooms {
@@ -652,6 +679,7 @@ export interface DB {
   product_snapshots: ProductSnapshots;
   push_subscriptions: PushSubscriptions;
   reserved_logins: ReservedLogins;
+  ring_delivery_outbox: RingDeliveryOutbox;
   room_bans: RoomBans;
   room_bookmarks: RoomBookmarks;
   room_chat_reads: RoomChatReads;
@@ -662,6 +690,7 @@ export interface DB {
   room_message_reactions: RoomMessageReactions;
   room_messages: RoomMessages;
   room_peer_identities: RoomPeerIdentities;
+  room_rings: RoomRings;
   room_server_mutes: RoomServerMutes;
   rooms: Rooms;
   sessions: Sessions;
