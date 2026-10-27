@@ -45,7 +45,7 @@ State on `<html>` and `<body>` is a class, set from the same places that set the
 | `<body data-screen-view='true'>` | `body.screen-view--open` |
 | `html.is-desktop`, `.is-shell-fullscreen`, `.vr-game-mode` | unchanged (already classes) |
 
-A theme or screen is one class at a time: remove the old one before adding the new one. `document.body.dataset.screen` stays as it is in the copied room client (its logic and the e2e specs read it; rule 7 bans `data-*` only for styling); styles select only the class; how the class is set next to it is decided in task C3 (W2).
+A theme or screen is one class at a time: remove the old one before adding the new one. Page state that Svelte keeps in `document.body.dataset` (`screen`, `chatOpen`, `lobbyEmbedded`, `screenView`, `stripCollapsed`, `stageSummary`) lives in one Pinia store, `page.store.ts`; one watcher, `installBodyClasses()`, sets the BEM classes on `<body>` from it. Nothing in web-vue writes or reads `body.dataset`; the e2e specs assert the class.
 
 ## Styles layout
 
