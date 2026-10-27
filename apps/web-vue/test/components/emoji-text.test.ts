@@ -12,5 +12,9 @@ test('text stays text and each emoji is drawn as artwork that keeps its characte
 
 test('no whitespace is added around the parts, so names and messages keep their spacing', () => {
   const { container } = render(EmojiText, { props: { text: 'a👍b' } });
-  expect(container.innerHTML.replace(/<!--.*?-->/g, '')).toMatch(/^a<[^>]+>.*<\/[^>]+>b$|^a<img[^>]*>b$/);
+  const nodes = [...container.childNodes].filter(
+    (node) => (node.nodeType !== Node.COMMENT_NODE && node.textContent !== '') || node.nodeName === 'IMG'
+  );
+  expect(nodes.map((node) => node.nodeName)).toEqual(['#text', 'IMG', '#text']);
+  expect(nodes.map((node) => node.textContent)).toEqual(['a', '', 'b']);
 });

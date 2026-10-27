@@ -1,7 +1,7 @@
 import { render } from '@testing-library/vue';
 import { nextTick } from 'vue';
 import { expect, test } from 'vitest';
-import Avatar from '../../src/shared/ui/Avatar/Avatar.vue';
+import Avatar from '@/shared/ui/Avatar/Avatar.vue';
 
 const dot = (container: Element) => container.querySelector('.ui-avatar__dot');
 const statusOf = (element: Element | null) =>
