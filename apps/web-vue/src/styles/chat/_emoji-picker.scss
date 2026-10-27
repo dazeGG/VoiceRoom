@@ -1,0 +1,279 @@
+// Emoji browser shared by reactions and the composer (shared/chat/EmojiPickerPanel.vue).
+//
+// Svelte class -> BEM class
+//   .reaction-picker-panel              -> .reaction-picker-panel (unchanged: the Popover `panel-class` that
+//                                          ReactionPicker.vue and ComposerEmojiPicker.vue pass)
+//   .reaction-picker                    -> .emoji-picker
+//   .reaction-picker-head               -> .emoji-picker__head
+//   .reaction-picker-search-row         -> .emoji-picker__search-row
+//   .reaction-picker-search             -> .emoji-picker__search
+//   .reaction-picker-search input       -> .emoji-picker__input
+//   .sr-only (search label)             -> .emoji-picker__label
+//   .reaction-tone                      -> .emoji-picker__tone
+//   .reaction-tone-trigger              -> .emoji-picker__tone-trigger
+//   .reaction-tone-menu                 -> .emoji-picker__tone-menu
+//   .reaction-tone-option               -> .emoji-picker__tone-option
+//   .reaction-tone-option.is-active     -> .emoji-picker__tone-option[aria-checked='true']
+//   .reaction-tone-strip                -> .emoji-picker__tone-strip
+//   .reaction-tone-strip button         -> .emoji-picker__tone-strip-option
+//   .reaction-picker-anchors            -> .emoji-picker__anchors
+//   .reaction-picker-anchor             -> .emoji-picker__anchor
+//   .reaction-picker-anchor.is-active   -> .emoji-picker__anchor--active
+//   .reaction-picker-body               -> .emoji-picker__body
+//   .reaction-picker-spacer             -> .emoji-picker__spacer
+//   .reaction-picker-section            -> .emoji-picker__section
+//   .reaction-picker-grid               -> .emoji-picker__row
+//   .reaction-picker-grid button        -> .emoji-picker__cell
+//   .reaction-picker-tone-hint          -> .emoji-picker__tone-hint
+//   .reaction-picker-empty              -> .emoji-picker__empty
+
+// The picker draws its own header and footer to the panel edges.
+.reaction-picker-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.emoji-picker {
+  position: relative;
+  display: flex;
+  width: min(430px, calc(100vw - 28px));
+  max-height: var(--popover-available-height, calc(100dvh - 16px));
+  flex-direction: column;
+}
+
+.emoji-picker__head {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 14px 10px;
+}
+
+.emoji-picker__search-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.emoji-picker__search {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.emoji-picker__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.emoji-picker__input {
+  width: 100%;
+  height: 44px;
+  box-sizing: border-box;
+  padding: 0 14px;
+  border: 1px solid var(--vr-line);
+  border-radius: 15px;
+  background: color-mix(in oklch, var(--vr-surface-3), transparent 45%);
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 14.5px;
+
+  &::placeholder {
+    color: var(--vr-text-2);
+  }
+
+  &:focus {
+    border-color: color-mix(in oklch, var(--vr-accent), transparent 40%);
+    outline: none;
+  }
+}
+
+.emoji-picker__tone {
+  position: relative;
+  flex: none;
+}
+
+.emoji-picker__tone-trigger {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid var(--vr-line);
+  border-radius: 15px;
+  background: color-mix(in oklch, var(--vr-surface-3), transparent 45%);
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    border-color: color-mix(in oklch, var(--vr-accent), transparent 40%);
+    outline: none;
+  }
+}
+
+.emoji-picker__tone-menu {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 6px);
+  inset-inline-end: 0;
+  display: flex;
+  gap: 2px;
+  border: 1px solid var(--vr-line);
+  border-radius: 13px;
+  padding: 4px;
+  background: var(--vr-bg);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
+}
+
+.emoji-picker__tone-option,
+.emoji-picker__tone-strip-option {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.emoji-picker__tone-option:hover,
+.emoji-picker__tone-option:focus-visible,
+.emoji-picker__tone-option[aria-checked='true'],
+.emoji-picker__tone-strip-option:hover,
+.emoji-picker__tone-strip-option:focus-visible {
+  background: color-mix(in oklch, var(--vr-accent), transparent 86%);
+  outline: none;
+}
+
+// One line, always: wrapping to a second row cost the grid a whole row of
+// emoji for something the reader only glances at.
+.emoji-picker__anchors {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+}
+
+.emoji-picker__anchor {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 1 1 0;
+  min-width: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 13px;
+  background: color-mix(in oklch, var(--vr-surface-3), transparent 55%);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 120ms ease;
+
+  &:hover {
+    background: color-mix(in oklch, var(--vr-accent), transparent 86%);
+  }
+}
+
+.emoji-picker__anchor--active {
+  background: color-mix(in oklch, var(--vr-accent), transparent 86%);
+}
+
+.emoji-picker__body {
+  position: relative;
+  max-height: min(368px, 58vh);
+  min-height: 0;
+  flex: 1 1 auto;
+  padding: 2px 14px 14px;
+  overflow-y: auto;
+
+  &:focus {
+    outline: none;
+  }
+}
+
+// Rows are positioned against the full-height spacer, so scrolling stays
+// accurate while only the visible ones exist.
+.emoji-picker__spacer {
+  position: relative;
+}
+
+.emoji-picker__section {
+  position: absolute;
+  inset-inline: 0;
+  display: flex;
+  height: 28px;
+  align-items: center;
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.emoji-picker__row {
+  position: absolute;
+  inset-inline: 0;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 4px;
+}
+
+.emoji-picker__cell {
+  position: relative;
+  display: grid;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: 13px;
+  background: transparent;
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in oklch, var(--vr-accent), transparent 86%);
+    outline: none;
+  }
+}
+
+// The corner notch marks what a long press can open, the way a keyboard marks
+// a key with alternates.
+.emoji-picker__tone-hint {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 0;
+  height: 0;
+  border-top: 4px solid transparent;
+  border-inline-start: 4px solid color-mix(in oklch, currentColor, transparent 62%);
+}
+
+.emoji-picker__empty {
+  margin: 8px 0;
+  color: var(--vr-text-3);
+  font-size: 13px;
+  text-align: center;
+}
+
+// Anchored over the tile it belongs to and only as wide as its six swatches,
+// rather than a full-width bar with empty space on both sides.
+.emoji-picker__tone-strip {
+  position: absolute;
+  z-index: 3;
+  display: flex;
+  width: max-content;
+  align-items: center;
+  gap: 2px;
+  border: 1px solid var(--vr-line);
+  border-radius: 15px;
+  // Padding, gap and swatch size are mirrored by the TONE_* constants, which
+  // clamp the strip inside the panel before it can be measured.
+  padding: 5px;
+  background: var(--vr-bg);
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.46);
+  // Overlaps its tile by a couple of pixels: a gap here is a dead zone the
+  // pointer crosses on the way to the swatches.
+  transform: translate(-50%, calc(-100% + 2px));
+}

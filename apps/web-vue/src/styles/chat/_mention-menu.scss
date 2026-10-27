@@ -1,0 +1,60 @@
+// Mention suggestions above the composer (shared/chat/MentionAutocomplete.vue).
+//
+// Svelte class -> BEM class
+//   .mention-menu            -> .mention-menu
+//   .mention-menu button     -> .mention-menu__option
+//   button.active            -> .mention-menu__option[aria-selected='true']
+//   .mention-names           -> .mention-menu__names
+//   .mention-name            -> .mention-menu__name
+//   .mention-menu small      -> .mention-menu__login
+
+.mention-menu {
+  position: absolute;
+  z-index: 20;
+  left: 18px;
+  right: 18px;
+  bottom: calc(100% - 8px);
+  display: grid;
+  width: auto;
+  max-height: 280px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 12px;
+  background: var(--vr-bg);
+  box-shadow: var(--vr-shadow-popover);
+}
+
+.mention-menu__option {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+
+  &[aria-selected='true'],
+  &:hover {
+    background: color-mix(in oklch, var(--vr-bg), var(--vr-text) 8%);
+  }
+}
+
+.mention-menu__names {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.mention-menu__name,
+.mention-menu__login {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mention-menu__login {
+  color: var(--vr-text-2);
+}
