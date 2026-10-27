@@ -6,5 +6,5 @@
     "types": ["vite/client", "node"],
     "noUnusedLocals": false
   },
-  "include": ["src/**/*.ts", "src/**/*.vue", "test/**/*.ts", "scripts/**/*.ts", "vite.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.vue", "test/**/*.ts", "test/**/*.vue", "scripts/**/*.ts", "vite.config.ts"]
 }

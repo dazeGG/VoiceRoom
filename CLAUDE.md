@@ -3,6 +3,7 @@
 ## Repository map
 - `apps/api` is the Fastify/PostgreSQL/LiveKit backend.
 - `apps/web` is the Svelte/Vite frontend.
+- While `apps/web-vue` (the Vue port) exists, any fix in `apps/web` also lands in `apps/web-vue`, or is listed in `docs/web-vue-parity.md` when its area is not ported yet.
 - `packages/shared` owns contracts shared by API and Web. Update shared contracts before their consumers.
 - `docs/GIT_FLOW.md` is the source of truth for branches, commits, pull requests, hotfixes, and releases.
 - A release may add a `docs/RELEASE_<version>_PLAN.md` target-state plan; none is active now. Do not describe an unmet gate as already implemented.

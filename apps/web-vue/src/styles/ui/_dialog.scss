@@ -1,0 +1,241 @@
+// Shared modal dialog chrome: overlay, card, tabs, form fields, actions, and
+// the destructive-action block at the foot of a settings section. Shared by the
+// create-room dialog and the room settings dialogs (Svelte: shared/styles/dialog.css
+// and the .dialog-danger-* rules of shared/styles/settings.css).
+//
+// Svelte class -> BEM class
+//   .dialog-overlay            -> .dialog__overlay
+//   .dialog-card               -> .dialog__card
+//   .dialog-head               -> .dialog__head
+//   .dialog-title              -> .dialog__title
+//   .dialog-close              -> .dialog__close
+//   .dialog-tabs               -> .dialog__tabs
+//   .dialog-tab                -> .dialog__tab
+//   .dialog-body               -> .dialog__body
+//   .dialog-error              -> .dialog__error
+//   .dialog-input              -> .dialog__input
+//   .dialog-note               -> .dialog__note
+//   .dialog-note--ok / --warn  -> .dialog__note--ok / .dialog__note--warn
+//   .dialog-actions            -> .dialog__actions
+//   .dialog-danger-zone        -> .dialog__danger-zone
+//   .dialog-danger-trigger     -> .dialog__danger-trigger
+//   .dialog-danger-note        -> .dialog__danger-note
+//   .dialog-danger-actions     -> .dialog__danger-actions
+//   .dialog-danger-confirm     -> .dialog__danger-confirm
+//
+// [data-*] -> aria
+//   .dialog-tab[data-active='true']  -> .dialog__tab[aria-selected='true']
+//     (tabs carry role="tab" and aria-selected; the Svelte markup sets both)
+@use '../mixins' as *;
+
+.dialog__overlay {
+  @include modal-overlay(40, 24px);
+}
+
+.dialog__card {
+  width: min(430px, 100%);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 20px;
+  background: var(--vr-surface);
+  box-shadow: var(--vr-shadow-modal);
+  overflow: hidden;
+}
+
+.dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 22px 16px;
+}
+
+.dialog__title {
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.dialog__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--vr-text-2);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.dialog__close:hover {
+  background: var(--vr-hover);
+  color: var(--vr-text);
+}
+
+.dialog__tabs {
+  display: flex;
+  gap: 2px;
+  margin: 0 22px;
+  padding: 3px;
+  border: 1px solid var(--vr-line);
+  border-radius: 14px;
+  background: var(--vr-surface-2);
+}
+
+.dialog__tab {
+  flex: 1;
+  border: none;
+  border-radius: 11px;
+  padding: 9px 0;
+  background: transparent;
+  color: var(--vr-text-2);
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+// Svelte: .dialog-tab:hover:not([data-active='true'])
+.dialog__tab:hover:not([aria-selected='true']) {
+  background: var(--vr-hover);
+  color: var(--vr-text);
+}
+
+// Svelte: .dialog-tab[data-active='true']
+.dialog__tab[aria-selected='true'] {
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
+}
+
+.dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px 22px 22px;
+}
+
+.dialog__error {
+  margin: 0;
+  border-radius: 11px;
+  padding: 9px 12px;
+  background: var(--vr-danger-soft);
+  color: var(--vr-danger);
+  font-size: 12.5px;
+}
+
+.dialog__input {
+  @include dialog-field;
+}
+
+.dialog__note {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border-radius: 11px;
+  padding: 11px 13px;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+.dialog__note svg {
+  flex: none;
+}
+
+.dialog__note--ok {
+  background: var(--vr-accent-soft);
+  color: var(--vr-text-2);
+}
+
+.dialog__note--ok svg {
+  stroke: var(--vr-online);
+}
+
+.dialog__note--warn {
+  background: color-mix(in oklch, var(--vr-warning), transparent 88%);
+  color: var(--vr-warning);
+}
+
+.dialog__note--warn svg {
+  stroke: var(--vr-warning);
+}
+
+.dialog__actions {
+  display: flex;
+  gap: 10px;
+}
+
+// ---- destructive action at the foot of a settings section ----
+.dialog__danger-zone {
+  margin-top: 4px;
+  padding-top: 20px;
+  border-top: 1px solid var(--vr-line);
+}
+
+.dialog__danger-trigger {
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in oklch, var(--vr-danger), transparent 60%);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--vr-danger);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.dialog__danger-trigger:hover {
+  border-color: color-mix(in oklch, var(--vr-danger), transparent 40%);
+  background: var(--vr-danger-hover);
+}
+
+.dialog__danger-note {
+  margin: 0 0 10px;
+  color: var(--vr-danger);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.dialog__danger-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dialog__danger-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--vr-danger);
+  color: var(--vr-on-danger);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.dialog__danger-confirm:hover {
+  background: color-mix(in oklch, var(--vr-danger), var(--vr-on-danger) 12%);
+}
+
+.dialog__danger-confirm:disabled,
+.dialog__danger-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}

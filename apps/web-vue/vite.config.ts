@@ -42,6 +42,7 @@ export default defineConfig({
   test: {
     include: ['test/**/*.test.ts'],
     environment: 'jsdom',
+    setupFiles: ['test/setup.ts'],
     testTimeout: 20000,
     // vi.stubGlobal() is undone after every test.
     unstubGlobals: true
