@@ -1,0 +1,254 @@
+// Avatar crop dialog (shared/ui/AvatarCropDialog). Svelte: scoped styles of AvatarCropDialog.svelte.
+//
+// Svelte class -> BEM class
+//   .crop-overlay                    -> .avatar-crop__overlay
+//   .crop-dialog                     -> .avatar-crop__dialog
+//   .crop-head                       -> .avatar-crop__head
+//   .crop-head h2 / p                -> .avatar-crop__title / .avatar-crop__hint
+//   .crop-head button                -> .avatar-crop__close
+//   .crop-body                       -> .avatar-crop__body
+//   .crop-editor                     -> .avatar-crop__editor
+//   .crop-stage                      -> .avatar-crop__stage
+//   .crop-stage--circle / --squircle -> .avatar-crop__stage--circle / --squircle
+//   canvas                           -> .avatar-crop__canvas
+//   .crop-zoom (its input)           -> .avatar-crop__zoom (.avatar-crop__zoom-input)
+//   .crop-preview                    -> .avatar-crop__preview
+//   .crop-preview-label              -> .avatar-crop__preview-label
+//   .crop-user-tile (strong, span)   -> .avatar-crop__tile (.avatar-crop__name, .avatar-crop__caption)
+//   .crop-sidebar-preview / .crop-room-preview -> .avatar-crop__card
+//     (its div -> .avatar-crop__card-text, strong -> .avatar-crop__name, span -> .avatar-crop__caption)
+//   .crop-error                      -> .avatar-crop__error
+//   .crop-actions                    -> .avatar-crop__actions
+//   .crop-cancel / .crop-save        -> .avatar-crop__cancel / .avatar-crop__save
+@use '../mixins' as *;
+
+.avatar-crop__overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--vr-bg) 72%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.avatar-crop__dialog {
+  width: min(820px, 100%);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 20px;
+  background: var(--vr-surface-2);
+  box-shadow: 0 36px 90px rgb(0 0 0 / 0.6);
+  color: var(--vr-text);
+  overflow: hidden;
+}
+
+.avatar-crop__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 20px 22px;
+  border-bottom: 1px solid var(--vr-line);
+}
+
+.avatar-crop__title {
+  margin: 0;
+  font-size: 18px;
+}
+
+.avatar-crop__hint {
+  margin: 5px 0 0;
+  color: var(--vr-text-3);
+  font-size: 13px;
+}
+
+.avatar-crop__close {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  background: var(--vr-surface-3);
+  color: inherit;
+  cursor: pointer;
+}
+
+.avatar-crop__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 260px;
+  gap: 28px;
+  padding: 24px;
+}
+
+.avatar-crop__editor {
+  min-width: 0;
+}
+
+.avatar-crop__stage {
+  position: relative;
+  width: min(100%, 430px);
+  aspect-ratio: 1;
+  margin: auto;
+  overflow: hidden;
+  background: var(--vr-bg);
+  touch-action: none;
+}
+
+.avatar-crop__stage--circle {
+  border-radius: 50%;
+}
+
+.avatar-crop__stage--squircle {
+  border-radius: 31%;
+}
+
+.avatar-crop__canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+}
+
+.avatar-crop__canvas:active {
+  cursor: grabbing;
+}
+
+.avatar-crop__zoom {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 14px;
+  margin: 18px auto 0;
+  max-width: 430px;
+  color: var(--vr-text-2);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.avatar-crop__zoom-input {
+  accent-color: var(--vr-accent);
+}
+
+.avatar-crop__preview {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.avatar-crop__preview-label {
+  color: var(--vr-text-3);
+  font-family: var(--font-ui, sans-serif);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.avatar-crop__tile {
+  display: flex;
+  min-height: 210px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 18px;
+  background: var(--preview-accent);
+  box-shadow: var(--preview-shadow);
+}
+
+.avatar-crop__tile .avatar-crop__name {
+  margin-top: 5px;
+}
+
+.avatar-crop__caption {
+  color: color-mix(in oklch, var(--vr-text) 62%, transparent);
+  font-size: 11px;
+}
+
+.avatar-crop__card {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 13px;
+  border: 1px solid var(--vr-line);
+  border-radius: 14px;
+  background: var(--vr-surface);
+}
+
+.avatar-crop__card-text {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.avatar-crop__card .avatar-crop__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.avatar-crop__error {
+  margin: 0 24px 12px;
+  color: var(--vr-danger);
+  font-size: 13px;
+}
+
+.avatar-crop__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 17px 22px;
+  border-top: 1px solid var(--vr-line);
+}
+
+.avatar-crop__cancel,
+.avatar-crop__save {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 11px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.avatar-crop__cancel {
+  border: 1px solid var(--vr-line-strong);
+  background: transparent;
+  color: var(--vr-text);
+}
+
+.avatar-crop__save {
+  border: 0;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+}
+
+.avatar-crop__cancel:disabled,
+.avatar-crop__save:disabled,
+.avatar-crop__close:disabled {
+  cursor: default;
+  opacity: 0.58;
+}
+
+@include below(720px) {
+  .avatar-crop__overlay {
+    padding: 10px;
+  }
+
+  .avatar-crop__dialog {
+    max-height: 96vh;
+    overflow-y: auto;
+  }
+
+  .avatar-crop__body {
+    grid-template-columns: 1fr;
+  }
+
+  .avatar-crop__preview {
+    display: none;
+  }
+}

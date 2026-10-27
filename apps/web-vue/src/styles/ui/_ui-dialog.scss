@@ -1,0 +1,65 @@
+// Dialog primitive (shared/ui/Dialog). Svelte: scoped styles of Dialog.svelte.
+//
+// Svelte class -> BEM class
+//   .ui-dialog-overlay -> .ui-dialog__overlay
+//   .ui-dialog-card    -> .ui-dialog__card
+//   .ui-dialog-head    -> .ui-dialog__head
+//   .ui-dialog-title   -> .ui-dialog__title
+//   .ui-dialog-close   -> .ui-dialog__close
+//   .ui-dialog-body    -> .ui-dialog__body
+@use '../mixins' as *;
+
+.ui-dialog__overlay {
+  @include modal-overlay(40, 24px);
+}
+
+.ui-dialog__card {
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 20px;
+  background: var(--vr-surface);
+  box-shadow: var(--vr-shadow-modal);
+  overflow: hidden;
+}
+
+.ui-dialog__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 22px 16px;
+}
+
+.ui-dialog__title {
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.ui-dialog__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--vr-text-2);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.ui-dialog__close:hover {
+  background: var(--vr-hover);
+  color: var(--vr-text);
+}
+
+.ui-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px 22px 22px;
+}
