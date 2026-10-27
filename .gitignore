@@ -49,3 +49,4 @@ playwright-report/
 
 # Generated emoji artwork (see apps/web/scripts/build-emoji-assets.ts)
 apps/web/static/emoji/
+apps/web-vue/public/emoji/

@@ -1,0 +1,13 @@
+// Global styles for apps/web-vue; src/main.ts imports this file. Sass module
+// system only (@use/@forward), never @import. Order: tokens, then the rules
+// that read them.
+@use 'tokens';
+@use 'typography';
+@use 'base';
+@use 'desktop-shell';
+@use 'ui';
+@use 'chat';
+@use 'room';
+@use 'home';
+@use 'auth';
+@use 'legal';

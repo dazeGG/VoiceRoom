@@ -14,15 +14,22 @@ import { Value } from 'typebox/value';
 
 const repoRoot = resolve(import.meta.dirname, '..');
 const BASELINE_PATH = resolve(repoRoot, 'config/test-source-reads.json');
-const TREES = ['apps/api/test', 'apps/admin/test', 'apps/web/test', 'packages/shared/test', 'scripts/test'];
+const TREES = [
+  'apps/api/test',
+  'apps/admin/test',
+  'apps/web/test',
+  'apps/web-vue/test',
+  'packages/shared/test',
+  'scripts/test'
+];
 
-const CODE_PATH = /(['"`])([^'"`\n]*\.(?:ts|tsx|mts|cts|svelte|js|mjs|cjs)|src|[^'"`\n]*\bsrc\/[^'"`\n]*)\1/g;
-const CODE_EXTENSION = /\.(?:ts|tsx|mts|cts|svelte|js|mjs|cjs)$/;
+const CODE_PATH = /(['"`])([^'"`\n]*\.(?:ts|tsx|mts|cts|svelte|vue|js|mjs|cjs)|src|[^'"`\n]*\bsrc\/[^'"`\n]*)\1/g;
+const CODE_EXTENSION = /\.(?:ts|tsx|mts|cts|svelte|vue|js|mjs|cjs)$/;
 const ALLOWED = [
   /\/migrations\//,
   /platform\/db\/schema\.ts$/,
   // Audio worklets are plain scripts the browser loads by URL; tests run them in a sandbox.
-  /\/static\/[^/]+\.worklet\.js$/
+  /\/(?:static|public)\/[^/]+\.worklet\.js$/
 ];
 // Only literals on a line that reads a file count; loading a module is fine.
 const READ_CALL = /\b(?:readFileSync|readFile|read[A-Z]\w*|read)\s*\(/;

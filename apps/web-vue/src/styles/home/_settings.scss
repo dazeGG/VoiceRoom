@@ -1,0 +1,655 @@
+// Settings modals: a large dialog with a section sidebar. Shared by the
+// account settings and the room settings (Svelte: shared/styles/settings.css;
+// the .dialog-danger-* rules that sat at its end are in ui/_dialog.scss).
+//
+// Svelte class -> BEM class (block "settings")
+//   .settings-overlay               -> .settings__overlay
+//   .settings-modal                 -> .settings__modal
+//   .room-settings-modal            -> .settings__modal--room   (room settings dialogs add it)
+//   .settings-head                  -> .settings__head
+//   .settings-title                 -> .settings__title
+//   .settings-close                 -> .settings__close
+//   .settings-body                  -> .settings__body
+//   .room-settings-body             -> .settings__body--room    (room settings dialogs add it)
+//   .settings-nav                   -> .settings__nav
+//   .settings-nav-main              -> .settings__nav-main
+//   .settings-nav-item              -> .settings__nav-item
+//   .settings-nav-item--danger      -> .settings__nav-item--danger
+//   .settings-content               -> .settings__content
+//   .settings-password-fields       -> .settings__password-fields
+//   .settings-field-label           -> .settings__field-label
+//   .settings-input                 -> .settings__input
+//   .settings-actions               -> .settings__actions
+//   .settings-save                  -> .settings__save
+//   .settings-cancel                -> .settings__cancel
+//   .settings-sound                 -> .settings__sound
+//   .settings-sound-devices         -> .settings__sound-devices
+//   .settings-sound-device          -> .settings__sound-device
+//   .settings-sound-head            -> .settings__sound-head
+//   .settings-gate-head             -> .settings__gate-head
+//   .settings-gate-body             -> .settings__gate-body
+//   .settings-gate-fill             -> .settings__gate-fill
+//   .settings-gate-hint             -> .settings__gate-hint
+//   .settings-switch                -> .settings__switch
+//   .settings-switch-knob           -> .settings__switch-knob
+//   .settings-section-title         -> .settings__section-title
+//   .settings-hotkeys               -> .settings__hotkeys
+//   .settings-hotkey-row            -> .settings__hotkey-row
+//   .settings-hotkey-label          -> .settings__hotkey-label
+//   .settings-hotkey-description    -> .settings__hotkey-description
+//   .settings-hotkey-window-note    -> .settings__hotkey-window-note
+//   .settings-notification-ignore   -> .settings__notification-ignore
+//   .settings-notification-dependent -> .settings__notification-dependent
+//   .settings-notification-group    -> .settings__notification-group
+//   .settings-notification-targets  -> .settings__notification-targets
+//   .settings-notification-list     -> .settings__notification-list
+//   .settings-notification-row      -> .settings__notification-row
+//   .settings-notification-name     -> .settings__notification-name
+//   .settings-notification-empty    -> .settings__notification-empty
+//   .settings-blocked-users         -> .settings__blocked-users
+//   .settings-unblock-button        -> .settings__unblock-button
+//   .settings-overlay-games         -> .settings__overlay-games
+//
+// Other components' classes this file reaches (names the owning component takes):
+//   .home-spinner -> .home-spinner (block)    .select-root -> .ui-select      .select-trigger -> .ui-select__trigger
+//   .popover-root -> .ui-popover              .vr-slider   -> .ui-slider
+//
+// [data-*] -> aria / modifier class
+//   .settings-nav-item[data-active='true']          -> .settings__nav-item[aria-current]:not([aria-current='false'])
+//     (the nav button also carries aria-current; Svelte omits it when inactive, Vue renders "false")
+//   .settings-gate-body[data-disabled='true']       -> .settings__gate-body--disabled
+//   .settings-gate-fill[data-state='closed']        -> .settings__gate-fill--closed
+//   .settings-hotkey-row[data-disabled='true']      -> .settings__hotkey-row--disabled
+//   .settings-notification-dependent[data-disabled='true'] -> .settings__notification-dependent--disabled
+//   .settings-overlay-games[data-disabled='true']   -> .settings__overlay-games--disabled
+//     (these wrappers are plain divs/sections with no aria state of their own)
+@use '../mixins' as *;
+
+.settings__overlay {
+  @include modal-overlay(60, 32px);
+}
+
+.settings__modal {
+  display: flex;
+  flex-direction: column;
+  width: 940px;
+  max-width: 100%;
+  max-height: 90vh;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 22px;
+  background: var(--vr-surface);
+  box-shadow: var(--vr-shadow-modal);
+  overflow: hidden;
+}
+
+.settings__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--vr-line);
+}
+
+.settings__title {
+  color: var(--vr-text);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.settings__close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--vr-text-2);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.settings__close:hover {
+  background: var(--vr-hover);
+  color: var(--vr-text);
+}
+
+.settings__body {
+  display: flex;
+  // Fixed height so the modal doesn't jump when switching Профиль / Звук.
+  // No flex-grow here — that would let content drive the height and reintroduce
+  // the jump.
+  height: 612px;
+}
+
+.settings__nav {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 4px;
+  width: 200px;
+  padding: 14px 12px;
+  border-right: 1px solid var(--vr-line);
+}
+
+// The account settings sit on a darker sidebar.
+.settings__modal:not(.settings__modal--room) .settings__nav {
+  width: 220px;
+  background: var(--vr-bg);
+}
+
+.settings__nav-main {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.settings__nav-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 9px 12px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--vr-text-2);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease;
+}
+
+.settings__nav-item:hover {
+  color: var(--vr-text);
+}
+
+// Svelte: [data-active='true']
+.settings__nav-item[aria-current]:not([aria-current='false']) {
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
+}
+
+.settings__nav-item--danger {
+  margin-top: auto;
+  color: var(--vr-danger);
+}
+
+.settings__nav-item--danger:hover {
+  background: var(--vr-danger-hover);
+  color: var(--vr-danger);
+}
+
+.settings__nav-item--danger:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.settings__content {
+  flex: 1;
+  min-width: 0;
+  padding: 20px 32px 32px;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+// ---- profile section ----
+
+.settings__password-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.settings__field-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--vr-text-2);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.settings__input {
+  @include dialog-field;
+}
+
+.settings__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.settings__save {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 40px;
+  padding: 0 20px;
+  border: none;
+  border-radius: 11px;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.settings__save:hover {
+  background: var(--vr-accent-hover);
+}
+
+// Nothing to save yet: the button waits, grey, until something changes.
+.settings__save:disabled {
+  background: var(--vr-surface-3);
+  color: var(--vr-text-3);
+  cursor: default;
+}
+
+.settings__save .home-spinner {
+  border-color: color-mix(in oklch, var(--vr-accent-ink), transparent 75%);
+  border-top-color: var(--vr-accent-ink);
+}
+
+.settings__cancel {
+  min-height: 40px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.settings__cancel:hover {
+  background: var(--vr-hover);
+}
+
+.settings__cancel:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+// ---- sound section ----
+.settings__sound {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.settings__sound-devices {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.settings__sound-device {
+  display: grid;
+  align-content: start;
+  gap: 22px;
+  min-width: 0;
+}
+
+.settings__sound-device > *,
+.settings__sound-device .ui-select,
+.settings__sound-device .ui-popover,
+.settings__sound-device .ui-select__trigger,
+.settings__sound-device .ui-slider {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+// Gate — an on/off switch over the in-room dock control: one slider on a live
+// mic-level meter. Off parks the threshold at the floor («Выкл») and greys the
+// meter out.
+.settings__gate-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.settings__gate-head .settings__field-label {
+  margin-bottom: 0;
+}
+
+.settings__switch {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--vr-surface-3);
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease;
+}
+
+.settings__switch::after {
+  content: '';
+  position: absolute;
+  inset: -10px -4px;
+  border-radius: var(--radius-pill);
+}
+
+.settings__switch[aria-checked='true'] {
+  background: var(--vr-accent);
+}
+
+.settings__switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--vr-text-2);
+  transition:
+    left 0.16s ease,
+    background 0.16s ease;
+}
+
+.settings__switch[aria-checked='true'] .settings__switch-knob {
+  left: 19px;
+  background: var(--vr-accent-ink);
+}
+
+.settings__gate-body {
+  transition: opacity 0.2s ease;
+}
+
+// Svelte: [data-disabled='true']
+.settings__gate-body--disabled {
+  opacity: 0.45;
+}
+
+.settings__gate-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--vr-accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition:
+    transform 80ms linear,
+    background 120ms ease;
+}
+
+// Svelte: [data-state='closed']
+.settings__gate-fill--closed {
+  background: var(--vr-text-3);
+}
+
+.settings__sound-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 9px;
+}
+
+.settings__sound-head .settings__field-label {
+  margin-bottom: 0;
+}
+
+.settings__gate-hint {
+  margin-top: 12px;
+  color: var(--vr-text-3);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.settings__section-title {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings__hotkeys {
+  display: grid;
+  gap: 18px;
+  border-top: 1px solid var(--vr-line);
+  padding-top: 22px;
+}
+
+.settings__content > .settings__hotkeys {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.settings__hotkey-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 210px);
+  align-items: center;
+  gap: 16px;
+}
+
+// Svelte: [data-disabled='true']
+.settings__hotkey-row--disabled {
+  opacity: 0.62;
+}
+
+.settings__hotkey-label,
+.settings__hotkey-description {
+  display: block;
+}
+
+.settings__hotkey-label {
+  color: var(--vr-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.settings__hotkey-description,
+.settings__hotkey-window-note {
+  margin-top: 3px;
+  color: var(--vr-text-3);
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.settings__notification-ignore {
+  display: grid;
+  gap: 18px;
+  padding-top: 2px;
+}
+
+.settings__notification-ignore > div:first-child .settings__section-title {
+  margin-bottom: 0;
+}
+
+.settings__notification-dependent {
+  transition: opacity 0.16s ease;
+}
+
+// Svelte: [data-disabled='true']
+.settings__notification-dependent--disabled {
+  opacity: 0.48;
+}
+
+.settings__switch:disabled {
+  cursor: not-allowed;
+}
+
+.settings__notification-group {
+  min-width: 0;
+}
+
+.settings__notification-targets {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.settings__notification-list {
+  display: grid;
+  gap: 4px;
+}
+
+.settings__notification-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  min-height: 48px;
+  padding: 6px 8px;
+  border-radius: 9px;
+}
+
+.settings__notification-row:hover {
+  background: var(--vr-hover);
+}
+
+.settings__notification-name,
+.settings__notification-name strong,
+.settings__notification-name small {
+  display: block;
+  min-width: 0;
+}
+
+.settings__notification-name strong {
+  overflow: hidden;
+  color: var(--vr-text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings__notification-name small {
+  margin-top: 1px;
+  overflow: hidden;
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings__notification-empty {
+  padding: 14px;
+  border: 1px dashed var(--vr-line);
+  border-radius: 12px;
+  color: var(--vr-text-3);
+  font-size: 12px;
+  text-align: center;
+}
+
+.settings__blocked-users {
+  margin-top: 4px;
+}
+
+.settings__unblock-button {
+  flex: none;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--vr-text);
+  font: 500 13px var(--font-ui);
+  cursor: pointer;
+}
+
+.settings__unblock-button:hover:not(:disabled) {
+  background: var(--vr-hover);
+}
+
+.settings__unblock-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+// Desktop overlay: the last window before VoiceRoom, offered as a game.
+.settings__overlay-games {
+  padding-top: 18px;
+  border-top: 1px solid var(--vr-line);
+  transition: opacity 0.16s ease;
+}
+
+// Svelte: [data-disabled='true']
+.settings__overlay-games--disabled {
+  opacity: 0.48;
+}
+
+@include below(820px) {
+  .settings__sound-devices,
+  .settings__notification-targets,
+  .settings__password-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settings__hotkey-window-note {
+  margin-top: 0;
+  border-radius: 9px;
+  padding: 9px 11px;
+  background: var(--vr-surface);
+}
+
+@include below($bp-phone) {
+  .settings__hotkey-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+}
+
+@include below($bp-phone) {
+  .settings__overlay {
+    padding: 16px;
+  }
+
+  .settings__body {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .settings__nav {
+    flex-direction: row;
+    align-items: stretch;
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--vr-line);
+  }
+
+  .settings__nav-main {
+    flex: 1;
+    flex-direction: row;
+  }
+
+  .settings__nav-item {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .settings__nav-item--danger {
+    flex: none;
+    margin-top: 0;
+  }
+}
