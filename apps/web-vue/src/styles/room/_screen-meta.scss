@@ -1,0 +1,94 @@
+// ScreenStage (features/room/components/ScreenStage.vue): the title bar over an opened screen share.
+// The block keeps its Svelte name: screen-view.ts ignores clicks on `.screen-meta`.
+//
+// Svelte class / selector -> BEM class
+//   .screen-meta                              -> .screen-meta
+//   .screen-meta-live                         -> .screen-meta__live
+//   .screen-meta-title                        -> .screen-meta__title
+//   .screen-meta-detail                       -> .screen-meta__detail
+//   .screen-meta-sep                          -> .screen-meta__sep
+//   .screen-meta-viewers                      -> .screen-meta__viewers
+//   .screen-meta-avatar-stack                 -> .screen-meta__avatar-stack (no rule)
+
+.screen-meta {
+  position: absolute;
+  top: var(--space-sm);
+  left: var(--space-sm);
+  z-index: 2;
+  display: flex;
+  max-width: calc(100% - 24px);
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-sm);
+  padding: 7px 9px;
+  background: color-mix(in srgb, var(--vr-bg) 78%, transparent);
+  color: var(--vr-text);
+  box-shadow: 0 14px 34px oklch(5% 0.012 92 / 0.32);
+  opacity: 1;
+  pointer-events: none;
+  transition: opacity 180ms var(--ease-out);
+}
+
+.screen-meta[hidden] {
+  display: none;
+}
+
+.screen-meta__live {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--vr-online);
+  box-shadow: 0 0 0 3px oklch(72% 0.16 164 / 0.14);
+}
+
+.screen-meta__title,
+.screen-meta__detail {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.78rem;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.screen-meta__title {
+  max-width: min(260px, 40vw);
+  font-weight: 800;
+}
+
+.screen-meta__detail {
+  max-width: min(360px, 48vw);
+  color: var(--vr-text-2);
+  font-weight: 780;
+}
+
+.screen-meta__viewers {
+  display: inline-flex;
+  max-width: none;
+  align-items: center;
+  gap: 5px;
+  overflow: visible;
+  color: var(--vr-text);
+}
+
+.screen-meta__viewers[hidden] {
+  display: none;
+}
+
+.screen-meta__sep {
+  flex: 0 0 auto;
+  align-self: center;
+  color: color-mix(in oklch, var(--vr-text) 72%, transparent);
+  font-size: 0.92rem;
+  font-weight: 800;
+  line-height: 1;
+  user-select: none;
+}
+
+.screen-meta__sep[hidden],
+.screen-meta__detail[hidden] {
+  display: none;
+}

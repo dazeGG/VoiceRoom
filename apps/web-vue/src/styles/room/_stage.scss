@@ -1,0 +1,47 @@
+// Stage (features/room/components/RoomStage.vue): the room's main column, the screen stage, the tile strip and the dock.
+//
+// Svelte class / selector -> BEM class
+//   .stage                                    -> .stage (block, kept: the room layout styles `.room-layout > .stage`)
+//   .room-layout, .app-shell                  -> unchanged (owned by the room layout and _base.scss)
+//   h1, .heading-actions, .primary-button, .secondary-button, .leave-button, .sound-button
+//                                             -> not ported here (shared rules at the top of stage-layout.css; their hosts own them)
+//
+// body[data-*] -> body class
+//   body[data-screen-view='true']             -> body.screen-view--open
+
+.stage {
+  position: relative;
+  display: grid;
+  min-height: 100%;
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--space-md);
+  overflow: hidden;
+  padding: 20px 20px 96px;
+  background: transparent;
+  // Responsive rules follow the stage's own width, not the window's: the chat
+  // rail can take 360px of it.
+  container-type: inline-size;
+  container-name: stage;
+}
+
+body.screen-view--open {
+  overflow: hidden;
+
+  .app-shell {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .room-layout,
+  .stage {
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .stage {
+    height: 100%;
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: var(--space-sm);
+    padding: 0 var(--space-xl) 104px;
+  }
+}

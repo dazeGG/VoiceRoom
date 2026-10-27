@@ -1,0 +1,80 @@
+// ScreenStage (features/room/components/ScreenStage.vue): the buttons over an opened screen share.
+// The block keeps its Svelte name: screen-view.ts ignores clicks on `.screen-view-controls`.
+//
+// Svelte class / selector -> BEM class
+//   .screen-view-controls                     -> .screen-view-controls
+//   .screen-control-button                    -> .screen-view-controls__button
+//   .screen-fullscreen-button                 -> .screen-view-controls__fullscreen
+//   .screen-fullscreen-icon-enter / -exit     -> .screen-view-controls__fullscreen-icon--enter / --exit
+//   .screen-fullscreen-icon                   -> .screen-view-controls__fullscreen-icon
+//
+// [data-*] -> aria / modifier class
+//   .screen-fullscreen-button[data-fullscreen='true'] -> .screen-view-controls__fullscreen[aria-pressed='true']
+//
+// The volume control inside the bar is _stream-volume.scss.
+
+.screen-view-controls {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-xs);
+  padding: var(--space-xs);
+  background: transparent;
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 180ms var(--ease-out);
+}
+
+.screen-view-controls[hidden] {
+  display: none;
+}
+
+.screen-view-controls__button {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-sm);
+  padding: 0;
+  background: color-mix(in srgb, var(--vr-bg) 88%, transparent);
+  color: var(--vr-text);
+  box-shadow: 0 12px 28px oklch(5% 0.01 92 / 0.3);
+  transition:
+    background 140ms var(--ease-out),
+    border-color 140ms var(--ease-out),
+    transform 140ms var(--ease-out);
+
+  &:hover {
+    border-color: color-mix(in oklch, var(--vr-text) 36%, transparent);
+    background: color-mix(in srgb, var(--vr-surface-3-hover) 94%, transparent);
+    transform: translateY(-1px);
+  }
+
+  svg {
+    width: 21px;
+    height: 21px;
+  }
+}
+
+.screen-view-controls__fullscreen-icon {
+  display: grid;
+  place-items: center;
+}
+
+.screen-view-controls__fullscreen-icon--exit {
+  display: none;
+}
+
+.screen-view-controls__fullscreen[aria-pressed='true'] {
+  .screen-view-controls__fullscreen-icon--enter {
+    display: none;
+  }
+
+  .screen-view-controls__fullscreen-icon--exit {
+    display: grid;
+  }
+}

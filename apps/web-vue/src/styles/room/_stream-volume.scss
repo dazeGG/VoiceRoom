@@ -1,0 +1,125 @@
+// ScreenStage (features/room/components/ScreenStage.vue): the speaker button with the volume slider above it.
+//
+// Svelte class / selector -> BEM class
+//   .stream-volume-control                    -> .stream-volume
+//   .stream-volume-button                     -> .stream-volume__button (+ .screen-view-controls__button)
+//   .stream-volume-icon / -on / -off          -> .stream-volume__icon / --on / --off
+//   .stream-volume-popover                    -> .stream-volume__popover
+//   .stream-volume-value                      -> .stream-volume__value
+//   .stream-volume-track                      -> .stream-volume__track
+//   .stream-volume-slider                     -> .stream-volume__slider
+//
+// [data-*] -> aria
+//   .stream-volume-button[data-muted='true']  -> .stream-volume__button[aria-pressed='true']
+//   .stream-volume-value[data-muted='true']   -> .stream-volume__value--muted
+
+.stream-volume {
+  position: relative;
+}
+
+.stream-volume[hidden] {
+  display: none;
+}
+
+// The hover look of the speaker button while the slider has focus.
+.stream-volume:focus-within .stream-volume__button {
+  border-color: color-mix(in oklch, var(--vr-text) 36%, transparent);
+  background: color-mix(in srgb, var(--vr-surface-3-hover) 94%, transparent);
+  transform: translateY(-1px);
+}
+
+.stream-volume__icon {
+  display: grid;
+  place-items: center;
+}
+
+.stream-volume__icon--off,
+.stream-volume__button[aria-pressed='true'] .stream-volume__icon--on {
+  display: none;
+}
+
+.stream-volume__button[aria-pressed='true'] .stream-volume__icon--off {
+  display: grid;
+}
+
+.stream-volume__popover {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + var(--space-xs));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-xs);
+  width: 48px;
+  border-radius: 999px;
+  padding: var(--space-sm) 0 var(--space-md);
+  background: color-mix(in srgb, var(--vr-bg) 72%, transparent);
+  box-shadow: 0 12px 28px oklch(5% 0.01 92 / 0.3);
+  backdrop-filter: blur(10px);
+  visibility: hidden;
+  opacity: 0;
+  transform: translate(-50%, 6px);
+  // Hiding waits a beat so a pointer heading for the slider never loses it.
+  transition:
+    opacity 140ms var(--ease-out) 160ms,
+    transform 140ms var(--ease-out) 160ms,
+    visibility 0s linear 300ms;
+
+  // Covers the gap above the button, so moving up to the slider keeps hover.
+  &::after {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    height: calc(var(--space-xs) + 2px);
+    content: '';
+  }
+}
+
+.stream-volume:hover .stream-volume__popover,
+.stream-volume:focus-within .stream-volume__popover {
+  visibility: visible;
+  opacity: 1;
+  transform: translate(-50%, 0);
+  transition:
+    opacity 140ms var(--ease-out),
+    transform 140ms var(--ease-out),
+    visibility 0s;
+}
+
+.stream-volume__value {
+  min-width: 36px;
+  border-radius: 999px;
+  padding: 2px 0;
+  color: var(--vr-text);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.stream-volume__value--muted {
+  color: color-mix(in oklch, var(--vr-text) 72%, transparent);
+}
+
+.stream-volume__track {
+  position: relative;
+  width: 100%;
+  height: 100px;
+}
+
+.stream-volume__slider {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100px;
+  min-height: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  accent-color: var(--vr-text);
+  cursor: pointer;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  transform-origin: center;
+}
