@@ -43,9 +43,13 @@ State on `<html>` and `<body>` is a class, set from the same places that set the
 | `<body data-screen='entry-error'>` | `body.screen--entry-error` |
 | `<body data-screen='not-found'>` | `body.screen--not-found` |
 | `<body data-screen-view='true'>` | `body.screen-view--open` |
+| `<body data-chat-open='true'>` | `body.chat--open` |
+| `<body data-lobby-embedded='true'>` | `body.lobby--embedded` |
+| `<body data-strip-collapsed='true'>` | `body.strip--collapsed` |
+| `<body data-stage-summary='hidden'>` | `body.stage-summary--hidden` |
 | `html.is-desktop`, `.is-shell-fullscreen`, `.vr-game-mode` | unchanged (already classes) |
 
-A theme or screen is one class at a time: remove the old one before adding the new one. Page state that Svelte keeps in `document.body.dataset` (`screen`, `chatOpen`, `lobbyEmbedded`, `screenView`, `stripCollapsed`, `stageSummary`) lives in one Pinia store, `page.store.ts`; one watcher, `installBodyClasses()`, sets the BEM classes on `<body>` from it. Nothing in web-vue writes or reads `body.dataset`; the e2e specs assert the class.
+A theme or screen is one class at a time: remove the old one before adding the new one. Page state that Svelte keeps in `document.body.dataset` (`screen`, `chatOpen`, `lobbyEmbedded`, `screenView`, `stripCollapsed`, `stageSummary`) lives in one Pinia store, `page.store.ts`; one watcher, `installBodyClasses()`, sets the BEM classes on `<body>` from it. Nothing in web-vue writes or reads `body.dataset`; the e2e specs assert the class. The room runtime `state` (`room-runtime.store.ts`) is one module-level reactive object that the room client imports directly, as it did in Svelte; `useRoomRuntimeStore().state` is the same object for components. Assigning a class instance (LiveKit `Room`, publications) to it marks the value raw.
 
 ## Styles layout
 
