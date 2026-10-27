@@ -7,3 +7,10 @@ export interface AvatarStackItem {
   shadow?: string;
   src?: string | null;
 }
+
+export interface AvatarStackProps {
+  items: AvatarStackItem[];
+  maxAvatars?: number | null;
+  size?: number;
+  ariaLabel?: string;
+}
