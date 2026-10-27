@@ -1,14 +1,16 @@
 // Lint rules that catch what tsc does not: unhandled promises, non-exhaustive
-// switches, `any`, and Svelte 5 reactivity mistakes. Existing violations are
-// recorded in eslint-suppressions.json (`npm run lint:baseline`), so the gate
-// fails only on new ones; fix a suppressed file and run
-// `npm run lint -- --prune-suppressions` to shrink the list.
+// switches, `any`, Svelte 5 reactivity mistakes and Vue template mistakes.
+// Existing violations are recorded in eslint-suppressions.json
+// (`npm run lint:baseline`), so the gate fails only on new ones; fix a
+// suppressed file and run `npm run lint -- --prune-suppressions` to shrink
+// the list.
 
 import js from '@eslint/js';
 import reactHooks from 'eslint-plugin-react-hooks';
 import svelte from 'eslint-plugin-svelte';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
+import vue from 'eslint-plugin-vue';
 
 // A cast written as overloads: public signatures promise a type, and the
 // implementation behind them answers unknown (or leaves its answer unstated).
@@ -31,6 +33,7 @@ export default tseslint.config(
       '.omc/**',
       'apps/api/src/platform/db/schema.ts',
       'apps/web/static/**',
+      'apps/web-vue/public/**',
       'apps/web/svelte.config.js',
       'packages/shared/src/emoji.ts',
       'scripts/geoip/**',
@@ -41,6 +44,11 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
   ...svelte.configs.recommended,
+  // Vue rules apply to the Vue web only (apps/web-vue, until it replaces apps/web).
+  ...vue.configs['flat/recommended-error'].map((config) => ({
+    ...config,
+    files: config.files ?? ['apps/web-vue/**/*.{ts,vue}']
+  })),
   {
     languageOptions: {
       globals: { ...globals.node, ...globals.browser },
@@ -51,11 +59,12 @@ export default tseslint.config(
           './apps/api/tsconfig.json',
           './apps/admin/tsconfig.json',
           './apps/web/tsconfig.test.json',
+          './apps/web-vue/tsconfig.test.json',
           './packages/shared/tsconfig.test.json',
           './scripts/tsconfig.json'
         ],
         tsconfigRootDir: import.meta.dirname,
-        extraFileExtensions: ['.svelte']
+        extraFileExtensions: ['.svelte', '.vue']
       }
     }
   },
@@ -66,6 +75,27 @@ export default tseslint.config(
         parser: tseslint.parser,
         extraFileExtensions: ['.svelte']
       }
+    }
+  },
+  {
+    files: ['**/*.vue'],
+    languageOptions: {
+      parserOptions: {
+        parser: tseslint.parser,
+        extraFileExtensions: ['.vue']
+      }
+    },
+    rules: {
+      // Prettier owns the layout of templates, as it does everywhere else.
+      ...vue.configs['no-layout-rules'].rules,
+      // apps/web-vue/CLAUDE.md: <script setup lang="ts"> only.
+      'vue/block-lang': ['error', { script: { lang: 'ts' } }],
+      'vue/component-api-style': ['error', ['script-setup']],
+      // Component names copy the Svelte ones (Button, Dialog, Select); templates
+      // write them in PascalCase, so they never clash with HTML elements.
+      'vue/multi-word-component-names': 'off',
+      // The same ban as svelte/no-at-html-tags in the Svelte web.
+      'vue/no-v-html': 'error'
     }
   },
   {
@@ -153,22 +183,28 @@ export default tseslint.config(
   {
     // Browser code logs through $lib/shared/log so records reach the failure
     // report buffer; only the logger itself touches the console.
-    files: ['apps/web/src/**/*.{ts,svelte}'],
-    ignores: ['apps/web/src/lib/shared/log.ts'],
+    files: ['apps/web/src/**/*.{ts,svelte}', 'apps/web-vue/src/**/*.{ts,vue}'],
+    ignores: ['apps/web/src/lib/shared/log.ts', 'apps/web-vue/src/shared/log.ts'],
     rules: { 'no-console': 'error' }
   },
   {
     // docs/ARCHITECTURE.md section 5: the lobby shows rooms, never the other way
     // round. What both need lives in $lib/entities; what a room needs from the
     // lobby comes through a context (features/room/social.ts).
-    files: ['apps/web/src/lib/features/room/**/*.{ts,svelte}'],
+    files: ['apps/web/src/lib/features/room/**/*.{ts,svelte}', 'apps/web-vue/src/features/room/**/*.{ts,vue}'],
     rules: {
       'no-restricted-imports': [
         'error',
         {
           patterns: [
             {
-              group: ['$lib/features/home', '$lib/features/home/**', '**/features/home/**'],
+              group: [
+                '$lib/features/home',
+                '$lib/features/home/**',
+                '@/features/home',
+                '@/features/home/**',
+                '**/features/home/**'
+              ],
               message: 'A room does not import the lobby: use $lib/entities or the room social context.'
             }
           ]
@@ -178,14 +214,26 @@ export default tseslint.config(
   },
   {
     // Layers below the features never reach up into one.
-    files: ['apps/web/src/lib/{entities,shared,platform,api}/**/*.{ts,svelte}'],
+    files: [
+      'apps/web/src/lib/{entities,shared,platform,api}/**/*.{ts,svelte}',
+      'apps/web-vue/src/{entities,shared,platform,api}/**/*.{ts,vue}'
+    ],
     rules: {
       'no-restricted-imports': [
         'error',
         {
           patterns: [
             {
-              group: ['$lib/features/home/**', '$lib/features/room/**', '**/features/home/**', '**/features/room/**'],
+              group: [
+                '$lib/features/home/**',
+                '$lib/features/room/**',
+                '@/features/home',
+                '@/features/home/**',
+                '@/features/room',
+                '@/features/room/**',
+                '**/features/home/**',
+                '**/features/room/**'
+              ],
               message: 'entities, shared, platform and api sit below the features and do not import them.'
             }
           ]
@@ -196,15 +244,16 @@ export default tseslint.config(
   {
     // The lobby reaches the room client only through its public index
     // (features/room/client/index.ts), never a module inside it.
-    files: ['apps/web/src/lib/features/home/**/*.{ts,svelte}'],
+    files: ['apps/web/src/lib/features/home/**/*.{ts,svelte}', 'apps/web-vue/src/features/home/**/*.{ts,vue}'],
     rules: {
       'no-restricted-imports': [
         'error',
         {
           patterns: [
             {
-              group: ['$lib/features/room/client/**', '**/room/client/**'],
-              message: 'Import the room client from $lib/features/room/client, its public index.'
+              group: ['$lib/features/room/client/**', '@/features/room/client/**', '**/room/client/**'],
+              message:
+                'Import the room client from $lib/features/room/client (@/features/room/client), its public index.'
             }
           ]
         }

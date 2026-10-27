@@ -1,0 +1,10 @@
+{
+  // Tests, build scripts and config files run on Node (Vitest, Vite), so they
+  // get Node's types on top of the app's settings.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["vite/client", "node"],
+    "noUnusedLocals": false
+  },
+  "include": ["src/**/*.ts", "src/**/*.vue", "test/**/*.ts", "scripts/**/*.ts", "vite.config.ts"]
+}

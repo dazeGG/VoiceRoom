@@ -17,6 +17,7 @@ coverage/
 .svelte-kit/
 apps/web/build/
 apps/web/static/
+apps/web-vue/public/
 .omc/
 .claude/
 .idea/
