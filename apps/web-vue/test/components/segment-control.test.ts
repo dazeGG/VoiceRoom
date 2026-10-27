@@ -31,3 +31,13 @@ test('arrow keys move to the next enabled option', async () => {
   await userEvent.keyboard('{ArrowRight}');
   expect(onChange).toHaveBeenLastCalledWith('chat');
 });
+
+test('the group is a tablist or a radiogroup and items carry no aria-pressed', () => {
+  const view = render(SegmentControl, { props: { options, value: 'chat', ariaLabel: 'Раздел', kind: 'tabs' } });
+  expect(screen.getByRole('tablist', { name: 'Раздел' })).toBeTruthy();
+  for (const tab of screen.getAllByRole('tab')) expect(tab.hasAttribute('aria-pressed')).toBe(false);
+  view.unmount();
+  render(SegmentControl, { props: { options, value: 'chat', ariaLabel: 'Режим' } });
+  expect(screen.getByRole('radiogroup', { name: 'Режим' })).toBeTruthy();
+  for (const radio of screen.getAllByRole('radio')) expect(radio.hasAttribute('aria-pressed')).toBe(false);
+});

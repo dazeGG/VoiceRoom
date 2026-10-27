@@ -52,7 +52,7 @@ function handleUpdate(values: number[] | undefined): void {
     :step="step"
     :disabled="disabled"
     @update:model-value="handleUpdate"
-    @pointerdown="pointerActive = true"
+    @pointerdown.capture="pointerActive = true"
     @pointerup="pointerActive = false"
     @pointercancel="pointerActive = false"
     @focusout="pointerActive = false"

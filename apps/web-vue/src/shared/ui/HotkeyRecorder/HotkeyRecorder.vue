@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { RotateCcw } from '@lucide/vue';
+import { iconSm } from '@/shared/ui/icons';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { formatHotkeyBinding, hotkeyBindingFromEvent, isHotkeyModifierCode } from './hotkey';
 import type { HotkeyBinding, HotkeyRecorderProps } from './types';
 
-type Props = Pick<HotkeyRecorderProps, 'ariaLabel' | 'defaultValue' | 'disabled'>;
-
-const props = withDefaults(defineProps<Props>(), { defaultValue: null, disabled: false, ariaLabel: 'Горячая клавиша' });
+const props = withDefaults(defineProps<HotkeyRecorderProps>(), {
+  defaultValue: null,
+  disabled: false,
+  ariaLabel: 'Горячая клавиша'
+});
 
 const emit = defineEmits<{ recordingChange: [recording: boolean]; valueChange: [value: HotkeyBinding | null] }>();
 
@@ -58,9 +61,10 @@ function handleFocusOut(event: FocusEvent): void {
   stopRecording();
 }
 
-onMounted(() => window.addEventListener('keydown', captureKey));
+// Capture phase: Reka's Escape listener on window must not see the key while recording.
+onMounted(() => window.addEventListener('keydown', captureKey, true));
 onBeforeUnmount(() => {
-  window.removeEventListener('keydown', captureKey);
+  window.removeEventListener('keydown', captureKey, true);
   stopRecording();
 });
 </script>
@@ -70,7 +74,7 @@ onBeforeUnmount(() => {
     <button
       ref="recorderButton"
       class="hotkey-recorder__field"
-      :class="{ 'hotkey-recorder__field--recording': recording }"
+      :data-hotkey-recorder-recording="String(recording)"
       type="button"
       :disabled="disabled"
       :aria-label="ariaLabel"
@@ -89,7 +93,7 @@ onBeforeUnmount(() => {
       title="Сбросить"
       @click="reset"
     >
-      <RotateCcw :size="15" :stroke-width="2" aria-hidden="true" />
+      <RotateCcw v-bind="iconSm" aria-hidden="true" />
     </button>
   </div>
 </template>

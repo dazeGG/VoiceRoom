@@ -51,3 +51,18 @@ test('a disabled slider ignores the keyboard', async () => {
   await userEvent.keyboard('{ArrowRight}');
   expect(onValueChange).not.toHaveBeenCalled();
 });
+
+test('a press within the snap threshold of the default value snaps to it', async () => {
+  const onValueChange = vi.fn();
+  render(Slider, {
+    props: { modelValue: 80, defaultValue: 50, snap: true, snapThreshold: 5, ariaLabel: 'Громкость', onValueChange }
+  });
+  const thumb = await screen.findByRole('slider', { name: 'Громкость' });
+  const root = thumb.closest('.vr-slider');
+  if (!(root instanceof HTMLElement)) throw new Error('slider root not found');
+  root.setPointerCapture = () => {};
+  root.releasePointerCapture = () => {};
+  root.getBoundingClientRect = () => new DOMRect(0, 0, 100, 36);
+  await userEvent.pointer({ keys: '[MouseLeft>]', target: root, coords: { clientX: 52, clientY: 10 } });
+  expect(onValueChange).toHaveBeenLastCalledWith(50);
+});

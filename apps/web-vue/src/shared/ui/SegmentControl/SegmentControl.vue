@@ -1,16 +1,17 @@
-<script setup lang="ts">
+<script setup lang="ts" generic="T extends string">
 import { ToggleGroupItem, ToggleGroupRoot } from 'reka-ui';
 import type { SegmentControlProps, SegmentOption } from './types';
 
-const props = withDefaults(defineProps<SegmentControlProps>(), { kind: 'radio', size: 'md' });
+const props = withDefaults(defineProps<SegmentControlProps<T>>(), { kind: 'radio', size: 'md' });
 
-const emit = defineEmits<{ change: [value: string] }>();
+const emit = defineEmits<{ change: [value: T] }>();
 
 defineSlots<{ suffix?: (props: { option: SegmentOption }) => unknown }>();
 
 // Choosing the selected segment again deselects it in Reka; the segment stays and reports itself, as before.
-function choose(next: string | undefined): void {
-  emit('change', next ?? props.value);
+function choose(next: unknown): void {
+  const option = props.options.find((candidate) => candidate.value === next);
+  emit('change', option?.value ?? props.value);
 }
 
 function move(event: KeyboardEvent, index: number): void {
@@ -33,31 +34,30 @@ function move(event: KeyboardEvent, index: number): void {
 </script>
 
 <template>
-  <ToggleGroupRoot
-    class="ui-segment"
-    :class="`ui-segment--${size}`"
-    type="single"
-    :model-value="value"
-    :roving-focus="false"
-    :role="kind === 'tabs' ? 'tablist' : 'radiogroup'"
-    :aria-label="ariaLabel"
-    @update:model-value="(next) => choose(next as string | undefined)"
-  >
-    <ToggleGroupItem
-      v-for="(option, index) in options"
-      :key="option.value"
-      class="ui-segment__item"
-      :value="option.value"
-      :role="kind === 'tabs' ? 'tab' : 'radio'"
-      :aria-selected="kind === 'tabs' ? option.value === value : undefined"
-      :aria-checked="kind === 'radio' ? option.value === value : undefined"
-      :tabindex="option.value === value ? 0 : -1"
-      :disabled="option.disabled ?? false"
-      @keydown="move($event, index)"
+  <ToggleGroupRoot as-child type="single" :model-value="value" :roving-focus="false" @update:model-value="choose">
+    <div
+      class="ui-segment"
+      :class="`ui-segment--${size}`"
+      :role="kind === 'tabs' ? 'tablist' : 'radiogroup'"
+      :aria-label="ariaLabel"
     >
-      <span v-if="option.dot" class="ui-segment__dot" aria-hidden="true"></span>
-      <span>{{ option.label }}</span>
-      <slot name="suffix" :option="option" />
-    </ToggleGroupItem>
+      <ToggleGroupItem
+        v-for="(option, index) in options"
+        :key="option.value"
+        class="ui-segment__item"
+        :value="option.value"
+        :role="kind === 'tabs' ? 'tab' : 'radio'"
+        :aria-selected="kind === 'tabs' ? option.value === value : undefined"
+        :aria-checked="kind === 'radio' ? option.value === value : undefined"
+        :aria-pressed="undefined"
+        :tabindex="option.value === value ? 0 : -1"
+        :disabled="option.disabled ?? false"
+        @keydown="move($event, index)"
+      >
+        <span v-if="option.dot" class="ui-segment__dot" aria-hidden="true"></span>
+        <span>{{ option.label }}</span>
+        <slot name="suffix" :option="option" />
+      </ToggleGroupItem>
+    </div>
   </ToggleGroupRoot>
 </template>

@@ -6,7 +6,7 @@ export interface SegmentOption<T extends string = string> {
   dot?: boolean;
 }
 
-export interface SegmentControlProps<T extends string = string> {
+export interface SegmentControlProps<T extends string> {
   options: SegmentOption<T>[];
   value: T;
   ariaLabel: string;

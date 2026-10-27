@@ -8,7 +8,7 @@
 //
 // Data attributes -> aria / modifier
 //   .hotkey-recorder-field[aria-pressed='true']    -> unchanged (aria-pressed)
-//   (data-hotkey-recorder-recording)               -> .hotkey-recorder__field--recording
+//   data-hotkey-recorder-recording                 -> kept as a behaviour hook (hotkeys.ts and SettingsDialog read it); not styled
 //   .hotkey-recorder-value (data-empty)            -> .hotkey-recorder__value--empty
 .hotkey-recorder {
   display: grid;
