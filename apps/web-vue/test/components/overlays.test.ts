@@ -3,8 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
 import { ContextMenu } from '@/shared/ui/ContextMenu';
-import { PopoverMenuItem } from '@/shared/ui/Popover';
-import { popoverHarness } from './PopoverHarness';
+import { Popover, PopoverMenuItem, type PopoverCloseReason } from '@/shared/ui/Popover';
 import { settle, stubOverlayDom } from '../helpers/overlay-dom';
 
 stubOverlayDom();
@@ -42,32 +41,65 @@ function contextMenuHarness(props: { onClose: () => void; restoreFocus?: HTMLEle
   });
 }
 
+// A popover whose trigger exposes aria-expanded, beside a button outside it.
+function popoverWithOutside(onBeforeClose?: (reason: PopoverCloseReason) => boolean | void) {
+  return defineComponent(() => {
+    const open = ref(false);
+    return () => [
+      h(
+        Popover,
+        {
+          open: open.value,
+          'onUpdate:open': (value: boolean) => (open.value = value),
+          ariaLabel: 'Меню',
+          role: 'menu',
+          ...(onBeforeClose ? { onBeforeClose } : {})
+        },
+        {
+          trigger: ({ toggle, panelId }: { toggle: () => void; panelId: string }) =>
+            h(
+              'button',
+              { type: 'button', 'aria-expanded': open.value, 'aria-controls': panelId, onClick: toggle },
+              'Открыть'
+            ),
+          content: () => [h(PopoverMenuItem, { label: 'Пункт' })]
+        }
+      ),
+      h('button', { type: 'button' }, 'Снаружи')
+    ];
+  });
+}
+
 test('a popover opens from its trigger and Escape closes it and returns focus to the trigger', async () => {
-  render(popoverHarness({ label: 'Меню' }));
-  const trigger = screen.getByRole('button', { name: 'Меню' });
+  render(popoverWithOutside());
+  const trigger = screen.getByRole('button', { name: 'Открыть' });
   await userEvent.click(trigger);
-  expect(await screen.findByRole('menu', { name: 'Меню Меню' })).toBeTruthy();
+  expect(await screen.findByRole('menu', { name: 'Меню' })).toBeTruthy();
+  expect(trigger.getAttribute('aria-expanded')).toBe('true');
 
   await settle();
   await userEvent.keyboard('{Escape}');
   await settle();
   expect(screen.queryByRole('menu')).toBeNull();
+  expect(trigger.getAttribute('aria-expanded')).toBe('false');
   await waitFor(() => expect(document.activeElement).toBe(trigger));
 });
 
 test('a click outside closes a popover without stealing focus back', async () => {
-  render(popoverHarness());
-  await userEvent.click(screen.getByRole('button', { name: 'open' }));
+  render(popoverWithOutside());
+  await userEvent.click(screen.getByRole('button', { name: 'Открыть' }));
   await screen.findByRole('menu');
-  await userEvent.click(document.body);
+  const outside = screen.getByRole('button', { name: 'Снаружи' });
+  await userEvent.click(outside);
+  await settle();
   expect(screen.queryByRole('menu')).toBeNull();
-  expect(document.activeElement).toBe(document.body);
+  expect(document.activeElement).toBe(outside);
 });
 
 test('a popover can veto closing', async () => {
   const onBeforeClose = vi.fn(() => false);
-  render(popoverHarness({ onBeforeClose }));
-  await userEvent.click(screen.getByRole('button', { name: 'open' }));
+  render(popoverWithOutside(onBeforeClose));
+  await userEvent.click(screen.getByRole('button', { name: 'Открыть' }));
   await screen.findByRole('menu');
   await settle();
   await userEvent.keyboard('{Escape}');
@@ -118,3 +150,7 @@ test('pressing outside or resizing the window closes a context menu', async () =
   window.dispatchEvent(new Event('resize'));
   expect(onResizeClose).toHaveBeenCalledTimes(1);
 });
+
+// Dropped: the Svelte test mocked getBoundingClientRect and asserted the inline left/top the
+// menu computed itself to stay inside the window. Reka places the menu with collision
+// avoidance (avoid-collisions, collision-padding 8), which jsdom cannot lay out.

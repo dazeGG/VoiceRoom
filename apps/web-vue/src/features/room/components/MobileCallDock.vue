@@ -111,7 +111,6 @@ function pickOutput(value: string): void {
     <button
       :class="[
         'mobile-call-dock__button',
-        'mobile-call-dock__button--camera',
         { 'mobile-call-dock__button--camera-on': cameraControls.stateName === 'on' }
       ]"
       type="button"

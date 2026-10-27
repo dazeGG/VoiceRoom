@@ -6,18 +6,18 @@
 //   .stream-tile-video                        -> .stream-tile__video
 //   .stream-tile-icon                         -> .stream-tile__icon
 //   .stream-tile-profile-meta                 -> .stream-tile__profile-meta
-//   .stream-tile-copy / -copy-idle            -> .stream-tile__copy / .stream-tile__copy--idle
+//   .stream-tile-copy / -copy-idle            -> .stream-tile__copy / .stream-tile__copy--idle (no rule)
 //   .stream-tile-plate                        -> .stream-tile__plate
 //   .stream-tile-mini-avatar                  -> .stream-tile__mini-avatar
 //   .stream-tile-actions                      -> .stream-tile__actions
-//   .stream-tile-action / -action-primary     -> .stream-tile__action / .stream-tile__action--primary
+//   .stream-tile-action / -action-primary     -> .stream-tile__action / .stream-tile__action--primary (no rule)
 //   .stream-tile-expand                       -> .stream-tile__expand
 //
 // [data-*] -> modifier class
 //   [data-idle='true']                        -> .stream-tile--idle
 //   [data-preview='true']                     -> .stream-tile--preview
 //   [data-collapsed='true']                   -> .stream-tile--collapsed
-//   [data-local='true']                       -> .stream-tile--local (no rule reads it)
+//   [data-local='true']                       -> .stream-tile--local (no rule)
 //   data-peer-id stays as an identity hook, not styled
 
 .stream-tile {

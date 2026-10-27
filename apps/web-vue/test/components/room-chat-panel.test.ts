@@ -323,6 +323,19 @@ test('a reader at the newest message stays on it when loading artwork grows the 
   expect(body.scrollTop).toBe(100);
 });
 
+test('a panel open at mount parks on the newest message once the history is in', async () => {
+  Object.defineProperty(HTMLElement.prototype, 'scrollHeight', { configurable: true, get: () => 1000 });
+  try {
+    stubRoom();
+    renderPanel();
+    await screen.findByText('от Ады');
+    const body = instanceOf(document.querySelector('.room-chat-panel__body'), HTMLElement, 'chat body');
+    await vi.waitFor(() => expect(body.scrollTop).toBe(1000));
+  } finally {
+    Reflect.deleteProperty(HTMLElement.prototype, 'scrollHeight');
+  }
+});
+
 test('a right-click on a picture offers to copy and save it; on the text it does not', async () => {
   const picture = {
     id: 'att-1',

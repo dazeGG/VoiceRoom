@@ -4,7 +4,7 @@
 // Svelte class -> BEM class
 //   .mc-dock                              -> .mobile-call-dock
 //   .mc-dock-button                       -> .mobile-call-dock__button
-//   .mc-dock-mic / -output / -camera / -leave -> .mobile-call-dock__button--mic / --output / --camera / --leave
+//   .mc-dock-mic / -output / -leave        -> .mobile-call-dock__button--mic / --output / --leave (-camera: no rule of its own)
 //   .mc-output-scrim                      -> .mobile-call-dock__output-scrim
 //   .mc-output-menu                       -> .mobile-call-dock__output-menu
 //   .mc-output-option                     -> .mobile-call-dock__output-option

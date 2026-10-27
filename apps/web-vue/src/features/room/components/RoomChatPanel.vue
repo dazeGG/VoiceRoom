@@ -193,11 +193,12 @@ onBeforeUnmount(() => {
   sectionWatchers.clear();
 });
 
-// Showing the chat marks it read and parks the view on the newest message.
+// Showing the chat marks it read and parks the view on the newest message. It
+// waits for the body element: parking scrolls that element.
 watch(
-  [chatVisible, () => props.roomId],
-  ([isVisible, roomId], _previous, onCleanup) => {
-    if (!isVisible || !roomId) return;
+  [chatVisible, () => props.roomId, bodyElement],
+  ([isVisible, roomId, body], _previous, onCleanup) => {
+    if (!isVisible || !roomId || !body) return;
     onCleanup(chat.show());
   },
   { immediate: true, flush: 'post' }

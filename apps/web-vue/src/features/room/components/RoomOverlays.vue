@@ -50,11 +50,11 @@ const summaryDetail = computed(
     `${screenSourceUi.mode === 'text' ? 'Текст' : screenSourceUi.quality === 'high' ? 'HD' : 'SD'} · ${qualityLabel.value} · ${fpsLabel.value}${screenSourceUi.audio ? ' · звук' : ''}`
 );
 
-watch(
-  () => guestNameUi.open,
-  (open) => syncGuestNameDialogInert(open, guestNameDialog.value),
-  { flush: 'post', immediate: true }
-);
+// Also re-runs when the element binds: the dialog may already be open at mount.
+watch([() => guestNameUi.open, guestNameDialog], ([open, dialog]) => syncGuestNameDialogInert(open, dialog), {
+  flush: 'post',
+  immediate: true
+});
 
 onBeforeUnmount(() => syncGuestNameDialogInert(false, guestNameDialog.value));
 

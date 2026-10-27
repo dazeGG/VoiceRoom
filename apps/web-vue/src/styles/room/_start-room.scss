@@ -19,7 +19,7 @@
 //   input                                 -> .start-room__field input (the global input rule of controls.css)
 //
 // [data-*] -> modifier class
-//   .name-status[data-state='saved']      -> .start-room__status--saved
+//   .name-status[data-state='saved']      -> (no rule; same colour as the base)
 //   .name-status[data-state='dirty']      -> .start-room__status--dirty
 //   @media (max-width: 560px) .start-panel -> the same block under below($bp-phone-sm)
 @use '../mixins' as *;

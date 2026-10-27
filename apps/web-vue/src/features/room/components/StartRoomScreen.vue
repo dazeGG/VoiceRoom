@@ -42,11 +42,7 @@ function handleCreateClick(): void {
         <button class="start-room__button start-room__button--secondary" type="submit">Сохранить имя</button>
         <p
           id="startNameStatus"
-          :class="[
-            'start-room__status',
-            { 'start-room__status--saved': startUi.savedNameState === 'saved' },
-            { 'start-room__status--dirty': startUi.savedNameState === 'dirty' }
-          ]"
+          :class="['start-room__status', { 'start-room__status--dirty': startUi.savedNameState === 'dirty' }]"
         >
           {{ startUi.savedNameStatus }}
         </p>
