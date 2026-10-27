@@ -1,0 +1,80 @@
+// Hotkey field with a reset button.
+//
+// Svelte class -> BEM class
+//   .hotkey-recorder               -> .hotkey-recorder
+//   .hotkey-recorder-field         -> .hotkey-recorder__field
+//   .hotkey-recorder-reset         -> .hotkey-recorder__reset
+//   .hotkey-recorder-value         -> .hotkey-recorder__value
+//
+// Data attributes -> aria / modifier
+//   .hotkey-recorder-field[aria-pressed='true']    -> unchanged (aria-pressed)
+//   (data-hotkey-recorder-recording)               -> .hotkey-recorder__field--recording
+//   .hotkey-recorder-value (data-empty)            -> .hotkey-recorder__value--empty
+.hotkey-recorder {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 38px;
+  gap: 8px;
+
+  button:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+}
+
+.hotkey-recorder__field,
+.hotkey-recorder__reset {
+  min-height: 38px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease;
+
+  &:hover {
+    border-color: color-mix(in oklch, var(--vr-text) 22%, transparent);
+    background: var(--vr-surface-3-hover);
+  }
+
+  &:focus-visible {
+    border-color: var(--vr-online);
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--vr-online) 18%, transparent);
+  }
+}
+
+.hotkey-recorder__field {
+  min-width: 0;
+  padding: 0 12px;
+  text-align: left;
+
+  &[aria-pressed='true'] {
+    border-color: var(--vr-online);
+    outline: none;
+    box-shadow: 0 0 0 2px color-mix(in oklch, var(--vr-online) 18%, transparent);
+  }
+}
+
+.hotkey-recorder__value {
+  display: block;
+  overflow: hidden;
+  font-family: var(--font-ui, system-ui);
+  font-size: 13px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hotkey-recorder__value--empty {
+  color: var(--vr-text-3);
+  font-weight: 600;
+}
+
+.hotkey-recorder__reset {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--vr-text-2);
+}

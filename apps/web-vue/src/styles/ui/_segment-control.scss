@@ -1,0 +1,74 @@
+// Segmented tabs / radio choice over Reka's toggle group.
+//
+// Svelte class -> BEM class
+//   .ui-segment               -> .ui-segment
+//   .ui-segment--sm / --md    -> .ui-segment--sm / .ui-segment--md
+//   .ui-segment-item          -> .ui-segment__item
+//   .ui-segment-dot           -> .ui-segment__dot
+//
+// State class -> aria
+//   .ui-segment-item.is-selected -> .ui-segment__item[aria-selected='true'] (tabs) / [aria-checked='true'] (radio)
+.ui-segment {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--vr-line);
+  border-radius: 14px;
+  background: var(--vr-surface-2);
+}
+
+.ui-segment__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--vr-text-2);
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+
+  .ui-segment--sm & {
+    min-height: 28px;
+    padding: 0 12px;
+    border-radius: 9px;
+    font-size: 13px;
+  }
+
+  &:hover:not(:disabled):not([aria-selected='true']):not([aria-checked='true']) {
+    background: var(--vr-hover);
+    color: var(--vr-text);
+  }
+
+  &[aria-selected='true'],
+  &[aria-checked='true'] {
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--vr-accent);
+    outline-offset: 1px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+}
+
+.ui-segment__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vr-accent);
+}

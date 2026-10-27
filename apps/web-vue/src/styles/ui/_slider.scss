@@ -1,0 +1,79 @@
+// Range slider with a custom track, fill and thumb over Reka's slider.
+//
+// Svelte class -> BEM class
+//   .vr-slider                 -> .vr-slider
+//   .vr-slider--disabled       -> .vr-slider--disabled
+//   .vr-slider-control         -> .vr-slider__control
+//   .vr-slider-track           -> .vr-slider__track
+//   .vr-slider-fill            -> .vr-slider__fill
+//   .vr-slider-thumb           -> .vr-slider__thumb
+//   .vr-slider-input (native range input) -> .vr-slider__input (Reka's thumb: the focusable, invisible hit area)
+.vr-slider {
+  --slider-thumb: 16px;
+  --slider-track-h: 8px;
+  display: grid;
+  min-width: 0;
+  touch-action: none;
+  user-select: none;
+}
+
+.vr-slider__control {
+  position: relative;
+  display: grid;
+  align-items: center;
+  min-width: 0;
+  height: 36px;
+  cursor: pointer;
+}
+
+.vr-slider__track {
+  position: relative;
+  height: var(--slider-track-h);
+  border-radius: 999px;
+  background: var(--vr-surface-3);
+}
+
+.vr-slider__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--slider-thumb) / 2 + (100% - var(--slider-thumb)) * var(--slider-fraction));
+  border-radius: inherit;
+  background: var(--slider-fill, var(--vr-accent));
+}
+
+.vr-slider__thumb {
+  position: absolute;
+  top: 50%;
+  left: calc(var(--slider-thumb) / 2 + (100% - var(--slider-thumb)) * var(--slider-fraction));
+  width: var(--slider-thumb);
+  height: var(--slider-thumb);
+  border-radius: 50%;
+  background: var(--vr-text);
+  box-shadow: var(--vr-shadow-toast);
+  transform: translate(-50%, -50%);
+}
+
+.vr-slider__input {
+  display: block;
+  width: var(--slider-thumb);
+  height: 36px;
+  border-radius: 50%;
+  background: transparent;
+  outline: none;
+}
+
+.vr-slider__control:focus-within .vr-slider__track {
+  background: var(--vr-surface-3-hover);
+}
+
+.vr-slider__control:focus-within .vr-slider__thumb {
+  box-shadow: 0 0 0 2px var(--vr-accent-line);
+}
+
+.vr-slider--disabled {
+  opacity: 0.55;
+
+  .vr-slider__control {
+    cursor: not-allowed;
+  }
+}

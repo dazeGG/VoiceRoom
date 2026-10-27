@@ -1,0 +1,52 @@
+// On/off switch over Reka's switch.
+//
+// Svelte class -> BEM class
+//   .ui-switch                -> .ui-switch
+//   .ui-switch-thumb          -> .ui-switch__thumb
+//
+// State class -> aria
+//   .ui-switch.is-on          -> .ui-switch[aria-checked='true']
+.ui-switch {
+  position: relative;
+  flex: none;
+  width: 40px;
+  height: 24px;
+  padding: 3px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: var(--vr-surface-3);
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: -10px -4px;
+    border-radius: inherit;
+  }
+
+  &[aria-checked='true'] {
+    background: var(--vr-accent);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+}
+
+.ui-switch__thumb {
+  display: block;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--vr-text-2);
+  transition:
+    transform 0.15s ease,
+    background 0.15s ease;
+
+  .ui-switch[aria-checked='true'] & {
+    transform: translateX(16px);
+    background: var(--vr-accent-ink);
+  }
+}
