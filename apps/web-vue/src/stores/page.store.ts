@@ -14,14 +14,16 @@ export const usePageStore = defineStore('page', () => {
   const screenView = ref(false);
   const stripCollapsed = ref(false);
   const stageSummary = ref<'' | 'hidden'>('');
-  return { screen, chatOpen, lobbyEmbedded, screenView, stripCollapsed, stageSummary };
+  const desktopScreenFullscreen = ref(false);
+  return { screen, chatOpen, lobbyEmbedded, screenView, stripCollapsed, stageSummary, desktopScreenFullscreen };
 });
 
 const SCREEN_CLASS_PREFIX = 'screen--';
+const DESKTOP_FULLSCREEN_CLASS = 'screen--desktop-fullscreen';
 
 /**
  * Sets the BEM classes of the page store on `<body>`: `screen--<name>`, `chat--open`,
- * `lobby--embedded`, `screen-view--open`, `strip--collapsed`, `stage-summary--hidden`.
+ * `lobby--embedded`, `screen-view--open`, `strip--collapsed`, `stage-summary--hidden`, `screen--desktop-fullscreen`.
  * Call once after the active Pinia is set; returns the handle that stops it.
  */
 export function installBodyClasses(): WatchHandle {
@@ -30,7 +32,7 @@ export function installBodyClasses(): WatchHandle {
     () => {
       const { classList } = document.body;
       for (const name of [...classList]) {
-        if (name.startsWith(SCREEN_CLASS_PREFIX)) classList.remove(name);
+        if (name.startsWith(SCREEN_CLASS_PREFIX) && name !== DESKTOP_FULLSCREEN_CLASS) classList.remove(name);
       }
       if (page.screen) classList.add(`${SCREEN_CLASS_PREFIX}${page.screen}`);
       classList.toggle('chat--open', page.chatOpen);
@@ -38,6 +40,7 @@ export function installBodyClasses(): WatchHandle {
       classList.toggle('screen-view--open', page.screenView);
       classList.toggle('strip--collapsed', page.stripCollapsed);
       classList.toggle('stage-summary--hidden', page.stageSummary === 'hidden');
+      classList.toggle(DESKTOP_FULLSCREEN_CLASS, page.desktopScreenFullscreen);
     },
     { flush: 'post' }
   );
