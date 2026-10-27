@@ -1,0 +1,105 @@
+// ProfileCard (shared/components/profile-card/ProfileCard.vue).
+//
+// Svelte class -> BEM class
+//   .profile-card                               -> .profile-card
+//   .profile-card-body                          -> .profile-card__body
+//   .profile-card-avatar                        -> .profile-card__avatar
+//   .profile-card-identity                      -> .profile-card__identity
+//   .profile-card-name-row                      -> .profile-card__name-row
+//   .profile-card-name                          -> .profile-card__name (on Ellipsis)
+//   .profile-card-handle                        -> .profile-card__handle (on Ellipsis)
+//   .profile-card-since                         -> .profile-card__since
+//   .profile-card-since-label                   -> .profile-card__since-label
+//   .profile-card-since-value                   -> .profile-card__since-value
+//   .profile-card-note                          -> .profile-card__note
+//   .profile-card-actions                       -> .profile-card__actions
+//   .profile-card-actions :global(.ui-button)   -> .profile-card__actions .ui-button
+//
+// [data-profile-card] stays on the root as a hook for e2e and the host; nothing styles it.
+
+.profile-card {
+  width: min(300px, calc(100vw - 28px));
+  overflow: hidden;
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklch, var(--profile-accent) 30%, var(--vr-surface-2)) 0%,
+    var(--vr-surface-2) 58%
+  );
+}
+
+.profile-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px;
+}
+
+.profile-card__avatar {
+  display: inline-flex;
+  align-self: flex-start;
+}
+
+.profile-card__identity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.profile-card__name-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.profile-card__name {
+  min-width: 0;
+  color: var(--vr-text);
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.profile-card__handle {
+  color: var(--vr-text-2);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+}
+
+.profile-card__since {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-top: 14px;
+  border-top: 1px solid var(--vr-line);
+}
+
+.profile-card__since-label {
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.profile-card__since-value {
+  color: var(--vr-text);
+  font-size: 13.5px;
+}
+
+.profile-card__note {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: var(--vr-hover);
+  color: var(--vr-text-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.profile-card__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-card__actions .ui-button {
+  width: 100%;
+}

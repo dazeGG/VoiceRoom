@@ -1,0 +1,40 @@
+// AppBenefitsModal (shared/components/AppBenefitsModal.vue): what the desktop app adds.
+//
+// Svelte class -> BEM class
+//   .app-benefits           -> .app-benefits
+//   .app-benefits li        -> .app-benefits__item
+//   .app-benefits strong    -> .app-benefits__title
+//   .app-benefits span      -> .app-benefits__text
+//   .app-benefits-actions   -> .app-benefits__actions
+
+.app-benefits {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-benefits__item {
+  display: grid;
+  gap: 2px;
+}
+
+.app-benefits__title {
+  color: var(--vr-text);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.app-benefits__text {
+  color: var(--vr-text-2);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.app-benefits__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}

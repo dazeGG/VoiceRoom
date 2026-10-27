@@ -1,1 +1,4 @@
 // In-room UI: dock, topbar, panels, tiles, stage. One partial per BEM block, forwarded from here.
+@forward 'room-bans';
+@forward 'room-avatar-field';
+@forward 'room-member-list';

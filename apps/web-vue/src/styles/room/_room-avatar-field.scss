@@ -1,0 +1,97 @@
+// RoomAvatarField (entities/room/components/RoomAvatarField.vue): the room avatar in room settings.
+//
+// Svelte class -> BEM class
+//   .room-avatar-control   -> .room-avatar-field
+//   .room-avatar-input     -> .room-avatar-field__input
+//   .room-avatar-edit      -> .room-avatar-field__edit
+//   .room-avatar-camera    -> .room-avatar-field__camera
+//   .room-avatar-remove    -> .room-avatar-field__remove
+
+.room-avatar-field {
+  position: relative;
+  flex: none;
+  width: 76px;
+  height: 76px;
+}
+
+.room-avatar-field__input {
+  display: none;
+}
+
+.room-avatar-field__edit {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 76px;
+  height: 76px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 31%;
+  background: transparent;
+  color: var(--vr-text);
+  cursor: pointer;
+}
+
+.room-avatar-field__camera {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border: 2px solid var(--vr-surface);
+  border-radius: 50%;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+  pointer-events: none;
+}
+
+.room-avatar-field__edit:focus-visible {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: 3px;
+}
+
+.room-avatar-field__remove {
+  position: absolute;
+  z-index: 1;
+  top: -5px;
+  right: -5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid var(--vr-surface);
+  border-radius: 50%;
+  background: var(--vr-danger);
+  color: var(--vr-on-danger);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.16s ease,
+    background 0.16s ease;
+}
+
+.room-avatar-field:hover .room-avatar-field__remove,
+.room-avatar-field:focus-within .room-avatar-field__remove {
+  opacity: 1;
+}
+
+.room-avatar-field__remove:not(:disabled):hover {
+  background: color-mix(in oklch, var(--vr-danger), var(--vr-on-danger) 12%);
+}
+
+.room-avatar-field__remove:focus-visible {
+  outline: 2px solid var(--vr-text);
+  outline-offset: 2px;
+}
+
+.room-avatar-field__edit:disabled,
+.room-avatar-field__remove:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
