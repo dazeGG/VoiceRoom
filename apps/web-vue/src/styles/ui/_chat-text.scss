@@ -1,0 +1,9 @@
+// ChatText (shared/components/ChatText.vue): message text with links.
+//
+// Svelte class -> BEM class
+//   a (scoped) -> .chat-text__link
+
+.chat-text__link {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}

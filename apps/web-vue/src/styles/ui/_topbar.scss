@@ -1,0 +1,36 @@
+// Topbar (shared/components/Topbar.vue): the logo bar of every page, with BetaMark.
+// Page-specific spacing (the app-shell padding) lives in _base.scss, not here.
+//
+// Svelte class -> BEM class
+//   .topbar       -> .topbar
+//   .brand        -> .topbar__brand
+//   .brand-mark   -> .topbar__brand-mark
+//   .beta-mark    -> .beta-mark (block, ui/_beta-mark.scss)
+
+.topbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.topbar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  color: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+}
+
+.topbar__brand-mark {
+  width: 24px;
+  height: 24px;
+  display: block;
+  flex: 0 0 auto;
+  background: var(--vr-accent);
+  mask: url('/voiceroom-mascot.svg') center / contain no-repeat;
+}

@@ -1,0 +1,55 @@
+// Right-click menu of a message (shared/chat/MessageContextMenu.vue).
+//
+// Svelte class -> BEM class
+//   .message-menu                       -> .message-menu
+//   .message-menu-reactions             -> .message-menu__reactions
+//   .message-menu-reaction              -> .message-menu__reaction
+//   .message-menu-reaction.is-active    -> .message-menu__reaction--active
+//   .message-menu-reaction--more        -> .message-menu__reaction--more (no rules of its own)
+
+.message-menu {
+  display: flex;
+  width: min(288px, calc(100vw - 28px));
+  flex-direction: column;
+  gap: 2px;
+}
+
+.message-menu__reactions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px 4px;
+}
+
+.message-menu__reaction {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 0;
+  border-radius: 14px;
+  background: color-mix(in oklch, var(--vr-surface-3), transparent 55%);
+  color: var(--vr-text-2);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.14s ease,
+    color 0.14s ease;
+
+  &:hover:not(:disabled),
+  &:focus-visible:not(:disabled) {
+    background: color-mix(in oklch, var(--vr-accent), transparent 86%);
+    color: var(--vr-text);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.55;
+  }
+}
+
+.message-menu__reaction--active {
+  background: color-mix(in oklch, var(--vr-accent), transparent 86%);
+  color: var(--vr-text);
+}

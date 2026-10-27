@@ -1,0 +1,36 @@
+// Contenteditable message field (shared/chat/EmojiComposer.vue).
+//
+// Svelte class -> BEM class
+//   .emoji-composer                        -> .emoji-composer
+//   .emoji-composer[data-empty]            -> .emoji-composer--empty
+//   .emoji-composer[contenteditable=false] -> .emoji-composer--disabled
+//   img.composer-emoji                     -> .emoji-composer__emoji (an <img> the component builds by hand)
+
+.emoji-composer {
+  position: relative;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  cursor: text;
+}
+
+.emoji-composer--disabled {
+  cursor: default;
+}
+
+// The placeholder is drawn over the empty field rather than put into it, so
+// it is never part of the text and the caret starts at the very beginning.
+.emoji-composer--empty::before {
+  position: absolute;
+  content: attr(placeholder);
+  color: var(--composer-placeholder, var(--vr-text-3));
+  pointer-events: none;
+}
+
+.emoji-composer__emoji {
+  width: 1.375em;
+  height: 1.375em;
+  margin: 0 0.05em 0 0.1em;
+  vertical-align: -0.3em;
+  user-select: all;
+}

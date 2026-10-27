@@ -1,0 +1,20 @@
+// In-place message editor (shared/chat/MessageEditor.vue).
+//
+// Svelte class -> BEM class
+//   .dm-msg-edit / .chat-msg-edit -> .message-editor + .message-editor--dm / .message-editor--chat
+//                                    (the layout lived in friends.css and chat-rail.css; it moves here)
+//   .{variant}-edit-input         -> .message-editor__input (no rules of its own)
+//   .{variant}-edit-actions       -> .message-editor__actions (no rules of its own)
+
+.message-editor {
+  display: grid;
+  gap: 6px;
+}
+
+.message-editor--dm {
+  min-width: min(320px, 55vw);
+}
+
+.message-editor--chat {
+  margin-top: 4px;
+}

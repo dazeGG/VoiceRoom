@@ -1,0 +1,47 @@
+// "Add attachment" button of the composer (shared/chat/AttachmentUploadControl.vue).
+// The popover root and panel (.attachment-upload, .attachment-upload__popover) are in _attachment.scss.
+//
+// Svelte class -> BEM class
+//   .attachment-add-button  -> .attachment-upload__button
+//   .attachment-file-input  -> .attachment-upload__input
+
+.attachment-upload__input {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.attachment-upload__button {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--vr-text-2);
+  cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover,
+  &[aria-expanded='true'] {
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--focus-border);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.42;
+  }
+}

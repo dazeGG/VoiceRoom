@@ -1,0 +1,46 @@
+// Emoji button of the composer (shared/chat/ComposerEmojiPicker.vue). The panel
+// itself is .reaction-picker-panel, styled in _emoji-picker.scss.
+//
+// Svelte class -> BEM class
+//   .composer-emoji-root     -> .composer-emoji-picker (Popover `root-class`)
+//   .composer-emoji-trigger  -> .composer-emoji-picker__trigger
+//   Hosts that override the old root class (chat-rail.css) target .composer-emoji-picker now.
+
+// The mirror of the attachment button on the other side of the field: the
+// same 32px square, centred on the one-line textarea.
+.composer-emoji-picker {
+  align-self: flex-start;
+  margin: 8px 8px 0 0;
+}
+
+.composer-emoji-picker__trigger {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--vr-text-2);
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease;
+
+  &:hover,
+  &[aria-expanded='true'] {
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--focus-border);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.42;
+  }
+}

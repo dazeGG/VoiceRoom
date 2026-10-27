@@ -1,0 +1,54 @@
+// Reply row inside the composer (shared/chat/ReplyTargetBar.vue).
+//
+// Svelte class -> BEM class
+//   .reply-target                         -> .reply-target
+//   .reply-target-label                   -> .reply-target__label
+//   .reply-target-cancel                  -> .reply-target__cancel
+//   .reply-target :global(.reply-preview) -> .reply-target .reply-preview (the reply-preview block, tuned for this row)
+
+// Matches .attachment-composer padding so a reply and a pending image line up
+// against the same field edge.
+.reply-target {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 10px 0;
+
+  .reply-preview {
+    min-height: 0;
+    border-start-end-radius: 8px;
+    border-end-end-radius: 8px;
+    padding-block: 5px;
+  }
+}
+
+.reply-target__label {
+  flex: none;
+  color: var(--vr-text-2);
+  font-size: 13px;
+}
+
+.reply-target__cancel {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  padding: 0;
+  background: transparent;
+  color: var(--vr-text-2);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+
+  &:hover,
+  &:focus-visible {
+    background: color-mix(in oklch, var(--vr-danger), transparent 86%);
+    color: var(--vr-danger);
+    outline: none;
+  }
+}

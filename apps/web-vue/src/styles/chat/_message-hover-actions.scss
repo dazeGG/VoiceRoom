@@ -1,0 +1,75 @@
+// Toolbar that floats above a hovered message (shared/chat/MessageHoverActions.vue).
+//
+// Svelte class -> BEM class
+//   .chat-msg-actions                       -> .message-hover-actions
+//   .chat-msg-actions[data-overlay-open]    -> .message-hover-actions--overlay-open
+//   .chat-msg-actions-divider               -> .message-hover-actions__divider
+//   .chat-msg-actions > button              -> .message-hover-actions__button
+//   .chat-msg-text:hover .chat-msg-actions  -> .message-bubble:hover .message-hover-actions (in _message-bubble.scss)
+// The room-layout rules that raise a hovered `.chat-msg` and keep the toolbar open from the
+// author line (`.chat-msg-meta:hover + .chat-msg-text`) stay with the room chat panel.
+
+// Floating pill above the message, matching the context-menu surface: same
+// blur, border and shadow, so hover actions and the right-click menu read as
+// one system.
+.message-hover-actions {
+  position: absolute;
+  bottom: calc(100% - 6px);
+  right: -12px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  overflow: visible;
+  padding: 4px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 12px;
+  background: var(--vr-surface-2);
+  box-shadow: var(--vr-shadow-popover);
+  opacity: 0;
+  transform: translateY(2px);
+  pointer-events: none;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+// An open message menu or reaction picker takes the pointer and the focus out of
+// the row, so :hover alone would hide the toolbar the overlay was opened from —
+// and with it the target the user is about to click.
+.message-hover-actions--overlay-open {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.message-hover-actions__button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 0;
+  border-radius: 9px;
+  padding: 0;
+  background: transparent;
+  color: var(--vr-text-2);
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--vr-hover);
+    color: var(--vr-text);
+    outline: none;
+  }
+}
+
+.message-hover-actions__divider {
+  width: 1px;
+  height: 24px;
+  flex: none;
+  margin: 0 2px;
+  background: var(--vr-line-strong);
+}

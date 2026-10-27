@@ -1,0 +1,28 @@
+// "Someone is typing" line above the composer (shared/chat/TypingIndicator.vue).
+//
+// Svelte class -> BEM class
+//   .chat-typing    -> .typing-indicator
+// The custom property --chat-typing-inset is unchanged.
+
+// Sits in the top padding right above the message field, so the composer
+// never jumps when someone starts or stops typing. The host sets
+// --chat-typing-inset to its own side padding and is the positioned box.
+.typing-indicator {
+  position: absolute;
+  top: 0;
+  right: var(--chat-typing-inset, 18px);
+  left: var(--chat-typing-inset, 18px);
+  height: 14px;
+  margin: 0;
+  overflow: hidden;
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+  line-height: 14px;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &:empty {
+    visibility: hidden;
+  }
+}

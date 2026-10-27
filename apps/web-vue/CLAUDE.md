@@ -5,6 +5,7 @@
 ## Rules (binding for every task)
 
 1. `<script setup lang="ts">` only. Typed `defineProps<...>()`, `defineEmits<...>()`, `defineModel` for v-model. No Options API, no mixins.
+   A callback prop (`onX`) is allowed instead of an emit when the component renders differently depending on whether a handler was given, or awaits the handler's return value; otherwise use `defineEmits`.
 2. Where state lives:
    - a component's own state (open flags, input values, hover) is `ref`/`reactive`/`computed` in its `<script setup>`, never a store;
    - app-wide singleton state (session, lobby, inbox, preferences, theme, room runtime and room UI) is a Pinia setup store, `defineStore('x', () => { ... })`, in `*.store.ts`;
