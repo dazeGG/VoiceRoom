@@ -1,0 +1,174 @@
+// One author's run of messages in the room chat (features/room/components/RoomChatMessageGroup.vue):
+// the avatar and name, then each message as a shared MessageBubble.
+//
+// Svelte class -> BEM class
+//   .chat-msg                               -> .room-chat-group
+//   .chat-avatar-button                     -> .room-chat-group__avatar-button
+//   .chat-msg-avatar                        -> .room-chat-group__avatar
+//   .chat-msg-main                          -> .room-chat-group__main
+//   .chat-msg-meta                          -> .room-chat-group__meta
+//   .chat-msg-author                        -> .room-chat-group__author
+//   .chat-msg-trigger                       -> .room-chat-group__trigger
+//   .chat-msg-time                          -> .room-chat-group__time
+//   .chat-msg-content                       -> .room-chat-group__content
+//   .chat-msg-edited                        -> .room-chat-group__edited
+//   .chat-msg-body                          -> .room-chat-group .message-bubble__body
+//   .chat-msg-text + .chat-msg-text         -> .room-chat-group .message-bubble + .message-bubble
+//   .chat-msg-text a                        -> .room-chat-group .message-bubble a
+//   .chat-msg:has(.chat-msg-text:hover)     -> .room-chat-group:has(.message-bubble:hover)
+//   .chat-msg-meta:hover + .chat-msg-text .chat-msg-actions -> .room-chat-group__meta:hover + .message-bubble .message-hover-actions
+//   .chat-msg-avatar.chat-msg-trigger:hover/:focus-visible  -> .room-chat-group__avatar-button:hover/:focus-visible
+//     (the Svelte rule never matched: the avatar was never the trigger; the outline was meant for the button)
+//   .chat-msg[data-self]                    -> no rules; dropped
+// The direct-message thread shares .chat-msg and its parts in Svelte; the DM port names its own.
+
+.room-chat-group {
+  position: relative;
+  display: flex;
+  gap: 10px;
+  isolation: isolate;
+}
+
+// A hovered message must rise above the sticky day divider so its toolbar,
+// lifted above the message body, is not covered by the pinned date bubble.
+.room-chat-group:has(.message-bubble:hover),
+.room-chat-group:has(.message-bubble:focus-within) {
+  z-index: 6;
+}
+
+.room-chat-group__avatar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.room-chat-group__avatar-button {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+
+  &:hover,
+  &:focus-visible {
+    outline: 2px solid var(--vr-accent);
+    outline-offset: 2px;
+  }
+}
+
+.room-chat-group__main {
+  flex: 1;
+  min-width: 0;
+}
+
+.room-chat-group__meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.room-chat-group__author {
+  color: var(--vr-text);
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// Message rows reach 42px into the avatar column to widen the hover target, and
+// being positioned they paint over it. Lift the identity triggers back on top so
+// the avatar and the name stay clickable.
+.room-chat-group__avatar-button,
+.room-chat-group__meta .room-chat-group__trigger {
+  position: relative;
+  z-index: 1;
+}
+
+.room-chat-group__trigger {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+button.room-chat-group__author {
+  max-width: 100%;
+  font-family: var(--font-ui);
+  text-align: left;
+}
+
+.room-chat-group__author.room-chat-group__trigger:hover,
+.room-chat-group__author.room-chat-group__trigger:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
+.room-chat-group__time {
+  flex: none;
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+// The author line holds the first message's toolbar open: it floats over that
+// band, so it would vanish the moment the pointer crosses it on its way to the
+// toolbar, or after an overlay closes under the pointer there.
+.room-chat-group__meta:hover + .message-bubble .message-hover-actions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.room-chat-group__content {
+  min-width: 0;
+  flex: 1;
+}
+
+.room-chat-group__edited {
+  margin-left: 5px;
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+
+.room-chat-group .message-bubble + .message-bubble {
+  margin-top: 3px;
+}
+
+.room-chat-group .message-bubble a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+
+  &:hover {
+    opacity: 0.85;
+  }
+}
+
+// The message body stacks its parts, so reactions land under the text on the
+// left instead of beside it.
+.room-chat-group .message-bubble__body {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+  justify-items: start;
+}
+
+:where(.room-chat-group .message-bubble__body) > * {
+  max-width: 100%;
+}

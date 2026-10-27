@@ -1,0 +1,87 @@
+// The room chat's compose form (features/room/components/RoomChatComposer.vue).
+//
+// Svelte class -> BEM class
+//   .chat-rail-compose                        -> .room-chat-composer
+//   .chat-compose-row.attachment-compose-field -> .room-chat-composer__row.attachment-compose
+//   .chat-rail-input.chat-rail-textarea       -> .room-chat-composer__input
+//   .chat-rail-send                           -> .room-chat-composer__send
+//   .chat-rail-compose .attachment-upload-root -> .room-chat-composer .attachment-upload
+//   .chat-rail-compose .composer-emoji-root   -> .room-chat-composer .composer-emoji-picker
+
+.room-chat-composer {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 18px 18px;
+  --chat-typing-inset: 20px;
+
+  .attachment-upload {
+    margin-top: 5px;
+  }
+
+  .composer-emoji-picker {
+    margin-top: 5px;
+  }
+}
+
+.room-chat-composer__row {
+  display: flex;
+  align-items: stretch;
+}
+
+.room-chat-composer__input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 13px;
+  padding: 10px 14px 10px 8px;
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  outline: none;
+  transition: border-color 0.15s ease;
+
+  // The field grows with its text up to the cap, then scrolls.
+  box-sizing: border-box;
+  overflow-y: auto;
+  min-height: 42px;
+  max-height: 140px;
+  line-height: 1.35;
+
+  &::placeholder {
+    color: var(--vr-text-3);
+  }
+
+  &:focus,
+  &:focus-visible {
+    border-color: var(--vr-accent-line);
+    box-shadow: none;
+  }
+}
+
+.room-chat-composer__send {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  margin: 6px 6px 6px 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: var(--vr-accent-hover);
+  }
+
+  &:disabled {
+    background: var(--vr-surface-3);
+    color: var(--vr-text-3);
+    cursor: default;
+    opacity: 1;
+  }
+}

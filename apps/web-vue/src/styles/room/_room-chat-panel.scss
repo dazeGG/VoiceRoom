@@ -1,0 +1,82 @@
+// The room chat panel (features/room/components/RoomChatPanel.vue): the scrolling
+// message body, the day sections and the notes under the thread. The root element
+// takes the host's class (`room-chat-rail`, `lobby-preview-chat`) beside
+// `room-chat-panel`, which has no rules of its own.
+//
+// Svelte class -> BEM class
+//   <aside class={rootClass}>                 -> .room-chat-panel (+ the host's rootClass)
+//   .chat-rail-body                           -> .room-chat-panel__body
+//   .room-panel-members                       -> .room-chat-panel__members
+//   .chat-day-section                         -> .room-chat-panel__day
+//   .chat-day-divider                         -> .room-chat-panel__day-divider (its <span> -> __day-label)
+//   .chat-rail-note                           -> .room-chat-panel__note
+//   .chat-rail-error                          -> .room-chat-panel__error
+//   html[data-platform-class='mobile'] .chat-rail-collapse -> .room-panel-header__collapse (room layout)
+// The direct-message thread shares .chat-day-divider in Svelte; the DM port names its own.
+
+.room-chat-panel__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 18px 20px;
+}
+
+// Anchor content to the bottom without `justify-content: flex-end`: that would
+// make overflowing messages above the visible area unreachable by scrolling.
+:where(.room-chat-panel__body) > :first-child {
+  margin-top: auto;
+}
+
+.room-chat-panel__members {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 16px 24px;
+}
+
+.room-chat-panel__day {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.room-chat-panel__day-divider {
+  position: sticky;
+  top: 8px;
+  z-index: 5;
+  display: flex;
+  justify-content: center;
+  margin: 3px 0;
+  pointer-events: none;
+}
+
+.room-chat-panel__day-label {
+  flex: none;
+  border: 1px solid var(--vr-line);
+  border-radius: 999px;
+  padding: 4px 12px;
+  background: var(--vr-surface);
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.room-chat-panel__note,
+.room-chat-panel__error {
+  margin: auto 0 0;
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.room-chat-panel__error {
+  margin: 0;
+  padding: 0 20px 8px;
+  color: var(--vr-danger);
+}

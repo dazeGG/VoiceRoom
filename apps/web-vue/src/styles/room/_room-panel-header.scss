@@ -1,0 +1,40 @@
+// Header of the room panel: the Chat / Participants tabs and the collapse
+// button (features/room/components/RoomPanelHeader.vue). The tab control itself
+// is _room-panel-tabs.scss.
+//
+// Svelte class -> BEM class
+//   .chat-rail-head       -> .room-panel-header
+//   .chat-rail-collapse   -> .room-panel-header__collapse
+
+.room-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 14px;
+  box-sizing: border-box;
+  min-height: var(--vr-room-head-h);
+  border-bottom: 1px solid var(--vr-line);
+}
+
+.room-panel-header__collapse {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--vr-text-2);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    background: var(--vr-hover);
+    color: var(--vr-text);
+  }
+}
