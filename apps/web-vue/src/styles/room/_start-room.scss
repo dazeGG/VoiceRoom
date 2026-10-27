@@ -1,0 +1,177 @@
+// StartRoomScreen (features/room/components/StartRoomScreen.vue): the name form and the
+// create/join panel shown before a room is entered. The grid itself is the
+// .start-layout block in _base.scss. Svelte: the <style> of StartRoomScreen.svelte,
+// .start-panel of room/layout.css, and the name/field/button rules of
+// controls.css and stage-layout.css that only this screen uses (their own copy
+// here, so the screen does not depend on another block's rules).
+//
+// Svelte class -> BEM class
+//   .start-copy                           -> .start-layout__copy (_base.scss)
+//   .hero-title                           -> .start-room__title
+//   .hero-lead                            -> .start-room__lead
+//   .start-panel                          -> .start-room__panel
+//   .name-panel                           -> .start-room__form
+//   .room-actions                         -> .start-room__actions
+//   .field, .field span                   -> .start-room__field
+//   .name-status                          -> .start-room__status
+//   .start-divider                        -> .start-room__divider
+//   .primary-button / .secondary-button   -> .start-room__button--primary / --secondary
+//   input                                 -> .start-room__field input (the global input rule of controls.css)
+//
+// [data-*] -> modifier class
+//   .name-status[data-state='saved']      -> .start-room__status--saved
+//   .name-status[data-state='dirty']      -> .start-room__status--dirty
+//   @media (max-width: 560px) .start-panel -> the same block under below($bp-phone-sm)
+@use '../mixins' as *;
+
+.start-room__title {
+  margin: 18px 0 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.03;
+  letter-spacing: 0;
+  text-wrap: balance;
+}
+
+.start-room__lead {
+  margin: 22px 0 0;
+  max-width: 460px;
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.55;
+  color: var(--vr-text-2);
+}
+
+.start-room__panel {
+  display: grid;
+  gap: var(--space-lg);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-md);
+  padding: var(--space-xl);
+  background: linear-gradient(180deg, var(--vr-surface-3), var(--vr-surface)), var(--vr-surface);
+  box-shadow: var(--vr-shadow-popover);
+}
+
+.start-room__form,
+.start-room__actions {
+  display: grid;
+  gap: var(--space-md);
+}
+
+.start-room__field {
+  display: grid;
+  gap: var(--space-xs);
+
+  span {
+    color: var(--vr-text-2);
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  input {
+    width: 100%;
+    min-height: 44px;
+    border: 1px solid var(--vr-line-strong);
+    border-radius: 12px;
+    padding: 0 14px;
+    background: var(--vr-surface-2);
+    color: var(--vr-text);
+    outline: none;
+    transition: border-color 150ms var(--ease-out);
+
+    &::placeholder {
+      color: var(--vr-text-3);
+    }
+
+    &:focus,
+    &:focus-visible {
+      border-color: var(--vr-accent-line);
+      box-shadow: none;
+    }
+  }
+}
+
+.start-room__status {
+  margin: calc(var(--space-xs) * -1) 0 0;
+  color: var(--vr-text-2);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.start-room__status--dirty {
+  color: var(--vr-away);
+}
+
+.start-room__divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  color: var(--vr-text-2);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+
+  &::before,
+  &::after {
+    height: 1px;
+    flex: 1;
+    background: var(--vr-line-strong);
+    content: '';
+  }
+}
+
+.start-room__button {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-sm);
+  padding: 0 16px;
+  font-weight: 600;
+  transition:
+    background 160ms var(--ease-out),
+    color 160ms var(--ease-out),
+    border-color 160ms var(--ease-out),
+    box-shadow 160ms var(--ease-out),
+    transform 160ms var(--ease-out);
+
+  &:hover {
+    border-color: color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 22%);
+    box-shadow: 0 0 0 3px var(--vr-line-strong);
+  }
+
+  &:active {
+    transform: translateY(1px);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--vr-accent);
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+}
+
+.start-room__button--primary {
+  border-color: transparent;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+
+  &:hover {
+    background: var(--vr-accent-hover);
+  }
+}
+
+.start-room__button--secondary {
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
+
+  &:hover {
+    background: var(--vr-surface-3);
+  }
+}
+
+@include below($bp-phone-sm) {
+  .start-room__panel {
+    padding: var(--space-lg);
+  }
+}

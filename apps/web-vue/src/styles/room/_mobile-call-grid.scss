@@ -1,0 +1,132 @@
+// MobileCallGrid (features/room/components/MobileCallGrid.vue): everyone at once,
+// filling the screen, paged sideways past nine. Svelte: the <style> of MobileCallGrid.svelte.
+//
+// Svelte class -> BEM class
+//   .mc-grid                              -> .mobile-call-grid
+//   .mc-grid-pages                        -> .mobile-call-grid__pages
+//   .mc-grid-page                         -> .mobile-call-grid__page
+//   .mc-grid-cell                         -> .mobile-call-grid__cell
+//   .mc-grid-flip                         -> .mobile-call-grid__flip
+//   .mc-grid-dots                         -> .mobile-call-grid__dots
+//   .mc-grid-dot                          -> .mobile-call-grid__dot
+//   .mobile-call[data-chrome='hidden']    -> .mobile-call--chrome-hidden
+//
+// [data-*] -> modifier class
+//   .mc-grid[data-paged='true']           -> .mobile-call-grid--paged
+//   .mc-grid[data-voice-only='true']      -> .mobile-call-grid--voice-only
+//   .mc-grid-dot[aria-current='page']     -> unchanged
+
+.mobile-call-grid {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.mobile-call-grid__pages {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+// Room for the page dots under the grid.
+.mobile-call-grid--paged .mobile-call-grid__pages {
+  margin-bottom: 28px;
+}
+
+// Six columns take rows of one, two or three tiles alike.
+.mobile-call-grid__page {
+  display: grid;
+  flex: 0 0 100%;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  min-height: 0;
+  padding: 0 8px;
+  box-sizing: border-box;
+  scroll-snap-align: start;
+}
+
+.mobile-call-grid__cell {
+  min-width: 0;
+  min-height: 0;
+}
+
+// Voices only: 16:9 tiles like the room stage, gathered in the middle.
+.mobile-call-grid--voice-only {
+  .mobile-call-grid__page {
+    align-content: safe center;
+  }
+
+  .mobile-call-grid__cell {
+    aspect-ratio: 16 / 9;
+  }
+}
+
+.mobile-call-grid__flip {
+  position: absolute;
+  right: 18px;
+  bottom: 44px;
+  z-index: 3;
+  transition:
+    opacity 250ms ease,
+    transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.mobile-call--chrome-hidden .mobile-call-grid__flip {
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+}
+
+.mobile-call-grid__dots {
+  position: absolute;
+  left: 50%;
+  bottom: 3px;
+  display: flex;
+  gap: 2px;
+  height: 22px;
+  padding: 0 4px;
+  border-radius: 11px;
+  background: var(--vr-scrim);
+  transform: translateX(-50%);
+  transition: opacity 250ms ease;
+}
+
+.mobile-call--chrome-hidden .mobile-call-grid__dots {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mobile-call-grid__dot {
+  position: relative;
+  width: 16px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+
+  &::before {
+    position: absolute;
+    top: 8px;
+    left: 5px;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: color-mix(in oklch, var(--vr-text) 30%, transparent);
+    content: '';
+  }
+
+  &[aria-current='page']::before {
+    background: var(--vr-text);
+  }
+}

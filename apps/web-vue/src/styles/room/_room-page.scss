@@ -1,0 +1,167 @@
+// The room page layout (features/room/RoomPage.vue, RoomStage.vue): the grid the
+// top bar, the stage and the chat rail sit in, the embedded variant inside the
+// lobby, and the narrow-window rules of the page. Svelte: room/styles/layout.css and
+// responsive.css (the parts whose blocks no component owns); room.css only imported
+// the others and is gone with this port.
+//
+// Rules of layout.css / responsive.css that moved to the block that owns them:
+//   .room-heading*, .room-invite*, .status-pill, .status-dot -> _room-topbar.scss
+//   .room-dock, .dock-*, *-button (dock), html[data-platform-class='mobile'] dock -> _room-dock.scss
+//   .start-panel, .room-actions                              -> _start-room.scss
+//   .not-found-*                                             -> _not-found.scss
+//   prefers-reduced-motion                                   -> _base.scss
+//
+// Svelte class / selector -> BEM class (a guess where the owning component is ported by another task)
+//   .brand                                -> .topbar__brand
+//   .app-shell                            -> .app-shell (block, _base.scss)
+//   .room-embedded-shell                  -> .room-embedded-shell (the modifier RoomPage.vue sets)
+//   .room-layout, .stage                  -> unchanged (RoomStage.vue)
+//   .screen-meta, .screen-meta-title, -detail -> .screen-meta, .screen-meta__title, __detail
+//   .screen-view-controls, .screen-control-button -> .screen-view-controls, .screen-view-controls__button
+//   .screen-source-dialog, -panel, -heading h2, -options -> .screen-source-dialog, __panel, __heading h2, __options (_screen-source-dialog.scss)
+//   .chat-rail-collapse                   -> .room-panel-header__collapse
+//   .heading-actions, .room-heading (stacked) -> not used by any ported component; left out
+//
+// body / html [data-*] -> class
+//   body[data-screen='room']              -> body.screen--room
+//   body[data-chat-open='true']           -> body.chat--open
+//   body[data-lobby-embedded='true']      -> body.lobby--embedded
+//   body[data-screen-view='true']         -> body.screen-view--open
+//   html[data-platform-class='mobile']    -> html.platform--mobile
+@use '../mixins' as *;
+
+body.screen--room .topbar__brand {
+  display: none;
+}
+
+// The room is one grid: the top bar and the stage in the first column, the
+// chat rail beside them when it is open. The layout wrapper only groups.
+body.screen--room .app-shell {
+  position: relative;
+  height: 100dvh;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+  padding: 0;
+  gap: 0;
+  overflow: hidden;
+}
+
+body.screen--room .topbar {
+  grid-column: 1;
+  grid-row: 1;
+  padding: 0 20px;
+  box-sizing: border-box;
+  min-height: var(--vr-room-head-h);
+  border-bottom: 1px solid var(--vr-line);
+  container-type: inline-size;
+}
+
+.room-layout {
+  display: contents;
+
+  > .stage {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+  }
+}
+
+.room-embedded-shell,
+body.lobby--embedded .app-shell.room-embedded-shell {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  gap: 0;
+  background: transparent;
+}
+
+.room-embedded-shell .topbar,
+body.lobby--embedded .room-embedded-shell .topbar {
+  width: 100%;
+  margin-inline: 0;
+  padding: 0 20px;
+  box-sizing: border-box;
+  min-height: var(--vr-room-head-h);
+}
+
+// With the rail open there is a second column; below 1200px it floats over the
+// stage instead (see _room-chat-rail.scss) and the grid stays single-column.
+@media (min-width: 1200px) {
+  body.screen--room.chat--open .app-shell {
+    grid-template-columns: minmax(0, 1fr) var(--room-panel-width);
+  }
+}
+
+@include below($bp-narrow) {
+  .room-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .stage {
+    min-height: 100%;
+    padding-inline: var(--space-md);
+  }
+
+  h1 {
+    font-size: 2.4rem;
+  }
+}
+
+@include below($bp-phone-sm) {
+  body.screen-view--open .stage {
+    padding: var(--space-sm) var(--space-sm) 88px;
+  }
+
+  .screen-meta {
+    max-width: calc(100% - 16px);
+    gap: 5px;
+    padding: 6px 8px;
+  }
+
+  .screen-meta__title {
+    max-width: 42vw;
+  }
+
+  .screen-meta__detail {
+    max-width: 74vw;
+  }
+
+  .screen-view-controls {
+    right: 0;
+    bottom: 0;
+    gap: 6px;
+    padding: var(--space-xs);
+  }
+
+  .screen-view-controls__button {
+    width: 40px;
+    height: 40px;
+  }
+
+  .screen-source-dialog {
+    padding: var(--space-sm);
+  }
+
+  .screen-source-dialog__panel {
+    max-height: calc(100vh - 24px);
+    padding: var(--space-md);
+  }
+
+  .screen-source-dialog__heading h2 {
+    font-size: 1.24rem;
+  }
+
+  .screen-source-dialog__options {
+    max-height: calc(100vh - 160px);
+    grid-template-columns: 1fr;
+  }
+}
+
+// The collapse button is the only way out of the chat on a phone, so it gets
+// the same 40px target as the heading tabs.
+html.platform--mobile .room-panel-header__collapse {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+}

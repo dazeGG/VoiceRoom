@@ -1,0 +1,74 @@
+// LeaveScreen (features/room/components/LeaveScreen.vue): the window shown after
+// «Покинуть звонок». Svelte: the <style> of LeaveScreen.svelte.
+//
+// Svelte class -> BEM class
+//   .guest-leave                          -> .leave-screen
+//   .guest-leave-card                     -> .leave-screen__card
+//   .guest-leave-card h1                  -> .leave-screen__title
+//   .guest-leave-card p                   -> .leave-screen__text
+//   .guest-leave-thanks                   -> .leave-screen__thanks
+//   .guest-leave-divider                  -> .leave-screen__divider
+//   .guest-leave-actions                  -> .leave-screen__actions
+
+.leave-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--vr-bg) 78%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.leave-screen__card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(440px, 100%);
+  max-height: 100%;
+  padding: 26px;
+  overflow-y: auto;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-xl);
+  background: var(--vr-surface-2);
+  box-shadow: var(--vr-shadow-popover);
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+}
+
+.leave-screen__title {
+  margin: 0;
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.leave-screen__text {
+  margin: 0;
+  color: var(--vr-text-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.leave-screen__card .leave-screen__thanks {
+  color: var(--vr-text);
+  font-weight: 600;
+}
+
+.leave-screen__divider {
+  width: 100%;
+  margin: 6px 0;
+  border: 0;
+  border-top: 1px solid var(--vr-line);
+}
+
+.leave-screen__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}

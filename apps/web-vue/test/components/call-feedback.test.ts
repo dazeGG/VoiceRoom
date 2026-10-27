@@ -1,10 +1,8 @@
 // "How was the call?": when the app asks after a call, and the card that asks.
 // The answers are read in the admin app (apps/admin).
-//
-// Not ported yet: "on the leave screen the question is the bottom of that
-// window" needs LeaveScreen (W5); it comes with that component.
 
-import { screen } from '@testing-library/vue';
+import { render, screen, within } from '@testing-library/vue';
+import { nextTick } from 'vue';
 import userEvent from '@testing-library/user-event';
 import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
@@ -16,6 +14,8 @@ import {
   useCallFeedbackStore
 } from '@/features/call-feedback/call-feedback.store';
 import CallFeedbackPrompt from '@/features/call-feedback/CallFeedbackPrompt.vue';
+import LeaveScreen from '@/features/room/components/LeaveScreen.vue';
+import { useLeaveScreenStore } from '@/features/room/leave-screen.store';
 import {
   finishCallQuality,
   recordNetworkSample,
@@ -237,6 +237,38 @@ test('a click beside the window closes it as the cross does', async () => {
   // Closed unanswered: the next question waits twice as long.
   leave(T0 + 4 * DAY);
   expect(feedback.call).toBeNull();
+});
+
+test('on the leave screen the question is the bottom of that window, not a second one', async () => {
+  const { calls } = stubFetch({ 'POST /api/feedback/calls': { status: 201, body: { ok: true } } });
+  const view = await renderWithApp(LeaveScreen);
+  feedback = useCallFeedbackStore(view.pinia);
+  const leaveScreen = useLeaveScreenStore(view.pinia);
+  leaveScreen.openLeaveScreen({ roomId: 'kitchen', isStatic: false, guest: true });
+  feedback.call = call;
+  render(CallFeedbackPrompt, { props: { hidden: leaveScreen.open }, global: { plugins: [view.pinia, view.router] } });
+  await nextTick();
+
+  const window = screen.getByRole('dialog', { name: 'Вы вышли из комнаты' });
+  expect(screen.getAllByRole('dialog')).toHaveLength(1);
+  const question = within(window).getByRole('heading', { name: 'Как прошёл звонок?' });
+  const offer = within(window).getByRole('button', { name: 'Создать аккаунт' });
+  expect(
+    offer.compareDocumentPosition(question) & Node.DOCUMENT_POSITION_FOLLOWING,
+    'the offer comes first'
+  ).toBeTruthy();
+  expect(within(window).queryByRole('button', { name: 'Закрыть' }), 'the window has its own ways out').toBeNull();
+
+  // A thumb alone is a whole answer: nothing else needs filling in.
+  await userEvent.click(within(window).getByRole('button', { name: 'Плохо' }));
+  expect(within(window).getByLabelText('Комментарий').getAttribute('placeholder')).not.toMatch(/необязательно/i);
+  await userEvent.click(within(window).getByRole('button', { name: 'Задержка' }));
+  await userEvent.click(within(window).getByRole('button', { name: 'Отправить' }));
+  expect(within(window).getByRole('status').textContent).toContain('Спасибо за отзыв');
+  expect(within(window).queryByRole('heading', { name: 'Как прошёл звонок?' })).toBeNull();
+  expect(within(window).getByRole('button', { name: 'Создать аккаунт' })).toBeTruthy();
+  await vi.waitFor(() => expect(calls).toHaveLength(1));
+  expect(calls[0]?.body).toEqual({ rating: 'bad', tags: ['delay'], call });
 });
 
 function setVisibility(value: DocumentVisibilityState): void {

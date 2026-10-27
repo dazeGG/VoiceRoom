@@ -1,0 +1,149 @@
+// NotFoundScreen, RoomEntryErrorScreen and RoomModerationScreen
+// (features/room/components/): a full-bleed editorial surface per the Claude Design
+// handoff: warm-dark backdrop with a giant bleeding "404" watermark, a left-aligned
+// headline, a mono code chip and a single home CTA, no card. One block for the three
+// screens, which share the layout. Svelte: room/layout.css and the :global rules of
+// NotFoundScreen.svelte.
+//
+// Svelte class / selector -> BEM class
+//   .not-found-layout                     -> .not-found
+//   .not-found-watermark                  -> .not-found__watermark
+//   .not-found-content                    -> .not-found__content
+//   .not-found-mascot                     -> .not-found__mascot
+//   .not-found-title                      -> .not-found__title
+//   .not-found-copy                       -> .not-found__copy
+//   .not-found-code                       -> .not-found__code
+//   .not-found-code-dot                   -> .not-found__code-dot
+//   .not-found-actions                    -> .not-found__actions
+//   .not-found-home                       -> .not-found__home
+//   body[data-screen='not-found']         -> body.screen--not-found
+
+body.screen--not-found {
+  background:
+    radial-gradient(58% 64% at 88% 14%, color-mix(in oklch, var(--vr-surface-2), transparent 66%), transparent 56%),
+    radial-gradient(52% 60% at 4% 92%, color-mix(in oklch, var(--vr-surface), transparent 80%), transparent 54%),
+    var(--vr-bg);
+}
+
+.not-found {
+  display: flex;
+  align-items: center;
+  width: min(100%, 1020px);
+  min-height: min(760px, calc(100dvh - 116px));
+  margin-inline: auto;
+  padding-bottom: clamp(40px, 9vh, 90px);
+}
+
+// Bleeds off the bottom-right of the viewport, behind everything (z-index -1
+// keeps it under the static topbar and content but above the body backdrop).
+.not-found__watermark {
+  position: fixed;
+  right: -3vw;
+  bottom: -12vh;
+  z-index: -1;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 46vw;
+  line-height: 0.8;
+  letter-spacing: -0.05em;
+  color: color-mix(in oklch, var(--vr-text) 4%, transparent);
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.not-found__content {
+  width: 100%;
+}
+
+.not-found__mascot {
+  display: inline-flex;
+  margin-bottom: 22px;
+}
+
+.not-found__title {
+  margin: 0;
+  max-width: 560px;
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 5vw, 3.625rem); // tops out at 58px, like the home hero
+  font-weight: 700;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  color: var(--vr-text);
+  text-wrap: balance;
+}
+
+.not-found__copy {
+  max-width: 520px;
+  margin: 26px 0 0;
+  font-size: 18px;
+  line-height: 1.55;
+  color: var(--vr-text-3);
+}
+
+.not-found__code {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 8px;
+  background: var(--vr-surface-3);
+  font-family: var(--font-mono);
+  font-size: 14.5px;
+  letter-spacing: 0.04em;
+  color: var(--vr-text-2);
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.not-found__code-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--vr-danger);
+}
+
+.not-found__actions {
+  margin-top: 34px;
+}
+
+.not-found__home {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  border: none;
+  border-radius: 13px;
+  padding: 14px 22px;
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background 140ms ease,
+    transform 140ms ease;
+
+  &:hover {
+    background: var(--vr-text);
+    transform: translateY(-1px);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  &:focus-visible {
+    outline: none;
+    border-color: var(--focus-border);
+    box-shadow: none;
+  }
+
+  svg {
+    display: block;
+  }
+}
