@@ -3,8 +3,8 @@ import { classifyPlatformPolicy, type PlatformPolicy, type PlatformSignals } fro
 // Vite has no `$app/environment`: the runtime says whether this is a browser, as in shared/log.ts.
 const browser = typeof window !== 'undefined' && typeof document !== 'undefined';
 
-const DOCUMENT_BOUNDARY_KEY = 'desktopBoundary';
-const DOCUMENT_PLATFORM_KEY = 'platformClass';
+const BOUNDARY_CLASS_PREFIX = 'desktop-boundary--';
+const PLATFORM_CLASS_PREFIX = 'platform--';
 
 let cachedPolicy: PlatformPolicy | null = null;
 
@@ -31,13 +31,19 @@ function readPlatformSignals(): PlatformSignals {
   };
 }
 
-function writeBoundaryDataset(policy: PlatformPolicy): void {
+// One class of each kind at a time on <html>: the old one goes before the new one comes.
+function setRootClass(prefix: string, value: string): void {
+  const { classList } = document.documentElement;
+  for (const name of [...classList]) {
+    if (name.startsWith(prefix)) classList.remove(name);
+  }
+  classList.add(`${prefix}${value}`);
+}
+
+function writeBoundaryClasses(policy: PlatformPolicy): void {
   if (!browser) return;
-  const boundary = policy.desktopAllowed ? 'allowed' : 'blocked';
-  document.documentElement.dataset[DOCUMENT_BOUNDARY_KEY] = boundary;
-  document.documentElement.dataset[DOCUMENT_PLATFORM_KEY] = policy.platformClass;
-  document.body.dataset[DOCUMENT_BOUNDARY_KEY] = boundary;
-  document.body.dataset[DOCUMENT_PLATFORM_KEY] = policy.platformClass;
+  setRootClass(BOUNDARY_CLASS_PREFIX, policy.desktopAllowed ? 'allowed' : 'blocked');
+  setRootClass(PLATFORM_CLASS_PREFIX, policy.platformClass);
 }
 
 export function resolveDesktopBoundaryPolicy(): PlatformPolicy {
@@ -47,7 +53,7 @@ export function resolveDesktopBoundaryPolicy(): PlatformPolicy {
 
 export function applyDesktopBoundaryToDocument(): PlatformPolicy {
   const policy = resolveDesktopBoundaryPolicy();
-  writeBoundaryDataset(policy);
+  writeBoundaryClasses(policy);
   return policy;
 }
 

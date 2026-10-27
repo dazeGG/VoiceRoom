@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { markRaw, reactive } from 'vue';
+import { isReactive, markRaw, reactive } from 'vue';
 import { createInitialRoomState } from '../model/room-state';
 import type { AppState } from './types';
 
@@ -13,9 +13,12 @@ import type { AppState } from './types';
  * removed from a screen stream in place are announced with `screenUi.revision`.
  *
  * Vue proxies class instances (LiveKit's `Room`, publications), which breaks identity
- * checks, so a value of that kind is marked raw when it is assigned to `state` (rule 4).
- * A participant put into `state.peers` or `state.self` must be made reactive by whoever
- * creates it.
+ * checks, so a top-level field holding a value of that kind is marked raw when it is
+ * assigned to `state` (rule 4). The contents of a Map, Set or array are not marked. A Map
+ * or Set assigned here that is not already reactive (`localScreenPublications`, which holds
+ * LiveKit publications) is marked raw as a whole, so its values stay unproxied. `peers` and
+ * the peer id sets are made reactive explicitly by whoever creates them, and a participant
+ * put into `state.peers` or `state.self` must be made reactive by whoever creates it.
  *
  * The client imports `state` directly, as it always did; `useRoomRuntimeStore().state` is
  * the same object for components. It lives for the page, like the Svelte `$state` did,
@@ -32,6 +35,10 @@ function isForeignObject(value: unknown): value is object {
   return !PLAIN_PROTOTYPES.has(Reflect.getPrototypeOf(value));
 }
 
+function isPlainCollection(value: unknown): value is object {
+  return (value instanceof Map || value instanceof Set) && !isReactive(value);
+}
+
 // `reactive()` types a LiveKit class as its public shape, so `state` keeps the `AppState`
 // type through a proxy whose traps hand every access to the reactive view.
 const initialState = createInitialRoomState();
@@ -43,7 +50,7 @@ export const state: AppState = new Proxy(initialState, {
     return value;
   },
   set: (_target, key, value: unknown) =>
-    Reflect.set(reactiveState, key, isForeignObject(value) ? markRaw(value) : value),
+    Reflect.set(reactiveState, key, isForeignObject(value) || isPlainCollection(value) ? markRaw(value) : value),
   has: (_target, key) => Reflect.has(reactiveState, key),
   deleteProperty: (_target, key) => Reflect.deleteProperty(reactiveState, key),
   ownKeys: () => Reflect.ownKeys(reactiveState)

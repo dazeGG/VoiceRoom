@@ -1,7 +1,8 @@
 // The lobby's state for the friends/rooms experience: friend list, requests,
 // the active main view, the open DM thread, and the realtime subscription that
-// keeps them all live. One lobby store per signed-in lobby, provided to its
-// components through provide/inject (provideLobby / useLobby).
+// keeps them all live. The store is a Pinia singleton, so the teardown that init
+// returns resets everything it holds: the next account starts empty. Components
+// get it through provide/inject (provideLobby / useLobby).
 
 import { defineStore } from 'pinia';
 import { markRaw, reactive, ref } from 'vue';
@@ -147,6 +148,19 @@ export const useLobbyStore = defineStore('lobby', () => {
     incomingRequestCount.value = requests.value.incoming.length;
   }
 
+  // Back to the state of a lobby nobody has opened: nothing of the last account stays.
+  function reset(): void {
+    loaded.value = false;
+    friends.value = [];
+    incomingRequestCount.value = 0;
+    requests.value = { incoming: [], outgoing: [] };
+    mode.value = 'friends';
+    view.value = 'home';
+    selectedFriendId.value = null;
+    outboxes.clear();
+    selfId = '';
+  }
+
   // Start the lobby: load the friend list and subscribe to the realtime stream. Returns a
   // teardown function for onMounted cleanup.
   function init(
@@ -185,6 +199,7 @@ export const useLobbyStore = defineStore('lobby', () => {
       presence.reset();
       browserNotifications.stop();
       thread.close();
+      reset();
       preferences.resetNotificationPreferences();
     };
   }

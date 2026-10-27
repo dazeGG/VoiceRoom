@@ -2,7 +2,7 @@
 // overlay stays up while the pointer crosses child elements, and a drop hands
 // the images to the conversation's compose store.
 
-import { ref } from 'vue';
+import { markRaw, ref } from 'vue';
 import { dataTransferHasImages, imageFilesFromDataTransfer, type AttachmentComposeStore } from './attachment-compose';
 
 export class AttachmentDrop {
@@ -13,6 +13,7 @@ export class AttachmentDrop {
   #onError: (message: string) => void;
 
   constructor(options: { media: () => AttachmentComposeStore | null; onError: (message: string) => void }) {
+    markRaw(this);
     this.#media = options.media;
     this.#onError = options.onError;
   }

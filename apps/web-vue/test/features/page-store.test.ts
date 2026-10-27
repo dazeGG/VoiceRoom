@@ -1,4 +1,3 @@
-import { nextTick } from 'vue';
 import { afterEach, beforeEach, expect, test } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { installBodyClasses, usePageStore } from '@/stores/page.store';
@@ -18,26 +17,22 @@ afterEach(() => {
 
 const bodyClasses = () => [...document.body.classList].sort();
 
-test('the screen is one class at a time on the body', async () => {
+test('the screen is one class at a time on the body', () => {
   const page = usePageStore();
   stop = installBodyClasses();
-  await nextTick();
   expect(bodyClasses()).toEqual([]);
 
   page.screen = 'start';
-  await nextTick();
   expect(bodyClasses()).toEqual(['screen--start']);
 
   page.screen = 'room';
-  await nextTick();
   expect(bodyClasses()).toEqual(['screen--room']);
 
   page.screen = '';
-  await nextTick();
   expect(bodyClasses()).toEqual([]);
 });
 
-test('each page flag toggles its own class and leaves unrelated body classes alone', async () => {
+test('each page flag toggles its own class and leaves unrelated body classes alone', () => {
   document.body.classList.add('vr-keep');
   const page = usePageStore();
   stop = installBodyClasses();
@@ -48,7 +43,6 @@ test('each page flag toggles its own class and leaves unrelated body classes alo
   page.stripCollapsed = true;
   page.stageSummary = 'hidden';
   page.desktopScreenFullscreen = true;
-  await nextTick();
   expect(bodyClasses()).toEqual([
     'chat--open',
     'lobby--embedded',
@@ -64,36 +58,31 @@ test('each page flag toggles its own class and leaves unrelated body classes alo
   page.screenView = false;
   page.stageSummary = '';
   page.desktopScreenFullscreen = false;
-  await nextTick();
   expect(bodyClasses()).toEqual(['lobby--embedded', 'screen--room', 'strip--collapsed', 'vr-keep']);
 
   page.desktopScreenFullscreen = true;
   page.screen = 'start';
-  await nextTick();
   expect(bodyClasses()).toContain('screen--desktop-fullscreen');
   expect(bodyClasses()).toContain('screen--start');
   expect(bodyClasses()).not.toContain('screen--room');
 });
 
-test('the classes follow the store from the moment they are installed, and stop when stopped', async () => {
+test('the classes follow the store from the moment they are installed, and stop when stopped', () => {
   const page = usePageStore();
   page.screen = 'checking';
   page.screenView = true;
   stop = installBodyClasses();
-  await nextTick();
   expect(bodyClasses()).toEqual(['screen--checking', 'screen-view--open']);
 
   stop();
   page.screen = 'room';
-  await nextTick();
   expect(bodyClasses()).toEqual(['screen--checking', 'screen-view--open']);
 });
 
-test('nothing is written to body.dataset', async () => {
+test('nothing is written to body.dataset', () => {
   const page = usePageStore();
   stop = installBodyClasses();
   page.screen = 'room';
   page.chatOpen = true;
-  await nextTick();
   expect(Object.keys(document.body.dataset)).toEqual([]);
 });

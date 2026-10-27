@@ -42,11 +42,14 @@ State on `<html>` and `<body>` is a class, set from the same places that set the
 | `<body data-screen='start'>` | `body.screen--start` |
 | `<body data-screen='entry-error'>` | `body.screen--entry-error` |
 | `<body data-screen='not-found'>` | `body.screen--not-found` |
+| `<body data-screen='moderation'>` | `body.screen--moderation` |
 | `<body data-screen-view='true'>` | `body.screen-view--open` |
 | `<body data-chat-open='true'>` | `body.chat--open` |
 | `<body data-lobby-embedded='true'>` | `body.lobby--embedded` |
 | `<body data-strip-collapsed='true'>` | `body.strip--collapsed` |
 | `<body data-stage-summary='hidden'>` | `body.stage-summary--hidden` |
+| `<html data-platform-class='desktop' | 'mobile' | 'unknown'>` (also on `<body>`) | `html.platform--desktop`, `html.platform--mobile`, `html.platform--unknown` |
+| `<html data-desktop-boundary='allowed' | 'blocked'>` (also on `<body>`) | `html.desktop-boundary--allowed`, `html.desktop-boundary--blocked` |
 | `<body data-desktop-screen-fullscreen='true'>` | `body.screen--desktop-fullscreen` (not a screen name; independent of `screen--<name>`) |
 | `html.is-desktop`, `.is-shell-fullscreen`, `.vr-game-mode` | unchanged (already classes) |
 

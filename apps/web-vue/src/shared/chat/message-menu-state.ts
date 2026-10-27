@@ -2,7 +2,7 @@
 // one the composer replies to, the context menu (with the picture it was
 // opened on) and the message being reported. The room and direct chats each
 // hold one; it also shows every message's reactions as the thread renders it.
-import { ref, shallowRef, watchEffect, type ShallowRef } from 'vue';
+import { markRaw, ref, shallowRef, watch, type ShallowRef, type WatchHandle } from 'vue';
 import type { Attachment, ReactionSummary } from '@voice-room/shared/contracts/messages';
 import { attachmentAt } from './attachment-actions';
 import type { ReactionStore } from './reaction-store';
@@ -32,17 +32,38 @@ export class MessageMenuState<T extends MenuMessage> {
 
   readonly #reactions: ReactionStore;
   readonly #onEdit: (() => void) | undefined;
+  readonly #stopShowing: WatchHandle;
 
   /**
    * Built while the view initialises: it starts the effect that shows each of
    * `messages()`'s reactions. `onEdit` runs whenever an edit starts.
    */
   constructor(options: { reactions: ReactionStore; messages: () => readonly T[]; onEdit?: (() => void) | undefined }) {
+    markRaw(this);
     this.#reactions = options.reactions;
     this.#onEdit = options.onEdit;
-    watchEffect(() => {
-      for (const message of options.messages()) options.reactions.show(message);
-    });
+    // The getter reads what the messages carry; showing them (which reads the store's
+    // summaries) is the callback, so a reaction change does not run it again.
+    this.#stopShowing = watch(
+      () =>
+        options
+          .messages()
+          .map((message) => [
+            message,
+            message.reactions
+              ?.map((item) => `${item.emoji}:${item.count}:${item.reactedByMe}:${item.revision}`)
+              .join('|')
+          ]),
+      () => {
+        for (const message of options.messages()) options.reactions.show(message);
+      },
+      { immediate: true }
+    );
+  }
+
+  /** Stops showing reactions; the view that owns this state calls it when it goes away. */
+  dispose(): void {
+    this.#stopShowing.stop();
   }
 
   get editingId(): string {

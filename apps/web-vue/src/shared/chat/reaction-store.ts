@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { markRaw, ref } from 'vue';
 import type { ReactionSummary, Reactor } from '@voice-room/shared/contracts/messages';
 import { fetchReactionSummaries, fetchReactors, setReactionDesired, type ReactionConversation } from '@/api/reactions';
 import { replaceReactionSnapshot } from './reaction-reconciliation';
@@ -50,6 +50,10 @@ export class ReactionStore {
   private requested: Record<string, true> = {};
   // The page snapshot each message's reactions were last taken from. Plain, as above.
   private snapshots: Record<string, string> = {};
+
+  constructor() {
+    markRaw(this);
+  }
 
   get conversation(): ReactionConversation | null {
     return this.#conversation.value;
@@ -311,7 +315,7 @@ export class ReactionStore {
 }
 
 export function createReactionStore(): ReactionStore {
-  return new ReactionStore();
+  return markRaw(new ReactionStore());
 }
 
 export const reactionStore = createReactionStore();

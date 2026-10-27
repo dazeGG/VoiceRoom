@@ -3,7 +3,7 @@
 // picture-in-picture sits. Desktop never reaches this state.
 
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { onScopeDispose, ref } from 'vue';
 import { state } from './client/core/room-runtime.store';
 import type { Participant } from './client/core/types';
 import { useParticipantsUiStore } from './participants-ui.store';
@@ -51,6 +51,8 @@ export const useMobileCallUiStore = defineStore('mobile-call-ui', () => {
   // Whether the screen is a portrait phone; follows the media query once it has been asked.
   const portraitPhone = ref(true);
   let portraitPhoneQuery: MediaQueryList | null = null;
+  let stopPortraitPhoneListener: (() => void) | null = null;
+  onScopeDispose(() => stopPortraitPhoneListener?.());
 
   function isPortraitPhoneScreen(): boolean {
     if (typeof matchMedia !== 'function') return true;
@@ -58,9 +60,11 @@ export const useMobileCallUiStore = defineStore('mobile-call-ui', () => {
       const query = matchMedia(PORTRAIT_PHONE_QUERY);
       portraitPhoneQuery = query;
       portraitPhone.value = query.matches;
-      query.addEventListener('change', (event) => {
+      const onChange = (event: MediaQueryListEvent): void => {
         portraitPhone.value = event.matches;
-      });
+      };
+      query.addEventListener('change', onChange);
+      stopPortraitPhoneListener = () => query.removeEventListener('change', onChange);
     }
     return portraitPhone.value;
   }

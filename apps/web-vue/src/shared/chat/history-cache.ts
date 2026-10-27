@@ -21,7 +21,7 @@ export interface HistoryCache<T> {
 }
 
 /**
- * `copy` takes plain data out of the messages a page shows (`$state.snapshot`),
+ * `copy` takes plain data out of the messages a page shows (`plainSnapshot`),
  * so the kept copy does not follow later changes to them.
  */
 export function createHistoryCache<T>(copy: (messages: T[]) => T[]): HistoryCache<T> {

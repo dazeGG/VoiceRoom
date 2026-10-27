@@ -27,7 +27,6 @@ async function loadRoomRealtime() {
     }
   };
   vi.doMock('@/api/realtime', () => ({ getAppRealtime: () => connection }));
-  vi.doMock('@/entities/room/room-presence.store', () => ({ applyRoomSummary: () => {} }));
   return { realtime: await import('@/entities/room/room-realtime'), sent };
 }
 

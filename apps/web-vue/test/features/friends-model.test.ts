@@ -117,3 +117,26 @@ test('a reconnect picks up direct messages that arrived while the socket was dow
   emit({ type: 'ready', payload: { onlineFriendIds: ['anna'] } });
   await vi.waitFor(() => expect(lobby.friends[0]?.unreadCount).toBe(2));
 });
+
+test('signing out clears what the lobby held, so the next account sees none of it', async () => {
+  const lobby = await startLobby();
+  await vi.waitFor(() => expect(lobby.requests.incoming).toHaveLength(1));
+  lobby.setMode('rooms');
+  lobby.showPeople();
+  lobby.selectedFriendId = 'anna';
+  const queued = lobby.outboxFor('anna');
+
+  stop?.();
+  stop = null;
+
+  expect(lobby).toMatchObject({
+    friends: [],
+    incomingRequestCount: 0,
+    requests: { incoming: [], outgoing: [] },
+    loaded: false,
+    mode: 'friends',
+    view: 'home',
+    selectedFriendId: null
+  });
+  expect(lobby.outboxFor('anna')).not.toBe(queued);
+});

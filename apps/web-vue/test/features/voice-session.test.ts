@@ -1,5 +1,5 @@
 import { createPinia, setActivePinia } from 'pinia';
-import { afterEach, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 vi.mock('@/features/room/client/media/cues', () => ({ playPeerCue: vi.fn() }));
 vi.mock('@/entities/room/room-membership.store', () => ({
@@ -9,14 +9,17 @@ vi.mock('@/entities/room/room-membership.store', () => ({
 const cues = await import('@/features/room/client/media/cues');
 const { useVoiceSessionStore } = await import('@/features/room/voice-session.store');
 
-// One store for the file: a hang-up that is still waiting for its cue finds the handler a later test registered.
-setActivePinia(createPinia());
-const voice = useVoiceSessionStore();
+// A new Pinia per test: a store is cached per Pinia, so no test sees a handler or room an earlier one left.
+let voice: ReturnType<typeof useVoiceSessionStore>;
+
+beforeEach(() => {
+  setActivePinia(createPinia());
+  voice = useVoiceSessionStore();
+});
 
 afterEach(() => {
   vi.useRealTimers();
   vi.mocked(cues.playPeerCue).mockClear();
-  voice.clearConnectedVoiceRoom();
 });
 
 test('leaving the active call plays the leave cue first and hangs up once it had time to sound', async () => {
@@ -38,14 +41,17 @@ test('without an active call, leaving does nothing and plays no cue', async () =
   expect(cues.playPeerCue).not.toHaveBeenCalled();
 });
 
-test('an unregistered call handler is not replaced by a stale unregister', () => {
+test('an unregistered call handler is not replaced by a stale unregister', async () => {
   const first = vi.fn();
   const second = vi.fn();
   const unregisterFirst = voice.registerActiveVoiceLeave(first);
   const unregisterSecond = voice.registerActiveVoiceLeave(second);
   unregisterFirst();
-  void voice.leaveActiveVoiceRoomWithCue();
+  const leaving = voice.leaveActiveVoiceRoomWithCue();
   expect(cues.playPeerCue).toHaveBeenCalledWith('leave');
+  await leaving;
+  expect(second).toHaveBeenCalledTimes(1);
+  expect(first).not.toHaveBeenCalled();
   unregisterSecond();
 });
 

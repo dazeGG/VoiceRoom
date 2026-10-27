@@ -3,7 +3,8 @@
 // window, since paged history is account-only. Both keep the same list, so the
 // chat view adds, edits and removes messages without knowing which it has.
 
-import { ref, toRaw } from 'vue';
+import { ref } from 'vue';
+import { plainSnapshot } from '@/shared/utils/plain-snapshot';
 import { ApiError } from '@/api/client';
 import { fetchRoomChat, fetchRoomChatPage, type ChatMessage } from '@/api/rooms';
 import type { PublicPeer } from '@voice-room/shared/contracts/rooms';
@@ -15,7 +16,7 @@ const MAX_EARLY_EDITS = 50;
 
 /** Room chats kept between visits, by room id. */
 const roomHistoryCache = createHistoryCache<ChatMessage>((messages) =>
-  messages.map((message) => structuredClone(toRaw(message)))
+  messages.map((message) => plainSnapshot(message))
 );
 
 export function useRoomChatTimeline() {

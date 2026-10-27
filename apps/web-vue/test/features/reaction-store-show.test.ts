@@ -1,7 +1,7 @@
 // A history page carries its messages' reactions, so showing those messages
 // asks the server nothing; only a message that came without them is fetched.
 
-import { effectScope, nextTick, watchEffect } from 'vue';
+import { effectScope, isReactive, nextTick, watchEffect } from 'vue';
 import { expect, test } from 'vitest';
 import { createReactionStore } from '@/shared/chat/reaction-store';
 import { stubFetch } from '../fixtures/fetch.ts';
@@ -60,4 +60,22 @@ test('a new conversation takes its page copies afresh', () => {
   expect(store.forMessage('m1')).toEqual([]);
   store.show(message);
   expect(store.forMessage('m1').map((item) => item.count)).toEqual([1]);
+});
+
+test('a store, a compose draft store and a drop target stay as they are inside reactive state', async () => {
+  const { reactive } = await import('vue');
+  const { AttachmentComposeStore } = await import('@/shared/chat/attachment-compose');
+  const { AttachmentDrop } = await import('@/shared/chat/attachment-drop');
+  const holder = reactive({
+    store: new (await import('@/shared/chat/reaction-store')).ReactionStore(),
+    drop: new AttachmentDrop({ media: () => null, onError: () => {} }),
+    compose: new AttachmentComposeStore('dm', 'peer')
+  });
+  expect(holder.store.conversation).toBeNull();
+  expect(holder.drop.active).toBe(false);
+  expect(holder.compose.drafts).toEqual([]);
+  expect(holder.store).toBe(holder.store);
+  expect(isReactive(holder.store)).toBe(false);
+  expect(isReactive(holder.drop)).toBe(false);
+  expect(isReactive(holder.compose)).toBe(false);
 });

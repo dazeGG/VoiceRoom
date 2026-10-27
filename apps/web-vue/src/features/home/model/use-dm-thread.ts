@@ -4,6 +4,7 @@
 // which peer is open; the thread keeps that peer's messages right.
 
 import { nextTick, ref, toRaw } from 'vue';
+import { plainSnapshot } from '@/shared/utils/plain-snapshot';
 import { fetchThreadPage, markThreadRead, type DirectMessage } from '@/api/dm';
 import type { PublicUser } from '@/api/friends';
 import { createAnchoredHistory } from '@/shared/chat/anchored-history';
@@ -12,7 +13,7 @@ import { createReadReconciliation } from '@/shared/chat/read-reconciliation';
 
 /** Conversations kept between visits, by peer id. */
 const dmHistoryCache = createHistoryCache<DirectMessage>((messages) =>
-  messages.map((message) => structuredClone(toRaw(message)))
+  messages.map((message) => plainSnapshot(message))
 );
 
 /** `isOpen` answers whether the lobby still shows this peer's thread. */
@@ -83,9 +84,8 @@ export function useDmThread(isOpen: (peerId: string) => boolean) {
     // A link preview can arrive as an edit before the message itself is
     // delivered; the later, preview-less copy must not wipe it.
     const known = messages.value.find((existing) => existing.id === incoming.id);
-    history.upsert(
-      known?.linkPreview && !incoming.linkPreview ? { ...incoming, linkPreview: known.linkPreview } : incoming
-    );
+    const knownPreview = known ? toRaw(known).linkPreview : undefined;
+    history.upsert(knownPreview && !incoming.linkPreview ? { ...incoming, linkPreview: knownPreview } : incoming);
   }
 
   function replace(message: DirectMessage): void {

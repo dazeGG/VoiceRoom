@@ -25,8 +25,7 @@ async function load() {
 afterEach(() => {
   vi.restoreAllMocks();
   Reflect.deleteProperty(navigator, 'maxTouchPoints');
-  delete document.documentElement.dataset.desktopBoundary;
-  delete document.documentElement.dataset.platformClass;
+  document.documentElement.className = '';
 });
 
 test('a desktop browser gets everything', async () => {
@@ -34,7 +33,8 @@ test('a desktop browser gets everything', async () => {
   const { boundary } = await load();
   const policy = boundary.applyDesktopBoundaryToDocument();
   expect(policy).toMatchObject({ desktopAllowed: true, roomClientAllowed: true });
-  expect(document.documentElement.dataset.desktopBoundary).toBe('allowed');
+  expect(document.documentElement.classList.contains('desktop-boundary--allowed')).toBe(true);
+  expect(document.documentElement.classList.contains('platform--desktop')).toBe(true);
   expect(boundary.isRealtimeBlocked()).toBe(false);
 });
 
@@ -43,7 +43,10 @@ test('a phone may use the room client but not the desktop screens, and the page 
   const { boundary } = await load();
   const policy = boundary.applyDesktopBoundaryToDocument();
   expect(policy).toMatchObject({ desktopAllowed: false, roomClientAllowed: true });
-  expect(document.documentElement.dataset.platformClass).toBe('mobile');
+  expect(document.documentElement.classList.contains('platform--mobile')).toBe(true);
+  expect(document.documentElement.classList.contains('desktop-boundary--blocked')).toBe(true);
+  expect(document.documentElement.classList.contains('platform--desktop')).toBe(false);
+  expect(document.body.dataset.platformClass).toBeUndefined();
 });
 
 test('on a phone the realtime socket opens only while a room page is mounted', async () => {

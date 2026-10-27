@@ -1,4 +1,4 @@
-import { ref } from 'vue';
+import { markRaw, ref } from 'vue';
 import { isArray } from '@voice-room/shared/guards';
 import {
   createAttachmentSlot,
@@ -36,6 +36,7 @@ export class AttachmentComposeStore {
     readonly context: AttachmentContext,
     readonly contextId: string
   ) {
+    markRaw(this);
     this.storageKey = `voice-room:attachment-drafts:${context}:${contextId}`;
     try {
       const ids: unknown = JSON.parse(readStorage(this.storageKey) || '[]');

@@ -1,4 +1,4 @@
-import { reactive } from 'vue';
+import { markRaw, reactive } from 'vue';
 import {
   DEFAULT_SCREEN_FPS_ID,
   DEFAULT_SCREEN_PROFILE_ID,
@@ -44,7 +44,7 @@ export function createInitialRoomState(): AppState {
     cameraDeviceId: readStorage(CAMERA_DEVICE_STORAGE_KEY) || '',
     cameraFacing: 'user',
     cameraStarting: false,
-    localScreenPublications: new Map(),
+    localScreenPublications: markRaw(new Map()),
     localScreenAudioCapture: null,
     localScreenStats: null,
     localScreenStatsPrevious: null,

@@ -3,7 +3,6 @@ declare global {
   namespace App {}
 
   /** Present only when a Node host (SSR, tests) runs the code; `typeof process` guards every use. */
-  // eslint-disable-next-line no-var
   var process: { env: Record<string, string | undefined> } | undefined;
 
   /** Chromium's User-Agent Client Hints; other browsers have none. */

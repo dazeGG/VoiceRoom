@@ -42,6 +42,6 @@ export function installBodyClasses(): WatchHandle {
       classList.toggle('stage-summary--hidden', page.stageSummary === 'hidden');
       classList.toggle(DESKTOP_FULLSCREEN_CLASS, page.desktopScreenFullscreen);
     },
-    { flush: 'post' }
+    { flush: 'sync' }
   );
 }

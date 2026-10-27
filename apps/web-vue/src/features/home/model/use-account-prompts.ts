@@ -3,7 +3,7 @@
 // "what's new" stories, and the one-time desktop app prompt, which waits until
 // none of the others is on screen and no call is joining or live.
 
-import { ref, watchEffect } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { fetchAccountSecurity, markAppPromptSeen, snoozeRecoveryCodesReminder, type AuthUser } from '@/api/auth';
 import { shouldOpenAppPrompt } from '@/features/room/room-cta';
 import { readOpenInAppSignals, shouldOfferOpenInApp } from '@/platform/open-in-app';
@@ -35,18 +35,25 @@ export function useAccountPrompts(options: {
   const appPromptAvailable = ref(false);
   const appPromptDone = ref(false);
 
-  watchEffect(() => {
+  // Whether the prompt may show now. Once it opened it stays until closed, whatever else opens after.
+  const appPromptWanted = computed(() => {
     const user = options.user();
-    if (appPromptDone.value || appPromptOpen.value || !user) return;
-    const open = shouldOpenAppPrompt({
+    if (appPromptDone.value || !user) return false;
+    return shouldOpenAppPrompt({
       appAvailable: appPromptAvailable.value,
       hasUsedDesktopApp: user.hasUsedDesktopApp,
       appPromptSeen: user.appPromptSeen,
       otherDialogOpen: loginAlertOpen.value || whatsNewOpen.value || options.lobbyDialogOpen(),
       voiceActive: options.voiceActive()
     });
-    if (open) appPromptOpen.value = true;
   });
+  watch(
+    appPromptWanted,
+    (wanted) => {
+      if (wanted) appPromptOpen.value = true;
+    },
+    { immediate: true }
+  );
 
   /** Runs once the lobby is mounted (reads the browser and the account's security). */
   function start(): void {

@@ -1,7 +1,7 @@
 // The room client reads and writes `state` as a plain object; components read the same
 // object from the store. Foreign objects must stay out of the reactive proxy.
 
-import type { Room } from 'livekit-client';
+import type { LocalTrackPublication, Room } from 'livekit-client';
 import { createPinia, setActivePinia } from 'pinia';
 import { watch } from 'vue';
 import { beforeEach, expect, test } from 'vitest';
@@ -61,4 +61,29 @@ test('the room name is the client name only for the room it holds', () => {
   state.roomName = 'Кухня';
   expect(clientRoomName('kitchen')).toBe('Кухня');
   expect(clientRoomName('other')).toBe('');
+});
+
+test('publications kept in state come back unproxied, so unpublishTrack finds them', async () => {
+  const { unpublishLocalScreenTracks } = await import('@/features/room/client/services/livekit/local-publications');
+  const track = { id: 'screen-track' };
+  const unpublished: unknown[] = [];
+  state.livekitRoom = mistyped<Room>({
+    localParticipant: {
+      unpublishTrack: (candidate: unknown) => {
+        unpublished.push(candidate);
+        return Promise.resolve();
+      }
+    }
+  });
+  const publication = { track };
+  state.localScreenPublications = new Map([['screen-track', mistyped<LocalTrackPublication>(publication)]]);
+  expect(state.localScreenPublications.get('screen-track')).toBe(publication);
+
+  await unpublishLocalScreenTracks();
+  expect(unpublished).toHaveLength(1);
+  expect(unpublished[0]).toBe(track);
+
+  Object.assign(state, createInitialRoomState());
+  state.localScreenPublications.set('x', mistyped<LocalTrackPublication>(publication));
+  expect(state.localScreenPublications.get('x')).toBe(publication);
 });

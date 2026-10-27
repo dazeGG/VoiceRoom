@@ -126,3 +126,19 @@ test('the reactions of every message shown appear, including messages that arriv
   await nextTick();
   expect(reactions.forMessage('m2').map((item) => item.count)).toEqual([3]);
 });
+
+test('a reaction change does not show the messages again, and a disposed state stops showing', async () => {
+  stubFetch({});
+  const thumbs = (count: number) => [{ emoji: '👍', count, reactedByMe: false, revision: String(count) }];
+  const { menu, reactions, shown } = setup([{ id: 'm1', reactions: thumbs(1) }]);
+  const show = vi.spyOn(reactions, 'show');
+
+  reactions.applyServer('m1', { emoji: '🔥', count: 1, reactedByMe: false, revision: '9' });
+  await nextTick();
+  expect(show).not.toHaveBeenCalled();
+
+  menu.dispose();
+  shown.messages = [...shown.messages, { id: 'm2', reactions: thumbs(3) }];
+  await nextTick();
+  expect(show).not.toHaveBeenCalled();
+});

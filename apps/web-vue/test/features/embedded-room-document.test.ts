@@ -6,7 +6,18 @@ import { beforeEach, expect, test } from 'vitest';
 import { syncEmbeddedRoomDocument } from '../../src/features/home/model/embedded-room-document.ts';
 import { usePageStore } from '../../src/stores/page.store.ts';
 
-beforeEach(() => setActivePinia(createPinia()));
+// A new Pinia is a new page store: no body flag of an earlier test is left over.
+beforeEach(() => {
+  setActivePinia(createPinia());
+  expect(usePageStore()).toMatchObject({
+    screen: '',
+    chatOpen: false,
+    lobbyEmbedded: false,
+    screenView: false,
+    stripCollapsed: false,
+    desktopScreenFullscreen: false
+  });
+});
 
 test('coming back to a room with a stream on its stage brings the stream layout back', () => {
   const page = usePageStore();

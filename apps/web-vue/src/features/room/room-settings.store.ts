@@ -1,9 +1,9 @@
 // Reactive open/closed state for the owner-only room settings dialog, kept
 // separate from the vanilla room client (RoomSettingsDialog.vue owns the
 // actual rename/delete network calls) — same split as room-ui.store.ts for chat.
-// `isOwner` is mirrored here (set once room.ts resolves ownership) because
-// the vanilla `state` object is not itself reactive for the topbar
-// button, which needs a reactive flag to show/hide.
+// `isOwner` is mirrored here (set once room.ts resolves ownership) as the flag
+// the topbar button shows/hides on; the room client's `state` is reactive too,
+// but ownership is the settings dialog's concern, not the client's.
 
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
