@@ -28,6 +28,8 @@
 //   .reaction-picker-empty              -> .emoji-picker__empty
 
 // The picker draws its own header and footer to the panel edges.
+@use '../mixins' as *;
+
 .reaction-picker-panel {
   padding: 0;
   overflow: hidden;
@@ -62,12 +64,7 @@
 }
 
 .emoji-picker__label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
+  @include visually-hidden;
 }
 
 .emoji-picker__input {

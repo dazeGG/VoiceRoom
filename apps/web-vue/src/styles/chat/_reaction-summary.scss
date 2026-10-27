@@ -9,6 +9,8 @@
 //   .reaction-count              -> .reaction-summary__count
 //   .sr-only (role="alert")      -> .reaction-summary__error
 
+@use '../mixins' as *;
+
 .reaction-summary {
   display: flex;
   flex-wrap: wrap;
@@ -69,10 +71,5 @@
 
 // Read out by a screen reader, never drawn.
 .reaction-summary__error {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
+  @include visually-hidden;
 }

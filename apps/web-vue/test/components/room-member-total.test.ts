@@ -2,7 +2,7 @@ import type { MemberPresenceStatus } from '@voice-room/shared/contracts/membersh
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { useRoomMembershipStore } from '@/entities/room/room-membership.store';
-import { stubFetch } from './fixtures/fetch.ts';
+import { stubFetch } from '../fixtures/fetch.ts';
 
 beforeEach(() => setActivePinia(createPinia()));
 

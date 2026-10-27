@@ -9,6 +9,9 @@ import { Avatar, AvatarCropDialog } from '@/shared/ui';
 import { iconSm } from '@/shared/ui/icons';
 import type { RoomAvatarChange } from '../room-avatar-change';
 
+// Two roots (the field and the crop dialog): attributes go to the field.
+defineOptions({ inheritAttrs: false });
+
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 
 const props = withDefaults(
@@ -80,7 +83,7 @@ function closeCrop(): void {
 </script>
 
 <template>
-  <div class="room-avatar-field">
+  <div class="room-avatar-field" v-bind="$attrs">
     <input
       ref="input"
       class="room-avatar-field__input"

@@ -5,11 +5,14 @@ import { iconMd } from '@/shared/ui/icons';
 
 const value = defineModel<string>({ required: true });
 
-withDefaults(defineProps<{ placeholder?: string; autocomplete?: string; id?: string | undefined }>(), {
-  placeholder: '',
-  autocomplete: 'current-password',
-  id: undefined
-});
+withDefaults(
+  defineProps<{ placeholder?: string; autocomplete?: 'current-password' | 'new-password'; id?: string | undefined }>(),
+  {
+    placeholder: '',
+    autocomplete: 'current-password',
+    id: undefined
+  }
+);
 
 const revealed = ref(false);
 </script>

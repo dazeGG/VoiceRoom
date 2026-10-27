@@ -39,7 +39,7 @@ function close(): void {
 <template>
   <Dialog
     :open="!hidden && (call !== null || thanked)"
-    title="Как прошёл звонок?"
+    :title="call ? 'Как прошёл звонок?' : 'Спасибо!'"
     :width="420"
     initial-focus=".call-feedback__thumb"
     :on-close="close"

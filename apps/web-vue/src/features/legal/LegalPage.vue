@@ -2,7 +2,7 @@
 // The frame of a public legal page: a way back to the app, the document
 // title with its effective date, the other documents, and the text.
 import { ArrowLeft } from '@lucide/vue';
-import { computed, onBeforeUnmount, watchEffect } from 'vue';
+import { computed, onBeforeUnmount, onMounted, watchEffect } from 'vue';
 import { RouterLink } from 'vue-router';
 import { LEGAL, LEGAL_DOCUMENTS, type LegalDocument } from './legal-info';
 
@@ -11,11 +11,15 @@ const props = defineProps<{ current: LegalDocument }>();
 const title = computed(() => LEGAL_DOCUMENTS.find((document) => document.id === props.current)?.title ?? '');
 
 // Svelte: <svelte:head>. The page sets the tab title and the browser colour while it is shown.
-const previousTitle = document.title;
+let previousTitle = document.title;
 const themeColor = document.createElement('meta');
 themeColor.name = 'theme-color';
 themeColor.content = '#131416';
-document.head.append(themeColor);
+
+onMounted(() => {
+  previousTitle = document.title;
+  document.head.append(themeColor);
+});
 
 watchEffect(() => {
   document.title = `${title.value} · ${LEGAL.service}`;

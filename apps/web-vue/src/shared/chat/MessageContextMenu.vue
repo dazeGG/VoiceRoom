@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// Callback props (onX) instead of emits: the menu renders differently depending on whether a handler was given.
 // Right-click menu shared by the room chat and DMs. Quick reactions sit at the
 // top so the most common action needs no submenu; everything else is a normal
 // menu row. Which rows appear is decided by the caller through the flags.

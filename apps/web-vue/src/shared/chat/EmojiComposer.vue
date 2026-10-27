@@ -167,7 +167,7 @@ function getSelection(): TextSelection {
   return lastSelection ?? { start: value.value.length, end: value.value.length };
 }
 
-function setSelection(start: number, end = start): void {
+function setSelection(start: number, end = start, length = value.value.length): void {
   const from = pointAt(start);
   const to = pointAt(end);
   const selection = document.getSelection();
@@ -177,7 +177,7 @@ function setSelection(start: number, end = start): void {
   range.setEnd(to.node, to.offset);
   selection.removeAllRanges();
   selection.addRange(range);
-  lastSelection = { start: Math.min(start, value.value.length), end: Math.min(end, value.value.length) };
+  lastSelection = { start: Math.min(start, length), end: Math.min(end, length) };
 }
 
 /** Puts text where the caret was, replacing a selection, like typing it. */
@@ -189,7 +189,7 @@ function insertText(text: string): boolean {
   render(inserted.text);
   value.value = inserted.text;
   root.value.focus();
-  setSelection(inserted.caret);
+  setSelection(inserted.caret, inserted.caret, inserted.text.length);
   emit('input');
   return true;
 }
