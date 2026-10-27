@@ -1,2 +1,4 @@
 // Lobby and start-screen UI: one partial per BEM block, forwarded from here.
 @forward 'settings';
+@forward 'app-update-notice';
+@forward 'call-feedback';
