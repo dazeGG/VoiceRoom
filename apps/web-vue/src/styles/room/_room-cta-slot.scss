@@ -1,0 +1,172 @@
+// RoomCtaSlot (features/room/components/RoomCtaSlot.vue): the account / desktop app
+// offer floating above the dock, and the mobile browser hint.
+//
+// Svelte class -> BEM class
+//   .room-cta-stack            -> .room-cta-slot
+//   .room-cta                  -> .room-cta-slot__card
+//   .room-cta-icon             -> .room-cta-slot__icon
+//   .room-cta-copy             -> .room-cta-slot__copy
+//   .room-cta-title            -> .room-cta-slot__title
+//   .room-cta-text             -> .room-cta-slot__text
+//   .room-cta-action           -> .room-cta-slot__action (with .ui-button--compact)
+//   .room-cta-close            -> .room-cta-slot__close
+//   .room-mobile-hint          -> .room-cta-slot__hint
+//
+// [data-*] -> modifier class
+//   .room-cta[data-kind]       -> .room-cta-slot__card--account / --app (no rules)
+//   body[data-lobby-embedded='true'] -> body.lobby--embedded
+//   body[data-chat-open='true']      -> body.chat--open
+
+// Floats just above the dock, mirroring its offsets, so it never covers the
+// heading: on narrow screens the heading wraps and its tabs move down.
+.room-cta-slot {
+  position: fixed;
+  right: 0;
+  bottom: calc(max(var(--space-lg), env(safe-area-inset-bottom)) + 80px);
+  left: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding-inline: 16px;
+  pointer-events: none;
+}
+
+.room-cta-slot > * {
+  max-width: min(640px, 100%);
+  pointer-events: auto;
+}
+
+body.lobby--embedded .room-cta-slot {
+  left: var(--lobby-sidebar-width, 312px);
+}
+
+@media (min-width: 901px) {
+  body.chat--open .room-cta-slot {
+    right: var(--room-panel-width);
+  }
+}
+
+.room-cta-slot__hint {
+  margin: 0;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--vr-surface-2) 88%, transparent);
+  color: var(--vr-text-2);
+  font-size: 12px;
+  text-align: center;
+}
+
+// Reads as a second dock: same glass, same 18px corner and the same inner
+// 13px radius on the icon, so the pair sits together instead of the card
+// looking bolted on above it.
+.room-cta-slot__card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 100%;
+  padding: 10px 11px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 18px;
+  background: color-mix(in srgb, color-mix(in srgb, var(--vr-surface-2) 60%, var(--vr-bg)) 90%, transparent);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+}
+
+.room-cta-slot__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--vr-line);
+  border-radius: 13px;
+  background: color-mix(in oklch, var(--vr-accent) 14%, var(--vr-surface-3));
+  color: var(--vr-accent);
+}
+
+.room-cta-slot__copy {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.room-cta-slot__title {
+  color: var(--vr-text);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.room-cta-slot__text {
+  color: var(--vr-text-2);
+  font-size: 12.5px;
+  line-height: 1.35;
+}
+
+.room-cta-slot__close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--vr-text-3);
+  cursor: pointer;
+  transition:
+    background 150ms var(--ease-out),
+    color 150ms var(--ease-out);
+}
+
+.room-cta-slot__close:hover {
+  background: var(--vr-surface-3-hover);
+  color: var(--vr-text);
+}
+
+// Narrow: the copy keeps the full width next to the icon and the action drops
+// to its own row, so neither the headline nor the button is squeezed.
+@media (max-width: 640px) {
+  .room-cta-slot__card {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 10px;
+    row-gap: 10px;
+    padding: 12px;
+  }
+
+  // Placed explicitly: the action spans the full width, and sparse
+  // auto-placement would otherwise push the close button past it into a
+  // third row instead of the free cell beside the copy.
+  .room-cta-slot__icon {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .room-cta-slot__copy {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .room-cta-slot__close {
+    grid-column: 3;
+    grid-row: 1;
+    width: 40px;
+    height: 40px;
+    align-self: start;
+    margin: -4px -4px 0 0;
+  }
+
+  .room-cta-slot__card .room-cta-slot__action {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    width: 100%;
+  }
+}

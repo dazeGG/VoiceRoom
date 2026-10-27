@@ -1,0 +1,124 @@
+// StageTiles (features/room/components/StageTiles.vue): the strip under the stage with the tile grid or the spotlight carousel.
+//
+// Svelte class / selector -> BEM class
+//   .stage-strip                              -> .stage-strip
+//   .stage-strip-bar                          -> .stage-strip__bar
+//   .stage-strip-title                        -> .stage-strip__title
+//   .stage-strip-kicker                       -> .stage-strip__kicker
+//   .stage-strip-title strong                 -> .stage-strip__summary
+//   .strip-toggle-button                      -> .stage-strip__toggle
+//
+// body[data-*] -> body class
+//   body[data-stage-summary='hidden']         -> body.stage-summary--hidden
+//   body[data-strip-collapsed='true']         -> body.strip--collapsed
+//   body[data-screen-view='true']             -> body.screen-view--open
+
+.stage-strip {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  // Optional bar (auto) + the tile grid which fills the remaining height.
+  grid-template-rows: auto minmax(0, 1fr);
+  min-height: 0;
+  gap: var(--space-sm);
+  container-type: size;
+}
+
+// When the summary bar is hidden the grid is the only row.
+body.stage-summary--hidden {
+  .stage-strip {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .stage-strip__bar {
+    display: none;
+  }
+}
+
+.stage-strip__bar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+}
+
+.stage-strip__title {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.stage-strip__kicker {
+  color: var(--vr-text-2);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.stage-strip__summary {
+  overflow: hidden;
+  color: var(--vr-text);
+  font-size: 0.92rem;
+  font-weight: 800;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stage-strip__toggle {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-sm);
+  padding: 0;
+  background: var(--vr-bg);
+  color: var(--vr-text-2);
+  transition:
+    background 140ms var(--ease-out),
+    border-color 140ms var(--ease-out),
+    color 140ms var(--ease-out);
+
+  &:hover {
+    border-color: color-mix(in oklch, var(--vr-line-strong), var(--vr-text) 18%);
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
+  }
+
+  svg {
+    width: 19px;
+    height: 19px;
+    transition: transform 160ms var(--ease-out);
+  }
+}
+
+body.strip--collapsed .stage-strip__toggle svg {
+  transform: rotate(180deg);
+}
+
+// While a stream is spotlighted the stage keeps the ScreenStage in the main
+// row and the strip row below renders the same spotlight carousel as a
+// focused participant (see _participant-carousel.scss).
+// Explicit height: .stage-strip is a size query container (contain: size), so
+// it cannot derive a height from its own content inside the stage's auto row.
+body.screen-view--open {
+  .stage-strip {
+    min-height: 0;
+    height: 128px;
+    align-content: center;
+    overflow: hidden;
+  }
+
+  .participant-carousel {
+    justify-self: center;
+  }
+}
+
+body.screen-view--open.strip--collapsed .stage-strip {
+  max-height: 42px;
+}

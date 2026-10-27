@@ -1,0 +1,616 @@
+// RoomDock (features/room/components/RoomDock.vue): the floating control bar with
+// the microphone, headphones, camera and screen buttons, the signal bars and the
+// device settings popovers. Svelte: room/styles/controls.css, the dock rules of
+// responsive.css and the scoped styles of RoomDock.svelte.
+//
+// Svelte class -> BEM class
+//   .room-dock                          -> .room-dock
+//   .dock-shell                         -> .room-dock__shell
+//   .dock-cluster                       -> .room-dock__cluster
+//   .dock-cluster--screen               -> .room-dock__cluster--screen
+//   .dock-anchor (rootClass)            -> .room-dock__anchor
+//   .dock-split                         -> .room-dock__split
+//   .dock-button                        -> .room-dock__button
+//   .mic-button                         -> .room-dock__button--mic
+//   .output-button                      -> .room-dock__button--output
+//   .camera-button                      -> .room-dock__button--camera
+//   .screen-button                      -> .room-dock__button--screen
+//   .leave-button                       -> .room-dock__button--leave
+//   .screen-exit-button                 -> .room-dock__button--screen-exit
+//   .dock-menu-button                   -> .room-dock__menu-button
+//   .dock-icon                          -> .room-dock__icon
+//   .dock-icon-mic / -muted             -> .room-dock__icon--mic / --muted
+//   .dock-icon-output / -output-muted   -> .room-dock__icon--output / --output-muted
+//   .dock-icon-camera / -camera-off     -> .room-dock__icon--camera / --camera-off
+//   .dock-icon-screen / -screen-stop    -> .room-dock__icon--screen / --screen-stop
+//   .sr-only (button labels)            -> .room-dock__label
+//   .dock-ptt-badge                     -> .room-dock__ptt-badge
+//   .dock-divider                       -> .room-dock__divider
+//   .dock-connection-wrap               -> .room-dock__connection-wrap
+//   .dock-connection                    -> .room-dock__connection
+//   .dock-bar                           -> .room-dock__bar
+//   .dock-connection-popover            -> .room-dock__connection-popover
+//   .dock-connection-dot                -> .room-dock__connection-dot
+//   .dock-connection-label              -> .room-dock__connection-label
+//   .device-popover (panelClass)        -> .room-dock__device-popover
+//   .field (in the popovers)            -> .room-dock__field
+//   .dock-volume-head                   -> .room-dock__volume-head
+//   .gate-field-head                    -> .room-dock__gate-head
+//   .gate-switch / .gate-switch-knob    -> .room-dock__gate-switch / .room-dock__gate-switch-knob
+//   .gate-control                       -> .room-dock__gate-control
+//   .mic-level-fill                     -> .room-dock__level-fill
+//
+// [data-*] -> modifier class
+//   .dock-split:has(.mic-button[data-state='muted']) / (.output-button[...='muted'])
+//                                       -> .room-dock__split--muted
+//   .dock-split:has(.mic-button[data-state='ptt-active'])
+//                                       -> .room-dock__split--active
+//   .dock-split:has(.camera-button[data-state='on'])
+//                                       -> .room-dock__split--on
+//   .mic-button / .output-button [data-state='muted'] -> .room-dock__button--muted
+//   .camera-button[data-state='on']     -> .room-dock__button--on
+//   .screen-button[data-state='live']   -> .room-dock__button--live
+//   .dock-ptt-badge[data-active='true'] -> .room-dock__ptt-badge--active
+//   .dock-connection[data-state='x']    -> .room-dock__connection--x (and --x on the popover for the dot)
+//   .gate-control[data-disabled='true'] -> .room-dock__gate-control--disabled
+//   .mic-level-fill[data-state='closed'] -> .room-dock__level-fill--closed
+//   html[data-platform-class='mobile']  -> html.platform--mobile
+//
+// The device popover is placed by Reka (the end of its button, above it): the
+// Svelte panel centred itself over the button with absolute offsets.
+@use '../mixins' as *;
+
+// The dock floats over the bottom of the stage, centred in it whatever the
+// rail or the lobby sidebar take up.
+.room-dock {
+  position: absolute;
+  right: 0;
+  bottom: 20px;
+  left: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-inline: 20px;
+  pointer-events: none;
+}
+
+.room-dock__shell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  max-width: 100%;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 18px;
+  padding: 8px;
+  background: var(--vr-dock-bg);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: var(--vr-shadow-dock);
+  pointer-events: auto;
+}
+
+// Mic / headphones / camera: a toggle plus a chevron that picks the device. The
+// outer cluster anchors the settings popover; the inner split clips the two
+// halves into one rounded block that takes the state colour.
+.room-dock__cluster {
+  display: flex;
+}
+
+.room-dock__anchor {
+  position: relative;
+  width: fit-content;
+}
+
+.room-dock__split {
+  display: flex;
+  align-items: stretch;
+  height: 44px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
+}
+
+.room-dock__split--muted {
+  background: var(--vr-danger-off);
+  color: var(--vr-danger);
+}
+
+.room-dock__split--on,
+.room-dock__split--active {
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+}
+
+.room-dock__button,
+.room-dock__menu-button {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+  transition:
+    background 150ms var(--ease-out),
+    color 150ms var(--ease-out);
+}
+
+.room-dock__button:focus-visible,
+.room-dock__menu-button:focus-visible,
+.room-dock__gate-switch:focus-visible {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.room-dock__button--mic,
+.room-dock__button--output,
+.room-dock__button--camera {
+  position: relative;
+  width: 44px;
+  height: 44px;
+}
+
+.room-dock__button--mic:hover,
+.room-dock__button--output:hover,
+.room-dock__button--camera:hover,
+.room-dock__menu-button:hover {
+  background: var(--vr-hover);
+}
+
+.room-dock__menu-button {
+  width: 24px;
+  height: 44px;
+  border-left: 1px solid var(--vr-line);
+  opacity: 0.7;
+}
+
+.room-dock__menu-button:hover {
+  opacity: 1;
+}
+
+// Standalone square buttons (screen / leave / connection).
+.room-dock__button--screen,
+.room-dock__button--leave,
+.room-dock__button--screen-exit,
+.room-dock__connection {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border-radius: 12px;
+}
+
+.room-dock__button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.room-dock__menu-button svg {
+  width: 13px;
+  height: 13px;
+}
+
+.room-dock__icon {
+  display: grid;
+  place-items: center;
+}
+
+.room-dock__label {
+  @include visually-hidden;
+}
+
+.room-dock__button--screen {
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
+}
+
+.room-dock__button--screen:hover {
+  background: var(--vr-surface-3-hover);
+}
+
+.room-dock__button--screen:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+// Sharing the screen fills the button with the accent.
+.room-dock__button--screen.room-dock__button--live {
+  background: var(--vr-accent);
+  color: var(--vr-accent-ink);
+}
+
+.room-dock__button--screen.room-dock__button--live:hover {
+  background: var(--vr-accent-hover);
+}
+
+// Each toggle shows one of its two icons.
+.room-dock__icon--muted,
+.room-dock__icon--output-muted,
+.room-dock__icon--screen-stop,
+.room-dock__icon--camera,
+.room-dock__button--mic.room-dock__button--muted .room-dock__icon--mic,
+.room-dock__button--output.room-dock__button--muted .room-dock__icon--output,
+.room-dock__button--screen.room-dock__button--live .room-dock__icon--screen,
+.room-dock__button--camera.room-dock__button--on .room-dock__icon--camera-off {
+  display: none;
+}
+
+.room-dock__button--mic.room-dock__button--muted .room-dock__icon--muted,
+.room-dock__button--output.room-dock__button--muted .room-dock__icon--output-muted,
+.room-dock__button--screen.room-dock__button--live .room-dock__icon--screen-stop,
+.room-dock__button--camera.room-dock__button--on .room-dock__icon--camera {
+  display: grid;
+}
+
+.room-dock__ptt-badge {
+  position: absolute;
+  right: 3px;
+  bottom: 2px;
+  border-radius: 4px;
+  padding: 1px 3px;
+  background: var(--vr-hover);
+  color: var(--vr-text-2);
+  font-size: 7px;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: 0.04em;
+}
+
+.room-dock__ptt-badge--active {
+  background: var(--vr-accent-soft-hover);
+  color: var(--vr-accent);
+}
+
+.room-dock__button--camera:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.room-dock__divider {
+  width: 1px;
+  height: 28px;
+  flex: 0 0 auto;
+  margin: 0 2px;
+  background: var(--vr-line-strong);
+  pointer-events: none;
+}
+
+// Connection: signal bars, with the ping on hover.
+.room-dock__connection-wrap {
+  position: relative;
+  display: flex;
+}
+
+.room-dock__connection {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  padding: 0 0 14px;
+  background: var(--vr-surface-3);
+  pointer-events: auto;
+  cursor: default;
+}
+
+.room-dock__bar {
+  width: 3px;
+  border-radius: 2px;
+  background: var(--vr-text-3);
+}
+
+.room-dock__bar:nth-child(1) {
+  height: 6px;
+}
+
+.room-dock__bar:nth-child(2) {
+  height: 11px;
+}
+
+.room-dock__bar:nth-child(3) {
+  height: 16px;
+}
+
+.room-dock__connection--connected .room-dock__bar {
+  background: var(--vr-success);
+}
+
+.room-dock__connection--connecting .room-dock__bar {
+  background: var(--vr-info);
+}
+
+.room-dock__connection--warning .room-dock__bar {
+  background: var(--vr-away);
+}
+
+.room-dock__connection--error .room-dock__bar {
+  background: var(--vr-danger);
+}
+
+.room-dock__connection-popover {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 11px);
+  transform: translateX(-50%);
+  display: none;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: var(--vr-surface-2);
+  box-shadow: var(--vr-shadow-popover);
+}
+
+.room-dock__connection-wrap:hover .room-dock__connection-popover {
+  display: flex;
+}
+
+.room-dock__connection-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--vr-success);
+}
+
+.room-dock__connection-popover--connecting .room-dock__connection-dot {
+  background: var(--vr-info);
+}
+
+.room-dock__connection-popover--warning .room-dock__connection-dot {
+  background: var(--vr-away);
+}
+
+.room-dock__connection-popover--error .room-dock__connection-dot {
+  background: var(--vr-danger);
+}
+
+.room-dock__connection-popover--idle .room-dock__connection-dot {
+  background: var(--vr-text-3);
+}
+
+.room-dock__connection-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--vr-text);
+}
+
+.room-dock__button--leave,
+.room-dock__button--screen-exit {
+  background: var(--vr-danger);
+  color: var(--vr-on-danger);
+  pointer-events: auto;
+}
+
+.room-dock__button--leave:hover,
+.room-dock__button--screen-exit:hover {
+  background: color-mix(in oklch, var(--vr-danger), var(--vr-on-danger) 12%);
+}
+
+// A narrow stage drops the device chevrons and the signal bars and lets the
+// dock wrap.
+@container stage (max-width: 619px) {
+  .room-dock__menu-button,
+  .room-dock__connection-wrap,
+  .room-dock__divider {
+    display: none;
+  }
+}
+
+// ---- device settings popovers ----
+
+// Doubled class: beats Popover's own panel chrome (padding, radius) whatever
+// the order of the partials.
+.popover__panel.room-dock__device-popover {
+  display: grid;
+  gap: var(--space-md);
+  width: min(320px, calc(100vw - 48px));
+  min-width: 0;
+  // Visible overflow: the Select listbox must not be clipped by the panel.
+  overflow: visible;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 18px;
+  padding: var(--space-lg);
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
+  box-shadow: var(--vr-shadow-popover);
+}
+
+.room-dock__field {
+  display: grid;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+.room-dock__field > span {
+  color: var(--vr-text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.room-dock__device-popover .select,
+.room-dock__device-popover .select__trigger {
+  max-width: 100%;
+}
+
+.room-dock__volume-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+
+.room-dock__volume-head output {
+  color: var(--vr-text);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.room-dock__gate-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.room-dock__gate-head > span {
+  color: var(--vr-text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.room-dock__gate-switch {
+  position: relative;
+  flex: none;
+  width: 36px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: var(--vr-surface-3);
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease;
+}
+
+// Enlarges the touch target past the visible switch.
+.room-dock__gate-switch::after {
+  content: '';
+  position: absolute;
+  inset: -12px -6px;
+  border-radius: var(--radius-pill);
+}
+
+.room-dock__gate-switch[aria-checked='true'] {
+  background: var(--vr-accent);
+}
+
+.room-dock__gate-switch-knob {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--vr-text-2);
+  transition:
+    left 0.16s ease,
+    background 0.16s ease;
+}
+
+.room-dock__gate-switch[aria-checked='true'] .room-dock__gate-switch-knob {
+  left: 17px;
+  background: var(--vr-accent-ink);
+}
+
+.room-dock__gate-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 58px;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-top: var(--space-xs);
+  transition: opacity 0.2s ease;
+}
+
+.room-dock__gate-control--disabled {
+  opacity: 0.45;
+}
+
+.room-dock__gate-control output {
+  color: var(--vr-text);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 500;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.room-dock__level-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--vr-accent);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition:
+    transform 80ms linear,
+    background 120ms ease;
+}
+
+.room-dock__level-fill--closed {
+  background: var(--vr-surface-3-hover);
+}
+
+// ---- small screens ----
+
+@include below($bp-phone-sm) {
+  .room-dock {
+    padding-inline: var(--space-xs);
+  }
+
+  .room-dock__shell {
+    gap: var(--space-xs);
+  }
+}
+
+@media (max-width: 360px) {
+  .room-dock__shell {
+    gap: 6px;
+    padding: 8px 9px;
+  }
+
+  .room-dock__split {
+    height: 42px;
+  }
+
+  .room-dock__button--mic,
+  .room-dock__button--output,
+  .room-dock__button--camera,
+  .room-dock__button--screen,
+  .room-dock__button--leave,
+  .room-dock__button--screen-exit,
+  .room-dock__connection {
+    width: 42px;
+    height: 42px;
+  }
+
+  .room-dock__menu-button {
+    width: 24px;
+    height: 42px;
+  }
+}
+
+// Phones: mobile browsers cannot capture the screen, and dock controls keep a
+// 44px touch target even on the narrowest viewports. The whole cluster goes, not
+// just the button: an empty flex child still spends the shell's gap and pushed
+// the divider off-centre between the headphones and the signal bars.
+html.platform--mobile .room-dock__cluster--screen {
+  display: none;
+}
+
+html.platform--mobile
+  :is(
+    .room-dock__button--mic,
+    .room-dock__button--output,
+    .room-dock__button--camera,
+    .room-dock__button--leave,
+    .room-dock__button--screen-exit,
+    .room-dock__connection
+  ) {
+  min-width: 44px;
+  min-height: 44px;
+}
+
+html.platform--mobile .room-dock__split {
+  min-height: 44px;
+}

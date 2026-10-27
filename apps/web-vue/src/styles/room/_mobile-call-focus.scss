@@ -1,0 +1,133 @@
+// MobileCallFocus (features/room/components/MobileCallFocus.vue): one person big,
+// everyone else in a strip below. Svelte: the <style> of MobileCallFocus.svelte.
+//
+// Svelte class -> BEM class
+//   .mc-focus                             -> .mobile-call-focus
+//   .mc-focus-big                         -> .mobile-call-focus__big
+//   .mc-pin-controls                      -> .mobile-call-focus__pin-controls
+//   .mc-unpin                             -> .mobile-call-focus__unpin
+//   .mc-strip                             -> .mobile-call-focus__strip
+//   .mc-strip-self                        -> .mobile-call-focus__strip-self
+//   .mc-strip-item                        -> .mobile-call-focus__strip-item
+//   .mc-strip-divider                     -> .mobile-call-focus__strip-divider
+//   .mc-strip-scroller                    -> .mobile-call-focus__strip-scroller
+//   .mobile-call[data-chrome='hidden']    -> .mobile-call--chrome-hidden
+//
+// [data-*] -> modifier class
+//   .mc-strip[data-fits='true']           -> .mobile-call-focus__strip--fits
+
+.mobile-call-focus {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-height: 0;
+  padding: 0 8px;
+  box-sizing: border-box;
+}
+
+.mobile-call-focus__big {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.mobile-call-focus__pin-controls {
+  position: absolute;
+  right: 10px;
+  bottom: 44px;
+  z-index: 4;
+  display: flex;
+  gap: 8px;
+  transition:
+    opacity 250ms ease,
+    transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.mobile-call--chrome-hidden .mobile-call-focus__pin-controls {
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+}
+
+.mobile-call-focus__unpin {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 18px 0 16px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 16px;
+  background: var(--vr-scrim);
+  color: var(--vr-text);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.mobile-call-focus__strip {
+  position: relative;
+  display: flex;
+  flex: none;
+  height: min(150px, 25%);
+}
+
+.mobile-call-focus__strip-self,
+.mobile-call-focus__strip-item {
+  flex: 0 0 100px;
+  min-width: 0;
+}
+
+.mobile-call-focus__strip-divider {
+  flex: 0 0 13px;
+  align-self: center;
+  height: 56%;
+  background: linear-gradient(var(--vr-line-strong), var(--vr-line-strong)) center / 1px 100% no-repeat;
+}
+
+.mobile-call-focus__strip-scroller {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 6px;
+  min-width: 0;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.mobile-call-focus__strip-item {
+  scroll-snap-align: start;
+}
+
+// Three tiles or fewer share the width; more scroll, with a fade saying so.
+.mobile-call-focus__strip--fits {
+  .mobile-call-focus__strip-self {
+    flex: 1 1 0;
+  }
+
+  .mobile-call-focus__strip-scroller {
+    flex: var(--strip-others) 1 0;
+  }
+
+  .mobile-call-focus__strip-item {
+    flex: 1 1 0;
+  }
+}
+
+.mobile-call-focus__strip:not(.mobile-call-focus__strip--fits)::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 28px;
+  background: linear-gradient(90deg, transparent, color-mix(in oklch, var(--vr-bg) 90%, transparent));
+  content: '';
+  pointer-events: none;
+}

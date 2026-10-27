@@ -1,0 +1,149 @@
+// MobileCallStage (features/room/components/MobileCallStage.vue): the call on a
+// phone in portrait, covering the room page. Svelte: the <style> of MobileCallStage.svelte.
+//
+// Svelte class -> BEM class
+//   .mobile-call                          -> .mobile-call
+//   .mc-chrome                            -> .mobile-call__chrome
+//   .mc-content                           -> .mobile-call__content
+//   .mc-bleed                             -> .mobile-call__bleed
+//   .mc-bleed-controls                    -> .mobile-call__bleed-controls
+//   .mc-bubble                            -> .mobile-call__bubble
+//   .topbar (the room's own bar)          -> .topbar (shared Topbar block)
+//   .room-cta-stack                       -> .room-cta-slot
+//
+// [data-*] -> modifier class
+//   .mobile-call[data-chrome='hidden']    -> .mobile-call--chrome-hidden
+//   .mobile-call[data-scene='duo']        -> .mobile-call--duo (also --grid, --focus)
+//   (the other mobile-call-* blocks read --chrome-hidden through this block's name)
+
+.mobile-call {
+  --mc-safe-top: env(safe-area-inset-top, 0px);
+  --mc-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --mc-dock-bottom: max(12px, var(--mc-safe-bottom));
+  // The band the tiles may use: under the top bar and above the dock.
+  --mc-top: calc(var(--mc-safe-top) + 58px);
+  --mc-bottom: calc(var(--mc-dock-bottom) + 86px);
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  overflow: hidden;
+  background: var(--vr-bg);
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.mobile-call--chrome-hidden {
+  --mc-top: calc(var(--mc-safe-top) + 4px);
+  --mc-bottom: max(8px, var(--mc-safe-bottom));
+}
+
+.mobile-call__chrome {
+  display: contents;
+}
+
+.mobile-call__content {
+  position: absolute;
+  top: var(--mc-top);
+  right: 0;
+  bottom: var(--mc-bottom);
+  left: 0;
+  // The picture-in-picture measures itself against the band.
+  container-type: size;
+  transition:
+    top 350ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    bottom 350ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+// Two people: only the picture-in-picture lives in the band, over the full-screen picture.
+.mobile-call--duo .mobile-call__content {
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+}
+
+.mobile-call__bleed {
+  position: absolute;
+  inset: 0;
+}
+
+.mobile-call__bleed-controls {
+  position: absolute;
+  left: 14px;
+  bottom: calc(var(--mc-bottom) + 42px);
+  z-index: 3;
+  transition:
+    bottom 350ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 250ms ease,
+    transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.mobile-call--chrome-hidden .mobile-call__bleed-controls {
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+}
+
+.mobile-call__bubble {
+  position: absolute;
+  top: calc(var(--mc-safe-top) + 12px);
+  left: 12px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 11px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--vr-scrim);
+  color: var(--vr-danger);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px);
+  transition:
+    opacity 250ms ease,
+    transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.mobile-call--chrome-hidden .mobile-call__bubble {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+// The room page under the call is taller than the screen; scrolling it would
+// slide the call away from the finger.
+html:has(.mobile-call),
+body:has(.mobile-call) {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+// The room's own top bar lies under the call: it must not take taps or be
+// read out a second time next to the call's bar.
+body:has(.mobile-call) .topbar {
+  visibility: hidden;
+}
+
+// The account offer and the screen-on hint hang under the top bar, clear of
+// the name plates, and go away with the controls.
+body:has(.mobile-call) .room-cta-slot {
+  top: calc(env(safe-area-inset-top, 0px) + 64px);
+  bottom: auto;
+}
+
+body:has(.mobile-call--chrome-hidden) .room-cta-slot {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 250ms ease;
+
+  > * {
+    pointer-events: none;
+  }
+}

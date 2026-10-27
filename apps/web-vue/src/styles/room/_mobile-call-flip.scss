@@ -1,0 +1,45 @@
+// MobileCameraFlip (features/room/components/MobileCameraFlip.vue): the camera switch.
+// Svelte: the <style> of MobileCameraFlip.svelte.
+//
+// Svelte class -> BEM class
+//   .mc-flip                              -> .mobile-call-flip
+//   .mc-flip-icon                         -> .mobile-call-flip__icon
+//
+// [data-*] -> modifier class
+//   .mc-flip[data-variant='round']        -> .mobile-call-flip--round (--pill has no rules of its own)
+
+.mobile-call-flip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 18px 0 16px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 16px;
+  background: var(--vr-scrim);
+  color: var(--vr-text);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+  -webkit-tap-highlight-color: transparent;
+
+  &:disabled {
+    opacity: 0.6;
+  }
+}
+
+.mobile-call-flip--round {
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.mobile-call-flip__icon {
+  display: inline-flex;
+  transition: transform 450ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}

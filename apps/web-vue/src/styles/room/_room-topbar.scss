@@ -1,0 +1,243 @@
+// RoomTopbar (features/room/components/RoomTopbar.vue): the room heading, the
+// invite menu and the connection pill in the top bar. The Svelte rules lived in
+// room/layout.css and responsive.css. The chat/participants tabs are the shared
+// .room-panel-tabs block (_room-panel-tabs.scss).
+//
+// Svelte class -> BEM class
+//   .room-heading.topbar-room-heading    -> .room-topbar__heading
+//   .room-heading-main                   -> .room-topbar__heading-main
+//   .room-heading-trigger                -> .room-topbar__heading-trigger
+//   .room-heading-title-wrap             -> .room-topbar__heading-title-wrap
+//   .room-heading-title                  -> .room-topbar__heading-title
+//   .room-heading-trigger-chevron        -> .room-topbar__heading-chevron
+//   .room-heading-actions                -> .room-topbar__heading-actions
+//   .room-invite-button                  -> .room-topbar__invite-button
+//   .room-invite-popover                 -> .room-topbar__invite-popover
+//   .room-invite-label                   -> .room-topbar__invite-label
+//   .room-panel-tabs button              -> .room-panel-tabs__tab
+//   .room-panel-tab-unread               -> .room-panel-tabs__unread
+//   .status-pill                         -> .room-topbar__status
+//   .status-dot                          -> .room-topbar__status-dot
+//
+// [data-*] -> aria / modifier class
+//   .status-pill[data-state='x']                    -> .room-topbar__status--x
+//   body[data-screen='room'] .topbar-room-heading   -> body.screen--room .room-topbar__heading
+//   html[data-platform-class='mobile']              -> html.platform--mobile
+@use '../mixins' as *;
+
+.room-topbar__heading {
+  display: none;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+body.screen--room .room-topbar__heading {
+  display: flex;
+}
+
+.room-topbar__heading[hidden] {
+  display: none;
+}
+
+.room-topbar__heading-main {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.room-topbar__heading-trigger {
+  display: inline-flex;
+  min-width: 60px;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  border: 0;
+  border-radius: 12px;
+  padding: 4px 10px 4px 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background 150ms var(--ease-out);
+}
+
+.room-topbar__heading-title-wrap {
+  display: flex;
+  margin: 0;
+  min-width: 0;
+  align-items: center;
+}
+
+.room-topbar__heading-trigger:hover,
+.room-topbar__heading-trigger[aria-expanded='true'] {
+  background: var(--vr-hover);
+}
+
+.room-topbar__heading-title {
+  max-width: min(46vw, 28ch);
+  font-family: var(--font-ui);
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.room-topbar__heading-chevron {
+  flex: none;
+  display: inline-flex;
+  color: var(--vr-text-3);
+  transition: transform 0.16s ease;
+}
+
+.room-topbar__heading-trigger[aria-expanded='true'] .room-topbar__heading-chevron {
+  transform: rotate(180deg);
+}
+
+.room-topbar__heading-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+// The invite button is a label plus an icon; narrow stages keep the icon.
+.room-topbar__invite-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.room-topbar__invite-button:hover,
+.room-topbar__invite-button[aria-expanded='true'] {
+  background: var(--vr-hover);
+}
+
+.room-topbar__invite-popover {
+  width: min(300px, calc(100vw - 24px));
+}
+
+.room-topbar__invite-label {
+  display: inline;
+}
+
+@container (max-width: 699px) {
+  .room-topbar__invite-label {
+    display: none;
+  }
+}
+
+// The heading tabs are the only way into chat on a phone, so they get the same
+// 44px target as the dock.
+html.platform--mobile .room-panel-tabs--topbar .room-panel-tabs__tab {
+  width: 40px;
+  height: 40px;
+}
+
+.room-topbar__status {
+  display: inline-flex;
+  align-items: center;
+  min-width: 178px;
+  margin-left: auto;
+  justify-content: center;
+  gap: var(--space-xs);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: var(--vr-surface-2);
+  color: var(--vr-text-2);
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.room-topbar__status[hidden] {
+  display: none;
+}
+
+// The connection state lives in the dock, so the pill is suppressed in-room.
+body.screen--room .room-topbar__status {
+  display: none;
+}
+
+.room-topbar__status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--vr-away);
+}
+
+.room-topbar__status--connected .room-topbar__status-dot {
+  background: var(--vr-success);
+}
+
+.room-topbar__status--error .room-topbar__status-dot {
+  background: var(--vr-danger);
+}
+
+.room-topbar__status--warning .room-topbar__status-dot {
+  background: var(--vr-away);
+}
+
+.room-topbar__status--connecting .room-topbar__status-dot {
+  animation: blink 1s infinite;
+  background: var(--vr-info);
+}
+
+@include below($bp-phone-sm) {
+  // In-room the heading stays one row: stacking it dropped the call timer and
+  // the tabs into a second line under the room name. The name takes what is
+  // left and ellipsises; the actions keep their intrinsic width on the right.
+  .room-topbar__heading {
+    align-items: center;
+    flex-direction: row;
+    gap: var(--space-sm);
+  }
+
+  .room-topbar__heading-main {
+    flex: 1 1 auto;
+  }
+
+  .room-topbar__status {
+    width: 100%;
+  }
+
+  body.screen--room .room-topbar__status {
+    width: auto;
+    min-width: 0;
+    max-width: 46vw;
+    padding-inline: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .room-topbar__heading-title {
+    min-width: 0;
+    max-width: calc(100vw - 172px);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  // A long room name must shrink inside the heading instead of widening the
+  // page: the menu's popover root otherwise sizes to the full title.
+  .room-topbar__heading-main > .popover {
+    min-width: 0;
+    max-width: 100%;
+  }
+}

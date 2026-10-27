@@ -1,0 +1,72 @@
+// In-room chat as a collapsible right rail (features/room/components/RoomChat.vue
+// passes `room-chat-rail` as the root class of RoomChatPanel). In-flow beside the
+// stage on wide windows (the room layout gives it its own grid column), floating
+// over the stage below 1200px. The lobby preview uses the same panel with its own
+// root class; the panel's inner blocks are room-chat-panel, room-panel-header,
+// room-panel-tabs, room-chat-group, room-chat-composer and pinned-bar.
+//
+// Svelte class -> BEM class
+//   .room-chat-rail                          -> .room-chat-rail (block, unchanged: _desktop-shell.scss and the room layout name it)
+//   body[data-screen='room'] .room-chat-rail -> body.screen--room .room-chat-rail
+//   :root --room-panel-width                 -> unchanged
+
+@use '../mixins' as *;
+
+:root {
+  --room-panel-width: 360px;
+}
+
+.room-chat-rail {
+  position: relative;
+  flex: none;
+  width: var(--room-panel-width);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--vr-line);
+  background: var(--vr-surface);
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+// The rail takes the second column of the room grid, over the full height.
+body.screen--room .room-chat-rail {
+  grid-column: 2;
+  grid-row: 1 / -1;
+  min-width: 0;
+}
+
+// Below 1200px the rail floats over the stage instead of squeezing it.
+@media (max-width: 1199px) {
+  body.screen--room .room-chat-rail {
+    position: absolute;
+    grid-column: 1 / -1;
+    grid-row: 1 / -1;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 6;
+    max-width: 100%;
+    box-shadow: -24px 0 60px oklch(0% 0 0 / 0.45);
+  }
+}
+
+// On narrow screens the rail overlays the room instead of squeezing the grid.
+@include below($bp-narrow) {
+  .room-chat-rail,
+  body.screen--room .room-chat-rail {
+    position: fixed;
+    top: 76px;
+    right: 12px;
+    bottom: 92px;
+    left: 12px;
+    width: auto;
+    z-index: 20;
+    border: 1px solid var(--vr-line-strong);
+    border-radius: 18px;
+    background: var(--vr-surface);
+    box-shadow: var(--vr-shadow-popover);
+  }
+}

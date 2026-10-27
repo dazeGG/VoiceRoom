@@ -1,0 +1,111 @@
+// RoomSettingsDialog (features/room/components/RoomSettingsDialog.vue): the owner's
+// room settings. The chrome is the settings block (home/_settings.scss) inside the
+// shared Dialog; this partial holds what the Svelte component's own <style> had.
+//
+// Svelte class -> BEM class
+//   .room-settings-modal              -> Dialog width 780 (prop)
+//   .room-settings-body               -> .settings__body--room (home/_settings.scss)
+//   .room-settings-content            -> .room-settings__content
+//   .room-settings-notifications      -> .room-settings__notifications
+//   .room-profile-head                -> .room-settings__profile-head
+//   .room-name-field                  -> .room-settings__name-field
+//   .settings-select-wrap             -> .room-settings__select-wrap
+//   .settings-select                  -> .room-settings__select
+//   .settings-select-chevron          -> .room-settings__select-chevron
+//   (new)                             -> .room-settings (cancels the Dialog body padding)
+@use '../mixins' as *;
+
+// The Dialog body pads and spaces its content; the settings body and its sidebar
+// run edge to edge under the title, as in the Svelte modal.
+.room-settings {
+  margin: -20px -22px -22px;
+  border-top: 1px solid var(--vr-line);
+}
+
+// One height for every section, so switching tabs does not jump.
+.settings__body--room {
+  height: min(532px, calc(90vh - 74px));
+  min-height: 0;
+}
+
+.room-settings__content {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  padding: 24px;
+}
+
+.room-settings__notifications {
+  display: grid;
+}
+
+.room-settings__notifications .settings__field-label {
+  margin-bottom: 9px;
+}
+
+.room-settings__profile-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.room-settings__name-field {
+  flex: 1;
+  min-width: 0;
+}
+
+@include below($bp-phone) {
+  .settings__body--room {
+    height: auto;
+    overflow-y: auto;
+  }
+
+  .room-settings__content {
+    padding: 22px 18px;
+  }
+}
+
+.room-settings__select-wrap {
+  position: relative;
+}
+
+.room-settings__select {
+  width: 100%;
+  appearance: none;
+  min-height: 44px;
+  padding: 0 40px 0 14px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 12px;
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 14.5px;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 150ms var(--ease-out);
+}
+
+.room-settings__select:hover {
+  border-color: var(--vr-line-strong);
+}
+
+.room-settings__select:focus,
+.room-settings__select:focus-visible {
+  border-color: var(--vr-accent-line);
+}
+
+.room-settings__select option {
+  background: var(--vr-surface-2);
+  color: var(--vr-text);
+}
+
+.room-settings__select-chevron {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  pointer-events: none;
+  color: var(--vr-text-2);
+}

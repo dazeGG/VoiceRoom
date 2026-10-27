@@ -1,0 +1,95 @@
+// Segment control shared by the top bar (icons) and the rail header (words):
+// features/room/components/RoomPanelHeader.vue, RoomTopbar.vue, MobileCallTopbar.vue
+// and the lobby room views.
+//
+// Svelte class -> BEM class
+//   .room-panel-tabs                          -> .room-panel-tabs
+//   .room-panel-tabs--topbar                  -> .room-panel-tabs--topbar (a modifier, no rules of its own)
+//   .chat-rail-head .room-panel-tabs          -> .room-panel-tabs--header
+//   .room-panel-tabs button                   -> .room-panel-tabs__tab (every button inside the control carries it)
+//   button[data-active='true']                -> .room-panel-tabs__tab[aria-selected='true'] / [aria-pressed='true']
+//   .room-panel-tab-count                     -> .room-panel-tabs__count
+//   .room-panel-tab-unread                    -> .room-panel-tabs__unread
+//   html[data-platform-class='mobile'] :is(.room-panel-tabs--topbar, .chat-rail-head .room-panel-tabs) button
+//                                             -> the room layout's responsive rules, on .room-panel-tabs__tab
+
+.room-panel-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  padding: 3px;
+  border: 1px solid var(--vr-line);
+  border-radius: 11px;
+  background: var(--vr-surface-2);
+}
+
+.room-panel-tabs--header {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.room-panel-tabs__tab {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 36px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  padding: 0;
+  background: transparent;
+  color: var(--vr-text-2);
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    color: var(--vr-text);
+  }
+
+  &[aria-selected='true'],
+  &[aria-pressed='true'] {
+    background: var(--vr-surface-3);
+    color: var(--vr-text);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--vr-accent);
+    outline-offset: 2px;
+  }
+}
+
+.room-panel-tabs--header .room-panel-tabs__tab {
+  width: auto;
+}
+
+.room-panel-tabs__count {
+  color: var(--vr-text-3);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 400;
+}
+
+.room-panel-tabs__unread {
+  position: absolute;
+  top: 5px;
+  right: 7px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--vr-accent);
+  box-shadow: 0 0 0 2px var(--vr-surface-2);
+}
+
+.room-panel-tabs--header .room-panel-tabs__unread {
+  position: static;
+  box-shadow: none;
+}

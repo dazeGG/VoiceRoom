@@ -1,0 +1,142 @@
+// MobileCallDock (features/room/components/MobileCallDock.vue): the phone dock and
+// its sound-output menu. Svelte: the <style> of MobileCallDock.svelte.
+//
+// Svelte class -> BEM class
+//   .mc-dock                              -> .mobile-call-dock
+//   .mc-dock-button                       -> .mobile-call-dock__button
+//   .mc-dock-mic / -output / -leave        -> .mobile-call-dock__button--mic / --output / --leave (-camera: no rule of its own)
+//   .mc-output-scrim                      -> .mobile-call-dock__output-scrim
+//   .mc-output-menu                       -> .mobile-call-dock__output-menu
+//   .mc-output-option                     -> .mobile-call-dock__output-option
+//   .mc-output-option-icon                -> .mobile-call-dock__output-icon
+//   .mc-output-option-label               -> .mobile-call-dock__output-label
+//   .mc-output-check (global)             -> .mobile-call-dock__output-check
+//   .mobile-call[data-chrome='hidden']    -> .mobile-call--chrome-hidden
+//
+// [data-*] -> aria / modifier class
+//   .mc-dock-camera[data-state='on']      -> .mobile-call-dock__button--camera-on
+//   [aria-pressed] and [aria-expanded] stay as they were.
+
+.mobile-call-dock {
+  position: absolute;
+  left: 50%;
+  bottom: var(--mc-dock-bottom);
+  z-index: 5;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 22px;
+  background: var(--vr-dock-bg);
+  box-shadow: var(--vr-shadow-dock);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+  transform: translateX(-50%);
+  transition:
+    opacity 250ms ease,
+    transform 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.mobile-call--chrome-hidden .mobile-call-dock {
+  opacity: 0;
+  transform: translate(-50%, 130px);
+  pointer-events: none;
+}
+
+.mobile-call-dock__button {
+  display: grid;
+  width: 58px;
+  height: 58px;
+  place-items: center;
+  border: 0;
+  border-radius: 16px;
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
+  -webkit-tap-highlight-color: transparent;
+
+  &:disabled {
+    opacity: 0.5;
+  }
+}
+
+.mobile-call-dock__button--mic[aria-pressed='true'] {
+  background: var(--vr-danger-off);
+  color: var(--vr-danger);
+}
+
+.mobile-call-dock__button--output[aria-expanded='true'] {
+  background: var(--vr-surface-3-hover);
+}
+
+.mobile-call-dock__button--camera-on {
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+}
+
+.mobile-call-dock__button--leave {
+  background: var(--vr-danger);
+  color: var(--vr-on-danger);
+}
+
+.mobile-call-dock__output-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  border: 0;
+  background: transparent;
+}
+
+.mobile-call-dock__output-menu {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--mc-dock-bottom) + 86px);
+  z-index: 7;
+  display: grid;
+  gap: 2px;
+  width: min(250px, calc(100% - 24px));
+  padding: 6px;
+  box-sizing: border-box;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 18px;
+  background: var(--vr-surface-2);
+  box-shadow: var(--vr-shadow-popover);
+  transform: translateX(-50%);
+}
+
+.mobile-call-dock__output-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 52px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--vr-text);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: left;
+
+  &[aria-pressed='true'] {
+    background: var(--vr-surface-3);
+  }
+}
+
+.mobile-call-dock__output-icon {
+  display: inline-flex;
+  color: var(--vr-text-2);
+}
+
+.mobile-call-dock__output-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-call-dock__output-check {
+  flex: none;
+  color: var(--vr-accent);
+}
