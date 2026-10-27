@@ -1,0 +1,31 @@
+// Structured message content (shared/chat/StructuredMessageContent.vue).
+//
+// Svelte class -> BEM class
+//   .structured-message                     -> .structured-message
+//   .structured-message__mention            -> .structured-message__mention
+//   button.structured-message__mention      -> .structured-message__mention--button
+
+.structured-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.structured-message__mention {
+  padding: 0 3px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--vr-accent-soft);
+  color: var(--vr-accent);
+  font: inherit;
+  font-weight: 500;
+}
+
+.structured-message__mention--button {
+  cursor: pointer;
+
+  &:hover,
+  &:focus-visible {
+    background: var(--vr-accent-soft-hover);
+    outline: none;
+  }
+}
