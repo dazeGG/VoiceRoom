@@ -1,0 +1,54 @@
+// RoomCallTimer (features/room/components/RoomCallTimer.vue): the call duration.
+//
+// Svelte class -> BEM class
+//   .room-call-timer                -> .room-call-timer
+//   .room-call-timer--sidebar       -> .room-call-timer--sidebar
+//   .room-call-timer--topbar        -> .room-call-timer--topbar
+//   .room-call-timer--bubble        -> .room-call-timer--bubble
+//   .room-call-timer-separator      -> .room-call-timer__separator
+
+.room-call-timer {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  color: var(--vr-accent);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.room-call-timer--sidebar {
+  color: var(--vr-text-2);
+  font-size: 12px;
+}
+
+.room-call-timer__separator {
+  color: var(--vr-text-3);
+  font-size: 12px;
+}
+
+.room-call-timer--topbar {
+  gap: 8px;
+  color: var(--vr-text-2);
+  font-size: 13px;
+}
+
+// The phone shows the timer alone over the call while its controls are hidden.
+.room-call-timer--bubble {
+  gap: 8px;
+  color: var(--vr-text);
+  font-size: 12.5px;
+}
+
+.room-call-timer--topbar::before,
+.room-call-timer--bubble::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--vr-accent);
+  box-shadow: 0 0 0 3px var(--vr-accent-soft);
+}
