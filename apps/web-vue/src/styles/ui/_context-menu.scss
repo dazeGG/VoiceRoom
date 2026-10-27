@@ -1,0 +1,80 @@
+// Context menu panel.
+//
+// Svelte class -> BEM class
+//   .context-menu-panel       -> .context-menu__panel
+//   .context-menu-panel--bare -> .context-menu__panel--bare
+//   .context-menu-panel-inner -> .context-menu__inner
+//   (new)                     -> .context-menu__anchor
+
+// Zero-size box at the requested point; Reka anchors the menu to it.
+.context-menu__anchor {
+  position: fixed;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.context-menu__panel {
+  z-index: 140;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: min(244px, calc(100vw - 16px));
+  max-width: min(320px, calc(100vw - 16px));
+  max-height: calc(100vh - 16px);
+  max-height: calc(100dvh - 16px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 12px;
+  background: var(--vr-surface-2);
+  box-shadow: var(--vr-shadow-popover);
+}
+
+.context-menu__panel--bare {
+  gap: 0;
+  padding: 0;
+  border-radius: 18px;
+  // The content owns the rounded corners, so clip anything that overflows
+  // them (the profile-card banner).
+  overflow: hidden;
+}
+
+.context-menu__inner {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: inherit;
+}
+
+.context-menu__panel:focus {
+  outline: none;
+}
+
+.context-menu__panel [role='menuitem']:focus-visible {
+  outline: 2px solid var(--vr-accent);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .context-menu__inner {
+    animation: context-menu-enter 120ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+}
+
+// Keep the panel inside its measured viewport bounds for the whole entrance.
+// Movement here would temporarily push edge-aligned menus outside the gap.
+@keyframes context-menu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

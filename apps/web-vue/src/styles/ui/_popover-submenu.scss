@@ -1,0 +1,50 @@
+// Popover submenu: a hover region with a fixed panel beside it.
+//
+// Svelte class -> BEM class
+//   .popover-submenu                           -> .popover-submenu
+//   .popover-submenu[data-submenu-side='left'] -> gone: Reka flips the panel; the bridge is right-side only
+//   .popover-submenu-panel                     -> .popover-submenu__panel
+
+.popover-submenu {
+  position: relative;
+}
+
+// Invisible bridge across the gap so the pointer can travel from the row to
+// the panel without a pointerleave closing it mid-move.
+.popover-submenu::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 100%;
+  width: 12px;
+  height: 100%;
+}
+
+.popover-submenu__panel {
+  z-index: 160;
+  min-width: 244px;
+  max-width: min(268px, calc(100vw - 28px));
+  padding: 6px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 12px;
+  background: var(--vr-surface-2);
+  box-shadow: var(--vr-shadow-popover);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .popover-submenu__panel {
+    animation: popover-submenu-enter 120ms ease-out;
+  }
+}
+
+@keyframes popover-submenu-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
