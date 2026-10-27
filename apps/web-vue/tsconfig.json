@@ -19,7 +19,7 @@
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
     "types": ["vite/client"],
-    "paths": { "@/*": ["./src/*"] }
+    "paths": { "@/*": ["${configDir}/src/*"] }
   },
   "include": ["src/**/*.ts", "src/**/*.vue"]
 }

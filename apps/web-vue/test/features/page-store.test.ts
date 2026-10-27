@@ -47,10 +47,12 @@ test('each page flag toggles its own class and leaves unrelated body classes alo
   page.screenView = true;
   page.stripCollapsed = true;
   page.stageSummary = 'hidden';
+  page.desktopScreenFullscreen = true;
   await nextTick();
   expect(bodyClasses()).toEqual([
     'chat--open',
     'lobby--embedded',
+    'screen--desktop-fullscreen',
     'screen--room',
     'screen-view--open',
     'stage-summary--hidden',
@@ -61,8 +63,16 @@ test('each page flag toggles its own class and leaves unrelated body classes alo
   page.chatOpen = false;
   page.screenView = false;
   page.stageSummary = '';
+  page.desktopScreenFullscreen = false;
   await nextTick();
   expect(bodyClasses()).toEqual(['lobby--embedded', 'screen--room', 'strip--collapsed', 'vr-keep']);
+
+  page.desktopScreenFullscreen = true;
+  page.screen = 'start';
+  await nextTick();
+  expect(bodyClasses()).toContain('screen--desktop-fullscreen');
+  expect(bodyClasses()).toContain('screen--start');
+  expect(bodyClasses()).not.toContain('screen--room');
 });
 
 test('the classes follow the store from the moment they are installed, and stop when stopped', async () => {

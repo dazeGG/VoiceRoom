@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { GATE_THRESHOLD_MIN_DB } from './client/core/config';
-import type { SelectOption } from '@/shared/ui';
+import type { SelectOption } from '@/shared/ui/Select/types';
 
 export const NOISE_MODE_SELECT_OPTIONS: SelectOption[] = [
   { value: 'off', label: 'Выкл' },

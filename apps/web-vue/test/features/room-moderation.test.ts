@@ -1,0 +1,104 @@
+import { beforeEach, expect, test, vi } from 'vitest';
+import type { Ban } from '@voice-room/shared/contracts/moderation';
+import type { ModerationNotice } from '@/entities/room/room-moderation';
+import { defined } from '../helpers/assert';
+
+vi.mock('@/api/moderation', () => ({
+  putBan: vi.fn(),
+  unban: vi.fn()
+}));
+vi.mock('@/api/rooms', () => ({ kickRoomPeer: vi.fn() }));
+
+const api = await import('@/api/moderation');
+const roomsApi = await import('@/api/rooms');
+const {
+  BAN_DURATIONS,
+  BAN_UNDO_DURATION_MS,
+  banExpiryLabel,
+  banRoomMember,
+  banSubjectName,
+  kickRoomMember,
+  liftRoomBan
+} = await import('@/entities/room/room-moderation');
+
+const ban = (overrides: Partial<Ban> = {}): Ban => ({
+  id: 'ban-1',
+  roomId: 'room-a',
+  subject: {
+    kind: 'account',
+    userId: 'u-anna',
+    profile: { displayName: 'Анна', login: 'anna', avatarUrl: null, avatarColorKey: 'blue', avatarAccent: null }
+  },
+  reason: '',
+  createdAt: null,
+  updatedAt: null,
+  expiresAt: null,
+  ...overrides
+});
+
+beforeEach(() => vi.clearAllMocks());
+
+test('owners choose a ban of an hour, a day, a week or forever', () => {
+  expect(BAN_DURATIONS.map((option) => option.value)).toEqual(['1h', '1d', '7d', 'permanent']);
+});
+
+test('a ban reports who and for how long, with an undo that lifts it', async () => {
+  vi.mocked(api.putBan).mockResolvedValue(ban());
+  vi.mocked(api.unban).mockResolvedValue();
+  const notify = vi.fn<ModerationNotice>();
+
+  await banRoomMember('room-a', { userId: 'u-anna', name: 'Анна' }, '1d', notify);
+  expect(api.putBan).toHaveBeenCalledWith(
+    'room-a',
+    { userId: 'u-anna', guestIp: null, duration: '1d', reason: '' },
+    expect.any(String)
+  );
+  const [message, options] = defined(notify.mock.calls[0], 'moderation notice');
+  expect(message).toBe('Анна заблокирован на 1 день');
+  const undo = defined(options?.undo, 'undo action');
+  expect(undo.label).toBe('Отменить');
+
+  undo.run();
+  await vi.waitFor(() => expect(notify).toHaveBeenLastCalledWith('Блокировка отменена'));
+  expect(api.unban).toHaveBeenCalledWith('room-a', 'ban-1');
+});
+
+test('failures are reported as errors with the server message or a fallback', async () => {
+  vi.mocked(api.putBan).mockRejectedValue(new Error(''));
+  const notify = vi.fn();
+  await expect(banRoomMember('room-a', { userId: 'u', name: 'X' }, '1h', notify)).resolves.toBeNull();
+  expect(notify).toHaveBeenCalledWith('Не удалось заблокировать участника', { variant: 'error' });
+
+  vi.mocked(api.unban).mockRejectedValue(new Error('Нет прав'));
+  await expect(liftRoomBan('room-a', ban(), notify)).resolves.toBe(false);
+  expect(notify).toHaveBeenLastCalledWith('Нет прав', { variant: 'error' });
+});
+
+test('the bans list names people instead of showing raw ids', () => {
+  expect(banSubjectName(ban())).toBe('Анна');
+  expect(banSubjectName(ban({ subject: { kind: 'guest', userId: null } }))).toBe('Гость');
+  expect(banSubjectName(ban({ subject: { kind: 'account', userId: 'u-anna' } }))).toBe('Участник');
+  expect(banExpiryLabel(ban())).toBe('Навсегда');
+  expect(banExpiryLabel(ban({ expiresAt: Date.UTC(2026, 9, 1) }))).toMatch(/^До /);
+});
+
+test('the undo window of a ban is six seconds', () => {
+  expect(BAN_UNDO_DURATION_MS).toBe(6000);
+});
+
+test('kicking takes the live peer out and says they can come back by the link', async () => {
+  vi.mocked(roomsApi.kickRoomPeer).mockResolvedValue();
+  const notify = vi.fn();
+
+  expect(await kickRoomMember('room-a', { peerId: 'peer-1', name: 'Анна' }, notify)).toBe(true);
+  expect(roomsApi.kickRoomPeer).toHaveBeenCalledWith('room-a', 'peer-1');
+  expect(notify).toHaveBeenCalledWith('Анна выгнан из комнаты', { description: 'Сможет вернуться по ссылке' });
+});
+
+test('a failed kick is reported as an error', async () => {
+  vi.mocked(roomsApi.kickRoomPeer).mockRejectedValue(new Error('Нет прав'));
+  const notify = vi.fn();
+
+  expect(await kickRoomMember('room-a', { peerId: 'peer-1', name: 'Анна' }, notify)).toBe(false);
+  expect(notify).toHaveBeenCalledWith('Нет прав', { variant: 'error' });
+});

@@ -21,7 +21,11 @@ import type { AppState } from './types';
  * the same object for components. It lives for the page, like the Svelte `$state` did,
  * so a test resets it with `Object.assign(state, createInitialRoomState())`.
  */
-const PLAIN_PROTOTYPES: ReadonlySet<object | null> = new Set([null, Object.prototype, Array.prototype]);
+const PLAIN_PROTOTYPES: ReadonlySet<object | null> = new Set([
+  null,
+  Reflect.getPrototypeOf({}),
+  Reflect.getPrototypeOf([])
+]);
 
 function isForeignObject(value: unknown): value is object {
   if (typeof value !== 'object' || value === null || value instanceof Map || value instanceof Set) return false;
