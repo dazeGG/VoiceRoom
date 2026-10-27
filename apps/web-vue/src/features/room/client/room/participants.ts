@@ -1,0 +1,587 @@
+import { markRaw, reactive } from 'vue';
+import { useParticipantContextUiStore } from '../../participant-context-ui.store';
+import { state } from '../core/room-runtime.store';
+import { getScreenProfile } from '../media/profiles';
+import {
+  applyRemoteParticipantAudioPreferences,
+  playMediaElement,
+  releaseRemoteAudioElement
+} from '../services/media-playback-service';
+import { STREAM_CUE_DEDUPE_MS } from '../core/config';
+import { recordPeerCount } from './call-quality';
+import { clearPeerJoinCue, playStreamCue, playStreamViewerCue } from '../media/cues';
+import type { Participant, PeerInfo } from '../core/types';
+
+const watchedRemoteScreenTracks = new WeakSet<MediaStreamTrack>();
+const streamCueTimes = new Map<string, number>();
+
+function attachMeterSoon(participant: Participant | null, stream: MediaStream | null): void {
+  void import('../media/meters').then((module) => module.attachMeter(participant, stream));
+}
+
+function detachMeterSoon(participant: Participant): void {
+  void import('../media/meters').then((module) => module.detachMeter(participant));
+}
+
+function refreshSpeakingSoon(participant: Participant): void {
+  if (!participant.meter) return;
+  void import('../media/meters').then((module) => module.refreshSpeaking(participant));
+}
+
+function syncLiveKitScreenSubscriptionsSoon(peer: Participant): void {
+  void import('../services/livekit-service').then((module) => module.syncLiveKitScreenSubscriptions(peer));
+}
+
+function disconnectScreenSoon(peerId: string): void {
+  void import('../ui/screen-view').then((module) => module.disconnectScreen(peerId));
+}
+
+function hideScreenStageSoon(): void {
+  void import('../ui/screen-view').then((module) => module.hideScreenStage());
+}
+
+function refreshScreenStageSoon(): void {
+  void import('../ui/screen-view').then((module) => module.refreshScreenStage());
+}
+
+function refreshScreenTilesSoon(): void {
+  void import('../ui/screen-view').then((module) => module.refreshScreenTiles());
+}
+
+function createParticipantModel(peerInfo: PeerInfo, isLocal: boolean): Participant {
+  const name = peerInfo.name ?? '';
+  return {
+    accountUserId: peerInfo.accountUserId || '',
+    analyser: null,
+    audioElements: new Map(),
+    avatarAccent: peerInfo.avatarAccent || '',
+    avatarColorKey: peerInfo.avatarColorKey || '',
+    avatarUrl: peerInfo.avatarUrl || '',
+    camera: false,
+    cameraStream: null,
+    deafened: Boolean(peerInfo.deafened),
+    id: peerInfo.id,
+    isLocal,
+    joinedAt: peerInfo.joinedAt ?? Date.now(),
+    livekitParticipant: null,
+    connectionQuality: 'unknown',
+    meter: null,
+    meterData: null,
+    muted: Boolean(peerInfo.muted),
+    speaking: false,
+    voiceDetected: false,
+    speakingHoldUntil: 0,
+    statusLabel: '',
+    name,
+    micReceiver: null,
+    screen: Boolean(peerInfo.screen),
+    screenAuthoritative: peerInfo.screenAuthoritative ? Boolean(peerInfo.screen) : null,
+    screenAudio: Boolean(peerInfo.screenAudio),
+    screenProfileId: getScreenProfile(peerInfo.screenProfileId ?? '').id,
+    screenStream: null,
+    screenStreamId: peerInfo.screenStreamId || '',
+    serverMuted: Boolean(peerInfo.serverMuted),
+    stream: null,
+    viewedScreenPeerId: peerInfo.viewedScreenPeerId || '',
+    voiceIssue: ''
+  };
+}
+
+export function applyRemoteScreenCue(participant: Participant, hadScreen: boolean, nextScreen: boolean): void {
+  if (participant.isLocal || hadScreen === nextScreen) return;
+
+  const dedupeKey = `${participant.id}:${nextScreen ? 'start' : 'stop'}`;
+  const now = Date.now();
+  const lastPlayedAt = streamCueTimes.get(dedupeKey) || 0;
+  if (now - lastPlayedAt < STREAM_CUE_DEDUPE_MS) return;
+
+  streamCueTimes.set(dedupeKey, now);
+  playStreamCue(nextScreen ? 'start' : 'stop');
+}
+
+function clearRemoteScreenCue(peerId: string | undefined): void {
+  if (!peerId) return;
+  streamCueTimes.delete(`${peerId}:start`);
+  streamCueTimes.delete(`${peerId}:stop`);
+}
+
+function getAttendedStreamOwnerIds(): Set<string> {
+  const ownerIds = new Set<string>();
+  if (state.localScreenStream && state.peerId) ownerIds.add(state.peerId);
+  const attendedPeerId = state.self?.viewedScreenPeerId || '';
+  if (attendedPeerId) ownerIds.add(attendedPeerId);
+  return ownerIds;
+}
+
+function applyStreamViewerCue(participant: Participant, hadViewedOwnerId: string, nextViewedOwnerId: string): void {
+  if (participant.isLocal || hadViewedOwnerId === nextViewedOwnerId) return;
+
+  const attendedOwnerIds = getAttendedStreamOwnerIds();
+  if (attendedOwnerIds.size === 0) return;
+
+  for (const ownerId of attendedOwnerIds) {
+    if (hadViewedOwnerId !== ownerId && nextViewedOwnerId === ownerId) {
+      playStreamViewerCue('join');
+      return;
+    }
+    if (hadViewedOwnerId === ownerId && nextViewedOwnerId !== ownerId) {
+      playStreamViewerCue('leave');
+      return;
+    }
+  }
+}
+
+export function syncPeers(peerIds: string[]): void {
+  const livePeerIds = new Set(peerIds);
+  for (const peerId of state.peers.keys()) {
+    if (!livePeerIds.has(peerId)) {
+      removePeer(peerId);
+      clearPeerJoinCue(peerId);
+    }
+  }
+}
+
+function isParticipant(value: object): value is Participant {
+  return 'id' in value;
+}
+
+export function createParticipant(peerInfo: PeerInfo): Participant {
+  const isLocal = Boolean(peerInfo.isLocal || peerInfo.id === state.peerId);
+  peerInfo.isLocal = isLocal;
+
+  const existing = isLocal ? state.self : state.peers.get(peerInfo.id);
+  if (existing) {
+    if (isLocal) {
+      const duplicate = state.peers.get(peerInfo.id);
+      if (duplicate) state.peers.delete(duplicate.id);
+    }
+    updateParticipant(peerInfo);
+    return existing;
+  }
+
+  const model = createParticipantModel(peerInfo, isLocal);
+
+  let participant: Participant;
+  if (model.isLocal) {
+    state.self = model;
+    state.peers.delete(peerInfo.id);
+    // The reactive copy, not the model: changes made through the returned
+    // participant must reach the components reading state.self.
+    participant = state.self;
+  } else {
+    // `reactive` types a LiveKit class as its public shape; the object is still a Participant.
+    const reactiveModel: object = reactive(model);
+    if (!isParticipant(reactiveModel)) return model;
+    participant = reactiveModel;
+    state.peers.set(peerInfo.id, participant);
+    recordPeerCount(state.peers.size);
+  }
+
+  if (!participant.isLocal && participant.screen) {
+    applyRemoteScreenCue(participant, false, true);
+  }
+  return participant;
+}
+
+export function updateParticipant(peerInfo: PeerInfo): void {
+  const participant = peerInfo.id === state.peerId ? state.self : state.peers.get(peerInfo.id);
+  if (!participant) return;
+
+  const hadScreen = participant.screen;
+  const hadScreenAudio = participant.screenAudio;
+  const hadScreenStreamId = participant.screenStreamId;
+  const hadName = participant.name;
+  const hadAccountUserId = participant.accountUserId;
+  const hasScreenUpdate = Object.hasOwn(peerInfo, 'screen');
+  const hasAuthoritativeScreenUpdate = peerInfo.screenAuthoritative === true && hasScreenUpdate;
+  if (Object.hasOwn(peerInfo, 'accountUserId')) participant.accountUserId = peerInfo.accountUserId || '';
+  if (Object.hasOwn(peerInfo, 'avatarAccent')) participant.avatarAccent = peerInfo.avatarAccent || '';
+  if (Object.hasOwn(peerInfo, 'avatarColorKey'))
+    participant.avatarColorKey = peerInfo.avatarColorKey || participant.avatarColorKey;
+  if (Object.hasOwn(peerInfo, 'avatarUrl')) participant.avatarUrl = peerInfo.avatarUrl || '';
+  if (Object.hasOwn(peerInfo, 'name')) participant.name = peerInfo.name || participant.name;
+  if (Object.hasOwn(peerInfo, 'deafened')) participant.deafened = Boolean(peerInfo.deafened);
+  if (Object.hasOwn(peerInfo, 'muted')) participant.muted = Boolean(peerInfo.muted);
+  if (hasScreenUpdate && (hasAuthoritativeScreenUpdate || participant.screenAuthoritative !== false)) {
+    participant.screen = Boolean(peerInfo.screen);
+  }
+  if (hasAuthoritativeScreenUpdate) participant.screenAuthoritative = Boolean(peerInfo.screen);
+  if (
+    Object.hasOwn(peerInfo, 'screenAudio') &&
+    (hasAuthoritativeScreenUpdate || participant.screenAuthoritative !== false)
+  ) {
+    participant.screenAudio = Boolean(peerInfo.screenAudio);
+  }
+  if (Object.hasOwn(peerInfo, 'screenProfileId'))
+    participant.screenProfileId = getScreenProfile(peerInfo.screenProfileId ?? '').id;
+  if (Object.hasOwn(peerInfo, 'screenStreamId')) participant.screenStreamId = peerInfo.screenStreamId || '';
+  if (Object.hasOwn(peerInfo, 'serverMuted')) participant.serverMuted = Boolean(peerInfo.serverMuted);
+  const hadViewedScreenOwnerId = participant.viewedScreenPeerId;
+  if (Object.hasOwn(peerInfo, 'viewedScreenPeerId')) {
+    participant.viewedScreenPeerId = peerInfo.viewedScreenPeerId || '';
+    applyStreamViewerCue(participant, hadViewedScreenOwnerId, participant.viewedScreenPeerId);
+  }
+  if (Object.hasOwn(peerInfo, 'muted')) {
+    // Muted drops the ring at once; unmuted mid-sentence relights it from what
+    // the speaking detector is hearing right now.
+    if (participant.muted) setParticipantSpeaking(participant, false);
+    else refreshSpeakingSoon(participant);
+  }
+  if (hasScreenUpdate) {
+    applyRemoteScreenCue(participant, hadScreen, participant.screen);
+  }
+  if (!participant.screen) {
+    const attendedEndedScreen =
+      state.viewedScreenPeerId === participant.id ||
+      state.screenSubscribedPeerIds.has(participant.id) ||
+      state.self?.viewedScreenPeerId === participant.id;
+    state.screenCollapsedPeerIds.delete(participant.id);
+    state.screenSubscribedPeerIds.delete(participant.id);
+    if (attendedEndedScreen) disconnectScreenSoon(participant.id);
+  }
+  if (!participant.screen && state.sharedScreenPeerId === participant.id) {
+    detachRemoteScreen(participant);
+  }
+  updatePeerStatus(participant);
+  if (!participant.isLocal && participant.accountUserId !== hadAccountUserId) {
+    applyRemoteParticipantAudioPreferences(participant);
+  }
+
+  if (shouldRefreshScreenTiles(peerInfo, hadScreen, hadScreenAudio, hadScreenStreamId, hadName)) {
+    refreshScreenTilesSoon();
+  }
+
+  if (shouldRefreshScreenStage(peerInfo, hadScreen, hadScreenAudio, hadScreenStreamId, hadName)) {
+    refreshScreenStageSoon();
+  }
+}
+
+function shouldRefreshScreenTiles(
+  peerInfo: PeerInfo,
+  hadScreen: boolean,
+  hadScreenAudio: boolean,
+  hadScreenStreamId: string,
+  hadName: string
+): boolean {
+  if (Object.hasOwn(peerInfo, 'name') && (peerInfo.name || '') !== hadName) return true;
+  if (Object.hasOwn(peerInfo, 'screen') && Boolean(peerInfo.screen) !== hadScreen) return true;
+  if (Object.hasOwn(peerInfo, 'screenAudio') && Boolean(peerInfo.screenAudio) !== hadScreenAudio) return true;
+  if (Object.hasOwn(peerInfo, 'screenStreamId') && (peerInfo.screenStreamId || '') !== hadScreenStreamId) return true;
+  return false;
+}
+
+function shouldRefreshScreenStage(
+  peerInfo: PeerInfo,
+  hadScreen: boolean,
+  hadScreenAudio: boolean,
+  hadScreenStreamId: string,
+  hadName: string
+): boolean {
+  if (shouldRefreshScreenTiles(peerInfo, hadScreen, hadScreenAudio, hadScreenStreamId, hadName)) return true;
+  if (Object.hasOwn(peerInfo, 'screenProfileId')) return true;
+  return false;
+}
+
+export function removePeer(peerId: string): void {
+  const peer = state.peers.get(peerId);
+  if (!peer) return;
+  useParticipantContextUiStore().closeParticipantContextMenu(peerId);
+
+  const attendedRemovedScreen =
+    state.viewedScreenPeerId === peerId ||
+    state.screenSubscribedPeerIds.has(peerId) ||
+    state.self?.viewedScreenPeerId === peerId;
+
+  applyStreamViewerCue(peer, peer.viewedScreenPeerId, '');
+  clearPeerJoinCue(peerId);
+  clearRemoteScreenCue(peerId);
+  removeAudioElements(peer);
+  detachMeterSoon(peer);
+  state.screenCollapsedPeerIds.delete(peerId);
+  state.screenSubscribedPeerIds.delete(peerId);
+  if (attendedRemovedScreen) disconnectScreenSoon(peerId);
+  if (state.sharedScreenPeerId === peer.id) {
+    hideScreenStageSoon();
+  }
+  state.peers.delete(peerId);
+  if (state.peers.size === 0) setParticipantSpeaking(state.self, false);
+  refreshScreenTilesSoon();
+}
+
+export function detachLiveKitParticipant(peer: Participant, voiceIssue = ''): void {
+  peer.livekitParticipant = null;
+  peer.voiceIssue = voiceIssue;
+  peer.micReceiver = null;
+  removeAudioElements(peer);
+  setParticipantSpeaking(peer, false);
+  updatePeerStatus(peer);
+}
+
+export function attachRemoteTrack(
+  peer: Participant,
+  track: MediaStreamTrack,
+  stream: MediaStream | null,
+  receiver: RTCRtpReceiver | null | undefined = null
+): void {
+  const mediaStream = stream || new MediaStream([track]);
+  const isScreenStream = isRemoteScreenTrack(peer, track, mediaStream);
+
+  if (isScreenStream) {
+    attachRemoteScreenStream(peer, mediaStream);
+    return;
+  }
+
+  if (track.kind === 'audio') {
+    peer.stream = markRaw(mediaStream);
+    peer.micReceiver = receiver ? markRaw(receiver) : null;
+    ensureRemoteAudioElement(peer, track, receiver);
+    // A resubscribed voice arrives as a new track: the meter moves to it, or the
+    // ring would stay on the dead one.
+    if (peer.meter?.track !== track) attachMeterSoon(peer, new MediaStream([track]));
+    updatePeerStatus(peer);
+  }
+}
+
+function isRemoteScreenTrack(peer: Participant, track: MediaStreamTrack, stream: MediaStream): boolean {
+  if (track.kind === 'video') return true;
+  if (peer.screenStreamId && stream.id === peer.screenStreamId) return true;
+  if (track.kind !== 'audio' || !peer.screen || !peer.screenAudio) return false;
+
+  const alreadyHasMicAudio = Boolean(
+    peer.stream?.getAudioTracks().some((audioTrack) => audioTrack.readyState !== 'ended')
+  );
+  const subscribed = state.viewedScreenPeerId === peer.id || state.screenSubscribedPeerIds.has(peer.id);
+  const alreadyWatchingScreen = subscribed || Boolean(peer.screenStream);
+  return alreadyHasMicAudio && alreadyWatchingScreen;
+}
+
+export function attachRemoteScreenStream(peer: Participant, stream: MediaStream): void {
+  if (peer.screenAuthoritative === false) return;
+
+  const screenStream = mergeRemoteScreenStream(peer, stream);
+  const hasVideo = screenStream.getVideoTracks().some((track) => track.readyState !== 'ended');
+  peer.screen = peer.screen || hasVideo;
+  peer.screenStream = markRaw(screenStream);
+  peer.screenAudio = peer.screenAudio || screenStream.getAudioTracks().some((track) => track.readyState !== 'ended');
+  peer.screenStreamId ||= screenStream.id;
+
+  for (const track of screenStream.getVideoTracks()) {
+    if (watchedRemoteScreenTracks.has(track)) continue;
+    watchedRemoteScreenTracks.add(track);
+    track.addEventListener('ended', () => detachRemoteScreenVideoTrack(peer, track.id), { once: true });
+  }
+  for (const track of screenStream.getAudioTracks()) {
+    if (watchedRemoteScreenTracks.has(track)) continue;
+    watchedRemoteScreenTracks.add(track);
+    track.addEventListener('ended', () => detachRemoteScreenAudioTrack(peer, track.id), { once: true });
+  }
+
+  const subscribed = state.viewedScreenPeerId === peer.id || state.screenSubscribedPeerIds.has(peer.id);
+  if (!subscribed) {
+    syncLiveKitScreenSubscriptionsSoon(peer);
+    detachRemoteScreen(peer);
+    return;
+  }
+
+  if (hasVideo) state.screenRequesting = false;
+  if (hasVideo) {
+    refreshScreenStageSoon();
+    refreshScreenTilesSoon();
+  } else if (state.viewedScreenPeerId === peer.id) {
+    // Screen audio can arrive after a transient video unsubscribe. Refresh the
+    // already-open stage so its routed audio-only fallback starts immediately
+    // instead of waiting for a later video or unrelated UI update.
+    refreshScreenStageSoon();
+  }
+  updatePeerStatus(peer);
+}
+
+function mergeRemoteScreenStream(peer: Participant, stream: MediaStream): MediaStream {
+  if (!peer.screenStream || peer.screenStream === stream) return stream;
+
+  const existingTrackIds = new Set(peer.screenStream.getTracks().map((track) => track.id));
+  for (const track of stream.getTracks()) {
+    if (!existingTrackIds.has(track.id)) peer.screenStream.addTrack(track);
+  }
+
+  return peer.screenStream;
+}
+
+export function hasRemoteScreenVideo(peer: Participant | null | undefined): boolean {
+  return Boolean(peer?.screenStream?.getVideoTracks().some((track) => track.readyState !== 'ended'));
+}
+
+export function detachRemoteScreenVideoTrack(peer: Participant, trackId: string): void {
+  detachRemoteScreenVideoTracks(peer, trackId);
+}
+
+export function detachRemoteScreenVideoTracks(peer: Participant, trackId = ''): void {
+  const stream = peer.screenStream;
+  if (!stream) return;
+
+  let removed = false;
+  for (const track of stream.getVideoTracks()) {
+    if (trackId && track.id !== trackId) continue;
+    stream.removeTrack(track);
+    removed = true;
+  }
+  if (!removed) return;
+  if (stream.getTracks().length === 0) peer.screenStream = null;
+  if (!hasRemoteScreenVideo(peer)) {
+    if (state.viewedScreenPeerId === peer.id) state.screenRequesting = true;
+    if (!peer.screen && state.sharedScreenPeerId === peer.id) hideScreenStageSoon();
+  }
+
+  refreshScreenStageSoon();
+  refreshScreenTilesSoon();
+  updatePeerStatus(peer);
+}
+
+export function detachRemoteScreenAudioTrack(peer: Participant, trackId: string): void {
+  const stream = peer.screenStream;
+  if (!stream) return;
+
+  let removed = false;
+  for (const track of stream.getAudioTracks()) {
+    if (track.id !== trackId) continue;
+    stream.removeTrack(track);
+    removed = true;
+  }
+  if (!removed) return;
+  if (stream.getTracks().length === 0) peer.screenStream = null;
+
+  refreshScreenStageSoon();
+  refreshScreenTilesSoon();
+  updatePeerStatus(peer);
+}
+
+export function detachRemoteScreen(peer: Participant): void {
+  peer.screenStream = null;
+  if (state.sharedScreenPeerId === peer.id) hideScreenStageSoon();
+  refreshScreenStageSoon();
+  updatePeerStatus(peer);
+}
+
+export function ensureRemoteAudioElement(
+  peer: Participant,
+  track: MediaStreamTrack,
+  receiver: RTCRtpReceiver | null | undefined = null
+): void {
+  if (track.kind !== 'audio' || track.readyState === 'ended') return;
+
+  const audio = peer.audioElements.get(track.id);
+  const existingStream = audio?.srcObject instanceof MediaStream ? audio.srcObject : null;
+  const existingHasLiveTrack = Boolean(
+    existingStream?.getAudioTracks().some((audioTrack) => audioTrack === track && audioTrack.readyState !== 'ended')
+  );
+
+  if (audio && existingHasLiveTrack) {
+    if (!audio.isConnected) document.body.append(audio);
+    applyRemoteParticipantAudioPreferences(peer);
+    playMediaElement(audio);
+    return;
+  }
+
+  if (audio) disposeAudioElement(audio);
+
+  attachRemoteAudioTrack(peer, track, receiver);
+}
+
+function attachRemoteAudioTrack(
+  peer: Participant,
+  track: MediaStreamTrack,
+  receiver: RTCRtpReceiver | null | undefined = null
+): void {
+  const audio = document.createElement('audio');
+  audio.autoplay = true;
+  audio.muted = true;
+  // Not on HTMLAudioElement in lib.dom; iOS reads it from any media element.
+  Object.assign(audio, { playsInline: true });
+  // The activator and WebAudio source must contain exactly this microphone
+  // track; a LiveKit stream can also carry screen audio.
+  audio.srcObject = new MediaStream([track]);
+  peer.audioElements.set(track.id, audio);
+  document.body.append(audio);
+  applyRemoteParticipantAudioPreferences(peer);
+  playMediaElement(audio);
+
+  track.addEventListener(
+    'ended',
+    () => {
+      disposeAudioElement(audio);
+      peer.audioElements.delete(track.id);
+      if (peer.micReceiver === receiver) peer.micReceiver = null;
+      setParticipantSpeaking(peer, false);
+    },
+    { once: true }
+  );
+}
+
+export function detachRemoteAudioTrack(peer: Participant, trackId: string): void {
+  const audio = peer.audioElements.get(trackId);
+  if (!audio) return;
+
+  disposeAudioElement(audio);
+  peer.audioElements.delete(trackId);
+}
+
+export function removeAudioElements(peer: Participant): void {
+  for (const audio of peer.audioElements.values()) disposeAudioElement(audio);
+  peer.audioElements.clear();
+}
+
+function disposeAudioElement(audio: HTMLAudioElement): void {
+  audio.pause();
+  audio.srcObject = null;
+  releaseRemoteAudioElement(audio);
+  audio.remove();
+}
+
+export function setParticipantSpeaking(participant: Participant | null, speaking: boolean): void {
+  if (!participant) return;
+  const nextSpeaking = Boolean(speaking);
+  if (participant.speaking === nextSpeaking) return;
+  participant.speaking = nextSpeaking;
+}
+
+/**
+ * Drop every ring at once. Deafened means no audio reaches this tab, so a ring
+ * left over from the last thing heard would be telling the user something false.
+ */
+export function clearAllSpeaking(): void {
+  setParticipantSpeaking(state.self, false);
+  for (const peer of state.peers.values()) setParticipantSpeaking(peer, false);
+}
+
+// A remote tile names a real voice problem ("голос не подключен"); while the
+// voice is still connecting it shows nothing rather than a passing placeholder.
+export function updatePeerStatus(peer: Participant): void {
+  setParticipantStatus(peer, !peer.isLocal && peer.voiceIssue ? peer.voiceIssue : '');
+}
+
+function setParticipantStatus(peer: Participant, label: string): void {
+  if (peer.statusLabel === label) return;
+  peer.statusLabel = label;
+}
+
+export function getParticipantById(peerId: string): Participant | null {
+  if (!peerId) return null;
+  if (peerId === state.peerId) return state.self;
+  return state.peers.get(peerId) || null;
+}
+
+export function getAllParticipants(): Participant[] {
+  return [...(state.self ? [state.self] : []), ...state.peers.values()];
+}
+
+/** The local tile shows an avatar changed in the lobby's settings without a rejoin. */
+export function syncLocalProfile(profile: {
+  avatarAccent?: string | null | undefined;
+  avatarColorKey?: string | null | undefined;
+  avatarUrl?: string | null | undefined;
+}): void {
+  if (!state.self?.isLocal) return;
+  state.self.avatarAccent = profile.avatarAccent || '';
+  state.self.avatarColorKey = profile.avatarColorKey || '';
+  state.self.avatarUrl = profile.avatarUrl || '';
+}

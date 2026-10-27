@@ -1,0 +1,217 @@
+import { markRaw, ref } from 'vue';
+import { isArray } from '@voice-room/shared/guards';
+import {
+  createAttachmentSlot,
+  deleteAttachment,
+  getAttachmentStatus,
+  retryAttachment,
+  uploadAttachmentContent,
+  type AttachmentContext,
+  type AttachmentDraft
+} from '../../api/attachments';
+import { newId } from '../new-id';
+import { readStorage, removeStorage, writeStorage } from '../storage';
+
+export interface ComposeDraft extends AttachmentDraft {
+  file: File | null;
+  previewUrl: string | null;
+  progress: number;
+  error: string | null;
+}
+
+const allowedTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+function disposePreview(draft: ComposeDraft): void {
+  if (draft.previewUrl?.startsWith('blob:')) URL.revokeObjectURL(draft.previewUrl);
+}
+
+export class AttachmentComposeStore {
+  readonly #drafts = ref<ComposeDraft[]>([]);
+  readonly #busy = ref(false);
+  readonly #lastError = ref<string | null>(null);
+
+  private readonly storageKey: string;
+
+  constructor(
+    readonly context: AttachmentContext,
+    readonly contextId: string
+  ) {
+    markRaw(this);
+    this.storageKey = `voice-room:attachment-drafts:${context}:${contextId}`;
+    try {
+      const ids: unknown = JSON.parse(readStorage(this.storageKey) || '[]');
+      if (isArray(ids) && ids.length) void this.resume(ids.filter((id): id is string => typeof id === 'string'));
+    } catch {
+      removeStorage(this.storageKey);
+    }
+  }
+
+  get drafts(): ComposeDraft[] {
+    return this.#drafts.value;
+  }
+  set drafts(value: ComposeDraft[]) {
+    this.#drafts.value = value;
+  }
+  get busy(): boolean {
+    return this.#busy.value;
+  }
+  set busy(value: boolean) {
+    this.#busy.value = value;
+  }
+  get lastError(): string | null {
+    return this.#lastError.value;
+  }
+  set lastError(value: string | null) {
+    this.#lastError.value = value;
+  }
+
+  get readyIds(): string[] {
+    return this.drafts.filter((draft) => draft.state === 'ready').map((draft) => draft.id);
+  }
+  get canSend(): boolean {
+    return this.drafts.length > 0 && this.drafts.every((draft) => draft.state === 'ready');
+  }
+
+  async addFiles(files: Iterable<File, unknown, unknown>): Promise<void> {
+    this.lastError = null;
+    const candidates = Array.from(files).slice(0, Math.max(0, 4 - this.drafts.length));
+    for (const file of candidates) {
+      if (!allowedTypes.has(file.type) || file.size < 1 || file.size > 10 * 1024 * 1024) {
+        throw new Error('Поддерживаются JPEG, PNG и WebP размером до 10 МБ');
+      }
+      await this.upload(file);
+    }
+  }
+
+  private async upload(file: File): Promise<void> {
+    this.busy = true;
+    let draft: ComposeDraft | null = null;
+    try {
+      const slot = await createAttachmentSlot({
+        context: this.context,
+        bytes: file.size,
+        clientRequestId: newId()
+      });
+      this.drafts.push({
+        ...slot,
+        file,
+        previewUrl: URL.createObjectURL(file),
+        progress: 0,
+        error: null
+      });
+      // The reactive proxy of the pushed draft, which the UI watches.
+      const added = this.drafts.at(-1);
+      if (!added) return;
+      draft = added;
+      this.persist();
+      Object.assign(
+        added,
+        await uploadAttachmentContent(slot.id, file, (progress) => {
+          added.progress = progress;
+        }),
+        { progress: 1 }
+      );
+      await this.waitUntilTerminal(added);
+    } catch (error) {
+      if (draft && draft.state !== 'ready') {
+        this.lastError = error instanceof Error ? error.message : 'Ошибка загрузки';
+        await deleteAttachment(draft.id).catch(() => {});
+        disposePreview(draft);
+        this.drafts = this.drafts.filter((item) => item.id !== draft?.id);
+        this.persist();
+      } else throw error;
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  async waitUntilTerminal(draft: ComposeDraft): Promise<void> {
+    for (let attempt = 0; attempt < 120 && (draft.state === 'pending' || draft.state === 'processing'); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      Object.assign(draft, await getAttachmentStatus(draft.id));
+    }
+  }
+
+  async resume(ids: string[]): Promise<void> {
+    const statuses = await Promise.all(ids.slice(0, 4).map(getAttachmentStatus));
+    this.drafts = statuses
+      .filter((draft) => draft.context === this.context && draft.state !== 'deleted')
+      .map((draft) => ({
+        ...draft,
+        file: null,
+        previewUrl: null,
+        progress: draft.state === 'ready' ? 1 : 0,
+        error: null
+      }));
+    this.persist();
+    await Promise.all(
+      this.drafts
+        .filter((draft) => draft.state === 'pending' || draft.state === 'processing')
+        .map((draft) => this.waitUntilTerminal(draft))
+    );
+  }
+
+  move(from: number, to: number): void {
+    if (from === to || from < 0 || to < 0 || from >= this.drafts.length || to >= this.drafts.length) return;
+    const [draft] = this.drafts.splice(from, 1);
+    if (!draft) return;
+    this.drafts.splice(to, 0, draft);
+    this.persist();
+  }
+
+  async retry(draft: ComposeDraft): Promise<void> {
+    draft.error = null;
+    Object.assign(draft, await retryAttachment(draft.id));
+    await this.waitUntilTerminal(draft);
+  }
+
+  async remove(draft: ComposeDraft): Promise<void> {
+    await deleteAttachment(draft.id);
+    disposePreview(draft);
+    this.drafts = this.drafts.filter((item) => item.id !== draft.id);
+    this.persist();
+  }
+
+  private persist(): void {
+    if (this.drafts.length) writeStorage(this.storageKey, JSON.stringify(this.drafts.map((draft) => draft.id)));
+    else removeStorage(this.storageKey);
+  }
+
+  clearBound(): void {
+    this.drafts.forEach(disposePreview);
+    this.drafts = [];
+    this.persist();
+  }
+
+  discard(): void {
+    for (const draft of this.drafts) {
+      disposePreview(draft);
+      void deleteAttachment(draft.id).catch(() => {});
+    }
+    this.drafts = [];
+    this.persist();
+  }
+}
+
+export function imageFilesFromClipboard(event: ClipboardEvent): File[] {
+  const data = event.clipboardData;
+  if (!data) return [];
+  const files = Array.from(data.files).filter((file) => file.type.startsWith('image/'));
+  if (files.length) return files;
+  return Array.from(data.items)
+    .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null);
+}
+
+export function imageFilesFromDataTransfer(data: DataTransfer | null): File[] {
+  if (!data) return [];
+  return Array.from(data.files).filter((file) => allowedTypes.has(file.type));
+}
+
+export function dataTransferHasImages(data: DataTransfer | null): boolean {
+  if (!data) return false;
+  const fileItems = Array.from(data.items).filter((item) => item.kind === 'file');
+  if (fileItems.some((item) => allowedTypes.has(item.type))) return true;
+  return fileItems.length === 0 && Array.from(data.types).includes('Files');
+}
