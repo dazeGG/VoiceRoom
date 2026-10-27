@@ -11,6 +11,7 @@
 
 .ui-dialog__overlay {
   @include modal-overlay(40, 24px);
+  pointer-events: auto;
 }
 
 .ui-dialog__card {

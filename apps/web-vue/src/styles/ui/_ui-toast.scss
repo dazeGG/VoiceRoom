@@ -28,6 +28,8 @@
   align-items: flex-end;
   gap: 8px;
   max-width: min(360px, calc(100vw - 32px));
+  // A modal dialog sets pointer-events: none on the body; toasts stay clickable.
+  pointer-events: auto;
 }
 
 // In the room the toasts sit above the dock.

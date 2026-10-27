@@ -31,6 +31,7 @@
   padding: 24px;
   background: color-mix(in srgb, var(--vr-bg) 72%, transparent);
   backdrop-filter: blur(8px);
+  pointer-events: auto;
 }
 
 .avatar-crop__dialog {

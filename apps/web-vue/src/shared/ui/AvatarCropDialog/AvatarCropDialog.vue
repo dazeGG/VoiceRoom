@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { Check, X } from '@lucide/vue';
 import { deriveAvatarAccent, dominantAvatarColor } from '@voice-room/shared/avatar-accent';
-import { DialogContent, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
+import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
 import { ref, shallowRef, watch } from 'vue';
 import EmojiText from '@/shared/chat/EmojiText.vue';
+import { isToastPress } from '../Dialog/toast-press';
 import Avatar from '../Avatar/Avatar.vue';
 import type { AvatarCropDialogProps } from './types';
 import { context2d, type Canvas2D } from './canvas-2d';
@@ -192,7 +193,7 @@ function onOpenChange(next: boolean): void {
 }
 
 function blockWhileSaving(event: Event): void {
-  if (saving.value) event.preventDefault();
+  if (saving.value || isToastPress(event)) event.preventDefault();
 }
 
 function onOpenAutoFocus(event: Event): void {
@@ -208,12 +209,14 @@ function onOpenAutoFocus(event: Event): void {
 <template>
   <DialogRoot :open="open" @update:open="onOpenChange">
     <DialogPortal>
-      <DialogOverlay class="avatar-crop__overlay">
+      <!-- Not DialogOverlay: it locks body scroll and the original had no lock. -->
+      <div v-if="open" class="avatar-crop__overlay">
         <DialogContent
           class="avatar-crop__dialog"
-          aria-describedby="undefined"
+          :aria-describedby="undefined"
           @open-auto-focus="onOpenAutoFocus"
           @escape-key-down="blockWhileSaving"
+          @pointer-down-outside="blockWhileSaving"
           @interact-outside="blockWhileSaving"
         >
           <header class="avatar-crop__head">
@@ -307,7 +310,7 @@ function onOpenAutoFocus(event: Event): void {
             </button>
           </footer>
         </DialogContent>
-      </DialogOverlay>
+      </div>
     </DialogPortal>
   </DialogRoot>
 </template>

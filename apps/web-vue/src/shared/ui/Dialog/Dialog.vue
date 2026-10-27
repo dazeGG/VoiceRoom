@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { X } from '@lucide/vue';
-import { DialogContent, DialogOverlay, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
+import { DialogContent, DialogPortal, DialogRoot, DialogTitle } from 'reka-ui';
 import { iconSm } from '@/shared/ui/icons';
+import { isToastPress } from './toast-press';
 import type { DialogProps } from './types';
 
 const props = withDefaults(defineProps<DialogProps>(), {
@@ -21,6 +22,10 @@ function onOpenAutoFocus(event: Event): void {
   target.focus({ preventScroll: true });
 }
 
+function keepOnToastPress(event: Event): void {
+  if (isToastPress(event)) event.preventDefault();
+}
+
 function onOpenChange(next: boolean): void {
   if (!next) props.onClose();
 }
@@ -29,12 +34,15 @@ function onOpenChange(next: boolean): void {
 <template>
   <DialogRoot :open="open" @update:open="onOpenChange">
     <DialogPortal>
-      <DialogOverlay class="ui-dialog__overlay">
+      <!-- Not DialogOverlay: it locks body scroll and the original had no lock. -->
+      <div v-if="open" class="ui-dialog__overlay">
         <DialogContent
           class="ui-dialog__card"
           :style="{ width: `min(${width}px, 100%)` }"
-          aria-describedby="undefined"
+          :aria-describedby="undefined"
           @open-auto-focus="onOpenAutoFocus"
+          @pointer-down-outside="keepOnToastPress"
+          @interact-outside="keepOnToastPress"
         >
           <div class="ui-dialog__head">
             <DialogTitle as="span" class="ui-dialog__title">{{ title }}</DialogTitle>
@@ -52,7 +60,7 @@ function onOpenChange(next: boolean): void {
             <slot />
           </div>
         </DialogContent>
-      </DialogOverlay>
+      </div>
     </DialogPortal>
   </DialogRoot>
 </template>

@@ -3,8 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import { defineComponent, h, ref } from 'vue';
 import { Dialog as UiDialog } from '@/shared/ui/Dialog';
+import { ToastStack, type ToastItem } from '@/shared/ui/ToastStack';
 
-function hostWith(onClosed: () => void) {
+function hostWith(onClosed: () => void, toasts: ToastItem[] = []) {
   return defineComponent({
     setup() {
       const open = ref(false);
@@ -17,15 +18,16 @@ function hostWith(onClosed: () => void) {
         h(UiDialog, { open: open.value, title: 'Настройки', onClose: close }, () => [
           h('input', { 'aria-label': 'first' }),
           h('button', { type: 'button' }, 'last')
-        ])
+        ]),
+        ...(toasts.length > 0 ? [h(ToastStack, { toasts, onDismiss: () => {} })] : [])
       ];
     }
   });
 }
 
-async function openDialog() {
+async function openDialog(toasts: ToastItem[] = []) {
   const onClosed = vi.fn();
-  render(hostWith(onClosed));
+  render(hostWith(onClosed, toasts));
   const opener = screen.getByRole('button', { name: 'Open' });
   await userEvent.click(opener);
   const dialog = await screen.findByRole('dialog', { name: 'Настройки' });
@@ -64,6 +66,21 @@ test('a press outside the card closes, a press inside does not', async () => {
 
   const overlay = dialog.parentElement;
   if (!overlay) throw new Error('dialog has no overlay');
-  await userEvent.click(overlay);
+  // jsdom has no stylesheet, so the body lock's pointer-events: none is not undone by our CSS.
+  await userEvent.setup({ pointerEventsCheck: 0 }).click(overlay);
   expect(onClosed).toHaveBeenCalledTimes(1);
+});
+
+test('a press on a toast raised over the dialog does not close it', async () => {
+  const onAction = vi.fn();
+  const { onClosed } = await openDialog([
+    { id: 't1', message: 'Сохранено', actions: [{ label: 'Отменить', onClick: onAction }] }
+  ]);
+
+  // Same jsdom limit as above: the press itself is what is under test.
+  await userEvent.setup({ pointerEventsCheck: 0 }).click(screen.getByRole('button', { name: 'Отменить' }));
+
+  expect(onAction).toHaveBeenCalledWith('t1');
+  expect(onClosed).not.toHaveBeenCalled();
+  expect(screen.getByRole('dialog')).toBeTruthy();
 });
