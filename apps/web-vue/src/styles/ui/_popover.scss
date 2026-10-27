@@ -5,7 +5,8 @@
 //   .popover-root                          -> .popover
 //   .popover-panel                         -> .popover__panel
 //   .popover-panel--closed                 -> .popover__panel--closed
-//   .popover-panel--floating, [data-placement] -> gone: Reka portals and places the panel
+//   .popover-panel--floating               -> .popover__panel--floating (z-index only; Reka places the panel)
+//   [data-placement]                       -> gone: Reka places the panel
 
 // A grid root drops the whitespace text run Svelte left between the trigger
 // and the panel anchor. As a block box that run added a full line box under
@@ -20,7 +21,7 @@
 // Matches the context-menu panel so a popover menu and a right-click menu are
 // visually the same surface.
 .popover__panel {
-  z-index: 150;
+  z-index: 50;
   --popover-available-height: var(--reka-popover-content-available-height);
   min-width: 0;
   padding: 8px;
@@ -46,6 +47,10 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.popover__panel--floating {
+  z-index: 150;
 }
 
 .popover__panel--closed {

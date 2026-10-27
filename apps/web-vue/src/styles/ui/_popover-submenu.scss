@@ -2,7 +2,7 @@
 //
 // Svelte class -> BEM class
 //   .popover-submenu                           -> .popover-submenu
-//   .popover-submenu[data-submenu-side='left'] -> gone: Reka flips the panel; the bridge is right-side only
+//   .popover-submenu[data-submenu-side='left'] -> .popover-submenu--left (set from the side Reka placed the panel on)
 //   .popover-submenu-panel                     -> .popover-submenu__panel
 
 .popover-submenu {
@@ -18,6 +18,11 @@
   left: 100%;
   width: 12px;
   height: 100%;
+}
+
+.popover-submenu--left::after {
+  right: 100%;
+  left: auto;
 }
 
 .popover-submenu__panel {

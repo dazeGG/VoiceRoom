@@ -24,6 +24,12 @@ const props = withDefaults(defineProps<SelectProps>(), {
   variant: 'field'
 });
 
+// Reka's SelectItem throws on an empty value, but a device list starts with one
+// (the system default), so '' travels through Reka as this stand-in.
+const EMPTY_VALUE = '__select-empty__';
+const toItem = (value: string): string => (value === '' ? EMPTY_VALUE : value);
+const fromItem = (value: string): string => (value === EMPTY_VALUE ? '' : value);
+
 const emit = defineEmits<{ valueChange: [value: string] }>();
 
 const value = defineModel<string>({ default: '' });
@@ -44,9 +50,9 @@ function choose(next: string | undefined): void {
 <template>
   <div class="select">
     <SelectRoot
-      :model-value="value"
-      :disabled="disabled"
-      @update:model-value="(next) => choose(typeof next === 'string' ? next : undefined)"
+      :model-value="toItem(value)"
+      :disabled="disabled || options.length === 0"
+      @update:model-value="(next) => choose(typeof next === 'string' ? fromItem(next) : undefined)"
     >
       <SelectTrigger class="select__trigger" :class="`select__trigger--${variant}`" :aria-label="label || undefined">
         <span class="select__label">
@@ -61,6 +67,7 @@ function choose(next: string | undefined): void {
         <SelectContent
           class="select__panel"
           position="popper"
+          loop
           :side="axis.vertical"
           :align="axis.horizontal"
           :side-offset="10"
@@ -69,7 +76,12 @@ function choose(next: string | undefined): void {
           :aria-label="label || undefined"
         >
           <SelectViewport>
-            <SelectItem v-for="option in options" :key="option.value" class="select__option" :value="option.value">
+            <SelectItem
+              v-for="option in options"
+              :key="option.value"
+              class="select__option"
+              :value="toItem(option.value)"
+            >
               <SelectItemText>
                 <Ellipsis :text="option.label" :title="option.label" />
               </SelectItemText>

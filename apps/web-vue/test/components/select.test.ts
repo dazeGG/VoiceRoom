@@ -2,19 +2,9 @@ import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 import Select from '@/shared/ui/Select/Select.vue';
+import { stubOverlayDom } from '../helpers/overlay-dom';
 
-// Reka measures and scrolls through APIs that jsdom lacks.
-for (const method of ['hasPointerCapture', 'setPointerCapture', 'releasePointerCapture', 'scrollIntoView']) {
-  Object.defineProperty(Element.prototype, method, { value: () => false, configurable: true });
-}
-vi.stubGlobal(
-  'ResizeObserver',
-  class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  }
-);
+stubOverlayDom();
 
 const options = [
   { value: 'default', label: 'По умолчанию' },
@@ -32,6 +22,7 @@ function renderSelect(value = 'default') {
 
 const focused = () => document.activeElement?.textContent?.trim();
 
+// Reka's Select trigger has role="combobox" (the Svelte one was a button with aria-haspopup="listbox").
 test('the trigger shows the chosen option and opens a listbox focused on it', async () => {
   const { trigger } = renderSelect('speakers');
   expect(trigger.textContent).toContain('Колонки');
@@ -40,21 +31,25 @@ test('the trigger shows the chosen option and opens a listbox focused on it', as
   trigger.focus();
   await userEvent.keyboard('{ArrowDown}');
   expect(screen.getByRole('listbox')).toBeTruthy();
+  expect(screen.getAllByRole('option')).toHaveLength(4);
+  expect(screen.getByRole('option', { name: 'Колонки' }).getAttribute('aria-selected')).toBe('true');
   expect(trigger.getAttribute('aria-expanded')).toBe('true');
   expect(focused()).toBe('Колонки');
 });
 
-test('arrow keys move, Home and End jump, Enter chooses and closes', async () => {
+test('arrow keys wrap, Home and End jump, Enter chooses and closes', async () => {
   const { trigger, onValueChange } = renderSelect();
   trigger.focus();
   await userEvent.keyboard('{ArrowDown}');
-  await userEvent.keyboard('{End}');
+  await userEvent.keyboard('{ArrowUp}');
   expect(focused()).toBe('HDMI');
   await userEvent.keyboard('{Home}');
   expect(focused()).toBe('По умолчанию');
   await userEvent.keyboard('{End}');
   expect(focused()).toBe('HDMI');
-  await userEvent.keyboard('{Home}{ArrowDown}{Enter}');
+  await userEvent.keyboard('{ArrowDown}');
+  expect(focused()).toBe('По умолчанию');
+  await userEvent.keyboard('{ArrowDown}{Enter}');
 
   expect(onValueChange).toHaveBeenCalledWith('headset');
   expect(screen.queryByRole('listbox')).toBeNull();
@@ -83,6 +78,29 @@ test('Escape closes without changing the value; choosing the current value repor
 
 test('a disabled select does not open', async () => {
   render(Select, { props: { modelValue: 'default', options, label: 'Устройство', disabled: true } });
+  await userEvent.click(screen.getByRole('combobox'));
+  expect(screen.queryByRole('listbox')).toBeNull();
+});
+
+test('an option with the empty value can be shown, chosen and left again', async () => {
+  const onValueChange = vi.fn();
+  const devices = [{ value: '', label: 'Системный' }, ...options.slice(1)];
+  render(Select, { props: { modelValue: '', options: devices, label: 'Устройство', onValueChange } });
+  const trigger = screen.getByRole('combobox');
+  expect(trigger.textContent).toContain('Системный');
+
+  await userEvent.click(trigger);
+  expect(screen.getByRole('option', { name: 'Системный' }).getAttribute('aria-selected')).toBe('true');
+  await userEvent.click(screen.getByRole('option', { name: 'Гарнитура' }));
+  expect(onValueChange).toHaveBeenLastCalledWith('headset');
+
+  await userEvent.click(trigger);
+  await userEvent.click(screen.getByRole('option', { name: 'Системный' }));
+  expect(onValueChange).toHaveBeenLastCalledWith('');
+});
+
+test('a select without options does not open', async () => {
+  render(Select, { props: { modelValue: '', options: [], label: 'Пусто' } });
   await userEvent.click(screen.getByRole('combobox'));
   expect(screen.queryByRole('listbox')).toBeNull();
 });

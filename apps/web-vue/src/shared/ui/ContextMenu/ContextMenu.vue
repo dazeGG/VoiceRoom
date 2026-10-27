@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ContextMenuContent, ContextMenuPortal, ContextMenuRoot, ContextMenuTrigger } from 'reka-ui';
-import { nextTick, ref, useId } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue';
 import type { ContextMenuContentState, ContextMenuProps } from './types';
 
 const EDGE_GAP = 8;
@@ -15,9 +15,17 @@ const emit = defineEmits<{ close: [] }>();
 
 defineSlots<{ default(state: ContextMenuContentState): unknown }>();
 
-const panel = ref<{ $el: HTMLElement } | null>(null);
+const panel = ref<HTMLElement | null>(null);
 const overlayId = `context-menu-${useId()}`;
 let restoreFocusOnClose = true;
+
+// A consumer may keep the menu open after `close`, so each opening starts clean.
+watch(
+  () => props.open,
+  (isOpen) => {
+    if (isOpen) restoreFocusOnClose = true;
+  }
+);
 
 function close(shouldRestoreFocus = true): void {
   restoreFocusOnClose = shouldRestoreFocus;
@@ -25,7 +33,7 @@ function close(shouldRestoreFocus = true): void {
 }
 
 function menuItems(): HTMLElement[] {
-  const element = panel.value?.$el;
+  const element = panel.value;
   if (!element) return [];
   const itemRole = props.role === 'listbox' ? 'option' : 'menuitem';
   return [...element.querySelectorAll<HTMLElement>(`[role="${itemRole}"]:not([disabled])`)].filter((item) => {
@@ -37,7 +45,7 @@ function menuItems(): HTMLElement[] {
 function focusItem(index: number): void {
   const items = menuItems();
   if (items.length === 0) {
-    panel.value?.$el.focus();
+    panel.value?.focus();
     return;
   }
   items[(index + items.length) % items.length]?.focus();
@@ -56,7 +64,7 @@ function onCloseAutoFocus(event: Event): void {
 
 function isInsideOwnedOverlay(target: EventTarget | null): boolean {
   if (!(target instanceof Node)) return false;
-  if (panel.value?.$el.contains(target)) return true;
+  if (panel.value?.contains(target)) return true;
   return target instanceof Element && Boolean(target.closest(`[data-overlay-owner="${overlayId}"]`));
 }
 
@@ -75,6 +83,25 @@ function onFocusOutside(event: CustomEvent<{ originalEvent: FocusEvent }>): void
   else restoreFocusOnClose = false;
 }
 
+function handleViewportChange(): void {
+  if (props.open) close();
+}
+
+function handleViewportScroll(event: Event): void {
+  if (isInsideOwnedOverlay(event.target)) return;
+  handleViewportChange();
+}
+
+onMounted(() => {
+  window.addEventListener('resize', handleViewportChange);
+  window.addEventListener('scroll', handleViewportScroll, { capture: true });
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleViewportChange);
+  window.removeEventListener('scroll', handleViewportScroll, { capture: true });
+});
+
 function onKeydown(event: KeyboardEvent): void {
   const items = menuItems();
   const currentIndex = items.findIndex((item) => item === document.activeElement);
@@ -87,7 +114,7 @@ function onKeydown(event: KeyboardEvent): void {
   );
   const activeScope = activeElement?.parentElement?.closest<HTMLElement>('[role="menu"], [role="listbox"]');
 
-  if (props.role === 'dialog' || ownsNavigation || (activeScope && activeScope !== panel.value?.$el)) {
+  if (props.role === 'dialog' || ownsNavigation || (activeScope && activeScope !== panel.value)) {
     return;
   } else if (event.key === 'ArrowDown') {
     event.preventDefault();
@@ -107,21 +134,15 @@ function onKeydown(event: KeyboardEvent): void {
 
 <template>
   <ContextMenuRoot :open="open" :modal="false" @update:open="(value: boolean) => !value && close(restoreFocusOnClose)">
-    <!-- Reka anchors the menu to its trigger: an empty 0x0 box at the requested point. -->
+    <!-- Reka anchors the menu to its trigger: an empty box at the requested point. -->
     <ContextMenuTrigger as-child>
       <span class="context-menu__anchor" :style="{ left: `${x}px`, top: `${y}px` }"></span>
     </ContextMenuTrigger>
 
     <ContextMenuPortal>
       <ContextMenuContent
-        ref="panel"
-        class="context-menu__panel"
-        :class="{ 'context-menu__panel--bare': !padded }"
-        data-context-menu
-        :data-overlay-id="overlayId"
-        :role="role"
-        :aria-label="ariaLabel"
-        tabindex="-1"
+        :key="`${x},${y}`"
+        as-child
         side="bottom"
         align="start"
         :side-offset="0"
@@ -133,8 +154,20 @@ function onKeydown(event: KeyboardEvent): void {
         @focus-outside="onFocusOutside"
         @keydown="onKeydown"
       >
-        <div class="context-menu__inner">
-          <slot :close="close" />
+        <!-- Our own element, so the role prop wins over the menu role Reka would set. -->
+        <div
+          ref="panel"
+          class="context-menu__panel"
+          :class="{ 'context-menu__panel--bare': !padded }"
+          data-context-menu
+          :data-overlay-id="overlayId"
+          :role="role"
+          :aria-label="ariaLabel"
+          tabindex="-1"
+        >
+          <div class="context-menu__inner">
+            <slot :close="close" />
+          </div>
         </div>
       </ContextMenuContent>
     </ContextMenuPortal>
