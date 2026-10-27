@@ -1,0 +1,201 @@
+// MascotIcon (shared/ui/MascotIcon).
+//
+// Svelte class -> BEM class
+//   .mascot-icon, --blink/--look/--scare -> unchanged
+//   .mascot-head       -> .mascot-icon__head
+//   .mascot-eye        -> .mascot-icon__eye
+//   .mascot-eyes       -> .mascot-icon__eyes
+//   .mascot-scare      -> .mascot-icon__scare
+//   .mascot-eyes-fade  -> .mascot-icon__eyes-fade
+//   .mascot-x-fade     -> .mascot-icon__x-fade
+// The keyframes keep their names (Svelte scoped them; here they are global and unique).
+
+.mascot-icon__head {
+  fill: var(--vr-accent);
+}
+
+.mascot-icon__eye {
+  fill: var(--vr-accent);
+}
+
+.mascot-icon--blink .mascot-icon__eyes {
+  transform-origin: 50px 55px;
+  animation: mascot-blink 4.2s ease-in-out infinite;
+}
+
+.mascot-icon--look .mascot-icon__eyes {
+  animation: mascot-look 5.5s ease-in-out infinite;
+}
+
+@keyframes mascot-blink {
+  0%,
+  91%,
+  100% {
+    transform: scaleY(1);
+  }
+  94%,
+  96% {
+    transform: scaleY(0.12);
+  }
+}
+
+@keyframes mascot-look {
+  0%,
+  22% {
+    transform: translateX(0);
+  }
+  32%,
+  52% {
+    transform: translateX(7px);
+  }
+  62%,
+  84% {
+    transform: translateX(-7px);
+  }
+  94%,
+  100% {
+    transform: translateX(0);
+  }
+}
+
+.mascot-icon--scare {
+  cursor: pointer;
+}
+
+.mascot-icon__scare {
+  transform-origin: 50px 60px;
+  animation: mascot-scare 1.8s ease-out forwards;
+}
+
+.mascot-icon__eyes-fade {
+  animation: mascot-eyes-out 1.8s linear forwards;
+}
+
+.mascot-icon__x-fade {
+  opacity: 0;
+  fill: none;
+  stroke: var(--vr-accent);
+  stroke-width: 4;
+  stroke-linecap: round;
+  animation: mascot-x-in 1.8s linear forwards;
+}
+
+// Hovering replays the scare: swap to identically-defined "-replay" keyframes,
+// since re-triggering the same forwards animation name is a no-op in CSS.
+.mascot-icon--scare:hover .mascot-icon__scare {
+  animation-name: mascot-scare-replay;
+}
+.mascot-icon--scare:hover .mascot-icon__eyes-fade {
+  animation-name: mascot-eyes-out-replay;
+}
+.mascot-icon--scare:hover .mascot-icon__x-fade {
+  animation-name: mascot-x-in-replay;
+}
+
+@keyframes mascot-scare {
+  0% {
+    transform: none;
+  }
+  8% {
+    transform: translateY(-5px);
+  }
+  14% {
+    transform: translate(-2.5px, 0);
+  }
+  20% {
+    transform: translate(2.5px, 0);
+  }
+  26% {
+    transform: translate(-1.5px, 0);
+  }
+  32%,
+  55% {
+    transform: none;
+  }
+  70%,
+  100% {
+    transform: translateY(2px) rotate(-2deg);
+  }
+}
+@keyframes mascot-scare-replay {
+  0% {
+    transform: none;
+  }
+  8% {
+    transform: translateY(-5px);
+  }
+  14% {
+    transform: translate(-2.5px, 0);
+  }
+  20% {
+    transform: translate(2.5px, 0);
+  }
+  26% {
+    transform: translate(-1.5px, 0);
+  }
+  32%,
+  55% {
+    transform: none;
+  }
+  70%,
+  100% {
+    transform: translateY(2px) rotate(-2deg);
+  }
+}
+
+@keyframes mascot-eyes-out {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  52%,
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes mascot-eyes-out-replay {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  52%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes mascot-x-in {
+  0%,
+  52% {
+    opacity: 0;
+  }
+  60%,
+  100% {
+    opacity: 1;
+  }
+}
+@keyframes mascot-x-in-replay {
+  0%,
+  52% {
+    opacity: 0;
+  }
+  60%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mascot-icon__eyes,
+  .mascot-icon__scare,
+  .mascot-icon__eyes-fade {
+    animation: none !important;
+  }
+  .mascot-icon__eyes-fade {
+    opacity: 0 !important;
+  }
+  .mascot-icon__x-fade {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}

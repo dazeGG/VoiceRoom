@@ -1,0 +1,198 @@
+// Toast stack (shared/ui/ToastStack). Svelte: scoped styles of ToastStack.svelte.
+//
+// Svelte class -> BEM class
+//   .ui-toaststack        -> .ui-toaststack
+//   .ui-toast-queue       -> .ui-toaststack__queue
+//   .ui-toast             -> .ui-toast
+//   .ui-toast-icon        -> .ui-toast__icon
+//   .ui-toast-copy        -> .ui-toast__copy
+//   .ui-toast-message     -> .ui-toast__message
+//   .ui-toast-description -> .ui-toast__description
+//   .ui-toast-actions     -> .ui-toast__actions
+//   .ui-toast-action      -> .ui-toast__action
+//   .ui-toast-close       -> .ui-toast__close
+//   .ui-toast-progress    -> .ui-toast__progress
+//
+// State -> modifier class
+//   Svelte: variant attribute error/success/warning/info -> .ui-toast--error / --success / --warning / --info
+//   Svelte: body screen room/checking                    -> body.screen--room / body.screen--checking
+@use '../mixins' as *;
+
+.ui-toaststack {
+  position: fixed;
+  right: var(--space-lg);
+  bottom: var(--space-lg);
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: min(360px, calc(100vw - 32px));
+  // A modal dialog sets pointer-events: none on the body; toasts stay clickable.
+  pointer-events: auto;
+}
+
+// In the room the toasts sit above the dock.
+@include below($bp-phone-sm) {
+  body.screen--room .ui-toaststack,
+  body.screen--checking .ui-toaststack {
+    right: var(--space-md);
+    bottom: calc(max(var(--space-lg), env(safe-area-inset-bottom)) + 72px);
+  }
+}
+
+.ui-toast {
+  --toast-accent: var(--vr-text-2);
+  position: relative;
+  display: flex;
+  width: min(382px, calc(100vw - 32px));
+  align-items: flex-start;
+  gap: 10px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 16px;
+  padding: 13px 42px 15px 14px;
+  overflow: hidden;
+  background: var(--vr-surface-3);
+  box-shadow: var(--vr-shadow-toast);
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 13.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  animation: ui-toast-in 180ms var(--ease-out);
+}
+
+.ui-toast--error {
+  --toast-accent: var(--vr-danger);
+}
+
+.ui-toast--success {
+  --toast-accent: var(--vr-success);
+}
+
+.ui-toast--warning {
+  --toast-accent: var(--vr-warning);
+}
+
+.ui-toast--info {
+  --toast-accent: var(--vr-info);
+}
+
+.ui-toast__icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--toast-accent), transparent 86%);
+  color: var(--toast-accent);
+}
+
+.ui-toast__copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 3px;
+}
+
+.ui-toast__message {
+  white-space: pre-line;
+}
+
+.ui-toast__description {
+  color: var(--vr-text-2);
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+.ui-toaststack__queue {
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: var(--vr-surface-3);
+  color: var(--vr-text-2);
+  font: 500 11px var(--font-mono);
+}
+
+.ui-toast__actions {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+.ui-toast__action {
+  border: none;
+  border-radius: 7px;
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--vr-accent);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ui-toast__action:hover {
+  background: var(--vr-accent-soft);
+}
+
+.ui-toast__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--vr-text-3);
+  cursor: pointer;
+}
+
+.ui-toast__progress {
+  position: absolute;
+  right: 14px;
+  bottom: 0;
+  left: 14px;
+  height: 3px;
+  border-radius: 999px 999px 0 0;
+  background: var(--toast-accent);
+  transform-origin: left;
+  animation: ui-toast-progress var(--toast-duration) linear forwards;
+}
+
+.ui-toast__close:hover {
+  background: var(--vr-hover);
+  color: var(--vr-text);
+}
+
+@keyframes ui-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ui-toast-progress {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-toast,
+  .ui-toast__progress {
+    animation: none;
+  }
+}

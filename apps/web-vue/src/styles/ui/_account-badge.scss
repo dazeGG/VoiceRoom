@@ -1,0 +1,19 @@
+// AccountBadge (shared/ui/AccountBadge).
+//
+// Svelte class -> BEM class
+//   .account-badge                 -> .account-badge
+//   [data-badge='official'|...]    -> .account-badge--official / .account-badge--verified (no styles)
+//   .account-badge :global(svg)    -> .account-badge svg
+
+.account-badge {
+  display: inline-flex;
+  flex: none;
+  margin-left: 4px;
+  vertical-align: -0.15em;
+  color: var(--vr-accent-ink);
+  line-height: 0;
+}
+
+.account-badge svg {
+  fill: var(--vr-accent);
+}

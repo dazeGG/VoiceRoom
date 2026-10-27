@@ -1,0 +1,77 @@
+// Popover: floating panel chrome. Popover owns open/close + placement;
+// consumers fill the slots. Also holds the popover divider and menu label.
+//
+// Svelte class -> BEM class
+//   .popover-root                          -> .popover
+//   .popover-panel                         -> .popover__panel
+//   .popover-panel--closed                 -> .popover__panel--closed
+//   .popover-panel--floating               -> .popover__panel--floating (z-index only; Reka places the panel)
+//   [data-placement]                       -> gone: Reka places the panel
+
+// A grid root drops the whitespace text run Svelte left between the trigger
+// and the panel anchor. As a block box that run added a full line box under
+// the trigger, which inflated the root and pushed the trigger off the centre
+// line of any toolbar hosting it.
+.popover {
+  position: relative;
+  display: grid;
+  flex: none;
+}
+
+// Matches the context-menu panel so a popover menu and a right-click menu are
+// visually the same surface.
+.popover__panel {
+  z-index: 50;
+  --popover-available-height: var(--reka-popover-content-available-height);
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 12px;
+  background: var(--vr-surface-2);
+  box-shadow: var(--vr-shadow-popover);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .popover__panel:not(.popover__panel--closed) {
+    animation: popover-panel-enter 120ms ease-out;
+  }
+}
+
+@keyframes popover-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.popover__panel--floating {
+  z-index: 150;
+}
+
+.popover__panel--closed {
+  display: none !important;
+  pointer-events: none;
+}
+
+.popover-divider {
+  height: 1px;
+  margin: 6px 8px;
+  background: var(--vr-line);
+}
+
+.popover-divider--tight {
+  margin: 3px 8px;
+}
+
+.popover-menu-label {
+  display: block;
+  padding: 11px 12px 6px;
+  color: var(--vr-text-3);
+  font-size: 12px;
+  font-weight: 500;
+}
