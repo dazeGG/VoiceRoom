@@ -97,8 +97,8 @@ export function useChatScroll() {
   /** Centre a message and flash it, so the eye lands on the one that was meant. */
   function flash(target: HTMLElement): void {
     target.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    target.classList.add('is-highlighted');
-    setTimeout(() => target.classList.remove('is-highlighted'), HIGHLIGHT_MS);
+    target.classList.add('message-bubble--highlighted');
+    setTimeout(() => target.classList.remove('message-bubble--highlighted'), HIGHLIGHT_MS);
   }
 
   function jumpTo(messageId: string, onMissing: () => void): void {
@@ -110,7 +110,7 @@ export function useChatScroll() {
   // The emoji picker is owned by each message's hover toolbar, so the menu entry
   // drives that trigger rather than duplicating the popover.
   function openReactionPicker(messageId: string): void {
-    queueMicrotask(() => row(messageId)?.querySelector<HTMLButtonElement>('.reaction-picker-trigger')?.click());
+    queueMicrotask(() => row(messageId)?.querySelector<HTMLButtonElement>('.reaction-picker__button--more')?.click());
   }
 
   return {
