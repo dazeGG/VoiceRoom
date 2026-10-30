@@ -11,7 +11,8 @@
     "emoji:assets": "node scripts/build-emoji-assets.ts",
     "check": "node --check public/audio-gate.worklet.js && node --check public/desktop-audio-source.worklet.js && node --check public/rnnoise/rnnoise.worklet.js && vue-tsc --noEmit && vue-tsc -p tsconfig.test.json --noEmit",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "e2e": "playwright test"
   },
   "dependencies": {
     "@fortawesome/free-brands-svg-icons": "^7.3.0",

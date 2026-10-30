@@ -1,0 +1,252 @@
+import { expect, test, type Page } from '@playwright/test';
+import {
+  ReactionBody,
+  type ReactionSet,
+  type ReactionSummaries,
+  type ReactorPage
+} from '@voice-room/shared/contracts/messages';
+import { parse } from '../test/helpers/assert';
+import { createPermanentRoom, enableCapabilities, enterRoom, registerViaUi, uniqueLogin } from './helpers';
+
+const enableReactions = (target: Page) => enableCapabilities(target, ['reactions']);
+
+test('G70 supplemental mocked keyboard and pagination rendering remains deterministic', async ({ page }) => {
+  const allReactors = Array.from({ length: 120 }, (_, index) => ({
+    userId: `user-${index}`,
+    displayName: `Reactor ${index}`,
+    avatarUrl: null
+  }));
+  await enableReactions(page);
+  await page.route('**/api/reactions/**', async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/reactors')) {
+      const offset = Number(url.searchParams.get('cursor') || 0);
+      const reactors = allReactors.slice(offset, offset + 50);
+      const json: ReactorPage = {
+        ok: true,
+        reactors,
+        nextCursor: offset + reactors.length < allReactors.length ? String(offset + reactors.length) : null
+      };
+      return route.fulfill({ json });
+    }
+    if (route.request().method() === 'GET') {
+      const json: ReactionSummaries = {
+        ok: true,
+        summaries: [{ emoji: '👍', count: 120, reactedByMe: false, revision: '1' }]
+      };
+      return route.fulfill({ json });
+    }
+    const requested = parse(ReactionBody, route.request().postDataJSON());
+    const json: ReactionSet = {
+      ok: true,
+      summary: { emoji: requested.emoji || '👍', count: 120, reactedByMe: true, revision: '1' }
+    };
+    return route.fulfill({ json });
+  });
+  const login = uniqueLogin('reactionkbd');
+  await registerViaUi(page, login);
+  const roomId = await createPermanentRoom(page, `Reaction keyboard ${login}`);
+  await enterRoom(page, roomId);
+  await page.getByRole('button', { name: 'Чат', exact: true }).click();
+  const input = page.getByPlaceholder('Написать в комнату…');
+  await input.fill('keyboard reaction');
+  await input.press('Enter');
+  const message = page.locator('.message-bubble', { hasText: 'keyboard reaction' });
+  await expect(message).toBeVisible();
+  await message.hover();
+  const pickerButton = message.getByRole('button', { name: 'Открыть выбор эмодзи' });
+  await pickerButton.focus();
+  await pickerButton.press('Enter');
+  const grid = page.getByRole('grid', { name: 'Доступные реакции' });
+  await expect(grid).toBeVisible();
+  const search = page.getByPlaceholder('Поиск реакции');
+  await expect(search).toBeFocused();
+  await search.press('Tab');
+  await expect(page.getByRole('tab', { name: 'Часто используемые' })).toBeFocused();
+  await page.keyboard.press('Tab');
+  const firstCell = grid.getByRole('gridcell').first();
+  await expect(firstCell).toBeFocused();
+  await firstCell.press('ArrowRight');
+  await page.keyboard.press('Home');
+  const keyboardMutation = page.waitForRequest(
+    (request) => request.method() === 'PUT' && request.url().includes('/api/reactions/')
+  );
+  await Promise.all([keyboardMutation, page.keyboard.press('Enter')]);
+  const thumbChip = page.locator('.reaction-summary__chip', { has: page.getByRole('button', { name: /реакцию 👍/i }) });
+  const count = thumbChip.getByRole('button', { name: 'Показать пользователей: 120' });
+  await expect(count).toBeVisible();
+  await count.click();
+  await expect(page.getByRole('heading', { name: /Реакция/ })).toBeFocused();
+  await expect(page.getByText('Reactor 49')).toBeVisible();
+  await page.getByRole('button', { name: 'Показать ещё' }).click();
+  await expect(page.getByText('Reactor 99')).toBeVisible();
+  await page.getByRole('button', { name: 'Показать ещё' }).click();
+  await expect(page.getByText('Reactor 119')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Показать ещё' })).toHaveCount(0);
+});
+
+test('G70-A03 late reaction response cannot revive a deleted message', async ({ page }) => {
+  const { promise: mutationBlocked, resolve: releaseMutation } = Promise.withResolvers<void>();
+  await enableReactions(page);
+  await page.route('**/api/reactions/**', async (route) => {
+    if (route.request().method() === 'GET') {
+      const json: ReactionSummaries = { ok: true, summaries: [] };
+      return route.fulfill({ json });
+    }
+    await mutationBlocked;
+    const json: ReactionSet = { ok: true, summary: { emoji: '👍', count: 1, reactedByMe: true, revision: '1' } };
+    return route.fulfill({ json });
+  });
+  const login = uniqueLogin('reaction');
+  await registerViaUi(page, login);
+  const roomId = await createPermanentRoom(page, `Reaction ${login}`);
+  await enterRoom(page, roomId);
+  await page.getByRole('button', { name: 'Чат', exact: true }).click();
+  const input = page.getByPlaceholder('Написать в комнату…');
+  await input.fill('hostile reaction race');
+  await input.press('Enter');
+  const message = page.locator('.message-bubble', { hasText: 'hostile reaction race' });
+  await expect(message).toBeVisible();
+  await message.hover();
+  const mutationRequest = page.waitForRequest(
+    (request) => request.method() === 'PUT' && request.url().includes('/api/reactions/')
+  );
+  await Promise.all([mutationRequest, message.getByRole('button', { name: 'Добавить быструю реакцию 👍' }).click()]);
+  // The mutation is now in flight and intentionally held by the route.
+  await message.getByRole('button', { name: 'Удалить' }).click();
+  await expect(message).toHaveCount(0);
+  releaseMutation();
+  await page.waitForTimeout(100);
+  await expect(page.getByText('hostile reaction race')).toHaveCount(0);
+  await expect(page.locator('.reaction-summary__chip')).toHaveCount(0);
+});
+
+test('G70-A04 two accounts and a guest enforce the real mutation boundary across contexts', async ({
+  browser,
+  page
+}) => {
+  test.skip(
+    process.env.E2E_REAL_REACTIONS !== 'true',
+    'E2E_REAL_REACTIONS requires the release-test capability overlay'
+  );
+  await enableReactions(page);
+  const ownerLogin = uniqueLogin('reactionowner');
+  await registerViaUi(page, ownerLogin);
+  const roomId = await createPermanentRoom(page, `Reaction contexts ${ownerLogin}`);
+  await enterRoom(page, roomId);
+  const memberContext = await browser.newContext();
+  const member = await memberContext.newPage();
+  await enableReactions(member);
+  await registerViaUi(member, uniqueLogin('reactionmember'));
+  await enterRoom(member, roomId);
+  const guestContext = await browser.newContext();
+  const guest = await guestContext.newPage();
+  await enableReactions(guest);
+  await guest.goto(`/r/${roomId}`);
+  const guestDialog = guest.getByRole('dialog', { name: 'Как вас зовут?' });
+  await guestDialog.getByPlaceholder('Ваше имя').fill('Reaction Guest');
+  await guestDialog.getByRole('button', { name: 'Войти в комнату' }).click();
+  await expect(guest.locator('body')).toHaveClass(/\bscreen--room\b/);
+  for (const target of [page, member, guest]) await target.getByRole('button', { name: 'Чат', exact: true }).click();
+  const input = page.getByPlaceholder('Написать в комнату…');
+  await input.fill('three-context reaction boundary');
+  await input.press('Enter');
+  const memberMessage = member.locator('.message-bubble', { hasText: 'three-context reaction boundary' });
+  const guestMessage = guest.locator('.message-bubble', { hasText: 'three-context reaction boundary' });
+  await expect(memberMessage).toBeVisible();
+  await expect(guestMessage).toBeVisible();
+  await memberMessage.hover();
+  await expect(memberMessage.getByRole('button', { name: /Добавить быструю реакцию/ }).first()).toBeVisible();
+  const mutationResponse = member.waitForResponse(
+    (response) => response.request().method() === 'PUT' && response.url().includes('/api/reactions/')
+  );
+  await memberMessage.getByRole('button', { name: 'Добавить быструю реакцию 👍' }).click();
+  const mutation = await mutationResponse;
+  expect(mutation.ok(), await mutation.text()).toBe(true);
+  await expect(
+    member.locator('.reaction-summary__chip').getByText('1'),
+    'mutating member applies the authoritative API response'
+  ).toBeVisible();
+  await expect(page.locator('.reaction-summary__chip').getByText('1'), 'owner receives reaction.updated').toBeVisible();
+  await expect(
+    guest.locator('.reaction-summary__chip').getByText('1'),
+    'guest receives read-only reaction.updated'
+  ).toBeVisible();
+  await guestMessage.hover();
+  await expect(guestMessage.getByRole('button', { name: /Добавить быструю реакцию/ })).toHaveCount(0);
+  await member.close();
+  const reconnected = await memberContext.newPage();
+  await enableReactions(reconnected);
+  await enterRoom(reconnected, roomId);
+  await reconnected.getByRole('button', { name: 'Чат', exact: true }).click();
+  await expect(
+    reconnected
+      .locator('.message-bubble', { hasText: 'three-context reaction boundary' })
+      .locator('.reaction-summary__chip')
+      .getByText('1')
+  ).toBeVisible();
+  const ownerMessage = page.locator('.message-bubble', { hasText: 'three-context reaction boundary' });
+  await ownerMessage.hover();
+  await ownerMessage.getByRole('button', { name: 'Добавить быструю реакцию 👍' }).click();
+  for (const target of [page, reconnected, guest])
+    await expect(target.locator('.reaction-summary__chip').getByText('2')).toBeVisible();
+  await memberContext.close();
+  await guestContext.close();
+});
+
+test('G70-A02 real storage paginates 120 reactors through the production API', async ({ page }) => {
+  test.skip(!process.env.E2E_DATABASE_URL, 'E2E_DATABASE_URL is required for the real 120-reactor storage scenario');
+  await enableReactions(page);
+  const login = uniqueLogin('reactionreal');
+  await registerViaUi(page, login);
+  const roomId = await createPermanentRoom(page, `Reaction real ${login}`);
+  await enterRoom(page, roomId);
+  await page.getByRole('button', { name: 'Чат', exact: true }).click();
+  const input = page.getByPlaceholder('Написать в комнату…');
+  await input.fill('real 120 reactors');
+  await input.press('Enter');
+  const message = page.locator('.message-bubble', { hasText: 'real 120 reactors' });
+  await expect(message).toBeVisible();
+  const messageId = await message.getAttribute('data-message-id');
+  expect(messageId).toBeTruthy();
+  const { default: pg } = await import('pg');
+  const client = new pg.Client({ connectionString: process.env.E2E_DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    for (let index = 0; index < 120; index += 1) {
+      const userId = `g70-reactor-${String(index).padStart(3, '0')}`;
+      await client.query(
+        `INSERT INTO users(id,login,display_name,password_hash) VALUES($1,$2,$3,'fixture') ON CONFLICT(id) DO NOTHING`,
+        [userId, `g70r${String(index).padStart(3, '0')}`, `Real Reactor ${index}`]
+      );
+      await client.query(
+        `INSERT INTO room_message_reactions(message_id,emoji,user_id,revision,created_at) VALUES($1,'👍',$2,120,current_timestamp+($3*interval '1 millisecond')) ON CONFLICT DO NOTHING`,
+        [messageId, userId, index]
+      );
+    }
+    await client.query(
+      `INSERT INTO room_message_reaction_revisions(message_id,emoji,revision) VALUES($1,'👍',120) ON CONFLICT(message_id,emoji) DO UPDATE SET revision=120,updated_at=current_timestamp`,
+      [messageId]
+    );
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    await client.end();
+  }
+  await page.reload();
+  await expect(page.locator('body')).toHaveClass(/\bscreen--room\b/);
+  await page.getByRole('button', { name: 'Чат', exact: true }).click();
+  const restored = page.locator('.message-bubble', { hasText: 'real 120 reactors' });
+  await expect(restored).toBeVisible();
+  const count = restored.getByRole('button', { name: 'Показать пользователей: 120' });
+  await count.click();
+  await expect(page.getByText('Real Reactor 49')).toBeVisible();
+  await page.getByRole('button', { name: 'Показать ещё' }).click();
+  await expect(page.getByText('Real Reactor 99')).toBeVisible();
+  await page.getByRole('button', { name: 'Показать ещё' }).click();
+  await expect(page.getByText('Real Reactor 119')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Показать ещё' })).toHaveCount(0);
+});

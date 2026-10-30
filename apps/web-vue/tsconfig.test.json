@@ -3,8 +3,18 @@
   // get Node's types on top of the app's settings.
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
     "types": ["vite/client", "node"],
     "noUnusedLocals": false
   },
-  "include": ["src/**/*.ts", "src/**/*.vue", "test/**/*.ts", "test/**/*.vue", "scripts/**/*.ts", "vite.config.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.vue",
+    "test/**/*.ts",
+    "test/**/*.vue",
+    "e2e/**/*.ts",
+    "scripts/**/*.ts",
+    "playwright.config.ts",
+    "vite.config.ts"
+  ]
 }
