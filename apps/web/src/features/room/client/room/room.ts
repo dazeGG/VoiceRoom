@@ -24,6 +24,7 @@ import { closeScreenView, refreshScreenStage } from '../ui/screen-view';
 import { createParticipant, removeAudioElements, updatePeerStatus } from './participants';
 import { connectLiveKitRoom, disconnectLiveKitRoom, syncRemoteVideoVisibility } from '../services/livekit-service';
 import { LiveKitTransportError } from '../services/livekit/transport';
+import { loadLiveKitClient } from '../media/livekit-runtime';
 import { onAppVisibilityChange } from '@/platform/app-visibility';
 import {
   describeMicrophoneError,
@@ -218,6 +219,9 @@ async function performJoinRoom(generation: number): Promise<void> {
     }
     if (state.microphoneMode === 'push-to-talk') state.muted = true;
 
+    // The library downloads while the microphone opens (a permission prompt can
+    // take a while), not after the token. A failure here is retried at connect.
+    loadLiveKitClient().catch(() => {});
     const microphoneCapture = await openJoinMicrophone();
     if (!isCurrent()) {
       if (microphoneCapture) stopMicrophoneCapture(microphoneCapture);
