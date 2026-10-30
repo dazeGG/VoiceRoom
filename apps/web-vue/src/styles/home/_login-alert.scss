@@ -1,0 +1,132 @@
+// "New sign-in to your account" question and the follow-up to secure the account.
+// Svelte: LoginAlertDialog.svelte <style>.
+//
+// Svelte class -> BEM class (block "login-alert")
+//   .login-alert-layer .ui-dialog-overlay -> .ui-dialog__overlay:has(.login-alert)
+//     (the Dialog portals its overlay to <body>, so a wrapper cannot style it;
+//     a security question outranks every other dialog)
+//   .login-alert-text                 -> .login-alert__text
+//   .login-alert-device               -> .login-alert__device
+//   .login-alert-icon                 -> .login-alert__icon
+//   .login-alert-device strong/small  -> .login-alert__device-name / __device-when
+//   .login-alert-actions (--stack)    -> .login-alert__actions (--stack)
+//   .login-alert-button (--safe, --danger, --ghost) -> .login-alert__button (same modifiers)
+//   .login-alert-later                -> .login-alert__later
+
+.ui-dialog__overlay:has(.login-alert) {
+  z-index: 110;
+}
+
+.login-alert__text {
+  margin: 0;
+  color: var(--vr-text-2);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.login-alert__device {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin: 16px 0 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--vr-line);
+  border-radius: 12px;
+  background: var(--vr-bg);
+}
+
+.login-alert__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  background: var(--vr-surface-3);
+  color: var(--vr-text);
+}
+
+.login-alert__device-name {
+  display: block;
+  color: var(--vr-text);
+  font-size: 14px;
+}
+
+.login-alert__device-when {
+  display: block;
+  margin-top: 2px;
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}
+
+.login-alert__actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.login-alert__actions--stack {
+  grid-template-columns: 1fr;
+  margin-top: 16px;
+}
+
+.login-alert__button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.6;
+  }
+}
+
+.login-alert__button--safe {
+  background: var(--vr-online);
+  color: var(--vr-accent-ink);
+
+  &:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--vr-online), transparent 12%);
+  }
+}
+
+.login-alert__button--danger {
+  border-color: color-mix(in oklch, var(--vr-danger), transparent 45%);
+  background: color-mix(in oklch, var(--vr-danger), transparent 78%);
+  color: var(--vr-danger);
+
+  &:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--vr-danger), transparent 66%);
+  }
+}
+
+.login-alert__button--ghost {
+  border-color: var(--vr-line-strong);
+  background: transparent;
+  color: var(--vr-text);
+
+  &:hover {
+    background: var(--vr-surface-3);
+  }
+}
+
+.login-alert__later {
+  justify-self: center;
+  padding: 6px 10px;
+  border: none;
+  background: none;
+  color: var(--vr-text-3);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover {
+    color: var(--vr-text);
+  }
+}

@@ -1,0 +1,12 @@
+// Pieces the lobby dialogs share (create room, delete account, recovery codes, room switch).
+// Svelte: the .lr-dialog-* rules of home/styles/lobby-v2.css.
+//
+// Svelte class -> BEM class (block "home-dialog")
+//   .lr-dialog-actions -> .home-dialog__actions
+
+.home-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}

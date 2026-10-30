@@ -1,0 +1,70 @@
+// The guest landing page: header, two-column layout and the legal footer.
+// Svelte: HomePage.svelte <style> and home/styles/home.css.
+//
+// Svelte class -> BEM class (block "landing")
+//   .landing-container                  -> .landing__container
+//   .landing-header-auth                -> .landing__auth
+//   .landing-header-login               -> .landing__login
+//   .landing-layout                     -> .landing__layout
+//   .landing-legal                      -> .landing__legal
+//   body:not([data-screen='room'])      -> body:not(.screen--room)
+@use '../mixins' as *;
+
+.landing__container {
+  width: min(100%, 1160px);
+  margin-inline: auto;
+}
+
+body:not(.screen--room) .landing__container .topbar {
+  width: 100%;
+}
+
+.landing__auth {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  @include below(560px) {
+    gap: 6px;
+  }
+}
+
+.landing__login {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  padding: 0 16px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 10px;
+  color: var(--vr-text);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+
+  &:hover {
+    background: var(--vr-hover);
+  }
+}
+
+.landing__layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr));
+  align-items: center;
+  gap: 40px;
+  width: min(100%, 1160px);
+  margin-inline: auto;
+  padding: 24px 0 40px;
+}
+
+.landing__legal {
+  padding: 8px 16px 24px;
+}
+
+// The brand name hides next to the login button on a narrow phone.
+@include below(440px) {
+  .topbar:has(.landing__auth) .topbar__brand span {
+    display: none;
+  }
+}

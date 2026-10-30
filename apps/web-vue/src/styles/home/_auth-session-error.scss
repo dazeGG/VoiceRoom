@@ -1,0 +1,47 @@
+// The session could not be checked, and the unsupported-device screen.
+// Svelte: home/styles/home.css (.auth-session-error*).
+//
+// Svelte class -> BEM class (block "auth-session-error")
+//   .auth-session-error                    -> .auth-session-error
+//   .auth-session-error-card               -> .auth-session-error__card
+//   .auth-loader-kicker (in the card)      -> .auth-session-error__kicker
+//   .auth-session-error-card h1            -> .auth-session-error__title
+//   .auth-session-error-card p:not(kicker) -> .auth-session-error__text
+
+.auth-session-error {
+  display: grid;
+  min-height: calc(100vh - 76px);
+  place-items: center;
+  padding: 32px;
+}
+
+.auth-session-error__card {
+  width: min(520px, 100%);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 28px;
+  background: var(--vr-surface-2);
+  box-shadow: var(--vr-shadow-modal);
+  padding: 28px;
+  text-align: center;
+}
+
+.auth-session-error__kicker {
+  margin: 0 0 8px;
+  color: var(--vr-text-3);
+  font-family: var(--font-ui);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.auth-session-error__title {
+  margin: 8px 0 10px;
+  color: var(--vr-text);
+  font-size: clamp(1.65rem, 4vw, 2.35rem);
+}
+
+.auth-session-error__text {
+  margin: 0 0 22px;
+  color: var(--vr-text-2);
+  line-height: 1.55;
+}

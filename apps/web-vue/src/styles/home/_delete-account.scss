@@ -1,0 +1,113 @@
+// Delete-account confirmation, opened from the settings modal.
+// Svelte: DeleteAccountDialog.svelte <style>.
+//
+// Svelte class -> BEM class (block "delete-account")
+//   .delete-account-layer .ui-dialog-overlay -> .ui-dialog__overlay:has(.delete-account)
+//     (the Dialog portals its overlay to <body>, so a wrapper cannot style it;
+//     the settings overlay sits at z-index 60)
+//   .delete-account-text, -error     -> .delete-account__text, __error
+//   .delete-account-list             -> .delete-account__list
+//   .delete-account-rooms            -> .delete-account__rooms
+//   .delete-account-room             -> .delete-account__room
+//   .delete-account-room strong      -> .delete-account__room-name
+//   .delete-account-room small       -> .delete-account__room-fate
+//   .delete-account-confirm          -> .delete-account__confirm
+//   .delete-account-submit           -> .delete-account__submit
+//   .settings-field-label, .settings-input -> settings__field-label, settings__input
+
+.ui-dialog__overlay:has(.delete-account) {
+  z-index: 100;
+}
+
+.delete-account {
+  display: grid;
+  gap: 14px;
+}
+
+.delete-account__text,
+.delete-account__error {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.delete-account__text {
+  color: var(--vr-text-2);
+}
+
+.delete-account__error {
+  color: var(--vr-danger);
+}
+
+.delete-account__list {
+  display: grid;
+  gap: 4px;
+  margin: -6px 0 0;
+  padding-left: 20px;
+  color: var(--vr-text-2);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.delete-account__rooms {
+  display: grid;
+  gap: 6px;
+}
+
+.delete-account__room {
+  padding: 10px 12px;
+  border: 1px solid var(--vr-line);
+  border-radius: 10px;
+  background: var(--vr-bg);
+}
+
+.delete-account__room-name {
+  display: block;
+  color: var(--vr-text);
+  font-size: 13.5px;
+}
+
+.delete-account__room-fate {
+  display: block;
+  margin-top: 2px;
+  color: var(--vr-text-3);
+  font-size: 12.5px;
+}
+
+.delete-account__confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--vr-text);
+  font-size: 14px;
+  cursor: pointer;
+
+  input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--vr-danger);
+  }
+}
+
+.delete-account__submit {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1px solid color-mix(in oklch, var(--vr-danger), transparent 45%);
+  border-radius: 12px;
+  background: color-mix(in oklch, var(--vr-danger), transparent 78%);
+  color: var(--vr-danger);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: color-mix(in oklch, var(--vr-danger), transparent 66%);
+  }
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.55;
+  }
+}

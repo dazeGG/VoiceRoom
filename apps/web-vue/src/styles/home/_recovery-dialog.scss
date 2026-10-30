@@ -1,0 +1,92 @@
+// Recovery codes: password prompt, then the codes to save. Opened from the settings modal.
+// Svelte: RecoveryCodesDialog.svelte <style>.
+//
+// Svelte class -> BEM class (block "recovery-dialog")
+//   .recovery-dialog-layer .ui-dialog-overlay -> .ui-dialog__overlay:has(.recovery-dialog)
+//     (the Dialog portals its overlay to <body>, so a wrapper cannot style it;
+//     the settings overlay sits at z-index 60)
+//   .recovery-form                   -> .recovery-dialog / .recovery-dialog__form
+//   .recovery-text, -warning, -error -> .recovery-dialog__text, __warning, __error
+//   .recovery-codes                  -> .recovery-dialog__codes
+//   .recovery-tools                  -> .recovery-dialog__tools
+//   .recovery-confirm                -> .recovery-dialog__confirm
+//   [data-recovery-codes]            -> .recovery-dialog__codes (focus target)
+//   .settings-field-label, .settings-input -> settings__field-label, settings__input
+@use '../mixins' as *;
+
+.ui-dialog__overlay:has(.recovery-dialog) {
+  z-index: 100;
+}
+
+.recovery-dialog__form {
+  display: grid;
+  gap: 14px;
+}
+
+.recovery-dialog__text,
+.recovery-dialog__warning,
+.recovery-dialog__error {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.recovery-dialog__text {
+  color: var(--vr-text-2);
+}
+
+.recovery-dialog__warning {
+  color: var(--vr-away);
+}
+
+.recovery-dialog__error {
+  color: var(--vr-danger);
+}
+
+.recovery-dialog__codes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 14px 0;
+  padding: 14px 16px 14px 36px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 12px;
+  background: var(--vr-bg);
+  color: var(--vr-text-3);
+  outline: none;
+
+  @include below(460px) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  code {
+    color: var(--vr-text);
+    font-family: var(--font-mono, 'JetBrains Mono', ui-monospace, monospace);
+    font-size: 14px;
+    letter-spacing: 0.04em;
+    user-select: all;
+  }
+}
+
+.recovery-dialog__tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.recovery-dialog__confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 14px 0 4px;
+  color: var(--vr-text);
+  font-size: 14px;
+  cursor: pointer;
+
+  input {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: var(--vr-accent, currentColor);
+  }
+}

@@ -1,0 +1,56 @@
+// "Opening in the app" overlay shown before a room opens.
+// Svelte: OpenInAppScreen.svelte <style>.
+//
+// Svelte class -> BEM class (block "open-in-app")
+//   .open-in-app-card      -> .open-in-app__card
+//   .open-in-app-card h1   -> .open-in-app__title
+//   .open-in-app-card p    -> .open-in-app__text
+//   .open-in-app-actions   -> .open-in-app__actions
+
+.open-in-app {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--vr-bg) 78%, transparent);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.open-in-app__card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: min(440px, 100%);
+  padding: 26px;
+  border: 1px solid var(--vr-line-strong);
+  border-radius: var(--radius-xl);
+  background: var(--vr-surface-2);
+  box-shadow: var(--vr-shadow-popover);
+}
+
+.open-in-app__title {
+  margin: 0;
+  color: var(--vr-text);
+  font-family: var(--font-ui);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.open-in-app__text {
+  margin: 0;
+  color: var(--vr-text-2);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.open-in-app__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+}
