@@ -105,3 +105,11 @@ test('the back button out of the lobby goes to that page', async () => {
 
   await settlesOn('/login');
 });
+
+test('entering a room puts it in the address before the room mounts', async () => {
+  const routing = await openAt('/');
+  routing.requestEnterRoom('abc123');
+  // The room client and the room chat read their room from the address.
+  expect(window.location.pathname).toBe('/r/abc123');
+  await settlesOn('/r/abc123');
+});

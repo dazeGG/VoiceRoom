@@ -26,9 +26,11 @@ vi.mock('../../src/platform/desktop-boundary.ts', async (importOriginal) => {
   return { ...original, applyDesktopBoundaryToDocument: policy, getDesktopBoundaryPolicy: policy };
 });
 
+let fetched: ReturnType<typeof stubFetch>;
+
 beforeEach(() => {
   platform.desktop = true;
-  stubFetch({ 'GET /api/badges': { body: { ok: true, badges: [] } } });
+  fetched = stubFetch({ 'GET /api/badges': { body: { ok: true, badges: [] } } });
 });
 
 async function openApp(path: string) {
@@ -53,6 +55,13 @@ test('a phone opening an account page gets the block screen, not the page', asyn
   await openApp('/login');
   expect(await screen.findByRole('heading', { name: 'Откройте VoiceRoom на компьютере' })).toBeTruthy();
   expect(screen.getByRole('main', { name: 'Неподдерживаемое устройство' })).toBeTruthy();
+  // Behind the block screen nothing talks to the API.
+  expect(fetched.calls).toEqual([]);
+});
+
+test('a desktop loads the account marks', async () => {
+  await openApp('/licenses');
+  await vi.waitFor(() => expect(fetched.calls.map((call) => call.url)).toEqual(['/api/badges']));
 });
 
 test('a phone following a link off a mobile route gets the block screen there', async () => {

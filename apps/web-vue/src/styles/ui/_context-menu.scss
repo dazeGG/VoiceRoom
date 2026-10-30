@@ -4,7 +4,7 @@
 //   .context-menu-panel       -> .context-menu__panel
 //   .context-menu-panel--bare -> .context-menu__panel--bare
 //   .context-menu-panel-inner -> .context-menu__inner
-//   (new)                     -> .context-menu__anchor
+//   (new)                     -> .context-menu__anchor, .context-menu__point
 
 // Zero-size box at the requested point; Reka anchors the menu to it.
 .context-menu__anchor {
@@ -12,6 +12,13 @@
   width: 0;
   height: 0;
   pointer-events: none;
+}
+
+// The trigger Reka measures, at the anchor's origin.
+.context-menu__point {
+  display: block;
+  width: 0;
+  height: 0;
 }
 
 .context-menu__panel {

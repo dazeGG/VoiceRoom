@@ -134,10 +134,20 @@ function onKeydown(event: KeyboardEvent): void {
 
 <template>
   <ContextMenuRoot :open="open" :modal="false" @update:open="(value: boolean) => !value && close(restoreFocusOnClose)">
-    <!-- Reka anchors the menu to its trigger: an empty box at the requested point. -->
-    <ContextMenuTrigger as-child>
-      <span class="context-menu__anchor" :style="{ left: `${x}px`, top: `${y}px` }"></span>
-    </ContextMenuTrigger>
+    <!-- Reka anchors the menu to its trigger: an empty box at the requested point,
+         kept off the edges as Svelte did. The trigger sets its own style, so the
+         position sits on a box around it, in the body: a transformed ancestor
+         would make `position: fixed` relative to itself. -->
+    <Teleport to="body">
+      <span
+        class="context-menu__anchor"
+        :style="{ left: `${Math.max(EDGE_GAP, x)}px`, top: `${Math.max(EDGE_GAP, y)}px` }"
+      >
+        <ContextMenuTrigger as-child>
+          <span class="context-menu__point"></span>
+        </ContextMenuTrigger>
+      </span>
+    </Teleport>
 
     <ContextMenuPortal>
       <ContextMenuContent
@@ -148,6 +158,7 @@ function onKeydown(event: KeyboardEvent): void {
         :side-offset="0"
         :avoid-collisions="true"
         :collision-padding="EDGE_GAP"
+        sticky="always"
         @open-auto-focus="onOpenAutoFocus"
         @close-auto-focus="onCloseAutoFocus"
         @pointer-down-outside="onPointerDownOutside"

@@ -2,7 +2,7 @@
 // What apps/web's routes/+layout.svelte did around every page: the device
 // boundary, the deploy check and its update notice, the call feedback question,
 // and the app-wide listeners (theme, desktop system, emoji copy).
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterView, useRoute, useRouter } from 'vue-router';
 import { loadAccountBadges } from '@/api/badges';
 import { onContractViolation } from '@/api/contract-violations';
@@ -56,9 +56,20 @@ function checkForUpdate(): void {
 
 const cleanups: Array<() => void> = [];
 
+// The account marks load once a page may show; behind the block screen
+// nothing talks to the API.
+const stopBadges = watch(
+  () => boundaryReady.value && allowed.value,
+  (ready) => {
+    if (!ready) return;
+    void loadAccountBadges();
+    stopBadges();
+  },
+  { flush: 'sync' }
+);
+
 onMounted(() => {
   theme.initTheme();
-  void loadAccountBadges();
   // "How was the call?" asked by a leave on the page before this load.
   callFeedback.restorePendingCallFeedback();
   const policy = applyDesktopBoundaryToDocument();
@@ -97,6 +108,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  stopBadges();
   removeUpdateGuard();
   versionCheck.stop();
   for (const cleanup of cleanups.splice(0)) cleanup();

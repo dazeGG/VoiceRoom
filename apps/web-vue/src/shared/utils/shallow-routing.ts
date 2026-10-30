@@ -19,8 +19,22 @@ function navigate(router: Router, path: string, replace: boolean): Promise<void>
   // `force`: the address may lag behind the route (the back button inside the
   // lobby), and a write to the route the router is on must still land.
   const location = { path, state: { shallowPath: path }, force: true };
+  // SvelteKit wrote the address at once, and the code copied from it reads
+  // window.location right after (the room client and the room chat take their
+  // room from it). The router writes after its guards, so the address changes
+  // here first; a push then rewrites the entry it leaves back to the router's
+  // own address for it (`history.state.current`) before adding the new one.
+  const history: { readonly state: unknown } = window.history;
+  window.history.replaceState(history.state, '', path);
   return (replace ? router.replace(location) : router.push(location))
-    .then(() => undefined)
+    .then((failure) => {
+      // A navigation that did not happen leaves the entry's own address,
+      // unless a later one has written its own since.
+      const state = history.state;
+      if (failure && currentPath() === path && isRecord(state) && typeof state.current === 'string') {
+        window.history.replaceState(state, '', state.current);
+      }
+    })
     .finally(() => {
       const left = (pendingShallowPaths.get(path) ?? 1) - 1;
       if (left > 0) pendingShallowPaths.set(path, left);
@@ -40,6 +54,10 @@ export function shallowReplace(router: Router, path: string): Promise<void> {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function currentPath(): string {
+  return `${window.location.pathname}${window.location.search}`;
 }
 
 /** Whether the history entry now shown for `fullPath` was written by a shallow push or replace. */

@@ -124,3 +124,21 @@ test('a real replace of a shallow entry is a real navigation', async () => {
   await router.replace('/privacy');
   expect(isShallowEntry('/privacy')).toBe(false);
 });
+
+test('a shallow push shows its address at once, as SvelteKit pushState did, and the back button returns', async () => {
+  const pushed = shallowPush(router, '/r/abc');
+  expect(window.location.pathname).toBe('/r/abc');
+  await pushed;
+
+  await back();
+  expect(window.location.pathname).toBe('/');
+  expect(router.currentRoute.value.path).toBe('/');
+});
+
+test('a shallow push a guard stops leaves the address where it was', async () => {
+  const remove = router.beforeEach(() => false);
+  await shallowPush(router, '/r/abc');
+  expect(window.location.pathname).toBe('/');
+  expect(router.currentRoute.value.path).toBe('/');
+  remove();
+});
