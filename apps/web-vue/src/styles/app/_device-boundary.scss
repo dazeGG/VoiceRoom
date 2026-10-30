@@ -1,0 +1,40 @@
+// The device check and the unsupported-device screen around every page.
+// Svelte: the <style> of routes/+layout.svelte.
+//
+// Svelte class -> BEM class (block "device-boundary")
+//   .device-boundary         -> .device-boundary
+//   .device-boundary__card   -> .device-boundary__card
+//   .device-boundary__card h1 -> .device-boundary__title
+//   .device-boundary__card p  -> .device-boundary__text
+
+.device-boundary {
+  box-sizing: border-box;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: var(--vr-text);
+  background: var(--vr-bg);
+  font-family: var(--font-ui);
+}
+
+.device-boundary__card {
+  box-sizing: border-box;
+  width: min(100%, 520px);
+  padding: clamp(24px, 7vw, 48px);
+  border: 1px solid var(--vr-line-strong);
+  border-radius: 24px;
+  background: var(--vr-surface);
+}
+
+.device-boundary__title {
+  margin: 8px 0 16px;
+  font-size: clamp(28px, 8vw, 48px);
+  line-height: 1.05;
+}
+
+.device-boundary__text {
+  margin: 0;
+  color: var(--vr-text-2);
+  line-height: 1.5;
+}

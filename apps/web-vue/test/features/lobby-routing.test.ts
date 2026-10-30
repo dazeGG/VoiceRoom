@@ -12,13 +12,14 @@ import { useRoomNavigationStore } from '../../src/features/home/model/room-navig
 import { ROOM_SWITCH_CONFIRM_STORAGE_KEY } from '../../src/features/home/model/room-switch-confirmation.ts';
 import { useVoiceSessionStore } from '../../src/features/room/voice-session.store.ts';
 import { usePageStore } from '../../src/stores/page.store.ts';
+import { spyOnPush, spyOnReplace } from '../helpers/router-spies.ts';
 
 function makeRouter() {
   const router = createRouter({
     history: createMemoryHistory(),
     routes: [{ path: '/:pathMatch(.*)*', component: { render: () => null } }]
   });
-  return { router, push: vi.spyOn(router, 'push'), replace: vi.spyOn(router, 'replace') };
+  return { router, push: spyOnPush(router), replace: spyOnReplace(router) };
 }
 
 let roomNavigation: ReturnType<typeof useRoomNavigationStore>;

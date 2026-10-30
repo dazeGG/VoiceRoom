@@ -14,6 +14,7 @@ import { authUser } from '../fixtures/users.ts';
 import { stubMatchMedia } from '../helpers/match-media.ts';
 import { stubOverlayDom } from '../helpers/overlay-dom';
 import { renderWithApp } from '../helpers/render.ts';
+import { spyOnPush, spyOnReplace } from '../helpers/router-spies.ts';
 
 vi.mock('../../src/features/room/RoomPage.vue', () => import('./harness/RoomShellHarness'));
 
@@ -95,7 +96,7 @@ test('leaving the room the lobby shows closes it and gives the address back', as
   window.history.replaceState(null, '', '/r/abc123');
   stubLobby();
   const { router, pinia } = await renderLobby();
-  const replace = vi.spyOn(router, 'replace');
+  const replace = spyOnReplace(router);
 
   await userEvent.click(await screen.findByRole('button', { name: 'Покинуть комнату' }));
 
@@ -121,7 +122,7 @@ test('accepting a room invitation in a DM opens that room', async () => {
   window.history.replaceState(null, '', '/?dm=bob');
   stubLobby();
   const { router } = await renderLobby();
-  const push = vi.spyOn(router, 'push');
+  const push = spyOnPush(router);
 
   await userEvent.click(await screen.findByRole('button', { name: 'Войти' }));
 

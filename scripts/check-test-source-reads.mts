@@ -29,7 +29,9 @@ const ALLOWED = [
   /\/migrations\//,
   /platform\/db\/schema\.ts$/,
   // Audio worklets are plain scripts the browser loads by URL; tests run them in a sandbox.
-  /\/(?:static|public)\/[^/]+\.worklet\.js$/
+  /\/(?:static|public)\/[^/]+\.worklet\.js$/,
+  // The web push worker as a production build emits it: deployment output, not source.
+  /^service-worker\.js$/
 ];
 // Only literals on a line that reads a file count; loading a module is fine.
 const READ_CALL = /\b(?:readFileSync|readFile|read[A-Z]\w*|read)\s*\(/;

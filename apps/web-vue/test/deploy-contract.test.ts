@@ -97,6 +97,17 @@ test('a production build keeps the deployment contract', { timeout: 60_000 }, as
 
     const immutable = readdirSync(join(outDir, '_app', 'immutable'));
     assert.ok(immutable.some((file) => file.endsWith('.js')));
+    // The update check compares the file against the id compiled into the bundle.
+    const bundle = immutable
+      .filter((file) => file.endsWith('.js'))
+      .map((file) => readFileSync(join(outDir, '_app', 'immutable', file), 'utf8'))
+      .join('\n');
+    assert.ok(bundle.includes(String(version.version)), 'the bundle carries the build id of version.json');
+
+    // Web push: one self-contained module at the root, as SvelteKit emitted it.
+    const serviceWorker = readFileSync(join(outDir, 'service-worker.js'), 'utf8');
+    assert.ok(serviceWorker.includes('showNotification'));
+    assert.doesNotMatch(serviceWorker, /(^|[;}])\s*import[\s{*]/m);
     // public/ is served from the root, next to index.html.
     assert.ok(readdirSync(outDir).includes('voiceroom-icon.svg'));
     assert.ok(readdirSync(join(outDir, 'rnnoise')).includes('rnnoise.wasm'));

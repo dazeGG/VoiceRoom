@@ -16,6 +16,7 @@ import {
 } from '@/platform/open-in-app';
 import { usePageStore } from '@/stores/page.store';
 import { extractRoomId } from '@/shared/utils/room';
+import { shallowPush, shallowReplace } from '@/shared/utils/shallow-routing';
 import type { LobbyStore } from './lobby.store';
 import type { LobbyRooms } from './use-lobby-rooms';
 import { useRoomNavigationStore } from './room-navigation.store';
@@ -42,7 +43,7 @@ function restoreLobbyDocumentState(): void {
 
 /**
  * `lobby` and `rooms` are what the routing needs of the lobby store and the room list; `router` is
- * the app's router (the address changes go through it, where SvelteKit used shallow routing).
+ * the app's router (the address changes go through it as shallow entries, shallow-routing.ts).
  */
 export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router: Router = useRouter()) {
   const navigation = useRoomNavigationStore();
@@ -59,11 +60,11 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
   const previewAnchor = ref<{ roomId: string; messageId: string } | null>(null);
 
   function pushState(url: string): void {
-    void router.push(url);
+    void shallowPush(router, url);
   }
 
   function replaceState(url: string): void {
-    void router.replace(url);
+    void shallowReplace(router, url);
   }
 
   /** Follows the address the page was opened on, the back button and desktop links; returns the teardown. */
@@ -243,6 +244,9 @@ export function useLobbyRouting(lobby: RoutingLobby, rooms: RoutingRooms, router
 
   const onPopState = (): void => {
     const roomId = extractRoomId(window.location.pathname);
+    // The back button out of the lobby (to /login, /privacy, ...): that page
+    // takes over, and rewriting its entry would swallow the move.
+    if (!roomId && window.location.pathname !== '/') return;
     if (roomId) {
       navigation.setViewedRoomFromRoute(roomId);
       lobby.mode = 'rooms';
