@@ -142,3 +142,35 @@ test('a shallow push a guard stops leaves the address where it was', async () =>
   expect(router.currentRoute.value.path).toBe('/');
   remove();
 });
+
+test('a shallow replace a guard stops leaves the address where it was', async () => {
+  await router.push('/privacy');
+  const remove = router.beforeEach(() => false);
+  await shallowReplace(router, '/r/abc');
+  expect(window.location.pathname).toBe('/privacy');
+  remove();
+});
+
+test('a shallow push whose guard throws leaves the address where it was and reports the error', async () => {
+  const remove = router.beforeEach(() => {
+    throw new Error('guard broke');
+  });
+  await expect(shallowPush(router, '/r/abc')).rejects.toThrow('guard broke');
+  expect(window.location.pathname).toBe('/');
+  remove();
+});
+
+test('a real navigation that overtakes a pending shallow push keeps its own address', async () => {
+  const { promise: gate, resolve: open } = Promise.withResolvers<void>();
+  const remove = router.beforeEach((to) => (to.path === '/r/abc' ? gate : true));
+  const shallow = shallowPush(router, '/r/abc');
+  await router.push('/privacy');
+  open();
+  await shallow;
+  expect(window.location.pathname).toBe('/privacy');
+  expect(router.currentRoute.value.path).toBe('/privacy');
+
+  await back();
+  expect(window.location.pathname).toBe('/');
+  remove();
+});

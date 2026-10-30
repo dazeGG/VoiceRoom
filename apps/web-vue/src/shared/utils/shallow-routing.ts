@@ -24,17 +24,28 @@ function navigate(router: Router, path: string, replace: boolean): Promise<void>
   // room from it). The router writes after its guards, so the address changes
   // here first; a push then rewrites the entry it leaves back to the router's
   // own address for it (`history.state.current`) before adding the new one.
+  // This relies on shallow targets settling within microtasks (MainRoute is
+  // loaded eagerly and no guard waits), so a back press cannot land between.
   const history: { readonly state: unknown } = window.history;
   window.history.replaceState(history.state, '', path);
+  // A navigation that did not happen leaves the entry's own address, unless a
+  // later one has written its own since.
+  const restore = (): void => {
+    const state = history.state;
+    if (currentPath() === path && isRecord(state) && typeof state.current === 'string') {
+      window.history.replaceState(state, '', state.current);
+    }
+  };
   return (replace ? router.replace(location) : router.push(location))
-    .then((failure) => {
-      // A navigation that did not happen leaves the entry's own address,
-      // unless a later one has written its own since.
-      const state = history.state;
-      if (failure && currentPath() === path && isRecord(state) && typeof state.current === 'string') {
-        window.history.replaceState(state, '', state.current);
+    .then(
+      (failure) => {
+        if (failure) restore();
+      },
+      (error: unknown) => {
+        restore();
+        throw error;
       }
-    })
+    )
     .finally(() => {
       const left = (pendingShallowPaths.get(path) ?? 1) - 1;
       if (left > 0) pendingShallowPaths.set(path, left);

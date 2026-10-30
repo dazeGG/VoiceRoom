@@ -159,6 +159,7 @@ function onKeydown(event: KeyboardEvent): void {
         :avoid-collisions="true"
         :collision-padding="EDGE_GAP"
         sticky="always"
+        prioritize-position
         @open-auto-focus="onOpenAutoFocus"
         @close-auto-focus="onCloseAutoFocus"
         @pointer-down-outside="onPointerDownOutside"

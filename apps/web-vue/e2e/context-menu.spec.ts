@@ -31,18 +31,13 @@ test('room context menu supports pointer, keyboard navigation, focus restore, an
   await page.keyboard.press('Escape');
 
   // locator.dispatchEvent('contextmenu') builds a plain Event without coordinates.
-  const openAtCorner = () =>
-    card.evaluate((element) =>
-      element.dispatchEvent(
-        new MouseEvent('contextmenu', {
-          bubbles: true,
-          cancelable: true,
-          button: 2,
-          buttons: 2,
-          clientX: 4,
-          clientY: 4
-        })
-      )
+  const openAtCorner = (clientX = 4, clientY = 4) =>
+    card.evaluate(
+      (element, point) =>
+        element.dispatchEvent(
+          new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, buttons: 2, ...point })
+        ),
+      { clientX, clientY }
     );
   await page.setViewportSize({ width: 360, height: 240 });
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
@@ -54,6 +49,17 @@ test('room context menu supports pointer, keyboard navigation, focus restore, an
   expect(box.x + box.width).toBeLessThanOrEqual(352);
   expect(box.y + box.height).toBeLessThanOrEqual(232);
 
+  // The far corner keeps the same margins.
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await openAtCorner(356, 236);
+  await expect(menu).toBeVisible();
+  const farBox = await boxOf(menu);
+  expect(farBox.x).toBeGreaterThanOrEqual(8);
+  expect(farBox.y).toBeGreaterThanOrEqual(8);
+  expect(farBox.x + farBox.width).toBeLessThanOrEqual(352);
+  expect(farBox.y + farBox.height).toBeLessThanOrEqual(232);
+
   await page.setViewportSize({ width: 360, height: 120 });
   await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
   await openAtCorner();
@@ -64,13 +70,17 @@ test('room context menu supports pointer, keyboard navigation, focus restore, an
   await expect(menu).toBeVisible();
 });
 
-test('friend rows open only the direct-message thread and do not expose a context menu', async ({ browser, page }) => {
+test('friend rows open only the direct-message thread and do not expose a context menu', async ({
+  browser,
+  page,
+  baseURL
+}) => {
   const firstLogin = uniqueLogin('friendone');
   const secondLogin = uniqueLogin('friendtwo');
 
   await registerViaUi(page, firstLogin);
 
-  const secondContext = await browser.newContext({ baseURL: 'http://localhost:5180' });
+  const secondContext = await browser.newContext(baseURL ? { baseURL } : {});
   const secondPage = await secondContext.newPage();
   try {
     await registerViaUi(secondPage, secondLogin);

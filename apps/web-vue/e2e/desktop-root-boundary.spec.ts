@@ -60,7 +60,7 @@ test('G18-A02 registered mobile service worker suppresses a delivered push notif
   browser,
   baseURL
 }) => {
-  const origin = baseURL ?? 'http://127.0.0.1:5180';
+  const origin = baseURL ?? 'http://127.0.0.1:5182';
   const context = await mobileContext(browser);
   await context.grantPermissions(['notifications'], { origin });
   const page = await context.newPage();

@@ -304,23 +304,28 @@ test('manual polish keeps the newest mention query, emits login-bound segments, 
   await pickerTrigger.press('Enter');
   const picker = page.getByRole('dialog', { name: 'Выбор реакции' });
   await expect(picker).toBeVisible();
+  // Flipped below the trigger near the top edge. Svelte said so in
+  // data-placement='bottom-start'; Reka sets data-side and data-align.
+  await expect(picker).toHaveAttribute('data-side', 'bottom');
+  await expect(picker).toHaveAttribute('data-align', 'start');
   const pickerBox = await boxOf(picker);
-  // Flipped below the trigger near the top edge (Svelte: data-placement='bottom-start').
   const triggerBox = await boxOf(pickerTrigger);
   expect(pickerBox.y).toBeGreaterThanOrEqual(triggerBox.y + triggerBox.height - 1);
   expect(pickerBox.y).toBeGreaterThanOrEqual(8);
   expect(pickerBox.y + pickerBox.height).toBeLessThanOrEqual(420);
-  // Fixed to the viewport: the picker itself, or the box the popover library places it in.
+  // Fixed to the viewport (Reka positions the box around the panel), not
+  // scrolling inside the chat body.
   await expect
     .poll(() =>
       picker.evaluate((element) => {
-        for (let node: Element | null = element; node; node = node.parentElement) {
-          if (getComputedStyle(node).position === 'fixed') return 'fixed';
-        }
-        return 'not fixed';
+        const placed = element.closest('[data-reka-popper-content-wrapper]') ?? element;
+        return {
+          position: getComputedStyle(placed).position,
+          inChat: Boolean(element.closest('.room-chat-panel__body'))
+        };
       })
     )
-    .toBe('fixed');
+    .toEqual({ position: 'fixed', inChat: false });
   await expect
     .poll(() =>
       page.locator('.room-chat-panel__body').evaluate((element) => element.scrollWidth <= element.clientWidth + 1)

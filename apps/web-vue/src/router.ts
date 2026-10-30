@@ -56,7 +56,7 @@ export function loadFailedPagesInFull(
   router: Router,
   load: (href: string) => void = (href) => (window.location.href = href)
 ): () => void {
-  return router.onError((_error, to) => {
+  return router.onError((_error: unknown, to) => {
     if (router.currentRoute.value !== START_LOCATION) load(router.resolve(to).href);
   });
 }
