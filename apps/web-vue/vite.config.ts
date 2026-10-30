@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vitest/config';
 
-import { cspMetaPlugin, versionFilePlugin } from './scripts/deploy-contract.ts';
+import { buildVersion, cspMetaPlugin, serviceWorkerPlugin, versionFilePlugin } from './scripts/deploy-contract.ts';
 
 const API_TARGET = process.env.VITE_DEV_API_TARGET || 'http://localhost:3000';
 const DEV_HOST = process.env.VITE_DEV_HOST || '127.0.0.1';
@@ -21,8 +21,12 @@ const API_PROXY = {
   }
 };
 
+// One id for the bundle (the update check compares against it) and /_app/version.json.
+const APP_VERSION = buildVersion();
+
 export default defineConfig({
-  plugins: [vue(), cspMetaPlugin(), versionFilePlugin()],
+  plugins: [vue(), cspMetaPlugin(), versionFilePlugin(APP_VERSION), serviceWorkerPlugin()],
+  define: { 'import.meta.env.VITE_APP_VERSION': JSON.stringify(APP_VERSION) },
   resolve: {
     alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) }
   },

@@ -1,10 +1,11 @@
 // What the build owes the deployment (Caddyfile, Dockerfile web-build stage):
 // a CSP <meta> in index.html that scripts/emit-caddy-csp.ts turns into the
-// Caddy header, and /_app/version.json, which open tabs poll to learn of a
-// deploy and show the update notice. Assets go to /_app/immutable/ through
-// build.assetsDir in vite.config.ts.
+// Caddy header, /_app/version.json, which open tabs poll to learn of a deploy
+// and show the update notice, and /service-worker.js for web push. Assets go
+// to /_app/immutable/ through build.assetsDir in vite.config.ts.
 
-import type { Plugin } from 'vite';
+import { resolve } from 'node:path';
+import { build, type Plugin } from 'vite';
 
 type Env = Record<string, string | undefined>;
 
@@ -115,12 +116,68 @@ export function versionFile(version: string): string {
   return JSON.stringify({ version });
 }
 
-export function versionFilePlugin(version = Date.now().toString()): Plugin {
+/** The build id: SvelteKit's default, the build time. vite.config.ts computes it once for the bundle and the file. */
+export function buildVersion(): string {
+  return Date.now().toString();
+}
+
+export function versionFilePlugin(version = buildVersion()): Plugin {
   return {
     name: 'voiceroom-version-file',
     apply: 'build',
     generateBundle() {
       this.emitFile({ type: 'asset', fileName: '_app/version.json', source: versionFile(version) });
+    }
+  };
+}
+
+const SERVICE_WORKER_PATH = '/service-worker.js';
+
+/**
+ * `src/service-worker.ts` served at /service-worker.js, as SvelteKit did: one
+ * self-contained module in the build, the transformed source on the dev server.
+ * The page registers it with `type: 'module'` (push-notifications.store.ts).
+ */
+export function serviceWorkerPlugin(entry = 'src/service-worker.ts'): Plugin {
+  let root = process.cwd();
+  let outDir = 'dist';
+  let isBuild = false;
+  return {
+    name: 'voiceroom-service-worker',
+    configResolved(config) {
+      root = config.root;
+      outDir = resolve(config.root, config.build.outDir);
+      isBuild = config.command === 'build';
+    },
+    configureServer(server) {
+      server.middlewares.use(SERVICE_WORKER_PATH, (_request, response, next) => {
+        server
+          .transformRequest(`/${entry}`)
+          .then((result) => {
+            if (!result) {
+              next();
+              return;
+            }
+            response.setHeader('Content-Type', 'text/javascript');
+            response.end(result.code);
+          })
+          .catch(next);
+      });
+    },
+    async closeBundle() {
+      if (!isBuild) return;
+      await build({
+        configFile: false,
+        root,
+        logLevel: 'warn',
+        build: {
+          outDir,
+          emptyOutDir: false,
+          copyPublicDir: false,
+          minify: true,
+          lib: { entry: resolve(root, entry), formats: ['es'], fileName: () => SERVICE_WORKER_PATH.slice(1) }
+        }
+      });
     }
   };
 }

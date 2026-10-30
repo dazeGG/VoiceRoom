@@ -7,3 +7,8 @@ declare module '*.vue' {
   const component: DefineComponent;
   export default component;
 }
+
+interface ImportMetaEnv {
+  /** The build id, the same one /_app/version.json carries (vite.config.ts). */
+  readonly VITE_APP_VERSION: string;
+}
