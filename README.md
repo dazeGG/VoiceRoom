@@ -56,7 +56,7 @@ VoiceRoom — голосовые комнаты по ссылке: голос, �
 ```
 apps/
   api/        Fastify API, WebSocket realtime, воркеры доставки и медиа, auth-gate LiveKit
-  web/        SvelteKit-клиент (статическая сборка)
+  web/        клиент на Vue 3 (статическая сборка Vite)
   admin/      админка на React, отдельный сайт на admin.<домен>
 packages/
   shared/     общие контракты HTTP и realtime для API и веба
@@ -78,7 +78,7 @@ npm run dev
 Проверки:
 
 ```bash
-npm run check   # tsc, svelte-check, ESLint и Prettier
+npm run check   # tsc, vue-tsc, ESLint и Prettier
 TEST_DATABASE_URL=postgres://postgres:postgres@127.0.0.1:55432/postgres npm test
 npm run build
 npm run e2e     # Playwright, нужен запущенный dev-стек
@@ -96,4 +96,4 @@ Production-стек — это `docker-compose.yml`: PostgreSQL, API, ворке
 
 ## Лицензия
 
-MIT License. Vendored RNNoise assets в `apps/web/static/rnnoise/` распространяются под собственной MIT-лицензией в `apps/web/static/rnnoise/LICENSE`. Атрибуция шрифтов, эмодзи, GeoIP и библиотек — на странице `/licenses`.
+MIT License. Vendored RNNoise assets в `apps/web/public/rnnoise/` распространяются под собственной MIT-лицензией в `apps/web/public/rnnoise/LICENSE`. Атрибуция шрифтов, эмодзи, GeoIP и библиотек — на странице `/licenses`.

@@ -165,7 +165,7 @@ VAPID_SUBJECT
 Пайплайн описан в `.github/workflows/ci.yml`. Проверки запускаются для pull request и push в `develop`/`main`. Ветки, PR, коммиты, hotfix и релизы ведутся по [`GIT_FLOW.md`](./GIT_FLOW.md):
 
 - **policy** — проверяет допустимый Git Flow маршрут PR и Conventional Commit формат PR title.
-- **check** — `npm ci`, `npm run check` (tsc, svelte-check, ESLint и Prettier по shared, api и web), `npm run build` (Vite).
+- **check** — `npm ci`, `npm run check` (tsc, vue-tsc, ESLint и Prettier по shared, api и web), `npm run build` (Vite).
 - **test** — тесты shared и API против эфемерного PostgreSQL service-контейнера, файлы API-тестов идут в 4 потока, каждый тест получает копию шаблонной базы. **test-web** — тесты веба (Vitest) отдельным job параллельно с API. `TEST_DATABASE_URL` задаётся прямо в workflow одноразовым значением — секрет для этого **не нужен** (test harness создаёт/удаляет временную БД на каждый тест).
 - **voice-join** — проверка входа в голосовую комнату через LiveKit.
 - **G05 / G08** — строгий LiveKit-профиль и порог покрытия изменённого кода.
