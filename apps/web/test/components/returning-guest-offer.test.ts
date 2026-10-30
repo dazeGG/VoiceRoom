@@ -37,7 +37,9 @@ const createRoute = {
   }
 };
 
-let location: { href: string };
+// The lobby page loads on demand, after this stub is in place, and the room
+// state it imports reads the path.
+let location: { href: string; pathname: string };
 
 // The landing page asks for the desktop app's version on its own; only room
 // creation matters here.
@@ -59,7 +61,7 @@ beforeEach(() => {
     });
   }
   localStorage.clear();
-  location = { href: 'https://voiceroom.ru/' };
+  location = { href: 'https://voiceroom.ru/', pathname: '/' };
   stubWindow({ location });
 });
 

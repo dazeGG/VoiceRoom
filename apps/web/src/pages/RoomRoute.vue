@@ -1,12 +1,11 @@
 <script setup lang="ts">
 // What /r/:roomId shows on a load or a real navigation: the lobby for a
 // signed-in desktop visit, the room itself for a guest or a phone.
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onMounted, ref, watch } from 'vue';
 import { useSessionStore } from '@/features/auth/session.store';
 import { signOut } from '@/features/home/model/sign-out';
-import LobbyPage from '@/features/home/LobbyPage.vue';
 import { useToastsStore, type ToastOptions } from '@/features/home/model/toasts.store';
-import RoomPage from '@/features/room/RoomPage.vue';
+import { loadRoomPage } from '@/features/room/prefetch';
 import { MascotIcon, ToastStack } from '@/shared/ui';
 import { ProfileCardHost } from '@/features/home/components/profile-card';
 import OpenInAppScreen from '@/features/home/components/OpenInAppScreen.vue';
@@ -21,6 +20,12 @@ import {
 import { usePageHead } from './use-page-head';
 
 const props = defineProps<{ roomId: string }>();
+
+// Both pages are chunks of their own, so the landing does not ship them. The
+// room page, which the lobby embeds too, loads beside the session check; the
+// lobby only once the session says this visit is signed in.
+const LobbyPage = defineAsyncComponent(() => import('@/features/home/LobbyPage.vue'));
+const RoomPage = defineAsyncComponent(loadRoomPage);
 
 usePageHead('VoiceRoom');
 
@@ -71,6 +76,7 @@ onMounted(() => {
   roomAllowed.value = policy.roomClientAllowed;
   boundaryReady.value = true;
   if (!policy.roomClientAllowed) return;
+  loadRoomPage().catch(() => {});
 
   void session.loadSession().catch(() => {
     authLoadError.value = true;

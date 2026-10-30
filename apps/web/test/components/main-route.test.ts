@@ -1,15 +1,23 @@
 // `/` and `/r/:id` keep their page while the lobby moves the address between
 // them (SvelteKit's shallow routing); a real navigation picks the page again.
 
-import { render, screen } from '@testing-library/vue';
+import { cleanup, render, screen } from '@testing-library/vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { defineComponent, h } from 'vue';
 import { RouterView, createWebHistory, type Router } from 'vue-router';
 import { beforeEach, expect, test, vi } from 'vitest';
 import { createAppRouter } from '../../src/router.ts';
+import { prefetchRoom } from '../../src/features/room/prefetch.ts';
 import { shallowPush, shallowReplace } from '../../src/shared/utils/shallow-routing.ts';
 
 const mounts = vi.hoisted(() => ({ home: 0, room: 0 }));
+const device = vi.hoisted(() => ({ roomClientAllowed: true }));
+
+vi.mock('../../src/features/room/prefetch.ts', () => ({ prefetchRoom: vi.fn() }));
+vi.mock('../../src/platform/desktop-boundary.ts', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  isRoomClientAllowed: () => device.roomClientAllowed
+}));
 
 vi.mock('../../src/features/home/HomeRoute.vue', async () => {
   const { defineComponent, h, onMounted } = await import('vue');
@@ -37,6 +45,8 @@ vi.mock('../../src/pages/RoomRoute.vue', async () => {
 beforeEach(() => {
   mounts.home = 0;
   mounts.room = 0;
+  device.roomClientAllowed = true;
+  vi.mocked(prefetchRoom).mockClear();
 });
 
 async function open(path: string): Promise<Router> {
@@ -97,4 +107,24 @@ test('a real navigation between / and a room shows the page of the new address',
   await router.push('/');
   expect(await screen.findByText('home page')).toBeTruthy();
   expect(mounts).toEqual({ home: 2, room: 1 });
+});
+
+test('the landing fetches the room code once the page is idle, before any click', async () => {
+  await open('/');
+  expect(prefetchRoom).not.toHaveBeenCalled();
+  await vi.waitFor(() => expect(prefetchRoom).toHaveBeenCalledTimes(1));
+});
+
+test('a device that cannot open the room client never fetches its code', async () => {
+  device.roomClientAllowed = false;
+  await open('/');
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  expect(prefetchRoom).not.toHaveBeenCalled();
+});
+
+test('leaving the page before it is idle drops the prefetch', async () => {
+  await open('/');
+  cleanup();
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  expect(prefetchRoom).not.toHaveBeenCalled();
 });

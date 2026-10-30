@@ -3,13 +3,24 @@
 // address between them (shallow-routing.ts) never remounts it. What it shows
 // is decided by real navigations only, as SvelteKit decided the page: a load,
 // a link, the back button to an entry that was not written shallowly.
-import { ref, watch } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import HomeRoute from '@/features/home/HomeRoute.vue';
+import { prefetchRoom } from '@/features/room/prefetch';
+import { isRoomClientAllowed } from '@/platform/desktop-boundary';
+import { whenIdle } from '@/shared/utils/idle';
 import { isShallowEntry } from '@/shared/utils/shallow-routing';
 import RoomRoute from './RoomRoute.vue';
 
 const route = useRoute();
+
+// Most visits here end in a call; its code loads while the visitor reads. A
+// device that cannot open the room client never downloads it.
+let cancelPrefetch = () => {};
+onMounted(() => {
+  if (isRoomClientAllowed()) cancelPrefetch = whenIdle(prefetchRoom);
+});
+onBeforeUnmount(() => cancelPrefetch());
 
 function roomIdOf(params: typeof route.params): string {
   const roomId = params.roomId;

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ArrowRight } from '@lucide/vue';
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, useRoute, useRouter } from 'vue-router';
 import { createRoom } from '@/api/rooms';
 import type { AuthUser } from '@/api/auth';
@@ -16,13 +16,15 @@ import { usePageStore } from '@/stores/page.store';
 import DesktopAppCard from './components/DesktopAppCard.vue';
 import LandingHero from './components/LandingHero.vue';
 import PermanentRoomOfferDialog from './components/PermanentRoomOfferDialog.vue';
-import LobbyPage from './LobbyPage.vue';
 import { dismissPermanentRoomOffer, rememberGuestRoomCreated, shouldOfferPermanentRoom } from './model/returning-guest';
 import { usePushNotificationsStore } from './model/push-notifications.store';
 import { signOut } from './model/sign-out';
 import { useToastsStore, type ToastOptions } from './model/toasts.store';
 
 const props = withDefaults(defineProps<{ initialAuthMode?: AuthMode | null }>(), { initialAuthMode: null });
+
+// Only a signed-in visit shows the lobby; a guest's landing does not download it.
+const LobbyPage = defineAsyncComponent(() => import('./LobbyPage.vue'));
 
 const route = useRoute();
 const router = useRouter();
