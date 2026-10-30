@@ -11,16 +11,16 @@ import {
   createNetworkLevelTracker,
   readingLevel,
   type NetworkReading
-} from '../../src/lib/features/room/client/room/network-level.ts';
+} from '@/features/room/client/room/network-level';
 import type { NetworkLevel } from '@voice-room/shared/contracts/rooms';
 import { NETWORK_THRESHOLDS } from '@voice-room/shared/network-quality';
-import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
-import { createInitialRoomState } from '../../src/lib/features/room/client/model/room-state.ts';
-import { noteNetworkReading, resetNetworkLevel } from '../../src/lib/features/room/client/room/network-report.ts';
-import { postState } from '../../src/lib/features/room/client/room/presence.ts';
+import { state } from '@/features/room/client/core/room-runtime.store';
+import { createInitialRoomState } from '@/features/room/client/model/room-state';
+import { noteNetworkReading, resetNetworkLevel } from '@/features/room/client/room/network-report';
+import { postState } from '@/features/room/client/room/presence';
 
 const updateVoicePeer = vi.hoisted(() => vi.fn((_payload: { roomId: string; patch: Record<string, unknown> }) => {}));
-vi.mock('$lib/entities/room/room-realtime', () => ({ updateVoicePeer }));
+vi.mock('@/entities/room/room-realtime', () => ({ updateVoicePeer }));
 
 beforeEach(() => {
   Object.assign(state, createInitialRoomState());

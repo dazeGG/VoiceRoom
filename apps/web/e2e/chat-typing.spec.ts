@@ -22,17 +22,17 @@ test('a friend sees typing and emoji browsing under the message field, until the
     );
 
     await page.goto('/');
-    await page.locator('.lv-row', { hasText: writerLogin }).first().click();
-    const typing = page.locator('.lobby-dm-compose .chat-typing');
-    await expect(page.locator('.lobby-dm-head-status')).toBeVisible();
+    await page.locator('.sidebar__row', { hasText: writerLogin }).first().click();
+    const typing = page.locator('.dm-composer .typing-indicator');
+    await expect(page.locator('.dm-view__head-status')).toBeVisible();
     await expect(typing).toHaveText('');
 
     await writer.goto('/');
-    await writer.locator('.lv-row', { hasText: readerLogin }).first().click();
+    await writer.locator('.sidebar__row', { hasText: readerLogin }).first().click();
     const composer = writer.getByPlaceholder('Написать сообщение…');
     await composer.fill('секунду, пишу');
     await expect(typing).toHaveText(/ печатает…$/);
-    await expect(page.locator('.lobby-dm-head-status')).not.toContainText('печатает');
+    await expect(page.locator('.dm-view__head-status')).not.toContainText('печатает');
 
     await writer.getByRole('button', { name: 'Добавить эмодзи' }).click();
     await expect(typing).toHaveText(/ выбирает эмодзи…$/);
@@ -40,14 +40,14 @@ test('a friend sees typing and emoji browsing under the message field, until the
     // The field draws the emoji as artwork, so the text is the words and the
     // emoji is an image carrying the character.
     await expect(composer).toHaveText('секунду, пишу');
-    await expect(composer.locator('img.composer-emoji[alt="👍"]')).toBeVisible();
+    await expect(composer.locator('img.emoji-composer__emoji[alt="👍"]')).toBeVisible();
     await expect(composer).toBeFocused();
     await expect(typing).toHaveText(/ печатает…$/);
 
     await composer.press('Enter');
     // The message draws 👍 as artwork, so its text is the words and the emoji
     // is an image carrying the character.
-    const sent = page.locator('.dm-chat-message', { hasText: 'секунду, пишу' }).last();
+    const sent = page.locator('.message-bubble--dm', { hasText: 'секунду, пишу' }).last();
     await expect(sent).toBeVisible();
     await expect(sent.locator('img[alt="👍"]')).toBeVisible();
     await expect(typing).toHaveText('');
@@ -66,7 +66,7 @@ test('the room chat shows who is typing from the call to someone reading it in t
   await registerViaUi(page, ownerLogin);
   const roomName = `Typing ${ownerLogin}`;
   const roomId = await createPermanentRoom(page, roomName);
-  await page.locator('.lv-card', { hasText: roomName }).first().click();
+  await page.locator('.voice-home__card', { hasText: roomName }).first().click();
   await page.getByRole('button', { name: 'Чат', exact: true }).first().click();
   await expect(page.getByPlaceholder('Написать в комнату…')).toBeVisible({ timeout: 20_000 });
 
@@ -83,16 +83,16 @@ test('the room chat shows who is typing from the call to someone reading it in t
     await expect(composer).toBeVisible({ timeout: 20_000 });
     await composer.fill('сейчас расскажу');
 
-    const typing = page.locator('.chat-rail-compose .chat-typing');
+    const typing = page.locator('.room-chat-composer .typing-indicator');
     await expect(typing).toHaveText(`${guestLogin} печатает…`);
-    await expect(caller.locator('.chat-rail-compose .chat-typing')).toHaveText('');
+    await expect(caller.locator('.room-chat-composer .typing-indicator')).toHaveText('');
 
     await caller.locator('.room-chat-rail').getByRole('button', { name: 'Добавить эмодзи' }).click();
     await expect(typing).toHaveText(`${guestLogin} выбирает эмодзи…`);
     await caller.keyboard.press('Escape');
 
     await composer.press('Enter');
-    await expect(page.locator('.chat-msg-text', { hasText: 'сейчас расскажу' }).last()).toBeVisible();
+    await expect(page.locator('.message-bubble', { hasText: 'сейчас расскажу' }).last()).toBeVisible();
     await expect(typing).toHaveText('');
   } finally {
     await callerContext.close();

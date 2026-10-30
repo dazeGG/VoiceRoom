@@ -15,7 +15,7 @@ async function joinAsGuest(browser: Browser, baseURL: string | undefined, roomId
   await page.locator('#guestNameSubmitButton').click();
   // The standalone room keeps the connection pill in the dock popover, so the
   // joined state is read from the pill's presence rather than its visibility.
-  await expect(page.locator('.status-pill[data-state="connected"]')).toBeAttached({ timeout: 30_000 });
+  await expect(page.locator('.room-topbar__status--connected')).toBeAttached({ timeout: 30_000 });
   return page;
 }
 
@@ -49,7 +49,7 @@ test('a guest creates an account from the room and is back in the same call as t
     await reloaded;
 
     await expect(guest).toHaveURL(new RegExp(`/r/${roomId}$`));
-    await expect(guest.locator('.status-pill[data-state="connected"]')).toBeAttached({ timeout: 30_000 });
+    await expect(guest.locator('.room-topbar__status--connected')).toBeAttached({ timeout: 30_000 });
     await expect(guest.getByRole('button', { name: 'Открыть снова' })).toHaveCount(0);
     await expect(guest.getByRole('complementary', { name: 'Создать аккаунт' })).toHaveCount(0);
 
@@ -80,7 +80,7 @@ test('a guest leaving a permanent room is offered an account that keeps the room
 
     const login = uniqueLogin('leaveguest');
     await Promise.all([guest.waitForURL((url) => url.pathname === '/'), fillRegistration(guest, login)]);
-    await expect(guest.locator('.lv-card', { hasText: roomName }).first()).toBeVisible({ timeout: 15_000 });
+    await expect(guest.locator('.voice-home__card', { hasText: roomName }).first()).toBeVisible({ timeout: 15_000 });
   } finally {
     await guest.context().close();
   }

@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { avatarInitial } from '../src/lib/shared/utils/avatar-initial';
+import { avatarInitial } from '../src/shared/utils/avatar-initial';
 
 test('the first letter of the name, upper-cased', () => {
   expect(avatarInitial('анна')).toBe('А');

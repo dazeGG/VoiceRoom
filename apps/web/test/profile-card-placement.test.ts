@@ -1,9 +1,6 @@
-import { afterEach, expect, test, vi } from 'vitest';
-import {
-  closeProfileCard,
-  openProfileCardFor,
-  profileCardUi
-} from '../src/lib/entities/profile-card/profile-card-ui.svelte';
+import { createPinia, setActivePinia } from 'pinia';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
 
 const person = {
   userId: 'bob',
@@ -15,10 +12,16 @@ const person = {
   presence: 'online' as const
 };
 
-afterEach(() => closeProfileCard(false));
+function profileCard() {
+  return useProfileCardUiStore();
+}
+
+beforeEach(() => setActivePinia(createPinia()));
+afterEach(() => profileCard().closeProfileCard(false));
 
 test('the card opens to the right of the avatar', () => {
   vi.stubGlobal('innerWidth', 1280);
+  const { openProfileCardFor, profileCardUi } = profileCard();
   openProfileCardFor(person, { rect: { left: 300, right: 336, top: 200 } });
   expect(profileCardUi.x).toBe(346);
   expect(profileCardUi.y).toBe(184);
@@ -26,6 +29,7 @@ test('the card opens to the right of the avatar', () => {
 
 test('near the right edge it opens to the left of the avatar instead', () => {
   vi.stubGlobal('innerWidth', 1280);
+  const { openProfileCardFor, profileCardUi } = profileCard();
   openProfileCardFor(person, { rect: { left: 1200, right: 1236, top: 200 } });
   expect(profileCardUi.x).toBe(1200 - 10 - 300);
 });

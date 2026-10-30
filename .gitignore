@@ -23,9 +23,7 @@ work/
 outputs/
 deploy/
 dist/
-apps/web/build/
 apps/web/dist/
-.svelte-kit/
 apps/api/uploads/
 # Downloaded DB-IP City Lite database (scripts/geoip/fetch-dbip-city-lite.mjs)
 /geoip/
@@ -48,5 +46,4 @@ playwright-report/
 .omc/
 
 # Generated emoji artwork (see apps/web/scripts/build-emoji-assets.ts)
-apps/web/static/emoji/
-apps/web-vue/public/emoji/
+apps/web/public/emoji/

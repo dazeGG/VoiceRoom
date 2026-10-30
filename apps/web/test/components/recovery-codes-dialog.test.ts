@@ -1,14 +1,13 @@
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, test, vi } from 'vitest';
-import RecoveryCodesDialog from '../../src/lib/features/home/components/RecoveryCodesDialog.svelte';
-import { stubFetch } from '../fixtures/fetch.ts';
+import { expect, test, vi } from 'vitest';
+import RecoveryCodesDialog from '@/features/home/components/RecoveryCodesDialog.vue';
+import { stubFetch } from '../fixtures/fetch';
+import { renderWithApp } from '../helpers/render';
 
-afterEach(cleanup);
-
-function renderDialog() {
+async function renderDialog() {
   const props = { open: true, login: 'anya', onClose: vi.fn(), onGenerated: vi.fn(), onToast: vi.fn() };
-  render(RecoveryCodesDialog, { props });
+  await renderWithApp(RecoveryCodesDialog, { props });
   return props;
 }
 
@@ -17,7 +16,7 @@ test('codes are created with the current password, shown once, and the dialog cl
   const { calls } = stubFetch({
     'POST /api/auth/recovery-codes': { body: { ok: true, codes, recoveryCodes: { remaining: 10, generatedAt: 1 } } }
   });
-  const props = renderDialog();
+  const props = await renderDialog();
 
   await userEvent.click(screen.getByRole('button', { name: 'Создать коды' }));
   expect(screen.getByRole('alert').textContent).toBe('Введите текущий пароль');
@@ -39,7 +38,7 @@ test('codes are created with the current password, shown once, and the dialog cl
 
 test('a wrong password is reported and no codes appear', async () => {
   stubFetch({ 'POST /api/auth/recovery-codes': { status: 403, body: { ok: false, error: 'Неверный пароль' } } });
-  renderDialog();
+  await renderDialog();
   await userEvent.type(screen.getByLabelText('Текущий пароль'), 'wrong');
   await userEvent.click(screen.getByRole('button', { name: 'Создать коды' }));
   expect((await screen.findByRole('alert')).textContent).toBe('Неверный пароль');

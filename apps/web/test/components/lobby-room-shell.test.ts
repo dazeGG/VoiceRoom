@@ -2,20 +2,23 @@
 // left closes in the lobby, a room that changes refreshes the lobby's list, and
 // an invitation accepted in a DM opens its room.
 
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { pushState, replaceState } from '$app/navigation';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import LobbyPage from '../../src/lib/features/home/LobbyPage.svelte';
-import { setUser } from '../../src/lib/features/auth/session.svelte';
-import { clearEmbeddedRoom, clearViewedRoom } from '../../src/lib/features/home/model/room-navigation.svelte';
+import LobbyPage from '@/features/home/LobbyPage.vue';
+import { useSessionStore } from '@/features/auth/session.store';
+import { usePageStore } from '@/stores/page.store';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { installFakeWebSocket } from '../fixtures/fake-websocket.ts';
 import { authUser } from '../fixtures/users.ts';
 import { stubMatchMedia } from '../helpers/match-media.ts';
+import { stubOverlayDom } from '../helpers/overlay-dom';
+import { renderWithApp } from '../helpers/render.ts';
+import { spyOnPush, spyOnReplace } from '../helpers/router-spies.ts';
 
-vi.mock('$app/navigation', () => ({ pushState: vi.fn(), replaceState: vi.fn(), goto: vi.fn(async () => {}) }));
-vi.mock('../../src/lib/features/room/RoomPage.svelte', () => import('./harness/RoomShellHarness.svelte'));
+vi.mock('../../src/features/room/RoomPage.vue', () => import('./harness/RoomShellHarness'));
+
+stubOverlayDom();
 
 const user = authUser({ id: 'ada', login: 'ada', displayName: 'Ада' });
 const bob = authUser({ id: 'bob', login: 'bob', displayName: 'Боб' });
@@ -23,15 +26,9 @@ const bob = authUser({ id: 'bob', login: 'bob', displayName: 'Боб' });
 beforeEach(() => {
   installFakeWebSocket();
   stubMatchMedia();
-  setUser(user);
 });
 afterEach(() => {
-  cleanup();
-  clearEmbeddedRoom();
-  clearViewedRoom();
   window.history.replaceState(null, '', '/');
-  vi.mocked(pushState).mockClear();
-  vi.mocked(replaceState).mockClear();
 });
 
 const invite = {
@@ -84,8 +81,12 @@ function stubLobby() {
   });
 }
 
-function renderLobby(): void {
-  render(LobbyPage, { props: { user, loggingOut: false, onLogout: vi.fn(), onToast: vi.fn() } });
+async function renderLobby() {
+  const view = await renderWithApp(LobbyPage, {
+    props: { user, loggingOut: false, onLogout: vi.fn(), onToast: vi.fn() }
+  });
+  useSessionStore(view.pinia).setUser(user);
+  return view;
 }
 
 const roomsFetches = (calls: Array<{ method: string; url: string }>): number =>
@@ -94,19 +95,20 @@ const roomsFetches = (calls: Array<{ method: string; url: string }>): number =>
 test('leaving the room the lobby shows closes it and gives the address back', async () => {
   window.history.replaceState(null, '', '/r/abc123');
   stubLobby();
-  renderLobby();
+  const { router, pinia } = await renderLobby();
+  const replace = spyOnReplace(router);
 
   await userEvent.click(await screen.findByRole('button', { name: 'Покинуть комнату' }));
 
   await vi.waitFor(() => expect(screen.queryByRole('region', { name: 'Комната abc123' })).toBeNull());
-  expect(document.body.dataset.screen).toBe('start');
-  expect(vi.mocked(replaceState)).toHaveBeenCalledWith('/', {});
+  expect(usePageStore(pinia).screen).toBe('start');
+  expect(replace).toHaveBeenCalledWith('/');
 });
 
 test('a room that changes refreshes the lobby room list', async () => {
   window.history.replaceState(null, '', '/r/abc123');
   const { calls } = stubLobby();
-  renderLobby();
+  await renderLobby();
   const save = await screen.findByRole('button', { name: 'Сохранить комнату' });
   await vi.waitFor(() => expect(roomsFetches(calls)).toBeGreaterThan(0));
   const before = roomsFetches(calls);
@@ -119,10 +121,11 @@ test('a room that changes refreshes the lobby room list', async () => {
 test('accepting a room invitation in a DM opens that room', async () => {
   window.history.replaceState(null, '', '/?dm=bob');
   stubLobby();
-  renderLobby();
+  const { router } = await renderLobby();
+  const push = spyOnPush(router);
 
   await userEvent.click(await screen.findByRole('button', { name: 'Войти' }));
 
   expect(await screen.findByRole('region', { name: 'Комната abc123' })).toBeTruthy();
-  expect(vi.mocked(pushState)).toHaveBeenCalledWith('/r/abc123', {});
+  expect(push).toHaveBeenCalledWith('/r/abc123');
 });

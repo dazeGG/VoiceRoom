@@ -28,7 +28,10 @@ function stubNotification(permission: NotificationPermission, requested: Notific
   vi.stubGlobal('Notification', { permission, requestPermission: vi.fn(async () => requested) });
 }
 
-const load = () => freshImport(() => import('../../src/lib/features/home/model/push-notifications.svelte.ts'));
+const load = async () => {
+  const module = await freshImport(() => import('../../src/features/home/model/push-notifications.store.ts'));
+  return module.usePushNotificationsStore();
+};
 
 beforeEach(() => stubNotification('granted'));
 afterEach(() => {
@@ -51,7 +54,7 @@ test('turning push on subscribes this browser with the server key and saves the 
     url: '/api/push/subscriptions',
     body: { subscription: { endpoint: 'https://push.example/sub-1' } }
   });
-  expect(push.pushNotifications.active).toBe(true);
+  expect(push.active).toBe(true);
 });
 
 test('a refused browser permission leaves push off', async () => {
@@ -60,7 +63,7 @@ test('a refused browser permission leaves push off', async () => {
   stubFetch({ '/api/push/config': { body: { enabled: true, vapidPublicKey: 'BAAA' } } });
   const push = await load();
   await expect(push.setPushNotificationsEnabled(true)).rejects.toThrow('Notification permission was not granted');
-  expect(push.pushNotifications.active).toBe(false);
+  expect(push.active).toBe(false);
 });
 
 test('turning push off removes the subscription on the server and in the browser', async () => {
@@ -86,7 +89,7 @@ test("signing out detaches this browser's subscription", async () => {
   await push.detachPushSubscription();
   expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual(['DELETE /api/push/subscriptions']);
   expect(subscription.unsubscribe).toHaveBeenCalled();
-  expect(push.pushNotifications.userId).toBeNull();
+  expect(push.userId).toBeNull();
 });
 
 test('the desktop app never uses Web Push', async () => {

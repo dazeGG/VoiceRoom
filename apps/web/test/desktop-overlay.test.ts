@@ -15,7 +15,7 @@ async function loadService(bridge: unknown) {
     console.warn = originalWarn;
   });
   vi.resetModules();
-  return import('../src/lib/platform/desktop-overlay.ts');
+  return import('../src/platform/desktop-overlay.ts');
 }
 
 test('desktop overlay service is unavailable without the shell bridge', async () => {

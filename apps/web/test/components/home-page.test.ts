@@ -1,16 +1,16 @@
 // The signed-in home: the lobby with its profile card host. The host once read
 // the lobby's context from above the lobby and took the whole page down.
 
-import { cleanup, render, screen } from '@testing-library/svelte';
-import { afterEach, expect, test, vi } from 'vitest';
-import HomePage from '../../src/lib/features/home/HomePage.svelte';
-import { openProfileCardFor } from '../../src/lib/entities/profile-card/profile-card-ui.svelte';
-import { stubFetch } from '../fixtures/fetch.ts';
-import { installFakeWebSocket } from '../fixtures/fake-websocket.ts';
-import { authUser } from '../fixtures/users.ts';
-import { stubMatchMedia } from '../helpers/match-media.ts';
-
-afterEach(cleanup);
+import { screen } from '@testing-library/vue';
+import userEvent from '@testing-library/user-event';
+import { expect, test, vi } from 'vitest';
+import { useProfileCardUiStore } from '@/entities/profile-card/profile-card-ui.store';
+import HomePage from '@/features/home/HomePage.vue';
+import { stubFetch } from '../fixtures/fetch';
+import { installFakeWebSocket } from '../fixtures/fake-websocket';
+import { authUser } from '../fixtures/users';
+import { stubMatchMedia } from '../helpers/match-media';
+import { renderWithApp } from '../helpers/render';
 
 test('a signed-in visit renders the lobby, and a profile card opens there', async () => {
   const errors: unknown[] = [];
@@ -44,12 +44,12 @@ test('a signed-in visit renders the lobby, and a profile card opens there', asyn
     'GET /api/friends/requests': { body: { ok: true, incoming: [], outgoing: [] } }
   });
 
-  render(HomePage);
+  const { pinia } = await renderWithApp(HomePage);
   expect(await screen.findByRole('button', { name: 'Создать комнату' }, { timeout: 5000 })).toBeTruthy();
 
   const anchor = document.createElement('button');
   document.body.append(anchor);
-  openProfileCardFor(
+  useProfileCardUiStore(pinia).openProfileCardFor(
     {
       userId: 'bob',
       name: 'Боб',
@@ -66,4 +66,29 @@ test('a signed-in visit renders the lobby, and a profile card opens there', asyn
   await vi.waitFor(() => expect(errors).toEqual([]));
   window.removeEventListener('unhandledrejection', onError);
   window.removeEventListener('error', onError);
+});
+
+test('a guest on the landing opens the sign-in from the header in place', async () => {
+  // jsdom has no modal dialogs.
+  for (const [name, open] of [
+    ['showModal', true],
+    ['close', false]
+  ] as const) {
+    if (name in HTMLDialogElement.prototype) continue;
+    Object.defineProperty(HTMLDialogElement.prototype, name, {
+      configurable: true,
+      value(this: HTMLDialogElement) {
+        this.open = open;
+      }
+    });
+  }
+  installFakeWebSocket();
+  stubMatchMedia();
+  stubFetch({ 'GET /api/auth/me': { body: { ok: true, user: null } } });
+
+  const { router } = await renderWithApp(HomePage);
+  await userEvent.click(await screen.findByRole('link', { name: 'Войти' }, { timeout: 5000 }));
+
+  expect(await screen.findByRole('dialog', { name: 'Вход' })).toBeTruthy();
+  expect(router.currentRoute.value.fullPath).toBe('/?auth=login');
 });

@@ -1,18 +1,17 @@
 // Reactions are drawn with the bundled emoji artwork, not the platform font,
 // while the button still names the emoji it adds or removes.
 
-import { cleanup, render, screen } from '@testing-library/svelte';
-import { afterEach, expect, test } from 'vitest';
-import ReactionSummary from '../../src/lib/shared/chat/ReactionSummary.svelte';
-import { createReactionStore } from '../../src/lib/shared/chat/reaction-store.svelte';
+import { screen } from '@testing-library/vue';
+import { expect, test } from 'vitest';
+import ReactionSummary from '@/shared/chat/ReactionSummary.vue';
+import { createReactionStore } from '@/shared/chat/reaction-store';
+import { renderWithApp } from '../helpers/render.ts';
 
-afterEach(cleanup);
-
-test('a reaction chip draws its emoji as artwork and says which reaction it toggles', () => {
+test('a reaction chip draws its emoji as artwork and says which reaction it toggles', async () => {
   const store = createReactionStore();
   store.setConversation({ type: 'room', id: 'kitchen' });
   store.applyServer('m1', { emoji: '👍', count: 2, reactedByMe: true, revision: '1' });
-  const { container } = render(ReactionSummary, { props: { store, messageId: 'm1' } });
+  const { container } = await renderWithApp(ReactionSummary, { props: { store, messageId: 'm1' } });
 
   const toggle = screen.getByRole('button', { name: 'Убрать реакцию 👍' });
   const image = toggle.querySelector('img');

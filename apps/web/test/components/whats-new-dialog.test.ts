@@ -2,18 +2,18 @@
 // reader points at them, wait behind a more urgent dialog, and each release is
 // recorded as seen however the dialog closes.
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
+import { fireEvent, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import WhatsNewDialog from '../../src/lib/features/home/components/WhatsNewDialog.svelte';
-import { WHATS_NEW_SLIDES } from '../../src/lib/features/home/model/whats-new';
+import { beforeEach, expect, test, vi } from 'vitest';
 import { WHATS_NEW_VERSION } from '@voice-room/shared/account-security';
-import { stubFetch } from '../fixtures/fetch.ts';
-import { stubMatchMedia } from '../helpers/match-media.ts';
-import { defined } from '../helpers/assert.ts';
+import WhatsNewDialog from '@/features/home/components/WhatsNewDialog.vue';
+import { WHATS_NEW_SLIDES } from '@/features/home/model/whats-new';
+import { stubFetch } from '../fixtures/fetch';
+import { defined } from '../helpers/assert';
+import { stubMatchMedia } from '../helpers/match-media';
+import { renderWithApp } from '../helpers/render';
 
 beforeEach(() => stubMatchMedia());
-afterEach(cleanup);
 
 function stubRelease(lastSeen: string | null) {
   return stubFetch({
@@ -25,11 +25,11 @@ function stubRelease(lastSeen: string | null) {
 }
 
 const title = () => document.querySelector('#whatsNewSlideTitle')?.textContent;
-const runningFill = () => document.querySelector('.stories-fill--run');
+const runningFill = () => document.querySelector('.stories__fill--run');
 
 test('slides turn on their own and hold while the pointer is over the card', async () => {
   stubRelease(null);
-  render(WhatsNewDialog, { props: { onOpenAppearance: vi.fn() } });
+  await renderWithApp(WhatsNewDialog, { props: { onOpenAppearance: vi.fn() } });
   await screen.findByRole('dialog');
   expect(title()).toBe(WHATS_NEW_SLIDES[0].title);
 
@@ -37,16 +37,18 @@ test('slides turn on their own and hold while the pointer is over the card', asy
   expect(title()).toBe(defined(WHATS_NEW_SLIDES[1], 'WHATS_NEW_SLIDES[1]').title);
 
   await fireEvent.pointerEnter(screen.getByRole('dialog'), { pointerType: 'mouse' });
-  expect(runningFill()?.classList.contains('stories-fill--paused')).toBe(true);
+  expect(runningFill()?.classList.contains('stories__fill--paused')).toBe(true);
   await fireEvent.pointerLeave(screen.getByRole('dialog'), { pointerType: 'mouse' });
-  expect(runningFill()?.classList.contains('stories-fill--paused')).toBe(false);
+  expect(runningFill()?.classList.contains('stories__fill--paused')).toBe(false);
 });
 
 test('the story waits behind a more urgent dialog and tells the lobby when it is up', async () => {
   stubRelease(null);
   const onOpenChange = vi.fn();
-  const view = render(WhatsNewDialog, { props: { paused: true, onOpenAppearance: vi.fn(), onOpenChange } });
-  await vi.waitFor(() => expect(document.querySelector('.stories-fill')).toBeNull());
+  const view = await renderWithApp(WhatsNewDialog, {
+    props: { paused: true, onOpenAppearance: vi.fn(), onOpenChange }
+  });
+  await vi.waitFor(() => expect(document.querySelector('.stories__fill')).toBeNull());
   expect(screen.queryByRole('dialog')).toBeNull();
 
   await view.rerender({ paused: false, onOpenAppearance: vi.fn(), onOpenChange });
@@ -56,7 +58,7 @@ test('the story waits behind a more urgent dialog and tells the lobby when it is
 
 test('Escape closes it and records the release as seen', async () => {
   const { calls } = stubRelease(null);
-  render(WhatsNewDialog, { props: { onOpenAppearance: vi.fn() } });
+  await renderWithApp(WhatsNewDialog, { props: { onOpenAppearance: vi.fn() } });
   await screen.findByRole('dialog');
 
   await userEvent.keyboard('{Escape}');
@@ -67,7 +69,7 @@ test('Escape closes it and records the release as seen', async () => {
 test('the last slide can open the appearance settings', async () => {
   stubRelease(null);
   const onOpenAppearance = vi.fn();
-  render(WhatsNewDialog, { props: { onOpenAppearance } });
+  await renderWithApp(WhatsNewDialog, { props: { onOpenAppearance } });
   await screen.findByRole('dialog');
   for (let i = 1; i < WHATS_NEW_SLIDES.length; i += 1) await userEvent.keyboard('{ArrowRight}');
   expect(title()).toBe(WHATS_NEW_SLIDES.at(-1)?.title);
@@ -79,7 +81,7 @@ test('the last slide can open the appearance settings', async () => {
 
 test('a release already seen is not shown', async () => {
   stubRelease(WHATS_NEW_VERSION);
-  render(WhatsNewDialog, { props: { onOpenAppearance: vi.fn() } });
+  await renderWithApp(WhatsNewDialog, { props: { onOpenAppearance: vi.fn() } });
   await new Promise((resolve) => setTimeout(resolve, 50));
   expect(screen.queryByRole('dialog')).toBeNull();
 });

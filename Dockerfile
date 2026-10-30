@@ -5,7 +5,6 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/web/package.json ./apps/web/package.json
-COPY apps/web-vue/package.json ./apps/web-vue/package.json
 COPY apps/admin/package.json ./apps/admin/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 RUN npm ci
@@ -15,8 +14,6 @@ FROM deps AS web-build
 COPY apps/web ./apps/web
 COPY apps/admin ./apps/admin
 COPY packages ./packages
-# The Vue web (apps/web-vue) is not in the image until it replaces apps/web,
-# so the workspaces are built by name instead of the root `npm run build`.
 RUN npm --workspace @voice-room/web run build \
   && npm --workspace @voice-room/admin run build \
   && node apps/web/scripts/emit-caddy-csp.ts apps/web/dist/index.html > /app/csp.caddy
@@ -29,7 +26,6 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 COPY apps/api/package.json ./apps/api/package.json
 COPY apps/web/package.json ./apps/web/package.json
-COPY apps/web-vue/package.json ./apps/web-vue/package.json
 COPY apps/admin/package.json ./apps/admin/package.json
 COPY packages/shared/package.json ./packages/shared/package.json
 RUN npm ci --omit=dev

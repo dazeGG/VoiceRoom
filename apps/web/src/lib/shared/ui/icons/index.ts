@@ -1,1 +1,0 @@
-export { iconLg, iconMd, iconSm, iconStroke, iconXs } from './defaults';

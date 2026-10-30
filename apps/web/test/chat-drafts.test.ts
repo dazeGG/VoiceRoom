@@ -27,7 +27,7 @@ async function loadDrafts() {
     Reflect.deleteProperty(globalThis, 'localStorage');
   });
   vi.resetModules();
-  return { drafts: await import('../src/lib/shared/chat/chat-drafts.ts'), storage };
+  return { drafts: await import('@/shared/chat/chat-drafts'), storage };
 }
 
 const dm = (id: string) => ({ type: 'dm' as const, id });

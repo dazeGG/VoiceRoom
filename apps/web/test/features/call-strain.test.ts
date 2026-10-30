@@ -12,16 +12,16 @@ import {
   startCallStrainWatch,
   stopCallStrainWatch,
   type StrainCounts
-} from '../../src/lib/features/room/client/room/call-strain.ts';
-import { createInitialRoomState } from '../../src/lib/features/room/client/model/room-state.ts';
-import type { CpuPressureState } from '../../src/lib/features/room/client/services/cpu-pressure.ts';
-import { freshImport } from '../helpers/fresh-module.ts';
-import { clearLogBuffer, readLogBuffer } from '../../src/lib/shared/log.ts';
+} from '@/features/room/client/room/call-strain';
+import { createInitialRoomState } from '@/features/room/client/model/room-state';
+import type { CpuPressureState } from '@/features/room/client/services/cpu-pressure';
+import { freshImport } from '../helpers/fresh-module';
+import { clearLogBuffer, readLogBuffer } from '@/shared/log';
 
 afterEach(() => {
   stopCallStrainWatch();
   vi.useRealTimers();
-  vi.doUnmock('../../src/lib/entities/room/room-realtime');
+  vi.doUnmock('@/entities/room/room-realtime');
 });
 
 /** One 3-second poll of a call that sounds fine: speech both ways, nothing made up, no video. */
@@ -122,10 +122,10 @@ const report = (entries: Entry[]) => ({
 
 async function loadStatsPoll() {
   vi.useFakeTimers();
-  vi.doMock('../../src/lib/entities/room/room-realtime', () => ({ updateVoicePeer: () => {} }));
-  const stats = await freshImport(() => import('../../src/lib/features/room/client/room/stats.ts'));
-  const strain = await import('../../src/lib/features/room/client/room/call-strain.ts');
-  const { state } = await import('../../src/lib/features/room/client/core/state.svelte.ts');
+  vi.doMock('@/entities/room/room-realtime', () => ({ updateVoicePeer: () => {} }));
+  const stats = await freshImport(() => import('@/features/room/client/room/stats'));
+  const strain = await import('@/features/room/client/room/call-strain');
+  const { state } = await import('@/features/room/client/core/room-runtime.store');
   Object.assign(state, createInitialRoomState());
   return { stats, strain, state };
 }

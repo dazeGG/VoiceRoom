@@ -1,12 +1,15 @@
-import { sveltekit } from '@sveltejs/kit/vite';
+import { fileURLToPath } from 'node:url';
+import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vitest/config';
+
+import { buildVersion, cspMetaPlugin, serviceWorkerPlugin, versionFilePlugin } from './scripts/deploy-contract.ts';
 
 const API_TARGET = process.env.VITE_DEV_API_TARGET || 'http://localhost:3000';
 const DEV_HOST = process.env.VITE_DEV_HOST || '127.0.0.1';
 // Own a dedicated dev port instead of Vite's shared default 5173: a different
 // vite-plugin-pwa project (VideoCall) registers a service worker scoped to
-// localhost:5173 that then hijacks any app served on that origin. A unique
-// port keeps VoiceRoom isolated from foreign service workers.
+// localhost:5173 that then hijacks any app served on that origin. 5181 is the
+// admin app.
 const DEV_PORT = Number(process.env.VITE_DEV_PORT) || 5180;
 const API_PROXY = {
   '/api': {
@@ -18,24 +21,36 @@ const API_PROXY = {
   }
 };
 
+// One id for the bundle (the update check compares against it) and /_app/version.json.
+const APP_VERSION = buildVersion();
+
 export default defineConfig({
-  plugins: [sveltekit()],
+  plugins: [vue(), cspMetaPlugin(), versionFilePlugin(APP_VERSION), serviceWorkerPlugin()],
+  define: { 'import.meta.env.VITE_APP_VERSION': JSON.stringify(APP_VERSION) },
+  resolve: {
+    alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) }
+  },
   server: {
     host: DEV_HOST,
     port: DEV_PORT,
     strictPort: true,
     proxy: API_PROXY
   },
+  build: {
+    outDir: 'dist',
+    emptyOutDir: true,
+    // Caddy caches /_app/immutable/* for a year and keeps earlier releases'
+    // chunks there for open tabs (Caddyfile, config/caddy/archive-assets.sh).
+    assetsDir: '_app/immutable'
+  },
   test: {
-    include: ['test/**/*.test.ts', 'test/**/*.test.svelte.ts'],
-    // Browser semantics for every unit test: runes compile for the client and
-    // component tests get a DOM. Node APIs stay available.
+    include: ['test/**/*.test.ts'],
     environment: 'jsdom',
+    setupFiles: ['test/setup.ts'],
     testTimeout: 20000,
     // vi.stubGlobal() is undone after every test.
     unstubGlobals: true
   },
-  ...(process.env.VITEST ? { resolve: { conditions: ['browser'] } } : {}),
   preview: {
     host: DEV_HOST,
     port: DEV_PORT,

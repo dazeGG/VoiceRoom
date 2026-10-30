@@ -4,7 +4,7 @@
   "importRules": [
     {
       "id": "no-shared-src-deep-imports",
-      "sources": ["apps/api/src/**/*.{js,ts,mts}", "apps/web/src/**/*.{js,ts,svelte}", "apps/web-vue/src/**/*.{js,ts,vue}"],
+      "sources": ["apps/api/src/**/*.{js,ts,mts}", "apps/web/src/**/*.{js,ts,vue}"],
       "forbidden": ["packages/shared/src/", "@voice-room/shared/src/"],
       "message": "Use @voice-room/shared package exports instead of shared src deep imports."
     },

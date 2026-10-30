@@ -7,7 +7,7 @@ import { freshImport, muteWarnings } from '../helpers/fresh-module.ts';
 
 async function load() {
   installFakeWebSocket();
-  return freshImport(() => import('../../src/lib/api/realtime.ts'));
+  return freshImport(() => import('../../src/api/realtime.ts'));
 }
 
 beforeEach(() => vi.useFakeTimers());
@@ -65,7 +65,7 @@ test('a frame outside the realtime contract is dropped and the next good one sti
 
 test('frames outside the contract ask for a version check at most once a minute', async () => {
   const realtime = await load();
-  const { onContractViolation } = await import('../../src/lib/api/contract-violations.ts');
+  const { onContractViolation } = await import('../../src/api/contract-violations.ts');
   muteWarnings();
   const violated = vi.fn();
   onContractViolation(violated);

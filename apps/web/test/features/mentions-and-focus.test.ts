@@ -1,14 +1,9 @@
+import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, test } from 'vitest';
-import { createMentionComposer } from '../../src/lib/shared/chat/mention-composer.svelte.ts';
-import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
-import { createInitialRoomState } from '../../src/lib/features/room/client/model/room-state.ts';
-import {
-  clearParticipantFocus,
-  getFocusedParticipant,
-  getSortedParticipants,
-  participantsUi,
-  toggleParticipantFocus
-} from '../../src/lib/features/room/participants-ui.svelte.ts';
+import { createMentionComposer } from '@/shared/chat/mention-composer';
+import { state } from '@/features/room/client/core/room-runtime.store';
+import { createInitialRoomState } from '@/features/room/client/model/room-state';
+import { useParticipantsUiStore } from '@/features/room/participants-ui.store';
 import { participant } from '../fixtures/participant.ts';
 
 const member = (userId: string, login: string) =>
@@ -57,26 +52,30 @@ test('someone already mentioned is not offered again', () => {
   expect(mentions.candidates.map((candidate) => candidate.userId)).toEqual(['u-alex']);
 });
 
+let participantsUi: ReturnType<typeof useParticipantsUiStore>;
+
 beforeEach(() => {
+  setActivePinia(createPinia());
+  participantsUi = useParticipantsUiStore();
   Object.assign(state, createInitialRoomState());
-  clearParticipantFocus();
+  participantsUi.clearParticipantFocus();
 });
 
 test('you come first in the grid, then peers in the order they joined', () => {
   state.self = participant({ id: 'me', joinedAt: 5 });
   state.peers.set('late', participant({ id: 'late', joinedAt: 30 }));
   state.peers.set('early', participant({ id: 'early', joinedAt: 10 }));
-  expect(getSortedParticipants().map((participant) => participant.id)).toEqual(['me', 'early', 'late']);
+  expect(participantsUi.getSortedParticipants().map((participant) => participant.id)).toEqual(['me', 'early', 'late']);
 });
 
 test('clicking a tile focuses it, clicking again unfocuses, and a departed peer is no longer focused', () => {
   state.peers.set('anna', participant({ id: 'anna', joinedAt: 1 }));
-  toggleParticipantFocus('anna');
-  expect(getFocusedParticipant()?.id).toBe('anna');
-  toggleParticipantFocus('anna');
+  participantsUi.toggleParticipantFocus('anna');
+  expect(participantsUi.getFocusedParticipant()?.id).toBe('anna');
+  participantsUi.toggleParticipantFocus('anna');
   expect(participantsUi.focusedParticipantId).toBe('');
 
-  toggleParticipantFocus('anna');
+  participantsUi.toggleParticipantFocus('anna');
   state.peers.delete('anna');
-  expect(getFocusedParticipant()).toBeNull();
+  expect(participantsUi.getFocusedParticipant()).toBeNull();
 });

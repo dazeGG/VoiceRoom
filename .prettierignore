@@ -1,4 +1,4 @@
-# Prettier formats code only: ts, js, svelte and css. Markdown, YAML and JSON
+# Prettier formats code only: ts, js, vue, scss and css. Markdown, YAML and JSON
 # keep their hand layout (compose files and fixtures are read by tests).
 *.md
 *.yml
@@ -14,10 +14,7 @@ apps/api/src/platform/db/schema.ts
 node_modules/
 coverage/
 !scripts/coverage/
-.svelte-kit/
-apps/web/build/
-apps/web/static/
-apps/web-vue/public/
+apps/web/public/
 .omc/
 .claude/
 .idea/

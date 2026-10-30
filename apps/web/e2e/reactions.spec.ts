@@ -1,5 +1,4 @@
 import { expect, test, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
 import {
   ReactionBody,
   type ReactionSet,
@@ -9,45 +8,7 @@ import {
 import { parse } from '../test/helpers/assert';
 import { createPermanentRoom, enableCapabilities, enterRoom, registerViaUi, uniqueLogin } from './helpers';
 
-const store = readFileSync(new URL('../src/lib/shared/chat/reaction-store.svelte.ts', import.meta.url), 'utf8');
-const summary = readFileSync(new URL('../src/lib/shared/chat/ReactionSummary.svelte', import.meta.url), 'utf8');
-const picker =
-  readFileSync(new URL('../src/lib/shared/chat/ReactionPicker.svelte', import.meta.url), 'utf8') +
-  readFileSync(new URL('../src/lib/shared/chat/EmojiPickerPanel.svelte', import.meta.url), 'utf8');
-const reactors = readFileSync(new URL('../src/lib/shared/chat/ReactorList.svelte', import.meta.url), 'utf8');
-const room = readFileSync(new URL('../src/lib/features/room/components/RoomChat.svelte', import.meta.url), 'utf8');
-const dm = readFileSync(new URL('../src/lib/features/home/components/lobby/DmView.svelte', import.meta.url), 'utf8');
-
 const enableReactions = (target: Page) => enableCapabilities(target, ['reactions']);
-
-test('G70 supplemental source contracts cover reconciliation branches', async () => {
-  expect(store).toContain('Math.max(0');
-  expect(store).toMatch(/revision\(summary\.revision\) < revision\(current\.revision\)/);
-  expect(store).toContain('this.applyServer(messageId, authoritative)');
-  expect(store).toContain('new Map(candidates.map((reactor) => [reactor.userId, reactor]))');
-  expect(store).toContain('this.reactorRequests[key] !== requestId');
-  expect(store).toContain('this.isDeleted(messageId)');
-  expect(room).toContain('reactions.markDeleted(mid)');
-  expect(dm).toContain('reactions.markDeleted(mid)');
-  expect(room).toContain("event.type === 'reaction.updated'");
-  expect(dm).toContain("event.type !== 'reaction.updated'");
-});
-
-test('G70 supplemental accessibility contracts remain visible in components', async () => {
-  expect(room).toContain('reactionsEnabled && session.user?.id');
-  expect(room).toContain('canMutate={Boolean(session.user?.id)}');
-  expect(summary).toContain('{#if canMutate}');
-  expect(summary).toContain('aria-pressed={summary.reactedByMe}');
-  expect(summary).toContain('aria-haspopup="dialog"');
-  expect(summary).toContain('role="alert"');
-  expect(picker).toMatch(/ArrowRight|ArrowLeft/);
-  expect(picker).toMatch(/ArrowDown|ArrowUp/);
-  expect(picker).toMatch(/Home|End/);
-  expect(picker).toContain('role="grid"');
-  expect(reactors).toContain('heading?.focus()');
-  expect(reactors).toContain('aria-live="polite"');
-  expect(reactors).toContain('Показать ещё');
-});
 
 test('G70 supplemental mocked keyboard and pagination rendering remains deterministic', async ({ page }) => {
   const allReactors = Array.from({ length: 120 }, (_, index) => ({
@@ -90,7 +51,7 @@ test('G70 supplemental mocked keyboard and pagination rendering remains determin
   const input = page.getByPlaceholder('Написать в комнату…');
   await input.fill('keyboard reaction');
   await input.press('Enter');
-  const message = page.locator('.chat-msg-text', { hasText: 'keyboard reaction' });
+  const message = page.locator('.message-bubble', { hasText: 'keyboard reaction' });
   await expect(message).toBeVisible();
   await message.hover();
   const pickerButton = message.getByRole('button', { name: 'Открыть выбор эмодзи' });
@@ -111,7 +72,7 @@ test('G70 supplemental mocked keyboard and pagination rendering remains determin
     (request) => request.method() === 'PUT' && request.url().includes('/api/reactions/')
   );
   await Promise.all([keyboardMutation, page.keyboard.press('Enter')]);
-  const thumbChip = page.locator('.reaction-chip', { has: page.getByRole('button', { name: /реакцию 👍/i }) });
+  const thumbChip = page.locator('.reaction-summary__chip', { has: page.getByRole('button', { name: /реакцию 👍/i }) });
   const count = thumbChip.getByRole('button', { name: 'Показать пользователей: 120' });
   await expect(count).toBeVisible();
   await count.click();
@@ -144,7 +105,7 @@ test('G70-A03 late reaction response cannot revive a deleted message', async ({ 
   const input = page.getByPlaceholder('Написать в комнату…');
   await input.fill('hostile reaction race');
   await input.press('Enter');
-  const message = page.locator('.chat-msg-text', { hasText: 'hostile reaction race' });
+  const message = page.locator('.message-bubble', { hasText: 'hostile reaction race' });
   await expect(message).toBeVisible();
   await message.hover();
   const mutationRequest = page.waitForRequest(
@@ -157,7 +118,7 @@ test('G70-A03 late reaction response cannot revive a deleted message', async ({ 
   releaseMutation();
   await page.waitForTimeout(100);
   await expect(page.getByText('hostile reaction race')).toHaveCount(0);
-  await expect(page.locator('.reaction-chip')).toHaveCount(0);
+  await expect(page.locator('.reaction-summary__chip')).toHaveCount(0);
 });
 
 test('G70-A04 two accounts and a guest enforce the real mutation boundary across contexts', async ({
@@ -185,13 +146,13 @@ test('G70-A04 two accounts and a guest enforce the real mutation boundary across
   const guestDialog = guest.getByRole('dialog', { name: 'Как вас зовут?' });
   await guestDialog.getByPlaceholder('Ваше имя').fill('Reaction Guest');
   await guestDialog.getByRole('button', { name: 'Войти в комнату' }).click();
-  await expect(guest.locator('body')).toHaveAttribute('data-screen', 'room');
+  await expect(guest.locator('body')).toHaveClass(/\bscreen--room\b/);
   for (const target of [page, member, guest]) await target.getByRole('button', { name: 'Чат', exact: true }).click();
   const input = page.getByPlaceholder('Написать в комнату…');
   await input.fill('three-context reaction boundary');
   await input.press('Enter');
-  const memberMessage = member.locator('.chat-msg-text', { hasText: 'three-context reaction boundary' });
-  const guestMessage = guest.locator('.chat-msg-text', { hasText: 'three-context reaction boundary' });
+  const memberMessage = member.locator('.message-bubble', { hasText: 'three-context reaction boundary' });
+  const guestMessage = guest.locator('.message-bubble', { hasText: 'three-context reaction boundary' });
   await expect(memberMessage).toBeVisible();
   await expect(guestMessage).toBeVisible();
   await memberMessage.hover();
@@ -203,12 +164,12 @@ test('G70-A04 two accounts and a guest enforce the real mutation boundary across
   const mutation = await mutationResponse;
   expect(mutation.ok(), await mutation.text()).toBe(true);
   await expect(
-    member.locator('.reaction-chip').getByText('1'),
+    member.locator('.reaction-summary__chip').getByText('1'),
     'mutating member applies the authoritative API response'
   ).toBeVisible();
-  await expect(page.locator('.reaction-chip').getByText('1'), 'owner receives reaction.updated').toBeVisible();
+  await expect(page.locator('.reaction-summary__chip').getByText('1'), 'owner receives reaction.updated').toBeVisible();
   await expect(
-    guest.locator('.reaction-chip').getByText('1'),
+    guest.locator('.reaction-summary__chip').getByText('1'),
     'guest receives read-only reaction.updated'
   ).toBeVisible();
   await guestMessage.hover();
@@ -220,15 +181,15 @@ test('G70-A04 two accounts and a guest enforce the real mutation boundary across
   await reconnected.getByRole('button', { name: 'Чат', exact: true }).click();
   await expect(
     reconnected
-      .locator('.chat-msg-text', { hasText: 'three-context reaction boundary' })
-      .locator('.reaction-chip')
+      .locator('.message-bubble', { hasText: 'three-context reaction boundary' })
+      .locator('.reaction-summary__chip')
       .getByText('1')
   ).toBeVisible();
-  const ownerMessage = page.locator('.chat-msg-text', { hasText: 'three-context reaction boundary' });
+  const ownerMessage = page.locator('.message-bubble', { hasText: 'three-context reaction boundary' });
   await ownerMessage.hover();
   await ownerMessage.getByRole('button', { name: 'Добавить быструю реакцию 👍' }).click();
   for (const target of [page, reconnected, guest])
-    await expect(target.locator('.reaction-chip').getByText('2')).toBeVisible();
+    await expect(target.locator('.reaction-summary__chip').getByText('2')).toBeVisible();
   await memberContext.close();
   await guestContext.close();
 });
@@ -244,7 +205,7 @@ test('G70-A02 real storage paginates 120 reactors through the production API', a
   const input = page.getByPlaceholder('Написать в комнату…');
   await input.fill('real 120 reactors');
   await input.press('Enter');
-  const message = page.locator('.chat-msg-text', { hasText: 'real 120 reactors' });
+  const message = page.locator('.message-bubble', { hasText: 'real 120 reactors' });
   await expect(message).toBeVisible();
   const messageId = await message.getAttribute('data-message-id');
   expect(messageId).toBeTruthy();
@@ -276,9 +237,9 @@ test('G70-A02 real storage paginates 120 reactors through the production API', a
     await client.end();
   }
   await page.reload();
-  await expect(page.locator('body')).toHaveAttribute('data-screen', 'room');
+  await expect(page.locator('body')).toHaveClass(/\bscreen--room\b/);
   await page.getByRole('button', { name: 'Чат', exact: true }).click();
-  const restored = page.locator('.chat-msg-text', { hasText: 'real 120 reactors' });
+  const restored = page.locator('.message-bubble', { hasText: 'real 120 reactors' });
   await expect(restored).toBeVisible();
   const count = restored.getByRole('button', { name: 'Показать пользователей: 120' });
   await count.click();

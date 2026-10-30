@@ -5,7 +5,7 @@ import { Type, type Static } from 'typebox';
 import { Value } from 'typebox/value';
 import { globToRegExp, normalizePath, readSource, repoFiles } from './lib/glob.mts';
 
-const isSource = (file: string) => /\.(?:js|mjs|cjs|ts|mts|cts|svelte|vue)$/.test(file);
+const isSource = (file: string) => /\.(?:js|mjs|cjs|ts|mts|cts|vue)$/.test(file);
 
 const ImportRule = Type.Object({
   id: Type.String(),

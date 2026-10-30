@@ -1,14 +1,16 @@
 // The notifications tab asks for the browser's permission only when its switch
 // is pressed, stays quiet when that works, and reports why when it does not.
 
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import NotificationSettings from '../../src/lib/features/home/components/settings/NotificationSettings.svelte';
-import { pushNotifications } from '../../src/lib/features/home/model/push-notifications.svelte';
-import { syncNotificationPermission } from '../../src/lib/shared/notifications/preferences.svelte';
-import type { SettingsSupport } from '../../src/lib/features/home/model/settings-support';
+import type { Pinia } from 'pinia';
+import { beforeEach, expect, test, vi } from 'vitest';
+import NotificationSettings from '@/features/home/components/settings/NotificationSettings.vue';
+import { usePushNotificationsStore } from '@/features/home/model/push-notifications.store';
+import type { SettingsSupport } from '@/features/home/model/settings-support';
+import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { stubFetch } from '../fixtures/fetch.ts';
+import { renderWithApp } from '../helpers/render.ts';
 
 const browserTab: SettingsSupport = {
   desktopApp: false,
@@ -29,30 +31,27 @@ function stubNotification(answer: NotificationPermission) {
     static requestPermission = requestPermission;
   }
   vi.stubGlobal('Notification', FakeNotification);
-  syncNotificationPermission();
   return requestPermission;
 }
 
 beforeEach(() => {
   localStorage.clear();
-  pushNotifications.supported = false;
-  pushNotifications.active = false;
-  pushNotifications.busy = false;
-  pushNotifications.loaded = false;
-  pushNotifications.serverEnabled = false;
 });
-afterEach(cleanup);
 
-function renderTab() {
+async function renderTab(setup: (pinia: Pinia) => void = () => {}) {
   const onToast = vi.fn();
-  render(NotificationSettings, { props: { support: browserTab, users: [], rooms: [], onToast } });
+  const { pinia } = await renderWithApp(NotificationSettings, {
+    props: { support: browserTab, users: [], rooms: [], onToast }
+  });
+  useNotificationPreferencesStore(pinia).syncNotificationPermission();
+  setup(pinia);
   return onToast;
 }
 
 test('permission is asked only when the switch is pressed, and a grant turns it on quietly', async () => {
   stubFetch({ 'GET /api/blocks': { body: { ok: true, blocked: [], users: [] } } });
   const requestPermission = stubNotification('granted');
-  const onToast = renderTab();
+  const onToast = await renderTab();
 
   const toggle = screen.getByRole('switch', { name: 'Push этого браузера' });
   expect(toggle.getAttribute('aria-checked')).toBe('false');
@@ -68,7 +67,7 @@ test('permission is asked only when the switch is pressed, and a grant turns it 
 test('a refused permission says where to change it', async () => {
   stubFetch({ 'GET /api/blocks': { body: { ok: true, blocked: [], users: [] } } });
   stubNotification('denied');
-  const onToast = renderTab();
+  const onToast = await renderTab();
 
   await userEvent.click(screen.getByRole('switch', { name: 'Push этого браузера' }));
   await vi.waitFor(() => expect(onToast).toHaveBeenCalledWith('Разрешите уведомления в настройках браузера'));
@@ -80,8 +79,9 @@ test('push that the server does not offer is reported as an error', async () => 
     'GET /api/push/config': { body: { ok: true, enabled: false, vapidPublicKey: '' } }
   });
   stubNotification('granted');
-  pushNotifications.supported = true;
-  const onToast = renderTab();
+  const onToast = await renderTab((pinia) => {
+    usePushNotificationsStore(pinia).supported = true;
+  });
 
   await userEvent.click(screen.getByRole('switch', { name: 'Push этого браузера' }));
   await vi.waitFor(() =>

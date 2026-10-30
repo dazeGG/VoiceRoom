@@ -71,7 +71,7 @@ export function Segment<Value extends string>({
   );
 }
 
-// The main site's avatar hues (apps/web/src/lib/visual/tokens.ts): every
+// The main site's avatar hues (apps/web/src/visual/tokens.ts): every
 // avatar sits at the same lightness, its letter darker on the same hue.
 const AVATAR_HUES: Record<string, number> = {
   blurple: 278,

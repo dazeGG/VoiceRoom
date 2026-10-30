@@ -7,7 +7,7 @@ import { freshImport } from '../helpers/fresh-module.ts';
 import { Type } from 'typebox';
 import { parse } from '../helpers/assert.ts';
 
-const load = () => freshImport(() => import('../../src/lib/shared/log.ts'));
+const load = () => freshImport(() => import('../../src/shared/log.ts'));
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -114,10 +114,10 @@ test('a failed API response is logged with the request id the server gave it', a
   );
   const log = await load();
   log.clearLogBuffer();
-  const { api } = await import('../../src/lib/api/client.ts');
+  const { api } = await import('../../src/api/client.ts');
   const { Done } = await import('@voice-room/shared/contracts/http');
   await expect(api.get('/api/friends', Done)).rejects.toThrow('Нет доступа');
-  const records = (await import('../../src/lib/shared/log.ts')).readLogBuffer();
+  const records = (await import('../../src/shared/log.ts')).readLogBuffer();
   expect(records.at(-1)).toMatchObject({
     level: 'warn',
     msg: 'api request failed',

@@ -1,15 +1,14 @@
 // Deleting the account asks for the password and says what the grace period
 // keeps; a new sign-in asks "was it you?" and "no" leads to securing the account.
 
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, test, vi } from 'vitest';
-import DeleteAccountDialog from '../../src/lib/features/home/components/DeleteAccountDialog.svelte';
-import LoginAlertDialog from '../../src/lib/features/home/components/LoginAlertDialog.svelte';
-import { stubFetch } from '../fixtures/fetch.ts';
-import { installFakeWebSocket } from '../fixtures/fake-websocket.ts';
-
-afterEach(cleanup);
+import { expect, test, vi } from 'vitest';
+import DeleteAccountDialog from '@/features/home/components/DeleteAccountDialog.vue';
+import LoginAlertDialog from '@/features/home/components/LoginAlertDialog.vue';
+import { stubFetch } from '../fixtures/fetch';
+import { installFakeWebSocket } from '../fixtures/fake-websocket';
+import { renderWithApp } from '../helpers/render';
 
 const ALERT_ID = '0f0e0d0c-0b0a-4908-8706-050403020100';
 
@@ -28,7 +27,7 @@ test('deletion waits for the password and the acknowledgement, and names what ha
     'POST /api/auth/account/deletion': { body: { ok: true, deletionScheduledFor: Date.UTC(2026, 9, 6) } }
   });
   const onToast = vi.fn();
-  render(DeleteAccountDialog, { props: { open: true, onClose: vi.fn(), onToast } });
+  await renderWithApp(DeleteAccountDialog, { props: { open: true, onClose: vi.fn(), onToast } });
 
   expect(await screen.findByText(/перейдёт к Боб/)).toBeTruthy();
   expect(screen.getByText('удалится: других участников нет')).toBeTruthy();
@@ -55,7 +54,7 @@ test('a wrong password keeps the dialog open with the reason', async () => {
     }
   });
   const onToast = vi.fn();
-  render(DeleteAccountDialog, { props: { open: true, onClose: vi.fn(), onToast } });
+  await renderWithApp(DeleteAccountDialog, { props: { open: true, onClose: vi.fn(), onToast } });
   await userEvent.type(await screen.findByLabelText('Текущий пароль'), 'wrong');
   await userEvent.click(screen.getByRole('checkbox'));
   await userEvent.click(screen.getByRole('button', { name: 'Удалить аккаунт' }));
@@ -87,7 +86,7 @@ test('"it was not me" ends that session and leads to changing the password', asy
   });
   const onSecureAccount = vi.fn();
   const onOpenChange = vi.fn();
-  render(LoginAlertDialog, { props: { onSecureAccount, onOpenChange, onToast: vi.fn() } });
+  await renderWithApp(LoginAlertDialog, { props: { onSecureAccount, onOpenChange, onToast: vi.fn() } });
 
   await userEvent.click(await screen.findByRole('button', { name: 'Это не я' }));
   expect(await screen.findByText(/Сеанс на том устройстве завершён/)).toBeTruthy();
@@ -101,7 +100,9 @@ test('"it was not me" ends that session and leads to changing the password', asy
 test('"it was me" closes the question; closing without an answer only postpones it', async () => {
   const { calls } = stubAlerts({});
   const onOpenChange = vi.fn();
-  const view = render(LoginAlertDialog, { props: { onSecureAccount: vi.fn(), onOpenChange, onToast: vi.fn() } });
+  const view = await renderWithApp(LoginAlertDialog, {
+    props: { onSecureAccount: vi.fn(), onOpenChange, onToast: vi.fn() }
+  });
 
   await screen.findByRole('button', { name: 'Это я' });
   await userEvent.keyboard('{Escape}');
@@ -109,7 +110,7 @@ test('"it was me" closes the question; closing without an answer only postpones 
   expect(calls.some((call) => call.url.endsWith('/confirm') || call.url.endsWith('/deny'))).toBe(false);
 
   view.unmount();
-  render(LoginAlertDialog, { props: { onSecureAccount: vi.fn(), onOpenChange, onToast: vi.fn() } });
+  await renderWithApp(LoginAlertDialog, { props: { onSecureAccount: vi.fn(), onOpenChange, onToast: vi.fn() } });
   await userEvent.click(await screen.findByRole('button', { name: 'Это я' }));
   await vi.waitFor(() => expect(screen.queryByRole('button', { name: 'Это я' })).toBeNull());
   expect(calls.some((call) => call.url.endsWith('/confirm'))).toBe(true);

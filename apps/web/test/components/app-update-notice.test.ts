@@ -2,14 +2,13 @@
 // reloading under the user; the desktop shell's own update goes through the
 // same notice, and nothing is applied during a call.
 
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, test, vi } from 'vitest';
-import AppUpdateNotice from '../../src/lib/features/app-update/AppUpdateNotice.svelte';
-import { AppUpdate, pendingUpdate } from '../../src/lib/features/app-update/app-update.svelte.ts';
-import { bindDesktopUpdate, normalizeDesktopUpdate } from '../../src/lib/platform/desktop-update.ts';
-
-afterEach(cleanup);
+import { expect, test, vi } from 'vitest';
+import AppUpdateNotice from '@/features/app-update/AppUpdateNotice.vue';
+import { pendingUpdate, useAppUpdateStore } from '@/features/app-update/app-update.store';
+import { bindDesktopUpdate, normalizeDesktopUpdate } from '@/platform/desktop-update';
+import { renderWithApp } from '../helpers/render';
 
 type Bridge = NonNullable<Window['voiceRoomDesktopUpdate']>;
 
@@ -31,6 +30,14 @@ function desktopShell(state: unknown, install: Bridge['install'] = async () => {
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+/** Renders the notice with a store that was told what the page knows of the deploy. */
+async function renderNotice(inCall: boolean, options: { webUpdated: boolean; reload?: () => void }) {
+  const view = await renderWithApp(AppUpdateNotice, { props: { inCall } });
+  const update = useAppUpdateStore(view.pinia);
+  update.configure(options);
+  return update;
+}
+
 test('a downloaded desktop shell wins over a web update: its restart brings both', () => {
   expect(pendingUpdate(false, null)).toBe('none');
   expect(pendingUpdate(true, null)).toBe('web');
@@ -39,37 +46,36 @@ test('a downloaded desktop shell wins over a web update: its restart brings both
   expect(pendingUpdate(true, { status: 'ready', version: '1.5.0' })).toBe('app');
 });
 
-test('nothing shows while the app is current', () => {
-  render(AppUpdateNotice, { update: new AppUpdate({ webUpdated: () => false }), inCall: false });
+test('nothing shows while the app is current', async () => {
+  await renderNotice(false, { webUpdated: false });
   expect(screen.queryByRole('status')).toBeNull();
 });
 
 test('a new web version is applied by a reload when the user asks', async () => {
   const reload = vi.fn();
-  render(AppUpdateNotice, { update: new AppUpdate({ webUpdated: () => true, reload }), inCall: false });
+  await renderNotice(false, { webUpdated: true, reload });
 
-  expect(screen.getByRole('status').textContent).toContain('Доступно обновление');
+  expect((await screen.findByRole('status')).textContent).toContain('Доступно обновление');
   await userEvent.click(screen.getByRole('button', { name: 'Обновить' }));
 
   expect(reload).toHaveBeenCalledOnce();
 });
 
-test('during a call the notice only says the update waits for the call to end', () => {
-  render(AppUpdateNotice, { update: new AppUpdate({ webUpdated: () => true, reload: vi.fn() }), inCall: true });
+test('during a call the notice only says the update waits for the call to end', async () => {
+  await renderNotice(true, { webUpdated: true, reload: vi.fn() });
 
-  expect(screen.getByRole('status').textContent).toContain('после звонка');
+  expect((await screen.findByRole('status')).textContent).toContain('после звонка');
   expect(screen.queryByRole('button')).toBeNull();
 });
 
 test('a desktop shell with a downloaded release restarts into it instead of reloading the page', async () => {
   const { bridge } = desktopShell({ status: 'ready', version: '1.5.0' });
   const reload = vi.fn();
-  const update = new AppUpdate({ webUpdated: () => true, reload });
+  const update = await renderNotice(false, { webUpdated: true, reload });
   const unbind = update.bind();
   await flush();
-  render(AppUpdateNotice, { update, inCall: false });
 
-  expect(screen.getByRole('status').textContent).toContain('Новая версия приложения');
+  expect((await screen.findByRole('status')).textContent).toContain('Новая версия приложения');
   await userEvent.click(screen.getByRole('button', { name: 'Перезапустить' }));
 
   expect(bridge.install).toHaveBeenCalledOnce();
@@ -82,7 +88,7 @@ test('if the shell cannot restart, a reload still brings the new web app', async
     throw new Error('installer busy');
   });
   const reload = vi.fn();
-  const update = new AppUpdate({ webUpdated: () => false, reload });
+  const update = await renderNotice(false, { webUpdated: false, reload });
   const unbind = update.bind();
   await flush();
 

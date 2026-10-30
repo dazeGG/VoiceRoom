@@ -1,7 +1,7 @@
 import { test, onTestFinished } from 'vitest';
 import assert from 'node:assert/strict';
 
-import * as service from '../src/lib/platform/desktop-autostart.ts';
+import * as service from '../src/platform/desktop-autostart.ts';
 import { mistyped } from './helpers/mistyped.ts';
 
 // The service has no module state and reads `window` on every call, so one

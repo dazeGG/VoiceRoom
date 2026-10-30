@@ -1,5 +1,6 @@
+import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, test, vi } from 'vitest';
-import type { Participant } from '../src/lib/features/room/client/core/types.ts';
+import type { Participant } from '@/features/room/client/core/types.ts';
 import { participant as participantFixture } from './fixtures/participant.ts';
 import { defined } from './helpers/assert.ts';
 import { FakeMediaStream, FakeMediaStreamTrack } from './helpers/fake-media.ts';
@@ -13,26 +14,27 @@ import assert from 'node:assert/strict';
 
 async function loadParticipantScreenLifecycle() {
   vi.resetModules();
+  setActivePinia(createPinia());
   const testState = { stageRefreshes: 0 };
-  vi.doMock('../src/lib/features/room/client/services/media-playback-service', () => ({
+  vi.doMock('@/features/room/client/services/media-playback-service', () => ({
     applyRemoteParticipantAudioPreferences: () => {},
     playMediaElement: () => {},
     releaseRemoteAudioElement: () => {}
   }));
-  vi.doMock('../src/lib/features/room/client/media/cues', () => ({
+  vi.doMock('@/features/room/client/media/cues', () => ({
     clearPeerJoinCue: () => {},
     playStreamCue: () => {},
     playStreamViewerCue: () => {}
   }));
-  vi.doMock('../src/lib/features/room/client/media/meters', () => ({
+  vi.doMock('@/features/room/client/media/meters', () => ({
     attachMeter: () => {},
     detachMeter: () => {},
     refreshSpeaking: () => {}
   }));
-  vi.doMock('../src/lib/features/room/client/services/livekit-service', () => ({
+  vi.doMock('@/features/room/client/services/livekit-service', () => ({
     syncLiveKitScreenSubscriptions: () => {}
   }));
-  vi.doMock('../src/lib/features/room/client/ui/screen-view', () => ({
+  vi.doMock('@/features/room/client/ui/screen-view', () => ({
     disconnectScreen: () => {},
     hideScreenStage: () => {},
     refreshScreenStage: () => {
@@ -40,8 +42,8 @@ async function loadParticipantScreenLifecycle() {
     },
     refreshScreenTiles: () => {}
   }));
-  const lifecycle = await import('../src/lib/features/room/client/room/participants.ts');
-  const { state } = await import('../src/lib/features/room/client/core/state.svelte.ts');
+  const lifecycle = await import('@/features/room/client/room/participants.ts');
+  const { state } = await import('@/features/room/client/core/room-runtime.store');
   state.viewedScreenPeerId = '';
   state.screenRequesting = false;
   return { lifecycle, state, testState };

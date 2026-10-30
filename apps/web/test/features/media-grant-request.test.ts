@@ -2,7 +2,7 @@
 // own id; no answer at all must not hold the stream back.
 
 import { afterEach, expect, test, vi } from 'vitest';
-import type { RealtimeEvent } from '../../src/lib/api/realtime';
+import type { RealtimeEvent } from '@/api/realtime';
 import { defined } from '../helpers/assert.ts';
 
 const TARGET = { roomId: 'room-1', peerId: 'peer-self1', sessionToken: 's'.repeat(32) };
@@ -20,9 +20,9 @@ async function loadRoomRealtime() {
       return () => handlers.delete(handler);
     }
   };
-  vi.doMock('../../src/lib/api/realtime', () => ({ getAppRealtime: () => connection }));
-  vi.doMock('../../src/lib/entities/room/room-presence.svelte', () => ({ applyRoomSummary: () => {} }));
-  const realtime = await import('../../src/lib/entities/room/room-realtime.ts');
+  vi.doMock('@/api/realtime', () => ({ getAppRealtime: () => connection }));
+  vi.doMock('@/entities/room/room-presence.store', () => ({ applyRoomSummary: () => {} }));
+  const realtime = await import('@/entities/room/room-realtime.ts');
   const emit = (event: RealtimeEvent) => [...handlers].forEach((handler) => handler(event));
   return { realtime, sent, handlers, emit };
 }

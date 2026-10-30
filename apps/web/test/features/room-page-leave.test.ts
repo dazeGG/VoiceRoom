@@ -2,11 +2,12 @@
 // browser only asks whether it may: a click on a download (the desktop app's
 // installer) fires beforeunload, the page stays, and the call must stay too.
 
+import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, expect, test, vi } from 'vitest';
 
 const leaveRoom = vi.fn();
 
-vi.mock('../../src/lib/features/room/client/room/room', () => ({
+vi.mock('@/features/room/client/room/room', () => ({
   joinRoom: vi.fn(async () => {}),
   leaveRoom,
   showRoomEntryFailure: vi.fn(),
@@ -15,7 +16,8 @@ vi.mock('../../src/lib/features/room/client/room/room', () => ({
   showStartScreen: vi.fn()
 }));
 
-const { mountRoomClient } = await import('../../src/lib/features/room/client/main');
+setActivePinia(createPinia());
+const { mountRoomClient } = await import('@/features/room/client/main');
 
 let unmount: (() => void) | null = null;
 

@@ -4,9 +4,9 @@
 // only when AudioWorklet is unavailable.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
-import { createInitialRoomState } from '../../src/lib/features/room/client/model/room-state.ts';
-import { createParticipant } from '../../src/lib/features/room/client/room/participants.ts';
+import { state } from '@/features/room/client/core/room-runtime.store';
+import { createInitialRoomState } from '@/features/room/client/model/room-state';
+import { createParticipant } from '@/features/room/client/room/participants';
 import {
   attachMeter,
   detachMeter,
@@ -15,16 +15,16 @@ import {
   startMeters,
   stopMeters,
   syncSpeakingThresholds
-} from '../../src/lib/features/room/client/media/meters.ts';
-import { defined } from '../helpers/assert.ts';
+} from '@/features/room/client/media/meters';
+import { defined } from '../helpers/assert';
 
 const refreshMicrophoneLevelMeter = vi.hoisted(() => vi.fn());
 const context = vi.hoisted((): { value: FakeContext | null } => ({ value: null }));
 
-vi.mock('../../src/lib/features/room/client/services/media-playback-service', () => ({
+vi.mock('@/features/room/client/services/media-playback-service', () => ({
   getSharedAudioContext: () => context.value
 }));
-vi.mock('../../src/lib/features/room/client/ui/devices', () => ({ refreshMicrophoneLevelMeter }));
+vi.mock('@/features/room/client/ui/devices', () => ({ refreshMicrophoneLevelMeter }));
 
 class FakeNode {
   connections: unknown[] = [];

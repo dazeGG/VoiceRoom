@@ -3,13 +3,17 @@ import { stubFetch } from '../fixtures/fetch.ts';
 import { authUser } from '../fixtures/users.ts';
 import { freshImport } from '../helpers/fresh-module.ts';
 
-const loadSessionModule = () => freshImport(() => import('../../src/lib/features/auth/session.svelte.ts'));
+const loadSessionModule = async () => {
+  const module = await freshImport(() => import('../../src/features/auth/session.store.ts'));
+  return module.useSessionStore();
+};
 
 beforeEach(() => localStorage.clear());
 
 test('the first load asks the server once, even for concurrent callers', async () => {
   const { calls } = stubFetch({ '/api/auth/me': { body: { ok: true, user: authUser() } } });
-  const { loadSession, session } = await loadSessionModule();
+  const session = await loadSessionModule();
+  const { loadSession } = session;
 
   const [first, second] = await Promise.all([loadSession(), loadSession()]);
 
@@ -34,7 +38,8 @@ test('a signed-in account fills the voice room name; there is no local session h
 
 test('a failed session check is reported, not shown as a signed-out visitor', async () => {
   stubFetch({ '/api/auth/me': { status: 502 } });
-  const { loadSession, session } = await loadSessionModule();
+  const session = await loadSessionModule();
+  const { loadSession } = session;
 
   await expect(loadSession()).rejects.toThrow('Не удалось проверить сессию');
   expect(session.loaded).toBe(true);
@@ -43,7 +48,8 @@ test('a failed session check is reported, not shown as a signed-out visitor', as
 
 test('a forced reload asks again and signing out forgets the room name', async () => {
   const { calls } = stubFetch({ '/api/auth/me': { body: { ok: true, user: authUser() } } });
-  const { clearSession, loadSession, session } = await loadSessionModule();
+  const session = await loadSessionModule();
+  const { clearSession, loadSession } = session;
 
   await loadSession();
   await loadSession(true);

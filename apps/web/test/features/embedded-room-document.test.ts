@@ -1,26 +1,39 @@
 // The lobby takes the room's body flags off while another view hides the
 // embedded room, and puts back every one the room still needs when it returns.
 
-import { afterEach, expect, test } from 'vitest';
-import { syncEmbeddedRoomDocument } from '../../src/lib/features/home/model/embedded-room-document.ts';
+import { createPinia, setActivePinia } from 'pinia';
+import { beforeEach, expect, test } from 'vitest';
+import { syncEmbeddedRoomDocument } from '../../src/features/home/model/embedded-room-document.ts';
+import { usePageStore } from '../../src/stores/page.store.ts';
 
-afterEach(() => {
-  for (const name of document.body.getAttributeNames()) document.body.removeAttribute(name);
+// A new Pinia is a new page store: no body flag of an earlier test is left over.
+beforeEach(() => {
+  setActivePinia(createPinia());
+  expect(usePageStore()).toMatchObject({
+    screen: '',
+    chatOpen: false,
+    lobbyEmbedded: false,
+    screenView: false,
+    stripCollapsed: false,
+    desktopScreenFullscreen: false
+  });
 });
 
 test('coming back to a room with a stream on its stage brings the stream layout back', () => {
+  const page = usePageStore();
   const room = { visible: true, chatOpen: false, streamOnStage: true };
-  document.body.dataset.screenView = 'true';
-  syncEmbeddedRoomDocument(document.body, { ...room, visible: false });
-  expect(document.body.dataset.screenView).toBeUndefined();
-  expect(document.body.dataset.screen).toBe('start');
+  page.screenView = true;
+  syncEmbeddedRoomDocument({ ...room, visible: false });
+  expect(page.screenView).toBe(false);
+  expect(page.screen).toBe('start');
 
-  syncEmbeddedRoomDocument(document.body, room);
-  expect(document.body.dataset).toMatchObject({ screen: 'room', lobbyEmbedded: 'true', screenView: 'true' });
+  syncEmbeddedRoomDocument(room);
+  expect(page).toMatchObject({ screen: 'room', lobbyEmbedded: true, screenView: true });
 });
 
 test('a room without a stream comes back without the stream layout, its chat as it was', () => {
-  syncEmbeddedRoomDocument(document.body, { visible: true, chatOpen: true, streamOnStage: false });
-  expect(document.body.dataset.screenView).toBeUndefined();
-  expect(document.body.dataset.chatOpen).toBe('true');
+  const page = usePageStore();
+  syncEmbeddedRoomDocument({ visible: true, chatOpen: true, streamOnStage: false });
+  expect(page.screenView).toBe(false);
+  expect(page.chatOpen).toBe(true);
 });

@@ -2,7 +2,7 @@ import { test } from 'vitest';
 import assert from 'node:assert/strict';
 
 async function loadRetryController() {
-  return import('../src/lib/features/room/client/media/screen-subscription-retry.ts');
+  return import('@/features/room/client/media/screen-subscription-retry.ts');
 }
 
 class FakeTimers {

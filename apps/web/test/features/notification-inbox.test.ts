@@ -3,9 +3,9 @@
 
 import type { InboxItem, InboxPage } from '@voice-room/shared/contracts/notifications';
 import { expect, test, vi } from 'vitest';
-import { ApiError } from '../../src/lib/api/client.ts';
+import { ApiError } from '@/api/client';
 import { notificationRoute } from '@voice-room/shared/notifications';
-import { createNotificationInbox } from '../../src/lib/shared/notifications/inbox.svelte.ts';
+import { createNotificationInbox } from '@/shared/notifications/inbox';
 
 const item = (id: string, readAt: number | null = null): InboxItem => ({
   id,

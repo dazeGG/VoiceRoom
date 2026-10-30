@@ -1,38 +1,36 @@
 // The profile button opens a status list driven from the keyboard; a chosen
 // status is saved on the server and shown as the server answered it.
 
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import Sidebar from '../../src/lib/features/home/components/lobby/Sidebar.svelte';
-import { LobbyStore } from '../../src/lib/features/home/model/lobby.svelte';
-import { lobbyContext } from '../../src/lib/features/home/model/lobby-context';
-import {
-  notificationPreferences as preferences,
-  prepareNotificationPreferences
-} from '../../src/lib/shared/notifications/preferences.svelte';
+import { expect, test, vi } from 'vitest';
+import Sidebar from '@/features/home/components/lobby/Sidebar.vue';
+import { useNotificationPreferencesStore } from '@/shared/notifications/preferences.store';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { authUser, notificationPreferences } from '../fixtures/users.ts';
+import { settle, stubOverlayDom } from '../helpers/overlay-dom';
+import { renderWithApp } from '../helpers/render.ts';
+import { lobbyHost } from './harness/lobby-host';
+
+stubOverlayDom();
 
 const user = authUser({ id: 'ada', login: 'ada', displayName: 'Ада' });
 
-beforeEach(() => prepareNotificationPreferences(user.id, false, 'online'));
-afterEach(cleanup);
-
-function renderSidebar() {
+async function renderSidebar() {
   const onToast = vi.fn();
-  render(Sidebar, {
-    props: { user, onGoHome: vi.fn(), onOpenPeople: vi.fn(), onOpenSettings: vi.fn(), onToast },
-    context: lobbyContext(new LobbyStore())
-  });
-  return onToast;
+  const { pinia } = await renderWithApp(
+    lobbyHost(Sidebar, { user, onGoHome: vi.fn(), onOpenPeople: vi.fn(), onOpenSettings: vi.fn(), onToast })
+  );
+  const preferences = useNotificationPreferencesStore(pinia);
+  preferences.prepareNotificationPreferences(user.id, false, 'online');
+  return { onToast, preferences: preferences.notificationPreferences };
 }
 
-const focusedLabel = () => document.activeElement?.querySelector('.lv-status-label')?.textContent;
+const focusedLabel = () => document.activeElement?.querySelector('.sidebar__status-label')?.textContent;
 
 test('the status list opens on the current status and moves with arrows, Home, End and typing', async () => {
   stubFetch({});
-  renderSidebar();
+  await renderSidebar();
 
   await userEvent.click(screen.getByRole('button', { name: /Ада/ }));
   expect(await screen.findByRole('listbox', { name: 'Статус пользователя' })).toBeTruthy();
@@ -58,19 +56,19 @@ test('choosing do-not-disturb saves it and shows what the server stored', async 
       }
     }
   });
-  renderSidebar();
+  const { preferences } = await renderSidebar();
 
   await userEvent.click(screen.getByRole('button', { name: /Ада/ }));
   await userEvent.click(await screen.findByRole('option', { name: /Не беспокоить/ }));
 
   await vi.waitFor(() => expect(preferences.presenceStatus).toBe('dnd'));
   expect(calls[0]).toMatchObject({ url: '/api/presence/status', body: { status: 'dnd', automatic: false } });
-  expect(screen.queryByRole('listbox')).toBeNull();
+  await vi.waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
 });
 
 test('a refused change keeps the old status and says so', async () => {
   stubFetch({ 'POST /api/presence/status': { status: 500, body: { ok: false, error: 'boom', code: 'internal' } } });
-  const onToast = renderSidebar();
+  const { onToast, preferences } = await renderSidebar();
 
   await userEvent.click(screen.getByRole('button', { name: /Ада/ }));
   await userEvent.click(await screen.findByRole('option', { name: /Отошёл/ }));
@@ -81,9 +79,11 @@ test('a refused change keeps the old status and says so', async () => {
 
 test('the status list is drawn outside the sidebar so its edge cannot clip it', async () => {
   stubFetch({});
-  renderSidebar();
+  await renderSidebar();
 
   await userEvent.click(screen.getByRole('button', { name: /Ада/ }));
   const panel = await screen.findByRole('listbox', { name: 'Статус пользователя' });
-  expect(panel.parentElement).toBe(document.body);
+  await settle();
+  expect(panel.closest('.sidebar')).toBeNull();
+  expect(document.body.contains(panel)).toBe(true);
 });

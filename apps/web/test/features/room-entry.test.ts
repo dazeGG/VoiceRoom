@@ -2,30 +2,35 @@
 // a signed-in account enters under its own name and saves the room, a guest
 // is asked for a name, and a failed account check stops entry.
 
+import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, expect, test, vi } from 'vitest';
-import { stubFetch, type Reply } from '../fixtures/fetch.ts';
-import { lobbyRoom, roomStatus } from '../fixtures/answers.ts';
-import { authUser } from '../fixtures/users.ts';
+import { stubFetch, type Reply } from '../fixtures/fetch';
+import { lobbyRoom, roomStatus } from '../fixtures/answers';
+import { authUser } from '../fixtures/users';
 
-vi.mock('../../src/lib/features/room/client/ui/devices', async (importOriginal) => ({
+vi.mock('@/features/room/client/ui/devices', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   refreshDevices: vi.fn(async () => {})
 }));
-vi.mock('../../src/lib/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
 
 async function load(routes: Record<string, Reply>) {
   vi.resetModules();
+  setActivePinia(createPinia());
   const fetchStub = stubFetch(routes);
   const shell = { roomLeft: vi.fn<(roomId: string) => void>(), roomsChanged: vi.fn<(roomId: string) => void>() };
-  const { setRoomShell } = await import('../../src/lib/features/room/client/core/embed.ts');
+  const { setRoomShell } = await import('@/features/room/client/core/embed');
   setRoomShell(shell);
-  const room = await import('../../src/lib/features/room/client/room/room.ts');
-  const { state } = await import('../../src/lib/features/room/client/core/state.svelte.ts');
-  const names = await import('../../src/lib/features/room/client/ui/names.ts');
-  const { guestNameUi } = await import('../../src/lib/features/room/guest-name-ui.svelte.ts');
-  const { showToast } = await import('../../src/lib/features/room/client/ui/toast');
+  const room = await import('@/features/room/client/room/room');
+  const { state } = await import('@/features/room/client/core/room-runtime.store');
+  const names = await import('@/features/room/client/ui/names');
+  const { useGuestNameUiStore } = await import('@/features/room/guest-name-ui.store');
+  const { usePageStore } = await import('@/stores/page.store');
+  const guestNameUi = useGuestNameUiStore();
+  const page = usePageStore();
+  const { showToast } = await import('@/features/room/client/ui/toast');
   state.roomId = 'abc123';
-  return { ...room, ...names, state, guestNameUi, fetchStub, shell, showToast: vi.mocked(showToast) };
+  return { ...room, ...names, state, guestNameUi, page, fetchStub, shell, showToast: vi.mocked(showToast) };
 }
 
 const roomExists = {
@@ -34,13 +39,12 @@ const roomExists = {
 
 beforeEach(() => {
   localStorage.clear();
-  delete document.body.dataset.screen;
 });
 
 test('a missing room shows the not-found screen without checking the account', async () => {
   const app = await load({ '/api/rooms/abc123': { status: 404 } });
   await expect(app.showRoomRoute()).resolves.toBe(false);
-  expect(document.body.dataset.screen).toBe('not-found');
+  expect(app.page.screen).toBe('not-found');
   expect(app.fetchStub.calls.map((call) => call.url)).toEqual(['/api/rooms/abc123']);
 });
 
@@ -54,12 +58,12 @@ test('a signed-in account enters under its name, saves the room to its list and 
 
   await expect(app.showRoomRoute()).resolves.toBe(true);
 
-  expect(document.body.dataset.screen).toBe('room');
+  expect(app.page.screen).toBe('room');
   expect(app.state.roomName).toBe('Планёрка');
   expect(localStorage.getItem('voice-room:name')).toBe('Аня');
   await vi.waitFor(() => expect(app.shell.roomsChanged).toHaveBeenCalledWith('abc123'));
-  const { roomSettingsUi } = await import('../../src/lib/features/room/room-settings.svelte.ts');
-  expect(roomSettingsUi.isOwner).toBe(true);
+  const { useRoomSettingsStore } = await import('@/features/room/room-settings.store');
+  expect(useRoomSettingsStore().isOwner).toBe(true);
 });
 
 test('a temporary room is not offered to the account list: only permanent rooms can be kept', async () => {

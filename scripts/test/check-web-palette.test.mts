@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test, { type TestContext } from 'node:test';
-import { paletteProblems, webVueApp } from '../check-web-palette.mts';
+import { paletteProblems, webApp } from '../check-web-palette.mts';
 
 const SURFACES = `:root {
   --vr-bg: oklch(15.5% 0.005 260);
@@ -13,15 +13,15 @@ const SURFACES = `:root {
 }
 `;
 
-/** A temp apps/web-vue with its tokens file plus the given files. */
+/** A temp apps/web with its tokens file plus the given files. */
 function app(t: TestContext, files: Record<string, string>, tokens = SURFACES) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-web-vue-palette-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-room-web-palette-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   for (const [file, content] of Object.entries({ 'src/styles/_tokens.scss': tokens, ...files })) {
     fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
     fs.writeFileSync(path.join(root, file), content);
   }
-  return webVueApp(root);
+  return webApp(root);
 }
 
 test('declared tokens and token-based backgrounds in nested SCSS pass', (t) => {

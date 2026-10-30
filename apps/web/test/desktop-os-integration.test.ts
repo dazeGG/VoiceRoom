@@ -16,7 +16,7 @@ const flush = () => new Promise((resolveFlush) => setImmediate(resolveFlush));
 test('desktop links normalize shell payloads and ignore anything unexpected', async () => {
   let handler: ((payload: unknown) => void) | undefined;
   let unsubscribed = false;
-  const service = await loadModule(() => import('../src/lib/platform/desktop-links.ts'), {
+  const service = await loadModule(() => import('../src/platform/desktop-links.ts'), {
     voiceRoomDesktopLinks: {
       onOpen: (next: (payload: unknown) => void) => {
         handler = next;
@@ -59,14 +59,14 @@ test('desktop links normalize shell payloads and ignore anything unexpected', as
 });
 
 test('desktop links are a no-op without the shell bridge', async () => {
-  const service = await loadModule(() => import('../src/lib/platform/desktop-links.ts'), {});
+  const service = await loadModule(() => import('../src/platform/desktop-links.ts'), {});
   assert.equal(typeof service.bindDesktopLinks(() => {}), 'function');
 });
 
 test('desktop call state is sent once per change and actions are filtered', async () => {
   const sent: unknown[] = [];
   let actionHandler: ((payload: unknown) => void) | undefined;
-  const service = await loadModule(() => import('../src/lib/platform/desktop-call.ts'), {
+  const service = await loadModule(() => import('../src/platform/desktop-call.ts'), {
     voiceRoomDesktopCall: {
       onAction: (handler: (payload: unknown) => void) => {
         actionHandler = handler;
@@ -101,7 +101,7 @@ test('desktop call state is sent once per change and actions are filtered', asyn
 test('desktop call state retries after a failed send', async () => {
   let fail = true;
   const sent: unknown[] = [];
-  const service = await loadModule(() => import('../src/lib/platform/desktop-call.ts'), {
+  const service = await loadModule(() => import('../src/platform/desktop-call.ts'), {
     voiceRoomDesktopCall: {
       onAction: () => () => {},
       setState: async (state: unknown) => {
@@ -121,7 +121,7 @@ test('desktop call state retries after a failed send', async () => {
 
 test('desktop diagnostics copy, open logs and share the web context', async () => {
   const contexts: unknown[] = [];
-  const service = await loadModule(() => import('../src/lib/platform/desktop-diagnostics.ts'), {
+  const service = await loadModule(() => import('../src/platform/desktop-diagnostics.ts'), {
     voiceRoomDesktopDiagnostics: {
       copyInfo: async () => ({ ok: true }),
       getInfo: async () => ({ text: 'x' }),
@@ -145,7 +145,7 @@ test('desktop diagnostics copy, open logs and share the web context', async () =
 });
 
 test('desktop diagnostics fail closed on bridge errors and without the bridge', async () => {
-  const service = await loadModule(() => import('../src/lib/platform/desktop-diagnostics.ts'), {
+  const service = await loadModule(() => import('../src/platform/desktop-diagnostics.ts'), {
     voiceRoomDesktopDiagnostics: {
       copyInfo: async () => {
         throw new Error('untrusted');
@@ -161,13 +161,13 @@ test('desktop diagnostics fail closed on bridge errors and without the bridge', 
   assert.equal(await service.copyDesktopDiagnostics(), false);
   assert.equal(await service.openDesktopLogsFolder(), false);
 
-  const bare = await loadModule(() => import('../src/lib/platform/desktop-diagnostics.ts'), {});
+  const bare = await loadModule(() => import('../src/platform/desktop-diagnostics.ts'), {});
   assert.equal(bare.desktopDiagnosticsAvailable(), false);
   assert.equal(await bare.copyDesktopDiagnostics(), false);
 });
 
 test('open in app targets desktop browsers only with the right scheme', async () => {
-  const service = await loadModule(() => import('../src/lib/platform/open-in-app.ts'), {});
+  const service = await loadModule(() => import('../src/platform/open-in-app.ts'), {});
   const windowsChrome =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0 Safari/537.36';
   const macSafari =
@@ -203,7 +203,7 @@ test('open in app targets desktop browsers only with the right scheme', async ()
 });
 
 test('open in app navigates Chromium and uses a hidden frame in Firefox', async () => {
-  const service = await loadModule(() => import('../src/lib/platform/open-in-app.ts'), {});
+  const service = await loadModule(() => import('../src/platform/open-in-app.ts'), {});
   const chromium = {
     document,
     location: { href: 'https://voiceroom.ru/r/abc123' },
@@ -231,24 +231,24 @@ test('in-app room reloads skip the open-in-app offer exactly for the next page',
   sessionStorage.clear();
   onTestFinished(() => sessionStorage.clear());
 
-  const marked = await loadModule(() => import('../src/lib/platform/open-in-app.ts'), {});
+  const marked = await loadModule(() => import('../src/platform/open-in-app.ts'), {});
   marked.markInAppRoomNavigation();
   assert.equal(sessionStorage.length, 1);
 
   // A fresh module instance stands in for the reloaded page.
-  const reloaded = await loadModule(() => import('../src/lib/platform/open-in-app.ts'), {});
+  const reloaded = await loadModule(() => import('../src/platform/open-in-app.ts'), {});
   assert.equal(reloaded.consumeInAppRoomNavigation(), true);
   assert.equal(reloaded.consumeInAppRoomNavigation(), true, 'stable for every caller on the page');
   assert.equal(sessionStorage.length, 0, 'the mark is gone for later loads');
 
-  const nextLoad = await loadModule(() => import('../src/lib/platform/open-in-app.ts'), {});
+  const nextLoad = await loadModule(() => import('../src/platform/open-in-app.ts'), {});
   assert.equal(nextLoad.consumeInAppRoomNavigation(), false);
 });
 
 test('room switch confirmation asks only when leaving another live call', async () => {
   localStorage.clear();
   onTestFinished(() => localStorage.clear());
-  const model = await loadModule(() => import('../src/lib/features/home/model/room-switch-confirmation.ts'), {});
+  const model = await loadModule(() => import('../src/features/home/model/room-switch-confirmation.ts'), {});
 
   assert.equal(
     model.shouldConfirmRoomSwitch({ confirmEnabled: true, connectedRoomId: 'room-a', targetRoomId: 'room-b' }),
@@ -296,10 +296,10 @@ test('desktop build download uses the release asset and falls back to the releas
     click.mockRestore();
     append.mockRestore();
   });
-  const downloads = await loadModule(() => import('../src/lib/platform/desktop-download.ts'), {
+  const downloads = await loadModule(() => import('../src/platform/desktop-download.ts'), {
     open: (...args: unknown[]) => opened.push(args)
   });
-  const { RELEASES_URL } = await import('../src/lib/platform/desktop-builds.ts');
+  const { RELEASES_URL } = await import('../src/platform/desktop-builds.ts');
   const release = {
     ok: true as const,
     version: '1.2.3',

@@ -8,8 +8,8 @@ import {
   gridRows,
   nearestCorner,
   nextActiveSpeaker
-} from '../../src/lib/features/room/mobile-call-layout.ts';
-import { defined } from '../helpers/assert.ts';
+} from '@/features/room/mobile-call-layout';
+import { defined } from '../helpers/assert';
 
 const others = (count: number) => Array.from({ length: count }, (_, index) => `p${index + 1}`);
 

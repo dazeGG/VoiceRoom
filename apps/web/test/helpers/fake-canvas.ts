@@ -4,7 +4,7 @@
 // blob. Undone with vi.unstubAllGlobals / vi.restoreAllMocks.
 
 import { vi } from 'vitest';
-import type * as Canvas2DModule from '../../src/lib/shared/ui/AvatarCropDialog/canvas-2d.ts';
+import type * as Canvas2DModule from '@/shared/ui/AvatarCropDialog/canvas-2d';
 
 function newContext(): Canvas2DModule.Canvas2D {
   return {

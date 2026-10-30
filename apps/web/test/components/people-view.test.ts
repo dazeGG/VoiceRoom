@@ -1,26 +1,28 @@
 // Adding a friend is keyboard-first: type the login (with or without @) and
 // press Enter. Incoming requests are answered from their cards.
 
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { render, screen } from '@testing-library/vue';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, test, vi } from 'vitest';
-import PeopleView from '../../src/lib/features/home/components/lobby/PeopleView.svelte';
-import { LobbyStore } from '../../src/lib/features/home/model/lobby.svelte';
-import { lobbyContext } from '../../src/lib/features/home/model/lobby-context';
+import { createPinia, setActivePinia } from 'pinia';
+import { expect, test, vi } from 'vitest';
+import PeopleView from '@/features/home/components/lobby/PeopleView.vue';
+import { LOBBY_KEY } from '@/features/home/model/lobby-context';
+import { useLobbyStore } from '@/features/home/model/lobby.store';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { authUser } from '../fixtures/users.ts';
 
-afterEach(cleanup);
-
 const bob = authUser({ id: 'bob', login: 'bob', displayName: 'Боб' });
 
-function renderPeople(lobby = new LobbyStore()) {
+function renderPeople() {
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  const lobby = useLobbyStore(pinia);
   const onToast = vi.fn();
   render(PeopleView, {
     props: { user: authUser({ login: 'ada' }), onToast, onHome: vi.fn() },
-    context: lobbyContext(lobby)
+    global: { plugins: [pinia], provide: { [LOBBY_KEY]: lobby } }
   });
-  return onToast;
+  return { lobby, onToast };
 }
 
 test('Enter sends a request for the typed login, @ or not, and empties the field', async () => {
@@ -29,7 +31,7 @@ test('Enter sends a request for the typed login, @ or not, and empties the field
     'GET /api/friends': { body: { ok: true, incomingRequestCount: 0, friends: [] } },
     'GET /api/friends/requests': { body: { ok: true, incoming: [], outgoing: [] } }
   });
-  const onToast = renderPeople();
+  const { onToast } = renderPeople();
 
   const field = screen.getByRole('textbox', { name: 'Логин друга' });
   expect(screen.getByRole('button', { name: 'Отправить заявку' })).toHaveProperty('disabled', true);
@@ -44,7 +46,7 @@ test('a refused request keeps the login and shows the reason', async () => {
   stubFetch({
     'POST /api/friends/requests': { status: 404, body: { ok: false, error: 'User not found', code: 'user_not_found' } }
   });
-  const onToast = renderPeople();
+  const { onToast } = renderPeople();
 
   const field = screen.getByRole('textbox', { name: 'Логин друга' });
   await userEvent.type(field, 'nobody{Enter}');
@@ -58,11 +60,10 @@ test('an incoming request is accepted from its card', async () => {
     'GET /api/friends': { body: { ok: true, incomingRequestCount: 0, friends: [] } },
     'GET /api/friends/requests': { body: { ok: true, incoming: [], outgoing: [] } }
   });
-  const lobby = new LobbyStore();
+  const { lobby, onToast } = renderPeople();
   lobby.requests = { incoming: [{ id: 'req-1', createdAt: 1, mutualFriends: 2, user: bob }], outgoing: [] };
-  const onToast = renderPeople(lobby);
 
-  expect(screen.getByText('2 общих друга')).toBeTruthy();
+  expect(await screen.findByText('2 общих друга')).toBeTruthy();
   await userEvent.click(screen.getByRole('button', { name: 'Принять' }));
   await vi.waitFor(() => expect(onToast).toHaveBeenCalledWith('Заявка принята'));
   expect(calls.some((call) => call.url === '/api/friends/requests/req-1/accept')).toBe(true);

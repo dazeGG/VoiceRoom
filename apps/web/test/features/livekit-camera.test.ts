@@ -27,9 +27,9 @@ async function loadRemoteCamera(peerId = 'peer-a') {
     autoResolveClient: true,
     requestToken: async () => ({ token: 't', url: 'wss://lk.example' })
   });
-  const { participantsUi } = await import('../../src/lib/features/room/participants-ui.svelte');
-  const { syncRemoteCameraDemand } =
-    await import('../../src/lib/features/room/client/services/livekit/remote-participants.ts');
+  const { useParticipantsUiStore } = await import('@/features/room/participants-ui.store');
+  const participantsUi = useParticipantsUiStore();
+  const { syncRemoteCameraDemand } = await import('@/features/room/client/services/livekit/remote-participants.ts');
   const track = { mediaStreamTrack: { kind: 'video', readyState: 'live', id: 'camera-track' } };
   const camera = fakePublication('camera', { isSubscribed: true, track });
   const participant = fakeParticipant(peerId, [camera.publication]);
@@ -107,7 +107,7 @@ async function loadLocalCamera(
 ) {
   const lk = await loadLiveKitHarness({ autoResolveClient: true, cameraCodec });
   const presence: Array<Record<string, unknown>> = [];
-  vi.doMock('../../src/lib/entities/room/room-realtime', () => ({
+  vi.doMock('@/entities/room/room-realtime', () => ({
     requestMediaGrant: async () => grant,
     updateVoicePeer: (payload: { patch: Record<string, unknown> }) => presence.push(payload.patch)
   }));
@@ -135,8 +135,8 @@ async function loadLocalCamera(
     cameraFacing: 'user'
   });
   const showToast = vi.fn();
-  vi.doMock('../../src/lib/features/room/client/ui/toast', () => ({ showToast }));
-  const camera = await import('../../src/lib/features/room/client/services/camera-service.ts');
+  vi.doMock('@/features/room/client/ui/toast', () => ({ showToast }));
+  const camera = await import('@/features/room/client/services/camera-service.ts');
   return { lk, camera, published, unpublished, showToast, presence, setPublishingQuality };
 }
 
@@ -316,14 +316,16 @@ test('a back camera chosen by its device is taken for one: not mirrored, and the
 });
 
 test('on a phone the camera layer follows its own big picture, whatever the desktop spotlight says', async () => {
+  const { usePageStore } = await import('@/stores/page.store');
   const { stubMatchMedia } = await import('../helpers/match-media.ts');
   const { lk, participantsUi, syncRemoteCameraDemand, camera, participant } = await loadRemoteCamera();
-  const { mobileCallUi, PORTRAIT_PHONE_QUERY, resetMobileCall } =
-    await import('../../src/lib/features/room/mobile-call-ui.svelte');
+  const { useMobileCallUiStore, PORTRAIT_PHONE_QUERY } = await import('@/features/room/mobile-call-ui.store');
+  const mobileCallUi = useMobileCallUiStore();
   stubMatchMedia([PORTRAIT_PHONE_QUERY]);
   lk.syncParticipant(participant);
   await flushMicrotasks();
-  Object.assign(lk.state, { screen: 'room', self: { id: 'self', isLocal: true, joinedAt: 0 } });
+  usePageStore().screen = 'room';
+  Object.assign(lk.state, { self: { id: 'self', isLocal: true, joinedAt: 0 } });
   mobileCallUi.enabled = true;
   try {
     // Left over from a screen view on the phone: it points at someone else.
@@ -340,7 +342,7 @@ test('on a phone the camera layer follows its own big picture, whatever the desk
     expect(camera.calls.quality.at(-1)).toBe(LOW);
   } finally {
     mobileCallUi.enabled = false;
-    resetMobileCall();
+    mobileCallUi.resetMobileCall();
     participantsUi.focusedParticipantId = '';
   }
 });
@@ -394,7 +396,7 @@ test('a browser without H.264 sends its camera in VP8, with no backup to fall ba
 
 test('an overloaded computer lightens video silently: our camera stops at 360p, others come in small unless large', async () => {
   const { lk, participantsUi, camera, participant } = await loadRemoteCamera();
-  const { relieveVideo } = await import('../../src/lib/features/room/client/services/video-relief.ts');
+  const { relieveVideo } = await import('@/features/room/client/services/video-relief.ts');
   lk.syncParticipant(participant);
   await flushMicrotasks();
   expect(camera.calls.quality.at(-1)).toBe(MEDIUM);
@@ -409,8 +411,7 @@ test('an overloaded computer lightens video silently: our camera stops at 360p, 
 
   // A camera opened large still comes in full.
   participantsUi.focusedParticipantId = 'peer-a';
-  const { syncRemoteCameraDemand } =
-    await import('../../src/lib/features/room/client/services/livekit/remote-participants.ts');
+  const { syncRemoteCameraDemand } = await import('@/features/room/client/services/livekit/remote-participants.ts');
   syncRemoteCameraDemand();
   await flushMicrotasks();
   expect(camera.calls.quality.at(-1)).toBe(HIGH);
@@ -426,7 +427,7 @@ test('a camera turned on after the call was lightened starts at 360p', async () 
 
 test('an overloaded computer shares its screen at 30 fps at most; a capture that refuses keeps its rate', async () => {
   const { lk } = await loadRemoteCamera();
-  const { applyVideoReliefToScreen } = await import('../../src/lib/features/room/client/services/video-relief.ts');
+  const { applyVideoReliefToScreen } = await import('@/features/room/client/services/video-relief.ts');
   const capture = (frameRate: number, refuse = false) => {
     const applied: MediaTrackConstraints[] = [];
     const track = {

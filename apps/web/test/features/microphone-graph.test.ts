@@ -2,14 +2,12 @@
 // gain → destination; the limiter joins only while the microphone is boosted
 // above 100%, since its look-ahead would otherwise delay every word.
 
+import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
-import { createInitialRoomState } from '../../src/lib/features/room/client/model/room-state.ts';
-import {
-  openLocalMicrophone,
-  setMicrophoneVolume
-} from '../../src/lib/features/room/client/services/microphone-service.ts';
-import type { MicrophoneCapture } from '../../src/lib/features/room/client/core/types.ts';
+import { state } from '@/features/room/client/core/room-runtime.store';
+import { createInitialRoomState } from '@/features/room/client/model/room-state.ts';
+import { openLocalMicrophone, setMicrophoneVolume } from '@/features/room/client/services/microphone-service.ts';
+import type { MicrophoneCapture } from '@/features/room/client/core/types.ts';
 import { defined } from '../helpers/assert.ts';
 
 vi.mock('/rnnoise/rnnoise.mjs', () => ({
@@ -85,6 +83,7 @@ const contexts: FakeContext[] = [];
 const latest = () => defined(contexts.at(-1), 'audio context');
 
 beforeEach(() => {
+  setActivePinia(createPinia());
   Object.assign(state, createInitialRoomState());
   state.gateThresholdDb = -50;
   vi.stubGlobal(

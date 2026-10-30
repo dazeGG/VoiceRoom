@@ -5,7 +5,7 @@
 // layouts many times a second on a small stage).
 
 import { afterEach, expect, test, vi } from 'vitest';
-import { fitTileGrid, fitTiles } from '../src/lib/shared/ui/tile-grid';
+import { fitTileGrid, fitTiles } from '@/shared/ui/tile-grid';
 
 const GAP = 16;
 const SCROLLBAR = 10;

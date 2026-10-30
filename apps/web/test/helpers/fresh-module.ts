@@ -1,6 +1,7 @@
 // Helpers for tests that need a fresh copy of a module (module-level state)
 // under a controlled `window` and `localStorage`.
 
+import { createPinia, setActivePinia } from 'pinia';
 import { onTestFinished, vi } from 'vitest';
 
 const stubbed = new Map<string, PropertyDescriptor | undefined>();
@@ -29,13 +30,21 @@ export function stubWindow(props: Record<string, unknown>): void {
 }
 
 /**
- * Loads a module as a new instance: `freshImport(() => import('../src/...'))`.
- * The import stays in the test, so the module keeps its type. This also
- * reloads Svelte's runtime, so a test that checks reactivity between the
- * module's `$state` and its own `$effect` must import the module statically.
+ * Loads a module as a new instance: `freshImport(() => import('@/...'))`.
+ * The import stays in the test, so the module keeps its type.
+ *
+ * `vi.resetModules()` clears the modules Vitest transforms itself (app source,
+ * `.vue` files, test helpers). `vue`, `pinia` and `vue-router` are node_modules
+ * Vitest leaves to Node, so they are not reloaded: the fresh module and the
+ * test share one reactivity runtime, and refs from either side work together.
+ * A store from `defineStore('x')` is cached on the active Pinia by id, so a
+ * re-imported store would hand back the old instance and its state; this call
+ * therefore also activates a new Pinia, and stores the fresh module creates
+ * start from their initial state.
  */
 export async function freshImport<T>(load: () => Promise<T>): Promise<T> {
   vi.resetModules();
+  setActivePinia(createPinia());
   return load();
 }
 

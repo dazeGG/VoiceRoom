@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { inviteAnswerable, inviteTitle } from '../../src/lib/features/home/model/dm-invite-view.ts';
+import { inviteAnswerable, inviteTitle } from '../../src/features/home/model/dm-invite-view.ts';
 
 const pending = { roomId: 'r', roomName: 'Планёрка', status: 'pending' as const, expiresAt: 2_000 };
 

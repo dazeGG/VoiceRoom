@@ -2,7 +2,7 @@ import { test } from 'vitest';
 import assert from 'node:assert/strict';
 
 async function loadDemandPolicy() {
-  return import('../src/lib/features/room/client/media/screen-receiver-demand.ts');
+  return import('@/features/room/client/media/screen-receiver-demand.ts');
 }
 
 test('screen receiver demand is deterministic and stage wins over preview', async () => {

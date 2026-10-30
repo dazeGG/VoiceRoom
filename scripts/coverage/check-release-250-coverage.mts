@@ -11,7 +11,7 @@ import { firstMismatch } from '../../packages/shared/src/contracts/http.ts';
 import { isArray } from '../../packages/shared/src/guards.ts';
 
 const DEFAULT_THRESHOLDS = 'config/coverage/release-250-thresholds.json';
-const BUSINESS_EXTENSIONS = /\.(?:js|mjs|cjs|ts|svelte)$/;
+const BUSINESS_EXTENSIONS = /\.(?:js|mjs|cjs|ts|vue)$/;
 const BRANCH_METRIC = 'node-v8-branch';
 
 // The shapes of the JSON files this gate reads, checked once when they are read.
@@ -253,7 +253,7 @@ function listBusinessSourceFiles(root: string, thresholds: CoverageThresholds) {
   const visit = (directory: string) => {
     if (!fs.existsSync(directory)) return;
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-      if (['node_modules', '.svelte-kit', 'dist', 'build'].includes(entry.name)) continue;
+      if (['node_modules', 'dist', 'build'].includes(entry.name)) continue;
       const absolute = path.join(directory, entry.name);
       if (entry.isDirectory()) visit(absolute);
       else {

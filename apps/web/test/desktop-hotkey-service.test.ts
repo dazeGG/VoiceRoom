@@ -89,7 +89,7 @@ test('desktop hotkey sync buffers early events, prefers the latest status, and d
   vi.resetModules();
   console.warn = () => {};
 
-  const service = await import('../src/lib/features/room/client/services/desktop-hotkey-service.ts');
+  const service = await import('@/features/room/client/services/desktop-hotkey-service.ts');
   const actions: unknown[] = [];
   const statuses: unknown[] = [];
   unbind = service.bindDesktopGlobalHotkeys(

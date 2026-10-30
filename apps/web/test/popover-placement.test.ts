@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest';
-import { resolvePopoverPlacement } from '../src/lib/shared/ui/Popover/popover-placement.ts';
+import { resolvePopoverPlacement } from '@/shared/ui/Popover/popover-placement';
 
 const VIEWPORT = 800;
 const rect = (top: number, height: number): DOMRect => ({

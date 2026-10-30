@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { fitTileGrid, fitTiles, MIN_TILE_WIDTH } from '../src/lib/shared/ui/tile-grid';
+import { fitTileGrid, fitTiles, MIN_TILE_WIDTH } from '@/shared/ui/tile-grid';
 
 const GAP = 16;
 

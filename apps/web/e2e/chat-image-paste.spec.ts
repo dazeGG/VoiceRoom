@@ -15,16 +15,16 @@ test('image attachments support picker, removal, drag-and-drop, paste, and sendi
     page.waitForResponse((response) => response.url().endsWith('/api/rooms') && response.request().method() === 'POST'),
     dialog.getByRole('button', { name: 'Создать комнату' }).click()
   ]);
-  await expect(page.locator('body')).toHaveAttribute('data-screen', 'room', { timeout: 20_000 });
+  await expect(page.locator('body')).toHaveClass(/\bscreen--room\b/, { timeout: 20_000 });
 
   await page.getByRole('button', { name: 'Чат', exact: true }).click();
-  const input = page.locator('.chat-rail-input');
+  const input = page.locator('.room-chat-composer__input');
   await expect(input).toBeVisible();
   const addButton = page.getByRole('button', { name: 'Добавить вложение' });
   await expect(addButton).toBeVisible();
-  const composeField = page.locator('.attachment-compose-field');
+  const composeField = page.locator('.attachment-compose');
   await expect(composeField).toBeVisible();
-  await expect(composeField.locator('.attachment-compose-controls')).toBeVisible();
+  await expect(composeField.locator('.attachment-compose__controls')).toBeVisible();
   const [fieldBox, addBox] = await Promise.all([boxOf(composeField), boxOf(addButton)]);
   expect(addBox.x).toBeGreaterThanOrEqual(fieldBox.x);
   expect(addBox.x + addBox.width).toBeLessThanOrEqual(fieldBox.x + fieldBox.width);
@@ -53,16 +53,21 @@ test('image attachments support picker, removal, drag-and-drop, paste, and sendi
     mimeType: 'image/png',
     buffer: Buffer.from(PNG_BASE64, 'base64')
   });
-  await expect(page.locator('.attachment-draft img')).toBeVisible();
-  await expect(composeField.locator('.attachment-draft')).toBeVisible();
-  const [thumbnailBox, composeBox] = await Promise.all([boxOf(page.locator('.attachment-draft')), boxOf(composeField)]);
+  await expect(page.locator('.attachment-composer__draft img')).toBeVisible();
+  await expect(composeField.locator('.attachment-composer__draft')).toBeVisible();
+  const [thumbnailBox, composeBox] = await Promise.all([
+    boxOf(page.locator('.attachment-composer__draft')),
+    boxOf(composeField)
+  ]);
   expect(thumbnailBox.x - composeBox.x).toBeGreaterThanOrEqual(8);
   expect(thumbnailBox.x - composeBox.x).toBeLessThanOrEqual(20);
-  await expect(page.locator('.attachment-draft-loading')).toBeVisible();
+  await expect(page.locator('.attachment-composer__loading')).toBeVisible();
   expect((await pickerUpload).ok()).toBe(true);
-  await expect(page.locator('.attachment-draft')).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
+  await expect(page.locator('.attachment-composer__draft')).toHaveClass(/\battachment-composer__draft--ready\b/, {
+    timeout: 30_000
+  });
 
-  const thumbnail = page.locator('.attachment-draft');
+  const thumbnail = page.locator('.attachment-composer__draft');
   await thumbnail.hover();
   const removeButton = page.getByRole('button', { name: 'Удалить изображение 1' });
   await expect(removeButton).toBeVisible();
@@ -122,7 +127,9 @@ test('image attachments support picker, removal, drag-and-drop, paste, and sendi
   const upload = await uploadResponse;
   expect(slot.ok(), await slot.text()).toBe(true);
   expect(upload.ok(), await upload.text()).toBe(true);
-  await expect(page.locator('.attachment-draft')).toHaveAttribute('data-state', 'ready', { timeout: 30_000 });
+  await expect(page.locator('.attachment-composer__draft')).toHaveClass(/\battachment-composer__draft--ready\b/, {
+    timeout: 30_000
+  });
 
   await input.press('Enter');
   await expect(page.locator('.attachment-mosaic img').last()).toBeVisible({ timeout: 30_000 });
@@ -143,5 +150,5 @@ test('image attachments support picker, removal, drag-and-drop, paste, and sendi
     );
   }, PNG_BASE64);
   expect((await pasteSlot).ok()).toBe(true);
-  await expect(page.locator('.attachment-draft')).toBeVisible();
+  await expect(page.locator('.attachment-composer__draft')).toBeVisible();
 });

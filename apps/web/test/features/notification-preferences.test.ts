@@ -9,9 +9,11 @@ import { freshImport } from '../helpers/fresh-module.ts';
 const prefs = notificationPreferences;
 
 async function load() {
-  const preferences = await freshImport(() => import('../../src/lib/shared/notifications/preferences.svelte.ts'));
-  const playback = await import('../../src/lib/shared/audio/playback-policy.svelte.ts');
-  return { ...preferences, ...playback };
+  const { useNotificationPreferencesStore } = await freshImport(
+    () => import('@/shared/notifications/preferences.store')
+  );
+  const { usePlaybackPolicyStore } = await import('@/shared/audio/playback-policy.store');
+  return { ...useNotificationPreferencesStore(), ...usePlaybackPolicyStore() };
 }
 
 beforeEach(() => localStorage.clear());

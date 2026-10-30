@@ -2,41 +2,42 @@
 // briefly missing, an unplugged microphone is reopened instead of carrying
 // silence, and microphone switches never overlap.
 
+import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import type { MicrophoneCapture } from '../../src/lib/features/room/client/core/types.ts';
-import { state } from '../../src/lib/features/room/client/core/state.svelte.ts';
-import { createInitialRoomState } from '../../src/lib/features/room/client/model/room-state.ts';
-import * as devices from '../../src/lib/features/room/client/ui/devices.ts';
-import * as microphone from '../../src/lib/features/room/client/services/microphone-service.ts';
-import * as livekit from '../../src/lib/features/room/client/services/livekit-service.ts';
-import * as playback from '../../src/lib/features/room/client/services/media-playback-service.ts';
-import { roomDeviceUi } from '../../src/lib/features/room/room-device-ui.svelte.ts';
-import { defined } from '../helpers/assert.ts';
+import type { MicrophoneCapture } from '@/features/room/client/core/types';
+import { state } from '@/features/room/client/core/room-runtime.store';
+import { createInitialRoomState } from '@/features/room/client/model/room-state';
+import * as devices from '@/features/room/client/ui/devices';
+import * as microphone from '@/features/room/client/services/microphone-service';
+import * as livekit from '@/features/room/client/services/livekit-service';
+import * as playback from '@/features/room/client/services/media-playback-service';
+import { useRoomDeviceUiStore } from '@/features/room/room-device-ui.store';
+import { defined } from '../helpers/assert';
 
-vi.mock('../../src/lib/features/room/client/services/livekit-service', () => ({
+vi.mock('@/features/room/client/services/livekit-service', () => ({
   publishLocalMicrophone: vi.fn(async () => {}),
   replaceLocalMicrophoneTrack: vi.fn(async () => true),
   unpublishLocalMicrophone: vi.fn(async () => {})
 }));
-vi.mock('../../src/lib/features/room/client/services/media-playback-service', () => ({
+vi.mock('@/features/room/client/services/media-playback-service', () => ({
   supportsAudioOutputSelection: () => true,
   syncAudioOutputDevices: vi.fn(async () => true)
 }));
-vi.mock('../../src/lib/features/room/client/services/microphone-service', async (importOriginal) => ({
+vi.mock('@/features/room/client/services/microphone-service', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   openLocalMicrophone: vi.fn(),
   stopMicrophoneCapture: vi.fn()
 }));
-vi.mock('../../src/lib/features/room/client/media/meters', () => ({
+vi.mock('@/features/room/client/media/meters', () => ({
   attachMeter: vi.fn(),
   syncSpeakingThresholds: vi.fn()
 }));
-vi.mock('../../src/lib/features/room/client/room/participants', () => ({ setParticipantSpeaking: vi.fn() }));
-vi.mock('../../src/lib/features/room/client/ui/controls', () => ({
+vi.mock('@/features/room/client/room/participants', () => ({ setParticipantSpeaking: vi.fn() }));
+vi.mock('@/features/room/client/ui/controls', () => ({
   syncMicrophoneControls: vi.fn(),
   syncOutputDeviceUiState: vi.fn()
 }));
-vi.mock('../../src/lib/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
+vi.mock('@/features/room/client/ui/toast', () => ({ showToast: vi.fn() }));
 
 // A class instance, like a real MediaStream, so the room state keeps it as is
 // instead of wrapping it in a reactive proxy. Registered as the global
@@ -82,6 +83,8 @@ let listed: MediaDeviceInfo[] = [];
 // The mocked modules keep the instance they were first built with, so the
 // whole graph is imported once and the room state is reset per test.
 async function load() {
+  setActivePinia(createPinia());
+  const roomDeviceUi = useRoomDeviceUiStore();
   Object.assign(state, createInitialRoomState());
   const open = vi.mocked(microphone.openLocalMicrophone);
   const stop = vi.mocked(microphone.stopMicrophoneCapture);
@@ -155,7 +158,7 @@ test("Chrome's default and communications aliases do not show up as extra device
   expect(roomDeviceUi.microphoneOptions.map((option) => option.value)).toEqual(['', 'fifine']);
   expect(roomDeviceUi.outputOptions.map((option) => option.value)).toEqual(['', 'speakers']);
 
-  const settings = await import('../../src/lib/features/home/model/sound-settings.ts');
+  const settings = await import('@/features/home/model/sound-settings');
   expect((await settings.enumerateMicrophones()).map((option) => option.deviceId)).toEqual(['fifine']);
   expect((await settings.enumerateSpeakers()).map((option) => option.deviceId)).toEqual(['speakers']);
 });
@@ -288,7 +291,7 @@ test('in the call without a microphone, plugging one in adds it muted', async ()
 
 test('the microphone button in a call without one asks for it again and says why it failed', async () => {
   const { state, devices, open } = await load();
-  const { showToast } = await import('../../src/lib/features/room/client/ui/toast');
+  const { showToast } = await import('@/features/room/client/ui/toast');
   Object.assign(state, { joined: true, microphoneMissing: true });
   open.mockRejectedValueOnce(Object.assign(new Error('denied'), { name: 'NotAllowedError' }));
 
@@ -304,7 +307,7 @@ test('the microphone button in a call without one asks for it again and says why
 
 test('a listener without a microphone shows as muted to the room', async () => {
   const { state } = await load();
-  const { isMicrophoneShownMuted } = await import('../../src/lib/features/room/client/core/microphone-mute.ts');
+  const { isMicrophoneShownMuted } = await import('@/features/room/client/core/microphone-mute');
   state.joined = true;
   expect(isMicrophoneShownMuted()).toBe(false);
   state.microphoneMissing = true;

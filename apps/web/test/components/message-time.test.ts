@@ -1,10 +1,11 @@
 // A message's time reads the same in the room chat as in direct messages:
 // 24-hour "14:05", whatever locale the browser runs in.
 
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { render, screen } from '@testing-library/vue';
+import { createPinia, setActivePinia } from 'pinia';
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
-import RoomChatPanel from '../../src/lib/features/room/components/RoomChatPanel.svelte';
-import { clockTime } from '../../src/lib/shared/utils/date-format.ts';
+import RoomChatPanel from '@/features/room/components/RoomChatPanel.vue';
+import { clockTime } from '@/shared/utils/date-format.ts';
 import type { RoomMessage } from '@voice-room/shared/contracts/messages';
 import { stubFetch } from '../fixtures/fetch.ts';
 import { installFakeWebSocket } from '../fixtures/fake-websocket.ts';
@@ -47,7 +48,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  cleanup();
   vi.restoreAllMocks();
 });
 
@@ -58,12 +58,15 @@ test('the room chat writes a message time on the 24-hour clock in an English bro
     'POST /api/rooms/room/read': { body: { ok: true } },
     'GET /api/reactions/room/room/m1': { body: { ok: true, summaries: [] } }
   });
+  const pinia = createPinia();
+  setActivePinia(pinia);
   render(RoomChatPanel, {
-    props: { roomId: 'room', peerId: 'me', sessionToken: 'token', resolveDisplayName: () => 'Я', onToast: vi.fn() }
+    props: { roomId: 'room', peerId: 'me', sessionToken: 'token', resolveDisplayName: () => 'Я', onToast: vi.fn() },
+    global: { plugins: [pinia] }
   });
   await screen.findByText('привет');
 
-  const time = document.querySelector('time.chat-msg-time');
+  const time = document.querySelector('time.room-chat-group__time');
   expect(time?.textContent).toBe('14:05');
   // Direct messages write their time with the same clock.
   expect(time?.textContent).toBe(clockTime(AFTERNOON));
